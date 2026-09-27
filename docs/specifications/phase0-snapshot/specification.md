@@ -415,7 +415,7 @@ Scenario: SCENARIO-13 — Snapshots directory not writable
 - [x] SCENARIO-02: Machine-readable result — delivered by SCENARIO-01b `cmd/quarry/run_test.go` `Test_run_prints_the_manifest_as_json_with_the_json_flag`
 - [x] SCENARIO-14: Usage errors — delivered by SCENARIO-01b `cmd/quarry/run_test.go` `Test_run_rejects_usage_errors`
 - [x] SCENARIO-05: Bad --quicken path refused — `cmd/quarry/run_test.go` `Test_run_refuses_a_bad_quicken_path`
-- [ ] SCENARIO-04: Bundle discovery in ~/Documents
+- [x] SCENARIO-04: Bundle discovery in ~/Documents — `cmd/quarry/run_test.go` `Test_run_discovers_the_bundle_from_documents_without_quicken`
 - [ ] SCENARIO-06: Encrypted file means Quicken does not have it open
 - [ ] SCENARIO-07: Quicken busy writing
 - [ ] SCENARIO-08: Snapshot content rejected

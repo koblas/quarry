@@ -18,7 +18,8 @@ func (e *runtimeError) Error() string { return e.err.Error() }
 func (e *runtimeError) Unwrap() error { return e.err }
 
 // newSyncCommand builds the sync subcommand: it takes no positional
-// arguments, requires --quicken, and writes either the human success block
+// arguments, resolves --quicken when given or else discovers the sole
+// .quicken bundle in ~/Documents, and writes either the human success block
 // or the --json manifest document to stdout.
 func newSyncCommand(srv *snapshot.Server, home string, jsonOut *bool) *cobra.Command {
 	var quickenPath string
@@ -43,7 +44,13 @@ Without --quicken, quarry uses the only .quicken file in ~/Documents.`,
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			bundlePath, err := snapshot.ResolveBundlePath(home, quickenPath)
+			var bundlePath string
+			var err error
+			if cmd.Flags().Changed("quicken") {
+				bundlePath, err = snapshot.ResolveBundlePath(home, quickenPath)
+			} else {
+				bundlePath, err = snapshot.DiscoverBundle(home)
+			}
 			if err != nil {
 				return &runtimeError{err: err}
 			}
@@ -68,7 +75,6 @@ Without --quicken, quarry uses the only .quicken file in ~/Documents.`,
 	}
 	cmd.Flags().StringVar(&quickenPath, "quicken", "",
 		"`path` to the .quicken file to snapshot (default: the only one in ~/Documents)")
-	_ = cmd.MarkFlagRequired("quicken")
 
 	return cmd
 }

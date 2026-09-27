@@ -165,6 +165,76 @@ func Test_run_refuses_a_bad_quicken_path(t *testing.T) {
 	})
 }
 
+func Test_run_discovers_the_bundle_from_documents_without_quicken(t *testing.T) {
+	cases := []struct {
+		name       string
+		setup      func(t *testing.T, home string)
+		wantStderr string
+	}{
+		{
+			name:       "no .quicken bundle",
+			setup:      func(t *testing.T, home string) {},
+			wantStderr: "quarry: no .quicken file found in ~/Documents; pass one with --quicken <path>\n",
+		},
+		{
+			name: "three bundles",
+			setup: func(t *testing.T, home string) {
+				documents := filepath.Join(home, "Documents")
+				require.NoError(t, os.MkdirAll(filepath.Join(documents, "Old.quicken"), 0o700))
+				v9fixture.OpenBundle(t, documents)
+				require.NoError(t, os.MkdirAll(filepath.Join(documents, "Business.quicken"), 0o700))
+			},
+			wantStderr: "quarry: found 3 .quicken files in ~/Documents " +
+				"(Business.quicken, Home.quicken, Old.quicken); choose one with --quicken <path>\n",
+		},
+		{
+			name: "an unreadable Documents directory",
+			setup: func(t *testing.T, home string) {
+				if os.Geteuid() == 0 {
+					t.Skip("root ignores file permissions")
+				}
+				documents := filepath.Join(home, "Documents")
+				require.NoError(t, os.MkdirAll(documents, 0o700))
+				t.Cleanup(func() { _ = os.Chmod(documents, 0o700) })
+				require.NoError(t, os.Chmod(documents, 0o000))
+			},
+			wantStderr: "quarry: cannot read ~/Documents: permission denied; allow your terminal to access " +
+				"the Documents folder in System Settings > Privacy & Security > Files and Folders, " +
+				"or pass --quicken <path>\n",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			c.setup(t, home)
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, c.wantStderr, stderr.String())
+			_, statErr := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"))
+			assert.ErrorIs(t, statErr, os.ErrNotExist)
+		})
+	}
+
+	t.Run("exactly one valid bundle", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
+		var stdout, stderr bytes.Buffer
+
+		exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+
+		require.Equal(t, 0, exitCode)
+		assert.Empty(t, stderr.String())
+		assert.Contains(t, stdout.String(), "Source    "+abbreviated(t, bundle.Dir, home)+"\n")
+	})
+}
+
 func Test_run_rejects_usage_errors(t *testing.T) {
 	cases := []struct {
 		name       string
