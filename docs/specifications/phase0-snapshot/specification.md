@@ -408,8 +408,8 @@ Scenario: SCENARIO-13 — Snapshots directory not writable
 ---
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01a: Snapshot of an open file matching the reference
-- [ ] SCENARIO-03: Live Quicken file is never modified
+- [x] SCENARIO-01a: Snapshot of an open file matching the reference — `internal/snapshot/sync_test.go` `Test_sync_writes_a_verified_private_snapshot_of_an_open_file`
+- [x] SCENARIO-03: Live Quicken file is never modified — delivered by SCENARIO-01a `internal/snapshot/sync_test.go` `Test_sync_leaves_the_live_bundle_unchanged`
 - [ ] SCENARIO-01b: quarry sync reports a verified snapshot
 - [ ] SCENARIO-02: Machine-readable result
 - [ ] SCENARIO-14: Usage errors

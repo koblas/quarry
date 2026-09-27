@@ -1,0 +1,49 @@
+package v9
+
+import (
+	"context"
+	_ "embed"
+	"fmt"
+
+	"github.com/koblas/quarry/internal/platform/sqlite"
+	"github.com/koblas/quarry/internal/platform/sqlschema"
+)
+
+// ReferenceDDL is the embedded Core Data schema for Quicken Classic for Mac
+// v9, taken verbatim from hardkoded/quicken-skills' fixture-schema.sql. It is
+// the one copy of the reference ever corrected.
+//
+//go:embed reference.sql
+var ReferenceDDL string
+
+// ReferenceLabel identifies the commit ReferenceDDL is pinned to. It changes
+// only when ReferenceDDL itself is corrected.
+const ReferenceLabel = "hardkoded/quicken-skills@752107b"
+
+// Reference executes ReferenceDDL against a private in-memory database and
+// returns the resulting schema, unscoped. Callers apply their own table
+// scope before comparing it against a snapshot's schema.
+func Reference(ctx context.Context) (sqlschema.Schema, error) {
+	schema, err := executeDDL(ctx, ReferenceDDL)
+	if err != nil {
+		// unreachable: Reference always passes the fixed, valid ReferenceDDL, so executeDDL cannot fail here.
+		return nil, fmt.Errorf("build reference schema: %w", err)
+	}
+	return schema, nil
+}
+
+// executeDDL runs ddl against a fresh in-memory database and returns the
+// schema it produces.
+func executeDDL(ctx context.Context, ddl string) (sqlschema.Schema, error) {
+	db, err := sqlite.OpenMemory(ctx)
+	if err != nil {
+		// unreachable: an in-process :memory: database has no external resource that can fail to open.
+		return nil, fmt.Errorf("open in-memory database: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	if _, err := db.Exec(ctx, ddl); err != nil {
+		return nil, fmt.Errorf("execute schema: %w", err)
+	}
+	return db.Schema(ctx)
+}

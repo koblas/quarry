@@ -1,0 +1,283 @@
+package snapshot_test
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/koblas/quarry/internal/platform/sqlschema"
+	"github.com/koblas/quarry/internal/quicken/v9"
+	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
+	"github.com/koblas/quarry/internal/snapshot"
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// fakeSource is a hand-written Source fake: each call returns the
+// configured error, or succeeds when it is nil.
+type fakeSource struct {
+	openErr, probeErr, backupErr error
+}
+
+func (f *fakeSource) Open(context.Context, string) error   { return f.openErr }
+func (f *fakeSource) Probe(context.Context) error          { return f.probeErr }
+func (f *fakeSource) Backup(context.Context, string) error { return f.backupErr }
+func (f *fakeSource) Close() error                         { return nil }
+
+var errBoom = errors.New("boom")
+
+func Test_sync_fails_when_no_reference_is_configured(t *testing.T) {
+	srv := snapshot.NewServer(snapshot.WithSnapshotDir(t.TempDir()))
+
+	_, err := srv.Sync(t.Context(), t.TempDir())
+
+	require.Error(t, err)
+}
+
+// Mandatory write-safety guard (BR-8): nothing reaches the snapshots
+// directory before the probe succeeds.
+func Test_sync_creates_nothing_when_the_probe_fails(t *testing.T) {
+	bundleDir := filepath.Join(t.TempDir(), "Home.quicken")
+	require.NoError(t, os.MkdirAll(bundleDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(bundleDir, "data"), []byte("not a database"), 0o600))
+	snapshotsDir := filepath.Join(t.TempDir(), "snapshots")
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(snapshotsDir),
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+	)
+
+	_, err := srv.Sync(t.Context(), bundleDir)
+
+	require.Error(t, err)
+	_, statErr := os.Stat(snapshotsDir)
+	assert.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
+func Test_sync_wraps_an_error_when_opening_the_bundle_fails(t *testing.T) {
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(t.TempDir()),
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{openErr: errBoom}),
+	)
+
+	_, err := srv.Sync(t.Context(), t.TempDir())
+
+	require.ErrorIs(t, err, errBoom)
+}
+
+func Test_sync_wraps_an_error_when_the_backup_fails(t *testing.T) {
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(t.TempDir()),
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{backupErr: errBoom}),
+	)
+
+	_, err := srv.Sync(t.Context(), t.TempDir())
+
+	require.ErrorIs(t, err, errBoom)
+}
+
+// Exercises the real Destination adapter's Prepare fault path: MkdirAll
+// fails because the configured snapshots path is already a regular file.
+func Test_sync_wraps_an_error_when_the_snapshots_directory_cannot_be_prepared(t *testing.T) {
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	ref, err := v9.Reference(t.Context())
+	require.NoError(t, err)
+	blockedPath := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(blockedPath, []byte("x"), 0o600))
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(blockedPath),
+		snapshot.WithReference(v9.ReferenceLabel, ref),
+	)
+
+	_, err = srv.Sync(t.Context(), bundle.Dir)
+
+	require.Error(t, err)
+}
+
+func Test_sync_wraps_an_error_when_the_probe_fails(t *testing.T) {
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(t.TempDir()),
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{probeErr: errBoom}),
+	)
+
+	_, err := srv.Sync(t.Context(), t.TempDir())
+
+	require.ErrorIs(t, err, errBoom)
+}
+
+// fixedPathDestination hands Backup's caller a pre-built file instead of
+// really backing anything up, so a test controls exactly what buildManifest
+// reads.
+type fixedPathDestination struct {
+	snapshotPath string
+}
+
+func (f *fixedPathDestination) Prepare(context.Context) error { return nil }
+func (f *fixedPathDestination) Backup(context.Context, snapshot.Source, string) (string, error) {
+	return f.snapshotPath, nil
+}
+func (f *fixedPathDestination) WriteManifest(context.Context, string, []byte) (string, error) {
+	return "", nil
+}
+func (f *fixedPathDestination) CommitSnapshot(context.Context, string) (string, error) {
+	return "", nil
+}
+func (f *fixedPathDestination) CommitManifest(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func Test_sync_wraps_an_error_when_the_snapshot_cannot_be_opened(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "garbage.sqlite")
+	require.NoError(t, os.WriteFile(path, []byte("not a database"), 0o600))
+	srv := snapshot.NewServer(
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{}),
+		snapshot.WithDestination(&fixedPathDestination{snapshotPath: path}),
+	)
+
+	_, err := srv.Sync(t.Context(), t.TempDir())
+
+	require.Error(t, err)
+}
+
+func Test_sync_wraps_an_error_when_the_snapshot_fails_integrity_check(t *testing.T) {
+	srv := snapshot.NewServer(
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{}),
+		snapshot.WithDestination(&fixedPathDestination{snapshotPath: newCorruptedSnapshot(t)}),
+	)
+
+	_, err := srv.Sync(t.Context(), t.TempDir())
+
+	require.Error(t, err)
+}
+
+// newCorruptedSnapshot writes enough rows to spill past the first page,
+// then flips bytes in a later page, so the file opens but its
+// integrity_check fails.
+func newCorruptedSnapshot(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "snap.sqlite")
+	conn, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	_, err = conn.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
+	require.NoError(t, err)
+	for i := 0; i < 500; i++ {
+		_, err = conn.Exec("INSERT INTO t (v) VALUES (?)", strings.Repeat("x", 100))
+		require.NoError(t, err)
+	}
+	require.NoError(t, conn.Close())
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Greater(t, len(raw), 8192)
+	for i := len(raw) - 200; i < len(raw)-100; i++ {
+		raw[i] ^= 0xFF
+	}
+	require.NoError(t, os.WriteFile(path, raw, 0o600))
+	return path
+}
+
+func Test_sync_wraps_an_error_when_the_snapshot_has_no_accounts_table(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "empty.sqlite")
+	require.NoError(t, os.WriteFile(path, nil, 0o600))
+	srv := snapshot.NewServer(
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{}),
+		snapshot.WithDestination(&fixedPathDestination{snapshotPath: path}),
+	)
+
+	_, err := srv.Sync(t.Context(), t.TempDir())
+
+	require.Error(t, err)
+}
+
+// partialFaultDestination wraps the real production Destination and injects
+// exactly one failing method, so the rest of Sync's pipeline (a real
+// backup and schema read) runs for real.
+type partialFaultDestination struct {
+	real                                              snapshot.Destination
+	failWriteManifest, failCommitManifest, failCommit error
+}
+
+func (f *partialFaultDestination) Prepare(ctx context.Context) error { return f.real.Prepare(ctx) }
+func (f *partialFaultDestination) Backup(ctx context.Context, src snapshot.Source, name string) (string, error) {
+	return f.real.Backup(ctx, src, name)
+}
+func (f *partialFaultDestination) WriteManifest(ctx context.Context, name string, data []byte) (string, error) {
+	if f.failWriteManifest != nil {
+		return "", f.failWriteManifest
+	}
+	return f.real.WriteManifest(ctx, name, data)
+}
+func (f *partialFaultDestination) CommitManifest(ctx context.Context, partial string) (string, error) {
+	if f.failCommitManifest != nil {
+		return "", f.failCommitManifest
+	}
+	return f.real.CommitManifest(ctx, partial)
+}
+func (f *partialFaultDestination) CommitSnapshot(ctx context.Context, partial string) (string, error) {
+	if f.failCommit != nil {
+		return "", f.failCommit
+	}
+	return f.real.CommitSnapshot(ctx, partial)
+}
+
+func Test_sync_wraps_an_error_when_writing_the_manifest_fails(t *testing.T) {
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	ref, err := v9.Reference(t.Context())
+	require.NoError(t, err)
+	srv := snapshot.NewServer(
+		snapshot.WithReference(v9.ReferenceLabel, ref),
+		snapshot.WithDestination(&partialFaultDestination{
+			real:              snapshot.NewDirDestination(filepath.Join(t.TempDir(), "snapshots")),
+			failWriteManifest: errBoom,
+		}),
+	)
+
+	_, err = srv.Sync(t.Context(), bundle.Dir)
+
+	require.ErrorIs(t, err, errBoom)
+}
+
+func Test_sync_wraps_an_error_when_committing_the_manifest_fails(t *testing.T) {
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	ref, err := v9.Reference(t.Context())
+	require.NoError(t, err)
+	srv := snapshot.NewServer(
+		snapshot.WithReference(v9.ReferenceLabel, ref),
+		snapshot.WithDestination(&partialFaultDestination{
+			real:               snapshot.NewDirDestination(filepath.Join(t.TempDir(), "snapshots")),
+			failCommitManifest: errBoom,
+		}),
+	)
+
+	_, err = srv.Sync(t.Context(), bundle.Dir)
+
+	require.ErrorIs(t, err, errBoom)
+}
+
+func Test_sync_wraps_an_error_when_committing_the_snapshot_fails(t *testing.T) {
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	ref, err := v9.Reference(t.Context())
+	require.NoError(t, err)
+	srv := snapshot.NewServer(
+		snapshot.WithReference(v9.ReferenceLabel, ref),
+		snapshot.WithDestination(&partialFaultDestination{
+			real:       snapshot.NewDirDestination(filepath.Join(t.TempDir(), "snapshots")),
+			failCommit: errBoom,
+		}),
+	)
+
+	_, err = srv.Sync(t.Context(), bundle.Dir)
+
+	require.ErrorIs(t, err, errBoom)
+}
