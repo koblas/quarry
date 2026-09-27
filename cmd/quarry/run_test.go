@@ -235,6 +235,20 @@ func Test_run_discovers_the_bundle_from_documents_without_quicken(t *testing.T) 
 	})
 }
 
+func Test_run_refuses_an_explicit_empty_quicken_flag_even_with_a_bundle_in_documents(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken="}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	_, statErr := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"))
+	assert.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
 func Test_run_rejects_usage_errors(t *testing.T) {
 	cases := []struct {
 		name       string

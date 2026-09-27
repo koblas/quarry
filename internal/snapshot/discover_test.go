@@ -78,6 +78,25 @@ func Test_DiscoverBundle_follows_a_symlinked_bundle_and_skips_a_dangling_one(t *
 	assert.Equal(t, bundle.Dir, got)
 }
 
+func Test_DiscoverBundle_follows_a_symlink_to_a_bundle_outside_documents(t *testing.T) {
+	home := t.TempDir()
+	documents := filepath.Join(home, "Documents")
+	require.NoError(t, os.MkdirAll(documents, 0o700))
+
+	elsewhere := t.TempDir()
+	realBundle := filepath.Join(elsewhere, "Real.quicken")
+	require.NoError(t, os.MkdirAll(realBundle, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(realBundle, "data"), []byte("x"), 0o600))
+
+	link := filepath.Join(documents, "Linked.quicken")
+	require.NoError(t, os.Symlink(realBundle, link))
+
+	got, err := snapshot.DiscoverBundle(home)
+
+	require.NoError(t, err)
+	assert.Equal(t, link, got, "the symlink path itself, not the resolved target, is the discovered bundle")
+}
+
 func Test_DiscoverBundle_refuses_when_multiple_bundles_exist(t *testing.T) {
 	cases := []struct {
 		name       string
