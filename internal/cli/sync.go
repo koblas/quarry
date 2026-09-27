@@ -43,7 +43,12 @@ Without --quicken, quarry uses the only .quicken file in ~/Documents.`,
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			manifest, err := srv.Sync(cmd.Context(), quickenPath)
+			bundlePath, err := snapshot.ResolveBundlePath(home, quickenPath)
+			if err != nil {
+				return &runtimeError{err: err}
+			}
+
+			manifest, err := srv.Sync(cmd.Context(), bundlePath)
 			if err != nil {
 				return &runtimeError{err: err}
 			}

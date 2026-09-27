@@ -1,6 +1,6 @@
-// White-box: abbreviateHome, formatMB, formatThousands and renderSuccess are
-// unexported formatting rules best driven directly, rather than through a
-// full command run for every rounding and boundary case.
+// White-box: formatMB, formatThousands and renderSuccess are unexported
+// formatting rules best driven directly, rather than through a full command
+// run for every rounding and boundary case.
 package cli
 
 import (
@@ -9,24 +9,6 @@ import (
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/stretchr/testify/assert"
 )
-
-func Test_abbreviateHome_replaces_the_home_prefix_with_a_tilde(t *testing.T) {
-	got := abbreviateHome("/Users/dave/Documents/Home.quicken", "/Users/dave")
-
-	assert.Equal(t, "~/Documents/Home.quicken", got)
-}
-
-func Test_abbreviateHome_abbreviates_home_itself_to_a_bare_tilde(t *testing.T) {
-	got := abbreviateHome("/Users/dave", "/Users/dave")
-
-	assert.Equal(t, "~", got)
-}
-
-func Test_abbreviateHome_does_not_abbreviate_a_path_that_only_shares_a_prefix_with_home(t *testing.T) {
-	got := abbreviateHome("/Users/davex/Documents/Home.quicken", "/Users/dave")
-
-	assert.Equal(t, "/Users/davex/Documents/Home.quicken", got)
-}
 
 func Test_formatThousands(t *testing.T) {
 	cases := []struct {

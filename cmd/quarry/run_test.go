@@ -74,6 +74,97 @@ func Test_run_prints_the_manifest_as_json_with_the_json_flag(t *testing.T) {
 	assert.ElementsMatch(t, []string{"snapshot", "schema", "warnings"}, slices.Collect(maps.Keys(parsed)))
 }
 
+func Test_run_refuses_a_bad_quicken_path(t *testing.T) {
+	cases := []struct {
+		name       string
+		quicken    string
+		setup      func(t *testing.T, home string)
+		wantStderr string
+	}{
+		{
+			name:    "missing",
+			quicken: "~/Documents/Missing.quicken",
+			setup:   func(t *testing.T, home string) {},
+			wantStderr: "quarry: ~/Documents/Missing.quicken does not exist; " +
+				"check the path passed to --quicken\n",
+		},
+		{
+			name:    "ending .QDF",
+			quicken: "~/Documents/Home.QDF",
+			setup: func(t *testing.T, home string) {
+				bundle := v9fixture.OpenBundle(t, filepath.Join(home, "RealBundle"))
+				require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents"), 0o700))
+				require.NoError(t, os.Symlink(bundle.Dir, filepath.Join(home, "Documents", "Home.QDF")))
+			},
+			wantStderr: "quarry: ~/Documents/Home.QDF is a Quicken for Windows file; " +
+				"quarry reads only Quicken Classic for Mac .quicken files\n",
+		},
+		{
+			name:    "a plain file",
+			quicken: "~/Documents/Plain.quicken",
+			setup: func(t *testing.T, home string) {
+				require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents"), 0o700))
+				require.NoError(t, os.WriteFile(filepath.Join(home, "Documents", "Plain.quicken"), []byte("x"), 0o600))
+			},
+			wantStderr: "quarry: ~/Documents/Plain.quicken is not a Quicken for Mac file " +
+				"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path>\n",
+		},
+		{
+			name:    "a bundle without data",
+			quicken: "~/Documents/Empty.quicken",
+			setup: func(t *testing.T, home string) {
+				require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "Empty.quicken"), 0o700))
+			},
+			wantStderr: "quarry: ~/Documents/Empty.quicken is not a Quicken for Mac file " +
+				"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path>\n",
+		},
+		{
+			name:    "a bundle whose data is unreadable",
+			quicken: "~/Documents/Home.quicken",
+			setup: func(t *testing.T, home string) {
+				if os.Geteuid() == 0 {
+					t.Skip("root ignores file permissions")
+				}
+				bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
+				require.NoError(t, os.Chmod(bundle.DataPath, 0o000))
+			},
+			wantStderr: "quarry: cannot read ~/Documents/Home.quicken/data: permission denied; " +
+				"allow your terminal to access the folder in System Settings > Privacy & Security, " +
+				"or check the file's permissions\n",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			c.setup(t, home)
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), []string{"sync", "--quicken", c.quicken}, &stdout, &stderr)
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, c.wantStderr, stderr.String())
+			_, statErr := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"))
+			assert.ErrorIs(t, statErr, os.ErrNotExist)
+		})
+	}
+
+	t.Run("a valid bundle given as ~/…", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
+		var stdout, stderr bytes.Buffer
+
+		exitCode := run(context.Background(), []string{"sync", "--quicken", "~/Documents/Home.quicken"}, &stdout, &stderr)
+
+		require.Equal(t, 0, exitCode)
+		assert.Empty(t, stderr.String())
+		assert.NotEmpty(t, stdout.String())
+	})
+}
+
 func Test_run_rejects_usage_errors(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -152,12 +243,18 @@ func Test_run_reports_exit_1_when_the_context_is_already_cancelled(t *testing.T)
 	assert.Contains(t, lines[0], "build reference schema", "expected the failure to come from v9.Reference, not from a later stage that also observes the cancelled context")
 }
 
+// The bundle passes ResolveBundlePath's R4-R7 checks (a real directory with a
+// readable regular "data" file) so this exercises srv.Sync's own error path,
+// not path resolution.
 func Test_run_reports_exit_1_when_sync_fails(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
+	require.NoError(t, os.MkdirAll(bundleDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(bundleDir, "data"), []byte("not a database"), 0o600))
 	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", filepath.Join(home, "Missing.quicken")}, &stdout, &stderr)
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundleDir}, &stdout, &stderr)
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())

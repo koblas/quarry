@@ -6,20 +6,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/snapshot"
 )
-
-// abbreviateHome replaces a leading home prefix in path with "~", leaving
-// path unchanged when it is not home itself or a path under it.
-func abbreviateHome(path, home string) string {
-	if path == home {
-		return "~"
-	}
-	if strings.HasPrefix(path, home+"/") {
-		return "~" + strings.TrimPrefix(path, home)
-	}
-	return path
-}
 
 // formatThousands renders n, which is always non-negative in this package's
 // callers (byte counts, account counts, table/column counts), with a comma
@@ -52,9 +41,9 @@ func accountsPhrase(n int) string {
 // naming the reference and its scoped table/column counts.
 func renderSuccess(m snapshot.Manifest, home string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%-10s%s\n", "Snapshot", abbreviateHome(m.Snapshot.Path, home))
-	fmt.Fprintf(&b, "%-10s%s\n", "Manifest", abbreviateHome(m.Snapshot.Manifest, home))
-	fmt.Fprintf(&b, "%-10s%s\n", "Source", abbreviateHome(m.Snapshot.Source, home))
+	fmt.Fprintf(&b, "%-10s%s\n", "Snapshot", homepath.Abbreviate(home, m.Snapshot.Path))
+	fmt.Fprintf(&b, "%-10s%s\n", "Manifest", homepath.Abbreviate(home, m.Snapshot.Manifest))
+	fmt.Fprintf(&b, "%-10s%s\n", "Source", homepath.Abbreviate(home, m.Snapshot.Source))
 	fmt.Fprintf(&b, "%-10s%s, %s\n", "Size", formatMB(m.Snapshot.Bytes), accountsPhrase(m.Snapshot.Accounts))
 	fmt.Fprintf(&b, "%-10s%s\n", "SHA-256", m.Snapshot.SHA256)
 	fmt.Fprintf(&b, "%-10s%s\n", "Schema", schemaLine(m.Schema))
