@@ -4,7 +4,7 @@
 
 ## Intent & Goal
 
-**Primary Goal**: `quarry sync` takes a safe, read-only snapshot of the open Quicken Classic for Mac v9 database with SQLite's online backup API and verifies its schema against an embedded reference ported from dweekly/quicken-mac-mcp, so Phase 1's importer builds on verified ground. The phase gate is David running `quarry sync` on his real v9 file and getting exit 0 (after correcting the embedded reference if the first run reports drift).
+**Primary Goal**: `quarry sync` takes a safe, read-only snapshot of the open Quicken Classic for Mac v9 database with SQLite's online backup API and verifies its schema against an embedded 9.x reference ported from hardkoded/quicken-skills, so Phase 1's importer builds on verified ground. The phase gate is David running `quarry sync` on his real v9 file and getting exit 0 (after correcting the embedded reference if the first run reports drift).
 
 **Secondary Goals**:
 - CLI skeleton and the binary-wide exit-code contract (0 success incl. warnings, 1 failure, 2 usage) with one-line stderr errors.
@@ -20,8 +20,8 @@
 - **BR-1 Live file is read-only.** The live `<bundle>/data` is opened with `mode=ro` only. Never `immutable=1`, never a `journal_mode` change, never a checkpoint, never any pragma write. The live file gets one probe read (encryption detection) plus the backup, nothing else. Integrity check, account count, hash and schema read all run on the snapshot.
 - **BR-2 Backup API, not a byte copy.** The snapshot is taken with SQLite's online backup API so pages still in the live `-wal` are included.
 - **BR-3 Fixture models an open Quicken file.** The synthetic live-file fixture is a WAL-mode database held open by a second connection with uncheckpointed writes (`-wal` and `-shm` present), matching Quicken's state while the file is open. At least one row exists only in the WAL; SCENARIO-01a asserts the snapshot contains it.
-- **BR-4 Fixture schema comes from the reference.** The fixture's schema is generated from the embedded `reference.sql`, so the SCENARIO-01a Given holds by construction. hardkoded's `fixture-schema.sql` / `fixture-data.sql` supply row data where useful and serve as the port-time cross-check; its differences from dweekly's DDL are recorded in `docs/prior-art/README.md` and in *Reference reconciliation* below.
-- **BR-5 One reference truth.** Only the embedded `reference.sql` (in the Quicken v9 package, pinned to an upstream dweekly commit) is ever corrected. `docs/prior-art/**` stays frozen upstream text.
+- **BR-4 Fixture schema comes from the reference.** The fixture's schema is generated from the embedded `reference.sql`, so the SCENARIO-01a Given holds by construction. hardkoded's `test/fixture-data.sql` may supply row data.
+- **BR-5 One reference truth.** Only the embedded `internal/quicken/v9/reference.sql` (hardkoded 9.x schema, pinned to commit `752107b`) is ever corrected. `docs/prior-art/**` stays frozen upstream text. The reference label printed and written to `schema.reference` is `hardkoded/quicken-skills@752107b` until the file is corrected (then the label changes with it).
 - **BR-6 Schema scope.** Every table whose name starts with `Z`, including `Z_PRIMARYKEY` and `Z_<n>` join tables, is compared. Excluded: `Z_METADATA`, `Z_MODELCACHE`, `sqlite_*`, non-`Z` tables. Names only; types are not compared.
 - **BR-7 Fingerprint.** `sha256:<hex>` over the UTF-8 bytes of `TABLE.COLUMN\n` for every in-scope table and column, names exactly as `pragma table_info` reports them, sorted bytewise. The same algorithm runs over the reference; exact match ⇔ equal fingerprints.
 - **BR-8 Order of work.** 1 resolve path → 2 open read-only and probe → 3 back up to a partial file → 4 integrity check → 5 `ZACCOUNT` exists with ≥1 row → 6 SHA-256 of file → 7 schema diff → 8 write manifest → 9 rename snapshot. Nothing is created in the snapshots directory before the probe succeeds. A snapshot is accepted only if its manifest exists.
@@ -33,7 +33,12 @@
 
 ### Reference reconciliation
 
-_To be filled by the prior-art pre-step before SCENARIO-01a's architect runs: upstream commit SHAs, which source wins per disagreement, and the full dweekly-vs-hardkoded Z-table/column diff._
+Done in the pre-step (commit after spec). Upstream: dweekly `119e2724a3cb0eab8729147d70b0d25f49326f2c`, hardkoded `752107bd0c96512757559a590368f32b93cbca63`.
+
+- dweekly `schema.md` was captured from **Quicken 8.5**; hardkoded `fixture-schema.sql` from a **real 9.x file**. User ruled (2026-09-27): **the embedded reference is hardkoded's 9.x schema**, not dweekly's. dweekly remains the semantics doc.
+- Diff (Z tables minus `Z_METADATA`/`Z_MODELCACHE`, names only): dweekly 83 tables / 1,829 columns, hardkoded 82 / 1,835. One table only in dweekly (`ZTAXLINEITEM`); 9 columns differ only by the Core Data entity number in the name (`Z79_PARENT` → `Z78_PARENT`, etc.); 1 column only in 8.5; 13 only in 9.x. Full table in `docs/prior-art/README.md`.
+- Consequence: entity-numbered FK column names are model-version-specific, so a Quicken upgrade shows up as missing + unexpected column pairs — which the diff already reports.
+- Prior-art provenance is recorded per directory (`docs/prior-art/README.md` + `THIRD_PARTY_NOTICES`) rather than as a header inserted in each file, so the copies stay byte-identical to upstream. `reference.sql` carries its own source header.
 
 ### Phase 1 obligations (deferred, recorded here)
 
@@ -66,9 +71,9 @@ _To be filled by the prior-art pre-step before SCENARIO-01a's architect runs: up
 5. Live-file open constraints as invariant (BR-1).
 6. TCC rows R3, R7.
 7. Deferred items recorded as Phase 1 obligations.
-8. hardkoded `fixture-schema.sql` as port-time cross-check (BR-4).
+8. hardkoded `fixture-schema.sql` as port-time cross-check (superseded: it is now the reference itself, BR-5).
 
-Prior-art deliverables (pre-step, outside the pipeline, data/docs only): `docs/prior-art/dweekly/` (schema.md, recipes, skill layout) and `docs/prior-art/hardkoded/` (fixture-schema.sql, hygiene list) verbatim and frozen, each file headed with source URL, commit SHA and "MIT, see THIRD_PARTY_NOTICES"; `THIRD_PARTY_NOTICES` at repo root with both copyrights and MIT text; README credit line; `docs/prior-art/README.md` recording dweekly-vs-hardkoded disagreements; embedded `reference.sql` extracted from dweekly `schema.md` `CREATE TABLE` blocks.
+Prior-art deliverables (pre-step, outside the pipeline, data/docs only): `docs/prior-art/dweekly/` (schema.md, recipes, skill layout) and `docs/prior-art/hardkoded/` (fixture-schema.sql, hygiene list) verbatim and frozen, each file headed with source URL, commit SHA and "MIT, see THIRD_PARTY_NOTICES"; `THIRD_PARTY_NOTICES` at repo root with both copyrights and MIT text; README credit line; `docs/prior-art/README.md` recording dweekly-vs-hardkoded disagreements; embedded `reference.sql` — superseded by *Reference reconciliation*: taken from hardkoded's 9.x `fixture-schema.sql`, not dweekly's 8.5 DDL.
 
 ---
 
@@ -137,13 +142,13 @@ Manifest  ~/Library/Application Support/quarry/snapshots/20260927T143005Z.json
 Source    ~/Documents/Home.quicken
 Size      212.4 MB, 42 accounts
 SHA-256   9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
-Schema    matches reference dweekly/quicken-mac-mcp@1a2b3c4 (71 tables, 1,042 columns)
+Schema    matches reference hardkoded/quicken-skills@752107b (71 tables, 1,042 columns)
 ```
 Formatting: size in decimal MB, one decimal place; `1 account` / `N accounts`; thousands grouped with commas.
 
 **Extras only (exit 0 + warning).** stdout: same block, `Schema` line and rows:
 ```
-Schema    matches reference dweekly/quicken-mac-mcp@1a2b3c4 (71 tables, 1,042 columns), plus 1 table and 2 columns not in it
+Schema    matches reference hardkoded/quicken-skills@752107b (71 tables, 1,042 columns), plus 1 table and 2 columns not in it
   + table   ZNEWENTITY
   + column  ZACCOUNT.ZNEWFLAG
   + column  ZTAG.ZCOLOR
@@ -168,7 +173,7 @@ Same document to stdout and manifest. `snapshot`, `schema`, `warnings` are perma
     "accounts": 42
   },
   "schema": {
-    "reference": "dweekly/quicken-mac-mcp@1a2b3c4",
+    "reference": "hardkoded/quicken-skills@752107b",
     "verified": true,
     "fingerprint": "sha256:…",
     "reference_fingerprint": "sha256:…",
@@ -197,7 +202,7 @@ Manifest  …/20260927T143005Z.json
 Source    ~/Documents/Home.quicken
 Size      212.4 MB, 42 accounts
 SHA-256   9f86…0a08
-Schema    DIFFERS from reference dweekly/quicken-mac-mcp@1a2b3c4: 1 table and 2 columns missing, 1 column not in reference
+Schema    DIFFERS from reference hardkoded/quicken-skills@752107b: 1 table and 2 columns missing, 1 column not in reference
   - table   ZLOT
   - column  ZCASHFLOWTRANSACTIONENTRY.ZMEMO
   - column  ZSECURITY.ZCUSIP
