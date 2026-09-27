@@ -65,10 +65,12 @@ func Test_sync_wraps_an_error_when_opening_the_bundle_fails(t *testing.T) {
 		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
 		snapshot.WithSource(&fakeSource{openErr: errBoom}),
 	)
+	bundlePath := t.TempDir()
 
-	_, err := srv.Sync(t.Context(), t.TempDir())
+	_, err := srv.Sync(t.Context(), bundlePath)
 
 	require.ErrorIs(t, err, errBoom)
+	assert.ErrorContains(t, err, "sync "+bundlePath)
 }
 
 func Test_sync_wraps_an_error_when_the_backup_fails(t *testing.T) {
@@ -78,10 +80,12 @@ func Test_sync_wraps_an_error_when_the_backup_fails(t *testing.T) {
 		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
 		snapshot.WithSource(&fakeSource{backupErr: errBoom}),
 	)
+	bundlePath := t.TempDir()
 
-	_, err := srv.Sync(t.Context(), t.TempDir())
+	_, err := srv.Sync(t.Context(), bundlePath)
 
 	require.ErrorIs(t, err, errBoom)
+	assert.ErrorContains(t, err, "sync "+bundlePath)
 	assertNoPartialsLeftBehind(t, snapshotsDir)
 }
 
@@ -124,10 +128,12 @@ func Test_sync_wraps_an_error_when_the_probe_fails(t *testing.T) {
 		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
 		snapshot.WithSource(&fakeSource{probeErr: errBoom}),
 	)
+	bundlePath := t.TempDir()
 
-	_, err := srv.Sync(t.Context(), t.TempDir())
+	_, err := srv.Sync(t.Context(), bundlePath)
 
 	require.ErrorIs(t, err, errBoom)
+	assert.ErrorContains(t, err, "sync "+bundlePath)
 }
 
 // fixedPathDestination hands Backup's caller a pre-built file instead of
@@ -153,18 +159,35 @@ func (f *fixedPathDestination) CommitManifest(context.Context, string) (string, 
 func (f *fixedPathDestination) FinalPaths(string) (string, string) { return "", "" }
 func (f *fixedPathDestination) Discard(context.Context, string) error { return nil }
 
+// garbageFileOpenCause opens path — garbage bytes buildManifest's own open
+// will fail against — through a connection independent of the code under
+// test, so a test can pin the exact cause Sync's wrap carries rather than
+// asserting only that "some error" occurred.
+func garbageFileOpenCause(t *testing.T, path string) error {
+	t.Helper()
+	conn, err := sql.Open("sqlite3", "file:"+path+"?mode=ro")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	var count int
+	return conn.QueryRow("SELECT count(*) FROM sqlite_master").Scan(&count)
+}
+
 func Test_sync_wraps_an_error_when_the_snapshot_cannot_be_opened(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "garbage.sqlite")
 	require.NoError(t, os.WriteFile(path, []byte("not a database"), 0o600))
+	cause := garbageFileOpenCause(t, path)
+	require.Error(t, cause)
+	bundlePath := t.TempDir()
 	srv := snapshot.NewServer(
 		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
 		snapshot.WithSource(&fakeSource{}),
 		snapshot.WithDestination(&fixedPathDestination{snapshotPath: path}),
 	)
 
-	_, err := srv.Sync(t.Context(), t.TempDir())
+	_, err := srv.Sync(t.Context(), bundlePath)
 
-	require.Error(t, err)
+	require.ErrorIs(t, err, cause)
+	assert.ErrorContains(t, err, "sync "+bundlePath)
 	var re snapshot.RefusalError
 	assert.False(t, errors.As(err, &re), "an unrelated open failure must not be misclassified as a content refusal")
 }
