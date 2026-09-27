@@ -60,6 +60,24 @@ func Test_schema_reads_table_and_column_names(t *testing.T) {
 	assert.Equal(t, sqlschema.Schema{"t": {"id", "v"}}, got)
 }
 
+func Test_schema_reads_quoted_table_and_column_names_verbatim(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data")
+	conn, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	_, err = conn.Exec(`CREATE TABLE "order" ("select" TEXT)`)
+	require.NoError(t, err)
+
+	db, err := sqlite.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	got, err := db.Schema(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, sqlschema.Schema{"order": {"select"}}, got)
+}
+
 func Test_integrity_check_fails_on_a_corrupted_database(t *testing.T) {
 	path := newMultiPageTestDatabase(t)
 	corruptLastPage(t, path)
@@ -220,7 +238,7 @@ func Test_backup_copies_rows_into_the_destination(t *testing.T) {
 }
 
 func Test_backup_sets_journal_mode_delete_on_the_destination(t *testing.T) {
-	srcPath := newTestDatabase(t)
+	srcPath := newWALTestDatabase(t)
 	src, err := sqlite.OpenReadOnly(t.Context(), srcPath)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = src.Close() })
@@ -230,8 +248,34 @@ func Test_backup_sets_journal_mode_delete_on_the_destination(t *testing.T) {
 	err = sqlite.Backup(t.Context(), src, destPath)
 	require.NoError(t, err)
 
+	// Offsets 18-19 of the SQLite header are the file-format write/read
+	// version: 2 for WAL, 1 for a rollback journal. The backup API copies
+	// the source's WAL header verbatim, so this is 2 unless Backup resets
+	// the destination's journal mode itself.
+	header, err := os.ReadFile(destPath)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(header), 20)
+	assert.Equal(t, []byte{0x01, 0x01}, header[18:20])
+
 	_, err = os.Stat(destPath + "-wal")
 	assert.ErrorIs(t, err, os.ErrNotExist)
+}
+
+// newWALTestDatabase creates a database already switched into WAL mode, so
+// its header bytes 18-19 read 2 (see Test_backup_sets_journal_mode_delete_on_the_destination).
+func newWALTestDatabase(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "data")
+	conn, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	_, err = conn.Exec("PRAGMA journal_mode=WAL")
+	require.NoError(t, err)
+	_, err = conn.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
+	require.NoError(t, err)
+	_, err = conn.Exec("INSERT INTO t (v) VALUES ('a')")
+	require.NoError(t, err)
+	return path
 }
 
 func Test_backup_fails_when_the_destination_directory_is_missing(t *testing.T) {

@@ -20,9 +20,9 @@ type dirDestination struct {
 
 var _ Destination = (*dirDestination)(nil)
 
-// NewDirDestination returns the production Destination adapter, writing
+// newDirDestination returns the production Destination adapter, writing
 // into dir.
-func NewDirDestination(dir string) Destination {
+func newDirDestination(dir string) Destination {
 	return &dirDestination{dir: dir}
 }
 
@@ -59,7 +59,9 @@ func (d *dirDestination) WriteManifest(ctx context.Context, name string, data []
 	defer func() { _ = f.Close() }()
 
 	if _, err := f.Write(data); err != nil {
-		// unreachable: a write failing on a file this call just created needs disk exhaustion or an I/O fault; BR-11 assigns that fault's test to SCENARIO-13's fake Destination, not to this adapter.
+		// unreachable: no portable, test-constructible input makes a Write
+		// to a freshly created regular file fail; only disk exhaustion or
+		// an I/O fault would, and this package cannot construct either.
 		_ = os.Remove(partial)
 		return "", fmt.Errorf("write manifest partial: %w", err)
 	}

@@ -84,11 +84,11 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 
 	source := s.source
 	if source == nil {
-		source = NewSQLiteSource()
+		source = newSQLiteSource()
 	}
 	destination := s.destination
 	if destination == nil {
-		destination = NewDirDestination(s.snapshotDir)
+		destination = newDirDestination(s.snapshotDir)
 	}
 
 	dataPath := filepath.Join(bundlePath, "data")

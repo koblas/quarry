@@ -88,7 +88,7 @@ func Test_sync_reports_a_missing_column_when_the_reference_names_one_the_bundle_
 	assert.Equal(t, []snapshot.ColumnRef{{Table: "ZACCOUNT", Column: "ZFAKECOLUMN"}}, manifest.Schema.MissingColumns)
 }
 
-func Test_sync_reports_a_warning_when_the_bundle_has_extra_tables_only(t *testing.T) {
+func Test_sync_stays_verified_and_lists_unexpected_tables_when_the_bundle_has_extra_tables_only(t *testing.T) {
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	ref, err := v9.Reference(t.Context())
 	require.NoError(t, err)
@@ -125,8 +125,10 @@ func Test_sync_leaves_the_live_bundle_unchanged(t *testing.T) {
 	entriesBefore, err := os.ReadDir(bundle.Dir)
 	require.NoError(t, err)
 
-	_, err = srv.Sync(t.Context(), bundle.Dir)
+	manifest, err := srv.Sync(t.Context(), bundle.Dir)
 	require.NoError(t, err)
+	require.FileExists(t, manifest.Snapshot.Path)
+	require.FileExists(t, manifest.Snapshot.Manifest)
 
 	after, err := os.ReadFile(bundle.DataPath)
 	require.NoError(t, err)

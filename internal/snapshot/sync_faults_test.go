@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/koblas/quarry/internal/platform/sqlite"
 	"github.com/koblas/quarry/internal/platform/sqlschema"
 	"github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
@@ -71,8 +72,9 @@ func Test_sync_wraps_an_error_when_opening_the_bundle_fails(t *testing.T) {
 }
 
 func Test_sync_wraps_an_error_when_the_backup_fails(t *testing.T) {
+	snapshotsDir := filepath.Join(t.TempDir(), "snapshots")
 	srv := snapshot.NewServer(
-		snapshot.WithSnapshotDir(t.TempDir()),
+		snapshot.WithSnapshotDir(snapshotsDir),
 		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
 		snapshot.WithSource(&fakeSource{backupErr: errBoom}),
 	)
@@ -80,6 +82,22 @@ func Test_sync_wraps_an_error_when_the_backup_fails(t *testing.T) {
 	_, err := srv.Sync(t.Context(), t.TempDir())
 
 	require.ErrorIs(t, err, errBoom)
+	assertNoPartialsLeftBehind(t, snapshotsDir)
+}
+
+// assertNoPartialsLeftBehind fails if dir holds any of Destination's
+// exclusively-created ".partial" files: every Destination method that
+// creates one removes it again on its own failure.
+func assertNoPartialsLeftBehind(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return
+	}
+	require.NoError(t, err)
+	for _, entry := range entries {
+		assert.False(t, strings.HasSuffix(entry.Name(), ".partial"), "leftover partial: %s", entry.Name())
+	}
 }
 
 // Exercises the real Destination adapter's Prepare fault path: MkdirAll
@@ -147,11 +165,15 @@ func Test_sync_wraps_an_error_when_the_snapshot_cannot_be_opened(t *testing.T) {
 	require.Error(t, err)
 }
 
+// The fixture is damaged so only integrity_check fails: every other read
+// buildManifest performs (accounts count, schema, hash) must still succeed
+// against the corrupted file, so this fixture keeps a real, non-empty
+// ZACCOUNT table and damages an index's pages instead.
 func Test_sync_wraps_an_error_when_the_snapshot_fails_integrity_check(t *testing.T) {
 	srv := snapshot.NewServer(
 		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
 		snapshot.WithSource(&fakeSource{}),
-		snapshot.WithDestination(&fixedPathDestination{snapshotPath: newCorruptedSnapshot(t)}),
+		snapshot.WithDestination(&fixedPathDestination{snapshotPath: newIndexCorruptedSnapshot(t)}),
 	)
 
 	_, err := srv.Sync(t.Context(), t.TempDir())
@@ -159,19 +181,30 @@ func Test_sync_wraps_an_error_when_the_snapshot_fails_integrity_check(t *testing
 	require.Error(t, err)
 }
 
-// newCorruptedSnapshot writes enough rows to spill past the first page,
-// then flips bytes in a later page, so the file opens but its
-// integrity_check fails.
-func newCorruptedSnapshot(t *testing.T) string {
+// newIndexCorruptedSnapshot builds a snapshot with a valid, non-empty
+// ZACCOUNT table plus a separate, heavily indexed filler table, then flips
+// bytes in the file's last page. ZACCOUNT is created and populated first, so
+// its pages sit near the front of the file; the filler table's index, built
+// over 1,000 rows, is what grows the file and ends up owning its last pages.
+// Corrupting there fails PRAGMA integrity_check without touching ZACCOUNT's
+// row, sqlite_master, or any pragma_table_info read of a column list.
+func newIndexCorruptedSnapshot(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "snap.sqlite")
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
-	_, err = conn.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
+	_, err = conn.Exec("CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZNAME TEXT)")
 	require.NoError(t, err)
-	for i := 0; i < 500; i++ {
-		_, err = conn.Exec("INSERT INTO t (v) VALUES (?)", strings.Repeat("x", 100))
+	_, err = conn.Exec("INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
+	require.NoError(t, err)
+
+	_, err = conn.Exec("CREATE TABLE ZFILLER (id INTEGER PRIMARY KEY, v TEXT)")
+	require.NoError(t, err)
+	_, err = conn.Exec("CREATE INDEX ZFILLER_V ON ZFILLER(v)")
+	require.NoError(t, err)
+	for i := 0; i < 1000; i++ {
+		_, err = conn.Exec("INSERT INTO ZFILLER (v) VALUES (?)", strings.Repeat("x", 100))
 		require.NoError(t, err)
 	}
 	require.NoError(t, conn.Close())
@@ -183,7 +216,29 @@ func newCorruptedSnapshot(t *testing.T) string {
 		raw[i] ^= 0xFF
 	}
 	require.NoError(t, os.WriteFile(path, raw, 0o600))
+
+	requireOnlyIntegrityCheckFails(t, path)
 	return path
+}
+
+// requireOnlyIntegrityCheckFails confirms the fixture built above is damaged
+// in exactly the way its name promises: integrity_check fails, but the two
+// other reads buildManifest performs on a snapshot (the accounts count and
+// the schema read) do not.
+func requireOnlyIntegrityCheckFails(t *testing.T, path string) {
+	t.Helper()
+	db, err := sqlite.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	require.Error(t, db.IntegrityCheck(t.Context()))
+
+	count, err := db.QueryInt(t.Context(), "SELECT count(*) FROM ZACCOUNT")
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
+
+	_, err = db.Schema(t.Context())
+	require.NoError(t, err)
 }
 
 func Test_sync_wraps_an_error_when_the_snapshot_has_no_accounts_table(t *testing.T) {

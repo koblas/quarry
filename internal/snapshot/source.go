@@ -15,8 +15,8 @@ type sqliteSource struct {
 
 var _ Source = (*sqliteSource)(nil)
 
-// NewSQLiteSource returns the production Source adapter.
-func NewSQLiteSource() Source {
+// newSQLiteSource returns the production Source adapter.
+func newSQLiteSource() Source {
 	return &sqliteSource{}
 }
 
