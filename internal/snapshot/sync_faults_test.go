@@ -8,13 +8,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/sqlite"
 	"github.com/koblas/quarry/internal/platform/sqlschema"
 	"github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/snapshot"
-	_ "github.com/mattn/go-sqlite3"
+	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -339,4 +340,67 @@ func Test_sync_wraps_an_error_when_committing_the_snapshot_fails(t *testing.T) {
 	_, err = srv.Sync(t.Context(), bundle.Dir)
 
 	require.ErrorIs(t, err, errBoom)
+}
+
+// Uses a rollback-journal (non-WAL) fixture: v9fixture's WAL-mode bundle
+// does not block a mode=ro reader against an uncommitted writer.
+func Test_sync_refuses_a_busy_bundle(t *testing.T) {
+	home := t.TempDir()
+	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
+	require.NoError(t, os.MkdirAll(bundleDir, 0o700))
+	dataPath := filepath.Join(bundleDir, "data")
+	conn, err := sql.Open("sqlite3", dataPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	_, err = conn.Exec("CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZNAME TEXT)")
+	require.NoError(t, err)
+	_, err = conn.Exec("INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
+	require.NoError(t, err)
+
+	locker, err := sql.Open("sqlite3", dataPath)
+	require.NoError(t, err)
+	locker.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = locker.Close() })
+	lockerConn, err := locker.Conn(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = lockerConn.Close() })
+	_, err = lockerConn.ExecContext(t.Context(), "BEGIN EXCLUSIVE")
+	require.NoError(t, err)
+	_, err = lockerConn.ExecContext(t.Context(), "INSERT INTO ZACCOUNT (ZNAME) VALUES ('Locked')")
+	require.NoError(t, err)
+
+	snapshotsDir := filepath.Join(home, "snapshots")
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(snapshotsDir),
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithHome(home),
+		snapshot.WithBusyTimeout(80*time.Millisecond),
+	)
+
+	_, err = srv.Sync(t.Context(), bundleDir)
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t, "Quicken is busy writing ~/Documents/Home.quicken; run quarry sync again in a moment", re.Error())
+	assertNoPartialsLeftBehind(t, snapshotsDir)
+	_, statErr := os.Stat(snapshotsDir)
+	assert.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
+// Proves Sync's Backup-failure branch shares Open/Probe's busy
+// classification, independent of real lock timing.
+func Test_sync_refuses_when_the_backup_hits_a_busy_lock(t *testing.T) {
+	home := t.TempDir()
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(t.TempDir()),
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{backupErr: sqlite3.Error{Code: sqlite3.ErrBusy}}),
+		snapshot.WithHome(home),
+	)
+
+	_, err := srv.Sync(t.Context(), filepath.Join(home, "Documents", "Home.quicken"))
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t, "Quicken is busy writing ~/Documents/Home.quicken; run quarry sync again in a moment", re.Error())
 }

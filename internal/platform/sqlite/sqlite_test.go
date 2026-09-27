@@ -1,15 +1,18 @@
 package sqlite_test
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/sqlite"
 	"github.com/koblas/quarry/internal/platform/sqlschema"
-	_ "github.com/mattn/go-sqlite3"
+	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -141,7 +144,7 @@ func Test_backup_fails_when_the_source_connection_is_closed(t *testing.T) {
 	destPath := filepath.Join(t.TempDir(), "dest")
 	require.NoError(t, os.WriteFile(destPath, nil, 0o600))
 
-	err = sqlite.Backup(t.Context(), src, destPath)
+	err = sqlite.Backup(t.Context(), src, destPath, 0)
 
 	require.Error(t, err)
 }
@@ -154,7 +157,7 @@ func Test_backup_fails_when_the_destination_is_not_a_database(t *testing.T) {
 	destPath := filepath.Join(t.TempDir(), "dest")
 	require.NoError(t, os.WriteFile(destPath, []byte("not a database"), 0o600))
 
-	err = sqlite.Backup(t.Context(), src, destPath)
+	err = sqlite.Backup(t.Context(), src, destPath, 0)
 
 	require.Error(t, err)
 }
@@ -190,7 +193,7 @@ func Test_backup_fails_when_the_destination_file_is_read_only(t *testing.T) {
 	require.NoError(t, os.WriteFile(destPath, nil, 0o400))
 	t.Cleanup(func() { _ = os.Chmod(destPath, 0o600) })
 
-	err = sqlite.Backup(t.Context(), src, destPath)
+	err = sqlite.Backup(t.Context(), src, destPath, 0)
 
 	require.Error(t, err)
 }
@@ -226,7 +229,7 @@ func Test_backup_copies_rows_into_the_destination(t *testing.T) {
 	destPath := filepath.Join(t.TempDir(), "dest")
 	require.NoError(t, os.WriteFile(destPath, nil, 0o600))
 
-	err = sqlite.Backup(t.Context(), src, destPath)
+	err = sqlite.Backup(t.Context(), src, destPath, 0)
 	require.NoError(t, err)
 
 	dest, err := sqlite.OpenReadOnly(t.Context(), destPath)
@@ -245,7 +248,7 @@ func Test_backup_sets_journal_mode_delete_on_the_destination(t *testing.T) {
 	destPath := filepath.Join(t.TempDir(), "dest")
 	require.NoError(t, os.WriteFile(destPath, nil, 0o600))
 
-	err = sqlite.Backup(t.Context(), src, destPath)
+	err = sqlite.Backup(t.Context(), src, destPath, 0)
 	require.NoError(t, err)
 
 	// Offsets 18-19 of the SQLite header are the file-format write/read
@@ -285,7 +288,122 @@ func Test_backup_fails_when_the_destination_directory_is_missing(t *testing.T) {
 	t.Cleanup(func() { _ = src.Close() })
 	destPath := filepath.Join(t.TempDir(), "missing-dir", "dest")
 
-	err = sqlite.Backup(t.Context(), src, destPath)
+	err = sqlite.Backup(t.Context(), src, destPath, 0)
 
 	require.Error(t, err)
+}
+
+func Test_IsNotADB_and_IsBusy_classify_sqlite3_error_codes(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantNotADB bool
+		wantBusy   bool
+	}{
+		{name: "not a database", err: sqlite3.Error{Code: sqlite3.ErrNotADB}, wantNotADB: true},
+		{name: "busy", err: sqlite3.Error{Code: sqlite3.ErrBusy}, wantBusy: true},
+		{name: "locked", err: sqlite3.Error{Code: sqlite3.ErrLocked}, wantBusy: true},
+		{name: "unrelated sqlite3 error", err: sqlite3.Error{Code: sqlite3.ErrCorrupt}},
+		{name: "non-sqlite3 error", err: errors.New("boom")},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.wantNotADB, sqlite.IsNotADB(c.err))
+			assert.Equal(t, c.wantBusy, sqlite.IsBusy(c.err))
+		})
+	}
+}
+
+// lockDatabaseExclusively opens a second connection to path and holds an
+// uncommitted BEGIN EXCLUSIVE for the rest of the test.
+func lockDatabaseExclusively(t *testing.T, path string) {
+	t.Helper()
+	locker, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	locker.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = locker.Close() })
+	conn, err := locker.Conn(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	_, err = conn.ExecContext(t.Context(), "BEGIN EXCLUSIVE")
+	require.NoError(t, err)
+	_, err = conn.ExecContext(t.Context(), "INSERT INTO t (v) VALUES ('locked')")
+	require.NoError(t, err)
+}
+
+// busy_timeout=0 disables SQLite's own retry, so any wait is runBackup's.
+// Bounded by 2s so a still-broken loop times out the test, not the suite.
+func Test_backup_fails_when_the_source_is_exclusively_locked_past_the_deadline(t *testing.T) {
+	path := newTestDatabase(t)
+	src, err := sqlite.OpenReadOnlyBusy(t.Context(), path, 0)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = src.Close() })
+	lockDatabaseExclusively(t, path)
+	destPath := filepath.Join(t.TempDir(), "dest")
+	require.NoError(t, os.WriteFile(destPath, nil, 0o600))
+
+	result := make(chan error, 1)
+	go func() {
+		result <- sqlite.Backup(t.Context(), src, destPath, 50*time.Millisecond)
+	}()
+
+	select {
+	case err := <-result:
+		require.Error(t, err)
+		assert.True(t, sqlite.IsBusy(err), "expected a busy-classified error, got %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Backup did not return within 2s of the source being locked past its deadline")
+	}
+}
+
+// busyTimeout is an hour, so only runBackup's own ctx check can return this
+// quickly. Cancel fires after the goroutine is inside the retry loop.
+func Test_backup_stops_when_the_context_is_cancelled_while_waiting_on_a_busy_source(t *testing.T) {
+	path := newTestDatabase(t)
+	src, err := sqlite.OpenReadOnlyBusy(t.Context(), path, 0)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = src.Close() })
+	lockDatabaseExclusively(t, path)
+	destPath := filepath.Join(t.TempDir(), "dest")
+	require.NoError(t, os.WriteFile(destPath, nil, 0o600))
+	ctx, cancel := context.WithCancel(context.Background())
+
+	result := make(chan error, 1)
+	go func() {
+		result <- sqlite.Backup(ctx, src, destPath, time.Hour)
+	}()
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-result:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Backup did not stop within 2s of ctx being cancelled while waiting on a busy source")
+	}
+}
+
+// The writer releases well before busyTimeout elapses.
+func Test_open_read_only_busy_succeeds_once_the_writer_releases_the_lock_before_the_timeout(t *testing.T) {
+	path := newTestDatabase(t)
+	locker, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	locker.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = locker.Close() })
+	conn, err := locker.Conn(t.Context())
+	require.NoError(t, err)
+	_, err = conn.ExecContext(t.Context(), "BEGIN EXCLUSIVE")
+	require.NoError(t, err)
+	_, err = conn.ExecContext(t.Context(), "INSERT INTO t (v) VALUES ('locked')")
+	require.NoError(t, err)
+	go func() {
+		time.Sleep(30 * time.Millisecond)
+		_, _ = conn.ExecContext(context.Background(), "COMMIT")
+	}()
+
+	db, err := sqlite.OpenReadOnlyBusy(t.Context(), path, 2*time.Second)
+
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
 }

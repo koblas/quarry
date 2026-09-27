@@ -17,12 +17,17 @@ import (
 // snapshot and manifest pair with.
 const snapshotNameLayout = "20060102T150405Z"
 
+// DefaultBusyTimeout is how long Sync waits for a busy or locked source before refusing.
+const DefaultBusyTimeout = 5 * time.Second
+
 // Server takes verified snapshots of a Quicken bundle into a snapshots
 // directory, checking each one against a reference schema.
 type Server struct {
 	snapshotDir    string
 	referenceLabel string
 	reference      sqlschema.Schema
+	home           string
+	busyTimeout    time.Duration
 
 	source      Source
 	destination Destination
@@ -58,9 +63,20 @@ func WithDestination(destination Destination) Option {
 	return func(s *Server) { s.destination = destination }
 }
 
+// WithHome sets the home directory Sync abbreviates refusal messages
+// raised from inside Sync itself against.
+func WithHome(home string) Option {
+	return func(s *Server) { s.home = home }
+}
+
+// WithBusyTimeout overrides DefaultBusyTimeout.
+func WithBusyTimeout(d time.Duration) Option {
+	return func(s *Server) { s.busyTimeout = d }
+}
+
 // NewServer builds a Server from opts.
 func NewServer(opts ...Option) *Server {
-	s := &Server{}
+	s := &Server{busyTimeout: DefaultBusyTimeout}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -84,7 +100,7 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 
 	source := s.source
 	if source == nil {
-		source = newSQLiteSource()
+		source = newSQLiteSource(s.busyTimeout)
 	}
 	destination := s.destination
 	if destination == nil {
@@ -93,12 +109,12 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 
 	dataPath := filepath.Join(bundlePath, "data")
 	if err := source.Open(ctx, dataPath); err != nil {
-		return Manifest{}, fmt.Errorf("sync %s: %w", bundlePath, err)
+		return Manifest{}, sourceRefusal(s.home, bundlePath, err)
 	}
 	defer func() { _ = source.Close() }()
 
 	if err := source.Probe(ctx); err != nil {
-		return Manifest{}, fmt.Errorf("sync %s: %w", bundlePath, err)
+		return Manifest{}, sourceRefusal(s.home, bundlePath, err)
 	}
 
 	if err := destination.Prepare(ctx); err != nil {
@@ -111,7 +127,7 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 
 	snapshotPartial, err := destination.Backup(ctx, source, name)
 	if err != nil {
-		return Manifest{}, fmt.Errorf("sync %s: %w", bundlePath, err)
+		return Manifest{}, sourceRefusal(s.home, bundlePath, err)
 	}
 
 	manifest, err := s.buildManifest(ctx, snapshotPartial, bundlePath, takenAt)

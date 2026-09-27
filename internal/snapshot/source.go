@@ -3,6 +3,7 @@ package snapshot
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/sqlite"
 )
@@ -11,17 +12,20 @@ import (
 // connection opened over platform/sqlite.
 type sqliteSource struct {
 	db *sqlite.DB
+	// busyTimeout governs both Open's connection-level busy_timeout and
+	// Backup's online-backup retry deadline.
+	busyTimeout time.Duration
 }
 
 var _ Source = (*sqliteSource)(nil)
 
 // newSQLiteSource returns the production Source adapter.
-func newSQLiteSource() Source {
-	return &sqliteSource{}
+func newSQLiteSource(busyTimeout time.Duration) Source {
+	return &sqliteSource{busyTimeout: busyTimeout}
 }
 
 func (s *sqliteSource) Open(ctx context.Context, path string) error {
-	db, err := sqlite.OpenReadOnly(ctx, path)
+	db, err := sqlite.OpenReadOnlyBusy(ctx, path, s.busyTimeout)
 	if err != nil {
 		return fmt.Errorf("open %s: %w", path, err)
 	}
@@ -38,7 +42,7 @@ func (s *sqliteSource) Probe(ctx context.Context) error {
 }
 
 func (s *sqliteSource) Backup(ctx context.Context, destPath string) error {
-	if err := sqlite.Backup(ctx, s.db, destPath); err != nil {
+	if err := sqlite.Backup(ctx, s.db, destPath, s.busyTimeout); err != nil {
 		return fmt.Errorf("backup: %w", err)
 	}
 	return nil

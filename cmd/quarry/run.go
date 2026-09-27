@@ -32,6 +32,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	srv := snapshot.NewServer(
 		snapshot.WithSnapshotDir(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")),
 		snapshot.WithReference(v9.ReferenceLabel, ref),
+		snapshot.WithHome(home),
 	)
 
 	if err := cli.Execute(ctx, args, stdout, stderr, srv, home); err != nil {

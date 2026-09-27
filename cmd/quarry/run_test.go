@@ -327,10 +327,9 @@ func Test_run_reports_exit_1_when_the_context_is_already_cancelled(t *testing.T)
 	assert.Contains(t, lines[0], "build reference schema", "expected the failure to come from v9.Reference, not from a later stage that also observes the cancelled context")
 }
 
-// The bundle passes ResolveBundlePath's R4-R7 checks (a real directory with a
-// readable regular "data" file) so this exercises srv.Sync's own error path,
-// not path resolution.
-func Test_run_reports_exit_1_when_sync_fails(t *testing.T) {
+// The bundle itself is valid; its data file is present but not a SQLite
+// database at all, so this exercises srv.Sync's error path, not path resolution.
+func Test_run_refuses_an_encrypted_bundle(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
@@ -342,7 +341,11 @@ func Test_run_reports_exit_1_when_sync_fails(t *testing.T) {
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
-	assert.NotEmpty(t, stderr.String())
+	assert.Equal(t, "quarry: "+abbreviated(t, bundleDir, home)+
+		" is encrypted, so Quicken does not have it open; open it in Quicken, then run quarry sync again\n",
+		stderr.String())
+	_, statErr := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"))
+	assert.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
 // onlyFileWithSuffix fails the test unless exactly one entry in dir ends in

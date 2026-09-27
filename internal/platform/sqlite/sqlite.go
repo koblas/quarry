@@ -3,8 +3,10 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/sqlschema"
 	sqlite3 "github.com/mattn/go-sqlite3"
@@ -20,7 +22,20 @@ type DB struct {
 // connection. It probes the connection with a read against sqlite_master so
 // a caller learns immediately whether path is a readable SQLite database.
 func OpenReadOnly(ctx context.Context, path string) (*DB, error) {
-	conn, err := sql.Open("sqlite3", "file:"+escapePath(path)+"?mode=ro")
+	return openReadOnly(ctx, path, "file:"+escapePath(path)+"?mode=ro")
+}
+
+// OpenReadOnlyBusy is OpenReadOnly with busyTimeout applied as the
+// connection's SQLite busy_timeout: a lock held by another connection is
+// retried for up to busyTimeout before Open (or any later read on the same
+// connection) fails with a sqlite.IsBusy error.
+func OpenReadOnlyBusy(ctx context.Context, path string, busyTimeout time.Duration) (*DB, error) {
+	dsn := fmt.Sprintf("file:%s?mode=ro&_busy_timeout=%d", escapePath(path), busyTimeout.Milliseconds())
+	return openReadOnly(ctx, path, dsn)
+}
+
+func openReadOnly(ctx context.Context, path, dsn string) (*DB, error) {
+	conn, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		// unreachable: sql.Open only validates the driver name, which the sqlite3 import always registers.
 		return nil, fmt.Errorf("open %s read-only: %w", path, err)
@@ -33,6 +48,21 @@ func OpenReadOnly(ctx context.Context, path string) (*DB, error) {
 		return nil, fmt.Errorf("probe %s: %w", path, err)
 	}
 	return &DB{conn: conn}, nil
+}
+
+// IsNotADB reports whether err is SQLite's "file is not a database" fault
+// (SQLITE_NOTADB) — the signal an encrypted Quicken file produces.
+func IsNotADB(err error) bool {
+	var serr sqlite3.Error
+	return errors.As(err, &serr) && serr.Code == sqlite3.ErrNotADB
+}
+
+// IsBusy reports whether err is SQLite's busy or locked fault
+// (SQLITE_BUSY/SQLITE_LOCKED) — another connection holding a lock the
+// caller's busy_timeout could not wait out.
+func IsBusy(err error) bool {
+	var serr sqlite3.Error
+	return errors.As(err, &serr) && (serr.Code == sqlite3.ErrBusy || serr.Code == sqlite3.ErrLocked)
 }
 
 // escapePath percent-encodes path for use as a SQLite URI filename, so
@@ -148,12 +178,15 @@ func (d *DB) tableColumns(ctx context.Context, table string) ([]string, error) {
 	return cols, rows.Err()
 }
 
+// backupRetryInterval is how long runBackup sleeps between busy retries.
+const backupRetryInterval = 10 * time.Millisecond
+
 // Backup copies src's "main" database into destPath, which must already
 // exist, using SQLite's online backup API so pages still in src's -wal file
 // are included. It then sets destPath's journal_mode to DELETE, since the
 // backup API copies the WAL flag from the source header and would otherwise
 // leave destPath in WAL mode with its own -wal/-shm files.
-func Backup(ctx context.Context, src *DB, destPath string) error {
+func Backup(ctx context.Context, src *DB, destPath string, busyTimeout time.Duration) error {
 	destDB, err := sql.Open("sqlite3", "file:"+escapePath(destPath))
 	if err != nil {
 		// unreachable: sql.Open only validates the driver name, which the sqlite3 import always registers.
@@ -176,7 +209,7 @@ func Backup(ctx context.Context, src *DB, destPath string) error {
 
 	err = destConn.Raw(func(destDriverConn any) error {
 		return srcConn.Raw(func(srcDriverConn any) error {
-			return runBackup(destDriverConn, srcDriverConn)
+			return runBackup(ctx, destDriverConn, srcDriverConn, busyTimeout)
 		})
 	})
 	if err != nil {
@@ -194,8 +227,9 @@ func Backup(ctx context.Context, src *DB, destPath string) error {
 }
 
 // runBackup drives one SQLite online-backup pass from srcDriverConn's "main"
-// database into destDriverConn's "main" database, stepping until done.
-func runBackup(destDriverConn, srcDriverConn any) error {
+// database into destDriverConn's "main" database, stepping until done or
+// until busyTimeout or ctx ends the wait.
+func runBackup(ctx context.Context, destDriverConn, srcDriverConn any, busyTimeout time.Duration) error {
 	dc, ok := destDriverConn.(*sqlite3.SQLiteConn)
 	if !ok {
 		// unreachable: this package only ever opens connections through the sqlite3 driver.
@@ -214,13 +248,26 @@ func runBackup(destDriverConn, srcDriverConn any) error {
 	}
 	defer func() { _ = bk.Close() }()
 
+	deadline := time.Now().Add(busyTimeout)
 	for {
+		// A source busy or locked reports neither done nor an error — mattn's
+		// own contract — so the caller, not Step, decides when to give up.
 		done, err := bk.Step(-1)
 		if err != nil {
 			return err
 		}
 		if done {
 			return nil
+		}
+
+		if time.Now().After(deadline) {
+			return sqlite3.Error{Code: sqlite3.ErrBusy}
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(backupRetryInterval):
 		}
 	}
 }
