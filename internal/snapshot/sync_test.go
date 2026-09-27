@@ -3,6 +3,7 @@ package snapshot_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -104,6 +105,39 @@ func Test_sync_stays_verified_and_lists_unexpected_tables_when_the_bundle_has_ex
 	assert.True(t, manifest.Schema.Verified)
 	assert.Equal(t, []string{"ZALERT"}, manifest.Schema.UnexpectedTables)
 	assert.Empty(t, manifest.Schema.MissingTables)
+}
+
+// Pinned against Test_scope_of_the_reference_has_the_pinned_table_and_column_counts.
+func Test_sync_reports_the_scoped_reference_table_and_column_counts(t *testing.T) {
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	snapshotsDir := filepath.Join(t.TempDir(), "snapshots")
+	srv := newServer(t, snapshotsDir)
+
+	manifest, err := srv.Sync(t.Context(), bundle.Dir)
+
+	require.NoError(t, err)
+	assert.Equal(t, 82, manifest.Schema.ReferenceTables)
+	assert.Equal(t, 1835, manifest.Schema.ReferenceColumns)
+	encoded, err := manifest.Encode()
+	require.NoError(t, err)
+	assert.NotContains(t, string(encoded), "ReferenceTables")
+	assert.NotContains(t, string(encoded), "ReferenceColumns")
+}
+
+func Test_sync_writes_a_manifest_whose_own_path_fields_match_where_it_is_committed(t *testing.T) {
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	snapshotsDir := filepath.Join(t.TempDir(), "snapshots")
+	srv := newServer(t, snapshotsDir)
+
+	manifest, err := srv.Sync(t.Context(), bundle.Dir)
+
+	require.NoError(t, err)
+	raw, err := os.ReadFile(manifest.Snapshot.Manifest)
+	require.NoError(t, err)
+	var onDisk snapshot.Manifest
+	require.NoError(t, json.Unmarshal(raw, &onDisk))
+	assert.Equal(t, manifest.Snapshot.Path, onDisk.Snapshot.Path)
+	assert.Equal(t, manifest.Snapshot.Manifest, onDisk.Snapshot.Manifest)
 }
 
 func assertMode(t *testing.T, path string, want os.FileMode) {

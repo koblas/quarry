@@ -107,6 +107,7 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 
 	takenAt := time.Now().UTC()
 	name := takenAt.Format(snapshotNameLayout)
+	snapshotPath, manifestPath := destination.FinalPaths(name)
 
 	snapshotPartial, err := destination.Backup(ctx, source, name)
 	if err != nil {
@@ -117,6 +118,11 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 	if err != nil {
 		return Manifest{}, fmt.Errorf("sync %s: %w", bundlePath, err)
 	}
+	// Set before Encode so the bytes committed to disk (BR-10: manifest ==
+	// --json) already carry the paths Sync returns, rather than the empty
+	// values Commit* would only learn afterward.
+	manifest.Snapshot.Path = snapshotPath
+	manifest.Snapshot.Manifest = manifestPath
 
 	manifestBytes, err := manifest.Encode()
 	if err != nil {
@@ -131,17 +137,13 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 	// Manifest commits first: BR-8 accepts a snapshot only if its manifest
 	// exists, so a crash between the two commits must never leave a
 	// snapshot without one.
-	manifestPath, err := destination.CommitManifest(ctx, manifestPartial)
-	if err != nil {
+	if _, err := destination.CommitManifest(ctx, manifestPartial); err != nil {
 		return Manifest{}, fmt.Errorf("sync %s: %w", bundlePath, err)
 	}
-	snapshotPath, err := destination.CommitSnapshot(ctx, snapshotPartial)
-	if err != nil {
+	if _, err := destination.CommitSnapshot(ctx, snapshotPartial); err != nil {
 		return Manifest{}, fmt.Errorf("sync %s: %w", bundlePath, err)
 	}
 
-	manifest.Snapshot.Path = snapshotPath
-	manifest.Snapshot.Manifest = manifestPath
 	return manifest, nil
 }
 
@@ -194,15 +196,23 @@ func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string,
 
 // schemaInfoFromDiff assembles SchemaInfo from a schema comparison.
 func schemaInfoFromDiff(referenceLabel string, reference, actual sqlschema.Schema, diff sqlschema.Diff) SchemaInfo {
+	scopedReference := scopeSchema(reference)
+	referenceColumns := 0
+	for _, cols := range scopedReference {
+		referenceColumns += len(cols)
+	}
+
 	return SchemaInfo{
 		Reference:            referenceLabel,
 		Verified:             len(diff.MissingTables) == 0 && len(diff.MissingColumns) == 0,
 		Fingerprint:          sqlschema.Fingerprint(scopeSchema(actual)),
-		ReferenceFingerprint: sqlschema.Fingerprint(scopeSchema(reference)),
+		ReferenceFingerprint: sqlschema.Fingerprint(scopedReference),
 		MissingTables:        diff.MissingTables,
 		MissingColumns:       toManifestColumns(diff.MissingColumns),
 		UnexpectedTables:     diff.UnexpectedTables,
 		UnexpectedColumns:    toManifestColumns(diff.UnexpectedColumns),
+		ReferenceTables:      len(scopedReference),
+		ReferenceColumns:     referenceColumns,
 	}
 }
 

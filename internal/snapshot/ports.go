@@ -38,4 +38,7 @@ type Destination interface {
 	// CommitManifest renames a manifest partial into its final name,
 	// refusing to overwrite an existing file.
 	CommitManifest(ctx context.Context, partial string) (final string, err error)
+	// FinalPaths predicts the snapshot and manifest paths CommitSnapshot and
+	// CommitManifest will produce for name, assuming no collision suffix.
+	FinalPaths(name string) (snapshotPath, manifestPath string)
 }

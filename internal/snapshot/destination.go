@@ -84,6 +84,10 @@ func (d *dirDestination) CommitManifest(ctx context.Context, partial string) (st
 	return final, nil
 }
 
+func (d *dirDestination) FinalPaths(name string) (string, string) {
+	return d.finalPath(d.partialPath(name, "sqlite")), d.finalPath(d.partialPath(name, "json"))
+}
+
 // partialPath returns the exclusively-created partial's path for name and
 // the final file's extension ("sqlite" or "json").
 func (d *dirDestination) partialPath(name, ext string) string {

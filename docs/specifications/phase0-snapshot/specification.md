@@ -410,9 +410,9 @@ Scenario: SCENARIO-13 — Snapshots directory not writable
 ## BDD Acceptance Progress
 - [x] SCENARIO-01a: Snapshot of an open file matching the reference — `internal/snapshot/sync_test.go` `Test_sync_writes_a_verified_private_snapshot_of_an_open_file`
 - [x] SCENARIO-03: Live Quicken file is never modified — delivered by SCENARIO-01a `internal/snapshot/sync_test.go` `Test_sync_leaves_the_live_bundle_unchanged`
-- [ ] SCENARIO-01b: quarry sync reports a verified snapshot
-- [ ] SCENARIO-02: Machine-readable result
-- [ ] SCENARIO-14: Usage errors
+- [x] SCENARIO-01b: quarry sync reports a verified snapshot — `cmd/quarry/run_test.go` `Test_run_writes_a_verified_snapshot_and_reports_success`
+- [x] SCENARIO-02: Machine-readable result — delivered by SCENARIO-01b `cmd/quarry/run_test.go` `Test_run_prints_the_manifest_as_json_with_the_json_flag`
+- [x] SCENARIO-14: Usage errors — delivered by SCENARIO-01b `cmd/quarry/run_test.go` `Test_run_rejects_usage_errors`
 - [ ] SCENARIO-05: Bad --quicken path refused
 - [ ] SCENARIO-04: Bundle discovery in ~/Documents
 - [ ] SCENARIO-06: Encrypted file means Quicken does not have it open

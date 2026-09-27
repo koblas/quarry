@@ -37,6 +37,12 @@ type SchemaInfo struct {
 	MissingColumns       []ColumnRef `json:"missing_columns"`
 	UnexpectedTables     []string    `json:"unexpected_tables"`
 	UnexpectedColumns    []ColumnRef `json:"unexpected_columns"`
+
+	// ReferenceTables and ReferenceColumns count the scoped reference
+	// schema's tables and columns, for the CLI's human Schema line. They
+	// are not part of the --json document.
+	ReferenceTables  int `json:"-"`
+	ReferenceColumns int `json:"-"`
 }
 
 // ColumnRef names one column of one table in the --json document.

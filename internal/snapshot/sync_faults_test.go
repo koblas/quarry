@@ -150,6 +150,7 @@ func (f *fixedPathDestination) CommitSnapshot(context.Context, string) (string, 
 func (f *fixedPathDestination) CommitManifest(context.Context, string) (string, error) {
 	return "", nil
 }
+func (f *fixedPathDestination) FinalPaths(string) (string, string) { return "", "" }
 
 func Test_sync_wraps_an_error_when_the_snapshot_cannot_be_opened(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "garbage.sqlite")
@@ -284,6 +285,9 @@ func (f *partialFaultDestination) CommitSnapshot(ctx context.Context, partial st
 		return "", f.failCommit
 	}
 	return f.real.CommitSnapshot(ctx, partial)
+}
+func (f *partialFaultDestination) FinalPaths(name string) (string, string) {
+	return f.real.FinalPaths(name)
 }
 
 func Test_sync_wraps_an_error_when_writing_the_manifest_fails(t *testing.T) {
