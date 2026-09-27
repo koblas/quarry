@@ -10,14 +10,11 @@ import (
 
 // Execute parses args against quarry's command tree and runs the matched
 // command against srv, writing to stdout/stderr and resolving `~` paths
-// against home. It returns a UsageError unchanged, an srv.Sync error
-// unwrapped, and wraps any other error as a UsageError with a
-// "Run 'quarry sync --help'" hint appended.
+// against home. args must be non-nil (cobra falls back to reading the
+// process's own os.Args for a nil slice). It returns a UsageError
+// unchanged, an srv.Sync error unwrapped, and wraps any other error as a
+// UsageError with a "Run 'quarry sync --help'" hint appended.
 func Execute(ctx context.Context, args []string, stdout, stderr io.Writer, srv *snapshot.Server, home string) error {
-	if args == nil {
-		args = []string{}
-	}
-
 	var jsonOut bool
 	root := newRootCommand(srv, home, &jsonOut)
 	root.SetArgs(args)

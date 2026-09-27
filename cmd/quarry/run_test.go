@@ -7,9 +7,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -65,6 +68,10 @@ func Test_run_prints_the_manifest_as_json_with_the_json_flag(t *testing.T) {
 	want, err := os.ReadFile(manifestPath)
 	require.NoError(t, err)
 	assert.Equal(t, string(want), stdout.String())
+
+	var parsed map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &parsed))
+	assert.ElementsMatch(t, []string{"snapshot", "schema", "warnings"}, slices.Collect(maps.Keys(parsed)))
 }
 
 func Test_run_rejects_usage_errors(t *testing.T) {
@@ -126,6 +133,23 @@ func Test_run_reports_exit_1_when_home_directory_cannot_be_resolved(t *testing.T
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
 	assert.NotEmpty(t, stderr.String())
+}
+
+func Test_run_reports_exit_1_when_the_context_is_already_cancelled(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(ctx, []string{"sync", "--quicken", filepath.Join(home, "Any.quicken")}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	lines := strings.Split(strings.TrimSuffix(stderr.String(), "\n"), "\n")
+	require.Len(t, lines, 1)
+	assert.True(t, strings.HasPrefix(lines[0], "quarry: "))
+	assert.Contains(t, lines[0], "build reference schema", "expected the failure to come from v9.Reference, not from a later stage that also observes the cancelled context")
 }
 
 func Test_run_reports_exit_1_when_sync_fails(t *testing.T) {

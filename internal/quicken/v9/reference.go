@@ -26,7 +26,6 @@ const ReferenceLabel = "hardkoded/quicken-skills@752107b"
 func Reference(ctx context.Context) (sqlschema.Schema, error) {
 	schema, err := executeDDL(ctx, ReferenceDDL)
 	if err != nil {
-		// unreachable: Reference always passes the fixed, valid ReferenceDDL, so executeDDL cannot fail here.
 		return nil, fmt.Errorf("build reference schema: %w", err)
 	}
 	return schema, nil
@@ -37,7 +36,6 @@ func Reference(ctx context.Context) (sqlschema.Schema, error) {
 func executeDDL(ctx context.Context, ddl string) (sqlschema.Schema, error) {
 	db, err := sqlite.OpenMemory(ctx)
 	if err != nil {
-		// unreachable: an in-process :memory: database has no external resource that can fail to open.
 		return nil, fmt.Errorf("open in-memory database: %w", err)
 	}
 	defer func() { _ = db.Close() }()

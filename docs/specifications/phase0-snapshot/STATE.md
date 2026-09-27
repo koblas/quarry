@@ -31,7 +31,8 @@ SCENARIO-14 (folded). Last updated by SCENARIO-01b.
 - `os.UserHomeDir()`/`v9.Reference(ctx)` failures happen in `cmd/quarry/run()` before `cli.Execute` runs — routing them through the `UsageError` check would wrongly exit 2 on an unset `HOME`.
 - Cobra's `c.Find` failure (unknown command) returns a plain error straight from `ExecuteContext` — `Execute`'s default branch, not a named check, catches it. Without `DisableSuggestions` on root, a near-miss like `synk` would append `"\n\nDid you mean this?\n\tsync"`, breaking the one-stderr-line rule.
 - `SilenceErrors`/`SilenceUsage` on the root command alone suppress printing for every subcommand (cobra checks the root's flags, not the found command's).
-- Cobra falls back to reading `os.Args` when `SetArgs(nil)` — `Execute` normalizes `nil` args to `[]string{}` before `SetArgs`.
+- Cobra falls back to reading `os.Args` when `SetArgs(nil)` — `Execute` requires a non-nil `args` slice and does not normalize; its one production caller (`cmd/quarry/run.go`, fed from `main.go`'s `os.Args[1:]`) never passes nil, and slicing a non-nil slice never produces nil.
+- A pre-cancelled or expired `ctx` reaching `v9.Reference` fails at `sqlite.OpenMemory`'s `PingContext`, not just at a real database's I/O — the `:memory:` DB is not exempt from context checks. Don't mark a ctx-consuming call `// unreachable` on the strength of "no external resource can fail" alone.
 
 ## Open debts
 - Connection-level driver pragmas (`busy_timeout`, `locking_mode`, `synchronous`) were reported, not ruled on by product-vision; carried forward for the final surface review in case a future driver upgrade changes what `Open` runs unconditionally.

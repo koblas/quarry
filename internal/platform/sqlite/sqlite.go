@@ -64,7 +64,6 @@ func OpenMemory(ctx context.Context) (*DB, error) {
 	conn.SetMaxOpenConns(1)
 
 	if err := conn.PingContext(ctx); err != nil {
-		// unreachable: an in-process :memory: database has no external resource that can fail.
 		_ = conn.Close()
 		return nil, fmt.Errorf("open in-memory database: %w", err)
 	}

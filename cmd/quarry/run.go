@@ -25,7 +25,6 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	ref, err := v9.Reference(ctx)
 	if err != nil {
-		// unreachable: Reference always executes the fixed, valid ReferenceDDL (see v9.Reference).
 		_, _ = fmt.Fprintf(stderr, "quarry: %s\n", err)
 		return 1
 	}
