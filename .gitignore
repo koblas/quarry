@@ -1,0 +1,18 @@
+# Devenv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
+
+# macOS
+.DS_Store
+
+# Claude Code local state
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
