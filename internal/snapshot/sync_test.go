@@ -118,10 +118,14 @@ func Test_sync_reports_the_scoped_reference_table_and_column_counts(t *testing.T
 	require.NoError(t, err)
 	assert.Equal(t, 82, manifest.Schema.ReferenceTables)
 	assert.Equal(t, 1835, manifest.Schema.ReferenceColumns)
+
 	encoded, err := manifest.Encode()
 	require.NoError(t, err)
-	assert.NotContains(t, string(encoded), "ReferenceTables")
-	assert.NotContains(t, string(encoded), "ReferenceColumns")
+	bare := manifest
+	bare.Schema.ReferenceTables, bare.Schema.ReferenceColumns = 0, 0
+	bareEncoded, err := bare.Encode()
+	require.NoError(t, err)
+	assert.Equal(t, string(bareEncoded), string(encoded))
 }
 
 func Test_sync_writes_a_manifest_whose_own_path_fields_match_where_it_is_committed(t *testing.T) {

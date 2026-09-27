@@ -10,10 +10,8 @@ import (
 
 // Execute parses args against quarry's command tree and runs the matched
 // command against srv, writing to stdout/stderr and resolving `~` paths
-// against home. A UsageError, whether from argument validation or already
-// wrapped below, is returned unchanged; an error from srv.Sync passes
-// through unwrapped (exit-1 default in cmd/quarry); any other cobra-native
-// parse or dispatch error is wrapped into a UsageError with a
+// against home. It returns a UsageError unchanged, an srv.Sync error
+// unwrapped, and wraps any other error as a UsageError with a
 // "Run 'quarry sync --help'" hint appended.
 func Execute(ctx context.Context, args []string, stdout, stderr io.Writer, srv *snapshot.Server, home string) error {
 	if args == nil {

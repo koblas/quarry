@@ -118,9 +118,7 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 	if err != nil {
 		return Manifest{}, fmt.Errorf("sync %s: %w", bundlePath, err)
 	}
-	// Set before Encode so the bytes committed to disk (BR-10: manifest ==
-	// --json) already carry the paths Sync returns, rather than the empty
-	// values Commit* would only learn afterward.
+	// Set before Encode: the committed manifest must carry the paths Sync returns.
 	manifest.Snapshot.Path = snapshotPath
 	manifest.Snapshot.Manifest = manifestPath
 

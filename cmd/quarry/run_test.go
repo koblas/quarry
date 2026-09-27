@@ -119,7 +119,9 @@ func Test_run_reports_exit_1_when_home_directory_cannot_be_resolved(t *testing.T
 	t.Setenv("HOME", "")
 	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", "irrelevant"}, &stdout, &stderr)
+	// frob is an unknown command: if the home-directory guard were bypassed,
+	// this would reach cli.Execute and exit 2 instead of 1.
+	exitCode := run(context.Background(), []string{"frob"}, &stdout, &stderr)
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
