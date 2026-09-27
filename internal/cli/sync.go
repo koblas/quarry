@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/koblas/quarry/internal/snapshot"
@@ -56,20 +57,30 @@ Without --quicken, quarry uses the only .quicken file in ~/Documents.`,
 			}
 
 			manifest, err := srv.Sync(cmd.Context(), bundlePath)
-			if err != nil {
+			var mismatch snapshot.MismatchError
+			isMismatch := errors.As(err, &mismatch)
+			if err != nil && !isMismatch {
 				return &runtimeError{err: err}
 			}
 
 			if *jsonOut {
-				data, err := manifest.Encode()
-				if err != nil {
+				data, encErr := manifest.Encode()
+				if encErr != nil {
 					// unreachable: Manifest.Encode's own error path is unreachable for any value Sync builds; see there.
-					return &runtimeError{err: err}
+					return &runtimeError{err: encErr}
 				}
 				_, _ = fmt.Fprint(cmd.OutOrStdout(), string(data))
-				return nil
+			} else {
+				_, _ = fmt.Fprint(cmd.OutOrStdout(), renderSuccess(manifest, home))
 			}
-			_, _ = fmt.Fprint(cmd.OutOrStdout(), renderSuccess(manifest, home))
+
+			for _, warning := range manifest.Warnings {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: warning: "+warning)
+			}
+
+			if isMismatch {
+				return &runtimeError{err: err}
+			}
 			return nil
 		},
 	}

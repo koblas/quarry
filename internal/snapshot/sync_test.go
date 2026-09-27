@@ -66,10 +66,13 @@ func Test_sync_reports_verified_false_when_the_reference_names_a_table_the_bundl
 
 	manifest, err := srv.Sync(t.Context(), bundle.Dir)
 
-	require.NoError(t, err)
+	var mismatch snapshot.MismatchError
+	require.ErrorAs(t, err, &mismatch)
 	assert.False(t, manifest.Schema.Verified)
 	assert.Equal(t, []string{"ZFAKETABLE"}, manifest.Schema.MissingTables)
 	assert.NotEqual(t, manifest.Schema.ReferenceFingerprint, manifest.Schema.Fingerprint)
+	assert.FileExists(t, manifest.Snapshot.Path)
+	assert.FileExists(t, manifest.Snapshot.Manifest)
 }
 
 func Test_sync_reports_a_missing_column_when_the_reference_names_one_the_bundle_lacks(t *testing.T) {
@@ -84,9 +87,12 @@ func Test_sync_reports_a_missing_column_when_the_reference_names_one_the_bundle_
 
 	manifest, err := srv.Sync(t.Context(), bundle.Dir)
 
-	require.NoError(t, err)
+	var mismatch snapshot.MismatchError
+	require.ErrorAs(t, err, &mismatch)
 	assert.False(t, manifest.Schema.Verified)
 	assert.Equal(t, []snapshot.ColumnRef{{Table: "ZACCOUNT", Column: "ZFAKECOLUMN"}}, manifest.Schema.MissingColumns)
+	assert.FileExists(t, manifest.Snapshot.Path)
+	assert.FileExists(t, manifest.Snapshot.Manifest)
 }
 
 func Test_sync_stays_verified_and_lists_unexpected_tables_when_the_bundle_has_extra_tables_only(t *testing.T) {
@@ -105,6 +111,29 @@ func Test_sync_stays_verified_and_lists_unexpected_tables_when_the_bundle_has_ex
 	assert.True(t, manifest.Schema.Verified)
 	assert.Equal(t, []string{"ZALERT"}, manifest.Schema.UnexpectedTables)
 	assert.Empty(t, manifest.Schema.MissingTables)
+	require.Len(t, manifest.Warnings, 1)
+	assert.Contains(t, manifest.Warnings[0], "1 table")
+	assert.Contains(t, manifest.Warnings[0], "not in the schema reference")
+}
+
+func Test_sync_does_not_populate_warnings_when_extras_are_accompanied_by_missing_entries(t *testing.T) {
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	ref, err := v9.Reference(t.Context())
+	require.NoError(t, err)
+	delete(ref, "ZALERT")
+	ref["ZFAKETABLE"] = []string{"ZFAKECOLUMN"}
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(filepath.Join(t.TempDir(), "snapshots")),
+		snapshot.WithReference(v9.ReferenceLabel, ref),
+	)
+
+	manifest, err := srv.Sync(t.Context(), bundle.Dir)
+
+	var mismatch snapshot.MismatchError
+	require.ErrorAs(t, err, &mismatch)
+	assert.False(t, manifest.Schema.Verified)
+	assert.NotEmpty(t, manifest.Schema.UnexpectedTables)
+	assert.Empty(t, manifest.Warnings)
 }
 
 // Pinned against Test_scope_of_the_reference_has_the_pinned_table_and_column_counts.

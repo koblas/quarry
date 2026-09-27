@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/koblas/quarry/internal/snapshot"
@@ -60,6 +61,105 @@ func Test_renderSuccess_reports_many_accounts_in_the_plural_with_thousands_group
 	assert.Contains(t, got, "1,000 accounts\n")
 }
 
+func Test_schemaLine(t *testing.T) {
+	cases := []struct {
+		name string
+		info snapshot.SchemaInfo
+		want string
+	}{
+		{
+			name: "exact match",
+			info: snapshot.SchemaInfo{Reference: "ref", Verified: true, ReferenceTables: 71, ReferenceColumns: 1042},
+			want: "matches reference ref (71 tables, 1,042 columns)",
+		},
+		{
+			name: "extras only",
+			info: snapshot.SchemaInfo{
+				Reference: "ref", Verified: true, ReferenceTables: 71, ReferenceColumns: 1042,
+				UnexpectedTables: []string{"ZNEWENTITY"},
+				UnexpectedColumns: []snapshot.ColumnRef{
+					{Table: "ZACCOUNT", Column: "ZNEWFLAG"}, {Table: "ZTAG", Column: "ZCOLOR"},
+				},
+			},
+			want: "matches reference ref (71 tables, 1,042 columns), plus 1 table and 2 columns not in it",
+		},
+		{
+			name: "missing tables only",
+			info: snapshot.SchemaInfo{Reference: "ref", Verified: false, MissingTables: []string{"ZLOT"}},
+			want: "DIFFERS from reference ref: 1 table missing",
+		},
+		{
+			name: "missing columns only",
+			info: snapshot.SchemaInfo{
+				Reference: "ref", Verified: false,
+				MissingColumns: []snapshot.ColumnRef{{Table: "ZACCOUNT", Column: "ZFAKE"}},
+			},
+			want: "DIFFERS from reference ref: 1 column missing",
+		},
+		{
+			name: "missing tables and columns",
+			info: snapshot.SchemaInfo{
+				Reference: "ref", Verified: false,
+				MissingTables: []string{"ZLOT"},
+				MissingColumns: []snapshot.ColumnRef{
+					{Table: "ZCASHFLOWTRANSACTIONENTRY", Column: "ZMEMO"}, {Table: "ZSECURITY", Column: "ZCUSIP"},
+				},
+			},
+			want: "DIFFERS from reference ref: 1 table and 2 columns missing",
+		},
+		{
+			name: "missing plus extras",
+			info: snapshot.SchemaInfo{
+				Reference: "ref", Verified: false,
+				MissingTables: []string{"ZLOT"},
+				MissingColumns: []snapshot.ColumnRef{
+					{Table: "ZCASHFLOWTRANSACTIONENTRY", Column: "ZMEMO"}, {Table: "ZSECURITY", Column: "ZCUSIP"},
+				},
+				UnexpectedColumns: []snapshot.ColumnRef{{Table: "ZACCOUNT", Column: "ZNEWFLAG"}},
+			},
+			want: "DIFFERS from reference ref: 1 table and 2 columns missing, 1 column not in reference",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, schemaLine(c.info))
+		})
+	}
+}
+
+func Test_renderSuccess_writes_diff_rows_missing_before_extras_and_tables_before_columns(t *testing.T) {
+	m := snapshot.Manifest{
+		Schema: snapshot.SchemaInfo{
+			Reference:      "ref",
+			Verified:       false,
+			MissingTables:  []string{"ZLOT"},
+			MissingColumns: []snapshot.ColumnRef{{Table: "ZCASHFLOWTRANSACTIONENTRY", Column: "ZMEMO"}, {Table: "ZSECURITY", Column: "ZCUSIP"}},
+			UnexpectedColumns: []snapshot.ColumnRef{
+				{Table: "ZACCOUNT", Column: "ZNEWFLAG"},
+			},
+		},
+	}
+
+	got := renderSuccess(m, "/Users/dave")
+
+	assert.True(t, strings.HasSuffix(got,
+		"  - table   ZLOT\n"+
+			"  - column  ZCASHFLOWTRANSACTIONENTRY.ZMEMO\n"+
+			"  - column  ZSECURITY.ZCUSIP\n"+
+			"  + column  ZACCOUNT.ZNEWFLAG\n"),
+		"got: %q", got)
+}
+
+func Test_renderSuccess_writes_no_diff_rows_on_an_exact_match(t *testing.T) {
+	m := snapshot.Manifest{Schema: snapshot.SchemaInfo{Reference: "ref", Verified: true}}
+
+	got := renderSuccess(m, "/Users/dave")
+
+	assert.False(t, strings.Contains(got, "  -"))
+	assert.False(t, strings.Contains(got, "  +"))
+}
+
 func Test_renderSuccess_reports_the_exact_match_schema_line(t *testing.T) {
 	m := snapshot.Manifest{
 		Snapshot: snapshot.SnapshotInfo{
@@ -72,6 +172,7 @@ func Test_renderSuccess_reports_the_exact_match_schema_line(t *testing.T) {
 		},
 		Schema: snapshot.SchemaInfo{
 			Reference:        "hardkoded/quicken-skills@752107b",
+			Verified:         true,
 			ReferenceTables:  71,
 			ReferenceColumns: 1042,
 		},

@@ -7,6 +7,7 @@ package v9fixture
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,6 +83,81 @@ func EmptyAccountsBundle(tb testing.TB, dir string) Bundle {
 	conn, err := sql.Open("sqlite3", dataPath)
 	require.NoError(tb, err)
 	requireExec(tb, ctx, conn, v9.ReferenceDDL)
+	require.NoError(tb, conn.Close())
+
+	return Bundle{Dir: bundleDir, DataPath: dataPath}
+}
+
+// Identifiers MissingSchemaBundle mutates; none references an index, PK, UNIQUE or FK.
+const (
+	MissingSchemaDroppedTable       = "ZALERT"
+	MissingSchemaDroppedColumnTable = "ZCLOUDSYNCDATA"
+	MissingSchemaDroppedColumn1     = "ZMINTWATERMARK"
+	MissingSchemaDroppedColumn2     = "ZRESOURCETYPE"
+	MissingSchemaAddedColumnTable   = "ZDOCUMENTPROPERTY"
+	MissingSchemaAddedColumn        = "ZQUARRYEXTRACOL"
+)
+
+// MissingSchemaBundle creates a closed, non-WAL Home.quicken bundle under
+// dir with one ZACCOUNT row and a mutated schema: MissingSchemaDroppedTable
+// removed entirely, MissingSchemaDroppedColumn1/2 dropped from
+// MissingSchemaDroppedColumnTable, and MissingSchemaAddedColumn added to
+// MissingSchemaAddedColumnTable. The result is missing one table and two
+// columns the reference names, plus one column the reference does not.
+func MissingSchemaBundle(tb testing.TB, dir string) Bundle {
+	tb.Helper()
+	ctx := context.Background()
+
+	bundleDir := filepath.Join(dir, "Home.quicken")
+	require.NoError(tb, os.MkdirAll(bundleDir, 0o700))
+	dataPath := filepath.Join(bundleDir, "data")
+
+	conn, err := sql.Open("sqlite3", dataPath)
+	require.NoError(tb, err)
+	requireExec(tb, ctx, conn, v9.ReferenceDDL)
+	requireExec(tb, ctx, conn, "INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
+	requireExec(tb, ctx, conn, fmt.Sprintf("DROP TABLE %s", MissingSchemaDroppedTable))
+	requireExec(tb, ctx, conn, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s",
+		MissingSchemaDroppedColumnTable, MissingSchemaDroppedColumn1))
+	requireExec(tb, ctx, conn, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s",
+		MissingSchemaDroppedColumnTable, MissingSchemaDroppedColumn2))
+	requireExec(tb, ctx, conn, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s VARCHAR",
+		MissingSchemaAddedColumnTable, MissingSchemaAddedColumn))
+	require.NoError(tb, conn.Close())
+
+	return Bundle{Dir: bundleDir, DataPath: dataPath}
+}
+
+// Identifiers ExtraSchemaBundle mutates: the table it adds, and two columns on two existing tables.
+const (
+	ExtraSchemaAddedTable        = "ZQUARRYEXTRATABLE"
+	ExtraSchemaAddedColumnTable1 = "ZDOWNLOADSESSION"
+	ExtraSchemaAddedColumn1      = "ZQUARRYEXTRACOL1"
+	ExtraSchemaAddedColumnTable2 = "ZFOREXQUOTE"
+	ExtraSchemaAddedColumn2      = "ZQUARRYEXTRACOL2"
+)
+
+// ExtraSchemaBundle creates a closed, non-WAL Home.quicken bundle under dir
+// with one ZACCOUNT row and a mutated schema that adds ExtraSchemaAddedTable
+// and ExtraSchemaAddedColumn1/2 on ExtraSchemaAddedColumnTable1/2, without
+// removing or altering anything the reference already names.
+func ExtraSchemaBundle(tb testing.TB, dir string) Bundle {
+	tb.Helper()
+	ctx := context.Background()
+
+	bundleDir := filepath.Join(dir, "Home.quicken")
+	require.NoError(tb, os.MkdirAll(bundleDir, 0o700))
+	dataPath := filepath.Join(bundleDir, "data")
+
+	conn, err := sql.Open("sqlite3", dataPath)
+	require.NoError(tb, err)
+	requireExec(tb, ctx, conn, v9.ReferenceDDL)
+	requireExec(tb, ctx, conn, "INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
+	requireExec(tb, ctx, conn, fmt.Sprintf("CREATE TABLE %s (Z_PK INTEGER PRIMARY KEY, ZVALUE VARCHAR)", ExtraSchemaAddedTable))
+	requireExec(tb, ctx, conn, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s VARCHAR",
+		ExtraSchemaAddedColumnTable1, ExtraSchemaAddedColumn1))
+	requireExec(tb, ctx, conn, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s VARCHAR",
+		ExtraSchemaAddedColumnTable2, ExtraSchemaAddedColumn2))
 	require.NoError(tb, conn.Close())
 
 	return Bundle{Dir: bundleDir, DataPath: dataPath}

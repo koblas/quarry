@@ -88,11 +88,12 @@ func NewServer(opts ...Option) *Server {
 var errNoReference = fmt.Errorf("no reference schema configured")
 
 // Sync takes a verified snapshot of the Quicken bundle at bundlePath (BR-8):
-// it opens bundlePath's data file read-only and probes it, then, only once
-// the probe succeeds, backs it up into the snapshots directory, checks the
-// copy's integrity, account count, hash and schema against the configured
-// reference, and commits the manifest before the snapshot. It returns
-// errNoReference if no reference schema was configured.
+// opens and probes bundlePath's data file read-only, backs it up, then
+// checks the copy's integrity, account count, hash and schema against the
+// configured reference. It returns errNoReference if no reference schema
+// was configured, or the populated, already-committed Manifest with a
+// non-nil MismatchError (BR-9) if the schema check finds a missing table or
+// column.
 func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) {
 	if s.reference == nil {
 		return Manifest{}, errNoReference
@@ -140,6 +141,9 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 	// Set before Encode: the committed manifest must carry the paths Sync returns.
 	manifest.Snapshot.Path = snapshotPath
 	manifest.Snapshot.Manifest = manifestPath
+	if hasOnlyExtras(manifest.Schema) {
+		manifest.Warnings = []string{extrasWarningText(bundlePath, manifestPath, manifest.Schema)}
+	}
 
 	manifestBytes, err := manifest.Encode()
 	if err != nil {
@@ -161,6 +165,9 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 		return Manifest{}, fmt.Errorf("sync %s: %w", bundlePath, err)
 	}
 
+	if !manifest.Schema.Verified {
+		return manifest, mismatchError(s.home, bundlePath, snapshotPath, manifest.Schema)
+	}
 	return manifest, nil
 }
 
