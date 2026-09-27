@@ -384,6 +384,54 @@ func Test_backup_stops_when_the_context_is_cancelled_while_waiting_on_a_busy_sou
 	}
 }
 
+// Proves runBackup's retry loop converges on success under real lock
+// contention, not just the two boundary outcomes (deadline exceeded, ctx
+// cancelled) the tests above cover.
+func Test_backup_succeeds_once_the_source_lock_releases_within_the_busy_budget(t *testing.T) {
+	path := newTestDatabase(t)
+	src, err := sqlite.OpenReadOnlyBusy(t.Context(), path, 0)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = src.Close() })
+
+	locker, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	locker.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = locker.Close() })
+	conn, err := locker.Conn(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	_, err = conn.ExecContext(t.Context(), "BEGIN EXCLUSIVE")
+	require.NoError(t, err)
+	_, err = conn.ExecContext(t.Context(), "INSERT INTO t (v) VALUES ('before-commit')")
+	require.NoError(t, err)
+
+	destPath := filepath.Join(t.TempDir(), "dest")
+	require.NoError(t, os.WriteFile(destPath, nil, 0o600))
+
+	result := make(chan error, 1)
+	go func() {
+		result <- sqlite.Backup(t.Context(), src, destPath, 2*time.Second)
+	}()
+	go func() {
+		time.Sleep(180 * time.Millisecond)
+		_, _ = conn.ExecContext(context.Background(), "COMMIT")
+	}()
+
+	select {
+	case err := <-result:
+		require.NoError(t, err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("Backup did not return within 3s of the source lock being released")
+	}
+
+	dest, err := sqlite.OpenReadOnly(t.Context(), destPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = dest.Close() })
+	got, err := dest.QueryInt(t.Context(), "SELECT count(*) FROM t WHERE v = 'before-commit'")
+	require.NoError(t, err)
+	assert.Equal(t, 1, got)
+}
+
 // The writer releases well before busyTimeout elapses.
 func Test_open_read_only_busy_succeeds_once_the_writer_releases_the_lock_before_the_timeout(t *testing.T) {
 	path := newTestDatabase(t)

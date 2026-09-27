@@ -387,20 +387,41 @@ func Test_sync_refuses_a_busy_bundle(t *testing.T) {
 	assert.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
-// Proves Sync's Backup-failure branch shares Open/Probe's busy
-// classification, independent of real lock timing.
-func Test_sync_refuses_when_the_backup_hits_a_busy_lock(t *testing.T) {
-	home := t.TempDir()
-	srv := snapshot.NewServer(
-		snapshot.WithSnapshotDir(t.TempDir()),
-		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
-		snapshot.WithSource(&fakeSource{backupErr: sqlite3.Error{Code: sqlite3.ErrBusy}}),
-		snapshot.WithHome(home),
-	)
+// Proves every Source call Sync routes through sourceRefusal (Open, Probe
+// and Backup) shares the same busy/encrypted classification, independent of
+// real lock or file-content timing.
+func Test_sync_refuses_when_the_source_reports_a_classified_error(t *testing.T) {
+	const busyMsg = "Quicken is busy writing ~/Documents/Home.quicken; run quarry sync again in a moment"
+	const notADBMsg = "~/Documents/Home.quicken is encrypted, so Quicken does not have it open; open it in Quicken, then run quarry sync again"
 
-	_, err := srv.Sync(t.Context(), filepath.Join(home, "Documents", "Home.quicken"))
+	cases := []struct {
+		name string
+		fake *fakeSource
+		want string
+	}{
+		{name: "open busy", fake: &fakeSource{openErr: sqlite3.Error{Code: sqlite3.ErrBusy}}, want: busyMsg},
+		{name: "open encrypted", fake: &fakeSource{openErr: sqlite3.Error{Code: sqlite3.ErrNotADB}}, want: notADBMsg},
+		{name: "probe busy", fake: &fakeSource{probeErr: sqlite3.Error{Code: sqlite3.ErrBusy}}, want: busyMsg},
+		{name: "probe encrypted", fake: &fakeSource{probeErr: sqlite3.Error{Code: sqlite3.ErrNotADB}}, want: notADBMsg},
+		{name: "backup busy", fake: &fakeSource{backupErr: sqlite3.Error{Code: sqlite3.ErrBusy}}, want: busyMsg},
+		{name: "backup encrypted", fake: &fakeSource{backupErr: sqlite3.Error{Code: sqlite3.ErrNotADB}}, want: notADBMsg},
+	}
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
-	assert.Equal(t, "Quicken is busy writing ~/Documents/Home.quicken; run quarry sync again in a moment", re.Error())
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			srv := snapshot.NewServer(
+				snapshot.WithSnapshotDir(t.TempDir()),
+				snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+				snapshot.WithSource(c.fake),
+				snapshot.WithHome(home),
+			)
+
+			_, err := srv.Sync(t.Context(), filepath.Join(home, "Documents", "Home.quicken"))
+
+			var re snapshot.RefusalError
+			require.ErrorAs(t, err, &re)
+			assert.Equal(t, c.want, re.Error())
+		})
+	}
 }
