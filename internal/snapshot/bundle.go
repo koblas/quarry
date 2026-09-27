@@ -22,6 +22,7 @@ var errBundleMissingData = errors.New("bundle has no data file")
 func ResolveBundlePath(home, path string) (string, error) {
 	abs, err := filepath.Abs(homepath.Expand(home, path))
 	if err != nil {
+		// unreachable: on darwin os.Getwd succeeds after the working directory is removed; Linux exercises it via Test_ResolveBundlePath_returns_an_error_when_the_working_directory_no_longer_exists
 		return "", fmt.Errorf("resolve bundle path %s: %w", path, err)
 	}
 
@@ -104,5 +105,6 @@ func osReason(err error) string {
 	if errors.As(err, &pathErr) {
 		return pathErr.Err.Error()
 	}
+	// unreachable: os.Stat/os.Open always return *fs.PathError
 	return err.Error()
 }

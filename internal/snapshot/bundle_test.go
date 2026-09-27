@@ -35,8 +35,11 @@ func Test_ResolveBundlePath_refuses_when_the_top_level_path_cannot_be_statted(t 
 
 	_, err := snapshot.ResolveBundlePath(home, path)
 
-	require.Error(t, err)
-	assert.NotErrorIs(t, err, os.ErrNotExist)
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t, "cannot read ~/Locked/Home.quicken: permission denied; "+
+		"allow your terminal to access the folder in System Settings > Privacy & Security, or check the file's permissions",
+		re.Error())
 }
 
 func Test_ResolveBundlePath_refuses_a_qdf_suffix(t *testing.T) {
@@ -82,6 +85,20 @@ func Test_ResolveBundlePath_refuses_a_bundle_without_data(t *testing.T) {
 	home := t.TempDir()
 	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
 	require.NoError(t, os.MkdirAll(bundleDir, 0o700))
+
+	_, err := snapshot.ResolveBundlePath(home, bundleDir)
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t, "~/Documents/Home.quicken is not a Quicken for Mac file "+
+		"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path>",
+		re.Error())
+}
+
+func Test_ResolveBundlePath_refuses_a_bundle_whose_data_is_a_directory(t *testing.T) {
+	home := t.TempDir()
+	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
+	require.NoError(t, os.MkdirAll(filepath.Join(bundleDir, "data"), 0o700))
 
 	_, err := snapshot.ResolveBundlePath(home, bundleDir)
 
