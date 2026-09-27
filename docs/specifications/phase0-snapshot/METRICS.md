@@ -9,6 +9,7 @@
 | SCENARIO-04 | code-first | 0/2/0/0 | yes |
 | SCENARIO-06 (+07 folded) | test-first | 0/2/0/0 | yes |
 | SCENARIO-08 | test-first | 0/1/0/0 | yes |
+| SCENARIO-10 (+09 folded) | code-first | 0/0/0/0 | no |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Verdict |
