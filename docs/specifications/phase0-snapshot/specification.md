@@ -418,7 +418,7 @@ Scenario: SCENARIO-13 — Snapshots directory not writable
 - [x] SCENARIO-04: Bundle discovery in ~/Documents — `cmd/quarry/run_test.go` `Test_run_discovers_the_bundle_from_documents_without_quicken`
 - [x] SCENARIO-06: Encrypted file means Quicken does not have it open — `cmd/quarry/run_test.go` `Test_run_refuses_an_encrypted_bundle`
 - [x] SCENARIO-07: Quicken busy writing — delivered by SCENARIO-06 `internal/snapshot/sync_faults_test.go` `Test_sync_refuses_a_busy_bundle`
-- [ ] SCENARIO-08: Snapshot content rejected
+- [x] SCENARIO-08: Snapshot content rejected — `cmd/quarry/run_test.go` `Test_run_refuses_a_bundle_whose_snapshot_content_is_rejected`
 - [ ] SCENARIO-10: Missing tables or columns fail the schema check
 - [ ] SCENARIO-09: Extra tables or columns only
 - [ ] SCENARIO-11: Same-second runs do not collide

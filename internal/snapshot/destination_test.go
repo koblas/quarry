@@ -78,3 +78,29 @@ func Test_dirDestination_commit_manifest_refuses_to_replace_an_existing_file(t *
 
 	require.Error(t, err)
 }
+
+func Test_dirDestination_discard_removes_the_partial(t *testing.T) {
+	dir := t.TempDir()
+	dest := snapshot.NewDirDestination(dir)
+	partial, err := dest.Backup(t.Context(), noopBackupSource{}, "20260927T143005Z")
+	require.NoError(t, err)
+
+	err = dest.Discard(t.Context(), partial)
+
+	require.NoError(t, err)
+	_, statErr := os.Stat(partial)
+	assert.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
+func Test_dirDestination_discard_fails_when_the_partial_cannot_be_removed(t *testing.T) {
+	dir := t.TempDir()
+	dest := snapshot.NewDirDestination(dir)
+	partial, err := dest.Backup(t.Context(), noopBackupSource{}, "20260927T143005Z")
+	require.NoError(t, err)
+	require.NoError(t, os.Chmod(dir, 0o500))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	err = dest.Discard(t.Context(), partial)
+
+	require.Error(t, err)
+}

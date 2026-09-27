@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -346,6 +347,90 @@ func Test_run_refuses_an_encrypted_bundle(t *testing.T) {
 		stderr.String())
 	_, statErr := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"))
 	assert.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
+// The snapshots directory is left behind, empty, in every case: Prepare
+// already ran before the content check can fail.
+func Test_run_refuses_a_bundle_whose_snapshot_content_is_rejected(t *testing.T) {
+	cases := []struct {
+		name        string
+		buildBundle func(t *testing.T, home string) string
+		wantLine    func(t *testing.T, bundleDir, home string) string
+	}{
+		{
+			name: "damaged so only integrity_check fails",
+			buildBundle: func(t *testing.T, home string) string {
+				bundleDir := filepath.Join(home, "Documents", "Home.quicken")
+				require.NoError(t, os.MkdirAll(bundleDir, 0o700))
+				v9fixture.CorruptDataFile(t, filepath.Join(bundleDir, "data"))
+				return bundleDir
+			},
+			wantLine: func(t *testing.T, bundleDir, home string) string {
+				last := integrityCheckLastLine(t, filepath.Join(bundleDir, "data"))
+				return "quarry: the snapshot of " + abbreviated(t, bundleDir, home) +
+					" failed SQLite's integrity check (" + last +
+					"); nothing was kept; quit and reopen the file in Quicken, then run quarry sync again"
+			},
+		},
+		{
+			name: "missing ZACCOUNT (including a 0-byte data file)",
+			buildBundle: func(t *testing.T, home string) string {
+				bundleDir := filepath.Join(home, "Documents", "Home.quicken")
+				require.NoError(t, os.MkdirAll(bundleDir, 0o700))
+				require.NoError(t, os.WriteFile(filepath.Join(bundleDir, "data"), nil, 0o600))
+				return bundleDir
+			},
+			wantLine: func(t *testing.T, bundleDir, home string) string {
+				return "quarry: " + abbreviated(t, bundleDir, home) +
+					" is not a Quicken Classic for Mac database (no ZACCOUNT table); pass the right file with --quicken <path>"
+			},
+		},
+		{
+			name: "ZACCOUNT with no rows",
+			buildBundle: func(t *testing.T, home string) string {
+				bundle := v9fixture.EmptyAccountsBundle(t, filepath.Join(home, "Documents"))
+				return bundle.Dir
+			},
+			wantLine: func(t *testing.T, bundleDir, home string) string {
+				return "quarry: " + abbreviated(t, bundleDir, home) +
+					" has no accounts; nothing was kept; check you have the right file open, or pass it with --quicken <path>"
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			bundleDir := c.buildBundle(t, home)
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), []string{"sync", "--quicken", bundleDir}, &stdout, &stderr)
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout.String())
+			lines := strings.Split(strings.TrimSuffix(stderr.String(), "\n"), "\n")
+			require.Len(t, lines, 1)
+			assert.Equal(t, c.wantLine(t, bundleDir, home), lines[0])
+			snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+			entries, err := os.ReadDir(snapshotsDir)
+			require.NoError(t, err)
+			assert.Empty(t, entries)
+		})
+	}
+}
+
+// integrityCheckLastLine reads PRAGMA integrity_check's first row's last
+// physical line through a connection independent of the code under test.
+func integrityCheckLastLine(t *testing.T, path string) string {
+	t.Helper()
+	conn, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	var row string
+	require.NoError(t, conn.QueryRow("PRAGMA integrity_check").Scan(&row))
+	lines := strings.Split(row, "\n")
+	return lines[len(lines)-1]
 }
 
 // onlyFileWithSuffix fails the test unless exactly one entry in dir ends in

@@ -84,6 +84,9 @@ func Test_schema_reads_quoted_table_and_column_names_verbatim(t *testing.T) {
 func Test_integrity_check_fails_on_a_corrupted_database(t *testing.T) {
 	path := newMultiPageTestDatabase(t)
 	corruptLastPage(t, path)
+	row := rawIntegrityCheckRow(t, path)
+	rowLines := strings.Split(row, "\n")
+	require.True(t, strings.HasPrefix(row, "*** in database"))
 
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
 	require.NoError(t, err)
@@ -91,7 +94,22 @@ func Test_integrity_check_fails_on_a_corrupted_database(t *testing.T) {
 
 	err = db.IntegrityCheck(t.Context())
 
-	require.Error(t, err)
+	var integrityErr sqlite.IntegrityError
+	require.ErrorAs(t, err, &integrityErr)
+	assert.Equal(t, rowLines[len(rowLines)-1], integrityErr.Result)
+	assert.NotContains(t, integrityErr.Result, "*** in database")
+}
+
+// rawIntegrityCheckRow reads PRAGMA integrity_check's first row through a
+// connection independent of the code under test.
+func rawIntegrityCheckRow(t *testing.T, path string) string {
+	t.Helper()
+	conn, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	var row string
+	require.NoError(t, conn.QueryRow("PRAGMA integrity_check").Scan(&row))
+	return row
 }
 
 // newMultiPageTestDatabase writes enough rows to spill past the first

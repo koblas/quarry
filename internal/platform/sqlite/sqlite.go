@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/sqlschema"
@@ -110,15 +111,28 @@ func (d *DB) QueryInt(ctx context.Context, query string, args ...any) (int, erro
 	return n, nil
 }
 
-// IntegrityCheck runs PRAGMA integrity_check and returns an error naming
-// the first reported problem when the result is not "ok".
+// IntegrityError reports PRAGMA integrity_check's own diagnostic when the
+// result is not "ok". Result is the check's first reported row's last
+// physical line.
+type IntegrityError struct {
+	Result string
+}
+
+// Error reports Result.
+func (e IntegrityError) Error() string {
+	return fmt.Sprintf("integrity_check: %s", e.Result)
+}
+
+// IntegrityCheck runs PRAGMA integrity_check and returns an IntegrityError
+// when the result is not "ok".
 func (d *DB) IntegrityCheck(ctx context.Context) error {
-	var result string
-	if err := d.conn.QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&result); err != nil {
+	var row string
+	if err := d.conn.QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&row); err != nil {
 		return fmt.Errorf("integrity_check: %w", err)
 	}
-	if result != "ok" {
-		return fmt.Errorf("integrity_check: %s", result)
+	if row != "ok" {
+		lines := strings.Split(row, "\n")
+		return IntegrityError{Result: lines[len(lines)-1]}
 	}
 	return nil
 }

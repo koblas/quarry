@@ -132,7 +132,10 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 
 	manifest, err := s.buildManifest(ctx, snapshotPartial, bundlePath, takenAt)
 	if err != nil {
-		return Manifest{}, fmt.Errorf("sync %s: %w", bundlePath, err)
+		// Best-effort: a Discard failure never replaces the classified
+		// refusal below, mirroring the deferred source.Close() above.
+		_ = destination.Discard(ctx, snapshotPartial)
+		return Manifest{}, contentRefusal(s.home, bundlePath, err)
 	}
 	// Set before Encode: the committed manifest must carry the paths Sync returns.
 	manifest.Snapshot.Path = snapshotPath
@@ -176,9 +179,22 @@ func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string,
 		return Manifest{}, fmt.Errorf("integrity check: %w", err)
 	}
 
+	exists, err := snap.QueryInt(ctx, "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'ZACCOUNT'")
+	if err != nil {
+		// unreachable: only a ctx cancelled between IntegrityCheck and this query could fail it, and no test in this package times that race.
+		return Manifest{}, fmt.Errorf("check accounts table: %w", err)
+	}
+	if exists == 0 {
+		return Manifest{}, errNoAccountsTable
+	}
+
 	accounts, err := snap.QueryInt(ctx, "SELECT count(*) FROM ZACCOUNT")
 	if err != nil {
+		// unreachable: only a ctx cancelled between the existence check and this query could fail it, and no test in this package times that race.
 		return Manifest{}, fmt.Errorf("count accounts: %w", err)
+	}
+	if accounts == 0 {
+		return Manifest{}, errNoAccounts
 	}
 
 	raw, err := os.ReadFile(snapshotPath)

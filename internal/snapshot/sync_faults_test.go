@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/koblas/quarry/internal/platform/sqlite"
 	"github.com/koblas/quarry/internal/platform/sqlschema"
 	"github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
@@ -152,6 +151,7 @@ func (f *fixedPathDestination) CommitManifest(context.Context, string) (string, 
 	return "", nil
 }
 func (f *fixedPathDestination) FinalPaths(string) (string, string) { return "", "" }
+func (f *fixedPathDestination) Discard(context.Context, string) error { return nil }
 
 func Test_sync_wraps_an_error_when_the_snapshot_cannot_be_opened(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "garbage.sqlite")
@@ -165,96 +165,93 @@ func Test_sync_wraps_an_error_when_the_snapshot_cannot_be_opened(t *testing.T) {
 	_, err := srv.Sync(t.Context(), t.TempDir())
 
 	require.Error(t, err)
+	var re snapshot.RefusalError
+	assert.False(t, errors.As(err, &re), "an unrelated open failure must not be misclassified as a content refusal")
 }
 
-// The fixture is damaged so only integrity_check fails: every other read
-// buildManifest performs (accounts count, schema, hash) must still succeed
-// against the corrupted file, so this fixture keeps a real, non-empty
-// ZACCOUNT table and damages an index's pages instead.
-func Test_sync_wraps_an_error_when_the_snapshot_fails_integrity_check(t *testing.T) {
-	srv := snapshot.NewServer(
-		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
-		snapshot.WithSource(&fakeSource{}),
-		snapshot.WithDestination(&fixedPathDestination{snapshotPath: newIndexCorruptedSnapshot(t)}),
-	)
-
-	_, err := srv.Sync(t.Context(), t.TempDir())
-
-	require.Error(t, err)
-}
-
-// newIndexCorruptedSnapshot builds a snapshot with a valid, non-empty
-// ZACCOUNT table plus a separate, heavily indexed filler table, then flips
-// bytes in the file's last page. ZACCOUNT is created and populated first, so
-// its pages sit near the front of the file; the filler table's index, built
-// over 1,000 rows, is what grows the file and ends up owning its last pages.
-// Corrupting there fails PRAGMA integrity_check without touching ZACCOUNT's
-// row, sqlite_master, or any pragma_table_info read of a column list.
-func newIndexCorruptedSnapshot(t *testing.T) string {
+// lastIntegrityCheckLine reads PRAGMA integrity_check's first row's last
+// physical line through a connection independent of the code under test.
+func lastIntegrityCheckLine(t *testing.T, path string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "snap.sqlite")
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
-	_, err = conn.Exec("CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZNAME TEXT)")
-	require.NoError(t, err)
-	_, err = conn.Exec("INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
-	require.NoError(t, err)
-
-	_, err = conn.Exec("CREATE TABLE ZFILLER (id INTEGER PRIMARY KEY, v TEXT)")
-	require.NoError(t, err)
-	_, err = conn.Exec("CREATE INDEX ZFILLER_V ON ZFILLER(v)")
-	require.NoError(t, err)
-	for i := 0; i < 1000; i++ {
-		_, err = conn.Exec("INSERT INTO ZFILLER (v) VALUES (?)", strings.Repeat("x", 100))
-		require.NoError(t, err)
-	}
-	require.NoError(t, conn.Close())
-
-	raw, err := os.ReadFile(path)
-	require.NoError(t, err)
-	require.Greater(t, len(raw), 8192)
-	for i := len(raw) - 200; i < len(raw)-100; i++ {
-		raw[i] ^= 0xFF
-	}
-	require.NoError(t, os.WriteFile(path, raw, 0o600))
-
-	requireOnlyIntegrityCheckFails(t, path)
-	return path
+	var row string
+	require.NoError(t, conn.QueryRow("PRAGMA integrity_check").Scan(&row))
+	lines := strings.Split(row, "\n")
+	return lines[len(lines)-1]
 }
 
-// requireOnlyIntegrityCheckFails confirms the fixture built above is damaged
-// in exactly the way its name promises: integrity_check fails, but the two
-// other reads buildManifest performs on a snapshot (the accounts count and
-// the schema read) do not.
-func requireOnlyIntegrityCheckFails(t *testing.T, path string) {
-	t.Helper()
-	db, err := sqlite.OpenReadOnly(t.Context(), path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-
-	require.Error(t, db.IntegrityCheck(t.Context()))
-
-	count, err := db.QueryInt(t.Context(), "SELECT count(*) FROM ZACCOUNT")
-	require.NoError(t, err)
-	require.Equal(t, 1, count)
-
-	_, err = db.Schema(t.Context())
-	require.NoError(t, err)
-}
-
-func Test_sync_wraps_an_error_when_the_snapshot_has_no_accounts_table(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "empty.sqlite")
-	require.NoError(t, os.WriteFile(path, nil, 0o600))
+func Test_sync_refuses_a_snapshot_that_fails_integrity_check(t *testing.T) {
+	home := t.TempDir()
+	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
+	path := filepath.Join(t.TempDir(), "snap.sqlite")
+	v9fixture.CorruptDataFile(t, path)
 	srv := snapshot.NewServer(
 		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
 		snapshot.WithSource(&fakeSource{}),
 		snapshot.WithDestination(&fixedPathDestination{snapshotPath: path}),
+		snapshot.WithHome(home),
 	)
 
-	_, err := srv.Sync(t.Context(), t.TempDir())
+	_, err := srv.Sync(t.Context(), bundleDir)
 
-	require.Error(t, err)
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t,
+		"the snapshot of ~/Documents/Home.quicken failed SQLite's integrity check ("+lastIntegrityCheckLine(t, path)+
+			"); nothing was kept; quit and reopen the file in Quicken, then run quarry sync again",
+		re.Error())
+}
+
+func Test_sync_refuses_a_snapshot_with_no_accounts_table(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "no-accounts.sqlite")
+	conn, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	_, err = conn.Exec("CREATE TABLE OTHER (id INTEGER PRIMARY KEY)")
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+	home := t.TempDir()
+	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
+	srv := snapshot.NewServer(
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{}),
+		snapshot.WithDestination(&fixedPathDestination{snapshotPath: path}),
+		snapshot.WithHome(home),
+	)
+
+	_, err = srv.Sync(t.Context(), bundleDir)
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t,
+		"~/Documents/Home.quicken is not a Quicken Classic for Mac database (no ZACCOUNT table); pass the right file with --quicken <path>",
+		re.Error())
+}
+
+func Test_sync_refuses_a_snapshot_with_no_account_rows(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "empty-accounts.sqlite")
+	conn, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	_, err = conn.Exec("CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZNAME TEXT)")
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+	home := t.TempDir()
+	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
+	srv := snapshot.NewServer(
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{}),
+		snapshot.WithDestination(&fixedPathDestination{snapshotPath: path}),
+		snapshot.WithHome(home),
+	)
+
+	_, err = srv.Sync(t.Context(), bundleDir)
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t,
+		"~/Documents/Home.quicken has no accounts; nothing was kept; check you have the right file open, or pass it with --quicken <path>",
+		re.Error())
 }
 
 // partialFaultDestination wraps the real production Destination and injects
@@ -263,11 +260,16 @@ func Test_sync_wraps_an_error_when_the_snapshot_has_no_accounts_table(t *testing
 type partialFaultDestination struct {
 	real                                              snapshot.Destination
 	failWriteManifest, failCommitManifest, failCommit error
+	failDiscard                                       error
+
+	backedUpPartial, discardedPartial string
 }
 
 func (f *partialFaultDestination) Prepare(ctx context.Context) error { return f.real.Prepare(ctx) }
 func (f *partialFaultDestination) Backup(ctx context.Context, src snapshot.Source, name string) (string, error) {
-	return f.real.Backup(ctx, src, name)
+	partial, err := f.real.Backup(ctx, src, name)
+	f.backedUpPartial = partial
+	return partial, err
 }
 func (f *partialFaultDestination) WriteManifest(ctx context.Context, name string, data []byte) (string, error) {
 	if f.failWriteManifest != nil {
@@ -289,6 +291,14 @@ func (f *partialFaultDestination) CommitSnapshot(ctx context.Context, partial st
 }
 func (f *partialFaultDestination) FinalPaths(name string) (string, string) {
 	return f.real.FinalPaths(name)
+}
+func (f *partialFaultDestination) Discard(ctx context.Context, partial string) error {
+	f.discardedPartial = partial
+	err := f.real.Discard(ctx, partial)
+	if f.failDiscard != nil {
+		return f.failDiscard
+	}
+	return err
 }
 
 func Test_sync_wraps_an_error_when_writing_the_manifest_fails(t *testing.T) {
@@ -340,6 +350,32 @@ func Test_sync_wraps_an_error_when_committing_the_snapshot_fails(t *testing.T) {
 	_, err = srv.Sync(t.Context(), bundle.Dir)
 
 	require.ErrorIs(t, err, errBoom)
+}
+
+func Test_sync_still_returns_the_classified_refusal_when_discard_fails(t *testing.T) {
+	home := t.TempDir()
+	bundle := v9fixture.EmptyAccountsBundle(t, filepath.Join(home, "Documents"))
+	ref, err := v9.Reference(t.Context())
+	require.NoError(t, err)
+	dest := &partialFaultDestination{
+		real:        snapshot.NewDirDestination(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")),
+		failDiscard: errBoom,
+	}
+	srv := snapshot.NewServer(
+		snapshot.WithReference(v9.ReferenceLabel, ref),
+		snapshot.WithDestination(dest),
+		snapshot.WithHome(home),
+	)
+
+	_, err = srv.Sync(t.Context(), bundle.Dir)
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t,
+		"~/Documents/Home.quicken has no accounts; nothing was kept; check you have the right file open, or pass it with --quicken <path>",
+		re.Error())
+	assert.NotEmpty(t, dest.backedUpPartial)
+	assert.Equal(t, dest.backedUpPartial, dest.discardedPartial)
 }
 
 // Uses a rollback-journal (non-WAL) fixture: v9fixture's WAL-mode bundle

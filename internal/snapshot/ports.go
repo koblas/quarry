@@ -41,4 +41,7 @@ type Destination interface {
 	// FinalPaths predicts the snapshot and manifest paths CommitSnapshot and
 	// CommitManifest will produce for name, assuming no collision suffix.
 	FinalPaths(name string) (snapshotPath, manifestPath string)
+	// Discard removes a snapshot partial Backup created, returning any
+	// removal error unchanged.
+	Discard(ctx context.Context, partial string) error
 }
