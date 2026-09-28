@@ -61,7 +61,8 @@ func mapTransactions(ctx context.Context, src Source, transactionEntity int64, a
 		var pk int64
 		var account sql.NullInt64
 		var posted, entered sql.NullFloat64
-		var amtType, amtText string
+		var amtType string
+		var amtText sql.NullString
 		var status sql.NullInt64
 		var payee sql.NullInt64
 		var note, cheque sql.NullString
@@ -93,13 +94,13 @@ func mapTransactions(ctx context.Context, src Source, transactionEntity int64, a
 			off.add(offender{class: 10, reason: reasonTransactionNoAmount(dateStr, acct.Name), dated: true, date: date, account: acct.Name, sourceID: pk})
 			return nil
 		}
-		cents, fault := parseMoney(amtType, amtText)
+		cents, fault := parseMoney(amtType, amtText.String)
 		switch fault {
 		case moneyPrecision:
-			off.add(offender{class: 3, reason: reasonTransactionPrecision(dateStr, acct.Name, amtText), dated: true, date: date, account: acct.Name, sourceID: pk})
+			off.add(offender{class: 3, reason: reasonTransactionPrecision(dateStr, acct.Name, amtText.String), dated: true, date: date, account: acct.Name, sourceID: pk})
 			return nil
 		case moneyTooLarge:
-			off.add(offender{class: 6, reason: reasonTransactionTooLarge(dateStr, acct.Name, amtText), dated: true, date: date, account: acct.Name, sourceID: pk})
+			off.add(offender{class: 6, reason: reasonTransactionTooLarge(dateStr, acct.Name, amtText.String), dated: true, date: date, account: acct.Name, sourceID: pk})
 			return nil
 		}
 

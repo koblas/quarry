@@ -19,3 +19,11 @@ func tagIDs(fake *fakeStore) []string {
 	}
 	return ids
 }
+
+func transactionIDs(fake *fakeStore) []string {
+	ids := make([]string, len(fake.Rows.Transactions))
+	for i, txn := range fake.Rows.Transactions {
+		ids[i] = txn.ID
+	}
+	return ids
+}

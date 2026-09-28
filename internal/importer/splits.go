@@ -28,7 +28,8 @@ func mapSplits(ctx context.Context, src Source, txns map[int64]txnRef, off *offe
 	err := src.QueryRows(ctx, entriesQuery, nil, func(scan func(dest ...any) error) error {
 		var pk int64
 		var parent sql.NullInt64
-		var amtType, amtText string
+		var amtType string
+		var amtText sql.NullString
 		var category sql.NullInt64
 		var note sql.NullString
 		if err := scan(&pk, &parent, &amtType, &amtText, &category, &note); err != nil {
@@ -49,13 +50,13 @@ func mapSplits(ctx context.Context, src Source, txns map[int64]txnRef, off *offe
 			off.add(offender{class: 10, reason: reasonSplitNoAmount(dateStr, txn.AccountName), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
 			return nil
 		}
-		cents, fault := parseMoney(amtType, amtText)
+		cents, fault := parseMoney(amtType, amtText.String)
 		switch fault {
 		case moneyPrecision:
-			off.add(offender{class: 4, reason: reasonSplitPrecision(dateStr, txn.AccountName, amtText), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
+			off.add(offender{class: 4, reason: reasonSplitPrecision(dateStr, txn.AccountName, amtText.String), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
 			return nil
 		case moneyTooLarge:
-			off.add(offender{class: 6, reason: reasonSplitTooLarge(dateStr, txn.AccountName, amtText), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
+			off.add(offender{class: 6, reason: reasonSplitTooLarge(dateStr, txn.AccountName, amtText.String), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
 			return nil
 		}
 
