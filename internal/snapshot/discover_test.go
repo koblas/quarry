@@ -1,10 +1,13 @@
 package snapshot_test
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/stretchr/testify/assert"
@@ -34,7 +37,8 @@ func Test_DiscoverBundle_refuses_when_no_bundle_is_found(t *testing.T) {
 
 			var re snapshot.RefusalError
 			require.ErrorAs(t, err, &re)
-			assert.Equal(t, "no .quicken file found in ~/Documents; pass one with --quicken <path>", re.Error())
+			assert.Equal(t, "no .quicken file found in ~/Documents or "+
+				"~/Library/Application Support/Quicken/Documents; pass one with --quicken <path>", re.Error())
 		})
 	}
 }
@@ -100,17 +104,47 @@ func Test_DiscoverBundle_follows_a_symlink_to_a_bundle_outside_documents(t *test
 // A symlink loop is a real stat fault, not a missing file: DiscoverBundle
 // must not silently fall back to the one bundle it can see.
 func Test_DiscoverBundle_refuses_when_a_candidate_cannot_be_statted_for_a_reason_other_than_not_existing(t *testing.T) {
-	home := t.TempDir()
-	documents := filepath.Join(home, "Documents")
-	v9fixture.OpenBundle(t, documents)
-	loop := filepath.Join(documents, "Loop.quicken")
-	require.NoError(t, os.Symlink(loop, loop))
+	cases := []struct {
+		name string
+		dir  func(home string) string
+	}{
+		{name: "under ~/Documents", dir: func(home string) string { return filepath.Join(home, "Documents") }},
+		{name: "under the Quicken folder", dir: func(home string) string {
+			return filepath.Join(home, "Library", "Application Support", "Quicken", "Documents")
+		}},
+	}
 
-	_, err := snapshot.DiscoverBundle(home)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			dir := c.dir(home)
+			v9fixture.OpenBundle(t, dir)
+			loop := filepath.Join(dir, "Loop.quicken")
+			require.NoError(t, os.Symlink(loop, loop))
+			_, statErr := os.Stat(loop)
+			require.Error(t, statErr)
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
-	assert.Contains(t, re.Error(), "cannot read")
+			_, err := snapshot.DiscoverBundle(home)
+
+			var re snapshot.RefusalError
+			require.ErrorAs(t, err, &re)
+			assert.Equal(t, fmt.Sprintf(
+				"cannot read %s: %s; allow your terminal to access the folder in "+
+					"System Settings > Privacy & Security, or check the file's permissions",
+				homepath.Abbreviate(home, loop), innermostCause(statErr)), re.Error())
+		})
+	}
+}
+
+// innermostCause unwraps err to its innermost cause's message.
+func innermostCause(err error) string {
+	for {
+		unwrapped := errors.Unwrap(err)
+		if unwrapped == nil {
+			return err.Error()
+		}
+		err = unwrapped
+	}
 }
 
 func Test_DiscoverBundle_refuses_when_multiple_bundles_exist(t *testing.T) {
@@ -120,15 +154,16 @@ func Test_DiscoverBundle_refuses_when_multiple_bundles_exist(t *testing.T) {
 		wantStderr string
 	}{
 		{
-			name:       "two arbitrary bundles",
-			bundles:    []string{"B.quicken", "A.quicken"},
-			wantStderr: "found 2 .quicken files in ~/Documents (A.quicken, B.quicken); choose one with --quicken <path>",
+			name:    "two arbitrary bundles",
+			bundles: []string{"B.quicken", "A.quicken"},
+			wantStderr: "found 2 .quicken files (~/Documents/A.quicken, ~/Documents/B.quicken); " +
+				"choose one with --quicken <path>",
 		},
 		{
-			name:    "the spec's three names created out of order",
+			name:    "three names created out of order",
 			bundles: []string{"Old.quicken", "Business.quicken", "Home.quicken"},
-			wantStderr: "found 3 .quicken files in ~/Documents " +
-				"(Business.quicken, Home.quicken, Old.quicken); choose one with --quicken <path>",
+			wantStderr: "found 3 .quicken files (~/Documents/Business.quicken, ~/Documents/Home.quicken, " +
+				"~/Documents/Old.quicken); choose one with --quicken <path>",
 		},
 	}
 

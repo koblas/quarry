@@ -123,8 +123,8 @@ Scenario: SCENARIO-05 — Help names both folders
 ---
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01: Bundle only in Quicken's Documents folder is used
-- [ ] SCENARIO-02: Bundles counted as one pool across both folders
-- [ ] SCENARIO-03: Same bundle reached two ways counts once
-- [ ] SCENARIO-04: An unreadable folder refuses instead of guessing
-- [ ] SCENARIO-05: Help names both folders
+- [x] SCENARIO-01: Bundle only in Quicken's Documents folder is used — `cmd/quarry/run_test.go` `Test_run_discovers_the_bundle_from_documents_without_quicken`
+- [x] SCENARIO-02: Bundles counted as one pool across both folders — delivered by SCENARIO-01 `cmd/quarry/run_test.go` `Test_run_pools_bundles_across_both_documents_folders`
+- [x] SCENARIO-03: Same bundle reached two ways counts once — delivered by SCENARIO-01 `cmd/quarry/run_test.go` `Test_run_counts_a_bundle_reached_two_ways_once`
+- [x] SCENARIO-04: An unreadable folder refuses instead of guessing — delivered by SCENARIO-01 `cmd/quarry/run_test.go` `Test_run_refuses_when_a_discovery_location_is_unreadable`
+- [x] SCENARIO-05: Help names both folders — delivered by SCENARIO-01 `cmd/quarry/run_test.go` `Test_run_sync_help_names_both_documents_folders`

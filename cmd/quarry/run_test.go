@@ -211,6 +211,20 @@ func Test_run_refuses_a_bad_quicken_path(t *testing.T) {
 		})
 	}
 
+	t.Run("--quicken names one of two bundles, so discovery never runs", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
+		require.NoError(t, os.MkdirAll(filepath.Join(quickenDocumentsDir(home), "Other.quicken"), 0o700))
+		var stdout, stderr bytes.Buffer
+
+		exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+
+		require.Equal(t, 0, exitCode)
+		assert.Empty(t, stderr.String())
+		assert.Contains(t, stdout.String(), "Source    "+abbreviated(t, bundle.Dir, home)+"\n")
+	})
+
 	t.Run("a valid bundle given as ~/…", func(t *testing.T) {
 		home := t.TempDir()
 		t.Setenv("HOME", home)
@@ -226,29 +240,190 @@ func Test_run_refuses_a_bad_quicken_path(t *testing.T) {
 }
 
 func Test_run_discovers_the_bundle_from_documents_without_quicken(t *testing.T) {
+	t.Run("exactly one bundle in ~/Documents", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
+		var stdout, stderr bytes.Buffer
+
+		exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+
+		require.Equal(t, 0, exitCode)
+		assert.Empty(t, stderr.String())
+		assert.Contains(t, stdout.String(), "Source    "+abbreviated(t, bundle.Dir, home)+"\n")
+	})
+
+	t.Run("~/Documents missing, Quicken Documents folder has one", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		bundle := v9fixture.OpenBundle(t, quickenDocumentsDir(home))
+		var stdout, stderr bytes.Buffer
+
+		exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+
+		require.Equal(t, 0, exitCode)
+		assert.Empty(t, stderr.String())
+		assert.Contains(t, stdout.String(), "Source    "+abbreviated(t, bundle.Dir, home)+"\n")
+	})
+}
+
+// quickenDocumentsDir is Quicken Classic for Mac's own Documents folder
+// under home.
+func quickenDocumentsDir(home string) string {
+	return filepath.Join(home, "Library", "Application Support", "Quicken", "Documents")
+}
+
+func Test_run_pools_bundles_across_both_documents_folders(t *testing.T) {
 	cases := []struct {
 		name       string
 		setup      func(t *testing.T, home string)
 		wantStderr string
 	}{
 		{
-			name:       "no .quicken bundle",
-			setup:      func(t *testing.T, home string) {},
-			wantStderr: "quarry: no .quicken file found in ~/Documents; pass one with --quicken <path>\n",
+			name:  "both folders missing",
+			setup: func(t *testing.T, home string) {},
+			wantStderr: "quarry: no .quicken file found in ~/Documents or " +
+				"~/Library/Application Support/Quicken/Documents; pass one with --quicken <path>\n",
 		},
 		{
-			name: "three bundles",
+			name: "both folders exist and are empty",
 			setup: func(t *testing.T, home string) {
-				documents := filepath.Join(home, "Documents")
-				require.NoError(t, os.MkdirAll(filepath.Join(documents, "Old.quicken"), 0o700))
-				v9fixture.OpenBundle(t, documents)
-				require.NoError(t, os.MkdirAll(filepath.Join(documents, "Business.quicken"), 0o700))
+				require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents"), 0o700))
+				require.NoError(t, os.MkdirAll(quickenDocumentsDir(home), 0o700))
 			},
-			wantStderr: "quarry: found 3 .quicken files in ~/Documents " +
-				"(Business.quicken, Home.quicken, Old.quicken); choose one with --quicken <path>\n",
+			wantStderr: "quarry: no .quicken file found in ~/Documents or " +
+				"~/Library/Application Support/Quicken/Documents; pass one with --quicken <path>\n",
 		},
 		{
-			name: "an unreadable Documents directory",
+			name: "bundles only under the Quicken Backups folder",
+			setup: func(t *testing.T, home string) {
+				backups := filepath.Join(home, "Library", "Application Support", "Quicken", "Backups")
+				require.NoError(t, os.MkdirAll(filepath.Join(backups, "Home.quicken"), 0o700))
+			},
+			wantStderr: "quarry: no .quicken file found in ~/Documents or " +
+				"~/Library/Application Support/Quicken/Documents; pass one with --quicken <path>\n",
+		},
+		{
+			name: "one bundle in each folder",
+			setup: func(t *testing.T, home string) {
+				require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "A.quicken"), 0o700))
+				require.NoError(t, os.MkdirAll(filepath.Join(quickenDocumentsDir(home), "B.quicken"), 0o700))
+			},
+			wantStderr: "quarry: found 2 .quicken files (~/Documents/A.quicken, " +
+				"~/Library/Application Support/Quicken/Documents/B.quicken); choose one with --quicken <path>\n",
+		},
+		{
+			name: "two bundles in ~/Documents, none in the Quicken folder",
+			setup: func(t *testing.T, home string) {
+				require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "A.quicken"), 0o700))
+				require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "B.quicken"), 0o700))
+			},
+			wantStderr: "quarry: found 2 .quicken files (~/Documents/A.quicken, ~/Documents/B.quicken); " +
+				"choose one with --quicken <path>\n",
+		},
+		{
+			name: "two bundles in the Quicken folder, none in ~/Documents",
+			setup: func(t *testing.T, home string) {
+				require.NoError(t, os.MkdirAll(filepath.Join(quickenDocumentsDir(home), "A.quicken"), 0o700))
+				require.NoError(t, os.MkdirAll(filepath.Join(quickenDocumentsDir(home), "B.quicken"), 0o700))
+			},
+			wantStderr: "quarry: found 2 .quicken files (~/Library/Application Support/Quicken/Documents/A.quicken, " +
+				"~/Library/Application Support/Quicken/Documents/B.quicken); choose one with --quicken <path>\n",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			c.setup(t, home)
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, c.wantStderr, stderr.String())
+			_, statErr := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"))
+			assert.ErrorIs(t, statErr, os.ErrNotExist)
+		})
+	}
+}
+
+func Test_run_counts_a_bundle_reached_two_ways_once(t *testing.T) {
+	t.Run("~/Documents/Linked.quicken symlinks to the only bundle in the Quicken folder", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		bundle := v9fixture.OpenBundle(t, quickenDocumentsDir(home))
+		require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents"), 0o700))
+		link := filepath.Join(home, "Documents", "Linked.quicken")
+		require.NoError(t, os.Symlink(bundle.Dir, link))
+		var stdout, stderr bytes.Buffer
+
+		exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+
+		require.Equal(t, 0, exitCode)
+		assert.Empty(t, stderr.String())
+		assert.Contains(t, stdout.String(), "Source    "+abbreviated(t, link, home)+"\n")
+	})
+
+	t.Run("the Quicken folder is symlinked to ~/Documents", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
+		require.NoError(t, os.MkdirAll(filepath.Join(home, "Library", "Application Support", "Quicken"), 0o700))
+		require.NoError(t, os.Symlink(
+			filepath.Join(home, "Documents"),
+			filepath.Join(home, "Library", "Application Support", "Quicken", "Documents")))
+		var stdout, stderr bytes.Buffer
+
+		exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+
+		require.Equal(t, 0, exitCode)
+		assert.Empty(t, stderr.String())
+		assert.Contains(t, stdout.String(), "Source    "+abbreviated(t, bundle.Dir, home)+"\n")
+	})
+}
+
+func Test_run_refuses_when_a_discovery_location_is_unreadable(t *testing.T) {
+	cases := []struct {
+		name       string
+		setup      func(t *testing.T, home string)
+		wantStderr string
+	}{
+		{
+			name: "~/Documents unreadable, Quicken folder has one",
+			setup: func(t *testing.T, home string) {
+				if os.Geteuid() == 0 {
+					t.Skip("root ignores file permissions")
+				}
+				v9fixture.OpenBundle(t, quickenDocumentsDir(home))
+				documents := filepath.Join(home, "Documents")
+				require.NoError(t, os.MkdirAll(documents, 0o700))
+				t.Cleanup(func() { _ = os.Chmod(documents, 0o700) })
+				require.NoError(t, os.Chmod(documents, 0o000))
+			},
+			wantStderr: "quarry: cannot read ~/Documents: permission denied; allow your terminal to access " +
+				"the Documents folder in System Settings > Privacy & Security > Files and Folders, " +
+				"or pass --quicken <path>\n",
+		},
+		{
+			name: "~/Documents has one, Quicken folder unreadable",
+			setup: func(t *testing.T, home string) {
+				if os.Geteuid() == 0 {
+					t.Skip("root ignores file permissions")
+				}
+				v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
+				quickenDir := quickenDocumentsDir(home)
+				require.NoError(t, os.MkdirAll(quickenDir, 0o700))
+				t.Cleanup(func() { _ = os.Chmod(quickenDir, 0o700) })
+				require.NoError(t, os.Chmod(quickenDir, 0o000))
+			},
+			wantStderr: "quarry: cannot read ~/Library/Application Support/Quicken/Documents: permission denied; " +
+				"check the folder's permissions, or pass --quicken <path>\n",
+		},
+		{
+			name: "both unreadable",
 			setup: func(t *testing.T, home string) {
 				if os.Geteuid() == 0 {
 					t.Skip("root ignores file permissions")
@@ -257,6 +432,10 @@ func Test_run_discovers_the_bundle_from_documents_without_quicken(t *testing.T) 
 				require.NoError(t, os.MkdirAll(documents, 0o700))
 				t.Cleanup(func() { _ = os.Chmod(documents, 0o700) })
 				require.NoError(t, os.Chmod(documents, 0o000))
+				quickenDir := quickenDocumentsDir(home)
+				require.NoError(t, os.MkdirAll(quickenDir, 0o700))
+				t.Cleanup(func() { _ = os.Chmod(quickenDir, 0o700) })
+				require.NoError(t, os.Chmod(quickenDir, 0o000))
 			},
 			wantStderr: "quarry: cannot read ~/Documents: permission denied; allow your terminal to access " +
 				"the Documents folder in System Settings > Privacy & Security > Files and Folders, " +
@@ -280,19 +459,22 @@ func Test_run_discovers_the_bundle_from_documents_without_quicken(t *testing.T) 
 			assert.ErrorIs(t, statErr, os.ErrNotExist)
 		})
 	}
+}
 
-	t.Run("exactly one valid bundle", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
-		bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
-		var stdout, stderr bytes.Buffer
+func Test_run_sync_help_names_both_documents_folders(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	var stdout, stderr bytes.Buffer
 
-		exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+	exitCode := run(context.Background(), []string{"sync", "--help"}, &stdout, &stderr)
 
-		require.Equal(t, 0, exitCode)
-		assert.Empty(t, stderr.String())
-		assert.Contains(t, stdout.String(), "Source    "+abbreviated(t, bundle.Dir, home)+"\n")
-	})
+	require.Equal(t, 0, exitCode)
+	assert.Empty(t, stderr.String())
+	assert.Contains(t, stdout.String(), "Without --quicken, quarry looks for .quicken files in ~/Documents and in\n"+
+		"~/Library/Application Support/Quicken/Documents, and uses the one it finds\n"+
+		"if there is exactly one.")
+	assert.Contains(t, stdout.String(),
+		"path to the .quicken file to snapshot (default: the only one in ~/Documents or Quicken's Documents folder)")
 }
 
 func Test_run_refuses_an_empty_or_whitespace_quicken_flag_as_a_usage_error_even_with_a_bundle_in_documents(t *testing.T) {

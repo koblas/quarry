@@ -47,7 +47,9 @@ for Mac v9. A JSON manifest is written next to each snapshot.
 Quicken must be running with the file open: it encrypts the database when
 the file is closed. quarry only reads the Quicken file; it never writes to it.
 
-Without --quicken, quarry uses the only .quicken file in ~/Documents.`,
+Without --quicken, quarry looks for .quicken files in ~/Documents and in
+~/Library/Application Support/Quicken/Documents, and uses the one it finds
+if there is exactly one.`,
 		Example: "  quarry sync --quicken ~/Documents/Home.quicken",
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -108,7 +110,7 @@ Without --quicken, quarry uses the only .quicken file in ~/Documents.`,
 		},
 	}
 	cmd.Flags().StringVar(&quickenPath, "quicken", "",
-		"`path` to the .quicken file to snapshot (default: the only one in ~/Documents)")
+		"`path` to the .quicken file to snapshot (default: the only one in ~/Documents or Quicken's Documents folder)")
 
 	return cmd
 }
