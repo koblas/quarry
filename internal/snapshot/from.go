@@ -22,7 +22,7 @@ func (s *Server) ImportFrom(ctx context.Context, from string) (Outcome, error) {
 	}
 	snapshotPath, manifestPath, err := resolveFrom(s.home, s.snapshotDir, from)
 	if err != nil {
-		// unreachable: filepath.Abs fails only when os.Getwd does, which darwin never reports once the working directory exists at startup.
+		// unreachable: on darwin os.Getwd succeeds after the working directory is removed; Linux exercises it via Test_import_from_refuses_a_relative_path_when_the_working_directory_no_longer_exists
 		return Outcome{}, err
 	}
 
@@ -69,7 +69,7 @@ func resolveFrom(home, snapshotDir, value string) (snapshotPath, manifestPath st
 	if strings.Contains(value, "/") || strings.HasSuffix(value, ".sqlite") {
 		snapshotPath, err = filepath.Abs(homepath.Expand(home, value))
 		if err != nil {
-			// unreachable: filepath.Abs fails only when os.Getwd does, which darwin never reports once the working directory exists at startup.
+			// unreachable: on darwin os.Getwd succeeds after the working directory is removed; Linux exercises it via Test_import_from_refuses_a_relative_path_when_the_working_directory_no_longer_exists
 			return "", "", fmt.Errorf("resolve snapshot path %s: %w", value, err)
 		}
 	}

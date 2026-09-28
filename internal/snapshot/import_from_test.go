@@ -91,6 +91,78 @@ func Test_import_from_passes_the_same_snapshot_ref_as_a_plain_sync(t *testing.T)
 	assert.Equal(t, hex.EncodeToString(sum[:]), fake.calls[1].SHA256)
 }
 
+func Test_import_from_passes_the_recomputed_schema_fingerprint_not_the_recorded_one(t *testing.T) {
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	synced, err := srv.SyncAndImport(t.Context(), bundle.Dir)
+	require.NoError(t, err)
+	const edited = "edited-fingerprint"
+	editManifest(t, synced.Manifest.Snapshot.Manifest, func(m *snapshot.Manifest) { m.Schema.Fingerprint = edited })
+
+	_, err = srv.ImportFrom(t.Context(), snapshotIDFromPath(synced.Manifest.Snapshot.Path))
+
+	require.NoError(t, err)
+	require.Len(t, fake.calls, 2)
+	assert.Equal(t, synced.Manifest.Schema.Fingerprint, fake.calls[1].SchemaFingerprint)
+	assert.NotEqual(t, edited, fake.calls[1].SchemaFingerprint)
+}
+
+func Test_import_from_never_rewrites_a_manifest_that_differs_from_the_recomputed_one(t *testing.T) {
+	home := t.TempDir()
+	srv := newImportServer(t, home, &fakeImporter{})
+	taken := takeSnapshot(t, srv)
+	editManifest(t, taken.Snapshot.Manifest, func(m *snapshot.Manifest) {
+		m.Schema.Verified = false
+		m.Schema.MissingTables = []string{"ZALERT"}
+	})
+	before, err := os.ReadFile(taken.Snapshot.Manifest)
+	require.NoError(t, err)
+
+	_, err = srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
+
+	require.NoError(t, err)
+	after, err := os.ReadFile(taken.Snapshot.Manifest)
+	require.NoError(t, err)
+	assert.Equal(t, string(before), string(after))
+}
+
+func Test_import_from_a_path_outside_the_snapshots_directory_never_creates_it(t *testing.T) {
+	elsewhere := t.TempDir()
+	fake := &fakeImporter{}
+	ref, err := v9.Reference(t.Context())
+	require.NoError(t, err)
+	taken := takeSnapshot(t, snapshot.NewServer(
+		snapshot.WithSnapshotDir(elsewhere), snapshot.WithReference(v9.ReferenceLabel, ref)))
+	home := t.TempDir()
+	srv := newImportServer(t, home, fake)
+
+	_, err = srv.ImportFrom(t.Context(), taken.Snapshot.Path)
+
+	require.NoError(t, err)
+	require.Len(t, fake.calls, 1)
+	assert.Equal(t, taken.Snapshot.Path, fake.calls[0].Path)
+	assert.NoDirExists(t, filepath.Join(home, "snapshots"))
+}
+
+func Test_import_from_refuses_a_relative_path_when_the_working_directory_no_longer_exists(t *testing.T) {
+	deletedDir := filepath.Join(t.TempDir(), "deleted")
+	require.NoError(t, os.Mkdir(deletedDir, 0o700))
+	t.Chdir(deletedDir)
+	require.NoError(t, os.Remove(deletedDir))
+	if _, err := os.Getwd(); err == nil {
+		t.Skip("os.Getwd resolved despite the working directory being removed on this platform")
+	}
+	fake := &fakeImporter{}
+	srv := newImportServer(t, t.TempDir(), fake)
+
+	_, err := srv.ImportFrom(t.Context(), "x.sqlite")
+
+	require.Error(t, err)
+	assert.Empty(t, fake.calls)
+}
+
 func Test_import_from_returns_the_manifest_a_plain_sync_returned(t *testing.T) {
 	home := t.TempDir()
 	srv := newImportServer(t, home, &fakeImporter{})

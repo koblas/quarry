@@ -39,6 +39,8 @@ Mutation checks:
 
 ## Handoff
 
+> Superseded: the `--from` order, and the "integrity before hash" trap, below predate the ruled order (hash and F5 before the SQLite open) — `STATE.md` is current.
+
 **Binding decisions** — a later scenario must not contradict these without saying so:
 - `ImportFrom` never constructs or calls `Destination` (no `Prepare`: no snapshots-dir mkdir, no snapshot-leftover sweep) nor `Source` — this is what makes "never rewrites the manifest" and "never touches Quicken" structural. The store leftover sweep still runs, unchanged, inside `Replace`.
 - `--from` precedence: resolve → manifest read/decode → inspect → F5 → M1b → import (V1, I2, S4, S1–S3 as today). SCENARIO-15 slots F1–F4 into `fromRefusal` and must keep this order.
