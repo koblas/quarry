@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/stretchr/testify/assert"
@@ -52,6 +53,35 @@ func Test_run_writes_a_verified_snapshot_and_reports_success(t *testing.T) {
 		"Schema", "matches reference hardkoded/quicken-skills@752107b (82 tables, 1,835 columns)",
 	)
 	assert.Equal(t, want, stdout.String())
+}
+
+// The leftovers are backdated past the sweep's age gate: a fresh leftover
+// could belong to another sync still in flight.
+func Test_run_removes_leftover_partials_silently_before_syncing(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
+	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	require.NoError(t, os.MkdirAll(snapshotsDir, 0o700))
+	leftover := filepath.Join(snapshotsDir, ".20260101T000000Z.sqlite.partial")
+	require.NoError(t, os.WriteFile(leftover, []byte("crash debris"), 0o600))
+	leftoverWAL := leftover + "-wal"
+	require.NoError(t, os.WriteFile(leftoverWAL, []byte("wal"), 0o600))
+	old := time.Now().Add(-2 * time.Hour)
+	require.NoError(t, os.Chtimes(leftover, old, old))
+	require.NoError(t, os.Chtimes(leftoverWAL, old, old))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode)
+	assert.Empty(t, stderr.String())
+	assert.Contains(t, stdout.String(), "Snapshot  ")
+	assert.NotContains(t, stdout.String(), ".partial")
+	_, err := os.Stat(leftover)
+	assert.ErrorIs(t, err, os.ErrNotExist)
+	_, err = os.Stat(leftoverWAL)
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func Test_run_prints_the_manifest_as_json_with_the_json_flag(t *testing.T) {

@@ -422,6 +422,6 @@ Scenario: SCENARIO-13 — Snapshots directory not writable
 - [x] SCENARIO-08: Snapshot content rejected — `cmd/quarry/run_test.go` `Test_run_refuses_a_bundle_whose_snapshot_content_is_rejected`
 - [x] SCENARIO-10: Missing tables or columns fail the schema check — `cmd/quarry/run_test.go` `Test_run_reports_a_schema_mismatch`
 - [x] SCENARIO-09: Extra tables or columns only — delivered by SCENARIO-10 `cmd/quarry/run_test.go` `Test_run_reports_extra_schema_only_as_a_warning`
-- [ ] SCENARIO-11: Same-second runs do not collide
-- [ ] SCENARIO-12: Crash leftovers cleaned silently
+- [x] SCENARIO-11: Same-second runs do not collide — `internal/snapshot/sync_test.go` `Test_sync_appends_a_suffix_when_the_current_second_already_has_a_snapshot`
+- [x] SCENARIO-12: Crash leftovers cleaned silently — delivered by SCENARIO-11 `cmd/quarry/run_test.go` `Test_run_removes_leftover_partials_silently_before_syncing`
 - [ ] SCENARIO-13: Snapshots directory not writable

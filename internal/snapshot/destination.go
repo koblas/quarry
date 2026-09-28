@@ -2,13 +2,25 @@ package snapshot
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/atomicfile"
 )
+
+// leftoverMaxAge is how old a leftover partial must be before Prepare's
+// startup sweep removes it.
+const leftoverMaxAge = time.Hour
+
+// leftoverPartialPattern matches a quarry partial name and its
+// -journal/-wal/-shm companions.
+var leftoverPartialPattern = regexp.MustCompile(`^\.\d{8}T\d{6}Z(_\d+)?\.(sqlite|json)\.partial(-journal|-wal|-shm)?$`)
 
 // dirDestination is the production Destination adapter: a directory on disk
 // holding committed snapshots and manifests plus their exclusively-created
@@ -30,23 +42,68 @@ func (d *dirDestination) Prepare(ctx context.Context) error {
 	if err := os.MkdirAll(d.dir, 0o700); err != nil {
 		return fmt.Errorf("create snapshots directory %s: %w", d.dir, err)
 	}
+	d.sweepLeftovers()
 	return nil
 }
 
-func (d *dirDestination) Backup(ctx context.Context, src Source, name string) (string, error) {
-	partial := d.partialPath(name, "sqlite")
-
-	f, err := atomicfile.Create(partial, 0o600)
+// sweepLeftovers best-effort removes leftoverPartialPattern matches older
+// than leftoverMaxAge. A ReadDir or Remove failure is swallowed: the sweep
+// never fails Prepare.
+func (d *dirDestination) sweepLeftovers() {
+	entries, err := os.ReadDir(d.dir)
 	if err != nil {
-		return "", fmt.Errorf("create snapshot partial: %w", err)
+		return
 	}
-	_ = f.Close()
+	cutoff := time.Now().Add(-leftoverMaxAge)
+	for _, entry := range entries {
+		if entry.IsDir() || !leftoverPartialPattern.MatchString(entry.Name()) {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil || info.ModTime().After(cutoff) {
+			continue
+		}
+		_ = os.Remove(filepath.Join(d.dir, entry.Name()))
+	}
+}
 
-	if err := src.Backup(ctx, partial); err != nil {
-		_ = os.Remove(partial)
-		return "", fmt.Errorf("backup snapshot: %w", err)
+// Backup reserves the first candidate name ("name", then "name_2", "name_3",
+// ...) whose sqlite and json finals do not already exist, backing up src
+// into that candidate's partial.
+func (d *dirDestination) Backup(ctx context.Context, src Source, name string) (string, string, error) {
+	candidate := name
+	for suffix := 1; ; suffix++ {
+		partial := d.partialPath(candidate, "sqlite")
+
+		f, err := atomicfile.Create(partial, 0o600)
+		if err != nil {
+			if errors.Is(err, fs.ErrExist) {
+				candidate = fmt.Sprintf("%s_%d", name, suffix+1)
+				continue
+			}
+			return "", "", fmt.Errorf("create snapshot partial: %w", err)
+		}
+		_ = f.Close()
+
+		snapshotFinal, manifestFinal := d.FinalPaths(candidate)
+		if fileExists(snapshotFinal) || fileExists(manifestFinal) {
+			_ = os.Remove(partial)
+			candidate = fmt.Sprintf("%s_%d", name, suffix+1)
+			continue
+		}
+
+		if err := src.Backup(ctx, partial); err != nil {
+			_ = os.Remove(partial)
+			return "", "", fmt.Errorf("backup snapshot: %w", err)
+		}
+		return partial, candidate, nil
 	}
-	return partial, nil
+}
+
+// fileExists reports whether path can be stat'ed.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func (d *dirDestination) WriteManifest(ctx context.Context, name string, data []byte) (string, error) {

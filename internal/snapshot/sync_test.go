@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/sqlite"
 	"github.com/koblas/quarry/internal/quicken/v9"
@@ -207,6 +210,70 @@ func Test_sync_leaves_the_live_bundle_unchanged(t *testing.T) {
 	assert.Equal(t, before, after)
 	assert.True(t, statBefore.ModTime().Equal(statAfter.ModTime()))
 	assert.Equal(t, namesOf(entriesBefore), namesOf(entriesAfter))
+}
+
+func Test_sync_appends_a_suffix_when_the_current_second_already_has_a_snapshot(t *testing.T) {
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	snapshotsDir := filepath.Join(t.TempDir(), "snapshots")
+	srv := newServer(t, snapshotsDir)
+
+	var first snapshot.Manifest
+	var firstSQLiteBefore, firstManifestBefore []byte
+	var firstModTimeBefore time.Time
+
+	// synctest freezes time.Now(), so both calls land in the same second.
+	synctest.Test(t, func(t *testing.T) {
+		var err error
+		first, err = srv.Sync(t.Context(), bundle.Dir)
+		require.NoError(t, err)
+
+		firstSQLiteBefore, err = os.ReadFile(first.Snapshot.Path)
+		require.NoError(t, err)
+		firstManifestBefore, err = os.ReadFile(first.Snapshot.Manifest)
+		require.NoError(t, err)
+		info, err := os.Stat(first.Snapshot.Path)
+		require.NoError(t, err)
+		firstModTimeBefore = info.ModTime()
+
+		_, err = srv.Sync(t.Context(), bundle.Dir)
+		require.NoError(t, err)
+	})
+
+	firstSQLiteAfter, err := os.ReadFile(first.Snapshot.Path)
+	require.NoError(t, err)
+	assert.Equal(t, firstSQLiteBefore, firstSQLiteAfter)
+	firstManifestAfter, err := os.ReadFile(first.Snapshot.Manifest)
+	require.NoError(t, err)
+	assert.Equal(t, firstManifestBefore, firstManifestAfter)
+	infoAfter, err := os.Stat(first.Snapshot.Path)
+	require.NoError(t, err)
+	assert.True(t, firstModTimeBefore.Equal(infoAfter.ModTime()))
+
+	// Located by directory listing, not by the returned Manifest, so a
+	// wrong-but-self-consistent returned path cannot make this pass.
+	secondManifestPath := onlyFileWithSuffix(t, snapshotsDir, "_2.json")
+	raw, err := os.ReadFile(secondManifestPath)
+	require.NoError(t, err)
+	var onDisk snapshot.Manifest
+	require.NoError(t, json.Unmarshal(raw, &onDisk))
+	assert.True(t, strings.HasSuffix(onDisk.Snapshot.Path, "_2.sqlite"), "got %s", onDisk.Snapshot.Path)
+	assert.True(t, strings.HasSuffix(onDisk.Snapshot.Manifest, "_2.json"), "got %s", onDisk.Snapshot.Manifest)
+}
+
+// onlyFileWithSuffix fails the test unless exactly one entry in dir ends in
+// suffix, returning its full path.
+func onlyFileWithSuffix(t *testing.T, dir, suffix string) string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	var found []string
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), suffix) {
+			found = append(found, e.Name())
+		}
+	}
+	require.Len(t, found, 1, "expected exactly one %s file in %s, found %v", suffix, dir, found)
+	return filepath.Join(dir, found[0])
 }
 
 func namesOf(entries []os.DirEntry) []string {

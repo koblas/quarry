@@ -144,8 +144,8 @@ type fixedPathDestination struct {
 }
 
 func (f *fixedPathDestination) Prepare(context.Context) error { return nil }
-func (f *fixedPathDestination) Backup(context.Context, snapshot.Source, string) (string, error) {
-	return f.snapshotPath, nil
+func (f *fixedPathDestination) Backup(_ context.Context, _ snapshot.Source, name string) (string, string, error) {
+	return f.snapshotPath, name, nil
 }
 func (f *fixedPathDestination) WriteManifest(context.Context, string, []byte) (string, error) {
 	return "", nil
@@ -289,10 +289,10 @@ type partialFaultDestination struct {
 }
 
 func (f *partialFaultDestination) Prepare(ctx context.Context) error { return f.real.Prepare(ctx) }
-func (f *partialFaultDestination) Backup(ctx context.Context, src snapshot.Source, name string) (string, error) {
-	partial, err := f.real.Backup(ctx, src, name)
+func (f *partialFaultDestination) Backup(ctx context.Context, src snapshot.Source, name string) (string, string, error) {
+	partial, resolvedName, err := f.real.Backup(ctx, src, name)
 	f.backedUpPartial = partial
-	return partial, err
+	return partial, resolvedName, err
 }
 func (f *partialFaultDestination) WriteManifest(ctx context.Context, name string, data []byte) (string, error) {
 	if f.failWriteManifest != nil {
