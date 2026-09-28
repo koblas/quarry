@@ -46,3 +46,4 @@ Scenarios complete: SCENARIO-01a (+ folded 04, 05), SCENARIO-01d. Last updated b
 ## Open debts
 - `--json` stdout gains top-level `store` key (P1-11); `Test_run_prints_the_manifest_as_json_with_the_json_flag` needs to change to "stdout minus `store` equals the manifest" — owned by SCENARIO-02.
 - `duckstore.Replace`'s `CheckpointClose`-failure branch, and `build`'s schema-exec failure via a real fault, have no black-box trigger through the current API — declared unreachable with a stated reason each; SCENARIO-14's fault work may want a seam to exercise them for real.
+- MINOR (01d checkpoint): `internal/snapshot/import.go:44` `SyncAndImport` doc 5 lines (budget ~4); `internal/snapshot/import.go:77` `StdoutWriteRefusal` doc 5 lines. Trim when next touched.
