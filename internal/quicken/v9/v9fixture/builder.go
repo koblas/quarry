@@ -118,6 +118,7 @@ type userTagLink struct{ entryPK, tagPK int64 }
 // v9.ReferenceDDL.
 type Builder struct {
 	entities map[string]int64
+	omitted  map[string]bool
 	nextPK   map[string]int64
 
 	accounts     []pkRow[AccountRow]
@@ -147,8 +148,16 @@ func NewBuilder() *Builder {
 			"SmartCashFlowTransaction": EntSmartCashFlowTransaction,
 			"InvestmentTransaction":    EntInvestmentTransaction,
 		},
-		nextPK: make(map[string]int64),
+		omitted: make(map[string]bool),
+		nextPK:  make(map[string]int64),
 	}
+}
+
+// WithoutEntity omits name's Z_PRIMARYKEY row entirely, simulating a
+// snapshot whose schema carries an entity kind quarry cannot resolve.
+func (b *Builder) WithoutEntity(name string) *Builder {
+	b.omitted[name] = true
+	return b
 }
 
 // WithEntity overrides name's Z_PRIMARYKEY entity number. name is one of
@@ -343,6 +352,9 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 	for _, name := range []string{
 		"CategoryTag", "UserTag", "CashFlowTransaction", "SmartCashFlowTransaction", "InvestmentTransaction",
 	} {
+		if b.omitted[name] {
+			continue
+		}
 		exec(tb, ctx, db,
 			"INSERT INTO Z_PRIMARYKEY (Z_ENT, Z_NAME, Z_SUPER, Z_MAX) VALUES (?, ?, 0, ?)",
 			b.entities[name], name, b.maxPKForEntity(name))
