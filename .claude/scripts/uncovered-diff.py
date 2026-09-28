@@ -15,8 +15,9 @@ Usage: .claude/scripts/uncovered-diff.py [--profile FILE] [--lines] [BASE] [PKG 
 
 Added lines are those `git diff -U0 BASE` adds to non-test .go files (committed and
 uncommitted), plus every line of an untracked, non-ignored non-test .go file
-(`git ls-files --others --exclude-standard`), which `git diff` does not show. A line is uncovered when every coverage block containing it has count 0;
-non-statement lines (comments, declarations, lone closing braces) are skipped.
+(`git ls-files --others --exclude-standard`), which `git diff` does not show.
+A line is uncovered when every coverage block containing it has count 0; non-statement
+lines (comments, declarations, lone closing braces) are skipped.
 
 Output (stdout): one row per run of consecutive uncovered lines,
   path:first[-last] (func): first line of source
