@@ -90,8 +90,9 @@ paths reads six diffs.
 finding no reviewer needs to rediscover by reading; handing every reviewer the same list stops
 three of them paying to find it separately. Its rows are grouped per run with the enclosing
 function, which is also the cheapest form to paste. If it exits 1 (anything outside the
-"declared unreachable" section), send it back to the developer before spending a review
-round at all. Also paste `.claude/scripts/test-stats.py --base <range base> --changed` so
+"declared unreachable" section, `(no coverage block)` file rows included), send it back to
+the developer before spending a review round at all. Exit 2 is a failing test — also back to
+the developer; never a PASS. Also paste `.claude/scripts/test-stats.py --base <range base> --changed` so
 reviewers read the test-count deltas instead of recounting.
 
 Do NOT review code yourself — only orchestrate.

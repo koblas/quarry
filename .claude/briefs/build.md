@@ -14,9 +14,9 @@ One statement of when test must fail before code exists. `CLAUDE.md`, `tdd` skil
 - **Write-safety guards** — anything that keeps `quarry` from damaging user files: overwrite / clobber refusals, symlink refusals, `os.Root` confinement (`internal/assemble/fs.go`, `internal/scaffold/fs.go`), `internal/platform/writable`.
 - **Adapters with atomicity or exclusive-create claim** — `internal/platform/atomicfile`, `internal/platform/rwfs`, temp-then-rename, `O_EXCL` creates.
 
-Everything else built as **code-first small batches**: one behaviour per batch — write code, then its unit tests in same batch, then refactor while green, then next batch. Refactor every batch, not once at end. Nothing ships untested — `test-reviewer`'s "untested change is BLOCKER" unchanged, and coverage gate still demands every added line executed. Only change: whether unit test must be *seen red* before its code exists. Code-first test proves it can fail by mutation reddening it (`proof.md`), not by prior red.
+Everything else built as **code-first small batches**: one behaviour per batch — write code, then its unit tests in same batch, then refactor while green, then next batch. Refactor every batch, not once at end. Nothing ships untested — `test-reviewer`'s "untested change is BLOCKER" unchanged, and coverage gate still demands every added line executed. Only change: whether unit test must be *seen red* before its code exists. Who proves a test can fail, and how, is `proof.md` → *Mutation verification* — not restated here.
 
-Architect marks each scenario's cadence in plan: `Cadence: test-first` (any mandatory item above touched — name which) or `Cadence: code-first`. Orchestrator copies it into `METRICS.md` so cadence cost can be compared later (`metrics.md`).
+Architect marks each scenario's cadence in plan: `Cadence: test-first` (any mandatory item above touched — name which) or `Cadence: code-first`. Every mandatory item touched also gets its own entry on the plan's `Mutation checks:` line. Orchestrator copies it into `METRICS.md` so cadence cost can be compared later (`metrics.md`).
 
 ## Scenario traceability
 
@@ -51,7 +51,7 @@ Developer sets `status: done` when scenario complete, plus tick in `specificatio
 
 Commonest blocking findings share one shape: fallible call in new code with no fault test, or numeric bound with no outside-the-bound test. Each costs fix pass plus re-gate for test architect could have listed up front. Every architect checklist for new or changed command, feature-package method or adapter names, in the Build batch that owns the code:
 
-- **One fault test per fallible call** — each `Store` call, file read/write/rename, `exec`, and parse the code makes. Include call that re-reads on resume or retry branch, not just first one.
+- **One fault test per fallible call** — each `Store` call, file read/write/rename, `exec`, and parse the code makes. Include call that re-reads on resume or retry branch, not just first one. Injected error has the shape the real adapter returns (`proof.md` → *Assertions that prove nothing*).
 - **Every numeric bound tested just outside it**, in-bound case as control (line caps, count limits, depth limits).
 - **Every fallback branch of error → exit-code mapper** — the `default:` arm, not just named sentinels.
 - **One decode-fault test per decoded record kind** for adapter or parser reading files — frontmatter as well as body items. Corrupt-child-item test on a read does not cover corrupt root on same read.

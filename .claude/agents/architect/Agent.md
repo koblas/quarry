@@ -119,8 +119,10 @@ Header lines:
   `## BDD Acceptance Progress` line. Plan absorbing a FOLD adds one more line per folded
   scenario: `Acceptance test (SCENARIO-NN, folded):` `` `<file>` `<TestName>` ``.
 - `Narrow loop:` test filter developer iterates on (`go test ./internal/<pkg>/ -run 'Finish'`).
-- `Mutation checks:` which guard, which test must redden — or `none`. Developer mutates only
-  what this line names.
+- `Mutation checks:` `guard → test` entries, one per mandatory test-first item the scenario
+  touches (the item `Cadence:` names) plus any other guard you judge load-bearing — or `none`,
+  valid only under `code-first`. Rule owned by `.claude/briefs/proof.md` → *Mutation
+  verification*.
 
 Phases — developer runs one build/test at each boundary, not per step:
 

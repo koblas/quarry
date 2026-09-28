@@ -18,18 +18,19 @@ Read once; no ask for repeat. New standing rule goes in brief its readers alread
 
 ```bash
 go build ./...
-go test -count=1 -coverpkg=./... -coverprofile="$TMPDIR/cover.out" ./...   # the full suite, once
+COVER="$(mktemp "$TMPDIR/cover.XXXXXX")"                                   # unique per run
+go test -count=1 -coverpkg=./... -coverprofile="$COVER" ./... &&          # the full suite, once
+  .claude/scripts/uncovered-diff.py --profile "$COVER" <start>              # coverage gate, no re-run
 go test -race ./<touched package>/...
 golangci-lint run ./...
-.claude/scripts/uncovered-diff.py --profile "$TMPDIR/cover.out" <start>    # coverage gate, no re-run
 .claude/scripts/test-stats.py --base <start> --changed                     # counts and deltas
 ```
 
-`<start>` = commit your scenario or fix pass started from.
+`<start>` = commit your scenario or fix pass started from. `mktemp` line, `go test` and `uncovered-diff.py` go in **one Bash call** — shell variables do not survive between calls, and fixed name like `$TMPDIR/cover.out` is shared by every agent in session (same hazard as `proof.md` → *Unique backup name*). `uncovered-diff.py` refuses (exit 2) profile older than a changed file, and lists changed file with no coverage block at all as open row.
 
 **Narrow loop while working, full run once.** During scenario Acceptance and Build phases run only packages and tests in play — plan's `Narrow loop:` line, e.g. `go test ./internal/setup/ -run 'Skill|Init'`. Run block above once, in `### Verify` phase (and at end of every fix pass). Full suite after every edit = most expensive habit, proves nothing final run does not. That one `go test` line is both full suite and coverage data — do not run suite second time for gate.
 
-**Coverage gate before handing off.** Every production line you added must be executed by test. `uncovered-diff.py` lists each added non-test line no test executes, grouped into runs with enclosing function, exits 1 if any left. Reach zero, or mark genuinely unreachable defensive branch in code with `// unreachable: <reason>` on the line (or the line above it) — then it move to "declared unreachable" section reviewer judge, and stop failing gate every later pass. Untested branch added by fix pass becomes next round's test-reviewer MAJOR.
+**Coverage gate before handing off.** Every production line you added must be executed by test. `uncovered-diff.py` lists each added non-test line no test executes, grouped into runs with enclosing function, exits 1 if any left. Reach zero, or mark genuinely unreachable defensive branch in code with `// unreachable: <reason>` on the line, or anywhere in the contiguous `//` comment block directly above the run — then it move to "declared unreachable" section reviewer judge, and stop failing gate every later pass. Untested branch added by fix pass becomes next round's test-reviewer MAJOR.
 
 **Counts come from `test-stats.py --base <start> --changed`**: every package whose tests changed, with `now (±delta)` for top-level tests, `t.TempDir()` sites and disk-touching tests, read from git at `<start>` — never from archive or checkout you build yourself.
 
