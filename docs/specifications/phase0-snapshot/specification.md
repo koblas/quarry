@@ -50,6 +50,7 @@ Done in the pre-step (commit after spec). Upstream: dweekly `119e2724a3cb0eab872
 - Busy timeout as config (a named constant in Phase 0).
 - Schema fingerprint recorded in `import_runs`.
 - Possibly comparing column types.
+- A `.json` manifest whose `.sqlite` is absent (SIGKILL / power loss between renames) is not a snapshot; `quarry status` and retention ignore or report it.
 - Rewrite `sync` help Long when sync gains import/validation.
 
 ---
@@ -230,6 +231,8 @@ All to stderr as one line prefixed `quarry: `. stdout empty in both modes; nothi
 | R7 | `data` unreadable (permissions/TCC) | `quarry: cannot read ~/Documents/Home.quicken/data: permission denied; allow your terminal to access the folder in System Settings > Privacy & Security, or check the file's permissions` (OS reason verbatim) | 1 |
 | R7b | `--quicken` path itself cannot be stat'ed for a reason other than not-exist (e.g. unreadable ancestor dir). Added at SCENARIO-05 planning; final product-vision pass reviews it. | `quarry: cannot read ~/Documents/Home.quicken: permission denied; allow your terminal to access the folder in System Settings > Privacy & Security, or check the file's permissions` (OS reason verbatim) | 1 |
 | R8 | Probe returns SQLITE_NOTADB (encrypted) | `quarry: ~/Documents/Home.quicken is encrypted, so Quicken does not have it open; open it in Quicken, then run quarry sync again` | 1 |
+| R8b | `data` is readable SQLite with header bytes 18–19 == 2 (WAL) and `<bundle>/data-wal` does not exist. Checked by reading header bytes before any SQLite open; after R6/R7, before R8/R9. Nothing created in the bundle or snapshots dir. (Added at final gate.) | `quarry: ~/Documents/Home.quicken is not open in Quicken (its database has no write-ahead log); open it in Quicken, then run quarry sync again` | 1 |
+| I1 | SIGINT/SIGTERM before commit. Context checked once immediately before the final renames; once past it, the renames complete and the run reports its normal outcome. All `.partial` files removed. (Added at final gate.) | `quarry: sync interrupted; nothing was kept; run quarry sync again` | 1 |
 | R9 | SQLITE_BUSY/LOCKED persists through busy timeout (named constant) | `quarry: Quicken is busy writing ~/Documents/Home.quicken; run quarry sync again in a moment` | 1 |
 | R10 | `integrity_check` not `ok` | `quarry: the snapshot of ~/Documents/Home.quicken failed SQLite's integrity check (<first result line>); nothing was kept; quit and reopen the file in Quicken, then run quarry sync again` | 1 |
 | R11 | No `ZACCOUNT` table (incl. 0-byte `data`) | `quarry: ~/Documents/Home.quicken is not a Quicken Classic for Mac database (no ZACCOUNT table); pass the right file with --quicken <path>` | 1 |
@@ -239,10 +242,23 @@ All to stderr as one line prefixed `quarry: `. stdout empty in both modes; nothi
 | U1 | Positional argument | `quarry: sync takes no arguments; pass the file with --quicken <path>` | 2 |
 | U2 | Unknown flag, `--quicken` without value, unknown command | cobra's message with `quarry: ` prefix, plus `Run 'quarry sync --help' for usage.` No usage dump. | 2 |
 
+### Singular / plural (ruled at final gate)
+
+Nouns: `1 table` / `N tables`, `1 column` / `N columns` in W1, M1, the `plus … not in it` clause and the `DIFFERS … missing / not in reference` clause; zero clauses omitted. W1 verb `is` + pronoun `it` only when exactly one item is named in total, else `are` + `them` (incl. `1 table and 1 column`):
+- `quarry: warning: Home.quicken has 1 table that is not in the schema reference; quarry ignores it (listed in 20260927T143005Z.json)`
+- `quarry: warning: Home.quicken has 1 column that is not in the schema reference; quarry ignores it (listed in 20260927T143005Z.json)`
+- `quarry: warning: Home.quicken has 2 columns that are not in the schema reference; quarry ignores them (listed in 20260927T143005Z.json)`
+- `quarry: warning: Home.quicken has 1 table and 1 column that are not in the schema reference; quarry ignores them (listed in 20260927T143005Z.json)`
+M1 is noun-only (`is missing 1 column that the schema reference expects`). `warnings` JSON entry = W1 text without prefix.
+
 ### Edge-case rows by output
 
 | Output | Input class | Text / behaviour |
 |---|---|---|
+| stdout | R8b, I1 | empty (human and `--json`) |
+| bundle file set | R8b | unchanged; no `-wal`/`-shm` added |
+| `data` rollback-journal (bytes 18–19 == 1) | not R8b | proceeds as today |
+| stderr | signal during commit | normal outcome for that run |
 | `Source` line | discovered vs `--quicken` | Identical: resolved bundle path, `~`-abbreviated. No "(auto-detected)". |
 | `Size` line | 1 / N accounts | `1 account` / `N accounts` |
 | `Schema` line | exact match | `matches reference … (T tables, C columns)`. No rows, no warning. |

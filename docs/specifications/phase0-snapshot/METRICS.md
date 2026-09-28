@@ -16,6 +16,7 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Verdict |
 | --- | --- | --- | --- |
+| 1 | arch, correctness, test, refactor | 0/4/27/9 | FAIL |
 
 ## Tokens
 <output of `.claude/scripts/feature-metrics.py phase0-snapshot`, pasted once at SHIP>
