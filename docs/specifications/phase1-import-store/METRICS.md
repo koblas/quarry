@@ -8,6 +8,7 @@
 | SCENARIO-01d | code-first | 0/0/2/0 | no (MINORs → STATE.md) |
 | SCENARIO-01b (+06) | test-first (guard batch built with tests; 2 of 4 named mutations overstated, fixed) | 3/1/21/0 | yes |
 | SCENARIO-09 (+11) | code-first | 0/1/15/0 | yes |
+| SCENARIO-01c (+07, 12, 21) | code-first | 0/1/4/0 | yes |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Verdict |
