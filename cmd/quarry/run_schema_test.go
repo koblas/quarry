@@ -165,6 +165,61 @@ func Test_run_reports_a_schema_mismatch_as_json(t *testing.T) {
 	assert.True(t, strings.HasPrefix(stderr.String(), "quarry: schema check failed:"))
 }
 
+// The MissingSchemaBundle fixture's own dropped table and columns are what
+// makes its snapshot mismatch the real embedded reference, independent of
+// Quicken: --from re-checks that same snapshot file against the same
+// reference and finds the same mismatch.
+func Test_run_reports_a_schema_mismatch_with_from(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
+	var syncStdout, syncStderr bytes.Buffer
+	require.Equal(t, 1, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncStdout, &syncStderr))
+	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	id := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--from", id}, &stdout, &stderr)
+
+	require.Equal(t, 1, exitCode)
+	assert.Equal(t, syncStdout.String(), stdout.String())
+	assert.Equal(t, "quarry: schema check failed: snapshot "+id+" of Home.quicken is missing 1 table and 2 columns "+
+		"that the schema reference expects; quarry cannot import it until its schema reference is updated\n",
+		stderr.String())
+	_, err := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb"))
+	assert.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func Test_run_reports_a_schema_mismatch_with_from_as_json(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
+	var syncStdout, syncStderr bytes.Buffer
+	require.Equal(t, 1, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncStdout, &syncStderr))
+	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	id := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--from", id, "--json"}, &stdout, &stderr)
+
+	require.Equal(t, 1, exitCode)
+	var parsed map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &parsed))
+	storeValue, present := parsed["store"]
+	require.True(t, present, "the store key must be present even when the import was not attempted")
+	assert.JSONEq(t, "null", string(storeValue))
+
+	var schema map[string]any
+	require.NoError(t, json.Unmarshal(parsed["schema"], &schema))
+	assert.Equal(t, false, schema["verified"])
+	assert.NotEmpty(t, schema["missing_tables"])
+	assert.NotEmpty(t, schema["missing_columns"])
+	assert.NotEmpty(t, schema["unexpected_columns"])
+
+	require.NotEmpty(t, stderr.String())
+	assert.True(t, strings.HasPrefix(stderr.String(), "quarry: schema check failed: snapshot "+id))
+}
+
 // On the mismatch path no build is reached, so a stdout write failure still
 // names the manifest already on disk, not --from --json.
 func Test_run_keeps_the_snapshot_message_when_writing_stdout_fails_on_a_schema_mismatch(t *testing.T) {

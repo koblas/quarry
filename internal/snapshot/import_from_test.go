@@ -5,13 +5,12 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 
+	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/sqlite"
 	"github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
@@ -270,39 +269,101 @@ func Test_import_from_skips_the_import_when_the_current_reference_no_longer_matc
 	assert.Equal(t, []string{"ZQUARRYNEWTABLE"}, outcome.Manifest.Schema.MissingTables)
 }
 
-func Test_import_from_refuses_without_importing_when_a_file_cannot_be_read(t *testing.T) {
-	cases := []struct {
-		name  string
-		setup func(t *testing.T, snapshotPath string)
-		cause error
-	}{
-		{name: "manifest missing", setup: func(t *testing.T, snapshotPath string) {
-			require.NoError(t, os.WriteFile(snapshotPath, []byte("x"), 0o600))
-		}, cause: fs.ErrNotExist},
-		{name: "snapshot missing", setup: func(t *testing.T, snapshotPath string) {
-			require.NoError(t, os.WriteFile(strings.TrimSuffix(snapshotPath, ".sqlite")+".json", []byte(`{}`), 0o600))
-		}, cause: fs.ErrNotExist},
-		{name: "snapshot is a directory", setup: func(t *testing.T, snapshotPath string) {
-			require.NoError(t, os.Mkdir(snapshotPath, 0o700))
-			require.NoError(t, os.WriteFile(strings.TrimSuffix(snapshotPath, ".sqlite")+".json", []byte(`{}`), 0o600))
-		}, cause: syscall.EISDIR},
+// F1/F1b/F2/F2b are a head os.Stat pre-check inside ImportFrom, ahead of any
+// manifest read: this proves each fires with no manifest file present at
+// all, which a manifest-stage refusal could never do.
+func Test_import_from_refuses_a_path_form_value_that_does_not_exist(t *testing.T) {
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	snapshotPath := filepath.Join(home, "elsewhere", "20260927T143005Z.sqlite")
+
+	_, err := srv.ImportFrom(t.Context(), snapshotPath)
+
+	require.EqualError(t, err, homepath.Abbreviate(home, snapshotPath)+
+		" does not exist; check the path passed to --from")
+	assert.Empty(t, fake.calls)
+}
+
+// A permission fault on the snapshots directory itself, not the file, is
+// the only way to make os.Stat fail with something other than ErrNotExist
+// without a race: it proves the pre-check's own F4 arm, distinct from
+// hashFile's F4 for a snapshot file that stats fine but cannot be opened.
+func Test_import_from_names_the_snapshot_when_its_directory_cannot_be_read(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file permissions")
 	}
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	taken := takeSnapshot(t, srv)
+	snapshotsDir := filepath.Dir(taken.Snapshot.Path)
+	require.NoError(t, os.Chmod(snapshotsDir, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(snapshotsDir, 0o700) })
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			fake := &fakeImporter{}
-			srv := newImportServer(t, home, fake)
-			snapshotPath := filepath.Join(home, "snapshots", "20260927T143005Z.sqlite")
-			require.NoError(t, os.MkdirAll(filepath.Dir(snapshotPath), 0o700))
-			c.setup(t, snapshotPath)
+	_, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
 
-			_, err := srv.ImportFrom(t.Context(), "20260927T143005Z")
+	require.EqualError(t, err, "cannot read "+homepath.Abbreviate(home, taken.Snapshot.Path)+
+		": permission denied; check the file's permissions")
+	assert.Empty(t, fake.calls)
+}
 
-			require.ErrorIs(t, err, c.cause)
-			assert.Empty(t, fake.calls)
-		})
-	}
+func Test_import_from_refuses_an_id_form_value_with_no_matching_snapshot(t *testing.T) {
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+
+	_, err := srv.ImportFrom(t.Context(), "20260927T143005Z")
+
+	require.EqualError(t, err, "no snapshot 20260927T143005Z in ~/snapshots; check the ID passed to --from")
+	assert.Empty(t, fake.calls)
+}
+
+func Test_import_from_refuses_a_directory_that_is_not_a_quicken_bundle(t *testing.T) {
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	snapshotPath := filepath.Join(home, "snapshots", "20260927T143005Z.sqlite")
+	require.NoError(t, os.MkdirAll(snapshotPath, 0o700))
+
+	_, err := srv.ImportFrom(t.Context(), "20260927T143005Z")
+
+	require.EqualError(t, err, "~/snapshots/20260927T143005Z.sqlite is not a snapshot file; "+
+		"pass a .sqlite snapshot from ~/snapshots with --from <snapshot>")
+	assert.Empty(t, fake.calls)
+}
+
+func Test_import_from_refuses_a_quicken_bundle_passed_as_from(t *testing.T) {
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+
+	_, err := srv.ImportFrom(t.Context(), bundle.Dir)
+
+	require.EqualError(t, err, bundle.Dir+" is a Quicken file, not a snapshot; "+
+		"pass it with --quicken <path>, or pass a snapshot with --from <snapshot>")
+	assert.Empty(t, fake.calls)
+}
+
+// Test_import_from_returns_the_manifest_a_plain_sync_returned and its
+// siblings above are this test's control: they pass a real, regular
+// snapshot file through the same pre-check and succeed, so F2 never fires
+// on a usable snapshot.
+
+func Test_import_from_reports_no_manifest_as_not_a_quarry_snapshot(t *testing.T) {
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	snapshotPath := filepath.Join(home, "snapshots", "20260927T143005Z.sqlite")
+	require.NoError(t, os.MkdirAll(filepath.Dir(snapshotPath), 0o700))
+	require.NoError(t, os.WriteFile(snapshotPath, []byte("x"), 0o600))
+
+	_, err := srv.ImportFrom(t.Context(), "20260927T143005Z")
+
+	require.EqualError(t, err, "~/snapshots/20260927T143005Z.sqlite is not a quarry snapshot "+
+		"(no .json manifest next to it); pass a snapshot taken by quarry sync with --from <snapshot>")
+	assert.Empty(t, fake.calls)
 }
 
 func Test_import_from_refuses_without_importing_when_the_manifest_is_not_json(t *testing.T) {
@@ -314,8 +375,52 @@ func Test_import_from_refuses_without_importing_when_the_manifest_is_not_json(t 
 
 	_, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
 
+	require.EqualError(t, err, homepath.Abbreviate(home, taken.Snapshot.Path)+
+		" is not a quarry snapshot (its manifest is not readable JSON); pass a snapshot taken by quarry sync with --from <snapshot>")
 	var syntaxErr *json.SyntaxError
 	require.ErrorAs(t, err, &syntaxErr)
+	assert.Empty(t, fake.calls)
+}
+
+// Prepare's MkdirAll is a no-op on an already-existing directory regardless
+// of its permission bits, so the snapshots directory must exist before the
+// chmod, or the failure this test wants would never surface.
+func Test_import_from_names_the_manifest_when_it_cannot_be_read(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file permissions")
+	}
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	taken := takeSnapshot(t, srv)
+	require.NoError(t, os.Chmod(taken.Snapshot.Manifest, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(taken.Snapshot.Manifest, 0o600) })
+
+	_, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
+
+	require.EqualError(t, err, "cannot read "+homepath.Abbreviate(home, taken.Snapshot.Manifest)+
+		": permission denied; check the file's permissions")
+	assert.Empty(t, fake.calls)
+}
+
+// Prepare's MkdirAll is a no-op on an already-existing directory regardless
+// of its permission bits, so the snapshots directory must exist before the
+// chmod, or the failure this test wants would never surface.
+func Test_import_from_names_the_snapshot_when_it_cannot_be_read(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file permissions")
+	}
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	taken := takeSnapshot(t, srv)
+	require.NoError(t, os.Chmod(taken.Snapshot.Path, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(taken.Snapshot.Path, 0o600) })
+
+	_, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
+
+	require.EqualError(t, err, "cannot read "+homepath.Abbreviate(home, taken.Snapshot.Path)+
+		": permission denied; check the file's permissions")
 	assert.Empty(t, fake.calls)
 }
 
@@ -330,7 +435,8 @@ func Test_import_from_refuses_without_importing_when_the_snapshot_is_not_sqlite(
 
 	_, err := srv.ImportFrom(t.Context(), "20260927T143005Z")
 
-	require.Error(t, err)
+	require.EqualError(t, err, "~/snapshots/20260927T143005Z.sqlite is not a quarry snapshot "+
+		"(not a SQLite database); pass a snapshot taken by quarry sync with --from <snapshot>")
 	assert.True(t, sqlite.IsNotADB(err), err.Error())
 	assert.Empty(t, fake.calls)
 }

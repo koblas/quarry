@@ -21,24 +21,27 @@ func Test_resolveFrom_maps_each_value_shape_to_its_snapshot_and_manifest(t *test
 		value        string
 		wantSnapshot string
 		wantManifest string
+		wantIsPath   bool
 	}{
 		{name: "an ID joins the snapshots directory", value: "20260927T143005Z",
-			wantSnapshot: snapshotDir + "/20260927T143005Z.sqlite", wantManifest: snapshotDir + "/20260927T143005Z.json"},
+			wantSnapshot: snapshotDir + "/20260927T143005Z.sqlite", wantManifest: snapshotDir + "/20260927T143005Z.json",
+			wantIsPath: false},
 		{name: "a leading tilde expands against home", value: "~/x.sqlite",
-			wantSnapshot: "/Users/x/x.sqlite", wantManifest: "/Users/x/x.json"},
+			wantSnapshot: "/Users/x/x.sqlite", wantManifest: "/Users/x/x.json", wantIsPath: true},
 		{name: "a slash makes a path even without the suffix", value: "/a/b",
-			wantSnapshot: "/a/b", wantManifest: "/a/b.json"},
+			wantSnapshot: "/a/b", wantManifest: "/a/b.json", wantIsPath: true},
 		{name: "a relative .sqlite name resolves against the working directory", value: "x.sqlite",
-			wantSnapshot: filepath.Join(cwd, "x.sqlite"), wantManifest: filepath.Join(cwd, "x.json")},
+			wantSnapshot: filepath.Join(cwd, "x.sqlite"), wantManifest: filepath.Join(cwd, "x.json"), wantIsPath: true},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			snapshotPath, manifestPath, err := resolveFrom(home, snapshotDir, c.value)
+			snapshotPath, manifestPath, isPath, err := resolveFrom(home, snapshotDir, c.value)
 
 			require.NoError(t, err)
 			assert.Equal(t, c.wantSnapshot, snapshotPath)
 			assert.Equal(t, c.wantManifest, manifestPath)
+			assert.Equal(t, c.wantIsPath, isPath)
 		})
 	}
 }

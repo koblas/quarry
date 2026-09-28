@@ -527,5 +527,5 @@ Order is execution order. Folded scenarios are ticked with the delivering scenar
 - [x] SCENARIO-20: leftovers from earlier builds are cleaned up (test-first: deletes files; small, sonnet architect) — `cmd/quarry/run_store_leftovers_test.go` `Test_run_removes_stale_store_leftovers_before_syncing`
 - [x] SCENARIO-03: rebuild from an earlier snapshot without Quicken (absorbs 16) — `cmd/quarry/run_from_test.go` `Test_run_rebuilds_the_store_from_an_earlier_snapshot_without_quicken`
 - [x] SCENARIO-16: --from usage errors — FOLD → 03, delivered by SCENARIO-03 — `cmd/quarry/run_usage_test.go` `Test_run_refuses_from_with_quicken_or_without_a_value`
-- [ ] SCENARIO-15: --from refuses input that is not a usable snapshot (absorbs 17)
-- [ ] SCENARIO-17: --from re-checks the schema against the current reference — FOLD → 15
+- [x] SCENARIO-15: --from refuses input that is not a usable snapshot (absorbs 17) — `cmd/quarry/run_from_refusals_test.go` `Test_run_refuses_from_input_that_is_not_a_usable_snapshot`
+- [x] SCENARIO-17: --from re-checks the schema against the current reference — FOLD → 15, delivered by SCENARIO-15 — `cmd/quarry/run_schema_test.go` `Test_run_reports_a_schema_mismatch_with_from`
