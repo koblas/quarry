@@ -49,14 +49,10 @@ ORDER BY COALESCE(t.ZPOSTEDDATE, t.ZENTEREDDATE), t.ZACCOUNT, t.Z_PK
 
 const transactionSurveyQuery = `SELECT Z_PK, Z_ENT, ZACCOUNT, COALESCE(ZDELETIONCOUNT, 0) FROM ZTRANSACTION`
 
-// surveyTransactions reads every ZTRANSACTION row's Z_PK, of any entity
-// and deletion state, so a split's dangling parent reference (no row at
-// all) can be told apart from one pointing at a row this importer excludes
-// for its own reason. It also counts the non-deleted investment
-// transactions in imported accounts, which quarry does not import;
-// hasInvestment is false when the snapshot has no investment entity.
+// surveyTransactions returns every ZTRANSACTION Z_PK, of any entity and
+// deletion state, and the count of investment transactions not imported.
 func surveyTransactions(
-	ctx context.Context, src Source, investmentEntity int64, hasInvestment bool, accounts map[int64]accountRef,
+	ctx context.Context, src Source, investmentEnt int64, hasInvestment bool, accounts map[int64]accountRef,
 ) (map[int64]bool, int, error) {
 	existing := make(map[int64]bool)
 	var investments int
@@ -67,9 +63,12 @@ func surveyTransactions(
 		if err := scan(&pk, &ent, &account, &deletionCount); err != nil {
 			return err
 		}
+		// Every Z_PK tells a split's dangling parent (no row at all) apart
+		// from one this importer excludes for its own reason.
 		existing[pk] = true
+		// Counted: non-deleted investment rows in imported accounts.
 		_, accountImported := accounts[account.Int64]
-		if hasInvestment && ent.Int64 == investmentEntity && deletionCount == 0 && account.Valid && accountImported {
+		if hasInvestment && ent.Int64 == investmentEnt && deletionCount == 0 && account.Valid && accountImported {
 			investments++
 		}
 		return nil

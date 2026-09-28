@@ -76,8 +76,7 @@ type Split struct {
 // Transfer is one row of the transfers table: a pair of split legs between
 // the user's own accounts, or a one-sided leg when ToSplitID is nil.
 // FromSplitID is the leg with the lower numeric source id, not the leg the
-// money left from; CrossCurrency is set when the legs' accounts differ in
-// currency.
+// money left from.
 type Transfer struct {
 	ID            string
 	FromSplitID   string

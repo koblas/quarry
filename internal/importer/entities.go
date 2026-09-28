@@ -12,8 +12,7 @@ import (
 // before reading any row, rather than hard-coding their Z_ENT numbers.
 var requiredEntities = []string{"CashFlowTransaction", "CategoryTag", "UserTag"}
 
-// investmentEntity is resolved when the snapshot has it; a snapshot without
-// it has no investment transactions to count.
+// investmentEntity is optional: a snapshot without it has none to count.
 const investmentEntity = "InvestmentTransaction"
 
 // resolveEntities reads Z_PRIMARYKEY and returns each of requiredEntities'

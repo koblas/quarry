@@ -17,12 +17,8 @@ type transferLink struct {
 	link      string
 }
 
-// pairTransfers builds the transfers rows for splits, whose links align
-// index-for-index with them, and sets each leg's TransferAccountID. A
-// numeric link names the counterpart's ZQUICKENID among the imported
-// splits; any other link is an account name, and a leg that resolves to no
-// unused counterpart is stored one-sided. Each split lands in at most one
-// row, so the store's transfers primary key never sees a duplicate.
+// pairTransfers builds the transfers rows for splits (links[i] belongs to
+// splits[i]) and sets each leg's TransferAccountID.
 func pairTransfers(splits []store.Split, links []transferLink, transactions []store.Transaction, accounts []store.Account) ([]store.Transfer, store.TransferCheck) {
 	accountOf := make(map[string]string, len(transactions))
 	for _, txn := range transactions {
@@ -47,8 +43,8 @@ func pairTransfers(splits []store.Split, links []transferLink, transactions []st
 	}
 	slices.SortFunc(order, bySourceID)
 
-	// Fixtures and real files can repeat a ZQUICKENID; the lowest source id
-	// keeps it, since order is ascending.
+	// A ZQUICKENID can repeat (an unset one reads as 0); the lowest source
+	// id keeps it, since order is ascending.
 	byQuickenID := make(map[int64]int)
 	for _, i := range order {
 		if q := links[i].quickenID; q.Valid {
@@ -60,6 +56,9 @@ func pairTransfers(splits []store.Split, links []transferLink, transactions []st
 
 	var rows []store.Transfer
 	var check store.TransferCheck
+	// Each split lands in at most one row, so the store's transfers primary
+	// key never sees a duplicate: a used or self-linked counterpart leaves
+	// the leg one-sided.
 	used := make(map[int]bool, len(splits))
 	for _, i := range order {
 		link := links[i].link
@@ -68,6 +67,8 @@ func pairTransfers(splits []store.Split, links []transferLink, transactions []st
 		}
 		used[i] = true
 
+		// A numeric link names the counterpart's ZQUICKENID among the
+		// imported splits; any other link is an account name.
 		quickenID, err := strconv.ParseInt(link, 10, 64)
 		if err != nil {
 			row, oneSided := nameFormLeg(&splits[i], link, namedAccount)

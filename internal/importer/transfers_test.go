@@ -82,9 +82,10 @@ func Test_import_stores_each_split_in_at_most_one_transfer(t *testing.T) {
 	selfLeg := transferLeg(b, chequingPK, "-1.00", 104, "104")
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	fillerTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "4.00", PostedDate: &day})
-	for range 4 {
-		b.Entry(v9fixture.EntryRow{Parent: fillerTxn, Amount: "1.00", QuickenID: 900})
-	}
+	b.Entry(v9fixture.EntryRow{Parent: fillerTxn, Amount: "1.00", QuickenID: 900})
+	b.Entry(v9fixture.EntryRow{Parent: fillerTxn, Amount: "1.00", QuickenID: 900})
+	b.Entry(v9fixture.EntryRow{Parent: fillerTxn, Amount: "1.00", QuickenID: 900})
+	b.Entry(v9fixture.EntryRow{Parent: fillerTxn, Amount: "1.00", QuickenID: 900})
 	leg9 := transferLeg(b, chequingPK, "-20.00", 109, "110")
 	leg10 := transferLeg(b, savingsPK, "20.00", 110, "109")
 	require.Equal(t, []int64{9, 10}, []int64{leg9, leg10})

@@ -23,7 +23,7 @@ ORDER BY e.ZPARENT, e.Z_PK
 // 6), is added to off and excluded. An entry whose parent exists but was
 // itself excluded (deleted, Smart/Investment, or its own offender) is
 // silently skipped. A category reference to a deleted or missing category
-// stores NULL. The returned links align index-for-index with the splits.
+// stores NULL.
 func mapSplits(
 	ctx context.Context, src Source, txns map[int64]txnRef, existingTransactions, existingCategories map[int64]bool, off *offenders,
 ) ([]store.Split, []transferLink, map[int64]string, error) {
@@ -86,7 +86,7 @@ func mapSplits(
 			split.Memo = &memo
 		}
 		rows = append(rows, split)
-		links = append(links, transferLink{quickenID: quickenID, link: transfer.String})
+		links = append(links, transferLink{quickenID: quickenID, link: transfer.String}) // links[i] belongs to rows[i]
 		ids[pk] = id
 		return nil
 	})
