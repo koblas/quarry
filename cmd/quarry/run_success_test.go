@@ -49,14 +49,17 @@ func Test_run_writes_a_verified_snapshot_and_reports_success(t *testing.T) {
 	require.NoError(t, err)
 	sum := sha256.Sum256(raw)
 
+	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
 	want := fmt.Sprintf(
-		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 2 accounts\n%-10s%s\n%-10s%s\n",
+		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 2 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
 		"Snapshot", abbreviated(t, snapshotPath, home),
 		"Manifest", abbreviated(t, manifestPath, home),
 		"Source", abbreviated(t, bundle.Dir, home),
 		"Size", megabytes(info.Size()),
 		"SHA-256", hex.EncodeToString(sum[:]),
 		"Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns)",
+		"Store", abbreviated(t, storePath, home),
+		"Rows", "0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags",
 	)
 	assert.Equal(t, want, stdout.String())
 }
@@ -90,9 +93,9 @@ func Test_run_removes_leftover_partials_silently_before_syncing(t *testing.T) {
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
-// A stdout write failure still leaves the already-committed snapshot and
-// manifest on disk, named in the refusal rather than the write error alone.
-func Test_run_reports_exit_1_when_writing_stdout_fails(t *testing.T) {
+// Once the build was reached, a stdout write failure points at --from
+// --json instead of the manifest: the store result no longer lives there alone.
+func Test_run_points_to_from_when_writing_stdout_fails_after_the_build(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
@@ -106,8 +109,8 @@ func Test_run_reports_exit_1_when_writing_stdout_fails(t *testing.T) {
 	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
 	onlyFileWithSuffix(t, snapshotsDir, ".json")
 	assert.Equal(t,
-		"quarry: cannot write the result to stdout: "+writeErr.Error()+"; the snapshot is kept at "+
-			abbreviated(t, snapshotPath, home)+" and its .json manifest holds the full result\n",
+		"quarry: cannot write the result to stdout: "+writeErr.Error()+"; run quarry sync --from "+
+			snapshotID(snapshotPath)+" --json to see it again\n",
 		stderr.String())
 }
 

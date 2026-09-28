@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -69,6 +70,9 @@ func Test_run_reports_a_schema_mismatch(t *testing.T) {
 	schema, ok := manifest["schema"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, false, schema["verified"])
+
+	_, err = os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb"))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func Test_run_reports_extra_schema_only_as_a_warning(t *testing.T) {
@@ -89,9 +93,11 @@ func Test_run_reports_extra_schema_only_as_a_warning(t *testing.T) {
 	require.NoError(t, err)
 	sum := sha256.Sum256(raw)
 
+	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
 	want := fmt.Sprintf(
 		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 1 account\n%-10s%s\n%-10s%s\n"+
-			"  + table   %s\n  + column  %s.%s\n  + column  %s.%s\n",
+			"  + table   %s\n  + column  %s.%s\n  + column  %s.%s\n"+
+			"%-10s%s\n%-10s%s\n",
 		"Snapshot", abbreviated(t, snapshotPath, home),
 		"Manifest", abbreviated(t, manifestPath, home),
 		"Source", abbreviated(t, bundle.Dir, home),
@@ -102,6 +108,8 @@ func Test_run_reports_extra_schema_only_as_a_warning(t *testing.T) {
 		v9fixture.ExtraSchemaAddedTable,
 		v9fixture.ExtraSchemaAddedColumnTable1, v9fixture.ExtraSchemaAddedColumn1,
 		v9fixture.ExtraSchemaAddedColumnTable2, v9fixture.ExtraSchemaAddedColumn2,
+		"Store", abbreviated(t, storePath, home),
+		"Rows", "0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags",
 	)
 	assert.Equal(t, want, stdout.String())
 
@@ -143,4 +151,25 @@ func Test_run_reports_a_schema_mismatch_as_json(t *testing.T) {
 
 	require.NotEmpty(t, stderr.String())
 	assert.True(t, strings.HasPrefix(stderr.String(), "quarry: schema check failed:"))
+}
+
+// On the mismatch path no build is reached, so a stdout write failure still
+// gets O1 (points at the manifest), not O1b.
+func Test_run_keeps_the_snapshot_message_when_writing_stdout_fails_on_a_schema_mismatch(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
+	writeErr := errors.New("no space left on device")
+	var stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, failingWriter{err: writeErr}, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
+	onlyFileWithSuffix(t, snapshotsDir, ".json")
+	assert.Equal(t,
+		"quarry: cannot write the result to stdout: "+writeErr.Error()+"; the snapshot is kept at "+
+			abbreviated(t, snapshotPath, home)+" and its .json manifest holds the full result\n",
+		stderr.String())
 }

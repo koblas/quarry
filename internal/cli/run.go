@@ -15,8 +15,8 @@ type ServerFactory func(ctx context.Context) (srv *snapshot.Server, err error)
 
 // Execute parses args against quarry's command tree and runs the matched
 // command, writing to stdout/stderr. It returns a UsageError unchanged, an
-// srv.Sync or newServer error unwrapped, or wraps any other error as a
-// UsageError with a run-sync-help hint appended.
+// srv.SyncAndImport or newServer error unwrapped, or wraps any other error
+// as a UsageError with a run-sync-help hint appended.
 func Execute(ctx context.Context, args []string, stdout, stderr io.Writer, newServer ServerFactory) error {
 	var jsonOut bool
 	root := newRootCommand(newServer, &jsonOut)

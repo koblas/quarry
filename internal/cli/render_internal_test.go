@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/koblas/quarry/internal/snapshot"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -187,4 +188,48 @@ func Test_renderSuccess_reports_the_exact_match_schema_line(t *testing.T) {
 		"SHA-256   9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\n"+
 		"Schema    matches reference hardkoded/quicken-skills@752107b (71 tables, 1,042 columns)\n",
 		got)
+}
+
+func Test_rowsPhrase(t *testing.T) {
+	cases := []struct {
+		name   string
+		counts store.Counts
+		want   string
+	}{
+		{
+			name:   "zero counts",
+			counts: store.Counts{},
+			want:   "0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags",
+		},
+		{
+			name:   "singular at exactly one",
+			counts: store.Counts{Transactions: 1, Splits: 1, Transfers: 1, Payees: 1, Categories: 1, Tags: 1},
+			want:   "1 transaction, 1 split, 1 transfer, 1 payee, 1 category, 1 tag",
+		},
+		{
+			name: "thousands-grouped at many",
+			counts: store.Counts{
+				Transactions: 18204, Splits: 21977, Transfers: 3112, Payees: 1873, Categories: 312, Tags: 14,
+			},
+			want: "18,204 transactions, 21,977 splits, 3,112 transfers, 1,873 payees, 312 categories, 14 tags",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, rowsPhrase(c.counts))
+		})
+	}
+}
+
+func Test_renderStore_renders_the_store_and_rows_lines(t *testing.T) {
+	result := store.Result{
+		Path:   "/Users/dave/Library/Application Support/quarry/quarry.duckdb",
+		Counts: store.Counts{Transactions: 1},
+	}
+
+	got := renderStore(result, "/Users/dave")
+
+	assert.Equal(t, "Store     ~/Library/Application Support/quarry/quarry.duckdb\n"+
+		"Rows      1 transaction, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags\n", got)
 }

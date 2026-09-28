@@ -42,3 +42,9 @@ func megabytes(bytes int64) string {
 	tenths := (bytes*10 + 500000) / 1000000
 	return fmt.Sprintf("%d.%d MB", tenths/10, tenths%10)
 }
+
+// snapshotID mirrors the CLI's <id> derivation: a snapshot path's basename
+// with the .sqlite extension removed.
+func snapshotID(snapshotPath string) string {
+	return strings.TrimSuffix(filepath.Base(snapshotPath), ".sqlite")
+}

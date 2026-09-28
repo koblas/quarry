@@ -1,6 +1,10 @@
 package snapshot
 
-import "context"
+import (
+	"context"
+
+	"github.com/koblas/quarry/internal/store"
+)
 
 // Source is the live Quicken bundle's read-only port: open, probe for
 // encryption, and back itself up. Every other read (integrity check,
@@ -46,4 +50,12 @@ type Destination interface {
 	// partial, or an already-committed final Sync must undo after a
 	// later step fails — returning any removal error unchanged.
 	Discard(ctx context.Context, partial string) error
+}
+
+// Importer builds quarry's store from a committed snapshot. It is shaped to
+// (*importer.Server).Import so that type satisfies it with no adapter.
+type Importer interface {
+	// Import maps snapshotPath's data into quarry's schema and writes it
+	// through the importer's own Store, returning the store.Result it built.
+	Import(ctx context.Context, snapshotPath string) (store.Result, error)
 }

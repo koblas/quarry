@@ -11,8 +11,8 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// storeFileName is quarry's store filename inside a Store's directory.
-const storeFileName = "quarry.duckdb"
+// FileName is quarry's store filename inside a Store's directory.
+const FileName = "quarry.duckdb"
 
 // partialNameLayout formats a partial build file's UTC timestamp, e.g. .quarry-20260927T143005Z.duckdb.partial.
 const partialNameLayout = "20060102T150405Z"
@@ -36,7 +36,7 @@ func New(dir string) *Store {
 // untouched: nothing is renamed until the build and its checkpoint both
 // succeed.
 func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
-	finalPath := filepath.Join(s.dir, storeFileName)
+	finalPath := filepath.Join(s.dir, FileName)
 	partialPath := filepath.Join(s.dir, fmt.Sprintf(".quarry-%s.duckdb.partial", time.Now().UTC().Format(partialNameLayout)))
 
 	db, err := duckdb.Create(ctx, partialPath)

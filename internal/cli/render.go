@@ -9,6 +9,7 @@ import (
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/sqlschema"
 	"github.com/koblas/quarry/internal/snapshot"
+	"github.com/koblas/quarry/internal/store"
 )
 
 // formatThousands renders n, which is always non-negative in this package's
@@ -29,12 +30,18 @@ func formatMB(bytes int64) string {
 	return fmt.Sprintf("%s.%d MB", formatThousands(int(tenths/10)), tenths%10)
 }
 
+// nounPhrase renders n with singular at exactly 1 and plural at 0 or more
+// than 1, thousands-grouped.
+func nounPhrase(n int, singular, plural string) string {
+	if n == 1 {
+		return "1 " + singular
+	}
+	return formatThousands(n) + " " + plural
+}
+
 // accountsPhrase renders n as "1 account" or "N accounts", thousands-grouped.
 func accountsPhrase(n int) string {
-	if n == 1 {
-		return "1 account"
-	}
-	return formatThousands(n) + " accounts"
+	return nounPhrase(n, "account", "accounts")
 }
 
 // renderSuccess renders m's result block, then the diff rows a mismatch or
@@ -94,4 +101,26 @@ func writeDiffRows(b *strings.Builder, s snapshot.SchemaInfo) {
 // space-padded 8-wide label, then value.
 func writeDiffRow(b *strings.Builder, sign, label, value string) {
 	fmt.Fprintf(b, "  %s %-8s%s\n", sign, label, value)
+}
+
+// renderStore renders result's Store and Rows lines, appended after
+// renderSuccess's block once a build was reached.
+func renderStore(result store.Result, home string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%-10s%s\n", "Store", homepath.Abbreviate(home, result.Path))
+	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(result.Counts))
+	return b.String()
+}
+
+// rowsPhrase renders c as one comma-separated clause, each noun inflected
+// on its own count.
+func rowsPhrase(c store.Counts) string {
+	return strings.Join([]string{
+		nounPhrase(c.Transactions, "transaction", "transactions"),
+		nounPhrase(c.Splits, "split", "splits"),
+		nounPhrase(c.Transfers, "transfer", "transfers"),
+		nounPhrase(c.Payees, "payee", "payees"),
+		nounPhrase(c.Categories, "category", "categories"),
+		nounPhrase(c.Tags, "tag", "tags"),
+	}, ", ")
 }

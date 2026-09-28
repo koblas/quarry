@@ -11,9 +11,14 @@ import (
 	"syscall"
 
 	"github.com/koblas/quarry/internal/cli"
+	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/snapshot"
+	"github.com/koblas/quarry/internal/store/duckstore"
 )
+
+// var _ documents that importer.Server satisfies snapshot.Importer with no adapter.
+var _ snapshot.Importer = (*importer.Server)(nil)
 
 // signalContext wraps parent with SIGINT/SIGTERM handling: ctx.Done() closes
 // on either signal, and a goroutine calls stop once it does, so a second
@@ -40,10 +45,13 @@ func newServer(ctx context.Context) (*snapshot.Server, error) {
 		return nil, snapshot.FailureOutcome(ctx, err)
 	}
 
+	storeDir := filepath.Join(home, "Library", "Application Support", "quarry")
 	srv := snapshot.NewServer(
-		snapshot.WithSnapshotDir(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")),
+		snapshot.WithSnapshotDir(filepath.Join(storeDir, "snapshots")),
 		snapshot.WithReference(v9.ReferenceLabel, ref),
 		snapshot.WithHome(home),
+		snapshot.WithImporter(importer.NewServer(importer.WithStore(duckstore.New(storeDir)))),
+		snapshot.WithStorePath(filepath.Join(storeDir, duckstore.FileName)),
 	)
 	return srv, nil
 }

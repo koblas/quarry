@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/spf13/cobra"
 )
@@ -22,14 +21,6 @@ func (e *runtimeError) Unwrap() error { return e.err }
 
 // emptyQuickenUsageError is cobra's own missing-value message for --quicken.
 var emptyQuickenUsageError = UsageError{msg: "flag needs an argument: --quicken; Run 'quarry sync --help' for usage."}
-
-// stdoutWriteRefusal reports that a committed snapshot's result could not
-// be written to stdout: the snapshot and its manifest stay on disk regardless.
-func stdoutWriteRefusal(home, snapshotPath string, err error) error {
-	return fmt.Errorf(
-		"cannot write the result to stdout: %s; the snapshot is kept at %s and its .json manifest holds the full result",
-		err, homepath.Abbreviate(home, snapshotPath))
-}
 
 // newSyncCommand builds the sync subcommand: resolve or discover the
 // bundle, sync it, and render the result.
@@ -77,7 +68,7 @@ if there is exactly one.`,
 				return &runtimeError{err: err}
 			}
 
-			manifest, err := srv.Sync(cmd.Context(), bundlePath)
+			outcome, err := srv.SyncAndImport(cmd.Context(), bundlePath)
 			var mismatch snapshot.MismatchError
 			isMismatch := errors.As(err, &mismatch)
 			if err != nil && !isMismatch {
@@ -86,20 +77,23 @@ if there is exactly one.`,
 
 			var output string
 			if *jsonOut {
-				data, encErr := manifest.Encode()
+				data, encErr := outcome.Manifest.Encode()
 				if encErr != nil {
 					// unreachable: Manifest.Encode's own error path is unreachable for any value Sync builds; see there.
 					return &runtimeError{err: encErr}
 				}
 				output = string(data)
 			} else {
-				output = renderSuccess(manifest, home)
+				output = renderSuccess(outcome.Manifest, home)
+				if outcome.Store != nil {
+					output += renderStore(*outcome.Store, home)
+				}
 			}
 			if _, writeErr := fmt.Fprint(cmd.OutOrStdout(), output); writeErr != nil {
-				return &runtimeError{err: stdoutWriteRefusal(home, manifest.Snapshot.Path, writeErr)}
+				return &runtimeError{err: outcome.StdoutWriteRefusal(home, writeErr)}
 			}
 
-			for _, warning := range manifest.Warnings {
+			for _, warning := range outcome.Manifest.Warnings {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: warning: "+warning)
 			}
 
