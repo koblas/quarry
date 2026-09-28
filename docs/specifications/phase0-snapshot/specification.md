@@ -15,6 +15,8 @@
 
 **Business Rules**: see below.
 
+**Gate: PASSED 2026-09-28** — `quarry sync` (discovery, no `--quicken`) on the real v9 file exited 0 with the schema matching `hardkoded/quicken-skills@752107b+quarry.1` (82 tables, 1,838 columns).
+
 ## Business Rules & Invariants
 
 - **BR-1 Live file is read-only.** The live `<bundle>/data` is opened with `mode=ro` only. Never `immutable=1`, never a `journal_mode` change, never a checkpoint, never any pragma write. The live file gets one probe read (encryption detection) plus the backup, nothing else. Integrity check, account count, hash and schema read all run on the snapshot.
