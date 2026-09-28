@@ -6,8 +6,11 @@ Usage: .claude/scripts/uncovered-diff.py [--profile FILE] [--lines] [BASE] [PKG 
   PKG      the packages whose tests run; defaults to ./...
   --profile FILE
            read coverage from FILE instead of running the tests. Produce it with the one
-           verification run a Verify phase already makes:
-             go test -count=1 -coverpkg=./... -coverprofile=FILE ./...
+           verification run a Verify phase already makes, under a unique name:
+             COVER="$(mktemp "$TMPDIR/cover.XXXXXX")"
+             go test -count=1 -coverpkg=./... -coverprofile="$COVER" ./...
+           Refused (exit 2) when FILE is older than any changed file: a stale profile reads
+           new lines as non-statements and reports a false "0 uncovered".
   --lines  one row per uncovered line instead of one row per consecutive run.
 
 Added lines are those `git diff -U0 BASE` adds to non-test .go files (committed and
@@ -16,12 +19,18 @@ non-statement lines (comments, declarations, lone closing braces) are skipped.
 
 Output (stdout): one row per run of consecutive uncovered lines,
   path:first[-last] (func): first line of source
-then, if any, a "declared unreachable" section: runs whose lines, or the line just above
-them, carry a `// unreachable: <reason>` comment. Those are listed for the reviewer to
-judge but do not fail the gate. A summary goes to stderr.
+then, if any, a "declared unreachable" section: runs whose lines, or any line of the
+contiguous `//` comment block directly above them, carry a `// unreachable: <reason>`
+comment. Those are listed for the reviewer to judge but do not fail the gate. A summary
+goes to stderr.
+
+A changed file with function bodies but no block in the coverage data is reported as one
+open row, `path (no coverage block)`: no test binary links its package (or the PKG list /
+profile is too narrow). It is untested code, not a tool failure.
 
 Exit status: 0 when every uncovered line is declared unreachable (or there are none), 1
-when any is not, 2 on a tool failure (a failing test prints its output).
+when any is not (blind files included), 2 on a tool failure: a failing test (prints its
+output) or a --profile older than a changed file (re-run the covered go test).
 Standard library only; runs on the macOS system python3 (3.9+).
 """
 
@@ -39,6 +48,7 @@ HUNK = re.compile(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@")
 # module/path/file.go:startLine.startCol,endLine.endCol numStmts count
 BLOCK = re.compile(r"^(.+):(\d+)\.\d+,(\d+)\.\d+ \d+ (\d+)$")
 FUNC = re.compile(r"^func (?:\([^)]*\) )?(\w+)")
+FUNC_BODY = re.compile(r"^func .*\{\s*$", re.M)
 UNREACHABLE = re.compile(r"//\s*unreachable:\s*(.+)$")
 FAIL_CONTEXT_LINES = 40
 
@@ -128,12 +138,41 @@ def runs_of(lines: list[int]) -> list[list[int]]:
 
 
 def declared_reason(source: list[str], run: list[int]) -> str | None:
-    for n in [run[0] - 1, *run]:
+    """The `// unreachable:` reason on a run's lines or its contiguous comment block above."""
+    above = []
+    n = run[0] - 1
+    while 1 <= n <= len(source) and source[n - 1].lstrip().startswith("//"):
+        above.append(n)
+        n -= 1
+    for n in [*above, *run]:
         if 1 <= n <= len(source):
             m = UNREACHABLE.search(source[n - 1])
             if m:
                 return m.group(1).strip()
     return None
+
+
+def check_fresh(added: dict[str, set[int]], profile: str) -> None:
+    """Refuse a profile older than a changed file: it reads new lines as non-statements."""
+    stale = [p for p in sorted(added) if os.path.exists(p) and os.path.getmtime(p) > os.path.getmtime(profile)]
+    if stale:
+        raise ToolError(f"profile {profile} is older than changed file(s): {', '.join(stale)}; "
+                        "re-run the covered go test")
+
+
+def blind_files(added: dict[str, set[int]], seen: set[tuple[str, int]]) -> list[str]:
+    """Changed files with function bodies that have no block in the coverage data at all."""
+    profiled = {path for path, _ in seen}
+    blind = []
+    for path in sorted(added):
+        try:
+            with open(path) as f:
+                has_body = bool(FUNC_BODY.search(f.read()))
+        except OSError:
+            continue  # added then deleted in the working tree
+        if has_body and path not in profiled:
+            blind.append(path)
+    return blind
 
 
 def main(argv: list[str]) -> int:
@@ -154,6 +193,7 @@ def main(argv: list[str]) -> int:
         module = subprocess.run(["go", "list", "-m"], text=True, capture_output=True, check=True).stdout.strip()
 
         if args.profile:
+            check_fresh(added, args.profile)
             seen, covered = coverage(args.profile, module)
         else:
             fd, profile = tempfile.mkstemp(prefix="uncovered.", dir=os.environ.get("TMPDIR"))
@@ -167,7 +207,8 @@ def main(argv: list[str]) -> int:
         print(f"uncovered-diff: {e}", file=sys.stderr)
         return 2
 
-    open_rows: list[str] = []
+    blind = blind_files(added, seen)
+    open_rows: list[str] = [f"{path} (no coverage block)" for path in blind]
     declared_rows: list[str] = []
     open_lines = 0
     for path in sorted(added):
@@ -202,7 +243,8 @@ def main(argv: list[str]) -> int:
             print(row)
 
     print(
-        f"uncovered-diff: {open_lines} uncovered added line(s) in {len(open_rows)} run(s) since {base[:12]}"
+        f"uncovered-diff: {open_lines} uncovered added line(s) in {len(open_rows) - len(blind)} run(s)"
+        + (f", {len(blind)} file(s) with no coverage block" if blind else "") + f" since {base[:12]}"
         + (f"; {len(declared_rows)} declared unreachable" if declared_rows else ""),
         file=sys.stderr,
     )

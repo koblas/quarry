@@ -4,7 +4,9 @@ For `developer` and test / correctness reviewers — what counts as evidence. `a
 
 ## Mutation verification
 
-Guard, test, or "absence" claim proven by breaking thing and seeing specific test go red — not by suite being green. For code-first test (`build.md` → *Build cadence*) this is how test shows it can fail at all.
+Guard, test, or "absence" claim proven by breaking thing and seeing specific test go red — not by suite being green.
+
+**Who mutates what — one rule, stated only here.** Developer runs a mutation for exactly the entries on plan's `Mutation checks:` line. Architect puts one entry there for **every mandatory test-first item** the scenario touches (`build.md` → *Build cadence*: bug fix, write-safety guard, atomicity / exclusive-create adapter), plus any other guard it judges load-bearing; `none` valid only under `Cadence: code-first`. Every other code-first test is proven falsifiable **on paper**: author can name the mutation it rules out (`go-testing` → *mutation question*); reviewer who doubts it mutates a `git archive` export (rule below), never the worktree.
 
 **Copy the file aside so a crash cannot leave the mutation behind:**
 
@@ -24,7 +26,7 @@ Interrupted run can die holding gutted guard, and tree then looks merely "failin
 
 Rules:
 
-- **Mutate only guards plan's `Mutation checks:` line names.** Architect picks which guards matter; developer add no mutation checks of own. Mutation per step = how scenario double its tool calls without proving anything named ones do not.
+- **No mutation runs beyond the `Mutation checks:` line** (rule above). Mutation per step = how scenario double its tool calls without proving anything named ones do not. Fix pass has no plan: mutations its brief names (`build.md` → *Fix passes*) plus each guard the pass adds are its line.
 - **Verify guards INDIVIDUALLY.** Two guards that only go red when BOTH disabled mean either can be deleted silently. Disable one at a time.
 - Mutation that breaks compilation **not** evidence. If every test fails, you proved file parses, nothing more. Make mutation surgical and still-valid.
 - Say which mutation you ran and which test it reddened. "Mutation-verified" alone not claim anyone can check.
@@ -43,5 +45,7 @@ Assertions that look like proof and are not recur in few shapes:
 - Asserting store empty without first proving it non-empty and same probe would have seen it.
 - Comments overclaiming what test below them covers.
 - On test-first set (`build.md` → *Build cadence*): test never seen red before its code. Off that set, code-first test is fine — but one no mutation can redden proves nothing.
+
+- **Fault injected in a shape production never produces.** Fault test must inject the error chain the real adapter returns — driver's own error type included, wrapped as the adapter wraps it — not a convenient stdlib stand-in. One row per shape adapter can surface. Example: disk-full test injecting `*fs.PathError{Err: ENOSPC}` passed while real SQLite backup returned `sqlite3.Error{Code: SQLITE_FULL}` with no errno, so classifier sent real disk-full to wrong refusal. Read adapter's wrap sites before writing fake.
 
 When refactor removes call site, **every existing "was never called" assertion on that fake become unfalsifiable.** Repoint them at new reachable observable, or they pass with guard deleted.

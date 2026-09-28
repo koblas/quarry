@@ -2,7 +2,9 @@
 """The one agreed way to count tests in this repo.
 
 Usage: .claude/scripts/test-stats.py [--base REF] [--changed] [--run] [PKGDIR ...]
-  PKGDIR     defaults to every package under internal/ that has tests.
+  PKGDIR     defaults to every package under cmd/ and internal/ that has tests. Accepts
+             `./cmd/quarry/`, `internal/x/...` spellings. A PKGDIR with no test files either
+             now or at the base is an error (exit 2), never a silently empty row.
   --base REF also count the same packages at REF (read from git, no checkout) and print the
              delta — the "count and delta" every report owes. REF is usually the commit the
              scenario or fix pass started from.
@@ -39,6 +41,7 @@ from pathlib import Path
 
 DISK = re.compile(r"t\.TempDir\(|t\.Chdir\(|os\.(WriteFile|MkdirAll|Mkdir|Symlink|Chmod|Remove)\(")
 STATIC = ("tests", "tempdir", "disk")
+ROOTS = ("cmd", "internal")
 RUN = ("pass", "fail", "skip")
 
 
@@ -56,14 +59,14 @@ def git(*args: str, stdin: str | None = None) -> str:
 def worktree_sources() -> dict[str, list[str]]:
     """Package dir -> test file contents, from the working tree, files in name order."""
     by_pkg: dict[str, list[str]] = defaultdict(list)
-    for f in sorted(Path("internal").rglob("*_test.go")):
+    for f in sorted(f for root in ROOTS for f in Path(root).rglob("*_test.go")):
         by_pkg[str(f.parent)].append(f.read_text())
     return by_pkg
 
 
 def ref_sources(ref: str) -> dict[str, list[str]]:
     """Package dir -> test file contents at ref, read in one `git cat-file --batch` call."""
-    paths = sorted(p for p in git("ls-tree", "-r", "--name-only", ref, "--", "internal").splitlines()
+    paths = sorted(p for p in git("ls-tree", "-r", "--name-only", ref, "--", *ROOTS).splitlines()
                    if p.endswith("_test.go"))
     if not paths:
         return {}
@@ -124,6 +127,13 @@ def run_counts(pkgs: list[str], module: str) -> dict[str, dict[str, int]]:
     return counts
 
 
+def normalize(pkg: str) -> str:
+    """`./cmd/quarry/...` and `cmd/quarry/` both name the dir `cmd/quarry`."""
+    pkg = pkg[:-4] if pkg.endswith("/...") else pkg
+    pkg = pkg[2:] if pkg.startswith("./") else pkg
+    return pkg.rstrip("/")
+
+
 def cell(value: int, before: int | None) -> str:
     return str(value) if before is None else f"{value} ({value - before:+d})"
 
@@ -144,7 +154,11 @@ def main(argv: list[str]) -> int:
             base_ref = git("merge-base", "HEAD", "origin/main").strip()
         then = ref_sources(base_ref) if base_ref else {}
 
-        pkgs = args.pkgs or sorted(set(now) | set(then))
+        pkgs = [normalize(p) for p in args.pkgs] or sorted(set(now) | set(then))
+        unknown = [p for p in pkgs if p not in now and p not in then]
+        if unknown:
+            raise ToolError("no test files in " + ", ".join(unknown)
+                            + " (now or at base): wrong path, or outside " + ", ".join(f"{r}/" for r in ROOTS))
         if args.changed:
             pkgs = [p for p in pkgs if now.get(p) != then.get(p)]
 
@@ -164,8 +178,6 @@ def main(argv: list[str]) -> int:
     total_now = dict.fromkeys(cols, 0)
     total_then = dict.fromkeys(STATIC, 0)
     for pkg in pkgs:
-        if pkg not in now and pkg not in then:
-            continue
         cur = static_counts(now.get(pkg, []))
         prev = static_counts(then.get(pkg, [])) if base_ref else None
         row = f"{pkg:<34}" + "".join(f" {cell(cur[c], prev[c] if prev else None):>{width}}" for c in STATIC)
