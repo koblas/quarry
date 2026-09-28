@@ -366,6 +366,75 @@ func Test_replace_does_not_swap_when_the_context_ends_after_the_checkpoint(t *te
 	assert.Equal(t, before, after)
 }
 
+func Test_replace_removes_a_stale_wal_before_swapping_in_the_new_store(t *testing.T) {
+	dir := t.TempDir()
+	staleWAL := filepath.Join(dir, "quarry.duckdb.wal")
+	require.NoError(t, os.WriteFile(staleWAL, []byte("wal"), 0o600))
+	st := duckstore.New(dir)
+
+	path, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(dir, "quarry.duckdb"), path)
+	_, statErr := os.Stat(staleWAL)
+	assert.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
+func Test_replace_leaves_a_missing_wal_alone(t *testing.T) {
+	dir := t.TempDir()
+	st := duckstore.New(dir)
+
+	path, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(dir, "quarry.duckdb"), path)
+}
+
+func Test_replace_does_not_remove_the_stale_wal_before_the_context_gate(t *testing.T) {
+	dir := t.TempDir()
+	path, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	before, err := os.ReadFile(path)
+	require.NoError(t, err)
+	staleWAL := filepath.Join(dir, "quarry.duckdb.wal")
+	require.NoError(t, os.WriteFile(staleWAL, []byte("wal"), 0o600))
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	st := newFaultStore(dir, &faultDB{afterCheckpoint: cancel})
+	rows := minimalRows()
+	rows.Transactions[0].Amount = 999
+
+	_, err = st.Replace(ctx, rows)
+
+	require.ErrorIs(t, err, context.Canceled)
+	_, statErr := os.Stat(staleWAL)
+	assert.NoError(t, statErr)
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, before, after)
+}
+
+func Test_replace_refuses_the_swap_when_the_stale_wal_cannot_be_removed(t *testing.T) {
+	dir := t.TempDir()
+	path, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	before, err := os.ReadFile(path)
+	require.NoError(t, err)
+	staleWAL := filepath.Join(dir, "quarry.duckdb.wal")
+	require.NoError(t, os.Mkdir(staleWAL, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(staleWAL, "occupied"), []byte("x"), 0o600))
+	st := duckstore.New(dir)
+
+	_, err = st.Replace(t.Context(), minimalRows())
+
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, store.ErrStoreNotWritable)
+	assert.NotErrorIs(t, err, store.ErrDiskFull)
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, before, after)
+}
+
 func Test_replace_does_not_tag_an_unrelated_build_failure(t *testing.T) {
 	st := duckstore.New(t.TempDir())
 

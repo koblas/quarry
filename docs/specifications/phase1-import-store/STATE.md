@@ -2,7 +2,7 @@
 
 Scenarios complete: SCENARIO-01a (+ folded 04, 05), SCENARIO-01d, SCENARIO-01b (+ folded 06),
 SCENARIO-09 (+ folded 11), SCENARIO-01c (+ folded 07, 12, 21), SCENARIO-08 (+ folded 19),
-SCENARIO-02 (+ folded 10, 18), SCENARIO-14 (+ folded 13). Last updated by SCENARIO-14.
+SCENARIO-02 (+ folded 10, 18), SCENARIO-14 (+ folded 13), SCENARIO-20. Last updated by SCENARIO-20.
 
 ## Binding decisions
 - Store ADR: `docs/adr/001-shared-store-package.md`. `internal/store` = row types only, no driver; `internal/store/duckstore` = DDL + builder + atomic swap. (SCENARIO-01a)
@@ -23,10 +23,10 @@ SCENARIO-02 (+ folded 10, 18), SCENARIO-14 (+ folded 13). Last updated by SCENAR
 - `InvestmentTransaction` is an **optional** entity (`investmentEntity`, absent → count 0). `surveyTransactions`' `hasInvestment` guard is mutation-proven by `Test_import_counts_no_investment_transactions_when_an_imported_one_shares_the_absent_entitys_zero`. (SCENARIO-01c)
 - Money is int64 cents in `store.Rows`, parsed via `typeof(col)` + `CAST(col AS TEXT)`. IDs `<prefix>-<Z_PK>`. `*importer.UnmappableError{Reason}` carries ruled text; S4 offenders accumulate (`s4ClassOrder`). P1-5d: deleted ref → dropped silently; nonexistent ref → NULL. Account/category booleans via `COALESCE(col, 0)`. (SCENARIO-01a)
 - `v9fixture.Builder`: real SQL NULL for zero refs/empty strings; `Z_PK` by call order per table; `WithoutEntity(name)`. `(*duckdb.DB).Create`/`CheckpointClose`/`AppendRows`/`Decimal`/`QueryRows`. (SCENARIO-01a/01d, PREP-c)
+- **`duckstore.Store.Replace` cleans up leftovers it, not `Prepare`, owns**: sweeps aged (`leftoverMaxAge = time.Hour`, duplicated from `internal/snapshot`'s own copy — a feature package may not import another) `.quarry-<UTC>.duckdb.partial(.wal)?` matches first (`sweepLeftovers`, silent on any `ReadDir`/`Remove` failure), then — after the existing ctx gate, before `os.Rename` — removes any stale `quarry.duckdb.wal` unconditionally (no age gate), a real failure there refusing the swap via `buildError` (not silent). A schema-mismatch or V1 sync never calls `Replace`, so it never sweeps. Mutation-proven: widening `leftoverMaxAge` or flipping the `ModTime` comparison reddens the age-gate pair; dropping the pattern's anchors reddens `Test_replace_sweep_leaves_near_miss_and_unrelated_files_alone`; moving the WAL removal before the ctx gate reddens `Test_replace_does_not_remove_the_stale_wal_before_the_context_gate`; swallowing the WAL removal's real errors reddens `Test_replace_refuses_the_swap_when_the_stale_wal_cannot_be_removed`; propagating the sweep's own error reddens `Test_replace_leaves_a_leftover_alone_when_the_sweep_cannot_remove_it`. (SCENARIO-20)
 
 ## Left unbuilt
 - Snapshot-side EDQUOT (`SQLITE_IOERR_WRITE` during `Source.Backup` → R14b) — see Open debts. (SCENARIO-14)
-- Stale `quarry.duckdb.wal` removal, `.partial` leftover sweep — SCENARIO-20.
 - `--from` flag + Example paragraph, `snapshot.Server` method for `--from` (fills `SnapshotRef`), M1b `--json` path — SCENARIO-03.
 - `import_runs` history across rebuilds — Phase 2.
 
@@ -49,10 +49,11 @@ SCENARIO-02 (+ folded 10, 18), SCENARIO-14 (+ folded 13). Last updated by SCENAR
 - `UnmappableError` must stay out of the `Unwrap` chain of `ErrUnmappable` (and the duckstore tag single-`Unwrap`): `causeText` walks one Unwrap chain, a multi-`%w` stops it and prints the whole chain. (SCENARIO-14)
 - The appender's duplicate-key error is a multi-`%w` (`database/sql/driver: could not close appender: Failed to append: …`), so S3's `<reason>` is that whole text, not the inner driver `Msg`. (SCENARIO-14)
 - S1 fault tests must create `snapshots/` before `chmod 0500` on the store dir, or Phase 0's `Prepare` refuses first. Fakes over `duckstore.DB` see `Close` after a failed `CheckpointClose`. (SCENARIO-14)
+- Stale `quarry.duckdb.wal` removal is unconditional (no age gate) on every successful `Replace`, unlike the leftover sweep — a fixture named exactly `quarry.duckdb.wal` is never a "kept" case in a `Replace`-level test. DuckDB's own WAL suffix is `.wal`, not SQLite's `-wal` (`internal/snapshot/destination.go`'s pattern uses `-wal`) — the two `leftoverMaxAge` constants (`snapshot`, `duckstore`) must change together if ever retuned; no shared symbol links them. (SCENARIO-20)
 
 ## Open debts
 - Snapshot-side EDQUOT (`SQLITE_IOERR_WRITE` during `Source.Backup` → R14b; copy already ruled) — unowned — dies unless re-opened as a standalone named-bug fix on a `platform/sqlite` classifier.
 - `internal/platform/duckdb`'s `Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration` flakes under full-suite CPU load — pre-existing — unowned, for the final gate to rule on.
 - `internal/cli/render_internal_test.go` is not gofmt-clean (pre-existing at 7d11103; `gofmt -l` lists it, golangci-lint does not) — unowned, cheap fold for any fix pass.
 - MINOR (08 checkpoint, doc budgets): `internal/importer/validate.go:75-77` describeOneSided (3→≤2); `internal/importer/importer.go:42-48` Import doc (7→~4; move import_runs detail to newImportRun); `internal/importer/importer.go:133-134` importRunID (→1); `internal/cli/render.go:317-319` oneSidedRows, `:342-344` otherAccountLabel (→≤2); `internal/store/store.go:223-229` OneSidedTransfer (7→~4, drop duplicated display-only aside).
-- MINOR (14 checkpoint, doc budgets): `internal/store/duckstore/duckstore.go:69-73` Replace doc (5→≤4); `internal/snapshot/import.go:113-115` importFailureRefusal (→1-2, drop restated precedence order); `internal/snapshot/sync_and_import_test.go:22-24` fakeImporter (→1-2).
+- MINOR (14 checkpoint, doc budgets): `internal/snapshot/import.go:113-115` importFailureRefusal (→1-2, drop restated precedence order); `internal/snapshot/sync_and_import_test.go:22-24` fakeImporter (→1-2).

@@ -3,9 +3,12 @@ package duckstore
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/duckdb"
@@ -14,6 +17,12 @@ import (
 
 // FileName is quarry's store filename inside a Store's directory.
 const FileName = "quarry.duckdb"
+
+// leftoverMaxAge is how old a store partial must be before Replace's sweep removes it.
+const leftoverMaxAge = time.Hour
+
+// leftoverPartialPattern matches a store partial build file and its .wal.
+var leftoverPartialPattern = regexp.MustCompile(`^\.quarry-\d{8}T\d{6}Z\.duckdb\.partial(\.wal)?$`)
 
 // partialNameLayout formats a partial build file's UTC timestamp, e.g. .quarry-20260927T143005Z.duckdb.partial.
 const partialNameLayout = "20060102T150405Z"
@@ -66,12 +75,13 @@ func createDuckDB(ctx context.Context, path string) (DB, error) {
 	return db, nil
 }
 
-// Replace builds rows into a new DuckDB file and swaps it in over
-// quarry.duckdb, returning the path it wrote. On any failure the partial
-// file and its .wal are removed and the existing store is untouched. A
-// permission fault matches store.ErrStoreNotWritable, a full disk or quota
-// store.ErrDiskFull. ctx is checked once more right before the swap.
+// Replace sweeps aged build leftovers and swaps rows into quarry.duckdb,
+// removing any stale quarry.duckdb.wal first. On failure the partial file
+// and its .wal are removed and the existing store is untouched; a
+// permission fault matches store.ErrStoreNotWritable, disk-full store.ErrDiskFull.
 func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
+	s.sweepLeftovers()
+
 	finalPath := filepath.Join(s.dir, FileName)
 	partialPath := filepath.Join(s.dir, fmt.Sprintf(".quarry-%s.duckdb.partial", time.Now().UTC().Format(partialNameLayout)))
 
@@ -99,12 +109,46 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
 		return "", buildError(err)
 	}
 
+	if err := removeStaleWAL(finalPath); err != nil {
+		removePartial(partialPath)
+		return "", buildError(err)
+	}
+
 	if err := os.Rename(partialPath, finalPath); err != nil {
 		removePartial(partialPath)
 		return "", buildError(err)
 	}
 
 	return finalPath, nil
+}
+
+// sweepLeftovers best-effort removes leftoverPartialPattern matches in
+// s.dir older than leftoverMaxAge; a ReadDir or Remove failure is silent.
+func (s *Store) sweepLeftovers() {
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-leftoverMaxAge)
+	for _, entry := range entries {
+		if entry.IsDir() || !leftoverPartialPattern.MatchString(entry.Name()) {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil || info.ModTime().After(cutoff) {
+			continue
+		}
+		_ = os.Remove(filepath.Join(s.dir, entry.Name()))
+	}
+}
+
+// removeStaleWAL removes finalPath+".wal", left by the store being
+// replaced, ignoring the file already being absent.
+func removeStaleWAL(finalPath string) error {
+	if err := os.Remove(finalPath + ".wal"); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 // buildFailure is a failed build: Error and Unwrap reach cause alone, while Is
