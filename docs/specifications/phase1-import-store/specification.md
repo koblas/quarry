@@ -284,7 +284,18 @@ S4 `<reason>` forms (first offender by date, then account, then source id; ` (an
 5. `the 2026-08-31 statement for "Visa Infinite" has a balance of 12.345, which has more than 2 decimal places`
 6. `… has an amount of <v>, which is too large for quarry's amounts` (same subjects as 3–5)
 
-Unmapped `ZRECONCILESTATUS` / category `ZTYPE` / required NULL values use the same frame; the architect proposes their reason text and a scoped product-vision copy ruling confirms it before implementation.
+7. `the snapshot has no CashFlowTransaction entity, which quarry needs to read Quicken's records`; several: `the snapshot has no CashFlowTransaction, CategoryTag or UserTag entity, which quarry needs to read Quicken's records` (names sorted, joined `, ` … ` or `)
+8. `a transaction on 2024-03-02 in "Visa Infinite" has reconcile status 7, which quarry does not map yet`
+9. `category "Food:Groceries" has type 5, which quarry does not map yet` (subject = full path)
+10. Required NULL, one form `<subject> has no <field>` (field = user-facing noun, never a column name): `account "Chequing" has no currency` · `account "Chequing" has no type` · `an account (source id 42) has no name` · `a transaction (source id 1234) has no account` · `a transaction on 2024-03-02 in "Visa Infinite" has no amount` · `a transaction in "Visa Infinite" (source id 1234) has no date` · `a split of a transaction on 2024-03-02 in "Visa Infinite" has no amount` · `a split (source id 5678) has no transaction` · `category (source id 99) has no name` · `category "Food:Groceries" has no type` · `the 2026-08-31 statement for "Visa Infinite" has no balance` · `a statement for "Visa Infinite" (source id 12) has no date`
+
+Subjects use the best handle the row has (date, account name, category path); when that handle is the missing value, fall back to `(source id N)` (= Quicken `Z_PK` = store `source_id`).
+
+Required columns (NULL → reason 10): `ZACCOUNT.ZNAME` (name), `.ZTYPENAME` (type), `.ZCURRENCY` (currency); imported `ZTRANSACTION.ZACCOUNT` (account), `.ZAMOUNT` (amount), date = `ZPOSTEDDATE` else `ZENTEREDDATE`, both NULL (date); non-deleted entry `ZAMOUNT` (amount), parent link (transaction); category `ZNAME` (name), `ZTYPE` (type); the newest reconcile record per account (the one the gate uses) `ZENDINGBALANCE` (balance), `ZENDDATE` (date). Everything else is nullable and never refuses: payee, memo, cheque number, institution, an entry's category (NULL `category_id`; uncategorized is a Phase 2 finding), `ZRECONCILESTATUS` (NULL = `uncleared`), `ZTRANSFER`, parent category, older reconcile records.
+
+Ordering: dated rows by date, account, source id; undated rows (accounts, categories, entity names) by name / full path, then source id. When several classes fail, S4 reports the first class in order 7, 1–6, 8–10 (a missing entity makes row checks meaningless); ` (and N more)` counts offenders of that class only.
+
+Interim frame (ruled 2026-09-28): until SCENARIO-14, S4 cases may surface in the S3 frame, but the importer's typed error carries the `<reason>` verbatim (incl. ` (and N more)`) from 01d on, and tests assert the reason substring (and the type via `errors.As`), not the frame. SCENARIO-14 swaps only the frame. No push or PR may ship with an S4 case in the S3 frame — the final gate treats that as a BLOCKER.
 
 ### Edge-case rows
 | Output | Input class | Ruling |
