@@ -9,15 +9,12 @@ import (
 	"github.com/koblas/quarry/internal/platform/sqlschema"
 )
 
-// ReferenceDDL is the embedded Core Data schema for Quicken Classic for Mac
-// v9, taken verbatim from hardkoded/quicken-skills' fixture-schema.sql. It is
-// the one copy of the reference ever corrected.
+// ReferenceDDL is the embedded, verbatim v9 Core Data schema — the one copy of the reference ever corrected.
 //
 //go:embed reference.sql
 var ReferenceDDL string
 
-// ReferenceLabel identifies the commit ReferenceDDL is pinned to. It changes
-// only when ReferenceDDL itself is corrected.
+// ReferenceLabel identifies the commit ReferenceDDL is pinned to.
 const ReferenceLabel = "hardkoded/quicken-skills@752107b"
 
 // Reference executes ReferenceDDL against a private in-memory database and

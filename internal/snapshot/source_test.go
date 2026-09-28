@@ -15,8 +15,7 @@ func Test_sqliteSource_backup_wraps_a_failure_from_the_underlying_backup(t *test
 	src := snapshot.NewSQLiteSource(0)
 	require.NoError(t, src.Open(t.Context(), bundle.DataPath))
 	t.Cleanup(func() { _ = src.Close() })
-	// The backup API needs the destination to already exist; a missing
-	// directory makes SQLite's own connection to it fail.
+	// The backup API needs the destination to already exist.
 	destPath := filepath.Join(t.TempDir(), "missing-dir", "dest")
 
 	err := src.Backup(t.Context(), destPath)

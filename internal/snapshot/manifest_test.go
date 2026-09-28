@@ -39,8 +39,6 @@ func Test_manifest_encodes_with_two_space_indent_and_a_trailing_newline(t *testi
 	assert.Contains(t, string(got), "{\n  \"snapshot\"")
 }
 
-// Field order in the encoded document must match the top-level keys the
-// manifest documents: snapshot, schema, warnings.
 func Test_manifest_keys_appear_in_snapshot_schema_warnings_order(t *testing.T) {
 	m := snapshot.Manifest{Warnings: []string{}}
 

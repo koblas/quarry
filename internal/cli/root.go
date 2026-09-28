@@ -7,9 +7,9 @@ import (
 
 // newRootCommand builds quarry's command tree: a persistent --json flag on
 // the root plus the sync subcommand, wired against srv and rooted at home.
-// The root carries no Args or Run, so an unmatched subcommand fails through
-// cobra's own dispatch rather than being accepted as a positional argument.
 func newRootCommand(srv *snapshot.Server, home string, jsonOut *bool) *cobra.Command {
+	// No Args or Run field: an unmatched subcommand fails through cobra's
+	// own dispatch rather than being accepted as a positional argument.
 	root := &cobra.Command{
 		Use:   "quarry",
 		Short: "Snapshot and query Quicken Classic for Mac data locally",

@@ -8,20 +8,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// runtimeError marks err as already classified by sync's RunE, so Execute's
-// default branch returns it unchanged instead of treating it as a
-// cobra-native usage error.
+// runtimeError marks err as already classified, so Execute returns it
+// unchanged instead of treating it as a cobra-native usage error.
 type runtimeError struct {
 	err error
 }
 
+// unreachable: Execute always matches *runtimeError with errors.As and returns e.err directly, so nothing calls Error() on the wrapper itself.
 func (e *runtimeError) Error() string { return e.err.Error() }
 func (e *runtimeError) Unwrap() error { return e.err }
 
-// newSyncCommand builds the sync subcommand: it takes no positional
-// arguments, resolves --quicken when given or else discovers the sole
-// .quicken bundle in ~/Documents, and writes either the human success block
-// or the --json manifest document to stdout.
+// newSyncCommand builds the sync subcommand: resolve or discover the
+// bundle, sync it, and render the result.
 func newSyncCommand(srv *snapshot.Server, home string, jsonOut *bool) *cobra.Command {
 	var quickenPath string
 

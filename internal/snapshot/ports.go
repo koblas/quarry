@@ -3,9 +3,9 @@ package snapshot
 import "context"
 
 // Source is the live Quicken bundle's read-only port: open, probe for
-// encryption, and back itself up. BR-1 confines every other read (integrity
-// check, account count, hash, schema) to the snapshot Destination.Backup
-// produces, never to the live file.
+// encryption, and back itself up. Every other read (integrity check,
+// account count, hash, schema) runs against the snapshot Destination.Backup
+// produces, never against the live file.
 type Source interface {
 	// Open opens path's data file read-only.
 	Open(ctx context.Context, path string) error
@@ -21,14 +21,13 @@ type Source interface {
 
 // Destination is the snapshots-directory write port: every write that
 // reaches disk during Sync goes through it, so a fake can inject a write
-// failure (R14) without depending on real disk space.
+// failure without depending on real disk space.
 type Destination interface {
 	// Prepare creates the snapshots directory (0700) if it does not exist.
 	Prepare(ctx context.Context) error
-	// Backup creates a new, exclusively-created 0600 partial snapshot file
-	// for name and backs up src into it, returning the partial's path and
-	// the name actually reserved: name, or "<name>_2", "<name>_3", ... if
-	// name's final snapshot or manifest already exists. It removes its own
+	// Backup creates a new, exclusively-created 0600 partial for name and
+	// backs up src into it, returning the partial's path and the name
+	// actually reserved ("<name>_2", ... on collision). It removes its own
 	// partial on any failure.
 	Backup(ctx context.Context, src Source, name string) (partial, resolvedName string, err error)
 	// WriteManifest writes data to a new, exclusively-created 0600 partial

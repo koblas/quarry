@@ -54,9 +54,8 @@ func Test_commit_refuses_to_replace_an_existing_file(t *testing.T) {
 	assert.Equal(t, "original", string(got))
 }
 
-// The partial's directory is made read-only after the partial is written,
-// so the hard link succeeds but removing the old entry cannot: dest already
-// exists via the link, so the commit is done regardless.
+// The partial's directory is made read-only after writing, so the hard
+// link succeeds but removing the old entry cannot.
 func Test_commit_succeeds_when_the_partial_cannot_be_removed_after_linking(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")

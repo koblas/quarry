@@ -71,11 +71,8 @@ func ResolveBundlePath(home, path string) (string, error) {
 	return abs, nil
 }
 
-// validateData confirms bundlePath contains a readable, regular file named
-// "data" — the on-disk shape every .quicken bundle must have — and that it
-// is not a closed WAL-formatted database (errNotOpenInQuicken, R8b). The
-// header check reads through the same open used for the readability probe,
-// before any SQLite connection is opened against data.
+// validateData confirms bundlePath has a readable regular file named
+// "data" that is not a closed WAL-formatted database (errNotOpenInQuicken).
 func validateData(bundlePath string) error {
 	dataPath := filepath.Join(bundlePath, "data")
 
@@ -96,6 +93,9 @@ func validateData(bundlePath string) error {
 	}
 	defer func() { _ = f.Close() }()
 
+	// Read the header through this same open, before any SQLite connection
+	// touches data: opening it a second time would risk racing a real
+	// Quicken write between the two opens.
 	var header [20]byte
 	n, _ := io.ReadFull(f, header[:])
 	if n == len(header) && header[18] == walFormatByte && header[19] == walFormatByte {
@@ -106,23 +106,24 @@ func validateData(bundlePath string) error {
 	return nil
 }
 
-// notABundleRefusal is R6: path is not a directory, or a directory with no
-// regular file named "data".
+// notABundleRefusal reports that path is not a directory, or a directory
+// with no regular file named "data".
 func notABundleRefusal(home, path string) error {
 	return RefusalError{msg: fmt.Sprintf(
 		"%s is not a Quicken for Mac file (expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path>",
 		homepath.Abbreviate(home, path))}
 }
 
-// notOpenInQuickenRefusal is R8b: path's data file header reports WAL
-// format with no live -wal file, so Quicken does not currently have it open.
+// notOpenInQuickenRefusal reports that path's data file header reports WAL
+// format with no live -wal file, so Quicken does not currently have it
+// open.
 func notOpenInQuickenRefusal(home, path string) error {
 	return RefusalError{msg: fmt.Sprintf(
 		"%s is not open in Quicken (its database has no write-ahead log); open it in Quicken, then run quarry sync again",
 		homepath.Abbreviate(home, path))}
 }
 
-// unreadableRefusal is R7/R7b: path could not be statted or opened for a
+// unreadableRefusal reports that path could not be statted or opened for a
 // reason other than not existing.
 func unreadableRefusal(home, path string, cause error) error {
 	return RefusalError{msg: fmt.Sprintf(

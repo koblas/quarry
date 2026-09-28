@@ -8,9 +8,9 @@ import (
 	"github.com/koblas/quarry/internal/platform/sqlschema"
 )
 
-// MismatchError is Sync's refusal (BR-9, M1) for a schema check that finds a
-// table or column the reference names and the bundle lacks: its message
-// excludes the "quarry: " prefix a caller adds before printing it to stderr.
+// MismatchError is Sync's refusal for a schema check that finds a table or
+// column the reference names and the bundle lacks: its message excludes
+// the "quarry: " prefix a caller adds before printing it to stderr.
 type MismatchError struct {
 	msg string
 }
@@ -18,8 +18,8 @@ type MismatchError struct {
 // Error returns the refusal's message verbatim.
 func (e MismatchError) Error() string { return e.msg }
 
-// mismatchError renders M1: bundlePath is named by its base name,
-// snapshotPath is ~-abbreviated against home.
+// mismatchError renders the mismatch refusal: bundlePath is named by its
+// base name, snapshotPath is ~-abbreviated against home.
 func mismatchError(home, bundlePath, snapshotPath string, info SchemaInfo) MismatchError {
 	return MismatchError{msg: fmt.Sprintf(
 		"schema check failed: %s is missing %s that the schema reference expects; "+
@@ -30,9 +30,10 @@ func mismatchError(home, bundlePath, snapshotPath string, info SchemaInfo) Misma
 		homepath.Abbreviate(home, snapshotPath))}
 }
 
-// extrasWarningText renders W1's body: bundlePath and manifestPath are both
-// named by their base name. The verb and pronoun agree with the singular
-// only when exactly one table or column, in total, is unexpected.
+// extrasWarningText renders the extras warning's body: bundlePath and
+// manifestPath are both named by their base name. The verb and pronoun
+// agree with the singular only when exactly one table or column, in
+// total, is unexpected.
 func extrasWarningText(bundlePath, manifestPath string, info SchemaInfo) string {
 	verb, pronoun := "are", "them"
 	if len(info.UnexpectedTables)+len(info.UnexpectedColumns) == 1 {
@@ -46,8 +47,9 @@ func extrasWarningText(bundlePath, manifestPath string, info SchemaInfo) string 
 		filepath.Base(manifestPath))
 }
 
-// hasOnlyExtras reports whether info has unexpected tables or columns and no
-// missing ones (BR-9): W1's condition, and MismatchError's opposite.
+// hasOnlyExtras reports whether info has unexpected tables or columns and
+// no missing ones: the extras-warning condition, and MismatchError's
+// opposite.
 func hasOnlyExtras(info SchemaInfo) bool {
 	return info.Verified && info.HasExtras()
 }

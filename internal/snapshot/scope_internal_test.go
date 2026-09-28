@@ -1,6 +1,6 @@
-// White-box: scopeSchema is unexported and BR-6's table set is a
-// combinatorial rule (prefix plus two named exclusions) best driven directly
-// rather than through a full Sync.
+// White-box: scopeSchema is unexported and its table set is a combinatorial
+// rule (prefix plus two named exclusions) best driven directly rather than
+// through a full Sync.
 package snapshot
 
 import (

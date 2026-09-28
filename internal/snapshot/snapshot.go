@@ -13,8 +13,7 @@ import (
 	"github.com/koblas/quarry/internal/platform/sqlschema"
 )
 
-// snapshotNameLayout is the UTC, colon-free timestamp Sync names each
-// snapshot and manifest pair with.
+// snapshotNameLayout is the UTC, colon-free timestamp each snapshot pair is named with.
 const snapshotNameLayout = "20060102T150405Z"
 
 // DefaultBusyTimeout is how long Sync waits for a busy or locked source before refusing.
@@ -83,17 +82,14 @@ func NewServer(opts ...Option) *Server {
 	return s
 }
 
-// errNoReference is returned by Sync when the Server has no reference
-// schema configured.
+// errNoReference is Sync's error when the Server has no reference schema.
 var errNoReference = fmt.Errorf("no reference schema configured")
 
-// Sync takes a verified snapshot of the Quicken bundle at bundlePath (BR-8):
-// opens and probes bundlePath's data file read-only, backs it up, then
-// checks the copy's integrity, account count, hash and schema against the
-// configured reference. It returns errNoReference if no reference schema
-// was configured, or the populated, already-committed Manifest with a
-// non-nil MismatchError (BR-9) if the schema check finds a missing table or
-// column.
+// Sync takes a verified snapshot of the Quicken bundle at bundlePath: it
+// opens, probes and backs up the live file read-only, then checks the copy
+// against the configured reference schema. It returns errNoReference with
+// none configured, or the committed Manifest with a MismatchError when the
+// schema check finds a missing table or column.
 func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) {
 	if s.reference == nil {
 		return Manifest{}, errNoReference
@@ -172,10 +168,10 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 }
 
 // commit runs Sync's single pre-commit ctx check, then renames the
-// manifest and snapshot partials into their final names in that order
-// (BR-8: a crash between the two renames must never leave a snapshot
-// without a manifest). Once the ctx check passes, both renames complete
-// regardless of ctx.
+// manifest and snapshot partials into their final names in that order: a
+// crash between the two renames must never leave a snapshot without a
+// manifest. Once the ctx check passes, both renames complete regardless of
+// ctx.
 func (s *Server) commit(ctx context.Context, destination Destination, manifestPartial, snapshotPartial, manifestPath string) error {
 	if ctx.Err() != nil {
 		_ = destination.Discard(ctx, manifestPartial)
@@ -198,10 +194,10 @@ func (s *Server) commit(ctx context.Context, destination Destination, manifestPa
 	return nil
 }
 
-// buildManifest reads the just-created snapshot at snapshotPath (BR-1: every
-// read past the probe runs on the snapshot, never the live file) and
-// assembles the manifest BR-8's remaining steps produce: integrity check,
-// account count, hash, and schema diff against the configured reference.
+// buildManifest reads the just-created snapshot at snapshotPath — every
+// read past the probe runs on the snapshot, never the live file — and
+// assembles the manifest: integrity check, account count, hash, and schema
+// diff against the configured reference.
 func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string, takenAt time.Time) (Manifest, error) {
 	snap, err := sqlite.OpenReadOnly(ctx, snapshotPath)
 	if err != nil {
@@ -215,7 +211,7 @@ func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string,
 
 	exists, err := snap.QueryInt(ctx, "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'ZACCOUNT'")
 	if err != nil {
-		// unreachable: only a ctx cancelled between IntegrityCheck and this query could fail it; Sync's failureOutcome then classifies it as I1, not this wrap.
+		// unreachable: only a ctx cancelled between IntegrityCheck and this query could fail it; Sync's failureOutcome then classifies it as interrupted, not this wrap.
 		return Manifest{}, fmt.Errorf("check accounts table: %w", err)
 	}
 	if exists == 0 {
@@ -224,7 +220,7 @@ func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string,
 
 	accounts, err := snap.QueryInt(ctx, "SELECT count(*) FROM ZACCOUNT")
 	if err != nil {
-		// unreachable: only a ctx cancelled between the existence check and this query could fail it; Sync's failureOutcome then classifies it as I1, not this wrap.
+		// unreachable: only a ctx cancelled between the existence check and this query could fail it; Sync's failureOutcome then classifies it as interrupted, not this wrap.
 		return Manifest{}, fmt.Errorf("count accounts: %w", err)
 	}
 	if accounts == 0 {

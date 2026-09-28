@@ -6,8 +6,8 @@ import (
 	"fmt"
 )
 
-// Manifest is quarry's on-disk manifest and --json document (BR-10): the
-// same bytes are written to <snapshot>.json and printed to stdout.
+// Manifest is quarry's on-disk manifest and --json document: the same
+// bytes are written to <snapshot>.json and printed to stdout.
 type Manifest struct {
 	Snapshot SnapshotInfo `json:"snapshot"`
 	Schema   SchemaInfo   `json:"schema"`
@@ -25,9 +25,9 @@ type SnapshotInfo struct {
 	Accounts int    `json:"accounts"`
 }
 
-// SchemaInfo reports the snapshot's schema against the reference (BR-6,
-// BR-7). Verified is true exactly when MissingTables and MissingColumns are
-// both empty (BR-9); extra tables or columns do not affect it.
+// SchemaInfo reports the snapshot's schema against the reference. Verified
+// is true exactly when MissingTables and MissingColumns are both empty;
+// extra tables or columns do not affect it.
 type SchemaInfo struct {
 	Reference            string      `json:"reference"`
 	Verified             bool        `json:"verified"`
@@ -59,8 +59,8 @@ type ColumnRef struct {
 
 // Encode returns m as the exact bytes written to disk and printed with
 // --json: 2-space indented JSON with a trailing newline. It is the only
-// encoder for Manifest, so the file on disk and stdout are always identical
-// (BR-10).
+// encoder for Manifest, so the file on disk and stdout are always
+// identical.
 func (m Manifest) Encode() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)

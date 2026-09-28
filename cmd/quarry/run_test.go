@@ -287,9 +287,13 @@ func Test_run_discovers_the_bundle_from_documents_without_quicken(t *testing.T) 
 	})
 }
 
+// t.Chdir pins the resolve to a directory with no data file, so the
+// outcome does not depend on whichever directory the test happens to run
+// from.
 func Test_run_refuses_an_explicit_empty_quicken_flag_even_with_a_bundle_in_documents(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Chdir(t.TempDir())
 	v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
 	var stdout, stderr bytes.Buffer
 

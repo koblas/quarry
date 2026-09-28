@@ -26,7 +26,8 @@ func DiscoverBundle(home string) (string, error) {
 	}
 
 	// os.ReadDir already returns entries sorted by filename, so the
-	// filtered names below need no further sort for R2's bytewise order.
+	// filtered names below need no further sort for the multiple-bundles
+	// refusal's required bytewise order.
 	var names []string
 	for _, e := range entries {
 		name := e.Name()
@@ -59,21 +60,22 @@ func DiscoverBundle(home string) (string, error) {
 	}
 }
 
-// noBundleFoundRefusal is R1: no .quicken bundle found in ~/Documents.
+// noBundleFoundRefusal reports that no .quicken bundle was found in
+// ~/Documents.
 func noBundleFoundRefusal() error {
 	return RefusalError{msg: "no .quicken file found in ~/Documents; pass one with --quicken <path>"}
 }
 
-// multipleQuickenBundlesRefusal is R2: more than one .quicken bundle found;
-// names must already be sorted bytewise.
+// multipleQuickenBundlesRefusal reports that more than one .quicken bundle
+// was found; names must already be sorted bytewise.
 func multipleQuickenBundlesRefusal(names []string) error {
 	return RefusalError{msg: fmt.Sprintf(
 		"found %d .quicken files in ~/Documents (%s); choose one with --quicken <path>",
 		len(names), strings.Join(names, ", "))}
 }
 
-// documentsUnreadableRefusal is R3: ~/Documents could not be read for a
-// reason other than not existing.
+// documentsUnreadableRefusal reports that ~/Documents could not be read
+// for a reason other than not existing.
 func documentsUnreadableRefusal(home string, cause error) error {
 	return RefusalError{msg: fmt.Sprintf(
 		"cannot read ~/Documents: %s; allow your terminal to access the Documents folder in "+

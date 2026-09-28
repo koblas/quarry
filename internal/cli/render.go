@@ -51,8 +51,8 @@ func renderSuccess(m snapshot.Manifest, home string) string {
 	return b.String()
 }
 
-// schemaLine renders the Schema line: exact match, extras-only (W1), or a
-// DIFFERS line for a mismatch (M1).
+// schemaLine renders the Schema line: exact match, extras-only, or a
+// DIFFERS line for a mismatch.
 func schemaLine(s snapshot.SchemaInfo) string {
 	if !s.Verified {
 		line := fmt.Sprintf("DIFFERS from reference %s: %s missing",

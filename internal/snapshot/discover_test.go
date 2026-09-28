@@ -65,7 +65,7 @@ func Test_DiscoverBundle_finds_a_bundle_whose_suffix_case_differs(t *testing.T) 
 	assert.Equal(t, bundleDir, got)
 }
 
-func Test_DiscoverBundle_follows_a_symlinked_bundle_and_skips_a_dangling_one(t *testing.T) {
+func Test_DiscoverBundle_skips_a_dangling_symlink_and_finds_the_real_bundle(t *testing.T) {
 	home := t.TempDir()
 	documents := filepath.Join(home, "Documents")
 	bundle := v9fixture.OpenBundle(t, documents)

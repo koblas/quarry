@@ -14,12 +14,10 @@ import (
 	"github.com/koblas/quarry/internal/platform/atomicfile"
 )
 
-// leftoverMaxAge is how old a leftover partial must be before Prepare's
-// startup sweep removes it.
+// leftoverMaxAge is how old a leftover partial must be before Prepare's sweep removes it.
 const leftoverMaxAge = time.Hour
 
-// leftoverPartialPattern matches a quarry partial name and its
-// -journal/-wal/-shm companions.
+// leftoverPartialPattern matches a quarry partial name and its -journal/-wal/-shm companions.
 var leftoverPartialPattern = regexp.MustCompile(`^\.\d{8}T\d{6}Z(_\d+)?\.(sqlite|json)\.partial(-journal|-wal|-shm)?$`)
 
 // dirDestination is the production Destination adapter: a directory on disk

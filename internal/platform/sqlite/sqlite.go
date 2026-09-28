@@ -76,8 +76,7 @@ func IsBusy(err error) bool {
 }
 
 // escapePath percent-encodes path for use as a SQLite URI filename, so
-// characters query parsing would otherwise treat specially (space, ?, #)
-// survive as part of the path.
+// characters query parsing treats specially (space, ?, #) survive.
 func escapePath(path string) string {
 	return (&url.URL{Path: path}).EscapedPath()
 }
@@ -208,9 +207,8 @@ const backupRetryInterval = 10 * time.Millisecond
 
 // Backup copies src's "main" database into destPath, which must already
 // exist, using SQLite's online backup API so pages still in src's -wal file
-// are included. It then sets destPath's journal_mode to DELETE, since the
-// backup API copies the WAL flag from the source header and would otherwise
-// leave destPath in WAL mode with its own -wal/-shm files.
+// are included. It then resets destPath's journal_mode to DELETE, since
+// the backup API copies the WAL flag from the source header verbatim.
 func Backup(ctx context.Context, src *DB, destPath string, busyTimeout time.Duration) error {
 	destDB, err := sql.Open("sqlite3", "file:"+escapePath(destPath))
 	if err != nil {
@@ -251,9 +249,8 @@ func Backup(ctx context.Context, src *DB, destPath string, busyTimeout time.Dura
 	return nil
 }
 
-// runBackup drives one SQLite online-backup pass from srcDriverConn's "main"
-// database into destDriverConn's "main" database, stepping until done or
-// until busyTimeout or ctx ends the wait.
+// runBackup steps srcDriverConn's "main" database into destDriverConn's
+// until done, busyTimeout, or ctx ends the wait.
 func runBackup(ctx context.Context, destDriverConn, srcDriverConn any, busyTimeout time.Duration) error {
 	dc, ok := destDriverConn.(*sqlite3.SQLiteConn)
 	if !ok {

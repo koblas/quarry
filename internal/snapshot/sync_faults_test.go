@@ -43,8 +43,8 @@ func Test_sync_fails_when_no_reference_is_configured(t *testing.T) {
 	require.Error(t, err)
 }
 
-// Mandatory write-safety guard (BR-8): nothing reaches the snapshots
-// directory before the probe succeeds.
+// Write-safety guard: nothing reaches the snapshots directory before the
+// probe succeeds.
 func Test_sync_creates_nothing_when_the_probe_fails(t *testing.T) {
 	bundleDir := filepath.Join(t.TempDir(), "Home.quicken")
 	require.NoError(t, os.MkdirAll(bundleDir, 0o700))
@@ -77,8 +77,8 @@ func Test_sync_wraps_an_error_when_opening_the_bundle_fails(t *testing.T) {
 }
 
 // A generic backup failure is not a classified source error (busy/encrypted),
-// so it falls to R14, not the old generic "sync <path>:" wrap.
-func Test_sync_wraps_an_error_when_the_backup_fails(t *testing.T) {
+// so it is a write fault, not a source refusal.
+func Test_sync_refuses_when_the_backup_fails(t *testing.T) {
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
 	srv := snapshot.NewServer(
@@ -128,8 +128,7 @@ func mkdirAllCause(t *testing.T, blockedPath string) string {
 
 // Exercises the real Destination adapter's Prepare fault path: MkdirAll
 // fails because the configured snapshots path is already a regular file.
-// Prepare's failure is always R13, whatever the OS reason.
-func Test_sync_wraps_an_error_when_the_snapshots_directory_cannot_be_prepared(t *testing.T) {
+func Test_sync_refuses_when_the_snapshots_directory_cannot_be_prepared(t *testing.T) {
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	ref, err := v9.Reference(t.Context())
 	require.NoError(t, err)
@@ -223,8 +222,7 @@ func Test_sync_wraps_an_error_when_the_snapshot_cannot_be_opened(t *testing.T) {
 }
 
 // A catalog row for a virtual table whose module is absent makes the
-// snapshot's own schema read fail, distinct from an integrity, account, or
-// open fault.
+// snapshot's own schema read fail.
 func Test_sync_wraps_an_error_when_the_snapshot_schema_cannot_be_read(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "snap.sqlite")
 	conn, err := sql.Open("sqlite3", path)
@@ -396,7 +394,7 @@ func assertSnapshotsDirEmpty(t *testing.T, dir string) {
 	assert.Empty(t, entries)
 }
 
-func Test_sync_wraps_an_error_when_writing_the_manifest_fails(t *testing.T) {
+func Test_sync_refuses_when_writing_the_manifest_fails(t *testing.T) {
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
@@ -422,7 +420,7 @@ func Test_sync_wraps_an_error_when_writing_the_manifest_fails(t *testing.T) {
 	assertSnapshotsDirEmpty(t, snapshotsDir)
 }
 
-func Test_sync_wraps_an_error_when_committing_the_manifest_fails(t *testing.T) {
+func Test_sync_refuses_when_committing_the_manifest_fails(t *testing.T) {
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
@@ -449,9 +447,8 @@ func Test_sync_wraps_an_error_when_committing_the_manifest_fails(t *testing.T) {
 }
 
 // The manifest final is already committed when CommitSnapshot fails; the
-// empty directory afterward proves Discard removed that final too, not
-// only the still-open snapshot partial.
-func Test_sync_wraps_an_error_when_committing_the_snapshot_fails(t *testing.T) {
+// empty directory afterward proves Discard removed that final too.
+func Test_sync_refuses_when_committing_the_snapshot_fails(t *testing.T) {
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
@@ -504,8 +501,7 @@ func Test_sync_still_returns_the_classified_refusal_when_discard_fails(t *testin
 }
 
 // A Backup error carrying both a classified sqlite cause and fs.ErrPermission
-// must still resolve to the busy source refusal: sourceRefusal's classified
-// check runs before the write-failure classifier ever sees the error.
+// must still resolve to the busy source refusal.
 func Test_sync_reports_the_source_refusal_when_a_backup_error_is_also_a_permission_error(t *testing.T) {
 	home := t.TempDir()
 	combined := fmt.Errorf("%w: %w", sqlite3.Error{Code: sqlite3.ErrBusy}, fs.ErrPermission)
@@ -523,9 +519,9 @@ func Test_sync_reports_the_source_refusal_when_a_backup_error_is_also_a_permissi
 	assert.Equal(t, "Quicken is busy writing ~/Documents/Home.quicken; run quarry sync again in a moment", re.Error())
 }
 
-// A Discard failure is best-effort (SCENARIO-08's rule): it never replaces
-// the R14 refusal already classified for the write failure that triggered it.
-func Test_sync_still_returns_the_R14_refusal_when_discard_fails_after_a_write_failure(t *testing.T) {
+// A Discard failure is best-effort: it never replaces the write refusal
+// already classified for the write failure that triggered it.
+func Test_sync_still_returns_the_write_refusal_when_discard_fails_after_a_write_failure(t *testing.T) {
 	writeErr := &fs.PathError{Op: "open", Path: "manifest.json.partial", Err: syscall.ENOSPC}
 
 	cases := []struct {
@@ -566,10 +562,7 @@ func Test_sync_still_returns_the_R14_refusal_when_discard_fails_after_a_write_fa
 			assert.Equal(t,
 				"cannot write snapshot to ~/snapshots: no space left on device; free disk space, then run quarry sync again",
 				re.Error())
-			// The fake's failDiscard only overrides the returned error;
-			// each Discard call still removes its own real file, so a
-			// case with two Discard calls must leave the directory empty
-			// even though both calls report failure.
+			// failDiscard only overrides the returned error; each call still removes its own real file.
 			assertSnapshotsDirEmpty(t, snapshotsDir)
 		})
 	}
@@ -615,13 +608,12 @@ func Test_sync_refuses_a_busy_bundle(t *testing.T) {
 	var re snapshot.RefusalError
 	require.ErrorAs(t, err, &re)
 	assert.Equal(t, "Quicken is busy writing ~/Documents/Home.quicken; run quarry sync again in a moment", re.Error())
-	assertNoPartialsLeftBehind(t, snapshotsDir)
 	_, statErr := os.Stat(snapshotsDir)
 	assert.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
-// A cancelled ctx overrides even a classified sqlite refusal: I1 takes
-// priority over R9 at the same failure site.
+// A cancelled ctx overrides even a classified sqlite refusal at the same
+// failure site.
 func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_at_a_precommit_failure(t *testing.T) {
 	home := t.TempDir()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -730,8 +722,7 @@ func (f *cancelDuringCommitManifestDestination) Discard(ctx context.Context, par
 }
 
 // Once the pre-commit checkpoint has passed, ctx ending mid-rename must not
-// abort the sequence: both files still commit and Sync reports its normal
-// outcome.
+// abort the sequence.
 func Test_sync_completes_normally_when_the_context_ends_during_the_commit_sequence(t *testing.T) {
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
@@ -757,9 +748,8 @@ func Test_sync_completes_normally_when_the_context_ends_during_the_commit_sequen
 	assert.FileExists(t, manifest.Snapshot.Manifest)
 }
 
-// Proves every Source call Sync routes through sourceRefusal (Open, Probe
-// and Backup) shares the same busy/encrypted classification, independent of
-// real lock or file-content timing.
+// Every Source call (Open, Probe, Backup) shares the same busy/encrypted
+// classification, independent of real lock or file-content timing.
 func Test_sync_refuses_when_the_source_reports_a_classified_error(t *testing.T) {
 	const busyMsg = "Quicken is busy writing ~/Documents/Home.quicken; run quarry sync again in a moment"
 	const notADBMsg = "~/Documents/Home.quicken is encrypted, so Quicken does not have it open; open it in Quicken, then run quarry sync again"

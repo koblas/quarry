@@ -22,9 +22,9 @@ func causeText(err error) string {
 	}
 }
 
-// unwritableDirRefusal is R13: Destination.Prepare failed, always
-// classified as R13 whatever the OS-level cause — its row names the
-// directory, not a permission split.
+// unwritableDirRefusal reports that Destination.Prepare failed: it names
+// the snapshots directory itself, whatever the OS-level cause, rather than
+// splitting on permission versus any other reason.
 func unwritableDirRefusal(home, snapshotDir string, err error) error {
 	return RefusalError{msg: fmt.Sprintf(
 		"cannot write to %s: %s; make the directory writable by your user",
@@ -32,7 +32,8 @@ func unwritableDirRefusal(home, snapshotDir string, err error) error {
 }
 
 // writeFaultRefusal classifies a post-Prepare Destination write failure: a
-// permission error is still R13; anything else is R14.
+// permission error reads as an unwritable directory; anything else reads
+// as a write fault (e.g. disk full).
 func writeFaultRefusal(home, snapshotDir string, err error) error {
 	if errors.Is(err, fs.ErrPermission) {
 		return unwritableDirRefusal(home, snapshotDir, err)

@@ -428,9 +428,8 @@ func Test_backup_stops_when_the_context_is_cancelled_while_waiting_on_a_busy_sou
 	}
 }
 
-// Proves runBackup's retry loop converges on success under real lock
-// contention, not just the two boundary outcomes (deadline exceeded, ctx
-// cancelled) the tests above cover.
+// Proves the retry loop converges on success under real lock contention,
+// not just the two boundary outcomes the tests above cover.
 func Test_backup_succeeds_once_the_source_lock_releases_within_the_busy_budget(t *testing.T) {
 	path := newTestDatabase(t)
 	src, err := sqlite.OpenReadOnlyBusy(t.Context(), path, 0)
