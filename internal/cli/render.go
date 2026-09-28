@@ -103,15 +103,29 @@ func writeDiffRow(b *strings.Builder, sign, label, value string) {
 	fmt.Fprintf(b, "  %s %-8s%s\n", sign, label, value)
 }
 
-// renderStore renders result's Store, Rows, Balances and Splits lines,
-// appended after renderSuccess's block once a build was reached.
+// renderStore renders result's Store, Rows, Balances, Splits and Transfers
+// lines, appended after renderSuccess's block once a build was reached.
 func renderStore(result store.Result, home string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", homepath.Abbreviate(home, result.Path))
-	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(result.Counts))
+	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(result.Counts, result.NotImported))
 	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(result.Validation.Balances))
 	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits))
+	fmt.Fprintf(&b, "%-10s%s\n", "Transfers", transfersPhrase(result.Validation.Transfers))
 	return b.String()
+}
+
+// transfersPhrase renders tc as "none", "N paired", or "N paired, M
+// one-sided" once any leg is one-sided.
+func transfersPhrase(tc store.TransferCheck) string {
+	switch {
+	case tc.Paired == 0 && len(tc.OneSided) == 0:
+		return "none"
+	case len(tc.OneSided) == 0:
+		return formatThousands(tc.Paired) + " paired"
+	default:
+		return fmt.Sprintf("%s paired, %s one-sided", formatThousands(tc.Paired), formatThousands(len(tc.OneSided)))
+	}
 }
 
 // balancesCheckedPhrase renders bc's checked clause: no accounts checked,
@@ -185,9 +199,9 @@ func splitsPhrase(sc store.SplitCheck) string {
 }
 
 // rowsPhrase renders c as one comma-separated clause, each noun inflected
-// on its own count.
-func rowsPhrase(c store.Counts) string {
-	return strings.Join([]string{
+// on its own count, then n's investment-transaction clause when nonzero.
+func rowsPhrase(c store.Counts, n store.NotImported) string {
+	phrase := strings.Join([]string{
 		nounPhrase(c.Transactions, "transaction", "transactions"),
 		nounPhrase(c.Splits, "split", "splits"),
 		nounPhrase(c.Transfers, "transfer", "transfers"),
@@ -195,6 +209,10 @@ func rowsPhrase(c store.Counts) string {
 		nounPhrase(c.Categories, "category", "categories"),
 		nounPhrase(c.Tags, "tag", "tags"),
 	}, ", ")
+	if n.InvestmentTransactions > 0 {
+		phrase += "; " + nounPhrase(n.InvestmentTransactions, "investment transaction", "investment transactions") + " not imported"
+	}
+	return phrase
 }
 
 // formatMoney renders cents as a thousands-grouped, 2-decimal amount with a
@@ -291,12 +309,13 @@ func widestLen(ss []string) int {
 	return n
 }
 
-// renderStoreFailure renders the V1 block: Store, Rows, and each of
-// Balances/Splits in its DIFFER form only when that check itself failed.
+// renderStoreFailure renders the V1 block: Store, Rows, each of
+// Balances/Splits in its DIFFER form only when that check itself failed,
+// and Transfers, which never fails.
 func renderStoreFailure(result store.Result, storeExisted bool, home string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", storeFailureLine(result.Path, storeExisted, home))
-	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(result.Counts))
+	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(result.Counts, result.NotImported))
 
 	if mismatched := result.Validation.Balances.Mismatched; len(mismatched) > 0 {
 		fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesDifferPhrase(result.Validation.Balances))
@@ -315,6 +334,7 @@ func renderStoreFailure(result store.Result, storeExisted bool, home string) str
 	} else {
 		fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits))
 	}
+	fmt.Fprintf(&b, "%-10s%s\n", "Transfers", transfersPhrase(result.Validation.Transfers))
 	return b.String()
 }
 

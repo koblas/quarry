@@ -79,7 +79,8 @@ func (srv *Server) Import(ctx context.Context, snapshotPath string) (store.Resul
 	if err != nil {
 		return store.Result{}, err
 	}
-	existingTransactions, err := existingTransactionPKs(ctx, src)
+	investmentEnt, hasInvestment := entities[investmentEntity]
+	existingTransactions, investmentsNotImported, err := surveyTransactions(ctx, src, investmentEnt, hasInvestment, accountRefs)
 	if err != nil {
 		return store.Result{}, err
 	}
@@ -88,7 +89,7 @@ func (srv *Server) Import(ctx context.Context, snapshotPath string) (store.Resul
 	if err != nil {
 		return store.Result{}, err
 	}
-	splits, splitIDs, err := mapSplits(ctx, src, txnRefs, existingTransactions, existingCategories, off)
+	splits, links, splitIDs, err := mapSplits(ctx, src, txnRefs, existingTransactions, existingCategories, off)
 	if err != nil {
 		return store.Result{}, err
 	}
@@ -101,18 +102,22 @@ func (srv *Server) Import(ctx context.Context, snapshotPath string) (store.Resul
 		return store.Result{}, err
 	}
 
+	transfers, transferCheck := pairTransfers(splits, links, transactions, accounts)
+
 	rows := store.Rows{
 		Accounts: accounts, Categories: categories, Payees: payees, Tags: tags,
-		Transactions: transactions, Splits: splits, SplitTags: splitTags,
+		Transactions: transactions, Splits: splits, SplitTags: splitTags, Transfers: transfers,
 	}
 	counts := store.Counts{
 		Accounts: len(accounts), Categories: len(categories), Payees: len(payees), Tags: len(tags),
-		Transactions: len(transactions), Splits: len(splits), SplitTags: len(splitTags),
+		Transactions: len(transactions), Splits: len(splits), SplitTags: len(splitTags), Transfers: len(transfers),
 	}
+	notImported := store.NotImported{InvestmentTransactions: investmentsNotImported}
 
 	validation := validate(rows, statements)
+	validation.Transfers = transferCheck
 	if validation.Failed() {
-		return store.Result{Built: false, Counts: counts, Validation: validation}, store.ErrValidationFailed
+		return store.Result{Built: false, Counts: counts, Validation: validation, NotImported: notImported}, store.ErrValidationFailed
 	}
 
 	path, err := srv.store.Replace(ctx, rows)
@@ -120,5 +125,5 @@ func (srv *Server) Import(ctx context.Context, snapshotPath string) (store.Resul
 		return store.Result{}, fmt.Errorf("replace store: %w", err)
 	}
 
-	return store.Result{Path: path, Built: true, Counts: counts, Validation: validation}, nil
+	return store.Result{Path: path, Built: true, Counts: counts, Validation: validation, NotImported: notImported}, nil
 }

@@ -193,9 +193,10 @@ func Test_renderSuccess_reports_the_exact_match_schema_line(t *testing.T) {
 
 func Test_rowsPhrase(t *testing.T) {
 	cases := []struct {
-		name   string
-		counts store.Counts
-		want   string
+		name        string
+		counts      store.Counts
+		notImported store.NotImported
+		want        string
 	}{
 		{
 			name:   "zero counts",
@@ -214,31 +215,72 @@ func Test_rowsPhrase(t *testing.T) {
 			},
 			want: "18,204 transactions, 21,977 splits, 3,112 transfers, 1,873 payees, 312 categories, 14 tags",
 		},
+		{
+			name:        "one investment transaction not imported, singular",
+			notImported: store.NotImported{InvestmentTransactions: 1},
+			want:        "0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 1 investment transaction not imported",
+		},
+		{
+			name:        "many investment transactions not imported, thousands-grouped",
+			notImported: store.NotImported{InvestmentTransactions: 1605},
+			want:        "0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 1,605 investment transactions not imported",
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, rowsPhrase(c.counts))
+			assert.Equal(t, c.want, rowsPhrase(c.counts, c.notImported))
 		})
 	}
 }
 
-func Test_renderStore_renders_the_store_rows_balances_and_splits_lines(t *testing.T) {
+func Test_transfersPhrase(t *testing.T) {
+	cases := []struct {
+		name string
+		tc   store.TransferCheck
+		want string
+	}{
+		{name: "no transfers", tc: store.TransferCheck{}, want: "none"},
+		{name: "one pair", tc: store.TransferCheck{Paired: 1}, want: "1 paired"},
+		{name: "many pairs, thousands-grouped", tc: store.TransferCheck{Paired: 3112}, want: "3,112 paired"},
+		{
+			name: "pairs and one-sided legs",
+			tc:   store.TransferCheck{Paired: 3112, OneSided: make([]store.OneSidedTransfer, 3)},
+			want: "3,112 paired, 3 one-sided",
+		},
+		{
+			name: "only one-sided legs",
+			tc:   store.TransferCheck{OneSided: make([]store.OneSidedTransfer, 2)},
+			want: "0 paired, 2 one-sided",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, transfersPhrase(c.tc))
+		})
+	}
+}
+
+func Test_renderStore_renders_the_store_rows_balances_splits_and_transfers_lines(t *testing.T) {
 	result := store.Result{
 		Path:   "/Users/dave/Library/Application Support/quarry/quarry.duckdb",
 		Counts: store.Counts{Transactions: 1},
 		Validation: store.Validation{
-			Balances: store.BalanceCheck{Checked: 1},
-			Splits:   store.SplitCheck{Checked: 1},
+			Balances:  store.BalanceCheck{Checked: 1},
+			Splits:    store.SplitCheck{Checked: 1},
+			Transfers: store.TransferCheck{Paired: 2},
 		},
+		NotImported: store.NotImported{InvestmentTransactions: 3},
 	}
 
 	got := renderStore(result, "/Users/dave")
 
 	assert.Equal(t, "Store     ~/Library/Application Support/quarry/quarry.duckdb\n"+
-		"Rows      1 transaction, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags\n"+
+		"Rows      1 transaction, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 3 investment transactions not imported\n"+
 		"Balances  1 account matches Quicken's last reconciled balance\n"+
-		"Splits    the 1 transaction equals the sum of its splits\n", got)
+		"Splits    the 1 transaction equals the sum of its splits\n"+
+		"Transfers 2 paired\n", got)
 }
 
 func Test_balancesPhrase(t *testing.T) {
@@ -414,17 +456,20 @@ func Test_renderStoreFailure(t *testing.T) {
 				Balances: store.BalanceCheck{Checked: 2, Mismatched: []store.BalanceMismatch{
 					{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC), Quarry: 100, Quicken: 200, Difference: -100},
 				}},
-				Splits: store.SplitCheck{Checked: 5},
+				Splits:    store.SplitCheck{Checked: 5},
+				Transfers: store.TransferCheck{Paired: 1, OneSided: make([]store.OneSidedTransfer, 1)},
 			},
+			NotImported: store.NotImported{InvestmentTransactions: 1},
 		}
 
 		got := renderStoreFailure(result, true, "/Users/dave")
 
 		assert.Equal(t, "Store     NOT REBUILT (~/Library/Application Support/quarry/quarry.duckdb unchanged)\n"+
-			"Rows      0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags\n"+
+			"Rows      0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 1 investment transaction not imported\n"+
 			"Balances  DIFFER for 1 of 2 accounts\n"+
 			"  ! Chequing (CAD)  2026-08-31  quarry 1.00  Quicken 2.00  difference -1.00\n"+
-			"Splits    all 5 transactions equal the sum of their splits\n", got)
+			"Splits    all 5 transactions equal the sum of their splits\n"+
+			"Transfers 1 paired, 1 one-sided\n", got)
 	})
 
 	t.Run("NOT BUILT for a first run", func(t *testing.T) {

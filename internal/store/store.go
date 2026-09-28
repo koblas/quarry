@@ -73,6 +73,18 @@ type Split struct {
 	TransferAccountID *string
 }
 
+// Transfer is one row of the transfers table: a pair of split legs between
+// the user's own accounts, or a one-sided leg when ToSplitID is nil.
+// FromSplitID is the leg with the lower numeric source id, not the leg the
+// money left from; CrossCurrency is set when the legs' accounts differ in
+// currency.
+type Transfer struct {
+	ID            string
+	FromSplitID   string
+	ToSplitID     *string
+	CrossCurrency bool
+}
+
 // SplitTag links one split to one tag (the split_tags table).
 type SplitTag struct {
 	SplitID string
@@ -88,10 +100,11 @@ type Rows struct {
 	Transactions []Transaction
 	Splits       []Split
 	SplitTags    []SplitTag
+	Transfers    []Transfer
 }
 
-// Counts is the row count of each table after a build. Transfers is always
-// 0 until the importer builds the transfers table.
+// Counts is the row count of each table after a build; Transfers counts
+// paired and one-sided rows alike.
 type Counts struct {
 	Accounts     int
 	Categories   int
@@ -104,13 +117,20 @@ type Counts struct {
 }
 
 // Result is what a store build returns. Built is false when a check failed:
-// Path is then empty (Replace never ran) but Counts and Validation still
-// describe the rows the build would have written.
+// Path is then empty (Replace never ran) but Counts, Validation and
+// NotImported still describe the rows the build would have written.
 type Result struct {
-	Path       string
-	Built      bool
-	Counts     Counts
-	Validation Validation
+	Path        string
+	Built       bool
+	Counts      Counts
+	Validation  Validation
+	NotImported NotImported
+}
+
+// NotImported counts source rows a build deliberately leaves out of the
+// store.
+type NotImported struct {
+	InvestmentTransactions int
 }
 
 // ErrValidationFailed is Import's error when a build's checks find a mismatch.
@@ -119,11 +139,13 @@ var ErrValidationFailed = errors.New("validation failed")
 // Validation is the outcome of every check a build runs on its mapped rows,
 // before the store is swapped in.
 type Validation struct {
-	Balances BalanceCheck
-	Splits   SplitCheck
+	Balances  BalanceCheck
+	Splits    SplitCheck
+	Transfers TransferCheck
 }
 
-// Failed reports whether any check found a mismatch.
+// Failed reports whether the balance or split-sum check found a mismatch.
+// Transfers never fail a build: a one-sided leg is stored, not refused.
 func (v Validation) Failed() bool {
 	return len(v.Balances.Mismatched) > 0 || len(v.Splits.Mismatched) > 0
 }
@@ -165,4 +187,22 @@ type SplitMismatch struct {
 	SourceID                     int64
 	Date                         time.Time
 	Amount, SplitsTotal          int64
+}
+
+// TransferCheck is the transfer-pairing result. CrossCurrency counts pairs
+// whose legs' accounts differ in currency; OneSided lists every stored leg
+// with no counterpart.
+type TransferCheck struct {
+	Paired, CrossCurrency int
+	OneSided              []OneSidedTransfer
+}
+
+// OneSidedTransfer is one transfer leg with no counterpart. OtherAccount is
+// the account name the leg records, nil for a numeric link; OtherAccountID
+// is the imported account that name matches, nil when none does.
+type OneSidedTransfer struct {
+	ID             string
+	SourceID       int64
+	OtherAccount   *string
+	OtherAccountID *string
 }

@@ -54,6 +54,12 @@ CREATE TABLE splits (
 	memo VARCHAR,
 	transfer_account_id VARCHAR
 );
+CREATE TABLE transfers (
+	id VARCHAR PRIMARY KEY,
+	from_split_id VARCHAR NOT NULL,
+	to_split_id VARCHAR,
+	cross_currency BOOLEAN NOT NULL
+);
 CREATE TABLE split_tags (
 	split_id VARCHAR NOT NULL,
 	tag_id VARCHAR NOT NULL,

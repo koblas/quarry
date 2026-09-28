@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01c
-status: open
+status: done
 ---
 
 # SCENARIO-01c: sync pairs transfers between the user's accounts
@@ -23,19 +23,19 @@ User-visible contract: `quarry sync` stdout adds a `Transfers` line after `Split
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_transfers_test.go` (new).
+- [x] Step 1: `cmd/quarry/run_transfers_test.go` (new).
   - `Test_run_pairs_transfers_between_the_users_accounts`: chequing↔savings and chequing↔credit-card pairs, where each leg's `EntryRow.Transfer` is the counterpart's `QuickenID` as text. Assert the full stdout block (Rows `2 transfers`, `Transfers  2 paired`). Assert both `transfers` rows via `stringMap` (`run_import_test.go:25`), plus each leg's `splits.transfer_account_id`. Exit 0.
   - `Test_run_reports_no_transfers_for_a_file_with_no_transactions`: accounts, 1 payee, 2 categories, 1 tag and 0 transactions. Assert Rows `0 transactions, 0 splits, 0 transfers, 1 payee, 2 categories, 1 tag`, Splits `no transactions to check`, Transfers `none`.
   - `Test_run_counts_investment_transactions_without_importing_them`: a brokerage account with 2 `EntInvestmentTransaction` rows (with entries) and a chequing→brokerage contribution pair. Assert only the contribution's two transactions are in `transactions`, and that Rows ends `; 2 investment transactions not imported`.
   - All three fail at their stdout assertion.
-- [ ] Step 2: `internal/importer/transfers_test.go` (new) `Test_import_pairs_cross_currency_and_brokerage_transfers`. Through `Server.Import` with `fakeStore`, cover a CAD→USD pair and a chequing→brokerage pair. Assert both are paired, the cross-currency row keeps both native split amounts, `Validation.Transfers.CrossCurrency == 1`, and the brokerage leg's transaction is in the brokerage account.
+- [x] Step 2: `internal/importer/transfers_test.go` (new) `Test_import_pairs_cross_currency_and_brokerage_transfers`. Through `Server.Import` with `fakeStore`, cover a CAD→USD pair and a chequing→brokerage pair. Assert both are paired, the cross-currency row keeps both native split amounts, `Validation.Transfers.CrossCurrency == 1`, and the brokerage leg's transaction is in the brokerage account.
   - Stubs so it compiles: in `internal/store/store.go:83-126`, add `Transfer{ID, FromSplitID, ToSplitID *string, CrossCurrency}`, `Rows.Transfers`, `TransferCheck{Paired, CrossCurrency int; OneSided []OneSidedTransfer}`, `OneSidedTransfer{ID, SourceID, OtherAccount, OtherAccountID *string}`, `Validation.Transfers` and `Result.NotImported{InvestmentTransactions int}`.
 
 ### Build
-- [ ] Step 3: `internal/store/duckstore/schema.go:6-62` `transfers` DDL (id PK, from_split_id NOT NULL, to_split_id NULL, cross_currency NOT NULL); `duckstore.go:81-116` `build` appends it via a new `transferRows`.
+- [x] Step 3: `internal/store/duckstore/schema.go:6-62` `transfers` DDL (id PK, from_split_id NOT NULL, to_split_id NULL, cross_currency NOT NULL); `duckstore.go:81-116` `build` appends it via a new `transferRows`.
   - `duckstore_test.go:22-45` `minimalRows` gains one paired and one one-sided row (NULL `to_split_id`). Assert both in the round-trip at `:48-70`.
   - Add a `transfers` case to the append-fault table at `:126-150`.
-- [ ] Step 4: `internal/importer/splits.go:11-16,26-92`: `entriesQuery` also reads `ZTRANSFER` and `ZQUICKENID`, and `mapSplits` returns each imported split's link. New `internal/importer/transfers.go` `pairTransfers`:
+- [x] Step 4: `internal/importer/splits.go:11-16,26-92`: `entriesQuery` also reads `ZTRANSFER` and `ZQUICKENID`, and `mapSplits` returns each imported split's link. New `internal/importer/transfers.go` `pairTransfers`:
   - A numeric link means ParseInt succeeds; it is resolved against imported splits' quicken ids. Anything else is a name-form leg.
   - Each imported split lands in at most one row. Legs are ordered by numeric source id; `from` = the lower leg.
   - `cross_currency` comes from the two accounts' currencies.
@@ -45,13 +45,13 @@ User-visible contract: `quarry sync` stdout adds a `Transfers` line after `Split
     - `Test_import_stores_each_split_in_at_most_one_transfer`: asymmetric A→B/B→C, a self-link, and legs with source ids 9 and 10.
     - `Test_import_keeps_a_name_form_leg_as_a_one_sided_transfer`: name matches → lowest-source-id account; no match → nil; a numeric link to a missing, deleted or investment entry → one-sided.
     - `Test_import_builds_the_store_with_a_one_sided_transfer`: `Built` is true and `Replace` is called.
-- [ ] Step 5: `internal/importer/entities.go:253-291`: resolve `InvestmentTransaction` as an **optional** entity (absent → count 0; do not add it to `requiredEntities`).
+- [x] Step 5: `internal/importer/entities.go:253-291`: resolve `InvestmentTransaction` as an **optional** entity (absent → count 0; do not add it to `requiredEntities`).
   - Widen `transactions.go:50-68` `existingTransactionPKs` (same scan, no new query) to count investment rows that are non-deleted and whose account was imported. Set `Result.NotImported` on both `Import` returns.
   - New `internal/importer/not_imported_test.go`:
     - `Test_import_counts_investment_transactions_not_imported`: excludes a deleted row and a row in a deleted account; investment entries yield no splits.
     - `Test_import_counts_no_investment_transactions_without_the_entity` (`WithoutEntity`).
   - If the query text changes, update the match strings in both fault tables (`import_faults_test.go:63-72,135-144`).
-- [ ] Step 6: `internal/cli/render.go`.
+- [x] Step 6: `internal/cli/render.go`.
   - New `transfersPhrase(store.TransferCheck)`.
   - `renderStore` (`:108-115`) and `renderStoreFailure` (`:296-321`) each add a `Transfers` line; V1 always uses the success phrase.
   - `rowsPhrase` (`:189-199`) takes the not-imported count (update both callers) and appends the clause.
@@ -61,13 +61,13 @@ User-visible contract: `quarry sync` stdout adds a `Transfers` line after `Split
     - `Test_renderStore…` (`:226`) and `Test_renderStoreFailure` (`:409`) gain the Transfers line.
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports.
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports.
   - Append the Transfers line to every exact-stdout assertion: `run_validation_test.go:94,166,282,346`, `run_success_test.go:64`, `run_schema_test.go:114`, `run_import_test.go:100` (and its `:40` comment), `render_internal_test.go:241,427`.
   - Rewrite the stale `store.Counts` doc (`store.go:93-94`).
   - Add doc comments on every new symbol.
 
 ### Verify
-- [ ] Step 8: full verification + `.claude/scripts/spec-check.py phase1-import-store` → tick 01c, 07, 12 and 21, each with its acceptance test.
+- [x] Step 8: full verification + `.claude/scripts/spec-check.py phase1-import-store` → tick 01c, 07, 12 and 21, each with its acceptance test.
 
 ## Handoff
 

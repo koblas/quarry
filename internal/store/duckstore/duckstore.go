@@ -112,7 +112,7 @@ func build(ctx context.Context, db *duckdb.DB, rows store.Rows) error {
 	if err := db.AppendRows(ctx, "split_tags", splitTagRows(rows.SplitTags)); err != nil {
 		return err
 	}
-	return nil
+	return db.AppendRows(ctx, "transfers", transferRows(rows.Transfers))
 }
 
 func nullableStr(s *string) any {
@@ -187,6 +187,14 @@ func splitTagRows(splitTags []store.SplitTag) [][]any {
 	out := make([][]any, len(splitTags))
 	for i, st := range splitTags {
 		out[i] = []any{st.SplitID, st.TagID}
+	}
+	return out
+}
+
+func transferRows(transfers []store.Transfer) [][]any {
+	out := make([][]any, len(transfers))
+	for i, tr := range transfers {
+		out[i] = []any{tr.ID, tr.FromSplitID, nullableStr(tr.ToSplitID), tr.CrossCurrency}
 	}
 	return out
 }

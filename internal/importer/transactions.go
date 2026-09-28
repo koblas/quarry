@@ -47,24 +47,37 @@ WHERE t.Z_ENT = ? AND COALESCE(t.ZDELETIONCOUNT, 0) = 0
 ORDER BY COALESCE(t.ZPOSTEDDATE, t.ZENTEREDDATE), t.ZACCOUNT, t.Z_PK
 `
 
-// existingTransactionPKs reads every ZTRANSACTION row's Z_PK, of any
-// entity and deletion state, so a split's dangling parent reference (no
-// row at all) can be told apart from one pointing at a row this importer
-// excludes for its own reason (deleted, Smart/Investment, or otherwise).
-func existingTransactionPKs(ctx context.Context, src Source) (map[int64]bool, error) {
+const transactionSurveyQuery = `SELECT Z_PK, Z_ENT, ZACCOUNT, COALESCE(ZDELETIONCOUNT, 0) FROM ZTRANSACTION`
+
+// surveyTransactions reads every ZTRANSACTION row's Z_PK, of any entity
+// and deletion state, so a split's dangling parent reference (no row at
+// all) can be told apart from one pointing at a row this importer excludes
+// for its own reason. It also counts the non-deleted investment
+// transactions in imported accounts, which quarry does not import;
+// hasInvestment is false when the snapshot has no investment entity.
+func surveyTransactions(
+	ctx context.Context, src Source, investmentEntity int64, hasInvestment bool, accounts map[int64]accountRef,
+) (map[int64]bool, int, error) {
 	existing := make(map[int64]bool)
-	err := src.QueryRows(ctx, "SELECT Z_PK FROM ZTRANSACTION", nil, func(scan func(dest ...any) error) error {
+	var investments int
+	err := src.QueryRows(ctx, transactionSurveyQuery, nil, func(scan func(dest ...any) error) error {
 		var pk int64
-		if err := scan(&pk); err != nil {
+		var ent, account sql.NullInt64
+		var deletionCount int64
+		if err := scan(&pk, &ent, &account, &deletionCount); err != nil {
 			return err
 		}
 		existing[pk] = true
+		_, accountImported := accounts[account.Int64]
+		if hasInvestment && ent.Int64 == investmentEntity && deletionCount == 0 && account.Valid && accountImported {
+			investments++
+		}
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("read transaction ids: %w", err)
+		return nil, 0, fmt.Errorf("read transaction ids: %w", err)
 	}
-	return existing, nil
+	return existing, investments, nil
 }
 
 // mapTransactions reads every non-deleted transactionEntity row of

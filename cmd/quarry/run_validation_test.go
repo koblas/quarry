@@ -81,7 +81,7 @@ func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *tes
 	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
 
 	want := fmt.Sprintf(
-		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 5 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
+		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 5 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
 		"Snapshot", abbreviated(t, snapshotPath, home),
 		"Manifest", abbreviated(t, manifestPath, home),
 		"Source", abbreviated(t, bundle.Dir, home),
@@ -92,6 +92,7 @@ func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *tes
 		"Rows", "4 transactions, 4 splits, 0 transfers, 0 payees, 0 categories, 0 tags",
 		"Balances", "3 accounts match Quicken's last reconciled balance; 1 never reconciled and 1 investment account not checked",
 		"Splits", "all 4 transactions equal the sum of their splits",
+		"Transfers", "none",
 	)
 	require.Equal(t, want, stdout.String())
 
@@ -152,7 +153,7 @@ func Test_run_refuses_a_balance_mismatch_and_leaves_no_store(t *testing.T) {
 	row := v1MismatchRow(len(label)+2, len("100.00"), len("100.01"), len("-0.01"), label, "2026-03-01", "100.00", "100.01", "-0.01")
 	wantStdout := fmt.Sprintf(
 		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 2 accounts\n%-10s%s\n%-10s%s\n"+
-			"%-10s%s\n%-10s%s\n%-10s%s\n%s\n%-10s%s\n",
+			"%-10s%s\n%-10s%s\n%-10s%s\n%s\n%-10s%s\n%-10s%s\n",
 		"Snapshot", abbreviated(t, snapshotPath, home),
 		"Manifest", abbreviated(t, manifestPath, home),
 		"Source", abbreviated(t, bundle.Dir, home),
@@ -164,6 +165,7 @@ func Test_run_refuses_a_balance_mismatch_and_leaves_no_store(t *testing.T) {
 		"Balances", "DIFFER for 1 of 2 accounts",
 		row,
 		"Splits", "all 2 transactions equal the sum of their splits",
+		"Transfers", "none",
 	)
 	assert.Equal(t, wantStdout, stdout.String())
 
@@ -263,7 +265,7 @@ func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *t
 	// Sorted by account name (byte order): Savings, US Chequing, Visa Infinite.
 	wantStdout := fmt.Sprintf(
 		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 3 accounts\n%-10s%s\n%-10s%s\n"+
-			"%-10s%s\n%-10s%s\n%-10s%s\n%s\n%s\n%s\n%-10s%s\n",
+			"%-10s%s\n%-10s%s\n%-10s%s\n%s\n%s\n%s\n%-10s%s\n%-10s%s\n",
 		"Snapshot", abbreviated(t, snapshotPath, home),
 		"Manifest", abbreviated(t, manifestPath, home),
 		"Source", abbreviated(t, bundle.Dir, home),
@@ -280,6 +282,7 @@ func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *t
 		v1MismatchRow(labelWidth, quarryWidth, quickenWidth, diffWidth,
 			"Visa Infinite (CAD, closed)", "2026-07-15", "-1,204.17", "-1,184.17", "-20.00"),
 		"Splits", "all 3 transactions equal the sum of their splits",
+		"Transfers", "none",
 	)
 	assert.Equal(t, wantStdout, stdout.String())
 
@@ -333,7 +336,7 @@ func Test_run_lists_mismatched_splits_in_the_v1_stdout_block(t *testing.T) {
 
 	wantStdout := fmt.Sprintf(
 		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 1 account\n%-10s%s\n%-10s%s\n"+
-			"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%s\n",
+			"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%s\n%-10s%s\n",
 		"Snapshot", abbreviated(t, snapshotPath, home),
 		"Manifest", abbreviated(t, manifestPath, home),
 		"Source", abbreviated(t, bundle.Dir, home),
@@ -345,6 +348,7 @@ func Test_run_lists_mismatched_splits_in_the_v1_stdout_block(t *testing.T) {
 		"Balances", "1 account matches Quicken's last reconciled balance",
 		"Splits", "DIFFER for 1 of 2 transactions",
 		"  ! 2024-03-02  Visa Infinite (CAD)  (no payee)  amount -212.40  splits -202.40",
+		"Transfers", "none",
 	)
 	assert.Equal(t, wantStdout, stdout.String())
 	assert.Contains(t, stderr.String(), "1 transaction does not equal the sum of its splits")

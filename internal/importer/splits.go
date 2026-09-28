@@ -9,7 +9,8 @@ import (
 )
 
 const entriesQuery = `
-SELECT e.Z_PK, e.ZPARENT, typeof(e.ZAMOUNT), CAST(e.ZAMOUNT AS TEXT), e.ZCATEGORYTAG, e.ZNOTE
+SELECT e.Z_PK, e.ZPARENT, typeof(e.ZAMOUNT), CAST(e.ZAMOUNT AS TEXT), e.ZCATEGORYTAG, e.ZNOTE,
+       e.ZQUICKENID, e.ZTRANSFER
 FROM ZCASHFLOWTRANSACTIONENTRY e
 WHERE COALESCE(e.ZDELETIONCOUNT, 0) = 0
 ORDER BY e.ZPARENT, e.Z_PK
@@ -22,11 +23,12 @@ ORDER BY e.ZPARENT, e.Z_PK
 // 6), is added to off and excluded. An entry whose parent exists but was
 // itself excluded (deleted, Smart/Investment, or its own offender) is
 // silently skipped. A category reference to a deleted or missing category
-// stores NULL.
+// stores NULL. The returned links align index-for-index with the splits.
 func mapSplits(
 	ctx context.Context, src Source, txns map[int64]txnRef, existingTransactions, existingCategories map[int64]bool, off *offenders,
-) ([]store.Split, map[int64]string, error) {
+) ([]store.Split, []transferLink, map[int64]string, error) {
 	var rows []store.Split
+	var links []transferLink
 	ids := make(map[int64]string)
 
 	err := src.QueryRows(ctx, entriesQuery, nil, func(scan func(dest ...any) error) error {
@@ -36,7 +38,9 @@ func mapSplits(
 		var amtText sql.NullString
 		var category sql.NullInt64
 		var note sql.NullString
-		if err := scan(&pk, &parent, &amtType, &amtText, &category, &note); err != nil {
+		var quickenID sql.NullInt64
+		var transfer sql.NullString
+		if err := scan(&pk, &parent, &amtType, &amtText, &category, &note, &quickenID, &transfer); err != nil {
 			return err
 		}
 
@@ -82,13 +86,14 @@ func mapSplits(
 			split.Memo = &memo
 		}
 		rows = append(rows, split)
+		links = append(links, transferLink{quickenID: quickenID, link: transfer.String})
 		ids[pk] = id
 		return nil
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("read splits: %w", err)
+		return nil, nil, nil, fmt.Errorf("read splits: %w", err)
 	}
-	return rows, ids, nil
+	return rows, links, ids, nil
 }
 
 const splitTagsQuery = `SELECT Z_15CASHFLOWTRANSACTIONENTRIES, Z_76USERTAGS FROM Z_15USERTAGS`

@@ -3,6 +3,7 @@ package importer
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -11,17 +12,22 @@ import (
 // before reading any row, rather than hard-coding their Z_ENT numbers.
 var requiredEntities = []string{"CashFlowTransaction", "CategoryTag", "UserTag"}
 
+// investmentEntity is resolved when the snapshot has it; a snapshot without
+// it has no investment transactions to count.
+const investmentEntity = "InvestmentTransaction"
+
 // resolveEntities reads Z_PRIMARYKEY and returns each of requiredEntities'
-// Z_ENT number by name. It returns an *UnmappableError (S4 reason 7) naming
-// every entity the snapshot's Z_PRIMARYKEY lacks, sorted and joined with
-// "or".
+// Z_ENT number by name, plus investmentEntity's when present. It returns an
+// *UnmappableError (S4 reason 7) naming every required entity the
+// snapshot's Z_PRIMARYKEY lacks, sorted and joined with "or".
 func resolveEntities(ctx context.Context, src Source) (map[string]int64, error) {
-	found := make(map[string]int64, len(requiredEntities))
-	args := make([]any, len(requiredEntities))
-	for i, name := range requiredEntities {
+	names := append(slices.Clone(requiredEntities), investmentEntity)
+	found := make(map[string]int64, len(names))
+	args := make([]any, len(names))
+	for i, name := range names {
 		args[i] = name
 	}
-	query := "SELECT Z_ENT, Z_NAME FROM Z_PRIMARYKEY WHERE Z_NAME IN (?, ?, ?)"
+	query := "SELECT Z_ENT, Z_NAME FROM Z_PRIMARYKEY WHERE Z_NAME IN (?, ?, ?, ?)"
 	err := src.QueryRows(ctx, query, args, func(scan func(dest ...any) error) error {
 		var ent int64
 		var name string
