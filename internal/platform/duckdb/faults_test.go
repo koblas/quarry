@@ -44,6 +44,18 @@ func Test_IsDiskFull_and_IsPermission_classify_error_shapes(t *testing.T) {
 			wantDiskFull: true,
 		},
 		{
+			name: "driver IO error, disk quota exceeded message",
+			err: &duckdbdriver.Error{Type: duckdbdriver.ErrorTypeIO,
+				Msg: `IO Error: Cannot write file "x.duckdb": ` + syscall.EDQUOT.Error()},
+			wantDiskFull: true,
+		},
+		{
+			name: "driver IO error, operation not permitted message",
+			err: &duckdbdriver.Error{Type: duckdbdriver.ErrorTypeIO,
+				Msg: `IO Error: Cannot open file "x.duckdb": ` + syscall.EPERM.Error()},
+			wantPerm: true,
+		},
+		{
 			name: "driver IO error, unrelated message",
 			err:  &duckdbdriver.Error{Type: duckdbdriver.ErrorTypeIO, Msg: "IO Error: file corrupt"},
 		},

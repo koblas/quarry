@@ -28,3 +28,17 @@ func Test_no_wal_check_passes_when_no_wal_file_exists(t *testing.T) {
 
 	assert.NoError(t, err)
 }
+
+// An unreadable parent directory makes os.Stat fail with EACCES rather than
+// ErrNotExist — that error must pass through, not be swallowed as "no WAL".
+func Test_no_wal_check_fails_when_the_stat_itself_errors(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	path := filepath.Join(dir, "data.duckdb")
+
+	err := checkNoWAL(path)
+
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrWALRemains)
+}

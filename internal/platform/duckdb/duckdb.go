@@ -17,9 +17,7 @@ import (
 // ErrExists is returned by Create when path already exists.
 var ErrExists = errors.New("duckdb: file already exists")
 
-// ErrWALRemains is returned by CheckpointClose when a .wal file is still
-// present beside the database after CHECKPOINT — the condition a caller
-// must never rename over.
+// ErrWALRemains is returned by CheckpointClose when a .wal file is still present after CHECKPOINT.
 var ErrWALRemains = errors.New("duckdb: wal file remains after checkpoint")
 
 // DB is a single DuckDB connection opened by this package, pinned to one
@@ -43,7 +41,9 @@ func Create(ctx context.Context, path string) (*DB, error) {
 
 	conn, err := sql.Open("duckdb", path)
 	if err != nil {
-		// unreachable: sql.Open only validates the driver name, which the duckdb import always registers.
+		// The duckdb driver opens (and for a new path, creates) the file
+		// inside sql.Open itself, so a permission fault on path or its
+		// parent directory surfaces here, not at PingContext below.
 		return nil, fmt.Errorf("create %s: %w", path, err)
 	}
 	conn.SetMaxOpenConns(1)
@@ -54,6 +54,9 @@ func Create(ctx context.Context, path string) (*DB, error) {
 	}
 
 	if err := os.Chmod(path, 0o600); err != nil {
+		// unreachable: chmod on the path PingContext just validated fails only for an
+		// ownership or permission-flag change this single-user test process cannot
+		// construct without a race, and not portably across CI.
 		_ = conn.Close()
 		return nil, fmt.Errorf("create %s: %w", path, err)
 	}
@@ -66,7 +69,9 @@ func Create(ctx context.Context, path string) (*DB, error) {
 func OpenReadOnly(ctx context.Context, path string) (*DB, error) {
 	conn, err := sql.Open("duckdb", path+"?access_mode=READ_ONLY")
 	if err != nil {
-		// unreachable: sql.Open only validates the driver name, which the duckdb import always registers.
+		// The duckdb driver opens the file inside sql.Open itself, so a
+		// missing path or permission fault surfaces here, not at
+		// PingContext below.
 		return nil, fmt.Errorf("open %s read-only: %w", path, err)
 	}
 	conn.SetMaxOpenConns(1)
@@ -83,12 +88,10 @@ func (d *DB) Exec(ctx context.Context, query string, args ...any) (sql.Result, e
 	return d.conn.ExecContext(ctx, query, args...)
 }
 
-// AppendRows bulk-inserts rows into table via the driver's Appender. Each
-// row must supply a value per column, in table's column order; use Decimal
-// for a DECIMAL column. ctx is checked before each row — the Appender
-// itself does not observe it — and the Appender's own Close error (which is
-// where a constraint violation on buffered rows surfaces) is always
-// returned, never dropped.
+// AppendRows bulk-inserts rows into table via the driver's Appender, one
+// value per column in table's column order (use Decimal for a DECIMAL
+// column). ctx is checked before each row, since the Appender itself does
+// not observe it; a buffered-row constraint violation surfaces at Close.
 func (d *DB) AppendRows(ctx context.Context, table string, rows [][]any) error {
 	conn, err := d.conn.Conn(ctx)
 	if err != nil {
@@ -159,9 +162,14 @@ func (d *DB) CheckpointClose(ctx context.Context) error {
 		return fmt.Errorf("checkpoint %s: %w", d.path, err)
 	}
 	if err := d.conn.Close(); err != nil {
+		// unreachable: database/sql.DB.Close is idempotent at the database/sql layer
+		// (a second call returns nil without reaching the driver), and the one pooled
+		// connection CHECKPOINT just used successfully cannot already be closed.
 		return fmt.Errorf("checkpoint %s: %w", d.path, err)
 	}
 	if err := checkNoWAL(d.path); err != nil {
+		// unreachable: CHECKPOINT removes the .wal file itself before Close can
+		// observe one (see checkpoint_internal_test.go for checkNoWAL's own coverage).
 		return fmt.Errorf("checkpoint %s: %w", d.path, err)
 	}
 	return nil
@@ -210,9 +218,8 @@ func IsPermission(err error) bool {
 		isDriverIOError(err, syscall.EACCES) || isDriverIOError(err, syscall.EPERM)
 }
 
-// isDriverIOError reports whether err is a *duckdbdriver.Error of
-// ErrorTypeIO whose message contains errno's OS-supplied text (DuckDB
-// reports IO faults via strerror, with no errno of its own to compare).
+// isDriverIOError reports whether err is a *duckdbdriver.Error of ErrorTypeIO
+// whose message contains errno's OS-supplied text (DuckDB has no errno of its own).
 func isDriverIOError(err error, errno syscall.Errno) bool {
 	var derr *duckdbdriver.Error
 	if !errors.As(err, &derr) || derr.Type != duckdbdriver.ErrorTypeIO {

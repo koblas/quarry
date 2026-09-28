@@ -10,10 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Proves the whole bulk-write path end to end: AppendRows writes negative,
-// zero and boundary DECIMAL(18,2) values; a .wal file exists before
-// CheckpointClose and is gone after; and a fresh read-only connection reads
-// every value back byte-identical via CAST(... AS VARCHAR), never float64.
+// End to end: AppendRows writes negative/zero/boundary DECIMAL(18,2) values,
+// CheckpointClose removes the .wal, and a fresh read-only connection reads every value back exactly.
 func Test_bulk_inserted_decimals_read_back_exactly_after_checkpoint_close(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data.duckdb")
 	db, err := duckdb.Create(t.Context(), path)
