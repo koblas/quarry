@@ -291,11 +291,8 @@ func widestLen(ss []string) int {
 	return n
 }
 
-// renderStoreFailure renders result's Store, Rows, Balances and Splits
-// lines for a build the balance or split-sum gate failed: the Store line
-// names storeExisted's NOT REBUILT/NOT BUILT form, and each of
-// Balances/Splits switches to its DIFFER form and "!" rows only when that
-// check itself found a mismatch.
+// renderStoreFailure renders the V1 block: Store, Rows, and each of
+// Balances/Splits in its DIFFER form only when that check itself failed.
 func renderStoreFailure(result store.Result, storeExisted bool, home string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", storeFailureLine(result.Path, storeExisted, home))

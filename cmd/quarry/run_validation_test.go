@@ -108,9 +108,7 @@ func maxLen(ss ...string) int {
 	return n
 }
 
-// v1MismatchRow renders one "!" row the same way the V1 block does: label
-// left-justified to the block's widest label + 2, date fixed, each amount
-// right-justified to its own column's widest value.
+// v1MismatchRow renders one "!" row the same way the V1 block does.
 func v1MismatchRow(labelWidth, quarryWidth, quickenWidth, diffWidth int, label, date, quarry, quicken, diff string) string {
 	return fmt.Sprintf("  ! %-*s%s  quarry %*s  Quicken %*s  difference %*s",
 		labelWidth, label, date, quarryWidth, quarry, quickenWidth, quicken, diffWidth, diff)
@@ -180,9 +178,8 @@ func Test_run_refuses_a_balance_mismatch_and_leaves_no_store(t *testing.T) {
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
-// Once the build was reached (even though it failed), a stdout write
-// failure points at --from --json (O1b), not the O1 form naming the kept
-// snapshot alone: outcome.Store is non-nil once the balance gate ran.
+// Once the build was reached, even though it failed, a stdout write
+// failure points at --from --json (O1b), not the O1 form.
 func Test_run_reports_the_o1b_refusal_when_stdout_fails_during_a_v1_render(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -209,9 +206,8 @@ func Test_run_reports_the_o1b_refusal_when_stdout_fails_during_a_v1_render(t *te
 		stderr.String())
 }
 
-// SCENARIO-11 (folded): a failing sync leaves an existing store
-// byte-identical, and the V1 block lists every mismatched balance in
-// account-name then source-id order, closed suppressing inactive.
+// A failing sync leaves an existing store byte-identical; the V1 block
+// lists every mismatched balance in account-name then source-id order.
 func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -299,9 +295,8 @@ func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *t
 	assert.Equal(t, sentinel, got)
 }
 
-// SCENARIO-11 (folded): a transaction whose splits don't sum to its amount
-// fails validation and lists in the V1 block, no payee falling back to
-// "(no payee)".
+// A transaction whose splits don't sum to its amount lists in the V1
+// block; no payee falls back to "(no payee)".
 func Test_run_lists_mismatched_splits_in_the_v1_stdout_block(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

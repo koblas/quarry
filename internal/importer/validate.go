@@ -19,8 +19,6 @@ func validate(rows store.Rows, statements map[string]parsedStatement) store.Vali
 
 // checkBalances compares reconciled sums against statements; an account
 // missing from statements is never reconciled, not mismatched.
-// NeverReconciled and Mismatched are sorted by account name (byte order)
-// then account source id, the display order for both V1 and --json.
 func checkBalances(rows store.Rows, statements map[string]parsedStatement) store.BalanceCheck {
 	reconciledSums := make(map[string]int64, len(rows.Accounts))
 	for _, txn := range rows.Transactions {
@@ -54,9 +52,8 @@ func checkBalances(rows store.Rows, statements map[string]parsedStatement) store
 	return check
 }
 
-// byNameThenSourceID builds a slices.SortFunc comparator ordering by name
-// (byte order) then numeric source id, the tie-break a string comparison of
-// two-digit and one-digit ids would get wrong.
+// byNameThenSourceID orders by name (byte order) then numeric source id,
+// the tie-break a string comparison of "9" and "10" would invert.
 func byNameThenSourceID[T any](key func(T) (string, int64)) func(T, T) int {
 	return func(a, b T) int {
 		aName, aID := key(a)
@@ -68,10 +65,8 @@ func byNameThenSourceID[T any](key func(T) (string, int64)) func(T, T) int {
 	}
 }
 
-// checkSplits verifies every imported transaction has at least one split
-// and its splits sum to its amount. Mismatched is sorted by date, account
-// name (byte order), account source id, then transaction source id — the
-// display order for both V1 and --json.
+// checkSplits verifies every transaction's splits sum to its amount,
+// sorting Mismatched by date, then account, then transaction.
 func checkSplits(rows store.Rows) store.SplitCheck {
 	sums := make(map[string]int64, len(rows.Transactions))
 	counts := make(map[string]int, len(rows.Transactions))

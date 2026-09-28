@@ -448,4 +448,32 @@ func Test_renderStoreFailure(t *testing.T) {
 		assert.Contains(t, got, "Splits    all 3 transactions equal the sum of their splits\n")
 		assert.NotContains(t, got, "Splits    DIFFER")
 	})
+
+	t.Run("singular DIFFER noun at 1 of 1", func(t *testing.T) {
+		result := store.Result{
+			Validation: store.Validation{
+				Balances: store.BalanceCheck{Checked: 1, Mismatched: []store.BalanceMismatch{{Name: "Chequing", Active: true}}},
+				Splits:   store.SplitCheck{Checked: 1, Mismatched: []store.SplitMismatch{{Account: "Chequing"}}},
+			},
+		}
+
+		got := renderStoreFailure(result, true, "/Users/dave")
+
+		assert.Contains(t, got, "Balances  DIFFER for 1 of 1 account\n")
+		assert.Contains(t, got, "Splits    DIFFER for 1 of 1 transaction\n")
+	})
+
+	t.Run("plural DIFFER noun control at 1 of 2", func(t *testing.T) {
+		result := store.Result{
+			Validation: store.Validation{
+				Balances: store.BalanceCheck{Checked: 2, Mismatched: []store.BalanceMismatch{{Name: "Chequing", Active: true}}},
+				Splits:   store.SplitCheck{Checked: 2, Mismatched: []store.SplitMismatch{{Account: "Chequing"}}},
+			},
+		}
+
+		got := renderStoreFailure(result, true, "/Users/dave")
+
+		assert.Contains(t, got, "Balances  DIFFER for 1 of 2 accounts\n")
+		assert.Contains(t, got, "Splits    DIFFER for 1 of 2 transactions\n")
+	})
 }

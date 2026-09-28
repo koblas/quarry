@@ -16,14 +16,10 @@ import (
 // errNoImporter is SyncAndImport's error when the Server has no Importer configured.
 var errNoImporter = errors.New("no importer configured")
 
-// Outcome is what SyncAndImport returns: the snapshot's Manifest, and the
-// store.Result of the import, when one ran. Store is nil when the schema
-// check found a mismatch (import skipped) or Sync itself failed.
-// StoreExisted is meaningful only when Store != nil && !Store.Built: it
-// reports whether a previous store was at the store path when the check
-// failed, deciding the V1 block's NOT REBUILT vs NOT BUILT line. Store's
-// own Path is populated on a V1 failure too, even though the importer's
-// own Result contract leaves it empty then.
+// Outcome is what SyncAndImport returns: the snapshot's Manifest and the
+// import's store.Result, when one ran. Store is nil on a schema mismatch
+// or Sync failure. StoreExisted (meaningful only when Store != nil &&
+// !Store.Built) decides the V1 block's NOT REBUILT vs NOT BUILT line.
 type Outcome struct {
 	Manifest     Manifest
 	Store        *store.Result
@@ -69,6 +65,7 @@ func (s *Server) SyncAndImport(ctx context.Context, bundlePath string) (Outcome,
 	result, err := s.importer.Import(ctx, manifest.Snapshot.Path)
 	if err != nil {
 		if errors.Is(err, store.ErrValidationFailed) {
+			// Populated here even though Import's own Result contract leaves it empty on a failed build.
 			result.Path = s.storePath
 			return Outcome{Manifest: manifest, Store: &result, StoreExisted: s.previousStoreExists()},
 				s.validationFailedRefusal(manifest, result.Validation, err)
@@ -79,9 +76,8 @@ func (s *Server) SyncAndImport(ctx context.Context, bundlePath string) (Outcome,
 	return Outcome{Manifest: manifest, Store: &result}, nil
 }
 
-// previousStoreExists reports whether a store was already at s.storePath
-// before this build. A stat error other than "not found" is treated as
-// existed: whichever it is, the failed build leaves it unchanged either way.
+// previousStoreExists reports whether a store was already at s.storePath;
+// a stat error other than "not found" is treated as existed.
 func (s *Server) previousStoreExists() bool {
 	_, err := os.Stat(s.storePath)
 	return !errors.Is(err, fs.ErrNotExist)

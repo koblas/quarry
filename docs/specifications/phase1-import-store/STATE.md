@@ -40,8 +40,9 @@ SCENARIO-09 (+ folded 11). Last updated by SCENARIO-09.
 - `cmd/quarry`'s test binary links DuckDB; linux-small CI has OOMed linking it (`devenv.nix`).
 - `v9fixture.Builder` assigns `Z_PK` strictly by call order, so "higher `Z_PK`" and "inserted later" are the same fact for any row kind — a tie-break-by-source-id test needs a second, differently-ordered key (name, date) to discriminate a "wrong sort direction" bug from a "no sort at all" bug; a same-name/same-date pair (two accounts both literally named the same, or two mismatches on the exact same day) isolates the source-id tie-break specifically.
 - A string comparison of numeric source ids inverts two-digit vs one-digit values ("10" < "9"); every source-id tie-break in `internal/importer/validate.go` uses `cmp.Compare` on the int64, never `strings.Compare` on a formatted id.
-- `internal/platform/duckdb`'s `Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration` is flaky under full-suite load (timing-dependent ctx cancellation) — passes standalone and on rerun; unrelated to this package, pre-existing.
+- `internal/platform/duckdb`'s `Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration` races `database/sql`'s async ctx watcher and flakes under full-suite CPU load — see Open debts.
 
 ## Open debts
 - `--json` stdout gains top-level `store` key (P1-11); `Test_run_prints_the_manifest_as_json_with_the_json_flag` needs to change to "stdout minus `store` equals the manifest" — owned by SCENARIO-02.
 - `duckstore.Replace`'s `CheckpointClose`-failure branch, and `build`'s schema-exec failure via a real fault, have no black-box trigger through the current API — declared unreachable with a stated reason each; SCENARIO-14's fault work may want a seam to exercise them for real.
+- `internal/platform/duckdb`'s `Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration` is flaky under full-suite CPU load (races `database/sql`'s async ctx watcher; passes standalone and in isolation) — CI-relevant, pre-existing, not touched by any phase1-import-store scenario — unowned, for the final gate to rule on.

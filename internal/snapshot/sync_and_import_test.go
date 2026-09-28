@@ -126,10 +126,8 @@ func Test_sync_and_import_does_not_import_when_the_snapshot_fails(t *testing.T) 
 	assert.Nil(t, outcome.Store)
 }
 
-// Store must be the unbuilt result, not nil, so StdoutWriteRefusal already
-// picks the --from --json form rather than the one naming the kept snapshot.
-// Path is populated on the returned copy even though the importer's own
-// Result contract leaves it empty on a failed build.
+// Store must be the unbuilt result, not nil, so StdoutWriteRefusal picks
+// the --from --json form; Path is populated on this copy regardless.
 func Test_sync_and_import_keeps_the_store_result_when_validation_fails(t *testing.T) {
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	home := t.TempDir()
@@ -184,9 +182,8 @@ func Test_sync_and_import_reports_whether_a_previous_store_existed(t *testing.T)
 	}
 }
 
-// A stat fault other than "not found" (here ENOTDIR, from a store path
-// running through a regular file) is treated as a previous store existing:
-// the build failed either way, so the file is unchanged either way.
+// A stat fault other than "not found" (ENOTDIR here) is treated as a
+// previous store existing: the build failed either way.
 func Test_sync_and_import_treats_a_stat_fault_as_a_previous_store(t *testing.T) {
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	home := t.TempDir()

@@ -199,10 +199,8 @@ func mismatchedBalanceAccount(b *v9fixture.Builder, name, accType string, day ti
 	return acctPK
 }
 
-// Mismatched is sorted by account name, not by insertion (Zebra is
-// inserted first but ends up last); two same-named accounts at source ids
-// 9 and 10 prove the tie-break is numeric — a string comparison would rank
-// "10" before "9" and swap them.
+// Zebra is inserted first but sorts last; two "Chequing" accounts at
+// source ids 9 and 10 prove the tie-break is numeric, not string.
 func Test_import_sorts_balance_mismatches_for_display(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	day := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
@@ -244,12 +242,8 @@ func matchingSplitTransaction(b *v9fixture.Builder, acctPK int64, day time.Time)
 	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "10.00"})
 }
 
-// Mismatched is sorted by date first (the transaction inserted first ends
-// up last, since its date is later); a same-date tie is broken by account
-// name ("Alpha Bank" before "Chequing"); a same-date, same-name tie (two
-// different accounts both named "Zulu") falls through to account source
-// id; and a same-date, same-account tie is broken by transaction source
-// id — 9 before 10, not the "10" < "9" a string comparison would produce.
+// Sorted by date, then account name, then account source id, then
+// transaction source id — each tie-break numeric, not string.
 func Test_import_sorts_split_mismatches_for_display(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true}) // source id 1
