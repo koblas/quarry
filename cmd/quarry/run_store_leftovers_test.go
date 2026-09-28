@@ -15,9 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The store partial and its wal are backdated past the sweep's age gate: a
-// fresh one could belong to another build still in flight. The stale
-// quarry.duckdb.wal has no age gate, so it is left unaged.
+// The store partial and its wal are backdated past the sweep's age gate; a
+// fresh one could belong to another build still in flight.
 func Test_run_removes_stale_store_leftovers_before_syncing(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
