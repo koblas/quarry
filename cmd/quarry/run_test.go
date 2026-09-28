@@ -313,6 +313,16 @@ func Test_run_pools_bundles_across_both_documents_folders(t *testing.T) {
 				"~/Library/Application Support/Quicken/Documents/B.quicken); choose one with --quicken <path>\n",
 		},
 		{
+			name: "same basename in both folders, three distinct bundles",
+			setup: func(t *testing.T, home string) {
+				require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "Business.quicken"), 0o700))
+				require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "Home.quicken"), 0o700))
+				require.NoError(t, os.MkdirAll(filepath.Join(quickenDocumentsDir(home), "Home.quicken"), 0o700))
+			},
+			wantStderr: "quarry: found 3 .quicken files (~/Documents/Business.quicken, ~/Documents/Home.quicken, " +
+				"~/Library/Application Support/Quicken/Documents/Home.quicken); choose one with --quicken <path>\n",
+		},
+		{
 			name: "two bundles in ~/Documents, none in the Quicken folder",
 			setup: func(t *testing.T, home string) {
 				require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "A.quicken"), 0o700))
