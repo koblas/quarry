@@ -1,6 +1,6 @@
 # Quarry: Quicken Data Platform — PRD
 
-Sep 27, 2026 · @david · Source: https://claude.ai/artifact/R4yVRk6NYX2U9aaYL6suE7 (rev 44)
+Sep 27, 2026 · @david · Source: https://claude.ai/artifact/R4yVRk6NYX2U9aaYL6suE7 (rev 47)
 
 ## Overview
 
@@ -95,7 +95,7 @@ never written         while Quicken open       seeded from dweekly       stable,
         │                                                          │
         ▼                                                          ▼
   quarry CLI  ◄── Claude skill                              MCP server (stdio)
-  sync, spend, cleanup, sql     SKILL.md + references/      schema, query, analysis tools
+  sync, spend, findings, sql    SKILL.md + references/      schema, query, analysis tools
   David, scheduled jobs         drives the CLI; Claude Code Claude desktop and chat
 ```
 
@@ -142,6 +142,10 @@ The store has a small set of normalized tables plus derived views; every analysi
 - `quarry sync` finds the `.quicken` package (configured path, or the single bundle in `~/Documents`), checks that Quicken is open, and copies `<file>.quicken/data` with SQLite's online backup API, read-only, to a timestamped snapshot. Quicken encrypts the database when closed, so a closed file is reported, not read.
 - It rejects a snapshot with no accounts, runs SQLite's integrity check, records the hash, and keeps the snapshot read-only.
 - It then rebuilds the store from that snapshot in one transaction; a failed build leaves the previous store untouched. `quarry sync --from <snapshot>` rebuilds from an existing snapshot without touching Quicken.
+- Snapshots are capped by count: `snapshots.keep` in config, default 12, minimum 1. After a sync swaps in the new store, the oldest snapshots beyond the cap are deleted. The snapshot the current store was built from is never deleted, and a failed sync deletes nothing.
+- A rejected snapshot (no accounts, failed integrity check) is deleted at once and never counts toward the cap. `import_runs` keeps each pruned snapshot's hash as the audit trail.
+- Each sync writes a new store file and swaps it in atomically; the previous `quarry.duckdb` is deleted after the swap, so only one store exists at a time. Scheduled jobs need no extra step: every successful sync prunes.
+- `quarry snapshots` lists snapshots and `quarry snapshots prune` applies the cap by hand (see CLI).
 - Validation runs on every build (see Testing) and fails the sync if balances don't reconcile.
 - Mapping from Quicken Classic v9's Core Data tables (`Z`-prefixed entities; dates as seconds since 2001-01-01), seeded from dweekly's schema reference, lives in one versioned package, with a detected-schema fingerprint recorded in `import_runs`.
 - Data-quality detection runs after validation and refreshes `findings`, marking earlier findings fixed when they no longer appear.
@@ -156,6 +160,7 @@ Every command supports `--json` for machine consumers and a readable table by de
 | Command | Purpose |
 | --- | --- |
 | `quarry sync` | Backup snapshot from the open Quicken file + build + validate + detect findings + refresh Bank of Canada exchange rates; `--from <snapshot>` to rebuild from an existing one |
+| `quarry snapshots` | List snapshots: ID, taken at, size, Quicken version, and which one the store was built from. `prune` deletes all but the newest `--keep N` (default `snapshots.keep`), never the store's own; `--dry-run` to preview |
 | `quarry status` | Last sync, row counts, validation results, staleness, FX rate coverage |
 | `quarry accounts` | Accounts with current balances, closed ones on request |
 | `quarry spend` | Spending by category / payee / tag / month, with `--since`, `--until`, `--account` |
@@ -164,12 +169,14 @@ Every command supports `--json` for machine consumers and a readable table by de
 | `quarry recurring` | Detected recurring charges, start date, price changes |
 | `quarry anomalies` | Unusually large or duplicate transactions |
 | `quarry acb` | Adjusted cost base per security and realized capital gains by tax year, in CAD |
-| `quarry cleanup` | The cleanup worklist to apply in Quicken; `--csv` to export |
+| `quarry findings` | The cleanup worklist to apply in Quicken; `--csv` to export |
 | `quarry sql` | Read-only SQL against the store |
 | `quarry export` | Views to CSV or Parquet for spreadsheets and notebooks |
 | `quarry mcp` | Start the MCP server (stdio) |
 
 Every reporting command takes `--currency CAD|USD` (default from config, CAD out of the box).
+
+`quarry findings` was named `cleanup` in earlier drafts; it was renamed so the worklist can't be mistaken for deleting old data. `quarry snapshots prune` with nothing to delete exits `0`; `--keep 0` is a usage error (exit `2`).
 
 **Exit codes** are a contract scripts and scheduled jobs branch on, the same for every command:
 
@@ -198,14 +205,14 @@ A thin wrapper over the core library, launched by the Claude desktop app as a lo
 - `query` is the escape hatch for questions no tool anticipates; the named tools exist so common questions don't depend on Claude re-deriving transfer rules in SQL.
 - The schema description includes the conventions (sign, transfers, currency) so ad-hoc SQL gets them right.
 - A `data_quality` tool returns the open findings, so Claude can help work through the cleanup list.
-- The server never runs `sync`; data freshness is reported, not changed.
+- The server never runs `sync` and never prunes snapshots; data freshness is reported, not changed.
 
 ### Claude skill
 
 `quarry` ships a Claude skill as the primary way Claude uses the data, with the MCP server for clients that can't load skills; this follows dweekly's finding that the skill is the better default path.
 
 - **`SKILL.md`**: when to use it, checking freshness with `quarry status` first, the conventions (sign, transfers, CAD reporting, cross-currency transfers), and the rule that every number comes from `quarry` output or SQL, never estimation.
-- **`references/`**: `schema.md` for `quarry`'s own tables and views (generated from the store, so it can't drift), plus `spending.md`, `net-worth.md`, `investments.md` and `cleanup.md` (walking David through the findings worklist), each with `.sql` recipes.
+- **`references/`**: `schema.md` for `quarry`'s own tables and views (generated from the store, so it can't drift), plus `spending.md`, `net-worth.md`, `investments.md` and `findings.md` (walking David through the findings worklist), each with `.sql` recipes.
 - The skill calls `quarry … --json` and `quarry sql`; it contains no Quicken schema knowledge, so a Quicken change never breaks it.
 - Packaged as a Claude Code plugin that bundles the skill and the MCP server config, adapted from dweekly's plugin layout.
 
@@ -254,7 +261,7 @@ All data stays on the Mac; the only data that leaves is the result of a query Da
 - **Encrypted at rest.** Snapshots and `quarry.duckdb` live under `~/Library/Application Support/quarry/` on a FileVault volume; files are `0600`. Optional DuckDB encryption with the key in the macOS Keychain.
 - **Redaction on import.** Account numbers are masked to the last four digits; free-text fields are scanned for card and account number patterns and masked.
 - **MCP boundary.** The MCP server is local stdio only (no network listener), SQL is read-only (enforced by a read-only connection), and results are row-capped so a stray `SELECT *` can't dump the whole history into a conversation.
-- **Snapshot retention.** Keep the last N snapshots (default 12); older ones are deleted.
+- **Snapshot retention.** Snapshots are capped by count (default 12) and the oldest are deleted after each successful sync; the rules live under Sync.
 - **No telemetry.** The only outbound network call in v1 is `quarry sync` fetching exchange rates from the Bank of Canada; it sends no user data.
 
 ## Testing and validation
@@ -324,6 +331,8 @@ The main risk is Quicken's undocumented schema; reconciliation on every sync is 
 - FX history: daily series from the Bank of Canada, fetched incrementally by `quarry sync`, since Quicken stores only the current rate. A failed fetch warns but does not fail the sync.
 - Exit codes: `0` success (warnings included), `1` failure, `2` usage error, for every command.
 - Feedback: findings go back into Quicken as a cleanup worklist so later snapshots and exports are clean.
+- Command names: the worklist is `quarry findings`, snapshot housekeeping is `quarry snapshots` / `quarry snapshots prune`; no command is called `cleanup`, since it reads as either.
+- Snapshot retention: a count cap (`snapshots.keep`, default 12), applied after every successful sync and by `snapshots prune`; the store's own snapshot is always kept. No size or age caps in v1.
 - Dashboards: out of scope for v1.
 - Language: Go, shipped as a single binary (duckdb-go, official MCP Go SDK).
 - Store engine: DuckDB, for exact `DECIMAL` money, ASOF joins against FX rates and prices, and analytical SQL. Tables use standard types only, so a move to SQLite stays a port. Syncs write a new file and swap it in atomically, since DuckDB allows one writer.
@@ -331,3 +340,5 @@ The main risk is Quicken's undocumented schema; reconciliation on every sync is 
 **Open questions**
 
 None block the design. Facts about a particular user's data (which accounts are registered, return-of-capital adjustments, whether trade history is complete) are gathered in session, not designed in: the skill asks for them when a report first needs them, stores the answers in `quarry`'s config, and `quarry` reports what is missing as findings.
+
+Pinning a snapshot (for example a tax year-end) so `prune` skips it is left out of v1; add it if the count cap proves too blunt.
