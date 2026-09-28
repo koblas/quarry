@@ -24,7 +24,7 @@ func Test_builder_seeds_every_row_kind_and_reads_back(t *testing.T) {
 		Name: "Checking", Type: "CHECKING", Currency: "CAD", Active: true,
 	})
 	payeePK := b.Payee(v9fixture.PayeeRow{Name: "Coffee Shop"})
-	categoryPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: 1})
+	categoryPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: v9fixture.Int64Ptr(1)})
 	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
 	txnPK := b.Transaction(v9fixture.TransactionRow{
 		Account: accountPK, Amount: "12.34", PostedDate: &postedDate, Payee: payeePK,

@@ -32,22 +32,27 @@ func CoreDataEpochSeconds(t time.Time) float64 {
 	return t.Sub(coreDataEpoch).Seconds()
 }
 
-// AccountRow is one ZACCOUNT row.
+// AccountRow is one ZACCOUNT row. Name, Type and Currency write SQL NULL
+// when "" (a real v9 file never has 0 or "" for a zero ref or a required
+// value — those are Go zero values standing in for NULL). Institution is a
+// zero ref: 0 writes NULL (no financial institution).
 type AccountRow struct {
-	Name     string
-	Type     string // ZTYPENAME
-	Currency string
-	Closed   bool
-	Active   bool
-	Deleted  bool
+	Name        string
+	Type        string // ZTYPENAME
+	Currency    string
+	Institution int64 // zero ref to a Builder.Institution row
+	Closed      bool
+	Active      bool
+	Deleted     bool
 }
 
 // TransactionRow is one ZTRANSACTION row. Entity defaults to the Builder's
-// CashFlowTransaction entity number when zero.
+// CashFlowTransaction entity number when zero. Account and Payee are zero
+// refs (0 writes NULL); Amount, Note and CheckNumber write NULL when "".
 type TransactionRow struct {
 	Entity      int64
 	Account     int64
-	Amount      string // decimal string bound as text
+	Amount      string // decimal string bound as text; "" writes NULL
 	PostedDate  *time.Time
 	EnteredDate *time.Time
 	Status      *int64 // ZRECONCILESTATUS: nil, 0 uncleared, 1 cleared, 2 reconciled
@@ -58,6 +63,8 @@ type TransactionRow struct {
 }
 
 // EntryRow is one ZCASHFLOWTRANSACTIONENTRY row (a split of a transaction).
+// Parent and CategoryTag are zero refs (0 writes NULL); Amount, Transfer and
+// Note write NULL when "".
 type EntryRow struct {
 	Parent      int64
 	Amount      string
@@ -77,10 +84,12 @@ type ReconcileRow struct {
 }
 
 // TagRow is one ZTAG row: a category or a user tag, told apart by Entity.
+// ParentCategory is a zero ref (0 writes NULL). Type is a pointer because 0
+// is a valid ZTYPE (system); nil is the only way to request NULL.
 type TagRow struct {
 	Entity         int64
 	Name           string
-	Type           int64
+	Type           *int64
 	Hidden         bool
 	ParentCategory int64
 	Deleted        bool
@@ -90,6 +99,11 @@ type TagRow struct {
 type PayeeRow struct {
 	Name    string
 	Deleted bool
+}
+
+// InstitutionRow is one ZFINANCIALINSTITUTION row.
+type InstitutionRow struct {
+	Name string
 }
 
 type pkRow[T any] struct {
@@ -112,8 +126,13 @@ type Builder struct {
 	reconciles   []pkRow[ReconcileRow]
 	tags         []pkRow[TagRow]
 	payees       []pkRow[PayeeRow]
+	institutions []pkRow[InstitutionRow]
 	userTagLinks []userTagLink
 }
+
+// Int64Ptr returns a pointer to v, for fixture fields (such as
+// TagRow.Type) that must distinguish a present zero value from NULL.
+func Int64Ptr(v int64) *int64 { return &v }
 
 // NewBuilder returns a Builder seeded with the reference schema's default
 // Z_PRIMARYKEY entity numbers (EntCategoryTag, EntUserTag,
@@ -213,6 +232,14 @@ func (b *Builder) Payee(row PayeeRow) int64 {
 	return pk
 }
 
+// Institution adds row and returns its assigned ZFINANCIALINSTITUTION.Z_PK,
+// for use as an AccountRow.Institution ref.
+func (b *Builder) Institution(row InstitutionRow) int64 {
+	pk := b.nextPKFor("ZFINANCIALINSTITUTION")
+	b.institutions = append(b.institutions, pkRow[InstitutionRow]{pk: pk, row: row})
+	return pk
+}
+
 func deletionCount(deleted bool) int {
 	if deleted {
 		return 1
@@ -234,6 +261,24 @@ func nullableInt(n *int64) any {
 	return *n
 }
 
+// nullableString stands in for a v9 column that has no way to be "" in
+// real data: "" is the Go zero value a fixture uses to mean NULL.
+func nullableString(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+// nullableRef stands in for a zero ref (a foreign key field whose Go zero
+// value, 0, means "no row"): real v9 stores NULL there, never 0.
+func nullableRef(ref int64) any {
+	if ref == 0 {
+		return nil
+	}
+	return ref
+}
+
 // Seed executes every row accumulated on Builder against db, which must
 // already carry v9.ReferenceDDL, then writes a Z_PRIMARYKEY row for each of
 // Builder's five entity kinds, with Z_MAX set to the highest Z_PK Builder
@@ -244,8 +289,15 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 
 	for _, a := range b.accounts {
 		exec(tb, ctx, db,
-			"INSERT INTO ZACCOUNT (Z_PK, ZNAME, ZTYPENAME, ZCURRENCY, ZCLOSED, ZACTIVE, ZDELETIONCOUNT) VALUES (?, ?, ?, ?, ?, ?, ?)",
-			a.pk, a.row.Name, a.row.Type, a.row.Currency, a.row.Closed, a.row.Active, deletionCount(a.row.Deleted))
+			"INSERT INTO ZACCOUNT (Z_PK, ZNAME, ZTYPENAME, ZCURRENCY, ZFINANCIALINSTITUTION, ZCLOSED, ZACTIVE, ZDELETIONCOUNT) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			a.pk, nullableString(a.row.Name), nullableString(a.row.Type), nullableString(a.row.Currency),
+			nullableRef(a.row.Institution), a.row.Closed, a.row.Active, deletionCount(a.row.Deleted))
+	}
+
+	for _, i := range b.institutions {
+		exec(tb, ctx, db,
+			"INSERT INTO ZFINANCIALINSTITUTION (Z_PK, ZNAME) VALUES (?, ?)",
+			i.pk, i.row.Name)
 	}
 
 	for _, x := range b.transactions {
@@ -253,14 +305,15 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 			`INSERT INTO ZTRANSACTION
 				(Z_PK, Z_ENT, ZACCOUNT, ZAMOUNT, ZPOSTEDDATE, ZENTEREDDATE, ZRECONCILESTATUS, ZUSERPAYEE, ZNOTE, ZCHECKNUMBER, ZDELETIONCOUNT)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			x.pk, x.row.Entity, x.row.Account, x.row.Amount, nullableTime(x.row.PostedDate), nullableTime(x.row.EnteredDate),
-			nullableInt(x.row.Status), x.row.Payee, x.row.Note, x.row.CheckNumber, deletionCount(x.row.Deleted))
+			x.pk, x.row.Entity, nullableRef(x.row.Account), nullableString(x.row.Amount), nullableTime(x.row.PostedDate), nullableTime(x.row.EnteredDate),
+			nullableInt(x.row.Status), nullableRef(x.row.Payee), nullableString(x.row.Note), nullableString(x.row.CheckNumber), deletionCount(x.row.Deleted))
 	}
 
 	for _, e := range b.entries {
 		exec(tb, ctx, db,
 			"INSERT INTO ZCASHFLOWTRANSACTIONENTRY (Z_PK, ZPARENT, ZAMOUNT, ZCATEGORYTAG, ZTRANSFER, ZQUICKENID, ZNOTE, ZDELETIONCOUNT) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-			e.pk, e.row.Parent, e.row.Amount, e.row.CategoryTag, e.row.Transfer, e.row.QuickenID, e.row.Note, deletionCount(e.row.Deleted))
+			e.pk, nullableRef(e.row.Parent), nullableString(e.row.Amount), nullableRef(e.row.CategoryTag), nullableString(e.row.Transfer),
+			e.row.QuickenID, nullableString(e.row.Note), deletionCount(e.row.Deleted))
 	}
 
 	for _, r := range b.reconciles {
@@ -272,7 +325,7 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 	for _, g := range b.tags {
 		exec(tb, ctx, db,
 			"INSERT INTO ZTAG (Z_PK, Z_ENT, ZNAME, ZTYPE, ZHIDDEN, ZPARENTCATEGORY, ZDELETIONCOUNT) VALUES (?, ?, ?, ?, ?, ?, ?)",
-			g.pk, g.row.Entity, g.row.Name, g.row.Type, g.row.Hidden, g.row.ParentCategory, deletionCount(g.row.Deleted))
+			g.pk, g.row.Entity, nullableString(g.row.Name), nullableInt(g.row.Type), g.row.Hidden, nullableRef(g.row.ParentCategory), deletionCount(g.row.Deleted))
 	}
 
 	for _, p := range b.payees {

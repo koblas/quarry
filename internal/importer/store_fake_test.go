@@ -1,0 +1,25 @@
+package importer_test
+
+import (
+	"context"
+
+	"github.com/koblas/quarry/internal/store"
+)
+
+// fakeStore captures the rows the last Replace call received, standing in
+// for a real Store so importer tests never link DuckDB.
+type fakeStore struct {
+	Rows    store.Rows
+	Path    string
+	nextErr error
+}
+
+func (f *fakeStore) failNext(err error) { f.nextErr = err }
+
+func (f *fakeStore) Replace(_ context.Context, rows store.Rows) (string, error) {
+	if f.nextErr != nil {
+		return "", f.nextErr
+	}
+	f.Rows = rows
+	return f.Path, nil
+}
