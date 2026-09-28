@@ -58,7 +58,7 @@ func Test_run_writes_a_verified_snapshot_and_reports_success(t *testing.T) {
 		"Source", abbreviated(t, bundle.Dir, home),
 		"Size", megabytes(info.Size()),
 		"SHA-256", hex.EncodeToString(sum[:]),
-		"Schema", "matches reference hardkoded/quicken-skills@752107b (82 tables, 1,835 columns)",
+		"Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns)",
 	)
 	assert.Equal(t, want, stdout.String())
 }
@@ -613,7 +613,7 @@ func Test_run_reports_a_schema_mismatch(t *testing.T) {
 		"Source", abbreviated(t, bundle.Dir, home),
 		"Size", megabytes(info.Size()),
 		"SHA-256", hex.EncodeToString(sum[:]),
-		"Schema", "DIFFERS from reference hardkoded/quicken-skills@752107b: "+
+		"Schema", "DIFFERS from reference hardkoded/quicken-skills@752107b+quarry.1: "+
 			"1 table and 2 columns missing, 1 column not in reference",
 		v9fixture.MissingSchemaDroppedTable,
 		v9fixture.MissingSchemaDroppedColumnTable, v9fixture.MissingSchemaDroppedColumn1,
@@ -663,7 +663,7 @@ func Test_run_reports_extra_schema_only_as_a_warning(t *testing.T) {
 		"Source", abbreviated(t, bundle.Dir, home),
 		"Size", megabytes(info.Size()),
 		"SHA-256", hex.EncodeToString(sum[:]),
-		"Schema", "matches reference hardkoded/quicken-skills@752107b (82 tables, 1,835 columns), "+
+		"Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns), "+
 			"plus 1 table and 2 columns not in it",
 		v9fixture.ExtraSchemaAddedTable,
 		v9fixture.ExtraSchemaAddedColumnTable1, v9fixture.ExtraSchemaAddedColumn1,

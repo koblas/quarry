@@ -194,7 +194,7 @@ func Test_sync_reports_the_scoped_reference_table_and_column_counts(t *testing.T
 
 	require.NoError(t, err)
 	assert.Equal(t, 82, manifest.Schema.ReferenceTables)
-	assert.Equal(t, 1835, manifest.Schema.ReferenceColumns)
+	assert.Equal(t, 1838, manifest.Schema.ReferenceColumns)
 
 	encoded, err := manifest.Encode()
 	require.NoError(t, err)

@@ -15,7 +15,7 @@ import (
 var ReferenceDDL string
 
 // ReferenceLabel identifies the commit ReferenceDDL is pinned to.
-const ReferenceLabel = "hardkoded/quicken-skills@752107b"
+const ReferenceLabel = "hardkoded/quicken-skills@752107b+quarry.1"
 
 // Reference executes ReferenceDDL against a private in-memory database and
 // returns the resulting schema, unscoped. Callers apply their own table

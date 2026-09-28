@@ -54,3 +54,12 @@ Columns only in hardkoded 9.x:
 - `ZTRANSACTION`: `ZAUTOUPDATEEBILLDATE`
 
 Consequence for recipes ported from dweekly: any SQL naming an entity-numbered column (`Z79_PARENT` and the like) must use the 9.x name.
+
+## Corrections from a live v9 file
+
+`internal/quicken/v9/reference.sql` (label `hardkoded/quicken-skills@752107b+quarry.1`) was corrected on 2026-09-28 after the Phase 0 gate run against a real Quicken Classic for Mac v9 file:
+
+- Not present in the live file: `ZBUDGETLINEITEM.ZROLLOVER`, `ZBUDGETTARGET.ZROLLOVERRESETAMT`.
+- Present in the live file, added: `ZACCOUNT.ZMMFPOSITIONSYMBOLS BLOB`, `ZBUDGETTARGET.ZROLLOVERMODE INTEGER`, `ZINVOICE.ZISSENT INTEGER`, `ZINVOICE.ZRECURRENCEJSON VARCHAR`, `ZINVOICE.ZTYPESTRING VARCHAR`.
+
+Result: 82 tables, 1,838 columns.
