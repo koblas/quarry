@@ -22,7 +22,7 @@
 
 - **P1-1 Quicken is read-only.** Phase 1 reads the snapshot only; `--from` never opens anything under a Quicken bundle.
 - **P1-2 All-or-nothing store.** The store is built into `.quarry-<UTC start>.duckdb.partial` in the store directory and renamed over `quarry.duckdb` only after every check passes. On any failure or interruption the partial is removed and `quarry.duckdb` is byte-identical to before (or still absent). Only one store exists after a swap; no `quarry.duckdb.wal` exists after a swap.
-- **P1-3 Balance gate (user ruling 2026-09-28).** Quicken v9 stores no current register balance. For each non-investment account with at least one non-deleted `ZRECONCILERECORD`, the sum of the account's imported transactions with status `reconciled` must equal the `ZENDINGBALANCE` of its newest reconcile record (by `ZENDDATE`, then `Z_PK`) to the cent. `statement_date` is that record's `ZENDDATE`; the `quarry` amount is the reconciled sum. The gate verifies reconciled accounts only; never-reconciled accounts are covered by the split and transfer checks alone. Accounts with no reconcile record are counted and listed as never reconciled — not failed, no warning; the `never reconciled` clause counts non-investment accounts only. Investment accounts are counted, not checked. Closed and inactive accounts are checked like any other.
+- **P1-3 Balance gate (user ruling 2026-09-28).** Quicken v9 stores no current register balance. For each non-investment account with at least one non-deleted `ZRECONCILERECORD`, the sum of the account's imported transactions with status `reconciled` must equal the `ZENDINGBALANCE` of its newest reconcile record (among non-deleted records: a NULL `ZENDDATE` ranks newest — it refuses with reason 10 rather than falling back to an older, possibly stale statement; otherwise latest `ZENDDATE`; ties → the higher `Z_PK`) to the cent. `statement_date` is that record's `ZENDDATE`; the `quarry` amount is the reconciled sum. The gate verifies reconciled accounts only; never-reconciled accounts are covered by the split and transfer checks alone. Accounts with no reconcile record are counted and listed as never reconciled — not failed, no warning; the `never reconciled` clause counts non-investment accounts only. Investment accounts are counted, not checked. Closed and inactive accounts are checked like any other.
   - Probe on the user's real file (20260928T112701Z): reconciled-status sum matched 6/6 reconciled accounts; "dated ≤ ZENDDATE" matched only 4/6 (dropped). 6 of 25 accounts are reconciled.
   - PRD Q2 "at the latest date" clause needs a PRD amendment: no Quicken source exists for it.
 - **P1-4 Split sum.** Every imported transaction has ≥1 split and its splits sum to its amount. `transactions.amount` comes from `ZTRANSACTION.ZAMOUNT` and is never recomputed from splits; split amounts come from `ZCASHFLOWTRANSACTIONENTRY.ZAMOUNT` (via `ZPARENT`) — independent columns in separate tables. Covers imported (cash-flow) transactions only. Probe: 0 zero-entry and 0 mismatching transactions in the real file.
@@ -194,7 +194,7 @@ Transfers 3,112 paired
 - Rows gains a trailing clause when investment transactions were skipped: `Rows      18,204 transactions, 21,977 splits, 3,112 transfers, 1,873 payees, 312 categories, 14 tags; 1,605 investment transactions not imported` (singular `1 investment transaction`; clause omitted at 0).
 - Rows nouns inflect each on its own count: singular at exactly 1 (`1 transaction`, `1 split`, `1 transfer`, `1 payee`, `1 category`, `1 tag`), plural at 0 and N ≥ 2 (`0 transactions` … `0 tags`); counts comma-grouped. Example: `1 transaction, 2 splits, 0 transfers, 1 payee, 3 categories, 0 tags`.
 - Transfer counted once per pair. Money on stdout: thousands separators, 2 decimals, leading `-` (`-1,204.17`).
-- Balances clauses: zero-count clauses omitted; two clauses joined with ` and `. Singular: `1 account matches Quicken's last reconciled balance`. None checkable: `no accounts to check; 3 never reconciled and 4 investment accounts not checked`.
+- Balances clauses: zero-count clauses omitted; two clauses joined with ` and `. Singular: `1 account matches Quicken's last reconciled balance`; `1 never reconciled`; `1 investment account not checked` (joined: `1 never reconciled and 1 investment account not checked`). None checkable: `no accounts to check; 3 never reconciled and 4 investment accounts not checked`.
 - Splits: exactly 1 → `the 1 transaction equals the sum of its splits`; zero → `no transactions to check`.
 - Transfers: none → `none`; with one-sided → `3,112 paired, 3 one-sided`; all one-sided → `0 paired, 2 one-sided`.
 - Zero transactions Rows: `0 transactions, 0 splits, 0 transfers, N payees, N categories, N tags`.
@@ -284,13 +284,15 @@ S4 `<reason>` forms (first offender by date, then account, then source id; ` (an
 3. `a transaction on 2024-03-02 in "Visa Infinite" has an amount of 12.345, which has more than 2 decimal places`
 4. `a split of a transaction on 2024-03-02 in "Visa Infinite" has an amount of 12.345, which has more than 2 decimal places`
 5. `the 2026-08-31 statement for "Visa Infinite" has a balance of 12.345, which has more than 2 decimal places`
-6. `… has an amount of <v>, which is too large for quarry's amounts` (same subjects as 3–5; numeric storage — `integer` / `real` — only: out of range, or REAL in exponent form / |v| ≥ 1e13)
+6. `… has an amount of <v>, which is too large for quarry's amounts` (same subjects as 3–4; statement form `the 2026-08-31 statement for "Visa Infinite" has a balance of <v>, which is too large for quarry's amounts`; numeric storage — `integer` / `real` — only: out of range, or REAL in exponent form / |v| ≥ 1e13)
 
 11. Money stored as `text` or `blob` (incl. empty / whitespace; value never quoted — may be bytes, long, or hold card-like digits): `a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number` · `a split of a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number` · `the 2026-08-31 statement for "Visa Infinite" has a balance that is not a number`; fallback `a transaction in "Visa Infinite" (source id 1234) has an amount that is not a number`. A NULL amount is reason 10, not 11.
 7. `the snapshot has no CashFlowTransaction entity, which quarry needs to read Quicken's records`; several: `the snapshot has no CashFlowTransaction, CategoryTag or UserTag entity, which quarry needs to read Quicken's records` (names sorted, joined `, ` … ` or `)
 8. `a transaction on 2024-03-02 in "Visa Infinite" has reconcile status 7, which quarry does not map yet`
 9. `category "Food:Groceries" has type 5, which quarry does not map yet` (subject = full path)
 10. Required NULL, one form `<subject> has no <field>` (field = user-facing noun, never a column name): `account "Chequing" has no currency` · `account "Chequing" has no type` · `an account (source id 42) has no name` · `a transaction (source id 1234) has no account` · `a transaction on 2024-03-02 in "Visa Infinite" has no amount` · `a transaction in "Visa Infinite" (source id 1234) has no date` · `a split of a transaction on 2024-03-02 in "Visa Infinite" has no amount` · `a split (source id 5678) has no transaction` · `category (source id 99) has no name` · `category "Food:Groceries" has no type` · `the 2026-08-31 statement for "Visa Infinite" has no balance` · `a statement for "Visa Infinite" (source id 12) has no date`
+
+Newest statement with NULL `ZENDDATE` and a bad balance (5/6/11 outrank 10): subject `a statement for "Visa Infinite" (source id 12)` — e.g. `… has a balance of 12.345, which has more than 2 decimal places` · `… has a balance of <v>, which is too large for quarry's amounts` · `… has a balance that is not a number`; the missing date (reason 10) surfaces on a later run.
 
 Subjects use the best handle the row has (date, account name, category path); when that handle is the missing value, fall back to `(source id N)` (= Quicken `Z_PK` = store `source_id`).
 
@@ -299,6 +301,8 @@ Required columns (NULL → reason 10): `ZACCOUNT.ZNAME` (name), `.ZTYPENAME` (ty
 Ordering: dated rows by date, account, source id; undated rows (accounts, categories, entity names) by name / full path, then source id. When several classes fail, S4 reports the first class in order 7, 1–6, 11, 8–10 (a missing entity makes row checks meaningless); ` (and N more)` counts offenders of that class only.
 
 Interim frame (ruled 2026-09-28): until SCENARIO-14, S4 cases may surface in the S3 frame, but the importer's typed error carries the `<reason>` verbatim (incl. ` (and N more)`) from 01d on, and tests assert the reason substring (and the type via `errors.As`), not the frame. SCENARIO-14 swaps only the frame. No push or PR may ship with an S4 case in the S3 frame — the final gate treats that as a BLOCKER.
+
+Interim V1 (ruled 2026-09-28): until SCENARIO-09 adds the V1 stdout block, a failed check exits 1 with empty stdout, store untouched, snapshot kept, and stderr is the V1 line with only `each difference is listed on stdout; ` removed, e.g. `quarry: validation failed: 1 of 3 accounts does not match Quicken's last reconciled balance; ~/Library/Application Support/quarry/quarry.duckdb was not changed; fix the account in Quicken and run quarry sync, or run quarry sync --from 20260927T143005Z after updating quarry`. SCENARIO-09 re-inserts the clause and adds stdout; nothing else changes. No push or PR may ship a V1 failure with empty stdout — final-gate BLOCKER.
 
 ### Edge-case rows
 | Output | Input class | Ruling |
@@ -493,6 +497,8 @@ Order is execution order. Folded scenarios are ticked with the delivering scenar
 - [x] SCENARIO-01d: sync imports the Quicken data into a new store — `cmd/quarry/run_import_test.go` `Test_run_imports_the_quicken_data_into_a_new_store`
 - [ ] SCENARIO-01b: sync checks balances and split sums before swapping the store in (absorbs 06)
 - [ ] SCENARIO-06: closed and inactive accounts are imported and checked — FOLD → 01b
+- [ ] SCENARIO-09: a balance mismatch leaves the previous store unchanged (absorbs 11)
+- [ ] SCENARIO-11: a transaction whose splits don't sum fails validation — FOLD → 09
 - [ ] SCENARIO-01c: sync pairs transfers between the user's accounts (absorbs 07, 12, 21)
 - [ ] SCENARIO-07: transfers pair, including cross-currency and investment counterparts — FOLD → 01c
 - [ ] SCENARIO-12: a file with no transactions — FOLD → 01c
@@ -500,8 +506,6 @@ Order is execution order. Folded scenarios are ticked with the delivering scenar
 - [ ] SCENARIO-02: --json reports the store result alongside the manifest (absorbs 10, 18)
 - [ ] SCENARIO-10: never-reconciled accounts are listed, not failed — FOLD → 02
 - [ ] SCENARIO-18: a schema mismatch on plain sync skips the import — FOLD → 02
-- [ ] SCENARIO-09: a balance mismatch leaves the previous store unchanged (absorbs 11)
-- [ ] SCENARIO-11: a transaction whose splits don't sum fails validation — FOLD → 09
 - [ ] SCENARIO-08: a one-sided transfer is kept and warned about (absorbs 19)
 - [ ] SCENARIO-19: each build records an import_runs row — FOLD → 08
 - [ ] SCENARIO-14: a failed build never replaces the store (absorbs 13; test-first: write safety)
