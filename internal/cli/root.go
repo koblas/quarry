@@ -1,13 +1,12 @@
 package cli
 
 import (
-	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/spf13/cobra"
 )
 
 // newRootCommand builds quarry's command tree: a persistent --json flag on
-// the root plus the sync subcommand, wired against srv and rooted at home.
-func newRootCommand(srv *snapshot.Server, home string, jsonOut *bool) *cobra.Command {
+// the root plus the sync subcommand, wired against newServer.
+func newRootCommand(newServer ServerFactory, jsonOut *bool) *cobra.Command {
 	// No Args or Run field: an unmatched subcommand fails through cobra's
 	// own dispatch rather than being accepted as a positional argument.
 	root := &cobra.Command{
@@ -23,6 +22,6 @@ never writes to the Quicken file.`,
 	root.CompletionOptions.DisableDefaultCmd = true
 	root.PersistentFlags().BoolVar(jsonOut, "json", false, "print the result as JSON on stdout")
 
-	root.AddCommand(newSyncCommand(srv, home, jsonOut))
+	root.AddCommand(newSyncCommand(newServer, jsonOut))
 	return root
 }

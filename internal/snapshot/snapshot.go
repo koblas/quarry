@@ -128,7 +128,7 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 		if refusal, ok := sourceRefusal(s.home, bundlePath, err); ok {
 			return Manifest{}, FailureOutcome(ctx, refusal)
 		}
-		return Manifest{}, FailureOutcome(ctx, writeFaultRefusal(s.home, s.snapshotDir, err))
+		return Manifest{}, FailureOutcome(ctx, backupFailureRefusal(s.home, bundlePath, s.snapshotDir, err))
 	}
 	snapshotPath, manifestPath := destination.FinalPaths(resolvedName)
 
@@ -149,7 +149,7 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 	manifestBytes, err := manifest.Encode()
 	if err != nil {
 		// unreachable: Manifest.Encode's own error path is unreachable for any value this package builds; see there.
-		return Manifest{}, fmt.Errorf("sync %s: encode manifest: %w", bundlePath, err)
+		return Manifest{}, contentRefusal(s.home, bundlePath, fmt.Errorf("encode manifest: %w", err))
 	}
 	manifestPartial, err := destination.WriteManifest(ctx, resolvedName, manifestBytes)
 	if err != nil {

@@ -16,7 +16,8 @@ var errNoAccounts = errors.New("no accounts")
 
 // contentRefusal classifies a buildManifest failure on the snapshot copy,
 // distinct from sourceRefusal's classification of a live-file failure. Any
-// unclassified error is Sync's ordinary wrapped error.
+// unclassified error still refuses in the same shape, naming the bundle and
+// the driver's own cause text.
 func contentRefusal(home, bundlePath string, err error) error {
 	var integrityErr sqlite.IntegrityError
 	switch {
@@ -33,6 +34,8 @@ func contentRefusal(home, bundlePath string, err error) error {
 			"%s has no accounts; nothing was kept; check you have the right file open, or pass it with --quicken <path>",
 			homepath.Abbreviate(home, bundlePath))}
 	default:
-		return fmt.Errorf("sync %s: %w", bundlePath, err)
+		return RefusalError{msg: fmt.Sprintf(
+			"cannot read the snapshot of %s: %s; nothing was kept; run quarry sync again",
+			homepath.Abbreviate(home, bundlePath), causeText(err))}
 	}
 }

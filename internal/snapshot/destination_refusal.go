@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"syscall"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
 )
@@ -29,14 +30,33 @@ func unwritableDirRefusal(home, snapshotDir string, err error) error {
 		homepath.Abbreviate(home, snapshotDir), causeText(err))}
 }
 
-// writeFaultRefusal classifies a post-Prepare Destination write failure: a
-// permission error reads as an unwritable directory; anything else reads
-// as a write fault (e.g. disk full).
+// writeFaultRefusal classifies a post-Prepare Destination write failure by
+// cause: permission, disk-full/over-quota, or anything else.
 func writeFaultRefusal(home, snapshotDir string, err error) error {
-	if errors.Is(err, fs.ErrPermission) {
+	switch {
+	case errors.Is(err, fs.ErrPermission):
 		return unwritableDirRefusal(home, snapshotDir, err)
+	case errors.Is(err, syscall.ENOSPC), errors.Is(err, syscall.EDQUOT):
+		return RefusalError{msg: fmt.Sprintf(
+			"cannot write snapshot to %s: %s; free disk space, then run quarry sync again",
+			homepath.Abbreviate(home, snapshotDir), causeText(err))}
+	default:
+		return RefusalError{msg: fmt.Sprintf(
+			"cannot write snapshot to %s: %s; run quarry sync again",
+			homepath.Abbreviate(home, snapshotDir), causeText(err))}
 	}
-	return RefusalError{msg: fmt.Sprintf(
-		"cannot write snapshot to %s: %s; free disk space, then run quarry sync again",
-		homepath.Abbreviate(home, snapshotDir), causeText(err))}
+}
+
+// backupFailureRefusal classifies a Destination.Backup failure once
+// sourceRefusal found nothing: a write-side cause still reads as a
+// destination fault; anything else is presumed a source-copy fault.
+func backupFailureRefusal(home, bundlePath, snapshotDir string, err error) error {
+	switch {
+	case errors.Is(err, fs.ErrPermission), errors.Is(err, syscall.ENOSPC), errors.Is(err, syscall.EDQUOT):
+		return writeFaultRefusal(home, snapshotDir, err)
+	default:
+		return RefusalError{msg: fmt.Sprintf(
+			"cannot copy %s: %s; run quarry sync again",
+			homepath.Abbreviate(home, bundlePath), causeText(err))}
+	}
 }

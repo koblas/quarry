@@ -76,27 +76,104 @@ func Test_sync_wraps_an_error_when_opening_the_bundle_fails(t *testing.T) {
 	assert.ErrorContains(t, err, "sync "+bundlePath)
 }
 
-// A generic backup failure is not a classified source error (busy/encrypted),
-// so it is a write fault, not a source refusal.
-func Test_sync_refuses_when_the_backup_fails(t *testing.T) {
+// A generic backup failure is not a classified source error (busy/encrypted)
+// and not a destination write fault (permission/disk-full), so Sync
+// presumes it is an unclassified source-side read fault copying the live
+// file, naming the bundle rather than the snapshots directory.
+func Test_sync_refuses_when_the_backup_fails_with_an_unclassified_cause(t *testing.T) {
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
+	bundlePath := filepath.Join(home, "Documents", "Home.quicken")
 	srv := snapshot.NewServer(
 		snapshot.WithSnapshotDir(snapshotsDir),
 		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
 		snapshot.WithSource(&fakeSource{backupErr: errBoom}),
 		snapshot.WithHome(home),
 	)
-	bundlePath := t.TempDir()
 
 	_, err := srv.Sync(t.Context(), bundlePath)
 
 	var re snapshot.RefusalError
 	require.ErrorAs(t, err, &re)
 	assert.Equal(t,
-		"cannot write snapshot to ~/snapshots: boom; free disk space, then run quarry sync again",
+		"cannot copy ~/Documents/Home.quicken: boom; run quarry sync again",
 		re.Error())
 	assertNoPartialsLeftBehind(t, snapshotsDir)
+}
+
+// A disk-full cause reaching Backup is still a destination write fault,
+// naming the snapshots directory, even though Backup's single return
+// cannot itself say which side (source or destination) produced it.
+func Test_sync_refuses_when_the_backup_fails_with_disk_full(t *testing.T) {
+	home := t.TempDir()
+	snapshotsDir := filepath.Join(home, "snapshots")
+	bundlePath := filepath.Join(home, "Documents", "Home.quicken")
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(snapshotsDir),
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{backupErr: &fs.PathError{Op: "write", Path: "partial", Err: syscall.ENOSPC}}),
+		snapshot.WithHome(home),
+	)
+
+	_, err := srv.Sync(t.Context(), bundlePath)
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t,
+		"cannot write snapshot to ~/snapshots: no space left on device; free disk space, then run quarry sync again",
+		re.Error())
+	assertNoPartialsLeftBehind(t, snapshotsDir)
+}
+
+// A permission cause reaching Backup is still an unwritable-directory
+// refusal, naming the snapshots directory rather than the bundle.
+func Test_sync_refuses_when_the_backup_fails_with_a_permission_error(t *testing.T) {
+	home := t.TempDir()
+	snapshotsDir := filepath.Join(home, "snapshots")
+	bundlePath := filepath.Join(home, "Documents", "Home.quicken")
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(snapshotsDir),
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{backupErr: &fs.PathError{Op: "write", Path: "partial", Err: fs.ErrPermission}}),
+		snapshot.WithHome(home),
+	)
+
+	_, err := srv.Sync(t.Context(), bundlePath)
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t,
+		"cannot write to ~/snapshots: permission denied; make the directory writable by your user",
+		re.Error())
+	assertNoPartialsLeftBehind(t, snapshotsDir)
+}
+
+// A write failure that is neither a permission error nor disk-full/over-quota
+// gets its own text, distinct from the disk-full wording.
+func Test_sync_refuses_when_writing_the_manifest_fails_with_an_unclassified_cause(t *testing.T) {
+	home := t.TempDir()
+	snapshotsDir := filepath.Join(home, "snapshots")
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	ref, err := v9.Reference(t.Context())
+	require.NoError(t, err)
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(snapshotsDir),
+		snapshot.WithReference(v9.ReferenceLabel, ref),
+		snapshot.WithDestination(&partialFaultDestination{
+			real:              snapshot.NewDirDestination(snapshotsDir),
+			failWriteManifest: &fs.PathError{Op: "open", Path: "manifest.json.partial", Err: syscall.EIO},
+		}),
+		snapshot.WithHome(home),
+	)
+
+	_, err = srv.Sync(t.Context(), bundle.Dir)
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t,
+		"cannot write snapshot to ~/snapshots: input/output error; run quarry sync again",
+		re.Error())
+	assertSnapshotsDirEmpty(t, snapshotsDir)
 }
 
 // assertNoPartialsLeftBehind fails if dir holds any of Destination's
@@ -201,29 +278,35 @@ func garbageFileOpenCause(t *testing.T, path string) error {
 	return conn.QueryRow("SELECT count(*) FROM sqlite_master").Scan(&count)
 }
 
-func Test_sync_wraps_an_error_when_the_snapshot_cannot_be_opened(t *testing.T) {
+// An unclassified buildManifest failure refuses naming the bundle and
+// carrying the driver's own cause text, distinct from the integrity-check
+// and no-accounts refusals.
+func Test_sync_refuses_a_snapshot_copy_that_cannot_be_opened(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "garbage.sqlite")
 	require.NoError(t, os.WriteFile(path, []byte("not a database"), 0o600))
 	cause := garbageFileOpenCause(t, path)
 	require.Error(t, cause)
-	bundlePath := t.TempDir()
+	home := t.TempDir()
+	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
 	srv := snapshot.NewServer(
 		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
 		snapshot.WithSource(&fakeSource{}),
 		snapshot.WithDestination(&fixedPathDestination{snapshotPath: path}),
+		snapshot.WithHome(home),
 	)
 
-	_, err := srv.Sync(t.Context(), bundlePath)
+	_, err := srv.Sync(t.Context(), bundleDir)
 
-	require.ErrorIs(t, err, cause)
-	assert.ErrorContains(t, err, "sync "+bundlePath)
 	var re snapshot.RefusalError
-	assert.False(t, errors.As(err, &re), "an unrelated open failure must not be misclassified as a content refusal")
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t,
+		"cannot read the snapshot of ~/Documents/Home.quicken: "+cause.Error()+"; nothing was kept; run quarry sync again",
+		re.Error())
 }
 
 // A catalog row for a virtual table whose module is absent makes the
-// snapshot's own schema read fail.
-func Test_sync_wraps_an_error_when_the_snapshot_schema_cannot_be_read(t *testing.T) {
+// snapshot's own schema read fail; Sync refuses naming the bundle.
+func Test_sync_refuses_a_snapshot_whose_schema_cannot_be_read(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "snap.sqlite")
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
@@ -237,19 +320,22 @@ func Test_sync_wraps_an_error_when_the_snapshot_schema_cannot_be_read(t *testing
 		"('table', 'ZFOO', 'ZFOO', 0, 'CREATE VIRTUAL TABLE ZFOO USING nonexistent_module')")
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
-	bundlePath := t.TempDir()
+	home := t.TempDir()
+	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
 	srv := snapshot.NewServer(
 		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
 		snapshot.WithSource(&fakeSource{}),
 		snapshot.WithDestination(&fixedPathDestination{snapshotPath: path}),
+		snapshot.WithHome(home),
 	)
 
-	_, err = srv.Sync(t.Context(), bundlePath)
+	_, err = srv.Sync(t.Context(), bundleDir)
 
-	assert.ErrorContains(t, err, "read snapshot schema")
-	assert.ErrorContains(t, err, "no such module")
 	var re snapshot.RefusalError
-	assert.False(t, errors.As(err, &re), "an unrelated schema-read failure must not be misclassified as a content refusal")
+	require.ErrorAs(t, err, &re)
+	assert.True(t, strings.HasPrefix(re.Error(), "cannot read the snapshot of ~/Documents/Home.quicken: "))
+	assert.Contains(t, re.Error(), "no such module")
+	assert.True(t, strings.HasSuffix(re.Error(), "; nothing was kept; run quarry sync again"))
 }
 
 // lastIntegrityCheckLine reads PRAGMA integrity_check's first row's last
