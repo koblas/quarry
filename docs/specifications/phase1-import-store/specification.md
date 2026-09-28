@@ -280,6 +280,8 @@ stderr: `quarry: warning: 29 transfers have no matching transaction in another a
 
 On a plain sync, S1–S4/I2/V1 keep the already-committed snapshot.
 
+Precedence when several apply: V1, I2, S4, S1, S2, S3. I2 covers any non-V1 import failure once the sync was interrupted, since an interrupted scan cannot vouch for S4's first offender or count.
+
 S4 `<reason>` forms (first offender by date, then account, then source id; ` (and N more)` appended when others exist):
 1. `account "Euro Savings" uses currency EUR; quarry supports CAD and USD accounts`
 2. `account "X" has type ZZZ, which quarry does not map yet`
