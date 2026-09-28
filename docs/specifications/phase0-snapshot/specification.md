@@ -50,6 +50,8 @@ Done in the pre-step (commit after spec). Upstream: dweekly `119e2724a3cb0eab872
 - Busy timeout as config (a named constant in Phase 0).
 - Schema fingerprint recorded in `import_runs`.
 - Possibly comparing column types.
+- EDQUOT (or any SQLITE_IOERR_WRITE) during backup reports as R14c today; ruled: route to R14b — `quarry: cannot write snapshot to ~/Library/Application Support/quarry/snapshots: disk I/O error; run quarry sync again` (the Quicken connection is read-only, so a write I/O error is snapshot-side).
+- When a second command lands, U2's unknown-command hint becomes `Run 'quarry --help' for usage.`
 - A `.json` manifest whose `.sqlite` is absent (SIGKILL / power loss between renames) is not a snapshot; `quarry status` and retention ignore or report it.
 - Rewrite `sync` help Long when sync gains import/validation.
 
@@ -238,7 +240,7 @@ All to stderr as one line prefixed `quarry: `. stdout empty in both modes; nothi
 | R11 | No `ZACCOUNT` table (incl. 0-byte `data`) | `quarry: ~/Documents/Home.quicken is not a Quicken Classic for Mac database (no ZACCOUNT table); pass the right file with --quicken <path>` | 1 |
 | R12 | `ZACCOUNT` has 0 rows | `quarry: ~/Documents/Home.quicken has no accounts; nothing was kept; check you have the right file open, or pass it with --quicken <path>` | 1 |
 | R13 | Cannot create or write the app-support or snapshots dir, at Prepare or on any later write, when the cause is a permission error | `quarry: cannot write to ~/Library/Application Support/quarry/snapshots: permission denied; make the directory writable by your user` (OS reason verbatim) | 1 |
-| R14 | Write fails with ENOSPC or EDQUOT during backup or manifest | `quarry: cannot write snapshot to ~/Library/Application Support/quarry/snapshots: no space left on device; free disk space, then run quarry sync again` | 1 |
+| R14 | Write fails with ENOSPC or EDQUOT during backup or manifest | `quarry: cannot write snapshot to ~/Library/Application Support/quarry/snapshots: no space left on device; free disk space, then run quarry sync again` (OS reason verbatim) | 1 |
 | R14b | Any other post-Prepare write failure (not permission, not ENOSPC/EDQUOT). Added at final product-vision pass. | `quarry: cannot write snapshot to ~/Library/Application Support/quarry/snapshots: <OS reason>; run quarry sync again` | 1 |
 | R14c | Unclassified Backup failure (source-side read fault; not R8/R9/R13/R14). Added at final product-vision pass. | `quarry: cannot copy ~/Documents/Home.quicken: <OS reason>; run quarry sync again` | 1 |
 | R15 | Snapshot content check fails for an unclassified reason (not R10/R11/R12), incl. the encode-manifest wrap. Added at final product-vision pass. | `quarry: cannot read the snapshot of ~/Documents/Home.quicken: <OS/driver reason>; nothing was kept; run quarry sync again` | 1 |
@@ -260,6 +262,7 @@ M1 is noun-only (`is missing 1 column that the schema reference expects`). `warn
 
 | Output | Input class | Text / behaviour |
 |---|---|---|
+| stderr | mismatch or extras, plus stdout write failure | O1 only; M1/W1 not printed; exit 1; the manifest carries "verified" and "warnings" |
 | stdout | R8b, I1 | empty (human and `--json`) |
 | bundle file set | R8b | unchanged; no `-wal`/`-shm` added |
 | `data` rollback-journal (bytes 18–19 == 1) | not R8b | proceeds as today |
