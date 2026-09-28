@@ -14,7 +14,8 @@ Usage: .claude/scripts/uncovered-diff.py [--profile FILE] [--lines] [BASE] [PKG 
   --lines  one row per uncovered line instead of one row per consecutive run.
 
 Added lines are those `git diff -U0 BASE` adds to non-test .go files (committed and
-uncommitted). A line is uncovered when every coverage block containing it has count 0;
+uncommitted), plus every line of an untracked, non-ignored non-test .go file
+(`git ls-files --others --exclude-standard`), which `git diff` does not show. A line is uncovered when every coverage block containing it has count 0;
 non-statement lines (comments, declarations, lone closing braces) are skipped.
 
 Output (stdout): one row per run of consecutive uncovered lines,
@@ -72,7 +73,8 @@ def default_base() -> str:
 
 
 def added_lines(base: str) -> dict[str, set[int]]:
-    """Map each non-test .go file to the line numbers `git diff -U0 base` added to it."""
+    """Map each non-test .go file to the line numbers `git diff -U0 base` added to it; an
+    untracked file counts as wholly added."""
     added: dict[str, set[int]] = defaultdict(set)
     path = None
     for line in git("diff", "-U0", base, "--", "*.go", ":(exclude)*_test.go").splitlines():
@@ -85,7 +87,16 @@ def added_lines(base: str) -> dict[str, set[int]]:
             start = int(m.group(1))
             count = 1 if m.group(2) is None else int(m.group(2))
             added[path].update(range(start, start + count))
+    for path in untracked_go_files():
+        with open(path) as f:
+            added[path].update(range(1, len(f.read().splitlines()) + 1))
     return added
+
+
+def untracked_go_files() -> list[str]:
+    """Non-test .go files not yet `git add`ed and not ignored: `git diff` cannot see them."""
+    out = git("ls-files", "--others", "--exclude-standard", "--", "*.go", ":(exclude)*_test.go")
+    return [p for p in out.splitlines() if p]
 
 
 def run_tests(profile: str, pkgs: list[str]) -> None:
