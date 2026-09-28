@@ -22,13 +22,13 @@ const dollarBound = 10_000_000_000_000_000 // 1e16
 
 // realIntBound is the largest magnitude (exclusive) a real-stored money
 // column's integer part may hold: SQLite prints a REAL to 15 significant
-// digits, so cents above this are not trustworthy (P1-7).
+// digits, so cents above this are not trustworthy.
 const realIntBound = 10_000_000_000_000 // 1e13
 
 // parseMoney reads typ (SQLite's typeof()) and text (CAST(col AS TEXT))
 // for one non-NULL money column and returns its value in cents, parsed
-// exactly from the digit string — never through float arithmetic (P1-7).
-// It reports moneyPrecision for more than 2 decimal places and moneyTooLarge
+// exactly from the digit string — never through float arithmetic. It
+// reports moneyPrecision for more than 2 decimal places and moneyTooLarge
 // for a value outside DECIMAL(18,2)'s trustworthy range.
 func parseMoney(typ, text string) (cents int64, fault moneyFault) {
 	switch typ {
@@ -38,7 +38,7 @@ func parseMoney(typ, text string) (cents int64, fault moneyFault) {
 		return parseRealMoney(text)
 	default:
 		// unreachable: a money column is only ever NULL, integer or real
-		// stored (P1-7); callers only reach parseMoney for a non-NULL one.
+		// stored; callers only reach parseMoney for a non-NULL one.
 		return 0, moneyTooLarge
 	}
 }

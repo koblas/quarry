@@ -40,7 +40,7 @@ func NewServer(opts ...Option) *Server {
 
 // Import maps snapshotPath's v9 database into quarry's schema and writes it
 // through the configured Store, returning the store.Result Replace
-// produced. Every check runs before any refusal (P1-6): it returns an
+// produced. Every check runs before any refusal: it returns an
 // *UnmappableError naming the first-ordered S4 class's first offender when
 // one or more values cannot be mapped to quarry's schema.
 func (srv *Server) Import(ctx context.Context, snapshotPath string) (store.Result, error) {

@@ -27,7 +27,7 @@ type offender struct {
 
 // offenders accumulates every row Import cannot map, across every
 // validation step, so a refusal reports every offender, not just the
-// first (P1-6).
+// first.
 type offenders struct {
 	items []offender
 }

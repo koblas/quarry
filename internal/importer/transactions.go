@@ -14,8 +14,8 @@ import (
 var coreDataEpoch = time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)
 
 // coreDataToDate converts a v9 TIMESTAMP value (seconds since
-// coreDataEpoch) to its UTC calendar date (P1-5c): quarry's date columns
-// hold no time of day.
+// coreDataEpoch) to its UTC calendar date: quarry's date columns hold no
+// time of day.
 func coreDataToDate(seconds float64) time.Time {
 	t := coreDataEpoch.Add(time.Duration(seconds * float64(time.Second)))
 	y, m, d := t.Date()

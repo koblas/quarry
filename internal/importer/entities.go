@@ -8,8 +8,7 @@ import (
 )
 
 // requiredEntities are the v9 Z_PRIMARYKEY entity names Import must resolve
-// before reading any row, rather than hard-coding their Z_ENT numbers
-// (P1-5b).
+// before reading any row, rather than hard-coding their Z_ENT numbers.
 var requiredEntities = []string{"CashFlowTransaction", "CategoryTag", "UserTag"}
 
 // resolveEntities reads Z_PRIMARYKEY and returns each of requiredEntities'

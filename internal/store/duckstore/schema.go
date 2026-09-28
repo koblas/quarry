@@ -1,8 +1,8 @@
 package duckstore
 
 // schemaDDL creates quarry's own tables. Primary keys are quarry's stable
-// <prefix>-<source id> ids (store package, P1-8); a build that would write
-// two rows under the same id fails here, at the Appender's Close.
+// <prefix>-<source id> ids; a build that would write two rows under the
+// same id fails here, at the Appender's Close.
 const schemaDDL = `
 CREATE TABLE accounts (
 	id VARCHAR PRIMARY KEY,

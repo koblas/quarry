@@ -23,7 +23,7 @@ var accountTypeMap = map[string]string{
 	"RETIREMENTIRA":              "retirement",
 }
 
-// validCurrencies are the only currencies quarry supports (P1-9).
+// validCurrencies are the only currencies quarry supports.
 var validCurrencies = map[string]bool{"CAD": true, "USD": true}
 
 // accountRef is what later mapping steps need about an account without

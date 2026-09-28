@@ -20,7 +20,7 @@ ORDER BY e.ZPARENT, e.Z_PK
 // one whose amount has too much precision (reason 4) or is too large
 // (reason 6) likewise. An entry whose transaction is not in txns — a
 // Smart/Investment transaction, or one itself excluded — is silently
-// skipped, never refused (P1-5b).
+// skipped, never refused.
 func mapSplits(ctx context.Context, src Source, txns map[int64]txnRef, off *offenders) ([]store.Split, map[int64]string, error) {
 	var rows []store.Split
 	ids := make(map[int64]string)
