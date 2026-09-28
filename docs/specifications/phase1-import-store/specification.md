@@ -223,6 +223,8 @@ Transfers 3,112 paired
   "warnings": []
 }
 ```
+- `payee` is `null` when the transaction has no payee (key always present; `(no payee)` is human output only).
+- `store.path` is always the store's path; with `"built": false` the file there is unchanged, or absent on a first run.
 - `not_imported` always present; `investment_transactions` is 0 when none.
 - `balances.mismatched[]`: `{"id","name","currency","closed","active","statement_date":"2026-08-31","quarry":"-1204.17","quicken":"-1184.17","difference":"-20.00"}`; `difference` = quarry − quicken.
 - `splits.mismatched[]`: `{"id","date","account","currency","payee","amount","splits_total"}`.
