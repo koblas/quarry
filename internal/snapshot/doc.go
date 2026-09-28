@@ -4,5 +4,6 @@
 // supplied reference, and writes both the snapshot and its JSON manifest
 // under a snapshots directory. SyncAndImport then sequences a store build
 // through a consumer-declared Importer, skipping it when the schema check
-// found a mismatch.
+// found a mismatch; ImportFrom does the same from an earlier snapshot,
+// re-verifying its hash and schema without reading Quicken.
 package snapshot

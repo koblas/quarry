@@ -48,6 +48,44 @@ func Test_run_prints_the_sync_help(t *testing.T) {
 		"must add up to the balance of its last reconciled statement in Quicken to the\n"+
 		"cent, and every transaction must equal the sum of its splits; if a check\n"+
 		"fails, the previous store is left unchanged.")
+	assert.Contains(t, syncStdout.String(), "With --from, quarry rebuilds the store from a snapshot it took earlier and\n"+
+		"does not read Quicken at all.")
+	assert.Contains(t, syncStdout.String(), "  quarry sync --quicken ~/Documents/Home.quicken\n  quarry sync --from 20260927T143005Z\n")
+	assert.Contains(t, syncStdout.String(), "--from snapshot   snapshot to rebuild the store from instead of reading Quicken: "+
+		"an ID such as 20260927T143005Z, or the path to its .sqlite file")
+}
+
+func Test_run_refuses_from_with_quicken_or_without_a_value(t *testing.T) {
+	const u3 = "quarry: --from and --quicken cannot be used together; --from rebuilds from a snapshot without reading Quicken\n"
+	const u4 = "quarry: flag needs an argument: --from; Run 'quarry sync --help' for usage.\n"
+	cases := []struct {
+		name       string
+		args       []string
+		wantStderr string
+	}{
+		{name: "with --quicken", args: []string{"sync", "--from", "20260927T143005Z", "--quicken", "~/Documents/Home.quicken"}, wantStderr: u3},
+		{name: "with an empty --quicken", args: []string{"sync", "--from", "20260927T143005Z", "--quicken="}, wantStderr: u3},
+		{name: "empty", args: []string{"sync", "--from="}, wantStderr: u4},
+		{name: "all whitespace", args: []string{"sync", "--from=   "}, wantStderr: u4},
+		{name: "missing its value", args: []string{"sync", "--from"}, wantStderr: u4},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), c.args, &stdout, &stderr)
+
+			assert.Equal(t, 2, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, c.wantStderr, stderr.String())
+			_, statErr := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"))
+			assert.ErrorIs(t, statErr, os.ErrNotExist)
+		})
+	}
 }
 
 func Test_run_refuses_an_empty_or_whitespace_quicken_flag_as_a_usage_error_even_with_a_bundle_in_documents(t *testing.T) {

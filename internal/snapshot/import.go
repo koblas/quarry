@@ -51,18 +51,18 @@ func oneSidedWarning(n int) string {
 	return fmt.Sprintf("%d transfers have no matching transaction in another account; quarry keeps them as one-sided transfers", n)
 }
 
-// storeRefusalError is an import failure's refusal: Error is the refusal
-// text alone, while Unwrap preserves the importer's error for errors.As.
-type storeRefusalError struct {
+// causedRefusal is a refusal that keeps its cause: Error is the refusal
+// text alone, while Unwrap preserves the cause for errors.Is and errors.As.
+type causedRefusal struct {
 	msg   string
 	cause error
 }
 
 // Error returns the refusal's message verbatim.
-func (e storeRefusalError) Error() string { return e.msg }
+func (e causedRefusal) Error() string { return e.msg }
 
-// Unwrap returns the importer error the refusal wraps.
-func (e storeRefusalError) Unwrap() error { return e.cause }
+// Unwrap returns the error the refusal wraps.
+func (e causedRefusal) Unwrap() error { return e.cause }
 
 // snapshotID returns the id a refusal names for path: its basename with the
 // .sqlite extension removed.
@@ -83,6 +83,12 @@ func (s *Server) SyncAndImport(ctx context.Context, bundlePath string) (Outcome,
 		return Outcome{Manifest: manifest}, err
 	}
 
+	return s.importVerified(ctx, manifest)
+}
+
+// importVerified imports the snapshot manifest describes, once its hash
+// and schema are verified, mapping a failure to its V1 or store refusal.
+func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome, error) {
 	if s.importer == nil {
 		return Outcome{Manifest: manifest}, errNoImporter
 	}
@@ -133,7 +139,7 @@ func (s *Server) importFailureRefusal(ctx context.Context, manifest Manifest, er
 	default:
 		msg = fmt.Sprintf("cannot build the store in %s: %s; run quarry sync --from %s", storeDir, causeText(err), id)
 	}
-	return storeRefusalError{msg: msg, cause: err}
+	return causedRefusal{msg: msg, cause: err}
 }
 
 // validationFailedRefusal reports V1: a build reached the balance or
@@ -146,7 +152,7 @@ func (s *Server) validationFailedRefusal(manifest Manifest, v store.Validation, 
 	if n := len(v.Splits.Mismatched); n > 0 {
 		clauses = append(clauses, splitMismatchClause(n))
 	}
-	return storeRefusalError{
+	return causedRefusal{
 		msg: fmt.Sprintf("validation failed: %s; %s was not changed; each difference is listed on stdout; "+
 			"fix the account in Quicken and run quarry sync, or run quarry sync --from %s after updating quarry",
 			strings.Join(clauses, " and "), homepath.Abbreviate(s.home, s.storePath), snapshotID(manifest.Snapshot.Path)),

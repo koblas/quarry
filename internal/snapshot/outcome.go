@@ -30,6 +30,16 @@ func mismatchError(home, bundlePath, snapshotPath string, info SchemaInfo) Misma
 		homepath.Abbreviate(home, snapshotPath))}
 }
 
+// fromMismatchError renders the --from mismatch refusal: the snapshot is
+// named by its ID, bundlePath by its base name.
+func fromMismatchError(snapshotPath, bundlePath string, info SchemaInfo) MismatchError {
+	return MismatchError{msg: fmt.Sprintf(
+		"schema check failed: snapshot %s of %s is missing %s that the schema reference expects; "+
+			"quarry cannot import it until its schema reference is updated",
+		snapshotID(snapshotPath), filepath.Base(bundlePath),
+		sqlschema.CountPhrase(len(info.MissingTables), len(info.MissingColumns)))}
+}
+
 // extrasWarningText renders the extras warning's body: bundlePath and
 // manifestPath are both named by their base name. The verb and pronoun
 // agree with the singular only when exactly one table or column, in
