@@ -116,9 +116,7 @@ func (d *dirDestination) WriteManifest(ctx context.Context, name string, data []
 	defer func() { _ = f.Close() }()
 
 	if _, err := f.Write(data); err != nil {
-		// unreachable: no portable, test-constructible input makes a Write
-		// to a freshly created regular file fail; only disk exhaustion or
-		// an I/O fault would, and this package cannot construct either.
+		// unreachable: no portable, test-constructible input makes a Write to a freshly created regular file fail.
 		_ = os.Remove(partial)
 		return "", fmt.Errorf("write manifest partial: %w", err)
 	}
