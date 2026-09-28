@@ -19,13 +19,12 @@ func Create(path string, perm fs.FileMode) (*os.File, error) {
 // Commit moves partial into place at dest without overwriting an existing
 // file. It returns an error wrapping fs.ErrExist when dest already exists,
 // leaving partial in place. The move is a hard link followed by removing
-// partial, which is atomic and fails without side effects when dest exists.
+// partial: the link is what makes dest exist, so the commit is done once it
+// succeeds even if removing the now-redundant partial fails.
 func Commit(partial, dest string) error {
 	if err := os.Link(partial, dest); err != nil {
 		return fmt.Errorf("commit %s: %w", dest, err)
 	}
-	if err := os.Remove(partial); err != nil {
-		return fmt.Errorf("commit %s: remove partial: %w", dest, err)
-	}
+	_ = os.Remove(partial)
 	return nil
 }

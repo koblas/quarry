@@ -97,6 +97,22 @@ func Test_DiscoverBundle_follows_a_symlink_to_a_bundle_outside_documents(t *test
 	assert.Equal(t, link, got, "the symlink path itself, not the resolved target, is the discovered bundle")
 }
 
+// A symlink loop is a real stat fault, not a missing file: DiscoverBundle
+// must not silently fall back to the one bundle it can see.
+func Test_DiscoverBundle_refuses_when_a_candidate_cannot_be_statted_for_a_reason_other_than_not_existing(t *testing.T) {
+	home := t.TempDir()
+	documents := filepath.Join(home, "Documents")
+	v9fixture.OpenBundle(t, documents)
+	loop := filepath.Join(documents, "Loop.quicken")
+	require.NoError(t, os.Symlink(loop, loop))
+
+	_, err := snapshot.DiscoverBundle(home)
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Contains(t, re.Error(), "cannot read")
+}
+
 func Test_DiscoverBundle_refuses_when_multiple_bundles_exist(t *testing.T) {
 	cases := []struct {
 		name       string

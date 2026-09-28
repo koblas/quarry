@@ -110,16 +110,16 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 
 	dataPath := filepath.Join(bundlePath, "data")
 	if err := source.Open(ctx, dataPath); err != nil {
-		return Manifest{}, sourceRefusal(s.home, bundlePath, err)
+		return Manifest{}, failureOutcome(ctx, sourceRefusal(s.home, bundlePath, err))
 	}
 	defer func() { _ = source.Close() }()
 
 	if err := source.Probe(ctx); err != nil {
-		return Manifest{}, sourceRefusal(s.home, bundlePath, err)
+		return Manifest{}, failureOutcome(ctx, sourceRefusal(s.home, bundlePath, err))
 	}
 
 	if err := destination.Prepare(ctx); err != nil {
-		return Manifest{}, prepareRefusal(s.home, s.snapshotDir, err)
+		return Manifest{}, failureOutcome(ctx, prepareRefusal(s.home, s.snapshotDir, err))
 	}
 
 	takenAt := time.Now().UTC()
@@ -128,9 +128,9 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 	snapshotPartial, resolvedName, err := destination.Backup(ctx, source, name)
 	if err != nil {
 		if sqlite.IsNotADB(err) || sqlite.IsBusy(err) {
-			return Manifest{}, sourceRefusal(s.home, bundlePath, err)
+			return Manifest{}, failureOutcome(ctx, sourceRefusal(s.home, bundlePath, err))
 		}
-		return Manifest{}, writeRefusal(s.home, s.snapshotDir, err)
+		return Manifest{}, failureOutcome(ctx, writeRefusal(s.home, s.snapshotDir, err))
 	}
 	snapshotPath, manifestPath := destination.FinalPaths(resolvedName)
 
@@ -139,7 +139,7 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 		// Best-effort: a Discard failure never replaces the classified
 		// refusal below, mirroring the deferred source.Close() above.
 		_ = destination.Discard(ctx, snapshotPartial)
-		return Manifest{}, contentRefusal(s.home, bundlePath, err)
+		return Manifest{}, failureOutcome(ctx, contentRefusal(s.home, bundlePath, err))
 	}
 	// Set before Encode: the committed manifest must carry the paths Sync returns.
 	manifest.Snapshot.Path = snapshotPath
@@ -156,7 +156,16 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 	manifestPartial, err := destination.WriteManifest(ctx, resolvedName, manifestBytes)
 	if err != nil {
 		_ = destination.Discard(ctx, snapshotPartial)
-		return Manifest{}, writeRefusal(s.home, s.snapshotDir, err)
+		return Manifest{}, failureOutcome(ctx, writeRefusal(s.home, s.snapshotDir, err))
+	}
+
+	// The single ctx check ahead of the commit sequence: past this point the
+	// renames run to completion regardless, and the run reports its normal
+	// outcome even if ctx ends mid-rename.
+	if ctx.Err() != nil {
+		_ = destination.Discard(ctx, manifestPartial)
+		_ = destination.Discard(ctx, snapshotPartial)
+		return Manifest{}, InterruptedRefusal()
 	}
 
 	// Manifest commits first: BR-8 accepts a snapshot only if its manifest
@@ -198,7 +207,7 @@ func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string,
 
 	exists, err := snap.QueryInt(ctx, "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'ZACCOUNT'")
 	if err != nil {
-		// unreachable: only a ctx cancelled between IntegrityCheck and this query could fail it, and no test in this package times that race.
+		// unreachable: only a ctx cancelled between IntegrityCheck and this query could fail it; Sync's failureOutcome then classifies it as I1, not this wrap.
 		return Manifest{}, fmt.Errorf("check accounts table: %w", err)
 	}
 	if exists == 0 {
@@ -207,7 +216,7 @@ func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string,
 
 	accounts, err := snap.QueryInt(ctx, "SELECT count(*) FROM ZACCOUNT")
 	if err != nil {
-		// unreachable: only a ctx cancelled between the existence check and this query could fail it, and no test in this package times that race.
+		// unreachable: only a ctx cancelled between the existence check and this query could fail it; Sync's failureOutcome then classifies it as I1, not this wrap.
 		return Manifest{}, fmt.Errorf("count accounts: %w", err)
 	}
 	if accounts == 0 {
@@ -223,7 +232,6 @@ func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string,
 
 	actual, err := snap.Schema(ctx)
 	if err != nil {
-		// unreachable: this connection just ran IntegrityCheck and QueryInt above; Schema's own error paths on the same connection are unreachable, see platform/sqlite.
 		return Manifest{}, fmt.Errorf("read snapshot schema: %w", err)
 	}
 	diff := sqlschema.Compare(scopeSchema(s.reference), scopeSchema(actual))

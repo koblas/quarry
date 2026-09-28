@@ -222,6 +222,38 @@ func Test_sync_wraps_an_error_when_the_snapshot_cannot_be_opened(t *testing.T) {
 	assert.False(t, errors.As(err, &re), "an unrelated open failure must not be misclassified as a content refusal")
 }
 
+// A catalog row for a virtual table whose module is absent makes the
+// snapshot's own schema read fail, distinct from an integrity, account, or
+// open fault.
+func Test_sync_wraps_an_error_when_the_snapshot_schema_cannot_be_read(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "snap.sqlite")
+	conn, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	_, err = conn.Exec("CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZNAME TEXT)")
+	require.NoError(t, err)
+	_, err = conn.Exec("INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
+	require.NoError(t, err)
+	_, err = conn.Exec("PRAGMA writable_schema = ON")
+	require.NoError(t, err)
+	_, err = conn.Exec("INSERT INTO sqlite_master (type, name, tbl_name, rootpage, sql) VALUES " +
+		"('table', 'ZFOO', 'ZFOO', 0, 'CREATE VIRTUAL TABLE ZFOO USING nonexistent_module')")
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+	bundlePath := t.TempDir()
+	srv := snapshot.NewServer(
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{}),
+		snapshot.WithDestination(&fixedPathDestination{snapshotPath: path}),
+	)
+
+	_, err = srv.Sync(t.Context(), bundlePath)
+
+	assert.ErrorContains(t, err, "read snapshot schema")
+	assert.ErrorContains(t, err, "no such module")
+	var re snapshot.RefusalError
+	assert.False(t, errors.As(err, &re), "an unrelated schema-read failure must not be misclassified as a content refusal")
+}
+
 // lastIntegrityCheckLine reads PRAGMA integrity_check's first row's last
 // physical line through a connection independent of the code under test.
 func lastIntegrityCheckLine(t *testing.T, path string) string {
@@ -586,6 +618,143 @@ func Test_sync_refuses_a_busy_bundle(t *testing.T) {
 	assertNoPartialsLeftBehind(t, snapshotsDir)
 	_, statErr := os.Stat(snapshotsDir)
 	assert.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
+// A cancelled ctx overrides even a classified sqlite refusal: I1 takes
+// priority over R9 at the same failure site.
+func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_at_a_precommit_failure(t *testing.T) {
+	home := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(t.TempDir()),
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{backupErr: sqlite3.Error{Code: sqlite3.ErrBusy}}),
+		snapshot.WithHome(home),
+	)
+
+	_, err := srv.Sync(ctx, filepath.Join(home, "Documents", "Home.quicken"))
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", re.Error())
+}
+
+// cancelAfterWriteManifestDestination wraps the real adapter and cancels ctx
+// once the manifest partial is actually on disk, so a test can land exactly
+// on Sync's single pre-commit ctx check.
+type cancelAfterWriteManifestDestination struct {
+	real   snapshot.Destination
+	cancel context.CancelFunc
+}
+
+func (f *cancelAfterWriteManifestDestination) Prepare(ctx context.Context) error {
+	return f.real.Prepare(ctx)
+}
+func (f *cancelAfterWriteManifestDestination) Backup(ctx context.Context, src snapshot.Source, name string) (string, string, error) {
+	return f.real.Backup(ctx, src, name)
+}
+func (f *cancelAfterWriteManifestDestination) WriteManifest(ctx context.Context, name string, data []byte) (string, error) {
+	partial, err := f.real.WriteManifest(ctx, name, data)
+	if err == nil {
+		f.cancel()
+	}
+	return partial, err
+}
+func (f *cancelAfterWriteManifestDestination) CommitManifest(ctx context.Context, partial string) (string, error) {
+	return f.real.CommitManifest(ctx, partial)
+}
+func (f *cancelAfterWriteManifestDestination) CommitSnapshot(ctx context.Context, partial string) (string, error) {
+	return f.real.CommitSnapshot(ctx, partial)
+}
+func (f *cancelAfterWriteManifestDestination) FinalPaths(name string) (string, string) {
+	return f.real.FinalPaths(name)
+}
+func (f *cancelAfterWriteManifestDestination) Discard(ctx context.Context, partial string) error {
+	return f.real.Discard(ctx, partial)
+}
+
+func Test_sync_discards_everything_and_reports_interrupted_when_the_context_ends_just_before_the_commit_sequence(t *testing.T) {
+	home := t.TempDir()
+	snapshotsDir := filepath.Join(home, "snapshots")
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	ref, err := v9.Reference(t.Context())
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(t.Context())
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(snapshotsDir),
+		snapshot.WithReference(v9.ReferenceLabel, ref),
+		snapshot.WithDestination(&cancelAfterWriteManifestDestination{
+			real:   snapshot.NewDirDestination(snapshotsDir),
+			cancel: cancel,
+		}),
+		snapshot.WithHome(home),
+	)
+
+	_, err = srv.Sync(ctx, bundle.Dir)
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", re.Error())
+	assertSnapshotsDirEmpty(t, snapshotsDir)
+}
+
+// cancelDuringCommitManifestDestination cancels ctx from inside
+// CommitManifest itself, after the pre-commit checkpoint has already passed.
+type cancelDuringCommitManifestDestination struct {
+	real   snapshot.Destination
+	cancel context.CancelFunc
+}
+
+func (f *cancelDuringCommitManifestDestination) Prepare(ctx context.Context) error {
+	return f.real.Prepare(ctx)
+}
+func (f *cancelDuringCommitManifestDestination) Backup(ctx context.Context, src snapshot.Source, name string) (string, string, error) {
+	return f.real.Backup(ctx, src, name)
+}
+func (f *cancelDuringCommitManifestDestination) WriteManifest(ctx context.Context, name string, data []byte) (string, error) {
+	return f.real.WriteManifest(ctx, name, data)
+}
+func (f *cancelDuringCommitManifestDestination) CommitManifest(ctx context.Context, partial string) (string, error) {
+	f.cancel()
+	return f.real.CommitManifest(ctx, partial)
+}
+func (f *cancelDuringCommitManifestDestination) CommitSnapshot(ctx context.Context, partial string) (string, error) {
+	return f.real.CommitSnapshot(ctx, partial)
+}
+func (f *cancelDuringCommitManifestDestination) FinalPaths(name string) (string, string) {
+	return f.real.FinalPaths(name)
+}
+func (f *cancelDuringCommitManifestDestination) Discard(ctx context.Context, partial string) error {
+	return f.real.Discard(ctx, partial)
+}
+
+// Once the pre-commit checkpoint has passed, ctx ending mid-rename must not
+// abort the sequence: both files still commit and Sync reports its normal
+// outcome.
+func Test_sync_completes_normally_when_the_context_ends_during_the_commit_sequence(t *testing.T) {
+	home := t.TempDir()
+	snapshotsDir := filepath.Join(home, "snapshots")
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	ref, err := v9.Reference(t.Context())
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(t.Context())
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(snapshotsDir),
+		snapshot.WithReference(v9.ReferenceLabel, ref),
+		snapshot.WithDestination(&cancelDuringCommitManifestDestination{
+			real:   snapshot.NewDirDestination(snapshotsDir),
+			cancel: cancel,
+		}),
+		snapshot.WithHome(home),
+	)
+
+	manifest, err := srv.Sync(ctx, bundle.Dir)
+
+	require.NoError(t, err)
+	assert.True(t, manifest.Schema.Verified)
+	assert.FileExists(t, manifest.Snapshot.Path)
+	assert.FileExists(t, manifest.Snapshot.Manifest)
 }
 
 // Proves every Source call Sync routes through sourceRefusal (Open, Probe

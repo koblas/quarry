@@ -1,6 +1,7 @@
 package snapshot_test
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -139,6 +140,44 @@ func Test_ResolveBundlePath_refuses_an_unreadable_bundle_directory(t *testing.T)
 	var re snapshot.RefusalError
 	require.ErrorAs(t, err, &re)
 	assert.Contains(t, re.Error(), "permission denied")
+}
+
+func Test_ResolveBundlePath_refuses_a_wal_formatted_bundle_with_no_live_wal_file(t *testing.T) {
+	home := t.TempDir()
+	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
+	require.NoError(t, os.MkdirAll(bundleDir, 0o700))
+	dataPath := filepath.Join(bundleDir, "data")
+	closeWALFormattedDatabase(t, dataPath)
+	before, err := os.ReadDir(bundleDir)
+	require.NoError(t, err)
+
+	_, err = snapshot.ResolveBundlePath(home, bundleDir)
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t, "~/Documents/Home.quicken is not open in Quicken (its database has no write-ahead log); "+
+		"open it in Quicken, then run quarry sync again", re.Error())
+	after, err := os.ReadDir(bundleDir)
+	require.NoError(t, err)
+	assert.Equal(t, namesOf(before), namesOf(after))
+}
+
+// closeWALFormattedDatabase leaves path's header marked WAL (bytes 18-19
+// == 2) with no live -wal file: SQLite's automatic checkpoint-on-close
+// merges and removes the WAL, but the header's format-version bytes stay
+// at 2 once journal_mode has ever been WAL.
+func closeWALFormattedDatabase(t *testing.T, path string) {
+	t.Helper()
+	conn, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	conn.SetMaxOpenConns(1)
+	_, err = conn.Exec("PRAGMA journal_mode=WAL")
+	require.NoError(t, err)
+	_, err = conn.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+	_, statErr := os.Stat(path + "-wal")
+	require.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
 func Test_ResolveBundlePath_accepts_a_symlinked_data_file(t *testing.T) {

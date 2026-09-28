@@ -37,7 +37,13 @@ func DiscoverBundle(home string) (string, error) {
 			continue
 		}
 		info, err := os.Stat(filepath.Join(documentsDir, name))
-		if err != nil || !info.IsDir() {
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				continue // a dangling symlink, not a candidate
+			}
+			return "", unreadableRefusal(home, filepath.Join(documentsDir, name), err)
+		}
+		if !info.IsDir() {
 			continue
 		}
 		names = append(names, name)

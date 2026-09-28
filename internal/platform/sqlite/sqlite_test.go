@@ -63,6 +63,30 @@ func Test_schema_reads_table_and_column_names(t *testing.T) {
 	assert.Equal(t, sqlschema.Schema{"t": {"id", "v"}}, got)
 }
 
+// A catalog row for a virtual table whose module is absent makes reading
+// its columns fail without ever hitting a Scan or a query-open fault.
+func Test_schema_wraps_the_error_when_a_table_column_read_fails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data")
+	conn, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	_, err = conn.Exec("PRAGMA writable_schema = ON")
+	require.NoError(t, err)
+	_, err = conn.Exec("INSERT INTO sqlite_master (type, name, tbl_name, rootpage, sql) VALUES " +
+		"('table', 'ZFOO', 'ZFOO', 0, 'CREATE VIRTUAL TABLE ZFOO USING nonexistent_module')")
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+
+	db, err := sqlite.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	_, err = db.Schema(t.Context())
+
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "columns of ZFOO")
+	assert.ErrorContains(t, err, "no such module")
+}
+
 func Test_schema_reads_quoted_table_and_column_names_verbatim(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data")
 	conn, err := sql.Open("sqlite3", path)
@@ -321,6 +345,8 @@ func Test_IsNotADB_and_IsBusy_classify_sqlite3_error_codes(t *testing.T) {
 		{name: "not a database", err: sqlite3.Error{Code: sqlite3.ErrNotADB}, wantNotADB: true},
 		{name: "busy", err: sqlite3.Error{Code: sqlite3.ErrBusy}, wantBusy: true},
 		{name: "locked", err: sqlite3.Error{Code: sqlite3.ErrLocked}, wantBusy: true},
+		{name: "busy extended code (recovery)", err: sqlite3.Error{Code: sqlite3.ErrNo(sqlite3.ErrBusyRecovery)}, wantBusy: true},
+		{name: "locked extended code (shared cache)", err: sqlite3.Error{Code: sqlite3.ErrNo(sqlite3.ErrLockedSharedCache)}, wantBusy: true},
 		{name: "unrelated sqlite3 error", err: sqlite3.Error{Code: sqlite3.ErrCorrupt}},
 		{name: "non-sqlite3 error", err: errors.New("boom")},
 	}

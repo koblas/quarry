@@ -63,15 +63,19 @@ Without --quicken, quarry uses the only .quicken file in ~/Documents.`,
 				return &runtimeError{err: err}
 			}
 
+			var output string
 			if *jsonOut {
 				data, encErr := manifest.Encode()
 				if encErr != nil {
 					// unreachable: Manifest.Encode's own error path is unreachable for any value Sync builds; see there.
 					return &runtimeError{err: encErr}
 				}
-				_, _ = fmt.Fprint(cmd.OutOrStdout(), string(data))
+				output = string(data)
 			} else {
-				_, _ = fmt.Fprint(cmd.OutOrStdout(), renderSuccess(manifest, home))
+				output = renderSuccess(manifest, home)
+			}
+			if _, writeErr := fmt.Fprint(cmd.OutOrStdout(), output); writeErr != nil {
+				return &runtimeError{err: fmt.Errorf("write output: %w", writeErr)}
 			}
 
 			for _, warning := range manifest.Warnings {

@@ -55,8 +55,12 @@ func Test_commit_refuses_to_replace_an_existing_file(t *testing.T) {
 }
 
 // The partial's directory is made read-only after the partial is written,
-// so the hard link succeeds but removing the old entry cannot.
-func Test_commit_fails_when_the_partial_cannot_be_removed(t *testing.T) {
+// so the hard link succeeds but removing the old entry cannot: dest already
+// exists via the link, so the commit is done regardless.
+func Test_commit_succeeds_when_the_partial_cannot_be_removed_after_linking(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file permissions")
+	}
 	partialDir := filepath.Join(t.TempDir(), "partial-dir")
 	require.NoError(t, os.MkdirAll(partialDir, 0o755))
 	partial := filepath.Join(partialDir, ".partial")
@@ -67,7 +71,10 @@ func Test_commit_fails_when_the_partial_cannot_be_removed(t *testing.T) {
 
 	err := atomicfile.Commit(partial, dest)
 
-	require.Error(t, err)
+	require.NoError(t, err)
+	got, err := os.ReadFile(dest)
+	require.NoError(t, err)
+	assert.Equal(t, "payload", string(got))
 }
 
 func Test_commit_fails_when_the_partial_is_missing(t *testing.T) {

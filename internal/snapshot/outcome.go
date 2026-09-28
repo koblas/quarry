@@ -31,12 +31,18 @@ func mismatchError(home, bundlePath, snapshotPath string, info SchemaInfo) Misma
 }
 
 // extrasWarningText renders W1's body: bundlePath and manifestPath are both
-// named by their base name.
+// named by their base name. The verb and pronoun agree with the singular
+// only when exactly one table or column, in total, is unexpected.
 func extrasWarningText(bundlePath, manifestPath string, info SchemaInfo) string {
+	verb, pronoun := "are", "them"
+	if len(info.UnexpectedTables)+len(info.UnexpectedColumns) == 1 {
+		verb, pronoun = "is", "it"
+	}
 	return fmt.Sprintf(
-		"%s has %s that are not in the schema reference; quarry ignores them (listed in %s)",
+		"%s has %s that %s not in the schema reference; quarry ignores %s (listed in %s)",
 		filepath.Base(bundlePath),
 		sqlschema.CountPhrase(len(info.UnexpectedTables), len(info.UnexpectedColumns)),
+		verb, pronoun,
 		filepath.Base(manifestPath))
 }
 

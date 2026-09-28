@@ -106,6 +106,9 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
+// WriteManifest writes data to name's partial and fsyncs it before closing,
+// so a crash right after this call cannot leave a truncated manifest on
+// disk once it is later committed.
 func (d *dirDestination) WriteManifest(ctx context.Context, name string, data []byte) (string, error) {
 	partial := d.partialPath(name, "json")
 
@@ -113,12 +116,23 @@ func (d *dirDestination) WriteManifest(ctx context.Context, name string, data []
 	if err != nil {
 		return "", fmt.Errorf("create manifest partial: %w", err)
 	}
-	defer func() { _ = f.Close() }()
 
 	if _, err := f.Write(data); err != nil {
-		// unreachable: no portable, test-constructible input makes a Write to a freshly created regular file fail.
+		// unreachable: reachable via a real ENOSPC mid-write; this repo has no portable disk-full fixture to trigger it.
+		_ = f.Close()
 		_ = os.Remove(partial)
 		return "", fmt.Errorf("write manifest partial: %w", err)
+	}
+	if err := f.Sync(); err != nil {
+		// unreachable: reachable via a real ENOSPC on fsync; this repo has no portable disk-full fixture to trigger it.
+		_ = f.Close()
+		_ = os.Remove(partial)
+		return "", fmt.Errorf("sync manifest partial: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		// unreachable: reachable via a delayed write-back failure on close; this repo has no portable fixture to trigger it.
+		_ = os.Remove(partial)
+		return "", fmt.Errorf("close manifest partial: %w", err)
 	}
 	return partial, nil
 }

@@ -51,11 +51,16 @@ func openReadOnly(ctx context.Context, path, dsn string) (*DB, error) {
 	return &DB{conn: conn}, nil
 }
 
+// primaryErrNo masks err to its primary (non-extended) result code: a
+// caller-supplied sqlite3.Error may carry an extended code (e.g.
+// ErrBusyRecovery) directly in Code rather than in ExtendedCode.
+const primaryErrNo = 0xff
+
 // IsNotADB reports whether err is SQLite's "file is not a database" fault
 // (SQLITE_NOTADB) — the signal an encrypted Quicken file produces.
 func IsNotADB(err error) bool {
 	var serr sqlite3.Error
-	return errors.As(err, &serr) && serr.Code == sqlite3.ErrNotADB
+	return errors.As(err, &serr) && serr.Code&primaryErrNo == sqlite3.ErrNotADB
 }
 
 // IsBusy reports whether err is SQLite's busy or locked fault
@@ -63,7 +68,11 @@ func IsNotADB(err error) bool {
 // caller's busy_timeout could not wait out.
 func IsBusy(err error) bool {
 	var serr sqlite3.Error
-	return errors.As(err, &serr) && (serr.Code == sqlite3.ErrBusy || serr.Code == sqlite3.ErrLocked)
+	if !errors.As(err, &serr) {
+		return false
+	}
+	code := serr.Code & primaryErrNo
+	return code == sqlite3.ErrBusy || code == sqlite3.ErrLocked
 }
 
 // escapePath percent-encodes path for use as a SQLite URI filename, so
@@ -164,7 +173,6 @@ func (d *DB) Schema(ctx context.Context) (sqlschema.Schema, error) {
 	for _, table := range tables {
 		cols, err := d.tableColumns(ctx, table)
 		if err != nil {
-			// unreachable: tableColumns' own error paths are unreachable on this same connection; see there.
 			return nil, err
 		}
 		schema[table] = cols
@@ -189,7 +197,10 @@ func (d *DB) tableColumns(ctx context.Context, table string) ([]string, error) {
 		}
 		cols = append(cols, name)
 	}
-	return cols, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("columns of %s: %w", table, err)
+	}
+	return cols, nil
 }
 
 // backupRetryInterval is how long runBackup sleeps between busy retries.
@@ -234,7 +245,7 @@ func Backup(ctx context.Context, src *DB, destPath string, busyTimeout time.Dura
 	// so a query through destDB here would block waiting for destConn to be
 	// released.
 	if _, err := destConn.ExecContext(ctx, "PRAGMA journal_mode = DELETE"); err != nil {
-		// unreachable: destConn just completed the backup write above; a pragma on the same connection failing only now needs a fault between the two statements that this package cannot construct.
+		// unreachable: reachable via a real ENOSPC while switching the destination off WAL mode; this repo has no portable disk-full fixture to trigger it.
 		return fmt.Errorf("backup to %s: set journal_mode delete: %w", destPath, err)
 	}
 	return nil

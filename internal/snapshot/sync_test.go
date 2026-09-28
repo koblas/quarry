@@ -74,6 +74,7 @@ func Test_sync_reports_verified_false_when_the_reference_names_a_table_the_bundl
 	assert.False(t, manifest.Schema.Verified)
 	assert.Equal(t, []string{"ZFAKETABLE"}, manifest.Schema.MissingTables)
 	assert.NotEqual(t, manifest.Schema.ReferenceFingerprint, manifest.Schema.Fingerprint)
+	assert.Contains(t, mismatch.Error(), "is missing 1 table that the schema reference expects")
 	assert.FileExists(t, manifest.Snapshot.Path)
 	assert.FileExists(t, manifest.Snapshot.Manifest)
 }
@@ -94,6 +95,7 @@ func Test_sync_reports_a_missing_column_when_the_reference_names_one_the_bundle_
 	require.ErrorAs(t, err, &mismatch)
 	assert.False(t, manifest.Schema.Verified)
 	assert.Equal(t, []snapshot.ColumnRef{{Table: "ZACCOUNT", Column: "ZFAKECOLUMN"}}, manifest.Schema.MissingColumns)
+	assert.Contains(t, mismatch.Error(), "is missing 1 column that the schema reference expects")
 	assert.FileExists(t, manifest.Snapshot.Path)
 	assert.FileExists(t, manifest.Snapshot.Manifest)
 }
@@ -117,6 +119,49 @@ func Test_sync_stays_verified_and_lists_unexpected_tables_when_the_bundle_has_ex
 	require.Len(t, manifest.Warnings, 1)
 	assert.Contains(t, manifest.Warnings[0], "1 table")
 	assert.Contains(t, manifest.Warnings[0], "not in the schema reference")
+}
+
+func Test_sync_warns_with_correct_singular_plural_agreement_for_extras(t *testing.T) {
+	cases := []struct {
+		name         string
+		dropTables   []string
+		dropColumns  int
+		wantFragment string
+	}{
+		{name: "one extra table only", dropTables: []string{"ZALERT"},
+			wantFragment: "has 1 table that is not in the schema reference; quarry ignores it"},
+		{name: "one extra column only", dropColumns: 1,
+			wantFragment: "has 1 column that is not in the schema reference; quarry ignores it"},
+		{name: "many extra columns only", dropColumns: 2,
+			wantFragment: "has 2 columns that are not in the schema reference; quarry ignores them"},
+		{name: "one extra table and one extra column", dropTables: []string{"ZALERT"}, dropColumns: 1,
+			wantFragment: "has 1 table and 1 column that are not in the schema reference; quarry ignores them"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			bundle := v9fixture.OpenBundle(t, t.TempDir())
+			ref, err := v9.Reference(t.Context())
+			require.NoError(t, err)
+			for _, table := range c.dropTables {
+				delete(ref, table)
+			}
+			if c.dropColumns > 0 {
+				cols := ref["ZACCOUNT"]
+				ref["ZACCOUNT"] = cols[:len(cols)-c.dropColumns]
+			}
+			srv := snapshot.NewServer(
+				snapshot.WithSnapshotDir(filepath.Join(t.TempDir(), "snapshots")),
+				snapshot.WithReference(v9.ReferenceLabel, ref),
+			)
+
+			manifest, err := srv.Sync(t.Context(), bundle.Dir)
+
+			require.NoError(t, err)
+			require.Len(t, manifest.Warnings, 1)
+			assert.Contains(t, manifest.Warnings[0], c.wantFragment)
+		})
+	}
 }
 
 func Test_sync_does_not_populate_warnings_when_extras_are_accompanied_by_missing_entries(t *testing.T) {

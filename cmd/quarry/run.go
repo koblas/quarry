@@ -25,6 +25,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	ref, err := v9.Reference(ctx)
 	if err != nil {
+		if ctx.Err() != nil {
+			err = snapshot.InterruptedRefusal()
+		}
 		_, _ = fmt.Fprintf(stderr, "quarry: %s\n", err)
 		return 1
 	}

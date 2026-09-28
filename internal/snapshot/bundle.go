@@ -3,6 +3,7 @@ package snapshot
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -14,6 +15,16 @@ import (
 // errBundleMissingData signals that a candidate bundle has no readable
 // regular file named "data".
 var errBundleMissingData = errors.New("bundle has no data file")
+
+// errNotOpenInQuicken signals that data's header reports WAL mode (SQLite
+// sets header bytes 18-19 to 2 once a connection ever set journal_mode=WAL)
+// with no live sibling -wal file: the database was written in WAL mode at
+// some point but nothing currently has it open.
+var errNotOpenInQuicken = errors.New("database has no write-ahead log")
+
+// walFormatByte is the SQLite header's file-format-version value (offsets
+// 18 and 19) that journal_mode=WAL leaves behind.
+const walFormatByte = 2
 
 // ResolveBundlePath expands and resolves path (a --quicken value) against
 // home to an absolute bundle directory. It returns a RefusalError unless the
@@ -47,19 +58,24 @@ func ResolveBundlePath(home, path string) (string, error) {
 	}
 
 	if err := validateData(abs); err != nil {
-		if errors.Is(err, errBundleMissingData) {
+		switch {
+		case errors.Is(err, errBundleMissingData):
 			return "", notABundleRefusal(home, abs)
+		case errors.Is(err, errNotOpenInQuicken):
+			return "", notOpenInQuickenRefusal(home, abs)
+		default:
+			return "", unreadableRefusal(home, filepath.Join(abs, "data"), err)
 		}
-		return "", unreadableRefusal(home, filepath.Join(abs, "data"), err)
 	}
 
 	return abs, nil
 }
 
 // validateData confirms bundlePath contains a readable, regular file named
-// "data" — the on-disk shape every .quicken bundle must have. It returns
-// errBundleMissingData when data is absent or not a regular file, or the
-// stat/open fault otherwise.
+// "data" — the on-disk shape every .quicken bundle must have — and that it
+// is not a closed WAL-formatted database (errNotOpenInQuicken, R8b). The
+// header check reads through the same open used for the readability probe,
+// before any SQLite connection is opened against data.
 func validateData(bundlePath string) error {
 	dataPath := filepath.Join(bundlePath, "data")
 
@@ -78,7 +94,15 @@ func validateData(bundlePath string) error {
 	if err != nil {
 		return err
 	}
-	_ = f.Close()
+	defer func() { _ = f.Close() }()
+
+	var header [20]byte
+	n, _ := io.ReadFull(f, header[:])
+	if n == len(header) && header[18] == walFormatByte && header[19] == walFormatByte {
+		if _, err := os.Stat(dataPath + "-wal"); errors.Is(err, fs.ErrNotExist) {
+			return errNotOpenInQuicken
+		}
+	}
 	return nil
 }
 
@@ -87,6 +111,14 @@ func validateData(bundlePath string) error {
 func notABundleRefusal(home, path string) error {
 	return RefusalError{msg: fmt.Sprintf(
 		"%s is not a Quicken for Mac file (expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path>",
+		homepath.Abbreviate(home, path))}
+}
+
+// notOpenInQuickenRefusal is R8b: path's data file header reports WAL
+// format with no live -wal file, so Quicken does not currently have it open.
+func notOpenInQuickenRefusal(home, path string) error {
+	return RefusalError{msg: fmt.Sprintf(
+		"%s is not open in Quicken (its database has no write-ahead log); open it in Quicken, then run quarry sync again",
 		homepath.Abbreviate(home, path))}
 }
 

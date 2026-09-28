@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -22,6 +23,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// failingWriter fails every Write with err, so a test can prove what happens
+// when stdout itself cannot be written to (a full disk on the far end of a
+// pipe, for example).
+type failingWriter struct{ err error }
+
+func (w failingWriter) Write([]byte) (int, error) { return 0, w.err }
 
 func Test_run_writes_a_verified_snapshot_and_reports_success(t *testing.T) {
 	home := t.TempDir()
@@ -82,6 +90,19 @@ func Test_run_removes_leftover_partials_silently_before_syncing(t *testing.T) {
 	assert.ErrorIs(t, err, os.ErrNotExist)
 	_, err = os.Stat(leftoverWAL)
 	assert.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func Test_run_reports_exit_1_when_writing_stdout_fails(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
+	writeErr := errors.New("no space left on device")
+	var stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, failingWriter{err: writeErr}, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Equal(t, "quarry: write output: "+writeErr.Error()+"\n", stderr.String())
 }
 
 func Test_run_prints_the_manifest_as_json_with_the_json_flag(t *testing.T) {
@@ -352,10 +373,7 @@ func Test_run_reports_exit_1_when_the_context_is_already_cancelled(t *testing.T)
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
-	lines := strings.Split(strings.TrimSuffix(stderr.String(), "\n"), "\n")
-	require.Len(t, lines, 1)
-	assert.True(t, strings.HasPrefix(lines[0], "quarry: "))
-	assert.Contains(t, lines[0], "build reference schema", "expected the failure to come from v9.Reference, not from a later stage that also observes the cancelled context")
+	assert.Equal(t, "quarry: sync interrupted; nothing was kept; run quarry sync again\n", stderr.String())
 }
 
 // The bundle itself is valid; its data file is present but not a SQLite
