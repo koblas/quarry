@@ -65,6 +65,7 @@ func Test_run_refuses_from_with_quicken_or_without_a_value(t *testing.T) {
 	}{
 		{name: "with --quicken", args: []string{"sync", "--from", "20260927T143005Z", "--quicken", "~/Documents/Home.quicken"}, wantStderr: u3},
 		{name: "with an empty --quicken", args: []string{"sync", "--from", "20260927T143005Z", "--quicken="}, wantStderr: u3},
+		{name: "empty, with --quicken", args: []string{"sync", "--from=", "--quicken", "~/Documents/Home.quicken"}, wantStderr: u3},
 		{name: "empty", args: []string{"sync", "--from="}, wantStderr: u4},
 		{name: "all whitespace", args: []string{"sync", "--from=   "}, wantStderr: u4},
 		{name: "missing its value", args: []string{"sync", "--from"}, wantStderr: u4},
