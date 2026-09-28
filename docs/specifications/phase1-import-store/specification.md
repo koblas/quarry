@@ -508,8 +508,8 @@ Order is execution order. Folded scenarios are ticked with the delivering scenar
 - [x] SCENARIO-07: transfers pair, including cross-currency and investment counterparts — FOLD → 01c, delivered by SCENARIO-01c — `internal/importer/transfers_test.go` `Test_import_pairs_cross_currency_and_brokerage_transfers`
 - [x] SCENARIO-12: a file with no transactions — FOLD → 01c, delivered by SCENARIO-01c — `cmd/quarry/run_transfers_test.go` `Test_run_reports_no_transfers_for_a_file_with_no_transactions`
 - [x] SCENARIO-21: investment transactions are counted, not imported — FOLD → 01c, delivered by SCENARIO-01c — `cmd/quarry/run_transfers_test.go` `Test_run_counts_investment_transactions_without_importing_them`
-- [ ] SCENARIO-08: a one-sided transfer is kept and warned about (absorbs 19)
-- [ ] SCENARIO-19: each build records an import_runs row — FOLD → 08
+- [x] SCENARIO-08: a one-sided transfer is kept and warned about (absorbs 19) — `cmd/quarry/run_transfers_test.go` `Test_run_keeps_and_warns_about_one_sided_transfers`
+- [x] SCENARIO-19: each build records an import_runs row — FOLD → 08, delivered by SCENARIO-08 — `cmd/quarry/run_import_runs_test.go` `Test_run_records_an_import_runs_row_for_the_build`
 - [ ] SCENARIO-02: --json reports the store result alongside the manifest (absorbs 10, 18)
 - [ ] SCENARIO-10: never-reconciled accounts are listed, not failed — FOLD → 02
 - [ ] SCENARIO-18: a schema mismatch on plain sync skips the import — FOLD → 02
