@@ -384,8 +384,6 @@ func Test_run_reports_exit_1_when_home_directory_cannot_be_resolved(t *testing.T
 		stderr.String())
 }
 
-// --help, sync --help and a usage error never resolve the home directory or
-// the reference schema, so all three work with HOME unset.
 func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 	t.Setenv("HOME", "")
 
