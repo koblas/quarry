@@ -240,31 +240,54 @@ func Test_run_refuses_a_bad_quicken_path(t *testing.T) {
 }
 
 func Test_run_discovers_the_bundle_from_documents_without_quicken(t *testing.T) {
-	t.Run("exactly one bundle in ~/Documents", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
-		bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
-		var stdout, stderr bytes.Buffer
+	cases := []struct {
+		name  string
+		setup func(t *testing.T, home string) string // returns the discovered bundle's dir
+	}{
+		{
+			name: "exactly one bundle in ~/Documents",
+			setup: func(t *testing.T, home string) string {
+				return v9fixture.OpenBundle(t, filepath.Join(home, "Documents")).Dir
+			},
+		},
+		{
+			name: "~/Documents missing, Quicken Documents folder has one",
+			setup: func(t *testing.T, home string) string {
+				return v9fixture.OpenBundle(t, quickenDocumentsDir(home)).Dir
+			},
+		},
+		{
+			name: "an ancestor of the Quicken Documents folder is a regular file, ~/Documents has one",
+			setup: func(t *testing.T, home string) string {
+				require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Dir(quickenDocumentsDir(home))), 0o700))
+				require.NoError(t, os.WriteFile(filepath.Dir(quickenDocumentsDir(home)), []byte("x"), 0o600))
+				return v9fixture.OpenBundle(t, filepath.Join(home, "Documents")).Dir
+			},
+		},
+		{
+			name: "the Quicken Documents folder itself is a regular file, ~/Documents has one",
+			setup: func(t *testing.T, home string) string {
+				require.NoError(t, os.MkdirAll(filepath.Dir(quickenDocumentsDir(home)), 0o700))
+				require.NoError(t, os.WriteFile(quickenDocumentsDir(home), []byte("x"), 0o600))
+				return v9fixture.OpenBundle(t, filepath.Join(home, "Documents")).Dir
+			},
+		},
+	}
 
-		exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			bundleDir := c.setup(t, home)
+			var stdout, stderr bytes.Buffer
 
-		require.Equal(t, 0, exitCode)
-		assert.Empty(t, stderr.String())
-		assert.Contains(t, stdout.String(), "Source    "+abbreviated(t, bundle.Dir, home)+"\n")
-	})
+			exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
 
-	t.Run("~/Documents missing, Quicken Documents folder has one", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
-		bundle := v9fixture.OpenBundle(t, quickenDocumentsDir(home))
-		var stdout, stderr bytes.Buffer
-
-		exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
-
-		require.Equal(t, 0, exitCode)
-		assert.Empty(t, stderr.String())
-		assert.Contains(t, stdout.String(), "Source    "+abbreviated(t, bundle.Dir, home)+"\n")
-	})
+			require.Equal(t, 0, exitCode)
+			assert.Empty(t, stderr.String())
+			assert.Contains(t, stdout.String(), "Source    "+abbreviated(t, bundleDir, home)+"\n")
+		})
+	}
 }
 
 // quickenDocumentsDir is Quicken Classic for Mac's own Documents folder
@@ -381,10 +404,8 @@ func Test_run_counts_a_bundle_reached_two_ways_once(t *testing.T) {
 		home := t.TempDir()
 		t.Setenv("HOME", home)
 		bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
-		require.NoError(t, os.MkdirAll(filepath.Join(home, "Library", "Application Support", "Quicken"), 0o700))
-		require.NoError(t, os.Symlink(
-			filepath.Join(home, "Documents"),
-			filepath.Join(home, "Library", "Application Support", "Quicken", "Documents")))
+		require.NoError(t, os.MkdirAll(filepath.Dir(quickenDocumentsDir(home)), 0o700))
+		require.NoError(t, os.Symlink(filepath.Join(home, "Documents"), quickenDocumentsDir(home)))
 		var stdout, stderr bytes.Buffer
 
 		exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
@@ -396,6 +417,9 @@ func Test_run_counts_a_bundle_reached_two_ways_once(t *testing.T) {
 }
 
 func Test_run_refuses_when_a_discovery_location_is_unreadable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file permissions")
+	}
 	cases := []struct {
 		name       string
 		setup      func(t *testing.T, home string)
@@ -404,9 +428,6 @@ func Test_run_refuses_when_a_discovery_location_is_unreadable(t *testing.T) {
 		{
 			name: "~/Documents unreadable, Quicken folder has one",
 			setup: func(t *testing.T, home string) {
-				if os.Geteuid() == 0 {
-					t.Skip("root ignores file permissions")
-				}
 				v9fixture.OpenBundle(t, quickenDocumentsDir(home))
 				documents := filepath.Join(home, "Documents")
 				require.NoError(t, os.MkdirAll(documents, 0o700))
@@ -420,9 +441,6 @@ func Test_run_refuses_when_a_discovery_location_is_unreadable(t *testing.T) {
 		{
 			name: "~/Documents has one, Quicken folder unreadable",
 			setup: func(t *testing.T, home string) {
-				if os.Geteuid() == 0 {
-					t.Skip("root ignores file permissions")
-				}
 				v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
 				quickenDir := quickenDocumentsDir(home)
 				require.NoError(t, os.MkdirAll(quickenDir, 0o700))
@@ -435,9 +453,6 @@ func Test_run_refuses_when_a_discovery_location_is_unreadable(t *testing.T) {
 		{
 			name: "both unreadable",
 			setup: func(t *testing.T, home string) {
-				if os.Geteuid() == 0 {
-					t.Skip("root ignores file permissions")
-				}
 				documents := filepath.Join(home, "Documents")
 				require.NoError(t, os.MkdirAll(documents, 0o700))
 				t.Cleanup(func() { _ = os.Chmod(documents, 0o700) })

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
 )
@@ -20,26 +21,18 @@ func DiscoverBundle(home string) (string, error) {
 	documentsDir := filepath.Join(home, "Documents")
 	locations := []struct {
 		dir     string
-		refusal func(home string, cause error) error
+		missing func(error) bool
+		refusal func(cause error) error
 	}{
-		{documentsDir, documentsUnreadableRefusal},
-		{quickenDocumentsDir(home), quickenDocumentsUnreadableRefusal},
+		{documentsDir, documentsMissing, documentsUnreadableRefusal},
+		{quickenDocumentsDir(home), quickenDocumentsMissing, quickenDocumentsUnreadableRefusal},
 	}
 
 	var candidates []bundleCandidate
 	for _, loc := range locations {
-		found, err := scanForBundles(home, loc.dir)
+		found, err := scanForBundles(home, loc.dir, loc.missing, loc.refusal)
 		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				continue
-			}
-			var re RefusalError
-			if errors.As(err, &re) {
-				return "", err
-			}
-			// The first unreadable location wins: return here rather than
-			// scanning the second.
-			return "", loc.refusal(home, err)
+			return "", err
 		}
 		candidates = append(candidates, found...)
 	}
@@ -62,6 +55,18 @@ func quickenDocumentsDir(home string) string {
 	return filepath.Join(home, "Library", "Application Support", "Quicken", "Documents")
 }
 
+// documentsMissing reports whether a ReadDir error on ~/Documents means the
+// folder doesn't exist yet.
+func documentsMissing(err error) bool {
+	return errors.Is(err, fs.ErrNotExist)
+}
+
+// quickenDocumentsMissing also treats ENOTDIR — the folder or an ancestor
+// being a plain file — as the location simply not existing.
+func quickenDocumentsMissing(err error) bool {
+	return errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
+}
+
 // bundleCandidate is a .quicken directory found during a scan, with the
 // os.Stat result used for both the directory check and identity dedupe.
 type bundleCandidate struct {
@@ -69,12 +74,15 @@ type bundleCandidate struct {
 	info os.FileInfo
 }
 
-// scanForBundles lists dir's .quicken candidates, or returns dir's ReadDir
-// error; a per-entry stat fault is already a classified RefusalError.
-func scanForBundles(home, dir string) ([]bundleCandidate, error) {
+// scanForBundles lists dir's .quicken candidates, treating dir as absent
+// when missing says so; any other failure becomes a RefusalError.
+func scanForBundles(home, dir string, missing func(error) bool, refusal func(cause error) error) ([]bundleCandidate, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, err
+		if missing(err) {
+			return nil, nil
+		}
+		return nil, refusal(err)
 	}
 
 	var candidates []bundleCandidate
@@ -141,9 +149,8 @@ func multipleQuickenBundlesRefusal(home string, candidates []bundleCandidate) er
 		len(paths), strings.Join(paths, ", "))}
 }
 
-// documentsUnreadableRefusal reports that ~/Documents could not be read for
-// a reason other than not existing.
-func documentsUnreadableRefusal(home string, cause error) error {
+// documentsUnreadableRefusal reports that ~/Documents could not be read.
+func documentsUnreadableRefusal(cause error) error {
 	return RefusalError{msg: fmt.Sprintf(
 		"cannot read ~/Documents: %s; allow your terminal to access the Documents folder in "+
 			"System Settings > Privacy & Security > Files and Folders, or pass --quicken <path>",
@@ -151,8 +158,8 @@ func documentsUnreadableRefusal(home string, cause error) error {
 }
 
 // quickenDocumentsUnreadableRefusal reports that Quicken's own Documents
-// folder could not be read for a reason other than not existing.
-func quickenDocumentsUnreadableRefusal(home string, cause error) error {
+// folder could not be read.
+func quickenDocumentsUnreadableRefusal(cause error) error {
 	return RefusalError{msg: fmt.Sprintf(
 		"cannot read ~/Library/Application Support/Quicken/Documents: %s; "+
 			"check the folder's permissions, or pass --quicken <path>",

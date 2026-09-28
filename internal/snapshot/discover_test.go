@@ -1,10 +1,10 @@
 package snapshot_test
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
@@ -123,27 +123,17 @@ func Test_DiscoverBundle_refuses_when_a_candidate_cannot_be_statted_for_a_reason
 			require.NoError(t, os.Symlink(loop, loop))
 			_, statErr := os.Stat(loop)
 			require.Error(t, statErr)
+			var errno syscall.Errno
+			require.ErrorAs(t, statErr, &errno, "the loop must fail with a raw errno to assert the cause text against")
 
 			_, err := snapshot.DiscoverBundle(home)
 
 			var re snapshot.RefusalError
 			require.ErrorAs(t, err, &re)
-			assert.Equal(t, fmt.Sprintf(
-				"cannot read %s: %s; allow your terminal to access the folder in "+
-					"System Settings > Privacy & Security, or check the file's permissions",
-				homepath.Abbreviate(home, loop), innermostCause(statErr)), re.Error())
+			assert.Equal(t, fmt.Sprintf("cannot read %s: ", homepath.Abbreviate(home, loop))+errno.Error()+
+				"; allow your terminal to access the folder in System Settings > Privacy & Security, "+
+				"or check the file's permissions", re.Error())
 		})
-	}
-}
-
-// innermostCause unwraps err to its innermost cause's message.
-func innermostCause(err error) string {
-	for {
-		unwrapped := errors.Unwrap(err)
-		if unwrapped == nil {
-			return err.Error()
-		}
-		err = unwrapped
 	}
 }
 
@@ -212,4 +202,20 @@ func Test_DiscoverBundle_refuses_when_documents_is_unreadable(t *testing.T) {
 	var re snapshot.RefusalError
 	require.ErrorAs(t, err, &re)
 	assert.Contains(t, re.Error(), "permission denied")
+}
+
+// Documents keeps R3 for ENOTDIR; only the Quicken location treats it as
+// missing, even though a valid bundle sits in the Quicken location too.
+func Test_DiscoverBundle_refuses_with_R3_when_documents_is_a_regular_file(t *testing.T) {
+	home := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(home, "Documents"), []byte("x"), 0o600))
+	v9fixture.OpenBundle(t, filepath.Join(home, "Library", "Application Support", "Quicken", "Documents"))
+
+	_, err := snapshot.DiscoverBundle(home)
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t, "cannot read ~/Documents: "+syscall.ENOTDIR.Error()+"; allow your terminal to access "+
+		"the Documents folder in System Settings > Privacy & Security > Files and Folders, "+
+		"or pass --quicken <path>", re.Error())
 }
