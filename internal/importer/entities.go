@@ -12,13 +12,11 @@ import (
 // before reading any row, rather than hard-coding their Z_ENT numbers.
 var requiredEntities = []string{"CashFlowTransaction", "CategoryTag", "UserTag"}
 
-// investmentEntity is optional: a snapshot without it has none to count.
+// investmentEntity is resolved with requiredEntities but optional; absent, it has no map entry.
 const investmentEntity = "InvestmentTransaction"
 
-// resolveEntities reads Z_PRIMARYKEY and returns each of requiredEntities'
-// Z_ENT number by name, plus investmentEntity's when present. It returns an
-// *UnmappableError (S4 reason 7) naming every required entity the
-// snapshot's Z_PRIMARYKEY lacks, sorted and joined with "or".
+// resolveEntities returns each entity's Z_ENT by name from Z_PRIMARYKEY, or
+// an *UnmappableError (S4 reason 7) naming every missing required entity.
 func resolveEntities(ctx context.Context, src Source) (map[string]int64, error) {
 	names := append(slices.Clone(requiredEntities), investmentEntity)
 	found := make(map[string]int64, len(names))

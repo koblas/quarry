@@ -17,9 +17,8 @@ import (
 
 func strPtr(s string) *string { return &s }
 
-// minimalRows is one row per table (transfers: one paired, one one-sided),
-// every ref column populated, so a round trip exercises every table and
-// every nullable column both set and NULL.
+// minimalRows fills every table (transfers: one paired, one one-sided) so a
+// round trip covers each table and each nullable column set and NULL.
 func minimalRows() store.Rows {
 	return store.Rows{
 		Accounts: []store.Account{{

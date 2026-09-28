@@ -66,7 +66,6 @@ func surveyTransactions(
 		// Every Z_PK tells a split's dangling parent (no row at all) apart
 		// from one this importer excludes for its own reason.
 		existing[pk] = true
-		// Counted: non-deleted investment rows in imported accounts.
 		_, accountImported := accounts[account.Int64]
 		if hasInvestment && ent.Int64 == investmentEnt && deletionCount == 0 && account.Valid && accountImported {
 			investments++

@@ -63,6 +63,24 @@ func Test_import_counts_no_investment_transactions_without_the_entity(t *testing
 	assert.Equal(t, store.NotImported{}, result.NotImported)
 }
 
+// Entity 0 is the value an absent entity's map lookup yields; the imported
+// transaction carrying it must not be counted as an investment.
+func Test_import_counts_no_investment_transactions_when_an_imported_one_shares_the_absent_entitys_zero(t *testing.T) {
+	b := v9fixture.NewBuilder().WithoutEntity("InvestmentTransaction").WithEntity("CashFlowTransaction", 0)
+	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "10.00", PostedDate: &day})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "10.00"})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+
+	require.NoError(t, err)
+	require.Len(t, fake.Rows.Transactions, 1)
+	assert.Equal(t, store.NotImported{}, result.NotImported)
+}
+
 // The balance check fails, so this is the unbuilt result a V1 block renders.
 func Test_import_reports_investment_transactions_not_imported_when_a_check_fails(t *testing.T) {
 	b := v9fixture.NewBuilder()

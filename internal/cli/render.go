@@ -309,9 +309,8 @@ func widestLen(ss []string) int {
 	return n
 }
 
-// renderStoreFailure renders the V1 block: Store, Rows, each of
-// Balances/Splits in its DIFFER form only when that check itself failed,
-// and Transfers, which never fails.
+// renderStoreFailure renders the V1 block: Store, Rows, Transfers, and each
+// of Balances/Splits in its DIFFER form only when that check itself failed.
 func renderStoreFailure(result store.Result, storeExisted bool, home string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", storeFailureLine(result.Path, storeExisted, home))
