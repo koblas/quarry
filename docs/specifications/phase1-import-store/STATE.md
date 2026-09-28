@@ -1,7 +1,7 @@
 # phase1-import-store — current state
 
-Infrastructure complete: PREP-c. No scenario implemented yet — SCENARIO-01a is next.
-Last updated by PREP-c.
+Infrastructure complete: PREP-c (checkpoint BLOCKER + MAJORs fixed). No scenario implemented yet — SCENARIO-01a is next.
+Last updated by PREP-c's fix pass.
 
 ## Binding decisions
 - `internal/platform/duckdb` wraps `github.com/duckdb/duckdb-go/v2` (driver name `"duckdb"`, `sql.Open("duckdb", path[+"?access_mode=READ_ONLY"])`). `DB` pool is pinned to 1 conn. This package (and 01a's store adapter) is the **only** importer of the driver — verified via `go list -deps -test`: 0 hits on snapshot/cli/cmd/v9/sqlite, 5 on `platform/duckdb` itself. Re-check this after adding the store adapter. (PREP-c)
@@ -25,6 +25,9 @@ Last updated by PREP-c.
 - DuckDB's `InstanceCache` refuses a second connection to the same path with a different config while the first is open ("Connection Error: ... different configuration than existing connections") — close a writer `*duckdb.DB` before opening `OpenReadOnly` on the same path. (PREP-c)
 - Appender faults (constraint violations, etc.) surface at `Close`/`Flush`, not at `AppendRow`; `AppendRows` ignores ctx inside the Appender itself and checks `ctx.Err()` per row instead. (PREP-c)
 - `go mod tidy` run before any `.go` file actually imports `duckdb-go` removes it from `go.mod` again — always add the import (even a blank one) before tidying. (PREP-c)
+- `sql.Open("duckdb", ...)` eagerly opens an *existing* file (permission/validity faults surface from `sql.Open` itself, verified via `go tool cover`), but *creating* a new file in an unwritable directory is deferred to `PingContext`/`Connect` — a cancelled-ctx test is the reliable way to reach the Ping-only branch without racing real cancellation against connection setup. `database/sql.DB.Close()` is idempotent at the database/sql layer (a second call never reaches the driver), so the driver's own double-close error is unreachable through this package's API. (PREP-c fix pass)
+- DuckDB batches query results into internal chunks; with only 1-2 rows a whole result is fetched by the first `Next()`, so a ctx cancelled from inside a `QueryRows` callback needs enough rows (~20k was reliable) to force a later chunk fetch that actually observes it. (PREP-c fix pass)
+- **`uncovered-diff.py` is blind to untracked files** (`git diff <start>` doesn't see them) and reports "0 runs" — indistinguishable from a clean gate — rather than an error. `git add` new files before trusting its output; this bit the PREP-c developer once (self-reported 0 uncovered lines that were really 17). (PREP-c fix pass)
 - Payees are `ZTRANSACTION.ZUSERPAYEE` → `ZUSERPAYEE.ZNAME`, not `ZBPFIPAYEE`. (carried from triage)
 - `buildManifest` (snapshot package) still reads with concrete `sqlite`/`os` calls, no read port — 01a must not grow a second ad hoc snapshot reader; extract/reuse rather than duplicate.
 - EDQUOT during the DuckDB build should route to S2 like `IsDiskFull` on the snapshot side does — decide explicitly in 01a rather than leaving disk-full classification split between packages.
