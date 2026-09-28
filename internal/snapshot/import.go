@@ -51,8 +51,8 @@ func oneSidedWarning(n int) string {
 	return fmt.Sprintf("%d transfers have no matching transaction in another account; quarry keeps them as one-sided transfers", n)
 }
 
-// storeRefusalError is SyncAndImport's S3 frame: Error is the refusal text
-// alone, while Unwrap preserves the importer's error for errors.As.
+// storeRefusalError is an import failure's refusal: Error is the refusal
+// text alone, while Unwrap preserves the importer's error for errors.As.
 type storeRefusalError struct {
 	msg   string
 	cause error
@@ -97,7 +97,7 @@ func (s *Server) SyncAndImport(ctx context.Context, bundlePath string) (Outcome,
 			return Outcome{Manifest: manifest, Store: &result, StoreExisted: s.previousStoreExists()},
 				s.validationFailedRefusal(manifest, result.Validation, err)
 		}
-		return Outcome{Manifest: manifest}, s.storeBuildRefusal(manifest, err)
+		return Outcome{Manifest: manifest}, s.importFailureRefusal(ctx, manifest, err)
 	}
 
 	return Outcome{Manifest: manifest, Store: &result}, nil
@@ -110,14 +110,30 @@ func (s *Server) previousStoreExists() bool {
 	return !errors.Is(err, fs.ErrNotExist)
 }
 
-// storeBuildRefusal reports a committed snapshot's import failure, wrapping
-// err so errors.As still reaches it.
-func (s *Server) storeBuildRefusal(manifest Manifest, err error) error {
-	return storeRefusalError{
-		msg: fmt.Sprintf("cannot build the store in %s: %s; run quarry sync --from %s",
-			homepath.Abbreviate(s.home, filepath.Dir(s.storePath)), causeText(err), snapshotID(manifest.Snapshot.Path)),
-		cause: err,
+// importFailureRefusal reports a committed snapshot's non-V1 import
+// failure, wrapping err so errors.As still reaches it: I2 once ctx has
+// ended, else S4, S1, S2 by the store sentinel err matches, else S3.
+func (s *Server) importFailureRefusal(ctx context.Context, manifest Manifest, err error) error {
+	id := snapshotID(manifest.Snapshot.Path)
+	storeDir := homepath.Abbreviate(s.home, filepath.Dir(s.storePath))
+	storePath := homepath.Abbreviate(s.home, s.storePath)
+	var msg string
+	switch {
+	case ctx.Err() != nil:
+		msg = fmt.Sprintf("sync interrupted while building the store; %s was not changed; run quarry sync --from %s to rebuild it",
+			storePath, id)
+	case errors.Is(err, store.ErrUnmappable):
+		msg = fmt.Sprintf("cannot import snapshot %s: %s; %s was not changed; run quarry sync --from %s once quarry supports it",
+			id, causeText(err), storePath, id)
+	case errors.Is(err, store.ErrStoreNotWritable):
+		msg = fmt.Sprintf("cannot write to %s: permission denied; make the directory writable by your user", storeDir)
+	case errors.Is(err, store.ErrDiskFull):
+		msg = fmt.Sprintf("cannot write the store to %s: no space left on device; free disk space, then run quarry sync --from %s",
+			storeDir, id)
+	default:
+		msg = fmt.Sprintf("cannot build the store in %s: %s; run quarry sync --from %s", storeDir, causeText(err), id)
 	}
+	return storeRefusalError{msg: msg, cause: err}
 }
 
 // validationFailedRefusal reports V1: a build reached the balance or

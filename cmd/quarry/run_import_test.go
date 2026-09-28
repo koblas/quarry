@@ -156,10 +156,14 @@ func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 	}, stringMap(t, db, "SELECT split_id, tag_id FROM split_tags"))
 }
 
-// The refusal carries the importer's own reason text verbatim.
 func Test_run_refuses_an_unmappable_value_and_keeps_the_snapshot(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	quarryDir := filepath.Join(home, "Library", "Application Support", "quarry")
+	require.NoError(t, os.MkdirAll(quarryDir, 0o700))
+	storePath := filepath.Join(quarryDir, "quarry.duckdb")
+	sentinel := []byte("previous store bytes, untouched by an unmappable value")
+	require.NoError(t, os.WriteFile(storePath, sentinel, 0o600))
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Euro Savings", Type: "SAVINGS", Currency: "EUR", Active: true})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
@@ -169,13 +173,17 @@ func Test_run_refuses_an_unmappable_value_and_keeps_the_snapshot(t *testing.T) {
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
-	assert.Contains(t, stderr.String(), `account "Euro Savings" uses currency EUR; quarry supports CAD and USD accounts`)
-
-	quarryDir := filepath.Join(home, "Library", "Application Support", "quarry")
 	snapshotsDir := filepath.Join(quarryDir, "snapshots")
-	onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
+	id := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
 	onlyFileWithSuffix(t, snapshotsDir, ".json")
+	assert.Equal(t,
+		"quarry: cannot import snapshot "+id+`: account "Euro Savings" uses currency EUR; quarry supports CAD and USD accounts; `+
+			abbreviated(t, storePath, home)+" was not changed; run quarry sync --from "+id+" once quarry supports it\n",
+		stderr.String())
 	entries, err := os.ReadDir(quarryDir)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"snapshots"}, entryNames(entries))
+	assert.Equal(t, []string{"quarry.duckdb", "snapshots"}, entryNames(entries))
+	after, err := os.ReadFile(storePath)
+	require.NoError(t, err)
+	assert.Equal(t, sentinel, after)
 }

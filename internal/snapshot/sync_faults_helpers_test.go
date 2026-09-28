@@ -44,7 +44,7 @@ func (f *fixedPathDestination) CommitSnapshot(context.Context, string) (string, 
 func (f *fixedPathDestination) CommitManifest(context.Context, string) (string, error) {
 	return "", nil
 }
-func (f *fixedPathDestination) FinalPaths(string) (string, string)   { return "", "" }
+func (f *fixedPathDestination) FinalPaths(string) (string, string)    { return "", "" }
 func (f *fixedPathDestination) Discard(context.Context, string) error { return nil }
 
 // assertSnapshotsDirEmpty fails if dir holds anything at all: unlike

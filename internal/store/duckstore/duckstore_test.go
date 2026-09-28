@@ -2,12 +2,15 @@ package duckstore_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	duckdbdriver "github.com/duckdb/duckdb-go/v2"
 	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
@@ -239,7 +242,7 @@ func Test_replace_removes_the_partial_when_the_rename_fails(t *testing.T) {
 	assert.True(t, info.IsDir())
 }
 
-func Test_replace_fails_in_a_read_only_store_directory(t *testing.T) {
+func Test_replace_tags_a_read_only_store_directory_as_not_writable(t *testing.T) {
 	dir := t.TempDir()
 	st := duckstore.New(dir)
 	path, err := st.Replace(t.Context(), minimalRows())
@@ -254,7 +257,7 @@ func Test_replace_fails_in_a_read_only_store_directory(t *testing.T) {
 
 	_, err = st.Replace(t.Context(), rows)
 
-	require.Error(t, err)
+	require.ErrorIs(t, err, store.ErrStoreNotWritable)
 	entries, err := os.ReadDir(dir)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"quarry.duckdb"}, direntNames(entries))
@@ -275,6 +278,118 @@ func Test_replace_fails_when_the_context_is_already_cancelled(t *testing.T) {
 	entries, err := os.ReadDir(dir)
 	require.NoError(t, err)
 	assert.Empty(t, entries)
+}
+
+// faultDB wraps the real partial-file connection and injects at most one
+// fault; with no fault configured it passes every call through.
+type faultDB struct {
+	duckstore.DB
+	path            string
+	checkpointFault error
+	afterCheckpoint func()
+	walOnClose      bool
+}
+
+// CheckpointClose returns checkpointFault wrapped as duckdb.CheckpointClose
+// wraps a driver error, or runs the real one and then afterCheckpoint.
+func (f *faultDB) CheckpointClose(ctx context.Context) error {
+	if f.checkpointFault != nil {
+		return fmt.Errorf("checkpoint %s: %w", f.path, f.checkpointFault)
+	}
+	err := f.DB.CheckpointClose(ctx)
+	if f.afterCheckpoint != nil {
+		f.afterCheckpoint()
+	}
+	return err
+}
+
+// Close closes the real connection, then leaves a .wal beside the partial
+// when walOnClose is set, as a crash mid-checkpoint would.
+func (f *faultDB) Close() error {
+	err := f.DB.Close()
+	if f.walOnClose {
+		_ = os.WriteFile(f.path+".wal", []byte("wal"), 0o600)
+	}
+	return err
+}
+
+// newFaultStore returns a Store over dir that builds its partial file
+// through f over a real DuckDB connection.
+func newFaultStore(dir string, f *faultDB) *duckstore.Store {
+	return duckstore.New(dir, duckstore.WithCreate(func(ctx context.Context, path string) (duckstore.DB, error) {
+		db, err := duckdb.Create(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		f.DB, f.path = db, path
+		return f, nil
+	}))
+}
+
+func Test_replace_removes_the_partial_and_wal_when_the_checkpoint_fails(t *testing.T) {
+	dir := t.TempDir()
+	st := newFaultStore(dir, &faultDB{
+		checkpointFault: &duckdbdriver.Error{
+			Type: duckdbdriver.ErrorTypeIO, Msg: `IO Error: Could not write file "quarry.duckdb.partial": No space left on device`,
+		},
+		walOnClose: true,
+	})
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.ErrorIs(t, err, store.ErrDiskFull)
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Empty(t, direntNames(entries))
+}
+
+func Test_replace_does_not_swap_when_the_context_ends_after_the_checkpoint(t *testing.T) {
+	dir := t.TempDir()
+	path, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	before, err := os.ReadFile(path)
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	st := newFaultStore(dir, &faultDB{afterCheckpoint: cancel})
+	rows := minimalRows()
+	rows.Transactions[0].Amount = 999
+
+	_, err = st.Replace(ctx, rows)
+
+	require.ErrorIs(t, err, context.Canceled)
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"quarry.duckdb"}, direntNames(entries))
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, before, after)
+}
+
+func Test_replace_does_not_tag_an_unrelated_build_failure(t *testing.T) {
+	st := duckstore.New(t.TempDir())
+
+	_, err := st.Replace(t.Context(), duplicatePKRows())
+
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, store.ErrStoreNotWritable)
+	assert.NotErrorIs(t, err, store.ErrDiskFull)
+}
+
+var errCreateBoom = errors.New("create boom")
+
+func Test_replace_fails_when_the_partial_file_cannot_be_created(t *testing.T) {
+	dir := t.TempDir()
+	st := duckstore.New(dir, duckstore.WithCreate(func(context.Context, string) (duckstore.DB, error) {
+		return nil, errCreateBoom
+	}))
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.ErrorIs(t, err, errCreateBoom)
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Empty(t, direntNames(entries))
 }
 
 func direntNames(entries []os.DirEntry) []string {

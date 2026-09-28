@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,17 +20,41 @@ import (
 )
 
 // fakeImporter is a hand-written Importer fake: it records every snapshot
-// ref it was called with and returns the configured result, or err when set.
+// ref it was called with and returns the configured result, or err when
+// set, after calling cancel when interrupt is set.
 type fakeImporter struct {
-	calls  []store.SnapshotRef
-	result store.Result
-	err    error
+	calls     []store.SnapshotRef
+	result    store.Result
+	err       error
+	interrupt bool
+	cancel    context.CancelFunc
 }
 
 func (f *fakeImporter) Import(_ context.Context, snap store.SnapshotRef) (store.Result, error) {
 	f.calls = append(f.calls, snap)
+	if f.interrupt {
+		f.cancel()
+	}
 	return f.result, f.err
 }
+
+// taggedBuildError mirrors a store build error classified as sentinel:
+// Unwrap reaches cause alone, Is also matches sentinel.
+type taggedBuildError struct {
+	sentinel error
+	cause    error
+}
+
+func (e taggedBuildError) Error() string        { return "build store: " + e.cause.Error() }
+func (e taggedBuildError) Unwrap() error        { return e.cause }
+func (e taggedBuildError) Is(target error) bool { return target == e.sentinel }
+
+// unmappableError mirrors the importer's unmappable-value error: its text is
+// the reason, and it matches store.ErrUnmappable.
+type unmappableError struct{ reason string }
+
+func (e unmappableError) Error() string        { return e.reason }
+func (e unmappableError) Is(target error) bool { return target == store.ErrUnmappable }
 
 // newImportServer builds a Server with a snapshots directory and a store
 // path both under home, so refusal copy has something real to abbreviate.
@@ -119,6 +144,111 @@ func Test_sync_and_import_frames_an_import_failure_as_a_store_refusal(t *testing
 	assert.Equal(t, want, err.Error())
 	assert.FileExists(t, outcome.Manifest.Snapshot.Path)
 	assert.FileExists(t, outcome.Manifest.Snapshot.Manifest)
+}
+
+func Test_sync_and_import_reports_each_build_failure_with_its_refusal(t *testing.T) {
+	permission := taggedBuildError{sentinel: store.ErrStoreNotWritable, cause: &fs.PathError{
+		Op: "open", Path: "quarry.duckdb.partial", Err: fs.ErrPermission,
+	}}
+	diskFull := taggedBuildError{sentinel: store.ErrDiskFull, cause: errors.New(
+		`IO Error: Could not write file "quarry.duckdb.partial": No space left on device`)}
+	unmappable := unmappableError{reason: `account "Euro Savings" uses currency EUR; quarry supports CAD and USD accounts`}
+	interrupted := func(_, storePath, id string) string {
+		return "sync interrupted while building the store; " + storePath + " was not changed; run quarry sync --from " + id + " to rebuild it"
+	}
+	cases := []struct {
+		name      string
+		err       error
+		interrupt bool
+		want      func(storeDir, storePath, id string) string
+	}{
+		{
+			name: "unwritable store directory",
+			err:  fmt.Errorf("replace store: %w", permission),
+			want: func(storeDir, _, _ string) string {
+				return "cannot write to " + storeDir + ": permission denied; make the directory writable by your user"
+			},
+		},
+		{
+			name: "disk full",
+			err:  fmt.Errorf("replace store: %w", diskFull),
+			want: func(storeDir, _, id string) string {
+				return "cannot write the store to " + storeDir + ": no space left on device; free disk space, then run quarry sync --from " + id
+			},
+		},
+		{
+			name: "other build failure",
+			err:  fmt.Errorf("replace store: build store: %w", errImportBoom),
+			want: func(storeDir, _, id string) string {
+				return "cannot build the store in " + storeDir + ": " + errImportBoom.Error() + "; run quarry sync --from " + id
+			},
+		},
+		{
+			name: "unmappable value",
+			err:  unmappable,
+			want: func(_, storePath, id string) string {
+				return "cannot import snapshot " + id + ": " + unmappable.reason + "; " + storePath +
+					" was not changed; run quarry sync --from " + id + " once quarry supports it"
+			},
+		},
+		{name: "interrupted", err: fmt.Errorf("replace store: build store: %w", errImportBoom), interrupt: true, want: interrupted},
+		{name: "interrupted beats disk full", err: fmt.Errorf("replace store: %w", diskFull), interrupt: true, want: interrupted},
+		{name: "interrupted beats an unmappable value", err: unmappable, interrupt: true, want: interrupted},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			bundle := v9fixture.OpenBundle(t, t.TempDir())
+			home := t.TempDir()
+			ctx, cancel := context.WithCancel(t.Context())
+			t.Cleanup(cancel)
+			fake := &fakeImporter{err: c.err, interrupt: c.interrupt, cancel: cancel}
+			srv := newImportServer(t, home, fake)
+
+			outcome, err := srv.SyncAndImport(ctx, bundle.Dir)
+
+			require.ErrorIs(t, err, c.err)
+			assert.Nil(t, outcome.Store)
+			storePath := filepath.Join(home, "quarry", "quarry.duckdb")
+			assert.Equal(t,
+				c.want(homepath.Abbreviate(home, filepath.Dir(storePath)), homepath.Abbreviate(home, storePath),
+					snapshotIDFromPath(outcome.Manifest.Snapshot.Path)),
+				err.Error())
+		})
+	}
+}
+
+// A permission fault the store did not classify, such as one reading the
+// snapshot, does not name the store directory as unwritable.
+func Test_sync_and_import_reports_an_untagged_permission_fault_as_s3(t *testing.T) {
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	home := t.TempDir()
+	readErr := &fs.PathError{Op: "open", Path: "snapshot.sqlite", Err: fs.ErrPermission}
+	fake := &fakeImporter{err: fmt.Errorf("open snapshot.sqlite: %w", readErr)}
+	srv := newImportServer(t, home, fake)
+
+	outcome, err := srv.SyncAndImport(t.Context(), bundle.Dir)
+
+	require.ErrorIs(t, err, fs.ErrPermission)
+	want := fmt.Sprintf("cannot build the store in %s: %s; run quarry sync --from %s",
+		homepath.Abbreviate(home, filepath.Join(home, "quarry")), fs.ErrPermission.Error(),
+		snapshotIDFromPath(outcome.Manifest.Snapshot.Path))
+	assert.Equal(t, want, err.Error())
+}
+
+func Test_sync_and_import_completes_normally_when_the_context_ends_after_a_successful_import(t *testing.T) {
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	home := t.TempDir()
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	fake := &fakeImporter{result: store.Result{Built: true}, interrupt: true, cancel: cancel}
+	srv := newImportServer(t, home, fake)
+
+	outcome, err := srv.SyncAndImport(ctx, bundle.Dir)
+
+	require.NoError(t, err)
+	require.NotNil(t, outcome.Store)
+	assert.True(t, outcome.Store.Built)
 }
 
 func Test_sync_and_import_does_not_import_when_the_snapshot_fails(t *testing.T) {

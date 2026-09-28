@@ -517,8 +517,8 @@ Order is execution order. Folded scenarios are ticked with the delivering scenar
 - [x] SCENARIO-02: --json reports the store result alongside the manifest (absorbs 10, 18) — `cmd/quarry/run_json_test.go` `Test_run_reports_the_store_result_alongside_the_manifest_as_json`
 - [x] SCENARIO-10: never-reconciled accounts are listed, not failed — FOLD → 02, delivered by SCENARIO-02 — `cmd/quarry/run_json_test.go` `Test_run_lists_never_reconciled_accounts_in_json_and_succeeds`
 - [x] SCENARIO-18: a schema mismatch on plain sync skips the import — FOLD → 02, delivered by SCENARIO-02 — `cmd/quarry/run_schema_test.go` `Test_run_reports_a_schema_mismatch_as_json`
-- [ ] SCENARIO-14: a failed build never replaces the store (absorbs 13; test-first: write safety)
-- [ ] SCENARIO-13: an unmappable value refuses the import — FOLD → 14
+- [x] SCENARIO-14: a failed build never replaces the store (absorbs 13; test-first: write safety) — `cmd/quarry/run_store_faults_test.go` `Test_run_never_replaces_the_store_when_the_build_fails`
+- [x] SCENARIO-13: an unmappable value refuses the import — FOLD → 14, delivered by SCENARIO-14 — `cmd/quarry/run_import_test.go` `Test_run_refuses_an_unmappable_value_and_keeps_the_snapshot`
 - [ ] SCENARIO-20: leftovers from earlier builds are cleaned up (test-first: deletes files; small, sonnet architect)
 - [ ] SCENARIO-03: rebuild from an earlier snapshot without Quicken (absorbs 16)
 - [ ] SCENARIO-16: --from usage errors — FOLD → 03

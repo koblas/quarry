@@ -1,6 +1,8 @@
 package importer_test
 
 import (
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -141,6 +143,13 @@ func Test_import_upgrades_the_reported_class_when_a_higher_priority_offender_is_
 	assert.Equal(t,
 		`category "Food:Groceries" has type 5, which quarry does not map yet`,
 		importReason(t, err))
+}
+
+func Test_UnmappableError_matches_ErrUnmappable_and_keeps_its_reason(t *testing.T) {
+	err := fmt.Errorf("import: %w", &importer.UnmappableError{Reason: "boom"})
+
+	assert.ErrorIs(t, err, store.ErrUnmappable)
+	assert.Equal(t, "boom", errors.Unwrap(err).Error())
 }
 
 func Test_UnmappableError_Error_returns_the_reason(t *testing.T) {

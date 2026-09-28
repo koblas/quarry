@@ -2,6 +2,7 @@ package duckstore
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,54 +21,113 @@ const partialNameLayout = "20060102T150405Z"
 // moneyWidth and moneyScale match schemaDDL's DECIMAL(18,2) money columns.
 const moneyWidth, moneyScale = 18, 2
 
+// DB is the connection a Store builds one partial file through.
+// *duckdb.DB is the production implementation.
+type DB interface {
+	Exec(ctx context.Context, query string, args ...any) (sql.Result, error)
+	AppendRows(ctx context.Context, table string, rows [][]any) error
+	CheckpointClose(ctx context.Context) error
+	Close() error
+}
+
+var _ DB = (*duckdb.DB)(nil)
+
 // Store builds quarry's DuckDB file inside one directory.
 type Store struct {
-	dir string
+	dir    string
+	create func(ctx context.Context, path string) (DB, error)
+}
+
+// Option configures a Store.
+type Option func(*Store)
+
+// WithCreate replaces how a Store creates its partial build file, which by
+// default is duckdb.Create. create must refuse an existing path.
+func WithCreate(create func(ctx context.Context, path string) (DB, error)) Option {
+	return func(s *Store) { s.create = create }
 }
 
 // New returns a Store that builds quarry.duckdb inside dir.
-func New(dir string) *Store {
-	return &Store{dir: dir}
+func New(dir string, opts ...Option) *Store {
+	s := &Store{dir: dir, create: createDuckDB}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// createDuckDB is New's default creator; it returns a nil interface, never
+// a typed nil, when duckdb.Create fails.
+func createDuckDB(ctx context.Context, path string) (DB, error) {
+	db, err := duckdb.Create(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
 }
 
 // Replace builds rows into a new DuckDB file and swaps it in over
 // quarry.duckdb, returning the path it wrote. On any failure the partial
-// build file (and its .wal) is removed and the existing store, if any, is
-// untouched: nothing is renamed until the build and its checkpoint both
-// succeed.
+// file and its .wal are removed and the existing store is untouched. A
+// permission fault matches store.ErrStoreNotWritable, a full disk or quota
+// store.ErrDiskFull. ctx is checked once more right before the swap.
 func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
 	finalPath := filepath.Join(s.dir, FileName)
 	partialPath := filepath.Join(s.dir, fmt.Sprintf(".quarry-%s.duckdb.partial", time.Now().UTC().Format(partialNameLayout)))
 
-	db, err := duckdb.Create(ctx, partialPath)
+	db, err := s.create(ctx, partialPath)
 	if err != nil {
 		removePartial(partialPath)
-		return "", fmt.Errorf("build store: %w", err)
+		return "", buildError(err)
 	}
 
 	if err := build(ctx, db, rows); err != nil {
 		_ = db.Close()
 		removePartial(partialPath)
-		return "", fmt.Errorf("build store: %w", err)
+		return "", buildError(err)
 	}
 
 	if err := db.CheckpointClose(ctx); err != nil {
-		// unreachable: CheckpointClose's own close/no-WAL failure paths are
-		// unreachable in platform/duckdb already; its remaining fault (ctx
-		// cancelled during CHECKPOINT) needs ctx cancelled between build and
-		// this call, which share one ctx parameter with no race-free hook to
-		// cancel only here.
 		_ = db.Close()
 		removePartial(partialPath)
-		return "", fmt.Errorf("build store: %w", err)
+		return "", buildError(err)
+	}
+
+	// The last point an interrupt can still keep the previous store.
+	if err := ctx.Err(); err != nil {
+		removePartial(partialPath)
+		return "", buildError(err)
 	}
 
 	if err := os.Rename(partialPath, finalPath); err != nil {
 		removePartial(partialPath)
-		return "", fmt.Errorf("build store: %w", err)
+		return "", buildError(err)
 	}
 
 	return finalPath, nil
+}
+
+// buildFailure is a failed build: Error and Unwrap reach cause alone, while Is
+// also matches the store sentinel the fault was classified as.
+type buildFailure struct {
+	sentinel error
+	cause    error
+}
+
+func (e buildFailure) Error() string        { return "build store: " + e.cause.Error() }
+func (e buildFailure) Unwrap() error        { return e.cause }
+func (e buildFailure) Is(target error) bool { return target == e.sentinel }
+
+// buildError wraps a failed build's cause, tagging permission and disk-full faults.
+func buildError(cause error) error {
+	var sentinel error
+	switch {
+	case duckdb.IsPermission(cause):
+		sentinel = store.ErrStoreNotWritable
+	case duckdb.IsDiskFull(cause):
+		sentinel = store.ErrDiskFull
+	}
+	return buildFailure{sentinel: sentinel, cause: cause}
 }
 
 // removePartial removes path and path+".wal", ignoring either being
@@ -78,7 +138,7 @@ func removePartial(path string) {
 }
 
 // build creates quarry's schema in db and bulk-loads every table in rows.
-func build(ctx context.Context, db *duckdb.DB, rows store.Rows) error {
+func build(ctx context.Context, db DB, rows store.Rows) error {
 	if _, err := db.Exec(ctx, schemaDDL); err != nil {
 		return fmt.Errorf("create schema: %w", err)
 	}

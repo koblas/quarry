@@ -157,6 +157,15 @@ type NotImported struct {
 // ErrValidationFailed is Import's error when a build's checks find a mismatch.
 var ErrValidationFailed = errors.New("validation failed")
 
+// ErrStoreNotWritable matches a build error caused by a permission fault writing the store.
+var ErrStoreNotWritable = errors.New("store not writable")
+
+// ErrDiskFull matches a build error caused by the disk or quota filling up.
+var ErrDiskFull = errors.New("disk full")
+
+// ErrUnmappable matches an import error for a source value quarry cannot map.
+var ErrUnmappable = errors.New("unmappable value")
+
 // Validation is the outcome of every check a build runs on its mapped rows,
 // before the store is swapped in.
 type Validation struct {
