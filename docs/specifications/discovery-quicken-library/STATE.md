@@ -59,6 +59,7 @@ None for this feature — DQ-1 through DQ-6 are all built and tested.
   `scanForBundles`, not returning a raw `error` for `DiscoverBundle` to re-classify.
 
 ## Open debts
+- A per-entry candidate whose stat fails with ENOTDIR (e.g. `~/Documents/Old.quicken` → symlink through a regular file) is refused via `unreadableRefusal`, not skipped as dangling. Pre-existing filter; decide in Phase 1 whether ENOTDIR counts as dangling (REVIEW-02).
 - `cmd/quarry/run_test.go` — phase0's STATE.md already flagged this file (758 lines) as due
   for a split "before the next feature adds to either" (it named this file and
   `internal/snapshot/sync_faults_test.go`); this scenario added ~200 lines to it, so that
