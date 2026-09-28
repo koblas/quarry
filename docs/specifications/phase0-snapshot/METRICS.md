@@ -18,6 +18,7 @@
 | --- | --- | --- | --- |
 | 1 | arch, correctness, test, refactor | 0/4/27/9 | FAIL |
 | 2 | arch, correctness, test, refactor | 0/1/9/3 | FAIL |
+| 3 | correctness, test | 0/1/3/1 | FAIL |
 
 ## Tokens
 <output of `.claude/scripts/feature-metrics.py phase0-snapshot`, pasted once at SHIP>
