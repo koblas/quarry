@@ -227,7 +227,7 @@ Transfers 3,112 paired
 - `balances.mismatched[]`: `{"id","name","currency","closed","active","statement_date":"2026-08-31","quarry":"-1204.17","quicken":"-1184.17","difference":"-20.00"}`; `difference` = quarry − quicken.
 - `splits.mismatched[]`: `{"id","date","account","currency","payee","amount","splits_total"}`.
 - `transfers.one_sided[]`: `{"id","date","account","currency","payee","amount","other_account","other_account_id"}`; `other_account` = the name as recorded, or `null`; `other_account_id` = the matching account's id, or `null` when no account matches.
-- All lists always present; sorted by name, or (date, account, id). `id` = quarry's stable ID.
+- All lists always present; sorted by account name then account source id, or by (date, account name, account source id, transaction source id); source ids compare numerically (never quarry's string `id`); `never_reconciled[]` and `transfers.one_sided[]` use the same keys; the human `!` / `?` rows use the same order (sorted once in the core, never re-sorted by renderers). Mismatch structs carry a numeric `SourceID`, not emitted in JSON. `id` = quarry's stable ID.
 - `store: null` when import not attempted (schema mismatch); `"built": false` when the build ran and a check failed.
 
 ### V1 — validation failed (exit 1)
@@ -310,6 +310,7 @@ Interim V1 (ruled 2026-09-28): until SCENARIO-09 adds the V1 stdout block, a fai
 | Store line | success | store path |
 | | validation failed, previous store | `NOT REBUILT (… unchanged)` |
 | | validation failed, first run | `NOT BUILT (no store at … yet)` |
+| | validation failed, store existence unknown (stat error other than not-found) | `NOT REBUILT (… unchanged)`; stderr unchanged |
 | | schema mismatch | no store lines; `store: null` |
 | | schema extras only | after the last `+` row; the Phase 0 block incl. `+` rows is the unchanged prefix; W1 on stderr (W2 after it), exit 0. Same placement for `NOT REBUILT` / `NOT BUILT` under V1 |
 | Balances | never reconciled | clause + json list; no warning; exit 0 |
