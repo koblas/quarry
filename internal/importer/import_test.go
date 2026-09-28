@@ -87,7 +87,8 @@ func Test_import_builds_every_table_from_a_v9_snapshot(t *testing.T) {
 func Test_import_twice_from_the_same_snapshot_keeps_every_id(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00"})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	fake1 := &fakeStore{}
