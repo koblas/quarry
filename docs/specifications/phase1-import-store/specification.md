@@ -81,6 +81,15 @@ PRD `docs/initial-prd.md`: milestone `:299-306` ("1 — Import + store | Banking
 - DuckDB: `github.com/duckdb/duckdb-go/v2` (verified on the module proxy; latest stable `v2.10505.0`). Confine the import to `internal/platform/duckdb` and the store adapter so other test binaries do not link it. `go get` needs network (run unsandboxed). Linux CI linking memory is a known risk (`devenv.nix` notes OOM on linux-small).
 - Checkpoint and close DuckDB and assert no `.partial.wal` remains before the rename; renaming with a live WAL orphans committed data.
 
+**Planning rulings from the SCENARIO-01a sizing (architect, 2026-09-28) — binding on later plans:**
+- `internal/store` holds only row types, `Rows`, `Counts`/`Result` (no driver import); `internal/store/duckstore` holds DDL, builder and swap and is the only non-platform importer of duckdb-go. Refines the "shared lower package" ruling; the store ADR records it.
+- The importer's `Store` port is `Replace(ctx, store.Rows) (path string, err error)`. Validation (01b) runs on mapped `store.Rows` in memory before `Replace`, so a V1 failure never creates a partial.
+- Sequencing lives in `snapshot.Server`: a consumer-declared `Importer` port wired with `snapshot.WithImporter`, and a new method returning `Outcome{Manifest, Store *store.Result}` that skips the import on schema mismatch (`Store == nil`). `Sync` keeps its signature. The O1/O1b choice becomes a snapshot function on `Outcome`. `cli.ServerFactory` keeps its shape (caller table: LSP `internal/cli/run.go:14`, `run.go:20`, `root.go:9`, `sync.go:36`, `cmd/quarry/run.go:60`; grep `sync.go:64`, `sync.go:88`). No cli/cmd test builds a factory.
+- Import errors do not go through `snapshot.FailureOutcome` (the snapshot is already committed).
+- 01a does not count skipped investment rows; `not_imported` and the Rows clause are 01c/S21's. `--json` stays manifest-only until SCENARIO-02.
+- Until SCENARIO-14, an unmappable value surfaces through the S3 frame with the ruled S4 reason text; the importer returns a typed error asserted with `errors.As`. SCENARIO-14 moves it to the S4 frame and ordering.
+- Help text ownership: 01b owns root Long and sync Short/Long (balance wording is only true after 01b); 03 owns the `--from` paragraph and Example.
+
 **Traps carried into plans:**
 - Phase 0 fixtures (`v9fixture.OpenBundle`) insert accounts with only `ZNAME` (NULL type and currency); once import is wired, P1-9 turns every Phase-0 command test into S4. SCENARIO-01a upgrades those fixtures.
 - Until SCENARIO-01b lands, 01a swaps in an unchecked store; 01a's Handoff says so.
@@ -309,10 +318,15 @@ Unmapped `ZRECONCILESTATUS` / category `ZTYPE` / required NULL values use the sa
 
 ## Scenarios (Gherkin)
 
-SCENARIO-01 was split at sizing into 01a / 01b / 01c (one `When` each). Folded scenarios keep their Gherkin; the delivering scenario's acceptance test covers them.
+SCENARIO-01 was split at sizing into 01a / 01b / 01c (one `When` each); 01a was split again at planning into 01a (importer + store, acceptance at `importer.Server.Import`) and 01d (`sync` wiring, acceptance through `run()`). Folded scenarios keep their Gherkin; the delivering scenario's acceptance test covers them.
 
 ```gherkin
-Scenario: SCENARIO-01a — sync imports the Quicken data into a new store
+Scenario: SCENARIO-01a — the importer builds a store from a v9 snapshot
+  Given a v9 snapshot with cash accounts, split transactions, payees, nested categories and tags
+  When the store is built from it
+  Then the store receives every account, category, payee, transaction, split, tag and split_tag with native-currency DECIMAL amounts and source_ids
+
+Scenario: SCENARIO-01d — sync imports the Quicken data into a new store
   Given Quicken is open on a file with cash accounts, split transactions, payees, nested categories and tags
   When I run quarry sync
   Then quarry.duckdb holds every account, category, payee, transaction, split, tag and split_tag with native-currency DECIMAL amounts and source_ids
@@ -458,9 +472,10 @@ Scenario: SCENARIO-21 — investment transactions are counted, not imported
 
 Order is execution order. Folded scenarios are ticked with the delivering scenario and its acceptance test.
 
-- [ ] SCENARIO-01a: sync imports the Quicken data into a new store (absorbs 04, 05; test-first: partial + rename)
+- [ ] SCENARIO-01a: the importer builds a store from a v9 snapshot (absorbs 04, 05; test-first: partial + rename)
 - [ ] SCENARIO-04: re-importing the same snapshot keeps quarry IDs stable — FOLD → 01a
 - [ ] SCENARIO-05: category hierarchy and kind are preserved — FOLD → 01a
+- [ ] SCENARIO-01d: sync imports the Quicken data into a new store
 - [ ] SCENARIO-01b: sync checks balances and split sums before swapping the store in (absorbs 06)
 - [ ] SCENARIO-06: closed and inactive accounts are imported and checked — FOLD → 01b
 - [ ] SCENARIO-01c: sync pairs transfers between the user's accounts (absorbs 07, 12, 21)
