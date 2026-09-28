@@ -264,7 +264,7 @@ stderr: `quarry: warning: 29 transfers have no matching transaction in another a
 | F1b | `--from` ID not found | `quarry: no snapshot 20260927T143005Z in ~/Library/Application Support/quarry/snapshots; check the ID passed to --from` | 1 |
 | F2 | not a regular file | `quarry: ~/x is not a snapshot file; pass a .sqlite snapshot from ~/Library/Application Support/quarry/snapshots with --from <snapshot>` | 1 |
 | F2b | a `.quicken` bundle | `quarry: ~/Documents/Home.quicken is a Quicken file, not a snapshot; pass it with --quicken <path>, or pass a snapshot with --from <snapshot>` | 1 |
-| F3 | not a quarry snapshot | `quarry: ~/x.sqlite is not a quarry snapshot (<reason>); pass a snapshot taken by quarry sync with --from <snapshot>`; `<reason>` ∈ `no .json manifest next to it` / `its manifest is not readable JSON` / `not a SQLite database` | 1 |
+| F3 | not a quarry snapshot | `quarry: ~/x.sqlite is not a quarry snapshot (<reason>); pass a snapshot taken by quarry sync with --from <snapshot>`; `<reason>` ∈ `no .json manifest next to it` / `its manifest is not readable JSON` / `not a SQLite database` / `it has no accounts table` / `it has no accounts` | 1 |
 | F4 | snapshot or manifest unreadable | `quarry: cannot read ~/x.sqlite: permission denied; check the file's permissions` (OS reason verbatim) | 1 |
 | F5 | SHA-256 ≠ manifest | `quarry: ~/Library/Application Support/quarry/snapshots/20260927T143005Z.sqlite has changed since quarry took it (its SHA-256 does not match its manifest); take a new snapshot with quarry sync` | 1 |
 | M1 | schema mismatch, plain sync | unchanged; import not attempted; `store: null`; no Store/Rows/Balances/Splits/Transfers lines | 1 |
@@ -279,6 +279,10 @@ stderr: `quarry: warning: 29 transfers have no matching transaction in another a
 | U4 | `--from` empty / all whitespace | `quarry: flag needs an argument: --from; Run 'quarry sync --help' for usage.` | 2 |
 
 On a plain sync, S1–S4/I2/V1 keep the already-committed snapshot.
+
+`--from` check order: path checks (F1/F1b/F2/F2b) → manifest present and parseable (F3 manifest reasons) → read and hash the file (F4 on an OS read error) → F5 → open as SQLite / integrity (F3 `not a SQLite database`) → account checks (F3 `it has no accounts table` / `it has no accounts`) → schema (M1b) → import. F5 wins whenever the manifest is readable.
+
+Interim `--from` frame (ruled 2026-09-28): until SCENARIO-15, F1–F4 causes may surface as `quarry: <~path> is not a quarry snapshot (<cause>); pass a snapshot taken by quarry sync with --from <snapshot>`, exit 1. No push or PR may carry an F1/F1b/F2/F2b/F4 case in the F3 frame — final-gate BLOCKER.
 
 Precedence when several apply: V1, I2, S4, S1, S2, S3. I2 covers any non-V1 import failure once the sync was interrupted, since an interrupted scan cannot vouch for S4's first offender or count.
 
