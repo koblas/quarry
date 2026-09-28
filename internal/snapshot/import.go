@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -17,9 +19,15 @@ var errNoImporter = errors.New("no importer configured")
 // Outcome is what SyncAndImport returns: the snapshot's Manifest, and the
 // store.Result of the import, when one ran. Store is nil when the schema
 // check found a mismatch (import skipped) or Sync itself failed.
+// StoreExisted is meaningful only when Store != nil && !Store.Built: it
+// reports whether a previous store was at the store path when the check
+// failed, deciding the V1 block's NOT REBUILT vs NOT BUILT line. Store's
+// own Path is populated on a V1 failure too, even though the importer's
+// own Result contract leaves it empty then.
 type Outcome struct {
-	Manifest Manifest
-	Store    *store.Result
+	Manifest     Manifest
+	Store        *store.Result
+	StoreExisted bool
 }
 
 // storeRefusalError is SyncAndImport's S3 frame: Error is the refusal text
@@ -61,12 +69,22 @@ func (s *Server) SyncAndImport(ctx context.Context, bundlePath string) (Outcome,
 	result, err := s.importer.Import(ctx, manifest.Snapshot.Path)
 	if err != nil {
 		if errors.Is(err, store.ErrValidationFailed) {
-			return Outcome{Manifest: manifest, Store: &result}, s.validationFailedRefusal(manifest, result.Validation, err)
+			result.Path = s.storePath
+			return Outcome{Manifest: manifest, Store: &result, StoreExisted: s.previousStoreExists()},
+				s.validationFailedRefusal(manifest, result.Validation, err)
 		}
 		return Outcome{Manifest: manifest}, s.storeBuildRefusal(manifest, err)
 	}
 
 	return Outcome{Manifest: manifest, Store: &result}, nil
+}
+
+// previousStoreExists reports whether a store was already at s.storePath
+// before this build. A stat error other than "not found" is treated as
+// existed: whichever it is, the failed build leaves it unchanged either way.
+func (s *Server) previousStoreExists() bool {
+	_, err := os.Stat(s.storePath)
+	return !errors.Is(err, fs.ErrNotExist)
 }
 
 // storeBuildRefusal reports a committed snapshot's import failure, wrapping
@@ -80,8 +98,7 @@ func (s *Server) storeBuildRefusal(manifest Manifest, err error) error {
 }
 
 // validationFailedRefusal reports V1: a build reached the balance or
-// split-sum gate and one or more checks failed. It omits "each difference
-// is listed on stdout; " since this interim copy writes nothing to stdout.
+// split-sum gate and one or more checks failed.
 func (s *Server) validationFailedRefusal(manifest Manifest, v store.Validation, cause error) error {
 	var clauses []string
 	if n := len(v.Balances.Mismatched); n > 0 {
@@ -91,7 +108,7 @@ func (s *Server) validationFailedRefusal(manifest Manifest, v store.Validation, 
 		clauses = append(clauses, splitMismatchClause(n))
 	}
 	return storeRefusalError{
-		msg: fmt.Sprintf("validation failed: %s; %s was not changed; "+
+		msg: fmt.Sprintf("validation failed: %s; %s was not changed; each difference is listed on stdout; "+
 			"fix the account in Quicken and run quarry sync, or run quarry sync --from %s after updating quarry",
 			strings.Join(clauses, " and "), homepath.Abbreviate(s.home, s.storePath), snapshotID(manifest.Snapshot.Path)),
 		cause: cause,

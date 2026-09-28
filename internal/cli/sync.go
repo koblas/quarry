@@ -77,7 +77,10 @@ if there is exactly one.`,
 			outcome, err := srv.SyncAndImport(cmd.Context(), bundlePath)
 			var mismatch snapshot.MismatchError
 			isMismatch := errors.As(err, &mismatch)
-			if err != nil && !isMismatch {
+			// A validation failure (V1) still renders on the human path: only
+			// --json stays interim, returning before anything is written.
+			validationFailed := outcome.Store != nil && !outcome.Store.Built
+			if err != nil && !isMismatch && (!validationFailed || *jsonOut) {
 				return &runtimeError{err: err}
 			}
 
@@ -91,7 +94,10 @@ if there is exactly one.`,
 				output = string(data)
 			} else {
 				output = renderSuccess(outcome.Manifest, home)
-				if outcome.Store != nil {
+				switch {
+				case validationFailed:
+					output += renderStoreFailure(*outcome.Store, outcome.StoreExisted, home)
+				case outcome.Store != nil:
 					output += renderStore(*outcome.Store, home)
 				}
 			}
@@ -103,7 +109,7 @@ if there is exactly one.`,
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: warning: "+warning)
 			}
 
-			if isMismatch {
+			if isMismatch || validationFailed {
 				return &runtimeError{err: err}
 			}
 			return nil

@@ -1,6 +1,7 @@
 package importer_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -185,6 +186,108 @@ func Test_import_reports_a_transaction_whose_splits_exceed_its_amount(t *testing
 	mismatch := result.Validation.Splits.Mismatched[0]
 	assert.Equal(t, int64(10000), mismatch.Amount)
 	assert.Equal(t, int64(10001), mismatch.SplitsTotal)
+}
+
+// mismatchedBalanceAccount adds an account whose reconciled sum never
+// matches its statement, for tests that only care about display order.
+func mismatchedBalanceAccount(b *v9fixture.Builder, name, accType string, day time.Time) int64 {
+	acctPK := b.Account(v9fixture.AccountRow{Name: name, Type: accType, Currency: "CAD", Active: true})
+	reconciled := int64(2)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "10.00", PostedDate: &day, Status: &reconciled})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "10.00"})
+	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &day, EndingBalance: "20.00"})
+	return acctPK
+}
+
+// Mismatched is sorted by account name, not by insertion (Zebra is
+// inserted first but ends up last); two same-named accounts at source ids
+// 9 and 10 prove the tie-break is numeric — a string comparison would rank
+// "10" before "9" and swap them.
+func Test_import_sorts_balance_mismatches_for_display(t *testing.T) {
+	b := v9fixture.NewBuilder()
+	day := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	mismatchedBalanceAccount(b, "Zebra", "CHECKING", day) // source id 1
+	mismatchedBalanceAccount(b, "Alpha", "CHECKING", day) // source id 2
+	for i := range 6 {
+		b.Account(v9fixture.AccountRow{Name: fmt.Sprintf("Filler %d", i), Type: "SAVINGS", Currency: "CAD", Active: true})
+	}
+	mismatchedBalanceAccount(b, "Chequing", "CHECKING", day) // source id 9
+	mismatchedBalanceAccount(b, "Chequing", "CHECKING", day) // source id 10
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+
+	require.ErrorIs(t, err, store.ErrValidationFailed)
+	require.Len(t, result.Validation.Balances.Mismatched, 4)
+	names := make([]string, len(result.Validation.Balances.Mismatched))
+	sourceIDs := make([]int64, len(result.Validation.Balances.Mismatched))
+	for i, m := range result.Validation.Balances.Mismatched {
+		names[i] = m.Name
+		sourceIDs[i] = m.SourceID
+	}
+	assert.Equal(t, []string{"Alpha", "Chequing", "Chequing", "Zebra"}, names)
+	assert.Equal(t, []int64{2, 9, 10, 1}, sourceIDs)
+}
+
+// mismatchedSplitTransaction adds a transaction on acctPK whose splits
+// never sum to its amount, for tests that only care about display order.
+func mismatchedSplitTransaction(b *v9fixture.Builder, acctPK int64, day time.Time) int64 {
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "10.00", PostedDate: &day})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "9.00"})
+	return txnPK
+}
+
+// matchingSplitTransaction adds a transaction whose splits sum correctly,
+// so it never reaches Mismatched.
+func matchingSplitTransaction(b *v9fixture.Builder, acctPK int64, day time.Time) {
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "10.00", PostedDate: &day})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "10.00"})
+}
+
+// Mismatched is sorted by date first (the transaction inserted first ends
+// up last, since its date is later); a same-date tie is broken by account
+// name ("Alpha Bank" before "Chequing"); a same-date, same-name tie (two
+// different accounts both named "Zulu") falls through to account source
+// id; and a same-date, same-account tie is broken by transaction source
+// id — 9 before 10, not the "10" < "9" a string comparison would produce.
+func Test_import_sorts_split_mismatches_for_display(t *testing.T) {
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true}) // source id 1
+	filler := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	for range 7 {
+		matchingSplitTransaction(b, acctPK, filler) // txn source ids 1-7
+	}
+	late := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	latePK := mismatchedSplitTransaction(b, acctPK, late) // txn source id 8
+	early := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	earlyFirstPK := mismatchedSplitTransaction(b, acctPK, early)  // txn source id 9
+	earlySecondPK := mismatchedSplitTransaction(b, acctPK, early) // txn source id 10
+
+	alphaPK := b.Account(v9fixture.AccountRow{Name: "Alpha Bank", Type: "CHECKING", Currency: "CAD", Active: true}) // source id 2
+	alphaTxnPK := mismatchedSplitTransaction(b, alphaPK, early)
+
+	zuluFirstPK := b.Account(v9fixture.AccountRow{Name: "Zulu", Type: "CHECKING", Currency: "CAD", Active: true}) // source id 3
+	zuluFirstTxnPK := mismatchedSplitTransaction(b, zuluFirstPK, early)
+	zuluSecondPK := b.Account(v9fixture.AccountRow{Name: "Zulu", Type: "CHECKING", Currency: "CAD", Active: true}) // source id 4
+	zuluSecondTxnPK := mismatchedSplitTransaction(b, zuluSecondPK, early)
+
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+
+	require.ErrorIs(t, err, store.ErrValidationFailed)
+	require.Len(t, result.Validation.Splits.Mismatched, 6)
+	ids := make([]string, len(result.Validation.Splits.Mismatched))
+	sourceIDs := make([]int64, len(result.Validation.Splits.Mismatched))
+	for i, m := range result.Validation.Splits.Mismatched {
+		ids[i] = m.ID
+		sourceIDs[i] = m.SourceID
+	}
+	assert.Equal(t, []string{
+		fmt.Sprintf("txn-%d", alphaTxnPK), fmt.Sprintf("txn-%d", earlyFirstPK), fmt.Sprintf("txn-%d", earlySecondPK),
+		fmt.Sprintf("txn-%d", zuluFirstTxnPK), fmt.Sprintf("txn-%d", zuluSecondTxnPK), fmt.Sprintf("txn-%d", latePK),
+	}, ids)
+	assert.Equal(t, []int64{11, 9, 10, 12, 13, 8}, sourceIDs)
 }
 
 // Amount "0.00" isolates the has-at-least-one-split guard: a nonzero

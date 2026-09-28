@@ -130,8 +130,13 @@ func balancesCheckedPhrase(n int) string {
 // balancesPhrase appends bc's never-reconciled and investment-account
 // clauses (each omitted at zero, joined with " and ") to its checked clause.
 func balancesPhrase(bc store.BalanceCheck) string {
-	phrase := balancesCheckedPhrase(bc.Checked)
+	return balancesCheckedPhrase(bc.Checked) + balancesExtrasPhrase(bc)
+}
 
+// balancesExtrasPhrase renders bc's never-reconciled and investment-account
+// clauses, each omitted at zero and joined with " and ", prefixed with a
+// "; " separator when any exist.
+func balancesExtrasPhrase(bc store.BalanceCheck) string {
 	var extras []string
 	if n := len(bc.NeverReconciled); n > 0 {
 		extras = append(extras, nounPhrase(n, "never reconciled", "never reconciled"))
@@ -139,10 +144,31 @@ func balancesPhrase(bc store.BalanceCheck) string {
 	if bc.InvestmentAccounts > 0 {
 		extras = append(extras, nounPhrase(bc.InvestmentAccounts, "investment account not checked", "investment accounts not checked"))
 	}
-	if len(extras) > 0 {
-		phrase += "; " + strings.Join(extras, " and ")
+	if len(extras) == 0 {
+		return ""
 	}
-	return phrase
+	return "; " + strings.Join(extras, " and ")
+}
+
+// xOfYPhrase renders "X of Y <noun>", the noun agreeing with y.
+func xOfYPhrase(x, y int, singular, plural string) string {
+	noun := plural
+	if y == 1 {
+		noun = singular
+	}
+	return fmt.Sprintf("%d of %d %s", x, y, noun)
+}
+
+// balancesDifferPhrase renders bc's V1 clause: how many of the checked
+// accounts differ, plus its never-reconciled and investment-account extras.
+func balancesDifferPhrase(bc store.BalanceCheck) string {
+	return "DIFFER for " + xOfYPhrase(len(bc.Mismatched), bc.Checked, "account", "accounts") + balancesExtrasPhrase(bc)
+}
+
+// splitsDifferPhrase renders sc's V1 clause: how many of the checked
+// transactions differ.
+func splitsDifferPhrase(sc store.SplitCheck) string {
+	return "DIFFER for " + xOfYPhrase(len(sc.Mismatched), sc.Checked, "transaction", "transactions")
 }
 
 // splitsPhrase renders sc's checked clause: no transactions checked,
@@ -169,4 +195,138 @@ func rowsPhrase(c store.Counts) string {
 		nounPhrase(c.Categories, "category", "categories"),
 		nounPhrase(c.Tags, "tag", "tags"),
 	}, ", ")
+}
+
+// formatMoney renders cents as a thousands-grouped, 2-decimal amount with a
+// leading "-" for a negative value.
+func formatMoney(cents int64) string {
+	negative := cents < 0
+	if negative {
+		cents = -cents
+	}
+	s := fmt.Sprintf("%s.%02d", formatThousands(int(cents/100)), cents%100)
+	if negative {
+		return "-" + s
+	}
+	return s
+}
+
+// accountLabel renders "Name (CUR[, closed][, inactive])": inactive is
+// shown only when the account is open (not closed) and not active.
+func accountLabel(name, currency string, closed, active bool) string {
+	suffix := ""
+	switch {
+	case closed:
+		suffix = ", closed"
+	case !active:
+		suffix = ", inactive"
+	}
+	return fmt.Sprintf("%s (%s%s)", name, currency, suffix)
+}
+
+// balanceMismatchRows renders one "!" row per mismatch, in the order
+// given: account label and date columns padded to the block's widest
+// value, quarry/Quicken/difference amounts right-aligned to their own
+// column's widest value.
+func balanceMismatchRows(mismatches []store.BalanceMismatch) []string {
+	labels := make([]string, len(mismatches))
+	quarry := make([]string, len(mismatches))
+	quicken := make([]string, len(mismatches))
+	diff := make([]string, len(mismatches))
+	for i, m := range mismatches {
+		labels[i] = accountLabel(m.Name, m.Currency, m.Closed, m.Active)
+		quarry[i] = formatMoney(m.Quarry)
+		quicken[i] = formatMoney(m.Quicken)
+		diff[i] = formatMoney(m.Difference)
+	}
+	labelWidth := widestLen(labels) + 2
+	quarryWidth, quickenWidth, diffWidth := widestLen(quarry), widestLen(quicken), widestLen(diff)
+
+	rows := make([]string, len(mismatches))
+	for i, m := range mismatches {
+		rows[i] = fmt.Sprintf("  ! %-*s%s  quarry %*s  Quicken %*s  difference %*s",
+			labelWidth, labels[i], m.StatementDate.Format("2006-01-02"),
+			quarryWidth, quarry[i], quickenWidth, quicken[i], diffWidth, diff[i])
+	}
+	return rows
+}
+
+// splitMismatchRows renders one "!" row per mismatch, in the order given:
+// date fixed, account label and payee columns padded to the block's widest
+// value (empty payee rendered as "(no payee)"), amount/splits totals
+// right-aligned to their own column's widest value.
+func splitMismatchRows(mismatches []store.SplitMismatch) []string {
+	labels := make([]string, len(mismatches))
+	payees := make([]string, len(mismatches))
+	amounts := make([]string, len(mismatches))
+	totals := make([]string, len(mismatches))
+	for i, m := range mismatches {
+		labels[i] = accountLabel(m.Account, m.Currency, false, true)
+		payees[i] = m.Payee
+		if payees[i] == "" {
+			payees[i] = "(no payee)"
+		}
+		amounts[i] = formatMoney(m.Amount)
+		totals[i] = formatMoney(m.SplitsTotal)
+	}
+	labelWidth := widestLen(labels) + 2
+	payeeWidth := widestLen(payees) + 2
+	amountWidth, totalWidth := widestLen(amounts), widestLen(totals)
+
+	rows := make([]string, len(mismatches))
+	for i, m := range mismatches {
+		rows[i] = fmt.Sprintf("  ! %s  %-*s%-*samount %*s  splits %*s",
+			m.Date.Format("2006-01-02"), labelWidth, labels[i], payeeWidth, payees[i],
+			amountWidth, amounts[i], totalWidth, totals[i])
+	}
+	return rows
+}
+
+// widestLen returns the length of the longest of ss, 0 for an empty slice.
+func widestLen(ss []string) int {
+	n := 0
+	for _, s := range ss {
+		n = max(n, len(s))
+	}
+	return n
+}
+
+// renderStoreFailure renders result's Store, Rows, Balances and Splits
+// lines for a build the balance or split-sum gate failed: the Store line
+// names storeExisted's NOT REBUILT/NOT BUILT form, and each of
+// Balances/Splits switches to its DIFFER form and "!" rows only when that
+// check itself found a mismatch.
+func renderStoreFailure(result store.Result, storeExisted bool, home string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%-10s%s\n", "Store", storeFailureLine(result.Path, storeExisted, home))
+	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(result.Counts))
+
+	if mismatched := result.Validation.Balances.Mismatched; len(mismatched) > 0 {
+		fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesDifferPhrase(result.Validation.Balances))
+		for _, row := range balanceMismatchRows(mismatched) {
+			fmt.Fprintln(&b, row)
+		}
+	} else {
+		fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(result.Validation.Balances))
+	}
+
+	if mismatched := result.Validation.Splits.Mismatched; len(mismatched) > 0 {
+		fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsDifferPhrase(result.Validation.Splits))
+		for _, row := range splitMismatchRows(mismatched) {
+			fmt.Fprintln(&b, row)
+		}
+	} else {
+		fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits))
+	}
+	return b.String()
+}
+
+// storeFailureLine renders the Store line for a failed build: NOT REBUILT
+// when a previous store existed, NOT BUILT for a first run.
+func storeFailureLine(path string, storeExisted bool, home string) string {
+	abbreviated := homepath.Abbreviate(home, path)
+	if storeExisted {
+		return fmt.Sprintf("NOT REBUILT (%s unchanged)", abbreviated)
+	}
+	return fmt.Sprintf("NOT BUILT (no store at %s yet)", abbreviated)
 }

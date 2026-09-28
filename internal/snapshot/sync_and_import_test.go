@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -127,6 +128,8 @@ func Test_sync_and_import_does_not_import_when_the_snapshot_fails(t *testing.T) 
 
 // Store must be the unbuilt result, not nil, so StdoutWriteRefusal already
 // picks the --from --json form rather than the one naming the kept snapshot.
+// Path is populated on the returned copy even though the importer's own
+// Result contract leaves it empty on a failed build.
 func Test_sync_and_import_keeps_the_store_result_when_validation_fails(t *testing.T) {
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	home := t.TempDir()
@@ -140,11 +143,62 @@ func Test_sync_and_import_keeps_the_store_result_when_validation_fails(t *testin
 
 	require.ErrorIs(t, err, store.ErrValidationFailed)
 	require.NotNil(t, outcome.Store)
-	assert.Equal(t, result, *outcome.Store)
+	want := result
+	want.Path = filepath.Join(home, "quarry", "quarry.duckdb")
+	assert.Equal(t, want, *outcome.Store)
 	assert.Contains(t, err.Error(), "validation failed")
 
 	writeErr := outcome.StdoutWriteRefusal(home, errBoom)
 	assert.Contains(t, writeErr.Error(), "--from "+snapshotIDFromPath(outcome.Manifest.Snapshot.Path)+" --json")
+}
+
+// A previous store existing or not decides the V1 block's NOT REBUILT vs
+// NOT BUILT line.
+func Test_sync_and_import_reports_whether_a_previous_store_existed(t *testing.T) {
+	cases := []struct {
+		name        string
+		createStore bool
+		wantExisted bool
+	}{
+		{name: "no previous store", createStore: false, wantExisted: false},
+		{name: "a previous store", createStore: true, wantExisted: true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			bundle := v9fixture.OpenBundle(t, t.TempDir())
+			home := t.TempDir()
+			storePath := filepath.Join(home, "quarry", "quarry.duckdb")
+			if c.createStore {
+				require.NoError(t, os.MkdirAll(filepath.Dir(storePath), 0o700))
+				require.NoError(t, os.WriteFile(storePath, []byte("store"), 0o600))
+			}
+			fake := &fakeImporter{result: store.Result{Built: false}, err: store.ErrValidationFailed}
+			srv := newImportServer(t, home, fake)
+
+			outcome, err := srv.SyncAndImport(t.Context(), bundle.Dir)
+
+			require.ErrorIs(t, err, store.ErrValidationFailed)
+			assert.Equal(t, c.wantExisted, outcome.StoreExisted)
+		})
+	}
+}
+
+// A stat fault other than "not found" (here ENOTDIR, from a store path
+// running through a regular file) is treated as a previous store existing:
+// the build failed either way, so the file is unchanged either way.
+func Test_sync_and_import_treats_a_stat_fault_as_a_previous_store(t *testing.T) {
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	home := t.TempDir()
+	blocker := filepath.Join(home, "quarry")
+	require.NoError(t, os.WriteFile(blocker, []byte("not a directory"), 0o600))
+	fake := &fakeImporter{result: store.Result{Built: false}, err: store.ErrValidationFailed}
+	srv := newImportServer(t, home, fake)
+
+	outcome, err := srv.SyncAndImport(t.Context(), bundle.Dir)
+
+	require.ErrorIs(t, err, store.ErrValidationFailed)
+	assert.True(t, outcome.StoreExisted)
 }
 
 // Count form is "X of Y <noun>": the noun agrees with Y, the verb with X.
@@ -217,10 +271,12 @@ func Test_sync_and_import_reports_the_v1_refusal_for_a_failed_check(t *testing.T
 
 			require.ErrorIs(t, err, store.ErrValidationFailed)
 			require.NotNil(t, outcome.Store)
-			assert.Equal(t, result, *outcome.Store)
 			storePath := filepath.Join(home, "quarry", "quarry.duckdb")
-			want := fmt.Sprintf("validation failed: %s; %s was not changed; fix the account in Quicken "+
-				"and run quarry sync, or run quarry sync --from %s after updating quarry",
+			wantResult := result
+			wantResult.Path = storePath
+			assert.Equal(t, wantResult, *outcome.Store)
+			want := fmt.Sprintf("validation failed: %s; %s was not changed; each difference is listed on stdout; "+
+				"fix the account in Quicken and run quarry sync, or run quarry sync --from %s after updating quarry",
 				c.wantClause, homepath.Abbreviate(home, storePath), snapshotIDFromPath(outcome.Manifest.Snapshot.Path))
 			assert.Equal(t, want, err.Error())
 		})

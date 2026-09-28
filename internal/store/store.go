@@ -140,9 +140,11 @@ type BalanceCheck struct {
 
 // BalanceMismatch is one reconciled account whose reconciled-transaction
 // sum does not equal its last reconciled statement's balance, in cents.
-// Difference is Quarry minus Quicken.
+// Difference is Quarry minus Quicken. SourceID orders display only; it is
+// never rendered.
 type BalanceMismatch struct {
 	ID, Name, Currency          string
+	SourceID                    int64
 	Closed, Active              bool
 	StatementDate               time.Time
 	Quarry, Quicken, Difference int64
@@ -156,9 +158,11 @@ type SplitCheck struct {
 }
 
 // SplitMismatch is one transaction whose splits do not sum to its amount,
-// in cents. Payee is "" when the transaction has none.
+// in cents. Payee is "" when the transaction has none. SourceID orders
+// display only; it is never rendered.
 type SplitMismatch struct {
 	ID, Account, Currency, Payee string
+	SourceID                     int64
 	Date                         time.Time
 	Amount, SplitsTotal          int64
 }
