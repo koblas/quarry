@@ -13,7 +13,7 @@
 - **DQ-1 Two locations, fixed order:** `~/Documents`, then `~/Library/Application Support/Quicken/Documents`. Top level of each only; per-directory filter unchanged (dotfiles ignored, case-insensitive `.quicken` suffix, symlinks followed, dangling links and non-directories skipped).
 - **DQ-2 One pool:** exactly one distinct bundle across both → use it (through `ResolveBundlePath`, unchanged). Two or more → R2. Never prefer a location.
 - **DQ-3 Dedupe by file identity** (`os.SameFile`); keep the first path found in location order. `Source` shows that path as found.
-- **DQ-4 Missing location is silent** (ENOENT on the folder or any ancestor → zero candidates).
+- **DQ-4 Missing location is silent** (ENOENT on the folder or any ancestor → zero candidates). For the Quicken location only, ENOTDIR (the folder or an ancestor is a regular file) also counts as missing. `~/Documents` keeps R3 for ENOTDIR. (Ruled at final gate.)
 - **DQ-5 Unreadable location refuses**, even if the other location has exactly one bundle. Check in location order; first unreadable wins (R3 before R3b).
 - **DQ-6** With `--quicken`, neither location is read.
 

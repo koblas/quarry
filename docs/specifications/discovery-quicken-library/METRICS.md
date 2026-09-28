@@ -8,6 +8,7 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Verdict |
 | --- | --- | --- | --- |
+| 1 | arch, correctness, test, refactor | 0/1/9/3 | FAIL |
 
 ## Tokens
 <output of `.claude/scripts/feature-metrics.py discovery-quicken-library`, pasted once at SHIP>
