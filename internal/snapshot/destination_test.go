@@ -2,6 +2,7 @@ package snapshot_test
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -42,7 +43,7 @@ func Test_dirDestination_backup_fails_when_the_directory_is_not_writable(t *test
 
 	_, _, err := dest.Backup(t.Context(), noopBackupSource{}, "20260927T143005Z")
 
-	require.Error(t, err)
+	require.ErrorIs(t, err, fs.ErrPermission)
 }
 
 func Test_dirDestination_backup_reserves_the_next_suffix_when_the_current_second_is_taken(t *testing.T) {
@@ -109,17 +110,19 @@ func Test_dirDestination_backup_returns_immediately_when_the_partial_cannot_be_c
 		t.Skip("root ignores file permissions")
 	}
 	dir := t.TempDir()
-	dest := snapshot.NewDirDestination(dir)
-	partial, _, err := dest.Backup(t.Context(), noopBackupSource{}, "20260927T143005Z")
-	require.NoError(t, err)
-	_, err = dest.CommitSnapshot(t.Context(), partial)
-	require.NoError(t, err)
+	// The first candidate collides (fs.ErrExist), so the loop must advance
+	// to "_2" — where directory permissions, not a collision, block create.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".20260927T143005Z.sqlite.partial"), []byte("in flight"), 0o600))
 	require.NoError(t, os.Chmod(dir, 0o500))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	dest := snapshot.NewDirDestination(dir)
 
-	_, _, err = dest.Backup(t.Context(), noopBackupSource{}, "20260927T143005Z")
+	_, _, err := dest.Backup(t.Context(), noopBackupSource{}, "20260927T143005Z")
 
-	require.Error(t, err)
+	require.ErrorIs(t, err, fs.ErrPermission)
+	var pathErr *fs.PathError
+	require.ErrorAs(t, err, &pathErr)
+	assert.Equal(t, ".20260927T143005Z_2.sqlite.partial", filepath.Base(pathErr.Path), "expected the failure on the second candidate, not a later one")
 }
 
 func Test_dirDestination_write_manifest_fails_when_the_directory_is_not_writable(t *testing.T) {
@@ -130,7 +133,7 @@ func Test_dirDestination_write_manifest_fails_when_the_directory_is_not_writable
 
 	_, err := dest.WriteManifest(t.Context(), "20260927T143005Z", []byte("{}"))
 
-	require.Error(t, err)
+	require.ErrorIs(t, err, fs.ErrPermission)
 }
 
 func Test_dirDestination_commit_snapshot_refuses_to_replace_an_existing_file(t *testing.T) {
@@ -180,7 +183,7 @@ func Test_dirDestination_discard_fails_when_the_partial_cannot_be_removed(t *tes
 
 	err = dest.Discard(t.Context(), partial)
 
-	require.Error(t, err)
+	require.ErrorIs(t, err, fs.ErrPermission)
 }
 
 // writeAged writes name under dir with contents "x" and backdates its mtime

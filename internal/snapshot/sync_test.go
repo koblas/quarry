@@ -252,6 +252,8 @@ func Test_sync_appends_a_suffix_when_the_current_second_already_has_a_snapshot(t
 	// Located by directory listing, not by the returned Manifest, so a
 	// wrong-but-self-consistent returned path cannot make this pass.
 	secondManifestPath := onlyFileWithSuffix(t, snapshotsDir, "_2.json")
+	secondSQLitePath := onlyFileWithSuffix(t, snapshotsDir, "_2.sqlite")
+	assert.FileExists(t, secondSQLitePath)
 	raw, err := os.ReadFile(secondManifestPath)
 	require.NoError(t, err)
 	var onDisk snapshot.Manifest
