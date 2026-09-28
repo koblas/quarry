@@ -76,6 +76,29 @@ func Test_commit_succeeds_when_the_partial_cannot_be_removed_after_linking(t *te
 	assert.Equal(t, "payload", string(got))
 }
 
+// dest's directory is made unreadable (but still writable+executable, which
+// Link only needs) before Commit runs, so the link succeeds but the
+// directory cannot be opened to fsync it.
+func Test_commit_succeeds_when_the_destination_directory_cannot_be_synced(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file permissions")
+	}
+	destDir := filepath.Join(t.TempDir(), "dest-dir")
+	require.NoError(t, os.MkdirAll(destDir, 0o755))
+	partial := filepath.Join(t.TempDir(), ".partial")
+	dest := filepath.Join(destDir, "final")
+	require.NoError(t, os.WriteFile(partial, []byte("payload"), 0o600))
+	require.NoError(t, os.Chmod(destDir, 0o300))
+	t.Cleanup(func() { _ = os.Chmod(destDir, 0o755) })
+
+	err := atomicfile.Commit(partial, dest)
+
+	require.NoError(t, err)
+	got, err := os.ReadFile(dest)
+	require.NoError(t, err)
+	assert.Equal(t, "payload", string(got))
+}
+
 func Test_commit_fails_when_the_partial_is_missing(t *testing.T) {
 	dir := t.TempDir()
 	partial := filepath.Join(dir, ".partial")

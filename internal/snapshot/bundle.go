@@ -16,14 +16,10 @@ import (
 // regular file named "data".
 var errBundleMissingData = errors.New("bundle has no data file")
 
-// errNotOpenInQuicken signals that data's header reports WAL mode (SQLite
-// sets header bytes 18-19 to 2 once a connection ever set journal_mode=WAL)
-// with no live sibling -wal file: the database was written in WAL mode at
-// some point but nothing currently has it open.
+// errNotOpenInQuicken signals a WAL-formatted header with no live -wal sibling: written in WAL mode once, but nothing has it open now.
 var errNotOpenInQuicken = errors.New("database has no write-ahead log")
 
-// walFormatByte is the SQLite header's file-format-version value (offsets
-// 18 and 19) that journal_mode=WAL leaves behind.
+// walFormatByte is the SQLite header's file-format-version value (offsets 18-19) that journal_mode=WAL leaves behind.
 const walFormatByte = 2
 
 // ResolveBundlePath expands and resolves path (a --quicken value) against
@@ -96,6 +92,7 @@ func validateData(bundlePath string) error {
 	// Read the header through this same open, before any SQLite connection
 	// touches data: opening it a second time would risk racing a real
 	// Quicken write between the two opens.
+	// A short read leaves n < len(header), which just fails the check below.
 	var header [20]byte
 	n, _ := io.ReadFull(f, header[:])
 	if n == len(header) && header[18] == walFormatByte && header[19] == walFormatByte {

@@ -401,9 +401,8 @@ func Test_run_refuses_an_encrypted_bundle(t *testing.T) {
 	assert.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
-// A WAL-formatted bundle with no live -wal file must be refused before
-// Sync ever opens it mode=ro: that open alone would create -wal/-shm in
-// the live bundle, which this test's file-set assertion would catch.
+// A WAL-formatted bundle with no live -wal file must be refused before Sync
+// opens it — that open alone would create -wal/-shm this test checks for.
 func Test_run_refuses_a_bundle_that_is_not_open_in_quicken(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

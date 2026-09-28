@@ -293,10 +293,8 @@ func Test_backup_sets_journal_mode_delete_on_the_destination(t *testing.T) {
 	err = sqlite.Backup(t.Context(), src, destPath, 0)
 	require.NoError(t, err)
 
-	// Offsets 18-19 of the SQLite header are the file-format write/read
-	// version: 2 for WAL, 1 for a rollback journal. The backup API copies
-	// the source's WAL header verbatim, so this is 2 unless Backup resets
-	// the destination's journal mode itself.
+	// Header offsets 18-19 are the file-format version (2=WAL, 1=rollback);
+	// the backup API copies the source's verbatim unless Backup resets it.
 	header, err := os.ReadFile(destPath)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(header), 20)

@@ -17,9 +17,7 @@ type RefusalError struct {
 func (e RefusalError) Error() string { return e.msg }
 
 // sourceRefusal classifies a Source failure as encrypted or busy/locked; ok
-// reports whether it recognized err. An unrecognized err still comes back
-// as Sync's ordinary wrapped error, so a caller that always wants a
-// sourceRefusal (Open, Probe) can use refusal directly and ignore ok.
+// reports whether it recognized err, so a caller that always wants a refusal can ignore it.
 func sourceRefusal(home, bundlePath string, err error) (refusal error, ok bool) {
 	switch {
 	case sqlite.IsNotADB(err):

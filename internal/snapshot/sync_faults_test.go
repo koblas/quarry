@@ -613,9 +613,7 @@ func Test_sync_refuses_a_busy_bundle(t *testing.T) {
 }
 
 // A cancelled ctx overrides whatever refusal each pre-commit failure site
-// would otherwise classify to — a classified sqlite fault (open, probe,
-// backup), a generic write fault (backup), and an unwritable directory
-// (prepare) alike.
+// would otherwise classify to, across every failure kind.
 func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_at_a_precommit_failure(t *testing.T) {
 	blockedPath := filepath.Join(t.TempDir(), "not-a-directory")
 	require.NoError(t, os.WriteFile(blockedPath, []byte("x"), 0o600))
@@ -655,8 +653,7 @@ func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_at_a_pr
 }
 
 // buildManifest's own ctx-cancellation failure (opening the snapshot copy)
-// is also routed through failureOutcome, distinct from every Source- and
-// Destination-facing site above.
+// is also routed through FailureOutcome, distinct from the sites above.
 func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_during_buildManifest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -675,8 +672,7 @@ func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_during_
 
 // cancelAndFailWriteManifestDestination cancels ctx and fails WriteManifest
 // in the same call, so a test can land exactly on that failure site's
-// failureOutcome check without the earlier buildManifest check intercepting
-// first.
+// FailureOutcome check without the earlier buildManifest check intercepting first.
 type cancelAndFailWriteManifestDestination struct {
 	real   snapshot.Destination
 	cancel context.CancelFunc

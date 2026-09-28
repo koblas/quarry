@@ -51,9 +51,7 @@ func openReadOnly(ctx context.Context, path, dsn string) (*DB, error) {
 	return &DB{conn: conn}, nil
 }
 
-// primaryErrNo masks err to its primary (non-extended) result code: a
-// caller-supplied sqlite3.Error may carry an extended code (e.g.
-// ErrBusyRecovery) directly in Code rather than in ExtendedCode.
+// primaryErrNo masks a sqlite3.Error.Code to its primary (non-extended) result code.
 const primaryErrNo = 0xff
 
 // IsNotADB reports whether err is SQLite's "file is not a database" fault

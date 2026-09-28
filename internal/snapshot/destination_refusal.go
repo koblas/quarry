@@ -9,9 +9,7 @@ import (
 )
 
 // causeText unwraps err to its innermost cause's message, falling back to
-// err's own text when nothing wraps it further. *fs.PathError and
-// *os.LinkError both implement Unwrap, so this one loop classifies either
-// without a type switch.
+// err's own text when nothing wraps it further.
 func causeText(err error) string {
 	for {
 		unwrapped := errors.Unwrap(err)
