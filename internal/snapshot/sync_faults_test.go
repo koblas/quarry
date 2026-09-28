@@ -4,9 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -73,19 +76,26 @@ func Test_sync_wraps_an_error_when_opening_the_bundle_fails(t *testing.T) {
 	assert.ErrorContains(t, err, "sync "+bundlePath)
 }
 
+// A generic backup failure is not a classified source error (busy/encrypted),
+// so it falls to R14, not the old generic "sync <path>:" wrap.
 func Test_sync_wraps_an_error_when_the_backup_fails(t *testing.T) {
-	snapshotsDir := filepath.Join(t.TempDir(), "snapshots")
+	home := t.TempDir()
+	snapshotsDir := filepath.Join(home, "snapshots")
 	srv := snapshot.NewServer(
 		snapshot.WithSnapshotDir(snapshotsDir),
 		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
 		snapshot.WithSource(&fakeSource{backupErr: errBoom}),
+		snapshot.WithHome(home),
 	)
 	bundlePath := t.TempDir()
 
 	_, err := srv.Sync(t.Context(), bundlePath)
 
-	require.ErrorIs(t, err, errBoom)
-	assert.ErrorContains(t, err, "sync "+bundlePath)
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t,
+		"cannot write snapshot to ~/snapshots: boom; free disk space, then run quarry sync again",
+		re.Error())
 	assertNoPartialsLeftBehind(t, snapshotsDir)
 }
 
@@ -104,22 +114,42 @@ func assertNoPartialsLeftBehind(t *testing.T, dir string) {
 	}
 }
 
+// mkdirAllCause reproduces os.MkdirAll's own failure against an existing
+// blockedPath through a connection independent of the code under test, so a
+// test can pin the exact OS reason rather than asserting only "some error".
+func mkdirAllCause(t *testing.T, blockedPath string) string {
+	t.Helper()
+	err := os.MkdirAll(blockedPath, 0o700)
+	require.Error(t, err)
+	var pathErr *fs.PathError
+	require.ErrorAs(t, err, &pathErr)
+	return pathErr.Err.Error()
+}
+
 // Exercises the real Destination adapter's Prepare fault path: MkdirAll
 // fails because the configured snapshots path is already a regular file.
+// Prepare's failure is always R13, whatever the OS reason.
 func Test_sync_wraps_an_error_when_the_snapshots_directory_cannot_be_prepared(t *testing.T) {
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	ref, err := v9.Reference(t.Context())
 	require.NoError(t, err)
+	home := t.TempDir()
 	blockedPath := filepath.Join(t.TempDir(), "not-a-directory")
 	require.NoError(t, os.WriteFile(blockedPath, []byte("x"), 0o600))
+	cause := mkdirAllCause(t, blockedPath)
 	srv := snapshot.NewServer(
 		snapshot.WithSnapshotDir(blockedPath),
 		snapshot.WithReference(v9.ReferenceLabel, ref),
+		snapshot.WithHome(home),
 	)
 
 	_, err = srv.Sync(t.Context(), bundle.Dir)
 
-	require.Error(t, err)
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t,
+		"cannot write to "+blockedPath+": "+cause+"; make the directory writable by your user",
+		re.Error())
 }
 
 func Test_sync_wraps_an_error_when_the_probe_fails(t *testing.T) {
@@ -324,55 +354,95 @@ func (f *partialFaultDestination) Discard(ctx context.Context, partial string) e
 	return err
 }
 
+// assertSnapshotsDirEmpty fails if dir holds anything at all: unlike
+// assertNoPartialsLeftBehind, it also catches a committed final Discard
+// should have removed.
+func assertSnapshotsDirEmpty(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
 func Test_sync_wraps_an_error_when_writing_the_manifest_fails(t *testing.T) {
+	home := t.TempDir()
+	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	ref, err := v9.Reference(t.Context())
 	require.NoError(t, err)
 	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(snapshotsDir),
 		snapshot.WithReference(v9.ReferenceLabel, ref),
 		snapshot.WithDestination(&partialFaultDestination{
-			real:              snapshot.NewDirDestination(filepath.Join(t.TempDir(), "snapshots")),
-			failWriteManifest: errBoom,
+			real:              snapshot.NewDirDestination(snapshotsDir),
+			failWriteManifest: &fs.PathError{Op: "open", Path: "manifest.json.partial", Err: syscall.ENOSPC},
 		}),
+		snapshot.WithHome(home),
 	)
 
 	_, err = srv.Sync(t.Context(), bundle.Dir)
 
-	require.ErrorIs(t, err, errBoom)
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t,
+		"cannot write snapshot to ~/snapshots: no space left on device; free disk space, then run quarry sync again",
+		re.Error())
+	assertSnapshotsDirEmpty(t, snapshotsDir)
 }
 
 func Test_sync_wraps_an_error_when_committing_the_manifest_fails(t *testing.T) {
+	home := t.TempDir()
+	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	ref, err := v9.Reference(t.Context())
 	require.NoError(t, err)
 	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(snapshotsDir),
 		snapshot.WithReference(v9.ReferenceLabel, ref),
 		snapshot.WithDestination(&partialFaultDestination{
-			real:               snapshot.NewDirDestination(filepath.Join(t.TempDir(), "snapshots")),
-			failCommitManifest: errBoom,
+			real:               snapshot.NewDirDestination(snapshotsDir),
+			failCommitManifest: &os.LinkError{Op: "link", Old: "manifest.json.partial", New: "manifest.json", Err: syscall.ENOSPC},
 		}),
+		snapshot.WithHome(home),
 	)
 
 	_, err = srv.Sync(t.Context(), bundle.Dir)
 
-	require.ErrorIs(t, err, errBoom)
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t,
+		"cannot write snapshot to ~/snapshots: no space left on device; free disk space, then run quarry sync again",
+		re.Error())
+	assertSnapshotsDirEmpty(t, snapshotsDir)
 }
 
+// The manifest final is already committed when CommitSnapshot fails; the
+// empty directory afterward proves Discard removed that final too, not
+// only the still-open snapshot partial.
 func Test_sync_wraps_an_error_when_committing_the_snapshot_fails(t *testing.T) {
+	home := t.TempDir()
+	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	ref, err := v9.Reference(t.Context())
 	require.NoError(t, err)
 	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(snapshotsDir),
 		snapshot.WithReference(v9.ReferenceLabel, ref),
 		snapshot.WithDestination(&partialFaultDestination{
-			real:       snapshot.NewDirDestination(filepath.Join(t.TempDir(), "snapshots")),
-			failCommit: errBoom,
+			real:       snapshot.NewDirDestination(snapshotsDir),
+			failCommit: &os.LinkError{Op: "link", Old: "snapshot.sqlite.partial", New: "snapshot.sqlite", Err: syscall.ENOSPC},
 		}),
+		snapshot.WithHome(home),
 	)
 
 	_, err = srv.Sync(t.Context(), bundle.Dir)
 
-	require.ErrorIs(t, err, errBoom)
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t,
+		"cannot write snapshot to ~/snapshots: no space left on device; free disk space, then run quarry sync again",
+		re.Error())
+	assertSnapshotsDirEmpty(t, snapshotsDir)
 }
 
 func Test_sync_still_returns_the_classified_refusal_when_discard_fails(t *testing.T) {
@@ -399,6 +469,73 @@ func Test_sync_still_returns_the_classified_refusal_when_discard_fails(t *testin
 		re.Error())
 	assert.NotEmpty(t, dest.backedUpPartial)
 	assert.Equal(t, dest.backedUpPartial, dest.discardedPartial)
+}
+
+// A Backup error carrying both a classified sqlite cause and fs.ErrPermission
+// must still resolve to the busy source refusal: sourceRefusal's classified
+// check runs before the write-failure classifier ever sees the error.
+func Test_sync_reports_the_source_refusal_when_a_backup_error_is_also_a_permission_error(t *testing.T) {
+	home := t.TempDir()
+	combined := fmt.Errorf("%w: %w", sqlite3.Error{Code: sqlite3.ErrBusy}, fs.ErrPermission)
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(t.TempDir()),
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{backupErr: combined}),
+		snapshot.WithHome(home),
+	)
+
+	_, err := srv.Sync(t.Context(), filepath.Join(home, "Documents", "Home.quicken"))
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t, "Quicken is busy writing ~/Documents/Home.quicken; run quarry sync again in a moment", re.Error())
+}
+
+// A Discard failure is best-effort (SCENARIO-08's rule): it never replaces
+// the R14 refusal already classified for the write failure that triggered it.
+func Test_sync_still_returns_the_R14_refusal_when_discard_fails_after_a_write_failure(t *testing.T) {
+	writeErr := &fs.PathError{Op: "open", Path: "manifest.json.partial", Err: syscall.ENOSPC}
+
+	cases := []struct {
+		name               string
+		failWriteManifest  error
+		failCommitManifest error
+		failCommit         error
+	}{
+		{name: "write manifest fails", failWriteManifest: writeErr},
+		{name: "commit manifest fails", failCommitManifest: writeErr},
+		{name: "commit snapshot fails", failCommit: writeErr},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			snapshotsDir := filepath.Join(home, "snapshots")
+			bundle := v9fixture.OpenBundle(t, t.TempDir())
+			ref, err := v9.Reference(t.Context())
+			require.NoError(t, err)
+			srv := snapshot.NewServer(
+				snapshot.WithSnapshotDir(snapshotsDir),
+				snapshot.WithReference(v9.ReferenceLabel, ref),
+				snapshot.WithDestination(&partialFaultDestination{
+					real:               snapshot.NewDirDestination(snapshotsDir),
+					failWriteManifest:  c.failWriteManifest,
+					failCommitManifest: c.failCommitManifest,
+					failCommit:         c.failCommit,
+					failDiscard:        errBoom,
+				}),
+				snapshot.WithHome(home),
+			)
+
+			_, err = srv.Sync(t.Context(), bundle.Dir)
+
+			var re snapshot.RefusalError
+			require.ErrorAs(t, err, &re)
+			assert.Equal(t,
+				"cannot write snapshot to ~/snapshots: no space left on device; free disk space, then run quarry sync again",
+				re.Error())
+		})
+	}
 }
 
 // Uses a rollback-journal (non-WAL) fixture: v9fixture's WAL-mode bundle

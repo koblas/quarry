@@ -119,7 +119,7 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 	}
 
 	if err := destination.Prepare(ctx); err != nil {
-		return Manifest{}, fmt.Errorf("sync %s: %w", bundlePath, err)
+		return Manifest{}, prepareRefusal(s.home, s.snapshotDir, err)
 	}
 
 	takenAt := time.Now().UTC()
@@ -127,7 +127,10 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 
 	snapshotPartial, resolvedName, err := destination.Backup(ctx, source, name)
 	if err != nil {
-		return Manifest{}, sourceRefusal(s.home, bundlePath, err)
+		if sqlite.IsNotADB(err) || sqlite.IsBusy(err) {
+			return Manifest{}, sourceRefusal(s.home, bundlePath, err)
+		}
+		return Manifest{}, writeRefusal(s.home, s.snapshotDir, err)
 	}
 	snapshotPath, manifestPath := destination.FinalPaths(resolvedName)
 
@@ -152,17 +155,24 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 	}
 	manifestPartial, err := destination.WriteManifest(ctx, resolvedName, manifestBytes)
 	if err != nil {
-		return Manifest{}, fmt.Errorf("sync %s: %w", bundlePath, err)
+		_ = destination.Discard(ctx, snapshotPartial)
+		return Manifest{}, writeRefusal(s.home, s.snapshotDir, err)
 	}
 
 	// Manifest commits first: BR-8 accepts a snapshot only if its manifest
 	// exists, so a crash between the two commits must never leave a
 	// snapshot without one.
 	if _, err := destination.CommitManifest(ctx, manifestPartial); err != nil {
-		return Manifest{}, fmt.Errorf("sync %s: %w", bundlePath, err)
+		_ = destination.Discard(ctx, manifestPartial)
+		_ = destination.Discard(ctx, snapshotPartial)
+		return Manifest{}, writeRefusal(s.home, s.snapshotDir, err)
 	}
 	if _, err := destination.CommitSnapshot(ctx, snapshotPartial); err != nil {
-		return Manifest{}, fmt.Errorf("sync %s: %w", bundlePath, err)
+		// The manifest final is discarded first, before the snapshot
+		// partial, so the reservation stays held until the last step.
+		_ = destination.Discard(ctx, manifestPath)
+		_ = destination.Discard(ctx, snapshotPartial)
+		return Manifest{}, writeRefusal(s.home, s.snapshotDir, err)
 	}
 
 	if !manifest.Schema.Verified {

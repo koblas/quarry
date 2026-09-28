@@ -43,7 +43,8 @@ type Destination interface {
 	// FinalPaths predicts the snapshot and manifest paths CommitSnapshot and
 	// CommitManifest will produce for name.
 	FinalPaths(name string) (snapshotPath, manifestPath string)
-	// Discard removes a snapshot partial Backup created, returning any
-	// removal error unchanged.
+	// Discard removes a path Sync hands it — a snapshot or manifest
+	// partial, or an already-committed final Sync must undo after a
+	// later step fails — returning any removal error unchanged.
 	Discard(ctx context.Context, partial string) error
 }

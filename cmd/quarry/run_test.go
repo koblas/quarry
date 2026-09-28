@@ -379,6 +379,34 @@ func Test_run_refuses_an_encrypted_bundle(t *testing.T) {
 	assert.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
+// Prepare's MkdirAll is a no-op on an already-existing directory regardless
+// of its permission bits, so the snapshots directory must exist before the
+// chmod, or the failure this test wants would never surface.
+func Test_run_refuses_a_snapshots_directory_that_is_not_writable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file permissions")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
+	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	require.NoError(t, os.MkdirAll(snapshotsDir, 0o700))
+	t.Cleanup(func() { _ = os.Chmod(snapshotsDir, 0o700) })
+	require.NoError(t, os.Chmod(snapshotsDir, 0o500))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: cannot write to "+abbreviated(t, snapshotsDir, home)+
+		": permission denied; make the directory writable by your user\n",
+		stderr.String())
+	entries, err := os.ReadDir(snapshotsDir)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
 // The snapshots directory is left behind, empty, in every case: Prepare
 // already ran before the content check can fail.
 func Test_run_refuses_a_bundle_whose_snapshot_content_is_rejected(t *testing.T) {

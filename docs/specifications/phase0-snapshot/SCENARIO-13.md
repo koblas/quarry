@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-13
-status: open
+status: done
 ---
 
 # SCENARIO-13: Snapshots directory not writable (R13) + BR-11's R14 unit-level requirement
@@ -23,7 +23,7 @@ failure branches → delete one and its test's on-disk-empty assertion goes red.
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_test.go:363-380` (append after `Test_run_refuses_an_encrypted_bundle`)
+- [x] Step 1: `cmd/quarry/run_test.go:363-380` (append after `Test_run_refuses_an_encrypted_bundle`)
   `Test_run_refuses_a_snapshots_directory_that_is_not_writable` — real bundle
   (`v9fixture.OpenBundle`), pre-create `.../quarry/snapshots` itself (`os.MkdirAll` `0o700`),
   `os.Chmod` it `0o500` (`t.Cleanup` restores `0o700` first, before `t.TempDir()` cleanup —
@@ -34,7 +34,7 @@ failure branches → delete one and its test's on-disk-empty assertion goes red.
   the stderr-content assertion.
 
 ### Build
-- [ ] Step 2: `internal/snapshot/destination_refusal.go` (new) — `writeReason(err) string`
+- [x] Step 2: `internal/snapshot/destination_refusal.go` (new) — `writeReason(err) string`
   (unwraps `*fs.PathError` (`Create`/`Remove`) and `*os.LinkError` (`Commit`'s `os.Link`) to
   the inner errno text; falls back to `err.Error()` for a real sqlite disk-full — a
   reachable default, not `// unreachable`, unlike `bundle.go`'s `osReason`, which only ever
@@ -42,12 +42,12 @@ failure branches → delete one and its test's on-disk-empty assertion goes red.
   `Prepare`, whose row is "cannot create/write the dir" regardless of OS reason), one that
   returns R13 when `errors.Is(err, fs.ErrPermission)` and R14 otherwise (for every
   post-`Prepare` write). Both format `homepath.Abbreviate(home, s.snapshotDir)`.
-- [ ] Step 3: `internal/snapshot/snapshot.go:121-123` (`Prepare` call site) — always-R13
+- [x] Step 3: `internal/snapshot/snapshot.go:121-123` (`Prepare` call site) — always-R13
   classifier. Strengthen `internal/snapshot/sync_faults_test.go:109-123`
   `Test_sync_wraps_an_error_when_the_snapshots_directory_cannot_be_prepared` (add
   `WithSnapshotDir`/`WithHome` to the `Server`) to assert `errors.As(err,
   &snapshot.RefusalError{})` and the exact R13 copy.
-- [ ] Step 4: `internal/snapshot/snapshot.go:128-131` (`Backup` call site) — keep
+- [x] Step 4: `internal/snapshot/snapshot.go:128-131` (`Backup` call site) — keep
   `sqlite.IsNotADB`/`IsBusy` routing to `sourceRefusal` first; every other error goes
   through the permission-or-not classifier. Update
   `internal/snapshot/sync_faults_test.go:76-90`
@@ -55,7 +55,7 @@ failure branches → delete one and its test's on-disk-empty assertion goes red.
   expect the R14 refusal for its generic `errBoom` — a deliberate reclassification, flagged
   below, not a regression. `Test_sync_refuses_when_the_source_reports_a_classified_error`'s
   busy/encrypted backup rows are unaffected.
-- [ ] Step 5: `internal/snapshot/snapshot.go:153-166`
+- [x] Step 5: `internal/snapshot/snapshot.go:153-166`
   (`WriteManifest`/`CommitManifest`/`CommitSnapshot` call sites) — before each now-classified
   return: `WriteManifest` discards `snapshotPartial`; `CommitManifest` discards
   `snapshotPartial` then `manifestPartial`; `CommitSnapshot` discards the **manifest
@@ -68,17 +68,17 @@ failure branches → delete one and its test's on-disk-empty assertion goes red.
   `errBoom`) to assert the R14 copy and that `os.ReadDir` on the real destination dir is
   **empty** afterward — not `assertNoPartialsLeftBehind`, which only matches the `.partial`
   suffix and would miss a leftover committed manifest final on the `CommitSnapshot` case.
-- [ ] Step 6: one table test, mirroring `sync_faults_test.go:378-402`'s
+- [x] Step 6: one table test, mirroring `sync_faults_test.go:378-402`'s
   discard-fails-but-refusal-still-returned pattern, covering
   `WriteManifest`/`CommitManifest`/`CommitSnapshot`: `Discard` itself fails but the R14
   refusal returned is unchanged (best-effort, SCENARIO-08's rule).
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports; doc comments on
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports; doc comments on
   `destination_refusal.go`'s symbols and the widened `Discard` doc.
 
 ### Verify
-- [ ] Step 8: full verification (`go build`, full suite + coverage, `-race` on
+- [x] Step 8: full verification (`go build`, full suite + coverage, `-race` on
   `internal/snapshot`/`cmd/quarry`, `golangci-lint`) + `.claude/scripts/spec-check.py
   phase0-snapshot` → tick SCENARIO-13 with its acceptance test.
 
@@ -114,3 +114,31 @@ flagged is closed by Step 5's final-then-partial discard order.
   failure is `*os.LinkError` — reusing `osReason` verbatim silently prints a wrong or empty
   reason for a `CommitManifest`/`CommitSnapshot` fault. Use the new `writeReason` for every
   destination-side refusal, never `osReason`.
+
+**Implementation notes (this run):**
+- `writeReason` is a generic `errors.Unwrap` loop to the innermost cause, not a type switch
+  on `*fs.PathError`/`*os.LinkError` as the plan's Step 2 sketch described — both types
+  implement `Unwrap`, so one loop covers both with no separate branch to leave uncovered
+  (the plan's own concern about `bundle.go`'s `osReason` needing a `// unreachable` default
+  does not apply here: the loop's fallback is reached for real by any error with no further
+  `Unwrap`, e.g. a raw `sqlite3.Error`).
+- Orchestrator constraint (this run): a `Backup` failure must classify through
+  `sourceRefusal` first — `sqlite.IsNotADB`/`IsBusy` stay the *first* check at the `Backup`
+  call site, `writeRefusal` only sees what neither matched. Added
+  `Test_sync_reports_the_source_refusal_when_a_backup_error_is_also_a_permission_error`
+  (a `fakeSource.backupErr` wrapping both a busy `sqlite3.Error` and `fs.ErrPermission`) to
+  prove the ordering; mutation-verified by swapping the two checks, which reddens exactly
+  that test.
+- Step 6's table test also mutation-verifies best-effort `Discard`-fails-but-refusal-
+  unchanged across all three of `WriteManifest`/`CommitManifest`/`CommitSnapshot`, using
+  `*os.LinkError`-flavored faults for the two `Commit*` cases (realistic: `Commit` really
+  fails via `os.Link`) and `*fs.PathError` for `WriteManifest` (`Create`'s real failure
+  shape) — the plan's Step 5 sketch used `*fs.PathError` for all three; this run varied the
+  shape per call site instead, which exercises `writeReason`'s unwrap loop against both
+  types across the fault tests as a whole.
+- Deviation flagged for the final product-vision pass, per orchestrator ruling: any
+  unclassified `Backup`/write error — including a context cancellation mid-backup, or a
+  source-side SQLite error `sourceRefusal` does not name — now renders as R14 ("free disk
+  space, then run quarry sync again"), which may not fit every such cause. No branch was
+  added for this; it rides the existing default. Recorded in STATE.md `## Open debts`
+  alongside the R13-covers-a-later-write deviation above.

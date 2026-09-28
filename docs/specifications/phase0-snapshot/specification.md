@@ -424,4 +424,4 @@ Scenario: SCENARIO-13 — Snapshots directory not writable
 - [x] SCENARIO-09: Extra tables or columns only — delivered by SCENARIO-10 `cmd/quarry/run_test.go` `Test_run_reports_extra_schema_only_as_a_warning`
 - [x] SCENARIO-11: Same-second runs do not collide — `internal/snapshot/sync_test.go` `Test_sync_appends_a_suffix_when_the_current_second_already_has_a_snapshot`
 - [x] SCENARIO-12: Crash leftovers cleaned silently — delivered by SCENARIO-11 `cmd/quarry/run_test.go` `Test_run_removes_leftover_partials_silently_before_syncing`
-- [ ] SCENARIO-13: Snapshots directory not writable
+- [x] SCENARIO-13: Snapshots directory not writable — `cmd/quarry/run_test.go` `Test_run_refuses_a_snapshots_directory_that_is_not_writable`
