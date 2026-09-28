@@ -249,7 +249,7 @@ stderr, one line, failing clauses joined with ` and `:
 ```
 quarry: validation failed: 2 of 35 accounts do not match Quicken's last reconciled balance and 1 transaction does not equal the sum of its splits; ~/Library/Application Support/quarry/quarry.duckdb was not changed; each difference is listed on stdout; fix the account in Quicken and run quarry sync, or run quarry sync --from 20260927T143005Z after updating quarry
 ```
-Singular: `1 of 35 accounts does not match`, `1 transaction does not`; plural `N transactions do not equal the sum of their splits`. Snapshot is kept.
+Count form is always `X of Y <noun>`: noun agrees with Y, verb with X — `1 of 1 account does not match`, `1 of 35 accounts does not match`, `35 of 35 accounts do not match`; Splits stdout the same (`DIFFER for 1 of 1 transaction`, `DIFFER for 3 of 3 transactions`); Splits stderr has no denominator. Singular: `1 of 35 accounts does not match`, `1 transaction does not`; plural `N transactions do not equal the sum of their splits`. Snapshot is kept.
 
 ### W2 — one-sided transfers (exit 0)
 Store built; each stored with other leg null. Covers numeric links that resolve to nothing and every name-form leg. stdout `Transfers 3,112 paired, 29 one-sided` then rows `  ? 2019-06-14  Chequing (CAD)  <payee or (no payee)>  -500.00  other account: <name>`; when the name matches no account: `other account: <name> (not in this file)`; when there is no name at all: `other account: unknown`.
