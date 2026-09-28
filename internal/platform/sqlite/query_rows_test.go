@@ -96,9 +96,8 @@ func Test_query_rows_fails_on_a_scan_type_error(t *testing.T) {
 
 var errQueryRowsCallback = errors.New("boom")
 
-// Two rows exist; the callback errors on the first, so a second call — which
-// would clear the error if the loop kept going — proves the stop, not just
-// the error's presence.
+// Two rows exist; the callback errors on the first, so a call count of 1
+// (not just the error) proves the loop stopped instead of continuing.
 func Test_query_rows_stops_iterating_once_the_callback_errors(t *testing.T) {
 	path := newMultiRowTestDatabase(t)
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
