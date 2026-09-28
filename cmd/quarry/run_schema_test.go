@@ -154,7 +154,7 @@ func Test_run_reports_a_schema_mismatch_as_json(t *testing.T) {
 }
 
 // On the mismatch path no build is reached, so a stdout write failure still
-// gets O1 (points at the manifest), not O1b.
+// names the manifest already on disk, not --from --json.
 func Test_run_keeps_the_snapshot_message_when_writing_stdout_fails_on_a_schema_mismatch(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

@@ -9,9 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Before the store was built, the refusal points at the manifest already on
-// disk; once it was built, the manifest alone no longer carries the store
-// result, so the refusal points at --from --json instead.
 func Test_stdout_write_refusal_points_to_from_only_once_the_build_was_reached(t *testing.T) {
 	writeErr := errors.New("no space left on device")
 	manifest := snapshot.Manifest{Snapshot: snapshot.SnapshotInfo{

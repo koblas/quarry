@@ -37,10 +37,7 @@ func stringMap(t *testing.T, db *duckdb.DB, query string) map[string]string {
 	return got
 }
 
-// Covers every table the importer writes: two accounts in different
-// currencies, a nested category pair, two payees, two tags (one linked to a
-// split via LinkUserTag), two split transactions and no ZTRANSFER legs, so
-// transfers stays 0.
+// No ZTRANSFER legs, so transfers stays 0: every other table gets its own noun in Rows.
 func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -114,26 +111,26 @@ func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 	splitID := func(pk int64) string { return fmt.Sprintf("split-%d", pk) }
 
 	assert.Equal(t, map[string]string{
-		acctID(chequingPK): "1", acctID(savingsPK): "2",
+		acctID(chequingPK): fmt.Sprint(chequingPK), acctID(savingsPK): fmt.Sprint(savingsPK),
 	}, stringMap(t, db, "SELECT id, CAST(source_id AS VARCHAR) FROM accounts"))
 	assert.Equal(t, map[string]string{
 		acctID(chequingPK): "CAD", acctID(savingsPK): "USD",
 	}, stringMap(t, db, "SELECT id, currency FROM accounts"))
 
 	assert.Equal(t, map[string]string{
-		catID(foodPK): "1", catID(groceriesPK): "2",
+		catID(foodPK): fmt.Sprint(foodPK), catID(groceriesPK): fmt.Sprint(groceriesPK),
 	}, stringMap(t, db, "SELECT id, CAST(source_id AS VARCHAR) FROM categories"))
 
 	assert.Equal(t, map[string]string{
-		payeeID(coffeeShopPK): "1", payeeID(groceryStorePK): "2",
+		payeeID(coffeeShopPK): fmt.Sprint(coffeeShopPK), payeeID(groceryStorePK): fmt.Sprint(groceryStorePK),
 	}, stringMap(t, db, "SELECT id, CAST(source_id AS VARCHAR) FROM payees"))
 
 	assert.Equal(t, map[string]string{
-		tagID(reimbursablePK): "3", tagID(businessPK): "4",
+		tagID(reimbursablePK): fmt.Sprint(reimbursablePK), tagID(businessPK): fmt.Sprint(businessPK),
 	}, stringMap(t, db, "SELECT id, CAST(source_id AS VARCHAR) FROM tags"))
 
 	assert.Equal(t, map[string]string{
-		txnID(txn1PK): "1", txnID(txn2PK): "2",
+		txnID(txn1PK): fmt.Sprint(txn1PK), txnID(txn2PK): fmt.Sprint(txn2PK),
 	}, stringMap(t, db, "SELECT id, CAST(source_id AS VARCHAR) FROM transactions"))
 	assert.Equal(t, map[string]string{
 		txnID(txn1PK): "CAD", txnID(txn2PK): "USD",
@@ -143,7 +140,8 @@ func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 	}, stringMap(t, db, "SELECT id, CAST(amount AS VARCHAR) FROM transactions"))
 
 	assert.Equal(t, map[string]string{
-		splitID(split1PK): "1", splitID(split2PK): "2", splitID(split3PK): "3", splitID(split4PK): "4",
+		splitID(split1PK): fmt.Sprint(split1PK), splitID(split2PK): fmt.Sprint(split2PK),
+		splitID(split3PK): fmt.Sprint(split3PK), splitID(split4PK): fmt.Sprint(split4PK),
 	}, stringMap(t, db, "SELECT id, CAST(source_id AS VARCHAR) FROM splits"))
 	assert.Equal(t, map[string]string{
 		splitID(split1PK): "7.00", splitID(split2PK): "5.34",
@@ -155,8 +153,7 @@ func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 	}, stringMap(t, db, "SELECT split_id, tag_id FROM split_tags"))
 }
 
-// The interim S3 frame carries the importer's own reason text verbatim
-// (SCENARIO-14 owns the frame itself); the already-committed snapshot stays.
+// The refusal carries the importer's own reason text verbatim.
 func Test_run_refuses_an_unmappable_value_and_keeps_the_snapshot(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -177,9 +174,5 @@ func Test_run_refuses_an_unmappable_value_and_keeps_the_snapshot(t *testing.T) {
 	onlyFileWithSuffix(t, snapshotsDir, ".json")
 	entries, err := os.ReadDir(quarryDir)
 	require.NoError(t, err)
-	names := make([]string, len(entries))
-	for i, e := range entries {
-		names[i] = e.Name()
-	}
-	assert.Equal(t, []string{"snapshots"}, names)
+	assert.Equal(t, []string{"snapshots"}, entryNames(entries))
 }
