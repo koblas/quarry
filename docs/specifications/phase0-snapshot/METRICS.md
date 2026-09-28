@@ -21,6 +21,7 @@
 | 3 | correctness, test | 0/1/3/1 | FAIL |
 | 4 | correctness | 0/0/0/2 | PASS WITH FOLLOW-UPS |
 | 5 (after PV SHIP WITH CHANGES) | correctness, test, arch | 1/2/12/1 | FAIL |
+| 6 | correctness, test | 0/0/0/0 | PASS |
 
 ## Tokens
 <output of `.claude/scripts/feature-metrics.py phase0-snapshot`, pasted once at SHIP>
