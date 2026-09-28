@@ -11,9 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// A statement balance one cent off the reconciled sum must refuse the
-// import and never call Replace: the store must not be replaced when a
-// check fails.
+// replaceCalls stays 0: a failed check must never reach Replace.
 func Test_import_does_not_replace_the_store_when_a_check_fails(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := chequingWithOneReconciledTxn(b, "100.00")
@@ -62,6 +60,25 @@ func Test_import_reports_an_account_whose_reconciled_sum_differs_from_its_statem
 	assert.Equal(t, int64(-1), mismatch.Difference)
 }
 
+// The control for the case above in the other direction: a reconciled sum
+// one cent OVER its statement is reported too, not just a short one.
+func Test_import_reports_an_account_whose_reconciled_sum_exceeds_its_statement(t *testing.T) {
+	b := v9fixture.NewBuilder()
+	acctPK := chequingWithOneReconciledTxn(b, "100.01")
+	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
+	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &feb, EndingBalance: "100.00"})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+
+	require.ErrorIs(t, err, store.ErrValidationFailed)
+	require.Len(t, result.Validation.Balances.Mismatched, 1)
+	mismatch := result.Validation.Balances.Mismatched[0]
+	assert.Equal(t, int64(10001), mismatch.Quarry)
+	assert.Equal(t, int64(10000), mismatch.Quicken)
+	assert.Equal(t, int64(1), mismatch.Difference)
+}
+
 // A non-reconciled transaction must not count toward the reconciled sum:
 // with it excluded the account still matches its statement.
 func Test_import_excludes_non_reconciled_transactions_from_the_balance_sum(t *testing.T) {
@@ -98,9 +115,7 @@ func Test_import_counts_an_investment_account_without_listing_it_as_never_reconc
 	assert.Equal(t, "Savings", result.Validation.Balances.NeverReconciled[0].Name)
 }
 
-// Both a closed and an open-inactive account are checked like any other
-// reconciled account: their closed/active flags are preserved and neither
-// is skipped from the balance gate.
+// Two separate accounts, so closed and inactive are each proven on their own.
 func Test_import_checks_closed_and_inactive_accounts_like_any_other(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	closedPK := b.Account(v9fixture.AccountRow{Name: "Closed Card", Type: "CREDITCARD", Currency: "CAD", Closed: true})
@@ -153,18 +168,39 @@ func Test_import_reports_a_transaction_whose_splits_do_not_sum_to_its_amount(t *
 	assert.Equal(t, "Costco", mismatch.Payee)
 }
 
-// A transaction with zero splits fails the same way a mis-summed one does,
-// even when its own amount happens to be nonzero.
-func Test_import_reports_a_transaction_with_no_splits(t *testing.T) {
+// The control for the case above in the other direction: splits one cent
+// OVER a transaction's amount are reported too, not just a short sum.
+func Test_import_reports_a_transaction_whose_splits_exceed_its_amount(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "100.00", PostedDate: &posted})
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "100.00", PostedDate: &posted})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "100.01"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
 
 	require.ErrorIs(t, err, store.ErrValidationFailed)
 	require.Len(t, result.Validation.Splits.Mismatched, 1)
-	assert.Equal(t, int64(0), result.Validation.Splits.Mismatched[0].SplitsTotal)
+	mismatch := result.Validation.Splits.Mismatched[0]
+	assert.Equal(t, int64(10000), mismatch.Amount)
+	assert.Equal(t, int64(10001), mismatch.SplitsTotal)
+}
+
+// Amount "0.00" isolates the has-at-least-one-split guard: a nonzero
+// amount would already fail the sum comparison alone.
+func Test_import_reports_a_transaction_with_no_splits(t *testing.T) {
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "0.00", PostedDate: &posted})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+
+	require.ErrorIs(t, err, store.ErrValidationFailed)
+	require.Len(t, result.Validation.Splits.Mismatched, 1)
+	mismatch := result.Validation.Splits.Mismatched[0]
+	assert.Equal(t, int64(0), mismatch.Amount)
+	assert.Equal(t, int64(0), mismatch.SplitsTotal)
 }

@@ -2,10 +2,8 @@ package importer
 
 import "github.com/koblas/quarry/internal/store"
 
-// validate checks rows against statements (the balance gate's per-account
-// newest reconcile record, keyed by account id) and rows' own split sums,
-// returning every check's result in one pass: the build does not stop at
-// the first failing account or transaction (P1-6).
+// validate runs every check on rows against statements (keyed by account
+// id) and returns all their results, even once one has already failed.
 func validate(rows store.Rows, statements map[string]parsedStatement) store.Validation {
 	return store.Validation{
 		Balances: checkBalances(rows, statements),
@@ -13,10 +11,8 @@ func validate(rows store.Rows, statements map[string]parsedStatement) store.Vali
 	}
 }
 
-// checkBalances compares each reconciled account's reconciled-transaction
-// sum to statements' balance for it (P1-3). Investment accounts are
-// counted only; a non-investment account with no statement is listed as
-// never reconciled, not failed.
+// checkBalances compares reconciled sums against statements; an account
+// missing from statements is never reconciled, not mismatched.
 func checkBalances(rows store.Rows, statements map[string]parsedStatement) store.BalanceCheck {
 	reconciledSums := make(map[string]int64, len(rows.Accounts))
 	for _, txn := range rows.Transactions {
@@ -49,7 +45,7 @@ func checkBalances(rows store.Rows, statements map[string]parsedStatement) store
 }
 
 // checkSplits verifies every imported transaction has at least one split
-// and its splits sum to its amount (P1-4).
+// and its splits sum to its amount.
 func checkSplits(rows store.Rows) store.SplitCheck {
 	sums := make(map[string]int64, len(rows.Transactions))
 	counts := make(map[string]int, len(rows.Transactions))

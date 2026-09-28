@@ -19,15 +19,15 @@ func chequingWithOneReconciledTxn(b *v9fixture.Builder, cents string) int64 {
 	return acctPK
 }
 
-// The later of two non-deleted statements is used, not the earlier one's
-// (wrong) balance: a control the earlier balance alone would not pass.
+// The correct (later) record is inserted first, so a "last row scanned
+// wins" bug would pick the wrong (earlier) one instead.
 func Test_import_uses_the_newest_statement_by_date(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := chequingWithOneReconciledTxn(b, "100.00")
 	jan := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
-	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &jan, EndingBalance: "999.00"})
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &feb, EndingBalance: "100.00"})
+	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &jan, EndingBalance: "999.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
@@ -36,14 +36,14 @@ func Test_import_uses_the_newest_statement_by_date(t *testing.T) {
 	assert.Empty(t, result.Validation.Balances.Mismatched)
 }
 
-// An undated record ranks newest even over a dated one: the gate refuses
-// with reason 10 rather than silently falling back to the dated statement.
+// The undated record is inserted first, so a "last row scanned wins" bug
+// would pick the dated one instead and the import would succeed.
 func Test_import_ranks_an_undated_statement_as_newest_over_a_dated_one(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := chequingWithOneReconciledTxn(b, "100.00")
+	pk := b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndingBalance: "100.00"})
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &feb, EndingBalance: "100.00"})
-	pk := b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndingBalance: "100.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
@@ -83,15 +83,15 @@ func Test_import_ignores_a_deleted_newer_statement(t *testing.T) {
 	assert.Empty(t, result.Validation.Balances.Mismatched)
 }
 
-// An older record's unparseable balance must never be read: only the
-// newest-ranked record is parsed.
+// The newest (good) record is inserted first, so a "last row scanned
+// wins" bug would read the older, bad one and refuse the import instead.
 func Test_import_ignores_an_older_statements_bad_balance(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := chequingWithOneReconciledTxn(b, "100.00")
 	jan := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
-	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &jan, EndingBalance: "12.345"})
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &feb, EndingBalance: "100.00"})
+	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &jan, EndingBalance: "12.345"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
@@ -205,9 +205,6 @@ func Test_import_refuses_a_statement_with_a_text_balance(t *testing.T) {
 	assert.Equal(t, `the 2026-02-28 statement for "Chequing" has a balance that is not a number`, importReason(t, err))
 }
 
-// An undated newest statement with a bad balance reports the balance fault
-// (which outranks the missing date), using the source-id fallback subject
-// since there is no date to build the dated subject from.
 func Test_import_refuses_an_undated_statement_with_a_bad_balance_using_the_source_id_subject(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -221,9 +218,7 @@ func Test_import_refuses_an_undated_statement_with_a_bad_balance_using_the_sourc
 		importReason(t, err))
 }
 
-// Same as the precision case above, for the too-large fault: the balance
-// fault is reported using the source-id fallback subject, not the missing
-// date.
+// Same as the precision case above, for the too-large fault.
 func Test_import_refuses_an_undated_statement_with_a_too_large_balance_using_the_source_id_subject(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})

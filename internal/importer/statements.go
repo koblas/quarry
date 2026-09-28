@@ -8,8 +8,8 @@ import (
 )
 
 // investmentTypes are the accounts.type values the balance gate counts but
-// never checks (P1-3): quarry imports their cash-flow transactions but has
-// no register balance to compare them against.
+// never checks: quarry imports their cash-flow transactions but has no
+// register balance to compare them against.
 var investmentTypes = map[string]bool{"brokerage": true, "retirement": true}
 
 // parsedStatement is the one reconcile record the balance gate uses for a
@@ -36,16 +36,9 @@ FROM ZRECONCILERECORD
 WHERE COALESCE(ZDELETIONCOUNT, 0) = 0
 `
 
-// newestStatements reads every non-deleted ZRECONCILERECORD row and
-// returns, per imported non-investment account id, the newest record by
-// the gate's ranking: a NULL ZENDDATE ranks newest (it refuses with reason
-// 10 rather than falling back to an older statement), else the latest
-// ZENDDATE, ties broken by the higher Z_PK. A record on an investment,
-// deleted or missing account is skipped silently. Only the newest-ranked
-// record per account is parsed: a missing, too-precise, too-large or
-// non-numeric balance is added to off (reason 5/6/11); a missing date is
-// added separately (reason 10), so it is reported once any balance fault
-// on the same record is fixed.
+// newestStatements returns each imported non-investment account's newest
+// ZRECONCILERECORD (newerReconcile), parsed to cents; a missing or
+// unparseable field is added to off instead.
 func newestStatements(ctx context.Context, src Source, accounts map[int64]accountRef, off *offenders) (map[string]parsedStatement, error) {
 	newest := make(map[int64]rawReconcile)
 	err := src.QueryRows(ctx, reconcileRecordsQuery, nil, func(scan func(dest ...any) error) error {
@@ -53,6 +46,8 @@ func newestStatements(ctx context.Context, src Source, accounts map[int64]accoun
 		if err := scan(&r.pk, &r.account, &r.endDate, &r.balType, &r.balText); err != nil {
 			return err
 		}
+		// A record on a deleted or missing account (!ok) or an investment
+		// account is skipped: neither is ever checked.
 		acct, ok := accounts[r.account]
 		if !ok || investmentTypes[acct.Type] {
 			return nil
@@ -88,9 +83,8 @@ func newerReconcile(a, b rawReconcile) bool {
 	return a.pk > b.pk
 }
 
-// parseStatement validates r's date and balance, adding an offender for
-// each missing or unparseable field, and returns the parsed statement only
-// when both are usable.
+// parseStatement adds an offender for each of r's missing or unparseable
+// fields and returns the parsed statement only when both are usable.
 func parseStatement(acct accountRef, r rawReconcile, off *offenders) (parsedStatement, bool) {
 	hasDate := r.endDate.Valid
 	var date time.Time
@@ -99,6 +93,10 @@ func parseStatement(acct accountRef, r rawReconcile, off *offenders) (parsedStat
 		date = coreDataToDate(r.endDate.Float64)
 		dateStr = date.Format(dateLayout)
 	} else {
+		// A missing date is its own offender, independent of a balance
+		// fault below: s4ClassOrder ranks 5/6/11 over 10, so a balance
+		// fault on the same record is reported first; this one surfaces
+		// once that fault is fixed.
 		off.add(offender{class: 10, reason: reasonStatementNoDate(acct.Name, r.pk), name: acct.Name, sourceID: r.pk})
 	}
 

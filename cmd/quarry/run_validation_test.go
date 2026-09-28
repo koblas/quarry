@@ -5,6 +5,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,12 +18,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Every account kind the balance gate distinguishes: a reconciled chequing
-// account with a non-reconciled transaction and both a stale and a deleted
-// newer statement, a closed and an open-inactive reconciled account, a
-// never-reconciled savings account, and an investment account. Every
-// transaction's entries balance, so only the balance and split-count clauses
-// are under test here.
+// Chequing's stale and deleted-newer statements, and its non-reconciled
+// transaction, must all be ignored for its balance to match.
 func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -69,19 +68,38 @@ func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *tes
 
 	require.Equal(t, 0, exitCode)
 	require.Empty(t, stderr.String())
-	assert.Contains(t, stdout.String(), "Balances  3 accounts match Quicken's last reconciled balance; "+
-		"1 never reconciled and 1 investment account not checked\n")
-	assert.Contains(t, stdout.String(), "Splits    all 4 transactions equal the sum of their splits\n")
 
+	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
+	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
+	raw, err := os.ReadFile(snapshotPath)
+	require.NoError(t, err)
+	info, err := os.Stat(snapshotPath)
+	require.NoError(t, err)
+	sum := sha256.Sum256(raw)
 	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
-	_, err := os.Stat(storePath)
+
+	want := fmt.Sprintf(
+		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 5 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
+		"Snapshot", abbreviated(t, snapshotPath, home),
+		"Manifest", abbreviated(t, manifestPath, home),
+		"Source", abbreviated(t, bundle.Dir, home),
+		"Size", megabytes(info.Size()),
+		"SHA-256", hex.EncodeToString(sum[:]),
+		"Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns)",
+		"Store", abbreviated(t, storePath, home),
+		"Rows", "4 transactions, 4 splits, 0 transfers, 0 payees, 0 categories, 0 tags",
+		"Balances", "3 accounts match Quicken's last reconciled balance; 1 never reconciled and 1 investment account not checked",
+		"Splits", "all 4 transactions equal the sum of their splits",
+	)
+	require.Equal(t, want, stdout.String())
+
+	_, err = os.Stat(storePath)
 	require.NoError(t, err)
 }
 
-// A balance mismatch on a first run (no previous store) exits 1 with an
-// empty stdout, keeps the snapshot and its manifest, and never creates
-// quarry.duckdb — the interim V1 behaviour, before SCENARIO-09 adds the
-// stdout block.
+// Interim V1 (no stdout block yet): a mismatch on a first run keeps the
+// snapshot but never creates quarry.duckdb.
 func Test_run_refuses_a_balance_mismatch_and_leaves_no_store(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

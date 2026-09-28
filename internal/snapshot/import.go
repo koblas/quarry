@@ -80,9 +80,8 @@ func (s *Server) storeBuildRefusal(manifest Manifest, err error) error {
 }
 
 // validationFailedRefusal reports V1: a build reached the balance or
-// split-sum gate and one or more checks failed. This is the interim copy
-// until SCENARIO-09 adds the stdout block: it omits "each difference is
-// listed on stdout; " since there is nothing on stdout to point at yet.
+// split-sum gate and one or more checks failed. It omits "each difference
+// is listed on stdout; " since this interim copy writes nothing to stdout.
 func (s *Server) validationFailedRefusal(manifest Manifest, v store.Validation, cause error) error {
 	var clauses []string
 	if n := len(v.Balances.Mismatched); n > 0 {
@@ -99,13 +98,18 @@ func (s *Server) validationFailedRefusal(manifest Manifest, v store.Validation, 
 	}
 }
 
-// balanceMismatchClause renders n mismatched of checked accounts, singular
-// at n == 1.
+// balanceMismatchClause renders n mismatched of checked accounts: the noun
+// agrees with checked, the verb with n.
 func balanceMismatchClause(n, checked int) string {
-	if n == 1 {
-		return fmt.Sprintf("1 of %d accounts does not match Quicken's last reconciled balance", checked)
+	noun := "accounts"
+	if checked == 1 {
+		noun = "account"
 	}
-	return fmt.Sprintf("%d of %d accounts do not match Quicken's last reconciled balance", n, checked)
+	verb := "do not match"
+	if n == 1 {
+		verb = "does not match"
+	}
+	return fmt.Sprintf("%d of %d %s %s Quicken's last reconciled balance", n, checked, noun, verb)
 }
 
 // splitMismatchClause renders n mismatched transactions, singular at n == 1.

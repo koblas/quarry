@@ -127,9 +127,8 @@ func balancesCheckedPhrase(n int) string {
 	}
 }
 
-// balancesPhrase renders bc's checked clause, followed by its
-// never-reconciled and investment-account clauses (each omitted at zero,
-// joined with " and ") when either is present.
+// balancesPhrase appends bc's never-reconciled and investment-account
+// clauses (each omitted at zero, joined with " and ") to its checked clause.
 func balancesPhrase(bc store.BalanceCheck) string {
 	phrase := balancesCheckedPhrase(bc.Checked)
 

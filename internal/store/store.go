@@ -113,8 +113,7 @@ type Result struct {
 	Validation Validation
 }
 
-// ErrValidationFailed is Import's error when a build's checks find a
-// mismatch: the store is left unchanged and Replace is never called.
+// ErrValidationFailed is Import's error when a build's checks find a mismatch.
 var ErrValidationFailed = errors.New("validation failed")
 
 // Validation is the outcome of every check a build runs on its mapped rows,

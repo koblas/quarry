@@ -125,10 +125,8 @@ func Test_sync_and_import_does_not_import_when_the_snapshot_fails(t *testing.T) 
 	assert.Nil(t, outcome.Store)
 }
 
-// A failed check sets Outcome.Store to the importer's unbuilt result (not
-// nil), so a later stdout write failure against it already gets the O1b
-// refusal rather than O1's "snapshot kept" copy — even though 01b itself
-// never writes stdout on this path.
+// Store must be the unbuilt result, not nil, so StdoutWriteRefusal already
+// picks the --from --json form rather than the one naming the kept snapshot.
 func Test_sync_and_import_keeps_the_store_result_when_validation_fails(t *testing.T) {
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	home := t.TempDir()
@@ -149,14 +147,20 @@ func Test_sync_and_import_keeps_the_store_result_when_validation_fails(t *testin
 	assert.Contains(t, writeErr.Error(), "--from "+snapshotIDFromPath(outcome.Manifest.Snapshot.Path)+" --json")
 }
 
-// The interim V1 refusal (until SCENARIO-09 adds the stdout block) joins
-// every failing clause.
+// Count form is "X of Y <noun>": the noun agrees with Y, the verb with X.
 func Test_sync_and_import_reports_the_v1_refusal_for_a_failed_check(t *testing.T) {
 	cases := []struct {
 		name       string
 		validation store.Validation
 		wantClause string
 	}{
+		{
+			name: "one of one account mismatched",
+			validation: store.Validation{Balances: store.BalanceCheck{
+				Checked: 1, Mismatched: []store.BalanceMismatch{{ID: "acct-1"}},
+			}},
+			wantClause: "1 of 1 account does not match Quicken's last reconciled balance",
+		},
 		{
 			name: "one balance mismatch",
 			validation: store.Validation{Balances: store.BalanceCheck{
@@ -170,6 +174,13 @@ func Test_sync_and_import_reports_the_v1_refusal_for_a_failed_check(t *testing.T
 				Checked: 3, Mismatched: []store.BalanceMismatch{{ID: "acct-1"}, {ID: "acct-2"}},
 			}},
 			wantClause: "2 of 3 accounts do not match Quicken's last reconciled balance",
+		},
+		{
+			name: "every checked account mismatched",
+			validation: store.Validation{Balances: store.BalanceCheck{
+				Checked: 3, Mismatched: []store.BalanceMismatch{{ID: "acct-1"}, {ID: "acct-2"}, {ID: "acct-3"}},
+			}},
+			wantClause: "3 of 3 accounts do not match Quicken's last reconciled balance",
 		},
 		{
 			name:       "one split mismatch",
