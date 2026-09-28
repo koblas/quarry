@@ -38,7 +38,7 @@ func Test_import_builds_every_table_from_a_v9_snapshot(t *testing.T) {
 	fake := &fakeStore{Path: "/store/quarry.duckdb"}
 	srv := importer.NewServer(importer.WithStore(fake))
 
-	result, err := srv.Import(t.Context(), bundle.DataPath)
+	result, err := srv.Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	assert.Equal(t, fake.Path, result.Path)
@@ -91,11 +91,11 @@ func Test_import_twice_from_the_same_snapshot_keeps_every_id(t *testing.T) {
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	fake1 := &fakeStore{}
-	_, err := importer.NewServer(importer.WithStore(fake1)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake1)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 	require.NoError(t, err)
 
 	fake2 := &fakeStore{}
-	_, err = importer.NewServer(importer.WithStore(fake2)).Import(t.Context(), bundle.DataPath)
+	_, err = importer.NewServer(importer.WithStore(fake2)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 	require.NoError(t, err)
 
 	wantAcctID := fmt.Sprintf("acct-%d", acctPK)
@@ -123,7 +123,7 @@ func Test_import_keeps_each_categorys_parent_path_kind_and_hidden(t *testing.T) 
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	parentID := fmt.Sprintf("cat-%d", parentPK)

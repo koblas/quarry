@@ -105,7 +105,7 @@ if there is exactly one.`,
 				return &runtimeError{err: outcome.StdoutWriteRefusal(home, writeErr)}
 			}
 
-			for _, warning := range outcome.Manifest.Warnings {
+			for _, warning := range outcome.Warnings() {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: warning: "+warning)
 			}
 

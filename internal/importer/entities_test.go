@@ -7,6 +7,7 @@ import (
 
 	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,7 +26,7 @@ func Test_import_resolves_entities_by_name_from_z_primarykey(t *testing.T) {
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	assert.Len(t, fake.Rows.Transactions, 1)
@@ -36,7 +37,7 @@ func Test_import_refuses_when_one_required_entity_is_missing(t *testing.T) {
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	var unmappable *importer.UnmappableError
 	require.True(t, errors.As(err, &unmappable))
@@ -48,7 +49,7 @@ func Test_import_refuses_when_several_required_entities_are_missing(t *testing.T
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	var unmappable *importer.UnmappableError
 	require.True(t, errors.As(err, &unmappable))
@@ -60,7 +61,7 @@ func Test_import_refuses_when_several_required_entities_are_missing(t *testing.T
 func Test_import_fails_when_the_snapshot_path_does_not_exist(t *testing.T) {
 	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), "/no/such/snapshot.sqlite")
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: "/no/such/snapshot.sqlite"})
 
 	require.Error(t, err)
 }

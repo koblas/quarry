@@ -3,6 +3,7 @@ package importer
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/koblas/quarry/internal/store"
 )
@@ -38,17 +39,18 @@ func NewServer(opts ...Option) *Server {
 	return srv
 }
 
-// Import maps snapshotPath's v9 database into quarry's schema, validates
-// the mapped rows, and writes them through the configured Store only once
-// every check passes. It returns an *UnmappableError naming the
-// first-ordered S4 class's first offender when one or more values cannot
-// be mapped to quarry's schema, or store.ErrValidationFailed with
-// Result.Built false, never calling Replace, when the balance or
-// split-sum gate finds a mismatch.
-func (srv *Server) Import(ctx context.Context, snapshotPath string) (store.Result, error) {
-	src, err := srv.open(ctx, snapshotPath)
+// Import maps snap.Path's v9 database into quarry's schema, validates
+// the mapped rows, and writes them, with one import_runs row describing
+// the build, through the configured Store only once every check passes.
+// It returns an *UnmappableError naming the first-ordered S4 class's first
+// offender when one or more values cannot be mapped to quarry's schema, or
+// store.ErrValidationFailed with Result.Built false, never calling Replace,
+// when the balance or split-sum gate finds a mismatch.
+func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Result, error) {
+	startedAt := time.Now().UTC()
+	src, err := srv.open(ctx, snap.Path)
 	if err != nil {
-		return store.Result{}, fmt.Errorf("open %s: %w", snapshotPath, err)
+		return store.Result{}, fmt.Errorf("open %s: %w", snap.Path, err)
 	}
 	defer func() { _ = src.Close() }()
 
@@ -114,16 +116,31 @@ func (srv *Server) Import(ctx context.Context, snapshotPath string) (store.Resul
 	}
 	notImported := store.NotImported{InvestmentTransactions: investmentsNotImported}
 
-	validation := validate(rows, statements)
-	validation.Transfers = transferCheck
+	validation := validate(rows, statements, transferCheck)
 	if validation.Failed() {
 		return store.Result{Built: false, Counts: counts, Validation: validation, NotImported: notImported}, store.ErrValidationFailed
 	}
 
+	rows.ImportRuns = []store.ImportRun{newImportRun(startedAt, snap, counts, validation, notImported)}
 	path, err := srv.store.Replace(ctx, rows)
 	if err != nil {
 		return store.Result{}, fmt.Errorf("replace store: %w", err)
 	}
 
 	return store.Result{Path: path, Built: true, Counts: counts, Validation: validation, NotImported: notImported}, nil
+}
+
+// importRunID is the import_runs id of a store's only run: every build
+// writes a fresh store, so no earlier run is carried into it.
+const importRunID = 1
+
+// newImportRun describes a build that passed validation, stamping its
+// finish time now, before the store is written.
+func newImportRun(startedAt time.Time, snap store.SnapshotRef, counts store.Counts, v store.Validation, n store.NotImported) store.ImportRun {
+	return store.ImportRun{
+		ID: importRunID, StartedAt: startedAt, FinishedAt: time.Now().UTC(), Snapshot: snap, Counts: counts,
+		BalancesChecked: v.Balances.Checked, BalancesMismatched: len(v.Balances.Mismatched),
+		SplitsMismatched: len(v.Splits.Mismatched), TransfersOneSided: len(v.Transfers.OneSided),
+		InvestmentTransactionsNotImported: n.InvestmentTransactions,
+	}
 }

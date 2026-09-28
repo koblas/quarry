@@ -262,6 +262,20 @@ func Test_transfersPhrase(t *testing.T) {
 	}
 }
 
+func Test_renderStore_lists_one_sided_transfers_after_the_transfers_line(t *testing.T) {
+	result := store.Result{
+		Path: "/Users/dave/Library/Application Support/quarry/quarry.duckdb",
+		Validation: store.Validation{Transfers: store.TransferCheck{Paired: 2, OneSided: []store.OneSidedTransfer{
+			{Date: time.Date(2019, 6, 14, 0, 0, 0, 0, time.UTC), Account: "Chequing", Currency: "CAD", Active: true, Amount: -50000},
+		}}},
+	}
+
+	got := renderStore(result, "/Users/dave")
+
+	assert.True(t, strings.HasSuffix(got, "Transfers 2 paired, 1 one-sided\n"+
+		"  ? 2019-06-14  Chequing (CAD)  (no payee)  -500.00  other account: unknown\n"), got)
+}
+
 func Test_renderStore_renders_the_store_rows_balances_splits_and_transfers_lines(t *testing.T) {
 	result := store.Result{
 		Path:   "/Users/dave/Library/Application Support/quarry/quarry.duckdb",
@@ -424,26 +438,82 @@ func Test_splitMismatchRows(t *testing.T) {
 
 	t.Run("single row needs no padding", func(t *testing.T) {
 		rows := splitMismatchRows([]store.SplitMismatch{
-			{Account: "Visa Infinite", Currency: "CAD", Payee: "Costco", Date: date, Amount: -21240, SplitsTotal: -20240},
+			{Account: "Visa Infinite", Currency: "CAD", Active: true, Payee: "Costco", Date: date, Amount: -21240, SplitsTotal: -20240},
 		})
 		assert.Equal(t, []string{"  ! 2024-03-02  Visa Infinite (CAD)  Costco  amount -212.40  splits -202.40"}, rows)
 	})
 
 	t.Run("empty payee falls back to (no payee)", func(t *testing.T) {
 		rows := splitMismatchRows([]store.SplitMismatch{
-			{Account: "Visa Infinite", Currency: "CAD", Date: date, Amount: -21240, SplitsTotal: -20240},
+			{Account: "Visa Infinite", Currency: "CAD", Active: true, Date: date, Amount: -21240, SplitsTotal: -20240},
 		})
 		assert.Equal(t, []string{"  ! 2024-03-02  Visa Infinite (CAD)  (no payee)  amount -212.40  splits -202.40"}, rows)
 	})
 
 	t.Run("widest label and payee, 2+ rows", func(t *testing.T) {
 		rows := splitMismatchRows([]store.SplitMismatch{
-			{Account: "Chequing", Currency: "CAD", Payee: "Costco Wholesale", Date: date, Amount: -21240, SplitsTotal: -20240},
-			{Account: "Visa Infinite", Currency: "CAD", Payee: "A", Date: date, Amount: 100, SplitsTotal: -100},
+			{Account: "Chequing", Currency: "CAD", Active: true, Payee: "Costco Wholesale", Date: date, Amount: -21240, SplitsTotal: -20240},
+			{Account: "Visa Infinite", Currency: "CAD", Active: true, Payee: "A", Date: date, Amount: 100, SplitsTotal: -100},
 		})
 		assert.Equal(t, []string{
 			"  ! 2024-03-02  Chequing (CAD)       Costco Wholesale  amount -212.40  splits -202.40",
 			"  ! 2024-03-02  Visa Infinite (CAD)  A                 amount    1.00  splits   -1.00",
+		}, rows)
+	})
+	t.Run("closed and inactive accounts carry the full label", func(t *testing.T) {
+		rows := splitMismatchRows([]store.SplitMismatch{
+			{Account: "Old Visa", Currency: "CAD", Closed: true, Payee: "A", Date: date, Amount: 100, SplitsTotal: 0},
+			{Account: "Savings", Currency: "USD", Payee: "A", Date: date, Amount: 100, SplitsTotal: 0},
+		})
+		assert.Equal(t, []string{
+			"  ! 2024-03-02  Old Visa (CAD, closed)   A  amount 1.00  splits 0.00",
+			"  ! 2024-03-02  Savings (USD, inactive)  A  amount 1.00  splits 0.00",
+		}, rows)
+	})
+}
+
+func Test_oneSidedRows(t *testing.T) {
+	date := time.Date(2019, 6, 14, 0, 0, 0, 0, time.UTC)
+
+	t.Run("numeric link renders other account unknown", func(t *testing.T) {
+		rows := oneSidedRows([]store.OneSidedTransfer{
+			{Date: date, Account: "Chequing", Currency: "CAD", Active: true, Payee: "Rent", Amount: -50000},
+		})
+		assert.Equal(t, []string{"  ? 2019-06-14  Chequing (CAD)  Rent  -500.00  other account: unknown"}, rows)
+	})
+
+	t.Run("name matching an account renders the name", func(t *testing.T) {
+		rows := oneSidedRows([]store.OneSidedTransfer{
+			{
+				Date: date, Account: "Chequing", Currency: "CAD", Active: true, Payee: "Rent", Amount: -50000,
+				OtherAccount: strPtr("Savings"), OtherAccountID: strPtr("acct-2"),
+			},
+		})
+		assert.Equal(t, []string{"  ? 2019-06-14  Chequing (CAD)  Rent  -500.00  other account: Savings"}, rows)
+	})
+
+	t.Run("name matching no account is marked not in this file", func(t *testing.T) {
+		rows := oneSidedRows([]store.OneSidedTransfer{
+			{Date: date, Account: "Chequing", Currency: "CAD", Active: true, Payee: "Rent", Amount: -50000, OtherAccount: strPtr("Old Visa")},
+		})
+		assert.Equal(t, []string{"  ? 2019-06-14  Chequing (CAD)  Rent  -500.00  other account: Old Visa (not in this file)"}, rows)
+	})
+
+	t.Run("empty payee falls back to (no payee)", func(t *testing.T) {
+		rows := oneSidedRows([]store.OneSidedTransfer{
+			{Date: date, Account: "Chequing", Currency: "CAD", Active: true, Amount: -50000},
+		})
+		assert.Equal(t, []string{"  ? 2019-06-14  Chequing (CAD)  (no payee)  -500.00  other account: unknown"}, rows)
+	})
+
+	t.Run("full label, widest label and payee, right-aligned amounts", func(t *testing.T) {
+		rows := oneSidedRows([]store.OneSidedTransfer{
+			{Date: date, Account: "Visa", Currency: "CAD", Closed: true, Payee: "Costco Wholesale", Amount: 100},
+			{Date: date, Account: "Savings", Currency: "USD", Payee: "A", Amount: -120417},
+		})
+		assert.Equal(t, []string{
+			"  ? 2019-06-14  Visa (CAD, closed)       Costco Wholesale       1.00  other account: unknown",
+			"  ? 2019-06-14  Savings (USD, inactive)  A                 -1,204.17  other account: unknown",
 		}, rows)
 	})
 }
@@ -457,7 +527,12 @@ func Test_renderStoreFailure(t *testing.T) {
 					{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC), Quarry: 100, Quicken: 200, Difference: -100},
 				}},
 				Splits:    store.SplitCheck{Checked: 5},
-				Transfers: store.TransferCheck{Paired: 1, OneSided: make([]store.OneSidedTransfer, 1)},
+				Transfers: store.TransferCheck{Paired: 1, OneSided: []store.OneSidedTransfer{
+					{
+						Date: time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC), Account: "Chequing", Currency: "CAD", Active: true,
+						Payee: "Rent", Amount: -50000, OtherAccount: strPtr("Old Visa"),
+					},
+				}},
 			},
 			NotImported: store.NotImported{InvestmentTransactions: 1},
 		}
@@ -469,7 +544,8 @@ func Test_renderStoreFailure(t *testing.T) {
 			"Balances  DIFFER for 1 of 2 accounts\n"+
 			"  ! Chequing (CAD)  2026-08-31  quarry 1.00  Quicken 2.00  difference -1.00\n"+
 			"Splits    all 5 transactions equal the sum of their splits\n"+
-			"Transfers 1 paired, 1 one-sided\n", got)
+			"Transfers 1 paired, 1 one-sided\n"+
+			"  ? 2026-08-02  Chequing (CAD)  Rent  -500.00  other account: Old Visa (not in this file)\n", got)
 	})
 
 	t.Run("NOT BUILT for a first run", func(t *testing.T) {
@@ -522,3 +598,5 @@ func Test_renderStoreFailure(t *testing.T) {
 		assert.Contains(t, got, "Splits    DIFFER for 1 of 2 transactions\n")
 	})
 }
+
+func strPtr(s string) *string { return &s }

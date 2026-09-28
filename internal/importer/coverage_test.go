@@ -6,6 +6,7 @@ import (
 
 	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +24,7 @@ func Test_import_maps_cleared_and_reconciled_transaction_status(t *testing.T) {
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	statuses := make([]string, len(fake.Rows.Transactions))
@@ -42,7 +43,7 @@ func Test_import_sets_transaction_memo_and_cheque_number_when_present(t *testing
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	require.Len(t, fake.Rows.Transactions, 1)
@@ -61,7 +62,7 @@ func Test_import_sets_split_memo_when_present(t *testing.T) {
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	require.Len(t, fake.Rows.Splits, 1)
@@ -78,7 +79,7 @@ func Test_import_skips_a_transaction_whose_account_was_itself_excluded(t *testin
 	b.Transaction(v9fixture.TransactionRow{Account: badAcctPK, Amount: "1.00", PostedDate: &posted})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t,
 		`account "Euro Savings" uses currency EUR; quarry supports CAD and USD accounts`,
@@ -94,7 +95,7 @@ func Test_import_skips_a_split_tag_link_whose_split_was_itself_skipped(t *testin
 	b.LinkUserTag(entryPK, tagPK)
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `a split (source id `+itoa(entryPK)+`) has no transaction`, importReason(t, err))
 }
@@ -107,7 +108,7 @@ func Test_import_full_path_falls_back_to_source_id_for_a_nameless_parent(t *test
 	b.Category(v9fixture.TagRow{Name: "Groceries", Type: v9fixture.Int64Ptr(1), ParentCategory: parentPK})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `category (source id `+itoa(parentPK)+`) has no name`, importReason(t, err))
 }
@@ -121,7 +122,7 @@ func Test_import_bounds_a_cyclic_category_parent_chain(t *testing.T) {
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	assert.Len(t, fake.Rows.Categories, 2)
@@ -135,7 +136,7 @@ func Test_import_upgrades_the_reported_class_when_a_higher_priority_offender_is_
 	b.Category(v9fixture.TagRow{Name: "Food:Groceries", Type: v9fixture.Int64Ptr(5)})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t,
 		`category "Food:Groceries" has type 5, which quarry does not map yet`,

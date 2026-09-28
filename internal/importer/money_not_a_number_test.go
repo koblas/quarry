@@ -7,6 +7,7 @@ import (
 
 	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
+	"github.com/koblas/quarry/internal/store"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,7 +42,7 @@ func Test_import_refuses_a_transaction_with_a_text_amount(t *testing.T) {
 	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "not-a-number", PostedDate: &posted})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	reason := importReason(t, err)
 	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, reason)
@@ -55,7 +56,7 @@ func Test_import_refuses_a_transaction_with_a_whitespace_amount(t *testing.T) {
 	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "   ", PostedDate: &posted})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, importReason(t, err))
 }
@@ -68,7 +69,7 @@ func Test_import_refuses_a_transaction_with_an_empty_text_amount(t *testing.T) {
 	bundle := b.WriteBundle(t, t.TempDir())
 	setColumnEmptyText(t, bundle.DataPath, "ZTRANSACTION", "ZAMOUNT", txnPK)
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, importReason(t, err))
 }
@@ -81,7 +82,7 @@ func Test_import_refuses_a_transaction_with_a_blob_amount(t *testing.T) {
 	bundle := b.WriteBundle(t, t.TempDir())
 	setColumnBlob(t, bundle.DataPath, "ZTRANSACTION", "ZAMOUNT", txnPK, []byte{0xde, 0xad, 0xbe, 0xef})
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, importReason(t, err))
 }
@@ -94,7 +95,7 @@ func Test_import_refuses_a_dateless_transaction_with_a_text_amount(t *testing.T)
 	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "not-a-number"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `a transaction in "Visa Infinite" (source id `+itoa(txnPK)+`) has an amount that is not a number`, importReason(t, err))
 }
@@ -107,7 +108,7 @@ func Test_import_refuses_a_split_with_a_text_amount(t *testing.T) {
 	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "not-a-number"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `a split of a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, importReason(t, err))
 }
@@ -121,7 +122,7 @@ func Test_import_refuses_a_split_with_a_blob_amount(t *testing.T) {
 	bundle := b.WriteBundle(t, t.TempDir())
 	setColumnBlob(t, bundle.DataPath, "ZCASHFLOWTRANSACTIONENTRY", "ZAMOUNT", entryPK, []byte{0x01, 0x02})
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `a split of a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, importReason(t, err))
 }
@@ -134,7 +135,7 @@ func Test_import_null_amount_is_reason_10_not_reason_11(t *testing.T) {
 	b.Transaction(v9fixture.TransactionRow{Account: acctPK, PostedDate: &posted})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has no amount`, importReason(t, err))
 }

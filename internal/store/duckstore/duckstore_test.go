@@ -44,6 +44,14 @@ func minimalRows() store.Rows {
 			{ID: "xfer-1", FromSplitID: "split-1", ToSplitID: strPtr("split-2"), CrossCurrency: true},
 			{ID: "xfer-3", FromSplitID: "split-3"},
 		},
+		ImportRuns: []store.ImportRun{{
+			ID: 1, StartedAt: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), FinishedAt: time.Date(2026, 9, 27, 14, 30, 7, 0, time.UTC),
+			Snapshot: store.SnapshotRef{Path: "/snapshots/20260927T143005Z.sqlite", SHA256: "9f86", SchemaFingerprint: "sha256:abc"},
+			Counts: store.Counts{
+				Accounts: 1, Categories: 2, Payees: 3, Tags: 4, Transactions: 5, Splits: 6, SplitTags: 7, Transfers: 8,
+			},
+			BalancesChecked: 9, BalancesMismatched: 10, SplitsMismatched: 11, TransfersOneSided: 12, InvestmentTransactionsNotImported: 13,
+		}},
 	}
 }
 
@@ -72,6 +80,13 @@ func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
 	assertScalar(t, db, "SELECT tag_id FROM split_tags WHERE split_id = 'split-1'", "tag-1")
 	assertScalar(t, db, "SELECT to_split_id || ' ' || CAST(cross_currency AS VARCHAR) FROM transfers WHERE id = 'xfer-1'", "split-2 true")
 	assertScalar(t, db, "SELECT from_split_id || ' ' || COALESCE(to_split_id, 'NULL') || ' ' || CAST(cross_currency AS VARCHAR) FROM transfers WHERE id = 'xfer-3'", "split-3 NULL false")
+	assertScalar(t, db, "SELECT CAST(started_at AS VARCHAR) || ' ' || CAST(finished_at AS VARCHAR) FROM import_runs WHERE id = 1",
+		"2026-09-27 14:30:05 2026-09-27 14:30:07")
+	assertScalar(t, db, "SELECT concat_ws(' ', snapshot_path, snapshot_sha256, schema_fingerprint) FROM import_runs WHERE id = 1",
+		"/snapshots/20260927T143005Z.sqlite 9f86 sha256:abc")
+	assertScalar(t, db, "SELECT concat_ws(' ', accounts_rows, categories_rows, payees_rows, tags_rows, transactions_rows, splits_rows, "+
+		"split_tags_rows, transfers_rows, balances_checked, balances_mismatched, splits_mismatched, transfers_one_sided, "+
+		"investment_transactions_not_imported) FROM import_runs WHERE id = 1", "1 2 3 4 5 6 7 8 9 10 11 12 13")
 }
 
 // A sign-drop bug would only show here, not in the positive-amount
@@ -142,6 +157,7 @@ func Test_replace_fails_when_any_tables_rows_fail_to_append(t *testing.T) {
 		{"splits", func(r store.Rows) store.Rows { r.Splits = append(r.Splits, r.Splits[0]); return r }},
 		{"split_tags", func(r store.Rows) store.Rows { r.SplitTags = append(r.SplitTags, r.SplitTags[0]); return r }},
 		{"transfers", func(r store.Rows) store.Rows { r.Transfers = append(r.Transfers, r.Transfers[0]); return r }},
+		{"import_runs", func(r store.Rows) store.Rows { r.ImportRuns = append(r.ImportRuns, r.ImportRuns[0]); return r }},
 	}
 
 	for _, c := range cases {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +18,7 @@ func Test_import_refuses_a_transaction_with_more_than_2_decimal_places(t *testin
 	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.345", PostedDate: &posted})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t,
 		`a transaction on 2024-03-02 in "Visa Infinite" has an amount of 12.345, which has more than 2 decimal places`,
@@ -31,7 +32,7 @@ func Test_import_refuses_a_transaction_with_an_amount_too_large_for_quarry(t *te
 	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "10000000000000.5", PostedDate: &posted})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t,
 		`a transaction on 2024-03-02 in "Visa Infinite" has an amount of 10000000000000.5, which is too large for quarry's amounts`,
@@ -46,7 +47,7 @@ func Test_import_refuses_a_transaction_with_reconcile_status_quarry_does_not_map
 	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34", PostedDate: &posted, Status: &status})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t,
 		`a transaction on 2024-03-02 in "Visa Infinite" has reconcile status 7, which quarry does not map yet`,
@@ -59,7 +60,7 @@ func Test_import_refuses_a_transaction_with_no_account(t *testing.T) {
 	txnPK := b.Transaction(v9fixture.TransactionRow{Amount: "12.34", PostedDate: &posted})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `a transaction (source id `+itoa(txnPK)+`) has no account`, importReason(t, err))
 }
@@ -71,7 +72,7 @@ func Test_import_refuses_a_transaction_with_no_amount(t *testing.T) {
 	b.Transaction(v9fixture.TransactionRow{Account: acctPK, PostedDate: &posted})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has no amount`, importReason(t, err))
 }
@@ -82,7 +83,7 @@ func Test_import_refuses_a_transaction_with_no_date(t *testing.T) {
 	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `a transaction in "Visa Infinite" (source id `+itoa(txnPK)+`) has no date`, importReason(t, err))
 }
@@ -94,7 +95,7 @@ func Test_import_refuses_a_transaction_with_no_date_and_no_amount(t *testing.T) 
 	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `a transaction in "Visa Infinite" (source id `+itoa(txnPK)+`) has no date`, importReason(t, err))
 }
@@ -109,7 +110,7 @@ func Test_import_does_not_refuse_a_deleted_or_investment_transaction_missing_fie
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	assert.Empty(t, fake.Rows.Transactions)
@@ -123,7 +124,7 @@ func Test_import_refuses_a_split_with_more_than_2_decimal_places(t *testing.T) {
 	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "12.345"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t,
 		`a transaction on 2024-03-02 in "Visa Infinite" has an amount of 12.345, which has more than 2 decimal places`,
@@ -138,7 +139,7 @@ func Test_import_refuses_a_split_with_more_than_2_decimal_places_when_its_transa
 	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "12.345"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t,
 		`a split of a transaction on 2024-03-02 in "Visa Infinite" has an amount of 12.345, which has more than 2 decimal places`,
@@ -153,7 +154,7 @@ func Test_import_refuses_a_split_with_an_amount_too_large_for_quarry(t *testing.
 	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "10000000000000.5"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t,
 		`a split of a transaction on 2024-03-02 in "Visa Infinite" has an amount of 10000000000000.5, which is too large for quarry's amounts`,
@@ -168,7 +169,7 @@ func Test_import_refuses_a_split_with_no_amount(t *testing.T) {
 	b.Entry(v9fixture.EntryRow{Parent: txnPK})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `a split of a transaction on 2024-03-02 in "Visa Infinite" has no amount`, importReason(t, err))
 }
@@ -178,7 +179,7 @@ func Test_import_refuses_a_split_with_no_transaction(t *testing.T) {
 	entryPK := b.Entry(v9fixture.EntryRow{Amount: "12.34"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `a split (source id `+itoa(entryPK)+`) has no transaction`, importReason(t, err))
 }
@@ -199,7 +200,7 @@ func Test_import_keeps_every_other_id_when_the_snapshot_gains_a_row(t *testing.T
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	require.Len(t, fake.Rows.Transactions, 3)

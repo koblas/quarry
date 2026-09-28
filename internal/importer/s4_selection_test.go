@@ -6,6 +6,7 @@ import (
 
 	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,7 +19,7 @@ func Test_import_reports_the_first_offender_and_how_many_more(t *testing.T) {
 	b.Account(v9fixture.AccountRow{Name: "Charlie", Type: "ZZZ", Currency: "CAD", Active: true})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t,
 		`account "Alpha" has type ZZZ, which quarry does not map yet (and 2 more)`,
@@ -32,7 +33,7 @@ func Test_import_reports_the_earliest_class_when_several_fail(t *testing.T) {
 	b.Account(v9fixture.AccountRow{Name: "Euro Savings", Type: "CHECKING", Currency: "EUR", Active: true})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t,
 		"the snapshot has no UserTag entity, which quarry needs to read Quicken's records",
@@ -49,7 +50,7 @@ func Test_import_reports_an_undated_offender_before_a_dated_one_in_the_same_clas
 	b.Transaction(v9fixture.TransactionRow{Account: goodAcct, PostedDate: &posted})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `an account (source id `+itoa(acctPK)+`) has no name (and 1 more)`, importReason(t, err))
 }

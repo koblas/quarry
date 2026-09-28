@@ -181,3 +181,81 @@ func Test_run_counts_investment_transactions_without_importing_them(t *testing.T
 		fmt.Sprintf("txn-%d", depositTxn):      fmt.Sprintf("acct-%d", brokeragePK),
 	}, stringMap(t, db, "SELECT id, account_id FROM transactions"))
 }
+
+func Test_run_keeps_and_warns_about_one_sided_transfers(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	b := v9fixture.NewBuilder()
+	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	savingsPK := b.Account(v9fixture.AccountRow{Name: "Savings", Type: "SAVINGS", Currency: "CAD", Active: true})
+	landlordPK := b.Payee(v9fixture.PayeeRow{Name: "Landlord"})
+	day1 := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	day2 := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+	day3 := time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
+
+	outTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-100.00", PostedDate: &day1})
+	b.Entry(v9fixture.EntryRow{Parent: outTxn, Amount: "-100.00", QuickenID: 1001, Transfer: "2002"})
+	inTxn := b.Transaction(v9fixture.TransactionRow{Account: savingsPK, Amount: "100.00", PostedDate: &day1})
+	b.Entry(v9fixture.EntryRow{Parent: inTxn, Amount: "100.00", QuickenID: 2002, Transfer: "1001"})
+	noMatchTxn := b.Transaction(v9fixture.TransactionRow{Account: savingsPK, Amount: "-1204.17", PostedDate: &day3})
+	noMatchLeg := b.Entry(v9fixture.EntryRow{Parent: noMatchTxn, Amount: "-1204.17", QuickenID: 3003, Transfer: "Old Visa"})
+	namedTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-500.00", PostedDate: &day2, Payee: landlordPK})
+	namedLeg := b.Entry(v9fixture.EntryRow{Parent: namedTxn, Amount: "-500.00", QuickenID: 3002, Transfer: "Savings"})
+	missingTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-1.00", PostedDate: &day1})
+	missingLeg := b.Entry(v9fixture.EntryRow{Parent: missingTxn, Amount: "-1.00", QuickenID: 3001, Transfer: "999"})
+
+	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+
+	storePath := storePathUnder(home)
+	assert.Equal(t, syncBlock(t, home, bundle.Dir, 2,
+		[2]string{"Store", abbreviated(t, storePath, home)},
+		[2]string{"Rows", "5 transactions, 5 splits, 4 transfers, 1 payee, 0 categories, 0 tags"},
+		[2]string{"Balances", "no accounts to check; 2 never reconciled"},
+		[2]string{"Splits", "all 5 transactions equal the sum of their splits"},
+		[2]string{"Transfers", "1 paired, 3 one-sided"},
+	)+
+		"  ? 2026-03-01  Chequing (CAD)  (no payee)      -1.00  other account: unknown\n"+
+		"  ? 2026-03-02  Chequing (CAD)  Landlord      -500.00  other account: Savings\n"+
+		"  ? 2026-03-03  Savings (CAD)   (no payee)  -1,204.17  other account: Old Visa (not in this file)\n",
+		stdout.String())
+	assert.Equal(t, "quarry: warning: 3 transfers have no matching transaction in another account; "+
+		"quarry keeps them as one-sided transfers\n", stderr.String())
+	require.Equal(t, 0, exitCode)
+
+	db, err := duckdb.OpenReadOnly(t.Context(), storePath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	assert.Equal(t, map[string]string{
+		fmt.Sprintf("xfer-%d", missingLeg): fmt.Sprintf("split-%d", missingLeg),
+		fmt.Sprintf("xfer-%d", namedLeg):   fmt.Sprintf("split-%d", namedLeg),
+		fmt.Sprintf("xfer-%d", noMatchLeg): fmt.Sprintf("split-%d", noMatchLeg),
+	}, stringMap(t, db, "SELECT id, from_split_id FROM transfers WHERE to_split_id IS NULL"))
+}
+
+func Test_run_lists_one_sided_transfers_without_warning_when_validation_fails(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	b := v9fixture.NewBuilder()
+	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	mismatchedTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-10.00", PostedDate: &day})
+	b.Entry(v9fixture.EntryRow{Parent: mismatchedTxn, Amount: "-9.00"})
+	legTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-5.00", PostedDate: &day})
+	b.Entry(v9fixture.EntryRow{Parent: legTxn, Amount: "-5.00", QuickenID: 3001, Transfer: "Old Visa"})
+
+	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.True(t, strings.HasSuffix(stdout.String(), "Transfers 0 paired, 1 one-sided\n"+
+		"  ? 2026-03-01  Chequing (CAD)  (no payee)  -5.00  other account: Old Visa (not in this file)\n"), stdout.String())
+	assert.True(t, strings.HasPrefix(stderr.String(), "quarry: validation failed: "), stderr.String())
+	assert.Equal(t, 1, strings.Count(stderr.String(), "\n"))
+}

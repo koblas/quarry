@@ -43,3 +43,58 @@ func Test_stdout_write_refusal_points_to_from_only_once_the_build_was_reached(t 
 		})
 	}
 }
+
+func builtWithOneSided(n int) *store.Result {
+	return &store.Result{Built: true, Validation: store.Validation{Transfers: store.TransferCheck{OneSided: make([]store.OneSidedTransfer, n)}}}
+}
+
+func Test_outcome_warnings_put_w1_before_w2(t *testing.T) {
+	outcome := snapshot.Outcome{Manifest: snapshot.Manifest{Warnings: []string{"W1 text"}}, Store: builtWithOneSided(2)}
+
+	got := outcome.Warnings()
+
+	assert.Equal(t, []string{
+		"W1 text",
+		"2 transfers have no matching transaction in another account; quarry keeps them as one-sided transfers",
+	}, got)
+}
+
+func Test_outcome_warnings_names_a_single_one_sided_transfer_in_the_singular(t *testing.T) {
+	outcome := snapshot.Outcome{Store: builtWithOneSided(1)}
+
+	got := outcome.Warnings()
+
+	assert.Equal(t, []string{
+		"1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer",
+	}, got)
+}
+
+func Test_outcome_warnings_omit_w2_when_every_transfer_is_paired(t *testing.T) {
+	outcome := snapshot.Outcome{
+		Manifest: snapshot.Manifest{Warnings: []string{"W1 text"}},
+		Store:    &store.Result{Built: true, Validation: store.Validation{Transfers: store.TransferCheck{Paired: 3}}},
+	}
+
+	got := outcome.Warnings()
+
+	assert.Equal(t, []string{"W1 text"}, got)
+}
+
+func Test_outcome_warnings_omit_w2_when_the_store_was_not_built(t *testing.T) {
+	built, unbuilt := builtWithOneSided(2), builtWithOneSided(2)
+	unbuilt.Built = false
+
+	gotBuilt := snapshot.Outcome{Manifest: snapshot.Manifest{Warnings: []string{"W1 text"}}, Store: built}.Warnings()
+	gotUnbuilt := snapshot.Outcome{Manifest: snapshot.Manifest{Warnings: []string{"W1 text"}}, Store: unbuilt}.Warnings()
+
+	assert.Len(t, gotBuilt, 2)
+	assert.Equal(t, []string{"W1 text"}, gotUnbuilt)
+}
+
+func Test_outcome_warnings_are_the_manifests_when_no_import_ran(t *testing.T) {
+	outcome := snapshot.Outcome{Manifest: snapshot.Manifest{Warnings: []string{"W1 text"}}}
+
+	got := outcome.Warnings()
+
+	assert.Equal(t, []string{"W1 text"}, got)
+}

@@ -24,7 +24,7 @@ func Test_import_counts_investment_transactions_not_imported(t *testing.T) {
 	b.Transaction(v9fixture.TransactionRow{Entity: investmentEnt, Account: deletedAccountPK, Amount: "7.00", PostedDate: &day})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	assert.Equal(t, store.NotImported{InvestmentTransactions: 2}, result.NotImported)
@@ -41,7 +41,7 @@ func Test_import_stores_no_splits_for_investment_transactions(t *testing.T) {
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	assert.Empty(t, fake.Rows.Transactions)
@@ -57,7 +57,7 @@ func Test_import_counts_no_investment_transactions_without_the_entity(t *testing
 	})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	assert.Equal(t, store.NotImported{}, result.NotImported)
@@ -74,7 +74,7 @@ func Test_import_counts_no_investment_transactions_when_an_imported_one_shares_t
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	require.Len(t, fake.Rows.Transactions, 1)
@@ -93,7 +93,7 @@ func Test_import_reports_investment_transactions_not_imported_when_a_check_fails
 	})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.ErrorIs(t, err, store.ErrValidationFailed)
 	assert.Equal(t, store.NotImported{InvestmentTransactions: 1}, result.NotImported)

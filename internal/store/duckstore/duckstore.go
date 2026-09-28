@@ -112,7 +112,10 @@ func build(ctx context.Context, db *duckdb.DB, rows store.Rows) error {
 	if err := db.AppendRows(ctx, "split_tags", splitTagRows(rows.SplitTags)); err != nil {
 		return err
 	}
-	return db.AppendRows(ctx, "transfers", transferRows(rows.Transfers))
+	if err := db.AppendRows(ctx, "transfers", transferRows(rows.Transfers)); err != nil {
+		return err
+	}
+	return db.AppendRows(ctx, "import_runs", importRunRows(rows.ImportRuns))
 }
 
 func nullableStr(s *string) any {
@@ -195,6 +198,21 @@ func transferRows(transfers []store.Transfer) [][]any {
 	out := make([][]any, len(transfers))
 	for i, tr := range transfers {
 		out[i] = []any{tr.ID, tr.FromSplitID, nullableStr(tr.ToSplitID), tr.CrossCurrency}
+	}
+	return out
+}
+
+func importRunRows(runs []store.ImportRun) [][]any {
+	out := make([][]any, len(runs))
+	for i, r := range runs {
+		c := r.Counts
+		out[i] = []any{
+			r.ID, r.StartedAt, r.FinishedAt, r.Snapshot.Path, r.Snapshot.SHA256, r.Snapshot.SchemaFingerprint,
+			int64(c.Accounts), int64(c.Categories), int64(c.Payees), int64(c.Tags),
+			int64(c.Transactions), int64(c.Splits), int64(c.SplitTags), int64(c.Transfers),
+			int64(r.BalancesChecked), int64(r.BalancesMismatched), int64(r.SplitsMismatched),
+			int64(r.TransfersOneSided), int64(r.InvestmentTransactionsNotImported),
+		}
 	}
 	return out
 }

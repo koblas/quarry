@@ -6,6 +6,7 @@ import (
 
 	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +23,7 @@ func Test_import_refuses_an_account_with_an_unsupported_currency(t *testing.T) {
 	b.Account(v9fixture.AccountRow{Name: "Euro Savings", Type: "CHECKING", Currency: "EUR", Active: true})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `account "Euro Savings" uses currency EUR; quarry supports CAD and USD accounts`, importReason(t, err))
 }
@@ -32,7 +33,7 @@ func Test_import_refuses_an_account_with_an_unmapped_type(t *testing.T) {
 	b.Account(v9fixture.AccountRow{Name: "X", Type: "ZZZ", Currency: "CAD", Active: true})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `account "X" has type ZZZ, which quarry does not map yet`, importReason(t, err))
 }
@@ -42,7 +43,7 @@ func Test_import_refuses_an_account_with_no_name(t *testing.T) {
 	acctPK := b.Account(v9fixture.AccountRow{Type: "CHECKING", Currency: "CAD", Active: true})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `an account (source id `+itoa(acctPK)+`) has no name`, importReason(t, err))
 }
@@ -52,7 +53,7 @@ func Test_import_refuses_an_account_with_no_type(t *testing.T) {
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Currency: "CAD", Active: true})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `account "Chequing" has no type`, importReason(t, err))
 }
@@ -62,7 +63,7 @@ func Test_import_refuses_an_account_with_no_currency(t *testing.T) {
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Active: true})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	assert.Equal(t, `account "Chequing" has no currency`, importReason(t, err))
 }
@@ -76,7 +77,7 @@ func Test_import_excludes_a_deleted_account_with_a_bad_currency_and_no_type(t *t
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	assert.Len(t, fake.Rows.Accounts, 1)

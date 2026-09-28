@@ -10,6 +10,7 @@ import (
 	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/platform/sqlite"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/require"
 )
 
@@ -76,7 +77,7 @@ func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			srv := importer.NewServer(importer.WithStore(&fakeStore{}), importer.WithSourceOpener(openerFailingOn(c.match, errBoom)))
 
-			_, err := srv.Import(t.Context(), bundle.DataPath)
+			_, err := srv.Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 			require.ErrorIs(t, err, errBoom)
 		})
@@ -148,7 +149,7 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			srv := importer.NewServer(importer.WithStore(&fakeStore{}), importer.WithSourceOpener(openerScanFailingOn(c.match, errBoom)))
 
-			_, err := srv.Import(t.Context(), bundle.DataPath)
+			_, err := srv.Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 			require.ErrorIs(t, err, errBoom)
 		})
@@ -163,7 +164,7 @@ func Test_import_propagates_a_store_replace_error(t *testing.T) {
 	errBoom := errors.New("disk full")
 	fake.failNext(errBoom)
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.ErrorIs(t, err, errBoom)
 }

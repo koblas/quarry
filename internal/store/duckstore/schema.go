@@ -65,4 +65,25 @@ CREATE TABLE split_tags (
 	tag_id VARCHAR NOT NULL,
 	PRIMARY KEY (split_id, tag_id)
 );
+CREATE TABLE import_runs (
+	id BIGINT PRIMARY KEY,
+	started_at TIMESTAMP NOT NULL,
+	finished_at TIMESTAMP NOT NULL,
+	snapshot_path VARCHAR NOT NULL,
+	snapshot_sha256 VARCHAR NOT NULL,
+	schema_fingerprint VARCHAR NOT NULL,
+	accounts_rows BIGINT NOT NULL,
+	categories_rows BIGINT NOT NULL,
+	payees_rows BIGINT NOT NULL,
+	tags_rows BIGINT NOT NULL,
+	transactions_rows BIGINT NOT NULL,
+	splits_rows BIGINT NOT NULL,
+	split_tags_rows BIGINT NOT NULL,
+	transfers_rows BIGINT NOT NULL,
+	balances_checked BIGINT NOT NULL,
+	balances_mismatched BIGINT NOT NULL,
+	splits_mismatched BIGINT NOT NULL,
+	transfers_one_sided BIGINT NOT NULL,
+	investment_transactions_not_imported BIGINT NOT NULL
+);
 `

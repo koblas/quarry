@@ -21,7 +21,7 @@ func Test_import_does_not_replace_the_store_when_a_check_fails(t *testing.T) {
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.ErrorIs(t, err, store.ErrValidationFailed)
 	assert.Equal(t, 0, fake.replaceCalls)
@@ -36,7 +36,7 @@ func Test_import_replaces_the_store_when_the_balance_check_passes(t *testing.T) 
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, fake.replaceCalls)
@@ -51,7 +51,7 @@ func Test_import_reports_an_account_whose_reconciled_sum_differs_from_its_statem
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &feb, EndingBalance: "100.01"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.ErrorIs(t, err, store.ErrValidationFailed)
 	require.Len(t, result.Validation.Balances.Mismatched, 1)
@@ -70,7 +70,7 @@ func Test_import_reports_an_account_whose_reconciled_sum_exceeds_its_statement(t
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &feb, EndingBalance: "100.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.ErrorIs(t, err, store.ErrValidationFailed)
 	require.Len(t, result.Validation.Balances.Mismatched, 1)
@@ -94,7 +94,7 @@ func Test_import_excludes_non_reconciled_transactions_from_the_balance_sum(t *te
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &posted, EndingBalance: "100.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	assert.Empty(t, result.Validation.Balances.Mismatched)
@@ -108,7 +108,7 @@ func Test_import_counts_an_investment_account_without_listing_it_as_never_reconc
 	b.Account(v9fixture.AccountRow{Name: "Savings", Type: "SAVINGS", Currency: "CAD", Active: true})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Validation.Balances.InvestmentAccounts)
@@ -132,7 +132,7 @@ func Test_import_checks_closed_and_inactive_accounts_like_any_other(t *testing.T
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
-	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), bundle.DataPath)
+	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.Validation.Balances.Checked)
@@ -159,7 +159,7 @@ func Test_import_reports_a_transaction_whose_splits_do_not_sum_to_its_amount(t *
 	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "99.99"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.ErrorIs(t, err, store.ErrValidationFailed)
 	require.Len(t, result.Validation.Splits.Mismatched, 1)
@@ -179,7 +179,7 @@ func Test_import_reports_a_transaction_whose_splits_exceed_its_amount(t *testing
 	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "100.01"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.ErrorIs(t, err, store.ErrValidationFailed)
 	require.Len(t, result.Validation.Splits.Mismatched, 1)
@@ -213,7 +213,7 @@ func Test_import_sorts_balance_mismatches_for_display(t *testing.T) {
 	mismatchedBalanceAccount(b, "Chequing", "CHECKING", day) // source id 10
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.ErrorIs(t, err, store.ErrValidationFailed)
 	require.Len(t, result.Validation.Balances.Mismatched, 4)
@@ -267,7 +267,7 @@ func Test_import_sorts_split_mismatches_for_display(t *testing.T) {
 
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.ErrorIs(t, err, store.ErrValidationFailed)
 	require.Len(t, result.Validation.Splits.Mismatched, 6)
@@ -293,11 +293,30 @@ func Test_import_reports_a_transaction_with_no_splits(t *testing.T) {
 	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "0.00", PostedDate: &posted})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.ErrorIs(t, err, store.ErrValidationFailed)
 	require.Len(t, result.Validation.Splits.Mismatched, 1)
 	mismatch := result.Validation.Splits.Mismatched[0]
 	assert.Equal(t, int64(0), mismatch.Amount)
 	assert.Equal(t, int64(0), mismatch.SplitsTotal)
+}
+
+func Test_import_carries_each_split_mismatchs_account_closed_and_active_flags(t *testing.T) {
+	b := v9fixture.NewBuilder()
+	closedPK := b.Account(v9fixture.AccountRow{Name: "Closed Visa", Type: "CREDITCARD", Currency: "CAD", Closed: true, Active: true})
+	inactivePK := b.Account(v9fixture.AccountRow{Name: "Dormant Savings", Type: "SAVINGS", Currency: "CAD"})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	b.Transaction(v9fixture.TransactionRow{Account: closedPK, Amount: "1.00", PostedDate: &posted})
+	b.Transaction(v9fixture.TransactionRow{Account: inactivePK, Amount: "2.00", PostedDate: &posted})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.ErrorIs(t, err, store.ErrValidationFailed)
+	var got [][2]bool
+	for _, m := range result.Validation.Splits.Mismatched {
+		got = append(got, [2]bool{m.Closed, m.Active})
+	}
+	assert.Equal(t, [][2]bool{{true, true}, {false, false}}, got)
 }

@@ -100,10 +100,32 @@ type Rows struct {
 	Splits       []Split
 	SplitTags    []SplitTag
 	Transfers    []Transfer
+	ImportRuns   []ImportRun
+}
+
+// SnapshotRef identifies the snapshot a build reads: its absolute Path,
+// its SHA-256, and its schema fingerprint, all as its manifest records them.
+type SnapshotRef struct {
+	Path, SHA256, SchemaFingerprint string
+}
+
+// ImportRun is one row of the import_runs table, describing the build that
+// wrote it. FinishedAt is stamped before the store is written and swapped
+// in; both times are UTC.
+type ImportRun struct {
+	ID                                int64
+	StartedAt, FinishedAt             time.Time
+	Snapshot                          SnapshotRef
+	Counts                            Counts
+	BalancesChecked                   int
+	BalancesMismatched                int
+	SplitsMismatched                  int
+	TransfersOneSided                 int
+	InvestmentTransactionsNotImported int
 }
 
 // Counts is the row count of each table after a build; Transfers counts
-// paired and one-sided rows alike.
+// paired and one-sided rows alike, and import_runs is not counted.
 type Counts struct {
 	Accounts     int
 	Categories   int
@@ -180,10 +202,12 @@ type SplitCheck struct {
 
 // SplitMismatch is one transaction whose splits do not sum to its amount,
 // in cents. Payee is "" when the transaction has none. SourceID orders
-// display only; it is never rendered.
+// display only, and Closed/Active label the account for display only;
+// none of the three is emitted in --json.
 type SplitMismatch struct {
 	ID, Account, Currency, Payee string
 	SourceID                     int64
+	Closed, Active               bool
 	Date                         time.Time
 	Amount, SplitsTotal          int64
 }
@@ -196,12 +220,21 @@ type TransferCheck struct {
 	OneSided              []OneSidedTransfer
 }
 
-// OneSidedTransfer is one transfer leg with no counterpart. OtherAccount is
-// the account name the leg records, nil for a numeric link; OtherAccountID
-// is the imported account that name matches, nil when none does.
+// OneSidedTransfer is one transfer leg with no counterpart: its
+// transaction's Date and Payee ("" when none), its account's name and
+// currency, and the leg's own split Amount in cents. OtherAccount is the
+// account name the leg records, nil for a numeric link; OtherAccountID is
+// the imported account that name matches, nil when none does. SourceID
+// (the split's) orders display only, and Closed/Active label the account
+// for display only; none of the three is emitted in --json.
 type OneSidedTransfer struct {
-	ID             string
-	SourceID       int64
-	OtherAccount   *string
-	OtherAccountID *string
+	ID                string
+	SourceID          int64
+	Date              time.Time
+	Account, Currency string
+	Closed, Active    bool
+	Payee             string
+	Amount            int64
+	OtherAccount      *string
+	OtherAccountID    *string
 }

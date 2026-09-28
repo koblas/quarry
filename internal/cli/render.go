@@ -111,8 +111,17 @@ func renderStore(result store.Result, home string) string {
 	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(result.Counts, result.NotImported))
 	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(result.Validation.Balances))
 	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits))
-	fmt.Fprintf(&b, "%-10s%s\n", "Transfers", transfersPhrase(result.Validation.Transfers))
+	writeTransfers(&b, result.Validation.Transfers)
 	return b.String()
+}
+
+// writeTransfers appends tc's Transfers line, then one "?" row per
+// one-sided leg.
+func writeTransfers(b *strings.Builder, tc store.TransferCheck) {
+	fmt.Fprintf(b, "%-10s%s\n", "Transfers", transfersPhrase(tc))
+	for _, row := range oneSidedRows(tc.OneSided) {
+		fmt.Fprintln(b, row)
+	}
 }
 
 // transfersPhrase renders tc as "none", "N paired", or "N paired, M
@@ -279,11 +288,8 @@ func splitMismatchRows(mismatches []store.SplitMismatch) []string {
 	amounts := make([]string, len(mismatches))
 	totals := make([]string, len(mismatches))
 	for i, m := range mismatches {
-		labels[i] = accountLabel(m.Account, m.Currency, false, true)
-		payees[i] = m.Payee
-		if payees[i] == "" {
-			payees[i] = "(no payee)"
-		}
+		labels[i] = accountLabel(m.Account, m.Currency, m.Closed, m.Active)
+		payees[i] = payeeLabel(m.Payee)
 		amounts[i] = formatMoney(m.Amount)
 		totals[i] = formatMoney(m.SplitsTotal)
 	}
@@ -298,6 +304,53 @@ func splitMismatchRows(mismatches []store.SplitMismatch) []string {
 			amountWidth, amounts[i], totalWidth, totals[i])
 	}
 	return rows
+}
+
+// payeeLabel renders payee, or "(no payee)" when it is empty.
+func payeeLabel(payee string) string {
+	if payee == "" {
+		return "(no payee)"
+	}
+	return payee
+}
+
+// oneSidedRows renders one "?" row per one-sided leg, in the order given:
+// date fixed, account label and payee columns padded to the widest among
+// these rows, the amount right-aligned, then the account the leg names.
+func oneSidedRows(legs []store.OneSidedTransfer) []string {
+	labels := make([]string, len(legs))
+	payees := make([]string, len(legs))
+	amounts := make([]string, len(legs))
+	for i, leg := range legs {
+		labels[i] = accountLabel(leg.Account, leg.Currency, leg.Closed, leg.Active)
+		payees[i] = payeeLabel(leg.Payee)
+		amounts[i] = formatMoney(leg.Amount)
+	}
+	labelWidth := widestLen(labels) + 2
+	payeeWidth := widestLen(payees) + 2
+	amountWidth := widestLen(amounts)
+
+	rows := make([]string, len(legs))
+	for i, leg := range legs {
+		rows[i] = fmt.Sprintf("  ? %s  %-*s%-*s%*s  other account: %s",
+			leg.Date.Format("2006-01-02"), labelWidth, labels[i], payeeWidth, payees[i],
+			amountWidth, amounts[i], otherAccountLabel(leg))
+	}
+	return rows
+}
+
+// otherAccountLabel renders the account a one-sided leg names: "unknown"
+// for a numeric link, the recorded name, or the name marked "(not in this
+// file)" when no imported account carries it.
+func otherAccountLabel(leg store.OneSidedTransfer) string {
+	switch {
+	case leg.OtherAccount == nil:
+		return "unknown"
+	case leg.OtherAccountID == nil:
+		return *leg.OtherAccount + " (not in this file)"
+	default:
+		return *leg.OtherAccount
+	}
 }
 
 // widestLen returns the length of the longest of ss, 0 for an empty slice.
@@ -333,7 +386,7 @@ func renderStoreFailure(result store.Result, storeExisted bool, home string) str
 	} else {
 		fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits))
 	}
-	fmt.Fprintf(&b, "%-10s%s\n", "Transfers", transfersPhrase(result.Validation.Transfers))
+	writeTransfers(&b, result.Validation.Transfers)
 	return b.String()
 }
 

@@ -55,7 +55,7 @@ type Destination interface {
 // Importer builds quarry's store from a committed snapshot. It is shaped to
 // (*importer.Server).Import so that type satisfies it with no adapter.
 type Importer interface {
-	// Import maps snapshotPath's data into quarry's schema and writes it
+	// Import maps snap.Path's data into quarry's schema and writes it
 	// through the importer's own Store, returning the store.Result it built.
-	Import(ctx context.Context, snapshotPath string) (store.Result, error)
+	Import(ctx context.Context, snap store.SnapshotRef) (store.Result, error)
 }

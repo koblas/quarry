@@ -18,16 +18,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeImporter is a hand-written Importer fake: it records every path it
-// was called with and returns the configured result, or err when set.
+// fakeImporter is a hand-written Importer fake: it records every snapshot
+// ref it was called with and returns the configured result, or err when set.
 type fakeImporter struct {
-	calls  []string
+	calls  []store.SnapshotRef
 	result store.Result
 	err    error
 }
 
-func (f *fakeImporter) Import(_ context.Context, snapshotPath string) (store.Result, error) {
-	f.calls = append(f.calls, snapshotPath)
+func (f *fakeImporter) Import(_ context.Context, snap store.SnapshotRef) (store.Result, error) {
+	f.calls = append(f.calls, snap)
 	return f.result, f.err
 }
 
@@ -62,9 +62,26 @@ func Test_sync_and_import_imports_the_committed_snapshot(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Len(t, fake.calls, 1)
-	assert.Equal(t, outcome.Manifest.Snapshot.Path, fake.calls[0])
+	assert.Equal(t, outcome.Manifest.Snapshot.Path, fake.calls[0].Path)
 	require.NotNil(t, outcome.Store)
 	assert.Equal(t, fake.result, *outcome.Store)
+}
+
+func Test_sync_and_import_passes_the_manifests_hash_and_fingerprint_to_the_importer(t *testing.T) {
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+
+	outcome, err := srv.SyncAndImport(t.Context(), bundle.Dir)
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.SnapshotRef{{
+		Path: outcome.Manifest.Snapshot.Path, SHA256: outcome.Manifest.Snapshot.SHA256,
+		SchemaFingerprint: outcome.Manifest.Schema.Fingerprint,
+	}}, fake.calls)
+	assert.NotEmpty(t, fake.calls[0].SHA256)
+	assert.NotEmpty(t, fake.calls[0].SchemaFingerprint)
 }
 
 func Test_sync_and_import_skips_the_import_on_a_schema_mismatch(t *testing.T) {

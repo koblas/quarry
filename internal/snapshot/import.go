@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
@@ -24,6 +25,30 @@ type Outcome struct {
 	Manifest     Manifest
 	Store        *store.Result
 	StoreExisted bool
+}
+
+// Warnings returns every warning o carries, without the "quarry: warning: "
+// prefix: the manifest's own, then the one-sided-transfer warning when a
+// built store kept one or more legs with no counterpart. An unbuilt store
+// kept nothing, so it adds no warning.
+func (o Outcome) Warnings() []string {
+	warnings := o.Manifest.Warnings
+	if o.Store == nil || !o.Store.Built {
+		return warnings
+	}
+	if n := len(o.Store.Validation.Transfers.OneSided); n > 0 {
+		warnings = append(slices.Clip(warnings), oneSidedWarning(n))
+	}
+	return warnings
+}
+
+// oneSidedWarning renders the warning for n one-sided transfers, singular
+// at n == 1.
+func oneSidedWarning(n int) string {
+	if n == 1 {
+		return "1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer"
+	}
+	return fmt.Sprintf("%d transfers have no matching transaction in another account; quarry keeps them as one-sided transfers", n)
 }
 
 // storeRefusalError is SyncAndImport's S3 frame: Error is the refusal text
@@ -62,7 +87,9 @@ func (s *Server) SyncAndImport(ctx context.Context, bundlePath string) (Outcome,
 		return Outcome{Manifest: manifest}, errNoImporter
 	}
 
-	result, err := s.importer.Import(ctx, manifest.Snapshot.Path)
+	result, err := s.importer.Import(ctx, store.SnapshotRef{
+		Path: manifest.Snapshot.Path, SHA256: manifest.Snapshot.SHA256, SchemaFingerprint: manifest.Schema.Fingerprint,
+	})
 	if err != nil {
 		if errors.Is(err, store.ErrValidationFailed) {
 			// Populated here even though Import's own Result contract leaves it empty on a failed build.
