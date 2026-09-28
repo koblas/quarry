@@ -227,7 +227,7 @@ Transfers 3,112 paired
 - `balances.mismatched[]`: `{"id","name","currency","closed","active","statement_date":"2026-08-31","quarry":"-1204.17","quicken":"-1184.17","difference":"-20.00"}`; `difference` = quarry − quicken.
 - `splits.mismatched[]`: `{"id","date","account","currency","payee","amount","splits_total"}`.
 - `transfers.one_sided[]`: `{"id","date","account","currency","payee","amount","other_account","other_account_id"}`; `other_account` = the name as recorded, or `null`; `other_account_id` = the matching account's id, or `null` when no account matches.
-- All lists always present; sorted by account name then account source id, or by (date, account name, account source id, transaction source id); source ids compare numerically (never quarry's string `id`); `never_reconciled[]` and `transfers.one_sided[]` use the same keys; the human `!` / `?` rows use the same order (sorted once in the core, never re-sorted by renderers). Mismatch structs carry a numeric `SourceID`, not emitted in JSON. `id` = quarry's stable ID.
+- All lists always present; sorted by account name then account source id, or by (date, account name, account source id, transaction source id); source ids compare numerically (never quarry's string `id`); `never_reconciled[]` uses the account keys; `transfers.one_sided[]` uses (date, account name, account source id, transaction source id, split source id); the human `!` / `?` rows use the same order (sorted once in the core, never re-sorted by renderers). Mismatch structs carry a numeric `SourceID`, not emitted in JSON. `id` = quarry's stable ID.
 - `store: null` when import not attempted (schema mismatch); `"built": false` when the build ran and a check failed.
 
 ### V1 — validation failed (exit 1)
@@ -327,6 +327,8 @@ Interim W2 (ruled 2026-09-28): until SCENARIO-08, one-sided legs are stored and 
 | `--from` | `verified: false` manifest, current reference matches | imports |
 | `--from` | Quicken closed/absent | irrelevant |
 | Warnings | W1 + W2 | W1 then W2; both in `warnings[]`; exit 0 |
+| | V1 with one-sided legs | `?` rows follow the V1 block's Transfers line; `one_sided[]` in json; no W2 on stderr or in `warnings[]` (W1 still prints if it applies); V1 stderr unchanged; exit 1 |
+| `!` / `?` rows | account label | always `Name (CUR[, closed][, inactive])` (Balances, Splits and one-sided rows alike); json adds no closed/active fields to `one_sided[]` / `splits.mismatched[]` |
 | Manifest | any Phase 1 outcome | never rewritten |
 
 ---
