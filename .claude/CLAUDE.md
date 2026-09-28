@@ -7,7 +7,7 @@
 - **Step 0 — fresh worktree (MANDATORY, before any feature work):** every pipeline run starts from clean, current default branch in isolated worktree — never shared checkout's current branch.
   1. Already in worktree → skip.
   2. Else call **`EnterWorktree`**, `name` = short feature slug. `worktree.baseRef` defaults to `fresh` — branches off `origin/<default-branch>` after fetch, so worktree starts from current master on own branch regardless of main checkout's branch. All pipeline artifacts live inside it.
-  3. **No dependency warming step.** Go module cache global, shared across worktrees. Do not wait on one, do not look for status file.
+  3. **Warm module cache once.** Module cache is **per worktree**, not shared: devenv sets `GOPATH` to `.devenv/state/go`, so `GOMODCACHE` = `<worktree>/.devenv/state/go/pkg/mod` and fresh worktree starts empty. Before first agent spawns, run `go mod download` from worktree root, one Bash call — needs network (`proxy.golang.org`, `sum.golang.org`, `storage.googleapis.com`); sandbox escape per *Toolchain*. Agents in this worktree then build offline instead of each paying download mid-step; `isolation: "worktree"` agent gets own empty cache, warms its own first. No status file, nothing to wait on.
 
 - **Pipeline is default path, not command user must remember.** User asks for behavior that not exist, or change to behavior → enter pipeline **without being asked**, Step 0 then scoping below. `/intent-and-goal` still typable to force it, but it procedure, not trigger.
 
