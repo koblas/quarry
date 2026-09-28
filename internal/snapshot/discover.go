@@ -78,5 +78,5 @@ func documentsUnreadableRefusal(home string, cause error) error {
 	return RefusalError{msg: fmt.Sprintf(
 		"cannot read ~/Documents: %s; allow your terminal to access the Documents folder in "+
 			"System Settings > Privacy & Security > Files and Folders, or pass --quicken <path>",
-		osReason(cause))}
+		causeText(cause))}
 }

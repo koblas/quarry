@@ -49,5 +49,5 @@ func extrasWarningText(bundlePath, manifestPath string, info SchemaInfo) string 
 // hasOnlyExtras reports whether info has unexpected tables or columns and no
 // missing ones (BR-9): W1's condition, and MismatchError's opposite.
 func hasOnlyExtras(info SchemaInfo) bool {
-	return info.Verified && (len(info.UnexpectedTables) > 0 || len(info.UnexpectedColumns) > 0)
+	return info.Verified && info.HasExtras()
 }

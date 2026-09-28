@@ -110,16 +110,18 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 
 	dataPath := filepath.Join(bundlePath, "data")
 	if err := source.Open(ctx, dataPath); err != nil {
-		return Manifest{}, failureOutcome(ctx, sourceRefusal(s.home, bundlePath, err))
+		refusal, _ := sourceRefusal(s.home, bundlePath, err)
+		return Manifest{}, failureOutcome(ctx, refusal)
 	}
 	defer func() { _ = source.Close() }()
 
 	if err := source.Probe(ctx); err != nil {
-		return Manifest{}, failureOutcome(ctx, sourceRefusal(s.home, bundlePath, err))
+		refusal, _ := sourceRefusal(s.home, bundlePath, err)
+		return Manifest{}, failureOutcome(ctx, refusal)
 	}
 
 	if err := destination.Prepare(ctx); err != nil {
-		return Manifest{}, failureOutcome(ctx, prepareRefusal(s.home, s.snapshotDir, err))
+		return Manifest{}, failureOutcome(ctx, unwritableDirRefusal(s.home, s.snapshotDir, err))
 	}
 
 	takenAt := time.Now().UTC()
@@ -127,10 +129,10 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 
 	snapshotPartial, resolvedName, err := destination.Backup(ctx, source, name)
 	if err != nil {
-		if sqlite.IsNotADB(err) || sqlite.IsBusy(err) {
-			return Manifest{}, failureOutcome(ctx, sourceRefusal(s.home, bundlePath, err))
+		if refusal, ok := sourceRefusal(s.home, bundlePath, err); ok {
+			return Manifest{}, failureOutcome(ctx, refusal)
 		}
-		return Manifest{}, failureOutcome(ctx, writeRefusal(s.home, s.snapshotDir, err))
+		return Manifest{}, failureOutcome(ctx, writeFaultRefusal(s.home, s.snapshotDir, err))
 	}
 	snapshotPath, manifestPath := destination.FinalPaths(resolvedName)
 
@@ -156,38 +158,44 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 	manifestPartial, err := destination.WriteManifest(ctx, resolvedName, manifestBytes)
 	if err != nil {
 		_ = destination.Discard(ctx, snapshotPartial)
-		return Manifest{}, failureOutcome(ctx, writeRefusal(s.home, s.snapshotDir, err))
+		return Manifest{}, failureOutcome(ctx, writeFaultRefusal(s.home, s.snapshotDir, err))
 	}
 
-	// The single ctx check ahead of the commit sequence: past this point the
-	// renames run to completion regardless, and the run reports its normal
-	// outcome even if ctx ends mid-rename.
-	if ctx.Err() != nil {
-		_ = destination.Discard(ctx, manifestPartial)
-		_ = destination.Discard(ctx, snapshotPartial)
-		return Manifest{}, InterruptedRefusal()
-	}
-
-	// Manifest commits first: BR-8 accepts a snapshot only if its manifest
-	// exists, so a crash between the two commits must never leave a
-	// snapshot without one.
-	if _, err := destination.CommitManifest(ctx, manifestPartial); err != nil {
-		_ = destination.Discard(ctx, manifestPartial)
-		_ = destination.Discard(ctx, snapshotPartial)
-		return Manifest{}, writeRefusal(s.home, s.snapshotDir, err)
-	}
-	if _, err := destination.CommitSnapshot(ctx, snapshotPartial); err != nil {
-		// The manifest final is discarded first, before the snapshot
-		// partial, so the reservation stays held until the last step.
-		_ = destination.Discard(ctx, manifestPath)
-		_ = destination.Discard(ctx, snapshotPartial)
-		return Manifest{}, writeRefusal(s.home, s.snapshotDir, err)
+	if err := s.commit(ctx, destination, manifestPartial, snapshotPartial, manifestPath); err != nil {
+		return Manifest{}, err
 	}
 
 	if !manifest.Schema.Verified {
 		return manifest, mismatchError(s.home, bundlePath, snapshotPath, manifest.Schema)
 	}
 	return manifest, nil
+}
+
+// commit runs Sync's single pre-commit ctx check, then renames the
+// manifest and snapshot partials into their final names in that order
+// (BR-8: a crash between the two renames must never leave a snapshot
+// without a manifest). Once the ctx check passes, both renames complete
+// regardless of ctx.
+func (s *Server) commit(ctx context.Context, destination Destination, manifestPartial, snapshotPartial, manifestPath string) error {
+	if ctx.Err() != nil {
+		_ = destination.Discard(ctx, manifestPartial)
+		_ = destination.Discard(ctx, snapshotPartial)
+		return InterruptedRefusal()
+	}
+
+	if _, err := destination.CommitManifest(ctx, manifestPartial); err != nil {
+		_ = destination.Discard(ctx, manifestPartial)
+		_ = destination.Discard(ctx, snapshotPartial)
+		return writeFaultRefusal(s.home, s.snapshotDir, err)
+	}
+	if _, err := destination.CommitSnapshot(ctx, snapshotPartial); err != nil {
+		// The manifest final is discarded first, before the snapshot
+		// partial, so the reservation stays held until the last step.
+		_ = destination.Discard(ctx, manifestPath)
+		_ = destination.Discard(ctx, snapshotPartial)
+		return writeFaultRefusal(s.home, s.snapshotDir, err)
+	}
+	return nil
 }
 
 // buildManifest reads the just-created snapshot at snapshotPath (BR-1: every

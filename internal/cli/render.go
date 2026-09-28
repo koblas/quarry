@@ -54,12 +54,10 @@ func renderSuccess(m snapshot.Manifest, home string) string {
 // schemaLine renders the Schema line: exact match, extras-only (W1), or a
 // DIFFERS line for a mismatch (M1).
 func schemaLine(s snapshot.SchemaInfo) string {
-	extra := len(s.UnexpectedTables) + len(s.UnexpectedColumns)
-
 	if !s.Verified {
 		line := fmt.Sprintf("DIFFERS from reference %s: %s missing",
 			s.Reference, sqlschema.CountPhrase(len(s.MissingTables), len(s.MissingColumns)))
-		if extra > 0 {
+		if s.HasExtras() {
 			line += fmt.Sprintf(", %s not in reference",
 				sqlschema.CountPhrase(len(s.UnexpectedTables), len(s.UnexpectedColumns)))
 		}
@@ -68,7 +66,7 @@ func schemaLine(s snapshot.SchemaInfo) string {
 
 	line := fmt.Sprintf("matches reference %s (%s tables, %s columns)",
 		s.Reference, formatThousands(s.ReferenceTables), formatThousands(s.ReferenceColumns))
-	if extra > 0 {
+	if s.HasExtras() {
 		line += fmt.Sprintf(", plus %s not in it",
 			sqlschema.CountPhrase(len(s.UnexpectedTables), len(s.UnexpectedColumns)))
 	}

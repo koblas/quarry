@@ -45,6 +45,12 @@ type SchemaInfo struct {
 	ReferenceColumns int `json:"-"`
 }
 
+// HasExtras reports whether s has any table or column the reference does
+// not name.
+func (s SchemaInfo) HasExtras() bool {
+	return len(s.UnexpectedTables) > 0 || len(s.UnexpectedColumns) > 0
+}
+
 // ColumnRef names one column of one table in the --json document.
 type ColumnRef struct {
 	Table  string `json:"table"`

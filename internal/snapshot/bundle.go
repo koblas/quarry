@@ -127,16 +127,5 @@ func notOpenInQuickenRefusal(home, path string) error {
 func unreadableRefusal(home, path string, cause error) error {
 	return RefusalError{msg: fmt.Sprintf(
 		"cannot read %s: %s; allow your terminal to access the folder in System Settings > Privacy & Security, or check the file's permissions",
-		homepath.Abbreviate(home, path), osReason(cause))}
-}
-
-// osReason returns the innermost *fs.PathError's OS-level message, the exact
-// text quarry's unreadable-file refusals quote.
-func osReason(err error) string {
-	var pathErr *fs.PathError
-	if errors.As(err, &pathErr) {
-		return pathErr.Err.Error()
-	}
-	// unreachable: os.Stat/os.Open always return *fs.PathError
-	return err.Error()
+		homepath.Abbreviate(home, path), causeText(cause))}
 }
