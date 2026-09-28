@@ -534,6 +534,11 @@ func Test_sync_still_returns_the_R14_refusal_when_discard_fails_after_a_write_fa
 			assert.Equal(t,
 				"cannot write snapshot to ~/snapshots: no space left on device; free disk space, then run quarry sync again",
 				re.Error())
+			// The fake's failDiscard only overrides the returned error;
+			// each Discard call still removes its own real file, so a
+			// case with two Discard calls must leave the directory empty
+			// even though both calls report failure.
+			assertSnapshotsDirEmpty(t, snapshotsDir)
 		})
 	}
 }
