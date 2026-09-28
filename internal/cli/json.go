@@ -12,9 +12,8 @@ import (
 // jsonDateLayout is the --json document's date format for every date field.
 const jsonDateLayout = "2006-01-02"
 
-// resultDocument is sync's --json stdout shape: the snapshot manifest's own
-// fields, the store result (null before an import was attempted), and
-// every warning worth surfacing.
+// resultDocument is sync's --json stdout shape: the manifest, the store
+// result (nil before an import is attempted), and every warning.
 type resultDocument struct {
 	Snapshot snapshot.SnapshotInfo `json:"snapshot"`
 	Schema   snapshot.SchemaInfo   `json:"schema"`

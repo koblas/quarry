@@ -18,10 +18,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The store object is asserted with assert.JSONEq against one literal, so
-// a wrong type (money as a number), a missing key (no "store": null shape)
-// or a leaked display-only field (source_id, closed, active on one_sided)
-// all fail the same assertion.
+// One assert.JSONEq against a full literal catches a wrong type, a missing
+// key, or a leaked display-only field (source_id, closed, active) at once.
 func Test_run_reports_the_store_result_alongside_the_manifest_as_json(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -109,7 +107,7 @@ func Test_run_prints_the_unbuilt_store_as_json_when_validation_fails(t *testing.
 	t.Setenv("HOME", home)
 
 	b := v9fixture.NewBuilder()
-	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Closed: true})
 	visaPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	reconciled := int64(2)
@@ -158,6 +156,8 @@ func Test_run_prints_the_unbuilt_store_as_json_when_validation_fails(t *testing.
 	assert.Equal(t, "100.00", balanceMismatched[0]["quarry"])
 	assert.Equal(t, "100.01", balanceMismatched[0]["quicken"])
 	assert.Equal(t, "-0.01", balanceMismatched[0]["difference"])
+	assert.Equal(t, true, balanceMismatched[0]["closed"])
+	assert.Equal(t, false, balanceMismatched[0]["active"])
 
 	var splits map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(store["splits"], &splits))

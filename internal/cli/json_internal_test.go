@@ -34,9 +34,8 @@ func Test_jsonMoney(t *testing.T) {
 	}
 }
 
-// The nil arm proves absent lists encode as [], never null or a missing
-// key; the populated control arm, differing only in having entries, proves
-// the same fields still carry their real content rather than a hardcoded [].
+// The nil arm proves absent lists encode as []; the populated control arm
+// proves the same fields still carry real content, not a hardcoded [].
 func Test_renderJSON_encodes_absent_lists_as_empty_arrays(t *testing.T) {
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	nilResult := store.Result{Path: "/store", Built: true}
@@ -74,10 +73,7 @@ func Test_renderJSON_encodes_absent_lists_as_empty_arrays(t *testing.T) {
 	assert.Len(t, populatedOneSided, 1)
 }
 
-// storeLists decodes data's store.balances, store.splits.mismatched and
-// store.transfers.one_sided lists as generic values, so a JSON null (which
-// decodes to a nil interface) is distinguishable from an empty array
-// (which decodes to a non-nil, zero-length slice).
+// storeLists decodes data's list fields as generic values, so a JSON null decodes distinguishably from an empty array.
 func storeLists(t *testing.T, data []byte) (balances map[string]any, splitsMismatched, oneSided any) {
 	t.Helper()
 	var doc map[string]any
