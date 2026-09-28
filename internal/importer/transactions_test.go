@@ -24,6 +24,20 @@ func Test_import_refuses_a_transaction_with_more_than_2_decimal_places(t *testin
 		importReason(t, err))
 }
 
+func Test_import_refuses_a_transaction_with_an_amount_too_large_for_quarry(t *testing.T) {
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
+	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "10000000000000.5", PostedDate: &posted})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+
+	assert.Equal(t,
+		`a transaction on 2024-03-02 in "Visa Infinite" has an amount of 10000000000000.5, which is too large for quarry's amounts`,
+		importReason(t, err))
+}
+
 func Test_import_refuses_a_transaction_with_reconcile_status_quarry_does_not_map(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
@@ -120,6 +134,21 @@ func Test_import_refuses_a_split_with_more_than_2_decimal_places_when_its_transa
 
 	assert.Equal(t,
 		`a split of a transaction on 2024-03-02 in "Visa Infinite" has an amount of 12.345, which has more than 2 decimal places`,
+		importReason(t, err))
+}
+
+func Test_import_refuses_a_split_with_an_amount_too_large_for_quarry(t *testing.T) {
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
+	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34", PostedDate: &posted})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "10000000000000.5"})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+
+	assert.Equal(t,
+		`a split of a transaction on 2024-03-02 in "Visa Infinite" has an amount of 10000000000000.5, which is too large for quarry's amounts`,
 		importReason(t, err))
 }
 
