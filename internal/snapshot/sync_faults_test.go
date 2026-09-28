@@ -671,8 +671,7 @@ func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_during_
 }
 
 // cancelAndFailWriteManifestDestination cancels ctx and fails WriteManifest
-// in the same call, so a test can land exactly on that failure site's
-// FailureOutcome check without the earlier buildManifest check intercepting first.
+// in the same call, landing exactly on that failure site's FailureOutcome check.
 type cancelAndFailWriteManifestDestination struct {
 	real   snapshot.Destination
 	cancel context.CancelFunc

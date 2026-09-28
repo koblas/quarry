@@ -76,9 +76,8 @@ func Test_commit_succeeds_when_the_partial_cannot_be_removed_after_linking(t *te
 	assert.Equal(t, "payload", string(got))
 }
 
-// dest's directory is made unreadable (but still writable+executable, which
-// Link only needs) before Commit runs, so the link succeeds but the
-// directory cannot be opened to fsync it.
+// destDir is unreadable (still writable+executable, all Link needs) before
+// Commit, so Link succeeds but fsyncing the directory afterward cannot open it.
 func Test_commit_succeeds_when_the_destination_directory_cannot_be_synced(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")
