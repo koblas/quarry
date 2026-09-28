@@ -483,9 +483,9 @@ Scenario: SCENARIO-21 — investment transactions are counted, not imported
 
 Order is execution order. Folded scenarios are ticked with the delivering scenario and its acceptance test.
 
-- [ ] SCENARIO-01a: the importer builds a store from a v9 snapshot (absorbs 04, 05; test-first: partial + rename)
-- [ ] SCENARIO-04: re-importing the same snapshot keeps quarry IDs stable — FOLD → 01a
-- [ ] SCENARIO-05: category hierarchy and kind are preserved — FOLD → 01a
+- [x] SCENARIO-01a: the importer builds a store from a v9 snapshot (absorbs 04, 05; test-first: partial + rename) — `internal/importer/import_test.go` `Test_import_builds_every_table_from_a_v9_snapshot`
+- [x] SCENARIO-04: re-importing the same snapshot keeps quarry IDs stable — FOLD → 01a, delivered by SCENARIO-01a — `internal/importer/import_test.go` `Test_import_twice_from_the_same_snapshot_keeps_every_id`
+- [x] SCENARIO-05: category hierarchy and kind are preserved — FOLD → 01a, delivered by SCENARIO-01a — `internal/importer/import_test.go` `Test_import_keeps_each_categorys_parent_path_kind_and_hidden`
 - [ ] SCENARIO-01d: sync imports the Quicken data into a new store
 - [ ] SCENARIO-01b: sync checks balances and split sums before swapping the store in (absorbs 06)
 - [ ] SCENARIO-06: closed and inactive accounts are imported and checked — FOLD → 01b
