@@ -113,9 +113,6 @@ func Test_import_refuses_a_split_with_more_than_2_decimal_places(t *testing.T) {
 
 	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
 
-	// The transaction's own amount also has 3 decimal places (class 3), which
-	// outranks the split's class 4 in S4 order, so both reasons exist here
-	// but only the transaction's is reported.
 	assert.Equal(t,
 		`a transaction on 2024-03-02 in "Visa Infinite" has an amount of 12.345, which has more than 2 decimal places`,
 		importReason(t, err))

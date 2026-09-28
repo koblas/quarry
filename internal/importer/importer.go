@@ -57,31 +57,36 @@ func (srv *Server) Import(ctx context.Context, snapshotPath string) (store.Resul
 
 	off := &offenders{}
 
-	accounts, accountRefs, err := mapAccounts(ctx, src, off)
+	accounts, accountRefs, existingAccounts, err := mapAccounts(ctx, src, off)
 	if err != nil {
 		return store.Result{}, err
 	}
-	categories, err := mapCategories(ctx, src, entities["CategoryTag"], off)
+	categories, existingCategories, err := mapCategories(ctx, src, entities["CategoryTag"], off)
 	if err != nil {
 		return store.Result{}, err
 	}
-	tags, err := mapTags(ctx, src, entities["UserTag"])
+	tags, existingTags, err := mapTags(ctx, src, entities["UserTag"])
 	if err != nil {
 		return store.Result{}, err
 	}
-	payees, err := mapPayees(ctx, src)
+	payees, existingPayees, err := mapPayees(ctx, src)
 	if err != nil {
 		return store.Result{}, err
 	}
-	transactions, txnRefs, err := mapTransactions(ctx, src, entities["CashFlowTransaction"], accountRefs, off)
+	existingTransactions, err := existingTransactionPKs(ctx, src)
 	if err != nil {
 		return store.Result{}, err
 	}
-	splits, splitIDs, err := mapSplits(ctx, src, txnRefs, off)
+	transactions, txnRefs, err := mapTransactions(
+		ctx, src, entities["CashFlowTransaction"], accountRefs, existingAccounts, existingPayees, off)
 	if err != nil {
 		return store.Result{}, err
 	}
-	splitTags, err := mapSplitTags(ctx, src, splitIDs)
+	splits, splitIDs, err := mapSplits(ctx, src, txnRefs, existingTransactions, existingCategories, off)
+	if err != nil {
+		return store.Result{}, err
+	}
+	splitTags, err := mapSplitTags(ctx, src, splitIDs, existingTags)
 	if err != nil {
 		return store.Result{}, err
 	}

@@ -47,13 +47,38 @@ WHERE t.Z_ENT = ? AND COALESCE(t.ZDELETIONCOUNT, 0) = 0
 ORDER BY COALESCE(t.ZPOSTEDDATE, t.ZENTEREDDATE), t.ZACCOUNT, t.Z_PK
 `
 
+// existingTransactionPKs reads every ZTRANSACTION row's Z_PK, of any
+// entity and deletion state, so a split's dangling parent reference (no
+// row at all) can be told apart from one pointing at a row this importer
+// excludes for its own reason (deleted, Smart/Investment, or otherwise).
+func existingTransactionPKs(ctx context.Context, src Source) (map[int64]bool, error) {
+	existing := make(map[int64]bool)
+	err := src.QueryRows(ctx, "SELECT Z_PK FROM ZTRANSACTION", nil, func(scan func(dest ...any) error) error {
+		var pk int64
+		if err := scan(&pk); err != nil {
+			return err
+		}
+		existing[pk] = true
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("read transaction ids: %w", err)
+	}
+	return existing, nil
+}
+
 // mapTransactions reads every non-deleted transactionEntity row of
-// ZTRANSACTION. A row whose account, date or amount is missing (S4 reason
-// 10), whose amount has too much precision (reason 3) or is too large
-// (reason 6), or whose reconcile status is unmapped (reason 8), is added
-// to off and excluded. A row whose account was itself excluded is silently
-// skipped.
-func mapTransactions(ctx context.Context, src Source, transactionEntity int64, accounts map[int64]accountRef, off *offenders) ([]store.Transaction, map[int64]txnRef, error) {
+// ZTRANSACTION. A row in a deleted account, or whose account was itself
+// excluded, is silently skipped. A row whose account reference points to
+// no row at all (S4 reason 10), whose date is missing (reason 10), whose
+// amount is missing (reason 10), stored as text or blob (reason 11), has
+// too much precision (reason 3) or is too large (reason 6), or whose
+// reconcile status is unmapped (reason 8), is added to off and excluded.
+// A payee reference to a deleted or missing payee stores NULL.
+func mapTransactions(
+	ctx context.Context, src Source, transactionEntity int64,
+	accounts map[int64]accountRef, existingAccounts, existingPayees map[int64]bool, off *offenders,
+) ([]store.Transaction, map[int64]txnRef, error) {
 	var rows []store.Transaction
 	refs := make(map[int64]txnRef)
 
@@ -74,27 +99,49 @@ func mapTransactions(ctx context.Context, src Source, transactionEntity int64, a
 			off.add(offender{class: 10, reason: reasonTransactionNoAccount(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
 			return nil
 		}
+		if !existingAccounts[account.Int64] {
+			off.add(offender{class: 10, reason: reasonTransactionNoAccount(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
+			return nil
+		}
 		acct, ok := accounts[account.Int64]
 		if !ok {
-			return nil
+			return nil // account was deleted, or itself excluded (P1-5d)
 		}
 
-		if !posted.Valid && !entered.Valid {
-			off.add(offender{class: 10, reason: reasonTransactionNoDate(acct.Name, pk), name: acct.Name, sourceID: pk})
-			return nil
+		hasDate := posted.Valid || entered.Valid
+		var date time.Time
+		var dateStr string
+		if hasDate {
+			seconds := entered.Float64
+			if posted.Valid {
+				seconds = posted.Float64
+			}
+			date = coreDataToDate(seconds)
+			dateStr = date.Format(dateLayout)
 		}
-		seconds := entered.Float64
-		if posted.Valid {
-			seconds = posted.Float64
-		}
-		date := coreDataToDate(seconds)
-		dateStr := date.Format(dateLayout)
 
 		if amtType == "null" {
+			if !hasDate {
+				off.add(offender{class: 10, reason: reasonTransactionNoDate(acct.Name, pk), name: acct.Name, sourceID: pk})
+				return nil
+			}
 			off.add(offender{class: 10, reason: reasonTransactionNoAmount(dateStr, acct.Name), dated: true, date: date, account: acct.Name, sourceID: pk})
 			return nil
 		}
+
 		cents, fault := parseMoney(amtType, amtText.String)
+		if fault == moneyNotANumber {
+			if hasDate {
+				off.add(offender{class: 11, reason: reasonTransactionNotANumber(dateStr, acct.Name), dated: true, date: date, account: acct.Name, sourceID: pk})
+			} else {
+				off.add(offender{class: 11, reason: reasonTransactionNotANumberNoDate(acct.Name, pk), name: acct.Name, sourceID: pk})
+			}
+			return nil
+		}
+		if !hasDate {
+			off.add(offender{class: 10, reason: reasonTransactionNoDate(acct.Name, pk), name: acct.Name, sourceID: pk})
+			return nil
+		}
 		switch fault {
 		case moneyPrecision:
 			off.add(offender{class: 3, reason: reasonTransactionPrecision(dateStr, acct.Name, amtText.String), dated: true, date: date, account: acct.Name, sourceID: pk})
@@ -122,7 +169,7 @@ func mapTransactions(ctx context.Context, src Source, transactionEntity int64, a
 			ID: id, SourceID: pk, AccountID: acct.ID, Date: date,
 			Amount: cents, Currency: acct.Currency, Status: statusStr,
 		}
-		if payee.Valid {
+		if payee.Valid && existingPayees[payee.Int64] {
 			pid := fmt.Sprintf("payee-%d", payee.Int64)
 			txn.PayeeID = &pid
 		}

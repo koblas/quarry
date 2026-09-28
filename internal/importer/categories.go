@@ -32,8 +32,11 @@ ORDER BY ZNAME, Z_PK
 // mapCategories reads every non-deleted ZTAG row of categoryEntity. A row
 // with no name (S4 reason 10) is added to off and excluded; a row with no
 // type (reason 10) or an unmapped type (reason 9) is likewise excluded,
-// but its name still anchors any child's full_path.
-func mapCategories(ctx context.Context, src Source, categoryEntity int64, off *offenders) ([]store.Category, error) {
+// but its name still anchors any child's full_path. The second return
+// value is every category PK that exists (non-deleted), so a nullable
+// reference to a deleted or missing category can be told apart from one
+// pointing at a live row.
+func mapCategories(ctx context.Context, src Source, categoryEntity int64, off *offenders) ([]store.Category, map[int64]bool, error) {
 	var raws []rawCategory
 	byPK := make(map[int64]rawCategory)
 
@@ -47,7 +50,7 @@ func mapCategories(ctx context.Context, src Source, categoryEntity int64, off *o
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("read categories: %w", err)
+		return nil, nil, fmt.Errorf("read categories: %w", err)
 	}
 
 	var rows []store.Category
@@ -79,7 +82,11 @@ func mapCategories(ctx context.Context, src Source, categoryEntity int64, off *o
 			Name: r.name.String, FullPath: fullPath, Kind: kind, Hidden: r.hidden,
 		})
 	}
-	return rows, nil
+	existing := make(map[int64]bool, len(byPK))
+	for pk := range byPK {
+		existing[pk] = true
+	}
+	return rows, existing, nil
 }
 
 // categoryFullPath walks r's ZPARENTCATEGORY chain, bounded by the number
@@ -118,9 +125,12 @@ WHERE Z_ENT = ? AND COALESCE(ZDELETIONCOUNT, 0) = 0
 ORDER BY ZNAME, Z_PK
 `
 
-// mapTags reads every non-deleted ZTAG row of tagEntity as a user tag.
-func mapTags(ctx context.Context, src Source, tagEntity int64) ([]store.Tag, error) {
+// mapTags reads every non-deleted ZTAG row of tagEntity as a user tag. The
+// second return value is every tag PK that exists (non-deleted), for a
+// split_tags link's tag-existence check.
+func mapTags(ctx context.Context, src Source, tagEntity int64) ([]store.Tag, map[int64]bool, error) {
 	var rows []store.Tag
+	existing := make(map[int64]bool)
 	err := src.QueryRows(ctx, userTagsQuery, []any{tagEntity}, func(scan func(dest ...any) error) error {
 		var pk int64
 		var name string
@@ -128,10 +138,11 @@ func mapTags(ctx context.Context, src Source, tagEntity int64) ([]store.Tag, err
 			return err
 		}
 		rows = append(rows, store.Tag{ID: fmt.Sprintf("tag-%d", pk), SourceID: pk, Name: name})
+		existing[pk] = true
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("read tags: %w", err)
+		return nil, nil, fmt.Errorf("read tags: %w", err)
 	}
-	return rows, nil
+	return rows, existing, nil
 }

@@ -37,27 +37,34 @@ type accountRef struct {
 
 const accountsQuery = `
 SELECT a.Z_PK, a.ZNAME, a.ZTYPENAME, a.ZCURRENCY, fi.ZNAME,
-       COALESCE(a.ZCLOSED, 0), COALESCE(a.ZACTIVE, 0)
+       COALESCE(a.ZCLOSED, 0), COALESCE(a.ZACTIVE, 0), COALESCE(a.ZDELETIONCOUNT, 0)
 FROM ZACCOUNT a
 LEFT JOIN ZFINANCIALINSTITUTION fi ON a.ZFINANCIALINSTITUTION = fi.Z_PK
-WHERE COALESCE(a.ZDELETIONCOUNT, 0) = 0
 ORDER BY a.ZNAME, a.Z_PK
 `
 
-// mapAccounts reads every non-deleted ZACCOUNT row. A row with no name, no
-// type or no currency (S4 reason 10), an unmapped type (reason 2) or an
-// unsupported currency (reason 1) is added to off and excluded from both
-// results.
-func mapAccounts(ctx context.Context, src Source, off *offenders) ([]store.Account, map[int64]accountRef, error) {
+// mapAccounts reads every ZACCOUNT row. A deleted row is excluded silently
+// (never validated, never counted) but still marked as existing in the
+// third return value, so a dangling reference to it can be told apart
+// from a reference to no row at all. A row with no name, no type or no
+// currency (S4 reason 10), an unmapped type (reason 2) or an unsupported
+// currency (reason 1) is added to off and excluded from the other two.
+func mapAccounts(ctx context.Context, src Source, off *offenders) ([]store.Account, map[int64]accountRef, map[int64]bool, error) {
 	var rows []store.Account
 	refs := make(map[int64]accountRef)
+	existing := make(map[int64]bool)
 
 	err := src.QueryRows(ctx, accountsQuery, nil, func(scan func(dest ...any) error) error {
 		var pk int64
 		var name, typ, currency, institution sql.NullString
 		var closed, active bool
-		if err := scan(&pk, &name, &typ, &currency, &institution, &closed, &active); err != nil {
+		var deletionCount int
+		if err := scan(&pk, &name, &typ, &currency, &institution, &closed, &active, &deletionCount); err != nil {
 			return err
+		}
+		existing[pk] = true
+		if deletionCount != 0 {
+			return nil
 		}
 
 		if !name.Valid || name.String == "" {
@@ -96,7 +103,7 @@ func mapAccounts(ctx context.Context, src Source, off *offenders) ([]store.Accou
 		return nil
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("read accounts: %w", err)
+		return nil, nil, nil, fmt.Errorf("read accounts: %w", err)
 	}
-	return rows, refs, nil
+	return rows, refs, existing, nil
 }

@@ -6,9 +6,8 @@ import (
 	"time"
 )
 
-// s4ClassOrder is the S4 reporting order: reason 7 first (a missing entity
-// makes every row check meaningless), then 1-6, then 8-10.
-var s4ClassOrder = map[int]int{7: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 8: 7, 9: 8, 10: 9}
+// s4ClassOrder is the S4 reporting order: 7, then 1-6, then 11, then 8-10.
+var s4ClassOrder = map[int]int{7: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 11: 7, 8: 8, 9: 9, 10: 10}
 
 // offender is one row Import cannot map, in one S4 class. reason is that
 // row's rendered text, without " (and N more)". Undated offenders (an

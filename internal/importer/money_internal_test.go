@@ -29,6 +29,10 @@ func Test_parseMoney(t *testing.T) {
 		{"real exponent form", "real", "1e+20", 0, moneyTooLarge},
 		{"real bound in", "real", "9999999999999.99", 9999999999999*100 + 99, moneyOK},
 		{"real bound out", "real", "10000000000000.5", 0, moneyTooLarge},
+		{"text storage", "text", "12.34", 0, moneyNotANumber},
+		{"text empty", "text", "", 0, moneyNotANumber},
+		{"text whitespace", "text", "   ", 0, moneyNotANumber},
+		{"blob storage", "blob", "\xde\xad\xbe\xef", 0, moneyNotANumber},
 	}
 
 	for _, c := range cases {

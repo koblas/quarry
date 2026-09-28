@@ -43,6 +43,18 @@ func reasonSplitTooLarge(date, account, amount string) string {
 	return fmt.Sprintf("a split of a transaction on %s in \"%s\" has an amount of %s, which is too large for quarry's amounts", date, account, amount)
 }
 
+func reasonTransactionNotANumber(date, account string) string {
+	return fmt.Sprintf("a transaction on %s in \"%s\" has an amount that is not a number", date, account)
+}
+
+func reasonTransactionNotANumberNoDate(account string, sourceID int64) string {
+	return fmt.Sprintf("a transaction in \"%s\" (source id %d) has an amount that is not a number", account, sourceID)
+}
+
+func reasonSplitNotANumber(date, account string) string {
+	return fmt.Sprintf("a split of a transaction on %s in \"%s\" has an amount that is not a number", date, account)
+}
+
 func reasonTransactionStatus(date, account string, status int64) string {
 	return fmt.Sprintf("a transaction on %s in \"%s\" has reconcile status %d, which quarry does not map yet", date, account, status)
 }

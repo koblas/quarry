@@ -13,23 +13,21 @@ const (
 	moneyOK moneyFault = iota
 	moneyPrecision
 	moneyTooLarge
+	moneyNotANumber
 )
 
-// dollarBound is the largest magnitude (exclusive) an integer-stored money
-// column may hold in whole dollars: cents = dollars*100 must stay inside
-// DECIMAL(18,2)'s 18-digit unscaled range.
+// dollarBound is the DECIMAL(18,2)-safe bound (exclusive) on whole dollars: cents = dollars*100 must fit 18 unscaled digits.
 const dollarBound = 10_000_000_000_000_000 // 1e16
 
-// realIntBound is the largest magnitude (exclusive) a real-stored money
-// column's integer part may hold: SQLite prints a REAL to 15 significant
-// digits, so cents above this are not trustworthy.
+// realIntBound is the bound (exclusive) on a REAL's integer part: SQLite prints a REAL to 15 significant digits.
 const realIntBound = 10_000_000_000_000 // 1e13
 
 // parseMoney reads typ (SQLite's typeof()) and text (CAST(col AS TEXT))
 // for one non-NULL money column and returns its value in cents, parsed
 // exactly from the digit string — never through float arithmetic. It
-// reports moneyPrecision for more than 2 decimal places and moneyTooLarge
-// for a value outside DECIMAL(18,2)'s trustworthy range.
+// reports moneyPrecision for more than 2 decimal places, moneyTooLarge for
+// a value outside DECIMAL(18,2)'s trustworthy range, and moneyNotANumber
+// for a column stored as text or blob (typ is anything but integer/real).
 func parseMoney(typ, text string) (cents int64, fault moneyFault) {
 	switch typ {
 	case "integer":
@@ -37,9 +35,7 @@ func parseMoney(typ, text string) (cents int64, fault moneyFault) {
 	case "real":
 		return parseRealMoney(text)
 	default:
-		// unreachable: a money column is only ever NULL, integer or real
-		// stored; callers only reach parseMoney for a non-NULL one.
-		return 0, moneyTooLarge
+		return 0, moneyNotANumber
 	}
 }
 

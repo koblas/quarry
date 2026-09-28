@@ -16,12 +16,16 @@ ORDER BY e.ZPARENT, e.Z_PK
 `
 
 // mapSplits reads every non-deleted ZCASHFLOWTRANSACTIONENTRY row. An
-// entry with no transaction (S4 reason 10) is added to off and excluded;
-// one whose amount has too much precision (reason 4) or is too large
-// (reason 6) likewise. An entry whose transaction is not in txns — a
-// Smart/Investment transaction, or one itself excluded — is silently
-// skipped, never refused.
-func mapSplits(ctx context.Context, src Source, txns map[int64]txnRef, off *offenders) ([]store.Split, map[int64]string, error) {
+// entry whose parent reference points to no transaction row at all (S4
+// reason 10), whose amount is missing (reason 10), stored as text or blob
+// (reason 11), has too much precision (reason 4) or is too large (reason
+// 6), is added to off and excluded. An entry whose parent exists but was
+// itself excluded (deleted, Smart/Investment, or its own offender) is
+// silently skipped. A category reference to a deleted or missing category
+// stores NULL.
+func mapSplits(
+	ctx context.Context, src Source, txns map[int64]txnRef, existingTransactions, existingCategories map[int64]bool, off *offenders,
+) ([]store.Split, map[int64]string, error) {
 	var rows []store.Split
 	ids := make(map[int64]string)
 
@@ -40,9 +44,13 @@ func mapSplits(ctx context.Context, src Source, txns map[int64]txnRef, off *offe
 			off.add(offender{class: 10, reason: reasonSplitNoTransaction(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
 			return nil
 		}
+		if !existingTransactions[parent.Int64] {
+			off.add(offender{class: 10, reason: reasonSplitNoTransaction(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
+			return nil
+		}
 		txn, ok := txns[parent.Int64]
 		if !ok {
-			return nil
+			return nil // parent was deleted, Smart/Investment, or itself excluded (P1-5d)
 		}
 		dateStr := txn.Date.Format(dateLayout)
 
@@ -52,6 +60,9 @@ func mapSplits(ctx context.Context, src Source, txns map[int64]txnRef, off *offe
 		}
 		cents, fault := parseMoney(amtType, amtText.String)
 		switch fault {
+		case moneyNotANumber:
+			off.add(offender{class: 11, reason: reasonSplitNotANumber(dateStr, txn.AccountName), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
+			return nil
 		case moneyPrecision:
 			off.add(offender{class: 4, reason: reasonSplitPrecision(dateStr, txn.AccountName, amtText.String), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
 			return nil
@@ -62,7 +73,7 @@ func mapSplits(ctx context.Context, src Source, txns map[int64]txnRef, off *offe
 
 		id := fmt.Sprintf("split-%d", pk)
 		split := store.Split{ID: id, SourceID: pk, TransactionID: txn.ID, Amount: cents}
-		if category.Valid {
+		if category.Valid && existingCategories[category.Int64] {
 			cid := fmt.Sprintf("cat-%d", category.Int64)
 			split.CategoryID = &cid
 		}
@@ -83,8 +94,9 @@ func mapSplits(ctx context.Context, src Source, txns map[int64]txnRef, off *offe
 const splitTagsQuery = `SELECT Z_15CASHFLOWTRANSACTIONENTRIES, Z_76USERTAGS FROM Z_15USERTAGS`
 
 // mapSplitTags reads Z_15USERTAGS, keeping only links whose split is in
-// splitIDs (an entry whose transaction was skipped has no split to link).
-func mapSplitTags(ctx context.Context, src Source, splitIDs map[int64]string) ([]store.SplitTag, error) {
+// splitIDs (an entry whose transaction was skipped has no split to link)
+// and whose tag exists (non-deleted).
+func mapSplitTags(ctx context.Context, src Source, splitIDs map[int64]string, existingTags map[int64]bool) ([]store.SplitTag, error) {
 	var rows []store.SplitTag
 	err := src.QueryRows(ctx, splitTagsQuery, nil, func(scan func(dest ...any) error) error {
 		var entryPK, tagPK int64
@@ -92,7 +104,7 @@ func mapSplitTags(ctx context.Context, src Source, splitIDs map[int64]string) ([
 			return err
 		}
 		splitID, ok := splitIDs[entryPK]
-		if !ok {
+		if !ok || !existingTags[tagPK] {
 			return nil
 		}
 		rows = append(rows, store.SplitTag{SplitID: splitID, TagID: fmt.Sprintf("tag-%d", tagPK)})

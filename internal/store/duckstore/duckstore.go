@@ -14,12 +14,10 @@ import (
 // storeFileName is quarry's store filename inside a Store's directory.
 const storeFileName = "quarry.duckdb"
 
-// partialNameLayout matches the UTC build-start timestamp in a partial
-// build file's name, e.g. .quarry-20260927T143005Z.duckdb.partial.
+// partialNameLayout formats a partial build file's UTC timestamp, e.g. .quarry-20260927T143005Z.duckdb.partial.
 const partialNameLayout = "20060102T150405Z"
 
-// moneyWidth and moneyScale are quarry's DECIMAL(18,2) money columns
-// (schemaDDL); duckdb.Decimal enforces the width itself.
+// moneyWidth and moneyScale match schemaDDL's DECIMAL(18,2) money columns.
 const moneyWidth, moneyScale = 18, 2
 
 // Store builds quarry's DuckDB file inside one directory.

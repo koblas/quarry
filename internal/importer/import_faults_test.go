@@ -81,8 +81,7 @@ func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
 }
 
 // scanFaultingSource lets a matched query's real rows through but fails
-// every scan() call on them, exercising the row-callback's own error path
-// rather than QueryRows' own.
+// every scan() call on them.
 type scanFaultingSource struct {
 	real  importer.Source
 	match string
