@@ -54,6 +54,8 @@ func resolveEntities(ctx context.Context, src Source) (map[string]int64, error) 
 func joinOr(names []string) string {
 	switch len(names) {
 	case 0:
+		// unreachable: resolveEntities only calls joinOr inside its own
+		// len(missing) > 0 check.
 		return ""
 	case 1:
 		return names[0]

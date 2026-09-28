@@ -2,6 +2,7 @@ package duckstore_test
 
 import (
 	"context"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -121,6 +122,56 @@ func duplicatePKRows() store.Rows {
 	rows := minimalRows()
 	rows.Accounts = append(rows.Accounts, rows.Accounts[0])
 	return rows
+}
+
+// Every table's AppendRows failure must propagate, not just the first
+// table build tries: one row per table, each corrupted by duplicating its
+// only row while every earlier table stays valid.
+func Test_replace_fails_when_any_tables_rows_fail_to_append(t *testing.T) {
+	cases := []struct {
+		name    string
+		corrupt func(store.Rows) store.Rows
+	}{
+		{"accounts", func(r store.Rows) store.Rows { r.Accounts = append(r.Accounts, r.Accounts[0]); return r }},
+		{"categories", func(r store.Rows) store.Rows { r.Categories = append(r.Categories, r.Categories[0]); return r }},
+		{"payees", func(r store.Rows) store.Rows { r.Payees = append(r.Payees, r.Payees[0]); return r }},
+		{"tags", func(r store.Rows) store.Rows { r.Tags = append(r.Tags, r.Tags[0]); return r }},
+		{"transactions", func(r store.Rows) store.Rows { r.Transactions = append(r.Transactions, r.Transactions[0]); return r }},
+		{"splits", func(r store.Rows) store.Rows { r.Splits = append(r.Splits, r.Splits[0]); return r }},
+		{"split_tags", func(r store.Rows) store.Rows { r.SplitTags = append(r.SplitTags, r.SplitTags[0]); return r }},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			st := duckstore.New(t.TempDir())
+
+			_, err := st.Replace(t.Context(), c.corrupt(minimalRows()))
+
+			require.Error(t, err)
+		})
+	}
+}
+
+func Test_replace_fails_when_a_transactions_amount_is_out_of_range(t *testing.T) {
+	dir := t.TempDir()
+	rows := minimalRows()
+	rows.Transactions[0].Amount = math.MaxInt64
+	st := duckstore.New(dir)
+
+	_, err := st.Replace(t.Context(), rows)
+
+	require.Error(t, err)
+}
+
+func Test_replace_fails_when_a_splits_amount_is_out_of_range(t *testing.T) {
+	dir := t.TempDir()
+	rows := minimalRows()
+	rows.Splits[0].Amount = math.MaxInt64
+	st := duckstore.New(dir)
+
+	_, err := st.Replace(t.Context(), rows)
+
+	require.Error(t, err)
 }
 
 func Test_replace_removes_the_partial_when_the_build_fails(t *testing.T) {

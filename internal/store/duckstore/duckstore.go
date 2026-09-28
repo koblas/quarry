@@ -54,6 +54,11 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
 	}
 
 	if err := db.CheckpointClose(ctx); err != nil {
+		// unreachable: CheckpointClose's own close/no-WAL failure paths are
+		// unreachable in platform/duckdb already; its remaining fault (ctx
+		// cancelled during CHECKPOINT) needs ctx cancelled between build and
+		// this call, which share one ctx parameter with no race-free hook to
+		// cancel only here.
 		_ = db.Close()
 		removePartial(partialPath)
 		return "", fmt.Errorf("build store: %w", err)
