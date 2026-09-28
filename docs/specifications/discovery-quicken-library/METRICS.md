@@ -3,6 +3,7 @@
 ## Scenarios
 | Scenario | Cadence | Checkpoint findings (B/M/m/n) | Checkpoint fix pass |
 | --- | --- | --- | --- |
+| SCENARIO-01 (+02..05 folded) | code-first | 0/0/0/0 | no |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Verdict |
