@@ -3,6 +3,7 @@ module github.com/koblas/quarry
 go 1.27.1
 
 require (
+	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.12.1
