@@ -14,9 +14,8 @@ import (
 
 func strPtr(s string) *string { return &s }
 
-// Proves Import maps every table from a v9 snapshot: an account with an
-// institution, a two-way split transaction, a category, a payee and a tag
-// linked to one split, with money in cents and dates in UTC.
+// Covers every table in one pass: an account with an institution, a
+// two-way split transaction, a category, a payee and a tag on one split.
 func Test_import_builds_every_table_from_a_v9_snapshot(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	bankPK := b.Institution(v9fixture.InstitutionRow{Name: "Big Bank"})
@@ -81,9 +80,8 @@ func Test_import_builds_every_table_from_a_v9_snapshot(t *testing.T) {
 	assert.Equal(t, []store.SplitTag{{SplitID: split1ID, TagID: tagID}}, fake.Rows.SplitTags)
 }
 
-// Delivers SCENARIO-04, folded: rebuilding from the same snapshot must not
-// derive IDs from anything but each row's own Z_PK, or a second build would
-// mint different IDs for identical rows.
+// Ids must derive only from each row's own Z_PK, never from anything a
+// second build could compute differently for the same row.
 func Test_import_twice_from_the_same_snapshot_keeps_every_id(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -111,9 +109,8 @@ func Test_import_twice_from_the_same_snapshot_keeps_every_id(t *testing.T) {
 	assert.Equal(t, wantTxnID, fake2.Rows.Transactions[0].ID)
 }
 
-// Delivers SCENARIO-05, folded: each category keeps its own parent_id,
-// full_path, kind and hidden flag, across income, expense and system kinds
-// and a nested parent/child pair.
+// Each category keeps its own parent_id, full_path, kind and hidden flag,
+// across income, expense and system kinds and a nested parent/child pair.
 func Test_import_keeps_each_categorys_parent_path_kind_and_hidden(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	incomePK := b.Category(v9fixture.TagRow{Name: "Salary", Type: v9fixture.Int64Ptr(2)})

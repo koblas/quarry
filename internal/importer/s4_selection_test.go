@@ -9,8 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Three accounts with an unmapped type report the earliest-dated offender
-// first (source id tiebreak not needed here) with "(and 2 more)" counting
+// The alphabetically-first offender is reported; "(and 2 more)" counts
 // only the other two of its own class.
 func Test_import_reports_the_first_offender_and_how_many_more(t *testing.T) {
 	b := v9fixture.NewBuilder()
@@ -40,9 +39,8 @@ func Test_import_reports_the_earliest_class_when_several_fail(t *testing.T) {
 		importReason(t, err))
 }
 
-// Two account offenders (undated) and one transaction offender (dated) in
-// the same S4 class (10, missing required field) must report the account
-// first: undated offenders sort before dated ones.
+// Within one class, an undated offender (account) must sort before a
+// dated one (transaction).
 func Test_import_reports_an_undated_offender_before_a_dated_one_in_the_same_class(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Type: "CHECKING", Currency: "CAD", Active: true})

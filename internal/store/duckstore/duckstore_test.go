@@ -43,9 +43,8 @@ func minimalRows() store.Rows {
 	}
 }
 
-// Proves every table, every column and negative money round-trip through
-// the built file: reading back via a fresh read-only connection is the
-// only proof the bytes on disk, not just the in-memory build, are correct.
+// Reads back via a fresh read-only connection: the only proof of the
+// bytes on disk, not just the in-memory build.
 func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
 	dir := t.TempDir()
 	st := duckstore.New(dir)
@@ -69,10 +68,8 @@ func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
 	assertScalar(t, db, "SELECT tag_id FROM split_tags WHERE split_id = 'split-1'", "tag-1")
 }
 
-// A negative amount must round-trip through DECIMAL(18,2) with its sign
-// intact: split from the positive-amount coverage above by one assertion
-// shape (both prove exact-cents round trip, but a sign-drop bug would only
-// show here).
+// A sign-drop bug would only show here, not in the positive-amount
+// coverage above.
 func Test_replace_keeps_a_negative_amounts_sign(t *testing.T) {
 	dir := t.TempDir()
 	rows := minimalRows()
@@ -124,9 +121,8 @@ func duplicatePKRows() store.Rows {
 	return rows
 }
 
-// Every table's AppendRows failure must propagate, not just the first
-// table build tries: one row per table, each corrupted by duplicating its
-// only row while every earlier table stays valid.
+// One row per table, each corrupted by duplicating its only row while
+// every earlier table stays valid.
 func Test_replace_fails_when_any_tables_rows_fail_to_append(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -222,13 +218,26 @@ func Test_replace_removes_the_partial_when_the_rename_fails(t *testing.T) {
 
 func Test_replace_fails_in_a_read_only_store_directory(t *testing.T) {
 	dir := t.TempDir()
+	st := duckstore.New(dir)
+	path, err := st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	before, err := os.ReadFile(path)
+	require.NoError(t, err)
+
 	require.NoError(t, os.Chmod(dir, 0o500))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
-	st := duckstore.New(dir)
+	rows := minimalRows()
+	rows.Transactions[0].Amount = 999
 
-	_, err := st.Replace(t.Context(), minimalRows())
+	_, err = st.Replace(t.Context(), rows)
 
 	require.Error(t, err)
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"quarry.duckdb"}, direntNames(entries))
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, before, after)
 }
 
 func Test_replace_fails_when_the_context_is_already_cancelled(t *testing.T) {

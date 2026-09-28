@@ -3,14 +3,16 @@ package importer
 import "fmt"
 
 // The reason* functions render an S4 refusal's <reason> text, ruled
-// verbatim in specification.md's Surface & Copy section.
+// verbatim in specification.md's Surface & Copy section. Subjects are
+// wrapped in literal double quotes ("%s") rather than Go's %q verb, which
+// escapes a quote or backslash inside the name — the ruled copy never does.
 
 func reasonAccountCurrency(name, currency string) string {
-	return fmt.Sprintf("account %q uses currency %s; quarry supports CAD and USD accounts", name, currency)
+	return fmt.Sprintf("account \"%s\" uses currency %s; quarry supports CAD and USD accounts", name, currency)
 }
 
 func reasonAccountType(name, typ string) string {
-	return fmt.Sprintf("account %q has type %s, which quarry does not map yet", name, typ)
+	return fmt.Sprintf("account \"%s\" has type %s, which quarry does not map yet", name, typ)
 }
 
 func reasonAccountNoName(sourceID int64) string {
@@ -18,35 +20,35 @@ func reasonAccountNoName(sourceID int64) string {
 }
 
 func reasonAccountNoType(name string) string {
-	return fmt.Sprintf("account %q has no type", name)
+	return fmt.Sprintf("account \"%s\" has no type", name)
 }
 
 func reasonAccountNoCurrency(name string) string {
-	return fmt.Sprintf("account %q has no currency", name)
+	return fmt.Sprintf("account \"%s\" has no currency", name)
 }
 
 func reasonTransactionPrecision(date, account, amount string) string {
-	return fmt.Sprintf("a transaction on %s in %q has an amount of %s, which has more than 2 decimal places", date, account, amount)
+	return fmt.Sprintf("a transaction on %s in \"%s\" has an amount of %s, which has more than 2 decimal places", date, account, amount)
 }
 
 func reasonTransactionTooLarge(date, account, amount string) string {
-	return fmt.Sprintf("a transaction on %s in %q has an amount of %s, which is too large for quarry's amounts", date, account, amount)
+	return fmt.Sprintf("a transaction on %s in \"%s\" has an amount of %s, which is too large for quarry's amounts", date, account, amount)
 }
 
 func reasonSplitPrecision(date, account, amount string) string {
-	return fmt.Sprintf("a split of a transaction on %s in %q has an amount of %s, which has more than 2 decimal places", date, account, amount)
+	return fmt.Sprintf("a split of a transaction on %s in \"%s\" has an amount of %s, which has more than 2 decimal places", date, account, amount)
 }
 
 func reasonSplitTooLarge(date, account, amount string) string {
-	return fmt.Sprintf("a split of a transaction on %s in %q has an amount of %s, which is too large for quarry's amounts", date, account, amount)
+	return fmt.Sprintf("a split of a transaction on %s in \"%s\" has an amount of %s, which is too large for quarry's amounts", date, account, amount)
 }
 
 func reasonTransactionStatus(date, account string, status int64) string {
-	return fmt.Sprintf("a transaction on %s in %q has reconcile status %d, which quarry does not map yet", date, account, status)
+	return fmt.Sprintf("a transaction on %s in \"%s\" has reconcile status %d, which quarry does not map yet", date, account, status)
 }
 
 func reasonCategoryType(fullPath string, kind int64) string {
-	return fmt.Sprintf("category %q has type %d, which quarry does not map yet", fullPath, kind)
+	return fmt.Sprintf("category \"%s\" has type %d, which quarry does not map yet", fullPath, kind)
 }
 
 func reasonTransactionNoAccount(sourceID int64) string {
@@ -54,15 +56,15 @@ func reasonTransactionNoAccount(sourceID int64) string {
 }
 
 func reasonTransactionNoAmount(date, account string) string {
-	return fmt.Sprintf("a transaction on %s in %q has no amount", date, account)
+	return fmt.Sprintf("a transaction on %s in \"%s\" has no amount", date, account)
 }
 
 func reasonTransactionNoDate(account string, sourceID int64) string {
-	return fmt.Sprintf("a transaction in %q (source id %d) has no date", account, sourceID)
+	return fmt.Sprintf("a transaction in \"%s\" (source id %d) has no date", account, sourceID)
 }
 
 func reasonSplitNoAmount(date, account string) string {
-	return fmt.Sprintf("a split of a transaction on %s in %q has no amount", date, account)
+	return fmt.Sprintf("a split of a transaction on %s in \"%s\" has no amount", date, account)
 }
 
 func reasonSplitNoTransaction(sourceID int64) string {
@@ -74,5 +76,5 @@ func reasonCategoryNoName(sourceID int64) string {
 }
 
 func reasonCategoryNoType(fullPath string) string {
-	return fmt.Sprintf("category %q has no type", fullPath)
+	return fmt.Sprintf("category \"%s\" has no type", fullPath)
 }

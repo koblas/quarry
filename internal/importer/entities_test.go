@@ -11,9 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// WithEntity overrides all three required entities away from their default
-// numbers; Import must still find CashFlowTransaction by name, not by its
-// usual Z_ENT, proving entity numbers are resolved from Z_PRIMARYKEY.
+// WithEntity overrides all three away from their default numbers; Import
+// must still find each by name, not its usual Z_ENT.
 func Test_import_resolves_entities_by_name_from_z_primarykey(t *testing.T) {
 	b := v9fixture.NewBuilder().
 		WithEntity("CashFlowTransaction", 9001).

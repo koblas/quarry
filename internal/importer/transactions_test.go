@@ -87,9 +87,8 @@ func Test_import_refuses_a_transaction_with_no_date(t *testing.T) {
 	assert.Equal(t, `a transaction in "Visa Infinite" (source id `+itoa(txnPK)+`) has no date`, importReason(t, err))
 }
 
-// A deleted CashFlowTransaction and an InvestmentTransaction, both with no
-// account and no amount, must never be reported: they are excluded by the
-// SQL row filter itself, before any required-field check runs.
+// Both rows are excluded by the SQL row filter itself, before any
+// required-field check runs.
 func Test_import_does_not_refuse_a_deleted_or_investment_transaction_missing_fields(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -175,9 +174,8 @@ func Test_import_refuses_a_split_with_no_transaction(t *testing.T) {
 	assert.Equal(t, `a split (source id `+itoa(entryPK)+`) has no transaction`, importReason(t, err))
 }
 
-// A transaction added after two others, but dated earliest, must sort
-// first in Rows.Transactions while every existing transaction keeps its
-// own id: ids come from each row's own Z_PK, never from output position.
+// A later-added but earlier-dated transaction sorts first while every
+// existing transaction keeps its own id.
 func Test_import_keeps_every_other_id_when_the_snapshot_gains_a_row(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})

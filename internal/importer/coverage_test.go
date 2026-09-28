@@ -66,9 +66,8 @@ func Test_import_sets_split_memo_when_present(t *testing.T) {
 	assert.Equal(t, "split memo", *fake.Rows.Splits[0].Memo)
 }
 
-// A transaction whose account was itself excluded (an S4 offender) must be
-// silently skipped, not separately refused: only the account's own reason
-// is reported.
+// A transaction whose account was itself excluded is not double-reported:
+// only the account's own reason is reported.
 func Test_import_skips_a_transaction_whose_account_was_itself_excluded(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	badAcctPK := b.Account(v9fixture.AccountRow{Name: "Euro Savings", Type: "CHECKING", Currency: "EUR", Active: true})
