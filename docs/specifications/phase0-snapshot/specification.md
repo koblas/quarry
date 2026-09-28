@@ -99,7 +99,7 @@ Implemented verbatim. Error vocabulary for the whole binary: `quarry: <what fail
 | Directories | `~/Library/Application Support/quarry/` and `…/quarry/snapshots/`, created `0700` |
 | Snapshot | `snapshots/20260927T143005Z.sqlite` — UTC time the sync started, ISO 8601 basic, no colons, `0600`. Never opened for writing after rename. |
 | Same-second collision | Exclusive create; on collision `…Z_2.sqlite`, `…Z_3.sqlite`. `.sqlite`/`.json` names reserved as a pair (same suffix). |
-| Partial | `snapshots/.20260927T143005Z.sqlite.partial` (and `.json.partial`). Removed on any failure. Leftovers matching quarry's own `.partial` pattern removed at start of next sync without comment. |
+| Partial | `snapshots/.20260927T143005Z.sqlite.partial` (and `.json.partial`). Removed on any failure. Leftovers matching quarry's own .partial pattern and older than 1 hour are removed at the start of a later sync without comment; younger ones are left for a sync that may still be running. |
 | Manifest | `snapshots/20260927T143005Z.json`, `0600`, byte-for-byte the `--json` document. |
 | Hash | SHA-256 of the snapshot file's bytes. |
 
@@ -234,13 +234,18 @@ All to stderr as one line prefixed `quarry: `. stdout empty in both modes; nothi
 | R8b | `data` is readable SQLite with header bytes 18–19 == 2 (WAL) and `<bundle>/data-wal` does not exist. Checked by reading header bytes before any SQLite open; after R6/R7, before R8/R9. Nothing created in the bundle or snapshots dir. (Added at final gate.) | `quarry: ~/Documents/Home.quicken is not open in Quicken (its database has no write-ahead log); open it in Quicken, then run quarry sync again` | 1 |
 | I1 | SIGINT/SIGTERM before commit. Context checked once immediately before the final renames; once past it, the renames complete and the run reports its normal outcome. All `.partial` files removed. (Added at final gate.) | `quarry: sync interrupted; nothing was kept; run quarry sync again` | 1 |
 | R9 | SQLITE_BUSY/LOCKED persists through busy timeout (named constant) | `quarry: Quicken is busy writing ~/Documents/Home.quicken; run quarry sync again in a moment` | 1 |
-| R10 | `integrity_check` not `ok` | `quarry: the snapshot of ~/Documents/Home.quicken failed SQLite's integrity check (<first result line>); nothing was kept; quit and reopen the file in Quicken, then run quarry sync again` | 1 |
+| R10 | `integrity_check` not `ok` | `quarry: the snapshot of ~/Documents/Home.quicken failed SQLite's integrity check (<the first problem SQLite reports, without its "*** in database main ***" header line>); nothing was kept; quit and reopen the file in Quicken, then run quarry sync again` | 1 |
 | R11 | No `ZACCOUNT` table (incl. 0-byte `data`) | `quarry: ~/Documents/Home.quicken is not a Quicken Classic for Mac database (no ZACCOUNT table); pass the right file with --quicken <path>` | 1 |
 | R12 | `ZACCOUNT` has 0 rows | `quarry: ~/Documents/Home.quicken has no accounts; nothing was kept; check you have the right file open, or pass it with --quicken <path>` | 1 |
-| R13 | Cannot create/write app-support or snapshots dir | `quarry: cannot write to ~/Library/Application Support/quarry/snapshots: permission denied; make the directory writable by your user` (OS reason verbatim) | 1 |
-| R14 | Disk full / other write error during backup or manifest | `quarry: cannot write snapshot to ~/Library/Application Support/quarry/snapshots: no space left on device; free disk space, then run quarry sync again` | 1 |
+| R13 | Cannot create or write the app-support or snapshots dir, at Prepare or on any later write, when the cause is a permission error | `quarry: cannot write to ~/Library/Application Support/quarry/snapshots: permission denied; make the directory writable by your user` (OS reason verbatim) | 1 |
+| R14 | Write fails with ENOSPC or EDQUOT during backup or manifest | `quarry: cannot write snapshot to ~/Library/Application Support/quarry/snapshots: no space left on device; free disk space, then run quarry sync again` | 1 |
+| R14b | Any other post-Prepare write failure (not permission, not ENOSPC/EDQUOT). Added at final product-vision pass. | `quarry: cannot write snapshot to ~/Library/Application Support/quarry/snapshots: <OS reason>; run quarry sync again` | 1 |
+| R14c | Unclassified Backup failure (source-side read fault; not R8/R9/R13/R14). Added at final product-vision pass. | `quarry: cannot copy ~/Documents/Home.quicken: <OS reason>; run quarry sync again` | 1 |
+| R15 | Snapshot content check fails for an unclassified reason (not R10/R11/R12), incl. the encode-manifest wrap. Added at final product-vision pass. | `quarry: cannot read the snapshot of ~/Documents/Home.quicken: <OS/driver reason>; nothing was kept; run quarry sync again` | 1 |
+| O1 | stdout write fails after snapshot and manifest are committed (EPIPE keeps Go's default SIGPIPE death). Added at final product-vision pass. | `quarry: cannot write the result to stdout: <OS reason>; the snapshot is kept at ~/Library/Application Support/quarry/snapshots/<name>.sqlite and its .json manifest holds the full result` | 1 |
+| H1 | Home directory cannot be resolved; resolved (and reference loaded) inside sync only — `--help` and usage errors never depend on it. Added at final product-vision pass. | `quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry sync again` | 1 |
 | U1 | Positional argument | `quarry: sync takes no arguments; pass the file with --quicken <path>` | 2 |
-| U2 | Unknown flag, `--quicken` without value, unknown command | cobra's message with `quarry: ` prefix, plus `Run 'quarry sync --help' for usage.` No usage dump. | 2 |
+| U2 | Unknown flag, `--quicken` without value or with an empty/all-whitespace value (never falls back to discovery; text `quarry: flag needs an argument: --quicken; Run 'quarry sync --help' for usage.`), unknown command | cobra's message with `quarry: ` prefix, plus `Run 'quarry sync --help' for usage.` No usage dump. | 2 |
 
 ### Singular / plural (ruled at final gate)
 
@@ -274,7 +279,7 @@ M1 is noun-only (`is missing 1 column that the schema reference expects`). `warn
 | stdout | mismatch | block + diff, or full document |
 | Snapshot name | second run same second | `…Z_2.sqlite` / `…Z_2.json`; no dedupe by hash |
 | Snapshot name | concurrent syncs | exclusive create; no lock file |
-| Partial leftovers | earlier crash | removed silently at start |
+| Partial leftovers | earlier crash | older than 1 hour: removed silently at start; younger: left alone |
 | TTY vs pipe | either | same bytes |
 | Quicken open on A, `--quicken` names closed B | | R8 ("encrypted") |
 | First run on real file | likely mismatch | M1 path; fix `reference.sql`, re-run, exit 0 = gate |
