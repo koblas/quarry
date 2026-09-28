@@ -139,12 +139,21 @@ func Test_run_reports_a_schema_mismatch_as_json(t *testing.T) {
 	require.Equal(t, 1, exitCode)
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
-	want, err := os.ReadFile(manifestPath)
+	manifestBytes, err := os.ReadFile(manifestPath)
 	require.NoError(t, err)
-	assert.Equal(t, string(want), stdout.String())
+	var manifest map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(manifestBytes, &manifest))
 
 	var parsed map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &parsed))
+	assert.JSONEq(t, string(manifest["snapshot"]), string(parsed["snapshot"]))
+	assert.JSONEq(t, string(manifest["schema"]), string(parsed["schema"]))
+	assert.JSONEq(t, string(manifest["warnings"]), string(parsed["warnings"]))
+
+	storeValue, present := parsed["store"]
+	require.True(t, present, "the store key must be present even when the import was not attempted")
+	assert.JSONEq(t, "null", string(storeValue))
+
 	var schema map[string]any
 	require.NoError(t, json.Unmarshal(parsed["schema"], &schema))
 	assert.Equal(t, false, schema["verified"])

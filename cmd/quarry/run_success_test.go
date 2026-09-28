@@ -129,11 +129,15 @@ func Test_run_prints_the_manifest_as_json_with_the_json_flag(t *testing.T) {
 	assert.Empty(t, stderr.String())
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
-	want, err := os.ReadFile(manifestPath)
+	manifestBytes, err := os.ReadFile(manifestPath)
 	require.NoError(t, err)
-	assert.Equal(t, string(want), stdout.String())
+	var manifest map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(manifestBytes, &manifest))
 
 	var parsed map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &parsed))
-	assert.ElementsMatch(t, []string{"snapshot", "schema", "warnings"}, slices.Collect(maps.Keys(parsed)))
+	assert.ElementsMatch(t, []string{"snapshot", "schema", "store", "warnings"}, slices.Collect(maps.Keys(parsed)))
+	assert.JSONEq(t, string(manifest["snapshot"]), string(parsed["snapshot"]))
+	assert.JSONEq(t, string(manifest["schema"]), string(parsed["schema"]))
+	assert.JSONEq(t, string(manifest["warnings"]), string(parsed["warnings"]))
 }

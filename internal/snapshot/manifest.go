@@ -6,8 +6,8 @@ import (
 	"fmt"
 )
 
-// Manifest is quarry's on-disk manifest and --json document: the same
-// bytes are written to <snapshot>.json and printed to stdout.
+// Manifest is quarry's on-disk manifest, written next to each snapshot as
+// <snapshot>.json.
 type Manifest struct {
 	Snapshot SnapshotInfo `json:"snapshot"`
 	Schema   SchemaInfo   `json:"schema"`
@@ -57,10 +57,8 @@ type ColumnRef struct {
 	Column string `json:"column"`
 }
 
-// Encode returns m as the exact bytes written to disk and printed with
-// --json: 2-space indented JSON with a trailing newline. It is the only
-// encoder for Manifest, so the file on disk and stdout are always
-// identical.
+// Encode returns m as the exact bytes written to disk: 2-space indented
+// JSON with a trailing newline. It is the only encoder for Manifest.
 func (m Manifest) Encode() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)

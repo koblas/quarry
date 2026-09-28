@@ -77,18 +77,16 @@ if there is exactly one.`,
 			outcome, err := srv.SyncAndImport(cmd.Context(), bundlePath)
 			var mismatch snapshot.MismatchError
 			isMismatch := errors.As(err, &mismatch)
-			// A validation failure (V1) still renders on the human path: only
-			// --json stays interim, returning before anything is written.
 			validationFailed := outcome.Store != nil && !outcome.Store.Built
-			if err != nil && !isMismatch && (!validationFailed || *jsonOut) {
+			if err != nil && !isMismatch && !validationFailed {
 				return &runtimeError{err: err}
 			}
 
 			var output string
 			if *jsonOut {
-				data, encErr := outcome.Manifest.Encode()
+				data, encErr := renderJSON(outcome)
 				if encErr != nil {
-					// unreachable: Manifest.Encode's own error path is unreachable for any value Sync builds; see there.
+					// unreachable: renderJSON's own error path is unreachable for any value SyncAndImport builds; see there.
 					return &runtimeError{err: encErr}
 				}
 				output = string(data)

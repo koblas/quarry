@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-02
-status: open
+status: done
 ---
 
 # SCENARIO-02: --json reports the store result alongside the manifest (absorbs 10, 18)
@@ -19,16 +19,16 @@ Mutation checks: none
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_json_test.go` (new) `Test_run_reports_the_store_result_alongside_the_manifest_as_json` — build the fixture with the v9fixture builder: one reconciled account that matches, one paired transfer, and one-sided legs of all three kinds (numeric link to nothing, a name that matches an account, a name that matches none). Copy the shape from `run_transfers_test.go:185-214`.
+- [x] Step 1: `cmd/quarry/run_json_test.go` (new) `Test_run_reports_the_store_result_alongside_the_manifest_as_json` — build the fixture with the v9fixture builder: one reconciled account that matches, one paired transfer, and one-sided legs of all three kinds (numeric link to nothing, a name that matches an account, a name that matches none). Copy the shape from `run_transfers_test.go:185-214`.
   - Run `sync --quicken … --json` and expect exit 0.
   - `snapshot` and `schema` decode equal to the manifest file's.
   - `warnings` equals the manifest's `warnings` followed by the W2 text (P1-11 "+ import warnings").
   - The `store` object matches a JSON literal via `assert.JSONEq`. That one assertion catches: money as a number instead of a 2-decimal string, a missing key instead of `null`, and leaked `source_id`/`closed`/`active` keys.
   - stderr carries the W2 line.
-- [ ] Step 2: `internal/cli/json.go` (new) `renderJSON(snapshot.Outcome) ([]byte, error)` — signature-only stub, wired at `internal/cli/sync.go:88-94` in place of `outcome.Manifest.Encode()`. Step 1 must fail on its `store` assertion.
+- [x] Step 2: `internal/cli/json.go` (new) `renderJSON(snapshot.Outcome) ([]byte, error)` — signature-only stub, wired at `internal/cli/sync.go:88-94` in place of `outcome.Manifest.Encode()`. Step 1 must fail on its `store` assertion.
 
 ### Build
-- [ ] Step 3: `internal/cli/json.go` — document DTOs and the `jsonMoney(cents)` renderer. Four decisions are already fixed (the full list is in Handoff):
+- [x] Step 3: `internal/cli/json.go` — document DTOs and the `jsonMoney(cents)` renderer. Four decisions are already fixed (the full list is in Handoff):
   - key order is snapshot, schema, store, warnings;
   - `store` is a pointer with **no `omitempty`**;
   - nil lists are encoded as `[]`;
@@ -39,7 +39,7 @@ Mutation checks: none
   Unit tests go in `internal/cli/json_internal_test.go` (new):
   - `Test_jsonMoney` — a table covering 0, -1, -50 (sign with a zero integer part), 120417, and -100000000 (no thousands grouping).
   - `Test_renderJSON_encodes_absent_lists_as_empty_arrays` — nil `NeverReconciled`, `Balances.Mismatched`, `Splits.Mismatched` and `OneSided`, with a populated control arm.
-- [ ] Step 4: `internal/cli/sync.go:80-85` — remove `|| *jsonOut` and the stale interim comment at `:80-81`, so a V1 failure writes the JSON with `"built": false` and then returns the V1 error.
+- [x] Step 4: `internal/cli/sync.go:80-85` — remove `|| *jsonOut` and the stale interim comment at `:80-81`, so a V1 failure writes the JSON with `"built": false` and then returns the V1 error.
   - Tests go in `run_json_test.go`: `Test_run_prints_the_unbuilt_store_as_json_when_validation_fails`. Use one balance mismatch and one split mismatch, plus one one-sided leg.
   - Assert:
     - `built: false`;
@@ -51,15 +51,15 @@ Mutation checks: none
     - the stderr V1 line is exact;
     - exit is 1.
   - Fault test: `Test_run_reports_the_o1b_refusal_when_stdout_fails_during_a_v1_json_write`, using `failingWriter` (`run_success_test.go:28-30`) and asserting the O1b copy.
-- [ ] Step 5: `run_json_test.go` `Test_run_lists_never_reconciled_accounts_in_json_and_succeeds` (fold 10) — one never-reconciled account that is **closed** and one that is **open and inactive**, so that hardcoded booleans cannot pass. `never_reconciled[]` must be `{id,name,currency,closed,active}` in name-then-source-id order. The Balances clause is unchanged, stderr is empty, and exit is 0.
-- [ ] Step 6: `cmd/quarry/run_schema_test.go:131-157` `Test_run_reports_a_schema_mismatch_as_json` (fold 18) — rewrite the test.
+- [x] Step 5: `run_json_test.go` `Test_run_lists_never_reconciled_accounts_in_json_and_succeeds` (fold 10) — one never-reconciled account that is **closed** and one that is **open and inactive**, so that hardcoded booleans cannot pass. `never_reconciled[]` must be `{id,name,currency,closed,active}` in name-then-source-id order. The Balances clause is unchanged, stderr is empty, and exit is 0.
+- [x] Step 6: `cmd/quarry/run_schema_test.go:131-157` `Test_run_reports_a_schema_mismatch_as_json` (fold 18) — rewrite the test.
   - Assert that the `store` key is **present** and its raw value is `null`. `parsed["store"] == nil` would also pass when the key is absent.
   - `snapshot`, `schema` and `warnings` equal the manifest's.
   - The existing schema, stderr and exit-1 assertions stay.
-- [ ] Step 7: `cmd/quarry/run_success_test.go:120-139` `Test_run_prints_the_manifest_as_json_with_the_json_flag` — rewrite in place. With `store` deleted, the decoded stdout equals the decoded manifest file, and the key set is `snapshot, schema, store, warnings`. This closes the STATE.md debt. The test count is unchanged.
+- [x] Step 7: `cmd/quarry/run_success_test.go:120-139` `Test_run_prints_the_manifest_as_json_with_the_json_flag` — rewrite in place. With `store` deleted, the decoded stdout equals the decoded manifest file, and the key set is `snapshot, schema, store, warnings`. This closes the STATE.md debt. The test count is unchanged.
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports. Then correct the doc comments this change makes false:
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports. Then correct the doc comments this change makes false:
   - `internal/snapshot/manifest.go:9-10` (`Manifest` "same bytes … printed to stdout");
   - `internal/snapshot/manifest.go:60-63` (`Encode` "stdout always identical");
   - `internal/cli/doc.go:1-3` ("--json manifest document").
@@ -67,7 +67,7 @@ Mutation checks: none
   Also add doc comments on the new `json.go` symbols (unexported, 1–2 lines each).
 
 ### Verify
-- [ ] Step 9: run full verification per `.claude/rules/agent-briefs.md` → *Verification* (race on `./internal/cli/ ./cmd/quarry/`), then `.claude/scripts/spec-check.py phase1-import-store`. Tick SCENARIO-02, and tick 10 and 18 as "FOLD → 02, delivered by SCENARIO-02", each with its acceptance test. In STATE.md, delete the two debts: **Interim W2** and the `--json` `store` key.
+- [x] Step 9: run full verification per `.claude/rules/agent-briefs.md` → *Verification* (race on `./internal/cli/ ./cmd/quarry/`), then `.claude/scripts/spec-check.py phase1-import-store`. Tick SCENARIO-02, and tick 10 and 18 as "FOLD → 02, delivered by SCENARIO-02", each with its acceptance test. In STATE.md, delete the two debts: **Interim W2** and the `--json` `store` key.
 
 ## Handoff
 
