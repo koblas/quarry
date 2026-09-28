@@ -20,7 +20,8 @@ func Test_import_resolves_entities_by_name_from_z_primarykey(t *testing.T) {
 		WithEntity("UserTag", 9003)
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 

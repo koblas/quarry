@@ -90,3 +90,35 @@ func reasonCategoryNoName(sourceID int64) string {
 func reasonCategoryNoType(fullPath string) string {
 	return fmt.Sprintf("category \"%s\" has no type", fullPath)
 }
+
+func reasonStatementPrecision(date, account, amount string) string {
+	return fmt.Sprintf("the %s statement for \"%s\" has a balance of %s, which has more than 2 decimal places", date, account, amount)
+}
+
+func reasonStatementPrecisionNoDate(account string, sourceID int64, amount string) string {
+	return fmt.Sprintf("a statement for \"%s\" (source id %d) has a balance of %s, which has more than 2 decimal places", account, sourceID, amount)
+}
+
+func reasonStatementTooLarge(date, account, amount string) string {
+	return fmt.Sprintf("the %s statement for \"%s\" has a balance of %s, which is too large for quarry's amounts", date, account, amount)
+}
+
+func reasonStatementTooLargeNoDate(account string, sourceID int64, amount string) string {
+	return fmt.Sprintf("a statement for \"%s\" (source id %d) has a balance of %s, which is too large for quarry's amounts", account, sourceID, amount)
+}
+
+func reasonStatementNotANumber(date, account string) string {
+	return fmt.Sprintf("the %s statement for \"%s\" has a balance that is not a number", date, account)
+}
+
+func reasonStatementNotANumberNoDate(account string, sourceID int64) string {
+	return fmt.Sprintf("a statement for \"%s\" (source id %d) has a balance that is not a number", account, sourceID)
+}
+
+func reasonStatementNoBalance(date, account string) string {
+	return fmt.Sprintf("the %s statement for \"%s\" has no balance", date, account)
+}
+
+func reasonStatementNoDate(account string, sourceID int64) string {
+	return fmt.Sprintf("a statement for \"%s\" (source id %d) has no date", account, sourceID)
+}

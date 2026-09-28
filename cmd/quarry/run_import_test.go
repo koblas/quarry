@@ -87,7 +87,7 @@ func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
 
 	want := fmt.Sprintf(
-		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 2 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
+		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 2 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
 		"Snapshot", abbreviated(t, snapshotPath, home),
 		"Manifest", abbreviated(t, manifestPath, home),
 		"Source", abbreviated(t, bundle.Dir, home),
@@ -96,6 +96,8 @@ func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 		"Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns)",
 		"Store", abbreviated(t, storePath, home),
 		"Rows", "2 transactions, 4 splits, 0 transfers, 2 payees, 2 categories, 2 tags",
+		"Balances", "no accounts to check; 2 never reconciled",
+		"Splits", "all 2 transactions equal the sum of their splits",
 	)
 	require.Equal(t, want, stdout.String())
 

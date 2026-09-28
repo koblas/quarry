@@ -495,8 +495,8 @@ Order is execution order. Folded scenarios are ticked with the delivering scenar
 - [x] SCENARIO-04: re-importing the same snapshot keeps quarry IDs stable — FOLD → 01a, delivered by SCENARIO-01a — `internal/importer/import_test.go` `Test_import_twice_from_the_same_snapshot_keeps_every_id`
 - [x] SCENARIO-05: category hierarchy and kind are preserved — FOLD → 01a, delivered by SCENARIO-01a — `internal/importer/import_test.go` `Test_import_keeps_each_categorys_parent_path_kind_and_hidden`
 - [x] SCENARIO-01d: sync imports the Quicken data into a new store — `cmd/quarry/run_import_test.go` `Test_run_imports_the_quicken_data_into_a_new_store`
-- [ ] SCENARIO-01b: sync checks balances and split sums before swapping the store in (absorbs 06)
-- [ ] SCENARIO-06: closed and inactive accounts are imported and checked — FOLD → 01b
+- [x] SCENARIO-01b: sync checks balances and split sums before swapping the store in (absorbs 06) — `cmd/quarry/run_validation_test.go` `Test_run_checks_balances_and_split_sums_before_swapping_the_store_in`
+- [x] SCENARIO-06: closed and inactive accounts are imported and checked — FOLD → 01b, delivered by SCENARIO-01b — `internal/importer/validation_test.go` `Test_import_checks_closed_and_inactive_accounts_like_any_other`
 - [ ] SCENARIO-09: a balance mismatch leaves the previous store unchanged (absorbs 11)
 - [ ] SCENARIO-11: a transaction whose splits don't sum fails validation — FOLD → 09
 - [ ] SCENARIO-01c: sync pairs transfers between the user's accounts (absorbs 07, 12, 21)

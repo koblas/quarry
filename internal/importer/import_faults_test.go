@@ -52,6 +52,7 @@ func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
 	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
 	entryPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00", CategoryTag: catPK})
 	b.LinkUserTag(entryPK, tagPK)
+	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &posted, EndingBalance: "1.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	errBoom := errors.New("boom")
@@ -61,6 +62,7 @@ func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
 	}{
 		{"Z_PRIMARYKEY", "Z_PRIMARYKEY"},
 		{"ZACCOUNT", "ZTYPENAME"},
+		{"ZRECONCILERECORD", "ZRECONCILERECORD"},
 		{"ZTAG categories", "ZPARENTCATEGORY"},
 		{"ZTAG tags", "COALESCE(ZNAME, '')\nFROM ZTAG"},
 		{"ZUSERPAYEE", "ZUSERPAYEE"},
@@ -122,6 +124,7 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
 	entryPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00", CategoryTag: catPK})
 	b.LinkUserTag(entryPK, tagPK)
+	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &posted, EndingBalance: "1.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	errBoom := errors.New("boom")
@@ -131,6 +134,7 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 	}{
 		{"Z_PRIMARYKEY", "Z_PRIMARYKEY"},
 		{"ZACCOUNT", "ZTYPENAME"},
+		{"ZRECONCILERECORD", "ZRECONCILERECORD"},
 		{"ZTAG categories", "ZPARENTCATEGORY"},
 		{"ZTAG tags", "COALESCE(ZNAME, '')\nFROM ZTAG"},
 		{"ZUSERPAYEE", "ZUSERPAYEE"},

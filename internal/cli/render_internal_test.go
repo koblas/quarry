@@ -222,14 +222,90 @@ func Test_rowsPhrase(t *testing.T) {
 	}
 }
 
-func Test_renderStore_renders_the_store_and_rows_lines(t *testing.T) {
+func Test_renderStore_renders_the_store_rows_balances_and_splits_lines(t *testing.T) {
 	result := store.Result{
 		Path:   "/Users/dave/Library/Application Support/quarry/quarry.duckdb",
 		Counts: store.Counts{Transactions: 1},
+		Validation: store.Validation{
+			Balances: store.BalanceCheck{Checked: 1},
+			Splits:   store.SplitCheck{Checked: 1},
+		},
 	}
 
 	got := renderStore(result, "/Users/dave")
 
 	assert.Equal(t, "Store     ~/Library/Application Support/quarry/quarry.duckdb\n"+
-		"Rows      1 transaction, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags\n", got)
+		"Rows      1 transaction, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags\n"+
+		"Balances  1 account matches Quicken's last reconciled balance\n"+
+		"Splits    the 1 transaction equals the sum of its splits\n", got)
+}
+
+func Test_balancesPhrase(t *testing.T) {
+	cases := []struct {
+		name string
+		bc   store.BalanceCheck
+		want string
+	}{
+		{name: "nothing to check", bc: store.BalanceCheck{}, want: "no accounts to check"},
+		{
+			name: "one account matches",
+			bc:   store.BalanceCheck{Checked: 1},
+			want: "1 account matches Quicken's last reconciled balance",
+		},
+		{
+			name: "many accounts match, thousands-grouped",
+			bc:   store.BalanceCheck{Checked: 1000},
+			want: "1,000 accounts match Quicken's last reconciled balance",
+		},
+		{
+			name: "one never reconciled",
+			bc:   store.BalanceCheck{NeverReconciled: []store.Account{{}}},
+			want: "no accounts to check; 1 never reconciled",
+		},
+		{
+			name: "one investment account",
+			bc:   store.BalanceCheck{InvestmentAccounts: 1},
+			want: "no accounts to check; 1 investment account not checked",
+		},
+		{
+			name: "never reconciled and investment accounts joined",
+			bc:   store.BalanceCheck{NeverReconciled: []store.Account{{}, {}, {}}, InvestmentAccounts: 4},
+			want: "no accounts to check; 3 never reconciled and 4 investment accounts not checked",
+		},
+		{
+			name: "checked, never reconciled and investment accounts",
+			bc: store.BalanceCheck{
+				Checked: 35, NeverReconciled: []store.Account{{}, {}, {}}, InvestmentAccounts: 4,
+			},
+			want: "35 accounts match Quicken's last reconciled balance; 3 never reconciled and 4 investment accounts not checked",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, balancesPhrase(c.bc))
+		})
+	}
+}
+
+func Test_splitsPhrase(t *testing.T) {
+	cases := []struct {
+		name string
+		sc   store.SplitCheck
+		want string
+	}{
+		{name: "nothing to check", sc: store.SplitCheck{}, want: "no transactions to check"},
+		{name: "one transaction", sc: store.SplitCheck{Checked: 1}, want: "the 1 transaction equals the sum of its splits"},
+		{
+			name: "many transactions, thousands-grouped",
+			sc:   store.SplitCheck{Checked: 18204},
+			want: "all 18,204 transactions equal the sum of their splits",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, splitsPhrase(c.sc))
+		})
+	}
 }

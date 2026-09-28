@@ -27,12 +27,14 @@ var accountTypeMap = map[string]string{
 var validCurrencies = map[string]bool{"CAD": true, "USD": true}
 
 // accountRef is what later mapping steps need about an account without
-// re-reading ZACCOUNT: its quarry id, name (for S4 subjects) and currency
-// (a transaction's currency comes from its account).
+// re-reading ZACCOUNT: its quarry id, name (for S4 subjects), currency (a
+// transaction's currency comes from its account) and type (the balance
+// gate's investment-account exclusion).
 type accountRef struct {
 	ID       string
 	Name     string
 	Currency string
+	Type     string
 }
 
 const accountsQuery = `
@@ -99,7 +101,7 @@ func mapAccounts(ctx context.Context, src Source, off *offenders) ([]store.Accou
 			acct.Institution = &inst
 		}
 		rows = append(rows, acct)
-		refs[pk] = accountRef{ID: id, Name: name.String, Currency: currency.String}
+		refs[pk] = accountRef{ID: id, Name: name.String, Currency: currency.String, Type: quarryType}
 		return nil
 	})
 	if err != nil {

@@ -114,7 +114,8 @@ func Test_import_nulls_a_transactions_payee_when_the_payee_is_deleted(t *testing
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	deletedPayeePK := b.Payee(v9fixture.PayeeRow{Name: "Old Shop", Deleted: true})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, Payee: deletedPayeePK})
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, Payee: deletedPayeePK})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
@@ -131,7 +132,8 @@ func Test_import_nulls_a_transactions_payee_when_the_payee_does_not_exist(t *tes
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, Payee: 999})
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, Payee: 999})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 

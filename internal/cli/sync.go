@@ -29,11 +29,17 @@ func newSyncCommand(newServer ServerFactory, jsonOut *bool) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "sync",
-		Short: "Snapshot the open Quicken file and verify its schema",
+		Short: "Snapshot the open Quicken file and rebuild quarry's store from it",
 		Long: `Copy the Quicken file's database with SQLite's backup API into
 ~/Library/Application Support/quarry/snapshots/, check its integrity, and
 compare its tables and columns with quarry's reference for Quicken Classic
 for Mac v9. A JSON manifest is written next to each snapshot.
+
+quarry then rebuilds its store, ~/Library/Application Support/quarry/quarry.duckdb,
+from the snapshot. In every reconciled account, the reconciled transactions
+must add up to the balance of its last reconciled statement in Quicken to the
+cent, and every transaction must equal the sum of its splits; if a check
+fails, the previous store is left unchanged.
 
 Quicken must be running with the file open: it encrypts the database when
 the file is closed. quarry only reads the Quicken file; it never writes to it.

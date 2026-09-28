@@ -45,7 +45,9 @@ func snapshotID(path string) string {
 // configured Importer, skipping the import (Store left nil) on a schema
 // mismatch or any other Sync failure. An import failure never replaces the
 // already-committed snapshot: it comes back as a store refusal wrapping the
-// importer's error, so errors.As still reaches it.
+// importer's error, so errors.As still reaches it. A failed check (V1) sets
+// Store to the unbuilt result, so a later stdout write against it still
+// gets the O1b refusal.
 func (s *Server) SyncAndImport(ctx context.Context, bundlePath string) (Outcome, error) {
 	manifest, err := s.Sync(ctx, bundlePath)
 	if err != nil {
@@ -58,6 +60,9 @@ func (s *Server) SyncAndImport(ctx context.Context, bundlePath string) (Outcome,
 
 	result, err := s.importer.Import(ctx, manifest.Snapshot.Path)
 	if err != nil {
+		if errors.Is(err, store.ErrValidationFailed) {
+			return Outcome{Manifest: manifest, Store: &result}, s.validationFailedRefusal(manifest, result.Validation, err)
+		}
 		return Outcome{Manifest: manifest}, s.storeBuildRefusal(manifest, err)
 	}
 
@@ -72,6 +77,43 @@ func (s *Server) storeBuildRefusal(manifest Manifest, err error) error {
 			homepath.Abbreviate(s.home, filepath.Dir(s.storePath)), causeText(err), snapshotID(manifest.Snapshot.Path)),
 		cause: err,
 	}
+}
+
+// validationFailedRefusal reports V1: a build reached the balance or
+// split-sum gate and one or more checks failed. This is the interim copy
+// until SCENARIO-09 adds the stdout block: it omits "each difference is
+// listed on stdout; " since there is nothing on stdout to point at yet.
+func (s *Server) validationFailedRefusal(manifest Manifest, v store.Validation, cause error) error {
+	var clauses []string
+	if n := len(v.Balances.Mismatched); n > 0 {
+		clauses = append(clauses, balanceMismatchClause(n, v.Balances.Checked))
+	}
+	if n := len(v.Splits.Mismatched); n > 0 {
+		clauses = append(clauses, splitMismatchClause(n))
+	}
+	return storeRefusalError{
+		msg: fmt.Sprintf("validation failed: %s; %s was not changed; "+
+			"fix the account in Quicken and run quarry sync, or run quarry sync --from %s after updating quarry",
+			strings.Join(clauses, " and "), homepath.Abbreviate(s.home, s.storePath), snapshotID(manifest.Snapshot.Path)),
+		cause: cause,
+	}
+}
+
+// balanceMismatchClause renders n mismatched of checked accounts, singular
+// at n == 1.
+func balanceMismatchClause(n, checked int) string {
+	if n == 1 {
+		return fmt.Sprintf("1 of %d accounts does not match Quicken's last reconciled balance", checked)
+	}
+	return fmt.Sprintf("%d of %d accounts do not match Quicken's last reconciled balance", n, checked)
+}
+
+// splitMismatchClause renders n mismatched transactions, singular at n == 1.
+func splitMismatchClause(n int) string {
+	if n == 1 {
+		return "1 transaction does not equal the sum of its splits"
+	}
+	return fmt.Sprintf("%d transactions do not equal the sum of their splits", n)
 }
 
 // StdoutWriteRefusal reports that o's result could not be written to

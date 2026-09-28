@@ -37,7 +37,7 @@ func Test_builder_seeds_every_row_kind_and_reads_back(t *testing.T) {
 	})
 	entryPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "12.34", CategoryTag: categoryPK})
 	b.LinkUserTag(entryPK, tagPK)
-	b.Reconcile(v9fixture.ReconcileRow{Account: accountPK, EndDate: postedDate, EndingBalance: "100.00"})
+	b.Reconcile(v9fixture.ReconcileRow{Account: accountPK, EndDate: &postedDate, EndingBalance: "100.00"})
 
 	bundle := b.WriteBundle(t, t.TempDir())
 

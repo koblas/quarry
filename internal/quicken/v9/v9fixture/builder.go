@@ -75,10 +75,11 @@ type EntryRow struct {
 	Deleted     bool
 }
 
-// ReconcileRow is one ZRECONCILERECORD row.
+// ReconcileRow is one ZRECONCILERECORD row. EndDate writes NULL when nil;
+// EndingBalance writes NULL when "".
 type ReconcileRow struct {
 	Account       int64
-	EndDate       time.Time
+	EndDate       *time.Time
 	EndingBalance string
 	Deleted       bool
 }
@@ -328,7 +329,7 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 	for _, r := range b.reconciles {
 		exec(tb, ctx, db,
 			"INSERT INTO ZRECONCILERECORD (Z_PK, ZACCOUNT, ZENDDATE, ZENDINGBALANCE, ZDELETIONCOUNT) VALUES (?, ?, ?, ?, ?)",
-			r.pk, r.row.Account, CoreDataEpochSeconds(r.row.EndDate), r.row.EndingBalance, deletionCount(r.row.Deleted))
+			r.pk, r.row.Account, nullableTime(r.row.EndDate), nullableString(r.row.EndingBalance), deletionCount(r.row.Deleted))
 	}
 
 	for _, g := range b.tags {

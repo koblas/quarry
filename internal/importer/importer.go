@@ -38,11 +38,13 @@ func NewServer(opts ...Option) *Server {
 	return srv
 }
 
-// Import maps snapshotPath's v9 database into quarry's schema and writes it
-// through the configured Store, returning the store.Result Replace
-// produced. Every check runs before any refusal: it returns an
-// *UnmappableError naming the first-ordered S4 class's first offender when
-// one or more values cannot be mapped to quarry's schema.
+// Import maps snapshotPath's v9 database into quarry's schema, validates
+// the mapped rows, and writes them through the configured Store only once
+// every check passes. It returns an *UnmappableError naming the
+// first-ordered S4 class's first offender when one or more values cannot
+// be mapped to quarry's schema, or store.ErrValidationFailed with
+// Result.Built false, never calling Replace, when the balance or
+// split-sum gate finds a mismatch.
 func (srv *Server) Import(ctx context.Context, snapshotPath string) (store.Result, error) {
 	src, err := srv.open(ctx, snapshotPath)
 	if err != nil {
@@ -58,6 +60,10 @@ func (srv *Server) Import(ctx context.Context, snapshotPath string) (store.Resul
 	off := &offenders{}
 
 	accounts, accountRefs, existingAccounts, err := mapAccounts(ctx, src, off)
+	if err != nil {
+		return store.Result{}, err
+	}
+	statements, err := newestStatements(ctx, src, accountRefs, off)
 	if err != nil {
 		return store.Result{}, err
 	}
@@ -99,16 +105,20 @@ func (srv *Server) Import(ctx context.Context, snapshotPath string) (store.Resul
 		Accounts: accounts, Categories: categories, Payees: payees, Tags: tags,
 		Transactions: transactions, Splits: splits, SplitTags: splitTags,
 	}
+	counts := store.Counts{
+		Accounts: len(accounts), Categories: len(categories), Payees: len(payees), Tags: len(tags),
+		Transactions: len(transactions), Splits: len(splits), SplitTags: len(splitTags),
+	}
+
+	validation := validate(rows, statements)
+	if validation.Failed() {
+		return store.Result{Built: false, Counts: counts, Validation: validation}, store.ErrValidationFailed
+	}
+
 	path, err := srv.store.Replace(ctx, rows)
 	if err != nil {
 		return store.Result{}, fmt.Errorf("replace store: %w", err)
 	}
 
-	return store.Result{
-		Path: path,
-		Counts: store.Counts{
-			Accounts: len(accounts), Categories: len(categories), Payees: len(payees), Tags: len(tags),
-			Transactions: len(transactions), Splits: len(splits), SplitTags: len(splitTags),
-		},
-	}, nil
+	return store.Result{Path: path, Built: true, Counts: counts, Validation: validation}, nil
 }

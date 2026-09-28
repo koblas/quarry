@@ -191,8 +191,11 @@ func Test_import_keeps_every_other_id_when_the_snapshot_gains_a_row(t *testing.T
 	later := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
 	earlier := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 	txn1PK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &later})
+	b.Entry(v9fixture.EntryRow{Parent: txn1PK, Amount: "1.00"})
 	txn2PK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "2.00", PostedDate: &later})
+	b.Entry(v9fixture.EntryRow{Parent: txn2PK, Amount: "2.00"})
 	newPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "3.00", PostedDate: &earlier})
+	b.Entry(v9fixture.EntryRow{Parent: newPK, Amount: "3.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 

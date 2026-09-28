@@ -16,8 +16,10 @@ func Test_import_maps_cleared_and_reconciled_transaction_status(t *testing.T) {
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
 	cleared := int64(1)
 	reconciled := int64(2)
-	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, Status: &cleared})
-	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "2.00", PostedDate: &posted, Status: &reconciled})
+	clearedTxnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, Status: &cleared})
+	b.Entry(v9fixture.EntryRow{Parent: clearedTxnPK, Amount: "1.00"})
+	reconciledTxnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "2.00", PostedDate: &posted, Status: &reconciled})
+	b.Entry(v9fixture.EntryRow{Parent: reconciledTxnPK, Amount: "2.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
@@ -35,7 +37,8 @@ func Test_import_sets_transaction_memo_and_cheque_number_when_present(t *testing
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, Note: "Groceries", CheckNumber: "101"})
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, Note: "Groceries", CheckNumber: "101"})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 

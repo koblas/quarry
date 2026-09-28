@@ -6,17 +6,20 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// fakeStore captures the rows the last Replace call received, standing in
-// for a real Store so importer tests never link DuckDB.
+// fakeStore captures the rows the last Replace call received and counts
+// every call, standing in for a real Store so importer tests never link
+// DuckDB.
 type fakeStore struct {
-	Rows    store.Rows
-	Path    string
-	nextErr error
+	Rows         store.Rows
+	Path         string
+	nextErr      error
+	replaceCalls int
 }
 
 func (f *fakeStore) failNext(err error) { f.nextErr = err }
 
 func (f *fakeStore) Replace(_ context.Context, rows store.Rows) (string, error) {
+	f.replaceCalls++
 	if f.nextErr != nil {
 		return "", f.nextErr
 	}

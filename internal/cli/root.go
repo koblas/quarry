@@ -13,8 +13,8 @@ func newRootCommand(newServer ServerFactory, jsonOut *bool) *cobra.Command {
 		Use:   "quarry",
 		Short: "Snapshot and query Quicken Classic for Mac data locally",
 		Long: `quarry copies the Quicken Classic for Mac file you have open into a local,
-read-only snapshot and checks it against quarry's schema reference. quarry
-never writes to the Quicken file.`,
+read-only snapshot, rebuilds its own store from that snapshot, and checks the
+store against Quicken's balances. quarry never writes to the Quicken file.`,
 		SilenceUsage:       true,
 		SilenceErrors:      true,
 		DisableSuggestions: true,

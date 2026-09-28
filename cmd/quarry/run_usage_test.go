@@ -30,6 +30,26 @@ func Test_run_sync_help_names_both_documents_folders(t *testing.T) {
 		"path to the .quicken file to snapshot (default: the only one in ~/Documents or Quicken's Documents folder)")
 }
 
+func Test_run_prints_the_sync_help(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	var rootStdout, rootStderr, syncStdout, syncStderr bytes.Buffer
+
+	rootExit := run(context.Background(), []string{"--help"}, &rootStdout, &rootStderr)
+	syncExit := run(context.Background(), []string{"sync", "--help"}, &syncStdout, &syncStderr)
+
+	require.Equal(t, 0, rootExit)
+	require.Equal(t, 0, syncExit)
+	assert.Empty(t, rootStderr.String())
+	assert.Empty(t, syncStderr.String())
+	assert.Contains(t, rootStdout.String(), "Snapshot the open Quicken file and rebuild quarry's store from it")
+	assert.Contains(t, syncStdout.String(), "quarry then rebuilds its store, ~/Library/Application Support/quarry/quarry.duckdb,\n"+
+		"from the snapshot. In every reconciled account, the reconciled transactions\n"+
+		"must add up to the balance of its last reconciled statement in Quicken to the\n"+
+		"cent, and every transaction must equal the sum of its splits; if a check\n"+
+		"fails, the previous store is left unchanged.")
+}
+
 func Test_run_refuses_an_empty_or_whitespace_quicken_flag_as_a_usage_error_even_with_a_bundle_in_documents(t *testing.T) {
 	cases := []struct {
 		name string

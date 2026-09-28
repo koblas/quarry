@@ -103,13 +103,60 @@ func writeDiffRow(b *strings.Builder, sign, label, value string) {
 	fmt.Fprintf(b, "  %s %-8s%s\n", sign, label, value)
 }
 
-// renderStore renders result's Store and Rows lines, appended after
-// renderSuccess's block once a build was reached.
+// renderStore renders result's Store, Rows, Balances and Splits lines,
+// appended after renderSuccess's block once a build was reached.
 func renderStore(result store.Result, home string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", homepath.Abbreviate(home, result.Path))
 	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(result.Counts))
+	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(result.Validation.Balances))
+	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits))
 	return b.String()
+}
+
+// balancesCheckedPhrase renders bc's checked clause: no accounts checked,
+// exactly one matching, or the plural count.
+func balancesCheckedPhrase(n int) string {
+	switch n {
+	case 0:
+		return "no accounts to check"
+	case 1:
+		return "1 account matches Quicken's last reconciled balance"
+	default:
+		return formatThousands(n) + " accounts match Quicken's last reconciled balance"
+	}
+}
+
+// balancesPhrase renders bc's checked clause, followed by its
+// never-reconciled and investment-account clauses (each omitted at zero,
+// joined with " and ") when either is present.
+func balancesPhrase(bc store.BalanceCheck) string {
+	phrase := balancesCheckedPhrase(bc.Checked)
+
+	var extras []string
+	if n := len(bc.NeverReconciled); n > 0 {
+		extras = append(extras, nounPhrase(n, "never reconciled", "never reconciled"))
+	}
+	if bc.InvestmentAccounts > 0 {
+		extras = append(extras, nounPhrase(bc.InvestmentAccounts, "investment account not checked", "investment accounts not checked"))
+	}
+	if len(extras) > 0 {
+		phrase += "; " + strings.Join(extras, " and ")
+	}
+	return phrase
+}
+
+// splitsPhrase renders sc's checked clause: no transactions checked,
+// exactly one equalling its splits, or the plural count.
+func splitsPhrase(sc store.SplitCheck) string {
+	switch sc.Checked {
+	case 0:
+		return "no transactions to check"
+	case 1:
+		return "the 1 transaction equals the sum of its splits"
+	default:
+		return "all " + formatThousands(sc.Checked) + " transactions equal the sum of their splits"
+	}
 }
 
 // rowsPhrase renders c as one comma-separated clause, each noun inflected

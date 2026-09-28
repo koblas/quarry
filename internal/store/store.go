@@ -1,6 +1,9 @@
 package store
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 // Account is one row of the accounts table.
 type Account struct {
@@ -100,9 +103,63 @@ type Counts struct {
 	Transfers    int
 }
 
-// Result is what a store build returns: the path it was written to, and the
-// row counts it holds.
+// Result is what a store build returns. Built is false when a check failed:
+// Path is then empty (Replace never ran) but Counts and Validation still
+// describe the rows the build would have written.
 type Result struct {
-	Path   string
-	Counts Counts
+	Path       string
+	Built      bool
+	Counts     Counts
+	Validation Validation
+}
+
+// ErrValidationFailed is Import's error when a build's checks find a
+// mismatch: the store is left unchanged and Replace is never called.
+var ErrValidationFailed = errors.New("validation failed")
+
+// Validation is the outcome of every check a build runs on its mapped rows,
+// before the store is swapped in.
+type Validation struct {
+	Balances BalanceCheck
+	Splits   SplitCheck
+}
+
+// Failed reports whether any check found a mismatch.
+func (v Validation) Failed() bool {
+	return len(v.Balances.Mismatched) > 0 || len(v.Splits.Mismatched) > 0
+}
+
+// BalanceCheck is the balance gate's result across every non-investment
+// account: each reconciled account's imported transactions with status
+// reconciled are compared to its last reconciled statement's balance.
+type BalanceCheck struct {
+	Checked            int
+	Mismatched         []BalanceMismatch
+	NeverReconciled    []Account
+	InvestmentAccounts int
+}
+
+// BalanceMismatch is one reconciled account whose reconciled-transaction
+// sum does not equal its last reconciled statement's balance, in cents.
+// Difference is Quarry minus Quicken.
+type BalanceMismatch struct {
+	ID, Name, Currency          string
+	Closed, Active              bool
+	StatementDate               time.Time
+	Quarry, Quicken, Difference int64
+}
+
+// SplitCheck is the split-sum gate's result across every imported
+// transaction.
+type SplitCheck struct {
+	Checked    int
+	Mismatched []SplitMismatch
+}
+
+// SplitMismatch is one transaction whose splits do not sum to its amount,
+// in cents. Payee is "" when the transaction has none.
+type SplitMismatch struct {
+	ID, Account, Currency, Payee string
+	Date                         time.Time
+	Amount, SplitsTotal          int64
 }
