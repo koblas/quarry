@@ -343,6 +343,7 @@ func Test_IsNotADB_and_IsBusy_classify_sqlite3_error_codes(t *testing.T) {
 		wantBusy   bool
 	}{
 		{name: "not a database", err: sqlite3.Error{Code: sqlite3.ErrNotADB}, wantNotADB: true},
+		{name: "not a database extended code", err: sqlite3.Error{Code: sqlite3.ErrNo(sqlite3.ErrNotADB.Extend(1))}, wantNotADB: true},
 		{name: "busy", err: sqlite3.Error{Code: sqlite3.ErrBusy}, wantBusy: true},
 		{name: "locked", err: sqlite3.Error{Code: sqlite3.ErrLocked}, wantBusy: true},
 		{name: "busy extended code (recovery)", err: sqlite3.Error{Code: sqlite3.ErrNo(sqlite3.ErrBusyRecovery)}, wantBusy: true},

@@ -401,6 +401,40 @@ func Test_run_refuses_an_encrypted_bundle(t *testing.T) {
 	assert.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
+// A WAL-formatted bundle with no live -wal file must be refused before
+// Sync ever opens it mode=ro: that open alone would create -wal/-shm in
+// the live bundle, which this test's file-set assertion would catch.
+func Test_run_refuses_a_bundle_that_is_not_open_in_quicken(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bundle := v9fixture.ClosedWALBundle(t, filepath.Join(home, "Documents"))
+	before, err := os.ReadDir(bundle.Dir)
+	require.NoError(t, err)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: "+abbreviated(t, bundle.Dir, home)+
+		" is not open in Quicken (its database has no write-ahead log); open it in Quicken, then run quarry sync again\n",
+		stderr.String())
+	after, err := os.ReadDir(bundle.Dir)
+	require.NoError(t, err)
+	assert.Equal(t, entryNames(before), entryNames(after))
+	_, statErr := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"))
+	assert.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
+// entryNames returns entries' names in order.
+func entryNames(entries []os.DirEntry) []string {
+	names := make([]string, len(entries))
+	for i, e := range entries {
+		names[i] = e.Name()
+	}
+	return names
+}
+
 // Prepare's MkdirAll is a no-op on an already-existing directory regardless
 // of its permission bits, so the snapshots directory must exist before the
 // chmod, or the failure this test wants would never surface.

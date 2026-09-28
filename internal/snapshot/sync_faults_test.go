@@ -612,20 +612,117 @@ func Test_sync_refuses_a_busy_bundle(t *testing.T) {
 	assert.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
-// A cancelled ctx overrides even a classified sqlite refusal at the same
-// failure site.
+// A cancelled ctx overrides whatever refusal each pre-commit failure site
+// would otherwise classify to — a classified sqlite fault (open, probe,
+// backup), a generic write fault (backup), and an unwritable directory
+// (prepare) alike.
 func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_at_a_precommit_failure(t *testing.T) {
-	home := t.TempDir()
+	blockedPath := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(blockedPath, []byte("x"), 0o600))
+
+	cases := []struct {
+		name string
+		dir  string
+		src  *fakeSource
+	}{
+		{name: "open fails", dir: t.TempDir(), src: &fakeSource{openErr: errBoom}},
+		{name: "probe fails", dir: t.TempDir(), src: &fakeSource{probeErr: errBoom}},
+		{name: "prepare fails", dir: blockedPath, src: &fakeSource{}},
+		{name: "backup fails with a classified sqlite fault", dir: t.TempDir(),
+			src: &fakeSource{backupErr: sqlite3.Error{Code: sqlite3.ErrBusy}}},
+		{name: "backup fails with a generic write fault", dir: t.TempDir(), src: &fakeSource{backupErr: errBoom}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			srv := snapshot.NewServer(
+				snapshot.WithSnapshotDir(c.dir),
+				snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+				snapshot.WithSource(c.src),
+				snapshot.WithHome(home),
+			)
+
+			_, err := srv.Sync(ctx, filepath.Join(home, "Documents", "Home.quicken"))
+
+			var re snapshot.RefusalError
+			require.ErrorAs(t, err, &re)
+			assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", re.Error())
+		})
+	}
+}
+
+// buildManifest's own ctx-cancellation failure (opening the snapshot copy)
+// is also routed through failureOutcome, distinct from every Source- and
+// Destination-facing site above.
+func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_during_buildManifest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	srv := snapshot.NewServer(
-		snapshot.WithSnapshotDir(t.TempDir()),
 		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
-		snapshot.WithSource(&fakeSource{backupErr: sqlite3.Error{Code: sqlite3.ErrBusy}}),
+		snapshot.WithSource(&fakeSource{}),
+		snapshot.WithDestination(&fixedPathDestination{snapshotPath: filepath.Join(t.TempDir(), "missing.sqlite")}),
+	)
+
+	_, err := srv.Sync(ctx, t.TempDir())
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", re.Error())
+}
+
+// cancelAndFailWriteManifestDestination cancels ctx and fails WriteManifest
+// in the same call, so a test can land exactly on that failure site's
+// failureOutcome check without the earlier buildManifest check intercepting
+// first.
+type cancelAndFailWriteManifestDestination struct {
+	real   snapshot.Destination
+	cancel context.CancelFunc
+}
+
+func (f *cancelAndFailWriteManifestDestination) Prepare(ctx context.Context) error {
+	return f.real.Prepare(ctx)
+}
+func (f *cancelAndFailWriteManifestDestination) Backup(ctx context.Context, src snapshot.Source, name string) (string, string, error) {
+	return f.real.Backup(ctx, src, name)
+}
+func (f *cancelAndFailWriteManifestDestination) WriteManifest(context.Context, string, []byte) (string, error) {
+	f.cancel()
+	return "", errBoom
+}
+func (f *cancelAndFailWriteManifestDestination) CommitManifest(ctx context.Context, partial string) (string, error) {
+	return f.real.CommitManifest(ctx, partial)
+}
+func (f *cancelAndFailWriteManifestDestination) CommitSnapshot(ctx context.Context, partial string) (string, error) {
+	return f.real.CommitSnapshot(ctx, partial)
+}
+func (f *cancelAndFailWriteManifestDestination) FinalPaths(name string) (string, string) {
+	return f.real.FinalPaths(name)
+}
+func (f *cancelAndFailWriteManifestDestination) Discard(ctx context.Context, partial string) error {
+	return f.real.Discard(ctx, partial)
+}
+
+func Test_sync_reports_interrupted_when_the_context_ends_exactly_when_writing_the_manifest_fails(t *testing.T) {
+	home := t.TempDir()
+	snapshotsDir := filepath.Join(home, "snapshots")
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	ref, err := v9.Reference(t.Context())
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(t.Context())
+	srv := snapshot.NewServer(
+		snapshot.WithSnapshotDir(snapshotsDir),
+		snapshot.WithReference(v9.ReferenceLabel, ref),
+		snapshot.WithDestination(&cancelAndFailWriteManifestDestination{
+			real:   snapshot.NewDirDestination(snapshotsDir),
+			cancel: cancel,
+		}),
 		snapshot.WithHome(home),
 	)
 
-	_, err := srv.Sync(ctx, filepath.Join(home, "Documents", "Home.quicken"))
+	_, err = srv.Sync(ctx, bundle.Dir)
 
 	var re snapshot.RefusalError
 	require.ErrorAs(t, err, &re)

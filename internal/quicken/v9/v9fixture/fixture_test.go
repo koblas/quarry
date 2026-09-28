@@ -39,6 +39,22 @@ func Test_a_byte_copy_of_data_omits_the_WAL_only_account(t *testing.T) {
 	assert.Equal(t, 2, liveCount)
 }
 
+func Test_ClosedWALBundle_leaves_no_live_wal_file(t *testing.T) {
+	bundle := v9fixture.ClosedWALBundle(t, t.TempDir())
+
+	_, err := os.Stat(bundle.DataPath + "-wal")
+
+	assert.ErrorIs(t, err, os.ErrNotExist)
+	var header [20]byte
+	f, err := os.Open(bundle.DataPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = f.Close() })
+	_, err = f.Read(header[:])
+	require.NoError(t, err)
+	assert.Equal(t, byte(2), header[18])
+	assert.Equal(t, byte(2), header[19])
+}
+
 func Test_MissingSchemaBundle_drops_a_table_two_columns_and_adds_one(t *testing.T) {
 	bundle := v9fixture.MissingSchemaBundle(t, t.TempDir())
 	conn, err := sql.Open("sqlite3", bundle.DataPath)

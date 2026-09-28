@@ -88,6 +88,31 @@ func EmptyAccountsBundle(tb testing.TB, dir string) Bundle {
 	return Bundle{Dir: bundleDir, DataPath: dataPath}
 }
 
+// ClosedWALBundle creates a Home.quicken bundle under dir with
+// ReferenceDDL's schema and one account, written through a WAL-mode
+// connection that is then closed: the header stays WAL-formatted (SQLite
+// never reverts it on close) but the checkpoint-on-close removes -wal/-shm,
+// leaving the bundle Quicken would leave after quitting without ever
+// reverting journal_mode.
+func ClosedWALBundle(tb testing.TB, dir string) Bundle {
+	tb.Helper()
+	ctx := context.Background()
+
+	bundleDir := filepath.Join(dir, "Home.quicken")
+	require.NoError(tb, os.MkdirAll(bundleDir, 0o700))
+	dataPath := filepath.Join(bundleDir, "data")
+
+	conn, err := sql.Open("sqlite3", dataPath)
+	require.NoError(tb, err)
+	conn.SetMaxOpenConns(1)
+	requireExec(tb, ctx, conn, "PRAGMA journal_mode=WAL")
+	requireExec(tb, ctx, conn, v9.ReferenceDDL)
+	requireExec(tb, ctx, conn, "INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
+	require.NoError(tb, conn.Close())
+
+	return Bundle{Dir: bundleDir, DataPath: dataPath}
+}
+
 // Identifiers MissingSchemaBundle mutates; none references an index, PK, UNIQUE or FK.
 const (
 	MissingSchemaDroppedTable       = "ZALERT"
