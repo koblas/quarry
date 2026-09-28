@@ -87,6 +87,18 @@ func Test_import_refuses_a_transaction_with_no_date(t *testing.T) {
 	assert.Equal(t, `a transaction in "Visa Infinite" (source id `+itoa(txnPK)+`) has no date`, importReason(t, err))
 }
 
+// No date wins over no amount when both are missing.
+func Test_import_refuses_a_transaction_with_no_date_and_no_amount(t *testing.T) {
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), bundle.DataPath)
+
+	assert.Equal(t, `a transaction in "Visa Infinite" (source id `+itoa(txnPK)+`) has no date`, importReason(t, err))
+}
+
 // Both rows are excluded by the SQL row filter itself, before any
 // required-field check runs.
 func Test_import_does_not_refuse_a_deleted_or_investment_transaction_missing_fields(t *testing.T) {
