@@ -192,6 +192,7 @@ Splits    all 18,204 transactions equal the sum of their splits
 Transfers 3,112 paired
 ```
 - Rows gains a trailing clause when investment transactions were skipped: `Rows      18,204 transactions, 21,977 splits, 3,112 transfers, 1,873 payees, 312 categories, 14 tags; 1,605 investment transactions not imported` (singular `1 investment transaction`; clause omitted at 0).
+- Rows nouns inflect each on its own count: singular at exactly 1 (`1 transaction`, `1 split`, `1 transfer`, `1 payee`, `1 category`, `1 tag`), plural at 0 and N ≥ 2 (`0 transactions` … `0 tags`); counts comma-grouped. Example: `1 transaction, 2 splits, 0 transfers, 1 payee, 3 categories, 0 tags`.
 - Transfer counted once per pair. Money on stdout: thousands separators, 2 decimals, leading `-` (`-1,204.17`).
 - Balances clauses: zero-count clauses omitted; two clauses joined with ` and `. Singular: `1 account matches Quicken's last reconciled balance`. None checkable: `no accounts to check; 3 never reconciled and 4 investment accounts not checked`.
 - Splits: exactly 1 → `the 1 transaction equals the sum of its splits`; zero → `no transactions to check`.
@@ -306,6 +307,7 @@ Interim frame (ruled 2026-09-28): until SCENARIO-14, S4 cases may surface in the
 | | validation failed, previous store | `NOT REBUILT (… unchanged)` |
 | | validation failed, first run | `NOT BUILT (no store at … yet)` |
 | | schema mismatch | no store lines; `store: null` |
+| | schema extras only | after the last `+` row; the Phase 0 block incl. `+` rows is the unchanged prefix; W1 on stderr (W2 after it), exit 0. Same placement for `NOT REBUILT` / `NOT BUILT` under V1 |
 | Balances | never reconciled | clause + json list; no warning; exit 0 |
 | | investment accounts | clause only |
 | | closed/inactive | checked; labelled only in mismatch rows; `closed` and `active` in json |
