@@ -73,6 +73,14 @@ func IsBusy(err error) bool {
 	return code == sqlite3.ErrBusy || code == sqlite3.ErrLocked
 }
 
+// IsFull reports whether err is SQLite's disk-full fault (SQLITE_FULL) — a
+// real disk-full during an online backup, with no errno for
+// errors.Is(syscall.ENOSPC) to match.
+func IsFull(err error) bool {
+	var serr sqlite3.Error
+	return errors.As(err, &serr) && serr.Code&primaryErrNo == sqlite3.ErrFull
+}
+
 // escapePath percent-encodes path for use as a SQLite URI filename, so
 // characters query parsing treats specially (space, ?, #) survive.
 func escapePath(path string) string {

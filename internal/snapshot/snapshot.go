@@ -73,6 +73,10 @@ func WithBusyTimeout(d time.Duration) Option {
 	return func(s *Server) { s.busyTimeout = d }
 }
 
+// Home returns the home directory Sync abbreviates refusal messages
+// against, as set by WithHome.
+func (s *Server) Home() string { return s.home }
+
 // NewServer builds a Server from opts.
 func NewServer(opts ...Option) *Server {
 	s := &Server{busyTimeout: DefaultBusyTimeout}
@@ -149,7 +153,8 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 	manifestBytes, err := manifest.Encode()
 	if err != nil {
 		// unreachable: Manifest.Encode's own error path is unreachable for any value this package builds; see there.
-		return Manifest{}, contentRefusal(s.home, bundlePath, fmt.Errorf("encode manifest: %w", err))
+		_ = destination.Discard(ctx, snapshotPartial)
+		return Manifest{}, FailureOutcome(ctx, contentRefusal(s.home, bundlePath, fmt.Errorf("encode manifest: %w", err)))
 	}
 	manifestPartial, err := destination.WriteManifest(ctx, resolvedName, manifestBytes)
 	if err != nil {

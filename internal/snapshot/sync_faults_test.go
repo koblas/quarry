@@ -76,76 +76,65 @@ func Test_sync_wraps_an_error_when_opening_the_bundle_fails(t *testing.T) {
 	assert.ErrorContains(t, err, "sync "+bundlePath)
 }
 
-// A generic backup failure is not a classified source error (busy/encrypted)
-// and not a destination write fault (permission/disk-full), so Sync
-// presumes it is an unclassified source-side read fault copying the live
-// file, naming the bundle rather than the snapshots directory.
-func Test_sync_refuses_when_the_backup_fails_with_an_unclassified_cause(t *testing.T) {
-	home := t.TempDir()
-	snapshotsDir := filepath.Join(home, "snapshots")
-	bundlePath := filepath.Join(home, "Documents", "Home.quicken")
-	srv := snapshot.NewServer(
-		snapshot.WithSnapshotDir(snapshotsDir),
-		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
-		snapshot.WithSource(&fakeSource{backupErr: errBoom}),
-		snapshot.WithHome(home),
-	)
+// A Backup failure classifies as a destination write fault (disk-full,
+// quota, permission), or an unclassified source-side read fault otherwise.
+func Test_sync_refuses_when_the_backup_fails(t *testing.T) {
+	fullCause := sqlite3.Error{Code: sqlite3.ErrFull}.Error()
+	quotaCause := syscall.EDQUOT.Error()
 
-	_, err := srv.Sync(t.Context(), bundlePath)
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "an unclassified cause",
+			err:  errBoom,
+			want: "cannot copy ~/Documents/Home.quicken: boom; run quarry sync again",
+		},
+		{
+			name: "disk full reported through a PathError",
+			err:  &fs.PathError{Op: "write", Path: "partial", Err: syscall.ENOSPC},
+			want: "cannot write snapshot to ~/snapshots: no space left on device; free disk space, then run quarry sync again",
+		},
+		{
+			name: "over quota reported through a PathError",
+			err:  &fs.PathError{Op: "write", Path: "partial", Err: syscall.EDQUOT},
+			want: "cannot write snapshot to ~/snapshots: " + quotaCause + "; free disk space, then run quarry sync again",
+		},
+		{
+			// The real sqliteSource.Backup wraps SQLite's own SQLITE_FULL, which carries no errno.
+			name: "disk full reported by SQLite itself, with no errno",
+			err: fmt.Errorf("backup: %w", fmt.Errorf("backup to %s: %w",
+				"partial", sqlite3.Error{Code: sqlite3.ErrFull})),
+			want: "cannot write snapshot to ~/snapshots: " + fullCause + "; free disk space, then run quarry sync again",
+		},
+		{
+			name: "a permission error",
+			err:  &fs.PathError{Op: "write", Path: "partial", Err: fs.ErrPermission},
+			want: "cannot write to ~/snapshots: permission denied; make the directory writable by your user",
+		},
+	}
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
-	assert.Equal(t,
-		"cannot copy ~/Documents/Home.quicken: boom; run quarry sync again",
-		re.Error())
-	assertNoPartialsLeftBehind(t, snapshotsDir)
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			snapshotsDir := filepath.Join(home, "snapshots")
+			srv := snapshot.NewServer(
+				snapshot.WithSnapshotDir(snapshotsDir),
+				snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+				snapshot.WithSource(&fakeSource{backupErr: c.err}),
+				snapshot.WithHome(home),
+			)
 
-// A disk-full cause reaching Backup is still a destination write fault,
-// naming the snapshots directory, even though Backup's single return
-// cannot itself say which side (source or destination) produced it.
-func Test_sync_refuses_when_the_backup_fails_with_disk_full(t *testing.T) {
-	home := t.TempDir()
-	snapshotsDir := filepath.Join(home, "snapshots")
-	bundlePath := filepath.Join(home, "Documents", "Home.quicken")
-	srv := snapshot.NewServer(
-		snapshot.WithSnapshotDir(snapshotsDir),
-		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
-		snapshot.WithSource(&fakeSource{backupErr: &fs.PathError{Op: "write", Path: "partial", Err: syscall.ENOSPC}}),
-		snapshot.WithHome(home),
-	)
+			_, err := srv.Sync(t.Context(), filepath.Join(home, "Documents", "Home.quicken"))
 
-	_, err := srv.Sync(t.Context(), bundlePath)
-
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
-	assert.Equal(t,
-		"cannot write snapshot to ~/snapshots: no space left on device; free disk space, then run quarry sync again",
-		re.Error())
-	assertNoPartialsLeftBehind(t, snapshotsDir)
-}
-
-// A permission cause reaching Backup is still an unwritable-directory
-// refusal, naming the snapshots directory rather than the bundle.
-func Test_sync_refuses_when_the_backup_fails_with_a_permission_error(t *testing.T) {
-	home := t.TempDir()
-	snapshotsDir := filepath.Join(home, "snapshots")
-	bundlePath := filepath.Join(home, "Documents", "Home.quicken")
-	srv := snapshot.NewServer(
-		snapshot.WithSnapshotDir(snapshotsDir),
-		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
-		snapshot.WithSource(&fakeSource{backupErr: &fs.PathError{Op: "write", Path: "partial", Err: fs.ErrPermission}}),
-		snapshot.WithHome(home),
-	)
-
-	_, err := srv.Sync(t.Context(), bundlePath)
-
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
-	assert.Equal(t,
-		"cannot write to ~/snapshots: permission denied; make the directory writable by your user",
-		re.Error())
-	assertNoPartialsLeftBehind(t, snapshotsDir)
+			var re snapshot.RefusalError
+			require.ErrorAs(t, err, &re)
+			assert.Equal(t, c.want, re.Error())
+			assertNoPartialsLeftBehind(t, snapshotsDir)
+		})
+	}
 }
 
 // A write failure that is neither a permission error nor disk-full/over-quota
@@ -278,9 +267,8 @@ func garbageFileOpenCause(t *testing.T, path string) error {
 	return conn.QueryRow("SELECT count(*) FROM sqlite_master").Scan(&count)
 }
 
-// An unclassified buildManifest failure refuses naming the bundle and
-// carrying the driver's own cause text, distinct from the integrity-check
-// and no-accounts refusals.
+// An unclassified buildManifest failure names the bundle and carries the
+// driver's own cause text, distinct from the integrity-check refusal.
 func Test_sync_refuses_a_snapshot_copy_that_cannot_be_opened(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "garbage.sqlite")
 	require.NoError(t, os.WriteFile(path, []byte("not a database"), 0o600))
@@ -714,7 +702,7 @@ func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_at_a_pr
 		{name: "prepare fails", dir: blockedPath, src: &fakeSource{}},
 		{name: "backup fails with a classified sqlite fault", dir: t.TempDir(),
 			src: &fakeSource{backupErr: sqlite3.Error{Code: sqlite3.ErrBusy}}},
-		{name: "backup fails with a generic write fault", dir: t.TempDir(), src: &fakeSource{backupErr: errBoom}},
+		{name: "backup fails with an unclassified cause", dir: t.TempDir(), src: &fakeSource{backupErr: errBoom}},
 	}
 
 	for _, c := range cases {

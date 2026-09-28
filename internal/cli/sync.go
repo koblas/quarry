@@ -59,10 +59,11 @@ Without --quicken, quarry uses the only .quicken file in ~/Documents.`,
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			srv, home, err := newServer(cmd.Context())
+			srv, err := newServer(cmd.Context())
 			if err != nil {
 				return &runtimeError{err: err}
 			}
+			home := srv.Home()
 
 			var bundlePath string
 			if cmd.Flags().Changed("quicken") {

@@ -29,15 +29,15 @@ func signalContext(parent context.Context) (context.Context, context.CancelFunc)
 
 // newServer is cli.Execute's ServerFactory: it resolves the home directory
 // and the embedded reference schema, then builds the Server against them.
-func newServer(ctx context.Context) (*snapshot.Server, string, error) {
+func newServer(ctx context.Context) (*snapshot.Server, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return nil, "", homeDirectoryRefusal(err)
+		return nil, homeDirectoryRefusal()
 	}
 
 	ref, err := v9.Reference(ctx)
 	if err != nil {
-		return nil, "", snapshot.FailureOutcome(ctx, err)
+		return nil, snapshot.FailureOutcome(ctx, err)
 	}
 
 	srv := snapshot.NewServer(
@@ -45,14 +45,13 @@ func newServer(ctx context.Context) (*snapshot.Server, string, error) {
 		snapshot.WithReference(v9.ReferenceLabel, ref),
 		snapshot.WithHome(home),
 	)
-	return srv, home, nil
+	return srv, nil
 }
 
-// homeDirectoryRefusal reports that the home directory could not be
-// resolved: every path sync touches derives from it, so this refusal only
-// ever fires from inside sync's RunE.
-func homeDirectoryRefusal(err error) error {
-	return fmt.Errorf("cannot find your home directory (%s); set HOME, then run quarry sync again", err)
+// homeDirectoryRefusal is sync's fixed-literal refusal when the home
+// directory cannot be resolved; os.UserHomeDir's own text varies by platform.
+func homeDirectoryRefusal() error {
+	return errors.New("cannot find your home directory ($HOME is not set); set HOME, then run quarry sync again")
 }
 
 // run is the process entrypoint's testable body: it delegates to

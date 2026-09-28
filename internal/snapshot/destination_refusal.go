@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
+	"github.com/koblas/quarry/internal/platform/sqlite"
 )
 
 // causeText unwraps err to its innermost cause's message, falling back to
@@ -36,7 +37,7 @@ func writeFaultRefusal(home, snapshotDir string, err error) error {
 	switch {
 	case errors.Is(err, fs.ErrPermission):
 		return unwritableDirRefusal(home, snapshotDir, err)
-	case errors.Is(err, syscall.ENOSPC), errors.Is(err, syscall.EDQUOT):
+	case errors.Is(err, syscall.ENOSPC), errors.Is(err, syscall.EDQUOT), sqlite.IsFull(err):
 		return RefusalError{msg: fmt.Sprintf(
 			"cannot write snapshot to %s: %s; free disk space, then run quarry sync again",
 			homepath.Abbreviate(home, snapshotDir), causeText(err))}
@@ -52,7 +53,7 @@ func writeFaultRefusal(home, snapshotDir string, err error) error {
 // destination fault; anything else is presumed a source-copy fault.
 func backupFailureRefusal(home, bundlePath, snapshotDir string, err error) error {
 	switch {
-	case errors.Is(err, fs.ErrPermission), errors.Is(err, syscall.ENOSPC), errors.Is(err, syscall.EDQUOT):
+	case errors.Is(err, fs.ErrPermission), errors.Is(err, syscall.ENOSPC), errors.Is(err, syscall.EDQUOT), sqlite.IsFull(err):
 		return writeFaultRefusal(home, snapshotDir, err)
 	default:
 		return RefusalError{msg: fmt.Sprintf(

@@ -93,8 +93,7 @@ func Test_run_removes_leftover_partials_silently_before_syncing(t *testing.T) {
 }
 
 // A stdout write failure still leaves the already-committed snapshot and
-// manifest on disk: the refusal names where they are kept rather than
-// merely wrapping the write error.
+// manifest on disk, named in the refusal rather than the write error alone.
 func Test_run_reports_exit_1_when_writing_stdout_fails(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -107,6 +106,7 @@ func Test_run_reports_exit_1_when_writing_stdout_fails(t *testing.T) {
 	assert.Equal(t, 1, exitCode)
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
+	onlyFileWithSuffix(t, snapshotsDir, ".json")
 	assert.Equal(t,
 		"quarry: cannot write the result to stdout: "+writeErr.Error()+"; the snapshot is kept at "+
 			abbreviated(t, snapshotPath, home)+" and its .json manifest holds the full result\n",
@@ -295,8 +295,6 @@ func Test_run_discovers_the_bundle_from_documents_without_quicken(t *testing.T) 
 	})
 }
 
-// An empty or all-whitespace --quicken value is a usage error, never a
-// fall-back to ~/Documents discovery, even though a valid bundle sits there.
 func Test_run_refuses_an_empty_or_whitespace_quicken_flag_as_a_usage_error_even_with_a_bundle_in_documents(t *testing.T) {
 	cases := []struct {
 		name string
@@ -372,21 +370,17 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 	}
 }
 
-// Home resolution happens only inside sync's RunE: a valid sync invocation
-// with HOME unset refuses with its own descriptive text, not a raw
-// os.UserHomeDir error.
+// Home resolution happens only inside sync's RunE, on a valid sync
+// invocation with HOME unset.
 func Test_run_reports_exit_1_when_home_directory_cannot_be_resolved(t *testing.T) {
 	t.Setenv("HOME", "")
-	unresolved, err := os.UserHomeDir()
-	require.Error(t, err)
-	require.Empty(t, unresolved)
 	var stdout, stderr bytes.Buffer
 
 	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
-	assert.Equal(t, "quarry: cannot find your home directory ("+err.Error()+"); set HOME, then run quarry sync again\n",
+	assert.Equal(t, "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry sync again\n",
 		stderr.String())
 }
 
@@ -397,7 +391,9 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 
 	t.Run("root help", func(t *testing.T) {
 		var stdout, stderr bytes.Buffer
+
 		exitCode := run(context.Background(), []string{"--help"}, &stdout, &stderr)
+
 		assert.Equal(t, 0, exitCode)
 		assert.NotEmpty(t, stdout.String())
 		assert.Empty(t, stderr.String())
@@ -405,7 +401,9 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 
 	t.Run("sync help", func(t *testing.T) {
 		var stdout, stderr bytes.Buffer
+
 		exitCode := run(context.Background(), []string{"sync", "--help"}, &stdout, &stderr)
+
 		assert.Equal(t, 0, exitCode)
 		assert.NotEmpty(t, stdout.String())
 		assert.Empty(t, stderr.String())
@@ -413,7 +411,9 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 
 	t.Run("unknown command is still a usage error, not the home-directory refusal", func(t *testing.T) {
 		var stdout, stderr bytes.Buffer
+
 		exitCode := run(context.Background(), []string{"frob"}, &stdout, &stderr)
+
 		assert.Equal(t, 2, exitCode)
 		assert.Empty(t, stdout.String())
 		assert.Equal(t, "quarry: unknown command \"frob\" for \"quarry\"; Run 'quarry sync --help' for usage.\n", stderr.String())

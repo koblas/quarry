@@ -8,10 +8,10 @@ import (
 	"github.com/koblas/quarry/internal/snapshot"
 )
 
-// ServerFactory resolves the home directory and builds the Server sync
-// needs. It is called only from inside sync's RunE, so building the
-// command tree, --help and a usage error never depend on it.
-type ServerFactory func(ctx context.Context) (srv *snapshot.Server, home string, err error)
+// ServerFactory builds the Server sync needs. It is called only from
+// inside sync's RunE, so building the command tree, --help and a usage
+// error never depend on it.
+type ServerFactory func(ctx context.Context) (srv *snapshot.Server, err error)
 
 // Execute parses args against quarry's command tree and runs the matched
 // command, writing to stdout/stderr. It returns a UsageError unchanged, an
