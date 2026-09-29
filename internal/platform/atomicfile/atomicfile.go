@@ -26,16 +26,16 @@ func Commit(partial, dest string) error {
 	if err := os.Link(partial, dest); err != nil {
 		return fmt.Errorf("commit %s: %w", dest, err)
 	}
-	syncDir(filepath.Dir(dest))
+	SyncDir(filepath.Dir(dest))
 	_ = os.Remove(partial)
 	return nil
 }
 
-// syncDir best-effort fsyncs dir so the directory entry the last Link
-// created is durable sooner than the filesystem's own periodic flush; a
-// failure here does not undo the commit the successful Link already made.
-// *os.File's methods are nil-safe, so an Open failure needs no extra guard.
-func syncDir(dir string) {
+// SyncDir best-effort fsyncs dir so a directory entry just created or
+// renamed is durable sooner than the filesystem's own periodic flush. It
+// reports nothing: the entry change it follows has already succeeded.
+func SyncDir(dir string) {
+	// *os.File's methods are nil-safe, so an Open failure needs no extra guard.
 	d, _ := os.Open(dir)
 	defer func() { _ = d.Close() }()
 	_ = d.Sync()

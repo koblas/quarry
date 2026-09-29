@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/koblas/quarry/internal/platform/atomicfile"
 	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/koblas/quarry/internal/store"
 )
@@ -75,11 +76,14 @@ func createDuckDB(ctx context.Context, path string) (DB, error) {
 	return db, nil
 }
 
-// Replace sweeps aged build leftovers and swaps rows into quarry.duckdb,
-// removing any stale quarry.duckdb.wal first. On failure the partial file
-// and its .wal are removed and the existing store is untouched; a
-// permission fault matches store.ErrStoreNotWritable, disk-full store.ErrDiskFull.
+// Replace creates the store directory (0700) if needed, sweeps aged build
+// leftovers and swaps rows into quarry.duckdb, removing any stale
+// quarry.duckdb.wal first. On failure its own partial is removed and the existing
+// store is untouched; a permission fault matches store.ErrStoreNotWritable, disk-full store.ErrDiskFull.
 func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
+	if err := os.MkdirAll(s.dir, 0o700); err != nil {
+		return "", buildError(err)
+	}
 	s.sweepLeftovers()
 
 	finalPath := filepath.Join(s.dir, FileName)
@@ -87,7 +91,10 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
 
 	db, err := s.create(ctx, partialPath)
 	if err != nil {
-		removePartial(partialPath)
+		// An existing partial belongs to another run started the same second.
+		if !errors.Is(err, duckdb.ErrExists) {
+			removePartial(partialPath)
+		}
 		return "", buildError(err)
 	}
 
@@ -118,6 +125,7 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
 		removePartial(partialPath)
 		return "", buildError(err)
 	}
+	atomicfile.SyncDir(s.dir)
 
 	return finalPath, nil
 }

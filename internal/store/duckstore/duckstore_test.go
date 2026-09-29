@@ -461,6 +461,64 @@ func Test_replace_fails_when_the_partial_file_cannot_be_created(t *testing.T) {
 	assert.Empty(t, direntNames(entries))
 }
 
+func Test_replace_creates_a_missing_store_directory_owner_only(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "quarry")
+	st := duckstore.New(dir)
+
+	path, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.FileExists(t, path)
+	info, err := os.Stat(dir)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
+}
+
+func Test_replace_tags_a_store_directory_it_cannot_create_as_not_writable(t *testing.T) {
+	parent := t.TempDir()
+	require.NoError(t, os.Chmod(parent, 0o500))
+	t.Cleanup(func() { _ = os.Chmod(parent, 0o700) })
+	st := duckstore.New(filepath.Join(parent, "quarry"))
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.ErrorIs(t, err, store.ErrStoreNotWritable)
+}
+
+// createLeavingPartial returns a create func that writes a partial and its
+// .wal at the path it is given, as a racing run would, then fails with err.
+func createLeavingPartial(t *testing.T, err error) func(context.Context, string) (duckstore.DB, error) {
+	return func(_ context.Context, path string) (duckstore.DB, error) {
+		require.NoError(t, os.WriteFile(path, []byte("partial"), 0o600))
+		require.NoError(t, os.WriteFile(path+".wal", []byte("wal"), 0o600))
+		return nil, fmt.Errorf("create %s: %w", path, err)
+	}
+}
+
+func Test_replace_leaves_a_partial_it_did_not_create_when_the_name_is_taken(t *testing.T) {
+	dir := t.TempDir()
+	st := duckstore.New(dir, duckstore.WithCreate(createLeavingPartial(t, duckdb.ErrExists)))
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.ErrorIs(t, err, duckdb.ErrExists)
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Len(t, entries, 2)
+}
+
+func Test_replace_removes_the_partial_its_failed_create_left_behind(t *testing.T) {
+	dir := t.TempDir()
+	st := duckstore.New(dir, duckstore.WithCreate(createLeavingPartial(t, errCreateBoom)))
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.ErrorIs(t, err, errCreateBoom)
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Empty(t, direntNames(entries))
+}
+
 func direntNames(entries []os.DirEntry) []string {
 	names := make([]string, len(entries))
 	for i, e := range entries {

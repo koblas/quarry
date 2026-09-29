@@ -44,3 +44,25 @@ func Test_run_rebuilds_the_store_from_an_earlier_snapshot_without_quicken(t *tes
 	onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
 	onlyFileWithSuffix(t, snapshotsDir, ".json")
 }
+
+func Test_run_from_a_path_creates_quarrys_directory_on_a_machine_without_one(t *testing.T) {
+	syncHome := t.TempDir()
+	t.Setenv("HOME", syncHome)
+	bundle := v9fixture.OpenBundle(t, filepath.Join(syncHome, "Documents"))
+	var syncStdout, syncStderr bytes.Buffer
+	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncStdout, &syncStderr))
+	snapshotsDir := filepath.Join(syncHome, "Library", "Application Support", "quarry", "snapshots")
+	elsewhere := t.TempDir()
+	for _, suffix := range []string{".sqlite", ".json"} {
+		src := onlyFileWithSuffix(t, snapshotsDir, suffix)
+		require.NoError(t, os.Rename(src, filepath.Join(elsewhere, filepath.Base(src))))
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--from", onlyFileWithSuffix(t, elsewhere, ".sqlite")}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.FileExists(t, filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb"))
+}

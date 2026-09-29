@@ -135,13 +135,13 @@ func Test_replace_leaves_a_fresh_partial_alone(t *testing.T) {
 	assert.NoError(t, statErr)
 }
 
-// s.dir is a regular file, so the sweep's own os.ReadDir fails; WithCreate
+// dir is write+execute only, so the sweep's own os.ReadDir fails; WithCreate
 // is wired to a distinct forced error, independent of the filesystem.
 func Test_replace_ignores_a_sweep_that_cannot_list_the_directory(t *testing.T) {
-	parent := t.TempDir()
-	notADir := filepath.Join(parent, "not-a-dir")
-	require.NoError(t, os.WriteFile(notADir, []byte("x"), 0o600))
-	st := duckstore.New(notADir, duckstore.WithCreate(func(context.Context, string) (duckstore.DB, error) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0o300))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	st := duckstore.New(dir, duckstore.WithCreate(func(context.Context, string) (duckstore.DB, error) {
 		return nil, errCreateBoom
 	}))
 
