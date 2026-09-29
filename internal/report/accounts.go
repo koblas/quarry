@@ -44,9 +44,8 @@ func (s *Server) Accounts(ctx context.Context, includeClosed bool) (AccountListi
 	return AccountListing{AccountList: list, Hidden: hidden}, nil
 }
 
-// resolveAccounts is the accounts args name, in the order given and without repeats: each arg is
-// an account's id, else its name ignoring case, closed and left-out accounts included. The first
-// arg naming no account, or several, is refused. It refuses a failed read like command's other reads.
+// resolveAccounts is the accounts args name, in the order given and without repeats: each arg is an
+// account's id, else its name ignoring case. The first arg naming none or several is refused.
 func (s *Server) resolveAccounts(ctx context.Context, command string, args []string) ([]store.Account, error) {
 	list, err := s.store.Accounts(ctx)
 	if err != nil {
@@ -68,8 +67,11 @@ func (s *Server) resolveAccounts(ctx context.Context, command string, args []str
 }
 
 // pickAccount is the account arg names: the one with that id, else the only one with that name
-// ignoring case.
+// ignoring case. An empty arg names no account, whatever an account's name.
 func pickAccount(accounts []store.AccountBalance, arg string) (store.Account, error) {
+	if arg == "" {
+		return store.Account{}, unknownAccountRefusal(arg)
+	}
 	for _, a := range accounts {
 		if a.ID == arg {
 			return a.Account, nil

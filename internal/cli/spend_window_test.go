@@ -162,3 +162,12 @@ func Test_spend_help_shows_the_since_and_until_flags(t *testing.T) {
 	assert.Regexp(t, `--until date +count transactions dated on or before date `+
 		`\(YYYY, YYYY-MM or YYYY-MM-DD; default today\)`, stdout.String())
 }
+
+func Test_spend_help_shows_the_account_flag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeSpend(t, fakeReportStore{}, spendWindowNow, &stdout, &stderr, "--help")
+
+	require.NoError(t, err)
+	assert.Regexp(t, `--account name +count only the account with this name or id; repeat for more`, stdout.String())
+}

@@ -79,9 +79,8 @@ the rows can add up to more than the total.`,
 	return cmd
 }
 
-// spendWarnings is the warnings a spending carries, unprefixed and never nil, in the order printed:
-// one for each named account Quicken leaves out of reports, then, for --by tag with multi-tagged
-// splits, that the rows add up to more than the total.
+// spendWarnings is s's warnings, unprefixed and never nil: one per named account Quicken leaves out
+// of reports, then the multi-tag-splits note.
 func spendWarnings(s report.Spending) []string {
 	warnings := []string{}
 	for _, a := range s.Accounts {

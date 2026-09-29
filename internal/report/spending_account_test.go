@@ -110,6 +110,14 @@ func Test_spend_refuses_an_ambiguous_name_listing_its_ids_sorted(t *testing.T) {
 	assert.Equal(t, `2 accounts are named "VISA"; pass one of their ids instead: acct-812, acct-977`, refusal.Error())
 }
 
+func Test_spend_refuses_an_empty_argument_even_when_an_account_has_an_empty_name(t *testing.T) {
+	list := accountsOf(chequing, store.Account{ID: "acct-400", Name: ""})
+
+	_, _, err := spendAccounts(t, list, "")
+
+	assert.EqualError(t, err, `no account named ""; run quarry accounts --all to list them`)
+}
+
 func Test_spend_refuses_the_first_account_it_cannot_pick(t *testing.T) {
 	list := accountsOf(chequing)
 

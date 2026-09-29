@@ -81,6 +81,11 @@ func Test_run_spend_refuses_an_account_it_cannot_pick(t *testing.T) {
 			want: "quarry: no account named \"Chequeing\"; run quarry accounts --all to list them\n",
 		},
 		{
+			name: "the argument is empty",
+			arg:  "",
+			want: "quarry: no account named \"\"; run quarry accounts --all to list them\n",
+		},
+		{
 			name: "two accounts share the name, listed by sorted id",
 			arg:  "Visa",
 			want: "quarry: 2 accounts are named \"Visa\"; pass one of their ids instead: acct-812, acct-977\n",

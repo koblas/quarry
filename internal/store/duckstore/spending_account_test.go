@@ -11,15 +11,17 @@ import (
 
 const (
 	acctSecond = "acct-second"
-	acctThird  = "acct-third"
+	acctThird  = "acct-o'brien"
+	acctFourth = "acct-fourth"
 )
 
-// accountRows is spendRows plus two more in-report accounts, so three accounts can each spend.
+// accountRows is spendRows plus three more in-report accounts, so four accounts can each spend.
 func accountRows() store.Rows {
 	rows := spendRows()
 	rows.Accounts = append(rows.Accounts,
 		store.Account{ID: acctSecond, SourceID: 3, Name: "Savings", Type: "chequing", Currency: "CAD", Active: true},
-		store.Account{ID: acctThird, SourceID: 4, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true})
+		store.Account{ID: acctThird, SourceID: 4, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
+		store.Account{ID: acctFourth, SourceID: 5, Name: "Cash", Type: "cash", Currency: "CAD", Active: true})
 	return rows
 }
 
@@ -43,6 +45,21 @@ func Test_spending_counts_only_the_named_accounts(t *testing.T) {
 		Rows:   []store.SpendingRow{{Key: new("Groceries"), Currency: "CAD", Spent: 300}},
 		Totals: []store.SpendingTotal{{Currency: "CAD", Spent: 300}},
 	}, got)
+}
+
+func Test_spending_counts_three_named_accounts_binding_an_id_with_a_quote(t *testing.T) {
+	t.Parallel()
+	rows := accountRows()
+	addSplit(&rows, splitSpec{id: "first", account: acctInReports, category: new(catExpense), amount: -100})
+	addSplit(&rows, splitSpec{id: "second", account: acctSecond, category: new(catExpense), amount: -200})
+	addSplit(&rows, splitSpec{id: "third", account: acctThird, category: new(catExpense), amount: -400})
+	addSplit(&rows, splitSpec{id: "fourth", account: acctFourth, category: new(catExpense), amount: -800})
+	st := newStoreWith(t, rows)
+
+	got, err := st.Spending(t.Context(), namedAccounts(spendingParams(), acctThird, acctInReports, acctSecond))
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.SpendingTotal{{Currency: "CAD", Spent: 700}}, got.Totals)
 }
 
 func Test_spending_by_month_counts_only_the_named_accounts(t *testing.T) {
