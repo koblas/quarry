@@ -28,6 +28,7 @@ Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01). Last updated by
 - `fakeReportStore.Query` ignores `maxRows`; a fixture writing at the store path must `CheckpointClose` before any read (DuckDB `InstanceCache`); a held reader shares the old inode. (2a S09, S02, REVIEW-01)
 
 ## Open debts
+- MINOR (01 checkpoint): `internal/store/duckstore/duckstore.go:24` — nothing pins `FormatVersion` to literal 3 (all tests compare to the constant). Owner: SCENARIO-09's plan (delivers folded SCENARIO-05) builds a store with literal `format_version = 2` for the R2 test, or asserts `FormatVersion == 3` once.
 - Gate "matches Quicken reports over 2 years" is carried by 2b (spec) — owned by the spend scenarios.
 - 2a debts still open and unowned - die unless re-opened: `sql.go` Long blank lines/wrap NIT (fold into the next sql.go edit), HOME with trailing slash prints absolute paths, `run_status_json_test.go:1` header, `balancesPhrase` three bare ints, duckstore fault-test copy-paste (`docs/specifications/phase2a-read-foundation/STATE.md`).
 - Snapshots accumulate (~200 MB each) until 2c.
