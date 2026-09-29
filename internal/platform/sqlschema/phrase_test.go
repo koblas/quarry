@@ -28,6 +28,7 @@ func Test_CountPhrase(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, c.want, sqlschema.CountPhrase(c.tables, c.columns))
 		})
 	}

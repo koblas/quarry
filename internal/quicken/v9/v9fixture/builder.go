@@ -131,10 +131,6 @@ type Builder struct {
 	userTagLinks []userTagLink
 }
 
-// Int64Ptr returns a pointer to v, for fixture fields (such as
-// TagRow.Type) that must distinguish a present zero value from NULL.
-func Int64Ptr(v int64) *int64 { return &v }
-
 // NewBuilder returns a Builder seeded with the reference schema's default
 // Z_PRIMARYKEY entity numbers (EntCategoryTag, EntUserTag,
 // EntCashFlowTransaction, EntSmartCashFlowTransaction,
@@ -365,24 +361,25 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 // number, or 0 when nothing carrying that entity was added.
 func (b *Builder) maxPKForEntity(name string) int64 {
 	ent := b.entities[name]
-	var max int64
+	var maxPK int64
 	switch name {
 	case "CategoryTag", "UserTag":
 		for _, g := range b.tags {
-			if g.row.Entity == ent && g.pk > max {
-				max = g.pk
+			if g.row.Entity == ent {
+				maxPK = max(maxPK, g.pk)
 			}
 		}
 	case "CashFlowTransaction", "SmartCashFlowTransaction", "InvestmentTransaction":
 		for _, x := range b.transactions {
-			if x.row.Entity == ent && x.pk > max {
-				max = x.pk
+			if x.row.Entity == ent {
+				maxPK = max(maxPK, x.pk)
 			}
 		}
 	}
-	return max
+	return maxPK
 }
 
+//nolint:revive // testing.TB leads, by convention
 func exec(tb testing.TB, ctx context.Context, db *sql.DB, query string, args ...any) {
 	tb.Helper()
 	_, err := db.ExecContext(ctx, query, args...)

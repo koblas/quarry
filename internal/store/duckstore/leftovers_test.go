@@ -25,6 +25,7 @@ func Test_replace_removes_a_leftover_partial_just_past_the_age_gate(t *testing.T
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			dir := t.TempDir()
 			leftover := filepath.Join(dir, c.file)
 			require.NoError(t, os.WriteFile(leftover, []byte("stale"), 0o600))
@@ -77,6 +78,7 @@ func Test_replace_sweep_leaves_near_miss_and_unrelated_files_alone(t *testing.T)
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			dir := t.TempDir()
 			path := filepath.Join(dir, c.file)
 			require.NoError(t, os.WriteFile(path, []byte("x"), 0o600))

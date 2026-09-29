@@ -61,7 +61,8 @@ func Test_append_rows_reports_a_wrong_column_count(t *testing.T) {
 // cancelAfterNErrCalls reports Err() as nil for its first n calls, then as
 // context.Canceled — lands AppendRows' per-row check on a chosen row deterministically.
 type cancelAfterNErrCalls struct {
-	context.Context
+	context.Context //nolint:containedctx // wraps a Context to override Err alone
+
 	n     int
 	calls int
 }

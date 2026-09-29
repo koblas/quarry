@@ -16,7 +16,7 @@ func execOn(t *testing.T, dataPath, query string, args ...any) {
 	db, err := sql.Open("sqlite3", dataPath)
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
-	_, err = db.Exec(query, args...)
+	_, err = db.ExecContext(t.Context(), query, args...)
 	require.NoError(t, err)
 }
 

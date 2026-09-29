@@ -9,13 +9,13 @@ import (
 // Manifest is quarry's on-disk manifest, written next to each snapshot as
 // <snapshot>.json.
 type Manifest struct {
-	Snapshot SnapshotInfo `json:"snapshot"`
-	Schema   SchemaInfo   `json:"schema"`
-	Warnings []string     `json:"warnings"`
+	Snapshot Info       `json:"snapshot"`
+	Schema   SchemaInfo `json:"schema"`
+	Warnings []string   `json:"warnings"`
 }
 
-// SnapshotInfo describes the snapshot file itself.
-type SnapshotInfo struct {
+// Info describes the snapshot file itself.
+type Info struct {
 	Path     string `json:"path"`
 	Manifest string `json:"manifest"`
 	Source   string `json:"source"`

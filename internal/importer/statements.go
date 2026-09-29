@@ -135,6 +135,7 @@ func parseStatement(acct accountRef, r rawReconcile, off *offenders) (parsedStat
 			off.add(offender{class: classTooLarge, reason: reasonStatementTooLargeNoDate(acct.Name, r.pk, r.balText.String), name: acct.Name, sourceID: r.pk})
 		}
 		return parsedStatement{}, false
+	case moneyOK:
 	}
 
 	if !hasDate {

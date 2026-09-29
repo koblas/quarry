@@ -13,7 +13,7 @@ import (
 func Test_import_refuses_a_category_with_an_unmapped_type(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	b.Category(v9fixture.TagRow{Name: "Food:Groceries", Type: v9fixture.Int64Ptr(5)})
+	b.Category(v9fixture.TagRow{Name: "Food:Groceries", Type: new(int64(5))})
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
@@ -24,7 +24,7 @@ func Test_import_refuses_a_category_with_an_unmapped_type(t *testing.T) {
 func Test_import_refuses_a_category_with_no_name(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	catPK := b.Category(v9fixture.TagRow{Type: v9fixture.Int64Ptr(1)})
+	catPK := b.Category(v9fixture.TagRow{Type: new(int64(1))})
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})

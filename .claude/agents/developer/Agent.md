@@ -78,8 +78,9 @@ All Go commands run from the repo root.
        assertion, then the code, then refactor.
      The acceptance test goes green during Build. When it does, the scenario's behaviour
      exists; remaining batches are coverage and edge cases.
-   - **Sweep** — run `go build ./... && golangci-lint run ./...` once and fix everything it
-     reports (missing `exhaustive` cases, new interface implementers), then the plan's doc
+   - **Sweep** — run `go build ./... && golangci-lint run ./...` and fix everything it
+     reports down to `0 issues` (`.claude/rules/agent-briefs.md` → *Lint gate*; missing
+     `exhaustive` cases, new interface implementers), then the plan's doc
      comments and exact-count assertion bumps.
    - **Verify** — the full suite once, per `.claude/rules/agent-briefs.md` → *Verification*:
      one covered full-suite run feeding its coverage gate and `test-stats.py --base` counts.

@@ -19,7 +19,7 @@ type ServerFactory func(ctx context.Context) (srv *snapshot.Server, err error)
 // as a UsageError with a run-sync-help hint appended.
 func Execute(ctx context.Context, args []string, stdout, stderr io.Writer, newServer ServerFactory) error {
 	var jsonOut bool
-	root := newRootCommand(newServer, &jsonOut)
+	root := newRootCommand(newServer, &jsonOut) //nolint:contextcheck // RunE reads ctx back through cmd.Context(), set by ExecuteContext below
 	// args must be non-nil: cobra falls back to the process's own os.Args for a nil slice.
 	root.SetArgs(args)
 	root.SetOut(stdout)
@@ -30,12 +30,10 @@ func Execute(ctx context.Context, args []string, stdout, stderr io.Writer, newSe
 		return nil
 	}
 
-	var ue UsageError
-	if errors.As(err, &ue) {
+	if ue, ok := errors.AsType[UsageError](err); ok {
 		return ue
 	}
-	var re *runtimeError
-	if errors.As(err, &re) {
+	if re, ok := errors.AsType[*runtimeError](err); ok {
 		return re.err
 	}
 	return UsageError{msg: err.Error() + "; Run 'quarry sync --help' for usage."}

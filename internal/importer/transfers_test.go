@@ -62,8 +62,8 @@ func Test_import_pairs_cross_currency_and_brokerage_transfers(t *testing.T) {
 	require.NoError(t, err)
 	split := func(pk int64) string { return fmt.Sprintf("split-%d", pk) }
 	assert.Equal(t, []store.Transfer{
-		{ID: fmt.Sprintf("xfer-%d", cadLeg), FromSplitID: split(cadLeg), ToSplitID: strPtr(split(usdLeg)), CrossCurrency: true},
-		{ID: fmt.Sprintf("xfer-%d", contributionLeg), FromSplitID: split(contributionLeg), ToSplitID: strPtr(split(depositLeg))},
+		{ID: fmt.Sprintf("xfer-%d", cadLeg), FromSplitID: split(cadLeg), ToSplitID: new(split(usdLeg)), CrossCurrency: true},
+		{ID: fmt.Sprintf("xfer-%d", contributionLeg), FromSplitID: split(contributionLeg), ToSplitID: new(split(depositLeg))},
 	}, fake.Rows.Transfers)
 	assert.Equal(t, store.TransferCheck{Paired: 2, CrossCurrency: 1}, result.Validation.Transfers)
 	assert.Equal(t, int64(-10000), splitByID(fake, split(cadLeg)).Amount)
@@ -98,10 +98,10 @@ func Test_import_stores_each_split_in_at_most_one_transfer(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []store.Transfer{
-		{ID: transferIDFor(legA), FromSplitID: splitIDFor(legA), ToSplitID: strPtr(splitIDFor(legB))},
+		{ID: transferIDFor(legA), FromSplitID: splitIDFor(legA), ToSplitID: new(splitIDFor(legB))},
 		{ID: transferIDFor(legC), FromSplitID: splitIDFor(legC)},
 		{ID: transferIDFor(selfLeg), FromSplitID: splitIDFor(selfLeg)},
-		{ID: "xfer-9", FromSplitID: "split-9", ToSplitID: strPtr("split-10")},
+		{ID: "xfer-9", FromSplitID: "split-9", ToSplitID: new("split-10")},
 	}, fake.Rows.Transfers)
 }
 
@@ -119,7 +119,7 @@ func Test_import_keys_a_pair_by_its_lower_leg_when_only_the_higher_leg_links(t *
 
 	require.NoError(t, err)
 	assert.Equal(t, []store.Transfer{
-		{ID: transferIDFor(unlinkedLeg), FromSplitID: splitIDFor(unlinkedLeg), ToSplitID: strPtr(splitIDFor(linkingLeg))},
+		{ID: transferIDFor(unlinkedLeg), FromSplitID: splitIDFor(unlinkedLeg), ToSplitID: new(splitIDFor(linkingLeg))},
 	}, fake.Rows.Transfers)
 }
 
@@ -136,8 +136,8 @@ func Test_import_links_each_paired_leg_to_its_counterparts_account(t *testing.T)
 	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
-	assert.Equal(t, strPtr(accountIDFor(savingsPK)), splitByID(fake, splitIDFor(outLeg)).TransferAccountID)
-	assert.Equal(t, strPtr(accountIDFor(chequingPK)), splitByID(fake, splitIDFor(inLeg)).TransferAccountID)
+	assert.Equal(t, new(accountIDFor(savingsPK)), splitByID(fake, splitIDFor(outLeg)).TransferAccountID)
+	assert.Equal(t, new(accountIDFor(chequingPK)), splitByID(fake, splitIDFor(inLeg)).TransferAccountID)
 }
 
 // Two accounts share the name "Savings"; the lower source id is the match.
@@ -159,14 +159,14 @@ func Test_import_keeps_a_name_form_leg_as_a_one_sided_transfer(t *testing.T) {
 	assert.Equal(t, store.TransferCheck{OneSided: []store.OneSidedTransfer{
 		{
 			ID: transferIDFor(matchedLeg), SourceID: matchedLeg, Date: day, Account: "Chequing", Currency: "CAD", Active: true,
-			Amount: -1000, OtherAccount: strPtr("Savings"), OtherAccountID: strPtr(accountIDFor(savingsPK)),
+			Amount: -1000, OtherAccount: new("Savings"), OtherAccountID: new(accountIDFor(savingsPK)),
 		},
 		{
 			ID: transferIDFor(unmatchedLeg), SourceID: unmatchedLeg, Date: day, Account: "Chequing", Currency: "CAD", Active: true,
-			Amount: -500, OtherAccount: strPtr("Old Visa"),
+			Amount: -500, OtherAccount: new("Old Visa"),
 		},
 	}}, result.Validation.Transfers)
-	assert.Equal(t, strPtr(accountIDFor(savingsPK)), splitByID(fake, splitIDFor(matchedLeg)).TransferAccountID)
+	assert.Equal(t, new(accountIDFor(savingsPK)), splitByID(fake, splitIDFor(matchedLeg)).TransferAccountID)
 	assert.Nil(t, splitByID(fake, splitIDFor(unmatchedLeg)).TransferAccountID)
 }
 
@@ -258,7 +258,7 @@ func Test_import_describes_a_one_sided_leg_by_its_transaction_account_and_own_sp
 	require.NoError(t, err)
 	assert.Equal(t, []store.OneSidedTransfer{{
 		ID: transferIDFor(leg), SourceID: leg, Date: day, Account: "Old Chequing", Currency: "USD", Closed: true,
-		Payee: "Landlord", Amount: -2000, OtherAccount: strPtr("Old Visa"),
+		Payee: "Landlord", Amount: -2000, OtherAccount: new("Old Visa"),
 	}}, result.Validation.Transfers.OneSided)
 }
 
@@ -288,7 +288,7 @@ func Test_import_orders_one_sided_transfers_by_date_account_and_transaction(t *t
 	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.NoError(t, err)
-	var got []string
+	got := make([]string, 0, len(result.Validation.Transfers.OneSided))
 	for _, leg := range result.Validation.Transfers.OneSided {
 		got = append(got, leg.ID)
 	}

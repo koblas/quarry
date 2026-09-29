@@ -89,12 +89,12 @@ func escapePath(path string) string {
 
 // Close closes the underlying connection.
 func (d *DB) Close() error {
-	return d.conn.Close()
+	return d.conn.Close() //nolint:wrapcheck // thin adapter over *sql.DB; callers add context
 }
 
 // Exec runs query against the connection.
 func (d *DB) Exec(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	return d.conn.ExecContext(ctx, query, args...)
+	return d.conn.ExecContext(ctx, query, args...) //nolint:wrapcheck // thin adapter over *sql.DB; callers add context
 }
 
 // OpenMemory opens a private, in-process SQLite database. Because
@@ -155,7 +155,7 @@ type IntegrityError struct {
 
 // Error reports Result.
 func (e IntegrityError) Error() string {
-	return fmt.Sprintf("integrity_check: %s", e.Result)
+	return "integrity_check: " + e.Result
 }
 
 // IntegrityCheck runs PRAGMA integrity_check and returns an IntegrityError
@@ -276,24 +276,27 @@ func Backup(ctx context.Context, src *DB, destPath string, busyTimeout time.Dura
 	return nil
 }
 
+// errNotSQLite3Conn reports a pooled connection from some other driver.
+var errNotSQLite3Conn = errors.New("connection is not a sqlite3 connection")
+
 // runBackup steps srcDriverConn's "main" database into destDriverConn's
 // until done, busyTimeout, or ctx ends the wait.
 func runBackup(ctx context.Context, destDriverConn, srcDriverConn any, busyTimeout time.Duration) error {
 	dc, ok := destDriverConn.(*sqlite3.SQLiteConn)
 	if !ok {
 		// unreachable: this package only ever opens connections through the sqlite3 driver.
-		return fmt.Errorf("destination connection is not a sqlite3 connection")
+		return fmt.Errorf("destination %w", errNotSQLite3Conn)
 	}
 	sc, ok := srcDriverConn.(*sqlite3.SQLiteConn)
 	if !ok {
 		// unreachable: this package only ever opens connections through the sqlite3 driver.
-		return fmt.Errorf("source connection is not a sqlite3 connection")
+		return fmt.Errorf("source %w", errNotSQLite3Conn)
 	}
 
 	bk, err := dc.Backup("main", sc, "main")
 	if err != nil {
 		// unreachable: sqlite3_backup_init fails only for a same-connection or concurrent-backup misuse this package's callers never construct; Step's own fault path below exercises the failure contract.
-		return err
+		return fmt.Errorf("start backup: %w", err)
 	}
 	defer func() { _ = bk.Close() }()
 
@@ -303,7 +306,7 @@ func runBackup(ctx context.Context, destDriverConn, srcDriverConn any, busyTimeo
 		// own contract — so the caller, not Step, decides when to give up.
 		done, err := bk.Step(-1)
 		if err != nil {
-			return err
+			return fmt.Errorf("backup step: %w", err)
 		}
 		if done {
 			return nil
@@ -315,7 +318,7 @@ func runBackup(ctx context.Context, destDriverConn, srcDriverConn any, busyTimeo
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("wait for busy source: %w", ctx.Err())
 		case <-time.After(backupRetryInterval):
 		}
 	}

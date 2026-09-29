@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/koblas/quarry/internal/platform/sqlschema"
-	"github.com/koblas/quarry/internal/quicken/v9"
+	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/snapshot"
 	sqlite3 "github.com/mattn/go-sqlite3"
@@ -30,13 +30,16 @@ func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_at_a_pr
 		{name: "open fails", dir: t.TempDir(), src: &fakeSource{openErr: errBoom}},
 		{name: "probe fails", dir: t.TempDir(), src: &fakeSource{probeErr: errBoom}},
 		{name: "prepare fails", dir: blockedPath, src: &fakeSource{}},
-		{name: "backup fails with a classified sqlite fault", dir: t.TempDir(),
-			src: &fakeSource{backupErr: sqlite3.Error{Code: sqlite3.ErrBusy}}},
+		{
+			name: "backup fails with a classified sqlite fault", dir: t.TempDir(),
+			src: &fakeSource{backupErr: sqlite3.Error{Code: sqlite3.ErrBusy}},
+		},
 		{name: "backup fails with an unclassified cause", dir: t.TempDir(), src: &fakeSource{backupErr: errBoom}},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			home := t.TempDir()
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
@@ -85,22 +88,28 @@ type cancelAndFailWriteManifestDestination struct {
 func (f *cancelAndFailWriteManifestDestination) Prepare(ctx context.Context) error {
 	return f.real.Prepare(ctx)
 }
+
 func (f *cancelAndFailWriteManifestDestination) Backup(ctx context.Context, src snapshot.Source, name string) (string, string, error) {
 	return f.real.Backup(ctx, src, name)
 }
+
 func (f *cancelAndFailWriteManifestDestination) WriteManifest(context.Context, string, []byte) (string, error) {
 	f.cancel()
 	return "", errBoom
 }
+
 func (f *cancelAndFailWriteManifestDestination) CommitManifest(ctx context.Context, partial string) (string, error) {
 	return f.real.CommitManifest(ctx, partial)
 }
+
 func (f *cancelAndFailWriteManifestDestination) CommitSnapshot(ctx context.Context, partial string) (string, error) {
 	return f.real.CommitSnapshot(ctx, partial)
 }
+
 func (f *cancelAndFailWriteManifestDestination) FinalPaths(name string) (string, string) {
 	return f.real.FinalPaths(name)
 }
+
 func (f *cancelAndFailWriteManifestDestination) Discard(ctx context.Context, partial string) error {
 	return f.real.Discard(ctx, partial)
 }
@@ -141,9 +150,11 @@ type cancelAfterWriteManifestDestination struct {
 func (f *cancelAfterWriteManifestDestination) Prepare(ctx context.Context) error {
 	return f.real.Prepare(ctx)
 }
+
 func (f *cancelAfterWriteManifestDestination) Backup(ctx context.Context, src snapshot.Source, name string) (string, string, error) {
 	return f.real.Backup(ctx, src, name)
 }
+
 func (f *cancelAfterWriteManifestDestination) WriteManifest(ctx context.Context, name string, data []byte) (string, error) {
 	partial, err := f.real.WriteManifest(ctx, name, data)
 	if err == nil {
@@ -151,15 +162,19 @@ func (f *cancelAfterWriteManifestDestination) WriteManifest(ctx context.Context,
 	}
 	return partial, err
 }
+
 func (f *cancelAfterWriteManifestDestination) CommitManifest(ctx context.Context, partial string) (string, error) {
 	return f.real.CommitManifest(ctx, partial)
 }
+
 func (f *cancelAfterWriteManifestDestination) CommitSnapshot(ctx context.Context, partial string) (string, error) {
 	return f.real.CommitSnapshot(ctx, partial)
 }
+
 func (f *cancelAfterWriteManifestDestination) FinalPaths(name string) (string, string) {
 	return f.real.FinalPaths(name)
 }
+
 func (f *cancelAfterWriteManifestDestination) Discard(ctx context.Context, partial string) error {
 	return f.real.Discard(ctx, partial)
 }
@@ -200,22 +215,28 @@ type cancelDuringCommitManifestDestination struct {
 func (f *cancelDuringCommitManifestDestination) Prepare(ctx context.Context) error {
 	return f.real.Prepare(ctx)
 }
+
 func (f *cancelDuringCommitManifestDestination) Backup(ctx context.Context, src snapshot.Source, name string) (string, string, error) {
 	return f.real.Backup(ctx, src, name)
 }
+
 func (f *cancelDuringCommitManifestDestination) WriteManifest(ctx context.Context, name string, data []byte) (string, error) {
 	return f.real.WriteManifest(ctx, name, data)
 }
+
 func (f *cancelDuringCommitManifestDestination) CommitManifest(ctx context.Context, partial string) (string, error) {
 	f.cancel()
 	return f.real.CommitManifest(ctx, partial)
 }
+
 func (f *cancelDuringCommitManifestDestination) CommitSnapshot(ctx context.Context, partial string) (string, error) {
 	return f.real.CommitSnapshot(ctx, partial)
 }
+
 func (f *cancelDuringCommitManifestDestination) FinalPaths(name string) (string, string) {
 	return f.real.FinalPaths(name)
 }
+
 func (f *cancelDuringCommitManifestDestination) Discard(ctx context.Context, partial string) error {
 	return f.real.Discard(ctx, partial)
 }

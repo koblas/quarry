@@ -19,15 +19,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func strPtr(s string) *string { return &s }
-
 // minimalRows fills every table (transfers: one paired, one one-sided) so a
 // round trip covers each table and each nullable column set and NULL.
 func minimalRows() store.Rows {
 	return store.Rows{
 		Accounts: []store.Account{{
 			ID: "acct-1", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD",
-			Institution: strPtr("Big Bank"), Closed: false, Active: true,
+			Institution: new("Big Bank"), Closed: false, Active: true,
 		}},
 		Categories: []store.Category{{
 			ID: "cat-1", SourceID: 1, Name: "Groceries", FullPath: "Groceries", Kind: "expense", Hidden: false,
@@ -36,16 +34,16 @@ func minimalRows() store.Rows {
 		Tags:   []store.Tag{{ID: "tag-1", SourceID: 1, Name: "Reimbursable"}},
 		Transactions: []store.Transaction{{
 			ID: "txn-1", SourceID: 1, AccountID: "acct-1",
-			Date: time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC), PayeeID: strPtr("payee-1"), Memo: strPtr("Beans"),
-			Amount: 1234, Currency: "CAD", Status: "uncleared", ChequeNumber: strPtr("101"),
+			Date: time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC), PayeeID: new("payee-1"), Memo: new("Beans"),
+			Amount: 1234, Currency: "CAD", Status: "uncleared", ChequeNumber: new("101"),
 		}},
 		Splits: []store.Split{{
-			ID: "split-1", SourceID: 1, TransactionID: "txn-1", CategoryID: strPtr("cat-1"),
-			Amount: 1234, Memo: strPtr("split memo"),
+			ID: "split-1", SourceID: 1, TransactionID: "txn-1", CategoryID: new("cat-1"),
+			Amount: 1234, Memo: new("split memo"),
 		}},
 		SplitTags: []store.SplitTag{{SplitID: "split-1", TagID: "tag-1"}},
 		Transfers: []store.Transfer{
-			{ID: "xfer-1", FromSplitID: "split-1", ToSplitID: strPtr("split-2"), CrossCurrency: true},
+			{ID: "xfer-1", FromSplitID: "split-1", ToSplitID: new("split-2"), CrossCurrency: true},
 			{ID: "xfer-3", FromSplitID: "split-3"},
 		},
 		ImportRuns: []store.ImportRun{{
@@ -122,7 +120,7 @@ func Test_replace_leaves_no_partial_or_wal(t *testing.T) {
 
 	entries, err := os.ReadDir(dir)
 	require.NoError(t, err)
-	var names []string
+	names := make([]string, 0, len(entries))
 	for _, e := range entries {
 		names = append(names, e.Name())
 	}
@@ -171,6 +169,7 @@ func Test_replace_fails_when_any_tables_rows_fail_to_append(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			st := duckstore.New(t.TempDir())
 
 			_, err := st.Replace(t.Context(), c.corrupt(minimalRows()))
@@ -297,6 +296,7 @@ func Test_replace_fails_when_the_context_is_already_cancelled(t *testing.T) {
 // fault; with no fault configured it passes every call through.
 type faultDB struct {
 	duckstore.DB
+
 	path            string
 	checkpointFault error
 	afterCheckpoint func()
@@ -426,7 +426,7 @@ func Test_replace_does_not_remove_the_stale_wal_before_the_context_gate(t *testi
 
 	require.ErrorIs(t, err, context.Canceled)
 	_, statErr := os.Stat(staleWAL)
-	assert.NoError(t, statErr)
+	require.NoError(t, statErr)
 	after, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Equal(t, before, after)
@@ -447,8 +447,8 @@ func Test_replace_refuses_the_swap_when_the_stale_wal_cannot_be_removed(t *testi
 	_, err = st.Replace(t.Context(), minimalRows())
 
 	require.Error(t, err)
-	assert.NotErrorIs(t, err, store.ErrStoreNotWritable)
-	assert.NotErrorIs(t, err, store.ErrDiskFull)
+	require.NotErrorIs(t, err, store.ErrStoreNotWritable)
+	require.NotErrorIs(t, err, store.ErrDiskFull)
 	after, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Equal(t, before, after)
@@ -461,7 +461,7 @@ func Test_replace_does_not_tag_an_unrelated_build_failure(t *testing.T) {
 	_, err := st.Replace(t.Context(), duplicatePKRows())
 
 	require.Error(t, err)
-	assert.NotErrorIs(t, err, store.ErrStoreNotWritable)
+	require.NotErrorIs(t, err, store.ErrStoreNotWritable)
 	assert.NotErrorIs(t, err, store.ErrDiskFull)
 }
 
@@ -542,6 +542,7 @@ func Test_store_exists_treats_a_stat_fault_as_a_store(t *testing.T) {
 // createLeavingPartial returns a create func that writes a partial and its
 // .wal at the path it is given, as a racing run would, then fails with err.
 func createLeavingPartial(t *testing.T, err error) func(context.Context, string) (duckstore.DB, error) {
+	t.Helper()
 	return func(_ context.Context, path string) (duckstore.DB, error) {
 		require.NoError(t, os.WriteFile(path, []byte("partial"), 0o600))
 		require.NoError(t, os.WriteFile(path+".wal", []byte("wal"), 0o600))
@@ -587,7 +588,7 @@ func Test_replace_reports_a_create_collision_as_an_untagged_build_failure(t *tes
 	_, err := st.Replace(t.Context(), minimalRows())
 
 	require.ErrorIs(t, err, duckdb.ErrExists)
-	assert.NotErrorIs(t, err, store.ErrStoreNotWritable)
+	require.NotErrorIs(t, err, store.ErrStoreNotWritable)
 	assert.NotErrorIs(t, err, store.ErrDiskFull)
 }
 

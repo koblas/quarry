@@ -35,12 +35,15 @@ func (f *fixedPathDestination) Prepare(context.Context) error { return nil }
 func (f *fixedPathDestination) Backup(_ context.Context, _ snapshot.Source, name string) (string, string, error) {
 	return f.snapshotPath, name, nil
 }
+
 func (f *fixedPathDestination) WriteManifest(context.Context, string, []byte) (string, error) {
 	return "", nil
 }
+
 func (f *fixedPathDestination) CommitSnapshot(context.Context, string) (string, error) {
 	return "", nil
 }
+
 func (f *fixedPathDestination) CommitManifest(context.Context, string) (string, error) {
 	return "", nil
 }

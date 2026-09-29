@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -224,7 +223,7 @@ func Test_run_keeps_the_snapshot_message_when_writing_stdout_fails_on_a_schema_m
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
-	writeErr := errors.New("no space left on device")
+	writeErr := errNoSpace
 	var stderr bytes.Buffer
 
 	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, failingWriter{err: writeErr}, &stderr)

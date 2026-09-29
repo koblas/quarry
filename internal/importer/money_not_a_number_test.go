@@ -20,7 +20,7 @@ func setColumnBlob(t *testing.T, dataPath, table, column string, pk int64, value
 	db, err := sql.Open("sqlite3", dataPath)
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
-	_, err = db.Exec("UPDATE "+table+" SET "+column+" = ? WHERE Z_PK = ?", value, pk)
+	_, err = db.ExecContext(t.Context(), "UPDATE "+table+" SET "+column+" = ? WHERE Z_PK = ?", value, pk) //nolint:gosec // table and column are test constants
 	require.NoError(t, err)
 }
 
@@ -31,7 +31,7 @@ func setColumnEmptyText(t *testing.T, dataPath, table, column string, pk int64) 
 	db, err := sql.Open("sqlite3", dataPath)
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
-	_, err = db.Exec("UPDATE "+table+" SET "+column+" = '' WHERE Z_PK = ?", pk)
+	_, err = db.ExecContext(t.Context(), "UPDATE "+table+" SET "+column+" = '' WHERE Z_PK = ?", pk) //nolint:gosec // table and column are test constants
 	require.NoError(t, err)
 }
 

@@ -31,7 +31,7 @@ func Test_formatMB(t *testing.T) {
 }
 
 func Test_renderSuccess_reports_one_account_in_the_singular(t *testing.T) {
-	m := snapshot.Manifest{Snapshot: snapshot.SnapshotInfo{Accounts: 1}}
+	m := snapshot.Manifest{Snapshot: snapshot.Info{Accounts: 1}}
 
 	got := renderSuccess(m, "/Users/dave")
 
@@ -39,7 +39,7 @@ func Test_renderSuccess_reports_one_account_in_the_singular(t *testing.T) {
 }
 
 func Test_renderSuccess_reports_many_accounts_in_the_plural_with_thousands_grouped(t *testing.T) {
-	m := snapshot.Manifest{Snapshot: snapshot.SnapshotInfo{Accounts: 1000}}
+	m := snapshot.Manifest{Snapshot: snapshot.Info{Accounts: 1000}}
 
 	got := renderSuccess(m, "/Users/dave")
 
@@ -141,13 +141,13 @@ func Test_renderSuccess_writes_no_diff_rows_on_an_exact_match(t *testing.T) {
 
 	got := renderSuccess(m, "/Users/dave")
 
-	assert.False(t, strings.Contains(got, "  -"))
-	assert.False(t, strings.Contains(got, "  +"))
+	assert.NotContains(t, got, "  -")
+	assert.NotContains(t, got, "  +")
 }
 
 func Test_renderSuccess_reports_the_exact_match_schema_line(t *testing.T) {
 	m := snapshot.Manifest{
-		Snapshot: snapshot.SnapshotInfo{
+		Snapshot: snapshot.Info{
 			Path:     "/Users/dave/Library/Application Support/quarry/snapshots/20260927T143005Z.sqlite",
 			Manifest: "/Users/dave/Library/Application Support/quarry/snapshots/20260927T143005Z.json",
 			Source:   "/Users/dave/Documents/Home.quicken",
@@ -469,7 +469,7 @@ func Test_oneSidedRows(t *testing.T) {
 		rows := oneSidedRows([]store.OneSidedTransfer{
 			{
 				Date: date, Account: "Chequing", Currency: "CAD", Active: true, Payee: "Rent", Amount: -50000,
-				OtherAccount: strPtr("Savings"), OtherAccountID: strPtr("acct-2"),
+				OtherAccount: new("Savings"), OtherAccountID: new("acct-2"),
 			},
 		})
 		assert.Equal(t, []string{"  ? 2019-06-14  Chequing (CAD)  Rent  -500.00  other account: Savings"}, rows)
@@ -477,7 +477,7 @@ func Test_oneSidedRows(t *testing.T) {
 
 	t.Run("name matching no account is marked not in this file", func(t *testing.T) {
 		rows := oneSidedRows([]store.OneSidedTransfer{
-			{Date: date, Account: "Chequing", Currency: "CAD", Active: true, Payee: "Rent", Amount: -50000, OtherAccount: strPtr("Old Visa")},
+			{Date: date, Account: "Chequing", Currency: "CAD", Active: true, Payee: "Rent", Amount: -50000, OtherAccount: new("Old Visa")},
 		})
 		assert.Equal(t, []string{"  ? 2019-06-14  Chequing (CAD)  Rent  -500.00  other account: Old Visa (not in this file)"}, rows)
 	})
@@ -513,7 +513,7 @@ func Test_renderStoreFailure(t *testing.T) {
 				Transfers: store.TransferCheck{Paired: 1, OneSided: []store.OneSidedTransfer{
 					{
 						Date: time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC), Account: "Chequing", Currency: "CAD", Active: true,
-						Payee: "Rent", Amount: -50000, OtherAccount: strPtr("Old Visa"),
+						Payee: "Rent", Amount: -50000, OtherAccount: new("Old Visa"),
 					},
 				}},
 			},
@@ -595,5 +595,3 @@ func Test_renderStoreFailure(t *testing.T) {
 		assert.Contains(t, got, "Splits    DIFFER for 1,000 of 1,204 transactions\n")
 	})
 }
-
-func strPtr(s string) *string { return &s }

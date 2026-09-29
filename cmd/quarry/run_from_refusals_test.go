@@ -30,23 +30,27 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 		{
 			name: "a path that does not exist",
 			setup: func(t *testing.T) (string, string) {
+				t.Helper()
 				home := t.TempDir()
 				t.Setenv("HOME", home)
 				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 				return home, filepath.Join(snapshotsDir, "20260927T143005Z.sqlite")
 			},
 			want: func(t *testing.T, home, from string) string {
+				t.Helper()
 				return "quarry: " + abbreviated(t, from, home) + " does not exist; check the path passed to --from"
 			},
 		},
 		{
 			name: "an unknown ID",
 			setup: func(t *testing.T) (string, string) {
+				t.Helper()
 				home := t.TempDir()
 				t.Setenv("HOME", home)
 				return home, "20260927T143005Z"
 			},
-			want: func(t *testing.T, home, from string) string {
+			want: func(t *testing.T, home, _ string) string {
+				t.Helper()
 				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 				return "quarry: no snapshot 20260927T143005Z in " + abbreviated(t, snapshotsDir, home) +
 					"; check the ID passed to --from"
@@ -55,6 +59,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 		{
 			name: "a directory",
 			setup: func(t *testing.T) (string, string) {
+				t.Helper()
 				home := t.TempDir()
 				t.Setenv("HOME", home)
 				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
@@ -63,6 +68,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 				return home, dir
 			},
 			want: func(t *testing.T, home, from string) string {
+				t.Helper()
 				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 				return "quarry: " + abbreviated(t, from, home) + " is not a snapshot file; pass a .sqlite snapshot from " +
 					abbreviated(t, snapshotsDir, home) + " with --from <snapshot>"
@@ -71,12 +77,14 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 		{
 			name: "a .quicken bundle",
 			setup: func(t *testing.T) (string, string) {
+				t.Helper()
 				home := t.TempDir()
 				t.Setenv("HOME", home)
 				bundle := v9fixture.OpenBundle(t, t.TempDir())
 				return home, bundle.Dir
 			},
 			want: func(t *testing.T, _, from string) string {
+				t.Helper()
 				return "quarry: " + from + " is a Quicken file, not a snapshot; " +
 					"pass it with --quicken <path>, or pass a snapshot with --from <snapshot>"
 			},
@@ -84,6 +92,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 		{
 			name: "a file with no manifest",
 			setup: func(t *testing.T) (string, string) {
+				t.Helper()
 				home := t.TempDir()
 				t.Setenv("HOME", home)
 				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
@@ -92,6 +101,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 				return home, "20260927T143005Z"
 			},
 			want: func(t *testing.T, home, _ string) string {
+				t.Helper()
 				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 				path := filepath.Join(snapshotsDir, "20260927T143005Z.sqlite")
 				return "quarry: " + abbreviated(t, path, home) +
@@ -101,6 +111,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 		{
 			name: "an unreadable file",
 			setup: func(t *testing.T) (string, string) {
+				t.Helper()
 				if os.Geteuid() == 0 {
 					t.Skip("root ignores file permissions")
 				}
@@ -117,6 +128,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 				return home, "20260927T143005Z"
 			},
 			want: func(t *testing.T, home, _ string) string {
+				t.Helper()
 				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 				path := filepath.Join(snapshotsDir, "20260927T143005Z.sqlite")
 				return "quarry: cannot read " + abbreviated(t, path, home) + ": permission denied; check the file's permissions"
@@ -125,6 +137,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 		{
 			name: "a snapshot whose hash changed",
 			setup: func(t *testing.T) (string, string) {
+				t.Helper()
 				home := t.TempDir()
 				t.Setenv("HOME", home)
 				bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
@@ -145,6 +158,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 				return home, id
 			},
 			want: func(t *testing.T, home, from string) string {
+				t.Helper()
 				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 				path := filepath.Join(snapshotsDir, from+".sqlite")
 				return "quarry: " + abbreviated(t, path, home) +
@@ -173,7 +187,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 func writeManifestForTest(t *testing.T, snapshotPath string, content []byte) {
 	t.Helper()
 	sum := sha256.Sum256(content)
-	manifest := snapshot.Manifest{Snapshot: snapshot.SnapshotInfo{
+	manifest := snapshot.Manifest{Snapshot: snapshot.Info{
 		Source: "/Users/x/Documents/Home.quicken", SHA256: hex.EncodeToString(sum[:]),
 	}}
 	data, err := manifest.Encode()

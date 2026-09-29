@@ -199,13 +199,12 @@ func Test_import_reports_a_transaction_whose_splits_exceed_its_amount(t *testing
 
 // mismatchedBalanceAccount adds an account whose reconciled sum never
 // matches its statement, for tests that only care about display order.
-func mismatchedBalanceAccount(b *v9fixture.Builder, name, accType string, day time.Time) int64 {
+func mismatchedBalanceAccount(b *v9fixture.Builder, name, accType string, day time.Time) {
 	acctPK := b.Account(v9fixture.AccountRow{Name: name, Type: accType, Currency: "CAD", Active: true})
 	reconciled := int64(2)
 	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "10.00", PostedDate: &day, Status: &reconciled})
 	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "10.00"})
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &day, EndingBalance: "20.00"})
-	return acctPK
 }
 
 // Zebra is inserted first but sorts last; two "Chequing" accounts at
@@ -327,7 +326,7 @@ func Test_import_carries_each_split_mismatchs_account_closed_and_active_flags(t 
 	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.ErrorIs(t, err, store.ErrValidationFailed)
-	var got [][2]bool
+	got := make([][2]bool, 0, len(result.Validation.Splits.Mismatched))
 	for _, m := range result.Validation.Splits.Mismatched {
 		got = append(got, [2]bool{m.Closed, m.Active})
 	}

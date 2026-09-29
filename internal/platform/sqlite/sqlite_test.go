@@ -23,9 +23,9 @@ func newTestDatabase(t *testing.T) string {
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
-	_, err = conn.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
+	_, err = conn.ExecContext(t.Context(), "CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
 	require.NoError(t, err)
-	_, err = conn.Exec("INSERT INTO t (v) VALUES ('a')")
+	_, err = conn.ExecContext(t.Context(), "INSERT INTO t (v) VALUES ('a')")
 	require.NoError(t, err)
 	return path
 }
@@ -73,9 +73,9 @@ func Test_schema_wraps_the_error_when_a_table_column_read_fails(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data")
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
-	_, err = conn.Exec("PRAGMA writable_schema = ON")
+	_, err = conn.ExecContext(t.Context(), "PRAGMA writable_schema = ON")
 	require.NoError(t, err)
-	_, err = conn.Exec("INSERT INTO sqlite_master (type, name, tbl_name, rootpage, sql) VALUES " +
+	_, err = conn.ExecContext(t.Context(), "INSERT INTO sqlite_master (type, name, tbl_name, rootpage, sql) VALUES "+
 		"('table', 'ZFOO', 'ZFOO', 0, 'CREATE VIRTUAL TABLE ZFOO USING nonexistent_module')")
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
@@ -87,7 +87,7 @@ func Test_schema_wraps_the_error_when_a_table_column_read_fails(t *testing.T) {
 	_, err = db.Schema(t.Context())
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "columns of ZFOO")
+	require.ErrorContains(t, err, "columns of ZFOO")
 	assert.ErrorContains(t, err, "no such module")
 }
 
@@ -97,7 +97,7 @@ func Test_schema_reads_quoted_table_and_column_names_verbatim(t *testing.T) {
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
-	_, err = conn.Exec(`CREATE TABLE "order" ("select" TEXT)`)
+	_, err = conn.ExecContext(t.Context(), `CREATE TABLE "order" ("select" TEXT)`)
 	require.NoError(t, err)
 
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
@@ -138,7 +138,7 @@ func rawIntegrityCheckRow(t *testing.T, path string) string {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 	var row string
-	require.NoError(t, conn.QueryRow("PRAGMA integrity_check").Scan(&row))
+	require.NoError(t, conn.QueryRowContext(t.Context(), "PRAGMA integrity_check").Scan(&row))
 	return row
 }
 
@@ -151,10 +151,10 @@ func newMultiPageTestDatabase(t *testing.T) string {
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
-	_, err = conn.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
+	_, err = conn.ExecContext(t.Context(), "CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
 	require.NoError(t, err)
-	for i := 0; i < 500; i++ {
-		_, err = conn.Exec("INSERT INTO t (v) VALUES (?)", strings.Repeat("x", 100))
+	for range 500 {
+		_, err = conn.ExecContext(t.Context(), "INSERT INTO t (v) VALUES (?)", strings.Repeat("x", 100))
 		require.NoError(t, err)
 	}
 	return path
@@ -170,7 +170,7 @@ func corruptLastPage(t *testing.T, path string) {
 	for i := len(raw) - 200; i < len(raw)-100; i++ {
 		raw[i] ^= 0xFF
 	}
-	require.NoError(t, os.WriteFile(path, raw, 0o600))
+	require.NoError(t, os.WriteFile(path, raw, 0o600)) //nolint:gosec // path is under the test's own temp dir
 }
 
 func Test_schema_fails_when_the_connection_is_closed(t *testing.T) {
@@ -327,11 +327,11 @@ func newWALTestDatabase(t *testing.T) string {
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
-	_, err = conn.Exec("PRAGMA journal_mode=WAL")
+	_, err = conn.ExecContext(t.Context(), "PRAGMA journal_mode=WAL")
 	require.NoError(t, err)
-	_, err = conn.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
+	_, err = conn.ExecContext(t.Context(), "CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
 	require.NoError(t, err)
-	_, err = conn.Exec("INSERT INTO t (v) VALUES ('a')")
+	_, err = conn.ExecContext(t.Context(), "INSERT INTO t (v) VALUES ('a')")
 	require.NoError(t, err)
 	return path
 }
@@ -349,6 +349,8 @@ func Test_backup_fails_when_the_destination_directory_is_missing(t *testing.T) {
 	require.Error(t, err)
 }
 
+var errNotSQLite3 = errors.New("boom")
+
 func Test_IsNotADB_and_IsBusy_classify_sqlite3_error_codes(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -364,11 +366,12 @@ func Test_IsNotADB_and_IsBusy_classify_sqlite3_error_codes(t *testing.T) {
 		{name: "busy extended code (recovery)", err: sqlite3.Error{Code: sqlite3.ErrNo(sqlite3.ErrBusyRecovery)}, wantBusy: true},
 		{name: "locked extended code (shared cache)", err: sqlite3.Error{Code: sqlite3.ErrNo(sqlite3.ErrLockedSharedCache)}, wantBusy: true},
 		{name: "unrelated sqlite3 error", err: sqlite3.Error{Code: sqlite3.ErrCorrupt}},
-		{name: "non-sqlite3 error", err: errors.New("boom")},
+		{name: "non-sqlite3 error", err: errNotSQLite3},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, c.wantNotADB, sqlite.IsNotADB(c.err))
 			assert.Equal(t, c.wantBusy, sqlite.IsBusy(c.err))
 		})

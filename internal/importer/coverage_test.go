@@ -112,8 +112,8 @@ func Test_import_skips_a_split_tag_link_whose_split_was_itself_skipped(t *testin
 func Test_import_full_path_falls_back_to_source_id_for_a_nameless_parent(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	parentPK := b.Category(v9fixture.TagRow{Type: v9fixture.Int64Ptr(1)})
-	b.Category(v9fixture.TagRow{Name: "Groceries", Type: v9fixture.Int64Ptr(1), ParentCategory: parentPK})
+	parentPK := b.Category(v9fixture.TagRow{Type: new(int64(1))})
+	b.Category(v9fixture.TagRow{Name: "Groceries", Type: new(int64(1)), ParentCategory: parentPK})
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
@@ -126,8 +126,8 @@ func Test_import_full_path_falls_back_to_source_id_for_a_nameless_parent(t *test
 func Test_import_bounds_a_cyclic_category_parent_chain(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	b.Category(v9fixture.TagRow{Name: "A", Type: v9fixture.Int64Ptr(1), ParentCategory: 2})
-	b.Category(v9fixture.TagRow{Name: "B", Type: v9fixture.Int64Ptr(1), ParentCategory: 1})
+	b.Category(v9fixture.TagRow{Name: "A", Type: new(int64(1)), ParentCategory: 2})
+	b.Category(v9fixture.TagRow{Name: "B", Type: new(int64(1)), ParentCategory: 1})
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
@@ -143,7 +143,7 @@ func Test_import_upgrades_the_reported_class_when_a_higher_priority_offender_is_
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Type: "CHECKING", Currency: "CAD", Active: true})
-	b.Category(v9fixture.TagRow{Name: "Food:Groceries", Type: v9fixture.Int64Ptr(5)})
+	b.Category(v9fixture.TagRow{Name: "Food:Groceries", Type: new(int64(5))})
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
@@ -157,7 +157,7 @@ func Test_UnmappableError_matches_ErrUnmappable_and_keeps_its_reason(t *testing.
 	t.Parallel()
 	err := fmt.Errorf("import: %w", &importer.UnmappableError{Reason: "boom"})
 
-	assert.ErrorIs(t, err, store.ErrUnmappable)
+	require.ErrorIs(t, err, store.ErrUnmappable)
 	assert.Equal(t, "boom", errors.Unwrap(err).Error())
 }
 

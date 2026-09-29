@@ -159,6 +159,7 @@ func mapTransactions(
 		case moneyTooLarge:
 			off.add(offender{class: classTooLarge, reason: reasonTransactionTooLarge(dateStr, acct.Name, amtText.String), dated: true, date: date, account: acct.Name, sourceID: pk})
 			return nil
+		case moneyOK, moneyNotANumber: // moneyNotANumber returned above
 		}
 
 		var statusStr string

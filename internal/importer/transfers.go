@@ -98,7 +98,7 @@ func pairTransfers(splits []store.Split, links []transferLink, transactions []st
 	return rows, check
 }
 
-// pairLegs links from and to to each other's account and returns their
+// pairLegs links the from and to splits to each other's account and returns their
 // transfers row, keyed by from.
 func pairLegs(from, to *store.Split, accountOf, currencyOf map[string]string) store.Transfer {
 	fromAccount, toAccount := accountOf[from.TransactionID], accountOf[to.TransactionID]

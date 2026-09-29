@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/koblas/quarry/internal/platform/sqlschema"
-	"github.com/koblas/quarry/internal/quicken/v9"
+	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/stretchr/testify/assert"
@@ -25,7 +25,7 @@ func garbageFileOpenCause(t *testing.T, path string) error {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 	var count int
-	return conn.QueryRow("SELECT count(*) FROM sqlite_master").Scan(&count)
+	return conn.QueryRowContext(t.Context(), "SELECT count(*) FROM sqlite_master").Scan(&count)
 }
 
 // An unclassified buildManifest failure names the bundle and carries the
@@ -61,13 +61,13 @@ func Test_sync_refuses_a_snapshot_whose_schema_cannot_be_read(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "snap.sqlite")
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
-	_, err = conn.Exec("CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZNAME TEXT)")
+	_, err = conn.ExecContext(t.Context(), "CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZNAME TEXT)")
 	require.NoError(t, err)
-	_, err = conn.Exec("INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
+	_, err = conn.ExecContext(t.Context(), "INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
 	require.NoError(t, err)
-	_, err = conn.Exec("PRAGMA writable_schema = ON")
+	_, err = conn.ExecContext(t.Context(), "PRAGMA writable_schema = ON")
 	require.NoError(t, err)
-	_, err = conn.Exec("INSERT INTO sqlite_master (type, name, tbl_name, rootpage, sql) VALUES " +
+	_, err = conn.ExecContext(t.Context(), "INSERT INTO sqlite_master (type, name, tbl_name, rootpage, sql) VALUES "+
 		"('table', 'ZFOO', 'ZFOO', 0, 'CREATE VIRTUAL TABLE ZFOO USING nonexistent_module')")
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
@@ -97,7 +97,7 @@ func lastIntegrityCheckLine(t *testing.T, path string) string {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 	var row string
-	require.NoError(t, conn.QueryRow("PRAGMA integrity_check").Scan(&row))
+	require.NoError(t, conn.QueryRowContext(t.Context(), "PRAGMA integrity_check").Scan(&row))
 	lines := strings.Split(row, "\n")
 	return lines[len(lines)-1]
 }
@@ -130,7 +130,7 @@ func Test_sync_refuses_a_snapshot_with_no_accounts_table(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "no-accounts.sqlite")
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
-	_, err = conn.Exec("CREATE TABLE OTHER (id INTEGER PRIMARY KEY)")
+	_, err = conn.ExecContext(t.Context(), "CREATE TABLE OTHER (id INTEGER PRIMARY KEY)")
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
 	home := t.TempDir()
@@ -156,7 +156,7 @@ func Test_sync_refuses_a_snapshot_with_no_account_rows(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "empty-accounts.sqlite")
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
-	_, err = conn.Exec("CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZNAME TEXT)")
+	_, err = conn.ExecContext(t.Context(), "CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZNAME TEXT)")
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
 	home := t.TempDir()

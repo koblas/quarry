@@ -40,5 +40,11 @@ func executeDDL(ctx context.Context, ddl string) (sqlschema.Schema, error) {
 	if _, err := db.Exec(ctx, ddl); err != nil {
 		return nil, fmt.Errorf("execute schema: %w", err)
 	}
-	return db.Schema(ctx)
+	schema, err := db.Schema(ctx)
+	if err != nil {
+		// unreachable: Schema reads sqlite_master of the in-memory database the DDL above just built;
+		// only a ctx cancelled between Exec and Schema reaches here, a race no test can pin.
+		return nil, fmt.Errorf("read schema: %w", err)
+	}
+	return schema, nil
 }

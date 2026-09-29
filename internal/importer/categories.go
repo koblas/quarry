@@ -96,7 +96,7 @@ func categoryFullPath(byPK map[int64]rawCategory, r rawCategory) string {
 	names := []string{categoryName(r)}
 	seen := map[int64]bool{r.pk: true}
 	cur := r
-	for i := 0; i < len(byPK); i++ {
+	for range len(byPK) {
 		if !cur.parent.Valid || cur.parent.Int64 == 0 {
 			break
 		}

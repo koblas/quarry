@@ -1,7 +1,6 @@
 package importer_test
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -42,7 +41,7 @@ func Test_import_refuses_when_one_required_entity_is_missing(t *testing.T) {
 	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	var unmappable *importer.UnmappableError
-	require.True(t, errors.As(err, &unmappable))
+	require.ErrorAs(t, err, &unmappable)
 	assert.Equal(t, "the snapshot has no UserTag entity, which quarry needs to read Quicken's records", unmappable.Reason)
 }
 
@@ -55,7 +54,7 @@ func Test_import_refuses_when_several_required_entities_are_missing(t *testing.T
 	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	var unmappable *importer.UnmappableError
-	require.True(t, errors.As(err, &unmappable))
+	require.ErrorAs(t, err, &unmappable)
 	assert.Equal(t,
 		"the snapshot has no CategoryTag or UserTag entity, which quarry needs to read Quicken's records",
 		unmappable.Reason)

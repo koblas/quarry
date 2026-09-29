@@ -20,6 +20,9 @@ var ErrExists = errors.New("duckdb: file already exists")
 // ErrWALRemains is returned by CheckpointClose when a .wal file is still present after CHECKPOINT.
 var ErrWALRemains = errors.New("duckdb: wal file remains after checkpoint")
 
+// errNotDuckDBConn reports a pooled connection from some other driver.
+var errNotDuckDBConn = errors.New("connection is not a duckdb driver connection")
+
 // DB is a single DuckDB connection opened by this package, pinned to one
 // pool connection so callers, the Appender and CheckpointClose all observe
 // the same session.
@@ -85,7 +88,7 @@ func OpenReadOnly(ctx context.Context, path string) (*DB, error) {
 
 // Exec runs query against the connection.
 func (d *DB) Exec(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	return d.conn.ExecContext(ctx, query, args...)
+	return d.conn.ExecContext(ctx, query, args...) //nolint:wrapcheck // thin adapter over *sql.DB; callers add context
 }
 
 // AppendRows bulk-inserts rows into table via the driver's Appender, one
@@ -99,11 +102,11 @@ func (d *DB) AppendRows(ctx context.Context, table string, rows [][]any) error {
 	}
 	defer func() { _ = conn.Close() }()
 
-	return conn.Raw(func(driverConn any) error {
+	return conn.Raw(func(driverConn any) error { //nolint:wrapcheck // Raw returns the callback's error, already wrapped below
 		dc, ok := driverConn.(driver.Conn)
 		if !ok {
 			// unreachable: this package only ever opens connections through the duckdb driver.
-			return fmt.Errorf("append rows to %s: connection is not a duckdb driver connection", table)
+			return fmt.Errorf("append rows to %s: %w", table, errNotDuckDBConn)
 		}
 		app, err := duckdbdriver.NewAppenderFromConn(dc, "", table)
 		if err != nil {
@@ -113,7 +116,7 @@ func (d *DB) AppendRows(ctx context.Context, table string, rows [][]any) error {
 		for _, row := range rows {
 			if err := ctx.Err(); err != nil {
 				_ = app.Close()
-				return err
+				return fmt.Errorf("append rows to %s: %w", table, err)
 			}
 			values := make([]driver.Value, len(row))
 			for i, v := range row {
@@ -180,14 +183,14 @@ func checkNoWAL(path string) error {
 	if _, err := os.Stat(path + ".wal"); err == nil {
 		return ErrWALRemains
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
+		return fmt.Errorf("stat %s.wal: %w", path, err)
 	}
 	return nil
 }
 
 // Close closes the underlying connection without running CHECKPOINT.
 func (d *DB) Close() error {
-	return d.conn.Close()
+	return d.conn.Close() //nolint:wrapcheck // thin adapter over *sql.DB; callers add context
 }
 
 // Decimal returns a driver value representing unscaled x 10^-scale as
@@ -198,7 +201,7 @@ func Decimal(unscaled int64, width, scale uint8) (any, error) {
 	limit := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(width)), nil)
 	value := big.NewInt(unscaled)
 	if new(big.Int).Abs(value).Cmp(limit) >= 0 {
-		return nil, fmt.Errorf("decimal %d exceeds DECIMAL(%d,%d)", unscaled, width, scale)
+		return nil, decimalRangeError{unscaled: unscaled, width: width, scale: scale}
 	}
 	return duckdbdriver.Decimal{Width: width, Scale: scale, Value: value}, nil
 }
@@ -226,4 +229,15 @@ func isDriverIOError(err error, errno syscall.Errno) bool {
 		return false
 	}
 	return strings.Contains(strings.ToLower(derr.Msg), strings.ToLower(errno.Error()))
+}
+
+// decimalRangeError is Decimal's refusal of an unscaled value too wide for
+// DECIMAL(width, scale).
+type decimalRangeError struct {
+	unscaled     int64
+	width, scale uint8
+}
+
+func (e decimalRangeError) Error() string {
+	return fmt.Sprintf("decimal %d exceeds DECIMAL(%d,%d)", e.unscaled, e.width, e.scale)
 }

@@ -36,7 +36,7 @@ func newDirDestination(dir string) Destination {
 	return &dirDestination{dir: dir}
 }
 
-func (d *dirDestination) Prepare(ctx context.Context) error {
+func (d *dirDestination) Prepare(_ context.Context) error {
 	if err := os.MkdirAll(d.dir, 0o700); err != nil {
 		return fmt.Errorf("create snapshots directory %s: %w", d.dir, err)
 	}
@@ -107,7 +107,7 @@ func fileExists(path string) bool {
 // WriteManifest writes data to name's partial and fsyncs it before closing,
 // so a crash right after this call cannot leave a truncated manifest on
 // disk once it is later committed.
-func (d *dirDestination) WriteManifest(ctx context.Context, name string, data []byte) (string, error) {
+func (d *dirDestination) WriteManifest(_ context.Context, name string, data []byte) (string, error) {
 	partial := d.partialPath(name, "json")
 
 	f, err := atomicfile.Create(partial, 0o600)
@@ -135,7 +135,7 @@ func (d *dirDestination) WriteManifest(ctx context.Context, name string, data []
 	return partial, nil
 }
 
-func (d *dirDestination) CommitSnapshot(ctx context.Context, partial string) (string, error) {
+func (d *dirDestination) CommitSnapshot(_ context.Context, partial string) (string, error) {
 	final := d.finalPath(partial)
 	if err := atomicfile.Commit(partial, final); err != nil {
 		return "", fmt.Errorf("commit snapshot: %w", err)
@@ -143,7 +143,7 @@ func (d *dirDestination) CommitSnapshot(ctx context.Context, partial string) (st
 	return final, nil
 }
 
-func (d *dirDestination) CommitManifest(ctx context.Context, partial string) (string, error) {
+func (d *dirDestination) CommitManifest(_ context.Context, partial string) (string, error) {
 	final := d.finalPath(partial)
 	if err := atomicfile.Commit(partial, final); err != nil {
 		return "", fmt.Errorf("commit manifest: %w", err)
@@ -155,7 +155,7 @@ func (d *dirDestination) FinalPaths(name string) (string, string) {
 	return d.finalPath(d.partialPath(name, "sqlite")), d.finalPath(d.partialPath(name, "json"))
 }
 
-func (d *dirDestination) Discard(ctx context.Context, partial string) error {
+func (d *dirDestination) Discard(_ context.Context, partial string) error {
 	if err := os.Remove(partial); err != nil {
 		return fmt.Errorf("discard snapshot partial: %w", err)
 	}

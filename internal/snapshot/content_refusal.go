@@ -26,13 +26,9 @@ func contentRefusal(home, bundlePath string, err error) error {
 			"the snapshot of %s failed SQLite's integrity check (%s); nothing was kept; quit and reopen the file in Quicken, then run quarry sync again",
 			homepath.Abbreviate(home, bundlePath), integrityErr.Result)}
 	case errors.Is(err, errNoAccountsTable):
-		return RefusalError{msg: fmt.Sprintf(
-			"%s is not a Quicken Classic for Mac database (no ZACCOUNT table); pass the right file with --quicken <path>",
-			homepath.Abbreviate(home, bundlePath))}
+		return RefusalError{msg: homepath.Abbreviate(home, bundlePath) + " is not a Quicken Classic for Mac database (no ZACCOUNT table); pass the right file with --quicken <path>"}
 	case errors.Is(err, errNoAccounts):
-		return RefusalError{msg: fmt.Sprintf(
-			"%s has no accounts; nothing was kept; check you have the right file open, or pass it with --quicken <path>",
-			homepath.Abbreviate(home, bundlePath))}
+		return RefusalError{msg: homepath.Abbreviate(home, bundlePath) + " has no accounts; nothing was kept; check you have the right file open, or pass it with --quicken <path>"}
 	default:
 		return RefusalError{msg: fmt.Sprintf(
 			"cannot read the snapshot of %s: %s; nothing was kept; run quarry sync again",

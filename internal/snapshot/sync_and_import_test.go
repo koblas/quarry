@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
-	"github.com/koblas/quarry/internal/quicken/v9"
+	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store"
@@ -147,7 +147,7 @@ func Test_sync_and_import_frames_an_import_failure_as_a_store_refusal(t *testing
 	outcome, err := srv.SyncAndImport(t.Context(), bundle.Dir)
 
 	require.Error(t, err)
-	assert.ErrorIs(t, err, errImportBoom)
+	require.ErrorIs(t, err, errImportBoom)
 	assert.Nil(t, outcome.Store)
 	id := snapshotIDFromPath(outcome.Manifest.Snapshot.Path)
 	want := fmt.Sprintf("cannot build the store in %s: %s; run quarry sync --from %s",
@@ -157,13 +157,14 @@ func Test_sync_and_import_frames_an_import_failure_as_a_store_refusal(t *testing
 	assert.FileExists(t, outcome.Manifest.Snapshot.Manifest)
 }
 
+var errDuckDBDiskFull = errors.New(`IO Error: Could not write file "quarry.duckdb.partial": No space left on device`)
+
 func Test_sync_and_import_reports_each_build_failure_with_its_refusal(t *testing.T) {
 	t.Parallel()
 	permission := taggedBuildError{sentinel: store.ErrStoreNotWritable, cause: &fs.PathError{
 		Op: "open", Path: "quarry.duckdb.partial", Err: fs.ErrPermission,
 	}}
-	diskFull := taggedBuildError{sentinel: store.ErrDiskFull, cause: errors.New(
-		`IO Error: Could not write file "quarry.duckdb.partial": No space left on device`)}
+	diskFull := taggedBuildError{sentinel: store.ErrDiskFull, cause: errDuckDBDiskFull}
 	unmappable := unmappableError{reason: `account "Euro Savings" uses currency EUR; quarry supports CAD and USD accounts`}
 	interrupted := func(_, storePath, id string) string {
 		return "sync interrupted while building the store; " + storePath + " was not changed; run quarry sync --from " + id + " to rebuild it"
@@ -210,6 +211,7 @@ func Test_sync_and_import_reports_each_build_failure_with_its_refusal(t *testing
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			bundle := v9fixture.OpenBundle(t, t.TempDir())
 			home := t.TempDir()
 			ctx, cancel := context.WithCancel(t.Context())
@@ -283,7 +285,7 @@ func Test_sync_and_import_does_not_import_when_the_snapshot_fails(t *testing.T) 
 
 	require.Error(t, err)
 	var mismatch snapshot.MismatchError
-	assert.False(t, errors.As(err, &mismatch))
+	assert.NotErrorAs(t, err, &mismatch)
 	assert.Empty(t, fake.calls)
 	assert.Nil(t, outcome.Store)
 }
@@ -327,6 +329,7 @@ func Test_sync_and_import_reports_whether_a_previous_store_existed(t *testing.T)
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			bundle := v9fixture.OpenBundle(t, t.TempDir())
 			home := t.TempDir()
 			fake := &fakeImporter{result: store.Result{Built: false}, err: store.ErrValidationFailed}
@@ -368,6 +371,7 @@ func Test_sync_and_import_refuses_to_import_without_an_importer_or_store_probe(t
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			bundle := v9fixture.OpenBundle(t, t.TempDir())
 			fake := &fakeImporter{}
 			srv := newImportServer(t, t.TempDir(), fake, c.opts...)
@@ -454,6 +458,7 @@ func Test_sync_and_import_reports_a_failed_check_in_the_validation_refusal(t *te
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			bundle := v9fixture.OpenBundle(t, t.TempDir())
 			home := t.TempDir()
 			result := store.Result{Built: false, Counts: store.Counts{Accounts: 3}, Validation: c.validation}

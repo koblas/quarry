@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -91,7 +90,7 @@ func Test_run_removes_leftover_partials_silently_before_syncing(t *testing.T) {
 	assert.Contains(t, stdout.String(), "Snapshot  ")
 	assert.NotContains(t, stdout.String(), ".partial")
 	_, err := os.Stat(leftover)
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorIs(t, err, os.ErrNotExist)
 	_, err = os.Stat(leftoverWAL)
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
@@ -102,7 +101,7 @@ func Test_run_points_to_from_when_writing_stdout_fails_after_the_build(t *testin
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
-	writeErr := errors.New("no space left on device")
+	writeErr := errNoSpace
 	var stderr bytes.Buffer
 
 	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, failingWriter{err: writeErr}, &stderr)

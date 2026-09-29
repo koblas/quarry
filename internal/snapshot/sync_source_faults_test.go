@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/sqlschema"
-	"github.com/koblas/quarry/internal/quicken/v9"
+	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/snapshot"
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -62,6 +62,7 @@ func Test_sync_refuses_when_the_backup_fails(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			home := t.TempDir()
 			snapshotsDir := filepath.Join(home, "snapshots")
 			srv := snapshot.NewServer(
@@ -127,9 +128,9 @@ func Test_sync_refuses_a_busy_bundle(t *testing.T) {
 	conn, err := sql.Open("sqlite3", dataPath)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
-	_, err = conn.Exec("CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZNAME TEXT)")
+	_, err = conn.ExecContext(t.Context(), "CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZNAME TEXT)")
 	require.NoError(t, err)
-	_, err = conn.Exec("INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
+	_, err = conn.ExecContext(t.Context(), "INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
 	require.NoError(t, err)
 
 	locker, err := sql.Open("sqlite3", dataPath)
@@ -183,6 +184,7 @@ func Test_sync_refuses_when_the_source_reports_a_classified_error(t *testing.T) 
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			home := t.TempDir()
 			srv := snapshot.NewServer(
 				snapshot.WithSnapshotDir(t.TempDir()),

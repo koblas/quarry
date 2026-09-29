@@ -109,12 +109,14 @@ func Test_run_refuses_a_bundle_whose_snapshot_content_is_rejected(t *testing.T) 
 		{
 			name: "damaged so only integrity_check fails",
 			buildBundle: func(t *testing.T, home string) string {
+				t.Helper()
 				bundleDir := filepath.Join(home, "Documents", "Home.quicken")
 				require.NoError(t, os.MkdirAll(bundleDir, 0o700))
 				v9fixture.CorruptDataFile(t, filepath.Join(bundleDir, "data"))
 				return bundleDir
 			},
 			wantLine: func(t *testing.T, bundleDir, home string) string {
+				t.Helper()
 				last := integrityCheckLastLine(t, filepath.Join(bundleDir, "data"))
 				return "quarry: the snapshot of " + abbreviated(t, bundleDir, home) +
 					" failed SQLite's integrity check (" + last +
@@ -124,12 +126,14 @@ func Test_run_refuses_a_bundle_whose_snapshot_content_is_rejected(t *testing.T) 
 		{
 			name: "missing ZACCOUNT (including a 0-byte data file)",
 			buildBundle: func(t *testing.T, home string) string {
+				t.Helper()
 				bundleDir := filepath.Join(home, "Documents", "Home.quicken")
 				require.NoError(t, os.MkdirAll(bundleDir, 0o700))
 				require.NoError(t, os.WriteFile(filepath.Join(bundleDir, "data"), nil, 0o600))
 				return bundleDir
 			},
 			wantLine: func(t *testing.T, bundleDir, home string) string {
+				t.Helper()
 				return "quarry: " + abbreviated(t, bundleDir, home) +
 					" is not a Quicken Classic for Mac database (no ZACCOUNT table); pass the right file with --quicken <path>"
 			},
@@ -137,10 +141,12 @@ func Test_run_refuses_a_bundle_whose_snapshot_content_is_rejected(t *testing.T) 
 		{
 			name: "ZACCOUNT with no rows",
 			buildBundle: func(t *testing.T, home string) string {
+				t.Helper()
 				bundle := v9fixture.EmptyAccountsBundle(t, filepath.Join(home, "Documents"))
 				return bundle.Dir
 			},
 			wantLine: func(t *testing.T, bundleDir, home string) string {
+				t.Helper()
 				return "quarry: " + abbreviated(t, bundleDir, home) +
 					" has no accounts; nothing was kept; check you have the right file open, or pass it with --quicken <path>"
 			},
@@ -177,7 +183,7 @@ func integrityCheckLastLine(t *testing.T, path string) string {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 	var row string
-	require.NoError(t, conn.QueryRow("PRAGMA integrity_check").Scan(&row))
+	require.NoError(t, conn.QueryRowContext(t.Context(), "PRAGMA integrity_check").Scan(&row))
 	lines := strings.Split(row, "\n")
 	return lines[len(lines)-1]
 }

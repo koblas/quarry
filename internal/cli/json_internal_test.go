@@ -74,13 +74,13 @@ func Test_renderJSON_encodes_absent_lists_as_empty_arrays(t *testing.T) {
 }
 
 // storeLists decodes data's list fields as generic values, so a JSON null decodes distinguishably from an empty array.
-func storeLists(t *testing.T, data []byte) (balances map[string]any, splitsMismatched, oneSided any) {
+func storeLists(t *testing.T, data []byte) (map[string]any, any, any) {
 	t.Helper()
 	var doc map[string]any
 	require.NoError(t, json.Unmarshal(data, &doc))
 	store, ok := doc["store"].(map[string]any)
 	require.True(t, ok)
-	balances, ok = store["balances"].(map[string]any)
+	balances, ok := store["balances"].(map[string]any)
 	require.True(t, ok)
 	splits, ok := store["splits"].(map[string]any)
 	require.True(t, ok)

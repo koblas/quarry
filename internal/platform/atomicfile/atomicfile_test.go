@@ -1,7 +1,6 @@
 package atomicfile_test
 
 import (
-	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -20,7 +19,7 @@ func Test_create_refuses_an_existing_file(t *testing.T) {
 	_, err := atomicfile.Create(path, 0o600)
 
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, fs.ErrExist))
+	assert.ErrorIs(t, err, fs.ErrExist)
 }
 
 func Test_commit_moves_the_partial_into_place(t *testing.T) {
@@ -37,7 +36,7 @@ func Test_commit_moves_the_partial_into_place(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "payload", string(got))
 	_, err = os.Stat(partial)
-	assert.True(t, errors.Is(err, fs.ErrNotExist))
+	assert.ErrorIs(t, err, fs.ErrNotExist)
 }
 
 func Test_commit_refuses_to_replace_an_existing_file(t *testing.T) {
@@ -51,7 +50,7 @@ func Test_commit_refuses_to_replace_an_existing_file(t *testing.T) {
 	err := atomicfile.Commit(partial, dest)
 
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, fs.ErrExist))
+	require.ErrorIs(t, err, fs.ErrExist)
 	got, err := os.ReadFile(dest)
 	require.NoError(t, err)
 	assert.Equal(t, "original", string(got))
@@ -112,5 +111,5 @@ func Test_commit_fails_when_the_partial_is_missing(t *testing.T) {
 	err := atomicfile.Commit(partial, dest)
 
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, fs.ErrNotExist))
+	assert.ErrorIs(t, err, fs.ErrNotExist)
 }

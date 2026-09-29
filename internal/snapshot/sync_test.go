@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/sqlite"
-	"github.com/koblas/quarry/internal/quicken/v9"
+	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/stretchr/testify/assert"
@@ -133,18 +133,27 @@ func Test_sync_warns_with_correct_singular_plural_agreement_for_extras(t *testin
 		dropColumns  int
 		wantFragment string
 	}{
-		{name: "one extra table only", dropTables: []string{"ZALERT"},
-			wantFragment: "has 1 table that is not in the schema reference; quarry ignores it"},
-		{name: "one extra column only", dropColumns: 1,
-			wantFragment: "has 1 column that is not in the schema reference; quarry ignores it"},
-		{name: "many extra columns only", dropColumns: 2,
-			wantFragment: "has 2 columns that are not in the schema reference; quarry ignores them"},
-		{name: "one extra table and one extra column", dropTables: []string{"ZALERT"}, dropColumns: 1,
-			wantFragment: "has 1 table and 1 column that are not in the schema reference; quarry ignores them"},
+		{
+			name: "one extra table only", dropTables: []string{"ZALERT"},
+			wantFragment: "has 1 table that is not in the schema reference; quarry ignores it",
+		},
+		{
+			name: "one extra column only", dropColumns: 1,
+			wantFragment: "has 1 column that is not in the schema reference; quarry ignores it",
+		},
+		{
+			name: "many extra columns only", dropColumns: 2,
+			wantFragment: "has 2 columns that are not in the schema reference; quarry ignores them",
+		},
+		{
+			name: "one extra table and one extra column", dropTables: []string{"ZALERT"}, dropColumns: 1,
+			wantFragment: "has 1 table and 1 column that are not in the schema reference; quarry ignores them",
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			bundle := v9fixture.OpenBundle(t, t.TempDir())
 			ref, err := v9.Reference(t.Context())
 			require.NoError(t, err)

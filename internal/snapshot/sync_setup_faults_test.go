@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/koblas/quarry/internal/platform/sqlschema"
-	"github.com/koblas/quarry/internal/quicken/v9"
+	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

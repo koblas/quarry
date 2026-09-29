@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//nolint:revive // testing.T leads, by convention
 func waitDone(t *testing.T, ctx context.Context) {
 	t.Helper()
 	select {
@@ -56,7 +57,8 @@ func Test_signalContext_kills_the_process_on_a_second_sigterm(t *testing.T) {
 		return
 	}
 
-	cmd := exec.Command(os.Args[0], "-test.run=^Test_signalContext_kills_the_process_on_a_second_sigterm$")
+	cmd := exec.CommandContext(t.Context(), os.Args[0], //nolint:gosec // re-executes this test binary with a fixed -test.run
+		"-test.run=^Test_signalContext_kills_the_process_on_a_second_sigterm$")
 	cmd.Env = append(os.Environ(), signalSubprocessEnv+"=1")
 	stdout, err := cmd.StdoutPipe()
 	require.NoError(t, err)
@@ -99,9 +101,9 @@ func Test_signalContext_kills_the_process_on_a_second_sigterm(t *testing.T) {
 func runSignalSubprocessChild() {
 	ctx, stop := signalContext(context.Background())
 	defer stop()
-	fmt.Println("ready")
+	_, _ = fmt.Fprintln(os.Stdout, "ready")
 	<-ctx.Done()
-	fmt.Println("done")
+	_, _ = fmt.Fprintln(os.Stdout, "done")
 	time.Sleep(30 * time.Second)
 }
 
