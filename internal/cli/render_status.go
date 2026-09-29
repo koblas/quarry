@@ -11,11 +11,8 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// Layouts for the snapshot's local moment and for a store date (a calendar day).
-const (
-	takenLayout = "2006-01-02 15:04 MST"
-	dateLayout  = "2006-01-02"
-)
+// takenLayout is the format of the snapshot's local moment.
+const takenLayout = "2006-01-02 15:04 MST"
 
 // renderStatus renders st's Store, Snapshot, Source, Dates, Rows, Balances,
 // Splits and Transfers lines, ages measured against now.
@@ -58,7 +55,7 @@ func datesLine(first, last time.Time) string {
 	if first.IsZero() {
 		return "no transactions"
 	}
-	return first.Format(dateLayout) + " to " + last.Format(dateLayout)
+	return first.Format(jsonDateLayout) + " to " + last.Format(jsonDateLayout)
 }
 
 // snapshotTakenPhrase renders takenAt in the local zone with its age at now

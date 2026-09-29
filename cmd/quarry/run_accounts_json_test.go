@@ -1,3 +1,5 @@
+// run is unexported, so its tests live in package main rather than
+// importing main from outside.
 package main
 
 import (
@@ -44,8 +46,7 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
 	addTransaction(b, chequing, "-54.33", past)
 	addTransaction(b, rrsp, "1000.00", past)
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var syncOut, syncErr bytes.Buffer
-	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncOut, &syncErr), syncErr.String())
+	syncBundle(t, bundle)
 	var stdout, stderr bytes.Buffer
 	before := time.Now()
 
@@ -54,15 +55,46 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
 	after := time.Now()
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	var got accountsJSON
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
-	assert.Contains(t, []string{before.Format("2006-01-02"), after.Format("2006-01-02")}, got.AsOf)
-	assert.Equal(t, []accountRowJSON{
-		{ID: fmt.Sprintf("acct-%d", chequing), Name: "Chequing", Type: "chequing", Currency: "CAD", Institution: new("First Bank"), Active: true, Balance: new("12345.67")},
-		{ID: fmt.Sprintf("acct-%d", rrsp), Name: "RRSP", Type: "retirement", Currency: "CAD", Institution: new("First Bank"), Active: true},
-		{ID: fmt.Sprintf("acct-%d", savings), Name: "Savings", Type: "savings", Currency: "CAD", Active: true, Balance: new("0.00")},
-	}, got.Accounts)
-	assert.Contains(t, stdout.String(), "  \"warnings\": []\n}\n")
+	want := func(asOf time.Time) string {
+		return fmt.Sprintf(`{
+  "as_of": "%s",
+  "accounts": [
+    {
+      "id": "acct-%d",
+      "name": "Chequing",
+      "type": "chequing",
+      "currency": "CAD",
+      "institution": "First Bank",
+      "closed": false,
+      "active": true,
+      "balance": "12345.67"
+    },
+    {
+      "id": "acct-%d",
+      "name": "RRSP",
+      "type": "retirement",
+      "currency": "CAD",
+      "institution": "First Bank",
+      "closed": false,
+      "active": true,
+      "balance": null
+    },
+    {
+      "id": "acct-%d",
+      "name": "Savings",
+      "type": "savings",
+      "currency": "CAD",
+      "institution": null,
+      "closed": false,
+      "active": true,
+      "balance": "0.00"
+    }
+  ],
+  "warnings": []
+}
+`, asOf.Format("2006-01-02"), chequing, rrsp, savings)
+	}
+	assert.Contains(t, []string{want(before), want(after)}, stdout.String())
 }
 
 func Test_run_accounts_json_reports_the_all_closed_note_in_both_streams(t *testing.T) {

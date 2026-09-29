@@ -2,7 +2,6 @@ package report_test
 
 import (
 	"context"
-	"fmt"
 	"io/fs"
 	"testing"
 
@@ -116,7 +115,7 @@ func Test_a_store_refusal_unwraps_to_the_store_error(t *testing.T) {
 }
 
 func Test_query_keeps_an_open_interrupted_by_its_context_as_interrupted(t *testing.T) {
-	interrupted := fmt.Errorf("%w: %w", store.ErrQueryInterrupted, &store.OpenError{Fault: store.OpenFaultMissing, Path: storePath})
+	interrupted := store.Interrupted(&store.OpenError{Fault: store.OpenFaultMissing, Path: storePath})
 	var gotMaxRows int
 	srv := report.NewServer(report.WithStore(fakeStore{err: interrupted, gotMaxRows: &gotMaxRows}), report.WithHome(refusalHome))
 

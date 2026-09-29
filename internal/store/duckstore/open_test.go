@@ -88,6 +88,7 @@ func Test_open_read_classifies_each_store_file_it_cannot_read(t *testing.T) {
 			name: "a file the process may not read",
 			arrange: func(t *testing.T, dir string) {
 				t.Helper()
+				skipAsRoot(t)
 				path := filepath.Join(dir, duckstore.FileName)
 				require.NoError(t, os.WriteFile(path, []byte("text\n"), 0o600))
 				require.NoError(t, os.Chmod(path, 0o000))
@@ -98,6 +99,7 @@ func Test_open_read_classifies_each_store_file_it_cannot_read(t *testing.T) {
 			name: "a directory the process may not search",
 			arrange: func(t *testing.T, dir string) {
 				t.Helper()
+				skipAsRoot(t)
 				require.NoError(t, os.WriteFile(filepath.Join(dir, duckstore.FileName), []byte("text\n"), 0o600))
 				require.NoError(t, os.Chmod(dir, 0o000))
 				t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })

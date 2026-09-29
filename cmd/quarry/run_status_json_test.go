@@ -19,8 +19,7 @@ func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	bundle := writeStatusFixtureBundle(t, home)
-	var syncOut, syncErr bytes.Buffer
-	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncOut, &syncErr), syncErr.String())
+	syncBundle(t, bundle)
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
 	raw, err := os.ReadFile(onlyFileWithSuffix(t, snapshotsDir, ".json"))

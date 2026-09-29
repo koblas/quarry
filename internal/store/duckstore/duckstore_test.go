@@ -99,6 +99,28 @@ func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
 		"2026-09-27 14:30:05 /Users/alex/Documents/Home.quicken 14 15 16 17")
 }
 
+// The held reader reads nothing before Replace: a cached page would hide an overwrite of its file.
+func Test_replace_leaves_a_held_reader_on_the_old_rows_and_a_later_read_sees_the_new(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir())
+	path, err := st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	held, err := duckdb.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = held.Close() })
+	renamed := minimalRows()
+	renamed.Accounts[0].Name = "Savings"
+
+	_, err = st.Replace(t.Context(), renamed)
+
+	require.NoError(t, err)
+	assertScalar(t, held, "SELECT name FROM accounts", "Chequing")
+	require.NoError(t, held.Close())
+	got, err := st.Query(t.Context(), "SELECT name FROM accounts", 0)
+	require.NoError(t, err)
+	assert.Equal(t, "Savings", got.Rows[0][0].Text)
+}
+
 func Test_replace_writes_one_store_info_row_with_the_format_version_and_build_time(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

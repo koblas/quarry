@@ -1,3 +1,5 @@
+// run is unexported, so its tests live in package main rather than
+// importing main from outside.
 package main
 
 import (
@@ -70,8 +72,7 @@ func Test_run_accounts_reports_a_failed_stdout_write(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var syncOut, syncErr bytes.Buffer
-	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncOut, &syncErr), syncErr.String())
+	syncBundle(t, bundle)
 	var stderr bytes.Buffer
 
 	exitCode := run(context.Background(), []string{"accounts"}, failingWriter{err: errNoSpace}, &stderr)
@@ -118,8 +119,7 @@ func syncAccountsFixture(t *testing.T, home string) {
 	addTransaction(b, visa, "-1204.17", past)
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 
-	var syncOut, syncErr bytes.Buffer
-	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncOut, &syncErr), syncErr.String())
+	syncBundle(t, bundle)
 }
 
 // addTransaction adds one transaction with a single split of the same amount.
@@ -136,8 +136,7 @@ func syncClosedAccountsFixture(t *testing.T, home string, n int) {
 	}
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 
-	var syncOut, syncErr bytes.Buffer
-	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncOut, &syncErr), syncErr.String())
+	syncBundle(t, bundle)
 }
 
 func Test_run_accounts_says_how_to_list_them_when_every_account_is_closed(t *testing.T) {
@@ -163,5 +162,10 @@ func Test_run_accounts_all_lists_closed_accounts_without_a_note(t *testing.T) {
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Contains(t, stdout.String(), "Closed 1  chequing  CAD")
+	assert.Equal(t, ""+
+		"Account   Type      Currency  Balance  Status\n"+
+		"Closed 1  chequing  CAD          0.00  closed\n"+
+		"Closed 2  chequing  CAD          0.00  closed\n"+
+		"Closed 3  chequing  CAD          0.00  closed\n",
+		stdout.String())
 }

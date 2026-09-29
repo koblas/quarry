@@ -20,9 +20,9 @@ status reads only quarry's store; it never looks at Quicken. Run quarry sync
 to bring the store up to date.`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			srv, err := newReport(cmd.Context(), cmd.Name())
+			srv, err := openReport(cmd, newReport)
 			if err != nil {
-				return &runtimeError{err: err}
+				return err
 			}
 
 			st, err := srv.Status(cmd.Context())
@@ -30,20 +30,13 @@ to bring the store up to date.`,
 				return &runtimeError{err: err}
 			}
 
-			var out []byte
-			if *jsonOut {
-				if out, err = renderStatusJSON(st); err != nil {
-					// unreachable: renderStatusJSON's own error path is unreachable for any Status; see there.
-					return &runtimeError{err: err}
-				}
-			} else {
-				out = []byte(renderStatus(st, srv.Home(), time.Now()))
-			}
-
-			if err := writeResult(cmd, out); err != nil {
+			out, err := renderResult(*jsonOut,
+				func() ([]byte, error) { return renderStatusJSON(st) },
+				func() string { return renderStatus(st, srv.Home(), time.Now()) })
+			if err != nil {
 				return err
 			}
-			return nil
+			return emit(cmd, out, "", nil)
 		},
 	}
 }

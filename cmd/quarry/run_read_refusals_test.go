@@ -1,3 +1,5 @@
+// run is unexported, so its tests live in package main rather than
+// importing main from outside.
 package main
 
 import (

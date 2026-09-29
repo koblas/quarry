@@ -1,3 +1,5 @@
+// run is unexported, so its tests live in package main rather than
+// importing main from outside.
 package main
 
 import (
@@ -53,9 +55,7 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 }
 
 func Test_run_sql_refuses_a_multi_line_query_that_starts_with_a_dash_as_an_unknown_flag(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	syncAccountsFixture(t, home)
+	t.Setenv("HOME", t.TempDir())
 	var stdout, stderr bytes.Buffer
 	env := defaultEnv(&stdout, &stderr)
 

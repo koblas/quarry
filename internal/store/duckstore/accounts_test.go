@@ -60,13 +60,13 @@ func Test_accounts_reads_each_accounts_balance(t *testing.T) {
 	got, err := st.Accounts(t.Context())
 
 	require.NoError(t, err)
-	assert.Equal(t, store.AccountList{AsOf: localToday(), Accounts: []store.AccountBalance{
+	assert.Equal(t, []store.AccountBalance{
 		{Account: chequing, Balance: new(int64(123956))},
 		{Account: rrsp, Balance: nil},
 		{Account: savings, Balance: new(int64(0))},
 		{Account: usChequing, Balance: new(int64(800))},
 		{Account: visa, Balance: new(int64(-2500))},
-	}}, got)
+	}, got.Accounts)
 }
 
 func Test_accounts_counts_transactions_dated_today_but_not_tomorrow(t *testing.T) {
@@ -86,8 +86,10 @@ func Test_accounts_counts_transactions_dated_today_but_not_tomorrow(t *testing.T
 
 	require.NoError(t, err)
 	require.Len(t, got.Accounts, 2)
-	assert.Equal(t, []*int64{new(int64(100)), new(int64(0))},
-		[]*int64{got.Accounts[0].Balance, got.Accounts[1].Balance})
+	// Past midnight, as_of is tomorrow and counts the tomorrow rows too.
+	want := map[time.Time][]*int64{today: {new(int64(100)), new(int64(0))}, tomorrow: {new(int64(1100)), new(int64(700))}}
+	balances := []*int64{got.Accounts[0].Balance, got.Accounts[1].Balance}
+	assert.Equal(t, want[got.AsOf], balances)
 }
 
 func Test_accounts_sorts_by_name_then_source_id(t *testing.T) {
@@ -114,11 +116,14 @@ func Test_accounts_sorts_by_name_then_source_id(t *testing.T) {
 func Test_accounts_reads_as_of_with_no_accounts(t *testing.T) {
 	t.Parallel()
 	st := replaceWith(t, nil, nil)
+	before := localToday()
 
 	got, err := st.Accounts(t.Context())
 
+	after := localToday()
 	require.NoError(t, err)
-	assert.Equal(t, store.AccountList{AsOf: localToday()}, got)
+	assert.Empty(t, got.Accounts)
+	assert.Contains(t, []time.Time{before, after}, got.AsOf)
 }
 
 func Test_accounts_returns_the_open_fault(t *testing.T) {

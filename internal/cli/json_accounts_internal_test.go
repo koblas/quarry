@@ -25,7 +25,7 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
 	got, err := renderAccountsJSON(list, []string{})
 
 	require.NoError(t, err)
-	assert.JSONEq(t, `{
+	want := `{
   "as_of": "2026-09-29",
   "accounts": [
     {
@@ -71,7 +71,8 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
   ],
   "warnings": []
 }
-`, string(got))
+`
+	assert.Equal(t, want, string(got))
 }
 
 func Test_renderAccountsJSON_renders_no_accounts_as_an_empty_list(t *testing.T) {
@@ -80,7 +81,7 @@ func Test_renderAccountsJSON_renders_no_accounts_as_an_empty_list(t *testing.T) 
 	got, err := renderAccountsJSON(list, []string{})
 
 	require.NoError(t, err)
-	assert.JSONEq(t, "{\n  \"as_of\": \"2026-09-29\",\n  \"accounts\": [],\n  \"warnings\": []\n}\n", string(got))
+	assert.Equal(t, "{\n  \"as_of\": \"2026-09-29\",\n  \"accounts\": [],\n  \"warnings\": []\n}\n", string(got)) //nolint:testifylint // bytes are the contract
 }
 
 func Test_renderAccountsJSON_carries_the_warnings(t *testing.T) {

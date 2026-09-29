@@ -1,3 +1,5 @@
+// run is unexported, so its tests live in package main rather than
+// importing main from outside.
 package main
 
 import (
@@ -166,7 +168,8 @@ func Test_run_sql_refuses_to_change_a_setting(t *testing.T) {
 	}
 }
 
-// Not parallel: it signals the whole test process.
+// Not parallel: it signals the whole test process. It proves the SIGINT wiring;
+// the sleep does not prove the query had started (duckstore's tests cover that).
 func Test_run_sql_reports_a_query_interrupted_by_sigint(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -186,6 +189,18 @@ func Test_run_sql_reports_a_query_interrupted_by_sigint(t *testing.T) {
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
 	assert.Equal(t, "quarry: query interrupted\n", stderr.String())
+}
+
+func Test_run_sql_refuses_when_home_is_unset(t *testing.T) {
+	t.Setenv("HOME", "")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sql", "SELECT 1"}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry sql again\n",
+		stderr.String())
 }
 
 const (

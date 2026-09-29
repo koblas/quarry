@@ -246,7 +246,7 @@ func Test_sql_reports_each_query_refusal(t *testing.T) {
 		},
 		{
 			name: "an interrupted query",
-			err:  fmt.Errorf("%w: %w", store.ErrQueryInterrupted, context.Canceled),
+			err:  store.Interrupted(context.Canceled),
 			want: "query interrupted",
 		},
 		{

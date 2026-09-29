@@ -57,8 +57,7 @@ func nativeValue(t *typeNode, v any, text string) any {
 		if text == infinityText || text == negInfinityText {
 			return text
 		}
-		switch t.kindName() {
-		case "DATE", "TIMESTAMP", "TIMESTAMP_S", "TIMESTAMP_MS", "TIMESTAMP_NS", "TIMESTAMPTZ":
+		if timeKinds[t.kindName()].instant {
 			return v
 		}
 	}
@@ -98,7 +97,7 @@ func valueText(t *typeNode, v any) (string, bool) {
 	case duckdbdriver.Interval:
 		return intervalText(v), true
 	case []any:
-		return listText(t.elemType(), v)
+		return listText(t, v)
 	case duckdbdriver.OrderedMap:
 		return mapText(t, v)
 	case duckdbdriver.Union:
@@ -174,46 +173,44 @@ func bytesText(kind string, b []byte) (string, bool) {
 	return "", false
 }
 
-// timeText renders the date and time types the driver hands over as time.Time.
-func timeText(kind string, v time.Time) (string, bool) {
-	switch kind {
-	case "DATE":
-		days := v.Unix() / secondsPerDay
-		return infinityOr(days, math.MaxInt32, func() string { return dateText(v) }), true
-	case "TIMESTAMP":
-		return infinityOr(v.UnixMicro(), math.MaxInt64, func() string { return timestampText(v) }), true
-	case "TIMESTAMP_S":
-		return infinityOr(v.Unix(), math.MaxInt64, func() string { return timestampText(v) }), true
-	case "TIMESTAMP_MS":
-		return infinityOr(v.UnixMilli(), math.MaxInt64, func() string { return timestampText(v) }), true
-	case "TIMESTAMP_NS":
-		return infinityOr(v.UnixNano(), math.MaxInt64, func() string { return timestampText(v) }), true
-	case "TIMESTAMPTZ":
-		return infinityOr(v.UnixMicro(), math.MaxInt64, func() string {
-			// DuckDB renders TIMESTAMPTZ in its TimeZone setting, which defaults to the process's zone.
-			local := v.In(time.Local) //nolint:gosmopolitan // DuckDB's default TimeZone is the local zone
-			return timestampText(local) + offsetText(local)
-		}), true
-	case "TIME":
-		return clockText(v), true
-	case "TIMETZ":
-		return clockText(v) + offsetText(v), true
-	}
-	return "", false
+// timeKind is how one date or time type the driver hands over as time.Time prints.
+type timeKind struct {
+	units    func(time.Time) int64 // the stored count DuckDB's ±infinity sentinel is written in; nil for no infinity
+	sentinel int64
+	text     func(time.Time) string
+	instant  bool // a date or instant, kept as a time.Time native value; else text
+}
+
+// timeKinds holds every date and time type, by the name the driver gives it.
+var timeKinds = map[string]timeKind{
+	"DATE":         {units: func(v time.Time) int64 { return v.Unix() / secondsPerDay }, sentinel: math.MaxInt32, text: dateText, instant: true},
+	"TIMESTAMP":    {units: time.Time.UnixMicro, sentinel: math.MaxInt64, text: timestampText, instant: true},
+	"TIMESTAMP_S":  {units: time.Time.Unix, sentinel: math.MaxInt64, text: timestampText, instant: true},
+	"TIMESTAMP_MS": {units: time.Time.UnixMilli, sentinel: math.MaxInt64, text: timestampText, instant: true},
+	"TIMESTAMP_NS": {units: time.Time.UnixNano, sentinel: math.MaxInt64, text: timestampText, instant: true},
+	"TIMESTAMPTZ":  {units: time.Time.UnixMicro, sentinel: math.MaxInt64, text: timestampTZText, instant: true},
+	"TIME":         {text: clockText},
+	"TIMETZ":       {text: func(v time.Time) string { return clockText(v) + timeTZOffsetText(v) }},
 }
 
 const secondsPerDay = 24 * 60 * 60
 
-// infinityOr is the infinity word when units is DuckDB's ±sentinel for
-// the type, otherwise finite().
-func infinityOr(units, sentinel int64, finite func() string) string {
-	switch units {
-	case sentinel:
-		return infinityText
-	case -sentinel:
-		return negInfinityText
+// timeText renders a date or time type the driver hands over as time.Time;
+// false for any other kind.
+func timeText(kind string, v time.Time) (string, bool) {
+	k, ok := timeKinds[kind]
+	if !ok {
+		return "", false
 	}
-	return finite()
+	if k.units != nil {
+		switch k.units(v) {
+		case k.sentinel:
+			return infinityText, true
+		case -k.sentinel:
+			return negInfinityText, true
+		}
+	}
+	return k.text(v), true
 }
 
 // dateText is YYYY-MM-DD, with at least four year digits and " (BC)" after
@@ -226,8 +223,16 @@ func dateText(v time.Time) string {
 	return fmt.Sprintf("%04d-%02d-%02d%s", year, int(v.Month()), v.Day(), suffix)
 }
 
+// timestampText is a date, a space and a clock time.
 func timestampText(v time.Time) string {
 	return dateText(v) + " " + clockText(v)
+}
+
+// timestampTZText is v in DuckDB's TimeZone setting, which defaults to the
+// process's zone, followed by that zone's offset.
+func timestampTZText(v time.Time) string {
+	local := v.In(time.Local) //nolint:gosmopolitan // DuckDB's default TimeZone is the local zone
+	return timestampText(local) + zoneOffsetText(local)
 }
 
 // clockText is HH:MM:SS plus the fraction of a second, trailing zeros dropped.
@@ -244,21 +249,39 @@ func fractionText(n int64, digits int) string {
 	return "." + strings.TrimRight(fmt.Sprintf("%0*d", digits, n), "0")
 }
 
-// offsetText is v's UTC offset as ±HH, with :MM and :SS only when non-zero.
-func offsetText(v time.Time) string {
+// zoneOffsetText is v's UTC offset as a TIMESTAMPTZ prints it: ±HH, then :MM
+// when non-zero; seconds are truncated.
+func zoneOffsetText(v time.Time) string {
+	sign, hours, minutes, _ := offsetParts(v)
+	s := fmt.Sprintf("%s%02d", sign, hours)
+	if minutes != 0 {
+		s += fmt.Sprintf(":%02d", minutes)
+	}
+	return s
+}
+
+// timeTZOffsetText is v's UTC offset as a TIMETZ prints it: ±HH, then :MM and
+// :SS when non-zero, a zero :MM dropped before a non-zero :SS.
+func timeTZOffsetText(v time.Time) string {
+	sign, hours, minutes, seconds := offsetParts(v)
+	s := fmt.Sprintf("%s%02d", sign, hours)
+	if minutes != 0 {
+		s += fmt.Sprintf(":%02d", minutes)
+	}
+	if seconds != 0 {
+		s += fmt.Sprintf(":%02d", seconds)
+	}
+	return s
+}
+
+// offsetParts splits v's UTC offset into its sign and its hours, minutes and seconds.
+func offsetParts(v time.Time) (string, int, int, int) {
 	_, offset := v.Zone()
 	sign := "+"
 	if offset < 0 {
 		sign, offset = "-", -offset
 	}
-	s := fmt.Sprintf("%s%02d", sign, offset/3600)
-	if minutes, seconds := offset/60%60, offset%60; minutes != 0 || seconds != 0 {
-		s += fmt.Sprintf(":%02d", minutes)
-		if seconds != 0 {
-			s += fmt.Sprintf(":%02d", seconds)
-		}
-	}
-	return s
+	return sign, offset / 3600, offset / 60 % 60, offset % 60
 }
 
 // intervalText renders iv as DuckDB does: signed year, month and day parts
@@ -293,11 +316,16 @@ func intervalText(iv duckdbdriver.Interval) string {
 	return strings.Join(parts, " ")
 }
 
-// listText renders a LIST or ARRAY as [a, b, ...].
-func listText(elem *typeNode, items []any) (string, bool) {
+// listText renders a LIST or ARRAY as [a, b, ...]; an ARRAY's scalars print
+// bare, a LIST's quoted as nestedText quotes them.
+func listText(t *typeNode, items []any) (string, bool) {
+	elemText := nestedText
+	if t.kindName() == kindArray {
+		elemText = valueText
+	}
 	texts := make([]string, len(items))
 	for i, item := range items {
-		text, ok := nestedText(elem, item)
+		text, ok := elemText(t.elemType(), item)
 		if !ok {
 			return "", false
 		}

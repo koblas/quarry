@@ -7,18 +7,9 @@ import (
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
 	"github.com/koblas/quarry/internal/store"
-	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func newBuiltStore(t *testing.T, opts ...duckstore.Option) *duckstore.Store {
-	t.Helper()
-	dir := t.TempDir()
-	_, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
-	require.NoError(t, err)
-	return duckstore.New(dir, opts...)
-}
 
 func Test_query_reads_a_built_store(t *testing.T) {
 	t.Parallel()
@@ -31,6 +22,44 @@ func Test_query_reads_a_built_store(t *testing.T) {
 		Columns: []store.QueryColumn{{Name: "name", Type: "VARCHAR"}, {Name: "balance", Type: "DECIMAL(18,2)"}},
 		Rows:    [][]store.QueryValue{{{Text: "Chequing", Native: "Chequing"}, {Text: "12.34", Native: "12.34"}}},
 	}, got)
+}
+
+// storeRelations are the tables and views a built store holds, for sql users to query.
+func storeRelations() []string {
+	return []string{
+		"accounts", "categories", "import_runs", "payees", "split_tags", "splits", "store_info", "tags",
+		"transactions", "transfers", "v_account_balances",
+	}
+}
+
+func Test_query_show_tables_lists_every_table_and_view(t *testing.T) {
+	t.Parallel()
+	st := newBuiltStore(t)
+
+	got, err := st.Query(t.Context(), "SHOW TABLES", 0)
+
+	require.NoError(t, err)
+	names := make([]string, len(got.Rows))
+	for i, row := range got.Rows {
+		names[i] = row[0].Text
+	}
+	assert.ElementsMatch(t, storeRelations(), names)
+}
+
+func Test_query_prints_every_column_of_each_table_and_view(t *testing.T) {
+	t.Parallel()
+	st := newBuiltStore(t)
+
+	for _, name := range storeRelations() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := st.Query(t.Context(), "SELECT * FROM "+name, 0) //nolint:unqueryvet // every column is the point
+
+			require.NoError(t, err)
+			assert.NotEmpty(t, got.Rows)
+		})
+	}
 }
 
 func Test_query_returns_at_most_max_rows(t *testing.T) {

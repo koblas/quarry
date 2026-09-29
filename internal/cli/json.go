@@ -9,7 +9,7 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// jsonDateLayout is the --json document's date format for every date field.
+// jsonDateLayout is the format of every calendar date quarry prints, in text and in --json.
 const jsonDateLayout = "2006-01-02"
 
 // resultDocument is sync's --json stdout shape: the manifest, the store

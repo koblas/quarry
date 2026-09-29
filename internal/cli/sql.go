@@ -63,9 +63,9 @@ quarry says so on stderr. --limit 0 prints every row.`,
 				}
 			}
 
-			srv, err := newReport(cmd.Context(), cmd.Name())
+			srv, err := openReport(cmd, newReport)
 			if err != nil {
-				return &runtimeError{err: err}
+				return err
 			}
 
 			result, err := srv.Query(cmd.Context(), query, limit)
@@ -78,23 +78,13 @@ quarry says so on stderr. --limit 0 prints every row.`,
 				warnings = append(warnings, truncationNote(limit))
 			}
 
-			var out []byte
-			if *jsonOut {
-				if out, err = renderSQLJSON(result, limit, warnings); err != nil {
-					// unreachable: renderSQLJSON's own error path is unreachable for any QueryResult; see marshalDocument.
-					return &runtimeError{err: err}
-				}
-			} else {
-				out = []byte(renderSQLTable(result.QueryResult))
-			}
-
-			if err := writeResult(cmd, out); err != nil {
+			out, err := renderResult(*jsonOut,
+				func() ([]byte, error) { return renderSQLJSON(result, limit, warnings) },
+				func() string { return renderSQLTable(result.QueryResult) })
+			if err != nil {
 				return err
 			}
-			for _, warning := range warnings {
-				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: warning: "+warning)
-			}
-			return nil
+			return emit(cmd, out, "quarry: warning: ", warnings)
 		},
 	}
 	cmd.Flags().IntVar(&limit, "limit", defaultSQLLimit, "print at most `n` rows (0 prints every row)")
@@ -133,7 +123,7 @@ func readStdinQuery(ctx context.Context, in io.Reader) (string, error) {
 	}
 	// A read that finishes as the interrupt lands still reports the interrupt.
 	if err := ctx.Err(); err != nil {
-		return "", &runtimeError{err: queryFailure(fmt.Errorf("%w: %w", store.ErrQueryInterrupted, err))}
+		return "", &runtimeError{err: queryFailure(store.Interrupted(err))}
 	}
 	if got.err != nil {
 		return "", &runtimeError{err: &refusalError{text: "cannot read the query from stdin: " + osReason(got.err), cause: got.err}}

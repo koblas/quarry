@@ -3,7 +3,9 @@ package duckdb_test
 import (
 	"fmt"
 	"testing"
+	"time"
 
+	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -60,6 +62,8 @@ func Test_query_table_text_matches_duckdb_cast(t *testing.T) {
 		{name: "TIME with a fraction", expr: "TIME '03:04:05.5'", native: "string 03:04:05.5"},
 		{name: "TIMETZ with an hour offset", expr: "TIMETZ '03:04:05+02'", native: "string 03:04:05+02"},
 		{name: "TIMETZ with a seconds offset", expr: "TIMETZ '03:04:05.25-02:30:15'", native: "string 03:04:05.25-02:30:15"},
+		{name: "TIMETZ offset of zero minutes and some seconds drops the minutes", expr: "TIMETZ '12:00:00-00:00:30'", native: "string 12:00:00-00:30"},
+		{name: "TIMETZ offset of one minute and some seconds", expr: "TIMETZ '12:00:00+00:01:30'", native: "string 12:00:00+00:01:30"},
 		{name: "TIMESTAMP with hundredths", expr: "TIMESTAMP '2026-01-02 03:04:05.12'", native: "time.Time 2026-01-02 03:04:05.12 +0000 UTC"},
 		{name: "TIMESTAMP with one microsecond", expr: "TIMESTAMP '2026-01-02 03:04:05.000001'", native: "time.Time 2026-01-02 03:04:05.000001 +0000 UTC"},
 		{name: "TIMESTAMP before year 1", expr: "TIMESTAMP '0033-01-02 03:04:05' - INTERVAL 40 YEARS", native: "time.Time -0007-01-02 03:04:05 +0000 UTC"},
@@ -91,6 +95,12 @@ func Test_query_table_text_matches_duckdb_cast(t *testing.T) {
 		{name: "LIST of plain strings", expr: "['a', 'b c']", native: "string [a, b c]"},
 		{name: "empty LIST", expr: "[]::INTEGER[]", native: "string []"},
 		{name: "ARRAY", expr: "array_value(1, 2)", native: "string [1, 2]"},
+		{name: "ARRAY of strings prints them bare", expr: "array_value('', 'a b ', 'NULL', 'x''y')", native: "string [, a b , NULL, x'y]"},
+		{name: "ARRAY of TIMESTAMPs is bare", expr: "array_value(TIMESTAMP '2026-01-01 01:02:03')", native: "string [2026-01-01 01:02:03]"},
+		{name: "ARRAY in a LIST keeps its elements bare", expr: "[array_value('b,c')]", native: "string [[b,c]]"},
+		{name: "ARRAY in a STRUCT keeps its elements bare", expr: "{'k': array_value('x,y')}", native: "string {'k': [x,y]}"},
+		{name: "LIST in an ARRAY keeps its quoting", expr: "array_value(['a,b'])", native: "string [['a,b']]"},
+		{name: "STRUCT in an ARRAY keeps its quoting", expr: "array_value({'k': 'x,y'})", native: "string [{'k': 'x,y'}]"},
 		{name: "LIST of LISTs", expr: "[[1, 2], [3]]", native: "string [[1, 2], [3]]"},
 		{name: "MAP", expr: "MAP {'a': 1, 'b': NULL}", native: "string {a=1, b=NULL}"},
 		{name: "UNION", expr: "union_value(num := 2)", native: "string 2"},
@@ -135,4 +145,43 @@ func Test_query_table_prints_time_24_00_00_as_midnight(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "00:00:00", table.Rows[0][0].Text)
+}
+
+// Not parallel: it swaps the process-local zone, which DuckDB's TimeZone mirrors via SET GLOBAL.
+// TZ cannot do it: Go and DuckDB each read the zone once per process.
+func Test_query_table_prints_a_timestamptz_offset_in_whole_minutes(t *testing.T) {
+	cases := []struct {
+		name string
+		zone string
+		want string
+	}{
+		{name: "a negative offset of 30 seconds or more is truncated", zone: "America/Chicago", want: "1800-06-01 06:09:24-05:50"},
+		{name: "a positive offset of 30 seconds or more is truncated", zone: "Asia/Tokyo", want: "1800-06-01 21:18:59+09:18"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			db, _ := newOpenDatabase(t)
+			useZone(t, db, c.zone)
+
+			table, err := db.QueryTable(t.Context(),
+				"SELECT TIMESTAMPTZ '1800-06-01 12:00:00+00' AS v, CAST(TIMESTAMPTZ '1800-06-01 12:00:00+00' AS VARCHAR) AS s", 0)
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{c.want, c.want}, []string{table.Rows[0][0].Text, table.Rows[0][1].Text})
+		})
+	}
+}
+
+// useZone makes zone the process-local zone and db's TimeZone for the test.
+func useZone(t *testing.T, db *duckdb.DB, zone string) {
+	t.Helper()
+	loc, err := time.LoadLocation(zone)
+	require.NoError(t, err)
+	_, err = db.Exec(t.Context(), "SET GLOBAL TimeZone = '"+zone+"'")
+	require.NoError(t, err)
+	//nolint:gosmopolitan // the test swaps the process-local zone; Cleanup restores it
+	previous := time.Local
+	time.Local = loc                            //nolint:gosmopolitan // restored by Cleanup
+	t.Cleanup(func() { time.Local = previous }) //nolint:gosmopolitan // restores the zone swapped above
 }

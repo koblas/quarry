@@ -1,10 +1,6 @@
 package cli
 
-import (
-	"fmt"
-
-	"github.com/spf13/cobra"
-)
+import "github.com/spf13/cobra"
 
 // newAccountsCommand builds accounts: balances per account, closed ones only
 // with --all, as JSON when *jsonOut is set.
@@ -21,9 +17,9 @@ Brokerage and retirement accounts show "not imported": quarry does not
 import investment transactions yet, so it cannot compute their balance.`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			srv, err := newReport(cmd.Context(), cmd.Name())
+			srv, err := openReport(cmd, newReport)
 			if err != nil {
-				return &runtimeError{err: err}
+				return err
 			}
 
 			listing, err := srv.Accounts(cmd.Context(), all)
@@ -36,23 +32,13 @@ import investment transactions yet, so it cannot compute their balance.`,
 				warnings = append(warnings, allClosedNote(listing.Hidden))
 			}
 
-			var out []byte
-			if *jsonOut {
-				if out, err = renderAccountsJSON(listing.AccountList, warnings); err != nil {
-					// unreachable: renderAccountsJSON's own error path is unreachable for any AccountList; see marshalDocument.
-					return &runtimeError{err: err}
-				}
-			} else {
-				out = []byte(renderAccounts(listing.AccountList))
-			}
-
-			if err := writeResult(cmd, out); err != nil {
+			out, err := renderResult(*jsonOut,
+				func() ([]byte, error) { return renderAccountsJSON(listing.AccountList, warnings) },
+				func() string { return renderAccounts(listing.AccountList) })
+			if err != nil {
 				return err
 			}
-			for _, warning := range warnings {
-				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: "+warning)
-			}
-			return nil
+			return emit(cmd, out, "quarry: ", warnings)
 		},
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "include closed accounts")

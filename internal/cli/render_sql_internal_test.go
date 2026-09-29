@@ -59,6 +59,21 @@ func Test_renderSQLTable(t *testing.T) {
 			want:   "n  s\n1\n",
 		},
 		{
+			name:   "a last column value's own trailing space is kept",
+			result: store.QueryResult{Columns: []store.QueryColumn{integer, text}, Rows: [][]store.QueryValue{sqlRow("1", "b ")}},
+			want:   "n  s\n1  b \n",
+		},
+		{
+			name:   "a middle column value's own edge spaces are kept and widen its column",
+			result: store.QueryResult{Columns: []store.QueryColumn{text, integer}, Rows: [][]store.QueryValue{sqlRow(" b ", "1"), sqlRow("x", "2")}},
+			want:   "s    n\n b   1\nx    2\n",
+		},
+		{
+			name:   "an all-spaces middle cell is kept before an empty last cell",
+			result: store.QueryResult{Columns: []store.QueryColumn{text, {Name: "t", Type: "VARCHAR"}}, Rows: [][]store.QueryValue{sqlRow("  ", "")}},
+			want:   "s   t\n  \n",
+		},
+		{
 			name:   "zero rows print the header only",
 			result: store.QueryResult{Columns: []store.QueryColumn{text, integer}},
 			want:   "s  n\n",

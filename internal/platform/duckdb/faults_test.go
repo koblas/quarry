@@ -97,6 +97,7 @@ func Test_IsDiskFull_and_IsPermission_classify_error_shapes(t *testing.T) {
 // process cannot read at all.
 func Test_open_read_only_on_a_permission_denied_file_classifies_as_permission(t *testing.T) {
 	t.Parallel()
+	skipAsRoot(t)
 	writer, path := newOpenDatabase(t)
 	require.NoError(t, writer.Close())
 	require.NoError(t, os.Chmod(path, 0o000))
@@ -177,4 +178,12 @@ func Test_query_error_predicates_reject_an_error_from_elsewhere(t *testing.T) {
 	assert.False(t, duckdb.IsReadOnlyViolation(errNotDuckDB))
 	assert.False(t, duckdb.IsAccessDisabled(errNotDuckDB))
 	assert.False(t, duckdb.IsEmptyQuery(errNotDuckDB))
+}
+
+// skipAsRoot skips t under root, whom file modes do not stop.
+func skipAsRoot(t *testing.T) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file modes")
+	}
 }

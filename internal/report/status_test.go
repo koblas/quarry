@@ -1,7 +1,6 @@
 package report_test
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -12,29 +11,6 @@ import (
 )
 
 var errDiskRead = errors.New("read store status: disk read failed")
-
-// fakeStore answers each read with a canned result or fault; Query returns
-// at most maxRows of rows, recording the maxRows it was asked for in *gotMaxRows.
-type fakeStore struct {
-	status     store.Status
-	accounts   store.AccountList
-	rows       [][]store.QueryValue
-	gotMaxRows *int
-	err        error
-}
-
-func (f fakeStore) Status(context.Context) (store.Status, error) { return f.status, f.err }
-
-func (f fakeStore) Accounts(context.Context) (store.AccountList, error) { return f.accounts, f.err }
-
-func (f fakeStore) Query(_ context.Context, _ string, maxRows int) (store.QueryResult, error) {
-	*f.gotMaxRows = maxRows
-	rows := f.rows
-	if maxRows > 0 {
-		rows = rows[:min(maxRows, len(rows))]
-	}
-	return store.QueryResult{Rows: rows}, f.err
-}
 
 func Test_status_returns_what_the_store_reads(t *testing.T) {
 	want := store.Status{Path: "/home/dave/quarry.duckdb", FormatVersion: 2, QuarryVersion: "v1.2.3"}

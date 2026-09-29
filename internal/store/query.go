@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 )
 
@@ -58,6 +59,12 @@ var ErrEmptyQuery = errors.New("query holds no statement")
 
 // ErrQueryInterrupted is a query stopped because its context was cancelled.
 var ErrQueryInterrupted = errors.New("query interrupted")
+
+// Interrupted is err reported as a query stopped by its context; errors.Is
+// matches both ErrQueryInterrupted and err.
+func Interrupted(err error) error {
+	return fmt.Errorf("%w: %w", ErrQueryInterrupted, err)
+}
 
 // QueryError is a query the database rejected; Reason is the first line of
 // the database's own message, verbatim.

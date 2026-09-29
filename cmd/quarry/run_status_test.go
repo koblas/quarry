@@ -23,8 +23,7 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 
 	bundle := writeStatusFixtureBundle(t, home)
 
-	var syncOut, syncErr bytes.Buffer
-	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncOut, &syncErr), syncErr.String())
+	syncBundle(t, bundle)
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
 	raw, err := os.ReadFile(onlyFileWithSuffix(t, snapshotsDir, ".json"))
@@ -74,8 +73,7 @@ func Test_run_status_reports_a_failed_stdout_write(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var syncOut, syncErr bytes.Buffer
-	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncOut, &syncErr), syncErr.String())
+	syncBundle(t, bundle)
 	var stderr bytes.Buffer
 
 	exitCode := run(context.Background(), []string{"status"}, failingWriter{err: errNoSpace}, &stderr)
@@ -96,7 +94,13 @@ func Test_run_help_prints_quarrys_description(t *testing.T) {
 read-only snapshot, rebuilds its own store from that snapshot, and checks the
 store against Quicken's balances. Every other command reads that store;
 quarry never writes to the Quicken file.`)
-	assert.Contains(t, stdout.String(), "  status      Show which snapshot the store was built from and what it holds\n")
+	assert.Contains(t, stdout.String(), ""+
+		"Available Commands:\n"+
+		"  accounts    List accounts with their current balances\n"+
+		"  help        Help about any command\n"+
+		"  sql         Run a read-only SQL query against quarry's store\n"+
+		"  status      Show which snapshot the store was built from and what it holds\n"+
+		"  sync        Snapshot the open Quicken file and rebuild quarry's store from it\n\n")
 }
 
 func Test_run_status_help_describes_the_command_without_needing_home(t *testing.T) {
