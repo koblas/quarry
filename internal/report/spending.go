@@ -7,12 +7,12 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// SpendRequest is what a spend read needs from its caller: the current
-// instant, in the zone whose calendar day counts as today, and what to
-// group by (category when unset).
+// SpendRequest is what a spend read needs from its caller: the window to
+// count, resolved by ParseWindow or DefaultWindow, and what to group by
+// (category when unset).
 type SpendRequest struct {
-	Now time.Time
-	By  store.SpendingGroup
+	Window store.Window
+	By     store.SpendingGroup
 }
 
 // Spending is a spend read: the window it covered, what it was grouped by
@@ -34,12 +34,11 @@ func DefaultWindow(now time.Time) store.Window {
 	}
 }
 
-// Spend reads this year's spending up to today, grouped by req.By.
+// Spend reads the spending inside req.Window, grouped by req.By.
 func (s *Server) Spend(ctx context.Context, req SpendRequest) (Spending, error) {
-	window := DefaultWindow(req.Now)
-	spending, err := s.store.Spending(ctx, store.SpendingParams{Window: window, By: req.By})
+	spending, err := s.store.Spending(ctx, store.SpendingParams{Window: req.Window, By: req.By})
 	if err != nil {
 		return Spending{}, s.readRefusal(ctx, "spend", err)
 	}
-	return Spending{Spending: spending, Window: window, By: req.By}, nil
+	return Spending{Spending: spending, Window: req.Window, By: req.By}, nil
 }

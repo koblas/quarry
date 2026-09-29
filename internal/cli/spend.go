@@ -50,7 +50,7 @@ the rows can add up to more than the total.`,
 				return err
 			}
 
-			spending, err := srv.Spend(cmd.Context(), report.SpendRequest{Now: now(), By: group})
+			spending, err := srv.Spend(cmd.Context(), report.SpendRequest{Window: report.DefaultWindow(now()), By: group})
 			if err != nil {
 				return &runtimeError{err: err}
 			}
