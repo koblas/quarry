@@ -18,5 +18,6 @@
 | Round | Reviewers run | Findings (B/M/m/n) | Verdict |
 | --- | --- | --- | --- |
 | 1 | arch, correctness, test, refactor | 0/5/18/5 | FAIL |
+| 2 | correctness, test, refactor | 0/0/1/3 | PASS WITH FOLLOW-UPS |
 
 ## Tokens
