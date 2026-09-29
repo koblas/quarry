@@ -339,6 +339,24 @@ func Test_import_skips_a_split_with_no_parent_transaction(t *testing.T) {
 	assert.Empty(t, fake.Rows.Splits)
 }
 
+func Test_import_skips_a_split_with_no_parent_whatever_its_amount(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34", PostedDate: &posted})
+	keptPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "12.34"})
+	b.Entry(v9fixture.EntryRow{Amount: "12.34"})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	require.Len(t, fake.Rows.Splits, 1)
+	assert.Equal(t, "split-"+itoa(keptPK), fake.Rows.Splits[0].ID)
+}
+
 // A later-added but earlier-dated transaction sorts first while every
 // existing transaction keeps its own id.
 func Test_import_keeps_every_other_id_when_the_snapshot_gains_a_row(t *testing.T) {

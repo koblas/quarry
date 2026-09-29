@@ -82,7 +82,7 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 		return store.Result{}, err
 	}
 	investmentEnt, hasInvestment := entities[investmentEntity]
-	existingTransactions, investmentsNotImported, err := surveyTransactions(ctx, src, investmentEnt, hasInvestment, accountRefs)
+	investmentsNotImported, err := surveyTransactions(ctx, src, investmentEnt, hasInvestment, accountRefs)
 	if err != nil {
 		return store.Result{}, err
 	}
@@ -91,7 +91,7 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	if err != nil {
 		return store.Result{}, err
 	}
-	splits, links, splitIDs, err := mapSplits(ctx, src, txnRefs, existingTransactions, existingCategories, off)
+	splits, links, splitIDs, err := mapSplits(ctx, src, txnRefs, existingCategories, off)
 	if err != nil {
 		return store.Result{}, err
 	}

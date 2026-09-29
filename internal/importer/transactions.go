@@ -47,25 +47,19 @@ WHERE t.Z_ENT = ? AND COALESCE(t.ZDELETIONCOUNT, 0) = 0
 ORDER BY COALESCE(t.ZPOSTEDDATE, t.ZENTEREDDATE), t.ZACCOUNT, t.Z_PK
 `
 
-const transactionSurveyQuery = `SELECT Z_PK, Z_ENT, ZACCOUNT, COALESCE(ZDELETIONCOUNT, 0) FROM ZTRANSACTION`
+const transactionSurveyQuery = `SELECT Z_ENT, ZACCOUNT, COALESCE(ZDELETIONCOUNT, 0) FROM ZTRANSACTION`
 
-// surveyTransactions returns every ZTRANSACTION Z_PK, of any entity and
-// deletion state, and the count of investment transactions not imported.
+// surveyTransactions returns the count of investment transactions not imported.
 func surveyTransactions(
 	ctx context.Context, src Source, investmentEnt int64, hasInvestment bool, accounts map[int64]accountRef,
-) (map[int64]bool, int, error) {
-	existing := make(map[int64]bool)
+) (int, error) {
 	var investments int
 	err := src.QueryRows(ctx, transactionSurveyQuery, nil, func(scan func(dest ...any) error) error {
-		var pk int64
 		var ent, account sql.NullInt64
 		var deletionCount int64
-		if err := scan(&pk, &ent, &account, &deletionCount); err != nil {
+		if err := scan(&ent, &account, &deletionCount); err != nil {
 			return err
 		}
-		// Every Z_PK tells a split's dangling parent (no row at all) apart
-		// from one this importer excludes for its own reason.
-		existing[pk] = true
 		_, accountImported := accounts[account.Int64]
 		if hasInvestment && ent.Int64 == investmentEnt && deletionCount == 0 && account.Valid && accountImported {
 			investments++
@@ -73,9 +67,9 @@ func surveyTransactions(
 		return nil
 	})
 	if err != nil {
-		return nil, 0, fmt.Errorf("read transaction ids: %w", err)
+		return 0, fmt.Errorf("read transaction ids: %w", err)
 	}
-	return existing, investments, nil
+	return investments, nil
 }
 
 // mapTransactions reads every non-deleted transactionEntity row of

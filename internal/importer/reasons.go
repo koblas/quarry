@@ -79,10 +79,6 @@ func reasonSplitNoAmount(date, account string) string {
 	return fmt.Sprintf("a split of a transaction on %s in \"%s\" has no amount", date, account)
 }
 
-func reasonSplitNoTransaction(sourceID int64) string {
-	return fmt.Sprintf("a split (source id %d) has no transaction", sourceID)
-}
-
 func reasonCategoryNoName(sourceID int64) string {
 	return fmt.Sprintf("category (source id %d) has no name", sourceID)
 }
