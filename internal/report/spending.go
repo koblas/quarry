@@ -62,16 +62,9 @@ func DefaultWindow(now time.Time) store.Window {
 // Spend reads the spending inside req.Window, grouped by req.By, in the accounts req.Accounts
 // name (every account when none). An account it cannot pick is a RefusalError.
 func (s *Server) Spend(ctx context.Context, req SpendRequest) (Spending, error) {
-	var accounts []store.Account
-	var accountIDs []string
-	if len(req.Accounts) > 0 {
-		var err error
-		if accounts, err = s.resolveAccounts(ctx, "spend", req.Accounts); err != nil {
-			return Spending{}, err
-		}
-		for _, a := range accounts {
-			accountIDs = append(accountIDs, a.ID)
-		}
+	accounts, accountIDs, err := s.namedAccounts(ctx, "spend", req.Accounts)
+	if err != nil {
+		return Spending{}, err
 	}
 	spending, err := s.store.Spending(ctx, store.SpendingParams{Window: req.Window, By: req.By, AccountIDs: accountIDs})
 	if err != nil {

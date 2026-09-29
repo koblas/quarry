@@ -23,6 +23,20 @@ func (f accountFilter) and(column string) string {
 	return " AND " + column + " IN (" + f.marks(3) + ")"
 }
 
+// args is one query argument per named account.
+func (f accountFilter) args() []any {
+	args := make([]any, len(f))
+	for i, id := range f {
+		args[i] = id
+	}
+	return args
+}
+
+// readArgs is the arguments of a windowed read: the window's first and last day, then the named accounts.
+func readArgs(window store.Window, accounts accountFilter) []any {
+	return append([]any{civilDay(window.Since), civilDay(window.Until)}, accounts.args()...)
+}
+
 // marks is one parameter per named account, numbered from first.
 func (f accountFilter) marks(first int) string {
 	marks := make([]string, len(f))
@@ -32,8 +46,8 @@ func (f accountFilter) marks(first int) string {
 	return strings.Join(marks, ", ")
 }
 
-// transactionRangeQuery is the first and last day of the transactions a spending read was
-// scoped to: every transaction, or the named accounts' that Quicken counts in reports. Its
+// transactionRangeQuery is the first and last day of the transactions a spending or cash-flow
+// read was scoped to: every transaction, or the named accounts' that Quicken counts in reports. Its
 // parameters are the named accounts, numbered from $1.
 func transactionRangeQuery(accounts accountFilter) string {
 	if len(accounts) == 0 {
@@ -143,11 +157,7 @@ func (s *Store) Spending(ctx context.Context, params store.SpendingParams) (stor
 
 	var spending store.Spending
 	accounts := accountFilter(params.AccountIDs)
-	accountArgs := make([]any, len(accounts))
-	for i, id := range accounts {
-		accountArgs[i] = id
-	}
-	args := append([]any{civilDay(params.Window.Since), civilDay(params.Window.Until)}, accountArgs...)
+	args := readArgs(params.Window, accounts)
 	err = db.QueryRows(ctx, queryFor(accounts), args, func(scan func(dest ...any) error) error {
 		var key sql.NullString
 		var currency string
@@ -169,7 +179,7 @@ func (s *Store) Spending(ctx context.Context, params store.SpendingParams) (stor
 	}
 	if err == nil && len(spending.Totals) == 0 {
 		var first, last sql.NullTime
-		err = db.QueryRows(ctx, transactionRangeQuery(accounts), accountArgs, func(scan func(dest ...any) error) error {
+		err = db.QueryRows(ctx, transactionRangeQuery(accounts), accounts.args(), func(scan func(dest ...any) error) error {
 			return scan(&first, &last)
 		})
 		spending.Transactions = store.TransactionRange{First: first.Time, Last: last.Time}

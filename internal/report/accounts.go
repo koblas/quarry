@@ -66,6 +66,23 @@ func (s *Server) resolveAccounts(ctx context.Context, command string, args []str
 	return resolved, nil
 }
 
+// namedAccounts is the accounts names resolve to and their ids, both nil when none is named
+// (which counts every account, without reading the store's accounts).
+func (s *Server) namedAccounts(ctx context.Context, command string, names []string) ([]store.Account, []string, error) {
+	if len(names) == 0 {
+		return nil, nil, nil
+	}
+	accounts, err := s.resolveAccounts(ctx, command, names)
+	if err != nil {
+		return nil, nil, err
+	}
+	ids := make([]string, len(accounts))
+	for i, a := range accounts {
+		ids[i] = a.ID
+	}
+	return accounts, ids, nil
+}
+
 // pickAccount is the account arg names: the one with that id, else the only one with that name
 // ignoring case. An empty arg names no account, whatever an account's name.
 func pickAccount(accounts []store.AccountBalance, arg string) (store.Account, error) {

@@ -2,11 +2,87 @@ package duckstore
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 
 	"github.com/koblas/quarry/internal/store"
 )
 
-// CashFlow reads income and spending in params.Window, per period and currency.
-func (s *Store) CashFlow(context.Context, store.CashFlowParams) (store.CashFlow, error) {
-	return store.CashFlow{}, nil
+// cashFlowKeys is the SQL text of each period's key, matching Go's 2006-01 and 2006 layouts.
+var cashFlowKeys = map[store.CashFlowPeriod]string{
+	store.CashFlowByMonth: "strftime(date, '%Y-%m')",
+	store.CashFlowByYear:  "strftime(date, '%Y')",
+}
+
+// ErrUnsupportedPeriod is what CashFlow returns for a period unit it cannot read.
+var ErrUnsupportedPeriod = errors.New("cash-flow period is not supported")
+
+// cashFlowQuery reads per-period and per-currency-total income, spending and net in cents from
+// v_cash_flow. The rate is net over income in tenths of a percent, rounded half away from zero
+// in integers, so it is never a negative zero; it is NULL when income is zero or less.
+func cashFlowQuery(key string, accounts accountFilter) string {
+	return fmt.Sprintf(`
+SELECT period_key, currency, income, spent, income - spent,
+	CASE WHEN income > 0 THEN CAST(sign(income - spent) * ((2000 * abs(CAST(income - spent AS HUGEINT)) + income) // (2 * income)) AS BIGINT) / 10.0 END,
+	grp
+FROM (
+	SELECT period_key, currency,
+		CAST(COALESCE(sum(CASE WHEN flow = 'income' THEN amount END), 0) * 100 AS BIGINT) AS income,
+		CAST(COALESCE(sum(CASE WHEN flow = 'expense' THEN -amount END), 0) * 100 AS BIGINT) AS spent,
+		GROUPING(period_key) AS grp
+	FROM (SELECT account_id, date, currency, flow, amount, %s AS period_key FROM v_cash_flow)
+	WHERE date >= CAST($1 AS DATE) AND date <= CAST($2 AS DATE)%s
+	GROUP BY GROUPING SETS ((period_key, currency), (currency))
+)
+ORDER BY grp, period_key, currency`, key, accounts.and("account_id"))
+}
+
+// CashFlow reads income and spending in params.Window (both days counted), per period and
+// currency, counting only params.AccountIDs when any (every account otherwise); Totals give one
+// row per currency. A window with no income or spending also gets Transactions, as Spending does.
+// An unsupported period is ErrUnsupportedPeriod, and a store it cannot open or read is a *store.OpenError.
+func (s *Store) CashFlow(ctx context.Context, params store.CashFlowParams) (store.CashFlow, error) {
+	key, ok := cashFlowKeys[params.By]
+	if !ok {
+		return store.CashFlow{}, fmt.Errorf("%w: %d", ErrUnsupportedPeriod, params.By)
+	}
+	db, err := s.openRead(ctx)
+	if err != nil {
+		return store.CashFlow{}, err
+	}
+	defer func() { _ = db.Close() }()
+
+	var flow store.CashFlow
+	accounts := accountFilter(params.AccountIDs)
+	err = db.QueryRows(ctx, cashFlowQuery(key, accounts), readArgs(params.Window, accounts), func(scan func(dest ...any) error) error {
+		var period sql.NullString
+		var currency string
+		var income, spent, net, grouping int64
+		var rate sql.NullFloat64
+		if err := scan(&period, &currency, &income, &spent, &net, &rate, &grouping); err != nil {
+			return err
+		}
+		var ratePct *float64
+		if rate.Valid {
+			ratePct = &rate.Float64
+		}
+		if grouping == 1 {
+			flow.Totals = append(flow.Totals, store.CashFlowTotal{Currency: currency, Income: income, Spent: spent, Net: net, SavingsRatePct: ratePct})
+			return nil
+		}
+		flow.Rows = append(flow.Rows, store.CashFlowRow{Period: period.String, Currency: currency, Income: income, Spent: spent, Net: net, SavingsRatePct: ratePct})
+		return nil
+	})
+	if err == nil && len(flow.Totals) == 0 {
+		var first, last sql.NullTime
+		err = db.QueryRows(ctx, transactionRangeQuery(accounts), accounts.args(), func(scan func(dest ...any) error) error {
+			return scan(&first, &last)
+		})
+		flow.Transactions = store.TransactionRange{First: first.Time, Last: last.Time}
+	}
+	if err != nil {
+		return store.CashFlow{}, openFault(s.Path(), err)
+	}
+	return flow, nil
 }
