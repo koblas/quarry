@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
+	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -46,7 +47,7 @@ func oneSidedWarning(n int) string {
 	if n == 1 {
 		return "1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer"
 	}
-	return fmt.Sprintf("%d transfers have no matching transaction in another account; quarry keeps them as one-sided transfers", n)
+	return humanize.Thousands(n) + " transfers have no matching transaction in another account; quarry keeps them as one-sided transfers"
 }
 
 // causedRefusal is a refusal that keeps its cause: Error is the refusal
@@ -162,7 +163,7 @@ func balanceMismatchClause(n, checked int) string {
 	if n == 1 {
 		verb = "does not match"
 	}
-	return fmt.Sprintf("%d of %d %s %s Quicken's last reconciled balance", n, checked, noun, verb)
+	return fmt.Sprintf("%s of %s %s %s Quicken's last reconciled balance", humanize.Thousands(n), humanize.Thousands(checked), noun, verb)
 }
 
 // splitMismatchClause renders n mismatched transactions, singular at n == 1.
@@ -170,7 +171,7 @@ func splitMismatchClause(n int) string {
 	if n == 1 {
 		return "1 transaction does not equal the sum of its splits"
 	}
-	return fmt.Sprintf("%d transactions do not equal the sum of their splits", n)
+	return humanize.Thousands(n) + " transactions do not equal the sum of their splits"
 }
 
 // StdoutWriteRefusal reports that o's result could not be written to

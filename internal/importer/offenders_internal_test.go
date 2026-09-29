@@ -34,3 +34,14 @@ func Test_lessOffender(t *testing.T) {
 		})
 	}
 }
+
+func Test_firstError_groups_the_more_count_by_thousands(t *testing.T) {
+	var off offenders
+	for range 1001 {
+		off.add(offender{class: 10, reason: "a split (source id 1) has no transaction"})
+	}
+
+	err := off.firstError()
+
+	assert.EqualError(t, err, "a split (source id 1) has no transaction (and 1,000 more)")
+}

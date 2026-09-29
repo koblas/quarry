@@ -1,4 +1,4 @@
-// White-box: formatMB, formatThousands and renderSuccess are unexported
+// White-box: formatMB, renderSuccess and the phrase builders are unexported
 // formatting rules best driven directly, rather than through a full command
 // run for every rounding and boundary case.
 package cli
@@ -12,23 +12,6 @@ import (
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 )
-
-func Test_formatThousands(t *testing.T) {
-	cases := []struct {
-		name string
-		n    int
-		want string
-	}{
-		{name: "below the grouping boundary", n: 999, want: "999"},
-		{name: "at the grouping boundary", n: 1000, want: "1,000"},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, formatThousands(c.n))
-		})
-	}
-}
 
 func Test_formatMB(t *testing.T) {
 	cases := []struct {
@@ -526,7 +509,7 @@ func Test_renderStoreFailure(t *testing.T) {
 				Balances: store.BalanceCheck{Checked: 2, Mismatched: []store.BalanceMismatch{
 					{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC), Quarry: 100, Quicken: 200, Difference: -100},
 				}},
-				Splits:    store.SplitCheck{Checked: 5},
+				Splits: store.SplitCheck{Checked: 5},
 				Transfers: store.TransferCheck{Paired: 1, OneSided: []store.OneSidedTransfer{
 					{
 						Date: time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC), Account: "Chequing", Currency: "CAD", Active: true,
@@ -596,6 +579,20 @@ func Test_renderStoreFailure(t *testing.T) {
 
 		assert.Contains(t, got, "Balances  DIFFER for 1 of 2 accounts\n")
 		assert.Contains(t, got, "Splits    DIFFER for 1 of 2 transactions\n")
+	})
+
+	t.Run("DIFFER counts grouped by thousands", func(t *testing.T) {
+		result := store.Result{
+			Validation: store.Validation{
+				Balances: store.BalanceCheck{Checked: 1035, Mismatched: make([]store.BalanceMismatch, 1000)},
+				Splits:   store.SplitCheck{Checked: 1204, Mismatched: make([]store.SplitMismatch, 1000)},
+			},
+		}
+
+		got := renderStoreFailure(result, true, "/Users/dave")
+
+		assert.Contains(t, got, "Balances  DIFFER for 1,000 of 1,035 accounts\n")
+		assert.Contains(t, got, "Splits    DIFFER for 1,000 of 1,204 transactions\n")
 	})
 }
 

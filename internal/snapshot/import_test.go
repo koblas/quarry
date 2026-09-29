@@ -69,6 +69,16 @@ func Test_outcome_warnings_names_a_single_one_sided_transfer_in_the_singular(t *
 	}, got)
 }
 
+func Test_outcome_warnings_group_the_one_sided_count_by_thousands(t *testing.T) {
+	outcome := snapshot.Outcome{Store: builtWithOneSided(1204)}
+
+	got := outcome.Warnings()
+
+	assert.Equal(t, []string{
+		"1,204 transfers have no matching transaction in another account; quarry keeps them as one-sided transfers",
+	}, got)
+}
+
 func Test_outcome_warnings_omit_w2_when_every_transfer_is_paired(t *testing.T) {
 	outcome := snapshot.Outcome{
 		Manifest: snapshot.Manifest{Warnings: []string{"W1 text"}},

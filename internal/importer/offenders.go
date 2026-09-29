@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"time"
+
+	"github.com/koblas/quarry/internal/platform/humanize"
 )
 
 // s4ClassOrder is the S4 reporting order: 7, then 1-6, then 11, then 8-10.
@@ -63,7 +65,7 @@ func (o *offenders) firstError() error {
 
 	reason := inClass[0].reason
 	if extra := len(inClass) - 1; extra > 0 {
-		reason = fmt.Sprintf("%s (and %d more)", reason, extra)
+		reason = fmt.Sprintf("%s (and %s more)", reason, humanize.Thousands(extra))
 	}
 	return &UnmappableError{Reason: reason}
 }

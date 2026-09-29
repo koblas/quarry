@@ -3,45 +3,25 @@ package cli
 import (
 	"fmt"
 	"math"
-	"strconv"
 	"strings"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
+	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/platform/sqlschema"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store"
 )
 
-// formatThousands renders n, which is always non-negative in this package's
-// callers (byte counts, account counts, table/column counts), with a comma
-// every three digits from the right.
-func formatThousands(n int) string {
-	s := strconv.Itoa(n)
-	for i := len(s) - 3; i > 0; i -= 3 {
-		s = s[:i] + "," + s[i:]
-	}
-	return s
-}
-
 // formatMB renders bytes as decimal megabytes with one decimal place and
 // thousands-grouped whole MB.
 func formatMB(bytes int64) string {
 	tenths := int64(math.Round(float64(bytes) / 100000))
-	return fmt.Sprintf("%s.%d MB", formatThousands(int(tenths/10)), tenths%10)
-}
-
-// nounPhrase renders n with singular at exactly 1 and plural at 0 or more
-// than 1, thousands-grouped.
-func nounPhrase(n int, singular, plural string) string {
-	if n == 1 {
-		return "1 " + singular
-	}
-	return formatThousands(n) + " " + plural
+	return fmt.Sprintf("%s.%d MB", humanize.Thousands(int(tenths/10)), tenths%10)
 }
 
 // accountsPhrase renders n as "1 account" or "N accounts", thousands-grouped.
 func accountsPhrase(n int) string {
-	return nounPhrase(n, "account", "accounts")
+	return humanize.Count(n, "account", "accounts")
 }
 
 // renderSuccess renders m's result block, then the diff rows a mismatch or
@@ -72,7 +52,7 @@ func schemaLine(s snapshot.SchemaInfo) string {
 	}
 
 	line := fmt.Sprintf("matches reference %s (%s tables, %s columns)",
-		s.Reference, formatThousands(s.ReferenceTables), formatThousands(s.ReferenceColumns))
+		s.Reference, humanize.Thousands(s.ReferenceTables), humanize.Thousands(s.ReferenceColumns))
 	if s.HasExtras() {
 		line += fmt.Sprintf(", plus %s not in it",
 			sqlschema.CountPhrase(len(s.UnexpectedTables), len(s.UnexpectedColumns)))
@@ -131,9 +111,9 @@ func transfersPhrase(tc store.TransferCheck) string {
 	case tc.Paired == 0 && len(tc.OneSided) == 0:
 		return "none"
 	case len(tc.OneSided) == 0:
-		return formatThousands(tc.Paired) + " paired"
+		return humanize.Thousands(tc.Paired) + " paired"
 	default:
-		return fmt.Sprintf("%s paired, %s one-sided", formatThousands(tc.Paired), formatThousands(len(tc.OneSided)))
+		return fmt.Sprintf("%s paired, %s one-sided", humanize.Thousands(tc.Paired), humanize.Thousands(len(tc.OneSided)))
 	}
 }
 
@@ -146,7 +126,7 @@ func balancesCheckedPhrase(n int) string {
 	case 1:
 		return "1 account matches Quicken's last reconciled balance"
 	default:
-		return formatThousands(n) + " accounts match Quicken's last reconciled balance"
+		return humanize.Thousands(n) + " accounts match Quicken's last reconciled balance"
 	}
 }
 
@@ -162,10 +142,10 @@ func balancesPhrase(bc store.BalanceCheck) string {
 func balancesExtrasPhrase(bc store.BalanceCheck) string {
 	var extras []string
 	if n := len(bc.NeverReconciled); n > 0 {
-		extras = append(extras, nounPhrase(n, "never reconciled", "never reconciled"))
+		extras = append(extras, humanize.Count(n, "never reconciled", "never reconciled"))
 	}
 	if bc.InvestmentAccounts > 0 {
-		extras = append(extras, nounPhrase(bc.InvestmentAccounts, "investment account not checked", "investment accounts not checked"))
+		extras = append(extras, humanize.Count(bc.InvestmentAccounts, "investment account not checked", "investment accounts not checked"))
 	}
 	if len(extras) == 0 {
 		return ""
@@ -179,7 +159,7 @@ func xOfYPhrase(x, y int, singular, plural string) string {
 	if y == 1 {
 		noun = singular
 	}
-	return fmt.Sprintf("%d of %d %s", x, y, noun)
+	return fmt.Sprintf("%s of %s %s", humanize.Thousands(x), humanize.Thousands(y), noun)
 }
 
 // balancesDifferPhrase renders bc's V1 clause: how many of the checked
@@ -203,7 +183,7 @@ func splitsPhrase(sc store.SplitCheck) string {
 	case 1:
 		return "the 1 transaction equals the sum of its splits"
 	default:
-		return "all " + formatThousands(sc.Checked) + " transactions equal the sum of their splits"
+		return "all " + humanize.Thousands(sc.Checked) + " transactions equal the sum of their splits"
 	}
 }
 
@@ -211,15 +191,15 @@ func splitsPhrase(sc store.SplitCheck) string {
 // on its own count, then n's investment-transaction clause when nonzero.
 func rowsPhrase(c store.Counts, n store.NotImported) string {
 	phrase := strings.Join([]string{
-		nounPhrase(c.Transactions, "transaction", "transactions"),
-		nounPhrase(c.Splits, "split", "splits"),
-		nounPhrase(c.Transfers, "transfer", "transfers"),
-		nounPhrase(c.Payees, "payee", "payees"),
-		nounPhrase(c.Categories, "category", "categories"),
-		nounPhrase(c.Tags, "tag", "tags"),
+		humanize.Count(c.Transactions, "transaction", "transactions"),
+		humanize.Count(c.Splits, "split", "splits"),
+		humanize.Count(c.Transfers, "transfer", "transfers"),
+		humanize.Count(c.Payees, "payee", "payees"),
+		humanize.Count(c.Categories, "category", "categories"),
+		humanize.Count(c.Tags, "tag", "tags"),
 	}, ", ")
 	if n.InvestmentTransactions > 0 {
-		phrase += "; " + nounPhrase(n.InvestmentTransactions, "investment transaction", "investment transactions") + " not imported"
+		phrase += "; " + humanize.Count(n.InvestmentTransactions, "investment transaction", "investment transactions") + " not imported"
 	}
 	return phrase
 }
@@ -231,7 +211,7 @@ func formatMoney(cents int64) string {
 	if negative {
 		cents = -cents
 	}
-	s := fmt.Sprintf("%s.%02d", formatThousands(int(cents/100)), cents%100)
+	s := fmt.Sprintf("%s.%02d", humanize.Thousands(int(cents/100)), cents%100)
 	if negative {
 		return "-" + s
 	}

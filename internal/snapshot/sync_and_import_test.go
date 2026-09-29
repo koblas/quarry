@@ -419,6 +419,18 @@ func Test_sync_and_import_reports_the_v1_refusal_for_a_failed_check(t *testing.T
 			wantClause: "2 transactions do not equal the sum of their splits",
 		},
 		{
+			name: "balance counts grouped by thousands",
+			validation: store.Validation{Balances: store.BalanceCheck{
+				Checked: 1035, Mismatched: make([]store.BalanceMismatch, 1000),
+			}},
+			wantClause: "1,000 of 1,035 accounts do not match Quicken's last reconciled balance",
+		},
+		{
+			name:       "split count grouped by thousands",
+			validation: store.Validation{Splits: store.SplitCheck{Mismatched: make([]store.SplitMismatch, 1204)}},
+			wantClause: "1,204 transactions do not equal the sum of their splits",
+		},
+		{
 			name: "a balance and a split mismatch joined",
 			validation: store.Validation{
 				Balances: store.BalanceCheck{Checked: 3, Mismatched: []store.BalanceMismatch{{ID: "acct-1"}}},
