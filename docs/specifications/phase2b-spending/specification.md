@@ -121,7 +121,7 @@ Total                CAD       31,204.18
 Total                USD        2,110.00
 ```
 - Caption with `--account`: `Spending 2026-01-01 to 2026-09-29 in Chequing, Visa Infinite` (names in resolved order as given).
-- Column 1 header by `--by`: `Category` (full_path; `(uncategorized)` for NULL); `Payee` (`(no payee)` for NULL); `Tag` (`(no tag)` for untagged splits); `Month` (`2026-01`, plus a trailing Status column: `partial` or empty).
+- Column 1 header by `--by`: `Category` (full_path; `(uncategorized)` for NULL); `Payee` (`(no payee)` for NULL); `Tag` (`(no tag)` for untagged splits); `Month` (`2026-01`, plus a trailing `Status` column, always present (header-only table included); `partial` or empty, Total rows empty; no trailing spaces; JSON key stays `partial`).
 - Sort: category and tag `lower(name), name, currency`, synthetic buckets first; payee `currency, spent DESC, lower(payee)`; month `month, currency`. Total rows last, one per currency present, CAD before USD.
 - `--json`:
 ```
@@ -161,7 +161,7 @@ less. A period that --since or --until cuts short is marked partial.
 ```
 Cash flow 2026-01-01 to 2026-09-29 in all accounts
 
-Month    Currency     Income      Spent       Net  Savings rate
+Month    Currency     Income      Spent       Net  Savings rate  Status
 2026-01  CAD        9,100.00   6,200.00  2,900.00         31.9%
 2026-09  CAD        6,020.00   5,110.40    909.60         15.1%  partial
 Total    CAD       61,410.00  44,002.18  17,407.82        28.3%
