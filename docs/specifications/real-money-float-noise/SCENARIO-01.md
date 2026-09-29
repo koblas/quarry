@@ -25,7 +25,7 @@ Exact decimal: `math/big.Rat` — `SetString` reads decimals and `e-17` text exa
 - [x] Step 2: `statements_test.go` (after `:41`, pattern of `Test_import_uses_the_newest_statement_by_date` with `chequingWithOneReconciledTxn(b, "100.00")`) — 03: `EndingBalance: "100.0000004"` → NoError, `Validation.Balances.Checked == 1`, `Mismatched` empty. Run `A`: 01/02/03/05 red at their assertions (refuse today; 05 as reason 3 not 6); 04 green on arrival (regression guard) — say so. Signature stubs: none needed, no new symbol.
 
 ### Build
-- [ ] Step 3: `money.go:53-85` `parseRealMoney` + `money.go:19-24` + `money_internal_test.go:23-50` `Test_parseMoney` — snap core (B1). Named constant for the 0.000001 tolerance beside `realIntBound`. When `len(fracPart) > 2` and no exponent: exact `big.Rat` distance to nearest cent (half-up), within tolerance inclusive → that cent, else `moneyPrecision`. Integer part ≥ 1e9 → `moneyTooLarge` checked before the precision test (R7). Snapped zero is `0`, never negative (R8). Test-first rows: `-55396.139999999992`→-5539614, `-15.67000000001`→-1567, `0.30000000000000004`→30, `12.340001`→1234 (inclusive edge), `12.3400011`→moneyPrecision, `12.339999`→1234, `-0.0000001`→0, `12.345`→moneyPrecision stays. Bound tests: inside/just outside tolerance, both signs (`-12.340001`, `-12.3400011`).
+- [x] Step 3: `money.go:53-85` `parseRealMoney` + `money.go:19-24` + `money_internal_test.go:23-50` `Test_parseMoney` — snap core (B1). Named constant for the 0.000001 tolerance beside `realIntBound`. When `len(fracPart) > 2` and no exponent: exact `big.Rat` distance to nearest cent (half-up), within tolerance inclusive → that cent, else `moneyPrecision`. Integer part ≥ 1e9 → `moneyTooLarge` checked before the precision test (R7). Snapped zero is `0`, never negative (R8). Test-first rows: `-55396.139999999992`→-5539614, `-15.67000000001`→-1567, `0.30000000000000004`→30, `12.340001`→1234 (inclusive edge), `12.3400011`→moneyPrecision, `12.339999`→1234, `-0.0000001`→0, `12.345`→moneyPrecision stays. Bound tests: inside/just outside tolerance, both signs (`-12.340001`, `-12.3400011`).
 - [ ] Step 4: `money.go:61-67` exponent branch + `Test_parseMoney` rows `:32-34` — (B2) positive exponent stays `moneyTooLarge`; negative exponent: validate mantissa (`digits(.digits)`) and exponent (`-digits`) else `moneyNotANumber`, then the same `big.Rat` snap (magnitude ≤ 1e-6 → 0 cents, else `moneyPrecision`). Flip `:33` to `5.5511151231257827e-17`→0 `moneyOK`; add `4.0e-07`→0, `2.0e-06`→moneyPrecision; `1.0e-05`→moneyPrecision (`:34`, unchanged). Add one malformed-mantissa row (`x.1e-05`→moneyNotANumber).
 - [ ] Step 5: `money.go` post-snap bound — (B2) snapped |cents| ≥ `realIntBound*100` → `moneyTooLarge`. Rows: `999999999.9999999`→moneyTooLarge, `-999999999.9999999`→moneyTooLarge, control `999999999.99`→99999999999 `moneyOK` (`:35`), `999999999.9999`→moneyPrecision (1e-4 from the bound, outside tolerance).
 
@@ -54,17 +54,17 @@ Exact decimal: `math/big.Rat` — `SetString` reads decimals and `e-17` text exa
 
 ## Phase report
 
-Run A (steps 1-2) done. No production code touched, no stubs needed.
+Run B1 (step 3) done, test-first.
 
-Files: `internal/importer/transactions_test.go:84-186` (5 new tests + `transactionAmounts`/`splitAmounts` helpers; e-17 case removed from the exponent refusal table); `internal/importer/statements_test.go:41-53` (03).
+Files: `internal/importer/money.go` (`snapToleranceInverse` const beside `realIntBound`; `parseRealMoney` now parses the integer part first, so integer >= 1e9 is `moneyTooLarge` before precision; >2 decimals no-exponent goes through new `snapToCent` — exact `big.Rat`, half-up, inclusive tolerance; 2-digit fast path untouched); `internal/importer/money_internal_test.go` (10 new `Test_parseMoney` rows); `internal/importer/transactions_test.go` (02 and the tolerance control fixtures gained a mirror `b.Entry` — without one the import ends in `validation failed`, not the asserted outcome).
 
-Red at assertion (`require.NoError` / `assert.Equal`):
-- 01 `...float_residue_as_their_cent`: `a transaction on 2020-04-13 in "HELOC" has an amount of -55396.139999999992, which has more than 2 decimal places (and 1 more)`
-- 02 `...near_zero_residue_amount_as_zero_cents`: refused, `5.5511151231257827e-17 ... more than 2 decimal places`
-- 03 statements: `the 2026-02-28 statement for "Chequing" has a balance of 100.0000004, which has more than 2 decimal places`
-- 05 `...rounds_up_to_the_bound_as_too_large`: today reason 3 (`more than 2 decimal places`), wants reason 6.
-- Extra control test `Test_import_imports_an_amount_on_the_snap_tolerance_as_its_cent` (`12.340001` -> 1234) red for 04's control arm.
-- 04 `...beyond_the_snap_tolerance` GREEN ON ARRIVAL (regression guard; refuses today as reason 3, `Rows.Transactions` empty).
+Red first: 8 of the new rows failed at their assertion; the two "beyond tolerance" rows (`12.3400011`, `-12.3400011`) green on arrival (refuse today), guarded by mutation below. Narrow loop now: green except the B2 tests — `..._near_zero_residue_amount_as_zero_cents` (exponent branch, step 4) and `..._rounds_up_to_the_bound_as_too_large` (post-snap bound, step 5; today the snap yields 1e11 cents and import ends `validation failed` instead of reason 6).
 
-Do not redo/undo: 05 fixture is `999999999.99999988`, not the spec's `999999999.9999999` — SQLite renders the stored REAL as `999999999.99999988` (17 sig digits), and reason-6 text quotes that. Distance to 1e9 is 1.2e-7, inside tolerance, so it snaps to the bound then hits the post-snap check. Unit row `999999999.9999999` in `Test_parseMoney` is still valid (text given directly to `parseMoney`).
-Baseline: full `./internal/importer/` run shows exactly these 5 failing tests, rest green.
+Mutations (money.go, each restored, diff clean):
+- `> 0` -> `>= 0` on the distance test: reds `real_on_the_snap_tolerance_snaps` (12.340001), `real_negative_on_the_snap_tolerance_snaps`, `real_just_below_a_cent_snaps_up`.
+- tolerance 1e-9: reds `real_on_the_snap_tolerance_snaps`, `real_negative_on_the_snap_tolerance_snaps`.
+- tolerance 1e-5: reds `real_beyond_the_snap_tolerance` (12.3400011), `real_negative_beyond_the_snap_tolerance`; the `2.0e-06` row half belongs to B2 (row not yet added).
+- float `ParseFloat` distance instead of `big.Rat`: reds `real_on_the_snap_tolerance_snaps`, `real_negative_on_the_snap_tolerance_snaps` (float distance of 12.340001 exceeds 1e-6 by rounding). Boundary rows are the discriminators; no extra row needed.
+- Still owed to B2: drop post-snap bound -> row `999999999.9999999` + acceptance 05.
+
+Do not redo/undo: 05 fixture stays `999999999.99999988`; `Rows`-empty/`validation failed` on 05 is expected until step 5. Steps 4-5 must add the post-snap bound and the negative-exponent branch in `parseRealMoney`'s exponent `if`; `snapToCent` takes the unsigned text and requires the digit grammar already checked (exponent text must go through its own grammar guard before `big.Rat.SetString`).

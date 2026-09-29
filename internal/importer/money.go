@@ -1,6 +1,7 @@
 package importer
 
 import (
+	"math/big"
 	"strconv"
 	"strings"
 )
@@ -22,6 +23,10 @@ const dollarBound = 10_000_000_000_000_000 // 1e16
 // realIntBound is the bound (exclusive) on a REAL's integer part: above it SQLite
 // can render a 2-decimal REAL with float noise, so its cents cannot be trusted.
 const realIntBound = 1_000_000_000 // 1e9
+
+// snapToleranceInverse is 1 over the tolerance, in dollars, within which a REAL
+// with more than 2 decimals is float residue of the cent it sits on.
+const snapToleranceInverse = 1_000_000 // tolerance 1e-6
 
 // parseMoney reads typ (SQLite's typeof()) and text (CAST(col AS TEXT))
 // for one non-NULL money column and returns its value in cents, parsed
@@ -69,19 +74,41 @@ func parseRealMoney(text string) (int64, moneyFault) {
 	if intPart == "" || !allDigits(intPart) || !allDigits(fracPart) || (hasDot && fracPart == "") {
 		return 0, moneyNotANumber
 	}
-	if len(fracPart) > 2 {
-		return 0, moneyPrecision
-	}
 	intVal, err := strconv.ParseInt(intPart, 10, 64)
 	if err != nil || intVal >= realIntBound {
 		return 0, moneyTooLarge
 	}
-	fracPart += "00"[len(fracPart):]
-	cents := intVal*100 + int64(fracPart[0]-'0')*10 + int64(fracPart[1]-'0')
+	var cents int64
+	if len(fracPart) > 2 {
+		var ok bool
+		if cents, ok = snapToCent(unsigned); !ok {
+			return 0, moneyPrecision
+		}
+	} else {
+		fracPart += "00"[len(fracPart):]
+		cents = intVal*100 + int64(fracPart[0]-'0')*10 + int64(fracPart[1]-'0')
+	}
 	if neg {
 		cents = -cents
 	}
 	return cents, moneyOK
+}
+
+// snapToCent returns the whole cents nearest the non-negative decimal text and
+// whether text lies within the snap tolerance of them, compared exactly.
+func snapToCent(text string) (int64, bool) {
+	dollars, ok := new(big.Rat).SetString(text)
+	if !ok {
+		return 0, false
+	}
+	scaled := dollars.Mul(dollars, big.NewRat(100, 1))
+	nearest := new(big.Rat).Add(scaled, big.NewRat(1, 2))
+	cents := new(big.Int).Quo(nearest.Num(), nearest.Denom())
+	distance := new(big.Rat).Sub(scaled, new(big.Rat).SetInt(cents))
+	if distance.Abs(distance).Cmp(big.NewRat(100, snapToleranceInverse)) > 0 {
+		return 0, false
+	}
+	return cents.Int64(), true
 }
 
 // allDigits reports whether s holds only ASCII digits; "" does.

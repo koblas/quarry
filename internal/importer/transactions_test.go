@@ -100,7 +100,8 @@ func Test_import_imports_a_near_zero_residue_amount_as_zero_cents(t *testing.T) 
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "5.5511151231257827e-17", PostedDate: &posted})
+	txn := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "5.5511151231257827e-17", PostedDate: &posted})
+	b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "5.5511151231257827e-17"})
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
@@ -132,7 +133,8 @@ func Test_import_imports_an_amount_on_the_snap_tolerance_as_its_cent(t *testing.
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.340001", PostedDate: &posted})
+	txn := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.340001", PostedDate: &posted})
+	b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "12.340001"})
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
