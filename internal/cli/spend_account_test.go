@@ -34,6 +34,12 @@ func namedAccounts() fakeReportStore {
 	)
 }
 
+// withSpending is fake answering every spend read with one CAD total, so the window is not empty.
+func withSpending(fake fakeReportStore) fakeReportStore {
+	fake.spending = store.Spending{Totals: []store.SpendingTotal{{Currency: "CAD", Spent: 100}}}
+	return fake
+}
+
 func leftOutWarning(name string) string {
 	return "account \"" + name + "\" is not used in reports in Quicken, so spend leaves it out; " +
 		"to include it, turn on reports for it in Quicken's account settings, then run quarry sync"
@@ -51,13 +57,13 @@ func Test_spend_captions_the_named_accounts(t *testing.T) {
 func Test_spend_json_lists_the_named_accounts_in_account_filter(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, namedAccounts(), spendTagNow, &stdout, &stderr,
+	err := executeSpend(t, withSpending(namedAccounts()), spendTagNow, &stdout, &stderr,
 		"--account", "visa infinite", "--account", chequingID, "--json")
 
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"since":"2026-01-01","until":"2026-09-29","by":"category",
 		"account_filter":[{"id":"acct-visa","name":"Visa Infinite"},{"id":"acct-chq","name":"Chequing"}],
-		"rows":[],"totals":[],"warnings":[]}`, stdout.String())
+		"rows":[],"totals":[{"currency":"CAD","spent":"1.00"}],"warnings":[]}`, stdout.String())
 }
 
 func Test_spend_passes_every_account_flag_to_the_report(t *testing.T) {
@@ -92,7 +98,7 @@ func Test_spend_json_puts_w2_in_warnings_unprefixed_before_w1(t *testing.T) {
 func Test_spend_warns_once_per_named_account_left_out_of_reports_in_the_order_given(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, namedAccounts(), spendTagNow, &stdout, &stderr,
+	err := executeSpend(t, withSpending(namedAccounts()), spendTagNow, &stdout, &stderr,
 		"--account", "Old Card", "--account", chequingID, "--account", oldBankID, "--account", "old card")
 
 	require.NoError(t, err)
@@ -103,7 +109,7 @@ func Test_spend_warns_once_per_named_account_left_out_of_reports_in_the_order_gi
 func Test_spend_does_not_warn_about_an_account_in_reports(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, namedAccounts(), spendTagNow, &stdout, &stderr, "--account", chequingID)
+	err := executeSpend(t, withSpending(namedAccounts()), spendTagNow, &stdout, &stderr, "--account", chequingID)
 
 	require.NoError(t, err)
 	assert.Empty(t, stderr.String())

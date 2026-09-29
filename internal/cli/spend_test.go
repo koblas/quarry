@@ -34,7 +34,9 @@ func Test_spend_reads_the_window_from_the_env_clock(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	now := time.Date(2026, 12, 31, 22, 0, 0, 0, utcMinus5)
 
-	err := executeSpend(t, fakeReportStore{gotSpending: &got}, now, &stdout, &stderr)
+	fake := withSpending(fakeReportStore{gotSpending: &got})
+
+	err := executeSpend(t, fake, now, &stdout, &stderr)
 
 	require.NoError(t, err)
 	assert.Equal(t, store.Window{
@@ -42,7 +44,7 @@ func Test_spend_reads_the_window_from_the_env_clock(t *testing.T) {
 		Until: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC),
 	}, got.Window)
 	assert.Equal(t, store.SpendByCategory, got.By)
-	assert.Equal(t, "Spending 2026-01-01 to 2026-12-31 in all accounts\n\nCategory  Currency  Spent\n", stdout.String())
+	assert.Equal(t, "Spending 2026-01-01 to 2026-12-31 in all accounts\n\nCategory  Currency  Spent\nTotal     CAD        1.00\n", stdout.String())
 	assert.Empty(t, stderr.String())
 }
 

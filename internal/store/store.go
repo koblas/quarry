@@ -359,6 +359,12 @@ type SpendingTotal struct {
 	Spent    int64
 }
 
+// TransactionRange is the first and last day of a set of transactions, each a
+// calendar day held as UTC midnight; the zero value means there are none.
+type TransactionRange struct {
+	First, Last time.Time
+}
+
 // Spending is the rows of a spending read in display order, and one Total
 // per currency present, CAD before USD.
 type Spending struct {
@@ -367,4 +373,8 @@ type Spending struct {
 	// MultiTagSplits counts the splits in the window that carry more than one
 	// tag; it is set only when grouping by tag.
 	MultiTagSplits int
+	// Transactions is set only when the window holds no spending (no Totals): the span of
+	// the whole store's transactions, or of those of the accounts in reports among
+	// SpendingParams.AccountIDs; the zero range means there are none.
+	Transactions TransactionRange
 }

@@ -33,6 +33,10 @@ type Spending struct {
 	// MultiTagSplits counts the splits carrying more than one tag; it is set
 	// only when grouping by tag.
 	MultiTagSplits int
+	// Transactions is set only when the window holds no spending: the span of the transactions
+	// of the whole store, or of the named accounts that Quicken counts in
+	// reports; the zero range means there are none.
+	Transactions store.TransactionRange
 
 	Window store.Window
 	By     store.SpendingGroup
@@ -40,6 +44,10 @@ type Spending struct {
 	// without repeats; empty means every account was counted.
 	Accounts []store.Account
 }
+
+// Empty is whether the window held no spending at all: a currency whose spending nets to zero
+// still has a total, so it is not empty.
+func (s Spending) Empty() bool { return len(s.Totals) == 0 }
 
 // DefaultWindow is January 1 of now's year through now's day, both read in
 // now's own zone.
@@ -72,6 +80,7 @@ func (s *Server) Spend(ctx context.Context, req SpendRequest) (Spending, error) 
 	result := Spending{
 		Totals:         spending.Totals,
 		MultiTagSplits: spending.MultiTagSplits,
+		Transactions:   spending.Transactions,
 		Window:         req.Window,
 		By:             req.By,
 		Accounts:       accounts,

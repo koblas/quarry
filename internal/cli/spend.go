@@ -80,17 +80,24 @@ the rows can add up to more than the total.`,
 }
 
 // spendWarnings is s's warnings, unprefixed and never nil: one per named account Quicken leaves out
-// of reports, then the multi-tag-splits note.
+// of reports, then the multi-tag-splits note, then a note that the window held no spending.
 func spendWarnings(s report.Spending) []string {
 	warnings := []string{}
+	leftOut := 0
 	for _, a := range s.Accounts {
 		if a.NotInReports {
 			warnings = append(warnings, leftOutOfReportsWarning(a, "spend"))
+			leftOut++
 		}
 	}
 	if s.By == store.SpendByTag && s.MultiTagSplits > 0 {
 		warnings = append(warnings, humanize.Count(s.MultiTagSplits, "split carries", "splits carry")+
 			" more than one tag, so the rows add up to more than the total")
+	}
+	named := len(s.Accounts) > 0
+	// Naming only accounts left out of reports makes an empty result expected: the warnings above say so.
+	if s.Empty() && (!named || leftOut < len(s.Accounts)) {
+		warnings = append(warnings, emptyWindowWarning("spending", s.Window, named, s.Transactions))
 	}
 	return warnings
 }

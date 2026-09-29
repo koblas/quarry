@@ -20,11 +20,28 @@ func (f accountFilter) and(column string) string {
 	if len(f) == 0 {
 		return ""
 	}
+	return " AND " + column + " IN (" + f.marks(3) + ")"
+}
+
+// marks is one parameter per named account, numbered from first.
+func (f accountFilter) marks(first int) string {
 	marks := make([]string, len(f))
 	for i := range f {
-		marks[i] = fmt.Sprintf("$%d", i+3)
+		marks[i] = fmt.Sprintf("$%d", first+i)
 	}
-	return " AND " + column + " IN (" + strings.Join(marks, ", ") + ")"
+	return strings.Join(marks, ", ")
+}
+
+// transactionRangeQuery is the first and last day of the transactions a spending read was
+// scoped to: every transaction, or the named accounts' that Quicken counts in reports. Its
+// parameters are the named accounts, numbered from $1.
+func transactionRangeQuery(accounts accountFilter) string {
+	if len(accounts) == 0 {
+		return "SELECT min(date), max(date) FROM transactions"
+	}
+	return `SELECT min(t.date), max(t.date)
+FROM transactions t JOIN accounts a ON a.id = t.account_id
+WHERE a.in_reports AND t.account_id IN (` + accounts.marks(1) + ")"
 }
 
 // spendingQueryFor is a spending query for the accounts of a filter; each takes the window's
@@ -110,8 +127,9 @@ var ErrUnsupportedGrouping = errors.New("spending grouping is not supported")
 // Spending reads the spending in params.Window (both days counted) grouped by params.By,
 // counting only params.AccountIDs when any (every account otherwise), dropping a group that
 // nets to zero; Totals keep it, one per currency. Grouping by tag also
-// counts the splits carrying several tags. An unsupported grouping is an error, and a store
-// it cannot open or read is a *store.OpenError.
+// counts the splits carrying several tags. A window with no spending also gets Transactions,
+// the span of the store's transactions, or of the in-report accounts among AccountIDs. An
+// unsupported grouping is an error, and a store it cannot open or read is a *store.OpenError.
 func (s *Store) Spending(ctx context.Context, params store.SpendingParams) (store.Spending, error) {
 	queryFor, ok := spendingQueries[params.By]
 	if !ok {
@@ -125,10 +143,11 @@ func (s *Store) Spending(ctx context.Context, params store.SpendingParams) (stor
 
 	var spending store.Spending
 	accounts := accountFilter(params.AccountIDs)
-	args := []any{civilDay(params.Window.Since), civilDay(params.Window.Until)}
-	for _, id := range accounts {
-		args = append(args, id)
+	accountArgs := make([]any, len(accounts))
+	for i, id := range accounts {
+		accountArgs[i] = id
 	}
+	args := append([]any{civilDay(params.Window.Since), civilDay(params.Window.Until)}, accountArgs...)
 	err = db.QueryRows(ctx, queryFor(accounts), args, func(scan func(dest ...any) error) error {
 		var key sql.NullString
 		var currency string
@@ -147,6 +166,13 @@ func (s *Store) Spending(ctx context.Context, params store.SpendingParams) (stor
 		err = db.QueryRows(ctx, multiTagSplitsQuery(accounts), args, func(scan func(dest ...any) error) error {
 			return scan(&spending.MultiTagSplits)
 		})
+	}
+	if err == nil && len(spending.Totals) == 0 {
+		var first, last sql.NullTime
+		err = db.QueryRows(ctx, transactionRangeQuery(accounts), accountArgs, func(scan func(dest ...any) error) error {
+			return scan(&first, &last)
+		})
+		spending.Transactions = store.TransactionRange{First: first.Time, Last: last.Time}
 	}
 	if err != nil {
 		return store.Spending{}, openFault(s.Path(), err)
