@@ -538,6 +538,9 @@ Scenario: SCENARIO-29 — accounts marks linked-tracking accounts
 | SCENARIO-24 | FOLD into SCENARIO-20 — reuses the parser, resolver and E1 seams; only the cashflow S4/E1 copy is new |
 | SCENARIO-25 | FOLD into SCENARIO-26 — one prefix string plus its tests |
 | SCENARIO-26 | LIGHT (run 2) — 3 steps (Accounts read carries `in_reports` / Status + JSON `in_reports` / S25 prefix + sql Long NIT), duckstore + cli; absorbs 25 |
+| SCENARIO-27 | OWNS A RUN (post-Gate) — 4 batches (import `ZSIMPLEINVESTING` → `linked_tracking` through store + schema + fixture / one SQL "reported" definition shared by the `v_cash_flow` predicate, the E1a/E2a range query and the COMMENT / Accounts read + `Account.LeftOutOfReports` + W3 / accounts Status + JSON + spend/cashflow Long), 1 feature package (importer) plus store/duckstore/cli; absorbs 28, 29; owns the "reported" rule, so mutations must be named |
+| SCENARIO-28 | FOLD into SCENARIO-27 — its Accounts-read column and `LeftOutOfReports` are what 27's W3 batch builds; W3 is one branch in `leftOutWarnings` |
+| SCENARIO-29 | FOLD into SCENARIO-27 — a status part and one JSON field over the Accounts read 27 already widens; the new Long text says "linked tracking" and that is only true once 29's Status lands |
 
 ## BDD Acceptance Progress
 - [x] SCENARIO-01: sync records which transactions Quicken leaves out of reports — `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_records_which_transactions_are_excluded_from_reports`
