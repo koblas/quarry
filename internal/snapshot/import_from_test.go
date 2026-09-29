@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/sqlite"
@@ -73,6 +74,7 @@ func writeManifestFor(t *testing.T, snapshotPath string) {
 }
 
 func Test_import_from_passes_the_same_snapshot_ref_as_a_plain_sync(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -92,6 +94,7 @@ func Test_import_from_passes_the_same_snapshot_ref_as_a_plain_sync(t *testing.T)
 }
 
 func Test_import_from_passes_the_recomputed_schema_fingerprint_not_the_recorded_one(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -110,6 +113,7 @@ func Test_import_from_passes_the_recomputed_schema_fingerprint_not_the_recorded_
 }
 
 func Test_import_from_never_rewrites_a_manifest_that_differs_from_the_recomputed_one(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	srv := newImportServer(t, home, &fakeImporter{})
 	taken := takeSnapshot(t, srv)
@@ -129,6 +133,7 @@ func Test_import_from_never_rewrites_a_manifest_that_differs_from_the_recomputed
 }
 
 func Test_import_from_a_path_outside_the_snapshots_directory_never_creates_it(t *testing.T) {
+	t.Parallel()
 	elsewhere := t.TempDir()
 	fake := &fakeImporter{}
 	ref, err := v9.Reference(t.Context())
@@ -164,6 +169,7 @@ func Test_import_from_refuses_a_relative_path_when_the_working_directory_no_long
 }
 
 func Test_import_from_returns_the_manifest_a_plain_sync_returned(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	srv := newImportServer(t, home, &fakeImporter{})
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
@@ -177,6 +183,7 @@ func Test_import_from_returns_the_manifest_a_plain_sync_returned(t *testing.T) {
 }
 
 func Test_import_from_returns_the_taken_at_time_the_manifest_recorded(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	srv := newImportServer(t, home, &fakeImporter{})
 	taken := takeSnapshot(t, srv)
@@ -190,6 +197,7 @@ func Test_import_from_returns_the_taken_at_time_the_manifest_recorded(t *testing
 }
 
 func Test_import_from_imports_a_snapshot_whose_manifest_said_unverified_once_the_current_reference_matches(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -208,6 +216,7 @@ func Test_import_from_imports_a_snapshot_whose_manifest_said_unverified_once_the
 }
 
 func Test_import_from_reports_a_failed_validation_like_a_plain_sync(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -223,6 +232,7 @@ func Test_import_from_reports_a_failed_validation_like_a_plain_sync(t *testing.T
 }
 
 func Test_import_from_never_imports_a_snapshot_whose_hash_changed(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -240,6 +250,7 @@ func Test_import_from_never_imports_a_snapshot_whose_hash_changed(t *testing.T) 
 }
 
 func Test_import_from_reports_a_changed_snapshot_that_no_longer_opens_as_changed(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -258,6 +269,7 @@ func Test_import_from_reports_a_changed_snapshot_that_no_longer_opens_as_changed
 }
 
 func Test_import_from_skips_the_import_when_the_current_reference_no_longer_matches(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	taken := takeSnapshot(t, newImportServer(t, home, fake))
@@ -286,6 +298,7 @@ func Test_import_from_skips_the_import_when_the_current_reference_no_longer_matc
 // No manifest file exists in any of this group's fixtures: that absence
 // proves ImportFrom's path pre-check runs before any manifest read.
 func Test_import_from_refuses_a_path_form_value_that_does_not_exist(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -301,6 +314,7 @@ func Test_import_from_refuses_a_path_form_value_that_does_not_exist(t *testing.T
 // os.Stat needs no read permission on its target, only execute on its
 // ancestor directories, so only a chmod'd directory reaches this branch.
 func Test_import_from_names_the_snapshot_when_its_directory_cannot_be_read(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")
 	}
@@ -320,6 +334,7 @@ func Test_import_from_names_the_snapshot_when_its_directory_cannot_be_read(t *te
 }
 
 func Test_import_from_refuses_an_id_form_value_with_no_matching_snapshot(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -331,6 +346,7 @@ func Test_import_from_refuses_an_id_form_value_with_no_matching_snapshot(t *test
 }
 
 func Test_import_from_refuses_a_directory_that_is_not_a_quicken_bundle(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -345,6 +361,7 @@ func Test_import_from_refuses_a_directory_that_is_not_a_quicken_bundle(t *testin
 }
 
 func Test_import_from_refuses_a_quicken_bundle_passed_as_from(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -358,6 +375,7 @@ func Test_import_from_refuses_a_quicken_bundle_passed_as_from(t *testing.T) {
 }
 
 func Test_import_from_reports_no_manifest_as_not_a_quarry_snapshot(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -373,6 +391,7 @@ func Test_import_from_reports_no_manifest_as_not_a_quarry_snapshot(t *testing.T)
 }
 
 func Test_import_from_refuses_without_importing_when_the_manifest_is_not_json(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -389,6 +408,7 @@ func Test_import_from_refuses_without_importing_when_the_manifest_is_not_json(t 
 }
 
 func Test_import_from_refuses_without_importing_when_the_manifest_has_a_wrong_typed_field(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -407,6 +427,7 @@ func Test_import_from_refuses_without_importing_when_the_manifest_has_a_wrong_ty
 // Only the manifest is chmod'd, not the snapshot: proves the refusal names
 // whichever file's own read actually failed.
 func Test_import_from_names_the_manifest_when_it_cannot_be_read(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")
 	}
@@ -426,6 +447,7 @@ func Test_import_from_names_the_manifest_when_it_cannot_be_read(t *testing.T) {
 
 // Only the snapshot is chmod'd, not the manifest: the mirror of the case above.
 func Test_import_from_names_the_snapshot_when_it_cannot_be_read(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")
 	}
@@ -444,6 +466,7 @@ func Test_import_from_names_the_snapshot_when_it_cannot_be_read(t *testing.T) {
 }
 
 func Test_import_from_refuses_without_importing_when_the_snapshot_is_not_sqlite(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -463,6 +486,7 @@ func Test_import_from_refuses_without_importing_when_the_snapshot_is_not_sqlite(
 // CorruptDataFile opens fine as SQLite (so sqlite.IsNotADB is false) and
 // fails only PRAGMA integrity_check, isolating that arm from the not-a-database one above.
 func Test_import_from_refuses_a_snapshot_that_fails_integrity_check(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -484,6 +508,7 @@ func Test_import_from_refuses_a_snapshot_that_fails_integrity_check(t *testing.T
 // first query, before any content classification: ImportFrom must report
 // the interruption, never a content refusal built from a cancellation.
 func Test_import_from_reports_interrupted_when_ctx_is_already_cancelled_before_inspecting_content(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -498,6 +523,7 @@ func Test_import_from_reports_interrupted_when_ctx_is_already_cancelled_before_i
 }
 
 func Test_import_from_names_the_missing_accounts_in_the_refusal(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name   string
 		ddl    []string
@@ -523,12 +549,13 @@ func Test_import_from_names_the_missing_accounts_in_the_refusal(t *testing.T) {
 	}
 }
 
-// A rollback-journal file, so the held exclusive lock blocks readers; the read waits out the driver's default busy timeout.
+// A rollback-journal file, so the held exclusive lock blocks readers; a
+// short busy timeout keeps the wait for the read to give up brief.
 func Test_import_from_refuses_a_locked_snapshot_as_unreadable(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
-	srv := newImportServer(t, home, fake)
+	srv := newImportServer(t, home, fake, snapshot.WithBusyTimeout(50*time.Millisecond))
 	snapshots := filepath.Join(home, "snapshots")
 	writeSnapshotPair(t, snapshots, "20260927T143005Z",
 		"CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY)", "INSERT INTO ZACCOUNT (Z_PK) VALUES (1)")
@@ -557,6 +584,7 @@ func holdExclusiveLock(t *testing.T, path string) {
 }
 
 func Test_import_from_refuses_without_a_reference_schema(t *testing.T) {
+	t.Parallel()
 	fake := &fakeImporter{}
 	srv := snapshot.NewServer(snapshot.WithImporter(fake), snapshot.WithSnapshotDir(t.TempDir()))
 

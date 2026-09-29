@@ -11,6 +11,7 @@ import (
 )
 
 func Test_lessOffender(t *testing.T) {
+	t.Parallel()
 	early := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	late := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
 
@@ -36,6 +37,7 @@ func Test_lessOffender(t *testing.T) {
 }
 
 func Test_firstError_groups_the_more_count_by_thousands(t *testing.T) {
+	t.Parallel()
 	var off offenders
 	for range 1001 {
 		off.add(offender{class: classMissingValue, reason: "a split (source id 1) has no transaction"})

@@ -30,6 +30,7 @@ func newServer(t *testing.T, snapshotsDir string) *snapshot.Server {
 }
 
 func Test_sync_writes_a_verified_private_snapshot_of_an_open_file(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	snapshotsDir := filepath.Join(t.TempDir(), "Application Support", "quarry", "snapshots")
 	srv := newServer(t, snapshotsDir)
@@ -58,6 +59,7 @@ func Test_sync_writes_a_verified_private_snapshot_of_an_open_file(t *testing.T) 
 }
 
 func Test_sync_reports_verified_false_when_the_reference_names_a_table_the_bundle_lacks(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	ref, err := v9.Reference(t.Context())
 	require.NoError(t, err)
@@ -80,6 +82,7 @@ func Test_sync_reports_verified_false_when_the_reference_names_a_table_the_bundl
 }
 
 func Test_sync_reports_a_missing_column_when_the_reference_names_one_the_bundle_lacks(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	ref, err := v9.Reference(t.Context())
 	require.NoError(t, err)
@@ -101,6 +104,7 @@ func Test_sync_reports_a_missing_column_when_the_reference_names_one_the_bundle_
 }
 
 func Test_sync_stays_verified_and_lists_unexpected_tables_when_the_bundle_has_extra_tables_only(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	ref, err := v9.Reference(t.Context())
 	require.NoError(t, err)
@@ -122,6 +126,7 @@ func Test_sync_stays_verified_and_lists_unexpected_tables_when_the_bundle_has_ex
 }
 
 func Test_sync_warns_with_correct_singular_plural_agreement_for_extras(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name         string
 		dropTables   []string
@@ -165,6 +170,7 @@ func Test_sync_warns_with_correct_singular_plural_agreement_for_extras(t *testin
 }
 
 func Test_sync_does_not_populate_warnings_when_extras_are_accompanied_by_missing_entries(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	ref, err := v9.Reference(t.Context())
 	require.NoError(t, err)
@@ -186,6 +192,7 @@ func Test_sync_does_not_populate_warnings_when_extras_are_accompanied_by_missing
 
 // Pinned against Test_scope_of_the_reference_has_the_pinned_table_and_column_counts.
 func Test_sync_reports_the_scoped_reference_table_and_column_counts(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	snapshotsDir := filepath.Join(t.TempDir(), "snapshots")
 	srv := newServer(t, snapshotsDir)
@@ -206,6 +213,7 @@ func Test_sync_reports_the_scoped_reference_table_and_column_counts(t *testing.T
 }
 
 func Test_sync_writes_a_manifest_whose_own_path_fields_match_where_it_is_committed(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	snapshotsDir := filepath.Join(t.TempDir(), "snapshots")
 	srv := newServer(t, snapshotsDir)
@@ -229,6 +237,7 @@ func assertMode(t *testing.T, path string, want os.FileMode) {
 }
 
 func Test_sync_leaves_the_live_bundle_unchanged(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	snapshotsDir := filepath.Join(t.TempDir(), "snapshots")
 	srv := newServer(t, snapshotsDir)
@@ -258,6 +267,7 @@ func Test_sync_leaves_the_live_bundle_unchanged(t *testing.T) {
 }
 
 func Test_sync_appends_a_suffix_when_the_current_second_already_has_a_snapshot(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	snapshotsDir := filepath.Join(t.TempDir(), "snapshots")
 	srv := newServer(t, snapshotsDir)

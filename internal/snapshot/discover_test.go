@@ -16,6 +16,7 @@ import (
 )
 
 func Test_DiscoverBundle_refuses_when_no_bundle_is_found(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name  string
 		setup func(t *testing.T, documents string)
@@ -45,6 +46,7 @@ func Test_DiscoverBundle_refuses_when_no_bundle_is_found(t *testing.T) {
 }
 
 func Test_DiscoverBundle_ignores_dotfiles_and_non_directories_and_returns_the_only_bundle(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	documents := filepath.Join(home, "Documents")
 	bundle := v9fixture.OpenBundle(t, documents)
@@ -59,6 +61,7 @@ func Test_DiscoverBundle_ignores_dotfiles_and_non_directories_and_returns_the_on
 }
 
 func Test_DiscoverBundle_finds_a_bundle_whose_suffix_case_differs(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	bundleDir := filepath.Join(home, "Documents", "Home.QUICKEN")
 	require.NoError(t, os.MkdirAll(bundleDir, 0o700))
@@ -71,6 +74,7 @@ func Test_DiscoverBundle_finds_a_bundle_whose_suffix_case_differs(t *testing.T) 
 }
 
 func Test_DiscoverBundle_skips_a_dangling_symlink_and_finds_the_real_bundle(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	documents := filepath.Join(home, "Documents")
 	bundle := v9fixture.OpenBundle(t, documents)
@@ -84,6 +88,7 @@ func Test_DiscoverBundle_skips_a_dangling_symlink_and_finds_the_real_bundle(t *t
 }
 
 func Test_DiscoverBundle_follows_a_symlink_to_a_bundle_outside_documents(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	documents := filepath.Join(home, "Documents")
 	require.NoError(t, os.MkdirAll(documents, 0o700))
@@ -105,6 +110,7 @@ func Test_DiscoverBundle_follows_a_symlink_to_a_bundle_outside_documents(t *test
 // A symlink loop is a real stat fault, not a missing file: DiscoverBundle
 // must not silently fall back to the one bundle it can see.
 func Test_DiscoverBundle_refuses_when_a_candidate_cannot_be_statted_for_a_reason_other_than_not_existing(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		dir  func(home string) string
@@ -139,6 +145,7 @@ func Test_DiscoverBundle_refuses_when_a_candidate_cannot_be_statted_for_a_reason
 }
 
 func Test_DiscoverBundle_refuses_when_multiple_bundles_exist(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name       string
 		bundles    []string
@@ -176,6 +183,7 @@ func Test_DiscoverBundle_refuses_when_multiple_bundles_exist(t *testing.T) {
 }
 
 func Test_DiscoverBundle_groups_the_bundle_count_by_thousands(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	documents := filepath.Join(home, "Documents")
 	for i := range 1000 {
@@ -190,6 +198,7 @@ func Test_DiscoverBundle_groups_the_bundle_count_by_thousands(t *testing.T) {
 }
 
 func Test_DiscoverBundle_refuses_when_the_only_match_has_no_data_file(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "Home.quicken"), 0o700))
 
@@ -203,6 +212,7 @@ func Test_DiscoverBundle_refuses_when_the_only_match_has_no_data_file(t *testing
 }
 
 func Test_DiscoverBundle_refuses_when_documents_is_unreadable(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")
 	}
@@ -221,6 +231,7 @@ func Test_DiscoverBundle_refuses_when_documents_is_unreadable(t *testing.T) {
 
 // Only the Quicken location treats ENOTDIR as missing, even though a valid bundle sits there.
 func Test_DiscoverBundle_refuses_documents_as_unreadable_when_it_is_a_regular_file(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(home, "Documents"), []byte("x"), 0o600))
 	v9fixture.OpenBundle(t, filepath.Join(home, "Library", "Application Support", "Quicken", "Documents"))

@@ -11,6 +11,7 @@ import (
 )
 
 func Test_describeOneSided_orders_legs_of_one_transaction_by_split_source_id(t *testing.T) {
+	t.Parallel()
 	rows := store.Rows{
 		Accounts:     []store.Account{{ID: "acct-1", SourceID: 1, Name: "Chequing", Currency: "CAD", Active: true}},
 		Transactions: []store.Transaction{{ID: "txn-1", SourceID: 1, AccountID: "acct-1", Date: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)}},

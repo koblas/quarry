@@ -13,6 +13,7 @@ import (
 )
 
 func Test_ResolveBundlePath_refuses_a_missing_path(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	path := filepath.Join(home, "Documents", "Missing.quicken")
 
@@ -24,6 +25,7 @@ func Test_ResolveBundlePath_refuses_a_missing_path(t *testing.T) {
 }
 
 func Test_ResolveBundlePath_refuses_when_the_top_level_path_cannot_be_statted(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")
 	}
@@ -44,6 +46,7 @@ func Test_ResolveBundlePath_refuses_when_the_top_level_path_cannot_be_statted(t 
 }
 
 func Test_ResolveBundlePath_refuses_a_qdf_suffix(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	cases := []struct {
 		name string
@@ -68,6 +71,7 @@ func Test_ResolveBundlePath_refuses_a_qdf_suffix(t *testing.T) {
 }
 
 func Test_ResolveBundlePath_refuses_a_plain_file(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	path := filepath.Join(home, "Documents", "Home.quicken")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
@@ -83,6 +87,7 @@ func Test_ResolveBundlePath_refuses_a_plain_file(t *testing.T) {
 }
 
 func Test_ResolveBundlePath_refuses_a_bundle_without_data(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
 	require.NoError(t, os.MkdirAll(bundleDir, 0o700))
@@ -97,6 +102,7 @@ func Test_ResolveBundlePath_refuses_a_bundle_without_data(t *testing.T) {
 }
 
 func Test_ResolveBundlePath_refuses_a_bundle_whose_data_is_a_directory(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
 	require.NoError(t, os.MkdirAll(filepath.Join(bundleDir, "data"), 0o700))
@@ -111,6 +117,7 @@ func Test_ResolveBundlePath_refuses_a_bundle_whose_data_is_a_directory(t *testin
 }
 
 func Test_ResolveBundlePath_refuses_unreadable_data(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")
 	}
@@ -126,6 +133,7 @@ func Test_ResolveBundlePath_refuses_unreadable_data(t *testing.T) {
 }
 
 func Test_ResolveBundlePath_refuses_an_unreadable_bundle_directory(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")
 	}
@@ -143,6 +151,7 @@ func Test_ResolveBundlePath_refuses_an_unreadable_bundle_directory(t *testing.T)
 }
 
 func Test_ResolveBundlePath_refuses_a_wal_formatted_bundle_with_no_live_wal_file(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
 	require.NoError(t, os.MkdirAll(bundleDir, 0o700))
@@ -181,6 +190,7 @@ func closeWALFormattedDatabase(t *testing.T, path string) {
 }
 
 func Test_ResolveBundlePath_accepts_a_symlinked_data_file(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
 	require.NoError(t, os.MkdirAll(bundleDir, 0o700))
@@ -208,6 +218,7 @@ func Test_ResolveBundlePath_resolves_a_relative_path_to_absolute(t *testing.T) {
 }
 
 func Test_ResolveBundlePath_expands_a_tilde_path_under_home(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
 

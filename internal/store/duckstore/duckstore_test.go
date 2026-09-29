@@ -62,6 +62,7 @@ func minimalRows() store.Rows {
 // Reads back via a fresh read-only connection: the only proof of the
 // bytes on disk, not just the in-memory build.
 func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	st := duckstore.New(dir)
 
@@ -96,6 +97,7 @@ func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
 // A sign-drop bug would only show here, not in the positive-amount
 // coverage above.
 func Test_replace_keeps_a_negative_amounts_sign(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	rows := minimalRows()
 	rows.Transactions[0].Amount = -1204
@@ -111,6 +113,7 @@ func Test_replace_keeps_a_negative_amounts_sign(t *testing.T) {
 }
 
 func Test_replace_leaves_no_partial_or_wal(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	st := duckstore.New(dir)
 
@@ -127,6 +130,7 @@ func Test_replace_leaves_no_partial_or_wal(t *testing.T) {
 }
 
 func Test_replace_makes_the_store_owner_only(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	st := duckstore.New(dir)
 
@@ -149,6 +153,7 @@ func duplicatePKRows() store.Rows {
 // One row per table, each corrupted by duplicating its only row while
 // every earlier table stays valid.
 func Test_replace_fails_when_any_tables_rows_fail_to_append(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		corrupt func(store.Rows) store.Rows
@@ -176,6 +181,7 @@ func Test_replace_fails_when_any_tables_rows_fail_to_append(t *testing.T) {
 }
 
 func Test_replace_fails_when_a_transactions_amount_is_out_of_range(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	rows := minimalRows()
 	rows.Transactions[0].Amount = math.MaxInt64
@@ -187,6 +193,7 @@ func Test_replace_fails_when_a_transactions_amount_is_out_of_range(t *testing.T)
 }
 
 func Test_replace_fails_when_a_splits_amount_is_out_of_range(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	rows := minimalRows()
 	rows.Splits[0].Amount = math.MaxInt64
@@ -198,6 +205,7 @@ func Test_replace_fails_when_a_splits_amount_is_out_of_range(t *testing.T) {
 }
 
 func Test_replace_removes_the_partial_when_the_build_fails(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	st := duckstore.New(dir)
 
@@ -210,6 +218,7 @@ func Test_replace_removes_the_partial_when_the_build_fails(t *testing.T) {
 }
 
 func Test_replace_leaves_the_existing_store_byte_identical_when_the_build_fails(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	st := duckstore.New(dir)
 	path, err := st.Replace(t.Context(), minimalRows())
@@ -226,6 +235,7 @@ func Test_replace_leaves_the_existing_store_byte_identical_when_the_build_fails(
 }
 
 func Test_replace_removes_the_partial_when_the_rename_fails(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	finalPath := filepath.Join(dir, "quarry.duckdb")
 	require.NoError(t, os.Mkdir(finalPath, 0o700))
@@ -244,6 +254,7 @@ func Test_replace_removes_the_partial_when_the_rename_fails(t *testing.T) {
 }
 
 func Test_replace_tags_a_read_only_store_directory_as_not_writable(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	st := duckstore.New(dir)
 	path, err := st.Replace(t.Context(), minimalRows())
@@ -268,6 +279,7 @@ func Test_replace_tags_a_read_only_store_directory_as_not_writable(t *testing.T)
 }
 
 func Test_replace_fails_when_the_context_is_already_cancelled(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -328,6 +340,7 @@ func newFaultStore(dir string, f *faultDB) *duckstore.Store {
 }
 
 func Test_replace_removes_the_partial_and_wal_when_the_checkpoint_fails(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	st := newFaultStore(dir, &faultDB{
 		checkpointFault: &duckdbdriver.Error{
@@ -345,6 +358,7 @@ func Test_replace_removes_the_partial_and_wal_when_the_checkpoint_fails(t *testi
 }
 
 func Test_replace_does_not_swap_when_the_context_ends_after_the_checkpoint(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
@@ -368,6 +382,7 @@ func Test_replace_does_not_swap_when_the_context_ends_after_the_checkpoint(t *te
 }
 
 func Test_replace_removes_a_stale_wal_before_swapping_in_the_new_store(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	staleWAL := filepath.Join(dir, "quarry.duckdb.wal")
 	require.NoError(t, os.WriteFile(staleWAL, []byte("wal"), 0o600))
@@ -382,6 +397,7 @@ func Test_replace_removes_a_stale_wal_before_swapping_in_the_new_store(t *testin
 }
 
 func Test_replace_leaves_a_missing_wal_alone(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	st := duckstore.New(dir)
 
@@ -392,6 +408,7 @@ func Test_replace_leaves_a_missing_wal_alone(t *testing.T) {
 }
 
 func Test_replace_does_not_remove_the_stale_wal_before_the_context_gate(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
@@ -416,6 +433,7 @@ func Test_replace_does_not_remove_the_stale_wal_before_the_context_gate(t *testi
 }
 
 func Test_replace_refuses_the_swap_when_the_stale_wal_cannot_be_removed(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
@@ -437,6 +455,7 @@ func Test_replace_refuses_the_swap_when_the_stale_wal_cannot_be_removed(t *testi
 }
 
 func Test_replace_does_not_tag_an_unrelated_build_failure(t *testing.T) {
+	t.Parallel()
 	st := duckstore.New(t.TempDir())
 
 	_, err := st.Replace(t.Context(), duplicatePKRows())
@@ -449,6 +468,7 @@ func Test_replace_does_not_tag_an_unrelated_build_failure(t *testing.T) {
 var errCreateBoom = errors.New("create boom")
 
 func Test_replace_fails_when_the_partial_file_cannot_be_created(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	st := duckstore.New(dir, duckstore.WithCreate(func(context.Context, string) (duckstore.DB, error) {
 		return nil, errCreateBoom
@@ -463,6 +483,7 @@ func Test_replace_fails_when_the_partial_file_cannot_be_created(t *testing.T) {
 }
 
 func Test_replace_creates_a_missing_store_directory_owner_only(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "quarry")
 	st := duckstore.New(dir)
 
@@ -476,6 +497,7 @@ func Test_replace_creates_a_missing_store_directory_owner_only(t *testing.T) {
 }
 
 func Test_replace_tags_a_store_directory_it_cannot_create_as_not_writable(t *testing.T) {
+	t.Parallel()
 	parent := t.TempDir()
 	require.NoError(t, os.Chmod(parent, 0o500))
 	t.Cleanup(func() { _ = os.Chmod(parent, 0o700) })
@@ -487,6 +509,7 @@ func Test_replace_tags_a_store_directory_it_cannot_create_as_not_writable(t *tes
 }
 
 func Test_store_path_is_where_replace_writes_the_store(t *testing.T) {
+	t.Parallel()
 	st := duckstore.New(t.TempDir())
 
 	path, err := st.Replace(t.Context(), minimalRows())
@@ -496,6 +519,7 @@ func Test_store_path_is_where_replace_writes_the_store(t *testing.T) {
 }
 
 func Test_store_exists_only_once_a_store_file_is_there(t *testing.T) {
+	t.Parallel()
 	st := duckstore.New(t.TempDir())
 	before := st.Exists()
 
@@ -508,6 +532,7 @@ func Test_store_exists_only_once_a_store_file_is_there(t *testing.T) {
 
 // The store directory is a regular file, so stat fails with ENOTDIR, not not-found.
 func Test_store_exists_treats_a_stat_fault_as_a_store(t *testing.T) {
+	t.Parallel()
 	notADir := filepath.Join(t.TempDir(), "quarry")
 	require.NoError(t, os.WriteFile(notADir, []byte("not a directory"), 0o600))
 
@@ -525,6 +550,7 @@ func createLeavingPartial(t *testing.T, err error) func(context.Context, string)
 }
 
 func Test_replace_names_its_build_file_with_its_process_id(t *testing.T) {
+	t.Parallel()
 	var created string
 	st := duckstore.New(t.TempDir(), duckstore.WithCreate(func(_ context.Context, path string) (duckstore.DB, error) {
 		created = filepath.Base(path)
@@ -539,6 +565,7 @@ func Test_replace_names_its_build_file_with_its_process_id(t *testing.T) {
 
 // The other run's partial is fresh, so neither this run's cleanup nor its sweep may take it.
 func Test_replace_leaves_a_concurrent_runs_live_partial_alone_when_its_own_create_fails(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	other := filepath.Join(dir, ".quarry-20260927T143005Z-"+strconv.Itoa(os.Getpid()+1)+".duckdb.partial")
 	require.NoError(t, os.WriteFile(other, []byte("live build"), 0o600))
@@ -554,6 +581,7 @@ func Test_replace_leaves_a_concurrent_runs_live_partial_alone_when_its_own_creat
 }
 
 func Test_replace_reports_a_create_collision_as_an_untagged_build_failure(t *testing.T) {
+	t.Parallel()
 	st := duckstore.New(t.TempDir(), duckstore.WithCreate(createLeavingPartial(t, duckdb.ErrExists)))
 
 	_, err := st.Replace(t.Context(), minimalRows())
@@ -565,6 +593,7 @@ func Test_replace_reports_a_create_collision_as_an_untagged_build_failure(t *tes
 
 // The colliding partial and .wal sit at this run's own name, so they are this run's to remove.
 func Test_replace_removes_its_own_partial_and_wal_after_a_create_collision(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	st := duckstore.New(dir, duckstore.WithCreate(createLeavingPartial(t, duckdb.ErrExists)))
 
@@ -577,6 +606,7 @@ func Test_replace_removes_its_own_partial_and_wal_after_a_create_collision(t *te
 }
 
 func Test_replace_removes_the_partial_its_failed_create_left_behind(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	st := duckstore.New(dir, duckstore.WithCreate(createLeavingPartial(t, errCreateBoom)))
 

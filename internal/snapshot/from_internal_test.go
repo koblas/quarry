@@ -12,6 +12,7 @@ import (
 )
 
 func Test_resolveFrom_maps_each_value_shape_to_its_snapshot_and_manifest(t *testing.T) {
+	t.Parallel()
 	const home = "/Users/x"
 	const snapshotDir = "/Users/x/Library/Application Support/quarry/snapshots"
 	cwd, err := os.Getwd()

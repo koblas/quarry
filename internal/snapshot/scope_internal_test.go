@@ -13,6 +13,7 @@ import (
 )
 
 func Test_scope_keeps_Z_tables_only(t *testing.T) {
+	t.Parallel()
 	s := sqlschema.Schema{
 		"Z_PRIMARYKEY":    {"Z_ENT"},
 		"Z_15USERTAGS":    {"Z_15CASHFLOWTRANSACTIONENTRIES"},
@@ -32,6 +33,7 @@ func Test_scope_keeps_Z_tables_only(t *testing.T) {
 
 // Pinned against the sqlite3 CLI and README: 82 tables, 1,838 columns.
 func Test_scope_of_the_reference_has_the_pinned_table_and_column_counts(t *testing.T) {
+	t.Parallel()
 	ref, err := v9.Reference(t.Context())
 	require.NoError(t, err)
 

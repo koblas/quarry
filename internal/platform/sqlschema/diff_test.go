@@ -8,6 +8,7 @@ import (
 )
 
 func Test_Compare(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name      string
 		reference sqlschema.Schema

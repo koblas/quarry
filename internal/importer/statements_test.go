@@ -23,6 +23,7 @@ func chequingWithOneReconciledTxn(b *v9fixture.Builder, cents string) int64 {
 // The correct (later) record is inserted first, so a "last row scanned
 // wins" bug would pick the wrong (earlier) one instead.
 func Test_import_uses_the_newest_statement_by_date(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := chequingWithOneReconciledTxn(b, "100.00")
 	jan := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
@@ -40,6 +41,7 @@ func Test_import_uses_the_newest_statement_by_date(t *testing.T) {
 // The undated record is inserted first, so a "last row scanned wins" bug
 // would pick the dated one instead and the import would succeed.
 func Test_import_ranks_an_undated_statement_as_newest_over_a_dated_one(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := chequingWithOneReconciledTxn(b, "100.00")
 	pk := b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndingBalance: "100.00"})
@@ -54,6 +56,7 @@ func Test_import_ranks_an_undated_statement_as_newest_over_a_dated_one(t *testin
 
 // Same ZENDDATE on two records: the higher Z_PK's balance wins.
 func Test_import_breaks_a_statement_date_tie_with_the_higher_source_id(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := chequingWithOneReconciledTxn(b, "100.00")
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
@@ -70,6 +73,7 @@ func Test_import_breaks_a_statement_date_tie_with_the_higher_source_id(t *testin
 // A deleted record dated after the true newest must not be selected: its
 // balance would mismatch if it were.
 func Test_import_ignores_a_deleted_newer_statement(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := chequingWithOneReconciledTxn(b, "100.00")
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
@@ -87,6 +91,7 @@ func Test_import_ignores_a_deleted_newer_statement(t *testing.T) {
 // The newest (good) record is inserted first, so a "last row scanned
 // wins" bug would read the older, bad one and refuse the import instead.
 func Test_import_ignores_an_older_statements_bad_balance(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := chequingWithOneReconciledTxn(b, "100.00")
 	jan := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
@@ -104,6 +109,7 @@ func Test_import_ignores_an_older_statements_bad_balance(t *testing.T) {
 // A malformed reconcile record on an investment account must not refuse
 // the import: investment accounts are counted, never checked.
 func Test_import_skips_a_reconcile_record_on_an_investment_account(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
@@ -119,6 +125,7 @@ func Test_import_skips_a_reconcile_record_on_an_investment_account(t *testing.T)
 // A reconcile record on a deleted account must not refuse the import: the
 // account it names was never mapped.
 func Test_import_skips_a_reconcile_record_on_a_deleted_account(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	deletedPK := b.Account(v9fixture.AccountRow{Name: "Old", Type: "CHECKING", Currency: "CAD", Deleted: true})
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
@@ -133,6 +140,7 @@ func Test_import_skips_a_reconcile_record_on_a_deleted_account(t *testing.T) {
 // A reconcile record whose ZACCOUNT points to no row at all must not
 // refuse the import.
 func Test_import_skips_a_reconcile_record_on_a_missing_account(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
 	b.Reconcile(v9fixture.ReconcileRow{Account: 999, EndDate: &feb, EndingBalance: "not-a-number"})
@@ -144,6 +152,7 @@ func Test_import_skips_a_reconcile_record_on_a_missing_account(t *testing.T) {
 }
 
 func Test_import_refuses_a_statement_with_no_balance(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
@@ -156,6 +165,7 @@ func Test_import_refuses_a_statement_with_no_balance(t *testing.T) {
 }
 
 func Test_import_refuses_an_undated_statement(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	pk := b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndingBalance: "100.00"})
@@ -167,6 +177,7 @@ func Test_import_refuses_an_undated_statement(t *testing.T) {
 }
 
 func Test_import_refuses_a_statement_with_more_than_2_decimal_places(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
@@ -181,6 +192,7 @@ func Test_import_refuses_a_statement_with_more_than_2_decimal_places(t *testing.
 }
 
 func Test_import_refuses_a_statement_with_a_balance_too_large_for_quarry(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
@@ -195,6 +207,7 @@ func Test_import_refuses_a_statement_with_a_balance_too_large_for_quarry(t *test
 }
 
 func Test_import_refuses_a_statement_with_a_text_balance(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
@@ -207,6 +220,7 @@ func Test_import_refuses_a_statement_with_a_text_balance(t *testing.T) {
 }
 
 func Test_import_refuses_an_undated_statement_with_a_bad_balance_using_the_source_id_subject(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	pk := b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndingBalance: "12.345"})
@@ -221,6 +235,7 @@ func Test_import_refuses_an_undated_statement_with_a_bad_balance_using_the_sourc
 
 // Same as the precision case above, for the too-large fault.
 func Test_import_refuses_an_undated_statement_with_a_too_large_balance_using_the_source_id_subject(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	pk := b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndingBalance: "10000000000000.5"})
@@ -235,6 +250,7 @@ func Test_import_refuses_an_undated_statement_with_a_too_large_balance_using_the
 
 // Same as the precision case above, for the not-a-number fault.
 func Test_import_refuses_an_undated_statement_with_a_text_balance_using_the_source_id_subject(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	pk := b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndingBalance: "not-a-number"})
@@ -249,6 +265,7 @@ func Test_import_refuses_an_undated_statement_with_a_text_balance_using_the_sour
 
 // An account at Z_PK 0 exists, so a NULL account read as 0 would be checked against it.
 func Test_import_skips_a_statement_with_no_account(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := chequingWithOneReconciledTxn(b, "100.00")
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)

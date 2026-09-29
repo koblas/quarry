@@ -13,6 +13,7 @@ import (
 )
 
 func Test_sync_fails_when_no_reference_is_configured(t *testing.T) {
+	t.Parallel()
 	srv := snapshot.NewServer(snapshot.WithSnapshotDir(t.TempDir()))
 
 	_, err := srv.Sync(t.Context(), t.TempDir())
@@ -23,6 +24,7 @@ func Test_sync_fails_when_no_reference_is_configured(t *testing.T) {
 // Write-safety guard: nothing reaches the snapshots directory before the
 // probe succeeds.
 func Test_sync_creates_nothing_when_the_probe_fails(t *testing.T) {
+	t.Parallel()
 	bundleDir := filepath.Join(t.TempDir(), "Home.quicken")
 	require.NoError(t, os.MkdirAll(bundleDir, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(bundleDir, "data"), []byte("not a database"), 0o600))
@@ -40,6 +42,7 @@ func Test_sync_creates_nothing_when_the_probe_fails(t *testing.T) {
 }
 
 func Test_sync_wraps_an_error_when_opening_the_bundle_fails(t *testing.T) {
+	t.Parallel()
 	srv := snapshot.NewServer(
 		snapshot.WithSnapshotDir(t.TempDir()),
 		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
@@ -54,6 +57,7 @@ func Test_sync_wraps_an_error_when_opening_the_bundle_fails(t *testing.T) {
 }
 
 func Test_sync_wraps_an_error_when_the_probe_fails(t *testing.T) {
+	t.Parallel()
 	srv := snapshot.NewServer(
 		snapshot.WithSnapshotDir(t.TempDir()),
 		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),

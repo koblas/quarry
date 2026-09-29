@@ -83,6 +83,7 @@ func snapshotIDFromPath(path string) string {
 }
 
 func Test_sync_and_import_imports_the_committed_snapshot(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	home := t.TempDir()
 	fake := &fakeImporter{result: store.Result{
@@ -100,6 +101,7 @@ func Test_sync_and_import_imports_the_committed_snapshot(t *testing.T) {
 }
 
 func Test_sync_and_import_passes_the_manifests_hash_and_fingerprint_to_the_importer(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	home := t.TempDir()
 	fake := &fakeImporter{}
@@ -117,6 +119,7 @@ func Test_sync_and_import_passes_the_manifests_hash_and_fingerprint_to_the_impor
 }
 
 func Test_sync_and_import_skips_the_import_on_a_schema_mismatch(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.MissingSchemaBundle(t, t.TempDir())
 	home := t.TempDir()
 	fake := &fakeImporter{}
@@ -135,6 +138,7 @@ var errImportBoom = errors.New("boom from duckdb")
 // The store refusal wraps the importer's own error (errors.Is) so a typed
 // error such as *importer.UnmappableError still reaches a caller that asserts on it.
 func Test_sync_and_import_frames_an_import_failure_as_a_store_refusal(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	home := t.TempDir()
 	fake := &fakeImporter{err: errImportBoom}
@@ -154,6 +158,7 @@ func Test_sync_and_import_frames_an_import_failure_as_a_store_refusal(t *testing
 }
 
 func Test_sync_and_import_reports_each_build_failure_with_its_refusal(t *testing.T) {
+	t.Parallel()
 	permission := taggedBuildError{sentinel: store.ErrStoreNotWritable, cause: &fs.PathError{
 		Op: "open", Path: "quarry.duckdb.partial", Err: fs.ErrPermission,
 	}}
@@ -228,6 +233,7 @@ func Test_sync_and_import_reports_each_build_failure_with_its_refusal(t *testing
 // A permission fault the store did not classify, such as one reading the
 // snapshot, does not name the store directory as unwritable.
 func Test_sync_and_import_reports_an_untagged_permission_fault_as_s3(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	home := t.TempDir()
 	readErr := &fs.PathError{Op: "open", Path: "snapshot.sqlite", Err: fs.ErrPermission}
@@ -244,6 +250,7 @@ func Test_sync_and_import_reports_an_untagged_permission_fault_as_s3(t *testing.
 }
 
 func Test_sync_and_import_completes_normally_when_the_context_ends_after_a_successful_import(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	home := t.TempDir()
 	ctx, cancel := context.WithCancel(t.Context())
@@ -259,6 +266,7 @@ func Test_sync_and_import_completes_normally_when_the_context_ends_after_a_succe
 }
 
 func Test_sync_and_import_does_not_import_when_the_snapshot_fails(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	ref, err := v9.Reference(t.Context())
@@ -283,6 +291,7 @@ func Test_sync_and_import_does_not_import_when_the_snapshot_fails(t *testing.T) 
 // Store must be the unbuilt result, not nil, so StdoutWriteRefusal picks
 // the --from --json form; Path is populated on this copy regardless.
 func Test_sync_and_import_keeps_the_store_result_when_validation_fails(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	home := t.TempDir()
 	result := store.Result{Built: false, Validation: store.Validation{
@@ -307,6 +316,7 @@ func Test_sync_and_import_keeps_the_store_result_when_validation_fails(t *testin
 // A previous store existing or not decides the failed-validation block's NOT REBUILT vs
 // NOT BUILT line.
 func Test_sync_and_import_reports_whether_a_previous_store_existed(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		existed bool
@@ -332,6 +342,7 @@ func Test_sync_and_import_reports_whether_a_previous_store_existed(t *testing.T)
 }
 
 func Test_sync_and_import_names_the_store_file_its_probe_reports(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	home := t.TempDir()
 	fake := &fakeImporter{result: store.Result{Built: false}, err: store.ErrValidationFailed}
@@ -346,6 +357,7 @@ func Test_sync_and_import_names_the_store_file_its_probe_reports(t *testing.T) {
 }
 
 func Test_sync_and_import_refuses_to_import_without_an_importer_or_store_probe(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		opts []snapshot.Option
@@ -371,6 +383,7 @@ func Test_sync_and_import_refuses_to_import_without_an_importer_or_store_probe(t
 
 // Count form is "X of Y <noun>": the noun agrees with Y, the verb with X.
 func Test_sync_and_import_reports_a_failed_check_in_the_validation_refusal(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name       string
 		validation store.Validation
@@ -464,6 +477,7 @@ func Test_sync_and_import_reports_a_failed_check_in_the_validation_refusal(t *te
 }
 
 func Test_sync_and_import_refuses_without_an_importer(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	home := t.TempDir()
 	srv := newImportServer(t, home, nil)

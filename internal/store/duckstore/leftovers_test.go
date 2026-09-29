@@ -13,6 +13,7 @@ import (
 )
 
 func Test_replace_removes_a_leftover_partial_just_past_the_age_gate(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		file string
@@ -41,6 +42,7 @@ func Test_replace_removes_a_leftover_partial_just_past_the_age_gate(t *testing.T
 }
 
 func Test_replace_leaves_a_leftover_partial_just_inside_the_age_gate_alone(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	leftover := filepath.Join(dir, ".quarry-20260101T000000Z.duckdb.partial")
 	require.NoError(t, os.WriteFile(leftover, []byte("stale"), 0o600))
@@ -58,6 +60,7 @@ func Test_replace_leaves_a_leftover_partial_just_inside_the_age_gate_alone(t *te
 // Each case is old enough for the age gate alone to remove it, so only the
 // pattern's precision keeps it.
 func Test_replace_sweep_leaves_near_miss_and_unrelated_files_alone(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		file string
@@ -93,6 +96,7 @@ func Test_replace_sweep_leaves_near_miss_and_unrelated_files_alone(t *testing.T)
 // The directory's own name matches buildFilePattern, so only the
 // entry.IsDir() check (not the pattern) keeps it.
 func Test_replace_sweep_ignores_subdirectories(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sub := filepath.Join(dir, ".quarry-20200101T000000Z.duckdb.partial")
 	require.NoError(t, os.Mkdir(sub, 0o700))
@@ -112,6 +116,7 @@ func Test_replace_sweep_ignores_subdirectories(t *testing.T) {
 // leftover, quarry.duckdb(.wal) is the store still in place, and the sweep
 // runs before a build that can still fail.
 func Test_replace_sweep_never_matches_the_live_stores_own_files(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	storeFile := filepath.Join(dir, "quarry.duckdb")
 	storeWAL := filepath.Join(dir, "quarry.duckdb.wal")
@@ -138,6 +143,7 @@ func Test_replace_sweep_never_matches_the_live_stores_own_files(t *testing.T) {
 // A concurrent sync's own in-flight partial matches the pattern but is not
 // yet aged; the sweep must not race it.
 func Test_replace_leaves_a_fresh_partial_alone(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	fresh := filepath.Join(dir, ".quarry-20260927T143005Z.duckdb.partial")
 	require.NoError(t, os.WriteFile(fresh, []byte("in flight"), 0o600))
@@ -153,6 +159,7 @@ func Test_replace_leaves_a_fresh_partial_alone(t *testing.T) {
 // dir is write+execute only, so the sweep's own os.ReadDir fails; WithCreate
 // is wired to a distinct forced error, independent of the filesystem.
 func Test_replace_ignores_a_sweep_that_cannot_list_the_directory(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	require.NoError(t, os.Chmod(dir, 0o300))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
@@ -168,6 +175,7 @@ func Test_replace_ignores_a_sweep_that_cannot_list_the_directory(t *testing.T) {
 // dir is chmoded read-only, WithCreate wired to a distinct forced error:
 // both faults independent, only the sweep's must never surface.
 func Test_replace_leaves_a_leftover_alone_when_the_sweep_cannot_remove_it(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	leftover := filepath.Join(dir, ".quarry-20260101T000000Z.duckdb.partial")
 	require.NoError(t, os.WriteFile(leftover, []byte("stale"), 0o600))

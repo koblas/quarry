@@ -15,6 +15,7 @@ import (
 )
 
 func Test_IsDiskFull_and_IsPermission_classify_error_shapes(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name         string
 		err          error
@@ -84,6 +85,7 @@ func Test_IsDiskFull_and_IsPermission_classify_error_shapes(t *testing.T) {
 // Real driver fault, not a constructed one: OpenReadOnly on a file the
 // process cannot read at all.
 func Test_open_read_only_on_a_permission_denied_file_classifies_as_permission(t *testing.T) {
+	t.Parallel()
 	writer, path := newOpenDatabase(t)
 	require.NoError(t, writer.Close())
 	require.NoError(t, os.Chmod(path, 0o000))
@@ -97,6 +99,7 @@ func Test_open_read_only_on_a_permission_denied_file_classifies_as_permission(t 
 
 // Control for the case above: the same file, readable, opens fine.
 func Test_open_read_only_on_an_owner_readable_file_succeeds(t *testing.T) {
+	t.Parallel()
 	writer, path := newOpenDatabase(t)
 	require.NoError(t, writer.Close())
 	require.NoError(t, os.Chmod(path, 0o400))
@@ -109,6 +112,7 @@ func Test_open_read_only_on_an_owner_readable_file_succeeds(t *testing.T) {
 }
 
 func Test_create_on_an_existing_path_reports_ErrExists_not_a_permission_fault(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "data.duckdb")
 	require.NoError(t, os.WriteFile(path, nil, 0o600))
 

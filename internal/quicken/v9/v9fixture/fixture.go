@@ -13,7 +13,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/koblas/quarry/internal/quicken/v9"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 )
@@ -39,6 +38,7 @@ func OpenBundle(tb testing.TB, dir string) Bundle {
 	bundleDir := filepath.Join(dir, "Home.quicken")
 	require.NoError(tb, os.MkdirAll(bundleDir, 0o700))
 	dataPath := filepath.Join(bundleDir, "data")
+	writeReferenceSchema(tb, dataPath)
 
 	holder, err := sql.Open("sqlite3", dataPath)
 	require.NoError(tb, err)
@@ -47,7 +47,6 @@ func OpenBundle(tb testing.TB, dir string) Bundle {
 
 	requireExec(tb, ctx, holder, "PRAGMA journal_mode=WAL")
 	requireExec(tb, ctx, holder, "PRAGMA wal_autocheckpoint=0")
-	requireExec(tb, ctx, holder, v9.ReferenceDDL)
 
 	const checkpointed = "Checking"
 	const walOnly = "WAL Only Savings"
@@ -94,16 +93,11 @@ func requireEntityPrimaryKeys(tb testing.TB, ctx context.Context, db *sql.DB) {
 // ZACCOUNT rows.
 func EmptyAccountsBundle(tb testing.TB, dir string) Bundle {
 	tb.Helper()
-	ctx := context.Background()
 
 	bundleDir := filepath.Join(dir, "Home.quicken")
 	require.NoError(tb, os.MkdirAll(bundleDir, 0o700))
 	dataPath := filepath.Join(bundleDir, "data")
-
-	conn, err := sql.Open("sqlite3", dataPath)
-	require.NoError(tb, err)
-	requireExec(tb, ctx, conn, v9.ReferenceDDL)
-	require.NoError(tb, conn.Close())
+	writeReferenceSchema(tb, dataPath)
 
 	return Bundle{Dir: bundleDir, DataPath: dataPath}
 }
@@ -121,12 +115,12 @@ func ClosedWALBundle(tb testing.TB, dir string) Bundle {
 	bundleDir := filepath.Join(dir, "Home.quicken")
 	require.NoError(tb, os.MkdirAll(bundleDir, 0o700))
 	dataPath := filepath.Join(bundleDir, "data")
+	writeReferenceSchema(tb, dataPath)
 
 	conn, err := sql.Open("sqlite3", dataPath)
 	require.NoError(tb, err)
 	conn.SetMaxOpenConns(1)
 	requireExec(tb, ctx, conn, "PRAGMA journal_mode=WAL")
-	requireExec(tb, ctx, conn, v9.ReferenceDDL)
 	requireExec(tb, ctx, conn, "INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
 	require.NoError(tb, conn.Close())
 
@@ -156,10 +150,10 @@ func MissingSchemaBundle(tb testing.TB, dir string) Bundle {
 	bundleDir := filepath.Join(dir, "Home.quicken")
 	require.NoError(tb, os.MkdirAll(bundleDir, 0o700))
 	dataPath := filepath.Join(bundleDir, "data")
+	writeReferenceSchema(tb, dataPath)
 
 	conn, err := sql.Open("sqlite3", dataPath)
 	require.NoError(tb, err)
-	requireExec(tb, ctx, conn, v9.ReferenceDDL)
 	requireExec(tb, ctx, conn, "INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
 	requireExec(tb, ctx, conn, fmt.Sprintf("DROP TABLE %s", MissingSchemaDroppedTable))
 	requireExec(tb, ctx, conn, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s",
@@ -193,10 +187,10 @@ func ExtraSchemaBundle(tb testing.TB, dir string) Bundle {
 	bundleDir := filepath.Join(dir, "Home.quicken")
 	require.NoError(tb, os.MkdirAll(bundleDir, 0o700))
 	dataPath := filepath.Join(bundleDir, "data")
+	writeReferenceSchema(tb, dataPath)
 
 	conn, err := sql.Open("sqlite3", dataPath)
 	require.NoError(tb, err)
-	requireExec(tb, ctx, conn, v9.ReferenceDDL)
 	requireExec(tb, ctx, conn, "INSERT INTO ZACCOUNT (ZNAME, ZTYPENAME, ZCURRENCY, ZACTIVE) VALUES ('Checking', 'CHECKING', 'CAD', 1)")
 	requireEntityPrimaryKeys(tb, ctx, conn)
 	requireExec(tb, ctx, conn, fmt.Sprintf("CREATE TABLE %s (Z_PK INTEGER PRIMARY KEY, ZVALUE VARCHAR)", ExtraSchemaAddedTable))

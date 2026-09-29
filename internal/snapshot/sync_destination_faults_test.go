@@ -18,6 +18,7 @@ import (
 // A write failure that is neither a permission error nor disk-full/over-quota
 // gets its own text, distinct from the disk-full wording.
 func Test_sync_refuses_when_writing_the_manifest_fails_with_an_unclassified_cause(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
@@ -58,6 +59,7 @@ func mkdirAllCause(t *testing.T, blockedPath string) string {
 // Exercises the real Destination adapter's Prepare fault path: MkdirAll
 // fails because the configured snapshots path is already a regular file.
 func Test_sync_refuses_when_the_snapshots_directory_cannot_be_prepared(t *testing.T) {
+	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	ref, err := v9.Reference(t.Context())
 	require.NoError(t, err)
@@ -128,6 +130,7 @@ func (f *partialFaultDestination) Discard(ctx context.Context, partial string) e
 }
 
 func Test_sync_refuses_when_writing_the_manifest_fails(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
@@ -154,6 +157,7 @@ func Test_sync_refuses_when_writing_the_manifest_fails(t *testing.T) {
 }
 
 func Test_sync_refuses_when_committing_the_manifest_fails(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
@@ -182,6 +186,7 @@ func Test_sync_refuses_when_committing_the_manifest_fails(t *testing.T) {
 // The manifest final is already committed when CommitSnapshot fails; the
 // empty directory afterward proves Discard removed that final too.
 func Test_sync_refuses_when_committing_the_snapshot_fails(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
@@ -208,6 +213,7 @@ func Test_sync_refuses_when_committing_the_snapshot_fails(t *testing.T) {
 }
 
 func Test_sync_still_returns_the_classified_refusal_when_discard_fails(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	bundle := v9fixture.EmptyAccountsBundle(t, filepath.Join(home, "Documents"))
 	ref, err := v9.Reference(t.Context())
@@ -236,6 +242,7 @@ func Test_sync_still_returns_the_classified_refusal_when_discard_fails(t *testin
 // A Discard failure is best-effort: it never replaces the write refusal
 // already classified for the write failure that triggered it.
 func Test_sync_still_returns_the_write_refusal_when_discard_fails_after_a_write_failure(t *testing.T) {
+	t.Parallel()
 	writeErr := &fs.PathError{Op: "open", Path: "manifest.json.partial", Err: syscall.ENOSPC}
 
 	cases := []struct {

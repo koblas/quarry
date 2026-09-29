@@ -8,6 +8,7 @@ import (
 )
 
 func Test_CountPhrase(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		tables  int

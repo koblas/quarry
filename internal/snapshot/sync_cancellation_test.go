@@ -18,6 +18,7 @@ import (
 // A cancelled ctx overrides whatever refusal each pre-commit failure site
 // would otherwise classify to, across every failure kind.
 func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_at_a_precommit_failure(t *testing.T) {
+	t.Parallel()
 	blockedPath := filepath.Join(t.TempDir(), "not-a-directory")
 	require.NoError(t, os.WriteFile(blockedPath, []byte("x"), 0o600))
 
@@ -58,6 +59,7 @@ func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_at_a_pr
 // buildManifest's own ctx-cancellation failure (opening the snapshot copy)
 // is also routed through FailureOutcome, distinct from the sites above.
 func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_during_buildManifest(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	srv := snapshot.NewServer(
@@ -104,6 +106,7 @@ func (f *cancelAndFailWriteManifestDestination) Discard(ctx context.Context, par
 }
 
 func Test_sync_reports_interrupted_when_the_context_ends_exactly_when_writing_the_manifest_fails(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
@@ -162,6 +165,7 @@ func (f *cancelAfterWriteManifestDestination) Discard(ctx context.Context, parti
 }
 
 func Test_sync_discards_everything_and_reports_interrupted_when_the_context_ends_just_before_the_commit_sequence(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
@@ -219,6 +223,7 @@ func (f *cancelDuringCommitManifestDestination) Discard(ctx context.Context, par
 // Once the pre-commit checkpoint has passed, ctx ending mid-rename must not
 // abort the sequence.
 func Test_sync_completes_normally_when_the_context_ends_during_the_commit_sequence(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())

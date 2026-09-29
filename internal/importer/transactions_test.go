@@ -12,6 +12,7 @@ import (
 )
 
 func Test_import_refuses_a_transaction_with_more_than_2_decimal_places(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
@@ -26,6 +27,7 @@ func Test_import_refuses_a_transaction_with_more_than_2_decimal_places(t *testin
 }
 
 func Test_import_refuses_a_transaction_with_an_amount_too_large_for_quarry(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
@@ -41,6 +43,7 @@ func Test_import_refuses_a_transaction_with_an_amount_too_large_for_quarry(t *te
 
 // The amount is quoted as SQLite renders the stored REAL.
 func Test_import_refuses_an_exponent_form_amount_by_the_exponents_sign(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name   string
 		amount string
@@ -76,6 +79,7 @@ func Test_import_refuses_an_exponent_form_amount_by_the_exponents_sign(t *testin
 }
 
 func Test_import_refuses_a_transaction_with_reconcile_status_quarry_does_not_map(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
@@ -91,6 +95,7 @@ func Test_import_refuses_a_transaction_with_reconcile_status_quarry_does_not_map
 }
 
 func Test_import_refuses_a_transaction_with_no_account(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
 	txnPK := b.Transaction(v9fixture.TransactionRow{Amount: "12.34", PostedDate: &posted})
@@ -102,6 +107,7 @@ func Test_import_refuses_a_transaction_with_no_account(t *testing.T) {
 }
 
 func Test_import_refuses_a_transaction_with_no_amount(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
@@ -114,6 +120,7 @@ func Test_import_refuses_a_transaction_with_no_amount(t *testing.T) {
 }
 
 func Test_import_refuses_a_transaction_with_no_date(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34"})
@@ -126,6 +133,7 @@ func Test_import_refuses_a_transaction_with_no_date(t *testing.T) {
 
 // No date wins over no amount when both are missing.
 func Test_import_refuses_a_transaction_with_no_date_and_no_amount(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK})
@@ -139,6 +147,7 @@ func Test_import_refuses_a_transaction_with_no_date_and_no_amount(t *testing.T) 
 // Both rows are excluded by the SQL row filter itself, before any
 // required-field check runs.
 func Test_import_does_not_refuse_a_deleted_or_investment_transaction_missing_fields(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	b.Transaction(v9fixture.TransactionRow{Deleted: true})
@@ -153,6 +162,7 @@ func Test_import_does_not_refuse_a_deleted_or_investment_transaction_missing_fie
 }
 
 func Test_import_refuses_a_split_with_more_than_2_decimal_places(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
@@ -168,6 +178,7 @@ func Test_import_refuses_a_split_with_more_than_2_decimal_places(t *testing.T) {
 }
 
 func Test_import_refuses_a_split_with_more_than_2_decimal_places_when_its_transaction_is_valid(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
@@ -183,6 +194,7 @@ func Test_import_refuses_a_split_with_more_than_2_decimal_places_when_its_transa
 }
 
 func Test_import_refuses_a_split_with_an_amount_too_large_for_quarry(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
@@ -198,6 +210,7 @@ func Test_import_refuses_a_split_with_an_amount_too_large_for_quarry(t *testing.
 }
 
 func Test_import_refuses_a_split_with_no_amount(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
@@ -211,6 +224,7 @@ func Test_import_refuses_a_split_with_no_amount(t *testing.T) {
 }
 
 func Test_import_refuses_a_split_with_no_transaction(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	entryPK := b.Entry(v9fixture.EntryRow{Amount: "12.34"})
 	bundle := b.WriteBundle(t, t.TempDir())
@@ -223,6 +237,7 @@ func Test_import_refuses_a_split_with_no_transaction(t *testing.T) {
 // A later-added but earlier-dated transaction sorts first while every
 // existing transaction keeps its own id.
 func Test_import_keeps_every_other_id_when_the_snapshot_gains_a_row(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	later := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)

@@ -13,6 +13,7 @@ import (
 )
 
 func Test_parseMoney(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name      string
 		typ, text string
@@ -64,6 +65,7 @@ const scanBelowRealBound = 1_000_000
 
 // SQLite renders each REAL, so the test pins the linked SQLite's own text.
 func Test_parseMoney_reads_every_real_just_below_the_bound_exactly(t *testing.T) {
+	t.Parallel()
 	db, err := sqlite.OpenMemory(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })

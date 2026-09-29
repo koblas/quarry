@@ -8,6 +8,7 @@ import (
 )
 
 func Test_Thousands(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		n    int
@@ -27,6 +28,7 @@ func Test_Thousands(t *testing.T) {
 }
 
 func Test_Count(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		n    int
