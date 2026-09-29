@@ -6,6 +6,7 @@
 | SCENARIO-01 (+02, 03, 04) | code-first | A, B1, B2, V | 0/0/1/0 | no (MINOR → STATE.md) |
 | SCENARIO-26 (+25) | code-first (LIGHT) | L, V | 0/0/0/1 | no |
 | SCENARIO-06 (+08) | code-first | A, B1, B2, V | 0/2/4/1 | yes |
+| SCENARIO-09 (+05, 07) | code-first | A, B1, B2, V | 0/2/4/0 | yes |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
