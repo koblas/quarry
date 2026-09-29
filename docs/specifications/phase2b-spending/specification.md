@@ -258,13 +258,15 @@ Exported as CSV, kept outside the repo; no private data is checked in.
 
 **Pass rule**: per currency, `quarry spend --since Y --until Y` rows equal (a) to the cent for every leaf category and the total; `quarry cashflow --since Y --until Y` Income and Spent equal (b) for each month. Every difference is recorded below (year, currency, row, quarry, Quicken, cause) and classified as a quarry defect (fix pass), a rule change (product-vision amends P2b-n), or a Quicken data fix (2d finding, re-checked after next sync). The Gate passes when no difference is unexplained.
 
+**Gate verdict: PASS.** Every difference is explained: an export-setup gap (RBC card), investment transactions not imported (out of scope), and one rule change (linked tracking, resolved).
+
 | Year | Currency | Row | quarry | Quicken | Cause |
 |---|---|---|---|---|---|
 | 2024–25 | CAD | every month × category (547 cells) | = | = | Match to the cent once Quicken's CAD selection includes RBC Cash Back Mastercard. The CAD export (7 accounts) left the card out. Its own export (the first USD attempt) equals quarry's RBC rows cell for cell. Export setup, not a difference. |
 | 2024–25 | CAD | Investments:Dividend Income (8 months, 3,131.36) | 0.00 | 3,131.36 | Investment transactions are not imported (Phase 1 scope; `sync` counts them as not imported). Rule: out of scope until investment transactions are imported. |
 | 2024–25 | USD | Outflows, every month | = | = | Total Outflows equals `cashflow` Spent in all 24 months. |
 | 2024–25 | USD | Investments:Dividend Income / Realized Gain/Loss / Buy / Sell | 0.00 | 86,412.60 / 918.69 / −378,999.14 / 37,817.86 | Same cause: investment transactions are not imported. Buy/Sell sit under Quicken's "Other" group and are outside Inflows/Outflows. |
-| 2025 | USD | Uncategorized income, Netskope 401(k) (Mar 20,187.15; Jun 511.81; Sep 419.29; Dec 1,415.47) | 22,533.72 | 0.00 | **Rule change.** Netskope 401(k) uses Quicken's linked account tracking (`ZACCOUNT.ZSIMPLEINVESTING = 1`, the only such account; the user can't see its transactions in Quicken). Quicken's reports leave out the cash rows it downloads. With the account excluded, USD matches in every month × category cell except the investment-action rows. Needs a product-vision ruling on P2b-6, then a fix pass. |
+| 2025 | USD | Uncategorized income, Netskope 401(k) (Mar 20,187.15; Jun 511.81; Sep 419.29; Dec 1,415.47) | 22,533.72 → 0.00 | 0.00 | **Resolved (rule change P2b-2a/P2b-6, SCENARIO-27).** The account uses Quicken's linked account tracking (`ZSIMPLEINVESTING = 1`), which Quicken's reports leave out. Re-checked after `quarry sync` on 2026-09-29: USD matches in every month × category cell with no account excluded, apart from the investment-action rows (out of scope). `cashflow` Income equals Quicken's Total Personal Income and Spent equals Total Outflows in all 24 months. |
 
 ---
 
