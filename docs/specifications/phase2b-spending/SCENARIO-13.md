@@ -22,7 +22,7 @@ Size: OWNS A RUN — 4 Build batches, 1 feature package (report; cli + cmd wirin
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_spend_window_test.go` `Test_run_spend_counts_the_whole_period_it_is_given` — table over the three spec rows through `runWith`: CAD account with distinct-amount splits on 2024-01-01, 2024-12-31, 2025-01-01 (`spendRows`/`spendSplit`/`day`, `run_spend_test.go:23-75`), `env.Now` 2026-09-29; asserts the caption (`Spending 2024-12-01 to 2025-01-31 ...`) and the Total per row. Compiles today (no stubs); red at exit code 2, cobra "unknown flag: --since".
+- [x] Step 1: `cmd/quarry/run_spend_window_test.go` `Test_run_spend_counts_the_whole_period_it_is_given` — table over the three spec rows through `runWith`: CAD account with distinct-amount splits on 2024-01-01, 2024-12-31, 2025-01-01 (`spendRows`/`spendSplit`/`day`, `run_spend_test.go:23-75`), `env.Now` 2026-09-29; asserts the caption (`Spending 2024-12-01 to 2025-01-31 ...`) and the Total per row. Compiles today (no stubs); red at exit code 2, cobra "unknown flag: --since".
 
 ### Build
 - [ ] Step 2: `internal/report/window.go` (new), `window_test.go` (new, `report_test`) `ParseWindow`, `WindowError` — grammar and resolution, nil flags = default window. Tests: `Test_parse_window_resolves_a_bare_year_or_month_to_its_last_day` (2024 -> Dec 31, `2024-02` -> 29, `2023-02` -> 28, `2024-12` -> Dec 31, day value both bounds); `Test_parse_window_refuses_a_value_that_is_not_a_date` (table: `2024-13`, `2024-00`, `2024-02-30`, `2023-02-29`, `2024-1`, `2024-01-1`, `24`, `20240101`, `2024/01`, `2024-01-01x`, ` 2024`, ``, `yesterday`; both flags name themselves in the message; control `2024-02-29`); nil/nil equals `DefaultWindow(now)` in a non-UTC zone.
@@ -53,3 +53,9 @@ Size: OWNS A RUN — 4 Build batches, 1 feature package (report; cli + cmd wirin
 - S2d compares the until's *last* day with the default since; S3 compares the since's *first* day with today; S2 compares first day of since with last day of until. Comparing raw parse results (first day for both) makes `--since 2024 --until 2024` an S2.
 - Old spend tests set `Now` on `report.SpendRequest`; they stop compiling in Step 4 — update them, do not keep a `Now` shim.
 - Copy gaps (all ruled here, no product-vision run needed: each is an instance of a spec row): S1 quotes with `%q`, S2/S2d/S3 do not; empty value = S1; both flags bad reports `--since`; `--by` refusal outranks a bad window (argv order in code, spec silent).
+
+## Phase report
+
+Run A: PARTIAL — test written, red NOT yet observed (Bash tool's auto-mode classifier returned no verdict on every call, so `go test` never ran).
+- Written: `cmd/quarry/run_spend_window_test.go` `Test_run_spend_counts_the_whole_period_it_is_given` (3 subtests over `--since/--until`; CAD Auto:Fuel splits 10.00 on 2024-01-01, 20.00 on 2024-12-31, 40.00 on 2025-01-01; `env.Now` 2026-09-29 UTC; asserts full stdout: caption, header, Auto:Fuel row, Total row; totals 30.00 / 60.00 / 20.00).
+- Next run must: `go test ./cmd/quarry/ -run 'Test_run_spend_counts_the_whole'`, confirm it fails at `require.Equal(0, exitCode)` (cobra "unknown flag: --since", exit 2) and not at a compile error or a column-width mismatch; then tick Step 1. No stubs needed (compiles today). Nothing committed.
