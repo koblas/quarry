@@ -45,11 +45,11 @@ func mapSplits(
 		}
 
 		if !parent.Valid {
-			off.add(offender{class: 10, reason: reasonSplitNoTransaction(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
+			off.add(offender{class: classMissingValue, reason: reasonSplitNoTransaction(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
 			return nil
 		}
 		if !existingTransactions[parent.Int64] {
-			off.add(offender{class: 10, reason: reasonSplitNoTransaction(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
+			off.add(offender{class: classMissingValue, reason: reasonSplitNoTransaction(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
 			return nil
 		}
 		txn, ok := txns[parent.Int64]
@@ -59,19 +59,19 @@ func mapSplits(
 		dateStr := txn.Date.Format(dateLayout)
 
 		if amtType == "null" {
-			off.add(offender{class: 10, reason: reasonSplitNoAmount(dateStr, txn.AccountName), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
+			off.add(offender{class: classMissingValue, reason: reasonSplitNoAmount(dateStr, txn.AccountName), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
 			return nil
 		}
 		cents, fault := parseMoney(amtType, amtText.String)
 		switch fault {
 		case moneyNotANumber:
-			off.add(offender{class: 11, reason: reasonSplitNotANumber(dateStr, txn.AccountName), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
+			off.add(offender{class: classNotANumber, reason: reasonSplitNotANumber(dateStr, txn.AccountName), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
 			return nil
 		case moneyPrecision:
-			off.add(offender{class: 4, reason: reasonSplitPrecision(dateStr, txn.AccountName, amtText.String), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
+			off.add(offender{class: classSplitPrecision, reason: reasonSplitPrecision(dateStr, txn.AccountName, amtText.String), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
 			return nil
 		case moneyTooLarge:
-			off.add(offender{class: 6, reason: reasonSplitTooLarge(dateStr, txn.AccountName, amtText.String), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
+			off.add(offender{class: classTooLarge, reason: reasonSplitTooLarge(dateStr, txn.AccountName, amtText.String), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
 			return nil
 		}
 

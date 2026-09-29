@@ -107,11 +107,11 @@ func mapTransactions(
 		}
 
 		if !account.Valid {
-			off.add(offender{class: 10, reason: reasonTransactionNoAccount(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
+			off.add(offender{class: classMissingValue, reason: reasonTransactionNoAccount(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
 			return nil
 		}
 		if !existingAccounts[account.Int64] {
-			off.add(offender{class: 10, reason: reasonTransactionNoAccount(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
+			off.add(offender{class: classMissingValue, reason: reasonTransactionNoAccount(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
 			return nil
 		}
 		acct, ok := accounts[account.Int64]
@@ -133,32 +133,32 @@ func mapTransactions(
 
 		if amtType == "null" {
 			if !hasDate {
-				off.add(offender{class: 10, reason: reasonTransactionNoDate(acct.Name, pk), name: acct.Name, sourceID: pk})
+				off.add(offender{class: classMissingValue, reason: reasonTransactionNoDate(acct.Name, pk), name: acct.Name, sourceID: pk})
 				return nil
 			}
-			off.add(offender{class: 10, reason: reasonTransactionNoAmount(dateStr, acct.Name), dated: true, date: date, account: acct.Name, sourceID: pk})
+			off.add(offender{class: classMissingValue, reason: reasonTransactionNoAmount(dateStr, acct.Name), dated: true, date: date, account: acct.Name, sourceID: pk})
 			return nil
 		}
 
 		cents, fault := parseMoney(amtType, amtText.String)
 		if fault == moneyNotANumber {
 			if hasDate {
-				off.add(offender{class: 11, reason: reasonTransactionNotANumber(dateStr, acct.Name), dated: true, date: date, account: acct.Name, sourceID: pk})
+				off.add(offender{class: classNotANumber, reason: reasonTransactionNotANumber(dateStr, acct.Name), dated: true, date: date, account: acct.Name, sourceID: pk})
 			} else {
-				off.add(offender{class: 11, reason: reasonTransactionNotANumberNoDate(acct.Name, pk), name: acct.Name, sourceID: pk})
+				off.add(offender{class: classNotANumber, reason: reasonTransactionNotANumberNoDate(acct.Name, pk), name: acct.Name, sourceID: pk})
 			}
 			return nil
 		}
 		if !hasDate {
-			off.add(offender{class: 10, reason: reasonTransactionNoDate(acct.Name, pk), name: acct.Name, sourceID: pk})
+			off.add(offender{class: classMissingValue, reason: reasonTransactionNoDate(acct.Name, pk), name: acct.Name, sourceID: pk})
 			return nil
 		}
 		switch fault {
 		case moneyPrecision:
-			off.add(offender{class: 3, reason: reasonTransactionPrecision(dateStr, acct.Name, amtText.String), dated: true, date: date, account: acct.Name, sourceID: pk})
+			off.add(offender{class: classTransactionPrecision, reason: reasonTransactionPrecision(dateStr, acct.Name, amtText.String), dated: true, date: date, account: acct.Name, sourceID: pk})
 			return nil
 		case moneyTooLarge:
-			off.add(offender{class: 6, reason: reasonTransactionTooLarge(dateStr, acct.Name, amtText.String), dated: true, date: date, account: acct.Name, sourceID: pk})
+			off.add(offender{class: classTooLarge, reason: reasonTransactionTooLarge(dateStr, acct.Name, amtText.String), dated: true, date: date, account: acct.Name, sourceID: pk})
 			return nil
 		}
 
@@ -171,7 +171,7 @@ func mapTransactions(
 		case status.Int64 == 2:
 			statusStr = "reconciled"
 		default:
-			off.add(offender{class: 8, reason: reasonTransactionStatus(dateStr, acct.Name, status.Int64), dated: true, date: date, account: acct.Name, sourceID: pk})
+			off.add(offender{class: classTransactionStatus, reason: reasonTransactionStatus(dateStr, acct.Name, status.Int64), dated: true, date: date, account: acct.Name, sourceID: pk})
 			return nil
 		}
 

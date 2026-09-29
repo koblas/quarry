@@ -56,17 +56,17 @@ func mapCategories(ctx context.Context, src Source, categoryEntity int64, off *o
 	var rows []store.Category
 	for _, r := range raws {
 		if !r.name.Valid || r.name.String == "" {
-			off.add(offender{class: 10, reason: reasonCategoryNoName(r.pk), name: fmt.Sprintf("(source id %d)", r.pk), sourceID: r.pk})
+			off.add(offender{class: classMissingValue, reason: reasonCategoryNoName(r.pk), name: fmt.Sprintf("(source id %d)", r.pk), sourceID: r.pk})
 			continue
 		}
 		fullPath := categoryFullPath(byPK, r)
 		if !r.typ.Valid {
-			off.add(offender{class: 10, reason: reasonCategoryNoType(fullPath), name: fullPath, sourceID: r.pk})
+			off.add(offender{class: classMissingValue, reason: reasonCategoryNoType(fullPath), name: fullPath, sourceID: r.pk})
 			continue
 		}
 		kind, ok := categoryKindMap[r.typ.Int64]
 		if !ok {
-			off.add(offender{class: 9, reason: reasonCategoryType(fullPath, r.typ.Int64), name: fullPath, sourceID: r.pk})
+			off.add(offender{class: classCategoryType, reason: reasonCategoryType(fullPath, r.typ.Int64), name: fullPath, sourceID: r.pk})
 			continue
 		}
 

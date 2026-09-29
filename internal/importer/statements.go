@@ -97,15 +97,15 @@ func parseStatement(acct accountRef, r rawReconcile, off *offenders) (parsedStat
 		dateStr = date.Format(dateLayout)
 	} else {
 		// A missing date is its own offender, independent of a balance
-		// fault below: s4ClassOrder ranks 5/6/11 over 10, so a balance
-		// fault on the same record is reported first; this one surfaces
-		// once that fault is fixed.
-		off.add(offender{class: 10, reason: reasonStatementNoDate(acct.Name, r.pk), name: acct.Name, sourceID: r.pk})
+		// fault below: unmappableClassOrder ranks a balance fault over a
+		// missing value, so that fault is reported first; this one
+		// surfaces once it is fixed.
+		off.add(offender{class: classMissingValue, reason: reasonStatementNoDate(acct.Name, r.pk), name: acct.Name, sourceID: r.pk})
 	}
 
 	if r.balType == "null" {
 		if hasDate {
-			off.add(offender{class: 10, reason: reasonStatementNoBalance(dateStr, acct.Name), dated: true, date: date, account: acct.Name, sourceID: r.pk})
+			off.add(offender{class: classMissingValue, reason: reasonStatementNoBalance(dateStr, acct.Name), dated: true, date: date, account: acct.Name, sourceID: r.pk})
 		}
 		return parsedStatement{}, false
 	}
@@ -114,23 +114,23 @@ func parseStatement(acct accountRef, r rawReconcile, off *offenders) (parsedStat
 	switch fault {
 	case moneyNotANumber:
 		if hasDate {
-			off.add(offender{class: 11, reason: reasonStatementNotANumber(dateStr, acct.Name), dated: true, date: date, account: acct.Name, sourceID: r.pk})
+			off.add(offender{class: classNotANumber, reason: reasonStatementNotANumber(dateStr, acct.Name), dated: true, date: date, account: acct.Name, sourceID: r.pk})
 		} else {
-			off.add(offender{class: 11, reason: reasonStatementNotANumberNoDate(acct.Name, r.pk), name: acct.Name, sourceID: r.pk})
+			off.add(offender{class: classNotANumber, reason: reasonStatementNotANumberNoDate(acct.Name, r.pk), name: acct.Name, sourceID: r.pk})
 		}
 		return parsedStatement{}, false
 	case moneyPrecision:
 		if hasDate {
-			off.add(offender{class: 5, reason: reasonStatementPrecision(dateStr, acct.Name, r.balText.String), dated: true, date: date, account: acct.Name, sourceID: r.pk})
+			off.add(offender{class: classStatementPrecision, reason: reasonStatementPrecision(dateStr, acct.Name, r.balText.String), dated: true, date: date, account: acct.Name, sourceID: r.pk})
 		} else {
-			off.add(offender{class: 5, reason: reasonStatementPrecisionNoDate(acct.Name, r.pk, r.balText.String), name: acct.Name, sourceID: r.pk})
+			off.add(offender{class: classStatementPrecision, reason: reasonStatementPrecisionNoDate(acct.Name, r.pk, r.balText.String), name: acct.Name, sourceID: r.pk})
 		}
 		return parsedStatement{}, false
 	case moneyTooLarge:
 		if hasDate {
-			off.add(offender{class: 6, reason: reasonStatementTooLarge(dateStr, acct.Name, r.balText.String), dated: true, date: date, account: acct.Name, sourceID: r.pk})
+			off.add(offender{class: classTooLarge, reason: reasonStatementTooLarge(dateStr, acct.Name, r.balText.String), dated: true, date: date, account: acct.Name, sourceID: r.pk})
 		} else {
-			off.add(offender{class: 6, reason: reasonStatementTooLargeNoDate(acct.Name, r.pk, r.balText.String), name: acct.Name, sourceID: r.pk})
+			off.add(offender{class: classTooLarge, reason: reasonStatementTooLargeNoDate(acct.Name, r.pk, r.balText.String), name: acct.Name, sourceID: r.pk})
 		}
 		return parsedStatement{}, false
 	}

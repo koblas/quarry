@@ -70,24 +70,24 @@ func mapAccounts(ctx context.Context, src Source, off *offenders) ([]store.Accou
 		}
 
 		if !name.Valid || name.String == "" {
-			off.add(offender{class: 10, reason: reasonAccountNoName(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
+			off.add(offender{class: classMissingValue, reason: reasonAccountNoName(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
 			return nil
 		}
 		if !typ.Valid || typ.String == "" {
-			off.add(offender{class: 10, reason: reasonAccountNoType(name.String), name: name.String, sourceID: pk})
+			off.add(offender{class: classMissingValue, reason: reasonAccountNoType(name.String), name: name.String, sourceID: pk})
 			return nil
 		}
 		if !currency.Valid || currency.String == "" {
-			off.add(offender{class: 10, reason: reasonAccountNoCurrency(name.String), name: name.String, sourceID: pk})
+			off.add(offender{class: classMissingValue, reason: reasonAccountNoCurrency(name.String), name: name.String, sourceID: pk})
 			return nil
 		}
 		quarryType, ok := accountTypeMap[typ.String]
 		if !ok {
-			off.add(offender{class: 2, reason: reasonAccountType(name.String, typ.String), name: name.String, sourceID: pk})
+			off.add(offender{class: classAccountType, reason: reasonAccountType(name.String, typ.String), name: name.String, sourceID: pk})
 			return nil
 		}
 		if !validCurrencies[currency.String] {
-			off.add(offender{class: 1, reason: reasonAccountCurrency(name.String, currency.String), name: name.String, sourceID: pk})
+			off.add(offender{class: classCurrency, reason: reasonAccountCurrency(name.String, currency.String), name: name.String, sourceID: pk})
 			return nil
 		}
 
