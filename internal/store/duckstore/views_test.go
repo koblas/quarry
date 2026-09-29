@@ -40,7 +40,7 @@ func reportRows() store.Rows {
 }
 
 // splitSpec is one split and the transaction carrying it; account defaults to
-// acctInReports, currency to CAD and date to 2026-03-15.
+// acctInReports, currency to CAD and date to 2026-03-15; tags are tag ids.
 type splitSpec struct {
 	id       string
 	account  string
@@ -50,6 +50,7 @@ type splitSpec struct {
 	excluded bool
 	payee    *string
 	date     time.Time
+	tags     []string
 }
 
 func addSplit(rows *store.Rows, spec splitSpec) {
@@ -74,6 +75,9 @@ func addSplit(rows *store.Rows, spec splitSpec) {
 		ID: spec.id, SourceID: int64(len(rows.Splits) + 1), TransactionID: "txn-" + spec.id,
 		CategoryID: spec.category, Amount: spec.amount,
 	})
+	for _, tag := range spec.tags {
+		rows.SplitTags = append(rows.SplitTags, store.SplitTag{SplitID: spec.id, TagID: tag})
+	}
 }
 
 func newStoreWith(t *testing.T, rows store.Rows) *duckstore.Store {
