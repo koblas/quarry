@@ -10,12 +10,10 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// Query runs query verbatim against the store, opened read-only, and
-// returns at most maxRows rows (every row when maxRows is 0 or less). It
-// refuses with store.ErrQueryInterrupted once ctx is done, store.ErrReadOnlyQuery
-// for a write, store.ErrExternalAccess for another file, database or extension,
-// *store.UnprintableValueError for a value it cannot print, and *store.QueryError
-// for any other query error; other open faults are wrapped "run query: ...".
+// Query runs query verbatim against the store, opened read-only, returning at
+// most maxRows rows (all when maxRows <= 0). It refuses with store.ErrQueryInterrupted,
+// store.ErrReadOnlyQuery, store.ErrExternalAccess, *store.UnprintableValueError
+// or *store.QueryError; any other open fault is wrapped "run query: ...".
 func (s *Store) Query(ctx context.Context, query string, maxRows int) (store.QueryResult, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {
@@ -33,10 +31,9 @@ func (s *Store) Query(ctx context.Context, query string, maxRows int) (store.Que
 	return queryResult(table), nil
 }
 
-// queryRefusal classifies a failed query. A cancelled ctx is checked first:
-// the driver's interrupt error reads "context canceled" and would otherwise
-// be reported as a query error.
+// queryRefusal classifies a failed query as one of Query's refusals.
 func queryRefusal(ctx context.Context, err error) error {
+	// First: the driver's interrupt error reads "context canceled", which would pass as a query error.
 	if ctx.Err() != nil {
 		return fmt.Errorf("%w: %w", store.ErrQueryInterrupted, err)
 	}

@@ -67,8 +67,7 @@ func Create(ctx context.Context, path string) (*DB, error) {
 	return &DB{conn: conn, path: path}, nil
 }
 
-// readOnlyDSN locks a read session down: no write, no other file, database or
-// extension, and no SET that could undo any of it.
+// readOnlyDSN locks a read session down: no write, no outside access, no SET.
 const readOnlyDSN = "?access_mode=READ_ONLY&enable_external_access=false" +
 	"&autoload_known_extensions=false&autoinstall_known_extensions=false&lock_configuration=true"
 
