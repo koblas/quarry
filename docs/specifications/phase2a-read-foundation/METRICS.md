@@ -9,6 +9,7 @@
 | SCENARIO-04 (+05) | code-first | 0/0/0/2 | no (NIT → STATE.md) |
 | SCENARIO-07 (+06) | code-first | 0/1/2/0 | yes |
 | SCENARIO-08 | code-first | 0/0/3/1 | no (MINORs → STATE.md) |
+| SCENARIO-12 (+13, 14, 20) | test-first | 0/0/3/0 | no (MINORs → STATE.md) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Verdict |

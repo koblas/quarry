@@ -35,6 +35,7 @@ Scenarios complete: SCENARIO-01..08, 12 (05 folded into 04, 06 into 07; 13, 14, 
 - `import_runs` history across rebuilds (`importRunID` stays 1 per build) - Phase 2c.
 
 ## Traps
+- SCENARIO-15 hazard (12 checkpoint): Q-sentinels wrap `%w: %w`, so `errors.Unwrap` returns nil on them — R3's reason must come from the single-`%w` open fault (`run query: %w`) / `(*duckdb.Error).Msg`, never a `causeText`-style single-chain walk over Q1/Q2/Q4 wrappers.
 - The test binary's `debug.ReadBuildInfo().Main.Version` is `""`/`(devel)` either way: no `cmd/quarry` test can tell "wired" from "not wired". (S01)
 - DuckDB's `InstanceCache` refuses a second differently-configured open of one path in-process while the first is live: fixtures writing at the final path must Close first. A cmd-level `OpenReadOnly` after `status` cannot detect a leaked connection; only the fake-DB Close test (`Test_status_closes_the_connection_on_success_and_on_a_query_fault`) proves Close. (Phase 1, S02)
 - `QueryRows` with zero rows leaves the scan targets untouched and returns nil - hence `Status`'s found-exactly-one-row check; `min/max(date)` over no transactions returns one NULL row (scan into `sql.NullTime`). (S02)
@@ -52,6 +53,9 @@ Scenarios complete: SCENARIO-01..08, 12 (05 folded into 04, 06 into 07; 13, 14, 
 - `uncovered-diff.py` is blind to untracked files: `git add` before running it. `cmd/quarry`'s test binary links DuckDB (linux-small CI OOM history). `internal/platform/duckdb`'s mid-iteration ctx-cancel test flakes under full-suite load. (Phase 1)
 
 ## Open debts
+- MINOR (12 checkpoint): `cmd/quarry/run_sql_test.go:91` lock proof rests on DuckDB's wording — add a `SET threads=1` row expecting the locked-configuration Q3 line (succeeds when unlocked).
+- MINOR (12 checkpoint): `internal/store/duckstore/query_test.go:634` no store/cmd row for spec's Q3 example `SELECT * FROM '/etc/hosts'` (Catalog → Q3) vs `'x.parquet'` (Permission → Q2) — add one row each side.
+- MINOR (12 checkpoint): `internal/cli/sql_test.go:246` `gotMaxRows` set up but unused in `Test_sql_reports_each_query_refusal`.
 - MINOR (08 checkpoint): `Test_query_table_stops_at_max_rows` lacks a negative `maxRows` row (`{available: 4, maxRows: -1, want: 4}`).
 - MINOR (08 checkpoint, doc budgets): `internal/platform/duckdb/text.go` `cellValue`:34, `nativeValue`:48, `floatText`:116, `nestedText`:368, `needsQuotes`:386 (3→≤2), `nestedSpecial`:30 (→1); `typename.go:68` `parseTypeName` (4→≤2); `internal/cli/render_sql.go:121` `renderSQLTable` (3→≤2); `internal/cli/accounts_test.go:24` `fakeReportStore` (3→≤2).
 - Snapshots accumulate (~200 MB each) until 2c - known gap, owned by Phase 2c.
