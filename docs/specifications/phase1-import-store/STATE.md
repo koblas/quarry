@@ -76,3 +76,4 @@ Last updated by final-gate fix pass 2 (REVIEW-02).
 - Compose-method refactors: scan closures in `internal/importer/transactions.go`, `splits.go` (`mapSplits`), `accounts.go`; `internal/cli/sync.go` RunE (~53 lines) — unowned, MINOR.
 - NITs: `duckstore.Replace` repeated fail paths (local `fail` helper); `internal/cli/render.go` three row builders share a shape — unowned.
 - `Test_import_from_refuses_a_relative_path_when_the_working_directory_no_longer_exists` only runs on Linux, and there is no Linux CI, so `from.go:28,83` have never executed — unowned.
+- MINOR (REVIEW-04): `internal/importer/offenders.go:58` firstError doc 3 lines (budget 1–2).
