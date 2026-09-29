@@ -208,11 +208,21 @@ quarry says so on stderr. --limit 0 prints every row.
   quarry sql --limit 0 --json - < monthly.sql
 ```
 - Flag `--limit`, help ``print at most `n` rows (0 prints every row)``, default 500 (renders `--limit n ... (default 500)`).
-- Table output: header of column names, then rows. Raw DuckDB text, no grouping. NULL → `NULL`. Newline, tab,
-  CR inside a value → `\n`, `\t`, `\r`. Numeric columns right-aligned. Zero rows → header only, exit 0.
+- Table output: header of column names, then rows. Each value prints as DuckDB's own text for it (what
+  `CAST(x AS VARCHAR)` gives), no digit grouping — every scalar, ±infinity, LIST, ARRAY, MAP and UNION. STRUCT
+  prints `{'a': 1, 'b': x}` with fields in the order the column type declares (parsed from the type name,
+  quoted identifiers and nesting handled); if the type name cannot be parsed, fields sorted by name — the only
+  declared divergence. NULL → `NULL`. Newline, tab and CR inside a value → `\n`, `\t`, `\r`; nothing else is
+  escaped. Numeric columns (and their headers) right-aligned; other headers left-aligned; no trailing spaces.
+  Zero rows → header only, exit 0.
+- The table is for reading: a NULL and the string `NULL` print the same, and so do an escaped newline and a
+  literal `\n`. `--json` is the exact form.
 - `--json`: `{"columns":[{"name","type"}],"rows":[[…]],"row_count":N,"limit":500,"truncated":false,"warnings":[]}`.
-  DECIMAL and HUGEINT → strings; other integers, DOUBLE, BOOLEAN native; DATE `YYYY-MM-DD`; TIMESTAMP RFC3339
-  UTC; NULL `null`; anything else DuckDB's text as a string.
+  DECIMAL and HUGEINT → strings; other integers, DOUBLE, BOOLEAN native; FLOAT native encoded from float32;
+  DOUBLE/FLOAT NaN/±Inf → `"nan"`, `"inf"`, `"-inf"` (never `null`); `-0.0` native; DATE `YYYY-MM-DD`;
+  TIMESTAMP, TIMESTAMP_S/_MS/_NS, TIMESTAMPTZ → RFC3339Nano UTC with `Z`; DATE/TIMESTAMP ±infinity →
+  `"infinity"`/`"-infinity"`; NULL `null`; everything else (TIME, TIMETZ, INTERVAL, UUID, BLOB, BIT, ENUM, LIST,
+  ARRAY, MAP, STRUCT, UNION) DuckDB's text as a string — not nested JSON in 2a.
 - Truncation: fetch `limit+1`. More rows → stderr
   `quarry: warning: showing the first 500 rows; the query returned more; pass --limit 0 to print every row`;
   same text without prefix in `warnings[]`; `truncated: true`; exit 0. Exactly `limit` rows → not truncated.
@@ -232,9 +242,10 @@ quarry says so on stderr. --limit 0 prints every row.
 | Q2 | external access or extension refused (DuckDB Permission Error) | `quarry: quarry sql reads only quarry's store; other files, databases and extensions are turned off` | 1 |
 | Q3 | any other query error, incl. `SET` after the lock (`quarry: query failed: Invalid Input Error: Cannot change configuration option "enable_external_access" - the configuration has been locked`) and `SELECT * FROM '/etc/hosts'` (Catalog Error) | `quarry: query failed: <first line of DuckDB's message>` | 1 |
 | Q4 | sql interrupted (SIGINT/SIGTERM) | `quarry: query interrupted` | 1 |
+| Q5 | a result value quarry cannot print (Go type the renderer does not know; never `%v`) | `quarry: cannot print column "<name>" of type <DuckDB type>; cast it in the query, e.g. CAST(<name> AS VARCHAR)` | 1 |
 | O2 | stdout write fails (EPIPE keeps Go's default death) | `quarry: cannot write the result to stdout: <OS reason>` | 1 |
 | H1 | `$HOME` unset or unresolvable (status/accounts/sql/sync) | `quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry <cmd> again` — one builder taking the command name; sync's text stays byte-identical; help and usage errors never need `$HOME` | 1 |
-| U5 | sql: no argument, empty/whitespace query, or `-` with empty stdin | `quarry: sql needs a query; pass it as one quoted argument, or - to read it from stdin` | 2 |
+| U5 | sql: no argument, empty/whitespace query, `-` with empty stdin, or a query DuckDB answers with its empty-query error (`;`, `-- note`) — classified after the `ctx.Err()` check; with no store, `sql ";"` gets R1 because only DuckDB can tell it is empty | `quarry: sql needs a query; pass it as one quoted argument, or - to read it from stdin` | 2 |
 | U6 | sql: more than one argument | `quarry: sql takes one query; quote it as one argument` | 2 |
 | U7 | `--limit` < 0 | `quarry: --limit must be 0 or more; 0 prints every row` | 2 |
 | U8 | status/accounts given positional arguments | `quarry: <cmd> takes no arguments` | 2 |
@@ -430,6 +441,8 @@ Scenario Outline: SCENARIO-18 — read commands reject bad usage
     | sql                  | U5      |
     | sql "   "            | U5      |
     | sql - (empty stdin)  | U5      |
+    | sql ";"              | U5      |
+    | sql "-- note"        | U5      |
     | sql "SELECT 1" extra | U6      |
     | sql --limit -1 "SELECT 1" | U7 |
     | status extra         | U8      |
