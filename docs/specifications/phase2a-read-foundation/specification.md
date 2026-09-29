@@ -191,7 +191,8 @@ Visa Infinite  credit_card  CAD          -1,204.17  closed
 ```
 Run one SQL query against quarry's store and print the result. The store is
 opened read-only: a query cannot change it, read or write other files, or
-load extensions.
+load extensions. A query too large for memory may spill to a temporary
+directory beside the store; quarry removes it when it exits.
 
 Pass the query as one quoted argument, or - to read it from stdin. A query
 that starts with - (such as a -- comment) goes after --:
@@ -252,7 +253,7 @@ quarry says so on stderr. --limit 0 prints every row.
 | R3 | any other open/read fault (G1: with a `*fs.PathError` in the tree, `<reason>` = `PathError.Err.Error()` only; with no `*duckdb.Error`, first line of `err.Error()` with the same strip and `~` replacement; empty after stripping → `unknown error`) | `quarry: cannot read the store at ~/Library/Application Support/quarry/quarry.duckdb: <reason>; run quarry sync to rebuild it` — `<reason>` = first line of `(*duckdb.Error).Msg`, DuckDB type prefix (`^[A-Za-z ]+ Error: `) removed, every occurrence of the store path (as given and after `filepath.EvalSymlinks`) replaced by its `~` form | 1 |
 | Q1 | write statement (DuckDB read-only mode error) | `quarry: quarry sql only reads the store; change the data in Quicken and run quarry sync` | 1 |
 | Q2 | external access or extension refused (DuckDB Permission Error) | `quarry: quarry sql reads only quarry's store; other files, databases and extensions are turned off` | 1 |
-| Q3 | any other query error, incl. `SET` after the lock (`quarry: query failed: Invalid Input Error: Cannot change configuration option "enable_external_access" - the configuration has been locked`) and `SELECT * FROM '/etc/hosts'` (Catalog Error) | `quarry: query failed: <first line of DuckDB's message>` — verbatim, type prefix kept (`Binder Error: …`); a path in it is the user's own query text and is not `~`-abbreviated (P2a-8 covers paths quarry prints) | 1 |
+| Q3 | any other query error, incl. `Out of Memory Error: …` when a query exceeds memory and spill space (no LIMIT advice — `--limit` only caps printed rows), `SET` after the lock (`quarry: query failed: Invalid Input Error: Cannot change configuration option "enable_external_access" - the configuration has been locked`) and `SELECT * FROM '/etc/hosts'` (Catalog Error) | `quarry: query failed: <first line of DuckDB's message>` — verbatim, type prefix kept (`Binder Error: …`); a path in it is the user's own query text and is not `~`-abbreviated (P2a-8 covers paths quarry prints) | 1 |
 | Q4 | sql interrupted (SIGINT/SIGTERM), incl. while reading stdin for `sql -` (read runs in a goroutine, `select` on `ctx.Done()`; `ctx.Err()` checked before Q6 and U5) | `quarry: query interrupted` | 1 |
 | Q6 | `sql -` cannot read stdin (runtime fault, not usage) | `quarry: cannot read the query from stdin: <OS reason>` — `<OS reason>` per the G1 rule (`*fs.PathError` → `Err.Error()` only; else first line of `err.Error()`; empty → `unknown error`); stdout empty. No stdin size cap and no TTY detection (on a terminal `sql -` waits for Ctrl-D, like `psql -f -`) | 1 |
 | Q5 | a result value quarry cannot print: a Go type the renderer does not know (never `%v`); a JSON column (the driver returns it decoded, so DuckDB's text is lost); or a type the driver refuses (`unsupported data type: <T>: index: <i>` → name from the column list at `<i>`, type `<T>`; unmatched message falls back to Q3; owner SCENARIO-12's classifier, checked before Q3) | `quarry: cannot print column "<name>" of type <DuckDB type>; cast it in the query, e.g. CAST(<name> AS VARCHAR)` | 1 |
