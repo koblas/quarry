@@ -14,8 +14,7 @@ var spendGroupings = [...]spendGrouping{
 	store.SpendByPayee:    {name: "payee", header: "Payee", missing: "(no payee)"},
 }
 
-// errSpendByUnknown refuses a --by that names no grouping; it lists tag and
-// month, which spend does not read yet.
+// errSpendByUnknown refuses a --by that names no grouping spend reads.
 var errSpendByUnknown = UsageError{msg: "--by must be category, payee, tag or month"}
 
 // parseSpendGrouping returns the grouping named by a --by value, or

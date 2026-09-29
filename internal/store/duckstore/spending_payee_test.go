@@ -89,6 +89,23 @@ func Test_spending_by_payee_breaks_a_case_only_tie_by_byte_order(t *testing.T) {
 	}, got.Rows)
 }
 
+func Test_spending_by_payee_sorts_no_payee_after_a_named_payee_it_ties_with(t *testing.T) {
+	t.Parallel()
+	rows := spendRows()
+	addPayees(&rows, "Zed")
+	addSplit(&rows, payeeSplit("none", "", "CAD", -100))
+	addSplit(&rows, payeeSplit("zed", "Zed", "CAD", -100))
+	st := newStoreWith(t, rows)
+
+	got, err := st.Spending(t.Context(), payeeParams())
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.SpendingRow{
+		{Key: new("Zed"), Currency: "CAD", Spent: 100},
+		{Key: nil, Currency: "CAD", Spent: 100},
+	}, got.Rows)
+}
+
 func Test_spending_by_payee_drops_a_payee_that_nets_to_zero(t *testing.T) {
 	t.Parallel()
 	rows := spendRows()

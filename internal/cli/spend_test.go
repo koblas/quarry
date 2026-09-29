@@ -80,6 +80,25 @@ func Test_spend_refuses_a_by_that_names_no_grouping_before_reading_the_store(t *
 	}
 }
 
+func Test_spend_refuses_a_by_that_names_no_grouping_before_opening_the_report(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	env := cli.Env{
+		Stdout: &stdout, Stderr: &stderr,
+		Now: time.Now,
+		NewReport: func(context.Context, string) (*report.Server, error) {
+			return nil, errStoreRead
+		},
+	}
+
+	err := cli.Execute(t.Context(), []string{"spend", "--by", "vendor"}, env)
+
+	var usage cli.UsageError
+	require.ErrorAs(t, err, &usage)
+	require.EqualError(t, err, "--by must be category, payee, tag or month")
+	assert.Empty(t, stdout.String())
+	assert.Empty(t, stderr.String())
+}
+
 func Test_spend_json_puts_the_report_window_and_rows_in_the_document(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
