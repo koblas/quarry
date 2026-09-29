@@ -105,11 +105,8 @@ func Test_open_read_only_fails_when_the_context_is_already_cancelled(t *testing.
 	require.ErrorIs(t, err, context.Canceled)
 }
 
-// Enough rows to span several of DuckDB's internal result chunks; the
-// context is cancelled from inside the callback from the first row on, so
-// rows.Next() (driven by the same ctx) reports done partway through and
-// rows.Err() surfaces the cancellation — a distinct path from the callback
-// itself returning an error.
+// Enough rows to span several result chunks; the callback cancels ctx and returns nil,
+// so the cancellation surfaces through rows.Err(), not the callback's own error.
 func Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration(t *testing.T) {
 	db, _ := newOpenDatabase(t)
 	_, err := db.Exec(t.Context(), "CREATE TABLE t (v INTEGER)")

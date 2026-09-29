@@ -525,6 +525,7 @@ func Test_import_from_names_the_missing_accounts_in_the_refusal(t *testing.T) {
 
 // A rollback-journal file, so the held exclusive lock blocks readers; the read waits out the driver's default busy timeout.
 func Test_import_from_refuses_a_locked_snapshot_as_unreadable(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)

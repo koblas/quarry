@@ -247,6 +247,7 @@ func Test_import_refuses_an_undated_statement_with_a_text_balance_using_the_sour
 		importReason(t, err))
 }
 
+// An account at Z_PK 0 exists, so a NULL account read as 0 would be checked against it.
 func Test_import_skips_a_statement_with_no_account(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := chequingWithOneReconciledTxn(b, "100.00")
@@ -254,6 +255,7 @@ func Test_import_skips_a_statement_with_no_account(t *testing.T) {
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &feb, EndingBalance: "100.00"})
 	b.Reconcile(v9fixture.ReconcileRow{Account: 0, EndDate: &feb, EndingBalance: "999.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
+	execOn(t, bundle.DataPath, "INSERT INTO ZACCOUNT (Z_PK, ZNAME, ZTYPENAME, ZCURRENCY, ZACTIVE) VALUES (0, 'Zero', 'CHECKING', 'CAD', 1)")
 
 	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 

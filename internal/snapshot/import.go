@@ -13,8 +13,8 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// errNoImporter is SyncAndImport's error when the Server has no Importer or StoreProbe configured.
-var errNoImporter = errors.New("no importer or store probe configured")
+// errImportNotWired is SyncAndImport's error when the Server has no Importer or StoreProbe configured.
+var errImportNotWired = errors.New("no importer or store probe configured")
 
 // Outcome is what SyncAndImport returns: the snapshot's Manifest and the
 // import's store.Result, when one ran. Store is nil on a schema mismatch
@@ -89,7 +89,7 @@ func (s *Server) SyncAndImport(ctx context.Context, bundlePath string) (Outcome,
 // and schema are verified, mapping a failure to its V1 or store refusal.
 func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome, error) {
 	if s.importer == nil || s.storeProbe == nil {
-		return Outcome{Manifest: manifest}, errNoImporter
+		return Outcome{Manifest: manifest}, errImportNotWired
 	}
 
 	result, err := s.importer.Import(ctx, store.SnapshotRef{
@@ -113,8 +113,9 @@ func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome
 // ended, else S4, S1, S2 by the store sentinel err matches, else S3.
 func (s *Server) importFailureRefusal(ctx context.Context, manifest Manifest, err error) error {
 	id := snapshotID(manifest.Snapshot.Path)
-	storeDir := homepath.Abbreviate(s.home, filepath.Dir(s.storeProbe.Path()))
-	storePath := homepath.Abbreviate(s.home, s.storeProbe.Path())
+	probed := s.storeProbe.Path()
+	storeDir := homepath.Abbreviate(s.home, filepath.Dir(probed))
+	storePath := homepath.Abbreviate(s.home, probed)
 	var msg string
 	switch {
 	case ctx.Err() != nil:

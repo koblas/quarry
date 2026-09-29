@@ -107,7 +107,9 @@ func mapSplitTags(ctx context.Context, src Source, splitIDs map[int64]string, ex
 		if err := scan(&entryPK, &tagPK); err != nil {
 			return err
 		}
-		// A NULL end reads as 0, which no Z_PK uses, so the link is dropped.
+		if !entryPK.Valid || !tagPK.Valid {
+			return nil
+		}
 		splitID, ok := splitIDs[entryPK.Int64]
 		if !ok || !existingTags[tagPK.Int64] {
 			return nil

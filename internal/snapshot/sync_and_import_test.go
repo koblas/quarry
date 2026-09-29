@@ -64,9 +64,7 @@ type fakeStoreProbe struct {
 func (f *fakeStoreProbe) Path() string { return f.path }
 func (f *fakeStoreProbe) Exists() bool { return f.exists }
 
-// newImportServer builds a Server with a snapshots directory and a store
-// path both under home, so refusal copy has something real to abbreviate;
-// opts apply last, overriding those.
+// newImportServer builds a Server whose snapshots and store live under home; opts override those.
 func newImportServer(t *testing.T, home string, imp snapshot.Importer, opts ...snapshot.Option) *snapshot.Server {
 	t.Helper()
 	ref, err := v9.Reference(t.Context())

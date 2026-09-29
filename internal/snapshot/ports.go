@@ -65,7 +65,6 @@ type Importer interface {
 type StoreProbe interface {
 	// Path returns the store file's absolute path.
 	Path() string
-	// Exists reports whether a store file is already at Path; a stat fault
-	// other than not-found counts as one existing.
+	// Exists reports whether a store file is already at Path.
 	Exists() bool
 }

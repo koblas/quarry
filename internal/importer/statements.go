@@ -47,9 +47,11 @@ func newestStatements(ctx context.Context, src Source, accounts map[int64]accoun
 		if err := scan(&r.pk, &account, &r.endDate, &r.balType, &r.balText); err != nil {
 			return err
 		}
-		// A NULL account reads as 0, which no Z_PK uses. A record on a
-		// NULL, deleted or missing account (!ok) or an investment account
-		// is skipped: none is ever checked.
+		if !account.Valid {
+			return nil
+		}
+		// A record on a deleted or missing account (!ok) or an investment
+		// account is skipped: neither is ever checked.
 		r.account = account.Int64
 		acct, ok := accounts[r.account]
 		if !ok || investmentTypes[acct.Type] {
@@ -97,7 +99,7 @@ func parseStatement(acct accountRef, r rawReconcile, off *offenders) (parsedStat
 		dateStr = date.Format(dateLayout)
 	} else {
 		// A missing date is its own offender, independent of a balance
-		// fault below: unmappableClassOrder ranks a balance fault over a
+		// fault below: the class order ranks a balance fault over a
 		// missing value, so that fault is reported first; this one
 		// surfaces once it is fixed.
 		off.add(offender{class: classMissingValue, reason: reasonStatementNoDate(acct.Name, r.pk), name: acct.Name, sourceID: r.pk})

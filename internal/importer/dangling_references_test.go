@@ -202,6 +202,7 @@ func Test_import_drops_a_split_tag_link_when_its_split_was_skipped(t *testing.T)
 	assert.Empty(t, fake.Rows.SplitTags)
 }
 
+// A split at Z_PK 0 exists, so a NULL split end read as 0 would link to it.
 func Test_import_drops_a_split_tag_link_with_no_split(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -212,6 +213,7 @@ func Test_import_drops_a_split_tag_link_with_no_split(t *testing.T) {
 	b.LinkUserTag(entryPK, tagPK)
 	b.LinkUserTag(0, tagPK)
 	bundle := b.WriteBundle(t, t.TempDir())
+	execOn(t, bundle.DataPath, "INSERT INTO ZCASHFLOWTRANSACTIONENTRY (Z_PK, ZPARENT, ZAMOUNT, ZQUICKENID) VALUES (0, ?, 0, 0)", txnPK)
 	fake := &fakeStore{}
 
 	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
@@ -220,6 +222,7 @@ func Test_import_drops_a_split_tag_link_with_no_split(t *testing.T) {
 	assert.Equal(t, []store.SplitTag{{SplitID: "split-" + itoa(entryPK), TagID: "tag-" + itoa(tagPK)}}, fake.Rows.SplitTags)
 }
 
+// A tag at Z_PK 0 exists, so a NULL tag end read as 0 would link to it.
 func Test_import_drops_a_split_tag_link_with_no_tag(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -230,6 +233,7 @@ func Test_import_drops_a_split_tag_link_with_no_tag(t *testing.T) {
 	b.LinkUserTag(entryPK, tagPK)
 	b.LinkUserTag(entryPK, 0)
 	bundle := b.WriteBundle(t, t.TempDir())
+	execOn(t, bundle.DataPath, "INSERT INTO ZTAG (Z_PK, Z_ENT, ZNAME) VALUES (0, ?, 'Zero')", v9fixture.EntUserTag)
 	fake := &fakeStore{}
 
 	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
