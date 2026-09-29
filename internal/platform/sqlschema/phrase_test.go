@@ -22,6 +22,7 @@ func Test_CountPhrase(t *testing.T) {
 		{name: "one table, many columns", tables: 1, columns: 2, want: "1 table and 2 columns"},
 		{name: "many tables, one column", tables: 2, columns: 1, want: "2 tables and 1 column"},
 		{name: "many tables, many columns", tables: 2, columns: 3, want: "2 tables and 3 columns"},
+		{name: "counts grouped by thousands", tables: 1000, columns: 1838, want: "1,000 tables and 1,838 columns"},
 	}
 
 	for _, c := range cases {

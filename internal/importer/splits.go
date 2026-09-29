@@ -17,10 +17,9 @@ ORDER BY e.ZPARENT, e.Z_PK
 `
 
 // mapSplits reads every non-deleted ZCASHFLOWTRANSACTIONENTRY row. An
-// entry whose parent reference points to no transaction row at all (S4
-// reason 10), whose amount is missing (reason 10), stored as text or blob
-// (reason 11), has too much precision (reason 4) or is too large (reason
-// 6), is added to off and excluded. An entry whose parent exists but was
+// entry whose parent reference points to no transaction row at all, whose
+// amount is missing, stored as text or blob, has too much precision or is
+// too large, is added to off and excluded. An entry whose parent exists but was
 // itself excluded (deleted, Smart/Investment, or its own offender) is
 // silently skipped. A category reference to a deleted or missing category
 // stores NULL.

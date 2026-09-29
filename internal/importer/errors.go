@@ -5,7 +5,7 @@ import "github.com/koblas/quarry/internal/store"
 // UnmappableError reports a value Import cannot map to quarry's schema: an
 // unsupported currency or account type, a source value quarry does not
 // model, or a required field the snapshot leaves empty. Reason is the
-// caller-facing text, rendered verbatim by the S4 refusal.
+// caller-facing text, rendered verbatim by the unmappable-value refusal.
 type UnmappableError struct {
 	Reason string
 }

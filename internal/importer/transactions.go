@@ -22,12 +22,12 @@ func coreDataToDate(seconds float64) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 
-// dateLayout is the S4 subject date format ("2024-03-02").
+// dateLayout is the refusal subject date format ("2024-03-02").
 const dateLayout = "2006-01-02"
 
 // txnRef is what mapSplits needs about an imported transaction, without
-// re-reading ZTRANSACTION: its quarry id, date and account name (for S4
-// subjects).
+// re-reading ZTRANSACTION: its quarry id, date and account name (for
+// refusal subjects).
 type txnRef struct {
 	ID          string
 	Date        time.Time
@@ -81,10 +81,9 @@ func surveyTransactions(
 // mapTransactions reads every non-deleted transactionEntity row of
 // ZTRANSACTION. A row in a deleted account, or whose account was itself
 // excluded, is silently skipped. A row whose account reference points to
-// no row at all (S4 reason 10), whose date is missing (reason 10), whose
-// amount is missing (reason 10), stored as text or blob (reason 11), has
-// too much precision (reason 3) or is too large (reason 6), or whose
-// reconcile status is unmapped (reason 8), is added to off and excluded.
+// no row at all, whose date or amount is missing, whose amount is stored
+// as text or blob, has too much precision or is too large, or whose
+// reconcile status is unmapped, is added to off and excluded.
 // A payee reference to a deleted or missing payee stores NULL.
 func mapTransactions(
 	ctx context.Context, src Source, transactionEntity int64,

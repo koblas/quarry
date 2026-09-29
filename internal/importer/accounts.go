@@ -8,8 +8,8 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// accountTypeMap maps ZACCOUNT.ZTYPENAME to accounts.type (specification.md
-// "Store enum values"). Any other ZTYPENAME is unmappable (S4 reason 2).
+// accountTypeMap maps ZACCOUNT.ZTYPENAME to accounts.type. Any other
+// ZTYPENAME is unmappable (classAccountType).
 var accountTypeMap = map[string]string{
 	"CHECKING":                   "chequing",
 	"SAVINGS":                    "savings",
@@ -27,7 +27,7 @@ var accountTypeMap = map[string]string{
 var validCurrencies = map[string]bool{"CAD": true, "USD": true}
 
 // accountRef is what later mapping steps need about an account without
-// re-reading ZACCOUNT: its quarry id, name (for S4 subjects), currency (a
+// re-reading ZACCOUNT: its quarry id, name (for refusal subjects), currency (a
 // transaction's currency comes from its account) and type (the balance
 // gate's investment-account exclusion).
 type accountRef struct {
@@ -49,8 +49,8 @@ ORDER BY a.ZNAME, a.Z_PK
 // (never validated, never counted) but still marked as existing in the
 // third return value, so a dangling reference to it can be told apart
 // from a reference to no row at all. A row with no name, no type or no
-// currency (S4 reason 10), an unmapped type (reason 2) or an unsupported
-// currency (reason 1) is added to off and excluded from the other two.
+// currency, an unmapped type or an unsupported currency is added to off
+// and excluded from the other two.
 func mapAccounts(ctx context.Context, src Source, off *offenders) ([]store.Account, map[int64]accountRef, map[int64]bool, error) {
 	var rows []store.Account
 	refs := make(map[int64]accountRef)

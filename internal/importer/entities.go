@@ -16,7 +16,7 @@ var requiredEntities = []string{"CashFlowTransaction", "CategoryTag", "UserTag"}
 const investmentEntity = "InvestmentTransaction"
 
 // resolveEntities returns each entity's Z_ENT by name from Z_PRIMARYKEY, or
-// an *UnmappableError (S4 reason 7) naming every missing required entity.
+// an *UnmappableError naming every missing required entity.
 func resolveEntities(ctx context.Context, src Source) (map[string]int64, error) {
 	names := append(slices.Clone(requiredEntities), investmentEntity)
 	found := make(map[string]int64, len(names))

@@ -2,7 +2,7 @@ package importer
 
 import "fmt"
 
-// The reason* functions render an S4 refusal's <reason> text, ruled
+// The reason* functions render an unmappable-value refusal's <reason> text, ruled
 // verbatim in specification.md's Surface & Copy section. Subjects are
 // wrapped in literal double quotes ("%s") rather than Go's %q verb, which
 // escapes a quote or backslash inside the name — the ruled copy never does.

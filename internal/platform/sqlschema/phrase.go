@@ -1,6 +1,6 @@
 package sqlschema
 
-import "fmt"
+import "github.com/koblas/quarry/internal/platform/humanize"
 
 // CountPhrase renders tables and columns as "N table(s) and M column(s)",
 // omitting either clause when its count is zero. Callers never pass two
@@ -16,10 +16,7 @@ func CountPhrase(tables, columns int) string {
 	}
 }
 
-// countNoun renders n as "1 <noun>" or "N <noun>s".
+// countNoun renders n as "1 <noun>" or "N <noun>s", N thousands-grouped.
 func countNoun(n int, noun string) string {
-	if n == 1 {
-		return fmt.Sprintf("1 %s", noun)
-	}
-	return fmt.Sprintf("%d %ss", n, noun)
+	return humanize.Count(n, noun, noun+"s")
 }

@@ -1,6 +1,6 @@
-// White-box: lessOffender is unexported comparison logic with several
-// branches (dated vs undated, date/account/source-id tiebreaks); driving
-// each branch through a full snapshot per case is not economical.
+// White-box: lessOffender and firstError are unexported; lessOffender's
+// tiebreak branches and firstError's 1,000+ offender count are not economical
+// to drive through a full snapshot per case.
 package importer
 
 import (

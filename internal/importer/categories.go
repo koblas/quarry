@@ -10,7 +10,7 @@ import (
 )
 
 // categoryKindMap maps ZTAG.ZTYPE (a category row) to categories.kind. Any
-// other value is unmappable (S4 reason 9).
+// other value is unmappable (classCategoryType).
 var categoryKindMap = map[int64]string{2: "income", 1: "expense", 0: "system"}
 
 // rawCategory is one ZTAG row of the category entity, before mapping.
@@ -30,8 +30,8 @@ ORDER BY ZNAME, Z_PK
 `
 
 // mapCategories reads every non-deleted ZTAG row of categoryEntity. A row
-// with no name (S4 reason 10) is added to off and excluded; a row with no
-// type (reason 10) or an unmapped type (reason 9) is likewise excluded,
+// with no name is added to off and excluded; a row with no type or an
+// unmapped type is likewise excluded,
 // but its name still anchors any child's full_path. The second return
 // value is every category PK that exists (non-deleted), so a nullable
 // reference to a deleted or missing category can be told apart from one

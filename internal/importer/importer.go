@@ -42,7 +42,7 @@ func NewServer(opts ...Option) *Server {
 // Import maps snap.Path's v9 database into quarry's schema, validates
 // the mapped rows, and writes them, with one import_runs row describing
 // the build, through the configured Store only once every check passes.
-// It returns an *UnmappableError naming the first-ordered S4 class's first
+// It returns an *UnmappableError naming the first-ordered class's first
 // offender when one or more values cannot be mapped to quarry's schema, or
 // store.ErrValidationFailed with Result.Built false, never calling Replace,
 // when the balance or split-sum gate finds a mismatch.
