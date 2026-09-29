@@ -43,41 +43,17 @@ go build ./...
 pinned in `devenv.nix` (currently `go1.27.1`). A mismatch means the command ran outside the
 environment — not that PATH is broken.
 
-**Never hardcode a `/nix/store/...` path.** They go stale on every rebuild, silently pointing at a
-garbage-collectable store entry after a version bump.
-
-If a command fails with `operation not permitted`, the shell was **sandboxed**. Re-run with
-`dangerouslyDisableSandbox: true` and check `echo $DEVENV_ROOT` plus `which -a go` before
-concluding anything about PATH.
+Sandbox and `/nix/store` rules live in `.claude/rules/agent-briefs.md`. After escaping the
+sandbox, check `echo $DEVENV_ROOT` plus `which -a go` before concluding anything about PATH.
 
 ## Verification
 
-From the repo root:
-
-```bash
-go build ./...
-go test ./...
-go test -race ./internal/<touched>/...
-golangci-lint run ./...
-```
-
-**Never `| tail -N` / `| head -N` a verification command.** `$?` becomes the pipe's
-status — `go build ./nonexistent 2>&1 | tail -2` reports **exit 0** for a failed build.
-Never quote an exit code captured that way as proof anything passed. If you must pipe,
-prefix with `set -o pipefail`.
-
-A green `go test ./...` line is the evidence; the exit code of an unpiped command is
-trustworthy (1 on failure, 0 on success).
+Commands, the single covered full-suite run, and piping rules: `.claude/rules/agent-briefs.md`
+→ *Verification*.
 
 **A green summary does not mean everything ran.** A suite that skips on a missing
 precondition **skips green**. When a claim depends on one, count the skips:
 
 ```bash
 go test -v ./internal/<pkg>/... 2>&1 | grep -c -- "--- SKIP"
-```
-
-Before declaring a scenario or task complete, run the full suite once, unpiped:
-
-```bash
-go test ./...
 ```

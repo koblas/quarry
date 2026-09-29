@@ -51,6 +51,7 @@
   - **One `When` per scenario.** Scenario approval splits any scenario with more than one; `.claude/scripts/spec-check.py` enforces it. One behaviour → one acceptance test → one traceable tick.
   - Never batch multiple scenarios in one architect or developer call. Single exception: architect **FOLD** verdict — scenario too small to own run is absorbed — its acceptance test included — into neighbour's checklist *at plan time*, and ticked in `specification.md` with line naming scenario that delivered it and its acceptance test. Planning merge, not two scenarios improvised in one developer call. No developer for scenario whose architect said it needs no production code.
   - Never skip `/run-reviewers` after all scenarios implemented.
+  - **Fix pass = fresh `developer`**, at 5a, step 8 and step 10's SHIP WITH CHANGES alike: new spawn briefed with STATE.md plus findings (checkpoint output, or `REVIEW-NN.md`) — never resume or `SendMessage` scenario's developer, whose whole prior context rides every turn.
   - **Inherited context is `STATE.md`, not pile of handoffs.** `developer` rewrites `docs/specifications/<feature-slug>/STATE.md` at end of each scenario; `architect` and `developer` read that one file. Reading every prior `## Handoff` makes context grow with square of scenario count and dominates every late agent's budget on long feature. Per-scenario Handoffs remain audit trail.
   - **Do not retype standing brief into agent prompts.** Verification commands and stale-diagnostics rule live in `.claude/rules/agent-briefs.md` (core, every agent); rest split by audience under `.claude/briefs/` — `build.md` (cadence, traceability, step files, planning coverage, fix passes), `proof.md` (mutation protocol, vacuous assertions), `navigation.md` (Go LSP navigation), `review.md`, `metrics.md`. Prompts cite files their agent needs and carry scenario-specific delta only — what this scenario decides, what it inherits, what deliberately deferred. New standing rule goes in brief its readers already open, not core.
   - **Size whole feature once, before spec written** (scoping step 3). FOLD and SPLIT verdicts found one architect run at a time each cost full run producing only fold record or re-plan. Per-scenario architect still opens with size verdict, but should rarely find surprise.
@@ -114,13 +115,9 @@ Every scenario starts with one failing **acceptance test**; inside it, a mandato
 Bash tool calls already run inside pinned nix/devenv environment, so `go` and `golangci-lint` resolve to pinned versions. Run directly:
 
 ```bash
-go test ./...
+go version
 ```
 
 Always confirm `go version` matches pin in `devenv.nix` before trusting result.
 
-**Never write `/nix/store/...` path into checklist, agent prompt, or command.** Go stale on every rebuild. Bash call failing with `operation not permitted` means shell was **sandboxed** — re-run with `dangerouslyDisableSandbox: true`.
-
-Applies to `architect` especially: its checklists tell `developer` what to run, so stale path in plan propagates into every step of that scenario.
-
-Verification: `go build ./...`, `go test ./...`, `go test -race` on touched packages, `golangci-lint run ./...`. Details in `.claude/rules/go-code.md`.
+Sandbox (denies worktree reads — first Bash call unsandboxed), `/nix/store` paths, and verification commands: `.claude/rules/agent-briefs.md`.
