@@ -3,6 +3,8 @@
 // the built file in only after a clean checkpoint, so a failed or
 // interrupted build never touches the store already in place. A finished
 // store carries one store_info row (FormatVersion, quarry's version, build
-// time), appended last. It is the only package outside
-// internal/platform/duckdb that imports the DuckDB driver.
+// time), appended last. It also answers the read commands: every read opens
+// the store read-only, never creating it, and closes it before returning.
+// It is the only package outside internal/platform/duckdb that imports the
+// DuckDB driver.
 package duckstore

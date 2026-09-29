@@ -38,3 +38,4 @@ into both, with a compile-time guard for each port.
 - **Positive:** The single-method port means the importer never holds a half-built store; validation runs on the mapped `store.Rows` before `Replace` is called, so a failed check never creates a partial file.
 - **Negative:** Two packages where the original ruling named one; a reader must know the types and the adapter live apart.
 - **Trade-off:** Checks run on the in-memory rows quarry is about to write, not on the DuckDB file after writing. `duckstore`'s own round-trip tests carry the proof that what is written equals what was mapped.
+- **Follow-up:** Reads of the store, and the `report` package that consumes them, are decided in [ADR-003](003-duckstore-owns-the-read-side.md).

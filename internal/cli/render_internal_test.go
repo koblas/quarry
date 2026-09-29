@@ -219,28 +219,20 @@ func Test_rowsPhrase(t *testing.T) {
 
 func Test_transfersPhrase(t *testing.T) {
 	cases := []struct {
-		name string
-		tc   store.TransferCheck
-		want string
+		name             string
+		paired, oneSided int
+		want             string
 	}{
-		{name: "no transfers", tc: store.TransferCheck{}, want: "none"},
-		{name: "one pair", tc: store.TransferCheck{Paired: 1}, want: "1 paired"},
-		{name: "many pairs, thousands-grouped", tc: store.TransferCheck{Paired: 3112}, want: "3,112 paired"},
-		{
-			name: "pairs and one-sided legs",
-			tc:   store.TransferCheck{Paired: 3112, OneSided: make([]store.OneSidedTransfer, 3)},
-			want: "3,112 paired, 3 one-sided",
-		},
-		{
-			name: "only one-sided legs",
-			tc:   store.TransferCheck{OneSided: make([]store.OneSidedTransfer, 2)},
-			want: "0 paired, 2 one-sided",
-		},
+		{name: "no transfers", want: "none"},
+		{name: "one pair", paired: 1, want: "1 paired"},
+		{name: "many pairs, thousands-grouped", paired: 3112, want: "3,112 paired"},
+		{name: "pairs and one-sided legs", paired: 3112, oneSided: 3, want: "3,112 paired, 3 one-sided"},
+		{name: "only one-sided legs", oneSided: 2, want: "0 paired, 2 one-sided"},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, transfersPhrase(c.tc))
+			assert.Equal(t, c.want, transfersPhrase(c.paired, c.oneSided))
 		})
 	}
 }
@@ -282,70 +274,46 @@ func Test_renderStore_renders_the_store_rows_balances_splits_and_transfers_lines
 
 func Test_balancesPhrase(t *testing.T) {
 	cases := []struct {
-		name string
-		bc   store.BalanceCheck
-		want string
+		name                                 string
+		checked, neverReconciled, investment int
+		want                                 string
 	}{
-		{name: "nothing to check", bc: store.BalanceCheck{}, want: "no accounts to check"},
+		{name: "nothing to check", want: "no accounts to check"},
+		{name: "one account matches", checked: 1, want: "1 account matches Quicken's last reconciled balance"},
+		{name: "many accounts match, thousands-grouped", checked: 1000, want: "1,000 accounts match Quicken's last reconciled balance"},
+		{name: "one never reconciled", neverReconciled: 1, want: "no accounts to check; 1 never reconciled"},
+		{name: "one investment account", investment: 1, want: "no accounts to check; 1 investment account not checked"},
 		{
-			name: "one account matches",
-			bc:   store.BalanceCheck{Checked: 1},
-			want: "1 account matches Quicken's last reconciled balance",
-		},
-		{
-			name: "many accounts match, thousands-grouped",
-			bc:   store.BalanceCheck{Checked: 1000},
-			want: "1,000 accounts match Quicken's last reconciled balance",
-		},
-		{
-			name: "one never reconciled",
-			bc:   store.BalanceCheck{NeverReconciled: []store.Account{{}}},
-			want: "no accounts to check; 1 never reconciled",
-		},
-		{
-			name: "one investment account",
-			bc:   store.BalanceCheck{InvestmentAccounts: 1},
-			want: "no accounts to check; 1 investment account not checked",
-		},
-		{
-			name: "never reconciled and investment accounts joined",
-			bc:   store.BalanceCheck{NeverReconciled: []store.Account{{}, {}, {}}, InvestmentAccounts: 4},
+			name: "never reconciled and investment accounts joined", neverReconciled: 3, investment: 4,
 			want: "no accounts to check; 3 never reconciled and 4 investment accounts not checked",
 		},
 		{
-			name: "checked, never reconciled and investment accounts",
-			bc: store.BalanceCheck{
-				Checked: 35, NeverReconciled: []store.Account{{}, {}, {}}, InvestmentAccounts: 4,
-			},
+			name: "checked, never reconciled and investment accounts", checked: 35, neverReconciled: 3, investment: 4,
 			want: "35 accounts match Quicken's last reconciled balance; 3 never reconciled and 4 investment accounts not checked",
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, balancesPhrase(c.bc))
+			assert.Equal(t, c.want, balancesPhrase(c.checked, c.neverReconciled, c.investment))
 		})
 	}
 }
 
 func Test_splitsPhrase(t *testing.T) {
 	cases := []struct {
-		name string
-		sc   store.SplitCheck
-		want string
+		name    string
+		checked int
+		want    string
 	}{
-		{name: "nothing to check", sc: store.SplitCheck{}, want: "no transactions to check"},
-		{name: "one transaction", sc: store.SplitCheck{Checked: 1}, want: "the 1 transaction equals the sum of its splits"},
-		{
-			name: "many transactions, thousands-grouped",
-			sc:   store.SplitCheck{Checked: 18204},
-			want: "all 18,204 transactions equal the sum of their splits",
-		},
+		{name: "nothing to check", checked: 0, want: "no transactions to check"},
+		{name: "one transaction", checked: 1, want: "the 1 transaction equals the sum of its splits"},
+		{name: "many transactions, thousands-grouped", checked: 18204, want: "all 18,204 transactions equal the sum of their splits"},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, splitsPhrase(c.sc))
+			assert.Equal(t, c.want, splitsPhrase(c.checked))
 		})
 	}
 }

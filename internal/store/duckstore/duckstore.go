@@ -60,10 +60,21 @@ type DB interface {
 
 var _ DB = (*duckdb.DB)(nil)
 
-// Store builds quarry's DuckDB file inside one directory.
+// ReadDB is the read-only connection a Store answers one read through.
+// *duckdb.DB is the production implementation.
+type ReadDB interface {
+	QueryRows(ctx context.Context, query string, args []any, row func(scan func(dest ...any) error) error) error
+	Close() error
+}
+
+var _ ReadDB = (*duckdb.DB)(nil)
+
+// Store builds quarry's DuckDB file inside one directory and answers reads
+// from it.
 type Store struct {
 	dir           string
 	create        func(ctx context.Context, path string) (DB, error)
+	openReadOnly  func(ctx context.Context, path string) (ReadDB, error)
 	quarryVersion string
 }
 
@@ -74,6 +85,12 @@ type Option func(*Store)
 // default is duckdb.Create. create must refuse an existing path.
 func WithCreate(create func(ctx context.Context, path string) (DB, error)) Option {
 	return func(s *Store) { s.create = create }
+}
+
+// WithOpenReadOnly replaces how a Store opens the store file to read it,
+// which by default is duckdb.OpenReadOnly. open must not write to path.
+func WithOpenReadOnly(open func(ctx context.Context, path string) (ReadDB, error)) Option {
+	return func(s *Store) { s.openReadOnly = open }
 }
 
 // WithQuarryVersion sets the quarry_version Replace records; an empty v keeps
@@ -88,7 +105,7 @@ func WithQuarryVersion(v string) Option {
 
 // New returns a Store that builds quarry.duckdb inside dir.
 func New(dir string, opts ...Option) *Store {
-	s := &Store{dir: dir, create: createDuckDB, quarryVersion: develVersion}
+	s := &Store{dir: dir, create: createDuckDB, openReadOnly: openDuckDBReadOnly, quarryVersion: develVersion}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -115,6 +132,22 @@ func createDuckDB(ctx context.Context, path string) (DB, error) {
 		return nil, fmt.Errorf("create store file: %w", err)
 	}
 	return db, nil
+}
+
+// openDuckDBReadOnly is New's default read opener; it returns a nil
+// interface, never a typed nil, when duckdb.OpenReadOnly fails.
+func openDuckDBReadOnly(ctx context.Context, path string) (ReadDB, error) {
+	db, err := duckdb.OpenReadOnly(ctx, path)
+	if err != nil {
+		return nil, err //nolint:wrapcheck // OpenReadOnly already names the path; callers add the operation
+	}
+	return db, nil
+}
+
+// openRead opens the store file read-only. Every read method goes through
+// it, and it never creates the file: a missing store is the open's error.
+func (s *Store) openRead(ctx context.Context) (ReadDB, error) {
+	return s.openReadOnly(ctx, s.Path())
 }
 
 // Replace creates the store directory if needed, sweeps aged build leftovers
