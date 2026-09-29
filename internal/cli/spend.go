@@ -47,10 +47,10 @@ the rows can add up to more than the total.`,
 				return &runtimeError{err: err}
 			}
 
-			text := func() string { return renderSpending(spending) }
-			out, err := renderResult(*jsonOut, func() ([]byte, error) { return []byte(text()), nil }, text)
+			out, err := renderResult(*jsonOut,
+				func() ([]byte, error) { return renderSpendingJSON(spending) },
+				func() string { return renderSpending(spending) })
 			if err != nil {
-				// unreachable: the interim JSON renderer returns the text table and cannot fail; see renderResult.
 				return err
 			}
 			return emit(cmd, out, "quarry: warning: ", []string{})

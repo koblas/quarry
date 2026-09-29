@@ -46,18 +46,21 @@ func Test_spend_reads_the_window_from_the_env_clock(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
-func Test_spend_prints_the_text_table_for_json_until_the_json_document_exists(t *testing.T) {
-	var asText, asJSON bytes.Buffer
+func Test_spend_json_puts_the_report_window_and_rows_in_the_document(t *testing.T) {
+	var stdout, stderr bytes.Buffer
 	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
 	fake := fakeReportStore{spending: store.Spending{
 		Rows:   []store.SpendingRow{{Key: new("Auto:Fuel"), Currency: "CAD", Spent: 120450}},
 		Totals: []store.SpendingTotal{{Currency: "CAD", Spent: 120450}},
 	}}
 
-	require.NoError(t, executeSpend(t, fake, now, &asText, io.Discard))
-	require.NoError(t, executeSpend(t, fake, now, &asJSON, io.Discard, "--json"))
+	err := executeSpend(t, fake, now, &stdout, &stderr, "--json")
 
-	assert.Equal(t, asText.String(), asJSON.String())
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"since":"2026-01-01","until":"2026-09-29","by":"category","account_filter":[],
+		"rows":[{"category":"Auto:Fuel","currency":"CAD","spent":"1204.50"}],
+		"totals":[{"currency":"CAD","spent":"1204.50"}],"warnings":[]}`, stdout.String())
+	assert.Empty(t, stderr.String())
 }
 
 func Test_spend_returns_the_report_fault(t *testing.T) {
