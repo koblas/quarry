@@ -232,7 +232,7 @@ func checkFormat(ctx context.Context, db ReadDB, path string) error {
 		if err != nil {
 			return openFault(path, err)
 		}
-		if rows == 1 && version.Valid && version.Int64 == FormatVersion {
+		if rows == 1 && version.Int64 == FormatVersion { // NULL scans as 0
 			return nil
 		}
 	}
@@ -244,13 +244,13 @@ func checkFormat(ctx context.Context, db ReadDB, path string) error {
 // snapshotPath is the import run's snapshot path, or "" when import_runs
 // cannot yield exactly one.
 func snapshotPath(ctx context.Context, db ReadDB) string {
-	hasPath, err := hasColumn(ctx, db, "import_runs", "snapshot_path")
-	if err != nil || !hasPath {
+	hasPath, _ := hasColumn(ctx, db, "import_runs", "snapshot_path")
+	if !hasPath { // false on a catalog fault too
 		return ""
 	}
 	var path sql.NullString
 	rows := 0
-	err = db.QueryRows(ctx, snapshotPathQuery, nil, func(scan func(dest ...any) error) error {
+	err := db.QueryRows(ctx, snapshotPathQuery, nil, func(scan func(dest ...any) error) error {
 		rows++
 		return scan(&path)
 	})

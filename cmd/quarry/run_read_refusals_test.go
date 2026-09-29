@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"os"
 	"testing"
 
@@ -158,6 +159,61 @@ func Test_run_read_commands_report_an_interrupt_during_the_open(t *testing.T) {
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
 			assert.Equal(t, c.wantStderr, stderr.String())
+		})
+	}
+}
+
+// editStore runs stmt against the synced store through a writable connection of its own, closed before any read.
+func editStore(t *testing.T, home, stmt string) {
+	t.Helper()
+	conn, err := sql.Open("duckdb", storePathUnder(home))
+	require.NoError(t, err)
+	_, err = conn.ExecContext(t.Context(), stmt)
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+}
+
+func Test_run_accounts_refuses_a_store_that_cannot_be_read(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncAccountsFixture(t, home)
+	editStore(t, home, "DROP VIEW v_account_balances")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"accounts"}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: cannot read the store at "+abbreviated(t, storePathUnder(home), home)+
+		": Table with name v_account_balances does not exist!; run quarry sync to rebuild it\n",
+		stderr.String())
+}
+
+func Test_run_status_refuses_a_store_without_exactly_one_import_run(t *testing.T) {
+	cases := []struct {
+		name  string
+		stmt  string
+		found string
+	}{
+		{name: "no import run", stmt: "DELETE FROM import_runs", found: "0"},
+		{name: "two import runs", stmt: "INSERT INTO import_runs SELECT * REPLACE (id + 1 AS id) FROM import_runs", found: "2"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			syncAccountsFixture(t, home)
+			editStore(t, home, c.stmt)
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, "quarry: cannot read the store at "+abbreviated(t, storePathUnder(home), home)+
+				": expected exactly one import run, found "+c.found+"; run quarry sync to rebuild it\n",
+				stderr.String())
 		})
 	}
 }

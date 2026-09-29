@@ -126,13 +126,27 @@ func Test_run_sql_refuses_to_install_an_extension(t *testing.T) {
 	assert.Equal(t, sqlReadsOnlyItsStore, stderr)
 }
 
+// threads=1 is a change DuckDB allows on an unlocked read-only connection; only the lock refuses it.
 func Test_run_sql_refuses_to_change_a_setting(t *testing.T) {
-	exitCode, stdout, stderr := runSQLOnBuiltStore(t, "SET enable_external_access=true")
+	cases := []struct {
+		name    string
+		query   string
+		setting string
+	}{
+		{name: "one that opens external access", query: "SET enable_external_access=true", setting: "enable_external_access"},
+		{name: "one that is otherwise harmless", query: "SET threads=1", setting: "threads"},
+	}
 
-	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout)
-	assert.Equal(t, "quarry: query failed: Invalid Input Error: Cannot change configuration option "+
-		"\"enable_external_access\" - the configuration has been locked\n", stderr)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			exitCode, stdout, stderr := runSQLOnBuiltStore(t, c.query)
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout)
+			assert.Equal(t, "quarry: query failed: Invalid Input Error: Cannot change configuration option \""+c.setting+
+				"\" - the configuration has been locked\n", stderr)
+		})
+	}
 }
 
 // Not parallel: it signals the whole test process.

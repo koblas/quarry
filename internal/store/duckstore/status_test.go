@@ -107,11 +107,12 @@ func Test_status_refuses_a_store_without_exactly_one_import_run(t *testing.T) {
 	second := minimalRows().ImportRuns[0]
 	second.ID = 2
 	cases := []struct {
-		name string
-		runs []store.ImportRun
+		name  string
+		runs  []store.ImportRun
+		found string
 	}{
-		{name: "no import run", runs: nil},
-		{name: "two import runs", runs: append(minimalRows().ImportRuns, second)},
+		{name: "no import run", runs: nil, found: "0"},
+		{name: "two import runs", runs: append(minimalRows().ImportRuns, second), found: "2"},
 	}
 
 	for _, c := range cases {
@@ -125,7 +126,7 @@ func Test_status_refuses_a_store_without_exactly_one_import_run(t *testing.T) {
 
 			_, err = st.Status(t.Context())
 
-			assert.ErrorContains(t, err, "expected exactly one import run")
+			assertOtherFault(t, err, "expected exactly one import run, found "+c.found)
 		})
 	}
 }
@@ -146,9 +147,8 @@ func Test_status_fails_on_a_missing_store_without_creating_it(t *testing.T) {
 
 var errQueryFailed = errors.New("query failed")
 
-// spyReadDB wraps a real read connection and counts Close calls. queryFault fails,
-// and scanFault hands one failing scan to, the read's own query, which onQuery precedes;
-// checkFaults fails one of the open's format checks, keyed by its query.
+// spyReadDB counts Close calls on a real read connection. queryFault and scanFault fail the read's own
+// query (onQuery runs first); checkFaults fails one of the open's format checks, keyed by its query.
 type spyReadDB struct {
 	duckstore.ReadDB
 
@@ -232,16 +232,36 @@ func Test_status_returns_the_open_fault(t *testing.T) {
 	assert.ErrorAs(t, err, &openErr)
 }
 
-func Test_status_returns_the_query_fault(t *testing.T) {
+// assertOtherFault requires err to be the *store.OpenError of an unclassified fault, its Reason the one line reason.
+func assertOtherFault(t *testing.T, err error, reason string) {
+	t.Helper()
+	openErr, ok := errors.AsType[*store.OpenError](err)
+	require.True(t, ok, "want *store.OpenError, got %v", err)
+	assert.Equal(t, store.OpenFaultOther, openErr.Fault)
+	assert.Equal(t, reason, openErr.Reason)
+}
+
+func Test_status_returns_the_query_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
 	fault := ioFault(`query rows "SELECT"`)
 	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault}))
 
 	_, err := st.Status(t.Context())
 
-	require.ErrorIs(t, err, fault)
+	assertOtherFault(t, err, "disk read failed")
 	var derr *duckdbdriver.Error
-	assert.ErrorAs(t, err, &derr)
+	require.ErrorAs(t, err, &derr)
+	assert.ErrorIs(t, err, fault)
+}
+
+func Test_status_returns_a_scan_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	st := newBuiltStore(t, spyOpener(&spyReadDB{scanFault: errScanFailed}))
+
+	_, err := st.Status(t.Context())
+
+	assertOtherFault(t, err, errScanFailed.Error())
+	assert.ErrorIs(t, err, errScanFailed)
 }
 
 func Test_status_closes_the_connection_on_success_and_on_a_query_fault(t *testing.T) {

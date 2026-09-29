@@ -27,9 +27,9 @@ SELECT i.format_version, i.quarry_version, i.built_at,
 FROM store_info i CROSS JOIN import_runs r`
 
 // Status reads back what the store records about itself. It refuses a store
-// it cannot open or whose format is not this build's with *store.OpenError,
-// and fails when the store cannot be read or holds other than one import
-// run; a NULL snapshot_taken_at or source_path reads as the zero value.
+// it cannot open or read, whose format is not this build's, or that holds
+// other than one import run, with *store.OpenError; a NULL
+// snapshot_taken_at or source_path reads as the zero value.
 func (s *Store) Status(ctx context.Context) (store.Status, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {
@@ -55,10 +55,10 @@ func (s *Store) Status(ctx context.Context) (store.Status, error) {
 			&first, &last)
 	})
 	if err != nil {
-		return store.Status{}, fmt.Errorf("read store status: %w", err)
+		return store.Status{}, openFault(st.Path, err)
 	}
 	if found != 1 {
-		return store.Status{}, fmt.Errorf("read store status: %w, found %d", errImportRunCount, found)
+		return store.Status{}, openFault(st.Path, fmt.Errorf("%w, found %d", errImportRunCount, found))
 	}
 
 	run.Snapshot.TakenAt = takenAt.Time

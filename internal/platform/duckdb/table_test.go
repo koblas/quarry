@@ -38,6 +38,7 @@ func Test_query_table_stops_at_max_rows(t *testing.T) {
 		{name: "exactly max rows available", available: 3, maxRows: 3, want: 3},
 		{name: "one row more than max available", available: 4, maxRows: 3, want: 3},
 		{name: "max rows 0 returns every row", available: 4, maxRows: 0, want: 4},
+		{name: "a negative max rows returns every row", available: 4, maxRows: -1, want: 4},
 	}
 
 	for _, c := range cases {

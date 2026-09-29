@@ -78,6 +78,17 @@ func Test_query_reports_a_locked_setting_as_a_query_error(t *testing.T) {
 		queryErr.Reason)
 }
 
+func Test_query_reports_a_file_of_unknown_type_named_as_a_table_as_a_query_error(t *testing.T) {
+	t.Parallel()
+	st := newBuiltStore(t)
+
+	_, err := st.Query(t.Context(), "SELECT 1 FROM '/etc/hosts'", 0)
+
+	var queryErr *store.QueryError
+	require.ErrorAs(t, err, &queryErr)
+	assert.Equal(t, "Catalog Error: Table with name /etc/hosts does not exist!", queryErr.Reason)
+}
+
 func Test_query_refuses_what_a_read_may_not_do(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -87,6 +98,7 @@ func Test_query_refuses_what_a_read_may_not_do(t *testing.T) {
 	}{
 		{name: "a write", query: "CREATE TABLE notes (body VARCHAR)", want: store.ErrReadOnlyQuery},
 		{name: "another file", query: "SELECT * FROM read_csv('/etc/hosts')", want: store.ErrExternalAccess},
+		{name: "a known file type named as a table", query: "SELECT * FROM 'x.parquet'", want: store.ErrExternalAccess},
 	}
 
 	for _, c := range cases {

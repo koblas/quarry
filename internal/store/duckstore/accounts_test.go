@@ -131,25 +131,27 @@ func Test_accounts_returns_the_open_fault(t *testing.T) {
 	require.ErrorIs(t, err, fault)
 }
 
-func Test_accounts_returns_the_query_fault(t *testing.T) {
+func Test_accounts_returns_the_query_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
 	fault := ioFault(`query rows "SELECT"`)
 	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault}))
 
 	_, err := st.Accounts(t.Context())
 
-	require.ErrorIs(t, err, fault)
+	assertOtherFault(t, err, "disk read failed")
 	var derr *duckdbdriver.Error
-	assert.ErrorAs(t, err, &derr)
+	require.ErrorAs(t, err, &derr)
+	assert.ErrorIs(t, err, fault)
 }
 
-func Test_accounts_returns_the_scan_fault(t *testing.T) {
+func Test_accounts_returns_a_scan_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
 	st := newBuiltStore(t, spyOpener(&spyReadDB{scanFault: errScanFailed}))
 
 	_, err := st.Accounts(t.Context())
 
-	require.ErrorIs(t, err, errScanFailed)
+	assertOtherFault(t, err, errScanFailed.Error())
+	assert.ErrorIs(t, err, errScanFailed)
 }
 
 func Test_accounts_closes_the_connection_on_success_and_on_a_query_fault(t *testing.T) {

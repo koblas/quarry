@@ -86,10 +86,9 @@ quarry says so on stderr. --limit 0 prints every row.`)
 }
 
 func Test_sql_returns_the_query_fault(t *testing.T) {
-	var gotMaxRows int
 	var stdout bytes.Buffer
 
-	err := executeSQL(t, fakeReportStore{err: errStoreRead, gotMaxRows: &gotMaxRows}, &stdout, "SELECT 1")
+	err := executeSQL(t, fakeReportStore{err: errStoreRead}, &stdout, "SELECT 1")
 
 	require.ErrorIs(t, err, errStoreRead)
 	assert.Empty(t, stdout.String())
@@ -125,9 +124,7 @@ func Test_sql_reports_each_query_refusal(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			var gotMaxRows int
-
-			err := executeSQL(t, fakeReportStore{err: c.err, gotMaxRows: &gotMaxRows}, io.Discard, "SELECT 1")
+			err := executeSQL(t, fakeReportStore{err: c.err}, io.Discard, "SELECT 1")
 
 			require.EqualError(t, err, c.want)
 		})
@@ -135,11 +132,10 @@ func Test_sql_reports_each_query_refusal(t *testing.T) {
 }
 
 func Test_sql_says_how_to_print_a_column_it_cannot_print(t *testing.T) {
-	var gotMaxRows int
 	unprintable := &store.UnprintableValueError{Column: "doc", Type: "JSON"}
 	var stdout bytes.Buffer
 
-	err := executeSQL(t, fakeReportStore{err: unprintable, gotMaxRows: &gotMaxRows}, &stdout, "SELECT doc FROM t")
+	err := executeSQL(t, fakeReportStore{err: unprintable}, &stdout, "SELECT doc FROM t")
 
 	require.EqualError(t, err, `cannot print column "doc" of type JSON; cast it in the query, e.g. CAST(doc AS VARCHAR)`)
 	assert.Empty(t, stdout.String())
@@ -159,9 +155,7 @@ func Test_sql_returns_the_report_factory_fault(t *testing.T) {
 }
 
 func Test_sql_returns_the_stdout_write_fault(t *testing.T) {
-	var gotMaxRows int
-
-	err := executeSQL(t, fakeReportStore{gotMaxRows: &gotMaxRows}, failingWriter{err: errNoSpace}, "SELECT 1")
+	err := executeSQL(t, fakeReportStore{}, failingWriter{err: errNoSpace}, "SELECT 1")
 
 	require.ErrorIs(t, err, errNoSpace)
 }

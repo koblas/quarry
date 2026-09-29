@@ -3,7 +3,6 @@ package duckstore
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"time"
 
 	"github.com/koblas/quarry/internal/store"
@@ -19,8 +18,8 @@ ORDER BY lower(v.name), v.name, v.source_id`
 
 // Accounts reads every account, closed ones included, with its balance
 // and the store's today as AsOf, sorted by name ignoring case, then name,
-// then source id. It refuses a store it cannot open with *store.OpenError,
-// and fails when the store cannot be read.
+// then source id. It refuses a store it cannot open or read with
+// *store.OpenError.
 func (s *Store) Accounts(ctx context.Context) (store.AccountList, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {
@@ -52,7 +51,7 @@ func (s *Store) Accounts(ctx context.Context) (store.AccountList, error) {
 		return nil
 	})
 	if err != nil {
-		return store.AccountList{}, fmt.Errorf("read accounts: %w", err)
+		return store.AccountList{}, openFault(s.Path(), err)
 	}
 	return list, nil
 }
