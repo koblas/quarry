@@ -128,16 +128,27 @@ GROUP BY a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed,
 `
 }
 
-// cashFlowViewDDL creates v_cash_flow: each split that counts as income or spending.
+// cashFlowViewDDL creates v_cash_flow: each split that counts as income or spending in Quicken's reports.
 const cashFlowViewDDL = `
 CREATE VIEW v_cash_flow AS
-SELECT CAST(NULL AS VARCHAR) AS split_id, CAST(NULL AS VARCHAR) AS transaction_id,
-	CAST(NULL AS VARCHAR) AS account_id, CAST(NULL AS DATE) AS date, CAST(NULL AS DATE) AS month,
-	CAST(NULL AS VARCHAR) AS currency, CAST(NULL AS VARCHAR) AS category_id,
-	CAST(NULL AS VARCHAR) AS category, CAST(NULL AS VARCHAR) AS payee_id,
-	CAST(NULL AS VARCHAR) AS payee, CAST(NULL AS VARCHAR) AS flow,
-	CAST(NULL AS DECIMAL(18,2)) AS amount
-WHERE false;
+SELECT s.id AS split_id, s.transaction_id, t.account_id, t.date,
+	CAST(date_trunc('month', t.date) AS DATE) AS month, t.currency,
+	s.category_id, c.full_path AS category, t.payee_id, p.name AS payee,
+	CASE WHEN s.category_id IS NOT NULL THEN c.kind
+		WHEN s.amount < 0 THEN 'expense'
+		ELSE 'income' END AS flow,
+	s.amount
+FROM splits s
+JOIN transactions t ON t.id = s.transaction_id
+JOIN accounts a ON a.id = t.account_id
+LEFT JOIN categories c ON c.id = s.category_id
+LEFT JOIN payees p ON p.id = t.payee_id
+WHERE a.in_reports
+	AND NOT t.excluded_from_reports
+	AND c.kind IS DISTINCT FROM 'system'
+	AND NOT (s.category_id IS NULL AND s.amount = 0)
+	AND NOT EXISTS (SELECT 1 FROM transfers x WHERE x.from_split_id = s.id OR x.to_split_id = s.id);
+COMMENT ON VIEW v_cash_flow IS 'excludes accounts where accounts.in_reports is false, as Quicken reports do.';
 `
 
 // spendingViewDDL creates v_spending: the expense rows of v_cash_flow, amount sign flipped.

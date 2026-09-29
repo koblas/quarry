@@ -40,6 +40,8 @@ func minimalRows() store.Rows {
 		Splits: []store.Split{{
 			ID: "split-1", SourceID: 1, TransactionID: "txn-1", CategoryID: new("cat-1"),
 			Amount: 1234, Memo: new("split memo"),
+		}, {
+			ID: "split-4", SourceID: 4, TransactionID: "txn-1", CategoryID: new("cat-1"), Amount: 1234,
 		}},
 		SplitTags: []store.SplitTag{{SplitID: "split-1", TagID: "tag-1"}},
 		Transfers: []store.Transfer{

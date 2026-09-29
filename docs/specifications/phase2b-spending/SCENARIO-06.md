@@ -29,7 +29,7 @@ Size: OWNS A RUN — 2 batches, 1 feature package (duckstore; cmd test only); ab
 - [x] Step 2: `internal/store/duckstore/schema.go:129` (append) `cashFlowViewDDL`, `spendingViewDDL` stubs — full P2b-6 / P2b-8 column lists, `WHERE false`; `duckstore.go:389` concatenate both after `accountBalancesViewDDL()`; `query_test.go:28-33` `storeRelations()` gains `v_cash_flow`, `v_spending` (keeps `SHOW TABLES` test green). Expected red at end of A: both acceptance tests at their stdout assertion, and `Test_query_prints_every_column_of_each_table_and_view/v_cash_flow` + `/v_spending` (empty rows) — run A does not fix these
 
 ### Build
-- [ ] Step 3: `schema.go` `cashFlowViewDDL` real body + `COMMENT ON VIEW v_cash_flow IS` the spec sentence verbatim ("excludes accounts where accounts.in_reports is false, as Quicken reports do."); `duckstore_test.go:40-43` `minimalRows` gains `split-4` on `txn-1`, `cat-1`, not in `transfers` (split-1 is a transfer leg) — `SELECT *` over `v_cash_flow` returns a row. New `internal/store/duckstore/views_test.go` through `st.Query`:
+- [x] Step 3: `schema.go` `cashFlowViewDDL` real body + `COMMENT ON VIEW v_cash_flow IS` the spec sentence verbatim ("excludes accounts where accounts.in_reports is false, as Quicken reports do."); `duckstore_test.go:40-43` `minimalRows` gains `split-4` on `txn-1`, `cat-1`, not in `transfers` (split-1 is a transfer leg) — `SELECT *` over `v_cash_flow` returns a row. New `internal/store/duckstore/views_test.go` through `st.Query`:
   `Test_cash_flow_leaves_out_what_quicken_reports_leave_out` (table: paired from-leg, paired to-leg, unmatched leg, system category, excluded transaction, account not in reports, zero uncategorized — each row one variable away from a control expense split that stays; the fixture carries a NULL `to_split_id`),
   `Test_cash_flow_keeps_closed_accounts_hidden_categories_and_investment_accounts`,
   `Test_cash_flow_takes_flow_from_the_splits_own_category_kind` (expense child under income parent and the reverse),
@@ -68,11 +68,9 @@ Size: OWNS A RUN — 2 batches, 1 feature package (duckstore; cmd test only); ab
 
 ## Phase report
 
-Run A (steps 1-2) done. Red, at assertion, for the expected reason (stub views return no rows):
-- `cmd/quarry/run_sql_views_test.go`: both acceptance tests fail; actual stdout is the header only (`"split_id  flow  amount\n"`, `"category  spent\n"`) vs the expected rows.
-- `internal/store/duckstore/query_test.go:60` `Test_query_prints_every_column_of_each_table_and_view/v_cash_flow` and `/v_spending`: "Should NOT be empty" (expected, run B fixes via `minimalRows`).
-
-Changed: `cmd/quarry/run_sql_views_test.go` (new: `viewRows()` fixture, splits s01..s12 by id; kept = s01,s02,s08..s12; left out = s03/s04 paired transfer legs, s05 unmatched leg, s06 system, s07 excluded txn), `cmd/quarry/run_helpers_test.go:70` `replaceStore`, `internal/store/duckstore/schema.go:131-` `cashFlowViewDDL`/`spendingViewDDL` stubs (typed NULL columns, `WHERE false`; consts, not funcs), `duckstore.go:389` concatenation, `query_test.go:30` `storeRelations()`.
-
-Next run must not redo: replace the stub bodies only (keep column names/order/types); `minimalRows` still needs `split-4` (step 3). The expected stdout in the acceptance tests was hand-laid from `render_sql.go` alignment rules and is unproven until the views go green; if only spacing differs, fix the test string, not the view. Fixture has no not-in-reports account (Build tests cover it).
-
+Run B1 (step 3) done; green on the narrow loop except what run B2 owns.
+- `internal/store/duckstore/schema.go:131-152` `cashFlowViewDDL` real body plus `COMMENT ON VIEW`; `duckstore_test.go:40-46` `minimalRows` gains `split-4`; `internal/store/duckstore/views_test.go` (new: `reportRows`/`addSplit`/`newStoreWith`/`queryTexts` helpers, the six cash-flow tests).
+- Green: `Test_run_sql_cash_flow_keeps_only_real_income_and_spending`, all `Test_cash_flow_*`, `Test_query_prints_every_column_...` for every relation but `v_spending`.
+- Still red (run B2): `Test_run_sql_spending_nets_refunds_against_their_category`, `Test_query_prints_every_column_of_each_table_and_view/v_spending` (stub view has no rows).
+- Mutations, all 12 run against `schema.go` from a fresh copy, restored and diffed identical; each reddened the planned test: from-arm dropped -> `leaves_out.../the_from_leg` and `/an_unmatched_transfer_leg`; to-arm dropped -> `/the_to_leg`; transfer key -> `transfer_account_id IS NULL` -> unmatched, from and to rows; system, excluded, in_reports, zero-uncategorized drops -> their own subtest each; `<>` and swapped sign arms -> `uncategorized_splits_flow_from_its_sign`; parent-kind flow -> `own_category_kind`; `JOIN payees` and dropped `CAST ... AS DATE` -> `names_the_month_category_and_payee`.
+- Next run must not redo: `v_spending` body only (P2b-8 verbatim, `-amount AS spent FROM v_cash_flow WHERE flow = 'expense'`, same column order); its tests go in `views_test.go` reusing `reportRows`/`addSplit`/`newStoreWith`/`queryTexts` (`spent` type `DECIMAL(18,2)`). `minimalRows` needs nothing more: `v_cash_flow` returns `split-4`, so `v_spending` returns it too. Lint on the duckstore package: 0 issues.
