@@ -17,14 +17,19 @@ importer's own tests must be able to use the types without pulling in the driver
 ## Decision
 
 `internal/store` is a shared lower package, beside `internal/platform/*` in the dependency
-order: any feature may import it, and it imports no feature. It holds only quarry's row types
-(`Rows` and one struct per table), `Counts` and `Result`, and it has no driver import.
+order: any feature may import it, and it imports no feature. It holds the values features
+exchange about the store — quarry's row types (`Rows` and one struct per table, `ImportRun`
+included), `SnapshotRef`, `Counts`, `Result` with its `Validation` and `NotImported`, and the
+four store sentinels (`ErrValidationFailed`, `ErrStoreNotWritable`, `ErrDiskFull`,
+`ErrUnmappable`) — and no behaviour and no driver import.
 `internal/store/duckstore` holds the DuckDB schema DDL, the builder, and the atomic swap
 (build into `.quarry-<UTC>.duckdb.partial`, checkpoint and close, rename over
 `quarry.duckdb`). It is the only package outside `internal/platform/duckdb` that imports the
 driver. Only the importer knows Quicken's schema; neither store package knows it. The
 importer declares its own `Store` port with one method, `Replace(ctx, store.Rows)`, and
-`duckstore` implements it; `cmd/quarry` wires the two together.
+`duckstore` implements it; `snapshot` declares a `StoreProbe` port (`Path`, `Exists`) that the
+same `duckstore.Store` also implements. `cmd/quarry` builds one `duckstore.Store` and wires it
+into both, with a compile-time guard for each port.
 
 ## Consequences
 

@@ -59,3 +59,13 @@ type Importer interface {
 	// through the importer's own Store, returning the store.Result it built.
 	Import(ctx context.Context, snap store.SnapshotRef) (store.Result, error)
 }
+
+// StoreProbe locates the store the wired Importer writes, so refusal copy
+// and the unbuilt-store result name the file the Importer actually uses.
+type StoreProbe interface {
+	// Path returns the store file's absolute path.
+	Path() string
+	// Exists reports whether a store file is already at Path; a stat fault
+	// other than not-found counts as one existing.
+	Exists() bool
+}

@@ -17,11 +17,12 @@ another feature package, so `snapshot` cannot call `importer` directly, and `Man
 ## Decision
 
 `snapshot.Server` owns the sequence. `snapshot` declares a one-method `Importer` port,
-`Import(ctx, snapshotPath) (store.Result, error)`, shaped to `(*importer.Server).Import`
-so the importer satisfies it with no adapter. `snapshot.WithImporter` injects it and
-`snapshot.WithStorePath` names the store file for refusal copy (the directory for S1–S3,
-the file for S4/V1/I2); `cmd/quarry` builds that path from `duckstore.FileName`, so only
-`duckstore` spells the file name. A new method, `(*Server).SyncAndImport(ctx, bundlePath)
+`Import(ctx, store.SnapshotRef) (store.Result, error)`, shaped to `(*importer.Server).Import`
+so the importer satisfies it with no adapter. `snapshot.WithImporter` injects it. A second
+port, `StoreProbe` (`Path`, `Exists`), injected with `snapshot.WithStoreProbe`, locates the
+store for refusal copy (the directory for S1–S3, the file for S4/V1/I2) and for the unbuilt
+result's path and NOT BUILT / NOT REBUILT line; `cmd/quarry` passes the same
+`duckstore.Store` it gives the importer, so only `duckstore` knows where the store lives. A new method, `(*Server).SyncAndImport(ctx, bundlePath)
 (Outcome, error)`, calls `Sync`, and imports the committed snapshot only when its schema
 verified; `Outcome{Manifest, Store *store.Result}` carries `Store == nil` when no build
 was reached. `Sync` keeps its signature and behaviour. The O1/O1b choice is a method on
@@ -37,4 +38,4 @@ importer → duckstore.
 - **Positive:** `snapshot`, `cli` and `importer` stay free of the DuckDB driver; only `cmd/quarry` links it (checked with `go list -deps`).
 - **Positive:** `--from` (SCENARIO-03) adds a second entry point that reuses the same import step and `Outcome`, with no new wiring in `cli`.
 - **Negative:** `snapshot` now orchestrates the whole sync, not only snapshot-taking; its name undersells it, and the store refusal copy (S1–S4, V1, I2) accumulates there.
-- **Trade-off:** The store path reaches `snapshot` only as copy. `snapshot` never opens the store; it could name a path the wired importer does not write to, which only the `cmd/quarry` wiring prevents.
+- **Trade-off:** `snapshot` asks the store where it is and whether it exists, but never opens it. The probe and the importer's store are two ports on one `duckstore.Store` value; only the `cmd/quarry` wiring keeps them the same instance, and its tests name the store path the importer writes.

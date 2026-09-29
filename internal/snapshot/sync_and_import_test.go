@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -56,19 +55,29 @@ type unmappableError struct{ reason string }
 func (e unmappableError) Error() string        { return e.reason }
 func (e unmappableError) Is(target error) bool { return target == store.ErrUnmappable }
 
+// fakeStoreProbe is a hand-written StoreProbe fake reporting a fixed path and existence.
+type fakeStoreProbe struct {
+	path   string
+	exists bool
+}
+
+func (f *fakeStoreProbe) Path() string { return f.path }
+func (f *fakeStoreProbe) Exists() bool { return f.exists }
+
 // newImportServer builds a Server with a snapshots directory and a store
-// path both under home, so refusal copy has something real to abbreviate.
-func newImportServer(t *testing.T, home string, imp snapshot.Importer) *snapshot.Server {
+// path both under home, so refusal copy has something real to abbreviate;
+// opts apply last, overriding those.
+func newImportServer(t *testing.T, home string, imp snapshot.Importer, opts ...snapshot.Option) *snapshot.Server {
 	t.Helper()
 	ref, err := v9.Reference(t.Context())
 	require.NoError(t, err)
-	return snapshot.NewServer(
+	return snapshot.NewServer(append([]snapshot.Option{
 		snapshot.WithSnapshotDir(filepath.Join(home, "snapshots")),
 		snapshot.WithReference(v9.ReferenceLabel, ref),
 		snapshot.WithHome(home),
 		snapshot.WithImporter(imp),
-		snapshot.WithStorePath(filepath.Join(home, "quarry", "quarry.duckdb")),
-	)
+		snapshot.WithStoreProbe(&fakeStoreProbe{path: filepath.Join(home, "quarry", "quarry.duckdb")}),
+	}, opts...)...)
 }
 
 func snapshotIDFromPath(path string) string {
@@ -261,7 +270,7 @@ func Test_sync_and_import_does_not_import_when_the_snapshot_fails(t *testing.T) 
 		snapshot.WithReference(v9.ReferenceLabel, ref),
 		snapshot.WithSource(&fakeSource{openErr: errBoom}),
 		snapshot.WithImporter(fake),
-		snapshot.WithStorePath(filepath.Join(home, "quarry", "quarry.duckdb")),
+		snapshot.WithStoreProbe(&fakeStoreProbe{path: filepath.Join(home, "quarry", "quarry.duckdb")}),
 	)
 
 	outcome, err := srv.SyncAndImport(t.Context(), filepath.Join(home, "Home.quicken"))
@@ -301,48 +310,65 @@ func Test_sync_and_import_keeps_the_store_result_when_validation_fails(t *testin
 // NOT BUILT line.
 func Test_sync_and_import_reports_whether_a_previous_store_existed(t *testing.T) {
 	cases := []struct {
-		name        string
-		createStore bool
-		wantExisted bool
+		name    string
+		existed bool
 	}{
-		{name: "no previous store", createStore: false, wantExisted: false},
-		{name: "a previous store", createStore: true, wantExisted: true},
+		{name: "no previous store", existed: false},
+		{name: "a previous store", existed: true},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			bundle := v9fixture.OpenBundle(t, t.TempDir())
 			home := t.TempDir()
-			storePath := filepath.Join(home, "quarry", "quarry.duckdb")
-			if c.createStore {
-				require.NoError(t, os.MkdirAll(filepath.Dir(storePath), 0o700))
-				require.NoError(t, os.WriteFile(storePath, []byte("store"), 0o600))
-			}
 			fake := &fakeImporter{result: store.Result{Built: false}, err: store.ErrValidationFailed}
-			srv := newImportServer(t, home, fake)
+			probe := &fakeStoreProbe{path: filepath.Join(home, "quarry", "quarry.duckdb"), exists: c.existed}
+			srv := newImportServer(t, home, fake, snapshot.WithStoreProbe(probe))
 
 			outcome, err := srv.SyncAndImport(t.Context(), bundle.Dir)
 
 			require.ErrorIs(t, err, store.ErrValidationFailed)
-			assert.Equal(t, c.wantExisted, outcome.StoreExisted)
+			assert.Equal(t, c.existed, outcome.StoreExisted)
 		})
 	}
 }
 
-// A stat fault other than "not found" (ENOTDIR here) is treated as a
-// previous store existing: the build failed either way.
-func Test_sync_and_import_treats_a_stat_fault_as_a_previous_store(t *testing.T) {
+func Test_sync_and_import_names_the_store_file_its_probe_reports(t *testing.T) {
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	home := t.TempDir()
-	blocker := filepath.Join(home, "quarry")
-	require.NoError(t, os.WriteFile(blocker, []byte("not a directory"), 0o600))
 	fake := &fakeImporter{result: store.Result{Built: false}, err: store.ErrValidationFailed}
-	srv := newImportServer(t, home, fake)
+	probePath := filepath.Join(home, "elsewhere", "quarry.duckdb")
+	srv := newImportServer(t, home, fake, snapshot.WithStoreProbe(&fakeStoreProbe{path: probePath}))
 
 	outcome, err := srv.SyncAndImport(t.Context(), bundle.Dir)
 
 	require.ErrorIs(t, err, store.ErrValidationFailed)
-	assert.True(t, outcome.StoreExisted)
+	require.NotNil(t, outcome.Store)
+	assert.Equal(t, probePath, outcome.Store.Path)
+}
+
+func Test_sync_and_import_refuses_to_import_without_an_importer_or_store_probe(t *testing.T) {
+	cases := []struct {
+		name string
+		opts []snapshot.Option
+	}{
+		{name: "no importer", opts: []snapshot.Option{snapshot.WithImporter(nil)}},
+		{name: "no store probe", opts: []snapshot.Option{snapshot.WithStoreProbe(nil)}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			bundle := v9fixture.OpenBundle(t, t.TempDir())
+			fake := &fakeImporter{}
+			srv := newImportServer(t, t.TempDir(), fake, c.opts...)
+
+			outcome, err := srv.SyncAndImport(t.Context(), bundle.Dir)
+
+			require.EqualError(t, err, "no importer or store probe configured")
+			assert.Empty(t, fake.calls)
+			assert.Nil(t, outcome.Store)
+		})
+	}
 }
 
 // Count form is "X of Y <noun>": the noun agrees with Y, the verb with X.

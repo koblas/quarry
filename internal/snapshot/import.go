@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -14,8 +12,8 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// errNoImporter is SyncAndImport's error when the Server has no Importer configured.
-var errNoImporter = errors.New("no importer configured")
+// errNoImporter is SyncAndImport's error when the Server has no Importer or StoreProbe configured.
+var errNoImporter = errors.New("no importer or store probe configured")
 
 // Outcome is what SyncAndImport returns: the snapshot's Manifest and the
 // import's store.Result, when one ran. Store is nil on a schema mismatch
@@ -89,7 +87,7 @@ func (s *Server) SyncAndImport(ctx context.Context, bundlePath string) (Outcome,
 // importVerified imports the snapshot manifest describes, once its hash
 // and schema are verified, mapping a failure to its V1 or store refusal.
 func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome, error) {
-	if s.importer == nil {
+	if s.importer == nil || s.storeProbe == nil {
 		return Outcome{Manifest: manifest}, errNoImporter
 	}
 
@@ -99,8 +97,8 @@ func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome
 	if err != nil {
 		if errors.Is(err, store.ErrValidationFailed) {
 			// Populated here even though Import's own Result contract leaves it empty on a failed build.
-			result.Path = s.storePath
-			return Outcome{Manifest: manifest, Store: &result, StoreExisted: s.previousStoreExists()},
+			result.Path = s.storeProbe.Path()
+			return Outcome{Manifest: manifest, Store: &result, StoreExisted: s.storeProbe.Exists()},
 				s.validationFailedRefusal(manifest, result.Validation, err)
 		}
 		return Outcome{Manifest: manifest}, s.importFailureRefusal(ctx, manifest, err)
@@ -109,20 +107,13 @@ func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome
 	return Outcome{Manifest: manifest, Store: &result}, nil
 }
 
-// previousStoreExists reports whether a store was already at s.storePath;
-// a stat error other than "not found" is treated as existed.
-func (s *Server) previousStoreExists() bool {
-	_, err := os.Stat(s.storePath)
-	return !errors.Is(err, fs.ErrNotExist)
-}
-
 // importFailureRefusal reports a committed snapshot's non-V1 import
 // failure, wrapping err so errors.As still reaches it: I2 once ctx has
 // ended, else S4, S1, S2 by the store sentinel err matches, else S3.
 func (s *Server) importFailureRefusal(ctx context.Context, manifest Manifest, err error) error {
 	id := snapshotID(manifest.Snapshot.Path)
-	storeDir := homepath.Abbreviate(s.home, filepath.Dir(s.storePath))
-	storePath := homepath.Abbreviate(s.home, s.storePath)
+	storeDir := homepath.Abbreviate(s.home, filepath.Dir(s.storeProbe.Path()))
+	storePath := homepath.Abbreviate(s.home, s.storeProbe.Path())
 	var msg string
 	switch {
 	case ctx.Err() != nil:
@@ -155,7 +146,7 @@ func (s *Server) validationFailedRefusal(manifest Manifest, v store.Validation, 
 	return causedRefusal{
 		msg: fmt.Sprintf("validation failed: %s; %s was not changed; each difference is listed on stdout; "+
 			"fix the account in Quicken and run quarry sync, or run quarry sync --from %s after updating quarry",
-			strings.Join(clauses, " and "), homepath.Abbreviate(s.home, s.storePath), snapshotID(manifest.Snapshot.Path)),
+			strings.Join(clauses, " and "), homepath.Abbreviate(s.home, s.storeProbe.Path()), snapshotID(manifest.Snapshot.Path)),
 		cause: cause,
 	}
 }

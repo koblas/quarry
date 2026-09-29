@@ -66,6 +66,18 @@ func New(dir string, opts ...Option) *Store {
 	return s
 }
 
+// Path returns the store file's path inside the Store's directory.
+func (s *Store) Path() string {
+	return filepath.Join(s.dir, FileName)
+}
+
+// Exists reports whether a store file is already at Path; a stat fault
+// other than not-found counts as one existing.
+func (s *Store) Exists() bool {
+	_, err := os.Stat(s.Path())
+	return !errors.Is(err, fs.ErrNotExist)
+}
+
 // createDuckDB is New's default creator; it returns a nil interface, never
 // a typed nil, when duckdb.Create fails.
 func createDuckDB(ctx context.Context, path string) (DB, error) {
@@ -86,7 +98,7 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
 	}
 	s.sweepLeftovers()
 
-	finalPath := filepath.Join(s.dir, FileName)
+	finalPath := s.Path()
 	partialPath := filepath.Join(s.dir, fmt.Sprintf(".quarry-%s.duckdb.partial", time.Now().UTC().Format(partialNameLayout)))
 
 	db, err := s.create(ctx, partialPath)

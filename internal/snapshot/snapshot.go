@@ -28,11 +28,11 @@ type Server struct {
 	reference      sqlschema.Schema
 	home           string
 	busyTimeout    time.Duration
-	storePath      string
 
 	source      Source
 	destination Destination
 	importer    Importer
+	storeProbe  StoreProbe
 }
 
 // Option configures a Server built by NewServer.
@@ -83,11 +83,10 @@ func WithImporter(imp Importer) Option {
 	return func(s *Server) { s.importer = imp }
 }
 
-// WithStorePath sets the path SyncAndImport's refusal copy names: S1–S3
-// refusals name its directory, S4/V1/I2 the file itself. It does not open
-// the store; the wired Importer is what actually writes there.
-func WithStorePath(path string) Option {
-	return func(s *Server) { s.storePath = path }
+// WithStoreProbe sets the StoreProbe that locates the store the wired
+// Importer writes; production callers pass that Importer's own store.
+func WithStoreProbe(probe StoreProbe) Option {
+	return func(s *Server) { s.storeProbe = probe }
 }
 
 // Home returns the home directory Sync abbreviates refusal messages

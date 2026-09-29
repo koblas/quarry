@@ -485,6 +485,34 @@ func Test_replace_tags_a_store_directory_it_cannot_create_as_not_writable(t *tes
 	require.ErrorIs(t, err, store.ErrStoreNotWritable)
 }
 
+func Test_store_path_is_where_replace_writes_the_store(t *testing.T) {
+	st := duckstore.New(t.TempDir())
+
+	path, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Equal(t, path, st.Path())
+}
+
+func Test_store_exists_only_once_a_store_file_is_there(t *testing.T) {
+	st := duckstore.New(t.TempDir())
+	before := st.Exists()
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.False(t, before)
+	assert.True(t, st.Exists())
+}
+
+// The store directory is a regular file, so stat fails with ENOTDIR, not not-found.
+func Test_store_exists_treats_a_stat_fault_as_a_store(t *testing.T) {
+	notADir := filepath.Join(t.TempDir(), "quarry")
+	require.NoError(t, os.WriteFile(notADir, []byte("not a directory"), 0o600))
+
+	assert.True(t, duckstore.New(notADir).Exists())
+}
+
 // createLeavingPartial returns a create func that writes a partial and its
 // .wal at the path it is given, as a racing run would, then fails with err.
 func createLeavingPartial(t *testing.T, err error) func(context.Context, string) (duckstore.DB, error) {

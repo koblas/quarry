@@ -17,8 +17,12 @@ import (
 	"github.com/koblas/quarry/internal/store/duckstore"
 )
 
-// var _ documents that importer.Server satisfies snapshot.Importer with no adapter.
-var _ snapshot.Importer = (*importer.Server)(nil)
+// These guards document that the wired types satisfy each consumer's port with no adapter.
+var (
+	_ snapshot.Importer   = (*importer.Server)(nil)
+	_ importer.Store      = (*duckstore.Store)(nil)
+	_ snapshot.StoreProbe = (*duckstore.Store)(nil)
+)
 
 // signalContext wraps parent with SIGINT/SIGTERM handling: ctx.Done() closes
 // on either signal, and a goroutine calls stop once it does, so a second
@@ -48,12 +52,13 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 		}
 
 		storeDir := filepath.Join(home, "Library", "Application Support", "quarry")
+		st := duckstore.New(storeDir, storeOpts...)
 		srv := snapshot.NewServer(
 			snapshot.WithSnapshotDir(filepath.Join(storeDir, "snapshots")),
 			snapshot.WithReference(v9.ReferenceLabel, ref),
 			snapshot.WithHome(home),
-			snapshot.WithImporter(importer.NewServer(importer.WithStore(duckstore.New(storeDir, storeOpts...)))),
-			snapshot.WithStorePath(filepath.Join(storeDir, duckstore.FileName)),
+			snapshot.WithImporter(importer.NewServer(importer.WithStore(st))),
+			snapshot.WithStoreProbe(st),
 		)
 		return srv, nil
 	}
