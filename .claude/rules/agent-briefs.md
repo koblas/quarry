@@ -24,7 +24,7 @@ Turn count × context size is agent's wall-clock; each extra turn re-reads whole
 go build ./...
 COVER="$(mktemp "$TMPDIR/cover.XXXXXX")"; LOG="$COVER.log"                 # unique per run
 go test -count=1 -coverpkg=./... -coverprofile="$COVER" ./... >"$LOG" 2>&1; rc=$?   # the full suite, once
-grep -E '^(FAIL|--- FAIL|panic:)' "$LOG"; echo "go test rc=$rc"          # failures only; full log in $LOG
+grep -E '^(FAIL|--- FAIL|panic:)' "$LOG"; echo "go test rc=$rc"          # failures only; rc≠0 → read $LOG, never re-run
 [ "$rc" -eq 0 ] && .claude/scripts/uncovered-diff.py --profile "$COVER" <start>     # coverage gate, no re-run
 go test -race ./<touched package>/...
 golangci-lint run ./...
@@ -33,7 +33,7 @@ golangci-lint run ./...
 
 `<start>` = commit your scenario or fix pass started from. `mktemp` line, `go test` and `uncovered-diff.py` go in **one Bash call** — shell variables do not survive between calls, and fixed name like `$TMPDIR/cover.out` is shared by every agent in session (same hazard as `proof.md` → *Unique backup name*). `uncovered-diff.py` refuses (exit 2) profile older than a changed file, and lists changed file with no coverage block at all as open row.
 
-**Narrow loop while working, full run once.** During scenario Acceptance and Build phases run only packages and tests in play — plan's `Narrow loop:` line, e.g. `go test ./internal/setup/ -run 'Skill|Init'`. Run block above once, in `### Verify` phase (and at end of every fix pass). Full suite after every edit = most expensive habit, proves nothing final run does not. That one `go test` line is both full suite and coverage data — its own exit code is the evidence; do not run suite second time, for gate or "unpiped". Narrow loops run without `-count=1` so Go test cache skips unchanged packages; `-count=1` belongs only on Verify line.
+**Narrow loop while working, full run once.** During scenario Acceptance and Build phases run only packages and tests in play — plan's `Narrow loop:` line, e.g. `go test ./internal/setup/ -run 'Skill|Init'`. Run block above once, in `### Verify` phase (and at end of every fix pass). Full suite after every edit = most expensive habit, proves nothing final run does not. That one `go test` line is both full suite and coverage data — its printed `go test rc=` is the evidence; do not run suite second time, for gate or "unpiped". Narrow loops run without `-count=1` so Go test cache skips unchanged packages; `-count=1` belongs only on Verify line.
 
 **Lint gate before handing off.** `golangci-lint run ./...` reads repo-root `.golangci.yaml` and must exit 0 and print `0 issues` with no `level=error` line — part of the linting step, same standing as `go build`; judge exit code, not grepped text (a typecheck/config error can still end in `0 issues`). Run `golangci-lint fmt ./...` (and `golangci-lint run --fix ./...` for mechanical rewrites) first, then fix rest by hand; review `--fix` output — it can rewrite asserted copy. Default output caps repeats per linter, so hidden findings surface once visible ones fixed: rerun until zero, or pass `--max-issues-per-linter=0 --max-same-issues=0` to see all at once. `//nolint` only when fixing would change behaviour or user-visible copy, always as `//nolint:<linter> // <reason>` naming one linter. Never edit `.golangci.yaml` to silence a finding — stop and report the config change you would make.
 

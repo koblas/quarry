@@ -6,9 +6,8 @@ Usage: .claude/scripts/uncovered-diff.py [--profile FILE] [--lines] [BASE] [PKG 
   PKG      the packages whose tests run; defaults to ./...
   --profile FILE
            read coverage from FILE instead of running the tests. Produce it with the one
-           verification run a Verify phase already makes, under a unique name:
-             COVER="$(mktemp "$TMPDIR/cover.XXXXXX")"
-             go test -count=1 -coverpkg=./... -coverprofile="$COVER" ./...
+           verification run a Verify phase already makes: the full-suite block in
+           .claude/rules/agent-briefs.md -> Verification (unique name, output to a log).
            Refused (exit 2) when FILE is older than any changed file: a stale profile reads
            new lines as non-statements and reports a false "0 uncovered".
   --lines  one row per uncovered line instead of one row per consecutive run.
