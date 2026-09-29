@@ -6,7 +6,7 @@ worktree: ~/.claude/projects/<encoded-repo-path>*) and reads each subagent trans
 <session>/subagents/.
 
 Attribution. A run is attributed from the tag the orchestrator puts on the FIRST line of its
-prompt (CLAUDE.md → *Run tags*):
+prompt (CLAUDE.md → *Rules* → Run tags):
 
     run: <kind> feature: <slug> unit: <unit>
 

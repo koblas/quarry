@@ -61,7 +61,7 @@ All Go commands run from the repo root.
    nobody ruled on, and the final `product-vision` pass sends it back at ten times what it
    costs to settle now. A string the section does not cover, and that you cannot derive from
    a neighbouring command, is a question for the caller, not a blank to fill in silently.
-2. Read `docs/specifications/<feature-slug>/<scenario-id>.md` for your checklist, and its
+2. Read `docs/specifications/<feature-slug>/<scenario-id>.md` (run `L`: you write it) for your checklist, and its
    `## Phase report` — what earlier runs left. Execute only your run's phases; end by
    rewriting `## Phase report` (`.claude/briefs/build.md` → *Developer runs*). Steps 4–6 are
    run `V` only.

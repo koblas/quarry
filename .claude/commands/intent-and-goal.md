@@ -155,6 +155,11 @@ a line nobody ruled on — the final pass will send it back.>
 
 ---
 
+## Sizing
+| Scenario | Verdict (OWNS A RUN / LIGHT) — numbers |
+| --- | --- |
+| SCENARIO-01 | OWNS A RUN — 4 batches, 1 feature package |
+
 ## BDD Acceptance Progress
 - [ ] SCENARIO-01: <Title>
 - [ ] SCENARIO-02: <Title>

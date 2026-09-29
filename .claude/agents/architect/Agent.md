@@ -79,14 +79,14 @@ State exactly one, with the seam or the absorbing scenario named:
   5 Build batches; more than one feature package (`internal/<feature>`; `internal/cli` and
   `cmd/quarry` wiring for it don't count); or, once `feature-metrics.py` has 20+ past units,
   a twin of this scenario sat above the 90th-percentile unit cost.
-
-Write the verdict and the numbers behind it as the plan's `Size:` header line (and in every
-sizing-pass row): `Size: OWNS A RUN — 4 batches, 1 feature package`.
 - **FOLD** — too small to earn its own architect+developer pair. Name which scenario
   should absorb it, and why.
 - **LIGHT** — sizing pass only: ≤3 Build steps, one feature package, and nothing on the
   mandatory test-first set. No per-scenario architect run; developer plans it
   (`.claude/briefs/build.md` → *Light lane*). Not LIGHT when FOLD fits.
+
+Verdict and the numbers behind it go on the plan's `Size:` header line, and on the scenario's
+row in the sizing pass's answer: `OWNS A RUN — 4 batches, 1 feature package`.
 
 Scenario with more than one `When` is **SPLIT**, always — one behaviour per scenario, one
 acceptance test per scenario. `.claude/scripts/spec-check.py <slug>` counts them.

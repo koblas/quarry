@@ -79,7 +79,7 @@ Spawn all matching reviewers in a **single message** via `Agent`:
 
 ```
 Agent(subagent_type="<name>", prompt="<pipeline mode only — run: review feature: <slug> unit: -
-(CLAUDE.md → *Run tags*)>
+(CLAUDE.md → *Rules* → Run tags)>
 Review <commit range, or the listed paths>. Read
 .claude/briefs/review.md first<, and .claude/briefs/proof.md — only for test-reviewer and
 correctness-reviewer><, and .claude/briefs/navigation.md — only for arch-reviewer and
@@ -109,7 +109,9 @@ above already bounced any uncovered line). It
 mutates up to 20 changed lines (guards first) in an isolated `$TMPDIR` copy — never the
 worktree — and lists each `SURVIVED` mutant. Costs no model tokens. Exit 2 (tool failure, or
 unmutated tests already failing) → back to the developer, like the coverage gate. Record its
-summary line in the round's `METRICS.md` row.
+summary line in the round's `METRICS.md` row. Worst case is `--max` × `--timeout` (20 × 120s):
+run it with `run_in_background` and wait for it. Skip it when `test-reviewer` is not in this
+round or no production `.go` file changed; on a re-gate run it only if `test-reviewer` re-runs.
 
 Do NOT review code yourself — only orchestrate.
 
