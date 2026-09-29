@@ -523,6 +523,38 @@ func Test_import_from_names_the_missing_accounts_in_the_refusal(t *testing.T) {
 	}
 }
 
+// A rollback-journal file, so the held exclusive lock blocks readers; the read waits out the driver's default busy timeout.
+func Test_import_from_refuses_a_locked_snapshot_as_unreadable(t *testing.T) {
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	snapshots := filepath.Join(home, "snapshots")
+	writeSnapshotPair(t, snapshots, "20260927T143005Z",
+		"CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY)", "INSERT INTO ZACCOUNT (Z_PK) VALUES (1)")
+	holdExclusiveLock(t, filepath.Join(snapshots, "20260927T143005Z.sqlite"))
+
+	_, err := srv.ImportFrom(t.Context(), "20260927T143005Z")
+
+	require.EqualError(t, err,
+		"cannot read ~/snapshots/20260927T143005Z.sqlite: database is locked; take a new snapshot with quarry sync")
+	assert.Empty(t, fake.calls)
+}
+
+// holdExclusiveLock holds an EXCLUSIVE transaction on the SQLite file at path until the test ends.
+func holdExclusiveLock(t *testing.T, path string) {
+	t.Helper()
+	db, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	conn, err := db.Conn(t.Context())
+	require.NoError(t, err)
+	_, err = conn.ExecContext(t.Context(), "BEGIN EXCLUSIVE")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = conn.Close()
+		_ = db.Close()
+	})
+}
+
 func Test_import_from_refuses_without_a_reference_schema(t *testing.T) {
 	fake := &fakeImporter{}
 	srv := snapshot.NewServer(snapshot.WithImporter(fake), snapshot.WithSnapshotDir(t.TempDir()))

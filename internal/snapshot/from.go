@@ -203,7 +203,6 @@ func fromContentRefusal(home, snapshotPath string, err error) error {
 	case errors.Is(err, errNoAccounts):
 		return notSnapshotRefusal(home, snapshotPath, err, reasonNoAccounts)
 	default:
-		// unreachable: inspectContent's remaining query (its Schema read) has no fault seam of its own — every one of its internal error returns is itself marked unreachable in internal/platform/sqlite; the only live cause is a ctx cancellation mid-read, and ImportFrom checks ctx.Err() before ever calling this classifier, so that cause never reaches here.
 		return causedRefusal{
 			msg: fmt.Sprintf("cannot read %s: %s; take a new snapshot with quarry sync",
 				homepath.Abbreviate(home, snapshotPath), causeText(err)),
