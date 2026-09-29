@@ -67,6 +67,7 @@ the rows can add up to more than the total.`,
 				func() ([]byte, error) { return renderSpendingJSON(spending, warnings) },
 				func() string { return renderSpending(spending) })
 			if err != nil {
+				// unreachable: renderResult errors only when renderSpendingJSON does, and that returns only marshalDocument's error, which is unreachable; see renderResult.
 				return err
 			}
 			return emit(cmd, out, "quarry: warning: ", warnings)

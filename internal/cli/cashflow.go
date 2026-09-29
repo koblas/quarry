@@ -84,6 +84,7 @@ less. A period that --since or --until cuts short is marked partial.`,
 				func() ([]byte, error) { return renderCashFlowJSON(flow, warnings) },
 				func() string { return renderCashFlow(flow) })
 			if err != nil {
+				// unreachable: renderResult errors only when renderCashFlowJSON does, and that returns only marshalDocument's error, which is unreachable; see renderResult.
 				return err
 			}
 			return emit(cmd, out, "quarry: warning: ", warnings)
