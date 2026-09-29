@@ -19,10 +19,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Each row's setup deliberately leaves no manifest file at all where the
-// Outline's fault is on the path itself (F1/F1b/F2/F2b): that absence is
-// what proves the path pre-check inside ImportFrom runs before any
-// manifest read is attempted.
+// Each path-fault row's setup leaves no manifest file at all: that absence
+// proves the path pre-check runs before any manifest read is attempted.
 func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -171,9 +169,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 	}
 }
 
-// writeManifestForTest writes the .json manifest next to snapshotPath,
-// recording content's real SHA-256, so a fault injected on snapshotPath
-// itself (rather than its manifest) is what the test under it exercises.
+// writeManifestForTest writes the .json manifest next to snapshotPath, recording content's real SHA-256.
 func writeManifestForTest(t *testing.T, snapshotPath string, content []byte) {
 	t.Helper()
 	sum := sha256.Sum256(content)

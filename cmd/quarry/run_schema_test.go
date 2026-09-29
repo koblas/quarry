@@ -165,10 +165,8 @@ func Test_run_reports_a_schema_mismatch_as_json(t *testing.T) {
 	assert.True(t, strings.HasPrefix(stderr.String(), "quarry: schema check failed:"))
 }
 
-// The MissingSchemaBundle fixture's own dropped table and columns are what
-// makes its snapshot mismatch the real embedded reference, independent of
-// Quicken: --from re-checks that same snapshot file against the same
-// reference and finds the same mismatch.
+// --from re-checks the same snapshot file against the same embedded
+// reference MissingSchemaBundle already mismatches, independent of Quicken.
 func Test_run_reports_a_schema_mismatch_with_from(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

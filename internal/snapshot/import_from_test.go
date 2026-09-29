@@ -1,6 +1,7 @@
 package snapshot_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -269,9 +270,8 @@ func Test_import_from_skips_the_import_when_the_current_reference_no_longer_matc
 	assert.Equal(t, []string{"ZQUARRYNEWTABLE"}, outcome.Manifest.Schema.MissingTables)
 }
 
-// F1/F1b/F2/F2b are a head os.Stat pre-check inside ImportFrom, ahead of any
-// manifest read: this proves each fires with no manifest file present at
-// all, which a manifest-stage refusal could never do.
+// No manifest file exists in any of this group's fixtures: that absence
+// proves ImportFrom's path pre-check runs before any manifest read.
 func Test_import_from_refuses_a_path_form_value_that_does_not_exist(t *testing.T) {
 	home := t.TempDir()
 	fake := &fakeImporter{}
@@ -285,10 +285,8 @@ func Test_import_from_refuses_a_path_form_value_that_does_not_exist(t *testing.T
 	assert.Empty(t, fake.calls)
 }
 
-// A permission fault on the snapshots directory itself, not the file, is
-// the only way to make os.Stat fail with something other than ErrNotExist
-// without a race: it proves the pre-check's own F4 arm, distinct from
-// hashFile's F4 for a snapshot file that stats fine but cannot be opened.
+// os.Stat needs no read permission on its target, only execute on its
+// ancestor directories, so only a chmod'd directory reaches this branch.
 func Test_import_from_names_the_snapshot_when_its_directory_cannot_be_read(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")
@@ -346,11 +344,6 @@ func Test_import_from_refuses_a_quicken_bundle_passed_as_from(t *testing.T) {
 	assert.Empty(t, fake.calls)
 }
 
-// Test_import_from_returns_the_manifest_a_plain_sync_returned and its
-// siblings above are this test's control: they pass a real, regular
-// snapshot file through the same pre-check and succeed, so F2 never fires
-// on a usable snapshot.
-
 func Test_import_from_reports_no_manifest_as_not_a_quarry_snapshot(t *testing.T) {
 	home := t.TempDir()
 	fake := &fakeImporter{}
@@ -382,9 +375,24 @@ func Test_import_from_refuses_without_importing_when_the_manifest_is_not_json(t 
 	assert.Empty(t, fake.calls)
 }
 
-// Prepare's MkdirAll is a no-op on an already-existing directory regardless
-// of its permission bits, so the snapshots directory must exist before the
-// chmod, or the failure this test wants would never surface.
+func Test_import_from_refuses_without_importing_when_the_manifest_has_a_wrong_typed_field(t *testing.T) {
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	taken := takeSnapshot(t, srv)
+	require.NoError(t, os.WriteFile(taken.Snapshot.Manifest, []byte(`{"snapshot":{"sha256":5}}`), 0o600))
+
+	_, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
+
+	require.EqualError(t, err, homepath.Abbreviate(home, taken.Snapshot.Path)+
+		" is not a quarry snapshot (its manifest is not readable JSON); pass a snapshot taken by quarry sync with --from <snapshot>")
+	var typeErr *json.UnmarshalTypeError
+	require.ErrorAs(t, err, &typeErr)
+	assert.Empty(t, fake.calls)
+}
+
+// Only the manifest is chmod'd, not the snapshot: proves the refusal names
+// whichever file's own read actually failed.
 func Test_import_from_names_the_manifest_when_it_cannot_be_read(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")
@@ -403,9 +411,7 @@ func Test_import_from_names_the_manifest_when_it_cannot_be_read(t *testing.T) {
 	assert.Empty(t, fake.calls)
 }
 
-// Prepare's MkdirAll is a no-op on an already-existing directory regardless
-// of its permission bits, so the snapshots directory must exist before the
-// chmod, or the failure this test wants would never surface.
+// Only the snapshot is chmod'd, not the manifest: the mirror of the case above.
 func Test_import_from_names_the_snapshot_when_it_cannot_be_read(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")
@@ -438,6 +444,43 @@ func Test_import_from_refuses_without_importing_when_the_snapshot_is_not_sqlite(
 	require.EqualError(t, err, "~/snapshots/20260927T143005Z.sqlite is not a quarry snapshot "+
 		"(not a SQLite database); pass a snapshot taken by quarry sync with --from <snapshot>")
 	assert.True(t, sqlite.IsNotADB(err), err.Error())
+	assert.Empty(t, fake.calls)
+}
+
+// CorruptDataFile opens fine as SQLite (so sqlite.IsNotADB is false) and
+// fails only PRAGMA integrity_check, isolating that arm from the not-a-database one above.
+func Test_import_from_refuses_a_snapshot_that_fails_integrity_check(t *testing.T) {
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	snapshotPath := filepath.Join(home, "snapshots", "20260927T143005Z.sqlite")
+	require.NoError(t, os.MkdirAll(filepath.Dir(snapshotPath), 0o700))
+	v9fixture.CorruptDataFile(t, snapshotPath)
+	writeManifestFor(t, snapshotPath)
+
+	_, err := srv.ImportFrom(t.Context(), "20260927T143005Z")
+
+	require.EqualError(t, err, "~/snapshots/20260927T143005Z.sqlite is not a quarry snapshot "+
+		"(not a SQLite database); pass a snapshot taken by quarry sync with --from <snapshot>")
+	var integrityErr sqlite.IntegrityError
+	require.ErrorAs(t, err, &integrityErr)
+	assert.Empty(t, fake.calls)
+}
+
+// A pre-cancelled ctx makes inspectContent's own OpenReadOnly fail on its
+// first query, before any content classification: ImportFrom must report
+// I2, never a content refusal built from a cancellation.
+func Test_import_from_reports_interrupted_when_ctx_is_already_cancelled_before_inspecting_content(t *testing.T) {
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	taken := takeSnapshot(t, srv)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := srv.ImportFrom(ctx, snapshotIDFromPath(taken.Snapshot.Path))
+
+	require.EqualError(t, err, "sync interrupted; nothing was kept; run quarry sync again")
 	assert.Empty(t, fake.calls)
 }
 

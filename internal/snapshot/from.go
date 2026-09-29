@@ -16,8 +16,7 @@ import (
 
 // ImportFrom rebuilds the store from an earlier snapshot, named by ID or by
 // .sqlite path, without touching Quicken or writing the snapshots directory.
-// It refuses when from does not resolve to a usable snapshot file, when the
-// file's SHA-256 no longer matches its manifest, and returns a
+// It refuses when from does not resolve to a usable snapshot, and returns a
 // MismatchError when the current reference finds a missing table or column.
 func (s *Server) ImportFrom(ctx context.Context, from string) (Outcome, error) {
 	if s.reference == nil {
@@ -47,7 +46,10 @@ func (s *Server) ImportFrom(ctx context.Context, from string) (Outcome, error) {
 	}
 	accounts, actual, err := inspectContent(ctx, snapshotPath)
 	if err != nil {
-		return Outcome{}, FailureOutcome(ctx, fromContentRefusal(s.home, snapshotPath, err))
+		if ctx.Err() != nil {
+			return Outcome{}, InterruptedRefusal()
+		}
+		return Outcome{}, fromContentRefusal(s.home, snapshotPath, err)
 	}
 
 	manifest := Manifest{
@@ -84,8 +86,8 @@ func resolveFrom(home, snapshotDir, value string) (snapshotPath, manifestPath st
 	return snapshotPath, strings.TrimSuffix(snapshotPath, ".sqlite") + ".json", isPath, nil
 }
 
-// fromPathRefusal reports F1/F1b/F2/F2b: whether snapshotPath names a
-// usable file at all, before any manifest or content read is attempted.
+// fromPathRefusal reports whether snapshotPath names a usable file at all,
+// before any manifest or content read is attempted.
 func fromPathRefusal(home, snapshotDir, snapshotPath string, isPath bool) error {
 	info, err := os.Stat(snapshotPath)
 	switch {
@@ -104,27 +106,26 @@ func fromPathRefusal(home, snapshotDir, snapshotPath string, isPath bool) error 
 	return nil
 }
 
-// pathNotFoundRefusal reports F1: a path-form --from value naming a file
-// that does not exist.
+// pathNotFoundRefusal reports a path-form --from value naming a file that does not exist.
 func pathNotFoundRefusal(home, snapshotPath string) error {
 	return RefusalError{msg: fmt.Sprintf(
 		"%s does not exist; check the path passed to --from", homepath.Abbreviate(home, snapshotPath))}
 }
 
-// idNotFoundRefusal reports F1b: an ID-form --from value naming no snapshot in snapshotDir.
+// idNotFoundRefusal reports an ID-form --from value naming no snapshot in snapshotDir.
 func idNotFoundRefusal(home, snapshotDir, id string) error {
 	return RefusalError{msg: fmt.Sprintf(
 		"no snapshot %s in %s; check the ID passed to --from", id, homepath.Abbreviate(home, snapshotDir))}
 }
 
-// notASnapshotFileRefusal reports F2: snapshotPath exists but is not a regular file.
+// notASnapshotFileRefusal reports that snapshotPath exists but is not a regular file.
 func notASnapshotFileRefusal(home, snapshotPath, snapshotDir string) error {
 	return RefusalError{msg: fmt.Sprintf(
 		"%s is not a snapshot file; pass a .sqlite snapshot from %s with --from <snapshot>",
 		homepath.Abbreviate(home, snapshotPath), homepath.Abbreviate(home, snapshotDir))}
 }
 
-// quickenBundleRefusal reports F2b: snapshotPath is a Quicken bundle, not a snapshot.
+// quickenBundleRefusal reports that snapshotPath is a Quicken bundle, not a snapshot.
 func quickenBundleRefusal(home, snapshotPath string) error {
 	return RefusalError{msg: fmt.Sprintf(
 		"%s is a Quicken file, not a snapshot; pass it with --quicken <path>, or pass a snapshot with --from <snapshot>",
@@ -144,8 +145,8 @@ func readManifest(path string) (Manifest, error) {
 	return m, nil
 }
 
-// notSnapshotReason is F3's closed set of causes: only the classifiers
-// below select one, never a computed error string.
+// notSnapshotReason is the closed set of causes a file can fail to be a
+// usable snapshot for: only the classifiers below select one, never a computed error string.
 type notSnapshotReason string
 
 const (
@@ -156,8 +157,7 @@ const (
 	reasonNoAccounts      notSnapshotReason = "it has no accounts"
 )
 
-// notSnapshotRefusal reports F3: snapshotPath is not a usable quarry
-// snapshot, for reason.
+// notSnapshotRefusal reports that snapshotPath is not a usable quarry snapshot, for reason.
 func notSnapshotRefusal(home, snapshotPath string, err error, reason notSnapshotReason) error {
 	return causedRefusal{
 		msg: fmt.Sprintf("%s is not a quarry snapshot (%s); pass a snapshot taken by quarry sync with --from <snapshot>",
@@ -166,8 +166,8 @@ func notSnapshotRefusal(home, snapshotPath string, err error, reason notSnapshot
 	}
 }
 
-// manifestReadRefusal classifies readManifest's failure: F3 when the
-// manifest is missing or unparsable, else F4 naming the manifest itself.
+// manifestReadRefusal classifies readManifest's failure: not a usable
+// snapshot when the manifest is missing or unparsable, else unreadable, naming the manifest itself.
 func manifestReadRefusal(home, snapshotPath, manifestPath string, err error) error {
 	var syntaxErr *json.SyntaxError
 	var typeErr *json.UnmarshalTypeError
@@ -181,7 +181,7 @@ func manifestReadRefusal(home, snapshotPath, manifestPath string, err error) err
 	}
 }
 
-// fromUnreadableRefusal reports F4: an OS-level fault reading path, naming
+// fromUnreadableRefusal reports an OS-level fault reading path, naming
 // whichever file — snapshot or manifest — failed, with the OS reason verbatim.
 func fromUnreadableRefusal(home, path string, err error) error {
 	return causedRefusal{
@@ -192,7 +192,7 @@ func fromUnreadableRefusal(home, path string, err error) error {
 }
 
 // fromContentRefusal classifies inspectContent's failure once the hash is
-// verified: F3 for an open, integrity or accounts fault; else F4b.
+// verified: not a usable snapshot for an open, integrity or accounts fault; else unreadable.
 func fromContentRefusal(home, snapshotPath string, err error) error {
 	var integrityErr sqlite.IntegrityError
 	switch {
@@ -203,7 +203,7 @@ func fromContentRefusal(home, snapshotPath string, err error) error {
 	case errors.Is(err, errNoAccounts):
 		return notSnapshotRefusal(home, snapshotPath, err, reasonNoAccounts)
 	default:
-		// unreachable: inspectContent's remaining query (its Schema read) has no fault seam of its own — every one of its internal error returns is itself marked unreachable in internal/platform/sqlite, and the one live cause (a ctx cancellation mid-read) is reclassified as sync-interrupted by ImportFrom's FailureOutcome before this classifier ever sees it.
+		// unreachable: inspectContent's remaining query (its Schema read) has no fault seam of its own — every one of its internal error returns is itself marked unreachable in internal/platform/sqlite; the only live cause is a ctx cancellation mid-read, and ImportFrom checks ctx.Err() before ever calling this classifier, so that cause never reaches here.
 		return causedRefusal{
 			msg: fmt.Sprintf("cannot read %s: %s; take a new snapshot with quarry sync",
 				homepath.Abbreviate(home, snapshotPath), causeText(err)),
@@ -212,7 +212,7 @@ func fromContentRefusal(home, snapshotPath string, err error) error {
 	}
 }
 
-// changedSnapshotRefusal reports F5: a snapshot whose SHA-256 no longer matches its manifest.
+// changedSnapshotRefusal reports a snapshot whose SHA-256 no longer matches its manifest.
 func changedSnapshotRefusal(home, snapshotPath string) error {
 	return RefusalError{msg: fmt.Sprintf(
 		"%s has changed since quarry took it (its SHA-256 does not match its manifest); take a new snapshot with quarry sync",
