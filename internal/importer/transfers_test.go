@@ -207,6 +207,23 @@ func Test_import_keeps_a_numeric_link_with_no_imported_counterpart_as_one_sided(
 	}, fake.Rows.Transfers)
 }
 
+func Test_import_keeps_a_link_to_a_skipped_split_as_one_sided(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	leg := transferLeg(b, chequingPK, "-12.34", 101, "777")
+	b.Entry(v9fixture.EntryRow{Amount: "12.34", QuickenID: 777})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	assert.Equal(t, store.TransferCheck{OneSided: []store.OneSidedTransfer{{
+		ID: transferIDFor(leg), SourceID: leg, Date: day, Account: "Chequing", Currency: "CAD", Active: true, Amount: -1234,
+	}}}, result.Validation.Transfers)
+}
+
 func Test_import_builds_the_store_with_a_one_sided_transfer(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()

@@ -40,11 +40,12 @@ func Test_lessOffender(t *testing.T) {
 func Test_firstError_groups_the_more_count_by_thousands(t *testing.T) {
 	t.Parallel()
 	var off offenders
+	reason := reasonTransactionNoDate("Visa Infinite", 1)
 	for range 1001 {
-		off.add(offender{class: classMissingValue, reason: "a split (source id 1) has no transaction"})
+		off.add(offender{class: classMissingValue, reason: reason})
 	}
 
 	err := off.firstError()
 
-	assert.EqualError(t, err, "a split (source id 1) has no transaction (and 1,000 more)")
+	assert.EqualError(t, err, reason+" (and 1,000 more)")
 }

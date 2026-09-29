@@ -92,19 +92,19 @@ func Test_import_skips_a_transaction_whose_account_was_itself_excluded(t *testin
 		importReason(t, err))
 }
 
-// A Z_15USERTAGS link to an entry that was itself skipped (no transaction)
-// must not crash mapSplitTags: the entry's own offender is reported.
-func Test_import_skips_a_split_tag_link_whose_split_was_itself_skipped(t *testing.T) {
+func Test_import_skips_a_split_tag_link_whose_split_has_no_parent_transaction(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
 	entryPK := b.Entry(v9fixture.EntryRow{Amount: "1.00"})
 	b.LinkUserTag(entryPK, tagPK)
 	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
-	assert.Equal(t, `a split (source id `+itoa(entryPK)+`) has no transaction`, importReason(t, err))
+	require.NoError(t, err)
+	assert.Empty(t, fake.Rows.SplitTags)
 }
 
 // A category referencing a nameless parent must still build a full_path,
