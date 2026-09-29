@@ -113,7 +113,7 @@ func checkBalances(rows store.Rows, statements map[string]parsedStatement) store
 
 	var check store.BalanceCheck
 	for _, acct := range rows.Accounts {
-		if investmentTypes[acct.Type] {
+		if store.IsInvestmentAccount(acct.Type) {
 			check.InvestmentAccounts++
 			continue
 		}

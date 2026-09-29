@@ -17,10 +17,10 @@ var accountTypeMap = map[string]string{
 	"ASSET":                      "asset",
 	"LIABILITY":                  "liability",
 	"HOMEEQUITY":                 "home_equity",
-	"BROKERAGENORMAL":            "brokerage",
-	"BROKERAGEOTHER":             "brokerage",
-	"DEFERREDCOMPRETIREMENT401K": "retirement",
-	"RETIREMENTIRA":              "retirement",
+	"BROKERAGENORMAL":            store.AccountTypeBrokerage,
+	"BROKERAGEOTHER":             store.AccountTypeBrokerage,
+	"DEFERREDCOMPRETIREMENT401K": store.AccountTypeRetirement,
+	"RETIREMENTIRA":              store.AccountTypeRetirement,
 }
 
 // validCurrencies are the only currencies quarry supports.

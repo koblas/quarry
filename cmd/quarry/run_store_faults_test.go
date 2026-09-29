@@ -72,6 +72,7 @@ func Test_run_never_replaces_the_store_when_the_build_fails(t *testing.T) {
 			name: "unwritable store directory",
 			arrange: func(t *testing.T, storeDir string, _ context.CancelFunc) *faultDB {
 				t.Helper()
+				skipAsRoot(t)
 				require.NoError(t, os.Mkdir(filepath.Join(storeDir, "snapshots"), 0o700))
 				require.NoError(t, os.Chmod(storeDir, 0o500))
 				t.Cleanup(func() { _ = os.Chmod(storeDir, 0o700) })
@@ -132,8 +133,10 @@ func Test_run_never_replaces_the_store_when_the_build_fails(t *testing.T) {
 			fault := c.arrange(t, storeDir, cancel)
 			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(ctx, []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr,
-				newServerFactory(withFault(fault)))
+			env := defaultEnv(&stdout, &stderr)
+			env.NewServer = newServerFactory(withFault(fault))
+
+			exitCode := runWith(ctx, []string{"sync", "--quicken", bundle.Dir}, env)
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())

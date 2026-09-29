@@ -89,8 +89,9 @@ func renderStore(result store.Result, home string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", homepath.Abbreviate(home, result.Path))
 	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(result.Counts, result.NotImported))
-	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(result.Validation.Balances))
-	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits))
+	bc := result.Validation.Balances
+	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(bc.Checked, len(bc.NeverReconciled), bc.InvestmentAccounts))
+	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits.Checked))
 	writeTransfers(&b, result.Validation.Transfers)
 	return b.String()
 }
@@ -98,26 +99,26 @@ func renderStore(result store.Result, home string) string {
 // writeTransfers appends tc's Transfers line, then one "?" row per
 // one-sided leg.
 func writeTransfers(b *strings.Builder, tc store.TransferCheck) {
-	fmt.Fprintf(b, "%-10s%s\n", "Transfers", transfersPhrase(tc))
+	fmt.Fprintf(b, "%-10s%s\n", "Transfers", transfersPhrase(tc.Paired, len(tc.OneSided)))
 	for _, row := range oneSidedRows(tc.OneSided) {
 		fmt.Fprintln(b, row)
 	}
 }
 
-// transfersPhrase renders tc as "none", "N paired", or "N paired, M
-// one-sided" once any leg is one-sided.
-func transfersPhrase(tc store.TransferCheck) string {
+// transfersPhrase renders the paired and one-sided transfer counts as
+// "none", "N paired", or "N paired, M one-sided" once any leg is one-sided.
+func transfersPhrase(paired, oneSided int) string {
 	switch {
-	case tc.Paired == 0 && len(tc.OneSided) == 0:
+	case paired == 0 && oneSided == 0:
 		return "none"
-	case len(tc.OneSided) == 0:
-		return humanize.Thousands(tc.Paired) + " paired"
+	case oneSided == 0:
+		return humanize.Thousands(paired) + " paired"
 	default:
-		return fmt.Sprintf("%s paired, %s one-sided", humanize.Thousands(tc.Paired), humanize.Thousands(len(tc.OneSided)))
+		return fmt.Sprintf("%s paired, %s one-sided", humanize.Thousands(paired), humanize.Thousands(oneSided))
 	}
 }
 
-// balancesCheckedPhrase renders bc's checked clause: no accounts checked,
+// balancesCheckedPhrase renders the checked clause: no accounts checked,
 // exactly one matching, or the plural count.
 func balancesCheckedPhrase(n int) string {
 	switch n {
@@ -130,22 +131,22 @@ func balancesCheckedPhrase(n int) string {
 	}
 }
 
-// balancesPhrase appends bc's never-reconciled and investment-account
-// clauses (each omitted at zero, joined with " and ") to its checked clause.
-func balancesPhrase(bc store.BalanceCheck) string {
-	return balancesCheckedPhrase(bc.Checked) + balancesExtrasPhrase(bc)
+// balancesPhrase appends the never-reconciled and investment-account
+// clauses (each omitted at zero, joined with " and ") to the checked clause.
+func balancesPhrase(checked, neverReconciled, investmentAccounts int) string {
+	return balancesCheckedPhrase(checked) + balancesExtrasPhrase(neverReconciled, investmentAccounts)
 }
 
-// balancesExtrasPhrase renders bc's never-reconciled and investment-account
+// balancesExtrasPhrase renders the never-reconciled and investment-account
 // clauses, each omitted at zero and joined with " and ", prefixed with a
 // "; " separator when any exist.
-func balancesExtrasPhrase(bc store.BalanceCheck) string {
+func balancesExtrasPhrase(neverReconciled, investmentAccounts int) string {
 	var extras []string
-	if n := len(bc.NeverReconciled); n > 0 {
-		extras = append(extras, humanize.Count(n, "never reconciled", "never reconciled"))
+	if neverReconciled > 0 {
+		extras = append(extras, humanize.Count(neverReconciled, "never reconciled", "never reconciled"))
 	}
-	if bc.InvestmentAccounts > 0 {
-		extras = append(extras, humanize.Count(bc.InvestmentAccounts, "investment account not checked", "investment accounts not checked"))
+	if investmentAccounts > 0 {
+		extras = append(extras, humanize.Count(investmentAccounts, "investment account not checked", "investment accounts not checked"))
 	}
 	if len(extras) == 0 {
 		return ""
@@ -165,7 +166,8 @@ func xOfYPhrase(x, y int, singular, plural string) string {
 // balancesDifferPhrase renders bc's V1 clause: how many of the checked
 // accounts differ, plus its never-reconciled and investment-account extras.
 func balancesDifferPhrase(bc store.BalanceCheck) string {
-	return "DIFFER for " + xOfYPhrase(len(bc.Mismatched), bc.Checked, "account", "accounts") + balancesExtrasPhrase(bc)
+	return "DIFFER for " + xOfYPhrase(len(bc.Mismatched), bc.Checked, "account", "accounts") +
+		balancesExtrasPhrase(len(bc.NeverReconciled), bc.InvestmentAccounts)
 }
 
 // splitsDifferPhrase renders sc's V1 clause: how many of the checked
@@ -174,16 +176,16 @@ func splitsDifferPhrase(sc store.SplitCheck) string {
 	return "DIFFER for " + xOfYPhrase(len(sc.Mismatched), sc.Checked, "transaction", "transactions")
 }
 
-// splitsPhrase renders sc's checked clause: no transactions checked,
+// splitsPhrase renders the checked clause: no transactions checked,
 // exactly one equalling its splits, or the plural count.
-func splitsPhrase(sc store.SplitCheck) string {
-	switch sc.Checked {
+func splitsPhrase(checked int) string {
+	switch checked {
 	case 0:
 		return "no transactions to check"
 	case 1:
 		return "the 1 transaction equals the sum of its splits"
 	default:
-		return "all " + humanize.Thousands(sc.Checked) + " transactions equal the sum of their splits"
+		return "all " + humanize.Thousands(checked) + " transactions equal the sum of their splits"
 	}
 }
 
@@ -355,7 +357,8 @@ func renderStoreFailure(result store.Result, storeExisted bool, home string) str
 			fmt.Fprintln(&b, row)
 		}
 	} else {
-		fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(result.Validation.Balances))
+		bc := result.Validation.Balances
+		fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(bc.Checked, len(bc.NeverReconciled), bc.InvestmentAccounts))
 	}
 
 	if mismatched := result.Validation.Splits.Mismatched; len(mismatched) > 0 {
@@ -364,7 +367,7 @@ func renderStoreFailure(result store.Result, storeExisted bool, home string) str
 			fmt.Fprintln(&b, row)
 		}
 	} else {
-		fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits))
+		fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits.Checked))
 	}
 	writeTransfers(&b, result.Validation.Transfers)
 	return b.String()

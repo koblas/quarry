@@ -48,11 +48,15 @@ func minimalRows() store.Rows {
 		},
 		ImportRuns: []store.ImportRun{{
 			ID: 1, StartedAt: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), FinishedAt: time.Date(2026, 9, 27, 14, 30, 7, 0, time.UTC),
-			Snapshot: store.SnapshotRef{Path: "/snapshots/20260927T143005Z.sqlite", SHA256: "9f86", SchemaFingerprint: "sha256:abc"},
+			Snapshot: store.SnapshotRef{
+				Path: "/snapshots/20260927T143005Z.sqlite", SHA256: "9f86", SchemaFingerprint: "sha256:abc",
+				TakenAt: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), Source: "/Users/alex/Documents/Home.quicken",
+			},
 			Counts: store.Counts{
 				Accounts: 1, Categories: 2, Payees: 3, Tags: 4, Transactions: 5, Splits: 6, SplitTags: 7, Transfers: 8,
 			},
 			BalancesChecked: 9, BalancesMismatched: 10, SplitsMismatched: 11, TransfersOneSided: 12, InvestmentTransactionsNotImported: 13,
+			BalancesNeverReconciled: 14, InvestmentAccounts: 15, TransfersPaired: 16, TransfersCrossCurrency: 17,
 		}},
 	}
 }
@@ -90,6 +94,130 @@ func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
 	assertScalar(t, db, "SELECT concat_ws(' ', accounts_rows, categories_rows, payees_rows, tags_rows, transactions_rows, splits_rows, "+
 		"split_tags_rows, transfers_rows, balances_checked, balances_mismatched, splits_mismatched, transfers_one_sided, "+
 		"investment_transactions_not_imported) FROM import_runs WHERE id = 1", "1 2 3 4 5 6 7 8 9 10 11 12 13")
+	assertScalar(t, db, "SELECT concat_ws(' ', CAST(snapshot_taken_at AS VARCHAR), source_path, balances_never_reconciled, "+
+		"investment_accounts, transfers_paired, transfers_cross_currency) FROM import_runs WHERE id = 1",
+		"2026-09-27 14:30:05 /Users/alex/Documents/Home.quicken 14 15 16 17")
+}
+
+// The held reader reads nothing before Replace: a cached page would hide an overwrite of its file.
+func Test_replace_leaves_a_held_reader_on_the_old_rows_and_a_later_read_sees_the_new(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir())
+	path, err := st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	held, err := duckdb.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = held.Close() })
+	renamed := minimalRows()
+	renamed.Accounts[0].Name = "Savings"
+
+	_, err = st.Replace(t.Context(), renamed)
+
+	require.NoError(t, err)
+	assertScalar(t, held, "SELECT name FROM accounts", "Chequing")
+	require.NoError(t, held.Close())
+	got, err := st.Query(t.Context(), "SELECT name FROM accounts", 0)
+	require.NoError(t, err)
+	assert.Equal(t, "Savings", got.Rows[0][0].Text)
+}
+
+func Test_replace_writes_one_store_info_row_with_the_format_version_and_build_time(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	before := time.Now().UTC().Truncate(time.Microsecond)
+
+	path, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+
+	after := time.Now().UTC()
+	require.NoError(t, err)
+	db, err := duckdb.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	assertScalar(t, db, "SELECT CAST(count(*) AS VARCHAR) FROM store_info", "1")
+	assertScalar(t, db, "SELECT CAST(format_version AS VARCHAR) FROM store_info", strconv.Itoa(duckstore.FormatVersion))
+	var builtAt time.Time
+	require.NoError(t, db.QueryRows(t.Context(), "SELECT built_at FROM store_info", nil,
+		func(scan func(dest ...any) error) error { return scan(&builtAt) }))
+	assert.False(t, builtAt.Before(before))
+	assert.False(t, builtAt.After(after))
+}
+
+func Test_replace_records_the_quarry_version_it_is_given(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	path, err := duckstore.New(dir, duckstore.WithQuarryVersion("v1.2.3")).Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	db, err := duckdb.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	assertScalar(t, db, "SELECT quarry_version FROM store_info", "v1.2.3")
+}
+
+func Test_replace_records_devel_when_no_quarry_version_is_given(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		opts []duckstore.Option
+	}{
+		{name: "no option", opts: nil},
+		{name: "an empty version", opts: []duckstore.Option{duckstore.WithQuarryVersion("")}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			path, err := duckstore.New(t.TempDir(), c.opts...).Replace(t.Context(), minimalRows())
+
+			require.NoError(t, err)
+			db, err := duckdb.OpenReadOnly(t.Context(), path)
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = db.Close() })
+			assertScalar(t, db, "SELECT quarry_version FROM store_info", "(devel)")
+		})
+	}
+}
+
+func Test_replace_stores_null_when_the_snapshot_has_no_taken_at_or_source(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	rows.ImportRuns[0].Snapshot.TakenAt = time.Time{}
+	rows.ImportRuns[0].Snapshot.Source = ""
+
+	path, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
+
+	require.NoError(t, err)
+	db, err := duckdb.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	assertScalar(t, db, "SELECT COALESCE(CAST(snapshot_taken_at AS VARCHAR), 'NULL') || ' / ' || COALESCE(source_path, 'NULL') FROM import_runs",
+		"NULL / NULL")
+}
+
+func Test_replace_keeps_the_previous_store_when_store_info_cannot_be_written(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	before, err := os.ReadFile(path)
+	require.NoError(t, err)
+	st := newFaultStore(dir, &faultDB{appendFaultTable: "store_info", appendFault: &duckdbdriver.Error{
+		Type: duckdbdriver.ErrorTypeConstraint, Msg: "Constraint Error: NOT NULL constraint failed: store_info.built_at",
+	}})
+	rows := minimalRows()
+	rows.Transactions[0].Amount = 999
+
+	_, err = st.Replace(t.Context(), rows)
+
+	require.ErrorContains(t, err, "load store_info")
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"quarry.duckdb"}, direntNames(entries))
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, before, after)
 }
 
 // A sign-drop bug would only show here, not in the positive-amount
@@ -297,10 +425,20 @@ func Test_replace_fails_when_the_context_is_already_cancelled(t *testing.T) {
 type faultDB struct {
 	duckstore.DB
 
-	path            string
-	checkpointFault error
-	afterCheckpoint func()
-	walOnClose      bool
+	path             string
+	checkpointFault  error
+	afterCheckpoint  func()
+	walOnClose       bool
+	appendFaultTable string
+	appendFault      error
+}
+
+// AppendRows fails with appendFault for appendFaultTable, else appends for real.
+func (f *faultDB) AppendRows(ctx context.Context, table string, rows [][]any) error {
+	if f.appendFault != nil && table == f.appendFaultTable {
+		return fmt.Errorf("append %s: %w", table, f.appendFault)
+	}
+	return f.DB.AppendRows(ctx, table, rows)
 }
 
 // CheckpointClose returns checkpointFault wrapped as duckdb.CheckpointClose

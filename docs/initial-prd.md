@@ -114,7 +114,7 @@ The store has a small set of normalized tables plus derived views; every analysi
 | Table | Holds | Key rules |
 | --- | --- | --- |
 | `accounts` | Name, type (chequing, savings, credit card, investment, retirement, loan, asset), currency (CAD or USD), institution, open/closed, hidden | Closed accounts included; type drives net-worth sign and grouping |
-| `categories` | Hierarchy (`parent_id`, `full_path`), kind (income / expense / transfer), tax line | Full history kept, including retired categories |
+| `categories` | Hierarchy (`parent_id`, `full_path`), kind (income / expense / system), tax line | Full history kept, including retired categories |
 | `payees` | Payee names as recorded in Quicken | Variants of one merchant are flagged for cleanup, not silently merged |
 | `transactions` | Account, date, payee, memo, amount, currency, cleared/reconciled status, cheque number | Negative = money leaving the account |
 | `splits` | Transaction, category, amount, memo, transfer target account | Every transaction has at least one split; splits sum to the transaction amount |
@@ -165,13 +165,12 @@ Every command supports `--json` for machine consumers and a readable table by de
 | `quarry accounts` | Accounts with current balances, closed ones on request |
 | `quarry spend` | Spending by category / payee / tag / month, with `--since`, `--until`, `--account` |
 | `quarry cashflow` | Income, expense, savings rate by period |
-| `quarry networth` | Net worth history, by account type and currency |
+| `quarry networth` | Net worth history, by account type and currency (Phase 4: needs investment holdings) |
 | `quarry recurring` | Detected recurring charges, start date, price changes |
-| `quarry anomalies` | Unusually large or duplicate transactions |
+| `quarry anomalies` | Unusually large transactions (duplicates are `findings`) |
 | `quarry acb` | Adjusted cost base per security and realized capital gains by tax year, in CAD |
 | `quarry findings` | The cleanup worklist to apply in Quicken; `--csv` to export |
 | `quarry sql` | Read-only SQL against the store |
-| `quarry export` | Views to CSV or Parquet for spreadsheets and notebooks |
 | `quarry mcp` | Start the MCP server (stdio) |
 
 Every reporting command takes `--currency CAD|USD` (default from config, CAD out of the box).
@@ -300,9 +299,9 @@ Each phase ships only when its check passes.
 | --- | --- | --- |
 | 0 — Port prior art | dweekly schema, recipes, skill; backup snapshot | Schema verified on your v9 file |
 | **1 — Import + store** | Banking, credit, splits, transfers, categories | Balances reconcile for all cash accounts |
-| 2 — CLI + analysis | Views, CLI, cleanup worklist, anomaly detection | Matches Quicken reports, 2 years |
+| 2 — CLI + analysis | Views, CLI, cleanup worklist, anomaly detection (slices 2a–2f; `export` dropped for `sql --csv`) | Matches Quicken reports, 2 years |
 | 3 — Skill + MCP | `SKILL.md`, named tools, read-only query | Claude answers the use-case questions correctly |
-| 4 — Investments | Holdings, ACB, prices; monthly scheduled summary | Share counts match Quicken |
+| 4 — Investments | Holdings, ACB, prices, net worth; monthly scheduled summary | Share counts match Quicken |
 
 Phases 0–2 alone deliver the core goal (the data as a queryable source); the MCP server and investments build on a store that is already proven correct. No dates are set yet.
 

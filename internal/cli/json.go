@@ -9,7 +9,7 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// jsonDateLayout is the --json document's date format for every date field.
+// jsonDateLayout is the format of every calendar date quarry prints, in text and in --json.
 const jsonDateLayout = "2006-01-02"
 
 // resultDocument is sync's --json stdout shape: the manifest, the store
@@ -124,12 +124,18 @@ func renderJSON(outcome snapshot.Outcome) ([]byte, error) {
 		Store:    newStoreDocument(outcome.Store),
 		Warnings: outcome.Warnings(),
 	}
+	return marshalDocument(doc)
+}
+
+// marshalDocument encodes doc as every --json document is written: 2-space
+// indented JSON with a trailing newline.
+func marshalDocument(doc any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(doc); err != nil {
-		// unreachable: every resultDocument field is a string, bool, int, pointer or slice of those; none can fail JSON encoding.
-		return nil, fmt.Errorf("encode result: %w", err)
+		// unreachable: documents hold only strings, bools, ints, pointers, slices and the finite floats jsonSQLCell lets through; nothing can fail JSON encoding.
+		return nil, fmt.Errorf("encode document: %w", err)
 	}
 	return buf.Bytes(), nil
 }
@@ -206,7 +212,7 @@ func newSplitMismatchDocuments(mismatches []store.SplitMismatch) []splitMismatch
 	for i, m := range mismatches {
 		out[i] = splitMismatchDocument{
 			ID: m.ID, Date: m.Date.Format(jsonDateLayout), Account: m.Account, Currency: m.Currency,
-			Payee: jsonPayee(m.Payee), Amount: jsonMoney(m.Amount), SplitsTotal: jsonMoney(m.SplitsTotal),
+			Payee: jsonNullString(m.Payee), Amount: jsonMoney(m.Amount), SplitsTotal: jsonMoney(m.SplitsTotal),
 		}
 	}
 	return out
@@ -224,19 +230,19 @@ func newOneSidedDocuments(legs []store.OneSidedTransfer) []oneSidedDocument {
 	for i, leg := range legs {
 		out[i] = oneSidedDocument{
 			ID: leg.ID, Date: leg.Date.Format(jsonDateLayout), Account: leg.Account, Currency: leg.Currency,
-			Payee: jsonPayee(leg.Payee), Amount: jsonMoney(leg.Amount),
+			Payee: jsonNullString(leg.Payee), Amount: jsonMoney(leg.Amount),
 			OtherAccount: leg.OtherAccount, OtherAccountID: leg.OtherAccountID,
 		}
 	}
 	return out
 }
 
-// jsonPayee returns nil for an absent payee (""), else a pointer to name.
-func jsonPayee(name string) *string {
-	if name == "" {
+// jsonNullString returns nil for the empty string, else a pointer to s.
+func jsonNullString(s string) *string {
+	if s == "" {
 		return nil
 	}
-	return &name
+	return &s
 }
 
 // jsonMoney renders cents as a 2-decimal amount with a leading "-" for a

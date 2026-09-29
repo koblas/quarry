@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/atomicfile"
@@ -18,6 +19,12 @@ import (
 
 // FileName is quarry's store filename inside a Store's directory.
 const FileName = "quarry.duckdb"
+
+// FormatVersion is the store format this build of quarry writes and reads.
+const FormatVersion = 2
+
+// develVersion is the quarry_version recorded when no build version is known.
+const develVersion = "(devel)"
 
 // leftoverMaxAge is how old a store partial must be before Replace's sweep removes it.
 const leftoverMaxAge = time.Hour
@@ -54,10 +61,23 @@ type DB interface {
 
 var _ DB = (*duckdb.DB)(nil)
 
-// Store builds quarry's DuckDB file inside one directory.
+// ReadDB is the read-only connection a Store answers one read through.
+// *duckdb.DB is the production implementation.
+type ReadDB interface {
+	QueryRows(ctx context.Context, query string, args []any, row func(scan func(dest ...any) error) error) error
+	QueryTable(ctx context.Context, query string, maxRows int) (duckdb.Table, error)
+	Close() error
+}
+
+var _ ReadDB = (*duckdb.DB)(nil)
+
+// Store builds quarry's DuckDB file inside one directory and answers reads
+// from it.
 type Store struct {
-	dir    string
-	create func(ctx context.Context, path string) (DB, error)
+	dir           string
+	create        func(ctx context.Context, path string) (DB, error)
+	openReadOnly  func(ctx context.Context, path string) (ReadDB, error)
+	quarryVersion string
 }
 
 // Option configures a Store.
@@ -69,9 +89,25 @@ func WithCreate(create func(ctx context.Context, path string) (DB, error)) Optio
 	return func(s *Store) { s.create = create }
 }
 
+// WithOpenReadOnly replaces how a Store opens the store file to read it,
+// which by default is duckdb.OpenReadOnly. open must not write to path.
+func WithOpenReadOnly(open func(ctx context.Context, path string) (ReadDB, error)) Option {
+	return func(s *Store) { s.openReadOnly = open }
+}
+
+// WithQuarryVersion sets the quarry_version Replace records; an empty v keeps
+// the default "(devel)", so the column is never stored empty.
+func WithQuarryVersion(v string) Option {
+	return func(s *Store) {
+		if v != "" {
+			s.quarryVersion = v
+		}
+	}
+}
+
 // New returns a Store that builds quarry.duckdb inside dir.
 func New(dir string, opts ...Option) *Store {
-	s := &Store{dir: dir, create: createDuckDB}
+	s := &Store{dir: dir, create: createDuckDB, openReadOnly: openDuckDBReadOnly, quarryVersion: develVersion}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -100,6 +136,142 @@ func createDuckDB(ctx context.Context, path string) (DB, error) {
 	return db, nil
 }
 
+// openDuckDBReadOnly is New's default read opener; it returns a nil
+// interface, never a typed nil, when duckdb.OpenReadOnly fails.
+func openDuckDBReadOnly(ctx context.Context, path string) (ReadDB, error) {
+	db, err := duckdb.OpenReadOnly(ctx, path)
+	if err != nil {
+		return nil, err //nolint:wrapcheck // OpenReadOnly already names the path; callers add the operation
+	}
+	return db, nil
+}
+
+// openRead opens the store file read-only for one read and checks its
+// format, refusing with *store.OpenError; it never creates the file.
+func (s *Store) openRead(ctx context.Context) (ReadDB, error) {
+	path := s.Path()
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+		return nil, &store.OpenError{Fault: store.OpenFaultMissing, Path: path, Err: err}
+	}
+	db, err := s.openReadOnly(ctx, path)
+	if err != nil {
+		return nil, openFault(path, err)
+	}
+	if err := checkFormat(ctx, db, path); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return db, nil
+}
+
+// errFormatMismatch is the fault behind a store whose store_info is not this build's format.
+var errFormatMismatch = errors.New("store format is not this build's")
+
+// Format-check queries, run by openRead before any read's own query.
+const (
+	columnExistsQuery = `SELECT count(*) FROM duckdb_columns()
+WHERE database_name = current_database() AND schema_name = 'main' AND table_name = ? AND column_name = ?`
+	formatVersionQuery = `SELECT format_version FROM store_info`
+	snapshotPathQuery  = `SELECT snapshot_path FROM import_runs`
+)
+
+// openFault classifies err, a failed open or format check of the store at path.
+func openFault(path string, err error) *store.OpenError {
+	fault := &store.OpenError{Path: path, Err: err}
+	// The file decides whether the store vanished after the stat, never the driver's wording.
+	if _, statErr := os.Stat(path); errors.Is(statErr, fs.ErrNotExist) {
+		fault.Fault = store.OpenFaultMissing
+		return fault
+	}
+	switch {
+	case duckdb.IsNotDatabase(err):
+		fault.Fault = store.OpenFaultNotDuckDB
+	case duckdb.IsPermission(err):
+		fault.Fault = store.OpenFaultPermission
+	case duckdb.IsLocked(err):
+		fault.Fault = store.OpenFaultLocked
+	default:
+		fault.Fault = store.OpenFaultOther
+		fault.Reason = faultReason(path, err)
+	}
+	return fault
+}
+
+// faultReason is err's first line, naming the store by path however the
+// fault spelled it, or "unknown error" when that leaves nothing.
+func faultReason(path string, err error) string {
+	reason := duckdb.ErrorLine(err)
+	if pathErr, ok := errors.AsType[*fs.PathError](err); ok {
+		reason = pathErr.Err.Error()
+	}
+	// The driver names the resolved path, which can contain path (/private/var and /var): replace it first.
+	if resolved, evalErr := filepath.EvalSymlinks(path); evalErr == nil && resolved != path {
+		reason = strings.ReplaceAll(reason, resolved, path)
+	}
+	if reason == "" {
+		return "unknown error"
+	}
+	return reason
+}
+
+// checkFormat refuses, as store.OpenFaultOtherFormat, a store whose
+// store_info does not hold exactly one row of FormatVersion.
+func checkFormat(ctx context.Context, db ReadDB, path string) error {
+	// The catalog first: selecting from a missing store_info is a query error.
+	hasInfo, err := hasColumn(ctx, db, "store_info", "format_version")
+	if err != nil {
+		return openFault(path, err)
+	}
+	if hasInfo {
+		var version sql.NullInt64
+		rows := 0
+		err := db.QueryRows(ctx, formatVersionQuery, nil, func(scan func(dest ...any) error) error {
+			rows++
+			return scan(&version)
+		})
+		if err != nil {
+			return openFault(path, err)
+		}
+		if rows == 1 && version.Int64 == FormatVersion { // NULL scans as 0
+			return nil
+		}
+	}
+	return &store.OpenError{
+		Fault: store.OpenFaultOtherFormat, Path: path, SnapshotPath: snapshotPath(ctx, db), Err: errFormatMismatch,
+	}
+}
+
+// snapshotPath is the import run's snapshot path, or "" when import_runs
+// cannot yield exactly one.
+func snapshotPath(ctx context.Context, db ReadDB) string {
+	hasPath, _ := hasColumn(ctx, db, "import_runs", "snapshot_path")
+	if !hasPath { // false on a catalog fault too
+		return ""
+	}
+	var path sql.NullString
+	rows := 0
+	err := db.QueryRows(ctx, snapshotPathQuery, nil, func(scan func(dest ...any) error) error {
+		rows++
+		return scan(&path)
+	})
+	if err != nil || rows != 1 {
+		return ""
+	}
+	return path.String
+}
+
+// hasColumn reports whether the store's main schema has table.column.
+func hasColumn(ctx context.Context, db ReadDB, table, column string) (bool, error) {
+	var n int64
+	err := db.QueryRows(ctx, columnExistsQuery, []any{table, column}, func(scan func(dest ...any) error) error {
+		return scan(&n)
+	})
+	if err != nil {
+		return false, fmt.Errorf("read store catalog: %w", err)
+	}
+	return n > 0, nil
+}
+
 // Replace creates the store directory if needed, sweeps aged build leftovers
 // and swaps rows into quarry.duckdb, removing any stale quarry.duckdb.wal
 // first. On failure this run's own build file is removed and the existing
@@ -119,7 +291,8 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
 		return "", buildError(err)
 	}
 
-	if err := build(ctx, db, rows); err != nil {
+	builtAt := time.Now().UTC()
+	if err := build(ctx, db, rows, s.quarryVersion, builtAt); err != nil {
 		_ = db.Close()
 		removePartial(partialPath)
 		return "", buildError(err)
@@ -210,9 +383,10 @@ func removePartial(path string) {
 	_ = os.Remove(path + ".wal")
 }
 
-// build creates quarry's schema in db and bulk-loads every table in rows.
-func build(ctx context.Context, db DB, rows store.Rows) error {
-	if _, err := db.Exec(ctx, schemaDDL); err != nil {
+// build creates quarry's schema and views in db and bulk-loads every table
+// in rows, then store_info last: a store carrying it is complete.
+func build(ctx context.Context, db DB, rows store.Rows, quarryVersion string, builtAt time.Time) error {
+	if _, err := db.Exec(ctx, schemaDDL+accountBalancesViewDDL()); err != nil {
 		return fmt.Errorf("create schema: %w", err)
 	}
 
@@ -248,7 +422,10 @@ func build(ctx context.Context, db DB, rows store.Rows) error {
 	if err := appendTable(ctx, db, "transfers", transferRows(rows.Transfers)); err != nil {
 		return err
 	}
-	return appendTable(ctx, db, "import_runs", importRunRows(rows.ImportRuns))
+	if err := appendTable(ctx, db, "import_runs", importRunRows(rows.ImportRuns)); err != nil {
+		return err
+	}
+	return appendTable(ctx, db, "store_info", [][]any{{int32(FormatVersion), quarryVersion, builtAt}})
 }
 
 // appendTable bulk-loads rows into table, naming the table on failure.
@@ -264,6 +441,20 @@ func nullableStr(s *string) any {
 		return nil
 	}
 	return *s
+}
+
+func nullableTime(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t
+}
+
+func nullableNonEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func accountRows(accounts []store.Account) [][]any {
@@ -353,6 +544,9 @@ func importRunRows(runs []store.ImportRun) [][]any {
 			int64(c.Transactions), int64(c.Splits), int64(c.SplitTags), int64(c.Transfers),
 			int64(r.BalancesChecked), int64(r.BalancesMismatched), int64(r.SplitsMismatched),
 			int64(r.TransfersOneSided), int64(r.InvestmentTransactionsNotImported),
+			nullableTime(r.Snapshot.TakenAt), nullableNonEmpty(r.Snapshot.Source),
+			int64(r.BalancesNeverReconciled), int64(r.InvestmentAccounts),
+			int64(r.TransfersPaired), int64(r.TransfersCrossCurrency),
 		}
 	}
 	return out

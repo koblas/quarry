@@ -196,6 +196,41 @@ func Test_import_from_returns_the_taken_at_time_the_manifest_recorded(t *testing
 	assert.Equal(t, recordedTakenAt, outcome.Manifest.Snapshot.TakenAt)
 }
 
+func Test_import_from_passes_the_recorded_taken_at_and_source_to_the_importer(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	taken := takeSnapshot(t, srv)
+	editManifest(t, taken.Snapshot.Manifest, func(m *snapshot.Manifest) {
+		m.Snapshot.TakenAt = "2001-02-03T04:05:06-05:00"
+		m.Snapshot.Source = "/Users/alex/Documents/Old.quicken"
+	})
+
+	_, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
+
+	require.NoError(t, err)
+	require.Len(t, fake.calls, 1)
+	assert.Equal(t, time.Date(2001, 2, 3, 9, 5, 6, 0, time.UTC), fake.calls[0].TakenAt)
+	assert.Equal(t, time.UTC, fake.calls[0].TakenAt.Location())
+	assert.Equal(t, "/Users/alex/Documents/Old.quicken", fake.calls[0].Source)
+}
+
+func Test_import_from_imports_with_a_zero_taken_at_when_the_manifest_time_is_unparseable(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	taken := takeSnapshot(t, srv)
+	editManifest(t, taken.Snapshot.Manifest, func(m *snapshot.Manifest) { m.Snapshot.TakenAt = "yesterday-ish" })
+
+	_, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
+
+	require.NoError(t, err)
+	require.Len(t, fake.calls, 1)
+	assert.True(t, fake.calls[0].TakenAt.IsZero())
+}
+
 func Test_import_from_imports_a_snapshot_whose_manifest_said_unverified_once_the_current_reference_matches(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()

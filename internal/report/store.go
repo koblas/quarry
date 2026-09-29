@@ -1,0 +1,18 @@
+package report
+
+import (
+	"context"
+
+	"github.com/koblas/quarry/internal/store"
+)
+
+// Store is the read side of quarry's store: each method opens the store
+// read-only, answers, and closes it again.
+type Store interface {
+	// Status describes the store and the import run that built it.
+	Status(ctx context.Context) (store.Status, error)
+	// Accounts lists every account with its balance.
+	Accounts(ctx context.Context) (store.AccountList, error)
+	// Query runs query verbatim and returns at most maxRows rows, every row when maxRows is 0.
+	Query(ctx context.Context, query string, maxRows int) (store.QueryResult, error)
+}

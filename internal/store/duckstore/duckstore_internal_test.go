@@ -7,6 +7,7 @@ package duckstore
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/koblas/quarry/internal/store"
@@ -22,7 +23,7 @@ func Test_build_fails_when_the_schema_already_exists(t *testing.T) {
 	_, err = db.Exec(t.Context(), schemaDDL)
 	require.NoError(t, err)
 
-	err = build(t.Context(), db, store.Rows{})
+	err = build(t.Context(), db, store.Rows{}, "(devel)", time.Now())
 
 	require.Error(t, err)
 }

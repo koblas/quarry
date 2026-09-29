@@ -18,6 +18,9 @@ func Test_import_hands_the_store_one_import_run_describing_the_build(t *testing.
 	day := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
 	b.Reconcile(v9fixture.ReconcileRow{Account: chequingPK, EndDate: &day, EndingBalance: "100.00"})
 	transferLeg(b, chequingPK, "-5.00", 101, "Old Visa")
+	savingsPK := b.Account(v9fixture.AccountRow{Name: "US Savings", Type: "SAVINGS", Currency: "USD", Active: true})
+	transferLeg(b, chequingPK, "-20.00", 201, "202")
+	transferLeg(b, savingsPK, "15.00", 202, "201")
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	b.Transaction(v9fixture.TransactionRow{Entity: v9fixture.EntInvestmentTransaction, Account: brokeragePK, Amount: "-40.00", PostedDate: &day})
 	bundle := b.WriteBundle(t, t.TempDir())
@@ -33,8 +36,9 @@ func Test_import_hands_the_store_one_import_run_describing_the_build(t *testing.
 	run := fake.Rows.ImportRuns[0]
 	assert.Equal(t, store.ImportRun{
 		ID: 1, StartedAt: run.StartedAt, FinishedAt: run.FinishedAt, Snapshot: snap,
-		Counts:          store.Counts{Accounts: 2, Transactions: 2, Splits: 2, Transfers: 1},
+		Counts:          store.Counts{Accounts: 3, Transactions: 4, Splits: 4, Transfers: 2},
 		BalancesChecked: 1, TransfersOneSided: 1, InvestmentTransactionsNotImported: 1,
+		BalancesNeverReconciled: 1, InvestmentAccounts: 1, TransfersPaired: 1, TransfersCrossCurrency: 1,
 	}, run)
 	assert.Equal(t, time.UTC, run.StartedAt.Location())
 	assert.Equal(t, time.UTC, run.FinishedAt.Location())

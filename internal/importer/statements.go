@@ -5,12 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
-)
 
-// investmentTypes are the accounts.type values the balance gate counts but
-// never checks: quarry imports their cash-flow transactions but has no
-// register balance to compare them against.
-var investmentTypes = map[string]bool{"brokerage": true, "retirement": true}
+	"github.com/koblas/quarry/internal/store"
+)
 
 // parsedStatement is the one reconcile record the balance gate uses for a
 // non-investment account: its newest non-deleted ZRECONCILERECORD, already
@@ -54,7 +51,7 @@ func newestStatements(ctx context.Context, src Source, accounts map[int64]accoun
 		// account is skipped: neither is ever checked.
 		r.account = account.Int64
 		acct, ok := accounts[r.account]
-		if !ok || investmentTypes[acct.Type] {
+		if !ok || store.IsInvestmentAccount(acct.Type) {
 			return nil
 		}
 		if cur, ok := newest[r.account]; !ok || newerReconcile(r, cur) {
