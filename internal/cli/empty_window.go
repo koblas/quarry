@@ -42,10 +42,8 @@ func appendEmptyWindowWarning(warnings []string, subject string, accounts []stor
 	return append(warnings, emptyWindowWarning(subject, window, named, span))
 }
 
-// emptyWindowWarning is the warning that window held no activity, subject naming what a command
-// reports ("spending"): it says where the transactions it could have counted do run, or that
-// there are none. named is whether the command was limited to named accounts, whose
-// transactions span is then meant.
+// emptyWindowWarning is the note that window held no subject ("spending"), naming where span's
+// transactions run, or that there are none; named means span is the named accounts'.
 func emptyWindowWarning(subject string, window store.Window, named bool, span store.TransactionRange) string {
 	message := fmt.Sprintf("no %s from %s to %s", subject, window.Since.Format(time.DateOnly), window.Until.Format(time.DateOnly))
 	owner, have := "the store's", "the store has"

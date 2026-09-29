@@ -46,9 +46,8 @@ func (f accountFilter) marks(first int) string {
 	return strings.Join(marks, ", ")
 }
 
-// transactionRangeQuery is the first and last day of the transactions a spending or cash-flow
-// read was scoped to: every transaction, or the named accounts' that Quicken counts in reports. Its
-// parameters are the named accounts, numbered from $1.
+// transactionRangeQuery is the first and last day of every transaction, or of the named in-report
+// accounts' transactions; its parameters are those accounts, numbered from $1.
 func transactionRangeQuery(accounts accountFilter) string {
 	if len(accounts) == 0 {
 		return "SELECT min(date), max(date) FROM transactions"
@@ -82,8 +81,7 @@ ORDER BY GROUPING(%[1]s), %[2]s`, key, rowOrder, source, accounts.and("account_i
 	}
 }
 
-// spendingByMonthQuery keys each split by its month as YYYY-MM text, which a DATE scanned
-// into a string would not be.
+// spendingByMonthQuery keys each split by its month as YYYY-MM text, not a scanned DATE.
 var spendingByMonthQuery = spendingQueryFrom(
 	"(SELECT account_id, date, currency, spent, strftime(month, '%Y-%m') AS month_key FROM v_spending)",
 	"month_key", "month_key, currency")
@@ -138,12 +136,10 @@ var spendingQueries = map[store.SpendingGroup]spendingQueryFor{
 // ErrUnsupportedGrouping is what Spending returns for a grouping it cannot read.
 var ErrUnsupportedGrouping = errors.New("spending grouping is not supported")
 
-// Spending reads the spending in params.Window (both days counted) grouped by params.By,
-// counting only params.AccountIDs when any (every account otherwise), dropping a group that
-// nets to zero; Totals keep it, one per currency. Grouping by tag also
-// counts the splits carrying several tags. A window with no spending also gets Transactions,
-// the span of the store's transactions, or of the in-report accounts among AccountIDs. An
-// unsupported grouping is an error, and a store it cannot open or read is a *store.OpenError.
+// Spending reads the spending in params.Window (both days counted) grouped by params.By over
+// params.AccountIDs (every account when empty), dropping a group netting to zero; Totals keep it.
+// It fills MultiTagSplits and Transactions as store.Spending documents. An unknown grouping is
+// ErrUnsupportedGrouping; a store it cannot open or read is a *store.OpenError.
 func (s *Store) Spending(ctx context.Context, params store.SpendingParams) (store.Spending, error) {
 	queryFor, ok := spendingQueries[params.By]
 	if !ok {

@@ -104,6 +104,30 @@ func Test_spending_by_tag_totals_each_currency_cad_before_usd(t *testing.T) {
 	assert.Equal(t, []store.SpendingTotal{{Currency: "CAD", Spent: 250}, {Currency: "USD", Spent: 700}}, got.Totals)
 }
 
+func Test_spending_by_tag_lists_a_tags_currencies_in_alphabetical_order(t *testing.T) {
+	t.Parallel()
+	rows := spendRows()
+	addTag(&rows, "t-trip", "Trip")
+	addSplit(&rows, splitSpec{id: "usd", category: new(catExpense), currency: "USD", amount: -100, tags: []string{"t-trip"}})
+	addSplit(&rows, splitSpec{id: "gbp", category: new(catExpense), currency: "GBP", amount: -200, tags: []string{"t-trip"}})
+	addSplit(&rows, splitSpec{id: "eur", category: new(catExpense), currency: "EUR", amount: -300, tags: []string{"t-trip"}})
+	addSplit(&rows, splitSpec{id: "cad", category: new(catExpense), currency: "CAD", amount: -400, tags: []string{"t-trip"}})
+	st := newStoreWith(t, rows)
+
+	got, err := st.Spending(t.Context(), tagParams())
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.SpendingRow{
+		{Key: new("Trip"), Currency: "CAD", Spent: 400},
+		{Key: new("Trip"), Currency: "EUR", Spent: 300},
+		{Key: new("Trip"), Currency: "GBP", Spent: 200},
+		{Key: new("Trip"), Currency: "USD", Spent: 100},
+	}, got.Rows)
+	assert.Equal(t, []store.SpendingTotal{
+		{Currency: "CAD", Spent: 400}, {Currency: "EUR", Spent: 300}, {Currency: "GBP", Spent: 200}, {Currency: "USD", Spent: 100},
+	}, got.Totals)
+}
+
 func Test_spending_by_tag_omits_a_tag_that_nets_to_zero_and_keeps_it_in_the_total(t *testing.T) {
 	t.Parallel()
 	rows := spendRows()

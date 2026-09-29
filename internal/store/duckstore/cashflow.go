@@ -19,9 +19,9 @@ var cashFlowKeys = map[store.CashFlowPeriod]string{
 var ErrUnsupportedPeriod = errors.New("cash-flow period is not supported")
 
 // cashFlowQuery reads per-period and per-currency-total income, spending and net in cents from
-// v_cash_flow. The rate is net over income in tenths of a percent, rounded half away from zero
-// in integers, so it is never a negative zero; it is NULL when income is zero or less.
+// v_cash_flow, and the savings rate as BIGINT tenths / 10.0 (always finite), or NULL.
 func cashFlowQuery(key string, accounts accountFilter) string {
+	// Integer rounding half away from zero never yields a negative zero; income <= 0 has no rate.
 	return fmt.Sprintf(`
 SELECT period_key, currency, income, spent, income - spent,
 	CASE WHEN income > 0 THEN CAST(sign(income - spent) * ((2000 * abs(CAST(income - spent AS HUGEINT)) + income) // (2 * income)) AS BIGINT) / 10.0 END,

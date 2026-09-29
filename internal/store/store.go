@@ -373,9 +373,8 @@ type Spending struct {
 	// MultiTagSplits counts the splits in the window that carry more than one
 	// tag; it is set only when grouping by tag.
 	MultiTagSplits int
-	// Transactions is set only when the window holds no spending (no Totals): the span of
-	// the whole store's transactions, or of those of the accounts in reports among
-	// SpendingParams.AccountIDs; the zero range means there are none.
+	// Transactions is set only when there are no Totals: the span of the store's transactions, or
+	// of the in-report accounts among SpendingParams.AccountIDs; zero means there are none.
 	Transactions TransactionRange
 }
 

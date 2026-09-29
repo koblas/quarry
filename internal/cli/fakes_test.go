@@ -7,9 +7,8 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// fakeReportStore answers Accounts, Spending, CashFlow and Query with a canned result or fault, Query
-// recording its query and maxRows in *gotQuery and *gotMaxRows, Spending and CashFlow their params in
-// *gotSpending and *gotCashFlow, when set; Status panics through the nil embedded interface.
+// fakeReportStore answers each read with a canned result or err, recording its arguments in the
+// matching got* field when set; Status panics through the nil embedded interface.
 type fakeReportStore struct {
 	report.Store
 

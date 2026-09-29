@@ -140,6 +140,48 @@ func Test_spending_totals_each_currency_cad_before_usd(t *testing.T) {
 	assert.Equal(t, []store.SpendingTotal{{Currency: "CAD", Spent: 3250}, {Currency: "USD", Spent: 700}}, got.Totals)
 }
 
+func Test_spending_lists_a_categorys_currencies_in_alphabetical_order(t *testing.T) {
+	t.Parallel()
+	rows := spendRows()
+	addSplit(&rows, splitSpec{id: "usd", category: new(catExpense), currency: "USD", amount: -100})
+	addSplit(&rows, splitSpec{id: "gbp", category: new(catExpense), currency: "GBP", amount: -200})
+	addSplit(&rows, splitSpec{id: "eur", category: new(catExpense), currency: "EUR", amount: -300})
+	addSplit(&rows, splitSpec{id: "cad", category: new(catExpense), currency: "CAD", amount: -400})
+	st := newStoreWith(t, rows)
+
+	got, err := st.Spending(t.Context(), spendingParams())
+
+	require.NoError(t, err)
+	assert.Equal(t, store.Spending{
+		Rows: []store.SpendingRow{
+			{Key: new("Groceries"), Currency: "CAD", Spent: 400},
+			{Key: new("Groceries"), Currency: "EUR", Spent: 300},
+			{Key: new("Groceries"), Currency: "GBP", Spent: 200},
+			{Key: new("Groceries"), Currency: "USD", Spent: 100},
+		},
+		Totals: []store.SpendingTotal{
+			{Currency: "CAD", Spent: 400}, {Currency: "EUR", Spent: 300}, {Currency: "GBP", Spent: 200}, {Currency: "USD", Spent: 100},
+		},
+	}, got)
+}
+
+func Test_spending_counts_a_split_dated_after_today_when_the_window_reaches_it(t *testing.T) {
+	t.Parallel()
+	rows := spendRows()
+	addSplit(&rows, splitSpec{id: "future", category: new(catExpense), amount: -700, date: day(2099, time.June, 1)})
+	st := newStoreWith(t, rows)
+	params := spendingParams()
+	params.Window = store.Window{Since: day(2099, time.January, 1), Until: day(2099, time.December, 31)}
+
+	got, err := st.Spending(t.Context(), params)
+
+	require.NoError(t, err)
+	assert.Equal(t, store.Spending{
+		Rows:   []store.SpendingRow{{Key: new("Groceries"), Currency: "CAD", Spent: 700}},
+		Totals: []store.SpendingTotal{{Currency: "CAD", Spent: 700}},
+	}, got)
+}
+
 func Test_spending_refuses_a_grouping_it_does_not_know(t *testing.T) {
 	t.Parallel()
 	st := newStoreWith(t, spendRows())

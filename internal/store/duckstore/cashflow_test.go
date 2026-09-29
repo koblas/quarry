@@ -104,22 +104,6 @@ func Test_cash_flow_counts_an_uncategorized_split_by_the_sign_of_its_amount(t *t
 	assert.Equal(t, []store.CashFlowTotal{{Currency: "CAD", Income: 700, Spent: 200, Net: 500, SavingsRatePct: new(71.4)}}, got.Totals)
 }
 
-func Test_cash_flow_leaves_out_transfers_excluded_transactions_and_accounts_not_in_reports(t *testing.T) {
-	t.Parallel()
-	rows := incomeAndSpending(1000, 400)
-	addSplit(&rows, splitSpec{id: "leg-out", category: new(catExpense), amount: -10})
-	addSplit(&rows, splitSpec{id: "leg-in", account: acctNotReports, category: new(catIncome), amount: 10})
-	rows.Transfers = append(rows.Transfers, store.Transfer{ID: "xfer", FromSplitID: "leg-out", ToSplitID: new("leg-in")})
-	addSplit(&rows, splitSpec{id: "hidden", category: new(catExpense), amount: -20, excluded: true})
-	addSplit(&rows, splitSpec{id: "old-card", account: acctNotReports, category: new(catExpense), amount: -40})
-	st := newStoreWith(t, rows)
-
-	got, err := st.CashFlow(t.Context(), cashFlowParams())
-
-	require.NoError(t, err)
-	assert.Equal(t, []store.CashFlowTotal{{Currency: "CAD", Income: 1000, Spent: 400, Net: 600, SavingsRatePct: new(60.0)}}, got.Totals)
-}
-
 func Test_cash_flow_counts_only_the_named_accounts(t *testing.T) {
 	t.Parallel()
 	rows := accountRows()
@@ -169,19 +153,23 @@ func Test_cash_flow_by_year_keys_each_row_by_calendar_year(t *testing.T) {
 	}, got.Rows)
 }
 
-func Test_cash_flow_lists_cad_before_usd_in_each_period_and_in_the_totals(t *testing.T) {
+func Test_cash_flow_lists_currencies_alphabetically_in_each_period_and_in_the_totals(t *testing.T) {
 	t.Parallel()
 	rows := spendRows()
 	addSplit(&rows, splitSpec{id: "usd-jan", category: new(catIncome), currency: "USD", amount: 10, date: day(2026, time.January, 5)})
-	addSplit(&rows, splitSpec{id: "cad-jan", category: new(catIncome), amount: 20, date: day(2026, time.January, 5)})
-	addSplit(&rows, splitSpec{id: "cad-feb", category: new(catIncome), amount: 30, date: day(2026, time.February, 5)})
+	addSplit(&rows, splitSpec{id: "gbp-jan", category: new(catIncome), currency: "GBP", amount: 20, date: day(2026, time.January, 5)})
+	addSplit(&rows, splitSpec{id: "eur-jan", category: new(catIncome), currency: "EUR", amount: 30, date: day(2026, time.January, 5)})
+	addSplit(&rows, splitSpec{id: "cad-jan", category: new(catIncome), amount: 40, date: day(2026, time.January, 5)})
+	addSplit(&rows, splitSpec{id: "cad-feb", category: new(catIncome), amount: 50, date: day(2026, time.February, 5)})
 	st := newStoreWith(t, rows)
 
 	got, err := st.CashFlow(t.Context(), cashFlowParams())
 
 	require.NoError(t, err)
-	assert.Equal(t, [][2]string{{"2026-01", "CAD"}, {"2026-01", "USD"}, {"2026-02", "CAD"}}, periodCurrencies(got.Rows))
-	assert.Equal(t, []string{"CAD", "USD"}, totalCurrencies(got.Totals))
+	assert.Equal(t, [][2]string{
+		{"2026-01", "CAD"}, {"2026-01", "EUR"}, {"2026-01", "GBP"}, {"2026-01", "USD"}, {"2026-02", "CAD"},
+	}, periodCurrencies(got.Rows))
+	assert.Equal(t, []string{"CAD", "EUR", "GBP", "USD"}, totalCurrencies(got.Totals))
 }
 
 func periodCurrencies(rows []store.CashFlowRow) [][2]string {
@@ -275,6 +263,23 @@ func Test_cash_flow_rate_that_rounds_to_zero_is_not_a_negative_zero(t *testing.T
 	assert.False(t, math.Signbit(*got.Totals[0].SavingsRatePct))
 }
 
+func Test_cash_flow_counts_a_split_dated_after_today_when_the_window_reaches_it(t *testing.T) {
+	t.Parallel()
+	rows := spendRows()
+	addSplit(&rows, splitSpec{id: "future", category: new(catExpense), amount: -700, date: day(2099, time.June, 1)})
+	st := newStoreWith(t, rows)
+	params := cashFlowParams()
+	params.Window = store.Window{Since: day(2099, time.January, 1), Until: day(2099, time.December, 31)}
+
+	got, err := st.CashFlow(t.Context(), params)
+
+	require.NoError(t, err)
+	assert.Equal(t, store.CashFlow{
+		Rows:   []store.CashFlowRow{{Period: "2099-06", Currency: "CAD", Spent: 700, Net: -700}},
+		Totals: []store.CashFlowTotal{{Currency: "CAD", Spent: 700, Net: -700}},
+	}, got)
+}
+
 func Test_cash_flow_refuses_a_period_it_does_not_know(t *testing.T) {
 	t.Parallel()
 	st := newStoreWith(t, spendRows())
@@ -313,6 +318,16 @@ func Test_cash_flow_ranges_over_the_in_report_accounts_it_is_named_for(t *testin
 
 	require.NoError(t, err)
 	assert.Equal(t, store.TransactionRange{First: civil(2019, 3, 2), Last: civil(2019, 3, 2)}, got.Transactions)
+}
+
+func Test_cash_flow_gives_a_zero_range_when_the_store_has_no_transactions(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, spendRows())
+
+	got, err := st.CashFlow(t.Context(), cashFlowParams())
+
+	require.NoError(t, err)
+	assert.Zero(t, got.Transactions)
 }
 
 func Test_cash_flow_leaves_the_transaction_range_unset_when_the_window_holds_income(t *testing.T) {

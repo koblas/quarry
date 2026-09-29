@@ -1,3 +1,5 @@
+// run is unexported, so its tests live in package main rather than
+// importing main from outside.
 package main
 
 import (
@@ -58,6 +60,32 @@ func Test_run_spend_rejects_a_period_it_cannot_use(t *testing.T) {
 			exitCode := runWith(context.Background(), c.args, env)
 
 			assert.Equal(t, 2, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, c.wantStderr, stderr.String())
+		})
+	}
+}
+
+func Test_run_report_commands_refuse_when_home_is_unset(t *testing.T) {
+	cases := []struct {
+		command    string
+		wantStderr string
+	}{
+		{command: "spend", wantStderr: "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry spend again\n"},
+		{
+			command:    "cashflow",
+			wantStderr: "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry cashflow again\n",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.command, func(t *testing.T) {
+			t.Setenv("HOME", "")
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), []string{c.command}, &stdout, &stderr)
+
+			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
 			assert.Equal(t, c.wantStderr, stderr.String())
 		})

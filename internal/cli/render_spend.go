@@ -14,9 +14,8 @@ const spendingTotalLabel = "Total"
 // spendingPartialStatus is the Status cell of a month the window cuts short.
 const spendingPartialStatus = "partial"
 
-// renderSpending renders s as the spend table: a window caption, then a header,
-// one row per group and a Total row per currency. A month grouping adds a
-// trailing Status column, empty (and unpadded) except on a partial month.
+// renderSpending renders s as the spend table: caption, header, one row per group and a Total
+// row per currency; a month grouping adds a trailing, unpadded Status column.
 func renderSpending(s report.Spending) string {
 	const dateLayout = "2006-01-02"
 	grouping := spendGroupings[s.By]

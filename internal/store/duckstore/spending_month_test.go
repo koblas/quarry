@@ -61,6 +61,29 @@ func Test_spending_by_month_sorts_across_a_year_end_by_month_then_currency(t *te
 	}, got.Rows)
 }
 
+func Test_spending_by_month_lists_a_months_currencies_in_alphabetical_order(t *testing.T) {
+	t.Parallel()
+	rows := spendRows()
+	addSplit(&rows, splitSpec{id: "usd", category: new(catExpense), currency: "USD", amount: -100})
+	addSplit(&rows, splitSpec{id: "gbp", category: new(catExpense), currency: "GBP", amount: -200})
+	addSplit(&rows, splitSpec{id: "eur", category: new(catExpense), currency: "EUR", amount: -300})
+	addSplit(&rows, splitSpec{id: "cad", category: new(catExpense), currency: "CAD", amount: -400})
+	st := newStoreWith(t, rows)
+
+	got, err := st.Spending(t.Context(), monthParams())
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.SpendingRow{
+		{Key: new("2026-03"), Currency: "CAD", Spent: 400},
+		{Key: new("2026-03"), Currency: "EUR", Spent: 300},
+		{Key: new("2026-03"), Currency: "GBP", Spent: 200},
+		{Key: new("2026-03"), Currency: "USD", Spent: 100},
+	}, got.Rows)
+	assert.Equal(t, []store.SpendingTotal{
+		{Currency: "CAD", Spent: 400}, {Currency: "EUR", Spent: 300}, {Currency: "GBP", Spent: 200}, {Currency: "USD", Spent: 100},
+	}, got.Totals)
+}
+
 func Test_spending_by_month_omits_a_month_that_nets_to_zero_and_keeps_it_in_the_total(t *testing.T) {
 	t.Parallel()
 	rows := spendRows()

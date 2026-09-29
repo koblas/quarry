@@ -33,9 +33,7 @@ type Spending struct {
 	// MultiTagSplits counts the splits carrying more than one tag; it is set
 	// only when grouping by tag.
 	MultiTagSplits int
-	// Transactions is set only when the window holds no spending: the span of the transactions
-	// of the whole store, or of the named accounts that Quicken counts in
-	// reports; the zero range means there are none.
+	// Transactions is store.Spending.Transactions.
 	Transactions store.TransactionRange
 
 	Window store.Window

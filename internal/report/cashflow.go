@@ -28,7 +28,7 @@ type CashFlowRow struct {
 type CashFlow struct {
 	Rows   []CashFlowRow
 	Totals []store.CashFlowTotal
-	// Transactions is set only when the window holds no income or spending, as for Spending.
+	// Transactions is store.CashFlow.Transactions.
 	Transactions store.TransactionRange
 
 	Window store.Window

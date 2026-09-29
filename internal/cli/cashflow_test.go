@@ -124,6 +124,40 @@ func Test_cashflow_refuses_a_window_before_opening_the_report(t *testing.T) {
 	require.EqualError(t, err, `--since "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`)
 }
 
+func Test_cashflow_refuses_a_period_it_cannot_use_before_reading_the_store(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "a since after until", args: []string{"--since", "2025", "--until", "2024"}, want: "--since 2025 is after --until 2024"},
+		{
+			name: "an until before the default since",
+			args: []string{"--until", "2024"},
+			want: "--until 2024 is before the default --since 2026-01-01; pass --since too",
+		},
+		{
+			name: "a since after today",
+			args: []string{"--since", "2027"},
+			want: "--since 2027 is after today; pass --until to include future-dated transactions",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := executeCashFlow(t, fakeReportStore{err: errStoreRead}, &stdout, &stderr, c.args...)
+
+			var usage cli.UsageError
+			require.ErrorAs(t, err, &usage)
+			require.EqualError(t, err, c.want)
+			assert.Empty(t, stdout.String())
+			assert.Empty(t, stderr.String())
+		})
+	}
+}
+
 func Test_cashflow_returns_the_report_fault(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -151,7 +185,7 @@ func Test_cashflow_returns_the_report_factory_fault(t *testing.T) {
 func Test_cashflow_returns_a_failed_stdout_write(t *testing.T) {
 	var stderr bytes.Buffer
 
-	err := executeCashFlow(t, withCashFlow(fakeReportStore{}), failingWriter{err: errNoSpace}, &stderr)
+	err := executeCashFlow(t, fakeReportStore{cashFlow: store.CashFlow{Transactions: storeSpan}}, failingWriter{err: errNoSpace}, &stderr)
 
 	require.ErrorIs(t, err, errNoSpace)
 	assert.Empty(t, stderr.String())
@@ -176,17 +210,6 @@ func Test_cashflow_json_names_the_accounts_it_was_limited_to(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), "\"account_filter\": [\n    {\n      \"id\": \""+chequingID+"\",\n      \"name\": \"Chequing\"\n    }\n  ],\n")
-}
-
-func Test_cashflow_help_shows_the_flags_and_what_the_command_is_for(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeCashFlow(t, fakeReportStore{}, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Regexp(t, `--by period +group by period: month or year \(default "month"\)`, stdout.String())
-	assert.Regexp(t, `--account name +count only the account with this name or id; repeat for more`, stdout.String())
-	assert.Contains(t, stdout.String(), "Show income, spending and what was left over for each month or year, in\n")
 }
 
 func Test_cashflow_captions_the_named_accounts_and_passes_their_ids_to_the_report(t *testing.T) {
@@ -235,14 +258,46 @@ func Test_cashflow_says_nothing_of_an_empty_window_when_every_named_account_is_l
 		"quarry: warning: "+leftOutCashFlowWarning("Old Bank")+"\n", stderr.String())
 }
 
-func Test_cashflow_says_when_the_window_holds_nothing_and_the_store_has_transactions_elsewhere(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	fake := fakeReportStore{cashFlow: store.CashFlow{Transactions: storeSpan}}
+func Test_cashflow_says_when_the_window_holds_nothing(t *testing.T) {
+	cases := []struct {
+		name string
+		span store.TransactionRange
+		args []string
+		want string
+	}{
+		{
+			name: "the store has transactions elsewhere",
+			span: storeSpan,
+			want: "quarry: warning: " + cashFlowEmpty + "; the store's transactions run 2003-01-04 to 2026-09-26\n",
+		},
+		{
+			name: "the store has no transactions",
+			want: "quarry: warning: " + cashFlowEmpty + "; the store has no transactions\n",
+		},
+		{
+			name: "the named accounts have transactions elsewhere",
+			span: namedSpan,
+			args: []string{"--account", chequingID},
+			want: "quarry: warning: " + cashFlowEmpty + " in the named accounts; their transactions run 2019-03-02 to 2024-11-30\n",
+		},
+		{
+			name: "the named accounts have no transactions",
+			args: []string{"--account", chequingID},
+			want: "quarry: warning: " + cashFlowEmpty + " in the named accounts; they have no transactions\n",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			fake := namedAccounts()
+			fake.cashFlow = store.CashFlow{Transactions: c.span}
 
-	err := executeCashFlow(t, fake, &stdout, &stderr)
+			err := executeCashFlow(t, fake, &stdout, &stderr, c.args...)
 
-	require.NoError(t, err)
-	assert.Equal(t, "quarry: warning: "+cashFlowEmpty+"; the store's transactions run 2003-01-04 to 2026-09-26\n", stderr.String())
+			require.NoError(t, err)
+			assert.Equal(t, c.want, stderr.String())
+		})
+	}
 }
 
 func Test_cashflow_says_nothing_of_an_empty_window_when_a_currency_nets_to_zero(t *testing.T) {

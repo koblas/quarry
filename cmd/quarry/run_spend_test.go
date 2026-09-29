@@ -17,9 +17,8 @@ import (
 // utcMinus5 is a zone whose evening is already the next day in UTC.
 var utcMinus5 = time.FixedZone("UTC-5", -5*60*60)
 
-// spendSplit is one single-split transaction; "" category or payee id means
-// none, and negative cents is money out. tags lists the ids of the tags the
-// split carries.
+// spendSplit is one single-split transaction; "" category or payee means none,
+// negative cents is money out, and tags are tag ids.
 type spendSplit struct {
 	id, account, category, payee, currency string
 	day                                    time.Time
