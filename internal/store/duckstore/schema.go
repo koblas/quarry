@@ -18,7 +18,8 @@ CREATE TABLE accounts (
 	currency VARCHAR NOT NULL,
 	institution VARCHAR,
 	closed BOOLEAN NOT NULL,
-	active BOOLEAN NOT NULL
+	active BOOLEAN NOT NULL,
+	in_reports BOOLEAN NOT NULL
 );
 CREATE TABLE categories (
 	id VARCHAR PRIMARY KEY,
@@ -49,7 +50,9 @@ CREATE TABLE transactions (
 	amount DECIMAL(18,2) NOT NULL,
 	currency VARCHAR NOT NULL,
 	status VARCHAR NOT NULL,
-	cheque_number VARCHAR
+	cheque_number VARCHAR,
+	excluded_from_reports BOOLEAN NOT NULL,
+	posted_date DATE
 );
 CREATE TABLE splits (
 	id VARCHAR PRIMARY KEY,

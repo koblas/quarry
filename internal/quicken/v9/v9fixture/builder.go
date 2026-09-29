@@ -43,6 +43,8 @@ type AccountRow struct {
 	Closed      bool
 	Active      bool
 	Deleted     bool
+	// UsedInReports is ZUSEDINREPORTS: nil writes NULL, 0 off, 1 on.
+	UsedInReports *int64
 }
 
 // TransactionRow is one ZTRANSACTION row. Entity defaults to the Builder's
@@ -59,6 +61,8 @@ type TransactionRow struct {
 	Note        string
 	CheckNumber string
 	Deleted     bool
+	// ExcludeFromReports is ZEXCLUDEFROMREPORTS: nil writes NULL, 0 off, 1 on.
+	ExcludeFromReports *int64
 }
 
 // EntryRow is one ZCASHFLOWTRANSACTIONENTRY row (a split of a transaction).
@@ -294,9 +298,9 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 
 	for _, a := range b.accounts {
 		exec(tb, ctx, db,
-			"INSERT INTO ZACCOUNT (Z_PK, ZNAME, ZTYPENAME, ZCURRENCY, ZFINANCIALINSTITUTION, ZCLOSED, ZACTIVE, ZDELETIONCOUNT) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			"INSERT INTO ZACCOUNT (Z_PK, ZNAME, ZTYPENAME, ZCURRENCY, ZFINANCIALINSTITUTION, ZCLOSED, ZACTIVE, ZDELETIONCOUNT, ZUSEDINREPORTS) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 			a.pk, nullableString(a.row.Name), nullableString(a.row.Type), nullableString(a.row.Currency),
-			nullableRef(a.row.Institution), a.row.Closed, a.row.Active, deletionCount(a.row.Deleted))
+			nullableRef(a.row.Institution), a.row.Closed, a.row.Active, deletionCount(a.row.Deleted), nullableInt(a.row.UsedInReports))
 	}
 
 	for _, i := range b.institutions {
@@ -308,10 +312,10 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 	for _, x := range b.transactions {
 		exec(tb, ctx, db,
 			`INSERT INTO ZTRANSACTION
-				(Z_PK, Z_ENT, ZACCOUNT, ZAMOUNT, ZPOSTEDDATE, ZENTEREDDATE, ZRECONCILESTATUS, ZUSERPAYEE, ZNOTE, ZCHECKNUMBER, ZDELETIONCOUNT)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				(Z_PK, Z_ENT, ZACCOUNT, ZAMOUNT, ZPOSTEDDATE, ZENTEREDDATE, ZRECONCILESTATUS, ZUSERPAYEE, ZNOTE, ZCHECKNUMBER, ZDELETIONCOUNT, ZEXCLUDEFROMREPORTS)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			x.pk, x.row.Entity, nullableRef(x.row.Account), nullableString(x.row.Amount), nullableTime(x.row.PostedDate), nullableTime(x.row.EnteredDate),
-			nullableInt(x.row.Status), nullableRef(x.row.Payee), nullableString(x.row.Note), nullableString(x.row.CheckNumber), deletionCount(x.row.Deleted))
+			nullableInt(x.row.Status), nullableRef(x.row.Payee), nullableString(x.row.Note), nullableString(x.row.CheckNumber), deletionCount(x.row.Deleted), nullableInt(x.row.ExcludeFromReports))
 	}
 
 	for _, e := range b.entries {

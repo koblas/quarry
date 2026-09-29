@@ -16,6 +16,9 @@ type Account struct {
 	Institution *string
 	Closed      bool
 	Active      bool
+	// NotInReports is true when Quicken leaves the account out of its
+	// reports; the zero value means the account is in reports.
+	NotInReports bool
 }
 
 // Investment account types, whose balance quarry cannot compute.
@@ -78,6 +81,12 @@ type Transaction struct {
 	Currency     string
 	Status       string
 	ChequeNumber *string
+	// ExcludedFromReports is true when Quicken leaves the transaction out
+	// of its reports.
+	ExcludedFromReports bool
+	// PostedDate is the bank's posting day, set whenever Quicken holds one,
+	// even when it equals Date.
+	PostedDate *time.Time
 }
 
 // Split is one row of the splits table, a share of its Transaction's amount
