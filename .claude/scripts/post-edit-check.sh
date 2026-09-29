@@ -19,7 +19,9 @@ case "$file" in
 esac
 [ -f "$file" ] || exit 0
 
-root="${CLAUDE_PROJECT_DIR:-$(git -C "$(dirname "$file")" rev-parse --show-toplevel 2>/dev/null)}"
+# The file's own checkout, not CLAUDE_PROJECT_DIR: an isolated-worktree agent edits a tree
+# that is not the session's project dir.
+root="$(git -C "$(dirname "$file")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$root" ] && cd "$root" || exit 0
 
 if ! command -v go >/dev/null 2>&1 || [ -z "${DEVENV_ROOT:-}" ]; then
@@ -34,8 +36,13 @@ esac
 
 rel="${file#"$root"/}"
 pkg="./$(dirname "$rel")"
-out="$( { gofmt -l "$file" | sed 's/^/gofmt: needs formatting: /'; go build "$pkg" 2>&1; } )"
+# -o /dev/null: a main package would otherwise drop its binary in the repo root.
+# GOPROXY=off: an empty module cache must not trigger a download inside the sandbox.
+out="$( { gofmt -l "$file" | sed 's/^/gofmt: needs formatting: /'; GOPROXY=off go build -o /dev/null "$pkg" 2>&1; } )"
 [ -z "$out" ] && exit 0
+# Module-resolution failures are the environment, not the edit: stay silent, like an
+# unreachable toolchain.
+printf '%s\n' "$out" | grep -qE 'GOPROXY=off|missing go.sum entry|cannot find module|module lookup disabled' && exit 0
 
 total="$(printf '%s\n' "$out" | wc -l | tr -d ' ')"
 {
