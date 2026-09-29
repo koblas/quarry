@@ -165,7 +165,7 @@ Brokerage and retirement accounts show "not imported": quarry does not
 import investment transactions yet, so it cannot compute their balance.
 ```
 - Flag `--all`, help `include closed accounts`.
-- stdout (exit 0): header row, rows sorted by name then source id, columns two spaces apart, Balance
+- stdout (exit 0): header row, rows sorted by name ignoring case, then name, then source id (`ORDER BY lower(name), name, source_id`), columns two spaces apart, Balance
   right-aligned via `formatMoney`, no totals row:
 ```
 Account        Type         Currency       Balance  Status
@@ -174,7 +174,8 @@ RRSP           retirement   CAD       not imported
 US Chequing    chequing     USD           8,310.00
 Visa Infinite  credit_card  CAD          -1,204.17  closed
 ```
-- Status: empty for open+active; `inactive` for open, not active; `closed` for closed (only with `--all`).
+- Status: empty for open+active; `inactive` for open, not active; `closed` for closed, whether active or not (only with `--all`).
+- A non-investment account with no transactions dated today or earlier: Balance `0.00`, JSON `"0.00"` (`null` means only brokerage/retirement).
 - All accounts closed, no `--all` (exit 0, stdout header only, or `accounts:[]` under `--json`); the stderr line
   prints in both modes and the same text without `quarry: ` goes in `warnings[]`:
   - N ≥ 2: `quarry: all 3 accounts are closed; pass --all to list them`
