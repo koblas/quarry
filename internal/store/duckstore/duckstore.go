@@ -19,6 +19,12 @@ import (
 // FileName is quarry's store filename inside a Store's directory.
 const FileName = "quarry.duckdb"
 
+// FormatVersion is the store format this build of quarry writes and reads.
+const FormatVersion = 2
+
+// develVersion is the quarry_version recorded when no build version is known.
+const develVersion = "(devel)"
+
 // leftoverMaxAge is how old a store partial must be before Replace's sweep removes it.
 const leftoverMaxAge = time.Hour
 
@@ -56,8 +62,9 @@ var _ DB = (*duckdb.DB)(nil)
 
 // Store builds quarry's DuckDB file inside one directory.
 type Store struct {
-	dir    string
-	create func(ctx context.Context, path string) (DB, error)
+	dir           string
+	create        func(ctx context.Context, path string) (DB, error)
+	quarryVersion string
 }
 
 // Option configures a Store.
@@ -69,9 +76,19 @@ func WithCreate(create func(ctx context.Context, path string) (DB, error)) Optio
 	return func(s *Store) { s.create = create }
 }
 
+// WithQuarryVersion sets the quarry_version Replace records; an empty v keeps
+// the default "(devel)", so the column is never stored empty.
+func WithQuarryVersion(v string) Option {
+	return func(s *Store) {
+		if v != "" {
+			s.quarryVersion = v
+		}
+	}
+}
+
 // New returns a Store that builds quarry.duckdb inside dir.
 func New(dir string, opts ...Option) *Store {
-	s := &Store{dir: dir, create: createDuckDB}
+	s := &Store{dir: dir, create: createDuckDB, quarryVersion: develVersion}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -119,7 +136,8 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
 		return "", buildError(err)
 	}
 
-	if err := build(ctx, db, rows); err != nil {
+	builtAt := time.Now().UTC()
+	if err := build(ctx, db, rows, s.quarryVersion, builtAt); err != nil {
 		_ = db.Close()
 		removePartial(partialPath)
 		return "", buildError(err)
@@ -210,8 +228,9 @@ func removePartial(path string) {
 	_ = os.Remove(path + ".wal")
 }
 
-// build creates quarry's schema in db and bulk-loads every table in rows.
-func build(ctx context.Context, db DB, rows store.Rows) error {
+// build creates quarry's schema in db and bulk-loads every table in rows,
+// then store_info last: a store carrying it is complete.
+func build(ctx context.Context, db DB, rows store.Rows, quarryVersion string, builtAt time.Time) error {
 	if _, err := db.Exec(ctx, schemaDDL); err != nil {
 		return fmt.Errorf("create schema: %w", err)
 	}
@@ -248,7 +267,10 @@ func build(ctx context.Context, db DB, rows store.Rows) error {
 	if err := appendTable(ctx, db, "transfers", transferRows(rows.Transfers)); err != nil {
 		return err
 	}
-	return appendTable(ctx, db, "import_runs", importRunRows(rows.ImportRuns))
+	if err := appendTable(ctx, db, "import_runs", importRunRows(rows.ImportRuns)); err != nil {
+		return err
+	}
+	return appendTable(ctx, db, "store_info", [][]any{{int32(FormatVersion), quarryVersion, builtAt}})
 }
 
 // appendTable bulk-loads rows into table, naming the table on failure.
@@ -264,6 +286,20 @@ func nullableStr(s *string) any {
 		return nil
 	}
 	return *s
+}
+
+func nullableTime(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t
+}
+
+func nullableNonEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func accountRows(accounts []store.Account) [][]any {
@@ -353,6 +389,9 @@ func importRunRows(runs []store.ImportRun) [][]any {
 			int64(c.Transactions), int64(c.Splits), int64(c.SplitTags), int64(c.Transfers),
 			int64(r.BalancesChecked), int64(r.BalancesMismatched), int64(r.SplitsMismatched),
 			int64(r.TransfersOneSided), int64(r.InvestmentTransactionsNotImported),
+			nullableTime(r.Snapshot.TakenAt), nullableNonEmpty(r.Snapshot.Source),
+			int64(r.BalancesNeverReconciled), int64(r.InvestmentAccounts),
+			int64(r.TransfersPaired), int64(r.TransfersCrossCurrency),
 		}
 	}
 	return out

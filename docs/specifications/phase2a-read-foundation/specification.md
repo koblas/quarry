@@ -459,7 +459,7 @@ Scenario: SCENARIO-21 — a read command reports a failed stdout write
 ---
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01: sync stamps the store's format and records what status needs
+- [x] SCENARIO-01: sync stamps the store's format and records what status needs — `cmd/quarry/run_store_info_test.go` `Test_run_stamps_the_store_with_its_format_and_the_build`
 - [ ] SCENARIO-02: status describes the store and the checks sync ran
 - [ ] SCENARIO-03: status --json returns the store description as a document
 - [ ] SCENARIO-04: accounts lists open accounts with native-currency balances

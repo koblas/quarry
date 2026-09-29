@@ -105,8 +105,12 @@ type Rows struct {
 
 // SnapshotRef identifies the snapshot a build reads: its absolute Path,
 // its SHA-256, and its schema fingerprint, all as its manifest records them.
+// TakenAt (UTC) and Source are the manifest's recorded values, zero unless
+// filled from a manifest.
 type SnapshotRef struct {
 	Path, SHA256, SchemaFingerprint string
+	TakenAt                         time.Time
+	Source                          string
 }
 
 // ImportRun is one row of the import_runs table, describing the build that
@@ -122,6 +126,10 @@ type ImportRun struct {
 	SplitsMismatched                  int
 	TransfersOneSided                 int
 	InvestmentTransactionsNotImported int
+	BalancesNeverReconciled           int
+	InvestmentAccounts                int
+	TransfersPaired                   int
+	TransfersCrossCurrency            int
 }
 
 // Counts is the row count of each table after a build; Transfers counts

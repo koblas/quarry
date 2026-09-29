@@ -105,6 +105,10 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	}
 
 	transfers, transferCheck := pairTransfers(splits, links, transactions, accounts)
+	if err := checkTransferTotals(transfers, transferCheck); err != nil {
+		// unreachable: pairTransfers (transfers.go) makes each rows append together with one Paired++ or one OneSided append, so counts equal rows
+		return store.Result{}, err
+	}
 
 	rows := store.Rows{
 		Accounts: accounts, Categories: categories, Payees: payees, Tags: tags,
@@ -142,5 +146,9 @@ func newImportRun(startedAt time.Time, snap store.SnapshotRef, counts store.Coun
 		BalancesChecked: v.Balances.Checked, BalancesMismatched: len(v.Balances.Mismatched),
 		SplitsMismatched: len(v.Splits.Mismatched), TransfersOneSided: len(v.Transfers.OneSided),
 		InvestmentTransactionsNotImported: n.InvestmentTransactions,
+		BalancesNeverReconciled:           len(v.Balances.NeverReconciled),
+		InvestmentAccounts:                v.Balances.InvestmentAccounts,
+		TransfersPaired:                   v.Transfers.Paired,
+		TransfersCrossCurrency:            v.Transfers.CrossCurrency,
 	}
 }

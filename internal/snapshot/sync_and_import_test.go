@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
 	v9 "github.com/koblas/quarry/internal/quicken/v9"
@@ -110,12 +111,30 @@ func Test_sync_and_import_passes_the_manifests_hash_and_fingerprint_to_the_impor
 	outcome, err := srv.SyncAndImport(t.Context(), bundle.Dir)
 
 	require.NoError(t, err)
-	assert.Equal(t, []store.SnapshotRef{{
-		Path: outcome.Manifest.Snapshot.Path, SHA256: outcome.Manifest.Snapshot.SHA256,
-		SchemaFingerprint: outcome.Manifest.Schema.Fingerprint,
-	}}, fake.calls)
+	require.Len(t, fake.calls, 1)
+	assert.Equal(t, outcome.Manifest.Snapshot.Path, fake.calls[0].Path)
+	assert.Equal(t, outcome.Manifest.Snapshot.SHA256, fake.calls[0].SHA256)
+	assert.Equal(t, outcome.Manifest.Schema.Fingerprint, fake.calls[0].SchemaFingerprint)
 	assert.NotEmpty(t, fake.calls[0].SHA256)
 	assert.NotEmpty(t, fake.calls[0].SchemaFingerprint)
+}
+
+func Test_sync_and_import_passes_the_manifests_taken_at_and_source_to_the_importer(t *testing.T) {
+	t.Parallel()
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+
+	outcome, err := srv.SyncAndImport(t.Context(), bundle.Dir)
+
+	require.NoError(t, err)
+	require.Len(t, fake.calls, 1)
+	manifestTakenAt, err := time.Parse(time.RFC3339, outcome.Manifest.Snapshot.TakenAt)
+	require.NoError(t, err)
+	assert.Equal(t, manifestTakenAt.UTC(), fake.calls[0].TakenAt)
+	assert.NotEmpty(t, fake.calls[0].Source)
+	assert.Equal(t, outcome.Manifest.Snapshot.Source, fake.calls[0].Source)
 }
 
 func Test_sync_and_import_skips_the_import_on_a_schema_mismatch(t *testing.T) {

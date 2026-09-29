@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"syscall"
 
 	"github.com/koblas/quarry/internal/cli"
@@ -52,7 +53,8 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 		}
 
 		storeDir := filepath.Join(home, "Library", "Application Support", "quarry")
-		st := duckstore.New(storeDir, storeOpts...)
+		info, _ := debug.ReadBuildInfo()
+		st := duckstore.New(storeDir, append([]duckstore.Option{duckstore.WithQuarryVersion(buildVersion(info))}, storeOpts...)...)
 		srv := snapshot.NewServer(
 			snapshot.WithSnapshotDir(filepath.Join(storeDir, "snapshots")),
 			snapshot.WithReference(v9.ReferenceLabel, ref),
@@ -62,6 +64,15 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 		)
 		return srv, nil
 	}
+}
+
+// buildVersion is the main module's version from info, "" when info is nil
+// or carries none.
+func buildVersion(info *debug.BuildInfo) string {
+	if info == nil {
+		return ""
+	}
+	return info.Main.Version
 }
 
 // errHomeDirectory is sync's fixed-literal refusal when the home directory

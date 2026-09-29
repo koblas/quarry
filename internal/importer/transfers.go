@@ -3,6 +3,7 @@ package importer
 import (
 	"cmp"
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -96,6 +97,19 @@ func pairTransfers(splits []store.Split, links []transferLink, transactions []st
 		}
 	}
 	return rows, check
+}
+
+// errTransferTotals is checkTransferTotals' error: the pairing counts disagree with the rows.
+var errTransferTotals = errors.New("transfer pairing counts disagree with its rows")
+
+// checkTransferTotals confirms every transfers row was counted as paired or
+// one-sided, so the import_runs counts always add up to transfers_rows.
+func checkTransferTotals(transfers []store.Transfer, check store.TransferCheck) error {
+	if got := check.Paired + len(check.OneSided); got != len(transfers) {
+		return fmt.Errorf("%w: counted %d paired and %d one-sided for %d transfer rows",
+			errTransferTotals, check.Paired, len(check.OneSided), len(transfers))
+	}
+	return nil
 }
 
 // pairLegs links the from and to splits to each other's account and returns their

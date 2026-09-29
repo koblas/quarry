@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/humanize"
@@ -94,6 +95,7 @@ func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome
 
 	result, err := s.importer.Import(ctx, store.SnapshotRef{
 		Path: manifest.Snapshot.Path, SHA256: manifest.Snapshot.SHA256, SchemaFingerprint: manifest.Schema.Fingerprint,
+		TakenAt: recordedTakenAt(manifest.Snapshot.TakenAt), Source: manifest.Snapshot.Source,
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrValidationFailed) {
@@ -106,6 +108,16 @@ func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome
 	}
 
 	return Outcome{Manifest: manifest, Store: &result}, nil
+}
+
+// recordedTakenAt parses a manifest's taken_at into UTC; an unparseable
+// value gives the zero time, which the store records as NULL.
+func recordedTakenAt(s string) time.Time {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t.UTC()
 }
 
 // importFailureRefusal reports a committed snapshot's non-V1 import
