@@ -36,7 +36,7 @@ Test reference must be **last thing on line** — fold's "delivered by SCENARIO-
 
 ## Scenario plan files are brief step files
 
-`docs/specifications/<feature>/SCENARIO-XX.md` read by `quarry` itself (`brief status`, `brief check`). Must start with frontmatter, then heading, then header lines, then checklist under `## Implementation Plan` (phases in architect's plan format):
+`docs/specifications/<feature>/SCENARIO-XX.md` keeps one fixed shape so orchestrator, developer runs and reviewers find the same anchors. Must start with frontmatter, then heading, then header lines, then checklist under `## Implementation Plan` (phases in architect's plan format), then `## Handoff`, then `## Phase report`:
 
 ```markdown
 ---
@@ -47,7 +47,26 @@ status: open
 # SCENARIO-XX: <title>
 ```
 
-Developer sets `status: done` when scenario complete, plus tick in `specification.md`. Every `- [ ]` under `## Implementation Plan` must be ticked by then — `brief check` reports unticked item on done step.
+Developer sets `status: done` when scenario complete, plus tick in `specification.md`. Every `- [ ]` under `## Implementation Plan` must be ticked by then — checkpoint reports unticked item on done step.
+
+## Developer runs
+
+One scenario = several short `developer` runs, never one long one. Every turn re-reads whole context, so long run pays for its early turns again on each late one; in baseline features one developer session carried up to 32% of feature's tokens.
+
+Architect writes run groups on plan's `Runs:` header line; orchestrator spawns **fresh** `developer` per group, in order:
+
+| Run | Plan phases | Ends with | Skills to load |
+| --- | --- | --- | --- |
+| `A` | Acceptance (red) | acceptance test failing at its assertion | `tdd`, `go-testing`, `clean-architecture` |
+| `B1`, `B2`, … | Build, **≤3 behaviour batches** per run | its batches green on `Narrow loop:` | `go-testing`, `clean-architecture`; `tdd` only under `test-first` |
+| `V` | Sweep + Verify, spec tick, `spec-check.py`, `STATE.md` rewrite, `status: done` | full verification block green | none beyond briefs |
+
+- Run gets: tag line with `unit:`, `Run: <group>` line, plan (with ticks so far), `STATE.md`, plan's `## Phase report`. **Never** previous run's transcript or report pasted into prompt — it is in the file.
+- Each run ends by **rewriting** `## Phase report` (last section of plan, ≤30 lines, replaces previous): files changed (`file:line`), what is red / green now (run `A` quotes failing assertion), anything next run must not redo or undo. Then returns.
+- Run past ~40 tool calls: finish current batch, write phase report, return `PARTIAL: <steps left>`; orchestrator spawns next run for remainder. Long run is the cost this section exists to stop.
+- Plan with ≤1 Build batch may merge `A` and `B1` into one run (`Runs: A+B1 | V`). Nothing else merges.
+- `<start>` (CLAUDE.md step 5) recorded before run `A`; checkpoint runs after `V`, over whole scenario's range.
+- Fix passes stay single runs — findings list is their plan.
 
 ## Planning: coverage the gate will demand
 

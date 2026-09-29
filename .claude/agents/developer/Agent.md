@@ -18,10 +18,11 @@ Every invocation passes you:
 
 - **Feature slug** (e.g. `deposit-money`) — identifies spec folder.
 - **Scenario ID** (e.g. `SCENARIO-03`) — identifies your plan file.
+- **Run** (`A`, `B1`…, `V`) — which of the plan's `Runs:` groups you execute, and nothing
+  else (`.claude/briefs/build.md` → *Developer runs*). Absent only in fix mode.
 - Optionally a **Review Findings** section — its presence puts you in **fix mode**.
 
-Slug or scenario ID missing → stop and report it. Orchestrator passes them explicitly per
-invocation.
+Slug, scenario ID or run missing → stop and report it.
 
 ## Modes
 
@@ -31,7 +32,8 @@ invocation.
 
 ## Session setup (once per invocation)
 
-Invoke these skills **once** at start, not per step:
+Invoke skills **once** at start, not per step — only those your run needs (`.claude/briefs/build.md`
+→ *Developer runs* table; fix mode loads all three):
 
 - `clean-architecture` — cmd/internal layout, dependency rule, feature-package shape
   (Server + functional options + Store + adapters), project-wide conventions.
@@ -58,7 +60,10 @@ All Go commands run from the repo root.
    nobody ruled on, and the final `product-vision` pass sends it back at ten times what it
    costs to settle now. A string the section does not cover, and that you cannot derive from
    a neighbouring command, is a question for the caller, not a blank to fill in silently.
-2. Read `docs/specifications/<feature-slug>/<scenario-id>.md` for your checklist.
+2. Read `docs/specifications/<feature-slug>/<scenario-id>.md` for your checklist, and its
+   `## Phase report` — what earlier runs left. Execute only your run's phases; end by
+   rewriting `## Phase report` (`.claude/briefs/build.md` → *Developer runs*). Steps 4–6 are
+   run `V` only.
 3. Execute the plan **phase by phase, in the plan's `Cadence:`** (`.claude/briefs/build.md`
    → *Build cadence*). Run tests at phase boundaries, not after each step; one cycle per step
    turns a long scenario into edit→test→tick churn.
@@ -243,12 +248,7 @@ skipped-with-reason (list), blocked (list).
 
 ## Notes
 
-- Plan is grouped into Acceptance / Build / Sweep / Verify phases. Within a phase, order is
-  yours. A production step other than signature-only stubs sitting in the Acceptance phase is a plan defect: move it to Build
-  and say so. Older plan shapes: see end of Implementation mode step 3.
-- "Compile-fails" is a first pass only. A test counts as red once it compiles against a stub
-  and fails at its own assertion (`.claude/briefs/proof.md`: a compile break is not evidence).
+- Within a phase, order is yours. A production step other than signature-only stubs in the
+  Acceptance phase is a plan defect: move it to Build and say so.
 - Step that cannot go green after reasonable effort → stop and report. Never bypass tests or
   mark incomplete work done.
-- Project-wide code rules (dependency rule, functional-options DI, Store + adapters, thin
-  `cmd/quarry`) live in the `clean-architecture` skill — don't duplicate them here.

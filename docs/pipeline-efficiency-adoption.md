@@ -10,7 +10,7 @@ points at it.
 | ID | Status | Where implemented | Baseline | After | Notes |
 | --- | --- | --- | --- | --- | --- |
 | R1 | done | `.claude/scripts/feature-metrics.py`; CLAUDE.md → *Run tags*; `.claude/briefs/metrics.md` | see *Baseline* | | Orchestrator row is an upper bound (session window). Weights default to 0.1 cache read / 5 output; check against current pricing |
-| R2 | planned | | | | |
+| R2 | done | `.claude/briefs/build.md` → *Developer runs*; architect `Runs:` header; CLAUDE.md step 5; developer prompt contract | developer run median / p90 in *Baseline* | | Phase report lives in the plan file, rewritten each run. Early hand-off uses a ~40-tool-call proxy for "context past 50% of window", which the agent cannot measure directly |
 | R3 | planned | | | | |
 | R4 | planned | | | | |
 | R5 | partial | `.claude/scripts/post-edit-check.sh` (PostToolUse hook in `.claude/settings.json`); `.claude/briefs/build.md` → *Edit hook* | | | Deviation: hook runs gofmt + `go build` only. Narrow tests would report expected red in acceptance / test-first phases; `golangci-lint` too slow per edit — both stay at phase boundaries |

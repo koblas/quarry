@@ -123,6 +123,8 @@ Header lines:
   touches (the item `Cadence:` names) plus any other guard you judge load-bearing — or `none`,
   valid only under `code-first`. Rule owned by `.claude/briefs/proof.md` → *Mutation
   verification*.
+- `Runs:` developer run groups with their steps, e.g. `A (1-2) | B1 (3-5) | B2 (6) | V (7-8)`
+  — ≤3 Build batches per `B` group (`.claude/briefs/build.md` → *Developer runs*).
 
 Phases — developer runs one build/test at each boundary, not per step:
 
@@ -156,6 +158,7 @@ Cadence: code-first
 Acceptance test: `internal/account/withdraw_test.go` `Test_withdraw_reduces_the_balance`
 Narrow loop: `go test ./internal/account/ -run 'Withdraw|Store'`
 Mutation checks: overdraft guard in `(*Server).Withdraw` → `Test_withdraw_refuses_more_than_the_balance`
+Runs: A (1-2) | B1 (3-4) | V (5-6)
 
 ## Implementation Plan
 
@@ -181,9 +184,10 @@ For scenario adding command surface, acceptance test is command-slice test throu
 Build batches are subcommand in `internal/cli`, feature-package decision func, output renderer
 and `cmd/quarry` wiring.
 
-## Handoff section — mandatory, last section of every plan
+## Handoff section — mandatory, last section you write
 
-End every `SCENARIO-XX.md` with a `## Handoff` section. Anything a successor must not
+End your `SCENARIO-XX.md` with a `## Handoff` section (developer runs add `## Phase report`
+after it). Anything a successor must not
 rediscover or contradict belongs here, stated in full — not referenced. Keep it under ~25
 lines — it counts against plan's ~100-line cap; if it grows past that, you are explaining
 rather than handing off, and every subsequent agent pays for it.

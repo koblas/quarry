@@ -10,9 +10,9 @@ Orchestrator only — no agent reads this or ledger it describes.
 # Metrics: <feature-slug>
 
 ## Scenarios
-| Scenario | Cadence | Checkpoint findings (B/M/m/n) | Checkpoint fix pass |
-| --- | --- | --- | --- |
-| SCENARIO-01 | code-first | 0/1/2/0 | yes |
+| Scenario | Cadence | Developer runs | Checkpoint findings (B/M/m/n) | Checkpoint fix pass |
+| --- | --- | --- | --- | --- |
+| SCENARIO-01 | code-first | A, B1, V (+1 PARTIAL) | 0/1/2/0 | yes |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Verdict |
