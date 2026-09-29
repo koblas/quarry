@@ -20,4 +20,5 @@ Scenarios complete: SCENARIO-01..05 (02-05 folded into 01). Last updated by SCEN
 - Narrow-loop `-run` regex `Import|Offender|FirstError` is case-sensitive and misses `Test_import_*`; run `go test ./internal/importer/` (SCENARIO-01).
 
 ## Open debts
-- None.
+- internal/importer/transactions_test.go:196-210 (S3), :330-340 (S1), dangling_references_test.go (S2) — acceptance tests discard `result`; assert `result.NotImported` is zero and validation not failed, so "nothing printed" (R7) is pinned (checkpoint MINOR).
+- internal/importer/splits.go:45, transactions.go:102 — `!parent.Valid` / `!account.Valid` redundant with map miss (equivalent mutants) (checkpoint NIT).
