@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -89,10 +90,6 @@ func WithStoreProbe(probe StoreProbe) Option {
 	return func(s *Server) { s.storeProbe = probe }
 }
 
-// Home returns the home directory Sync abbreviates refusal messages
-// against, as set by WithHome.
-func (s *Server) Home() string { return s.home }
-
 // NewServer builds a Server from opts.
 func NewServer(opts ...Option) *Server {
 	s := &Server{busyTimeout: DefaultBusyTimeout}
@@ -102,8 +99,12 @@ func NewServer(opts ...Option) *Server {
 	return s
 }
 
+// Home returns the home directory Sync abbreviates refusal messages
+// against, as set by WithHome.
+func (s *Server) Home() string { return s.home }
+
 // errNoReference is Sync's error when the Server has no reference schema.
-var errNoReference = fmt.Errorf("no reference schema configured")
+var errNoReference = errors.New("no reference schema configured")
 
 // Sync takes a verified snapshot of the Quicken bundle at bundlePath: it
 // opens, probes and backs up the live file read-only, then checks the copy
@@ -126,13 +127,13 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 
 	dataPath := filepath.Join(bundlePath, "data")
 	if err := source.Open(ctx, dataPath); err != nil {
-		refusal, _ := sourceRefusal(s.home, bundlePath, err)
+		_, refusal := sourceRefusal(s.home, bundlePath, err)
 		return Manifest{}, FailureOutcome(ctx, refusal)
 	}
 	defer func() { _ = source.Close() }()
 
 	if err := source.Probe(ctx); err != nil {
-		refusal, _ := sourceRefusal(s.home, bundlePath, err)
+		_, refusal := sourceRefusal(s.home, bundlePath, err)
 		return Manifest{}, FailureOutcome(ctx, refusal)
 	}
 
@@ -145,7 +146,7 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 
 	snapshotPartial, resolvedName, err := destination.Backup(ctx, source, name)
 	if err != nil {
-		if refusal, ok := sourceRefusal(s.home, bundlePath, err); ok {
+		if ok, refusal := sourceRefusal(s.home, bundlePath, err); ok {
 			return Manifest{}, FailureOutcome(ctx, refusal)
 		}
 		return Manifest{}, FailureOutcome(ctx, backupFailureRefusal(s.home, bundlePath, s.snapshotDir, err))
@@ -227,7 +228,7 @@ func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string,
 	}
 
 	return Manifest{
-		Snapshot: SnapshotInfo{
+		Snapshot: Info{
 			Source:   source,
 			TakenAt:  takenAt.Format(time.RFC3339),
 			Bytes:    size,
@@ -243,7 +244,7 @@ func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string,
 // account count and schema, after its integrity and ZACCOUNT checks pass. A
 // lock held by another connection is retried for up to busyTimeout before
 // Open fails with a sqlite.IsBusy error.
-func inspectContent(ctx context.Context, path string, busyTimeout time.Duration) (accounts int, actual sqlschema.Schema, err error) {
+func inspectContent(ctx context.Context, path string, busyTimeout time.Duration) (int, sqlschema.Schema, error) {
 	snap, err := sqlite.OpenReadOnlyBusy(ctx, path, busyTimeout)
 	if err != nil {
 		return 0, nil, fmt.Errorf("open snapshot: %w", err)
@@ -263,7 +264,7 @@ func inspectContent(ctx context.Context, path string, busyTimeout time.Duration)
 		return 0, nil, errNoAccountsTable
 	}
 
-	accounts, err = snap.QueryInt(ctx, "SELECT count(*) FROM ZACCOUNT")
+	accounts, err := snap.QueryInt(ctx, "SELECT count(*) FROM ZACCOUNT")
 	if err != nil {
 		// unreachable: only a ctx cancelled between the existence check and this query reaches here, a race no test can pin; the caller's FailureOutcome classifies it as interrupted.
 		return 0, nil, fmt.Errorf("count accounts: %w", err)
@@ -272,7 +273,7 @@ func inspectContent(ctx context.Context, path string, busyTimeout time.Duration)
 		return 0, nil, errNoAccounts
 	}
 
-	actual, err = snap.Schema(ctx)
+	actual, err := snap.Schema(ctx)
 	if err != nil {
 		return 0, nil, fmt.Errorf("read snapshot schema: %w", err)
 	}
@@ -281,7 +282,7 @@ func inspectContent(ctx context.Context, path string, busyTimeout time.Duration)
 
 // hashFile streams the file at path through SHA-256, returning its size
 // and hex digest.
-func hashFile(path string) (size int64, sum string, err error) {
+func hashFile(path string) (int64, string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return 0, "", fmt.Errorf("read snapshot: %w", err)
@@ -289,7 +290,7 @@ func hashFile(path string) (size int64, sum string, err error) {
 	defer func() { _ = f.Close() }()
 
 	h := sha256.New()
-	size, err = io.Copy(h, f)
+	size, err := io.Copy(h, f)
 	if err != nil {
 		return 0, "", fmt.Errorf("read snapshot: %w", err)
 	}

@@ -46,8 +46,13 @@ func Test_run_records_an_import_runs_row_for_the_build(t *testing.T) {
 	raw, err := os.ReadFile(onlyFileWithSuffix(t, snapshotsDir, ".json"))
 	require.NoError(t, err)
 	var manifest struct {
-		Snapshot struct{ Path, SHA256 string }
-		Schema   struct{ Fingerprint string }
+		Snapshot struct {
+			Path   string `json:"path"`
+			SHA256 string `json:"sha256"`
+		} `json:"snapshot"`
+		Schema struct {
+			Fingerprint string `json:"fingerprint"`
+		} `json:"schema"`
 	}
 	require.NoError(t, json.Unmarshal(raw, &manifest))
 

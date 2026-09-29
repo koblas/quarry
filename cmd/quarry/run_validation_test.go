@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -194,7 +193,7 @@ func Test_run_points_at_from_json_when_stdout_fails_rendering_a_failed_validatio
 	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "100.00"})
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &day, EndingBalance: "100.01"})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	writeErr := errors.New("no space left on device")
+	writeErr := errNoSpace
 	var stderr bytes.Buffer
 
 	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, failingWriter{err: writeErr}, &stderr)

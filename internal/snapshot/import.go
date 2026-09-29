@@ -50,18 +50,18 @@ func oneSidedWarning(n int) string {
 	return humanize.Thousands(n) + " transfers have no matching transaction in another account; quarry keeps them as one-sided transfers"
 }
 
-// causedRefusal is a refusal that keeps its cause: Error is the refusal
+// causedRefusalError is a refusal that keeps its cause: Error is the refusal
 // text alone, while Unwrap preserves the cause for errors.Is and errors.As.
-type causedRefusal struct {
+type causedRefusalError struct {
 	msg   string
 	cause error
 }
 
 // Error returns the refusal's message verbatim.
-func (e causedRefusal) Error() string { return e.msg }
+func (e causedRefusalError) Error() string { return e.msg }
 
 // Unwrap returns the error the refusal wraps.
-func (e causedRefusal) Unwrap() error { return e.cause }
+func (e causedRefusalError) Unwrap() error { return e.cause }
 
 // snapshotID returns the id a refusal names for path: its basename with the
 // .sqlite extension removed.
@@ -132,7 +132,7 @@ func (s *Server) importFailureRefusal(ctx context.Context, manifest Manifest, er
 	default:
 		msg = fmt.Sprintf("cannot build the store in %s: %s; run quarry sync --from %s", storeDir, causeText(err), id)
 	}
-	return causedRefusal{msg: msg, cause: err}
+	return causedRefusalError{msg: msg, cause: err}
 }
 
 // validationFailedRefusal reports V1: a build reached the balance or
@@ -145,7 +145,7 @@ func (s *Server) validationFailedRefusal(manifest Manifest, v store.Validation, 
 	if n := len(v.Splits.Mismatched); n > 0 {
 		clauses = append(clauses, splitMismatchClause(n))
 	}
-	return causedRefusal{
+	return causedRefusalError{
 		msg: fmt.Sprintf("validation failed: %s; %s was not changed; each difference is listed on stdout; "+
 			"fix the account in Quicken and run quarry sync, or run quarry sync --from %s after updating quarry",
 			strings.Join(clauses, " and "), homepath.Abbreviate(s.home, s.storeProbe.Path()), snapshotID(manifest.Snapshot.Path)),
@@ -183,10 +183,10 @@ func splitMismatchClause(n int) string {
 func (o Outcome) StdoutWriteRefusal(home string, err error) error {
 	if o.Store == nil {
 		return fmt.Errorf(
-			"cannot write the result to stdout: %s; the snapshot is kept at %s and its .json manifest holds the full result",
+			"cannot write the result to stdout: %w; the snapshot is kept at %s and its .json manifest holds the full result",
 			err, homepath.Abbreviate(home, o.Manifest.Snapshot.Path))
 	}
 	return fmt.Errorf(
-		"cannot write the result to stdout: %s; run quarry sync --from %s --json to see it again",
+		"cannot write the result to stdout: %w; run quarry sync --from %s --json to see it again",
 		err, snapshotID(o.Manifest.Snapshot.Path))
 }

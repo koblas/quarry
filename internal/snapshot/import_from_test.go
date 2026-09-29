@@ -14,7 +14,7 @@ import (
 
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/sqlite"
-	"github.com/koblas/quarry/internal/quicken/v9"
+	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store"
@@ -53,7 +53,7 @@ func writeSnapshotPair(t *testing.T, dir, id string, ddl ...string) {
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
 	for _, stmt := range ddl {
-		_, err := conn.Exec(stmt)
+		_, err := conn.ExecContext(t.Context(), stmt)
 		require.NoError(t, err)
 	}
 	require.NoError(t, conn.Close())
@@ -66,7 +66,7 @@ func writeManifestFor(t *testing.T, snapshotPath string) {
 	raw, err := os.ReadFile(snapshotPath)
 	require.NoError(t, err)
 	sum := sha256.Sum256(raw)
-	data, err := snapshot.Manifest{Snapshot: snapshot.SnapshotInfo{
+	data, err := snapshot.Manifest{Snapshot: snapshot.Info{
 		Source: "/Users/x/Documents/Home.quicken", SHA256: hex.EncodeToString(sum[:]),
 	}}.Encode()
 	require.NoError(t, err)
@@ -535,6 +535,7 @@ func Test_import_from_names_the_missing_accounts_in_the_refusal(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			home := t.TempDir()
 			fake := &fakeImporter{}
 			srv := newImportServer(t, home, fake)

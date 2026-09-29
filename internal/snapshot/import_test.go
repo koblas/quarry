@@ -9,10 +9,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// errNoSpace stands in for a stdout write failing on a full disk.
+var errNoSpace = errors.New("no space left on device")
+
 func Test_stdout_write_refusal_points_to_from_only_once_the_build_was_reached(t *testing.T) {
 	t.Parallel()
-	writeErr := errors.New("no space left on device")
-	manifest := snapshot.Manifest{Snapshot: snapshot.SnapshotInfo{
+	writeErr := errNoSpace
+	manifest := snapshot.Manifest{Snapshot: snapshot.Info{
 		Path: "/Users/dave/Library/Application Support/quarry/snapshots/20260927T143005Z.sqlite",
 	}}
 	cases := []struct {
@@ -36,6 +39,7 @@ func Test_stdout_write_refusal_points_to_from_only_once_the_build_was_reached(t 
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			outcome := snapshot.Outcome{Manifest: manifest, Store: c.store}
 
 			got := outcome.StdoutWriteRefusal("/Users/dave", writeErr)

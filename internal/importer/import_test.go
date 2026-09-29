@@ -12,8 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func strPtr(s string) *string { return &s }
-
 // Covers every table in one pass: an account with an institution, a
 // two-way split transaction, a category, a payee and a tag on one split.
 func Test_import_builds_every_table_from_a_v9_snapshot(t *testing.T) {
@@ -24,7 +22,7 @@ func Test_import_builds_every_table_from_a_v9_snapshot(t *testing.T) {
 		Name: "Chequing", Type: "CHECKING", Currency: "CAD", Institution: bankPK, Active: true,
 	})
 	payeePK := b.Payee(v9fixture.PayeeRow{Name: "Coffee Shop"})
-	catPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: v9fixture.Int64Ptr(1)})
+	catPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: new(int64(1))})
 	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
 
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
@@ -57,7 +55,7 @@ func Test_import_builds_every_table_from_a_v9_snapshot(t *testing.T) {
 
 	assert.Equal(t, []store.Account{{
 		ID: acctID, SourceID: acctPK, Name: "Chequing", Type: "chequing", Currency: "CAD",
-		Institution: strPtr("Big Bank"), Closed: false, Active: true,
+		Institution: new("Big Bank"), Closed: false, Active: true,
 	}}, fake.Rows.Accounts)
 
 	assert.Equal(t, []store.Category{{
@@ -70,11 +68,11 @@ func Test_import_builds_every_table_from_a_v9_snapshot(t *testing.T) {
 
 	assert.Equal(t, []store.Transaction{{
 		ID: txnID, SourceID: txnPK, AccountID: acctID, Date: posted,
-		PayeeID: strPtr(payeeID), Amount: 1234, Currency: "CAD", Status: "uncleared",
+		PayeeID: new(payeeID), Amount: 1234, Currency: "CAD", Status: "uncleared",
 	}}, fake.Rows.Transactions)
 
 	assert.ElementsMatch(t, []store.Split{
-		{ID: split1ID, SourceID: entry1PK, TransactionID: txnID, CategoryID: strPtr(catID), Amount: 700},
+		{ID: split1ID, SourceID: entry1PK, TransactionID: txnID, CategoryID: new(catID), Amount: 700},
 		{ID: split2ID, SourceID: entry2PK, TransactionID: txnID, Amount: 534},
 	}, fake.Rows.Splits)
 
@@ -117,11 +115,11 @@ func Test_import_twice_from_the_same_snapshot_keeps_every_id(t *testing.T) {
 func Test_import_keeps_each_categorys_parent_path_kind_and_hidden(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	incomePK := b.Category(v9fixture.TagRow{Name: "Salary", Type: v9fixture.Int64Ptr(2)})
-	systemPK := b.Category(v9fixture.TagRow{Name: "Transfer", Type: v9fixture.Int64Ptr(0)})
-	parentPK := b.Category(v9fixture.TagRow{Name: "Food", Type: v9fixture.Int64Ptr(1)})
+	incomePK := b.Category(v9fixture.TagRow{Name: "Salary", Type: new(int64(2))})
+	systemPK := b.Category(v9fixture.TagRow{Name: "Transfer", Type: new(int64(0))})
+	parentPK := b.Category(v9fixture.TagRow{Name: "Food", Type: new(int64(1))})
 	childPK := b.Category(v9fixture.TagRow{
-		Name: "Groceries", Type: v9fixture.Int64Ptr(1), ParentCategory: parentPK, Hidden: true,
+		Name: "Groceries", Type: new(int64(1)), ParentCategory: parentPK, Hidden: true,
 	})
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
@@ -135,7 +133,7 @@ func Test_import_keeps_each_categorys_parent_path_kind_and_hidden(t *testing.T) 
 		{ID: fmt.Sprintf("cat-%d", systemPK), SourceID: systemPK, Name: "Transfer", FullPath: "Transfer", Kind: "system"},
 		{ID: parentID, SourceID: parentPK, Name: "Food", FullPath: "Food", Kind: "expense"},
 		{
-			ID: fmt.Sprintf("cat-%d", childPK), SourceID: childPK, ParentID: strPtr(parentID),
+			ID: fmt.Sprintf("cat-%d", childPK), SourceID: childPK, ParentID: new(parentID),
 			Name: "Groceries", FullPath: "Food:Groceries", Kind: "expense", Hidden: true,
 		},
 	}, fake.Rows.Categories)

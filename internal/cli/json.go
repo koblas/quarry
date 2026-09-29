@@ -15,10 +15,10 @@ const jsonDateLayout = "2006-01-02"
 // resultDocument is sync's --json stdout shape: the manifest, the store
 // result (nil before an import is attempted), and every warning.
 type resultDocument struct {
-	Snapshot snapshot.SnapshotInfo `json:"snapshot"`
-	Schema   snapshot.SchemaInfo   `json:"schema"`
-	Store    *storeDocument        `json:"store"`
-	Warnings []string              `json:"warnings"`
+	Snapshot snapshot.Info       `json:"snapshot"`
+	Schema   snapshot.SchemaInfo `json:"schema"`
+	Store    *storeDocument      `json:"store"`
+	Warnings []string            `json:"warnings"`
 }
 
 // storeDocument is the --json "store" object.

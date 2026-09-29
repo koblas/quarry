@@ -82,7 +82,7 @@ func Test_import_nulls_a_splits_category_when_the_category_is_deleted(t *testing
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	deletedCatPK := b.Category(v9fixture.TagRow{Name: "Old", Type: v9fixture.Int64Ptr(1), Deleted: true})
+	deletedCatPK := b.Category(v9fixture.TagRow{Name: "Old", Type: new(int64(1)), Deleted: true})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
 	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
 	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00", CategoryTag: deletedCatPK})
@@ -158,8 +158,8 @@ func Test_import_nulls_a_transactions_payee_when_the_payee_does_not_exist(t *tes
 func Test_import_category_full_path_ignores_a_deleted_parent(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	deletedParentPK := b.Category(v9fixture.TagRow{Name: "OldParent", Type: v9fixture.Int64Ptr(1), Deleted: true})
-	b.Category(v9fixture.TagRow{Name: "Child", Type: v9fixture.Int64Ptr(1), ParentCategory: deletedParentPK})
+	deletedParentPK := b.Category(v9fixture.TagRow{Name: "OldParent", Type: new(int64(1)), Deleted: true})
+	b.Category(v9fixture.TagRow{Name: "Child", Type: new(int64(1)), ParentCategory: deletedParentPK})
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 

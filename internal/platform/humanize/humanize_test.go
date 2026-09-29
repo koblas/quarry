@@ -22,6 +22,7 @@ func Test_Thousands(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, c.want, humanize.Thousands(c.n))
 		})
 	}
@@ -41,6 +42,7 @@ func Test_Count(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, c.want, humanize.Count(c.n, "account", "accounts"))
 		})
 	}

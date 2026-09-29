@@ -18,9 +18,9 @@ func newMultiRowTestDatabase(t *testing.T) string {
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
-	_, err = conn.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
+	_, err = conn.ExecContext(t.Context(), "CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
 	require.NoError(t, err)
-	_, err = conn.Exec("INSERT INTO t (id, v) VALUES (1, 'a'), (2, 'b'), (3, 'c')")
+	_, err = conn.ExecContext(t.Context(), "INSERT INTO t (id, v) VALUES (1, 'a'), (2, 'b'), (3, 'c')")
 	require.NoError(t, err)
 	return path
 }
@@ -77,7 +77,7 @@ func Test_query_rows_fails_on_a_query_error(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 
 	err = db.QueryRows(t.Context(), "SELECT v FROM missing_table", nil,
-		func(scan func(dest ...any) error) error { return nil })
+		func(func(dest ...any) error) error { return nil })
 
 	require.Error(t, err)
 }
@@ -111,7 +111,7 @@ func Test_query_rows_stops_iterating_once_the_callback_errors(t *testing.T) {
 
 	calls := 0
 	err = db.QueryRows(t.Context(), "SELECT v FROM t ORDER BY id", nil,
-		func(scan func(dest ...any) error) error {
+		func(func(dest ...any) error) error {
 			calls++
 			return errQueryRowsCallback
 		})
@@ -129,7 +129,7 @@ func Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration(t *testin
 	ctx, cancel := context.WithCancel(t.Context())
 
 	err = db.QueryRows(ctx, "SELECT v FROM t ORDER BY id", nil,
-		func(scan func(dest ...any) error) error {
+		func(func(dest ...any) error) error {
 			cancel()
 			return nil
 		})

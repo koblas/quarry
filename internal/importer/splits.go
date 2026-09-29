@@ -72,6 +72,7 @@ func mapSplits(
 		case moneyTooLarge:
 			off.add(offender{class: classTooLarge, reason: reasonSplitTooLarge(dateStr, txn.AccountName, amtText.String), dated: true, date: txn.Date, account: txn.AccountName, sourceID: pk})
 			return nil
+		case moneyOK:
 		}
 
 		id := fmt.Sprintf("split-%d", pk)

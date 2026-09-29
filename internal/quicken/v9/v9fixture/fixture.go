@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3" // registers the "sqlite3" driver fixtures open with sql.Open
 	"github.com/stretchr/testify/require"
 )
 
@@ -65,6 +65,7 @@ func OpenBundle(tb testing.TB, dir string) Bundle {
 	}
 }
 
+//nolint:revive // testing.TB leads, by convention
 func requireExec(tb testing.TB, ctx context.Context, db *sql.DB, query string, args ...any) {
 	tb.Helper()
 	_, err := db.ExecContext(ctx, query, args...)
@@ -73,6 +74,8 @@ func requireExec(tb testing.TB, ctx context.Context, db *sql.DB, query string, a
 
 // requireEntityPrimaryKeys writes a Z_PRIMARYKEY row (Z_MAX 0) for each
 // entity kind the importer must resolve: callers seed accounts only.
+//
+//nolint:revive // testing.TB leads, by convention
 func requireEntityPrimaryKeys(tb testing.TB, ctx context.Context, db *sql.DB) {
 	tb.Helper()
 	for _, ent := range []struct {
@@ -155,7 +158,7 @@ func MissingSchemaBundle(tb testing.TB, dir string) Bundle {
 	conn, err := sql.Open("sqlite3", dataPath)
 	require.NoError(tb, err)
 	requireExec(tb, ctx, conn, "INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
-	requireExec(tb, ctx, conn, fmt.Sprintf("DROP TABLE %s", MissingSchemaDroppedTable))
+	requireExec(tb, ctx, conn, "DROP TABLE "+MissingSchemaDroppedTable)
 	requireExec(tb, ctx, conn, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s",
 		MissingSchemaDroppedColumnTable, MissingSchemaDroppedColumn1))
 	requireExec(tb, ctx, conn, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s",
@@ -219,7 +222,7 @@ func CorruptDataFile(tb testing.TB, path string) {
 	requireExec(tb, ctx, conn, "INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
 	requireExec(tb, ctx, conn, "CREATE TABLE ZFILLER (id INTEGER PRIMARY KEY, v TEXT)")
 	requireExec(tb, ctx, conn, "CREATE INDEX ZFILLER_V ON ZFILLER(v)")
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		requireExec(tb, ctx, conn, "INSERT INTO ZFILLER (v) VALUES (?)", strings.Repeat("x", 100))
 	}
 	require.NoError(tb, conn.Close())
@@ -230,7 +233,7 @@ func CorruptDataFile(tb testing.TB, path string) {
 	for i := len(raw) - 200; i < len(raw)-100; i++ {
 		raw[i] ^= 0xFF
 	}
-	require.NoError(tb, os.WriteFile(path, raw, 0o600))
+	require.NoError(tb, os.WriteFile(path, raw, 0o600)) //nolint:gosec // path is the fixture's own file under the test's temp dir
 
 	requireIntegrityCheckFailsOnly(tb, path)
 }
@@ -247,14 +250,14 @@ func requireIntegrityCheckFailsOnly(tb testing.TB, path string) {
 	tb.Cleanup(func() { _ = conn.Close() })
 
 	var result string
-	require.NoError(tb, conn.QueryRow("PRAGMA integrity_check").Scan(&result))
+	require.NoError(tb, conn.QueryRowContext(tb.Context(), "PRAGMA integrity_check").Scan(&result))
 	require.True(tb, strings.HasPrefix(result, "*** in database"))
 
 	var count int
-	require.NoError(tb, conn.QueryRow("SELECT count(*) FROM ZACCOUNT").Scan(&count))
+	require.NoError(tb, conn.QueryRowContext(tb.Context(), "SELECT count(*) FROM ZACCOUNT").Scan(&count))
 	require.Equal(tb, 1, count)
 
 	var tables int
-	require.NoError(tb, conn.QueryRow("SELECT count(*) FROM sqlite_master WHERE type = 'table'").Scan(&tables))
-	require.Greater(tb, tables, 0)
+	require.NoError(tb, conn.QueryRowContext(tb.Context(), "SELECT count(*) FROM sqlite_master WHERE type = 'table'").Scan(&tables))
+	require.Positive(tb, tables)
 }

@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var errNotDuckDB = errors.New("boom")
+
 func Test_IsDiskFull_and_IsPermission_classify_error_shapes(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -34,26 +36,34 @@ func Test_IsDiskFull_and_IsPermission_classify_error_shapes(t *testing.T) {
 		},
 		{
 			name: "driver IO error, permission denied message",
-			err: &duckdbdriver.Error{Type: duckdbdriver.ErrorTypeIO,
-				Msg: `IO Error: Cannot open file "x.duckdb": Permission denied`},
+			err: &duckdbdriver.Error{
+				Type: duckdbdriver.ErrorTypeIO,
+				Msg:  `IO Error: Cannot open file "x.duckdb": Permission denied`,
+			},
 			wantPerm: true,
 		},
 		{
 			name: "driver IO error, no space left message",
-			err: &duckdbdriver.Error{Type: duckdbdriver.ErrorTypeIO,
-				Msg: `IO Error: Cannot write file "x.duckdb": No space left on device`},
+			err: &duckdbdriver.Error{
+				Type: duckdbdriver.ErrorTypeIO,
+				Msg:  `IO Error: Cannot write file "x.duckdb": No space left on device`,
+			},
 			wantDiskFull: true,
 		},
 		{
 			name: "driver IO error, disk quota exceeded message",
-			err: &duckdbdriver.Error{Type: duckdbdriver.ErrorTypeIO,
-				Msg: `IO Error: Cannot write file "x.duckdb": ` + syscall.EDQUOT.Error()},
+			err: &duckdbdriver.Error{
+				Type: duckdbdriver.ErrorTypeIO,
+				Msg:  `IO Error: Cannot write file "x.duckdb": ` + syscall.EDQUOT.Error(),
+			},
 			wantDiskFull: true,
 		},
 		{
 			name: "driver IO error, operation not permitted message",
-			err: &duckdbdriver.Error{Type: duckdbdriver.ErrorTypeIO,
-				Msg: `IO Error: Cannot open file "x.duckdb": ` + syscall.EPERM.Error()},
+			err: &duckdbdriver.Error{
+				Type: duckdbdriver.ErrorTypeIO,
+				Msg:  `IO Error: Cannot open file "x.duckdb": ` + syscall.EPERM.Error(),
+			},
 			wantPerm: true,
 		},
 		{
@@ -66,7 +76,7 @@ func Test_IsDiskFull_and_IsPermission_classify_error_shapes(t *testing.T) {
 		},
 		{
 			name: "non-duckdb error",
-			err:  errors.New("boom"),
+			err:  errNotDuckDB,
 		},
 		{
 			name: "nil",
@@ -76,6 +86,7 @@ func Test_IsDiskFull_and_IsPermission_classify_error_shapes(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, c.wantDiskFull, duckdb.IsDiskFull(c.err))
 			assert.Equal(t, c.wantPerm, duckdb.IsPermission(c.err))
 		})

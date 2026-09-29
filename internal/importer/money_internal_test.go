@@ -51,6 +51,7 @@ func Test_parseMoney(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			gotCents, gotFault := parseMoney(c.typ, c.text)
 
 			assert.Equal(t, c.wantFault, gotFault)

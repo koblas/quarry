@@ -58,6 +58,7 @@ func Test_ResolveBundlePath_refuses_a_qdf_suffix(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			path := filepath.Join(home, "Home"+c.ext)
 			require.NoError(t, os.WriteFile(path, []byte("x"), 0o600))
 
@@ -180,9 +181,9 @@ func closeWALFormattedDatabase(t *testing.T, path string) {
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
-	_, err = conn.Exec("PRAGMA journal_mode=WAL")
+	_, err = conn.ExecContext(t.Context(), "PRAGMA journal_mode=WAL")
 	require.NoError(t, err)
-	_, err = conn.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+	_, err = conn.ExecContext(t.Context(), "CREATE TABLE t (id INTEGER PRIMARY KEY)")
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
 	_, statErr := os.Stat(path + "-wal")

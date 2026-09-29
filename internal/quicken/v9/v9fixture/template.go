@@ -1,13 +1,15 @@
 package v9fixture
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 
-	"github.com/koblas/quarry/internal/quicken/v9"
+	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,7 +20,7 @@ import (
 var (
 	referenceTemplateOnce  sync.Once
 	referenceTemplateBytes []byte
-	referenceTemplateErr   error
+	errReferenceTemplate   error
 )
 
 // referenceTemplate returns the reference schema template's bytes, building
@@ -26,9 +28,9 @@ var (
 func referenceTemplate(tb testing.TB) []byte {
 	tb.Helper()
 	referenceTemplateOnce.Do(func() {
-		referenceTemplateBytes, referenceTemplateErr = buildReferenceTemplate()
+		referenceTemplateBytes, errReferenceTemplate = buildReferenceTemplate()
 	})
-	require.NoError(tb, referenceTemplateErr)
+	require.NoError(tb, errReferenceTemplate)
 	return referenceTemplateBytes
 }
 
@@ -39,7 +41,7 @@ func buildReferenceTemplate() ([]byte, error) {
 	dir, err := os.MkdirTemp("", "v9fixture-template")
 	if err != nil {
 		// unreachable: MkdirTemp fails only when TMPDIR itself is unwritable or full, a machine-level fault no test induces.
-		return nil, err
+		return nil, fmt.Errorf("create template dir: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 
@@ -47,20 +49,25 @@ func buildReferenceTemplate() ([]byte, error) {
 	conn, err := sql.Open("sqlite3", path)
 	if err != nil {
 		// unreachable: sql.Open only validates the driver name, which the sqlite3 import always registers.
-		return nil, err
+		return nil, fmt.Errorf("open template: %w", err)
 	}
 
-	if _, err := conn.Exec(v9.ReferenceDDL); err != nil {
+	if _, err := conn.ExecContext(context.Background(), v9.ReferenceDDL); err != nil {
 		// unreachable: ReferenceDDL is a fixed, valid schema every fixture test exercises; a syntax fault would fail the whole suite, not one path.
 		_ = conn.Close()
-		return nil, err
+		return nil, fmt.Errorf("execute reference ddl: %w", err) // unreachable: same fixed, valid ReferenceDDL as above
 	}
 	if err := conn.Close(); err != nil {
 		// unreachable: closing a connection with no pending writes and no locks held by another connection cannot fail.
-		return nil, err
+		return nil, fmt.Errorf("close template: %w", err)
 	}
 
-	return os.ReadFile(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		// unreachable: the file was just written and closed inside a directory only this function knows.
+		return nil, fmt.Errorf("read template: %w", err)
+	}
+	return data, nil
 }
 
 // writeReferenceSchema writes the reference schema template to path,

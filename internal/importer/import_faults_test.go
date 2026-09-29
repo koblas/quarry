@@ -31,13 +31,19 @@ func (f *faultingSource) QueryRows(ctx context.Context, query string, args []any
 
 func (f *faultingSource) Close() error { return f.real.Close() }
 
+// errSourceBoom and errStoreDiskFull are the faults the fakes below inject.
+var (
+	errSourceBoom    = errors.New("boom")
+	errStoreDiskFull = errors.New("disk full")
+)
+
 func openerFailingOn(match string, err error) importer.SourceOpener {
 	return func(ctx context.Context, path string) (importer.Source, error) {
-		real, openErr := sqlite.OpenReadOnly(ctx, path)
+		src, openErr := sqlite.OpenReadOnly(ctx, path)
 		if openErr != nil {
 			return nil, openErr
 		}
-		return &faultingSource{real: real, match: match, err: err}, nil
+		return &faultingSource{real: src, match: match, err: err}, nil
 	}
 }
 
@@ -47,7 +53,7 @@ func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	catPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: v9fixture.Int64Ptr(1)})
+	catPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: new(int64(1))})
 	b.Payee(v9fixture.PayeeRow{Name: "Coffee Shop"})
 	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
@@ -57,7 +63,7 @@ func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &posted, EndingBalance: "1.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	errBoom := errors.New("boom")
+	errBoom := errSourceBoom
 	cases := []struct {
 		name  string
 		match string
@@ -76,6 +82,7 @@ func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			srv := importer.NewServer(importer.WithStore(&fakeStore{}), importer.WithSourceOpener(openerFailingOn(c.match, errBoom)))
 
 			_, err := srv.Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
@@ -95,8 +102,8 @@ type scanFaultingSource struct {
 
 func (f *scanFaultingSource) QueryRows(ctx context.Context, query string, args []any, row func(scan func(dest ...any) error) error) error {
 	if strings.Contains(query, f.match) {
-		return f.real.QueryRows(ctx, query, args, func(scan func(dest ...any) error) error {
-			return row(func(dest ...any) error { return f.err })
+		return f.real.QueryRows(ctx, query, args, func(func(dest ...any) error) error {
+			return row(func(...any) error { return f.err })
 		})
 	}
 	return f.real.QueryRows(ctx, query, args, row)
@@ -106,11 +113,11 @@ func (f *scanFaultingSource) Close() error { return f.real.Close() }
 
 func openerScanFailingOn(match string, err error) importer.SourceOpener {
 	return func(ctx context.Context, path string) (importer.Source, error) {
-		real, openErr := sqlite.OpenReadOnly(ctx, path)
+		src, openErr := sqlite.OpenReadOnly(ctx, path)
 		if openErr != nil {
 			return nil, openErr
 		}
-		return &scanFaultingSource{real: real, match: match, err: err}, nil
+		return &scanFaultingSource{real: src, match: match, err: err}, nil
 	}
 }
 
@@ -120,7 +127,7 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	catPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: v9fixture.Int64Ptr(1)})
+	catPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: new(int64(1))})
 	b.Payee(v9fixture.PayeeRow{Name: "Coffee Shop"})
 	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
@@ -130,7 +137,7 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &posted, EndingBalance: "1.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
-	errBoom := errors.New("boom")
+	errBoom := errSourceBoom
 	cases := []struct {
 		name  string
 		match string
@@ -149,6 +156,7 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			srv := importer.NewServer(importer.WithStore(&fakeStore{}), importer.WithSourceOpener(openerScanFailingOn(c.match, errBoom)))
 
 			_, err := srv.Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
@@ -164,7 +172,7 @@ func Test_import_propagates_a_store_replace_error(t *testing.T) {
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
-	errBoom := errors.New("disk full")
+	errBoom := errStoreDiskFull
 	fake.failNext(errBoom)
 
 	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})

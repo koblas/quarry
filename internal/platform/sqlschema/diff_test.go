@@ -100,6 +100,7 @@ func Test_Compare(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			got := sqlschema.Compare(c.reference, c.actual)
 
 			assert.Equal(t, c.want, got)

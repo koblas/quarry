@@ -32,8 +32,8 @@ func Test_query_rows_fails_on_a_query_error(t *testing.T) {
 	t.Parallel()
 	db, _ := newOpenDatabase(t)
 
-	err := db.QueryRows(t.Context(), "SELECT * FROM missing_table", nil,
-		func(scan func(dest ...any) error) error { return nil })
+	err := db.QueryRows(t.Context(), "SELECT id FROM missing_table", nil,
+		func(func(dest ...any) error) error { return nil })
 
 	require.Error(t, err)
 }
@@ -65,7 +65,7 @@ func Test_query_rows_stops_once_the_callback_errors(t *testing.T) {
 
 	calls := 0
 	err = db.QueryRows(t.Context(), "SELECT v FROM t ORDER BY v", nil,
-		func(scan func(dest ...any) error) error {
+		func(func(dest ...any) error) error {
 			calls++
 			return boom
 		})
@@ -130,7 +130,7 @@ func Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration(t *testin
 
 	calls := 0
 	err = db.QueryRows(ctx, "SELECT v FROM t ORDER BY v", nil,
-		func(scan func(dest ...any) error) error {
+		func(func(dest ...any) error) error {
 			calls++
 			cancel()
 			return nil

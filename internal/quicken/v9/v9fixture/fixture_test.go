@@ -21,19 +21,19 @@ func Test_a_byte_copy_of_data_omits_the_WAL_only_account(t *testing.T) {
 	raw, err := os.ReadFile(bundle.DataPath)
 	require.NoError(t, err)
 	copyPath := filepath.Join(t.TempDir(), "copy")
-	require.NoError(t, os.WriteFile(copyPath, raw, 0o600))
+	require.NoError(t, os.WriteFile(copyPath, raw, 0o600)) //nolint:gosec // copyPath is under the test's own temp dir
 
 	copyDB, err := sql.Open("sqlite3", copyPath)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = copyDB.Close() })
 	var copyCount int
-	require.NoError(t, copyDB.QueryRow("SELECT count(*) FROM ZACCOUNT").Scan(&copyCount))
+	require.NoError(t, copyDB.QueryRowContext(t.Context(), "SELECT count(*) FROM ZACCOUNT").Scan(&copyCount))
 
 	liveDB, err := sql.Open("sqlite3", bundle.DataPath)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = liveDB.Close() })
 	var liveCount int
-	require.NoError(t, liveDB.QueryRow("SELECT count(*) FROM ZACCOUNT").Scan(&liveCount))
+	require.NoError(t, liveDB.QueryRowContext(t.Context(), "SELECT count(*) FROM ZACCOUNT").Scan(&liveCount))
 
 	assert.Equal(t, 1, copyCount)
 	assert.Equal(t, 2, liveCount)
@@ -44,7 +44,7 @@ func Test_ClosedWALBundle_leaves_no_live_wal_file(t *testing.T) {
 
 	_, err := os.Stat(bundle.DataPath + "-wal")
 
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorIs(t, err, os.ErrNotExist)
 	var header [20]byte
 	f, err := os.Open(bundle.DataPath)
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func Test_MissingSchemaBundle_drops_a_table_two_columns_and_adds_one(t *testing.
 	t.Cleanup(func() { _ = conn.Close() })
 
 	var tableCount int
-	require.NoError(t, conn.QueryRow(
+	require.NoError(t, conn.QueryRowContext(t.Context(),
 		"SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
 		v9fixture.MissingSchemaDroppedTable).Scan(&tableCount))
 	assert.Zero(t, tableCount)
@@ -75,7 +75,7 @@ func Test_MissingSchemaBundle_drops_a_table_two_columns_and_adds_one(t *testing.
 	assert.Contains(t, addedTo, v9fixture.MissingSchemaAddedColumn)
 
 	var accounts int
-	require.NoError(t, conn.QueryRow("SELECT count(*) FROM ZACCOUNT").Scan(&accounts))
+	require.NoError(t, conn.QueryRowContext(t.Context(), "SELECT count(*) FROM ZACCOUNT").Scan(&accounts))
 	assert.Equal(t, 1, accounts)
 }
 
@@ -86,7 +86,7 @@ func Test_ExtraSchemaBundle_adds_a_table_and_two_columns(t *testing.T) {
 	t.Cleanup(func() { _ = conn.Close() })
 
 	var tableCount int
-	require.NoError(t, conn.QueryRow(
+	require.NoError(t, conn.QueryRowContext(t.Context(),
 		"SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
 		v9fixture.ExtraSchemaAddedTable).Scan(&tableCount))
 	assert.Equal(t, 1, tableCount)
@@ -97,7 +97,7 @@ func Test_ExtraSchemaBundle_adds_a_table_and_two_columns(t *testing.T) {
 	assert.Contains(t, cols2, v9fixture.ExtraSchemaAddedColumn2)
 
 	var accounts int
-	require.NoError(t, conn.QueryRow("SELECT count(*) FROM ZACCOUNT").Scan(&accounts))
+	require.NoError(t, conn.QueryRowContext(t.Context(), "SELECT count(*) FROM ZACCOUNT").Scan(&accounts))
 	assert.Equal(t, 1, accounts)
 }
 
@@ -105,7 +105,7 @@ func Test_ExtraSchemaBundle_adds_a_table_and_two_columns(t *testing.T) {
 // production schema-reading code under test.
 func tableColumns(t *testing.T, conn *sql.DB, table string) []string {
 	t.Helper()
-	rows, err := conn.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	rows, err := conn.QueryContext(t.Context(), fmt.Sprintf("PRAGMA table_info(%s)", table))
 	require.NoError(t, err)
 	defer func() { _ = rows.Close() }()
 

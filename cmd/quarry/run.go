@@ -12,7 +12,7 @@ import (
 
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/importer"
-	"github.com/koblas/quarry/internal/quicken/v9"
+	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store/duckstore"
 )
@@ -43,7 +43,7 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 	return func(ctx context.Context) (*snapshot.Server, error) {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return nil, homeDirectoryRefusal()
+			return nil, errHomeDirectory
 		}
 
 		ref, err := v9.Reference(ctx)
@@ -64,11 +64,9 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 	}
 }
 
-// homeDirectoryRefusal is sync's fixed-literal refusal when the home
-// directory cannot be resolved; os.UserHomeDir's own text varies by platform.
-func homeDirectoryRefusal() error {
-	return errors.New("cannot find your home directory ($HOME is not set); set HOME, then run quarry sync again")
-}
+// errHomeDirectory is sync's fixed-literal refusal when the home directory
+// cannot be resolved; os.UserHomeDir's own text varies by platform.
+var errHomeDirectory = errors.New("cannot find your home directory ($HOME is not set); set HOME, then run quarry sync again")
 
 // run is the process entrypoint's testable body: it delegates to
 // cli.Execute, returning the process exit code (0 success, 1 failure, 2 usage).
@@ -81,8 +79,7 @@ func runWith(ctx context.Context, args []string, stdout, stderr io.Writer, newSe
 	if err := cli.Execute(ctx, args, stdout, stderr, newServer); err != nil {
 		_, _ = fmt.Fprintf(stderr, "quarry: %s\n", err)
 
-		var ue cli.UsageError
-		if errors.As(err, &ue) {
+		if _, ok := errors.AsType[cli.UsageError](err); ok {
 			return 2
 		}
 		return 1

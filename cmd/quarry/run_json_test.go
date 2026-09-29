@@ -18,6 +18,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// errNoSpace stands in for a stdout write failing on a full disk.
+var errNoSpace = errors.New("no space left on device")
+
 // One assert.JSONEq against a full literal catches a wrong type, a missing
 // key, or a leaked display-only field (source_id, closed, active) at once.
 func Test_run_reports_the_store_result_alongside_the_manifest_as_json(t *testing.T) {
@@ -195,7 +198,7 @@ func Test_run_points_at_from_json_when_stdout_fails_writing_a_failed_validation_
 	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "100.00"})
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &day, EndingBalance: "100.01"})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	writeErr := errors.New("no space left on device")
+	writeErr := errNoSpace
 	var stderr bytes.Buffer
 
 	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"}, failingWriter{err: writeErr}, &stderr)

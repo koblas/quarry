@@ -225,7 +225,7 @@ func Test_dirDestination_prepare_removes_old_leftover_partials_matching_the_quar
 	require.NoError(t, err)
 	for _, name := range matching {
 		_, statErr := os.Stat(filepath.Join(dir, name))
-		assert.ErrorIs(t, statErr, os.ErrNotExist, "expected %s removed", name)
+		require.ErrorIs(t, statErr, os.ErrNotExist, "expected %s removed", name)
 	}
 	for _, name := range append(kept, "20260927T143005Z.sqlite") {
 		assert.FileExists(t, filepath.Join(dir, name))

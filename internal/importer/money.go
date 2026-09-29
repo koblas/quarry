@@ -29,7 +29,7 @@ const realIntBound = 1_000_000_000 // 1e9
 // reports moneyPrecision for more than 2 decimal places, moneyTooLarge for
 // a value outside DECIMAL(18,2)'s trustworthy range, and moneyNotANumber
 // for a column stored as text or blob, or real text that is not a decimal.
-func parseMoney(typ, text string) (cents int64, fault moneyFault) {
+func parseMoney(typ, text string) (int64, moneyFault) {
 	switch typ {
 	case "integer":
 		return parseIntegerMoney(text)

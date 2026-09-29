@@ -51,6 +51,7 @@ func Test_run_prints_the_sync_help(t *testing.T) {
 	assert.Contains(t, syncStdout.String(), "With --from, quarry rebuilds the store from a snapshot it took earlier and\n"+
 		"does not read Quicken at all.")
 	assert.Contains(t, syncStdout.String(), "  quarry sync --quicken ~/Documents/Home.quicken\n  quarry sync --from 20260927T143005Z\n")
+	//nolint:dupword // the --from placeholder "snapshot" is followed by usage text that starts with it
 	assert.Contains(t, syncStdout.String(), "--from snapshot   snapshot to rebuild the store from instead of reading Quicken: "+
 		"an ID such as 20260927T143005Z, or the path to its .sqlite file")
 }

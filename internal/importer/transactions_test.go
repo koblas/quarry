@@ -65,6 +65,7 @@ func Test_import_refuses_an_exponent_form_amount_by_the_exponents_sign(t *testin
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			b := v9fixture.NewBuilder()
 			acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 			posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)

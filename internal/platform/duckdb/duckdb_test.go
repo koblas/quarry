@@ -41,7 +41,7 @@ func Test_bulk_inserted_decimals_read_back_exactly_after_checkpoint_close(t *tes
 	require.NoError(t, db.CheckpointClose(t.Context()))
 
 	_, err = os.Stat(path + ".wal")
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorIs(t, err, os.ErrNotExist)
 
 	reader, err := duckdb.OpenReadOnly(t.Context(), path)
 	require.NoError(t, err)

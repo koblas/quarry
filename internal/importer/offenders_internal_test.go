@@ -31,6 +31,7 @@ func Test_lessOffender(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, c.want, lessOffender(c.a, c.b))
 		})
 	}

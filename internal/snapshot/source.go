@@ -52,5 +52,9 @@ func (s *sqliteSource) Close() error {
 	if s.db == nil {
 		return nil
 	}
-	return s.db.Close()
+	if err := s.db.Close(); err != nil {
+		// unreachable: database/sql.DB.Close of a read-only connection with no open rows returns only sqlite3_close_v2's result, which is SQLITE_OK for a live connection with no unfinalized statements.
+		return fmt.Errorf("close source: %w", err)
+	}
+	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -45,8 +46,8 @@ func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	savingsPK := b.Account(v9fixture.AccountRow{Name: "US Savings", Type: "SAVINGS", Currency: "USD", Active: true})
-	foodPK := b.Category(v9fixture.TagRow{Name: "Food", Type: v9fixture.Int64Ptr(1)})
-	groceriesPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: v9fixture.Int64Ptr(1), ParentCategory: foodPK})
+	foodPK := b.Category(v9fixture.TagRow{Name: "Food", Type: new(int64(1))})
+	groceriesPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: new(int64(1)), ParentCategory: foodPK})
 	coffeeShopPK := b.Payee(v9fixture.PayeeRow{Name: "Coffee Shop"})
 	groceryStorePK := b.Payee(v9fixture.PayeeRow{Name: "Grocery Store"})
 	reimbursablePK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
@@ -114,26 +115,26 @@ func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 	splitID := func(pk int64) string { return fmt.Sprintf("split-%d", pk) }
 
 	assert.Equal(t, map[string]string{
-		acctID(chequingPK): fmt.Sprint(chequingPK), acctID(savingsPK): fmt.Sprint(savingsPK),
+		acctID(chequingPK): strconv.FormatInt(chequingPK, 10), acctID(savingsPK): strconv.FormatInt(savingsPK, 10),
 	}, stringMap(t, db, "SELECT id, CAST(source_id AS VARCHAR) FROM accounts"))
 	assert.Equal(t, map[string]string{
 		acctID(chequingPK): "CAD", acctID(savingsPK): "USD",
 	}, stringMap(t, db, "SELECT id, currency FROM accounts"))
 
 	assert.Equal(t, map[string]string{
-		catID(foodPK): fmt.Sprint(foodPK), catID(groceriesPK): fmt.Sprint(groceriesPK),
+		catID(foodPK): strconv.FormatInt(foodPK, 10), catID(groceriesPK): strconv.FormatInt(groceriesPK, 10),
 	}, stringMap(t, db, "SELECT id, CAST(source_id AS VARCHAR) FROM categories"))
 
 	assert.Equal(t, map[string]string{
-		payeeID(coffeeShopPK): fmt.Sprint(coffeeShopPK), payeeID(groceryStorePK): fmt.Sprint(groceryStorePK),
+		payeeID(coffeeShopPK): strconv.FormatInt(coffeeShopPK, 10), payeeID(groceryStorePK): strconv.FormatInt(groceryStorePK, 10),
 	}, stringMap(t, db, "SELECT id, CAST(source_id AS VARCHAR) FROM payees"))
 
 	assert.Equal(t, map[string]string{
-		tagID(reimbursablePK): fmt.Sprint(reimbursablePK), tagID(businessPK): fmt.Sprint(businessPK),
+		tagID(reimbursablePK): strconv.FormatInt(reimbursablePK, 10), tagID(businessPK): strconv.FormatInt(businessPK, 10),
 	}, stringMap(t, db, "SELECT id, CAST(source_id AS VARCHAR) FROM tags"))
 
 	assert.Equal(t, map[string]string{
-		txnID(txn1PK): fmt.Sprint(txn1PK), txnID(txn2PK): fmt.Sprint(txn2PK),
+		txnID(txn1PK): strconv.FormatInt(txn1PK, 10), txnID(txn2PK): strconv.FormatInt(txn2PK, 10),
 	}, stringMap(t, db, "SELECT id, CAST(source_id AS VARCHAR) FROM transactions"))
 	assert.Equal(t, map[string]string{
 		txnID(txn1PK): "CAD", txnID(txn2PK): "USD",
@@ -143,8 +144,8 @@ func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 	}, stringMap(t, db, "SELECT id, CAST(amount AS VARCHAR) FROM transactions"))
 
 	assert.Equal(t, map[string]string{
-		splitID(split1PK): fmt.Sprint(split1PK), splitID(split2PK): fmt.Sprint(split2PK),
-		splitID(split3PK): fmt.Sprint(split3PK), splitID(split4PK): fmt.Sprint(split4PK),
+		splitID(split1PK): strconv.FormatInt(split1PK, 10), splitID(split2PK): strconv.FormatInt(split2PK, 10),
+		splitID(split3PK): strconv.FormatInt(split3PK, 10), splitID(split4PK): strconv.FormatInt(split4PK, 10),
 	}, stringMap(t, db, "SELECT id, CAST(source_id AS VARCHAR) FROM splits"))
 	assert.Equal(t, map[string]string{
 		splitID(split1PK): "7.00", splitID(split2PK): "5.34",

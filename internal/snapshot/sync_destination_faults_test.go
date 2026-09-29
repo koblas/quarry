@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/koblas/quarry/internal/quicken/v9"
+	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/stretchr/testify/assert"
@@ -99,27 +99,32 @@ func (f *partialFaultDestination) Backup(ctx context.Context, src snapshot.Sourc
 	f.backedUpPartial = partial
 	return partial, resolvedName, err
 }
+
 func (f *partialFaultDestination) WriteManifest(ctx context.Context, name string, data []byte) (string, error) {
 	if f.failWriteManifest != nil {
 		return "", f.failWriteManifest
 	}
 	return f.real.WriteManifest(ctx, name, data)
 }
+
 func (f *partialFaultDestination) CommitManifest(ctx context.Context, partial string) (string, error) {
 	if f.failCommitManifest != nil {
 		return "", f.failCommitManifest
 	}
 	return f.real.CommitManifest(ctx, partial)
 }
+
 func (f *partialFaultDestination) CommitSnapshot(ctx context.Context, partial string) (string, error) {
 	if f.failCommit != nil {
 		return "", f.failCommit
 	}
 	return f.real.CommitSnapshot(ctx, partial)
 }
+
 func (f *partialFaultDestination) FinalPaths(name string) (string, string) {
 	return f.real.FinalPaths(name)
 }
+
 func (f *partialFaultDestination) Discard(ctx context.Context, partial string) error {
 	f.discardedPartial = partial
 	err := f.real.Discard(ctx, partial)
@@ -258,6 +263,7 @@ func Test_sync_still_returns_the_write_refusal_when_discard_fails_after_a_write_
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			home := t.TempDir()
 			snapshotsDir := filepath.Join(home, "snapshots")
 			bundle := v9fixture.OpenBundle(t, t.TempDir())

@@ -19,14 +19,14 @@ type runtimeError struct {
 func (e *runtimeError) Error() string { return e.err.Error() }
 func (e *runtimeError) Unwrap() error { return e.err }
 
-// emptyQuickenUsageError is cobra's own missing-value message for --quicken.
-var emptyQuickenUsageError = UsageError{msg: "flag needs an argument: --quicken; Run 'quarry sync --help' for usage."}
+// errEmptyQuickenUsage is cobra's own missing-value message for --quicken.
+var errEmptyQuickenUsage = UsageError{msg: "flag needs an argument: --quicken; Run 'quarry sync --help' for usage."}
 
-// emptyFromUsageError is cobra's own missing-value message for --from.
-var emptyFromUsageError = UsageError{msg: "flag needs an argument: --from; Run 'quarry sync --help' for usage."}
+// errEmptyFromUsage is cobra's own missing-value message for --from.
+var errEmptyFromUsage = UsageError{msg: "flag needs an argument: --from; Run 'quarry sync --help' for usage."}
 
-// fromWithQuickenUsageError refuses --from and --quicken together.
-var fromWithQuickenUsageError = UsageError{
+// errFromWithQuickenUsage refuses --from and --quicken together.
+var errFromWithQuickenUsage = UsageError{
 	msg: "--from and --quicken cannot be used together; --from rebuilds from a snapshot without reading Quicken",
 }
 
@@ -64,13 +64,13 @@ does not read Quicken at all.`,
 				return UsageError{msg: "sync takes no arguments; pass the file with --quicken <path>"}
 			}
 			if cmd.Flags().Changed("from") && cmd.Flags().Changed("quicken") {
-				return fromWithQuickenUsageError
+				return errFromWithQuickenUsage
 			}
 			if cmd.Flags().Changed("from") && strings.TrimSpace(fromValue) == "" {
-				return emptyFromUsageError
+				return errEmptyFromUsage
 			}
 			if cmd.Flags().Changed("quicken") && strings.TrimSpace(quickenPath) == "" {
-				return emptyQuickenUsageError
+				return errEmptyQuickenUsage
 			}
 			return nil
 		},
@@ -141,7 +141,7 @@ does not read Quicken at all.`,
 // value when given, else the one bundle discovery finds.
 func resolveBundle(cmd *cobra.Command, home, quickenPath string) (string, error) {
 	if cmd.Flags().Changed("quicken") {
-		return snapshot.ResolveBundlePath(home, quickenPath)
+		return snapshot.ResolveBundlePath(home, quickenPath) //nolint:wrapcheck // a RefusalError is final user copy; a prefix would change it
 	}
-	return snapshot.DiscoverBundle(home)
+	return snapshot.DiscoverBundle(home) //nolint:wrapcheck // a RefusalError is final user copy; a prefix would change it
 }

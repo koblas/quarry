@@ -21,10 +21,11 @@ func Test_DiscoverBundle_refuses_when_no_bundle_is_found(t *testing.T) {
 		name  string
 		setup func(t *testing.T, documents string)
 	}{
-		{name: "Documents is absent", setup: func(t *testing.T, documents string) {}},
+		{name: "Documents is absent", setup: func(_ *testing.T, _ string) {}},
 		{
 			name: "Documents is empty",
 			setup: func(t *testing.T, documents string) {
+				t.Helper()
 				require.NoError(t, os.MkdirAll(documents, 0o700))
 			},
 		},
@@ -32,6 +33,7 @@ func Test_DiscoverBundle_refuses_when_no_bundle_is_found(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			home := t.TempDir()
 			c.setup(t, filepath.Join(home, "Documents"))
 
@@ -123,6 +125,7 @@ func Test_DiscoverBundle_refuses_when_a_candidate_cannot_be_statted_for_a_reason
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			home := t.TempDir()
 			dir := c.dir(home)
 			v9fixture.OpenBundle(t, dir)
@@ -167,6 +170,7 @@ func Test_DiscoverBundle_refuses_when_multiple_bundles_exist(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			home := t.TempDir()
 			documents := filepath.Join(home, "Documents")
 			for _, name := range c.bundles {

@@ -132,7 +132,8 @@ Phases — developer runs one build/test at each boundary, not per step:
   tests covering it, fault and bound tests included (`.claude/briefs/build.md` → *Planning*).
   Under `code-first` developer writes code, then tests, then refactors. Under `test-first`
   batch's tests go red before its code.
-- `### Sweep` — "fix what `go build ./... && golangci-lint run ./...` reports" as one step, plus
+- `### Sweep` — "fix what `go build ./... && golangci-lint run ./...` reports" as one step
+  (`.claude/rules/agent-briefs.md` → *Lint gate*), plus
   doc comments and exact-count assertion bumps. **Do not enumerate chores toolchain will list**
   (`exhaustive` cases, new interface implementers).
 - `### Verify` — full verification per `.claude/rules/agent-briefs.md` → *Verification*,
@@ -167,7 +168,7 @@ Mutation checks: overdraft guard in `(*Server).Withdraw` → `Test_withdraw_refu
 - [ ] Step 4: `handler.go:40-62` `(*Server).Withdraw` — balance invariant; `Test_withdraw_refuses_more_than_the_balance` (bound: balance, balance+1)
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports; doc comment on `Withdraw`
+- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comment on `Withdraw`
 
 ### Verify
 - [ ] Step 6: full verification + `spec-check.py` → tick SCENARIO-01 with its acceptance test

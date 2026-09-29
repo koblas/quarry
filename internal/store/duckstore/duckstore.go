@@ -95,7 +95,7 @@ func (s *Store) Exists() bool {
 func createDuckDB(ctx context.Context, path string) (DB, error) {
 	db, err := duckdb.Create(ctx, path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create store file: %w", err)
 	}
 	return db, nil
 }
@@ -175,21 +175,21 @@ func (s *Store) sweepLeftovers() {
 // replaced, ignoring the file already being absent.
 func removeStaleWAL(finalPath string) error {
 	if err := os.Remove(finalPath + ".wal"); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
+		return fmt.Errorf("remove stale wal: %w", err)
 	}
 	return nil
 }
 
-// buildFailure is a failed build: Error and Unwrap reach cause alone, while Is
+// buildFailureError is a failed build: Error and Unwrap reach cause alone, while Is
 // also matches the store sentinel the fault was classified as.
-type buildFailure struct {
+type buildFailureError struct {
 	sentinel error
 	cause    error
 }
 
-func (e buildFailure) Error() string        { return "build store: " + e.cause.Error() }
-func (e buildFailure) Unwrap() error        { return e.cause }
-func (e buildFailure) Is(target error) bool { return target == e.sentinel }
+func (e buildFailureError) Error() string        { return "build store: " + e.cause.Error() }
+func (e buildFailureError) Unwrap() error        { return e.cause }
+func (e buildFailureError) Is(target error) bool { return target == e.sentinel }
 
 // buildError wraps a failed build's cause, tagging permission and disk-full faults.
 func buildError(cause error) error {
@@ -200,7 +200,7 @@ func buildError(cause error) error {
 	case duckdb.IsDiskFull(cause):
 		sentinel = store.ErrDiskFull
 	}
-	return buildFailure{sentinel: sentinel, cause: cause}
+	return buildFailureError{sentinel: sentinel, cause: cause}
 }
 
 // removePartial removes path and path+".wal", ignoring either being
@@ -216,39 +216,47 @@ func build(ctx context.Context, db DB, rows store.Rows) error {
 		return fmt.Errorf("create schema: %w", err)
 	}
 
-	if err := db.AppendRows(ctx, "accounts", accountRows(rows.Accounts)); err != nil {
+	if err := appendTable(ctx, db, "accounts", accountRows(rows.Accounts)); err != nil {
 		return err
 	}
-	if err := db.AppendRows(ctx, "categories", categoryRows(rows.Categories)); err != nil {
+	if err := appendTable(ctx, db, "categories", categoryRows(rows.Categories)); err != nil {
 		return err
 	}
-	if err := db.AppendRows(ctx, "payees", payeeRows(rows.Payees)); err != nil {
+	if err := appendTable(ctx, db, "payees", payeeRows(rows.Payees)); err != nil {
 		return err
 	}
-	if err := db.AppendRows(ctx, "tags", tagRows(rows.Tags)); err != nil {
+	if err := appendTable(ctx, db, "tags", tagRows(rows.Tags)); err != nil {
 		return err
 	}
 	txnRows, err := transactionRows(rows.Transactions)
 	if err != nil {
 		return err
 	}
-	if err := db.AppendRows(ctx, "transactions", txnRows); err != nil {
+	if err := appendTable(ctx, db, "transactions", txnRows); err != nil {
 		return err
 	}
 	splitRows, err := splitRows(rows.Splits)
 	if err != nil {
 		return err
 	}
-	if err := db.AppendRows(ctx, "splits", splitRows); err != nil {
+	if err := appendTable(ctx, db, "splits", splitRows); err != nil {
 		return err
 	}
-	if err := db.AppendRows(ctx, "split_tags", splitTagRows(rows.SplitTags)); err != nil {
+	if err := appendTable(ctx, db, "split_tags", splitTagRows(rows.SplitTags)); err != nil {
 		return err
 	}
-	if err := db.AppendRows(ctx, "transfers", transferRows(rows.Transfers)); err != nil {
+	if err := appendTable(ctx, db, "transfers", transferRows(rows.Transfers)); err != nil {
 		return err
 	}
-	return db.AppendRows(ctx, "import_runs", importRunRows(rows.ImportRuns))
+	return appendTable(ctx, db, "import_runs", importRunRows(rows.ImportRuns))
+}
+
+// appendTable bulk-loads rows into table, naming the table on failure.
+func appendTable(ctx context.Context, db DB, table string, rows [][]any) error {
+	if err := db.AppendRows(ctx, table, rows); err != nil {
+		return fmt.Errorf("load %s: %w", table, err)
+	}
+	return nil
 }
 
 func nullableStr(s *string) any {

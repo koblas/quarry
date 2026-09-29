@@ -1,7 +1,6 @@
 package importer_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/koblas/quarry/internal/importer"
@@ -14,7 +13,7 @@ import (
 func importReason(t *testing.T, err error) string {
 	t.Helper()
 	var unmappable *importer.UnmappableError
-	require.True(t, errors.As(err, &unmappable), "expected *importer.UnmappableError, got %v", err)
+	require.ErrorAs(t, err, &unmappable, "expected *importer.UnmappableError, got %v", err)
 	return unmappable.Reason
 }
 

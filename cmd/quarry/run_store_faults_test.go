@@ -20,6 +20,7 @@ import (
 // fault; with no fault configured it passes every call through.
 type faultDB struct {
 	duckstore.DB
+
 	path            string
 	duplicateTable  string
 	checkpointFault error
@@ -70,6 +71,7 @@ func Test_run_never_replaces_the_store_when_the_build_fails(t *testing.T) {
 		{
 			name: "unwritable store directory",
 			arrange: func(t *testing.T, storeDir string, _ context.CancelFunc) *faultDB {
+				t.Helper()
 				require.NoError(t, os.Mkdir(filepath.Join(storeDir, "snapshots"), 0o700))
 				require.NoError(t, os.Chmod(storeDir, 0o500))
 				t.Cleanup(func() { _ = os.Chmod(storeDir, 0o700) })
