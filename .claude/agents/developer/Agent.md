@@ -175,7 +175,7 @@ Findings arrive ranked `[BLOCKER|MAJOR|MINOR|NIT] <file>:<line>` with `Failure:`
    why. "Fixed the named files" is not a sweep.
 7. **Verify at the consumer, not at the change (MANDATORY).** A fix is correct only where the
    value is consumed. After changing an error/code/sentinel, follow it to the outermost
-   boundary that observes it — the HTTP handler, the edge mapping, the SPA — and confirm the
+   boundary that observes it — `internal/cli` output, `cmd/quarry` exit code — and confirm the
    externally visible behavior is what the finding intended. Repeatedly in this repo a fix has
    been right inside its own package and wrong one layer out (a new code falling into a
    generic `else` branch, turning a transient error into a permanent one). Name that boundary

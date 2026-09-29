@@ -83,5 +83,5 @@ Severity contract for this reviewer:
 - **MINOR** — wording that invites misreading; file drifting past its size budget.
 - **NIT** — preference. Never blocks.
 
-**Verdict is mechanical:** any BLOCKER or MAJOR → **FAIL**; only MINOR/NIT → **PASS WITH
+**Verdict is mechanical:** any BLOCKER or MAJOR → **BLOCKED**; only MINOR/NIT → **PASS WITH
 FOLLOW-UPS**; none → **PASS**.

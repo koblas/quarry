@@ -29,6 +29,10 @@ concurrently.
 Do it yourself when you already know the file, when one targeted `Grep` answers it, or
 when you need the surrounding code rather than its address — a summary is not a reading.
 
+Spawn fails with `Agent type 'caveman:cavecrew-investigator' not found` (plugin not
+installed) → run the sweep yourself with `Grep`, one multi-pattern call per question, and
+note in the brief that you did. Never stop triage over a missing plugin.
+
 **Go callers and implementers are yours, via `LSP`, not the investigator's.** Caller table
 for exported function, `Store` or port method is `findReferences` / `goToImplementation`, per
 `.claude/briefs/navigation.md` (read it once) — one call, complete through interfaces, where
