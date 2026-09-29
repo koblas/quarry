@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01
-status: open
+status: done
 ---
 
 # SCENARIO-01: A split with no parent transaction is skipped (folds 02-05)
@@ -35,11 +35,11 @@ Surveyed (item 5): callers of `existingAccounts` (`importer.go:64,90` -> `transa
 - [x] Step 5 (B2, transactions side): `transactions.go:109-120` collapse the two `off.add` refusals plus `accounts` miss into one silent skip (`!account.Valid` or `accounts` miss -> return nil); drop `existingAccounts` param (`:91`), reword doc `:81-88`; `accounts.go:48-67,108-110` drop `existing` map and third return, fix doc `:48-53`; `importer.go:64,90` follow; delete `reasonTransactionNoAccount` (`reasons.go:66-68`). Tests: (a) NULL account + entry -> both skipped (S3); (b) account 999 -> skipped (flip `dangling_references_test.go:32-45` to `Test_import_skips_a_transaction_whose_account_does_not_exist`); (c) deleted/excluded account -> still silent (existing, unchanged); (d) valid account -> imported (control, existing)
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; confirm `mapSplits`/`mapTransactions`/`mapAccounts`/`surveyTransactions` docs state the contract only (no history, no spec ids); grep-with-positive-control for `existingAccounts|existingTransactions|reasonSplitNoTransaction|reasonTransactionNoAccount` -> 0 in `internal/`; miss = docs prose (multiline-aware)
-- [ ] Step 7: `docs/specifications/phase1-import-store/specification.md` — apply verbatim from this spec's `## Product Verdict`: `:31` P1-5d whole-bullet replacement; `:16` sentence; `:303` remove the two reason-10 forms; paragraph after `:303` (the `Required columns` line, `:309`) drop `imported ZTRANSACTION.ZACCOUNT (account)` and `parent link (transaction)` and swap the "required reference ... treated as NULL" sentence per verdict; add the seven edge-case rows to the table at `:319-333` (Output/Input class/Ruling, `Rows` and `Transfers` grouping as neighbours); phase1 `STATE.md` grep found no restatement of the rule (lines checked: none) — leave alone
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; confirm `mapSplits`/`mapTransactions`/`mapAccounts`/`surveyTransactions` docs state the contract only (no history, no spec ids); grep-with-positive-control for `existingAccounts|existingTransactions|reasonSplitNoTransaction|reasonTransactionNoAccount` -> 0 in `internal/`; miss = docs prose (multiline-aware)
+- [x] Step 7: `docs/specifications/phase1-import-store/specification.md` — apply verbatim from this spec's `## Product Verdict`: `:31` P1-5d whole-bullet replacement; `:16` sentence; `:303` remove the two reason-10 forms; paragraph after `:303` (the `Required columns` line, `:309`) drop `imported ZTRANSACTION.ZACCOUNT (account)` and `parent link (transaction)` and swap the "required reference ... treated as NULL" sentence per verdict; add the seven edge-case rows to the table at `:319-333` (Output/Input class/Ruling, `Rows` and `Transfers` grouping as neighbours); phase1 `STATE.md` grep found no restatement of the rule (lines checked: none) — leave alone
 
 ### Verify
-- [ ] Step 8: full verification per `.claude/rules/agent-briefs.md` (single covered `go test`, `uncovered-diff.py`, `-race` on `./internal/importer/...`, lint, `test-stats.py`); create `docs/specifications/parentless-split/STATE.md`; `spec-check.py parentless-split`; tick SCENARIO-01 with its acceptance test and SCENARIO-02..05 each with "delivered by SCENARIO-01" plus its own acceptance test (test reference last on the line); set `status: done`
+- [x] Step 8: full verification per `.claude/rules/agent-briefs.md` (single covered `go test`, `uncovered-diff.py`, `-race` on `./internal/importer/...`, lint, `test-stats.py`); create `docs/specifications/parentless-split/STATE.md`; `spec-check.py parentless-split`; tick SCENARIO-01 with its acceptance test and SCENARIO-02..05 each with "delivered by SCENARIO-01" plus its own acceptance test (test reference last on the line); set `status: done`
 
 ## Handoff
 
@@ -58,14 +58,9 @@ Surveyed (item 5): callers of `existingAccounts` (`importer.go:64,90` -> `transa
 
 ## Phase report
 
-Run B2 (step 5) done, committed. `go test ./internal/importer/` green (whole package); `golangci-lint run ./internal/importer/...` 0 issues. Narrow loop: `go test ./internal/importer/` (the plan's `-run` regex is case-sensitive and misses `Test_import_*`).
+Run V (steps 6-8) done. Scenario complete; all plan items ticked, `status: done`.
 
-Production: `transactions.go` `mapTransactions` — one silent skip (`!account.Valid || accounts` miss), `existingAccounts` param dropped, doc reworded; `accounts.go` `mapAccounts` now `([]store.Account, map[int64]accountRef, error)`, `existing` map gone, doc reworded; `importer.go` follows; `reasons.go` `reasonTransactionNoAccount` deleted.
-
-Tests: `dangling_references_test.go` refusal test flipped -> `Test_import_skips_a_transaction_whose_account_does_not_exist` (control: a valid-account transaction is stored, only it, by `SourceID`). S3 (`Test_import_skips_a_transaction_with_no_account_and_its_split`) now green.
-
-Mutation (restored, diff byte-identical): NULL-only skip in `mapTransactions` (`!account.Valid` returns nil, `accounts` miss adds an offender) -> `Test_import_skips_a_transaction_whose_account_does_not_exist` red ("Received unexpected error: mutant", `dangling_references_test.go:46`).
-
-Grep sweep `existingAccounts|reasonTransactionNoAccount|has no account` in `internal/importer/`: 0 hits (line grep; would miss a phrase wrapped across comment lines). Step 6 still owes the multiline doc check and `existingTransactions|reasonSplitNoTransaction` grep; `go build ./...` and importer lint already clean; full-repo lint not yet run.
-
-Not done, do not redo above: steps 6-8 (V): Sweep, phase1 spec edit (step 7), full verification, STATE.md, spec ticks, `status: done`.
+- Sweep: `go build ./...` ok; `golangci-lint run ./...` 0 issues. Grep `existingAccounts|existingTransactions|reasonSplitNoTransaction|reasonTransactionNoAccount` over `internal cmd`: 0 hits; multiline-aware (comment-flattened) sweep over `internal/importer/*.go` for the four symbols plus `has no (account|transaction)`: 0 hits, positive control (`reasonTransactionNoDate`) found in 3 files. Only prose hit is the `mapTransactions` doc, which states the current skip contract.
+- Phase1 spec (`docs/specifications/phase1-import-store/specification.md`): `:16` sentence, P1-5d bullet, reason-10 list (two forms removed), required-columns paragraph, seven edge-case rows added, all verbatim from this spec's Product Verdict.
+- Verify: full covered suite ok (15 packages); `uncovered-diff.py`: 0 uncovered added lines; `-race ./internal/importer/...` ok; test-stats `internal/importer 131 (+3) tests, 121 (+3) tempdir, 121 (+3) disk` (base 6ca6f41 predates the red acceptance commit).
+- Spec ticks 01-05 done; `STATE.md` created.
