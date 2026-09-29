@@ -301,9 +301,9 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 
 	for _, a := range b.accounts {
 		exec(tb, ctx, db,
-			"INSERT INTO ZACCOUNT (Z_PK, ZNAME, ZTYPENAME, ZCURRENCY, ZFINANCIALINSTITUTION, ZCLOSED, ZACTIVE, ZDELETIONCOUNT, ZUSEDINREPORTS) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			"INSERT INTO ZACCOUNT (Z_PK, ZNAME, ZTYPENAME, ZCURRENCY, ZFINANCIALINSTITUTION, ZCLOSED, ZACTIVE, ZDELETIONCOUNT, ZUSEDINREPORTS, ZSIMPLEINVESTING) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 			a.pk, nullableString(a.row.Name), nullableString(a.row.Type), nullableString(a.row.Currency),
-			nullableRef(a.row.Institution), a.row.Closed, a.row.Active, deletionCount(a.row.Deleted), nullableInt(a.row.UsedInReports))
+			nullableRef(a.row.Institution), a.row.Closed, a.row.Active, deletionCount(a.row.Deleted), nullableInt(a.row.UsedInReports), nullableInt(a.row.SimpleInvesting))
 	}
 
 	for _, i := range b.institutions {

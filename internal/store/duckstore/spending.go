@@ -46,7 +46,7 @@ func (f accountFilter) marks(first int) string {
 	return strings.Join(marks, ", ")
 }
 
-// transactionRangeQuery is the first and last day of every transaction, or of the named in-report
+// transactionRangeQuery is the first and last day of every transaction, or of the named reported
 // accounts' transactions; its parameters are those accounts, numbered from $1.
 func transactionRangeQuery(accounts accountFilter) string {
 	if len(accounts) == 0 {
@@ -54,7 +54,7 @@ func transactionRangeQuery(accounts accountFilter) string {
 	}
 	return `SELECT min(t.date), max(t.date)
 FROM transactions t JOIN accounts a ON a.id = t.account_id
-WHERE a.in_reports AND t.account_id IN (` + accounts.marks(1) + ")"
+WHERE ` + reportedAccount + ` AND t.account_id IN (` + accounts.marks(1) + ")"
 }
 
 // spendingQueryFor is a spending query for the accounts of a filter; each takes the window's

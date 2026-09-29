@@ -89,6 +89,25 @@ func Test_import_excludes_a_deleted_account_with_a_bad_currency_and_no_type(t *t
 	assert.Equal(t, "Chequing", fake.Rows.Accounts[0].Name)
 }
 
+func Test_import_marks_an_account_that_uses_linked_account_tracking(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "A on", Type: "CHECKING", Currency: "CAD", Active: true, SimpleInvesting: new(int64(1))})
+	b.Account(v9fixture.AccountRow{Name: "B off", Type: "CHECKING", Currency: "CAD", Active: true, SimpleInvesting: new(int64(0))})
+	b.Account(v9fixture.AccountRow{Name: "C unset", Type: "CHECKING", Currency: "CAD", Active: true})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	require.Len(t, fake.Rows.Accounts, 3)
+	assert.True(t, fake.Rows.Accounts[0].LinkedTracking, "1 is on")
+	assert.False(t, fake.Rows.Accounts[1].LinkedTracking, "0 is off")
+	assert.False(t, fake.Rows.Accounts[2].LinkedTracking, "NULL is off")
+	assert.False(t, fake.Rows.Accounts[0].NotInReports, "the flags are independent")
+}
+
 func Test_import_marks_an_account_quicken_leaves_out_of_reports(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()

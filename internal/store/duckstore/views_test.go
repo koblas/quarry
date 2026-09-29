@@ -13,6 +13,7 @@ import (
 const (
 	acctInReports  = "acct-in"
 	acctNotReports = "acct-out"
+	acctLinked     = "acct-linked"
 	acctUSD        = "acct-usd"
 	catExpense     = "cat-expense"
 	catIncome      = "cat-income"
@@ -27,6 +28,7 @@ func reportRows() store.Rows {
 		Accounts: []store.Account{
 			{ID: acctInReports, SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
 			{ID: acctNotReports, SourceID: 2, Name: "Old Card", Type: "credit_card", Currency: "CAD", Active: true, NotInReports: true},
+			{ID: acctLinked, SourceID: 6, Name: "Netskope 401(k)", Type: "retirement", Currency: "USD", Active: true, LinkedTracking: true},
 		},
 		Categories: []store.Category{
 			{ID: catExpense, SourceID: 1, Name: "Groceries", FullPath: "Groceries", Kind: "expense"},
@@ -133,6 +135,14 @@ func Test_cash_flow_leaves_out_what_quicken_reports_leave_out(t *testing.T) {
 		{
 			name: "a split in an account that is not in reports",
 			add:  splitSpec{id: "left-out", account: acctNotReports, category: new(catExpense), amount: -500},
+		},
+		{
+			name: "an expense in an account that uses linked account tracking",
+			add:  splitSpec{id: "left-out", account: acctLinked, category: new(catExpense), amount: -500},
+		},
+		{
+			name: "an uncategorized deposit in an account that uses linked account tracking",
+			add:  splitSpec{id: "left-out", account: acctLinked, amount: 500},
 		},
 		{name: "a zero-amount uncategorized split", add: splitSpec{id: "left-out", amount: 0}},
 	}
@@ -310,7 +320,7 @@ func Test_cash_flow_view_carries_its_reports_note(t *testing.T) {
 
 	got := queryTexts(t, st, "SELECT comment FROM duckdb_views() WHERE view_name = 'v_cash_flow'")
 
-	assert.Equal(t, [][]string{{"excludes accounts where accounts.in_reports is false, as Quicken reports do."}}, got)
+	assert.Equal(t, [][]string{{"excludes accounts where accounts.in_reports is false or accounts.linked_tracking is true, as Quicken reports do."}}, got)
 }
 
 func Test_spending_holds_expense_flow_with_its_sign_flipped(t *testing.T) {
@@ -358,6 +368,7 @@ func Test_spending_holds_exactly_the_cash_flow_expense_rows(t *testing.T) {
 	addSplit(&rows, splitSpec{id: "system", category: new(catSystem), amount: -500})
 	addSplit(&rows, splitSpec{id: "excluded", category: new(catExpense), amount: -500, excluded: true})
 	addSplit(&rows, splitSpec{id: "not-in-reports", account: acctNotReports, category: new(catExpense), amount: -500})
+	addSplit(&rows, splitSpec{id: "linked", account: acctLinked, category: new(catExpense), amount: -500})
 	addSplit(&rows, splitSpec{id: "zero", amount: 0})
 	addSplit(&rows, splitSpec{id: "uncategorized-out", amount: -100})
 	rows.Transfers = append(rows.Transfers,
