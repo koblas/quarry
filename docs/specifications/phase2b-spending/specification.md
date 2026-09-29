@@ -513,7 +513,7 @@ Scenario: SCENARIO-26 — accounts marks accounts Quicken leaves out of reports
 - [x] SCENARIO-14: spend counts only the accounts it is given — `cmd/quarry/run_spend_account_test.go` `Test_run_spend_counts_only_the_accounts_it_is_given`
 - [x] SCENARIO-15: spend says why a named account shows nothing — delivered by SCENARIO-14 — `cmd/quarry/run_spend_account_test.go` `Test_run_spend_warns_that_a_named_account_is_left_out_of_reports`
 - [x] SCENARIO-16: spend --json returns spending as a document — `cmd/quarry/run_spend_json_test.go` `Test_run_spend_json_returns_spending_as_a_document`
-- [ ] SCENARIO-17: spend says when the period holds nothing
+- [x] SCENARIO-17: spend says when the period holds nothing — `cmd/quarry/run_spend_empty_test.go` `Test_run_spend_says_when_the_period_holds_nothing`
 - [x] SCENARIO-18: spend rejects a period it cannot use — delivered by SCENARIO-12 — `cmd/quarry/run_spend_refusals_test.go` `Test_run_spend_rejects_a_period_it_cannot_use`
 - [x] SCENARIO-19: spend refuses an account it cannot pick — delivered by SCENARIO-14 — `cmd/quarry/run_spend_account_test.go` `Test_run_spend_refuses_an_account_it_cannot_pick`
 - [ ] SCENARIO-20: cashflow shows income, spending and savings rate by month

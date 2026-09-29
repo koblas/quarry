@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-17
-status: open
+status: done
 ---
 
 # SCENARIO-17: spend says when the period holds nothing
@@ -30,8 +30,10 @@ Size: LIGHT — 3 steps, store + duckstore + report + cli
 
 ## Phase report
 
-Run L done: plan written, Acceptance + Build green; `golangci-lint run ./...` `0 issues`; `go test ./internal/... ./cmd/...` green. Not committed by V: nothing pending except V's work.
-- Red (step 1): `cmd/quarry/run_spend_empty_test.go:48` stderr expected the E1/E2 line, got `""` (stdout assert already passed: caption + header print for an empty read).
-- Files: `internal/store/store.go` `TransactionRange` + `Spending.Transactions`; `internal/store/duckstore/spending.go` `transactionRangeQuery`, `accountFilter.marks`, third statement in `Spending` (runs only when `len(Totals) == 0`, always LAST so the tag fault tests' `passQueries: 1` still hit the multi-tag statement); `internal/report/spending.go` `Spending.Transactions`, `Spending.Empty()`; `internal/cli/empty_window.go` `emptyWindowWarning`; `internal/cli/spend.go` `spendWarnings` appends E after W1.
-- Tests: `internal/store/duckstore/spending_range_test.go` (7), `internal/report/spending_empty_test.go` (1), `internal/cli/spend_empty_test.go` (5, one table of 4 phrases), acceptance in `cmd/quarry/run_spend_empty_test.go`. Existing cli tests that assumed empty spending had no stderr now seed one CAD total (`withSpending`, `spend_account_test.go`).
-- V: run verify block, tick SCENARIO-17 (acceptance test `Test_run_spend_says_when_the_period_holds_nothing`), spec-check, rewrite STATE.md (remove E1/E1a/E2/E2a from Left unbuilt; add: `Transactions` only on empty windows, third statement last, `emptyWindowWarning` reuse by S20, net-zero = not empty), `status: done`. No mutations were run (plan says none).
+Run V done: scenario complete, `status: done`.
+- `go build ./...` green; `golangci-lint run ./...` `0 issues`; covered full suite green (`go test -count=1 -coverpkg=./... ./...`); `go test -race` on duckstore, report, cli green.
+- `uncovered-diff.py --profile <cover> ff97ec0`: 0 uncovered added lines in 0 runs.
+- `test-stats.py --base ff97ec0 --changed`: cmd/quarry 116 (+1), internal/cli 98 (+5), internal/report 54 (+1), internal/store/duckstore 154 (+7); TOTAL 422 (+14).
+- Ticked SCENARIO-17 in `specification.md` with `Test_run_spend_says_when_the_period_holds_nothing`; `spec-check.py phase2b-spending` OK.
+- `STATE.md` rewritten: E1/E1a/E2/E2a removed from Left unbuilt; new binding entry for the empty-window design.
+- Nothing left for a later run; no production code changed in V.
