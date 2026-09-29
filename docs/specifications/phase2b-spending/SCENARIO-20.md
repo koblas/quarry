@@ -15,7 +15,7 @@ Mutation checks: cashflow query spent sums only negative expense amounts (refund
 Runs: A (1-3) | B1 (4-5) | B2 (6) | V (7-8)
 Size: OWNS A RUN — 3 batches, 1 feature package (report; duckstore adapter + cli delivery)
 
-**Copy gaps — orchestrator: get a `product-vision` copy ruling before dispatching B2** (proposed defaults, UNRULED; B1 does not depend on them):
+**Copy gaps — orchestrator: get a `product-vision` copy ruling before dispatching B2** (proposed defaults, RULED (spec Surface & Copy → cashflow, copy details); B1 does not depend on them):
 - `--by year` column-1 header — proposed `Year` (Surface & Copy shows only `Month`); year label `2026` as JSON.
 - `n/a` in the right-aligned Savings rate column — proposed right-aligned like numbers.
 - Negative rate and minus zero — proposed `-12.5%`; a rate rounding to −0.0 prints `0.0%` (JSON `0`), never `-0.0%`.

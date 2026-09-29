@@ -166,6 +166,14 @@ Month    Currency     Income      Spent       Net  Savings rate  Status
 2026-09  CAD        6,020.00   5,110.40    909.60         15.1%  partial
 Total    CAD       61,410.00  44,002.18  17,407.82        28.3%
 ```
+- Copy details (ruling, SCENARIO-20):
+  - Column 1 header `Month` (`--by month`) / `Year` (`--by year`); labels `2026-01` / `2026`, same in JSON `"period"`; Total rows show `Total`.
+  - `Savings rate`: one decimal + `%`, half away from zero (250/800 → `31.3%`), right-aligned; `n/a` right-aligned, no `%`, wherever that row's income ≤ 0 (incl. empty filled periods and Total rows); JSON `null` wherever text shows `n/a`.
+  - Negative rates `-12.5%`; negative zero never appears — a rate rounding to zero prints `0.0%` / JSON `0` even when net < 0; fixed in the store query that owns the rate (P2b-9).
+  - Large rates grouped in text (`-9,990.0%`); JSON `savings_rate_pct` plain number (`-9990`, `31.9`).
+  - Header row `Month|Year  Currency  Income  Spent  Net  Savings rate  Status`; Status last, no trailing spaces, empty on Total rows.
+  - Rates per currency, never across currencies.
+  - Interim `cashflow --json` prints the text table until SCENARIO-22, branch-only; SCENARIO-22 lands before `/run-reviewers` and replaces any test pinning the interim behaviour.
   Every period in the window is listed for each currency with any row in the window; empty periods print `0.00` and `n/a`. Status column last. Total rows never partial.
 - `--json`:
 ```
