@@ -3,6 +3,7 @@
 Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-05, 07, 09 (05, 07 folded into 09), SCENARIO-06 (08 folded), SCENARIO-10, SCENARIO-11, SCENARIO-12 (18 folded), SCENARIO-13, SCENARIO-16, SCENARIO-25..26 (25 folded into 26). Last updated by SCENARIO-12.
 
 ## Binding decisions
+- **Account copy details (orchestrator ruling, SCENARIO-14):** S5/S6 quote the value as typed (`%q`); W2 and the caption use the stored account name; several bad `--account` values → the first on the command line refuses (S5 or S6); `warnings[]` order W2 (argv order) → W1 → E lines; `--account ""` → S5 `no account named ""`.
 - **Window copy details (orchestrator ruling, SCENARIO-13):** S1 quotes the value (`%q`), S2/S2d/S3 print it as given unquoted; `--since ""` is S1; both flags bad → the `--since` message; S4 (`--by`) is checked before the window checks; year `0000` accepted (spec silent).
 - **Injected clock (orchestrator ruling, SCENARIO-09):** `cli.Env.Now` (`time.Now` in `defaultEnv`; nil panics, so every spend test sets it); the default window's day is read in the injected instant's own zone. A deliberate exception to the clean-architecture skill's "no injected clock / use synctest" rule: tests must pick a zone without mutating `time.Local`, and 2a's trap forbids a synctest bubble around an open DuckDB `sql.DB`. Reviewers: accepted, not a finding.
 - **Net-zero currency (orchestrator ruling):** a currency whose rows all net to 0.00 still prints `Total <cur> 0.00` (edge row: zero rows omitted, Total unaffected).
