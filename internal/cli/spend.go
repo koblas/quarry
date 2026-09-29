@@ -3,6 +3,7 @@ package cli
 import (
 	"time"
 
+	"github.com/koblas/quarry/internal/report"
 	"github.com/spf13/cobra"
 )
 
@@ -35,6 +36,24 @@ the rows can add up to more than the total.`,
   quarry spend --since 2024 --until 2024 --json
   quarry spend --account "Visa Infinite" --account Chequing`,
 		Args: noArgs,
-		RunE: func(*cobra.Command, []string) error { return nil },
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			srv, err := openReport(cmd, newReport)
+			if err != nil {
+				return err
+			}
+
+			spending, err := srv.Spend(cmd.Context(), report.SpendRequest{Now: now()})
+			if err != nil {
+				return &runtimeError{err: err}
+			}
+
+			// --json prints the text table until the JSON document is defined.
+			text := func() string { return renderSpending(spending) }
+			out, err := renderResult(*jsonOut, func() ([]byte, error) { return []byte(text()), nil }, text)
+			if err != nil {
+				return err
+			}
+			return emit(cmd, out, "quarry: warning: ", []string{})
+		},
 	}
 }

@@ -44,7 +44,7 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; the duckstore adapter
   - `internal/report/spending_test.go` (new) `Test_spend_reads_this_years_spending_by_category` (asserts the params the fake recorded and the returned Window)
   - `Test_spend_returns_the_store_fault`
   - Add `spend` rows to `refusal_test.go:88-106` (store refusal copy), `:127-157` (interrupt → `spend interrupted`) and `:159-` (non-refusal fault unchanged).
-- [ ] Step 6: `internal/cli/spend.go` RunE follows `accounts.go:19-42`: `openReport` → `srv.Spend(ctx, SpendRequest{Now: now()})` → emit. `--json` prints the text table until SCENARIO-16. Never pass a nil `renderJSON`.
+- [x] Step 6: `internal/cli/spend.go` RunE follows `accounts.go:19-42`: `openReport` → `srv.Spend(ctx, SpendRequest{Now: now()})` → emit. `--json` prints the text table until SCENARIO-16. Never pass a nil `renderJSON`.
   - `internal/cli/render_spend.go` (new) `renderSpending`: caption `Spending <since> to <until> in all accounts`, a blank line, the `Category  Currency  Spent` header, `(uncategorized)` for NULL, `formatMoney` right-aligned, `Total` rows last, no trailing spaces. Reuses `padRight`/`padLeft`/`accountsColumnGap` (`render_accounts.go:3-64`).
   - Render tests in `render_spend_internal_test.go` (new) `Test_renderSpending`, table cases: widths from the widest cell; a negative (net-refund) row; empty window gives caption + blank + header only.
   - cli tests in `spend_test.go` (new), styled after `accounts_test.go:34-146`: `Test_spend_reads_the_window_from_the_env_clock`, `Test_spend_returns_the_report_fault`, `Test_spend_returns_the_report_factory_fault`, `Test_spend_reports_a_failed_stdout_write`.
@@ -83,14 +83,12 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; the duckstore adapter
 
 ## Phase report
 
-Run B1 done (steps 3-5); steps 3-5 ticked. Narrow loop green for `internal/report`, `internal/store/duckstore`, `internal/cli`. The three cmd acceptance tests are still red by design (cli RunE is the stub; B2 fills it).
+Run B2 done (step 6 ticked). Narrow loop green for `internal/cli` and `cmd/quarry`; all three cmd acceptance tests green. Lint run on `internal/cli` and `cmd` only: 0 issues.
 
 Files:
-- `internal/report/spending.go`: `DefaultWindow` (`now.Date()` in now's zone, UTC-midnight days), `Spend` (DefaultWindow -> `store.Spending` with `SpendByCategory` -> `readRefusal(ctx, "spend", err)`).
-- `internal/store/duckstore/spending.go`: `Spending` is one statement, `GROUPING SETS ((category, currency), (currency))` over `v_spending`. Since and until bind as `YYYY-MM-DD` text through `CAST(? AS DATE)`. HAVING drops zero-net detail rows and keeps every total. `ErrUnsupportedGrouping` (exported sentinel, err113) is returned for any other `By`, before the store is opened. `AccountIDs` is still unread (SCENARIO-14).
-- Tests: `internal/report/spending_test.go` (new), `refusal_test.go` (spend rows: refusal copy, interrupt), `internal/store/duckstore/spending_test.go` (new: 5 behaviours + open/query/scan faults, close, missing store), `views_test.go` (`splitSpec.date` added, zero = 2026-03-15).
-- Fakes: `internal/report/fakes_test.go` `fakeStore.spending` + `gotSpending *store.SpendingParams`; `internal/cli/fakes_test.go` `fakeReportStore.spending` + `gotSpending` (B2 uses both).
+- `internal/cli/spend.go`: RunE = `openReport` -> `srv.Spend(SpendRequest{Now: now()})` -> `renderResult` -> `emit` (warnings `[]`). `--json` passes a renderJSON that returns the text table (never nil) until SCENARIO-16 replaces it.
+- `internal/cli/render_spend.go` (new): `renderSpending`, widths from every cell (header, rows, Total rows), `(uncategorized)` for a nil Key, reuses `padRight`/`padLeft`/`accountsColumnGap`.
+- Tests: `render_spend_internal_test.go` (new, 3 table cases), `spend_test.go` (new: env-clock window, `--json` prints the text table, report fault, factory fault, stdout write fault); cmd rows `spend` added to R1 (`run_read_refusals_test.go`), I1 interrupt, U8 (`run_read_usage_test.go`).
+- No mutation checks belong to B2.
 
-Mutations (all red, then restored byte-identical): until `<=`->`<` and since `>=`->`>` both redden `Test_spending_counts_the_windows_first_and_last_day_only` (actual 200 / 400 vs 600); `now.Date()`->`now.UTC().Date()` reddens both subtests of `Test_default_window_runs_from_january_first_to_today_in_the_instants_own_zone`.
-
-Next (B2): step 6 (cli `spend.go` RunE, `render_spend.go`, render/cli tests, R1/I1/U8 rows in cmd tests). Then V. Lint was run for report and store only.
+Next (V): Sweep (doc comments on new exported symbols, update `newRootCommand` doc `root.go:7-9` subcommand list and `Env` doc), full Verify block + `spec-check.py`, tick 09 (and 05, 07 as delivered by 09), rewrite STATE.md (drop FormatVersion literal debt: R2 test uses literal 2), `status: done`. The `--json` interim test pins text output; SCENARIO-16 rewrites it.
