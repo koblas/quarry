@@ -3,6 +3,7 @@ package cli
 import (
 	"time"
 
+	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/spf13/cobra"
@@ -54,15 +55,27 @@ the rows can add up to more than the total.`,
 				return &runtimeError{err: err}
 			}
 
+			warnings := spendWarnings(spending)
 			out, err := renderResult(*jsonOut,
-				func() ([]byte, error) { return renderSpendingJSON(spending) },
+				func() ([]byte, error) { return renderSpendingJSON(spending, warnings) },
 				func() string { return renderSpending(spending) })
 			if err != nil {
 				return err
 			}
-			return emit(cmd, out, "quarry: warning: ", []string{})
+			return emit(cmd, out, "quarry: warning: ", warnings)
 		},
 	}
 	cmd.Flags().StringVar(&by, "by", spendGroupings[store.SpendByCategory].name, "group spending by `group`: category, payee, tag or month")
 	return cmd
+}
+
+// spendWarnings is the warnings a spending carries, unprefixed and never nil:
+// a --by tag read with multi-tagged splits warns that its rows add up to more than the total.
+func spendWarnings(s report.Spending) []string {
+	warnings := []string{}
+	if s.By == store.SpendByTag && s.MultiTagSplits > 0 {
+		warnings = append(warnings, humanize.Count(s.MultiTagSplits, "split carries", "splits carry")+
+			" more than one tag, so the rows add up to more than the total")
+	}
+	return warnings
 }

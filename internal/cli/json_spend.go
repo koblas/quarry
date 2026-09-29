@@ -38,15 +38,23 @@ type spendPayeeRowDocument struct {
 	Spent    string  `json:"spent"`
 }
 
+// spendTagRowDocument is one entry of "rows" grouped by tag; Tag is null for
+// the group of splits with no tag.
+type spendTagRowDocument struct {
+	Tag      *string `json:"tag"`
+	Currency string  `json:"currency"`
+	Spent    string  `json:"spent"`
+}
+
 // spendTotalDocument is one entry of "totals".
 type spendTotalDocument struct {
 	Currency string `json:"currency"`
 	Spent    string `json:"spent"`
 }
 
-// renderSpendingJSON renders s as spend's --json document; rows and totals
-// are [] rather than null when s holds none.
-func renderSpendingJSON(s report.Spending) ([]byte, error) {
+// renderSpendingJSON renders s as spend's --json document with warnings;
+// rows and totals are [] rather than null when s holds none.
+func renderSpendingJSON(s report.Spending, warnings []string) ([]byte, error) {
 	rows := make([]any, len(s.Rows))
 	for i, r := range s.Rows {
 		rows[i] = spendRowDocumentFor(s.By, r, jsonMoney(r.Spent))
@@ -62,15 +70,19 @@ func renderSpendingJSON(s report.Spending) ([]byte, error) {
 		AccountFilter: []spendAccountDocument{},
 		Rows:          rows,
 		Totals:        totals,
-		Warnings:      []string{},
+		Warnings:      warnings,
 	})
 }
 
 // spendRowDocumentFor is the row of a spend grouped by group, its key named
 // for the grouping; spent is the row's amount already formatted.
 func spendRowDocumentFor(group store.SpendingGroup, r store.SpendingRow, spent string) any {
-	if group == store.SpendByPayee {
+	switch group {
+	case store.SpendByPayee:
 		return spendPayeeRowDocument{Payee: r.Key, Currency: r.Currency, Spent: spent}
+	case store.SpendByTag:
+		return spendTagRowDocument{Tag: r.Key, Currency: r.Currency, Spent: spent}
+	case store.SpendByCategory:
 	}
 	return spendCategoryRowDocument{Category: r.Key, Currency: r.Currency, Spent: spent}
 }

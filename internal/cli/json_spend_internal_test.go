@@ -29,7 +29,7 @@ func Test_renderSpendingJSON_writes_a_null_key_for_uncategorized_and_a_signed_am
 	}
 	s := report.Spending{Spending: found, Window: spendWindow()}
 
-	got, err := renderSpendingJSON(s)
+	got, err := renderSpendingJSON(s, []string{})
 
 	require.NoError(t, err)
 	//nolint:testifylint // bytes are the contract
@@ -71,7 +71,7 @@ func Test_renderSpendingJSON_names_the_row_key_and_by_for_the_payee_grouping(t *
 	}
 	s := report.Spending{Spending: found, Window: spendWindow(), By: store.SpendByPayee}
 
-	got, err := renderSpendingJSON(s)
+	got, err := renderSpendingJSON(s, []string{})
 
 	require.NoError(t, err)
 	//nolint:testifylint // bytes are the contract
@@ -104,7 +104,7 @@ func Test_renderSpendingJSON_names_the_row_key_and_by_for_the_payee_grouping(t *
 }
 
 func Test_renderSpendingJSON_writes_empty_lists_when_nothing_was_spent(t *testing.T) {
-	got, err := renderSpendingJSON(report.Spending{Window: spendWindow()})
+	got, err := renderSpendingJSON(report.Spending{Window: spendWindow()}, []string{})
 
 	require.NoError(t, err)
 	//nolint:testifylint // bytes are the contract
