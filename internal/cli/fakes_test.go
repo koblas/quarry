@@ -33,6 +33,10 @@ func (f fakeReportStore) Spending(_ context.Context, params store.SpendingParams
 	return f.spending, f.err
 }
 
+func (f fakeReportStore) CashFlow(context.Context, store.CashFlowParams) (store.CashFlow, error) {
+	return store.CashFlow{}, f.err
+}
+
 func (f fakeReportStore) Query(_ context.Context, query string, maxRows int) (store.QueryResult, error) {
 	if f.gotQuery != nil {
 		*f.gotQuery = query

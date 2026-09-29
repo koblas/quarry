@@ -378,3 +378,50 @@ type Spending struct {
 	// SpendingParams.AccountIDs; the zero range means there are none.
 	Transactions TransactionRange
 }
+
+// CashFlowPeriod names the calendar unit a cash-flow read groups its rows by.
+type CashFlowPeriod int
+
+// The cash-flow periods.
+const (
+	// CashFlowByMonth groups by calendar month; the key is YYYY-MM.
+	CashFlowByMonth CashFlowPeriod = iota
+	// CashFlowByYear groups by calendar year; the key is YYYY.
+	CashFlowByYear
+)
+
+// CashFlowParams is everything a cash-flow read varies by: the Window, the period
+// unit, and the accounts to count (every account in reports when AccountIDs is empty).
+type CashFlowParams struct {
+	Window     Window
+	By         CashFlowPeriod
+	AccountIDs []string
+}
+
+// CashFlowRow is one period's income, spending and net in one currency, in cents.
+// SavingsRatePct is net over income as a percentage rounded to one decimal, nil
+// when income is zero or less.
+type CashFlowRow struct {
+	Period         string
+	Currency       string
+	Income, Spent  int64
+	Net            int64
+	SavingsRatePct *float64
+}
+
+// CashFlowTotal is all of one currency's income, spending and net in the window, in cents.
+type CashFlowTotal struct {
+	Currency       string
+	Income, Spent  int64
+	Net            int64
+	SavingsRatePct *float64
+}
+
+// CashFlow is the periods of a cash-flow read, oldest first and CAD before USD within one,
+// and one Total per currency present.
+type CashFlow struct {
+	Rows   []CashFlowRow
+	Totals []CashFlowTotal
+	// Transactions is set only when the window holds no income or spending (no Totals), as for Spending.
+	Transactions TransactionRange
+}

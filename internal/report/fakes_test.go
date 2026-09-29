@@ -36,6 +36,10 @@ func (f fakeStore) Spending(_ context.Context, params store.SpendingParams) (sto
 	return f.spending, f.err
 }
 
+func (f fakeStore) CashFlow(context.Context, store.CashFlowParams) (store.CashFlow, error) {
+	return store.CashFlow{}, f.err
+}
+
 func (f fakeStore) Query(_ context.Context, _ string, maxRows int) (store.QueryResult, error) {
 	if f.gotMaxRows != nil {
 		*f.gotMaxRows = maxRows

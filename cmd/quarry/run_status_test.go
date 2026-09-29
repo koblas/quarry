@@ -97,6 +97,7 @@ quarry never writes to the Quicken file.`)
 	assert.Contains(t, stdout.String(), ""+
 		"Available Commands:\n"+
 		"  accounts    List accounts with their current balances\n"+
+		"  cashflow    Show income, spending and savings rate by month or year\n"+
 		"  help        Help about any command\n"+
 		"  spend       Show spending by category, payee, tag or month\n"+
 		"  sql         Run a read-only SQL query against quarry's store\n"+
