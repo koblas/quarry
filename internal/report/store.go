@@ -13,4 +13,6 @@ type Store interface {
 	Status(ctx context.Context) (store.Status, error)
 	// Accounts lists every account with its balance.
 	Accounts(ctx context.Context) (store.AccountList, error)
+	// Query runs query verbatim and returns at most maxRows rows, every row when maxRows is 0.
+	Query(ctx context.Context, query string, maxRows int) (store.QueryResult, error)
 }

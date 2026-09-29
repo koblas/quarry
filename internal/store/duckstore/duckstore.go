@@ -64,6 +64,7 @@ var _ DB = (*duckdb.DB)(nil)
 // *duckdb.DB is the production implementation.
 type ReadDB interface {
 	QueryRows(ctx context.Context, query string, args []any, row func(scan func(dest ...any) error) error) error
+	QueryTable(ctx context.Context, query string, maxRows int) (duckdb.Table, error)
 	Close() error
 }
 

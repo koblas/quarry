@@ -163,6 +163,13 @@ func (s *spyReadDB) QueryRows(ctx context.Context, query string, args []any, row
 	return s.ReadDB.QueryRows(ctx, query, args, row)
 }
 
+func (s *spyReadDB) QueryTable(ctx context.Context, query string, maxRows int) (duckdb.Table, error) {
+	if s.queryFault != nil {
+		return duckdb.Table{}, s.queryFault
+	}
+	return s.ReadDB.QueryTable(ctx, query, maxRows)
+}
+
 func (s *spyReadDB) Close() error {
 	s.closes++
 	if s.ReadDB == nil {

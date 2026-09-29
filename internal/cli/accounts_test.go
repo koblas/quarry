@@ -21,17 +21,25 @@ var (
 	errNoSpace   = errors.New("write /dev/stdout: no space left on device")
 )
 
-// fakeReportStore answers Accounts with a canned list or fault; Status is
-// left to the embedded nil interface, so a stray call panics.
+// fakeReportStore answers Accounts and Query with a canned result or fault,
+// Query recording its maxRows in *gotMaxRows; Status is left to the embedded
+// nil interface, so a stray call panics.
 type fakeReportStore struct {
 	report.Store
 
-	accounts store.AccountList
-	err      error
+	accounts   store.AccountList
+	result     store.QueryResult
+	gotMaxRows *int
+	err        error
 }
 
 func (f fakeReportStore) Accounts(context.Context) (store.AccountList, error) {
 	return f.accounts, f.err
+}
+
+func (f fakeReportStore) Query(_ context.Context, _ string, maxRows int) (store.QueryResult, error) {
+	*f.gotMaxRows = maxRows
+	return f.result, f.err
 }
 
 type failingWriter struct{ err error }

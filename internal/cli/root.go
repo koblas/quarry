@@ -27,5 +27,6 @@ quarry never writes to the Quicken file.`,
 	root.AddCommand(newSyncCommand(env.NewServer, jsonOut))
 	root.AddCommand(newStatusCommand(env.NewReport, jsonOut))
 	root.AddCommand(newAccountsCommand(env.NewReport, jsonOut))
+	root.AddCommand(newSQLCommand(env.NewReport))
 	return root
 }
