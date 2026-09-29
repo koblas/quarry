@@ -68,6 +68,15 @@ Architect writes run groups on plan's `Runs:` header line; orchestrator spawns *
 - `<start>` (CLAUDE.md step 5) recorded before run `A`; checkpoint runs after `V`, over whole scenario's range.
 - Fix passes stay single runs — findings list is their plan.
 
+### Light lane
+
+Scenario the sizing pass rated **LIGHT** (architect → *Size verdict*) skips its per-scenario `architect` run. Two developer runs instead:
+
+- `L` — writes `SCENARIO-XX.md` itself, same shape as architect plan, **≤15 lines** under `## Implementation Plan`, header `Size: LIGHT — <n> steps, <package>` and `Runs: L | V`, no `## Handoff` beyond anything a later scenario must not contradict. Then executes Acceptance (red) and Build, ends with phase report.
+- `V` — as above.
+
+Checkpoint still runs after `V`. Plan touching mandatory test-first item, or growing past 3 Build steps while being written → `L` stops, returns `PARTIAL: needs architect`; orchestrator runs `architect` and continues normally.
+
 ## Planning: coverage the gate will demand
 
 Commonest blocking findings share one shape: fallible call in new code with no fault test, or numeric bound with no outside-the-bound test. Each costs fix pass plus re-gate for test architect could have listed up front. Every architect checklist for new or changed command, feature-package method or adapter names, in the Build batch that owns the code:

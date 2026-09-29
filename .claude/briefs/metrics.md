@@ -27,7 +27,7 @@ Orchestrator only — no agent reads this or ledger it describes.
 | --- | --- | --- | --- |
 ```
 
-- **Scenarios** row appended at step 5b, after checkpoint (and its fix pass, if any).
+- **Scenarios** row appended at step 5b, after checkpoint (and its fix pass, if any). Light-lane scenario: cadence cell reads `code-first (light)`, so light and planned units compare.
 - **Final gate** row appended per `/run-reviewers` round at step 7/9; findings counts from that round's `REVIEW-NN.md`.
 - **Tokens** pasted once at SHIP. Attribution comes from run tags (CLAUDE.md → *Run tags*); `--strict` exits 1 if any run untagged — fix the tag habit, then paste anyway with attribution line intact. Orchestrator row is upper bound for session windows that ran feature's agents. "Weighted" = input-equivalent tokens; compare features on it, not on raw cache reads.
 - **Escaped defects** — row added whenever bug found in feature's code within 30 days of merge (issue, later feature's triage, user report). Append-only; earlier rows never edited. Empty section after 30 days is data, not omission.

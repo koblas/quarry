@@ -84,6 +84,9 @@ Write the verdict and the numbers behind it as the plan's `Size:` header line (a
 sizing-pass row): `Size: OWNS A RUN — 4 batches, 1 feature package`.
 - **FOLD** — too small to earn its own architect+developer pair. Name which scenario
   should absorb it, and why.
+- **LIGHT** — sizing pass only: ≤3 Build steps, one feature package, and nothing on the
+  mandatory test-first set. No per-scenario architect run; developer plans it
+  (`.claude/briefs/build.md` → *Light lane*). Not LIGHT when FOLD fits.
 
 Scenario with more than one `When` is **SPLIT**, always — one behaviour per scenario, one
 acceptance test per scenario. `.claude/scripts/spec-check.py <slug>` counts them.

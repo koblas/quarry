@@ -18,8 +18,9 @@ Every invocation passes you:
 
 - **Feature slug** (e.g. `deposit-money`) — identifies spec folder.
 - **Scenario ID** (e.g. `SCENARIO-03`) — identifies your plan file.
-- **Run** (`A`, `B1`…, `V`) — which of the plan's `Runs:` groups you execute, and nothing
-  else (`.claude/briefs/build.md` → *Developer runs*). Absent only in fix mode.
+- **Run** (`A`, `B1`…, `V`, or `L` for a light-lane scenario you plan yourself) — which of
+  the plan's `Runs:` groups you execute, and nothing else (`.claude/briefs/build.md` →
+  *Developer runs*). Absent only in fix mode.
 - Optionally a **Review Findings** section — its presence puts you in **fix mode**.
 
 Slug, scenario ID or run missing → stop and report it.
