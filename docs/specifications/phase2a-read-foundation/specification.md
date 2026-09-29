@@ -182,7 +182,7 @@ Visa Infinite  credit_card  CAD          -1,204.17  closed
   - exactly 1: `quarry: the only account is closed; pass --all to list it`
   - zero accounts in the store: no line, `accounts:[]`, `warnings:[]`. `--all` given: no note.
 - `--json`: `{"as_of":"2026-09-29","accounts":[{"id","name","type","currency","institution","closed","active","balance"}],"warnings":[]}` —
-  `balance` 2-decimal string or `null` (brokerage/retirement); `institution` may be `null`; `as_of` today's local
+  `balance` 2-decimal string or `null` (brokerage/retirement); `institution` may be `null` (SQL NULL or `""`); `as_of` today's local
   date, read from DuckDB's `current_date` in the same query as the balances; `warnings` always present.
 
 ### `sql`
