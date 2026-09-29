@@ -22,9 +22,10 @@ Turn count × context size is agent's wall-clock; each extra turn re-reads whole
 
 ```bash
 go build ./...
-COVER="$(mktemp "$TMPDIR/cover.XXXXXX")"                                   # unique per run
-go test -count=1 -coverpkg=./... -coverprofile="$COVER" ./... &&          # the full suite, once
-  .claude/scripts/uncovered-diff.py --profile "$COVER" <start>              # coverage gate, no re-run
+COVER="$(mktemp "$TMPDIR/cover.XXXXXX")"; LOG="$COVER.log"                 # unique per run
+go test -count=1 -coverpkg=./... -coverprofile="$COVER" ./... >"$LOG" 2>&1; rc=$?   # the full suite, once
+grep -E '^(FAIL|--- FAIL|panic:)' "$LOG"; echo "go test rc=$rc"          # failures only; full log in $LOG
+[ "$rc" -eq 0 ] && .claude/scripts/uncovered-diff.py --profile "$COVER" <start>     # coverage gate, no re-run
 go test -race ./<touched package>/...
 golangci-lint run ./...
 .claude/scripts/test-stats.py --base <start> --changed                     # counts and deltas
@@ -42,7 +43,7 @@ golangci-lint run ./...
 
 Rules:
 
-- **Never pipe verification command through `head`/`tail`.** Hides failures below cut, and `$?` become pipe status — `go build ./nonexistent 2>&1 | tail -2` reports **exit 0** for failed build. If must pipe, prefix `set -o pipefail`.
+- **Never pipe verification command through `head`/`tail`.** Hides failures below cut, and `$?` become pipe status — `go build ./nonexistent 2>&1 | tail -2` reports **exit 0** for failed build. Output too long → redirect to log file and grep it, as full-suite line above does; report the printed `rc=`. If must pipe, prefix `set -o pipefail`.
 - **Report exact test count and delta, from `.claude/scripts/test-stats.py`** — "green" not result, and hand-rolled counts drift between agents on same commit. Quote its rows as printed. Never write own counting script. Count that moved without explanation = finding, not rounding error.
 - Green summary not mean everything ran. `test-stats.py --run <pkgdir>` counts leaf pass/fail/skip in one parallel `go test -json`; check skips before leaning on package.
 - Write scratch files only under `$TMPDIR` or session scratchpad — never `/tmp`, never path outside worktree you got.
