@@ -256,7 +256,7 @@ Exported as CSV, kept outside the repo; no private data is checked in.
 | 2024–25 | CAD | Investments:Dividend Income (8 months, 3,131.36) | 0.00 | 3,131.36 | Investment transactions are not imported (Phase 1 scope; `sync` counts them as not imported). Rule: out of scope until investment transactions are imported. |
 | 2024–25 | USD | Outflows, every month | = | = | Total Outflows equals `cashflow` Spent in all 24 months. |
 | 2024–25 | USD | Investments:Dividend Income / Realized Gain/Loss / Buy / Sell | 0.00 | 86,412.60 / 918.69 / −378,999.14 / 37,817.86 | Same cause: investment transactions are not imported. Buy/Sell sit under Quicken's "Other" group and are outside Inflows/Outflows. |
-| 2025 | USD | Uncategorized income, Netskope 401(k) (Mar 20,187.15; Jun 511.81; Sep 419.29; Dec 1,415.47) | 22,533.72 | 0.00 | **Open.** These are cash-register rows in a retirement account ("… Contributions - Employee - Purchase", "… Dividends/Capital Gains - Purchase"), uncategorized and not excluded from reports. quarry counts them as income; Quicken's report leaves them out. Needs a probe into why. |
+| 2025 | USD | Uncategorized income, Netskope 401(k) (Mar 20,187.15; Jun 511.81; Sep 419.29; Dec 1,415.47) | 22,533.72 | 0.00 | **Rule change.** Netskope 401(k) uses Quicken's linked account tracking (`ZACCOUNT.ZSIMPLEINVESTING = 1`, the only such account; the user can't see its transactions in Quicken). Quicken's reports leave out the cash rows it downloads. With the account excluded, USD matches in every month × category cell except the investment-action rows. Needs a product-vision ruling on P2b-6, then a fix pass. |
 
 ---
 
