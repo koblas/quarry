@@ -19,10 +19,10 @@ ORDER BY e.ZPARENT, e.Z_PK
 // mapSplits reads every non-deleted ZCASHFLOWTRANSACTIONENTRY row. An
 // entry whose parent reference points to no transaction row at all, whose
 // amount is missing, stored as text or blob, has more than 2 decimals beyond
-// the snap tolerance or is too large, is added to off and excluded. An entry whose parent exists but was
-// itself excluded (deleted, Smart/Investment, or its own offender) is
-// silently skipped. A category reference to a deleted or missing category
-// stores NULL.
+// the snap tolerance or is too large, is added to off and excluded. An entry
+// whose parent exists but was itself excluded (deleted, Smart/Investment, or
+// its own offender) is silently skipped. A category reference to a deleted or
+// missing category stores NULL.
 func mapSplits(
 	ctx context.Context, src Source, txns map[int64]txnRef, existingTransactions, existingCategories map[int64]bool, off *offenders,
 ) ([]store.Split, []transferLink, map[int64]string, error) {
