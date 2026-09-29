@@ -105,13 +105,14 @@ func Test_status_refuses_a_store_without_exactly_one_import_run(t *testing.T) {
 
 func Test_status_fails_on_a_missing_store_without_creating_it(t *testing.T) {
 	t.Parallel()
-	dir := filepath.Join(t.TempDir(), "quarry")
+	dir := t.TempDir()
 
 	_, err := duckstore.New(dir).Status(t.Context())
 
 	require.Error(t, err)
-	_, statErr := os.Stat(dir)
-	assert.ErrorIs(t, statErr, os.ErrNotExist)
+	entries, readErr := os.ReadDir(dir)
+	require.NoError(t, readErr)
+	assert.Empty(t, entries)
 }
 
 var errQueryFailed = errors.New("query failed")

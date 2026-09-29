@@ -117,7 +117,7 @@ func Test_run_status_reports_exit_1_when_stdout_cannot_be_written(t *testing.T) 
 	assert.Contains(t, stderr.String(), errNoSpace.Error())
 }
 
-func Test_run_help_prints_quarrys_description_and_lists_status(t *testing.T) {
+func Test_run_help_prints_quarrys_description(t *testing.T) {
 	t.Setenv("HOME", "")
 	var stdout, stderr bytes.Buffer
 

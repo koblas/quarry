@@ -97,13 +97,16 @@ func storeDirUnder(home string) string {
 	return filepath.Join(home, "Library", "Application Support", "quarry")
 }
 
+// errNoHome is the home-directory refusal's lead; resolveHome appends what to do.
+var errNoHome = errors.New("cannot find your home directory ($HOME is not set)")
+
 // resolveHome returns the user's home directory, or the refusal telling
 // them to set HOME and run command again; os.UserHomeDir's own text varies
 // by platform.
 func resolveHome(command string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("cannot find your home directory ($HOME is not set); set HOME, then run quarry %s again", command) //nolint:err113 // fixed user copy; the platform error names no fix
+		return "", fmt.Errorf("%w; set HOME, then run quarry %s again", errNoHome, command)
 	}
 	return home, nil
 }
