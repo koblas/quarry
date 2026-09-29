@@ -154,10 +154,8 @@ COMMENT ON VIEW v_cash_flow IS 'excludes accounts where accounts.in_reports is f
 // spendingViewDDL creates v_spending: the expense rows of v_cash_flow, amount sign flipped.
 const spendingViewDDL = `
 CREATE VIEW v_spending AS
-SELECT CAST(NULL AS VARCHAR) AS split_id, CAST(NULL AS VARCHAR) AS transaction_id,
-	CAST(NULL AS VARCHAR) AS account_id, CAST(NULL AS DATE) AS date, CAST(NULL AS DATE) AS month,
-	CAST(NULL AS VARCHAR) AS currency, CAST(NULL AS VARCHAR) AS category_id,
-	CAST(NULL AS VARCHAR) AS category, CAST(NULL AS VARCHAR) AS payee_id,
-	CAST(NULL AS VARCHAR) AS payee, CAST(NULL AS DECIMAL(18,2)) AS spent
-WHERE false;
+SELECT split_id, transaction_id, account_id, date, month, currency,
+	category_id, category, payee_id, payee, -amount AS spent
+FROM v_cash_flow
+WHERE flow = 'expense';
 `

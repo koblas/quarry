@@ -260,3 +260,61 @@ func Test_cash_flow_view_carries_its_reports_note(t *testing.T) {
 
 	assert.Equal(t, [][]string{{"excludes accounts where accounts.in_reports is false, as Quicken reports do."}}, got)
 }
+
+func Test_spending_holds_expense_flow_with_its_sign_flipped(t *testing.T) {
+	t.Parallel()
+	rows := reportRows()
+	addSplit(&rows, splitSpec{id: "refund", category: new(catExpense), amount: 250})
+	addSplit(&rows, splitSpec{id: "salary", category: new(catIncome), amount: 500})
+	addSplit(&rows, splitSpec{id: "uncategorized-in", amount: 300})
+	addSplit(&rows, splitSpec{id: "uncategorized-out", amount: -400})
+	st := newStoreWith(t, rows)
+
+	got := queryTexts(t, st, "SELECT split_id, spent FROM v_spending ORDER BY split_id")
+
+	assert.Equal(t, [][]string{{keepSplit, "10.00"}, {"refund", "-2.50"}, {"uncategorized-out", "4.00"}}, got)
+}
+
+func Test_spending_lists_its_columns_in_order(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, reportRows())
+
+	got, err := st.Query(t.Context(), "SELECT * FROM v_spending", 0) //nolint:unqueryvet // every column is the point
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.QueryColumn{
+		{Name: "split_id", Type: "VARCHAR"},
+		{Name: "transaction_id", Type: "VARCHAR"},
+		{Name: "account_id", Type: "VARCHAR"},
+		{Name: "date", Type: "DATE"},
+		{Name: "month", Type: "DATE"},
+		{Name: "currency", Type: "VARCHAR"},
+		{Name: "category_id", Type: "VARCHAR"},
+		{Name: "category", Type: "VARCHAR"},
+		{Name: "payee_id", Type: "VARCHAR"},
+		{Name: "payee", Type: "VARCHAR"},
+		{Name: "spent", Type: "DECIMAL(18,2)"},
+	}, got.Columns)
+}
+
+func Test_spending_holds_exactly_the_cash_flow_expense_rows(t *testing.T) {
+	t.Parallel()
+	rows := reportRows()
+	addSplit(&rows, splitSpec{id: "from-leg", category: new(catExpense), amount: -500})
+	addSplit(&rows, splitSpec{id: "unmatched-leg", category: new(catExpense), amount: -500})
+	addSplit(&rows, splitSpec{id: "system", category: new(catSystem), amount: -500})
+	addSplit(&rows, splitSpec{id: "excluded", category: new(catExpense), amount: -500, excluded: true})
+	addSplit(&rows, splitSpec{id: "not-in-reports", account: acctNotReports, category: new(catExpense), amount: -500})
+	addSplit(&rows, splitSpec{id: "zero", amount: 0})
+	addSplit(&rows, splitSpec{id: "uncategorized-out", amount: -100})
+	rows.Transfers = append(rows.Transfers,
+		store.Transfer{ID: "xfer-1", FromSplitID: "from-leg", ToSplitID: new("peer-leg")},
+		store.Transfer{ID: "xfer-2", FromSplitID: "unmatched-leg"})
+	st := newStoreWith(t, rows)
+
+	spending := queryTexts(t, st, "SELECT split_id FROM v_spending ORDER BY split_id")
+	cashFlowExpense := queryTexts(t, st, "SELECT split_id FROM v_cash_flow WHERE flow = 'expense' ORDER BY split_id")
+
+	assert.Equal(t, [][]string{{keepSplit}, {"uncategorized-out"}}, spending)
+	assert.Equal(t, cashFlowExpense, spending)
+}

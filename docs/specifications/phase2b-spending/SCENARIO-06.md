@@ -36,7 +36,7 @@ Size: OWNS A RUN — 2 batches, 1 feature package (duckstore; cmd test only); ab
   `Test_cash_flow_takes_an_uncategorized_splits_flow_from_its_sign`,
   `Test_cash_flow_names_the_month_category_and_payee` (exact `Columns` names+types in P2b-6 order, `month` a first-of-month `DATE`, `category` full_path, NULL category, a split with no payee present),
   `Test_cash_flow_view_carries_its_reports_note` (`duckdb_views()` comment); run this batch's 12 mutations
-- [ ] Step 4: `schema.go` `spendingViewDDL` real body — exactly P2b-8 (`SELECT … -amount AS spent FROM v_cash_flow WHERE flow = 'expense'`, nothing else). Tests in `views_test.go`:
+- [x] Step 4: `schema.go` `spendingViewDDL` real body — exactly P2b-8 (`SELECT … -amount AS spent FROM v_cash_flow WHERE flow = 'expense'`, nothing else). Tests in `views_test.go`:
   `Test_spending_holds_expense_flow_with_its_sign_flipped` (columns in P2b-8 order, `spent` `DECIMAL(18,2)`; refund negative; income and positive uncategorized absent; negative uncategorized present),
   `Test_spending_holds_exactly_the_cash_flow_expense_rows` (fixture carrying every left-out class, not-in-reports account included); run this batch's 4 mutations
 
@@ -68,9 +68,7 @@ Size: OWNS A RUN — 2 batches, 1 feature package (duckstore; cmd test only); ab
 
 ## Phase report
 
-Run B1 (step 3) done; green on the narrow loop except what run B2 owns.
-- `internal/store/duckstore/schema.go:131-152` `cashFlowViewDDL` real body plus `COMMENT ON VIEW`; `duckstore_test.go:40-46` `minimalRows` gains `split-4`; `internal/store/duckstore/views_test.go` (new: `reportRows`/`addSplit`/`newStoreWith`/`queryTexts` helpers, the six cash-flow tests).
-- Green: `Test_run_sql_cash_flow_keeps_only_real_income_and_spending`, all `Test_cash_flow_*`, `Test_query_prints_every_column_...` for every relation but `v_spending`.
-- Still red (run B2): `Test_run_sql_spending_nets_refunds_against_their_category`, `Test_query_prints_every_column_of_each_table_and_view/v_spending` (stub view has no rows).
-- Mutations, all 12 run against `schema.go` from a fresh copy, restored and diffed identical; each reddened the planned test: from-arm dropped -> `leaves_out.../the_from_leg` and `/an_unmatched_transfer_leg`; to-arm dropped -> `/the_to_leg`; transfer key -> `transfer_account_id IS NULL` -> unmatched, from and to rows; system, excluded, in_reports, zero-uncategorized drops -> their own subtest each; `<>` and swapped sign arms -> `uncategorized_splits_flow_from_its_sign`; parent-kind flow -> `own_category_kind`; `JOIN payees` and dropped `CAST ... AS DATE` -> `names_the_month_category_and_payee`.
-- Next run must not redo: `v_spending` body only (P2b-8 verbatim, `-amount AS spent FROM v_cash_flow WHERE flow = 'expense'`, same column order); its tests go in `views_test.go` reusing `reportRows`/`addSplit`/`newStoreWith`/`queryTexts` (`spent` type `DECIMAL(18,2)`). `minimalRows` needs nothing more: `v_cash_flow` returns `split-4`, so `v_spending` returns it too. Lint on the duckstore package: 0 issues.
+Run B2 (step 4) done; narrow loop `go test ./internal/store/duckstore/ ./cmd/quarry/ -run 'cash_flow|spending|query_|replace_|run_sql'` green, including both acceptance tests and `Test_query_prints_every_column_of_each_table_and_view/v_spending`.
+- `internal/store/duckstore/schema.go:154-161` `spendingViewDDL` real body (P2b-8 verbatim over `v_cash_flow`); `internal/store/duckstore/views_test.go` appended `Test_spending_holds_expense_flow_with_its_sign_flipped`, `Test_spending_lists_its_columns_in_order` (extra, not in plan: columns/types split off the sign test), `Test_spending_holds_exactly_the_cash_flow_expense_rows`.
+- Mutations (schema.go, fresh copy each, restored, diffed identical): negation dropped -> sign_flipped (`keep` -10.00 vs 10.00); `WHERE flow='expense'` -> `WHERE true` -> sign_flipped (income `salary`, `uncategorized-in` present); `AND category_id IS NOT NULL` -> sign_flipped AND holds_exactly (`uncategorized-out` missing); own-predicates mutant reading `splits` minus `in_reports` -> holds_exactly (`not-in-reports` present).
+- Left for run V: Sweep (doc comments on both DDL consts already <=1 line each; `duckstore/doc.go:5-6` still needs the two views named; repo-wide lint), Verify, tick SCENARIO-06 + SCENARIO-08 in specification.md, `spec-check.py`, STATE.md rewrite (drop `v_cash_flow`/`v_spending` from Left unbuilt), `status: done`. Do not redo mutations.
