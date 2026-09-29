@@ -176,6 +176,19 @@ func Test_import_from_returns_the_manifest_a_plain_sync_returned(t *testing.T) {
 	assert.Equal(t, synced.Manifest, outcome.Manifest)
 }
 
+func Test_import_from_returns_the_taken_at_time_the_manifest_recorded(t *testing.T) {
+	home := t.TempDir()
+	srv := newImportServer(t, home, &fakeImporter{})
+	taken := takeSnapshot(t, srv)
+	const recordedTakenAt = "2001-02-03T04:05:06Z"
+	editManifest(t, taken.Snapshot.Manifest, func(m *snapshot.Manifest) { m.Snapshot.TakenAt = recordedTakenAt })
+
+	outcome, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
+
+	require.NoError(t, err)
+	assert.Equal(t, recordedTakenAt, outcome.Manifest.Snapshot.TakenAt)
+}
+
 func Test_import_from_imports_a_snapshot_whose_manifest_said_unverified_once_the_current_reference_matches(t *testing.T) {
 	home := t.TempDir()
 	fake := &fakeImporter{}
