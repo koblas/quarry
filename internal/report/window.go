@@ -16,8 +16,7 @@ type WindowError struct {
 // Error returns the refusal's message verbatim.
 func (e WindowError) Error() string { return e.msg }
 
-// dateForms are the accepted date layouts, each with the calendar step from
-// the first day it names to the last.
+// dateForms are the accepted layouts, each with the step from its first day to its last.
 var dateForms = []struct {
 	layout string
 	years  int
@@ -31,12 +30,10 @@ var dateForms = []struct {
 
 const layoutDay = "2006-01-02"
 
-// ParseWindow resolves the --since and --until values into a window; a nil
-// pointer is a flag not given and takes its default from now (see
-// DefaultWindow). A bare year or month covers all of it. It returns a
-// WindowError for a value that is not a date, for a since after until, for a
-// since after today when no until is given, and for an until before the
-// default since when no since is given.
+// ParseWindow resolves --since and --until into a window; a nil pointer is a flag not
+// given and takes its default from now (see DefaultWindow). A bare year or month covers
+// all of it. It returns a WindowError for a value that is not a date and for a period
+// that is empty, or a future one when no until allows it.
 func ParseWindow(since, until *string, now time.Time) (store.Window, error) {
 	window := DefaultWindow(now)
 	today := window.Until

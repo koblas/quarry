@@ -45,7 +45,7 @@ func Test_parse_window_resolves_a_bare_year_or_month_to_its_last_day(t *testing.
 func Test_parse_window_refuses_a_value_that_is_not_a_date(t *testing.T) {
 	values := []string{
 		"2024-13", "2024-00", "2024-02-30", "2023-02-29", "2024-1", "2024-01-1", "24",
-		"20240101", "2024/01", "2024-01-01x", " 2024", "", "yesterday",
+		"20240101", "2024/01", "2024-01-01x", " 2024", "2024 ", "", "yesterday",
 	}
 
 	flags := []struct {
@@ -172,7 +172,7 @@ func Test_parse_window_refuses_an_until_before_the_default_since(t *testing.T) {
 	})
 }
 
-func Test_parse_window_checks_bad_dates_before_since_after_today_before_since_after_until(t *testing.T) {
+func Test_parse_window_reports_the_since_first_and_keeps_each_refusal_to_its_own_flags(t *testing.T) {
 	t.Run("a bad until is a bad date even beside a future since", func(t *testing.T) {
 		_, err := report.ParseWindow(new("2099"), new("2024-13"), windowNow)
 

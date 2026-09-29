@@ -121,14 +121,26 @@ func Test_spend_refuses_a_bad_period_before_opening_the_report(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
-func Test_spend_refuses_an_empty_since_as_a_bad_date(t *testing.T) {
-	var stdout, stderr bytes.Buffer
+func Test_spend_refuses_an_empty_period_flag_as_a_bad_date(t *testing.T) {
+	cases := []struct {
+		flag string
+		want string
+	}{
+		{"--since", `--since "" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`},
+		{"--until", `--until "" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`},
+	}
 
-	err := executeSpend(t, fakeReportStore{}, spendWindowNow, &stdout, &stderr, "--since", "")
+	for _, c := range cases {
+		t.Run(c.flag, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
 
-	var usage cli.UsageError
-	require.ErrorAs(t, err, &usage)
-	require.EqualError(t, err, `--since "" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`)
+			err := executeSpend(t, fakeReportStore{}, spendWindowNow, &stdout, &stderr, c.flag, "")
+
+			var usage cli.UsageError
+			require.ErrorAs(t, err, &usage)
+			require.EqualError(t, err, c.want)
+		})
+	}
 }
 
 func Test_spend_refuses_a_by_that_names_no_grouping_before_a_bad_period(t *testing.T) {
