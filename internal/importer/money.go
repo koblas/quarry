@@ -58,38 +58,61 @@ func parseIntegerMoney(text string) (int64, moneyFault) {
 // parseRealMoney reads a real-stored money column's text as SQLite renders a
 // REAL: an optional "-", digits, and an optional "." with digits, or exponent form.
 func parseRealMoney(text string) (int64, moneyFault) {
-	neg := strings.HasPrefix(text, "-")
 	unsigned := strings.TrimPrefix(text, "-")
+	cents, fault := realCents(unsigned)
+	if fault != moneyOK {
+		return 0, fault
+	}
+	if unsigned != text {
+		cents = -cents
+	}
+	return cents, moneyOK
+}
+
+// realCents returns the cents of an unsigned REAL text: exact for at most 2
+// decimals, snapped to the nearest cent when the text is float residue of it.
+func realCents(unsigned string) (int64, moneyFault) {
 	if unsigned == "Inf" {
 		return 0, moneyTooLarge
 	}
+	mantissa, hasExponent := unsigned, false
 	if i := strings.IndexAny(unsigned, "eE"); i >= 0 {
-		// A negative exponent is a nonzero magnitude below 1e-4: always more than 2 decimals.
-		if strings.HasPrefix(unsigned[i+1:], "-") {
-			return 0, moneyPrecision
+		var exponent string
+		mantissa, exponent, hasExponent = unsigned[:i], unsigned[i+1:], true
+		if !strings.HasPrefix(exponent, "-") {
+			return 0, moneyTooLarge
 		}
-		return 0, moneyTooLarge
+		if exponent = exponent[1:]; exponent == "" || !allDigits(exponent) {
+			return 0, moneyNotANumber
+		}
 	}
-	intPart, fracPart, hasDot := strings.Cut(unsigned, ".")
+	intPart, fracPart, hasDot := strings.Cut(mantissa, ".")
 	if intPart == "" || !allDigits(intPart) || !allDigits(fracPart) || (hasDot && fracPart == "") {
 		return 0, moneyNotANumber
+	}
+	if hasExponent {
+		return snappedCents(unsigned)
 	}
 	intVal, err := strconv.ParseInt(intPart, 10, 64)
 	if err != nil || intVal >= realIntBound {
 		return 0, moneyTooLarge
 	}
-	var cents int64
 	if len(fracPart) > 2 {
-		var ok bool
-		if cents, ok = snapToCent(unsigned); !ok {
-			return 0, moneyPrecision
-		}
-	} else {
-		fracPart += "00"[len(fracPart):]
-		cents = intVal*100 + int64(fracPart[0]-'0')*10 + int64(fracPart[1]-'0')
+		return snappedCents(unsigned)
 	}
-	if neg {
-		cents = -cents
+	fracPart += "00"[len(fracPart):]
+	return intVal*100 + int64(fracPart[0]-'0')*10 + int64(fracPart[1]-'0'), moneyOK
+}
+
+// snappedCents snaps the unsigned decimal text to its cent, refusing text
+// beyond the tolerance or a snap that reaches the REAL bound.
+func snappedCents(unsigned string) (int64, moneyFault) {
+	cents, ok := snapToCent(unsigned)
+	switch {
+	case !ok:
+		return 0, moneyPrecision
+	case cents >= realIntBound*100:
+		return 0, moneyTooLarge
 	}
 	return cents, moneyOK
 }
