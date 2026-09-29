@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/snapshot"
@@ -19,13 +20,15 @@ type ServerFactory func(ctx context.Context) (srv *snapshot.Server, err error)
 // Like ServerFactory it is called only from a command's RunE.
 type ReportFactory func(ctx context.Context, command string) (srv *report.Server, err error)
 
-// Env is everything Execute takes from the process: its streams and the
-// factories that build each command family's Server.
+// Env is everything Execute takes from the process: its streams, the clock
+// and the factories that build each command family's Server. Now must be
+// set for any command that reads the date.
 type Env struct {
 	Stdin          io.Reader
 	Stdout, Stderr io.Writer
 	NewServer      ServerFactory
 	NewReport      ReportFactory
+	Now            func() time.Time
 }
 
 // Execute parses args against quarry's command tree and runs the matched

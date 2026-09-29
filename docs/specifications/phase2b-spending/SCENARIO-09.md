@@ -17,11 +17,11 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; the duckstore adapter
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: acceptance tests, all three at cmd level through `runWith`:
+- [x] Step 1: acceptance tests, all three at cmd level through `runWith`:
   - `run_spend_test.go` (new) `Test_run_spend_shows_this_years_spending_by_category_in_each_currency`. Uses `replaceStore(t, home, rows)` and `env := defaultEnv(...)` with a fixed `env.Now` in a non-UTC `time.FixedZone`. Fixture has CAD and USD spending this year, an uncategorized negative split, a 2025-12-31 row, and a row dated the day after "today". Build the expected stdout from the fixture's own cells, never from the spec's sample table.
   - `run_spend_test.go` `Test_run_spend_leaves_out_accounts_quicken_does_not_use_in_reports`. Same shape, with one account `NotInReports: true`.
   - `run_read_refusals_test.go:76-89` sibling `Test_run_spend_refuses_a_store_built_by_an_older_quarry`. Uses `writeStoreFixture(phaseOneImportRunsDDL + CREATE store_info + INSERT a row with literal format_version 2)`. Expects R2 with `--from 20260927T143005Z` and exit 1. The literal `2` row closes STATE's open debt.
-- [ ] Step 2: stubs so all three fail at their assertions, not with "unknown command":
+- [x] Step 2: stubs so all three fail at their assertions, not with "unknown command":
   - `internal/cli/run.go:22-29`: `Env.Now func() time.Time`.
   - `cmd/quarry/run.go:114-124`: `defaultEnv` sets `Now: time.Now`.
   - `internal/store/store.go:309-314`: `store.Window`, `store.SpendingGroup` + `SpendByCategory`, `store.SpendingParams` (Window, By, AccountIDs), `store.Spending` / `SpendingRow` / `SpendingTotal`.
@@ -80,3 +80,23 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; the duckstore adapter
 - A nil `renderJSON` passed to `renderResult` makes `spend --json` panic.
 - The Long and Example text name `--by`/`--since`/`--account` before those flags exist. They stay verbatim.
 - Existing cli tests build `cli.Env` without `Now`. Every spend test must set it, because a nil `Now` panics by design.
+
+## Phase report
+
+Run A done (steps 1-2). Only the three acceptance tests are red; every other test in the repo is green.
+
+Red (each at its stdout/stderr/exit assertion; the stub RunE prints nothing and returns nil):
+- `cmd/quarry/run_spend_test.go` `Test_run_spend_shows_this_years_spending_by_category_in_each_currency`: expected the caption + table, actual `""`.
+- `cmd/quarry/run_spend_test.go` `Test_run_spend_leaves_out_accounts_quicken_does_not_use_in_reports`: same.
+- `cmd/quarry/run_read_refusals_test.go` `Test_run_spend_refuses_a_store_built_by_an_older_quarry`: expected exit 1 + R2 stderr, actual exit 0, `""`.
+
+Files:
+- `internal/store/store.go` end: `Window`, `SpendingGroup`/`SpendByCategory`, `SpendingParams`, `SpendingRow` (Key *string), `SpendingTotal`, `Spending`. Window holds civil days as UTC-midnight `time.Time`.
+- `internal/report/store.go`: `Store.Spending`. Stubbed in `internal/store/duckstore/spending.go`, `internal/cli/fakes_test.go`, `internal/report/fakes_test.go` (all return zero, ignoring params; B runs add canned output and recording).
+- `internal/report/spending.go`: `SpendRequest{Now}`, `Spending{store.Spending; Window}`, stubbed `DefaultWindow` (returns zero), `(*Server).Spend` (returns zero).
+- `internal/cli/spend.go`: `newSpendCommand(newReport, now, jsonOut)`, Use/Short/Long/Example verbatim, `Args: noArgs`, RunE returns nil. Registered in `root.go`; the `newReport`, `now` and `jsonOut` params are unused for now. Root doc and `Env` doc still to update in V.
+- `internal/cli/run.go`: `Env.Now`; `cmd/quarry/run.go`: `defaultEnv` sets `time.Now`.
+- Updated: `run_status_test.go` (Available Commands gains `spend`), `run_usage_test.go` (U9 `spending`).
+
+Do not redo: the acceptance tests build expected text with `%-15s  %-8s  %8s` row formats from the fixture's own cells. The non-UTC clock is 2026-09-29 22:00 at UTC-5, so a UTC read would include the 2026-09-30 row.
+Next (B1): step 3 (`DefaultWindow`), 4 (duckstore query + fakes), 5 (`Spend`). Lint/vet not run yet (`go vet ./...` clean).

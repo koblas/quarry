@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"syscall"
+	"time"
 
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/importer"
@@ -120,6 +121,7 @@ func defaultEnv(stdout, stderr io.Writer) cli.Env {
 		Stderr:    stderr,
 		NewServer: newServerFactory(),
 		NewReport: newReportFactory(),
+		Now:       time.Now,
 	}
 }
 

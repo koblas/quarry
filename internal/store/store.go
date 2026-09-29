@@ -311,3 +311,48 @@ type AccountList struct {
 	AsOf     time.Time
 	Accounts []AccountBalance
 }
+
+// Window is an inclusive range of civil days: Since and Until are each a
+// calendar day held as UTC midnight, and both days count.
+type Window struct {
+	Since, Until time.Time
+}
+
+// SpendingGroup names what a spending read groups its rows by.
+type SpendingGroup int
+
+// The spending groupings.
+const (
+	// SpendByCategory groups by the split's category full path.
+	SpendByCategory SpendingGroup = iota
+)
+
+// SpendingParams is everything a spending read varies by: the Window,
+// the grouping, and the accounts to count (every account in reports when
+// AccountIDs is empty).
+type SpendingParams struct {
+	Window     Window
+	By         SpendingGroup
+	AccountIDs []string
+}
+
+// SpendingRow is one group's spending in one currency, in cents. Key is nil
+// for the group of splits with no category.
+type SpendingRow struct {
+	Key      *string
+	Currency string
+	Spent    int64
+}
+
+// SpendingTotal is all the spending in one currency, in cents.
+type SpendingTotal struct {
+	Currency string
+	Spent    int64
+}
+
+// Spending is the rows of a spending read in display order, and one Total
+// per currency present, CAD before USD.
+type Spending struct {
+	Rows   []SpendingRow
+	Totals []SpendingTotal
+}

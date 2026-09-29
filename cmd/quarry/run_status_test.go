@@ -98,6 +98,7 @@ quarry never writes to the Quicken file.`)
 		"Available Commands:\n"+
 		"  accounts    List accounts with their current balances\n"+
 		"  help        Help about any command\n"+
+		"  spend       Show spending by category, payee, tag or month\n"+
 		"  sql         Run a read-only SQL query against quarry's store\n"+
 		"  status      Show which snapshot the store was built from and what it holds\n"+
 		"  sync        Snapshot the open Quicken file and rebuild quarry's store from it\n\n")

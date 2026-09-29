@@ -20,6 +20,10 @@ func (f fakeStore) Status(context.Context) (store.Status, error) { return f.stat
 
 func (f fakeStore) Accounts(context.Context) (store.AccountList, error) { return f.accounts, f.err }
 
+func (f fakeStore) Spending(context.Context, store.SpendingParams) (store.Spending, error) {
+	return store.Spending{}, nil
+}
+
 func (f fakeStore) Query(_ context.Context, _ string, maxRows int) (store.QueryResult, error) {
 	if f.gotMaxRows != nil {
 		*f.gotMaxRows = maxRows
