@@ -26,8 +26,8 @@ Surveyed (item 5): callers of `existingAccounts` (`importer.go:64,90` -> `transa
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `transactions_test.go:326-334` flip `Test_import_refuses_a_split_with_no_transaction` -> S1 (NULL parent, amount 0: `NoError`, no split stored); `transactions_test.go:196-206` flip `Test_import_refuses_a_transaction_with_no_account` -> S3 (NULL account + one split under it: `NoError`, no transaction, no split); new S4 in `transfers_test.go` beside `:259` (imported leg whose numeric link = `QuickenID` of a parentless entry: `result.Validation.Transfers.OneSided` holds the leg, model on `:189-205`); new S5 in `validation_test.go` (transaction whose only entry has `Parent` = nonexistent id: `ErrValidationFailed`, V1 wording `1 transaction does not equal the sum of its splits` asserted as neighbouring tests do)
-- [ ] Step 2: `dangling_references_test.go:65-78` flip -> S2 (parent 999, amount 12.34: `NoError`, no split). No new production symbols, so no stubs; run Narrow loop and confirm S1-S5 fail at their assertions (refusal instead of success), not at compile
+- [x] Step 1: `transactions_test.go:326-334` flip `Test_import_refuses_a_split_with_no_transaction` -> S1 (NULL parent, amount 0: `NoError`, no split stored); `transactions_test.go:196-206` flip `Test_import_refuses_a_transaction_with_no_account` -> S3 (NULL account + one split under it: `NoError`, no transaction, no split); new S4 in `transfers_test.go` beside `:259` (imported leg whose numeric link = `QuickenID` of a parentless entry: `result.Validation.Transfers.OneSided` holds the leg, model on `:189-205`); new S5 in `validation_test.go` (transaction whose only entry has `Parent` = nonexistent id: `ErrValidationFailed`, V1 wording `1 transaction does not equal the sum of its splits` asserted as neighbouring tests do)
+- [x] Step 2: `dangling_references_test.go:65-78` flip -> S2 (parent 999, amount 12.34: `NoError`, no split). No new production symbols, so no stubs; run Narrow loop and confirm S1-S5 fail at their assertions (refusal instead of success), not at compile
 
 ### Build
 - [ ] Step 3 (B1, split side): `splits.go:46-57` collapse the `!parent.Valid` and `!existingTransactions` refusals into one silent skip (`!parent.Valid` -> return nil; `txns` miss already skips); drop `existingTransactions` param (`:27`), reword doc `:19-25`; `transactions.go:50-79` `surveyTransactions` drop `existing` map (`:57,66-68,78`) and return `(int, error)`, drop `Z_PK` from `transactionSurveyQuery` (`:50`) and the `pk` scan; `importer.go:85,94` follow; delete `reasonSplitNoTransaction` (`reasons.go:82-84`)
@@ -55,3 +55,21 @@ Surveyed (item 5): callers of `existingAccounts` (`importer.go:64,90` -> `transa
 - `internal/snapshot` and `cmd/quarry/run_bundle_refusals_test.go:151` `has no accounts` is the phase0 ZACCOUNT-empty path, unrelated; leave it.
 - Fixture: `EntryRow.Parent: 0` / `TransactionRow.Account: 0` write NULL (`v9fixture/builder.go:65-72`); nonexistent refs need an explicit id such as 999.
 - Skipping must not touch the parent transaction: S5 relies on V1 (`checkSplits`, `validate.go:164-166`) still seeing a split-less transaction.
+
+## Phase report
+
+Run A (steps 1-2) done; no production code touched, no stubs needed (no new symbols; `go vet ./internal/importer/` clean).
+
+Files changed (tests only):
+- `internal/importer/transactions_test.go:196-209` `Test_import_skips_a_transaction_with_no_account_and_its_split` (S3, NULL account + one entry under it); `:325-337` `Test_import_skips_a_split_with_no_parent_transaction` (S1, NULL parent, amount 0.00). Both flipped in place from the `refuses_*` tests.
+- `internal/importer/dangling_references_test.go:67-78` `Test_import_skips_a_split_whose_parent_transaction_does_not_exist` (S2, parent 999, 12.34).
+- `internal/importer/transfers_test.go` new `Test_import_keeps_a_link_to_a_skipped_split_as_one_sided` before `Test_import_builds_the_store_with_a_one_sided_transfer` (S4: leg link "777", parentless entry QuickenID 777).
+- `internal/importer/validation_test.go` (end of file) `Test_import_fails_validation_when_a_transaction_lost_its_only_split` (S5: asserts `ErrValidationFailed` + `Splits.Mismatched` amount 1234 / total 0; V1 wording lives in cmd, not the importer).
+
+Red now (all five fail at first assertion, refusal instead of success):
+- S1/S2/S4 `require.NoError` -> `a split (source id N) has no transaction`; S3 -> `a transaction (source id 1) has no account`; S5 `require.ErrorIs(ErrValidationFailed)` -> chain is `a split (source id 1) has no transaction`.
+
+Not yet done, next runs must do (do not redo the above):
+- B1 (steps 3-4): `splits.go`/`transactions.go surveyTransactions`/`importer.go`/`reasons.go` collapse; still to flip `coverage_test.go:97-108` (still asserts the refusal, will go red when B1 lands), re-point `offenders_internal_test.go:39-49`, add `Test_import_skips_a_split_with_no_parent_whatever_its_amount`.
+- B2 (step 5): `dangling_references_test.go:32-45` `Test_import_refuses_a_transaction_whose_account_does_not_exist` NOT yet flipped (only the NULL-account form was, per step 1).
+

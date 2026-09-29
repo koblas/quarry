@@ -193,16 +193,20 @@ func Test_import_refuses_a_transaction_with_reconcile_status_quarry_does_not_map
 		importReason(t, err))
 }
 
-func Test_import_refuses_a_transaction_with_no_account(t *testing.T) {
+func Test_import_skips_a_transaction_with_no_account_and_its_split(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
 	txnPK := b.Transaction(v9fixture.TransactionRow{Amount: "12.34", PostedDate: &posted})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "12.34"})
 	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
-	assert.Equal(t, `a transaction (source id `+itoa(txnPK)+`) has no account`, importReason(t, err))
+	require.NoError(t, err)
+	assert.Empty(t, fake.Rows.Transactions)
+	assert.Empty(t, fake.Rows.Splits)
 }
 
 func Test_import_refuses_a_transaction_with_no_amount(t *testing.T) {
@@ -322,15 +326,17 @@ func Test_import_refuses_a_split_with_no_amount(t *testing.T) {
 	assert.Equal(t, `a split of a transaction on 2024-03-02 in "Visa Infinite" has no amount`, importReason(t, err))
 }
 
-func Test_import_refuses_a_split_with_no_transaction(t *testing.T) {
+func Test_import_skips_a_split_with_no_parent_transaction(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	entryPK := b.Entry(v9fixture.EntryRow{Amount: "12.34"})
+	b.Entry(v9fixture.EntryRow{Amount: "0.00"})
 	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
-	assert.Equal(t, `a split (source id `+itoa(entryPK)+`) has no transaction`, importReason(t, err))
+	require.NoError(t, err)
+	assert.Empty(t, fake.Rows.Splits)
 }
 
 // A later-added but earlier-dated transaction sorts first while every
