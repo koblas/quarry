@@ -3,6 +3,8 @@
 Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-06 (08 folded), SCENARIO-25..26 (25 folded into 26). Last updated by SCENARIO-06.
 
 ## Binding decisions
+- **Injected clock (orchestrator ruling, SCENARIO-09):** `cli.Env` carries the clock; the default window's day is read in the injected instant's own zone. A deliberate exception to the clean-architecture skill's "no injected clock / use synctest" rule: tests must pick a zone without mutating `time.Local`, and 2a's trap forbids a synctest bubble around an open DuckDB `sql.DB`. Reviewers: accepted, not a finding.
+- **Net-zero currency (orchestrator ruling):** a currency whose rows all net to 0.00 still prints `Total <cur> 0.00` (edge row: zero rows omitted, Total unaffected).
 - Store columns (all appended LAST in their table; the build Appender is positional): `accounts.in_reports BOOLEAN NOT NULL` (`store.Account.NotInReports`, writer inverts, zero value = in reports), `transactions.excluded_from_reports BOOLEAN NOT NULL` (`store.Transaction.ExcludedFromReports`), `transactions.posted_date DATE` nullable (`store.Transaction.PostedDate *time.Time`, set whenever Quicken has a posted date, even equal to `date`). (SCENARIO-01)
 - `transactions.date` = UTC day of `ZENTEREDDATE`, else `ZPOSTEDDATE` (Quicken's register date); importer ORDER BY uses the same COALESCE. Balance validation stays date-free. Refusal subjects and the split-mismatch listing now show register dates (copy unchanged). (SCENARIO-01)
 - Quicken flags read as `COALESCE(col, default) <> 0` (NULL `ZUSEDINREPORTS` -> in reports, NULL `ZEXCLUDEFROMREPORTS` -> not excluded; any non-zero is on). (SCENARIO-01)
