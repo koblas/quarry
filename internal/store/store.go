@@ -330,6 +330,9 @@ const (
 	// SpendByTag groups by tag name; a split with several tags counts under
 	// each of them, and once in the Totals.
 	SpendByTag
+	// SpendByMonth groups by calendar month; the key is the month as
+	// YYYY-MM and is never nil.
+	SpendByMonth
 )
 
 // SpendingParams is everything a spending read varies by: the Window,

@@ -79,3 +79,32 @@ func Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_to
 	assert.Equal(t, "quarry: warning: 1 split carries more than one tag, so the rows add up to more than the total\n",
 		stderr.String())
 }
+
+func Test_run_spend_by_month_fills_empty_months_and_marks_a_cut_short_month_partial(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStore(t, home, spendRows(
+		[]store.Account{
+			{ID: "acct-cad", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
+		},
+		spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 1, 10), cents: -9999},
+		spendSplit{id: "s02", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 1, 20), cents: -5000},
+		spendSplit{id: "s03", account: "acct-cad", category: "cat-fuel", currency: "CAD", day: day(2026, 3, 10), cents: -12000},
+	))
+	var stdout, stderr bytes.Buffer
+	env := defaultEnv(&stdout, &stderr)
+	env.Now = func() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC) }
+
+	exitCode := runWith(context.Background(),
+		[]string{"spend", "--by", "month", "--since", "2026-01-15", "--until", "2026-03"}, env)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.Equal(t, "Spending 2026-01-15 to 2026-03-31 in all accounts\n\n"+
+		"Month    Currency   Spent  Status\n"+
+		"2026-01  CAD        50.00  partial\n"+
+		"2026-02  CAD         0.00\n"+
+		"2026-03  CAD       120.00\n"+
+		"Total    CAD       170.00\n",
+		stdout.String())
+}

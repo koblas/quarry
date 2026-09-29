@@ -18,8 +18,8 @@ Size: OWNS A RUN — 5 Build batches, 1 feature package (report; duckstore, cli 
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_spend_by_test.go` `Test_run_spend_by_month_fills_empty_months_and_marks_a_cut_short_month_partial` — `replaceStore`+`spendRows` fixture: CAD splits 2026-01-10 (before the window), 2026-01-20, 2026-03-10; `env.Now` 2026-09-29; `spend --by month --since 2026-01-15 --until 2026-03`; exact stdout (caption, `Month` header, 2026-01 partial, 2026-02 `0.00`, 2026-03, Total), empty stderr, exit 0
-- [ ] Step 2: `internal/store/store.go:321-333` `SpendByMonth` enum value; `internal/cli/spend_grouping.go:100-104` month entry (`name: "month"`, `header: "Month"`); drop `"month"` from the refused list at `internal/cli/spend_test.go:68`. Expected red: duckstore returns `ErrUnsupportedGrouping`, so the test fails at its exit-code assertion
+- [x] Step 1: `cmd/quarry/run_spend_by_test.go` `Test_run_spend_by_month_fills_empty_months_and_marks_a_cut_short_month_partial` — `replaceStore`+`spendRows` fixture: CAD splits 2026-01-10 (before the window), 2026-01-20, 2026-03-10; `env.Now` 2026-09-29; `spend --by month --since 2026-01-15 --until 2026-03`; exact stdout (caption, `Month` header, 2026-01 partial, 2026-02 `0.00`, 2026-03, Total), empty stderr, exit 0
+- [x] Step 2: `internal/store/store.go:321-333` `SpendByMonth` enum value; `internal/cli/spend_grouping.go:100-104` month entry (`name: "month"`, `header: "Month"`); drop `"month"` from the refused list at `internal/cli/spend_test.go:68`. Expected red: duckstore returns `ErrUnsupportedGrouping`, so the test fails at its exit-code assertion
 
 ### Build
 - [ ] Step 3: `internal/store/duckstore/spending.go:56-65` `spendingQueries[store.SpendByMonth]` — month query over `v_spending.month`, key produced as `YYYY-MM` text in SQL, order `month, currency`, keeps the `HAVING sum <> 0` row omission; new `spending_month_test.go`: `Test_spending_by_month_groups_each_currency_by_calendar_month`, `Test_spending_by_month_sorts_across_a_year_end_by_month_then_currency`, `Test_spending_by_month_omits_a_month_that_nets_to_zero_and_keeps_it_in_the_total`, `Test_spending_by_month_counts_the_windows_first_and_last_day_only`. No new fault test: the month query runs the same `QueryRows` path `spending_test.go:155-186` already fault-tests
@@ -54,3 +54,10 @@ Size: OWNS A RUN — 5 Build batches, 1 feature package (report; duckstore, cli 
 - SQL label and Go series label must match byte for byte, or every month prints `0.00` beside the lost real rows — only the DuckDB-backed acceptance test sees that.
 
 ## Phase report
+
+Run A done (acceptance red), commit follows this report. Test uses `env.Now` 2026-09-29; expected stdout is literal strings, widths verified with printf (`%-7s  %-8s  %6s  %s`; empty Status leaves no trailing spaces).
+- `cmd/quarry/run_spend_by_test.go:83-110` acceptance test `Test_run_spend_by_month_fills_empty_months_and_marks_a_cut_short_month_partial`.
+- `internal/store/store.go` `SpendByMonth` (iota 3); `internal/cli/spend_grouping.go` month entry (`missing` empty: month key never nil); `internal/cli/spend_test.go:68` `"month"` dropped from the refused list.
+- RED now: `require.Equal(0, exitCode)` fails, actual 1, `quarry: spending grouping is not supported: 3` (duckstore `ErrUnsupportedGrouping`). Everything else green: `go test ./internal/cli ./internal/report ./internal/store/...`.
+- KNOWN LINT RED until step 6: `internal/cli/json_spend.go:80` exhaustive switch lacks `store.SpendByMonth` (step 6 adds `spendMonthRowDocument` + case). Do not suppress it.
+- Copy ruling applied to steps 6 (not yet built): header `Status` always present (incl. header-only), empty cell on non-partial and Total rows, no trailing spaces; JSON month row `{"month","currency","spent","partial"}`.
