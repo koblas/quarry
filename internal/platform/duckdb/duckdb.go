@@ -162,9 +162,9 @@ func (d *DB) CheckpointClose(ctx context.Context) error {
 		return fmt.Errorf("checkpoint %s: %w", d.path, err)
 	}
 	if err := d.conn.Close(); err != nil {
-		// unreachable: database/sql.DB.Close is idempotent at the database/sql layer
-		// (a second call returns nil without reaching the driver), and the one pooled
-		// connection CHECKPOINT just used successfully cannot already be closed.
+		// unreachable: database/sql.DB.Close returns only the driver's own Close error
+		// for the one pooled connection, which CHECKPOINT just used successfully, and
+		// the duckdb driver's Close of a live connection does not fail.
 		return fmt.Errorf("checkpoint %s: %w", d.path, err)
 	}
 	if err := checkNoWAL(d.path); err != nil {

@@ -81,7 +81,7 @@ func Test_import_counts_no_investment_transactions_when_an_imported_one_shares_t
 	assert.Equal(t, store.NotImported{}, result.NotImported)
 }
 
-// The balance check fails, so this is the unbuilt result a V1 block renders.
+// The balance check fails, so this is the unbuilt result a failed-validation block renders.
 func Test_import_reports_investment_transactions_not_imported_when_a_check_fails(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	chequingPK := chequingWithOneReconciledTxn(b, "100.00")

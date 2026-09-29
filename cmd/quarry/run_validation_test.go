@@ -109,14 +109,14 @@ func maxLen(ss ...string) int {
 	return n
 }
 
-// v1MismatchRow renders one "!" row the same way the V1 block does.
-func v1MismatchRow(labelWidth, quarryWidth, quickenWidth, diffWidth int, label, date, quarry, quicken, diff string) string {
+// mismatchRow renders one "!" row the same way the failed-validation block does.
+func mismatchRow(labelWidth, quarryWidth, quickenWidth, diffWidth int, label, date, quarry, quicken, diff string) string {
 	return fmt.Sprintf("  ! %-*s%s  quarry %*s  Quicken %*s  difference %*s",
 		labelWidth, label, date, quarryWidth, quarry, quickenWidth, quicken, diffWidth, diff)
 }
 
 // A mismatch on a first run (no previous store) keeps the snapshot and
-// leaves no store, with the full V1 block on stdout.
+// leaves no store, with the full failed-validation block on stdout.
 func Test_run_refuses_a_balance_mismatch_and_leaves_no_store(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -150,7 +150,7 @@ func Test_run_refuses_a_balance_mismatch_and_leaves_no_store(t *testing.T) {
 	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
 
 	label := "Chequing (CAD)"
-	row := v1MismatchRow(len(label)+2, len("100.00"), len("100.01"), len("-0.01"), label, "2026-03-01", "100.00", "100.01", "-0.01")
+	row := mismatchRow(len(label)+2, len("100.00"), len("100.01"), len("-0.01"), label, "2026-03-01", "100.00", "100.01", "-0.01")
 	wantStdout := fmt.Sprintf(
 		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 2 accounts\n%-10s%s\n%-10s%s\n"+
 			"%-10s%s\n%-10s%s\n%-10s%s\n%s\n%-10s%s\n%-10s%s\n",
@@ -181,8 +181,8 @@ func Test_run_refuses_a_balance_mismatch_and_leaves_no_store(t *testing.T) {
 }
 
 // Once the build was reached, even though it failed, a stdout write
-// failure points at --from --json (O1b), not the O1 form.
-func Test_run_reports_the_o1b_refusal_when_stdout_fails_during_a_v1_render(t *testing.T) {
+// failure points at --from --json, not at the snapshot's manifest.
+func Test_run_points_at_from_json_when_stdout_fails_rendering_a_failed_validation(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -208,7 +208,7 @@ func Test_run_reports_the_o1b_refusal_when_stdout_fails_during_a_v1_render(t *te
 		stderr.String())
 }
 
-// A failing sync leaves an existing store byte-identical; the V1 block
+// A failing sync leaves an existing store byte-identical; the failed-validation block
 // lists every mismatched balance in account-name then source-id order.
 func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *testing.T) {
 	home := t.TempDir()
@@ -275,11 +275,11 @@ func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *t
 		"Store", "NOT REBUILT ("+abbreviated(t, storePath, home)+" unchanged)",
 		"Rows", "3 transactions, 3 splits, 0 transfers, 0 payees, 0 categories, 0 tags",
 		"Balances", "DIFFER for 3 of 3 accounts",
-		v1MismatchRow(labelWidth, quarryWidth, quickenWidth, diffWidth,
+		mismatchRow(labelWidth, quarryWidth, quickenWidth, diffWidth,
 			"Savings (CAD, inactive)", "2026-01-15", "50.00", "60.00", "-10.00"),
-		v1MismatchRow(labelWidth, quarryWidth, quickenWidth, diffWidth,
+		mismatchRow(labelWidth, quarryWidth, quickenWidth, diffWidth,
 			"US Chequing (USD)", "2026-08-31", "8,310.00", "8,300.00", "10.00"),
-		v1MismatchRow(labelWidth, quarryWidth, quickenWidth, diffWidth,
+		mismatchRow(labelWidth, quarryWidth, quickenWidth, diffWidth,
 			"Visa Infinite (CAD, closed)", "2026-07-15", "-1,204.17", "-1,184.17", "-20.00"),
 		"Splits", "all 3 transactions equal the sum of their splits",
 		"Transfers", "none",
@@ -298,9 +298,9 @@ func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *t
 	assert.Equal(t, sentinel, got)
 }
 
-// A transaction whose splits don't sum to its amount lists in the V1
-// block; no payee falls back to "(no payee)".
-func Test_run_lists_mismatched_splits_in_the_v1_stdout_block(t *testing.T) {
+// A transaction whose splits don't sum to its amount lists in the
+// failed-validation block; no payee falls back to "(no payee)".
+func Test_run_lists_mismatched_splits_in_the_failed_validation_stdout_block(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 

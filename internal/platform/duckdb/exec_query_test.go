@@ -106,7 +106,7 @@ func Test_open_read_only_fails_when_the_context_is_already_cancelled(t *testing.
 }
 
 // Enough rows to span several of DuckDB's internal result chunks; the
-// context is cancelled from inside the callback on the first row, so
+// context is cancelled from inside the callback from the first row on, so
 // rows.Next() (driven by the same ctx) reports done partway through and
 // rows.Err() surfaces the cancellation — a distinct path from the callback
 // itself returning an error.
@@ -125,9 +125,7 @@ func Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration(t *testin
 	err = db.QueryRows(ctx, "SELECT v FROM t ORDER BY v", nil,
 		func(scan func(dest ...any) error) error {
 			calls++
-			if calls == 1 {
-				cancel()
-			}
+			cancel()
 			return nil
 		})
 

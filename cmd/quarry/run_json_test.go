@@ -100,7 +100,7 @@ func Test_run_reports_the_store_result_alongside_the_manifest_as_json(t *testing
 	assert.JSONEq(t, wantStore, string(parsed["store"]))
 }
 
-// Once the build was reached, a V1 failure still writes the --json document
+// Once the build was reached, a failed validation still writes the --json document
 // with "built": false, instead of returning before anything is written.
 func Test_run_prints_the_unbuilt_store_as_json_when_validation_fails(t *testing.T) {
 	home := t.TempDir()
@@ -183,7 +183,7 @@ func Test_run_prints_the_unbuilt_store_as_json_when_validation_fails(t *testing.
 
 // Once the build was reached, a stdout write failure still points at
 // --from --json under --json, the same as it does on the human path.
-func Test_run_reports_the_o1b_refusal_when_stdout_fails_during_a_v1_json_write(t *testing.T) {
+func Test_run_points_at_from_json_when_stdout_fails_writing_a_failed_validation_as_json(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 

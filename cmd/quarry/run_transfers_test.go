@@ -210,6 +210,7 @@ func Test_run_keeps_and_warns_about_one_sided_transfers(t *testing.T) {
 
 	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
 
+	require.Equal(t, 0, exitCode)
 	storePath := storePathUnder(home)
 	assert.Equal(t, syncBlock(t, home, bundle.Dir, 2,
 		[2]string{"Store", abbreviated(t, storePath, home)},
@@ -224,7 +225,6 @@ func Test_run_keeps_and_warns_about_one_sided_transfers(t *testing.T) {
 		stdout.String())
 	assert.Equal(t, "quarry: warning: 3 transfers have no matching transaction in another account; "+
 		"quarry keeps them as one-sided transfers\n", stderr.String())
-	require.Equal(t, 0, exitCode)
 
 	db, err := duckdb.OpenReadOnly(t.Context(), storePath)
 	require.NoError(t, err)
@@ -242,6 +242,7 @@ func Test_run_lists_one_sided_transfers_without_warning_when_validation_fails(t 
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	b.Account(v9fixture.AccountRow{Name: "Savings", Type: "SAVINGS", Currency: "CAD", Active: true})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	mismatchedTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-10.00", PostedDate: &day})
 	b.Entry(v9fixture.EntryRow{Parent: mismatchedTxn, Amount: "-9.00"})
@@ -253,9 +254,21 @@ func Test_run_lists_one_sided_transfers_without_warning_when_validation_fails(t 
 
 	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
 
-	assert.Equal(t, 1, exitCode)
-	assert.True(t, strings.HasSuffix(stdout.String(), "Transfers 0 paired, 1 one-sided\n"+
-		"  ? 2026-03-01  Chequing (CAD)  (no payee)  -5.00  other account: Old Visa (not in this file)\n"), stdout.String())
-	assert.True(t, strings.HasPrefix(stderr.String(), "quarry: validation failed: "), stderr.String())
-	assert.Equal(t, 1, strings.Count(stderr.String(), "\n"))
+	require.Equal(t, 1, exitCode)
+	storePath := storePathUnder(home)
+	assert.Equal(t, syncBlock(t, home, bundle.Dir, 2,
+		[2]string{"Store", "NOT BUILT (no store at " + abbreviated(t, storePath, home) + " yet)"},
+		[2]string{"Rows", "2 transactions, 2 splits, 1 transfer, 0 payees, 0 categories, 0 tags"},
+		[2]string{"Balances", "no accounts to check; 2 never reconciled"},
+		[2]string{"Splits", "DIFFER for 1 of 2 transactions"},
+	)+
+		"  ! 2026-03-01  Chequing (CAD)  (no payee)  amount -10.00  splits -9.00\n"+
+		"Transfers 0 paired, 1 one-sided\n"+
+		"  ? 2026-03-01  Chequing (CAD)  (no payee)  -5.00  other account: Old Visa (not in this file)\n",
+		stdout.String())
+	assert.Equal(t, "quarry: validation failed: 1 transaction does not equal the sum of its splits; "+
+		abbreviated(t, storePath, home)+" was not changed; each difference is listed on stdout; "+
+		"fix the account in Quicken and run quarry sync, or run quarry sync --from "+
+		snapshotID(onlyFileWithSuffix(t, filepath.Join(filepath.Dir(storePath), "snapshots"), ".sqlite"))+" after updating quarry\n",
+		stderr.String())
 }

@@ -82,7 +82,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 			},
 		},
 		{
-			name: "no manifest / bad JSON / not SQLite",
+			name: "a file with no manifest",
 			setup: func(t *testing.T) (string, string) {
 				home := t.TempDir()
 				t.Setenv("HOME", home)

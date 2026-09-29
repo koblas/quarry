@@ -26,7 +26,7 @@ func Test_import_reports_the_first_offender_and_how_many_more(t *testing.T) {
 		importReason(t, err))
 }
 
-// A missing entity (class 7) outranks an account currency fault (class 1)
+// A missing entity outranks an account currency fault
 // even though the account offender was added to the accumulator first.
 func Test_import_reports_the_earliest_class_when_several_fail(t *testing.T) {
 	b := v9fixture.NewBuilder().WithoutEntity("UserTag")

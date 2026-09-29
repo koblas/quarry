@@ -306,7 +306,7 @@ func Test_sync_and_import_keeps_the_store_result_when_validation_fails(t *testin
 	assert.Contains(t, writeErr.Error(), "--from "+snapshotIDFromPath(outcome.Manifest.Snapshot.Path)+" --json")
 }
 
-// A previous store existing or not decides the V1 block's NOT REBUILT vs
+// A previous store existing or not decides the failed-validation block's NOT REBUILT vs
 // NOT BUILT line.
 func Test_sync_and_import_reports_whether_a_previous_store_existed(t *testing.T) {
 	cases := []struct {
@@ -372,7 +372,7 @@ func Test_sync_and_import_refuses_to_import_without_an_importer_or_store_probe(t
 }
 
 // Count form is "X of Y <noun>": the noun agrees with Y, the verb with X.
-func Test_sync_and_import_reports_the_v1_refusal_for_a_failed_check(t *testing.T) {
+func Test_sync_and_import_reports_a_failed_check_in_the_validation_refusal(t *testing.T) {
 	cases := []struct {
 		name       string
 		validation store.Validation

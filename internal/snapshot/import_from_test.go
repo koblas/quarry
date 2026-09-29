@@ -207,7 +207,7 @@ func Test_import_from_imports_a_snapshot_whose_manifest_said_unverified_once_the
 	assert.Empty(t, outcome.Manifest.Schema.MissingTables)
 }
 
-func Test_import_from_reports_a_v1_failure_like_a_plain_sync(t *testing.T) {
+func Test_import_from_reports_a_failed_validation_like_a_plain_sync(t *testing.T) {
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
@@ -482,7 +482,7 @@ func Test_import_from_refuses_a_snapshot_that_fails_integrity_check(t *testing.T
 
 // A pre-cancelled ctx makes inspectContent's own OpenReadOnly fail on its
 // first query, before any content classification: ImportFrom must report
-// I2, never a content refusal built from a cancellation.
+// the interruption, never a content refusal built from a cancellation.
 func Test_import_from_reports_interrupted_when_ctx_is_already_cancelled_before_inspecting_content(t *testing.T) {
 	home := t.TempDir()
 	fake := &fakeImporter{}

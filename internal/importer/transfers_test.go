@@ -216,7 +216,7 @@ func Test_import_builds_the_store_with_a_one_sided_transfer(t *testing.T) {
 	assert.Equal(t, 1, result.Counts.Transfers)
 }
 
-// The balance check fails, so this is the unbuilt result a V1 block renders.
+// The balance check fails, so this is the unbuilt result a failed-validation block renders.
 func Test_import_reports_transfers_when_a_check_fails(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	chequingPK := chequingWithOneReconciledTxn(b, "100.00")
