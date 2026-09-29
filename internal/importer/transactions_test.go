@@ -39,6 +39,42 @@ func Test_import_refuses_a_transaction_with_an_amount_too_large_for_quarry(t *te
 		importReason(t, err))
 }
 
+// The amount is quoted as SQLite renders the stored REAL.
+func Test_import_refuses_an_exponent_form_amount_by_the_exponents_sign(t *testing.T) {
+	cases := []struct {
+		name   string
+		amount string
+		want   string
+	}{
+		{
+			name: "a negative exponent near zero has too many decimals", amount: "5.5511151231257827e-17",
+			want: `a transaction on 2024-03-02 in "Visa Infinite" has an amount of 5.5511151231257827e-17, which has more than 2 decimal places`,
+		},
+		{
+			name: "a small negative exponent has too many decimals", amount: "0.00001",
+			want: `a transaction on 2024-03-02 in "Visa Infinite" has an amount of 1.0e-05, which has more than 2 decimal places`,
+		},
+		{
+			name: "a positive exponent is too large", amount: "1e20",
+			want: `a transaction on 2024-03-02 in "Visa Infinite" has an amount of 1.0e+20, which is too large for quarry's amounts`,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			b := v9fixture.NewBuilder()
+			acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
+			posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+			b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: c.amount, PostedDate: &posted})
+			bundle := b.WriteBundle(t, t.TempDir())
+
+			_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+			assert.Equal(t, c.want, importReason(t, err))
+		})
+	}
+}
+
 func Test_import_refuses_a_transaction_with_reconcile_status_quarry_does_not_map(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})

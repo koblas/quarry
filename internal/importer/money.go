@@ -50,16 +50,23 @@ func parseIntegerMoney(text string) (int64, moneyFault) {
 	return dollars * 100, moneyOK
 }
 
-// parseRealMoney reads a real-stored money column's decimal text, as SQLite
-// renders a REAL: an optional "-", digits, and an optional "." with digits.
+// parseRealMoney reads a real-stored money column's text as SQLite renders a
+// REAL: an optional "-", digits, and an optional "." with digits, or exponent form.
 func parseRealMoney(text string) (int64, moneyFault) {
 	neg := strings.HasPrefix(text, "-")
 	unsigned := strings.TrimPrefix(text, "-")
-	if unsigned == "Inf" || strings.ContainsAny(unsigned, "eE") {
+	if unsigned == "Inf" {
 		return 0, moneyTooLarge
 	}
-	intPart, fracPart, _ := strings.Cut(unsigned, ".")
-	if intPart == "" || !allDigits(intPart) || !allDigits(fracPart) {
+	if i := strings.IndexAny(unsigned, "eE"); i >= 0 {
+		// A negative exponent is a nonzero magnitude below 1e-4: always more than 2 decimals.
+		if strings.HasPrefix(unsigned[i+1:], "-") {
+			return 0, moneyPrecision
+		}
+		return 0, moneyTooLarge
+	}
+	intPart, fracPart, hasDot := strings.Cut(unsigned, ".")
+	if intPart == "" || !allDigits(intPart) || !allDigits(fracPart) || (hasDot && fracPart == "") {
 		return 0, moneyNotANumber
 	}
 	if len(fracPart) > 2 {
