@@ -125,6 +125,27 @@ func (d *DB) QueryInt(ctx context.Context, query string, args ...any) (int, erro
 	return n, nil
 }
 
+// QueryRows runs query and calls row once per result row, passing a scan
+// func bound to that row's columns. It stops and returns row's error as
+// soon as row returns one.
+func (d *DB) QueryRows(ctx context.Context, query string, args []any, row func(scan func(dest ...any) error) error) error {
+	rows, err := d.conn.QueryContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("query rows %q: %w", query, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		if err := row(rows.Scan); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("query rows %q: %w", query, err)
+	}
+	return nil
+}
+
 // IntegrityError reports PRAGMA integrity_check's own diagnostic when the
 // result is not "ok". Result is the check's first reported row's last
 // physical line.

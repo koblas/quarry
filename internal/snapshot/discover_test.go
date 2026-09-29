@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -174,6 +175,20 @@ func Test_DiscoverBundle_refuses_when_multiple_bundles_exist(t *testing.T) {
 	}
 }
 
+func Test_DiscoverBundle_groups_the_bundle_count_by_thousands(t *testing.T) {
+	home := t.TempDir()
+	documents := filepath.Join(home, "Documents")
+	for i := range 1000 {
+		require.NoError(t, os.MkdirAll(filepath.Join(documents, fmt.Sprintf("%04d.quicken", i)), 0o700))
+	}
+
+	_, err := snapshot.DiscoverBundle(home)
+
+	var re snapshot.RefusalError
+	require.ErrorAs(t, err, &re)
+	assert.Equal(t, "found 1,000 .quicken files", strings.SplitN(re.Error(), " (", 2)[0])
+}
+
 func Test_DiscoverBundle_refuses_when_the_only_match_has_no_data_file(t *testing.T) {
 	home := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "Home.quicken"), 0o700))
@@ -204,9 +219,8 @@ func Test_DiscoverBundle_refuses_when_documents_is_unreadable(t *testing.T) {
 	assert.Contains(t, re.Error(), "permission denied")
 }
 
-// Documents keeps R3 for ENOTDIR; only the Quicken location treats it as
-// missing, even though a valid bundle sits in the Quicken location too.
-func Test_DiscoverBundle_refuses_with_R3_when_documents_is_a_regular_file(t *testing.T) {
+// Only the Quicken location treats ENOTDIR as missing, even though a valid bundle sits there.
+func Test_DiscoverBundle_refuses_documents_as_unreadable_when_it_is_a_regular_file(t *testing.T) {
 	home := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(home, "Documents"), []byte("x"), 0o600))
 	v9fixture.OpenBundle(t, filepath.Join(home, "Library", "Application Support", "Quicken", "Documents"))

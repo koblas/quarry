@@ -51,9 +51,12 @@ func OpenBundle(tb testing.TB, dir string) Bundle {
 
 	const checkpointed = "Checking"
 	const walOnly = "WAL Only Savings"
-	requireExec(tb, ctx, holder, "INSERT INTO ZACCOUNT (ZNAME) VALUES (?)", checkpointed)
+	requireExec(tb, ctx, holder,
+		"INSERT INTO ZACCOUNT (ZNAME, ZTYPENAME, ZCURRENCY, ZACTIVE) VALUES (?, 'CHECKING', 'CAD', 1)", checkpointed)
 	requireExec(tb, ctx, holder, "PRAGMA wal_checkpoint(PASSIVE)")
-	requireExec(tb, ctx, holder, "INSERT INTO ZACCOUNT (ZNAME) VALUES (?)", walOnly)
+	requireExec(tb, ctx, holder,
+		"INSERT INTO ZACCOUNT (ZNAME, ZTYPENAME, ZCURRENCY, ZACTIVE) VALUES (?, 'SAVINGS', 'USD', 1)", walOnly)
+	requireEntityPrimaryKeys(tb, ctx, holder)
 
 	return Bundle{
 		Dir:                 bundleDir,
@@ -67,6 +70,23 @@ func requireExec(tb testing.TB, ctx context.Context, db *sql.DB, query string, a
 	tb.Helper()
 	_, err := db.ExecContext(ctx, query, args...)
 	require.NoError(tb, err)
+}
+
+// requireEntityPrimaryKeys writes a Z_PRIMARYKEY row (Z_MAX 0) for each
+// entity kind the importer must resolve: callers seed accounts only.
+func requireEntityPrimaryKeys(tb testing.TB, ctx context.Context, db *sql.DB) {
+	tb.Helper()
+	for _, ent := range []struct {
+		num  int64
+		name string
+	}{
+		{EntCashFlowTransaction, "CashFlowTransaction"},
+		{EntCategoryTag, "CategoryTag"},
+		{EntUserTag, "UserTag"},
+	} {
+		requireExec(tb, ctx, db, "INSERT INTO Z_PRIMARYKEY (Z_ENT, Z_NAME, Z_SUPER, Z_MAX) VALUES (?, ?, 0, 0)",
+			ent.num, ent.name)
+	}
 }
 
 // EmptyAccountsBundle creates a closed, rollback-journal (non-WAL)
@@ -177,7 +197,8 @@ func ExtraSchemaBundle(tb testing.TB, dir string) Bundle {
 	conn, err := sql.Open("sqlite3", dataPath)
 	require.NoError(tb, err)
 	requireExec(tb, ctx, conn, v9.ReferenceDDL)
-	requireExec(tb, ctx, conn, "INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
+	requireExec(tb, ctx, conn, "INSERT INTO ZACCOUNT (ZNAME, ZTYPENAME, ZCURRENCY, ZACTIVE) VALUES ('Checking', 'CHECKING', 'CAD', 1)")
+	requireEntityPrimaryKeys(tb, ctx, conn)
 	requireExec(tb, ctx, conn, fmt.Sprintf("CREATE TABLE %s (Z_PK INTEGER PRIMARY KEY, ZVALUE VARCHAR)", ExtraSchemaAddedTable))
 	requireExec(tb, ctx, conn, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s VARCHAR",
 		ExtraSchemaAddedColumnTable1, ExtraSchemaAddedColumn1))

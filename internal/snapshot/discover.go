@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
+	"github.com/koblas/quarry/internal/platform/humanize"
 )
 
 // DiscoverBundle finds the sole .quicken bundle across home's Documents
@@ -145,8 +146,8 @@ func multipleQuickenBundlesRefusal(home string, candidates []bundleCandidate) er
 	}
 	sort.Strings(paths)
 	return RefusalError{msg: fmt.Sprintf(
-		"found %d .quicken files (%s); choose one with --quicken <path>",
-		len(paths), strings.Join(paths, ", "))}
+		"found %s .quicken files (%s); choose one with --quicken <path>",
+		humanize.Thousands(len(paths)), strings.Join(paths, ", "))}
 }
 
 // documentsUnreadableRefusal reports that ~/Documents could not be read.

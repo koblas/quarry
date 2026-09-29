@@ -11,8 +11,17 @@ import (
 	"syscall"
 
 	"github.com/koblas/quarry/internal/cli"
+	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/snapshot"
+	"github.com/koblas/quarry/internal/store/duckstore"
+)
+
+// These guards document that the wired types satisfy each consumer's port with no adapter.
+var (
+	_ snapshot.Importer   = (*importer.Server)(nil)
+	_ importer.Store      = (*duckstore.Store)(nil)
+	_ snapshot.StoreProbe = (*duckstore.Store)(nil)
 )
 
 // signalContext wraps parent with SIGINT/SIGTERM handling: ctx.Done() closes
@@ -27,25 +36,32 @@ func signalContext(parent context.Context) (context.Context, context.CancelFunc)
 	return ctx, stop
 }
 
-// newServer is cli.Execute's ServerFactory: it resolves the home directory
-// and the embedded reference schema, then builds the Server against them.
-func newServer(ctx context.Context) (*snapshot.Server, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, homeDirectoryRefusal()
-	}
+// newServerFactory returns cli.Execute's ServerFactory: it resolves the
+// home directory and the embedded reference schema, then builds the Server
+// against them, passing storeOpts to the store it builds.
+func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
+	return func(ctx context.Context) (*snapshot.Server, error) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, homeDirectoryRefusal()
+		}
 
-	ref, err := v9.Reference(ctx)
-	if err != nil {
-		return nil, snapshot.FailureOutcome(ctx, err)
-	}
+		ref, err := v9.Reference(ctx)
+		if err != nil {
+			return nil, snapshot.FailureOutcome(ctx, err)
+		}
 
-	srv := snapshot.NewServer(
-		snapshot.WithSnapshotDir(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")),
-		snapshot.WithReference(v9.ReferenceLabel, ref),
-		snapshot.WithHome(home),
-	)
-	return srv, nil
+		storeDir := filepath.Join(home, "Library", "Application Support", "quarry")
+		st := duckstore.New(storeDir, storeOpts...)
+		srv := snapshot.NewServer(
+			snapshot.WithSnapshotDir(filepath.Join(storeDir, "snapshots")),
+			snapshot.WithReference(v9.ReferenceLabel, ref),
+			snapshot.WithHome(home),
+			snapshot.WithImporter(importer.NewServer(importer.WithStore(st))),
+			snapshot.WithStoreProbe(st),
+		)
+		return srv, nil
+	}
 }
 
 // homeDirectoryRefusal is sync's fixed-literal refusal when the home
@@ -57,6 +73,11 @@ func homeDirectoryRefusal() error {
 // run is the process entrypoint's testable body: it delegates to
 // cli.Execute, returning the process exit code (0 success, 1 failure, 2 usage).
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	return runWith(ctx, args, stdout, stderr, newServerFactory())
+}
+
+// runWith is run against an explicit ServerFactory.
+func runWith(ctx context.Context, args []string, stdout, stderr io.Writer, newServer cli.ServerFactory) int {
 	if err := cli.Execute(ctx, args, stdout, stderr, newServer); err != nil {
 		_, _ = fmt.Fprintf(stderr, "quarry: %s\n", err)
 

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -30,6 +31,8 @@ type Server struct {
 
 	source      Source
 	destination Destination
+	importer    Importer
+	storeProbe  StoreProbe
 }
 
 // Option configures a Server built by NewServer.
@@ -71,6 +74,19 @@ func WithHome(home string) Option {
 // WithBusyTimeout overrides DefaultBusyTimeout.
 func WithBusyTimeout(d time.Duration) Option {
 	return func(s *Server) { s.busyTimeout = d }
+}
+
+// WithImporter sets the Importer SyncAndImport builds the store with once a
+// snapshot's schema verifies. Production callers wire the importer package
+// through it; tests use it to inject a fake.
+func WithImporter(imp Importer) Option {
+	return func(s *Server) { s.importer = imp }
+}
+
+// WithStoreProbe sets the StoreProbe that locates the store the wired
+// Importer writes; production callers pass that Importer's own store.
+func WithStoreProbe(probe StoreProbe) Option {
+	return func(s *Server) { s.storeProbe = probe }
 }
 
 // Home returns the home directory Sync abbreviates refusal messages
@@ -146,9 +162,7 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 	// Set before Encode: the committed manifest must carry the paths Sync returns.
 	manifest.Snapshot.Path = snapshotPath
 	manifest.Snapshot.Manifest = manifestPath
-	if hasOnlyExtras(manifest.Schema) {
-		manifest.Warnings = []string{extrasWarningText(bundlePath, manifestPath, manifest.Schema)}
-	}
+	manifest.Warnings = schemaWarnings(bundlePath, manifestPath, manifest.Schema)
 
 	manifestBytes, err := manifest.Encode()
 	if err != nil {
@@ -201,58 +215,98 @@ func (s *Server) commit(ctx context.Context, destination Destination, manifestPa
 // assembles the manifest: integrity check, account count, hash, and schema
 // diff against the configured reference.
 func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string, takenAt time.Time) (Manifest, error) {
-	snap, err := sqlite.OpenReadOnly(ctx, snapshotPath)
+	accounts, actual, err := inspectContent(ctx, snapshotPath)
 	if err != nil {
-		return Manifest{}, fmt.Errorf("open snapshot: %w", err)
-	}
-	defer func() { _ = snap.Close() }()
-
-	if err := snap.IntegrityCheck(ctx); err != nil {
-		return Manifest{}, fmt.Errorf("integrity check: %w", err)
+		return Manifest{}, err
 	}
 
-	exists, err := snap.QueryInt(ctx, "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'ZACCOUNT'")
+	size, sum, err := hashFile(snapshotPath)
 	if err != nil {
-		// Only a ctx cancelled between IntegrityCheck and this query reaches here; Sync's FailureOutcome then classifies it as interrupted, not this wrap.
-		return Manifest{}, fmt.Errorf("check accounts table: %w", err)
+		// unreachable: inspectContent already opened this same path above; a plain read cannot fail where SQLite's own read just succeeded.
+		return Manifest{}, err
 	}
-	if exists == 0 {
-		return Manifest{}, errNoAccountsTable
-	}
-
-	accounts, err := snap.QueryInt(ctx, "SELECT count(*) FROM ZACCOUNT")
-	if err != nil {
-		// Only a ctx cancelled between the existence check and this query reaches here; Sync's FailureOutcome then classifies it as interrupted, not this wrap.
-		return Manifest{}, fmt.Errorf("count accounts: %w", err)
-	}
-	if accounts == 0 {
-		return Manifest{}, errNoAccounts
-	}
-
-	raw, err := os.ReadFile(snapshotPath)
-	if err != nil {
-		// unreachable: sqlite.OpenReadOnly already opened this same path above; a plain read cannot fail where SQLite's own read just succeeded.
-		return Manifest{}, fmt.Errorf("read snapshot: %w", err)
-	}
-	sum := sha256.Sum256(raw)
-
-	actual, err := snap.Schema(ctx)
-	if err != nil {
-		return Manifest{}, fmt.Errorf("read snapshot schema: %w", err)
-	}
-	diff := sqlschema.Compare(scopeSchema(s.reference), scopeSchema(actual))
 
 	return Manifest{
 		Snapshot: SnapshotInfo{
 			Source:   source,
 			TakenAt:  takenAt.Format(time.RFC3339),
-			Bytes:    int64(len(raw)),
-			SHA256:   hex.EncodeToString(sum[:]),
+			Bytes:    size,
+			SHA256:   sum,
 			Accounts: accounts,
 		},
-		Schema:   schemaInfoFromDiff(s.referenceLabel, s.reference, actual, diff),
+		Schema:   s.compareSchema(actual),
 		Warnings: []string{},
 	}, nil
+}
+
+// inspectContent opens the snapshot at path read-only and returns its
+// account count and schema, after its integrity and ZACCOUNT checks pass.
+func inspectContent(ctx context.Context, path string) (accounts int, actual sqlschema.Schema, err error) {
+	snap, err := sqlite.OpenReadOnly(ctx, path)
+	if err != nil {
+		return 0, nil, fmt.Errorf("open snapshot: %w", err)
+	}
+	defer func() { _ = snap.Close() }()
+
+	if err := snap.IntegrityCheck(ctx); err != nil {
+		return 0, nil, fmt.Errorf("integrity check: %w", err)
+	}
+
+	exists, err := snap.QueryInt(ctx, "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'ZACCOUNT'")
+	if err != nil {
+		// unreachable: only a ctx cancelled between IntegrityCheck and this query reaches here, a race no test can pin; the caller's FailureOutcome classifies it as interrupted.
+		return 0, nil, fmt.Errorf("check accounts table: %w", err)
+	}
+	if exists == 0 {
+		return 0, nil, errNoAccountsTable
+	}
+
+	accounts, err = snap.QueryInt(ctx, "SELECT count(*) FROM ZACCOUNT")
+	if err != nil {
+		// unreachable: only a ctx cancelled between the existence check and this query reaches here, a race no test can pin; the caller's FailureOutcome classifies it as interrupted.
+		return 0, nil, fmt.Errorf("count accounts: %w", err)
+	}
+	if accounts == 0 {
+		return 0, nil, errNoAccounts
+	}
+
+	actual, err = snap.Schema(ctx)
+	if err != nil {
+		return 0, nil, fmt.Errorf("read snapshot schema: %w", err)
+	}
+	return accounts, actual, nil
+}
+
+// hashFile streams the file at path through SHA-256, returning its size
+// and hex digest.
+func hashFile(path string) (size int64, sum string, err error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, "", fmt.Errorf("read snapshot: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	h := sha256.New()
+	size, err = io.Copy(h, f)
+	if err != nil {
+		return 0, "", fmt.Errorf("read snapshot: %w", err)
+	}
+	return size, hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// compareSchema diffs actual against the configured reference.
+func (s *Server) compareSchema(actual sqlschema.Schema) SchemaInfo {
+	diff := sqlschema.Compare(scopeSchema(s.reference), scopeSchema(actual))
+	return schemaInfoFromDiff(s.referenceLabel, s.reference, actual, diff)
+}
+
+// schemaWarnings returns a manifest's warnings for info: the extras warning
+// when the schema has only extras, else none.
+func schemaWarnings(bundlePath, manifestPath string, info SchemaInfo) []string {
+	if hasOnlyExtras(info) {
+		return []string{extrasWarningText(bundlePath, manifestPath, info)}
+	}
+	return []string{}
 }
 
 // schemaInfoFromDiff assembles SchemaInfo from a schema comparison.
