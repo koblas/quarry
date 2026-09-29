@@ -1,6 +1,6 @@
 # phase2b-spending — current state
 
-Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-05, 07, 09 (05, 07 folded into 09), SCENARIO-06 (08 folded), SCENARIO-25..26 (25 folded into 26). Last updated by SCENARIO-09.
+Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-05, 07, 09 (05, 07 folded into 09), SCENARIO-06 (08 folded), SCENARIO-16, SCENARIO-25..26 (25 folded into 26). Last updated by SCENARIO-16.
 
 ## Binding decisions
 - **Injected clock (orchestrator ruling, SCENARIO-09):** `cli.Env.Now` (`time.Now` in `defaultEnv`; nil panics, so every spend test sets it); the default window's day is read in the injected instant's own zone. A deliberate exception to the clean-architecture skill's "no injected clock / use synctest" rule: tests must pick a zone without mutating `time.Local`, and 2a's trap forbids a synctest bubble around an open DuckDB `sql.DB`. Reviewers: accepted, not a finding.
@@ -24,11 +24,11 @@ Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-05, 07
 - **Spend window (SCENARIO-09):** `report.DefaultWindow(now)` = Jan 1 of now's year through now's day in now's own zone; the window reaches DuckDB as civil DATE parameters (since/until inclusive), no query reads `current_date`. SCENARIO-13, 17 and 20 bind the same way and take `now` the same way.
 - **One `store.SpendingParams` (Window, By, AccountIDs) for every spend read**: SCENARIO-10, 11, 12, 14 add enum values or fields, never a new signature. Implementers: duckstore, `internal/cli/fakes_test.go`, `internal/report/fakes_test.go`. (SCENARIO-09)
 - **Spend totals come from `v_spending` per currency, independent of `By`** (SCENARIO-11's multi-tag split counts once in Total; no S09 test can tell, so SCENARIO-11 owns that mutation). Sort (NULL first, `lower(category)`, category, currency) and zero-net row omission live in the duckstore query; Totals keep zero-net rows. (SCENARIO-09)
-- **Interim `spend --json` prints the text table** (test pins it); SCENARIO-16 replaces the renderer and the test, and must delete the `// unreachable:` marker on `internal/cli/spend.go` renderResult error branch. (SCENARIO-09)
+- **`spend --json` document (`internal/cli/json_spend.go`)**: `{since, until, by, account_filter, rows, totals, warnings}`; `by` is the constant `spendByCategory`; `rows`/`totals`/`account_filter`/`warnings` are `[]`, never null. Row is `{category (null = uncategorized), currency, spent}` with the grouping key hard-wired to `category`: SCENARIO-10 must make the key name follow `--by` (payee/tag/month), SCENARIO-12 adds `partial`, SCENARIO-14 fills `account_filter` entries `{id, name}`. (SCENARIO-16)
 
 ## Left unbuilt
 - `SpendingParams.AccountIDs` exists but duckstore does not read it — SCENARIO-14. (SCENARIO-09)
-- `--by` and `SpendByPayee`/`Tag`/`Month` — SCENARIO-10, 11, 12; `--since`/`--until` (until then cobra "unknown flag", exit 2) — SCENARIO-13; `--account` and the named-accounts caption — SCENARIO-14; `renderSpendingJSON` — SCENARIO-16; E1/E2 warnings (empty window prints caption + header only) — SCENARIO-17; cash-flow port method and window — SCENARIO-20. No tag column on the views (tags join at query time). (SCENARIO-06, 09)
+- `--by` and `SpendByPayee`/`Tag`/`Month` — SCENARIO-10, 11, 12; `--since`/`--until` (until then cobra "unknown flag", exit 2) — SCENARIO-13; `--account` and the named-accounts caption — SCENARIO-14; E1/E2 warnings (empty window prints caption + header only) — SCENARIO-17; cash-flow port method and window — SCENARIO-20. No tag column on the views (tags join at query time). (SCENARIO-06, 09)
 
 ## Traps
 - `date_trunc('month', <DATE>)` is `TIMESTAMP` on DuckDB v1.5.5: cast to `DATE`. `s.id NOT IN (SELECT to_split_id ...)` with any NULL empties the view: use `NOT EXISTS`. `c.kind <> 'system'` drops uncategorized splits (NULL): use `IS DISTINCT FROM`. Category kind strings live only in `internal/importer`; duckstore uses SQL literals. `minimalRows`' transfers name `split-2`/`split-3`, not in `splits`. (SCENARIO-06)

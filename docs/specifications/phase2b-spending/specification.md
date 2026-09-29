@@ -512,7 +512,7 @@ Scenario: SCENARIO-26 — accounts marks accounts Quicken leaves out of reports
 - [ ] SCENARIO-13: spend counts the whole period it is given
 - [ ] SCENARIO-14: spend counts only the accounts it is given
 - [ ] SCENARIO-15: spend says why a named account shows nothing
-- [ ] SCENARIO-16: spend --json returns spending as a document
+- [x] SCENARIO-16: spend --json returns spending as a document — `cmd/quarry/run_spend_json_test.go` `Test_run_spend_json_returns_spending_as_a_document`
 - [ ] SCENARIO-17: spend says when the period holds nothing
 - [ ] SCENARIO-18: spend rejects a period it cannot use
 - [ ] SCENARIO-19: spend refuses an account it cannot pick

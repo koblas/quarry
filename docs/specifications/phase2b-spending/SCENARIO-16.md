@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-16
-status: open
+status: done
 ---
 
 # SCENARIO-16: spend --json returns spending as a document
@@ -25,7 +25,6 @@ Mutation checks: none (no mandatory test-first item)
 - `partial` on month rows arrives with SCENARIO-12 (row document then needs a `Partial` field); `by` and row key come from `--by` in SCENARIO-10; `account_filter` entries `{"id","name"}` fill in SCENARIO-14.
 
 ## Phase report
-Run L done. Red quoted: `spend --json` printed the text table, not the document (`run_spend_json_test.go:38`). Green: `go test ./internal/cli/ -run pend`, `go test ./cmd/quarry/ -run Test_run_spend`, lint on cli+cmd clean.
-- New: `internal/cli/json_spend.go`, `json_spend_internal_test.go`, `cmd/quarry/run_spend_json_test.go`. Changed: `spend.go` (renderer + marker deleted), `spend_test.go` (interim test replaced by `Test_spend_json_puts_the_report_window_and_rows_in_the_document`).
-- Row key is a fixed `category` field; SCENARIO-10 must make it follow `--by`, SCENARIO-12 adds `partial`, SCENARIO-14 fills `account_filter`.
-- V: full sweep/verify, check uncovered-diff on `spend.go` `return err`, tick SCENARIO-16 in specification.md, STATE.md (drop the interim-json line), `status: done`.
+Runs L and V done. Verify: `go build ./...` ok; `golangci-lint run ./...` 0 issues; covered full suite (`-count=1 -coverpkg=./...`) exit 0; `go test -race ./internal/cli/... ./cmd/quarry/...` ok; `uncovered-diff.py` 0 uncovered added lines since 7e1f486 (`spend.go` `return err` after renderResult is counted covered, same shape as `accounts.go:38`, no marker needed).
+- test-stats --base 7e1f486 --changed: cmd/quarry 107 (+1), internal/cli 67 (+2), TOTAL 174 (+3), tempdir 101 (+1), disk 86 (+1).
+- Ticked SCENARIO-16 in specification.md; `spec-check.py phase2b-spending` OK. STATE.md rewritten (interim-json binding replaced by the document shape; `renderSpendingJSON` out of Left unbuilt).
