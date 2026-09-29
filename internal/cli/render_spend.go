@@ -13,9 +13,8 @@ const uncategorizedLabel = "(uncategorized)"
 // spendingTotalLabel is the Category cell of a currency's total row.
 const spendingTotalLabel = "Total"
 
-// renderSpending renders s as the spend table: a caption naming the window, a
-// blank line, then a header row, one row per group and a Total row per
-// currency, Spent right-aligned.
+// renderSpending renders s as the spend table: a window caption, then a header,
+// one row per group and a Total row per currency.
 func renderSpending(s report.Spending) string {
 	const dateLayout = "2006-01-02"
 	header := []string{"Category", "Currency", "Spent"}

@@ -10,24 +10,22 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// spendingByCategoryQuery reads spending per category and currency in the window, then one total
-// per currency straight from v_spending; a total row is the one whose category grouping bit is set.
+// spendingByCategoryQuery reads per-category and per-currency-total spending from v_spending.
 const spendingByCategoryQuery = `
 SELECT category, currency, CAST(sum(spent) * 100 AS BIGINT), GROUPING(category)
 FROM v_spending
 WHERE date >= CAST(? AS DATE) AND date <= CAST(? AS DATE)
 GROUP BY GROUPING SETS ((category, currency), (currency))
 HAVING GROUPING(category) = 1 OR sum(spent) <> 0
+-- total rows last, uncategorized first, then category ignoring case (a case-only tie by byte order), then currency
 ORDER BY GROUPING(category), category IS NOT NULL, lower(category), category, currency`
 
 // ErrUnsupportedGrouping is what Spending returns for a grouping it cannot read.
 var ErrUnsupportedGrouping = errors.New("spending grouping is not supported")
 
-// Spending reads the spending in params.Window (both days counted) grouped
-// by params.By, dropping a group that nets to zero. Rows sort with
-// uncategorized first, then by category ignoring case; Totals keep every
-// row's spending, one per currency. An unsupported grouping is an error;
-// a store it cannot open or read is a *store.OpenError.
+// Spending reads the spending in params.Window (both days counted) grouped by params.By,
+// dropping a group that nets to zero; Totals keep it, one per currency. An unsupported
+// grouping is an error; a store it cannot open or read is a *store.OpenError.
 func (s *Store) Spending(ctx context.Context, params store.SpendingParams) (store.Spending, error) {
 	if params.By != store.SpendByCategory {
 		return store.Spending{}, fmt.Errorf("%w: %d", ErrUnsupportedGrouping, params.By)

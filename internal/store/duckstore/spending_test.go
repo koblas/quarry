@@ -72,6 +72,43 @@ func Test_spending_sorts_categories_ignoring_case_with_uncategorized_first(t *te
 	}, got.Rows)
 }
 
+func Test_spending_breaks_a_case_only_tie_by_byte_order_then_currency(t *testing.T) {
+	t.Parallel()
+	rows := spendRows(expenseCategory("cat-food-upper", "Food"), expenseCategory("cat-food-l", "food"))
+	addSplit(&rows, splitSpec{id: "upper-cad", category: new("cat-food-upper"), amount: -10})
+	addSplit(&rows, splitSpec{id: "upper-usd", category: new("cat-food-upper"), currency: "USD", amount: -20})
+	addSplit(&rows, splitSpec{id: "lower-cad", category: new("cat-food-l"), amount: -30})
+	st := newStoreWith(t, rows)
+
+	got, err := st.Spending(t.Context(), spendingParams())
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.SpendingRow{
+		{Key: new("Food"), Currency: "CAD", Spent: 10},
+		{Key: new("Food"), Currency: "USD", Spent: 20},
+		{Key: new("food"), Currency: "CAD", Spent: 30},
+	}, got.Rows)
+}
+
+func Test_spending_keeps_a_category_that_nets_negative(t *testing.T) {
+	t.Parallel()
+	rows := spendRows(expenseCategory("cat-refunded", "Refunded"))
+	addSplit(&rows, splitSpec{id: "refund", category: new("cat-refunded"), amount: 2500})
+	addSplit(&rows, splitSpec{id: "bought", category: new(catExpense), amount: -1000})
+	st := newStoreWith(t, rows)
+
+	got, err := st.Spending(t.Context(), spendingParams())
+
+	require.NoError(t, err)
+	assert.Equal(t, store.Spending{
+		Rows: []store.SpendingRow{
+			{Key: new("Groceries"), Currency: "CAD", Spent: 1000},
+			{Key: new("Refunded"), Currency: "CAD", Spent: -2500},
+		},
+		Totals: []store.SpendingTotal{{Currency: "CAD", Spent: -1500}},
+	}, got)
+}
+
 func Test_spending_omits_a_category_that_nets_to_zero_and_keeps_it_in_the_total(t *testing.T) {
 	t.Parallel()
 	rows := spendRows(expenseCategory("cat-refunded", "Refunded"))

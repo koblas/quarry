@@ -47,7 +47,6 @@ the rows can add up to more than the total.`,
 				return &runtimeError{err: err}
 			}
 
-			// --json prints the text table until the JSON document is defined.
 			text := func() string { return renderSpending(spending) }
 			out, err := renderResult(*jsonOut, func() ([]byte, error) { return []byte(text()), nil }, text)
 			if err != nil {
