@@ -526,7 +526,7 @@ Scenario: SCENARIO-26 — accounts marks accounts Quicken leaves out of reports
 - [x] SCENARIO-19: spend refuses an account it cannot pick — delivered by SCENARIO-14 — `cmd/quarry/run_spend_account_test.go` `Test_run_spend_refuses_an_account_it_cannot_pick`
 - [x] SCENARIO-20: cashflow shows income, spending and savings rate by month — `cmd/quarry/run_cashflow_test.go` `Test_run_cashflow_shows_income_spending_and_savings_rate_by_month`
 - [x] SCENARIO-21: cashflow groups by year — delivered by SCENARIO-20 — `cmd/quarry/run_cashflow_test.go` `Test_run_cashflow_by_year_shows_one_row_per_year_and_na_without_income`
-- [ ] SCENARIO-22: cashflow --json returns cash flow as a document
+- [x] SCENARIO-22: cashflow --json returns cash flow as a document — `cmd/quarry/run_cashflow_json_test.go` `Test_run_cashflow_json_returns_cash_flow_as_a_document`
 - [x] SCENARIO-23: cashflow's spending equals spend's total — delivered by SCENARIO-20 — `cmd/quarry/run_cashflow_invariant_test.go` `Test_run_cashflow_total_spent_equals_spend_total_per_currency`
 - [x] SCENARIO-24: cashflow refuses and reports empty periods like spend — delivered by SCENARIO-20 — `cmd/quarry/run_cashflow_refusals_test.go` `Test_run_cashflow_refuses_and_reports_empty_periods_like_spend`
 - [x] SCENARIO-25: accounts marks its all-closed note as a warning — delivered by SCENARIO-26 — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_says_how_to_list_them_when_every_account_is_closed`
