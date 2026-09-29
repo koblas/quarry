@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-12
-status: open
+status: done
 ---
 
 # SCENARIO-12: spend groups by month and fills empty months
@@ -29,10 +29,10 @@ Copy: the Status ruling is applied (header `Status` always present, empty cell w
 - [x] Step 7: new `cmd/quarry/run_spend_refusals_test.go` `Test_run_spend_rejects_a_period_it_cannot_use` — SCENARIO-18 outline rows (`--since 2024-13`, `--until yesterday`, `--since 2025 --until 2024`, `--since 2099`, `--by vendor`, `extra`); HOME = empty temp dir, no store (exit 2, not R1's 1, proves the checks run before `openReport`); `env.Now` set; exact `quarry: `-prefixed stderr per Surface & Copy S1/S2/S3/S4/U8, empty stdout. Expected **green on arrival**: all six refusals predate this scenario (SCENARIO-10, 13, `noArgs`); coverage-only fold
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `SpendByMonth` (key is `YYYY-MM`, never nil), `store.SpendingRow.Key` (month never nil), `report.SpendingRow`, `report.Spending`, the period series
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `SpendByMonth` (key is `YYYY-MM`, never nil), `store.SpendingRow.Key` (month never nil), `report.SpendingRow`, `report.Spending`, the period series
 
 ### Verify
-- [ ] Step 9: full verification + `spec-check.py phase2b-spending` -> tick SCENARIO-12 with its acceptance test and SCENARIO-18 as "delivered by SCENARIO-12" with its test; STATE.md: remove the cmd-level exit-2 open debt, move `SpendByMonth` out of Left unbuilt
+- [x] Step 9: full verification + `spec-check.py phase2b-spending` -> tick SCENARIO-12 with its acceptance test and SCENARIO-18 as "delivered by SCENARIO-12" with its test; STATE.md: remove the cmd-level exit-2 open debt, move `SpendByMonth` out of Left unbuilt
 
 ## Handoff
 
@@ -55,8 +55,7 @@ Copy: the Status ruling is applied (header `Status` always present, empty cell w
 
 ## Phase report
 
-Runs A, B1 and B2 done (steps 1-7 ticked); acceptance test `Test_run_spend_by_month_fills_empty_months_and_marks_a_cut_short_month_partial` green. Run V (steps 8-9) remains.
-- Step 6: `internal/cli/render_spend.go` `renderSpending` adds header `Status` for `store.SpendByMonth` only (empty header cell otherwise); `partial` cell on partial rows, never padded (last column, so no trailing spaces; empty cell prints nothing). `internal/cli/json_spend.go` `spendMonthRowDocument` + `spendRowDocumentFor` case (exhaustive lint closed; `*r.Key` deref relies on the store contract). Tests: two new `Test_renderSpending` cases (partial/non-partial with widest-cell width; header-only month table keeps `Status`), `Test_renderSpendingJSON_writes_month_rows_with_their_partial_flag`.
-- Step 7: `cmd/quarry/run_spend_refusals_test.go` `Test_run_spend_rejects_a_period_it_cannot_use` (6 rows, empty HOME, exact stderr). Green on arrival as planned: all refusals predate this scenario.
-- Lint: `0 issues`. No mutation checks named for B2 in the plan; none run.
-- Run V still owes: step 8 doc comments (`store.SpendingRow.Key` month never nil, `SpendByMonth`, `report.SpendingRow`, `report.Spending`, `monthSeries` - check what is already written), full verify, spec tick (SCENARIO-12 and SCENARIO-18 "delivered by SCENARIO-12"), STATE.md rewrite (remove exit-2 open debt, `SpendByMonth` out of Left unbuilt; add Status ruling and month JSON row to `spend --json` decision).
+All runs done (steps 1-9 ticked); `status: done`. Acceptance `Test_run_spend_by_month_fills_empty_months_and_marks_a_cut_short_month_partial` green; folded SCENARIO-18 test green.
+- Run V: doc comments were already written except `store.SpendingRow.Key` (added: month never nil). Lint `0 issues`; full covered suite exit 0; `uncovered-diff.py` 0 uncovered added lines; `-race` on report, cli, duckstore green; `spec-check.py phase2b-spending` OK.
+- test-stats vs e8467716: cmd/quarry 112 (+2), internal/cli 85 (+1), internal/report 40 (+9), internal/store/duckstore 139 (+4), TOTAL 376 (+16); tempdir 167 (+2); disk 148 (+2).
+- Spec ticked: SCENARIO-12 and SCENARIO-18 (delivered by SCENARIO-12). STATE.md rewritten (exit-2 debt closed, `SpendByMonth` out of Left unbuilt, Status ruling, month JSON row, `report.Spending` reshape, `period.go` seam).
