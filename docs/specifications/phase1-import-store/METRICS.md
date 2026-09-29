@@ -25,3 +25,31 @@
 | 4 | test (re-gate) | 0/0/1/0 | PASS WITH FOLLOW-UPS |
 
 ## Tokens
+Subagent tokens for `phase1-import-store` across 6 project dir(s). Main-thread (orchestrator) tokens not included.
+
+| Agent | Runs | Model(s) | Input | Cache write | Cache read | Output |
+| --- | --- | --- | --- | --- | --- | --- |
+| developer | 14 | claude-opus-5-5, claude-sonnet-5 | 4k | 8,308k | 575,364k | 296k |
+| test-reviewer | 15 | claude-sonnet-5 | 2k | 2,082k | 73,219k | 50k |
+| architect | 12 | claude-opus-5-5, claude-sonnet-5 | 1k | 1,636k | 32,441k | 30k |
+| product-vision | 1 | claude-opus-5-5 | 0k | 1,064k | 1,939k | 10k |
+| correctness-reviewer | 2 | claude-opus-5-5 | 0k | 176k | 2,402k | 2k |
+| arch-reviewer | 1 | claude-sonnet-5 | 0k | 80k | 1,388k | 2k |
+| refactor-advisor | 2 | claude-sonnet-5 | 0k | 150k | 1,155k | 5k |
+| **total** | 47 | | 7k | 13,497k | 687,908k | 394k |
+
+| Scenario | Architect runs | Developer runs | Cache read | Output |
+| --- | --- | --- | --- | --- |
+| SCENARIO-01a | 2 | 2 | 220,872k | 67k |
+| SCENARIO-01b | 1 | 1 | 85,875k | 64k |
+| SCENARIO-01c | 1 | 1 | 14,637k | 11k |
+| SCENARIO-01d | 1 | 1 | 46,229k | 24k |
+| SCENARIO-02 | 1 | 1 | 25,875k | 45k |
+| SCENARIO-03 | 1 | 1 | 10,136k | 4k |
+| SCENARIO-08 | 1 | 1 | 13,456k | 7k |
+| SCENARIO-09 | 1 | 1 | 46,106k | 46k |
+| SCENARIO-14 | 1 | 1 | 9,374k | 3k |
+| SCENARIO-15 | 1 | 1 | 71,584k | 35k |
+| SCENARIO-20 | 1 | 1 | 25,974k | 12k |
+| fix pass | 0 | 1 | 34,085k | 4k |
+| unattributed | 0 | 1 | 3,601k | 3k |

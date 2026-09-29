@@ -77,3 +77,5 @@ Last updated by final-gate fix pass 2 (REVIEW-02).
 - NITs: `duckstore.Replace` repeated fail paths (local `fail` helper); `internal/cli/render.go` three row builders share a shape — unowned.
 - `Test_import_from_refuses_a_relative_path_when_the_working_directory_no_longer_exists` only runs on Linux, and there is no Linux CI, so `from.go:28,83` have never executed — unowned.
 - MINOR (REVIEW-04): `internal/importer/offenders.go:58` firstError doc 3 lines (budget 1–2).
+- MINOR (final product-vision): malformed REAL text (`1.x`, `+1.5`, `.5`, `1.`) refuses with reason 11 by fallback — ruled acceptable because SQLite never renders a REAL that way (text/blob storage reaches reason 11 by type). The branch is white-box tested, so it carries no `// unreachable:` marker; if a comment is added, it should say reason 11 here means quarry's parser and SQLite disagree, not a data claim.
+- Phase 2 copy candidate (final product-vision): V1 stderr tail `fix the account in Quicken and run quarry sync` reads off when only splits fail; consider `fix the listed rows in Quicken and run quarry sync` when findings copy is designed.
