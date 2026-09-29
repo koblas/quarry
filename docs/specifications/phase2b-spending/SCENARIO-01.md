@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01
-status: open
+status: done
 ---
 
 # SCENARIO-01: sync records which transactions Quicken leaves out of reports
@@ -10,7 +10,7 @@ Acceptance test: `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_records_wh
 Acceptance test (SCENARIO-02, folded): `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_records_which_accounts_are_used_in_reports`
 Acceptance test (SCENARIO-03, folded): `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_dates_each_transaction_by_its_register_date`
 Acceptance test (SCENARIO-04, folded): `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_stores_uncategorized_splits_with_no_category`
-Narrow loop: `go test ./internal/importer/ ./internal/store/duckstore/ ./cmd/quarry/ -run 'Sync_records|Sync_dates|Sync_stores|Import|Replace|Report|Register|Uncategorized'`
+Narrow loop: `go test ./internal/importer/ ./internal/store/duckstore/ ./cmd/quarry/ -run 'run_sync_|import|replace'`
 Mutation checks: kind test in the Uncategorized match (`categories.go`) → `Test_import_keeps_an_expense_category_named_uncategorized`; full_path (not name) in the same match → `Test_import_keeps_a_system_subcategory_named_uncategorized`
 Runs: A (1-2) | B1 (3-5) | B2 (6) | V (7-8)
 Size: OWNS A RUN — 4 batches, 1 feature package (importer; duckstore/store/v9fixture plumbing); absorbs FOLD 02, 03, 04
@@ -32,10 +32,10 @@ Existence notes: no curated Z-column list exists outside the query SQL — both 
 - [x] Step 6: `categories.go:39-90` `mapCategories` also returns the PK set of categories with kind `system` AND full_path exactly `Uncategorized` (category row still emitted); `importer.go:72,94` thread it; `splits.go:19-25,80-83` `mapSplits` stores `CategoryID` nil for those PKs. Tests in `categories_test.go`: `Test_import_stores_a_split_on_uncategorized_with_no_category` (also asserts the `Uncategorized` row is in `Categories`), `Test_import_keeps_an_expense_category_named_uncategorized`, `Test_import_keeps_a_system_subcategory_named_uncategorized` (`Parent:Uncategorized`, system kind). Run both mutations on the `Mutation checks:` line individually.
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the three new store fields, `mapCategories`' new return, `mapSplits`, `FormatVersion` (no history), `TransactionRow`/`AccountRow` field docs.
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the three new store fields, `mapCategories`' new return, `mapSplits`, `FormatVersion` (no history), `TransactionRow`/`AccountRow` field docs.
 
 ### Verify
-- [ ] Step 8: full verification (`agent-briefs.md` → *Verification*) + `spec-check.py phase2b-spending`; tick SCENARIO-01 with its acceptance test and SCENARIO-02/03/04 each with `delivered by SCENARIO-01 —` before its own test (test last on the line); create `docs/specifications/phase2b-spending/STATE.md` seeded from 2a STATE.md's *Phase 2b must inherit* + binding decisions 2b reads (read seam, `storeRelations()`, refusal/read-command shape, date traps) + this Handoff.
+- [x] Step 8: full verification (`agent-briefs.md` → *Verification*) + `spec-check.py phase2b-spending`; tick SCENARIO-01 with its acceptance test and SCENARIO-02/03/04 each with `delivered by SCENARIO-01 —` before its own test (test last on the line); create `docs/specifications/phase2b-spending/STATE.md` seeded from 2a STATE.md's *Phase 2b must inherit* + binding decisions 2b reads (read seam, `storeRelations()`, refusal/read-command shape, date traps) + this Handoff.
 
 ## Handoff
 
@@ -59,8 +59,8 @@ Existence notes: no curated Z-column list exists outside the query SQL — both 
 
 ## Phase report
 
-Run B2 (step 6) done. `importer/categories.go`: `mapCategories` returns a third map (PKs of system-kind categories whose full_path is exactly `Uncategorized`, const `uncategorizedPath`; category row still emitted); `importer.go:72,94` thread it; `splits.go` `mapSplits` takes `uncategorized` and stores `CategoryID` nil for those PKs. Tests in `categories_test.go`: `Test_import_stores_a_split_on_uncategorized_with_no_category`, `Test_import_keeps_an_expense_category_named_uncategorized`, `Test_import_keeps_a_system_subcategory_named_uncategorized`, helper `categorizedSplit`.
+Run V done. Lint `0 issues` (fmt made no changes); `go build ./...` ok; covered full suite green (`go test -count=1 -coverpkg=./... ./...`, all 15 packages ok); `uncovered-diff.py --profile ... 35bb19de14dc` -> 0 uncovered added lines; `go test -race ./internal/importer/... ./internal/store/...` ok. Docs on the new store fields, `mapCategories`, `mapSplits`, `FormatVersion`, fixture rows were already in place. Narrow loop line fixed to `-run 'run_sync_|import|replace'`.
 
-Mutations (each restored, diffed identical): drop `kind == "system"` -> `Test_import_keeps_an_expense_category_named_uncategorized` red ("Expected value not to be nil"); `fullPath` -> `r.name.String` -> `Test_import_keeps_a_system_subcategory_named_uncategorized` red (same message).
+test-stats (base 35bb19de14dc): cmd/quarry 99 (+4), internal/importer 129 (+7), internal/store/duckstore 89 (+1), TOTAL 317 (+12) tests; tempdir 269 (+7); disk 250 (+5).
 
-Green now: all four `run_sync_*` acceptance tests, `./internal/importer`. Not run: lint, full suite, coverage gate (run V). Steps 1-6 done; do not redo. Note: the plan's Narrow loop `-run` pattern is case-sensitive and matches no `Test_import_*` names; use lowercase (`import|replace|run_sync`).
+Spec: SCENARIO-01 ticked, 02/03/04 ticked `delivered by SCENARIO-01 —`; `spec-check.py phase2b-spending` and `--run` both OK. `STATE.md` created; `status: done`. Nothing left for this scenario.

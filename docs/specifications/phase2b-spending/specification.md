@@ -497,10 +497,10 @@ Scenario: SCENARIO-26 — accounts marks accounts Quicken leaves out of reports
 | SCENARIO-26 | LIGHT (run 2) — 3 steps (Accounts read carries `in_reports` / Status + JSON `in_reports` / S25 prefix + sql Long NIT), duckstore + cli; absorbs 25 |
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01: sync records which transactions Quicken leaves out of reports
-- [ ] SCENARIO-02: sync records which accounts Quicken uses in reports
-- [ ] SCENARIO-03: sync dates each transaction by its register date
-- [ ] SCENARIO-04: sync stores splits on Quicken's Uncategorized category as uncategorized
+- [x] SCENARIO-01: sync records which transactions Quicken leaves out of reports — `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_records_which_transactions_are_excluded_from_reports`
+- [x] SCENARIO-02: sync records which accounts Quicken uses in reports — delivered by SCENARIO-01 — `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_records_which_accounts_are_used_in_reports`
+- [x] SCENARIO-03: sync dates each transaction by its register date — delivered by SCENARIO-01 — `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_dates_each_transaction_by_its_register_date`
+- [x] SCENARIO-04: sync stores splits on Quicken's Uncategorized category as uncategorized — delivered by SCENARIO-01 — `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_stores_uncategorized_splits_with_no_category`
 - [ ] SCENARIO-05: spend refuses a store built by an older quarry
 - [ ] SCENARIO-06: v_cash_flow keeps only real income and spending
 - [ ] SCENARIO-07: spending leaves out accounts Quicken does not use in reports
