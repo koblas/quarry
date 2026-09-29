@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-20
-status: open
+status: done
 ---
 
 # SCENARIO-20: cashflow shows income, spending and savings rate by month
@@ -35,10 +35,10 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report; duckstore adapter + c
 - [x] Step 6: `internal/cli/cashflow.go` RunE per `spend.go:45-74` (S4 parse before `windowFlags.window` before `openReport`); `internal/cli/render_cashflow.go` (new) caption `Cash flow … in <spendingAccountsCaption>`, columns per Surface & Copy, Status last and unpadded, Total rows empty Status, rate format per copy ruling; interim JSON = text table, the uncovered `return err` after `renderResult` marked `// unreachable:` citing `output.go:26`. Warnings: extract W2 loop + all-named-excluded suppression from `spend.go:84-103` into one helper used by both; cashflow passes `"cashflow"` and subject `income or spending` — `internal/cli/spend_account_test.go`, `spend_empty_test.go`, `cmd/quarry/run_spend_empty_test.go`, `run_spend_account_test.go` stay green. Tests `cashflow_test.go`/`render_cashflow_internal_test.go` (new): S4 (`month`, `year` controls; `week`, `""`), S4 before store open, W2 → E order, all-named-excluded → W2 only, report fault → exit 1, factory fault, failed stdout write, interim `--json`, render widths from cells, `n/a`, Year header. cmd rows: R1 `run_read_refusals_test.go:53`, I1 `:165` (`quarry: cashflow interrupted`), U8 `run_read_usage_test.go:40` (`quarry: cashflow takes no arguments`).
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new exported symbols; `internal/cli/root.go:7-9` doc lists cashflow; `internal/cli/run.go:24-25` Env doc names cashflow as a `Now` reader; clear STATE open debts only if touched.
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new exported symbols; `internal/cli/root.go:7-9` doc lists cashflow; `internal/cli/run.go:24-25` Env doc names cashflow as a `Now` reader; clear STATE open debts only if touched.
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase2b-spending` → tick SCENARIO-20, and 21, 23, 24 as "delivered by SCENARIO-20" with their acceptance tests.
+- [x] Step 8: full verification + `spec-check.py phase2b-spending` → tick SCENARIO-20, and 21, 23, 24 as "delivered by SCENARIO-20" with their acceptance tests.
 
 ## Handoff
 
@@ -62,10 +62,6 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report; duckstore adapter + c
 
 ## Phase report
 
-Run B2 (step 6) done. Narrow loop, the four cmd acceptance tests and the full covered suite are green; `golangci-lint run ./...` is already `0 issues`; `uncovered-diff.py` 0 uncovered, 1 declared unreachable (`internal/cli/cashflow.go:88`, the interim-JSON `return err`, for SCENARIO-22 to delete).
+Run V (steps 7-8) done; scenario complete. Covered full suite green; `go build ./...` ok; `go test -race` on report, cli, duckstore green; `golangci-lint run ./...` 0 issues; `uncovered-diff.py` 0 uncovered, 1 declared unreachable (`internal/cli/cashflow.go:88`, interim-JSON `return err`, SCENARIO-22 deletes it). test-stats vs base: cmd/quarry 120 (+4), internal/cli 115 (+17), internal/report 73 (+19), internal/store/duckstore 178 (+24), total 486 (+64). `spec-check.py phase2b-spending` OK.
 
-Files: `internal/cli/cashflow.go` (RunE per spend; `cashFlowPeriods`/`parseCashFlowPeriod`/`errCashFlowByUnknown` S4; `cashFlowWarnings`), `internal/cli/render_cashflow.go` (new; `renderCashFlow`, `formatRate` = tenths via `math.Round`, sign only when tenths < 0 so no `-0.0%`), `internal/cli/empty_window.go` (shared `leftOutWarnings`, `leftOutOfReportsWarning` moved here, `appendEmptyWindowWarning` = all-named-excluded suppression; `spendWarnings` uses them, order W2 -> W1 -> E), `internal/cli/spend.go`, `root.go`/`run.go` docs. Tests: `internal/cli/cashflow_test.go` (+15), `render_cashflow_internal_test.go` (+2, white-box), `fakes_test.go` (`cashFlow`, `gotCashFlow`), cmd rows added to `run_read_refusals_test.go` (R1, I1) and `run_read_usage_test.go` (U8).
-
-S23 mutations (`Test_run_cashflow_total_spent_equals_spend_total_per_currency`, both arms red each time, files restored byte-identical): (a) `v_spending` `AND category_id IS NOT NULL` -> spend column CAD 130.00/USD 45.00 vs want 155.00/55.00; (b) cashflow spent `AND amount < 0` -> cashflow column CAD 185.00/USD 60.00 vs 155.00/55.00; (c) cashflow spent also `WHEN flow='income' AND category_id IS NULL THEN amount` (subselect widened to carry `category_id`) -> CAD 195.00 vs 155.00.
-
-V must do: full verification (already run once here; rerun per brief), `spec-check.py`, tick 20/21/23/24 with acceptance tests, STATE.md rewrite (add: shared W2/E helpers in `empty_window.go`; interim JSON marker; cashflow copy built), `status: done`. Step 7 lint/doc-comment items were done in this run (root.go/run.go docs included).
+Spec ticked: SCENARIO-20, and 21, 23, 24 as delivered by SCENARIO-20 with their acceptance tests. STATE.md rewritten (cash-flow port and rate ownership, cashflow copy as built, shared W2/E helpers, interim JSON marker, division-by-zero NULL trap; cashflow removed from Left unbuilt except the JSON document, SCENARIO-22). Nothing left for this scenario.
