@@ -26,11 +26,14 @@ scenario rows and the gate-fix kind undercounts. Weighted = input-equivalent tok
 
 | Feature | Units | Subagent weighted | Developer share (weighted) | Median weighted per unit | Developer run median / p90 | Final-gate rounds | Checkpoint + gate BLOCKER+MAJOR per unit | Escaped defects |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| phase2a-read-foundation | 10 | 19.9M | 62% | 1.6M | 0.7M / 1.5M | 2 | 0.8 | not tracked |
 | phase1-import-store | 12 | 88.4M | 79% | 4.0M | 4.0M / 10.1M | 4 | 3.3 | not tracked |
 | phase0-snapshot | 9 | 79.6M | 80% | 4.3M | 3.3M / 9.7M | 6 | 3.0 | not tracked |
 | discovery-quicken-library | 1 | 4.8M | 73% | 3.0M | 1.8M / 2.3M | 2 | 1.0 | not tracked |
 
-Orchestrator (upper bound, weighted): phase1 9.4M, phase0 12.5M, discovery 1.4M.
+Orchestrator (upper bound, weighted): phase2a 5.3M, phase1 9.4M, phase0 12.5M, discovery 1.4M.
+
+phase2a is the primary comparator: it is the most recent and ran on the same model mix (Sonnet 5.5 developers) the next features will use. The older three ran on Sonnet 5 and cost 2–5x more per unit, so a comparison against them would credit these changes with a model upgrade.
 
 Pass thresholds (spec → *Rollout and evaluation*): median weighted per unit at least 15%
 lower; gate rounds not higher; BLOCKER+MAJOR per unit no more than 25% higher; escaped
