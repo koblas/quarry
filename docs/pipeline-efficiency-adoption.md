@@ -20,7 +20,7 @@ points at it.
 
 ## Baseline
 
-From `feature-metrics.py` on the three features built before these changes. Every run is
+From `feature-metrics.py` on the four features built before these changes. Every run is
 heuristically attributed (no run tags existed), so checkpoint fix passes are counted inside
 scenario rows and the gate-fix kind undercounts. Weighted = input-equivalent tokens (IE).
 
