@@ -20,5 +20,10 @@ Scenarios complete: SCENARIO-01..05 (02-05 folded into 01). Last updated by SCEN
 - Narrow-loop `-run` regex `Import|Offender|FirstError` is case-sensitive and misses `Test_import_*`; run `go test ./internal/importer/` (SCENARIO-01).
 
 ## Open debts
+- internal/importer/transfers.go:65-68 — one-way transfer link on a skipped entry vanishes silently; not observed in user data (1347 links, all bidirectional) (REVIEW-01 correctness MINOR).
+- internal/importer/transactions_test.go:329-340 — fold duplicate NULL-parent test into `..._whatever_its_amount` (REVIEW-01).
+- coverage_test.go:95-107, dangling_references_test.go:71-83, transactions_test.go:196-210 — add kept-row control arms (REVIEW-01).
+- internal/importer/transactions.go:70 — stale error text "read transaction ids"; transactions.go:102 split account guard into two steps (REVIEW-01).
+- splits.go:19-24, transactions.go:76-82, accounts.go:48-52 — trim unexported doc comments to budget (REVIEW-01).
 - internal/importer/transactions_test.go:196-210 (S3), :330-340 (S1), dangling_references_test.go (S2) — acceptance tests discard `result`; assert `result.NotImported` is zero and validation not failed, so "nothing printed" (R7) is pinned (checkpoint MINOR).
 - internal/importer/splits.go:45, transactions.go:102 — `!parent.Valid` / `!account.Valid` redundant with map miss (equivalent mutants) (checkpoint NIT).

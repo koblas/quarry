@@ -8,6 +8,7 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
+| 1 | arch, correctness, test, refactor | 0/0/6/1 | 0 / 2, 31s | PASS WITH FOLLOW-UPS |
 
 ## Tokens
 
