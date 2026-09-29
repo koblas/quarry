@@ -103,6 +103,14 @@ the developer before spending a review round at all. Exit 2 is a failing test �
 the developer; never a PASS. Also paste `.claude/scripts/test-stats.py --base <base> --changed` so
 reviewers read the test-count deltas instead of recounting.
 
+**Then run the mutation sample once, and paste its output into `test-reviewer`'s prompt only:**
+`.claude/scripts/mutation-sample.py --base <base>` (no `--profile` needed: the coverage gate
+above already bounced any uncovered line). It
+mutates up to 20 changed lines (guards first) in an isolated `$TMPDIR` copy — never the
+worktree — and lists each `SURVIVED` mutant. Costs no model tokens. Exit 2 (tool failure, or
+unmutated tests already failing) → back to the developer, like the coverage gate. Record its
+summary line in the round's `METRICS.md` row.
+
 Do NOT review code yourself — only orchestrate.
 
 Spawn fails with `Agent type '<name>' not found` → agent was added after session start, roster

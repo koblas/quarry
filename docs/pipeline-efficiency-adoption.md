@@ -15,7 +15,7 @@ points at it.
 | R4 | planned | | | | |
 | R5 | partial | `.claude/scripts/post-edit-check.sh` (PostToolUse hook in `.claude/settings.json`); `.claude/briefs/build.md` → *Edit hook* | | | Deviation: hook runs gofmt + `go build` only. Narrow tests would report expected red in acceptance / test-first phases; `golangci-lint` too slow per edit — both stay at phase boundaries |
 | R6 | planned | | | | |
-| R7 | planned | | | | |
+| R7 | done | `.claude/scripts/mutation-sample.py`; `/run-reviewers` Step 5; test-reviewer → *Review procedure* | no mutation data before this change | | Controls: 6 of 6 mutants killed on the tested `sql` fixes; 3 of 3 survived on an untested throwaway package. One operator flip per line; tests of every package whose test build imports the mutated one. `--profile` path not exercised yet |
 | I1–I5 | held | reviewer gate, severity contract, `/run-reviewers` tool output, sequential developers, acceptance-test-first + final product-vision pass | | | |
 
 ## Baseline

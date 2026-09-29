@@ -59,6 +59,12 @@ constructible input is a MAJOR, not an exemption. That mechanical pass replaces 
 spend the reading budget on what coverage cannot see: assertions that prove nothing, missing
 control arms, corner cases a covered line still gets wrong.
 
+**Then the mutation sample** (`.claude/scripts/mutation-sample.py` output, in your prompt on a
+gate round). Each `SURVIVED [guard]` row is a guard no test pins: MAJOR unless you show the
+mutant is equivalent (same behaviour for every input) — say why in one line. `SURVIVED [line]`
+rows: judge the same way, MINOR if the line carries no decision. Survivors are where to spend
+reading first; do not re-run the script or mutate the worktree.
+
 For each test file under review:
 
 1. **Read the file.**

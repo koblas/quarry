@@ -15,9 +15,9 @@ Orchestrator only — no agent reads this or ledger it describes.
 | SCENARIO-01 | code-first | A, B1, V (+1 PARTIAL) | 0/1/2/0 | yes |
 
 ## Final gate
-| Round | Reviewers run | Findings (B/M/m/n) | Verdict |
-| --- | --- | --- | --- |
-| 1 | arch, correctness, test | 1/2/4/1 | BLOCKED |
+| Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
+| --- | --- | --- | --- | --- |
+| 1 | arch, correctness, test | 1/2/4/1 | 2 / 20, 140s | BLOCKED |
 
 ## Tokens
 <output of `.claude/scripts/feature-metrics.py --strict <feature-slug>`, pasted once at SHIP>
