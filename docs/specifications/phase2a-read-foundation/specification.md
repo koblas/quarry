@@ -240,11 +240,12 @@ quarry says so on stderr. --limit 0 prints every row.
 | # | Condition | stderr | Exit |
 |---|---|---|---|
 | R1 | no store | `quarry: no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it` | 1 |
-| R2 | `store_info` missing, or `format_version` ≠ this binary's | `quarry: the store at ~/Library/Application Support/quarry/quarry.duckdb was built by another version of quarry; run quarry sync --from 20260927T143005Z to rebuild it` (ID = basename without extension of `import_runs.snapshot_path`; if unreadable: `…; run quarry sync to rebuild it`) | 1 |
+| R2 | `store_info` missing, not exactly one row, or `format_version` ≠ this binary's | `quarry: the store at ~/Library/Application Support/quarry/quarry.duckdb was built by another version of quarry; run quarry sync --from 20260927T143005Z to rebuild it` (ID = basename without extension of `import_runs.snapshot_path`; if unreadable: `…; run quarry sync to rebuild it`) | 1 |
+| I1 | status/accounts interrupted (SIGINT/SIGTERM); `ctx.Err()` checked before any R1–R3 classification (sql keeps Q4 byte-identical, incl. a cancel during the open) | `quarry: <cmd> interrupted` | 1 |
 | R3a | store is not a DuckDB file / corrupt (`not a valid DuckDB database file`) | `quarry: cannot read the store at ~/Library/Application Support/quarry/quarry.duckdb: the file is not a DuckDB database; run quarry sync to rebuild it` | 1 |
 | R3b | permission (`fs.ErrPermission` / `Permission denied`) | `quarry: cannot read the store at ~/Library/Application Support/quarry/quarry.duckdb: permission denied; run quarry sync to rebuild it` | 1 |
 | R3c | lock (`Could not set lock on file`) | `quarry: cannot read the store at ~/Library/Application Support/quarry/quarry.duckdb: another program has it open for writing; close that program and run the command again` | 1 |
-| R3 | any other open/read fault | `quarry: cannot read the store at ~/Library/Application Support/quarry/quarry.duckdb: <reason>; run quarry sync to rebuild it` — `<reason>` = first line of `(*duckdb.Error).Msg`, DuckDB type prefix (`^[A-Za-z ]+ Error: `) removed, every occurrence of the store path (as given and after `filepath.EvalSymlinks`) replaced by its `~` form | 1 |
+| R3 | any other open/read fault (G1: with a `*fs.PathError` in the tree, `<reason>` = `PathError.Err.Error()` only; with no `*duckdb.Error`, first line of `err.Error()` with the same strip and `~` replacement; empty after stripping → `unknown error`) | `quarry: cannot read the store at ~/Library/Application Support/quarry/quarry.duckdb: <reason>; run quarry sync to rebuild it` — `<reason>` = first line of `(*duckdb.Error).Msg`, DuckDB type prefix (`^[A-Za-z ]+ Error: `) removed, every occurrence of the store path (as given and after `filepath.EvalSymlinks`) replaced by its `~` form | 1 |
 | Q1 | write statement (DuckDB read-only mode error) | `quarry: quarry sql only reads the store; change the data in Quicken and run quarry sync` | 1 |
 | Q2 | external access or extension refused (DuckDB Permission Error) | `quarry: quarry sql reads only quarry's store; other files, databases and extensions are turned off` | 1 |
 | Q3 | any other query error, incl. `SET` after the lock (`quarry: query failed: Invalid Input Error: Cannot change configuration option "enable_external_access" - the configuration has been locked`) and `SELECT * FROM '/etc/hosts'` (Catalog Error) | `quarry: query failed: <first line of DuckDB's message>` — verbatim, type prefix kept (`Binder Error: …`); a path in it is the user's own query text and is not `~`-abbreviated (P2a-8 covers paths quarry prints) | 1 |
@@ -257,6 +258,8 @@ quarry says so on stderr. --limit 0 prints every row.
 | U7 | `--limit` < 0 | `quarry: --limit must be 0 or more; 0 prints every row` | 2 |
 | U8 | status/accounts given positional arguments | `quarry: <cmd> takes no arguments` | 2 |
 | U9 | cobra-native usage error | `<cobra text>; Run 'quarry <matched command path> --help' for usage.` e.g. `unknown flag: --bogus; Run 'quarry sql --help' for usage.`; root: `unknown command "spend" for "quarry"; Run 'quarry --help' for usage.` sync's U4 stays byte-identical | 2 |
+
+Shared open classifier order (one decision point): (1) `ctx.Err()` → I1/Q4; (2) stat not-exist → R1; (3) open fault then re-stat not-exist → R1 (store vanished between stat and open; never match the driver's "does not exist" text); (4) R3a/R3b/R3c; (5) R2 (catalog, row count, format_version); (6) R3 fallback.
 
 `--json` plus any refusal: stdout empty. A sync running concurrently: readers see the old store, no message.
 
