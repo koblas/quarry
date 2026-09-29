@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/spf13/cobra"
 )
@@ -12,8 +13,9 @@ import (
 const defaultSQLLimit = 500
 
 // newSQLCommand builds sql: one query run verbatim against the store, its
-// result printed as a table of at most --limit rows.
-func newSQLCommand(newReport ReportFactory) *cobra.Command {
+// result printed as a table, or as JSON when *jsonOut is set, of at most
+// --limit rows. When the query returned more, the cut is said on stderr.
+func newSQLCommand(newReport ReportFactory, jsonOut *bool) *cobra.Command {
 	var limit int
 	cmd := &cobra.Command{
 		Use:   "sql <query>",
@@ -44,14 +46,37 @@ quarry says so on stderr. --limit 0 prints every row.`,
 				return &runtimeError{err: queryFailure(err)}
 			}
 
-			if _, err := cmd.OutOrStdout().Write([]byte(renderSQLTable(result.QueryResult))); err != nil {
+			warnings := []string{}
+			if result.Truncated {
+				warnings = append(warnings, truncationNote(limit))
+			}
+
+			var out []byte
+			if *jsonOut {
+				if out, err = renderSQLJSON(result, limit, warnings); err != nil {
+					// unreachable: renderSQLJSON's own error path is unreachable for any QueryResult; see marshalDocument.
+					return &runtimeError{err: err}
+				}
+			} else {
+				out = []byte(renderSQLTable(result.QueryResult))
+			}
+
+			if _, err := cmd.OutOrStdout().Write(out); err != nil {
 				return &runtimeError{err: err}
+			}
+			for _, warning := range warnings {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: warning: "+warning)
 			}
 			return nil
 		},
 	}
 	cmd.Flags().IntVar(&limit, "limit", defaultSQLLimit, "print at most `n` rows (0 prints every row)")
 	return cmd
+}
+
+// truncationNote is the warning that sql cut its rows at limit.
+func truncationNote(limit int) string {
+	return "showing the first " + humanize.Count(limit, "row", "rows") + "; the query returned more; pass --limit 0 to print every row"
 }
 
 // queryFailure is the error sql reports for a failed query: the ruled

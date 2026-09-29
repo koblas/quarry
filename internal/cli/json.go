@@ -134,7 +134,7 @@ func marshalDocument(doc any) ([]byte, error) {
 	enc := json.NewEncoder(&buf)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(doc); err != nil {
-		// unreachable: every document field is a string, bool, int, pointer or slice of those; none can fail JSON encoding.
+		// unreachable: documents hold only strings, bools, ints, pointers, slices and the finite floats jsonSQLCell lets through; nothing can fail JSON encoding.
 		return nil, fmt.Errorf("encode document: %w", err)
 	}
 	return buf.Bytes(), nil

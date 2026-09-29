@@ -498,8 +498,8 @@ Scenario: SCENARIO-21 — a read command reports a failed stdout write
 - [x] SCENARIO-06: accounts says how to see accounts when every one is closed — delivered by SCENARIO-07 — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_says_how_to_list_them_when_every_account_is_closed`
 - [x] SCENARIO-07: accounts --json returns accounts as a document — `cmd/quarry/run_accounts_json_test.go` `Test_run_accounts_json_returns_accounts_as_a_document`
 - [x] SCENARIO-08: sql prints a query result as a table — `cmd/quarry/run_sql_test.go` `Test_run_sql_prints_the_query_result_as_a_table`
-- [ ] SCENARIO-09: sql --json returns typed values
-- [ ] SCENARIO-10: sql caps the rows it prints
+- [x] SCENARIO-09: sql --json returns typed values — `cmd/quarry/run_sql_json_test.go` `Test_run_sql_json_returns_typed_values`
+- [x] SCENARIO-10: sql caps the rows it prints — delivered by SCENARIO-09 — `cmd/quarry/run_sql_json_test.go` `Test_run_sql_json_caps_the_rows_and_says_so`
 - [ ] SCENARIO-11: sql reads its query from stdin
 - [x] SCENARIO-12: sql refuses to change the store — `cmd/quarry/run_sql_test.go` `Test_run_sql_refuses_to_change_the_store`
 - [x] SCENARIO-13: sql cannot reach other files, databases, extensions or settings — delivered by SCENARIO-12 — `cmd/quarry/run_sql_test.go` `Test_run_sql_refuses_to_write_another_file`

@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"testing"
@@ -16,8 +17,13 @@ import (
 
 func executeSQL(t *testing.T, fake fakeReportStore, stdout io.Writer, args ...string) error {
 	t.Helper()
+	return executeSQLWithStderr(t, fake, stdout, io.Discard, args...)
+}
+
+func executeSQLWithStderr(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
+	t.Helper()
 	env := cli.Env{
-		Stdout: stdout, Stderr: io.Discard,
+		Stdout: stdout, Stderr: stderr,
 		NewReport: func(context.Context, string) (*report.Server, error) {
 			return report.NewServer(report.WithStore(fake)), nil
 		},
@@ -158,4 +164,90 @@ func Test_sql_returns_the_stdout_write_fault(t *testing.T) {
 	err := executeSQL(t, fakeReportStore{}, failingWriter{err: errNoSpace}, "SELECT 1")
 
 	require.ErrorIs(t, err, errNoSpace)
+}
+
+// rowsOfOne is n canned single-column rows.
+func rowsOfOne(n int) store.QueryResult {
+	result := store.QueryResult{Columns: []store.QueryColumn{{Name: "n", Type: "INTEGER"}}}
+	for range n {
+		result.Rows = append(result.Rows, []store.QueryValue{{Text: "1", Native: int64(1)}})
+	}
+	return result
+}
+
+func Test_sql_says_when_it_cuts_the_rows(t *testing.T) {
+	const tail = "; the query returned more; pass --limit 0 to print every row"
+	cases := []struct {
+		name     string
+		returned int
+		args     []string
+		wantNote []string
+	}{
+		{name: "more rows than the limit", returned: 3, args: []string{"--limit", "2"}, wantNote: []string{"showing the first 2 rows" + tail}},
+		{name: "exactly the limit", returned: 2, args: []string{"--limit", "2"}, wantNote: []string{}},
+		{name: "no limit", returned: 3, args: []string{"--limit", "0"}, wantNote: []string{}},
+		{name: "a limit of one row", returned: 2, args: []string{"--limit", "1"}, wantNote: []string{"showing the first 1 row" + tail}},
+		{name: "the default limit", returned: 501, args: nil, wantNote: []string{"showing the first 500 rows" + tail}},
+		{name: "a limit in the thousands", returned: 1001, args: []string{"--limit", "1000"}, wantNote: []string{"showing the first 1,000 rows" + tail}},
+	}
+
+	for _, c := range cases {
+		args := append(append([]string{}, c.args...), "SELECT 1")
+		var wantStderr bytes.Buffer
+		for _, note := range c.wantNote {
+			wantStderr.WriteString("quarry: warning: " + note + "\n")
+		}
+		t.Run(c.name+", human", func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := executeSQLWithStderr(t, fakeReportStore{result: rowsOfOne(c.returned)}, &stdout, &stderr, args...)
+
+			require.NoError(t, err)
+			assert.Equal(t, wantStderr.String(), stderr.String())
+		})
+		t.Run(c.name+", json", func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := executeSQLWithStderr(t, fakeReportStore{result: rowsOfOne(c.returned)}, &stdout, &stderr, append([]string{"--json"}, args...)...)
+
+			require.NoError(t, err)
+			var got struct {
+				Warnings []string `json:"warnings"`
+			}
+			require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+			assert.Equal(t, c.wantNote, got.Warnings)
+			assert.Equal(t, wantStderr.String(), stderr.String())
+		})
+	}
+}
+
+func Test_sql_writes_no_warning_when_stdout_fails(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "human", args: []string{"--limit", "2", "SELECT 1"}},
+		{name: "json", args: []string{"--json", "--limit", "2", "SELECT 1"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stderr bytes.Buffer
+
+			err := executeSQLWithStderr(t, fakeReportStore{result: rowsOfOne(3)}, failingWriter{err: errNoSpace}, &stderr, c.args...)
+
+			require.ErrorIs(t, err, errNoSpace)
+			assert.Empty(t, stderr.String())
+		})
+	}
+}
+
+func Test_sql_json_writes_nothing_for_a_query_fault(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeSQLWithStderr(t, fakeReportStore{err: errStoreRead}, &stdout, &stderr, "--json", "SELECT 1")
+
+	require.ErrorIs(t, err, errStoreRead)
+	assert.Empty(t, stdout.String())
+	assert.Empty(t, stderr.String())
 }

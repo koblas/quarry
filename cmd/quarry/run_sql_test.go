@@ -59,6 +59,7 @@ func Test_run_sql_prints_at_most_limit_rows(t *testing.T) {
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "source_id\n        1\n        2\n", stdout.String())
+	assert.Equal(t, "quarry: warning: showing the first 2 rows; the query returned more; pass --limit 0 to print every row\n", stderr.String())
 }
 
 func Test_run_sql_reports_a_bad_query(t *testing.T) {
