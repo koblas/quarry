@@ -173,7 +173,6 @@ Total    CAD       61,410.00  44,002.18  17,407.82        28.3%
   - Large rates grouped in text (`-9,990.0%`); JSON `savings_rate_pct` plain number (`-9990`, `31.9`).
   - Header row `Month|Year  Currency  Income  Spent  Net  Savings rate  Status`; Status last, no trailing spaces, empty on Total rows.
   - Rates per currency, never across currencies.
-  - Interim `cashflow --json` prints the text table until SCENARIO-22, branch-only; SCENARIO-22 lands before `/run-reviewers` and replaces any test pinning the interim behaviour.
   Every period in the window is listed for each currency with any row in the window; empty periods print `0.00` and `n/a`. Status column last. Total rows never partial.
 - `--json`:
 ```
