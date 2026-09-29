@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/stretchr/testify/require"
 )
 
@@ -394,15 +393,14 @@ func exec(tb testing.TB, ctx context.Context, db *sql.DB, query string, args ...
 // v9.ReferenceDDL's schema and every row accumulated on Builder.
 func (b *Builder) WriteBundle(tb testing.TB, dir string) Bundle {
 	tb.Helper()
-	ctx := context.Background()
 
 	bundleDir := filepath.Join(dir, "Home.quicken")
 	require.NoError(tb, os.MkdirAll(bundleDir, 0o700))
 	dataPath := filepath.Join(bundleDir, "data")
+	writeReferenceSchema(tb, dataPath)
 
 	conn, err := sql.Open("sqlite3", dataPath)
 	require.NoError(tb, err)
-	exec(tb, ctx, conn, v9.ReferenceDDL)
 	b.Seed(tb, conn)
 	require.NoError(tb, conn.Close())
 
