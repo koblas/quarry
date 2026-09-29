@@ -20,6 +20,7 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
+| 1 | arch, correctness, test, refactor | 0/4/10/10 | 0 / 20, 202s | BLOCKED |
 
 ## Tokens
 
