@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-14
-status: open
+status: done
 ---
 
 # SCENARIO-14: spend counts only the accounts it is given
@@ -27,10 +27,10 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; duckstore adapter + c
 - [x] Step 6: `internal/cli/render_spend.go:53` caption joins `Spending.Accounts` names with `, ` (else `all accounts`); `internal/cli/json_spend.go:79` `account_filter` from `Spending.Accounts` (`{id,name}`, `[]` when none); `internal/cli/spend.go:240-249` `spendWarnings` prepends W2 per `NotInReports` account via a helper taking the command name (`spend`), W2 lines before W1; `internal/cli/spend.go:220` pass `Accounts` into `SpendRequest`. Tests in new `internal/cli/spend_account_test.go`: the two W2 mutation-check tests, `Test_spend_captions_the_named_accounts`, `Test_spend_json_lists_the_named_accounts_in_account_filter`, `Test_spend_json_puts_w2_in_warnings_unprefixed_before_w1`, `Test_spend_passes_every_account_flag_to_the_report`
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `RefusalError` doc (`refusal.go:103-105`) → cause may be nil; doc comments on `SpendRequest.Accounts`, `Spending.Accounts`, resolver, W2 helper; `store.SpendingParams` doc still true
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `RefusalError` doc (`refusal.go:103-105`) → cause may be nil; doc comments on `SpendRequest.Accounts`, `Spending.Accounts`, resolver, W2 helper; `store.SpendingParams` doc still true
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase2b-spending` → tick SCENARIO-14; tick SCENARIO-15 and SCENARIO-19 with "delivered by SCENARIO-14" and their acceptance tests; remove `AccountIDs`/`--account` from STATE.md Left unbuilt
+- [x] Step 8: full verification + `spec-check.py phase2b-spending` → tick SCENARIO-14; tick SCENARIO-15 and SCENARIO-19 with "delivered by SCENARIO-14" and their acceptance tests; remove `AccountIDs`/`--account` from STATE.md Left unbuilt
 
 ## Handoff
 
@@ -54,8 +54,6 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; duckstore adapter + c
 
 ## Phase report
 
-Run B2 (step 6) done; the three cmd acceptance tests are green on arrival of the wiring (steps 3-5 already built the store and report). Steps 7-8 (Sweep, Verify) are run V's; lint was already `0 issues` and the covered full suite green with `uncovered-diff.py` at 0 uncovered added lines.
-- `internal/cli/spend.go`: `--account` values reach `SpendRequest.Accounts`; `spendWarnings` prepends one W2 per `NotInReports` account in `Spending.Accounts` order (argv order, deduped by the resolver) before W1, via `leftOutOfReportsWarning(account, command)` (command name parameter for SCENARIO-20). `internal/cli/render_spend.go`: `spendingAccountsCaption` (names joined `, `, else `all accounts`). `internal/cli/json_spend.go`: `account_filter` from `Spending.Accounts` (`[]` when none).
-- `internal/cli/spend_account_test.go` (new, 7 tests, black-box via `executeSpend`).
-- Mutations (each reddened, restored byte-identical): W2 loop reversed -> `Test_spend_warns_once_per_named_account_left_out_of_reports_in_the_order_given`; resolver dedupe removed -> same test; id match moved after name match -> `Test_spend_resolves_an_id_before_a_name_equal_to_it`; warnings emitted on the error path (with report returning the partial accounts) -> `Test_spend_refuses_an_unknown_account_without_warning_about_an_excluded_one`.
-- For V: sweep doc comments (`SpendRequest.Accounts`, `Spending.Accounts`, resolver, `leftOutOfReportsWarning` already documented), tick SCENARIO-14/15/19 in specification.md, rewrite STATE.md (remove `AccountIDs`/`--account` from Left unbuilt; W2 helper takes the command name, SCENARIO-17 appends E lines after W1).
+Run V (steps 7-8) done; scenario complete. Sweep was already clean: `go build ./...` ok, `golangci-lint run ./...` `0 issues`, doc comments on `SpendRequest.Accounts`, `Spending.Accounts`, `resolveAccounts`, `pickAccount`, `leftOutOfReportsWarning` present, `RefusalError` doc already allows a nil cause. Working tree clean before V, so no mutation left in `internal/report` or `internal/cli`.
+- Verify: covered full suite green; `uncovered-diff.py --profile ... 2348fce` -> 0 uncovered added lines in 0 runs; `go test -race` on report, cli, duckstore green. `test-stats.py --base 2348fce --changed`: cmd/quarry 115 (+3), internal/cli 92 (+7), internal/report 52 (+12), internal/store/duckstore 146 (+7), TOTAL 405 (+29) tests, 170 (+3) tempdir, 151 (+3) disk.
+- `specification.md`: SCENARIO-14 ticked, SCENARIO-15 and 19 ticked "delivered by SCENARIO-14"; `spec-check.py phase2b-spending` OK. `STATE.md` rewritten (resolver, W2 helper, S17 contract, traps; `AccountIDs`/`--account` removed from Left unbuilt).

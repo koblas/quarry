@@ -510,12 +510,12 @@ Scenario: SCENARIO-26 — accounts marks accounts Quicken leaves out of reports
 - [x] SCENARIO-11: spend groups by tag and warns about multi-tagged splits — `cmd/quarry/run_spend_by_test.go` `Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_total_and_warns`
 - [x] SCENARIO-12: spend groups by month and fills empty months — `cmd/quarry/run_spend_by_test.go` `Test_run_spend_by_month_fills_empty_months_and_marks_a_cut_short_month_partial`
 - [x] SCENARIO-13: spend counts the whole period it is given — `cmd/quarry/run_spend_window_test.go` `Test_run_spend_counts_the_whole_period_it_is_given`
-- [ ] SCENARIO-14: spend counts only the accounts it is given
-- [ ] SCENARIO-15: spend says why a named account shows nothing
+- [x] SCENARIO-14: spend counts only the accounts it is given — `cmd/quarry/run_spend_account_test.go` `Test_run_spend_counts_only_the_accounts_it_is_given`
+- [x] SCENARIO-15: spend says why a named account shows nothing — delivered by SCENARIO-14 — `cmd/quarry/run_spend_account_test.go` `Test_run_spend_warns_that_a_named_account_is_left_out_of_reports`
 - [x] SCENARIO-16: spend --json returns spending as a document — `cmd/quarry/run_spend_json_test.go` `Test_run_spend_json_returns_spending_as_a_document`
 - [ ] SCENARIO-17: spend says when the period holds nothing
 - [x] SCENARIO-18: spend rejects a period it cannot use — delivered by SCENARIO-12 — `cmd/quarry/run_spend_refusals_test.go` `Test_run_spend_rejects_a_period_it_cannot_use`
-- [ ] SCENARIO-19: spend refuses an account it cannot pick
+- [x] SCENARIO-19: spend refuses an account it cannot pick — delivered by SCENARIO-14 — `cmd/quarry/run_spend_account_test.go` `Test_run_spend_refuses_an_account_it_cannot_pick`
 - [ ] SCENARIO-20: cashflow shows income, spending and savings rate by month
 - [ ] SCENARIO-21: cashflow groups by year
 - [ ] SCENARIO-22: cashflow --json returns cash flow as a document
