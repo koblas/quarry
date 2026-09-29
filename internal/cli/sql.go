@@ -54,11 +54,31 @@ quarry says so on stderr. --limit 0 prints every row.`,
 	return cmd
 }
 
-// queryFailure is the error sql reports for a failed query: the refusal
-// copy for a value quarry cannot print, otherwise err unchanged.
+// queryFailure is the error sql reports for a failed query: the ruled
+// refusal copy for each store refusal, otherwise err unchanged.
 func queryFailure(err error) error {
 	if unprintable, ok := errors.AsType[*store.UnprintableValueError](err); ok {
 		return fmt.Errorf("%w; cast it in the query, e.g. CAST(%s AS VARCHAR)", unprintable, unprintable.Column)
 	}
+	if queryErr, ok := errors.AsType[*store.QueryError](err); ok {
+		return &refusalError{text: "query failed: " + queryErr.Reason, cause: err}
+	}
+	switch {
+	case errors.Is(err, store.ErrReadOnlyQuery):
+		return &refusalError{text: "quarry sql only reads the store; change the data in Quicken and run quarry sync", cause: err}
+	case errors.Is(err, store.ErrExternalAccess):
+		return &refusalError{text: "quarry sql reads only quarry's store; other files, databases and extensions are turned off", cause: err}
+	case errors.Is(err, store.ErrQueryInterrupted):
+		return &refusalError{text: "query interrupted", cause: err}
+	}
 	return err
 }
+
+// refusalError is a refusal's user copy over the error that caused it.
+type refusalError struct {
+	text  string
+	cause error
+}
+
+func (e *refusalError) Error() string { return e.text }
+func (e *refusalError) Unwrap() error { return e.cause }

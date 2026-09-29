@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"testing"
 
@@ -92,6 +93,45 @@ func Test_sql_returns_the_query_fault(t *testing.T) {
 
 	require.ErrorIs(t, err, errStoreRead)
 	assert.Empty(t, stdout.String())
+}
+
+func Test_sql_reports_each_query_refusal(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "a write",
+			err:  fmt.Errorf("%w: %w", store.ErrReadOnlyQuery, errStoreRead),
+			want: "quarry sql only reads the store; change the data in Quicken and run quarry sync",
+		},
+		{
+			name: "another file, database or extension",
+			err:  fmt.Errorf("%w: %w", store.ErrExternalAccess, errStoreRead),
+			want: "quarry sql reads only quarry's store; other files, databases and extensions are turned off",
+		},
+		{
+			name: "any other query error",
+			err:  &store.QueryError{Reason: "Binder Error: Referenced column \"x\" not found in FROM clause!"},
+			want: "query failed: Binder Error: Referenced column \"x\" not found in FROM clause!",
+		},
+		{
+			name: "an interrupted query",
+			err:  fmt.Errorf("%w: %w", store.ErrQueryInterrupted, context.Canceled),
+			want: "query interrupted",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var gotMaxRows int
+
+			err := executeSQL(t, fakeReportStore{err: c.err, gotMaxRows: &gotMaxRows}, io.Discard, "SELECT 1")
+
+			require.EqualError(t, err, c.want)
+		})
+	}
 }
 
 func Test_sql_says_how_to_print_a_column_it_cannot_print(t *testing.T) {

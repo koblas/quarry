@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-12
-status: open
+status: done
 ---
 
 # SCENARIO-12: sql refuses to change the store (absorbs 13, 14, 20)
@@ -16,24 +16,24 @@ Mutation checks: `access_mode=READ_ONLY` → `Test_run_sql_refuses_to_change_the
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_sql_test.go` `Test_run_sql_refuses_to_change_the_store`. A built store runs `CREATE TABLE`. Expect Q1 on stderr, empty stdout, exit 1, and the store's sha256 unchanged. The test goes red only on the stderr line; the bytes-unchanged half passes on arrival because READ_ONLY already exists. Report it that way.
-- [ ] Step 2: `run_sql_test.go` adds the lockdown reds that exist today, one named test per SCENARIO-13 row:
+- [x] Step 1: `cmd/quarry/run_sql_test.go` `Test_run_sql_refuses_to_change_the_store`. A built store runs `CREATE TABLE`. Expect Q1 on stderr, empty stdout, exit 1, and the store's sha256 unchanged. The test goes red only on the stderr line; the bytes-unchanged half passes on arrival because READ_ONLY already exists. Report it that way.
+- [x] Step 2: `run_sql_test.go` adds the lockdown reds that exist today, one named test per SCENARIO-13 row:
   - `Test_run_sql_refuses_to_write_another_file`: COPY to a tmp path. Expect Q2 and assert the file does not exist.
   - `Test_run_sql_refuses_to_read_another_file`: `read_csv` of a tmp CSV the test wrote. Expect Q2.
   - `Test_run_sql_refuses_to_attach_another_database`: Expect Q2 and assert the target is not created.
   - `Test_run_sql_refuses_to_install_an_extension`: `INSTALL httpfs`. Expect Q2.
   - `Test_run_sql_refuses_to_change_a_setting`: `SET enable_external_access=true`. Expect the exact Q3 line from the spec's Refusals.
-- [ ] Step 3: `internal/platform/duckdb/exec_query_test.go` after :86-99 `Test_open_read_only_locks_down_the_session`. It reads `current_setting` for each of the 5 DSN parameters, one row each. 4 of the 5 rows are red today.
-- [ ] Step 4: `run_sql_test.go:60-71` rewrites `Test_run_sql_reports_a_query_error` as `Test_run_sql_reports_a_bad_query`. It asserts the exact stderr, which is the Binder message's first line only. Also add `Test_run_sql_reports_a_query_interrupted_by_sigint`. Its constraints:
+- [x] Step 3: `internal/platform/duckdb/exec_query_test.go` after :86-99 `Test_open_read_only_locks_down_the_session`. It reads `current_setting` for each of the 5 DSN parameters, one row each. 4 of the 5 rows are red today.
+- [x] Step 4: `run_sql_test.go:60-71` rewrites `Test_run_sql_reports_a_query_error` as `Test_run_sql_reports_a_bad_query`. It asserts the exact stderr, which is the Binder message's first line only. Also add `Test_run_sql_reports_a_query_interrupted_by_sigint`. Its constraints:
   - package main, no `t.Parallel`.
   - `signalContext` is registered first. Then send exactly one `syscall.Kill(os.Getpid(), SIGINT)` after a short delay.
   - The query is `SELECT count(*) FROM range(1000000000000)` (an integer literal).
   - Expect Q4 and exit 1, within a deadline, so a broken interrupt fails instead of hanging.
-- [ ] Step 5: `internal/store/query.go:36-45` gets signature-only stubs: `ErrReadOnlyQuery` (Q1), `ErrExternalAccess` (Q2), `ErrQueryInterrupted` (Q4), `*QueryError{Reason}` (Q3). Also stub `duckdb.IsReadOnlyViolation` and `duckdb.IsAccessDisabled`. Confirm that every test from Steps 1-4 fails at its assertion.
+- [x] Step 5: `internal/store/query.go:36-45` gets signature-only stubs: `ErrReadOnlyQuery` (Q1), `ErrExternalAccess` (Q2), `ErrQueryInterrupted` (Q4), `*QueryError{Reason}` (Q3). Also stub `duckdb.IsReadOnlyViolation` and `duckdb.IsAccessDisabled`. Confirm that every test from Steps 1-4 fails at its assertion.
 
 ### Build
-- [ ] Step 6: `internal/platform/duckdb/duckdb.go:70-87` `OpenReadOnly` builds its DSN from one named constant: `access_mode=READ_ONLY&enable_external_access=false&autoload_known_extensions=false&autoinstall_known_extensions=false&lock_configuration=true`, with `lock_configuration` last. This turns Steps 2-3 green. Update the doc comment to name the lockdown.
-- [ ] Step 7: `duckdb.go:224-231`, beside `isDriverIOError`, adds `IsReadOnlyViolation` and `IsAccessDisabled`:
+- [x] Step 6: `internal/platform/duckdb/duckdb.go:70-87` `OpenReadOnly` builds its DSN from one named constant: `access_mode=READ_ONLY&enable_external_access=false&autoload_known_extensions=false&autoinstall_known_extensions=false&lock_configuration=true`, with `lock_configuration` last. This turns Steps 2-3 green. Update the doc comment to name the lockdown.
+- [x] Step 7: `duckdb.go:224-231`, beside `isDriverIOError`, adds `IsReadOnlyViolation` and `IsAccessDisabled`:
   - `IsReadOnlyViolation` is true for `ErrorTypeInvalidInput` whose Msg contains `read-only mode`.
   - `IsAccessDisabled` is true for `ErrorTypePermission`.
   - `faults_test.go` gets `Test_query_error_predicates_classify_driver_errors`. It uses real driver errors from a locked-down open:
@@ -42,10 +42,10 @@ Mutation checks: `access_mode=READ_ONLY` → `Test_run_sql_refuses_to_change_the
     - `SELECT * FROM "read-only mode"` is a Catalog error and false for Q1.
     - `read_csv` and `LOAD httpfs` are true for Q2.
     - A plain `errors.New` is false for both.
-- [ ] Step 8: `internal/platform/duckdb/table.go:84-86` handles the Q5 case where the driver refuses a type. When `rows.Err()` matches `unsupported data type: <T>: index: <i>` and `i` is a valid column index, return `&UnprintableValueError{Column: Columns[i].Name, Type: <T>}`. Otherwise return the driver error unchanged.
+- [x] Step 8: `internal/platform/duckdb/table.go:84-86` handles the Q5 case where the driver refuses a type. When `rows.Err()` matches `unsupported data type: <T>: index: <i>` and `i` is a valid column index, return `&UnprintableValueError{Column: Columns[i].Name, Type: <T>}`. Otherwise return the driver error unchanged.
   - `table_test.go:66-73` becomes `Test_query_table_refuses_a_type_the_driver_cannot_read`. VARIANT is in column 1 and a distinctly named column is at 0, which catches an off-by-one.
   - Add one internal test for the unmatched and out-of-range cases, which return the error unchanged.
-- [ ] Step 9: `internal/store/duckstore/query.go:12-31` `Query` gets the classifier, in this order:
+- [x] Step 9: `internal/store/duckstore/query.go:12-31` `Query` gets the classifier, in this order:
   1. `ctx.Err() != nil` at either the open or the query stage gives `ErrQueryInterrupted`.
   2. `*duckdb.UnprintableValueError` stays mapped to the store's `*UnprintableValueError` (existing).
   3. Q1, then Q2.
@@ -58,18 +58,18 @@ Mutation checks: `access_mode=READ_ONLY` → `Test_run_sql_refuses_to_change_the
   - Real-store rows for Q1, Q2 and the SET case of Q3.
   - A fake `ReadDB` returning `errors.Join(context.Canceled, &duckdbdriver.Error{Type: ErrorTypeInterrupt, Msg: "INTERRUPT Error: Interrupted!"})` under a cancelled ctx gives Q4. A live ctx with the same error gives Q3 `context canceled`; this is the control arm.
   - A fake open fault under a cancelled ctx gives Q4. `:46-57` keeps the live-ctx open fault as `run query:`.
-- [ ] Step 10: `internal/cli/sql.go:57-64` `queryFailure` builds the ruled Q1 to Q4 copy verbatim from the spec's Refusals. `cmd/quarry` adds the `quarry: ` prefix. The Q5 arm is unchanged. Any other error passes through unchanged.
+- [x] Step 10: `internal/cli/sql.go:57-64` `queryFailure` builds the ruled Q1 to Q4 copy verbatim from the spec's Refusals. `cmd/quarry` adds the `quarry: ` prefix. The Q5 arm is unchanged. Any other error passes through unchanged.
   - `sql_test.go` gets `Test_sql_reports_each_query_refusal`, one row per sentinel plus `*QueryError`.
   - `:87-95` `Test_sql_returns_the_query_fault` still pins the default arm.
 
 ### Sweep
-- [ ] Step 11: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`.
+- [x] Step 11: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`.
   - Add doc comments on the new sentinels, `QueryError`, both predicates and the DSN constant.
   - Update `Query`'s doc (`query.go:12-15`) to list the refusals.
   - Reword the `// unreachable:` reasons at `table.go:54` and `:71`: the only way in is a ctx cancel racing the call, which the classifier reports as Q4. This closes the STATE open debt.
 
 ### Verify
-- [ ] Step 12: full verification plus `spec-check.py phase2a-read-foundation`.
+- [x] Step 12: full verification plus `spec-check.py phase2a-read-foundation`.
   - Tick SCENARIO-12 with its acceptance test.
   - Tick 13, 14 and 20, each ending "delivered by SCENARIO-12 — `<file>` `<test>`".
   - Remove the VARIANT and `table.go:54,71` debts from STATE.

@@ -1,6 +1,10 @@
 package duckdb
 
-import "context"
+import (
+	"context"
+	"regexp"
+	"strconv"
+)
 
 // Table is a query result: its columns and, in order, its rows.
 type Table struct {
@@ -40,7 +44,7 @@ func (e *UnprintableValueError) Error() string {
 // QueryTable runs query verbatim and returns its result, stopping after
 // maxRows rows (every row when maxRows is 0 or less). A query or driver
 // fault is returned as the driver's own error, unwrapped; a value it cannot
-// render is an *UnprintableValueError.
+// render, or a column type the driver refuses, is an *UnprintableValueError.
 func (d *DB) QueryTable(ctx context.Context, query string, maxRows int) (Table, error) {
 	rows, err := d.conn.QueryContext(ctx, query)
 	if err != nil {
@@ -50,7 +54,7 @@ func (d *DB) QueryTable(ctx context.Context, query string, maxRows int) (Table, 
 
 	columnTypes, err := rows.ColumnTypes()
 	if err != nil {
-		// unreachable: database/sql's Rows.ColumnTypes errs only once rs.closed, and QueryContext just returned rows open.
+		// unreachable: Rows.ColumnTypes errs only once rows is closed, which only a ctx cancel racing this call does; callers check ctx first and report an interrupt.
 		return Table{}, err //nolint:wrapcheck // callers classify the driver's own error
 	}
 	table := Table{Columns: make([]Column, len(columnTypes)), Rows: [][]Value{}}
@@ -67,7 +71,7 @@ func (d *DB) QueryTable(ctx context.Context, query string, maxRows int) (Table, 
 	}
 	for (maxRows <= 0 || len(table.Rows) < maxRows) && rows.Next() {
 		if err := rows.Scan(dest...); err != nil {
-			// unreachable: rows is open, dest has one *any per column, and database/sql's convertAssign stores any driver value in an *any.
+			// unreachable: Scan into one *any per column errs only on closed rows, which only a ctx cancel racing this call does; callers check ctx first and report an interrupt.
 			return Table{}, err //nolint:wrapcheck // callers classify the driver's own error
 		}
 		row := make([]Value, len(raw))
@@ -81,7 +85,24 @@ func (d *DB) QueryTable(ctx context.Context, query string, maxRows int) (Table, 
 		table.Rows = append(table.Rows, row)
 	}
 	if err := rows.Err(); err != nil {
-		return Table{}, err //nolint:wrapcheck // callers classify the driver's own error
+		return Table{}, driverRefusal(err, table.Columns)
 	}
 	return table, nil
+}
+
+// unsupportedType matches the driver's refusal of a column type it cannot hand over.
+var unsupportedType = regexp.MustCompile(`unsupported data type: (.+): index: (\d+)$`)
+
+// driverRefusal maps the driver's refusal of a column's type to an
+// *UnprintableValueError naming that column; any other err is returned unchanged.
+func driverRefusal(err error, columns []Column) error {
+	match := unsupportedType.FindStringSubmatch(err.Error())
+	if match == nil {
+		return err
+	}
+	i, convErr := strconv.Atoi(match[2])
+	if convErr != nil || i >= len(columns) {
+		return err
+	}
+	return &UnprintableValueError{Column: columns[i].Name, Type: match[1]}
 }

@@ -132,3 +132,43 @@ func Test_create_on_an_existing_path_reports_ErrExists_not_a_permission_fault(t 
 	require.ErrorIs(t, err, duckdb.ErrExists)
 	assert.False(t, duckdb.IsPermission(err))
 }
+
+func Test_query_error_predicates_classify_driver_errors(t *testing.T) {
+	t.Parallel()
+	writer, path := newOpenDatabase(t)
+	require.NoError(t, writer.Close())
+	db, err := duckdb.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	cases := []struct {
+		name               string
+		query              string
+		wantReadOnly       bool
+		wantAccessDisabled bool
+	}{
+		{name: "a write is a read-only violation", query: "CREATE TABLE t (v INTEGER)", wantReadOnly: true},
+		{name: "a locked setting is not a read-only violation", query: "SET enable_external_access=true"},
+		{name: "another error naming read-only mode is not a violation", query: `SELECT * FROM "read-only mode"`},
+		{name: "reading a file is disabled access", query: "SELECT count(*) FROM read_csv('" + path + ".csv')", wantAccessDisabled: true},
+		{name: "loading an extension is disabled access", query: "LOAD httpfs", wantAccessDisabled: true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := db.QueryTable(t.Context(), c.query, 0)
+
+			require.Error(t, err)
+			assert.Equal(t, c.wantReadOnly, duckdb.IsReadOnlyViolation(err), err.Error())
+			assert.Equal(t, c.wantAccessDisabled, duckdb.IsAccessDisabled(err), err.Error())
+		})
+	}
+}
+
+func Test_query_error_predicates_reject_an_error_from_elsewhere(t *testing.T) {
+	t.Parallel()
+
+	assert.False(t, duckdb.IsReadOnlyViolation(errNotDuckDB))
+	assert.False(t, duckdb.IsAccessDisabled(errNotDuckDB))
+}

@@ -67,10 +67,17 @@ func Create(ctx context.Context, path string) (*DB, error) {
 	return &DB{conn: conn, path: path}, nil
 }
 
-// OpenReadOnly opens an existing DuckDB database file at path for
-// read-only access: no write reaches path through this connection.
+// readOnlyDSN locks a read session down: no write, no other file, database or
+// extension, and no SET that could undo any of it.
+const readOnlyDSN = "?access_mode=READ_ONLY&enable_external_access=false" +
+	"&autoload_known_extensions=false&autoinstall_known_extensions=false&lock_configuration=true"
+
+// OpenReadOnly opens an existing DuckDB database file at path read-only and
+// locked down: no write reaches path, no other file, database or extension is
+// reachable, and the configuration cannot be changed. Every read-only open
+// in the process must use this one configuration.
 func OpenReadOnly(ctx context.Context, path string) (*DB, error) {
-	conn, err := sql.Open("duckdb", path+"?access_mode=READ_ONLY")
+	conn, err := sql.Open("duckdb", path+readOnlyDSN)
 	if err != nil {
 		// The duckdb driver opens the file inside sql.Open itself, so a
 		// missing path or permission fault surfaces here, not at
@@ -219,6 +226,21 @@ func IsDiskFull(err error) bool {
 func IsPermission(err error) bool {
 	return errors.Is(err, os.ErrPermission) ||
 		isDriverIOError(err, syscall.EACCES) || isDriverIOError(err, syscall.EPERM)
+}
+
+// IsReadOnlyViolation reports whether err is the driver's refusal of a
+// statement that would write through a read-only connection.
+func IsReadOnlyViolation(err error) bool {
+	derr, ok := errors.AsType[*duckdbdriver.Error](err)
+	return ok && derr.Type == duckdbdriver.ErrorTypeInvalidInput && strings.Contains(derr.Msg, "read-only mode")
+}
+
+// IsAccessDisabled reports whether err is the driver's refusal of a file,
+// database or extension that OpenReadOnly's configuration turned off. It is
+// a configuration refusal, not an OS permission fault (see IsPermission).
+func IsAccessDisabled(err error) bool {
+	derr, ok := errors.AsType[*duckdbdriver.Error](err)
+	return ok && derr.Type == duckdbdriver.ErrorTypePermission
 }
 
 // isDriverIOError reports whether err is a *duckdbdriver.Error of ErrorTypeIO

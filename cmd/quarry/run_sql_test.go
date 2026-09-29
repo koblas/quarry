@@ -3,8 +3,12 @@ package main
 import (
 	"bytes"
 	"context"
-	"strings"
+	"crypto/sha256"
+	"os"
+	"path/filepath"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -57,17 +61,100 @@ func Test_run_sql_prints_at_most_limit_rows(t *testing.T) {
 	assert.Equal(t, "source_id\n        1\n        2\n", stdout.String())
 }
 
-func Test_run_sql_reports_a_query_error(t *testing.T) {
+func Test_run_sql_reports_a_bad_query(t *testing.T) {
+	exitCode, stdout, stderr := runSQLOnBuiltStore(t, "SELECT missing_column FROM accounts")
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout)
+	assert.Equal(t, "quarry: query failed: Binder Error: Referenced column \"missing_column\" not found in FROM clause!\n", stderr)
+}
+
+func Test_run_sql_refuses_to_change_the_store(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	syncAccountsFixture(t, home)
+	storePath := filepath.Join(storeDirUnder(home), "quarry.duckdb")
+	before := fileSum(t, storePath)
 	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sql", "SELECT missing_column FROM accounts"}, &stdout, &stderr)
+	exitCode := run(context.Background(), []string{"sql", "CREATE TABLE notes (body VARCHAR)"}, &stdout, &stderr)
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
-	assert.True(t, strings.HasPrefix(stderr.String(), "quarry: run query: Binder Error: "), stderr.String())
+	assert.Equal(t, sqlReadsOnlyTheStore, stderr.String())
+	assert.Equal(t, before, fileSum(t, storePath))
+}
+
+func Test_run_sql_refuses_to_write_another_file(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "out.csv")
+
+	exitCode, stdout, stderr := runSQLOnBuiltStore(t, "COPY (SELECT 1) TO '"+target+"'")
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout)
+	assert.Equal(t, sqlReadsOnlyItsStore, stderr)
+	assert.NoFileExists(t, target)
+}
+
+func Test_run_sql_refuses_to_read_another_file(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "in.csv")
+	require.NoError(t, os.WriteFile(source, []byte("n\n1\n"), 0o600))
+
+	exitCode, stdout, stderr := runSQLOnBuiltStore(t, "SELECT n FROM read_csv('"+source+"')")
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout)
+	assert.Equal(t, sqlReadsOnlyItsStore, stderr)
+}
+
+func Test_run_sql_refuses_to_attach_another_database(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "other.duckdb")
+
+	exitCode, stdout, stderr := runSQLOnBuiltStore(t, "ATTACH '"+target+"' AS other")
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout)
+	assert.Equal(t, sqlReadsOnlyItsStore, stderr)
+	assert.NoFileExists(t, target)
+}
+
+func Test_run_sql_refuses_to_install_an_extension(t *testing.T) {
+	exitCode, stdout, stderr := runSQLOnBuiltStore(t, "INSTALL httpfs")
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout)
+	assert.Equal(t, sqlReadsOnlyItsStore, stderr)
+}
+
+func Test_run_sql_refuses_to_change_a_setting(t *testing.T) {
+	exitCode, stdout, stderr := runSQLOnBuiltStore(t, "SET enable_external_access=true")
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout)
+	assert.Equal(t, "quarry: query failed: Invalid Input Error: Cannot change configuration option "+
+		"\"enable_external_access\" - the configuration has been locked\n", stderr)
+}
+
+// Not parallel: it signals the whole test process.
+func Test_run_sql_reports_a_query_interrupted_by_sigint(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncAccountsFixture(t, home)
+	ctx, stop := signalContext(context.Background())
+	defer stop()
+	var stdout, stderr bytes.Buffer
+	exited := make(chan int, 1)
+	go func() {
+		exited <- run(ctx, []string{"sql", "SELECT count(*) FROM range(1000000000000)"}, &stdout, &stderr)
+	}()
+	time.Sleep(500 * time.Millisecond)
+
+	require.NoError(t, syscall.Kill(os.Getpid(), syscall.SIGINT))
+
+	exitCode := exitCodeWithin(t, exited, 30*time.Second)
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: query interrupted\n", stderr.String())
 }
 
 func Test_run_sql_needs_exactly_one_argument(t *testing.T) {
@@ -90,4 +177,39 @@ func Test_run_sql_needs_exactly_one_argument(t *testing.T) {
 			assert.Empty(t, stdout.String())
 		})
 	}
+}
+
+const (
+	sqlReadsOnlyTheStore = "quarry: quarry sql only reads the store; change the data in Quicken and run quarry sync\n"
+	sqlReadsOnlyItsStore = "quarry: quarry sql reads only quarry's store; other files, databases and extensions are turned off\n"
+)
+
+// runSQLOnBuiltStore syncs the accounts fixture under a fresh HOME, then runs sql query against it.
+func runSQLOnBuiltStore(t *testing.T, query string) (int, string, string) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncAccountsFixture(t, home)
+	var stdout, stderr bytes.Buffer
+	exitCode := run(context.Background(), []string{"sql", query}, &stdout, &stderr)
+	return exitCode, stdout.String(), stderr.String()
+}
+
+func fileSum(t *testing.T, path string) [sha256.Size]byte {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return sha256.Sum256(raw)
+}
+
+// exitCodeWithin waits for run's exit code on exited, failing t if none arrives within timeout.
+func exitCodeWithin(t *testing.T, exited <-chan int, timeout time.Duration) int {
+	t.Helper()
+	select {
+	case code := <-exited:
+		return code
+	case <-time.After(timeout):
+		t.Fatalf("run did not return within %s", timeout)
+	}
+	return 0
 }

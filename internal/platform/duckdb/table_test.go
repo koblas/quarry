@@ -63,13 +63,15 @@ func Test_query_table_returns_the_driver_error(t *testing.T) {
 	assert.Equal(t, duckdbdriver.ErrorTypeBinder, derr.Type)
 }
 
-func Test_query_table_returns_the_driver_error_for_a_type_it_cannot_read(t *testing.T) {
+func Test_query_table_refuses_a_type_the_driver_cannot_read(t *testing.T) {
 	t.Parallel()
 	db, _ := newOpenDatabase(t)
 
-	_, err := db.QueryTable(t.Context(), "SELECT 1::VARIANT AS v", 0)
+	_, err := db.QueryTable(t.Context(), "SELECT 'x' AS label, 1::VARIANT AS payload", 0)
 
-	require.ErrorContains(t, err, "unsupported data type: VARIANT")
+	var unprintable *duckdb.UnprintableValueError
+	require.ErrorAs(t, err, &unprintable)
+	assert.Equal(t, duckdb.UnprintableValueError{Column: "payload", Type: "VARIANT"}, *unprintable)
 }
 
 func Test_query_table_refuses_a_column_it_cannot_print(t *testing.T) {

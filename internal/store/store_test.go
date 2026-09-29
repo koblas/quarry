@@ -65,3 +65,9 @@ func Test_unprintable_value_error_names_the_column_and_its_type(t *testing.T) {
 
 	assert.EqualError(t, err, `cannot print column "doc" of type JSON`)
 }
+
+func Test_query_error_reads_as_its_reason(t *testing.T) {
+	err := &store.QueryError{Reason: "Binder Error: Referenced column \"x\" not found in FROM clause!"}
+
+	assert.EqualError(t, err, "Binder Error: Referenced column \"x\" not found in FROM clause!")
+}

@@ -1,6 +1,9 @@
 package store
 
-import "regexp"
+import (
+	"errors"
+	"regexp"
+)
 
 // QueryResult is the result of one query against the store.
 type QueryResult struct {
@@ -42,4 +45,23 @@ type UnprintableValueError struct {
 
 func (e *UnprintableValueError) Error() string {
 	return `cannot print column "` + e.Column + `" of type ` + e.Type
+}
+
+// ErrReadOnlyQuery is a query refused because it would change the store.
+var ErrReadOnlyQuery = errors.New("query would change the store")
+
+// ErrExternalAccess is a query refused because it reaches another file, database or extension.
+var ErrExternalAccess = errors.New("query reaches outside the store")
+
+// ErrQueryInterrupted is a query stopped because its context was cancelled.
+var ErrQueryInterrupted = errors.New("query interrupted")
+
+// QueryError is a query the database rejected; Reason is the first line of
+// the database's own message, verbatim.
+type QueryError struct {
+	Reason string
+}
+
+func (e *QueryError) Error() string {
+	return e.Reason
 }

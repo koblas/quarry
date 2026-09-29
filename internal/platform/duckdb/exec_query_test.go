@@ -97,6 +97,37 @@ func Test_open_read_only_refuses_writes(t *testing.T) {
 	require.Error(t, err)
 }
 
+func Test_open_read_only_locks_down_the_session(t *testing.T) {
+	t.Parallel()
+	writer, path := newOpenDatabase(t)
+	require.NoError(t, writer.Close())
+	db, err := duckdb.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	cases := []struct {
+		setting string
+		want    string
+	}{
+		{setting: "access_mode", want: "read_only"},
+		{setting: "enable_external_access", want: "false"},
+		{setting: "autoload_known_extensions", want: "false"},
+		{setting: "autoinstall_known_extensions", want: "false"},
+		{setting: "lock_configuration", want: "true"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.setting, func(t *testing.T) {
+			t.Parallel()
+
+			table, err := db.QueryTable(t.Context(), "SELECT current_setting('"+c.setting+"')::VARCHAR", 0)
+
+			require.NoError(t, err)
+			require.Len(t, table.Rows, 1)
+			assert.Equal(t, c.want, table.Rows[0][0].Text)
+		})
+	}
+}
+
 // sql.Open's own eager open of the existing file already succeeded, so a
 // context cancelled before OpenReadOnly runs lands specifically on
 // PingContext, not on sql.Open.

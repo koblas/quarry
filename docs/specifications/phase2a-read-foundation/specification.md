@@ -497,13 +497,13 @@ Scenario: SCENARIO-21 — a read command reports a failed stdout write
 - [ ] SCENARIO-09: sql --json returns typed values
 - [ ] SCENARIO-10: sql caps the rows it prints
 - [ ] SCENARIO-11: sql reads its query from stdin
-- [ ] SCENARIO-12: sql refuses to change the store
-- [ ] SCENARIO-13: sql cannot reach other files, databases, extensions or settings
-- [ ] SCENARIO-14: sql reports a bad query
+- [x] SCENARIO-12: sql refuses to change the store — `cmd/quarry/run_sql_test.go` `Test_run_sql_refuses_to_change_the_store`
+- [x] SCENARIO-13: sql cannot reach other files, databases, extensions or settings — delivered by SCENARIO-12 — `cmd/quarry/run_sql_test.go` `Test_run_sql_refuses_to_write_another_file`
+- [x] SCENARIO-14: sql reports a bad query — delivered by SCENARIO-12 — `cmd/quarry/run_sql_test.go` `Test_run_sql_reports_a_bad_query`
 - [ ] SCENARIO-15: read commands refuse when there is no store
 - [ ] SCENARIO-16: read commands refuse a store built by another version
 - [ ] SCENARIO-17: read commands refuse a store they cannot read
 - [ ] SCENARIO-18: read commands reject bad usage
 - [ ] SCENARIO-19: a usage error's hint names the command it came from
-- [ ] SCENARIO-20: interrupting sql stops the query
+- [x] SCENARIO-20: interrupting sql stops the query — delivered by SCENARIO-12 — `cmd/quarry/run_sql_test.go` `Test_run_sql_reports_a_query_interrupted_by_sigint`
 - [ ] SCENARIO-21: a read command reports a failed stdout write

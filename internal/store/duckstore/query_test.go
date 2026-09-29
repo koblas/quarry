@@ -2,6 +2,7 @@ package duckstore_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
@@ -56,15 +57,91 @@ func Test_query_returns_the_open_fault(t *testing.T) {
 	assert.EqualError(t, err, "run query: "+fault.Error())
 }
 
-func Test_query_returns_the_driver_error_for_a_bad_query(t *testing.T) {
+func Test_query_reports_the_first_line_of_a_bad_query(t *testing.T) {
 	t.Parallel()
 	st := newBuiltStore(t)
 
 	_, err := st.Query(t.Context(), "SELECT missing_column FROM accounts", 0)
 
-	var derr *duckdbdriver.Error
-	require.ErrorAs(t, err, &derr)
-	assert.Equal(t, "run query: "+derr.Error(), err.Error())
+	var queryErr *store.QueryError
+	require.ErrorAs(t, err, &queryErr)
+	assert.Equal(t, `Binder Error: Referenced column "missing_column" not found in FROM clause!`, queryErr.Reason)
+}
+
+func Test_query_reports_a_locked_setting_as_a_query_error(t *testing.T) {
+	t.Parallel()
+	st := newBuiltStore(t)
+
+	_, err := st.Query(t.Context(), "SET enable_external_access=true", 0)
+
+	var queryErr *store.QueryError
+	require.ErrorAs(t, err, &queryErr)
+	assert.Equal(t, `Invalid Input Error: Cannot change configuration option "enable_external_access" - the configuration has been locked`,
+		queryErr.Reason)
+}
+
+func Test_query_refuses_what_a_read_may_not_do(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		query string
+		want  error
+	}{
+		{name: "a write", query: "CREATE TABLE notes (body VARCHAR)", want: store.ErrReadOnlyQuery},
+		{name: "another file", query: "SELECT * FROM read_csv('/etc/hosts')", want: store.ErrExternalAccess},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t)
+
+			_, err := st.Query(t.Context(), c.query, 0)
+
+			require.ErrorIs(t, err, c.want)
+		})
+	}
+}
+
+func Test_query_reports_an_interrupted_query(t *testing.T) {
+	t.Parallel()
+	spy := &spyReadDB{queryFault: interruptFault()}
+	st := duckstore.New(t.TempDir(), duckstore.WithOpenReadOnly(func(context.Context, string) (duckstore.ReadDB, error) {
+		return spy, nil
+	}))
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := st.Query(ctx, "SELECT 1", 0)
+
+	require.ErrorIs(t, err, store.ErrQueryInterrupted)
+}
+
+func Test_query_reports_an_interrupt_error_under_a_live_context_as_a_query_error(t *testing.T) {
+	t.Parallel()
+	spy := &spyReadDB{queryFault: interruptFault()}
+	st := duckstore.New(t.TempDir(), duckstore.WithOpenReadOnly(func(context.Context, string) (duckstore.ReadDB, error) {
+		return spy, nil
+	}))
+
+	_, err := st.Query(t.Context(), "SELECT 1", 0)
+
+	var queryErr *store.QueryError
+	require.ErrorAs(t, err, &queryErr)
+	assert.Equal(t, "context canceled", queryErr.Reason)
+}
+
+func Test_query_reports_an_open_interrupted_by_its_context(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir(), duckstore.WithOpenReadOnly(func(context.Context, string) (duckstore.ReadDB, error) {
+		return nil, ioFault("open store read-only")
+	}))
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := st.Query(ctx, "SELECT 1", 0)
+
+	require.ErrorIs(t, err, store.ErrQueryInterrupted)
 }
 
 func Test_query_refuses_a_value_it_cannot_print(t *testing.T) {
@@ -103,4 +180,9 @@ func Test_query_closes_the_connection_on_success_and_on_a_query_fault(t *testing
 			assert.Equal(t, 1, spy.closes)
 		})
 	}
+}
+
+// interruptFault is the error chain the driver returns for a query its context interrupted.
+func interruptFault() error {
+	return errors.Join(context.Canceled, &duckdbdriver.Error{Type: duckdbdriver.ErrorTypeInterrupt, Msg: "INTERRUPT Error: Interrupted!"})
 }
