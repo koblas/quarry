@@ -24,9 +24,8 @@ type accountRowDocument struct {
 	Balance     *string `json:"balance"`
 }
 
-// renderAccountsJSON renders list as accounts's --json document. as_of is
-// the store's calendar day as-is, and accounts is [] rather than null when
-// list holds none.
+// renderAccountsJSON renders list as accounts's --json document; accounts is
+// [] rather than null when list holds none.
 func renderAccountsJSON(list store.AccountList, warnings []string) ([]byte, error) {
 	rows := make([]accountRowDocument, len(list.Accounts))
 	for i, a := range list.Accounts {

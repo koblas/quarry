@@ -40,8 +40,7 @@ func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
 	assert.Empty(t, stderr.String())
 	var unfixed struct {
 		Store struct {
-			QuarryVersion string `json:"quarry_version"`
-			BuiltAt       string `json:"built_at"`
+			BuiltAt string `json:"built_at"`
 		} `json:"store"`
 	}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &unfixed))
@@ -96,7 +95,7 @@ func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
   "warnings": []
 }
 `,
-		storePathUnder(home), duckstore.FormatVersion, unfixed.Store.QuarryVersion, unfixed.Store.BuiltAt,
+		storePathUnder(home), duckstore.FormatVersion, "(devel)", unfixed.Store.BuiltAt,
 		snapshotID(snapshotPath), snapshotPath, manifest.Snapshot.TakenAt, bundle.Dir, manifest.Snapshot.SHA256)
 	assert.Equal(t, want, stdout.String())
 }

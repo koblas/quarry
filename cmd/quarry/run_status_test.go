@@ -131,9 +131,8 @@ status reads only quarry's store; it never looks at Quicken. Run quarry sync
 to bring the store up to date.`)
 }
 
-// writeStatusFixtureBundle writes a bundle with a reconciled CAD account, a
-// never-reconciled USD account, an investment account, one paired cross-currency
-// transfer and one one-sided transfer leg.
+// writeStatusFixtureBundle writes a bundle with reconciled, never-reconciled and
+// investment accounts, one paired cross-currency transfer and one one-sided leg.
 func writeStatusFixtureBundle(t *testing.T, home string) v9fixture.Bundle {
 	t.Helper()
 	b := v9fixture.NewBuilder()

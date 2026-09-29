@@ -6,9 +6,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newAccountsCommand builds the accounts subcommand: list the store's
-// accounts with their balances, closed ones only when --all is given, as
-// JSON when *jsonOut is set.
+// newAccountsCommand builds accounts: balances per account, closed ones only
+// with --all, as JSON when *jsonOut is set.
 func newAccountsCommand(newReport ReportFactory, jsonOut *bool) *cobra.Command {
 	var all bool
 	cmd := &cobra.Command{

@@ -121,6 +121,7 @@ func Test_allClosedNote(t *testing.T) {
 		want   string
 	}{
 		{name: "exactly one account", hidden: 1, want: "the only account is closed; pass --all to list it"},
+		{name: "exactly two accounts", hidden: 2, want: "all 2 accounts are closed; pass --all to list them"},
 		{name: "several accounts", hidden: 3, want: "all 3 accounts are closed; pass --all to list them"},
 		{name: "a count with a thousands separator", hidden: 1204, want: "all 1,204 accounts are closed; pass --all to list them"},
 	}

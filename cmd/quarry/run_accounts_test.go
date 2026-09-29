@@ -145,7 +145,6 @@ func addTransaction(b *v9fixture.Builder, account int64, amount string, posted t
 	b.Entry(v9fixture.EntryRow{Parent: txn, Amount: amount})
 }
 
-// syncClosedAccountsFixture builds the store from n closed accounts.
 func syncClosedAccountsFixture(t *testing.T, home string, n int) {
 	t.Helper()
 	b := v9fixture.NewBuilder()
