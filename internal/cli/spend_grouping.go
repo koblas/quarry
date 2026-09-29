@@ -12,6 +12,7 @@ type spendGrouping struct {
 var spendGroupings = [...]spendGrouping{
 	store.SpendByCategory: {name: "category", header: "Category", missing: "(uncategorized)"},
 	store.SpendByPayee:    {name: "payee", header: "Payee", missing: "(no payee)"},
+	store.SpendByTag:      {name: "tag", header: "Tag", missing: "(no tag)"},
 }
 
 // errSpendByUnknown refuses a --by that names no grouping spend reads.

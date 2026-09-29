@@ -327,6 +327,9 @@ const (
 	SpendByCategory SpendingGroup = iota
 	// SpendByPayee groups by the transaction's payee name.
 	SpendByPayee
+	// SpendByTag groups by tag name; a split with several tags counts under
+	// each of them, and once in the Totals.
+	SpendByTag
 )
 
 // SpendingParams is everything a spending read varies by: the Window,
@@ -357,4 +360,7 @@ type SpendingTotal struct {
 type Spending struct {
 	Rows   []SpendingRow
 	Totals []SpendingTotal
+	// MultiTagSplits counts the splits in the window that carry more than one
+	// tag; it is set only when grouping by tag.
+	MultiTagSplits int
 }

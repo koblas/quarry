@@ -65,7 +65,7 @@ func Test_spend_by_payee_reads_the_payee_grouping_and_heads_the_first_column_Pay
 }
 
 func Test_spend_refuses_a_by_that_names_no_grouping_before_reading_the_store(t *testing.T) {
-	for _, by := range []string{"vendor", "", "Payee", "tag", "month"} {
+	for _, by := range []string{"vendor", "", "Payee", "month"} {
 		t.Run(by, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 

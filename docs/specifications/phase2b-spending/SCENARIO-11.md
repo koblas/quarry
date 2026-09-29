@@ -20,8 +20,8 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report untouched; store types
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_spend_by_test.go` `Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_total_and_warns` — `spend --by tag` over a two-tag split, a one-tag split and an untagged split; asserts stdout table (`Tag` header, `(no tag)` first, tags by `lower(name)`, one Total per currency counting each split once) and stderr exactly the W1 line. `cmd/quarry/run_spend_test.go:20-58` `spendSplit` gains `tags []string`; `spendRows` gains a `Tags` table and `SplitTags` links.
-- [ ] Step 2: `internal/store/store.go:321-359` `SpendByTag` (after `SpendByPayee`), `Spending.MultiTagSplits` (doc: splits in the window carrying more than one tag, set only for `SpendByTag`); `internal/cli/spend_grouping.go:155-158` table entry `{name: "tag", header: "Tag", missing: "(no tag)"}`. Red: totals/rows wrong until the store reads tags (`ErrUnsupportedGrouping` from duckstore, exit 1).
+- [x] Step 1: `cmd/quarry/run_spend_by_test.go` `Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_total_and_warns` — `spend --by tag` over a two-tag split, a one-tag split and an untagged split; asserts stdout table (`Tag` header, `(no tag)` first, tags by `lower(name)`, one Total per currency counting each split once) and stderr exactly the W1 line. `cmd/quarry/run_spend_test.go:20-58` `spendSplit` gains `tags []string`; `spendRows` gains a `Tags` table and `SplitTags` links.
+- [x] Step 2: `internal/store/store.go:321-359` `SpendByTag` (after `SpendByPayee`), `Spending.MultiTagSplits` (doc: splits in the window carrying more than one tag, set only for `SpendByTag`); `internal/cli/spend_grouping.go:155-158` table entry `{name: "tag", header: "Tag", missing: "(no tag)"}`. Red: totals/rows wrong until the store reads tags (`ErrUnsupportedGrouping` from duckstore, exit 1).
 
 ### Build
 - [ ] Step 3: `internal/store/duckstore/spending.go:25-31,39-70` `spendingQueries[SpendByTag]` (tag SQL above) — Tests in `spending_test.go` (`addSplit` in `views_test.go:44-55` needs a tags field or a `SplitTags` append): `Test_spending_by_tag_counts_a_two_tag_split_under_both_tags_and_once_in_the_total`, `Test_spending_by_tag_groups_untagged_splits_under_a_nil_key_first`, sort (`Test_spending_by_tag_sorts_ignoring_case_then_byte_order_then_currency`), zero-net tag omitted but kept in Total, two same-named tags on one split count once, CAD-before-USD Totals.
@@ -47,3 +47,19 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report untouched; store types
 - `Test_spend_refuses_a_by_that_names_no_grouping_before_reading_the_store` lists `"tag"` as refused: it goes red the moment the table entry lands; remove it, do not weaken S4.
 - `tags.name` is not unique and `split_tags` has no FK: LEFT JOIN `tags` after `split_tags`, or an untagged split and a dangling link look the same.
 - `GROUPING SETS ((tag, currency), (currency))` over the tag-joined source double-counts Total for a multi-tag split: the exact bug the first mutation check pins.
+
+## Phase report
+
+Run A (steps 1-2) done. Acceptance test is red at its assertion, for the expected reason.
+
+Files:
+- `cmd/quarry/run_spend_test.go:20-70` `spendSplit.tags []string` (tag ids), `spendRows` gains `Tags` (`tag-vacation` "Vacation", `tag-alpha` "alpha": byte order and `lower()` order differ) and appends `SplitTags`.
+- `cmd/quarry/run_spend_by_test.go:52-` `Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_total_and_warns` (s01 two tags, s02 one tag, s03 untagged, s04 USD one tag; expects W1 "1 split carries ...").
+- `internal/store/store.go` `SpendByTag`, `Spending.MultiTagSplits` (declared, nothing sets it).
+- `internal/cli/spend_grouping.go` table entry `tag`.
+- `internal/cli/spend_test.go:68` dropped `"tag"` from the refused list (`month` stays).
+
+Red now: `require.Equal(0, exitCode)` -> `actual: 1`, message `quarry: spending grouping is not supported: 2` (duckstore `ErrUnsupportedGrouping`).
+Green: `go test ./internal/cli/ ./internal/store/...` all ok. No production logic added yet (steps 3-5 remain).
+
+Next run must not redo: fixtures above (reuse `tags` field in duckstore tests via `addSplit` in `views_test.go`, which needs its own tags field).

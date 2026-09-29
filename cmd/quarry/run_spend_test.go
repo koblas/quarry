@@ -18,11 +18,13 @@ import (
 var utcMinus5 = time.FixedZone("UTC-5", -5*60*60)
 
 // spendSplit is one single-split transaction; "" category or payee id means
-// none, and negative cents is money out.
+// none, and negative cents is money out. tags lists the ids of the tags the
+// split carries.
 type spendSplit struct {
 	id, account, category, payee, currency string
 	day                                    time.Time
 	cents                                  int64
+	tags                                   []string
 }
 
 // spendRows is a store of accounts holding splits, inside one import run.
@@ -32,6 +34,10 @@ func spendRows(accounts []store.Account, splits ...spendSplit) store.Rows {
 		Payees: []store.Payee{
 			{ID: "payee-costco", SourceID: 1, Name: "Costco"},
 			{ID: "payee-bakery", SourceID: 2, Name: "Bakery"},
+		},
+		Tags: []store.Tag{
+			{ID: "tag-vacation", SourceID: 1, Name: "Vacation"},
+			{ID: "tag-alpha", SourceID: 2, Name: "alpha"},
 		},
 		Categories: []store.Category{
 			{ID: "cat-fuel", SourceID: 1, Name: "Fuel", FullPath: "Auto:Fuel", Kind: "expense"},
@@ -58,6 +64,9 @@ func spendRows(accounts []store.Account, splits ...spendSplit) store.Rows {
 		rows.Splits = append(rows.Splits, store.Split{
 			ID: "split-" + s.id, SourceID: 1, TransactionID: "txn-" + s.id, CategoryID: category, Amount: s.cents,
 		})
+		for _, tag := range s.tags {
+			rows.SplitTags = append(rows.SplitTags, store.SplitTag{SplitID: "split-" + s.id, TagID: tag})
+		}
 	}
 	return rows
 }
