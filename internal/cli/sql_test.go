@@ -196,7 +196,8 @@ func Test_sql_help_describes_the_command_and_the_limit_flag(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), `Run one SQL query against quarry's store and print the result. The store is
 opened read-only: a query cannot change it, read or write other files, or
-load extensions.
+load extensions. A query too large for memory may spill to a temporary
+directory beside the store; quarry removes it when it exits.
 
 Pass the query as one quoted argument, or - to read it from stdin. A query
 that starts with - (such as a -- comment) goes after --:
