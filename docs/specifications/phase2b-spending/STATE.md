@@ -69,6 +69,9 @@ Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-05, 07
 - `SUM(...)` over a `CASE` with no matching row is NULL, not 0: COALESCE before the cents cast. Year/month label text must equal Go's `2006`/`2006-01` byte for byte or every period prints `0.00` beside lost rows. (SCENARIO-20)
 
 ## Open debts
+- MINOR (20 checkpoint): `internal/store/duckstore/cashflow.go:37` `currency` ORDER BY term unpinned (DuckDB tie order happens to be CAD-first) — add a third currency (e.g. EUR) inserted out of order.
+- MINOR (20 checkpoint, folded into SCENARIO-22): no test pins cashflow `Long`/`Example`/`--by`/`--account` help copy (`internal/cli/cashflow.go:43-59,93-96`).
+- MINOR (20 checkpoint, comments): `internal/store/duckstore/cashflow.go:21-23` `cashFlowQuery` doc → ≤2 lines; `Transactions` "set only when empty" fact stated twice (`internal/report/cashflow.go:31`, `internal/store/store.go:425`) — keep in store.
 - MINOR (17 checkpoint, comment budgets): `internal/store/duckstore/spending.go` `transactionRangeQuery` doc (3→≤2) and `(*Store).Spending` doc (5→≤4); `internal/cli/empty_window.go` `emptyWindowWarning` doc (4→≤2); `Spending.Transactions` field doc duplicated in `internal/store/store.go` and `internal/report/spending.go` — say it once in store.
 - MINOR (12 checkpoint, comments): `internal/store/duckstore/spending.go:31-32` `spendingByMonthQuery` doc → 1 line; `internal/cli/render_spend.go:15-19` `renderSpending` doc → ≤2 lines.
 - NIT (12 checkpoint): month label SQL `%Y` vs Go `2006` byte-equality proven only for 4-digit years ≥1000; `--since 0001` is accepted — verify or clamp (year-999 duckstore test).
