@@ -20,5 +20,6 @@
 | Round | Reviewers run | Findings (B/M/m/n) | Verdict |
 | --- | --- | --- | --- |
 | 1 | arch, correctness, test, refactor + spec-check | 1/6/14/5 | FAIL |
+| 2 | correctness, test, arch, refactor (re-gate) | 0/1/10/3 | FAIL |
 
 ## Tokens
