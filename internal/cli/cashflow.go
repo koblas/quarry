@@ -3,14 +3,40 @@ package cli
 import (
 	"time"
 
+	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/spf13/cobra"
 )
+
+// cashFlowPeriod is how cashflow presents one --by value: the flag word and the column-1 header.
+type cashFlowPeriod struct {
+	name, header string
+}
+
+// cashFlowPeriods holds every --by value cashflow reads, indexed by period.
+var cashFlowPeriods = [...]cashFlowPeriod{
+	store.CashFlowByMonth: {name: "month", header: "Month"},
+	store.CashFlowByYear:  {name: "year", header: "Year"},
+}
+
+// errCashFlowByUnknown refuses a --by that names no period cashflow reads.
+var errCashFlowByUnknown = UsageError{msg: "--by must be month or year"}
+
+// parseCashFlowPeriod returns the period named by a --by value, or errCashFlowByUnknown.
+func parseCashFlowPeriod(name string) (store.CashFlowPeriod, error) {
+	for period, p := range cashFlowPeriods {
+		if p.name == name {
+			return store.CashFlowPeriod(period), nil
+		}
+	}
+	return 0, errCashFlowByUnknown
+}
 
 // newCashFlowCommand builds cashflow: the income, spending and savings rate in the --since/--until period per month or year.
 func newCashFlowCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var by string
 	var accounts []string
-	var period windowFlags
+	var window windowFlags
 	cmd := &cobra.Command{
 		Use:   "cashflow",
 		Short: "Show income, spending and savings rate by month or year",
@@ -32,10 +58,50 @@ less. A period that --since or --until cuts short is marked partial.`,
   quarry cashflow --by year --since 2020 --until 2025
   quarry cashflow --account Chequing --json`,
 		Args: noArgs,
-		RunE: func(*cobra.Command, []string) error { return nil },
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			period, err := parseCashFlowPeriod(by)
+			if err != nil {
+				return err
+			}
+
+			resolved, err := window.window(cmd, now())
+			if err != nil {
+				return err
+			}
+
+			srv, err := openReport(cmd, newReport)
+			if err != nil {
+				return err
+			}
+
+			flow, err := srv.CashFlow(cmd.Context(), report.CashFlowRequest{Window: resolved, By: period, Accounts: accounts})
+			if err != nil {
+				return &runtimeError{err: err}
+			}
+
+			warnings := cashFlowWarnings(flow)
+			out, err := renderResult(*jsonOut,
+				func() ([]byte, error) { return []byte(renderCashFlow(flow)), nil },
+				func() string { return renderCashFlow(flow) })
+			if err != nil {
+				// unreachable: the interim JSON renderer above always returns a nil error, and renderResult's own error path is unreachable (output.go:26).
+				return err
+			}
+			return emit(cmd, out, "quarry: warning: ", warnings)
+		},
 	}
-	cmd.Flags().StringVar(&by, "by", "month", "group by `period`: month or year")
-	period.bind(cmd)
+	cmd.Flags().StringVar(&by, "by", cashFlowPeriods[store.CashFlowByMonth].name, "group by `period`: month or year")
+	window.bind(cmd)
 	cmd.Flags().StringArrayVar(&accounts, "account", nil, "count only the account with this `name` or id; repeat for more")
 	return cmd
+}
+
+// cashFlowWarnings is c's warnings, unprefixed and never nil: one per named account Quicken leaves
+// out of reports, then a note that the window held no income or spending.
+func cashFlowWarnings(c report.CashFlow) []string {
+	warnings := leftOutWarnings(c.Accounts, "cashflow")
+	if c.Empty() {
+		warnings = appendEmptyWindowWarning(warnings, "income or spending", c.Accounts, c.Window, c.Transactions)
+	}
+	return warnings
 }
