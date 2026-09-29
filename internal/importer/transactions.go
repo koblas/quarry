@@ -73,16 +73,15 @@ func surveyTransactions(
 }
 
 // mapTransactions reads every non-deleted transactionEntity row of
-// ZTRANSACTION. A row in a deleted account, or whose account was itself
-// excluded, is silently skipped. A row whose account reference points to
-// no row at all, whose date or amount is missing, whose amount is stored
-// as text or blob, has more than 2 decimals beyond the snap tolerance or is
-// too large, or whose reconcile status is unmapped, is added to off and
-// excluded.
+// ZTRANSACTION. A row with no account, or whose account is deleted,
+// excluded or points to no row at all, is silently skipped. A row whose
+// date or amount is missing, whose amount is stored as text or blob, has
+// more than 2 decimals beyond the snap tolerance or is too large, or whose
+// reconcile status is unmapped, is added to off and excluded.
 // A payee reference to a deleted or missing payee stores NULL.
 func mapTransactions(
 	ctx context.Context, src Source, transactionEntity int64,
-	accounts map[int64]accountRef, existingAccounts, existingPayees map[int64]bool, off *offenders,
+	accounts map[int64]accountRef, existingPayees map[int64]bool, off *offenders,
 ) ([]store.Transaction, map[int64]txnRef, error) {
 	var rows []store.Transaction
 	refs := make(map[int64]txnRef)
@@ -100,17 +99,9 @@ func mapTransactions(
 			return err
 		}
 
-		if !account.Valid {
-			off.add(offender{class: classMissingValue, reason: reasonTransactionNoAccount(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
-			return nil
-		}
-		if !existingAccounts[account.Int64] {
-			off.add(offender{class: classMissingValue, reason: reasonTransactionNoAccount(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
-			return nil
-		}
 		acct, ok := accounts[account.Int64]
-		if !ok {
-			return nil // account was deleted, or itself excluded (P1-5d)
+		if !account.Valid || !ok {
+			return nil
 		}
 
 		hasDate := posted.Valid || entered.Valid

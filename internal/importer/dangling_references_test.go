@@ -30,18 +30,22 @@ func Test_import_skips_a_transaction_and_its_splits_in_a_deleted_account(t *test
 	assert.Empty(t, fake.Rows.Splits)
 }
 
-// A transaction whose account reference points to no row at all
-// refuses as having no account, the same text as a NULL account reference.
-func Test_import_refuses_a_transaction_whose_account_does_not_exist(t *testing.T) {
+func Test_import_skips_a_transaction_whose_account_does_not_exist(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: 999, Amount: "1.00", PostedDate: &posted})
+	keptPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "2.00", PostedDate: &posted})
+	b.Entry(v9fixture.EntryRow{Parent: keptPK, Amount: "2.00"})
+	b.Transaction(v9fixture.TransactionRow{Account: 999, Amount: "1.00", PostedDate: &posted})
 	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
-	assert.Equal(t, `a transaction (source id `+itoa(txnPK)+`) has no account`, importReason(t, err))
+	require.NoError(t, err)
+	require.Len(t, fake.Rows.Transactions, 1)
+	assert.Equal(t, keptPK, fake.Rows.Transactions[0].SourceID)
 }
 
 // An entry whose parent is a SmartCashFlowTransaction is dropped

@@ -63,10 +63,6 @@ func reasonCategoryType(fullPath string, kind int64) string {
 	return fmt.Sprintf("category \"%s\" has type %d, which quarry does not map yet", fullPath, kind)
 }
 
-func reasonTransactionNoAccount(sourceID int64) string {
-	return fmt.Sprintf("a transaction (source id %d) has no account", sourceID)
-}
-
 func reasonTransactionNoAmount(date, account string) string {
 	return fmt.Sprintf("a transaction on %s in \"%s\" has no amount", date, account)
 }
