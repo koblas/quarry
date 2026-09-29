@@ -13,7 +13,7 @@ points at it.
 | R2 | planned | | | | |
 | R3 | planned | | | | |
 | R4 | planned | | | | |
-| R5 | planned | | | | |
+| R5 | partial | `.claude/scripts/post-edit-check.sh` (PostToolUse hook in `.claude/settings.json`); `.claude/briefs/build.md` → *Edit hook* | | | Deviation: hook runs gofmt + `go build` only. Narrow tests would report expected red in acceptance / test-first phases; `golangci-lint` too slow per edit — both stay at phase boundaries |
 | R6 | planned | | | | |
 | R7 | planned | | | | |
 | I1–I5 | held | reviewer gate, severity contract, `/run-reviewers` tool output, sequential developers, acceptance-test-first + final product-vision pass | | | |

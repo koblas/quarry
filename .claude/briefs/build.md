@@ -18,6 +18,8 @@ Everything else built as **code-first small batches**: one behaviour per batch �
 
 Architect marks each scenario's cadence in plan: `Cadence: test-first` (any mandatory item above touched — name which) or `Cadence: code-first`. Every mandatory item touched also gets its own entry on the plan's `Mutation checks:` line. Orchestrator copies it into `METRICS.md` so cadence cost can be compared later (`metrics.md`).
 
+**Edit hook does compile and format.** After every `Edit`/`Write` on a `.go` file, `.claude/scripts/post-edit-check.sh` runs `gofmt -l` and `go build` on that package and feeds back only failures (≤50 lines). Silence = both passed. No `go build` or `gofmt` turns of your own between edits; fix what hook reports. Tests and `golangci-lint` stay yours, at phase boundaries — hook never runs tests (red phases red by design). Hook silent because toolchain unreachable is indistinguishable from pass, so Verify block still runs `go build ./...` once.
+
 ## Scenario traceability
 
 Link runs **from spec to test**, never test to spec — test code carries no scenario IDs (developer fix-mode rule 8: specs archived, citations rot).
