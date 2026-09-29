@@ -39,6 +39,7 @@ Scenarios complete: SCENARIO-01..05 (05 folded into 04). Last updated by SCENARI
 - `uncovered-diff.py` is blind to untracked files: `git add` before running it. `cmd/quarry`'s test binary links DuckDB (linux-small CI OOM history). `internal/platform/duckdb`'s mid-iteration ctx-cancel test flakes under full-suite load. (Phase 1)
 
 ## Open debts
+- NIT (04 checkpoint): `internal/store/duckstore/doc.go:6` package doc line ~110 chars after the view clause — reflow.
 - MINOR (03 checkpoint): `cmd/quarry/run_status_json_test.go:~68` echoes `quarry_version` from output — assert `NotEmpty`/`(devel)`.
 - MINOR (03 checkpoint): `cmd/quarry/run_status_test.go:~134` `writeStatusFixtureBundle` doc 3 lines → 1–2.
 - Snapshots accumulate (~200 MB each) until 2c - known gap, owned by Phase 2c.
