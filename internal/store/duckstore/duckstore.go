@@ -22,8 +22,7 @@ const FileName = "quarry.duckdb"
 // leftoverMaxAge is how old a store partial must be before Replace's sweep removes it.
 const leftoverMaxAge = time.Hour
 
-// Build files are named .quarry-<UTC start>-<pid>.duckdb.partial; partialName
-// and buildFilePattern below are the only places the shape is spelled.
+// Build file name parts; partialName and buildFilePattern are the only places the shape is spelled.
 const (
 	partialPrefix     = ".quarry-"
 	partialSuffix     = ".duckdb.partial"

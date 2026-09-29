@@ -55,10 +55,9 @@ func (o *offenders) add(item offender) {
 
 func (o *offenders) empty() bool { return len(o.items) == 0 }
 
-// firstError picks the lowest class present,
-// that class's first offender by lessOffender, and returns an
-// *UnmappableError whose reason appends " (and N more)" for the class's
-// other offenders.
+// firstError picks the lowest class present and that class's first offender
+// by lessOffender, returning an *UnmappableError whose reason appends
+// " (and N more)" for the class's other offenders.
 func (o *offenders) firstError() error {
 	if o.empty() {
 		return nil

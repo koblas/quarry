@@ -563,6 +563,19 @@ func Test_replace_reports_a_create_collision_as_an_untagged_build_failure(t *tes
 	assert.NotErrorIs(t, err, store.ErrDiskFull)
 }
 
+// The colliding partial and .wal sit at this run's own name, so they are this run's to remove.
+func Test_replace_removes_its_own_partial_and_wal_after_a_create_collision(t *testing.T) {
+	dir := t.TempDir()
+	st := duckstore.New(dir, duckstore.WithCreate(createLeavingPartial(t, duckdb.ErrExists)))
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.ErrorIs(t, err, duckdb.ErrExists)
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Empty(t, direntNames(entries))
+}
+
 func Test_replace_removes_the_partial_its_failed_create_left_behind(t *testing.T) {
 	dir := t.TempDir()
 	st := duckstore.New(dir, duckstore.WithCreate(createLeavingPartial(t, errCreateBoom)))
