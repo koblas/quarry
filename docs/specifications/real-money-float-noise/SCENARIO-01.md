@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01
-status: open
+status: done
 ---
 
 # SCENARIO-01: Transaction amounts carrying float residue import as their cent (absorbs 02-05)
@@ -30,10 +30,10 @@ Exact decimal: `math/big.Rat` — `SetString` reads decimals and `e-17` text exa
 - [x] Step 5: `money.go` post-snap bound — (B2) snapped |cents| ≥ `realIntBound*100` → `moneyTooLarge`. Rows: `999999999.9999999`→moneyTooLarge, `-999999999.9999999`→moneyTooLarge, control `999999999.99`→99999999999 `moneyOK` (`:35`), `999999999.9999`→moneyPrecision (1e-4 from the bound, outside tolerance).
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Doc comments to true up (shorter, no spec ids, no history): `money.go:19-24`, `:26-31` (`parseMoney` — "never through float arithmetic" stays, add the snap), `:53-54`, inline `:62`; `offenders.go:20-22` (precision classes, "more than 2 decimals beyond the snap tolerance"); `splits.go:15-22` (`mapSplits` "too much precision"). Docs: `phase1-import-store/specification.md:34` — replace from "A value with more than 2 decimal places" through "integer-stored values keep the full DECIMAL(18,2) range." with the P1-7 replacement text in this spec's `## Product Verdict`, verbatim; `phase1-import-store/STATE.md:30` money bullet — replace the negative-exponent sentence ("round 2") and "REAL text must be…" clause with the snap rule, and the mutation list; `phase1-import-store/REVIEW-02.md:31` Rulings 2 — append "superseded by P1-7 (2026-09-29)". Leave `SCENARIO-01a.md:45` alone (audit history).
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Doc comments to true up (shorter, no spec ids, no history): `money.go:19-24`, `:26-31` (`parseMoney` — "never through float arithmetic" stays, add the snap), `:53-54`, inline `:62`; `offenders.go:20-22` (precision classes, "more than 2 decimals beyond the snap tolerance"); `splits.go:15-22` (`mapSplits` "too much precision"). Docs: `phase1-import-store/specification.md:34` — replace from "A value with more than 2 decimal places" through "integer-stored values keep the full DECIMAL(18,2) range." with the P1-7 replacement text in this spec's `## Product Verdict`, verbatim; `phase1-import-store/STATE.md:30` money bullet — replace the negative-exponent sentence ("round 2") and "REAL text must be…" clause with the snap rule, and the mutation list; `phase1-import-store/REVIEW-02.md:31` Rulings 2 — append "superseded by P1-7 (2026-09-29)". Leave `SCENARIO-01a.md:45` alone (audit history).
 
 ### Verify
-- [ ] Step 7: full verification per `agent-briefs.md` → *Verification*; `.claude/scripts/spec-check.py real-money-float-noise`; tick SCENARIO-01..05 in `specification.md` — 02..05 lines read `delivered by SCENARIO-01 — ` before the test reference (test reference last, per `build.md` → *Scenario traceability*); create `docs/specifications/real-money-float-noise/STATE.md`; set `status: done`.
+- [x] Step 7: full verification per `agent-briefs.md` → *Verification*; `.claude/scripts/spec-check.py real-money-float-noise`; tick SCENARIO-01..05 in `specification.md` — 02..05 lines read `delivered by SCENARIO-01 — ` before the test reference (test reference last, per `build.md` → *Scenario traceability*); create `docs/specifications/real-money-float-noise/STATE.md`; set `status: done`.
 
 ## Handoff
 
@@ -54,14 +54,8 @@ Exact decimal: `math/big.Rat` — `SetString` reads decimals and `e-17` text exa
 
 ## Phase report
 
-Run B2 (steps 4-5) done, test-first.
+Run V (steps 6-7) done. Sweep: doc comments trued up in `money.go` (`parseMoney`, `snapToCent`), `offenders.go:20-22`, `splits.go` (`mapSplits`), `transactions.go` (`mapTransactions`); phase1 `specification.md:34` P1-7 replaced verbatim, `STATE.md:30` money bullet rewritten, `REVIEW-02.md` Rulings 2 marked superseded.
 
-Files: `internal/importer/money.go` — `parseRealMoney` now = sign strip + `realCents` (Inf, exponent/mantissa grammar, int-part >= 1e9 check, fast path) + `snappedCents` (`snapToCent` then post-snap bound `cents >= realIntBound*100` -> `moneyTooLarge`). Negative exponent goes straight to `snappedCents` with no int-part check (value is tiny); positive exponent stays `moneyTooLarge` before mantissa validation; malformed mantissa or empty/non-digit negative exponent -> `moneyNotANumber`. `internal/importer/money_internal_test.go` — flipped `5.5511151231257827e-17` to 0/OK; added rows `4.0e-07`, `2.0e-06`, `x.1e-05`, `1.0e-`, `999999999.9999999`, `-999999999.9999999`, `999999999.9999`.
+Coverage gate found `money.go:127` (`snapToCent` `!ok`) uncovered; it is reachable (`big.Rat` rejects exponent past its limit), so added `Test_parseMoney` row `1.0e-99999999999` -> moneyPrecision; mutated `!ok` guard -> nil-deref panic on that row, restored.
 
-Red first: 6 new rows plus acceptance 02 (`..._near_zero_residue_amount_as_zero_cents`) and 05 (`..._rounds_up_to_the_bound_as_too_large`) failed at their assertions; `2.0e-06` and `999999999.9999` green on arrival (refuse today), guarded by mutations. Narrow loop green; whole `internal/importer` package green; `golangci-lint run ./internal/importer/...` 0 issues.
-
-Mutations (money.go, each restored, diff clean):
-- drop post-snap bound (`case false:`): reds `real_just_under_the_bound_snaps_up_past_it`, `real_negative_just_under_the_bound_snaps_down_past_it`, acceptance `Test_import_refuses_a_residue_that_rounds_up_to_the_bound_as_too_large`.
-- tolerance 1e-5: reds `real_negative_exponent_beyond_the_snap_tolerance` (2.0e-06), `real_beyond_the_snap_tolerance` (12.3400011), negative variant, `real_small_negative_exponent`, acceptance `..._beyond_the_snap_tolerance`, and `Test_import_refuses_an_exponent_form_amount_by_the_exponents_sign/a_small_negative_exponent_has_too_many_decimals`.
-
-Next (V, steps 6-7): Sweep docs per plan (`money.go` doc comments — `parseMoney`, `parseRealMoney`, `realCents`, `snappedCents`; `offenders.go`, `splits.go`; phase1 spec/STATE/REVIEW-02), full verify with coverage gate, spec ticks, STATE.md, `status: done`. Do not redo: new helpers `realCents`/`snappedCents` are the structure; `exponent` var scoped inside the `if` to satisfy `wastedassign`.
+Verify: full covered suite green, `uncovered-diff.py` 0 uncovered, `-race ./internal/importer/...` green, lint 0 issues, `test-stats.py --base 1cce351 --changed`: internal/importer 128 (+6). Spec ticks 01-05, `spec-check.py` OK (also `--run`), STATE.md created, status done.

@@ -44,6 +44,7 @@ func Test_parseMoney(t *testing.T) {
 		{"real negative exponent within the snap tolerance snaps to zero", "real", "4.0e-07", 0, moneyOK},
 		{"real negative exponent beyond the snap tolerance", "real", "2.0e-06", 0, moneyPrecision},
 		{"real small negative exponent", "real", "1.0e-05", 0, moneyPrecision},
+		{"real negative exponent too large for exact arithmetic", "real", "1.0e-99999999999", 0, moneyPrecision},
 		{"real negative exponent with a malformed mantissa", "real", "x.1e-05", 0, moneyNotANumber},
 		{"real negative exponent with no exponent digits", "real", "1.0e-", 0, moneyNotANumber},
 		{"real just under the bound snaps up past it", "real", "999999999.9999999", 0, moneyTooLarge},

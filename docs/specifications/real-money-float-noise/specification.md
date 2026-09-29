@@ -106,8 +106,8 @@ Scenario: SCENARIO-05 — A residue that rounds to the $1e9 bound refuses as too
 Proposed runs: A (acceptance red for 01 + folded tests) | B1 (snap core + unit rows) | B2 (exponent branch + post-snap bound) | V. P1-7 amendment is a Sweep doc step.
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01: Transaction amounts carrying float residue import as their cent
-- [ ] SCENARIO-02: A near-zero residue imports as zero
-- [ ] SCENARIO-03: A statement balance carrying float residue imports as its cent
-- [ ] SCENARIO-04: A sub-cent amount beyond the tolerance still refuses
-- [ ] SCENARIO-05: A residue that rounds to the $1e9 bound refuses as too large
+- [x] SCENARIO-01: Transaction amounts carrying float residue import as their cent — `internal/importer/transactions_test.go` `Test_import_imports_a_transaction_and_split_carrying_float_residue_as_their_cent`
+- [x] SCENARIO-02: A near-zero residue imports as zero — delivered by SCENARIO-01 — `internal/importer/transactions_test.go` `Test_import_imports_a_near_zero_residue_amount_as_zero_cents`
+- [x] SCENARIO-03: A statement balance carrying float residue imports as its cent — delivered by SCENARIO-01 — `internal/importer/statements_test.go` `Test_import_imports_a_statement_balance_carrying_float_residue_as_its_cent`
+- [x] SCENARIO-04: A sub-cent amount beyond the tolerance still refuses — delivered by SCENARIO-01 — `internal/importer/transactions_test.go` `Test_import_refuses_an_amount_beyond_the_snap_tolerance`
+- [x] SCENARIO-05: A residue that rounds to the $1e9 bound refuses as too large — delivered by SCENARIO-01 — `internal/importer/transactions_test.go` `Test_import_refuses_a_residue_that_rounds_up_to_the_bound_as_too_large`

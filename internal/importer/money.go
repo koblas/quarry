@@ -30,10 +30,12 @@ const snapToleranceInverse = 1_000_000 // tolerance 1e-6
 
 // parseMoney reads typ (SQLite's typeof()) and text (CAST(col AS TEXT))
 // for one non-NULL money column and returns its value in cents, parsed
-// exactly from the digit string — never through float arithmetic. It
-// reports moneyPrecision for more than 2 decimal places, moneyTooLarge for
-// a value outside DECIMAL(18,2)'s trustworthy range, and moneyNotANumber
-// for a column stored as text or blob, or real text that is not a decimal.
+// exactly from the digit string — never through float arithmetic. A real
+// with more than 2 decimals within the snap tolerance of a cent is that cent.
+// It reports moneyPrecision for more decimals beyond the tolerance,
+// moneyTooLarge for a value outside DECIMAL(18,2)'s trustworthy range, and
+// moneyNotANumber for a column stored as text or blob, or real text that is
+// not a decimal.
 func parseMoney(typ, text string) (int64, moneyFault) {
 	switch typ {
 	case "integer":
@@ -118,7 +120,8 @@ func snappedCents(unsigned string) (int64, moneyFault) {
 }
 
 // snapToCent returns the whole cents nearest the non-negative decimal text and
-// whether text lies within the snap tolerance of them, compared exactly.
+// whether text lies within the snap tolerance of them, compared exactly. Text
+// whose exponent exceeds what big.Rat reads is not within it.
 func snapToCent(text string) (int64, bool) {
 	dollars, ok := new(big.Rat).SetString(text)
 	if !ok {

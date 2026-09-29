@@ -82,8 +82,9 @@ func surveyTransactions(
 // ZTRANSACTION. A row in a deleted account, or whose account was itself
 // excluded, is silently skipped. A row whose account reference points to
 // no row at all, whose date or amount is missing, whose amount is stored
-// as text or blob, has too much precision or is too large, or whose
-// reconcile status is unmapped, is added to off and excluded.
+// as text or blob, has more than 2 decimals beyond the snap tolerance or is
+// too large, or whose reconcile status is unmapped, is added to off and
+// excluded.
 // A payee reference to a deleted or missing payee stores NULL.
 func mapTransactions(
 	ctx context.Context, src Source, transactionEntity int64,
