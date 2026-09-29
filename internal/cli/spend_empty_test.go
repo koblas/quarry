@@ -91,6 +91,27 @@ func Test_spend_says_nothing_of_an_empty_window_when_every_named_account_is_left
 		stderr.String())
 }
 
+func Test_spend_says_nothing_of_an_empty_window_when_every_named_account_is_left_out_and_one_is_linked(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeSpend(t, namedAccounts(), spendTagNow, &stdout, &stderr, "--account", "Old Card", "--account", linkedID)
+
+	require.NoError(t, err)
+	assert.Equal(t, "quarry: warning: "+leftOutWarning("Old Card")+"\nquarry: warning: "+linkedTrackingWarning("Netskope 401(k)")+"\n",
+		stderr.String())
+}
+
+func Test_spend_puts_the_empty_window_note_after_the_linked_tracking_warning_when_a_reported_account_is_named(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	fake := namedAccounts()
+	fake.spending = store.Spending{Transactions: namedSpan}
+
+	err := executeSpend(t, fake, spendTagNow, &stdout, &stderr, "--account", linkedID, "--account", chequingID)
+
+	require.NoError(t, err)
+	assert.Equal(t, "quarry: warning: "+linkedTrackingWarning("Netskope 401(k)")+"\nquarry: warning: "+emptyE1a+"\n", stderr.String())
+}
+
 func Test_spend_puts_the_empty_window_note_after_the_left_out_of_reports_warnings(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	fake := namedAccounts()

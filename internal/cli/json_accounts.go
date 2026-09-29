@@ -14,15 +14,16 @@ type accountsDocument struct {
 // accountRowDocument is one entry of "accounts"; Institution is null when the
 // account has none, Balance when quarry cannot compute it.
 type accountRowDocument struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Type        string  `json:"type"`
-	Currency    string  `json:"currency"`
-	Institution *string `json:"institution"`
-	Closed      bool    `json:"closed"`
-	Active      bool    `json:"active"`
-	InReports   bool    `json:"in_reports"`
-	Balance     *string `json:"balance"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Type           string  `json:"type"`
+	Currency       string  `json:"currency"`
+	Institution    *string `json:"institution"`
+	Closed         bool    `json:"closed"`
+	Active         bool    `json:"active"`
+	InReports      bool    `json:"in_reports"`
+	LinkedTracking bool    `json:"linked_tracking"`
+	Balance        *string `json:"balance"`
 }
 
 // renderAccountsJSON renders list as accounts's --json document; accounts is
@@ -33,7 +34,7 @@ func renderAccountsJSON(list store.AccountList, warnings []string) ([]byte, erro
 		rows[i] = accountRowDocument{
 			ID: a.ID, Name: a.Name, Type: a.Type, Currency: a.Currency,
 			Institution: jsonNullInstitution(a.Institution),
-			Closed:      a.Closed, Active: a.Active, InReports: !a.NotInReports,
+			Closed:      a.Closed, Active: a.Active, InReports: !a.NotInReports, LinkedTracking: a.LinkedTracking,
 			Balance: jsonNullMoney(a.Balance),
 		}
 	}

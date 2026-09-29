@@ -91,6 +91,30 @@ func Test_run_spend_warns_that_a_named_linked_tracking_account_is_left_out(t *te
 	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in Netskope 401(k)\n\nCategory  Currency  Spent\n", stdout.String())
 }
 
+func Test_run_spend_ranges_a_linked_and_a_reported_named_account_over_the_reported_one(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStore(t, home, spendRows(
+		[]store.Account{
+			{ID: "acct-401k", SourceID: 1, Name: "Netskope 401(k)", Type: "retirement", Currency: "USD", Active: true, LinkedTracking: true},
+			{ID: "acct-chq", SourceID: 2, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
+		},
+		spendSplit{id: "s01", account: "acct-401k", category: "cat-groceries", currency: "USD", day: day(2003, 1, 4), cents: -900},
+		spendSplit{id: "s02", account: "acct-chq", category: "cat-groceries", currency: "CAD", day: day(2019, 3, 2), cents: -100},
+		spendSplit{id: "s03", account: "acct-chq", category: "cat-groceries", currency: "CAD", day: day(2019, 3, 5), cents: -100},
+	))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(),
+		[]string{"spend", "--account", "Netskope 401(k)", "--account", "Chequing"}, spendEnv(&stdout, &stderr))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Equal(t, "quarry: warning: account \"Netskope 401(k)\" uses linked account tracking in Quicken, "+
+		"so spend leaves it out, as Quicken's reports do\n"+
+		"quarry: warning: no spending from 2026-01-01 to 2026-09-29 in the named accounts; "+
+		"their transactions run 2019-03-02 to 2019-03-05\n", stderr.String())
+}
+
 func Test_run_spend_refuses_an_account_it_cannot_pick(t *testing.T) {
 	cases := []struct {
 		name string

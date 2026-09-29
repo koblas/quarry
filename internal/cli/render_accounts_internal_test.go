@@ -16,6 +16,12 @@ func balanceRow(name, accountType, currency string, cents *int64, closed, active
 	}
 }
 
+func linked(a store.AccountBalance, notInReports bool) store.AccountBalance {
+	a.NotInReports = notInReports
+	a.LinkedTracking = true
+	return a
+}
+
 func Test_renderAccounts(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -60,6 +66,17 @@ func Test_renderAccounts(t *testing.T) {
 				"Chequing  chequing  CAD          0.00\n" +
 				"Épargnes  savings   CAD          0.00  inactive\n",
 		},
+		{
+			name: "linked tracking after not in reports in the Status cell",
+			accounts: []store.AccountBalance{
+				linked(balanceRow("Netskope 401(k)", "retirement", "USD", nil, true, true), true),
+				linked(balanceRow("Brokerage", "brokerage", "USD", nil, false, true), false),
+			},
+			want: "" +
+				"Account          Type        Currency       Balance  Status\n" +
+				"Netskope 401(k)  retirement  USD       not imported  closed, not in reports, linked tracking\n" +
+				"Brokerage        brokerage   USD       not imported  linked tracking\n",
+		},
 	}
 
 	for _, c := range cases {
@@ -74,6 +91,7 @@ func Test_accountStatus(t *testing.T) {
 		name           string
 		closed, active bool
 		notInReports   bool
+		linkedTracking bool
 		want           string
 	}{
 		{name: "open and active is blank", closed: false, active: true, want: ""},
@@ -83,11 +101,16 @@ func Test_accountStatus(t *testing.T) {
 		{name: "open, active, not in reports", closed: false, active: true, notInReports: true, want: "not in reports"},
 		{name: "inactive and not in reports", closed: false, active: false, notInReports: true, want: "inactive, not in reports"},
 		{name: "closed and not in reports", closed: true, active: true, notInReports: true, want: "closed, not in reports"},
+		{name: "open, active, linked tracking", active: true, linkedTracking: true, want: "linked tracking"},
+		{name: "inactive and linked tracking", linkedTracking: true, want: "inactive, linked tracking"},
+		{name: "closed and linked tracking", closed: true, active: true, linkedTracking: true, want: "closed, linked tracking"},
+		{name: "not in reports and linked tracking", active: true, notInReports: true, linkedTracking: true, want: "not in reports, linked tracking"},
+		{name: "closed, not in reports and linked tracking", closed: true, active: true, notInReports: true, linkedTracking: true, want: "closed, not in reports, linked tracking"},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, accountStatus(c.closed, c.active, c.notInReports))
+			assert.Equal(t, c.want, accountStatus(c.closed, c.active, c.notInReports, c.linkedTracking))
 		})
 	}
 }

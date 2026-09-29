@@ -20,7 +20,7 @@ func renderAccounts(list store.AccountList) string {
 	rows := make([][]string, 0, 1+len(list.Accounts))
 	rows = append(rows, header)
 	for _, a := range list.Accounts {
-		rows = append(rows, []string{a.Name, a.Type, a.Currency, accountBalance(a.Balance), accountStatus(a.Closed, a.Active, a.NotInReports)})
+		rows = append(rows, []string{a.Name, a.Type, a.Currency, accountBalance(a.Balance), accountStatus(a.Closed, a.Active, a.NotInReports, a.LinkedTracking)})
 	}
 
 	widths := make([]int, len(header)-1)
@@ -54,8 +54,9 @@ func accountBalance(cents *int64) string {
 
 // accountStatus joins, with ", ", "closed" for a closed account or "inactive"
 // for an open one that is not active, then "not in reports" when Quicken
-// leaves the account out of its reports; "" when none applies.
-func accountStatus(closed, active, notInReports bool) string {
+// leaves the account out of its reports, then "linked tracking" when it uses linked account
+// tracking; "" when none applies.
+func accountStatus(closed, active, notInReports, linkedTracking bool) string {
 	var parts []string
 	switch {
 	case closed:
@@ -65,6 +66,9 @@ func accountStatus(closed, active, notInReports bool) string {
 	}
 	if notInReports {
 		parts = append(parts, "not in reports")
+	}
+	if linkedTracking {
+		parts = append(parts, "linked tracking")
 	}
 	return strings.Join(parts, ", ")
 }

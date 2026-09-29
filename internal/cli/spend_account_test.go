@@ -15,6 +15,8 @@ const (
 	visaID     = "acct-visa"
 	oldCardID  = "acct-old"
 	oldBankID  = "acct-bank"
+	linkedID   = "acct-401k"
+	bothID     = "acct-both"
 )
 
 func accountsStore(accounts ...store.Account) fakeReportStore {
@@ -31,6 +33,8 @@ func namedAccounts() fakeReportStore {
 		store.Account{ID: visaID, Name: "Visa Infinite"},
 		store.Account{ID: oldCardID, Name: "Old Card", NotInReports: true},
 		store.Account{ID: oldBankID, Name: "Old Bank", NotInReports: true},
+		store.Account{ID: linkedID, Name: "Netskope 401(k)", LinkedTracking: true},
+		store.Account{ID: bothID, Name: "Old 401(k)", NotInReports: true, LinkedTracking: true},
 	)
 }
 
@@ -43,6 +47,10 @@ func withSpending(fake fakeReportStore) fakeReportStore {
 func leftOutWarning(name string) string {
 	return "account \"" + name + "\" is not used in reports in Quicken, so spend leaves it out; " +
 		"to include it, turn on reports for it in Quicken's account settings, then run quarry sync"
+}
+
+func linkedTrackingWarning(name string) string {
+	return "account \"" + name + "\" uses linked account tracking in Quicken, so spend leaves it out, as Quicken's reports do"
 }
 
 func Test_spend_captions_the_named_accounts(t *testing.T) {
@@ -104,6 +112,26 @@ func Test_spend_warns_once_per_named_account_left_out_of_reports_in_the_order_gi
 	require.NoError(t, err)
 	assert.Equal(t, "quarry: warning: "+leftOutWarning("Old Card")+"\nquarry: warning: "+leftOutWarning("Old Bank")+"\n",
 		stderr.String())
+}
+
+func Test_spend_warns_about_a_linked_tracking_account_in_the_order_given_among_the_left_out_warnings(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeSpend(t, withSpending(namedAccounts()), spendTagNow, &stdout, &stderr,
+		"--account", "Old Card", "--account", linkedID, "--account", oldBankID, "--account", chequingID)
+
+	require.NoError(t, err)
+	assert.Equal(t, "quarry: warning: "+leftOutWarning("Old Card")+"\nquarry: warning: "+linkedTrackingWarning("Netskope 401(k)")+
+		"\nquarry: warning: "+leftOutWarning("Old Bank")+"\n", stderr.String())
+}
+
+func Test_spend_warns_only_that_linked_tracking_leaves_out_an_account_that_is_also_not_in_reports(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeSpend(t, withSpending(namedAccounts()), spendTagNow, &stdout, &stderr, "--account", bothID)
+
+	require.NoError(t, err)
+	assert.Equal(t, "quarry: warning: "+linkedTrackingWarning("Old 401(k)")+"\n", stderr.String())
 }
 
 func Test_spend_does_not_warn_about_an_account_in_reports(t *testing.T) {

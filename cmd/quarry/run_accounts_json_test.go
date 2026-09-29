@@ -17,15 +17,16 @@ import (
 )
 
 type accountRowJSON struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Type        string  `json:"type"`
-	Currency    string  `json:"currency"`
-	Institution *string `json:"institution"`
-	Closed      bool    `json:"closed"`
-	Active      bool    `json:"active"`
-	InReports   bool    `json:"in_reports"`
-	Balance     *string `json:"balance"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Type           string  `json:"type"`
+	Currency       string  `json:"currency"`
+	Institution    *string `json:"institution"`
+	Closed         bool    `json:"closed"`
+	Active         bool    `json:"active"`
+	InReports      bool    `json:"in_reports"`
+	LinkedTracking bool    `json:"linked_tracking"`
+	Balance        *string `json:"balance"`
 }
 
 type accountsJSON struct {
@@ -69,6 +70,7 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
       "closed": false,
       "active": true,
       "in_reports": true,
+      "linked_tracking": false,
       "balance": "12345.67"
     },
     {
@@ -80,6 +82,7 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
       "closed": false,
       "active": true,
       "in_reports": true,
+      "linked_tracking": false,
       "balance": null
     },
     {
@@ -91,6 +94,7 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
       "closed": false,
       "active": true,
       "in_reports": true,
+      "linked_tracking": false,
       "balance": "0.00"
     }
   ],
@@ -135,4 +139,23 @@ func Test_run_accounts_json_carries_in_reports_per_account(t *testing.T) {
 	}
 	assert.Equal(t, map[string]bool{"Chequing": true, "Float": false, "Old Savings": false, "Old Visa": false}, inReports)
 	assert.Contains(t, stdout.String(), "      \"active\": true,\n      \"in_reports\": false,\n")
+}
+
+func Test_run_accounts_json_carries_linked_tracking_per_account(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncLinkedTrackingFixture(t, home)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"accounts", "--all", "--json"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	var got accountsJSON
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+	linked := map[string]bool{}
+	for _, a := range got.Accounts {
+		linked[a.Name] = a.LinkedTracking
+	}
+	assert.Equal(t, map[string]bool{"Chequing": false, "Linked": true, "Old Linked": true, "Gone Linked": true}, linked)
+	assert.Contains(t, stdout.String(), "      \"in_reports\": true,\n      \"linked_tracking\": true,\n")
 }

@@ -11,7 +11,7 @@ import (
 // accountsQuery reads today's date and every account's balance in cents; as_of survives zero accounts.
 const accountsQuery = `
 SELECT d.as_of, v.id, v.source_id, v.name, v.type, v.currency, v.institution, v.closed, v.active,
-	NOT a.in_reports, CAST(v.balance * 100 AS BIGINT)
+	NOT a.in_reports, a.linked_tracking, CAST(v.balance * 100 AS BIGINT)
 FROM (SELECT current_date AS as_of) d
 LEFT JOIN v_account_balances v ON true
 LEFT JOIN accounts a ON a.id = v.id
@@ -33,8 +33,8 @@ func (s *Store) Accounts(ctx context.Context) (store.AccountList, error) {
 		var asOf time.Time
 		var id, name, typ, currency, institution sql.NullString
 		var sourceID, balance sql.NullInt64
-		var closed, active, notInReports sql.NullBool
-		if err := scan(&asOf, &id, &sourceID, &name, &typ, &currency, &institution, &closed, &active, &notInReports, &balance); err != nil {
+		var closed, active, notInReports, linkedTracking sql.NullBool
+		if err := scan(&asOf, &id, &sourceID, &name, &typ, &currency, &institution, &closed, &active, &notInReports, &linkedTracking, &balance); err != nil {
 			return err
 		}
 		list.AsOf = asOf
@@ -44,6 +44,7 @@ func (s *Store) Accounts(ctx context.Context) (store.AccountList, error) {
 		acct := store.AccountBalance{
 			ID: id.String, SourceID: sourceID.Int64, Name: name.String, Type: typ.String, Currency: currency.String,
 			Institution: nullStringPtr(institution), Closed: closed.Bool, Active: active.Bool, NotInReports: notInReports.Bool,
+			LinkedTracking: linkedTracking.Bool,
 		}
 		if balance.Valid {
 			acct.Balance = &balance.Int64
