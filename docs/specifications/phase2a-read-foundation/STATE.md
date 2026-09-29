@@ -24,6 +24,8 @@ Scenarios complete: SCENARIO-01. Last updated by SCENARIO-01.
 - `internal/platform/duckdb`'s mid-iteration ctx-cancel test flakes under full-suite load. (Phase 1)
 
 ## Open debts
+- MINOR (01 checkpoint): `cmd/quarry/run_build_version_test.go:1-2` header says "run is unexported" — file tests `buildVersion`; reword or drop.
+- NIT (01 checkpoint): `internal/importer/importer.go:109` `// unreachable:` reason should name the `pairTransfers` append sites in `transfers.go`.
 - Snapshots accumulate (~200 MB each) until 2c - known gap, owned by Phase 2c.
 - Phase 1 doc-budget MINORs, TOCTOU on `--from`, Compose-method refactors and the other Phase 1 debts (`docs/specifications/phase1-import-store/STATE.md`) - unowned - die unless re-opened.
 - Phase 2 copy candidate: V1 stderr tail `fix the account in Quicken and run quarry sync` reads off when only splits fail - unowned until findings copy (2d).
