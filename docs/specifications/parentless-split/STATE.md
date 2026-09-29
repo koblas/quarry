@@ -20,7 +20,7 @@ Scenarios complete: SCENARIO-01..05 (02-05 folded into 01). Last updated by SCEN
 - Narrow-loop `-run` regex `Import|Offender|FirstError` is case-sensitive and misses `Test_import_*`; run `go test ./internal/importer/` (SCENARIO-01).
 
 ## Open debts
-- internal/importer/transfers.go:65-68 — one-way transfer link on a skipped entry vanishes silently; not observed in user data (1347 links, all bidirectional) (REVIEW-01 correctness MINOR).
+- internal/importer/transfers.go:65-68 — one-way transfer link on a skipped entry vanishes silently; not observed in user data (1347 links, all bidirectional) (REVIEW-01 correctness MINOR). Final product-vision: ship as debt, not R4; if ever handled, a Phase 2 "transfer-looking entry with no pair" cleanup finding, not import-time copy.
 - internal/importer/transactions_test.go:329-340 — fold duplicate NULL-parent test into `..._whatever_its_amount` (REVIEW-01).
 - coverage_test.go:95-107, dangling_references_test.go:71-83, transactions_test.go:196-210 — add kept-row control arms (REVIEW-01).
 - internal/importer/transactions.go:70 — stale error text "read transaction ids"; transactions.go:102 split account guard into two steps (REVIEW-01).
