@@ -157,8 +157,8 @@ func Test_spend_help_shows_the_since_and_until_flags(t *testing.T) {
 	err := executeSpend(t, fakeReportStore{}, spendWindowNow, &stdout, &stderr, "--help")
 
 	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), "--since date   count transactions dated on or after date "+
-		"(YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year)")
-	assert.Contains(t, stdout.String(), "--until date   count transactions dated on or before date "+
-		"(YYYY, YYYY-MM or YYYY-MM-DD; default today)")
+	assert.Regexp(t, `--since date +count transactions dated on or after date `+
+		`\(YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year\)`, stdout.String())
+	assert.Regexp(t, `--until date +count transactions dated on or before date `+
+		`\(YYYY, YYYY-MM or YYYY-MM-DD; default today\)`, stdout.String())
 }

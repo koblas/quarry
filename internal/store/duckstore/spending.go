@@ -5,33 +5,56 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/koblas/quarry/internal/store"
 )
 
+// accountFilter is the ids of the accounts a spending read counts; empty counts every account.
+type accountFilter []string
+
+// and is the clause keeping only column values among the named accounts, or "" for every
+// account. Its parameters are numbered after the window's two.
+func (f accountFilter) and(column string) string {
+	if len(f) == 0 {
+		return ""
+	}
+	marks := make([]string, len(f))
+	for i := range f {
+		marks[i] = fmt.Sprintf("$%d", i+3)
+	}
+	return " AND " + column + " IN (" + strings.Join(marks, ", ") + ")"
+}
+
+// spendingQueryFor is a spending query for the accounts of a filter; each takes the window's
+// first and last day as $1 and $2, then one parameter per named account.
+type spendingQueryFor func(accountFilter) string
+
 // spendingQuery reads per-group and per-currency-total spending from v_spending, grouped by
 // the key column and ordered by rowOrder after the total rows.
-func spendingQuery(key, rowOrder string) string {
+func spendingQuery(key, rowOrder string) spendingQueryFor {
 	return spendingQueryFrom("v_spending", key, rowOrder)
 }
 
-// spendingQueryFrom is spendingQuery over source, a relation of v_spending's date, currency and
-// spent columns plus the key column.
-func spendingQueryFrom(source, key, rowOrder string) string {
-	return fmt.Sprintf(`
+// spendingQueryFrom is spendingQuery over source, a relation of v_spending's account_id, date,
+// currency and spent columns plus the key column.
+func spendingQueryFrom(source, key, rowOrder string) spendingQueryFor {
+	return func(accounts accountFilter) string {
+		return fmt.Sprintf(`
 SELECT %[1]s, currency, CAST(sum(spent) * 100 AS BIGINT), GROUPING(%[1]s)
 FROM %[3]s
-WHERE date >= CAST(? AS DATE) AND date <= CAST(? AS DATE)
+WHERE date >= CAST($1 AS DATE) AND date <= CAST($2 AS DATE)%[4]s
 GROUP BY GROUPING SETS ((%[1]s, currency), (currency))
 HAVING GROUPING(%[1]s) = 1 OR sum(spent) <> 0
-ORDER BY GROUPING(%[1]s), %[2]s`, key, rowOrder, source)
+ORDER BY GROUPING(%[1]s), %[2]s`, key, rowOrder, source, accounts.and("account_id"))
+	}
 }
 
 // spendingByMonthQuery keys each split by its month as YYYY-MM text, which a DATE scanned
 // into a string would not be.
 var spendingByMonthQuery = spendingQueryFrom(
-	"(SELECT date, currency, spent, strftime(month, '%Y-%m') AS month_key FROM v_spending)",
+	"(SELECT account_id, date, currency, spent, strftime(month, '%Y-%m') AS month_key FROM v_spending)",
 	"month_key", "month_key, currency")
 
 // splitTagNames is a CTE of each split's distinct tag names; a link to a missing tag has none.
@@ -40,34 +63,37 @@ const splitTagNames = `WITH split_tag_names AS (
 )`
 
 // spendingByTagQuery reads spending per tag, then per-currency totals counting each split once.
-const spendingByTagQuery = splitTagNames + `
+func spendingByTagQuery(accounts accountFilter) string {
+	return splitTagNames + `
 SELECT tag, currency, cents, grp FROM (
 	SELECT n.name AS tag, s.currency, CAST(sum(s.spent) * 100 AS BIGINT) AS cents, 0 AS grp
 	FROM v_spending s LEFT JOIN split_tag_names n ON n.split_id = s.split_id
-	WHERE s.date >= CAST($1 AS DATE) AND s.date <= CAST($2 AS DATE)
+	WHERE s.date >= CAST($1 AS DATE) AND s.date <= CAST($2 AS DATE)` + accounts.and("s.account_id") + `
 	GROUP BY n.name, s.currency
 	HAVING sum(s.spent) <> 0
 	UNION ALL
 	SELECT NULL, currency, CAST(sum(spent) * 100 AS BIGINT), 1
 	FROM v_spending
-	WHERE date >= CAST($1 AS DATE) AND date <= CAST($2 AS DATE)
+	WHERE date >= CAST($1 AS DATE) AND date <= CAST($2 AS DATE)` + accounts.and("account_id") + `
 	GROUP BY currency
 )
 ORDER BY grp, tag IS NOT NULL, lower(tag), tag, currency`
+}
 
 // multiTagSplitsQuery counts the splits in the window carrying more than one tag.
-const multiTagSplitsQuery = splitTagNames + `
+func multiTagSplitsQuery(accounts accountFilter) string {
+	return splitTagNames + `
 SELECT count(*) FROM (
 	SELECT n.split_id FROM split_tag_names n
 	WHERE n.split_id IN (
-		SELECT split_id FROM v_spending WHERE date >= CAST($1 AS DATE) AND date <= CAST($2 AS DATE)
+		SELECT split_id FROM v_spending WHERE date >= CAST($1 AS DATE) AND date <= CAST($2 AS DATE)` + accounts.and("account_id") + `
 	)
 	GROUP BY n.split_id HAVING count(*) > 1
 )`
+}
 
-// spendingQueries is the query of each grouping spending can read; each takes the window's
-// first and last day as its two arguments.
-var spendingQueries = map[store.SpendingGroup]string{
+// spendingQueries is the query of each grouping spending can read.
+var spendingQueries = map[store.SpendingGroup]spendingQueryFor{
 	// uncategorized first, then category ignoring case (a case-only tie by byte order), then currency
 	store.SpendByCategory: spendingQuery("category", "category IS NOT NULL, lower(category), category, currency"),
 	// each currency's biggest payee first; a tie by name ignoring case, then by byte order
@@ -82,11 +108,12 @@ var spendingQueries = map[store.SpendingGroup]string{
 var ErrUnsupportedGrouping = errors.New("spending grouping is not supported")
 
 // Spending reads the spending in params.Window (both days counted) grouped by params.By,
-// dropping a group that nets to zero; Totals keep it, one per currency. Grouping by tag also
+// counting only params.AccountIDs when any (every account otherwise), dropping a group that
+// nets to zero; Totals keep it, one per currency. Grouping by tag also
 // counts the splits carrying several tags. An unsupported grouping is an error, and a store
 // it cannot open or read is a *store.OpenError.
 func (s *Store) Spending(ctx context.Context, params store.SpendingParams) (store.Spending, error) {
-	query, ok := spendingQueries[params.By]
+	queryFor, ok := spendingQueries[params.By]
 	if !ok {
 		return store.Spending{}, fmt.Errorf("%w: %d", ErrUnsupportedGrouping, params.By)
 	}
@@ -97,8 +124,12 @@ func (s *Store) Spending(ctx context.Context, params store.SpendingParams) (stor
 	defer func() { _ = db.Close() }()
 
 	var spending store.Spending
+	accounts := accountFilter(params.AccountIDs)
 	args := []any{civilDay(params.Window.Since), civilDay(params.Window.Until)}
-	err = db.QueryRows(ctx, query, args, func(scan func(dest ...any) error) error {
+	for _, id := range accounts {
+		args = append(args, id)
+	}
+	err = db.QueryRows(ctx, queryFor(accounts), args, func(scan func(dest ...any) error) error {
 		var key sql.NullString
 		var currency string
 		var cents, grouping int64
@@ -113,7 +144,7 @@ func (s *Store) Spending(ctx context.Context, params store.SpendingParams) (stor
 		return nil
 	})
 	if err == nil && params.By == store.SpendByTag {
-		err = db.QueryRows(ctx, multiTagSplitsQuery, args, func(scan func(dest ...any) error) error {
+		err = db.QueryRows(ctx, multiTagSplitsQuery(accounts), args, func(scan func(dest ...any) error) error {
 			return scan(&spending.MultiTagSplits)
 		})
 	}

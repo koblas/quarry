@@ -8,7 +8,7 @@ import (
 
 // fakeStore answers each read with a canned result or fault; Query returns
 // at most maxRows of rows, recording the maxRows it was asked for in *gotMaxRows when set;
-// Spending records its params in *gotSpending when set.
+// Spending records its params in *gotSpending when set; Accounts counts its calls in *accountsReads when set.
 type fakeStore struct {
 	status     store.Status
 	accounts   store.AccountList
@@ -16,13 +16,19 @@ type fakeStore struct {
 	rows       [][]store.QueryValue
 	gotMaxRows *int
 
-	gotSpending *store.SpendingParams
-	err         error
+	gotSpending   *store.SpendingParams
+	accountsReads *int
+	err           error
 }
 
 func (f fakeStore) Status(context.Context) (store.Status, error) { return f.status, f.err }
 
-func (f fakeStore) Accounts(context.Context) (store.AccountList, error) { return f.accounts, f.err }
+func (f fakeStore) Accounts(context.Context) (store.AccountList, error) {
+	if f.accountsReads != nil {
+		*f.accountsReads++
+	}
+	return f.accounts, f.err
+}
 
 func (f fakeStore) Spending(_ context.Context, params store.SpendingParams) (store.Spending, error) {
 	if f.gotSpending != nil {

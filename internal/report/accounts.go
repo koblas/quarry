@@ -2,6 +2,7 @@ package report
 
 import (
 	"context"
+	"strings"
 
 	"github.com/koblas/quarry/internal/store"
 )
@@ -41,4 +42,54 @@ func (s *Server) Accounts(ctx context.Context, includeClosed bool) (AccountListi
 	hidden := len(list.Accounts) - len(open)
 	list.Accounts = open
 	return AccountListing{AccountList: list, Hidden: hidden}, nil
+}
+
+// resolveAccounts is the accounts args name, in the order given and without repeats: each arg is
+// an account's id, else its name ignoring case, closed and left-out accounts included. The first
+// arg naming no account, or several, is refused. It refuses a failed read like command's other reads.
+func (s *Server) resolveAccounts(ctx context.Context, command string, args []string) ([]store.Account, error) {
+	list, err := s.store.Accounts(ctx)
+	if err != nil {
+		return nil, s.readRefusal(ctx, command, err)
+	}
+	var resolved []store.Account
+	seen := make(map[string]bool, len(args))
+	for _, arg := range args {
+		account, err := pickAccount(list.Accounts, arg)
+		if err != nil {
+			return nil, err
+		}
+		if !seen[account.ID] {
+			seen[account.ID] = true
+			resolved = append(resolved, account)
+		}
+	}
+	return resolved, nil
+}
+
+// pickAccount is the account arg names: the one with that id, else the only one with that name
+// ignoring case.
+func pickAccount(accounts []store.AccountBalance, arg string) (store.Account, error) {
+	for _, a := range accounts {
+		if a.ID == arg {
+			return a.Account, nil
+		}
+	}
+	var named []store.Account
+	for _, a := range accounts {
+		if strings.EqualFold(a.Name, arg) {
+			named = append(named, a.Account)
+		}
+	}
+	switch len(named) {
+	case 0:
+		return store.Account{}, unknownAccountRefusal(arg)
+	case 1:
+		return named[0], nil
+	}
+	ids := make([]string, len(named))
+	for i, a := range named {
+		ids[i] = a.ID
+	}
+	return store.Account{}, ambiguousAccountRefusal(arg, ids)
 }
