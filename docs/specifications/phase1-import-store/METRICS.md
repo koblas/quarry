@@ -21,5 +21,6 @@
 | --- | --- | --- | --- |
 | 1 | arch, correctness, test, refactor + spec-check | 1/6/14/5 | FAIL |
 | 2 | correctness, test, arch, refactor (re-gate) | 0/1/10/3 | FAIL |
+| 3 | correctness, test, refactor (re-gate) | 0/1/0/2 | FAIL |
 
 ## Tokens
