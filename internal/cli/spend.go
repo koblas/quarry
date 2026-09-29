@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/humanize"
@@ -57,7 +58,7 @@ the rows can add up to more than the total.`,
 				return err
 			}
 
-			spending, err := srv.Spend(cmd.Context(), report.SpendRequest{Window: window, By: group})
+			spending, err := srv.Spend(cmd.Context(), report.SpendRequest{Window: window, By: group, Accounts: accounts})
 			if err != nil {
 				return &runtimeError{err: err}
 			}
@@ -78,13 +79,26 @@ the rows can add up to more than the total.`,
 	return cmd
 }
 
-// spendWarnings is the warnings a spending carries, unprefixed and never nil:
-// a --by tag read with multi-tagged splits warns that its rows add up to more than the total.
+// spendWarnings is the warnings a spending carries, unprefixed and never nil, in the order printed:
+// one for each named account Quicken leaves out of reports, then, for --by tag with multi-tagged
+// splits, that the rows add up to more than the total.
 func spendWarnings(s report.Spending) []string {
 	warnings := []string{}
+	for _, a := range s.Accounts {
+		if a.NotInReports {
+			warnings = append(warnings, leftOutOfReportsWarning(a, "spend"))
+		}
+	}
 	if s.By == store.SpendByTag && s.MultiTagSplits > 0 {
 		warnings = append(warnings, humanize.Count(s.MultiTagSplits, "split carries", "splits carry")+
 			" more than one tag, so the rows add up to more than the total")
 	}
 	return warnings
+}
+
+// leftOutOfReportsWarning is the warning that command counts nothing from a, which Quicken leaves
+// out of reports.
+func leftOutOfReportsWarning(a store.Account, command string) string {
+	return fmt.Sprintf("account %q is not used in reports in Quicken, so %s leaves it out; "+
+		"to include it, turn on reports for it in Quicken's account settings, then run quarry sync", a.Name, command)
 }

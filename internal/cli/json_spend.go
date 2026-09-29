@@ -72,11 +72,15 @@ func renderSpendingJSON(s report.Spending, warnings []string) ([]byte, error) {
 	for i, t := range s.Totals {
 		totals[i] = spendTotalDocument{Currency: t.Currency, Spent: jsonMoney(t.Spent)}
 	}
+	accountFilter := make([]spendAccountDocument, len(s.Accounts))
+	for i, a := range s.Accounts {
+		accountFilter[i] = spendAccountDocument{ID: a.ID, Name: a.Name}
+	}
 	return marshalDocument(spendDocument{
 		Since:         s.Window.Since.Format(jsonDateLayout),
 		Until:         s.Window.Until.Format(jsonDateLayout),
 		By:            spendGroupings[s.By].name,
-		AccountFilter: []spendAccountDocument{},
+		AccountFilter: accountFilter,
 		Rows:          rows,
 		Totals:        totals,
 		Warnings:      warnings,

@@ -50,7 +50,8 @@ func renderSpending(s report.Spending) string {
 	}
 
 	var b strings.Builder
-	b.WriteString("Spending " + s.Window.Since.Format(dateLayout) + " to " + s.Window.Until.Format(dateLayout) + " in all accounts\n\n")
+	b.WriteString("Spending " + s.Window.Since.Format(dateLayout) + " to " + s.Window.Until.Format(dateLayout) +
+		" in " + spendingAccountsCaption(s.Accounts) + "\n\n")
 	for _, row := range rows {
 		b.WriteString(padRight(row[0], widths[0]) + accountsColumnGap +
 			padRight(row[1], widths[1]) + accountsColumnGap +
@@ -61,4 +62,16 @@ func renderSpending(s report.Spending) string {
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// spendingAccountsCaption is the names of accounts joined by ", ", or "all accounts" when none.
+func spendingAccountsCaption(accounts []store.Account) string {
+	if len(accounts) == 0 {
+		return "all accounts"
+	}
+	names := make([]string, len(accounts))
+	for i, a := range accounts {
+		names[i] = a.Name
+	}
+	return strings.Join(names, ", ")
 }
