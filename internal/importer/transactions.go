@@ -41,10 +41,11 @@ type txnRef struct {
 const transactionsQuery = `
 SELECT t.Z_PK, t.ZACCOUNT, CAST(t.ZPOSTEDDATE AS REAL), CAST(t.ZENTEREDDATE AS REAL),
        typeof(t.ZAMOUNT), CAST(t.ZAMOUNT AS TEXT),
-       t.ZRECONCILESTATUS, t.ZUSERPAYEE, t.ZNOTE, t.ZCHECKNUMBER
+       t.ZRECONCILESTATUS, t.ZUSERPAYEE, t.ZNOTE, t.ZCHECKNUMBER,
+       COALESCE(t.ZEXCLUDEFROMREPORTS, 0) <> 0
 FROM ZTRANSACTION t
 WHERE t.Z_ENT = ? AND COALESCE(t.ZDELETIONCOUNT, 0) = 0
-ORDER BY COALESCE(t.ZPOSTEDDATE, t.ZENTEREDDATE), t.ZACCOUNT, t.Z_PK
+ORDER BY COALESCE(t.ZENTEREDDATE, t.ZPOSTEDDATE), t.ZACCOUNT, t.Z_PK
 `
 
 const transactionSurveyQuery = `SELECT Z_PK, Z_ENT, ZACCOUNT, COALESCE(ZDELETIONCOUNT, 0) FROM ZTRANSACTION`
@@ -84,7 +85,9 @@ func surveyTransactions(
 // no row at all, whose date or amount is missing, whose amount is stored
 // as text or blob, has too much precision or is too large, or whose
 // reconcile status is unmapped, is added to off and excluded.
-// A payee reference to a deleted or missing payee stores NULL.
+// A payee reference to a deleted or missing payee stores NULL. A
+// transaction is dated by its entered day (the register date), else its
+// posted day; PostedDate keeps the posted day whenever there is one.
 func mapTransactions(
 	ctx context.Context, src Source, transactionEntity int64,
 	accounts map[int64]accountRef, existingAccounts, existingPayees map[int64]bool, off *offenders,
@@ -101,7 +104,8 @@ func mapTransactions(
 		var status sql.NullInt64
 		var payee sql.NullInt64
 		var note, cheque sql.NullString
-		if err := scan(&pk, &account, &posted, &entered, &amtType, &amtText, &status, &payee, &note, &cheque); err != nil {
+		var excluded bool
+		if err := scan(&pk, &account, &posted, &entered, &amtType, &amtText, &status, &payee, &note, &cheque, &excluded); err != nil {
 			return err
 		}
 
@@ -122,9 +126,9 @@ func mapTransactions(
 		var date time.Time
 		var dateStr string
 		if hasDate {
-			seconds := entered.Float64
-			if posted.Valid {
-				seconds = posted.Float64
+			seconds := posted.Float64
+			if entered.Valid {
+				seconds = entered.Float64
 			}
 			date = coreDataToDate(seconds)
 			dateStr = date.Format(dateLayout)
@@ -178,7 +182,11 @@ func mapTransactions(
 		id := fmt.Sprintf("txn-%d", pk)
 		txn := store.Transaction{
 			ID: id, SourceID: pk, AccountID: acct.ID, Date: date,
-			Amount: cents, Currency: acct.Currency, Status: statusStr,
+			Amount: cents, Currency: acct.Currency, Status: statusStr, ExcludedFromReports: excluded,
+		}
+		if posted.Valid {
+			postedDay := coreDataToDate(posted.Float64)
+			txn.PostedDate = &postedDay
 		}
 		if payee.Valid && existingPayees[payee.Int64] {
 			pid := fmt.Sprintf("payee-%d", payee.Int64)

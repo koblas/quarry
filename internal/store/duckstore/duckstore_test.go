@@ -99,6 +99,33 @@ func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
 		"2026-09-27 14:30:05 /Users/alex/Documents/Home.quicken 14 15 16 17")
 }
 
+func Test_replace_stores_the_report_flags_and_the_posted_date(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	rows.Accounts = append(rows.Accounts, store.Account{
+		ID: "acct-2", SourceID: 2, Name: "Old Card", Type: "credit_card", Currency: "CAD", Active: true, NotInReports: true,
+	})
+	rows.Transactions[0].ExcludedFromReports = true
+	rows.Transactions[0].PostedDate = new(time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC))
+	rows.Transactions = append(rows.Transactions, store.Transaction{
+		ID: "txn-2", SourceID: 2, AccountID: "acct-1", Date: time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC),
+		Amount: 500, Currency: "CAD", Status: "uncleared",
+	})
+
+	path, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
+
+	require.NoError(t, err)
+	db, err := duckdb.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	assertScalar(t, db, "SELECT CAST(in_reports AS VARCHAR) FROM accounts WHERE id = 'acct-1'", "true")
+	assertScalar(t, db, "SELECT CAST(in_reports AS VARCHAR) FROM accounts WHERE id = 'acct-2'", "false")
+	assertScalar(t, db, "SELECT CAST(excluded_from_reports AS VARCHAR) FROM transactions WHERE id = 'txn-1'", "true")
+	assertScalar(t, db, "SELECT CAST(excluded_from_reports AS VARCHAR) FROM transactions WHERE id = 'txn-2'", "false")
+	assertScalar(t, db, "SELECT CAST(posted_date AS VARCHAR) FROM transactions WHERE id = 'txn-1'", "2026-03-14")
+	assertScalar(t, db, "SELECT COALESCE(CAST(posted_date AS VARCHAR), 'NULL') FROM transactions WHERE id = 'txn-2'", "NULL")
+}
+
 // The held reader reads nothing before Replace: a cached page would hide an overwrite of its file.
 func Test_replace_leaves_a_held_reader_on_the_old_rows_and_a_later_read_sees_the_new(t *testing.T) {
 	t.Parallel()
