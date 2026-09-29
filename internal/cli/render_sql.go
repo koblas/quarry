@@ -13,9 +13,8 @@ const sqlColumnGap = "  "
 // sqlCellEscaper escapes the only characters that would break a table line.
 var sqlCellEscaper = strings.NewReplacer("\n", `\n`, "\t", `\t`, "\r", `\r`)
 
-// renderSQLTable renders result as the sql table: a header of column names,
-// then one line per row. Numeric columns are right-aligned, others left, and
-// no line ends in padding.
+// renderSQLTable renders result as a header of column names, then one line
+// per row; numeric columns right-aligned, no line ending in padding.
 func renderSQLTable(result store.QueryResult) string {
 	numeric := make([]bool, len(result.Columns))
 	header := make([]string, len(result.Columns))

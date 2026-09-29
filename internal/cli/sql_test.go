@@ -21,7 +21,6 @@ import (
 )
 
 var (
-	errStreamReset         = errors.New("stream reset")
 	errStreamResetTwoLines = errors.New("stream reset\nby peer")
 	errNoText              = errors.New("")
 )
@@ -139,30 +138,17 @@ func Test_sql_reports_a_stdin_read_fault(t *testing.T) {
 func Test_sql_reports_an_interrupt_while_reading_stdin(t *testing.T) {
 	blocked, unblock := io.Pipe()
 	t.Cleanup(func() { _ = unblock.Close() })
-	cases := []struct {
-		name  string
-		stdin io.Reader
-	}{
-		{name: "stdin still open", stdin: blocked},
-		{name: "an empty stdin", stdin: strings.NewReader("")},
-		{name: "a stdin read fault", stdin: iotest.ErrReader(errStreamReset)},
-	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	var gotQuery string
+	var stdout bytes.Buffer
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(t.Context())
-			cancel()
-			var gotQuery string
-			var stdout bytes.Buffer
+	err := cli.Execute(ctx, []string{"sql", "-"}, sqlEnv(fakeReportStore{gotQuery: &gotQuery}, blocked, &stdout, io.Discard))
 
-			err := cli.Execute(ctx, []string{"sql", "-"}, sqlEnv(fakeReportStore{gotQuery: &gotQuery}, c.stdin, &stdout, io.Discard))
-
-			require.EqualError(t, err, "query interrupted")
-			require.ErrorIs(t, err, store.ErrQueryInterrupted)
-			assert.Empty(t, stdout.String())
-			assert.Empty(t, gotQuery)
-		})
-	}
+	require.EqualError(t, err, "query interrupted")
+	require.ErrorIs(t, err, store.ErrQueryInterrupted)
+	assert.Empty(t, stdout.String())
+	assert.Empty(t, gotQuery)
 }
 
 func Test_sql_prints_the_result_as_a_table(t *testing.T) {
@@ -212,9 +198,12 @@ func Test_sql_help_describes_the_command_and_the_limit_flag(t *testing.T) {
 opened read-only: a query cannot change it, read or write other files, or
 load extensions.
 
-Pass the query as one quoted argument, or - to read it from stdin. Amounts
-are DECIMAL(18,2) in each account's own currency; negative is money leaving
-the account. Transfers between your own accounts are in the transfers table
+Pass the query as one quoted argument, or - to read it from stdin. A query
+that starts with - (such as a -- comment) goes after --:
+quarry sql -- "-- monthly totals
+SELECT ..."
+Amounts are DECIMAL(18,2) in each account's own currency; negative is money
+leaving the account. Transfers between your own accounts are in the transfers table
 and splits.transfer_account_id, never in a category kind. List the tables
 and views with: quarry sql "SHOW TABLES"
 

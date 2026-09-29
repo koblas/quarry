@@ -27,13 +27,11 @@ const (
 // kindJSON is the JSON type: the driver decodes it, losing the text DuckDB would print.
 const kindJSON = "JSON"
 
-// nestedSpecial are the characters that make DuckDB quote a value nested
-// in a LIST, STRUCT or MAP.
+// nestedSpecial are the characters that make DuckDB quote a nested value.
 const nestedSpecial = `"'(),:=[]{}`
 
-// cellValue renders one scanned value of a column of type t as DuckDB's own
-// text for it (what CAST(v AS VARCHAR) gives) plus its typed form. It
-// reports false for a value it cannot render.
+// cellValue is v's DuckDB text (what CAST(v AS VARCHAR) gives) plus its typed
+// form; false for a value it cannot render.
 func cellValue(t *typeNode, v any) (Value, bool) {
 	if v == nil {
 		return Value{Null: true, Text: nullText}, true
@@ -45,9 +43,8 @@ func cellValue(t *typeNode, v any) (Value, bool) {
 	return Value{Text: text, Native: nativeValue(t, v, text)}, true
 }
 
-// nativeValue is v's typed form: nil, bool, int64, uint64, float32 or
-// float64, a time.Time for a finite DATE or TIMESTAMP of any precision or
-// zone, and text for everything else.
+// nativeValue is v's typed form: nil, bool, int64, uint64, float32, float64,
+// a time.Time for a finite DATE or TIMESTAMP, else text.
 func nativeValue(t *typeNode, v any, text string) any {
 	switch v := v.(type) {
 	case bool, float32, float64:
@@ -113,9 +110,8 @@ func valueText(t *typeNode, v any) (string, bool) {
 	}
 }
 
-// floatText is DuckDB's float text: the shortest round-tripping digits,
-// exponent form below 1e-4 and from 1e16, otherwise fixed with at least one
-// decimal place; nan, inf, -inf.
+// floatText is DuckDB's float text: shortest round-tripping digits, exponent
+// form below 1e-4 and from 1e16; nan, inf, -inf.
 func floatText(f float64, bitSize int) string {
 	switch {
 	case math.IsNaN(f):
@@ -365,9 +361,8 @@ func structFieldOrder(t *typeNode, m map[string]any) []string {
 	return names
 }
 
-// nestedText renders a value inside a LIST, STRUCT or MAP: a scalar's text
-// is quoted when DuckDB would quote it; NULL, nested values and a UNION's
-// value are not.
+// nestedText renders v inside a LIST, STRUCT or MAP, quoting a scalar as
+// DuckDB does; NULL, nested and UNION values are never quoted.
 func nestedText(t *typeNode, v any) (string, bool) {
 	text, ok := valueText(t, v)
 	if !ok {
@@ -383,9 +378,8 @@ func nestedText(t *typeNode, v any) (string, bool) {
 	return text, true
 }
 
-// needsQuotes reports whether DuckDB quotes s nested in another value: s is
-// empty, starts or ends with whitespace, reads as null, or holds a
-// character in nestedSpecial.
+// needsQuotes reports whether DuckDB quotes s nested in another value: empty,
+// edge whitespace, null, or a nestedSpecial character.
 func needsQuotes(s string) bool {
 	return s == "" || isASCIISpace(s[0]) || isASCIISpace(s[len(s)-1]) ||
 		strings.EqualFold(s, "null") || strings.ContainsAny(s, nestedSpecial)

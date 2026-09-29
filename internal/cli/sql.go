@@ -27,9 +27,12 @@ func newSQLCommand(newReport ReportFactory, jsonOut *bool) *cobra.Command {
 opened read-only: a query cannot change it, read or write other files, or
 load extensions.
 
-Pass the query as one quoted argument, or - to read it from stdin. Amounts
-are DECIMAL(18,2) in each account's own currency; negative is money leaving
-the account. Transfers between your own accounts are in the transfers table
+Pass the query as one quoted argument, or - to read it from stdin. A query
+that starts with - (such as a -- comment) goes after --:
+quarry sql -- "-- monthly totals
+SELECT ..."
+Amounts are DECIMAL(18,2) in each account's own currency; negative is money
+leaving the account. Transfers between your own accounts are in the transfers table
 and splits.transfer_account_id, never in a category kind. List the tables
 and views with: quarry sql "SHOW TABLES"
 
@@ -128,7 +131,7 @@ func readStdinQuery(ctx context.Context, in io.Reader) (string, error) {
 	case <-ctx.Done():
 	case got = <-done:
 	}
-	// Checked whichever case won, so an interrupt is never reported as a read fault or a blank query.
+	// A read that finishes as the interrupt lands still reports the interrupt.
 	if err := ctx.Err(); err != nil {
 		return "", &runtimeError{err: queryFailure(fmt.Errorf("%w: %w", store.ErrQueryInterrupted, err))}
 	}

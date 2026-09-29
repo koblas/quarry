@@ -62,10 +62,8 @@ func (t *typeNode) member(name string) *typeNode {
 	return nil
 }
 
-// parseTypeName parses a type name as the duckdb driver reports it:
-// scalar names, DECIMAL(w,s), MAP(K, V), STRUCT("a" T, ...) and
-// UNION("a" T, ...) with "" escaping a quote in a name, and any number of
-// [] (LIST) or [N] (ARRAY) suffixes. It reports false for anything else.
+// parseTypeName parses a driver type name: scalars, DECIMAL, MAP, STRUCT,
+// UNION and [] or [N] suffixes; false for anything else.
 func parseTypeName(name string) (*typeNode, bool) {
 	p := typeParser{s: name}
 	t, ok := p.parseType()

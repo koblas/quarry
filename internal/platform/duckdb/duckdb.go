@@ -246,7 +246,7 @@ func IsAccessDisabled(err error) bool {
 // IsEmptyQuery reports whether err is the driver's refusal of a query with no
 // statement in it, such as ";" or a lone comment.
 func IsEmptyQuery(err error) bool {
-	// Whole-text match: the driver's sentinel is unexported, and error('empty query') gains a type prefix.
+	// Whole text: the driver's sentinel is unexported and error('empty query') gains a prefix.
 	return err.Error() == "empty query"
 }
 
