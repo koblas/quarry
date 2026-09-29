@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-03
-status: open
+status: done
 ---
 
 # SCENARIO-03: status --json returns the store description as a document
@@ -23,18 +23,18 @@ Mutation checks: NULL-`taken_at` guard in `newStatusDocument` → `Test_renderSt
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_status_json_test.go` (new) `Test_run_status_json_describes_the_store_sync_built` — copy the fixture/sync setup of `run_status_test.go:21-75` (`Test_run_status_describes_the_store_sync_built`); run `status --json`; assert exit 0, stderr empty, stdout equals the exact expected document bytes (proves key order + indent) with store path/snapshot path/source absolute (not `~`), `taken_at` = manifest's `taken_at`, `sha256` = manifest's, `format_version` = `duckstore.FormatVersion`, `built_at` RFC3339 UTC ending `Z`, `rows.transfers` = 2, `balances`/`transfers` values as that fixture's human block. Reuse `onlyFileWithSuffix`, `storePathUnder`, `snapshotID` helpers; `built_at`/`quarry_version` asserted by shape (`(devel)` in test binary; `built_at` parses and is UTC) since they are not fixed.
-- [ ] Step 2: `internal/cli/status.go:12`, `internal/cli/json_status.go` (new) — signature-only stubs: `newStatusCommand(newReport, jsonOut *bool)` and `renderStatusJSON(st store.Status) ([]byte, error)`; `root.go:27` passes `jsonOut`. Test must fail at its assertion (human block printed), not at compile.
+- [x] Step 1: `cmd/quarry/run_status_json_test.go` (new) `Test_run_status_json_describes_the_store_sync_built` — copy the fixture/sync setup of `run_status_test.go:21-75` (`Test_run_status_describes_the_store_sync_built`); run `status --json`; assert exit 0, stderr empty, stdout equals the exact expected document bytes (proves key order + indent) with store path/snapshot path/source absolute (not `~`), `taken_at` = manifest's `taken_at`, `sha256` = manifest's, `format_version` = `duckstore.FormatVersion`, `built_at` RFC3339 UTC ending `Z`, `rows.transfers` = 2, `balances`/`transfers` values as that fixture's human block. Reuse `onlyFileWithSuffix`, `storePathUnder`, `snapshotID` helpers; `built_at`/`quarry_version` asserted by shape (`(devel)` in test binary; `built_at` parses and is UTC) since they are not fixed.
+- [x] Step 2: `internal/cli/status.go:12`, `internal/cli/json_status.go` (new) — signature-only stubs: `newStatusCommand(newReport, jsonOut *bool)` and `renderStatusJSON(st store.Status) ([]byte, error)`; `root.go:27` passes `jsonOut`. Test must fail at its assertion (human block printed), not at compile.
 
 ### Build
-- [ ] Step 3: `internal/cli/json_status.go` — `statusDocument` + `statusStoreDocument`, `statusSnapshotDocument` (`TakenAt *string`, `Source *string`), `statusDatesDocument` (`First, Last *string`), `statusBalancesDocument`, `statusSplitsDocument`, `statusTransfersDocument` types in spec key order; `newStatusDocument(st)` and `renderStatusJSON`. `jsonPayee`-style pointer helper for the string-or-nil fields (reuse `jsonPayee` at `json.go:234-240` only if it reads clean; it maps `""`→nil, exactly the source rule). Encoder identical to `json.go:118-135`; encode-failure branch marked `// unreachable:` like `json.go:131`. Tests in `internal/cli/json_status_internal_test.go` (new) `Test_renderStatusJSON`, subtests over `statusFixture()` (`render_status_internal_test.go:57`): full document exact bytes; no transactions → `"first":null,"last":null`; `TakenAt` zero → `"taken_at":null` and key present; `Source` `""` → `"source":null`; whitespace-only source → string kept; `BuiltAt` given in a non-UTC zone → UTC `Z`; `taken_at` unchanged under `useZone(EDT)` (UTC, never local); warnings encode as `[]`; `dates` unaffected by `useZone`.
-- [ ] Step 4: `internal/cli/status.go:22-37` — branch on `*jsonOut` between `renderStatusJSON(st)` and `renderStatus(...)`; single `Fprint` (write-fault mapping unchanged: existing `Test_run_status_reports_exit_1_when_stdout_cannot_be_written` covers the shared write).
+- [x] Step 3: `internal/cli/json_status.go` — `statusDocument` + `statusStoreDocument`, `statusSnapshotDocument` (`TakenAt *string`, `Source *string`), `statusDatesDocument` (`First, Last *string`), `statusBalancesDocument`, `statusSplitsDocument`, `statusTransfersDocument` types in spec key order; `newStatusDocument(st)` and `renderStatusJSON`. `jsonPayee`-style pointer helper for the string-or-nil fields (reuse `jsonPayee` at `json.go:234-240` only if it reads clean; it maps `""`→nil, exactly the source rule). Encoder identical to `json.go:118-135`; encode-failure branch marked `// unreachable:` like `json.go:131`. Tests in `internal/cli/json_status_internal_test.go` (new) `Test_renderStatusJSON`, subtests over `statusFixture()` (`render_status_internal_test.go:57`): full document exact bytes; no transactions → `"first":null,"last":null`; `TakenAt` zero → `"taken_at":null` and key present; `Source` `""` → `"source":null`; whitespace-only source → string kept; `BuiltAt` given in a non-UTC zone → UTC `Z`; `taken_at` unchanged under `useZone(EDT)` (UTC, never local); warnings encode as `[]`; `dates` unaffected by `useZone`.
+- [x] Step 4: `internal/cli/status.go:22-37` — branch on `*jsonOut` between `renderStatusJSON(st)` and `renderStatus(...)`; single `Fprint` (write-fault mapping unchanged: existing `Test_run_status_reports_exit_1_when_stdout_cannot_be_written` covers the shared write).
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new types (1-2 lines each); update `newStatusCommand` doc to mention `--json`.
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new types (1-2 lines each); update `newStatusCommand` doc to mention `--json`.
 
 ### Verify
-- [ ] Step 6: full verification per `.claude/rules/agent-briefs.md` → *Verification* (`git add` new files before `uncovered-diff.py`), `.claude/scripts/spec-check.py phase2a-read-foundation`, tick SCENARIO-03 with its acceptance test, set `status: done`, fold Handoff into STATE.md.
+- [x] Step 6: full verification per `.claude/rules/agent-briefs.md` → *Verification* (`git add` new files before `uncovered-diff.py`), `.claude/scripts/spec-check.py phase2a-read-foundation`, tick SCENARIO-03 with its acceptance test, set `status: done`, fold Handoff into STATE.md.
 
 ## Handoff
 

@@ -22,24 +22,7 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	b := v9fixture.NewBuilder()
-	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	savingsPK := b.Account(v9fixture.AccountRow{Name: "US Savings", Type: "SAVINGS", Currency: "USD", Active: true})
-	b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	earliest := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
-	transferDay := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	latest := time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC)
-	reconciled := int64(2)
-	depositTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "100.00", PostedDate: &earliest, Status: &reconciled})
-	b.Entry(v9fixture.EntryRow{Parent: depositTxn, Amount: "100.00"})
-	b.Reconcile(v9fixture.ReconcileRow{Account: chequingPK, EndDate: &earliest, EndingBalance: "100.00"})
-	sentTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-100.00", PostedDate: &transferDay})
-	b.Entry(v9fixture.EntryRow{Parent: sentTxn, Amount: "-100.00", QuickenID: 1001, Transfer: "2002"})
-	receivedTxn := b.Transaction(v9fixture.TransactionRow{Account: savingsPK, Amount: "75.00", PostedDate: &transferDay})
-	b.Entry(v9fixture.EntryRow{Parent: receivedTxn, Amount: "75.00", QuickenID: 2002, Transfer: "1001"})
-	strayTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-5.00", PostedDate: &latest})
-	b.Entry(v9fixture.EntryRow{Parent: strayTxn, Amount: "-5.00", QuickenID: 3001, Transfer: "Old Visa"})
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	bundle := writeStatusFixtureBundle(t, home)
 
 	var syncOut, syncErr bytes.Buffer
 	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncOut, &syncErr), syncErr.String())
@@ -146,4 +129,30 @@ transactions cover, and the checks sync ran when it built the store.
 
 status reads only quarry's store; it never looks at Quicken. Run quarry sync
 to bring the store up to date.`)
+}
+
+// writeStatusFixtureBundle writes a bundle with a reconciled CAD account, a
+// never-reconciled USD account, an investment account, one paired cross-currency
+// transfer and one one-sided transfer leg.
+func writeStatusFixtureBundle(t *testing.T, home string) v9fixture.Bundle {
+	t.Helper()
+	b := v9fixture.NewBuilder()
+	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	savingsPK := b.Account(v9fixture.AccountRow{Name: "US Savings", Type: "SAVINGS", Currency: "USD", Active: true})
+	b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	earliest := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+	transferDay := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	latest := time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC)
+	reconciled := int64(2)
+	depositTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "100.00", PostedDate: &earliest, Status: &reconciled})
+	b.Entry(v9fixture.EntryRow{Parent: depositTxn, Amount: "100.00"})
+	b.Reconcile(v9fixture.ReconcileRow{Account: chequingPK, EndDate: &earliest, EndingBalance: "100.00"})
+	sentTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-100.00", PostedDate: &transferDay})
+	b.Entry(v9fixture.EntryRow{Parent: sentTxn, Amount: "-100.00", QuickenID: 1001, Transfer: "2002"})
+	receivedTxn := b.Transaction(v9fixture.TransactionRow{Account: savingsPK, Amount: "75.00", PostedDate: &transferDay})
+	b.Entry(v9fixture.EntryRow{Parent: receivedTxn, Amount: "75.00", QuickenID: 2002, Transfer: "1001"})
+	strayTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-5.00", PostedDate: &latest})
+	b.Entry(v9fixture.EntryRow{Parent: strayTxn, Amount: "-5.00", QuickenID: 3001, Transfer: "Old Visa"})
+
+	return b.WriteBundle(t, filepath.Join(home, "Documents"))
 }

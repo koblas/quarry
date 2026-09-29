@@ -206,7 +206,7 @@ func newSplitMismatchDocuments(mismatches []store.SplitMismatch) []splitMismatch
 	for i, m := range mismatches {
 		out[i] = splitMismatchDocument{
 			ID: m.ID, Date: m.Date.Format(jsonDateLayout), Account: m.Account, Currency: m.Currency,
-			Payee: jsonPayee(m.Payee), Amount: jsonMoney(m.Amount), SplitsTotal: jsonMoney(m.SplitsTotal),
+			Payee: jsonNullString(m.Payee), Amount: jsonMoney(m.Amount), SplitsTotal: jsonMoney(m.SplitsTotal),
 		}
 	}
 	return out
@@ -224,19 +224,19 @@ func newOneSidedDocuments(legs []store.OneSidedTransfer) []oneSidedDocument {
 	for i, leg := range legs {
 		out[i] = oneSidedDocument{
 			ID: leg.ID, Date: leg.Date.Format(jsonDateLayout), Account: leg.Account, Currency: leg.Currency,
-			Payee: jsonPayee(leg.Payee), Amount: jsonMoney(leg.Amount),
+			Payee: jsonNullString(leg.Payee), Amount: jsonMoney(leg.Amount),
 			OtherAccount: leg.OtherAccount, OtherAccountID: leg.OtherAccountID,
 		}
 	}
 	return out
 }
 
-// jsonPayee returns nil for an absent payee (""), else a pointer to name.
-func jsonPayee(name string) *string {
-	if name == "" {
+// jsonNullString returns nil for the empty string, else a pointer to s.
+func jsonNullString(s string) *string {
+	if s == "" {
 		return nil
 	}
-	return &name
+	return &s
 }
 
 // jsonMoney renders cents as a 2-decimal amount with a leading "-" for a
