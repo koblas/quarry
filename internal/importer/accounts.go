@@ -37,6 +37,7 @@ type accountRef struct {
 	Type     string
 }
 
+// accountsQuery reads NULL ZUSEDINREPORTS as in reports and NULL ZSIMPLEINVESTING as linked tracking off.
 const accountsQuery = `
 SELECT a.Z_PK, a.ZNAME, a.ZTYPENAME, a.ZCURRENCY, fi.ZNAME,
        COALESCE(a.ZCLOSED, 0), COALESCE(a.ZACTIVE, 0), COALESCE(a.ZDELETIONCOUNT, 0),
@@ -46,12 +47,9 @@ LEFT JOIN ZFINANCIALINSTITUTION fi ON a.ZFINANCIALINSTITUTION = fi.Z_PK
 ORDER BY a.ZNAME, a.Z_PK
 `
 
-// mapAccounts reads every ZACCOUNT row; ZUSEDINREPORTS NULL means in reports
-// (Quicken's default) and ZSIMPLEINVESTING NULL means linked account tracking
-// is off; any non-zero value of either is on. A deleted row is excluded
-// silently (never validated, never counted). A row with no name, no type or no
-// currency, an unmapped type or an unsupported currency is added to off
-// and excluded from the returned rows and refs.
+// mapAccounts reads every ZACCOUNT row. A deleted row is excluded silently (never
+// validated, never counted). A row with no name, no type or no currency, an unmapped
+// type or an unsupported currency is added to off and excluded from the returned rows and refs.
 func mapAccounts(ctx context.Context, src Source, off *offenders) ([]store.Account, map[int64]accountRef, error) {
 	var rows []store.Account
 	refs := make(map[int64]accountRef)

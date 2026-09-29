@@ -7,9 +7,7 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// leftOutWarnings is one warning per account in accounts that command leaves out, in order: the
-// linked-tracking warning for a linked account (even one also not in reports), else the
-// left-out-of-reports one; never nil.
+// leftOutWarnings is one warning per account in accounts that command leaves out, never nil.
 func leftOutWarnings(accounts []store.Account, command string) []string {
 	warnings := []string{}
 	for _, a := range accounts {

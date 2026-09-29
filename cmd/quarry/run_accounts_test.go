@@ -204,8 +204,6 @@ func Test_run_accounts_all_marks_accounts_left_out_of_reports(t *testing.T) {
 		stdout.String())
 }
 
-// syncLinkedTrackingFixture builds an open, an inactive and a closed account that
-// use Quicken's linked account tracking (the closed one also not in reports), plus one that does not.
 func syncLinkedTrackingFixture(t *testing.T, home string) {
 	t.Helper()
 	on, off := new(int64(1)), new(int64(0))

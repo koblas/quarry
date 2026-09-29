@@ -52,10 +52,8 @@ func accountBalance(cents *int64) string {
 	return formatMoney(*cents)
 }
 
-// accountStatus joins, with ", ", "closed" for a closed account or "inactive"
-// for an open one that is not active, then "not in reports" when Quicken
-// leaves the account out of its reports, then "linked tracking" when it uses linked account
-// tracking; "" when none applies.
+// accountStatus joins, with ", ", the state (closed or inactive), "not in reports" and
+// "linked tracking" that apply; "" when none does.
 func accountStatus(closed, active, notInReports, linkedTracking bool) string {
 	var parts []string
 	switch {

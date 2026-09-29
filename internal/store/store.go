@@ -24,9 +24,8 @@ type Account struct {
 	LinkedTracking bool
 }
 
-// LeftOutOfReports reports whether spend and cashflow leave the account out,
-// as Quicken's reports do: it is not in reports or it uses linked account
-// tracking.
+// LeftOutOfReports reports whether spend and cashflow leave the account out, as
+// Quicken's reports do: not in reports, or using linked account tracking.
 func (a Account) LeftOutOfReports() bool {
 	return a.NotInReports || a.LinkedTracking
 }

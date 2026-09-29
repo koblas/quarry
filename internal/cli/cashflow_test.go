@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"testing"
 	"time"
@@ -272,6 +273,20 @@ func Test_cashflow_warns_that_linked_tracking_leaves_out_a_named_account_before_
 	assert.Equal(t, "quarry: warning: "+linkedCashFlowWarning("Netskope 401(k)")+"\n"+
 		"quarry: warning: "+leftOutCashFlowWarning("Old Card")+"\n"+
 		"quarry: warning: "+linkedCashFlowWarning("Old 401(k)")+"\n", stderr.String())
+}
+
+func Test_cashflow_json_lists_a_linked_tracking_warning_before_a_left_out_of_reports_one_unprefixed(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeCashFlow(t, withCashFlow(namedAccounts()), &stdout, &stderr,
+		"--account", linkedID, "--account", "Old Card", "--json")
+
+	require.NoError(t, err)
+	var doc struct {
+		Warnings []string `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	assert.Equal(t, []string{linkedCashFlowWarning("Netskope 401(k)"), leftOutCashFlowWarning("Old Card")}, doc.Warnings)
 }
 
 func Test_cashflow_says_nothing_of_an_empty_window_when_every_named_account_is_left_out_and_one_is_linked(t *testing.T) {

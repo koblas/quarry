@@ -323,6 +323,15 @@ func Test_cash_flow_view_carries_its_reports_note(t *testing.T) {
 	assert.Equal(t, [][]string{{"excludes accounts where accounts.in_reports is false or accounts.linked_tracking is true, as Quicken reports do."}}, got)
 }
 
+func Test_spending_view_carries_its_reports_note(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, reportRows())
+
+	got := queryTexts(t, st, "SELECT comment FROM duckdb_views() WHERE view_name = 'v_spending'")
+
+	assert.Equal(t, [][]string{{"expense splits of v_cash_flow with spent = -amount; same exclusions as v_cash_flow, so totals match quarry spend."}}, got)
+}
+
 func Test_spending_holds_expense_flow_with_its_sign_flipped(t *testing.T) {
 	t.Parallel()
 	rows := reportRows()

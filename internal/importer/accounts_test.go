@@ -123,6 +123,7 @@ func Test_import_marks_an_account_quicken_leaves_out_of_reports(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, fake.Rows.Accounts, 4)
 	assert.True(t, fake.Rows.Accounts[0].NotInReports, "0 is off")
+	assert.False(t, fake.Rows.Accounts[0].LinkedTracking, "the flags are independent")
 	assert.False(t, fake.Rows.Accounts[1].NotInReports, "1 is on")
 	assert.False(t, fake.Rows.Accounts[2].NotInReports, "NULL is on")
 	assert.False(t, fake.Rows.Accounts[3].NotInReports, "any non-zero is on")

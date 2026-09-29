@@ -243,6 +243,17 @@ that starts with - (such as a -- comment) goes after --:
 
 Amounts are DECIMAL(18,2) ...
 ```
+- `sql` Long (Gate ruling): the transfer sentence is replaced (the 2a claim that transfers are "never in a category kind" is false: unmatched legs have `transfer_account_id` NULL and sit in system/income/expense/NULL categories). The paragraph after the example reads:
+```
+Amounts are DECIMAL(18,2) in each account's own currency; negative is money
+leaving the account. For spending and income, query v_spending and
+v_cash_flow: they already leave out transfers between your own accounts,
+Quicken's system categories, transactions excluded from reports and
+accounts Quicken leaves out of reports, so their totals match quarry spend
+and quarry cashflow. A transfer leg is any split named in
+transfers.from_split_id or transfers.to_split_id. List the tables and views
+with: quarry sql "SHOW TABLES"
+```
 - `v_cash_flow` column/relation note for `describe_schema` (future MCP): "excludes accounts where accounts.in_reports is false or accounts.linked_tracking is true, as Quicken reports do." The `COMMENT ON VIEW v_cash_flow` matches.
 
 ---

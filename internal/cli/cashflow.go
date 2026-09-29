@@ -97,8 +97,8 @@ less. A period that --since or --until cuts short is marked partial.`,
 	return cmd
 }
 
-// cashFlowWarnings is c's warnings, unprefixed and never nil: one per named account Quicken leaves
-// out of reports, then a note that the window held no income or spending.
+// cashFlowWarnings is c's warnings, unprefixed and never nil: one per named account left out (W2 or W3),
+// then a note that the window held no income or spending.
 func cashFlowWarnings(c report.CashFlow) []string {
 	warnings := leftOutWarnings(c.Accounts, "cashflow")
 	if c.Empty() {

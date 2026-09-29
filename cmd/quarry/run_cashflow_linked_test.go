@@ -34,4 +34,5 @@ func Test_run_cashflow_leaves_out_accounts_that_use_linked_account_tracking(t *t
 	assert.Equal(t, map[string]string{"CAD": "500.00"}, totalsColumn(cashFlowOut.String(), 2))
 	assert.Equal(t, map[string]string{"CAD": "120.00"}, totalsColumn(cashFlowOut.String(), 3))
 	assert.Equal(t, map[string]string{"CAD": "120.00"}, totalsColumn(spendOut.String(), 2))
+	assert.Empty(t, stderr.String())
 }

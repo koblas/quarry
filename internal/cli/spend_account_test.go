@@ -134,6 +134,20 @@ func Test_spend_warns_only_that_linked_tracking_leaves_out_an_account_that_is_al
 	assert.Equal(t, "quarry: warning: "+linkedTrackingWarning("Old 401(k)")+"\n", stderr.String())
 }
 
+func Test_spend_json_lists_a_linked_tracking_warning_before_a_left_out_of_reports_one_unprefixed(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeSpend(t, withSpending(namedAccounts()), spendTagNow, &stdout, &stderr,
+		"--account", linkedID, "--account", "Old Card", "--json")
+
+	require.NoError(t, err)
+	var doc struct {
+		Warnings []string `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	assert.Equal(t, []string{linkedTrackingWarning("Netskope 401(k)"), leftOutWarning("Old Card")}, doc.Warnings)
+}
+
 func Test_spend_does_not_warn_about_an_account_in_reports(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -147,6 +161,16 @@ func Test_spend_refuses_an_unknown_account_without_warning_about_an_excluded_one
 	var stdout, stderr bytes.Buffer
 
 	err := executeSpend(t, namedAccounts(), spendTagNow, &stdout, &stderr, "--account", "Old Card", "--account", "Nowhere")
+
+	require.EqualError(t, err, "no account named \"Nowhere\"; run quarry accounts --all to list them")
+	assert.Empty(t, stderr.String())
+	assert.Empty(t, stdout.String())
+}
+
+func Test_spend_refuses_an_unknown_account_without_warning_about_a_linked_tracking_one(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeSpend(t, namedAccounts(), spendTagNow, &stdout, &stderr, "--account", linkedID, "--account", "Nowhere")
 
 	require.EqualError(t, err, "no account named \"Nowhere\"; run quarry accounts --all to list them")
 	assert.Empty(t, stderr.String())

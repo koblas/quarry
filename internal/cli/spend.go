@@ -80,8 +80,8 @@ the rows can add up to more than the total.`,
 	return cmd
 }
 
-// spendWarnings is s's warnings, unprefixed and never nil: one per named account left out
-// of reports, then the multi-tag-splits note, then a note that the window held no spending.
+// spendWarnings is s's warnings, unprefixed and never nil: one per named account left out (W2 or W3),
+// then the multi-tag-splits note, then a note that the window held no spending.
 func spendWarnings(s report.Spending) []string {
 	warnings := leftOutWarnings(s.Accounts, "spend")
 	if s.By == store.SpendByTag && s.MultiTagSplits > 0 {

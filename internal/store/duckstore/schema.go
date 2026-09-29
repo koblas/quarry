@@ -129,8 +129,7 @@ GROUP BY a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed,
 `
 }
 
-// reportedAccount is the SQL predicate, over accounts aliased a, for an account Quicken's reports
-// count: in reports and not using linked account tracking.
+// reportedAccount is the predicate, over accounts aliased a, for an account Quicken's reports count.
 const reportedAccount = "a.in_reports AND NOT a.linked_tracking"
 
 // cashFlowViewDDL creates v_cash_flow: each split that counts as income or spending in Quicken's reports.
@@ -163,4 +162,5 @@ SELECT split_id, transaction_id, account_id, date, month, currency,
 	category_id, category, payee_id, payee, -amount AS spent
 FROM v_cash_flow
 WHERE flow = 'expense';
+COMMENT ON VIEW v_spending IS 'expense splits of v_cash_flow with spent = -amount; same exclusions as v_cash_flow, so totals match quarry spend.';
 `
