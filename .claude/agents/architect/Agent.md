@@ -75,7 +75,13 @@ State exactly one, with the seam or the absorbing scenario named:
 
 - **OWNS A RUN** — normal. Write `SCENARIO-XX.md`.
 - **SPLIT** — too big for one run. Name the seam and the a/b halves, and stop; the
-  orchestrator decides before you plan either half.
+  orchestrator decides before you plan either half. **Mandatory** when any holds: more than
+  5 Build batches; more than one feature package (`internal/<feature>`; `internal/cli` and
+  `cmd/quarry` wiring for it don't count); or, once `feature-metrics.py` has 20+ past units,
+  a twin of this scenario sat above the 90th-percentile unit cost.
+
+Write the verdict and the numbers behind it as the plan's `Size:` header line (and in every
+sizing-pass row): `Size: OWNS A RUN — 4 batches, 1 feature package`.
 - **FOLD** — too small to earn its own architect+developer pair. Name which scenario
   should absorb it, and why.
 
@@ -106,7 +112,7 @@ writing rationale — cut it. Do **not** copy Gherkin in; cite `specification.md
 by ID.
 
 Frontmatter and title (`.claude/briefs/build.md` → *Scenario plan files are brief step
-files*), four header lines, then checklist under `## Implementation Plan` grouped into
+files*), header lines (below), then checklist under `## Implementation Plan` grouped into
 **phases**, not files — no tables, no prose API design, no implementation details (no method
 bodies, no parameter values, no assertions).
 
@@ -125,6 +131,7 @@ Header lines:
   verification*.
 - `Runs:` developer run groups with their steps, e.g. `A (1-2) | B1 (3-5) | B2 (6) | V (7-8)`
   — ≤3 Build batches per `B` group (`.claude/briefs/build.md` → *Developer runs*).
+- `Size:` verdict and the numbers behind it (*Size verdict* above).
 
 Phases — developer runs one build/test at each boundary, not per step:
 
@@ -159,6 +166,7 @@ Acceptance test: `internal/account/withdraw_test.go` `Test_withdraw_reduces_the_
 Narrow loop: `go test ./internal/account/ -run 'Withdraw|Store'`
 Mutation checks: overdraft guard in `(*Server).Withdraw` → `Test_withdraw_refuses_more_than_the_balance`
 Runs: A (1-2) | B1 (3-4) | V (5-6)
+Size: OWNS A RUN — 2 batches, 1 feature package
 
 ## Implementation Plan
 
