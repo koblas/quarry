@@ -21,8 +21,8 @@ Size: OWNS A RUN — 3 Build batches, 1 feature package (`internal/importer`); F
 Exact decimal: `math/big.Rat` — `SetString` reads decimals and `e-17` text exactly, so distance-to-cent is one exact compare; the 2-digit fast path stays digit-string (keeps the 1e6-value scan test fast). No `strconv.ParseFloat`. No new port, no `Server` option, no `cmd/`/`cli` change: surface is unchanged (spec `## Surface & Copy`).
 
 ### Acceptance (red)
-- [ ] Step 1: `transactions_test.go` (new tests after `:80`; pattern of `:14-27`, assert on `fakeStore.Rows`) — 01: HELOC-style transactions `-55396.139999999992` and `-15.67000000001`, each with a mirror `b.Entry`, `require.NoError`, `Rows.Transactions` amounts -5539614 / -1567 and matching `Rows.Splits`; 02: amount `5.5511151231257827e-17` → NoError, amount 0; 04: `12.3400011` → reason 3 quoting `12.3400011`, `Rows` empty (control: `12.340001` imports); 05: `999999999.9999999` → reason 6 quoting the text as SQLite renders it (confirm rendered text in the red run). Remove the e-17 case from the refusal table `:52-55` (moves to 02); `:56-63` stay.
-- [ ] Step 2: `statements_test.go` (after `:41`, pattern of `Test_import_uses_the_newest_statement_by_date` with `chequingWithOneReconciledTxn(b, "100.00")`) — 03: `EndingBalance: "100.0000004"` → NoError, `Validation.Balances.Checked == 1`, `Mismatched` empty. Run `A`: 01/02/03/05 red at their assertions (refuse today; 05 as reason 3 not 6); 04 green on arrival (regression guard) — say so. Signature stubs: none needed, no new symbol.
+- [x] Step 1: `transactions_test.go` (new tests after `:80`; pattern of `:14-27`, assert on `fakeStore.Rows`) — 01: HELOC-style transactions `-55396.139999999992` and `-15.67000000001`, each with a mirror `b.Entry`, `require.NoError`, `Rows.Transactions` amounts -5539614 / -1567 and matching `Rows.Splits`; 02: amount `5.5511151231257827e-17` → NoError, amount 0; 04: `12.3400011` → reason 3 quoting `12.3400011`, `Rows` empty (control: `12.340001` imports); 05: `999999999.9999999` → reason 6 quoting the text as SQLite renders it (confirm rendered text in the red run). Remove the e-17 case from the refusal table `:52-55` (moves to 02); `:56-63` stay.
+- [x] Step 2: `statements_test.go` (after `:41`, pattern of `Test_import_uses_the_newest_statement_by_date` with `chequingWithOneReconciledTxn(b, "100.00")`) — 03: `EndingBalance: "100.0000004"` → NoError, `Validation.Balances.Checked == 1`, `Mismatched` empty. Run `A`: 01/02/03/05 red at their assertions (refuse today; 05 as reason 3 not 6); 04 green on arrival (regression guard) — say so. Signature stubs: none needed, no new symbol.
 
 ### Build
 - [ ] Step 3: `money.go:53-85` `parseRealMoney` + `money.go:19-24` + `money_internal_test.go:23-50` `Test_parseMoney` — snap core (B1). Named constant for the 0.000001 tolerance beside `realIntBound`. When `len(fracPart) > 2` and no exponent: exact `big.Rat` distance to nearest cent (half-up), within tolerance inclusive → that cent, else `moneyPrecision`. Integer part ≥ 1e9 → `moneyTooLarge` checked before the precision test (R7). Snapped zero is `0`, never negative (R8). Test-first rows: `-55396.139999999992`→-5539614, `-15.67000000001`→-1567, `0.30000000000000004`→30, `12.340001`→1234 (inclusive edge), `12.3400011`→moneyPrecision, `12.339999`→1234, `-0.0000001`→0, `12.345`→moneyPrecision stays. Bound tests: inside/just outside tolerance, both signs (`-12.340001`, `-12.3400011`).
@@ -51,3 +51,20 @@ Exact decimal: `math/big.Rat` — `SetString` reads decimals and `e-17` text exa
 - `Test_parseMoney_reads_every_real_just_below_the_bound_exactly` (`:68`) must stay on the digit-string fast path for ≤2 decimals; routing everything through `big.Rat` slows the 1e6 scan.
 - `-0.0000001` must yield `0`, not a negated zero-cents path.
 - Rat `SetString` accepts forms SQLite never renders (`1/3`, `0x`); call it only after the digit/exponent grammar guards.
+
+## Phase report
+
+Run A (steps 1-2) done. No production code touched, no stubs needed.
+
+Files: `internal/importer/transactions_test.go:84-186` (5 new tests + `transactionAmounts`/`splitAmounts` helpers; e-17 case removed from the exponent refusal table); `internal/importer/statements_test.go:41-53` (03).
+
+Red at assertion (`require.NoError` / `assert.Equal`):
+- 01 `...float_residue_as_their_cent`: `a transaction on 2020-04-13 in "HELOC" has an amount of -55396.139999999992, which has more than 2 decimal places (and 1 more)`
+- 02 `...near_zero_residue_amount_as_zero_cents`: refused, `5.5511151231257827e-17 ... more than 2 decimal places`
+- 03 statements: `the 2026-02-28 statement for "Chequing" has a balance of 100.0000004, which has more than 2 decimal places`
+- 05 `...rounds_up_to_the_bound_as_too_large`: today reason 3 (`more than 2 decimal places`), wants reason 6.
+- Extra control test `Test_import_imports_an_amount_on_the_snap_tolerance_as_its_cent` (`12.340001` -> 1234) red for 04's control arm.
+- 04 `...beyond_the_snap_tolerance` GREEN ON ARRIVAL (regression guard; refuses today as reason 3, `Rows.Transactions` empty).
+
+Do not redo/undo: 05 fixture is `999999999.99999988`, not the spec's `999999999.9999999` — SQLite renders the stored REAL as `999999999.99999988` (17 sig digits), and reason-6 text quotes that. Distance to 1e9 is 1.2e-7, inside tolerance, so it snaps to the bound then hits the post-snap check. Unit row `999999999.9999999` in `Test_parseMoney` is still valid (text given directly to `parseMoney`).
+Baseline: full `./internal/importer/` run shows exactly these 5 failing tests, rest green.
