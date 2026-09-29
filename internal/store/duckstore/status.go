@@ -26,14 +26,14 @@ SELECT i.format_version, i.quarry_version, i.built_at,
 	(SELECT min(date) FROM transactions), (SELECT max(date) FROM transactions)
 FROM store_info i CROSS JOIN import_runs r`
 
-// Status reads back what the store records about itself. It fails when the
-// store cannot be opened or read, or does not hold exactly one import run
-// and one store_info row; a NULL snapshot_taken_at or source_path reads as
-// the zero value.
+// Status reads back what the store records about itself. It refuses a store
+// it cannot open or whose format is not this build's with *store.OpenError,
+// and fails when the store cannot be read or holds other than one import
+// run; a NULL snapshot_taken_at or source_path reads as the zero value.
 func (s *Store) Status(ctx context.Context) (store.Status, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {
-		return store.Status{}, fmt.Errorf("read store status: %w", err)
+		return store.Status{}, err
 	}
 	defer func() { _ = db.Close() }()
 

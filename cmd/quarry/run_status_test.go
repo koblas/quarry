@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -55,21 +54,6 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 		"Transfers", "1 paired, 1 one-sided",
 	)
 	assert.Equal(t, want, stdout.String())
-}
-
-func Test_run_status_fails_without_creating_a_store_when_none_exists(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	var stdout, stderr bytes.Buffer
-
-	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
-
-	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout.String())
-	assert.True(t, strings.HasPrefix(stderr.String(), "quarry: "), stderr.String())
-	entries, err := os.ReadDir(home)
-	require.NoError(t, err)
-	assert.Empty(t, entries)
 }
 
 func Test_run_status_refuses_when_home_is_unset(t *testing.T) {

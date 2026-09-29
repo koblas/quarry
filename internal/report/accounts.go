@@ -22,11 +22,11 @@ func (l AccountListing) AllHidden() bool {
 
 // Accounts lists the store's accounts in the store's order with their
 // balances; closed accounts are left out, and counted in Hidden, unless
-// includeClosed is set. Store errors are returned unchanged.
+// includeClosed is set. It refuses like Status.
 func (s *Server) Accounts(ctx context.Context, includeClosed bool) (AccountListing, error) {
 	list, err := s.store.Accounts(ctx)
 	if err != nil {
-		return AccountListing{}, err //nolint:wrapcheck // the store's error is final user copy; a prefix would change it
+		return AccountListing{}, s.readRefusal(ctx, "accounts", err)
 	}
 	if includeClosed {
 		return AccountListing{AccountList: list}, nil

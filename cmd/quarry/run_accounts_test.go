@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -64,21 +62,6 @@ func Test_run_accounts_refuses_when_home_is_unset(t *testing.T) {
 	assert.Empty(t, stdout.String())
 	assert.Equal(t, "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry accounts again\n",
 		stderr.String())
-}
-
-func Test_run_accounts_fails_without_creating_a_store_when_none_exists(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	var stdout, stderr bytes.Buffer
-
-	exitCode := run(context.Background(), []string{"accounts"}, &stdout, &stderr)
-
-	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout.String())
-	assert.True(t, strings.HasPrefix(stderr.String(), "quarry: "), stderr.String())
-	entries, err := os.ReadDir(home)
-	require.NoError(t, err)
-	assert.Empty(t, entries)
 }
 
 func Test_run_accounts_reports_exit_1_when_stdout_cannot_be_written(t *testing.T) {

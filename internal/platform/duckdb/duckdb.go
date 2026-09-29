@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"regexp"
 	"strings"
 	"syscall"
 
@@ -242,6 +243,33 @@ func IsAccessDisabled(err error) bool {
 	return ok && derr.Type == duckdbdriver.ErrorTypePermission
 }
 
+// IsNotDatabase reports whether err is the driver's refusal to open a file
+// that is not a DuckDB database, an empty file included.
+func IsNotDatabase(err error) bool {
+	return driverIOMessageContains(err, "not a valid DuckDB database file")
+}
+
+// IsLocked reports whether err is the driver's refusal to open a file
+// another process holds the lock on.
+func IsLocked(err error) bool {
+	return driverIOMessageContains(err, "Could not set lock on file")
+}
+
+// errorTypePrefix matches the error type DuckDB leads its messages with, e.g. "IO Error: ".
+var errorTypePrefix = regexp.MustCompile(`^[A-Za-z ]+ Error: `)
+
+// ErrorLine returns the first line of the driver's message for err, or of
+// err.Error() when no driver error is in its tree, without DuckDB's leading
+// error type.
+func ErrorLine(err error) string {
+	msg := err.Error()
+	if derr, ok := errors.AsType[*duckdbdriver.Error](err); ok {
+		msg = derr.Msg
+	}
+	line, _, _ := strings.Cut(msg, "\n")
+	return errorTypePrefix.ReplaceAllString(line, "")
+}
+
 // isDriverIOError reports whether err is a *duckdbdriver.Error of ErrorTypeIO
 // whose message contains errno's OS-supplied text (DuckDB has no errno of its own).
 func isDriverIOError(err error, errno syscall.Errno) bool {
@@ -250,6 +278,12 @@ func isDriverIOError(err error, errno syscall.Errno) bool {
 		return false
 	}
 	return strings.Contains(strings.ToLower(derr.Msg), strings.ToLower(errno.Error()))
+}
+
+// driverIOMessageContains reports whether err is a *duckdbdriver.Error of ErrorTypeIO whose message contains text.
+func driverIOMessageContains(err error, text string) bool {
+	derr, ok := errors.AsType[*duckdbdriver.Error](err)
+	return ok && derr.Type == duckdbdriver.ErrorTypeIO && strings.Contains(derr.Msg, text)
 }
 
 // decimalRangeError is Decimal's refusal of an unscaled value too wide for

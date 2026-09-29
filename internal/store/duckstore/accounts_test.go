@@ -1,14 +1,12 @@
 package duckstore_test
 
 import (
-	"context"
 	"errors"
 	"os"
 	"testing"
 	"time"
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
-	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
@@ -126,9 +124,7 @@ func Test_accounts_reads_as_of_with_no_accounts(t *testing.T) {
 func Test_accounts_returns_the_open_fault(t *testing.T) {
 	t.Parallel()
 	fault := ioFault("open store read-only")
-	st := duckstore.New(t.TempDir(), duckstore.WithOpenReadOnly(func(context.Context, string) (duckstore.ReadDB, error) {
-		return nil, fault
-	}))
+	st := newBuiltStore(t, failingOpener(fault))
 
 	_, err := st.Accounts(t.Context())
 
@@ -138,10 +134,7 @@ func Test_accounts_returns_the_open_fault(t *testing.T) {
 func Test_accounts_returns_the_query_fault(t *testing.T) {
 	t.Parallel()
 	fault := ioFault(`query rows "SELECT"`)
-	spy := &spyReadDB{queryFault: fault}
-	st := duckstore.New(t.TempDir(), duckstore.WithOpenReadOnly(func(context.Context, string) (duckstore.ReadDB, error) {
-		return spy, nil
-	}))
+	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault}))
 
 	_, err := st.Accounts(t.Context())
 
@@ -152,10 +145,7 @@ func Test_accounts_returns_the_query_fault(t *testing.T) {
 
 func Test_accounts_returns_the_scan_fault(t *testing.T) {
 	t.Parallel()
-	spy := &spyReadDB{scanFault: errScanFailed}
-	st := duckstore.New(t.TempDir(), duckstore.WithOpenReadOnly(func(context.Context, string) (duckstore.ReadDB, error) {
-		return spy, nil
-	}))
+	st := newBuiltStore(t, spyOpener(&spyReadDB{scanFault: errScanFailed}))
 
 	_, err := st.Accounts(t.Context())
 
@@ -175,15 +165,8 @@ func Test_accounts_closes_the_connection_on_success_and_on_a_query_fault(t *test
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			dir := t.TempDir()
-			_, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
-			require.NoError(t, err)
 			spy := &spyReadDB{queryFault: c.fault}
-			st := duckstore.New(dir, duckstore.WithOpenReadOnly(func(ctx context.Context, p string) (duckstore.ReadDB, error) {
-				db, openErr := duckdb.OpenReadOnly(ctx, p)
-				spy.ReadDB = db
-				return spy, openErr
-			}))
+			st := newBuiltStore(t, spyOpener(spy))
 
 			_, _ = st.Accounts(t.Context())
 

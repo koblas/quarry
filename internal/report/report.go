@@ -44,9 +44,15 @@ func NewServer(opts ...Option) *Server {
 func (s *Server) Home() string { return s.home }
 
 // Status describes the store: its origin snapshot, contents and the checks
-// sync ran when it built them. Store errors are returned unchanged.
+// sync ran when it built them. It refuses with a RefusalError when
+// interrupted or when the store cannot be opened; other store errors are
+// returned unchanged.
 func (s *Server) Status(ctx context.Context) (store.Status, error) {
-	return s.store.Status(ctx) //nolint:wrapcheck // the store's error is final user copy; a prefix would change it
+	st, err := s.store.Status(ctx)
+	if err != nil {
+		return store.Status{}, s.readRefusal(ctx, "status", err)
+	}
+	return st, nil
 }
 
 // SnapshotID returns the ID of the snapshot at path: its file name without

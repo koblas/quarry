@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/atomicfile"
@@ -145,10 +146,130 @@ func openDuckDBReadOnly(ctx context.Context, path string) (ReadDB, error) {
 	return db, nil
 }
 
-// openRead opens the store file read-only. Every read method goes through
-// it, and it never creates the file: a missing store is the open's error.
+// openRead opens the store file read-only for one read and checks its
+// format, refusing with *store.OpenError; it never creates the file.
 func (s *Store) openRead(ctx context.Context) (ReadDB, error) {
-	return s.openReadOnly(ctx, s.Path())
+	path := s.Path()
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+		return nil, &store.OpenError{Fault: store.OpenFaultMissing, Path: path, Err: err}
+	}
+	db, err := s.openReadOnly(ctx, path)
+	if err != nil {
+		return nil, openFault(path, err)
+	}
+	if err := checkFormat(ctx, db, path); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return db, nil
+}
+
+// errFormatMismatch is the fault behind a store whose store_info is not this build's format.
+var errFormatMismatch = errors.New("store format is not this build's")
+
+// Format-check queries, run by openRead before any read's own query.
+const (
+	columnExistsQuery = `SELECT count(*) FROM duckdb_columns()
+WHERE database_name = current_database() AND schema_name = 'main' AND table_name = ? AND column_name = ?`
+	formatVersionQuery = `SELECT format_version FROM store_info`
+	snapshotPathQuery  = `SELECT snapshot_path FROM import_runs`
+)
+
+// openFault classifies err, a failed open or format check of the store at path.
+func openFault(path string, err error) *store.OpenError {
+	fault := &store.OpenError{Path: path, Err: err}
+	// The file decides whether the store vanished after the stat, never the driver's wording.
+	if _, statErr := os.Stat(path); errors.Is(statErr, fs.ErrNotExist) {
+		fault.Fault = store.OpenFaultMissing
+		return fault
+	}
+	switch {
+	case duckdb.IsNotDatabase(err):
+		fault.Fault = store.OpenFaultNotDuckDB
+	case duckdb.IsPermission(err):
+		fault.Fault = store.OpenFaultPermission
+	case duckdb.IsLocked(err):
+		fault.Fault = store.OpenFaultLocked
+	default:
+		fault.Fault = store.OpenFaultOther
+		fault.Reason = faultReason(path, err)
+	}
+	return fault
+}
+
+// faultReason is err's first line, naming the store by path however the
+// fault spelled it, or "unknown error" when that leaves nothing.
+func faultReason(path string, err error) string {
+	reason := duckdb.ErrorLine(err)
+	if pathErr, ok := errors.AsType[*fs.PathError](err); ok {
+		reason = pathErr.Err.Error()
+	}
+	// The driver names the resolved path, which can contain path (/private/var and /var): replace it first.
+	if resolved, evalErr := filepath.EvalSymlinks(path); evalErr == nil && resolved != path {
+		reason = strings.ReplaceAll(reason, resolved, path)
+	}
+	if reason == "" {
+		return "unknown error"
+	}
+	return reason
+}
+
+// checkFormat refuses, as store.OpenFaultOtherFormat, a store whose
+// store_info does not hold exactly one row of FormatVersion.
+func checkFormat(ctx context.Context, db ReadDB, path string) error {
+	// The catalog first: selecting from a missing store_info is a query error.
+	hasInfo, err := hasColumn(ctx, db, "store_info", "format_version")
+	if err != nil {
+		return openFault(path, err)
+	}
+	if hasInfo {
+		var version sql.NullInt64
+		rows := 0
+		err := db.QueryRows(ctx, formatVersionQuery, nil, func(scan func(dest ...any) error) error {
+			rows++
+			return scan(&version)
+		})
+		if err != nil {
+			return openFault(path, err)
+		}
+		if rows == 1 && version.Valid && version.Int64 == FormatVersion {
+			return nil
+		}
+	}
+	return &store.OpenError{
+		Fault: store.OpenFaultOtherFormat, Path: path, SnapshotPath: snapshotPath(ctx, db), Err: errFormatMismatch,
+	}
+}
+
+// snapshotPath is the import run's snapshot path, or "" when import_runs
+// cannot yield exactly one.
+func snapshotPath(ctx context.Context, db ReadDB) string {
+	hasPath, err := hasColumn(ctx, db, "import_runs", "snapshot_path")
+	if err != nil || !hasPath {
+		return ""
+	}
+	var path sql.NullString
+	rows := 0
+	err = db.QueryRows(ctx, snapshotPathQuery, nil, func(scan func(dest ...any) error) error {
+		rows++
+		return scan(&path)
+	})
+	if err != nil || rows != 1 {
+		return ""
+	}
+	return path.String
+}
+
+// hasColumn reports whether the store's main schema has table.column.
+func hasColumn(ctx context.Context, db ReadDB, table, column string) (bool, error) {
+	var n int64
+	err := db.QueryRows(ctx, columnExistsQuery, []any{table, column}, func(scan func(dest ...any) error) error {
+		return scan(&n)
+	})
+	if err != nil {
+		return false, fmt.Errorf("read store catalog: %w", err)
+	}
+	return n > 0, nil
 }
 
 // Replace creates the store directory if needed, sweeps aged build leftovers

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -135,7 +136,9 @@ func Test_status_fails_on_a_missing_store_without_creating_it(t *testing.T) {
 
 	_, err := duckstore.New(dir).Status(t.Context())
 
-	require.Error(t, err)
+	openErr, ok := errors.AsType[*store.OpenError](err)
+	require.True(t, ok, "want *store.OpenError, got %v", err)
+	assert.Equal(t, store.OpenFaultMissing, openErr.Fault)
 	entries, readErr := os.ReadDir(dir)
 	require.NoError(t, readErr)
 	assert.Empty(t, entries)
@@ -143,17 +146,27 @@ func Test_status_fails_on_a_missing_store_without_creating_it(t *testing.T) {
 
 var errQueryFailed = errors.New("query failed")
 
-// spyReadDB wraps a real read connection (or none) and counts Close calls;
-// a non-nil queryFault fails every query, a non-nil scanFault hands the row callback one failing scan.
+// spyReadDB wraps a real read connection and counts Close calls. queryFault fails,
+// and scanFault hands one failing scan to, the read's own query, which onQuery precedes;
+// checkFaults fails one of the open's format checks, keyed by its query.
 type spyReadDB struct {
 	duckstore.ReadDB
 
-	queryFault error
-	scanFault  error
-	closes     int
+	queryFault  error
+	scanFault   error
+	checkFaults map[string]error
+	onQuery     func()
+	closes      int
 }
 
 func (s *spyReadDB) QueryRows(ctx context.Context, query string, args []any, row func(scan func(dest ...any) error) error) error {
+	if slices.Contains(duckstore.FormatCheckQueries, query) {
+		if fault, ok := s.checkFaults[query]; ok {
+			return fault
+		}
+		return s.ReadDB.QueryRows(ctx, query, args, row)
+	}
+	s.startQuery()
 	if s.queryFault != nil {
 		return s.queryFault
 	}
@@ -164,6 +177,7 @@ func (s *spyReadDB) QueryRows(ctx context.Context, query string, args []any, row
 }
 
 func (s *spyReadDB) QueryTable(ctx context.Context, query string, maxRows int) (duckdb.Table, error) {
+	s.startQuery()
 	if s.queryFault != nil {
 		return duckdb.Table{}, s.queryFault
 	}
@@ -172,10 +186,32 @@ func (s *spyReadDB) QueryTable(ctx context.Context, query string, maxRows int) (
 
 func (s *spyReadDB) Close() error {
 	s.closes++
-	if s.ReadDB == nil {
-		return nil
-	}
 	return s.ReadDB.Close()
+}
+
+func (s *spyReadDB) startQuery() {
+	if s.onQuery != nil {
+		s.onQuery()
+	}
+}
+
+// spyOpener opens the store read-only for real and hands spy the connection to wrap.
+func spyOpener(spy *spyReadDB) duckstore.Option {
+	return duckstore.WithOpenReadOnly(func(ctx context.Context, path string) (duckstore.ReadDB, error) {
+		db, err := duckdb.OpenReadOnly(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		spy.ReadDB = db
+		return spy, nil
+	})
+}
+
+// failingOpener is an opener that fails with fault.
+func failingOpener(fault error) duckstore.Option {
+	return duckstore.WithOpenReadOnly(func(context.Context, string) (duckstore.ReadDB, error) {
+		return nil, fault
+	})
 }
 
 // ioFault is the error chain duckdb.DB returns for a failed read: the
@@ -187,22 +223,19 @@ func ioFault(op string) error {
 func Test_status_returns_the_open_fault(t *testing.T) {
 	t.Parallel()
 	fault := ioFault("open store read-only")
-	st := duckstore.New(t.TempDir(), duckstore.WithOpenReadOnly(func(context.Context, string) (duckstore.ReadDB, error) {
-		return nil, fault
-	}))
+	st := newBuiltStore(t, failingOpener(fault))
 
 	_, err := st.Status(t.Context())
 
 	require.ErrorIs(t, err, fault)
+	var openErr *store.OpenError
+	assert.ErrorAs(t, err, &openErr)
 }
 
 func Test_status_returns_the_query_fault(t *testing.T) {
 	t.Parallel()
 	fault := ioFault(`query rows "SELECT"`)
-	spy := &spyReadDB{queryFault: fault}
-	st := duckstore.New(t.TempDir(), duckstore.WithOpenReadOnly(func(context.Context, string) (duckstore.ReadDB, error) {
-		return spy, nil
-	}))
+	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault}))
 
 	_, err := st.Status(t.Context())
 
@@ -224,15 +257,8 @@ func Test_status_closes_the_connection_on_success_and_on_a_query_fault(t *testin
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			dir := t.TempDir()
-			_, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
-			require.NoError(t, err)
 			spy := &spyReadDB{queryFault: c.fault}
-			st := duckstore.New(dir, duckstore.WithOpenReadOnly(func(ctx context.Context, p string) (duckstore.ReadDB, error) {
-				db, openErr := duckdb.OpenReadOnly(ctx, p)
-				spy.ReadDB = db
-				return spy, openErr
-			}))
+			st := newBuiltStore(t, spyOpener(spy))
 
 			_, _ = st.Status(t.Context())
 

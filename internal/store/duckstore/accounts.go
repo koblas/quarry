@@ -19,11 +19,12 @@ ORDER BY lower(v.name), v.name, v.source_id`
 
 // Accounts reads every account, closed ones included, with its balance
 // and the store's today as AsOf, sorted by name ignoring case, then name,
-// then source id. It fails when the store cannot be opened or read.
+// then source id. It refuses a store it cannot open with *store.OpenError,
+// and fails when the store cannot be read.
 func (s *Store) Accounts(ctx context.Context) (store.AccountList, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {
-		return store.AccountList{}, fmt.Errorf("read accounts: %w", err)
+		return store.AccountList{}, err
 	}
 	defer func() { _ = db.Close() }()
 

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
-	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
@@ -47,14 +46,13 @@ func Test_query_returns_at_most_max_rows(t *testing.T) {
 func Test_query_returns_the_open_fault(t *testing.T) {
 	t.Parallel()
 	fault := ioFault("open store read-only")
-	st := duckstore.New(t.TempDir(), duckstore.WithOpenReadOnly(func(context.Context, string) (duckstore.ReadDB, error) {
-		return nil, fault
-	}))
+	st := newBuiltStore(t, failingOpener(fault))
 
 	_, err := st.Query(t.Context(), "SELECT 1", 0)
 
 	require.ErrorIs(t, err, fault)
-	assert.EqualError(t, err, "run query: "+fault.Error())
+	var openErr *store.OpenError
+	assert.ErrorAs(t, err, &openErr)
 }
 
 func Test_query_reports_the_first_line_of_a_bad_query(t *testing.T) {
@@ -105,24 +103,19 @@ func Test_query_refuses_what_a_read_may_not_do(t *testing.T) {
 
 func Test_query_reports_an_interrupted_query(t *testing.T) {
 	t.Parallel()
-	spy := &spyReadDB{queryFault: interruptFault()}
-	st := duckstore.New(t.TempDir(), duckstore.WithOpenReadOnly(func(context.Context, string) (duckstore.ReadDB, error) {
-		return spy, nil
-	}))
 	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
+	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: interruptFault(), onQuery: cancel}))
 
 	_, err := st.Query(ctx, "SELECT 1", 0)
 
 	require.ErrorIs(t, err, store.ErrQueryInterrupted)
+	var openErr *store.OpenError
+	assert.NotErrorAs(t, err, &openErr, "the open succeeded; only the query was interrupted")
 }
 
 func Test_query_reports_an_interrupt_error_under_a_live_context_as_a_query_error(t *testing.T) {
 	t.Parallel()
-	spy := &spyReadDB{queryFault: interruptFault()}
-	st := duckstore.New(t.TempDir(), duckstore.WithOpenReadOnly(func(context.Context, string) (duckstore.ReadDB, error) {
-		return spy, nil
-	}))
+	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: interruptFault()}))
 
 	_, err := st.Query(t.Context(), "SELECT 1", 0)
 
@@ -133,15 +126,15 @@ func Test_query_reports_an_interrupt_error_under_a_live_context_as_a_query_error
 
 func Test_query_reports_an_open_interrupted_by_its_context(t *testing.T) {
 	t.Parallel()
-	st := duckstore.New(t.TempDir(), duckstore.WithOpenReadOnly(func(context.Context, string) (duckstore.ReadDB, error) {
-		return nil, ioFault("open store read-only")
-	}))
+	st := newBuiltStore(t, failingOpener(ioFault("open store read-only")))
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	_, err := st.Query(ctx, "SELECT 1", 0)
 
 	require.ErrorIs(t, err, store.ErrQueryInterrupted)
+	var openErr *store.OpenError
+	assert.ErrorAs(t, err, &openErr)
 }
 
 func Test_query_refuses_a_value_it_cannot_print(t *testing.T) {
@@ -169,11 +162,7 @@ func Test_query_closes_the_connection_on_success_and_on_a_query_fault(t *testing
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			spy := &spyReadDB{queryFault: c.fault}
-			st := newBuiltStore(t, duckstore.WithOpenReadOnly(func(ctx context.Context, p string) (duckstore.ReadDB, error) {
-				db, openErr := duckdb.OpenReadOnly(ctx, p)
-				spy.ReadDB = db
-				return spy, openErr
-			}))
+			st := newBuiltStore(t, spyOpener(spy))
 
 			_, _ = st.Query(t.Context(), "SELECT 1", 0)
 

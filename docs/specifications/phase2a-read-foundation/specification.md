@@ -503,9 +503,9 @@ Scenario: SCENARIO-21 — a read command reports a failed stdout write
 - [x] SCENARIO-12: sql refuses to change the store — `cmd/quarry/run_sql_test.go` `Test_run_sql_refuses_to_change_the_store`
 - [x] SCENARIO-13: sql cannot reach other files, databases, extensions or settings — delivered by SCENARIO-12 — `cmd/quarry/run_sql_test.go` `Test_run_sql_refuses_to_write_another_file`
 - [x] SCENARIO-14: sql reports a bad query — delivered by SCENARIO-12 — `cmd/quarry/run_sql_test.go` `Test_run_sql_reports_a_bad_query`
-- [ ] SCENARIO-15: read commands refuse when there is no store
-- [ ] SCENARIO-16: read commands refuse a store built by another version
-- [ ] SCENARIO-17: read commands refuse a store they cannot read
+- [x] SCENARIO-15: read commands refuse when there is no store — `cmd/quarry/run_read_refusals_test.go` `Test_run_read_commands_refuse_when_there_is_no_store`
+- [x] SCENARIO-16: read commands refuse a store built by another version — delivered by SCENARIO-15 — `cmd/quarry/run_read_refusals_test.go` `Test_run_status_refuses_a_store_built_by_another_version`
+- [x] SCENARIO-17: read commands refuse a store they cannot read — delivered by SCENARIO-15 — `cmd/quarry/run_read_refusals_test.go` `Test_run_accounts_refuses_a_store_that_is_not_a_duckdb_file`
 - [ ] SCENARIO-18: read commands reject bad usage
 - [ ] SCENARIO-19: a usage error's hint names the command it came from
 - [x] SCENARIO-20: interrupting sql stops the query — delivered by SCENARIO-12 — `cmd/quarry/run_sql_test.go` `Test_run_sql_reports_a_query_interrupted_by_sigint`
