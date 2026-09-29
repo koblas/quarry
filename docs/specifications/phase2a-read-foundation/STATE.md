@@ -48,7 +48,7 @@ Scenarios complete: SCENARIO-01..08 (05 folded into 04, 06 into 07). Last update
 - `uncovered-diff.py` is blind to untracked files: `git add` before running it. `cmd/quarry`'s test binary links DuckDB (linux-small CI OOM history). `internal/platform/duckdb`'s mid-iteration ctx-cancel test flakes under full-suite load. (Phase 1)
 
 ## Open debts
-- Unruled `sql` copy/divergences (S08) - owner: orchestrator, scoped product-vision ruling before S09: (1) a `JSON` column refused with Q5 (developer's reading: decoded JSON cannot be printed as DuckDB's text); (2) `TIME '24:00:00'` prints `00:00:00`, so Surface & Copy's "STRUCT fallback is the only declared divergence" is false; (3) TIMESTAMPTZ in `time.Local` ignores an in-query `SET TimeZone`; (4) a value's own trailing spaces are kept vs "no trailing spaces"; (5) a column type the driver refuses (`VARIANT`) prints raw `quarry: run query: database/sql/driver: unsupported data type: VARIANT: index: 0` - no copy (Q5's cast hint may fit; S12's classifier is where it would land).
+- Driver-refused column type (`VARIANT`) still prints raw `quarry: run query: … unsupported data type: VARIANT: index: 0` — ruled Q5 (spec Refusals); owner SCENARIO-12's classifier.
 - Snapshots accumulate (~200 MB each) until 2c - known gap, owned by Phase 2c.
 - Phase 1 doc-budget MINORs, TOCTOU on `--from`, Compose-method refactors and the other Phase 1 debts (`docs/specifications/phase1-import-store/STATE.md`) - unowned - die unless re-opened.
 - Phase 2 copy candidate: V1 stderr tail `fix the account in Quicken and run quarry sync` reads off when only splits fail - unowned until findings copy (2d).

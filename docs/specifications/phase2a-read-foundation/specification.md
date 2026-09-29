@@ -212,11 +212,18 @@ quarry says so on stderr. --limit 0 prints every row.
   `CAST(x AS VARCHAR)` gives), no digit grouping — every scalar, ±infinity, LIST, ARRAY, MAP and UNION. STRUCT
   prints `{'a': 1, 'b': x}` with fields in the order the column type declares (parsed from the type name,
   quoted identifiers and nesting handled); if the type name cannot be parsed, fields sorted by name — the only
-  declared divergence. NULL → `NULL`. Newline, tab and CR inside a value → `\n`, `\t`, `\r`; nothing else is
-  escaped. Numeric columns (and their headers) right-aligned; other headers left-aligned; no trailing spaces.
+  declared divergence (see Two declared divergences below). NULL → `NULL`. Newline, tab and CR inside a value → `\n`, `\t`, `\r`; nothing else is
+  escaped. Numeric columns (and their headers) right-aligned; other headers left-aligned; no padding after the last column;
+  a value's own spaces, leading or trailing, print as they are.
   Zero rows → header only, exit 0.
 - The table is for reading: a NULL and the string `NULL` print the same, and so do an escaped newline and a
   literal `\n`. `--json` is the exact form.
+- Two declared divergences from DuckDB's text: the STRUCT sorted-fields fallback, and `TIME '24:00:00'`, which
+  prints `00:00:00` (the driver collapses it) in both table and `--json` output.
+- TIMESTAMPTZ prints in this Mac's local time zone, as DuckDB's text does by default (e.g.
+  `2026-09-29 10:00:00-04`). `SET TimeZone` cannot change it (the configuration is locked — Q3); for another
+  zone, convert in the query, e.g. `timezone('UTC', ts)`. `--json` stays RFC3339Nano UTC.
+- quarry's own tables and views only use types both renderers print, so `SELECT *` over any of them never gets Q5.
 - `--json`: `{"columns":[{"name","type"}],"rows":[[…]],"row_count":N,"limit":500,"truncated":false,"warnings":[]}`.
   DECIMAL and HUGEINT → strings; other integers, DOUBLE, BOOLEAN native; FLOAT native encoded from float32;
   DOUBLE/FLOAT NaN/±Inf → `"nan"`, `"inf"`, `"-inf"` (never `null`); `-0.0` native; DATE `YYYY-MM-DD`;
@@ -242,7 +249,7 @@ quarry says so on stderr. --limit 0 prints every row.
 | Q2 | external access or extension refused (DuckDB Permission Error) | `quarry: quarry sql reads only quarry's store; other files, databases and extensions are turned off` | 1 |
 | Q3 | any other query error, incl. `SET` after the lock (`quarry: query failed: Invalid Input Error: Cannot change configuration option "enable_external_access" - the configuration has been locked`) and `SELECT * FROM '/etc/hosts'` (Catalog Error) | `quarry: query failed: <first line of DuckDB's message>` | 1 |
 | Q4 | sql interrupted (SIGINT/SIGTERM) | `quarry: query interrupted` | 1 |
-| Q5 | a result value quarry cannot print (Go type the renderer does not know; never `%v`) | `quarry: cannot print column "<name>" of type <DuckDB type>; cast it in the query, e.g. CAST(<name> AS VARCHAR)` | 1 |
+| Q5 | a result value quarry cannot print: a Go type the renderer does not know (never `%v`); a JSON column (the driver returns it decoded, so DuckDB's text is lost); or a type the driver refuses (`unsupported data type: <T>: index: <i>` → name from the column list at `<i>`, type `<T>`; unmatched message falls back to Q3; owner SCENARIO-12's classifier, checked before Q3) | `quarry: cannot print column "<name>" of type <DuckDB type>; cast it in the query, e.g. CAST(<name> AS VARCHAR)` | 1 |
 | O2 | stdout write fails (EPIPE keeps Go's default death) | `quarry: cannot write the result to stdout: <OS reason>` | 1 |
 | H1 | `$HOME` unset or unresolvable (status/accounts/sql/sync) | `quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry <cmd> again` — one builder taking the command name; sync's text stays byte-identical; help and usage errors never need `$HOME` | 1 |
 | U5 | sql: no argument, empty/whitespace query, `-` with empty stdin, or a query DuckDB answers with its empty-query error (`;`, `-- note`) — classified after the `ctx.Err()` check; with no store, `sql ";"` gets R1 because only DuckDB can tell it is empty | `quarry: sql needs a query; pass it as one quoted argument, or - to read it from stdin` | 2 |
