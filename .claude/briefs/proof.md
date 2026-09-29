@@ -29,7 +29,7 @@ Rules:
 - **No mutation runs beyond the `Mutation checks:` line** (rule above). Mutation per step = how scenario double its tool calls without proving anything named ones do not. Fix pass has no plan: mutations its brief names (`build.md` → *Fix passes*) plus each guard the pass adds are its line.
 - **Verify guards INDIVIDUALLY.** Two guards that only go red when BOTH disabled mean either can be deleted silently. Disable one at a time.
 - **Mutation must be directional and compile.** Invert or remove exactly behaviour the test pins (flip comparison, drop guard's `return`) — not break file. Compile failure, or every test failing, proves file parses, nothing more.
-- **Quote the red.** Report mutation (file:line, before → after) and paste reddened test's failing assertion output. "Mutation-verified", or test name alone, not claim anyone can check — checkpoint sends it back as fix pass.
+- **Quote the red.** Report mutation (file:line, before → after) and paste reddened test's failing assertion output. "Mutation-verified", or test name alone, not claim anyone can check.
 - Mutation results go in the report and STATE.md, never in a test comment (`go-testing` → *Test comments*).
 - **Run affected package with `-run`, not whole suite.** Mutation targets one file; full-suite run per check = most repeated waste in long scenario.
 - **Two reddened tests not two behaviours.** Pair sharing Given, When and Then is one case named twice; mutation report counting both overstates coverage. Check each cited test discriminates something others do not.
@@ -37,7 +37,7 @@ Rules:
 
 ## Unreachable claims
 
-`// unreachable: <reason>` (`agent-briefs.md` → *Coverage gate*) is claim like any other. Reason states **how** unreachability was established — caller that validates first (`file:line`), type that cannot hold value, `LSP` `findReferences` showing no other entry — not just why branch exists. Reviewer who constructs input reaching it raises MAJOR; "defensive" alone never passes.
+`// unreachable: <reason>` (`agent-briefs.md` → *Coverage gate*) is claim like any other. Reason, on one line (`uncovered-diff.py` captures only that line), states **how** unreachability was established — caller that validates first (`file:line`), type that cannot hold value, `LSP` `findReferences` showing no other entry — not just why branch exists. "Defensive" alone is no reason; `test-reviewer` judges it.
 
 ## Assertions that prove nothing
 

@@ -44,7 +44,7 @@ Rules:
 - **Report exact test count and delta, from `.claude/scripts/test-stats.py`** — "green" not result, and hand-rolled counts drift between agents on same commit. Quote its rows as printed. Never write own counting script. Count that moved without explanation = finding, not rounding error.
 - Green summary not mean everything ran. `test-stats.py --run <pkgdir>` counts leaf pass/fail/skip in one parallel `go test -json`; check skips before leaning on package.
 - Write scratch files only under `$TMPDIR` or session scratchpad — never `/tmp`, never path outside worktree you got.
-- **Sandbox denies reads of worktree too**, not only writes (repo sits under read-denied home dir). Make first Bash call with `dangerouslyDisableSandbox: true` — no probe-then-retry. Any later `operation not permitted` = same cause, same fix.
+- **Sandbox denies reads of worktree too**, not only writes: this repo's worktrees sit under read-denied home dir. So first Bash call that reads worktree goes with `dangerouslyDisableSandbox: true` — known denial, no probe-then-retry. Other `operation not permitted` (e.g. write to `.claude/settings.json`) = diagnose before escaping.
 
 ## IDE diagnostics are advisory
 
