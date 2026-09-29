@@ -25,17 +25,16 @@ func newBuiltStore(t *testing.T, opts ...duckstore.Option) *duckstore.Store {
 
 var errQueryFailed = errors.New("query failed")
 
-// spyReadDB counts Close calls on a real read connection. queryFault and scanFault fail the read's own
-// query (onQuery runs first; the first passQueries queries run for real); checkFaults fails one of the open's format checks, keyed by its query.
+// spyReadDB counts Close calls on a real read connection and injects faults into its reads.
 type spyReadDB struct {
 	duckstore.ReadDB
 
 	queryFault  error
 	scanFault   error
-	checkFaults map[string]error
-	onQuery     func()
+	checkFaults map[string]error // fails one of the open's format checks, keyed by its query
+	onQuery     func()           // runs before every read query
 	closes      int
-	passQueries int
+	passQueries int // the first passQueries read queries run for real before queryFault or scanFault apply
 	queries     int
 }
 

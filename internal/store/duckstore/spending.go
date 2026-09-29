@@ -22,14 +22,12 @@ HAVING GROUPING(%[1]s) = 1 OR sum(spent) <> 0
 ORDER BY GROUPING(%[1]s), %[2]s`, key, rowOrder)
 }
 
-// splitTagNames is a CTE of each split's tag names, one row per split and name: two tags
-// sharing a name count once, and a link to a tag that does not exist counts as no tag.
+// splitTagNames is a CTE of each split's distinct tag names; a link to a missing tag has none.
 const splitTagNames = `WITH split_tag_names AS (
 	SELECT DISTINCT st.split_id, t.name FROM split_tags st JOIN tags t ON t.id = st.tag_id
 )`
 
-// spendingByTagQuery reads spending per tag and currency, then per-currency totals over
-// the splits themselves: a split with several tags is a row under each and one in its total.
+// spendingByTagQuery reads spending per tag, then per-currency totals counting each split once.
 const spendingByTagQuery = splitTagNames + `
 SELECT tag, currency, cents, grp FROM (
 	SELECT n.name AS tag, s.currency, CAST(sum(s.spent) * 100 AS BIGINT) AS cents, 0 AS grp
@@ -71,7 +69,8 @@ var ErrUnsupportedGrouping = errors.New("spending grouping is not supported")
 
 // Spending reads the spending in params.Window (both days counted) grouped by params.By,
 // dropping a group that nets to zero; Totals keep it, one per currency. Grouping by tag also
-// counts the splits carrying several tags. An unsupported grouping is an error; a store it cannot open or read is a *store.OpenError.
+// counts the splits carrying several tags. An unsupported grouping is an error, and a store
+// it cannot open or read is a *store.OpenError.
 func (s *Store) Spending(ctx context.Context, params store.SpendingParams) (store.Spending, error) {
 	query, ok := spendingQueries[params.By]
 	if !ok {

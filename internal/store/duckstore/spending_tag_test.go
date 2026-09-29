@@ -158,6 +158,31 @@ func Test_spending_by_tag_counts_splits_with_several_tags_not_their_tags(t *test
 	assert.Equal(t, 2, got.MultiTagSplits)
 }
 
+func Test_spending_by_tag_counts_the_windows_first_and_last_day_only(t *testing.T) {
+	t.Parallel()
+	rows := spendRows()
+	addTag(&rows, "t-a", "A")
+	addTag(&rows, "t-b", "B")
+	both := []string{"t-a", "t-b"}
+	addSplit(&rows, splitSpec{id: "before", category: new(catExpense), amount: -100, date: windowSince.AddDate(0, 0, -1), tags: both})
+	addSplit(&rows, splitSpec{id: "first", category: new(catExpense), amount: -200, date: windowSince, tags: both})
+	addSplit(&rows, splitSpec{id: "last", category: new(catExpense), amount: -400, date: windowUntil, tags: both})
+	addSplit(&rows, splitSpec{id: "after", category: new(catExpense), amount: -800, date: windowUntil.AddDate(0, 0, 1), tags: both})
+	st := newStoreWith(t, rows)
+
+	got, err := st.Spending(t.Context(), tagParams())
+
+	require.NoError(t, err)
+	assert.Equal(t, store.Spending{
+		Rows: []store.SpendingRow{
+			{Key: new("A"), Currency: "CAD", Spent: 600},
+			{Key: new("B"), Currency: "CAD", Spent: 600},
+		},
+		Totals:         []store.SpendingTotal{{Currency: "CAD", Spent: 600}},
+		MultiTagSplits: 2,
+	}, got)
+}
+
 func Test_spending_by_tag_counts_one_multi_tag_split_as_one(t *testing.T) {
 	t.Parallel()
 	rows := spendRows()
@@ -178,6 +203,33 @@ func Test_spending_by_tag_counts_no_multi_tag_split_when_every_split_has_at_most
 	addTag(&rows, "t-a", "A")
 	addSplit(&rows, splitSpec{id: "one", category: new(catExpense), amount: -10, tags: []string{"t-a"}})
 	addSplit(&rows, splitSpec{id: "none", category: new(catExpense), amount: -10})
+	st := newStoreWith(t, rows)
+
+	got, err := st.Spending(t.Context(), tagParams())
+
+	require.NoError(t, err)
+	assert.Zero(t, got.MultiTagSplits)
+}
+
+func Test_spending_by_tag_does_not_count_a_split_with_one_real_tag_and_a_link_to_a_missing_tag(t *testing.T) {
+	t.Parallel()
+	rows := spendRows()
+	addTag(&rows, "t-a", "A")
+	addSplit(&rows, splitSpec{id: "dangling", category: new(catExpense), amount: -10, tags: []string{"t-a", "t-gone"}})
+	st := newStoreWith(t, rows)
+
+	got, err := st.Spending(t.Context(), tagParams())
+
+	require.NoError(t, err)
+	assert.Zero(t, got.MultiTagSplits)
+}
+
+func Test_spending_by_tag_does_not_count_a_split_whose_two_tags_share_a_name(t *testing.T) {
+	t.Parallel()
+	rows := spendRows()
+	addTag(&rows, "t-first", "Trip")
+	addTag(&rows, "t-second", "Trip")
+	addSplit(&rows, splitSpec{id: "both", category: new(catExpense), amount: -10, tags: []string{"t-first", "t-second"}})
 	st := newStoreWith(t, rows)
 
 	got, err := st.Spending(t.Context(), tagParams())
