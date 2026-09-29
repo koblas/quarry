@@ -52,8 +52,10 @@ guesses is the point of this phase.
 Intent confirmed → automatically:
 
 1. **Invoke `clean-architecture` skill** for folder structure and conventions.
-2. Read existing domain models in the domain source directory.
-3. Read existing use cases in the use case source directory.
+2. Read the exported surface of the feature packages the triage brief names
+   (`go doc ./internal/<pkg>`) — its `Server` methods, `Store` interface and types.
+3. Read the commands in `internal/cli` the triage brief names, so scenarios reuse their verbs,
+   flags and output shapes.
 4. Propose Gherkin scenarios with unique IDs (`SCENARIO-01`, `SCENARIO-02`, …).
 5. Ask clarifying questions if business rules ambiguous.
 6. Iterate with the user — add, remove, refine scenarios as needed.

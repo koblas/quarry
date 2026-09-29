@@ -68,7 +68,7 @@ Findings ranked most-severe first:
   Fix: <specific change>
 ```
 
-Then exactly one verdict line: **PASS**, **PASS WITH FOLLOW-UPS**, or **BLOCKED** (blocking
+Then exactly one verdict line: **PASS**, **PASS WITH FOLLOW-UPS**, or **FAIL** (blocking
 items named).
 
 Severity contract, shared across all reviewers in this repo:
@@ -84,14 +84,14 @@ Severity contract, shared across all reviewers in this repo:
 
 **Verdict is mechanical, not a judgement call:**
 
-- Any **BLOCKER** or **MAJOR** in your findings → **BLOCKED**. No exceptions. Not "BLOCKED
+- Any **BLOCKER** or **MAJOR** in your findings → **FAIL**. No exceptions. Not "FAIL
   unless it is pre-existing", not "PASS WITH FOLLOW-UPS because it is MAJOR-not-BLOCKER" —
   a MAJOR blocks.
 - Only **MINOR**/**NIT** → **PASS WITH FOLLOW-UPS**.
 - No findings → **PASS**.
 
 Before writing the verdict line, re-read your own findings and count the BLOCKERs and MAJORs.
-If the count is non-zero the verdict is BLOCKED, whatever the overall diff felt like.
+If the count is non-zero the verdict is FAIL, whatever the overall diff felt like.
 
 
 Cannot say what caller would actually experience → downgrade finding to MINOR and say that you
