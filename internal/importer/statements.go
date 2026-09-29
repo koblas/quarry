@@ -43,11 +43,14 @@ func newestStatements(ctx context.Context, src Source, accounts map[int64]accoun
 	newest := make(map[int64]rawReconcile)
 	err := src.QueryRows(ctx, reconcileRecordsQuery, nil, func(scan func(dest ...any) error) error {
 		var r rawReconcile
-		if err := scan(&r.pk, &r.account, &r.endDate, &r.balType, &r.balText); err != nil {
+		var account sql.NullInt64
+		if err := scan(&r.pk, &account, &r.endDate, &r.balType, &r.balText); err != nil {
 			return err
 		}
-		// A record on a deleted or missing account (!ok) or an investment
-		// account is skipped: neither is ever checked.
+		// A NULL account reads as 0, which no Z_PK uses. A record on a
+		// NULL, deleted or missing account (!ok) or an investment account
+		// is skipped: none is ever checked.
+		r.account = account.Int64
 		acct, ok := accounts[r.account]
 		if !ok || investmentTypes[acct.Type] {
 			return nil

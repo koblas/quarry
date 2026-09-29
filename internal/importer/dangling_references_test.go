@@ -201,3 +201,39 @@ func Test_import_drops_a_split_tag_link_when_its_split_was_skipped(t *testing.T)
 	require.NoError(t, err)
 	assert.Empty(t, fake.Rows.SplitTags)
 }
+
+func Test_import_drops_a_split_tag_link_with_no_split(t *testing.T) {
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
+	entryPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00"})
+	b.LinkUserTag(entryPK, tagPK)
+	b.LinkUserTag(0, tagPK)
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.SplitTag{{SplitID: "split-" + itoa(entryPK), TagID: "tag-" + itoa(tagPK)}}, fake.Rows.SplitTags)
+}
+
+func Test_import_drops_a_split_tag_link_with_no_tag(t *testing.T) {
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
+	entryPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00"})
+	b.LinkUserTag(entryPK, tagPK)
+	b.LinkUserTag(entryPK, 0)
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.SplitTag{{SplitID: "split-" + itoa(entryPK), TagID: "tag-" + itoa(tagPK)}}, fake.Rows.SplitTags)
+}

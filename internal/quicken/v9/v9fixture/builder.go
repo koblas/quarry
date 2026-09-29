@@ -75,8 +75,8 @@ type EntryRow struct {
 	Deleted     bool
 }
 
-// ReconcileRow is one ZRECONCILERECORD row. EndDate writes NULL when nil;
-// EndingBalance writes NULL when "".
+// ReconcileRow is one ZRECONCILERECORD row. Account is a zero ref (0 writes
+// NULL); EndDate writes NULL when nil; EndingBalance writes NULL when "".
 type ReconcileRow struct {
 	Account       int64
 	EndDate       *time.Time
@@ -228,7 +228,7 @@ func (b *Builder) UserTag(row TagRow) int64 {
 }
 
 // LinkUserTag adds a Z_15USERTAGS row pairing entryPK (an EntryRow's Z_PK)
-// with tagPK (a UserTag's Z_PK). The join table's own columns
+// with tagPK (a UserTag's Z_PK); either as 0 writes NULL. The join table's own columns
 // (Z_15CASHFLOWTRANSACTIONENTRIES, Z_76USERTAGS) are fixed by the schema's
 // DDL and do not follow a WithEntity("UserTag", ...) override.
 func (b *Builder) LinkUserTag(entryPK, tagPK int64) {
@@ -329,7 +329,7 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 	for _, r := range b.reconciles {
 		exec(tb, ctx, db,
 			"INSERT INTO ZRECONCILERECORD (Z_PK, ZACCOUNT, ZENDDATE, ZENDINGBALANCE, ZDELETIONCOUNT) VALUES (?, ?, ?, ?, ?)",
-			r.pk, r.row.Account, nullableTime(r.row.EndDate), nullableString(r.row.EndingBalance), deletionCount(r.row.Deleted))
+			r.pk, nullableRef(r.row.Account), nullableTime(r.row.EndDate), nullableString(r.row.EndingBalance), deletionCount(r.row.Deleted))
 	}
 
 	for _, g := range b.tags {
@@ -347,7 +347,7 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 	for _, link := range b.userTagLinks {
 		exec(tb, ctx, db,
 			`INSERT INTO "Z_15USERTAGS" (Z_15CASHFLOWTRANSACTIONENTRIES, Z_76USERTAGS) VALUES (?, ?)`,
-			link.entryPK, link.tagPK)
+			nullableRef(link.entryPK), nullableRef(link.tagPK))
 	}
 
 	for _, name := range []string{

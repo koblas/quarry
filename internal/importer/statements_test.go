@@ -246,3 +246,17 @@ func Test_import_refuses_an_undated_statement_with_a_text_balance_using_the_sour
 		`a statement for "Chequing" (source id `+itoa(pk)+`) has a balance that is not a number`,
 		importReason(t, err))
 }
+
+func Test_import_skips_a_statement_with_no_account(t *testing.T) {
+	b := v9fixture.NewBuilder()
+	acctPK := chequingWithOneReconciledTxn(b, "100.00")
+	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
+	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &feb, EndingBalance: "100.00"})
+	b.Reconcile(v9fixture.ReconcileRow{Account: 0, EndDate: &feb, EndingBalance: "999.00"})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Validation.Balances.Checked)
+}
