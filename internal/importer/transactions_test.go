@@ -50,10 +50,6 @@ func Test_import_refuses_an_exponent_form_amount_by_the_exponents_sign(t *testin
 		want   string
 	}{
 		{
-			name: "a negative exponent near zero has too many decimals", amount: "5.5511151231257827e-17",
-			want: `a transaction on 2024-03-02 in "Visa Infinite" has an amount of 5.5511151231257827e-17, which has more than 2 decimal places`,
-		},
-		{
 			name: "a small negative exponent has too many decimals", amount: "0.00001",
 			want: `a transaction on 2024-03-02 in "Visa Infinite" has an amount of 1.0e-05, which has more than 2 decimal places`,
 		},
@@ -77,6 +73,108 @@ func Test_import_refuses_an_exponent_form_amount_by_the_exponents_sign(t *testin
 			assert.Equal(t, c.want, importReason(t, err))
 		})
 	}
+}
+
+func Test_import_imports_a_transaction_and_split_carrying_float_residue_as_their_cent(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "HELOC", Type: "CREDITCARD", Currency: "CAD", Active: true})
+	apr13 := time.Date(2020, 4, 13, 0, 0, 0, 0, time.UTC)
+	apr14 := time.Date(2020, 4, 14, 0, 0, 0, 0, time.UTC)
+	first := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "-55396.139999999992", PostedDate: &apr13})
+	b.Entry(v9fixture.EntryRow{Parent: first, Amount: "-55396.139999999992"})
+	second := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "-15.67000000001", PostedDate: &apr14})
+	b.Entry(v9fixture.EntryRow{Parent: second, Amount: "-15.67000000001"})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []int64{-5539614, -1567}, transactionAmounts(fake.Rows))
+	assert.ElementsMatch(t, []int64{-5539614, -1567}, splitAmounts(fake.Rows))
+}
+
+func Test_import_imports_a_near_zero_residue_amount_as_zero_cents(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
+	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+	txn := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "5.5511151231257827e-17", PostedDate: &posted})
+	b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "5.5511151231257827e-17"})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.Equal(t, []int64{0}, transactionAmounts(fake.Rows))
+}
+
+func Test_import_refuses_an_amount_beyond_the_snap_tolerance(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
+	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.3400011", PostedDate: &posted})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	assert.Equal(t,
+		`a transaction on 2024-03-02 in "Visa Infinite" has an amount of 12.3400011, which has more than 2 decimal places`,
+		importReason(t, err))
+	assert.Empty(t, fake.Rows.Transactions)
+}
+
+func Test_import_imports_an_amount_on_the_snap_tolerance_as_its_cent(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
+	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+	txn := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.340001", PostedDate: &posted})
+	b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "12.340001"})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.Equal(t, []int64{1234}, transactionAmounts(fake.Rows))
+}
+
+func Test_import_refuses_a_residue_that_rounds_up_to_the_bound_as_too_large(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
+	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "999999999.99999988", PostedDate: &posted})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	assert.Equal(t,
+		`a transaction on 2024-03-02 in "Visa Infinite" has an amount of 999999999.99999988, which is too large for quarry's amounts`,
+		importReason(t, err))
+	assert.Empty(t, fake.Rows.Transactions)
+}
+
+func transactionAmounts(rows store.Rows) []int64 {
+	amounts := make([]int64, len(rows.Transactions))
+	for i, txn := range rows.Transactions {
+		amounts[i] = txn.Amount
+	}
+	return amounts
+}
+
+func splitAmounts(rows store.Rows) []int64 {
+	amounts := make([]int64, len(rows.Splits))
+	for i, split := range rows.Splits {
+		amounts[i] = split.Amount
+	}
+	return amounts
 }
 
 func Test_import_refuses_a_transaction_with_reconcile_status_quarry_does_not_map(t *testing.T) {

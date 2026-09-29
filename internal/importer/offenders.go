@@ -17,9 +17,9 @@ const (
 	classMissingEntity        unmappableClass = iota // a Core Data entity quarry needs is absent
 	classCurrency                                    // an account in an unsupported currency
 	classAccountType                                 // an account type quarry does not map
-	classTransactionPrecision                        // a transaction amount with more than 2 decimals
-	classSplitPrecision                              // a split amount with more than 2 decimals
-	classStatementPrecision                          // a statement balance with more than 2 decimals
+	classTransactionPrecision                        // a transaction amount with more than 2 decimals beyond the snap tolerance
+	classSplitPrecision                              // a split amount with more than 2 decimals beyond the snap tolerance
+	classStatementPrecision                          // a statement balance with more than 2 decimals beyond the snap tolerance
 	classTooLarge                                    // an amount outside quarry's range
 	classNotANumber                                  // an amount stored as text or blob
 	classTransactionStatus                           // a reconcile status quarry does not map

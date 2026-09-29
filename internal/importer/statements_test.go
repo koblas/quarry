@@ -38,6 +38,21 @@ func Test_import_uses_the_newest_statement_by_date(t *testing.T) {
 	assert.Empty(t, result.Validation.Balances.Mismatched)
 }
 
+func Test_import_imports_a_statement_balance_carrying_float_residue_as_its_cent(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := chequingWithOneReconciledTxn(b, "100.00")
+	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
+	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &feb, EndingBalance: "100.0000004"})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Validation.Balances.Checked)
+	assert.Empty(t, result.Validation.Balances.Mismatched)
+}
+
 // The undated record is inserted first, so a "last row scanned wins" bug
 // would pick the dated one instead and the import would succeed.
 func Test_import_ranks_an_undated_statement_as_newest_over_a_dated_one(t *testing.T) {

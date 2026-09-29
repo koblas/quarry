@@ -29,6 +29,6 @@ Range: `e0bffd3..efc8a75`. Coverage vs `0ecb753`: 0 uncovered, 11 declared unrea
 
 ## Rulings (product-vision, 2026-09-29)
 1. Build file `.quarry-<UTC>-<pid>.duckdb.partial`, unique per run; one function owns the name and the sweep pattern `.quarry-*.duckdb.partial`; failure cleanup unlinks only the run's own path; a create collision falls into S3. No run lock, no new copy. (DuckDB refuses a pre-created empty file, so uniqueness comes from the name, not O_EXCL.)
-2. REAL exponent form split by sign: negative exponent → reason 3/4/5 (value quoted as rendered); positive exponent → reason 6. Tests for `e-17`, `e-05` (reason 3) and one positive exponent (reason 6).
+2. REAL exponent form split by sign: negative exponent → reason 3/4/5 (value quoted as rendered); positive exponent → reason 6. Tests for `e-17`, `e-05` (reason 3) and one positive exponent (reason 6). Superseded by P1-7 (2026-09-29).
 
 ## Verdict: FAIL (1 MAJOR)
