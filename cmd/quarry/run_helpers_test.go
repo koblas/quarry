@@ -3,14 +3,24 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/stretchr/testify/require"
 )
+
+// syncBundle runs sync on bundle under the test's HOME, failing t unless it succeeds.
+func syncBundle(t *testing.T, bundle v9fixture.Bundle) {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr), stderr.String())
+}
 
 // onlyFileWithSuffix fails the test unless exactly one entry in dir ends in
 // suffix, returning its full path.
@@ -47,4 +57,12 @@ func megabytes(bytes int64) string {
 // with the .sqlite extension removed.
 func snapshotID(snapshotPath string) string {
 	return strings.TrimSuffix(filepath.Base(snapshotPath), ".sqlite")
+}
+
+// skipAsRoot skips t under root, whom file modes do not stop.
+func skipAsRoot(t *testing.T) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file modes")
+	}
 }

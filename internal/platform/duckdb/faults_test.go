@@ -97,6 +97,7 @@ func Test_IsDiskFull_and_IsPermission_classify_error_shapes(t *testing.T) {
 // process cannot read at all.
 func Test_open_read_only_on_a_permission_denied_file_classifies_as_permission(t *testing.T) {
 	t.Parallel()
+	skipAsRoot(t)
 	writer, path := newOpenDatabase(t)
 	require.NoError(t, writer.Close())
 	require.NoError(t, os.Chmod(path, 0o000))
@@ -131,4 +132,58 @@ func Test_create_on_an_existing_path_reports_ErrExists_not_a_permission_fault(t 
 
 	require.ErrorIs(t, err, duckdb.ErrExists)
 	assert.False(t, duckdb.IsPermission(err))
+}
+
+func Test_query_error_predicates_classify_driver_errors(t *testing.T) {
+	t.Parallel()
+	writer, path := newOpenDatabase(t)
+	require.NoError(t, writer.Close())
+	db, err := duckdb.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	cases := []struct {
+		name               string
+		query              string
+		wantReadOnly       bool
+		wantAccessDisabled bool
+		wantEmptyQuery     bool
+	}{
+		{name: "a write is a read-only violation", query: "CREATE TABLE t (v INTEGER)", wantReadOnly: true},
+		{name: "a locked setting is not a read-only violation", query: "SET enable_external_access=true"},
+		{name: "another error naming read-only mode is not a violation", query: `SELECT * FROM "read-only mode"`},
+		{name: "reading a file is disabled access", query: "SELECT count(*) FROM read_csv('" + path + ".csv')", wantAccessDisabled: true},
+		{name: "loading an extension is disabled access", query: "LOAD httpfs", wantAccessDisabled: true},
+		{name: "a lone semicolon is an empty query", query: ";", wantEmptyQuery: true},
+		{name: "a lone comment is an empty query", query: "-- note", wantEmptyQuery: true},
+		{name: "a user's own error saying empty query is not an empty query", query: "SELECT error('empty query')"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := db.QueryTable(t.Context(), c.query, 0)
+
+			require.Error(t, err)
+			assert.Equal(t, c.wantReadOnly, duckdb.IsReadOnlyViolation(err), err.Error())
+			assert.Equal(t, c.wantAccessDisabled, duckdb.IsAccessDisabled(err), err.Error())
+			assert.Equal(t, c.wantEmptyQuery, duckdb.IsEmptyQuery(err), err.Error())
+		})
+	}
+}
+
+func Test_query_error_predicates_reject_an_error_from_elsewhere(t *testing.T) {
+	t.Parallel()
+
+	assert.False(t, duckdb.IsReadOnlyViolation(errNotDuckDB))
+	assert.False(t, duckdb.IsAccessDisabled(errNotDuckDB))
+	assert.False(t, duckdb.IsEmptyQuery(errNotDuckDB))
+}
+
+// skipAsRoot skips t under root, whom file modes do not stop.
+func skipAsRoot(t *testing.T) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file modes")
+	}
 }

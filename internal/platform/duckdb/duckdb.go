@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"regexp"
 	"strings"
 	"syscall"
 
@@ -67,10 +68,16 @@ func Create(ctx context.Context, path string) (*DB, error) {
 	return &DB{conn: conn, path: path}, nil
 }
 
-// OpenReadOnly opens an existing DuckDB database file at path for
-// read-only access: no write reaches path through this connection.
+// readOnlyDSN locks a read session down: no write, no outside access, no SET.
+const readOnlyDSN = "?access_mode=READ_ONLY&enable_external_access=false" +
+	"&autoload_known_extensions=false&autoinstall_known_extensions=false&lock_configuration=true"
+
+// OpenReadOnly opens an existing DuckDB database file at path read-only and
+// locked down: no write reaches path, no other file, database or extension is
+// reachable, and the configuration cannot be changed. Every read-only open
+// in the process must use this one configuration.
 func OpenReadOnly(ctx context.Context, path string) (*DB, error) {
-	conn, err := sql.Open("duckdb", path+"?access_mode=READ_ONLY")
+	conn, err := sql.Open("duckdb", path+readOnlyDSN)
 	if err != nil {
 		// The duckdb driver opens the file inside sql.Open itself, so a
 		// missing path or permission fault surfaces here, not at
@@ -221,6 +228,55 @@ func IsPermission(err error) bool {
 		isDriverIOError(err, syscall.EACCES) || isDriverIOError(err, syscall.EPERM)
 }
 
+// IsReadOnlyViolation reports whether err is the driver's refusal of a
+// statement that would write through a read-only connection.
+func IsReadOnlyViolation(err error) bool {
+	derr, ok := errors.AsType[*duckdbdriver.Error](err)
+	return ok && derr.Type == duckdbdriver.ErrorTypeInvalidInput && strings.Contains(derr.Msg, "read-only mode")
+}
+
+// IsAccessDisabled reports whether err is the driver's refusal of a file,
+// database or extension that OpenReadOnly's configuration turned off. It is
+// a configuration refusal, not an OS permission fault (see IsPermission).
+func IsAccessDisabled(err error) bool {
+	derr, ok := errors.AsType[*duckdbdriver.Error](err)
+	return ok && derr.Type == duckdbdriver.ErrorTypePermission
+}
+
+// IsEmptyQuery reports whether err is the driver's refusal of a query with no
+// statement in it, such as ";" or a lone comment.
+func IsEmptyQuery(err error) bool {
+	// Whole text: the driver's sentinel is unexported and error('empty query') gains a prefix.
+	return err.Error() == "empty query"
+}
+
+// IsNotDatabase reports whether err is the driver's refusal to open a file
+// that is not a DuckDB database, an empty file included.
+func IsNotDatabase(err error) bool {
+	return driverIOMessageContains(err, "not a valid DuckDB database file")
+}
+
+// IsLocked reports whether err is the driver's refusal to open a file
+// another process holds the lock on.
+func IsLocked(err error) bool {
+	return driverIOMessageContains(err, "Could not set lock on file")
+}
+
+// errorTypePrefix matches the error type DuckDB leads its messages with, e.g. "IO Error: ".
+var errorTypePrefix = regexp.MustCompile(`^[A-Za-z ]+ Error: `)
+
+// ErrorLine returns the first line of the driver's message for err, or of
+// err.Error() when no driver error is in its tree, without DuckDB's leading
+// error type.
+func ErrorLine(err error) string {
+	msg := err.Error()
+	if derr, ok := errors.AsType[*duckdbdriver.Error](err); ok {
+		msg = derr.Msg
+	}
+	line, _, _ := strings.Cut(msg, "\n")
+	return errorTypePrefix.ReplaceAllString(line, "")
+}
+
 // isDriverIOError reports whether err is a *duckdbdriver.Error of ErrorTypeIO
 // whose message contains errno's OS-supplied text (DuckDB has no errno of its own).
 func isDriverIOError(err error, errno syscall.Errno) bool {
@@ -229,6 +285,12 @@ func isDriverIOError(err error, errno syscall.Errno) bool {
 		return false
 	}
 	return strings.Contains(strings.ToLower(derr.Msg), strings.ToLower(errno.Error()))
+}
+
+// driverIOMessageContains reports whether err is a *duckdbdriver.Error of ErrorTypeIO whose message contains text.
+func driverIOMessageContains(err error, text string) bool {
+	derr, ok := errors.AsType[*duckdbdriver.Error](err)
+	return ok && derr.Type == duckdbdriver.ErrorTypeIO && strings.Contains(derr.Msg, text)
 }
 
 // decimalRangeError is Decimal's refusal of an unscaled value too wide for

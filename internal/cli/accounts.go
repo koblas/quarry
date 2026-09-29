@@ -1,0 +1,46 @@
+package cli
+
+import "github.com/spf13/cobra"
+
+// newAccountsCommand builds accounts: balances per account, closed ones only
+// with --all, as JSON when *jsonOut is set.
+func newAccountsCommand(newReport ReportFactory, jsonOut *bool) *cobra.Command {
+	var all bool
+	cmd := &cobra.Command{
+		Use:   "accounts",
+		Short: "List accounts with their current balances",
+		Long: `List the accounts in quarry's store with each one's balance in its own
+currency: the sum of its transactions dated today or earlier. Closed
+accounts are left out unless --all is given.
+
+Brokerage and retirement accounts show "not imported": quarry does not
+import investment transactions yet, so it cannot compute their balance.`,
+		Args: noArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			srv, err := openReport(cmd, newReport)
+			if err != nil {
+				return err
+			}
+
+			listing, err := srv.Accounts(cmd.Context(), all)
+			if err != nil {
+				return &runtimeError{err: err}
+			}
+
+			warnings := []string{}
+			if listing.AllHidden() {
+				warnings = append(warnings, allClosedNote(listing.Hidden))
+			}
+
+			out, err := renderResult(*jsonOut,
+				func() ([]byte, error) { return renderAccountsJSON(listing.AccountList, warnings) },
+				func() string { return renderAccounts(listing.AccountList) })
+			if err != nil {
+				return err
+			}
+			return emit(cmd, out, "quarry: ", warnings)
+		},
+	}
+	cmd.Flags().BoolVar(&all, "all", false, "include closed accounts")
+	return cmd
+}

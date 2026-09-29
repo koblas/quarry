@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"slices"
 	"time"
 )
 
@@ -15,6 +16,25 @@ type Account struct {
 	Institution *string
 	Closed      bool
 	Active      bool
+}
+
+// Investment account types, whose balance quarry cannot compute.
+const (
+	AccountTypeBrokerage  = "brokerage"
+	AccountTypeRetirement = "retirement"
+)
+
+// InvestmentAccountTypes returns every accounts.type value
+// IsInvestmentAccount accepts, as a fresh slice.
+func InvestmentAccountTypes() []string {
+	return []string{AccountTypeBrokerage, AccountTypeRetirement}
+}
+
+// IsInvestmentAccount reports whether accountType is a brokerage or
+// retirement account: sync never checks its balance, and accounts shows it
+// as not imported.
+func IsInvestmentAccount(accountType string) bool {
+	return slices.Contains(InvestmentAccountTypes(), accountType)
 }
 
 // Category is one row of the categories table. ParentID is nil for a
@@ -105,8 +125,12 @@ type Rows struct {
 
 // SnapshotRef identifies the snapshot a build reads: its absolute Path,
 // its SHA-256, and its schema fingerprint, all as its manifest records them.
+// TakenAt (UTC) and Source are the manifest's recorded values, zero unless
+// filled from a manifest.
 type SnapshotRef struct {
 	Path, SHA256, SchemaFingerprint string
+	TakenAt                         time.Time
+	Source                          string
 }
 
 // ImportRun is one row of the import_runs table, describing the build that
@@ -122,6 +146,23 @@ type ImportRun struct {
 	SplitsMismatched                  int
 	TransfersOneSided                 int
 	InvestmentTransactionsNotImported int
+	BalancesNeverReconciled           int
+	InvestmentAccounts                int
+	TransfersPaired                   int
+	TransfersCrossCurrency            int
+}
+
+// Status is what a built store says about itself: its path, the format and
+// build that wrote it, its import run and the dates its transactions cover.
+// A zero Run.Snapshot.TakenAt or empty Source means NULL was recorded; the
+// dates are zero when there are no transactions.
+type Status struct {
+	Path                string
+	FormatVersion       int
+	QuarryVersion       string
+	BuiltAt             time.Time
+	Run                 ImportRun
+	FirstDate, LastDate time.Time
 }
 
 // Counts is the row count of each table after a build; Transfers counts
@@ -246,4 +287,18 @@ type OneSidedTransfer struct {
 	Amount            int64
 	OtherAccount      *string
 	OtherAccountID    *string
+}
+
+// AccountBalance is one account with its balance in cents; Balance is nil
+// when the store cannot compute it.
+type AccountBalance struct {
+	Account
+
+	Balance *int64
+}
+
+// AccountList is every account with its balance as of the store's today.
+type AccountList struct {
+	AsOf     time.Time
+	Accounts []AccountBalance
 }

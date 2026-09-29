@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
@@ -141,12 +142,12 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 		{
 			name:       "unknown command",
 			args:       []string{"frob"},
-			wantStderr: "quarry: unknown command \"frob\" for \"quarry\"; Run 'quarry sync --help' for usage.\n",
+			wantStderr: "quarry: unknown command \"frob\" for \"quarry\"; Run 'quarry --help' for usage.\n",
 		},
 		{
 			name:       "near miss of a known command",
 			args:       []string{"synk"},
-			wantStderr: "quarry: unknown command \"synk\" for \"quarry\"; Run 'quarry sync --help' for usage.\n",
+			wantStderr: "quarry: unknown command \"synk\" for \"quarry\"; Run 'quarry --help' for usage.\n",
 		},
 	}
 
@@ -161,6 +162,32 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 			assert.Empty(t, stdout.String())
 			assert.Equal(t, c.wantStderr, stderr.String())
 			assert.NotContains(t, stderr.String(), "Did you mean")
+		})
+	}
+}
+
+func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
+	cases := []struct {
+		name       string
+		args       []string
+		wantStderr string
+	}{
+		{name: "sql", args: []string{"sql", "--bogus"}, wantStderr: "quarry: unknown flag: --bogus; Run 'quarry sql --help' for usage.\n"},
+		{name: "status", args: []string{"status", "--bogus"}, wantStderr: "quarry: unknown flag: --bogus; Run 'quarry status --help' for usage.\n"},
+		{name: "accounts", args: []string{"accounts", "--bogus"}, wantStderr: "quarry: unknown flag: --bogus; Run 'quarry accounts --help' for usage.\n"},
+		{name: "root", args: []string{"spend"}, wantStderr: "quarry: unknown command \"spend\" for \"quarry\"; Run 'quarry --help' for usage.\n"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), c.args, &stdout, &stderr)
+
+			assert.Equal(t, 2, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, c.wantStderr, stderr.String())
 		})
 	}
 }
@@ -209,9 +236,37 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 
 		assert.Equal(t, 2, exitCode)
 		assert.Empty(t, stdout.String())
-		assert.Equal(t, "quarry: unknown command \"frob\" for \"quarry\"; Run 'quarry sync --help' for usage.\n", stderr.String())
+		assert.Equal(t, "quarry: unknown command \"frob\" for \"quarry\"; Run 'quarry --help' for usage.\n", stderr.String())
 	})
+
+	usageErrors := []struct {
+		name       string
+		args       []string
+		stdin      string
+		wantStderr string
+	}{
+		{name: "sql without a query", args: []string{"sql"}, wantStderr: sqlNeedsAQuery},
+		{name: "sql - with an empty stdin", args: []string{"sql", "-"}, wantStderr: sqlNeedsAQuery},
+		{name: "sql with a negative limit", args: []string{"sql", "--limit", "-1", "SELECT 1"}, wantStderr: "quarry: --limit must be 0 or more; 0 prints every row\n"},
+		{name: "status with an argument", args: []string{"status", "extra"}, wantStderr: "quarry: status takes no arguments\n"},
+		{name: "sql with an unknown flag", args: []string{"sql", "--bogus"}, wantStderr: "quarry: unknown flag: --bogus; Run 'quarry sql --help' for usage.\n"},
+	}
+	for _, c := range usageErrors {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			env := defaultEnv(&stdout, &stderr)
+			env.Stdin = strings.NewReader(c.stdin)
+
+			exitCode := runWith(context.Background(), c.args, env)
+
+			assert.Equal(t, 2, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, c.wantStderr, stderr.String())
+		})
+	}
 }
+
+const sqlNeedsAQuery = "quarry: sql needs a query; pass it as one quoted argument, or - to read it from stdin\n"
 
 func Test_run_reports_exit_1_when_the_context_is_already_cancelled(t *testing.T) {
 	home := t.TempDir()
