@@ -22,4 +22,7 @@ Scenarios complete: SCENARIO-01..05 (02-05 folded into 01). Last updated by SCEN
 - `≤`→`<` reddens `12.340001`; tolerance 1e-9 reddens `12.340001`; tolerance 1e-5 reddens `2.0e-06`, `12.3400011`; dropping the post-snap bound reddens `999999999.9999999` rows and acceptance 05; dropping the `dollars >= realIntBound` guard in `snappedCents` reddens `18446744073709551616.0e-0` and `99999999999999999999.0e-5`; the `SetString`-failure return flipped to `moneyPrecision` reddens the huge-exponent row (SCENARIO-01)
 
 ## Open debts
-- None.
+- internal/importer/money.go:105-110 — `SetString` failure returns `0, moneyOK`; also reachable by >1e6 fraction digits (not from SQLite rendering). Fail closed: decide below-tolerance from digits first, `!ok` → moneyNotANumber `// unreachable:` (REVIEW-01, correctness MINOR).
+- internal/importer/money_internal_test.go — pin ≤2-decimal fast path allocation-free (`testing.AllocsPerRun`), mutation survivor money.go:73 (REVIEW-01, test MINOR).
+- internal/importer/money.go — refactor MINORs: split `realCents` (grammar vs compute), one REAL-bound helper, package-level rats for 100/half/tolerance, restore `parseMoney` fault contract sentence (REVIEW-01).
+- offenders.go:20-22, splits.go:21-25, transactions.go:85-87 — "beyond the snap tolerance" repeated (NIT).
