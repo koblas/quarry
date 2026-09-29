@@ -124,12 +124,18 @@ func renderJSON(outcome snapshot.Outcome) ([]byte, error) {
 		Store:    newStoreDocument(outcome.Store),
 		Warnings: outcome.Warnings(),
 	}
+	return marshalDocument(doc)
+}
+
+// marshalDocument encodes doc as every --json document is written: 2-space
+// indented JSON with a trailing newline.
+func marshalDocument(doc any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(doc); err != nil {
-		// unreachable: every resultDocument field is a string, bool, int, pointer or slice of those; none can fail JSON encoding.
-		return nil, fmt.Errorf("encode result: %w", err)
+		// unreachable: every document field is a string, bool, int, pointer or slice of those; none can fail JSON encoding.
+		return nil, fmt.Errorf("encode document: %w", err)
 	}
 	return buf.Bytes(), nil
 }

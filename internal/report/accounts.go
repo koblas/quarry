@@ -6,16 +6,30 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
+// AccountListing is the accounts a listing shows, plus how many closed
+// accounts it left out.
+type AccountListing struct {
+	store.AccountList
+
+	Hidden int
+}
+
+// AllHidden reports whether the listing is empty only because every account
+// in the store is closed and was left out.
+func (l AccountListing) AllHidden() bool {
+	return l.Hidden > 0 && len(l.Accounts) == 0
+}
+
 // Accounts lists the store's accounts in the store's order with their
-// balances; closed accounts are left out unless includeClosed is set.
-// Store errors are returned unchanged.
-func (s *Server) Accounts(ctx context.Context, includeClosed bool) (store.AccountList, error) {
+// balances; closed accounts are left out, and counted in Hidden, unless
+// includeClosed is set. Store errors are returned unchanged.
+func (s *Server) Accounts(ctx context.Context, includeClosed bool) (AccountListing, error) {
 	list, err := s.store.Accounts(ctx)
 	if err != nil {
-		return store.AccountList{}, err //nolint:wrapcheck // the store's error is final user copy; a prefix would change it
+		return AccountListing{}, err //nolint:wrapcheck // the store's error is final user copy; a prefix would change it
 	}
 	if includeClosed {
-		return list, nil
+		return AccountListing{AccountList: list}, nil
 	}
 
 	open := list.Accounts[:0:0]
@@ -24,6 +38,7 @@ func (s *Server) Accounts(ctx context.Context, includeClosed bool) (store.Accoun
 			open = append(open, a)
 		}
 	}
+	hidden := len(list.Accounts) - len(open)
 	list.Accounts = open
-	return list, nil
+	return AccountListing{AccountList: list, Hidden: hidden}, nil
 }

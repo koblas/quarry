@@ -74,3 +74,12 @@ func padRight(s string, width int) string {
 func padLeft(s string, width int) string {
 	return strings.Repeat(" ", max(0, width-utf8.RuneCountInString(s))) + s
 }
+
+// allClosedNote says how to list the accounts when hidden closed accounts
+// are all the store has.
+func allClosedNote(hidden int) string {
+	if hidden == 1 {
+		return "the only account is closed; pass --all to list it"
+	}
+	return "all " + accountsPhrase(hidden) + " are closed; pass --all to list them"
+}

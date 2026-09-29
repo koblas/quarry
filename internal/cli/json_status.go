@@ -1,9 +1,6 @@
 package cli
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/koblas/quarry/internal/report"
@@ -72,14 +69,7 @@ type statusTransfersDocument struct {
 // renderStatusJSON renders st as status's --json document, encoded like
 // sync's: 2-space indent, trailing newline.
 func renderStatusJSON(st store.Status) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(newStatusDocument(st)); err != nil {
-		// unreachable: every statusDocument field is a string, int, pointer to string or slice of strings; none can fail JSON encoding.
-		return nil, fmt.Errorf("encode status: %w", err)
-	}
-	return buf.Bytes(), nil
+	return marshalDocument(newStatusDocument(st))
 }
 
 // newStatusDocument converts st into the --json shape. Paths stay absolute,

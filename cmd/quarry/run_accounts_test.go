@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -142,4 +143,43 @@ func syncAccountsFixture(t *testing.T, home string) {
 func addTransaction(b *v9fixture.Builder, account int64, amount string, posted time.Time) {
 	txn := b.Transaction(v9fixture.TransactionRow{Account: account, Amount: amount, PostedDate: &posted})
 	b.Entry(v9fixture.EntryRow{Parent: txn, Amount: amount})
+}
+
+// syncClosedAccountsFixture builds the store from n closed accounts.
+func syncClosedAccountsFixture(t *testing.T, home string, n int) {
+	t.Helper()
+	b := v9fixture.NewBuilder()
+	for i := range n {
+		b.Account(v9fixture.AccountRow{Name: fmt.Sprintf("Closed %d", i+1), Type: "CHECKING", Currency: "CAD", Closed: true, Active: true})
+	}
+	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+
+	var syncOut, syncErr bytes.Buffer
+	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncOut, &syncErr), syncErr.String())
+}
+
+func Test_run_accounts_says_how_to_list_them_when_every_account_is_closed(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncClosedAccountsFixture(t, home, 3)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"accounts"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode)
+	assert.Equal(t, "Account  Type  Currency  Balance  Status\n", stdout.String())
+	assert.Equal(t, "quarry: all 3 accounts are closed; pass --all to list them\n", stderr.String())
+}
+
+func Test_run_accounts_all_lists_closed_accounts_without_a_note(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncClosedAccountsFixture(t, home, 3)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"accounts", "--all"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.Contains(t, stdout.String(), "Closed 1  chequing  CAD")
 }

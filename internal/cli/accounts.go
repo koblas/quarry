@@ -1,12 +1,15 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
 // newAccountsCommand builds the accounts subcommand: list the store's
-// accounts with their balances, closed ones only when --all is given.
-func newAccountsCommand(newReport ReportFactory) *cobra.Command {
+// accounts with their balances, closed ones only when --all is given, as
+// JSON when *jsonOut is set.
+func newAccountsCommand(newReport ReportFactory, jsonOut *bool) *cobra.Command {
 	var all bool
 	cmd := &cobra.Command{
 		Use:   "accounts",
@@ -23,13 +26,31 @@ import investment transactions yet, so it cannot compute their balance.`,
 				return &runtimeError{err: err}
 			}
 
-			list, err := srv.Accounts(cmd.Context(), all)
+			listing, err := srv.Accounts(cmd.Context(), all)
 			if err != nil {
 				return &runtimeError{err: err}
 			}
 
-			if _, err := cmd.OutOrStdout().Write([]byte(renderAccounts(list))); err != nil {
+			warnings := []string{}
+			if listing.AllHidden() {
+				warnings = append(warnings, allClosedNote(listing.Hidden))
+			}
+
+			var out []byte
+			if *jsonOut {
+				if out, err = renderAccountsJSON(listing.AccountList, warnings); err != nil {
+					// unreachable: renderAccountsJSON's own error path is unreachable for any AccountList; see marshalDocument.
+					return &runtimeError{err: err}
+				}
+			} else {
+				out = []byte(renderAccounts(listing.AccountList))
+			}
+
+			if _, err := cmd.OutOrStdout().Write(out); err != nil {
 				return &runtimeError{err: err}
+			}
+			for _, warning := range warnings {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: "+warning)
 			}
 			return nil
 		},
