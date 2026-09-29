@@ -32,7 +32,7 @@ Each `## BDD Acceptance Progress` line names scenario's acceptance test:
 
 Test reference must be **last thing on line** — fold's "delivered by SCENARIO-NN" note goes before it, and ticked line must not wrap. `quarry`'s own tick (`tickProgressEntry`) matches by ID and keeps trailing text.
 
-`.claude/scripts/spec-check.py <feature-slug>` checks every scenario has exactly one `When`, every **ticked** scenario names acceptance test, and test exists in that file. Developer runs it right after ticking; final gate runs it. Enforces only specs carrying `<!-- spec-check: v1 -->` marker (`intent-and-goal` template adds it); spec written before this convention reported as not opted in and passes, so resuming one never turns shipped scenarios into gate findings. `--force` checks unmarked spec by hand.
+`.claude/scripts/spec-check.py <feature-slug>` checks every scenario has exactly one `When`, every **ticked** scenario names acceptance test, and test exists in that file. Developer runs it right after ticking; final gate runs it with `--run`, which also executes each ticked acceptance test (anchored `-run`) and fails the round if one fails or matches nothing — a tick can't outlive its test. Enforces only specs carrying `<!-- spec-check: v1 -->` marker (`intent-and-goal` template adds it); spec written before this convention reported as not opted in and passes, so resuming one never turns shipped scenarios into gate findings. `--force` checks unmarked spec by hand.
 
 ## Scenario plan files are brief step files
 
