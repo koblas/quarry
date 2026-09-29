@@ -73,17 +73,21 @@ func Test_accountStatus(t *testing.T) {
 	cases := []struct {
 		name           string
 		closed, active bool
+		notInReports   bool
 		want           string
 	}{
 		{name: "open and active is blank", closed: false, active: true, want: ""},
 		{name: "open and not active is inactive", closed: false, active: false, want: "inactive"},
 		{name: "closed and active is closed", closed: true, active: true, want: "closed"},
 		{name: "closed and not active is closed, not inactive", closed: true, active: false, want: "closed"},
+		{name: "open, active, not in reports", closed: false, active: true, notInReports: true, want: "not in reports"},
+		{name: "inactive and not in reports", closed: false, active: false, notInReports: true, want: "inactive, not in reports"},
+		{name: "closed and not in reports", closed: true, active: true, notInReports: true, want: "closed, not in reports"},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, accountStatus(c.closed, c.active))
+			assert.Equal(t, c.want, accountStatus(c.closed, c.active, c.notInReports))
 		})
 	}
 }

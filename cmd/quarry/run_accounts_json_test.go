@@ -24,6 +24,7 @@ type accountRowJSON struct {
 	Institution *string `json:"institution"`
 	Closed      bool    `json:"closed"`
 	Active      bool    `json:"active"`
+	InReports   bool    `json:"in_reports"`
 	Balance     *string `json:"balance"`
 }
 
@@ -67,6 +68,7 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
       "institution": "First Bank",
       "closed": false,
       "active": true,
+      "in_reports": true,
       "balance": "12345.67"
     },
     {
@@ -77,6 +79,7 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
       "institution": "First Bank",
       "closed": false,
       "active": true,
+      "in_reports": true,
       "balance": null
     },
     {
@@ -87,6 +90,7 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
       "institution": null,
       "closed": false,
       "active": true,
+      "in_reports": true,
       "balance": "0.00"
     }
   ],
@@ -111,5 +115,24 @@ func Test_run_accounts_json_reports_the_all_closed_note_in_both_streams(t *testi
 	assert.Empty(t, got.Accounts)
 	assert.Contains(t, stdout.String(), "  \"accounts\": [],\n")
 	assert.Equal(t, []string{"all 3 accounts are closed; pass --all to list them"}, got.Warnings)
-	assert.Equal(t, "quarry: all 3 accounts are closed; pass --all to list them\n", stderr.String())
+	assert.Equal(t, "quarry: warning: all 3 accounts are closed; pass --all to list them\n", stderr.String())
+}
+
+func Test_run_accounts_json_carries_in_reports_per_account(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncNotInReportsFixture(t, home)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"accounts", "--all", "--json"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	var got accountsJSON
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+	inReports := map[string]bool{}
+	for _, a := range got.Accounts {
+		inReports[a.Name] = a.InReports
+	}
+	assert.Equal(t, map[string]bool{"Chequing": true, "Float": false, "Old Savings": false, "Old Visa": false}, inReports)
+	assert.Contains(t, stdout.String(), "      \"active\": true,\n      \"in_reports\": false,\n")
 }

@@ -49,6 +49,7 @@ func Test_accounts_reads_each_accounts_balance(t *testing.T) {
 	visa := account("acct-4", 4, "Visa", "credit_card", "CAD")
 	visa.Closed, visa.Active = true, false
 	savings := account("acct-5", 5, "Savings", "savings", "CAD")
+	savings.NotInReports = true
 	st := replaceWith(t, []store.Account{chequing, usChequing, rrsp, visa, savings}, []store.Transaction{
 		transaction("txn-1", "acct-1", past, 123456),
 		transaction("txn-2", "acct-1", past, 500),

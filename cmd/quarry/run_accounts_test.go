@@ -149,7 +149,7 @@ func Test_run_accounts_says_how_to_list_them_when_every_account_is_closed(t *tes
 
 	require.Equal(t, 0, exitCode)
 	assert.Equal(t, "Account  Type  Currency  Balance  Status\n", stdout.String())
-	assert.Equal(t, "quarry: all 3 accounts are closed; pass --all to list them\n", stderr.String())
+	assert.Equal(t, "quarry: warning: all 3 accounts are closed; pass --all to list them\n", stderr.String())
 }
 
 func Test_run_accounts_all_lists_closed_accounts_without_a_note(t *testing.T) {
@@ -167,5 +167,39 @@ func Test_run_accounts_all_lists_closed_accounts_without_a_note(t *testing.T) {
 		"Closed 1  chequing  CAD          0.00  closed\n"+
 		"Closed 2  chequing  CAD          0.00  closed\n"+
 		"Closed 3  chequing  CAD          0.00  closed\n",
+		stdout.String())
+}
+
+// syncNotInReportsFixture builds an open, an inactive and a closed account that
+// Quicken leaves out of reports, plus an open one it includes.
+func syncNotInReportsFixture(t *testing.T, home string) {
+	t.Helper()
+	off := new(int64(0))
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	b.Account(v9fixture.AccountRow{Name: "Float", Type: "CHECKING", Currency: "CAD", Active: true, UsedInReports: off})
+	b.Account(v9fixture.AccountRow{Name: "Old Savings", Type: "SAVINGS", Currency: "CAD", Active: false, UsedInReports: off})
+	b.Account(v9fixture.AccountRow{Name: "Old Visa", Type: "CREDITCARD", Currency: "CAD", Closed: true, Active: true, UsedInReports: off})
+	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+
+	syncBundle(t, bundle)
+}
+
+func Test_run_accounts_all_marks_accounts_left_out_of_reports(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncNotInReportsFixture(t, home)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"accounts", "--all"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.Equal(t, ""+
+		"Account      Type         Currency  Balance  Status\n"+
+		"Chequing     chequing     CAD          0.00\n"+
+		"Float        chequing     CAD          0.00  not in reports\n"+
+		"Old Savings  savings      CAD          0.00  inactive, not in reports\n"+
+		"Old Visa     credit_card  CAD          0.00  closed, not in reports\n",
 		stdout.String())
 }

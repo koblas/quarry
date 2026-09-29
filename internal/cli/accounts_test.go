@@ -100,7 +100,7 @@ func Test_accounts_all_closed_note(t *testing.T) {
 func stderrOf(notes []string) string {
 	var b bytes.Buffer
 	for _, n := range notes {
-		b.WriteString("quarry: " + n + "\n")
+		b.WriteString("quarry: warning: " + n + "\n")
 	}
 	return b.String()
 }

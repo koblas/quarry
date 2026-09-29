@@ -21,6 +21,7 @@ type accountRowDocument struct {
 	Institution *string `json:"institution"`
 	Closed      bool    `json:"closed"`
 	Active      bool    `json:"active"`
+	InReports   bool    `json:"in_reports"`
 	Balance     *string `json:"balance"`
 }
 
@@ -32,7 +33,7 @@ func renderAccountsJSON(list store.AccountList, warnings []string) ([]byte, erro
 		rows[i] = accountRowDocument{
 			ID: a.ID, Name: a.Name, Type: a.Type, Currency: a.Currency,
 			Institution: jsonNullInstitution(a.Institution),
-			Closed:      a.Closed, Active: a.Active,
+			Closed:      a.Closed, Active: a.Active, InReports: !a.NotInReports,
 			Balance: jsonNullMoney(a.Balance),
 		}
 	}

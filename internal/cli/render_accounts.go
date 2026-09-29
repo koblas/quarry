@@ -20,7 +20,7 @@ func renderAccounts(list store.AccountList) string {
 	rows := make([][]string, 0, 1+len(list.Accounts))
 	rows = append(rows, header)
 	for _, a := range list.Accounts {
-		rows = append(rows, []string{a.Name, a.Type, a.Currency, accountBalance(a.Balance), accountStatus(a.Closed, a.Active)})
+		rows = append(rows, []string{a.Name, a.Type, a.Currency, accountBalance(a.Balance), accountStatus(a.Closed, a.Active, a.NotInReports)})
 	}
 
 	widths := make([]int, len(header)-1)
@@ -52,17 +52,21 @@ func accountBalance(cents *int64) string {
 	return formatMoney(*cents)
 }
 
-// accountStatus is "closed" for a closed account, "inactive" for an open one
-// that is not active, and "" otherwise.
-func accountStatus(closed, active bool) string {
+// accountStatus joins, with ", ", "closed" for a closed account or "inactive"
+// for an open one that is not active, then "not in reports" when Quicken
+// leaves the account out of its reports; "" when none applies.
+func accountStatus(closed, active, notInReports bool) string {
+	var parts []string
 	switch {
 	case closed:
-		return "closed"
+		parts = append(parts, "closed")
 	case !active:
-		return "inactive"
-	default:
-		return ""
+		parts = append(parts, "inactive")
 	}
+	if notInReports {
+		parts = append(parts, "not in reports")
+	}
+	return strings.Join(parts, ", ")
 }
 
 // padRight pads s with spaces to width runes.

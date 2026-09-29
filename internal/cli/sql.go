@@ -30,8 +30,10 @@ directory beside the store; quarry removes it when it exits.
 
 Pass the query as one quoted argument, or - to read it from stdin. A query
 that starts with - (such as a -- comment) goes after --:
-quarry sql -- "-- monthly totals
-SELECT ..."
+
+  quarry sql -- "-- monthly totals
+  SELECT ..."
+
 Amounts are DECIMAL(18,2) in each account's own currency; negative is money
 leaving the account. Transfers between your own accounts are in the transfers table
 and splits.transfer_account_id, never in a category kind. List the tables
