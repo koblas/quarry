@@ -19,15 +19,16 @@ const (
 // dollarBound is the DECIMAL(18,2)-safe bound (exclusive) on whole dollars: cents = dollars*100 must fit 18 unscaled digits.
 const dollarBound = 10_000_000_000_000_000 // 1e16
 
-// realIntBound is the bound (exclusive) on a REAL's integer part: SQLite prints a REAL to 15 significant digits.
-const realIntBound = 10_000_000_000_000 // 1e13
+// realIntBound is the bound (exclusive) on a REAL's integer part: above it SQLite
+// can render a 2-decimal REAL with float noise, so its cents cannot be trusted.
+const realIntBound = 1_000_000_000 // 1e9
 
 // parseMoney reads typ (SQLite's typeof()) and text (CAST(col AS TEXT))
 // for one non-NULL money column and returns its value in cents, parsed
 // exactly from the digit string — never through float arithmetic. It
 // reports moneyPrecision for more than 2 decimal places, moneyTooLarge for
 // a value outside DECIMAL(18,2)'s trustworthy range, and moneyNotANumber
-// for a column stored as text or blob (typ is anything but integer/real).
+// for a column stored as text or blob, or real text that is not a decimal.
 func parseMoney(typ, text string) (cents int64, fault moneyFault) {
 	switch typ {
 	case "integer":
@@ -49,14 +50,18 @@ func parseIntegerMoney(text string) (int64, moneyFault) {
 	return dollars * 100, moneyOK
 }
 
-// parseRealMoney reads a real-stored money column's decimal text.
+// parseRealMoney reads a real-stored money column's decimal text, as SQLite
+// renders a REAL: an optional "-", digits, and an optional "." with digits.
 func parseRealMoney(text string) (int64, moneyFault) {
-	if strings.ContainsAny(text, "eE") {
-		return 0, moneyTooLarge
-	}
 	neg := strings.HasPrefix(text, "-")
 	unsigned := strings.TrimPrefix(text, "-")
+	if unsigned == "Inf" || strings.ContainsAny(unsigned, "eE") {
+		return 0, moneyTooLarge
+	}
 	intPart, fracPart, _ := strings.Cut(unsigned, ".")
+	if intPart == "" || !allDigits(intPart) || !allDigits(fracPart) {
+		return 0, moneyNotANumber
+	}
 	if len(fracPart) > 2 {
 		return 0, moneyPrecision
 	}
@@ -64,18 +69,15 @@ func parseRealMoney(text string) (int64, moneyFault) {
 	if err != nil || intVal >= realIntBound {
 		return 0, moneyTooLarge
 	}
-	for len(fracPart) < 2 {
-		fracPart += "0"
-	}
-	fracVal, err := strconv.ParseInt(fracPart, 10, 64)
-	if err != nil {
-		// unreachable: fracPart is "" or a 1-2 digit run cut from text by
-		// strings.Cut, always padded to exactly 2 numeric digits above.
-		return 0, moneyTooLarge
-	}
-	cents := intVal*100 + fracVal
+	fracPart += "00"[len(fracPart):]
+	cents := intVal*100 + int64(fracPart[0]-'0')*10 + int64(fracPart[1]-'0')
 	if neg {
 		cents = -cents
 	}
 	return cents, moneyOK
+}
+
+// allDigits reports whether s holds only ASCII digits; "" does.
+func allDigits(s string) bool {
+	return strings.Trim(s, "0123456789") == ""
 }
