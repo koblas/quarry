@@ -1,0 +1,117 @@
+version: "2"
+linters:
+  default: all
+  disable:
+    - cyclop
+    - depguard
+    - dupl
+    - exhaustruct
+    # 2.13 renamed this linter, same as wsl -> wsl_v5 below. `default: all`
+    # auto-enables the new name, so both have to be listed.
+    - exhaustruct_v5
+    - funlen
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - gocyclo
+    - godox
+    - ireturn # this is pretty clean now, but disabling since it's not a priority
+    - mnd
+    - nestif
+    - nlreturn
+    - paralleltest
+    - protogetter
+    - tagliatelle
+    - varnamelen
+    - wsl
+    - wsl_v5
+    - godoclint
+    - gomodguard # deprecated
+    - noinlineerr # I link inline error handling
+    - goconst # this is over agressive
+  settings:
+    gocritic:
+      disabled-checks:
+        - commentFormatting
+    lll:
+      line-length: 200
+    nestif:
+      min-complexity: 12
+    funcorder:
+      struct-method: false
+    ireturn:
+      allow:
+        - stdlib
+        - error
+        - generic
+        - empty
+    wrapcheck:
+      # Every entry here is a pass-through that returns the error from a
+      # caller-supplied fn verbatim, and that fn already wraps. Re-wrapping at
+      # the call site would double-wrap.
+      #   - cobra Command.ExecuteContext -> the resolved command's RunE or
+      #                              FlagErrorFunc error, both brief's own
+      #                              usage/refusal errors already
+      #   - cobra Command.Help      -> always nil; Help renders through
+      #                              HelpFunc and never returns the render
+      #                              error itself (cobra prints it instead)
+      #   - config.Resolve          -> every error it returns is already
+      #                              wrapped, either as *InvalidConfigError
+      #                              or with "resolve config: " context;
+      #                              re-wrapping at the call site would
+      #                              double that prefix
+      #   - config.Locate           -> its own nonexistent-startDir refusal is
+      #                              already *InvalidConfigError, "resolve
+      #                              config: " prefixed, the same shape
+      #                              config.Resolve wraps
+      #   - config.LocateInRepo     -> LocateWithin(startDir, boundary), same
+      #                              nonexistent-startDir refusal as Locate,
+      #                              already wrapped the same way
+      extra-ignore-sigs:
+        - cobra.Command).ExecuteContext(
+        - cobra.Command).Help(
+        - config.Resolve(
+        - config.Locate(
+        - config.LocateInRepo(
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - wrapcheck
+        path: _test.go
+      - linters:
+          - lll
+        source: "^//go:generate "
+      - path: (.+)\.go$
+        text: "ineffectual assignment to ctx"
+      - path: (.+)\.go$
+        text: "SA4006: this value of ctx is never used"
+      - path: (.+)\.go$
+        text: "assigned to ctx, but never used afterwards"
+      - linters:
+          - unparam
+        text: "always receives"
+    paths:
+      - gen
+      - third_party$
+      - builtin$
+      - examples$
+      - tmp
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - gen
+      - third_party$
+      - builtin$
+      - examples$
