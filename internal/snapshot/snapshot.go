@@ -215,7 +215,7 @@ func (s *Server) commit(ctx context.Context, destination Destination, manifestPa
 // assembles the manifest: integrity check, account count, hash, and schema
 // diff against the configured reference.
 func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string, takenAt time.Time) (Manifest, error) {
-	accounts, actual, err := inspectContent(ctx, snapshotPath)
+	accounts, actual, err := inspectContent(ctx, snapshotPath, s.busyTimeout)
 	if err != nil {
 		return Manifest{}, err
 	}
@@ -240,9 +240,11 @@ func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string,
 }
 
 // inspectContent opens the snapshot at path read-only and returns its
-// account count and schema, after its integrity and ZACCOUNT checks pass.
-func inspectContent(ctx context.Context, path string) (accounts int, actual sqlschema.Schema, err error) {
-	snap, err := sqlite.OpenReadOnly(ctx, path)
+// account count and schema, after its integrity and ZACCOUNT checks pass. A
+// lock held by another connection is retried for up to busyTimeout before
+// Open fails with a sqlite.IsBusy error.
+func inspectContent(ctx context.Context, path string, busyTimeout time.Duration) (accounts int, actual sqlschema.Schema, err error) {
+	snap, err := sqlite.OpenReadOnlyBusy(ctx, path, busyTimeout)
 	if err != nil {
 		return 0, nil, fmt.Errorf("open snapshot: %w", err)
 	}

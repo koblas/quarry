@@ -44,7 +44,7 @@ func (s *Server) ImportFrom(ctx context.Context, from string) (Outcome, error) {
 	if sum != recorded.Snapshot.SHA256 {
 		return Outcome{}, changedSnapshotRefusal(s.home, snapshotPath)
 	}
-	accounts, actual, err := inspectContent(ctx, snapshotPath)
+	accounts, actual, err := inspectContent(ctx, snapshotPath, s.busyTimeout)
 	if err != nil {
 		if ctx.Err() != nil {
 			return Outcome{}, InterruptedRefusal()
