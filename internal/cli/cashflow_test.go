@@ -14,11 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	cashFlowEmpty = "no income or spending from 2026-01-01 to 2026-09-29"
-
-	cashFlowCaption = "Cash flow 2026-01-01 to 2026-09-29 in all accounts\n\n"
-)
+const cashFlowEmpty = "no income or spending from 2026-01-01 to 2026-09-29"
 
 func leftOutCashFlowWarning(name string) string {
 	return "account \"" + name + "\" is not used in reports in Quicken, so cashflow leaves it out; " +
@@ -161,13 +157,36 @@ func Test_cashflow_returns_a_failed_stdout_write(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
-func Test_cashflow_json_prints_the_text_table_until_the_document_exists(t *testing.T) {
+func Test_cashflow_json_lists_the_warnings_unprefixed_beside_the_prefixed_stderr_lines(t *testing.T) {
 	var stdout, stderr bytes.Buffer
+	fake := fakeReportStore{cashFlow: store.CashFlow{Transactions: storeSpan}}
 
-	err := executeCashFlow(t, fakeReportStore{}, &stdout, &stderr, "--json")
+	err := executeCashFlow(t, fake, &stdout, &stderr, "--json")
 
 	require.NoError(t, err)
-	assert.Equal(t, cashFlowCaption+"Month  Currency  Income  Spent  Net  Savings rate  Status\n", stdout.String())
+	assert.Contains(t, stdout.String(), "\"periods\": [],\n  \"totals\": [],\n  \"warnings\": [\n    \""+
+		cashFlowEmpty+"; the store's transactions run 2003-01-04 to 2026-09-26\"\n  ]\n")
+	assert.Equal(t, "quarry: warning: "+cashFlowEmpty+"; the store's transactions run 2003-01-04 to 2026-09-26\n", stderr.String())
+}
+
+func Test_cashflow_json_names_the_accounts_it_was_limited_to(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeCashFlow(t, withCashFlow(namedAccounts()), &stdout, &stderr, "--json", "--account", "chequing")
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), "\"account_filter\": [\n    {\n      \"id\": \""+chequingID+"\",\n      \"name\": \"Chequing\"\n    }\n  ],\n")
+}
+
+func Test_cashflow_help_shows_the_flags_and_what_the_command_is_for(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeCashFlow(t, fakeReportStore{}, &stdout, &stderr, "--help")
+
+	require.NoError(t, err)
+	assert.Regexp(t, `--by period +group by period: month or year \(default "month"\)`, stdout.String())
+	assert.Regexp(t, `--account name +count only the account with this name or id; repeat for more`, stdout.String())
+	assert.Contains(t, stdout.String(), "Show income, spending and what was left over for each month or year, in\n")
 }
 
 func Test_cashflow_captions_the_named_accounts_and_passes_their_ids_to_the_report(t *testing.T) {

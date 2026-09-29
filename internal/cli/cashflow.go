@@ -81,10 +81,9 @@ less. A period that --since or --until cuts short is marked partial.`,
 
 			warnings := cashFlowWarnings(flow)
 			out, err := renderResult(*jsonOut,
-				func() ([]byte, error) { return []byte(renderCashFlow(flow)), nil },
+				func() ([]byte, error) { return renderCashFlowJSON(flow, warnings) },
 				func() string { return renderCashFlow(flow) })
 			if err != nil {
-				// unreachable: the interim JSON renderer above always returns a nil error, and renderResult's own error path is unreachable (output.go:26).
 				return err
 			}
 			return emit(cmd, out, "quarry: warning: ", warnings)
