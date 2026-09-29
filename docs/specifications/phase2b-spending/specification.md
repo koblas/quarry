@@ -182,6 +182,7 @@ Read errors reuse `readRefusal`: R1, R2 (with its `--from` fix), R3a/b/c, R3, I1
 |---|---|---|---|
 | S1 | bad date | `quarry: --since "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD` (same for `--until`) | 2 |
 | S2 | since after until (resolved dates compared; values printed as given) | `quarry: --since 2025 is after --until 2024` | 2 |
+| S2d | `--until` given, `--since` not, and resolved until is before the default since | `quarry: --until 2024 is before the default --since 2026-01-01; pass --since too` (until as given, default since resolved YYYY-MM-DD). Check order S1 → S3 → S2/S2d; no mirror case (S3 owns since-after-today) | 2 |
 | S3 | since after today and no `--until` | `quarry: --since 2027 is after today; pass --until to include future-dated transactions` | 2 |
 | S4 | bad `--by` | spend: `quarry: --by must be category, payee, tag or month`; cashflow: `quarry: --by must be month or year` | 2 |
 | S5 | unknown account | `quarry: no account named "Chequeing"; run quarry accounts --all to list them` | 1 |
@@ -189,6 +190,8 @@ Read errors reuse `readRefusal`: R1, R2 (with its `--from` fix), R3a/b/c, R3, I1
 | U8 | positional args | `quarry: spend takes no arguments` / `quarry: cashflow takes no arguments` | 2 |
 | E1 | nothing in the window, store has transactions | exit 0; stdout caption, blank line, header only (JSON `rows`/`periods` `[]` for spend; cashflow per its fill rule); stderr `quarry: warning: no spending from 2026-01-01 to 2026-09-29; the store's transactions run 2003-01-04 to 2026-09-26` (cashflow: `no income or spending from …`) | 0 |
 | E2 | store has zero transactions | as E1, tail `; the store has no transactions` | 0 |
+| E1a | as E1 but `--account` given and some named account is in reports | `quarry: warning: no spending from 2026-01-01 to 2026-09-29 in the named accounts; their transactions run 2019-03-02 to 2024-11-30` (cashflow: `no income or spending from …`); range covers the in-report named accounts only | 0 |
+| E2a | as E1a but none of them has any transactions | `…in the named accounts; they have no transactions` | 0 |
 | W1 | `--by tag` and > 0 splits in the window carry more than one tag | `quarry: warning: 12 splits carry more than one tag, so the rows add up to more than the total` (`humanize.Count`; singular `1 split carries`) | 0 |
 | W2 | an `--account` resolves to an account with `in_reports = false` (once per such account) | `quarry: warning: account "<name>" is not used in reports in Quicken, so <cmd> leaves it out; to include it, turn on reports for it in Quicken's account settings, then run quarry sync` (`<cmd>` = `spend`/`cashflow`); if every named account is excluded the result is empty plus W2 | 0 |
 
@@ -208,7 +211,9 @@ Read errors reuse `readRefusal`: R1, R2 (with its `--from` fix), R3a/b/c, R3, I1
 | future-dated, default window | excluded; `--until` past today includes it |
 | split with two tags | both tag rows, once in Total; W1 |
 | window on day boundaries (`--since 2026-01-15`) | first period `partial` |
-| S1–S6 / E1 / E2 with W2 | refusals take precedence as ordered in P2b-13 |
+| S1–S6 / U8 with W2 | the refusal only; no W2 |
+| every `--account` not in reports (after dedupe) | W2 lines only; no E1/E2 (even with zero transactions); exit 0 |
+| some `--account` not in reports, rest empty in window | W2 lines (argv order, each account once) then E1a/E2a; same order in `warnings[]` |
 
 ### Changes to 2a surfaces
 - `accounts` all-closed note (2a Surface & Copy): stderr becomes `quarry: warning: all 3 accounts are closed; pass --all to list them` / `quarry: warning: the only account is closed; pass --all to list it`; `warnings[]` text unchanged.
