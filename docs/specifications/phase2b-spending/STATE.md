@@ -55,6 +55,8 @@ Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-05, 07
 - A `strftime(...)` expression passed as `spendingQuery`'s key lands inside `GROUPING()`/`GROUPING SETS`/`ORDER BY`: month uses a dedicated query exposing a key column. The `YYYY-MM` label must come from SQL (a DATE scanned into `sql.NullString` is RFC3339 text) and match Go's `monthLabelLayout` byte for byte, or every month prints `0.00` beside lost real rows; only the DuckDB-backed acceptance test sees that. (SCENARIO-12)
 
 ## Open debts
+- MINOR (12 checkpoint, comments): `internal/store/duckstore/spending.go:31-32` `spendingByMonthQuery` doc → 1 line; `internal/cli/render_spend.go:15-19` `renderSpending` doc → ≤2 lines.
+- NIT (12 checkpoint): month label SQL `%Y` vs Go `2006` byte-equality proven only for 4-digit years ≥1000; `--since 0001` is accepted — verify or clamp (year-999 duckstore test).
 - Gate "matches Quicken reports over 2 years" is carried by 2b (spec) — owned by the spend scenarios.
 - 2a debts still open and unowned - die unless re-opened: HOME with trailing slash prints absolute paths, `run_status_json_test.go:1` header, `balancesPhrase` three bare ints, duckstore fault-test copy-paste (`docs/specifications/phase2a-read-foundation/STATE.md`).
 - Snapshots accumulate (~200 MB each) until 2c.

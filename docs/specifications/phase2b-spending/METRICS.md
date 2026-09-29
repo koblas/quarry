@@ -11,6 +11,7 @@
 | SCENARIO-10 | code-first (LIGHT) | L, V | 0/1/3/0 | yes |
 | SCENARIO-11 | code-first | A, B1, B2, V | 0/1/2/0 | yes |
 | SCENARIO-13 | code-first | A (PARTIAL: Bash outage), B1, B2, V | 0/1/3/1 | yes |
+| SCENARIO-12 (+18) | code-first | A, B1, B2, V | 0/0/2/2 | no (→ STATE.md) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
