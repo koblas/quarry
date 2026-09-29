@@ -345,7 +345,8 @@ type SpendingParams struct {
 }
 
 // SpendingRow is one group's spending in one currency, in cents. Key is nil
-// for the group of splits with no category (or no payee).
+// for the group of splits with no category (or no payee); a month row's Key is
+// never nil.
 type SpendingRow struct {
 	Key      *string
 	Currency string
