@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-09
-status: open
+status: done
 ---
 
 # SCENARIO-09: spend shows this year's spending by category in each currency (absorbs SCENARIO-05, SCENARIO-07, U9-example fold)
@@ -51,10 +51,10 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; the duckstore adapter
   - Add a `spend` row to each of: cmd `run_read_refusals_test.go:46-73` (R1, no store), `:139-148` (I1), and `run_read_usage_test.go:23-39` (U8 `quarry: spend takes no arguments`).
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Add doc comments on every new exported symbol. Update the subcommand list in the `newRootCommand` doc (`root.go:7-9`) and the `Env` doc (`run.go:22-23`).
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Add doc comments on every new exported symbol. Update the subcommand list in the `newRootCommand` doc (`root.go:7-9`) and the `Env` doc (`run.go:22-23`).
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase2b-spending`. Tick SCENARIO-09, and tick 05 and 07 as "delivered by SCENARIO-09", each with its acceptance test. Rewrite STATE.md, which drops the FormatVersion literal debt.
+- [x] Step 8: full verification + `spec-check.py phase2b-spending`. Tick SCENARIO-09, and tick 05 and 07 as "delivered by SCENARIO-09", each with its acceptance test. Rewrite STATE.md, which drops the FormatVersion literal debt.
 
 ## Handoff
 
@@ -83,12 +83,8 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; the duckstore adapter
 
 ## Phase report
 
-Run B2 done (step 6 ticked). Narrow loop green for `internal/cli` and `cmd/quarry`; all three cmd acceptance tests green. Lint run on `internal/cli` and `cmd` only: 0 issues.
+Run V done (steps 7-8 ticked, `status: done`). Full suite green (`go test -count=1 -coverpkg=./...`), `golangci-lint run ./...` 0 issues, `go test -race` on report/cli/store green, `uncovered-diff.py` 0 uncovered, 1 declared unreachable.
 
-Files:
-- `internal/cli/spend.go`: RunE = `openReport` -> `srv.Spend(SpendRequest{Now: now()})` -> `renderResult` -> `emit` (warnings `[]`). `--json` passes a renderJSON that returns the text table (never nil) until SCENARIO-16 replaces it.
-- `internal/cli/render_spend.go` (new): `renderSpending`, widths from every cell (header, rows, Total rows), `(uncategorized)` for a nil Key, reuses `padRight`/`padLeft`/`accountsColumnGap`.
-- Tests: `render_spend_internal_test.go` (new, 3 table cases), `spend_test.go` (new: env-clock window, `--json` prints the text table, report fault, factory fault, stdout write fault); cmd rows `spend` added to R1 (`run_read_refusals_test.go`), I1 interrupt, U8 (`run_read_usage_test.go`).
-- No mutation checks belong to B2.
+Changes: `internal/cli/root.go` newRootCommand doc lists spend; `internal/cli/run.go` Env doc names spend and the nil-Now panic; `internal/cli/spend.go` renderResult error branch marked `// unreachable:` (interim JSON renderer returns the text table; SCENARIO-16 must remove the marker when it swaps in a real renderer). Spec ticked for 05, 07 (delivered by 09) and 09. STATE.md rewritten (FormatVersion literal debt closed by the literal-2 R2 test).
 
-Next (V): Sweep (doc comments on new exported symbols, update `newRootCommand` doc `root.go:7-9` subcommand list and `Env` doc), full Verify block + `spec-check.py`, tick 09 (and 05, 07 as delivered by 09), rewrite STATE.md (drop FormatVersion literal debt: R2 test uses literal 2), `status: done`. The `--json` interim test pins text output; SCENARIO-16 rewrites it.
+Nothing left for later runs; checkpoint next.

@@ -1,15 +1,15 @@
 # phase2b-spending — current state
 
-Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-06 (08 folded), SCENARIO-25..26 (25 folded into 26). Last updated by SCENARIO-06.
+Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-05, 07, 09 (05, 07 folded into 09), SCENARIO-06 (08 folded), SCENARIO-25..26 (25 folded into 26). Last updated by SCENARIO-09.
 
 ## Binding decisions
-- **Injected clock (orchestrator ruling, SCENARIO-09):** `cli.Env` carries the clock; the default window's day is read in the injected instant's own zone. A deliberate exception to the clean-architecture skill's "no injected clock / use synctest" rule: tests must pick a zone without mutating `time.Local`, and 2a's trap forbids a synctest bubble around an open DuckDB `sql.DB`. Reviewers: accepted, not a finding.
+- **Injected clock (orchestrator ruling, SCENARIO-09):** `cli.Env.Now` (`time.Now` in `defaultEnv`; nil panics, so every spend test sets it); the default window's day is read in the injected instant's own zone. A deliberate exception to the clean-architecture skill's "no injected clock / use synctest" rule: tests must pick a zone without mutating `time.Local`, and 2a's trap forbids a synctest bubble around an open DuckDB `sql.DB`. Reviewers: accepted, not a finding.
 - **Net-zero currency (orchestrator ruling):** a currency whose rows all net to 0.00 still prints `Total <cur> 0.00` (edge row: zero rows omitted, Total unaffected).
 - Store columns (all appended LAST in their table; the build Appender is positional): `accounts.in_reports BOOLEAN NOT NULL` (`store.Account.NotInReports`, writer inverts, zero value = in reports), `transactions.excluded_from_reports BOOLEAN NOT NULL` (`store.Transaction.ExcludedFromReports`), `transactions.posted_date DATE` nullable (`store.Transaction.PostedDate *time.Time`, set whenever Quicken has a posted date, even equal to `date`). (SCENARIO-01)
 - `transactions.date` = UTC day of `ZENTEREDDATE`, else `ZPOSTEDDATE` (Quicken's register date); importer ORDER BY uses the same COALESCE. Balance validation stays date-free. Refusal subjects and the split-mismatch listing now show register dates (copy unchanged). (SCENARIO-01)
 - Quicken flags read as `COALESCE(col, default) <> 0` (NULL `ZUSEDINREPORTS` -> in reports, NULL `ZEXCLUDEFROMREPORTS` -> not excluded; any non-zero is on). (SCENARIO-01)
 - Uncategorized = category with kind `system` AND full_path exactly `Uncategorized` (`importer.uncategorizedPath`); its splits store `category_id NULL`, its category row stays in `categories`. Views key on `category_id IS NULL`, never on the name. (SCENARIO-01)
-- `duckstore.FormatVersion = 3` is the ONLY 2b bump (format 3 unshipped): later 2b scenarios add views/columns without bumping. S05's refusal compares against the symbol, never a literal; an old store must get R2 (with `sync --from <id>` fix), not an R3 Catalog Error. (SCENARIO-01, 2a S15)
+- `duckstore.FormatVersion = 3` is the ONLY 2b bump (format 3 unshipped): later 2b scenarios add views/columns without bumping. S05's refusal compares against the symbol, never a literal (its test builds a store with literal `format_version = 2`); an old store must get R2 (with `sync --from <id>` fix), not an R3 Catalog Error. (SCENARIO-01, 2a S15)
 - Rules live in duckstore-owned store-DDL views (transfer exclusion, sign, split allocation); front ends add parameters only. Every new relation joins `storeRelations()` (`internal/store/duckstore/query_test.go`, literal list) and `minimalRows` (`duckstore_test.go`). (2a REVIEW-01)
 - Read-command shape: `openReport` -> store call -> `renderResult` -> `emit` (`internal/cli/output.go`); `report.Store` port gets one method per read, implemented by `*duckstore.Store`, `fakeStore` (`internal/report/fakes_test.go`), `fakeReportStore` (`internal/cli/fakes_test.go`); `(*Server).readRefusal` for I1/R1-R3; `noArgs` for no-positional commands; U9 via `ExecuteC`; H1 via `resolveHome(command)`; `warnings` always `[]`; absolute paths in `--json`; `marshalDocument` is the one encoder. Reads open through `openRead`, format check via `duckdb_columns()`; a session setting goes in the read DSN, never a post-open `SET`. (2a S02, S07, S15, S18)
 - Native currency only; group per currency, never sum CAD+USD. Cents: SUM(DECIMAL(18,2)) is DECIMAL(38,2), cast to BIGINT cents in SQL. (2a S04)
@@ -21,21 +21,27 @@ Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-06 (08
 - `v_spending` = `-amount AS spent` over `v_cash_flow WHERE flow = 'expense'`, no predicate of its own: one predicate owner, so SCENARIO-23's spend = cashflow-spent invariant holds. (SCENARIO-06)
 - `replaceStore(t, home, rows)` (`cmd/quarry/run_helpers_test.go`) is the cmd-level fixture path for view- and report-level tests; v9fixture sync stays for importer-shaped tests. (SCENARIO-06)
 
+- **Spend window (SCENARIO-09):** `report.DefaultWindow(now)` = Jan 1 of now's year through now's day in now's own zone; the window reaches DuckDB as civil DATE parameters (since/until inclusive), no query reads `current_date`. SCENARIO-13, 17 and 20 bind the same way and take `now` the same way.
+- **One `store.SpendingParams` (Window, By, AccountIDs) for every spend read**: SCENARIO-10, 11, 12, 14 add enum values or fields, never a new signature. Implementers: duckstore, `internal/cli/fakes_test.go`, `internal/report/fakes_test.go`. (SCENARIO-09)
+- **Spend totals come from `v_spending` per currency, independent of `By`** (SCENARIO-11's multi-tag split counts once in Total; no S09 test can tell, so SCENARIO-11 owns that mutation). Sort (NULL first, `lower(category)`, category, currency) and zero-net row omission live in the duckstore query; Totals keep zero-net rows. (SCENARIO-09)
+- **Interim `spend --json` prints the text table** (test pins it); SCENARIO-16 replaces the renderer and the test, and must delete the `// unreachable:` marker on `internal/cli/spend.go` renderResult error branch. (SCENARIO-09)
+
 ## Left unbuilt
-- `report.Store` spending/cash-flow port methods, aggregates, windows — SCENARIO-09/13/20. No tag column on the views (tags join at query time). (SCENARIO-06)
+- `SpendingParams.AccountIDs` exists but duckstore does not read it — SCENARIO-14. (SCENARIO-09)
+- `--by` and `SpendByPayee`/`Tag`/`Month` — SCENARIO-10, 11, 12; `--since`/`--until` (until then cobra "unknown flag", exit 2) — SCENARIO-13; `--account` and the named-accounts caption — SCENARIO-14; `renderSpendingJSON` — SCENARIO-16; E1/E2 warnings (empty window prints caption + header only) — SCENARIO-17; cash-flow port method and window — SCENARIO-20. No tag column on the views (tags join at query time). (SCENARIO-06, 09)
 
 ## Traps
 - `date_trunc('month', <DATE>)` is `TIMESTAMP` on DuckDB v1.5.5: cast to `DATE`. `s.id NOT IN (SELECT to_split_id ...)` with any NULL empties the view: use `NOT EXISTS`. `c.kind <> 'system'` drops uncategorized splits (NULL): use `IS DISTINCT FROM`. Category kind strings live only in `internal/importer`; duckstore uses SQL literals. `minimalRows`' transfers name `split-2`/`split-3`, not in `splits`. (SCENARIO-06)
 - A column added mid-`CREATE TABLE` while the writer appends at the end silently writes values into the neighbouring column. (SCENARIO-01)
 - A dev store synced before SCENARIO-06 lacks the 2b views; re-sync. (SCENARIO-01, 06)
 - Existing importer tests set only `PostedDate`; with entered NULL they still date by posted, so only exact-struct asserts on `Transactions` need a `PostedDate` bump. `store.Account`/`AccountBalance` test literals rely on `NotInReports` zero = in reports. (SCENARIO-01)
+- Binding a local-zone `time.Time` to a DATE comparison: go-duckdb converts to UTC and can shift the day; bind civil days. The spec's sample spend table is illustrative: derive widths from the cells. The spend Long/Example text names `--by`/`--since`/`--account` before those flags exist; verbatim. (SCENARIO-09)
 - Plan `-run` patterns are case-sensitive: importer tests are `Test_import_*`, cmd ones `Test_run_*`; use lowercase words. (SCENARIO-01)
 - Importer dates are UTC calendar days but `current_date` is process-local: date-boundary tests belong at duckstore level with `store.Transaction.Date` at UTC midnight; cmd fixtures use dates a year ahead. (2a S04)
 - `uncovered-diff.py` is blind to untracked files: `git add` first. Q-sentinels wrap `%w: %w`, so `errors.Unwrap` returns nil: use `errors.As`/`Is`. `v9fixture` writes `ZQUICKENID` raw: distinct non-zero per transfer leg. (Phase 1, 2a)
 - `fakeReportStore.Query` ignores `maxRows`; a fixture writing at the store path must `CheckpointClose` before any read (DuckDB `InstanceCache`); a held reader shares the old inode. (2a S09, S02, REVIEW-01)
 
 ## Open debts
-- MINOR (01 checkpoint): `internal/store/duckstore/duckstore.go:24` — nothing pins `FormatVersion` to literal 3 (all tests compare to the constant). Owner: SCENARIO-09's plan (delivers folded SCENARIO-05) builds a store with literal `format_version = 2` for the R2 test, or asserts `FormatVersion == 3` once.
 - Gate "matches Quicken reports over 2 years" is carried by 2b (spec) — owned by the spend scenarios.
 - 2a debts still open and unowned - die unless re-opened: HOME with trailing slash prints absolute paths, `run_status_json_test.go:1` header, `balancesPhrase` three bare ints, duckstore fault-test copy-paste (`docs/specifications/phase2a-read-foundation/STATE.md`).
 - Snapshots accumulate (~200 MB each) until 2c.

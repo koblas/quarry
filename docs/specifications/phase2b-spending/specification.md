@@ -501,11 +501,11 @@ Scenario: SCENARIO-26 — accounts marks accounts Quicken leaves out of reports
 - [x] SCENARIO-02: sync records which accounts Quicken uses in reports — delivered by SCENARIO-01 — `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_records_which_accounts_are_used_in_reports`
 - [x] SCENARIO-03: sync dates each transaction by its register date — delivered by SCENARIO-01 — `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_dates_each_transaction_by_its_register_date`
 - [x] SCENARIO-04: sync stores splits on Quicken's Uncategorized category as uncategorized — delivered by SCENARIO-01 — `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_stores_uncategorized_splits_with_no_category`
-- [ ] SCENARIO-05: spend refuses a store built by an older quarry
+- [x] SCENARIO-05: spend refuses a store built by an older quarry — delivered by SCENARIO-09 — `cmd/quarry/run_read_refusals_test.go` `Test_run_spend_refuses_a_store_built_by_an_older_quarry`
 - [x] SCENARIO-06: v_cash_flow keeps only real income and spending — `cmd/quarry/run_sql_views_test.go` `Test_run_sql_cash_flow_keeps_only_real_income_and_spending`
-- [ ] SCENARIO-07: spending leaves out accounts Quicken does not use in reports
+- [x] SCENARIO-07: spending leaves out accounts Quicken does not use in reports — delivered by SCENARIO-09 — `cmd/quarry/run_spend_test.go` `Test_run_spend_leaves_out_accounts_quicken_does_not_use_in_reports`
 - [x] SCENARIO-08: v_spending nets refunds against their category — delivered by SCENARIO-06 — `cmd/quarry/run_sql_views_test.go` `Test_run_sql_spending_nets_refunds_against_their_category`
-- [ ] SCENARIO-09: spend shows this year's spending by category in each currency
+- [x] SCENARIO-09: spend shows this year's spending by category in each currency — `cmd/quarry/run_spend_test.go` `Test_run_spend_shows_this_years_spending_by_category_in_each_currency`
 - [ ] SCENARIO-10: spend groups by payee
 - [ ] SCENARIO-11: spend groups by tag and warns about multi-tagged splits
 - [ ] SCENARIO-12: spend groups by month and fills empty months

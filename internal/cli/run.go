@@ -22,7 +22,7 @@ type ReportFactory func(ctx context.Context, command string) (srv *report.Server
 
 // Env is everything Execute takes from the process: its streams, the clock
 // and the factories that build each command family's Server. Now must be
-// set for any command that reads the date.
+// set for any command that reads the date, such as spend; a nil Now panics.
 type Env struct {
 	Stdin          io.Reader
 	Stdout, Stderr io.Writer
