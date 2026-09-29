@@ -1,6 +1,7 @@
 package importer
 
 import (
+	"math/big"
 	"strconv"
 	"strings"
 )
@@ -23,12 +24,11 @@ const dollarBound = 10_000_000_000_000_000 // 1e16
 // can render a 2-decimal REAL with float noise, so its cents cannot be trusted.
 const realIntBound = 1_000_000_000 // 1e9
 
-// parseMoney reads typ (SQLite's typeof()) and text (CAST(col AS TEXT))
-// for one non-NULL money column and returns its value in cents, parsed
-// exactly from the digit string — never through float arithmetic. It
-// reports moneyPrecision for more than 2 decimal places, moneyTooLarge for
-// a value outside DECIMAL(18,2)'s trustworthy range, and moneyNotANumber
-// for a column stored as text or blob, or real text that is not a decimal.
+// snapToleranceInverse is 1 over the dollar tolerance within which a REAL is float residue of its cent.
+const snapToleranceInverse = 1_000_000 // tolerance 1e-6
+
+// parseMoney returns the cents of one non-NULL money column from its
+// typeof() and text, exactly. A REAL within the snap tolerance of a cent is that cent.
 func parseMoney(typ, text string) (int64, moneyFault) {
 	switch typ {
 	case "integer":
@@ -53,35 +53,83 @@ func parseIntegerMoney(text string) (int64, moneyFault) {
 // parseRealMoney reads a real-stored money column's text as SQLite renders a
 // REAL: an optional "-", digits, and an optional "." with digits, or exponent form.
 func parseRealMoney(text string) (int64, moneyFault) {
-	neg := strings.HasPrefix(text, "-")
 	unsigned := strings.TrimPrefix(text, "-")
+	cents, fault := realCents(unsigned)
+	if fault != moneyOK {
+		return 0, fault
+	}
+	if unsigned != text {
+		cents = -cents
+	}
+	return cents, moneyOK
+}
+
+// realCents returns the cents of an unsigned REAL text: exact for at most 2
+// decimals, snapped to the nearest cent when the text is float residue of it.
+func realCents(unsigned string) (int64, moneyFault) {
 	if unsigned == "Inf" {
 		return 0, moneyTooLarge
 	}
+	mantissa, hasExponent := unsigned, false
 	if i := strings.IndexAny(unsigned, "eE"); i >= 0 {
-		// A negative exponent is a nonzero magnitude below 1e-4: always more than 2 decimals.
-		if strings.HasPrefix(unsigned[i+1:], "-") {
-			return 0, moneyPrecision
+		var exponent string
+		mantissa, exponent, hasExponent = unsigned[:i], unsigned[i+1:], true
+		if !strings.HasPrefix(exponent, "-") {
+			return 0, moneyTooLarge
 		}
-		return 0, moneyTooLarge
+		if exponent = exponent[1:]; exponent == "" || !allDigits(exponent) {
+			return 0, moneyNotANumber
+		}
 	}
-	intPart, fracPart, hasDot := strings.Cut(unsigned, ".")
+	intPart, fracPart, hasDot := strings.Cut(mantissa, ".")
 	if intPart == "" || !allDigits(intPart) || !allDigits(fracPart) || (hasDot && fracPart == "") {
 		return 0, moneyNotANumber
 	}
-	if len(fracPart) > 2 {
-		return 0, moneyPrecision
+	if hasExponent {
+		return snappedCents(unsigned)
 	}
 	intVal, err := strconv.ParseInt(intPart, 10, 64)
 	if err != nil || intVal >= realIntBound {
 		return 0, moneyTooLarge
 	}
+	if len(fracPart) > 2 {
+		return snappedCents(unsigned)
+	}
 	fracPart += "00"[len(fracPart):]
-	cents := intVal*100 + int64(fracPart[0]-'0')*10 + int64(fracPart[1]-'0')
-	if neg {
-		cents = -cents
+	return intVal*100 + int64(fracPart[0]-'0')*10 + int64(fracPart[1]-'0'), moneyOK
+}
+
+// snappedCents snaps the unsigned decimal text to its cent, refusing a value
+// at the REAL bound or beyond the snap tolerance.
+func snappedCents(unsigned string) (int64, moneyFault) {
+	dollars, ok := new(big.Rat).SetString(unsigned)
+	if !ok {
+		// After the grammar guards only a negative exponent beyond big.Rat's
+		// range fails: a value below the tolerance.
+		return 0, moneyOK
+	}
+	if dollars.Cmp(big.NewRat(realIntBound, 1)) >= 0 {
+		return 0, moneyTooLarge
+	}
+	cents, withinTolerance := nearestCent(dollars)
+	switch {
+	case !withinTolerance:
+		return 0, moneyPrecision
+	case cents >= realIntBound*100:
+		return 0, moneyTooLarge
 	}
 	return cents, moneyOK
+}
+
+// nearestCent returns the whole cents nearest dollars (below realIntBound) and
+// whether dollars lies within the snap tolerance of them, compared exactly.
+func nearestCent(dollars *big.Rat) (int64, bool) {
+	scaled := new(big.Rat).Mul(dollars, big.NewRat(100, 1))
+	nearest := new(big.Rat).Add(scaled, big.NewRat(1, 2))
+	cents := new(big.Int).Quo(nearest.Num(), nearest.Denom())
+	distance := new(big.Rat).Sub(scaled, new(big.Rat).SetInt(cents))
+	within := distance.Abs(distance).Cmp(big.NewRat(100, snapToleranceInverse)) <= 0
+	return cents.Int64(), within
 }
 
 // allDigits reports whether s holds only ASCII digits; "" does.

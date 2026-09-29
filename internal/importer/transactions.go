@@ -48,25 +48,19 @@ WHERE t.Z_ENT = ? AND COALESCE(t.ZDELETIONCOUNT, 0) = 0
 ORDER BY COALESCE(t.ZENTEREDDATE, t.ZPOSTEDDATE), t.ZACCOUNT, t.Z_PK
 `
 
-const transactionSurveyQuery = `SELECT Z_PK, Z_ENT, ZACCOUNT, COALESCE(ZDELETIONCOUNT, 0) FROM ZTRANSACTION`
+const transactionSurveyQuery = `SELECT Z_ENT, ZACCOUNT, COALESCE(ZDELETIONCOUNT, 0) FROM ZTRANSACTION`
 
-// surveyTransactions returns every ZTRANSACTION Z_PK, of any entity and
-// deletion state, and the count of investment transactions not imported.
+// surveyTransactions returns the count of investment transactions not imported.
 func surveyTransactions(
 	ctx context.Context, src Source, investmentEnt int64, hasInvestment bool, accounts map[int64]accountRef,
-) (map[int64]bool, int, error) {
-	existing := make(map[int64]bool)
+) (int, error) {
 	var investments int
 	err := src.QueryRows(ctx, transactionSurveyQuery, nil, func(scan func(dest ...any) error) error {
-		var pk int64
 		var ent, account sql.NullInt64
 		var deletionCount int64
-		if err := scan(&pk, &ent, &account, &deletionCount); err != nil {
+		if err := scan(&ent, &account, &deletionCount); err != nil {
 			return err
 		}
-		// Every Z_PK tells a split's dangling parent (no row at all) apart
-		// from one this importer excludes for its own reason.
-		existing[pk] = true
 		_, accountImported := accounts[account.Int64]
 		if hasInvestment && ent.Int64 == investmentEnt && deletionCount == 0 && account.Valid && accountImported {
 			investments++
@@ -74,23 +68,23 @@ func surveyTransactions(
 		return nil
 	})
 	if err != nil {
-		return nil, 0, fmt.Errorf("read transaction ids: %w", err)
+		return 0, fmt.Errorf("read transaction ids: %w", err)
 	}
-	return existing, investments, nil
+	return investments, nil
 }
 
 // mapTransactions reads every non-deleted transactionEntity row of
-// ZTRANSACTION. A row in a deleted account, or whose account was itself
-// excluded, is silently skipped. A row whose account reference points to
-// no row at all, whose date or amount is missing, whose amount is stored
-// as text or blob, has too much precision or is too large, or whose
+// ZTRANSACTION. A row with no account, or whose account is deleted,
+// excluded or points to no row at all, is silently skipped. A row whose
+// date or amount is missing, whose amount is stored as text or blob, has
+// more than 2 decimals beyond the snap tolerance or is too large, or whose
 // reconcile status is unmapped, is added to off and excluded.
 // A payee reference to a deleted or missing payee stores NULL. A
 // transaction is dated by its entered day (the register date), else its
 // posted day; PostedDate keeps the posted day whenever there is one.
 func mapTransactions(
 	ctx context.Context, src Source, transactionEntity int64,
-	accounts map[int64]accountRef, existingAccounts, existingPayees map[int64]bool, off *offenders,
+	accounts map[int64]accountRef, existingPayees map[int64]bool, off *offenders,
 ) ([]store.Transaction, map[int64]txnRef, error) {
 	var rows []store.Transaction
 	refs := make(map[int64]txnRef)
@@ -109,17 +103,9 @@ func mapTransactions(
 			return err
 		}
 
-		if !account.Valid {
-			off.add(offender{class: classMissingValue, reason: reasonTransactionNoAccount(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
-			return nil
-		}
-		if !existingAccounts[account.Int64] {
-			off.add(offender{class: classMissingValue, reason: reasonTransactionNoAccount(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
-			return nil
-		}
 		acct, ok := accounts[account.Int64]
-		if !ok {
-			return nil // account was deleted, or itself excluded (P1-5d)
+		if !account.Valid || !ok {
+			return nil
 		}
 
 		hasDate := posted.Valid || entered.Valid

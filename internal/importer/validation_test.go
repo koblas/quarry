@@ -332,3 +332,21 @@ func Test_import_carries_each_split_mismatchs_account_closed_and_active_flags(t 
 	}
 	assert.Equal(t, [][2]bool{{true, true}, {false, false}}, got)
 }
+
+func Test_import_fails_validation_when_a_transaction_lost_its_only_split(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34", PostedDate: &posted})
+	b.Entry(v9fixture.EntryRow{Parent: 999, Amount: "12.34"})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.ErrorIs(t, err, store.ErrValidationFailed)
+	require.Len(t, result.Validation.Splits.Mismatched, 1)
+	mismatch := result.Validation.Splits.Mismatched[0]
+	assert.Equal(t, int64(1234), mismatch.Amount)
+	assert.Equal(t, int64(0), mismatch.SplitsTotal)
+}

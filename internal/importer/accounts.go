@@ -47,16 +47,13 @@ ORDER BY a.ZNAME, a.Z_PK
 `
 
 // mapAccounts reads every ZACCOUNT row; ZUSEDINREPORTS NULL means in reports
-// (Quicken's default) and any non-zero value is on. A deleted row is excluded silently
-// (never validated, never counted) but still marked as existing in the
-// third return value, so a dangling reference to it can be told apart
-// from a reference to no row at all. A row with no name, no type or no
+// (Quicken's default) and any non-zero value is on. A deleted row is excluded
+// silently (never validated, never counted). A row with no name, no type or no
 // currency, an unmapped type or an unsupported currency is added to off
-// and excluded from the other two.
-func mapAccounts(ctx context.Context, src Source, off *offenders) ([]store.Account, map[int64]accountRef, map[int64]bool, error) {
+// and excluded from the returned rows and refs.
+func mapAccounts(ctx context.Context, src Source, off *offenders) ([]store.Account, map[int64]accountRef, error) {
 	var rows []store.Account
 	refs := make(map[int64]accountRef)
-	existing := make(map[int64]bool)
 
 	err := src.QueryRows(ctx, accountsQuery, nil, func(scan func(dest ...any) error) error {
 		var pk int64
@@ -66,7 +63,6 @@ func mapAccounts(ctx context.Context, src Source, off *offenders) ([]store.Accou
 		if err := scan(&pk, &name, &typ, &currency, &institution, &closed, &active, &deletionCount, &usedInReports); err != nil {
 			return err
 		}
-		existing[pk] = true
 		if deletionCount != 0 {
 			return nil
 		}
@@ -107,7 +103,7 @@ func mapAccounts(ctx context.Context, src Source, off *offenders) ([]store.Accou
 		return nil
 	})
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("read accounts: %w", err)
+		return nil, nil, fmt.Errorf("read accounts: %w", err)
 	}
-	return rows, refs, existing, nil
+	return rows, refs, nil
 }
