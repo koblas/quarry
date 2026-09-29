@@ -14,6 +14,7 @@ import (
 
 // replaceCalls stays 0: a failed check must never reach Replace.
 func Test_import_does_not_replace_the_store_when_a_check_fails(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := chequingWithOneReconciledTxn(b, "100.00")
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
@@ -29,6 +30,7 @@ func Test_import_does_not_replace_the_store_when_a_check_fails(t *testing.T) {
 
 // Control for the guard above: an exact match still replaces the store.
 func Test_import_replaces_the_store_when_the_balance_check_passes(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := chequingWithOneReconciledTxn(b, "100.00")
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
@@ -45,6 +47,7 @@ func Test_import_replaces_the_store_when_the_balance_check_passes(t *testing.T) 
 // A reconciled sum one cent short of its statement is reported with the
 // exact quarry/quicken/difference cents involved.
 func Test_import_reports_an_account_whose_reconciled_sum_differs_from_its_statement(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := chequingWithOneReconciledTxn(b, "100.00")
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
@@ -64,6 +67,7 @@ func Test_import_reports_an_account_whose_reconciled_sum_differs_from_its_statem
 // The control for the case above in the other direction: a reconciled sum
 // one cent OVER its statement is reported too, not just a short one.
 func Test_import_reports_an_account_whose_reconciled_sum_exceeds_its_statement(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := chequingWithOneReconciledTxn(b, "100.01")
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
@@ -83,6 +87,7 @@ func Test_import_reports_an_account_whose_reconciled_sum_exceeds_its_statement(t
 // A non-reconciled transaction must not count toward the reconciled sum:
 // with it excluded the account still matches its statement.
 func Test_import_excludes_non_reconciled_transactions_from_the_balance_sum(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
@@ -103,6 +108,7 @@ func Test_import_excludes_non_reconciled_transactions_from_the_balance_sum(t *te
 // An investment account is counted but never appears in the
 // never-reconciled list, even though it has no statement of its own.
 func Test_import_counts_an_investment_account_without_listing_it_as_never_reconciled(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	b.Account(v9fixture.AccountRow{Name: "Savings", Type: "SAVINGS", Currency: "CAD", Active: true})
@@ -118,6 +124,7 @@ func Test_import_counts_an_investment_account_without_listing_it_as_never_reconc
 
 // Two separate accounts, so closed and inactive are each proven on their own.
 func Test_import_checks_closed_and_inactive_accounts_like_any_other(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	closedPK := b.Account(v9fixture.AccountRow{Name: "Closed Card", Type: "CREDITCARD", Currency: "CAD", Closed: true})
 	inactivePK := b.Account(v9fixture.AccountRow{Name: "Old Wallet", Type: "SAVINGS", Currency: "CAD"})
@@ -151,6 +158,7 @@ func Test_import_checks_closed_and_inactive_accounts_like_any_other(t *testing.T
 // A transaction's splits one cent short of its amount is reported with the
 // exact amount/splits_total cents involved, and its payee's name.
 func Test_import_reports_a_transaction_whose_splits_do_not_sum_to_its_amount(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	payeePK := b.Payee(v9fixture.PayeeRow{Name: "Costco"})
@@ -172,6 +180,7 @@ func Test_import_reports_a_transaction_whose_splits_do_not_sum_to_its_amount(t *
 // The control for the case above in the other direction: splits one cent
 // OVER a transaction's amount are reported too, not just a short sum.
 func Test_import_reports_a_transaction_whose_splits_exceed_its_amount(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
@@ -202,6 +211,7 @@ func mismatchedBalanceAccount(b *v9fixture.Builder, name, accType string, day ti
 // Zebra is inserted first but sorts last; two "Chequing" accounts at
 // source ids 9 and 10 prove the tie-break is numeric, not string.
 func Test_import_sorts_balance_mismatches_for_display(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	day := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
 	mismatchedBalanceAccount(b, "Zebra", "CHECKING", day) // source id 1
@@ -245,6 +255,7 @@ func matchingSplitTransaction(b *v9fixture.Builder, acctPK int64, day time.Time)
 // Sorted by date, then account name, then account source id, then
 // transaction source id — each tie-break numeric, not string.
 func Test_import_sorts_split_mismatches_for_display(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true}) // source id 1
 	filler := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
@@ -287,6 +298,7 @@ func Test_import_sorts_split_mismatches_for_display(t *testing.T) {
 // Amount "0.00" isolates the has-at-least-one-split guard: a nonzero
 // amount would already fail the sum comparison alone.
 func Test_import_reports_a_transaction_with_no_splits(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
@@ -303,6 +315,7 @@ func Test_import_reports_a_transaction_with_no_splits(t *testing.T) {
 }
 
 func Test_import_carries_each_split_mismatchs_account_closed_and_active_flags(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	closedPK := b.Account(v9fixture.AccountRow{Name: "Closed Visa", Type: "CREDITCARD", Currency: "CAD", Closed: true, Active: true})
 	inactivePK := b.Account(v9fixture.AccountRow{Name: "Dormant Savings", Type: "SAVINGS", Currency: "CAD"})

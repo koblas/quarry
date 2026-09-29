@@ -31,6 +31,7 @@ func garbageFileOpenCause(t *testing.T, path string) error {
 // An unclassified buildManifest failure names the bundle and carries the
 // driver's own cause text, distinct from the integrity-check refusal.
 func Test_sync_refuses_a_snapshot_copy_that_cannot_be_opened(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "garbage.sqlite")
 	require.NoError(t, os.WriteFile(path, []byte("not a database"), 0o600))
 	cause := garbageFileOpenCause(t, path)
@@ -56,6 +57,7 @@ func Test_sync_refuses_a_snapshot_copy_that_cannot_be_opened(t *testing.T) {
 // A catalog row for a virtual table whose module is absent makes the
 // snapshot's own schema read fail; Sync refuses naming the bundle.
 func Test_sync_refuses_a_snapshot_whose_schema_cannot_be_read(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "snap.sqlite")
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
@@ -101,6 +103,7 @@ func lastIntegrityCheckLine(t *testing.T, path string) string {
 }
 
 func Test_sync_refuses_a_snapshot_that_fails_integrity_check(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
 	path := filepath.Join(t.TempDir(), "snap.sqlite")
@@ -123,6 +126,7 @@ func Test_sync_refuses_a_snapshot_that_fails_integrity_check(t *testing.T) {
 }
 
 func Test_sync_refuses_a_snapshot_with_no_accounts_table(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "no-accounts.sqlite")
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
@@ -148,6 +152,7 @@ func Test_sync_refuses_a_snapshot_with_no_accounts_table(t *testing.T) {
 }
 
 func Test_sync_refuses_a_snapshot_with_no_account_rows(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "empty-accounts.sqlite")
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)

@@ -9,6 +9,7 @@ import (
 
 // Pinned against `printf 'ZA.X\nZA.Y\n' | shasum -a 256`, computed outside Go.
 func Test_fingerprint_matches_the_pinned_vector_for_one_table(t *testing.T) {
+	t.Parallel()
 	s := sqlschema.Schema{"ZA": {"X", "Y"}}
 
 	got := sqlschema.Fingerprint(s)
@@ -17,6 +18,7 @@ func Test_fingerprint_matches_the_pinned_vector_for_one_table(t *testing.T) {
 }
 
 func Test_fingerprint_is_unaffected_by_column_order(t *testing.T) {
+	t.Parallel()
 	a := sqlschema.Fingerprint(sqlschema.Schema{"ZA": {"X", "Y"}})
 	b := sqlschema.Fingerprint(sqlschema.Schema{"ZA": {"Y", "X"}})
 
@@ -24,6 +26,7 @@ func Test_fingerprint_is_unaffected_by_column_order(t *testing.T) {
 }
 
 func Test_fingerprint_differs_for_different_schemas(t *testing.T) {
+	t.Parallel()
 	a := sqlschema.Fingerprint(sqlschema.Schema{"ZA": {"X"}})
 	b := sqlschema.Fingerprint(sqlschema.Schema{"ZB": {"X"}})
 

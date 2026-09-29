@@ -13,6 +13,7 @@ import (
 )
 
 func Test_create_refuses_an_existing_file(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "target")
 	require.NoError(t, os.WriteFile(path, []byte("existing"), 0o600))
 
@@ -23,6 +24,7 @@ func Test_create_refuses_an_existing_file(t *testing.T) {
 }
 
 func Test_commit_moves_the_partial_into_place(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	partial := filepath.Join(dir, ".partial")
 	dest := filepath.Join(dir, "final")
@@ -39,6 +41,7 @@ func Test_commit_moves_the_partial_into_place(t *testing.T) {
 }
 
 func Test_commit_refuses_to_replace_an_existing_file(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	partial := filepath.Join(dir, ".partial")
 	dest := filepath.Join(dir, "final")
@@ -57,6 +60,7 @@ func Test_commit_refuses_to_replace_an_existing_file(t *testing.T) {
 // The partial's directory is made read-only after writing, so the hard
 // link succeeds but removing the old entry cannot.
 func Test_commit_succeeds_when_the_partial_cannot_be_removed_after_linking(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")
 	}
@@ -79,6 +83,7 @@ func Test_commit_succeeds_when_the_partial_cannot_be_removed_after_linking(t *te
 // destDir is unreadable (still writable+executable, all Link needs) before
 // Commit, so Link succeeds but fsyncing the directory afterward cannot open it.
 func Test_commit_succeeds_when_the_destination_directory_cannot_be_synced(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")
 	}
@@ -99,6 +104,7 @@ func Test_commit_succeeds_when_the_destination_directory_cannot_be_synced(t *tes
 }
 
 func Test_commit_fails_when_the_partial_is_missing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	partial := filepath.Join(dir, ".partial")
 	dest := filepath.Join(dir, "final")

@@ -12,6 +12,7 @@ import (
 )
 
 func Test_import_hands_the_store_one_import_run_describing_the_build(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	chequingPK := chequingWithOneReconciledTxn(b, "100.00")
 	day := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)

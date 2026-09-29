@@ -22,6 +22,7 @@ func newTestTable(t *testing.T, ddl string) *duckdb.DB {
 }
 
 func Test_append_rows_reports_a_duplicate_primary_key(t *testing.T) {
+	t.Parallel()
 	db := newTestTable(t, "CREATE TABLE t (id INTEGER PRIMARY KEY, v VARCHAR)")
 
 	err := db.AppendRows(t.Context(), "t", [][]any{
@@ -36,6 +37,7 @@ func Test_append_rows_reports_a_duplicate_primary_key(t *testing.T) {
 // The pool's own Conn(ctx) acquisition checks ctx before this package's own
 // per-row check ever runs, for a context already cancelled beforehand.
 func Test_append_rows_fails_when_the_context_is_already_cancelled(t *testing.T) {
+	t.Parallel()
 	db := newTestTable(t, "CREATE TABLE t (id INTEGER PRIMARY KEY)")
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -46,6 +48,7 @@ func Test_append_rows_fails_when_the_context_is_already_cancelled(t *testing.T) 
 }
 
 func Test_append_rows_reports_a_wrong_column_count(t *testing.T) {
+	t.Parallel()
 	db := newTestTable(t, "CREATE TABLE t (id INTEGER PRIMARY KEY, v VARCHAR)")
 
 	err := db.AppendRows(t.Context(), "t", [][]any{
@@ -74,6 +77,7 @@ func (c *cancelAfterNErrCalls) Err() error {
 // Three rows exist; Err() cancels after the first, so a row count of
 // exactly 1 (not just an error) proves the loop stopped there.
 func Test_append_rows_stops_when_the_context_is_cancelled(t *testing.T) {
+	t.Parallel()
 	db := newTestTable(t, "CREATE TABLE t (id INTEGER PRIMARY KEY)")
 	ctx := &cancelAfterNErrCalls{Context: t.Context(), n: 1}
 

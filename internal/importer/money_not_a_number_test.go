@@ -36,6 +36,7 @@ func setColumnEmptyText(t *testing.T, dataPath, table, column string, pk int64) 
 }
 
 func Test_import_refuses_a_transaction_with_a_text_amount(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
@@ -50,6 +51,7 @@ func Test_import_refuses_a_transaction_with_a_text_amount(t *testing.T) {
 }
 
 func Test_import_refuses_a_transaction_with_a_whitespace_amount(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
@@ -62,6 +64,7 @@ func Test_import_refuses_a_transaction_with_a_whitespace_amount(t *testing.T) {
 }
 
 func Test_import_refuses_a_transaction_with_an_empty_text_amount(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
@@ -75,6 +78,7 @@ func Test_import_refuses_a_transaction_with_an_empty_text_amount(t *testing.T) {
 }
 
 func Test_import_refuses_a_transaction_with_a_blob_amount(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
@@ -90,6 +94,7 @@ func Test_import_refuses_a_transaction_with_a_blob_amount(t *testing.T) {
 // A text/blob amount with no date falls back to the source-id subject, the
 // same shape reason 10's "no date" form uses.
 func Test_import_refuses_a_dateless_transaction_with_a_text_amount(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "not-a-number"})
@@ -101,6 +106,7 @@ func Test_import_refuses_a_dateless_transaction_with_a_text_amount(t *testing.T)
 }
 
 func Test_import_refuses_a_split_with_a_text_amount(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
@@ -114,6 +120,7 @@ func Test_import_refuses_a_split_with_a_text_amount(t *testing.T) {
 }
 
 func Test_import_refuses_a_split_with_a_blob_amount(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
@@ -129,6 +136,7 @@ func Test_import_refuses_a_split_with_a_blob_amount(t *testing.T) {
 
 // A genuinely NULL amount stays reason 10, never reason 11.
 func Test_import_null_amount_is_reason_10_not_reason_11(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)

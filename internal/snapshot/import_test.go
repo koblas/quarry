@@ -10,6 +10,7 @@ import (
 )
 
 func Test_stdout_write_refusal_points_to_from_only_once_the_build_was_reached(t *testing.T) {
+	t.Parallel()
 	writeErr := errors.New("no space left on device")
 	manifest := snapshot.Manifest{Snapshot: snapshot.SnapshotInfo{
 		Path: "/Users/dave/Library/Application Support/quarry/snapshots/20260927T143005Z.sqlite",
@@ -49,6 +50,7 @@ func builtWithOneSided(n int) *store.Result {
 }
 
 func Test_outcome_warnings_put_the_manifests_before_the_one_sided_transfer_warning(t *testing.T) {
+	t.Parallel()
 	outcome := snapshot.Outcome{Manifest: snapshot.Manifest{Warnings: []string{"schema warning"}}, Store: builtWithOneSided(2)}
 
 	got := outcome.Warnings()
@@ -60,6 +62,7 @@ func Test_outcome_warnings_put_the_manifests_before_the_one_sided_transfer_warni
 }
 
 func Test_outcome_warnings_names_a_single_one_sided_transfer_in_the_singular(t *testing.T) {
+	t.Parallel()
 	outcome := snapshot.Outcome{Store: builtWithOneSided(1)}
 
 	got := outcome.Warnings()
@@ -70,6 +73,7 @@ func Test_outcome_warnings_names_a_single_one_sided_transfer_in_the_singular(t *
 }
 
 func Test_outcome_warnings_group_the_one_sided_count_by_thousands(t *testing.T) {
+	t.Parallel()
 	outcome := snapshot.Outcome{Store: builtWithOneSided(1204)}
 
 	got := outcome.Warnings()
@@ -80,6 +84,7 @@ func Test_outcome_warnings_group_the_one_sided_count_by_thousands(t *testing.T) 
 }
 
 func Test_outcome_warnings_omit_the_one_sided_transfer_warning_when_every_transfer_is_paired(t *testing.T) {
+	t.Parallel()
 	outcome := snapshot.Outcome{
 		Manifest: snapshot.Manifest{Warnings: []string{"schema warning"}},
 		Store:    &store.Result{Built: true, Validation: store.Validation{Transfers: store.TransferCheck{Paired: 3}}},
@@ -91,6 +96,7 @@ func Test_outcome_warnings_omit_the_one_sided_transfer_warning_when_every_transf
 }
 
 func Test_outcome_warnings_omit_the_one_sided_transfer_warning_when_the_store_was_not_built(t *testing.T) {
+	t.Parallel()
 	built, unbuilt := builtWithOneSided(2), builtWithOneSided(2)
 	unbuilt.Built = false
 
@@ -102,6 +108,7 @@ func Test_outcome_warnings_omit_the_one_sided_transfer_warning_when_the_store_wa
 }
 
 func Test_outcome_warnings_are_the_manifests_when_no_import_ran(t *testing.T) {
+	t.Parallel()
 	outcome := snapshot.Outcome{Manifest: snapshot.Manifest{Warnings: []string{"schema warning"}}}
 
 	got := outcome.Warnings()

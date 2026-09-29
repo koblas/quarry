@@ -13,6 +13,7 @@ import (
 
 // The entity number is overridden so it must be resolved by name.
 func Test_import_counts_investment_transactions_not_imported(t *testing.T) {
+	t.Parallel()
 	const investmentEnt = 9004
 	b := v9fixture.NewBuilder().WithEntity("InvestmentTransaction", investmentEnt)
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
@@ -31,6 +32,7 @@ func Test_import_counts_investment_transactions_not_imported(t *testing.T) {
 }
 
 func Test_import_stores_no_splits_for_investment_transactions(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
@@ -49,6 +51,7 @@ func Test_import_stores_no_splits_for_investment_transactions(t *testing.T) {
 }
 
 func Test_import_counts_no_investment_transactions_without_the_entity(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder().WithoutEntity("InvestmentTransaction")
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
@@ -66,6 +69,7 @@ func Test_import_counts_no_investment_transactions_without_the_entity(t *testing
 // Entity 0 is the value an absent entity's map lookup yields; the imported
 // transaction carrying it must not be counted as an investment.
 func Test_import_counts_no_investment_transactions_when_an_imported_one_shares_the_absent_entitys_zero(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder().WithoutEntity("InvestmentTransaction").WithEntity("CashFlowTransaction", 0)
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
@@ -83,6 +87,7 @@ func Test_import_counts_no_investment_transactions_when_an_imported_one_shares_t
 
 // The balance check fails, so this is the unbuilt result a failed-validation block renders.
 func Test_import_reports_investment_transactions_not_imported_when_a_check_fails(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	chequingPK := chequingWithOneReconciledTxn(b, "100.00")
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)

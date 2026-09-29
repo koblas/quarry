@@ -13,6 +13,7 @@ import (
 // End to end: AppendRows writes negative/zero/boundary DECIMAL(18,2) values,
 // CheckpointClose removes the .wal, and a fresh read-only connection reads every value back exactly.
 func Test_bulk_inserted_decimals_read_back_exactly_after_checkpoint_close(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "data.duckdb")
 	db, err := duckdb.Create(t.Context(), path)
 	require.NoError(t, err)

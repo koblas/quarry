@@ -14,6 +14,7 @@ import (
 )
 
 func Test_import_maps_cleared_and_reconciled_transaction_status(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
@@ -37,6 +38,7 @@ func Test_import_maps_cleared_and_reconciled_transaction_status(t *testing.T) {
 }
 
 func Test_import_sets_transaction_memo_and_cheque_number_when_present(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
@@ -56,6 +58,7 @@ func Test_import_sets_transaction_memo_and_cheque_number_when_present(t *testing
 }
 
 func Test_import_sets_split_memo_when_present(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
@@ -75,6 +78,7 @@ func Test_import_sets_split_memo_when_present(t *testing.T) {
 // A transaction whose account was itself excluded is not double-reported:
 // only the account's own reason is reported.
 func Test_import_skips_a_transaction_whose_account_was_itself_excluded(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	badAcctPK := b.Account(v9fixture.AccountRow{Name: "Euro Savings", Type: "CHECKING", Currency: "EUR", Active: true})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
@@ -91,6 +95,7 @@ func Test_import_skips_a_transaction_whose_account_was_itself_excluded(t *testin
 // A Z_15USERTAGS link to an entry that was itself skipped (no transaction)
 // must not crash mapSplitTags: the entry's own offender is reported.
 func Test_import_skips_a_split_tag_link_whose_split_was_itself_skipped(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
 	entryPK := b.Entry(v9fixture.EntryRow{Amount: "1.00"})
@@ -105,6 +110,7 @@ func Test_import_skips_a_split_tag_link_whose_split_was_itself_skipped(t *testin
 // A category referencing a nameless parent must still build a full_path,
 // falling back to "(source id N)" for that ancestor.
 func Test_import_full_path_falls_back_to_source_id_for_a_nameless_parent(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	parentPK := b.Category(v9fixture.TagRow{Type: v9fixture.Int64Ptr(1)})
 	b.Category(v9fixture.TagRow{Name: "Groceries", Type: v9fixture.Int64Ptr(1), ParentCategory: parentPK})
@@ -118,6 +124,7 @@ func Test_import_full_path_falls_back_to_source_id_for_a_nameless_parent(t *test
 // A cyclic ZPARENTCATEGORY chain must not loop: the walk is bounded by the
 // number of categories read.
 func Test_import_bounds_a_cyclic_category_parent_chain(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	b.Category(v9fixture.TagRow{Name: "A", Type: v9fixture.Int64Ptr(1), ParentCategory: 2})
 	b.Category(v9fixture.TagRow{Name: "B", Type: v9fixture.Int64Ptr(1), ParentCategory: 1})
@@ -133,6 +140,7 @@ func Test_import_bounds_a_cyclic_category_parent_chain(t *testing.T) {
 // A higher-priority offender added after a lower-priority one (accounts
 // are read before categories) must still be the one reported.
 func Test_import_upgrades_the_reported_class_when_a_higher_priority_offender_is_added_later(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Type: "CHECKING", Currency: "CAD", Active: true})
 	b.Category(v9fixture.TagRow{Name: "Food:Groceries", Type: v9fixture.Int64Ptr(5)})
@@ -146,6 +154,7 @@ func Test_import_upgrades_the_reported_class_when_a_higher_priority_offender_is_
 }
 
 func Test_UnmappableError_matches_ErrUnmappable_and_keeps_its_reason(t *testing.T) {
+	t.Parallel()
 	err := fmt.Errorf("import: %w", &importer.UnmappableError{Reason: "boom"})
 
 	assert.ErrorIs(t, err, store.ErrUnmappable)
@@ -153,6 +162,7 @@ func Test_UnmappableError_matches_ErrUnmappable_and_keeps_its_reason(t *testing.
 }
 
 func Test_UnmappableError_Error_returns_the_reason(t *testing.T) {
+	t.Parallel()
 	err := &importer.UnmappableError{Reason: "boom"}
 
 	assert.Equal(t, "boom", err.Error())

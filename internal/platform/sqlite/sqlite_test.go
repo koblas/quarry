@@ -31,6 +31,7 @@ func newTestDatabase(t *testing.T) string {
 }
 
 func Test_open_read_only_refuses_writes(t *testing.T) {
+	t.Parallel()
 	path := newTestDatabase(t)
 
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
@@ -43,6 +44,7 @@ func Test_open_read_only_refuses_writes(t *testing.T) {
 }
 
 func Test_open_read_only_fails_when_the_file_is_not_a_sqlite_database(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "data")
 	require.NoError(t, os.WriteFile(path, []byte("not a database"), 0o600))
 
@@ -52,6 +54,7 @@ func Test_open_read_only_fails_when_the_file_is_not_a_sqlite_database(t *testing
 }
 
 func Test_schema_reads_table_and_column_names(t *testing.T) {
+	t.Parallel()
 	path := newTestDatabase(t)
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
 	require.NoError(t, err)
@@ -66,6 +69,7 @@ func Test_schema_reads_table_and_column_names(t *testing.T) {
 // A catalog row for a virtual table whose module is absent makes reading
 // its columns fail without ever hitting a Scan or a query-open fault.
 func Test_schema_wraps_the_error_when_a_table_column_read_fails(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "data")
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
@@ -88,6 +92,7 @@ func Test_schema_wraps_the_error_when_a_table_column_read_fails(t *testing.T) {
 }
 
 func Test_schema_reads_quoted_table_and_column_names_verbatim(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "data")
 	conn, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)
@@ -106,6 +111,7 @@ func Test_schema_reads_quoted_table_and_column_names_verbatim(t *testing.T) {
 }
 
 func Test_integrity_check_fails_on_a_corrupted_database(t *testing.T) {
+	t.Parallel()
 	path := newMultiPageTestDatabase(t)
 	corruptLastPage(t, path)
 	row := rawIntegrityCheckRow(t, path)
@@ -168,6 +174,7 @@ func corruptLastPage(t *testing.T, path string) {
 }
 
 func Test_schema_fails_when_the_connection_is_closed(t *testing.T) {
+	t.Parallel()
 	path := newTestDatabase(t)
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
 	require.NoError(t, err)
@@ -179,6 +186,7 @@ func Test_schema_fails_when_the_connection_is_closed(t *testing.T) {
 }
 
 func Test_backup_fails_when_the_source_connection_is_closed(t *testing.T) {
+	t.Parallel()
 	srcPath := newTestDatabase(t)
 	src, err := sqlite.OpenReadOnly(t.Context(), srcPath)
 	require.NoError(t, err)
@@ -192,6 +200,7 @@ func Test_backup_fails_when_the_source_connection_is_closed(t *testing.T) {
 }
 
 func Test_backup_fails_when_the_destination_is_not_a_database(t *testing.T) {
+	t.Parallel()
 	srcPath := newTestDatabase(t)
 	src, err := sqlite.OpenReadOnly(t.Context(), srcPath)
 	require.NoError(t, err)
@@ -205,6 +214,7 @@ func Test_backup_fails_when_the_destination_is_not_a_database(t *testing.T) {
 }
 
 func Test_query_int_fails_on_a_query_error(t *testing.T) {
+	t.Parallel()
 	path := newTestDatabase(t)
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
 	require.NoError(t, err)
@@ -216,6 +226,7 @@ func Test_query_int_fails_on_a_query_error(t *testing.T) {
 }
 
 func Test_integrity_check_fails_when_the_connection_is_closed(t *testing.T) {
+	t.Parallel()
 	path := newTestDatabase(t)
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
 	require.NoError(t, err)
@@ -227,6 +238,7 @@ func Test_integrity_check_fails_when_the_connection_is_closed(t *testing.T) {
 }
 
 func Test_backup_fails_when_the_destination_file_is_read_only(t *testing.T) {
+	t.Parallel()
 	srcPath := newTestDatabase(t)
 	src, err := sqlite.OpenReadOnly(t.Context(), srcPath)
 	require.NoError(t, err)
@@ -241,6 +253,7 @@ func Test_backup_fails_when_the_destination_file_is_read_only(t *testing.T) {
 }
 
 func Test_integrity_check_passes_on_a_healthy_database(t *testing.T) {
+	t.Parallel()
 	path := newTestDatabase(t)
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
 	require.NoError(t, err)
@@ -252,6 +265,7 @@ func Test_integrity_check_passes_on_a_healthy_database(t *testing.T) {
 }
 
 func Test_query_int_returns_the_selected_value(t *testing.T) {
+	t.Parallel()
 	path := newTestDatabase(t)
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
 	require.NoError(t, err)
@@ -264,6 +278,7 @@ func Test_query_int_returns_the_selected_value(t *testing.T) {
 }
 
 func Test_backup_copies_rows_into_the_destination(t *testing.T) {
+	t.Parallel()
 	srcPath := newTestDatabase(t)
 	src, err := sqlite.OpenReadOnly(t.Context(), srcPath)
 	require.NoError(t, err)
@@ -283,6 +298,7 @@ func Test_backup_copies_rows_into_the_destination(t *testing.T) {
 }
 
 func Test_backup_sets_journal_mode_delete_on_the_destination(t *testing.T) {
+	t.Parallel()
 	srcPath := newWALTestDatabase(t)
 	src, err := sqlite.OpenReadOnly(t.Context(), srcPath)
 	require.NoError(t, err)
@@ -321,6 +337,7 @@ func newWALTestDatabase(t *testing.T) string {
 }
 
 func Test_backup_fails_when_the_destination_directory_is_missing(t *testing.T) {
+	t.Parallel()
 	srcPath := newTestDatabase(t)
 	src, err := sqlite.OpenReadOnly(t.Context(), srcPath)
 	require.NoError(t, err)
@@ -333,6 +350,7 @@ func Test_backup_fails_when_the_destination_directory_is_missing(t *testing.T) {
 }
 
 func Test_IsNotADB_and_IsBusy_classify_sqlite3_error_codes(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name       string
 		err        error
@@ -377,6 +395,7 @@ func lockDatabaseExclusively(t *testing.T, path string) {
 // busy_timeout=0 disables SQLite's own retry, so any wait is runBackup's.
 // Bounded by 2s so a still-broken loop times out the test, not the suite.
 func Test_backup_fails_when_the_source_is_exclusively_locked_past_the_deadline(t *testing.T) {
+	t.Parallel()
 	path := newTestDatabase(t)
 	src, err := sqlite.OpenReadOnlyBusy(t.Context(), path, 0)
 	require.NoError(t, err)
@@ -402,6 +421,7 @@ func Test_backup_fails_when_the_source_is_exclusively_locked_past_the_deadline(t
 // busyTimeout is an hour, so only runBackup's own ctx check can return this
 // quickly. Cancel fires after the goroutine is inside the retry loop.
 func Test_backup_stops_when_the_context_is_cancelled_while_waiting_on_a_busy_source(t *testing.T) {
+	t.Parallel()
 	path := newTestDatabase(t)
 	src, err := sqlite.OpenReadOnlyBusy(t.Context(), path, 0)
 	require.NoError(t, err)
@@ -429,6 +449,7 @@ func Test_backup_stops_when_the_context_is_cancelled_while_waiting_on_a_busy_sou
 // Proves the retry loop converges on success under real lock contention,
 // not just the two boundary outcomes the tests above cover.
 func Test_backup_succeeds_once_the_source_lock_releases_within_the_busy_budget(t *testing.T) {
+	t.Parallel()
 	path := newTestDatabase(t)
 	src, err := sqlite.OpenReadOnlyBusy(t.Context(), path, 0)
 	require.NoError(t, err)
@@ -475,6 +496,7 @@ func Test_backup_succeeds_once_the_source_lock_releases_within_the_busy_budget(t
 
 // The writer releases well before busyTimeout elapses.
 func Test_open_read_only_busy_succeeds_once_the_writer_releases_the_lock_before_the_timeout(t *testing.T) {
+	t.Parallel()
 	path := newTestDatabase(t)
 	locker, err := sql.Open("sqlite3", path)
 	require.NoError(t, err)

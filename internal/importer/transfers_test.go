@@ -45,6 +45,7 @@ func transactionAccount(fake *fakeStore, txnID string) string {
 }
 
 func Test_import_pairs_cross_currency_and_brokerage_transfers(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	cadPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	usdPK := b.Account(v9fixture.AccountRow{Name: "US Savings", Type: "SAVINGS", Currency: "USD", Active: true})
@@ -73,6 +74,7 @@ func Test_import_pairs_cross_currency_and_brokerage_transfers(t *testing.T) {
 
 // Entries 5-8 are fillers so the last pair's legs are source ids 9 and 10.
 func Test_import_stores_each_split_in_at_most_one_transfer(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	savingsPK := b.Account(v9fixture.AccountRow{Name: "Savings", Type: "SAVINGS", Currency: "CAD", Active: true})
@@ -104,6 +106,7 @@ func Test_import_stores_each_split_in_at_most_one_transfer(t *testing.T) {
 }
 
 func Test_import_keys_a_pair_by_its_lower_leg_when_only_the_higher_leg_links(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	savingsPK := b.Account(v9fixture.AccountRow{Name: "Savings", Type: "SAVINGS", Currency: "CAD", Active: true})
@@ -121,6 +124,7 @@ func Test_import_keys_a_pair_by_its_lower_leg_when_only_the_higher_leg_links(t *
 }
 
 func Test_import_links_each_paired_leg_to_its_counterparts_account(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	savingsPK := b.Account(v9fixture.AccountRow{Name: "Savings", Type: "SAVINGS", Currency: "CAD", Active: true})
@@ -138,6 +142,7 @@ func Test_import_links_each_paired_leg_to_its_counterparts_account(t *testing.T)
 
 // Two accounts share the name "Savings"; the lower source id is the match.
 func Test_import_keeps_a_name_form_leg_as_a_one_sided_transfer(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	savingsPK := b.Account(v9fixture.AccountRow{Name: "Savings", Type: "SAVINGS", Currency: "CAD", Active: true})
@@ -166,6 +171,7 @@ func Test_import_keeps_a_name_form_leg_as_a_one_sided_transfer(t *testing.T) {
 }
 
 func Test_import_keeps_a_numeric_link_with_no_imported_counterpart_as_one_sided(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
@@ -202,6 +208,7 @@ func Test_import_keeps_a_numeric_link_with_no_imported_counterpart_as_one_sided(
 }
 
 func Test_import_builds_the_store_with_a_one_sided_transfer(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	transferLeg(b, chequingPK, "-10.00", 101, "Old Visa")
@@ -218,6 +225,7 @@ func Test_import_builds_the_store_with_a_one_sided_transfer(t *testing.T) {
 
 // The balance check fails, so this is the unbuilt result a failed-validation block renders.
 func Test_import_reports_transfers_when_a_check_fails(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	chequingPK := chequingWithOneReconciledTxn(b, "100.00")
 	day := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
@@ -235,6 +243,7 @@ func Test_import_reports_transfers_when_a_check_fails(t *testing.T) {
 }
 
 func Test_import_describes_a_one_sided_leg_by_its_transaction_account_and_own_split(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	closedPK := b.Account(v9fixture.AccountRow{Name: "Old Chequing", Type: "CHECKING", Currency: "USD", Closed: true})
 	landlordPK := b.Payee(v9fixture.PayeeRow{Name: "Landlord"})
@@ -256,6 +265,7 @@ func Test_import_describes_a_one_sided_leg_by_its_transaction_account_and_own_sp
 // Entries 1-8 put the last transaction's two legs at split source ids 9 and
 // 10; Zeta's source id is lower than Alpha's, the reverse of name order.
 func Test_import_orders_one_sided_transfers_by_date_account_and_transaction(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	zetaPK := b.Account(v9fixture.AccountRow{Name: "Zeta", Type: "CHECKING", Currency: "CAD", Active: true})
 	alphaPK := b.Account(v9fixture.AccountRow{Name: "Alpha", Type: "CHECKING", Currency: "CAD", Active: true})

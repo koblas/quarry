@@ -14,6 +14,7 @@ import (
 )
 
 func Test_build_fails_when_the_schema_already_exists(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "pre-seeded.duckdb")
 	db, err := duckdb.Create(t.Context(), path)
 	require.NoError(t, err)

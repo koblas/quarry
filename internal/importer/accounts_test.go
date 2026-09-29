@@ -19,6 +19,7 @@ func importReason(t *testing.T, err error) string {
 }
 
 func Test_import_refuses_an_account_with_an_unsupported_currency(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Euro Savings", Type: "CHECKING", Currency: "EUR", Active: true})
 	bundle := b.WriteBundle(t, t.TempDir())
@@ -29,6 +30,7 @@ func Test_import_refuses_an_account_with_an_unsupported_currency(t *testing.T) {
 }
 
 func Test_import_refuses_an_account_with_an_unmapped_type(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "X", Type: "ZZZ", Currency: "CAD", Active: true})
 	bundle := b.WriteBundle(t, t.TempDir())
@@ -39,6 +41,7 @@ func Test_import_refuses_an_account_with_an_unmapped_type(t *testing.T) {
 }
 
 func Test_import_refuses_an_account_with_no_name(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Type: "CHECKING", Currency: "CAD", Active: true})
 	bundle := b.WriteBundle(t, t.TempDir())
@@ -49,6 +52,7 @@ func Test_import_refuses_an_account_with_no_name(t *testing.T) {
 }
 
 func Test_import_refuses_an_account_with_no_type(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Currency: "CAD", Active: true})
 	bundle := b.WriteBundle(t, t.TempDir())
@@ -59,6 +63,7 @@ func Test_import_refuses_an_account_with_no_type(t *testing.T) {
 }
 
 func Test_import_refuses_an_account_with_no_currency(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Active: true})
 	bundle := b.WriteBundle(t, t.TempDir())
@@ -71,6 +76,7 @@ func Test_import_refuses_an_account_with_no_currency(t *testing.T) {
 // A deleted account with a bad currency and no type must not be reported:
 // row filters run before any mapping check, so this row never reaches one.
 func Test_import_excludes_a_deleted_account_with_a_bad_currency_and_no_type(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Old", Currency: "EUR", Deleted: true})
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})

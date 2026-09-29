@@ -26,6 +26,7 @@ func newMultiRowTestDatabase(t *testing.T) string {
 }
 
 func Test_query_rows_scans_every_row_in_order(t *testing.T) {
+	t.Parallel()
 	path := newMultiRowTestDatabase(t)
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
 	require.NoError(t, err)
@@ -47,6 +48,7 @@ func Test_query_rows_scans_every_row_in_order(t *testing.T) {
 }
 
 func Test_query_rows_binds_args_into_the_query(t *testing.T) {
+	t.Parallel()
 	path := newMultiRowTestDatabase(t)
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
 	require.NoError(t, err)
@@ -68,6 +70,7 @@ func Test_query_rows_binds_args_into_the_query(t *testing.T) {
 }
 
 func Test_query_rows_fails_on_a_query_error(t *testing.T) {
+	t.Parallel()
 	path := newMultiRowTestDatabase(t)
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
 	require.NoError(t, err)
@@ -80,6 +83,7 @@ func Test_query_rows_fails_on_a_query_error(t *testing.T) {
 }
 
 func Test_query_rows_fails_on_a_scan_type_error(t *testing.T) {
+	t.Parallel()
 	path := newMultiRowTestDatabase(t)
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
 	require.NoError(t, err)
@@ -99,6 +103,7 @@ var errQueryRowsCallback = errors.New("boom")
 // Two rows exist; the callback errors on the first, so a call count of 1
 // (not just the error) proves the loop stopped instead of continuing.
 func Test_query_rows_stops_iterating_once_the_callback_errors(t *testing.T) {
+	t.Parallel()
 	path := newMultiRowTestDatabase(t)
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
 	require.NoError(t, err)
@@ -116,6 +121,7 @@ func Test_query_rows_stops_iterating_once_the_callback_errors(t *testing.T) {
 }
 
 func Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration(t *testing.T) {
+	t.Parallel()
 	path := newMultiRowTestDatabase(t)
 	db, err := sqlite.OpenReadOnly(t.Context(), path)
 	require.NoError(t, err)

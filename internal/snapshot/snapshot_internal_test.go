@@ -13,6 +13,7 @@ import (
 )
 
 func Test_hashFile_wraps_a_read_failure_after_a_successful_open(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	_, _, err := hashFile(dir)

@@ -12,6 +12,7 @@ import (
 )
 
 func Test_create_refuses_an_existing_path(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "data.duckdb")
 	require.NoError(t, os.WriteFile(path, []byte("not a database"), 0o600))
 
@@ -21,6 +22,7 @@ func Test_create_refuses_an_existing_path(t *testing.T) {
 }
 
 func Test_create_makes_the_file_owner_only(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "data.duckdb")
 
 	db, err := duckdb.Create(t.Context(), path)
@@ -33,6 +35,7 @@ func Test_create_makes_the_file_owner_only(t *testing.T) {
 }
 
 func Test_create_fails_with_a_permission_error_in_a_read_only_directory(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	roDir := filepath.Join(dir, "ro")
 	require.NoError(t, os.Mkdir(roDir, 0o500))
@@ -48,6 +51,7 @@ func Test_create_fails_with_a_permission_error_in_a_read_only_directory(t *testi
 // A regular file, not a directory, as a path segment makes os.Stat fail
 // with ENOTDIR — an error Create must not mistake for "does not exist yet".
 func Test_create_fails_when_a_path_segment_is_a_regular_file(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	regular := filepath.Join(dir, "regular")
 	require.NoError(t, os.WriteFile(regular, []byte("x"), 0o600))
@@ -63,6 +67,7 @@ func Test_create_fails_when_a_path_segment_is_a_regular_file(t *testing.T) {
 // writable temp dir), so a context cancelled before Create runs lands
 // specifically on PingContext, not on sql.Open.
 func Test_create_fails_when_the_context_is_already_cancelled(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "data.duckdb")
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

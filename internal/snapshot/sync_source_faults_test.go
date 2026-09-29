@@ -22,6 +22,7 @@ import (
 // A Backup failure classifies as a destination write fault (disk-full,
 // quota, permission), or an unclassified source-side read fault otherwise.
 func Test_sync_refuses_when_the_backup_fails(t *testing.T) {
+	t.Parallel()
 	fullCause := sqlite3.Error{Code: sqlite3.ErrFull}.Error()
 	quotaCause := syscall.EDQUOT.Error()
 
@@ -98,6 +99,7 @@ func assertNoPartialsLeftBehind(t *testing.T, dir string) {
 // A Backup error carrying both a classified sqlite cause and fs.ErrPermission
 // must still resolve to the busy source refusal.
 func Test_sync_reports_the_source_refusal_when_a_backup_error_is_also_a_permission_error(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	combined := fmt.Errorf("%w: %w", sqlite3.Error{Code: sqlite3.ErrBusy}, fs.ErrPermission)
 	srv := snapshot.NewServer(
@@ -117,6 +119,7 @@ func Test_sync_reports_the_source_refusal_when_a_backup_error_is_also_a_permissi
 // Uses a rollback-journal (non-WAL) fixture: v9fixture's WAL-mode bundle
 // does not block a mode=ro reader against an uncommitted writer.
 func Test_sync_refuses_a_busy_bundle(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
 	require.NoError(t, os.MkdirAll(bundleDir, 0o700))
@@ -161,6 +164,7 @@ func Test_sync_refuses_a_busy_bundle(t *testing.T) {
 // Every Source call (Open, Probe, Backup) shares the same busy/encrypted
 // classification, independent of real lock or file-content timing.
 func Test_sync_refuses_when_the_source_reports_a_classified_error(t *testing.T) {
+	t.Parallel()
 	const busyMsg = "Quicken is busy writing ~/Documents/Home.quicken; run quarry sync again in a moment"
 	const notADBMsg = "~/Documents/Home.quicken is encrypted, so Quicken does not have it open; open it in Quicken, then run quarry sync again"
 

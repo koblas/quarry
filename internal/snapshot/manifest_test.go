@@ -10,6 +10,7 @@ import (
 )
 
 func Test_manifest_encodes_empty_lists_as_arrays(t *testing.T) {
+	t.Parallel()
 	m := snapshot.Manifest{
 		Schema: snapshot.SchemaInfo{
 			MissingTables: []string{}, MissingColumns: []snapshot.ColumnRef{},
@@ -30,6 +31,7 @@ func Test_manifest_encodes_empty_lists_as_arrays(t *testing.T) {
 }
 
 func Test_manifest_encodes_with_two_space_indent_and_a_trailing_newline(t *testing.T) {
+	t.Parallel()
 	m := snapshot.Manifest{Warnings: []string{}}
 
 	got, err := m.Encode()
@@ -40,6 +42,7 @@ func Test_manifest_encodes_with_two_space_indent_and_a_trailing_newline(t *testi
 }
 
 func Test_manifest_keys_appear_in_snapshot_schema_warnings_order(t *testing.T) {
+	t.Parallel()
 	m := snapshot.Manifest{Warnings: []string{}}
 
 	got, err := m.Encode()

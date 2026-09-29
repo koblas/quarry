@@ -44,6 +44,7 @@ func openerFailingOn(match string, err error) importer.SourceOpener {
 // Import must propagate a failure from every source query it issues, not
 // swallow it — one row per table the importer reads from.
 func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	catPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: v9fixture.Int64Ptr(1)})
@@ -116,6 +117,7 @@ func openerScanFailingOn(match string, err error) importer.SourceOpener {
 // Import must propagate a Scan failure on a row it already fetched, not
 // just a failure to run the query itself — one row per table.
 func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	catPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: v9fixture.Int64Ptr(1)})
@@ -157,6 +159,7 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 }
 
 func Test_import_propagates_a_store_replace_error(t *testing.T) {
+	t.Parallel()
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	bundle := b.WriteBundle(t, t.TempDir())

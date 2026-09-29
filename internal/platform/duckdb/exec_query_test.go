@@ -20,6 +20,7 @@ func newOpenDatabase(t *testing.T) (*duckdb.DB, string) {
 }
 
 func Test_exec_fails_on_a_syntax_error(t *testing.T) {
+	t.Parallel()
 	db, _ := newOpenDatabase(t)
 
 	_, err := db.Exec(t.Context(), "NOT VALID SQL")
@@ -28,6 +29,7 @@ func Test_exec_fails_on_a_syntax_error(t *testing.T) {
 }
 
 func Test_query_rows_fails_on_a_query_error(t *testing.T) {
+	t.Parallel()
 	db, _ := newOpenDatabase(t)
 
 	err := db.QueryRows(t.Context(), "SELECT * FROM missing_table", nil,
@@ -37,6 +39,7 @@ func Test_query_rows_fails_on_a_query_error(t *testing.T) {
 }
 
 func Test_query_rows_fails_on_a_scan_type_error(t *testing.T) {
+	t.Parallel()
 	db, _ := newOpenDatabase(t)
 	_, err := db.Exec(t.Context(), "CREATE TABLE t (v VARCHAR)")
 	require.NoError(t, err)
@@ -53,6 +56,7 @@ func Test_query_rows_fails_on_a_scan_type_error(t *testing.T) {
 }
 
 func Test_query_rows_stops_once_the_callback_errors(t *testing.T) {
+	t.Parallel()
 	db, _ := newOpenDatabase(t)
 	_, err := db.Exec(t.Context(), "CREATE TABLE t (v INTEGER)")
 	require.NoError(t, err)
@@ -71,6 +75,7 @@ func Test_query_rows_stops_once_the_callback_errors(t *testing.T) {
 }
 
 func Test_open_read_only_fails_on_a_missing_path(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "missing.duckdb")
 
 	_, err := duckdb.OpenReadOnly(t.Context(), path)
@@ -79,6 +84,7 @@ func Test_open_read_only_fails_on_a_missing_path(t *testing.T) {
 }
 
 func Test_open_read_only_refuses_writes(t *testing.T) {
+	t.Parallel()
 	writer, path := newOpenDatabase(t)
 	require.NoError(t, writer.Close())
 
@@ -95,6 +101,7 @@ func Test_open_read_only_refuses_writes(t *testing.T) {
 // context cancelled before OpenReadOnly runs lands specifically on
 // PingContext, not on sql.Open.
 func Test_open_read_only_fails_when_the_context_is_already_cancelled(t *testing.T) {
+	t.Parallel()
 	writer, path := newOpenDatabase(t)
 	require.NoError(t, writer.Close())
 	ctx, cancel := context.WithCancel(t.Context())
@@ -107,6 +114,9 @@ func Test_open_read_only_fails_when_the_context_is_already_cancelled(t *testing.
 
 // Enough rows to span several result chunks; the callback cancels ctx and returns nil,
 // so the cancellation surfaces through rows.Err(), not the callback's own error.
+// Not parallel: cancellation must win the race against iteration finishing
+// on its own, and CPU contention from sibling parallel tests changes which
+// side wins.
 func Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration(t *testing.T) {
 	db, _ := newOpenDatabase(t)
 	_, err := db.Exec(t.Context(), "CREATE TABLE t (v INTEGER)")
@@ -132,6 +142,7 @@ func Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration(t *testin
 
 // The Appender itself refuses a table that does not exist.
 func Test_append_rows_fails_when_the_table_does_not_exist(t *testing.T) {
+	t.Parallel()
 	db, _ := newOpenDatabase(t)
 
 	err := db.AppendRows(t.Context(), "does_not_exist", [][]any{{int32(1)}})
@@ -142,6 +153,7 @@ func Test_append_rows_fails_when_the_table_does_not_exist(t *testing.T) {
 // A cancelled context makes CHECKPOINT itself fail, distinct from the
 // connection-close or no-WAL steps that follow it.
 func Test_checkpoint_close_fails_when_the_context_is_already_cancelled(t *testing.T) {
+	t.Parallel()
 	db, _ := newOpenDatabase(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

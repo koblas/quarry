@@ -9,12 +9,14 @@ import (
 )
 
 func Test_decimal_refuses_an_unscaled_magnitude_of_10_to_the_width(t *testing.T) {
+	t.Parallel()
 	_, err := duckdb.Decimal(1_000_000_000_000_000_000, 18, 2)
 
 	require.Error(t, err)
 }
 
 func Test_decimal_accepts_an_unscaled_magnitude_one_below_10_to_the_width(t *testing.T) {
+	t.Parallel()
 	value, err := duckdb.Decimal(999_999_999_999_999_999, 18, 2)
 
 	require.NoError(t, err)
@@ -22,6 +24,7 @@ func Test_decimal_accepts_an_unscaled_magnitude_one_below_10_to_the_width(t *tes
 }
 
 func Test_decimal_refuses_a_negative_unscaled_magnitude_of_10_to_the_width(t *testing.T) {
+	t.Parallel()
 	_, err := duckdb.Decimal(-1_000_000_000_000_000_000, 18, 2)
 
 	require.Error(t, err)
