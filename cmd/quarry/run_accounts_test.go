@@ -203,3 +203,37 @@ func Test_run_accounts_all_marks_accounts_left_out_of_reports(t *testing.T) {
 		"Old Visa     credit_card  CAD          0.00  closed, not in reports\n",
 		stdout.String())
 }
+
+// syncLinkedTrackingFixture builds an open, an inactive and a closed account that
+// use Quicken's linked account tracking (the closed one also not in reports), plus one that does not.
+func syncLinkedTrackingFixture(t *testing.T, home string) {
+	t.Helper()
+	on, off := new(int64(1)), new(int64(0))
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true, SimpleInvesting: off})
+	b.Account(v9fixture.AccountRow{Name: "Linked", Type: "CHECKING", Currency: "CAD", Active: true, SimpleInvesting: on})
+	b.Account(v9fixture.AccountRow{Name: "Old Linked", Type: "SAVINGS", Currency: "CAD", Active: false, SimpleInvesting: on})
+	b.Account(v9fixture.AccountRow{Name: "Gone Linked", Type: "CREDITCARD", Currency: "CAD", Closed: true, Active: true, UsedInReports: off, SimpleInvesting: on})
+	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+
+	syncBundle(t, bundle)
+}
+
+func Test_run_accounts_all_marks_accounts_that_use_linked_account_tracking(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncLinkedTrackingFixture(t, home)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"accounts", "--all"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.Equal(t, ""+
+		"Account      Type         Currency  Balance  Status\n"+
+		"Chequing     chequing     CAD          0.00\n"+
+		"Gone Linked  credit_card  CAD          0.00  closed, not in reports, linked tracking\n"+
+		"Linked       chequing     CAD          0.00  linked tracking\n"+
+		"Old Linked   savings      CAD          0.00  inactive, linked tracking\n",
+		stdout.String())
+}

@@ -45,6 +45,9 @@ type AccountRow struct {
 	Deleted     bool
 	// UsedInReports is ZUSEDINREPORTS: nil writes NULL, 0 off, 1 on.
 	UsedInReports *int64
+	// SimpleInvesting is ZSIMPLEINVESTING (linked account tracking): nil
+	// writes NULL, 0 off, 1 on.
+	SimpleInvesting *int64
 }
 
 // TransactionRow is one ZTRANSACTION row. Entity defaults to the Builder's

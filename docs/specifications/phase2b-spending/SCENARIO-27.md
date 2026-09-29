@@ -24,10 +24,10 @@ Survey (step-5 grep): every reader of `a.in_reports`/`NotInReports` in productio
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_cashflow_linked_test.go` (new) `Test_run_cashflow_leaves_out_accounts_that_use_linked_account_tracking` — `replaceStore` + `cashFlowRows` (shape of `run_cashflow_invariant_test.go:28-75`): linked account with an expense and an uncategorized deposit, unlinked account with spending; run spend and cashflow; cashflow Income/Spent hold only the unlinked rows and `totalsColumn` spend Total == cashflow Spent
-- [ ] Step 2: `cmd/quarry/run_spend_account_test.go:54-73` `Test_run_spend_warns_that_a_named_linked_tracking_account_is_left_out` — account "Netskope 401(k)" linked + not in reports; stdout caption and header only, stderr exactly the W3 line (spec Surface & Copy, W3), exit 0
-- [ ] Step 3: `cmd/quarry/run_accounts_test.go:175-206` `Test_run_accounts_all_marks_accounts_that_use_linked_account_tracking` + `syncLinkedTrackingFixture` (sync path, v9fixture `SimpleInvesting`): open linked, inactive linked, closed + not-in-reports + linked; Status `linked tracking`, `inactive, linked tracking`, `closed, not in reports, linked tracking`
-- [ ] Step 4: `store.go:10-22` `Account.LinkedTracking` and `v9fixture/builder.go:35-48` `AccountRow.SimpleInvesting *int64` — fields only so steps 1-3 compile; all three fail at their assertions
+- [x] Step 1: `cmd/quarry/run_cashflow_linked_test.go` (new) `Test_run_cashflow_leaves_out_accounts_that_use_linked_account_tracking` — `replaceStore` + `cashFlowRows` (shape of `run_cashflow_invariant_test.go:28-75`): linked account with an expense and an uncategorized deposit, unlinked account with spending; run spend and cashflow; cashflow Income/Spent hold only the unlinked rows and `totalsColumn` spend Total == cashflow Spent
+- [x] Step 2: `cmd/quarry/run_spend_account_test.go:54-73` `Test_run_spend_warns_that_a_named_linked_tracking_account_is_left_out` — account "Netskope 401(k)" linked + not in reports; stdout caption and header only, stderr exactly the W3 line (spec Surface & Copy, W3), exit 0
+- [x] Step 3: `cmd/quarry/run_accounts_test.go:175-206` `Test_run_accounts_all_marks_accounts_that_use_linked_account_tracking` + `syncLinkedTrackingFixture` (sync path, v9fixture `SimpleInvesting`): open linked, inactive linked, closed + not-in-reports + linked; Status `linked tracking`, `inactive, linked tracking`, `closed, not in reports, linked tracking`
+- [x] Step 4: `store.go:10-22` `Account.LinkedTracking` and `v9fixture/builder.go:35-48` `AccountRow.SimpleInvesting *int64` — fields only so steps 1-3 compile; all three fail at their assertions
 
 ### Build
 - [ ] Step 5: **Import the flag** — `importer/accounts.go:40-47,61-63,93-96` (`COALESCE(a.ZSIMPLEINVESTING, 0) <> 0`, scan, `LinkedTracking` set, not inverted); `v9fixture/builder.go:301-303` INSERT `ZSIMPLEINVESTING` via `nullableInt`; `schema.go:13-23` `linked_tracking BOOLEAN NOT NULL` LAST after `in_reports`; `duckstore.go:467-473` `accountRows` appends it last. Tests: `importer/accounts_test.go:92` `Test_import_marks_an_account_that_uses_linked_account_tracking` (`SimpleInvesting` 1/0/NULL → true/false/false); `duckstore_test.go:105-128` `Test_replace_stores_linked_tracking_per_account` (round trip, beside the `in_reports` asserts)
@@ -59,3 +59,18 @@ Survey (step-5 grep): every reader of `a.in_reports`/`NotInReports` in productio
 - `spendingQueryFrom` / `cashFlowQuery` filter through views, so only `transactionRangeQuery` needs the fragment; do not add it to the account-id filter.
 - A linked account named on `--account` still resolves (closed and not-in-reports accounts do); only the counting leaves it out.
 - `store.Account` literals in tests rely on the zero value = reported; `spendRows` needs no change.
+
+## Phase report
+
+Run A done. Steps 1-4 ticked; three acceptance tests red at their assertions, `go build ./...` and `go vet ./...` clean.
+
+Files:
+- `cmd/quarry/run_cashflow_linked_test.go` (new): `Test_run_cashflow_leaves_out_accounts_that_use_linked_account_tracking` — red: Income `900.00` want `500.00`, Spent `1,020.00` want `120.00` (linked rows counted).
+- `cmd/quarry/run_spend_account_test.go:71`: `Test_run_spend_warns_that_a_named_linked_tracking_account_is_left_out` — red: stderr is the W2 line, want the W3 line.
+- `cmd/quarry/run_accounts_test.go:209-238`: `syncLinkedTrackingFixture` + `Test_run_accounts_all_marks_accounts_that_use_linked_account_tracking` — red: Status lacks `linked tracking` on all three rows (rows print in name order: Chequing, Gone Linked, Linked, Old Linked).
+- `internal/store/store.go`: `Account.LinkedTracking bool` (field only).
+- `internal/quicken/v9/v9fixture/builder.go`: `AccountRow.SimpleInvesting *int64` (field only; the INSERT does NOT write `ZSIMPLEINVESTING` yet — step 5).
+
+Nothing else touched: no importer, schema, duckstore, view, cli or help change. The acceptance tests set `LinkedTracking` on `store.Account`, which `accountRows` does not append yet, so it is dropped on write; step 5 makes it round-trip.
+
+Next (B1, steps 5-6): importer flag + builder INSERT + schema column LAST + `accountRows`, then the one "reported" SQL fragment. The cashflow and W3 acceptance tests go green only once step 6 and step 7 land; the accounts test needs steps 5, 7 (Accounts read) and 8 (Status).
