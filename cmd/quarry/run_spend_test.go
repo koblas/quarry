@@ -18,17 +18,22 @@ import (
 var utcMinus5 = time.FixedZone("UTC-5", -5*60*60)
 
 // spendSplit is one single-split transaction in a currency on a day, its
-// category id "" for uncategorized; cents is negative for money out.
+// category id "" for uncategorized and its payee id "" for none; cents is
+// negative for money out.
 type spendSplit struct {
-	id, account, category, currency string
-	day                             time.Time
-	cents                           int64
+	id, account, category, payee, currency string
+	day                                    time.Time
+	cents                                  int64
 }
 
 // spendRows is a store of accounts holding splits, inside one import run.
 func spendRows(accounts []store.Account, splits ...spendSplit) store.Rows {
 	rows := store.Rows{
 		Accounts: accounts,
+		Payees: []store.Payee{
+			{ID: "payee-costco", SourceID: 1, Name: "Costco"},
+			{ID: "payee-bakery", SourceID: 2, Name: "Bakery"},
+		},
 		Categories: []store.Category{
 			{ID: "cat-fuel", SourceID: 1, Name: "Fuel", FullPath: "Auto:Fuel", Kind: "expense"},
 			{ID: "cat-groceries", SourceID: 2, Name: "Groceries", FullPath: "Food:Groceries", Kind: "expense"},
@@ -43,9 +48,13 @@ func spendRows(accounts []store.Account, splits ...spendSplit) store.Rows {
 		if s.category != "" {
 			category = new(s.category)
 		}
+		var payee *string
+		if s.payee != "" {
+			payee = new(s.payee)
+		}
 		rows.Transactions = append(rows.Transactions, store.Transaction{
 			ID: "txn-" + s.id, SourceID: 1, AccountID: s.account, Date: s.day,
-			Amount: s.cents, Currency: s.currency, Status: "uncleared",
+			Amount: s.cents, Currency: s.currency, Status: "uncleared", PayeeID: payee,
 		})
 		rows.Splits = append(rows.Splits, store.Split{
 			ID: "split-" + s.id, SourceID: 1, TransactionID: "txn-" + s.id, CategoryID: category, Amount: s.cents,

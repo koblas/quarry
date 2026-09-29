@@ -4,12 +4,14 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/spf13/cobra"
 )
 
-// newSpendCommand builds spend: this year's spending by category, read at now().
+// newSpendCommand builds spend: this year's spending grouped by --by, read at now().
 func newSpendCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
-	return &cobra.Command{
+	var by string
+	cmd := &cobra.Command{
 		Use:   "spend",
 		Short: "Show spending by category, payee, tag or month",
 		Long: `Show how much you spent, grouped by category, payee, tag or month, in each
@@ -37,12 +39,17 @@ the rows can add up to more than the total.`,
   quarry spend --account "Visa Infinite" --account Chequing`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			group, err := parseSpendGrouping(by)
+			if err != nil {
+				return err
+			}
+
 			srv, err := openReport(cmd, newReport)
 			if err != nil {
 				return err
 			}
 
-			spending, err := srv.Spend(cmd.Context(), report.SpendRequest{Now: now()})
+			spending, err := srv.Spend(cmd.Context(), report.SpendRequest{Now: now(), By: group})
 			if err != nil {
 				return &runtimeError{err: err}
 			}
@@ -56,4 +63,6 @@ the rows can add up to more than the total.`,
 			return emit(cmd, out, "quarry: warning: ", []string{})
 		},
 	}
+	cmd.Flags().StringVar(&by, "by", spendGroupings[store.SpendByCategory].name, "group spending by `group`: category, payee, tag or month")
+	return cmd
 }

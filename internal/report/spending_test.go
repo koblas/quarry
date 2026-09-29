@@ -53,6 +53,17 @@ func Test_spend_reads_this_years_spending_by_category(t *testing.T) {
 	assert.Equal(t, report.Spending{Spending: spending, Window: window}, result)
 }
 
+func Test_spend_reads_the_requested_grouping_and_returns_it_with_the_result(t *testing.T) {
+	var got store.SpendingParams
+	srv := report.NewServer(report.WithStore(fakeStore{gotSpending: &got}))
+
+	result, err := srv.Spend(t.Context(), report.SpendRequest{Now: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC), By: store.SpendByPayee})
+
+	require.NoError(t, err)
+	assert.Equal(t, store.SpendByPayee, got.By)
+	assert.Equal(t, store.SpendByPayee, result.By)
+}
+
 func Test_spend_returns_the_store_fault(t *testing.T) {
 	srv := report.NewServer(report.WithStore(fakeStore{err: errDiskRead}))
 

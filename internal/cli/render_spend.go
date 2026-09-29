@@ -7,25 +7,23 @@ import (
 	"github.com/koblas/quarry/internal/report"
 )
 
-// uncategorizedLabel is the Category cell of the group of splits with no category.
-const uncategorizedLabel = "(uncategorized)"
-
-// spendingTotalLabel is the Category cell of a currency's total row.
+// spendingTotalLabel is the first cell of a currency's total row.
 const spendingTotalLabel = "Total"
 
 // renderSpending renders s as the spend table: a window caption, then a header,
 // one row per group and a Total row per currency.
 func renderSpending(s report.Spending) string {
 	const dateLayout = "2006-01-02"
-	header := []string{"Category", "Currency", "Spent"}
+	grouping := spendGroupings[s.By]
+	header := []string{grouping.header, "Currency", "Spent"}
 	rows := make([][]string, 0, 1+len(s.Rows)+len(s.Totals))
 	rows = append(rows, header)
 	for _, r := range s.Rows {
-		category := uncategorizedLabel
+		key := grouping.missing
 		if r.Key != nil {
-			category = *r.Key
+			key = *r.Key
 		}
-		rows = append(rows, []string{category, r.Currency, formatMoney(r.Spent)})
+		rows = append(rows, []string{key, r.Currency, formatMoney(r.Spent)})
 	}
 	for _, t := range s.Totals {
 		rows = append(rows, []string{spendingTotalLabel, t.Currency, formatMoney(t.Spent)})

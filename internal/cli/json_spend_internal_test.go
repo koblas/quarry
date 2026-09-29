@@ -61,6 +61,48 @@ func Test_renderSpendingJSON_writes_a_null_key_for_uncategorized_and_a_signed_am
 `, string(got))
 }
 
+func Test_renderSpendingJSON_names_the_row_key_and_by_for_the_payee_grouping(t *testing.T) {
+	found := store.Spending{
+		Rows: []store.SpendingRow{
+			{Key: new("Costco"), Currency: "CAD", Spent: 30000},
+			{Key: nil, Currency: "CAD", Spent: 4208},
+		},
+		Totals: []store.SpendingTotal{{Currency: "CAD", Spent: 34208}},
+	}
+	s := report.Spending{Spending: found, Window: spendWindow(), By: store.SpendByPayee}
+
+	got, err := renderSpendingJSON(s)
+
+	require.NoError(t, err)
+	//nolint:testifylint // bytes are the contract
+	assert.Equal(t, `{
+  "since": "2026-01-01",
+  "until": "2026-09-29",
+  "by": "payee",
+  "account_filter": [],
+  "rows": [
+    {
+      "payee": "Costco",
+      "currency": "CAD",
+      "spent": "300.00"
+    },
+    {
+      "payee": null,
+      "currency": "CAD",
+      "spent": "42.08"
+    }
+  ],
+  "totals": [
+    {
+      "currency": "CAD",
+      "spent": "342.08"
+    }
+  ],
+  "warnings": []
+}
+`, string(got))
+}
+
 func Test_renderSpendingJSON_writes_empty_lists_when_nothing_was_spent(t *testing.T) {
 	got, err := renderSpendingJSON(report.Spending{Window: spendWindow()})
 

@@ -46,6 +46,40 @@ func Test_spend_reads_the_window_from_the_env_clock(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
+func Test_spend_by_payee_reads_the_payee_grouping_and_heads_the_first_column_Payee(t *testing.T) {
+	var got store.SpendingParams
+	var stdout, stderr bytes.Buffer
+	fake := fakeReportStore{gotSpending: &got, spending: store.Spending{
+		Rows:   []store.SpendingRow{{Key: nil, Currency: "CAD", Spent: 4208}},
+		Totals: []store.SpendingTotal{{Currency: "CAD", Spent: 4208}},
+	}}
+
+	err := executeSpend(t, fake, time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC), &stdout, &stderr, "--by", "payee")
+
+	require.NoError(t, err)
+	assert.Equal(t, store.SpendByPayee, got.By)
+	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in all accounts\n\n"+
+		"Payee       Currency  Spent\n"+
+		"(no payee)  CAD       42.08\n"+
+		"Total       CAD       42.08\n", stdout.String())
+}
+
+func Test_spend_refuses_a_by_that_names_no_grouping_before_reading_the_store(t *testing.T) {
+	for _, by := range []string{"vendor", "", "Payee", "tag", "month"} {
+		t.Run(by, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := executeSpend(t, fakeReportStore{err: errStoreRead}, time.Now(), &stdout, &stderr, "--by", by)
+
+			var usage cli.UsageError
+			require.ErrorAs(t, err, &usage)
+			require.EqualError(t, err, "--by must be category, payee, tag or month")
+			assert.Empty(t, stdout.String())
+			assert.Empty(t, stderr.String())
+		})
+	}
+}
+
 func Test_spend_json_puts_the_report_window_and_rows_in_the_document(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)

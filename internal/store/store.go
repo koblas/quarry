@@ -325,6 +325,8 @@ type SpendingGroup int
 const (
 	// SpendByCategory groups by the split's category full path.
 	SpendByCategory SpendingGroup = iota
+	// SpendByPayee groups by the transaction's payee name.
+	SpendByPayee
 )
 
 // SpendingParams is everything a spending read varies by: the Window,
@@ -337,7 +339,7 @@ type SpendingParams struct {
 }
 
 // SpendingRow is one group's spending in one currency, in cents. Key is nil
-// for the group of splits with no category.
+// for the group of splits with no category (or no payee).
 type SpendingRow struct {
 	Key      *string
 	Currency string

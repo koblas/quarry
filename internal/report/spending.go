@@ -8,16 +8,20 @@ import (
 )
 
 // SpendRequest is what a spend read needs from its caller: the current
-// instant, in the zone whose calendar day counts as today.
+// instant, in the zone whose calendar day counts as today, and what to
+// group by (category when unset).
 type SpendRequest struct {
 	Now time.Time
+	By  store.SpendingGroup
 }
 
-// Spending is a spend read: the window it covered and what the store found.
+// Spending is a spend read: the window it covered, what it was grouped by
+// and what the store found.
 type Spending struct {
 	store.Spending
 
 	Window store.Window
+	By     store.SpendingGroup
 }
 
 // DefaultWindow is January 1 of now's year through now's day, both read in
@@ -30,12 +34,12 @@ func DefaultWindow(now time.Time) store.Window {
 	}
 }
 
-// Spend reads this year's spending by category up to today.
+// Spend reads this year's spending up to today, grouped by req.By.
 func (s *Server) Spend(ctx context.Context, req SpendRequest) (Spending, error) {
 	window := DefaultWindow(req.Now)
-	spending, err := s.store.Spending(ctx, store.SpendingParams{Window: window, By: store.SpendByCategory})
+	spending, err := s.store.Spending(ctx, store.SpendingParams{Window: window, By: req.By})
 	if err != nil {
 		return Spending{}, s.readRefusal(ctx, "spend", err)
 	}
-	return Spending{Spending: spending, Window: window}, nil
+	return Spending{Spending: spending, Window: window, By: req.By}, nil
 }

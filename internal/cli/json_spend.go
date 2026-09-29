@@ -2,11 +2,8 @@ package cli
 
 import (
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/store"
 )
-
-// spendByCategory is the "by" value of a spend grouped by category, the only
-// grouping spend reads.
-const spendByCategory = "category"
 
 // spendDocument is spend's --json stdout shape.
 type spendDocument struct {
@@ -14,7 +11,7 @@ type spendDocument struct {
 	Until         string                 `json:"until"`
 	By            string                 `json:"by"`
 	AccountFilter []spendAccountDocument `json:"account_filter"`
-	Rows          []spendRowDocument     `json:"rows"`
+	Rows          []any                  `json:"rows"`
 	Totals        []spendTotalDocument   `json:"totals"`
 	Warnings      []string               `json:"warnings"`
 }
@@ -25,10 +22,18 @@ type spendAccountDocument struct {
 	Name string `json:"name"`
 }
 
-// spendRowDocument is one entry of "rows"; Category is null for the group of
-// splits with no category.
-type spendRowDocument struct {
+// spendCategoryRowDocument is one entry of "rows" grouped by category; Category
+// is null for the group of splits with no category.
+type spendCategoryRowDocument struct {
 	Category *string `json:"category"`
+	Currency string  `json:"currency"`
+	Spent    string  `json:"spent"`
+}
+
+// spendPayeeRowDocument is one entry of "rows" grouped by payee; Payee is null
+// for the group of splits with no payee.
+type spendPayeeRowDocument struct {
+	Payee    *string `json:"payee"`
 	Currency string  `json:"currency"`
 	Spent    string  `json:"spent"`
 }
@@ -42,9 +47,9 @@ type spendTotalDocument struct {
 // renderSpendingJSON renders s as spend's --json document; rows and totals
 // are [] rather than null when s holds none.
 func renderSpendingJSON(s report.Spending) ([]byte, error) {
-	rows := make([]spendRowDocument, len(s.Rows))
+	rows := make([]any, len(s.Rows))
 	for i, r := range s.Rows {
-		rows[i] = spendRowDocument{Category: r.Key, Currency: r.Currency, Spent: jsonMoney(r.Spent)}
+		rows[i] = spendRowDocumentFor(s.By, r, jsonMoney(r.Spent))
 	}
 	totals := make([]spendTotalDocument, len(s.Totals))
 	for i, t := range s.Totals {
@@ -53,10 +58,19 @@ func renderSpendingJSON(s report.Spending) ([]byte, error) {
 	return marshalDocument(spendDocument{
 		Since:         s.Window.Since.Format(jsonDateLayout),
 		Until:         s.Window.Until.Format(jsonDateLayout),
-		By:            spendByCategory,
+		By:            spendGroupings[s.By].name,
 		AccountFilter: []spendAccountDocument{},
 		Rows:          rows,
 		Totals:        totals,
 		Warnings:      []string{},
 	})
+}
+
+// spendRowDocumentFor is the row of a spend grouped by group, its key named
+// for the grouping; spent is the row's amount already formatted.
+func spendRowDocumentFor(group store.SpendingGroup, r store.SpendingRow, spent string) any {
+	if group == store.SpendByPayee {
+		return spendPayeeRowDocument{Payee: r.Key, Currency: r.Currency, Spent: spent}
+	}
+	return spendCategoryRowDocument{Category: r.Key, Currency: r.Currency, Spent: spent}
 }
