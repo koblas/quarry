@@ -16,6 +16,7 @@
 | SCENARIO-17 | code-first (LIGHT) | L, V | 0/0/4/0 | no (MINORs → STATE.md); 26 mutants, 24 killed, 2 equivalent |
 | SCENARIO-20 (+21, 23, 24) | code-first | A, B1, B2, V | 0/0/4/0 | no (MINORs → STATE.md); ~30 mutants, 3 equivalent survivors |
 | SCENARIO-22 | code-first (LIGHT) | L, V | 0/0/1/1 | no (spec line removed by orchestrator) |
+| SCENARIO-27 (+28, 29; post-Gate) | code-first | A, B1, B2, V | 0/0/5/1 | no (comment MINORs → STATE.md) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
