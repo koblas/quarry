@@ -12,6 +12,7 @@ import (
 // newSpendCommand builds spend: the spending in the --since/--until period (default this year to now()) grouped by --by.
 func newSpendCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var by string
+	var accounts []string
 	var period windowFlags
 	cmd := &cobra.Command{
 		Use:   "spend",
@@ -73,6 +74,7 @@ the rows can add up to more than the total.`,
 	}
 	cmd.Flags().StringVar(&by, "by", spendGroupings[store.SpendByCategory].name, "group spending by `group`: category, payee, tag or month")
 	period.bind(cmd)
+	cmd.Flags().StringArrayVar(&accounts, "account", nil, "count only the account with this `name` or id; repeat for more")
 	return cmd
 }
 

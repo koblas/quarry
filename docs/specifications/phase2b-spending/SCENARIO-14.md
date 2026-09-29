@@ -17,8 +17,8 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; duckstore adapter + c
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_spend_account_test.go` (new) — three `runWith` tests over `replaceStore(spendRows(...))` (`run_spend_test.go:20-74`): S14 = Chequing, Visa Infinite (closed), Savings, each with in-window spending, argv `spend --account chequing --account acct-<visa> --account Chequing` → caption `in Chequing, Visa Infinite`, Savings absent from rows and Total; S15 = "Old Card" `NotInReports` with spending → header-only table, stderr exactly W2, exit 0; S19 = table S5 `Chequeing` / S6 `Visa` (two Visa accounts, ids chosen so sorted order differs from insertion) → stderr exact, stdout empty, exit 1
-- [ ] Step 2: `internal/cli/spend.go:235-236` register `--account` via `StringArrayVar`, help verbatim from Surface & Copy; `internal/report/spending.go:13-16` `SpendRequest.Accounts []string`, `:28-37` `Spending.Accounts []store.Account` — fields only, unread; tests must fail at the stdout/stderr assertion, not on an unknown flag
+- [x] Step 1: `cmd/quarry/run_spend_account_test.go` (new) — three `runWith` tests over `replaceStore(spendRows(...))` (`run_spend_test.go:20-74`): S14 = Chequing, Visa Infinite (closed), Savings, each with in-window spending, argv `spend --account chequing --account acct-<visa> --account Chequing` → caption `in Chequing, Visa Infinite`, Savings absent from rows and Total; S15 = "Old Card" `NotInReports` with spending → header-only table, stderr exactly W2, exit 0; S19 = table S5 `Chequeing` / S6 `Visa` (two Visa accounts, ids chosen so sorted order differs from insertion) → stderr exact, stdout empty, exit 1
+- [x] Step 2: `internal/cli/spend.go:235-236` register `--account` via `StringArrayVar`, help verbatim from Surface & Copy; `internal/report/spending.go:13-16` `SpendRequest.Accounts []string`, `:28-37` `Spending.Accounts []store.Account` — fields only, unread; tests must fail at the stdout/stderr assertion, not on an unknown flag
 
 ### Build
 - [ ] Step 3: `internal/store/duckstore/spending.go:13-66` queries + `:88-124` `(*Store).Spending` — read `params.AccountIDs` (empty = every account); rows, Totals and `multiTagSplitsQuery` all filtered; new `internal/store/duckstore/spending_account_test.go`: `Test_spending_counts_only_the_named_accounts` (category + month, rows AND Totals, an unnamed in-window account present), `Test_spending_by_tag_counts_only_the_named_accounts`, `Test_spending_by_tag_counts_multi_tag_splits_only_in_the_named_accounts`, `Test_spending_with_no_named_accounts_counts_every_account` (control). Existing open/query/scan fault tests cover the call; add none unless a new statement is added
@@ -51,3 +51,11 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; duckstore adapter + c
 - `spendingQueryFrom` binds positional `?`, tag queries `$1/$2`: a filter `?` placed inside the FROM subselect textually precedes the window's `?`s and binds in the wrong order; empty list must never render `IN ()`.
 - `account_id IN (...)` hides duplicate ids, so row totals cannot prove dedupe.
 - `report` fakes share one `err` across Accounts and Spending: a named-account fault test fails at the Accounts read.
+
+## Phase report
+
+Run A (steps 1-2) done. Acceptance red, all at assertions (exit-0/stdout/stderr text), not on flag/compile:
+- `cmd/quarry/run_spend_account_test.go` (new): `spendEnv` helper; `Test_run_spend_counts_only_the_accounts_it_is_given` (got caption `in all accounts`, Auto:Fuel row, Total 18.00 vs wanted `in Chequing, Visa Infinite`, Total 15.00); `Test_run_spend_warns_that_a_named_account_is_left_out_of_reports` (stderr empty, caption `in all accounts`); `Test_run_spend_refuses_an_account_it_cannot_pick` (table: S5 / S6; exit 0 vs 1, stdout non-empty).
+- Fields only, unread: `internal/report/spending.go` `SpendRequest.Accounts []string`, `Spending.Accounts []store.Account`; `internal/cli/spend.go` `--account` via `StringArrayVar` into local `accounts` (not yet passed into `SpendRequest`; step 6 does that).
+- Plan line numbers for `internal/cli/spend.go` were stale (file is ~90 lines); use symbols. Nothing green-on-arrival. `go vet ./...` clean; lint not run (V).
+- Next (B1): duckstore reads `params.AccountIDs`; then resolver in report.

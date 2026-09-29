@@ -8,11 +8,13 @@ import (
 )
 
 // SpendRequest is what a spend read needs from its caller: the window to
-// count, resolved by ParseWindow or DefaultWindow, and what to group by
-// (category when unset).
+// count, resolved by ParseWindow or DefaultWindow, what to group by
+// (category when unset), and the accounts to count (each an id or a name;
+// none means every account).
 type SpendRequest struct {
-	Window store.Window
-	By     store.SpendingGroup
+	Window   store.Window
+	By       store.SpendingGroup
+	Accounts []string
 }
 
 // SpendingRow is one row of a spend read: what the store found, or for a
@@ -23,8 +25,8 @@ type SpendingRow struct {
 	Partial bool
 }
 
-// Spending is a spend read: the window it covered, what it was grouped by
-// and what the store found.
+// Spending is a spend read: the window it covered, what it was grouped by,
+// the accounts it counted and what the store found.
 type Spending struct {
 	Rows   []SpendingRow
 	Totals []store.SpendingTotal
@@ -34,6 +36,9 @@ type Spending struct {
 
 	Window store.Window
 	By     store.SpendingGroup
+	// Accounts is the accounts the request named, in the order given and
+	// without repeats; empty means every account was counted.
+	Accounts []store.Account
 }
 
 // DefaultWindow is January 1 of now's year through now's day, both read in
