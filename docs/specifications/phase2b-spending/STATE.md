@@ -1,6 +1,6 @@
 # phase2b-spending — current state
 
-Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-05, 07, 09 (05, 07 folded into 09), SCENARIO-06 (08 folded), SCENARIO-10, SCENARIO-11, SCENARIO-16, SCENARIO-25..26 (25 folded into 26). Last updated by SCENARIO-11.
+Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-05, 07, 09 (05, 07 folded into 09), SCENARIO-06 (08 folded), SCENARIO-10, SCENARIO-11, SCENARIO-13, SCENARIO-16, SCENARIO-25..26 (25 folded into 26). Last updated by SCENARIO-13.
 
 ## Binding decisions
 - **Window copy details (orchestrator ruling, SCENARIO-13):** S1 quotes the value (`%q`), S2/S2d/S3 print it as given unquoted; `--since ""` is S1; both flags bad → the `--since` message; S4 (`--by`) is checked before the window checks; year `0000` accepted (spec silent).
@@ -22,7 +22,7 @@ Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-05, 07
 - `v_spending` = `-amount AS spent` over `v_cash_flow WHERE flow = 'expense'`, no predicate of its own: one predicate owner, so SCENARIO-23's spend = cashflow-spent invariant holds. (SCENARIO-06)
 - `replaceStore(t, home, rows)` (`cmd/quarry/run_helpers_test.go`) is the cmd-level fixture path for view- and report-level tests; v9fixture sync stays for importer-shaped tests. (SCENARIO-06)
 
-- **Spend window (SCENARIO-09):** `report.DefaultWindow(now)` = Jan 1 of now's year through now's day in now's own zone; the window reaches DuckDB as civil DATE parameters (since/until inclusive), no query reads `current_date`. SCENARIO-13, 17 and 20 bind the same way and take `now` the same way.
+- **Spend window (SCENARIO-09, 13):** `report.DefaultWindow(now)` = Jan 1 of now's year through now's day in now's own zone. `report.ParseWindow(since, until *string, now) (store.Window, error)` is the one parser (nil = flag not given, an explicit empty value is S1; grammar exactly `2006`, `2006-01`, `2006-01-02` via `time.Parse`; value's first day = Since, last day = Until, both inclusive); it returns `report.WindowError` (copy without `quarry: `) which `internal/cli/window.go` `windowFlags.window(cmd, now)` wraps as `UsageError` (exit 2), before `openReport`. `report.SpendRequest` carries `Window`, not `Now`: nothing below cli reads the clock. The window reaches DuckDB as civil DATE parameters; no query reads `current_date`. SCENARIO-12 (partial), 14, 17, 20 take the resolved `Window` the same way; cashflow (20) binds the same `windowFlags` with the same help strings and reuses `ParseWindow` (S2d/S3 wording says "default --since" there).
 - **One `store.SpendingParams` (Window, By, AccountIDs) for every spend read**: SCENARIO-10, 11, 12, 14 add enum values or fields, never a new signature. Implementers: duckstore, `internal/cli/fakes_test.go`, `internal/report/fakes_test.go`. (SCENARIO-09)
 - **Spend totals come from `v_spending` per currency, independent of `By`**: a multi-tag split counts once in Total although it appears under each tag row, so tag rows sum >= Total (the tag query is its own SQL, Totals = `v_spending` grouped by currency; `GROUPING SETS` over the tag join would double-count). Sort (NULL first, `lower(category)`, category, currency) and zero-net row omission live in the duckstore query; Totals keep zero-net rows. (SCENARIO-09)
 - **`spend --json` document (`internal/cli/json_spend.go`)**: `{since, until, by, account_filter, rows, totals, warnings}`; `by` and the row's grouping key follow `--by` (`spendGroupings` name; row structs `spendCategoryRowDocument`/`spendPayeeRowDocument`, chosen by `spendRowDocumentFor`, key before `currency`: the embedded-field lint forbids a shared tail otherwise); `rows`/`totals`/`account_filter`/`warnings` are `[]`, never null; a null key = uncategorized / no payee. SCENARIO-11 added `spendTagRowDocument` (`spendRowDocumentFor` is a switch; category is the trailing return); SCENARIO-12 adds a month struct (also `partial`), SCENARIO-14 fills `account_filter` entries `{id, name}`. (SCENARIO-16, 10)
@@ -34,9 +34,10 @@ Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-05, 07
 
 ## Left unbuilt
 - `SpendingParams.AccountIDs` exists but duckstore does not read it — SCENARIO-14. (SCENARIO-09)
-- `SpendByMonth` and its `spendGroupings` entry, query and row struct — SCENARIO-12; `--since`/`--until` (until then cobra "unknown flag", exit 2) — SCENARIO-13; `--account` and the named-accounts caption — SCENARIO-14; E1/E2 warnings (empty window prints caption + header only) — SCENARIO-17; cash-flow port method and window — SCENARIO-20. No tag column on the views (tags join at query time). (SCENARIO-06, 09)
+- `SpendByMonth` and its `spendGroupings` entry, query and row struct — SCENARIO-12; `--account` and the named-accounts caption — SCENARIO-14; E1/E2 warnings (empty window prints caption + header only) — SCENARIO-17; cash-flow port method and window — SCENARIO-20. No tag column on the views (tags join at query time). (SCENARIO-06, 09)
 
 ## Traps
+- S2d compares the until's LAST day with the default since; S3 compares the since's FIRST day with today; S2 compares since's first day with until's last day. Comparing raw parse results makes `--since 2024 --until 2024` an S2. (SCENARIO-13)
 - `date_trunc('month', <DATE>)` is `TIMESTAMP` on DuckDB v1.5.5: cast to `DATE`. `s.id NOT IN (SELECT to_split_id ...)` with any NULL empties the view: use `NOT EXISTS`. `c.kind <> 'system'` drops uncategorized splits (NULL): use `IS DISTINCT FROM`. Category kind strings live only in `internal/importer`; duckstore uses SQL literals. `minimalRows`' transfers name `split-2`/`split-3`, not in `splits`. (SCENARIO-06)
 - A column added mid-`CREATE TABLE` while the writer appends at the end silently writes values into the neighbouring column. (SCENARIO-01)
 - A dev store synced before SCENARIO-06 lacks the 2b views; re-sync. (SCENARIO-01, 06)
@@ -50,6 +51,7 @@ Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-05, 07
 - `tags.name` is not unique and `split_tags` has no FK: tag SQL LEFT JOINs `tags` after `split_tags` and de-duplicates `(split_id, tag name)` before summing, or an untagged split and a dangling link look the same and two same-named tags double-count. (SCENARIO-11)
 
 ## Open debts
+- cmd-level exit-2 test for S1-S4/U8 through `runWith` — SCENARIO-12 absorbs 18 and ticks it once `--by month` exists; SCENARIO-13 pins the refusals at `cli.Execute` and `report` only. (SCENARIO-13)
 - Gate "matches Quicken reports over 2 years" is carried by 2b (spec) — owned by the spend scenarios.
 - 2a debts still open and unowned - die unless re-opened: HOME with trailing slash prints absolute paths, `run_status_json_test.go:1` header, `balancesPhrase` three bare ints, duckstore fault-test copy-paste (`docs/specifications/phase2a-read-foundation/STATE.md`).
 - Snapshots accumulate (~200 MB each) until 2c.

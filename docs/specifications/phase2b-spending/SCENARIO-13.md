@@ -1,13 +1,13 @@
 ---
 id: SCENARIO-13
-status: open
+status: done
 ---
 
 # SCENARIO-13: spend counts the whole period it is given
 
 Cadence: code-first (no bug fix, write-safety or atomicity item touched)
 Acceptance test: `cmd/quarry/run_spend_window_test.go` `Test_run_spend_counts_the_whole_period_it_is_given`
-Narrow loop: `go test ./internal/report/ -run 'Window|Spend' && go test ./internal/cli/ -run 'pend' && go test ./cmd/quarry/ -run 'Test_run_spend'`
+Narrow loop: `go test ./internal/report/ -run 'window|spend' && go test ./internal/cli/ -run 'spend' && go test ./cmd/quarry/ -run 'Test_run_spend'`
 Mutation checks: month end +1 (`2024-02` until -> 02-28, or Dec -> Dec 30) -> `Test_parse_window_resolves_a_bare_year_or_month_to_its_last_day`; until not inclusive (`<`) -> same test + acceptance row `2024-12-31 / 2024-12-31`; S1 grammar loosened (time layouts swapped for a prefix/regexp match, `2024-1`/`24`/trailing text accepted) -> `Test_parse_window_refuses_a_value_that_is_not_a_date`; S2 `>` -> `>=` (equal days refused) -> `Test_parse_window_accepts_equal_days_and_refuses_since_after_until`; S3 `>` -> `>=` (since == today refused) -> `Test_parse_window_refuses_a_since_after_today_only_when_until_is_absent`; S2d `<` -> `<=` (until == default since refused) -> `Test_parse_window_refuses_an_until_before_the_default_since`; check order (S3 before S1, or S2 before S3) -> `Test_parse_window_checks_bad_dates_before_since_after_today_before_since_after_until`; flag read as set when empty (drop `Changed`) -> `Test_spend_refuses_an_empty_since_as_a_bad_date`; window resolved after `openReport` -> `Test_spend_refuses_a_bad_period_before_opening_the_report`
 Runs: A (1) | B1 (2-4) | B2 (5) | V (6-7)
 Size: OWNS A RUN — 4 Build batches, 1 feature package (report; cli + cmd wiring do not count)
@@ -31,10 +31,10 @@ Size: OWNS A RUN — 4 Build batches, 1 feature package (report; cli + cmd wirin
 - [x] Step 5: `internal/cli/window.go` (new), `internal/cli/spend.go:13-56,68` — `windowFlags` bound next to `--by` (`spend.go:68`), `window(cmd, now())` between `parseSpendGrouping` (`:43`) and `openReport` (`:48`), result into `report.SpendRequest{Window: ...}` (`:53`). Tests in `internal/cli/spend_window_test.go` (new, `cli_test`, reuse `executeSpend` `spend_test.go:20-30`): `--since 2025-03 --until 2025-05` -> `got.Window` {2025-03-01, 2025-05-31}; only `--since` -> until today; only `--until` -> since Jan 1; refusal table S1 (each flag) / S2 / S2d / S3 asserts `cli.UsageError`, exact message, `fakeReportStore{err: errStoreRead}` never read, stdout and stderr empty; `Test_spend_refuses_a_bad_period_before_opening_the_report` (`NewReport` returns error, cf. `spend_test.go:83-100`); `Test_spend_refuses_an_empty_since_as_a_bad_date`; `--by vendor --since 2024-13` -> S4 message; help output carries both flag strings verbatim (fault: none, no fallible call added in cli beyond the parse).
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments (short, no scenario ids) on `ParseWindow`, `WindowError`, `windowFlags`; `internal/cli/doc.go`/`go doc ./internal/report` need no edit unless the package summary names spend's window.
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments (short, no scenario ids) on `ParseWindow`, `WindowError`, `windowFlags`; `internal/cli/doc.go`/`go doc ./internal/report` need no edit unless the package summary names spend's window.
 
 ### Verify
-- [ ] Step 7: full verification block + `.claude/scripts/spec-check.py phase2b-spending`; tick SCENARIO-13 with its acceptance test; rewrite STATE.md (`Left unbuilt` drops `--since`/`--until`; Spend window bullet says `SpendRequest.Window`, resolved by `report.ParseWindow`).
+- [x] Step 7: full verification block + `.claude/scripts/spec-check.py phase2b-spending`; tick SCENARIO-13 with its acceptance test; rewrite STATE.md (`Left unbuilt` drops `--since`/`--until`; Spend window bullet says `SpendRequest.Window`, resolved by `report.ParseWindow`).
 
 ## Handoff
 
@@ -56,9 +56,9 @@ Size: OWNS A RUN — 4 Build batches, 1 feature package (report; cli + cmd wirin
 
 ## Phase report
 
-Run B2: DONE (step 5 ticked). Acceptance test `Test_run_spend_counts_the_whole_period_it_is_given` is green (3 rows).
-- New: `internal/cli/window.go` (`windowFlags{since, until}`, `bind`, `window(cmd, now)` via `Changed`, wraps `report.WindowError` as `UsageError`); `internal/cli/spend_window_test.go` (6 tests: period table, refusal table S1 x2 / S2 / S2d / S3, refusal before `openReport`, empty `--since`, `--by` before window, help strings).
-- Changed: `internal/cli/spend.go` binds `period` next to `--by`, `period.window(cmd, now())` between `parseSpendGrouping` and `openReport`; the `DefaultWindow` bridge is gone.
-- Mutations (restored byte-identical): `Changed("since")` -> `w.since != ""` -> `Test_spend_refuses_an_empty_since_as_a_bad_date` (no error); window moved after `openReport` -> `Test_spend_refuses_a_bad_period_before_opening_the_report` (not a UsageError).
-- Narrow loops green; `golangci-lint run ./internal/cli/...` 0 issues. Not run: covered full suite, test-stats, spec tick, spec-check, STATE.md (run V).
-- V note: the help test asserts the exact cobra flag-table lines; `--until` `Changed` path is covered by the until-only rows.
+Run V: DONE (steps 6-7 ticked, `status: done`).
+- Sweep: `go build ./...` ok, `golangci-lint fmt` no changes, `golangci-lint run ./...` 0 issues; doc comments already on `ParseWindow`, `WindowError`, `windowFlags` (no scenario ids).
+- Verify: covered full suite green (15 packages); `uncovered-diff.py` 0 uncovered added lines; `go test -race ./internal/report/... ./internal/cli/...` green.
+- test-stats: cmd/quarry 110 (+1), internal/cli 84 (+6), internal/report 31 (+8), TOTAL 225 (+15); tempdir 104 (+1), disk 89 (+1).
+- Spec: SCENARIO-13 ticked with its acceptance test; `spec-check.py` run (see final report); STATE.md rewritten (`Left unbuilt` drops `--since`/`--until`; Spend window bullet says `SpendRequest.Window`, resolved by `report.ParseWindow`).
+- Plan's `Narrow loop:` lowercased (`window|spend`, `spend`): `-run` is case-sensitive.

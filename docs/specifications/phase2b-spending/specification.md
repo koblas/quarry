@@ -509,7 +509,7 @@ Scenario: SCENARIO-26 — accounts marks accounts Quicken leaves out of reports
 - [x] SCENARIO-10: spend groups by payee — `cmd/quarry/run_spend_by_test.go` `Test_run_spend_by_payee_groups_spending_by_payee_and_currency_biggest_first`
 - [x] SCENARIO-11: spend groups by tag and warns about multi-tagged splits — `cmd/quarry/run_spend_by_test.go` `Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_total_and_warns`
 - [ ] SCENARIO-12: spend groups by month and fills empty months
-- [ ] SCENARIO-13: spend counts the whole period it is given
+- [x] SCENARIO-13: spend counts the whole period it is given — `cmd/quarry/run_spend_window_test.go` `Test_run_spend_counts_the_whole_period_it_is_given`
 - [ ] SCENARIO-14: spend counts only the accounts it is given
 - [ ] SCENARIO-15: spend says why a named account shows nothing
 - [x] SCENARIO-16: spend --json returns spending as a document — `cmd/quarry/run_spend_json_test.go` `Test_run_spend_json_returns_spending_as_a_document`
