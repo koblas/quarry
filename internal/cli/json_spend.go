@@ -46,6 +46,15 @@ type spendTagRowDocument struct {
 	Spent    string  `json:"spent"`
 }
 
+// spendMonthRowDocument is one entry of "rows" grouped by month; Month is
+// YYYY-MM and Partial is true when the window cuts the month short.
+type spendMonthRowDocument struct {
+	Month    string `json:"month"`
+	Currency string `json:"currency"`
+	Spent    string `json:"spent"`
+	Partial  bool   `json:"partial"`
+}
+
 // spendTotalDocument is one entry of "totals".
 type spendTotalDocument struct {
 	Currency string `json:"currency"`
@@ -82,6 +91,8 @@ func spendRowDocumentFor(group store.SpendingGroup, r report.SpendingRow, spent 
 		return spendPayeeRowDocument{Payee: r.Key, Currency: r.Currency, Spent: spent}
 	case store.SpendByTag:
 		return spendTagRowDocument{Tag: r.Key, Currency: r.Currency, Spent: spent}
+	case store.SpendByMonth:
+		return spendMonthRowDocument{Month: *r.Key, Currency: r.Currency, Spent: spent, Partial: r.Partial}
 	case store.SpendByCategory:
 	}
 	return spendCategoryRowDocument{Category: r.Key, Currency: r.Currency, Spent: spent}

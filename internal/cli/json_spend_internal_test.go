@@ -104,6 +104,51 @@ func Test_renderSpendingJSON_names_the_row_key_and_by_for_the_payee_grouping(t *
 `, string(got))
 }
 
+func Test_renderSpendingJSON_writes_month_rows_with_their_partial_flag(t *testing.T) {
+	s := report.Spending{
+		Rows: []report.SpendingRow{
+			{Key: new("2026-01"), Currency: "CAD", Spent: 5000, Partial: true},
+			{Key: new("2026-02"), Currency: "CAD", Spent: 0},
+		},
+		Totals: []store.SpendingTotal{{Currency: "CAD", Spent: 5000}},
+		Window: spendWindow(),
+		By:     store.SpendByMonth,
+	}
+
+	got, err := renderSpendingJSON(s, []string{})
+
+	require.NoError(t, err)
+	//nolint:testifylint // bytes are the contract
+	assert.Equal(t, `{
+  "since": "2026-01-01",
+  "until": "2026-09-29",
+  "by": "month",
+  "account_filter": [],
+  "rows": [
+    {
+      "month": "2026-01",
+      "currency": "CAD",
+      "spent": "50.00",
+      "partial": true
+    },
+    {
+      "month": "2026-02",
+      "currency": "CAD",
+      "spent": "0.00",
+      "partial": false
+    }
+  ],
+  "totals": [
+    {
+      "currency": "CAD",
+      "spent": "50.00"
+    }
+  ],
+  "warnings": []
+}
+`, string(got))
+}
+
 func Test_renderSpendingJSON_writes_empty_lists_when_nothing_was_spent(t *testing.T) {
 	got, err := renderSpendingJSON(report.Spending{Window: spendWindow()}, []string{})
 

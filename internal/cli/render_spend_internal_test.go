@@ -78,6 +78,32 @@ func Test_renderSpending(t *testing.T) {
 				"\n" +
 				"Category  Currency  Spent\n",
 		},
+		{
+			name: "a month grouping adds a Status column that says partial only on a cut-short month",
+			by:   store.SpendByMonth,
+			rows: []report.SpendingRow{
+				{Key: new("2026-01"), Currency: "CAD", Spent: 5000, Partial: true},
+				{Key: new("2026-02"), Currency: "CAD", Spent: 0},
+				{Key: new("2026-03"), Currency: "CAD", Spent: 120000, Partial: true},
+			},
+			tots: []store.SpendingTotal{{Currency: "CAD", Spent: 125000}},
+			want: "" +
+				"Spending 2026-01-01 to 2026-03-09 in all accounts\n" +
+				"\n" +
+				"Month    Currency     Spent  Status\n" +
+				"2026-01  CAD          50.00  partial\n" +
+				"2026-02  CAD           0.00\n" +
+				"2026-03  CAD       1,200.00  partial\n" +
+				"Total    CAD       1,250.00\n",
+		},
+		{
+			name: "an empty month window still prints the Status header",
+			by:   store.SpendByMonth,
+			want: "" +
+				"Spending 2026-01-01 to 2026-03-09 in all accounts\n" +
+				"\n" +
+				"Month  Currency  Spent  Status\n",
+		},
 	}
 
 	for _, c := range cases {
