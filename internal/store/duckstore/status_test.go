@@ -144,17 +144,21 @@ func Test_status_fails_on_a_missing_store_without_creating_it(t *testing.T) {
 var errQueryFailed = errors.New("query failed")
 
 // spyReadDB wraps a real read connection (or none) and counts Close calls;
-// a non-nil queryFault fails every query.
+// a non-nil queryFault fails every query, a non-nil scanFault hands the row callback one failing scan.
 type spyReadDB struct {
 	duckstore.ReadDB
 
 	queryFault error
+	scanFault  error
 	closes     int
 }
 
 func (s *spyReadDB) QueryRows(ctx context.Context, query string, args []any, row func(scan func(dest ...any) error) error) error {
 	if s.queryFault != nil {
 		return s.queryFault
+	}
+	if s.scanFault != nil {
+		return row(func(...any) error { return s.scanFault })
 	}
 	return s.ReadDB.QueryRows(ctx, query, args, row)
 }

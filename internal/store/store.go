@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"slices"
 	"time"
 )
 
@@ -15,6 +16,25 @@ type Account struct {
 	Institution *string
 	Closed      bool
 	Active      bool
+}
+
+// Investment account types, whose balance quarry cannot compute.
+const (
+	AccountTypeBrokerage  = "brokerage"
+	AccountTypeRetirement = "retirement"
+)
+
+// InvestmentAccountTypes returns every accounts.type value
+// IsInvestmentAccount accepts, as a fresh slice.
+func InvestmentAccountTypes() []string {
+	return []string{AccountTypeBrokerage, AccountTypeRetirement}
+}
+
+// IsInvestmentAccount reports whether accountType is a brokerage or
+// retirement account: sync never checks its balance, and accounts shows it
+// as not imported.
+func IsInvestmentAccount(accountType string) bool {
+	return slices.Contains(InvestmentAccountTypes(), accountType)
 }
 
 // Category is one row of the categories table. ParentID is nil for a
@@ -267,4 +287,18 @@ type OneSidedTransfer struct {
 	Amount            int64
 	OtherAccount      *string
 	OtherAccountID    *string
+}
+
+// AccountBalance is one account with its balance in cents; Balance is nil
+// when the store cannot compute it.
+type AccountBalance struct {
+	Account
+
+	Balance *int64
+}
+
+// AccountList is every account with its balance as of the store's today.
+type AccountList struct {
+	AsOf     time.Time
+	Accounts []AccountBalance
 }

@@ -15,11 +15,14 @@ var errDiskRead = errors.New("read store status: disk read failed")
 
 // fakeStore answers Status with a canned result or fault.
 type fakeStore struct {
-	status store.Status
-	err    error
+	status   store.Status
+	accounts store.AccountList
+	err      error
 }
 
 func (f fakeStore) Status(context.Context) (store.Status, error) { return f.status, f.err }
+
+func (f fakeStore) Accounts(context.Context) (store.AccountList, error) { return f.accounts, f.err }
 
 func Test_status_returns_what_the_store_reads(t *testing.T) {
 	want := store.Status{Path: "/home/dave/quarry.duckdb", FormatVersion: 2, QuarryVersion: "v1.2.3"}

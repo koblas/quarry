@@ -1,5 +1,11 @@
 package duckstore
 
+import (
+	"strings"
+
+	"github.com/koblas/quarry/internal/store"
+)
+
 // schemaDDL creates quarry's own tables. Primary keys are quarry's stable
 // <prefix>-<source id> ids; a build that would write two rows under the
 // same id fails here, at the Appender's Close.
@@ -98,3 +104,23 @@ CREATE TABLE store_info (
 	built_at TIMESTAMP NOT NULL
 );
 `
+
+// accountBalancesViewDDL creates v_account_balances: each account with the sum of its
+// transactions dated today or earlier, NULL for an investment account.
+func accountBalancesViewDDL() string {
+	quoted := make([]string, 0, len(store.InvestmentAccountTypes()))
+	for _, t := range store.InvestmentAccountTypes() {
+		quoted = append(quoted, "'"+strings.ReplaceAll(t, "'", "''")+"'")
+	}
+	// The date test sits in the join, not a WHERE, so an account whose only
+	// transactions are future-dated is still listed.
+	return `
+CREATE VIEW v_account_balances AS
+SELECT a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed, a.active,
+	CASE WHEN a.type IN (` + strings.Join(quoted, ", ") + `) THEN NULL
+		ELSE CAST(COALESCE(sum(t.amount), 0) AS DECIMAL(18,2)) END AS balance
+FROM accounts a
+LEFT JOIN transactions t ON t.account_id = a.id AND t.date <= current_date
+GROUP BY a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed, a.active;
+`
+}

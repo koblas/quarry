@@ -11,4 +11,6 @@ import (
 type Store interface {
 	// Status describes the store and the import run that built it.
 	Status(ctx context.Context) (store.Status, error)
+	// Accounts lists every account with its balance.
+	Accounts(ctx context.Context) (store.AccountList, error)
 }
