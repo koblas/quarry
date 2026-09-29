@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-27
-status: open
+status: done
 ---
 
 # SCENARIO-27: spending leaves out accounts that use Quicken's linked account tracking (absorbs 28, 29)
@@ -36,10 +36,10 @@ Survey (step-5 grep): every reader of `a.in_reports`/`NotInReports` in productio
 - [x] Step 8: **cli copy** — `render_accounts.go:23,55-70` `accountStatus` third part `linked tracking` (order state, `not in reports`, `linked tracking`); `json_accounts.go:16-36` `LinkedTracking bool json:"linked_tracking"` directly after `in_reports`; `spend.go:20-31` and `cashflow.go:43-53` Long, copied from the spec blocks (spec `### spend` Long, `### cashflow` Long), NOT edited in place — wrapping differs. Tests: `render_accounts_internal_test.go:72-90` rows for every spec Status example; `json_accounts_internal_test.go:14-80`; `run_accounts_json_test.go` `Test_run_accounts_json_carries_linked_tracking_per_account`; pins `report_help_test.go:11-31,62-79`
 
 ### Sweep
-- [ ] Step 9: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; exact-document bumps `json_accounts_internal_test.go:39-72`, `run_accounts_json_test.go:27,71-93` (struct + expected JSON); `accountStatus` signature in `Test_accountStatus`; doc comments on the fragment const, `LeftOutOfReports`, `linkedTrackingWarning`
+- [x] Step 9: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; exact-document bumps `json_accounts_internal_test.go:39-72`, `run_accounts_json_test.go:27,71-93` (struct + expected JSON); `accountStatus` signature in `Test_accountStatus`; doc comments on the fragment const, `LeftOutOfReports`, `linkedTrackingWarning`
 
 ### Verify
-- [ ] Step 10: full verification + `spec-check.py phase2b-spending`; tick SCENARIO-27, and 28/29 as `— delivered by SCENARIO-27 — <its acceptance test>`; rewrite STATE.md; set `status: done`
+- [x] Step 10: full verification + `spec-check.py phase2b-spending`; tick SCENARIO-27, and 28/29 as `— delivered by SCENARIO-27 — <its acceptance test>`; rewrite STATE.md; set `status: done`
 
 ## Handoff
 
@@ -62,14 +62,4 @@ Survey (step-5 grep): every reader of `a.in_reports`/`NotInReports` in productio
 
 ## Phase report
 
-Run B2 done (steps 7-8 ticked). All three acceptance tests green (cashflow, W3 spend, accounts Status). `go build ./...`, covered full suite (`go test rc=0`), `uncovered-diff.py` (0 uncovered), `golangci-lint` (0 issues) all clean at end of B2; V still owes the Verify block, `test-stats.py`, `-race`, spec tick, STATE.md, `status: done`.
-
-Files:
-- `internal/store/duckstore/accounts.go`: Accounts read selects `a.linked_tracking` (`v_account_balances` not widened); `store.go`: `Account.LeftOutOfReports()`.
-- `internal/cli/empty_window.go`: `leftOutWarnings` W3 case first, `linkedTrackingWarning`, `appendEmptyWindowWarning` counts `LeftOutOfReports()`.
-- `internal/cli/render_accounts.go`: `accountStatus(closed, active, notInReports, linkedTracking)`; `json_accounts.go`: `linked_tracking` after `in_reports`; `spend.go`/`cashflow.go` Long copied from spec.
-- Tests: duckstore `accounts_test.go`; cli `spend_account_test.go` (`namedAccounts` gained linked `Netskope 401(k)` and both-flags `Old 401(k)`), `spend_empty_test.go`, `cashflow_test.go`, `render_accounts_internal_test.go`, `json_accounts_internal_test.go` (exact document bumped), `report_help_test.go`; cmd `run_spend_account_test.go`, `run_accounts_json_test.go` (struct + expected JSON bumped, new `..._carries_linked_tracking_per_account`).
-
-Mutations (all reverted): W2 case before W3 -> both-flags spend/cashflow tests and the W3 cmd test red; `LeftOutOfReports` without `LinkedTracking` -> the two every-left-out-and-one-linked tests red; `linkedTracking` dropped from `accountStatus` -> `Test_accountStatus`, `Test_renderAccounts`, cmd accounts Status test red; Accounts read not filling `LinkedTracking` -> duckstore test and four cmd tests red.
-
-V must not redo: the plan's step-9 exact-document bumps and `accountStatus` signature edits are already in; V's sweep is lint/doc comments (`reportedAccount`, `LeftOutOfReports`, `linkedTrackingWarning` already carry doc comments).
+Run V done (steps 9-10 ticked, `status: done`). `go build ./...` ok; covered full suite `go test rc=0`; `uncovered-diff.py` 0 uncovered; `-race` on importer, store, duckstore, cli, report, cmd/quarry ok; `golangci-lint` 0 issues; `spec-check.py phase2b-spending` OK. SCENARIO-27 ticked, 28 and 29 ticked as delivered by 27. STATE.md rewritten (reported-rule owner, W3, format-3 re-sync trap). Runs A-B2 files and mutations: see git log 5444906, 41dbcac, ab98214.

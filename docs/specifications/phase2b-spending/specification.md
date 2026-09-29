@@ -569,6 +569,6 @@ Scenario: SCENARIO-29 — accounts marks linked-tracking accounts
 - [x] SCENARIO-24: cashflow refuses and reports empty periods like spend — delivered by SCENARIO-20 — `cmd/quarry/run_cashflow_refusals_test.go` `Test_run_cashflow_refuses_and_reports_empty_periods_like_spend`
 - [x] SCENARIO-25: accounts marks its all-closed note as a warning — delivered by SCENARIO-26 — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_says_how_to_list_them_when_every_account_is_closed`
 - [x] SCENARIO-26: accounts marks accounts Quicken leaves out of reports — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_all_marks_accounts_left_out_of_reports`
-- [ ] SCENARIO-27: spending leaves out accounts that use Quicken's linked account tracking
-- [ ] SCENARIO-28: naming a linked-tracking account warns that it is left out
-- [ ] SCENARIO-29: accounts marks linked-tracking accounts
+- [x] SCENARIO-27: spending leaves out accounts that use Quicken's linked account tracking — `cmd/quarry/run_cashflow_linked_test.go` `Test_run_cashflow_leaves_out_accounts_that_use_linked_account_tracking`
+- [x] SCENARIO-28: naming a linked-tracking account warns that it is left out — delivered by SCENARIO-27 — `cmd/quarry/run_spend_account_test.go` `Test_run_spend_warns_that_a_named_linked_tracking_account_is_left_out`
+- [x] SCENARIO-29: accounts marks linked-tracking accounts — delivered by SCENARIO-27 — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_all_marks_accounts_that_use_linked_account_tracking`
