@@ -193,9 +193,12 @@ Run one SQL query against quarry's store and print the result. The store is
 opened read-only: a query cannot change it, read or write other files, or
 load extensions.
 
-Pass the query as one quoted argument, or - to read it from stdin. Amounts
-are DECIMAL(18,2) in each account's own currency; negative is money leaving
-the account. Transfers between your own accounts are in the transfers table
+Pass the query as one quoted argument, or - to read it from stdin. A query
+that starts with - (such as a -- comment) goes after --:
+quarry sql -- "-- monthly totals
+SELECT ..."
+Amounts are DECIMAL(18,2) in each account's own currency; negative is money
+leaving the account. Transfers between your own accounts are in the transfers table
 and splits.transfer_account_id, never in a category kind. List the tables
 and views with: quarry sql "SHOW TABLES"
 
@@ -259,7 +262,7 @@ quarry says so on stderr. --limit 0 prints every row.
 | U6 | sql: more than one argument | `quarry: sql takes one query; quote it as one argument` | 2 |
 | U7 | `--limit` < 0 | `quarry: --limit must be 0 or more; 0 prints every row` | 2 |
 | U8 | status/accounts given positional arguments | `quarry: <cmd> takes no arguments` | 2 |
-| U9 | cobra-native usage error | `<cobra text>; Run 'quarry <matched command path> --help' for usage.` e.g. `unknown flag: --bogus; Run 'quarry sql --help' for usage.`; root: `unknown command "spend" for "quarry"; Run 'quarry --help' for usage.` sync's U4 stays byte-identical | 2 |
+| U9 | cobra-native usage error | `<cobra text>; Run 'quarry <matched command path> --help' for usage.` e.g. `unknown flag: --bogus; Run 'quarry sql --help' for usage.`; root: `unknown command "spend" for "quarry"; Run 'quarry --help' for usage.` sync's U4 stays byte-identical A sql query argument starting with `-` is parsed as a flag (U9, cobra's text verbatim even when multi-line, e.g. `quarry: unknown flag: -- note; Run 'quarry sql --help' for usage.`); it reaches DuckDB only after `--` or via `-`. | 2 |
 
 Shared open classifier order (one decision point): (1) `ctx.Err()` → I1/Q4; (2) stat not-exist → R1; (3) open fault then re-stat not-exist → R1 (store vanished between stat and open; never match the driver's "does not exist" text); (4) R3a/R3b/R3c; (5) R2 (catalog, row count, format_version); (6) R3 fallback.
 
@@ -454,7 +457,8 @@ Scenario Outline: SCENARIO-18 — read commands reject bad usage
     | sql "   "            | U5      |
     | sql - (empty stdin)  | U5      |
     | sql ";"              | U5      |
-    | sql "-- note"        | U5      |
+    | sql -- "-- note"     | U5      |
+    | sql "-- note"        | U9      |
     | sql "SELECT 1" extra | U6      |
     | sql --limit -1 "SELECT 1" | U7 |
     | status extra         | U8      |
