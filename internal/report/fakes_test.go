@@ -7,21 +7,28 @@ import (
 )
 
 // fakeStore answers each read with a canned result or fault; Query returns
-// at most maxRows of rows, recording the maxRows it was asked for in *gotMaxRows when set.
+// at most maxRows of rows, recording the maxRows it was asked for in *gotMaxRows when set;
+// Spending records its params in *gotSpending when set.
 type fakeStore struct {
 	status     store.Status
 	accounts   store.AccountList
+	spending   store.Spending
 	rows       [][]store.QueryValue
 	gotMaxRows *int
-	err        error
+
+	gotSpending *store.SpendingParams
+	err         error
 }
 
 func (f fakeStore) Status(context.Context) (store.Status, error) { return f.status, f.err }
 
 func (f fakeStore) Accounts(context.Context) (store.AccountList, error) { return f.accounts, f.err }
 
-func (f fakeStore) Spending(context.Context, store.SpendingParams) (store.Spending, error) {
-	return store.Spending{}, nil
+func (f fakeStore) Spending(_ context.Context, params store.SpendingParams) (store.Spending, error) {
+	if f.gotSpending != nil {
+		*f.gotSpending = params
+	}
+	return f.spending, f.err
 }
 
 func (f fakeStore) Query(_ context.Context, _ string, maxRows int) (store.QueryResult, error) {

@@ -31,16 +31,16 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; the duckstore adapter
   - Update the two tests that registration breaks: `cmd/quarry/run_status_test.go:98-103` (Available Commands gains `  spend       Show spending by category, payee, tag or month` between help and sql) and `cmd/quarry/run_usage_test.go:178` (`spend` → `spending`).
 
 ### Build
-- [ ] Step 3: `internal/report/spending.go` `DefaultWindow`: January 1 of now's year through now's day, both read in now's own zone and returned as civil days.
+- [x] Step 3: `internal/report/spending.go` `DefaultWindow`: January 1 of now's year through now's day, both read in now's own zone and returned as civil days.
   - `Test_default_window_runs_from_january_first_to_today_in_the_instants_own_zone`: 2025-12-31 22:00 at UTC-5 (already 2026-01-01 in UTC) must give 2025-01-01..2025-12-31; a mid-year instant is the control.
-- [ ] Step 4: `internal/store/duckstore/spending.go` (new) `(*Store).Spending`. Shape follows `accounts.go:11-58`: one statement over `v_spending`; since and until bound as DATE parameters; category grouping; zero-net rows dropped; rows sorted with NULL first, then `lower(category)`, category, currency; per-currency Totals read from `v_spending` itself, never summed from rows; an unsupported `By` returns an error. Also fill the two fakes: record the params and return canned output. Tests in `spending_test.go` (new):
+- [x] Step 4: `internal/store/duckstore/spending.go` (new) `(*Store).Spending`. Shape follows `accounts.go:11-58`: one statement over `v_spending`; since and until bound as DATE parameters; category grouping; zero-net rows dropped; rows sorted with NULL first, then `lower(category)`, category, currency; per-currency Totals read from `v_spending` itself, never summed from rows; an unsupported `By` returns an error. Also fill the two fakes: record the params and return canned output. Tests in `spending_test.go` (new):
   - `Test_spending_counts_the_windows_first_and_last_day_only` (since-1, since, until, until+1; only the middle two counted)
   - `Test_spending_sorts_categories_ignoring_case_with_uncategorized_first` (one category in both currencies; case order differs from byte order)
   - `Test_spending_omits_a_category_that_nets_to_zero_and_keeps_it_in_the_total`
   - `Test_spending_totals_each_currency_cad_before_usd`
   - `Test_spending_refuses_a_grouping_it_does_not_know`
   - Faults, mirroring `accounts_test.go:130-192`: open fault, query fault as another fault, scan fault, connection closed on success and on fault, missing store not created.
-- [ ] Step 5: `internal/report/spending.go` `(*Server).Spend`: DefaultWindow(req.Now) → `SpendingParams{By: SpendByCategory}` → store, with the refusal from `readRefusal(ctx, "spend", err)`. Tests:
+- [x] Step 5: `internal/report/spending.go` `(*Server).Spend`: DefaultWindow(req.Now) → `SpendingParams{By: SpendByCategory}` → store, with the refusal from `readRefusal(ctx, "spend", err)`. Tests:
   - `internal/report/spending_test.go` (new) `Test_spend_reads_this_years_spending_by_category` (asserts the params the fake recorded and the returned Window)
   - `Test_spend_returns_the_store_fault`
   - Add `spend` rows to `refusal_test.go:88-106` (store refusal copy), `:127-157` (interrupt → `spend interrupted`) and `:159-` (non-refusal fault unchanged).
@@ -83,20 +83,14 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; the duckstore adapter
 
 ## Phase report
 
-Run A done (steps 1-2). Only the three acceptance tests are red; every other test in the repo is green.
-
-Red (each at its stdout/stderr/exit assertion; the stub RunE prints nothing and returns nil):
-- `cmd/quarry/run_spend_test.go` `Test_run_spend_shows_this_years_spending_by_category_in_each_currency`: expected the caption + table, actual `""`.
-- `cmd/quarry/run_spend_test.go` `Test_run_spend_leaves_out_accounts_quicken_does_not_use_in_reports`: same.
-- `cmd/quarry/run_read_refusals_test.go` `Test_run_spend_refuses_a_store_built_by_an_older_quarry`: expected exit 1 + R2 stderr, actual exit 0, `""`.
+Run B1 done (steps 3-5); steps 3-5 ticked. Narrow loop green for `internal/report`, `internal/store/duckstore`, `internal/cli`. The three cmd acceptance tests are still red by design (cli RunE is the stub; B2 fills it).
 
 Files:
-- `internal/store/store.go` end: `Window`, `SpendingGroup`/`SpendByCategory`, `SpendingParams`, `SpendingRow` (Key *string), `SpendingTotal`, `Spending`. Window holds civil days as UTC-midnight `time.Time`.
-- `internal/report/store.go`: `Store.Spending`. Stubbed in `internal/store/duckstore/spending.go`, `internal/cli/fakes_test.go`, `internal/report/fakes_test.go` (all return zero, ignoring params; B runs add canned output and recording).
-- `internal/report/spending.go`: `SpendRequest{Now}`, `Spending{store.Spending; Window}`, stubbed `DefaultWindow` (returns zero), `(*Server).Spend` (returns zero).
-- `internal/cli/spend.go`: `newSpendCommand(newReport, now, jsonOut)`, Use/Short/Long/Example verbatim, `Args: noArgs`, RunE returns nil. Registered in `root.go`; the `newReport`, `now` and `jsonOut` params are unused for now. Root doc and `Env` doc still to update in V.
-- `internal/cli/run.go`: `Env.Now`; `cmd/quarry/run.go`: `defaultEnv` sets `time.Now`.
-- Updated: `run_status_test.go` (Available Commands gains `spend`), `run_usage_test.go` (U9 `spending`).
+- `internal/report/spending.go`: `DefaultWindow` (`now.Date()` in now's zone, UTC-midnight days), `Spend` (DefaultWindow -> `store.Spending` with `SpendByCategory` -> `readRefusal(ctx, "spend", err)`).
+- `internal/store/duckstore/spending.go`: `Spending` is one statement, `GROUPING SETS ((category, currency), (currency))` over `v_spending`. Since and until bind as `YYYY-MM-DD` text through `CAST(? AS DATE)`. HAVING drops zero-net detail rows and keeps every total. `ErrUnsupportedGrouping` (exported sentinel, err113) is returned for any other `By`, before the store is opened. `AccountIDs` is still unread (SCENARIO-14).
+- Tests: `internal/report/spending_test.go` (new), `refusal_test.go` (spend rows: refusal copy, interrupt), `internal/store/duckstore/spending_test.go` (new: 5 behaviours + open/query/scan faults, close, missing store), `views_test.go` (`splitSpec.date` added, zero = 2026-03-15).
+- Fakes: `internal/report/fakes_test.go` `fakeStore.spending` + `gotSpending *store.SpendingParams`; `internal/cli/fakes_test.go` `fakeReportStore.spending` + `gotSpending` (B2 uses both).
 
-Do not redo: the acceptance tests build expected text with `%-15s  %-8s  %8s` row formats from the fixture's own cells. The non-UTC clock is 2026-09-29 22:00 at UTC-5, so a UTC read would include the 2026-09-30 row.
-Next (B1): step 3 (`DefaultWindow`), 4 (duckstore query + fakes), 5 (`Spend`). Lint/vet not run yet (`go vet ./...` clean).
+Mutations (all red, then restored byte-identical): until `<=`->`<` and since `>=`->`>` both redden `Test_spending_counts_the_windows_first_and_last_day_only` (actual 200 / 400 vs 600); `now.Date()`->`now.UTC().Date()` reddens both subtests of `Test_default_window_runs_from_january_first_to_today_in_the_instants_own_zone`.
+
+Next (B2): step 6 (cli `spend.go` RunE, `render_spend.go`, render/cli tests, R1/I1/U8 rows in cmd tests). Then V. Lint was run for report and store only.

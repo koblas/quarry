@@ -40,7 +40,7 @@ func reportRows() store.Rows {
 }
 
 // splitSpec is one split and the transaction carrying it; account defaults to
-// acctInReports and currency to CAD.
+// acctInReports, currency to CAD and date to 2026-03-15.
 type splitSpec struct {
 	id       string
 	account  string
@@ -49,6 +49,7 @@ type splitSpec struct {
 	amount   int64
 	excluded bool
 	payee    *string
+	date     time.Time
 }
 
 func addSplit(rows *store.Rows, spec splitSpec) {
@@ -60,9 +61,13 @@ func addSplit(rows *store.Rows, spec splitSpec) {
 	if currency == "" {
 		currency = "CAD"
 	}
+	date := spec.date
+	if date.IsZero() {
+		date = time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	}
 	rows.Transactions = append(rows.Transactions, store.Transaction{
 		ID: "txn-" + spec.id, SourceID: int64(len(rows.Transactions) + 1), AccountID: account,
-		Date: time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC), PayeeID: spec.payee,
+		Date: date, PayeeID: spec.payee,
 		Amount: spec.amount, Currency: currency, Status: "uncleared", ExcludedFromReports: spec.excluded,
 	})
 	rows.Splits = append(rows.Splits, store.Split{

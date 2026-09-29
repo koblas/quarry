@@ -7,24 +7,30 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// fakeReportStore answers Accounts and Query with a canned result or fault, Query recording its query
-// and maxRows in *gotQuery and *gotMaxRows when set; Status panics through the nil embedded interface.
+// fakeReportStore answers Accounts, Spending and Query with a canned result or fault, Query recording
+// its query and maxRows in *gotQuery and *gotMaxRows, Spending its params in *gotSpending, when set;
+// Status panics through the nil embedded interface.
 type fakeReportStore struct {
 	report.Store
 
-	accounts   store.AccountList
-	result     store.QueryResult
-	gotQuery   *string
-	gotMaxRows *int
-	err        error
+	accounts    store.AccountList
+	spending    store.Spending
+	result      store.QueryResult
+	gotQuery    *string
+	gotMaxRows  *int
+	gotSpending *store.SpendingParams
+	err         error
 }
 
 func (f fakeReportStore) Accounts(context.Context) (store.AccountList, error) {
 	return f.accounts, f.err
 }
 
-func (f fakeReportStore) Spending(context.Context, store.SpendingParams) (store.Spending, error) {
-	return store.Spending{}, nil
+func (f fakeReportStore) Spending(_ context.Context, params store.SpendingParams) (store.Spending, error) {
+	if f.gotSpending != nil {
+		*f.gotSpending = params
+	}
+	return f.spending, f.err
 }
 
 func (f fakeReportStore) Query(_ context.Context, query string, maxRows int) (store.QueryResult, error) {
