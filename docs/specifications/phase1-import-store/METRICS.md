@@ -14,6 +14,7 @@
 | SCENARIO-14 (+13) | test-first | 0/0/3/1 | no (MINORs → STATE.md) |
 | SCENARIO-20 | test-first | 0/2/2/1 | yes |
 | SCENARIO-03 (+16) | code-first | 3/1/0/0 | yes |
+| SCENARIO-15 (+17) | code-first (acceptance test written after code; red reconstructed) | 0/3/7/0 | yes |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Verdict |
