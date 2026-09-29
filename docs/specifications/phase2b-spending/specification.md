@@ -507,7 +507,7 @@ Scenario: SCENARIO-26 — accounts marks accounts Quicken leaves out of reports
 - [x] SCENARIO-08: v_spending nets refunds against their category — delivered by SCENARIO-06 — `cmd/quarry/run_sql_views_test.go` `Test_run_sql_spending_nets_refunds_against_their_category`
 - [x] SCENARIO-09: spend shows this year's spending by category in each currency — `cmd/quarry/run_spend_test.go` `Test_run_spend_shows_this_years_spending_by_category_in_each_currency`
 - [x] SCENARIO-10: spend groups by payee — `cmd/quarry/run_spend_by_test.go` `Test_run_spend_by_payee_groups_spending_by_payee_and_currency_biggest_first`
-- [ ] SCENARIO-11: spend groups by tag and warns about multi-tagged splits
+- [x] SCENARIO-11: spend groups by tag and warns about multi-tagged splits — `cmd/quarry/run_spend_by_test.go` `Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_total_and_warns`
 - [ ] SCENARIO-12: spend groups by month and fills empty months
 - [ ] SCENARIO-13: spend counts the whole period it is given
 - [ ] SCENARIO-14: spend counts only the accounts it is given

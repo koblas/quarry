@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-11
-status: open
+status: done
 ---
 
 # SCENARIO-11: spend groups by tag and warns about multi-tagged splits
@@ -29,10 +29,10 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report untouched; store types
 - [x] Step 5: `internal/cli/spend.go:116-139`, `internal/cli/json_spend.go:219-248` — `spendWarnings(spending)` returns `[]string{}` or the one W1 line (`> 0` only), passed to both `renderSpendingJSON(spending, warnings)` (replaces the literal `[]string{}` at :237) and `emit`; `spendTagRowDocument{Tag *string "tag"; Currency; Spent}` chosen in `spendRowDocumentFor` (:243, becomes a switch). Update `spend_test.go:68` refusal list: drop `"tag"` (`month` stays). Tests (fake store `MultiTagSplits`, `internal/cli/fakes_test.go` needs no change): text `Tag` header and `(no tag)` label; JSON `tag` key null + `warnings[]` unprefixed + `by":"tag"`; `Test_spend_by_tag_warns_with_the_singular_phrase_for_one_split` (1), plural with thousands (`1,234 splits carry`), `Test_spend_by_tag_prints_no_warning_when_no_split_has_two_tags` (0: stderr empty, `warnings: []`), `Test_spend_by_tag_writes_no_warning_when_stdout_fails` (failing writer + count > 0: stderr empty, error is the stdout-write refusal), `--by category` with a count set prints no warning.
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `SpendByTag`, `MultiTagSplits`, `spendWarnings`; the `Spend` Long text (`spend.go:109-110`) already states the multi-tag rule and stays verbatim.
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `SpendByTag`, `MultiTagSplits`, `spendWarnings`; the `Spend` Long text (`spend.go:109-110`) already states the multi-tag rule and stays verbatim.
 
 ### Verify
-- [ ] Step 7: full verification block + `spec-check.py phase2b-spending`; tick SCENARIO-11 with its acceptance test; rewrite STATE.md (SCENARIO-12 adds `SpendByMonth` the same way; `Left unbuilt` drops `SpendByTag`).
+- [x] Step 7: full verification block + `spec-check.py phase2b-spending`; tick SCENARIO-11 with its acceptance test; rewrite STATE.md (SCENARIO-12 adds `SpendByMonth` the same way; `Left unbuilt` drops `SpendByTag`).
 
 ## Handoff
 
@@ -50,12 +50,9 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report untouched; store types
 
 ## Phase report
 
-Run B2 (step 5) done; acceptance test `Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_total_and_warns` now green (was red only at the W1 stderr assertion). Remaining: run V (Sweep step 6, Verify step 7: full covered suite, `uncovered-diff.py`, `test-stats.py`, `spec-check.py`, tick spec, STATE.md rewrite).
+Run V done; scenario complete (`status: done`). No production or test code changed in V.
 
-Files:
-- `internal/cli/spend.go` `spendWarnings(report.Spending) []string` (W1 only when `By == SpendByTag && MultiTagSplits > 0`, composed with `humanize.Count`); `RunE` builds `warnings` once, passes it to `renderSpendingJSON(spending, warnings)` and `emit`.
-- `internal/cli/json_spend.go` `renderSpendingJSON(s, warnings)` (was one arg), `spendTagRowDocument{tag,currency,spent}`, `spendRowDocumentFor` now a switch (payee/tag; category is the trailing return, `exhaustive` is satisfied by the empty `case store.SpendByCategory:`). SCENARIO-12 adds a month case.
-- `internal/cli/json_spend_internal_test.go`: callers pass `[]string{}`.
-- `internal/cli/spend_tag_test.go` (new, 7 tests): text `Tag`/`(no tag)`, JSON tag key + unprefixed warning, singular, thousands, zero, stdout-failure, category-with-count. The refusal list in `spend_test.go` already lacked `"tag"`.
-- Mutations run, each reddened: `>0`->`>=0` (no-warning test), singular dropped (singular test), `By == tag` guard dropped (category test), warning before stdout in `emit` (stdout-fails tests, including accounts/sql siblings), tag row as category struct and `warnings` dropped from JSON (JSON test), warnings not emitted (three stderr tests).
-- `go build ./...` and `golangci-lint run ./...`: `0 issues`. Narrow tests green for `./internal/cli ./internal/report ./cmd/quarry`.
+- `go build ./...` ok; `golangci-lint run ./...` `0 issues`, exit 0. Doc comments on `SpendByTag`, `MultiTagSplits`, `spendWarnings` already present.
+- Covered full suite (`go test -count=1 -coverpkg=./... -coverprofile`): all 15 packages ok, exit 0. `uncovered-diff.py --profile <cover> 32d74b5`: `0 uncovered added line(s) in 0 run(s)`. `go test -race` on duckstore, cli, cmd/quarry, report: ok.
+- `test-stats.py --base 32d74b5 --changed`: cmd/quarry 109 (+1), internal/cli 78 (+7), internal/store/duckstore 132 (+14), TOTAL 319 (+22) tests, tempdir 164 (+1), disk 145 (+1).
+- Spec SCENARIO-11 ticked with its acceptance test; `spec-check.py phase2b-spending` OK. STATE.md rewritten.
