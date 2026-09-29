@@ -521,5 +521,5 @@ Scenario: SCENARIO-26 — accounts marks accounts Quicken leaves out of reports
 - [ ] SCENARIO-22: cashflow --json returns cash flow as a document
 - [ ] SCENARIO-23: cashflow's spending equals spend's total
 - [ ] SCENARIO-24: cashflow refuses and reports empty periods like spend
-- [ ] SCENARIO-25: accounts marks its all-closed note as a warning
-- [ ] SCENARIO-26: accounts marks accounts Quicken leaves out of reports
+- [x] SCENARIO-25: accounts marks its all-closed note as a warning — delivered by SCENARIO-26 — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_says_how_to_list_them_when_every_account_is_closed`
+- [x] SCENARIO-26: accounts marks accounts Quicken leaves out of reports — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_all_marks_accounts_left_out_of_reports`

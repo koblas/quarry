@@ -1,6 +1,6 @@
 # phase2b-spending — current state
 
-Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01). Last updated by SCENARIO-01.
+Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-25..26 (25 folded into 26). Last updated by SCENARIO-26.
 
 ## Binding decisions
 - Store columns (all appended LAST in their table; the build Appender is positional): `accounts.in_reports BOOLEAN NOT NULL` (`store.Account.NotInReports`, writer inverts, zero value = in reports), `transactions.excluded_from_reports BOOLEAN NOT NULL` (`store.Transaction.ExcludedFromReports`), `transactions.posted_date DATE` nullable (`store.Transaction.PostedDate *time.Time`, set whenever Quicken has a posted date, even equal to `date`). (SCENARIO-01)
@@ -12,10 +12,10 @@ Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01). Last updated by
 - Read-command shape: `openReport` -> store call -> `renderResult` -> `emit` (`internal/cli/output.go`); `report.Store` port gets one method per read, implemented by `*duckstore.Store`, `fakeStore` (`internal/report/fakes_test.go`), `fakeReportStore` (`internal/cli/fakes_test.go`); `(*Server).readRefusal` for I1/R1-R3; `noArgs` for no-positional commands; U9 via `ExecuteC`; H1 via `resolveHome(command)`; `warnings` always `[]`; absolute paths in `--json`; `marshalDocument` is the one encoder. Reads open through `openRead`, format check via `duckdb_columns()`; a session setting goes in the read DSN, never a post-open `SET`. (2a S02, S07, S15, S18)
 - Native currency only; group per currency, never sum CAD+USD. Cents: SUM(DECIMAL(18,2)) is DECIMAL(38,2), cast to BIGINT cents in SQL. (2a S04)
 - Investment accounts have NULL balance via the one predicate `store.IsInvestmentAccount`; `v_account_balances` filters `date <= current_date` in the JOIN. (2a S04)
-- Warning prefix (P2b-14): every `warnings[]`-bearing stderr line uses `quarry: warning: `; 2a's accounts all-closed note changes accordingly (its `warnings[]` text unchanged). (spec)
+- Warning prefix (P2b-14): every `warnings[]`-bearing stderr line uses `quarry: warning: `; accounts' all-closed note now does (its `warnings[]` text unchanged); each new warning line of a later scenario follows suit. (spec, SCENARIO-26)
+- `(*duckstore.Store).Accounts` reads `NotInReports` by joining `accounts a ON a.id = v.id`; `v_account_balances` is a queryable contract and was NOT widened. Accounts Status = `closed`/`inactive`/`not in reports` joined by `, `; `--json` account rows carry `in_reports` after `active`. SCENARIO-06's views read `a.in_reports` themselves. (SCENARIO-26)
 
 ## Left unbuilt
-- `in_reports` in `(*duckstore.Store).Accounts` / `v_account_balances`, accounts Status + `--json` `in_reports` — run 2 (SCENARIO-26).
 - `v_cash_flow`, `v_spending`, their `storeRelations()` entries and `minimalRows` rows — run 3 (SCENARIO-06).
 
 ## Traps
@@ -30,5 +30,5 @@ Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01). Last updated by
 ## Open debts
 - MINOR (01 checkpoint): `internal/store/duckstore/duckstore.go:24` — nothing pins `FormatVersion` to literal 3 (all tests compare to the constant). Owner: SCENARIO-09's plan (delivers folded SCENARIO-05) builds a store with literal `format_version = 2` for the R2 test, or asserts `FormatVersion == 3` once.
 - Gate "matches Quicken reports over 2 years" is carried by 2b (spec) — owned by the spend scenarios.
-- 2a debts still open and unowned - die unless re-opened: `sql.go` Long blank lines/wrap NIT (fold into the next sql.go edit), HOME with trailing slash prints absolute paths, `run_status_json_test.go:1` header, `balancesPhrase` three bare ints, duckstore fault-test copy-paste (`docs/specifications/phase2a-read-foundation/STATE.md`).
+- 2a debts still open and unowned - die unless re-opened: HOME with trailing slash prints absolute paths, `run_status_json_test.go:1` header, `balancesPhrase` three bare ints, duckstore fault-test copy-paste (`docs/specifications/phase2a-read-foundation/STATE.md`).
 - Snapshots accumulate (~200 MB each) until 2c.
