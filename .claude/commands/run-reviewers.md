@@ -78,7 +78,9 @@ overrides). Skip reviewers with no matching files.
 Spawn all matching reviewers in a **single message** via `Agent`:
 
 ```
-Agent(subagent_type="<name>", prompt="Review <commit range, or the listed paths>. Read
+Agent(subagent_type="<name>", prompt="<pipeline mode only — run: review feature: <slug> unit: -
+(CLAUDE.md → *Run tags*)>
+Review <commit range, or the listed paths>. Read
 .claude/briefs/review.md first<, and .claude/briefs/proof.md — only for test-reviewer and
 correctness-reviewer><, and .claude/briefs/navigation.md — only for arch-reviewer and
 correctness-reviewer>. Scope: <the matched files, listed>. Start from the diff
