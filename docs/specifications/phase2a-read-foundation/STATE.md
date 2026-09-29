@@ -60,6 +60,8 @@ Scenarios complete: SCENARIO-01..10, 12, 15 (05 folded into 04, 06 into 07; 10 i
 - `uncovered-diff.py` is blind to untracked files: `git add` before running it. `cmd/quarry`'s test binary links DuckDB (linux-small CI OOM history). `internal/platform/duckdb`'s mid-iteration ctx-cancel test flakes under full-suite load. (Phase 1)
 
 ## Open debts
+- MINOR (09 checkpoint, doc budgets): `internal/cli/json_sql.go:53-57` `jsonSQLCell` (5→≤2), `json_sql.go:29-31` `renderSQLJSON` and `sql.go:16-18` `newSQLCommand` (3→2).
+- MINOR (09 checkpoint): `internal/cli/sql_test.go:~192-197` `Test_sql_says_when_it_cuts_the_rows` computes args/wantStderr with loops — table field `wantStderr`, inline `append`.
 - MINOR (08 checkpoint, doc budgets): `internal/platform/duckdb/text.go` `cellValue`:34, `nativeValue`:48, `floatText`:116, `nestedText`:368, `needsQuotes`:386 (3→≤2), `nestedSpecial`:30 (→1); `typename.go:68` `parseTypeName` (4→≤2); `internal/cli/render_sql.go:121` `renderSQLTable` (3→≤2).
 - Snapshots accumulate (~200 MB each) until 2c - known gap, owned by Phase 2c.
 - Phase 1 doc-budget MINORs, TOCTOU on `--from`, Compose-method refactors and the other Phase 1 debts (`docs/specifications/phase1-import-store/STATE.md`) - unowned - die unless re-opened.

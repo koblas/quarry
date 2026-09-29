@@ -11,6 +11,7 @@
 | SCENARIO-08 | code-first | 0/0/3/1 | no (MINORs → STATE.md) |
 | SCENARIO-12 (+13, 14, 20) | test-first | 0/0/3/0 | no (MINORs → STATE.md) |
 | SCENARIO-15 (+16, 17) | code-first | 0/1/3/1 | yes |
+| SCENARIO-09 (+10) | code-first | 0/0/3/0 | no (MINORs → STATE.md) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Verdict |
