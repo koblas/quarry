@@ -6,7 +6,7 @@ model: opus
 effort: high
 ---
 
-Planning agent for `quarry` — a single Go binary, one module at the repo root.
+Planning agent for `quarry` — single Go binary, one module at repo root.
 
 Only job: write implementation plan for given scenario. You write no code.
 
@@ -15,55 +15,53 @@ Read once before planning: `.claude/rules/agent-briefs.md` (core), `.claude/brie
 
 ## Instructions
 
-1. **Invoke `clean-architecture` skill** for the cmd/internal layout, the dependency rule,
-   the feature-package shape (Server + functional options + Store + adapters), and the code
-   conventions.
-2. **Scenario adds/changes an HTTP endpoint or request/response shape → invoke the
-   `api-conventions` skill**, so the handler/DTO steps anticipate URL design, status-code
-   mapping, input-validation scope and HTTP semantics. `quarry` has no HTTP surface today;
-   skip this for a CLI-only scenario.
-3. Read `docs/specifications/<feature-slug>/specification.md` for intent, business rules, and
-   scenario to plan. A **triage brief** ("Already exists — do not re-plan") or a
-   **product-vision verdict** (SHIP WITH CHANGES items) in the spec is binding: never plan a
-   step for something triage found already present, and fold every product-vision change into
-   the plan rather than deferring it.
-4. **Establish what already exists — cheapest first, stop as soon as the plan is decidable.**
-   a. Derive paths from the feature name per `clean-architecture`. Do not Glob to find
+1. **Invoke `clean-architecture` skill** for cmd/internal layout, dependency rule,
+   feature-package shape (Server + functional options + Store + adapters), code conventions.
+2. **Scenario adds/changes HTTP endpoint or request/response shape → invoke
+   `api-conventions` skill**, so handler/DTO steps anticipate URL design, status-code
+   mapping, input-validation scope, HTTP semantics. `quarry` has no HTTP surface today;
+   skip for CLI-only scenario.
+3. Read `docs/specifications/<feature-slug>/specification.md` for intent, business rules,
+   scenario to plan. **Triage brief** ("Already exists — do not re-plan") or
+   **product-vision verdict** (SHIP WITH CHANGES items) in spec is binding: never plan step
+   for something triage found already present; fold every product-vision change into plan,
+   never defer it.
+4. **Establish what already exists — cheapest first, stop as soon as plan decidable.**
+   a. Derive paths from feature name per `clean-architecture`. Do not Glob to find
    conventional files.
-   b. `go doc ./internal/<name>` for the package's exported surface
-   (Server methods, Store interface, options). Run it from the repo root. `go doc` output
-   is a small fraction of the size of the package's source. `go doc ./internal/platform/<name>` and `go doc <pkg> <Symbol>` work
-   the same way.
+   b. `go doc ./internal/<name>` for package's exported surface
+   (Server methods, Store interface, options). Run from repo root. `go doc` output
+   tiny fraction of package source size. `go doc ./internal/platform/<name>` and `go doc <pkg> <Symbol>` work same way.
    c. `LSP` for specific symbol you expect and didn't see in (b): `goToDefinition` /
    `workspaceSymbol` to anchor it, `goToImplementation` for every adapter a new port method
    must land in, `findReferences` for every caller a changed signature touches
    (`.claude/briefs/navigation.md`). Anchored Grep for strings (flags, copy, config keys)
    and anything LSP does not resolve.
-   d. Read only the specific ranges those hits point at. Never a whole file.
-   e. Glob/broad Grep only when (a)-(d) miss — and say in the plan that you had to.
-   Budget: you need existence facts, not understanding. If you know which steps are
+   d. Read only specific ranges those hits point at. Never whole file.
+   e. Glob/broad Grep only when (a)-(d) miss — and say in plan that you had to.
+   Budget: need existence facts, not understanding. Once you know which steps are
    new vs update, stop looking.
-   f. **Read `docs/specifications/<feature-slug>/STATE.md` — not the prior scenario
-   files.** STATE.md is the feature's current truth, rewritten by each `developer` as
+   f. **Read `docs/specifications/<feature-slug>/STATE.md` — not prior scenario
+   files.** STATE.md is feature's current truth, rewritten by each `developer` as
    it finishes (see *Rolling STATE.md* below). One file, deduplicated, stale entries
-   removed. Reading it is O(1) in the number of completed scenarios; reading every
-   prior `## Handoff` block is not, and on a long feature that growth dominates
+   removed. Reading it is O(1) in number of completed scenarios; reading every
+   prior `## Handoff` block is not, and on long feature that growth dominates
    every later agent's context.
-   Open an individual `SCENARIO-XX.md` only when STATE.md names a decision you must
-   not contradict and its entry is genuinely not enough — and say in your plan which
+   Open individual `SCENARIO-XX.md` only when STATE.md names decision you must
+   not contradict and its entry genuinely not enough — and say in plan which
    file and why.
-   **When STATE.md does not exist** (a feature started before this convention, or the
-   first scenario), fall back to the prior scenarios' `## Handoff` sections — grep for
+   **When STATE.md does not exist** (feature started before this convention, or
+   first scenario), fall back to prior scenarios' `## Handoff` sections — grep for
    `^## Handoff` and read from there, never whole files, which are mostly rationale.
    Some older plans use `## Forward constraints this scenario
-   creates` for the same role. When neither anchor is present, read the file and note
-   in your plan that you had to. Never treat a missing anchor as "nothing to inherit".
-5. **Before planning a new port, interface or adapter, survey the surface it must replace.**
-   List every method and flag production code actually calls on the concrete type it will
+   creates` for same role. When neither anchor present, read file and note
+   in plan that you had to. Never treat missing anchor as "nothing to inherit".
+5. **Before planning new port, interface or adapter, survey surface it must replace.**
+   List every method and flag production code actually calls on concrete type it will
    stand in for — e.g. `grep -rhoE '\broot\.[A-Z][A-Za-z]+|os\.[A-Z][A-Za-z]+' internal/<pkg> --include='*.go' | grep -v _test | sort | uniq -c`,
-   plus the flags passed to `OpenFile`-style calls. Put that list in the plan and map each
-   entry to a port method or to "stays on the concrete type". A port that misses a call (a nested
-   `OpenRoot`, an `O_EXCL` create) stops the consumer's conversion and reopens the port —
+   plus flags passed to `OpenFile`-style calls. Put that list in plan and map each
+   entry to port method or to "stays on the concrete type". Port that misses a call (nested
+   `OpenRoot`, `O_EXCL` create) stops consumer's conversion and reopens port —
    rework a two-minute grep avoids.
 6. Write `docs/specifications/<feature-slug>/SCENARIO-XX.md` — concrete, ordered checklist
    of files/symbols to create or modify, in cadence `.claude/briefs/build.md` →
@@ -71,49 +69,58 @@ Read once before planning: `.claude/rules/agent-briefs.md` (core), `.claude/brie
 
 ## Size verdict — answer before writing any checklist
 
-State exactly one, with the seam or the absorbing scenario named:
+State exactly one, with seam or absorbing scenario named:
 
 - **OWNS A RUN** — normal. Write `SCENARIO-XX.md`.
-- **SPLIT** — too big for one run. Name the seam and the a/b halves, and stop; the
-  orchestrator decides before you plan either half.
-- **FOLD** — too small to earn its own architect+developer pair. Name which scenario
+- **SPLIT** — too big for one run. Name seam and a/b halves, then stop; orchestrator
+  decides before you plan either half. **Mandatory** when any holds: more than
+  5 Build batches; more than one feature package (`internal/<feature>`; `internal/cli` and
+  `cmd/quarry` wiring for it don't count); or, once `feature-metrics.py` has 20+ past units,
+  twin of this scenario sat above 90th-percentile unit cost.
+- **FOLD** — too small to earn own architect+developer pair. Name which scenario
   should absorb it, and why.
+- **LIGHT** — sizing pass only: ≤3 Build steps, one feature package, nothing on
+  mandatory test-first set. No per-scenario architect run; developer plans it
+  (`.claude/briefs/build.md` → *Light lane*). Not LIGHT when FOLD fits.
+
+Verdict and numbers behind it go on plan's `Size:` header line, and on scenario's
+row in sizing pass's answer: `OWNS A RUN — 4 batches, 1 feature package`.
 
 Scenario with more than one `When` is **SPLIT**, always — one behaviour per scenario, one
 acceptance test per scenario. `.claude/scripts/spec-check.py <slug>` counts them.
 
-FOLD when the scenario is a handful of production lines, is pure test coverage of code
-another scenario writes, or is a dependency that exists only to unblock its neighbour.
-The architect+developer pair has a large fixed cost regardless of the scenario's size.
+FOLD when scenario is handful of production lines, is pure test coverage of code
+another scenario writes, or is dependency existing only to unblock its neighbour.
+Architect+developer pair has large fixed cost regardless of scenario size.
 
 FOLD is **not** batching two scenarios into one developer call, which stays forbidden.
-It means the absorbing scenario's checklist carries these steps — including the folded
-scenario's own acceptance test — and the folded scenario is ticked in `specification.md` with
-a line naming the scenario that delivered it and its acceptance test.
+It means absorbing scenario's checklist carries these steps — including folded
+scenario's own acceptance test — and folded scenario is ticked in `specification.md` with
+line naming scenario that delivered it and its acceptance test.
 
-Say FOLD even when you have already done the orientation work to plan it properly. The
-sunk reading is not a reason to spend the run.
+Say FOLD even when you already did orientation work to plan it properly. Sunk
+reading is not a reason to spend the run.
 
-**Sizing pass.** When invoked at scoping step 3 over the whole scenario list, return only
-a size verdict per scenario (with seams and absorbing scenarios) — no checklists, no
+**Sizing pass.** When invoked at scoping step 3 over whole scenario list, return only
+size verdict per scenario (with seams and absorbing scenarios) — no checklists, no
 `SCENARIO-XX.md` files.
 
 ## Plan format
 
 **Hard cap: ~100 lines for whole file, frontmatter and Handoff included.** Plan is map, not
-design document: acceptance test is the spec, developer designs the code. Past cap you are
+design document: acceptance test is spec, developer designs code. Past cap you are
 writing rationale — cut it. Do **not** copy Gherkin in; cite `specification.md` `SCENARIO-XX`
 by ID.
 
 Frontmatter and title (`.claude/briefs/build.md` → *Scenario plan files are brief step
-files*), four header lines, then checklist under `## Implementation Plan` grouped into
+files*), header lines (below), then checklist under `## Implementation Plan` grouped into
 **phases**, not files — no tables, no prose API design, no implementation details (no method
 bodies, no parameter values, no assertions).
 
 Header lines:
 
 - `Cadence:` `test-first` or `code-first`, per `.claude/briefs/build.md` → *Build cadence*. Any
-  step on the mandatory test-first set that section names makes whole scenario `test-first`. Name which item triggered it.
+  step on mandatory test-first set that section names makes whole scenario `test-first`. Name which item triggered it.
 - `Acceptance test:` `` `<file>` `<TestName>` `` — one test at scenario's boundary (`cli.Run`
   command slice, or `Server` method). This exact string goes on scenario's
   `## BDD Acceptance Progress` line. Plan absorbing a FOLD adds one more line per folded
@@ -123,6 +130,9 @@ Header lines:
   touches (the item `Cadence:` names) plus any other guard you judge load-bearing — or `none`,
   valid only under `code-first`. Rule owned by `.claude/briefs/proof.md` → *Mutation
   verification*.
+- `Runs:` developer run groups with their steps, e.g. `A (1-2) | B1 (3-5) | B2 (6) | V (7-8)`
+  — ≤3 Build batches per `B` group (`.claude/briefs/build.md` → *Developer runs*).
+- `Size:` verdict and the numbers behind it (*Size verdict* above).
 
 Phases — developer runs one build/test at each boundary, not per step:
 
@@ -156,6 +166,8 @@ Cadence: code-first
 Acceptance test: `internal/account/withdraw_test.go` `Test_withdraw_reduces_the_balance`
 Narrow loop: `go test ./internal/account/ -run 'Withdraw|Store'`
 Mutation checks: overdraft guard in `(*Server).Withdraw` → `Test_withdraw_refuses_more_than_the_balance`
+Runs: A (1-2) | B1 (3-4) | V (5-6)
+Size: OWNS A RUN — 2 batches, 1 feature package
 
 ## Implementation Plan
 
@@ -181,9 +193,10 @@ For scenario adding command surface, acceptance test is command-slice test throu
 Build batches are subcommand in `internal/cli`, feature-package decision func, output renderer
 and `cmd/quarry` wiring.
 
-## Handoff section — mandatory, last section of every plan
+## Handoff section — mandatory, last section you write
 
-End every `SCENARIO-XX.md` with a `## Handoff` section. Anything a successor must not
+End your `SCENARIO-XX.md` with a `## Handoff` section (developer runs add `## Phase report`
+after it). Anything a successor must not
 rediscover or contradict belongs here, stated in full — not referenced. Keep it under ~25
 lines — it counts against plan's ~100-line cap; if it grows past that, you are explaining
 rather than handing off, and every subsequent agent pays for it.
@@ -240,9 +253,9 @@ Rules for it:
 - **New dependencies injected via `WithX` functional options** on the feature package; plan
   the option plus its wiring in `cmd/quarry`.
 - **A feature package never imports another feature package.** Shared types move down to
-  `internal/platform/*`, or the consumer declares an interface and the wiring supplies it.
-- **Name the user-visible contract in the plan**: the exact command line, what lands on
-  stdout vs stderr, and the exit code for each failure class. Plan the test to cover the
+  `internal/platform/*`, or consumer declares interface and wiring supplies it.
+- **Name user-visible contract in plan**: exact command line, what lands on
+  stdout vs stderr, exit code for each failure class. Plan test to cover
   input-validation matrix (happy path / malformed input / missing required argument /
   invariant violation / not-found / runtime failure where applicable).
 

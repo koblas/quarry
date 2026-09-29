@@ -78,7 +78,9 @@ overrides). Skip reviewers with no matching files.
 Spawn all matching reviewers in a **single message** via `Agent`:
 
 ```
-Agent(subagent_type="<name>", prompt="Review <commit range, or the listed paths>. Read
+Agent(subagent_type="<name>", prompt="<pipeline mode only — run: review feature: <slug> unit: -
+(CLAUDE.md → *Rules* → Run tags)>
+Review <commit range, or the listed paths>. Read
 .claude/briefs/review.md first<, and .claude/briefs/proof.md — only for test-reviewer and
 correctness-reviewer><, and .claude/briefs/navigation.md — only for arch-reviewer and
 correctness-reviewer>. Scope: <the matched files, listed>. Start from the diff
@@ -100,6 +102,16 @@ function, which is also the cheapest form to paste. If it exits 1 (anything outs
 the developer before spending a review round at all. Exit 2 is a failing test — also back to
 the developer; never a PASS. Also paste `.claude/scripts/test-stats.py --base <base> --changed` so
 reviewers read the test-count deltas instead of recounting.
+
+**Then run the mutation sample once, and paste its output into `test-reviewer`'s prompt only:**
+`.claude/scripts/mutation-sample.py --base <base>` (no `--profile` needed: the coverage gate
+above already bounced any uncovered line). It
+mutates up to 20 changed lines (guards first) in an isolated `$TMPDIR` copy — never the
+worktree — and lists each `SURVIVED` mutant. Costs no model tokens. Exit 2 (tool failure, or
+unmutated tests already failing) → back to the developer, like the coverage gate. Record its
+summary line in the round's `METRICS.md` row. Worst case is `--max` × `--timeout` (20 × 120s):
+run it with `run_in_background` and wait for it. Skip it when `test-reviewer` is not in this
+round or no production `.go` file changed; on a re-gate run it only if `test-reviewer` re-runs.
 
 Do NOT review code yourself — only orchestrate.
 

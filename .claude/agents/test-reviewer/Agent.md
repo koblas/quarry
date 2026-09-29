@@ -25,14 +25,16 @@ questions — skip the full procedure below:
 1. Does the acceptance test named on the scenario's `## BDD Acceptance Progress` line exist,
    sit at scenario's boundary (`cli.Run` command slice or `Server` method), and assert the
    scenario's `Then` — so it could not pass without the scenario's production code?
-2. Does every test the plan's `### Build` steps name exist?
+2. Does every test the plan's `### Build` steps name exist, and is every `- [ ]` under
+   `## Implementation Plan` ticked?
 3. Are `.claude/briefs/build.md` → *Planning* items present for this diff: one fault test per
    fallible call, every numeric bound just outside, every error-mapper fallback, one
    decode-fault test per decoded record kind?
 4. Does the diff touch only what the plan's steps name? Production file, behaviour or public
-   symbol no step names is scope creep — name it, and whether a later scenario owns it.
+   symbol no step names is scope creep — name it, and whether a later scenario owns it. Plan
+   with `Size: LIGHT` was written by developer itself: judge scope against spec's scenario.
 5. Does `.claude/scripts/uncovered-diff.py` report zero open runs for the range? Use the
-   output the prompt carries (developer's Verify run); only when missing, run
+   output the prompt carries (run `V`'s Verify); only when missing, run
    `uncovered-diff.py <start>` yourself (full suite — never a narrowed PKG list). Each open
    run is MAJOR — a `(no coverage block)` row too: no test links that file's package.
    Judge each "declared unreachable" reason as in *Review procedure*. Exit 2 (stale profile,
@@ -58,6 +60,13 @@ developer's `// unreachable:` reason: judge the reason; a branch you can reach w
 constructible input is a MAJOR, not an exemption. That mechanical pass replaces hunting for untested branches by eye;
 spend the reading budget on what coverage cannot see: assertions that prove nothing, missing
 control arms, corner cases a covered line still gets wrong.
+
+**Then the mutation sample** (`.claude/scripts/mutation-sample.py` output, in your prompt on a
+gate round). Each `SURVIVED [guard]` row is a guard no test pins: MAJOR unless you show the
+mutant is equivalent (same behaviour for every input) — say why in one line. `SURVIVED [line]`
+rows: judge the same way, MINOR if the line carries no decision. Survivors are where to spend
+reading first; do not re-run the script or mutate the worktree. `TIMED OUT` rows are
+unchecked, not killed — say so.
 
 For each test file under review:
 

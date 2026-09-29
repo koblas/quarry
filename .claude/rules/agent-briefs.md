@@ -4,7 +4,7 @@ Standing brief every `architect`/`developer`/reviewer prompt would otherwise ret
 
 | File | Read by |
 | --- | --- |
-| `.claude/briefs/build.md` — build cadence (double loop), scenario traceability, step-file format, planning coverage, fix passes | architect, developer, checkpoint reviewers, orchestrator writing fix-pass brief |
+| `.claude/briefs/build.md` — build cadence (double loop), edit hook, scenario traceability, step-file format, developer runs and light lane, planning coverage, fix passes | architect, developer, checkpoint reviewers, orchestrator writing fix-pass brief |
 | `.claude/briefs/proof.md` — mutation verification, assertions that prove nothing | developer, test / correctness reviewers; architect when plan names mutation check |
 | `.claude/briefs/navigation.md` — Go navigation with `LSP` tool (gopls) | triage, architect, developer, arch / correctness reviewers |
 | `.claude/briefs/review.md` — reviewing: scope and completeness | every reviewer |

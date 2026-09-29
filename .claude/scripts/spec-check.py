@@ -10,11 +10,14 @@ For the named feature (docs/specifications/<slug>/specification.md):
         - [x] SCENARIO-04: Title — `internal/scaffold/finish_test.go` `Test_does_the_thing`
   3. The named test exists: `func <Name>(` in that file (a `Test_a/sub` name checks the
      top-level func and the subtest string).
+  4. With --run: the named test also PASSES — `go test -run '^Name$'` (subtest levels anchored
+     the same way) in the test file's package. A tick whose test fails, or matches nothing,
+     is a problem. Go's test cache is used, so an unchanged package costs nothing.
 
 Only specs carrying the `<!-- spec-check: v1 -->` marker are enforced; an unmarked
 (pre-convention) spec is reported as not opted in and passes, unless --force.
 
-Usage (from anywhere in the repo):  .claude/scripts/spec-check.py [--force] <feature-slug> [...]
+Usage (from anywhere in the repo):  .claude/scripts/spec-check.py [--force] [--run] <feature-slug> [...]
 Exit status is non-zero if any check fails.
 """
 
@@ -84,7 +87,21 @@ def go_test_exists(src: str, name: str) -> bool:
     return not sub or f'"{sub}"' in src
 
 
-def check(root: Path, slug: str, force: bool) -> list[str]:
+def run_test(root: Path, path: str, name: str) -> str | None:
+    """Run one acceptance test; return a problem string, or None when it passed."""
+    pattern = "/".join(f"^{re.escape(level)}$" for level in name.split("/"))
+    pkg = "./" + str(Path(path).parent)
+    p = subprocess.run(["go", "test", "-run", pattern, "-v", pkg], cwd=root,
+                       capture_output=True, text=True)
+    if p.returncode != 0:
+        tail = "; ".join(l.strip() for l in p.stdout.splitlines() if "FAIL" in l or "Error" in l)[:300]
+        return f"acceptance test `{name}` fails ({tail or 'go test exit ' + str(p.returncode)})"
+    if f"--- PASS: {name.split('/')[0]}" not in p.stdout:
+        return f"acceptance test `{name}` ran nothing in {pkg} (-run {pattern})"
+    return None
+
+
+def check(root: Path, slug: str, force: bool, run: bool = False) -> list[str]:
     spec = root / "docs" / "specifications" / slug / "specification.md"
     if not spec.is_file():
         return [f"{slug}: no specification at {spec.relative_to(root)}"]
@@ -121,6 +138,9 @@ def check(root: Path, slug: str, force: bool) -> list[str]:
         src = test_file.read_text()
         if not go_test_exists(src, name):
             problems.append(f"{slug} {sid}: `{name}` not found in {path}")
+            continue
+        if run and (failure := run_test(root, path, name)):
+            problems.append(f"{slug} {sid}: {failure}")
     return problems
 
 
@@ -128,9 +148,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("slugs", nargs="+", metavar="feature-slug")
     ap.add_argument("--force", action="store_true", help="check a spec without the opt-in marker")
+    ap.add_argument("--run", action="store_true", help="also run each ticked acceptance test")
     args = ap.parse_args()
     root = repo_root()
-    problems = [p for slug in args.slugs for p in check(root, slug, args.force)]
+    problems = [p for slug in args.slugs for p in check(root, slug, args.force, args.run)]
     for p in problems:
         print(p)
     if problems:

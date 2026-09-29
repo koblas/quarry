@@ -95,7 +95,7 @@ rather than one scenario per row — still one `When`.
 ## Phase 3: SoT Creation
 
 On approval, first run **one `architect` sizing pass** over the whole approved scenario list —
-a size verdict per scenario (OWNS A RUN / SPLIT with seam / FOLD into named neighbour), no
+a size verdict per scenario (OWNS A RUN / SPLIT with seam / FOLD into named neighbour / LIGHT), no
 checklists. Apply its merges and splits to the scenario list, then create
 `docs/specifications/<feature-slug>/` and write the specification inside it. A merge or split
 changes scenario boundaries, not behaviour; if one would change what a scenario asserts, put it
@@ -154,6 +154,11 @@ a line nobody ruled on — the final pass will send it back.>
 <Approved scenarios from Phase 2>
 
 ---
+
+## Sizing
+| Scenario | Verdict (OWNS A RUN / LIGHT) — numbers |
+| --- | --- |
+| SCENARIO-01 | OWNS A RUN — 4 batches, 1 feature package |
 
 ## BDD Acceptance Progress
 - [ ] SCENARIO-01: <Title>
