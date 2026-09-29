@@ -20,14 +20,14 @@ func spendWindow() store.Window {
 }
 
 func Test_renderSpendingJSON_writes_a_null_key_for_uncategorized_and_a_signed_amount_for_a_refund(t *testing.T) {
-	found := store.Spending{
-		Rows: []store.SpendingRow{
+	s := report.Spending{
+		Rows: []report.SpendingRow{
 			{Key: nil, Currency: "CAD", Spent: 4208},
 			{Key: new("Auto:Fuel"), Currency: "CAD", Spent: -1500},
 		},
 		Totals: []store.SpendingTotal{{Currency: "CAD", Spent: 2708}},
+		Window: spendWindow(),
 	}
-	s := report.Spending{Spending: found, Window: spendWindow()}
 
 	got, err := renderSpendingJSON(s, []string{})
 
@@ -62,14 +62,15 @@ func Test_renderSpendingJSON_writes_a_null_key_for_uncategorized_and_a_signed_am
 }
 
 func Test_renderSpendingJSON_names_the_row_key_and_by_for_the_payee_grouping(t *testing.T) {
-	found := store.Spending{
-		Rows: []store.SpendingRow{
+	s := report.Spending{
+		Rows: []report.SpendingRow{
 			{Key: new("Costco"), Currency: "CAD", Spent: 30000},
 			{Key: nil, Currency: "CAD", Spent: 4208},
 		},
 		Totals: []store.SpendingTotal{{Currency: "CAD", Spent: 34208}},
+		Window: spendWindow(),
+		By:     store.SpendByPayee,
 	}
-	s := report.Spending{Spending: found, Window: spendWindow(), By: store.SpendByPayee}
 
 	got, err := renderSpendingJSON(s, []string{})
 

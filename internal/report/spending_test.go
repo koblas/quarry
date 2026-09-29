@@ -49,7 +49,11 @@ func Test_spend_reads_the_requested_window_by_category(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, store.SpendingParams{Window: window, By: store.SpendByCategory}, got)
-	assert.Equal(t, report.Spending{Spending: spending, Window: window}, result)
+	assert.Equal(t, report.Spending{
+		Rows:   []report.SpendingRow{{SpendingRow: spending.Rows[0]}},
+		Totals: spending.Totals,
+		Window: window,
+	}, result)
 }
 
 func Test_spend_reads_the_requested_grouping_and_returns_it_with_the_result(t *testing.T) {

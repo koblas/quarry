@@ -76,7 +76,7 @@ func renderSpendingJSON(s report.Spending, warnings []string) ([]byte, error) {
 
 // spendRowDocumentFor is the row of a spend grouped by group, its key named
 // for the grouping; spent is the row's amount already formatted.
-func spendRowDocumentFor(group store.SpendingGroup, r store.SpendingRow, spent string) any {
+func spendRowDocumentFor(group store.SpendingGroup, r report.SpendingRow, spent string) any {
 	switch group {
 	case store.SpendByPayee:
 		return spendPayeeRowDocument{Payee: r.Key, Currency: r.Currency, Spent: spent}

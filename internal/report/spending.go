@@ -15,10 +15,22 @@ type SpendRequest struct {
 	By     store.SpendingGroup
 }
 
+// SpendingRow is one row of a spend read: what the store found, or for a
+// filled month zero spending. Partial marks a month the window cuts short.
+type SpendingRow struct {
+	store.SpendingRow
+
+	Partial bool
+}
+
 // Spending is a spend read: the window it covered, what it was grouped by
 // and what the store found.
 type Spending struct {
-	store.Spending
+	Rows   []SpendingRow
+	Totals []store.SpendingTotal
+	// MultiTagSplits counts the splits carrying more than one tag; it is set
+	// only when grouping by tag.
+	MultiTagSplits int
 
 	Window store.Window
 	By     store.SpendingGroup
@@ -40,5 +52,40 @@ func (s *Server) Spend(ctx context.Context, req SpendRequest) (Spending, error) 
 	if err != nil {
 		return Spending{}, s.readRefusal(ctx, "spend", err)
 	}
-	return Spending{Spending: spending, Window: req.Window, By: req.By}, nil
+	result := Spending{
+		Totals:         spending.Totals,
+		MultiTagSplits: spending.MultiTagSplits,
+		Window:         req.Window,
+		By:             req.By,
+	}
+	for _, r := range spending.Rows {
+		result.Rows = append(result.Rows, SpendingRow{SpendingRow: r})
+	}
+	if req.By == store.SpendByMonth {
+		result.Rows = fillMonths(result, req.Window)
+	}
+	return result, nil
+}
+
+// fillMonths is a month spending's rows with a row for every month of the window in every
+// currency of its Totals: the store's row where it has one, else zero.
+func fillMonths(spending Spending, window store.Window) []SpendingRow {
+	type monthCurrency struct{ label, currency string }
+	found := make(map[monthCurrency]SpendingRow, len(spending.Rows))
+	for _, r := range spending.Rows {
+		found[monthCurrency{*r.Key, r.Currency}] = r
+	}
+	series := monthSeries(window)
+	rows := make([]SpendingRow, 0, len(series)*len(spending.Totals))
+	for _, p := range series {
+		for _, total := range spending.Totals {
+			row, ok := found[monthCurrency{p.Label, total.Currency}]
+			if !ok {
+				row = SpendingRow{Key: new(p.Label), Currency: total.Currency}
+			}
+			row.Partial = p.Partial
+			rows = append(rows, row)
+		}
+	}
+	return rows
 }

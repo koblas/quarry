@@ -13,14 +13,26 @@ import (
 // spendingQuery reads per-group and per-currency-total spending from v_spending, grouped by
 // the key column and ordered by rowOrder after the total rows.
 func spendingQuery(key, rowOrder string) string {
+	return spendingQueryFrom("v_spending", key, rowOrder)
+}
+
+// spendingQueryFrom is spendingQuery over source, a relation of v_spending's date, currency and
+// spent columns plus the key column.
+func spendingQueryFrom(source, key, rowOrder string) string {
 	return fmt.Sprintf(`
 SELECT %[1]s, currency, CAST(sum(spent) * 100 AS BIGINT), GROUPING(%[1]s)
-FROM v_spending
+FROM %[3]s
 WHERE date >= CAST(? AS DATE) AND date <= CAST(? AS DATE)
 GROUP BY GROUPING SETS ((%[1]s, currency), (currency))
 HAVING GROUPING(%[1]s) = 1 OR sum(spent) <> 0
-ORDER BY GROUPING(%[1]s), %[2]s`, key, rowOrder)
+ORDER BY GROUPING(%[1]s), %[2]s`, key, rowOrder, source)
 }
+
+// spendingByMonthQuery keys each split by its month as YYYY-MM text, which a DATE scanned
+// into a string would not be.
+var spendingByMonthQuery = spendingQueryFrom(
+	"(SELECT date, currency, spent, strftime(month, '%Y-%m') AS month_key FROM v_spending)",
+	"month_key", "month_key, currency")
 
 // splitTagNames is a CTE of each split's distinct tag names; a link to a missing tag has none.
 const splitTagNames = `WITH split_tag_names AS (
@@ -62,6 +74,8 @@ var spendingQueries = map[store.SpendingGroup]string{
 	store.SpendByPayee: spendingQuery("payee", "currency, sum(spent) DESC, lower(payee), payee"),
 	// no tag first, then tag name ignoring case (a case-only tie by byte order), then currency
 	store.SpendByTag: spendingByTagQuery,
+	// oldest month first, then currency
+	store.SpendByMonth: spendingByMonthQuery,
 }
 
 // ErrUnsupportedGrouping is what Spending returns for a grouping it cannot read.
