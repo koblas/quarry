@@ -5,6 +5,7 @@
 | --- | --- | --- | --- |
 | SCENARIO-01 | code-first | 0/0/1/2 | no (MINOR/NITs → STATE.md) |
 | SCENARIO-02 | code-first | 0/1/5/2 | yes |
+| SCENARIO-03 | code-first | 0/0/2/1 | no (MINORs → STATE.md) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Verdict |
