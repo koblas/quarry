@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-10
-status: open
+status: done
 ---
 
 # SCENARIO-10: spend groups by payee
@@ -26,8 +26,6 @@ Mutation checks: none (no mandatory test-first item)
 - `tag` and `month` are refused by the S4 branch only because they are absent from `spendGroupings`; SCENARIO-11/12 add a table entry, a store query and a row struct each. Month rows also need `partial` and a Status column.
 
 ## Phase report
-Run L done: acceptance red at its assertion (`quarry: unknown flag: --by`, exit 2 not 0), then green; `golangci-lint run ./...` 0 issues.
-- `internal/store/store.go` `SpendByPayee`; `duckstore/spending.go` `spendingQuery(key, rowOrder)` + `spendingQueries` map (a grouping absent from it is `ErrUnsupportedGrouping`; test for 99 still there); `duckstore/spending_payee_test.go` (4 tests).
-- `internal/report/spending.go` `SpendRequest.By`, `Spending.By`; `internal/cli/spend_grouping.go` (`spendGroupings` array indexed by group, `parseSpendGrouping`, `errSpendByUnknown`), `spend.go` `--by`, `render_spend.go` header/missing label, `json_spend.go` `spendCategoryRowDocument`/`spendPayeeRowDocument` + `spendRowDocumentFor`.
-- Tests: `cmd/quarry/run_spend_by_test.go` (acceptance; `spendSplit.payee`, `spendRows` payees in `run_spend_test.go`), `internal/cli/spend_test.go` (payee wiring, S4 table incl. tag/month), white-box render and json cases, `internal/report/spending_test.go`.
-- Run V still to do: Verify block, spec tick (append acceptance test), `spec-check.py`, STATE.md rewrite (json row-key binding now generalised; `--by` and SpendByPayee out of Left unbuilt; tag/month refused via absence from `spendGroupings`), `status: done`. No mutation checks were planned.
+Run L done (code and tests in commit `60b1d7c`); run V done: `go build`, `golangci-lint run ./...` 0 issues, covered full suite green, `uncovered-diff.py` 0 uncovered added lines since `24692f5`, `go test -race` on cli/report/store green, spec ticked, `spec-check.py` OK, STATE.md rewritten (json row-key binding generalised; `--by` grouping table added; `SpendByPayee` out of Left unbuilt).
+- test-stats vs `24692f5`: cmd/quarry 108 (+1), internal/cli 70 (+3), internal/report 23 (+1), internal/store/duckstore 117 (+4); TOTAL 318 (+9).
+- Nothing left for later runs. No mutation checks were planned.
