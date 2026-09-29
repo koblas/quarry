@@ -386,7 +386,7 @@ func removePartial(path string) {
 // build creates quarry's schema and views in db and bulk-loads every table
 // in rows, then store_info last: a store carrying it is complete.
 func build(ctx context.Context, db DB, rows store.Rows, quarryVersion string, builtAt time.Time) error {
-	if _, err := db.Exec(ctx, schemaDDL+accountBalancesViewDDL()); err != nil {
+	if _, err := db.Exec(ctx, schemaDDL+accountBalancesViewDDL()+cashFlowViewDDL+spendingViewDDL); err != nil {
 		return fmt.Errorf("create schema: %w", err)
 	}
 

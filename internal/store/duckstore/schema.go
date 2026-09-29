@@ -127,3 +127,26 @@ LEFT JOIN transactions t ON t.account_id = a.id AND t.date <= current_date
 GROUP BY a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed, a.active;
 `
 }
+
+// cashFlowViewDDL creates v_cash_flow: each split that counts as income or spending.
+const cashFlowViewDDL = `
+CREATE VIEW v_cash_flow AS
+SELECT CAST(NULL AS VARCHAR) AS split_id, CAST(NULL AS VARCHAR) AS transaction_id,
+	CAST(NULL AS VARCHAR) AS account_id, CAST(NULL AS DATE) AS date, CAST(NULL AS DATE) AS month,
+	CAST(NULL AS VARCHAR) AS currency, CAST(NULL AS VARCHAR) AS category_id,
+	CAST(NULL AS VARCHAR) AS category, CAST(NULL AS VARCHAR) AS payee_id,
+	CAST(NULL AS VARCHAR) AS payee, CAST(NULL AS VARCHAR) AS flow,
+	CAST(NULL AS DECIMAL(18,2)) AS amount
+WHERE false;
+`
+
+// spendingViewDDL creates v_spending: the expense rows of v_cash_flow, amount sign flipped.
+const spendingViewDDL = `
+CREATE VIEW v_spending AS
+SELECT CAST(NULL AS VARCHAR) AS split_id, CAST(NULL AS VARCHAR) AS transaction_id,
+	CAST(NULL AS VARCHAR) AS account_id, CAST(NULL AS DATE) AS date, CAST(NULL AS DATE) AS month,
+	CAST(NULL AS VARCHAR) AS currency, CAST(NULL AS VARCHAR) AS category_id,
+	CAST(NULL AS VARCHAR) AS category, CAST(NULL AS VARCHAR) AS payee_id,
+	CAST(NULL AS VARCHAR) AS payee, CAST(NULL AS DECIMAL(18,2)) AS spent
+WHERE false;
+`

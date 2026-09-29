@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
+	"github.com/koblas/quarry/internal/store"
+	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/require"
 )
 
@@ -65,4 +67,12 @@ func skipAsRoot(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file modes")
 	}
+}
+
+// replaceStore builds quarry's store under home straight from rows, skipping
+// Quicken: view-level tests own every row the store holds.
+func replaceStore(t *testing.T, home string, rows store.Rows) {
+	t.Helper()
+	_, err := duckstore.New(storeDirUnder(home)).Replace(context.Background(), rows)
+	require.NoError(t, err)
 }
