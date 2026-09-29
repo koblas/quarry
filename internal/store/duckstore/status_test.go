@@ -2,6 +2,7 @@ package duckstore_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -58,6 +59,31 @@ func Test_status_reads_null_taken_at_and_source_as_zero(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, got.Run.Snapshot.TakenAt.IsZero())
 	assert.Empty(t, got.Run.Snapshot.Source)
+}
+
+// The count columns are nullable in the schema, and Replace never writes NULL,
+// so the test nulls them through a writable connection of its own.
+func Test_status_reads_null_check_counts_as_zero(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	st := duckstore.New(dir)
+	_, err := st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	conn, err := sql.Open("duckdb", st.Path())
+	require.NoError(t, err)
+	_, err = conn.ExecContext(t.Context(), `UPDATE import_runs SET balances_never_reconciled = NULL,
+		investment_accounts = NULL, transfers_paired = NULL, transfers_cross_currency = NULL`)
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+
+	got, err := st.Status(t.Context())
+
+	require.NoError(t, err)
+	assert.Zero(t, got.Run.BalancesNeverReconciled)
+	assert.Zero(t, got.Run.InvestmentAccounts)
+	assert.Zero(t, got.Run.TransfersPaired)
+	assert.Zero(t, got.Run.TransfersCrossCurrency)
+	assert.Equal(t, minimalRows().ImportRuns[0].BalancesChecked, got.Run.BalancesChecked)
 }
 
 func Test_status_reports_no_dates_for_a_store_without_transactions(t *testing.T) {

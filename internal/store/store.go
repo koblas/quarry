@@ -132,12 +132,10 @@ type ImportRun struct {
 	TransfersCrossCurrency            int
 }
 
-// Status is what a built store says about itself: where it is, the format
-// and build that wrote it, the import run that produced it, and the dates
-// its transactions cover. A zero Run.Snapshot.TakenAt or empty
-// Run.Snapshot.Source means the store recorded NULL; FirstDate and LastDate
-// are zero when the store holds no transactions. Times are UTC, except that
-// the two dates are calendar days.
+// Status is what a built store says about itself: its path, the format and
+// build that wrote it, its import run and the dates its transactions cover.
+// A zero Run.Snapshot.TakenAt or empty Source means NULL was recorded; the
+// dates are zero when there are no transactions.
 type Status struct {
 	Path                string
 	FormatVersion       int

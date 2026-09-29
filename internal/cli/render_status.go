@@ -11,8 +11,7 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// Layouts for status's times: the snapshot's local moment, and a store date
-// (a calendar day, never converted between zones).
+// Layouts for the snapshot's local moment and for a store date (a calendar day).
 const (
 	takenLayout = "2006-01-02 15:04 MST"
 	dateLayout  = "2006-01-02"
@@ -69,9 +68,8 @@ func snapshotTakenPhrase(now, takenAt time.Time) string {
 	return local.Format(takenLayout) + " (" + snapshotAge(now, takenAt) + ")"
 }
 
-// snapshotAge renders how long before now takenAt was, rounding down to the
-// unit: "just now" under a minute (or when takenAt is ahead of the clock),
-// then minutes below an hour, hours below 48 hours, and days after.
+// snapshotAge renders how long before now takenAt was, or "just now" when
+// under a minute or ahead of the clock.
 func snapshotAge(now, takenAt time.Time) string {
 	age := now.Sub(takenAt)
 	switch {

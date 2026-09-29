@@ -9,12 +9,10 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// errImportRunCount is Status's refusal of a store whose import_runs and
-// store_info do not pair up to exactly one row.
+// errImportRunCount refuses a store that does not pair one import run with one store_info row.
 var errImportRunCount = errors.New("expected exactly one import run")
 
-// statusQuery reads store_info, the one import_runs row and the dates the
-// transactions cover; a NULL count column reads as zero.
+// statusQuery reads store_info, the import run and the transaction dates; NULL check counts read as zero.
 const statusQuery = `
 SELECT i.format_version, i.quarry_version, i.built_at,
 	r.id, r.started_at, r.finished_at, r.snapshot_path, r.snapshot_sha256, r.schema_fingerprint,

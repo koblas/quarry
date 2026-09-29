@@ -1,5 +1,4 @@
-// run is unexported, so its tests live in package main rather than
-// importing main from outside.
+// buildVersion is unexported and lives in package main, so its tests do too.
 package main
 
 import (
