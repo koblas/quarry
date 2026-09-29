@@ -9,9 +9,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newSpendCommand builds spend: this year's spending grouped by --by, read at now().
+// newSpendCommand builds spend: the spending in the --since/--until period (default this year to now()) grouped by --by.
 func newSpendCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var by string
+	var period windowFlags
 	cmd := &cobra.Command{
 		Use:   "spend",
 		Short: "Show spending by category, payee, tag or month",
@@ -45,12 +46,17 @@ the rows can add up to more than the total.`,
 				return err
 			}
 
+			window, err := period.window(cmd, now())
+			if err != nil {
+				return err
+			}
+
 			srv, err := openReport(cmd, newReport)
 			if err != nil {
 				return err
 			}
 
-			spending, err := srv.Spend(cmd.Context(), report.SpendRequest{Window: report.DefaultWindow(now()), By: group})
+			spending, err := srv.Spend(cmd.Context(), report.SpendRequest{Window: window, By: group})
 			if err != nil {
 				return &runtimeError{err: err}
 			}
@@ -66,6 +72,7 @@ the rows can add up to more than the total.`,
 		},
 	}
 	cmd.Flags().StringVar(&by, "by", spendGroupings[store.SpendByCategory].name, "group spending by `group`: category, payee, tag or month")
+	period.bind(cmd)
 	return cmd
 }
 
