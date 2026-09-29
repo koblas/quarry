@@ -232,7 +232,8 @@ quarry says so on stderr. --limit 0 prints every row.
   ARRAY, MAP, STRUCT, UNION) DuckDB's text as a string — not nested JSON in 2a.
 - Truncation: fetch `limit+1`. More rows → stderr
   `quarry: warning: showing the first 500 rows; the query returned more; pass --limit 0 to print every row`;
-  same text without prefix in `warnings[]`; `truncated: true`; exit 0. Exactly `limit` rows → not truncated.
+  same text without the whole `quarry: warning: ` prefix in `warnings[]` (Phase 1 W2 precedent); the count goes
+  through `humanize.Count` (`first 1 row`, `first 10,000 rows`); printed on stderr in both modes, after stdout succeeds; `truncated: true`; exit 0. Exactly `limit` rows → not truncated.
   `--limit 0` never truncates.
 - Multiple statements: DuckDB's own behaviour, not a documented promise.
 
