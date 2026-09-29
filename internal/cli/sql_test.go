@@ -61,13 +61,25 @@ func Test_sql_passes_the_limit_to_the_query(t *testing.T) {
 	}
 }
 
-func Test_sql_help_describes_the_limit_flag(t *testing.T) {
+func Test_sql_help_describes_the_command_and_the_limit_flag(t *testing.T) {
 	var stdout bytes.Buffer
 
 	err := executeSQL(t, fakeReportStore{}, &stdout, "--help")
 
 	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), "Run one SQL query against quarry's store and print the result.")
+	assert.Contains(t, stdout.String(), `Run one SQL query against quarry's store and print the result. The store is
+opened read-only: a query cannot change it, read or write other files, or
+load extensions.
+
+Pass the query as one quoted argument, or - to read it from stdin. Amounts
+are DECIMAL(18,2) in each account's own currency; negative is money leaving
+the account. Transfers between your own accounts are in the transfers table
+and splits.transfer_account_id, never in a category kind. List the tables
+and views with: quarry sql "SHOW TABLES"
+
+At most --limit rows are printed (500 unless set); when there are more,
+quarry says so on stderr. --limit 0 prints every row.`)
+	assert.Contains(t, stdout.String(), "  quarry sql \"SELECT name, currency FROM accounts WHERE NOT closed\"\n")
 	assert.Contains(t, stdout.String(), "  quarry sql --limit 0 --json - < monthly.sql\n")
 	assert.Contains(t, stdout.String(), "      --limit n   print at most n rows (0 prints every row) (default 500)\n")
 }

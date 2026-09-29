@@ -1,7 +1,6 @@
-package duckdb
-
 // White-box: parseTypeName's refusals and the renderer's fallbacks are reached
 // only through type names and Go values the driver does not produce.
+package duckdb
 
 import (
 	"testing"
