@@ -80,7 +80,7 @@ Findings ranked most-severe first:
   Fix: <specific change>
 ```
 
-Then exactly one verdict line: **PASS**, **PASS WITH FOLLOW-UPS**, or **FAIL**
+Then exactly one verdict line: **PASS**, **PASS WITH FOLLOW-UPS**, or **BLOCKED**
 (blocking items named).
 
 Severity contract, shared across all reviewers in this repo:

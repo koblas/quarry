@@ -144,8 +144,8 @@ Merge into one severity-ranked list, deduplicating findings two reviewers raised
 ### Strengths
 <positive notes worth another author copying — omit if none>
 
-### Verdict: PASS | PASS WITH FOLLOW-UPS | FAIL
-- **FAIL** — any BLOCKER or MAJOR exists. Must be fixed before feature is done.
+### Verdict: PASS | PASS WITH FOLLOW-UPS | BLOCKED
+- **BLOCKED** — any BLOCKER or MAJOR exists. Must be fixed before feature is done.
 - **PASS WITH FOLLOW-UPS** — only MINOR/NIT findings. Feature is done; findings go to
   developer as fix-if-cheap, not a mandatory round trip.
 - **PASS** — no findings.
@@ -158,4 +158,4 @@ dispatching any fix pass. Fix-pass prompt cites that file instead of pasting fin
 only in conversation is gone.
 
 Style preferences never fail the gate. A `refactor-advisor` suggestion alone is
-**PASS WITH FOLLOW-UPS**, not FAIL.
+**PASS WITH FOLLOW-UPS**, not BLOCKED.

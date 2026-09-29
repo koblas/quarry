@@ -17,7 +17,7 @@ Orchestrator only — no agent reads this or ledger it describes.
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Verdict |
 | --- | --- | --- | --- |
-| 1 | arch, correctness, test | 1/2/4/1 | FAIL |
+| 1 | arch, correctness, test | 1/2/4/1 | BLOCKED |
 
 ## Tokens
 <output of `.claude/scripts/feature-metrics.py <feature-slug>`, pasted once at SHIP>
