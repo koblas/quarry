@@ -53,6 +53,9 @@ var ErrReadOnlyQuery = errors.New("query would change the store")
 // ErrExternalAccess is a query refused because it reaches another file, database or extension.
 var ErrExternalAccess = errors.New("query reaches outside the store")
 
+// ErrEmptyQuery is a query refused because it holds no statement.
+var ErrEmptyQuery = errors.New("query holds no statement")
+
 // ErrQueryInterrupted is a query stopped because its context was cancelled.
 var ErrQueryInterrupted = errors.New("query interrupted")
 

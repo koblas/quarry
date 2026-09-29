@@ -501,14 +501,14 @@ Scenario: SCENARIO-21 — a read command reports a failed stdout write
 - [x] SCENARIO-08: sql prints a query result as a table — `cmd/quarry/run_sql_test.go` `Test_run_sql_prints_the_query_result_as_a_table`
 - [x] SCENARIO-09: sql --json returns typed values — `cmd/quarry/run_sql_json_test.go` `Test_run_sql_json_returns_typed_values`
 - [x] SCENARIO-10: sql caps the rows it prints — delivered by SCENARIO-09 — `cmd/quarry/run_sql_json_test.go` `Test_run_sql_json_caps_the_rows_and_says_so`
-- [ ] SCENARIO-11: sql reads its query from stdin
+- [x] SCENARIO-11: sql reads its query from stdin — delivered by SCENARIO-18 — `cmd/quarry/run_sql_test.go` `Test_run_sql_reads_the_query_from_stdin`
 - [x] SCENARIO-12: sql refuses to change the store — `cmd/quarry/run_sql_test.go` `Test_run_sql_refuses_to_change_the_store`
 - [x] SCENARIO-13: sql cannot reach other files, databases, extensions or settings — delivered by SCENARIO-12 — `cmd/quarry/run_sql_test.go` `Test_run_sql_refuses_to_write_another_file`
 - [x] SCENARIO-14: sql reports a bad query — delivered by SCENARIO-12 — `cmd/quarry/run_sql_test.go` `Test_run_sql_reports_a_bad_query`
 - [x] SCENARIO-15: read commands refuse when there is no store — `cmd/quarry/run_read_refusals_test.go` `Test_run_read_commands_refuse_when_there_is_no_store`
 - [x] SCENARIO-16: read commands refuse a store built by another version — delivered by SCENARIO-15 — `cmd/quarry/run_read_refusals_test.go` `Test_run_status_refuses_a_store_built_by_another_version`
 - [x] SCENARIO-17: read commands refuse a store they cannot read — delivered by SCENARIO-15 — `cmd/quarry/run_read_refusals_test.go` `Test_run_accounts_refuses_a_store_that_is_not_a_duckdb_file`
-- [ ] SCENARIO-18: read commands reject bad usage
-- [ ] SCENARIO-19: a usage error's hint names the command it came from
+- [x] SCENARIO-18: read commands reject bad usage — `cmd/quarry/run_read_usage_test.go` `Test_run_read_commands_reject_bad_usage`
+- [x] SCENARIO-19: a usage error's hint names the command it came from — delivered by SCENARIO-18 — `cmd/quarry/run_usage_test.go` `Test_run_usage_hint_names_the_matched_command`
 - [x] SCENARIO-20: interrupting sql stops the query — delivered by SCENARIO-12 — `cmd/quarry/run_sql_test.go` `Test_run_sql_reports_a_query_interrupted_by_sigint`
-- [ ] SCENARIO-21: a read command reports a failed stdout write
+- [x] SCENARIO-21: a read command reports a failed stdout write — delivered by SCENARIO-18 — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_reports_a_failed_stdout_write`

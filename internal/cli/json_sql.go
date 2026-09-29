@@ -25,9 +25,8 @@ type sqlColumnDocument struct {
 	Type string `json:"type"`
 }
 
-// renderSQLJSON renders result as sql's --json document. row_count counts
-// the rows in the document, limit echoes the --limit value, and columns and
-// rows are [] rather than null when empty.
+// renderSQLJSON renders result as sql's --json document: row_count counts its
+// rows, limit echoes --limit, and empty columns and rows are [], never null.
 func renderSQLJSON(result report.QueryResult, limit int, warnings []string) ([]byte, error) {
 	columns := make([]sqlColumnDocument, len(result.Columns))
 	for i, col := range result.Columns {
@@ -47,11 +46,8 @@ func renderSQLJSON(result report.QueryResult, limit int, warnings []string) ([]b
 	})
 }
 
-// jsonSQLCell is the JSON value of one result cell, the only producer of
-// row values: nil, bool, int64, uint64, a finite float32 or float64, or a
-// string. NaN and the infinities become "nan", "inf" and "-inf"; a DATE
-// prints as its calendar day, any other time as RFC 3339 in UTC; every
-// other kind, DECIMAL and HUGEINT included, is DuckDB's own text.
+// jsonSQLCell is one result cell's JSON value, and the only producer of row values:
+// nil, bool, int64, uint64, a finite float32 or float64, or a string.
 func jsonSQLCell(col store.QueryColumn, v store.QueryValue) any {
 	if v.Null {
 		return nil
@@ -69,6 +65,7 @@ func jsonSQLCell(col store.QueryColumn, v store.QueryValue) any {
 		}
 		return n.UTC().Format(time.RFC3339Nano)
 	}
+	// Every other kind, DECIMAL and HUGEINT included, is DuckDB's own text.
 	return v.Text
 }
 

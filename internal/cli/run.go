@@ -31,17 +31,17 @@ type Env struct {
 // Execute parses args against quarry's command tree and runs the matched
 // command, writing to env's streams. It returns a UsageError unchanged, a
 // command's own runtime error unwrapped, or wraps any other error as a
-// UsageError with a run-sync-help hint appended.
+// UsageError pointing at the matched command's --help.
 func Execute(ctx context.Context, args []string, env Env) error {
 	var jsonOut bool
-	root := newRootCommand(env, &jsonOut) //nolint:contextcheck // RunE reads ctx back through cmd.Context(), set by ExecuteContext below
+	root := newRootCommand(env, &jsonOut) //nolint:contextcheck // RunE reads ctx back through cmd.Context(), set by ExecuteContextC below
 	// args must be non-nil: cobra falls back to the process's own os.Args for a nil slice.
 	root.SetArgs(args)
 	root.SetIn(env.Stdin)
 	root.SetOut(env.Stdout)
 	root.SetErr(env.Stderr)
 
-	err := root.ExecuteContext(ctx)
+	cmd, err := root.ExecuteContextC(ctx)
 	if err == nil {
 		return nil
 	}
@@ -52,5 +52,5 @@ func Execute(ctx context.Context, args []string, env Env) error {
 	if re, ok := errors.AsType[*runtimeError](err); ok {
 		return re.err
 	}
-	return UsageError{msg: err.Error() + "; Run 'quarry sync --help' for usage."}
+	return UsageError{msg: err.Error() + "; Run '" + cmd.CommandPath() + " --help' for usage."}
 }

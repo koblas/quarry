@@ -12,8 +12,9 @@ import (
 
 // Query runs query verbatim against the store, opened read-only, returning at
 // most maxRows rows (all when maxRows <= 0). It refuses with store.ErrQueryInterrupted,
-// store.ErrReadOnlyQuery, store.ErrExternalAccess, *store.UnprintableValueError,
-// *store.QueryError, or, for a store it cannot open, *store.OpenError.
+// store.ErrReadOnlyQuery, store.ErrExternalAccess, store.ErrEmptyQuery,
+// *store.UnprintableValueError, *store.QueryError, or, for a store it cannot
+// open, *store.OpenError.
 func (s *Store) Query(ctx context.Context, query string, maxRows int) (store.QueryResult, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {
@@ -45,6 +46,9 @@ func queryRefusal(ctx context.Context, err error) error {
 	}
 	if duckdb.IsAccessDisabled(err) {
 		return fmt.Errorf("%w: %w", store.ErrExternalAccess, err)
+	}
+	if duckdb.IsEmptyQuery(err) {
+		return fmt.Errorf("%w: %w", store.ErrEmptyQuery, err)
 	}
 	reason, _, _ := strings.Cut(err.Error(), "\n")
 	return &store.QueryError{Reason: reason}

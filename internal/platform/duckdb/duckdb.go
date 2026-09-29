@@ -243,6 +243,13 @@ func IsAccessDisabled(err error) bool {
 	return ok && derr.Type == duckdbdriver.ErrorTypePermission
 }
 
+// IsEmptyQuery reports whether err is the driver's refusal of a query with no
+// statement in it, such as ";" or a lone comment.
+func IsEmptyQuery(err error) bool {
+	// Whole-text match: the driver's sentinel is unexported, and error('empty query') gains a type prefix.
+	return err.Error() == "empty query"
+}
+
 // IsNotDatabase reports whether err is the driver's refusal to open a file
 // that is not a DuckDB database, an empty file included.
 func IsNotDatabase(err error) bool {

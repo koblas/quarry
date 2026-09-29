@@ -19,6 +19,7 @@ accounts are left out unless --all is given.
 
 Brokerage and retirement accounts show "not imported": quarry does not
 import investment transactions yet, so it cannot compute their balance.`,
+		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			srv, err := newReport(cmd.Context(), cmd.Name())
 			if err != nil {
@@ -45,8 +46,8 @@ import investment transactions yet, so it cannot compute their balance.`,
 				out = []byte(renderAccounts(listing.AccountList))
 			}
 
-			if _, err := cmd.OutOrStdout().Write(out); err != nil {
-				return &runtimeError{err: err}
+			if err := writeResult(cmd, out); err != nil {
+				return err
 			}
 			for _, warning := range warnings {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: "+warning)

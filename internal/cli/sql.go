@@ -1,8 +1,12 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
+	"strings"
 
 	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/store"
@@ -12,9 +16,8 @@ import (
 // defaultSQLLimit is how many rows sql prints unless --limit says otherwise.
 const defaultSQLLimit = 500
 
-// newSQLCommand builds sql: one query run verbatim against the store, its
-// result printed as a table, or as JSON when *jsonOut is set, of at most
-// --limit rows. When the query returned more, the cut is said on stderr.
+// newSQLCommand builds sql: one query run verbatim against the store, at most
+// --limit rows of its result printed as a table, or as JSON when *jsonOut is set.
 func newSQLCommand(newReport ReportFactory, jsonOut *bool) *cobra.Command {
 	var limit int
 	cmd := &cobra.Command{
@@ -34,14 +37,35 @@ At most --limit rows are printed (500 unless set); when there are more,
 quarry says so on stderr. --limit 0 prints every row.`,
 		Example: `  quarry sql "SELECT name, currency FROM accounts WHERE NOT closed"
   quarry sql --limit 0 --json - < monthly.sql`,
-		Args: cobra.ExactArgs(1),
+		Args: func(_ *cobra.Command, args []string) error {
+			switch {
+			case len(args) == 0:
+				return errSQLNeedsQuery
+			case len(args) > 1:
+				return errSQLTakesOneQuery
+			case limit < 0:
+				return errSQLNegativeLimit
+			case strings.TrimSpace(args[0]) == "":
+				return errSQLNeedsQuery
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			query := args[0]
+			if query == readQueryFromStdin {
+				// Before newReport: an empty stdin is a usage error, which never needs $HOME.
+				var err error
+				if query, err = readStdinQuery(cmd.Context(), cmd.InOrStdin()); err != nil {
+					return err
+				}
+			}
+
 			srv, err := newReport(cmd.Context(), cmd.Name())
 			if err != nil {
 				return &runtimeError{err: err}
 			}
 
-			result, err := srv.Query(cmd.Context(), args[0], limit)
+			result, err := srv.Query(cmd.Context(), query, limit)
 			if err != nil {
 				return &runtimeError{err: queryFailure(err)}
 			}
@@ -61,8 +85,8 @@ quarry says so on stderr. --limit 0 prints every row.`,
 				out = []byte(renderSQLTable(result.QueryResult))
 			}
 
-			if _, err := cmd.OutOrStdout().Write(out); err != nil {
-				return &runtimeError{err: err}
+			if err := writeResult(cmd, out); err != nil {
+				return err
 			}
 			for _, warning := range warnings {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: warning: "+warning)
@@ -72,6 +96,59 @@ quarry says so on stderr. --limit 0 prints every row.`,
 	}
 	cmd.Flags().IntVar(&limit, "limit", defaultSQLLimit, "print at most `n` rows (0 prints every row)")
 	return cmd
+}
+
+// readQueryFromStdin is the query argument that reads the query from stdin.
+const readQueryFromStdin = "-"
+
+var (
+	errSQLNeedsQuery    = UsageError{msg: "sql needs a query; pass it as one quoted argument, or - to read it from stdin"}
+	errSQLTakesOneQuery = UsageError{msg: "sql takes one query; quote it as one argument"}
+	errSQLNegativeLimit = UsageError{msg: "--limit must be 0 or more; 0 prints every row"}
+)
+
+// readStdinQuery reads all of in as the query, verbatim. It refuses an
+// interrupt, then a read fault, then a blank query, in that order.
+func readStdinQuery(ctx context.Context, in io.Reader) (string, error) {
+	type read struct {
+		query []byte
+		err   error
+	}
+	done := make(chan read, 1)
+	go func() {
+		query, err := io.ReadAll(in)
+		done <- read{query: query, err: err}
+	}()
+
+	var got read
+	select {
+	case <-ctx.Done():
+	case got = <-done:
+	}
+	// Checked whichever case won, so an interrupt is never reported as a read fault or a blank query.
+	if err := ctx.Err(); err != nil {
+		return "", &runtimeError{err: queryFailure(fmt.Errorf("%w: %w", store.ErrQueryInterrupted, err))}
+	}
+	if got.err != nil {
+		return "", &runtimeError{err: &refusalError{text: "cannot read the query from stdin: " + osReason(got.err), cause: got.err}}
+	}
+	if strings.TrimSpace(string(got.query)) == "" {
+		return "", errSQLNeedsQuery
+	}
+	return string(got.query), nil
+}
+
+// osReason is err's OS-supplied reason: a path error's own cause, else the
+// first line of err, or "unknown error" when that is empty.
+func osReason(err error) string {
+	reason, _, _ := strings.Cut(err.Error(), "\n")
+	if pathErr, ok := errors.AsType[*fs.PathError](err); ok {
+		reason = pathErr.Err.Error()
+	}
+	if reason == "" {
+		return "unknown error"
+	}
+	return reason
 }
 
 // truncationNote is the warning that sql cut its rows at limit.
@@ -89,6 +166,8 @@ func queryFailure(err error) error {
 		return &refusalError{text: "query failed: " + queryErr.Reason, cause: err}
 	}
 	switch {
+	case errors.Is(err, store.ErrEmptyQuery):
+		return errSQLNeedsQuery
 	case errors.Is(err, store.ErrReadOnlyQuery):
 		return &refusalError{text: "quarry sql only reads the store; change the data in Quicken and run quarry sync", cause: err}
 	case errors.Is(err, store.ErrExternalAccess):

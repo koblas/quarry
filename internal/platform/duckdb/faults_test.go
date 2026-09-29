@@ -145,12 +145,16 @@ func Test_query_error_predicates_classify_driver_errors(t *testing.T) {
 		query              string
 		wantReadOnly       bool
 		wantAccessDisabled bool
+		wantEmptyQuery     bool
 	}{
 		{name: "a write is a read-only violation", query: "CREATE TABLE t (v INTEGER)", wantReadOnly: true},
 		{name: "a locked setting is not a read-only violation", query: "SET enable_external_access=true"},
 		{name: "another error naming read-only mode is not a violation", query: `SELECT * FROM "read-only mode"`},
 		{name: "reading a file is disabled access", query: "SELECT count(*) FROM read_csv('" + path + ".csv')", wantAccessDisabled: true},
 		{name: "loading an extension is disabled access", query: "LOAD httpfs", wantAccessDisabled: true},
+		{name: "a lone semicolon is an empty query", query: ";", wantEmptyQuery: true},
+		{name: "a lone comment is an empty query", query: "-- note", wantEmptyQuery: true},
+		{name: "a user's own error saying empty query is not an empty query", query: "SELECT error('empty query')"},
 	}
 
 	for _, c := range cases {
@@ -162,6 +166,7 @@ func Test_query_error_predicates_classify_driver_errors(t *testing.T) {
 			require.Error(t, err)
 			assert.Equal(t, c.wantReadOnly, duckdb.IsReadOnlyViolation(err), err.Error())
 			assert.Equal(t, c.wantAccessDisabled, duckdb.IsAccessDisabled(err), err.Error())
+			assert.Equal(t, c.wantEmptyQuery, duckdb.IsEmptyQuery(err), err.Error())
 		})
 	}
 }
@@ -171,4 +176,5 @@ func Test_query_error_predicates_reject_an_error_from_elsewhere(t *testing.T) {
 
 	assert.False(t, duckdb.IsReadOnlyViolation(errNotDuckDB))
 	assert.False(t, duckdb.IsAccessDisabled(errNotDuckDB))
+	assert.False(t, duckdb.IsEmptyQuery(errNotDuckDB))
 }

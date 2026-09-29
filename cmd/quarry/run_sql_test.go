@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -60,6 +61,21 @@ func Test_run_sql_prints_at_most_limit_rows(t *testing.T) {
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "source_id\n        1\n        2\n", stdout.String())
 	assert.Equal(t, "quarry: warning: showing the first 2 rows; the query returned more; pass --limit 0 to print every row\n", stderr.String())
+}
+
+func Test_run_sql_reads_the_query_from_stdin(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncAccountsFixture(t, home)
+	var stdout, stderr bytes.Buffer
+	env := defaultEnv(&stdout, &stderr)
+	env.Stdin = strings.NewReader("SELECT name\nFROM accounts\nWHERE source_id = 1;\n")
+
+	exitCode := runWith(context.Background(), []string{"sql", "-"}, env)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.Equal(t, "name\nChequing\n", stdout.String())
 }
 
 func Test_run_sql_reports_a_bad_query(t *testing.T) {
@@ -170,28 +186,6 @@ func Test_run_sql_reports_a_query_interrupted_by_sigint(t *testing.T) {
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
 	assert.Equal(t, "quarry: query interrupted\n", stderr.String())
-}
-
-func Test_run_sql_needs_exactly_one_argument(t *testing.T) {
-	cases := []struct {
-		name string
-		args []string
-	}{
-		{name: "no query", args: []string{"sql"}},
-		{name: "two arguments", args: []string{"sql", "SELECT 1", "extra"}},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
-			var stdout, stderr bytes.Buffer
-
-			exitCode := run(context.Background(), c.args, &stdout, &stderr)
-
-			assert.Equal(t, 2, exitCode)
-			assert.Empty(t, stdout.String())
-		})
-	}
 }
 
 const (

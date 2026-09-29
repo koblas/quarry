@@ -18,6 +18,7 @@ transactions cover, and the checks sync ran when it built the store.
 
 status reads only quarry's store; it never looks at Quicken. Run quarry sync
 to bring the store up to date.`,
+		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			srv, err := newReport(cmd.Context(), cmd.Name())
 			if err != nil {
@@ -39,8 +40,8 @@ to bring the store up to date.`,
 				out = []byte(renderStatus(st, srv.Home(), time.Now()))
 			}
 
-			if _, err := cmd.OutOrStdout().Write(out); err != nil {
-				return &runtimeError{err: err}
+			if err := writeResult(cmd, out); err != nil {
+				return err
 			}
 			return nil
 		},

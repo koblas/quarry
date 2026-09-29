@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-18
-status: open
+status: done
 ---
 
 # SCENARIO-18: read commands reject bad usage (absorbs SCENARIO-11, 19, 21)
@@ -23,22 +23,22 @@ Existence facts: `Execute` uses `root.ExecuteContext` and hard-codes the sync hi
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_read_usage_test.go` (new) `Test_run_read_commands_reject_bad_usage` — sync a v9fixture store once, then the 9 outline rows through `runWith` (`defaultEnv` + `env.Stdin` per row); exit 2, stdout empty, exact stderr. Same file: `Test_run_sql_reports_no_store_for_an_empty_statement` (`sql ";"`, no store → R1, exit 1). No stubs needed — black-box through `runWith`
-- [ ] Step 2: `run_sql_test.go` `Test_run_sql_reads_the_query_from_stdin` (runWith, stdin `SELECT 1 AS n`); `run_usage_test.go` `Test_run_usage_hint_names_the_matched_command` (`sql --bogus`, `status --bogus`, `accounts --bogus`, `spend`); `run_accounts_test.go:67-81` rename to `Test_run_accounts_reports_a_failed_stdout_write`, assert exact O2 line. All four red at their assertions
+- [x] Step 1: `cmd/quarry/run_read_usage_test.go` (new) `Test_run_read_commands_reject_bad_usage` — sync a v9fixture store once, then the 9 outline rows through `runWith` (`defaultEnv` + `env.Stdin` per row); exit 2, stdout empty, exact stderr. Same file: `Test_run_sql_reports_no_store_for_an_empty_statement` (`sql ";"`, no store → R1, exit 1). No stubs needed — black-box through `runWith`
+- [x] Step 2: `run_sql_test.go` `Test_run_sql_reads_the_query_from_stdin` (runWith, stdin `SELECT 1 AS n`); `run_usage_test.go` `Test_run_usage_hint_names_the_matched_command` (`sql --bogus`, `status --bogus`, `accounts --bogus`, `spend`); `run_accounts_test.go:67-81` rename to `Test_run_accounts_reports_a_failed_stdout_write`, assert exact O2 line. All four red at their assertions
 
 ### Build
-- [ ] Step 3: `internal/platform/duckdb/duckdb.go:233-243` `IsEmptyQuery` (exact `err.Error() == "empty query"`; the driver's `errEmptyQuery` is unexported) + `faults_test.go:136-167` rows `;`, `-- note` true, `SELECT error('empty query')` false, and `:169-174` errNotDuckDB false
-- [ ] Step 4: `store/query.go:51-57` `ErrEmptyQuery`; `duckstore/query.go:35-51` `queryRefusal` arm after `IsAccessDisabled` (`%w: %w`) + `query_test.go:92-113` rows `;`, `-- note` → `store.ErrEmptyQuery`
-- [ ] Step 5: `internal/cli/sql.go:37-72` — custom `Args` (count: 0 → U5, >1 → U6; then `limit < 0` → U7; then blank literal → U5); RunE reads `cmd.InOrStdin()` for `-` and blank-checks BEFORE `newReport`; query passed verbatim (trim only for the test); `queryFailure:84-100` maps `store.ErrEmptyQuery` → U5 `UsageError`. Tests in `sql_test.go`: `Test_sql_rejects_bad_usage` (rows incl. precedence `--limit -1` with no arg, whitespace stdin, and U7 bound pair `-1` refuses / `0` runs), `Test_sql_reads_the_query_from_stdin_verbatim` (via new `gotQuery *string` on `fakeReportStore`, `accounts_test.go:26-41`), `Test_sql_reports_a_stdin_read_fault` (`iotest.ErrReader`; copy per ruling), `Test_sql_reports_each_query_refusal:103-138` row ErrEmptyQuery → U5 `UsageError`; delete `run_sql_test.go:175-195` (superseded by Step 1)
-- [ ] Step 6: `internal/cli/errors.go` `noArgs` Args func (`cmd.Name() + " takes no arguments"`) before `status.go:21` and `accounts.go:22` RunE + `accounts_test.go` `Test_status_and_accounts_take_no_arguments`
-- [ ] Step 7: `internal/cli/run.go:31-55` `Execute` → `ExecuteContextC`; fallback hint uses `cmd.CommandPath()` (never nil — no defensive branch); update `run_usage_test.go:142-150` (`frob`, `synk` → `quarry --help`) and `:212`; extend `Test_run_help_and_usage_errors_do_not_need_home:182-214` with HOME-less U5 (`sql`, `sql -` empty stdin via runWith), U7, U8, U9 `sql --bogus` rows
-- [ ] Step 8: `internal/cli/output.go` (new) `writeResult(cmd, out)` → `&runtimeError{fmt.Errorf("cannot write the result to stdout: %w", err)}`; use at `status.go:42`, `accounts.go:48`, `sql.go:64` (note/warning loops stay after it). Tests: `sql_test.go:163-167` → `EqualError` O2 text; `Test_accounts_reports_a_failed_stdout_write` in `accounts_test.go`; status's O2 proven at cmd level — tighten `run_status_test.go:71-85` to the exact line (`fakeReportStore` has no `Status`; do not add one)
+- [x] Step 3: `internal/platform/duckdb/duckdb.go:233-243` `IsEmptyQuery` (exact `err.Error() == "empty query"`; the driver's `errEmptyQuery` is unexported) + `faults_test.go:136-167` rows `;`, `-- note` true, `SELECT error('empty query')` false, and `:169-174` errNotDuckDB false
+- [x] Step 4: `store/query.go:51-57` `ErrEmptyQuery`; `duckstore/query.go:35-51` `queryRefusal` arm after `IsAccessDisabled` (`%w: %w`) + `query_test.go:92-113` rows `;`, `-- note` → `store.ErrEmptyQuery`
+- [x] Step 5: `internal/cli/sql.go:37-72` — custom `Args` (count: 0 → U5, >1 → U6; then `limit < 0` → U7; then blank literal → U5); RunE reads `cmd.InOrStdin()` for `-` and blank-checks BEFORE `newReport`; query passed verbatim (trim only for the test); `queryFailure:84-100` maps `store.ErrEmptyQuery` → U5 `UsageError`. Tests in `sql_test.go`: `Test_sql_rejects_bad_usage` (rows incl. precedence `--limit -1` with no arg, whitespace stdin, and U7 bound pair `-1` refuses / `0` runs), `Test_sql_reads_the_query_from_stdin_verbatim` (via new `gotQuery *string` on `fakeReportStore`, `accounts_test.go:26-41`), `Test_sql_reports_a_stdin_read_fault` (`iotest.ErrReader`; copy per ruling), `Test_sql_reports_each_query_refusal:103-138` row ErrEmptyQuery → U5 `UsageError`; delete `run_sql_test.go:175-195` (superseded by Step 1)
+- [x] Step 6: `internal/cli/errors.go` `noArgs` Args func (`cmd.Name() + " takes no arguments"`) before `status.go:21` and `accounts.go:22` RunE + `accounts_test.go` `Test_status_and_accounts_take_no_arguments`
+- [x] Step 7: `internal/cli/run.go:31-55` `Execute` → `ExecuteContextC`; fallback hint uses `cmd.CommandPath()` (never nil — no defensive branch); update `run_usage_test.go:142-150` (`frob`, `synk` → `quarry --help`) and `:212`; extend `Test_run_help_and_usage_errors_do_not_need_home:182-214` with HOME-less U5 (`sql`, `sql -` empty stdin via runWith), U7, U8, U9 `sql --bogus` rows
+- [x] Step 8: `internal/cli/output.go` (new) `writeResult(cmd, out)` → `&runtimeError{fmt.Errorf("cannot write the result to stdout: %w", err)}`; use at `status.go:42`, `accounts.go:48`, `sql.go:64` (note/warning loops stay after it). Tests: `sql_test.go:163-167` → `EqualError` O2 text; `Test_accounts_reports_a_failed_stdout_write` in `accounts_test.go`; status's O2 proven at cmd level — tighten `run_status_test.go:71-85` to the exact line (`fakeReportStore` has no `Status`; do not add one)
 
 ### Sweep
-- [ ] Step 9: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `IsEmptyQuery`, `ErrEmptyQuery`, `writeResult`, `noArgs`, `Execute` (hint now names the matched command). Fold STATE debts: `sql.go:15-17` `newSQLCommand` doc (→2 lines), `json_sql.go:28-30` `renderSQLJSON` (→2), `json_sql.go:50-54` `jsonSQLCell` (→≤2); `sql_test.go:178-222` `Test_sql_says_when_it_cuts_the_rows` — `wantStderr` table field, inline `append`, no loops
+- [x] Step 9: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `IsEmptyQuery`, `ErrEmptyQuery`, `writeResult`, `noArgs`, `Execute` (hint now names the matched command). Fold STATE debts: `sql.go:15-17` `newSQLCommand` doc (→2 lines), `json_sql.go:28-30` `renderSQLJSON` (→2), `json_sql.go:50-54` `jsonSQLCell` (→≤2); `sql_test.go:178-222` `Test_sql_says_when_it_cuts_the_rows` — `wantStderr` table field, inline `append`, no loops
 
 ### Verify
-- [ ] Step 10: full verification + `spec-check.py phase2a-read-foundation` → tick SCENARIO-18 with its acceptance test; tick 11, 19, 21 each `— delivered by SCENARIO-18 — <file> <Test>` (reference last); rewrite STATE.md
+- [x] Step 10: full verification + `spec-check.py phase2a-read-foundation` → tick SCENARIO-18 with its acceptance test; tick 11, 19, 21 each `— delivered by SCENARIO-18 — <file> <Test>` (reference last); rewrite STATE.md
 
 ## Handoff
 

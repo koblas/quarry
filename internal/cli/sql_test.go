@@ -4,15 +4,26 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"strings"
+	"syscall"
 	"testing"
+	"testing/iotest"
 
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+)
+
+var (
+	errStreamReset         = errors.New("stream reset")
+	errStreamResetTwoLines = errors.New("stream reset\nby peer")
+	errNoText              = errors.New("")
 )
 
 func executeSQL(t *testing.T, fake fakeReportStore, stdout io.Writer, args ...string) error {
@@ -22,13 +33,138 @@ func executeSQL(t *testing.T, fake fakeReportStore, stdout io.Writer, args ...st
 
 func executeSQLWithStderr(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
 	t.Helper()
-	env := cli.Env{
-		Stdout: stdout, Stderr: stderr,
+	return cli.Execute(t.Context(), append([]string{"sql"}, args...), sqlEnv(fake, nil, stdout, stderr))
+}
+
+func executeSQLWithStdin(t *testing.T, fake fakeReportStore, stdin io.Reader, stdout io.Writer, args ...string) error {
+	t.Helper()
+	return cli.Execute(t.Context(), append([]string{"sql"}, args...), sqlEnv(fake, stdin, stdout, io.Discard))
+}
+
+func sqlEnv(fake fakeReportStore, stdin io.Reader, stdout, stderr io.Writer) cli.Env {
+	return cli.Env{
+		Stdin: stdin, Stdout: stdout, Stderr: stderr,
 		NewReport: func(context.Context, string) (*report.Server, error) {
 			return report.NewServer(report.WithStore(fake)), nil
 		},
 	}
-	return cli.Execute(t.Context(), append([]string{"sql"}, args...), env)
+}
+
+func Test_sql_rejects_bad_usage(t *testing.T) {
+	const (
+		u5 = "sql needs a query; pass it as one quoted argument, or - to read it from stdin"
+		u6 = "sql takes one query; quote it as one argument"
+		u7 = "--limit must be 0 or more; 0 prints every row"
+	)
+	cases := []struct {
+		name  string
+		args  []string
+		stdin string
+		want  string
+	}{
+		{name: "no query", args: nil, want: u5},
+		{name: "an empty query", args: []string{""}, want: u5},
+		{name: "a whitespace query", args: []string{" \t\n"}, want: u5},
+		{name: "a whitespace query on stdin", args: []string{"-"}, stdin: " \n\t\n", want: u5},
+		{name: "two queries", args: []string{"SELECT 1", "SELECT 2"}, want: u6},
+		{name: "a limit just below zero", args: []string{"--limit", "-1", "SELECT 1"}, want: u7},
+		{name: "no query before a negative limit", args: []string{"--limit", "-1"}, want: u5},
+		{name: "two queries before a negative limit", args: []string{"--limit", "-1", "SELECT 1", "SELECT 2"}, want: u6},
+		{name: "a negative limit before a blank query", args: []string{"--limit", "-1", " "}, want: u7},
+		{name: "a negative limit before reading stdin", args: []string{"--limit", "-1", "-"}, stdin: "SELECT 1", want: u7},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var gotQuery string
+			var stdout bytes.Buffer
+
+			err := executeSQLWithStdin(t, fakeReportStore{gotQuery: &gotQuery}, strings.NewReader(c.stdin), &stdout, c.args...)
+
+			var usage cli.UsageError
+			require.ErrorAs(t, err, &usage)
+			assert.Equal(t, c.want, usage.Error())
+			assert.Empty(t, stdout.String())
+			assert.Empty(t, gotQuery)
+		})
+	}
+}
+
+func Test_sql_reads_the_query_from_stdin_verbatim(t *testing.T) {
+	const query = "  -- monthly\nSELECT 1;\n\n"
+	var gotQuery string
+
+	err := executeSQLWithStdin(t, fakeReportStore{gotQuery: &gotQuery}, strings.NewReader(query), io.Discard, "-")
+
+	require.NoError(t, err)
+	assert.Equal(t, query, gotQuery)
+}
+
+func Test_sql_passes_an_argument_query_verbatim(t *testing.T) {
+	const query = " SELECT 1 \n"
+	var gotQuery string
+
+	err := executeSQL(t, fakeReportStore{gotQuery: &gotQuery}, io.Discard, query)
+
+	require.NoError(t, err)
+	assert.Equal(t, query, gotQuery)
+}
+
+func Test_sql_reports_a_stdin_read_fault(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "an OS fault on the file", err: &fs.PathError{Op: "read", Path: "/dev/stdin", Err: syscall.EIO}, want: "input/output error"},
+		{name: "a fault from another reader", err: errStreamReset, want: "stream reset"},
+		{name: "a fault over several lines", err: errStreamResetTwoLines, want: "stream reset"},
+		{name: "a fault with no text", err: errNoText, want: "unknown error"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var gotQuery string
+			var stdout bytes.Buffer
+
+			err := executeSQLWithStdin(t, fakeReportStore{gotQuery: &gotQuery}, iotest.ErrReader(c.err), &stdout, "-")
+
+			require.EqualError(t, err, "cannot read the query from stdin: "+c.want)
+			require.ErrorIs(t, err, c.err)
+			assert.NotErrorAs(t, err, new(cli.UsageError))
+			assert.Empty(t, stdout.String())
+			assert.Empty(t, gotQuery)
+		})
+	}
+}
+
+func Test_sql_reports_an_interrupt_while_reading_stdin(t *testing.T) {
+	blocked, unblock := io.Pipe()
+	t.Cleanup(func() { _ = unblock.Close() })
+	cases := []struct {
+		name  string
+		stdin io.Reader
+	}{
+		{name: "stdin still open", stdin: blocked},
+		{name: "an empty stdin", stdin: strings.NewReader("")},
+		{name: "a stdin read fault", stdin: iotest.ErrReader(errStreamReset)},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			var gotQuery string
+			var stdout bytes.Buffer
+
+			err := cli.Execute(ctx, []string{"sql", "-"}, sqlEnv(fakeReportStore{gotQuery: &gotQuery}, c.stdin, &stdout, io.Discard))
+
+			require.EqualError(t, err, "query interrupted")
+			require.ErrorIs(t, err, store.ErrQueryInterrupted)
+			assert.Empty(t, stdout.String())
+			assert.Empty(t, gotQuery)
+		})
+	}
 }
 
 func Test_sql_prints_the_result_as_a_table(t *testing.T) {
@@ -126,6 +262,11 @@ func Test_sql_reports_each_query_refusal(t *testing.T) {
 			err:  fmt.Errorf("%w: %w", store.ErrQueryInterrupted, context.Canceled),
 			want: "query interrupted",
 		},
+		{
+			name: "a query holding no statement",
+			err:  fmt.Errorf("%w: %w", store.ErrEmptyQuery, errStoreRead),
+			want: "sql needs a query; pass it as one quoted argument, or - to read it from stdin",
+		},
 	}
 
 	for _, c := range cases {
@@ -160,10 +301,11 @@ func Test_sql_returns_the_report_factory_fault(t *testing.T) {
 	assert.Empty(t, stdout.String())
 }
 
-func Test_sql_returns_the_stdout_write_fault(t *testing.T) {
+func Test_sql_reports_a_failed_stdout_write(t *testing.T) {
 	err := executeSQL(t, fakeReportStore{}, failingWriter{err: errNoSpace}, "SELECT 1")
 
-	require.ErrorIs(t, err, errNoSpace)
+	require.EqualError(t, err, "cannot write the result to stdout: write /dev/stdout: no space left on device")
+	assert.ErrorIs(t, err, errNoSpace)
 }
 
 // rowsOfOne is n canned single-column rows.
@@ -178,37 +320,45 @@ func rowsOfOne(n int) store.QueryResult {
 func Test_sql_says_when_it_cuts_the_rows(t *testing.T) {
 	const tail = "; the query returned more; pass --limit 0 to print every row"
 	cases := []struct {
-		name     string
-		returned int
-		args     []string
-		wantNote []string
+		name       string
+		returned   int
+		args       []string
+		wantNote   []string
+		wantStderr string
 	}{
-		{name: "more rows than the limit", returned: 3, args: []string{"--limit", "2"}, wantNote: []string{"showing the first 2 rows" + tail}},
-		{name: "exactly the limit", returned: 2, args: []string{"--limit", "2"}, wantNote: []string{}},
-		{name: "no limit", returned: 3, args: []string{"--limit", "0"}, wantNote: []string{}},
-		{name: "a limit of one row", returned: 2, args: []string{"--limit", "1"}, wantNote: []string{"showing the first 1 row" + tail}},
-		{name: "the default limit", returned: 501, args: nil, wantNote: []string{"showing the first 500 rows" + tail}},
-		{name: "a limit in the thousands", returned: 1001, args: []string{"--limit", "1000"}, wantNote: []string{"showing the first 1,000 rows" + tail}},
+		{
+			name: "more rows than the limit", returned: 3, args: []string{"--limit", "2", "SELECT 1"},
+			wantNote: []string{"showing the first 2 rows" + tail}, wantStderr: "quarry: warning: showing the first 2 rows" + tail + "\n",
+		},
+		{name: "exactly the limit", returned: 2, args: []string{"--limit", "2", "SELECT 1"}, wantNote: []string{}},
+		{name: "no limit", returned: 3, args: []string{"--limit", "0", "SELECT 1"}, wantNote: []string{}},
+		{
+			name: "a limit of one row", returned: 2, args: []string{"--limit", "1", "SELECT 1"},
+			wantNote: []string{"showing the first 1 row" + tail}, wantStderr: "quarry: warning: showing the first 1 row" + tail + "\n",
+		},
+		{
+			name: "the default limit", returned: 501, args: []string{"SELECT 1"},
+			wantNote: []string{"showing the first 500 rows" + tail}, wantStderr: "quarry: warning: showing the first 500 rows" + tail + "\n",
+		},
+		{
+			name: "a limit in the thousands", returned: 1001, args: []string{"--limit", "1000", "SELECT 1"},
+			wantNote: []string{"showing the first 1,000 rows" + tail}, wantStderr: "quarry: warning: showing the first 1,000 rows" + tail + "\n",
+		},
 	}
 
 	for _, c := range cases {
-		args := append(append([]string{}, c.args...), "SELECT 1")
-		var wantStderr bytes.Buffer
-		for _, note := range c.wantNote {
-			wantStderr.WriteString("quarry: warning: " + note + "\n")
-		}
 		t.Run(c.name+", human", func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
-			err := executeSQLWithStderr(t, fakeReportStore{result: rowsOfOne(c.returned)}, &stdout, &stderr, args...)
+			err := executeSQLWithStderr(t, fakeReportStore{result: rowsOfOne(c.returned)}, &stdout, &stderr, c.args...)
 
 			require.NoError(t, err)
-			assert.Equal(t, wantStderr.String(), stderr.String())
+			assert.Equal(t, c.wantStderr, stderr.String())
 		})
 		t.Run(c.name+", json", func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
-			err := executeSQLWithStderr(t, fakeReportStore{result: rowsOfOne(c.returned)}, &stdout, &stderr, append([]string{"--json"}, args...)...)
+			err := executeSQLWithStderr(t, fakeReportStore{result: rowsOfOne(c.returned)}, &stdout, &stderr, append([]string{"--json"}, c.args...)...)
 
 			require.NoError(t, err)
 			var got struct {
@@ -216,7 +366,7 @@ func Test_sql_says_when_it_cuts_the_rows(t *testing.T) {
 			}
 			require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
 			assert.Equal(t, c.wantNote, got.Warnings)
-			assert.Equal(t, wantStderr.String(), stderr.String())
+			assert.Equal(t, c.wantStderr, stderr.String())
 		})
 	}
 }

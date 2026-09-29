@@ -64,7 +64,7 @@ func Test_run_accounts_refuses_when_home_is_unset(t *testing.T) {
 		stderr.String())
 }
 
-func Test_run_accounts_reports_exit_1_when_stdout_cannot_be_written(t *testing.T) {
+func Test_run_accounts_reports_a_failed_stdout_write(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	b := v9fixture.NewBuilder()
@@ -77,7 +77,7 @@ func Test_run_accounts_reports_exit_1_when_stdout_cannot_be_written(t *testing.T
 	exitCode := run(context.Background(), []string{"accounts"}, failingWriter{err: errNoSpace}, &stderr)
 
 	assert.Equal(t, 1, exitCode)
-	assert.Contains(t, stderr.String(), errNoSpace.Error())
+	assert.Equal(t, "quarry: cannot write the result to stdout: no space left on device\n", stderr.String())
 }
 
 func Test_run_accounts_help_describes_the_command_without_needing_home(t *testing.T) {

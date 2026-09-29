@@ -99,6 +99,8 @@ func Test_query_refuses_what_a_read_may_not_do(t *testing.T) {
 		{name: "a write", query: "CREATE TABLE notes (body VARCHAR)", want: store.ErrReadOnlyQuery},
 		{name: "another file", query: "SELECT * FROM read_csv('/etc/hosts')", want: store.ErrExternalAccess},
 		{name: "a known file type named as a table", query: "SELECT * FROM 'x.parquet'", want: store.ErrExternalAccess},
+		{name: "a lone semicolon", query: ";", want: store.ErrEmptyQuery},
+		{name: "a lone comment", query: "-- note", want: store.ErrEmptyQuery},
 	}
 
 	for _, c := range cases {

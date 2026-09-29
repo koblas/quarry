@@ -21,13 +21,14 @@ var (
 	errNoSpace   = errors.New("write /dev/stdout: no space left on device")
 )
 
-// fakeReportStore answers Accounts and Query with a canned result or fault, Query recording
-// its maxRows in *gotMaxRows when set; Status panics through the nil embedded interface.
+// fakeReportStore answers Accounts and Query with a canned result or fault, Query recording its query
+// and maxRows in *gotQuery and *gotMaxRows when set; Status panics through the nil embedded interface.
 type fakeReportStore struct {
 	report.Store
 
 	accounts   store.AccountList
 	result     store.QueryResult
+	gotQuery   *string
 	gotMaxRows *int
 	err        error
 }
@@ -36,7 +37,10 @@ func (f fakeReportStore) Accounts(context.Context) (store.AccountList, error) {
 	return f.accounts, f.err
 }
 
-func (f fakeReportStore) Query(_ context.Context, _ string, maxRows int) (store.QueryResult, error) {
+func (f fakeReportStore) Query(_ context.Context, query string, maxRows int) (store.QueryResult, error) {
+	if f.gotQuery != nil {
+		*f.gotQuery = query
+	}
 	if f.gotMaxRows != nil {
 		*f.gotMaxRows = maxRows
 	}
@@ -140,6 +144,13 @@ func Test_accounts_writes_no_note_when_stdout_fails(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
+func Test_accounts_reports_a_failed_stdout_write(t *testing.T) {
+	err := executeAccounts(t, fakeReportStore{}, failingWriter{err: errNoSpace}, io.Discard)
+
+	require.EqualError(t, err, "cannot write the result to stdout: write /dev/stdout: no space left on device")
+	assert.ErrorIs(t, err, errNoSpace)
+}
+
 func Test_accounts_returns_the_report_fault(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -161,4 +172,32 @@ func Test_accounts_returns_the_report_factory_fault(t *testing.T) {
 
 	require.ErrorIs(t, err, errStoreRead)
 	assert.Empty(t, stdout.String())
+}
+
+func Test_status_and_accounts_take_no_arguments(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "status", args: []string{"status", "extra"}, want: "status takes no arguments"},
+		{name: "accounts", args: []string{"accounts", "extra"}, want: "accounts takes no arguments"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout bytes.Buffer
+			env := cli.Env{
+				Stdout: &stdout, Stderr: io.Discard,
+				NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
+			}
+
+			err := cli.Execute(t.Context(), c.args, env)
+
+			var usage cli.UsageError
+			require.ErrorAs(t, err, &usage)
+			assert.Equal(t, c.want, usage.Error())
+			assert.Empty(t, stdout.String())
+		})
+	}
 }
