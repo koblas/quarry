@@ -1,6 +1,6 @@
 # phase2b-spending — current state
 
-Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-25..26 (25 folded into 26). Last updated by SCENARIO-26.
+Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-06 (08 folded), SCENARIO-25..26 (25 folded into 26). Last updated by SCENARIO-06.
 
 ## Binding decisions
 - Store columns (all appended LAST in their table; the build Appender is positional): `accounts.in_reports BOOLEAN NOT NULL` (`store.Account.NotInReports`, writer inverts, zero value = in reports), `transactions.excluded_from_reports BOOLEAN NOT NULL` (`store.Transaction.ExcludedFromReports`), `transactions.posted_date DATE` nullable (`store.Transaction.PostedDate *time.Time`, set whenever Quicken has a posted date, even equal to `date`). (SCENARIO-01)
@@ -15,12 +15,17 @@ Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-25..26
 - Warning prefix (P2b-14): every `warnings[]`-bearing stderr line uses `quarry: warning: `; accounts' all-closed note now does (its `warnings[]` text unchanged); each new warning line of a later scenario follows suit. (spec, SCENARIO-26)
 - `(*duckstore.Store).Accounts` reads `NotInReports` by joining `accounts a ON a.id = v.id`; `v_account_balances` is a queryable contract and was NOT widened. Accounts Status = `closed`/`inactive`/`not in reports` joined by `, `; `--json` account rows carry `in_reports` after `active`. SCENARIO-06's views read `a.in_reports` themselves. (SCENARIO-26)
 
+- `v_cash_flow` columns are exactly P2b-6 order (`split_id, transaction_id, account_id, date, month, currency, category_id, category, payee_id, payee, flow, amount`); `month` = `CAST(date_trunc('month', t.date) AS DATE)`, `category` = `categories.full_path` and `payee` = `payees.name` via LEFT JOIN; flow comes from the split's own category kind, or the amount sign when uncategorized. Transfer exclusion is `NOT EXISTS` on `transfers.from_split_id`/`to_split_id`, never `transfer_account_id`. `COMMENT ON VIEW v_cash_flow` carries the reports note (read via `duckdb_views().comment`). SCENARIO-09..12 group on these names. (SCENARIO-06)
+- `v_spending` = `-amount AS spent` over `v_cash_flow WHERE flow = 'expense'`, no predicate of its own: one predicate owner, so SCENARIO-23's spend = cashflow-spent invariant holds. (SCENARIO-06)
+- `replaceStore(t, home, rows)` (`cmd/quarry/run_helpers_test.go`) is the cmd-level fixture path for view- and report-level tests; v9fixture sync stays for importer-shaped tests. (SCENARIO-06)
+
 ## Left unbuilt
-- `v_cash_flow`, `v_spending`, their `storeRelations()` entries and `minimalRows` rows — run 3 (SCENARIO-06).
+- `report.Store` spending/cash-flow port methods, aggregates, windows — SCENARIO-09/13/20. No tag column on the views (tags join at query time). (SCENARIO-06)
 
 ## Traps
+- `date_trunc('month', <DATE>)` is `TIMESTAMP` on DuckDB v1.5.5: cast to `DATE`. `s.id NOT IN (SELECT to_split_id ...)` with any NULL empties the view: use `NOT EXISTS`. `c.kind <> 'system'` drops uncategorized splits (NULL): use `IS DISTINCT FROM`. Category kind strings live only in `internal/importer`; duckstore uses SQL literals. `minimalRows`' transfers name `split-2`/`split-3`, not in `splits`. (SCENARIO-06)
 - A column added mid-`CREATE TABLE` while the writer appends at the end silently writes values into the neighbouring column. (SCENARIO-01)
-- A dev store synced before run 3 lacks the 2b views; re-sync after run 3. (SCENARIO-01)
+- A dev store synced before SCENARIO-06 lacks the 2b views; re-sync. (SCENARIO-01, 06)
 - Existing importer tests set only `PostedDate`; with entered NULL they still date by posted, so only exact-struct asserts on `Transactions` need a `PostedDate` bump. `store.Account`/`AccountBalance` test literals rely on `NotInReports` zero = in reports. (SCENARIO-01)
 - Plan `-run` patterns are case-sensitive: importer tests are `Test_import_*`, cmd ones `Test_run_*`; use lowercase words. (SCENARIO-01)
 - Importer dates are UTC calendar days but `current_date` is process-local: date-boundary tests belong at duckstore level with `store.Transaction.Date` at UTC midnight; cmd fixtures use dates a year ahead. (2a S04)

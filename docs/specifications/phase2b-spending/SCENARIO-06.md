@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-06
-status: open
+status: done
 ---
 
 # SCENARIO-06: v_cash_flow keeps only real income and spending (absorbs SCENARIO-08)
@@ -41,10 +41,10 @@ Size: OWNS A RUN — 2 batches, 1 feature package (duckstore; cmd test only); ab
   `Test_spending_holds_exactly_the_cash_flow_expense_rows` (fixture carrying every left-out class, not-in-reports account included); run this batch's 4 mutations
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on both DDL consts (≤2 lines each); `internal/store/duckstore/doc.go:5-6` names the two new views beside `v_account_balances`
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on both DDL consts (≤2 lines each); `internal/store/duckstore/doc.go:5-6` names the two new views beside `v_account_balances`
 
 ### Verify
-- [ ] Step 6: full verification + `spec-check.py phase2b-spending` → tick SCENARIO-06 and SCENARIO-08 (`delivered by SCENARIO-06 —` before its test); STATE.md rewrite
+- [x] Step 6: full verification + `spec-check.py phase2b-spending` → tick SCENARIO-06 and SCENARIO-08 (`delivered by SCENARIO-06 —` before its test); STATE.md rewrite
 
 ## Handoff
 
@@ -68,7 +68,6 @@ Size: OWNS A RUN — 2 batches, 1 feature package (duckstore; cmd test only); ab
 
 ## Phase report
 
-Run B2 (step 4) done; narrow loop `go test ./internal/store/duckstore/ ./cmd/quarry/ -run 'cash_flow|spending|query_|replace_|run_sql'` green, including both acceptance tests and `Test_query_prints_every_column_of_each_table_and_view/v_spending`.
-- `internal/store/duckstore/schema.go:154-161` `spendingViewDDL` real body (P2b-8 verbatim over `v_cash_flow`); `internal/store/duckstore/views_test.go` appended `Test_spending_holds_expense_flow_with_its_sign_flipped`, `Test_spending_lists_its_columns_in_order` (extra, not in plan: columns/types split off the sign test), `Test_spending_holds_exactly_the_cash_flow_expense_rows`.
-- Mutations (schema.go, fresh copy each, restored, diffed identical): negation dropped -> sign_flipped (`keep` -10.00 vs 10.00); `WHERE flow='expense'` -> `WHERE true` -> sign_flipped (income `salary`, `uncategorized-in` present); `AND category_id IS NOT NULL` -> sign_flipped AND holds_exactly (`uncategorized-out` missing); own-predicates mutant reading `splits` minus `in_reports` -> holds_exactly (`not-in-reports` present).
-- Left for run V: Sweep (doc comments on both DDL consts already <=1 line each; `duckstore/doc.go:5-6` still needs the two views named; repo-wide lint), Verify, tick SCENARIO-06 + SCENARIO-08 in specification.md, `spec-check.py`, STATE.md rewrite (drop `v_cash_flow`/`v_spending` from Left unbuilt), `status: done`. Do not redo mutations.
+Run V (steps 5-6) done. Sweep: `duckstore/doc.go:5-7` names v_cash_flow and v_spending beside v_account_balances; both DDL consts already carry one-line docs; `go build ./...` ok, `golangci-lint run ./...` 0 issues (exit 0).
+Verify: one covered full-suite run exit 0 (15 packages ok); `uncovered-diff.py --profile` from dc1aa57: 0 uncovered added lines; `go test -race` on duckstore and cmd/quarry ok. test-stats: cmd/quarry 103 (+2), internal/store/duckstore 98 (+9), TOTAL 201 (+11), tempdir 157 (+3), disk 138 (+2).
+Spec: SCENARIO-06 ticked with its acceptance test, SCENARIO-08 ticked `delivered by SCENARIO-06 —`; `spec-check.py phase2b-spending` OK. STATE.md rewritten. Nothing left.
