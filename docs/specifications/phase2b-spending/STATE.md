@@ -62,6 +62,7 @@ Scenarios complete: SCENARIO-01..04 (02, 03, 04 folded into 01), SCENARIO-05, 07
 - An empty `AccountIDs` means every account: filtering excluded accounts out in `report` turns "all named excluded" into "count everything". `spendingQueryFrom` binds positional `?`, tag queries `$1/$2`: a filter placed in the FROM subselect binds out of order; empty list must never render `IN ()`. `IN (...)` hides duplicate ids, so dedupe is provable only on `Spending.Accounts` length/order. `report` fakes share one `err` across Accounts and Spending. (SCENARIO-14)
 
 ## Open debts
+- MINOR (17 checkpoint, comment budgets): `internal/store/duckstore/spending.go` `transactionRangeQuery` doc (3→≤2) and `(*Store).Spending` doc (5→≤4); `internal/cli/empty_window.go` `emptyWindowWarning` doc (4→≤2); `Spending.Transactions` field doc duplicated in `internal/store/store.go` and `internal/report/spending.go` — say it once in store.
 - MINOR (12 checkpoint, comments): `internal/store/duckstore/spending.go:31-32` `spendingByMonthQuery` doc → 1 line; `internal/cli/render_spend.go:15-19` `renderSpending` doc → ≤2 lines.
 - NIT (12 checkpoint): month label SQL `%Y` vs Go `2006` byte-equality proven only for 4-digit years ≥1000; `--since 0001` is accepted — verify or clamp (year-999 duckstore test).
 - Gate "matches Quicken reports over 2 years" is carried by 2b (spec) — owned by the spend scenarios.
