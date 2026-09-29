@@ -136,6 +136,11 @@ Transfers 3,112 paired, 29 one-sided
 - One-sided = 0: `Transfers 3,112 paired`; none paired: Phase 1's `none` form.
 - Built with `--from`: Source is the manifest's recorded source; Snapshot is that snapshot's `taken_at`.
 - Stale store: age only, no warning.
+- `snapshot_taken_at` NULL: `Snapshot  20260927T143005Z, time taken not recorded in its manifest` (no age, never
+  parsed from the ID, nothing on stderr); JSON `"taken_at":null` (key kept, never `""`).
+- `source_path` NULL or `""` (whitespace-only prints as-is): `Source    not recorded in the snapshot's manifest`;
+  JSON `"source":null`. Both NULL: both lines print.
+- Negative age (taken_at ahead of the clock): `just now`.
 - `--json`:
 ```json
 {"store":{"path":"…","format_version":2,"quarry_version":"(devel)","built_at":"2026-09-27T14:31:02Z","rows":{…the same 8 keys as sync's store.rows, "transfers":3141…}},
@@ -227,6 +232,7 @@ quarry says so on stderr. --limit 0 prints every row.
 | Q3 | any other query error, incl. `SET` after the lock (`quarry: query failed: Invalid Input Error: Cannot change configuration option "enable_external_access" - the configuration has been locked`) and `SELECT * FROM '/etc/hosts'` (Catalog Error) | `quarry: query failed: <first line of DuckDB's message>` | 1 |
 | Q4 | sql interrupted (SIGINT/SIGTERM) | `quarry: query interrupted` | 1 |
 | O2 | stdout write fails (EPIPE keeps Go's default death) | `quarry: cannot write the result to stdout: <OS reason>` | 1 |
+| H1 | `$HOME` unset or unresolvable (status/accounts/sql/sync) | `quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry <cmd> again` — one builder taking the command name; sync's text stays byte-identical; help and usage errors never need `$HOME` | 1 |
 | U5 | sql: no argument, empty/whitespace query, or `-` with empty stdin | `quarry: sql needs a query; pass it as one quoted argument, or - to read it from stdin` | 2 |
 | U6 | sql: more than one argument | `quarry: sql takes one query; quote it as one argument` | 2 |
 | U7 | `--limit` < 0 | `quarry: --limit must be 0 or more; 0 prints every row` | 2 |
