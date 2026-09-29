@@ -64,7 +64,7 @@ Scenarios complete: SCENARIO-01..21 (all; 05 folded into 04, 06 into 07; 10 into
 
 ## Open debts
 - MINOR (08 checkpoint, doc budgets): `internal/platform/duckdb/text.go` `cellValue`:34, `nativeValue`:48, `floatText`:116, `nestedText`:368, `needsQuotes`:386 (3→≤2), `nestedSpecial`:30 (→1); `typename.go:68` `parseTypeName` (4→≤2); `internal/cli/render_sql.go:121` `renderSQLTable` (3→≤2).
-- A SQL query starting with a comment (`quarry sql "-- monthly\nSELECT ..."`) is refused as an unknown flag unless preceded by `--` or piped via `sql -`; the spec's `sql "-- note"` → U5 row is unreachable as literally written - needs a product ruling (help text / Long mention of `--`, or a flag-parse change) - unowned, for the final product-vision pass.
+- A SQL query starting with a comment (`quarry sql "-- monthly\nSELECT ..."`) is refused as an unknown flag unless preceded by `--` or piped via `sql -`; the spec's `sql "-- note"` → U5 row is unreachable as literally written (today: U9 `unknown flag: -- note; Run 'quarry sql --help' for usage.`, exit 2, unpinned) - needs a mid-feature copy ruling before `/run-reviewers`; owner: orchestrator.
 - Snapshots accumulate (~200 MB each) until 2c - known gap, owned by Phase 2c.
 - Phase 1 doc-budget MINORs, TOCTOU on `--from`, Compose-method refactors and the other Phase 1 debts (`docs/specifications/phase1-import-store/STATE.md`) - unowned - die unless re-opened.
 - Phase 2 copy candidate: V1 stderr tail `fix the account in Quicken and run quarry sync` reads off when only splits fail - unowned until findings copy (2d).

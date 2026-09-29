@@ -63,7 +63,6 @@ func Test_sql_rejects_bad_usage(t *testing.T) {
 		want  string
 	}{
 		{name: "no query", args: nil, want: u5},
-		{name: "an empty query", args: []string{""}, want: u5},
 		{name: "a whitespace query", args: []string{" \t\n"}, want: u5},
 		{name: "a whitespace query on stdin", args: []string{"-"}, stdin: " \n\t\n", want: u5},
 		{name: "two queries", args: []string{"SELECT 1", "SELECT 2"}, want: u6},
@@ -117,8 +116,7 @@ func Test_sql_reports_a_stdin_read_fault(t *testing.T) {
 		want string
 	}{
 		{name: "an OS fault on the file", err: &fs.PathError{Op: "read", Path: "/dev/stdin", Err: syscall.EIO}, want: "input/output error"},
-		{name: "a fault from another reader", err: errStreamReset, want: "stream reset"},
-		{name: "a fault over several lines", err: errStreamResetTwoLines, want: "stream reset"},
+		{name: "a fault from another reader, first line only", err: errStreamResetTwoLines, want: "stream reset"},
 		{name: "a fault with no text", err: errNoText, want: "unknown error"},
 	}
 

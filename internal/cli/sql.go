@@ -101,11 +101,14 @@ quarry says so on stderr. --limit 0 prints every row.`,
 // readQueryFromStdin is the query argument that reads the query from stdin.
 const readQueryFromStdin = "-"
 
-var (
-	errSQLNeedsQuery    = UsageError{msg: "sql needs a query; pass it as one quoted argument, or - to read it from stdin"}
-	errSQLTakesOneQuery = UsageError{msg: "sql takes one query; quote it as one argument"}
-	errSQLNegativeLimit = UsageError{msg: "--limit must be 0 or more; 0 prints every row"}
-)
+// errSQLNeedsQuery refuses a missing or blank query, stdin's included.
+var errSQLNeedsQuery = UsageError{msg: "sql needs a query; pass it as one quoted argument, or - to read it from stdin"}
+
+// errSQLTakesOneQuery refuses more than one query argument.
+var errSQLTakesOneQuery = UsageError{msg: "sql takes one query; quote it as one argument"}
+
+// errSQLNegativeLimit refuses a --limit below zero.
+var errSQLNegativeLimit = UsageError{msg: "--limit must be 0 or more; 0 prints every row"}
 
 // readStdinQuery reads all of in as the query, verbatim. It refuses an
 // interrupt, then a read fault, then a blank query, in that order.
