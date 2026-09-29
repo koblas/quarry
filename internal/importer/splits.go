@@ -21,10 +21,10 @@ ORDER BY e.ZPARENT, e.Z_PK
 // amount is missing, stored as text or blob, has too much precision or is
 // too large, is added to off and excluded. An entry whose parent exists but was
 // itself excluded (deleted, Smart/Investment, or its own offender) is
-// silently skipped. A category reference to a deleted or missing category
-// stores NULL.
+// silently skipped. A category reference to a deleted or missing category,
+// or to a PK in uncategorized, stores NULL.
 func mapSplits(
-	ctx context.Context, src Source, txns map[int64]txnRef, existingTransactions, existingCategories map[int64]bool, off *offenders,
+	ctx context.Context, src Source, txns map[int64]txnRef, existingTransactions, existingCategories, uncategorized map[int64]bool, off *offenders,
 ) ([]store.Split, []transferLink, map[int64]string, error) {
 	var rows []store.Split
 	var links []transferLink
@@ -77,7 +77,7 @@ func mapSplits(
 
 		id := fmt.Sprintf("split-%d", pk)
 		split := store.Split{ID: id, SourceID: pk, TransactionID: txn.ID, Amount: cents}
-		if category.Valid && existingCategories[category.Int64] {
+		if category.Valid && existingCategories[category.Int64] && !uncategorized[category.Int64] {
 			cid := fmt.Sprintf("cat-%d", category.Int64)
 			split.CategoryID = &cid
 		}
