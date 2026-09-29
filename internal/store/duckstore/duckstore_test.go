@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -523,16 +524,43 @@ func createLeavingPartial(t *testing.T, err error) func(context.Context, string)
 	}
 }
 
-func Test_replace_leaves_a_partial_it_did_not_create_when_the_name_is_taken(t *testing.T) {
+func Test_replace_names_its_build_file_with_its_process_id(t *testing.T) {
+	var created string
+	st := duckstore.New(t.TempDir(), duckstore.WithCreate(func(_ context.Context, path string) (duckstore.DB, error) {
+		created = filepath.Base(path)
+		return nil, errCreateBoom
+	}))
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.ErrorIs(t, err, errCreateBoom)
+	assert.Regexp(t, `^\.quarry-\d{8}T\d{6}Z-`+strconv.Itoa(os.Getpid())+`\.duckdb\.partial$`, created)
+}
+
+// The other run's partial is fresh, so neither this run's cleanup nor its sweep may take it.
+func Test_replace_leaves_a_concurrent_runs_live_partial_alone_when_its_own_create_fails(t *testing.T) {
 	dir := t.TempDir()
-	st := duckstore.New(dir, duckstore.WithCreate(createLeavingPartial(t, duckdb.ErrExists)))
+	other := filepath.Join(dir, ".quarry-20260927T143005Z-"+strconv.Itoa(os.Getpid()+1)+".duckdb.partial")
+	require.NoError(t, os.WriteFile(other, []byte("live build"), 0o600))
+	require.NoError(t, os.WriteFile(other+".wal", []byte("live wal"), 0o600))
+	st := duckstore.New(dir, duckstore.WithCreate(createLeavingPartial(t, errCreateBoom)))
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.ErrorIs(t, err, errCreateBoom)
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{filepath.Base(other), filepath.Base(other) + ".wal"}, direntNames(entries))
+}
+
+func Test_replace_reports_a_create_collision_as_an_untagged_build_failure(t *testing.T) {
+	st := duckstore.New(t.TempDir(), duckstore.WithCreate(createLeavingPartial(t, duckdb.ErrExists)))
 
 	_, err := st.Replace(t.Context(), minimalRows())
 
 	require.ErrorIs(t, err, duckdb.ErrExists)
-	entries, err := os.ReadDir(dir)
-	require.NoError(t, err)
-	assert.Len(t, entries, 2)
+	assert.NotErrorIs(t, err, store.ErrStoreNotWritable)
+	assert.NotErrorIs(t, err, store.ErrDiskFull)
 }
 
 func Test_replace_removes_the_partial_its_failed_create_left_behind(t *testing.T) {

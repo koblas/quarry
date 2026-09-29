@@ -13,18 +13,31 @@ import (
 )
 
 func Test_replace_removes_a_leftover_partial_just_past_the_age_gate(t *testing.T) {
-	dir := t.TempDir()
-	leftover := filepath.Join(dir, ".quarry-20260101T000000Z.duckdb.partial")
-	require.NoError(t, os.WriteFile(leftover, []byte("stale"), 0o600))
-	old := time.Now().Add(-61 * time.Minute)
-	require.NoError(t, os.Chtimes(leftover, old, old))
-	st := duckstore.New(dir)
+	cases := []struct {
+		name string
+		file string
+	}{
+		{"per-run name", ".quarry-20260101T000000Z-4242.duckdb.partial"},
+		{"per-run name's wal", ".quarry-20260101T000000Z-4242.duckdb.partial.wal"},
+		{"seconds-only name from an older release", ".quarry-20260101T000000Z.duckdb.partial"},
+	}
 
-	_, err := st.Replace(t.Context(), minimalRows())
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			leftover := filepath.Join(dir, c.file)
+			require.NoError(t, os.WriteFile(leftover, []byte("stale"), 0o600))
+			old := time.Now().Add(-61 * time.Minute)
+			require.NoError(t, os.Chtimes(leftover, old, old))
+			st := duckstore.New(dir)
 
-	require.NoError(t, err)
-	_, statErr := os.Stat(leftover)
-	assert.ErrorIs(t, statErr, os.ErrNotExist)
+			_, err := st.Replace(t.Context(), minimalRows())
+
+			require.NoError(t, err)
+			_, statErr := os.Stat(leftover)
+			assert.ErrorIs(t, statErr, os.ErrNotExist)
+		})
+	}
 }
 
 func Test_replace_leaves_a_leftover_partial_just_inside_the_age_gate_alone(t *testing.T) {
@@ -55,6 +68,8 @@ func Test_replace_sweep_leaves_near_miss_and_unrelated_files_alone(t *testing.T)
 		{"extra prefix before the dot", "x.quarry-20260927T143005Z.duckdb.partial"},
 		{"sqlite wal suffix, not duckdb's", ".quarry-20260927T143005Z.duckdb.partial-wal"},
 		{"snapshot-shaped, wrong extension", ".20260927T143005Z.sqlite.partial"},
+		{"empty process id", ".quarry-20260927T143005Z-.duckdb.partial"},
+		{"non-numeric process id", ".quarry-20260927T143005Z-12a.duckdb.partial"},
 	}
 
 	for _, c := range cases {
@@ -75,7 +90,7 @@ func Test_replace_sweep_leaves_near_miss_and_unrelated_files_alone(t *testing.T)
 	}
 }
 
-// The directory's own name matches leftoverPartialPattern, so only the
+// The directory's own name matches buildFilePattern, so only the
 // entry.IsDir() check (not the pattern) keeps it.
 func Test_replace_sweep_ignores_subdirectories(t *testing.T) {
 	dir := t.TempDir()

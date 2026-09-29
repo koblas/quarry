@@ -23,7 +23,7 @@ included), `SnapshotRef`, `Counts`, `Result` with its `Validation` and `NotImpor
 four store sentinels (`ErrValidationFailed`, `ErrStoreNotWritable`, `ErrDiskFull`,
 `ErrUnmappable`) — and no behaviour and no driver import.
 `internal/store/duckstore` holds the DuckDB schema DDL, the builder, and the atomic swap
-(build into `.quarry-<UTC>.duckdb.partial`, checkpoint and close, rename over
+(build into a per-run `.quarry-<UTC>-<pid>.duckdb.partial`, checkpoint and close, rename over
 `quarry.duckdb`). It is the only package outside `internal/platform/duckdb` that imports the
 driver. Only the importer knows Quicken's schema; neither store package knows it. The
 importer declares its own `Store` port with one method, `Replace(ctx, store.Rows)`, and

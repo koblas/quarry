@@ -22,11 +22,24 @@ const FileName = "quarry.duckdb"
 // leftoverMaxAge is how old a store partial must be before Replace's sweep removes it.
 const leftoverMaxAge = time.Hour
 
-// leftoverPartialPattern matches a store partial build file and its .wal.
-var leftoverPartialPattern = regexp.MustCompile(`^\.quarry-\d{8}T\d{6}Z\.duckdb\.partial(\.wal)?$`)
+// Build files are named .quarry-<UTC start>-<pid>.duckdb.partial; partialName
+// and buildFilePattern below are the only places the shape is spelled.
+const (
+	partialPrefix     = ".quarry-"
+	partialSuffix     = ".duckdb.partial"
+	partialNameLayout = "20060102T150405Z"
+)
 
-// partialNameLayout formats a partial build file's UTC timestamp, e.g. .quarry-20260927T143005Z.duckdb.partial.
-const partialNameLayout = "20060102T150405Z"
+// partialName is this run's own build file name: its UTC start and process
+// id, so no two concurrent runs share one.
+func partialName(start time.Time) string {
+	return fmt.Sprintf("%s%s-%d%s", partialPrefix, start.UTC().Format(partialNameLayout), os.Getpid(), partialSuffix)
+}
+
+// buildFilePattern matches any run's build file or its .wal, including the
+// seconds-only name older releases left behind.
+var buildFilePattern = regexp.MustCompile(`^` + regexp.QuoteMeta(partialPrefix) + `\d{8}T\d{6}Z(-\d+)?` +
+	regexp.QuoteMeta(partialSuffix) + `(\.wal)?$`)
 
 // moneyWidth and moneyScale match schemaDDL's DECIMAL(18,2) money columns.
 const moneyWidth, moneyScale = 18, 2
@@ -88,9 +101,9 @@ func createDuckDB(ctx context.Context, path string) (DB, error) {
 	return db, nil
 }
 
-// Replace creates the store directory (0700) if needed, sweeps aged build
-// leftovers and swaps rows into quarry.duckdb, removing any stale
-// quarry.duckdb.wal first. On failure its own partial is removed and the existing
+// Replace creates the store directory if needed, sweeps aged build leftovers
+// and swaps rows into quarry.duckdb, removing any stale quarry.duckdb.wal
+// first. On failure this run's own build file is removed and the existing
 // store is untouched; a permission fault matches store.ErrStoreNotWritable, disk-full store.ErrDiskFull.
 func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
@@ -99,14 +112,11 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
 	s.sweepLeftovers()
 
 	finalPath := s.Path()
-	partialPath := filepath.Join(s.dir, fmt.Sprintf(".quarry-%s.duckdb.partial", time.Now().UTC().Format(partialNameLayout)))
+	partialPath := filepath.Join(s.dir, partialName(time.Now()))
 
 	db, err := s.create(ctx, partialPath)
 	if err != nil {
-		// An existing partial belongs to another run started the same second.
-		if !errors.Is(err, duckdb.ErrExists) {
-			removePartial(partialPath)
-		}
+		removePartial(partialPath)
 		return "", buildError(err)
 	}
 
@@ -142,7 +152,7 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
 	return finalPath, nil
 }
 
-// sweepLeftovers best-effort removes leftoverPartialPattern matches in
+// sweepLeftovers best-effort removes buildFilePattern matches in
 // s.dir older than leftoverMaxAge; a ReadDir or Remove failure is silent.
 func (s *Store) sweepLeftovers() {
 	entries, err := os.ReadDir(s.dir)
@@ -151,7 +161,7 @@ func (s *Store) sweepLeftovers() {
 	}
 	cutoff := time.Now().Add(-leftoverMaxAge)
 	for _, entry := range entries {
-		if entry.IsDir() || !leftoverPartialPattern.MatchString(entry.Name()) {
+		if entry.IsDir() || !buildFilePattern.MatchString(entry.Name()) {
 			continue
 		}
 		info, err := entry.Info()
