@@ -241,7 +241,7 @@ func checkFormat(ctx context.Context, db ReadDB, path string) error {
 	}
 }
 
-// snapshotPath is the latest import run's snapshot path, or "" when
+// snapshotPath is the highest-id import run's snapshot path, or "" when
 // import_runs has no run to name.
 func snapshotPath(ctx context.Context, db ReadDB) string {
 	hasPath, _ := hasColumn(ctx, db, "import_runs", "snapshot_path")
@@ -270,10 +270,11 @@ func hasColumn(ctx context.Context, db ReadDB, table, column string) (bool, erro
 	return n > 0, nil
 }
 
-// Replace creates the store directory if needed, sweeps aged build leftovers
-// and swaps rows into quarry.duckdb, removing any stale quarry.duckdb.wal
-// first. On failure this run's own build file is removed and the existing
-// store is untouched; a permission fault matches store.ErrStoreNotWritable, disk-full store.ErrDiskFull.
+// Replace swaps rows into quarry.duckdb through a build file, carrying the
+// previous store's import_runs ahead of the new run, which it numbers after the
+// highest carried id. An unreadable history restarts at id 1 and comes back as
+// Replaced.HistoryFault. On failure the existing store is untouched; a permission
+// fault matches store.ErrStoreNotWritable, disk-full store.ErrDiskFull.
 func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, error) {
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return store.Replaced{}, buildError(err)

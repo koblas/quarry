@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-13
-status: open
+status: done
 ---
 
 # SCENARIO-13: sync keeps earlier builds in import_runs (absorbs SCENARIO-14)
@@ -32,10 +32,10 @@ Port survey: `importer.Store` has one method, `Replace`, one production call (`i
 
 ### Sweep
 - [x] Step 8: `docs/initial-prd.md:127,146,163` — P2c-13's quoted text verbatim: `:127` both cells; `:146` second sentence replaced, then P2c-13's closing sentence (`A snapshot never built ...`) after it (the rejected-snapshot sentence stays); `:163` drops `Quicken version, `
-- [ ] Step 9: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments within budget on `Replace` (`duckstore.go:275-278`), `Status` and `errImportRunCount` (`status.go:12,29-32`), `snapshotPath` (`:244-245`), `store.Rows`, `store.ImportRun` (`store.go:132,155-157`), `OpenError.SnapshotPath` (`open.go:18-21`), `Import` (`importer.go:42-48`), `duckstore/doc.go`
+- [x] Step 9: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments within budget on `Replace` (`duckstore.go:275-278`), `Status` and `errImportRunCount` (`status.go:12,29-32`), `snapshotPath` (`:244-245`), `store.Rows`, `store.ImportRun` (`store.go:132,155-157`), `OpenError.SnapshotPath` (`open.go:18-21`), `Import` (`importer.go:42-48`), `duckstore/doc.go`
 
 ### Verify
-- [ ] Step 10: full verification + `.claude/scripts/spec-check.py phase2c-snapshots-config` → tick SCENARIO-13, and SCENARIO-14 as delivered by SCENARIO-13, each with its acceptance test; rewrite this feature's `STATE.md` only (other features' STATE files are the orchestrator's at SHIP)
+- [x] Step 10: full verification + `.claude/scripts/spec-check.py phase2c-snapshots-config` → tick SCENARIO-13, and SCENARIO-14 as delivered by SCENARIO-13, each with its acceptance test; rewrite this feature's `STATE.md` only (other features' STATE files are the orchestrator's at SHIP)
 
 ## Handoff
 

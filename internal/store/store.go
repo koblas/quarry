@@ -129,7 +129,8 @@ type SplitTag struct {
 	TagID   string
 }
 
-// Rows is every row a store build writes, grouped by table.
+// Rows is every row a store build writes, grouped by table. ImportRuns holds
+// the new build's run only; the store carries earlier runs forward itself.
 type Rows struct {
 	Accounts     []Account
 	Categories   []Category

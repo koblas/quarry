@@ -9,7 +9,7 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// errImportRunCount refuses a store that does not pair one import run with one store_info row.
+// errImportRunCount refuses a store whose import_runs holds no run.
 var errImportRunCount = errors.New("expected exactly one import run")
 
 // statusQuery reads store_info, the import run and the transaction dates; NULL check counts read as zero.
@@ -27,9 +27,9 @@ SELECT i.format_version, i.quarry_version, i.built_at,
 FROM store_info i CROSS JOIN import_runs r
 ORDER BY r.id DESC LIMIT 1`
 
-// Status reads back what the store records about itself. It refuses a store
-// it cannot open or read, whose format is not this build's, or that holds
-// other than one import run, with *store.OpenError; a NULL
+// Status reads back what the store records about itself, from the highest-id
+// import run. It refuses a store it cannot open or read, whose format is not
+// this build's, or whose import_runs is empty, with *store.OpenError; a NULL
 // snapshot_taken_at or source_path reads as the zero value.
 func (s *Store) Status(ctx context.Context) (store.Status, error) {
 	db, err := s.openRead(ctx)
