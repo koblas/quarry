@@ -23,6 +23,7 @@
 | 3 | correctness, test | 1/0/0/3 | 0 / 5, 96s | BLOCKED |
 | 4 | correctness | 1/0/2/1 | 0 / 2, 40s | BLOCKED |
 | 5 | correctness | 1/0/0/0 | 0 / 3, 72s | BLOCKED |
+| 6 | orchestrator verification (one-line prescribed fix) | 0/0/0/0 | — | PASS WITH FOLLOW-UPS |
 
 ## Tokens
 
