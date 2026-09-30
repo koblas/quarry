@@ -116,3 +116,12 @@ func skipAsRoot(t *testing.T) {
 func day(year int, month time.Month, dayOfMonth int) time.Time {
 	return time.Date(year, month, dayOfMonth, 0, 0, 0, 0, time.UTC)
 }
+
+// openReadOnly opens the store file at path read-only, closing it when t ends.
+func openReadOnly(t *testing.T, path string) *duckdb.DB {
+	t.Helper()
+	db, err := duckdb.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}

@@ -75,9 +75,7 @@ func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(dir, "quarry.duckdb"), path)
 
-	db, err := duckdb.OpenReadOnly(t.Context(), path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := openReadOnly(t, path)
 
 	assertScalar(t, db, "SELECT name FROM accounts WHERE id = 'acct-1'", "Chequing")
 	assertScalar(t, db, "SELECT institution FROM accounts WHERE id = 'acct-1'", "Big Bank")
@@ -117,9 +115,7 @@ func Test_replace_stores_the_report_flags_and_the_posted_date(t *testing.T) {
 	path, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
 
 	require.NoError(t, err)
-	db, err := duckdb.OpenReadOnly(t.Context(), path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := openReadOnly(t, path)
 	assertScalar(t, db, "SELECT CAST(in_reports AS VARCHAR) FROM accounts WHERE id = 'acct-1'", "true")
 	assertScalar(t, db, "SELECT CAST(in_reports AS VARCHAR) FROM accounts WHERE id = 'acct-2'", "false")
 	assertScalar(t, db, "SELECT CAST(excluded_from_reports AS VARCHAR) FROM transactions WHERE id = 'txn-1'", "true")
@@ -138,9 +134,7 @@ func Test_replace_stores_linked_tracking_per_account(t *testing.T) {
 	path, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
 
 	require.NoError(t, err)
-	db, err := duckdb.OpenReadOnly(t.Context(), path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := openReadOnly(t, path)
 	assertScalar(t, db, "SELECT CAST(linked_tracking AS VARCHAR) FROM accounts WHERE id = 'acct-1'", "false")
 	assertScalar(t, db, "SELECT CAST(linked_tracking AS VARCHAR) FROM accounts WHERE id = 'acct-2'", "true")
 	assertScalar(t, db, "SELECT CAST(in_reports AS VARCHAR) FROM accounts WHERE id = 'acct-2'", "true")
@@ -152,9 +146,7 @@ func Test_replace_leaves_a_held_reader_on_the_old_rows_and_a_later_read_sees_the
 	st := duckstore.New(t.TempDir())
 	path, err := st.Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
-	held, err := duckdb.OpenReadOnly(t.Context(), path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = held.Close() })
+	held := openReadOnly(t, path)
 	renamed := minimalRows()
 	renamed.Accounts[0].Name = "Savings"
 
@@ -177,9 +169,7 @@ func Test_replace_writes_one_store_info_row_with_the_format_version_and_build_ti
 
 	after := time.Now().UTC()
 	require.NoError(t, err)
-	db, err := duckdb.OpenReadOnly(t.Context(), path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := openReadOnly(t, path)
 	assertScalar(t, db, "SELECT CAST(count(*) AS VARCHAR) FROM store_info", "1")
 	assertScalar(t, db, "SELECT CAST(format_version AS VARCHAR) FROM store_info", strconv.Itoa(duckstore.FormatVersion))
 	var builtAt time.Time
@@ -196,9 +186,7 @@ func Test_replace_records_the_quarry_version_it_is_given(t *testing.T) {
 	path, err := duckstore.New(dir, duckstore.WithQuarryVersion("v1.2.3")).Replace(t.Context(), minimalRows())
 
 	require.NoError(t, err)
-	db, err := duckdb.OpenReadOnly(t.Context(), path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := openReadOnly(t, path)
 	assertScalar(t, db, "SELECT quarry_version FROM store_info", "v1.2.3")
 }
 
@@ -219,9 +207,7 @@ func Test_replace_records_devel_when_no_quarry_version_is_given(t *testing.T) {
 			path, err := duckstore.New(t.TempDir(), c.opts...).Replace(t.Context(), minimalRows())
 
 			require.NoError(t, err)
-			db, err := duckdb.OpenReadOnly(t.Context(), path)
-			require.NoError(t, err)
-			t.Cleanup(func() { _ = db.Close() })
+			db := openReadOnly(t, path)
 			assertScalar(t, db, "SELECT quarry_version FROM store_info", "(devel)")
 		})
 	}
@@ -236,9 +222,7 @@ func Test_replace_stores_null_when_the_snapshot_has_no_taken_at_or_source(t *tes
 	path, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
 
 	require.NoError(t, err)
-	db, err := duckdb.OpenReadOnly(t.Context(), path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := openReadOnly(t, path)
 	assertScalar(t, db, "SELECT COALESCE(CAST(snapshot_taken_at AS VARCHAR), 'NULL') || ' / ' || COALESCE(source_path, 'NULL') FROM import_runs",
 		"NULL / NULL")
 }
@@ -279,9 +263,7 @@ func Test_replace_keeps_a_negative_amounts_sign(t *testing.T) {
 	path, err := st.Replace(t.Context(), rows)
 	require.NoError(t, err)
 
-	db, err := duckdb.OpenReadOnly(t.Context(), path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := openReadOnly(t, path)
 	assertScalar(t, db, "SELECT CAST(amount AS VARCHAR) FROM transactions WHERE id = 'txn-1'", "-12.04")
 }
 
