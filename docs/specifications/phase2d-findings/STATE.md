@@ -36,3 +36,5 @@ Scenarios complete: SCENARIO-01..05 (02, 03 delivered by 01; 05 by 04). Last upd
 - Checkpoint 01 MINOR (comment budget): `internal/store/duckstore/findings.go:12-13` const doc is 2 lines with a "how" clause — cut to one line
 - Checkpoint 01 MINOR (comment budget): `internal/store/duckstore/duckstore.go:391-393` `build` doc is 3 lines — trim to 2
 - Checkpoint 01 MINOR (comment): `internal/store/duckstore/findings.go:84-85` "findings come in the query's payee order" is unobservable how — drop; `internal/store/duckstore/doc.go:6` ~89 columns — re-wrap
+- Checkpoint 04 MINOR (comment budget): `internal/cli/render.go:86-89` `renderStore` doc 4 lines — trim to 2 (drop "One-sided legs appear only as a count here")
+- Checkpoint 04 MINOR (comment budget): `internal/cli/json.go:166-169` `newStoreDocument` doc 3 lines — trim to 2
