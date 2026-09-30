@@ -2,31 +2,28 @@ package duckstore_test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func civil(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
-
 // emptyWindowParams is a window before any transaction of minimalRows.
 func emptyWindowParams() store.SpendingParams {
-	return store.SpendingParams{Window: store.Window{Since: civil(1990, 1, 1), Until: civil(1990, 1, 31)}}
+	return store.SpendingParams{Window: store.Window{Since: day(1990, 1, 1), Until: day(1990, 1, 31)}}
 }
 
 func Test_spending_gives_the_store_transaction_range_when_the_window_holds_no_spending(t *testing.T) {
 	t.Parallel()
 	rows := accountRows()
-	addSplit(&rows, splitSpec{id: "income", category: new(catIncome), amount: 500, date: civil(2003, 1, 4)})
-	addSplit(&rows, splitSpec{id: "late", account: acctNotReports, category: new(catExpense), amount: -100, date: civil(2025, 12, 31)})
+	addSplit(&rows, splitSpec{id: "income", category: new(catIncome), amount: 500, date: day(2003, 1, 4)})
+	addSplit(&rows, splitSpec{id: "late", account: acctNotReports, category: new(catExpense), amount: -100, date: day(2025, 12, 31)})
 	st := newStoreWith(t, rows)
 
 	got, err := st.Spending(t.Context(), spendingParams())
 
 	require.NoError(t, err)
-	assert.Equal(t, store.TransactionRange{First: civil(2003, 1, 4), Last: civil(2025, 12, 31)}, got.Transactions)
+	assert.Equal(t, store.TransactionRange{First: day(2003, 1, 4), Last: day(2025, 12, 31)}, got.Transactions)
 	assert.Empty(t, got.Totals)
 }
 
@@ -43,7 +40,7 @@ func Test_spending_gives_a_zero_range_when_the_store_has_no_transactions(t *test
 func Test_spending_leaves_the_transaction_range_unset_when_the_window_holds_spending(t *testing.T) {
 	t.Parallel()
 	rows := accountRows()
-	addSplit(&rows, splitSpec{id: "old", category: new(catExpense), amount: -100, date: civil(2003, 1, 4)})
+	addSplit(&rows, splitSpec{id: "old", category: new(catExpense), amount: -100, date: day(2003, 1, 4)})
 	addSplit(&rows, splitSpec{id: "now", category: new(catExpense), amount: -200})
 	st := newStoreWith(t, rows)
 
@@ -57,25 +54,25 @@ func Test_spending_leaves_the_transaction_range_unset_when_the_window_holds_spen
 func Test_spending_ranges_over_the_reported_accounts_it_is_named_for(t *testing.T) {
 	t.Parallel()
 	rows := accountRows()
-	addSplit(&rows, splitSpec{id: "left-out", account: acctNotReports, category: new(catExpense), amount: -100, date: civil(2001, 5, 5)})
-	addSplit(&rows, splitSpec{id: "linked", account: acctLinked, category: new(catExpense), amount: -100, date: civil(1999, 1, 1)})
-	addSplit(&rows, splitSpec{id: "first", account: acctInReports, category: new(catExpense), amount: -100, date: civil(2019, 3, 2)})
-	addSplit(&rows, splitSpec{id: "last", account: acctInReports, category: new(catExpense), amount: -100, date: civil(2024, 11, 30)})
-	addSplit(&rows, splitSpec{id: "unnamed", account: acctSecond, category: new(catExpense), amount: -100, date: civil(2010, 2, 2)})
-	addSplit(&rows, splitSpec{id: "unnamed-late", account: acctSecond, category: new(catExpense), amount: -100, date: civil(2025, 8, 8)})
+	addSplit(&rows, splitSpec{id: "left-out", account: acctNotReports, category: new(catExpense), amount: -100, date: day(2001, 5, 5)})
+	addSplit(&rows, splitSpec{id: "linked", account: acctLinked, category: new(catExpense), amount: -100, date: day(1999, 1, 1)})
+	addSplit(&rows, splitSpec{id: "first", account: acctInReports, category: new(catExpense), amount: -100, date: day(2019, 3, 2)})
+	addSplit(&rows, splitSpec{id: "last", account: acctInReports, category: new(catExpense), amount: -100, date: day(2024, 11, 30)})
+	addSplit(&rows, splitSpec{id: "unnamed", account: acctSecond, category: new(catExpense), amount: -100, date: day(2010, 2, 2)})
+	addSplit(&rows, splitSpec{id: "unnamed-late", account: acctSecond, category: new(catExpense), amount: -100, date: day(2025, 8, 8)})
 	st := newStoreWith(t, rows)
 
 	got, err := st.Spending(t.Context(), namedAccounts(spendingParams(), acctNotReports, acctLinked, acctInReports))
 
 	require.NoError(t, err)
-	assert.Equal(t, store.TransactionRange{First: civil(2019, 3, 2), Last: civil(2024, 11, 30)}, got.Transactions)
+	assert.Equal(t, store.TransactionRange{First: day(2019, 3, 2), Last: day(2024, 11, 30)}, got.Transactions)
 }
 
 func Test_spending_gives_a_zero_range_when_every_named_account_is_left_out_of_reports(t *testing.T) {
 	t.Parallel()
 	rows := accountRows()
-	addSplit(&rows, splitSpec{id: "left-out", account: acctNotReports, category: new(catExpense), amount: -100, date: civil(2001, 5, 5)})
-	addSplit(&rows, splitSpec{id: "unnamed", account: acctSecond, category: new(catExpense), amount: -100, date: civil(2010, 2, 2)})
+	addSplit(&rows, splitSpec{id: "left-out", account: acctNotReports, category: new(catExpense), amount: -100, date: day(2001, 5, 5)})
+	addSplit(&rows, splitSpec{id: "unnamed", account: acctSecond, category: new(catExpense), amount: -100, date: day(2010, 2, 2)})
 	st := newStoreWith(t, rows)
 
 	got, err := st.Spending(t.Context(), namedAccounts(spendingParams(), acctNotReports))
@@ -87,8 +84,8 @@ func Test_spending_gives_a_zero_range_when_every_named_account_is_left_out_of_re
 func Test_spending_gives_a_zero_range_when_every_named_account_uses_linked_account_tracking(t *testing.T) {
 	t.Parallel()
 	rows := accountRows()
-	addSplit(&rows, splitSpec{id: "linked", account: acctLinked, category: new(catExpense), amount: -100, date: civil(2001, 5, 5)})
-	addSplit(&rows, splitSpec{id: "unnamed", account: acctSecond, category: new(catExpense), amount: -100, date: civil(2010, 2, 2)})
+	addSplit(&rows, splitSpec{id: "linked", account: acctLinked, category: new(catExpense), amount: -100, date: day(2001, 5, 5)})
+	addSplit(&rows, splitSpec{id: "unnamed", account: acctSecond, category: new(catExpense), amount: -100, date: day(2010, 2, 2)})
 	st := newStoreWith(t, rows)
 
 	got, err := st.Spending(t.Context(), namedAccounts(spendingParams(), acctLinked))

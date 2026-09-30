@@ -24,7 +24,7 @@ func renderStatus(st store.Status, home string, now time.Time) string {
 	fmt.Fprintf(&b, "%-10s%s\n", "Source", sourceLine(run.Snapshot.Source, home))
 	fmt.Fprintf(&b, "%-10s%s\n", "Dates", datesLine(st.FirstDate, st.LastDate))
 	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(run.Counts, store.NotImported{InvestmentTransactions: run.InvestmentTransactionsNotImported}))
-	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(run.BalancesChecked, run.BalancesNeverReconciled, run.InvestmentAccounts))
+	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(balanceCounts{Checked: run.BalancesChecked, NeverReconciled: run.BalancesNeverReconciled, InvestmentAccounts: run.InvestmentAccounts}))
 	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(run.Counts.Transactions))
 	fmt.Fprintf(&b, "%-10s%s\n", "Transfers", transfersPhrase(run.TransfersPaired, run.TransfersOneSided))
 	return b.String()

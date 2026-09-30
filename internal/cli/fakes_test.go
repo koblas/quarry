@@ -2,10 +2,16 @@ package cli_test
 
 import (
 	"context"
+	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
+	"github.com/stretchr/testify/require"
 )
+
+// spendNow is the clock every report command test runs at: 2026-09-29 noon UTC.
+var spendNow = time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
 
 // fakeReportStore answers each read with a canned result or err, recording its arguments in the
 // matching got* field when set; Status panics through the nil embedded interface.
@@ -55,3 +61,13 @@ func (f fakeReportStore) Query(_ context.Context, query string, maxRows int) (st
 type failingWriter struct{ err error }
 
 func (w failingWriter) Write([]byte) (int, error) { return 0, w.err }
+
+// span is the range of transaction dates from first to last, both YYYY-MM-DD.
+func span(t *testing.T, first, last string) store.TransactionRange {
+	t.Helper()
+	from, err := time.Parse(time.DateOnly, first)
+	require.NoError(t, err)
+	to, err := time.Parse(time.DateOnly, last)
+	require.NoError(t, err)
+	return store.TransactionRange{First: from, Last: to}
+}

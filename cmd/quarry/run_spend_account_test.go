@@ -7,27 +7,18 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
-	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// spendEnv is an env writing to stdout and stderr, with the clock at 2026-09-29.
-func spendEnv(stdout, stderr *bytes.Buffer) cli.Env {
-	e := defaultEnv(stdout, stderr)
-	e.Now = func() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC) }
-	return e
-}
 
 func Test_run_spend_counts_only_the_accounts_it_is_given(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
-			{ID: "acct-chq", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
+			chequingAccount("acct-chq", 1),
 			{ID: "acct-visa", SourceID: 2, Name: "Visa Infinite", Type: "credit_card", Currency: "CAD", Closed: true},
 			{ID: "acct-sav", SourceID: 3, Name: "Savings", Type: "savings", Currency: "CAD", Active: true},
 		},
@@ -97,7 +88,7 @@ func Test_run_spend_ranges_a_linked_and_a_reported_named_account_over_the_report
 	replaceStore(t, home, spendRows(
 		[]store.Account{
 			{ID: "acct-401k", SourceID: 1, Name: "Netskope 401(k)", Type: "retirement", Currency: "USD", Active: true, LinkedTracking: true},
-			{ID: "acct-chq", SourceID: 2, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
+			chequingAccount("acct-chq", 2),
 		},
 		spendSplit{id: "s01", account: "acct-401k", category: "cat-groceries", currency: "USD", day: day(2003, 1, 4), cents: -900},
 		spendSplit{id: "s02", account: "acct-chq", category: "cat-groceries", currency: "CAD", day: day(2019, 3, 2), cents: -100},
@@ -142,7 +133,7 @@ func Test_run_spend_refuses_an_account_it_cannot_pick(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
 			replaceStore(t, home, spendRows([]store.Account{
-				{ID: "acct-chq", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
+				chequingAccount("acct-chq", 1),
 				{ID: "acct-977", SourceID: 2, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
 				{ID: "acct-812", SourceID: 3, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
 			}))

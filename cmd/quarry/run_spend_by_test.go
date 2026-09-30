@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -19,8 +18,8 @@ func Test_run_spend_by_payee_groups_spending_by_payee_and_currency_biggest_first
 	t.Setenv("HOME", home)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
-			{ID: "acct-cad", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
-			{ID: "acct-usd", SourceID: 2, Name: "US Chequing", Type: "chequing", Currency: "USD", Active: true},
+			chequingAccount("acct-cad", 1),
+			usdChequingAccount("acct-usd", 2),
 		},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", payee: "payee-costco", currency: "CAD", day: day(2026, 3, 10), cents: -30000},
 		spendSplit{id: "s02", account: "acct-cad", category: "cat-groceries", payee: "payee-bakery", currency: "CAD", day: day(2026, 3, 11), cents: -1000},
@@ -29,8 +28,7 @@ func Test_run_spend_by_payee_groups_spending_by_payee_and_currency_biggest_first
 		spendSplit{id: "s05", account: "acct-usd", category: "cat-groceries", payee: "payee-costco", currency: "USD", day: day(2026, 4, 1), cents: -31210},
 	))
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
-	env.Now = func() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC) }
+	env := spendEnv(&stdout, &stderr)
 
 	exitCode := runWith(context.Background(), []string{"spend", "--by", "payee"}, env)
 
@@ -53,8 +51,8 @@ func Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_to
 	t.Setenv("HOME", home)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
-			{ID: "acct-cad", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
-			{ID: "acct-usd", SourceID: 2, Name: "US Chequing", Type: "chequing", Currency: "USD", Active: true},
+			chequingAccount("acct-cad", 1),
+			usdChequingAccount("acct-usd", 2),
 		},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -10000, tags: []string{"tag-vacation", "tag-alpha"}},
 		spendSplit{id: "s02", account: "acct-cad", category: "cat-fuel", currency: "CAD", day: day(2026, 5, 2), cents: -2500, tags: []string{"tag-vacation"}},
@@ -62,8 +60,7 @@ func Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_to
 		spendSplit{id: "s04", account: "acct-usd", category: "cat-groceries", currency: "USD", day: day(2026, 4, 1), cents: -31210, tags: []string{"tag-alpha"}},
 	))
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
-	env.Now = func() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC) }
+	env := spendEnv(&stdout, &stderr)
 
 	exitCode := runWith(context.Background(), []string{"spend", "--by", "tag"}, env)
 
@@ -87,15 +84,14 @@ func Test_run_spend_by_month_fills_empty_months_and_marks_a_cut_short_month_part
 	t.Setenv("HOME", home)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
-			{ID: "acct-cad", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
+			chequingAccount("acct-cad", 1),
 		},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 1, 10), cents: -9999},
 		spendSplit{id: "s02", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 1, 20), cents: -5000},
 		spendSplit{id: "s03", account: "acct-cad", category: "cat-fuel", currency: "CAD", day: day(2026, 3, 10), cents: -12000},
 	))
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
-	env.Now = func() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC) }
+	env := spendEnv(&stdout, &stderr)
 
 	exitCode := runWith(context.Background(),
 		[]string{"spend", "--by", "month", "--since", "2026-01-15", "--until", "2026-03"}, env)

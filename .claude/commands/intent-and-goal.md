@@ -143,10 +143,12 @@ architect folds these into the scenario plans rather than deferring them.>
 
 ## Surface & Copy
 <The literal surface `product-vision` ruled on in Phase 1: command and flag names, flag help
-strings, success / refusal / fix lines, exit codes, `--json` field names. The developer
-implements these strings verbatim rather than inventing copy at the keyboard, and the final
-`product-vision` pass reviews against this section. A line invented during implementation is
-a line nobody ruled on — the final pass will send it back.>
+strings, success / refusal / fix lines, exit codes, `--json` field names. Under a
+`### Changes to existing surfaces` subsection: each existing help Long, error line or skill
+text the feature makes false, with its replacement line ('none' if the sweep found nothing).
+The developer implements these strings verbatim rather than inventing copy at the
+keyboard, and the final `product-vision` pass reviews against this section. A line invented
+during implementation is a line nobody ruled on — the final pass will send it back.>
 
 ---
 

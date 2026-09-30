@@ -47,10 +47,10 @@ func Test_run_cashflow_total_spent_equals_spend_total_per_currency(t *testing.T)
 			t.Setenv("HOME", home)
 			rows := cashFlowRows(
 				[]store.Account{
-					{ID: "acct-cad", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
+					chequingAccount("acct-cad", 1),
 					{ID: "acct-sav", SourceID: 2, Name: "Savings", Type: "savings", Currency: "CAD", Active: true},
 					{ID: "acct-out", SourceID: 3, Name: "Old Card", Type: "credit_card", Currency: "CAD", Active: true, NotInReports: true},
-					{ID: "acct-usd", SourceID: 4, Name: "US Chequing", Type: "chequing", Currency: "USD", Active: true},
+					usdChequingAccount("acct-usd", 4),
 				},
 				spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -10000},
 				spendSplit{id: "s02", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 12), cents: 3000},

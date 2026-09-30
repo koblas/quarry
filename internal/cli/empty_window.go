@@ -11,6 +11,9 @@ import (
 func leftOutWarnings(accounts []store.Account, command string) []string {
 	warnings := []string{}
 	for _, a := range accounts {
+		if !a.LeftOutOfReports() {
+			continue
+		}
 		switch {
 		case a.LinkedTracking:
 			warnings = append(warnings, linkedTrackingWarning(a, command))

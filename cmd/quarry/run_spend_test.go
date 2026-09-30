@@ -14,72 +14,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// utcMinus5 is a zone whose evening is already the next day in UTC.
-var utcMinus5 = time.FixedZone("UTC-5", -5*60*60)
-
-// spendSplit is one single-split transaction; "" category or payee means none,
-// negative cents is money out, and tags are tag ids.
-type spendSplit struct {
-	id, account, category, payee, currency string
-	day                                    time.Time
-	cents                                  int64
-	tags                                   []string
-}
-
-// spendRows is a store of accounts holding splits, inside one import run.
-func spendRows(accounts []store.Account, splits ...spendSplit) store.Rows {
-	rows := store.Rows{
-		Accounts: accounts,
-		Payees: []store.Payee{
-			{ID: "payee-costco", SourceID: 1, Name: "Costco"},
-			{ID: "payee-bakery", SourceID: 2, Name: "Bakery"},
-		},
-		Tags: []store.Tag{
-			{ID: "tag-vacation", SourceID: 1, Name: "Vacation"},
-			{ID: "tag-alpha", SourceID: 2, Name: "alpha"},
-		},
-		Categories: []store.Category{
-			{ID: "cat-fuel", SourceID: 1, Name: "Fuel", FullPath: "Auto:Fuel", Kind: "expense"},
-			{ID: "cat-groceries", SourceID: 2, Name: "Groceries", FullPath: "Food:Groceries", Kind: "expense"},
-		},
-		ImportRuns: []store.ImportRun{{
-			ID: 1, StartedAt: time.Unix(0, 0).UTC(), FinishedAt: time.Unix(0, 0).UTC(),
-			Snapshot: store.SnapshotRef{Path: "/snapshots/20260929T000000Z.sqlite", SHA256: "9f86", SchemaFingerprint: "sha256:abc"},
-		}},
-	}
-	for _, s := range splits {
-		var category *string
-		if s.category != "" {
-			category = new(s.category)
-		}
-		var payee *string
-		if s.payee != "" {
-			payee = new(s.payee)
-		}
-		rows.Transactions = append(rows.Transactions, store.Transaction{
-			ID: "txn-" + s.id, SourceID: 1, AccountID: s.account, Date: s.day,
-			Amount: s.cents, Currency: s.currency, Status: "uncleared", PayeeID: payee,
-		})
-		rows.Splits = append(rows.Splits, store.Split{
-			ID: "split-" + s.id, SourceID: 1, TransactionID: "txn-" + s.id, CategoryID: category, Amount: s.cents,
-		})
-		for _, tag := range s.tags {
-			rows.SplitTags = append(rows.SplitTags, store.SplitTag{SplitID: "split-" + s.id, TagID: tag})
-		}
-	}
-	return rows
-}
-
-// day is the civil day y-m-d at UTC midnight, as the store dates transactions.
-func day(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
-
 func Test_run_spend_shows_this_years_spending_by_category_in_each_currency(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
-			{ID: "acct-cad", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
-			{ID: "acct-usd", SourceID: 2, Name: "US Chequing", Type: "chequing", Currency: "USD", Active: true},
+			chequingAccount("acct-cad", 1),
+			usdChequingAccount("acct-usd", 2),
 		},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -12345},
 		spendSplit{id: "s02", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 9, 29), cents: -1000},
@@ -90,8 +31,7 @@ func Test_run_spend_shows_this_years_spending_by_category_in_each_currency(t *te
 		spendSplit{id: "s07", account: "acct-cad", category: "cat-fuel", currency: "CAD", day: day(2026, 9, 30), cents: -77700},
 	))
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
-	env.Now = func() time.Time { return time.Date(2026, 9, 29, 22, 0, 0, 0, utcMinus5) }
+	env := spendEnvAt(&stdout, &stderr, time.Date(2026, 9, 29, 22, 0, 0, 0, utcMinus5))
 
 	exitCode := runWith(context.Background(), []string{"spend"}, env)
 
@@ -114,15 +54,14 @@ func Test_run_spend_leaves_out_accounts_quicken_does_not_use_in_reports(t *testi
 	t.Setenv("HOME", home)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
-			{ID: "acct-in", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
+			chequingAccount("acct-in", 1),
 			{ID: "acct-out", SourceID: 2, Name: "Old Card", Type: "credit_card", Currency: "CAD", Active: true, NotInReports: true},
 		},
 		spendSplit{id: "s01", account: "acct-in", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -2500},
 		spendSplit{id: "s02", account: "acct-out", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 11), cents: -900},
 	))
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
-	env.Now = func() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC) }
+	env := spendEnv(&stdout, &stderr)
 
 	exitCode := runWith(context.Background(), []string{"spend"}, env)
 

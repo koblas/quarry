@@ -34,8 +34,9 @@ func renderAccountsJSON(list store.AccountList, warnings []string) ([]byte, erro
 		rows[i] = accountRowDocument{
 			ID: a.ID, Name: a.Name, Type: a.Type, Currency: a.Currency,
 			Institution: jsonNullInstitution(a.Institution),
-			Closed:      a.Closed, Active: a.Active, InReports: !a.NotInReports, LinkedTracking: a.LinkedTracking,
-			Balance: jsonNullMoney(a.Balance),
+			Closed:      a.Closed, Active: a.Active, InReports: !a.NotInReports,
+			LinkedTracking: a.LinkedTracking,
+			Balance:        jsonNullMoney(a.Balance),
 		}
 	}
 	return marshalDocument(accountsDocument{AsOf: list.AsOf.Format(jsonDateLayout), Accounts: rows, Warnings: warnings})

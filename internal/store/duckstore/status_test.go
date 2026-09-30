@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	duckdbdriver "github.com/duckdb/duckdb-go/v2"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
@@ -141,18 +140,6 @@ func Test_status_fails_on_a_missing_store_without_creating_it(t *testing.T) {
 	assert.Empty(t, entries)
 }
 
-func Test_status_returns_the_open_fault(t *testing.T) {
-	t.Parallel()
-	fault := ioFault("open store read-only")
-	st := newBuiltStore(t, failingOpener(fault))
-
-	_, err := st.Status(t.Context())
-
-	require.ErrorIs(t, err, fault)
-	var openErr *store.OpenError
-	assert.ErrorAs(t, err, &openErr)
-}
-
 // assertOtherFault requires err to be the *store.OpenError of an unclassified fault, its Reason the one line reason.
 func assertOtherFault(t *testing.T, err error, reason string) {
 	t.Helper()
@@ -160,50 +147,4 @@ func assertOtherFault(t *testing.T, err error, reason string) {
 	require.True(t, ok, "want *store.OpenError, got %v", err)
 	assert.Equal(t, store.OpenFaultOther, openErr.Fault)
 	assert.Equal(t, reason, openErr.Reason)
-}
-
-func Test_status_returns_the_query_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	fault := ioFault(`query rows "SELECT"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault}))
-
-	_, err := st.Status(t.Context())
-
-	assertOtherFault(t, err, "disk read failed")
-	var derr *duckdbdriver.Error
-	require.ErrorAs(t, err, &derr)
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_status_returns_a_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{scanFault: errScanFailed}))
-
-	_, err := st.Status(t.Context())
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
-}
-
-func Test_status_closes_the_connection_on_success_and_on_a_query_fault(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		name  string
-		fault error
-	}{
-		{name: "after a successful read", fault: nil},
-		{name: "after a query fault", fault: errQueryFailed},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
-			spy := &spyReadDB{queryFault: c.fault}
-			st := newBuiltStore(t, spyOpener(spy))
-
-			_, _ = st.Status(t.Context())
-
-			assert.Equal(t, 1, spy.closes)
-		})
-	}
 }

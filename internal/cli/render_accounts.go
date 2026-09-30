@@ -20,7 +20,7 @@ func renderAccounts(list store.AccountList) string {
 	rows := make([][]string, 0, 1+len(list.Accounts))
 	rows = append(rows, header)
 	for _, a := range list.Accounts {
-		rows = append(rows, []string{a.Name, a.Type, a.Currency, accountBalance(a.Balance), accountStatus(a.Closed, a.Active, a.NotInReports, a.LinkedTracking)})
+		rows = append(rows, []string{a.Name, a.Type, a.Currency, accountBalance(a.Balance), accountStatus(a.Account)})
 	}
 
 	widths := make([]int, len(header)-1)
@@ -54,18 +54,18 @@ func accountBalance(cents *int64) string {
 
 // accountStatus joins, with ", ", the state (closed or inactive), "not in reports" and
 // "linked tracking" that apply; "" when none does.
-func accountStatus(closed, active, notInReports, linkedTracking bool) string {
+func accountStatus(a store.Account) string {
 	var parts []string
 	switch {
-	case closed:
+	case a.Closed:
 		parts = append(parts, "closed")
-	case !active:
+	case !a.Active:
 		parts = append(parts, "inactive")
 	}
-	if notInReports {
+	if a.NotInReports {
 		parts = append(parts, "not in reports")
 	}
-	if linkedTracking {
+	if a.LinkedTracking {
 		parts = append(parts, "linked tracking")
 	}
 	return strings.Join(parts, ", ")

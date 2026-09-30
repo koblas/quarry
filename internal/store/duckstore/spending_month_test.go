@@ -15,10 +15,6 @@ func monthParams() store.SpendingParams {
 	return params
 }
 
-func day(year int, month time.Month, dayOfMonth int) time.Time {
-	return time.Date(year, month, dayOfMonth, 0, 0, 0, 0, time.UTC)
-}
-
 func Test_spending_by_month_groups_each_currency_by_calendar_month(t *testing.T) {
 	t.Parallel()
 	rows := spendRows()

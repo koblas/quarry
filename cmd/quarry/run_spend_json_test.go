@@ -18,8 +18,8 @@ func Test_run_spend_json_returns_spending_as_a_document(t *testing.T) {
 	t.Setenv("HOME", home)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
-			{ID: "acct-cad", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
-			{ID: "acct-usd", SourceID: 2, Name: "US Chequing", Type: "chequing", Currency: "USD", Active: true},
+			chequingAccount("acct-cad", 1),
+			usdChequingAccount("acct-usd", 2),
 		},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -12345},
 		spendSplit{id: "s02", account: "acct-cad", category: "cat-fuel", currency: "CAD", day: day(2026, 5, 2), cents: -120450},
@@ -27,8 +27,7 @@ func Test_run_spend_json_returns_spending_as_a_document(t *testing.T) {
 		spendSplit{id: "s04", account: "acct-usd", category: "cat-groceries", currency: "USD", day: day(2026, 4, 1), cents: -31210},
 	))
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
-	env.Now = func() time.Time { return time.Date(2026, 9, 29, 22, 0, 0, 0, utcMinus5) }
+	env := spendEnvAt(&stdout, &stderr, time.Date(2026, 9, 29, 22, 0, 0, 0, utcMinus5))
 
 	exitCode := runWith(context.Background(), []string{"spend", "--json"}, env)
 

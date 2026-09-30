@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -16,16 +15,6 @@ const (
 	emptyE1a    = "no spending from 2026-01-01 to 2026-09-29 in the named accounts; their transactions run 2019-03-02 to 2024-11-30"
 )
 
-var storeSpan = store.TransactionRange{
-	First: time.Date(2003, 1, 4, 0, 0, 0, 0, time.UTC),
-	Last:  time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC),
-}
-
-var namedSpan = store.TransactionRange{
-	First: time.Date(2019, 3, 2, 0, 0, 0, 0, time.UTC),
-	Last:  time.Date(2024, 11, 30, 0, 0, 0, 0, time.UTC),
-}
-
 func Test_spend_says_when_the_window_holds_nothing(t *testing.T) {
 	cases := []struct {
 		name string
@@ -35,7 +24,7 @@ func Test_spend_says_when_the_window_holds_nothing(t *testing.T) {
 	}{
 		{
 			name: "the store has transactions elsewhere",
-			span: storeSpan,
+			span: span(t, "2003-01-04", "2026-09-26"),
 			want: emptyPrefix + "; the store's transactions run 2003-01-04 to 2026-09-26\n",
 		},
 		{
@@ -44,7 +33,7 @@ func Test_spend_says_when_the_window_holds_nothing(t *testing.T) {
 		},
 		{
 			name: "the named accounts have transactions elsewhere",
-			span: namedSpan,
+			span: span(t, "2019-03-02", "2024-11-30"),
 			args: []string{"--account", chequingID},
 			want: "quarry: warning: " + emptyE1a + "\n",
 		},
@@ -60,7 +49,7 @@ func Test_spend_says_when_the_window_holds_nothing(t *testing.T) {
 			fake := namedAccounts()
 			fake.spending = store.Spending{Transactions: c.span}
 
-			err := executeSpend(t, fake, spendTagNow, &stdout, &stderr, c.args...)
+			err := executeSpend(t, fake, spendNow, &stdout, &stderr, c.args...)
 
 			require.NoError(t, err)
 			assert.Equal(t, c.want, stderr.String())
@@ -71,9 +60,9 @@ func Test_spend_says_when_the_window_holds_nothing(t *testing.T) {
 func Test_spend_json_puts_the_empty_window_note_in_warnings_unprefixed(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	fake := namedAccounts()
-	fake.spending = store.Spending{Transactions: storeSpan}
+	fake.spending = store.Spending{Transactions: span(t, "2003-01-04", "2026-09-26")}
 
-	err := executeSpend(t, fake, spendTagNow, &stdout, &stderr, "--json")
+	err := executeSpend(t, fake, spendNow, &stdout, &stderr, "--json")
 
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"since":"2026-01-01","until":"2026-09-29","by":"category","account_filter":[],
@@ -84,7 +73,7 @@ func Test_spend_json_puts_the_empty_window_note_in_warnings_unprefixed(t *testin
 func Test_spend_says_nothing_of_an_empty_window_when_every_named_account_is_left_out_of_reports(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, namedAccounts(), spendTagNow, &stdout, &stderr, "--account", "Old Card", "--account", oldBankID)
+	err := executeSpend(t, namedAccounts(), spendNow, &stdout, &stderr, "--account", "Old Card", "--account", oldBankID)
 
 	require.NoError(t, err)
 	assert.Equal(t, "quarry: warning: "+leftOutWarning("Old Card")+"\nquarry: warning: "+leftOutWarning("Old Bank")+"\n",
@@ -94,7 +83,7 @@ func Test_spend_says_nothing_of_an_empty_window_when_every_named_account_is_left
 func Test_spend_says_nothing_of_an_empty_window_when_every_named_account_is_left_out_and_one_is_linked(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, namedAccounts(), spendTagNow, &stdout, &stderr, "--account", "Old Card", "--account", linkedID)
+	err := executeSpend(t, namedAccounts(), spendNow, &stdout, &stderr, "--account", "Old Card", "--account", linkedID)
 
 	require.NoError(t, err)
 	assert.Equal(t, "quarry: warning: "+leftOutWarning("Old Card")+"\nquarry: warning: "+linkedTrackingWarning("Netskope 401(k)")+"\n",
@@ -104,9 +93,9 @@ func Test_spend_says_nothing_of_an_empty_window_when_every_named_account_is_left
 func Test_spend_puts_the_empty_window_note_after_the_linked_tracking_warning_when_a_reported_account_is_named(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	fake := namedAccounts()
-	fake.spending = store.Spending{Transactions: namedSpan}
+	fake.spending = store.Spending{Transactions: span(t, "2019-03-02", "2024-11-30")}
 
-	err := executeSpend(t, fake, spendTagNow, &stdout, &stderr, "--account", linkedID, "--account", chequingID)
+	err := executeSpend(t, fake, spendNow, &stdout, &stderr, "--account", linkedID, "--account", chequingID)
 
 	require.NoError(t, err)
 	assert.Equal(t, "quarry: warning: "+linkedTrackingWarning("Netskope 401(k)")+"\nquarry: warning: "+emptyE1a+"\n", stderr.String())
@@ -115,9 +104,9 @@ func Test_spend_puts_the_empty_window_note_after_the_linked_tracking_warning_whe
 func Test_spend_puts_the_empty_window_note_after_the_left_out_of_reports_warnings(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	fake := namedAccounts()
-	fake.spending = store.Spending{Transactions: namedSpan}
+	fake.spending = store.Spending{Transactions: span(t, "2019-03-02", "2024-11-30")}
 
-	err := executeSpend(t, fake, spendTagNow, &stdout, &stderr,
+	err := executeSpend(t, fake, spendNow, &stdout, &stderr,
 		"--account", "Old Card", "--account", chequingID, "--json")
 
 	require.NoError(t, err)
@@ -132,9 +121,9 @@ func Test_spend_puts_the_empty_window_note_after_the_left_out_of_reports_warning
 func Test_spend_says_nothing_of_an_empty_window_when_a_currency_nets_to_zero(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	fake := namedAccounts()
-	fake.spending = store.Spending{Totals: []store.SpendingTotal{{Currency: "CAD", Spent: 0}}, Transactions: storeSpan}
+	fake.spending = store.Spending{Totals: []store.SpendingTotal{{Currency: "CAD", Spent: 0}}, Transactions: span(t, "2003-01-04", "2026-09-26")}
 
-	err := executeSpend(t, fake, spendTagNow, &stdout, &stderr)
+	err := executeSpend(t, fake, spendNow, &stdout, &stderr)
 
 	require.NoError(t, err)
 	assert.Empty(t, stderr.String())

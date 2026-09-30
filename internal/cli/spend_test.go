@@ -56,7 +56,7 @@ func Test_spend_by_payee_reads_the_payee_grouping_and_heads_the_first_column_Pay
 		Totals: []store.SpendingTotal{{Currency: "CAD", Spent: 4208}},
 	}}
 
-	err := executeSpend(t, fake, time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC), &stdout, &stderr, "--by", "payee")
+	err := executeSpend(t, fake, spendNow, &stdout, &stderr, "--by", "payee")
 
 	require.NoError(t, err)
 	assert.Equal(t, store.SpendByPayee, got.By)
@@ -103,13 +103,12 @@ func Test_spend_refuses_a_by_that_names_no_grouping_before_opening_the_report(t 
 
 func Test_spend_json_puts_the_report_window_and_rows_in_the_document(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
 	fake := fakeReportStore{spending: store.Spending{
 		Rows:   []store.SpendingRow{{Key: new("Auto:Fuel"), Currency: "CAD", Spent: 120450}},
 		Totals: []store.SpendingTotal{{Currency: "CAD", Spent: 120450}},
 	}}
 
-	err := executeSpend(t, fake, now, &stdout, &stderr, "--json")
+	err := executeSpend(t, fake, spendNow, &stdout, &stderr, "--json")
 
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"since":"2026-01-01","until":"2026-09-29","by":"category","account_filter":[],

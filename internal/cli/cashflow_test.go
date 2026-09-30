@@ -30,7 +30,7 @@ func executeCashFlow(t *testing.T, fake fakeReportStore, stdout, stderr io.Write
 	t.Helper()
 	env := cli.Env{
 		Stdout: stdout, Stderr: stderr,
-		Now: func() time.Time { return spendTagNow },
+		Now: func() time.Time { return spendNow },
 		NewReport: func(context.Context, string) (*report.Server, error) {
 			return report.NewServer(report.WithStore(fake)), nil
 		},
@@ -190,7 +190,7 @@ func Test_cashflow_returns_the_report_factory_fault(t *testing.T) {
 func Test_cashflow_returns_a_failed_stdout_write(t *testing.T) {
 	var stderr bytes.Buffer
 
-	err := executeCashFlow(t, fakeReportStore{cashFlow: store.CashFlow{Transactions: storeSpan}}, failingWriter{err: errNoSpace}, &stderr)
+	err := executeCashFlow(t, fakeReportStore{cashFlow: store.CashFlow{Transactions: span(t, "2003-01-04", "2026-09-26")}}, failingWriter{err: errNoSpace}, &stderr)
 
 	require.ErrorIs(t, err, errNoSpace)
 	assert.Empty(t, stderr.String())
@@ -198,7 +198,7 @@ func Test_cashflow_returns_a_failed_stdout_write(t *testing.T) {
 
 func Test_cashflow_json_lists_the_warnings_unprefixed_beside_the_prefixed_stderr_lines(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	fake := fakeReportStore{cashFlow: store.CashFlow{Transactions: storeSpan}}
+	fake := fakeReportStore{cashFlow: store.CashFlow{Transactions: span(t, "2003-01-04", "2026-09-26")}}
 
 	err := executeCashFlow(t, fake, &stdout, &stderr, "--json")
 
@@ -244,7 +244,7 @@ func Test_cashflow_warns_once_per_named_account_left_out_of_reports_saying_cashf
 func Test_cashflow_puts_the_empty_window_note_after_the_left_out_of_reports_warnings(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	fake := namedAccounts()
-	fake.cashFlow = store.CashFlow{Transactions: namedSpan}
+	fake.cashFlow = store.CashFlow{Transactions: span(t, "2019-03-02", "2024-11-30")}
 
 	err := executeCashFlow(t, fake, &stdout, &stderr, "--account", "Old Card", "--account", chequingID)
 
@@ -302,7 +302,7 @@ func Test_cashflow_says_nothing_of_an_empty_window_when_every_named_account_is_l
 func Test_cashflow_puts_the_empty_window_note_after_the_linked_tracking_warning_when_a_reported_account_is_named(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	fake := namedAccounts()
-	fake.cashFlow = store.CashFlow{Transactions: namedSpan}
+	fake.cashFlow = store.CashFlow{Transactions: span(t, "2019-03-02", "2024-11-30")}
 
 	err := executeCashFlow(t, fake, &stdout, &stderr, "--account", linkedID, "--account", chequingID)
 
@@ -320,7 +320,7 @@ func Test_cashflow_says_when_the_window_holds_nothing(t *testing.T) {
 	}{
 		{
 			name: "the store has transactions elsewhere",
-			span: storeSpan,
+			span: span(t, "2003-01-04", "2026-09-26"),
 			want: "quarry: warning: " + cashFlowEmpty + "; the store's transactions run 2003-01-04 to 2026-09-26\n",
 		},
 		{
@@ -329,7 +329,7 @@ func Test_cashflow_says_when_the_window_holds_nothing(t *testing.T) {
 		},
 		{
 			name: "the named accounts have transactions elsewhere",
-			span: namedSpan,
+			span: span(t, "2019-03-02", "2024-11-30"),
 			args: []string{"--account", chequingID},
 			want: "quarry: warning: " + cashFlowEmpty + " in the named accounts; their transactions run 2019-03-02 to 2024-11-30\n",
 		},
@@ -355,7 +355,7 @@ func Test_cashflow_says_when_the_window_holds_nothing(t *testing.T) {
 
 func Test_cashflow_says_nothing_of_an_empty_window_when_a_currency_nets_to_zero(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	fake := fakeReportStore{cashFlow: store.CashFlow{Totals: []store.CashFlowTotal{{Currency: "CAD"}}, Transactions: storeSpan}}
+	fake := fakeReportStore{cashFlow: store.CashFlow{Totals: []store.CashFlowTotal{{Currency: "CAD"}}, Transactions: span(t, "2003-01-04", "2026-09-26")}}
 
 	err := executeCashFlow(t, fake, &stdout, &stderr)
 
