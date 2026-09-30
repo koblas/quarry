@@ -49,23 +49,26 @@ func duplicateIDs(t *testing.T, mutate func(*store.Rows), txns ...store.Transact
 func Test_replace_flags_two_same_amount_transactions_up_to_three_days_apart_as_a_duplicate(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name  string
-		apart int
-		want  string
+		name string
+		// lowerIDApart is the lower-id transaction's date minus the higher-id one's, in days.
+		lowerIDApart int
+		want         string
 	}{
 		{"the same day", 0, "duplicate:txn-1+txn-2"},
-		{"three days apart, the last day in", 3, "duplicate:txn-1+txn-2"},
-		{"four days apart, the first day out", 4, ""},
+		{"three days apart, the last day in", -3, "duplicate:txn-1+txn-2"},
+		{"four days apart, the first day out", -4, ""},
+		{"three days apart, the lower id dated later", 3, "duplicate:txn-1+txn-2"},
+		{"four days apart, the lower id dated later", 4, ""},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			start := day(2026, 8, 3)
+			start := day(2026, 8, 10)
 
 			got := duplicateIDs(t, nil,
-				dupTxn(1, "acct-1", start, duplicateAmount, uncleared),
-				dupTxn(2, "acct-1", start.AddDate(0, 0, c.apart), duplicateAmount, uncleared))
+				dupTxn(1, "acct-1", start.AddDate(0, 0, c.lowerIDApart), duplicateAmount, uncleared),
+				dupTxn(2, "acct-1", start, duplicateAmount, uncleared))
 
 			assert.Equal(t, c.want, got)
 		})
@@ -98,7 +101,7 @@ func Test_replace_flags_a_pair_with_one_reconciled_transaction_but_not_a_reconci
 	}
 }
 
-func Test_replace_does_not_flag_transactions_that_differ_in_account_or_amount_or_have_none(t *testing.T) {
+func Test_replace_does_not_flag_transactions_that_differ_in_account_or_amount_or_are_zero(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name         string
@@ -151,7 +154,7 @@ func Test_replace_flags_duplicates_in_every_kind_of_account_and_ignores_the_paye
 		}, []store.Transaction{
 			dupTxn(1, "acct-1", day(2026, 8, 3), duplicateAmount, uncleared), dupTxn(2, "acct-1", day(2026, 8, 4), duplicateAmount, uncleared),
 		}},
-		{"different payees", nil, []store.Transaction{
+		{"a payee on only one", nil, []store.Transaction{
 			{ID: "txn-1", SourceID: 1, AccountID: "acct-1", Date: day(2026, 8, 3), Amount: duplicateAmount, Currency: "CAD", Status: uncleared, PayeeID: new("payee-1")},
 			dupTxn(2, "acct-1", day(2026, 8, 4), duplicateAmount, uncleared),
 		}},
