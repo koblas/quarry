@@ -29,11 +29,8 @@ questions — skip the full procedure below:
    `## Implementation Plan` ticked?
 3. Are `.claude/briefs/build.md` → *Planning* items present for this diff: one fault test per
    fallible call, every numeric bound just outside, every error-mapper fallback, one
-   decode-fault test per decoded record kind, and a test pinning each `## Surface & Copy`
-   string and edge-case row this scenario owns (help Long, Example, flag help, refusal and
-   warning lines, sort order, edge rows such as future-dated or other-currency input)?
-   Unpinned ruled copy or edge row is MAJOR — found here it costs one fold, at final gate
-   a fix pass.
+   decode-fault test per decoded record kind, and one pin per ruled string and edge row the
+   scenario owns? Unpinned ruled copy or edge row is MAJOR.
 4. Does the diff touch only what the plan's steps name? Production file, behaviour or public
    symbol no step names is scope creep — name it, and whether a later scenario owns it. Plan
    with `Size: LIGHT` was written by developer itself: judge scope against spec's scenario.
