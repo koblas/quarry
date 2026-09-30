@@ -337,9 +337,8 @@ func oneSidedRows(legs []store.OneSidedTransfer) []string {
 	return legRows(legs, leads)
 }
 
-// legRows renders one row per one-sided leg, each behind its own lead: date
-// fixed, account label and payee columns padded to the widest among these
-// rows, the amount right-aligned, then the account the leg names.
+// legRows renders one row per one-sided leg behind its own lead: date, padded
+// label and payee columns, the amount right-aligned, then the other account.
 func legRows(legs []store.OneSidedTransfer, leads []string) []string {
 	labels := make([]string, len(legs))
 	payees := make([]string, len(legs))

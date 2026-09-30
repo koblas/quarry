@@ -9,8 +9,7 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// findingsQuery reads every finding with its items, one row per item, or one NULL-item row for a finding with none.
-// New and newly fixed are equality with the store's build time, the same definition sync counts by.
+// findingsQuery reads every finding with one row per item (one NULL-item row if none); new and newly fixed mean found or fixed at the build time.
 const findingsQuery = `
 SELECT f.id, f.type, f.first_found_at, f.fixed_at,
 	COALESCE(f.first_found_at = i.built_at, false), COALESCE(f.fixed_at = i.built_at, false),

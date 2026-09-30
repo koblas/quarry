@@ -58,7 +58,7 @@ func findingsGroupCount(group report.FindingsGroup) string {
 	return humanize.Count(len(group.Findings), "payee", "payees") + ", " + humanize.Count(splits, "split", "splits")
 }
 
-// findingLines is the rows of a group's findings, in order.
+// findingLines is the rows of a group's findings, in order; a type without a row layout gets one id line per finding.
 func findingLines(group report.FindingsGroup) []string {
 	switch group.Type { //nolint:exhaustive // the other types' rows arrive with their detectors
 	case finding.Duplicate:
@@ -75,7 +75,11 @@ func findingLines(group report.FindingsGroup) []string {
 	case finding.Uncategorized:
 		return uncategorizedRows(group.Findings)
 	}
-	return nil // unreachable: no detector produces any other type yet
+	lines := make([]string, len(group.Findings))
+	for i, f := range group.Findings {
+		lines[i] = "  " + f.ID
+	}
+	return lines
 }
 
 // itemRows renders one row per item: date, account label and payee padded to the widest among them,

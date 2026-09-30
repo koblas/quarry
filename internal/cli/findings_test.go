@@ -176,9 +176,17 @@ func Test_findings_accepts_every_status_and_type_value(t *testing.T) {
 			err := executeFindings(t, fakeReportStore{}, &stdout, &stderr, args...)
 
 			require.NoError(t, err)
-			assert.Equal(t, "No open findings\n", stdout.String())
 		})
 	}
+}
+
+func Test_findings_with_no_flags_says_no_open_findings_for_an_empty_store(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeFindings(t, fakeReportStore{}, &stdout, &stderr)
+
+	require.NoError(t, err)
+	assert.Equal(t, "No open findings\n", stdout.String())
 }
 
 func Test_findings_returns_the_report_factory_error_unchanged_and_prints_nothing(t *testing.T) {

@@ -34,7 +34,7 @@ type FindingsListing struct {
 }
 
 // Findings lists the open findings, grouped in finding.Types order and sorted within each group,
-// and counts every finding by status: an id in req.Ignore is ignored unless the finding is fixed.
+// and counts every finding of a known type by status: an id in req.Ignore is ignored unless fixed.
 // It refuses like Status.
 func (s *Server) Findings(ctx context.Context, req FindingsRequest) (FindingsListing, error) {
 	list, err := s.store.Findings(ctx)
@@ -46,9 +46,17 @@ func (s *Server) Findings(ctx context.Context, req FindingsRequest) (FindingsLis
 		ignored[id] = true
 	}
 
+	known := map[finding.Type]bool{}
+	for _, typ := range finding.Types() {
+		known[typ] = true
+	}
+
 	var counts finding.Counts
 	open := map[finding.Type][]store.Finding{}
 	for _, f := range list.Findings {
+		if !known[f.Type] {
+			continue
+		}
 		switch finding.StatusOf(f.FixedAt != nil, ignored[f.ID]) {
 		case finding.StatusFixed:
 			counts.Fixed++
@@ -77,9 +85,8 @@ func (s *Server) Findings(ctx context.Context, req FindingsRequest) (FindingsLis
 	return FindingsListing{Groups: groups, Counts: counts}, nil
 }
 
-// findingOrder is the display order of open findings of type typ: duplicate and one-sided by
-// their latest item date descending, uncategorized by item count descending then payee name
-// ignoring case; every tie, and every other type, by id.
+// findingOrder is the display order of open findings of typ: duplicate and one-sided by latest item
+// date descending, uncategorized by item count descending then payee; ties and other types by id.
 func findingOrder(typ finding.Type) func(a, b store.Finding) int {
 	switch typ { //nolint:exhaustive // every other type sorts by id
 	case finding.Duplicate, finding.OneSidedTransfer:

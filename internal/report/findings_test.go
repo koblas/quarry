@@ -187,3 +187,13 @@ func Test_findings_sorts_an_uncategorized_finding_with_no_items_after_those_with
 
 	assert.Equal(t, []string{"uncategorized:payee-3", "uncategorized:payee-1", "uncategorized:payee-2"}, idsOf(got.Groups[0]))
 }
+
+func Test_findings_neither_counts_nor_lists_a_finding_of_a_type_it_does_not_know(t *testing.T) {
+	got := findingsOf(t,
+		dated("duplicate:txn-1+txn-2", finding.Duplicate, march1, march1),
+		dated("mystery:thing-1", finding.Type("mystery"), march1))
+
+	assert.Equal(t, 1, got.Counts.Open)
+	require.Len(t, got.Groups, 1)
+	assert.Equal(t, []string{"duplicate:txn-1+txn-2"}, idsOf(got.Groups[0]))
+}

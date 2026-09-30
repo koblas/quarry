@@ -3,6 +3,8 @@
 package cli
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -221,4 +223,65 @@ func Test_renderFindings_shows_the_ignore_hint_only_when_asked_and_a_finding_is_
 	assert.Contains(t, renderFindings(open, true), "\n1 open finding\n"+ignoreHint)
 	assert.NotContains(t, renderFindings(open, false), "Ignore a finding")
 	assert.NotContains(t, renderFindings(report.FindingsListing{}, true), "Ignore a finding")
+}
+
+func Test_renderFindings_lists_one_id_per_finding_of_a_type_with_no_row_layout(t *testing.T) {
+	listing := report.FindingsListing{
+		Groups: []report.FindingsGroup{
+			{Type: finding.MixedCategories, Findings: []store.Finding{
+				{ID: "mixed-categories:payee-3", Type: finding.MixedCategories},
+				{ID: "mixed-categories:payee-7", Type: finding.MixedCategories},
+			}},
+			{Type: finding.Uncategorized, Findings: []store.Finding{
+				uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)),
+			}},
+		},
+		Counts: finding.Counts{Open: 3},
+	}
+
+	got := renderFindings(listing, false)
+
+	assert.Equal(t, "Payees in mixed categories (2): pick one category per payee in Quicken, or ignore a payee whose mix is intended\n"+
+		"  mixed-categories:payee-3\n"+
+		"  mixed-categories:payee-7\n"+
+		"\n"+
+		"Uncategorized (1 payee, 1 split)"+uncategorizedFix+
+		"  uncategorized:payee-1  Amazon  1 split  2026-03-01\n"+
+		"\n3 open findings\n", got)
+}
+
+func Test_renderFindings_groups_the_thousands_of_a_group_header_count(t *testing.T) {
+	findings := make([]store.Finding, 1204)
+	for i := range findings {
+		findings[i] = store.Finding{ID: fmt.Sprintf("mixed-categories:payee-%d", i), Type: finding.MixedCategories}
+	}
+	listing := report.FindingsListing{
+		Groups: []report.FindingsGroup{{Type: finding.MixedCategories, Findings: findings}},
+		Counts: finding.Counts{Open: 1204},
+	}
+
+	got := renderFindings(listing, false)
+
+	assert.True(t, strings.HasPrefix(got, "Payees in mixed categories (1,204): "), got)
+}
+
+func Test_renderFindings_pads_columns_by_runes_not_bytes_for_a_non_ASCII_payee(t *testing.T) {
+	listing := report.FindingsListing{
+		Groups: []report.FindingsGroup{
+			{Type: finding.Duplicate, Findings: []store.Finding{
+				duplicatePair("duplicate:txn-1+txn-2", chequing("CAD"), [2]string{"Café", "Bar"},
+					[2]time.Time{findingDay(2026, 5, 1), findingDay(2026, 5, 2)}, -450),
+			}},
+			{Type: finding.Uncategorized, Findings: []store.Finding{
+				uncategorizedFinding("uncategorized:payee-1", "Café", 2, findingDay(2026, 3, 1), findingDay(2026, 3, 1)),
+				uncategorizedFinding("uncategorized:payee-2", "Bar", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)),
+			}},
+		},
+		Counts: finding.Counts{Open: 3},
+	}
+
+	got := renderFindings(listing, false)
+
+	assert.Contains(t, got, "    2026-05-01  Chequing (CAD)  Café  -4.50\n    2026-05-02  Chequing (CAD)  Bar   -4.50\n")
+	assert.Contains(t, got, "  uncategorized:payee-1  Café  2 splits  2026-03-01\n  uncategorized:payee-2  Bar    1 split  2026-03-01\n")
 }

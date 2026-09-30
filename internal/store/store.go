@@ -117,14 +117,15 @@ type Split struct {
 // Transfer is one row of the transfers table: a pair of split legs between
 // the user's own accounts, or a one-sided leg when ToSplitID is nil.
 // FromSplitID is the leg with the lower numeric source id, not the leg the
-// money left from. OtherAccount is the account name a one-sided leg recorded
-// instead of a link; it is nil for a pair and for a leg linked by account id.
+// money left from.
 type Transfer struct {
 	ID            string
 	FromSplitID   string
 	ToSplitID     *string
 	CrossCurrency bool
-	OtherAccount  *string
+	// OtherAccount is the account name a one-sided leg recorded instead of a
+	// link; nil for a pair and for a leg linked by account id.
+	OtherAccount *string
 }
 
 // SplitTag links one split to one tag (the split_tags table).
@@ -359,11 +360,8 @@ type Finding struct {
 }
 
 // FindingItem is what a finding is about: a transaction or split with its
-// account and payee, or (for payee and category findings) a payee or
-// category. Amount is the item split's amount in cents when SplitID is set,
-// else the transaction's; Payee is "" when the transaction has none.
-// OtherAccount and OtherAccountID describe a one-sided transfer leg as
-// OneSidedTransfer does.
+// account and payee, or a payee or category. Amount is in cents, the split's
+// when SplitID is set; OtherAccount* describe a one-sided leg as OneSidedTransfer does.
 type FindingItem struct {
 	TransactionID  *string
 	SplitID        *string
