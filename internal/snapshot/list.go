@@ -55,6 +55,18 @@ type Listing struct {
 // built from. A missing folder lists nothing, an unreadable one or an ended ctx is a
 // refusal; a store that cannot say marks nothing and sets StoreUnreadable.
 func (s *Server) List(ctx context.Context) (Listing, error) {
+	listing, err := s.listFolder()
+	if err != nil {
+		return Listing{}, err
+	}
+	if err := s.markStore(ctx, &listing); err != nil {
+		return Listing{}, err
+	}
+	return listing, nil
+}
+
+// listFolder reads the snapshots folder into a Listing that says nothing of the store.
+func (s *Server) listFolder() (Listing, error) {
 	files, err := s.snapshotFiles()
 	if err != nil {
 		return Listing{}, err
@@ -62,7 +74,7 @@ func (s *Server) List(ctx context.Context) (Listing, error) {
 	listing := Listing{Dir: s.snapshotDir, Entries: make([]Entry, len(files))}
 	for i, f := range files {
 		entry := Entry{ID: f.id, Path: filepath.Join(s.snapshotDir, f.id+".sqlite"), Bytes: f.bytes}
-		if manifest, err := readManifest(filepath.Join(s.snapshotDir, f.id+".json")); err == nil {
+		if manifest, err := readManifest(s.manifestPath(f.id)); err == nil {
 			entry.Manifest = &manifest
 			entry.TakenAt = recordedTakenAt(manifest.Snapshot.TakenAt)
 		}
@@ -72,10 +84,17 @@ func (s *Server) List(ctx context.Context) (Listing, error) {
 	if len(files) == 0 {
 		listing.NoSnapshots = "no snapshots in " + homepath.Abbreviate(s.home, s.snapshotDir) + " yet; run quarry sync to take one"
 	}
+	return listing, nil
+}
 
+// manifestPath is where the manifest of the snapshot with id lives.
+func (s *Server) manifestPath(id string) string { return filepath.Join(s.snapshotDir, id+".json") }
+
+// markStore reads which snapshot the store was built from into listing and marks that entry.
+func (s *Server) markStore(ctx context.Context, listing *Listing) error {
 	recorded, reason, err := s.storeSnapshot(ctx)
 	if err != nil {
-		return Listing{}, err
+		return err
 	}
 	if reason != "" {
 		listing.StoreUnreadable = reason
@@ -83,7 +102,7 @@ func (s *Server) List(ctx context.Context) (Listing, error) {
 	}
 	listing.StorePath = recorded
 	markStoreSnapshot(listing.Entries, recorded)
-	return listing, nil
+	return nil
 }
 
 // snapshotFile is one snapshot's file as listed: its ID, the two parts the

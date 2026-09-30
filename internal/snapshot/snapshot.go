@@ -34,6 +34,7 @@ type Server struct {
 	destination Destination
 	importer    Importer
 	storeProbe  StoreProbe
+	remove      func(path string) error
 }
 
 // Option configures a Server built by NewServer.
@@ -93,12 +94,12 @@ func WithStoreProbe(probe StoreProbe) Option {
 // WithRemove sets the function that deletes a file in the snapshots
 // directory; it defaults to os.Remove. Tests use it to inject a failing delete.
 func WithRemove(remove func(path string) error) Option {
-	return func(*Server) {}
+	return func(s *Server) { s.remove = remove }
 }
 
 // NewServer builds a Server from opts.
 func NewServer(opts ...Option) *Server {
-	s := &Server{busyTimeout: DefaultBusyTimeout}
+	s := &Server{busyTimeout: DefaultBusyTimeout, remove: os.Remove}
 	for _, opt := range opts {
 		opt(s)
 	}
