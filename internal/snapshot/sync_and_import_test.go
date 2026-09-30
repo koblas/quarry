@@ -65,6 +65,8 @@ type fakeStoreProbe struct {
 func (f *fakeStoreProbe) Path() string { return f.path }
 func (f *fakeStoreProbe) Exists() bool { return f.exists }
 
+func (f *fakeStoreProbe) BuiltFrom(context.Context) (string, error) { return "", nil }
+
 // newImportServer builds a Server whose snapshots and store live under home; opts override those.
 func newImportServer(t *testing.T, home string, imp snapshot.Importer, opts ...snapshot.Option) *snapshot.Server {
 	t.Helper()

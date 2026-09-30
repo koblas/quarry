@@ -121,6 +121,7 @@ quarry never writes to the Quicken file.`)
 		"  accounts    List accounts with their current balances\n"+
 		"  cashflow    Show income, spending and savings rate by month or year\n"+
 		"  help        Help about any command\n"+
+		"  snapshots   List the snapshots quarry has taken and which one the store was built from\n"+
 		"  spend       Show spending by category, payee, tag or month\n"+
 		"  sql         Run a read-only SQL query against quarry's store\n"+
 		"  status      Show which snapshot the store was built from and what it holds\n"+

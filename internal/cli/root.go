@@ -5,7 +5,7 @@ import (
 )
 
 // newRootCommand builds quarry's command tree: a persistent --json flag on
-// the root plus the sync, status, accounts, spend, cashflow and sql subcommands,
+// the root plus the sync, status, accounts, spend, cashflow, sql and snapshots subcommands,
 // wired against env's factories.
 func newRootCommand(env Env, jsonOut *bool) *cobra.Command {
 	// No Args or Run field: an unmatched subcommand fails through cobra's
@@ -30,5 +30,6 @@ quarry never writes to the Quicken file.`,
 	root.AddCommand(newSpendCommand(env.NewReport, env.Now, jsonOut))
 	root.AddCommand(newCashFlowCommand(env.NewReport, env.Now, jsonOut))
 	root.AddCommand(newSQLCommand(env.NewReport, jsonOut))
+	root.AddCommand(newSnapshotsCommand(env.NewSnapshots, env.LoadConfig))
 	return root
 }

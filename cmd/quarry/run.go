@@ -94,6 +94,25 @@ func newReportFactory(storeOpts ...duckstore.Option) cli.ReportFactory {
 	}
 }
 
+// newSnapshotsFactory returns cli.Execute's SnapshotsFactory: it resolves the
+// home directory and builds a Server that lists the snapshots folder and asks
+// the store which snapshot it was built from. It has no reference schema and no importer.
+func newSnapshotsFactory(storeOpts ...duckstore.Option) cli.SnapshotsFactory {
+	return func(_ context.Context, command string) (*snapshot.Server, error) {
+		home, err := resolveHome(command)
+		if err != nil {
+			return nil, err
+		}
+
+		storeDir := storeDirUnder(home)
+		return snapshot.NewServer(
+			snapshot.WithSnapshotDir(filepath.Join(storeDir, "snapshots")),
+			snapshot.WithHome(home),
+			snapshot.WithStoreProbe(duckstore.New(storeDir, storeOpts...)),
+		), nil
+	}
+}
+
 // newConfigLoader returns cli.Execute's ConfigLoader: it resolves the home
 // directory and loads the config file in quarry's store directory.
 func newConfigLoader() cli.ConfigLoader {
@@ -130,13 +149,14 @@ func resolveHome(command string) (string, error) {
 // streams, and the factories over the default store.
 func defaultEnv(stdout, stderr io.Writer) cli.Env {
 	return cli.Env{
-		Stdin:      os.Stdin,
-		Stdout:     stdout,
-		Stderr:     stderr,
-		NewServer:  newServerFactory(),
-		NewReport:  newReportFactory(),
-		LoadConfig: newConfigLoader(),
-		Now:        time.Now,
+		Stdin:        os.Stdin,
+		Stdout:       stdout,
+		Stderr:       stderr,
+		NewServer:    newServerFactory(),
+		NewReport:    newReportFactory(),
+		NewSnapshots: newSnapshotsFactory(),
+		LoadConfig:   newConfigLoader(),
+		Now:          time.Now,
 	}
 }
 

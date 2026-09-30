@@ -21,6 +21,11 @@ type ServerFactory func(ctx context.Context) (srv *snapshot.Server, err error)
 // Like ServerFactory it is called only from a command's RunE.
 type ReportFactory func(ctx context.Context, command string) (srv *report.Server, err error)
 
+// SnapshotsFactory builds the Server the snapshots command needs; command is
+// the name of the command asking, for the home-directory refusal. Like the
+// other factories it is called only from a command's RunE.
+type SnapshotsFactory func(ctx context.Context, command string) (srv *snapshot.Server, err error)
+
 // ConfigLoader reads quarry's config file for command, the name of the
 // command asking, for refusals that say which command to run again. Like
 // the factories it is called only from a command's RunE.
@@ -34,6 +39,7 @@ type Env struct {
 	Stdout, Stderr io.Writer
 	NewServer      ServerFactory
 	NewReport      ReportFactory
+	NewSnapshots   SnapshotsFactory
 	LoadConfig     ConfigLoader
 	Now            func() time.Time
 }
