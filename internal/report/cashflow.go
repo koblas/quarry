@@ -54,7 +54,7 @@ func (s *Server) CashFlow(ctx context.Context, req CashFlowRequest) (CashFlow, e
 		return CashFlow{}, s.readRefusal(ctx, "cashflow", err)
 	}
 	return CashFlow{
-		Rows:         fillPeriods(flow, req),
+		Rows:         fillSeries(cashFlowSeries(req), currencyList(flow.Totals, cashFlowTotalCurrency), flow.Rows, cashFlowRowPeriod, blankCashFlowRow, wrapCashFlowRow),
 		Totals:       flow.Totals,
 		Transactions: flow.Transactions,
 		Window:       req.Window,
@@ -63,27 +63,28 @@ func (s *Server) CashFlow(ctx context.Context, req CashFlowRequest) (CashFlow, e
 	}, nil
 }
 
-// fillPeriods is a row for every period of the window in every currency of flow's Totals:
-// the store's row where it has one, else zero income and spending with no savings rate.
-func fillPeriods(flow store.CashFlow, req CashFlowRequest) []CashFlowRow {
-	type periodCurrency struct{ label, currency string }
-	found := make(map[periodCurrency]store.CashFlowRow, len(flow.Rows))
-	for _, r := range flow.Rows {
-		found[periodCurrency{r.Period, r.Currency}] = r
-	}
-	series := monthSeries(req.Window)
+// cashFlowTotalCurrency is the currency of a cash-flow total.
+func cashFlowTotalCurrency(t store.CashFlowTotal) string { return t.Currency }
+
+// cashFlowRowPeriod is the period and currency a row reports.
+func cashFlowRowPeriod(r store.CashFlowRow) periodKey {
+	return periodKey{label: r.Period, currency: r.Currency}
+}
+
+// blankCashFlowRow is the row of a period the store found no income or spending in.
+func blankCashFlowRow(k periodKey) store.CashFlowRow {
+	return store.CashFlowRow{Period: k.label, Currency: k.currency}
+}
+
+// wrapCashFlowRow is a cash-flow row with the period's Partial.
+func wrapCashFlowRow(r store.CashFlowRow, partial bool) CashFlowRow {
+	return CashFlowRow{CashFlowRow: r, Partial: partial}
+}
+
+// cashFlowSeries is the periods of the window in the request's unit.
+func cashFlowSeries(req CashFlowRequest) []period {
 	if req.By == store.CashFlowByYear {
-		series = yearSeries(req.Window)
+		return yearSeries(req.Window)
 	}
-	rows := make([]CashFlowRow, 0, len(series)*len(flow.Totals))
-	for _, p := range series {
-		for _, total := range flow.Totals {
-			row, ok := found[periodCurrency{p.Label, total.Currency}]
-			if !ok {
-				row = store.CashFlowRow{Period: p.Label, Currency: total.Currency}
-			}
-			rows = append(rows, CashFlowRow{CashFlowRow: row, Partial: p.Partial})
-		}
-	}
-	return rows
+	return monthSeries(req.Window)
 }

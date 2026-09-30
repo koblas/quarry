@@ -51,14 +51,10 @@ func storeRefusal(err error, home string) error {
 		msg = "no store at " + at + " yet; run quarry sync to build it"
 	case store.OpenFaultOtherFormat:
 		msg = "the store at " + at + " was built by another version of quarry; run quarry sync " + rebuildArgs(openErr.SnapshotPath) + "to rebuild it"
-	case store.OpenFaultNotDuckDB:
-		msg = "cannot read the store at " + at + ": the file is not a DuckDB database; run quarry sync to rebuild it"
-	case store.OpenFaultPermission:
-		msg = "cannot read the store at " + at + ": permission denied; run quarry sync to rebuild it"
+	case store.OpenFaultNotDuckDB, store.OpenFaultPermission, store.OpenFaultOther:
+		msg = "cannot read the store at " + at + ": " + openErr.UnreadableReason(at) + "; run quarry sync to rebuild it"
 	case store.OpenFaultLocked:
-		msg = "cannot read the store at " + at + ": another program has it open for writing; close that program and run the command again"
-	case store.OpenFaultOther:
-		msg = "cannot read the store at " + at + ": " + strings.ReplaceAll(openErr.Reason, openErr.Path, at) + "; run quarry sync to rebuild it"
+		msg = "cannot read the store at " + at + ": " + openErr.UnreadableReason(at) + "; close that program and run the command again"
 	}
 	return RefusalError{msg: msg, cause: err}
 }

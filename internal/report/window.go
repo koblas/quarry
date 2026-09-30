@@ -25,10 +25,18 @@ var dateForms = []struct {
 }{
 	{layout: "2006", years: 1, days: -1},
 	{layout: "2006-01", months: 1, days: -1},
-	{layout: layoutDay},
+	{layout: time.DateOnly},
 }
 
-const layoutDay = "2006-01-02"
+// DefaultWindow is January 1 of now's year through now's day, both read in
+// now's own zone.
+func DefaultWindow(now time.Time) store.Window {
+	year, month, day := now.Date()
+	return store.Window{
+		Since: time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC),
+		Until: time.Date(year, month, day, 0, 0, 0, 0, time.UTC),
+	}
+}
 
 // ParseWindow resolves --since and --until into a window; a nil pointer is a flag not
 // given and takes its default from now (see DefaultWindow). A bare year or month covers
@@ -64,7 +72,7 @@ func ParseWindow(since, until *string, now time.Time) (store.Window, error) {
 	case since == nil && until != nil && window.Until.Before(defaultSince):
 		return store.Window{}, WindowError{msg: fmt.Sprintf(
 			"--until %s is before the default --since %s; pass --since too",
-			*until, defaultSince.Format(layoutDay))}
+			*until, defaultSince.Format(time.DateOnly))}
 	}
 	return window, nil
 }

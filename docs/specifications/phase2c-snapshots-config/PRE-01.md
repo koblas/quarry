@@ -17,8 +17,8 @@ Neutrality rule for every step: no `*_test.go`, `testdata` or `cmd/` hunk. Grep 
 ## Implementation Plan
 
 ### Build
-- [ ] Step 1: new `internal/store/duckstore/filter.go` ← `spending.go:14-58` (`accountFilter`, `and`, `args`, `readArgs`, `marks`, `transactionRangeQuery`) + `spending.go:189-192` `civilDay`; extract `transactionRange` from the duplicate blocks `spending.go:176-182` and `cashflow.go:77-83` (read stays the LAST statement in both); reachability note on `ErrUnsupportedGrouping` `spending.go:136-137` and `ErrUnsupportedPeriod` `cashflow.go:18-19` (cli's `--by` tables refuse every other value before a read). Unchanged: `duckstore/spending*_test.go`, `cashflow_test.go`, `read_faults_test.go`
-- [ ] Step 2: report + store —
+- [x] Step 1: new `internal/store/duckstore/filter.go` ← `spending.go:14-58` (`accountFilter`, `and`, `args`, `readArgs`, `marks`, `transactionRangeQuery`) + `spending.go:189-192` `civilDay`; extract `transactionRange` from the duplicate blocks `spending.go:176-182` and `cashflow.go:77-83` (read stays the LAST statement in both); reachability note on `ErrUnsupportedGrouping` `spending.go:136-137` and `ErrUnsupportedPeriod` `cashflow.go:18-19` (cli's `--by` tables refuse every other value before a read). Unchanged: `duckstore/spending*_test.go`, `cashflow_test.go`, `read_faults_test.go`
+- [x] Step 2: report + store —
   (a) one fill helper in `report/period.go` replacing `spending.go:88-109` `fillMonths` and `cashflow.go:66-89` `fillPeriods` (series × Totals currencies, store row else zero row, Partial from the period);
   (b) `DefaultWindow` `spending.go:50-58` → `window.go`;
   (c) drop `period.First` and `period.Last` fields `period.go:12-18,43-48` — no reader (grep over report+cli; positive control `span.First` hit); the local `last` stays for Partial;
@@ -58,3 +58,13 @@ Neutrality rule for every step: no `*_test.go`, `testdata` or `cmd/` hunk. Grep 
 - Cobra renders flag help from registration; keep `--by` first, then `--since`, `--until`, `--account` exactly as today.
 
 ## Phase report
+
+Run B1 (steps 1-2) — done, green on `go test ./internal/store/... ./internal/report/ ./internal/cli/` and `go test ./cmd/quarry/ -run 'spend|cashflow|refuse'`; `git diff --exit-code b9bb83c -- '*_test.go' cmd/ ':(glob)**/testdata/**'` empty. Also ran the full covered suite + `uncovered-diff.py` (0 uncovered) and `golangci-lint run ./...` (0 issues) early; V still owns the official pass.
+
+Files:
+- `internal/store/duckstore/filter.go` (new): `accountFilter` + `and/args/marks`, `readArgs`, `transactionRangeQuery`, `transactionRange(ctx, db ReadDB, accounts)` (returns the driver error unwrapped, `//nolint:wrapcheck` — callers classify with `openFault`), `civilDay`. `spending.go` / `cashflow.go` call `transactionRange` as the LAST statement; reachability notes on `ErrUnsupportedGrouping` (`spending.go`) and `ErrUnsupportedPeriod` (`cashflow.go`).
+- `internal/report/period.go`: `period` lost `First`/`Last`; new `periodKey`, `currencyList`, generic `fillSeries(series, currencies, stored, keyOf, blank, wrap)`. `spending.go` `fillMonths` and `cashflow.go` `fillPeriods` are gone; per-report helpers `spendingTotalCurrency/spendingRowPeriod/blankSpendingRow/wrapSpendingRow` and `cashFlowTotalCurrency/cashFlowRowPeriod/blankCashFlowRow/wrapCashFlowRow/cashFlowSeries` feed it. `Spend` returns before the non-month row loop for `SpendByMonth` (month rows still non-nil, empty when no Totals).
+- `internal/report/window.go`: `DefaultWindow` moved here. Done ahead of B2: `layoutDay` const removed, `time.DateOnly` used in `dateForms` and `ParseWindow` (report side of step 3 only).
+- `internal/store/open.go`: `(*OpenError).UnreadableReason(at)` via the `unreadableReasons` table (NotDuckDB/Permission/Locked), else `Reason` with `Path` -> `at` (empty for Missing/OtherFormat). `report/refusal.go` `storeRefusal` uses it; NotDuckDB/Permission/Other share one arm (rebuild remedy), Locked has its own.
+
+For B2 (steps 3-4, cli only): do NOT redo `layoutDay` in `report/window.go`; step 3 still owns `render_spend.go:20`, `render_cashflow.go:22`, `json.go:13`. Nothing in `internal/cli` was touched. Command-name consts in `report` (step 4e, `spending.go`/`cashflow.go` `"spend"`/`"cashflow"` literals passed to `namedAccounts`/`readRefusal`) are NOT done yet.

@@ -5,57 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
-	"time"
 
 	"github.com/koblas/quarry/internal/store"
 )
-
-// accountFilter is the ids of the accounts a spending read counts; empty counts every account.
-type accountFilter []string
-
-// and is the clause keeping only column values among the named accounts, or "" for every
-// account. Its parameters are numbered after the window's two.
-func (f accountFilter) and(column string) string {
-	if len(f) == 0 {
-		return ""
-	}
-	return " AND " + column + " IN (" + f.marks(3) + ")"
-}
-
-// args is one query argument per named account.
-func (f accountFilter) args() []any {
-	args := make([]any, len(f))
-	for i, id := range f {
-		args[i] = id
-	}
-	return args
-}
-
-// readArgs is the arguments of a windowed read: the window's first and last day, then the named accounts.
-func readArgs(window store.Window, accounts accountFilter) []any {
-	return append([]any{civilDay(window.Since), civilDay(window.Until)}, accounts.args()...)
-}
-
-// marks is one parameter per named account, numbered from first.
-func (f accountFilter) marks(first int) string {
-	marks := make([]string, len(f))
-	for i := range f {
-		marks[i] = fmt.Sprintf("$%d", first+i)
-	}
-	return strings.Join(marks, ", ")
-}
-
-// transactionRangeQuery is the first and last day of every transaction, or of the named reported
-// accounts' transactions; its parameters are those accounts, numbered from $1.
-func transactionRangeQuery(accounts accountFilter) string {
-	if len(accounts) == 0 {
-		return "SELECT min(date), max(date) FROM transactions"
-	}
-	return `SELECT min(t.date), max(t.date)
-FROM transactions t JOIN accounts a ON a.id = t.account_id
-WHERE ` + reportedAccount + ` AND t.account_id IN (` + accounts.marks(1) + ")"
-}
 
 // spendingQueryFor is a spending query for the accounts of a filter; each takes the window's
 // first and last day as $1 and $2, then one parameter per named account.
@@ -133,7 +85,9 @@ var spendingQueries = map[store.SpendingGroup]spendingQueryFor{
 	store.SpendByMonth: spendingByMonthQuery,
 }
 
-// ErrUnsupportedGrouping is what Spending returns for a grouping it cannot read.
+// ErrUnsupportedGrouping is what Spending returns for a grouping it cannot read. The spend command
+// refuses every --by value outside its grouping table before a read, so only a caller
+// bypassing that table reaches it.
 var ErrUnsupportedGrouping = errors.New("spending grouping is not supported")
 
 // Spending reads the spending in params.Window (both days counted) grouped by params.By over
@@ -174,19 +128,10 @@ func (s *Store) Spending(ctx context.Context, params store.SpendingParams) (stor
 		})
 	}
 	if err == nil && len(spending.Totals) == 0 {
-		var first, last sql.NullTime
-		err = db.QueryRows(ctx, transactionRangeQuery(accounts), accounts.args(), func(scan func(dest ...any) error) error {
-			return scan(&first, &last)
-		})
-		spending.Transactions = store.TransactionRange{First: first.Time, Last: last.Time}
+		spending.Transactions, err = transactionRange(ctx, db, accounts)
 	}
 	if err != nil {
 		return store.Spending{}, openFault(s.Path(), err)
 	}
 	return spending, nil
-}
-
-// civilDay is day's calendar date as text, which DuckDB reads as a DATE in no zone.
-func civilDay(day time.Time) string {
-	return day.Format(time.DateOnly)
 }
