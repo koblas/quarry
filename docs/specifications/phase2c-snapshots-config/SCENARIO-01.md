@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01
-status: open
+status: done
 ---
 
 # SCENARIO-01: A malformed config file is refused before Quicken is touched
@@ -31,10 +31,10 @@ Dependency: `github.com/pelletier/go-toml/v2 v2.4.3` (zero deps). Run B1 fetches
 - [x] Step 5: sync wiring — `sync.go:77-124` print `cfg.Warnings` as `quarry: warning: ` lines right after load; `json.go:119-128` `renderJSON` takes the config warnings, `warnings[]` = config then `outcome.Warnings()`; `cmd/quarry/run.go` loader finished. Tests in `run_config_test.go`: `Test_run_sync_refuses_a_relative_quicken_path` (bare sync; `--quicken <bundle>` with `quicken.path = "Home.quicken"` → C2r), `Test_run_sync_refuses_a_quicken_path_that_is_not_a_string` (bare sync; `--from <id>` with `quicken.path = 12` → C2q), `Test_run_read_commands_ignore_a_malformed_config` (status, accounts, spend, cashflow, `sql`: stdout equal to the run before the file broke, stderr empty, exit 0; `spendEnv` clock), `Test_run_sync_warns_about_unknown_config_keys_before_its_own` (status fixture's one-sided warning: C3 line first then it, on stderr and in `--json` `warnings[]` without prefix). Must stay green unchanged: `Test_run_reports_exit_1_when_home_directory_cannot_be_resolved`, `Test_run_help_and_usage_errors_do_not_need_home` (`run_usage_test.go:202-225`)
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go mod tidy`; doc comments on `config` package, `Load`, `Config`, `osreason.Reason`, `ConfigLoader`, `Env.LoadConfig`
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go mod tidy`; doc comments on `config` package, `Load`, `Config`, `osreason.Reason`, `ConfigLoader`, `Env.LoadConfig`
 
 ### Verify
-- [ ] Step 7: full verification + `spec-check.py phase2c-snapshots-config` → tick SCENARIO-01, then 04, 09 and 10 each with its own "delivered by SCENARIO-01" note before its acceptance test; STATE.md rewrite
+- [x] Step 7: full verification + `spec-check.py phase2c-snapshots-config` → tick SCENARIO-01, then 04, 09 and 10 each with its own "delivered by SCENARIO-01" note before its acceptance test; STATE.md rewrite
 
 ## Handoff
 
@@ -59,24 +59,9 @@ Dependency: `github.com/pelletier/go-toml/v2 v2.4.3` (zero deps). Run B1 fetches
 
 ## Phase report
 
-Run B1 done (steps 3-5). `<start>` 03ce837; B1 committed on top of run A's 965f380.
+Run V done (steps 6-7). `<start>` 03ce837; A 965f380, B1 a2a3189, V on top.
 
-Files:
-- `internal/platform/osreason/{doc,osreason,osreason_test}.go` new: `Reason(err)` moved from `internal/cli/sql.go` (`osReason` deleted, `sql.go:136` repointed); 4 tests.
-- `internal/config/config.go` `Load` (missing -> defaults; other read error -> C4 via `osreason.Reason`); `refusal.go` `RefusalError` (msg is the whole line after `quarry: `, `Unwrap` = read error); `parse.go`: `tree()` decodes into `map[string]any` (C1: line + first line of parser text), `keep`/`quickenPath` validate from the tree, `lookup` gives C2t for a plain value where a table is expected, `got` = raw text (`unstable.RawMessage` structs, `decodeRaw`) collapsed with `strings.Fields`, "a table" for a table; `unknownKeys` = strict decode, file order as go-toml yields it (no sort; a child of an already-warned key is skipped). `config_test.go` 19 top-level tests.
-- `internal/cli/sync.go` prints `cfg.Warnings` as `quarry: warning: ` right after load; `json.go` `renderJSON(outcome, configWarnings)` = config warnings then `outcome.Warnings()`, always non-nil.
-- `cmd/quarry/run_config_test.go`: helpers `writeConfig`, consts `configShown`/`configFix`; tests for 09, 10, ruled C2/C2a/C2m/C2t lines (7 cases), C4, 04 (5 read commands via `replaceStore`), warnings text + JSON.
-- go.mod/go.sum: `go-toml/v2 v2.4.3` direct, `go mod tidy` run.
-
-Green: `go build ./...`, `golangci-lint run ./...` 0 issues, `go test ./internal/config ./internal/platform/osreason ./internal/cli`, `go test ./cmd/quarry -run 'config|quicken_path|home|usage|sql'`, `internal/config` coverage 99.0% (only the `// unreachable:` line in `tree()` open).
-
-Mutation (plan line): moved the `loadConfig` call below `SyncAndImport` in `sync.go` -> `Test_run_sync_refuses_a_malformed_config_before_taking_a_snapshot` red: snapshot `.sqlite` count expected 1 actual 2 (`run_config_test.go:71`), store digest changed (`:72`). Restored, byte-identical.
-
-Decisions / deviations for V and later scenarios:
-- Shape mismatch is C2t (refused, exit 1), not the plan's C3 warning; no Go type names anywhere (pinned in `Test_load_never_reports_a_shape_mismatch_as_malformed` and at cmd level).
-- Integer overflow (`keep = 99999999999999999999`) is C1 with go-toml's text: `line 2: decimal number is too large to fit in a 64-bit signed integer` (the tree decode fails; pinned).
-- go-toml warns `[foo]` and `[foo.bar]` separately; `unknownKeys` drops a key whose prefix was already warned. `snapshot.keep = 3` warns as `snapshot.keep` (dotted keys warn per leaf).
-- A trailing `# comment` is not in `got`; a comment inside a multi-line array is (collapsed).
-- Acceptance test still pins C1 by frame regex; exact parser text is pinned in `config_test.go`.
-
-For V: nothing left in Build; run Sweep/Verify (`test-stats.py --base 03ce837`), tick 01/04/09/10 with delivered-by notes, `spec-check.py`, STATE.md rewrite, `status: done`. The 5 read-command subtests need HOME set (they use `t.Setenv` in the parent).
+- Sweep: `go build ./...` ok, `golangci-lint run ./...` 0 issues, `go mod tidy` no change.
+- Verify: covered full suite rc=0; `uncovered-diff.py` 0 uncovered, 1 declared unreachable (`internal/config/parse.go:95`); `-race` on config, osreason, cli, cmd/quarry ok.
+- Counts (`test-stats.py --base 03ce837 --changed`): cmd/quarry 136 (+8), internal/cli 135 (+0), internal/config 17 (+17), internal/platform/osreason 4 (+4), TOTAL 292 (+29). B1 report said 19 config tests; the script counts 17.
+- Ticked SCENARIO-01, 04, 09, 10 in specification.md; `spec-check.py` OK; STATE.md rewritten; status done.

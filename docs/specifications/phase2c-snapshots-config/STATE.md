@@ -1,6 +1,6 @@
 # phase2c-snapshots-config — current state
 
-Scenarios complete: PRE-01 (behaviour-neutral pre-step; no SCENARIO ticked yet). Last updated by PRE-01.
+Scenarios complete: PRE-01 (pre-step), SCENARIO-01 (with folded 04, 09, 10). Last updated by SCENARIO-01.
 
 ## Binding decisions
 - R3 reason phrase is `(*store.OpenError).UnreadableReason(at string) string` in `internal/store/open.go`: `at` is the display path (caller abbreviates with `homepath.Abbreviate`); returns the bare phrase (`the file is not a DuckDB database`, `permission denied`, `another program has it open for writing`, or Reason with every Path replaced by `at`), with no `cannot read the store at …:` prefix and no remedy. Missing/OtherFormat give the Reason fallback (empty). `snapshot` may not import `report`, so SCENARIO-15/16/21 render refusals from this method (PRE-01)
@@ -11,14 +11,26 @@ Scenarios complete: PRE-01 (behaviour-neutral pre-step; no SCENARIO ticked yet).
 - `internal/cli/render_table.go` `renderTable(caption, rows)` is the one period-table renderer; `windowCaption`, `accountsCaption`, `tableTotalLabel`, `tablePartialStatus` are report-neutral (PRE-01)
 - `accountFilterDocument` / `accountFilterDocuments(accounts)` in `internal/cli/json_spend.go` build every report's `account_filter` (not `accountDocument`: that is sync's `never_reconciled` entry in `json.go`); `allLeftOut(accounts)` in `empty_window.go` (PRE-01)
 - Command-name const pairs, unexported, must stay equal: cli `spendCommand="spend"` / `cashFlowCommand="cashflow"` (Use: and `leftOutWarnings`) and report `spendCommand` / `cashFlowCommand` (refusal word, e.g. `spend interrupted`). `jsonDateLayout = time.DateOnly` (value unchanged) (PRE-01)
+- `internal/config` (leaf; imported only by `internal/cli` and `cmd/quarry`; `snapshot` never imports it, so `keep` and the path reach it as values/options): `Load(home, path) (Config, error)`; `Config{Path, Keep, QuickenPath, Warnings}`; `DefaultKeep = 12`. `Path` is absolute whether or not the file exists. `QuickenPath` is `""` when unset, else `~/`-expanded via `homepath.Expand` only (no Clean/EvalSymlinks), so SCENARIO-05 resolves it as it resolves the flag. Refusals are `*config.RefusalError` whose `Error()` is the whole line after `quarry: ` (`Unwrap` = read error) (SCENARIO-01)
+- The one seam is `cli.Env.LoadConfig` (`cli.ConfigLoader func(command string) (config.Config, error)`); `cmd/quarry/run.go` `newConfigLoader` resolves home via `resolveHome(command)` and `storeDirUnder(home)/config.toml`. `sync` calls it first in `RunE` (after `Args`, before `newServer`/`resolveBundle`); SCENARIO-16/24/29 call it the same way at the top of their `RunE`, so `--help`/usage errors need no home. `status`/`accounts`/`spend`/`cashflow`/`sql` never load it (SCENARIO-01)
+- Warnings ordering: C3 lines print to stderr as `quarry: warning: ` right after load (before any command output); `--json` `warnings[]` = config warnings (no prefix), then `outcome.Warnings()`, always non-nil (`renderJSON(outcome, configWarnings)`). Unknown keys in file order as go-toml yields them, no sort; `[foo]` warns once by its own key (children skipped), dotted keys warn per leaf (`snapshot.keep`). A refusal drops the warnings (SCENARIO-01)
+- Value check order: parse (C1) then `snapshots.keep` then `quicken.path`. A plain value where a table is expected (`snapshots = 3`, `quicken = "x"`) is C2t, a refusal, never a warning and never Go type names. `got` in C2 lines is the raw source text collapsed with `strings.Fields`; a header table is "a table"; a trailing `# comment` is not in `got`, one inside a multi-line array is (SCENARIO-01)
+- Integer overflow (`keep = 99999999999999999999`) is C1 (`line N: decimal number is too large to fit in a 64-bit signed integer`), because the tree decode fails before value checks; pinned in `config_test.go` (SCENARIO-01)
+- `internal/platform/osreason.Reason(err)` is the one G1 reason (`*fs.PathError` -> `Err.Error()`, else first line, empty -> `unknown error`); `internal/cli/sql.go` uses it. SCENARIO-16/21 (folder unreadable, delete failure) call it, never copy (SCENARIO-01)
+- TOML lib `github.com/pelletier/go-toml/v2 v2.4.3`: reports line 1 for `[snapshots` where BurntSushi says line 2; `unstable.RawMessage` gives the value as written (SCENARIO-01)
 
 ## Left unbuilt
+- `quicken.path` precedence, K1/K2 copy, sync Long / `--quicken` help — SCENARIO-05 (SCENARIO-01)
+- `snapshots.keep` consumers (`prune`, auto-prune) — SCENARIO-24, SCENARIO-29 (SCENARIO-01)
 - `render.go` `:262,290,323` date literals stay (sync validation output, outside the report pipeline) — unowned (PRE-01)
 
 ## Traps
 - `exhaustive` rejects a partial `OpenFault` switch even with `default:`; an arm only Missing/OtherFormat reach is uncovered (report handles them first) and fails `uncovered-diff.py` (PRE-01)
 - Cobra renders flag help from registration order; keep `--by`, `--since`, `--until`, `--account` exactly (PRE-01)
 - P2c-12: the existing black-box suite must pass with no `*_test.go`, `testdata` or `cmd/` hunk from PRE-01 (`git diff --exit-code b9bb83c -- '*_test.go' cmd/ ':(glob)**/testdata/**'` is empty); later scenarios add tests, so this is a PRE-01-range check only (PRE-01)
+- C1 must come from a decode into `map[string]any` (shape-agnostic): every `*toml.DecodeError` looks alike, and a struct decode reports a shape mismatch (`snapshots = 3`) naming Go types. Decoding into a typed struct first would leak them (SCENARIO-01)
+- `unstable.RawMessage` for a header table (`[quicken.path]`) is the table body and for a multi-line array contains newlines; neither is a one-line `got` as is. `unstable` is go-toml's unstable API: re-run `internal/config` tests on any go-toml bump (SCENARIO-01)
+- The 5 read-command subtests in `Test_run_read_commands_ignore_a_malformed_config` need HOME set (`t.Setenv` in the parent) (SCENARIO-01)
 
 ## Open debts
 - PRE-01 checkpoint MINORs (comment budget): `internal/store/duckstore/cashflow.go:18-20` and `spending.go:88-90` sentinel docs 3 lines → 1 (reachability note at the `!ok` return); `internal/report/period.go:62-64` `fillSeries` doc → 2 lines; `internal/cli/render_table.go:20-22` `renderTable` doc → 2 lines. NIT: `store.OpenError.UnreadableReason` empty-result branch for Missing/OtherFormat unexecuted — pin it if SCENARIO-15/16/21 reach those faults.

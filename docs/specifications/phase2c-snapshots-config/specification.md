@@ -544,10 +544,10 @@ Sizing notes (binding on per-scenario architects):
 - Past units: 16 (< 20), so the p90-twin SPLIT rule does not apply; 2b's heaviest twin (S20, 3 folds) cost 2.4M IE — 16 and 21 are its twins.
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01: A malformed config file is refused before Quicken is touched
-- [ ] SCENARIO-04: Read commands ignore a broken config file
-- [ ] SCENARIO-09: A relative quicken.path is refused
-- [ ] SCENARIO-10: A quicken.path that is not a string is refused
+- [x] SCENARIO-01: A malformed config file is refused before Quicken is touched — `cmd/quarry/run_config_test.go` `Test_run_sync_refuses_a_malformed_config_before_taking_a_snapshot`
+- [x] SCENARIO-04: Read commands ignore a broken config file — delivered by SCENARIO-01 `cmd/quarry/run_config_test.go` `Test_run_read_commands_ignore_a_malformed_config`
+- [x] SCENARIO-09: A relative quicken.path is refused — delivered by SCENARIO-01 `cmd/quarry/run_config_test.go` `Test_run_sync_refuses_a_relative_quicken_path`
+- [x] SCENARIO-10: A quicken.path that is not a string is refused — delivered by SCENARIO-01 `cmd/quarry/run_config_test.go` `Test_run_sync_refuses_a_quicken_path_that_is_not_a_string`
 - [ ] SCENARIO-05: sync snapshots the file named by quicken.path
 - [ ] SCENARIO-06: --quicken overrides quicken.path
 - [ ] SCENARIO-07: A configured path that does not exist is refused naming the config key
