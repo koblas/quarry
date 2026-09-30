@@ -6,8 +6,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	"github.com/koblas/quarry/internal/snapshot"
@@ -170,7 +172,7 @@ func Test_run_snapshots_prune_says_nothing_to_delete_when_the_only_candidate_is_
 	vanishing := func(path string) error {
 		err := os.Remove(path)
 		if filepath.Base(path) == pruneOldest+".sqlite" {
-			return os.ErrNotExist
+			return &fs.PathError{Op: "remove", Path: path, Err: syscall.ENOENT}
 		}
 		return err
 	}
@@ -251,7 +253,6 @@ func Test_run_snapshots_prune_prints_what_it_deleted_before_the_interrupt_line(t
 			buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			// The newest snapshot beyond the kept ones is deleted first; the interrupt lands right after it.
 			trigger := c.wantGone[0] + ".sqlite"
 
 			exitCode, stdout, stderr := runPruneRemoving(ctx, t, cancellingRemove(cancel, trigger, ""), "--keep", c.keep)
@@ -273,7 +274,6 @@ func Test_run_snapshots_prune_prints_the_failure_line_before_the_interrupt_line(
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	// Keep 1 selects four snapshots newest first: the second fails and the interrupt lands with two never attempted.
 	remove := cancellingRemove(cancel, pruneMorning+".sqlite", pruneMorning+".sqlite")
 
 	exitCode, stdout, stderr := runPruneRemoving(ctx, t, remove, "--keep", "1")

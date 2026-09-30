@@ -49,12 +49,10 @@ func selectPrune(entries []Entry, keep int) ([]Entry, *Entry) {
 	return doomed, storeKept
 }
 
-// Prune deletes all but the newest keep snapshots, never the one the store was built
-// from, and reports what it deleted and what it could not. It refuses a keep under 1
-// (ErrKeepBelowOne), an ended ctx and an unreadable folder, and, only when a snapshot lies
-// beyond the newest keep, a store that cannot say which snapshot built it; nothing is deleted then.
-// An ended ctx stops it between snapshots: it returns what it did with the interrupted refusal and
-// no orphan sweep; otherwise it ends by removing orphan manifests, silently.
+// Prune deletes all but the newest keep snapshots, never the one the store was built from,
+// and reports what it deleted and what it could not. It refuses keep < 1 (ErrKeepBelowOne),
+// an ended ctx, an unreadable folder and, only past the newest keep, a store that cannot say
+// which snapshot built it. An ended ctx stops it between snapshots; otherwise it sweeps orphan manifests.
 func (s *Server) Prune(ctx context.Context, keep int) (Pruned, error) {
 	if keep < 1 {
 		return Pruned{}, ErrKeepBelowOne
@@ -101,9 +99,8 @@ func (s *Server) sweepOrphans(orphans []string) {
 	}
 }
 
-// deleteSnapshot removes entry's .sqlite, then its manifest, and records the outcome in
-// pruned. A .sqlite already gone counts as neither deleted nor failed; any other fault
-// leaves the manifest and is recorded as failed. A manifest that will not go, or is not a regular file, is left silently.
+// deleteSnapshot removes entry's .sqlite, then its manifest, and records the outcome in pruned.
+// A .sqlite already gone is neither deleted nor failed; any other fault leaves the manifest.
 func (s *Server) deleteSnapshot(entry Entry, pruned *Pruned) {
 	err := s.remove(entry.Path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {

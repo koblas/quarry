@@ -41,6 +41,11 @@ func Test_renderPruned_names_what_it_kept(t *testing.T) {
 			want:   "Deleted 2 snapshots (110.3 MB), keeping the newest 12:\n",
 		},
 		{
+			name:   "grouping the thousands of N",
+			pruned: snapshot.Pruned{Keep: 1200, Deleted: one},
+			want:   "Deleted 1 snapshot (55.1 MB), keeping the newest 1,200:\n",
+		},
+		{
 			name:   "naming the store's snapshot when it lies outside the newest N",
 			pruned: snapshot.Pruned{Keep: 12, Deleted: one, StoreKept: stored},
 			want:   "Deleted 1 snapshot (55.1 MB), keeping the newest 12 and 20260801T120000Z, the store's snapshot:\n",

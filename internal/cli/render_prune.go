@@ -10,8 +10,7 @@ import (
 const pruneRowIndent = "  "
 
 // renderPruned is p as stdout text: the Deleted block, else the Nothing to delete line
-// when nothing was deleted, nothing failed and the run was not interrupted, else "".
-// home abbreviates the snapshots folder.
+// when nothing failed and the run was not interrupted, else "". home abbreviates the folder.
 func renderPruned(p snapshot.Pruned, home string) string {
 	switch {
 	case len(p.Deleted) > 0:

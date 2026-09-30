@@ -94,9 +94,8 @@ func newReportFactory(storeOpts ...duckstore.Option) cli.ReportFactory {
 	}
 }
 
-// newSnapshotsFactory returns cli.Execute's SnapshotsFactory: it resolves the
-// home directory and builds a Server that lists the snapshots folder and asks
-// the store which snapshot it was built from. It has no reference schema and no importer.
+// newSnapshotsFactory returns cli.Execute's SnapshotsFactory: a Server over the snapshots
+// folder and the store's probe, with no reference schema and no importer.
 func newSnapshotsFactory(storeOpts ...duckstore.Option) cli.SnapshotsFactory {
 	return func(_ context.Context, command string) (*snapshot.Server, error) {
 		home, err := resolveHome(command)
@@ -173,16 +172,22 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 // runWith is run against an explicit Env.
 func runWith(ctx context.Context, args []string, env cli.Env) int {
-	if err := cli.Execute(ctx, args, env); err != nil {
-		if _, ok := errors.AsType[cli.ReportedError](err); ok {
-			return 1
-		}
-		_, _ = fmt.Fprintf(env.Stderr, "quarry: %s\n", err)
+	return exitCode(cli.Execute(ctx, args, env), env.Stderr)
+}
 
-		if _, ok := errors.AsType[cli.UsageError](err); ok {
-			return 2
-		}
+// exitCode is the process exit code for err (0 for nil, 2 for a usage error, else 1),
+// printing err to stderr unless the command already reported it.
+func exitCode(err error, stderr io.Writer) int {
+	if err == nil {
+		return 0
+	}
+	if _, ok := errors.AsType[cli.ReportedError](err); ok {
 		return 1
 	}
-	return 0
+	_, _ = fmt.Fprintf(stderr, "quarry: %s\n", err)
+
+	if _, ok := errors.AsType[cli.UsageError](err); ok {
+		return 2
+	}
+	return 1
 }

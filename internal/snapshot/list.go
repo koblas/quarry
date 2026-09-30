@@ -114,9 +114,8 @@ type snapshotFile struct {
 	bytes             int64
 }
 
-// scanFolder reads the snapshots folder once: the regular snapshot files, newest first,
-// and the orphan manifests' paths. A folder it cannot read, or a snapshot it cannot
-// stat, is a refusal.
+// scanFolder reads the snapshots folder once: the regular snapshot files, newest first, and
+// the orphan manifests' paths. An unreadable folder or unstattable snapshot is a refusal.
 func (s *Server) scanFolder() ([]snapshotFile, []string, error) {
 	dirEntries, err := os.ReadDir(s.snapshotDir)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -188,8 +187,7 @@ func (s *Server) storeSnapshot(ctx context.Context) (string, string, error) {
 	if !ok {
 		return "", "", fmt.Errorf("read the store's snapshot: %w", err)
 	}
-	// UnreadableReason is empty for Missing, which is no store and no warning, and for
-	// OtherFormat, which is classified here first.
+	// UnreadableReason is empty for Missing (no store) and OtherFormat (handled first here).
 	if openErr.Fault == store.OpenFaultOtherFormat {
 		if openErr.SnapshotPath == "" {
 			return "", reasonOtherFormat, nil
