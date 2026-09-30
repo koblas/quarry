@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-21
-status: open
+status: done
 ---
 
 # SCENARIO-21: prune deletes all but the newest N snapshots (absorbs SCENARIO-23, 25, 26, 27)
@@ -33,10 +33,10 @@ Decision order (U7): `--keep` bound → ended ctx → folder listing → count �
 - [x] Step 7: `internal/cli/render_prune.go` `renderPruned` (reuse `snapshotTaken` `render_snapshots.go:56-62`, `formatMB` `render.go:17`, `humanize.Count`; one keep phrase for the Deleted header and the within line), failure lines, `internal/cli/errors.go:5-12` `ReportedError` + `internal/cli/run.go:65-71` + `cmd/quarry/run.go:175-185` (exit 1, nothing more printed) — `render_prune_internal_test.go` `Test_renderPruned_names_what_it_kept` (N=1 `the newest one`, N≥2, store suffix, `1 snapshot`), `Test_renderPruned_aligns_the_rows` (`unknown` Taken, sizes of different widths, no trailing spaces), `Test_renderPruned_says_nothing_to_delete` (within line, singular `1 snapshot`, no-snapshots line with the folder abbreviated; empty when every attempt failed or the run was interrupted); `run_prune_refusals_test.go` `Test_run_snapshots_prune_says_nothing_to_delete_beside_an_unreadable_store` (exit 0, stderr empty), `Test_run_snapshots_prune_says_nothing_to_delete_with_no_snapshots_folder`, `Test_run_snapshots_prune_says_nothing_to_delete_when_the_only_candidate_is_already_gone` (count now), `Test_run_snapshots_prune_prints_one_line_per_failure_and_nothing_on_stdout_when_none_succeeded` (folder 0500: real EACCES, two lines), `Test_run_snapshots_prune_prints_what_it_deleted_before_the_interrupt_line`, `Test_run_snapshots_prune_says_it_was_interrupted_before_any_delete`, `Test_run_snapshots_prune_refuses_a_store_with_no_import_history`, `Test_run_snapshots_prune_refuses_a_store_of_another_format_naming_no_snapshot`, `Test_run_snapshots_prune_refuses_a_snapshots_folder_it_cannot_read`, `Test_run_snapshots_prune_protects_nothing_when_there_is_no_store`, `Test_run_snapshots_prune_reports_a_failed_stdout_write`, `Test_runWith_exits_1_and_prints_nothing_for_an_error_already_reported`
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments (`Prune`, `Pruned`, `WithRemove`, `ReportedError`, `markStoreSnapshot`); `internal/snapshot/doc.go:1-10` and `internal/cli/root.go:7-9` name prune
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments (`Prune`, `Pruned`, `WithRemove`, `ReportedError`, `markStoreSnapshot`); `internal/snapshot/doc.go:1-10` and `internal/cli/root.go:7-9` name prune
 
 ### Verify
-- [ ] Step 9: full verification + `spec-check.py phase2c-snapshots-config` → tick SCENARIO-21, 23, 25, 26, 27 with their acceptance tests (folds say "delivered by SCENARIO-21"); rewrite STATE.md; `status: done`
+- [x] Step 9: full verification + `spec-check.py phase2c-snapshots-config` → tick SCENARIO-21, 23, 25, 26, 27 with their acceptance tests (folds say "delivered by SCENARIO-21"); rewrite STATE.md; `status: done`
 
 ## Handoff
 
@@ -64,19 +64,10 @@ Decision order (U7): `--keep` bound → ended ctx → folder listing → count �
 
 ## Phase report
 
-Run B4 (steps 6-7) done and committed. All five acceptance tests green; `go test -count=1 -coverpkg=./... ./...` rc=0, `uncovered-diff.py` 0 uncovered since `3e04291` (1 declared unreachable: `ReportedError.Error`), lint `0 issues`, `-race` green on cli + cmd. Counts vs `3e04291`: cmd/quarry 196 (+21), internal/cli 150 (+7), internal/snapshot 209 (+37). Next: V (steps 8-9): doc comments (`Prune`, `Pruned`, `WithRemove`, `ReportedError`, `markStoreSnapshot` already carry them; check), `internal/snapshot/doc.go` and `internal/cli/root.go:7-9` still do not name prune, spec-check, ticks, STATE.md.
+Run V (steps 8-9) done. Doc-only source edits: `internal/snapshot/doc.go` (names `Prune`), `internal/cli/root.go:7-9` (snapshots carries prune). Doc comments on `Prune`, `Pruned`, `WithRemove`, `ReportedError`, `markStoreSnapshot` already present and accurate; no other production change.
 
-Files:
-- `internal/cli/snapshots_prune.go`: `newPruneCommand(newSnapshots)` attached in `snapshots.go` (`cmd.AddCommand`). `Args` = positional (`prune takes no arguments; Run '… --help' for usage.`) then `--keep` bound when `Changed`; both are `UsageError`s carrying their own hint, so before the factory and no home needed. `RunE`: `limit = config.DefaultKeep` unless `--keep` given (no config load: SCENARIO-24), factory called as `snapshots prune`, `Prune`, then `reportPruned`. A refusal from `Prune` comes back with a zero `Pruned` (`Keep == 0`) and is returned bare; a non-zero `Pruned` with an error (mid-delete interrupt) is rendered first.
-- `reportPruned`: stdout (`renderPruned`) via `writeResult`, then one `quarry: cannot delete snapshot <id>: <reason>` per failure, then the run's own error (`runtimeError`), else `ReportedError{}` when any delete failed. So U4 order is failure lines, then the interrupt line.
-- `internal/cli/render_prune.go`: `renderPruned(p, home)` (Deleted block / `Nothing to delete` lines / `""` when only failures or an interrupt), `keepPhrase`, `snapshotCount`. `render_snapshots.go`: the column layout moved into `alignSnapshotRows(rows, indent)`, shared with the Deleted rows (Size column 2 right-aligned).
-- `internal/cli/errors.go` `ReportedError`; `run.go` `Execute` returns it as is; `cmd/quarry/run.go` `runWith` exits 1 printing nothing for it. Nothing else calls it yet: 28 reuses it for JSON on partial failure.
-- Tests: `internal/cli/snapshots_prune_test.go` (help), `render_prune_internal_test.go`, `cmd/quarry/run_prune_refusals_test.go`, three rows in `run_usage_test.go` `Test_run_rejects_usage_errors`. Helper `runPruneRemoving(ctx, t, remove, args…)` and `cancellingRemove` for the interrupt cases.
+Verify (vs `3e04291`): `go build ./...` ok, `golangci-lint run ./...` 0 issues, `go test -count=1 -coverpkg=./... ./...` rc=0, `uncovered-diff.py` 0 uncovered, 1 declared unreachable (`internal/cli/errors.go:26 ReportedError.Error`), `-race` green on snapshot, cli, cmd/quarry. test-stats: cmd/quarry 196 (+21), internal/cli 150 (+7), internal/snapshot 209 (+37), TOTAL 555 (+65).
 
-Red first: help tests (Long, Example + flag, Short) failed at their `Contains` (parent help printed), usage rows failed with `unknown flag: --keep` / the parent's positional line; the four `renderPruned` tables failed at their expected text against a `""` stub. Green on arrival (post-hoc pins, code already present when written): every `cmd/quarry/run_prune_refusals_test.go` test, and the "prints nothing" render test (the stub returned `""`).
+`specification.md`: SCENARIO-21 ticked, 23/25/26/27 ticked "delivered by SCENARIO-21"; `spec-check.py phase2c-snapshots-config` OK. Sizing row for 24 no longer lists the Nothing-to-delete lines (built here). `STATE.md` rewritten; `status: done`.
 
-Pinned but unchanged: `snapshots list` still exits 2 with the ruled line (`Test_run_rejects_usage_errors/snapshots_with_a_positional_argument`), green before and after the child command was attached. `--dry-run` is cobra's unknown-flag error until SCENARIO-24. `--keep abc` text is cobra's own: `invalid argument "abc" for "--keep" flag: strconv.ParseInt: parsing "abc": invalid syntax; Run 'quarry snapshots prune --help' for usage.`
-
-Mutations (each individually, restored): `keep < 1` -> `keep < 0` in the command's `Args` -> `Test_run_snapshots_prune_refuses_keep_0_as_a_usage_error` (plan's cli `--keep` bound; the `-1` and `abc` rows stay green, `-1` is `< 0`); `Changed(keepFlag) && keep < 1` -> `keep < 1` (bound applied when the flag is absent) -> 7 prune tests incl. `…without_keep_deletes_beyond_the_newest_12`; `len(args) > 0` -> `> 1` -> the `prune with a positional argument` row; `runWith` `ReportedError` exit 1 -> 2 -> `…reports_each_snapshot_it_could_not_delete_and_exits_1` and `…prints_one_line_per_failure…`; discarded `pruned.Keep == 0` refusal branch -> five refusal tests.
-
-Not done here (V): step 8 doc/lint sweep beyond `0 issues`, step 9 ticks in `specification.md`, `spec-check.py`, STATE.md rewrite, `status: done`.
+Next: SCENARIO-24 (config load in prune, `--dry-run`, Would-delete block, prune half of the quicken.path never-stat row).

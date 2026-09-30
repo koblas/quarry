@@ -567,7 +567,7 @@ Edge rows owned by scenario plans as unit tests (not scenarios): C4; prune inter
 | SCENARIO-21 | OWNS A RUN (run 8) — test-first (store's snapshot never deleted; R3 → nothing deleted) — 4 batches (retention selection in list order: newest N, store's snapshot protected → N+1 / prune on the Server: R3 refusal before any delete, `.sqlite` then `.json`, orphan `.json` silent, per-failure results, interrupt / cli `snapshots prune` + `--keep` ≥ 1 bound + parse error + no-args / Deleted block + keep phrase + failure lines + help), 1 feature package (snapshot) + cli + cmd; absorbs 23, 25, 26, 27; owns edge rows orphan `.json` removed silently, prune interrupted, unreadable folder, `--keep abc`, positional args |
 | SCENARIO-22 | FOLD into SCENARIO-24 — dry-run is a no-delete guard (test-first), so not LIGHT; one branch beside 24's |
 | SCENARIO-23 | FOLD into SCENARIO-21 — the protection guard 21 builds test-first, plus its keep phrase |
-| SCENARIO-24 | OWNS A RUN (run 9) — test-first (`--dry-run` deletes nothing) — 3 batches (prune loads and validates config, `snapshots.keep` default / both Nothing-to-delete lines / `--dry-run` + Would-delete block), 1 feature package (snapshot) + cli + cmd; absorbs 02, 22 |
+| SCENARIO-24 | OWNS A RUN (run 9) — test-first (`--dry-run` deletes nothing) — 3 batches (prune loads and validates config, `snapshots.keep` default / `--dry-run` + Would-delete block; both Nothing-to-delete lines are already rendered by SCENARIO-21), 1 feature package (snapshot) + cli + cmd; absorbs 02, 22 |
 | SCENARIO-25 | FOLD into SCENARIO-21 — the same guard as 23: an unknown store's snapshot deletes nothing |
 | SCENARIO-26 | FOLD into SCENARIO-21 — the out-of-bound test 21's `--keep` needs anyway |
 | SCENARIO-27 | FOLD into SCENARIO-21 — the fault test 21's delete needs anyway |
@@ -610,11 +610,11 @@ Sizing notes (binding on per-scenario architects):
 - [x] SCENARIO-20: snapshots warns when the store cannot be read — delivered by SCENARIO-16 — `cmd/quarry/run_snapshots_test.go` `Test_run_snapshots_warns_when_the_store_cannot_be_read`
 - [x] SCENARIO-34: --from with an unknown ID points at quarry snapshots — delivered by SCENARIO-16 — `cmd/quarry/run_from_refusals_test.go` `Test_run_sync_from_an_unknown_id_points_at_quarry_snapshots`
 - [x] SCENARIO-18: snapshots --json lists every snapshot with its store flag — `cmd/quarry/run_snapshots_json_test.go` `Test_run_snapshots_json_prints_the_ruled_document_for_two_snapshots_and_a_store`
-- [ ] SCENARIO-21: prune deletes all but the newest N snapshots
-- [ ] SCENARIO-23: prune keeps the store's snapshot when it is older than the newest N
-- [ ] SCENARIO-25: prune refuses when the store cannot be read
-- [ ] SCENARIO-26: prune --keep 0 is a usage error
-- [ ] SCENARIO-27: prune reports each snapshot it could not delete and exits 1
+- [x] SCENARIO-21: prune deletes all but the newest N snapshots — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_deletes_all_but_the_newest_n`
+- [x] SCENARIO-23: prune keeps the store's snapshot when it is older than the newest N — delivered by SCENARIO-21 — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_keeps_the_stores_snapshot_when_it_is_older_than_the_newest_n`
+- [x] SCENARIO-25: prune refuses when the store cannot be read — delivered by SCENARIO-21 — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_refuses_when_the_store_cannot_be_read`
+- [x] SCENARIO-26: prune --keep 0 is a usage error — delivered by SCENARIO-21 — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_refuses_keep_0_as_a_usage_error`
+- [x] SCENARIO-27: prune reports each snapshot it could not delete and exits 1 — delivered by SCENARIO-21 — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_reports_each_snapshot_it_could_not_delete_and_exits_1`
 - [ ] SCENARIO-24: prune with nothing beyond the cap deletes nothing
 - [ ] SCENARIO-02: A snapshots.keep below 1 is refused
 - [ ] SCENARIO-22: prune --dry-run lists what it would delete and deletes nothing

@@ -6,5 +6,6 @@
 // through a consumer-declared Importer, skipping it when the schema check
 // found a mismatch; ImportFrom does the same from an earlier snapshot,
 // re-verifying its hash and schema without reading Quicken. List reads the
-// snapshots directory newest first and marks the snapshot the store was built from.
+// snapshots directory newest first and marks the snapshot the store was built from;
+// Prune deletes all but the newest few, never that one.
 package snapshot
