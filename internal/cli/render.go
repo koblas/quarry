@@ -90,7 +90,7 @@ func renderStore(result store.Result, home string) string {
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", homepath.Abbreviate(home, result.Path))
 	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(result.Counts, result.NotImported))
 	bc := result.Validation.Balances
-	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(bc.Checked, len(bc.NeverReconciled), bc.InvestmentAccounts))
+	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(balanceCounts{Checked: bc.Checked, NeverReconciled: len(bc.NeverReconciled), InvestmentAccounts: bc.InvestmentAccounts}))
 	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits.Checked))
 	writeTransfers(&b, result.Validation.Transfers)
 	return b.String()
@@ -131,22 +131,27 @@ func balancesCheckedPhrase(n int) string {
 	}
 }
 
+// balanceCounts is the balance gate's account counts, named so they cannot be swapped.
+type balanceCounts struct {
+	Checked, NeverReconciled, InvestmentAccounts int
+}
+
 // balancesPhrase appends the never-reconciled and investment-account
 // clauses (each omitted at zero, joined with " and ") to the checked clause.
-func balancesPhrase(checked, neverReconciled, investmentAccounts int) string {
-	return balancesCheckedPhrase(checked) + balancesExtrasPhrase(neverReconciled, investmentAccounts)
+func balancesPhrase(c balanceCounts) string {
+	return balancesCheckedPhrase(c.Checked) + balancesExtrasPhrase(c)
 }
 
 // balancesExtrasPhrase renders the never-reconciled and investment-account
 // clauses, each omitted at zero and joined with " and ", prefixed with a
 // "; " separator when any exist.
-func balancesExtrasPhrase(neverReconciled, investmentAccounts int) string {
+func balancesExtrasPhrase(c balanceCounts) string {
 	var extras []string
-	if neverReconciled > 0 {
-		extras = append(extras, humanize.Count(neverReconciled, "never reconciled", "never reconciled"))
+	if c.NeverReconciled > 0 {
+		extras = append(extras, humanize.Count(c.NeverReconciled, "never reconciled", "never reconciled"))
 	}
-	if investmentAccounts > 0 {
-		extras = append(extras, humanize.Count(investmentAccounts, "investment account not checked", "investment accounts not checked"))
+	if c.InvestmentAccounts > 0 {
+		extras = append(extras, humanize.Count(c.InvestmentAccounts, "investment account not checked", "investment accounts not checked"))
 	}
 	if len(extras) == 0 {
 		return ""
@@ -167,7 +172,7 @@ func xOfYPhrase(x, y int, singular, plural string) string {
 // accounts differ, plus its never-reconciled and investment-account extras.
 func balancesDifferPhrase(bc store.BalanceCheck) string {
 	return "DIFFER for " + xOfYPhrase(len(bc.Mismatched), bc.Checked, "account", "accounts") +
-		balancesExtrasPhrase(len(bc.NeverReconciled), bc.InvestmentAccounts)
+		balancesExtrasPhrase(balanceCounts{NeverReconciled: len(bc.NeverReconciled), InvestmentAccounts: bc.InvestmentAccounts})
 }
 
 // splitsDifferPhrase renders sc's V1 clause: how many of the checked
@@ -358,7 +363,7 @@ func renderStoreFailure(result store.Result, storeExisted bool, home string) str
 		}
 	} else {
 		bc := result.Validation.Balances
-		fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(bc.Checked, len(bc.NeverReconciled), bc.InvestmentAccounts))
+		fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(balanceCounts{Checked: bc.Checked, NeverReconciled: len(bc.NeverReconciled), InvestmentAccounts: bc.InvestmentAccounts}))
 	}
 
 	if mismatched := result.Validation.Splits.Mismatched; len(mismatched) > 0 {
