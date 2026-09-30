@@ -157,9 +157,9 @@ Uncategorized (2 payees, 16 splits): give each payee's splits a category in Quic
 
 Payees in mixed categories (1): pick one category per payee in Quicken, or ignore a payee whose mix is intended
   mixed-categories:payee-12  Costco  3 categories, 48 transactions
-    Groceries           30 transactions
-    Household           12 transactions
-    Auto:Fuel            6 transactions
+    Groceries  30 transactions
+    Household  12 transactions
+    Auto:Fuel   6 transactions
 
 Payee variants (1 group): rename each group to one payee in Quicken and add a renaming rule
   payee-variants:tim-hortons  2 payees, 252 transactions
