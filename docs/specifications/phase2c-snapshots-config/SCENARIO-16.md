@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-16
-status: open
+status: done
 ---
 
 # SCENARIO-16: snapshots lists newest first, marks the store's snapshot, and totals the size (absorbs SCENARIO-03, 17, 19, 20, 34)
@@ -43,10 +43,10 @@ Unruled outcomes — each default below reuses ruled copy only; the orchestrator
 - [x] Step 7: `snapshot/from.go:116-120` `idNotFoundRefusal` — surface #3's copy; pin `import_from_test.go:371-380`. `cmd/quarry/run.go:63,110-113` — one `snapshotsDirUnder` for both factories; the factory's own home refusal tested with a stubbed `Env.LoadConfig`
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments within budget on `List`, `Listing`, `StoreProbe` (`ports.go:63-64`), `BuiltFrom`, `newRootCommand` (`root.go:7-9`), `snapshot/doc.go`, `duckstore/doc.go`
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments within budget on `List`, `Listing`, `StoreProbe` (`ports.go:63-64`), `BuiltFrom`, `newRootCommand` (`root.go:7-9`), `snapshot/doc.go`, `duckstore/doc.go`
 
 ### Verify
-- [ ] Step 9: full verification + `.claude/scripts/spec-check.py phase2c-snapshots-config` → tick SCENARIO-16, and 03, 17, 19, 20, 34 as delivered by SCENARIO-16, each with its acceptance test; rewrite `STATE.md` (drop the three Left-unbuilt rows this closes, keep the `prune` half of the `quicken.path` row)
+- [x] Step 9: full verification + `.claude/scripts/spec-check.py phase2c-snapshots-config` → tick SCENARIO-16, and 03, 17, 19, 20, 34 as delivered by SCENARIO-16, each with its acceptance test; rewrite `STATE.md` (drop the three Left-unbuilt rows this closes, keep the `prune` half of the `quicken.path` row)
 
 ## Handoff
 
@@ -76,13 +76,4 @@ Unruled outcomes — each default below reuses ruled copy only; the orchestrator
 
 ## Phase report
 
-Run B2 (steps 6-7) done. Green: the five `run_snapshots_test.go` acceptance tests and `Test_run_sync_from_an_unknown_id_points_at_quarry_snapshots` (both green on the first run after the code, since steps 6-7 were code-first and the Acceptance phase held the red); narrow loop and `golangci-lint run ./...` (0 issues). Full suite, `-race`, coverage gate, `test-stats.py` are run V's.
-
-Files:
-- `cli/snapshots.go`: command (ruled Short/Long/Example; `Args` returns the whole usage line, hint included); config loaded first, C3 lines through new `output.go` `printConfigWarnings` (sync.go uses it too), then factory, `List`, `writeResult`, then stderr: `quarry: ` + `NoSnapshots`, `quarry: warning: ` + `StoreWarning`. A `List` error is a `runtimeError` (exit 1). No `--json` branch (SCENARIO-18).
-- `cli/render_snapshots.go`: `renderSnapshots(Listing)` (own padding; every line right-trimmed; Total row only with entries), `snapshotStatus` (store > no manifest > schema differs), `snapshotTaken`, `snapshotSource`.
-- `snapshot/from.go` `idNotFoundRefusal` copy; pin `import_from_test.go:379`. `cmd/quarry/run.go` `snapshotsDirUnder` used by both factories.
-- Tests: `cli/render_snapshots_internal_test.go` (incl. `Test_snapshotStatus_puts_store_first`), `cli/snapshots_test.go` (Long, Examples), `cmd/quarry/run_snapshots_refusals_test.go` (C1, C2/C2q/C2r, C4, quicken.path never stat'ed, HOME unset both paths, stdout write failure, folder unreadable, stat fault, interrupted, both stderr lines in order, zero import runs, R2 no path, unknown Taken/Source), `run_usage_test.go` (`snapshots list` exit 2, `--bogus` hint, `snapshots --help` without HOME).
-- Mutation: `store` arm moved below `no manifest` / `schema differs` -> `Test_snapshotStatus_puts_store_first` red on both `store beats …` rows (expected "store", actual "no manifest" / "schema differs"); restored byte-identical.
-
-For V: STATE.md needs the three Left-unbuilt rows closed (store's-snapshot port, `idNotFoundRefusal`, the `snapshots` half of the `quicken.path` never-stat row; keep the `prune` half) and line 25 (`expected exactly one import run` kept byte-identical) is false since B1: the phrase is now `the store has no import history`.
+Run V (steps 8-9) done; scenario complete, `status: done`. Sweep: `go build` and `golangci-lint` 0 issues; doc budgets already met, one sentence each added to `snapshot/doc.go` (List) and `duckstore/doc.go` (BuiltFrom). Verify: full covered suite rc=0, `uncovered-diff.py` 0 uncovered added lines, `-race` green on snapshot/store/cli/cmd. specification.md: SCENARIO-16 ticked, 03/17/19/20/34 ticked as delivered by SCENARIO-16; `spec-check.py` OK. STATE.md rewritten (List/Listing contract, `snapshots interrupted` -> prune mapping, NewSnapshots, printConfigWarnings, pinLocalZone; stale `found 0` line corrected; `prune` half of the quicken.path row kept for SCENARIO-24).

@@ -590,12 +590,12 @@ Sizing notes (binding on per-scenario architects):
 - [x] SCENARIO-13: sync keeps earlier builds in import_runs — `cmd/quarry/run_import_runs_test.go` `Test_run_sync_from_keeps_the_earlier_build_in_import_runs`
 - [x] SCENARIO-14: status reports the latest build when import_runs holds several — delivered by SCENARIO-13 `cmd/quarry/run_status_test.go` `Test_run_status_reports_the_latest_build_when_import_runs_holds_several`
 - [x] SCENARIO-15: sync warns and restarts history when the previous store's history cannot be read — `cmd/quarry/run_import_runs_test.go` `Test_run_sync_from_warns_and_restarts_history_when_the_previous_store_is_not_a_duckdb_database`
-- [ ] SCENARIO-16: snapshots lists newest first, marks the store's snapshot, and totals the size
-- [ ] SCENARIO-03: An unknown config key warns and the command proceeds
-- [ ] SCENARIO-17: snapshots marks a schema-mismatch snapshot and one with no manifest
-- [ ] SCENARIO-19: snapshots with none taken yet says how to take one
-- [ ] SCENARIO-20: snapshots warns when the store cannot be read
-- [ ] SCENARIO-34: --from with an unknown ID points at quarry snapshots
+- [x] SCENARIO-16: snapshots lists newest first, marks the store's snapshot, and totals the size — `cmd/quarry/run_snapshots_test.go` `Test_run_snapshots_lists_newest_first_marks_the_stores_snapshot_and_totals_the_size`
+- [x] SCENARIO-03: An unknown config key warns and the command proceeds — delivered by SCENARIO-16 — `cmd/quarry/run_snapshots_test.go` `Test_run_snapshots_warns_about_an_unknown_config_key_and_still_lists`
+- [x] SCENARIO-17: snapshots marks a schema-mismatch snapshot and one with no manifest — delivered by SCENARIO-16 — `cmd/quarry/run_snapshots_test.go` `Test_run_snapshots_marks_a_schema_mismatch_and_a_missing_manifest`
+- [x] SCENARIO-19: snapshots with none taken yet says how to take one — delivered by SCENARIO-16 — `cmd/quarry/run_snapshots_test.go` `Test_run_snapshots_with_none_taken_yet_says_how_to_take_one`
+- [x] SCENARIO-20: snapshots warns when the store cannot be read — delivered by SCENARIO-16 — `cmd/quarry/run_snapshots_test.go` `Test_run_snapshots_warns_when_the_store_cannot_be_read`
+- [x] SCENARIO-34: --from with an unknown ID points at quarry snapshots — delivered by SCENARIO-16 — `cmd/quarry/run_from_refusals_test.go` `Test_run_sync_from_an_unknown_id_points_at_quarry_snapshots`
 - [ ] SCENARIO-18: snapshots --json lists every snapshot with its store flag
 - [ ] SCENARIO-21: prune deletes all but the newest N snapshots
 - [ ] SCENARIO-23: prune keeps the store's snapshot when it is older than the newest N

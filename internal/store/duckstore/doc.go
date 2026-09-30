@@ -6,7 +6,8 @@
 // store carries one store_info row (FormatVersion, quarry's version, build
 // time), appended last, and the v_account_balances, v_cash_flow and v_spending
 // views. It also answers the read commands: every read opens the store
-// read-only, never creating it, and closes it before returning.
+// read-only, never creating it, and closes it before returning; BuiltFrom
+// reports the snapshot the store's latest import run recorded.
 // It is the only package outside internal/platform/duckdb that imports the
 // DuckDB driver.
 package duckstore
