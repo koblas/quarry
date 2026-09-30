@@ -29,7 +29,7 @@ var requiredRunColumns = []string{
 	"balances_checked", "balances_mismatched", "splits_mismatched", "transfers_one_sided", "investment_transactions_not_imported",
 }
 
-// optionalRunColumns are the columns a Phase 1 store lacks; history carries NULL for each it does not have.
+// optionalRunColumns are the columns an older store format lacks; history carries NULL for each it does not have.
 var optionalRunColumns = []string{
 	"snapshot_taken_at", "source_path", "balances_never_reconciled", "investment_accounts", "transfers_paired", "transfers_cross_currency",
 }
@@ -91,9 +91,8 @@ func historyFault(path string, err error) *store.OpenError {
 	return &store.OpenError{Fault: store.OpenFaultOther, Path: path, Reason: reason, Err: err}
 }
 
-// readRuns reads every import_runs row through db, selecting only the fixed columns. It fails
-// with errRunsMissing (no table), errRunsRepeatID (an id twice), errRunsIDLimit (an id no run
-// can follow), else with the read's own fault.
+// readRuns reads every import_runs row through db. It fails with errRunsMissing (no table), errRunsRepeatID
+// (an id twice), errRunsIDLimit (an id no run can follow), else with the read's own fault.
 func readRuns(ctx context.Context, db ReadDB) (history, error) {
 	present := map[string]bool{}
 	err := db.QueryRows(ctx, runColumnsQuery, nil, func(scan func(dest ...any) error) error {

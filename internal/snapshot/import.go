@@ -90,15 +90,10 @@ func ID(path string) string {
 	return strings.TrimSuffix(filepath.Base(path), ".sqlite")
 }
 
-// SyncAndImport takes a snapshot of bundlePath, then imports it through the
-// configured Importer, skipping the import (Store left nil) on a schema
-// mismatch or any other Sync failure. An import failure never replaces the
-// already-committed snapshot: it comes back as a store refusal wrapping the
-// importer's error, so errors.As still reaches it. A failed check (V1) sets
-// Store to the unbuilt result, so a later stdout write against it still
-// gets the O1b refusal. Once the store is built, a Server with WithAutoPrune
-// deletes the snapshots beyond the newest few; interrupted with any left to
-// delete, it returns the built Outcome beside a refusal.
+// SyncAndImport takes a snapshot of bundlePath, then imports it through the configured Importer,
+// leaving Store nil on a Sync failure. An import failure never replaces the committed snapshot: it
+// wraps the importer's error in a store refusal. A Server with WithAutoPrune then deletes old
+// snapshots; interrupted with any left, it returns the built Outcome beside a refusal.
 func (s *Server) SyncAndImport(ctx context.Context, bundlePath string) (Outcome, error) {
 	manifest, err := s.Sync(ctx, bundlePath)
 	if err != nil {

@@ -62,9 +62,8 @@ type prunePlan struct {
 	orphans []string
 }
 
-// planPrune decides what a prune would delete without touching a file. It refuses keep < 1
-// (ErrKeepBelowOne), an ended ctx, an unreadable folder and, only past the newest keep, a
-// store that cannot say which snapshot built it; within the newest keep that read is best-effort.
+// planPrune decides what a prune would delete without touching a file. It refuses keep < 1, an ended ctx,
+// an unreadable folder and, only beyond the newest keep, a store that cannot say which snapshot built it.
 func (s *Server) planPrune(ctx context.Context, keep int) (prunePlan, error) {
 	if keep < 1 {
 		return prunePlan{}, ErrKeepBelowOne
@@ -112,7 +111,7 @@ func (s *Server) PlanPrune(ctx context.Context, keep int) (Pruned, error) {
 }
 
 // Prune deletes all but the newest keep snapshots, never the one the store was built from,
-// and reports what it deleted and what it could not. Its refusals are planPrune's. An ended
+// and reports what it deleted and what it could not. It refuses what PlanPrune refuses. An ended
 // ctx stops it between snapshots and skips the orphan sweep.
 func (s *Server) Prune(ctx context.Context, keep int) (Pruned, error) {
 	plan, err := s.planPrune(ctx, keep)
