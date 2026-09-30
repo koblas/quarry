@@ -1,3 +1,5 @@
+// run is unexported, so its tests live in package main rather than
+// importing main from outside.
 package main
 
 import (
@@ -15,7 +17,7 @@ func Test_run_cashflow_leaves_out_accounts_that_use_linked_account_tracking(t *t
 	t.Setenv("HOME", home)
 	replaceStore(t, home, cashFlowRows(
 		[]store.Account{
-			{ID: "acct-chq", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
+			chequingAccount("acct-chq", 1),
 			{ID: "acct-401k", SourceID: 2, Name: "Netskope 401(k)", Type: "retirement", Currency: "CAD", Active: true, LinkedTracking: true},
 		},
 		spendSplit{id: "s01", account: "acct-chq", category: "cat-salary", currency: "CAD", day: day(2026, 3, 1), cents: 50000},

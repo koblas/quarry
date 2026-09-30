@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -54,8 +53,7 @@ func Test_run_spend_rejects_a_period_it_cannot_use(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
 			var stdout, stderr bytes.Buffer
-			env := defaultEnv(&stdout, &stderr)
-			env.Now = func() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC) }
+			env := spendEnv(&stdout, &stderr)
 
 			exitCode := runWith(context.Background(), c.args, env)
 

@@ -16,7 +16,7 @@ func Test_run_cashflow_json_returns_cash_flow_as_a_document(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	replaceStore(t, home, cashFlowRows(
-		[]store.Account{{ID: "acct-cad", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true}},
+		[]store.Account{chequingAccount("acct-cad", 1)},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 1, 31), cents: 910000},
 		spendSplit{id: "s02", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 1, 10), cents: -300000},
 		spendSplit{id: "s03", account: "acct-cad", category: "cat-fuel", currency: "CAD", day: day(2026, 1, 20), cents: -320000},
