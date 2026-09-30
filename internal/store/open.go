@@ -51,5 +51,8 @@ func (e *OpenError) UnreadableReason(at string) string {
 	if reason, ok := unreadableReasons[e.Fault]; ok {
 		return reason
 	}
+	if e.Path == "" {
+		return e.Reason
+	}
 	return strings.ReplaceAll(e.Reason, e.Path, at)
 }

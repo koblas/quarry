@@ -190,7 +190,7 @@ func Test_prune_counts_only_unattempted_snapshots_after_a_failure_and_an_interru
 	assert.Equal(t, []string{idFourth}, doomedIDs(pruned.Deleted))
 }
 
-func Test_prune_finishes_and_sweeps_when_the_context_ends_after_the_last_delete(t *testing.T) {
+func Test_prune_finishes_without_sweeping_when_the_context_ends_after_the_last_delete(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
 	dir := prunable(t, home, idNewest, idMiddle, idOldest)
@@ -202,5 +202,5 @@ func Test_prune_finishes_and_sweeps_when_the_context_ends_after_the_last_delete(
 	require.NoError(t, err)
 	assert.Equal(t, []string{idOldest}, doomedIDs(pruned.Deleted))
 	assert.Zero(t, pruned.NotDeleted)
-	assert.NoFileExists(t, filepath.Join(dir, idFourth+".json"))
+	assert.FileExists(t, filepath.Join(dir, idFourth+".json"))
 }

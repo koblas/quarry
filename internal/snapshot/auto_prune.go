@@ -19,8 +19,7 @@ func (s *Server) autoPrune(ctx context.Context, outcome *Outcome) error {
 	outcome.Pruned = pruned
 	listing, err := s.listFolder()
 	if err != nil {
-		// listFolder refuses only with a causedRefusalError; the warning quotes the OS cause, not the refusal.
-		reason := osreason.Reason(errors.Unwrap(err))
+		reason := unlistedReason(err)
 		outcome.pruneWarning = cannotListWarning(homepath.Abbreviate(s.home, s.snapshotDir), reason)
 		outcome.pruneWarningAbsolute = cannotListWarning(s.snapshotDir, reason)
 		return nil
@@ -36,10 +35,16 @@ func (s *Server) autoPrune(ctx context.Context, outcome *Outcome) error {
 		}
 		s.deleteSnapshot(entry, pruned)
 	}
-	if ctx.Err() == nil {
-		s.sweepOrphans(listing.orphans)
-	}
+	s.sweepOrphans(ctx, listing.orphans)
 	return nil
+}
+
+// unlistedReason is the OS reason behind listFolder's refusal err: its cause's, else err's own.
+func unlistedReason(err error) string {
+	if cause := errors.Unwrap(err); cause != nil {
+		return osreason.Reason(cause)
+	}
+	return osreason.Reason(err)
 }
 
 // interruptedWhilePruning is the refusal for a sync whose ctx ended with snapshots still to delete.

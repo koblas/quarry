@@ -113,7 +113,7 @@ func (s *Server) PlanPrune(ctx context.Context, keep int) (Pruned, error) {
 
 // Prune deletes all but the newest keep snapshots, never the one the store was built from,
 // and reports what it deleted and what it could not. Its refusals are planPrune's. An ended
-// ctx stops it between snapshots; otherwise it sweeps orphan manifests.
+// ctx stops it between snapshots and skips the orphan sweep.
 func (s *Server) Prune(ctx context.Context, keep int) (Pruned, error) {
 	plan, err := s.planPrune(ctx, keep)
 	if err != nil {
@@ -128,12 +128,15 @@ func (s *Server) Prune(ctx context.Context, keep int) (Pruned, error) {
 			return pruned, interruptedMidDelete(ctx, left)
 		}
 	}
-	s.sweepOrphans(plan.orphans)
+	s.sweepOrphans(ctx, plan.orphans)
 	return pruned, nil
 }
 
-// sweepOrphans removes each orphan manifest; one that will not go is not reported.
-func (s *Server) sweepOrphans(orphans []string) {
+// sweepOrphans removes each orphan manifest unless ctx has ended; one that will not go is not reported.
+func (s *Server) sweepOrphans(ctx context.Context, orphans []string) {
+	if ctx.Err() != nil {
+		return
+	}
 	for _, path := range orphans {
 		_ = s.remove(path)
 	}

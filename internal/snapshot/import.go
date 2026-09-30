@@ -133,7 +133,8 @@ func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome
 	if fault := result.HistoryFault; fault != nil {
 		outcome.historyWarning = historyRestartWarning(fault.UnreadableReason(homepath.Abbreviate(s.home, s.storeProbe.Path())))
 	}
-	return outcome, s.autoPrune(ctx, &outcome)
+	err = s.autoPrune(ctx, &outcome)
+	return outcome, err
 }
 
 // recordedTakenAt parses a manifest's taken_at into UTC; an unparseable
