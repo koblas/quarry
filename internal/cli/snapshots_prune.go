@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 
-	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/spf13/cobra"
 )
@@ -18,8 +17,8 @@ const (
 )
 
 // newPruneCommand builds the snapshots prune subcommand: delete all but the newest
-// --keep snapshots (config.DefaultKeep when the flag is not given), never the store's own.
-func newPruneCommand(newSnapshots SnapshotsFactory) *cobra.Command {
+// --keep snapshots (snapshots.keep from the config file when the flag is not given), never the store's own.
+func newPruneCommand(newSnapshots SnapshotsFactory, loadConfig ConfigLoader) *cobra.Command {
 	var keep int
 	cmd := &cobra.Command{
 		Use:   pruneCommand,
@@ -42,7 +41,13 @@ With --dry-run, prune lists what it would delete and deletes nothing.`,
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			limit := config.DefaultKeep
+			cfg, err := loadConfig(pruneFactoryCommand)
+			if err != nil {
+				return &runtimeError{err: err}
+			}
+			printConfigWarnings(cmd, cfg.Warnings)
+
+			limit := cfg.Keep
 			if cmd.Flags().Changed(keepFlag) {
 				limit = keep
 			}
