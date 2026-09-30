@@ -159,9 +159,8 @@ func Test_run_snapshots_prune_run_twice_never_deletes_the_snapshot_the_recorded_
 	}
 }
 
-// storeBuiltFromASymlink syncs, rebuilds the store with sync --from a symlink outside the folder to the
-// snapshot taken, then adds a newer hard link of it and one newer snapshot; it returns the snapshot's ID,
-// the newer snapshot's ID and the folder.
+// storeBuiltFromASymlink syncs, rebuilds the store --from a symlink to that snapshot and adds a newer hard
+// link of it beside one newer snapshot; it returns the snapshot's ID, the newer snapshot's ID and the folder.
 func storeBuiltFromASymlink(t *testing.T, home string) (string, string, string) {
 	t.Helper()
 	newer := newerSnapshots(1)
