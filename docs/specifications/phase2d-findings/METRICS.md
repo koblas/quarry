@@ -7,6 +7,7 @@
 | SCENARIO-04 (+05) | code-first | A, B1, B2, V | 0/0/2/2 | no (comment MINORs → STATE.md) |
 | SCENARIO-06 (+07) | code-first | A, B1, B2, V | 0/2/3/0 | yes (carried-flag wiring and carried type unpinned; test-only fix) |
 | SCENARIO-08 | code-first | A, B1, B2, V | 0/2/3/0 | yes (findings read-fault reason and silent format-3 rows unpinned; test-only fix); 1 copy ruling (both carry faults) |
+| SCENARIO-09 (+10) | code-first (light) | L, V | 0/1/0/2 | yes (reverse-order day bound unpinned; test-only fix) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
