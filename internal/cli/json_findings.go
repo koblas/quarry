@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 )
@@ -45,9 +44,9 @@ type findingItemDocument struct {
 	Splits         *int    `json:"splits"`
 }
 
-// renderFindingsJSON renders listing as findings's --json document with warnings as given; findings
-// and warnings are [] rather than null when empty.
-func renderFindingsJSON(listing report.FindingsListing, warnings []string) ([]byte, error) {
+// renderFindingsJSON renders listing as findings's --json document for view with warnings as given;
+// findings and warnings are [] rather than null when empty.
+func renderFindingsJSON(listing report.FindingsListing, view findingsView, warnings []string) ([]byte, error) {
 	entries := []findingEntryDocument{}
 	for _, group := range listing.Groups {
 		for _, f := range group.Findings {
@@ -55,24 +54,30 @@ func renderFindingsJSON(listing report.FindingsListing, warnings []string) ([]by
 		}
 	}
 	return marshalDocument(findingsListDocument{
-		Status:   string(finding.StatusOpen),
+		Status:   string(view.status),
+		Type:     jsonNullString(string(view.typ)),
 		Counts:   newFindingCountsDocument(listing.Counts),
 		Findings: entries,
 		Warnings: append([]string{}, warnings...),
 	})
 }
 
-// newFindingEntryDocument converts f, an open finding, into its --json entry: it has no fixed_at.
-func newFindingEntryDocument(f store.Finding) findingEntryDocument {
+// newFindingEntryDocument converts f into its --json entry: fixed_at is set only for a fixed finding, which has no items.
+func newFindingEntryDocument(f report.ListedFinding) findingEntryDocument {
 	items := make([]findingItemDocument, len(f.Items))
 	for i, item := range f.Items {
 		items[i] = newFindingItemDocument(item)
 	}
-	return findingEntryDocument{
-		ID: f.ID, Type: string(f.Type), Status: string(finding.StatusOpen),
+	doc := findingEntryDocument{
+		ID: f.ID, Type: string(f.Type), Status: string(f.Status),
 		FirstFoundAt: jsonTimestamp(f.FirstFoundAt),
 		Fix:          f.Type.Fix().Sentence, Items: items,
 	}
+	if f.FixedAt != nil {
+		fixedAt := jsonTimestamp(*f.FixedAt)
+		doc.FixedAt = &fixedAt
+	}
+	return doc
 }
 
 // newFindingItemDocument converts item into its --json entry; category, transactions and splits stay null until a type carries them.

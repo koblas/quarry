@@ -21,32 +21,56 @@ const findingsHint = "Ignore a finding by adding its id to findings.ignore in " 
 // findingsNotShown ends the footer clause that counts the findings the default view leaves out.
 const findingsNotShown = " not shown (--status all)"
 
-// renderFindings renders the open findings group by group, each group with its header and rows and
-// a blank line after, then the footer, and the ignore hint when showHint and a finding is open.
-func renderFindings(listing report.FindingsListing, showHint bool) string {
+// findingsView is which findings the command lists: one status or report.FindingsAll, and one
+// finding type or every type when typ is empty.
+type findingsView struct {
+	status finding.Status
+	typ    finding.Type
+}
+
+// renderFindings renders the listed findings group by group, each group with its header and rows and
+// a blank line after, then the footer, and the ignore hint when showHint and an open finding is listed.
+func renderFindings(listing report.FindingsListing, view findingsView, showHint bool) string {
 	var b strings.Builder
 	for _, group := range listing.Groups {
 		b.WriteString(findingsHeader(group) + "\n")
-		for _, line := range findingLines(group) {
+		for _, line := range findingLines(group, view) {
 			b.WriteString(line + "\n")
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString(findingsFooter(listing.Counts) + "\n")
-	if showHint && listing.Counts.Open > 0 {
+	b.WriteString(findingsFooter(listing.Counts, view) + "\n")
+	if showHint && hasOpen(listing.Groups...) {
 		b.WriteString(findingsHint + "\n")
 	}
 	return b.String()
 }
 
-// findingsHeader is a group's header: its heading, how many it lists and the fix in one clause.
+// hasOpen reports whether any finding listed in groups is open.
+func hasOpen(groups ...report.FindingsGroup) bool {
+	for _, group := range groups {
+		for _, f := range group.Findings {
+			if f.Status == finding.StatusOpen {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// findingsHeader is a group's header: its heading and how many it lists, then the fix in one clause
+// when the group lists an open finding.
 func findingsHeader(group report.FindingsGroup) string {
 	fix := group.Type.Fix()
-	return fmt.Sprintf("%s (%s): %s", fix.Heading, findingsGroupCount(group), fix.GroupClause)
+	header := fmt.Sprintf("%s (%s)", fix.Heading, findingsGroupCount(group))
+	if !hasOpen(group) {
+		return header
+	}
+	return header + ": " + fix.GroupClause
 }
 
 // findingsGroupCount is the count in a group header: the findings listed, and for uncategorized
-// the payees and splits they cover.
+// the payees and the splits they list, the splits left out when none is listed.
 func findingsGroupCount(group report.FindingsGroup) string {
 	if group.Type != finding.Uncategorized {
 		return humanize.Thousands(len(group.Findings))
@@ -55,29 +79,60 @@ func findingsGroupCount(group report.FindingsGroup) string {
 	for _, f := range group.Findings {
 		splits += len(f.Items)
 	}
-	return humanize.Count(len(group.Findings), "payee", "payees") + ", " + humanize.Count(splits, "split", "splits")
+	payees := humanize.Count(len(group.Findings), "payee", "payees")
+	if splits == 0 {
+		return payees
+	}
+	return payees + ", " + humanize.Count(splits, "split", "splits")
 }
 
-// findingLines is the rows of a group's findings, in order; a type without a row layout gets one id line per finding.
-func findingLines(group report.FindingsGroup) []string {
-	switch group.Type { //nolint:exhaustive // the other types' rows arrive with their detectors
+// findingLines is the rows of a group's findings: the open and ignored ones laid out together, then
+// one line per fixed one.
+func findingLines(group report.FindingsGroup, view findingsView) []string {
+	var live, fixed []report.ListedFinding
+	for _, f := range group.Findings {
+		if f.Status == finding.StatusFixed {
+			fixed = append(fixed, f)
+		} else {
+			live = append(live, f)
+		}
+	}
+	lines := liveFindingLines(group.Type, live, view)
+	for _, f := range fixed {
+		lines = append(lines, "  "+f.ID+"  fixed "+f.FixedAt.In(time.Local).Format(time.DateOnly)) //nolint:gosmopolitan // fixed dates are the user's local dates
+	}
+	return lines
+}
+
+// ignoredMarker ends the line of an ignored finding when the view lists findings of every status.
+func ignoredMarker(f report.ListedFinding, view findingsView) string {
+	if f.Status == finding.StatusIgnored && view.status == report.FindingsAll {
+		return "  ignored"
+	}
+	return ""
+}
+
+// liveFindingLines is the rows of findings that are open or ignored, in order; a type without a
+// row layout gets one id line per finding.
+func liveFindingLines(typ finding.Type, findings []report.ListedFinding, view findingsView) []string {
+	switch typ { //nolint:exhaustive // the other types' rows arrive with their detectors
 	case finding.Duplicate:
 		var lines []string
-		for _, f := range group.Findings {
-			lines = append(lines, "  "+f.ID)
+		for _, f := range findings {
+			lines = append(lines, "  "+f.ID+ignoredMarker(f, view))
 			for _, row := range itemRows(f.Items) {
 				lines = append(lines, "    "+row)
 			}
 		}
 		return lines
 	case finding.OneSidedTransfer:
-		return oneSidedFindingRows(group.Findings)
+		return oneSidedFindingRows(findings, view)
 	case finding.Uncategorized:
-		return uncategorizedRows(group.Findings)
+		return uncategorizedRows(findings, view)
 	}
-	lines := make([]string, len(group.Findings))
-	for i, f := range group.Findings {
-		lines[i] = "  " + f.ID
+	lines := make([]string, len(findings))
+	for i, f := range findings {
+		lines[i] = "  " + f.ID + ignoredMarker(f, view)
 	}
 	return lines
 }
@@ -104,14 +159,19 @@ func itemRows(items []store.FindingItem) []string {
 }
 
 // oneSidedFindingRows renders one row per one-sided finding item: the leg as a "?" row shows it,
-// behind the finding's id padded to the widest among them.
-func oneSidedFindingRows(findings []store.Finding) []string {
+// behind the finding's id padded to the widest among them; an ignored finding's first row ends with its marker.
+func oneSidedFindingRows(findings []report.ListedFinding, view findingsView) []string {
 	var legs []store.OneSidedTransfer
-	var ids []string
+	var ids, markers []string
 	for _, f := range findings {
-		for _, item := range f.Items {
+		for i, item := range f.Items {
+			marker := ""
+			if i == 0 {
+				marker = ignoredMarker(f, view)
+			}
 			legs = append(legs, legOf(item))
 			ids = append(ids, f.ID)
+			markers = append(markers, marker)
 		}
 	}
 	idWidth := widestRunes(ids)
@@ -120,7 +180,11 @@ func oneSidedFindingRows(findings []store.Finding) []string {
 	for i, id := range ids {
 		leads[i] = "  " + padRight(id, idWidth) + "  "
 	}
-	return legRows(legs, leads)
+	rows := legRows(legs, leads)
+	for i := range rows {
+		rows[i] += markers[i]
+	}
+	return rows
 }
 
 // legOf is the one-sided leg an item describes.
@@ -132,8 +196,8 @@ func legOf(item store.FindingItem) store.OneSidedTransfer {
 }
 
 // uncategorizedRows renders one row per uncategorized finding: its id, payee, how many splits and
-// the dates they run from and to, each column padded to the widest among them.
-func uncategorizedRows(findings []store.Finding) []string {
+// the dates they run from and to, each column padded to the widest among them, then the ignored marker.
+func uncategorizedRows(findings []report.ListedFinding, view findingsView) []string {
 	ids := make([]string, len(findings))
 	payees := make([]string, len(findings))
 	counts := make([]string, len(findings))
@@ -153,7 +217,7 @@ func uncategorizedRows(findings []store.Finding) []string {
 	rows := make([]string, len(findings))
 	for i := range findings {
 		rows[i] = "  " + padRight(ids[i], idWidth) + "  " + padRight(payees[i], payeeWidth) + "  " +
-			padLeft(counts[i], countWidth) + "  " + spans[i]
+			padLeft(counts[i], countWidth) + "  " + spans[i] + ignoredMarker(findings[i], view)
 	}
 	return rows
 }
@@ -174,10 +238,24 @@ func uncategorizedSpan(items []store.FindingItem) (string, time.Time, time.Time)
 	return payee, first, last
 }
 
-// findingsFooter is the default view's last line: how many findings are open, then how many ignored
-// and fixed ones it leaves out.
-func findingsFooter(counts finding.Counts) string {
-	line := "No open findings"
+// findingsFooter is the view's last line: its count of findings, or the empty line when there are none.
+// Counts are over the view's type.
+func findingsFooter(counts finding.Counts, view findingsView) string {
+	switch view.status {
+	case finding.StatusOpen:
+		return openFooter(counts, view.typ)
+	case finding.StatusIgnored:
+		return statusFooter(counts.Ignored, "ignored", view.typ)
+	case finding.StatusFixed:
+		return statusFooter(counts.Fixed, "fixed", view.typ)
+	}
+	return allFooter(counts, view.typ)
+}
+
+// openFooter is the default view's footer: how many findings are open, then how many ignored and
+// fixed ones it leaves out.
+func openFooter(counts finding.Counts, typ finding.Type) string {
+	line := "No open findings" + ofType(typ)
 	if counts.Open > 0 {
 		line = humanize.Count(counts.Open, "open finding", "open findings")
 	}
@@ -192,6 +270,41 @@ func findingsFooter(counts finding.Counts) string {
 		return line
 	}
 	return line + "; " + strings.Join(hidden, " and ") + findingsNotShown
+}
+
+// statusFooter is the footer of a view listing only findings of status: "3 ignored findings".
+func statusFooter(n int, status string, typ finding.Type) string {
+	if n == 0 {
+		return "No " + status + " findings" + ofType(typ)
+	}
+	return humanize.Count(n, status+" finding", status+" findings")
+}
+
+// allFooter is the footer of the view listing every status: the total, then the count of each
+// status that has any.
+func allFooter(counts finding.Counts, typ finding.Type) string {
+	total := counts.Open + counts.Ignored + counts.Fixed
+	if total == 0 {
+		return "No findings" + ofType(typ)
+	}
+	var clauses []string
+	for _, c := range []struct {
+		n     int
+		label string
+	}{{counts.Open, "open"}, {counts.Ignored, "ignored"}, {counts.Fixed, "fixed"}} {
+		if c.n > 0 {
+			clauses = append(clauses, humanize.Thousands(c.n)+" "+c.label)
+		}
+	}
+	return humanize.Count(total, "finding", "findings") + ": " + strings.Join(clauses, ", ")
+}
+
+// ofType is the phrase that names typ at the end of an empty line, nothing when no type is chosen.
+func ofType(typ finding.Type) string {
+	if typ == "" {
+		return ""
+	}
+	return " of type " + string(typ)
 }
 
 // widestRunes is the width in runes of the widest of ss, 0 for an empty slice.

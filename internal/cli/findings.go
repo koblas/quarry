@@ -14,10 +14,7 @@ import (
 // findingsCommand is the word that names findings on the command line and in its usage lines.
 const findingsCommand = "findings"
 
-// findingsStatusAll is the --status value that shows every status.
-const findingsStatusAll = "all"
-
-// newFindingsCommand builds findings: the open findings sync found, grouped by type with the fix for each, as JSON when *jsonOut is set.
+// newFindingsCommand builds findings: the findings sync found, filtered by --status and --type and grouped by type with the fix for each, as JSON when *jsonOut is set.
 func newFindingsCommand(newReport ReportFactory, loadConfig ConfigLoader, jsonOut *bool) *cobra.Command {
 	var status, typ string
 	cmd := &cobra.Command{
@@ -84,7 +81,8 @@ prints one row per item, for a spreadsheet.`,
 				return err
 			}
 
-			req := report.FindingsRequest{Ignore: cfg.Ignore}
+			req := report.FindingsRequest{Ignore: cfg.Ignore, Status: finding.Status(status), Type: finding.Type(typ)}
+			view := findingsView{status: req.Status, typ: req.Type}
 			listing, err := srv.Findings(cmd.Context(), req)
 			if err != nil {
 				return &runtimeError{err: err}
@@ -93,9 +91,11 @@ prints one row per item, for a spreadsheet.`,
 			printConfigWarnings(cmd, unmatched)
 			out, err := renderResult(*jsonOut,
 				func() ([]byte, error) {
-					return renderFindingsJSON(listing, append(slices.Clone(cfg.Warnings), unmatched...))
+					return renderFindingsJSON(listing, view, append(slices.Clone(cfg.Warnings), unmatched...))
 				},
-				func() string { return renderFindings(listing, len(req.Ignore) == 0) })
+				func() string {
+					return renderFindings(listing, view, len(req.Ignore) == 0)
+				})
 			if err != nil {
 				// unreachable: renderResult fails only via marshalDocument, and the findings document holds strings, ints and slices; see marshalDocument.
 				return err
@@ -124,7 +124,7 @@ func unmatchedIgnoreWarnings(configShown string, unmatched []string) []string {
 // validateFindingsFlags refuses a --status that is not open, ignored, fixed or all, and a --type
 // that is not a finding type (or empty), as usage errors.
 func validateFindingsFlags(status, typ string) error {
-	if !slices.Contains([]string{string(finding.StatusOpen), string(finding.StatusIgnored), string(finding.StatusFixed), findingsStatusAll}, status) {
+	if !slices.Contains([]string{string(finding.StatusOpen), string(finding.StatusIgnored), string(finding.StatusFixed), string(report.FindingsAll)}, status) {
 		return UsageError{msg: "--status must be open, ignored, fixed or all"}
 	}
 	types := finding.Types()

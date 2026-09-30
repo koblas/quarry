@@ -5,6 +5,7 @@ package cli
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/report"
@@ -16,7 +17,7 @@ import (
 func Test_renderFindingsJSON_encodes_each_of_the_five_counts_under_its_own_key(t *testing.T) {
 	listing := report.FindingsListing{Counts: finding.Counts{Open: 5, Ignored: 4, Fixed: 12, New: 2, NewlyFixed: 1}}
 
-	data, err := renderFindingsJSON(listing, nil)
+	data, err := renderFindingsJSON(listing, openView, nil)
 
 	require.NoError(t, err)
 	var doc struct {
@@ -29,13 +30,13 @@ func Test_renderFindingsJSON_encodes_each_of_the_five_counts_under_its_own_key(t
 func Test_renderFindingsJSON_encodes_a_finding_item_without_a_payee_as_null(t *testing.T) {
 	listing := report.FindingsListing{Groups: []report.FindingsGroup{{
 		Type: finding.Uncategorized,
-		Findings: []store.Finding{{
+		Findings: []report.ListedFinding{openFinding(store.Finding{
 			ID: "uncategorized:no-payee", Type: finding.Uncategorized,
 			Items: []store.FindingItem{{Payee: "", Date: findingDay(2012, 1, 1)}},
-		}},
+		})},
 	}}}
 
-	data, err := renderFindingsJSON(listing, nil)
+	data, err := renderFindingsJSON(listing, openView, nil)
 
 	require.NoError(t, err)
 	var doc struct {
@@ -48,4 +49,62 @@ func Test_renderFindingsJSON_encodes_a_finding_item_without_a_payee_as_null(t *t
 	require.Len(t, doc.Findings[0].Items, 1)
 	assert.Contains(t, doc.Findings[0].Items[0], "payee")
 	assert.Nil(t, doc.Findings[0].Items[0]["payee"])
+}
+
+func Test_renderFindingsJSON_names_the_view_status_and_type(t *testing.T) {
+	cases := []struct {
+		name       string
+		view       findingsView
+		wantStatus string
+		wantType   any
+	}{
+		{name: "the default view", view: openView, wantStatus: "open", wantType: nil},
+		{name: "all statuses", view: allView, wantStatus: "all", wantType: nil},
+		{name: "fixed of one type", view: findingsView{status: finding.StatusFixed, typ: finding.Duplicate}, wantStatus: "fixed", wantType: "duplicate"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			data, err := renderFindingsJSON(report.FindingsListing{}, c.view, nil)
+
+			require.NoError(t, err)
+			var doc map[string]any
+			require.NoError(t, json.Unmarshal(data, &doc))
+			assert.Equal(t, c.wantStatus, doc["status"])
+			assert.Equal(t, c.wantType, doc["type"])
+		})
+	}
+}
+
+func Test_renderFindingsJSON_entries_follow_each_findings_status_and_fixed_at(t *testing.T) {
+	fixedAt := time.Date(2026, 10, 2, 3, 0, 0, 0, time.UTC)
+	ignored := withStatus(openFinding(store.Finding{
+		ID: "duplicate:txn-1+txn-2", Type: finding.Duplicate,
+		Items: []store.FindingItem{{Date: findingDay(2026, 8, 3)}},
+	}), finding.StatusIgnored)
+	listing := report.FindingsListing{Groups: []report.FindingsGroup{{
+		Type:     finding.Duplicate,
+		Findings: []report.ListedFinding{ignored, fixedFinding("duplicate:txn-3+txn-4", finding.Duplicate, fixedAt)},
+	}}}
+
+	data, err := renderFindingsJSON(listing, allView, nil)
+
+	require.NoError(t, err)
+	var doc struct {
+		Findings []struct {
+			ID      string  `json:"id"`
+			Status  string  `json:"status"`
+			FixedAt *string `json:"fixed_at"`
+			Items   []any   `json:"items"`
+		} `json:"findings"`
+	}
+	require.NoError(t, json.Unmarshal(data, &doc))
+	require.Len(t, doc.Findings, 2)
+	assert.Equal(t, "ignored", doc.Findings[0].Status)
+	assert.Nil(t, doc.Findings[0].FixedAt)
+	assert.Len(t, doc.Findings[0].Items, 1)
+	assert.Equal(t, "fixed", doc.Findings[1].Status)
+	require.NotNil(t, doc.Findings[1].FixedAt)
+	assert.Equal(t, "2026-10-02T03:00:00Z", *doc.Findings[1].FixedAt)
+	assert.Equal(t, []any{}, doc.Findings[1].Items)
 }
