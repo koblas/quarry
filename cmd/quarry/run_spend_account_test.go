@@ -1,0 +1,114 @@
+// run is unexported, so its tests live in package main rather than
+// importing main from outside.
+package main
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/koblas/quarry/internal/cli"
+	"github.com/koblas/quarry/internal/store"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// spendEnv is an env writing to stdout and stderr, with the clock at 2026-09-29.
+func spendEnv(stdout, stderr *bytes.Buffer) cli.Env {
+	e := defaultEnv(stdout, stderr)
+	e.Now = func() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC) }
+	return e
+}
+
+func Test_run_spend_counts_only_the_accounts_it_is_given(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStore(t, home, spendRows(
+		[]store.Account{
+			{ID: "acct-chq", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
+			{ID: "acct-visa", SourceID: 2, Name: "Visa Infinite", Type: "credit_card", Currency: "CAD", Closed: true},
+			{ID: "acct-sav", SourceID: 3, Name: "Savings", Type: "savings", Currency: "CAD", Active: true},
+		},
+		spendSplit{id: "s01", account: "acct-chq", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -1000},
+		spendSplit{id: "s02", account: "acct-visa", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 11), cents: -500},
+		spendSplit{id: "s03", account: "acct-sav", category: "cat-fuel", currency: "CAD", day: day(2026, 3, 12), cents: -300},
+	))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(),
+		[]string{"spend", "--account", "chequing", "--account", "acct-visa", "--account", "Chequing"},
+		spendEnv(&stdout, &stderr))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	const row = "%-14s  %-8s  %5s\n"
+	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in Chequing, Visa Infinite\n\n"+
+		fmt.Sprintf(row, "Category", "Currency", "Spent")+
+		fmt.Sprintf(row, "Food:Groceries", "CAD", "15.00")+
+		fmt.Sprintf(row, "Total", "CAD", "15.00"),
+		stdout.String())
+}
+
+func Test_run_spend_warns_that_a_named_account_is_left_out_of_reports(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStore(t, home, spendRows(
+		[]store.Account{
+			{ID: "acct-old", SourceID: 1, Name: "Old Card", Type: "credit_card", Currency: "CAD", Active: true, NotInReports: true},
+		},
+		spendSplit{id: "s01", account: "acct-old", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -900},
+	))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"spend", "--account", "Old Card"}, spendEnv(&stdout, &stderr))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Equal(t, "quarry: warning: account \"Old Card\" is not used in reports in Quicken, so spend leaves it out; "+
+		"to include it, turn on reports for it in Quicken's account settings, then run quarry sync\n",
+		stderr.String())
+	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in Old Card\n\nCategory  Currency  Spent\n", stdout.String())
+}
+
+func Test_run_spend_refuses_an_account_it_cannot_pick(t *testing.T) {
+	cases := []struct {
+		name string
+		arg  string
+		want string
+	}{
+		{
+			name: "no account has the name",
+			arg:  "Chequeing",
+			want: "quarry: no account named \"Chequeing\"; run quarry accounts --all to list them\n",
+		},
+		{
+			name: "the argument is empty",
+			arg:  "",
+			want: "quarry: no account named \"\"; run quarry accounts --all to list them\n",
+		},
+		{
+			name: "two accounts share the name, listed by sorted id",
+			arg:  "Visa",
+			want: "quarry: 2 accounts are named \"Visa\"; pass one of their ids instead: acct-812, acct-977\n",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			replaceStore(t, home, spendRows([]store.Account{
+				{ID: "acct-chq", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
+				{ID: "acct-977", SourceID: 2, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
+				{ID: "acct-812", SourceID: 3, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
+			}))
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), []string{"spend", "--account", c.arg}, spendEnv(&stdout, &stderr))
+
+			assert.Equal(t, 1, exitCode)
+			assert.Equal(t, c.want, stderr.String())
+			assert.Empty(t, stdout.String())
+		})
+	}
+}

@@ -69,7 +69,7 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	if err != nil {
 		return store.Result{}, err
 	}
-	categories, existingCategories, err := mapCategories(ctx, src, entities["CategoryTag"], off)
+	categories, existingCategories, uncategorized, err := mapCategories(ctx, src, entities["CategoryTag"], off)
 	if err != nil {
 		return store.Result{}, err
 	}
@@ -91,7 +91,7 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	if err != nil {
 		return store.Result{}, err
 	}
-	splits, links, splitIDs, err := mapSplits(ctx, src, txnRefs, existingCategories, off)
+	splits, links, splitIDs, err := mapSplits(ctx, src, txnRefs, existingCategories, uncategorized, off)
 	if err != nil {
 		return store.Result{}, err
 	}

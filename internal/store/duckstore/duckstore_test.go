@@ -40,6 +40,8 @@ func minimalRows() store.Rows {
 		Splits: []store.Split{{
 			ID: "split-1", SourceID: 1, TransactionID: "txn-1", CategoryID: new("cat-1"),
 			Amount: 1234, Memo: new("split memo"),
+		}, {
+			ID: "split-4", SourceID: 4, TransactionID: "txn-1", CategoryID: new("cat-1"), Amount: 1234,
 		}},
 		SplitTags: []store.SplitTag{{SplitID: "split-1", TagID: "tag-1"}},
 		Transfers: []store.Transfer{
@@ -97,6 +99,33 @@ func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
 	assertScalar(t, db, "SELECT concat_ws(' ', CAST(snapshot_taken_at AS VARCHAR), source_path, balances_never_reconciled, "+
 		"investment_accounts, transfers_paired, transfers_cross_currency) FROM import_runs WHERE id = 1",
 		"2026-09-27 14:30:05 /Users/alex/Documents/Home.quicken 14 15 16 17")
+}
+
+func Test_replace_stores_the_report_flags_and_the_posted_date(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	rows.Accounts = append(rows.Accounts, store.Account{
+		ID: "acct-2", SourceID: 2, Name: "Old Card", Type: "credit_card", Currency: "CAD", Active: true, NotInReports: true,
+	})
+	rows.Transactions[0].ExcludedFromReports = true
+	rows.Transactions[0].PostedDate = new(time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC))
+	rows.Transactions = append(rows.Transactions, store.Transaction{
+		ID: "txn-2", SourceID: 2, AccountID: "acct-1", Date: time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC),
+		Amount: 500, Currency: "CAD", Status: "uncleared",
+	})
+
+	path, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
+
+	require.NoError(t, err)
+	db, err := duckdb.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	assertScalar(t, db, "SELECT CAST(in_reports AS VARCHAR) FROM accounts WHERE id = 'acct-1'", "true")
+	assertScalar(t, db, "SELECT CAST(in_reports AS VARCHAR) FROM accounts WHERE id = 'acct-2'", "false")
+	assertScalar(t, db, "SELECT CAST(excluded_from_reports AS VARCHAR) FROM transactions WHERE id = 'txn-1'", "true")
+	assertScalar(t, db, "SELECT CAST(excluded_from_reports AS VARCHAR) FROM transactions WHERE id = 'txn-2'", "false")
+	assertScalar(t, db, "SELECT CAST(posted_date AS VARCHAR) FROM transactions WHERE id = 'txn-1'", "2026-03-14")
+	assertScalar(t, db, "SELECT COALESCE(CAST(posted_date AS VARCHAR), 'NULL') FROM transactions WHERE id = 'txn-2'", "NULL")
 }
 
 // The held reader reads nothing before Replace: a cached page would hide an overwrite of its file.

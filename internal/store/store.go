@@ -16,6 +16,9 @@ type Account struct {
 	Institution *string
 	Closed      bool
 	Active      bool
+	// NotInReports is true when Quicken leaves the account out of its
+	// reports; the zero value means the account is in reports.
+	NotInReports bool
 }
 
 // Investment account types, whose balance quarry cannot compute.
@@ -78,6 +81,12 @@ type Transaction struct {
 	Currency     string
 	Status       string
 	ChequeNumber *string
+	// ExcludedFromReports is true when Quicken leaves the transaction out
+	// of its reports.
+	ExcludedFromReports bool
+	// PostedDate is the bank's posting day, set whenever Quicken holds one,
+	// even when it equals Date.
+	PostedDate *time.Time
 }
 
 // Split is one row of the splits table, a share of its Transaction's amount
@@ -301,4 +310,117 @@ type AccountBalance struct {
 type AccountList struct {
 	AsOf     time.Time
 	Accounts []AccountBalance
+}
+
+// Window is an inclusive range of civil days: Since and Until are each a
+// calendar day held as UTC midnight, and both days count.
+type Window struct {
+	Since, Until time.Time
+}
+
+// SpendingGroup names what a spending read groups its rows by.
+type SpendingGroup int
+
+// The spending groupings.
+const (
+	// SpendByCategory groups by the split's category full path.
+	SpendByCategory SpendingGroup = iota
+	// SpendByPayee groups by the transaction's payee name.
+	SpendByPayee
+	// SpendByTag groups by tag name; a split with several tags counts under
+	// each of them, and once in the Totals.
+	SpendByTag
+	// SpendByMonth groups by calendar month; the key is the month as
+	// YYYY-MM and is never nil.
+	SpendByMonth
+)
+
+// SpendingParams is everything a spending read varies by: the Window,
+// the grouping, and the accounts to count (every account in reports when
+// AccountIDs is empty).
+type SpendingParams struct {
+	Window     Window
+	By         SpendingGroup
+	AccountIDs []string
+}
+
+// SpendingRow is one group's spending in one currency, in cents. Key is nil
+// for the group of splits with no category (or no payee); a month row's Key is
+// never nil.
+type SpendingRow struct {
+	Key      *string
+	Currency string
+	Spent    int64
+}
+
+// SpendingTotal is all the spending in one currency, in cents.
+type SpendingTotal struct {
+	Currency string
+	Spent    int64
+}
+
+// TransactionRange is the first and last day of a set of transactions, each a
+// calendar day held as UTC midnight; the zero value means there are none.
+type TransactionRange struct {
+	First, Last time.Time
+}
+
+// Spending is the rows of a spending read in display order, and one Total
+// per currency present, CAD before USD.
+type Spending struct {
+	Rows   []SpendingRow
+	Totals []SpendingTotal
+	// MultiTagSplits counts the splits in the window that carry more than one
+	// tag; it is set only when grouping by tag.
+	MultiTagSplits int
+	// Transactions is set only when there are no Totals: the span of the store's transactions, or
+	// of the in-report accounts among SpendingParams.AccountIDs; zero means there are none.
+	Transactions TransactionRange
+}
+
+// CashFlowPeriod names the calendar unit a cash-flow read groups its rows by.
+type CashFlowPeriod int
+
+// The cash-flow periods.
+const (
+	// CashFlowByMonth groups by calendar month; the key is YYYY-MM.
+	CashFlowByMonth CashFlowPeriod = iota
+	// CashFlowByYear groups by calendar year; the key is YYYY.
+	CashFlowByYear
+)
+
+// CashFlowParams is everything a cash-flow read varies by: the Window, the period
+// unit, and the accounts to count (every account in reports when AccountIDs is empty).
+type CashFlowParams struct {
+	Window     Window
+	By         CashFlowPeriod
+	AccountIDs []string
+}
+
+// CashFlowRow is one period's income, spending and net in one currency, in cents.
+// SavingsRatePct is net over income as a percentage rounded to one decimal, nil
+// when income is zero or less.
+type CashFlowRow struct {
+	Period         string
+	Currency       string
+	Income, Spent  int64
+	Net            int64
+	SavingsRatePct *float64
+}
+
+// CashFlowTotal is all of one currency's income, spending and net in the window, in cents.
+type CashFlowTotal struct {
+	Currency       string
+	Income, Spent  int64
+	Net            int64
+	SavingsRatePct *float64
+}
+
+// CashFlow is the periods of a cash-flow read, oldest first and CAD before USD within one,
+// and one Total per currency present.
+type CashFlow struct {
+	Rows   []CashFlowRow
+	Totals []CashFlowTotal
+	// Transactions is set only when the window holds no income or spending (no Totals), as for Spending.
+	Transactions TransactionRange
 }

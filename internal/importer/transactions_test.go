@@ -382,3 +382,79 @@ func Test_import_keeps_every_other_id_when_the_snapshot_gains_a_row(t *testing.T
 	assert.Contains(t, transactionIDs(fake), "txn-"+itoa(txn1PK))
 	assert.Contains(t, transactionIDs(fake), "txn-"+itoa(txn2PK))
 }
+
+// addBalancedTransaction adds row plus one split for its whole amount, so
+// the snapshot passes split validation.
+func addBalancedTransaction(b *v9fixture.Builder, row v9fixture.TransactionRow) {
+	pk := b.Transaction(row)
+	b.Entry(v9fixture.EntryRow{Parent: pk, Amount: row.Amount})
+}
+
+func Test_import_marks_a_transaction_excluded_from_reports(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	addBalancedTransaction(b, v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, ExcludeFromReports: new(int64(1))})
+	addBalancedTransaction(b, v9fixture.TransactionRow{Account: acctPK, Amount: "2.00", PostedDate: &posted, ExcludeFromReports: new(int64(0))})
+	addBalancedTransaction(b, v9fixture.TransactionRow{Account: acctPK, Amount: "3.00", PostedDate: &posted})
+	addBalancedTransaction(b, v9fixture.TransactionRow{Account: acctPK, Amount: "4.00", PostedDate: &posted, ExcludeFromReports: new(int64(2))})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	require.Len(t, fake.Rows.Transactions, 4)
+	assert.True(t, fake.Rows.Transactions[0].ExcludedFromReports, "1 is excluded")
+	assert.False(t, fake.Rows.Transactions[1].ExcludedFromReports, "0 is included")
+	assert.False(t, fake.Rows.Transactions[2].ExcludedFromReports, "NULL is included")
+	assert.True(t, fake.Rows.Transactions[3].ExcludedFromReports, "any non-zero is excluded")
+}
+
+func Test_import_dates_a_transaction_by_its_entered_date(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	entered := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	posted := time.Date(2026, 5, 31, 0, 0, 0, 0, time.UTC)
+	postedOnly := time.Date(2026, 7, 4, 0, 0, 0, 0, time.UTC)
+	enteredOnly := time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC)
+	addBalancedTransaction(b, v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", EnteredDate: &entered, PostedDate: &posted})
+	addBalancedTransaction(b, v9fixture.TransactionRow{Account: acctPK, Amount: "2.00", PostedDate: &postedOnly})
+	addBalancedTransaction(b, v9fixture.TransactionRow{Account: acctPK, Amount: "3.00", EnteredDate: &enteredOnly})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	require.Len(t, fake.Rows.Transactions, 3)
+	assert.Equal(t, entered, fake.Rows.Transactions[0].Date)
+	assert.Equal(t, &posted, fake.Rows.Transactions[0].PostedDate)
+	assert.Equal(t, postedOnly, fake.Rows.Transactions[1].Date)
+	assert.Equal(t, &postedOnly, fake.Rows.Transactions[1].PostedDate)
+	assert.Equal(t, enteredOnly, fake.Rows.Transactions[2].Date)
+	assert.Nil(t, fake.Rows.Transactions[2].PostedDate)
+}
+
+func Test_import_orders_transactions_by_register_date(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	lateEntered := time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC)
+	earlyPosted := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	earlyEntered := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	latePosted := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
+	addBalancedTransaction(b, v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", EnteredDate: &lateEntered, PostedDate: &earlyPosted})
+	addBalancedTransaction(b, v9fixture.TransactionRow{Account: acctPK, Amount: "2.00", EnteredDate: &earlyEntered, PostedDate: &latePosted})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	require.Len(t, fake.Rows.Transactions, 2)
+	assert.Equal(t, int64(200), fake.Rows.Transactions[0].Amount)
+	assert.Equal(t, int64(100), fake.Rows.Transactions[1].Amount)
+}

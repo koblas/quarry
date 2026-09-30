@@ -50,6 +50,8 @@ func Test_run_read_commands_refuse_when_there_is_no_store(t *testing.T) {
 	}{
 		{name: "status", args: []string{"status"}},
 		{name: "accounts", args: []string{"accounts"}},
+		{name: "spend", args: []string{"spend"}},
+		{name: "cashflow", args: []string{"cashflow"}},
 		{name: "sql with a query", args: []string{"sql", "SELECT 1"}},
 		{name: "sql with a query only DuckDB can tell is empty", args: []string{"sql", ";"}},
 	}
@@ -80,6 +82,23 @@ func Test_run_status_refuses_a_store_built_by_another_version(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
 	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: the store at "+abbreviated(t, storePathUnder(home), home)+
+		" was built by another version of quarry; run quarry sync --from 20260927T143005Z to rebuild it\n",
+		stderr.String())
+}
+
+func Test_run_spend_refuses_a_store_built_by_an_older_quarry(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeStoreFixture(t, home, phaseOneImportRunsDDL+
+		"CREATE TABLE store_info (format_version INTEGER, quarry_version VARCHAR, built_at TIMESTAMP);"+
+		"INSERT INTO store_info VALUES (2, '0.2.0', TIMESTAMP '2026-09-27 14:30:05');")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"spend"}, &stdout, &stderr)
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -144,6 +163,8 @@ func Test_run_read_commands_report_an_interrupt_during_the_open(t *testing.T) {
 	}{
 		{name: "status", args: []string{"status"}, wantStderr: "quarry: status interrupted\n"},
 		{name: "accounts", args: []string{"accounts"}, wantStderr: "quarry: accounts interrupted\n"},
+		{name: "spend", args: []string{"spend"}, wantStderr: "quarry: spend interrupted\n"},
+		{name: "cashflow", args: []string{"cashflow"}, wantStderr: "quarry: cashflow interrupted\n"},
 		{name: "sql", args: []string{"sql", "SELECT 1"}, wantStderr: "quarry: query interrupted\n"},
 	}
 

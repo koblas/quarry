@@ -37,6 +37,8 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 		{name: "sql with a negative limit", args: []string{"sql", "--limit", "-1", "SELECT 1"}, wantStderr: u7},
 		{name: "status with an argument", args: []string{"status", "extra"}, wantStderr: "quarry: status takes no arguments\n"},
 		{name: "accounts with an argument", args: []string{"accounts", "extra"}, wantStderr: "quarry: accounts takes no arguments\n"},
+		{name: "spend with an argument", args: []string{"spend", "extra"}, wantStderr: "quarry: spend takes no arguments\n"},
+		{name: "cashflow with an argument", args: []string{"cashflow", "extra"}, wantStderr: "quarry: cashflow takes no arguments\n"},
 	}
 
 	for _, c := range cases {

@@ -3,6 +3,8 @@ package report
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
@@ -11,7 +13,7 @@ import (
 
 // RefusalError is a final, one-line refusal of a read: its message excludes
 // the "quarry: " prefix a caller adds before printing it to stderr, and it
-// unwraps to the store error that caused it.
+// unwraps to the store error that caused it, if a store error did.
 type RefusalError struct {
 	msg   string
 	cause error
@@ -20,7 +22,7 @@ type RefusalError struct {
 // Error returns the refusal's message verbatim.
 func (e RefusalError) Error() string { return e.msg }
 
-// Unwrap returns the store error the refusal was made from.
+// Unwrap returns the store error the refusal was made from, or nil when it was not made from one.
 func (e RefusalError) Unwrap() error { return e.cause }
 
 // readRefusal is command's refusal of err: interrupted when ctx is done, else the store's refusal.
@@ -59,6 +61,17 @@ func storeRefusal(err error, home string) error {
 		msg = "cannot read the store at " + at + ": " + strings.ReplaceAll(openErr.Reason, openErr.Path, at) + "; run quarry sync to rebuild it"
 	}
 	return RefusalError{msg: msg, cause: err}
+}
+
+// unknownAccountRefusal refuses an --account value that names no account.
+func unknownAccountRefusal(arg string) error {
+	return RefusalError{msg: fmt.Sprintf("no account named %q; run quarry accounts --all to list them", arg)}
+}
+
+// ambiguousAccountRefusal refuses an --account value naming the accounts with ids, which it lists sorted.
+func ambiguousAccountRefusal(arg string, ids []string) error {
+	sorted := slices.Sorted(slices.Values(ids))
+	return RefusalError{msg: fmt.Sprintf("%d accounts are named %q; pass one of their ids instead: %s", len(ids), arg, strings.Join(sorted, ", "))}
 }
 
 // rebuildArgs is the --from argument naming the snapshot at snapshotPath, followed by a space; "" when there is none.

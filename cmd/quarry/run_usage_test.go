@@ -175,7 +175,12 @@ func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
 		{name: "sql", args: []string{"sql", "--bogus"}, wantStderr: "quarry: unknown flag: --bogus; Run 'quarry sql --help' for usage.\n"},
 		{name: "status", args: []string{"status", "--bogus"}, wantStderr: "quarry: unknown flag: --bogus; Run 'quarry status --help' for usage.\n"},
 		{name: "accounts", args: []string{"accounts", "--bogus"}, wantStderr: "quarry: unknown flag: --bogus; Run 'quarry accounts --help' for usage.\n"},
-		{name: "root", args: []string{"spend"}, wantStderr: "quarry: unknown command \"spend\" for \"quarry\"; Run 'quarry --help' for usage.\n"},
+		{name: "spend", args: []string{"spend", "--bogus"}, wantStderr: "quarry: unknown flag: --bogus; Run 'quarry spend --help' for usage.\n"},
+		{
+			name: "cashflow", args: []string{"cashflow", "--bogus"},
+			wantStderr: "quarry: unknown flag: --bogus; Run 'quarry cashflow --help' for usage.\n",
+		},
+		{name: "root", args: []string{"spending"}, wantStderr: "quarry: unknown command \"spending\" for \"quarry\"; Run 'quarry --help' for usage.\n"},
 	}
 
 	for _, c := range cases {

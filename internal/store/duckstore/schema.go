@@ -18,7 +18,8 @@ CREATE TABLE accounts (
 	currency VARCHAR NOT NULL,
 	institution VARCHAR,
 	closed BOOLEAN NOT NULL,
-	active BOOLEAN NOT NULL
+	active BOOLEAN NOT NULL,
+	in_reports BOOLEAN NOT NULL
 );
 CREATE TABLE categories (
 	id VARCHAR PRIMARY KEY,
@@ -49,7 +50,9 @@ CREATE TABLE transactions (
 	amount DECIMAL(18,2) NOT NULL,
 	currency VARCHAR NOT NULL,
 	status VARCHAR NOT NULL,
-	cheque_number VARCHAR
+	cheque_number VARCHAR,
+	excluded_from_reports BOOLEAN NOT NULL,
+	posted_date DATE
 );
 CREATE TABLE splits (
 	id VARCHAR PRIMARY KEY,
@@ -124,3 +127,35 @@ LEFT JOIN transactions t ON t.account_id = a.id AND t.date <= current_date
 GROUP BY a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed, a.active;
 `
 }
+
+// cashFlowViewDDL creates v_cash_flow: each split that counts as income or spending in Quicken's reports.
+const cashFlowViewDDL = `
+CREATE VIEW v_cash_flow AS
+SELECT s.id AS split_id, s.transaction_id, t.account_id, t.date,
+	CAST(date_trunc('month', t.date) AS DATE) AS month, t.currency,
+	s.category_id, c.full_path AS category, t.payee_id, p.name AS payee,
+	CASE WHEN s.category_id IS NOT NULL THEN c.kind
+		WHEN s.amount < 0 THEN 'expense'
+		ELSE 'income' END AS flow,
+	s.amount
+FROM splits s
+JOIN transactions t ON t.id = s.transaction_id
+JOIN accounts a ON a.id = t.account_id
+LEFT JOIN categories c ON c.id = s.category_id
+LEFT JOIN payees p ON p.id = t.payee_id
+WHERE a.in_reports
+	AND NOT t.excluded_from_reports
+	AND c.kind IS DISTINCT FROM 'system'
+	AND NOT (s.category_id IS NULL AND s.amount = 0)
+	AND NOT EXISTS (SELECT 1 FROM transfers x WHERE x.from_split_id = s.id OR x.to_split_id = s.id);
+COMMENT ON VIEW v_cash_flow IS 'excludes accounts where accounts.in_reports is false, as Quicken reports do.';
+`
+
+// spendingViewDDL creates v_spending: the expense rows of v_cash_flow, amount sign flipped.
+const spendingViewDDL = `
+CREATE VIEW v_spending AS
+SELECT split_id, transaction_id, account_id, date, month, currency,
+	category_id, category, payee_id, payee, -amount AS spent
+FROM v_cash_flow
+WHERE flow = 'expense';
+`

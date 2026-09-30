@@ -38,7 +38,7 @@ import investment transactions yet, so it cannot compute their balance.`,
 			if err != nil {
 				return err
 			}
-			return emit(cmd, out, "quarry: ", warnings)
+			return emit(cmd, out, "quarry: warning: ", warnings)
 		},
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "include closed accounts")

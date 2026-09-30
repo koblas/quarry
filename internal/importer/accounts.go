@@ -39,14 +39,16 @@ type accountRef struct {
 
 const accountsQuery = `
 SELECT a.Z_PK, a.ZNAME, a.ZTYPENAME, a.ZCURRENCY, fi.ZNAME,
-       COALESCE(a.ZCLOSED, 0), COALESCE(a.ZACTIVE, 0), COALESCE(a.ZDELETIONCOUNT, 0)
+       COALESCE(a.ZCLOSED, 0), COALESCE(a.ZACTIVE, 0), COALESCE(a.ZDELETIONCOUNT, 0),
+       COALESCE(a.ZUSEDINREPORTS, 1) <> 0
 FROM ZACCOUNT a
 LEFT JOIN ZFINANCIALINSTITUTION fi ON a.ZFINANCIALINSTITUTION = fi.Z_PK
 ORDER BY a.ZNAME, a.Z_PK
 `
 
-// mapAccounts reads every ZACCOUNT row. A deleted row is excluded silently
-// (never validated, never counted). A row with no name, no type or no
+// mapAccounts reads every ZACCOUNT row; ZUSEDINREPORTS NULL means in reports
+// (Quicken's default) and any non-zero value is on. A deleted row is excluded
+// silently (never validated, never counted). A row with no name, no type or no
 // currency, an unmapped type or an unsupported currency is added to off
 // and excluded from the returned rows and refs.
 func mapAccounts(ctx context.Context, src Source, off *offenders) ([]store.Account, map[int64]accountRef, error) {
@@ -56,9 +58,9 @@ func mapAccounts(ctx context.Context, src Source, off *offenders) ([]store.Accou
 	err := src.QueryRows(ctx, accountsQuery, nil, func(scan func(dest ...any) error) error {
 		var pk int64
 		var name, typ, currency, institution sql.NullString
-		var closed, active bool
+		var closed, active, usedInReports bool
 		var deletionCount int
-		if err := scan(&pk, &name, &typ, &currency, &institution, &closed, &active, &deletionCount); err != nil {
+		if err := scan(&pk, &name, &typ, &currency, &institution, &closed, &active, &deletionCount, &usedInReports); err != nil {
 			return err
 		}
 		if deletionCount != 0 {
@@ -90,7 +92,7 @@ func mapAccounts(ctx context.Context, src Source, off *offenders) ([]store.Accou
 		id := fmt.Sprintf("acct-%d", pk)
 		acct := store.Account{
 			ID: id, SourceID: pk, Name: name.String, Type: quarryType, Currency: currency.String,
-			Closed: closed, Active: active,
+			Closed: closed, Active: active, NotInReports: !usedInReports,
 		}
 		if institution.Valid {
 			inst := institution.String

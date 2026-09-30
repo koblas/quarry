@@ -21,7 +21,7 @@ import (
 const FileName = "quarry.duckdb"
 
 // FormatVersion is the store format this build of quarry writes and reads.
-const FormatVersion = 2
+const FormatVersion = 3
 
 // develVersion is the quarry_version recorded when no build version is known.
 const develVersion = "(devel)"
@@ -386,7 +386,7 @@ func removePartial(path string) {
 // build creates quarry's schema and views in db and bulk-loads every table
 // in rows, then store_info last: a store carrying it is complete.
 func build(ctx context.Context, db DB, rows store.Rows, quarryVersion string, builtAt time.Time) error {
-	if _, err := db.Exec(ctx, schemaDDL+accountBalancesViewDDL()); err != nil {
+	if _, err := db.Exec(ctx, schemaDDL+accountBalancesViewDDL()+cashFlowViewDDL+spendingViewDDL); err != nil {
 		return fmt.Errorf("create schema: %w", err)
 	}
 
@@ -450,6 +450,13 @@ func nullableTime(t time.Time) any {
 	return t
 }
 
+func nullablePtrTime(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return *t
+}
+
 func nullableNonEmpty(s string) any {
 	if s == "" {
 		return nil
@@ -460,7 +467,7 @@ func nullableNonEmpty(s string) any {
 func accountRows(accounts []store.Account) [][]any {
 	out := make([][]any, len(accounts))
 	for i, a := range accounts {
-		out[i] = []any{a.ID, a.SourceID, a.Name, a.Type, a.Currency, nullableStr(a.Institution), a.Closed, a.Active}
+		out[i] = []any{a.ID, a.SourceID, a.Name, a.Type, a.Currency, nullableStr(a.Institution), a.Closed, a.Active, !a.NotInReports}
 	}
 	return out
 }
@@ -498,7 +505,7 @@ func transactionRows(transactions []store.Transaction) ([][]any, error) {
 		}
 		out[i] = []any{
 			t.ID, t.SourceID, t.AccountID, t.Date, nullableStr(t.PayeeID), nullableStr(t.Memo),
-			amount, t.Currency, t.Status, nullableStr(t.ChequeNumber),
+			amount, t.Currency, t.Status, nullableStr(t.ChequeNumber), t.ExcludedFromReports, nullablePtrTime(t.PostedDate),
 		}
 	}
 	return out, nil

@@ -67,7 +67,7 @@ func Test_import_builds_every_table_from_a_v9_snapshot(t *testing.T) {
 	assert.Equal(t, []store.Tag{{ID: tagID, SourceID: tagPK, Name: "Reimbursable"}}, fake.Rows.Tags)
 
 	assert.Equal(t, []store.Transaction{{
-		ID: txnID, SourceID: txnPK, AccountID: acctID, Date: posted,
+		ID: txnID, SourceID: txnPK, AccountID: acctID, Date: posted, PostedDate: &posted,
 		PayeeID: new(payeeID), Amount: 1234, Currency: "CAD", Status: "uncleared",
 	}}, fake.Rows.Transactions)
 

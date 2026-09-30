@@ -28,7 +28,7 @@ func Test_query_reads_a_built_store(t *testing.T) {
 func storeRelations() []string {
 	return []string{
 		"accounts", "categories", "import_runs", "payees", "split_tags", "splits", "store_info", "tags",
-		"transactions", "transfers", "v_account_balances",
+		"transactions", "transfers", "v_account_balances", "v_cash_flow", "v_spending",
 	}
 }
 

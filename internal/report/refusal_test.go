@@ -95,6 +95,16 @@ func Test_accounts_refuses_with_the_store_refusal_copy(t *testing.T) {
 		"cannot read the store at ~/Library/Application Support/quarry/quarry.duckdb: permission denied; run quarry sync to rebuild it")
 }
 
+func Test_spend_refuses_with_the_store_refusal_copy(t *testing.T) {
+	openErr := &store.OpenError{Fault: store.OpenFaultPermission, Path: storePath}
+	srv := report.NewServer(report.WithStore(fakeStore{err: openErr}), report.WithHome(refusalHome))
+
+	_, err := srv.Spend(t.Context(), report.SpendRequest{})
+
+	assert.EqualError(t, err,
+		"cannot read the store at ~/Library/Application Support/quarry/quarry.duckdb: permission denied; run quarry sync to rebuild it")
+}
+
 func Test_query_refuses_with_the_store_refusal_copy(t *testing.T) {
 	openErr := &store.OpenError{Fault: store.OpenFaultMissing, Path: storePath}
 	var gotMaxRows int
@@ -139,6 +149,14 @@ func Test_reads_report_an_interrupt_before_any_store_refusal(t *testing.T) {
 			name: "accounts",
 			read: func(ctx context.Context, srv *report.Server) error { _, err := srv.Accounts(ctx, false); return err },
 			want: "accounts interrupted",
+		},
+		{
+			name: "spend",
+			read: func(ctx context.Context, srv *report.Server) error {
+				_, err := srv.Spend(ctx, report.SpendRequest{})
+				return err
+			},
+			want: "spend interrupted",
 		},
 	}
 
