@@ -83,6 +83,13 @@ Paths in copy are `~`-abbreviated in human output and absolute in `--json` (2a r
 | C3 | unknown key at any level (one line per key, file order; never `snapshots` or `quicken` themselves — see C2t) | `quarry: warning: ~/Library/Application Support/quarry/config.toml: unknown key snapshot.keep; quarry ignores it`; same text without `quarry: warning: ` in `warnings[]`; command proceeds | 0 |
 | C4 | path exists but unreadable, or is a directory | `quarry: cannot read ~/Library/Application Support/quarry/config.toml: <OS reason per G1>; fix the file and run the command again` | 1 |
 
+Final-pass rulings (product-vision, SHIP WITH CHANGES):
+- **C3 key quoting.** Each key part prints bare if it matches `^[A-Za-z0-9_-]+$`, otherwise as a TOML basic string (double quotes; `\"`, `\\`, `\n`, `\t`, `\uXXXX` for control characters); parts joined with `.`. `"snapshots.keep" = 5` → `quarry: warning: ~/Library/Application Support/quarry/config.toml: unknown key "snapshots.keep"; quarry ignores it`; `"a\nb" = 1` → `… unknown key "a\nb"; …` (literal backslash-n, one line); `"" = 5` → `… unknown key ""; …`; `[foo]` then `"x.y" = 1` → `unknown key foo."x.y"`. `warnings[]` carries each without the prefix. `Snapshots.Keep` stays `unknown key Snapshots.Keep`.
+- **UTF-8 BOM.** One leading `EF BB BF` is stripped before parsing; no copy.
+- **Sole discovered bundle that fails validation** names `quicken.path`: not a bundle → `quarry: ~/Documents/Empty.quicken is not a Quicken for Mac file (expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path> or set quicken.path in ~/Library/Application Support/quarry/config.toml` (exit 1); vanished between discovery and stat → `quarry: ~/Documents/Home.quicken does not exist; pass one with --quicken <path> or set quicken.path in ~/Library/Application Support/quarry/config.toml` (exit 1). `--quicken` copy stays byte-identical.
+- **Deferred (ruled, not built):** an unreadable recorded store path (non-ENOENT stat fault) → cannot-tell refusal with reason `cannot read <recorded path, ~-abbreviated>: <G1 reason>` (prune exit 1; `snapshots` warning exit 0).
+- **Closed, no change:** a spared same-file entry is kept silently; `store_snapshot.id` repeats what the store recorded (as 2a `status` does) — scripts and the skill join on `"store": true`, never on id equality.
+
 ### `quicken.path` outcomes (sync)
 | # | Condition | stderr | Exit |
 |---|---|---|---|
