@@ -22,8 +22,8 @@ Dependency: `github.com/pelletier/go-toml/v2 v2.4.3` (zero deps). Run B1 fetches
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_config_test.go` `Test_run_sync_refuses_a_malformed_config_before_taking_a_snapshot` — `writeStatusFixtureBundle` (`run_status_test.go:126`, lands in `~/Documents`), one good `quarry sync`, then config `[snapshots` on line 1, bare `quarry sync`: exact C1 for line 1, exit 1, stdout empty, snapshot `.sqlite` count still 1, store file bytes unchanged — count and bytes checked with `assert` before any exit-code `require`, so run A's quoted red shows the second snapshot; it is the control arm for "no new snapshot"
-- [ ] Step 2: stubs — `internal/config/doc.go`, `internal/config/config.go` `Config{Path, Keep, QuickenPath, Warnings}`, `DefaultKeep`, `Load(home, path)` returning defaults; `internal/cli/run.go:13-32` `ConfigLoader func(command string) (config.Config, error)` + `Env.LoadConfig`; `internal/cli/root.go:27` pass it to `newSyncCommand` (`sync.go:35`); first call in `RunE` (`sync.go:77-81`), before `newServer`; `cmd/quarry/run.go` `newConfigLoader` (beside `:96-113`, uses `resolveHome(command)` + `storeDirUnder`) wired in `defaultEnv` `:115-126`
+- [x] Step 1: `cmd/quarry/run_config_test.go` `Test_run_sync_refuses_a_malformed_config_before_taking_a_snapshot` — `writeStatusFixtureBundle` (`run_status_test.go:126`, lands in `~/Documents`), one good `quarry sync`, then config `[snapshots` on line 1, bare `quarry sync`: exact C1 for line 1, exit 1, stdout empty, snapshot `.sqlite` count still 1, store file bytes unchanged — count and bytes checked with `assert` before any exit-code `require`, so run A's quoted red shows the second snapshot; it is the control arm for "no new snapshot"
+- [x] Step 2: stubs — `internal/config/doc.go`, `internal/config/config.go` `Config{Path, Keep, QuickenPath, Warnings}`, `DefaultKeep`, `Load(home, path)` returning defaults; `internal/cli/run.go:13-32` `ConfigLoader func(command string) (config.Config, error)` + `Env.LoadConfig`; `internal/cli/root.go:27` pass it to `newSyncCommand` (`sync.go:35`); first call in `RunE` (`sync.go:77-81`), before `newServer`; `cmd/quarry/run.go` `newConfigLoader` (beside `:96-113`, uses `resolveHome(command)` + `storeDirUnder`) wired in `defaultEnv` `:115-126`
 
 ### Build
 - [ ] Step 3: loader read + parse — `go get` (above); `internal/platform/osreason/doc.go` + `Reason(err)` (G1: `*fs.PathError` → `Err.Error()`, else first line, empty → `unknown error`) moved down from `internal/cli/sql.go:144-155` `osReason`, `sql.go:136` repointed; `config.Load`: missing / empty → defaults silently; C4 through `osreason.Reason`; C1 from a shape-agnostic decode (`*toml.DecodeError` line + message minus `toml: `, first line). Tests: `osreason_test.go` `Test_reason_*` (path error, multi-line, empty); `config_test.go` `Test_load_returns_defaults_for_a_missing_or_empty_file`, `Test_load_refuses_a_file_it_cannot_read` (directory; chmod 000 with a root skip), `Test_load_refuses_malformed_toml_naming_the_line` (line 1 `[snapshots`, error on line 3, duplicate key, integer overflow in `keep` — pin what the decode yields)
@@ -56,3 +56,26 @@ Dependency: `github.com/pelletier/go-toml/v2 v2.4.3` (zero deps). Run B1 fetches
 - Every `*toml.DecodeError` looks alike: a struct type mismatch (`snapshots = 3`) comes back as one naming Go types. C1 must come from a decode that accepts any shape
 - `RawMessage` for a header table (`[quicken.path]`) is the table body, and for a multi-line array it has newlines — neither is a one-line `got` value
 - `unstable` is go-toml's unstable API: no version bump without re-running `internal/config` tests
+
+## Phase report
+
+Run A done (steps 1-2). `<start>` 03ce837.
+
+Files:
+- `cmd/quarry/run_config_test.go:1-62` new: helpers `countFilesWithSuffix`, `fileDigest` (SHA-256 hex; store bytes compared as digest so a failure prints short) and `Test_run_sync_refuses_a_malformed_config_before_taking_a_snapshot`. Folded tests (04, 09, 10) and the warnings test still to add here (step 5).
+- `internal/config/doc.go`, `internal/config/config.go:1-21` stubs: `Config{Path, Keep, QuickenPath, Warnings}`, `DefaultKeep = 12`, `Load(_, path)` returns defaults (B1 restores the `home` name when it uses it; revive flagged the unused param).
+- `internal/cli/run.go` `ConfigLoader` + `Env.LoadConfig`; `internal/cli/root.go:27` passes it; `internal/cli/sync.go` `newSyncCommand(newServer, loadConfig, jsonOut)`, first statement of `RunE` is `loadConfig("sync")` (config value discarded until step 5; error becomes `runtimeError`). A nil `LoadConfig` panics in sync, as nil `Now` does; every in-tree sync caller uses `defaultEnv`.
+- `cmd/quarry/run.go` `newConfigLoader` (beside `storeDirUnder`), wired in `defaultEnv`.
+
+State: acceptance test RED at its assertions, stubs compile, `go build`, `internal/cli` tests and `cmd/quarry -run 'home|usage|help'` green, lint 0 issues after the `_` rename.
+
+Red quoted (stub loads nothing, so the second bare sync succeeds):
+- `run_config_test.go:56` snapshot `.sqlite` count expected 1, actual 2
+- `run_config_test.go:57` store digest changed (the store was rebuilt)
+- `run_config_test.go:58` exit code expected 1, actual 0
+
+For B1:
+- C1's parser text is unknown until go-toml is fetched, so the acceptance test pins C1's frame (prefix through `line 1: `, non-empty message, suffix `; fix the file and run the command again`) by regex; pin the parser text exactly in `config_test.go` `Test_load_refuses_malformed_toml_naming_the_line`.
+- `go get github.com/pelletier/go-toml/v2@v2.4.3` needs network (outside the sandbox); it is not in `go.mod` yet.
+- `osreason` package does not exist yet (I removed a premature `doc.go`); step 3 creates it and repoints `internal/cli/sql.go:136`.
+- Config test must not be undone: the `loadConfig` call stays the first statement in `RunE`, above `newServer` (mutation check).

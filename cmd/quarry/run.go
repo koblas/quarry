@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/cli"
+	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/importer"
 	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/report"
@@ -93,6 +94,19 @@ func newReportFactory(storeOpts ...duckstore.Option) cli.ReportFactory {
 	}
 }
 
+// newConfigLoader returns cli.Execute's ConfigLoader: it resolves the home
+// directory and loads the config file in quarry's store directory.
+func newConfigLoader() cli.ConfigLoader {
+	return func(command string) (config.Config, error) {
+		home, err := resolveHome(command)
+		if err != nil {
+			return config.Config{}, err
+		}
+
+		return config.Load(home, filepath.Join(storeDirUnder(home), "config.toml"))
+	}
+}
+
 // storeDirUnder is the directory holding quarry's store and snapshots.
 func storeDirUnder(home string) string {
 	return filepath.Join(home, "Library", "Application Support", "quarry")
@@ -116,12 +130,13 @@ func resolveHome(command string) (string, error) {
 // streams, and the factories over the default store.
 func defaultEnv(stdout, stderr io.Writer) cli.Env {
 	return cli.Env{
-		Stdin:     os.Stdin,
-		Stdout:    stdout,
-		Stderr:    stderr,
-		NewServer: newServerFactory(),
-		NewReport: newReportFactory(),
-		Now:       time.Now,
+		Stdin:      os.Stdin,
+		Stdout:     stdout,
+		Stderr:     stderr,
+		NewServer:  newServerFactory(),
+		NewReport:  newReportFactory(),
+		LoadConfig: newConfigLoader(),
+		Now:        time.Now,
 	}
 }
 

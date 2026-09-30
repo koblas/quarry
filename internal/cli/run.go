@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/snapshot"
 )
@@ -20,6 +21,11 @@ type ServerFactory func(ctx context.Context) (srv *snapshot.Server, err error)
 // Like ServerFactory it is called only from a command's RunE.
 type ReportFactory func(ctx context.Context, command string) (srv *report.Server, err error)
 
+// ConfigLoader reads quarry's config file for command, the name of the
+// command asking, for refusals that say which command to run again. Like
+// the factories it is called only from a command's RunE.
+type ConfigLoader func(command string) (config.Config, error)
+
 // Env is everything Execute takes from the process: its streams, the clock
 // and the factories that build each command family's Server. Now must be
 // set for any command that reads the date, such as spend or cashflow; a nil Now panics.
@@ -28,6 +34,7 @@ type Env struct {
 	Stdout, Stderr io.Writer
 	NewServer      ServerFactory
 	NewReport      ReportFactory
+	LoadConfig     ConfigLoader
 	Now            func() time.Time
 }
 

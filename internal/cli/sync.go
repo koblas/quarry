@@ -32,7 +32,7 @@ var errFromWithQuickenUsage = UsageError{
 
 // newSyncCommand builds the sync subcommand: resolve or discover the
 // bundle, sync it, and render the result.
-func newSyncCommand(newServer ServerFactory, jsonOut *bool) *cobra.Command {
+func newSyncCommand(newServer ServerFactory, loadConfig ConfigLoader, jsonOut *bool) *cobra.Command {
 	var quickenPath, fromValue string
 
 	cmd := &cobra.Command{
@@ -75,6 +75,10 @@ does not read Quicken at all.`,
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if _, err := loadConfig("sync"); err != nil {
+				return &runtimeError{err: err}
+			}
+
 			srv, err := newServer(cmd.Context())
 			if err != nil {
 				return &runtimeError{err: err}
