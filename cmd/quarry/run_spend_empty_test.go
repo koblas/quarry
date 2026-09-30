@@ -38,7 +38,7 @@ func Test_run_spend_says_when_the_period_holds_nothing(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
 			replaceStore(t, home, spendRows([]store.Account{
-				{ID: "acct-chq", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
+				chequingAccount("acct-chq", 1),
 			}, c.splits...))
 			var stdout, stderr bytes.Buffer
 

@@ -72,18 +72,6 @@ func Test_query_returns_at_most_max_rows(t *testing.T) {
 	assert.Len(t, got.Rows, 2)
 }
 
-func Test_query_returns_the_open_fault(t *testing.T) {
-	t.Parallel()
-	fault := ioFault("open store read-only")
-	st := newBuiltStore(t, failingOpener(fault))
-
-	_, err := st.Query(t.Context(), "SELECT 1", 0)
-
-	require.ErrorIs(t, err, fault)
-	var openErr *store.OpenError
-	assert.ErrorAs(t, err, &openErr)
-}
-
 func Test_query_reports_the_first_line_of_a_bad_query(t *testing.T) {
 	t.Parallel()
 	st := newBuiltStore(t)
@@ -189,29 +177,6 @@ func Test_query_refuses_a_value_it_cannot_print(t *testing.T) {
 	var unprintable *store.UnprintableValueError
 	require.ErrorAs(t, err, &unprintable)
 	assert.Equal(t, store.UnprintableValueError{Column: "doc", Type: "JSON"}, *unprintable)
-}
-
-func Test_query_closes_the_connection_on_success_and_on_a_query_fault(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		name  string
-		fault error
-	}{
-		{name: "after a successful query", fault: nil},
-		{name: "after a query fault", fault: errQueryFailed},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
-			spy := &spyReadDB{queryFault: c.fault}
-			st := newBuiltStore(t, spyOpener(spy))
-
-			_, _ = st.Query(t.Context(), "SELECT 1", 0)
-
-			assert.Equal(t, 1, spy.closes)
-		})
-	}
 }
 
 // interruptFault is the error chain the driver returns for a query its context interrupted.

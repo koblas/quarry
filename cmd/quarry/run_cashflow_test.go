@@ -13,14 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// cashFlowRows is spendRows plus an income category, cat-salary.
-func cashFlowRows(accounts []store.Account, splits ...spendSplit) store.Rows {
-	rows := spendRows(accounts, splits...)
-	rows.Categories = append(rows.Categories,
-		store.Category{ID: "cat-salary", SourceID: 3, Name: "Salary", FullPath: "Income:Salary", Kind: "income"})
-	return rows
-}
-
 // cashFlowLine is one cash-flow table line with every column but the last as wide as the fixtures' widest cells.
 func cashFlowLine(periodWidth int, period, currency, income, spent, net, rate, status string) string {
 	line := fmt.Sprintf("%-*s  %-8s  %9s  %9s  %9s  %12s", periodWidth, period, currency, income, spent, net, rate)
@@ -34,7 +26,7 @@ func Test_run_cashflow_shows_income_spending_and_savings_rate_by_month(t *testin
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	replaceStore(t, home, cashFlowRows(
-		[]store.Account{{ID: "acct-cad", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true}},
+		[]store.Account{chequingAccount("acct-cad", 1)},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 1, 31), cents: 910000},
 		spendSplit{id: "s02", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 1, 10), cents: -300000},
 		spendSplit{id: "s03", account: "acct-cad", category: "cat-fuel", currency: "CAD", day: day(2026, 1, 20), cents: -320000},
@@ -69,7 +61,7 @@ func Test_run_cashflow_by_year_shows_one_row_per_year_and_na_without_income(t *t
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	replaceStore(t, home, cashFlowRows(
-		[]store.Account{{ID: "acct-cad", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true}},
+		[]store.Account{chequingAccount("acct-cad", 1)},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2020, 6, 1), cents: 1000000},
 		spendSplit{id: "s02", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2020, 7, 1), cents: -400000},
 		spendSplit{id: "s03", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2021, 3, 1), cents: 300000},

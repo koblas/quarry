@@ -14,7 +14,9 @@ import (
 )
 
 // viewRows is a store with one split of every kind the report views keep or
-// leave out. s01-s02 and s08-s12 are the ones kept.
+// leave out. s01-s02 and s08-s12 are the ones kept. It is not spendRows: the
+// tests read split ids and bare category paths off the view, and it needs
+// transfers, excluded transactions and system/income categories.
 func viewRows() store.Rows {
 	day := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
 	txn := func(id string, amount int64) store.Transaction {
@@ -34,7 +36,7 @@ func viewRows() store.Rows {
 	transferIn.TransferAccountID = new("acct-1")
 
 	return store.Rows{
-		Accounts: []store.Account{{ID: "acct-1", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true}},
+		Accounts: []store.Account{chequingAccount("acct-1", 1)},
 		Categories: []store.Category{
 			{ID: "cat-groceries", SourceID: 1, Name: "Groceries", FullPath: "Groceries", Kind: "expense"},
 			{ID: "cat-salary", SourceID: 2, Name: "Salary", FullPath: "Salary", Kind: "income"},

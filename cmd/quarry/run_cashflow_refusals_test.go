@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -48,7 +47,7 @@ func Test_run_cashflow_refuses_and_reports_empty_periods_like_spend(t *testing.T
 			name: "a store with transactions, none in the period",
 			args: []string{"cashflow", "--since", "2026-01", "--until", "2026-02"},
 			accounts: []store.Account{
-				{ID: "acct-chq", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
+				chequingAccount("acct-chq", 1),
 			},
 			splits: []spendSplit{
 				{id: "s01", account: "acct-chq", category: "cat-groceries", currency: "CAD", day: day(2003, 1, 4), cents: -1000},
@@ -105,8 +104,7 @@ func Test_run_cashflow_rejects_a_period_it_cannot_use(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
 			var stdout, stderr bytes.Buffer
-			env := defaultEnv(&stdout, &stderr)
-			env.Now = func() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC) }
+			env := spendEnv(&stdout, &stderr)
 
 			exitCode := runWith(context.Background(), c.args, env)
 

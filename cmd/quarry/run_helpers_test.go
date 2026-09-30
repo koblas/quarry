@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
@@ -75,4 +77,98 @@ func replaceStore(t *testing.T, home string, rows store.Rows) {
 	t.Helper()
 	_, err := duckstore.New(storeDirUnder(home)).Replace(context.Background(), rows)
 	require.NoError(t, err)
+}
+
+// spendEnv is an env writing to stdout and stderr, with the clock at 2026-09-29 12:00 UTC.
+func spendEnv(stdout, stderr *bytes.Buffer) cli.Env {
+	return spendEnvAt(stdout, stderr, time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC))
+}
+
+// spendEnvAt is spendEnv with the clock at now.
+func spendEnvAt(stdout, stderr *bytes.Buffer, now time.Time) cli.Env {
+	e := defaultEnv(stdout, stderr)
+	e.Now = func() time.Time { return now }
+	return e
+}
+
+// chequingAccount is an active CAD chequing account named "Chequing".
+func chequingAccount(id string, sourceID int64) store.Account {
+	return store.Account{ID: id, SourceID: sourceID, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true}
+}
+
+// usdChequingAccount is an active USD chequing account named "US Chequing".
+func usdChequingAccount(id string, sourceID int64) store.Account {
+	return store.Account{ID: id, SourceID: sourceID, Name: "US Chequing", Type: "chequing", Currency: "USD", Active: true}
+}
+
+// utcMinus5 is a zone whose evening is already the next day in UTC.
+var utcMinus5 = time.FixedZone("UTC-5", -5*60*60)
+
+// spendSplit is one single-split transaction; "" category or payee means none,
+// negative cents is money out, and tags are tag ids.
+type spendSplit struct {
+	id, account, category, payee, currency string
+	day                                    time.Time
+	cents                                  int64
+	tags                                   []string
+}
+
+// spendRows is a store of accounts holding splits, inside one import run. It
+// always holds the same reference data, which a split names by id:
+//
+//	cat-fuel "Auto:Fuel", cat-groceries "Food:Groceries"
+//	payee-costco "Costco", payee-bakery "Bakery"
+//	tag-vacation "Vacation", tag-alpha "alpha"
+func spendRows(accounts []store.Account, splits ...spendSplit) store.Rows {
+	rows := store.Rows{
+		Accounts: accounts,
+		Payees: []store.Payee{
+			{ID: "payee-costco", SourceID: 1, Name: "Costco"},
+			{ID: "payee-bakery", SourceID: 2, Name: "Bakery"},
+		},
+		Tags: []store.Tag{
+			{ID: "tag-vacation", SourceID: 1, Name: "Vacation"},
+			{ID: "tag-alpha", SourceID: 2, Name: "alpha"},
+		},
+		Categories: []store.Category{
+			{ID: "cat-fuel", SourceID: 1, Name: "Fuel", FullPath: "Auto:Fuel", Kind: "expense"},
+			{ID: "cat-groceries", SourceID: 2, Name: "Groceries", FullPath: "Food:Groceries", Kind: "expense"},
+		},
+		ImportRuns: []store.ImportRun{{
+			ID: 1, StartedAt: time.Unix(0, 0).UTC(), FinishedAt: time.Unix(0, 0).UTC(),
+			Snapshot: store.SnapshotRef{Path: "/snapshots/20260929T000000Z.sqlite", SHA256: "9f86", SchemaFingerprint: "sha256:abc"},
+		}},
+	}
+	for _, s := range splits {
+		var category *string
+		if s.category != "" {
+			category = new(s.category)
+		}
+		var payee *string
+		if s.payee != "" {
+			payee = new(s.payee)
+		}
+		rows.Transactions = append(rows.Transactions, store.Transaction{
+			ID: "txn-" + s.id, SourceID: 1, AccountID: s.account, Date: s.day,
+			Amount: s.cents, Currency: s.currency, Status: "uncleared", PayeeID: payee,
+		})
+		rows.Splits = append(rows.Splits, store.Split{
+			ID: "split-" + s.id, SourceID: 1, TransactionID: "txn-" + s.id, CategoryID: category, Amount: s.cents,
+		})
+		for _, tag := range s.tags {
+			rows.SplitTags = append(rows.SplitTags, store.SplitTag{SplitID: "split-" + s.id, TagID: tag})
+		}
+	}
+	return rows
+}
+
+// day is the civil day y-m-d at UTC midnight, as the store dates transactions.
+func day(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+
+// cashFlowRows is spendRows plus an income category, cat-salary.
+func cashFlowRows(accounts []store.Account, splits ...spendSplit) store.Rows {
+	rows := spendRows(accounts, splits...)
+	rows.Categories = append(rows.Categories,
+		store.Category{ID: "cat-salary", SourceID: 3, Name: "Salary", FullPath: "Income:Salary", Kind: "income"})
+	return rows
 }

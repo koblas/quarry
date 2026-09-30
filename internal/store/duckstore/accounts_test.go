@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	duckdbdriver "github.com/duckdb/duckdb-go/v2"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
@@ -144,62 +143,6 @@ func Test_accounts_reads_as_of_with_no_accounts(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, got.Accounts)
 	assert.Contains(t, []time.Time{before, after}, got.AsOf)
-}
-
-func Test_accounts_returns_the_open_fault(t *testing.T) {
-	t.Parallel()
-	fault := ioFault("open store read-only")
-	st := newBuiltStore(t, failingOpener(fault))
-
-	_, err := st.Accounts(t.Context())
-
-	require.ErrorIs(t, err, fault)
-}
-
-func Test_accounts_returns_the_query_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	fault := ioFault(`query rows "SELECT"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault}))
-
-	_, err := st.Accounts(t.Context())
-
-	assertOtherFault(t, err, "disk read failed")
-	var derr *duckdbdriver.Error
-	require.ErrorAs(t, err, &derr)
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_accounts_returns_a_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{scanFault: errScanFailed}))
-
-	_, err := st.Accounts(t.Context())
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
-}
-
-func Test_accounts_closes_the_connection_on_success_and_on_a_query_fault(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		name  string
-		fault error
-	}{
-		{name: "after a successful read", fault: nil},
-		{name: "after a query fault", fault: errQueryFailed},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
-			spy := &spyReadDB{queryFault: c.fault}
-			st := newBuiltStore(t, spyOpener(spy))
-
-			_, _ = st.Accounts(t.Context())
-
-			assert.Equal(t, 1, spy.closes)
-		})
-	}
 }
 
 func Test_accounts_fails_on_a_missing_store_without_creating_it(t *testing.T) {

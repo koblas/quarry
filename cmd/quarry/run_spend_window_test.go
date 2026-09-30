@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -52,15 +51,14 @@ func Test_run_spend_counts_the_whole_period_it_is_given(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
 			replaceStore(t, home, spendRows(
-				[]store.Account{{ID: "acct-cad", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true}},
+				[]store.Account{chequingAccount("acct-cad", 1)},
 				spendSplit{id: "s01", account: "acct-cad", category: "cat-fuel", currency: "CAD", day: day(2024, 1, 1), cents: -1000},
 				spendSplit{id: "s02", account: "acct-cad", category: "cat-fuel", currency: "CAD", day: day(2024, 12, 31), cents: -2000},
 				spendSplit{id: "s03", account: "acct-cad", category: "cat-fuel", currency: "CAD", day: day(2025, 1, 1), cents: -4000},
 				spendSplit{id: "s04", account: "acct-cad", category: "cat-fuel", currency: "CAD", day: day(2099, 6, 1), cents: -8000},
 			))
 			var stdout, stderr bytes.Buffer
-			env := defaultEnv(&stdout, &stderr)
-			env.Now = func() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC) }
+			env := spendEnv(&stdout, &stderr)
 
 			exitCode := runWith(context.Background(), []string{"spend", "--since", c.since, "--until", c.until}, env)
 

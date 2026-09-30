@@ -32,7 +32,7 @@ the rows can add up to more than the total.
 `
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, fakeReportStore{}, spendWindowNow, &stdout, &stderr, "--help")
+	err := executeSpend(t, fakeReportStore{}, spendNow, &stdout, &stderr, "--help")
 
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), long)
@@ -47,7 +47,7 @@ func Test_spend_help_shows_examples(t *testing.T) {
 `
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, fakeReportStore{}, spendWindowNow, &stdout, &stderr, "--help")
+	err := executeSpend(t, fakeReportStore{}, spendNow, &stdout, &stderr, "--help")
 
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), examples)
@@ -56,7 +56,7 @@ func Test_spend_help_shows_examples(t *testing.T) {
 func Test_spend_help_shows_the_by_flag_and_its_default(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, fakeReportStore{}, spendWindowNow, &stdout, &stderr, "--help")
+	err := executeSpend(t, fakeReportStore{}, spendNow, &stdout, &stderr, "--help")
 
 	require.NoError(t, err)
 	assert.Regexp(t, `--by group +group spending by group: category, payee, tag or month \(default "category"\)`, stdout.String())
