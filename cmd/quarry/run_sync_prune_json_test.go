@@ -174,7 +174,7 @@ func Test_run_sync_json_lists_the_prune_warnings_after_config_and_history_warnin
 	require.Equal(t, 0, exitCode, errOut)
 	assert.Equal(t, []string{
 		configShown + ": unknown key snapshot.keep; quarry ignores it",
-		historyRestartWarning,
+		combinedCarryWarning,
 		"cannot delete snapshot " + fixtures[0].id + ": permission denied; run quarry snapshots prune to try again",
 	}, decodeSyncDoc(t, out).Warnings)
 }

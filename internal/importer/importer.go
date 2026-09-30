@@ -134,6 +134,7 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	return store.Result{
 		Path: replaced.Path, Built: true, Counts: counts, Validation: validation, NotImported: notImported,
 		HistoryFault: replaced.HistoryFault, Findings: replaced.Findings, FindingsCarried: replaced.FindingsCarried,
+		FindingsFault: replaced.FindingsFault, StoreUnreadable: replaced.StoreUnreadable,
 	}, nil
 }
 

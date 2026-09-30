@@ -72,6 +72,7 @@ func Test_outcome_lists_prune_warnings_after_the_history_warning(t *testing.T) {
 	prunable(t, home, ids...)
 	result := store.Result{Built: true}
 	result.HistoryFault = &store.OpenError{Fault: store.OpenFaultNotDuckDB, Path: filepath.Join(home, "quarry", "quarry.duckdb")}
+	result.StoreUnreadable = true
 	srv := newImportServer(t, home, &fakeImporter{result: result},
 		snapshot.WithAutoPrune(1), snapshot.WithRemove(failingRemover(syscall.EACCES, ids[0]+".sqlite").remove))
 
@@ -79,7 +80,25 @@ func Test_outcome_lists_prune_warnings_after_the_history_warning(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{
-		historyRestartLine("the file is not a DuckDB database"),
+		combinedCarryLine("the file is not a DuckDB database"),
+		deleteFailureLine(ids[0], "permission denied"),
+	}, outcome.Warnings())
+}
+
+func Test_outcome_lists_prune_warnings_after_the_findings_warning(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	ids := oldIDs(2)
+	prunable(t, home, ids...)
+	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: filepath.Join(home, "quarry", "quarry.duckdb"), Reason: "its findings table is incomplete"}
+	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, FindingsFault: fault}},
+		snapshot.WithAutoPrune(1), snapshot.WithRemove(failingRemover(syscall.EACCES, ids[0]+".sqlite").remove))
+
+	outcome, err := syncBundle(t, srv)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		findingsRestartLine("its findings table is incomplete"),
 		deleteFailureLine(ids[0], "permission denied"),
 	}, outcome.Warnings())
 }

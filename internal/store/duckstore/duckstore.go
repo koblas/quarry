@@ -325,7 +325,10 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, e
 	}
 	atomicfile.SyncDir(s.dir)
 
-	return store.Replaced{Path: finalPath, HistoryFault: historyFault, Findings: counts, FindingsCarried: carried.findingsCarried}, nil
+	return store.Replaced{
+		Path: finalPath, HistoryFault: historyFault, Findings: counts,
+		FindingsCarried: carried.findingsCarried, FindingsFault: carried.findingsFault, StoreUnreadable: carried.unreadable,
+	}, nil
 }
 
 // sweepLeftovers best-effort removes buildFilePattern matches in

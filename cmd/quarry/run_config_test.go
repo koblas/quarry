@@ -37,8 +37,8 @@ const (
 	configShown = "~/Library/Application Support/quarry/config.toml"
 	configFix   = "; fix the file and run the command again"
 
-	historyRestartWarning = "cannot carry import history forward from the previous store (the file is not a DuckDB database); " +
-		"import_runs starts again with this sync"
+	combinedCarryWarning = "cannot carry import history and findings forward from the previous store (the file is not a DuckDB database); " +
+		"both start again with this sync"
 )
 
 // corruptPreviousStore syncs once, then replaces the store with bytes DuckDB cannot open.
@@ -251,7 +251,7 @@ func Test_run_sync_warns_about_unknown_config_keys_before_its_own_warnings(t *te
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: "+configShown+": unknown key snapshot.keep; quarry ignores it\n"+
-		"quarry: warning: "+historyRestartWarning+"\n",
+		"quarry: warning: "+combinedCarryWarning+"\n",
 		stderr.String())
 }
 
@@ -267,7 +267,7 @@ func Test_run_sync_warns_about_a_config_key_that_differs_from_a_known_one_only_i
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: "+configShown+": unknown key Snapshots; quarry ignores it\n"+
-		"quarry: warning: "+historyRestartWarning+"\n",
+		"quarry: warning: "+combinedCarryWarning+"\n",
 		stderr.String())
 }
 
@@ -288,7 +288,7 @@ func Test_run_sync_json_lists_config_warnings_before_its_own_without_the_prefix(
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
 	assert.Equal(t, []string{
 		configShown + ": unknown key snapshot.keep; quarry ignores it",
-		historyRestartWarning,
+		combinedCarryWarning,
 	}, doc.Warnings)
 }
 
@@ -309,7 +309,7 @@ func Test_run_sync_json_lists_the_history_warning_after_the_config_warning_witho
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
 	assert.Equal(t, []string{
 		configShown + ": unknown key snapshot.keep; quarry ignores it",
-		historyRestartWarning,
+		combinedCarryWarning,
 	}, doc.Warnings)
 }
 
@@ -325,7 +325,7 @@ func Test_run_sync_quotes_an_unknown_config_key_that_is_not_a_bare_key(t *testin
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: "+configShown+": unknown key \"snapshots.keep\"; quarry ignores it\n"+
-		"quarry: warning: "+historyRestartWarning+"\n",
+		"quarry: warning: "+combinedCarryWarning+"\n",
 		stderr.String())
 }
 
@@ -346,6 +346,6 @@ func Test_run_sync_json_lists_a_quoted_unknown_config_key_without_the_prefix(t *
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
 	assert.Equal(t, []string{
 		configShown + ": unknown key \"a\\nb\"; quarry ignores it",
-		historyRestartWarning,
+		combinedCarryWarning,
 	}, doc.Warnings)
 }

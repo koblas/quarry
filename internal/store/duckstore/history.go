@@ -17,11 +17,14 @@ import (
 
 // history is what Replace carries from the store it replaces: its import_runs rows in importRunRows's
 // column order with the highest id among them, and its findings, with findingsCarried true iff that table was read.
+// findingsFault is why a findings table that exists could not be read; unreadable is true iff the store could not be opened.
 type history struct {
 	rows            [][]any
 	maxID           int64
 	findings        []carriedFinding
 	findingsCarried bool
+	findingsFault   *store.OpenError
+	unreadable      bool
 }
 
 // requiredRunColumns are the import_runs columns every store format has, in importRunRows's order.
@@ -50,16 +53,22 @@ const (
 	reasonRunsIDTooLarge = "its import_runs table has an id too large to follow"
 	reasonRunsMissing    = "it has no import_runs table"
 	reasonRunsIncomplete = "its import_runs table is incomplete"
+
+	reasonFindingsRepeatID   = "its findings table repeats an id"
+	reasonFindingsIncomplete = "its findings table is incomplete"
 )
 
 var (
 	errRunsMissing  = errors.New("import_runs table is absent")
 	errRunsRepeatID = errors.New("import_runs holds an id twice")
 	errRunsIDLimit  = errors.New("import_runs holds the largest id, which no run can follow")
+
+	errFindingsRepeatID = errors.New("findings holds an id twice")
 )
 
 // readHistory reads the import_runs and findings of the store at s.Path() and closes it before returning.
 // An absent store has no history; an unreadable one has none and its fault, bar findings a bad import_runs spares.
+// A findings fault is on the returned history, not in the returned fault.
 func (s *Store) readHistory(ctx context.Context) (history, *store.OpenError) {
 	path := s.Path()
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
@@ -71,7 +80,7 @@ func (s *Store) readHistory(ctx context.Context) (history, *store.OpenError) {
 		if fault.Fault == store.OpenFaultMissing {
 			return history{}, nil
 		}
-		return history{}, fault
+		return history{unreadable: true}, fault
 	}
 	defer func() { _ = db.Close() }()
 
@@ -80,7 +89,11 @@ func (s *Store) readHistory(ctx context.Context) (history, *store.OpenError) {
 	if err != nil {
 		carried, fault = history{}, historyFault(path, err)
 	}
-	if findings, present, err := readFindings(ctx, db); err == nil && present {
+	findings, present, err := readFindings(ctx, db)
+	switch {
+	case err != nil:
+		carried.findingsFault = findingsFault(path, err)
+	case present:
 		carried.findings, carried.findingsCarried = findings, true
 	}
 	return carried, fault
@@ -97,6 +110,16 @@ func historyFault(path string, err error) *store.OpenError {
 		reason = reasonRunsRepeatID
 	case errors.Is(err, errRunsIDLimit):
 		reason = reasonRunsIDTooLarge
+	}
+	return &store.OpenError{Fault: store.OpenFaultOther, Path: path, Reason: reason, Err: err}
+}
+
+// findingsFault is the fault of a findings read that failed after the store opened: an
+// OpenFaultOther whose Reason is a fixed phrase, never driver text.
+func findingsFault(path string, err error) *store.OpenError {
+	reason := reasonFindingsIncomplete
+	if errors.Is(err, errFindingsRepeatID) {
+		reason = reasonFindingsRepeatID
 	}
 	return &store.OpenError{Fault: store.OpenFaultOther, Path: path, Reason: reason, Err: err}
 }
@@ -161,6 +184,7 @@ type carriedFinding struct {
 }
 
 // readFindings reads every findings row through db; present is false, without a fault, when the store has no findings table.
+// It fails with errFindingsRepeatID (an id twice), else with the read's own fault.
 func readFindings(ctx context.Context, db ReadDB) ([]carriedFinding, bool, error) {
 	present := false
 	err := db.QueryRows(ctx, findingColumnsQuery, nil, func(scan func(dest ...any) error) error {
@@ -175,12 +199,17 @@ func readFindings(ctx context.Context, db ReadDB) ([]carriedFinding, bool, error
 		return nil, false, nil
 	}
 	var found []carriedFinding
+	seen := map[string]bool{}
 	err = db.QueryRows(ctx, "SELECT id, type, first_found_at, fixed_at FROM findings ORDER BY id", nil,
 		func(scan func(dest ...any) error) error {
 			var f carriedFinding
 			if err := scan(&f.id, &f.typ, &f.firstFoundAt, &f.fixedAt); err != nil {
 				return err
 			}
+			if seen[f.id] {
+				return errFindingsRepeatID
+			}
+			seen[f.id] = true
 			found = append(found, f)
 			return nil
 		})

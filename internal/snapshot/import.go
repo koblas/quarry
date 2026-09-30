@@ -31,6 +31,9 @@ type Outcome struct {
 	// historyWarning is the warning for a built store whose previous import
 	// history could not be carried forward; empty when it was carried.
 	historyWarning string
+	// findingsWarning is the warning for a built store whose previous findings
+	// could not be carried forward, or the combined history-and-findings warning.
+	findingsWarning string
 	// pruneWarning is the warning for a snapshots folder auto-prune could not list, and
 	// pruneWarningAbsolute the same warning naming the folder by its absolute path.
 	pruneWarning, pruneWarningAbsolute string
@@ -38,7 +41,7 @@ type Outcome struct {
 
 // Warnings returns every warning o carries, without the "quarry: warning: "
 // prefix: the manifest's own, then, for a built store only, the import-history
-// restart and auto-prune warnings, in that order.
+// restart, findings restart and auto-prune warnings, in that order.
 func (o Outcome) Warnings() []string { return o.warnings(o.pruneWarning) }
 
 // warnings is Warnings with listWarning as the warning for a snapshots folder that could not be listed.
@@ -50,6 +53,9 @@ func (o Outcome) warnings(listWarning string) []string {
 	if o.historyWarning != "" {
 		warnings = append(slices.Clip(warnings), o.historyWarning)
 	}
+	if o.findingsWarning != "" {
+		warnings = append(slices.Clip(warnings), o.findingsWarning)
+	}
 	return append(slices.Clip(warnings), o.pruneWarnings(listWarning)...)
 }
 
@@ -57,6 +63,34 @@ func (o Outcome) warnings(listWarning string) []string {
 // history could not be carried forward, for a reason from UnreadableReason.
 func historyRestartWarning(reason string) string {
 	return "cannot carry import history forward from the previous store (" + reason + "); import_runs starts again with this sync"
+}
+
+// findingsRestartWarning renders the warning that the previous store's findings
+// could not be carried forward, for a reason from UnreadableReason.
+func findingsRestartWarning(reason string) string {
+	return "cannot carry findings forward from the previous store (" + reason + "); findings history starts again with this sync"
+}
+
+// combinedCarryWarning renders the warning for a previous store that could not be
+// read at all, so neither its import history nor its findings were carried.
+func combinedCarryWarning(reason string) string {
+	return "cannot carry import history and findings forward from the previous store (" + reason + "); both start again with this sync"
+}
+
+// carryWarnings maps a built store's carry faults to the history and findings warnings they print.
+// An unreadable store prints the combined warning alone (as the findings one); otherwise each fault prints its own.
+func carryWarnings(result store.Result, display string) (string, string) {
+	if result.StoreUnreadable && result.HistoryFault != nil {
+		return "", combinedCarryWarning(result.HistoryFault.UnreadableReason(display))
+	}
+	var history, findings string
+	if result.HistoryFault != nil {
+		history = historyRestartWarning(result.HistoryFault.UnreadableReason(display))
+	}
+	if result.FindingsFault != nil {
+		findings = findingsRestartWarning(result.FindingsFault.UnreadableReason(display))
+	}
+	return history, findings
 }
 
 // causedRefusalError is a refusal that keeps its cause: Error is the refusal
@@ -113,9 +147,7 @@ func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome
 	}
 
 	outcome := Outcome{Manifest: manifest, Store: &result}
-	if fault := result.HistoryFault; fault != nil {
-		outcome.historyWarning = historyRestartWarning(fault.UnreadableReason(homepath.Abbreviate(s.home, s.storeProbe.Path())))
-	}
+	outcome.historyWarning, outcome.findingsWarning = carryWarnings(result, homepath.Abbreviate(s.home, s.storeProbe.Path()))
 	err = s.autoPrune(ctx, &outcome)
 	return outcome, err
 }

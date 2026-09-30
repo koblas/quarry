@@ -76,6 +76,21 @@ func Test_import_reports_no_history_fault_when_the_store_returns_none(t *testing
 	assert.Nil(t, result.HistoryFault)
 }
 
+func Test_import_passes_the_carry_faults_through_to_the_result(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: "/store/quarry.duckdb", Reason: "its findings table repeats an id"}
+	fake := &fakeStore{findingsFault: fault, unreadable: true}
+
+	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.Same(t, fault, result.FindingsFault)
+	assert.True(t, result.StoreUnreadable)
+}
+
 func Test_import_returns_the_stores_findings_counts(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()

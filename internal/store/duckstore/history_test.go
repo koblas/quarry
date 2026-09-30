@@ -190,6 +190,7 @@ func Test_replace_starts_history_silently_when_the_store_vanishes_before_it_is_o
 
 	require.NoError(t, err)
 	assert.Nil(t, replaced.HistoryFault)
+	assert.False(t, replaced.StoreUnreadable)
 	assert.Equal(t, []int64{1}, importRunIDs(t, st))
 }
 
@@ -264,12 +265,14 @@ func Test_replace_carries_the_findings_beside_an_import_runs_table_it_cannot_rea
 	require.NoError(t, err)
 	assert.Equal(t, reasonRepeatedID, historyReason(t, st, replaced))
 	assert.True(t, replaced.FindingsCarried)
+	assert.Nil(t, replaced.FindingsFault)
+	assert.False(t, replaced.StoreUnreadable)
 	db := openReadOnly(t, st.Path())
 	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM findings WHERE id = 'uncategorized:payee-9'
 		AND first_found_at = TIMESTAMP '2026-06-01 10:00:00' AND fixed_at IS NOT NULL`, "1")
 }
 
-func Test_replace_starts_findings_silently_when_the_findings_read_fails(t *testing.T) {
+func Test_replace_names_a_failed_findings_read_as_incomplete_and_closes_the_connection(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
