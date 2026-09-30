@@ -18,6 +18,8 @@ const (
 	idOldest = "20260927T143005Z"
 	idMiddle = "20260929T090011Z"
 	idNewest = "20260930T141502Z"
+	// idOutside names no snapshot in the folders the list tests build.
+	idOutside = "20260801T120000Z"
 )
 
 // snapshotsFolder creates and returns the snapshots folder under home.
@@ -411,7 +413,7 @@ func Test_list_marks_nothing_for_a_store_built_from_a_snapshot_outside_the_folde
 	t.Parallel()
 	home := t.TempDir()
 	threeSnapshots(t, home)
-	outside := writeSnapshot(t, home, idMiddle, 1000)
+	outside := writeSnapshot(t, home, idOutside, 1000)
 
 	listing, err := newListServer(home, &fakeStoreProbe{builtFrom: outside}).List(t.Context())
 
@@ -419,6 +421,45 @@ func Test_list_marks_nothing_for_a_store_built_from_a_snapshot_outside_the_folde
 	assert.Equal(t, []bool{false, false, false}, storeFlags(listing))
 	assert.Equal(t, outside, listing.StorePath)
 	assert.Empty(t, listing.StoreWarning)
+}
+
+func Test_list_marks_the_same_id_snapshot_when_the_store_was_built_from_a_copy_outside_the_folder(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	threeSnapshots(t, home)
+	outside := writeSnapshot(t, home, idMiddle, 1000)
+
+	listing, err := newListServer(home, &fakeStoreProbe{builtFrom: outside}).List(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, []bool{false, true, false}, storeFlags(listing))
+	assert.Equal(t, outside, listing.StorePath)
+}
+
+func Test_list_marks_the_same_id_snapshot_when_the_recorded_path_no_longer_resolves(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	threeSnapshots(t, home)
+	moved := filepath.Join(home, "moved-away", idMiddle+".sqlite")
+
+	listing, err := newListServer(home, &fakeStoreProbe{builtFrom: moved}).List(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, []bool{false, true, false}, storeFlags(listing))
+	assert.Equal(t, moved, listing.StorePath)
+}
+
+func Test_list_prefers_the_path_match_over_the_id_match(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	dir := threeSnapshots(t, home)
+	alias := filepath.Join(home, idMiddle+".sqlite")
+	require.NoError(t, os.Symlink(filepath.Join(dir, idNewest+".sqlite"), alias))
+
+	listing, err := newListServer(home, &fakeStoreProbe{builtFrom: alias}).List(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true, false, false}, storeFlags(listing))
 }
 
 func Test_list_marks_nothing_but_keeps_the_recorded_path_when_the_snapshot_was_deleted_by_hand(t *testing.T) {

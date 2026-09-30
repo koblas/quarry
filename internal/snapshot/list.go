@@ -165,15 +165,20 @@ func (s *Server) storeSnapshot(ctx context.Context) (string, string, error) {
 	return "", openErr.UnreadableReason(homepath.Abbreviate(s.home, openErr.Path)), nil
 }
 
-// markStoreSnapshot sets Store on the entry that is the file recorded names.
-// Both sides resolve symlinks; a recorded path that no longer resolves marks nothing.
+// markStoreSnapshot sets Store on the entry that is the file recorded names: the one
+// whose symlink-resolved path matches, else the one whose ID is the recorded file's.
 func markStoreSnapshot(entries []Entry, recorded string) {
-	want := resolvedPath(recorded)
-	if want == "" {
+	if want := resolvedPath(recorded); want != "" {
+		for i := range entries {
+			entries[i].Store = resolvedPath(entries[i].Path) == want
+		}
+	}
+	if slices.ContainsFunc(entries, func(e Entry) bool { return e.Store }) {
 		return
 	}
+	id := ID(recorded)
 	for i := range entries {
-		entries[i].Store = resolvedPath(entries[i].Path) == want
+		entries[i].Store = entries[i].ID == id
 	}
 }
 
