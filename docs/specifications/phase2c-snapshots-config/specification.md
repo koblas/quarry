@@ -231,6 +231,13 @@ Prune rulings U1–U7 (copy ruling, SCENARIO-21; all apply to `--dry-run` too):
 | U3 | singular mid-delete interrupt | `quarry: snapshots prune interrupted; 1 snapshot was not deleted` | 1 |
 | U4 | a failed delete and an interrupt in one run | stdout the `Deleted …` block for the successes; stderr each `quarry: cannot delete snapshot <id>: <OS reason>`, then `quarry: snapshots prune interrupted; N snapshots were not deleted`. N counts only selected snapshots never attempted (failures not counted). Bare `quarry: snapshots prune interrupted` only when nothing was attempted. `--json`: `deleted[]`/`failed[]` as they stand at the interrupt | 1 |
 
+Prune `--json` rulings (copy ruling, SCENARIO-28; refines U7 — "not consulted" means "cannot block", not "must not be opened"):
+- When count ≤ N (incl. zero snapshots) prune reads the store's snapshot **best-effort, in text and `--json` mode, one code path**: success → `store_snapshot` `{"id","path"}` exactly as `quarry snapshots --json` gives (U6 path-then-ID, R2 naming a path); no store / unreadable / no import history / other version naming no path → `store_snapshot: null`, stderr empty, `warnings: []`, exit 0. Never refuses, never warns. Text mode prints the same `Nothing to delete: …` line either way. An interrupt during that read is still `quarry: snapshots prune interrupted`, exit 1.
+- `store_snapshot: null` in `prune --json` means "no store, or the store could not be read and nothing depended on it"; when count > N it can only mean "no store" (every other case refuses).
+- Refusals under `--json`, with or without `--dry-run` (cannot-tell, C1/C2/C2q/C2r/C2t/C4, folder unreadable, usage): stdout empty, stderr the refusal line, exit 1 (2 for usage). No JSON document.
+- Partial failure or interrupt: JSON printed with `deleted[]`/`failed[]` as they stand, stderr lines as ruled, exit 1.
+- `would_delete[]`/`deleted[]` entries `{"id","path","bytes"}` newest first (ID timestamp, then numeric suffix), `path` absolute, `bytes` the `.sqlite` size; `failed[]` entries `{"id","path","reason"}` same order; `keep` the effective N (`--keep`, else `snapshots.keep`, else 12); `dry_run` reflects the flag; every list `[]`, never `null`.
+
 - `--json` (one shape): `{"dry_run":false,"keep":12,"store_snapshot":{…}|null,"deleted":[{"id","path","bytes"}],"would_delete":[{"id","path","bytes"}],"failed":[{"id","path","reason"}],"warnings":[]}`. `would_delete` `[]` in a real run; `deleted`/`failed` `[]` in a dry run; partial failure still prints JSON, exit 1.
 
 ### Sync auto-prune
