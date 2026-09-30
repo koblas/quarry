@@ -255,6 +255,12 @@ Ignore a finding by adding its id to findings.ignore in ~/Library/Application Su
 - `status --json` gains `"findings": {"open","ignored","fixed","new","newly_fixed"}` after `transfers` (additive; existing fields byte-identical); `ignored` null on a config refusal.
 - Best-effort config (P2d-10): on any C refusal, stderr `quarry: warning: cannot tell which findings you ignored: <the C line without its "quarry: " prefix and without "; fix the file and run the command again">; findings you ignored are counted as open` — e.g. `quarry: warning: cannot tell which findings you ignored: ~/Library/Application Support/quarry/config.toml: snapshots.keep must be a whole number of 1 or more, got 0; findings you ignored are counted as open`; ignored clause omitted; exit 0.
 - Long first paragraph ends: `…the dates its transactions cover, the checks sync ran when it built the store, and how many findings are open.`
+- Long paragraph 2 replaced (ruled mid-feature, SCENARIO-19):
+```
+status reads quarry's store, and the config file for the findings you ignored;
+it never looks at Quicken. Run quarry sync to bring the store up to date.
+```
+- `status --json` `warnings[]` (existing, today always `[]`) carries the config warning unprefixed, one entry, on any C refusal; stderr still prints it; C3 and W1 never reach it. `<config>` in that entry uses the same form as the other config warnings in `--json` (abbreviated today; see STATE open debt on the 2a absolute-path rule).
 
 ### Config: `findings.ignore`
 | # | Condition | stderr | Exit |
