@@ -15,8 +15,8 @@ const findingsCommand = "findings"
 // findingsStatusAll is the --status value that shows every status.
 const findingsStatusAll = "all"
 
-// newFindingsCommand builds findings: the open findings sync found, grouped by type with the fix for each.
-func newFindingsCommand(newReport ReportFactory, loadConfig ConfigLoader) *cobra.Command {
+// newFindingsCommand builds findings: the open findings sync found, grouped by type with the fix for each, as JSON when *jsonOut is set.
+func newFindingsCommand(newReport ReportFactory, loadConfig ConfigLoader, jsonOut *bool) *cobra.Command {
 	var status, typ string
 	cmd := &cobra.Command{
 		Use:   findingsCommand,
@@ -87,7 +87,14 @@ prints one row per item, for a spreadsheet.`,
 			if err != nil {
 				return &runtimeError{err: err}
 			}
-			return emit(cmd, []byte(renderFindings(listing, len(req.Ignore) == 0)), "", nil)
+			out, err := renderResult(*jsonOut,
+				func() ([]byte, error) { return renderFindingsJSON(listing, cfg.Warnings) },
+				func() string { return renderFindings(listing, len(req.Ignore) == 0) })
+			if err != nil {
+				// unreachable: renderResult fails only via marshalDocument, and the findings document holds strings, ints and slices; see marshalDocument.
+				return err
+			}
+			return writeResult(cmd, out)
 		},
 	}
 	cmd.Flags().StringVar(&status, "status", string(finding.StatusOpen),
