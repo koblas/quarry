@@ -11,9 +11,8 @@ type csvCell struct {
 	Null bool
 }
 
-// csvField is c as one CSV field. Text is quoted, with `"` doubled, when it
-// holds a comma, a quote, CR or LF, or is empty, so an empty string (`""`)
-// differs from a NULL (nothing). Nothing else is escaped.
+// csvField is c as one CSV field: quoted, with `"` doubled, when it holds a
+// comma, a quote, CR or LF or is empty, so `""` differs from a NULL (nothing).
 func csvField(c csvCell) string {
 	if c.Null {
 		return ""

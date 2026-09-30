@@ -17,6 +17,7 @@ const findingsCommand = "findings"
 // newFindingsCommand builds findings: the findings sync found, filtered by --status and --type and grouped by type with the fix for each, as JSON when *jsonOut is set.
 func newFindingsCommand(newReport ReportFactory, loadConfig ConfigLoader, jsonOut *bool) *cobra.Command {
 	var status, typ string
+	var csvOut bool
 	cmd := &cobra.Command{
 		Use:   findingsCommand,
 		Short: "List what to clean up in Quicken",
@@ -63,6 +64,9 @@ prints one row per item, for a spreadsheet.`,
 				return UsageError{msg: findingsCommand + " takes no arguments; to ignore a finding add its id to findings.ignore in " +
 					findingsConfigShown + "; Run '" + cmd.CommandPath() + " --help' for usage."}
 			}
+			if csvOut && *jsonOut {
+				return errCSVAndJSON
+			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -89,13 +93,15 @@ prints one row per item, for a spreadsheet.`,
 			}
 			unmatched := unmatchedIgnoreWarnings(homepath.Abbreviate(srv.Home(), cfg.Path), listing.Unmatched)
 			printConfigWarnings(cmd, unmatched)
+			renderText := func() string { return renderFindings(listing, view, len(req.Ignore) == 0) }
+			if csvOut {
+				renderText = func() string { return renderFindingsCSV(listing) }
+			}
 			out, err := renderResult(*jsonOut,
 				func() ([]byte, error) {
 					return renderFindingsJSON(listing, view, append(slices.Clone(cfg.Warnings), unmatched...))
 				},
-				func() string {
-					return renderFindings(listing, view, len(req.Ignore) == 0)
-				})
+				renderText)
 			if err != nil {
 				// unreachable: renderResult fails only via marshalDocument, and the findings document holds strings, ints and slices; see marshalDocument.
 				return err
@@ -107,6 +113,7 @@ prints one row per item, for a spreadsheet.`,
 		"show only findings whose status is `status`: open, ignored, fixed or all")
 	cmd.Flags().StringVar(&typ, "type", "",
 		"show only findings of this `type`: duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, payee-variants, similar-categories or unused-category")
+	cmd.Flags().BoolVar(&csvOut, "csv", false, "print one row per transaction or split as CSV")
 	return cmd
 }
 

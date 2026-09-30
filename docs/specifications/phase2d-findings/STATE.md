@@ -1,6 +1,6 @@
 # phase2d-findings — current state
 
-Scenarios complete: SCENARIO-01..21 (02, 03 delivered by 01; 05 by 04; 07 by 06; 10 by 09; 12, 13 by 11; 17 by 16; 20 by 19). Last updated by SCENARIO-21.
+Scenarios complete: SCENARIO-01..23 (02, 03 delivered by 01; 05 by 04; 07 by 06; 10 by 09; 12, 13 by 11; 17 by 16; 20 by 19; 23 by 22). Last updated by SCENARIO-22.
 
 ## Binding decisions
 - `internal/finding` is the leaf (stdlib only) owning type names/order, id grammar (`ID`, `PairID`, `NoPayee`), `StatusOf`, the fix table, `Counts`, `State` and `Classify`; `store`, `duckstore`, `snapshot`, `report` and the `findings` command (11) import it (SCENARIO-01)
@@ -28,14 +28,14 @@ Scenarios complete: SCENARIO-01..21 (02, 03 delivered by 01; 05 by 04; 07 by 06;
 - `status` config is best-effort and read AFTER the store and `FindingCounts` succeed: any loader error exits 0, stderr `quarry: warning: cannot tell which findings you ignored: <config.Problem(err)>; findings you ignored are counted as open`, nil ignore list (ignored findings count open and new), text drops the `, J ignored` clause, JSON `ignored` null and the same unprefixed line in `warnings[]`. `config.Problem(err)` (`internal/config/refusal.go`) trims `fixIt`; no cli copy of the suffix. Store refusal never reads the config. `cfg.Warnings` and W1 are never printed by `status` (SCENARIO-19)
 - `status` Findings row: `findingsPhrase` with `New`/`NewlyFixed` zeroed and `carried` false, so never a `(M new)` or fixed clause; `status --json` `findings` does carry `new`/`newly_fixed` (SCENARIO-19)
 
-- One CSV writer in `internal/cli/csv.go`: `csvCell{Text, Null}`, `csvField`, `csvRecord`, `errCSVAndJSON`; `renderSQLCSV` (`render_sql.go`) uses it. Field quoted iff it has `,` `"` CR LF or is empty (`""`), `"` doubled; NULL is an unquoted empty field, decided by `.Null` never the text `NULL`; tab alone not a trigger; no formula escaping; header names use the same quoter. No `encoding/csv` (cannot tell NULL from `""`). `findings --csv` (22) reuses it with its own NULLable cells (SCENARIO-21)
+- One CSV writer in `internal/cli/csv.go`: `csvCell{Text, Null}`, `csvField`, `csvRecord`, `errCSVAndJSON`; `renderSQLCSV` (`render_sql.go`) uses it. Field quoted iff it has `,` `"` CR LF or is empty (`""`), `"` doubled; NULL is an unquoted empty field, decided by `.Null` never the text `NULL`; tab alone not a trigger; no formula escaping; header names use the same quoter. No `encoding/csv` (cannot tell NULL from `""`). `findings --csv` (22) reuses it (SCENARIO-21)
+- `findings --csv` (`internal/cli/csv_findings.go`): header `finding_id,type,status,date,account,currency,payee,category,amount,other_account,transactions,splits,transaction_id,split_id,payee_id,category_id,fix`; one row per item in listing order, a fixed finding (no items) one row with 13 NULL item cells; `fix` on every row; cells come from `newFindingEntryDocument` (the same converter as `--json`, so date `2006-01-02`, plain amount, empty payee NULL); no footer, hint or blank line; config warnings on stderr only. `--csv --json` is `errCSVAndJSON` in `findings` `Args` after the positional check. 24-28 filling `category`/`transactions`/`splits` in `findingItemDocument` fill the CSV for free (`csvOptional`, `csvOptionalCount`) (SCENARIO-22)
 - `sql --limit` flag default is 0 (help reads the ruled text, no pflag `(default 500)`); the effective limit lives in `rowLimit(cmd, limit, csvOut)` in `sql.go`: `Flags().Changed("limit")` wins, else 0 (every row) under `--csv`, else `defaultSQLLimit` 500. `--csv --json` is the LAST `Args` case, so u5/u6/u7 keep precedence (SCENARIO-21)
 
 - `config.Config.Ignore []string` is `findings.ignore` as written: file order, duplicates, `""` and unknown prefixes kept, nil when unset (whole-struct `assert.Equal` tests break on a non-nil empty slice); `FindingsRequest.Ignore` and W1 read every element. Validation order: `snapshots.keep`, `quicken.path`, `findings.ignore`, unknown keys; first refusal wins (SCENARIO-15)
 - `config` `ignore()` decides the first non-string item from the DECODED tree; `items.go` `arrayItems` splits `entry.value` only to spell it (`itemText`: raw text, or the decoded value when counts disagree, so a splitter fault degrades the copy, never accepts a bad item). Its `stringEnd` `min(..., len(s))` guards pin no-panic on unclosed strings (SCENARIO-15)
 
 ## Left unbuilt
-- `findings --csv` and its `--csv --json` line (reuse `csvRecord`/`errCSVAndJSON`) — 22 (reuses 18's request/listing; a fixed finding is one row, item fields empty NULLs)
 - `findings --json` item `category`, `transactions` and `splits` are always null until 24-28 fill them (`findingItemDocument`); rows and sort rules for unlinked-transfer, mixed-categories, payee-variants, similar-categories, unused-category; `findingLines`' `// unreachable` final `return nil` must go when 24-28 add their types; payee-variants / similar-categories headers use `(N groups)` — 24-28
 
 ## Traps
@@ -63,6 +63,7 @@ Scenarios complete: SCENARIO-01..21 (02, 03 delivered by 01; 05 by 04; 07 by 06;
 - `editStore` cannot insert a duplicate into a format-4 `findings` (PK): `DROP TABLE findings` and recreate without the PK (no FK from `finding_items`); `spyReadDB.passQueries` 2 fails the findings columns query, 3 the rows query (SCENARIO-08)
 - `spyReadDB` fails EVERY query after `passQueries`, so a runs-fault spy test also fails the findings read; only the DDL fixture (broken `import_runs`, intact `findings`) shows findings survive a runs fault (SCENARIO-06)
 - `newBuiltStore`'s previous store holds `one-sided-transfer:xfer-3`, so every `Replace` over it carries findings; count tests on fresh dirs keep `New == Open` (SCENARIO-06)
+- `csvOptionalCount`'s non-nil arm is reached only by the white-box `csv_findings_internal_test.go` until 24-28 fill `transactions`/`splits`; delete that test when a real type does (SCENARIO-22)
 - Test names for `-run` patterns are matched lowercase-first in this repo's narrow loops; capitalised patterns match nothing (SCENARIO-06)
 
 - A sync fixture with two equal-amount transactions in one account within 3 days now raises a `duplicate` finding: give look-alikes distinct amounts (`twoPayeeBundle` second txn is -11.00) — never weaken the detector (SCENARIO-09)
@@ -74,4 +75,3 @@ Scenarios complete: SCENARIO-01..21 (02, 03 delivered by 01; 05 by 04; 07 by 06;
 - Orchestrator: the Reference check (real-file review of heuristic findings) runs after SCENARIO-28, before the gate round (unowned until then)
 - Orchestrator: config warnings (C3, W1) in `--json` `warnings[]` name `<config>` abbreviated (`~/...`), a 2c-era deviation from the 2a absolute-in-`--json` rule — raise at the final product-vision pass (unowned). Includes `status --json`'s bad-config entry (ruled at SCENARIO-19 to use the same form as the other config warnings)
 - Orchestrator: `sql --csv` one-column NULL row renders as a blank line (P2d-12 applied literally, as PostgreSQL COPY CSV does); `encoding/csv` readers skip blank lines — raise at the final product-vision pass (unowned)
-- Checkpoint 21 MINOR (comment budget): `internal/cli/csv.go:14-17` `csvField` doc 4 lines — trim to 2

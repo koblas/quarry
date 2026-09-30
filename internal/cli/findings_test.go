@@ -110,6 +110,7 @@ func Test_findings_help_shows_each_flag(t *testing.T) {
 			help: "show only findings of this type: duplicate, one-sided-transfer, unlinked-transfer, " +
 				"uncategorized, mixed-categories, payee-variants, similar-categories or unused-category",
 		},
+		{flag: "--csv", usage: "--csv", help: "print one row per transaction or split as CSV"},
 	}
 
 	for _, c := range cases {
@@ -140,6 +141,14 @@ func Test_findings_rejects_bad_usage(t *testing.T) {
 			name: "a type that is not a finding type", args: []string{"--type", "duplicates"},
 			want: "--type must be duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, " +
 				"payee-variants, similar-categories or unused-category",
+		},
+		{
+			name: "--csv with --json", args: []string{"--csv", "--json"},
+			want: "--csv and --json cannot be used together; choose one output format",
+		},
+		{
+			name: "--json with --csv", args: []string{"--json", "--csv"},
+			want: "--csv and --json cannot be used together; choose one output format",
 		},
 	}
 
