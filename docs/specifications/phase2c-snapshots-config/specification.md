@@ -625,7 +625,7 @@ Sizing notes (binding on per-scenario architects):
 - [x] SCENARIO-24: prune with nothing beyond the cap deletes nothing — `cmd/quarry/run_prune_config_test.go` `Test_run_snapshots_prune_with_nothing_beyond_the_default_cap_deletes_nothing`
 - [x] SCENARIO-02: A snapshots.keep below 1 is refused — delivered by SCENARIO-24 — `cmd/quarry/run_prune_config_test.go` `Test_run_snapshots_prune_refuses_a_snapshots_keep_below_one`
 - [x] SCENARIO-22: prune --dry-run lists what it would delete and deletes nothing — delivered by SCENARIO-24 — `cmd/quarry/run_prune_dryrun_test.go` `Test_run_snapshots_prune_dry_run_lists_what_it_would_delete_and_deletes_nothing`
-- [ ] SCENARIO-28: prune --json reports deleted, would_delete and failed in one shape
+- [x] SCENARIO-28: prune --json reports deleted, would_delete and failed in one shape — `cmd/quarry/run_prune_json_test.go` `Test_run_snapshots_prune_json_prints_the_ruled_document_for_a_real_run`
 - [ ] SCENARIO-29: sync deletes snapshots beyond the newest 12 and prints a Pruned line
 - [ ] SCENARIO-30: sync honours snapshots.keep from config
 - [ ] SCENARIO-31: sync --json always carries the pruned key
