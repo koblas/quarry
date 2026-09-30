@@ -13,6 +13,7 @@
 | SCENARIO-21 (+23, 25, 26, 27) | test-first | A, B1, B2, B3, B4, V | 0/2/6/2 | yes (ticked test missing; false unreachable marker); 1 copy ruling (U1–U7), plan amended once; 3 architect API 529s |
 | SCENARIO-24 (+02, 22) | test-first | A, B1, B2, V | 0/0/4/0 | no (MINORs → STATE.md); 1 copy ruling (prune --json store read) |
 | SCENARIO-28 | code-first (light) | L, V | 0/3/1/0 | yes (three ruled `--json` rows unpinned; test-only fix) |
+| SCENARIO-29 (+30, 31, 32, 33) | test-first | A, B1, B2, V | 0/0/4/1 | no (MINORs → STATE.md); 1 copy ruling (interrupt + composites) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
