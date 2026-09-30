@@ -2,6 +2,7 @@ package duckstore_test
 
 import (
 	"os"
+	"slices"
 	"testing"
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
@@ -133,4 +134,90 @@ func Test_replace_keeps_the_previous_store_when_detection_fails(t *testing.T) {
 			assert.Equal(t, before, after)
 		})
 	}
+}
+
+// findingTimes is every findings row as id|first_found_at|fixed_at text, ordered by id.
+func findingTimes(t *testing.T, st *duckstore.Store) string {
+	t.Helper()
+	db := openReadOnly(t, st.Path())
+	var out string
+	require.NoError(t, db.QueryRows(t.Context(), `SELECT COALESCE(string_agg(id || '|' || CAST(first_found_at AS VARCHAR) || '|' ||
+		COALESCE(CAST(fixed_at AS VARCHAR), 'NULL'), '; ' ORDER BY id), '') FROM findings`, nil,
+		func(scan func(dest ...any) error) error { return scan(&out) }))
+	require.NoError(t, db.Close())
+	return out
+}
+
+func Test_replace_marks_a_carried_finding_not_detected_fixed_at_the_build_time(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	_, err := duckstore.New(dir).Replace(t.Context(), withFindingCandidates())
+	require.NoError(t, err)
+
+	replaced, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	db := openReadOnly(t, replaced.Path)
+	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM findings WHERE id LIKE 'uncategorized:%'
+		AND fixed_at = (SELECT built_at FROM store_info)`, "2")
+	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM finding_items WHERE finding_id LIKE 'uncategorized:%'`, "0")
+	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM findings WHERE id = 'one-sided-transfer:xfer-3' AND fixed_at IS NULL`, "1")
+}
+
+func Test_replace_keeps_a_fixed_finding_fixed_at_its_first_fix_time(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	_, err := duckstore.New(dir).Replace(t.Context(), withFindingCandidates())
+	require.NoError(t, err)
+	_, err = duckstore.New(dir).Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	st := duckstore.New(dir)
+	afterFirstFix := findingTimes(t, st)
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Equal(t, afterFirstFix, findingTimes(t, st))
+	assert.Equal(t, finding.Counts{Open: 1, Fixed: 2}, replaced.Findings)
+}
+
+func Test_replace_reopens_a_fixed_finding_keeping_its_first_found_at(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	_, err := duckstore.New(dir).Replace(t.Context(), withFindingCandidates())
+	require.NoError(t, err)
+	st := duckstore.New(dir)
+	firstFound := findingTimes(t, st)
+	_, err = st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+
+	replaced, err := st.Replace(t.Context(), withFindingCandidates())
+
+	require.NoError(t, err)
+	assert.Equal(t, firstFound, findingTimes(t, st))
+	assert.Equal(t, finding.Counts{Open: 3}, replaced.Findings)
+}
+
+func Test_replace_counts_new_and_newly_fixed_as_the_findings_stamped_with_the_build_time(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	_, err := duckstore.New(dir).Replace(t.Context(), withFindingCandidates())
+	require.NoError(t, err)
+	rows := withFindingCandidates()
+	rows.Transactions = slices.DeleteFunc(rows.Transactions, func(x store.Transaction) bool { return x.ID == "txn-2" })
+	rows.Splits = slices.DeleteFunc(rows.Splits, func(x store.Split) bool { return x.ID == "split-5" })
+	rows.Payees = append(rows.Payees, store.Payee{ID: "payee-2", SourceID: 2, Name: "Bakery"})
+	rows.Transactions = append(rows.Transactions, store.Transaction{
+		ID: "txn-6", SourceID: 6, AccountID: "acct-1", Date: day(2026, 3, 16), PayeeID: new("payee-2"),
+		Amount: -100, Currency: "CAD", Status: "uncleared",
+	})
+	rows.Splits = append(rows.Splits, store.Split{ID: "split-8", SourceID: 8, TransactionID: "txn-6", Amount: -100})
+
+	replaced, err := duckstore.New(dir).Replace(t.Context(), rows)
+
+	require.NoError(t, err)
+	assert.Equal(t, finding.Counts{Open: 3, Fixed: 1, New: 1, NewlyFixed: 1}, replaced.Findings)
+	db := openReadOnly(t, replaced.Path)
+	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM findings WHERE first_found_at = (SELECT built_at FROM store_info) AND fixed_at IS NULL`, "1")
+	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM findings WHERE fixed_at = (SELECT built_at FROM store_info)`, "1")
 }

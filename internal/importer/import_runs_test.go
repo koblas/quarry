@@ -88,3 +88,15 @@ func Test_import_returns_the_stores_findings_counts(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, counts, result.Findings)
 }
+
+func Test_import_returns_whether_the_stores_findings_were_carried(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{carried: true})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.True(t, result.FindingsCarried)
+}

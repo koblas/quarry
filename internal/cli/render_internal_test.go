@@ -278,18 +278,42 @@ func Test_renderStore_renders_the_store_rows_balances_splits_and_transfers_lines
 
 func Test_findingsPhrase(t *testing.T) {
 	cases := []struct {
-		name string
-		open int
-		want string
+		name    string
+		counts  finding.Counts
+		carried bool
+		want    string
 	}{
-		{name: "none open", open: 0, want: "none open"},
-		{name: "one open", open: 1, want: "1 open; run quarry findings to list them"},
-		{name: "many open, thousands-grouped", open: 1204, want: "1,204 open; run quarry findings to list them"},
+		{name: "none open", want: "none open"},
+		{name: "one open", counts: finding.Counts{Open: 1, New: 1}, want: "1 open; run quarry findings to list them"},
+		{name: "many open, thousands-grouped", counts: finding.Counts{Open: 1204}, want: "1,204 open; run quarry findings to list them"},
+		{
+			name: "new but not carried", counts: finding.Counts{Open: 12, New: 12}, carried: false,
+			want: "12 open; run quarry findings to list them",
+		},
+		{
+			name: "carried, none new", counts: finding.Counts{Open: 12}, carried: true,
+			want: "12 open; run quarry findings to list them",
+		},
+		{
+			name: "carried, some new and some fixed", counts: finding.Counts{Open: 12, New: 3, Fixed: 2, NewlyFixed: 2}, carried: true,
+			want: "12 open (3 new), 2 fixed since the last sync; run quarry findings to list them",
+		},
+		{
+			name: "carried, new count thousands-grouped", counts: finding.Counts{Open: 2000, New: 1500}, carried: true,
+			want: "2,000 open (1,500 new); run quarry findings to list them",
+		},
+		{name: "none open, some fixed", counts: finding.Counts{Fixed: 2, NewlyFixed: 2}, carried: true, want: "none open, 2 fixed since the last sync"},
+		{name: "none open, fixed earlier not counted", counts: finding.Counts{Fixed: 2}, carried: true, want: "none open"},
+		{
+			name: "fixed clause without new", counts: finding.Counts{Open: 1, Fixed: 1, NewlyFixed: 1}, carried: true,
+			want: "1 open, 1 fixed since the last sync; run quarry findings to list them",
+		},
+		{name: "fixed count thousands-grouped", counts: finding.Counts{NewlyFixed: 1200}, carried: true, want: "none open, 1,200 fixed since the last sync"},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, findingsPhrase(c.open))
+			assert.Equal(t, c.want, findingsPhrase(c.counts, c.carried))
 		})
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/platform/sqlschema"
@@ -84,8 +85,7 @@ func writeDiffRow(b *strings.Builder, sign, label, value string) {
 }
 
 // renderStore renders result's Store, Rows, Balances, Splits, Transfers and
-// Findings lines, appended after renderSuccess's block once a build was
-// reached. One-sided legs appear only as a count here; findings lists them.
+// Findings lines, appended after renderSuccess's block once a build was reached.
 func renderStore(result store.Result, home string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", homepath.Abbreviate(home, result.Path))
@@ -94,17 +94,29 @@ func renderStore(result store.Result, home string) string {
 	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(balanceCounts{Checked: bc.Checked, NeverReconciled: len(bc.NeverReconciled), InvestmentAccounts: bc.InvestmentAccounts}))
 	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits.Checked))
 	writeTransfersLine(&b, result.Validation.Transfers)
-	fmt.Fprintf(&b, "%-10s%s\n", "Findings", findingsPhrase(result.Findings.Open))
+	fmt.Fprintf(&b, "%-10s%s\n", "Findings", findingsPhrase(result.Findings, result.FindingsCarried))
 	return b.String()
 }
 
-// findingsPhrase renders the open finding count as "none open", or "N open"
-// with the pointer to quarry findings.
-func findingsPhrase(open int) string {
-	if open == 0 {
-		return "none open"
+// findingsPhrase renders the open count, with "(M new)" once history was carried and
+// "K fixed since the last sync"; "run quarry findings" follows only while any are open.
+func findingsPhrase(c finding.Counts, carried bool) string {
+	if c.Open == 0 {
+		return "none open" + fixedClause(c.NewlyFixed)
 	}
-	return humanize.Thousands(open) + " open; run quarry findings to list them"
+	phrase := humanize.Thousands(c.Open) + " open"
+	if carried && c.New > 0 {
+		phrase += " (" + humanize.Thousands(c.New) + " new)"
+	}
+	return phrase + fixedClause(c.NewlyFixed) + "; run quarry findings to list them"
+}
+
+// fixedClause renders ", K fixed since the last sync", empty when none were fixed.
+func fixedClause(newlyFixed int) string {
+	if newlyFixed == 0 {
+		return ""
+	}
+	return ", " + humanize.Thousands(newlyFixed) + " fixed since the last sync"
 }
 
 // writeTransfersLine appends tc's Transfers count line.

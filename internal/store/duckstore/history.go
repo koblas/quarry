@@ -15,11 +15,13 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// history is the import_runs rows of the store Replace is about to replace,
-// in importRunRows's column order, and the highest id among them.
+// history is what Replace carries from the store it replaces: its import_runs rows in importRunRows's
+// column order with the highest id among them, and its findings, with findingsCarried true iff that table was read.
 type history struct {
-	rows  [][]any
-	maxID int64
+	rows            [][]any
+	maxID           int64
+	findings        []carriedFinding
+	findingsCarried bool
 }
 
 // requiredRunColumns are the import_runs columns every store format has, in importRunRows's order.
@@ -38,6 +40,10 @@ var optionalRunColumns = []string{
 const runColumnsQuery = `SELECT column_name FROM duckdb_columns()
 WHERE database_name = current_database() AND schema_name = 'main' AND table_name = 'import_runs'`
 
+// findingColumnsQuery lists the columns of the store's findings table, none when it has no such table.
+const findingColumnsQuery = `SELECT column_name FROM duckdb_columns()
+WHERE database_name = current_database() AND schema_name = 'main' AND table_name = 'findings'`
+
 // The phrases a sync prints for a history fault found after the store opened, each naming the previous store as "it".
 const (
 	reasonRunsRepeatID   = "its import_runs table repeats an id"
@@ -52,8 +58,9 @@ var (
 	errRunsIDLimit  = errors.New("import_runs holds the largest id, which no run can follow")
 )
 
-// readHistory reads the import_runs of the store at s.Path() and closes it before returning.
-// An absent store has no history and no fault; an unreadable one has no history and its fault.
+// readHistory reads the import_runs and findings of the store at s.Path() and closes it before returning.
+// An absent store has no history and no fault; an unreadable one has none and its fault; a bad import_runs
+// table leaves the findings carried.
 func (s *Store) readHistory(ctx context.Context) (history, *store.OpenError) {
 	path := s.Path()
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
@@ -69,11 +76,15 @@ func (s *Store) readHistory(ctx context.Context) (history, *store.OpenError) {
 	}
 	defer func() { _ = db.Close() }()
 
+	var fault *store.OpenError
 	carried, err := readRuns(ctx, db)
 	if err != nil {
-		return history{}, historyFault(path, err)
+		carried, fault = history{}, historyFault(path, err)
 	}
-	return carried, nil
+	if findings, present, err := readFindings(ctx, db); err == nil && present {
+		carried.findings, carried.findingsCarried = findings, true
+	}
+	return carried, fault
 }
 
 // historyFault is the fault of a history read that failed after the store opened: an
@@ -141,6 +152,43 @@ func readRuns(ctx context.Context, db ReadDB) (history, error) {
 		return history{}, errRunsIDLimit
 	}
 	return carried, nil
+}
+
+// carriedFinding is one findings row as read, its timestamps kept as stored so a carried finding keeps them.
+type carriedFinding struct {
+	id, typ      string
+	firstFoundAt time.Time
+	fixedAt      sql.NullTime
+}
+
+// readFindings reads every findings row through db; present is false, without a fault, when the store has no findings table.
+func readFindings(ctx context.Context, db ReadDB) ([]carriedFinding, bool, error) {
+	present := false
+	err := db.QueryRows(ctx, findingColumnsQuery, nil, func(scan func(dest ...any) error) error {
+		var column string
+		present = true
+		return scan(&column)
+	})
+	if err != nil {
+		return nil, false, fmt.Errorf("read findings columns: %w", err)
+	}
+	if !present {
+		return nil, false, nil
+	}
+	var found []carriedFinding
+	err = db.QueryRows(ctx, "SELECT id, type, first_found_at, fixed_at FROM findings ORDER BY id", nil,
+		func(scan func(dest ...any) error) error {
+			var f carriedFinding
+			if err := scan(&f.id, &f.typ, &f.firstFoundAt, &f.fixedAt); err != nil {
+				return err
+			}
+			found = append(found, f)
+			return nil
+		})
+	if err != nil {
+		return nil, false, fmt.Errorf("read findings: %w", err)
+	}
+	return found, true, nil
 }
 
 // carriedRun is one import_runs row as read: the required columns typed, the

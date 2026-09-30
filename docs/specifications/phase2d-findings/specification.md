@@ -569,8 +569,8 @@ Ruled: the finding core (type list and order, id grammar, P2d-3 status function,
 - [x] SCENARIO-03: uncategorized findings count what cashflow counts — delivered by SCENARIO-01 — `cmd/quarry/run_sync_findings_test.go` `Test_run_sync_uncategorized_findings_hold_what_cashflow_counts`
 - [x] SCENARIO-04: a successful sync lists one-sided transfers only as findings — `cmd/quarry/run_transfers_test.go` `Test_run_lists_one_sided_transfers_only_as_findings_on_a_successful_sync`
 - [x] SCENARIO-05: a validation failure says to fix them in Quicken — delivered by SCENARIO-04 — `cmd/quarry/run_validation_test.go` `Test_run_lists_mismatched_splits_in_the_failed_validation_stdout_block`
-- [ ] SCENARIO-06: a finding no longer found is marked fixed on the next sync
-- [ ] SCENARIO-07: a fixed finding that comes back reopens and is not new
+- [x] SCENARIO-06: a finding no longer found is marked fixed on the next sync — `cmd/quarry/run_sync_findings_test.go` `Test_run_sync_marks_a_finding_no_longer_found_fixed_at_the_build_time`
+- [x] SCENARIO-07: a fixed finding that comes back reopens and is not new — delivered by SCENARIO-06 — `cmd/quarry/run_sync_findings_test.go` `Test_run_sync_reopens_a_fixed_finding_with_its_first_found_at_and_not_new`
 - [ ] SCENARIO-08: findings history that cannot be carried forward restarts with a warning
 - [ ] SCENARIO-09: two same-amount transactions within 3 days are a possible duplicate
 - [ ] SCENARIO-10: two reconciled look-alikes are not a duplicate

@@ -163,9 +163,8 @@ func marshalDocument(doc any) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// newStoreDocument converts result into the --json store document, nil
-// when the import was never attempted (a schema mismatch); its findings are
-// null unless the store was built.
+// newStoreDocument converts result into the --json store document, nil when the
+// import was never attempted (a schema mismatch); findings are null unless built.
 func newStoreDocument(result *store.Result) *storeDocument {
 	if result == nil {
 		return nil

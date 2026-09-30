@@ -9,8 +9,7 @@ import (
 	"github.com/koblas/quarry/internal/finding"
 )
 
-// oneSidedTransferQuery lists every transfer with no to-split, with the transaction of its from-split
-// (NULL when the from-split is not a stored split); it selects from transfers so a join never shrinks the set.
+// oneSidedTransferQuery lists every transfer with no to-split, with its from-split's transaction (NULL when not stored).
 const oneSidedTransferQuery = `SELECT x.id, x.from_split_id, s.transaction_id
 FROM transfers x LEFT JOIN splits s ON s.id = x.from_split_id
 WHERE x.to_split_id IS NULL
@@ -34,14 +33,14 @@ type detectedFinding struct {
 	items []findingItem
 }
 
-// loadFindings detects the findings in the loaded tables, writes them to findings and finding_items,
-// and returns their counts; any fault is a build fault.
-func loadFindings(ctx context.Context, db DB, builtAt time.Time) (finding.Counts, error) {
+// loadFindings detects the findings in the loaded tables, merges them with the carried ones, writes
+// findings and finding_items, and returns the counts; any fault is a build fault.
+func loadFindings(ctx context.Context, db DB, carried []carriedFinding, builtAt time.Time) (finding.Counts, error) {
 	detected, err := detectFindings(ctx, db)
 	if err != nil {
 		return finding.Counts{}, err
 	}
-	findingRows, itemRows, counts := mergeFindings(detected, builtAt)
+	findingRows, itemRows, counts := mergeFindings(detected, carried, builtAt)
 	if err := appendTable(ctx, db, "findings", findingRows); err != nil {
 		return finding.Counts{}, err
 	}
@@ -82,7 +81,7 @@ func detectOneSidedTransfers(ctx context.Context, db DB) ([]detectedFinding, err
 }
 
 // detectUncategorized returns one finding per payee with uncategorized splits, or per
-// finding.NoPayee, its items one per split; findings come in the query's payee order.
+// finding.NoPayee, its items one per split.
 func detectUncategorized(ctx context.Context, db DB) ([]detectedFinding, error) {
 	var found []detectedFinding
 	byID := map[string]int{}
@@ -109,18 +108,45 @@ func detectUncategorized(ctx context.Context, db DB) ([]detectedFinding, error) 
 	return found, err //nolint:wrapcheck // detectFindings names the detector
 }
 
-// mergeFindings turns detected findings into findings and finding_items rows, every finding first
-// found at builtAt and not fixed, and counts them all open and new.
-func mergeFindings(detected []detectedFinding, builtAt time.Time) ([][]any, [][]any, finding.Counts) {
+// mergeFindings turns detected and carried findings into findings and finding_items rows. A detected finding keeps
+// its carried first_found_at and is reopened; one not carried is new at builtAt. A carried open finding not detected
+// is fixed at builtAt, and a carried fixed one stays fixed at its first fix time.
+func mergeFindings(detected []detectedFinding, carried []carriedFinding, builtAt time.Time) ([][]any, [][]any, finding.Counts) {
+	prior := make(map[string]carriedFinding, len(carried))
+	for _, c := range carried {
+		prior[c.id] = c
+	}
+	var counts finding.Counts
 	findingRows := make([][]any, 0, len(detected))
 	var itemRows [][]any
+	found := make(map[string]bool, len(detected))
 	for _, d := range detected {
-		findingRows = append(findingRows, []any{d.id, string(d.typ), builtAt, nil})
+		found[d.id] = true
+		firstFoundAt := builtAt
+		if c, ok := prior[d.id]; ok {
+			firstFoundAt = c.firstFoundAt
+		} else {
+			counts.New++
+		}
+		counts.Open++
+		findingRows = append(findingRows, []any{d.id, string(d.typ), firstFoundAt, nil})
 		for _, item := range d.items {
 			itemRows = append(itemRows, []any{d.id, nullableNull(item.transactionID), nullableNull(item.splitID), nil, nil})
 		}
 	}
-	return findingRows, itemRows, finding.Counts{Open: len(detected), New: len(detected)}
+	for _, c := range carried {
+		if found[c.id] {
+			continue
+		}
+		fixedAt := c.fixedAt
+		if !fixedAt.Valid {
+			fixedAt = sql.NullTime{Time: builtAt, Valid: true}
+			counts.NewlyFixed++
+		}
+		counts.Fixed++
+		findingRows = append(findingRows, []any{c.id, c.typ, c.firstFoundAt, fixedAt.Time})
+	}
+	return findingRows, itemRows, counts
 }
 
 // nullableNull is s as an appender value: its string, or nil for NULL.

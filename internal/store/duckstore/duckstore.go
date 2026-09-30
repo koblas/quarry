@@ -273,11 +273,11 @@ func hasColumn(ctx context.Context, db ReadDB, table, column string) (bool, erro
 	return n > 0, nil
 }
 
-// Replace swaps rows into quarry.duckdb through a build file, carrying the
-// previous store's import_runs ahead of the new run, which it numbers after the
-// highest carried id. An unreadable history restarts at id 1 and comes back as
-// Replaced.HistoryFault. On failure the existing store is untouched; a permission
-// fault matches store.ErrStoreNotWritable, disk-full store.ErrDiskFull.
+// Replace swaps rows into quarry.duckdb through a build file, carrying the previous
+// store's import_runs ahead of the new run, which it numbers after the highest carried id,
+// and its findings. An unreadable history restarts at id 1 (Replaced.HistoryFault). On failure
+// the existing store is untouched; a permission fault matches store.ErrStoreNotWritable,
+// disk-full store.ErrDiskFull.
 func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, error) {
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return store.Replaced{}, buildError(err)
@@ -326,7 +326,7 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, e
 	}
 	atomicfile.SyncDir(s.dir)
 
-	return store.Replaced{Path: finalPath, HistoryFault: historyFault, Findings: counts}, nil
+	return store.Replaced{Path: finalPath, HistoryFault: historyFault, Findings: counts, FindingsCarried: carried.findingsCarried}, nil
 }
 
 // sweepLeftovers best-effort removes buildFilePattern matches in
@@ -388,9 +388,8 @@ func removePartial(path string) {
 	_ = os.Remove(path + ".wal")
 }
 
-// build creates quarry's schema and views in db and bulk-loads every table
-// in rows, then detects findings, then store_info last: a store carrying it is
-// complete. It returns the counts of the findings it recorded.
+// build loads schema, views, rows, then findings merged with carried, then store_info last: a store
+// carrying it is complete. It returns the counts of the findings it recorded.
 func build(ctx context.Context, db DB, rows store.Rows, carried history, quarryVersion string, builtAt time.Time) (finding.Counts, error) {
 	if _, err := db.Exec(ctx, schemaDDL+accountBalancesViewDDL()+cashFlowViewDDL+spendingViewDDL); err != nil {
 		return finding.Counts{}, fmt.Errorf("create schema: %w", err)
@@ -398,7 +397,7 @@ func build(ctx context.Context, db DB, rows store.Rows, carried history, quarryV
 	if err := loadRows(ctx, db, rows, carried); err != nil {
 		return finding.Counts{}, err
 	}
-	counts, err := loadFindings(ctx, db, builtAt)
+	counts, err := loadFindings(ctx, db, carried.findings, builtAt)
 	if err != nil {
 		return finding.Counts{}, err
 	}

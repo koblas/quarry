@@ -205,7 +205,8 @@ type Counts struct {
 // NotImported still describe the rows the build would have written.
 // HistoryFault is why the previous store's import runs were not carried
 // into a built store; nil when they were, or no store existed. Findings
-// counts what the build's detection recorded; zero when Built is false.
+// counts what the build's detection recorded, zero when Built is false;
+// FindingsCarried is true iff the previous store's findings were read.
 type Result struct {
 	Path         string
 	Built        bool
@@ -214,15 +215,19 @@ type Result struct {
 	NotImported  NotImported
 	HistoryFault *OpenError
 	Findings     finding.Counts
+
+	FindingsCarried bool
 }
 
 // Replaced is what Store.Replace reports: the path it wrote, the fault that
-// kept the previous store's import runs from being carried, if any, and the
-// counts of the findings it recorded.
+// kept the previous store's import runs from being carried, if any, the counts
+// of the findings it recorded, and whether the previous store's findings were carried.
 type Replaced struct {
 	Path         string
 	HistoryFault *OpenError
 	Findings     finding.Counts
+
+	FindingsCarried bool
 }
 
 // NotImported counts source rows a build deliberately leaves out of the

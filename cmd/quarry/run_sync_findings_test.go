@@ -21,16 +21,40 @@ import (
 // syncFindingsBundle writes b under home, syncs it and returns the store opened read-only with sync's stdout.
 func syncFindingsBundle(t *testing.T, home string, b *v9fixture.Builder) (*duckdb.DB, string) {
 	t.Helper()
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	stdout := syncFindingsBundleIn(t, home, "Documents", b)
+	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	return db, stdout
+}
+
+// syncFindingsBundleIn syncs b written under home/dir and returns sync's last stdout line, leaving no store connection open.
+func syncFindingsBundleIn(t *testing.T, home, dir string, b *v9fixture.Builder) string {
+	t.Helper()
+	bundle := b.WriteBundle(t, filepath.Join(home, dir))
 	var stdout, stderr bytes.Buffer
 
 	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db, stdout.String()
+	lines := strings.Split(strings.TrimSuffix(stdout.String(), "\n"), "\n")
+	return lines[len(lines)-1]
+}
+
+// uncategorizedPayeeBundle mints the same payee key on every call, so the finding id is the same in every sync.
+func uncategorizedPayeeBundle(categorized bool, amount string) (*v9fixture.Builder, int64) {
+	b := v9fixture.NewBuilder()
+	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	amazonPK := b.Payee(v9fixture.PayeeRow{Name: "Amazon"})
+	foodPK := b.Category(v9fixture.TagRow{Name: "Food", Type: new(int64(1))})
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	txn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: amount, PostedDate: &day, Payee: amazonPK})
+	entry := v9fixture.EntryRow{Parent: txn, Amount: amount}
+	if categorized {
+		entry.CategoryTag = foodPK
+	}
+	b.Entry(entry)
+	return b, amazonPK
 }
 
 func Test_run_sync_records_findings_and_prints_the_findings_line(t *testing.T) {
@@ -151,4 +175,104 @@ func Test_run_sync_uncategorized_findings_hold_what_cashflow_counts(t *testing.T
 	assert.Equal(t, "CAD", flow.Totals[0].Currency)
 	assert.Equal(t, map[string]string{"income": "4020.00", "spent": "301.00"}, itemTotals)
 	assert.Equal(t, map[string]string{"income": flow.Totals[0].Income, "spent": flow.Totals[0].Spent}, itemTotals)
+}
+
+func Test_run_sync_marks_a_finding_no_longer_found_fixed_at_the_build_time(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	first, amazonPK := uncategorizedPayeeBundle(false, "-10.00")
+	second, _ := uncategorizedPayeeBundle(true, "-10.00")
+	syncFindingsBundleIn(t, home, "DocumentsA", first)
+
+	line := syncFindingsBundleIn(t, home, "DocumentsB", second)
+
+	assert.Equal(t, "Findings  none open, 1 fixed since the last sync", line)
+	assert.Equal(t, map[string]string{fmt.Sprintf("uncategorized:payee-%d", amazonPK): "true"},
+		importRunQuery(t, home, "SELECT id, CAST(fixed_at = (SELECT built_at FROM store_info) AS VARCHAR) FROM findings"))
+	assert.Equal(t, map[string]string{"items": "0"},
+		importRunQuery(t, home, "SELECT 'items', CAST(count(*) AS VARCHAR) FROM finding_items"))
+}
+
+func Test_run_sync_reopens_a_fixed_finding_with_its_first_found_at_and_not_new(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	first, amazonPK := uncategorizedPayeeBundle(false, "-10.00")
+	fixed, _ := uncategorizedPayeeBundle(true, "-10.00")
+	reopened, _ := uncategorizedPayeeBundle(false, "-12.00")
+	syncFindingsBundleIn(t, home, "DocumentsA", first)
+	id := fmt.Sprintf("uncategorized:payee-%d", amazonPK)
+	firstFoundAt := importRunQuery(t, home, "SELECT id, CAST(first_found_at AS VARCHAR) FROM findings")[id]
+	syncFindingsBundleIn(t, home, "DocumentsB", fixed)
+
+	line := syncFindingsBundleIn(t, home, "DocumentsC", reopened)
+
+	assert.Equal(t, "Findings  1 open; run quarry findings to list them", line)
+	assert.Equal(t, map[string]string{id: firstFoundAt + "|NULL"},
+		importRunQuery(t, home, "SELECT id, CAST(first_found_at AS VARCHAR) || '|' || COALESCE(CAST(fixed_at AS VARCHAR), 'NULL') FROM findings"))
+}
+
+func Test_run_sync_json_counts_a_finding_fixed_since_the_last_sync(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	first, _ := uncategorizedPayeeBundle(false, "-10.00")
+	second, _ := uncategorizedPayeeBundle(true, "-10.00")
+	syncFindingsBundleIn(t, home, "DocumentsA", first)
+	bundle := second.WriteBundle(t, filepath.Join(home, "DocumentsB"))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	var parsed struct {
+		Store struct {
+			Findings json.RawMessage `json:"findings"`
+		} `json:"store"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &parsed))
+	assert.JSONEq(t, `{"open":0,"ignored":0,"fixed":1,"new":0,"newly_fixed":1}`, string(parsed.Store.Findings))
+}
+
+// twoPayeeBundle mints both payees in every call, so each finding id is the same in every sync.
+func twoPayeeBundle(xCategorized, yCategorized bool) (*v9fixture.Builder, int64) {
+	b := v9fixture.NewBuilder()
+	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	xPK := b.Payee(v9fixture.PayeeRow{Name: "Amazon"})
+	yPK := b.Payee(v9fixture.PayeeRow{Name: "Landlord"})
+	foodPK := b.Category(v9fixture.TagRow{Name: "Food", Type: new(int64(1))})
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	for _, p := range []struct {
+		payee       int64
+		categorized bool
+	}{{xPK, xCategorized}, {yPK, yCategorized}} {
+		payee, categorized := p.payee, p.categorized
+		txn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-10.00", PostedDate: &day, Payee: payee})
+		entry := v9fixture.EntryRow{Parent: txn, Amount: "-10.00"}
+		if categorized {
+			entry.CategoryTag = foodPK
+		}
+		b.Entry(entry)
+	}
+	return b, xPK
+}
+
+func Test_run_sync_from_an_older_snapshot_reopens_and_fixes_findings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	first, xPK := twoPayeeBundle(false, true)
+	second, _ := twoPayeeBundle(true, false)
+	syncFindingsBundleIn(t, home, "DocumentsA", first)
+	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	firstID := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
+	xID := fmt.Sprintf("uncategorized:payee-%d", xPK)
+	firstFoundAt := importRunQuery(t, home, "SELECT id, CAST(first_found_at AS VARCHAR) FROM findings")[xID]
+	syncFindingsBundleIn(t, home, "DocumentsB", second)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--from", firstID}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	lines := strings.Split(strings.TrimSuffix(stdout.String(), "\n"), "\n")
+	assert.Equal(t, "Findings  1 open, 1 fixed since the last sync; run quarry findings to list them", lines[len(lines)-1])
+	assert.Equal(t, firstFoundAt+"|NULL", importRunQuery(t, home,
+		"SELECT id, CAST(first_found_at AS VARCHAR) || '|' || COALESCE(CAST(fixed_at AS VARCHAR), 'NULL') FROM findings")[xID])
 }
