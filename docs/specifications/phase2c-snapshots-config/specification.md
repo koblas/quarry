@@ -596,7 +596,7 @@ Sizing notes (binding on per-scenario architects):
 - [x] SCENARIO-19: snapshots with none taken yet says how to take one — delivered by SCENARIO-16 — `cmd/quarry/run_snapshots_test.go` `Test_run_snapshots_with_none_taken_yet_says_how_to_take_one`
 - [x] SCENARIO-20: snapshots warns when the store cannot be read — delivered by SCENARIO-16 — `cmd/quarry/run_snapshots_test.go` `Test_run_snapshots_warns_when_the_store_cannot_be_read`
 - [x] SCENARIO-34: --from with an unknown ID points at quarry snapshots — delivered by SCENARIO-16 — `cmd/quarry/run_from_refusals_test.go` `Test_run_sync_from_an_unknown_id_points_at_quarry_snapshots`
-- [ ] SCENARIO-18: snapshots --json lists every snapshot with its store flag
+- [x] SCENARIO-18: snapshots --json lists every snapshot with its store flag — `cmd/quarry/run_snapshots_json_test.go` `Test_run_snapshots_json_prints_the_ruled_document_for_two_snapshots_and_a_store`
 - [ ] SCENARIO-21: prune deletes all but the newest N snapshots
 - [ ] SCENARIO-23: prune keeps the store's snapshot when it is older than the newest N
 - [ ] SCENARIO-25: prune refuses when the store cannot be read

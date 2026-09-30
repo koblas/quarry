@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-18
-status: in-progress
+status: done
 ---
 
 # SCENARIO-18: snapshots --json lists every snapshot with its store flag
@@ -23,7 +23,7 @@ Contract (specification.md `### quarry snapshots` `--json`): keys in order `dire
 - [x] Step 2: new `internal/cli/json_snapshots.go` (`snapshotsDocument`, `renderSnapshotsJSON(listing, keep, warnings)`, `snapshotsWarnings`); `internal/cli/snapshots.go` takes `jsonOut` (`root.go:33`) and renders through `renderResult`, stderr lines unchanged; `internal/snapshot/import.go:82` `snapshotID` → exported `ID`. Tests, each its own function: no manifest (five nulls, keys present), unparsable `taken_at`, empty `source`, empty folder (`snapshots: []`, `total_bytes: 0`), config + no-snapshots + store warning order with stderr, `store_snapshot` null (no store / unreadable / zero runs / R2 without path, table), `store_snapshot` names the recorded path outside the folder and for a hand-deleted snapshot (table), `keep` from config; `render_snapshots_internal_test.go` non-ASCII Source pin
 
 ### Sweep / Verify
-- [ ] Run V: full verification, tick SCENARIO-18 in specification.md, rewrite STATE.md
+- [x] Run V: full verification, tick SCENARIO-18 in specification.md, rewrite STATE.md
 
 ## Phase report
 
