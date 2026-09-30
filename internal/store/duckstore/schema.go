@@ -129,7 +129,8 @@ GROUP BY a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed,
 `
 }
 
-// reportedAccount is the predicate, over accounts aliased a, for an account Quicken's reports count.
+// reportedAccount is the predicate, over accounts aliased a, for an account Quicken's reports count;
+// it is the SQL form of the negation of store.Account.LeftOutOfReports.
 const reportedAccount = "a.in_reports AND NOT a.linked_tracking"
 
 // cashFlowViewDDL creates v_cash_flow: each split that counts as income or spending in Quicken's reports.

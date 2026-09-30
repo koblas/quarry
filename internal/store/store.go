@@ -26,6 +26,7 @@ type Account struct {
 
 // LeftOutOfReports reports whether spend and cashflow leave the account out, as
 // Quicken's reports do: not in reports, or using linked account tracking.
+// duckstore's reportedAccount is the SQL form of its negation.
 func (a Account) LeftOutOfReports() bool {
 	return a.NotInReports || a.LinkedTracking
 }

@@ -274,28 +274,28 @@ func Test_renderStore_renders_the_store_rows_balances_splits_and_transfers_lines
 
 func Test_balancesPhrase(t *testing.T) {
 	cases := []struct {
-		name                                 string
-		checked, neverReconciled, investment int
-		want                                 string
+		name   string
+		counts balanceCounts
+		want   string
 	}{
 		{name: "nothing to check", want: "no accounts to check"},
-		{name: "one account matches", checked: 1, want: "1 account matches Quicken's last reconciled balance"},
-		{name: "many accounts match, thousands-grouped", checked: 1000, want: "1,000 accounts match Quicken's last reconciled balance"},
-		{name: "one never reconciled", neverReconciled: 1, want: "no accounts to check; 1 never reconciled"},
-		{name: "one investment account", investment: 1, want: "no accounts to check; 1 investment account not checked"},
+		{name: "one account matches", counts: balanceCounts{Checked: 1}, want: "1 account matches Quicken's last reconciled balance"},
+		{name: "many accounts match, thousands-grouped", counts: balanceCounts{Checked: 1000}, want: "1,000 accounts match Quicken's last reconciled balance"},
+		{name: "one never reconciled", counts: balanceCounts{NeverReconciled: 1}, want: "no accounts to check; 1 never reconciled"},
+		{name: "one investment account", counts: balanceCounts{InvestmentAccounts: 1}, want: "no accounts to check; 1 investment account not checked"},
 		{
-			name: "never reconciled and investment accounts joined", neverReconciled: 3, investment: 4,
+			name: "never reconciled and investment accounts joined", counts: balanceCounts{NeverReconciled: 3, InvestmentAccounts: 4},
 			want: "no accounts to check; 3 never reconciled and 4 investment accounts not checked",
 		},
 		{
-			name: "checked, never reconciled and investment accounts", checked: 35, neverReconciled: 3, investment: 4,
+			name: "checked, never reconciled and investment accounts", counts: balanceCounts{Checked: 35, NeverReconciled: 3, InvestmentAccounts: 4},
 			want: "35 accounts match Quicken's last reconciled balance; 3 never reconciled and 4 investment accounts not checked",
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, balancesPhrase(c.checked, c.neverReconciled, c.investment))
+			assert.Equal(t, c.want, balancesPhrase(c.counts))
 		})
 	}
 }
