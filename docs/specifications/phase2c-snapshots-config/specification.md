@@ -622,9 +622,9 @@ Sizing notes (binding on per-scenario architects):
 - [x] SCENARIO-25: prune refuses when the store cannot be read — delivered by SCENARIO-21 — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_refuses_when_the_store_cannot_be_read`
 - [x] SCENARIO-26: prune --keep 0 is a usage error — delivered by SCENARIO-21 — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_refuses_keep_0_as_a_usage_error`
 - [x] SCENARIO-27: prune reports each snapshot it could not delete and exits 1 — delivered by SCENARIO-21 — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_reports_each_snapshot_it_could_not_delete_and_exits_1`
-- [ ] SCENARIO-24: prune with nothing beyond the cap deletes nothing
-- [ ] SCENARIO-02: A snapshots.keep below 1 is refused
-- [ ] SCENARIO-22: prune --dry-run lists what it would delete and deletes nothing
+- [x] SCENARIO-24: prune with nothing beyond the cap deletes nothing — `cmd/quarry/run_prune_config_test.go` `Test_run_snapshots_prune_with_nothing_beyond_the_default_cap_deletes_nothing`
+- [x] SCENARIO-02: A snapshots.keep below 1 is refused — delivered by SCENARIO-24 — `cmd/quarry/run_prune_config_test.go` `Test_run_snapshots_prune_refuses_a_snapshots_keep_below_one`
+- [x] SCENARIO-22: prune --dry-run lists what it would delete and deletes nothing — delivered by SCENARIO-24 — `cmd/quarry/run_prune_dryrun_test.go` `Test_run_snapshots_prune_dry_run_lists_what_it_would_delete_and_deletes_nothing`
 - [ ] SCENARIO-28: prune --json reports deleted, would_delete and failed in one shape
 - [ ] SCENARIO-29: sync deletes snapshots beyond the newest 12 and prints a Pruned line
 - [ ] SCENARIO-30: sync honours snapshots.keep from config

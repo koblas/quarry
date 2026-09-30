@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-24
-status: open
+status: done
 ---
 
 # SCENARIO-24: prune with nothing beyond the cap deletes nothing (absorbs SCENARIO-02 config refusal, SCENARIO-22 `--dry-run`)
@@ -31,10 +31,10 @@ Contract: `quarry snapshots prune [--keep n] [--dry-run]`. Order in `RunE`: `loa
 - [x] Step 6: B2 batch 3b — cli. `snapshots_prune.go:22-64`: `--dry-run` `BoolVar` registered after `--keep`, help ``list the snapshots prune would delete without deleting them``; `RunE` calls `PlanPrune` under `--dry-run` else `Prune`, then the same `reportPruned` (:68). `render_prune.go:14-36`: `renderPruned` prints the `Would delete …` block when `WouldDelete` is non-empty (ahead of the Nothing arms), sharing row/total/keep-phrase code with `renderDeleted` (verb is the only difference). Tests: `render_prune_internal_test.go` (Would block, singular `1 snapshot`, keep phrase with the store's snapshot, dry run with nothing selected prints the ordinary Nothing-to-delete line); `snapshots_prune_test.go` help pin (flag line verbatim, `--keep` before `--dry-run`); `run_prune_dryrun_test.go`: `…dry_run_refuses_when_the_store_cannot_be_read` (exit 1, cannot-tell line, stdout empty, all kept), `…dry_run_uses_snapshots_keep` (config `keep = 3`), `…dry_run_refuses_a_bad_config` (C2 with `--dry-run`), `…dry_run_says_nothing_to_delete_within_the_cap` and with no snapshots folder, `…dry_run_names_the_stores_snapshot_when_it_lies_beyond_the_newest_n` (keep phrase, store file kept), `…dry_run_reports_a_folder_it_cannot_read` (0500 folder or `WithRemove` spy via `runPruneRemoving`, `run_prune_refusals_test.go:38`: remover never called), `…dry_run_is_interrupted_before_the_store_read` (cancelled ctx → `snapshots prune interrupted`, exit 1, nothing deleted), bound: 5 snapshots `--keep 5 --dry-run` → Nothing, `--keep 4` → Would delete 1
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `PlanPrune`, `Pruned` fields, `newPruneCommand` (budget: exported ≤4 lines, no history); bump help Long only if it stops matching
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `PlanPrune`, `Pruned` fields, `newPruneCommand` (budget: exported ≤4 lines, no history); bump help Long only if it stops matching
 
 ### Verify
-- [ ] Step 8: full verification per `agent-briefs.md` + `spec-check.py phase2c-snapshots-config`; tick SCENARIO-24, and SCENARIO-02 / SCENARIO-22 with a "delivered by SCENARIO-24" note before each test reference (test ref last on the line); rewrite STATE.md (drop the `--dry-run`/config/prune `Left unbuilt` items, move the "never stats `quicken.path`" edge row to built)
+- [x] Step 8: full verification per `agent-briefs.md` + `spec-check.py phase2c-snapshots-config`; tick SCENARIO-24, and SCENARIO-02 / SCENARIO-22 with a "delivered by SCENARIO-24" note before each test reference (test ref last on the line); rewrite STATE.md (drop the `--dry-run`/config/prune `Left unbuilt` items, move the "never stats `quicken.path`" edge row to built)
 
 ## Handoff
 
@@ -55,14 +55,6 @@ Contract: `quarry snapshots prune [--keep n] [--dry-run]`. Order in `RunE`: `loa
 
 ## Phase report
 
-Run B2 (steps 5-6) done. Commit follows `dc565c7`. `<start>` for V: `9bc846d`.
+Run V (steps 7-8) done. `<start>` 9bc846d. No source edits in V: `go build ./...` ok, `golangci-lint run ./...` 0 issues, full covered suite rc=0, `uncovered-diff.py` 0 uncovered added lines (no `// unreachable:` added), `-race` green on internal/snapshot, internal/cli, cmd/quarry. test-stats: cmd/quarry 226 (+28), internal/cli 155 (+4), internal/snapshot 225 (+16), TOTAL 606 (+48).
 
-Production: `internal/snapshot/prune.go` `Pruned` gains `DryRun`, `WouldDelete`, `StorePath`; new unexported `prunePlan` + `(*Server).planPrune` (the one decision: keep check, ctx, `listFolder`, `markStore`, refusal, `selectPrune`), `PlanPrune` (sets `DryRun`, `WouldDelete`; no remove, no sweep) and `Prune` (deletes and sweeps from the plan). Within the cap the store is read best-effort in both: any non-interrupt `markStore` error (open fault or not) is swallowed, `StorePath` empty; interrupt -> `snapshots prune interrupted`. `internal/cli/snapshots_prune.go` `--dry-run` (`dryRunFlag`), `prune := srv.Prune` swapped to `srv.PlanPrune`; `render_prune.go` `renderSnapshotBlock(verb, entries, p)` replaces `renderDeleted`; `Would delete` arm ahead of `Deleted`.
-
-Tests: `internal/snapshot/prune_dryrun_test.go` (new, 12 funcs), `prune_store_test.go` (SCENARIO-21 zero-read test rewritten: reads-once table, never-blocks table over `storeReadFaults()` + non-open fault, StorePath table, interrupt within cap; `storeFile`/`storeReadFaults` extracted), `internal/cli/render_prune_internal_test.go` (+3), `snapshots_prune_test.go` (help split: examples, `Test_prune_help_shows_each_flag`), `cmd/quarry/run_prune_dryrun_test.go` (+10). Green on arrival: never-blocks Prune tests (guard for mutation "refusal within cap"), `Test_plan_prune_removes_nothing` / `_leaves_orphan_manifests_alone` (vacuous vs the zero stub; proof is mutation a/b), the Nothing-to-delete dry-run render test.
-
-Deviation: cobra sorts flags alphabetically, so help renders `--dry-run` before `--keep n` (the STATE trap "registration order" is not true; no `SortFlags` anywhere). Pinned per-flag with regexes; `--keep` help pin gained a column of padding.
-
-Mutations (each alone, restored, diff clean): (a) PlanPrune deleteSnapshot -> `Test_plan_prune_removes_nothing`, `_leaves_orphan_manifests_alone`, cmd acceptance + 3 dry-run tests; (b) PlanPrune sweepOrphans -> `Test_plan_prune_leaves_orphan_manifests_alone` only; (c) PlanPrune bypasses store read -> 5 plan tests + cmd `dry_run_refuses_when_the_store_cannot_be_read`, `..._names_the_stores_snapshot...`; refusal within cap -> `Test_prune_never_blocks_...` and the PlanPrune twin; cli calls Prune under `--dry-run` -> cmd acceptance + 3.
-
-For V: `golangci-lint` 0 issues, `internal/snapshot` and `internal/cli` green (also -race). Run full verify with `<start>` = 9bc846d. STATE.md: rewrite the SCENARIO-21 entry "count <= keep: store never read" -> best-effort read (StorePath), drop `--dry-run`/config/prune `Left unbuilt`, fix the flag-order trap (alphabetical). Tick SCENARIO-24/02/22.
+Ticked SCENARIO-24, 02, 22 in specification.md; `spec-check.py phase2c-snapshots-config` OK. STATE.md rewritten (70 lines): best-effort within-cap store read, `planPrune`, prune RunE order, alphabetical-flag trap; swallowed non-open-fault probe error within the cap recorded as a final-gate ruling.
