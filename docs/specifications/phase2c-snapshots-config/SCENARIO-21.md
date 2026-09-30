@@ -22,8 +22,8 @@ Decision order (U7): `--keep` bound → ended ctx → folder listing → count �
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_prune_test.go` — the five acceptance tests above plus `runPrune` helper; fixtures from `run_snapshots_test.go:33-98` (`writeSnapshots`, `buildStoreFrom`, `pinLocalZone`), store fault as `run_snapshots_refusals_test.go:168-180`; every test asserts the surviving and deleted `.sqlite`/`.json` files on disk, 26 included; 27 uses `runWith` with `env.NewSnapshots` stubbed (precedent `run_snapshots_refusals_test.go:239-252`) to a Server whose remove fails for the oldest `.sqlite` with `&fs.PathError{Op: "remove", Err: syscall.EACCES}`
-- [ ] Step 2: `internal/snapshot/snapshot.go:26-100` `WithRemove` — signature-only option (remove func, default `os.Remove`) so Step 1 compiles; red = each test fails at its exit-code/stderr assertion (today the parent's `Args`, `snapshots.go:35-41`, refuses `prune` as a positional)
+- [x] Step 1: `cmd/quarry/run_prune_test.go` — the five acceptance tests above plus `runPrune` helper; fixtures from `run_snapshots_test.go:33-98` (`writeSnapshots`, `buildStoreFrom`, `pinLocalZone`), store fault as `run_snapshots_refusals_test.go:168-180`; every test asserts the surviving and deleted `.sqlite`/`.json` files on disk, 26 included; 27 uses `runWith` with `env.NewSnapshots` stubbed (precedent `run_snapshots_refusals_test.go:239-252`) to a Server whose remove fails for the oldest `.sqlite` with `&fs.PathError{Op: "remove", Err: syscall.EACCES}`
+- [x] Step 2: `internal/snapshot/snapshot.go:26-100` `WithRemove` — signature-only option (remove func, default `os.Remove`) so Step 1 compiles; red = each test fails at its exit-code/stderr assertion (today the parent's `Args`, `snapshots.go:35-41`, refuses `prune` as a positional)
 
 ### Build
 - [ ] Step 3: what is protected and what is selected — `internal/snapshot/list.go:168-178` `markStoreSnapshot` (path match after `EvalSymlinks` first, else the entry whose ID is `ID(recorded)`; `StorePath` stays the recorded path) + `internal/snapshot/prune.go` `selectPrune`, `Pruned`, `(*Server).Prune` keep guard; selection over entries in listing order (no sort), protection keyed on `Entry.Store` only. List tests (`list_test.go`): new `Test_list_marks_the_same_id_snapshot_when_the_recorded_path_no_longer_resolves`, `Test_list_prefers_the_path_match_over_the_id_match`; edit `:410-422` `Test_list_marks_nothing_for_a_store_built_from_a_snapshot_outside_the_folder` (its outside file reuses `idMiddle`, so it now marks: re-point to an ID not in the folder, U6b, and add the same-ID arm as marked); `:424-436` `…deleted_by_hand` and `cmd/quarry/run_snapshots_json_test.go:262-293` stay green (their IDs are not in the folder) and are the controls. Prune tests (`prune_test.go`, helpers `list_test.go:24-79,336-351`, `fakeStoreProbe` `sync_and_import_test.go:61-73`): `Test_prune_keeps_exactly_the_newest_n` (N+1 → oldest only, N+2, a `_10`/`_2` pair), `Test_prune_never_deletes_the_stores_snapshot_when_it_is_older_than_the_newest_n` (store at index N → N+1 kept; index N-1 as control), `Test_prune_never_deletes_the_stores_snapshot_recorded_under_a_path_that_no_longer_resolves`, `Test_prune_protects_nothing_without_a_store_or_for_a_store_built_outside_the_folder` (no same-ID file), `Test_prune_deletes_nothing_for_a_keep_below_one` (0, -1; 1 as control)
@@ -61,3 +61,19 @@ Decision order (U7): `--keep` bound → ended ctx → folder listing → count �
 - The ID fallback also fires when the recorded path resolves to a same-ID file outside the folder (a store built `--from` a copy): the folder's one is marked and protected. `list_test.go:410-422` pinned the opposite.
 - A snapshot with no manifest is normal; treating ENOENT on its `.json` as a failure makes every such snapshot "fail".
 - A 0500 snapshots folder lists fine and fails every remove with EACCES: the real-shape fault for cmd tests; one-file faults need `WithRemove`.
+
+## Phase report
+
+Run A (steps 1-2) done; acceptance is red, nothing else touched.
+
+Files:
+- `cmd/quarry/run_prune_test.go` (new): the five acceptance tests; helpers `runPrune`, `fiveSnapshots`, `pruneFixture`, `requireSnapshotsGone`, `requireSnapshotsKept`, `refusingRemove`; consts `storeShown`, `prune*` ids, `keptBytes`. Reuse them in B runs and in `run_prune_refusals_test.go`.
+- `internal/snapshot/snapshot.go` `WithRemove`: signature-only stub (ignores its argument). Step 3/4 must add the `remove` field on `Server` (default `os.Remove`, set in `NewServer`) and make the option assign it.
+
+Red now (`go test ./cmd/quarry/ -run Test_run_snapshots_prune`): all five fail at exit code / stderr, because the parent `snapshots` `Args` treats `prune` as a positional (`quarry: unknown flag: --keep; Run 'quarry snapshots --help' for usage.`, exit 2):
+- deletes_all_but_the_newest_n, keeps_the_stores_snapshot_...: `expected: 0 actual: 2`.
+- refuses_when_the_store_cannot_be_read: `expected: 1 actual: 2`, then stderr.
+- refuses_keep_0_as_a_usage_error: exit 2 already equal; fails at the stderr text.
+- reports_each_snapshot_it_could_not_delete: `expected: 1 actual: 2`, empty stdout, stderr, and the deleted middle snapshot still on disk.
+
+Orchestrator rulings for B runs: Step 3's two edits stay one batch; U6 ID fallback unconditional whenever no folder snapshot matches by path; the `Nothing to delete` forms reuse the one keep phrase (`within the newest one`; `within the newest 12 and <ID>, the store's snapshot`); the orphan sweep also runs on a Nothing-to-delete run, never after a refusal or interrupt.

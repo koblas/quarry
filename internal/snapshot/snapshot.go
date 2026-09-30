@@ -90,6 +90,12 @@ func WithStoreProbe(probe StoreProbe) Option {
 	return func(s *Server) { s.storeProbe = probe }
 }
 
+// WithRemove sets the function that deletes a file in the snapshots
+// directory; it defaults to os.Remove. Tests use it to inject a failing delete.
+func WithRemove(remove func(path string) error) Option {
+	return func(*Server) {}
+}
+
 // NewServer builds a Server from opts.
 func NewServer(opts ...Option) *Server {
 	s := &Server{busyTimeout: DefaultBusyTimeout}
