@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store"
 )
 
 // jsonDateLayout is the format of every calendar date quarry prints, in text and in --json.
-const jsonDateLayout = "2006-01-02"
+const jsonDateLayout = time.DateOnly
 
 // resultDocument is sync's --json stdout shape: the manifest, the store
 // result (nil before an import is attempted), and every warning.

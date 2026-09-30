@@ -46,16 +46,19 @@ type Spending struct {
 // still has a total, so it is not empty.
 func (s Spending) Empty() bool { return len(s.Totals) == 0 }
 
+// spendCommand names spend in its refusals; it equals the cli command word.
+const spendCommand = "spend"
+
 // Spend reads the spending inside req.Window, grouped by req.By, in the accounts req.Accounts
 // name (every account when none). An account it cannot pick is a RefusalError.
 func (s *Server) Spend(ctx context.Context, req SpendRequest) (Spending, error) {
-	accounts, accountIDs, err := s.namedAccounts(ctx, "spend", req.Accounts)
+	accounts, accountIDs, err := s.namedAccounts(ctx, spendCommand, req.Accounts)
 	if err != nil {
 		return Spending{}, err
 	}
 	spending, err := s.store.Spending(ctx, store.SpendingParams{Window: req.Window, By: req.By, AccountIDs: accountIDs})
 	if err != nil {
-		return Spending{}, s.readRefusal(ctx, "spend", err)
+		return Spending{}, s.readRefusal(ctx, spendCommand, err)
 	}
 	result := Spending{
 		Totals:         spending.Totals,

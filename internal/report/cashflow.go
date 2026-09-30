@@ -42,16 +42,19 @@ type CashFlow struct {
 // zero still has a total, so it is not empty.
 func (c CashFlow) Empty() bool { return len(c.Totals) == 0 }
 
+// cashFlowCommand names cashflow in its refusals; it equals the cli command word.
+const cashFlowCommand = "cashflow"
+
 // CashFlow reads the income and spending inside req.Window, per req.By period, in the
 // accounts req.Accounts name (every account when none). An account it cannot pick is a RefusalError.
 func (s *Server) CashFlow(ctx context.Context, req CashFlowRequest) (CashFlow, error) {
-	accounts, accountIDs, err := s.namedAccounts(ctx, "cashflow", req.Accounts)
+	accounts, accountIDs, err := s.namedAccounts(ctx, cashFlowCommand, req.Accounts)
 	if err != nil {
 		return CashFlow{}, err
 	}
 	flow, err := s.store.CashFlow(ctx, store.CashFlowParams{Window: req.Window, By: req.By, AccountIDs: accountIDs})
 	if err != nil {
-		return CashFlow{}, s.readRefusal(ctx, "cashflow", err)
+		return CashFlow{}, s.readRefusal(ctx, cashFlowCommand, err)
 	}
 	return CashFlow{
 		Rows:         fillSeries(cashFlowSeries(req), currencyList(flow.Totals, cashFlowTotalCurrency), flow.Rows, cashFlowRowPeriod, blankCashFlowRow, wrapCashFlowRow),
