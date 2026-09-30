@@ -24,7 +24,7 @@ Scenarios complete: SCENARIO-01..15 (02, 03 delivered by 01; 05 by 04; 07 by 06;
 - `sync --json` `store.findings` is `{open, ignored, fixed, new, newly_fixed}` ints, null iff `Built` false; 19's `status --json` needs `ignored: null`, so it must not reuse `findingsDocument` as is (SCENARIO-04)
 
 - `config.Config.Ignore []string` is `findings.ignore` as written: file order, duplicates, `""` and unknown prefixes kept, nil when unset (whole-struct `assert.Equal` tests break on a non-nil empty slice); 16 fills `FindingsRequest.Ignore` from it, 17's W1 needs every element. Validation order: `snapshots.keep`, `quicken.path`, `findings.ignore`, unknown keys; first refusal wins (SCENARIO-15)
-- `internal/config/items.go` `arrayItems` splits `entry.value` text only to find C6e's item index and raw text (first non-string item, from 1); values come from the decoded tree. Comments skipped, nesting/multi-line strings honoured (SCENARIO-15)
+- `config` `ignore()` decides the first non-string item from the DECODED tree; `items.go` `arrayItems` splits `entry.value` only to spell it (`itemText`: raw text, or the decoded value when counts disagree, so a splitter fault degrades the copy, never accepts a bad item). Its `stringEnd` `min(..., len(s))` guards pin no-panic on unclosed strings (SCENARIO-15)
 
 ## Left unbuilt
 - `J ignored` Findings-line clause and `Counts.Ignored` (stays 0 from `duckstore`; 16 sets it via a `snapshot` option) — 16

@@ -220,18 +220,26 @@ func (d document) ignore() ([]string, error) {
 	if !isList || !isWritten {
 		return nil, d.badValue(ignoreSetting.String()+" must be a list of finding ids in quotes, such as "+ignoreExample, d.got(ignoreSetting.key()))
 	}
-	for i, item := range arrayItems(written.value) {
-		if !strings.HasPrefix(item, `"`) && !strings.HasPrefix(item, "'") {
-			return nil, d.badValue(ignoreSetting.String()+" must hold only finding ids in quotes", strings.Join(strings.Fields(item), " ")+" as item "+strconv.Itoa(i+1))
-		}
-	}
 	var ids []string
-	for _, item := range items {
-		id, _ := item.(string) // every item is a string: arrayItems found no other
+	for i, item := range items {
+		id, isString := item.(string)
+		if !isString {
+			return nil, d.badValue(ignoreSetting.String()+" must hold only finding ids in quotes", itemText(arrayItems(written.value), items, i)+" as item "+strconv.Itoa(i+1))
+		}
 		ids = append(ids, id)
 	}
 
 	return ids, nil
+}
+
+// itemText is items[i] as the file wrote it, collapsed to one line, from the split text
+// raw; when raw and the decoded items disagree in count it is the decoded value.
+func itemText(raw []string, items []any, i int) string {
+	if len(raw) != len(items) {
+		return fmt.Sprint(items[i])
+	}
+
+	return strings.Join(strings.Fields(raw[i]), " ")
 }
 
 // written is the key-value entry at key, which a header or dotted keys never make.

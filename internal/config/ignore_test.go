@@ -18,6 +18,7 @@ func Test_load_reads_findings_ignore_in_file_order_keeping_duplicates_and_empty_
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"b", "a", "", "b", "duplicate:txn-1+txn-2", "lit:x"}, cfg.Ignore)
+	assert.Empty(t, cfg.Warnings)
 }
 
 func Test_load_leaves_findings_ignore_empty_when_unset_or_an_empty_list(t *testing.T) {
@@ -89,6 +90,7 @@ func Test_load_refuses_a_findings_ignore_that_is_not_a_list(t *testing.T) {
 		{name: "table header", content: "[findings.ignore]\nx = 1\n", got: "a table"},
 		{name: "dotted keys", content: "findings.ignore.x = 1\n", got: "a table"},
 		{name: "list of tables header", content: "[[findings.ignore]]\nx = 1\n", got: "a list of tables"},
+		{name: "string inside an inline table", content: "findings = { ignore = \"x\" }\n", got: `"x"`},
 	}
 
 	for _, c := range cases {
@@ -138,6 +140,23 @@ func Test_load_refuses_a_findings_ignore_item_that_is_not_a_string(t *testing.T)
 		{name: "comment lines do not shift the index", content: "findings.ignore = [\n  # one\n  \"a\",\n  # two\n  \"b\", # three\n  7,\n]\n", got: "7 as item 3"},
 		{name: "trailing comma", content: "findings.ignore = [\"a\", 9,]\n", got: "9 as item 2"},
 		{name: "inline array of tables", content: "findings.ignore = [{ a = 1 }]\n", got: "{ a = 1 } as item 1"},
+		{name: "comma inside a basic string", content: `findings.ignore = ["a,b", 12]` + "\n", got: "12 as item 2"},
+		{name: "bracket inside a literal string", content: `findings.ignore = ['c]d', 12]` + "\n", got: "12 as item 2"},
+		{name: "hash inside a basic string", content: `findings.ignore = ["#g", 12]` + "\n", got: "12 as item 2"},
+		{name: "escaped quote inside a basic string", content: `findings.ignore = ["e\"f,", 12]` + "\n", got: "12 as item 2"},
+		{name: "backslash ends a literal string", content: `findings.ignore = ['C:\', 12]` + "\n", got: "12 as item 2"},
+		{name: "comma inside a multi-line basic string", content: "findings.ignore = [\"\"\"h,\ni\"\"\", 12]\n", got: "12 as item 2"},
+		{name: "quote and comma inside a multi-line literal string", content: "findings.ignore = ['''j,'k''', 12]\n", got: "12 as item 2"},
+		{name: "multi-line basic string ending in a quote", content: "findings.ignore = [\"\"\"n\"\"\"\", 12]\n", got: "12 as item 2"},
+		{name: "escaped quotes inside a multi-line basic string", content: "findings.ignore = [\"\"\"l\\\"\"\"m\"\"\", 12]\n", got: "12 as item 2"},
+		{name: "backslash ends a multi-line literal string", content: `findings.ignore = ['''C:\''', 12]` + "\n", got: "12 as item 2"},
+		{name: "bracket inside a string in a nested list", content: `findings.ignore = ["a", ["]", 1], 12]` + "\n", got: `["]", 1] as item 2`},
+		{name: "comma inside a nested list", content: `findings.ignore = ["a", [1, 2], 12]` + "\n", got: "[1, 2] as item 2"},
+		{name: "brace inside a string in an inline table", content: `findings.ignore = ["a", {x = "}"}, 12]` + "\n", got: `{x = "}"} as item 2`},
+		{name: "comma inside an inline table", content: `findings.ignore = ["a", {x = 1, y = 2}]` + "\n", got: "{x = 1, y = 2} as item 2"},
+		{name: "comment after the closing bracket", content: `findings.ignore = ["a", 1] # ]` + "\n", got: "1 as item 2"},
+		{name: "CRLF line endings", content: "findings.ignore = [\r\n \"a\",\r\n 12\r\n]\r\n", got: "12 as item 2"},
+		{name: "list inside an inline table", content: `findings = { ignore = ["a", 1] }` + "\n", got: "1 as item 2"},
 	}
 
 	for _, c := range cases {
@@ -145,6 +164,34 @@ func Test_load_refuses_a_findings_ignore_item_that_is_not_a_string(t *testing.T)
 			got := refusal(t, c.content)
 
 			assert.Equal(t, shownPath+": "+ignoreOnly+c.got+fixLine, got)
+		})
+	}
+}
+
+// The bad item is a list, whose text differs from its decoded form, so a split that loses
+// its place cannot pass by showing the decoded value.
+func Test_load_spells_a_bad_item_as_written_after_a_string_holding_delimiters(t *testing.T) {
+	cases := []struct {
+		name  string
+		first string
+	}{
+		{name: "comma inside a basic string", first: `"a,b"`},
+		{name: "bracket inside a literal string", first: `'c]d'`},
+		{name: "hash inside a basic string", first: `"#g"`},
+		{name: "escaped quote inside a basic string", first: `"e\"f,"`},
+		{name: "backslash ends a literal string", first: `'C:\'`},
+		{name: "comma inside a multi-line basic string", first: "\"\"\"h,\ni\"\"\""},
+		{name: "quote and comma inside a multi-line literal string", first: `'''j,'k'''`},
+		{name: "multi-line basic string ending in a quote", first: `"""n""""`},
+		{name: "escaped quotes inside a multi-line basic string", first: `"""l\"""m"""`},
+		{name: "backslash ends a multi-line literal string", first: `'''C:\'''`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := refusal(t, "findings.ignore = ["+c.first+", [1, 2]]\n")
+
+			assert.Equal(t, shownPath+": "+ignoreOnly+"[1, 2] as item 2"+fixLine, got)
 		})
 	}
 }

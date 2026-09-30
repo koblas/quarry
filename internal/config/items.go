@@ -2,9 +2,8 @@ package config
 
 import "strings"
 
-// arrayItems splits the text of a TOML array, brackets included, into its items as
-// written, comments dropped. A bracket, quote or comma inside a string or a nested
-// container does not split.
+// arrayItems splits a TOML array's text, brackets included, into its items as
+// written, comments dropped.
 func arrayItems(text string) []string {
 	body := text[1 : len(text)-1]
 	var items []string
@@ -49,7 +48,8 @@ func arrayItems(text string) []string {
 	return items
 }
 
-// stringEnd is the offset just past the TOML string that opens at s[start].
+// stringEnd is the offset just past the TOML string that opens at s[start], or len(s)
+// when it never closes, so a splitter fault cannot slice past the text.
 func stringEnd(s string, start int) int {
 	quote := s[start]
 	triple := strings.Repeat(string(quote), 3)
