@@ -594,8 +594,8 @@ Ruled: the finding core (type list and order, id grammar, P2d-3 status function,
 - [x] SCENARIO-16: an id listed in findings.ignore is ignored — `cmd/quarry/run_findings_ignore_test.go` `Test_run_findings_leaves_an_ignored_id_off_the_list_and_counts_it_in_the_footer`
 - [x] SCENARIO-17: an ignored id that is not a finding warns — delivered by SCENARIO-16 — `cmd/quarry/run_findings_ignore_test.go` `Test_run_findings_warns_about_an_ignored_id_that_is_not_a_finding`
 - [x] SCENARIO-18: findings filters by status and type — `cmd/quarry/run_findings_filters_test.go` `Test_run_findings_status_all_type_duplicate_marks_ignored_shows_fixed_as_a_date_line_and_counts_duplicates_only`
-- [ ] SCENARIO-19: status shows the open findings count
-- [ ] SCENARIO-20: status warns on a bad config and still reports
+- [x] SCENARIO-19: status shows the open findings count — `cmd/quarry/run_status_findings_test.go` `Test_run_status_shows_the_findings_line_with_open_and_ignored_counts`
+- [x] SCENARIO-20: status warns on a bad config and still reports — delivered by SCENARIO-19 — `cmd/quarry/run_status_findings_test.go` `Test_run_status_warns_on_a_bad_config_and_still_reports`
 - [ ] SCENARIO-21: sql --csv prints every row with a header
 - [ ] SCENARIO-22: findings --csv prints one row per item
 - [ ] SCENARIO-23: findings rejects usage it cannot use

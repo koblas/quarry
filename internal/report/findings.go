@@ -57,21 +57,11 @@ func (s *Server) Findings(ctx context.Context, req FindingsRequest) (FindingsLis
 	}
 	want := cmp.Or(req.Status, finding.StatusOpen)
 
-	known := map[finding.Type]bool{}
-	for _, typ := range finding.Types() {
-		known[typ] = true
-	}
-	var stored []store.Finding
-	var states, typeStates []finding.State
-	for _, f := range list.Findings {
-		if !known[f.Type] {
-			continue
-		}
-		state := finding.State{ID: f.ID, Fixed: f.FixedAt != nil, New: f.New, NewlyFixed: f.NewlyFixed}
-		stored = append(stored, f)
-		states = append(states, state)
+	stored, states := knownFindings(list)
+	var typeStates []finding.State
+	for i, f := range stored {
 		if req.Type == "" || f.Type == req.Type {
-			typeStates = append(typeStates, state)
+			typeStates = append(typeStates, states[i])
 		}
 	}
 	// Unmatched ids are judged against every known finding, so a --type filter never hides one.
@@ -95,6 +85,35 @@ func (s *Server) Findings(ctx context.Context, req FindingsRequest) (FindingsLis
 		groups = append(groups, FindingsGroup{Type: typ, Findings: selected[typ]})
 	}
 	return FindingsListing{Groups: groups, Counts: counts, Unmatched: classified.Unmatched}, nil
+}
+
+// FindingCounts tallies every finding of a known type by status: an id in ignore is ignored unless
+// fixed. It refuses like Status.
+func (s *Server) FindingCounts(ctx context.Context, ignore []string) (finding.Counts, error) {
+	list, err := s.store.Findings(ctx)
+	if err != nil {
+		return finding.Counts{}, s.readRefusal(ctx, statusCommand, err)
+	}
+	_, states := knownFindings(list)
+	return finding.Classify(states, ignore).Counts, nil
+}
+
+// knownFindings is the findings of list whose type this binary knows, with each one's finding.State
+// at the same index; rows of any other type are neither listed nor counted.
+func knownFindings(list store.FindingList) ([]store.Finding, []finding.State) {
+	known := map[finding.Type]bool{}
+	for _, typ := range finding.Types() {
+		known[typ] = true
+	}
+	var stored []store.Finding
+	var states []finding.State
+	for _, f := range list.Findings {
+		if known[f.Type] {
+			stored = append(stored, f)
+			states = append(states, finding.State{ID: f.ID, Fixed: f.FixedAt != nil, New: f.New, NewlyFixed: f.NewlyFixed})
+		}
+	}
+	return stored, states
 }
 
 // listedOrder is the display order within a group: open, ignored, then fixed; open and ignored
@@ -123,9 +142,8 @@ func statusRank(s finding.Status) int {
 	return 0
 }
 
-// findingOrder is the display order of the open and ignored findings of typ (fixed ones sort apart):
-// duplicate and one-sided by latest item date descending, uncategorized by item count descending
-// then payee; ties and other types by id.
+// findingOrder is the display order of the open and ignored findings of typ: duplicate and one-sided
+// by latest item date descending, uncategorized by item count then payee, all else by id.
 func findingOrder(typ finding.Type) func(a, b store.Finding) int {
 	switch typ { //nolint:exhaustive // every other type sorts by id
 	case finding.Duplicate, finding.OneSidedTransfer:

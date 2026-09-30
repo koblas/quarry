@@ -3,9 +3,11 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 )
@@ -75,6 +77,10 @@ func statusFixture() store.Status {
 	}
 }
 
+func findingsFixture() statusFindings {
+	return statusFindings{counts: finding.Counts{Open: 12, Ignored: 4}, ignoreKnown: true}
+}
+
 func Test_renderStatus(t *testing.T) {
 	useZone(t, time.FixedZone("EDT", -4*60*60))
 	home := "/Users/dave"
@@ -88,9 +94,10 @@ func Test_renderStatus(t *testing.T) {
 			"Rows      18,204 transactions, 21,977 splits, 3,141 transfers, 1,873 payees, 312 categories, 14 tags; 1,605 investment transactions not imported\n" +
 			"Balances  35 accounts match Quicken's last reconciled balance; 3 never reconciled and 4 investment accounts not checked\n" +
 			"Splits    all 18,204 transactions equal the sum of their splits\n" +
-			"Transfers 3,112 paired, 29 one-sided\n"
+			"Transfers 3,112 paired, 29 one-sided\n" +
+			"Findings  12 open, 4 ignored; run quarry findings to list them\n"
 
-		assert.Equal(t, want, renderStatus(statusFixture(), home, now))
+		assert.Equal(t, want, renderStatus(statusFixture(), findingsFixture(), home, now))
 	})
 
 	t.Run("no transactions", func(t *testing.T) {
@@ -98,7 +105,7 @@ func Test_renderStatus(t *testing.T) {
 		st.FirstDate, st.LastDate = time.Time{}, time.Time{}
 		st.Run.Counts = store.Counts{}
 
-		got := renderStatus(st, home, now)
+		got := renderStatus(st, findingsFixture(), home, now)
 
 		assert.Contains(t, got, "Dates     no transactions\n")
 		assert.Contains(t, got, "Splits    no transactions to check\n")
@@ -108,21 +115,21 @@ func Test_renderStatus(t *testing.T) {
 		st := statusFixture()
 		st.Run.TransfersOneSided = 0
 
-		assert.Contains(t, renderStatus(st, home, now), "Transfers 3,112 paired\n")
+		assert.Contains(t, renderStatus(st, findingsFixture(), home, now), "Transfers 3,112 paired\n")
 	})
 
 	t.Run("no transfers at all", func(t *testing.T) {
 		st := statusFixture()
 		st.Run.TransfersPaired, st.Run.TransfersOneSided = 0, 0
 
-		assert.Contains(t, renderStatus(st, home, now), "Transfers none\n")
+		assert.Contains(t, renderStatus(st, findingsFixture(), home, now), "Transfers none\n")
 	})
 
 	t.Run("snapshot time not recorded", func(t *testing.T) {
 		st := statusFixture()
 		st.Run.Snapshot.TakenAt = time.Time{}
 
-		got := renderStatus(st, home, now)
+		got := renderStatus(st, findingsFixture(), home, now)
 
 		assert.Contains(t, got, "Snapshot  20260927T143005Z, time taken not recorded in its manifest\n")
 	})
@@ -131,7 +138,7 @@ func Test_renderStatus(t *testing.T) {
 		st := statusFixture()
 		st.Run.Snapshot.Source = ""
 
-		got := renderStatus(st, home, now)
+		got := renderStatus(st, findingsFixture(), home, now)
 
 		assert.Contains(t, got, "Source    not recorded in the snapshot's manifest\n")
 	})
@@ -140,12 +147,51 @@ func Test_renderStatus(t *testing.T) {
 		st := statusFixture()
 		st.Run.Snapshot.Source = " "
 
-		assert.Contains(t, renderStatus(st, home, now), "Source     \n")
+		assert.Contains(t, renderStatus(st, findingsFixture(), home, now), "Source     \n")
 	})
 
 	t.Run("a store dated west of UTC keeps its calendar days", func(t *testing.T) {
 		useZone(t, time.FixedZone("PST", -8*60*60))
 
-		assert.Contains(t, renderStatus(statusFixture(), home, now), "Dates     2003-01-04 to 2026-09-26\n")
+		assert.Contains(t, renderStatus(statusFixture(), findingsFixture(), home, now), "Dates     2003-01-04 to 2026-09-26\n")
+	})
+
+	t.Run("findings row forms", func(t *testing.T) {
+		cases := []struct {
+			name     string
+			findings statusFindings
+			want     string
+		}{
+			{
+				name: "open and ignored", findings: statusFindings{counts: finding.Counts{Open: 12, Ignored: 4}, ignoreKnown: true},
+				want: "Findings  12 open, 4 ignored; run quarry findings to list them\n",
+			},
+			{
+				name: "none open", findings: statusFindings{ignoreKnown: true},
+				want: "Findings  none open\n",
+			},
+			{
+				name: "none open, some ignored", findings: statusFindings{counts: finding.Counts{Ignored: 4}, ignoreKnown: true},
+				want: "Findings  none open, 4 ignored\n",
+			},
+			{
+				name: "counts are thousands-grouped", findings: statusFindings{counts: finding.Counts{Open: 1234}, ignoreKnown: true},
+				want: "Findings  1,234 open; run quarry findings to list them\n",
+			},
+			{
+				name: "new and newly fixed findings add no clause", findings: statusFindings{counts: finding.Counts{Open: 3, New: 3, NewlyFixed: 2}, ignoreKnown: true},
+				want: "Findings  3 open; run quarry findings to list them\n",
+			},
+			{
+				name: "an unreadable ignore list drops the ignored clause", findings: statusFindings{counts: finding.Counts{Open: 4, Ignored: 1}},
+				want: "Findings  4 open; run quarry findings to list them\n",
+			},
+		}
+
+		for _, c := range cases {
+			t.Run(c.name, func(t *testing.T) {
+				assert.True(t, strings.HasSuffix(renderStatus(statusFixture(), c.findings, home, now), c.want))
+			})
+		}
 	})
 }

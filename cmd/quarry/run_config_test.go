@@ -212,7 +212,6 @@ func Test_run_read_commands_ignore_a_malformed_config(t *testing.T) {
 		spendSplit{id: "s02", account: "acct-chq", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -12000},
 	))
 	commands := map[string][]string{
-		"status":   {"status"},
 		"accounts": {"accounts"},
 		"spend":    {"spend", "--since", "2026-01", "--until", "2026-09"},
 		"cashflow": {"cashflow", "--since", "2026-01", "--until", "2026-09"},

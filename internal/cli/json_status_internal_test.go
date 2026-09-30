@@ -3,9 +3,11 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -52,12 +54,23 @@ const fullStatusJSON = `{
     "cross_currency": 41,
     "one_sided": 29
   },
+  "findings": {
+    "open": 12,
+    "ignored": 4,
+    "fixed": 7,
+    "new": 2,
+    "newly_fixed": 1
+  },
   "not_imported": {
     "investment_transactions": 1605
   },
   "warnings": []
 }
 `
+
+func jsonFindingsFixture() statusFindings {
+	return statusFindings{counts: finding.Counts{Open: 12, Ignored: 4, Fixed: 7, New: 2, NewlyFixed: 1}, ignoreKnown: true}
+}
 
 func Test_renderStatusJSON(t *testing.T) {
 	newStatus := func() store.Status {
@@ -70,11 +83,15 @@ func Test_renderStatusJSON(t *testing.T) {
 		st.Run.TransfersCrossCurrency = 41
 		return st
 	}
-	render := func(t *testing.T, st store.Status) string {
+	renderWith := func(t *testing.T, st store.Status, findings statusFindings, warnings []string) string {
 		t.Helper()
-		out, err := renderStatusJSON(st)
+		out, err := renderStatusJSON(st, findings, warnings)
 		require.NoError(t, err)
 		return string(out)
+	}
+	render := func(t *testing.T, st store.Status) string {
+		t.Helper()
+		return renderWith(t, st, jsonFindingsFixture(), nil)
 	}
 
 	t.Run("full document", func(t *testing.T) {
@@ -125,5 +142,20 @@ func Test_renderStatusJSON(t *testing.T) {
 
 		assert.Contains(t, got, "\"taken_at\": \"2026-09-27T14:30:05Z\",\n")
 		assert.Contains(t, got, "\"first\": \"2003-01-04\",\n")
+	})
+
+	t.Run("an unreadable ignore list makes ignored null and keeps the other counts", func(t *testing.T) {
+		findings := jsonFindingsFixture()
+		findings.ignoreKnown = false
+
+		got := renderWith(t, newStatus(), findings, nil)
+
+		assert.Contains(t, got, "\"findings\": {\n    \"open\": 12,\n    \"ignored\": null,\n    \"fixed\": 7,\n    \"new\": 2,\n    \"newly_fixed\": 1\n  },\n")
+	})
+
+	t.Run("warnings are listed as given", func(t *testing.T) {
+		got := renderWith(t, newStatus(), jsonFindingsFixture(), []string{"cannot tell which findings you ignored: x"})
+
+		assert.True(t, strings.HasSuffix(got, "\"warnings\": [\n    \"cannot tell which findings you ignored: x\"\n  ]\n}\n"))
 	})
 }

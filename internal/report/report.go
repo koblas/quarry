@@ -43,6 +43,9 @@ func NewServer(opts ...Option) *Server {
 // Home returns the home directory output abbreviates paths against.
 func (s *Server) Home() string { return s.home }
 
+// statusCommand names status in its refusals; it equals the cli command word.
+const statusCommand = "status"
+
 // Status describes the store: its origin snapshot, contents and the checks
 // sync ran when it built them. It refuses with a RefusalError when
 // interrupted or when the store cannot be opened; other store errors are
@@ -50,7 +53,7 @@ func (s *Server) Home() string { return s.home }
 func (s *Server) Status(ctx context.Context) (store.Status, error) {
 	st, err := s.store.Status(ctx)
 	if err != nil {
-		return store.Status{}, s.readRefusal(ctx, "status", err)
+		return store.Status{}, s.readRefusal(ctx, statusCommand, err)
 	}
 	return st, nil
 }

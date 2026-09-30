@@ -15,6 +15,7 @@ type statusDocument struct {
 	Balances    statusBalancesDocument  `json:"balances"`
 	Splits      statusSplitsDocument    `json:"splits"`
 	Transfers   statusTransfersDocument `json:"transfers"`
+	Findings    statusFindingsDocument  `json:"findings"`
 	NotImported notImportedDocument     `json:"not_imported"`
 	Warnings    []string                `json:"warnings"`
 }
@@ -66,15 +67,25 @@ type statusTransfersDocument struct {
 	OneSided      int `json:"one_sided"`
 }
 
-// renderStatusJSON renders st as status's --json document, encoded like
-// sync's: 2-space indent, trailing newline.
-func renderStatusJSON(st store.Status) ([]byte, error) {
-	return marshalDocument(newStatusDocument(st))
+// statusFindingsDocument is the --json "findings" object; Ignored is null when findings.ignore
+// could not be read.
+type statusFindingsDocument struct {
+	Open       int  `json:"open"`
+	Ignored    *int `json:"ignored"`
+	Fixed      int  `json:"fixed"`
+	New        int  `json:"new"`
+	NewlyFixed int  `json:"newly_fixed"`
+}
+
+// renderStatusJSON renders st, its findings tally and warnings as status's --json document,
+// encoded like sync's: 2-space indent, trailing newline.
+func renderStatusJSON(st store.Status, findings statusFindings, warnings []string) ([]byte, error) {
+	return marshalDocument(newStatusDocument(st, findings, warnings))
 }
 
 // newStatusDocument converts st into the --json shape. Paths stay absolute,
-// times are UTC RFC 3339, and dates are calendar days as stored.
-func newStatusDocument(st store.Status) statusDocument {
+// times are UTC RFC 3339, and dates are calendar days as stored. warnings is never null.
+func newStatusDocument(st store.Status, findings statusFindings, warnings []string) statusDocument {
 	run := st.Run
 	return statusDocument{
 		Store: statusStoreDocument{
@@ -103,9 +114,20 @@ func newStatusDocument(st store.Status) statusDocument {
 			CrossCurrency: run.TransfersCrossCurrency,
 			OneSided:      run.TransfersOneSided,
 		},
+		Findings:    newStatusFindingsDocument(findings),
 		NotImported: notImportedDocument{InvestmentTransactions: run.InvestmentTransactionsNotImported},
-		Warnings:    []string{},
+		Warnings:    append([]string{}, warnings...),
 	}
+}
+
+// newStatusFindingsDocument converts f into the --json shape.
+func newStatusFindingsDocument(f statusFindings) statusFindingsDocument {
+	c := f.counts
+	doc := statusFindingsDocument{Open: c.Open, Fixed: c.Fixed, New: c.New, NewlyFixed: c.NewlyFixed}
+	if f.ignoreKnown {
+		doc.Ignored = &c.Ignored
+	}
+	return doc
 }
 
 // jsonTimestamp formats t as RFC 3339 in UTC.

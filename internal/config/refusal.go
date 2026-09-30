@@ -1,7 +1,13 @@
 package config
 
+import "strings"
+
 // fixIt ends every refusal: the file is the interface, so the fix is an edit.
 const fixIt = "; fix the file and run the command again"
+
+// Problem is err's text without the closing instruction to fix the file, for a caller that words
+// its own next step; an error that does not end with it is returned as text unchanged.
+func Problem(err error) string { return strings.TrimSuffix(err.Error(), fixIt) }
 
 // refusalError is a config refusal: its text is the complete line for the
 // user, without the "quarry: " lead the command adds.
