@@ -389,3 +389,18 @@ func Test_run_refuses_when_a_discovery_location_is_unreadable(t *testing.T) {
 		})
 	}
 }
+
+func Test_run_sync_names_quicken_path_when_the_only_discovered_bundle_is_not_a_bundle(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "Empty.quicken"), 0o700))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: ~/Documents/Empty.quicken is not a Quicken for Mac file "+
+		"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path> "+
+		"or set quicken.path in ~/Library/Application Support/quarry/config.toml\n", stderr.String())
+}

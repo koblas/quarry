@@ -2,10 +2,13 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
 	toml "github.com/pelletier/go-toml/v2"
@@ -244,8 +247,50 @@ func (d document) unknownKeys() []string {
 			continue
 		}
 		reported = append(reported, e.key)
-		warnings = append(warnings, d.shown+": unknown key "+strings.Join(e.key, ".")+"; quarry ignores it")
+		warnings = append(warnings, d.shown+": unknown key "+keyText(e.key)+"; quarry ignores it")
 	}
 
 	return warnings
+}
+
+// bareKey matches a key part TOML allows unquoted.
+var bareKey = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// keyText writes key as TOML would: a part that is not bare is a basic string, so a dot,
+// quote, newline or empty name inside one part stays visible and on one line.
+func keyText(key []string) string {
+	parts := make([]string, len(key))
+	for i, part := range key {
+		parts[i] = keyPartText(part)
+	}
+
+	return strings.Join(parts, ".")
+}
+
+// keyPartText is part bare when TOML allows it, else a basic string with control characters escaped.
+func keyPartText(part string) string {
+	if bareKey.MatchString(part) {
+		return part
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range part {
+		switch {
+		case r == '"':
+			b.WriteString(`\"`)
+		case r == '\\':
+			b.WriteString(`\\`)
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\t':
+			b.WriteString(`\t`)
+		case unicode.IsControl(r):
+			fmt.Fprintf(&b, `\u%04X`, r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+
+	return b.String()
 }

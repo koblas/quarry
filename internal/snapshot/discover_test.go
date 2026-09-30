@@ -213,7 +213,8 @@ func Test_DiscoverBundle_refuses_when_the_only_match_has_no_data_file(t *testing
 	var re snapshot.RefusalError
 	require.ErrorAs(t, err, &re)
 	assert.Equal(t, "~/Documents/Home.quicken is not a Quicken for Mac file "+
-		"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path>",
+		"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path> "+
+		"or set quicken.path in ~/Library/Application Support/quarry/config.toml",
 		re.Error())
 }
 

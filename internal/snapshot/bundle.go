@@ -83,6 +83,16 @@ var configuredRefusals = originRefusals{
 	},
 }
 
+// discoveredRefusals are for the sole bundle discovery found: no flag was given and no path configured, so either remedy applies.
+var discoveredRefusals = originRefusals{
+	notExist: func(home, abs string) error {
+		return RefusalError{msg: homepath.Abbreviate(home, abs) + " does not exist; pass one with --quicken <path> or set quicken.path in " + configFileShown}
+	},
+	notABundle: func(home, abs string) error {
+		return RefusalError{msg: homepath.Abbreviate(home, abs) + notABundleText + "pass the .quicken bundle with --quicken <path> or set quicken.path in " + configFileShown}
+	},
+}
+
 // resolveBundlePath is ResolveBundlePath with the refusals of path's origin.
 func resolveBundlePath(home, path string, origin originRefusals) (string, error) {
 	abs, err := filepath.Abs(homepath.Expand(home, path))

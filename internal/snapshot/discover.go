@@ -44,7 +44,7 @@ func DiscoverBundle(home string) (string, error) {
 	case 0:
 		return "", noBundleFoundRefusal()
 	case 1:
-		return ResolveBundlePath(home, candidates[0].path)
+		return resolveBundlePath(home, candidates[0].path, discoveredRefusals)
 	default:
 		return "", multipleQuickenBundlesRefusal(home, candidates)
 	}

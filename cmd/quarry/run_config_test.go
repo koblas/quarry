@@ -302,3 +302,38 @@ func Test_run_sync_json_lists_the_history_warning_after_config_and_transfer_warn
 		"cannot carry import history forward from the previous store (the file is not a DuckDB database); import_runs starts again with this sync",
 	}, doc.Warnings)
 }
+
+func Test_run_sync_quotes_an_unknown_config_key_that_is_not_a_bare_key(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeStatusFixtureBundle(t, home)
+	writeConfig(t, home, "\"snapshots.keep\" = 5\n")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Equal(t, "quarry: warning: "+configShown+": unknown key \"snapshots.keep\"; quarry ignores it\n"+
+		"quarry: warning: 1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer\n",
+		stderr.String())
+}
+
+func Test_run_sync_json_lists_a_quoted_unknown_config_key_without_the_prefix(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeStatusFixtureBundle(t, home)
+	writeConfig(t, home, "\"a\\nb\" = 1\n")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--json"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	var doc struct {
+		Warnings []string `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	assert.Equal(t, []string{
+		configShown + ": unknown key \"a\\nb\"; quarry ignores it",
+		"1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer",
+	}, doc.Warnings)
+}

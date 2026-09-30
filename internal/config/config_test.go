@@ -126,7 +126,7 @@ func Test_load_refuses_malformed_toml_naming_the_line(t *testing.T) {
 		{name: "value missing on line 3", content: "# c\na = 1\nb = \n", want: "line 3: unexpected character U+000A at start of value"},
 		{name: "duplicate key", content: "a = 1\na = 2\n", want: "line 2: key a is already defined"},
 		{name: "invalid UTF-8", content: "a = \"\xff\"\n", want: "line 1: invalid UTF-8 character in basic string"},
-		{name: "byte order mark", content: "\ufeffa = 1\n", want: "line 1: invalid character at start of key: U+00EF 'ï'"},
+		{name: "a second byte order mark", content: "\ufeff\ufeffa = 1\n", want: "line 1: invalid character at start of key: U+00EF 'ï'"},
 		{name: "integer too large", content: "[snapshots]\nkeep = 99999999999999999999\n", want: "line 2: decimal number is too large to fit in a 64-bit signed integer"},
 	}
 
@@ -474,4 +474,62 @@ func Test_load_checks_a_plain_snapshots_value_before_quicken_path(t *testing.T) 
 	got := refusal(t, "quicken.path = 12\nsnapshots = 3\n")
 
 	assert.Equal(t, shownPath+": snapshots must be a table, such as snapshots.keep = 12, got 3"+fixLine, got)
+}
+
+func Test_load_names_an_unknown_key_as_toml_would_write_it(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{name: "a bare key stays bare", content: "snapshot.keep = 5\n", want: "snapshot.keep"},
+		{name: "letter case is kept", content: "Snapshots.Keep = 5\n", want: "Snapshots.Keep"},
+		{name: "digits, underscore and dash are bare", content: "a_1-b = 1\n", want: "a_1-b"},
+		{name: "a dot inside one part is quoted", content: "\"snapshots.keep\" = 5\n", want: `"snapshots.keep"`},
+		{name: "an empty part is quoted", content: "\"\" = 5\n", want: `""`},
+		{name: "a space is quoted", content: "\"a b\" = 1\n", want: `"a b"`},
+		{name: "a non-ASCII letter is quoted", content: "\"café\" = 1\n", want: "\"café\""},
+		{name: "a quote is escaped", content: "\"a\\\"b\" = 1\n", want: `"a\"b"`},
+		{name: "a backslash is escaped", content: "\"a\\\\b\" = 1\n", want: `"a\\b"`},
+		{name: "a newline is written as backslash n", content: "\"a\\nb\" = 1\n", want: `"a\nb"`},
+		{name: "a tab is written as backslash t", content: "\"a\\tb\" = 1\n", want: `"a\tb"`},
+		{name: "another control character is a four-digit escape", content: "\"a\\u0001b\" = 1\n", want: `"a\u0001b"`},
+		{name: "only the part that needs quotes is quoted", content: "foo.\"x.y\" = 1\n", want: `foo."x.y"`},
+		{name: "a quoted key under a known table", content: "[snapshots]\n\"x.y\" = 1\n", want: `snapshots."x.y"`},
+		{name: "an inline table child is quoted under its parents", content: "snapshots = { \"x.y\" = 1 }\n", want: `snapshots."x.y"`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, cfg, err := load(t, c.content)
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{shownPath + ": unknown key " + c.want + "; quarry ignores it"}, cfg.Warnings)
+		})
+	}
+}
+
+func Test_load_names_a_table_once_when_its_children_need_quotes(t *testing.T) {
+	_, cfg, err := load(t, "[foo]\n\"x.y\" = 1\n\"a b\" = 2\n")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{shownPath + ": unknown key foo; quarry ignores it"}, cfg.Warnings)
+}
+
+func Test_load_reads_a_file_that_starts_with_a_byte_order_mark(t *testing.T) {
+	_, cfg, err := load(t, "\xef\xbb\xbf[snapshots]\nkeep = 5\n")
+
+	require.NoError(t, err)
+	assert.Equal(t, 5, cfg.Keep)
+	assert.Empty(t, cfg.Warnings)
+}
+
+func Test_load_returns_defaults_for_a_file_holding_only_a_byte_order_mark(t *testing.T) {
+	home, path := newHome(t)
+	require.NoError(t, os.WriteFile(path, []byte("\xef\xbb\xbf"), 0o600))
+
+	cfg, err := config.Load(home, path)
+
+	require.NoError(t, err)
+	assert.Equal(t, config.Config{Path: path, Keep: config.DefaultKeep}, cfg)
 }

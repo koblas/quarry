@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"io/fs"
 	"os"
@@ -11,6 +12,9 @@ import (
 
 // DefaultKeep is how many snapshots quarry keeps when snapshots.keep is unset.
 const DefaultKeep = 12
+
+// utf8BOM is the byte order mark some editors put first in a UTF-8 file.
+var utf8BOM = []byte("\xef\xbb\xbf")
 
 // Config is quarry's settings after defaults are applied.
 type Config struct {
@@ -33,7 +37,7 @@ func Load(home, path string) (Config, error) {
 	if errors.Is(err, fs.ErrNotExist) {
 		return Config{Path: path, Keep: DefaultKeep}, nil
 	}
-	f := file{home: home, path: path, shown: homepath.Abbreviate(home, path), data: data}
+	f := file{home: home, path: path, shown: homepath.Abbreviate(home, path), data: bytes.TrimPrefix(data, utf8BOM)}
 	if err != nil {
 		return Config{}, f.refuse("cannot read "+f.shown+": "+osreason.Reason(err), err)
 	}
