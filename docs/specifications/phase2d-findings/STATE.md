@@ -1,6 +1,6 @@
 # phase2d-findings — current state
 
-Scenarios complete: SCENARIO-01..20 (02, 03 delivered by 01; 05 by 04; 07 by 06; 10 by 09; 12, 13 by 11; 17 by 16; 20 by 19). Last updated by SCENARIO-19.
+Scenarios complete: SCENARIO-01..21 (02, 03 delivered by 01; 05 by 04; 07 by 06; 10 by 09; 12, 13 by 11; 17 by 16; 20 by 19). Last updated by SCENARIO-21.
 
 ## Binding decisions
 - `internal/finding` is the leaf (stdlib only) owning type names/order, id grammar (`ID`, `PairID`, `NoPayee`), `StatusOf`, the fix table, `Counts`, `State` and `Classify`; `store`, `duckstore`, `snapshot`, `report` and the `findings` command (11) import it (SCENARIO-01)
@@ -28,14 +28,19 @@ Scenarios complete: SCENARIO-01..20 (02, 03 delivered by 01; 05 by 04; 07 by 06;
 - `status` config is best-effort and read AFTER the store and `FindingCounts` succeed: any loader error exits 0, stderr `quarry: warning: cannot tell which findings you ignored: <config.Problem(err)>; findings you ignored are counted as open`, nil ignore list (ignored findings count open and new), text drops the `, J ignored` clause, JSON `ignored` null and the same unprefixed line in `warnings[]`. `config.Problem(err)` (`internal/config/refusal.go`) trims `fixIt`; no cli copy of the suffix. Store refusal never reads the config. `cfg.Warnings` and W1 are never printed by `status` (SCENARIO-19)
 - `status` Findings row: `findingsPhrase` with `New`/`NewlyFixed` zeroed and `carried` false, so never a `(M new)` or fixed clause; `status --json` `findings` does carry `new`/`newly_fixed` (SCENARIO-19)
 
+- One CSV writer in `internal/cli/csv.go`: `csvCell{Text, Null}`, `csvField`, `csvRecord`, `errCSVAndJSON`; `renderSQLCSV` (`render_sql.go`) uses it. Field quoted iff it has `,` `"` CR LF or is empty (`""`), `"` doubled; NULL is an unquoted empty field, decided by `.Null` never the text `NULL`; tab alone not a trigger; no formula escaping; header names use the same quoter. No `encoding/csv` (cannot tell NULL from `""`). `findings --csv` (22) reuses it with its own NULLable cells (SCENARIO-21)
+- `sql --limit` flag default is 0 (help reads the ruled text, no pflag `(default 500)`); the effective limit lives in `rowLimit(cmd, limit, csvOut)` in `sql.go`: `Flags().Changed("limit")` wins, else 0 (every row) under `--csv`, else `defaultSQLLimit` 500. `--csv --json` is the LAST `Args` case, so u5/u6/u7 keep precedence (SCENARIO-21)
+
 - `config.Config.Ignore []string` is `findings.ignore` as written: file order, duplicates, `""` and unknown prefixes kept, nil when unset (whole-struct `assert.Equal` tests break on a non-nil empty slice); `FindingsRequest.Ignore` and W1 read every element. Validation order: `snapshots.keep`, `quicken.path`, `findings.ignore`, unknown keys; first refusal wins (SCENARIO-15)
 - `config` `ignore()` decides the first non-string item from the DECODED tree; `items.go` `arrayItems` splits `entry.value` only to spell it (`itemText`: raw text, or the decoded value when counts disagree, so a splitter fault degrades the copy, never accepts a bad item). Its `stringEnd` `min(..., len(s))` guards pin no-panic on unclosed strings (SCENARIO-15)
 
 ## Left unbuilt
-- `findings --csv` and the `--csv --json` line — 22 (reuses 18's request/listing; a fixed finding is one row, item fields empty)
+- `findings --csv` and its `--csv --json` line (reuse `csvRecord`/`errCSVAndJSON`) — 22 (reuses 18's request/listing; a fixed finding is one row, item fields empty NULLs)
 - `findings --json` item `category`, `transactions` and `splits` are always null until 24-28 fill them (`findingItemDocument`); rows and sort rules for unlinked-transfer, mixed-categories, payee-variants, similar-categories, unused-category; `findingLines`' `// unreachable` final `return nil` must go when 24-28 add their types; payee-variants / similar-categories headers use `(N groups)` — 24-28
 
 ## Traps
+- `QueryValue.Text` is `"NULL"` for a NULL: decide by `.Null` (csv) ; a one-column NULL row is a blank line that `encoding/csv` readers skip (see Open debts) (SCENARIO-21)
+- `fakeReportStore.Query` ignores `maxRows` (records `gotMaxRows`): assert the recorded value, not truncation, unless the test feeds `limit+1` rows (SCENARIO-21)
 - A fixed finding has no items: `latestDate`/`payeeOf`-based sorts must not run on it. `fixed_at` is UTC in the store and `--json`, local only in text; text tests pin `time.Local` to a fixed zone (no `t.Parallel`) (SCENARIO-18)
 - Text renders `  <id>  ignored` / `  <id>  fixed <local date>` at line end (id line for multi-line types); padding widths over non-fixed rows only; `-run 'findings|Findings'` misses `Test_findingLines_*`/`Test_findingsFooter_*`: run the whole `internal/cli` package (SCENARIO-18)
 - `keyPartText` returns bare text for bare-key-shaped strings; W1 needs `config.BasicString` (always quoted), not `keyPartText` (SCENARIO-16)

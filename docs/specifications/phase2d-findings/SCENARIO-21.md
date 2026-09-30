@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-21
-status: open
+status: done
 ---
 
 # SCENARIO-21: sql --csv prints every row with a header
@@ -26,19 +26,19 @@ Contract (Surface & Copy → `quarry sql --csv`, P2d-12/13), pinned verbatim:
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `internal/cli/sql_csv_test.go` (new) `Test_sql_csv_prints_every_row_with_a_header` — `Execute` `sql --csv` over `fakeReportStore` (`fakes_test.go:18`) holding 600 rows of `id, payee, memo` incl. payee `Smith, "Jo"` (comma+quote), one NULL memo beside one `""` memo; asserts whole stdout, `gotMaxRows == 0`, empty stderr
-- [ ] Step 2: `internal/cli/sql.go:21-99`, `internal/cli/csv.go` (new), `render_sql.go` — signature-only stubs so the test compiles and fails at its stdout assertion (`--csv` flag registered, `renderSQLCSV` returning empty)
+- [x] Step 1: `internal/cli/sql_csv_test.go` (new) `Test_sql_csv_prints_every_row_with_a_header` — `Execute` `sql --csv` over `fakeReportStore` (`fakes_test.go:18`) holding 600 rows of `id, payee, memo` incl. payee `Smith, "Jo"` (comma+quote), one NULL memo beside one `""` memo; asserts whole stdout, `gotMaxRows == 0`, empty stderr
+- [x] Step 2: `internal/cli/sql.go:21-99`, `internal/cli/csv.go` (new), `render_sql.go` — signature-only stubs so the test compiles and fails at its stdout assertion (`--csv` flag registered, `renderSQLCSV` returning empty)
 
 ### Build
-- [ ] Step 3: `internal/cli/csv.go` (new) `csvField`/record writer + `errCSVAndJSON`; `render_sql.go` `renderSQLCSV(store.QueryResult) string` — the one shared writer (SCENARIO-22's `findings --csv` reuses it; its fields must be able to be NULL without `store.QueryValue`). Tests in `csv_internal_test.go` `Test_csvField_quoting_matrix` (table: plain, comma, quote doubled, CR, LF, CRLF kept verbatim, lone tab unquoted, tab+comma quoted with tab verbatim, empty string → `""`, NULL, text `NULL`, space-padded unquoted, `=1+1`/`+`/`-`/`@` unescaped, non-ASCII) and `Test_renderSQLCSV` (header quoting incl. `a,b`, `"`, empty name; zero rows = header only; single-column NULL row = blank line, `""` row = `""`; no BOM; `\n` endings with CR inside) and `Test_sql_csv_tells_null_from_the_empty_string_and_the_word_null` (via command)
-- [ ] Step 4: `sql.go:50-62,63-95,97` `--csv` flag, `Args` conflict case (last), `RunE` csv branch: limit forced to 0 when `!cmd.Flags().Changed("limit")`, render via `renderSQLCSV` then `emit(cmd, []byte(...), "quarry: warning: ", warnings)`. Tests in `sql_csv_test.go`: default = every row (maxRows 0); `--limit 2` cuts to 2 rows + note on stderr, stdout has 2 rows; `Test_sql_csv_honours_an_explicit_limit_equal_to_the_default` (`--limit 500` → maxRows 501, control arm: no `--csv` still 501); `--limit 0`; `--csv --json` and `--json --csv` (UsageError text, stdout empty, `gotQuery` empty, stdin `-` unread); conflict ordering (no query → u5; `--limit -1` → u7); fault tests: stdout write fault (`failingWriter`, no stderr warning even when truncated), query fault, unprintable value (`store.UnprintableValueError` → existing cast-hint refusal, stdout empty); zero rows header only; existing table/JSON tests still green (`--csv` off)
-- [ ] Step 5: `sql.go:26-49,97` Long (Changes item 2, verbatim), Example third line, `--limit` help; update `sql_test.go:191-222` `Test_sql_help_describes_the_command_and_the_limit_flag` to pin the new Long whole, all three Example lines, the `--csv` and `--limit` flag lines as pflag prints them (see Handoff: `(default 500)`)
+- [x] Step 3: `internal/cli/csv.go` (new) `csvField`/record writer + `errCSVAndJSON`; `render_sql.go` `renderSQLCSV(store.QueryResult) string` — the one shared writer (SCENARIO-22's `findings --csv` reuses it; its fields must be able to be NULL without `store.QueryValue`). Tests in `csv_internal_test.go` `Test_csvField_quoting_matrix` (table: plain, comma, quote doubled, CR, LF, CRLF kept verbatim, lone tab unquoted, tab+comma quoted with tab verbatim, empty string → `""`, NULL, text `NULL`, space-padded unquoted, `=1+1`/`+`/`-`/`@` unescaped, non-ASCII) and `Test_renderSQLCSV` (header quoting incl. `a,b`, `"`, empty name; zero rows = header only; single-column NULL row = blank line, `""` row = `""`; no BOM; `\n` endings with CR inside) and `Test_sql_csv_tells_null_from_the_empty_string_and_the_word_null` (via command)
+- [x] Step 4: `sql.go:50-62,63-95,97` `--csv` flag, `Args` conflict case (last), `RunE` csv branch: limit forced to 0 when `!cmd.Flags().Changed("limit")`, render via `renderSQLCSV` then `emit(cmd, []byte(...), "quarry: warning: ", warnings)`. Tests in `sql_csv_test.go`: default = every row (maxRows 0); `--limit 2` cuts to 2 rows + note on stderr, stdout has 2 rows; `Test_sql_csv_honours_an_explicit_limit_equal_to_the_default` (`--limit 500` → maxRows 501, control arm: no `--csv` still 501); `--limit 0`; `--csv --json` and `--json --csv` (UsageError text, stdout empty, `gotQuery` empty, stdin `-` unread); conflict ordering (no query → u5; `--limit -1` → u7); fault tests: stdout write fault (`failingWriter`, no stderr warning even when truncated), query fault, unprintable value (`store.UnprintableValueError` → existing cast-hint refusal, stdout empty); zero rows header only; existing table/JSON tests still green (`--csv` off)
+- [x] Step 5: `sql.go:26-49,97` Long (Changes item 2, verbatim), Example third line, `--limit` help; update `sql_test.go:191-222` `Test_sql_help_describes_the_command_and_the_limit_flag` to pin the new Long whole, all three Example lines, the `--csv` and `--limit` flag lines as pflag prints them (see Handoff: `(default 500)`)
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `csvField`, `renderSQLCSV`, `errCSVAndJSON`; update `newSQLCommand` doc (`sql.go:19-20`) to mention `--csv`
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `csvField`, `renderSQLCSV`, `errCSVAndJSON`; update `newSQLCommand` doc (`sql.go:19-20`) to mention `--csv`
 
 ### Verify
-- [ ] Step 7: full verification + `spec-check.py phase2d-findings`; tick SCENARIO-21 with its acceptance test; strike the `sql.go` Long re-wrap NIT under `## Open debts` in `docs/specifications/phase2a-read-foundation/STATE.md` (line 69); rewrite `STATE.md`
+- [x] Step 7: full verification + `spec-check.py phase2d-findings`; tick SCENARIO-21 with its acceptance test; strike the `sql.go` Long re-wrap NIT under `## Open debts` in `docs/specifications/phase2a-read-foundation/STATE.md` (line 69); rewrite `STATE.md`
 
 ## Handoff
 
@@ -57,3 +57,7 @@ Contract (Surface & Copy → `quarry sql --csv`, P2d-12/13), pinned verbatim:
 - `QueryValue.Text` is `"NULL"` for a NULL: decide by `.Null`, never the text
 - A tab alone does not trigger quoting; a one-column NULL row is a blank line that `encoding/csv` readers skip — both follow the rule literally
 - `fakeReportStore.Query` ignores `maxRows` (records it in `gotMaxRows`): assert the recorded value, not truncation, except where the test feeds `limit+1` rows itself
+
+## Phase report
+
+Run V done: sweep clean (`go build ./...` ok, `golangci-lint run ./...` 0 issues); full suite `go test rc=0`, `uncovered-diff.py` 0 uncovered added lines, `go test -race ./internal/cli/...` ok; `test-stats.py --base 4df838e`: internal/cli 208 (+12), tempdir 0 (+0), disk 0 (+0). spec tick + `spec-check.py phase2d-findings` OK; 2a STATE `sql.go` Long re-wrap debt struck; STATE.md rewritten; status: done. Nothing left for later runs.

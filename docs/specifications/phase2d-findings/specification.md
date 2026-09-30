@@ -596,7 +596,7 @@ Ruled: the finding core (type list and order, id grammar, P2d-3 status function,
 - [x] SCENARIO-18: findings filters by status and type — `cmd/quarry/run_findings_filters_test.go` `Test_run_findings_status_all_type_duplicate_marks_ignored_shows_fixed_as_a_date_line_and_counts_duplicates_only`
 - [x] SCENARIO-19: status shows the open findings count — `cmd/quarry/run_status_findings_test.go` `Test_run_status_shows_the_findings_line_with_open_and_ignored_counts`
 - [x] SCENARIO-20: status warns on a bad config and still reports — delivered by SCENARIO-19 — `cmd/quarry/run_status_findings_test.go` `Test_run_status_warns_on_a_bad_config_and_still_reports`
-- [ ] SCENARIO-21: sql --csv prints every row with a header
+- [x] SCENARIO-21: sql --csv prints every row with a header — `internal/cli/sql_csv_test.go` `Test_sql_csv_prints_every_row_with_a_header`
 - [ ] SCENARIO-22: findings --csv prints one row per item
 - [ ] SCENARIO-23: findings rejects usage it cannot use
 - [ ] SCENARIO-24: opposite amounts in two accounts not linked as a transfer are an unlinked transfer

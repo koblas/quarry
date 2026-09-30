@@ -66,7 +66,7 @@ Scenarios complete: SCENARIO-01..21 (all; 05 folded into 04, 06 into 07; 10 into
 - `uncovered-diff.py` is blind to untracked files: `git add` before running it. `cmd/quarry`'s test binary links DuckDB (linux-small CI OOM history). `internal/platform/duckdb`'s mid-iteration ctx-cancel test flakes under full-suite load. (Phase 1)
 
 ## Open debts
-- NIT (final product-vision): `internal/cli/sql.go` Long — blank lines around the indented `quarry sql -- "-- monthly totals / SELECT ..."` example and re-wrap to ≤80 cols; fold into the next edit of sql.go (2b/2d) with the matching spec change.
+- ~~NIT (final product-vision): `internal/cli/sql.go` Long re-wrap to ≤80 cols.~~ Closed by Phase 2d (SCENARIO-21, Long rewritten with the `--csv` change).
 - MINOR (REVIEW-02): `cmd/quarry/run_status_json_test.go:1` lacks the white-box `package main` header.
 - NIT (REVIEW-02): `internal/platform/duckdb/text_test.go:150-174` TZ test needs host zoneinfo — `_ "time/tzdata"` or skip on `LoadLocation` error; rename `jsonDateLayout` → `dateLayout` (now shared by text output); `zoneOffsetText`/`timeTZOffsetText` share the `±HH[:MM]` prefix (optional).
 - ~~Snapshots accumulate (~200 MB each) until 2c.~~ Closed by Phase 2c (`snapshots.keep`, `quarry snapshots prune`, sync auto-prune).

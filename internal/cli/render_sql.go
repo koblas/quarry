@@ -71,3 +71,22 @@ func sqlLine(cells []string, widths []int, numeric []bool) string {
 	}
 	return line.String()[:end]
 }
+
+// renderSQLCSV renders result as CSV: a header line of column names, then one
+// line per row, every field written as csvField does.
+func renderSQLCSV(result store.QueryResult) string {
+	header := make([]csvCell, len(result.Columns))
+	for i, c := range result.Columns {
+		header[i] = csvCell{Text: c.Name}
+	}
+	var b strings.Builder
+	b.WriteString(csvRecord(header))
+	for _, row := range result.Rows {
+		cells := make([]csvCell, len(row))
+		for i, v := range row {
+			cells[i] = csvCell{Text: v.Text, Null: v.Null}
+		}
+		b.WriteString(csvRecord(cells))
+	}
+	return b.String()
+}

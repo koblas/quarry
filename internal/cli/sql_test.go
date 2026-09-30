@@ -188,7 +188,7 @@ func Test_sql_passes_the_limit_to_the_query(t *testing.T) {
 	}
 }
 
-func Test_sql_help_describes_the_command_and_the_limit_flag(t *testing.T) {
+func Test_sql_help_describes_the_command_and_its_flags(t *testing.T) {
 	var stdout bytes.Buffer
 
 	err := executeSQL(t, fakeReportStore{}, &stdout, "--help")
@@ -211,14 +211,24 @@ v_cash_flow: they already leave out transfers between your own accounts,
 Quicken's system categories, transactions excluded from reports and
 accounts Quicken leaves out of reports, so their totals match quarry spend
 and quarry cashflow. A transfer leg is any split named in
-transfers.from_split_id or transfers.to_split_id. List the tables and views
-with: quarry sql "SHOW TABLES"
+transfers.from_split_id or transfers.to_split_id.
 
-At most --limit rows are printed (500 unless set); when there are more,
-quarry says so on stderr. --limit 0 prints every row.`)
+findings holds what sync found to clean up in Quicken, and finding_items
+the transactions, splits, payees or categories each one is about;
+fixed_at is set once a finding is no longer found. Which findings you
+ignored is set in the config file, not the store: quarry findings shows
+each one's status.
+
+List the tables and views with: quarry sql "SHOW TABLES"
+
+At most --limit rows are printed (500 unless set, every row with --csv);
+when there are more, quarry says so on stderr. --limit 0 prints every row.
+With --csv, an empty field is NULL and "" is an empty string.`)
 	assert.Contains(t, stdout.String(), "  quarry sql \"SELECT name, currency FROM accounts WHERE NOT closed\"\n")
 	assert.Contains(t, stdout.String(), "  quarry sql --limit 0 --json - < monthly.sql\n")
-	assert.Contains(t, stdout.String(), "      --limit n   print at most n rows (0 prints every row) (default 500)\n")
+	assert.Contains(t, stdout.String(), "  quarry sql --csv \"SELECT * FROM transactions\" > transactions.csv\n")
+	assert.Contains(t, stdout.String(), "      --csv       print the rows as CSV, with a header line\n")
+	assert.Contains(t, stdout.String(), "      --limit n   print at most n rows (500 unless set, every row with --csv; 0 prints every row)\n")
 }
 
 func Test_sql_returns_the_query_fault(t *testing.T) {
