@@ -36,6 +36,7 @@ type Server struct {
 	storeProbe  StoreProbe
 	remove      func(path string) error
 	autoKeep    int
+	ignore      []string
 }
 
 // Option configures a Server built by NewServer.
@@ -102,6 +103,12 @@ func WithRemove(remove func(path string) error) Option {
 // keep once the store is built; unset or below 1, they delete nothing.
 func WithAutoPrune(keep int) Option {
 	return func(s *Server) { s.autoKeep = keep }
+}
+
+// WithIgnore sets the finding ids of findings.ignore, which SyncAndImport and ImportFrom
+// leave out of the open and new counts of the store they build and count as ignored.
+func WithIgnore(ids []string) Option {
+	return func(s *Server) { s.ignore = ids }
 }
 
 // NewServer builds a Server from opts.

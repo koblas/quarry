@@ -329,14 +329,21 @@ func keyText(key []string) string {
 	return strings.Join(parts, ".")
 }
 
-// keyPartText is part bare when TOML allows it, else a basic string with control characters escaped.
+// keyPartText is part bare when TOML allows it, else BasicString(part).
 func keyPartText(part string) string {
 	if bareKey.MatchString(part) {
 		return part
 	}
+
+	return BasicString(part)
+}
+
+// BasicString writes s as a TOML basic string, always quoted: quote, backslash, newline and tab are
+// escaped, other control characters as \uXXXX, and everything else kept, so s shows on one line.
+func BasicString(s string) string {
 	var b strings.Builder
 	b.WriteByte('"')
-	for _, r := range part {
+	for _, r := range s {
 		switch {
 		case r == '"':
 			b.WriteString(`\"`)

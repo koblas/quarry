@@ -197,3 +197,17 @@ func Test_findings_neither_counts_nor_lists_a_finding_of_a_type_it_does_not_know
 	require.Len(t, got.Groups, 1)
 	assert.Equal(t, []string{"duplicate:txn-1+txn-2"}, idsOf(got.Groups[0]))
 }
+
+func Test_findings_lists_the_ignore_ids_that_match_no_finding(t *testing.T) {
+	srv := report.NewServer(report.WithStore(fakeStore{findings: store.FindingList{Findings: []store.Finding{
+		dated("duplicate:txn-1+txn-2", finding.Duplicate, march1, march1),
+		dated("mystery:thing-1", finding.Type("mystery"), march1),
+	}}}))
+	ignore := []string{"uncategorized:payee-999", "duplicate:txn-1+txn-2", "mystery:thing-1"}
+
+	got, err := srv.Findings(t.Context(), report.FindingsRequest{Ignore: ignore})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"uncategorized:payee-999", "mystery:thing-1"}, got.Unmatched)
+	assert.Equal(t, finding.Counts{Ignored: 1}, got.Counts)
+}

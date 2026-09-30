@@ -580,8 +580,8 @@ Ruled: the finding core (type list and order, id grammar, P2d-3 status function,
 - [x] SCENARIO-13: findings refuses a store built before findings existed — delivered by SCENARIO-11 — `cmd/quarry/run_findings_test.go` `Test_run_findings_refuses_a_store_built_before_findings_existed`
 - [x] SCENARIO-14: findings --json returns the worklist as a document — `cmd/quarry/run_findings_json_test.go` `Test_run_findings_json_prints_the_ruled_document_for_one_open_duplicate`
 - [x] SCENARIO-15: a malformed findings.ignore is refused before Quicken is touched — `cmd/quarry/run_findings_ignore_config_test.go` `Test_run_sync_refuses_a_findings_ignore_that_is_not_a_list_before_taking_a_snapshot`
-- [ ] SCENARIO-16: an id listed in findings.ignore is ignored
-- [ ] SCENARIO-17: an ignored id that is not a finding warns
+- [x] SCENARIO-16: an id listed in findings.ignore is ignored — `cmd/quarry/run_findings_ignore_test.go` `Test_run_findings_leaves_an_ignored_id_off_the_list_and_counts_it_in_the_footer`
+- [x] SCENARIO-17: an ignored id that is not a finding warns — delivered by SCENARIO-16 — `cmd/quarry/run_findings_ignore_test.go` `Test_run_findings_warns_about_an_ignored_id_that_is_not_a_finding`
 - [ ] SCENARIO-18: findings filters by status and type
 - [ ] SCENARIO-19: status shows the open findings count
 - [ ] SCENARIO-20: status warns on a bad config and still reports

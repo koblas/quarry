@@ -126,3 +126,48 @@ func Test_fix_pins_the_ruled_copy_for_every_type(t *testing.T) {
 func Test_fix_of_an_unknown_type_is_empty(t *testing.T) {
 	assert.Equal(t, finding.Fix{}, finding.Type("made-up").Fix())
 }
+
+func Test_classify_counts_a_fixed_finding_that_is_ignored_as_fixed_and_newly_fixed(t *testing.T) {
+	states := []finding.State{{ID: "uncategorized:payee-2", Fixed: true, NewlyFixed: true}}
+
+	got := finding.Classify(states, []string{"uncategorized:payee-2"})
+
+	assert.Equal(t, []finding.Status{finding.StatusFixed}, got.Statuses)
+	assert.Equal(t, finding.Counts{Fixed: 1, NewlyFixed: 1}, got.Counts)
+}
+
+func Test_classify_does_not_count_an_ignored_new_finding_as_new(t *testing.T) {
+	states := []finding.State{
+		{ID: "duplicate:txn-1+txn-2", New: true},
+		{ID: "duplicate:txn-3+txn-4", New: true},
+		{ID: "one-sided-transfer:xfer-3"},
+	}
+
+	got := finding.Classify(states, []string{"duplicate:txn-3+txn-4"})
+
+	assert.Equal(t, []finding.Status{finding.StatusOpen, finding.StatusIgnored, finding.StatusOpen}, got.Statuses)
+	assert.Equal(t, finding.Counts{Open: 2, Ignored: 1, New: 1}, got.Counts)
+}
+
+func Test_classify_lists_each_unmatched_element_in_file_order(t *testing.T) {
+	states := []finding.State{{ID: "duplicate:txn-1+txn-2"}}
+	ignore := []string{"uncategorized:payee-9", "duplicate:txn-1+txn-2", "", "uncategorized:payee-9", "duplicate:txn-1+txn-2"}
+
+	got := finding.Classify(states, ignore)
+
+	assert.Equal(t, []string{"uncategorized:payee-9", "", "uncategorized:payee-9"}, got.Unmatched)
+}
+
+func Test_classify_with_no_ignore_list_counts_as_before_and_lists_nothing_unmatched(t *testing.T) {
+	states := []finding.State{
+		{ID: "duplicate:txn-1+txn-2", New: true},
+		{ID: "duplicate:txn-3+txn-4"},
+		{ID: "uncategorized:payee-2", Fixed: true, NewlyFixed: true},
+		{ID: "uncategorized:payee-3", Fixed: true},
+	}
+
+	got := finding.Classify(states, nil)
+
+	assert.Equal(t, finding.Counts{Open: 2, Fixed: 2, New: 1, NewlyFixed: 1}, got.Counts)
+	assert.Nil(t, got.Unmatched)
+}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/store"
@@ -146,6 +147,7 @@ func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome
 		return Outcome{Manifest: manifest}, s.importFailureRefusal(ctx, manifest, err)
 	}
 
+	result.Findings = finding.Classify(result.FindingStates, s.ignore).Counts
 	outcome := Outcome{Manifest: manifest, Store: &result}
 	outcome.historyWarning, outcome.findingsWarning = carryWarnings(result, homepath.Abbreviate(s.home, s.storeProbe.Path()))
 	err = s.autoPrune(ctx, &outcome)

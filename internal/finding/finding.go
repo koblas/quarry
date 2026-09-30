@@ -114,6 +114,60 @@ type Counts struct {
 	NewlyFixed int
 }
 
+// State is what a tally needs to know about one finding: its id, whether it is fixed, and whether
+// the latest build found it (New) or fixed it (NewlyFixed).
+type State struct {
+	ID         string
+	Fixed      bool
+	New        bool
+	NewlyFixed bool
+}
+
+// Classified is the outcome of Classify: Statuses[i] is the status of states[i]; Unmatched holds
+// every ignore element that names none of the states, in ignore order, duplicates kept.
+type Classified struct {
+	Statuses  []Status
+	Counts    Counts
+	Unmatched []string
+}
+
+// Classify is the one place an id in ignore is matched to a finding. It derives each state's status
+// with StatusOf, tallies them (an ignored finding is never New; a fixed one counts as fixed even if
+// listed) and reports the ignore elements that match no state. A nil ignore list ignores nothing.
+func Classify(states []State, ignore []string) Classified {
+	listed := make(map[string]bool, len(ignore))
+	for _, id := range ignore {
+		listed[id] = true
+	}
+
+	out := Classified{Statuses: make([]Status, len(states))}
+	known := make(map[string]bool, len(states))
+	for i, s := range states {
+		known[s.ID] = true
+		out.Statuses[i] = StatusOf(s.Fixed, listed[s.ID])
+		switch out.Statuses[i] {
+		case StatusFixed:
+			out.Counts.Fixed++
+			if s.NewlyFixed {
+				out.Counts.NewlyFixed++
+			}
+		case StatusIgnored:
+			out.Counts.Ignored++
+		case StatusOpen:
+			out.Counts.Open++
+			if s.New {
+				out.Counts.New++
+			}
+		}
+	}
+	for _, id := range ignore {
+		if !known[id] {
+			out.Unmatched = append(out.Unmatched, id)
+		}
+	}
+	return out
+}
+
 // Fix is the suggested repair for one finding type: Sentence is the JSON
 // `fix`; Heading and GroupClause make a text group header "<Heading> (<n>):
 // <GroupClause>", where the renderer owns the counts in parentheses.

@@ -92,7 +92,7 @@ does not read Quicken at all.`,
 			}
 			printConfigWarnings(cmd, cfg.Warnings)
 
-			srv, err := newServer(cmd.Context(), snapshot.WithAutoPrune(cfg.Keep))
+			srv, err := newServer(cmd.Context(), snapshot.WithAutoPrune(cfg.Keep), snapshot.WithIgnore(cfg.Ignore))
 			if err != nil {
 				return &runtimeError{err: err}
 			}

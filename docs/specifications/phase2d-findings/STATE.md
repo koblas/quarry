@@ -1,9 +1,9 @@
 # phase2d-findings — current state
 
-Scenarios complete: SCENARIO-01..15 (02, 03 delivered by 01; 05 by 04; 07 by 06; 10 by 09; 12, 13 by 11). Last updated by SCENARIO-15.
+Scenarios complete: SCENARIO-01..17 (02, 03 delivered by 01; 05 by 04; 07 by 06; 10 by 09; 12, 13 by 11; 17 by 16). Last updated by SCENARIO-16.
 
 ## Binding decisions
-- `internal/finding` is the leaf (stdlib only) owning type names/order, id grammar (`ID`, `PairID`, `NoPayee`), `StatusOf`, the fix table and `Counts`; `store`, `duckstore`, `snapshot`, `report` and the `findings` command (11) import it (SCENARIO-01)
+- `internal/finding` is the leaf (stdlib only) owning type names/order, id grammar (`ID`, `PairID`, `NoPayee`), `StatusOf`, the fix table, `Counts`, `State` and `Classify`; `store`, `duckstore`, `snapshot`, `report` and the `findings` command (11) import it (SCENARIO-01)
 - Detection runs in Go over `DB.QueryRows` on the build connection, inside `build` before `store_info`; any detection or append error is a build error — previous store untouched, exit 1 (P2d-5) (SCENARIO-01)
 - `first_found_at`/`fixed_at` are the `builtAt` written to `store_info.built_at`, never `now()`; compared by exact SQL equality with it; sync counts come from `mergeFindings`' branches and `Test_replace_counts_new_and_newly_fixed_as_the_findings_stamped_with_the_build_time` pins both agree — 19's `status` counts reuse that SQL definition (SCENARIO-01, 06)
 - `mergeFindings(detected, carried, builtAt)` (`duckstore/findings.go`): detected+carried keeps carried `first_found_at`, `fixed_at` NULL, not new; detected only is new at `builtAt`; carried open not detected is fixed at `builtAt` (NewlyFixed); carried fixed not detected is unchanged (Fixed, not NewlyFixed); items only for detected. Carried timestamps are written back as scanned (SCENARIO-06)
@@ -22,19 +22,26 @@ Scenarios complete: SCENARIO-01..15 (02, 03 delivered by 01; 05 by 04; 07 by 06;
 - `findings` command: flags validated then config loaded strictly (`loadConfig("findings")` + `printConfigWarnings`) then store; hint shows iff >=1 open and `len(req.Ignore) == 0`; `renderFindings(listing, showHint)` owns the default-view footer (incl. `J ignored`) and both empty forms; 18 adds the other status views (SCENARIO-11)
 - Sort: duplicate and one-sided by latest item date desc then id; uncategorized by item count desc, payee case-insensitive, id; other types by id. Duplicate item rows render in pair-id order (lower source id first), not date order — accepted (SCENARIO-11)
 - `sync --json` `store.findings` is `{open, ignored, fixed, new, newly_fixed}` ints, null iff `Built` false; 19's `status --json` needs `ignored: null`, so it must not reuse `findingsDocument` as is (SCENARIO-04)
+- `finding.Classify(states, ignore)` is the ONLY place an ignore id is matched to a finding (P2d-3): returns per-state `Status`, `Counts`, `Unmatched`; `report`, `duckstore` (nil list) and `snapshot` call it. 18's `--status` views and 19's `status` counts must use it, never a second map. An ignored fixed finding counts as fixed (and newly fixed); an ignored new one is not new (SCENARIO-16)
+- Sync ignore travels UP: `store.Replaced`/`Result` carry `FindingStates []finding.State`; duckstore never sees `findings.ignore` and its `Result.Findings` is ignore-free (`Ignored` 0) until `snapshot.importVerified` recounts via `snapshot.WithIgnore(cfg.Ignore)` (set in `cli/sync.go`, covers `--from`). Read counts only from the `Outcome`. Sync line: `, J ignored` after the fixed clause, before the tail; `none open, J ignored` has no tail (SCENARIO-16)
+- W1 (ignored id that is no finding) is built in `cli` from `FindingsListing.Unmatched`: one line per unmatched element, file order (duplicates repeat, `""` prints `lists ""`), id via `config.BasicString`, `<config>` abbreviated like C3 on stderr AND in `warnings[]`, after C3. `sync`/`status` never print it. Hint shows iff >=1 open and `len(cfg.Ignore) == 0`: a list of only unmatched ids still hides it (SCENARIO-16, 17)
 
-- `config.Config.Ignore []string` is `findings.ignore` as written: file order, duplicates, `""` and unknown prefixes kept, nil when unset (whole-struct `assert.Equal` tests break on a non-nil empty slice); 16 fills `FindingsRequest.Ignore` from it, 17's W1 needs every element. Validation order: `snapshots.keep`, `quicken.path`, `findings.ignore`, unknown keys; first refusal wins (SCENARIO-15)
+- `config.Config.Ignore []string` is `findings.ignore` as written: file order, duplicates, `""` and unknown prefixes kept, nil when unset (whole-struct `assert.Equal` tests break on a non-nil empty slice); `FindingsRequest.Ignore` and W1 read every element. Validation order: `snapshots.keep`, `quicken.path`, `findings.ignore`, unknown keys; first refusal wins (SCENARIO-15)
 - `config` `ignore()` decides the first non-string item from the DECODED tree; `items.go` `arrayItems` splits `entry.value` only to spell it (`itemText`: raw text, or the decoded value when counts disagree, so a splitter fault degrades the copy, never accepts a bad item). Its `stringEnd` `min(..., len(s))` guards pin no-panic on unclosed strings (SCENARIO-15)
 
 ## Left unbuilt
-- `J ignored` Findings-line clause and `Counts.Ignored` (stays 0 from `duckstore`; 16 sets it via a `snapshot` option) — 16
+- `status` Findings line / `status --json` `findings` and its best-effort config — 19 (must pass the ignore list to `Classify`)
 - `findings --csv` and the `--csv --json` line — 22
 - `--status`/`--type` filtering (values validated, not passed on), `ignored` marker, `fixed <date>` lines, fixed sort; `findings --json` hardcodes `status` "open", `type` null and `fixed_at` nil, and `items` is `[]` for a fixed finding — 18
-- `FindingsRequest.Ignore` filled from `cfg.Ignore` — 16; W1 — 17
+- `--status`/`--type` must keep W1 computed over every known-type row, never the filtered view — 18
 - `findings --json` item `category`, `transactions` and `splits` are always null until 24-28 fill them (`findingItemDocument`); rows and sort rules for unlinked-transfer, mixed-categories, payee-variants, similar-categories, unused-category; `findingLines`' `// unreachable` final `return nil` must go when 24-28 add their types; payee-variants / similar-categories headers use `(N groups)` — 24-28
 
 ## Traps
-- `report` counts `New` over open-status findings only (ignored new ones are not New), but sync's `Counts.New` from duckstore does not exclude ignored: 16 must make the sync line's `(M new)` and `open` exclude ignored so sync, status and findings agree (SCENARIO-11)
+- `keyPartText` returns bare text for bare-key-shaped strings; W1 needs `config.BasicString` (always quoted), not `keyPartText` (SCENARIO-16)
+- An ignore id naming a stored row whose type this binary does not know gets W1 (such rows are neither listed nor counted): accepted reading (SCENARIO-16)
+- `(M new)` only renders when history was carried: sync tests of ignored-new need a second sync (SCENARIO-16)
+- Do not add a field to `config.Config` for the shown path (whole-struct `assert.Equal` tests break): abbreviate `cfg.Path` with `srv.Home()` (SCENARIO-16)
+- In the duckstore findings-state test `uncategorized:no-payee` is reopened, not `Fixed`: dropping `xfer-3` turns its from-split into an uncategorized one; it is the fixture (SCENARIO-16)
 - A v4 store built on this branch before `transfers.other_account` makes `Findings` fail with a read refusal; re-sync (SCENARIO-11)
 - `report/fakes_test.go` `fakeStore` lists methods explicitly; `cli` `fakeReportStore` embeds `report.Store`, so an unset `Findings` panics. Duplicate item amount is the transaction's; one-sided item amount is the leg's split (SCENARIO-11)
 - `cmd/quarry` `Test_run_help_prints_quarrys_description` pins the exact command list: a new subcommand needs its row (SCENARIO-11)

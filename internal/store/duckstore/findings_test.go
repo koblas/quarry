@@ -239,3 +239,32 @@ func Test_replace_counts_new_and_newly_fixed_as_the_findings_stamped_with_the_bu
 	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM findings WHERE first_found_at = (SELECT built_at FROM store_info) AND fixed_at IS NULL`, "1")
 	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM findings WHERE fixed_at = (SELECT built_at FROM store_info)`, "1")
 }
+
+func Test_replace_reports_each_findings_state_new_carried_reopened_and_newly_fixed(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	_, err := duckstore.New(dir).Replace(t.Context(), withFindingCandidates())
+	require.NoError(t, err)
+	_, err = duckstore.New(dir).Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	rows := withFindingCandidates()
+	rows.Transfers = slices.DeleteFunc(rows.Transfers, func(x store.Transfer) bool { return x.ID == "xfer-3" })
+	rows.Transactions = slices.DeleteFunc(rows.Transactions, func(x store.Transaction) bool { return x.ID == "txn-2" })
+	rows.Splits = slices.DeleteFunc(rows.Splits, func(x store.Split) bool { return x.ID == "split-5" })
+	rows.Payees = append(rows.Payees, store.Payee{ID: "payee-2", SourceID: 2, Name: "Bakery"})
+	rows.Transactions = append(rows.Transactions, store.Transaction{
+		ID: "txn-6", SourceID: 6, AccountID: "acct-1", Date: day(2026, 3, 16), PayeeID: new("payee-2"),
+		Amount: -100, Currency: "CAD", Status: "uncleared",
+	})
+	rows.Splits = append(rows.Splits, store.Split{ID: "split-8", SourceID: 8, TransactionID: "txn-6", Amount: -100})
+
+	replaced, err := duckstore.New(dir).Replace(t.Context(), rows)
+
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []finding.State{
+		{ID: "uncategorized:payee-2", New: true},
+		{ID: "uncategorized:payee-1"},
+		{ID: "one-sided-transfer:xfer-3", Fixed: true, NewlyFixed: true},
+		{ID: "uncategorized:no-payee"},
+	}, replaced.FindingStates)
+}

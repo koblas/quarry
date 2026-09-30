@@ -295,7 +295,7 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, e
 	}
 
 	builtAt := time.Now().UTC()
-	counts, err := build(ctx, db, rows, carried, s.quarryVersion, builtAt)
+	states, err := build(ctx, db, rows, carried, s.quarryVersion, builtAt)
 	if err != nil {
 		_ = db.Close()
 		removePartial(partialPath)
@@ -326,7 +326,7 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, e
 	atomicfile.SyncDir(s.dir)
 
 	return store.Replaced{
-		Path: finalPath, HistoryFault: historyFault, Findings: counts,
+		Path: finalPath, HistoryFault: historyFault, Findings: finding.Classify(states, nil).Counts, FindingStates: states,
 		FindingsCarried: carried.findingsCarried, FindingsFault: carried.findingsFault, StoreUnreadable: carried.unreadable,
 	}, nil
 }
@@ -391,22 +391,22 @@ func removePartial(path string) {
 }
 
 // build loads schema, views, rows, then findings merged with carried, then store_info last: a store
-// carrying it is complete. It returns the counts of the findings it recorded.
-func build(ctx context.Context, db DB, rows store.Rows, carried history, quarryVersion string, builtAt time.Time) (finding.Counts, error) {
+// carrying it is complete. It returns the state of each finding it recorded.
+func build(ctx context.Context, db DB, rows store.Rows, carried history, quarryVersion string, builtAt time.Time) ([]finding.State, error) {
 	if _, err := db.Exec(ctx, schemaDDL+accountBalancesViewDDL()+cashFlowViewDDL+spendingViewDDL); err != nil {
-		return finding.Counts{}, fmt.Errorf("create schema: %w", err)
+		return nil, fmt.Errorf("create schema: %w", err)
 	}
 	if err := loadRows(ctx, db, rows, carried); err != nil {
-		return finding.Counts{}, err
+		return nil, err
 	}
-	counts, err := loadFindings(ctx, db, carried.findings, builtAt)
+	states, err := loadFindings(ctx, db, carried.findings, builtAt)
 	if err != nil {
-		return finding.Counts{}, err
+		return nil, err
 	}
 	if err := appendTable(ctx, db, "store_info", [][]any{{int32(FormatVersion), quarryVersion, builtAt}}); err != nil {
-		return finding.Counts{}, err
+		return nil, err
 	}
-	return counts, nil
+	return states, nil
 }
 
 // loadRows bulk-loads every table of rows, and the carried import_runs ahead of the new run.

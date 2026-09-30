@@ -329,6 +329,17 @@ func Test_findingsPhrase(t *testing.T) {
 			want: "1 open, 1 fixed since the last sync; run quarry findings to list them",
 		},
 		{name: "fixed count thousands-grouped", counts: finding.Counts{NewlyFixed: 1200}, carried: true, want: "none open, 1,200 fixed since the last sync"},
+		{
+			name: "new, fixed and ignored", counts: finding.Counts{Open: 12, New: 3, Ignored: 4, Fixed: 2, NewlyFixed: 2}, carried: true,
+			want: "12 open (3 new), 2 fixed since the last sync, 4 ignored; run quarry findings to list them",
+		},
+		{name: "open and ignored", counts: finding.Counts{Open: 1, Ignored: 1}, want: "1 open, 1 ignored; run quarry findings to list them"},
+		{name: "none open, some ignored", counts: finding.Counts{Ignored: 4}, want: "none open, 4 ignored"},
+		{
+			name: "none open, fixed and ignored", counts: finding.Counts{Ignored: 4, Fixed: 2, NewlyFixed: 2}, carried: true,
+			want: "none open, 2 fixed since the last sync, 4 ignored",
+		},
+		{name: "ignored count thousands-grouped", counts: finding.Counts{Ignored: 1200}, want: "none open, 1,200 ignored"},
 	}
 
 	for _, c := range cases {

@@ -4,7 +4,9 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/spf13/cobra"
 )
@@ -82,13 +84,17 @@ prints one row per item, for a spreadsheet.`,
 				return err
 			}
 
-			req := report.FindingsRequest{}
+			req := report.FindingsRequest{Ignore: cfg.Ignore}
 			listing, err := srv.Findings(cmd.Context(), req)
 			if err != nil {
 				return &runtimeError{err: err}
 			}
+			unmatched := unmatchedIgnoreWarnings(homepath.Abbreviate(srv.Home(), cfg.Path), listing.Unmatched)
+			printConfigWarnings(cmd, unmatched)
 			out, err := renderResult(*jsonOut,
-				func() ([]byte, error) { return renderFindingsJSON(listing, cfg.Warnings) },
+				func() ([]byte, error) {
+					return renderFindingsJSON(listing, append(slices.Clone(cfg.Warnings), unmatched...))
+				},
 				func() string { return renderFindings(listing, len(req.Ignore) == 0) })
 			if err != nil {
 				// unreachable: renderResult fails only via marshalDocument, and the findings document holds strings, ints and slices; see marshalDocument.
@@ -102,6 +108,17 @@ prints one row per item, for a spreadsheet.`,
 	cmd.Flags().StringVar(&typ, "type", "",
 		"show only findings of this `type`: duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, payee-variants, similar-categories or unused-category")
 	return cmd
+}
+
+// unmatchedIgnoreWarnings is one line per findings.ignore element that names no finding, each
+// naming configShown, the config file as the user sees it.
+func unmatchedIgnoreWarnings(configShown string, unmatched []string) []string {
+	lines := make([]string, len(unmatched))
+	for i, id := range unmatched {
+		lines[i] = configShown + ": findings.ignore lists " + config.BasicString(id) +
+			", which is not a finding in quarry's store; quarry skips it"
+	}
+	return lines
 }
 
 // validateFindingsFlags refuses a --status that is not open, ignored, fixed or all, and a --type

@@ -26,11 +26,13 @@ type FindingsGroup struct {
 	Findings []store.Finding
 }
 
-// FindingsListing is the open findings grouped by type in display order, and the tallies over
-// every finding. A type with no open finding has no group.
+// FindingsListing is the open findings grouped by type in display order, the tallies over every
+// finding of a known type, and the findings.ignore elements that name none of them, in file order.
+// A type with no open finding has no group.
 type FindingsListing struct {
-	Groups []FindingsGroup
-	Counts finding.Counts
+	Groups    []FindingsGroup
+	Counts    finding.Counts
+	Unmatched []string
 }
 
 // Findings lists the open findings, grouped in finding.Types order and sorted within each group,
@@ -41,39 +43,28 @@ func (s *Server) Findings(ctx context.Context, req FindingsRequest) (FindingsLis
 	if err != nil {
 		return FindingsListing{}, s.readRefusal(ctx, findingsCommand, err)
 	}
-	ignored := make(map[string]bool, len(req.Ignore))
-	for _, id := range req.Ignore {
-		ignored[id] = true
-	}
 
 	known := map[finding.Type]bool{}
 	for _, typ := range finding.Types() {
 		known[typ] = true
 	}
-
-	var counts finding.Counts
-	open := map[finding.Type][]store.Finding{}
+	var stored []store.Finding
+	var states []finding.State
 	for _, f := range list.Findings {
 		if !known[f.Type] {
 			continue
 		}
-		switch finding.StatusOf(f.FixedAt != nil, ignored[f.ID]) {
-		case finding.StatusFixed:
-			counts.Fixed++
-			if f.NewlyFixed {
-				counts.NewlyFixed++
-			}
-		case finding.StatusIgnored:
-			counts.Ignored++
-		case finding.StatusOpen:
-			counts.Open++
-			if f.New {
-				counts.New++
-			}
+		stored = append(stored, f)
+		states = append(states, finding.State{ID: f.ID, Fixed: f.FixedAt != nil, New: f.New, NewlyFixed: f.NewlyFixed})
+	}
+	classified := finding.Classify(states, req.Ignore)
+
+	open := map[finding.Type][]store.Finding{}
+	for i, f := range stored {
+		if classified.Statuses[i] == finding.StatusOpen {
 			open[f.Type] = append(open[f.Type], f)
 		}
 	}
-
 	var groups []FindingsGroup
 	for _, typ := range finding.Types() {
 		if len(open[typ]) == 0 {
@@ -82,7 +73,7 @@ func (s *Server) Findings(ctx context.Context, req FindingsRequest) (FindingsLis
 		slices.SortStableFunc(open[typ], findingOrder(typ))
 		groups = append(groups, FindingsGroup{Type: typ, Findings: open[typ]})
 	}
-	return FindingsListing{Groups: groups, Counts: counts}, nil
+	return FindingsListing{Groups: groups, Counts: classified.Counts, Unmatched: classified.Unmatched}, nil
 }
 
 // findingOrder is the display order of open findings of typ: duplicate and one-sided by latest item

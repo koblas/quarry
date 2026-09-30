@@ -246,6 +246,12 @@ func Test_run_sync_json_counts_a_finding_fixed_since_the_last_sync(t *testing.T)
 
 // twoPayeeBundle mints both payees in every call, so each finding id is the same in every sync.
 func twoPayeeBundle(xCategorized, yCategorized bool) (*v9fixture.Builder, int64) {
+	b, xPK, _ := twoPayeeBundleKeys(xCategorized, yCategorized)
+	return b, xPK
+}
+
+// twoPayeeBundleKeys is twoPayeeBundle that also returns the second payee's key.
+func twoPayeeBundleKeys(xCategorized, yCategorized bool) (*v9fixture.Builder, int64, int64) {
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	xPK := b.Payee(v9fixture.PayeeRow{Name: "Amazon"})
@@ -266,7 +272,7 @@ func twoPayeeBundle(xCategorized, yCategorized bool) (*v9fixture.Builder, int64)
 		}
 		b.Entry(entry)
 	}
-	return b, xPK
+	return b, xPK, yPK
 }
 
 func Test_run_sync_from_an_older_snapshot_reopens_and_fixes_findings(t *testing.T) {
@@ -289,4 +295,90 @@ func Test_run_sync_from_an_older_snapshot_reopens_and_fixes_findings(t *testing.
 	assert.Equal(t, "Findings  1 open, 1 fixed since the last sync; run quarry findings to list them", lines[len(lines)-1])
 	assert.Equal(t, firstFoundAt+"|NULL", importRunQuery(t, home,
 		"SELECT id, CAST(first_found_at AS VARCHAR) || '|' || COALESCE(CAST(fixed_at AS VARCHAR), 'NULL') FROM findings")[xID])
+}
+
+// syncIgnoringTheNewFinding syncs x alone, then x and y under a config ignoring y, the finding first seen by the second sync.
+func syncIgnoringTheNewFinding(t *testing.T, home string, extra ...string) (int, string, string) {
+	t.Helper()
+	first, _, _ := twoPayeeBundleKeys(false, true)
+	second, _, yPK := twoPayeeBundleKeys(false, false)
+	syncFindingsBundleIn(t, home, "DocumentsA", first)
+	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [\"uncategorized:payee-%d\"]\n", yPK))
+	return syncNewBundle(t, home, "DocumentsB", second, extra...)
+}
+
+func Test_run_sync_counts_an_ignored_finding_as_ignored_not_open_or_new(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	exitCode, stdout, stderr := syncIgnoringTheNewFinding(t, home)
+
+	require.Equal(t, 0, exitCode, stderr)
+	lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
+	assert.Equal(t, "Findings  1 open, 1 ignored; run quarry findings to list them", lines[len(lines)-1])
+}
+
+func Test_run_sync_json_counts_an_ignored_finding_as_ignored_not_open_or_new(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	exitCode, stdout, stderr := syncIgnoringTheNewFinding(t, home, "--json")
+
+	require.Equal(t, 0, exitCode, stderr)
+	var parsed struct {
+		Store struct {
+			Findings json.RawMessage `json:"findings"`
+		} `json:"store"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &parsed))
+	assert.JSONEq(t, `{"open":1,"ignored":1,"fixed":0,"new":0,"newly_fixed":0}`, string(parsed.Store.Findings))
+}
+
+func Test_run_sync_counts_a_new_open_finding_beside_an_ignored_one(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	first, xPK, _ := twoPayeeBundleKeys(false, true)
+	second, _, _ := twoPayeeBundleKeys(false, false)
+	syncFindingsBundleIn(t, home, "DocumentsA", first)
+	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [\"uncategorized:payee-%d\"]\n", xPK))
+
+	exitCode, stdout, stderr := syncNewBundle(t, home, "DocumentsB", second)
+
+	require.Equal(t, 0, exitCode, stderr)
+	lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
+	assert.Equal(t, "Findings  1 open (1 new), 1 ignored; run quarry findings to list them", lines[len(lines)-1])
+}
+
+func Test_run_sync_from_counts_an_ignored_finding_as_ignored_not_open(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	first, xPK, _ := twoPayeeBundleKeys(false, true)
+	syncFindingsBundleIn(t, home, "DocumentsA", first)
+	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	firstID := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
+	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [\"uncategorized:payee-%d\"]\n", xPK))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--from", firstID}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	lines := strings.Split(strings.TrimSuffix(stdout.String(), "\n"), "\n")
+	assert.Equal(t, "Findings  none open, 1 ignored", lines[len(lines)-1])
+}
+
+func Test_run_sync_says_nothing_about_an_ignored_id_that_is_not_a_finding(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	first, _, _ := twoPayeeBundleKeys(false, true)
+	writeConfig(t, home, "[findings]\nignore = [\"uncategorized:payee-999\"]\n")
+
+	exitCode, stdout, stderr := syncNewBundle(t, home, "DocumentsA", first, "--json")
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Empty(t, stderr)
+	var parsed struct {
+		Warnings []string `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &parsed))
+	assert.Empty(t, parsed.Warnings)
 }

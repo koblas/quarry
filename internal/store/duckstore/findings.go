@@ -43,20 +43,20 @@ type detectedFinding struct {
 }
 
 // loadFindings detects the findings in the loaded tables, merges them with the carried ones, writes
-// findings and finding_items, and returns the counts; any fault is a build fault.
-func loadFindings(ctx context.Context, db DB, carried []carriedFinding, builtAt time.Time) (finding.Counts, error) {
+// findings and finding_items, and returns each finding's state; any fault is a build fault.
+func loadFindings(ctx context.Context, db DB, carried []carriedFinding, builtAt time.Time) ([]finding.State, error) {
 	detected, err := detectFindings(ctx, db)
 	if err != nil {
-		return finding.Counts{}, err
+		return nil, err
 	}
-	findingRows, itemRows, counts := mergeFindings(detected, carried, builtAt)
+	findingRows, itemRows, states := mergeFindings(detected, carried, builtAt)
 	if err := appendTable(ctx, db, "findings", findingRows); err != nil {
-		return finding.Counts{}, err
+		return nil, err
 	}
 	if err := appendTable(ctx, db, "finding_items", itemRows); err != nil {
-		return finding.Counts{}, err
+		return nil, err
 	}
-	return counts, nil
+	return states, nil
 }
 
 // detectFindings runs every detector against the build connection, in finding.Types order.
@@ -142,25 +142,25 @@ func detectUncategorized(ctx context.Context, db DB) ([]detectedFinding, error) 
 }
 
 // mergeFindings turns detected and carried findings into findings and finding_items rows; a carried finding keeps
-// its first_found_at and type, and is fixed at builtAt the first build that no longer detects it.
-func mergeFindings(detected []detectedFinding, carried []carriedFinding, builtAt time.Time) ([][]any, [][]any, finding.Counts) {
+// its first_found_at and type, and is fixed at builtAt the first build that no longer detects it. The
+// states describe every finding written: detected ones first, then carried ones no longer detected.
+func mergeFindings(detected []detectedFinding, carried []carriedFinding, builtAt time.Time) ([][]any, [][]any, []finding.State) {
 	prior := make(map[string]carriedFinding, len(carried))
 	for _, c := range carried {
 		prior[c.id] = c
 	}
-	var counts finding.Counts
+	states := make([]finding.State, 0, len(detected)+len(carried))
 	findingRows := make([][]any, 0, len(detected))
 	var itemRows [][]any
 	found := make(map[string]bool, len(detected))
 	for _, d := range detected {
 		found[d.id] = true
 		firstFoundAt := builtAt
-		if c, ok := prior[d.id]; ok {
+		c, carriedBefore := prior[d.id]
+		if carriedBefore {
 			firstFoundAt = c.firstFoundAt
-		} else {
-			counts.New++
 		}
-		counts.Open++
+		states = append(states, finding.State{ID: d.id, New: !carriedBefore})
 		findingRows = append(findingRows, []any{d.id, string(d.typ), firstFoundAt, nil})
 		for _, item := range d.items {
 			itemRows = append(itemRows, []any{d.id, nullableNull(item.transactionID), nullableNull(item.splitID), nil, nil})
@@ -171,14 +171,14 @@ func mergeFindings(detected []detectedFinding, carried []carriedFinding, builtAt
 			continue
 		}
 		fixedAt := c.fixedAt
-		if !fixedAt.Valid {
+		newlyFixed := !fixedAt.Valid
+		if newlyFixed {
 			fixedAt = sql.NullTime{Time: builtAt, Valid: true}
-			counts.NewlyFixed++
 		}
-		counts.Fixed++
+		states = append(states, finding.State{ID: c.id, Fixed: true, NewlyFixed: newlyFixed})
 		findingRows = append(findingRows, []any{c.id, c.typ, c.firstFoundAt, fixedAt.Time})
 	}
-	return findingRows, itemRows, counts
+	return findingRows, itemRows, states
 }
 
 // nullableNull is s as an appender value: its string, or nil for NULL.

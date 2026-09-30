@@ -99,16 +99,24 @@ func renderStore(result store.Result, home string) string {
 }
 
 // findingsPhrase renders the open count, with "(M new)" once history was carried and
-// "K fixed since the last sync"; "run quarry findings" follows only while any are open.
+// "K fixed since the last sync" and "J ignored"; "run quarry findings" follows only while any are open.
 func findingsPhrase(c finding.Counts, carried bool) string {
 	if c.Open == 0 {
-		return "none open" + fixedClause(c.NewlyFixed)
+		return "none open" + fixedClause(c.NewlyFixed) + ignoredClause(c.Ignored)
 	}
 	phrase := humanize.Thousands(c.Open) + " open"
 	if carried && c.New > 0 {
 		phrase += " (" + humanize.Thousands(c.New) + " new)"
 	}
-	return phrase + fixedClause(c.NewlyFixed) + "; run quarry findings to list them"
+	return phrase + fixedClause(c.NewlyFixed) + ignoredClause(c.Ignored) + "; run quarry findings to list them"
+}
+
+// ignoredClause renders ", J ignored", empty when none are ignored.
+func ignoredClause(ignored int) string {
+	if ignored == 0 {
+		return ""
+	}
+	return ", " + humanize.Thousands(ignored) + " ignored"
 }
 
 // fixedClause renders ", K fixed since the last sync", empty when none were fixed.

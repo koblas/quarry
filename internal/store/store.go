@@ -208,8 +208,9 @@ type Counts struct {
 // NotImported still describe the rows the build would have written.
 // HistoryFault is why the previous store's import runs were not carried
 // into a built store; nil when they were, or no store existed. Findings
-// counts what the build's detection recorded, zero when Built is false;
-// FindingsCarried is true iff the previous store's findings were read.
+// tallies FindingStates with no findings.ignore list, zero when Built is false;
+// FindingStates is the state of each finding the build recorded, so a caller can
+// recount them against an ignore list; FindingsCarried is true iff the previous store's findings were read.
 // FindingsFault is why a previous store that opened had findings that could not be read.
 // StoreUnreadable is true iff the previous store could not be opened at all.
 type Result struct {
@@ -221,6 +222,7 @@ type Result struct {
 	HistoryFault *OpenError
 	Findings     finding.Counts
 
+	FindingStates   []finding.State
 	FindingsCarried bool
 	FindingsFault   *OpenError
 	StoreUnreadable bool
@@ -228,13 +230,14 @@ type Result struct {
 
 // Replaced is what Store.Replace reports: the path it wrote, the fault that
 // kept the previous store's import runs from being carried, if any, the counts
-// of the findings it recorded, and whether the previous store's findings were carried.
+// of the findings it recorded, their states, and whether the previous store's findings were carried.
 // FindingsFault and StoreUnreadable mean what they do on Result.
 type Replaced struct {
 	Path         string
 	HistoryFault *OpenError
 	Findings     finding.Counts
 
+	FindingStates   []finding.State
 	FindingsCarried bool
 	FindingsFault   *OpenError
 	StoreUnreadable bool

@@ -15,6 +15,7 @@ type fakeStore struct {
 	Path          string
 	historyFault  *store.OpenError
 	findings      finding.Counts
+	states        []finding.State
 	carried       bool
 	findingsFault *store.OpenError
 	unreadable    bool
@@ -31,7 +32,7 @@ func (f *fakeStore) Replace(_ context.Context, rows store.Rows) (store.Replaced,
 	}
 	f.Rows = rows
 	return store.Replaced{
-		Path: f.Path, HistoryFault: f.historyFault, Findings: f.findings, FindingsCarried: f.carried,
+		Path: f.Path, HistoryFault: f.historyFault, Findings: f.findings, FindingStates: f.states, FindingsCarried: f.carried,
 		FindingsFault: f.findingsFault, StoreUnreadable: f.unreadable,
 	}, nil
 }
