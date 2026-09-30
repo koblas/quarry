@@ -153,12 +153,14 @@ func (s *Server) scanFolder() ([]snapshotFile, []string, error) {
 	return files, orphans, nil
 }
 
-// newestFirst orders by ID timestamp, then _N suffix (none oldest), as digits so it
-// never has to fit an integer; taken_at plays no part.
+// newestFirst orders by ID timestamp, then _N suffix by value (none oldest), read as digits so
+// it never has to fit an integer; equal values fall to the suffix text, fewer zeros first.
 func newestFirst(a, b snapshotFile) int {
+	digitsA, digitsB := strings.TrimLeft(a.suffix, "0"), strings.TrimLeft(b.suffix, "0")
 	return cmp.Or(
 		cmp.Compare(b.stamp, a.stamp),
-		cmp.Compare(len(b.suffix), len(a.suffix)),
+		cmp.Compare(len(digitsB), len(digitsA)),
+		cmp.Compare(digitsB, digitsA),
 		cmp.Compare(b.suffix, a.suffix),
 	)
 }

@@ -125,6 +125,34 @@ func Test_list_orders_a_suffix_too_long_for_an_integer_by_value(t *testing.T) {
 	assert.Equal(t, []string{idNewest + huge, idNewest + "_9"}, entryIDs(listing))
 }
 
+func Test_list_orders_a_suffix_with_leading_zeros_by_its_value(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	dir := snapshotsFolder(t, home)
+	for _, id := range []string{idNewest + "_010", idNewest + "_11"} {
+		writeSnapshot(t, dir, id, 1000)
+	}
+
+	listing, err := newListServer(home, nil).List(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{idNewest + "_11", idNewest + "_010"}, entryIDs(listing))
+}
+
+func Test_list_orders_suffixes_of_equal_value_by_their_text_with_fewer_zeros_first(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	dir := snapshotsFolder(t, home)
+	for _, id := range []string{idNewest + "_02", idNewest + "_2"} {
+		writeSnapshot(t, dir, id, 1000)
+	}
+
+	listing, err := newListServer(home, nil).List(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{idNewest + "_2", idNewest + "_02"}, entryIDs(listing))
+}
+
 func Test_list_totals_every_snapshot_including_one_with_no_manifest(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
