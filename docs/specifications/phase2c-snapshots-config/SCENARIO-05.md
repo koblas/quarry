@@ -28,9 +28,9 @@ Callers (all `grep`; gopls `findReferences` on `ResolveBundlePath` returned the 
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_quicken_path_test.go` (new) `Test_run_sync_snapshots_the_file_named_by_quicken_path` — `v9fixture.OpenBundle(t, ~/Books)`, empty dirs `~/Documents/A.quicken` + `B.quicken` (as `run_discovery_test.go:241-246`), `writeConfig` (`run_config_test.go:42-47`); bare `sync`; Source line, stderr empty, exit 0. No stub needed: it compiles against `run` and is red today on the several-files refusal (exit 1) — quote that
-- [ ] Step 2: same file, folded tests — `…refuses_a_quicken_path_that_does_not_exist` (K1, `~/Books/Missing.quicken`) and `…that_is_not_a_bundle` (K2, regular file `~/Books/notes.txt`): exact stderr with `configShown`, stdout empty, exit 1, no `snapshots` folder; red today on the no-bundle-found line. `…prefers_the_quicken_flag_over_quicken_path` (bundle reached as `~/Documents/A.quicken` by symlink, precedent `run_discovery_test.go:280-295`; same Missing config as K1) and `…from_ignores_quicken_path` (one `sync --quicken`, then the Missing config, store removed, `sync --from <id>` as `run_from_test.go:18-47`; store file exists, stderr empty, exit 0): both **green on arrival** — report so, no manufactured red; mutations 3 and 4 are their proof and the K1 test is their control arm
-- [ ] Step 3: `cmd/quarry/run_discovery_test.go:196-197,206-207,216-217,226-227,237-238,247-248,257-258` `Test_run_pools_bundles_across_both_documents_folders` — amend the seven `wantStderr` rows to the ruled #4 / #5 lines (SCENARIO-12's acceptance test; its "two bundles in ~/Documents" row is the scenario's Given); red on the old copy — quote one row of each line
+- [x] Step 1: `cmd/quarry/run_quicken_path_test.go` (new) `Test_run_sync_snapshots_the_file_named_by_quicken_path` — `v9fixture.OpenBundle(t, ~/Books)`, empty dirs `~/Documents/A.quicken` + `B.quicken` (as `run_discovery_test.go:241-246`), `writeConfig` (`run_config_test.go:42-47`); bare `sync`; Source line, stderr empty, exit 0. No stub needed: it compiles against `run` and is red today on the several-files refusal (exit 1) — quote that
+- [x] Step 2: same file, folded tests — `…refuses_a_quicken_path_that_does_not_exist` (K1, `~/Books/Missing.quicken`) and `…that_is_not_a_bundle` (K2, regular file `~/Books/notes.txt`): exact stderr with `configShown`, stdout empty, exit 1, no `snapshots` folder; red today on the no-bundle-found line. `…prefers_the_quicken_flag_over_quicken_path` (bundle reached as `~/Documents/A.quicken` by symlink, precedent `run_discovery_test.go:280-295`; same Missing config as K1) and `…from_ignores_quicken_path` (one `sync --quicken`, then the Missing config, store removed, `sync --from <id>` as `run_from_test.go:18-47`; store file exists, stderr empty, exit 0): both **green on arrival** — report so, no manufactured red; mutations 3 and 4 are their proof and the K1 test is their control arm
+- [x] Step 3: `cmd/quarry/run_discovery_test.go:196-197,206-207,216-217,226-227,237-238,247-248,257-258` `Test_run_pools_bundles_across_both_documents_folders` — amend the seven `wantStderr` rows to the ruled #4 / #5 lines (SCENARIO-12's acceptance test; its "two bundles in ~/Documents" row is the scenario's Given); red on the old copy — quote one row of each line
 
 ### Build
 - [ ] Step 4: `internal/snapshot/bundle.go:25-64` `ResolveBundlePath`, `:102-106` `notABundleRefusal` — unexported core taking the origin's two refusals (not-exist `:38-40`; not-a-bundle `:48-50`, `:54-55`); `ResolveBundlePath` stays the flag-origin wrapper; new `BundleChoice` + `ResolveBundle(home, choice)`: flag, else configured (K1/K2 copy), else `DiscoverBundle`. New `internal/snapshot/resolve_bundle_test.go` (`package snapshot_test`): `Test_ResolveBundle_prefers_the_flag_path_over_the_configured_one` (both are valid open bundles), `Test_ResolveBundle_refuses_a_bad_configured_path` (K1 missing; K2 plain file; K2 bundle without `data` — two arms), `Test_ResolveBundle_keeps_the_flag_refusals_when_quicken_path_is_also_set` (flag missing, flag plain file, each with a valid configured bundle)
@@ -63,3 +63,17 @@ Callers (all `grep`; gopls `findReferences` on `ResolveBundlePath` returned the 
 - `cfg.QuickenPath` keeps a trailing slash (`homepath.Expand` only); `filepath.Abs` at `bundle.go:30` cleans it — do not clean in `internal/config`
 - `v9fixture.OpenBundle` always names the bundle `Home.quicken`; `writeStatusFixtureBundle` leaves a transfer warning on stderr, so it cannot back a "stderr empty" assertion
 - Cobra strips the backticks in flag help; the Long sentence grows from 3 lines to 5, and `Test_run_prints_the_sync_help` (`run_usage_test.go:35-`) pins the neighbouring paragraphs — leave them
+
+## Phase report
+
+Run A done (steps 1-3 ticked). No production code touched; no stubs needed (tests compile against `run`).
+
+Files:
+- `cmd/quarry/run_quicken_path_test.go` (new): helpers `quickenPathConfig`, `assertRefusedBeforeSnapshotting`; tests 05, 07, 08, 06, 11.
+- `cmd/quarry/run_discovery_test.go:194-265`: seven `wantStderr` rows now the ruled #4 / #5 lines (`... or set quicken.path in " + configShown`).
+
+State (narrow `go test ./cmd/quarry/ -run 'quicken_path|pools_bundles'`):
+- RED at assertion: `Test_run_sync_snapshots_the_file_named_by_quicken_path` (exit 1, `found 2 .quicken files (~/Documents/A.quicken, ~/Documents/B.quicken); choose one with --quicken <path>`); `...does_not_exist` (K1) and `...is_not_a_bundle` (K2) both get today's `no .quicken file found ...; pass one with --quicken <path>`; all 7 `Test_run_pools_bundles_across_both_documents_folders` subtests (old copy without `or set quicken.path in ...`).
+- GREEN on arrival, as planned: `...prefers_the_quicken_flag_over_quicken_path` (06) and `...from_ignores_quicken_path` (11); mutations 3/4 are their proof, K1 test is the control arm.
+
+For B1 (steps 4-6): nothing to undo. `configShown` (`run_config_test.go:34`) is the const the tests use for the config path. Step 6 must also make `Test_run_sync_help_names_both_documents_folders` pin (not yet written).
