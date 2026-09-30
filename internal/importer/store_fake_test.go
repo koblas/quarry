@@ -3,6 +3,7 @@ package importer_test
 import (
 	"context"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -13,6 +14,7 @@ type fakeStore struct {
 	Rows         store.Rows
 	Path         string
 	historyFault *store.OpenError
+	findings     finding.Counts
 	nextErr      error
 	replaceCalls int
 }
@@ -25,5 +27,5 @@ func (f *fakeStore) Replace(_ context.Context, rows store.Rows) (store.Replaced,
 		return store.Replaced{}, f.nextErr
 	}
 	f.Rows = rows
-	return store.Replaced{Path: f.Path, HistoryFault: f.historyFault}, nil
+	return store.Replaced{Path: f.Path, HistoryFault: f.historyFault, Findings: f.findings}, nil
 }

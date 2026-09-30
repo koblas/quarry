@@ -4,6 +4,8 @@ import (
 	"errors"
 	"slices"
 	"time"
+
+	"github.com/koblas/quarry/internal/finding"
 )
 
 // Account is one row of the accounts table.
@@ -202,7 +204,8 @@ type Counts struct {
 // Path is then empty (Replace never ran) but Counts, Validation and
 // NotImported still describe the rows the build would have written.
 // HistoryFault is why the previous store's import runs were not carried
-// into a built store; nil when they were, or no store existed.
+// into a built store; nil when they were, or no store existed. Findings
+// counts what the build's detection recorded; zero when Built is false.
 type Result struct {
 	Path         string
 	Built        bool
@@ -210,13 +213,16 @@ type Result struct {
 	Validation   Validation
 	NotImported  NotImported
 	HistoryFault *OpenError
+	Findings     finding.Counts
 }
 
-// Replaced is what Store.Replace reports: the path it wrote, and the fault
-// that kept the previous store's import runs from being carried, if any.
+// Replaced is what Store.Replace reports: the path it wrote, the fault that
+// kept the previous store's import runs from being carried, if any, and the
+// counts of the findings it recorded.
 type Replaced struct {
 	Path         string
 	HistoryFault *OpenError
+	Findings     finding.Counts
 }
 
 // NotImported counts source rows a build deliberately leaves out of the

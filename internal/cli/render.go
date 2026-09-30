@@ -83,8 +83,8 @@ func writeDiffRow(b *strings.Builder, sign, label, value string) {
 	fmt.Fprintf(b, "  %s %-8s%s\n", sign, label, value)
 }
 
-// renderStore renders result's Store, Rows, Balances, Splits and Transfers
-// lines, appended after renderSuccess's block once a build was reached.
+// renderStore renders result's Store, Rows, Balances, Splits, Transfers and
+// Findings lines, appended after renderSuccess's block once a build was reached.
 func renderStore(result store.Result, home string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", homepath.Abbreviate(home, result.Path))
@@ -93,7 +93,17 @@ func renderStore(result store.Result, home string) string {
 	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(balanceCounts{Checked: bc.Checked, NeverReconciled: len(bc.NeverReconciled), InvestmentAccounts: bc.InvestmentAccounts}))
 	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits.Checked))
 	writeTransfers(&b, result.Validation.Transfers)
+	fmt.Fprintf(&b, "%-10s%s\n", "Findings", findingsPhrase(result.Findings.Open))
 	return b.String()
+}
+
+// findingsPhrase renders the open finding count as "none open", or "N open"
+// with the pointer to quarry findings.
+func findingsPhrase(open int) string {
+	if open == 0 {
+		return "none open"
+	}
+	return humanize.Thousands(open) + " open; run quarry findings to list them"
 }
 
 // writeTransfers appends tc's Transfers line, then one "?" row per

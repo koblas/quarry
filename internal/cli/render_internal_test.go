@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -243,12 +244,14 @@ func Test_renderStore_lists_one_sided_transfers_after_the_transfers_line(t *test
 		Validation: store.Validation{Transfers: store.TransferCheck{Paired: 2, OneSided: []store.OneSidedTransfer{
 			{Date: time.Date(2019, 6, 14, 0, 0, 0, 0, time.UTC), Account: "Chequing", Currency: "CAD", Active: true, Amount: -50000},
 		}}},
+		Findings: finding.Counts{Open: 2},
 	}
 
 	got := renderStore(result, "/Users/dave")
 
 	assert.True(t, strings.HasSuffix(got, "Transfers 2 paired, 1 one-sided\n"+
-		"  ? 2019-06-14  Chequing (CAD)  (no payee)  -500.00  other account: unknown\n"), got)
+		"  ? 2019-06-14  Chequing (CAD)  (no payee)  -500.00  other account: unknown\n"+
+		"Findings  2 open; run quarry findings to list them\n"), got)
 }
 
 func Test_renderStore_renders_the_store_rows_balances_splits_and_transfers_lines(t *testing.T) {
@@ -269,7 +272,26 @@ func Test_renderStore_renders_the_store_rows_balances_splits_and_transfers_lines
 		"Rows      1 transaction, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 3 investment transactions not imported\n"+
 		"Balances  1 account matches Quicken's last reconciled balance\n"+
 		"Splits    the 1 transaction equals the sum of its splits\n"+
-		"Transfers 2 paired\n", got)
+		"Transfers 2 paired\n"+
+		"Findings  none open\n", got)
+}
+
+func Test_findingsPhrase(t *testing.T) {
+	cases := []struct {
+		name string
+		open int
+		want string
+	}{
+		{name: "none open", open: 0, want: "none open"},
+		{name: "one open", open: 1, want: "1 open; run quarry findings to list them"},
+		{name: "many open, thousands-grouped", open: 1204, want: "1,204 open; run quarry findings to list them"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, findingsPhrase(c.open))
+		})
+	}
 }
 
 func Test_balancesPhrase(t *testing.T) {

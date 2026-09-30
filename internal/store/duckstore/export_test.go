@@ -9,3 +9,9 @@ const (
 
 // FormatCheckQueries lists every query openRead runs before a read's own query.
 var FormatCheckQueries = []string{columnExistsQuery, formatVersionQuery, snapshotPathQuery}
+
+// The detector queries build runs, so a test fake can fail one of them.
+const (
+	OneSidedTransferQuery = oneSidedTransferQuery
+	UncategorizedQuery    = uncategorizedQuery
+)

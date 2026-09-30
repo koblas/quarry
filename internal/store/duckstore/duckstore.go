@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/platform/atomicfile"
 	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/koblas/quarry/internal/store"
@@ -21,7 +22,7 @@ import (
 const FileName = "quarry.duckdb"
 
 // FormatVersion is the store format this build of quarry writes and reads.
-const FormatVersion = 3
+const FormatVersion = 4
 
 // develVersion is the quarry_version recorded when no build version is known.
 const develVersion = "(devel)"
@@ -55,6 +56,8 @@ const moneyWidth, moneyScale = 18, 2
 type DB interface {
 	Exec(ctx context.Context, query string, args ...any) (sql.Result, error)
 	AppendRows(ctx context.Context, table string, rows [][]any) error
+	// QueryRows runs query against the build file, calling row once per result row.
+	QueryRows(ctx context.Context, query string, args []any, row func(scan func(dest ...any) error) error) error
 	CheckpointClose(ctx context.Context) error
 	Close() error
 }
@@ -293,7 +296,8 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, e
 	}
 
 	builtAt := time.Now().UTC()
-	if err := build(ctx, db, rows, carried, s.quarryVersion, builtAt); err != nil {
+	counts, err := build(ctx, db, rows, carried, s.quarryVersion, builtAt)
+	if err != nil {
 		_ = db.Close()
 		removePartial(partialPath)
 		return store.Replaced{}, buildError(err)
@@ -322,7 +326,7 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, e
 	}
 	atomicfile.SyncDir(s.dir)
 
-	return store.Replaced{Path: finalPath, HistoryFault: historyFault}, nil
+	return store.Replaced{Path: finalPath, HistoryFault: historyFault, Findings: counts}, nil
 }
 
 // sweepLeftovers best-effort removes buildFilePattern matches in
@@ -385,12 +389,27 @@ func removePartial(path string) {
 }
 
 // build creates quarry's schema and views in db and bulk-loads every table
-// in rows, then store_info last: a store carrying it is complete.
-func build(ctx context.Context, db DB, rows store.Rows, carried history, quarryVersion string, builtAt time.Time) error {
+// in rows, then detects findings, then store_info last: a store carrying it is
+// complete. It returns the counts of the findings it recorded.
+func build(ctx context.Context, db DB, rows store.Rows, carried history, quarryVersion string, builtAt time.Time) (finding.Counts, error) {
 	if _, err := db.Exec(ctx, schemaDDL+accountBalancesViewDDL()+cashFlowViewDDL+spendingViewDDL); err != nil {
-		return fmt.Errorf("create schema: %w", err)
+		return finding.Counts{}, fmt.Errorf("create schema: %w", err)
 	}
+	if err := loadRows(ctx, db, rows, carried); err != nil {
+		return finding.Counts{}, err
+	}
+	counts, err := loadFindings(ctx, db, builtAt)
+	if err != nil {
+		return finding.Counts{}, err
+	}
+	if err := appendTable(ctx, db, "store_info", [][]any{{int32(FormatVersion), quarryVersion, builtAt}}); err != nil {
+		return finding.Counts{}, err
+	}
+	return counts, nil
+}
 
+// loadRows bulk-loads every table of rows, and the carried import_runs ahead of the new run.
+func loadRows(ctx context.Context, db DB, rows store.Rows, carried history) error {
 	if err := appendTable(ctx, db, "accounts", accountRows(rows.Accounts)); err != nil {
 		return err
 	}
@@ -423,10 +442,7 @@ func build(ctx context.Context, db DB, rows store.Rows, carried history, quarryV
 	if err := appendTable(ctx, db, "transfers", transferRows(rows.Transfers)); err != nil {
 		return err
 	}
-	if err := appendTable(ctx, db, "import_runs", importRunRows(carried, rows.ImportRuns)); err != nil {
-		return err
-	}
-	return appendTable(ctx, db, "store_info", [][]any{{int32(FormatVersion), quarryVersion, builtAt}})
+	return appendTable(ctx, db, "import_runs", importRunRows(carried, rows.ImportRuns))
 }
 
 // appendTable bulk-loads rows into table, naming the table on failure.

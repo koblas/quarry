@@ -96,7 +96,7 @@ func Test_run_reports_extra_schema_only_as_a_warning(t *testing.T) {
 	want := fmt.Sprintf(
 		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 1 account\n%-10s%s\n%-10s%s\n"+
 			"  + table   %s\n  + column  %s.%s\n  + column  %s.%s\n"+
-			"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
+			"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
 		"Snapshot", abbreviated(t, snapshotPath, home),
 		"Manifest", abbreviated(t, manifestPath, home),
 		"Source", abbreviated(t, bundle.Dir, home),
@@ -112,6 +112,7 @@ func Test_run_reports_extra_schema_only_as_a_warning(t *testing.T) {
 		"Balances", "no accounts to check; 1 never reconciled",
 		"Splits", "no transactions to check",
 		"Transfers", "none",
+		"Findings", "none open",
 	)
 	assert.Equal(t, want, stdout.String())
 

@@ -564,9 +564,9 @@ Ruled: the finding core (type list and order, id grammar, P2d-3 status function,
 | 29 (29) | Moved to `## Reference check` — manual review on the real file, no Go acceptance test, no architect or developer run |
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01: sync records findings and prints a Findings line
-- [ ] SCENARIO-02: a transfer with no matching leg is a one-sided-transfer finding
-- [ ] SCENARIO-03: uncategorized findings count what cashflow counts
+- [x] SCENARIO-01: sync records findings and prints a Findings line — `cmd/quarry/run_sync_findings_test.go` `Test_run_sync_records_findings_and_prints_the_findings_line`
+- [x] SCENARIO-02: a transfer with no matching leg is a one-sided-transfer finding — delivered by SCENARIO-01 — `cmd/quarry/run_sync_findings_test.go` `Test_run_sync_records_a_one_sided_transfer_with_its_from_split_as_the_item`
+- [x] SCENARIO-03: uncategorized findings count what cashflow counts — delivered by SCENARIO-01 — `cmd/quarry/run_sync_findings_test.go` `Test_run_sync_uncategorized_findings_hold_what_cashflow_counts`
 - [ ] SCENARIO-04: a successful sync lists one-sided transfers only as findings
 - [ ] SCENARIO-05: a validation failure says to fix them in Quicken
 - [ ] SCENARIO-06: a finding no longer found is marked fixed on the next sync

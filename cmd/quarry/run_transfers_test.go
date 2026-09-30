@@ -83,6 +83,7 @@ func Test_run_pairs_transfers_between_the_users_accounts(t *testing.T) {
 		[2]string{"Balances", "no accounts to check; 3 never reconciled"},
 		[2]string{"Splits", "all 4 transactions equal the sum of their splits"},
 		[2]string{"Transfers", "2 paired"},
+		[2]string{"Findings", "none open"},
 	), stdout.String())
 
 	db, err := duckdb.OpenReadOnly(t.Context(), storePath)
@@ -132,6 +133,7 @@ func Test_run_reports_no_transfers_for_a_file_with_no_transactions(t *testing.T)
 		[2]string{"Balances", "no accounts to check; 2 never reconciled"},
 		[2]string{"Splits", "no transactions to check"},
 		[2]string{"Transfers", "none"},
+		[2]string{"Findings", "none open"},
 	), stdout.String())
 }
 
@@ -171,6 +173,7 @@ func Test_run_counts_investment_transactions_without_importing_them(t *testing.T
 		[2]string{"Balances", "no accounts to check; 1 never reconciled and 1 investment account not checked"},
 		[2]string{"Splits", "all 2 transactions equal the sum of their splits"},
 		[2]string{"Transfers", "1 paired"},
+		[2]string{"Findings", "none open"},
 	), stdout.String())
 
 	db, err := duckdb.OpenReadOnly(t.Context(), storePath)
@@ -221,7 +224,8 @@ func Test_run_keeps_and_warns_about_one_sided_transfers(t *testing.T) {
 	)+
 		"  ? 2026-03-01  Chequing (CAD)  (no payee)      -1.00  other account: unknown\n"+
 		"  ? 2026-03-02  Chequing (CAD)  Landlord      -500.00  other account: Savings\n"+
-		"  ? 2026-03-03  Savings (CAD)   (no payee)  -1,204.17  other account: Old Visa (not in this file)\n",
+		"  ? 2026-03-03  Savings (CAD)   (no payee)  -1,204.17  other account: Old Visa (not in this file)\n"+
+		"Findings  3 open; run quarry findings to list them\n",
 		stdout.String())
 	assert.Equal(t, "quarry: warning: 3 transfers have no matching transaction in another account; "+
 		"quarry keeps them as one-sided transfers\n", stderr.String())

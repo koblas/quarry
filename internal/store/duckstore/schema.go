@@ -102,6 +102,19 @@ CREATE TABLE import_runs (
 	transfers_paired BIGINT,
 	transfers_cross_currency BIGINT
 );
+CREATE TABLE findings (
+	id VARCHAR PRIMARY KEY,
+	type VARCHAR NOT NULL,
+	first_found_at TIMESTAMP NOT NULL,
+	fixed_at TIMESTAMP
+);
+CREATE TABLE finding_items (
+	finding_id VARCHAR NOT NULL,
+	transaction_id VARCHAR,
+	split_id VARCHAR,
+	payee_id VARCHAR,
+	category_id VARCHAR
+);
 CREATE TABLE store_info (
 	format_version INTEGER NOT NULL,
 	quarry_version VARCHAR NOT NULL,

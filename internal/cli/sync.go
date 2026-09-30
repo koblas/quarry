@@ -49,6 +49,10 @@ must add up to the balance of its last reconciled statement in Quicken to the
 cent, and every transaction must equal the sum of its splits; if a check
 fails, the previous store is left unchanged.
 
+sync then looks for things to clean up in Quicken, such as uncategorized
+splits, one-sided transfers and possible duplicates; run quarry findings to
+list them. Findings never fail a sync.
+
 After it rebuilds the store, sync deletes the oldest snapshots beyond the
 newest 12 (snapshots.keep in ~/Library/Application Support/quarry/config.toml),
 never the one the store was built from; a failed sync deletes nothing. Run

@@ -483,6 +483,21 @@ type faultDB struct {
 	walOnClose       bool
 	appendFaultTable string
 	appendFault      error
+	queryFaultOn     string // the build query that fails with queryFault, or whose first row's scan fails with scanFault
+	queryFault       error
+	scanFault        error
+}
+
+// QueryRows fails with queryFault for the query queryFaultOn, hands its row callback a scan that
+// fails with scanFault, else queries for real.
+func (f *faultDB) QueryRows(ctx context.Context, query string, args []any, row func(scan func(dest ...any) error) error) error {
+	if f.queryFault != nil && query == f.queryFaultOn {
+		return f.queryFault
+	}
+	if f.scanFault != nil && query == f.queryFaultOn {
+		return row(func(...any) error { return f.scanFault })
+	}
+	return f.DB.QueryRows(ctx, query, args, row)
 }
 
 // AppendRows fails with appendFault for appendFaultTable, else appends for real.
