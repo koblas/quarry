@@ -27,9 +27,13 @@ type setting struct {
 	table, name, example string
 }
 
+// ignoreExample is a findings.ignore list as a user writes it, right of the equal sign.
+const ignoreExample = `["duplicate:txn-4410+txn-4412"]`
+
 var (
-	keepSetting = setting{table: "snapshots", name: "keep", example: "snapshots.keep = 12"}
-	pathSetting = setting{table: "quicken", name: "path", example: `quicken.path = "~/Documents/Home.quicken"`}
+	keepSetting   = setting{table: "snapshots", name: "keep", example: "snapshots.keep = 12"}
+	pathSetting   = setting{table: "quicken", name: "path", example: `quicken.path = "~/Documents/Home.quicken"`}
+	ignoreSetting = setting{table: "findings", name: "ignore", example: "findings.ignore = " + ignoreExample}
 )
 
 func (s setting) String() string { return strings.Join(s.key(), ".") }
@@ -43,7 +47,7 @@ type file struct {
 }
 
 // parse validates the whole file: syntax first, then snapshots.keep, then
-// quicken.path, then unknown keys.
+// quicken.path, then findings.ignore, then unknown keys.
 func (f file) parse() (Config, error) {
 	tree, err := f.tree()
 	if err != nil {
@@ -59,10 +63,16 @@ func (f file) parse() (Config, error) {
 		return Config{}, err
 	}
 
+	ignore, err := doc.ignore()
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		Path:        f.path,
 		Keep:        keep,
 		QuickenPath: homepath.Expand(f.home, quickenPath),
+		Ignore:      ignore,
 		Warnings:    doc.unknownKeys(),
 	}, nil
 }
@@ -198,6 +208,43 @@ func (d document) quickenPath() (string, error) {
 	return text, nil
 }
 
+// ignore is findings.ignore as written, file order and duplicates kept, nil when unset:
+// a list whose items are all strings. An item that is not one is refused by its place.
+func (d document) ignore() ([]string, error) {
+	value, present, err := d.lookup(ignoreSetting)
+	if err != nil || !present {
+		return nil, err
+	}
+	items, isList := value.([]any)
+	written, isWritten := d.written(ignoreSetting.key())
+	if !isList || !isWritten {
+		return nil, d.badValue(ignoreSetting.String()+" must be a list of finding ids in quotes, such as "+ignoreExample, d.got(ignoreSetting.key()))
+	}
+	for i, item := range arrayItems(written.value) {
+		if !strings.HasPrefix(item, `"`) && !strings.HasPrefix(item, "'") {
+			return nil, d.badValue(ignoreSetting.String()+" must hold only finding ids in quotes", strings.Join(strings.Fields(item), " ")+" as item "+strconv.Itoa(i+1))
+		}
+	}
+	var ids []string
+	for _, item := range items {
+		id, _ := item.(string) // every item is a string: arrayItems found no other
+		ids = append(ids, id)
+	}
+
+	return ids, nil
+}
+
+// written is the key-value entry at key, which a header or dotted keys never make.
+func (d document) written(key []string) (entry, bool) {
+	for _, e := range d.entries {
+		if e.kind == unstable.KeyValue && slices.Equal(e.key, key) {
+			return e, true
+		}
+	}
+
+	return entry{}, false
+}
+
 // lookup finds s in the values. A table written as a plain value is refused.
 func (d document) lookup(s setting) (any, bool, error) {
 	entry, found := d.tree[s.table]
@@ -232,7 +279,14 @@ func (d document) got(key []string) string {
 }
 
 // knownKeys are the paths quarry reads; a header or key at any other path is unknown.
-var knownKeys = [][]string{{keepSetting.table}, keepSetting.key(), {pathSetting.table}, pathSetting.key()}
+var knownKeys = [][]string{
+	{keepSetting.table},
+	keepSetting.key(),
+	{pathSetting.table},
+	pathSetting.key(),
+	{ignoreSetting.table},
+	ignoreSetting.key(),
+}
 
 // unknownKeys is one warning per key the file has beyond the known ones, in
 // file order, matched by exact spelling. A table is named once, not once per child.

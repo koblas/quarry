@@ -1,6 +1,6 @@
 # phase2d-findings — current state
 
-Scenarios complete: SCENARIO-01..14 (02, 03 delivered by 01; 05 by 04; 07 by 06; 10 by 09; 12, 13 by 11). Last updated by SCENARIO-14.
+Scenarios complete: SCENARIO-01..15 (02, 03 delivered by 01; 05 by 04; 07 by 06; 10 by 09; 12, 13 by 11). Last updated by SCENARIO-15.
 
 ## Binding decisions
 - `internal/finding` is the leaf (stdlib only) owning type names/order, id grammar (`ID`, `PairID`, `NoPayee`), `StatusOf`, the fix table and `Counts`; `store`, `duckstore`, `snapshot`, `report` and the `findings` command (11) import it (SCENARIO-01)
@@ -23,11 +23,14 @@ Scenarios complete: SCENARIO-01..14 (02, 03 delivered by 01; 05 by 04; 07 by 06;
 - Sort: duplicate and one-sided by latest item date desc then id; uncategorized by item count desc, payee case-insensitive, id; other types by id. Duplicate item rows render in pair-id order (lower source id first), not date order — accepted (SCENARIO-11)
 - `sync --json` `store.findings` is `{open, ignored, fixed, new, newly_fixed}` ints, null iff `Built` false; 19's `status --json` needs `ignored: null`, so it must not reuse `findingsDocument` as is (SCENARIO-04)
 
+- `config.Config.Ignore []string` is `findings.ignore` as written: file order, duplicates, `""` and unknown prefixes kept, nil when unset (whole-struct `assert.Equal` tests break on a non-nil empty slice); 16 fills `FindingsRequest.Ignore` from it, 17's W1 needs every element. Validation order: `snapshots.keep`, `quicken.path`, `findings.ignore`, unknown keys; first refusal wins (SCENARIO-15)
+- `internal/config/items.go` `arrayItems` splits `entry.value` text only to find C6e's item index and raw text (first non-string item, from 1); values come from the decoded tree. Comments skipped, nesting/multi-line strings honoured (SCENARIO-15)
+
 ## Left unbuilt
 - `J ignored` Findings-line clause and `Counts.Ignored` (stays 0 from `duckstore`; 16 sets it via a `snapshot` option) — 16
 - `findings --csv` and the `--csv --json` line — 22
 - `--status`/`--type` filtering (values validated, not passed on), `ignored` marker, `fixed <date>` lines, fixed sort; `findings --json` hardcodes `status` "open", `type` null and `fixed_at` nil, and `items` is `[]` for a fixed finding — 18
-- `Config` ignore field, C6/C6e — 15; `FindingsRequest.Ignore` filled from config — 16; W1 — 17
+- `FindingsRequest.Ignore` filled from `cfg.Ignore` — 16; W1 — 17
 - `findings --json` item `category`, `transactions` and `splits` are always null until 24-28 fill them (`findingItemDocument`); rows and sort rules for unlinked-transfer, mixed-categories, payee-variants, similar-categories, unused-category; `findingLines`' `// unreachable` final `return nil` must go when 24-28 add their types; payee-variants / similar-categories headers use `(N groups)` — 24-28
 
 ## Traps
@@ -49,6 +52,8 @@ Scenarios complete: SCENARIO-01..14 (02, 03 delivered by 01; 05 by 04; 07 by 06;
 
 - A sync fixture with two equal-amount transactions in one account within 3 days now raises a `duplicate` finding: give look-alikes distinct amounts (`twoPayeeBundle` second txn is -11.00) — never weaken the detector (SCENARIO-09)
 - Duplicate test names in `duckstore/findings_duplicate_test.go` do not all contain `duplicate`: use `-run 'flag|duplicate'` (SCENARIO-09)
+
+- go-toml `unstable` array/inline-table nodes carry no usable `Raw`, so compound item text comes from splitting `entry.value`; `[[findings.ignore]]` (`ArrayTable`) must go to C6 `got a list of tables`, never C6e — `written` only accepts KeyValue entries (SCENARIO-15)
 
 ## Open debts
 - Orchestrator: the Reference check (real-file review of heuristic findings) runs after SCENARIO-28, before the gate round (unowned until then)

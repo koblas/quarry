@@ -24,6 +24,8 @@ type Config struct {
 	Keep int
 	// QuickenPath is quicken.path with a leading "~/" expanded, "" when unset.
 	QuickenPath string
+	// Ignore is findings.ignore as written: file order, duplicates and any text kept, nil when unset.
+	Ignore []string
 	// Warnings holds one line per unknown key, in file order.
 	Warnings []string
 }
@@ -31,7 +33,8 @@ type Config struct {
 // Load reads the config file at path, resolving "~/" against home. A missing
 // or empty file yields the defaults. It refuses, with an error whose text is
 // the whole line for the user, a file that cannot be read, is not valid TOML,
-// or holds a bad value for a known key; unknown keys are Config.Warnings.
+// or holds a bad value for a known key (snapshots.keep, quicken.path,
+// findings.ignore); unknown keys are Config.Warnings.
 func Load(home, path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {

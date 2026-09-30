@@ -356,7 +356,7 @@ func Test_load_keeps_the_known_values_beside_unknown_keys(t *testing.T) {
 }
 
 func Test_load_has_no_warnings_when_every_key_is_known(t *testing.T) {
-	_, cfg, err := load(t, "snapshots.keep = 2\n")
+	_, cfg, err := load(t, "snapshots.keep = 2\nquicken.path = \"/x/Home.quicken\"\n[findings]\nignore = [\"a\"]\n")
 
 	require.NoError(t, err)
 	assert.Empty(t, cfg.Warnings)
