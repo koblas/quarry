@@ -34,10 +34,10 @@ Neutrality rule for every step: no `*_test.go`, `testdata` or `cmd/` hunk. Grep 
   Unchanged: `report_help_test.go`, `spend_window_test.go`, `spend_account_test.go`, `spend_empty_test.go`, `json_*_internal_test.go`, cmd `run_*spend*`/`run_cashflow*` tests
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on every new/moved symbol (`go doc ./internal/store OpenError` reads as the contract); `filter.go` has no doc of history
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on every new/moved symbol (`go doc ./internal/store OpenError` reads as the contract); `filter.go` has no doc of history
 
 ### Verify
-- [ ] Step 6: full verification (`.claude/rules/agent-briefs.md`) incl. `go test -race ./internal/store/... ./internal/report/ ./internal/cli/`; `test-stats.py --base <start> --changed` → ±0 everywhere (expect no rows); `git diff --exit-code <start> -- '*_test.go' cmd/ ':(glob)**/testdata/**'` empty; no `--json` field, help string or golden changed; `spec-check.py phase2c-snapshots-config` plain (no tick — PRE-01 is traced in `METRICS.md` only); create `docs/specifications/phase2c-snapshots-config/STATE.md` (first 2c unit); do NOT edit 2b `STATE.md` (orchestrator closes that debt at SHIP, surface #9)
+- [x] Step 6: full verification (`.claude/rules/agent-briefs.md`) incl. `go test -race ./internal/store/... ./internal/report/ ./internal/cli/`; `test-stats.py --base <start> --changed` → ±0 everywhere (expect no rows); `git diff --exit-code <start> -- '*_test.go' cmd/ ':(glob)**/testdata/**'` empty; no `--json` field, help string or golden changed; `spec-check.py phase2c-snapshots-config` plain (no tick — PRE-01 is traced in `METRICS.md` only); create `docs/specifications/phase2c-snapshots-config/STATE.md` (first 2c unit); do NOT edit 2b `STATE.md` (orchestrator closes that debt at SHIP, surface #9)
 
 ## Handoff
 
@@ -59,16 +59,4 @@ Neutrality rule for every step: no `*_test.go`, `testdata` or `cmd/` hunk. Grep 
 
 ## Phase report
 
-Run B2 (steps 3-4) — done; committed. Green on `go test ./internal/store/... ./internal/report/ ./internal/cli/` and `go test ./cmd/quarry/ -run 'spend|cashflow|refuse'`; `git diff --exit-code b9bb83c -- '*_test.go' cmd/ ':(glob)**/testdata/**'` empty. Also ran early (V still owns the official pass): `golangci-lint run ./...` 0 issues; covered full suite rc=0; `uncovered-diff.py` 0 uncovered, 1 declared unreachable (`output.go` `emitReport`); `test-stats.py --base b9bb83c --changed` TOTAL +0.
-
-Earlier run B1 (steps 1-2), unchanged: `filter.go` owns `accountFilter/readArgs/civilDay/transactionRangeQuery/transactionRange`; `report/period.go` `fillSeries`; `DefaultWindow` in `report/window.go`; `(*store.OpenError).UnreadableReason`.
-
-B2 files:
-- `internal/cli/render_table.go` (new): `renderTable(caption, rows)`, `windowCaption`, `accountsCaption` (was `spendingAccountsCaption`), consts `tableTotalLabel`, `tablePartialStatus`. `render_spend.go`, `render_cashflow.go` now only build rows (`cashFlowColumns` const gone). `json.go:13` `jsonDateLayout = time.DateOnly`.
-- `internal/cli/window.go`: `windowFlags` -> `reportFlags` (since, until, accounts); `bind` registers `--since`, `--until`, `--account` (commands register `--by` first). `spend.go`/`cashflow.go` use it; consts `spendCommand`, `cashFlowCommand` (cli, used for `Use:` and `leftOutWarnings`).
-- `internal/cli/output.go`: `emitReport` (renderResult -> emit) with the single `// unreachable:` comment; both commands call it.
-- `internal/cli/json_spend.go`: `accountFilterDocument` + `accountFilterDocuments(accounts)`, used by `json_cashflow.go`. NOT named `accountDocument`: that name is already sync's `never_reconciled` entry in `json.go` (plan 4c named it in error).
-- `internal/cli/empty_window.go`: `allLeftOut(accounts)`.
-- `internal/report/spending.go`, `cashflow.go`: consts `spendCommand`, `cashFlowCommand` replace the `"spend"`/`"cashflow"` literals (step 4e, report side). `report/accounts.go` / `report.go` `"accounts"`/`"status"` literals left as is (out of plan).
-
-For V: nothing left to build. Run Sweep/Verify, create 2c `STATE.md` (record `store.CashFlowFigures` as unowned Open debt), `spec-check.py phase2c-snapshots-config`, set `status: done`. Do not edit 2b STATE.md.
+Run V (steps 5-6) — done. `go build ./...` ok; `golangci-lint run ./...` 0 issues; covered full suite rc=0; `uncovered-diff.py` 0 uncovered, 1 declared unreachable (`internal/cli/output.go` `emitReport`); `go test -race ./internal/store/... ./internal/report/ ./internal/cli/` ok; `test-stats.py --base b9bb83c --changed` TOTAL 0 (+0); neutrality diff empty; `spec-check.py phase2c-snapshots-config` OK. `STATE.md` created (`store.CashFlowFigures` unowned Open debt). 2b STATE.md untouched. Nothing left.
