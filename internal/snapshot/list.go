@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
@@ -198,11 +199,12 @@ func (s *Server) storeSnapshot(ctx context.Context) (string, string, error) {
 }
 
 // markStoreSnapshot sets Store on the entry that is the file recorded names: the one
-// whose symlink-resolved path matches, else the one whose ID is the recorded file's.
+// that is the same file on disk, else the one whose ID is the recorded file's, letter case aside.
 func markStoreSnapshot(entries []Entry, recorded string) {
-	if want := resolvedPath(recorded); want != "" {
+	if want, err := os.Stat(recorded); err == nil {
 		for i := range entries {
-			entries[i].Store = resolvedPath(entries[i].Path) == want
+			info, err := os.Stat(entries[i].Path)
+			entries[i].Store = err == nil && os.SameFile(want, info)
 		}
 	}
 	if slices.ContainsFunc(entries, func(e Entry) bool { return e.Store }) {
@@ -210,15 +212,6 @@ func markStoreSnapshot(entries []Entry, recorded string) {
 	}
 	id := ID(recorded)
 	for i := range entries {
-		entries[i].Store = entries[i].ID == id
+		entries[i].Store = strings.EqualFold(entries[i].ID, id)
 	}
-}
-
-// resolvedPath is path with symlinks resolved, or "" when it does not resolve.
-func resolvedPath(path string) string {
-	resolved, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return ""
-	}
-	return resolved
 }
