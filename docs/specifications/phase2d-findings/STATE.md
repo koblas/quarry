@@ -36,5 +36,4 @@ Scenarios complete: SCENARIO-01..07 (02, 03 delivered by 01; 05 by 04; 07 by 06)
 - Test names for `-run` patterns are matched lowercase-first in this repo's narrow loops; capitalised patterns match nothing (SCENARIO-06)
 
 ## Open debts
-- Orchestrator: the findings `Long` line "the splits quarry cashflow counts as uncategorized" needs a product-vision copy ruling before SCENARIO-11 — cashflow prints no uncategorized count (SCENARIO-11)
 - Orchestrator: the Reference check (real-file review of heuristic findings) runs after SCENARIO-28, before the gate round (unowned until then)

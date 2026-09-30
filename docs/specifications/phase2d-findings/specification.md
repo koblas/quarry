@@ -84,8 +84,8 @@ quarry looks for:
   unlinked-transfer   two transactions in different accounts of the same
                       currency that look like one transfer (opposite
                       amounts, within 3 days) but are not linked as one
-  uncategorized       splits with no category, one finding per payee: the
-                      splits quarry cashflow counts as uncategorized
+  uncategorized       splits with no category, one finding per payee;
+                      quarry cashflow counts them as income or spending
   mixed-categories    a payee whose transactions go back and forth between
                       categories
   payee-variants      payees whose names differ only in case, punctuation,
@@ -237,6 +237,7 @@ Ignore a finding by adding its id to findings.ignore in ~/Library/Application Su
 |---|---|
 | previous store unreadable at open (store-level fault) | replaces CF2 for this case: `quarry: warning: cannot carry import history and findings forward from the previous store (<reason>); both start again with this sync` |
 | only `import_runs` faulty | the existing CF2 line, unchanged |
+| `import_runs` and `findings` both faulty (store opens) | two lines, each with its own reason: the existing CF2 line, then the findings-only line; stderr order manifest, CF2, findings, prune; two `warnings[]` entries in that order (ruled mid-feature, SCENARIO-08) |
 | only `findings` faulty | `quarry: warning: cannot carry findings forward from the previous store (<reason>); findings history starts again with this sync` |
 | `findings` reasons | ids not unique: `its findings table repeats an id`; a required column (`id`, `type`, `first_found_at`) missing or NULL, or any other row fault: `its findings table is incomplete` |
 | previous store has no `findings` table (format 3) | silent; history starts |
