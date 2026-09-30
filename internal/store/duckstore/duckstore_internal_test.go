@@ -23,7 +23,7 @@ func Test_build_fails_when_the_schema_already_exists(t *testing.T) {
 	_, err = db.Exec(t.Context(), schemaDDL)
 	require.NoError(t, err)
 
-	err = build(t.Context(), db, store.Rows{}, "(devel)", time.Now())
+	err = build(t.Context(), db, store.Rows{}, history{}, "(devel)", time.Now())
 
 	require.Error(t, err)
 }

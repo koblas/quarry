@@ -212,31 +212,18 @@ func Test_run_accounts_refuses_a_store_that_cannot_be_read(t *testing.T) {
 		stderr.String())
 }
 
-func Test_run_status_refuses_a_store_without_exactly_one_import_run(t *testing.T) {
-	cases := []struct {
-		name  string
-		stmt  string
-		found string
-	}{
-		{name: "no import run", stmt: "DELETE FROM import_runs", found: "0"},
-		{name: "two import runs", stmt: "INSERT INTO import_runs SELECT * REPLACE (id + 1 AS id) FROM import_runs", found: "2"},
-	}
+func Test_run_status_refuses_a_store_without_an_import_run(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncAccountsFixture(t, home)
+	editStore(t, home, "DELETE FROM import_runs")
+	var stdout, stderr bytes.Buffer
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
-			syncAccountsFixture(t, home)
-			editStore(t, home, c.stmt)
-			var stdout, stderr bytes.Buffer
+	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
 
-			exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
-
-			assert.Equal(t, 1, exitCode)
-			assert.Empty(t, stdout.String())
-			assert.Equal(t, "quarry: cannot read the store at "+abbreviated(t, storePathUnder(home), home)+
-				": expected exactly one import run, found "+c.found+"; run quarry sync to rebuild it\n",
-				stderr.String())
-		})
-	}
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: cannot read the store at "+abbreviated(t, storePathUnder(home), home)+
+		": expected exactly one import run, found 0; run quarry sync to rebuild it\n",
+		stderr.String())
 }

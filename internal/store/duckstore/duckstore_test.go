@@ -316,8 +316,8 @@ func duplicatePKRows() store.Rows {
 	return rows
 }
 
-// One row per table, each corrupted by duplicating its only row while
-// every earlier table stays valid.
+// One row per table but import_runs (the store numbers its ids), each corrupted by
+// duplicating its only row while every earlier table stays valid.
 func Test_replace_fails_when_any_tables_rows_fail_to_append(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -332,7 +332,6 @@ func Test_replace_fails_when_any_tables_rows_fail_to_append(t *testing.T) {
 		{"splits", func(r store.Rows) store.Rows { r.Splits = append(r.Splits, r.Splits[0]); return r }},
 		{"split_tags", func(r store.Rows) store.Rows { r.SplitTags = append(r.SplitTags, r.SplitTags[0]); return r }},
 		{"transfers", func(r store.Rows) store.Rows { r.Transfers = append(r.Transfers, r.Transfers[0]); return r }},
-		{"import_runs", func(r store.Rows) store.Rows { r.ImportRuns = append(r.ImportRuns, r.ImportRuns[0]); return r }},
 	}
 
 	for _, c := range cases {
@@ -345,6 +344,17 @@ func Test_replace_fails_when_any_tables_rows_fail_to_append(t *testing.T) {
 			require.Error(t, err)
 		})
 	}
+}
+
+func Test_replace_fails_when_import_runs_cannot_be_written(t *testing.T) {
+	t.Parallel()
+	st := newFaultStore(t.TempDir(), &faultDB{appendFaultTable: "import_runs", appendFault: &duckdbdriver.Error{
+		Type: duckdbdriver.ErrorTypeConstraint, Msg: "Constraint Error: Duplicate key \"id: 1\" violates primary key constraint",
+	}})
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.ErrorContains(t, err, "load import_runs")
 }
 
 func Test_replace_fails_when_a_transactions_amount_is_out_of_range(t *testing.T) {

@@ -172,7 +172,7 @@ const (
 	columnExistsQuery = `SELECT count(*) FROM duckdb_columns()
 WHERE database_name = current_database() AND schema_name = 'main' AND table_name = ? AND column_name = ?`
 	formatVersionQuery = `SELECT format_version FROM store_info`
-	snapshotPathQuery  = `SELECT snapshot_path FROM import_runs`
+	snapshotPathQuery  = `SELECT snapshot_path FROM import_runs ORDER BY id DESC LIMIT 1`
 )
 
 // openFault classifies err, a failed open or format check of the store at path.
@@ -241,20 +241,18 @@ func checkFormat(ctx context.Context, db ReadDB, path string) error {
 	}
 }
 
-// snapshotPath is the import run's snapshot path, or "" when import_runs
-// cannot yield exactly one.
+// snapshotPath is the latest import run's snapshot path, or "" when
+// import_runs has no run to name.
 func snapshotPath(ctx context.Context, db ReadDB) string {
 	hasPath, _ := hasColumn(ctx, db, "import_runs", "snapshot_path")
 	if !hasPath { // false on a catalog fault too
 		return ""
 	}
 	var path sql.NullString
-	rows := 0
 	err := db.QueryRows(ctx, snapshotPathQuery, nil, func(scan func(dest ...any) error) error {
-		rows++
 		return scan(&path)
 	})
-	if err != nil || rows != 1 {
+	if err != nil {
 		return ""
 	}
 	return path.String
@@ -282,6 +280,8 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, e
 	}
 	s.sweepLeftovers()
 
+	carried, historyFault := s.readHistory(ctx)
+
 	finalPath := s.Path()
 	partialPath := filepath.Join(s.dir, partialName(time.Now()))
 
@@ -292,7 +292,7 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, e
 	}
 
 	builtAt := time.Now().UTC()
-	if err := build(ctx, db, rows, s.quarryVersion, builtAt); err != nil {
+	if err := build(ctx, db, rows, carried, s.quarryVersion, builtAt); err != nil {
 		_ = db.Close()
 		removePartial(partialPath)
 		return store.Replaced{}, buildError(err)
@@ -321,7 +321,7 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, e
 	}
 	atomicfile.SyncDir(s.dir)
 
-	return store.Replaced{Path: finalPath}, nil
+	return store.Replaced{Path: finalPath, HistoryFault: historyFault}, nil
 }
 
 // sweepLeftovers best-effort removes buildFilePattern matches in
@@ -385,7 +385,7 @@ func removePartial(path string) {
 
 // build creates quarry's schema and views in db and bulk-loads every table
 // in rows, then store_info last: a store carrying it is complete.
-func build(ctx context.Context, db DB, rows store.Rows, quarryVersion string, builtAt time.Time) error {
+func build(ctx context.Context, db DB, rows store.Rows, carried history, quarryVersion string, builtAt time.Time) error {
 	if _, err := db.Exec(ctx, schemaDDL+accountBalancesViewDDL()+cashFlowViewDDL+spendingViewDDL); err != nil {
 		return fmt.Errorf("create schema: %w", err)
 	}
@@ -422,7 +422,7 @@ func build(ctx context.Context, db DB, rows store.Rows, quarryVersion string, bu
 	if err := appendTable(ctx, db, "transfers", transferRows(rows.Transfers)); err != nil {
 		return err
 	}
-	if err := appendTable(ctx, db, "import_runs", importRunRows(rows.ImportRuns)); err != nil {
+	if err := appendTable(ctx, db, "import_runs", importRunRows(carried, rows.ImportRuns)); err != nil {
 		return err
 	}
 	return appendTable(ctx, db, "store_info", [][]any{{int32(FormatVersion), quarryVersion, builtAt}})
@@ -541,12 +541,12 @@ func transferRows(transfers []store.Transfer) [][]any {
 	return out
 }
 
-func importRunRows(runs []store.ImportRun) [][]any {
-	out := make([][]any, len(runs))
+func importRunRows(carried history, runs []store.ImportRun) [][]any {
+	out := append([][]any(nil), carried.rows...)
 	for i, r := range runs {
 		c := r.Counts
-		out[i] = []any{
-			r.ID, r.StartedAt, r.FinishedAt, r.Snapshot.Path, r.Snapshot.SHA256, r.Snapshot.SchemaFingerprint,
+		out = append(out, []any{
+			carried.maxID + int64(i) + 1, r.StartedAt, r.FinishedAt, r.Snapshot.Path, r.Snapshot.SHA256, r.Snapshot.SchemaFingerprint,
 			int64(c.Accounts), int64(c.Categories), int64(c.Payees), int64(c.Tags),
 			int64(c.Transactions), int64(c.Splits), int64(c.SplitTags), int64(c.Transfers),
 			int64(r.BalancesChecked), int64(r.BalancesMismatched), int64(r.SplitsMismatched),
@@ -554,7 +554,7 @@ func importRunRows(runs []store.ImportRun) [][]any {
 			nullableTime(r.Snapshot.TakenAt), nullableNonEmpty(r.Snapshot.Source),
 			int64(r.BalancesNeverReconciled), int64(r.InvestmentAccounts),
 			int64(r.TransfersPaired), int64(r.TransfersCrossCurrency),
-		}
+		})
 	}
 	return out
 }

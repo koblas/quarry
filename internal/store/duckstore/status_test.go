@@ -97,33 +97,46 @@ func Test_status_reports_no_dates_for_a_store_without_transactions(t *testing.T)
 	assert.True(t, got.LastDate.IsZero())
 }
 
-func Test_status_refuses_a_store_without_exactly_one_import_run(t *testing.T) {
+// addImportRun copies the store's first run as a run of its own id, snapshot path and accounts count,
+// through a writable connection closed before any read.
+func addImportRun(t *testing.T, st *duckstore.Store, id int, snapshotPath string, accounts int) {
+	t.Helper()
+	conn, err := sql.Open("duckdb", st.Path())
+	require.NoError(t, err)
+	const clone = "INSERT INTO import_runs SELECT * REPLACE (? AS id, ? AS snapshot_path, ? AS accounts_rows) " + //nolint:unqueryvet // a copy of the row is the point
+		"FROM import_runs WHERE id = (SELECT min(id) FROM import_runs)"
+	_, err = conn.ExecContext(t.Context(), clone, id, snapshotPath, accounts)
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+}
+
+func Test_status_reads_the_latest_import_run(t *testing.T) {
 	t.Parallel()
-	second := minimalRows().ImportRuns[0]
-	second.ID = 2
-	cases := []struct {
-		name  string
-		runs  []store.ImportRun
-		found string
-	}{
-		{name: "no import run", runs: nil, found: "0"},
-		{name: "two import runs", runs: append(minimalRows().ImportRuns, second), found: "2"},
-	}
+	st := duckstore.New(t.TempDir())
+	_, err := st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	addImportRun(t, st, 3, "/snapshots/run-3.sqlite", 33)
+	addImportRun(t, st, 2, "/snapshots/run-2.sqlite", 22)
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
-			rows := minimalRows()
-			rows.ImportRuns = c.runs
-			st := duckstore.New(t.TempDir())
-			_, err := st.Replace(t.Context(), rows)
-			require.NoError(t, err)
+	got, err := st.Status(t.Context())
 
-			_, err = st.Status(t.Context())
+	require.NoError(t, err)
+	assert.EqualValues(t, 3, got.Run.ID)
+	assert.Equal(t, "/snapshots/run-3.sqlite", got.Run.Snapshot.Path)
+	assert.Equal(t, 33, got.Run.Counts.Accounts)
+}
 
-			assertOtherFault(t, err, "expected exactly one import run, found "+c.found)
-		})
-	}
+func Test_status_refuses_a_store_without_an_import_run(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	rows.ImportRuns = nil
+	st := duckstore.New(t.TempDir())
+	_, err := st.Replace(t.Context(), rows)
+	require.NoError(t, err)
+
+	_, err = st.Status(t.Context())
+
+	assertOtherFault(t, err, "expected exactly one import run, found 0")
 }
 
 func Test_status_fails_on_a_missing_store_without_creating_it(t *testing.T) {

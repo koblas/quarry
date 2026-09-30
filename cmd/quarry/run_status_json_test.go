@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -99,4 +100,27 @@ func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
 		storePathUnder(home), duckstore.FormatVersion, "(devel)", unfixed.Store.BuiltAt,
 		snapshotID(snapshotPath), snapshotPath, manifest.Snapshot.TakenAt, bundle.Dir, manifest.Snapshot.SHA256)
 	assert.Equal(t, want, stdout.String())
+}
+
+func Test_run_status_json_reports_the_latest_build_when_import_runs_holds_several(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bundle := writeStatusFixtureBundle(t, home)
+	syncBundle(t, bundle)
+	snapshotsDir := filepath.Join(storeDirUnder(home), "snapshots")
+	earlierPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
+	laterPath := filepath.Join(snapshotsDir, "later-build.sqlite")
+	var before bytes.Buffer
+	require.Equal(t, 0, run(context.Background(), []string{"status", "--json"}, &before, &bytes.Buffer{}))
+	editStore(t, home, "INSERT INTO import_runs SELECT * REPLACE (2 AS id) FROM import_runs") //nolint:unqueryvet // a copy of the row is the point
+	editStore(t, home, "UPDATE import_runs SET snapshot_path = '"+laterPath+"' WHERE id = 2")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"status", "--json"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	wantJSON := strings.ReplaceAll(before.String(), earlierPath, laterPath)
+	wantJSON = strings.ReplaceAll(wantJSON, snapshotID(earlierPath), "later-build")
+	assert.Equal(t, wantJSON, stdout.String()) //nolint:testifylint // the bytes are the contract
 }

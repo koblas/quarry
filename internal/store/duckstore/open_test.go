@@ -201,7 +201,7 @@ func Test_open_read_refuses_a_store_of_another_format(t *testing.T) {
 	}
 }
 
-func Test_open_read_names_a_snapshot_only_when_import_runs_yields_exactly_one(t *testing.T) {
+func Test_open_read_names_a_snapshot_only_when_import_runs_yields_one(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
@@ -212,7 +212,6 @@ func Test_open_read_names_a_snapshot_only_when_import_runs_yields_exactly_one(t 
 		{name: "no import_runs table", ddl: "CREATE TABLE accounts (id VARCHAR);", want: ""},
 		{name: "no snapshot_path column", ddl: "CREATE TABLE import_runs (id BIGINT); INSERT INTO import_runs VALUES (1);", want: ""},
 		{name: "no import run", ddl: "CREATE TABLE import_runs (id BIGINT, snapshot_path VARCHAR);", want: ""},
-		{name: "two import runs", ddl: importRunsDDL + "INSERT INTO import_runs VALUES (2, '" + snapshotFile + "');", want: ""},
 		{name: "a NULL snapshot path", ddl: "CREATE TABLE import_runs (id BIGINT, snapshot_path VARCHAR); INSERT INTO import_runs VALUES (1, NULL);", want: ""},
 	}
 
@@ -226,6 +225,16 @@ func Test_open_read_names_a_snapshot_only_when_import_runs_yields_exactly_one(t 
 			assert.Equal(t, c.want, got.SnapshotPath)
 		})
 	}
+}
+
+func Test_open_read_names_the_latest_import_runs_snapshot(t *testing.T) {
+	t.Parallel()
+	st := newStoreFile(t, importRunsDDL+
+		"INSERT INTO import_runs VALUES (3, '/snapshots/run-3.sqlite'); INSERT INTO import_runs VALUES (2, '/snapshots/run-2.sqlite');")
+
+	got := openRefusal(t, st)
+
+	assert.Equal(t, "/snapshots/run-3.sqlite", got.SnapshotPath)
 }
 
 // The store's directory is reached through a symlink, so the path given and the path the driver names differ on every OS.
