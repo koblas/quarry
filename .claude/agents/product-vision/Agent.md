@@ -116,7 +116,7 @@ So scoping pass does not stop at "shape is right". Write out, literally:
 - success line, each refusal line, each fix line;
 - exit code for each outcome;
 - `--json` field names, and where document differs between modes of same command;
-- **every failure outcome of a destructive or config-parsing command** — refusal, partial failure, interrupt, unreadable input, each value shape the parser can meet — with its line and exit code, so scenarios do not come back one at a time for mid-feature rulings;
+- **every failure outcome of a destructive or config-parsing command** — refusal, partial failure, interrupt, unreadable input, each value shape the parser can meet — each with line and exit code;
 - **existing copy the feature makes false** — grep help Longs, error lines and skill text for statements of any rule the feature defines or changes (what counts as a transfer, which accounts count); list each with its replacement line under `## Surface & Copy` → *Changes to existing surfaces*;
 - **edge-case row table** for every output block, row kind, hint, suffix: each input class reaching it (no snapshot yet, Quicken closed, stale store, reconciliation failed, schema fingerprint changed, empty period, CAD vs USD, closed account, flag given vs not) with exact text it gets — or that it gets no row, and why. Hint only ruled once you said which rows it true for.
 
