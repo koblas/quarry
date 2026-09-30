@@ -23,9 +23,15 @@ var errFindingsFactory = errors.New("open the store: disk gone")
 
 func executeFindings(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
 	t.Helper()
+	return executeFindingsIgnoring(t, fake, nil, stdout, stderr, args...)
+}
+
+// executeFindingsIgnoring runs findings with ignore as the config's findings.ignore.
+func executeFindingsIgnoring(t *testing.T, fake fakeReportStore, ignore []string, stdout, stderr io.Writer, args ...string) error {
+	t.Helper()
 	env := cli.Env{
 		Stdout: stdout, Stderr: stderr,
-		LoadConfig: func(string) (config.Config, error) { return config.Config{}, nil },
+		LoadConfig: func(string) (config.Config, error) { return config.Config{Ignore: ignore}, nil },
 		NewReport: func(context.Context, string) (*report.Server, error) {
 			return report.NewServer(report.WithStore(fake)), nil
 		},
@@ -148,6 +154,15 @@ func Test_findings_rejects_bad_usage(t *testing.T) {
 		},
 		{
 			name: "--json with --csv", args: []string{"--json", "--csv"},
+			want: "--csv and --json cannot be used together; choose one output format",
+		},
+		{
+			name: "a positional argument beside --csv and --json", args: []string{"extra", "--csv", "--json"},
+			want: "findings takes no arguments; to ignore a finding add its id to findings.ignore in " +
+				"~/Library/Application Support/quarry/config.toml; Run 'quarry findings --help' for usage.",
+		},
+		{
+			name: "--csv with --json and a bad status", args: []string{"--csv", "--json", "--status", "maybe"},
 			want: "--csv and --json cannot be used together; choose one output format",
 		},
 	}

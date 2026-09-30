@@ -75,26 +75,60 @@ func Test_findings_csv_leaves_the_payee_of_a_no_payee_item_as_an_empty_field_not
 func Test_findings_csv_applies_the_status_and_type_filters(t *testing.T) {
 	const uncategorizedRow = "uncategorized:payee-7,uncategorized,open,2026-09-01,Visa,CAD,Amazon,,-10.00,,,,,,,," + uncategorizedFixCSV + "\n"
 	const fixedRow = "duplicate:txn-1+txn-2,duplicate,fixed,,,,,,,,,,,,,," + duplicateFixCSV + "\n"
+	const ignoredRow = "one-sided-transfer:xfer-3,one-sided-transfer,ignored,2026-08-02,Visa,USD,Payment,,-5.00,Savings,,,txn-3,split-3,,," + oneSidedFixCSV + "\n"
 	cases := []struct {
 		name string
 		args []string
 		want string
 	}{
 		{name: "the default view lists open findings only", args: []string{"--csv"}, want: findingsCSVHeader + uncategorizedRow},
-		{name: "status all lists every finding", args: []string{"--csv", "--status", "all"}, want: findingsCSVHeader + fixedRow + uncategorizedRow},
+		{name: "status all lists every finding", args: []string{"--csv", "--status", "all"}, want: findingsCSVHeader + fixedRow + ignoredRow + uncategorizedRow},
+		{name: "status ignored lists the ignored one", args: []string{"--csv", "--status", "ignored"}, want: findingsCSVHeader + ignoredRow},
 		{name: "type duplicate with status fixed lists the fixed one", args: []string{"--csv", "--status", "fixed", "--type", "duplicate"}, want: findingsCSVHeader + fixedRow},
+		{name: "type duplicate with none open prints the header alone", args: []string{"--csv", "--type", "duplicate"}, want: findingsCSVHeader},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			var stdout bytes.Buffer
+			fake := filterFakeFindings()
+			txn, split, other := "txn-3", "split-3", "Savings"
+			fake.findings.Findings = append(fake.findings.Findings, store.Finding{
+				ID: "one-sided-transfer:xfer-3", Type: finding.OneSidedTransfer, FirstFoundAt: csvFindingDay(1),
+				Items: []store.FindingItem{{TransactionID: &txn, SplitID: &split, Date: csvFindingDay(2), Account: "Visa", Currency: "USD", Payee: "Payment", Amount: -500, OtherAccount: &other}},
+			})
+			var stdout, stderr bytes.Buffer
 
-			err := executeFindings(t, filterFakeFindings(), &stdout, &bytes.Buffer{}, c.args...)
+			err := executeFindingsIgnoring(t, fake, []string{"one-sided-transfer:xfer-3"}, &stdout, &stderr, c.args...)
 
 			require.NoError(t, err)
 			assert.Equal(t, c.want, stdout.String())
+			assert.Empty(t, stderr.String())
 		})
 	}
+}
+
+func Test_findings_csv_puts_the_payee_and_category_ids_in_their_own_columns(t *testing.T) {
+	payeeID, categoryID := "payee-7", "cat-3"
+	fake := fakeReportStore{findings: store.FindingList{Findings: []store.Finding{{
+		ID: "uncategorized:payee-7", Type: finding.Uncategorized, FirstFoundAt: csvFindingDay(1),
+		Items: []store.FindingItem{{PayeeID: &payeeID, CategoryID: &categoryID, Date: csvFindingDay(2), Account: "Visa", Currency: "CAD", Payee: "Amazon", Amount: -1000}},
+	}}}}
+	var stdout bytes.Buffer
+
+	err := executeFindings(t, fake, &stdout, &bytes.Buffer{}, "--csv")
+
+	require.NoError(t, err)
+	assert.Equal(t, findingsCSVHeader+
+		"uncategorized:payee-7,uncategorized,open,2026-08-02,Visa,CAD,Amazon,,-10.00,,,,,,payee-7,cat-3,"+uncategorizedFixCSV+"\n", stdout.String())
+}
+
+func Test_findings_csv_prints_nothing_when_the_listing_fails(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeFindings(t, fakeReportStore{err: errStoreRead}, &stdout, &stderr, "--csv")
+
+	require.ErrorIs(t, err, errStoreRead)
+	assert.Empty(t, stdout.String())
 }
 
 func Test_findings_csv_prints_the_header_alone_when_no_finding_is_listed(t *testing.T) {

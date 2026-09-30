@@ -93,15 +93,15 @@ prints one row per item, for a spreadsheet.`,
 			}
 			unmatched := unmatchedIgnoreWarnings(homepath.Abbreviate(srv.Home(), cfg.Path), listing.Unmatched)
 			printConfigWarnings(cmd, unmatched)
-			renderText := func() string { return renderFindings(listing, view, len(req.Ignore) == 0) }
+			render := func() string { return renderFindings(listing, view, len(req.Ignore) == 0) }
 			if csvOut {
-				renderText = func() string { return renderFindingsCSV(listing) }
+				render = func() string { return renderFindingsCSV(listing) }
 			}
 			out, err := renderResult(*jsonOut,
 				func() ([]byte, error) {
 					return renderFindingsJSON(listing, view, append(slices.Clone(cfg.Warnings), unmatched...))
 				},
-				renderText)
+				render)
 			if err != nil {
 				// unreachable: renderResult fails only via marshalDocument, and the findings document holds strings, ints and slices; see marshalDocument.
 				return err
