@@ -15,7 +15,8 @@ import (
 )
 
 // ImportFrom rebuilds the store from an earlier snapshot, named by ID or by
-// .sqlite path, without touching Quicken or writing the snapshots directory.
+// .sqlite path, without touching Quicken or writing a new snapshot; a Server
+// with WithAutoPrune then deletes old ones as SyncAndImport does.
 // It refuses when from does not resolve to a usable snapshot, and returns a
 // MismatchError when the current reference finds a missing table or column.
 func (s *Server) ImportFrom(ctx context.Context, from string) (Outcome, error) {

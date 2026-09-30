@@ -634,8 +634,8 @@ Sizing notes (binding on per-scenario architects):
 - [x] SCENARIO-02: A snapshots.keep below 1 is refused — delivered by SCENARIO-24 — `cmd/quarry/run_prune_config_test.go` `Test_run_snapshots_prune_refuses_a_snapshots_keep_below_one`
 - [x] SCENARIO-22: prune --dry-run lists what it would delete and deletes nothing — delivered by SCENARIO-24 — `cmd/quarry/run_prune_dryrun_test.go` `Test_run_snapshots_prune_dry_run_lists_what_it_would_delete_and_deletes_nothing`
 - [x] SCENARIO-28: prune --json reports deleted, would_delete and failed in one shape — `cmd/quarry/run_prune_json_test.go` `Test_run_snapshots_prune_json_prints_the_ruled_document_for_a_real_run`
-- [ ] SCENARIO-29: sync deletes snapshots beyond the newest 12 and prints a Pruned line
-- [ ] SCENARIO-30: sync honours snapshots.keep from config
-- [ ] SCENARIO-31: sync --json always carries the pruned key
-- [ ] SCENARIO-32: a failed sync deletes nothing
-- [ ] SCENARIO-33: sync warns when an old snapshot cannot be deleted, and still succeeds
+- [x] SCENARIO-29: sync deletes snapshots beyond the newest 12 and prints a Pruned line — `cmd/quarry/run_sync_prune_test.go` `Test_run_sync_deletes_the_snapshot_beyond_the_newest_12_and_prints_a_pruned_line`
+- [x] SCENARIO-30: sync honours snapshots.keep from config — delivered by SCENARIO-29 — `cmd/quarry/run_sync_prune_test.go` `Test_run_sync_from_honours_snapshots_keep_from_config`
+- [x] SCENARIO-31: sync --json always carries the pruned key — delivered by SCENARIO-29 — `cmd/quarry/run_sync_prune_test.go` `Test_run_sync_from_json_carries_a_null_pruned_key_on_a_schema_mismatch`
+- [x] SCENARIO-32: a failed sync deletes nothing — delivered by SCENARIO-29 — `cmd/quarry/run_sync_prune_test.go` `Test_run_sync_deletes_nothing_when_validation_fails`
+- [x] SCENARIO-33: sync warns when an old snapshot cannot be deleted, and still succeeds — delivered by SCENARIO-29 — `cmd/quarry/run_sync_prune_test.go` `Test_run_sync_warns_when_an_old_snapshot_cannot_be_deleted_and_still_succeeds`

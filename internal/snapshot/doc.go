@@ -7,5 +7,6 @@
 // found a mismatch; ImportFrom does the same from an earlier snapshot,
 // re-verifying its hash and schema without reading Quicken. List reads the
 // snapshots directory newest first and marks the snapshot the store was built from;
-// Prune deletes all but the newest few, never that one.
+// Prune deletes all but the newest few, never that one, and a Server built
+// WithAutoPrune does the same after each successful store build.
 package snapshot

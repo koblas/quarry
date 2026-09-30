@@ -17,15 +17,15 @@ import (
 // errImportNotWired is SyncAndImport's error when the Server has no Importer or StoreProbe configured.
 var errImportNotWired = errors.New("no importer or store probe configured")
 
-// Outcome is what SyncAndImport returns: the snapshot's Manifest and the
-// import's store.Result, when one ran. Store is nil on a schema mismatch
-// or Sync failure. StoreExisted (meaningful only when Store != nil &&
+// Outcome is what SyncAndImport and ImportFrom return: the snapshot's Manifest
+// and the import's store.Result, when one ran. Store is nil on a schema
+// mismatch or Sync failure. StoreExisted (meaningful only when Store != nil &&
 // !Store.Built) decides the V1 block's NOT REBUILT vs NOT BUILT line.
 type Outcome struct {
 	Manifest     Manifest
 	Store        *store.Result
 	StoreExisted bool
-	// Pruned is what auto-prune did once the store was built; nil when it was not, or the Server has no WithAutoPrune.
+	// Pruned is what auto-prune did once the store was built; nil when none was built or the Server has no WithAutoPrune.
 	Pruned *Pruned
 
 	// historyWarning is the warning for a built store whose previous import
@@ -37,9 +37,8 @@ type Outcome struct {
 }
 
 // Warnings returns every warning o carries, without the "quarry: warning: "
-// prefix: the manifest's own, then the one-sided-transfer warning when a
-// built store kept one or more legs with no counterpart, then the warning
-// that import history restarted. An unbuilt store adds none of them.
+// prefix: the manifest's own, then, for a built store only, the one-sided
+// transfer, import-history restart and auto-prune warnings, in that order.
 func (o Outcome) Warnings() []string { return o.warnings(o.pruneWarning) }
 
 // warnings is Warnings with listWarning as the warning for a snapshots folder that could not be listed.
@@ -97,7 +96,9 @@ func ID(path string) string {
 // already-committed snapshot: it comes back as a store refusal wrapping the
 // importer's error, so errors.As still reaches it. A failed check (V1) sets
 // Store to the unbuilt result, so a later stdout write against it still
-// gets the O1b refusal.
+// gets the O1b refusal. Once the store is built, a Server with WithAutoPrune
+// deletes the snapshots beyond the newest few; interrupted with any left to
+// delete, it returns the built Outcome beside a refusal.
 func (s *Server) SyncAndImport(ctx context.Context, bundlePath string) (Outcome, error) {
 	manifest, err := s.Sync(ctx, bundlePath)
 	if err != nil {
