@@ -90,6 +90,7 @@ Commonest blocking findings share one shape: fallible call in new code with no f
 - **Every numeric bound tested just outside it**, in-bound case as control (line caps, count limits, depth limits).
 - **Every fallback branch of error → exit-code mapper** — the `default:` arm, not just named sentinels.
 - **One decode-fault test per decoded record kind** for adapter or parser reading files — frontmatter as well as body items. Corrupt-child-item test on a read does not cover corrupt root on same read.
+- **One pin per ruled string and edge row the scenario owns** — every `## Surface & Copy` line it delivers (help Long, Example, flag help, refusal, warning, sort order) asserted verbatim, and every edge-case row it reaches (future-dated, other currency, closed account, empty period) as its own case. Scenario's `Then` rarely covers them; checkpoint checks this list.
 
 ## Fix passes
 
