@@ -90,11 +90,12 @@ Commonest blocking findings share one shape: fallible call in new code with no f
 - **Every numeric bound tested just outside it**, in-bound case as control (line caps, count limits, depth limits).
 - **Every fallback branch of error → exit-code mapper** — the `default:` arm, not just named sentinels.
 - **One decode-fault test per decoded record kind** for adapter or parser reading files — frontmatter as well as body items. Corrupt-child-item test on a read does not cover corrupt root on same read.
+- **Destructive guard = identity invariant, not a name rule.** Scenario that deletes or overwrites user files states its safety property as invariant holding without any name comparison ("prune never deletes an entry that is the same file as the one the store recorded"); name, case and extension matching may only choose what to display. Guard that selects by name (first match, newest match, name fallback) → list every way two names reach one object (letter case, hard link, symlink, extension) and say which the invariant covers. Mutation checks include one that breaks the invariant, not only one per matching arm.
 - **One pin per ruled string and edge row the scenario owns** — every `## Surface & Copy` line it delivers (help Long, Example, flag help, refusal, warning, sort order) asserted verbatim, and every edge-case row it reaches (future-dated, other currency, closed account, empty period) as its own case. Scenario's `Then` rarely covers them.
 
 ## Fix passes
 
-**Findings with `Failure:` are bug fixes → test-first** (*Build cadence*). Write test reproducing `Failure:`, run, see it fail at its assertion, then fix. Finding already covered by test failing today → cite it. Behaviour-neutral findings (docs, renames, test additions, extractions) exempt. Cannot make it red → say so with what you tried; no fix blind then backfill.
+**Findings with `Failure:` are bug fixes → test-first** (*Build cadence*). Brief naming mutation checks cites `proof.md` → *Mutation verification* (unique backup name, restore checked by `diff`). Write test reproducing `Failure:`, run, see it fail at its assertion, then fix. Finding already covered by test failing today → cite it. Behaviour-neutral findings (docs, renames, test additions, extractions) exempt. Cannot make it red → say so with what you tried; no fix blind then backfill.
 
 **No new behaviour.** Cheap MINOR/NIT folds = docs, renames, test additions, extractions keeping behaviour identical. **Fold adding runtime behaviour not cheap:** new branch folded in from MINOR and left untested becomes MAJOR forcing another fix pass and re-gate. New behaviour goes to STATE.md `## Open debts`, or folded with its tests planned in same brief, named per branch.
 

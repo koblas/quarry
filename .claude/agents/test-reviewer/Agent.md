@@ -29,8 +29,9 @@ questions — skip the full procedure below:
    `## Implementation Plan` ticked?
 3. Are `.claude/briefs/build.md` → *Planning* items present for this diff: one fault test per
    fallible call, every numeric bound just outside, every error-mapper fallback, one
-   decode-fault test per decoded record kind, and one pin per ruled string and edge row the
-   scenario owns? Unpinned ruled copy or edge row is MAJOR.
+   decode-fault test per decoded record kind, one pin per ruled string and edge row the
+   scenario owns, and a destructive guard decided by identity invariant rather than by name?
+   Unpinned ruled copy or edge row is MAJOR; a name-decided destructive guard is MAJOR.
 4. Does the diff touch only what the plan's steps name? Production file, behaviour or public
    symbol no step names is scope creep — name it, and whether a later scenario owns it. Plan
    with `Size: LIGHT` was written by developer itself: judge scope against spec's scenario.
