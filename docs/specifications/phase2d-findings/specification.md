@@ -179,8 +179,9 @@ Unused categories (2): no transaction uses them; check that no scheduled transac
 Ignore a finding by adding its id to findings.ignore in ~/Library/Application Support/quarry/config.toml; see quarry findings --help
 ```
 - Row rules: one-sided row reuses the existing `?`-row columns without the `?`, incl. `otherAccountLabel`. Uncategorized: `N splits` and `first to last`, or just the date when equal. `unlinked-transfer` category cell: the split's `full_path`; `(uncategorized)` when NULL; `(split)` when the transaction has > 1 split. ` (and N subcategories)` only when N > 0.
-- Footer: under `--status open`: `N open findings` (`1 open finding`), then `; ` and clauses `J ignored` and `K fixed` joined with ` and `, followed by ` not shown (--status all)`; zero clauses omitted; both zero → no `;` part. Under `--status all`: `21 findings: 5 open, 4 ignored, 12 fixed` (zero clauses omitted). Under `--status ignored|fixed`: `N ignored findings` / `N fixed findings`. Footer counts follow `--type`. Hint line (text mode only, when ≥ 1 finding is open and `findings.ignore` is unset or empty): `Ignore a finding by adding its id to findings.ignore in ~/Library/Application Support/quarry/config.toml; see quarry findings --help`.
+- Footer: under `--status open`: `N open findings` (`1 open finding`), then `; ` and clauses `J ignored` and `K fixed` joined with ` and `, followed by ` not shown (--status all)`; zero clauses omitted; both zero → no `;` part. Under `--status all`: `21 findings: 5 open, 4 ignored, 12 fixed` (zero clauses omitted). Under `--status ignored|fixed`: `N ignored findings` / `N fixed findings`. Footer counts follow `--type`. Hint line (text mode only, when ≥ 1 open finding is listed — never under `--status ignored|fixed`, never with an empty line — and `findings.ignore` is unset or empty): `Ignore a finding by adding its id to findings.ignore in ~/Library/Application Support/quarry/config.toml; see quarry findings --help`.
 - Status markers: under `--status all` an ignored finding's id line ends `  ignored`; a fixed finding is one line `  <id>  fixed 2026-10-01` (local date of `fixed_at`), no item lines; open carries no marker.
+- Ruled mid-feature (SCENARIO-18): the `  ignored` / `  fixed <date>` marker is always at the very end of the line, two spaces after the last column, on every row shape (multi-line types: on the id line); no marker under `--status ignored`. Within a group: all open, then all ignored (each in the type's sort), then fixed (`fixed_at` desc, id). Group header with no open finding listed: heading and `(N)` only, no `: fix` clause (e.g. `Possible duplicates (2)`); uncategorized drops `, M splits` when M = 0 (`Uncategorized (1 payee)`); N counts listed findings, M listed items.
 
 | Input | stdout | stderr | Exit |
 |---|---|---|---|
@@ -188,6 +189,10 @@ Ignore a finding by adding its id to findings.ignore in ~/Library/Application Su
 | none open, some ignored or fixed | `No open findings; 4 ignored and 12 fixed not shown (--status all)` | nothing | 0 |
 | `--type duplicate`, none | `No open findings of type duplicate` (under `--status all`: `No findings of type duplicate`) | nothing | 0 |
 | `--status fixed`, none | `No fixed findings` | nothing | 0 |
+| `--status all`, nothing at all | `No findings` | nothing | 0 |
+| `--status ignored`, none | `No ignored findings` | nothing | 0 |
+| `--status ignored\|fixed --type duplicate`, none | `No ignored findings of type duplicate` / `No fixed findings of type duplicate` (no `not shown` clause under `--status ignored\|fixed\|all`) | nothing | 0 |
+| default view `--type duplicate`, none open but some ignored/fixed of that type | `No open findings of type duplicate; 1 ignored and 2 fixed not shown (--status all)` (counts follow `--type`; zero clauses omitted) | nothing | 0 |
 | finding in a closed account | listed; label `(CAD, closed)` | | 0 |
 | USD account | label `(USD)`; amounts native | | 0 |
 | no store / R2 (v3 store before the first 2d sync) / R3 | empty | existing store refusal lines, command `findings` | 1 |
