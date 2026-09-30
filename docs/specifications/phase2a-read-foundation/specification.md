@@ -12,7 +12,7 @@ reuses.
 **Out of Scope**: findings, config file, FX / `--currency` (2f), `import_runs` history across rebuilds and
 snapshot listing/pruning (2c), CSV output (2d), `spend`/`cashflow` (2b), `recurring`/`anomalies` (2e),
 `networth` (moved to Phase 4), `export` (dropped — `sql --csv` in 2d covers it). Snapshots keep
-accumulating (~200 MB each) until 2c — a known gap.
+accumulating (~200 MB each) until 2c — a known gap (closed by Phase 2c).
 
 **Business Rules**: read commands never touch Quicken; the store is opened read-only with external access,
 extension loading and configuration changes turned off; amounts are reported in each account's native

@@ -38,7 +38,7 @@ Scenarios complete: SCENARIO-01..21 (all; 05 folded into 04, 06 into 07; 10 into
 ## Left unbuilt
 - `sql -`: stdin size cap and TTY detection - ruled not built (spec Q6). (S18)
 - Nested JSON for LIST/STRUCT/MAP is out of 2a (they are DuckDB text strings in `sql --json`) - unowned.
-- `import_runs` history across rebuilds (`importRunID` stays 1 per build) - Phase 2c.
+- ~~`import_runs` history across rebuilds (`importRunID` stays 1 per build) - Phase 2c.~~ Closed by Phase 2c.
 
 ## Traps
 - Q-sentinels wrap `%w: %w`, so `errors.Unwrap` returns nil on them: reach a wrapped error with `errors.As`/`errors.Is` tree walks, never a single-chain `errors.Unwrap` loop. (S12, S15)
@@ -69,7 +69,7 @@ Scenarios complete: SCENARIO-01..21 (all; 05 folded into 04, 06 into 07; 10 into
 - NIT (final product-vision): `internal/cli/sql.go` Long — blank lines around the indented `quarry sql -- "-- monthly totals / SELECT ..."` example and re-wrap to ≤80 cols; fold into the next edit of sql.go (2b/2d) with the matching spec change.
 - MINOR (REVIEW-02): `cmd/quarry/run_status_json_test.go:1` lacks the white-box `package main` header.
 - NIT (REVIEW-02): `internal/platform/duckdb/text_test.go:150-174` TZ test needs host zoneinfo — `_ "time/tzdata"` or skip on `LoadLocation` error; rename `jsonDateLayout` → `dateLayout` (now shared by text output); `zoneOffsetText`/`timeTZOffsetText` share the `±HH[:MM]` prefix (optional).
-- Snapshots accumulate (~200 MB each) until 2c - known gap, owned by Phase 2c.
+- ~~Snapshots accumulate (~200 MB each) until 2c.~~ Closed by Phase 2c (`snapshots.keep`, `quarry snapshots prune`, sync auto-prune).
 - Phase 1 doc-budget MINORs, TOCTOU on `--from`, Compose-method refactors and the other Phase 1 debts (`docs/specifications/phase1-import-store/STATE.md`) - unowned - die unless re-opened.
 - Phase 2 copy candidate: V1 stderr tail `fix the account in Quicken and run quarry sync` reads off when only splits fail - unowned until findings copy (2d).
 - Arch MINORs: sql refusal copy lives in cli `queryFailure` while status/accounts use `report.readRefusal` (optional: `report.Server.Query` returns `RefusalError`); `readStdinQuery` I/O policy in cli - unowned.

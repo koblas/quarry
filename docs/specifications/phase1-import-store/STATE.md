@@ -35,7 +35,7 @@ Last updated by final-gate fix pass 2 (REVIEW-02).
 
 ## Left unbuilt
 - Snapshot-side EDQUOT (`SQLITE_IOERR_WRITE` during `Source.Backup` → R14b) — see Open debts. (SCENARIO-14)
-- `import_runs` history across rebuilds — Phase 2.
+- ~~`import_runs` history across rebuilds — Phase 2.~~ Closed by Phase 2c (carried across rebuilds).
 
 ## Traps
 - `WithEntity`/`WithoutEntity` overrides are the only proof entity numbers come from `Z_PRIMARYKEY`.
