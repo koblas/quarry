@@ -25,10 +25,14 @@ type Outcome struct {
 	Manifest     Manifest
 	Store        *store.Result
 	StoreExisted bool
+	// Pruned is what auto-prune did once the store was built; nil when it was not, or the Server has no WithAutoPrune.
+	Pruned *Pruned
 
 	// historyWarning is the warning for a built store whose previous import
 	// history could not be carried forward; empty when it was carried.
 	historyWarning string
+	// pruneWarning is the warning for a snapshots folder auto-prune could not list.
+	pruneWarning string
 }
 
 // Warnings returns every warning o carries, without the "quarry: warning: "
@@ -46,7 +50,7 @@ func (o Outcome) Warnings() []string {
 	if o.historyWarning != "" {
 		warnings = append(slices.Clip(warnings), o.historyWarning)
 	}
-	return warnings
+	return append(slices.Clip(warnings), o.pruneWarnings()...)
 }
 
 // historyRestartWarning renders the warning that the previous store's import
@@ -124,7 +128,7 @@ func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome
 	if fault := result.HistoryFault; fault != nil {
 		outcome.historyWarning = historyRestartWarning(fault.UnreadableReason(homepath.Abbreviate(s.home, s.storeProbe.Path())))
 	}
-	return outcome, nil
+	return outcome, s.autoPrune(ctx, &outcome)
 }
 
 // recordedTakenAt parses a manifest's taken_at into UTC; an unparseable
