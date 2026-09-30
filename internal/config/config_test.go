@@ -95,6 +95,17 @@ func Test_load_refuses_a_directory_in_place_of_the_file(t *testing.T) {
 	assert.ErrorAs(t, err, new(*fs.PathError))
 }
 
+func Test_load_refuses_a_config_folder_that_is_a_file(t *testing.T) {
+	home := t.TempDir()
+	folder := filepath.Join(home, "Library", "Application Support", "quarry")
+	require.NoError(t, os.MkdirAll(filepath.Dir(folder), 0o700))
+	require.NoError(t, os.WriteFile(folder, nil, 0o600))
+
+	_, err := config.Load(home, filepath.Join(folder, "config.toml"))
+
+	require.EqualError(t, err, "cannot read "+shownPath+": not a directory"+fixLine)
+}
+
 func Test_load_refuses_a_file_it_has_no_permission_to_read(t *testing.T) {
 	home, path := newHome(t)
 	require.NoError(t, os.WriteFile(path, []byte("[snapshots]\n"), 0o000))
@@ -181,6 +192,10 @@ func Test_load_refuses_a_snapshots_keep_below_one_or_not_an_integer(t *testing.T
 		{name: "boolean", content: "snapshots.keep = true\n", got: "true"},
 		{name: "date", content: "snapshots.keep = 2026-01-01\n", got: "2026-01-01"},
 		{name: "trailing comment is not part of the value", content: "[snapshots]\nkeep = 0 # none\n", got: "0"},
+		{name: "inline table right of the equal sign", content: "snapshots.keep = { a = 1 }\n", got: "{ a = 1 }"},
+		{name: "key inside an inline snapshots table", content: "snapshots = { keep = 0 }\n", got: "0"},
+		{name: "the exact key, not one that differs in letter case, before it", content: "[snapshots]\nkeep = \"x\"\nKeep = 9\n", got: `"x"`},
+		{name: "the exact key, not one that differs in letter case, after it", content: "[snapshots]\nKeep = 9\nkeep = \"x\"\n", got: `"x"`},
 	}
 
 	for _, c := range cases {
@@ -201,8 +216,11 @@ func Test_load_refuses_a_quicken_path_that_is_not_a_string(t *testing.T) {
 		{name: "integer", content: "quicken.path = 12\n", got: "12"},
 		{name: "boolean", content: "[quicken]\npath = true\n", got: "true"},
 		{name: "array", content: "quicken.path = [\"~/a.quicken\"]\n", got: `["~/a.quicken"]`},
-		{name: "inline table", content: "quicken.path = { x = 1 }\n", got: "a table"},
+		{name: "inline table", content: "quicken.path = { x = 1 }\n", got: "{ x = 1 }"},
+		{name: "inline table under a header", content: "[quicken]\npath = { a = \"b\" }\n", got: `{ a = "b" }`},
 		{name: "table header", content: "[quicken.path]\nx = 1\n", got: "a table"},
+		{name: "dotted keys", content: "quicken.path.x = 1\n", got: "a table"},
+		{name: "the exact key, not one that differs in letter case", content: "[quicken]\npath = 12\nPATH = \"~/ok.quicken\"\n", got: "12"},
 	}
 
 	for _, c := range cases {
@@ -270,6 +288,56 @@ func Test_load_warns_about_unknown_keys_in_file_order(t *testing.T) {
 		shownPath + ": unknown key foo; quarry ignores it",
 		shownPath + ": unknown key snapshots.other; quarry ignores it",
 	}, cfg.Warnings)
+}
+
+func Test_load_warns_about_a_key_that_differs_from_a_known_one_only_in_letter_case(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{name: "table name", content: "[Snapshots]\nKeep = 50\n", want: "Snapshots"},
+		{name: "key name", content: "[snapshots]\nKeep = 50\n", want: "snapshots.Keep"},
+		{name: "dotted key", content: "SNAPSHOTS.KEEP = 50\n", want: "SNAPSHOTS.KEEP"},
+		{name: "quicken table with a value that would be refused", content: "[Quicken]\nPath = 12\n", want: "Quicken"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, cfg, err := load(t, c.content)
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{shownPath + ": unknown key " + c.want + "; quarry ignores it"}, cfg.Warnings)
+		})
+	}
+}
+
+func Test_load_warns_about_an_unknown_key_inside_an_inline_table(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{name: "inside a known table", content: "snapshots = { keep = 2, other = 3 }\n", want: "snapshots.other"},
+		{name: "inside an unknown table, named once", content: "foo = { a = 1, b = 2 }\n", want: "foo"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, cfg, err := load(t, c.content)
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{shownPath + ": unknown key " + c.want + "; quarry ignores it"}, cfg.Warnings)
+		})
+	}
+}
+
+func Test_load_ignores_the_values_of_keys_that_differ_from_known_ones_only_in_letter_case(t *testing.T) {
+	_, cfg, err := load(t, "[Snapshots]\nKeep = 50\n[Quicken]\nPath = \"/x/Home.quicken\"\n")
+
+	require.NoError(t, err)
+	assert.Equal(t, config.DefaultKeep, cfg.Keep)
+	assert.Empty(t, cfg.QuickenPath)
 }
 
 func Test_load_keeps_the_known_values_beside_unknown_keys(t *testing.T) {

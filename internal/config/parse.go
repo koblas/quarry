@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bytes"
 	"errors"
 	"path/filepath"
 	"slices"
@@ -34,27 +33,6 @@ func (s setting) String() string { return strings.Join(s.key(), ".") }
 
 func (s setting) key() []string { return []string{s.table, s.name} }
 
-// Mirrors of the known keys with each value left as written, one per setting
-// so a bad shape in the other table cannot fail this one's decode.
-type (
-	snapshotsTable struct {
-		Keep unstable.RawMessage `toml:"keep"`
-	}
-	quickenTable struct {
-		Path unstable.RawMessage `toml:"path"`
-	}
-	keepDocument struct {
-		Snapshots snapshotsTable `toml:"snapshots"`
-	}
-	pathDocument struct {
-		Quicken quickenTable `toml:"quicken"`
-	}
-	knownKeys struct {
-		Snapshots snapshotsTable `toml:"snapshots"`
-		Quicken   quickenTable   `toml:"quicken"`
-	}
-)
-
 // file is one config file read from disk.
 type file struct {
 	home, path, shown string
@@ -68,11 +46,12 @@ func (f file) parse() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	keep, err := f.keep(tree)
+	doc := document{file: f, tree: tree, entries: f.entries()}
+	keep, err := doc.keep()
 	if err != nil {
 		return Config{}, err
 	}
-	quickenPath, err := f.quickenPath(tree)
+	quickenPath, err := doc.quickenPath()
 	if err != nil {
 		return Config{}, err
 	}
@@ -81,7 +60,7 @@ func (f file) parse() (Config, error) {
 		Path:        f.path,
 		Keep:        keep,
 		QuickenPath: homepath.Expand(f.home, quickenPath),
-		Warnings:    f.unknownKeys(),
+		Warnings:    doc.unknownKeys(),
 	}, nil
 }
 
@@ -104,9 +83,90 @@ func (f file) tree() (map[string]any, error) {
 	return nil, f.refuse("cannot read "+f.shown+": line "+strconv.Itoa(line)+": "+message, err)
 }
 
+// entry is one header or key of the file at its full key path, exactly as written:
+// a key under a header or inside an inline table carries its parents' names.
+type entry struct {
+	kind unstable.Kind // Table, ArrayTable or KeyValue
+	key  []string
+	// value is a KeyValue's value as written, up to the end of the line's expression.
+	value string
+}
+
+// entries lists every header and key of the file in file order. The parser reads the
+// file's own spelling, so a key's letter case is never folded.
+func (f file) entries() []entry {
+	var parser unstable.Parser
+	parser.Reset(f.data)
+	var entries []entry
+	var header []string
+	for parser.NextExpression() {
+		expr := parser.Expression()
+		if expr.Kind == unstable.KeyValue {
+			entries = f.appendKeyValue(entries, header, expr)
+			continue
+		}
+		if expr.Kind == unstable.Table || expr.Kind == unstable.ArrayTable {
+			header = keyParts(expr)
+			entries = append(entries, entry{kind: expr.Kind, key: header})
+		}
+	}
+
+	return entries
+}
+
+// appendKeyValue adds the key of expr under parent, then the keys of an inline table it holds.
+func (f file) appendKeyValue(entries []entry, parent []string, expr *unstable.Node) []entry {
+	key := append(slices.Clone(parent), keyParts(expr)...)
+	entries = append(entries, entry{kind: unstable.KeyValue, key: key, value: f.valueText(expr)})
+	if value := expr.Value(); value.Kind == unstable.InlineTable {
+		for children := value.Children(); children.Next(); {
+			entries = f.appendKeyValue(entries, key, children.Node())
+		}
+	}
+
+	return entries
+}
+
+// keyParts are the names in the key of a header or key-value expression.
+func keyParts(expr *unstable.Node) []string {
+	var parts []string
+	for part := expr.Key(); part.Next(); {
+		parts = append(parts, string(part.Node().Data))
+	}
+
+	return parts
+}
+
+// valueText is the text right of the "=" of expr, to the end of the expression, so a
+// container is whole and a trailing comment is left out.
+func (f file) valueText(expr *unstable.Node) string {
+	var last unstable.Range
+	for part := expr.Key(); part.Next(); {
+		last = part.Node().Raw
+	}
+	start := int(last.Offset + last.Length)
+	for start < len(f.data) && (f.data[start] == ' ' || f.data[start] == '\t') {
+		start++
+	}
+	start++ // the equal sign
+	for start < len(f.data) && (f.data[start] == ' ' || f.data[start] == '\t') {
+		start++
+	}
+
+	return string(f.data[start : expr.Raw.Offset+expr.Raw.Length])
+}
+
+// document is a file with its values and every key as written, for checks that need both.
+type document struct {
+	file
+
+	tree    map[string]any
+	entries []entry
+}
+
 // keep is snapshots.keep: DefaultKeep when unset, else a whole number of 1 or more.
-func (f file) keep(tree map[string]any) (int, error) {
-	value, present, err := f.lookup(tree, keepSetting)
+func (d document) keep() (int, error) {
+	value, present, err := d.lookup(keepSetting)
 	if err != nil || !present {
 		return DefaultKeep, err
 	}
@@ -114,125 +174,77 @@ func (f file) keep(tree map[string]any) (int, error) {
 		return int(n), nil
 	}
 
-	return 0, f.badValue(keepSetting.String()+" must be a whole number of 1 or more", f.got(value, keepSetting.key(), f.rawKeep))
+	return 0, d.badValue(keepSetting.String()+" must be a whole number of 1 or more", d.got(keepSetting.key()))
 }
 
 // quickenPath is quicken.path as written: "" when unset, else a string that
 // is a full path or starts with "~/".
-func (f file) quickenPath(tree map[string]any) (string, error) {
-	value, present, err := f.lookup(tree, pathSetting)
+func (d document) quickenPath() (string, error) {
+	value, present, err := d.lookup(pathSetting)
 	if err != nil || !present {
 		return "", err
 	}
 	text, isString := value.(string)
 	if !isString {
-		return "", f.badValue(pathSetting.String()+" must be a path in quotes", f.got(value, pathSetting.key(), f.rawPath))
+		return "", d.badValue(pathSetting.String()+" must be a path in quotes", d.got(pathSetting.key()))
 	}
 	if !filepath.IsAbs(text) && !strings.HasPrefix(text, "~/") {
-		return "", f.badValue(pathSetting.String()+" must be a full path or start with ~/", f.got(value, pathSetting.key(), f.rawPath))
+		return "", d.badValue(pathSetting.String()+" must be a full path or start with ~/", d.got(pathSetting.key()))
 	}
 
 	return text, nil
 }
 
-// lookup finds s in tree. A table written as a plain value is refused.
-func (f file) lookup(tree map[string]any, s setting) (any, bool, error) {
-	entry, found := tree[s.table]
+// lookup finds s in the values. A table written as a plain value is refused.
+func (d document) lookup(s setting) (any, bool, error) {
+	entry, found := d.tree[s.table]
 	if !found {
 		return nil, false, nil
 	}
 	table, isTable := entry.(map[string]any)
 	if !isTable {
-		return nil, false, f.badValue(s.table+" must be a table, such as "+s.example, f.got(entry, []string{s.table}, func() unstable.RawMessage { return f.rawTable(s.table) }))
+		return nil, false, d.badValue(s.table+" must be a table, such as "+s.example, d.got([]string{s.table}))
 	}
 	value, present := table[s.name]
 
 	return value, present, nil
 }
 
-// got is value as the file wrote it, collapsed to one line. A value a header
-// introduced is named by kind, since its text is the body under the header.
-func (f file) got(value any, key []string, raw func() unstable.RawMessage) string {
-	switch value.(type) {
-	case map[string]any:
-		return gotTable
-	case []any:
-		if f.hasArrayTableHeader(key) {
+// got is the value at key as the file wrote it, collapsed to one line. A value a header
+// introduced, or dotted keys built, is named by kind, since it has no text right of "=".
+func (d document) got(key []string) string {
+	for _, e := range d.entries {
+		if !slices.Equal(e.key, key) {
+			continue
+		}
+		if e.kind == unstable.ArrayTable {
 			return gotTableList
 		}
-	}
-
-	return strings.Join(strings.Fields(string(raw())), " ")
-}
-
-// hasArrayTableHeader reports whether the file opens a [[key]] header; an
-// inline array of inline tables decodes to the same value but has none.
-func (f file) hasArrayTableHeader(key []string) bool {
-	var parser unstable.Parser
-	parser.Reset(f.data)
-	for parser.NextExpression() {
-		expr := parser.Expression()
-		if expr.Kind != unstable.ArrayTable {
-			continue
-		}
-		var header []string
-		for part := expr.Key(); part.Next(); {
-			header = append(header, string(part.Node().Data))
-		}
-		if slices.Equal(header, key) {
-			return true
+		if e.kind == unstable.KeyValue {
+			return strings.Join(strings.Fields(e.value), " ")
 		}
 	}
 
-	return false
+	return gotTable
 }
 
-func (f file) rawKeep() unstable.RawMessage {
-	var doc keepDocument
-	f.decodeRaw(&doc)
-
-	return doc.Snapshots.Keep
-}
-
-func (f file) rawPath() unstable.RawMessage {
-	var doc pathDocument
-	f.decodeRaw(&doc)
-
-	return doc.Quicken.Path
-}
-
-// rawTable is the value written for the top-level key name.
-func (f file) rawTable(name string) unstable.RawMessage {
-	var doc map[string]unstable.RawMessage
-	f.decodeRaw(&doc)
-
-	return doc[name]
-}
-
-// decodeRaw fills target's RawMessage fields from the file.
-func (f file) decodeRaw(target any) {
-	// Any other [[table]] header in the file fails the decode, but only after the
-	// keys above it are filled, and those are the only ones read.
-	_ = toml.NewDecoder(bytes.NewReader(f.data)).EnableUnmarshalerInterface().Decode(target)
-}
+// knownKeys are the paths quarry reads; a header or key at any other path is unknown.
+var knownKeys = [][]string{{keepSetting.table}, keepSetting.key(), {pathSetting.table}, pathSetting.key()}
 
 // unknownKeys is one warning per key the file has beyond the known ones, in
-// file order. A table is named once, not once per child.
-func (f file) unknownKeys() []string {
-	err := toml.NewDecoder(bytes.NewReader(f.data)).DisallowUnknownFields().EnableUnmarshalerInterface().Decode(&knownKeys{})
-	missing, ok := errors.AsType[*toml.StrictMissingError](err)
-	if !ok {
-		return nil
-	}
+// file order, matched by exact spelling. A table is named once, not once per child.
+func (d document) unknownKeys() []string {
 	var warnings []string
 	var reported [][]string
-	for _, decodeErr := range missing.Errors {
-		key := decodeErr.Key()
-		if slices.ContainsFunc(reported, func(parent []string) bool { return slices.Equal(parent, key[:min(len(parent), len(key))]) }) {
+	for _, e := range d.entries {
+		if slices.ContainsFunc(knownKeys, func(known []string) bool { return slices.Equal(known, e.key) }) {
 			continue
 		}
-		reported = append(reported, key)
-		warnings = append(warnings, f.shown+": unknown key "+strings.Join(key, ".")+"; quarry ignores it")
+		if slices.ContainsFunc(reported, func(parent []string) bool { return slices.Equal(parent, e.key[:min(len(parent), len(e.key))]) }) {
+			continue
+		}
+		reported = append(reported, e.key)
+		warnings = append(warnings, d.shown+": unknown key "+strings.Join(e.key, ".")+"; quarry ignores it")
 	}
 
 	return warnings

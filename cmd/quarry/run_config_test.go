@@ -243,6 +243,21 @@ func Test_run_sync_warns_about_unknown_config_keys_before_its_own_warnings(t *te
 		stderr.String())
 }
 
+func Test_run_sync_warns_about_a_config_key_that_differs_from_a_known_one_only_in_letter_case(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeStatusFixtureBundle(t, home)
+	writeConfig(t, home, "[Snapshots]\nKeep = 50\n")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Equal(t, "quarry: warning: "+configShown+": unknown key Snapshots; quarry ignores it\n"+
+		"quarry: warning: 1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer\n",
+		stderr.String())
+}
+
 func Test_run_sync_json_lists_config_warnings_before_its_own_without_the_prefix(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
