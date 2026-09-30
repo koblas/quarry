@@ -112,6 +112,21 @@ func Test_run_sync_from_warns_and_restarts_history_when_the_previous_store_is_no
 	assert.Equal(t, map[string]string{"1": manifestSHA256(t, manifest)}, importRunQuery(t, home, "SELECT CAST(id AS VARCHAR), snapshot_sha256 FROM import_runs"))
 }
 
+func Test_run_sync_from_warns_and_restarts_history_when_the_previous_run_has_the_largest_id(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncBundle(t, writeNamedAccountBundle(t, filepath.Join(home, "Documents"), "Chequing"))
+	id := snapshotID(onlyFileWithSuffix(t, filepath.Join(storeDirUnder(home), "snapshots"), ".sqlite"))
+	editStore(t, home, "UPDATE import_runs SET id = 9223372036854775807")
+
+	exitCode, _, stderr := runSyncFrom(t, id)
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Equal(t, "quarry: warning: cannot carry import history forward from the previous store (its import_runs table has an id too large to follow); "+
+		"import_runs starts again with this sync\n", stderr)
+	assert.Equal(t, map[string]string{"1": id + ".sqlite"}, importRunQuery(t, home, "SELECT CAST(id AS VARCHAR), regexp_extract(snapshot_path, '[^/]+$') FROM import_runs"))
+}
+
 // writeNamedAccountBundle writes a bundle whose one account carries name, so two bundles hash differently.
 func writeNamedAccountBundle(t *testing.T, dir, name string) v9fixture.Bundle {
 	t.Helper()

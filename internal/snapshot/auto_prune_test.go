@@ -215,52 +215,62 @@ func Test_sync_and_import_does_not_prune_without_a_keep(t *testing.T) {
 	}
 }
 
+// syncBesideOldSnapshots syncs bundle through fake beside three old snapshots and an orphan manifest with a keep of 1.
+func syncBesideOldSnapshots(t *testing.T, fake *fakeImporter, bundle func(testing.TB, string) v9fixture.Bundle) afterBuild {
+	t.Helper()
+	home := t.TempDir()
+	ids := oldIDs(3)
+	dir := prunable(t, home, ids...)
+	writeManifest(t, dir, oldIDs(4)[3], manifestTaken("2000-04-01T00:00:00Z"))
+	rm := &fakeRemover{}
+	srv := newImportServer(t, home, fake, snapshot.WithAutoPrune(1), snapshot.WithRemove(rm.remove))
+
+	outcome, err := srv.SyncAndImport(t.Context(), bundle(t, t.TempDir()).Dir)
+	return afterBuild{outcome: outcome, err: err, rm: rm, ids: ids, dir: dir}
+}
+
+// requireNothingDeleted asserts the sync pruned nothing and left every old snapshot and the orphan manifest.
+func requireNothingDeleted(t *testing.T, got afterBuild) {
+	t.Helper()
+	assert.Nil(t, got.outcome.Pruned)
+	assert.Empty(t, got.rm.calls)
+	assertSnapshotPairs(t, got.dir, true, got.ids...)
+	assert.FileExists(t, filepath.Join(got.dir, oldIDs(4)[3]+".json"))
+}
+
 func Test_sync_and_import_deletes_nothing_when_the_store_is_not_built(t *testing.T) {
 	t.Parallel()
 	unbuilt := store.Result{Validation: store.Validation{
 		Balances: store.BalanceCheck{Checked: 1, Mismatched: []store.BalanceMismatch{{ID: "acct-1"}}},
 	}}
 	cases := []struct {
-		name       string
-		bundle     func(testing.TB, string) v9fixture.Bundle
-		fake       *fakeImporter
-		requireErr func(t *testing.T, err error)
+		name string
+		fake *fakeImporter
+		want error
 	}{
-		{"validation failed", v9fixture.OpenBundle, &fakeImporter{result: unbuilt, err: store.ErrValidationFailed}, requireErrorIs(store.ErrValidationFailed)},
-		{"store refusal", v9fixture.OpenBundle, &fakeImporter{err: errImportBoom}, requireErrorIs(errImportBoom)},
-		{"schema mismatch", v9fixture.MissingSchemaBundle, &fakeImporter{}, func(t *testing.T, err error) {
-			t.Helper()
-			var mismatch snapshot.MismatchError
-			require.ErrorAs(t, err, &mismatch)
-		}},
+		{"validation failed", &fakeImporter{result: unbuilt, err: store.ErrValidationFailed}, store.ErrValidationFailed},
+		{"store refusal", &fakeImporter{err: errImportBoom}, errImportBoom},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			home := t.TempDir()
-			ids := oldIDs(3)
-			dir := prunable(t, home, ids...)
-			writeManifest(t, dir, oldIDs(4)[3], manifestTaken("2000-04-01T00:00:00Z"))
-			rm := &fakeRemover{}
-			srv := newImportServer(t, home, c.fake, snapshot.WithAutoPrune(1), snapshot.WithRemove(rm.remove))
 
-			outcome, err := srv.SyncAndImport(t.Context(), c.bundle(t, t.TempDir()).Dir)
+			got := syncBesideOldSnapshots(t, c.fake, v9fixture.OpenBundle)
 
-			c.requireErr(t, err)
-			assert.Nil(t, outcome.Pruned)
-			assert.Empty(t, rm.calls)
-			assertSnapshotPairs(t, dir, true, ids...)
-			assert.FileExists(t, filepath.Join(dir, oldIDs(4)[3]+".json"))
+			require.ErrorIs(t, got.err, c.want)
+			requireNothingDeleted(t, got)
 		})
 	}
 }
 
-// requireErrorIs is a check that err is want.
-func requireErrorIs(want error) func(t *testing.T, err error) {
-	return func(t *testing.T, err error) {
-		t.Helper()
-		require.ErrorIs(t, err, want)
-	}
+func Test_sync_and_import_deletes_nothing_on_a_schema_mismatch(t *testing.T) {
+	t.Parallel()
+
+	got := syncBesideOldSnapshots(t, &fakeImporter{}, v9fixture.MissingSchemaBundle)
+
+	var mismatch snapshot.MismatchError
+	require.ErrorAs(t, got.err, &mismatch)
+	requireNothingDeleted(t, got)
 }
 
 func Test_sync_and_import_prunes_when_the_store_is_built_on_the_same_folder_and_remover(t *testing.T) {
