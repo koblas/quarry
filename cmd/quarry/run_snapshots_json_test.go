@@ -170,6 +170,55 @@ func Test_run_snapshots_json_nulls_only_source_when_the_manifest_holds_an_empty_
 	assert.Equal(t, "true", string(entries[0]["schema_verified"]))
 }
 
+// writeManifestJSON writes a hand-built manifest beside the snapshot with id in dir, so its fields can differ from the file.
+func writeManifestJSON(t *testing.T, dir, id, snapshotJSON string) {
+	t.Helper()
+	manifest := `{"snapshot":` + snapshotJSON + `,"schema":{"verified":true}}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, id+".json"), []byte(manifest), 0o600))
+}
+
+func Test_run_snapshots_json_reports_the_size_on_disk_and_not_the_size_the_manifest_records(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := writeSnapshots(t, home, snapshotFixture{id: oldestID, bytes: oldestBytes})
+	writeManifestJSON(t, dir, oldestID, `{"source":"`+homeQuicken+`","taken_at":"2026-09-27T14:30:05Z","bytes":999,"sha256":"aaaa"}`)
+
+	exitCode, stdout, stderr := runSnapshotsJSON(t)
+
+	require.Equal(t, 0, exitCode, stderr)
+	entries := jsonEntries(t, stdout)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "1240000", string(entries[0]["bytes"]))
+}
+
+func Test_run_snapshots_json_prints_taken_at_in_UTC_whatever_offset_the_manifest_records(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := writeSnapshots(t, home, snapshotFixture{id: oldestID, bytes: oldestBytes})
+	writeManifestJSON(t, dir, oldestID, `{"source":"`+homeQuicken+`","taken_at":"2026-09-27T10:30:05-04:00","bytes":1240000,"sha256":"aaaa"}`)
+
+	exitCode, stdout, stderr := runSnapshotsJSON(t)
+
+	require.Equal(t, 0, exitCode, stderr)
+	entries := jsonEntries(t, stdout)
+	require.Len(t, entries, 1)
+	assert.Equal(t, `"2026-09-27T14:30:05Z"`, string(entries[0]["taken_at"]))
+}
+
+func Test_run_snapshots_json_passes_an_empty_recorded_sha256_through_as_an_empty_string(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := writeSnapshots(t, home, snapshotFixture{id: oldestID, bytes: oldestBytes})
+	writeManifestJSON(t, dir, oldestID, `{"source":"`+homeQuicken+`","taken_at":"2026-09-27T14:30:05Z","bytes":1240000,"sha256":""}`)
+
+	exitCode, stdout, stderr := runSnapshotsJSON(t)
+
+	require.Equal(t, 0, exitCode, stderr)
+	entries := jsonEntries(t, stdout)
+	require.Len(t, entries, 1)
+	assert.Equal(t, `""`, string(entries[0]["sha256"]))
+}
+
 func Test_run_snapshots_json_prints_an_empty_list_and_the_no_snapshots_line_when_none_are_taken(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

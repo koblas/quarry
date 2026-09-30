@@ -76,6 +76,6 @@ quarry sync --from <ID>.`,
 			return nil
 		},
 	}
-	cmd.AddCommand(newPruneCommand(newSnapshots, loadConfig))
+	cmd.AddCommand(newPruneCommand(newSnapshots, loadConfig, jsonOut))
 	return cmd
 }

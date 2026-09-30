@@ -21,7 +21,7 @@ const (
 // newPruneCommand builds the snapshots prune subcommand: delete all but the newest
 // --keep snapshots (snapshots.keep from the config file when the flag is not given), never the store's own.
 // With --dry-run it lists what it would delete and deletes nothing.
-func newPruneCommand(newSnapshots SnapshotsFactory, loadConfig ConfigLoader) *cobra.Command {
+func newPruneCommand(newSnapshots SnapshotsFactory, loadConfig ConfigLoader, jsonOut *bool) *cobra.Command {
 	var keep int
 	var dryRun bool
 	cmd := &cobra.Command{
@@ -69,7 +69,7 @@ With --dry-run, prune lists what it would delete and deletes nothing.`,
 			if pruneErr != nil && pruned.Keep == 0 {
 				return &runtimeError{err: pruneErr}
 			}
-			return reportPruned(cmd, srv, pruned, pruneErr)
+			return reportPruned(cmd, srv, pruned, pruneErr, *jsonOut, cfg.Warnings)
 		},
 	}
 	cmd.Flags().IntVar(&keep, keepFlag, 0, "keep the newest `n` snapshots (default: snapshots.keep in the config file, 12 unless set)")
@@ -77,10 +77,17 @@ With --dry-run, prune lists what it would delete and deletes nothing.`,
 	return cmd
 }
 
-// reportPruned writes what pruned deleted to stdout, then a line per failed delete to stderr.
-// It returns pruneErr, the run's own refusal, else ReportedError when a delete failed.
-func reportPruned(cmd *cobra.Command, srv *snapshot.Server, pruned snapshot.Pruned, pruneErr error) error {
-	if err := writeResult(cmd, []byte(renderPruned(pruned, srv.Home()))); err != nil {
+// reportPruned writes what pruned deleted to stdout, as the --json document when asJSON, then a line per
+// failed delete to stderr. It returns pruneErr, the run's own refusal, else ReportedError when a delete failed.
+func reportPruned(cmd *cobra.Command, srv *snapshot.Server, pruned snapshot.Pruned, pruneErr error, asJSON bool, warnings []string) error {
+	out, err := renderResult(asJSON,
+		func() ([]byte, error) { return renderPrunedJSON(pruned, warnings) },
+		func() string { return renderPruned(pruned, srv.Home()) })
+	if err != nil {
+		// unreachable: renderResult fails only via marshalDocument, and the prune document holds strings, ints, bools and slices; see marshalDocument.
+		return err
+	}
+	if err := writeResult(cmd, out); err != nil {
 		return err
 	}
 	for _, failure := range pruned.Failed {
