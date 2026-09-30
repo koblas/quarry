@@ -52,6 +52,7 @@ Scenarios complete: PRE-01 (pre-step), SCENARIO-01 (with folded 04, 09, 10), SCE
 - Stale WAL beside the store, pinned in `history_faults_test.go`: a regular `quarry.duckdb.wal` is no fault; a real uncheckpointed WAL is replayed by the read-only open and its rows carried; a garbage file is ignored (SCENARIO-13)
 
 ## Open debts
+- SCENARIO-15 checkpoint MINOR (comment budget): `internal/snapshot/import.go:34-38` `Outcome.Warnings` doc 5 lines → ~4.
 - SCENARIO-13 checkpoint MINORs (comment budget): `internal/store/duckstore/history.go` `readRuns` doc 3 lines → 2 (move the fixed-columns note above the SELECT); `internal/store/duckstore/duckstore.go` `Replace` doc 5 → 4; `internal/store/open.go` `OpenError` doc 5 → 4; `internal/store/store.go` `Result` doc 6 → field comment. NIT: "Phase 1" in `optionalRunColumns` / `phase1ImportRunsDDL` docs → "older store format".
 - History carry is last-writer-wins under concurrent syncs: two `Replace` calls both read history before either renames; the second drops the first's run and both new rows get the same id. No lock exists (same gap as prune vs sync). Unowned.
 - NIT (13 checkpoint): a failed `Replace` beside a real stale WAL is not asserted to leave store and WAL untouched; non-ENOENT `os.Stat` error untested on its own. Unowned.
