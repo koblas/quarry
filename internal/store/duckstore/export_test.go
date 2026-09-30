@@ -15,3 +15,6 @@ const (
 	OneSidedTransferQuery = oneSidedTransferQuery
 	UncategorizedQuery    = uncategorizedQuery
 )
+
+// DuplicateQuery is the duplicate detector's query.
+const DuplicateQuery = duplicateQuery

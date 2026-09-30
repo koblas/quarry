@@ -252,13 +252,15 @@ func twoPayeeBundle(xCategorized, yCategorized bool) (*v9fixture.Builder, int64)
 	yPK := b.Payee(v9fixture.PayeeRow{Name: "Landlord"})
 	foodPK := b.Category(v9fixture.TagRow{Name: "Food", Type: new(int64(1))})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	// The amounts differ so the two transactions are not duplicates of each other.
 	for _, p := range []struct {
 		payee       int64
 		categorized bool
-	}{{xPK, xCategorized}, {yPK, yCategorized}} {
+		amount      string
+	}{{xPK, xCategorized, "-10.00"}, {yPK, yCategorized, "-11.00"}} {
 		payee, categorized := p.payee, p.categorized
-		txn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-10.00", PostedDate: &day, Payee: payee})
-		entry := v9fixture.EntryRow{Parent: txn, Amount: "-10.00"}
+		txn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: p.amount, PostedDate: &day, Payee: payee})
+		entry := v9fixture.EntryRow{Parent: txn, Amount: p.amount}
 		if categorized {
 			entry.CategoryTag = foodPK
 		}

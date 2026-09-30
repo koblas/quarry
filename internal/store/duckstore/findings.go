@@ -4,10 +4,19 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/koblas/quarry/internal/finding"
 )
+
+// duplicateQuery lists each pair of transactions in one account with the same non-zero amount at most ? days
+// apart, unless both are reconciled, the lower source id first so each pair appears once.
+const duplicateQuery = `SELECT a.id, b.id
+FROM transactions a JOIN transactions b
+  ON a.account_id = b.account_id AND a.amount = b.amount AND (a.source_id, a.id) < (b.source_id, b.id)
+WHERE a.amount <> 0 AND abs(a.date - b.date) <= ? AND NOT (a.status = 'reconciled' AND b.status = 'reconciled')
+ORDER BY a.id, b.id`
 
 // oneSidedTransferQuery lists every transfer with no to-split, with its from-split's transaction (NULL when not stored).
 const oneSidedTransferQuery = `SELECT x.id, x.from_split_id, s.transaction_id
@@ -50,8 +59,12 @@ func loadFindings(ctx context.Context, db DB, carried []carriedFinding, builtAt 
 	return counts, nil
 }
 
-// detectFindings runs every detector against the build connection, one-sided transfers first.
+// detectFindings runs every detector against the build connection, in finding.Types order.
 func detectFindings(ctx context.Context, db DB) ([]detectedFinding, error) {
+	duplicates, err := detectDuplicates(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("detect %s findings: %w", finding.Duplicate, err)
+	}
 	oneSided, err := detectOneSidedTransfers(ctx, db)
 	if err != nil {
 		return nil, fmt.Errorf("detect %s findings: %w", finding.OneSidedTransfer, err)
@@ -60,7 +73,27 @@ func detectFindings(ctx context.Context, db DB) ([]detectedFinding, error) {
 	if err != nil {
 		return nil, fmt.Errorf("detect %s findings: %w", finding.Uncategorized, err)
 	}
-	return append(oneSided, uncategorized...), nil
+	return slices.Concat(duplicates, oneSided, uncategorized), nil
+}
+
+// detectDuplicates returns one finding per duplicate pair, its items the two transactions.
+func detectDuplicates(ctx context.Context, db DB) ([]detectedFinding, error) {
+	var found []detectedFinding
+	err := db.QueryRows(ctx, duplicateQuery, []any{finding.MatchDays}, func(scan func(dest ...any) error) error {
+		var first, second string
+		if err := scan(&first, &second); err != nil {
+			return err
+		}
+		found = append(found, detectedFinding{
+			id: finding.PairID(finding.Duplicate, first, second), typ: finding.Duplicate,
+			items: []findingItem{
+				{transactionID: sql.NullString{String: first, Valid: true}},
+				{transactionID: sql.NullString{String: second, Valid: true}},
+			},
+		})
+		return nil
+	})
+	return found, err //nolint:wrapcheck // detectFindings names the detector
 }
 
 // detectOneSidedTransfers returns one finding per transfer with no to-split, its item the from-split.

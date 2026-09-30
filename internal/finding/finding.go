@@ -33,6 +33,10 @@ func Types() []Type {
 // transaction has no payee.
 const NoPayee = "no-payee"
 
+// MatchDays is how many days apart two transactions may be and still match as a pair finding
+// (duplicate, unlinked-transfer), inclusive.
+const MatchDays = 3
+
 // idSeparator splits a finding id into its type and entity.
 const idSeparator = ":"
 

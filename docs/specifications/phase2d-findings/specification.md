@@ -573,8 +573,8 @@ Ruled: the finding core (type list and order, id grammar, P2d-3 status function,
 - [x] SCENARIO-06: a finding no longer found is marked fixed on the next sync — `cmd/quarry/run_sync_findings_test.go` `Test_run_sync_marks_a_finding_no_longer_found_fixed_at_the_build_time`
 - [x] SCENARIO-07: a fixed finding that comes back reopens and is not new — delivered by SCENARIO-06 — `cmd/quarry/run_sync_findings_test.go` `Test_run_sync_reopens_a_fixed_finding_with_its_first_found_at_and_not_new`
 - [x] SCENARIO-08: findings history that cannot be carried forward restarts with a warning — `cmd/quarry/run_findings_carry_test.go` `Test_run_sync_from_warns_and_restarts_findings_history_when_the_previous_findings_table_repeats_an_id`
-- [ ] SCENARIO-09: two same-amount transactions within 3 days are a possible duplicate
-- [ ] SCENARIO-10: two reconciled look-alikes are not a duplicate
+- [x] SCENARIO-09: two same-amount transactions within 3 days are a possible duplicate — `cmd/quarry/run_sync_duplicates_test.go` `Test_run_sync_records_two_same_amount_transactions_within_three_days_as_a_duplicate`
+- [x] SCENARIO-10: two reconciled look-alikes are not a duplicate — delivered by SCENARIO-09 — `cmd/quarry/run_sync_duplicates_test.go` `Test_run_sync_does_not_flag_two_reconciled_look_alikes_as_a_duplicate`
 - [ ] SCENARIO-11: findings lists open findings by type with their fix
 - [ ] SCENARIO-12: findings with none open says so
 - [ ] SCENARIO-13: findings refuses a store built before findings existed
