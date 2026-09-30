@@ -21,5 +21,6 @@ Scenarios complete: PRE-01 (behaviour-neutral pre-step; no SCENARIO ticked yet).
 - P2c-12: the existing black-box suite must pass with no `*_test.go`, `testdata` or `cmd/` hunk from PRE-01 (`git diff --exit-code b9bb83c -- '*_test.go' cmd/ ':(glob)**/testdata/**'` is empty); later scenarios add tests, so this is a PRE-01-range check only (PRE-01)
 
 ## Open debts
+- PRE-01 checkpoint MINORs (comment budget): `internal/store/duckstore/cashflow.go:18-20` and `spending.go:88-90` sentinel docs 3 lines → 1 (reachability note at the `!ok` return); `internal/report/period.go:62-64` `fillSeries` doc → 2 lines; `internal/cli/render_table.go:20-22` `renderTable` doc → 2 lines. NIT: `store.OpenError.UnreadableReason` empty-result branch for Missing/OtherFormat unexecuted — pin it if SCENARIO-15/16/21 reach those faults.
 - `store.CashFlowFigures` (shared figures struct embedded in `store.CashFlowRow` / `store.CashFlowTotal`) — not built: it rewrites composite literals in `internal/cli/cashflow_test.go` (4) and `internal/store/duckstore/cashflow_test.go` (10), a test hunk PRE-01 forbids. Unowned — dies unless re-opened (PRE-01)
 - 2b `STATE.md` debt about the same duplication is closed by the orchestrator at SHIP (surface #9), not edited here (PRE-01)
