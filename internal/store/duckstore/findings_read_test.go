@@ -215,3 +215,75 @@ func Test_findings_marks_a_finding_first_found_by_the_latest_build_as_new(t *tes
 	assert.True(t, got.New)
 	assert.False(t, got.NewlyFixed)
 }
+
+// categoryAndSplits is the two fields an unlinked-transfer item reads beyond its transaction's columns.
+type categoryAndSplits struct {
+	Category *string
+	Splits   int
+}
+
+// unlinkedPair builds an unlinked pair txn-1 (acct-1, -500.00) and txn-2 (acct-2, +500.00) with category cat-2
+// "Income:Other" added, applies splits to the rows, and returns what the read gives for each item.
+func unlinkedPair(t *testing.T, splits ...store.Split) []categoryAndSplits {
+	t.Helper()
+	rows := unlinkedRows(func(r *store.Rows) {
+		r.Categories = append(r.Categories, store.Category{ID: "cat-2", SourceID: 2, Name: "Other", FullPath: "Income:Other", Kind: "income"})
+		r.Splits = splits
+	},
+		dupTxn(1, "acct-1", day(2026, 8, 3), -unlinkedAmount, uncleared),
+		dupTxn(2, "acct-2", day(2026, 8, 4), unlinkedAmount, uncleared))
+	got := readFinding(t, rows, "unlinked-transfer:txn-1+txn-2")
+	out := make([]categoryAndSplits, len(got.Items))
+	for i, item := range got.Items {
+		out[i] = categoryAndSplits{item.Category, item.Splits}
+	}
+	return out
+}
+
+func Test_findings_reads_the_category_path_of_the_sole_split_of_each_unlinked_transfer_item(t *testing.T) {
+	t.Parallel()
+
+	got := unlinkedPair(t,
+		store.Split{ID: "split-1", SourceID: 1, TransactionID: "txn-1", CategoryID: new("cat-2"), Amount: -unlinkedAmount},
+		store.Split{ID: "split-2", SourceID: 2, TransactionID: "txn-2", CategoryID: new("cat-1"), Amount: unlinkedAmount})
+
+	assert.Equal(t, []categoryAndSplits{{new("Income:Other"), 1}, {new("Groceries"), 1}}, got)
+}
+
+func Test_findings_reads_no_category_for_an_unlinked_transfer_item_whose_only_split_has_none_or_that_has_no_split(t *testing.T) {
+	t.Parallel()
+
+	got := unlinkedPair(t, store.Split{ID: "split-1", SourceID: 1, TransactionID: "txn-1", Amount: -unlinkedAmount})
+
+	assert.Equal(t, []categoryAndSplits{{nil, 1}, {nil, 0}}, got)
+}
+
+func Test_findings_reads_the_split_count_and_no_category_for_an_unlinked_transfer_item_with_two_categorized_splits(t *testing.T) {
+	t.Parallel()
+
+	got := unlinkedPair(t,
+		store.Split{ID: "split-1", SourceID: 1, TransactionID: "txn-1", CategoryID: new("cat-1"), Amount: -30000},
+		store.Split{ID: "split-4", SourceID: 4, TransactionID: "txn-1", CategoryID: new("cat-2"), Amount: -20000},
+		store.Split{ID: "split-2", SourceID: 2, TransactionID: "txn-2", CategoryID: new("cat-1"), Amount: unlinkedAmount})
+
+	assert.Equal(t, []categoryAndSplits{{nil, 2}, {new("Groceries"), 1}}, got)
+}
+
+func Test_findings_reads_no_category_or_split_count_for_the_items_of_a_duplicate(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	rows.Transactions = []store.Transaction{
+		dupTxn(9, "acct-1", day(2026, 8, 3), duplicateAmount, uncleared), dupTxn(10, "acct-1", day(2026, 8, 4), duplicateAmount, uncleared),
+	}
+	rows.Splits = []store.Split{
+		{ID: "split-9", SourceID: 9, TransactionID: "txn-9", CategoryID: new("cat-1"), Amount: duplicateAmount},
+		{ID: "split-10", SourceID: 10, TransactionID: "txn-10", CategoryID: new("cat-1"), Amount: duplicateAmount},
+	}
+	rows.SplitTags, rows.Transfers = nil, nil
+
+	got := readFinding(t, rows, "duplicate:txn-9+txn-10")
+
+	require.Len(t, got.Items, 2)
+	assert.Equal(t, []categoryAndSplits{{nil, 0}, {nil, 0}},
+		[]categoryAndSplits{{got.Items[0].Category, got.Items[0].Splits}, {got.Items[1].Category, got.Items[1].Splits}})
+}

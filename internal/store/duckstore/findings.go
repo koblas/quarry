@@ -18,6 +18,21 @@ FROM transactions a JOIN transactions b
 WHERE a.amount <> 0 AND abs(a.date - b.date) <= ? AND NOT (a.status = 'reconciled' AND b.status = 'reconciled')
 ORDER BY a.id, b.id`
 
+// unlinkedTransferQuery lists each pair of transactions in two accounts of one currency with opposite non-zero amounts at
+// most ? days apart, neither with a split that is a transfer leg, the lower source id first so each pair appears once.
+const unlinkedTransferQuery = `SELECT a.id, b.id
+FROM transactions a
+  JOIN accounts aa ON aa.id = a.account_id
+  JOIN transactions b ON a.account_id <> b.account_id AND a.amount = -b.amount AND (a.source_id, a.id) < (b.source_id, b.id)
+  JOIN accounts ba ON ba.id = b.account_id AND ba.currency = aa.currency
+WHERE a.amount <> 0 AND abs(a.date - b.date) <= ?
+  AND NOT EXISTS (
+    SELECT 1 FROM splits s
+    WHERE s.transaction_id IN (a.id, b.id)
+      AND (s.transfer_account_id IS NOT NULL
+        OR EXISTS (SELECT 1 FROM transfers x WHERE x.from_split_id = s.id OR x.to_split_id = s.id)))
+ORDER BY a.id, b.id`
+
 // oneSidedTransferQuery lists every transfer with no to-split, with its from-split's transaction (NULL when not stored).
 const oneSidedTransferQuery = `SELECT x.id, x.from_split_id, s.transaction_id
 FROM transfers x LEFT JOIN splits s ON s.id = x.from_split_id
@@ -69,11 +84,15 @@ func detectFindings(ctx context.Context, db DB) ([]detectedFinding, error) {
 	if err != nil {
 		return nil, fmt.Errorf("detect %s findings: %w", finding.OneSidedTransfer, err)
 	}
+	unlinked, err := detectUnlinkedTransfers(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("detect %s findings: %w", finding.UnlinkedTransfer, err)
+	}
 	uncategorized, err := detectUncategorized(ctx, db)
 	if err != nil {
 		return nil, fmt.Errorf("detect %s findings: %w", finding.Uncategorized, err)
 	}
-	return slices.Concat(duplicates, oneSided, uncategorized), nil
+	return slices.Concat(duplicates, oneSided, unlinked, uncategorized), nil
 }
 
 // detectDuplicates returns one finding per duplicate pair, its items the two transactions.
@@ -86,6 +105,26 @@ func detectDuplicates(ctx context.Context, db DB) ([]detectedFinding, error) {
 		}
 		found = append(found, detectedFinding{
 			id: finding.PairID(finding.Duplicate, first, second), typ: finding.Duplicate,
+			items: []findingItem{
+				{transactionID: sql.NullString{String: first, Valid: true}},
+				{transactionID: sql.NullString{String: second, Valid: true}},
+			},
+		})
+		return nil
+	})
+	return found, err //nolint:wrapcheck // detectFindings names the detector
+}
+
+// detectUnlinkedTransfers returns one finding per unlinked transfer pair, its items the two transactions.
+func detectUnlinkedTransfers(ctx context.Context, db DB) ([]detectedFinding, error) {
+	var found []detectedFinding
+	err := db.QueryRows(ctx, unlinkedTransferQuery, []any{finding.MatchDays}, func(scan func(dest ...any) error) error {
+		var first, second string
+		if err := scan(&first, &second); err != nil {
+			return err
+		}
+		found = append(found, detectedFinding{
+			id: finding.PairID(finding.UnlinkedTransfer, first, second), typ: finding.UnlinkedTransfer,
 			items: []findingItem{
 				{transactionID: sql.NullString{String: first, Valid: true}},
 				{transactionID: sql.NullString{String: second, Valid: true}},

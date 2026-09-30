@@ -365,6 +365,8 @@ type Finding struct {
 // FindingItem is what a finding is about: a transaction or split with its
 // account and payee, or a payee or category. Amount is in cents, the split's
 // when SplitID is set; OtherAccount* describe a one-sided leg as OneSidedTransfer does.
+// Category and Splits are read for an unlinked-transfer item only: Category is the full path of the
+// transaction's sole split's category, nil when it has none or several splits; Splits counts its splits.
 type FindingItem struct {
 	TransactionID  *string
 	SplitID        *string
@@ -376,6 +378,8 @@ type FindingItem struct {
 	Currency       string
 	Closed, Active bool
 	Payee          string
+	Category       *string
+	Splits         int
 	Amount         int64
 	OtherAccount   *string
 	OtherAccountID *string

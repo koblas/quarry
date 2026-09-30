@@ -117,14 +117,9 @@ func ignoredMarker(f report.ListedFinding, view findingsView) string {
 func liveFindingLines(typ finding.Type, findings []report.ListedFinding, view findingsView) []string {
 	switch typ { //nolint:exhaustive // the other types' rows arrive with their detectors
 	case finding.Duplicate:
-		var lines []string
-		for _, f := range findings {
-			lines = append(lines, "  "+f.ID+ignoredMarker(f, view))
-			for _, row := range itemRows(f.Items) {
-				lines = append(lines, "    "+row)
-			}
-		}
-		return lines
+		return pairRows(findings, view, itemRows)
+	case finding.UnlinkedTransfer:
+		return pairRows(findings, view, unlinkedRows)
 	case finding.OneSidedTransfer:
 		return oneSidedFindingRows(findings, view)
 	case finding.Uncategorized:
@@ -135,6 +130,39 @@ func liveFindingLines(typ finding.Type, findings []report.ListedFinding, view fi
 		lines[i] = "  " + f.ID + ignoredMarker(f, view)
 	}
 	return lines
+}
+
+// pairRows is each finding's id line, with the ignored marker, then one four-space row per item as rowsOf lays them out.
+func pairRows(findings []report.ListedFinding, view findingsView, rowsOf func([]store.FindingItem) []string) []string {
+	var lines []string
+	for _, f := range findings {
+		lines = append(lines, "  "+f.ID+ignoredMarker(f, view))
+		for _, row := range rowsOf(f.Items) {
+			lines = append(lines, "    "+row)
+		}
+	}
+	return lines
+}
+
+// unlinkedRows is itemRows with each row ending in its transaction's category cell.
+func unlinkedRows(items []store.FindingItem) []string {
+	rows := itemRows(items)
+	for i, item := range items {
+		rows[i] += "  " + categoryCell(item)
+	}
+	return rows
+}
+
+// categoryCell is an unlinked-transfer item's category as text shows it: "(split)" for several splits,
+// "(uncategorized)" for none, else the full path.
+func categoryCell(item store.FindingItem) string {
+	switch {
+	case item.Splits > 1:
+		return "(split)"
+	case item.Category == nil:
+		return "(uncategorized)"
+	}
+	return *item.Category
 }
 
 // itemRows renders one row per item: date, account label and payee padded to the widest among them,

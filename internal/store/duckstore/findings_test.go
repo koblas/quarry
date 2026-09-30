@@ -107,6 +107,8 @@ func Test_replace_keeps_the_previous_store_when_detection_fails(t *testing.T) {
 		{"the duplicate query", &faultDB{queryFaultOn: duckstore.DuplicateQuery, queryFault: queryFault}, "detect duplicate findings"},
 		{"scanning a duplicate row", &faultDB{queryFaultOn: duckstore.DuplicateQuery, scanFault: queryFault}, "detect duplicate findings"},
 		{"the one-sided query", &faultDB{queryFaultOn: duckstore.OneSidedTransferQuery, queryFault: queryFault}, "detect one-sided-transfer findings"},
+		{"the unlinked-transfer query", &faultDB{queryFaultOn: duckstore.UnlinkedTransferQuery, queryFault: queryFault}, "detect unlinked-transfer findings"},
+		{"scanning an unlinked-transfer row", &faultDB{queryFaultOn: duckstore.UnlinkedTransferQuery, scanFault: queryFault}, "detect unlinked-transfer findings"},
 		{"the uncategorized query", &faultDB{queryFaultOn: duckstore.UncategorizedQuery, queryFault: queryFault}, "detect uncategorized findings"},
 		{"scanning a one-sided row", &faultDB{queryFaultOn: duckstore.OneSidedTransferQuery, scanFault: queryFault}, "detect one-sided-transfer findings"},
 		{"scanning an uncategorized row", &faultDB{queryFaultOn: duckstore.UncategorizedQuery, scanFault: queryFault}, "detect uncategorized findings"},

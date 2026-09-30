@@ -165,3 +165,42 @@ func Test_findings_csv_refuses_a_failed_stdout_write(t *testing.T) {
 
 	require.EqualError(t, err, "cannot write the result to stdout: write /dev/stdout: no space left on device")
 }
+
+const unlinkedFixCSV = `"Make the pair one transfer between the two accounts in Quicken, or ignore it if no money moved between your accounts"`
+
+// unlinkedFake is one unlinked-transfer finding of first and second, both in Chequing (CAD) with payee Rent.
+func unlinkedFake(first, second store.FindingItem) fakeReportStore {
+	for _, item := range []*store.FindingItem{&first, &second} {
+		item.Account, item.Currency, item.Payee, item.Amount = "Chequing", "CAD", "Rent", -1000
+	}
+	first.Date, second.Date = csvFindingDay(2), csvFindingDay(3)
+	return fakeReportStore{findings: store.FindingList{Findings: []store.Finding{{
+		ID: "unlinked-transfer:txn-1+txn-2", Type: finding.UnlinkedTransfer, FirstFoundAt: csvFindingDay(1), Items: []store.FindingItem{first, second},
+	}}}}
+}
+
+func Test_findings_csv_puts_the_category_path_of_an_unlinked_transfer_item_in_its_category_column(t *testing.T) {
+	fake := unlinkedFake(store.FindingItem{Category: new("Income:Other"), Splits: 1}, store.FindingItem{Category: new("Bills, fixed"), Splits: 1})
+	var stdout bytes.Buffer
+
+	err := executeFindings(t, fake, &stdout, &bytes.Buffer{}, "--csv")
+
+	require.NoError(t, err)
+	assert.Equal(t, findingsCSVHeader+
+		"unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-02,Chequing,CAD,Rent,Income:Other,-10.00,,,,,,,,"+unlinkedFixCSV+"\n"+
+		`unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-03,Chequing,CAD,Rent,"Bills, fixed",-10.00,,,,,,,,`+unlinkedFixCSV+"\n",
+		stdout.String())
+}
+
+func Test_findings_csv_leaves_the_category_of_a_split_or_uncategorized_unlinked_transfer_item_an_empty_field_not_an_empty_string(t *testing.T) {
+	fake := unlinkedFake(store.FindingItem{Splits: 2}, store.FindingItem{Splits: 1})
+	var stdout bytes.Buffer
+
+	err := executeFindings(t, fake, &stdout, &bytes.Buffer{}, "--csv")
+
+	require.NoError(t, err)
+	assert.Equal(t, findingsCSVHeader+
+		"unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-02,Chequing,CAD,Rent,,-10.00,,,,,,,,"+unlinkedFixCSV+"\n"+
+		"unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-03,Chequing,CAD,Rent,,-10.00,,,,,,,,"+unlinkedFixCSV+"\n",
+		stdout.String())
+}

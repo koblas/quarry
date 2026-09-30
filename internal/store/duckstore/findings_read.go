@@ -10,12 +10,14 @@ import (
 )
 
 // findingsQuery reads every finding with one row per item (one NULL-item row if none); new and newly fixed mean found or fixed at the build time.
+// Only an unlinked-transfer item joins its transaction's splits, for the split count and the sole split's category.
 const findingsQuery = `
 SELECT f.id, f.type, f.first_found_at, f.fixed_at,
 	COALESCE(f.first_found_at = i.built_at, false), COALESCE(f.fixed_at = i.built_at, false),
 	fi.finding_id IS NOT NULL, fi.transaction_id, fi.split_id, fi.payee_id, fi.category_id,
 	t.date, a.id, a.name, a.currency, a.closed, a.active, p.name,
-	CAST(COALESCE(s.amount, t.amount) * 100 AS BIGINT), x.other_account, s.transfer_account_id
+	CAST(COALESCE(s.amount, t.amount) * 100 AS BIGINT), x.other_account, s.transfer_account_id,
+	c.full_path, COALESCE(ts.n, 0)
 FROM findings f
 CROSS JOIN store_info i
 LEFT JOIN finding_items fi ON fi.finding_id = f.id
@@ -24,6 +26,9 @@ LEFT JOIN accounts a ON a.id = t.account_id
 LEFT JOIN payees p ON p.id = t.payee_id
 LEFT JOIN splits s ON s.id = fi.split_id
 LEFT JOIN transfers x ON x.from_split_id = fi.split_id
+LEFT JOIN (SELECT transaction_id, count(*) AS n, min(category_id) AS category_id FROM splits GROUP BY transaction_id) ts
+	ON ts.transaction_id = fi.transaction_id AND f.type = 'unlinked-transfer'
+LEFT JOIN categories c ON c.id = ts.category_id AND ts.n = 1
 ORDER BY f.id, fi.rowid`
 
 // Findings reads every finding, open and fixed, with its items, sorted by id; a fixed finding has no items. It
@@ -48,9 +53,11 @@ func (s *Store) Findings(ctx context.Context) (store.FindingList, error) {
 			closed, active                      sql.NullBool
 			amount                              sql.NullInt64
 			otherAccount, otherAccountID        sql.NullString
+			category                            sql.NullString
+			splits                              int
 		)
 		err := scan(&id, &typ, &firstFoundAt, &fixedAt, &isNew, &newlyFixed, &hasItem, &txnID, &splitID, &payeeID, &categoryID,
-			&date, &accountID, &account, &currency, &closed, &active, &payee, &amount, &otherAccount, &otherAccountID)
+			&date, &accountID, &account, &currency, &closed, &active, &payee, &amount, &otherAccount, &otherAccountID, &category, &splits)
 		if err != nil {
 			return err
 		}
@@ -69,7 +76,7 @@ func (s *Store) Findings(ctx context.Context) (store.FindingList, error) {
 			TransactionID: nullStringPtr(txnID), SplitID: nullStringPtr(splitID),
 			PayeeID: nullStringPtr(payeeID), CategoryID: nullStringPtr(categoryID),
 			Date: date.Time, AccountID: accountID.String, Account: account.String, Currency: currency.String,
-			Closed: closed.Bool, Active: active.Bool, Payee: payee.String, Amount: amount.Int64,
+			Closed: closed.Bool, Active: active.Bool, Payee: payee.String, Category: nullStringPtr(category), Splits: splits, Amount: amount.Int64,
 			OtherAccount: nullStringPtr(otherAccount), OtherAccountID: nullStringPtr(otherAccountID),
 		})
 		return nil

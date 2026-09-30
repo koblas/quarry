@@ -14,6 +14,7 @@ var FormatCheckQueries = []string{columnExistsQuery, formatVersionQuery, snapsho
 const (
 	OneSidedTransferQuery = oneSidedTransferQuery
 	UncategorizedQuery    = uncategorizedQuery
+	UnlinkedTransferQuery = unlinkedTransferQuery
 )
 
 // DuplicateQuery is the duplicate detector's query.

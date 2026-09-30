@@ -78,6 +78,18 @@ func Test_findings_sorts_a_duplicate_group_by_the_pairs_later_date_descending_th
 	}, idsOf(got.Groups[0]))
 }
 
+func Test_findings_sorts_an_unlinked_transfer_group_by_the_pairs_later_date_descending_then_id(t *testing.T) {
+	got := findingsOf(t,
+		dated("unlinked-transfer:txn-9+txn-10", finding.UnlinkedTransfer, march3, march1),
+		dated("unlinked-transfer:txn-5+txn-6", finding.UnlinkedTransfer, march2, march2),
+		dated("unlinked-transfer:txn-7+txn-8", finding.UnlinkedTransfer, march1, march3),
+		dated("unlinked-transfer:txn-1+txn-2", finding.UnlinkedTransfer, march1, march1))
+
+	assert.Equal(t, []string{
+		"unlinked-transfer:txn-7+txn-8", "unlinked-transfer:txn-9+txn-10", "unlinked-transfer:txn-5+txn-6", "unlinked-transfer:txn-1+txn-2",
+	}, idsOf(got.Groups[0]))
+}
+
 func Test_findings_sorts_a_one_sided_group_by_date_descending_then_id(t *testing.T) {
 	got := findingsOf(t,
 		dated("one-sided-transfer:xfer-9", finding.OneSidedTransfer, march1),

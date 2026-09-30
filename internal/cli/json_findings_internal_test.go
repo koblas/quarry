@@ -108,3 +108,42 @@ func Test_renderFindingsJSON_entries_follow_each_findings_status_and_fixed_at(t 
 	assert.Equal(t, "2026-10-02T03:00:00Z", *doc.Findings[1].FixedAt)
 	assert.Equal(t, []any{}, doc.Findings[1].Items)
 }
+
+// unlinkedItemsJSON renders one unlinked-transfer finding of items as --json and returns its items' decoded objects.
+func unlinkedItemsJSON(t *testing.T, items ...store.FindingItem) []map[string]any {
+	t.Helper()
+	listing := report.FindingsListing{Groups: []report.FindingsGroup{{
+		Type:     finding.UnlinkedTransfer,
+		Findings: []report.ListedFinding{openFinding(store.Finding{ID: "unlinked-transfer:txn-1+txn-2", Type: finding.UnlinkedTransfer, Items: items})},
+	}}}
+	data, err := renderFindingsJSON(listing, openView, nil)
+	require.NoError(t, err)
+	var doc struct {
+		Findings []struct {
+			Items []map[string]any `json:"items"`
+		} `json:"findings"`
+	}
+	require.NoError(t, json.Unmarshal(data, &doc))
+	require.Len(t, doc.Findings, 1)
+	return doc.Findings[0].Items
+}
+
+func Test_renderFindingsJSON_gives_an_unlinked_transfer_item_its_category_path_and_a_null_category_id(t *testing.T) {
+	txn := "txn-1"
+
+	items := unlinkedItemsJSON(t,
+		store.FindingItem{TransactionID: &txn, Date: findingDay(2026, 7, 2), Category: new("Income:Other"), Splits: 1})
+
+	assert.Equal(t, []any{"Income:Other", nil}, []any{items[0]["category"], items[0]["category_id"]})
+}
+
+func Test_renderFindingsJSON_gives_an_unlinked_transfer_item_with_several_splits_or_none_a_null_category(t *testing.T) {
+	items := unlinkedItemsJSON(t,
+		store.FindingItem{Date: findingDay(2026, 7, 2), Splits: 2},
+		store.FindingItem{Date: findingDay(2026, 7, 3), Splits: 0})
+
+	assert.Contains(t, items[0], "category")
+	assert.Nil(t, items[0]["category"])
+	assert.Contains(t, items[1], "category")
+	assert.Nil(t, items[1]["category"])
+}

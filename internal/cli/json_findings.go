@@ -80,12 +80,13 @@ func newFindingEntryDocument(f report.ListedFinding) findingEntryDocument {
 	return doc
 }
 
-// newFindingItemDocument converts item into its --json entry; category, transactions and splits stay null until a type carries them.
+// newFindingItemDocument converts item into its --json entry; category is an unlinked-transfer item's path or null,
+// and transactions and splits stay null until a type carries them.
 func newFindingItemDocument(item store.FindingItem) findingItemDocument {
 	return findingItemDocument{
 		TransactionID: item.TransactionID, SplitID: item.SplitID, PayeeID: item.PayeeID, CategoryID: item.CategoryID,
 		Date: item.Date.Format(jsonDateLayout), AccountID: item.AccountID, Account: item.Account, Currency: item.Currency,
-		Payee: jsonNullString(item.Payee), Amount: jsonMoney(item.Amount),
+		Payee: jsonNullString(item.Payee), Category: item.Category, Amount: jsonMoney(item.Amount),
 		OtherAccount: item.OtherAccount, OtherAccountID: item.OtherAccountID,
 	}
 }
