@@ -20,6 +20,7 @@
 | --- | --- | --- | --- | --- |
 | 1 | arch, correctness ×2, test ×2, refactor | 1/4/34/12 | 0 / 20, 858s | BLOCKED |
 | 2 | correctness, test | 0/2/2/4 | 2 / 15, 319s (1 equivalent) | BLOCKED |
+| 3 | correctness, test | 1/0/0/3 | 0 / 5, 96s | BLOCKED |
 
 ## Tokens
 
