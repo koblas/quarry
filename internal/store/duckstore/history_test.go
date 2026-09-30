@@ -251,6 +251,8 @@ func Test_replace_reports_no_findings_carried_when_the_previous_store_has_no_fin
 
 			require.NoError(t, err)
 			assert.Nil(t, replaced.HistoryFault)
+			assert.Nil(t, replaced.FindingsFault)
+			assert.False(t, replaced.StoreUnreadable)
 			assert.False(t, replaced.FindingsCarried)
 		})
 	}
@@ -294,6 +296,10 @@ func Test_replace_names_a_failed_findings_read_as_incomplete_and_closes_the_conn
 			require.NoError(t, err)
 			assert.Nil(t, replaced.HistoryFault)
 			assert.False(t, replaced.FindingsCarried)
+			assert.False(t, replaced.StoreUnreadable)
+			require.NotNil(t, replaced.FindingsFault)
+			assert.Equal(t, store.OpenFaultOther, replaced.FindingsFault.Fault)
+			assert.Equal(t, "its findings table is incomplete", findingsReason(t, st, replaced))
 			assert.Equal(t, 1, c.spy.closes)
 			assert.Equal(t, []int64{1, 2}, importRunIDs(t, st))
 		})

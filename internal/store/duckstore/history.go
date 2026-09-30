@@ -17,14 +17,13 @@ import (
 
 // history is what Replace carries from the store it replaces: its import_runs rows in importRunRows's
 // column order with the highest id among them, and its findings, with findingsCarried true iff that table was read.
-// findingsFault is why a findings table that exists could not be read; unreadable is true iff the store could not be opened.
 type history struct {
 	rows            [][]any
 	maxID           int64
 	findings        []carriedFinding
 	findingsCarried bool
-	findingsFault   *store.OpenError
-	unreadable      bool
+	findingsFault   *store.OpenError // why a findings table that exists could not be read
+	unreadable      bool             // true iff the store could not be opened
 }
 
 // requiredRunColumns are the import_runs columns every store format has, in importRunRows's order.
@@ -67,8 +66,7 @@ var (
 )
 
 // readHistory reads the import_runs and findings of the store at s.Path() and closes it before returning.
-// An absent store has no history; an unreadable one has none and its fault, bar findings a bad import_runs spares.
-// A findings fault is on the returned history, not in the returned fault.
+// An absent store has no history; an unreadable one has none and a fault; a findings fault rides on the history.
 func (s *Store) readHistory(ctx context.Context) (history, *store.OpenError) {
 	path := s.Path()
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {

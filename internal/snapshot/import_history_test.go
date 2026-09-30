@@ -142,6 +142,18 @@ func Test_sync_and_import_prints_the_history_line_then_the_findings_line_when_bo
 	}, outcome.Warnings())
 }
 
+func Test_sync_and_import_warns_of_a_findings_fault_alone_when_the_store_is_flagged_unreadable(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: filepath.Join(home, "quarry", "quarry.duckdb"), Reason: "its findings table is incomplete"}
+	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, StoreUnreadable: true, FindingsFault: fault}})
+
+	outcome, err := srv.SyncAndImport(t.Context(), v9fixture.OpenBundle(t, t.TempDir()).Dir)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{findingsRestartLine("its findings table is incomplete")}, outcome.Warnings())
+}
+
 func Test_outcome_adds_no_carry_warning_for_a_store_that_was_not_built(t *testing.T) {
 	t.Parallel()
 	fault := &store.OpenError{Fault: store.OpenFaultNotDuckDB, Path: "quarry.duckdb"}
