@@ -35,7 +35,7 @@ func Test_import_hands_the_store_one_import_run_describing_the_build(t *testing.
 	require.Len(t, fake.Rows.ImportRuns, 1)
 	run := fake.Rows.ImportRuns[0]
 	assert.Equal(t, store.ImportRun{
-		ID: 1, StartedAt: run.StartedAt, FinishedAt: run.FinishedAt, Snapshot: snap,
+		StartedAt: run.StartedAt, FinishedAt: run.FinishedAt, Snapshot: snap,
 		Counts:          store.Counts{Accounts: 3, Transactions: 4, Splits: 4, Transfers: 2},
 		BalancesChecked: 1, TransfersOneSided: 1, InvestmentTransactionsNotImported: 1,
 		BalancesNeverReconciled: 1, InvestmentAccounts: 1, TransfersPaired: 1, TransfersCrossCurrency: 1,
@@ -45,4 +45,32 @@ func Test_import_hands_the_store_one_import_run_describing_the_build(t *testing.
 	assert.False(t, run.StartedAt.Before(before))
 	assert.False(t, run.FinishedAt.Before(run.StartedAt))
 	assert.False(t, after.Before(run.FinishedAt))
+}
+
+func Test_import_reports_the_history_fault_the_store_returns(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fault := &store.OpenError{Fault: store.OpenFaultNotDuckDB, Path: "/store/quarry.duckdb"}
+	fake := &fakeStore{historyFault: fault}
+
+	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.True(t, result.Built)
+	assert.Same(t, fault, result.HistoryFault)
+}
+
+func Test_import_reports_no_history_fault_when_the_store_returns_none(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.True(t, result.Built)
+	assert.Nil(t, result.HistoryFault)
 }

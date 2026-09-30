@@ -17,8 +17,9 @@ const (
 
 // OpenError is a read refused while opening the store at Path. SnapshotPath
 // (OpenFaultOtherFormat only) is the import run's snapshot, "" when
-// unreadable; Reason (OpenFaultOther only) is the fault's first line with
-// the store named by Path. Err is the underlying fault.
+// unreadable; Reason (OpenFaultOther only) is the fault's first line with the
+// store named by Path, or a ready phrase where the fault is in the store's import
+// history. Err is the underlying fault, not user copy: print UnreadableReason.
 type OpenError struct {
 	Fault        OpenFault
 	Path         string

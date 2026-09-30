@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -31,6 +33,22 @@ var optionalRunColumns = []string{
 	"snapshot_taken_at", "source_path", "balances_never_reconciled", "investment_accounts", "transfers_paired", "transfers_cross_currency",
 }
 
+// runColumnsQuery lists the columns of the store's import_runs table, none when it has no such table.
+const runColumnsQuery = `SELECT column_name FROM duckdb_columns()
+WHERE database_name = current_database() AND schema_name = 'main' AND table_name = 'import_runs'`
+
+// The phrases a sync prints for a history fault found after the store opened, each naming the previous store as "it".
+const (
+	reasonRunsRepeatID   = "its import_runs table repeats an id"
+	reasonRunsMissing    = "it has no import_runs table"
+	reasonRunsIncomplete = "its import_runs table is incomplete"
+)
+
+var (
+	errRunsMissing  = errors.New("import_runs table is absent")
+	errRunsRepeatID = errors.New("import_runs holds an id twice")
+)
+
 // readHistory reads the import_runs of the store at s.Path() and closes it before returning.
 // An absent store has no history and no fault; an unreadable one has no history and its fault.
 func (s *Store) readHistory(ctx context.Context) (history, *store.OpenError) {
@@ -48,37 +66,72 @@ func (s *Store) readHistory(ctx context.Context) (history, *store.OpenError) {
 	}
 	defer func() { _ = db.Close() }()
 
-	return readRuns(ctx, db, path)
+	carried, err := readRuns(ctx, db)
+	if err != nil {
+		return history{}, historyFault(path, err)
+	}
+	return carried, nil
 }
 
-// readRuns reads every import_runs row of the store at path through db; the
-// SELECT names only the fixed columns, never ones the store's own catalog reports.
-func readRuns(ctx context.Context, db ReadDB, path string) (history, *store.OpenError) {
-	columns := append([]string(nil), requiredRunColumns...)
-	for _, column := range optionalRunColumns {
-		has, err := hasColumn(ctx, db, "import_runs", column)
-		if err != nil {
-			return history{}, openFault(path, err)
+// historyFault is the fault of a history read that failed after the store opened: an
+// OpenFaultOther whose Reason is the phrase UnreadableReason gives, never driver text.
+func historyFault(path string, err error) *store.OpenError {
+	reason := reasonRunsIncomplete
+	switch {
+	case errors.Is(err, errRunsMissing):
+		reason = reasonRunsMissing
+	case errors.Is(err, errRunsRepeatID):
+		reason = reasonRunsRepeatID
+	}
+	return &store.OpenError{Fault: store.OpenFaultOther, Path: path, Reason: reason, Err: err}
+}
+
+// readRuns reads every import_runs row through db; the SELECT names only the fixed columns,
+// never ones the store's own catalog reports. It fails with errRunsMissing when the store
+// has no import_runs table, errRunsRepeatID when two rows share an id, else with the read's own fault.
+func readRuns(ctx context.Context, db ReadDB) (history, error) {
+	present := map[string]bool{}
+	err := db.QueryRows(ctx, runColumnsQuery, nil, func(scan func(dest ...any) error) error {
+		var column string
+		if err := scan(&column); err != nil {
+			return err
 		}
-		if !has {
+		present[column] = true
+		return nil
+	})
+	if err != nil {
+		return history{}, fmt.Errorf("read import_runs columns: %w", err)
+	}
+	if len(present) == 0 {
+		return history{}, errRunsMissing
+	}
+
+	columns := slices.Clone(requiredRunColumns)
+	for _, column := range optionalRunColumns {
+		if !present[column] {
 			column = "NULL"
 		}
 		columns = append(columns, column)
 	}
 
 	var carried history
-	err := db.QueryRows(ctx, "SELECT "+strings.Join(columns, ", ")+" FROM import_runs ORDER BY id", nil,
+	seen := map[int64]bool{}
+	err = db.QueryRows(ctx, "SELECT "+strings.Join(columns, ", ")+" FROM import_runs ORDER BY id", nil,
 		func(scan func(dest ...any) error) error {
 			var r carriedRun
 			if err := scan(r.targets()...); err != nil {
 				return err
 			}
+			if seen[r.id] {
+				return errRunsRepeatID
+			}
+			seen[r.id] = true
 			carried.rows = append(carried.rows, r.values())
 			carried.maxID = max(carried.maxID, r.id)
 			return nil
 		})
 	if err != nil {
-		return history{}, openFault(path, err)
+		return history{}, fmt.Errorf("read import_runs: %w", err)
 	}
 	return carried, nil
 }

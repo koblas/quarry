@@ -131,18 +131,17 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 		return store.Result{}, fmt.Errorf("replace store: %w", err)
 	}
 
-	return store.Result{Path: replaced.Path, Built: true, Counts: counts, Validation: validation, NotImported: notImported}, nil
+	return store.Result{
+		Path: replaced.Path, Built: true, Counts: counts, Validation: validation, NotImported: notImported,
+		HistoryFault: replaced.HistoryFault,
+	}, nil
 }
 
-// importRunID is the import_runs id of a store's only run: every build
-// writes a fresh store, so no earlier run is carried into it.
-const importRunID = 1
-
 // newImportRun describes a build that passed validation, stamping its
-// finish time now, before the store is written.
+// finish time now, before the store is written; the store assigns its ID.
 func newImportRun(startedAt time.Time, snap store.SnapshotRef, counts store.Counts, v store.Validation, n store.NotImported) store.ImportRun {
 	return store.ImportRun{
-		ID: importRunID, StartedAt: startedAt, FinishedAt: time.Now().UTC(), Snapshot: snap, Counts: counts,
+		StartedAt: startedAt, FinishedAt: time.Now().UTC(), Snapshot: snap, Counts: counts,
 		BalancesChecked: v.Balances.Checked, BalancesMismatched: len(v.Balances.Mismatched),
 		SplitsMismatched: len(v.Splits.Mismatched), TransfersOneSided: len(v.Transfers.OneSided),
 		InvestmentTransactionsNotImported: n.InvestmentTransactions,
