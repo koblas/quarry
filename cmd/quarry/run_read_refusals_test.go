@@ -52,6 +52,7 @@ func Test_run_read_commands_refuse_when_there_is_no_store(t *testing.T) {
 		{name: "accounts", args: []string{"accounts"}},
 		{name: "spend", args: []string{"spend"}},
 		{name: "cashflow", args: []string{"cashflow"}},
+		{name: "findings", args: []string{"findings"}},
 		{name: "sql with a query", args: []string{"sql", "SELECT 1"}},
 		{name: "sql with a query only DuckDB can tell is empty", args: []string{"sql", ";"}},
 	}
@@ -165,6 +166,7 @@ func Test_run_read_commands_report_an_interrupt_during_the_open(t *testing.T) {
 		{name: "accounts", args: []string{"accounts"}, wantStderr: "quarry: accounts interrupted\n"},
 		{name: "spend", args: []string{"spend"}, wantStderr: "quarry: spend interrupted\n"},
 		{name: "cashflow", args: []string{"cashflow"}, wantStderr: "quarry: cashflow interrupted\n"},
+		{name: "findings", args: []string{"findings"}, wantStderr: "quarry: findings interrupted\n"},
 		{name: "sql", args: []string{"sql", "SELECT 1"}, wantStderr: "quarry: query interrupted\n"},
 	}
 

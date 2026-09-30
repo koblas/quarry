@@ -13,6 +13,7 @@ type fakeStore struct {
 	accounts   store.AccountList
 	spending   store.Spending
 	cashFlow   store.CashFlow
+	findings   store.FindingList
 	rows       [][]store.QueryValue
 	gotMaxRows *int
 
@@ -44,6 +45,8 @@ func (f fakeStore) CashFlow(_ context.Context, params store.CashFlowParams) (sto
 	}
 	return f.cashFlow, f.err
 }
+
+func (f fakeStore) Findings(context.Context) (store.FindingList, error) { return f.findings, f.err }
 
 func (f fakeStore) Query(_ context.Context, _ string, maxRows int) (store.QueryResult, error) {
 	if f.gotMaxRows != nil {

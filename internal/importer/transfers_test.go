@@ -168,6 +168,10 @@ func Test_import_keeps_a_name_form_leg_as_a_one_sided_transfer(t *testing.T) {
 	}}, result.Validation.Transfers)
 	assert.Equal(t, new(accountIDFor(savingsPK)), splitByID(fake, splitIDFor(matchedLeg)).TransferAccountID)
 	assert.Nil(t, splitByID(fake, splitIDFor(unmatchedLeg)).TransferAccountID)
+	assert.Equal(t, []store.Transfer{
+		{ID: transferIDFor(matchedLeg), FromSplitID: splitIDFor(matchedLeg), OtherAccount: new("Savings")},
+		{ID: transferIDFor(unmatchedLeg), FromSplitID: splitIDFor(unmatchedLeg), OtherAccount: new("Old Visa")},
+	}, fake.Rows.Transfers)
 }
 
 func Test_import_keeps_a_numeric_link_with_no_imported_counterpart_as_one_sided(t *testing.T) {

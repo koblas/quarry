@@ -239,6 +239,34 @@ func Test_run_read_commands_ignore_a_malformed_config(t *testing.T) {
 	}
 }
 
+func Test_run_findings_refuses_a_bad_config_before_looking_for_a_store(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, "snapshots.keep = 0\n")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: "+configShown+": snapshots.keep must be a whole number of 1 or more, got 0"+configFix+"\n", stderr.String())
+}
+
+func Test_run_findings_lists_after_warning_about_an_unknown_config_key(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStore(t, home, spendRows([]store.Account{chequingAccount("acct-1", 1)},
+		spendSplit{id: "1", account: "acct-1", category: "cat-fuel", payee: "payee-costco", currency: "CAD", day: day(2026, 9, 1), cents: -4500}))
+	writeConfig(t, home, "snapshot.keep = 3\n")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+
+	assert.Equal(t, 0, exitCode)
+	assert.Equal(t, "No open findings\n", stdout.String())
+	assert.Equal(t, "quarry: warning: "+configShown+": unknown key snapshot.keep; quarry ignores it\n", stderr.String())
+}
+
 func Test_run_sync_warns_about_unknown_config_keys_before_its_own_warnings(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

@@ -327,10 +327,20 @@ func payeeLabel(payee string) string {
 	return payee
 }
 
-// oneSidedRows renders one "?" row per one-sided leg, in the order given:
-// date fixed, account label and payee columns padded to the widest among
-// these rows, the amount right-aligned, then the account the leg names.
+// oneSidedRows renders one "?" row per one-sided leg, in the order given, each
+// behind the lead "  ? ".
 func oneSidedRows(legs []store.OneSidedTransfer) []string {
+	leads := make([]string, len(legs))
+	for i := range leads {
+		leads[i] = "  ? "
+	}
+	return legRows(legs, leads)
+}
+
+// legRows renders one row per one-sided leg, each behind its own lead: date
+// fixed, account label and payee columns padded to the widest among these
+// rows, the amount right-aligned, then the account the leg names.
+func legRows(legs []store.OneSidedTransfer, leads []string) []string {
 	labels := make([]string, len(legs))
 	payees := make([]string, len(legs))
 	amounts := make([]string, len(legs))
@@ -345,8 +355,8 @@ func oneSidedRows(legs []store.OneSidedTransfer) []string {
 
 	rows := make([]string, len(legs))
 	for i, leg := range legs {
-		rows[i] = fmt.Sprintf("  ? %s  %-*s%-*s%*s  other account: %s",
-			leg.Date.Format("2006-01-02"), labelWidth, labels[i], payeeWidth, payees[i],
+		rows[i] = fmt.Sprintf("%s%s  %-*s%-*s%*s  other account: %s",
+			leads[i], leg.Date.Format("2006-01-02"), labelWidth, labels[i], payeeWidth, payees[i],
 			amountWidth, amounts[i], otherAccountLabel(leg))
 	}
 	return rows

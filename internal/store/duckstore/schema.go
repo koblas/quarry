@@ -68,7 +68,8 @@ CREATE TABLE transfers (
 	id VARCHAR PRIMARY KEY,
 	from_split_id VARCHAR NOT NULL,
 	to_split_id VARCHAR,
-	cross_currency BOOLEAN NOT NULL
+	cross_currency BOOLEAN NOT NULL,
+	other_account VARCHAR
 );
 CREATE TABLE split_tags (
 	split_id VARCHAR NOT NULL,

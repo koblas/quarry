@@ -554,7 +554,7 @@ func splitTagRows(splitTags []store.SplitTag) [][]any {
 func transferRows(transfers []store.Transfer) [][]any {
 	out := make([][]any, len(transfers))
 	for i, tr := range transfers {
-		out[i] = []any{tr.ID, tr.FromSplitID, nullableStr(tr.ToSplitID), tr.CrossCurrency}
+		out[i] = []any{tr.ID, tr.FromSplitID, nullableStr(tr.ToSplitID), tr.CrossCurrency, nullableStr(tr.OtherAccount)}
 	}
 	return out
 }

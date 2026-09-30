@@ -575,9 +575,9 @@ Ruled: the finding core (type list and order, id grammar, P2d-3 status function,
 - [x] SCENARIO-08: findings history that cannot be carried forward restarts with a warning — `cmd/quarry/run_findings_carry_test.go` `Test_run_sync_from_warns_and_restarts_findings_history_when_the_previous_findings_table_repeats_an_id`
 - [x] SCENARIO-09: two same-amount transactions within 3 days are a possible duplicate — `cmd/quarry/run_sync_duplicates_test.go` `Test_run_sync_records_two_same_amount_transactions_within_three_days_as_a_duplicate`
 - [x] SCENARIO-10: two reconciled look-alikes are not a duplicate — delivered by SCENARIO-09 — `cmd/quarry/run_sync_duplicates_test.go` `Test_run_sync_does_not_flag_two_reconciled_look_alikes_as_a_duplicate`
-- [ ] SCENARIO-11: findings lists open findings by type with their fix
-- [ ] SCENARIO-12: findings with none open says so
-- [ ] SCENARIO-13: findings refuses a store built before findings existed
+- [x] SCENARIO-11: findings lists open findings by type with their fix — `cmd/quarry/run_findings_test.go` `Test_run_findings_lists_open_findings_by_type_with_their_fix`
+- [x] SCENARIO-12: findings with none open says so — delivered by SCENARIO-11 — `cmd/quarry/run_findings_test.go` `Test_run_findings_says_no_open_findings_when_the_store_has_none`
+- [x] SCENARIO-13: findings refuses a store built before findings existed — delivered by SCENARIO-11 — `cmd/quarry/run_findings_test.go` `Test_run_findings_refuses_a_store_built_before_findings_existed`
 - [ ] SCENARIO-14: findings --json returns the worklist as a document
 - [ ] SCENARIO-15: a malformed findings.ignore is refused before Quicken is touched
 - [ ] SCENARIO-16: an id listed in findings.ignore is ignored

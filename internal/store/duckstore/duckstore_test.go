@@ -46,7 +46,7 @@ func minimalRows() store.Rows {
 		SplitTags: []store.SplitTag{{SplitID: "split-1", TagID: "tag-1"}},
 		Transfers: []store.Transfer{
 			{ID: "xfer-1", FromSplitID: "split-1", ToSplitID: new("split-2"), CrossCurrency: true},
-			{ID: "xfer-3", FromSplitID: "split-3"},
+			{ID: "xfer-3", FromSplitID: "split-3", OtherAccount: new("Savings")},
 		},
 		ImportRuns: []store.ImportRun{{
 			ID: 1, StartedAt: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), FinishedAt: time.Date(2026, 9, 27, 14, 30, 7, 0, time.UTC),
@@ -88,6 +88,8 @@ func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
 	assertScalar(t, db, "SELECT tag_id FROM split_tags WHERE split_id = 'split-1'", "tag-1")
 	assertScalar(t, db, "SELECT to_split_id || ' ' || CAST(cross_currency AS VARCHAR) FROM transfers WHERE id = 'xfer-1'", "split-2 true")
 	assertScalar(t, db, "SELECT from_split_id || ' ' || COALESCE(to_split_id, 'NULL') || ' ' || CAST(cross_currency AS VARCHAR) FROM transfers WHERE id = 'xfer-3'", "split-3 NULL false")
+	assertScalar(t, db, "SELECT COALESCE(other_account, 'NULL') FROM transfers WHERE id = 'xfer-1'", "NULL")
+	assertScalar(t, db, "SELECT other_account FROM transfers WHERE id = 'xfer-3'", "Savings")
 	assertScalar(t, db, "SELECT CAST(started_at AS VARCHAR) || ' ' || CAST(finished_at AS VARCHAR) FROM import_runs WHERE id = 1",
 		"2026-09-27 14:30:05 2026-09-27 14:30:07")
 	assertScalar(t, db, "SELECT concat_ws(' ', snapshot_path, snapshot_sha256, schema_fingerprint) FROM import_runs WHERE id = 1",

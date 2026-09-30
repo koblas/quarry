@@ -1,6 +1,6 @@
 # phase2d-findings — current state
 
-Scenarios complete: SCENARIO-01..10 (02, 03 delivered by 01; 05 by 04; 07 by 06; 10 by 09). Last updated by SCENARIO-09.
+Scenarios complete: SCENARIO-01..13 (02, 03 delivered by 01; 05 by 04; 07 by 06; 10 by 09; 12, 13 by 11). Last updated by SCENARIO-11.
 
 ## Binding decisions
 - `internal/finding` is the leaf (stdlib only) owning type names/order, id grammar (`ID`, `PairID`, `NoPayee`), `StatusOf`, the fix table and `Counts`; `store`, `duckstore`, `snapshot`, `report` and the `findings` command (11) import it (SCENARIO-01)
@@ -16,14 +16,24 @@ Scenarios complete: SCENARIO-01..10 (02, 03 delivered by 01; 05 by 04; 07 by 06;
 - `FormatVersion` is 4; `findings` and `finding_items` are in `storeRelations` (SCENARIO-01)
 - `Outcome.Warnings()` order is manifest, history restart, findings restart, auto-prune; no one-sided entry in text or `warnings[]` — the count survives as the `Transfers` line, `store.transfers.one_sided` and the Findings count (SCENARIO-04)
 - Success block prints no `?` rows; only `renderStoreFailure` prints `writeOneSidedRows` (`oneSidedRows`, `otherAccountLabel` stay live there). V1 tail is `fix them in Quicken and run quarry sync, or run quarry sync --from <id> after updating quarry` (SCENARIO-04)
+- Findings reads live in `report` (no `internal/findings` package; refusal copy is `report`-private): `Store.Findings`, `Server.Findings(FindingsRequest{Ignore})` -> `FindingsListing{Groups, Counts}`; status only via `finding.StatusOf`; groups in `finding.Types()` order, empty groups omitted; Counts cover all findings. `store.FindingList/Finding/FindingItem` carry `New`/`NewlyFixed` computed in SQL by equality with `store_info.built_at`; 14 and 19 count from them (SCENARIO-11)
+- `transfers.other_account` (format 4, NULL for paired and numeric links) + `Transfer.OtherAccount`; `FindingItem.OtherAccount/OtherAccountID` feed 14's JSON `other_account`/`other_account_id` and 22's CSV cell (SCENARIO-11)
+- `findings` command: flags validated then config loaded strictly (`loadConfig("findings")` + `printConfigWarnings`) then store; hint shows iff >=1 open and `len(req.Ignore) == 0`; `renderFindings(listing, showHint)` owns the default-view footer (incl. `J ignored`) and both empty forms; 18 adds the other status views (SCENARIO-11)
+- Sort: duplicate and one-sided by latest item date desc then id; uncategorized by item count desc, payee case-insensitive, id; other types by id. Duplicate item rows render in pair-id order (lower source id first), not date order — accepted (SCENARIO-11)
 - `sync --json` `store.findings` is `{open, ignored, fixed, new, newly_fixed}` ints, null iff `Built` false; 19's `status --json` needs `ignored: null`, so it must not reuse `findingsDocument` as is (SCENARIO-04)
 
 ## Left unbuilt
 - `J ignored` Findings-line clause and `Counts.Ignored` (stays 0 from `duckstore`; 16 sets it via a `snapshot` option) — 16
-- Text rows for one-sided legs (`one-sided-transfer:xfer-N  date  account  payee  amount  other account: ...`) — 11 reuses `oneSidedRows` columns minus the `?` (SCENARIO-04)
-- Exported finding row type / read port for reads — 11 designs it
+- `findings --json` document (RunE prints the text view until then) — 14; `--csv` and the `--csv --json` line — 22
+- `--status`/`--type` filtering (values validated, not passed on), `ignored` marker, `fixed <date>` lines, fixed sort — 18
+- `Config` ignore field, C6/C6e — 15; `FindingsRequest.Ignore` filled from config — 16; W1 — 17
+- Rows and sort rules for unlinked-transfer, mixed-categories, payee-variants, similar-categories, unused-category; `findingLines`' `// unreachable` final `return nil` must go when 24-28 add their types; payee-variants / similar-categories headers use `(N groups)` — 24-28
 
 ## Traps
+- `report` counts `New` over open-status findings only (ignored new ones are not New), but sync's `Counts.New` from duckstore does not exclude ignored: 16 must make the sync line's `(M new)` and `open` exclude ignored so sync, status and findings agree (SCENARIO-11)
+- A v4 store built on this branch before `transfers.other_account` makes `Findings` fail with a read refusal; re-sync (SCENARIO-11)
+- `report/fakes_test.go` `fakeStore` lists methods explicitly; `cli` `fakeReportStore` embeds `report.Store`, so an unset `Findings` panics. Duplicate item amount is the transaction's; one-sided item amount is the leg's split (SCENARIO-11)
+- `cmd/quarry` `Test_run_help_prints_quarrys_description` pins the exact command list: a new subcommand needs its row (SCENARIO-11)
 - A duplicated EMPTY append does not fail: `duplicateTable: "findings"` fixtures need >= 1 finding (SCENARIO-01)
 - Uncategorized is per payee: a fixture whose splits all lack a payee is `1 open`, not the split count (SCENARIO-01)
 - A one-sided transfer's from-split is a transfer leg, so `v_cash_flow` never lists it as uncategorized (SCENARIO-01)

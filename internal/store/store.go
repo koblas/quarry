@@ -117,12 +117,14 @@ type Split struct {
 // Transfer is one row of the transfers table: a pair of split legs between
 // the user's own accounts, or a one-sided leg when ToSplitID is nil.
 // FromSplitID is the leg with the lower numeric source id, not the leg the
-// money left from.
+// money left from. OtherAccount is the account name a one-sided leg recorded
+// instead of a link; it is nil for a pair and for a leg linked by account id.
 type Transfer struct {
 	ID            string
 	FromSplitID   string
 	ToSplitID     *string
 	CrossCurrency bool
+	OtherAccount  *string
 }
 
 // SplitTag links one split to one tag (the split_tags table).
@@ -335,6 +337,47 @@ type OneSidedTransfer struct {
 	Amount            int64
 	OtherAccount      *string
 	OtherAccountID    *string
+}
+
+// FindingList is every finding the store holds, open and fixed alike; ignored
+// is not stored, so callers derive it from the config.
+type FindingList struct {
+	Findings []Finding
+}
+
+// Finding is one row of the findings table with its items. FixedAt is nil
+// while the finding is open; a fixed finding has no Items. New and NewlyFixed
+// mean first found or fixed by the store's own build.
+type Finding struct {
+	ID           string
+	Type         finding.Type
+	FirstFoundAt time.Time
+	FixedAt      *time.Time
+	New          bool
+	NewlyFixed   bool
+	Items        []FindingItem
+}
+
+// FindingItem is what a finding is about: a transaction or split with its
+// account and payee, or (for payee and category findings) a payee or
+// category. Amount is the item split's amount in cents when SplitID is set,
+// else the transaction's; Payee is "" when the transaction has none.
+// OtherAccount and OtherAccountID describe a one-sided transfer leg as
+// OneSidedTransfer does.
+type FindingItem struct {
+	TransactionID  *string
+	SplitID        *string
+	PayeeID        *string
+	CategoryID     *string
+	Date           time.Time
+	AccountID      string
+	Account        string
+	Currency       string
+	Closed, Active bool
+	Payee          string
+	Amount         int64
+	OtherAccount   *string
+	OtherAccountID *string
 }
 
 // AccountBalance is one account with its balance in cents; Balance is nil
