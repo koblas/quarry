@@ -126,12 +126,12 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	}
 
 	rows.ImportRuns = []store.ImportRun{newImportRun(startedAt, snap, counts, validation, notImported)}
-	path, err := srv.store.Replace(ctx, rows)
+	replaced, err := srv.store.Replace(ctx, rows)
 	if err != nil {
 		return store.Result{}, fmt.Errorf("replace store: %w", err)
 	}
 
-	return store.Result{Path: path, Built: true, Counts: counts, Validation: validation, NotImported: notImported}, nil
+	return store.Result{Path: replaced.Path, Built: true, Counts: counts, Validation: validation, NotImported: notImported}, nil
 }
 
 // importRunID is the import_runs id of a store's only run: every build

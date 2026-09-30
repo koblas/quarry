@@ -20,9 +20,9 @@ Port survey: `importer.Store` has one method, `Replace`, one production call (`i
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_import_runs_test.go` `Test_run_sync_from_keeps_the_earlier_build_in_import_runs` — two bundles with different data (equal data can hash alike); store built from A only (sync A, copy the store file aside, sync B, put the copy back), then `sync --from <B>`; ids 1 and 2 carry each manifest's sha256, and row 1 reads the same in every column (timestamps included) as before the When. Red today: one row
-- [ ] Step 2: `cmd/quarry/run_status_test.go` `Test_run_status_reports_the_latest_build_when_import_runs_holds_several` — Given built with `editStore` (`run_read_refusals_test.go:190-197`): a second row as `:222` builds one (`SELECT * REPLACE (2 AS id, '<other snapshot path>' AS snapshot_path)`; vary the path only, so `(just now)` holds; two real syncs would pass today with one row); stdout is the `:45-54` form with only the Snapshot id changed. Red today: `found 2`
-- [ ] Step 3: `internal/store/store.go:199-209` `Result.HistoryFault *OpenError` + new `store.Replaced{Path, HistoryFault}`; `importer/ports.go:21-26`, `duckstore.go:275-325`, `importer.go:128-134`, `importer/store_fake_test.go:9-28` `Replace` returns `store.Replaced` — signature only, behaviour unchanged; `.Path` at each caller the build lists (about 20 in `duckstore_test.go`)
+- [x] Step 1: `cmd/quarry/run_import_runs_test.go` `Test_run_sync_from_keeps_the_earlier_build_in_import_runs` — two bundles with different data (equal data can hash alike); store built from A only (sync A, copy the store file aside, sync B, put the copy back), then `sync --from <B>`; ids 1 and 2 carry each manifest's sha256, and row 1 reads the same in every column (timestamps included) as before the When. Red today: one row
+- [x] Step 2: `cmd/quarry/run_status_test.go` `Test_run_status_reports_the_latest_build_when_import_runs_holds_several` — Given built with `editStore` (`run_read_refusals_test.go:190-197`): a second row as `:222` builds one (`SELECT * REPLACE (2 AS id, '<other snapshot path>' AS snapshot_path)`; vary the path only, so `(just now)` holds; two real syncs would pass today with one row); stdout is the `:45-54` form with only the Snapshot id changed. Red today: `found 2`
+- [x] Step 3: `internal/store/store.go:199-209` `Result.HistoryFault *OpenError` + new `store.Replaced{Path, HistoryFault}`; `importer/ports.go:21-26`, `duckstore.go:275-325`, `importer.go:128-134`, `importer/store_fake_test.go:9-28` `Replace` returns `store.Replaced` — signature only, behaviour unchanged; `.Path` at each caller the build lists (about 20 in `duckstore_test.go`)
 
 ### Build
 - [ ] Step 4: `duckstore/status.go:12-27,57-62` `statusQuery`, `Status` + `duckstore.go:175,244-261` `snapshotPathQuery`, `snapshotPath` — latest row. `status_test.go:100-127` becomes `Test_status_reads_the_latest_import_run` (three runs inserted in id order 1, 3, 2 by SQL as `:62-73` does, each its own snapshot and counts) and `Test_status_refuses_a_store_without_an_import_run` (`found 0`); `open_test.go:204-229` becomes `Test_open_read_names_the_latest_import_runs_snapshot` (same 1, 3, 2 shape with distinct paths; the other rows stay); `cmd/quarry/run_read_refusals_test.go:215-242` loses its two-runs row; `cmd/quarry/run_status_json_test.go` `Test_run_status_json_reports_the_latest_build_when_import_runs_holds_several`. Step 2 turns green
@@ -62,3 +62,16 @@ Port survey: `importer.Store` has one method, `Replace`, one production call (`i
 - The history read runs before `removeStaleWAL`; what a read-only open does beside a stale WAL was not established at plan time (step 6 pins it)
 - `LSP` in this session answers from another worktree (`../agent-…` paths): treat its results as unverified and grep
 - `Outcome.Warnings()` has no home; `importVerified` (`snapshot/import.go:91-111`) has `s.home` — SCENARIO-15 needs it for `UnreadableReason(at)`
+
+## Phase report
+
+Run A (steps 1-3) done. Orchestrator ruling on deviation 1 ACCEPTED: `Replace` may open the previous store read-only (lockdown DSN, no `checkFormat`), closed before the partial is created; 2a's invariant is "never opens the final path for writing".
+
+Files:
+- `cmd/quarry/run_import_runs_test.go:78-` `Test_run_sync_from_keeps_the_earlier_build_in_import_runs` + helpers `writeNamedAccountBundle`, `manifestOtherThan`, `manifestSHA256`, `importRunRowsAsText`, `importRunSHA256`, `importRunQuery`. Store A is set aside with `os.Rename` (gosec flags `WriteFile` on the tainted store path).
+- `cmd/quarry/run_status_test.go:54-` `Test_run_status_reports_the_latest_build_when_import_runs_holds_several`: second row by two `editStore` calls (copy with id 2, then `UPDATE ... snapshot_path`, because `unqueryvet` rejects `SELECT *` in a concatenated query); expected stdout is the before-output with only the snapshot id replaced.
+- Signature: `store.Replaced{Path, HistoryFault}` and `Result.HistoryFault` in `internal/store/store.go`; `importer.Store.Replace`, `duckstore.Replace`, `importer.go:129`, `store_fake_test.go:21` return it. `HistoryFault` is declared, never set or read yet (B2 step 6/7). `duckstore_test.go`: 20 `path, err :=` sites now `replaced, err :=` + `path := replaced.Path` after the `require.NoError`.
+
+State: red = the two acceptance tests, both at their assertion (`Len 2` got 1 with row 1 = bundle B; status `found 2` refusal, exit 1 not 0). Everything else green; `go build`, `go vet`, `golangci-lint run ./...` 0 issues.
+
+B1 (steps 4-5) must not redo: nothing here. Trap: `Test_run_status_reports_...` asserts against the pre-edit `status` output, so it stays green after step 4 only if the latest row is read (id 2).

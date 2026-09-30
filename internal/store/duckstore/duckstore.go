@@ -276,9 +276,9 @@ func hasColumn(ctx context.Context, db ReadDB, table, column string) (bool, erro
 // and swaps rows into quarry.duckdb, removing any stale quarry.duckdb.wal
 // first. On failure this run's own build file is removed and the existing
 // store is untouched; a permission fault matches store.ErrStoreNotWritable, disk-full store.ErrDiskFull.
-func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
+func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, error) {
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
-		return "", buildError(err)
+		return store.Replaced{}, buildError(err)
 	}
 	s.sweepLeftovers()
 
@@ -288,40 +288,40 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (string, error) {
 	db, err := s.create(ctx, partialPath)
 	if err != nil {
 		removePartial(partialPath)
-		return "", buildError(err)
+		return store.Replaced{}, buildError(err)
 	}
 
 	builtAt := time.Now().UTC()
 	if err := build(ctx, db, rows, s.quarryVersion, builtAt); err != nil {
 		_ = db.Close()
 		removePartial(partialPath)
-		return "", buildError(err)
+		return store.Replaced{}, buildError(err)
 	}
 
 	if err := db.CheckpointClose(ctx); err != nil {
 		_ = db.Close()
 		removePartial(partialPath)
-		return "", buildError(err)
+		return store.Replaced{}, buildError(err)
 	}
 
 	// The last point an interrupt can still keep the previous store.
 	if err := ctx.Err(); err != nil {
 		removePartial(partialPath)
-		return "", buildError(err)
+		return store.Replaced{}, buildError(err)
 	}
 
 	if err := removeStaleWAL(finalPath); err != nil {
 		removePartial(partialPath)
-		return "", buildError(err)
+		return store.Replaced{}, buildError(err)
 	}
 
 	if err := os.Rename(partialPath, finalPath); err != nil {
 		removePartial(partialPath)
-		return "", buildError(err)
+		return store.Replaced{}, buildError(err)
 	}
 	atomicfile.SyncDir(s.dir)
 
-	return finalPath, nil
+	return store.Replaced{Path: finalPath}, nil
 }
 
 // sweepLeftovers best-effort removes buildFilePattern matches in

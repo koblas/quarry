@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,4 +70,86 @@ func Test_run_records_an_import_runs_row_for_the_build(t *testing.T) {
 			"transfers_one_sided, investment_transactions_not_imported) FROM import_runs"))
 	assert.Equal(t, map[string]string{"1": "true"},
 		stringMap(t, db, "SELECT CAST(id AS VARCHAR), CAST(started_at <= finished_at AS VARCHAR) FROM import_runs"))
+}
+
+func Test_run_sync_from_keeps_the_earlier_build_in_import_runs(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	snapshotsDir := filepath.Join(storeDirUnder(home), "snapshots")
+	syncBundle(t, writeNamedAccountBundle(t, filepath.Join(home, "DocumentsA"), "Chequing"))
+	earlierManifest := onlyFileWithSuffix(t, snapshotsDir, ".json")
+	earlierStore := filepath.Join(home, "earlier.duckdb")
+	require.NoError(t, os.Rename(storePathUnder(home), earlierStore))
+	syncBundle(t, writeNamedAccountBundle(t, filepath.Join(home, "DocumentsB"), "Savings"))
+	laterManifest := manifestOtherThan(t, snapshotsDir, earlierManifest)
+	require.NoError(t, os.Rename(earlierStore, storePathUnder(home)))
+	rowsBefore := importRunRowsAsText(t, home)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--from", strings.TrimSuffix(filepath.Base(laterManifest), ".json")}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	rowsAfter := importRunRowsAsText(t, home)
+	require.Len(t, rowsAfter, 2)
+	assert.Equal(t, rowsBefore["1"], rowsAfter["1"])
+	assert.Equal(t, manifestSHA256(t, earlierManifest), importRunSHA256(t, home, "1"))
+	assert.Equal(t, manifestSHA256(t, laterManifest), importRunSHA256(t, home, "2"))
+}
+
+// writeNamedAccountBundle writes a bundle whose one account carries name, so two bundles hash differently.
+func writeNamedAccountBundle(t *testing.T, dir, name string) v9fixture.Bundle {
+	t.Helper()
+	b := v9fixture.NewBuilder()
+	account := b.Account(v9fixture.AccountRow{Name: name, Type: "CHECKING", Currency: "CAD", Active: true})
+	addTransaction(b, account, "10.00", time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC))
+	return b.WriteBundle(t, dir)
+}
+
+// manifestOtherThan returns the one snapshot manifest in dir that is not excluded.
+func manifestOtherThan(t *testing.T, dir, excluded string) string {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(dir, "*.json"))
+	require.NoError(t, err)
+	var others []string
+	for _, m := range matches {
+		if m != excluded {
+			others = append(others, m)
+		}
+	}
+	require.Len(t, others, 1)
+	return others[0]
+}
+
+// manifestSHA256 reads the snapshot sha256 a manifest records.
+func manifestSHA256(t *testing.T, manifestPath string) string {
+	t.Helper()
+	raw, err := os.ReadFile(manifestPath)
+	require.NoError(t, err)
+	var manifest struct {
+		Snapshot struct {
+			SHA256 string `json:"sha256"`
+		} `json:"snapshot"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &manifest))
+	return manifest.Snapshot.SHA256
+}
+
+// importRunRowsAsText maps each import_runs id to its whole row rendered as text, so every column takes part in a comparison.
+func importRunRowsAsText(t *testing.T, home string) map[string]string {
+	t.Helper()
+	return importRunQuery(t, home, "SELECT CAST(id AS VARCHAR), CAST(r AS VARCHAR) FROM import_runs r")
+}
+
+// importRunSHA256 reads the snapshot_sha256 of import run id.
+func importRunSHA256(t *testing.T, home, id string) string {
+	t.Helper()
+	return importRunQuery(t, home, "SELECT CAST(id AS VARCHAR), snapshot_sha256 FROM import_runs")[id]
+}
+
+func importRunQuery(t *testing.T, home, query string) map[string]string {
+	t.Helper()
+	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	return stringMap(t, db, query)
 }

@@ -201,11 +201,19 @@ type Counts struct {
 // Path is then empty (Replace never ran) but Counts, Validation and
 // NotImported still describe the rows the build would have written.
 type Result struct {
-	Path        string
-	Built       bool
-	Counts      Counts
-	Validation  Validation
-	NotImported NotImported
+	Path         string
+	Built        bool
+	Counts       Counts
+	Validation   Validation
+	NotImported  NotImported
+	HistoryFault *OpenError
+}
+
+// Replaced is what Store.Replace reports: the path it wrote, and the fault
+// that kept the previous store's import runs from being carried, if any.
+type Replaced struct {
+	Path         string
+	HistoryFault *OpenError
 }
 
 // NotImported counts source rows a build deliberately leaves out of the

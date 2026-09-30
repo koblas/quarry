@@ -70,9 +70,10 @@ func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
 	dir := t.TempDir()
 	st := duckstore.New(dir)
 
-	path, err := st.Replace(t.Context(), minimalRows())
+	replaced, err := st.Replace(t.Context(), minimalRows())
 
 	require.NoError(t, err)
+	path := replaced.Path
 	assert.Equal(t, filepath.Join(dir, "quarry.duckdb"), path)
 
 	db := openReadOnly(t, path)
@@ -112,9 +113,10 @@ func Test_replace_stores_the_report_flags_and_the_posted_date(t *testing.T) {
 		Amount: 500, Currency: "CAD", Status: "uncleared",
 	})
 
-	path, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
+	replaced, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
 
 	require.NoError(t, err)
+	path := replaced.Path
 	db := openReadOnly(t, path)
 	assertScalar(t, db, "SELECT CAST(in_reports AS VARCHAR) FROM accounts WHERE id = 'acct-1'", "true")
 	assertScalar(t, db, "SELECT CAST(in_reports AS VARCHAR) FROM accounts WHERE id = 'acct-2'", "false")
@@ -131,9 +133,10 @@ func Test_replace_stores_linked_tracking_per_account(t *testing.T) {
 		ID: "acct-2", SourceID: 2, Name: "Netskope 401(k)", Type: "retirement", Currency: "USD", Active: true, LinkedTracking: true,
 	})
 
-	path, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
+	replaced, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
 
 	require.NoError(t, err)
+	path := replaced.Path
 	db := openReadOnly(t, path)
 	assertScalar(t, db, "SELECT CAST(linked_tracking AS VARCHAR) FROM accounts WHERE id = 'acct-1'", "false")
 	assertScalar(t, db, "SELECT CAST(linked_tracking AS VARCHAR) FROM accounts WHERE id = 'acct-2'", "true")
@@ -144,8 +147,9 @@ func Test_replace_stores_linked_tracking_per_account(t *testing.T) {
 func Test_replace_leaves_a_held_reader_on_the_old_rows_and_a_later_read_sees_the_new(t *testing.T) {
 	t.Parallel()
 	st := duckstore.New(t.TempDir())
-	path, err := st.Replace(t.Context(), minimalRows())
+	replaced, err := st.Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
+	path := replaced.Path
 	held := openReadOnly(t, path)
 	renamed := minimalRows()
 	renamed.Accounts[0].Name = "Savings"
@@ -165,10 +169,11 @@ func Test_replace_writes_one_store_info_row_with_the_format_version_and_build_ti
 	dir := t.TempDir()
 	before := time.Now().UTC().Truncate(time.Microsecond)
 
-	path, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+	replaced, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
 
 	after := time.Now().UTC()
 	require.NoError(t, err)
+	path := replaced.Path
 	db := openReadOnly(t, path)
 	assertScalar(t, db, "SELECT CAST(count(*) AS VARCHAR) FROM store_info", "1")
 	assertScalar(t, db, "SELECT CAST(format_version AS VARCHAR) FROM store_info", strconv.Itoa(duckstore.FormatVersion))
@@ -183,9 +188,10 @@ func Test_replace_records_the_quarry_version_it_is_given(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	path, err := duckstore.New(dir, duckstore.WithQuarryVersion("v1.2.3")).Replace(t.Context(), minimalRows())
+	replaced, err := duckstore.New(dir, duckstore.WithQuarryVersion("v1.2.3")).Replace(t.Context(), minimalRows())
 
 	require.NoError(t, err)
+	path := replaced.Path
 	db := openReadOnly(t, path)
 	assertScalar(t, db, "SELECT quarry_version FROM store_info", "v1.2.3")
 }
@@ -204,9 +210,10 @@ func Test_replace_records_devel_when_no_quarry_version_is_given(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 
-			path, err := duckstore.New(t.TempDir(), c.opts...).Replace(t.Context(), minimalRows())
+			replaced, err := duckstore.New(t.TempDir(), c.opts...).Replace(t.Context(), minimalRows())
 
 			require.NoError(t, err)
+			path := replaced.Path
 			db := openReadOnly(t, path)
 			assertScalar(t, db, "SELECT quarry_version FROM store_info", "(devel)")
 		})
@@ -219,9 +226,10 @@ func Test_replace_stores_null_when_the_snapshot_has_no_taken_at_or_source(t *tes
 	rows.ImportRuns[0].Snapshot.TakenAt = time.Time{}
 	rows.ImportRuns[0].Snapshot.Source = ""
 
-	path, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
+	replaced, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
 
 	require.NoError(t, err)
+	path := replaced.Path
 	db := openReadOnly(t, path)
 	assertScalar(t, db, "SELECT COALESCE(CAST(snapshot_taken_at AS VARCHAR), 'NULL') || ' / ' || COALESCE(source_path, 'NULL') FROM import_runs",
 		"NULL / NULL")
@@ -230,8 +238,9 @@ func Test_replace_stores_null_when_the_snapshot_has_no_taken_at_or_source(t *tes
 func Test_replace_keeps_the_previous_store_when_store_info_cannot_be_written(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	path, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+	replaced, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
+	path := replaced.Path
 	before, err := os.ReadFile(path)
 	require.NoError(t, err)
 	st := newFaultStore(dir, &faultDB{appendFaultTable: "store_info", appendFault: &duckdbdriver.Error{
@@ -260,8 +269,9 @@ func Test_replace_keeps_a_negative_amounts_sign(t *testing.T) {
 	rows.Transactions[0].Amount = -1204
 	st := duckstore.New(dir)
 
-	path, err := st.Replace(t.Context(), rows)
+	replaced, err := st.Replace(t.Context(), rows)
 	require.NoError(t, err)
+	path := replaced.Path
 
 	db := openReadOnly(t, path)
 	assertScalar(t, db, "SELECT CAST(amount AS VARCHAR) FROM transactions WHERE id = 'txn-1'", "-12.04")
@@ -289,8 +299,9 @@ func Test_replace_makes_the_store_owner_only(t *testing.T) {
 	dir := t.TempDir()
 	st := duckstore.New(dir)
 
-	path, err := st.Replace(t.Context(), minimalRows())
+	replaced, err := st.Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
+	path := replaced.Path
 
 	info, err := os.Stat(path)
 	require.NoError(t, err)
@@ -377,8 +388,9 @@ func Test_replace_leaves_the_existing_store_byte_identical_when_the_build_fails(
 	t.Parallel()
 	dir := t.TempDir()
 	st := duckstore.New(dir)
-	path, err := st.Replace(t.Context(), minimalRows())
+	replaced, err := st.Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
+	path := replaced.Path
 	before, err := os.ReadFile(path)
 	require.NoError(t, err)
 
@@ -413,8 +425,9 @@ func Test_replace_tags_a_read_only_store_directory_as_not_writable(t *testing.T)
 	t.Parallel()
 	dir := t.TempDir()
 	st := duckstore.New(dir)
-	path, err := st.Replace(t.Context(), minimalRows())
+	replaced, err := st.Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
+	path := replaced.Path
 	before, err := os.ReadFile(path)
 	require.NoError(t, err)
 
@@ -527,8 +540,9 @@ func Test_replace_removes_the_partial_and_wal_when_the_checkpoint_fails(t *testi
 func Test_replace_does_not_swap_when_the_context_ends_after_the_checkpoint(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	path, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+	replaced, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
+	path := replaced.Path
 	before, err := os.ReadFile(path)
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -555,9 +569,10 @@ func Test_replace_removes_a_stale_wal_before_swapping_in_the_new_store(t *testin
 	require.NoError(t, os.WriteFile(staleWAL, []byte("wal"), 0o600))
 	st := duckstore.New(dir)
 
-	path, err := st.Replace(t.Context(), minimalRows())
+	replaced, err := st.Replace(t.Context(), minimalRows())
 
 	require.NoError(t, err)
+	path := replaced.Path
 	assert.Equal(t, filepath.Join(dir, "quarry.duckdb"), path)
 	_, statErr := os.Stat(staleWAL)
 	assert.ErrorIs(t, statErr, os.ErrNotExist)
@@ -568,17 +583,19 @@ func Test_replace_leaves_a_missing_wal_alone(t *testing.T) {
 	dir := t.TempDir()
 	st := duckstore.New(dir)
 
-	path, err := st.Replace(t.Context(), minimalRows())
+	replaced, err := st.Replace(t.Context(), minimalRows())
 
 	require.NoError(t, err)
+	path := replaced.Path
 	assert.Equal(t, filepath.Join(dir, "quarry.duckdb"), path)
 }
 
 func Test_replace_does_not_remove_the_stale_wal_before_the_context_gate(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	path, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+	replaced, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
+	path := replaced.Path
 	before, err := os.ReadFile(path)
 	require.NoError(t, err)
 	staleWAL := filepath.Join(dir, "quarry.duckdb.wal")
@@ -602,8 +619,9 @@ func Test_replace_does_not_remove_the_stale_wal_before_the_context_gate(t *testi
 func Test_replace_refuses_the_swap_when_the_stale_wal_cannot_be_removed(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	path, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+	replaced, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
+	path := replaced.Path
 	before, err := os.ReadFile(path)
 	require.NoError(t, err)
 	staleWAL := filepath.Join(dir, "quarry.duckdb.wal")
@@ -654,9 +672,10 @@ func Test_replace_creates_a_missing_store_directory_owner_only(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "quarry")
 	st := duckstore.New(dir)
 
-	path, err := st.Replace(t.Context(), minimalRows())
+	replaced, err := st.Replace(t.Context(), minimalRows())
 
 	require.NoError(t, err)
+	path := replaced.Path
 	assert.FileExists(t, path)
 	info, err := os.Stat(dir)
 	require.NoError(t, err)
@@ -679,9 +698,10 @@ func Test_store_path_is_where_replace_writes_the_store(t *testing.T) {
 	t.Parallel()
 	st := duckstore.New(t.TempDir())
 
-	path, err := st.Replace(t.Context(), minimalRows())
+	replaced, err := st.Replace(t.Context(), minimalRows())
 
 	require.NoError(t, err)
+	path := replaced.Path
 	assert.Equal(t, path, st.Path())
 }
 
