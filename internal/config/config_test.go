@@ -494,6 +494,8 @@ func Test_load_names_an_unknown_key_as_toml_would_write_it(t *testing.T) {
 		{name: "a newline is written as backslash n", content: "\"a\\nb\" = 1\n", want: `"a\nb"`},
 		{name: "a tab is written as backslash t", content: "\"a\\tb\" = 1\n", want: `"a\tb"`},
 		{name: "another control character is a four-digit escape", content: "\"a\\u0001b\" = 1\n", want: `"a\u0001b"`},
+		{name: "delete is a four-digit escape in upper-case hex", content: "\"a\\u007fb\" = 1\n", want: `"a\u007Fb"`},
+		{name: "a C1 control character is a four-digit escape", content: "\"a\\u0085b\" = 1\n", want: `"a\u0085b"`},
 		{name: "only the part that needs quotes is quoted", content: "foo.\"x.y\" = 1\n", want: `foo."x.y"`},
 		{name: "a quoted key under a known table", content: "[snapshots]\n\"x.y\" = 1\n", want: `snapshots."x.y"`},
 		{name: "an inline table child is quoted under its parents", content: "snapshots = { \"x.y\" = 1 }\n", want: `snapshots."x.y"`},

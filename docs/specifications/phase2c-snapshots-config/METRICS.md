@@ -24,6 +24,7 @@
 | 4 | correctness | 1/0/2/1 | 0 / 2, 40s | BLOCKED |
 | 5 | correctness | 1/0/0/0 | 0 / 3, 72s | BLOCKED |
 | 6 | orchestrator verification (one-line prescribed fix) | 0/0/0/0 | — | PASS WITH FOLLOW-UPS |
+| 7 (after final product-vision SHIP WITH CHANGES) | test; product-vision narrow | 0/2/0/1 | 0 / 4, 47s | PASS WITH FOLLOW-UPS |
 
 ## Tokens
 
