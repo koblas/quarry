@@ -3,7 +3,9 @@ package snapshot
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
+	"os"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/osreason"
@@ -22,6 +24,8 @@ type Pruned struct {
 	Deleted   []Entry
 	Failed    []PruneFailure
 	StoreKept *Entry
+	// NotDeleted counts the selected snapshots never attempted because the ctx ended.
+	NotDeleted int
 }
 
 // PruneFailure is a snapshot Prune could not delete and the OS reason why.
@@ -49,6 +53,8 @@ func selectPrune(entries []Entry, keep int) ([]Entry, *Entry) {
 // from, and reports what it deleted and what it could not. It refuses a keep under 1
 // (ErrKeepBelowOne), an ended ctx and an unreadable folder, and, only when a snapshot lies
 // beyond the newest keep, a store that cannot say which snapshot built it; nothing is deleted then.
+// An ended ctx stops it between snapshots: it returns what it did with the interrupted refusal and
+// no orphan sweep; otherwise it ends by removing orphan manifests, silently.
 func (s *Server) Prune(ctx context.Context, keep int) (Pruned, error) {
 	if keep < 1 {
 		return Pruned{}, ErrKeepBelowOne
@@ -62,6 +68,7 @@ func (s *Server) Prune(ctx context.Context, keep int) (Pruned, error) {
 	}
 	pruned := Pruned{Keep: keep, Dir: listing.Dir, Snapshots: len(listing.Entries)}
 	if len(listing.Entries) <= keep {
+		s.sweepOrphans(listing.orphans)
 		return pruned, nil
 	}
 	if err := s.markStore(ctx, &listing); err != nil {
@@ -75,15 +82,28 @@ func (s *Server) Prune(ctx context.Context, keep int) (Pruned, error) {
 	}
 	doomed, storeKept := selectPrune(listing.Entries, keep)
 	pruned.StoreKept = storeKept
-	for _, entry := range doomed {
+	for i, entry := range doomed {
 		s.deleteSnapshot(entry, &pruned)
+		// The first snapshot is always attempted: ctx was checked when the store was read.
+		if left := len(doomed) - i - 1; left > 0 && ctx.Err() != nil {
+			pruned.NotDeleted = left
+			return pruned, interruptedMidDelete(ctx, left)
+		}
 	}
+	s.sweepOrphans(listing.orphans)
 	return pruned, nil
+}
+
+// sweepOrphans removes each orphan manifest; one that will not go is not reported.
+func (s *Server) sweepOrphans(orphans []string) {
+	for _, path := range orphans {
+		_ = s.remove(path)
+	}
 }
 
 // deleteSnapshot removes entry's .sqlite, then its manifest, and records the outcome in
 // pruned. A .sqlite already gone counts as neither deleted nor failed; any other fault
-// leaves the manifest and is recorded as failed. A manifest that will not go is not reported.
+// leaves the manifest and is recorded as failed. A manifest that will not go, or is not a regular file, is left silently.
 func (s *Server) deleteSnapshot(entry Entry, pruned *Pruned) {
 	err := s.remove(entry.Path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -94,12 +114,28 @@ func (s *Server) deleteSnapshot(entry Entry, pruned *Pruned) {
 	if err == nil {
 		pruned.Deleted = append(pruned.Deleted, entry)
 	}
-	_ = s.remove(s.manifestPath(entry.ID))
+	// os.Remove would delete an empty directory or a symlink named like the manifest.
+	manifest := s.manifestPath(entry.ID)
+	if info, statErr := os.Lstat(manifest); statErr == nil && info.Mode().IsRegular() {
+		_ = s.remove(manifest)
+	}
 }
 
 // pruneInterrupted is the refusal for a prune whose ctx ended before it could delete.
 func pruneInterrupted(ctx context.Context) error {
 	return causedRefusalError{msg: "snapshots prune interrupted", cause: ctx.Err()}
+}
+
+// interruptedMidDelete is the refusal for a prune whose ctx ended with notDeleted snapshots unattempted.
+func interruptedMidDelete(ctx context.Context, notDeleted int) error {
+	noun, verb := "snapshots", "were"
+	if notDeleted == 1 {
+		noun, verb = "snapshot", "was"
+	}
+	return causedRefusalError{
+		msg:   fmt.Sprintf("snapshots prune interrupted; %d %s %s not deleted", notDeleted, noun, verb),
+		cause: ctx.Err(),
+	}
 }
 
 // cannotTellRefusal is the refusal for a store that cannot say which snapshot built it.

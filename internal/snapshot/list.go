@@ -49,6 +49,8 @@ type Listing struct {
 	StoreUnreadable string
 	// StoreWarning is StoreUnreadable as the warning a listing prints; "" when StoreUnreadable is.
 	StoreWarning string
+	// orphans are the manifests whose snapshot file is gone and that no sync is writing.
+	orphans []string
 }
 
 // List reads the snapshots folder, newest first, and marks the snapshot the store was
@@ -67,11 +69,11 @@ func (s *Server) List(ctx context.Context) (Listing, error) {
 
 // listFolder reads the snapshots folder into a Listing that says nothing of the store.
 func (s *Server) listFolder() (Listing, error) {
-	files, err := s.snapshotFiles()
+	files, orphans, err := s.scanFolder()
 	if err != nil {
 		return Listing{}, err
 	}
-	listing := Listing{Dir: s.snapshotDir, Entries: make([]Entry, len(files))}
+	listing := Listing{Dir: s.snapshotDir, Entries: make([]Entry, len(files)), orphans: orphans}
 	for i, f := range files {
 		entry := Entry{ID: f.id, Path: filepath.Join(s.snapshotDir, f.id+".sqlite"), Bytes: f.bytes}
 		if manifest, err := readManifest(s.manifestPath(f.id)); err == nil {
@@ -112,30 +114,43 @@ type snapshotFile struct {
 	bytes             int64
 }
 
-// snapshotFiles lists the regular snapshot files, newest first; a folder it cannot
-// read, or a snapshot it cannot stat, is a refusal.
-func (s *Server) snapshotFiles() ([]snapshotFile, error) {
+// scanFolder reads the snapshots folder once: the regular snapshot files, newest first,
+// and the orphan manifests' paths. A folder it cannot read, or a snapshot it cannot
+// stat, is a refusal.
+func (s *Server) scanFolder() ([]snapshotFile, []string, error) {
 	dirEntries, err := os.ReadDir(s.snapshotDir)
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err != nil {
-		return nil, s.folderUnreadableRefusal(err)
+		return nil, nil, s.folderUnreadableRefusal(err)
+	}
+	names := make(map[string]bool, len(dirEntries))
+	for _, dirEntry := range dirEntries {
+		names[dirEntry.Name()] = true
 	}
 	var files []snapshotFile
+	var orphans []string
 	for _, dirEntry := range dirEntries {
+		if match := manifestFilePattern.FindStringSubmatch(dirEntry.Name()); match != nil {
+			// A manifest beside a partial snapshot is a sync in flight: it commits the manifest first.
+			if dirEntry.Type().IsRegular() && !names[match[1]+".sqlite"] && !names["."+match[1]+".sqlite.partial"] {
+				orphans = append(orphans, filepath.Join(s.snapshotDir, dirEntry.Name()))
+			}
+			continue
+		}
 		match := snapshotFilePattern.FindStringSubmatch(dirEntry.Name())
 		if match == nil || !dirEntry.Type().IsRegular() {
 			continue
 		}
 		info, err := dirEntry.Info()
 		if err != nil {
-			return nil, s.folderUnreadableRefusal(err)
+			return nil, nil, s.folderUnreadableRefusal(err)
 		}
 		files = append(files, snapshotFile{id: ID(dirEntry.Name()), stamp: match[1], suffix: match[2], bytes: info.Size()})
 	}
 	slices.SortFunc(files, newestFirst)
-	return files, nil
+	return files, orphans, nil
 }
 
 // newestFirst orders by ID timestamp, then _N suffix (none oldest), as digits so it

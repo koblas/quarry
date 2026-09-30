@@ -1,6 +1,7 @@
 package snapshot_test
 
 import (
+	"context"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -17,11 +18,17 @@ import (
 type fakeRemover struct {
 	calls  []string
 	faults map[string]error
+	// cancel, when set, ends the context once cancelAfter has been removed (or has failed).
+	cancelAfter string
+	cancel      context.CancelFunc
 }
 
 func (r *fakeRemover) remove(path string) error {
 	name := filepath.Base(path)
 	r.calls = append(r.calls, name)
+	if r.cancel != nil && name == r.cancelAfter {
+		defer r.cancel()
+	}
 	if err, ok := r.faults[name]; ok {
 		return err
 	}
