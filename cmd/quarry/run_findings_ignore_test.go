@@ -99,6 +99,28 @@ func Test_run_findings_json_lists_an_unmatched_ignore_id_after_the_config_warnin
 	assert.Equal(t, []string{unknownKey, unmatched}, doc.Warnings)
 }
 
+func Test_run_findings_quotes_and_orders_every_unmatched_ignore_id_in_stderr_and_json_warnings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	ids := syncIgnoreFixture(t, home)
+	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [\"\", \"a\\\"b\\\\c\\n\\u0001\", \"\", \"last:1\", %q]\n", ids.duplicate))
+	lists := func(quoted string) string {
+		return configShown + ": findings.ignore lists " + quoted + ", which is not a finding in quarry's store; quarry skips it"
+	}
+	want := []string{lists(`""`), lists(`"a\"b\\c\n\u0001"`), lists(`""`), lists(`"last:1"`)}
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"findings", "--json"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Equal(t, "quarry: warning: "+strings.Join(want, "\nquarry: warning: ")+"\n", stderr.String())
+	var doc struct {
+		Warnings []string `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	assert.Equal(t, want, doc.Warnings)
+}
+
 func Test_run_findings_shows_the_hint_when_findings_ignore_is_an_empty_list(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

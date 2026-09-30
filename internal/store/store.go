@@ -209,8 +209,8 @@ type Counts struct {
 // HistoryFault is why the previous store's import runs were not carried
 // into a built store; nil when they were, or no store existed. Findings
 // tallies FindingStates with no findings.ignore list, zero when Built is false;
-// FindingStates is the state of each finding the build recorded, so a caller can
-// recount them against an ignore list; FindingsCarried is true iff the previous store's findings were read.
+// FindingStates is the state of each finding the build recorded;
+// FindingsCarried is true iff the previous store's findings were read.
 // FindingsFault is why a previous store that opened had findings that could not be read.
 // StoreUnreadable is true iff the previous store could not be opened at all.
 type Result struct {
