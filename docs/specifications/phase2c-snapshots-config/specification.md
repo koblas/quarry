@@ -549,12 +549,12 @@ Sizing notes (binding on per-scenario architects):
 - [x] SCENARIO-04: Read commands ignore a broken config file — delivered by SCENARIO-01 `cmd/quarry/run_config_test.go` `Test_run_read_commands_ignore_a_malformed_config`
 - [x] SCENARIO-09: A relative quicken.path is refused — delivered by SCENARIO-01 `cmd/quarry/run_config_test.go` `Test_run_sync_refuses_a_relative_quicken_path`
 - [x] SCENARIO-10: A quicken.path that is not a string is refused — delivered by SCENARIO-01 `cmd/quarry/run_config_test.go` `Test_run_sync_refuses_a_quicken_path_that_is_not_a_string`
-- [ ] SCENARIO-05: sync snapshots the file named by quicken.path
-- [ ] SCENARIO-06: --quicken overrides quicken.path
-- [ ] SCENARIO-07: A configured path that does not exist is refused naming the config key
-- [ ] SCENARIO-08: A configured path that is not a .quicken bundle is refused naming the config key
-- [ ] SCENARIO-11: sync --from ignores quicken.path
-- [ ] SCENARIO-12: Finding several .quicken files points at quicken.path
+- [x] SCENARIO-05: sync snapshots the file named by quicken.path — `cmd/quarry/run_quicken_path_test.go` `Test_run_sync_snapshots_the_file_named_by_quicken_path`
+- [x] SCENARIO-06: --quicken overrides quicken.path — delivered by SCENARIO-05 `cmd/quarry/run_quicken_path_test.go` `Test_run_sync_prefers_the_quicken_flag_over_quicken_path`
+- [x] SCENARIO-07: A configured path that does not exist is refused naming the config key — delivered by SCENARIO-05 `cmd/quarry/run_quicken_path_test.go` `Test_run_sync_refuses_a_quicken_path_that_does_not_exist`
+- [x] SCENARIO-08: A configured path that is not a .quicken bundle is refused naming the config key — delivered by SCENARIO-05 `cmd/quarry/run_quicken_path_test.go` `Test_run_sync_refuses_a_quicken_path_that_is_not_a_bundle`
+- [x] SCENARIO-11: sync --from ignores quicken.path — delivered by SCENARIO-05 `cmd/quarry/run_quicken_path_test.go` `Test_run_sync_from_ignores_quicken_path`
+- [x] SCENARIO-12: Finding several .quicken files points at quicken.path — delivered by SCENARIO-05 `cmd/quarry/run_discovery_test.go` `Test_run_pools_bundles_across_both_documents_folders`
 - [ ] SCENARIO-13: sync keeps earlier builds in import_runs
 - [ ] SCENARIO-14: status reports the latest build when import_runs holds several
 - [ ] SCENARIO-15: sync warns and restarts history when the previous store's history cannot be read

@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-05
-status: open
+status: done
 ---
 
 # SCENARIO-05: sync snapshots the file named by quicken.path
@@ -38,10 +38,10 @@ Callers (all `grep`; gopls `findReferences` on `ResolveBundlePath` returned the 
 - [x] Step 6: `internal/cli/sync.go:96` call `snapshot.ResolveBundle` with `quickenPath` and `cfg.QuickenPath`; delete `resolveBundle` `:148-155`; `newSyncCommand` doc `:33-34`; Long discovery sentence `:55-57` → the ruled five lines; `--quicken` help `:140-141` (#2). Pin: `run_usage_test.go:18-32` `Test_run_sync_help_names_both_documents_folders` (both strings, rendered `--quicken path`). Steps 1-2 go green here; run mutations 1-5 (2-4 need this step's wiring)
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `BundleChoice`, `ResolveBundle`, the core; `ResolveBundlePath` doc `:25-28` still true
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `BundleChoice`, `ResolveBundle`, the core; `ResolveBundlePath` doc `:25-28` still true
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase2c-snapshots-config` → tick SCENARIO-05, and 06, 07, 08, 11, 12 as "delivered by SCENARIO-05" with their tests last on the line; rewrite `STATE.md`; `status: done`
+- [x] Step 8: full verification + `spec-check.py phase2c-snapshots-config` → tick SCENARIO-05, and 06, 07, 08, 11, 12 as "delivered by SCENARIO-05" with their tests last on the line; rewrite `STATE.md`; `status: done`
 
 ## Handoff
 
@@ -66,16 +66,9 @@ Callers (all `grep`; gopls `findReferences` on `ResolveBundlePath` returned the 
 
 ## Phase report
 
-Run B1 done (steps 4-6 ticked). Narrow loop green; `golangci-lint run ./...` 0 issues; not yet a full-suite run.
+Run V done (steps 7-8 ticked, `status: done`). Nothing left for this scenario.
 
-Files:
-- `internal/snapshot/bundle.go`: `BundleChoice`, `ResolveBundle` (flag > configured > `DiscoverBundle`), `ResolveBundlePath` now a wrapper over unexported `resolveBundlePath(home, path, originRefusals)`; `flagRefusals` / `configuredRefusals` hold the two origin-specific lines; consts `configFileShown`, `notABundleText`. `notABundleRefusal` is gone (folded into `flagRefusals`).
-- `internal/snapshot/discover.go:133-151`: #4 / #5 lines now end `or set quicken.path in ` + `configFileShown`.
-- `internal/snapshot/discover_test.go`: pins for #4 / #5 updated (3 sites).
-- `internal/snapshot/resolve_bundle_test.go` (new): 7 tests (prefers flag, uses configured, discovers, bad configured path table K1/K2/K3/K4 rows, unreadable data K5, flag refusals kept, trailing slash/symlink).
-- `internal/cli/sync.go`: `resolveBundle` deleted; plain-sync branch calls `snapshot.ResolveBundle`; Long discovery sentence and `--quicken` help per #1/#2; doc comment.
-- `cmd/quarry/run_usage_test.go:18-33`: `Test_run_sync_help_names_both_documents_folders` repointed at the new Long sentence and `--quicken path` help line.
-
-Mutations (all reverted, byte-identical), each reddened the named test: (1) swap branches -> `Test_ResolveBundle_prefers_the_flag_path_over_the_configured_one` (+ the K5-keeps test, + cmd flag test); (2) drop configured branch -> `Test_run_sync_snapshots_the_file_named_by_quicken_path` and K1/K2 cmd tests (+ 5 unit tests); (3) examine configured when flag given -> `Test_run_sync_prefers_the_quicken_flag_over_quicken_path` only (unit tests stay green); (4) resolve above `--from` -> `Test_run_sync_from_ignores_quicken_path` (+ 2 existing from tests); (5) pick copy by configured-set -> `Test_ResolveBundle_keeps_the_flag_refusals_when_quicken_path_is_also_set` (both subtests) only.
-
-For V: Sweep lint already 0 issues; run full covered suite + uncovered-diff (`<start>` 82ccaad), `test-stats.py`, `spec-check.py`, ticks (05 plus 06, 07, 08, 11, 12 "delivered by SCENARIO-05"), STATE.md rewrite, `status: done`. Handoff "Left unbuilt"/"Traps" as written still hold.
+- Verify: `go build ./...` ok; full covered suite `go test rc=0`; `uncovered-diff.py`: 0 uncovered added lines since 82ccaad; `-race` on `internal/snapshot`, `internal/cli`, `cmd/quarry` ok; `golangci-lint run ./...` 0 issues, rc=0.
+- `test-stats.py --base 82ccaad --changed`: cmd/quarry 141 (+5), internal/snapshot 146 (+7), TOTAL 287 (+12).
+- specification.md: SCENARIO-05 ticked; 06, 07, 08, 11, 12 ticked as "delivered by SCENARIO-05"; `spec-check.py phase2c-snapshots-config` OK.
+- STATE.md rewritten (SCENARIO-05 folded in).

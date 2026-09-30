@@ -1,6 +1,6 @@
 # phase2c-snapshots-config — current state
 
-Scenarios complete: PRE-01 (pre-step), SCENARIO-01 (with folded 04, 09, 10). Last updated by SCENARIO-01.
+Scenarios complete: PRE-01 (pre-step), SCENARIO-01 (with folded 04, 09, 10), SCENARIO-05 (with folded 06, 07, 08, 11, 12). Last updated by SCENARIO-05.
 
 ## Binding decisions
 - R3 reason phrase is `(*store.OpenError).UnreadableReason(at string) string` in `internal/store/open.go`: `at` is the display path (caller abbreviates with `homepath.Abbreviate`); returns the bare phrase (`the file is not a DuckDB database`, `permission denied`, `another program has it open for writing`, or Reason with every Path replaced by `at`), with no `cannot read the store at …:` prefix and no remedy. Missing/OtherFormat give the Reason fallback (empty). `snapshot` may not import `report`, so SCENARIO-15/16/21 render refusals from this method (PRE-01)
@@ -17,10 +17,13 @@ Scenarios complete: PRE-01 (pre-step), SCENARIO-01 (with folded 04, 09, 10). Las
 - Value check order: parse (C1) then `snapshots.keep` then `quicken.path`. A plain value where a table is expected (`snapshots = 3`, `quicken = "x"`) is C2t, a refusal, never a warning and never Go type names. `got` in C2 lines is the raw source text collapsed with `strings.Fields` for a value written right of `=`; a header names its value by kind: `[x]` -> "a table", `[[x]]` -> "a list of tables" (`hasArrayTableHeader`: exact `[[key]]` match through `unstable.Parser`, since an inline `[{a = 1}]` decodes to the same `[]any` and stays raw); a trailing `# comment` is not in `got`, one inside a multi-line array is (C2l, SCENARIO-01)
 - Integer overflow (`keep = 99999999999999999999`) is C1 (`line N: decimal number is too large to fit in a 64-bit signed integer`), because the tree decode fails before value checks; pinned in `config_test.go` (SCENARIO-01)
 - `internal/platform/osreason.Reason(err)` is the one G1 reason (`*fs.PathError` -> `Err.Error()`, else first line, empty -> `unknown error`); `internal/cli/sql.go` uses it. SCENARIO-16/21 (folder unreadable, delete failure) call it, never copy (SCENARIO-01)
+- `snapshot.ResolveBundle(home, BundleChoice{Flag, Configured})` owns bundle precedence: `--quicken` > `quicken.path` > `DiscoverBundle`. `Flag == ""` means "not given" (sound because `sync.go` refuses a blank `--quicken` before `RunE`); the configured path is never examined when a flag is given. cli only maps `--quicken` and `cfg.QuickenPath` into it; `snapshot` never imports `config`. Called only on the plain-sync branch: `--from` (and `snapshots`/`prune` when 16/24 add them) load config but never call it. `ResolveBundlePath(home, path)` keeps its signature and flag copy (wrapper over unexported `resolveBundlePath` with `flagRefusals`/`configuredRefusals`); `discover.go` resolves a sole discovered bundle through it (SCENARIO-05)
+- K1/K2, #4 and #5 name the config file from one unexported const `configFileShown` = `~/Library/Application Support/quarry/config.toml` in `internal/snapshot/bundle.go`, not from `cfg.Path`. True while there is no env override and no `--config` (P2c-1); a future `--config` must turn it into a field on `BundleChoice` and `DiscoverBundle(home)` grows the same input (SCENARIO-05)
 - TOML lib `github.com/pelletier/go-toml/v2 v2.4.3`: reports line 1 for `[snapshots` where BurntSushi says line 2; `unstable.RawMessage` gives the value as written (SCENARIO-01)
 
 ## Left unbuilt
-- `quicken.path` precedence, K1/K2 copy, sync Long / `--quicken` help — SCENARIO-05 (SCENARIO-01)
+- Edge row "`snapshots` / `prune` never stat `quicken.path`" (missing on disk -> no effect) — no code yet, pin owed by SCENARIO-16 (`snapshots`) and SCENARIO-24 (`prune` starts loading config) (SCENARIO-05)
+- sync Long auto-prune paragraph (#1 first half) — SCENARIO-29; `idNotFoundRefusal` (#3) — SCENARIO-16 (SCENARIO-05)
 - `snapshots.keep` consumers (`prune`, auto-prune) — SCENARIO-24, SCENARIO-29 (SCENARIO-01)
 - `render.go` `:262,290,323` date literals stay (sync validation output, outside the report pipeline) — unowned (PRE-01)
 
@@ -32,9 +35,14 @@ Scenarios complete: PRE-01 (pre-step), SCENARIO-01 (with folded 04, 09, 10). Las
 - `Decode` into a `RawMessage` target errors on any `[[x]]` header it must store (empty/NUL `got`) and on any unrelated `[[foo]]` later in the file, after the keys above it are filled; `decodeRaw` ignores that error on purpose and array-of-tables values never reach it (`got` names them first) (SCENARIO-01)
 - `unstable.RawMessage` for a header table (`[quicken.path]`) is the table body and for a multi-line array contains newlines; neither is a one-line `got` as is. `unstable` is go-toml's unstable API: re-run `internal/config` tests on any go-toml bump (SCENARIO-01)
 - A UTF-8 BOM refuses as C1 `line 1: invalid character at start of key: U+00EF 'ï'` (go-toml reads the bytes as Latin-1); pinned, copy not ruled - raise at the final `product-vision` pass if it should say "byte order mark" (SCENARIO-01)
+- Picking K1/K2 copy by "is `quicken.path` set" passes every flag-origin test (none writes a config file); only `Test_ResolveBundle_keeps_the_flag_refusals_when_quicken_path_is_also_set` guards it (SCENARIO-05)
+- `cfg.QuickenPath` keeps a trailing slash (`homepath.Expand` only); `ResolveBundlePath`'s `filepath.Abs` cleans it. Do not clean in `internal/config` (SCENARIO-05)
+- `v9fixture.OpenBundle` always names the bundle `Home.quicken`; `writeStatusFixtureBundle` leaves a transfer warning on stderr, so it cannot back a "stderr empty" assertion (SCENARIO-05)
+- Cobra strips backticks in flag help; `Test_run_prints_the_sync_help` pins the paragraphs around the discovery sentence — leave them (SCENARIO-05)
 - The 5 read-command subtests in `Test_run_read_commands_ignore_a_malformed_config` need HOME set (`t.Setenv` in the parent) (SCENARIO-01)
 
 ## Open debts
+- Unruled copy for the final `product-vision` pass: a sole *discovered* bundle that fails validation keeps the flag line (`... pass the .quicken bundle with --quicken <path>`, pinned `discover_test.go:204-216`); it does not name `quicken.path`. Left byte-identical, ruling owed (SCENARIO-05)
 - PRE-01 checkpoint MINORs (comment budget): `internal/store/duckstore/cashflow.go:18-20` and `spending.go:88-90` sentinel docs 3 lines → 1 (reachability note at the `!ok` return); `internal/report/period.go:62-64` `fillSeries` doc → 2 lines; `internal/cli/render_table.go:20-22` `renderTable` doc → 2 lines. NIT: `store.OpenError.UnreadableReason` empty-result branch for Missing/OtherFormat unexecuted — pin it if SCENARIO-15/16/21 reach those faults.
 - `store.CashFlowFigures` (shared figures struct embedded in `store.CashFlowRow` / `store.CashFlowTotal`) — not built: it rewrites composite literals in `internal/cli/cashflow_test.go` (4) and `internal/store/duckstore/cashflow_test.go` (10), a test hunk PRE-01 forbids. Unowned — dies unless re-opened (PRE-01)
 - 2b `STATE.md` debt about the same duplication is closed by the orchestrator at SHIP (surface #9), not edited here (PRE-01)
