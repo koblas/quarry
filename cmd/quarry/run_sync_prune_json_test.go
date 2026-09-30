@@ -159,13 +159,11 @@ func Test_run_sync_from_json_names_the_unlistable_folder_by_its_absolute_path_in
 		"run quarry snapshots prune to try again\n", stderr)
 }
 
-func Test_run_sync_json_lists_the_prune_warnings_after_config_transfer_and_history_warnings(t *testing.T) {
+func Test_run_sync_json_lists_the_prune_warnings_after_config_and_history_warnings(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	writeStatusFixtureBundle(t, home)
-	var stdout, stderr bytes.Buffer
-	require.Equal(t, 0, run(context.Background(), []string{"sync"}, &stdout, &stderr), stderr.String())
-	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a database"), 0o600))
+	corruptPreviousStore(t, home)
 	writeConfig(t, home, "snapshot.keep = 3\n")
 	fixtures := oldSnapshots(keptSnapshots)
 	writeSnapshots(t, home, fixtures...)
@@ -176,8 +174,7 @@ func Test_run_sync_json_lists_the_prune_warnings_after_config_transfer_and_histo
 	require.Equal(t, 0, exitCode, errOut)
 	assert.Equal(t, []string{
 		configShown + ": unknown key snapshot.keep; quarry ignores it",
-		"1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer",
-		"cannot carry import history forward from the previous store (the file is not a DuckDB database); import_runs starts again with this sync",
+		historyRestartWarning,
 		"cannot delete snapshot " + fixtures[0].id + ": permission denied; run quarry snapshots prune to try again",
 	}, decodeSyncDoc(t, out).Warnings)
 }

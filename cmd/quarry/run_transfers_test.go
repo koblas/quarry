@@ -185,7 +185,7 @@ func Test_run_counts_investment_transactions_without_importing_them(t *testing.T
 	}, stringMap(t, db, "SELECT id, account_id FROM transactions"))
 }
 
-func Test_run_keeps_and_warns_about_one_sided_transfers(t *testing.T) {
+func Test_run_lists_one_sided_transfers_only_as_findings_on_a_successful_sync(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -221,14 +221,9 @@ func Test_run_keeps_and_warns_about_one_sided_transfers(t *testing.T) {
 		[2]string{"Balances", "no accounts to check; 2 never reconciled"},
 		[2]string{"Splits", "all 5 transactions equal the sum of their splits"},
 		[2]string{"Transfers", "1 paired, 3 one-sided"},
-	)+
-		"  ? 2026-03-01  Chequing (CAD)  (no payee)      -1.00  other account: unknown\n"+
-		"  ? 2026-03-02  Chequing (CAD)  Landlord      -500.00  other account: Savings\n"+
-		"  ? 2026-03-03  Savings (CAD)   (no payee)  -1,204.17  other account: Old Visa (not in this file)\n"+
-		"Findings  3 open; run quarry findings to list them\n",
-		stdout.String())
-	assert.Equal(t, "quarry: warning: 3 transfers have no matching transaction in another account; "+
-		"quarry keeps them as one-sided transfers\n", stderr.String())
+		[2]string{"Findings", "3 open; run quarry findings to list them"},
+	), stdout.String())
+	assert.Empty(t, stderr.String())
 
 	db, err := duckdb.OpenReadOnly(t.Context(), storePath)
 	require.NoError(t, err)
@@ -272,7 +267,7 @@ func Test_run_lists_one_sided_transfers_without_warning_when_validation_fails(t 
 		stdout.String())
 	assert.Equal(t, "quarry: validation failed: 1 transaction does not equal the sum of its splits; "+
 		abbreviated(t, storePath, home)+" was not changed; each difference is listed on stdout; "+
-		"fix the account in Quicken and run quarry sync, or run quarry sync --from "+
+		"fix them in Quicken and run quarry sync, or run quarry sync --from "+
 		snapshotID(onlyFileWithSuffix(t, filepath.Join(filepath.Dir(storePath), "snapshots"), ".sqlite"))+" after updating quarry\n",
 		stderr.String())
 }

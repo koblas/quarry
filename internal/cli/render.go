@@ -84,7 +84,8 @@ func writeDiffRow(b *strings.Builder, sign, label, value string) {
 }
 
 // renderStore renders result's Store, Rows, Balances, Splits, Transfers and
-// Findings lines, appended after renderSuccess's block once a build was reached.
+// Findings lines, appended after renderSuccess's block once a build was
+// reached. One-sided legs appear only as a count here; findings lists them.
 func renderStore(result store.Result, home string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", homepath.Abbreviate(home, result.Path))
@@ -92,7 +93,7 @@ func renderStore(result store.Result, home string) string {
 	bc := result.Validation.Balances
 	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(balanceCounts{Checked: bc.Checked, NeverReconciled: len(bc.NeverReconciled), InvestmentAccounts: bc.InvestmentAccounts}))
 	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits.Checked))
-	writeTransfers(&b, result.Validation.Transfers)
+	writeTransfersLine(&b, result.Validation.Transfers)
 	fmt.Fprintf(&b, "%-10s%s\n", "Findings", findingsPhrase(result.Findings.Open))
 	return b.String()
 }
@@ -106,11 +107,14 @@ func findingsPhrase(open int) string {
 	return humanize.Thousands(open) + " open; run quarry findings to list them"
 }
 
-// writeTransfers appends tc's Transfers line, then one "?" row per
-// one-sided leg.
-func writeTransfers(b *strings.Builder, tc store.TransferCheck) {
+// writeTransfersLine appends tc's Transfers count line.
+func writeTransfersLine(b *strings.Builder, tc store.TransferCheck) {
 	fmt.Fprintf(b, "%-10s%s\n", "Transfers", transfersPhrase(tc.Paired, len(tc.OneSided)))
-	for _, row := range oneSidedRows(tc.OneSided) {
+}
+
+// writeOneSidedRows appends one "?" row per one-sided leg.
+func writeOneSidedRows(b *strings.Builder, legs []store.OneSidedTransfer) {
+	for _, row := range oneSidedRows(legs) {
 		fmt.Fprintln(b, row)
 	}
 }
@@ -384,7 +388,8 @@ func renderStoreFailure(result store.Result, storeExisted bool, home string) str
 	} else {
 		fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits.Checked))
 	}
-	writeTransfers(&b, result.Validation.Transfers)
+	writeTransfersLine(&b, result.Validation.Transfers)
+	writeOneSidedRows(&b, result.Validation.Transfers.OneSided)
 	return b.String()
 }
 

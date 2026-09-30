@@ -7,7 +7,7 @@ status: done
 
 Size verdict: OWNS A RUN. If it overruns, SPLIT at the 08/19 seam: W2 needs no port change, and import_runs needs nothing from W2.
 Cadence: code-first. No mandatory item is touched. duckstore's temp-then-rename and partial-removal paths stay unchanged, and the new `import_runs` append rides the existing build-failure tests (`duckstore_test.go:132-206`).
-Acceptance test: `cmd/quarry/run_transfers_test.go` `Test_run_keeps_and_warns_about_one_sided_transfers`
+Acceptance test: `cmd/quarry/run_transfers_test.go` `Test_run_lists_one_sided_transfers_only_as_findings_on_a_successful_sync`
 Acceptance test (SCENARIO-19, folded): `cmd/quarry/run_import_runs_test.go` `Test_run_records_an_import_runs_row_for_the_build`
 Narrow loop: `go test ./internal/store/... ./internal/importer/ ./internal/snapshot/ ./internal/cli/ && go test ./cmd/quarry/ -run 'OneSided|ImportRuns|Transfers'`
 Mutation checks: one-sided comparator uses `strings.Compare` on ids, or drops the split-id key → `Test_import_orders_one_sided_transfers_by_date_account_and_transaction`; `(Outcome).Warnings` puts import warnings before manifest warnings → `Test_outcome_warnings_put_w1_before_w2`; W2 emitted on an unbuilt result (per ruling R2) → `Test_outcome_warnings_omit_w2_when_the_store_was_not_built`
@@ -18,7 +18,7 @@ Rulings needed before Step 9 (orchestrator → scoped `product-vision`). Each ru
 ## Implementation Plan
 
 ### Acceptance (red)
-- [x] Step 1: `cmd/quarry/run_transfers_test.go` `Test_run_keeps_and_warns_about_one_sided_transfers` — one bundle holding all three Outline legs plus one pair. It checks: exact stdout via `syncBlock` with the Transfers line followed by the three `?` rows in core order; stderr exactly the plural W2 line; exit 0; three `transfers` rows with `to_split_id IS NULL`.
+- [x] Step 1: `cmd/quarry/run_transfers_test.go` `Test_run_lists_one_sided_transfers_only_as_findings_on_a_successful_sync` — one bundle holding all three Outline legs plus one pair. It checks: exact stdout via `syncBlock` with the Transfers line followed by the three `?` rows in core order; stderr exactly the plural W2 line; exit 0; three `transfers` rows with `to_split_id IS NULL`.
 - [x] Step 2: `cmd/quarry/run_import_runs_test.go` `Test_run_records_an_import_runs_row_for_the_build` — after a successful sync, `SELECT … FROM import_runs` returns exactly one row. Its `snapshot_path` / `snapshot_sha256` / `schema_fingerprint` equal the manifest JSON read from disk. It also checks row counts, balances_checked, zero mismatches, transfers_one_sided, investment_transactions_not_imported, and `started_at ≤ finished_at`.
 - [x] Step 3: `internal/store/duckstore/schema.go:57-68` — stub `CREATE TABLE import_runs` (full column set, `id BIGINT PRIMARY KEY`) so Step 2 fails on its row count, not on a missing table. Both tests red at their assertions.
 

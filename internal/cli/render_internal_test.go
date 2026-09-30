@@ -238,7 +238,7 @@ func Test_transfersPhrase(t *testing.T) {
 	}
 }
 
-func Test_renderStore_lists_one_sided_transfers_after_the_transfers_line(t *testing.T) {
+func Test_renderStore_prints_the_transfers_count_line_without_one_sided_rows(t *testing.T) {
 	result := store.Result{
 		Path: "/Users/dave/Library/Application Support/quarry/quarry.duckdb",
 		Validation: store.Validation{Transfers: store.TransferCheck{Paired: 2, OneSided: []store.OneSidedTransfer{
@@ -250,8 +250,8 @@ func Test_renderStore_lists_one_sided_transfers_after_the_transfers_line(t *test
 	got := renderStore(result, "/Users/dave")
 
 	assert.True(t, strings.HasSuffix(got, "Transfers 2 paired, 1 one-sided\n"+
-		"  ? 2019-06-14  Chequing (CAD)  (no payee)  -500.00  other account: unknown\n"+
 		"Findings  2 open; run quarry findings to list them\n"), got)
+	assert.NotContains(t, got, "?")
 }
 
 func Test_renderStore_renders_the_store_rows_balances_splits_and_transfers_lines(t *testing.T) {

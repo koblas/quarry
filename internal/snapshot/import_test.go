@@ -49,66 +49,14 @@ func Test_stdout_write_refusal_points_to_from_only_once_the_build_was_reached(t 
 	}
 }
 
-func builtWithOneSided(n int) *store.Result {
-	return &store.Result{Built: true, Validation: store.Validation{Transfers: store.TransferCheck{OneSided: make([]store.OneSidedTransfer, n)}}}
-}
-
-func Test_outcome_warnings_put_the_manifests_before_the_one_sided_transfer_warning(t *testing.T) {
+func Test_outcome_warnings_omit_one_sided_transfers_for_a_built_store(t *testing.T) {
 	t.Parallel()
-	outcome := snapshot.Outcome{Manifest: snapshot.Manifest{Warnings: []string{"schema warning"}}, Store: builtWithOneSided(2)}
-
-	got := outcome.Warnings()
-
-	assert.Equal(t, []string{
-		"schema warning",
-		"2 transfers have no matching transaction in another account; quarry keeps them as one-sided transfers",
-	}, got)
-}
-
-func Test_outcome_warnings_names_a_single_one_sided_transfer_in_the_singular(t *testing.T) {
-	t.Parallel()
-	outcome := snapshot.Outcome{Store: builtWithOneSided(1)}
-
-	got := outcome.Warnings()
-
-	assert.Equal(t, []string{
-		"1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer",
-	}, got)
-}
-
-func Test_outcome_warnings_group_the_one_sided_count_by_thousands(t *testing.T) {
-	t.Parallel()
-	outcome := snapshot.Outcome{Store: builtWithOneSided(1204)}
-
-	got := outcome.Warnings()
-
-	assert.Equal(t, []string{
-		"1,204 transfers have no matching transaction in another account; quarry keeps them as one-sided transfers",
-	}, got)
-}
-
-func Test_outcome_warnings_omit_the_one_sided_transfer_warning_when_every_transfer_is_paired(t *testing.T) {
-	t.Parallel()
-	outcome := snapshot.Outcome{
-		Manifest: snapshot.Manifest{Warnings: []string{"schema warning"}},
-		Store:    &store.Result{Built: true, Validation: store.Validation{Transfers: store.TransferCheck{Paired: 3}}},
-	}
+	built := &store.Result{Built: true, Validation: store.Validation{Transfers: store.TransferCheck{OneSided: make([]store.OneSidedTransfer, 2)}}}
+	outcome := snapshot.Outcome{Manifest: snapshot.Manifest{Warnings: []string{"schema warning"}}, Store: built}
 
 	got := outcome.Warnings()
 
 	assert.Equal(t, []string{"schema warning"}, got)
-}
-
-func Test_outcome_warnings_omit_the_one_sided_transfer_warning_when_the_store_was_not_built(t *testing.T) {
-	t.Parallel()
-	built, unbuilt := builtWithOneSided(2), builtWithOneSided(2)
-	unbuilt.Built = false
-
-	gotBuilt := snapshot.Outcome{Manifest: snapshot.Manifest{Warnings: []string{"schema warning"}}, Store: built}.Warnings()
-	gotUnbuilt := snapshot.Outcome{Manifest: snapshot.Manifest{Warnings: []string{"schema warning"}}, Store: unbuilt}.Warnings()
-
-	assert.Len(t, gotBuilt, 2)
-	assert.Equal(t, []string{"schema warning"}, gotUnbuilt)
 }
 
 func Test_outcome_warnings_are_the_manifests_when_no_import_ran(t *testing.T) {

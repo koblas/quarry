@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
+	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -85,20 +87,20 @@ func Test_sync_and_import_warns_of_nothing_when_the_history_was_carried(t *testi
 	assert.Empty(t, outcome.Warnings())
 }
 
-func Test_import_from_puts_the_history_warning_after_the_one_sided_transfer_warning(t *testing.T) {
+func Test_import_from_puts_the_history_warning_after_the_manifest_warning(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
+	ref, err := v9.Reference(t.Context())
+	require.NoError(t, err)
+	delete(ref, "ZALERT")
 	fault := &store.OpenError{Fault: store.OpenFaultNotDuckDB, Path: filepath.Join(home, "quarry", "quarry.duckdb")}
-	result := *builtWithOneSided(1)
-	result.HistoryFault = fault
-	srv := newImportServer(t, home, &fakeImporter{result: result})
+	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, HistoryFault: fault}},
+		snapshot.WithReference(v9.ReferenceLabel, ref))
 	taken := takeSnapshot(t, srv)
+	require.Len(t, taken.Warnings, 1)
 
 	outcome, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
 
 	require.NoError(t, err)
-	assert.Equal(t, []string{
-		"1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer",
-		historyRestartLine("the file is not a DuckDB database"),
-	}, outcome.Warnings())
+	assert.Equal(t, []string{taken.Warnings[0], historyRestartLine("the file is not a DuckDB database")}, outcome.Warnings())
 }

@@ -37,8 +37,8 @@ type Outcome struct {
 }
 
 // Warnings returns every warning o carries, without the "quarry: warning: "
-// prefix: the manifest's own, then, for a built store only, the one-sided
-// transfer, import-history restart and auto-prune warnings, in that order.
+// prefix: the manifest's own, then, for a built store only, the import-history
+// restart and auto-prune warnings, in that order.
 func (o Outcome) Warnings() []string { return o.warnings(o.pruneWarning) }
 
 // warnings is Warnings with listWarning as the warning for a snapshots folder that could not be listed.
@@ -46,9 +46,6 @@ func (o Outcome) warnings(listWarning string) []string {
 	warnings := o.Manifest.Warnings
 	if o.Store == nil || !o.Store.Built {
 		return warnings
-	}
-	if n := len(o.Store.Validation.Transfers.OneSided); n > 0 {
-		warnings = append(slices.Clip(warnings), oneSidedWarning(n))
 	}
 	if o.historyWarning != "" {
 		warnings = append(slices.Clip(warnings), o.historyWarning)
@@ -60,15 +57,6 @@ func (o Outcome) warnings(listWarning string) []string {
 // history could not be carried forward, for a reason from UnreadableReason.
 func historyRestartWarning(reason string) string {
 	return "cannot carry import history forward from the previous store (" + reason + "); import_runs starts again with this sync"
-}
-
-// oneSidedWarning renders the warning for n one-sided transfers, singular
-// at n == 1.
-func oneSidedWarning(n int) string {
-	if n == 1 {
-		return "1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer"
-	}
-	return humanize.Thousands(n) + " transfers have no matching transaction in another account; quarry keeps them as one-sided transfers"
 }
 
 // causedRefusalError is a refusal that keeps its cause: Error is the refusal
@@ -181,7 +169,7 @@ func (s *Server) validationFailedRefusal(manifest Manifest, v store.Validation, 
 	}
 	return causedRefusalError{
 		msg: fmt.Sprintf("validation failed: %s; %s was not changed; each difference is listed on stdout; "+
-			"fix the account in Quicken and run quarry sync, or run quarry sync --from %s after updating quarry",
+			"fix them in Quicken and run quarry sync, or run quarry sync --from %s after updating quarry",
 			strings.Join(clauses, " and "), homepath.Abbreviate(s.home, s.storeProbe.Path()), ID(manifest.Snapshot.Path)),
 		cause: cause,
 	}
