@@ -96,6 +96,22 @@ func Test_run_sync_from_keeps_the_earlier_build_in_import_runs(t *testing.T) {
 	assert.Equal(t, manifestSHA256(t, laterManifest), importRunSHA256(t, home, "2"))
 }
 
+func Test_run_sync_from_warns_and_restarts_history_when_the_previous_store_is_not_a_duckdb_database(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncBundle(t, writeNamedAccountBundle(t, filepath.Join(home, "Documents"), "Chequing"))
+	manifest := onlyFileWithSuffix(t, filepath.Join(storeDirUnder(home), "snapshots"), ".json")
+	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a database"), 0o600))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--from", strings.TrimSuffix(filepath.Base(manifest), ".json")}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Equal(t, "quarry: warning: cannot carry import history forward from the previous store (the file is not a DuckDB database); "+
+		"import_runs starts again with this sync\n", stderr.String())
+	assert.Equal(t, map[string]string{"1": manifestSHA256(t, manifest)}, importRunQuery(t, home, "SELECT CAST(id AS VARCHAR), snapshot_sha256 FROM import_runs"))
+}
+
 // writeNamedAccountBundle writes a bundle whose one account carries name, so two bundles hash differently.
 func writeNamedAccountBundle(t *testing.T, dir, name string) v9fixture.Bundle {
 	t.Helper()

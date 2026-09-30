@@ -25,12 +25,16 @@ type Outcome struct {
 	Manifest     Manifest
 	Store        *store.Result
 	StoreExisted bool
+
+	// historyWarning is the warning for a built store whose previous import
+	// history could not be carried forward; empty when it was carried.
+	historyWarning string
 }
 
 // Warnings returns every warning o carries, without the "quarry: warning: "
 // prefix: the manifest's own, then the one-sided-transfer warning when a
-// built store kept one or more legs with no counterpart. An unbuilt store
-// kept nothing, so it adds no warning.
+// built store kept one or more legs with no counterpart, then the warning
+// that import history restarted. An unbuilt store adds none of them.
 func (o Outcome) Warnings() []string {
 	warnings := o.Manifest.Warnings
 	if o.Store == nil || !o.Store.Built {
@@ -39,7 +43,16 @@ func (o Outcome) Warnings() []string {
 	if n := len(o.Store.Validation.Transfers.OneSided); n > 0 {
 		warnings = append(slices.Clip(warnings), oneSidedWarning(n))
 	}
+	if o.historyWarning != "" {
+		warnings = append(slices.Clip(warnings), o.historyWarning)
+	}
 	return warnings
+}
+
+// historyRestartWarning renders the warning that the previous store's import
+// history could not be carried forward, for a reason from UnreadableReason.
+func historyRestartWarning(reason string) string {
+	return "cannot carry import history forward from the previous store (" + reason + "); import_runs starts again with this sync"
 }
 
 // oneSidedWarning renders the warning for n one-sided transfers, singular
@@ -107,7 +120,11 @@ func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome
 		return Outcome{Manifest: manifest}, s.importFailureRefusal(ctx, manifest, err)
 	}
 
-	return Outcome{Manifest: manifest, Store: &result}, nil
+	outcome := Outcome{Manifest: manifest, Store: &result}
+	if fault := result.HistoryFault; fault != nil {
+		outcome.historyWarning = historyRestartWarning(fault.UnreadableReason(homepath.Abbreviate(s.home, s.storeProbe.Path())))
+	}
+	return outcome, nil
 }
 
 // recordedTakenAt parses a manifest's taken_at into UTC; an unparseable

@@ -262,3 +262,28 @@ func Test_run_sync_json_lists_config_warnings_before_its_own_without_the_prefix(
 		"1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer",
 	}, doc.Warnings)
 }
+
+func Test_run_sync_json_lists_the_history_warning_after_config_and_transfer_warnings_without_the_prefix(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeStatusFixtureBundle(t, home)
+	var stdout, stderr bytes.Buffer
+	require.Equal(t, 0, run(context.Background(), []string{"sync"}, &stdout, &stderr), stderr.String())
+	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a database"), 0o600))
+	writeConfig(t, home, "snapshot.keep = 3\n")
+	stdout.Reset()
+	stderr.Reset()
+
+	exitCode := run(context.Background(), []string{"sync", "--json"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	var doc struct {
+		Warnings []string `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	assert.Equal(t, []string{
+		configShown + ": unknown key snapshot.keep; quarry ignores it",
+		"1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer",
+		"cannot carry import history forward from the previous store (the file is not a DuckDB database); import_runs starts again with this sync",
+	}, doc.Warnings)
+}
