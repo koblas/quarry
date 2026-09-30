@@ -273,11 +273,10 @@ func hasColumn(ctx context.Context, db ReadDB, table, column string) (bool, erro
 	return n > 0, nil
 }
 
-// Replace swaps rows into quarry.duckdb through a build file, carrying the previous
-// store's import_runs ahead of the new run, which it numbers after the highest carried id,
-// and its findings. An unreadable history restarts at id 1 (Replaced.HistoryFault). On failure
-// the existing store is untouched; a permission fault matches store.ErrStoreNotWritable,
-// disk-full store.ErrDiskFull.
+// Replace swaps rows into quarry.duckdb through a build file, carrying the previous store's
+// import_runs ahead of the new run, and its findings. An unreadable history restarts at id 1
+// (Replaced.HistoryFault). On failure the existing store is untouched; a permission fault
+// matches store.ErrStoreNotWritable, disk-full store.ErrDiskFull.
 func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, error) {
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return store.Replaced{}, buildError(err)

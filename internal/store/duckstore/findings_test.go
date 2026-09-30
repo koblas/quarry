@@ -136,12 +136,12 @@ func Test_replace_keeps_the_previous_store_when_detection_fails(t *testing.T) {
 	}
 }
 
-// findingTimes is every findings row as id|first_found_at|fixed_at text, ordered by id.
+// findingTimes is every findings row as id|type|first_found_at|fixed_at text, ordered by id.
 func findingTimes(t *testing.T, st *duckstore.Store) string {
 	t.Helper()
 	db := openReadOnly(t, st.Path())
 	var out string
-	require.NoError(t, db.QueryRows(t.Context(), `SELECT COALESCE(string_agg(id || '|' || CAST(first_found_at AS VARCHAR) || '|' ||
+	require.NoError(t, db.QueryRows(t.Context(), `SELECT COALESCE(string_agg(id || '|' || type || '|' || CAST(first_found_at AS VARCHAR) || '|' ||
 		COALESCE(CAST(fixed_at AS VARCHAR), 'NULL'), '; ' ORDER BY id), '') FROM findings`, nil,
 		func(scan func(dest ...any) error) error { return scan(&out) }))
 	require.NoError(t, db.Close())
@@ -162,6 +162,22 @@ func Test_replace_marks_a_carried_finding_not_detected_fixed_at_the_build_time(t
 		AND fixed_at = (SELECT built_at FROM store_info)`, "2")
 	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM finding_items WHERE finding_id LIKE 'uncategorized:%'`, "0")
 	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM findings WHERE id = 'one-sided-transfer:xfer-3' AND fixed_at IS NULL`, "1")
+}
+
+func Test_replace_keeps_the_type_of_a_carried_finding_that_is_no_longer_detected(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	_, err := duckstore.New(dir).Replace(t.Context(), withFindingCandidates())
+	require.NoError(t, err)
+	rows := withFindingCandidates()
+	rows.Transfers = slices.DeleteFunc(rows.Transfers, func(x store.Transfer) bool { return x.ID == "xfer-3" })
+
+	replaced, err := duckstore.New(dir).Replace(t.Context(), rows)
+
+	require.NoError(t, err)
+	db := openReadOnly(t, replaced.Path)
+	assertScalar(t, db, `SELECT type || ' ' || CAST(fixed_at = (SELECT built_at FROM store_info) AS VARCHAR)
+		FROM findings WHERE id = 'one-sided-transfer:xfer-3'`, "one-sided-transfer true")
 }
 
 func Test_replace_keeps_a_fixed_finding_fixed_at_its_first_fix_time(t *testing.T) {

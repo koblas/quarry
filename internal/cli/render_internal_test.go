@@ -254,6 +254,26 @@ func Test_renderStore_prints_the_transfers_count_line_without_one_sided_rows(t *
 	assert.NotContains(t, got, "?")
 }
 
+func Test_renderStore_prints_new_findings_only_when_the_history_was_carried(t *testing.T) {
+	counts := finding.Counts{Open: 2, New: 1}
+	cases := []struct {
+		name    string
+		carried bool
+		want    string
+	}{
+		{name: "carried", carried: true, want: "Findings  2 open (1 new); run quarry findings to list them\n"},
+		{name: "not carried", carried: false, want: "Findings  2 open; run quarry findings to list them\n"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := renderStore(store.Result{Findings: counts, FindingsCarried: c.carried}, "/Users/dave")
+
+			assert.True(t, strings.HasSuffix(got, c.want), got)
+		})
+	}
+}
+
 func Test_renderStore_renders_the_store_rows_balances_splits_and_transfers_lines(t *testing.T) {
 	result := store.Result{
 		Path:   "/Users/dave/Library/Application Support/quarry/quarry.duckdb",

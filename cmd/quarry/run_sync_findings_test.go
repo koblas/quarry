@@ -211,6 +211,18 @@ func Test_run_sync_reopens_a_fixed_finding_with_its_first_found_at_and_not_new(t
 		importRunQuery(t, home, "SELECT id, CAST(first_found_at AS VARCHAR) || '|' || COALESCE(CAST(fixed_at AS VARCHAR), 'NULL') FROM findings"))
 }
 
+func Test_run_sync_prints_a_finding_first_seen_since_the_last_sync_as_new(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	first, _ := twoPayeeBundle(false, true)
+	second, _ := twoPayeeBundle(false, false)
+	syncFindingsBundleIn(t, home, "DocumentsA", first)
+
+	line := syncFindingsBundleIn(t, home, "DocumentsB", second)
+
+	assert.Equal(t, "Findings  2 open (1 new); run quarry findings to list them", line)
+}
+
 func Test_run_sync_json_counts_a_finding_fixed_since_the_last_sync(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

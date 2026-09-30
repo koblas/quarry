@@ -59,8 +59,7 @@ var (
 )
 
 // readHistory reads the import_runs and findings of the store at s.Path() and closes it before returning.
-// An absent store has no history and no fault; an unreadable one has none and its fault; a bad import_runs
-// table leaves the findings carried.
+// An absent store has no history; an unreadable one has none and its fault, bar findings a bad import_runs spares.
 func (s *Store) readHistory(ctx context.Context) (history, *store.OpenError) {
 	path := s.Path()
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {

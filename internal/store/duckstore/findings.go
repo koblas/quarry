@@ -108,9 +108,8 @@ func detectUncategorized(ctx context.Context, db DB) ([]detectedFinding, error) 
 	return found, err //nolint:wrapcheck // detectFindings names the detector
 }
 
-// mergeFindings turns detected and carried findings into findings and finding_items rows. A detected finding keeps
-// its carried first_found_at and is reopened; one not carried is new at builtAt. A carried open finding not detected
-// is fixed at builtAt, and a carried fixed one stays fixed at its first fix time.
+// mergeFindings turns detected and carried findings into findings and finding_items rows; a carried finding keeps
+// its first_found_at and type, and is fixed at builtAt the first build that no longer detects it.
 func mergeFindings(detected []detectedFinding, carried []carriedFinding, builtAt time.Time) ([][]any, [][]any, finding.Counts) {
 	prior := make(map[string]carriedFinding, len(carried))
 	for _, c := range carried {
