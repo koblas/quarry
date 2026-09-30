@@ -23,7 +23,7 @@
 - P2c-10 (latest-row reads): `duckstore/status.go` (`store_info CROSS JOIN import_runs`) and `duckstore.go` `snapshotPathQuery` (R2's `--from` hint) read the latest row (`ORDER BY id DESC LIMIT 1`). Every `status` line and `status --json` field stays byte-identical. `quarry sql "SELECT * FROM import_runs"` returns one row per build (intended).
 - P2c-11 (format): `duckstore.FormatVersion` bumps 3→4 only if the DDL changes; if bumped, read commands show the existing R2 line until the first 2c sync (accepted).
 - P2c-12 (PRE-01 neutrality): the report-pipeline refactor changes no behaviour: no hunk in any `package *_test` black-box test file under `internal/cli/spend*_test.go`, `internal/cli/cashflow_test.go`, `internal/cli/report_help_test.go`, `internal/store/duckstore/spending*_test.go`, `internal/store/duckstore/cashflow_test.go`, `cmd/quarry/`; ±0 top-level tests per package (except tests of deleted dead code, listed); full suite, lint, coverage gate clean; no `--json` field, help string, golden or `testdata` change. Needing to change a black-box assertion = behaviour change → stop and report.
-- P2c-13 (PRD amendments): drop "Quicken version" from the `snapshots` row (:163) and the `import_runs` row (:127). :146 → "`import_runs` keeps one row per successful build, carried across rebuilds, so the hash of every snapshot a store was built from outlives the snapshot." :127 → "Snapshot hash, row counts, validation results | One row per successful build, kept across rebuilds; audit trail". A snapshot never built into a store keeps its hash only in its manifest.
+- P2c-13 (PRD amendments): drop "Quicken version" from the `snapshots` row (:163) and the `import_runs` row (:127). :146 paragraph → "A rejected snapshot (no accounts, failed integrity check) is deleted at once and never counts toward the cap. `import_runs` keeps one row per successful build, carried across rebuilds, so the hash of every snapshot a store was built from outlives the snapshot. A snapshot that was never built into a store keeps its hash only in its manifest, which is deleted with it." :127 → "Snapshot hash, row counts, validation results | One row per successful build, kept across rebuilds; audit trail". A snapshot never built into a store keeps its hash only in its manifest.
 
 ---
 
@@ -207,6 +207,16 @@ With --dry-run, prune lists what it would delete and deletes nothing.
   - `quarry: warning: cannot list ~/Library/Application Support/quarry/snapshots to delete old snapshots: <OS reason>; run quarry snapshots prune to try again`
 - Interrupted during prune (store already swapped): `quarry: sync interrupted while deleting old snapshots; the store was rebuilt; run quarry snapshots prune to finish` — exit 1.
 - CF1: no previous store → history starts silently. CF2: previous store's `import_runs` unreadable → `quarry: warning: cannot carry import history forward from the previous store (<reason>); import_runs starts again with this sync` (exit 0; build proceeds).
+- CF2 `<reason>` phrases ("it"/"its" = the previous store; warning, build proceeds, exit 0; never driver text or Go type names; `warnings[]` carries the line without `quarry: warning: `):
+
+| Case | `<reason>` |
+|---|---|
+| open or read fault | `store.OpenError.UnreadableReason`, verbatim (e.g. `the file is not a DuckDB database`) |
+| ids in `import_runs` not unique | `its import_runs table repeats an id` |
+| no `import_runs` table | `it has no import_runs table` |
+| a required column (`id`, `snapshot_path`, `snapshot_sha256`) missing or NULL, or any other row-read fault on a readable file | `its import_runs table is incomplete` |
+
+  Columns an older store format lacks are carried as NULL and are not a fault.
 
 ### Changes to existing surfaces
 1. `internal/cli/sync.go` sync Long — insert after the "if a check fails…" paragraph:
