@@ -116,7 +116,7 @@ func pathNotFoundRefusal(home, snapshotPath string) error {
 // idNotFoundRefusal reports an ID-form --from value naming no snapshot in snapshotDir.
 func idNotFoundRefusal(home, snapshotDir, id string) error {
 	return RefusalError{msg: fmt.Sprintf(
-		"no snapshot %s in %s; check the ID passed to --from", id, homepath.Abbreviate(home, snapshotDir))}
+		"no snapshot %s in %s; run quarry snapshots to list the ones kept", id, homepath.Abbreviate(home, snapshotDir))}
 }
 
 // notASnapshotFileRefusal reports that snapshotPath exists but is not a regular file.

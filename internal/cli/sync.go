@@ -81,9 +81,7 @@ does not read Quicken at all.`,
 			if err != nil {
 				return &runtimeError{err: err}
 			}
-			for _, warning := range cfg.Warnings {
-				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: warning: "+warning)
-			}
+			printConfigWarnings(cmd, cfg.Warnings)
 
 			srv, err := newServer(cmd.Context())
 			if err != nil {

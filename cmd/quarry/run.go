@@ -60,7 +60,7 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 		info, _ := debug.ReadBuildInfo()
 		st := duckstore.New(storeDir, append([]duckstore.Option{duckstore.WithQuarryVersion(buildVersion(info))}, storeOpts...)...)
 		srv := snapshot.NewServer(
-			snapshot.WithSnapshotDir(filepath.Join(storeDir, "snapshots")),
+			snapshot.WithSnapshotDir(snapshotsDirUnder(home)),
 			snapshot.WithReference(v9.ReferenceLabel, ref),
 			snapshot.WithHome(home),
 			snapshot.WithImporter(importer.NewServer(importer.WithStore(st))),
@@ -106,7 +106,7 @@ func newSnapshotsFactory(storeOpts ...duckstore.Option) cli.SnapshotsFactory {
 
 		storeDir := storeDirUnder(home)
 		return snapshot.NewServer(
-			snapshot.WithSnapshotDir(filepath.Join(storeDir, "snapshots")),
+			snapshot.WithSnapshotDir(snapshotsDirUnder(home)),
 			snapshot.WithHome(home),
 			snapshot.WithStoreProbe(duckstore.New(storeDir, storeOpts...)),
 		), nil
@@ -129,6 +129,11 @@ func newConfigLoader() cli.ConfigLoader {
 // storeDirUnder is the directory holding quarry's store and snapshots.
 func storeDirUnder(home string) string {
 	return filepath.Join(home, "Library", "Application Support", "quarry")
+}
+
+// snapshotsDirUnder is the directory holding the snapshots quarry has taken.
+func snapshotsDirUnder(home string) string {
+	return filepath.Join(storeDirUnder(home), "snapshots")
 }
 
 // errNoHome is the home-directory refusal's lead; resolveHome appends what to do.

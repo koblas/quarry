@@ -60,3 +60,11 @@ func writeResult(cmd *cobra.Command, out []byte) error {
 	}
 	return nil
 }
+
+// printConfigWarnings writes each config-file warning to cmd's stderr as
+// "quarry: warning: <warning>", before the command's own output.
+func printConfigWarnings(cmd *cobra.Command, warnings []string) {
+	for _, warning := range warnings {
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: warning: "+warning)
+	}
+}
