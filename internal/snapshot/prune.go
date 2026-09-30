@@ -24,6 +24,11 @@ type Pruned struct {
 	Deleted   []Entry
 	Failed    []PruneFailure
 	StoreKept *Entry
+	// DryRun is true when nothing was deleted because the run only planned; WouldDelete then lists the snapshots a real run deletes.
+	DryRun      bool
+	WouldDelete []Entry
+	// StorePath is the snapshot path the store recorded, unresolved; "" when the store was not readable or names none.
+	StorePath string
 	// NotDeleted counts the selected snapshots never attempted because the ctx ended.
 	NotDeleted int
 }
@@ -49,46 +54,81 @@ func selectPrune(entries []Entry, keep int) ([]Entry, *Entry) {
 	return doomed, storeKept
 }
 
-// Prune deletes all but the newest keep snapshots, never the one the store was built from,
-// and reports what it deleted and what it could not. It refuses keep < 1 (ErrKeepBelowOne),
-// an ended ctx, an unreadable folder and, only past the newest keep, a store that cannot say
-// which snapshot built it. An ended ctx stops it between snapshots; otherwise it sweeps orphan manifests.
-func (s *Server) Prune(ctx context.Context, keep int) (Pruned, error) {
+// prunePlan is the decision Prune and PlanPrune share: the facts so far, what lies beyond
+// the newest keep, and the orphan manifests a real run sweeps.
+type prunePlan struct {
+	pruned  Pruned
+	doomed  []Entry
+	orphans []string
+}
+
+// planPrune decides what a prune would delete without touching a file. It refuses keep < 1
+// (ErrKeepBelowOne), an ended ctx, an unreadable folder and, only past the newest keep, a
+// store that cannot say which snapshot built it; within the newest keep that read is best-effort.
+func (s *Server) planPrune(ctx context.Context, keep int) (prunePlan, error) {
 	if keep < 1 {
-		return Pruned{}, ErrKeepBelowOne
+		return prunePlan{}, ErrKeepBelowOne
 	}
 	if ctx.Err() != nil {
-		return Pruned{}, pruneInterrupted(ctx)
+		return prunePlan{}, pruneInterrupted(ctx)
 	}
 	listing, err := s.listFolder()
 	if err != nil {
-		return Pruned{}, err
+		return prunePlan{}, err
 	}
-	pruned := Pruned{Keep: keep, Dir: listing.Dir, Snapshots: len(listing.Entries)}
-	if len(listing.Entries) <= keep {
-		s.sweepOrphans(listing.orphans)
-		return pruned, nil
-	}
+	beyond := len(listing.Entries) > keep
 	if err := s.markStore(ctx, &listing); err != nil {
 		if ctx.Err() != nil {
-			return Pruned{}, pruneInterrupted(ctx)
+			return prunePlan{}, pruneInterrupted(ctx)
 		}
-		return Pruned{}, err
+		if beyond {
+			return prunePlan{}, err
+		}
+	}
+	plan := prunePlan{
+		pruned:  Pruned{Keep: keep, Dir: listing.Dir, Snapshots: len(listing.Entries), StorePath: listing.StorePath},
+		orphans: listing.orphans,
+	}
+	if !beyond {
+		return plan, nil
 	}
 	if listing.StoreUnreadable != "" {
-		return Pruned{}, s.cannotTellRefusal(listing.StoreUnreadable)
+		return prunePlan{}, s.cannotTellRefusal(listing.StoreUnreadable)
 	}
-	doomed, storeKept := selectPrune(listing.Entries, keep)
-	pruned.StoreKept = storeKept
-	for i, entry := range doomed {
+	plan.doomed, plan.pruned.StoreKept = selectPrune(listing.Entries, keep)
+	return plan, nil
+}
+
+// PlanPrune is Prune without the deleting: WouldDelete lists what Prune would delete, in the
+// same order, and no file is removed, orphan manifests included. Its refusals are Prune's.
+func (s *Server) PlanPrune(ctx context.Context, keep int) (Pruned, error) {
+	plan, err := s.planPrune(ctx, keep)
+	if err != nil {
+		return Pruned{}, err
+	}
+	plan.pruned.DryRun = true
+	plan.pruned.WouldDelete = plan.doomed
+	return plan.pruned, nil
+}
+
+// Prune deletes all but the newest keep snapshots, never the one the store was built from,
+// and reports what it deleted and what it could not. Its refusals are planPrune's. An ended
+// ctx stops it between snapshots; otherwise it sweeps orphan manifests.
+func (s *Server) Prune(ctx context.Context, keep int) (Pruned, error) {
+	plan, err := s.planPrune(ctx, keep)
+	if err != nil {
+		return Pruned{}, err
+	}
+	pruned := plan.pruned
+	for i, entry := range plan.doomed {
 		s.deleteSnapshot(entry, &pruned)
 		// The first snapshot is always attempted: ctx was checked when the store was read.
-		if left := len(doomed) - i - 1; left > 0 && ctx.Err() != nil {
+		if left := len(plan.doomed) - i - 1; left > 0 && ctx.Err() != nil {
 			pruned.NotDeleted = left
 			return pruned, interruptedMidDelete(ctx, left)
 		}
 	}
-	s.sweepOrphans(listing.orphans)
+	s.sweepOrphans(plan.orphans)
 	return pruned, nil
 }
 

@@ -28,7 +28,7 @@ func (p *countingProbe) BuiltFrom(ctx context.Context) (string, error) {
 	return p.fakeStoreProbe.BuiltFrom(ctx)
 }
 
-func Test_prune_does_not_ask_the_store_when_nothing_lies_beyond_the_newest_n(t *testing.T) {
+func Test_prune_reads_the_store_once_when_nothing_lies_beyond_the_newest_n(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
@@ -49,9 +49,78 @@ func Test_prune_does_not_ask_the_store_when_nothing_lies_beyond_the_newest_n(t *
 			_, err := newPruneServer(home, probe, &fakeRemover{}).Prune(t.Context(), 2)
 
 			require.NoError(t, err)
-			assert.Zero(t, probe.calls)
+			assert.Equal(t, 1, probe.calls)
 		})
 	}
+}
+
+func Test_prune_never_blocks_when_nothing_lies_beyond_the_newest_n_and_the_store_cannot_say_which_snapshot_built_it(t *testing.T) {
+	t.Parallel()
+	for _, c := range storeReadFaults() {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			prunable(t, home, idNewest, idMiddle)
+			probe := &fakeStoreProbe{path: storeFile, builtFromErr: c.fault}
+
+			pruned, err := newPruneServer(home, probe, &fakeRemover{}).Prune(t.Context(), 2)
+
+			require.NoError(t, err)
+			assert.Equal(t, snapshot.Pruned{Keep: 2, Dir: filepath.Join(home, "snapshots"), Snapshots: 2}, pruned)
+		})
+	}
+}
+
+func Test_prune_never_blocks_on_a_store_read_that_is_not_an_open_fault_when_nothing_lies_beyond_the_newest_n(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	prunable(t, home, idNewest, idMiddle)
+
+	pruned, err := newPruneServer(home, &fakeStoreProbe{builtFromErr: errStoreRead}, &fakeRemover{}).Prune(t.Context(), 2)
+
+	require.NoError(t, err)
+	assert.Equal(t, snapshot.Pruned{Keep: 2, Dir: filepath.Join(home, "snapshots"), Snapshots: 2}, pruned)
+}
+
+func Test_prune_reports_the_snapshot_path_the_store_recorded(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		ids  []string
+		keep int
+	}{
+		{"nothing lies beyond the newest two", []string{idNewest, idMiddle}, 2},
+		{"no snapshots folder", nil, 2},
+		{"a snapshot lies beyond the newest two", []string{idNewest, idMiddle, idOldest}, 2},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			if len(c.ids) > 0 {
+				prunable(t, home, c.ids...)
+			}
+			recorded := filepath.Join(home, "snapshots", idNewest+".sqlite")
+
+			pruned, err := newPruneServer(home, &fakeStoreProbe{builtFrom: recorded}, &fakeRemover{}).Prune(t.Context(), c.keep)
+
+			require.NoError(t, err)
+			assert.Equal(t, recorded, pruned.StorePath)
+		})
+	}
+}
+
+func Test_prune_is_interrupted_when_the_context_ended_during_the_store_read_with_nothing_beyond_the_newest_n(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	prunable(t, home, idNewest, idMiddle)
+	ctx, end := context.WithCancel(t.Context())
+
+	pruned, err := newPruneServer(home, &countingProbe{onRead: end}, &fakeRemover{}).Prune(ctx, 2)
+
+	require.EqualError(t, err, "snapshots prune interrupted")
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, snapshot.Pruned{}, pruned)
 }
 
 func Test_prune_asks_the_store_when_a_snapshot_lies_beyond_the_newest_n(t *testing.T) {
@@ -92,14 +161,19 @@ func Test_prune_reports_the_folder_and_its_snapshot_count_when_nothing_lies_beyo
 	}
 }
 
-func Test_prune_deletes_nothing_when_the_store_cannot_say_which_snapshot_built_it(t *testing.T) {
-	t.Parallel()
-	const storeFile = "/Users/x/Library/Application Support/quarry/quarry.duckdb"
-	cases := []struct {
-		name   string
-		fault  *store.OpenError
-		reason string
-	}{
+// storeFile is the store path the faults name; the Server's home is /Users/x.
+const storeFile = "/Users/x/Library/Application Support/quarry/quarry.duckdb"
+
+// storeReadFault is a store fault and the R3 reason a prune refusal gives for it.
+type storeReadFault struct {
+	name   string
+	fault  *store.OpenError
+	reason string
+}
+
+// storeReadFaults are the five ways a store cannot say which snapshot built it.
+func storeReadFaults() []storeReadFault {
+	return []storeReadFault{
 		{"not a DuckDB file", &store.OpenError{Fault: store.OpenFaultNotDuckDB, Path: storeFile}, "the file is not a DuckDB database"},
 		{"permission denied", &store.OpenError{Fault: store.OpenFaultPermission, Path: storeFile}, "permission denied"},
 		{"locked by another program", &store.OpenError{Fault: store.OpenFaultLocked, Path: storeFile}, "another program has it open for writing"},
@@ -114,7 +188,11 @@ func Test_prune_deletes_nothing_when_the_store_cannot_say_which_snapshot_built_i
 			"the store was built by another version of quarry",
 		},
 	}
-	for _, c := range cases {
+}
+
+func Test_prune_deletes_nothing_when_the_store_cannot_say_which_snapshot_built_it(t *testing.T) {
+	t.Parallel()
+	for _, c := range storeReadFaults() {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()

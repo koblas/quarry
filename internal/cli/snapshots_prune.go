@@ -14,12 +14,16 @@ const (
 	pruneFactoryCommand = snapshotsCommand + " " + pruneCommand
 	// keepFlag is the flag holding how many snapshots prune keeps.
 	keepFlag = "keep"
+	// dryRunFlag is the flag that has prune list what it would delete instead of deleting it.
+	dryRunFlag = "dry-run"
 )
 
 // newPruneCommand builds the snapshots prune subcommand: delete all but the newest
 // --keep snapshots (snapshots.keep from the config file when the flag is not given), never the store's own.
+// With --dry-run it lists what it would delete and deletes nothing.
 func newPruneCommand(newSnapshots SnapshotsFactory, loadConfig ConfigLoader) *cobra.Command {
 	var keep int
+	var dryRun bool
 	cmd := &cobra.Command{
 		Use:   pruneCommand,
 		Short: "Delete all but the newest snapshots",
@@ -56,7 +60,11 @@ With --dry-run, prune lists what it would delete and deletes nothing.`,
 			if err != nil {
 				return &runtimeError{err: err}
 			}
-			pruned, pruneErr := srv.Prune(cmd.Context(), limit)
+			prune := srv.Prune
+			if dryRun {
+				prune = srv.PlanPrune
+			}
+			pruned, pruneErr := prune(cmd.Context(), limit)
 			// Prune returns a zero Pruned with every refusal that leaves nothing to report.
 			if pruneErr != nil && pruned.Keep == 0 {
 				return &runtimeError{err: pruneErr}
@@ -65,6 +73,7 @@ With --dry-run, prune lists what it would delete and deletes nothing.`,
 		},
 	}
 	cmd.Flags().IntVar(&keep, keepFlag, 0, "keep the newest `n` snapshots (default: snapshots.keep in the config file, 12 unless set)")
+	cmd.Flags().BoolVar(&dryRun, dryRunFlag, false, "list the snapshots prune would delete without deleting them")
 	return cmd
 }
 

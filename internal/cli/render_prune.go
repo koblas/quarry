@@ -9,12 +9,14 @@ import (
 // pruneRowIndent sets a Deleted block's rows under its header line.
 const pruneRowIndent = "  "
 
-// renderPruned is p as stdout text: the Deleted block, else the Nothing to delete line
-// when nothing failed and the run was not interrupted, else "". home abbreviates the folder.
+// renderPruned is p as stdout text: the Deleted or Would delete block, else the Nothing to delete
+// line when nothing failed and the run was not interrupted, else "". home abbreviates the folder.
 func renderPruned(p snapshot.Pruned, home string) string {
 	switch {
+	case len(p.WouldDelete) > 0:
+		return renderSnapshotBlock("Would delete", p.WouldDelete, p)
 	case len(p.Deleted) > 0:
-		return renderDeleted(p)
+		return renderSnapshotBlock("Deleted", p.Deleted, p)
 	case len(p.Failed) > 0 || p.NotDeleted > 0:
 		return ""
 	case p.Snapshots == 0:
@@ -23,15 +25,15 @@ func renderPruned(p snapshot.Pruned, home string) string {
 	return "Nothing to delete: " + snapshotCount(p.Snapshots) + ", within " + keepPhrase(p) + "\n"
 }
 
-// renderDeleted is the Deleted block: a header, then a row per deleted snapshot in p's order.
-func renderDeleted(p snapshot.Pruned) string {
+// renderSnapshotBlock is the block headed by verb: a header, then a row per entry in entries' order.
+func renderSnapshotBlock(verb string, entries []snapshot.Entry, p snapshot.Pruned) string {
 	var total int64
-	rows := make([][]string, len(p.Deleted))
-	for i, e := range p.Deleted {
+	rows := make([][]string, len(entries))
+	for i, e := range entries {
 		total += e.Bytes
 		rows[i] = []string{e.ID, snapshotTaken(e), formatMB(e.Bytes)}
 	}
-	return "Deleted " + snapshotCount(len(p.Deleted)) + " (" + formatMB(total) + "), keeping " + keepPhrase(p) + ":\n" +
+	return verb + " " + snapshotCount(len(entries)) + " (" + formatMB(total) + "), keeping " + keepPhrase(p) + ":\n" +
 		alignSnapshotRows(rows, pruneRowIndent)
 }
 
