@@ -28,3 +28,6 @@ Scenarios complete: SCENARIO-01..03 (02, 03 delivered by 01). Last updated by SC
 ## Open debts
 - Orchestrator: the findings `Long` line "the splits quarry cashflow counts as uncategorized" needs a product-vision copy ruling before SCENARIO-11 — cashflow prints no uncategorized count (SCENARIO-11)
 - Orchestrator: the Reference check (real-file review of heuristic findings) runs after SCENARIO-28, before the gate round (unowned until then)
+- Checkpoint 01 MINOR (comment budget): `internal/store/duckstore/findings.go:12-13` const doc is 2 lines with a "how" clause — cut to one line
+- Checkpoint 01 MINOR (comment budget): `internal/store/duckstore/duckstore.go:391-393` `build` doc is 3 lines — trim to 2
+- Checkpoint 01 MINOR (comment): `internal/store/duckstore/findings.go:84-85` "findings come in the query's payee order" is unobservable how — drop; `internal/store/duckstore/doc.go:6` ~89 columns — re-wrap
