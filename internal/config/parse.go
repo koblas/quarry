@@ -13,8 +13,11 @@ import (
 	"github.com/pelletier/go-toml/v2/unstable"
 )
 
-// gotTable is the value shown for a setting written as a table.
-const gotTable = "a table"
+// What a bad value shows when the file introduced it with a header, not right of "=".
+const (
+	gotTable     = "a table"
+	gotTableList = "a list of tables"
+)
 
 // setting names a known key: its table, its name in that table, and the
 // line shown to a user who wrote the table as a plain value.
@@ -27,11 +30,12 @@ var (
 	pathSetting = setting{table: "quicken", name: "path", example: `quicken.path = "~/Documents/Home.quicken"`}
 )
 
-func (s setting) String() string { return s.table + "." + s.name }
+func (s setting) String() string { return strings.Join(s.key(), ".") }
 
-// The types below mirror the known keys with each value left as written.
-// One per setting keeps a bad shape in the other table from failing this
-// one's decode.
+func (s setting) key() []string { return []string{s.table, s.name} }
+
+// Mirrors of the known keys with each value left as written, one per setting
+// so a bad shape in the other table cannot fail this one's decode.
 type (
 	snapshotsTable struct {
 		Keep unstable.RawMessage `toml:"keep"`
@@ -91,7 +95,7 @@ func (f file) tree() (map[string]any, error) {
 	}
 	decodeErr, ok := errors.AsType[*toml.DecodeError](err)
 	if !ok {
-		// unreachable: Unmarshal into a map[string]any wraps every parser and tracker error as *toml.DecodeError; its other errors need another target type.
+		// unreachable: go-toml v2.4.3 decode_fused.go raises only parser and tracker errors and wrapError makes them *toml.DecodeError; 23 malformed scalars, keys and strings probed, all *toml.DecodeError.
 		return nil, f.refuse("cannot read "+f.shown+": "+err.Error(), err)
 	}
 	line, _ := decodeErr.Position()
@@ -110,7 +114,7 @@ func (f file) keep(tree map[string]any) (int, error) {
 		return int(n), nil
 	}
 
-	return 0, f.badValue(keepSetting.String()+" must be a whole number of 1 or more", f.got(value, f.rawKeep))
+	return 0, f.badValue(keepSetting.String()+" must be a whole number of 1 or more", f.got(value, keepSetting.key(), f.rawKeep))
 }
 
 // quickenPath is quicken.path as written: "" when unset, else a string that
@@ -122,10 +126,10 @@ func (f file) quickenPath(tree map[string]any) (string, error) {
 	}
 	text, isString := value.(string)
 	if !isString {
-		return "", f.badValue(pathSetting.String()+" must be a path in quotes", f.got(value, f.rawPath))
+		return "", f.badValue(pathSetting.String()+" must be a path in quotes", f.got(value, pathSetting.key(), f.rawPath))
 	}
 	if !filepath.IsAbs(text) && !strings.HasPrefix(text, "~/") {
-		return "", f.badValue(pathSetting.String()+" must be a full path or start with ~/", f.got(value, f.rawPath))
+		return "", f.badValue(pathSetting.String()+" must be a full path or start with ~/", f.got(value, pathSetting.key(), f.rawPath))
 	}
 
 	return text, nil
@@ -139,20 +143,48 @@ func (f file) lookup(tree map[string]any, s setting) (any, bool, error) {
 	}
 	table, isTable := entry.(map[string]any)
 	if !isTable {
-		return nil, false, f.badValue(s.table+" must be a table, such as "+s.example, f.got(entry, func() unstable.RawMessage { return f.rawTable(s.table) }))
+		return nil, false, f.badValue(s.table+" must be a table, such as "+s.example, f.got(entry, []string{s.table}, func() unstable.RawMessage { return f.rawTable(s.table) }))
 	}
 	value, present := table[s.name]
 
 	return value, present, nil
 }
 
-// got is value as the file wrote it, collapsed to one line, or "a table".
-func (f file) got(value any, raw func() unstable.RawMessage) string {
-	if _, isTable := value.(map[string]any); isTable {
+// got is value as the file wrote it, collapsed to one line. A value a header
+// introduced is named by kind, since its text is the body under the header.
+func (f file) got(value any, key []string, raw func() unstable.RawMessage) string {
+	switch value.(type) {
+	case map[string]any:
 		return gotTable
+	case []any:
+		if f.hasArrayTableHeader(key) {
+			return gotTableList
+		}
 	}
 
 	return strings.Join(strings.Fields(string(raw())), " ")
+}
+
+// hasArrayTableHeader reports whether the file opens a [[key]] header; an
+// inline array of inline tables decodes to the same value but has none.
+func (f file) hasArrayTableHeader(key []string) bool {
+	var parser unstable.Parser
+	parser.Reset(f.data)
+	for parser.NextExpression() {
+		expr := parser.Expression()
+		if expr.Kind != unstable.ArrayTable {
+			continue
+		}
+		var header []string
+		for part := expr.Key(); part.Next(); {
+			header = append(header, string(part.Node().Data))
+		}
+		if slices.Equal(header, key) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (f file) rawKeep() unstable.RawMessage {
@@ -179,7 +211,8 @@ func (f file) rawTable(name string) unstable.RawMessage {
 
 // decodeRaw fills target's RawMessage fields from the file.
 func (f file) decodeRaw(target any) {
-	// unreachable: tree() decoded these bytes, and callers pick a target whose tables the tree showed to be tables or whose fields are RawMessage, which takes any value.
+	// Any other [[table]] header in the file fails the decode, but only after the
+	// keys above it are filled, and those are the only ones read.
 	_ = toml.NewDecoder(bytes.NewReader(f.data)).EnableUnmarshalerInterface().Decode(target)
 }
 

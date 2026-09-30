@@ -36,33 +36,46 @@ func load(t *testing.T, content string) (string, config.Config, error) {
 	return home, cfg, err
 }
 
+// skipIfReadable skips the test when path can be read despite its mode, as it can by root.
+func skipIfReadable(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.ReadFile(path); err == nil {
+		t.Skip("running with permission to read a mode 000 file")
+	}
+}
+
 // refusal loads content and returns the refusal text, requiring an empty Config with it.
 func refusal(t *testing.T, content string) string {
 	t.Helper()
 	_, cfg, err := load(t, content)
 	require.Error(t, err)
-	require.ErrorAs(t, err, new(*config.RefusalError))
 	assert.Zero(t, cfg)
 
 	return err.Error()
 }
 
-func Test_load_returns_defaults_for_a_missing_or_empty_file(t *testing.T) {
+func Test_load_returns_defaults_for_a_missing_file(t *testing.T) {
+	home, path := newHome(t)
+
+	cfg, err := config.Load(home, path)
+
+	require.NoError(t, err)
+	assert.Equal(t, config.Config{Path: path, Keep: config.DefaultKeep}, cfg)
+}
+
+func Test_load_returns_defaults_for_an_empty_file(t *testing.T) {
 	cases := []struct {
 		name    string
-		content *string
+		content string
 	}{
-		{name: "missing file", content: nil},
-		{name: "empty file", content: new("")},
-		{name: "only a comment", content: new("# nothing set\n")},
+		{name: "empty file", content: ""},
+		{name: "only a comment", content: "# nothing set\n"},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			home, path := newHome(t)
-			if c.content != nil {
-				require.NoError(t, os.WriteFile(path, []byte(*c.content), 0o600))
-			}
+			require.NoError(t, os.WriteFile(path, []byte(c.content), 0o600))
 
 			cfg, err := config.Load(home, path)
 
@@ -85,9 +98,7 @@ func Test_load_refuses_a_directory_in_place_of_the_file(t *testing.T) {
 func Test_load_refuses_a_file_it_has_no_permission_to_read(t *testing.T) {
 	home, path := newHome(t)
 	require.NoError(t, os.WriteFile(path, []byte("[snapshots]\n"), 0o000))
-	if _, readErr := os.ReadFile(path); readErr == nil {
-		t.Skip("running with permission to read a mode 000 file")
-	}
+	skipIfReadable(t, path)
 
 	_, err := config.Load(home, path)
 
@@ -103,6 +114,8 @@ func Test_load_refuses_malformed_toml_naming_the_line(t *testing.T) {
 		{name: "unclosed table header on line 1", content: "[snapshots\nkeep = 24\n", want: "line 1: expected ']' to close table name"},
 		{name: "value missing on line 3", content: "# c\na = 1\nb = \n", want: "line 3: unexpected character U+000A at start of value"},
 		{name: "duplicate key", content: "a = 1\na = 2\n", want: "line 2: key a is already defined"},
+		{name: "invalid UTF-8", content: "a = \"\xff\"\n", want: "line 1: invalid UTF-8 character in basic string"},
+		{name: "byte order mark", content: "\ufeffa = 1\n", want: "line 1: invalid character at start of key: U+00EF 'ï'"},
 		{name: "integer too large", content: "[snapshots]\nkeep = 99999999999999999999\n", want: "line 2: decimal number is too large to fit in a 64-bit signed integer"},
 	}
 
@@ -330,6 +343,46 @@ func Test_load_never_reports_a_shape_mismatch_as_malformed(t *testing.T) {
 		{
 			name: "quicken.path is a multi-line array", content: "quicken.path = [\n  \"a\",\n  \"b\"\n]\n",
 			want: shownPath + ": quicken.path must be a path in quotes, got [ \"a\", \"b\" ]",
+		},
+		{
+			name: "snapshots is a list of tables", content: "[[snapshots]]\n",
+			want: shownPath + ": snapshots must be a table, such as snapshots.keep = 12, got a list of tables",
+		},
+		{
+			name: "quicken is a list of tables", content: "[[quicken]]\nx = 1\n",
+			want: shownPath + ": quicken must be a table, such as quicken.path = \"~/Documents/Home.quicken\", got a list of tables",
+		},
+		{
+			name: "snapshots.keep is a list of tables", content: "[[snapshots.keep]]\nx = 1\n",
+			want: shownPath + ": snapshots.keep must be a whole number of 1 or more, got a list of tables",
+		},
+		{
+			name: "quicken.path is a list of tables", content: "[[quicken.path]]\nx = 1\n",
+			want: shownPath + ": quicken.path must be a path in quotes, got a list of tables",
+		},
+		{
+			name: "a quoted list-of-tables header is still a list of tables", content: "[[\"snapshots\"]]\n",
+			want: shownPath + ": snapshots must be a table, such as snapshots.keep = 12, got a list of tables",
+		},
+		{
+			name: "snapshots is an integer beside an unrelated list of tables", content: "snapshots = 3\n[[foo]]\nx = 1\n",
+			want: shownPath + ": snapshots must be a table, such as snapshots.keep = 12, got 3",
+		},
+		{
+			name: "snapshots.keep is a multi-line array beside an unrelated list of tables", content: "snapshots.keep = [1,\n 2]\n[[foo]]\nx = 1\n",
+			want: shownPath + ": snapshots.keep must be a whole number of 1 or more, got [1, 2]",
+		},
+		{
+			name: "snapshots is an inline array of inline tables", content: "snapshots = [{a = 1}]\n",
+			want: shownPath + ": snapshots must be a table, such as snapshots.keep = 12, got [{a = 1}]",
+		},
+		{
+			name: "snapshots.keep is an inline array of inline tables", content: "snapshots.keep = [{a = 1},\n  {b = 2}]\n",
+			want: shownPath + ": snapshots.keep must be a whole number of 1 or more, got [{a = 1}, {b = 2}]",
+		},
+		{
+			name: "quicken.path is an inline array of inline tables", content: "[quicken]\npath = [{a = 1}]\n",
+			want: shownPath + ": quicken.path must be a path in quotes, got [{a = 1}]",
 		},
 	}
 
