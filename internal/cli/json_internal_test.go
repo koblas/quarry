@@ -55,9 +55,9 @@ func Test_renderJSON_encodes_absent_lists_as_empty_arrays(t *testing.T) {
 		},
 	}
 
-	nilData, err := renderJSON(snapshot.Outcome{Store: &nilResult})
+	nilData, err := renderJSON(snapshot.Outcome{Store: &nilResult}, nil)
 	require.NoError(t, err)
-	populatedData, err := renderJSON(snapshot.Outcome{Store: &populatedResult})
+	populatedData, err := renderJSON(snapshot.Outcome{Store: &populatedResult}, nil)
 	require.NoError(t, err)
 
 	nilBalances, nilSplits, nilOneSided := storeLists(t, nilData)

@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"strings"
 
 	"github.com/koblas/quarry/internal/platform/humanize"
+	"github.com/koblas/quarry/internal/platform/osreason"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/spf13/cobra"
 )
@@ -133,25 +133,12 @@ func readStdinQuery(ctx context.Context, in io.Reader) (string, error) {
 		return "", &runtimeError{err: queryFailure(store.Interrupted(err))}
 	}
 	if got.err != nil {
-		return "", &runtimeError{err: &refusalError{text: "cannot read the query from stdin: " + osReason(got.err), cause: got.err}}
+		return "", &runtimeError{err: &refusalError{text: "cannot read the query from stdin: " + osreason.Reason(got.err), cause: got.err}}
 	}
 	if strings.TrimSpace(string(got.query)) == "" {
 		return "", errSQLNeedsQuery
 	}
 	return string(got.query), nil
-}
-
-// osReason is err's OS-supplied reason: a path error's own cause, else the
-// first line of err, or "unknown error" when that is empty.
-func osReason(err error) string {
-	reason, _, _ := strings.Cut(err.Error(), "\n")
-	if pathErr, ok := errors.AsType[*fs.PathError](err); ok {
-		reason = pathErr.Err.Error()
-	}
-	if reason == "" {
-		return "unknown error"
-	}
-	return reason
 }
 
 // truncationNote is the warning that sql cut its rows at limit.

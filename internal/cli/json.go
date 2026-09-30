@@ -117,13 +117,15 @@ type notImportedDocument struct {
 }
 
 // renderJSON renders outcome as sync's --json document: 2-space indented
-// JSON with a trailing newline, matching Manifest.Encode's formatting.
-func renderJSON(outcome snapshot.Outcome) ([]byte, error) {
+// JSON with a trailing newline, matching Manifest.Encode's formatting. Its
+// warnings are configWarnings, then the outcome's own.
+func renderJSON(outcome snapshot.Outcome, configWarnings []string) ([]byte, error) {
+	warnings := append([]string{}, configWarnings...)
 	doc := resultDocument{
 		Snapshot: outcome.Manifest.Snapshot,
 		Schema:   outcome.Manifest.Schema,
 		Store:    newStoreDocument(outcome.Store),
-		Warnings: outcome.Warnings(),
+		Warnings: append(warnings, outcome.Warnings()...),
 	}
 	return marshalDocument(doc)
 }

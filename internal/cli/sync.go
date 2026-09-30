@@ -75,8 +75,12 @@ does not read Quicken at all.`,
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if _, err := loadConfig("sync"); err != nil {
+			cfg, err := loadConfig("sync")
+			if err != nil {
 				return &runtimeError{err: err}
+			}
+			for _, warning := range cfg.Warnings {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: warning: "+warning)
 			}
 
 			srv, err := newServer(cmd.Context())
@@ -104,7 +108,7 @@ does not read Quicken at all.`,
 
 			var output string
 			if *jsonOut {
-				data, encErr := renderJSON(outcome)
+				data, encErr := renderJSON(outcome, cfg.Warnings)
 				if encErr != nil {
 					// unreachable: renderJSON's own error path is unreachable for any value SyncAndImport builds; see there.
 					return &runtimeError{err: encErr}
