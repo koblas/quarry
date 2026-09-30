@@ -157,9 +157,35 @@ func Test_run_findings_json_lists_a_config_warning_without_the_prefix_and_prints
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {
+		Findings []any    `json:"findings"`
 		Warnings []string `json:"warnings"`
 	}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	assert.Equal(t, []any{}, doc.Findings)
 	assert.Equal(t, []string{configShown + ": unknown key snapshot.keep; quarry ignores it"}, doc.Warnings)
 	assert.Equal(t, "quarry: warning: "+configShown+": unknown key snapshot.keep; quarry ignores it\n", stderr.String())
+}
+
+func Test_run_findings_reports_a_failed_stdout_write(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "text", args: []string{"findings"}},
+		{name: "json", args: []string{"findings", "--json"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			replaceStore(t, home, spendRows([]store.Account{chequingAccount("acct-1", 1)},
+				spendSplit{id: "1", account: "acct-1", category: "cat-fuel", payee: "payee-costco", currency: "CAD", day: day(2026, 9, 1), cents: -4500}))
+			var stderr bytes.Buffer
+
+			exitCode := run(context.Background(), c.args, failingWriter{err: errNoSpace}, &stderr)
+
+			assert.Equal(t, 1, exitCode)
+			assert.Equal(t, "quarry: cannot write the result to stdout: no space left on device\n", stderr.String())
+		})
+	}
 }

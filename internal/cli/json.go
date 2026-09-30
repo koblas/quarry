@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store"
 )
@@ -186,8 +187,13 @@ func newFindingsDocument(result *store.Result) *findingsDocument {
 	if !result.Built {
 		return nil
 	}
-	c := result.Findings
-	return &findingsDocument{Open: c.Open, Ignored: c.Ignored, Fixed: c.Fixed, New: c.New, NewlyFixed: c.NewlyFixed}
+	doc := newFindingCountsDocument(result.Findings)
+	return &doc
+}
+
+// newFindingCountsDocument converts c into the --json finding-counts shape shared by sync and findings.
+func newFindingCountsDocument(c finding.Counts) findingsDocument {
+	return findingsDocument{Open: c.Open, Ignored: c.Ignored, Fixed: c.Fixed, New: c.New, NewlyFixed: c.NewlyFixed}
 }
 
 // newSyncPrunedDocument converts p into the --json pruned object, nil when auto-prune did not run; its lists are never nil.

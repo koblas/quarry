@@ -54,10 +54,9 @@ func renderFindingsJSON(listing report.FindingsListing, warnings []string) ([]by
 			entries = append(entries, newFindingEntryDocument(f))
 		}
 	}
-	c := listing.Counts
 	return marshalDocument(findingsListDocument{
 		Status:   string(finding.StatusOpen),
-		Counts:   findingsDocument{Open: c.Open, Ignored: c.Ignored, Fixed: c.Fixed, New: c.New, NewlyFixed: c.NewlyFixed},
+		Counts:   newFindingCountsDocument(listing.Counts),
 		Findings: entries,
 		Warnings: append([]string{}, warnings...),
 	})
