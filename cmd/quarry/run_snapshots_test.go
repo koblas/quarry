@@ -37,6 +37,7 @@ type snapshotFixture struct {
 	bytes    int64
 	taken    time.Time
 	source   string
+	sha256   string
 	verified bool
 }
 
@@ -62,7 +63,7 @@ func writeSnapshots(t *testing.T, home string, fixtures ...snapshotFixture) stri
 			continue
 		}
 		manifest := snapshot.Manifest{
-			Snapshot: snapshot.Info{Source: f.source, TakenAt: f.taken.Format(time.RFC3339), Bytes: f.bytes},
+			Snapshot: snapshot.Info{Source: f.source, TakenAt: f.taken.Format(time.RFC3339), Bytes: f.bytes, SHA256: f.sha256},
 			Schema:   snapshot.SchemaInfo{Verified: f.verified},
 		}
 		data, err := manifest.Encode()

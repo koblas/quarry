@@ -97,7 +97,7 @@ func fromPathRefusal(home, snapshotDir, snapshotPath string, isPath bool) error 
 		if isPath {
 			return pathNotFoundRefusal(home, snapshotPath)
 		}
-		return idNotFoundRefusal(home, snapshotDir, snapshotID(snapshotPath))
+		return idNotFoundRefusal(home, snapshotDir, ID(snapshotPath))
 	case err != nil:
 		return fromUnreadableRefusal(home, snapshotPath, err)
 	case info.IsDir() && strings.EqualFold(filepath.Ext(snapshotPath), ".quicken"):

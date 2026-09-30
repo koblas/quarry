@@ -10,8 +10,8 @@ import (
 const snapshotsCommand = "snapshots"
 
 // newSnapshotsCommand builds the snapshots subcommand: list the snapshots
-// quarry has taken and mark the one the store was built from.
-func newSnapshotsCommand(newSnapshots SnapshotsFactory, loadConfig ConfigLoader) *cobra.Command {
+// quarry has taken and mark the one the store was built from, as JSON when *jsonOut is set.
+func newSnapshotsCommand(newSnapshots SnapshotsFactory, loadConfig ConfigLoader, jsonOut *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   snapshotsCommand,
 		Short: "List the snapshots quarry has taken and which one the store was built from",
@@ -55,7 +55,16 @@ quarry sync --from <ID>.`,
 				return &runtimeError{err: err}
 			}
 
-			if err := writeResult(cmd, []byte(renderSnapshots(listing))); err != nil {
+			out, err := renderResult(*jsonOut,
+				func() ([]byte, error) {
+					return renderSnapshotsJSON(listing, cfg.Keep, snapshotsWarnings(cfg.Warnings, listing))
+				},
+				func() string { return renderSnapshots(listing) })
+			if err != nil {
+				// unreachable: renderResult fails only via marshalDocument, and the snapshots document holds strings, ints, bools and slices; see marshalDocument.
+				return err
+			}
+			if err := writeResult(cmd, out); err != nil {
 				return err
 			}
 			if listing.NoSnapshots != "" {

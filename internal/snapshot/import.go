@@ -77,9 +77,9 @@ func (e causedRefusalError) Error() string { return e.msg }
 // Unwrap returns the error the refusal wraps.
 func (e causedRefusalError) Unwrap() error { return e.cause }
 
-// snapshotID returns the id a refusal names for path: its basename with the
-// .sqlite extension removed.
-func snapshotID(path string) string {
+// ID returns the id a snapshot goes by for its .sqlite path: the base name
+// with the extension removed.
+func ID(path string) string {
 	return strings.TrimSuffix(filepath.Base(path), ".sqlite")
 }
 
@@ -141,7 +141,7 @@ func recordedTakenAt(s string) time.Time {
 // failure, wrapping err so errors.As still reaches it: I2 once ctx has
 // ended, else S4, S1, S2 by the store sentinel err matches, else S3.
 func (s *Server) importFailureRefusal(ctx context.Context, manifest Manifest, err error) error {
-	id := snapshotID(manifest.Snapshot.Path)
+	id := ID(manifest.Snapshot.Path)
 	probed := s.storeProbe.Path()
 	storeDir := homepath.Abbreviate(s.home, filepath.Dir(probed))
 	storePath := homepath.Abbreviate(s.home, probed)
@@ -177,7 +177,7 @@ func (s *Server) validationFailedRefusal(manifest Manifest, v store.Validation, 
 	return causedRefusalError{
 		msg: fmt.Sprintf("validation failed: %s; %s was not changed; each difference is listed on stdout; "+
 			"fix the account in Quicken and run quarry sync, or run quarry sync --from %s after updating quarry",
-			strings.Join(clauses, " and "), homepath.Abbreviate(s.home, s.storeProbe.Path()), snapshotID(manifest.Snapshot.Path)),
+			strings.Join(clauses, " and "), homepath.Abbreviate(s.home, s.storeProbe.Path()), ID(manifest.Snapshot.Path)),
 		cause: cause,
 	}
 }
@@ -217,5 +217,5 @@ func (o Outcome) StdoutWriteRefusal(home string, err error) error {
 	}
 	return fmt.Errorf(
 		"cannot write the result to stdout: %w; run quarry sync --from %s --json to see it again",
-		err, snapshotID(o.Manifest.Snapshot.Path))
+		err, ID(o.Manifest.Snapshot.Path))
 }

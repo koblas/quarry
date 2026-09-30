@@ -113,7 +113,7 @@ func (s *Server) snapshotFiles() ([]snapshotFile, error) {
 		if err != nil {
 			return nil, s.folderUnreadableRefusal(err)
 		}
-		files = append(files, snapshotFile{id: snapshotID(dirEntry.Name()), stamp: match[1], suffix: match[2], bytes: info.Size()})
+		files = append(files, snapshotFile{id: ID(dirEntry.Name()), stamp: match[1], suffix: match[2], bytes: info.Size()})
 	}
 	slices.SortFunc(files, newestFirst)
 	return files, nil

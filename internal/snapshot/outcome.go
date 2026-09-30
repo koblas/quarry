@@ -36,7 +36,7 @@ func fromMismatchError(snapshotPath, bundlePath string, info SchemaInfo) Mismatc
 	return MismatchError{msg: fmt.Sprintf(
 		"schema check failed: snapshot %s of %s is missing %s that the schema reference expects; "+
 			"quarry cannot import it until its schema reference is updated",
-		snapshotID(snapshotPath), filepath.Base(bundlePath),
+		ID(snapshotPath), filepath.Base(bundlePath),
 		sqlschema.CountPhrase(len(info.MissingTables), len(info.MissingColumns)))}
 }
 

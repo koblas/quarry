@@ -65,6 +65,21 @@ func Test_renderSnapshots_shows_unknown_for_an_unparsable_taken_at_and_an_empty_
 		"Total                      1.2 MB\n", got)
 }
 
+func Test_renderSnapshots_pads_a_non_ASCII_source_by_characters_not_bytes(t *testing.T) {
+	useZone(t, time.UTC)
+	cafe := snapshotEntry("20260930T141502Z", 1_240_000, "/Users/x/Café.quicken", time.Date(2026, 9, 30, 14, 15, 2, 0, time.UTC), true)
+	cafe.Store = true
+	family := snapshotEntry("20260929T090011Z", 1_240_000, "/Users/x/Family.quicken", time.Date(2026, 9, 29, 9, 0, 11, 0, time.UTC), false)
+
+	got := renderSnapshots(snapshot.Listing{Entries: []snapshot.Entry{cafe, family}, TotalBytes: 2_480_000})
+
+	assert.Equal(t, ""+
+		"ID                Taken                   Size  Source          Status\n"+
+		"20260930T141502Z  2026-09-30 14:15 UTC  1.2 MB  Café.quicken    store\n"+
+		"20260929T090011Z  2026-09-29 09:00 UTC  1.2 MB  Family.quicken  schema differs\n"+
+		"Total                                   2.5 MB\n", got)
+}
+
 func Test_snapshotStatus_puts_store_first(t *testing.T) {
 	cases := []struct {
 		name  string
