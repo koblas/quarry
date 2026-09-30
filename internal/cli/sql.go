@@ -35,9 +35,13 @@ that starts with - (such as a -- comment) goes after --:
   SELECT ..."
 
 Amounts are DECIMAL(18,2) in each account's own currency; negative is money
-leaving the account. Transfers between your own accounts are in the transfers table
-and splits.transfer_account_id, never in a category kind. List the tables
-and views with: quarry sql "SHOW TABLES"
+leaving the account. For spending and income, query v_spending and
+v_cash_flow: they already leave out transfers between your own accounts,
+Quicken's system categories, transactions excluded from reports and
+accounts Quicken leaves out of reports, so their totals match quarry spend
+and quarry cashflow. A transfer leg is any split named in
+transfers.from_split_id or transfers.to_split_id. List the tables and views
+with: quarry sql "SHOW TABLES"
 
 At most --limit rows are printed (500 unless set); when there are more,
 quarry says so on stderr. --limit 0 prints every row.`,

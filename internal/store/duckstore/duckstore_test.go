@@ -128,6 +128,24 @@ func Test_replace_stores_the_report_flags_and_the_posted_date(t *testing.T) {
 	assertScalar(t, db, "SELECT COALESCE(CAST(posted_date AS VARCHAR), 'NULL') FROM transactions WHERE id = 'txn-2'", "NULL")
 }
 
+func Test_replace_stores_linked_tracking_per_account(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	rows.Accounts = append(rows.Accounts, store.Account{
+		ID: "acct-2", SourceID: 2, Name: "Netskope 401(k)", Type: "retirement", Currency: "USD", Active: true, LinkedTracking: true,
+	})
+
+	path, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
+
+	require.NoError(t, err)
+	db, err := duckdb.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	assertScalar(t, db, "SELECT CAST(linked_tracking AS VARCHAR) FROM accounts WHERE id = 'acct-1'", "false")
+	assertScalar(t, db, "SELECT CAST(linked_tracking AS VARCHAR) FROM accounts WHERE id = 'acct-2'", "true")
+	assertScalar(t, db, "SELECT CAST(in_reports AS VARCHAR) FROM accounts WHERE id = 'acct-2'", "true")
+}
+
 // The held reader reads nothing before Replace: a cached page would hide an overwrite of its file.
 func Test_replace_leaves_a_held_reader_on_the_old_rows_and_a_later_read_sees_the_new(t *testing.T) {
 	t.Parallel()

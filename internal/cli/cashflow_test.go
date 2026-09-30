@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"testing"
 	"time"
@@ -19,6 +20,10 @@ const cashFlowEmpty = "no income or spending from 2026-01-01 to 2026-09-29"
 func leftOutCashFlowWarning(name string) string {
 	return "account \"" + name + "\" is not used in reports in Quicken, so cashflow leaves it out; " +
 		"to include it, turn on reports for it in Quicken's account settings, then run quarry sync"
+}
+
+func linkedCashFlowWarning(name string) string {
+	return "account \"" + name + "\" uses linked account tracking in Quicken, so cashflow leaves it out, as Quicken's reports do"
 }
 
 func executeCashFlow(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
@@ -256,6 +261,54 @@ func Test_cashflow_says_nothing_of_an_empty_window_when_every_named_account_is_l
 	require.NoError(t, err)
 	assert.Equal(t, "quarry: warning: "+leftOutCashFlowWarning("Old Card")+"\n"+
 		"quarry: warning: "+leftOutCashFlowWarning("Old Bank")+"\n", stderr.String())
+}
+
+func Test_cashflow_warns_that_linked_tracking_leaves_out_a_named_account_before_an_account_not_in_reports(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeCashFlow(t, withCashFlow(namedAccounts()), &stdout, &stderr,
+		"--account", linkedID, "--account", "Old Card", "--account", bothID)
+
+	require.NoError(t, err)
+	assert.Equal(t, "quarry: warning: "+linkedCashFlowWarning("Netskope 401(k)")+"\n"+
+		"quarry: warning: "+leftOutCashFlowWarning("Old Card")+"\n"+
+		"quarry: warning: "+linkedCashFlowWarning("Old 401(k)")+"\n", stderr.String())
+}
+
+func Test_cashflow_json_lists_a_linked_tracking_warning_before_a_left_out_of_reports_one_unprefixed(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeCashFlow(t, withCashFlow(namedAccounts()), &stdout, &stderr,
+		"--account", linkedID, "--account", "Old Card", "--json")
+
+	require.NoError(t, err)
+	var doc struct {
+		Warnings []string `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	assert.Equal(t, []string{linkedCashFlowWarning("Netskope 401(k)"), leftOutCashFlowWarning("Old Card")}, doc.Warnings)
+}
+
+func Test_cashflow_says_nothing_of_an_empty_window_when_every_named_account_is_left_out_and_one_is_linked(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeCashFlow(t, namedAccounts(), &stdout, &stderr, "--account", linkedID, "--account", "Old Card")
+
+	require.NoError(t, err)
+	assert.Equal(t, "quarry: warning: "+linkedCashFlowWarning("Netskope 401(k)")+"\n"+
+		"quarry: warning: "+leftOutCashFlowWarning("Old Card")+"\n", stderr.String())
+}
+
+func Test_cashflow_puts_the_empty_window_note_after_the_linked_tracking_warning_when_a_reported_account_is_named(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	fake := namedAccounts()
+	fake.cashFlow = store.CashFlow{Transactions: namedSpan}
+
+	err := executeCashFlow(t, fake, &stdout, &stderr, "--account", linkedID, "--account", chequingID)
+
+	require.NoError(t, err)
+	assert.Equal(t, "quarry: warning: "+linkedCashFlowWarning("Netskope 401(k)")+"\n"+
+		"quarry: warning: "+cashFlowEmpty+" in the named accounts; their transactions run 2019-03-02 to 2024-11-30\n", stderr.String())
 }
 
 func Test_cashflow_says_when_the_window_holds_nothing(t *testing.T) {

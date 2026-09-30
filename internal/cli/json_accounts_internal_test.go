@@ -15,7 +15,7 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
 	list := store.AccountList{
 		AsOf: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC),
 		Accounts: []store.AccountBalance{
-			{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Institution: new("First Bank"), Active: true, Balance: new(int64(1234567))},
+			{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Institution: new("First Bank"), Active: true, LinkedTracking: true, Balance: new(int64(1234567))},
 			{ID: "acct-2", Name: "Visa", Type: "credit_card", Currency: "CAD", Closed: true, Active: true, NotInReports: true, Balance: new(int64(-120417))},
 			{ID: "acct-3", Name: "Old Savings", Type: "savings", Currency: "USD", Balance: new(int64(0))},
 			{ID: "acct-4", Name: "RRSP", Type: "retirement", Currency: "CAD", Institution: new("First Bank"), Active: true},
@@ -37,6 +37,7 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
       "closed": false,
       "active": true,
       "in_reports": true,
+      "linked_tracking": true,
       "balance": "12345.67"
     },
     {
@@ -48,6 +49,7 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
       "closed": true,
       "active": true,
       "in_reports": false,
+      "linked_tracking": false,
       "balance": "-1204.17"
     },
     {
@@ -59,6 +61,7 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
       "closed": false,
       "active": false,
       "in_reports": true,
+      "linked_tracking": false,
       "balance": "0.00"
     },
     {
@@ -70,6 +73,7 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
       "closed": false,
       "active": true,
       "in_reports": true,
+      "linked_tracking": false,
       "balance": null
     }
   ],

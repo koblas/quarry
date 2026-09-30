@@ -19,10 +19,11 @@ exit 2 only when argv plus the clock decide the outcome, anything needing the st
 ## Business Rules & Invariants
 - P2b-1 (import): `transactions.excluded_from_reports BOOLEAN NOT NULL` from `ZEXCLUDEFROMREPORTS` (NULL → false).
 - P2b-2 (import): `accounts.in_reports BOOLEAN NOT NULL` from `ZACCOUNT.ZUSEDINREPORTS` (NULL → true, Quicken's default). Quicken data, not a quarry decision.
+- P2b-2a (import, Gate ruling): `accounts.linked_tracking BOOLEAN NOT NULL` from `COALESCE(ZACCOUNT.ZSIMPLEINVESTING, 0) <> 0` (NULL → false), appended last in `accounts` after `in_reports`; Go field `store.Account.LinkedTracking`. Quicken's "Linked account tracking" (balance only; Quicken shows no transactions). Folds into format 3 (unshipped) — no new bump; dev stores synced before this need `quarry sync` again. Quicken data, not a quarry decision.
 - P2b-3 (import): `transactions.date` = UTC calendar day of `ZENTEREDDATE` (the register date — user-confirmed on the real file: entered 2026-06-01 / posted 2026-05-31 shows 2026-06-01), falling back to `ZPOSTEDDATE` only when entered is NULL. Posted kept as nullable `transactions.posted_date DATE`. Balance validation (`checkBalances`, `internal/importer/validate.go:106-133`) sums by reconcile status and never reads transaction dates, so it is unaffected. The flip also moves `status`'s First/Last dates and which rows fall on `v_account_balances`' `date <= current_date` edge — accepted, not separately asserted.
 - P2b-4 (import): splits on the system category whose full_path is `Uncategorized` are stored with `category_id NULL` (the quirk is resolved in the importer, never by name-matching in a view). Probe P1 on the real file: Transfer 1,384 splits, Uncategorized 604, Transfer:Credit Card Payment 289, Adjustment 97, Investments:* 0.
 - P2b-5 (store): `duckstore.FormatVersion` 2 → 3; `v_cash_flow` and `v_spending` join the `storeRelations()` literal and must return rows from `minimalRows`. A format-2 store gets R2 with its `sync --from <id>` fix.
-- P2b-6 (`v_cash_flow`, split grain) columns: `split_id, transaction_id, account_id, date, month (DATE, first of month), currency, category_id, category (full_path; NULL = uncategorized), payee_id, payee, flow ('income'|'expense'), amount (signed native DECIMAL(18,2))`. A split is in the view only when: it is not a transfer leg (`split.id ∈ transfers.from_split_id ∪ transfers.to_split_id` — never `transfer_account_id`, which is NULL on unmatched legs); its transaction is not `excluded_from_reports`; its category is not `system` kind; its account has `in_reports = true`. Every account type included, closed accounts too (brokerage/retirement contribute only their imported cash-flow rows). Hidden categories included. No date cutoff in the view.
+- P2b-6 (`v_cash_flow`, split grain) columns: `split_id, transaction_id, account_id, date, month (DATE, first of month), currency, category_id, category (full_path; NULL = uncategorized), payee_id, payee, flow ('income'|'expense'), amount (signed native DECIMAL(18,2))`. A split is in the view only when: it is not a transfer leg (`split.id ∈ transfers.from_split_id ∪ transfers.to_split_id` — never `transfer_account_id`, which is NULL on unmatched legs); its transaction is not `excluded_from_reports`; its category is not `system` kind; its account is **reported**. An account is reported when `in_reports = true` and `linked_tracking = false`, as Quicken reports do: Quicken's reports leave out every row a linked-tracking account downloads, even though ZTRANSACTION holds cash-flow rows for it. The flag decides, not account type or data source — other retirement and `ONLINE` accounts match Quicken's reports with their rows in (Gate 2024–25 USD). One owner for "reported": one duckstore SQL definition used by the view predicate and the E1a/E2a range query, and one `store.Account` method (e.g. `LeftOutOfReports() bool { return a.NotInReports || a.LinkedTracking }`) used by the every-named-account-left-out check. Every other account type included, closed accounts too (brokerage/retirement that are not linked contribute only their imported cash-flow rows). Hidden categories included. No date cutoff in the view.
 - P2b-7 (`flow`): the split's own category kind wins (never the parent's). An uncategorized split takes flow from its sign: negative → `expense`, positive → `income`; zero-amount uncategorized splits dropped. A positive uncategorized split never nets against spending.
 - P2b-8 (`v_spending`): `SELECT split_id, transaction_id, account_id, date, month, currency, category_id, category, payee_id, payee, -amount AS spent FROM v_cash_flow WHERE flow = 'expense'` — it selects from `v_cash_flow`, never with its own predicates. Refunds net; a category can be negative (printed negative, never clamped). Tags joined through `split_tags` at query time.
 - P2b-9 (aggregates, owned by the store query; front ends pass parameters only): `income = SUM(amount | income)`, `spent = SUM(spent)`, `net = income − spent`, `savings_rate_pct = round(100·net/income, 1)`, NULL when income ≤ 0.
@@ -80,8 +81,9 @@ Spending is every split in an expense category, plus uncategorized splits
 that take money out. Refunds in an expense category are netted against it,
 so a category can come out negative. Transfers between your own accounts,
 splits in Quicken's system categories and transactions marked "exclude from
-reports" in Quicken are left out. Accounts Quicken leaves out of reports are
-left out here too; quarry accounts marks them "not in reports". Closed
+reports" in Quicken are left out. So are accounts Quicken leaves out of
+reports (quarry accounts marks them "not in reports") and accounts that use
+Quicken's linked account tracking (marked "linked tracking"). Closed
 accounts are included.
 
 The period runs from --since to --until, both included; a bare year or month
@@ -142,10 +144,11 @@ together.
 Income and spending follow the same rules as quarry spend: transfers between
 your own accounts, Quicken's system categories and transactions marked
 "exclude from reports" are left out, and refunds are netted. Accounts Quicken
-leaves out of reports are left out here too; quarry accounts marks them "not
-in reports". Uncategorized splits count as income when they bring money in
-and as spending when they take money out. The Spent column equals quarry
-spend's total for the same period and accounts.
+leaves out of reports ("not in reports" in quarry accounts) and accounts
+that use Quicken's linked account tracking ("linked tracking") are left out
+here too. Uncategorized splits count as income when they bring money in and
+as spending when they take money out. The Spent column equals quarry spend's
+total for the same period and accounts.
 
 Savings rate is net divided by income, and shows n/a when income is zero or
 less. A period that --since or --until cuts short is marked partial.
@@ -197,10 +200,11 @@ Read errors reuse `readRefusal`: R1, R2 (with its `--from` fix), R3a/b/c, R3, I1
 | U8 | positional args | `quarry: spend takes no arguments` / `quarry: cashflow takes no arguments` | 2 |
 | E1 | nothing in the window, store has transactions | exit 0; stdout caption, blank line, header only (JSON `rows`/`periods` `[]` for spend; cashflow per its fill rule); stderr `quarry: warning: no spending from 2026-01-01 to 2026-09-29; the store's transactions run 2003-01-04 to 2026-09-26` (cashflow: `no income or spending from …`) | 0 |
 | E2 | store has zero transactions | as E1, tail `; the store has no transactions` | 0 |
-| E1a | as E1 but `--account` given and some named account is in reports | `quarry: warning: no spending from 2026-01-01 to 2026-09-29 in the named accounts; their transactions run 2019-03-02 to 2024-11-30` (cashflow: `no income or spending from …`); range covers the in-report named accounts only | 0 |
+| E1a | as E1 but `--account` given and some named account is reported (P2b-6) | `quarry: warning: no spending from 2026-01-01 to 2026-09-29 in the named accounts; their transactions run 2019-03-02 to 2024-11-30` (cashflow: `no income or spending from …`); range covers the reported named accounts only | 0 |
 | E2a | as E1a but none of them has any transactions | `…in the named accounts; they have no transactions` | 0 |
 | W1 | `--by tag` and > 0 splits in the window carry more than one tag | `quarry: warning: 12 splits carry more than one tag, so the rows add up to more than the total` (`humanize.Count`; singular `1 split carries`) | 0 |
 | W2 | an `--account` resolves to an account with `in_reports = false` (once per such account) | `quarry: warning: account "<name>" is not used in reports in Quicken, so <cmd> leaves it out; to include it, turn on reports for it in Quicken's account settings, then run quarry sync` (`<cmd>` = `spend`/`cashflow`); if every named account is excluded the result is empty plus W2 | 0 |
+| W3 | an `--account` resolves to an account with `linked_tracking = true` (once per such account) | `quarry: warning: account "<name>" uses linked account tracking in Quicken, so <cmd> leaves it out, as Quicken's reports do` (`<cmd>` = `spend`/`cashflow`; `<name>` = stored name). No fix clause. An account both `in_reports = false` and linked gets W3 only, never W2. W2/W3 lines interleave in argv order, one per account, before W1 and E | 0 |
 
 ### Edge-case rows
 | Input class | Result |
@@ -215,16 +219,20 @@ Read errors reuse `readRefusal`: R1, R2 (with its `--from` fix), R3a/b/c, R3, I1
 | closed account | included; matchable by `--account` |
 | account not in reports, no `--account` | absent, no warning |
 | account not in reports named by `--account` (incl. closed) | W2 only |
+| linked account, no `--account` | absent, no warning |
+| linked account named by `--account` (incl. closed) | W3 only |
+| named account both not in reports and linked | W3 only (no W2) |
 | future-dated, default window | excluded; `--until` past today includes it |
 | split with two tags | both tag rows, once in Total; W1 |
 | window on day boundaries (`--since 2026-01-15`) | first period `partial` |
-| S1–S6 / U8 with W2 | the refusal only; no W2 |
-| every `--account` not in reports (after dedupe) | W2 lines only; no E1/E2 (even with zero transactions); exit 0 |
-| some `--account` not in reports, rest empty in window | W2 lines (argv order, each account once) then E1a/E2a; same order in `warnings[]` |
+| S1–S6 / U8 with W2 or W3 | the refusal only; no W2/W3 |
+| every `--account` left out — not in reports or linked, any mix (after dedupe) | W2/W3 lines only (argv order); no E1/E2/E1a/E2a (even with zero transactions); exit 0 |
+| some `--account` left out, rest empty in window | W2/W3 lines (argv order, each account once) then E1a/E2a over the reported named accounts; same order in `warnings[]` |
 
 ### Changes to 2a surfaces
 - `accounts` all-closed note (2a Surface & Copy): stderr becomes `quarry: warning: all 3 accounts are closed; pass --all to list them` / `quarry: warning: the only account is closed; pass --all to list it`; `warnings[]` text unchanged.
 - `accounts` Status column: append `not in reports` for `in_reports = false`, joined with `, ` — open+active `not in reports`; inactive `inactive, not in reports`; closed (with `--all`) `closed, not in reports`. `--json` adds `"in_reports": true|false` after `"active"`.
+- `accounts` Status column (Gate ruling): parts joined with `, ` in fixed order state (`closed`/`inactive`), `not in reports`, `linked tracking` — e.g. `linked tracking`, `inactive, linked tracking`, `closed, linked tracking`, `not in reports, linked tracking`, `closed, not in reports, linked tracking`. `--json` adds `"linked_tracking": true|false` directly after `"in_reports"`.
 - U9 example: `unknown command "spend"` → `unknown command "spending" for "quarry"; Run 'quarry --help' for usage.`; root Available Commands gains `cashflow` and `spend` (cobra alphabetical order).
 - `sql` Long: blank lines around the indented example:
 ```
@@ -235,7 +243,18 @@ that starts with - (such as a -- comment) goes after --:
 
 Amounts are DECIMAL(18,2) ...
 ```
-- `v_cash_flow` column/relation note for `describe_schema` (future MCP): "excludes accounts where accounts.in_reports is false, as Quicken reports do."
+- `sql` Long (Gate ruling): the transfer sentence is replaced (the 2a claim that transfers are "never in a category kind" is false: unmatched legs have `transfer_account_id` NULL and sit in system/income/expense/NULL categories). The paragraph after the example reads:
+```
+Amounts are DECIMAL(18,2) in each account's own currency; negative is money
+leaving the account. For spending and income, query v_spending and
+v_cash_flow: they already leave out transfers between your own accounts,
+Quicken's system categories, transactions excluded from reports and
+accounts Quicken leaves out of reports, so their totals match quarry spend
+and quarry cashflow. A transfer leg is any split named in
+transfers.from_split_id or transfers.to_split_id. List the tables and views
+with: quarry sql "SHOW TABLES"
+```
+- `v_cash_flow` column/relation note for `describe_schema` (future MCP): "excludes accounts where accounts.in_reports is false or accounts.linked_tracking is true, as Quicken reports do." The `COMMENT ON VIEW v_cash_flow` matches.
 
 ---
 
@@ -250,8 +269,15 @@ Exported as CSV, kept outside the repo; no private data is checked in.
 
 **Pass rule**: per currency, `quarry spend --since Y --until Y` rows equal (a) to the cent for every leaf category and the total; `quarry cashflow --since Y --until Y` Income and Spent equal (b) for each month. Every difference is recorded below (year, currency, row, quarry, Quicken, cause) and classified as a quarry defect (fix pass), a rule change (product-vision amends P2b-n), or a Quicken data fix (2d finding, re-checked after next sync). The Gate passes when no difference is unexplained.
 
+**Gate verdict: PASS.** Every difference is explained: an export-setup gap (RBC card), investment transactions not imported (out of scope), and one rule change (linked tracking, resolved).
+
 | Year | Currency | Row | quarry | Quicken | Cause |
 |---|---|---|---|---|---|
+| 2024–25 | CAD | every month × category (547 cells) | = | = | Match to the cent once Quicken's CAD selection includes RBC Cash Back Mastercard. The CAD export (7 accounts) left the card out. Its own export (the first USD attempt) equals quarry's RBC rows cell for cell. Export setup, not a difference. |
+| 2024–25 | CAD | Investments:Dividend Income (8 months, 3,131.36) | 0.00 | 3,131.36 | Investment transactions are not imported (Phase 1 scope; `sync` counts them as not imported). Rule: out of scope until investment transactions are imported. |
+| 2024–25 | USD | Outflows, every month | = | = | Total Outflows equals `cashflow` Spent in all 24 months. |
+| 2024–25 | USD | Investments:Dividend Income / Realized Gain/Loss / Buy / Sell | 0.00 | 86,412.60 / 918.69 / −378,999.14 / 37,817.86 | Same cause: investment transactions are not imported. Buy/Sell sit under Quicken's "Other" group and are outside Inflows/Outflows. |
+| 2025 | USD | Uncategorized income, Netskope 401(k) (Mar 20,187.15; Jun 511.81; Sep 419.29; Dec 1,415.47) | 22,533.72 → 0.00 | 0.00 | **Resolved (rule change P2b-2a/P2b-6, SCENARIO-27).** The account uses Quicken's linked account tracking (`ZSIMPLEINVESTING = 1`), which Quicken's reports leave out. Re-checked after `quarry sync` on 2026-09-29: USD matches in every month × category cell with no account excluded, apart from the investment-action rows (out of scope). `cashflow` Income equals Quicken's Total Personal Income and Spent equals Total Outflows in all 24 months. |
 
 ---
 
@@ -471,6 +497,29 @@ Scenario: SCENARIO-26 — accounts marks accounts Quicken leaves out of reports
   Then their Status reads "not in reports", "inactive, not in reports" and "closed, not in reports", and --json carries "in_reports": false
 ```
 
+Added after the Gate (linked account tracking, user-approved 2026-09-29):
+
+```gherkin
+Scenario: SCENARIO-27 — spending leaves out accounts that use Quicken's linked account tracking
+  Given a store with an expense and an uncategorized deposit in an account whose linked_tracking is true, and spending in one whose linked_tracking is false
+  When I run quarry cashflow for that period
+  Then only the unlinked account's rows are counted, and quarry spend's total equals cashflow's Spent
+```
+
+```gherkin
+Scenario: SCENARIO-28 — naming a linked-tracking account warns that it is left out
+  Given a store whose account "Netskope 401(k)" has linked_tracking true and in_reports false
+  When I run quarry spend --account "Netskope 401(k)"
+  Then the result is empty, stderr carries only W3 naming "Netskope 401(k)" (no W2, no E line), and the exit code is 0
+```
+
+```gherkin
+Scenario: SCENARIO-29 — accounts marks linked-tracking accounts
+  Given a store with an open linked account, an inactive linked account and a closed account that is linked and not in reports
+  When I run quarry accounts --all
+  Then their Status reads "linked tracking", "inactive, linked tracking" and "closed, not in reports, linked tracking", and --json carries "linked_tracking": true after "in_reports"
+```
+
 ---
 
 ## Sizing
@@ -502,6 +551,9 @@ Scenario: SCENARIO-26 — accounts marks accounts Quicken leaves out of reports
 | SCENARIO-24 | FOLD into SCENARIO-20 — reuses the parser, resolver and E1 seams; only the cashflow S4/E1 copy is new |
 | SCENARIO-25 | FOLD into SCENARIO-26 — one prefix string plus its tests |
 | SCENARIO-26 | LIGHT (run 2) — 3 steps (Accounts read carries `in_reports` / Status + JSON `in_reports` / S25 prefix + sql Long NIT), duckstore + cli; absorbs 25 |
+| SCENARIO-27 | OWNS A RUN (post-Gate) — 4 batches (import `ZSIMPLEINVESTING` → `linked_tracking` through store + schema + fixture / one SQL "reported" definition shared by the `v_cash_flow` predicate, the E1a/E2a range query and the COMMENT / Accounts read + `Account.LeftOutOfReports` + W3 / accounts Status + JSON + spend/cashflow Long), 1 feature package (importer) plus store/duckstore/cli; absorbs 28, 29; owns the "reported" rule, so mutations must be named |
+| SCENARIO-28 | FOLD into SCENARIO-27 — its Accounts-read column and `LeftOutOfReports` are what 27's W3 batch builds; W3 is one branch in `leftOutWarnings` |
+| SCENARIO-29 | FOLD into SCENARIO-27 — a status part and one JSON field over the Accounts read 27 already widens; the new Long text says "linked tracking" and that is only true once 29's Status lands |
 
 ## BDD Acceptance Progress
 - [x] SCENARIO-01: sync records which transactions Quicken leaves out of reports — `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_records_which_transactions_are_excluded_from_reports`
@@ -530,3 +582,6 @@ Scenario: SCENARIO-26 — accounts marks accounts Quicken leaves out of reports
 - [x] SCENARIO-24: cashflow refuses and reports empty periods like spend — delivered by SCENARIO-20 — `cmd/quarry/run_cashflow_refusals_test.go` `Test_run_cashflow_refuses_and_reports_empty_periods_like_spend`
 - [x] SCENARIO-25: accounts marks its all-closed note as a warning — delivered by SCENARIO-26 — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_says_how_to_list_them_when_every_account_is_closed`
 - [x] SCENARIO-26: accounts marks accounts Quicken leaves out of reports — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_all_marks_accounts_left_out_of_reports`
+- [x] SCENARIO-27: spending leaves out accounts that use Quicken's linked account tracking — `cmd/quarry/run_cashflow_linked_test.go` `Test_run_cashflow_leaves_out_accounts_that_use_linked_account_tracking`
+- [x] SCENARIO-28: naming a linked-tracking account warns that it is left out — delivered by SCENARIO-27 — `cmd/quarry/run_spend_account_test.go` `Test_run_spend_warns_that_a_named_linked_tracking_account_is_left_out`
+- [x] SCENARIO-29: accounts marks linked-tracking accounts — delivered by SCENARIO-27 — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_all_marks_accounts_that_use_linked_account_tracking`

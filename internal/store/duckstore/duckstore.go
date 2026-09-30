@@ -467,7 +467,7 @@ func nullableNonEmpty(s string) any {
 func accountRows(accounts []store.Account) [][]any {
 	out := make([][]any, len(accounts))
 	for i, a := range accounts {
-		out[i] = []any{a.ID, a.SourceID, a.Name, a.Type, a.Currency, nullableStr(a.Institution), a.Closed, a.Active, !a.NotInReports}
+		out[i] = []any{a.ID, a.SourceID, a.Name, a.Type, a.Currency, nullableStr(a.Institution), a.Closed, a.Active, !a.NotInReports, a.LinkedTracking}
 	}
 	return out
 }

@@ -47,10 +47,11 @@ together.
 Income and spending follow the same rules as quarry spend: transfers between
 your own accounts, Quicken's system categories and transactions marked
 "exclude from reports" are left out, and refunds are netted. Accounts Quicken
-leaves out of reports are left out here too; quarry accounts marks them "not
-in reports". Uncategorized splits count as income when they bring money in
-and as spending when they take money out. The Spent column equals quarry
-spend's total for the same period and accounts.
+leaves out of reports ("not in reports" in quarry accounts) and accounts
+that use Quicken's linked account tracking ("linked tracking") are left out
+here too. Uncategorized splits count as income when they bring money in and
+as spending when they take money out. The Spent column equals quarry spend's
+total for the same period and accounts.
 
 Savings rate is net divided by income, and shows n/a when income is zero or
 less. A period that --since or --until cuts short is marked partial.`,
@@ -96,8 +97,8 @@ less. A period that --since or --until cuts short is marked partial.`,
 	return cmd
 }
 
-// cashFlowWarnings is c's warnings, unprefixed and never nil: one per named account Quicken leaves
-// out of reports, then a note that the window held no income or spending.
+// cashFlowWarnings is c's warnings, unprefixed and never nil: one per named account left out (W2 or W3),
+// then a note that the window held no income or spending.
 func cashFlowWarnings(c report.CashFlow) []string {
 	warnings := leftOutWarnings(c.Accounts, "cashflow")
 	if c.Empty() {

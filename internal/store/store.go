@@ -19,6 +19,15 @@ type Account struct {
 	// NotInReports is true when Quicken leaves the account out of its
 	// reports; the zero value means the account is in reports.
 	NotInReports bool
+	// LinkedTracking is true when the account uses Quicken's linked account
+	// tracking; the zero value means it does not.
+	LinkedTracking bool
+}
+
+// LeftOutOfReports reports whether spend and cashflow leave the account out, as
+// Quicken's reports do: not in reports, or using linked account tracking.
+func (a Account) LeftOutOfReports() bool {
+	return a.NotInReports || a.LinkedTracking
 }
 
 // Investment account types, whose balance quarry cannot compute.

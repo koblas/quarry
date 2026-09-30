@@ -70,6 +70,25 @@ func Test_accounts_reads_each_accounts_balance(t *testing.T) {
 	}, got.Accounts)
 }
 
+func Test_accounts_reads_which_accounts_use_linked_account_tracking(t *testing.T) {
+	t.Parallel()
+	chequing := account("acct-1", 1, "Chequing", "chequing", "CAD")
+	linked := account("acct-2", 2, "Linked", "retirement", "USD")
+	linked.LinkedTracking = true
+	both := account("acct-3", 3, "Both", "savings", "CAD")
+	both.NotInReports, both.LinkedTracking = true, true
+	st := replaceWith(t, []store.Account{chequing, linked, both}, nil)
+
+	got, err := st.Accounts(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.AccountBalance{
+		{Account: both, Balance: new(int64(0))},
+		{Account: chequing, Balance: new(int64(0))},
+		{Account: linked, Balance: nil},
+	}, got.Accounts)
+}
+
 func Test_accounts_counts_transactions_dated_today_but_not_tomorrow(t *testing.T) {
 	t.Parallel()
 	today := localToday()

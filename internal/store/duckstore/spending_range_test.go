@@ -54,17 +54,18 @@ func Test_spending_leaves_the_transaction_range_unset_when_the_window_holds_spen
 	assert.NotEmpty(t, got.Totals)
 }
 
-func Test_spending_ranges_over_the_in_report_accounts_it_is_named_for(t *testing.T) {
+func Test_spending_ranges_over_the_reported_accounts_it_is_named_for(t *testing.T) {
 	t.Parallel()
 	rows := accountRows()
 	addSplit(&rows, splitSpec{id: "left-out", account: acctNotReports, category: new(catExpense), amount: -100, date: civil(2001, 5, 5)})
+	addSplit(&rows, splitSpec{id: "linked", account: acctLinked, category: new(catExpense), amount: -100, date: civil(1999, 1, 1)})
 	addSplit(&rows, splitSpec{id: "first", account: acctInReports, category: new(catExpense), amount: -100, date: civil(2019, 3, 2)})
 	addSplit(&rows, splitSpec{id: "last", account: acctInReports, category: new(catExpense), amount: -100, date: civil(2024, 11, 30)})
 	addSplit(&rows, splitSpec{id: "unnamed", account: acctSecond, category: new(catExpense), amount: -100, date: civil(2010, 2, 2)})
 	addSplit(&rows, splitSpec{id: "unnamed-late", account: acctSecond, category: new(catExpense), amount: -100, date: civil(2025, 8, 8)})
 	st := newStoreWith(t, rows)
 
-	got, err := st.Spending(t.Context(), namedAccounts(spendingParams(), acctNotReports, acctInReports))
+	got, err := st.Spending(t.Context(), namedAccounts(spendingParams(), acctNotReports, acctLinked, acctInReports))
 
 	require.NoError(t, err)
 	assert.Equal(t, store.TransactionRange{First: civil(2019, 3, 2), Last: civil(2024, 11, 30)}, got.Transactions)
@@ -78,6 +79,19 @@ func Test_spending_gives_a_zero_range_when_every_named_account_is_left_out_of_re
 	st := newStoreWith(t, rows)
 
 	got, err := st.Spending(t.Context(), namedAccounts(spendingParams(), acctNotReports))
+
+	require.NoError(t, err)
+	assert.Zero(t, got.Transactions)
+}
+
+func Test_spending_gives_a_zero_range_when_every_named_account_uses_linked_account_tracking(t *testing.T) {
+	t.Parallel()
+	rows := accountRows()
+	addSplit(&rows, splitSpec{id: "linked", account: acctLinked, category: new(catExpense), amount: -100, date: civil(2001, 5, 5)})
+	addSplit(&rows, splitSpec{id: "unnamed", account: acctSecond, category: new(catExpense), amount: -100, date: civil(2010, 2, 2)})
+	st := newStoreWith(t, rows)
+
+	got, err := st.Spending(t.Context(), namedAccounts(spendingParams(), acctLinked))
 
 	require.NoError(t, err)
 	assert.Zero(t, got.Transactions)

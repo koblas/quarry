@@ -25,8 +25,9 @@ Spending is every split in an expense category, plus uncategorized splits
 that take money out. Refunds in an expense category are netted against it,
 so a category can come out negative. Transfers between your own accounts,
 splits in Quicken's system categories and transactions marked "exclude from
-reports" in Quicken are left out. Accounts Quicken leaves out of reports are
-left out here too; quarry accounts marks them "not in reports". Closed
+reports" in Quicken are left out. So are accounts Quicken leaves out of
+reports (quarry accounts marks them "not in reports") and accounts that use
+Quicken's linked account tracking (marked "linked tracking"). Closed
 accounts are included.
 
 The period runs from --since to --until, both included; a bare year or month
@@ -79,8 +80,8 @@ the rows can add up to more than the total.`,
 	return cmd
 }
 
-// spendWarnings is s's warnings, unprefixed and never nil: one per named account Quicken leaves out
-// of reports, then the multi-tag-splits note, then a note that the window held no spending.
+// spendWarnings is s's warnings, unprefixed and never nil: one per named account left out (W2 or W3),
+// then the multi-tag-splits note, then a note that the window held no spending.
 func spendWarnings(s report.Spending) []string {
 	warnings := leftOutWarnings(s.Accounts, "spend")
 	if s.By == store.SpendByTag && s.MultiTagSplits > 0 {

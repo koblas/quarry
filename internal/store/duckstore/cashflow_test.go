@@ -306,18 +306,32 @@ func Test_cash_flow_gives_the_transaction_range_when_the_window_holds_no_income_
 	assert.Empty(t, got.Totals)
 }
 
-func Test_cash_flow_ranges_over_the_in_report_accounts_it_is_named_for(t *testing.T) {
+func Test_cash_flow_ranges_over_the_reported_accounts_it_is_named_for(t *testing.T) {
 	t.Parallel()
 	rows := accountRows()
 	addSplit(&rows, splitSpec{id: "left-out", account: acctNotReports, category: new(catExpense), amount: -100, date: civil(2001, 5, 5)})
+	addSplit(&rows, splitSpec{id: "linked", account: acctLinked, category: new(catExpense), amount: -100, date: civil(1999, 1, 1)})
 	addSplit(&rows, splitSpec{id: "first", account: acctInReports, category: new(catExpense), amount: -100, date: civil(2019, 3, 2)})
 	addSplit(&rows, splitSpec{id: "unnamed", account: acctSecond, category: new(catExpense), amount: -100, date: civil(2025, 8, 8)})
 	st := newStoreWith(t, rows)
 
-	got, err := st.CashFlow(t.Context(), namedCashFlowAccounts(acctNotReports, acctInReports))
+	got, err := st.CashFlow(t.Context(), namedCashFlowAccounts(acctNotReports, acctLinked, acctInReports))
 
 	require.NoError(t, err)
 	assert.Equal(t, store.TransactionRange{First: civil(2019, 3, 2), Last: civil(2019, 3, 2)}, got.Transactions)
+}
+
+func Test_cash_flow_gives_a_zero_range_when_every_named_account_uses_linked_account_tracking(t *testing.T) {
+	t.Parallel()
+	rows := accountRows()
+	addSplit(&rows, splitSpec{id: "linked", account: acctLinked, category: new(catExpense), amount: -100, date: civil(2001, 5, 5)})
+	addSplit(&rows, splitSpec{id: "unnamed", account: acctSecond, category: new(catExpense), amount: -100, date: civil(2010, 2, 2)})
+	st := newStoreWith(t, rows)
+
+	got, err := st.CashFlow(t.Context(), namedCashFlowAccounts(acctLinked))
+
+	require.NoError(t, err)
+	assert.Zero(t, got.Transactions)
 }
 
 func Test_cash_flow_gives_a_zero_range_when_the_store_has_no_transactions(t *testing.T) {

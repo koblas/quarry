@@ -7,16 +7,24 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// leftOutWarnings is one warning per account in accounts that Quicken leaves out of reports,
-// in order, saying command leaves it out; never nil.
+// leftOutWarnings is one warning per account in accounts that command leaves out, never nil.
 func leftOutWarnings(accounts []store.Account, command string) []string {
 	warnings := []string{}
 	for _, a := range accounts {
-		if a.NotInReports {
+		switch {
+		case a.LinkedTracking:
+			warnings = append(warnings, linkedTrackingWarning(a, command))
+		case a.NotInReports:
 			warnings = append(warnings, leftOutOfReportsWarning(a, command))
 		}
 	}
 	return warnings
+}
+
+// linkedTrackingWarning is the warning that command counts nothing from a, which uses Quicken's
+// linked account tracking.
+func linkedTrackingWarning(a store.Account, command string) string {
+	return fmt.Sprintf("account %q uses linked account tracking in Quicken, so %s leaves it out, as Quicken's reports do", a.Name, command)
 }
 
 // leftOutOfReportsWarning is the warning that command counts nothing from a, which Quicken leaves
@@ -27,12 +35,12 @@ func leftOutOfReportsWarning(a store.Account, command string) string {
 }
 
 // appendEmptyWindowWarning appends the empty-window note for an empty result, except when every
-// account named in accounts is left out of reports: the warnings before it already say why.
+// account named in accounts is left out: the warnings before it already say why.
 func appendEmptyWindowWarning(warnings []string, subject string, accounts []store.Account, window store.Window, span store.TransactionRange) []string {
 	named := len(accounts) > 0
 	leftOut := 0
 	for _, a := range accounts {
-		if a.NotInReports {
+		if a.LeftOutOfReports() {
 			leftOut++
 		}
 	}

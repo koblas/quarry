@@ -146,6 +146,19 @@ func Test_spending_counts_nothing_for_a_named_account_left_out_of_reports(t *tes
 	assert.Equal(t, store.Spending{}, got)
 }
 
+func Test_spending_counts_nothing_for_a_named_account_that_uses_linked_account_tracking(t *testing.T) {
+	t.Parallel()
+	rows := accountRows()
+	addSplit(&rows, splitSpec{id: "counted", account: acctInReports, category: new(catExpense), amount: -100})
+	addSplit(&rows, splitSpec{id: "linked", account: acctLinked, category: new(catExpense), amount: -200})
+	st := newStoreWith(t, rows)
+
+	got, err := st.Spending(t.Context(), namedAccounts(spendingParams(), acctLinked))
+
+	require.NoError(t, err)
+	assert.Equal(t, store.Spending{}, got)
+}
+
 func Test_spending_counts_a_named_accounts_splits_inside_the_window_only(t *testing.T) {
 	t.Parallel()
 	rows := accountRows()

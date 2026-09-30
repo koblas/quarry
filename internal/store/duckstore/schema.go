@@ -19,7 +19,8 @@ CREATE TABLE accounts (
 	institution VARCHAR,
 	closed BOOLEAN NOT NULL,
 	active BOOLEAN NOT NULL,
-	in_reports BOOLEAN NOT NULL
+	in_reports BOOLEAN NOT NULL,
+	linked_tracking BOOLEAN NOT NULL
 );
 CREATE TABLE categories (
 	id VARCHAR PRIMARY KEY,
@@ -128,6 +129,9 @@ GROUP BY a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed,
 `
 }
 
+// reportedAccount is the predicate, over accounts aliased a, for an account Quicken's reports count.
+const reportedAccount = "a.in_reports AND NOT a.linked_tracking"
+
 // cashFlowViewDDL creates v_cash_flow: each split that counts as income or spending in Quicken's reports.
 const cashFlowViewDDL = `
 CREATE VIEW v_cash_flow AS
@@ -143,12 +147,12 @@ JOIN transactions t ON t.id = s.transaction_id
 JOIN accounts a ON a.id = t.account_id
 LEFT JOIN categories c ON c.id = s.category_id
 LEFT JOIN payees p ON p.id = t.payee_id
-WHERE a.in_reports
+WHERE ` + reportedAccount + `
 	AND NOT t.excluded_from_reports
 	AND c.kind IS DISTINCT FROM 'system'
 	AND NOT (s.category_id IS NULL AND s.amount = 0)
 	AND NOT EXISTS (SELECT 1 FROM transfers x WHERE x.from_split_id = s.id OR x.to_split_id = s.id);
-COMMENT ON VIEW v_cash_flow IS 'excludes accounts where accounts.in_reports is false, as Quicken reports do.';
+COMMENT ON VIEW v_cash_flow IS 'excludes accounts where accounts.in_reports is false or accounts.linked_tracking is true, as Quicken reports do.';
 `
 
 // spendingViewDDL creates v_spending: the expense rows of v_cash_flow, amount sign flipped.
@@ -158,4 +162,5 @@ SELECT split_id, transaction_id, account_id, date, month, currency,
 	category_id, category, payee_id, payee, -amount AS spent
 FROM v_cash_flow
 WHERE flow = 'expense';
+COMMENT ON VIEW v_spending IS 'expense splits of v_cash_flow with spent = -amount; same exclusions as v_cash_flow, so totals match quarry spend.';
 `
