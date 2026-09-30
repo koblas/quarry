@@ -276,3 +276,24 @@ func Test_run_sync_from_keeps_the_snapshot_it_names_and_its_newer_hard_link_beyo
 		})
 	}
 }
+
+func Test_run_snapshots_prune_keeps_the_snapshot_sync_was_built_from_under_another_extension_once_that_file_is_gone(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	newer := newerSnapshots(1)
+	id, dir := syncThenWrite(t, home, newer...)
+	backup := filepath.Join(home, "backup")
+	require.NoError(t, os.MkdirAll(backup, 0o700))
+	from := hardLink(t, snapshotFile(dir, id), filepath.Join(backup, id+".db"))
+	hardLink(t, filepath.Join(dir, id+".json"), from+".json")
+	exitCode, _, stderr := runSyncFrom(t, from)
+	require.Equal(t, 0, exitCode, stderr)
+	require.NoError(t, os.Remove(from))
+	require.NoError(t, os.Remove(from+".json"))
+
+	exitCode, stdout, stderr := runPrune(t, "--keep", "1")
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Equal(t, "Nothing to delete: 2 snapshots, within the newest one and "+id+", the store's snapshot\n", stdout)
+	requireSnapshotsKept(t, dir, id, newer[0].id)
+}

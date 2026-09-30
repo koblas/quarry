@@ -202,11 +202,11 @@ func Test_list_marks_exactly_the_snapshot_the_recorded_path_resolves_to(t *testi
 			want: []string{idMiddle},
 		},
 		{
-			name: "a path that is gone named as a snapshot under another extension marks nothing",
+			name: "a path that is gone whose id is a snapshot's under another extension",
 			recorded: func(_ *testing.T, home, _ string) string {
 				return filepath.Join(home, "moved-away", idMiddle+".db")
 			},
-			want: []string{},
+			want: []string{idMiddle},
 		},
 		{
 			name: "a path that is gone whose id is no snapshot's marks nothing",

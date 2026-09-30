@@ -235,13 +235,10 @@ func storeEntryIndex(entries []Entry, sameFile []int, recorded string) int {
 	return slices.IndexFunc(entries, func(e Entry) bool { return strings.EqualFold(e.ID, snapshotName(recorded)) })
 }
 
-// snapshotName is path's base name without its .sqlite extension, which it may spell in any letter case.
+// snapshotName is path's base name without its extension; snapshot IDs contain no dot.
 func snapshotName(path string) string {
 	name := filepath.Base(path)
-	if ext := filepath.Ext(name); strings.EqualFold(ext, ".sqlite") {
-		return strings.TrimSuffix(name, ext)
-	}
-	return name
+	return strings.TrimSuffix(name, filepath.Ext(name))
 }
 
 // entriesAt returns the indexes of the entries that are the file at path, symlinks followed and
