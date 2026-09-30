@@ -30,7 +30,10 @@ type Entry struct {
 	Manifest *Manifest
 	// TakenAt is the manifest's taken_at in UTC; zero when there is no manifest or it does not parse.
 	TakenAt time.Time
-	Store   bool
+	// Store marks the one entry output names as the store's snapshot.
+	Store bool
+	// storeFile is true for every entry that is the file the store recorded, whatever its name; none is ever deleted.
+	storeFile bool
 }
 
 // Listing is what List found in the snapshots folder.
@@ -200,22 +203,26 @@ func (s *Server) storeSnapshot(ctx context.Context) (string, string, error) {
 	return "", openErr.UnreadableReason(homepath.Abbreviate(s.home, openErr.Path)), nil
 }
 
-// markStoreSnapshot sets Store on the one entry the store's recorded snapshot path resolves to, or
-// on none; that entry is the one prune and auto-prune never delete.
+// markStoreSnapshot records which entries are the store's recorded snapshot: storeFile on every entry that
+// is that file, and Store on the one of them output names, or on the entry carrying its ID when none is.
 func markStoreSnapshot(entries []Entry, recorded string) {
-	if i := storeEntryIndex(entries, recorded); i >= 0 {
+	sameFile := entriesAt(entries, recorded)
+	for _, i := range sameFile {
+		entries[i].storeFile = true
+	}
+	if i := storeEntryIndex(entries, sameFile, recorded); i >= 0 {
 		entries[i].Store = true
 	}
 }
 
-// storeEntryIndex is the index of the entry, newest first, that recorded resolves to, or -1: the one
-// place that decides which snapshot is the store's.
-func storeEntryIndex(entries []Entry, recorded string) int {
-	sameFile := entriesAt(entries, recorded)
+// storeEntryIndex is the index of the entry output names as the store's snapshot, or -1. sameFile are the
+// indexes, newest first, of the entries that are the file at recorded.
+func storeEntryIndex(entries []Entry, sameFile []int, recorded string) int {
 	// The entry that is the recorded file under the recorded name is the one the path resolves to. The symlink-free
 	// name goes first: a hard link carrying the symlink's own name is not what the symlink points at.
+	// A path that does not resolve leaves resolved empty, which names no entry: the error decides nothing.
 	resolved, _ := filepath.EvalSymlinks(recorded)
-	for _, name := range []string{ID(resolved), ID(recorded)} {
+	for _, name := range []string{snapshotName(resolved), snapshotName(recorded)} {
 		if i := slices.IndexFunc(sameFile, func(i int) bool { return strings.EqualFold(entries[i].ID, name) }); i >= 0 {
 			return sameFile[i]
 		}
@@ -225,7 +232,16 @@ func storeEntryIndex(entries []Entry, recorded string) int {
 		return sameFile[0]
 	}
 	// No entry is the recorded file, which is gone or a separate file elsewhere: the entry carrying its ID, if any.
-	return slices.IndexFunc(entries, func(e Entry) bool { return strings.EqualFold(e.ID, ID(recorded)) })
+	return slices.IndexFunc(entries, func(e Entry) bool { return strings.EqualFold(e.ID, snapshotName(recorded)) })
+}
+
+// snapshotName is path's base name without its .sqlite extension, which it may spell in any letter case.
+func snapshotName(path string) string {
+	name := filepath.Base(path)
+	if ext := filepath.Ext(name); strings.EqualFold(ext, ".sqlite") {
+		return strings.TrimSuffix(name, ext)
+	}
+	return name
 }
 
 // entriesAt returns the indexes of the entries that are the file at path, symlinks followed and

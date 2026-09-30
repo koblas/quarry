@@ -81,6 +81,16 @@ func Test_list_marks_exactly_the_snapshot_the_recorded_path_resolves_to(t *testi
 			want: []string{idMiddle},
 		},
 		{
+			name: "a symlink outside the folder to a snapshot named with an upper-case extension, with a newer hard link",
+			recorded: func(t *testing.T, home, dir string) string {
+				t.Helper()
+				skipOnCaseSensitiveVolume(t, home)
+				hardLink(t, snapshotFile(dir, idMiddle), snapshotFile(dir, idLinkNewer))
+				return symlink(t, filepath.Join(dir, idMiddle+".SQLITE"), filepath.Join(home, "latest.sqlite"))
+			},
+			want: []string{idMiddle},
+		},
+		{
 			name: "a symlink outside the folder whose target has a newer hard link",
 			recorded: func(t *testing.T, home, dir string) string {
 				t.Helper()
@@ -114,6 +124,16 @@ func Test_list_marks_exactly_the_snapshot_the_recorded_path_resolves_to(t *testi
 				hardLink(t, snapshotFile(dir, idMiddle), snapshotFile(dir, idLinkNewer))
 				outside := hardLink(t, snapshotFile(dir, idMiddle), filepath.Join(home, "elsewhere.sqlite"))
 				return symlink(t, outside, snapshotFile(filepath.Join(home, "aliases"), idMiddle))
+			},
+			want: []string{idMiddle},
+		},
+		{
+			name: "a symlink named as a snapshot with an upper-case extension to a hard link of it outside the folder",
+			recorded: func(t *testing.T, home, dir string) string {
+				t.Helper()
+				hardLink(t, snapshotFile(dir, idMiddle), snapshotFile(dir, idLinkNewer))
+				outside := hardLink(t, snapshotFile(dir, idMiddle), filepath.Join(home, "elsewhere.sqlite"))
+				return symlink(t, outside, filepath.Join(home, "aliases", idMiddle+".SQLITE"))
 			},
 			want: []string{idMiddle},
 		},
@@ -173,6 +193,20 @@ func Test_list_marks_exactly_the_snapshot_the_recorded_path_resolves_to(t *testi
 				return snapshotFile(filepath.Join(home, "moved-away"), strings.ToLower(idMiddle))
 			},
 			want: []string{idMiddle},
+		},
+		{
+			name: "a path that is gone whose id is a snapshot's with an upper-case extension",
+			recorded: func(_ *testing.T, home, _ string) string {
+				return filepath.Join(home, "moved-away", idMiddle+".SQLITE")
+			},
+			want: []string{idMiddle},
+		},
+		{
+			name: "a path that is gone named as a snapshot under another extension marks nothing",
+			recorded: func(_ *testing.T, home, _ string) string {
+				return filepath.Join(home, "moved-away", idMiddle+".db")
+			},
+			want: []string{},
 		},
 		{
 			name: "a path that is gone whose id is no snapshot's marks nothing",

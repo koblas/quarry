@@ -8,8 +8,8 @@ import (
 	"github.com/koblas/quarry/internal/platform/osreason"
 )
 
-// autoPrune deletes the snapshots beyond the newest s.autoKeep, sparing outcome's own, and records
-// the result in outcome.Pruned; an ended ctx before a delete stops it with interruptedWhilePruning.
+// autoPrune deletes the snapshots beyond the newest s.autoKeep, sparing every one that is outcome's own file, and
+// records the result in outcome.Pruned; an ended ctx before a delete stops it with interruptedWhilePruning.
 func (s *Server) autoPrune(ctx context.Context, outcome *Outcome) error {
 	if s.autoKeep < 1 {
 		return nil

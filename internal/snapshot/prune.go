@@ -39,14 +39,16 @@ type PruneFailure struct {
 	Reason string
 }
 
-// selectPrune splits entries, newest first, into those beyond the newest keep to
-// delete and the store's entry when it lies beyond them, which is never deleted.
+// selectPrune splits entries, newest first, into those beyond the newest keep to delete and the entry
+// marked as the store's when it lies beyond them. No entry that is the store's recorded file is deleted.
 func selectPrune(entries []Entry, keep int) ([]Entry, *Entry) {
 	var doomed []Entry
 	var storeKept *Entry
 	for _, entry := range entries[min(keep, len(entries)):] {
 		if entry.Store {
 			storeKept = &entry
+		}
+		if entry.Store || entry.storeFile {
 			continue
 		}
 		doomed = append(doomed, entry)
@@ -110,8 +112,8 @@ func (s *Server) PlanPrune(ctx context.Context, keep int) (Pruned, error) {
 	return plan.pruned, nil
 }
 
-// Prune deletes all but the newest keep snapshots, never the one the store was built from,
-// and reports what it deleted and what it could not. It refuses what PlanPrune refuses. An ended
+// Prune deletes all but the newest keep snapshots, never one that is the file the store was built
+// from, and reports what it deleted and what it could not. It refuses what PlanPrune refuses. An ended
 // ctx stops it between snapshots and skips the orphan sweep.
 func (s *Server) Prune(ctx context.Context, keep int) (Pruned, error) {
 	plan, err := s.planPrune(ctx, keep)

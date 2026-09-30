@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,7 +38,7 @@ func storeIdentity(t *testing.T, stdout string) ([]string, string) {
 	return marked, doc.StoreSnapshot.ID
 }
 
-func Test_run_snapshots_prune_dry_run_keeps_the_recorded_snapshot_and_counts_its_hard_link_as_deletable(t *testing.T) {
+func Test_run_snapshots_prune_dry_run_lists_neither_the_recorded_snapshot_nor_its_hard_link(t *testing.T) {
 	pinLocalZone(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -50,11 +51,10 @@ func Test_run_snapshots_prune_dry_run_keeps_the_recorded_snapshot_and_counts_its
 	require.Equal(t, 0, exitCode, stderr)
 	assert.Empty(t, stderr)
 	assert.Equal(t, ""+
-		"Would delete 4 snapshots (3.9 MB), keeping the newest one and 20260927T143005Z, the store's snapshot:\n"+
+		"Would delete 3 snapshots (2.6 MB), keeping the newest one and 20260927T143005Z, the store's snapshot:\n"+
 		"  20260930T141502Z  2026-09-30 10:15 EDT  0.2 MB\n"+
 		"  20260930T090000Z  2026-09-30 05:00 EDT  0.2 MB\n"+
-		"  20260929T090011Z  2026-09-29 05:00 EDT  2.2 MB\n"+
-		"  20200101T000000Z  unknown               1.2 MB\n", stdout)
+		"  20260929T090011Z  2026-09-29 05:00 EDT  2.2 MB\n", stdout)
 	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
 	assert.FileExists(t, filepath.Join(dir, linkID+".sqlite"))
 }
@@ -72,4 +72,43 @@ func Test_run_snapshots_json_marks_only_the_recorded_snapshot_when_another_is_a_
 	marked, storeSnapshotID := storeIdentity(t, stdout)
 	assert.Equal(t, []string{pruneOldest}, marked)
 	assert.Equal(t, pruneOldest, storeSnapshotID)
+}
+
+func Test_run_snapshots_prune_json_lists_neither_the_recorded_snapshot_nor_its_hard_link(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := writeSnapshots(t, home, fiveSnapshots()...)
+	hardLink(t, snapshotFile(dir, pruneOldest), snapshotFile(dir, linkID))
+	buildStoreFrom(t, home, filepath.Join(dir, pruneOldest+".sqlite"))
+
+	exitCode, stdout, stderr := runPrune(t, "--keep", "3", "--json")
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Equal(t, ""+
+		"{\n"+
+		"  \"dry_run\": false,\n"+
+		"  \"keep\": 3,\n"+
+		pruneStoreSnapshotJSON(dir, pruneOldest)+
+		"  \"deleted\": [\n"+
+		pruneEntryJSON(dir, pruneMiddle, middleBytes)+"\n"+
+		"  ],\n"+
+		"  \"would_delete\": [],\n"+
+		"  \"failed\": [],\n"+
+		"  \"warnings\": []\n"+
+		"}\n", stdout)
+	assert.FileExists(t, snapshotFile(dir, linkID))
+}
+
+func Test_run_snapshots_prune_says_nothing_to_delete_when_only_a_hard_link_of_the_stores_snapshot_lies_beyond_the_newest_n(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := writeSnapshots(t, home, pruneFixture(pruneNewest, newestBytes, time.Date(2026, 9, 30, 18, 30, 0, 0, time.UTC)))
+	hardLink(t, snapshotFile(dir, pruneNewest), snapshotFile(dir, linkID))
+	buildStoreFrom(t, home, snapshotFile(dir, pruneNewest))
+
+	exitCode, stdout, stderr := runPrune(t, "--keep", "1")
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Equal(t, "Nothing to delete: 2 snapshots, within the newest one\n", stdout)
+	assert.FileExists(t, snapshotFile(dir, linkID))
 }
