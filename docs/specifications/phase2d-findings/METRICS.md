@@ -14,6 +14,7 @@
 | SCENARIO-16 (+17) | code-first | A, B1, B2, V | 0/1/2/0 | yes (W1 quoting/order unpinned at cli boundary; test-only); sizing SPLIT overruled to one 4-batch run |
 | SCENARIO-18 | code-first | A, B1, B2, V | 0/0/1/0 | no (comment MINOR → STATE.md); 1 copy ruling (5 status/type outcomes) |
 | SCENARIO-19 (+20) | code-first | A, B1, V | 0/0/1/1 | no (plan drift MINOR fixed in plan Handoff); 1 copy ruling (status Long ¶2, warnings[]) |
+| SCENARIO-21 | code-first | A, B1, V | 0/0/1/1 | no (comment MINOR → STATE.md) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
