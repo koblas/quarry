@@ -567,7 +567,7 @@ Sizing notes (binding on per-scenario architects):
 - [x] SCENARIO-12: Finding several .quicken files points at quicken.path — delivered by SCENARIO-05 `cmd/quarry/run_discovery_test.go` `Test_run_pools_bundles_across_both_documents_folders`
 - [x] SCENARIO-13: sync keeps earlier builds in import_runs — `cmd/quarry/run_import_runs_test.go` `Test_run_sync_from_keeps_the_earlier_build_in_import_runs`
 - [x] SCENARIO-14: status reports the latest build when import_runs holds several — delivered by SCENARIO-13 `cmd/quarry/run_status_test.go` `Test_run_status_reports_the_latest_build_when_import_runs_holds_several`
-- [ ] SCENARIO-15: sync warns and restarts history when the previous store's history cannot be read
+- [x] SCENARIO-15: sync warns and restarts history when the previous store's history cannot be read — `cmd/quarry/run_import_runs_test.go` `Test_run_sync_from_warns_and_restarts_history_when_the_previous_store_is_not_a_duckdb_database`
 - [ ] SCENARIO-16: snapshots lists newest first, marks the store's snapshot, and totals the size
 - [ ] SCENARIO-03: An unknown config key warns and the command proceeds
 - [ ] SCENARIO-17: snapshots marks a schema-mismatch snapshot and one with no manifest
