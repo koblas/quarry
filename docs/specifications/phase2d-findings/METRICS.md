@@ -5,6 +5,7 @@
 | --- | --- | --- | --- | --- |
 | SCENARIO-01 (+02, 03) | test-first | A, B1, B2, V | 0/0/3/1 | no (comment MINORs → STATE.md) |
 | SCENARIO-04 (+05) | code-first | A, B1, B2, V | 0/0/2/2 | no (comment MINORs → STATE.md) |
+| SCENARIO-06 (+07) | code-first | A, B1, B2, V | 0/2/3/0 | yes (carried-flag wiring and carried type unpinned; test-only fix) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
