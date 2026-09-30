@@ -43,6 +43,7 @@ func unlistedReason(err error) string {
 	if cause := errors.Unwrap(err); cause != nil {
 		return osreason.Reason(cause)
 	}
+	// unreachable: listFolder's only errors are folderUnreadableRefusal's (list.go:126,148), whose cause is a non-nil OS error
 	return osreason.Reason(err)
 }
 

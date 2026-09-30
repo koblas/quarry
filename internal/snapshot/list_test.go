@@ -139,18 +139,35 @@ func Test_list_orders_a_suffix_with_leading_zeros_by_its_value(t *testing.T) {
 	assert.Equal(t, []string{idNewest + "_11", idNewest + "_010"}, entryIDs(listing))
 }
 
-func Test_list_orders_suffixes_of_equal_value_by_their_text_with_fewer_zeros_first(t *testing.T) {
+func Test_list_orders_suffixes_of_equal_value_by_their_text_from_the_highest(t *testing.T) {
 	t.Parallel()
-	home := t.TempDir()
-	dir := snapshotsFolder(t, home)
-	for _, id := range []string{idNewest + "_02", idNewest + "_2"} {
-		writeSnapshot(t, dir, id, 1000)
+	cases := []struct {
+		name string
+		ids  []string
+		want []string
+	}{
+		{name: "one leading zero", ids: []string{idNewest + "_02", idNewest + "_2"}, want: []string{idNewest + "_2", idNewest + "_02"}},
+		{
+			name: "all-zero suffixes fall before the bare id", ids: []string{idNewest, idNewest + "_0", idNewest + "_000", idNewest + "_00"},
+			want: []string{idNewest + "_000", idNewest + "_00", idNewest + "_0", idNewest},
+		},
 	}
 
-	listing, err := newListServer(home, nil).List(t.Context())
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			dir := snapshotsFolder(t, home)
+			for _, id := range c.ids {
+				writeSnapshot(t, dir, id, 1000)
+			}
 
-	require.NoError(t, err)
-	assert.Equal(t, []string{idNewest + "_2", idNewest + "_02"}, entryIDs(listing))
+			listing, err := newListServer(home, nil).List(t.Context())
+
+			require.NoError(t, err)
+			assert.Equal(t, c.want, entryIDs(listing))
+		})
+	}
 }
 
 func Test_list_totals_every_snapshot_including_one_with_no_manifest(t *testing.T) {

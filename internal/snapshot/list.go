@@ -153,8 +153,8 @@ func (s *Server) scanFolder() ([]snapshotFile, []string, error) {
 	return files, orphans, nil
 }
 
-// newestFirst orders by ID timestamp, then _N suffix by value (none oldest), read as digits so
-// it never has to fit an integer; equal values fall to the suffix text, fewer zeros first.
+// newestFirst orders by ID timestamp, then _N suffix by value (none oldest, read as digits so it never
+// has to fit an integer); equal values fall to the suffix text, highest first, so the order is total.
 func newestFirst(a, b snapshotFile) int {
 	digitsA, digitsB := strings.TrimLeft(a.suffix, "0"), strings.TrimLeft(b.suffix, "0")
 	return cmp.Or(
@@ -200,20 +200,35 @@ func (s *Server) storeSnapshot(ctx context.Context) (string, string, error) {
 	return "", openErr.UnreadableReason(homepath.Abbreviate(s.home, openErr.Path)), nil
 }
 
-// markStoreSnapshot sets Store on the entry that is the file recorded names: the one
-// that is the same file on disk, else the one whose ID is the recorded file's, letter case aside.
+// markStoreSnapshot sets Store on the one entry that is the file recorded names, or on none.
+// storeEntryIndex decides which.
 func markStoreSnapshot(entries []Entry, recorded string) {
+	if i := storeEntryIndex(entries, recorded); i >= 0 {
+		entries[i].Store = true
+	}
+}
+
+// storeEntryIndex is the entry that is the recorded file on disk, preferring the recorded ID, else
+// the newest; failing that the entry whose ID is the recorded one's, letter case aside; else -1.
+func storeEntryIndex(entries []Entry, recorded string) int {
+	id := ID(recorded)
+	sameFile := -1
 	if want, err := os.Stat(recorded); err == nil {
-		for i := range entries {
-			info, err := os.Stat(entries[i].Path)
-			entries[i].Store = err == nil && os.SameFile(want, info)
+		for i, entry := range entries {
+			if info, err := os.Stat(entry.Path); err != nil || !os.SameFile(want, info) {
+				continue
+			}
+			// A hard link under another ID must not outrank the file the store recorded.
+			if strings.EqualFold(entry.ID, id) {
+				return i
+			}
+			if sameFile < 0 {
+				sameFile = i
+			}
 		}
 	}
-	if slices.ContainsFunc(entries, func(e Entry) bool { return e.Store }) {
-		return
+	if sameFile >= 0 {
+		return sameFile
 	}
-	id := ID(recorded)
-	for i := range entries {
-		entries[i].Store = strings.EqualFold(entries[i].ID, id)
-	}
+	return slices.IndexFunc(entries, func(e Entry) bool { return strings.EqualFold(e.ID, id) })
 }

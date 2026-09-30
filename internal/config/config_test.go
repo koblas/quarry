@@ -192,6 +192,11 @@ func Test_load_refuses_a_snapshots_keep_below_one_or_not_an_integer(t *testing.T
 		{name: "boolean", content: "snapshots.keep = true\n", got: "true"},
 		{name: "date", content: "snapshots.keep = 2026-01-01\n", got: "2026-01-01"},
 		{name: "trailing comment is not part of the value", content: "[snapshots]\nkeep = 0 # none\n", got: "0"},
+		{name: "no space on either side of the equal sign", content: "[snapshots]\nkeep=0\n", got: "0"},
+		{name: "no space after the equal sign", content: "[snapshots]\nkeep =0\n", got: "0"},
+		{name: "no space before the equal sign", content: "[snapshots]\nkeep= 0\n", got: "0"},
+		{name: "tabs around the equal sign", content: "snapshots.keep\t=\t0\n", got: "0"},
+		{name: "trailing comment with no space before it", content: "[snapshots]\nkeep=0# none\n", got: "0"},
 		{name: "inline table right of the equal sign", content: "snapshots.keep = { a = 1 }\n", got: "{ a = 1 }"},
 		{name: "key inside an inline snapshots table", content: "snapshots = { keep = 0 }\n", got: "0"},
 		{name: "the exact key, not one that differs in letter case, before it", content: "[snapshots]\nkeep = \"x\"\nKeep = 9\n", got: `"x"`},
@@ -214,6 +219,8 @@ func Test_load_refuses_a_quicken_path_that_is_not_a_string(t *testing.T) {
 		got     string
 	}{
 		{name: "integer", content: "quicken.path = 12\n", got: "12"},
+		{name: "no space on either side of the equal sign", content: "[quicken]\npath=12\n", got: "12"},
+		{name: "tabs around the equal sign", content: "quicken.path\t=\t12\n", got: "12"},
 		{name: "boolean", content: "[quicken]\npath = true\n", got: "true"},
 		{name: "array", content: "quicken.path = [\"~/a.quicken\"]\n", got: `["~/a.quicken"]`},
 		{name: "inline table", content: "quicken.path = { x = 1 }\n", got: "{ x = 1 }"},
