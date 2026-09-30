@@ -95,10 +95,10 @@ func Test_outcome_adds_no_prune_warning_for_a_store_that_was_not_built(t *testin
 	assert.Empty(t, unbuilt.Warnings())
 }
 
-func Test_import_from_warns_when_the_snapshots_folder_cannot_be_listed(t *testing.T) {
-	t.Parallel()
+// importFromUnlistableFolder rebuilds the store from a snapshot whose folder can be opened but not listed.
+func importFromUnlistableFolder(t *testing.T, home string) (snapshot.Outcome, string) {
+	t.Helper()
 	skipUnderRoot(t)
-	home := t.TempDir()
 	srv := newImportServer(t, home, builtStore(), snapshot.WithAutoPrune(2))
 	taken := takeSnapshot(t, srv)
 	dir := filepath.Join(home, "snapshots")
@@ -108,6 +108,13 @@ func Test_import_from_warns_when_the_snapshots_folder_cannot_be_listed(t *testin
 	outcome, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
 
 	require.NoError(t, err)
+	return outcome, dir
+}
+
+func Test_import_from_warns_when_the_snapshots_folder_cannot_be_listed(t *testing.T) {
+	t.Parallel()
+	outcome, dir := importFromUnlistableFolder(t, t.TempDir())
+
 	require.NotNil(t, outcome.Pruned)
 	assert.Equal(t, 2, outcome.Pruned.Keep)
 	assert.Equal(t, dir, outcome.Pruned.Dir)
@@ -115,6 +122,23 @@ func Test_import_from_warns_when_the_snapshots_folder_cannot_be_listed(t *testin
 	assert.Empty(t, outcome.Pruned.Failed)
 	assert.Equal(t, []string{"cannot list ~/snapshots to delete old snapshots: permission denied; run quarry snapshots prune to try again"},
 		outcome.Warnings())
+}
+
+func Test_outcome_names_the_unlistable_folder_by_its_absolute_path_in_the_absolute_warnings(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	outcome, dir := importFromUnlistableFolder(t, home)
+
+	assert.Equal(t, []string{"cannot list " + dir + " to delete old snapshots: permission denied; run quarry snapshots prune to try again"},
+		outcome.WarningsAbsolute())
+}
+
+func Test_outcome_absolute_warnings_match_the_warnings_when_no_folder_could_not_be_listed(t *testing.T) {
+	t.Parallel()
+	failed := []snapshot.PruneFailure{{Entry: snapshot.Entry{ID: idOldest}, Reason: "permission denied"}}
+	outcome := snapshot.Outcome{Store: builtWithOneSided(1), Pruned: &snapshot.Pruned{Failed: failed}}
+
+	assert.Equal(t, outcome.Warnings(), outcome.WarningsAbsolute())
 }
 
 func Test_sync_and_import_neither_counts_nor_warns_about_a_snapshot_already_gone(t *testing.T) {

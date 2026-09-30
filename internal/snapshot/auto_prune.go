@@ -20,8 +20,9 @@ func (s *Server) autoPrune(ctx context.Context, outcome *Outcome) error {
 	listing, err := s.listFolder()
 	if err != nil {
 		// listFolder refuses only with a causedRefusalError; the warning quotes the OS cause, not the refusal.
-		outcome.pruneWarning = "cannot list " + homepath.Abbreviate(s.home, s.snapshotDir) + " to delete old snapshots: " +
-			osreason.Reason(errors.Unwrap(err)) + tryAgain
+		reason := osreason.Reason(errors.Unwrap(err))
+		outcome.pruneWarning = cannotListWarning(homepath.Abbreviate(s.home, s.snapshotDir), reason)
+		outcome.pruneWarningAbsolute = cannotListWarning(s.snapshotDir, reason)
 		return nil
 	}
 	markStoreSnapshot(listing.Entries, outcome.Manifest.Snapshot.Path)
@@ -52,11 +53,16 @@ func interruptedWhilePruning(ctx context.Context) error {
 // tryAgain ends every warning about a snapshot auto-prune could not delete.
 const tryAgain = "; run quarry snapshots prune to try again"
 
-// pruneWarnings returns o's auto-prune warnings: the one for a folder that could not be
+// cannotListWarning is the warning for a snapshots folder shown as folder that could not be listed for reason.
+func cannotListWarning(folder, reason string) string {
+	return "cannot list " + folder + " to delete old snapshots: " + reason + tryAgain
+}
+
+// pruneWarnings returns o's auto-prune warnings: listWarning when the folder could not be
 // listed, else one per snapshot that could not be deleted, in listing order.
-func (o Outcome) pruneWarnings() []string {
-	if o.pruneWarning != "" {
-		return []string{o.pruneWarning}
+func (o Outcome) pruneWarnings(listWarning string) []string {
+	if listWarning != "" {
+		return []string{listWarning}
 	}
 	if o.Pruned == nil {
 		return nil
@@ -67,3 +73,7 @@ func (o Outcome) pruneWarnings() []string {
 	}
 	return warnings
 }
+
+// WarningsAbsolute returns Warnings with a snapshots folder that could not be listed named by its
+// absolute path, not ~-abbreviated; machine-readable output carries this form.
+func (o Outcome) WarningsAbsolute() []string { return o.warnings(o.pruneWarningAbsolute) }

@@ -49,6 +49,11 @@ must add up to the balance of its last reconciled statement in Quicken to the
 cent, and every transaction must equal the sum of its splits; if a check
 fails, the previous store is left unchanged.
 
+After it rebuilds the store, sync deletes the oldest snapshots beyond the
+newest 12 (snapshots.keep in ~/Library/Application Support/quarry/config.toml),
+never the one the store was built from; a failed sync deletes nothing. Run
+quarry snapshots to list them.
+
 Quicken must be running with the file open: it encrypts the database when
 the file is closed. quarry only reads the Quicken file; it never writes to it.
 
@@ -83,7 +88,7 @@ does not read Quicken at all.`,
 			}
 			printConfigWarnings(cmd, cfg.Warnings)
 
-			srv, err := newServer(cmd.Context())
+			srv, err := newServer(cmd.Context(), snapshot.WithAutoPrune(cfg.Keep))
 			if err != nil {
 				return &runtimeError{err: err}
 			}
@@ -103,7 +108,9 @@ does not read Quicken at all.`,
 			var mismatch snapshot.MismatchError
 			isMismatch := errors.As(err, &mismatch)
 			validationFailed := outcome.Store != nil && !outcome.Store.Built
-			if err != nil && !isMismatch && !validationFailed {
+			// An error beside a rebuilt store is auto-prune's interrupt: the result is still owed.
+			rebuilt := outcome.Store != nil && outcome.Store.Built
+			if err != nil && !isMismatch && !validationFailed && !rebuilt {
 				return &runtimeError{err: err}
 			}
 
@@ -122,6 +129,9 @@ does not read Quicken at all.`,
 					output += renderStoreFailure(*outcome.Store, outcome.StoreExisted, home)
 				case outcome.Store != nil:
 					output += renderStore(*outcome.Store, home)
+					if outcome.Pruned != nil {
+						output += renderPrunedLine(*outcome.Pruned)
+					}
 				}
 			}
 			if _, writeErr := fmt.Fprint(cmd.OutOrStdout(), output); writeErr != nil {
@@ -132,7 +142,7 @@ does not read Quicken at all.`,
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: warning: "+warning)
 			}
 
-			if isMismatch || validationFailed {
+			if err != nil {
 				return &runtimeError{err: err}
 			}
 			return nil

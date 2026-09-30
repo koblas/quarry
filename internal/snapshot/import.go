@@ -31,15 +31,19 @@ type Outcome struct {
 	// historyWarning is the warning for a built store whose previous import
 	// history could not be carried forward; empty when it was carried.
 	historyWarning string
-	// pruneWarning is the warning for a snapshots folder auto-prune could not list.
-	pruneWarning string
+	// pruneWarning is the warning for a snapshots folder auto-prune could not list, and
+	// pruneWarningAbsolute the same warning naming the folder by its absolute path.
+	pruneWarning, pruneWarningAbsolute string
 }
 
 // Warnings returns every warning o carries, without the "quarry: warning: "
 // prefix: the manifest's own, then the one-sided-transfer warning when a
 // built store kept one or more legs with no counterpart, then the warning
 // that import history restarted. An unbuilt store adds none of them.
-func (o Outcome) Warnings() []string {
+func (o Outcome) Warnings() []string { return o.warnings(o.pruneWarning) }
+
+// warnings is Warnings with listWarning as the warning for a snapshots folder that could not be listed.
+func (o Outcome) warnings(listWarning string) []string {
 	warnings := o.Manifest.Warnings
 	if o.Store == nil || !o.Store.Built {
 		return warnings
@@ -50,7 +54,7 @@ func (o Outcome) Warnings() []string {
 	if o.historyWarning != "" {
 		warnings = append(slices.Clip(warnings), o.historyWarning)
 	}
-	return append(slices.Clip(warnings), o.pruneWarnings()...)
+	return append(slices.Clip(warnings), o.pruneWarnings(listWarning)...)
 }
 
 // historyRestartWarning renders the warning that the previous store's import

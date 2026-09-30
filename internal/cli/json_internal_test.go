@@ -88,3 +88,20 @@ func storeLists(t *testing.T, data []byte) (map[string]any, any, any) {
 	require.True(t, ok)
 	return balances, splits["mismatched"], transfers["one_sided"]
 }
+
+// Nil lists in a Pruned must encode as [], and no Pruned at all as null: the key is always present.
+func Test_renderJSON_encodes_pruned_lists_as_empty_arrays_and_no_pruned_as_null(t *testing.T) {
+	built := store.Result{Path: "/store", Built: true}
+
+	withPruned, err := renderJSON(snapshot.Outcome{Store: &built, Pruned: &snapshot.Pruned{Keep: 12}}, nil)
+	require.NoError(t, err)
+	without, err := renderJSON(snapshot.Outcome{Store: &built}, nil)
+	require.NoError(t, err)
+
+	var doc, bare map[string]any
+	require.NoError(t, json.Unmarshal(withPruned, &doc))
+	require.NoError(t, json.Unmarshal(without, &bare))
+	assert.Equal(t, map[string]any{"keep": float64(12), "deleted": []any{}, "failed": []any{}}, doc["pruned"])
+	assert.Contains(t, bare, "pruned")
+	assert.Nil(t, bare["pruned"])
+}

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/snapshot"
@@ -39,14 +41,36 @@ func renderSnapshotBlock(verb string, entries []snapshot.Entry, p snapshot.Prune
 
 // keepPhrase names what p kept: the newest one or N, and the store's snapshot when it lies outside them.
 func keepPhrase(p snapshot.Pruned) string {
-	phrase := "the newest one"
-	if p.Keep > 1 {
-		phrase = "the newest " + humanize.Thousands(p.Keep)
-	}
+	phrase := newestPhrase(p.Keep)
 	if p.StoreKept != nil {
 		phrase += " and " + p.StoreKept.ID + ", the store's snapshot"
 	}
 	return phrase
+}
+
+// newestPhrase is "the newest one" for keep 1, else "the newest N".
+func newestPhrase(keep int) string {
+	if keep > 1 {
+		return "the newest " + humanize.Thousands(keep)
+	}
+	return "the newest one"
+}
+
+// renderPrunedLine is the Pruned line sync prints after its Transfers block: what auto-prune
+// deleted, or "" when it deleted nothing. Deletes that failed are not counted.
+func renderPrunedLine(p snapshot.Pruned) string {
+	if len(p.Deleted) == 0 {
+		return ""
+	}
+	var total int64
+	for _, e := range p.Deleted {
+		total += e.Bytes
+	}
+	beyond := newestPhrase(p.Keep)
+	if p.StoreKept != nil {
+		beyond += " and the store's own"
+	}
+	return fmt.Sprintf("%-10s%s beyond %s (%s)\n", "Pruned", snapshotCount(len(p.Deleted)), beyond, formatMB(total))
 }
 
 // snapshotCount renders n as "1 snapshot" or "N snapshots".

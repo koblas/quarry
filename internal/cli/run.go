@@ -11,10 +11,10 @@ import (
 	"github.com/koblas/quarry/internal/snapshot"
 )
 
-// ServerFactory builds the Server sync needs. It is called only from
-// inside sync's RunE, so building the command tree, --help and a usage
-// error never depend on it.
-type ServerFactory func(ctx context.Context) (srv *snapshot.Server, err error)
+// ServerFactory builds the Server sync needs, applying opts after its own
+// options. It is called only from inside sync's RunE, so building the
+// command tree, --help and a usage error never depend on it.
+type ServerFactory func(ctx context.Context, opts ...snapshot.Option) (srv *snapshot.Server, err error)
 
 // ReportFactory builds the Server a read command needs; command is the name
 // of the command asking, for refusals that say which command to run again.

@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
+	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,10 +24,15 @@ const keptSnapshots = 12
 // oldSnapshots returns n fixtures with year-2000 IDs, one per month, oldest first,
 // so every one sorts older than the ID a real sync mints from the clock.
 // The oldest is the only one with its own size.
-func oldSnapshots(n int) []snapshotFixture {
+func oldSnapshots(n int) []snapshotFixture { return datedSnapshots(2000, n) }
+
+// newerSnapshots is oldSnapshots in year 2999, so every one sorts newer than a real snapshot.
+func newerSnapshots(n int) []snapshotFixture { return datedSnapshots(2999, n) }
+
+func datedSnapshots(year, n int) []snapshotFixture {
 	fixtures := make([]snapshotFixture, n)
 	for i := range fixtures {
-		taken := time.Date(2000, time.Month(i+1), 1, 0, 0, 0, 0, time.UTC)
+		taken := time.Date(year, time.Month(i+1), 1, 0, 0, 0, 0, time.UTC)
 		fixtures[i] = snapshotFixture{
 			id:       taken.Format("20060102T150405Z"),
 			bytes:    middleBytes,
@@ -94,4 +101,145 @@ func Test_run_sync_deletes_nothing_when_validation_fails(t *testing.T) {
 	assert.Len(t, snapshotFiles(t, dir, ".json"), keptSnapshots+2)
 	assert.FileExists(t, orphan)
 	assert.NotContains(t, stdout.String(), "Pruned")
+}
+
+// runSyncRemoving runs quarry sync with args under ctx, its Server removing files through remove.
+func runSyncRemoving(ctx context.Context, remove func(string) error, args ...string) (int, string, string) {
+	var stdout, stderr bytes.Buffer
+	env := defaultEnv(&stdout, &stderr)
+	base := env.NewServer
+	env.NewServer = func(ctx context.Context, opts ...snapshot.Option) (*snapshot.Server, error) {
+		return base(ctx, append(opts, snapshot.WithRemove(remove))...)
+	}
+
+	exitCode := runWith(ctx, append([]string{"sync"}, args...), env)
+	return exitCode, stdout.String(), stderr.String()
+}
+
+// syncThenWrite syncs bundle under the test's HOME, writes fixtures beside the snapshot it took,
+// and returns that snapshot's ID and the snapshots folder.
+func syncThenWrite(t *testing.T, home string, fixtures ...snapshotFixture) (string, string) {
+	t.Helper()
+	syncBundle(t, v9fixture.OpenBundle(t, filepath.Join(home, "Documents")))
+	dir := filepath.Join(storeDirUnder(home), "snapshots")
+	id := snapshotID(onlyFileWithSuffix(t, dir, ".sqlite"))
+	writeSnapshots(t, home, fixtures...)
+	return id, dir
+}
+
+// runSyncFrom runs quarry sync --from id with extra args.
+func runSyncFrom(t *testing.T, id string, extra ...string) (int, string, string) {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	exitCode := run(context.Background(), append([]string{"sync", "--from", id}, extra...), &stdout, &stderr)
+	return exitCode, stdout.String(), stderr.String()
+}
+
+func Test_run_sync_from_honours_snapshots_keep_from_config(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	older := oldSnapshots(3)
+	id, dir := syncThenWrite(t, home, older...)
+	writeConfig(t, home, snapshotsKeepConfig(2))
+
+	exitCode, stdout, stderr := runSyncFrom(t, id)
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Equal(t, []string{filepath.Join(dir, older[2].id+".sqlite"), filepath.Join(dir, id+".sqlite")}, snapshotFiles(t, dir, ".sqlite"))
+	assert.Regexp(t, fmt.Sprintf(`Pruned {4}2 snapshots beyond the newest 2 \(%s\)\n$`, megabytes(oldestBytes+middleBytes)), stdout)
+}
+
+func Test_run_sync_from_json_carries_a_null_pruned_key_on_a_schema_mismatch(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
+	var syncStdout, syncStderr bytes.Buffer
+	require.Equal(t, 1, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncStdout, &syncStderr))
+	id := snapshotID(onlyFileWithSuffix(t, filepath.Join(storeDirUnder(home), "snapshots"), ".sqlite"))
+
+	exitCode, stdout, _ := runSyncFrom(t, id, "--json")
+
+	require.Equal(t, 1, exitCode)
+	var parsed map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal([]byte(stdout), &parsed))
+	prunedValue, present := parsed["pruned"]
+	require.True(t, present, "the pruned key must be present even when nothing was pruned")
+	assert.JSONEq(t, "null", string(prunedValue))
+}
+
+func Test_run_sync_warns_when_an_old_snapshot_cannot_be_deleted_and_still_succeeds(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	fixtures := oldSnapshots(keptSnapshots)
+	dir := writeSnapshots(t, home, fixtures...)
+	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
+
+	exitCode, stdout, stderr := runSyncRemoving(context.Background(), refusingRemove(fixtures[0].id+".sqlite"), "--quicken", bundle.Dir)
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Equal(t, "quarry: warning: cannot delete snapshot "+fixtures[0].id+": permission denied; run quarry snapshots prune to try again\n", stderr)
+	assert.NotContains(t, stdout, "Pruned")
+	assert.FileExists(t, filepath.Join(dir, fixtures[0].id+".sqlite"))
+}
+
+func Test_run_sync_prunes_the_snapshots_it_can_and_warns_about_the_one_it_cannot(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	fixtures := oldSnapshots(keptSnapshots + 2)
+	dir := writeSnapshots(t, home, fixtures...)
+	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
+
+	exitCode, stdout, stderr := runSyncRemoving(context.Background(), refusingRemove(fixtures[1].id+".sqlite"), "--quicken", bundle.Dir)
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Equal(t, "quarry: warning: cannot delete snapshot "+fixtures[1].id+": permission denied; run quarry snapshots prune to try again\n", stderr)
+	assert.Regexp(t, fmt.Sprintf(`Pruned {4}2 snapshots beyond the newest %d \(%s\)\n$`, keptSnapshots, megabytes(oldestBytes+middleBytes)), stdout)
+	assert.NoFileExists(t, filepath.Join(dir, fixtures[0].id+".sqlite"))
+	assert.FileExists(t, filepath.Join(dir, fixtures[1].id+".sqlite"))
+	assert.NoFileExists(t, filepath.Join(dir, fixtures[2].id+".sqlite"))
+}
+
+func Test_run_sync_from_an_older_snapshot_says_and_the_stores_own(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	newer := newerSnapshots(keptSnapshots)
+	older := oldSnapshots(1)
+	id, dir := syncThenWrite(t, home, append(newer, older...)...)
+
+	exitCode, stdout, stderr := runSyncFrom(t, id)
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Regexp(t, fmt.Sprintf(`Pruned {4}1 snapshot beyond the newest %d and the store's own \(%s\)\n$`, keptSnapshots, megabytes(oldestBytes)), stdout)
+	assert.FileExists(t, filepath.Join(dir, id+".sqlite"))
+	assert.NoFileExists(t, filepath.Join(dir, older[0].id+".sqlite"))
+	assert.Len(t, snapshotFiles(t, dir, ".sqlite"), keptSnapshots+1)
+}
+
+func Test_run_sync_from_says_the_newest_one_when_snapshots_keep_is_1(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	id, dir := syncThenWrite(t, home, oldSnapshots(2)...)
+	writeConfig(t, home, snapshotsKeepConfig(1))
+
+	exitCode, stdout, stderr := runSyncFrom(t, id)
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Regexp(t, fmt.Sprintf(`Pruned {4}2 snapshots beyond the newest one \(%s\)\n$`, megabytes(oldestBytes+middleBytes)), stdout)
+	assert.Equal(t, []string{filepath.Join(dir, id+".sqlite")}, snapshotFiles(t, dir, ".sqlite"))
+}
+
+func Test_run_sync_from_warns_when_it_cannot_list_the_snapshots_folder(t *testing.T) {
+	skipAsRoot(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	id, dir := syncThenWrite(t, home)
+	require.NoError(t, os.Chmod(dir, 0o300))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	exitCode, stdout, stderr := runSyncFrom(t, id)
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Equal(t, "quarry: warning: cannot list "+snapshotsShown+" to delete old snapshots: permission denied; "+
+		"run quarry snapshots prune to try again\n", stderr)
+	assert.NotContains(t, stdout, "Pruned")
 }

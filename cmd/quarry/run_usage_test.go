@@ -52,6 +52,10 @@ func Test_run_prints_the_sync_help(t *testing.T) {
 		"must add up to the balance of its last reconciled statement in Quicken to the\n"+
 		"cent, and every transaction must equal the sum of its splits; if a check\n"+
 		"fails, the previous store is left unchanged.")
+	assert.Contains(t, syncStdout.String(), "After it rebuilds the store, sync deletes the oldest snapshots beyond the\n"+
+		"newest 12 (snapshots.keep in ~/Library/Application Support/quarry/config.toml),\n"+
+		"never the one the store was built from; a failed sync deletes nothing. Run\n"+
+		"quarry snapshots to list them.")
 	assert.Contains(t, syncStdout.String(), "With --from, quarry rebuilds the store from a snapshot it took earlier and\n"+
 		"does not read Quicken at all.")
 	assert.Contains(t, syncStdout.String(), "  quarry sync --quicken ~/Documents/Home.quicken\n  quarry sync --from 20260927T143005Z\n")

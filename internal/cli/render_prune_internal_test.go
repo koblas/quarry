@@ -218,3 +218,57 @@ func Test_renderPruned_says_nothing_to_delete_for_a_dry_run_that_selects_nothing
 		})
 	}
 }
+
+func Test_renderPrunedLine_names_what_lay_beyond_the_newest(t *testing.T) {
+	one := []snapshot.Entry{deletedEntry("20260927T143005Z", 55_100_000)}
+	three := []snapshot.Entry{
+		deletedEntry("20260929T090011Z", 55_200_000), deletedEntry("20260928T090011Z", 55_100_000), deletedEntry("20260927T143005Z", 55_100_000),
+	}
+	stored := &snapshot.Entry{ID: "20260801T120000Z", Store: true}
+	failure := snapshot.PruneFailure{Entry: deletedEntry("20260926T143005Z", 99_000_000), Reason: "permission denied"}
+	cases := []struct {
+		name   string
+		pruned snapshot.Pruned
+		want   string
+	}{
+		{name: "plural", pruned: snapshot.Pruned{Keep: 12, Deleted: three}, want: "Pruned    3 snapshots beyond the newest 12 (165.4 MB)\n"},
+		{name: "singular", pruned: snapshot.Pruned{Keep: 12, Deleted: one}, want: "Pruned    1 snapshot beyond the newest 12 (55.1 MB)\n"},
+		{name: "the newest one when N is 1", pruned: snapshot.Pruned{Keep: 1, Deleted: three}, want: "Pruned    3 snapshots beyond the newest one (165.4 MB)\n"},
+		{
+			name: "the store's own when it lies outside the newest N", pruned: snapshot.Pruned{Keep: 12, Deleted: three, StoreKept: stored},
+			want: "Pruned    3 snapshots beyond the newest 12 and the store's own (165.4 MB)\n",
+		},
+		{
+			name: "the store's own beside the newest one, singular", pruned: snapshot.Pruned{Keep: 1, Deleted: one, StoreKept: stored},
+			want: "Pruned    1 snapshot beyond the newest one and the store's own (55.1 MB)\n",
+		},
+		{
+			name: "only the deletes that succeeded", pruned: snapshot.Pruned{Keep: 12, Deleted: one, Failed: []snapshot.PruneFailure{failure}},
+			want: "Pruned    1 snapshot beyond the newest 12 (55.1 MB)\n",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, renderPrunedLine(c.pruned))
+		})
+	}
+}
+
+func Test_renderPrunedLine_is_empty_when_nothing_was_deleted(t *testing.T) {
+	failure := snapshot.PruneFailure{Entry: deletedEntry("20260927T143005Z", 1_240_000), Reason: "permission denied"}
+	cases := []struct {
+		name   string
+		pruned snapshot.Pruned
+	}{
+		{name: "nothing beyond the newest N", pruned: snapshot.Pruned{Keep: 12, Snapshots: 5}},
+		{name: "every attempted delete failed", pruned: snapshot.Pruned{Keep: 12, Failed: []snapshot.PruneFailure{failure}}},
+		{name: "interrupted before the first delete", pruned: snapshot.Pruned{Keep: 12, NotDeleted: 2}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Empty(t, renderPrunedLine(c.pruned))
+		})
+	}
+}

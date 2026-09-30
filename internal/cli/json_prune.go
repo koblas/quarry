@@ -29,15 +29,20 @@ type pruneFailureDocument struct {
 
 // renderPrunedJSON renders p as prune's --json document with warnings as given; every list is [] rather than null.
 func renderPrunedJSON(p snapshot.Pruned, warnings []string) ([]byte, error) {
-	failed := make([]pruneFailureDocument, len(p.Failed))
-	for i, f := range p.Failed {
-		failed[i] = pruneFailureDocument{ID: f.Entry.ID, Path: f.Entry.Path, Reason: f.Reason}
-	}
 	return marshalDocument(prunedDocument{
 		DryRun: p.DryRun, Keep: p.Keep, StoreSnapshot: newStoreSnapshotDocument(p.StorePath),
 		Deleted: newPrunedEntryDocuments(p.Deleted), WouldDelete: newPrunedEntryDocuments(p.WouldDelete),
-		Failed: failed, Warnings: append([]string{}, warnings...),
+		Failed: newPruneFailureDocuments(p.Failed), Warnings: append([]string{}, warnings...),
 	})
+}
+
+// newPruneFailureDocuments converts failures into the --json "failed" shape.
+func newPruneFailureDocuments(failures []snapshot.PruneFailure) []pruneFailureDocument {
+	out := make([]pruneFailureDocument, len(failures))
+	for i, f := range failures {
+		out[i] = pruneFailureDocument{ID: f.Entry.ID, Path: f.Entry.Path, Reason: f.Reason}
+	}
+	return out
 }
 
 // newPrunedEntryDocuments converts entries into the --json entry shape.
