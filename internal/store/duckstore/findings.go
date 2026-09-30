@@ -18,8 +18,7 @@ FROM transactions a JOIN transactions b
 WHERE a.amount <> 0 AND abs(a.date - b.date) <= ? AND NOT (a.status = 'reconciled' AND b.status = 'reconciled')
 ORDER BY a.id, b.id`
 
-// unlinkedTransferQuery lists each pair of transactions in two accounts of one currency with opposite non-zero amounts at
-// most ? days apart, neither with a split that is a transfer leg, the lower source id first so each pair appears once.
+// unlinkedTransferQuery lists each pair of opposite non-zero transactions in two accounts of one currency at most ? days apart, neither with a transfer-leg split.
 const unlinkedTransferQuery = `SELECT a.id, b.id
 FROM transactions a
   JOIN accounts aa ON aa.id = a.account_id

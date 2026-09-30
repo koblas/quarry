@@ -9,8 +9,7 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// findingsQuery reads every finding with one row per item (one NULL-item row if none); new and newly fixed mean found or fixed at the build time.
-// Only an unlinked-transfer item joins its transaction's splits, for the split count and the sole split's category.
+// findingsQuery reads every finding with one row per item (one NULL-item row if none), new and newly fixed being at the build time.
 const findingsQuery = `
 SELECT f.id, f.type, f.first_found_at, f.fixed_at,
 	COALESCE(f.first_found_at = i.built_at, false), COALESCE(f.fixed_at = i.built_at, false),

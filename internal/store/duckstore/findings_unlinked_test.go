@@ -67,6 +67,16 @@ func Test_replace_flags_opposite_amounts_in_two_accounts_up_to_three_days_apart_
 	}
 }
 
+func Test_replace_flags_an_unlinked_transfer_whose_lower_id_transaction_is_the_deposit(t *testing.T) {
+	t.Parallel()
+
+	got := unlinkedIDs(t, nil,
+		dupTxn(1, "acct-1", day(2026, 8, 3), unlinkedAmount, uncleared),
+		dupTxn(2, "acct-2", day(2026, 8, 6), -unlinkedAmount, uncleared))
+
+	assert.Equal(t, "unlinked-transfer:txn-1+txn-2", got)
+}
+
 func Test_replace_does_not_flag_an_unlinked_transfer_between_transactions_that_are_not_opposite_amounts_in_two_accounts_of_one_currency(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

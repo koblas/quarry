@@ -362,11 +362,10 @@ type Finding struct {
 	Items        []FindingItem
 }
 
-// FindingItem is what a finding is about: a transaction or split with its
-// account and payee, or a payee or category. Amount is in cents, the split's
-// when SplitID is set; OtherAccount* describe a one-sided leg as OneSidedTransfer does.
-// Category and Splits are read for an unlinked-transfer item only: Category is the full path of the
-// transaction's sole split's category, nil when it has none or several splits; Splits counts its splits.
+// FindingItem is what a finding is about: a transaction or split with its account and payee, or a payee or
+// category. Amount is in cents, the split's when SplitID is set; OtherAccount* describe a one-sided leg as
+// OneSidedTransfer does. Category (the sole split's full path, nil if none or several) and Splits (the count)
+// are read for an unlinked-transfer item only.
 type FindingItem struct {
 	TransactionID  *string
 	SplitID        *string
