@@ -224,20 +224,25 @@ func Test_run_snapshots_prune_prints_what_it_deleted_before_the_interrupt_line(t
 	cases := []struct {
 		name       string
 		keep       string
+		wantStdout string
 		wantStderr string
 		wantGone   []string
 		wantKept   []string
 	}{
 		{
-			name:       "one snapshot never attempted",
-			keep:       "3",
+			name: "one snapshot never attempted",
+			keep: "3",
+			wantStdout: "Deleted 1 snapshot (2.2 MB), keeping the newest 3:\n" +
+				"  20260929T090011Z  2026-09-29 05:00 EDT  2.2 MB\n",
 			wantStderr: "quarry: snapshots prune interrupted; 1 snapshot was not deleted\n",
 			wantGone:   []string{pruneMiddle},
 			wantKept:   []string{pruneOldest, pruneMorning, pruneNoon, pruneNewest},
 		},
 		{
-			name:       "several snapshots never attempted",
-			keep:       "2",
+			name: "several snapshots never attempted",
+			keep: "2",
+			wantStdout: "Deleted 1 snapshot (0.2 MB), keeping the newest 2:\n" +
+				"  20260930T090000Z  2026-09-30 05:00 EDT  0.2 MB\n",
 			wantStderr: "quarry: snapshots prune interrupted; 2 snapshots were not deleted\n",
 			wantGone:   []string{pruneMorning},
 			wantKept:   []string{pruneOldest, pruneMiddle, pruneNoon, pruneNewest},
@@ -259,7 +264,7 @@ func Test_run_snapshots_prune_prints_what_it_deleted_before_the_interrupt_line(t
 
 			assert.Equal(t, 1, exitCode)
 			assert.Equal(t, c.wantStderr, stderr)
-			assert.Contains(t, stdout, "Deleted 1 snapshot")
+			assert.Equal(t, c.wantStdout, stdout)
 			requireSnapshotsGone(t, dir, c.wantGone...)
 			requireSnapshotsKept(t, dir, c.wantKept...)
 		})

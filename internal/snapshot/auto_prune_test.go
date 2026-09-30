@@ -221,14 +221,18 @@ func Test_sync_and_import_deletes_nothing_when_the_store_is_not_built(t *testing
 		Balances: store.BalanceCheck{Checked: 1, Mismatched: []store.BalanceMismatch{{ID: "acct-1"}}},
 	}}
 	cases := []struct {
-		name   string
-		bundle func(testing.TB, string) v9fixture.Bundle
-		fake   *fakeImporter
-		want   error
+		name       string
+		bundle     func(testing.TB, string) v9fixture.Bundle
+		fake       *fakeImporter
+		requireErr func(t *testing.T, err error)
 	}{
-		{"validation failed", v9fixture.OpenBundle, &fakeImporter{result: unbuilt, err: store.ErrValidationFailed}, store.ErrValidationFailed},
-		{"store refusal", v9fixture.OpenBundle, &fakeImporter{err: errImportBoom}, errImportBoom},
-		{"schema mismatch", v9fixture.MissingSchemaBundle, &fakeImporter{}, nil},
+		{"validation failed", v9fixture.OpenBundle, &fakeImporter{result: unbuilt, err: store.ErrValidationFailed}, requireErrorIs(store.ErrValidationFailed)},
+		{"store refusal", v9fixture.OpenBundle, &fakeImporter{err: errImportBoom}, requireErrorIs(errImportBoom)},
+		{"schema mismatch", v9fixture.MissingSchemaBundle, &fakeImporter{}, func(t *testing.T, err error) {
+			t.Helper()
+			var mismatch snapshot.MismatchError
+			require.ErrorAs(t, err, &mismatch)
+		}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -242,15 +246,20 @@ func Test_sync_and_import_deletes_nothing_when_the_store_is_not_built(t *testing
 
 			outcome, err := srv.SyncAndImport(t.Context(), c.bundle(t, t.TempDir()).Dir)
 
-			require.Error(t, err)
-			if c.want != nil {
-				require.ErrorIs(t, err, c.want)
-			}
+			c.requireErr(t, err)
 			assert.Nil(t, outcome.Pruned)
 			assert.Empty(t, rm.calls)
 			assertSnapshotPairs(t, dir, true, ids...)
 			assert.FileExists(t, filepath.Join(dir, oldIDs(4)[3]+".json"))
 		})
+	}
+}
+
+// requireErrorIs is a check that err is want.
+func requireErrorIs(want error) func(t *testing.T, err error) {
+	return func(t *testing.T, err error) {
+		t.Helper()
+		require.ErrorIs(t, err, want)
 	}
 }
 
@@ -327,45 +336,57 @@ func Test_sync_and_import_sweeps_orphan_manifests_once_the_store_is_built(t *tes
 	assertSnapshotPairs(t, dir, true, ids[0])
 }
 
+// afterBuild is what syncAfterBuild leaves: the sync's result, the removals it made, and the old snapshots' IDs and folder.
+type afterBuild struct {
+	outcome snapshot.Outcome
+	err     error
+	rm      *fakeRemover
+	ids     []string
+	dir     string
+}
+
+// syncAfterBuild syncs beside three old snapshots with a keep of 1, the ctx ending right after the build when interrupt is set.
+func syncAfterBuild(t *testing.T, interrupt bool) afterBuild {
+	t.Helper()
+	home := t.TempDir()
+	ids := oldIDs(3)
+	dir := prunable(t, home, ids...)
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	fake := &fakeImporter{result: store.Result{Built: true}, interrupt: interrupt, cancel: cancel}
+	rm := &fakeRemover{}
+	srv := newImportServer(t, home, fake, snapshot.WithAutoPrune(1), snapshot.WithRemove(rm.remove))
+
+	outcome, err := srv.SyncAndImport(ctx, v9fixture.OpenBundle(t, t.TempDir()).Dir)
+	return afterBuild{outcome: outcome, err: err, rm: rm, ids: ids, dir: dir}
+}
+
 func Test_sync_and_import_deletes_nothing_once_interrupted_after_the_build(t *testing.T) {
 	t.Parallel()
-	cases := []struct {
-		name      string
-		interrupt bool
-	}{
-		{"interrupted after the build", true},
-		{"not interrupted", false},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
-			home := t.TempDir()
-			ids := oldIDs(3)
-			dir := prunable(t, home, ids...)
-			ctx, cancel := context.WithCancel(t.Context())
-			t.Cleanup(cancel)
-			fake := &fakeImporter{result: store.Result{Built: true}, interrupt: c.interrupt, cancel: cancel}
-			rm := &fakeRemover{}
-			srv := newImportServer(t, home, fake, snapshot.WithAutoPrune(1), snapshot.WithRemove(rm.remove))
 
-			outcome, err := srv.SyncAndImport(ctx, v9fixture.OpenBundle(t, t.TempDir()).Dir)
+	got := syncAfterBuild(t, true)
 
-			if !c.interrupt {
-				require.NoError(t, err)
-				assert.NotEmpty(t, rm.calls)
-				return
-			}
-			require.EqualError(t, err, interruptedPruneLine)
-			require.ErrorIs(t, err, context.Canceled)
-			require.NotNil(t, outcome.Store)
-			assert.True(t, outcome.Store.Built)
-			require.NotNil(t, outcome.Pruned)
-			assert.Equal(t, 3, outcome.Pruned.NotDeleted)
-			assert.Empty(t, outcome.Pruned.Deleted)
-			assert.Empty(t, rm.calls)
-			assertSnapshotPairs(t, dir, true, ids...)
-		})
-	}
+	require.EqualError(t, got.err, interruptedPruneLine)
+	require.ErrorIs(t, got.err, context.Canceled)
+	require.NotNil(t, got.outcome.Store)
+	assert.True(t, got.outcome.Store.Built)
+	require.NotNil(t, got.outcome.Pruned)
+	assert.Equal(t, 3, got.outcome.Pruned.NotDeleted)
+	assert.Empty(t, got.outcome.Pruned.Deleted)
+	assert.Empty(t, got.rm.calls)
+	assertSnapshotPairs(t, got.dir, true, got.ids...)
+}
+
+func Test_sync_and_import_deletes_the_old_snapshots_when_not_interrupted_after_the_build(t *testing.T) {
+	t.Parallel()
+
+	got := syncAfterBuild(t, false)
+
+	require.NoError(t, got.err)
+	assert.NotEmpty(t, got.rm.calls)
+	require.NotNil(t, got.outcome.Pruned)
+	assert.Len(t, got.outcome.Pruned.Deleted, 3)
+	assertSnapshotPairs(t, got.dir, false, got.ids...)
 }
 
 func Test_sync_and_import_is_interrupted_while_deleting_old_snapshots(t *testing.T) {

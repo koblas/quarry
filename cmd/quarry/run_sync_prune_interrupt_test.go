@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
@@ -23,9 +24,8 @@ type interruptedRun struct {
 	stdout, stderr string
 }
 
-// interruptedSync runs quarry sync with args beside 14 old snapshots, three beyond the newest 12.
-// Deletes go newest first: the first is refused, the second cancels the run once deleted, and the
-// oldest is left unattempted.
+// interruptedSync runs quarry sync with args beside 14 old snapshots, three beyond the newest 12: the
+// newest of them is refused, the next cancels the run once deleted, the oldest is never attempted.
 func interruptedSync(t *testing.T, args ...string) interruptedRun {
 	t.Helper()
 	home := t.TempDir()
@@ -48,7 +48,7 @@ func Test_run_sync_says_it_was_interrupted_while_deleting_old_snapshots(t *testi
 	assert.Equal(t, 1, got.exitCode)
 	assert.Equal(t, "quarry: warning: cannot delete snapshot "+fixtures[2].id+": permission denied; run quarry snapshots prune to try again\n"+
 		interruptedWhilePruningLine, stderr)
-	assert.Contains(t, stdout, "Store")
+	assert.Regexp(t, `(?m)^Store {5}`+regexp.QuoteMeta(storeShown)+`$`, stdout)
 	assert.Regexp(t, `Pruned {4}1 snapshot beyond the newest 12 \(`+megabytes(middleBytes)+`\)\n$`, stdout)
 	assert.NoFileExists(t, filepath.Join(got.dir, fixtures[1].id+".sqlite"))
 	assert.FileExists(t, filepath.Join(got.dir, fixtures[0].id+".sqlite"))

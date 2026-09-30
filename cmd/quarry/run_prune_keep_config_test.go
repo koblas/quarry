@@ -118,6 +118,7 @@ func Test_run_snapshots_prune_deletes_exactly_the_oldest_when_snapshots_keep_is_
 }
 
 func Test_run_snapshots_prune_accepts_snapshots_keep_of_one(t *testing.T) {
+	pinLocalZone(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
@@ -127,7 +128,12 @@ func Test_run_snapshots_prune_accepts_snapshots_keep_of_one(t *testing.T) {
 
 	require.Equal(t, 0, exitCode, stderr)
 	assert.Empty(t, stderr)
-	assert.Contains(t, stdout, "Deleted 4 snapshots")
+	assert.Equal(t, ""+
+		"Deleted 4 snapshots (3.9 MB), keeping the newest one:\n"+
+		"  20260930T141502Z  2026-09-30 10:15 EDT  0.2 MB\n"+
+		"  20260930T090000Z  2026-09-30 05:00 EDT  0.2 MB\n"+
+		"  20260929T090011Z  2026-09-29 05:00 EDT  2.2 MB\n"+
+		"  20260927T143005Z  2026-09-27 10:30 EDT  1.2 MB\n", stdout)
 	requireSnapshotsGone(t, dir, pruneMorning, pruneNoon, pruneMiddle, pruneOldest)
 	requireSnapshotsKept(t, dir, pruneNewest)
 }

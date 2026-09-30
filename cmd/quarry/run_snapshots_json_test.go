@@ -334,7 +334,9 @@ func Test_run_snapshots_json_names_the_recorded_path_and_marks_nothing_when_no_l
 			require.Equal(t, 0, exitCode, stderr)
 			assert.Empty(t, stderr)
 			assert.JSONEq(t, `{"id":"`+snapshotID(recorded)+`","path":"`+recorded+`"}`, jsonStoreSnapshot(t, stdout))
-			for _, entry := range jsonEntries(t, stdout) {
+			entries := jsonEntries(t, stdout)
+			require.Len(t, entries, len(olderPair()))
+			for _, entry := range entries {
 				assert.Equal(t, "false", string(entry["store"]))
 			}
 		})
