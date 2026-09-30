@@ -161,6 +161,19 @@ Total                                   165.5 MB
 | positional argument (`quarry snapshots list`) | empty | `quarry: snapshots takes no arguments; to delete old snapshots run quarry snapshots prune; Run 'quarry snapshots --help' for usage.` | 2 |
 | C1/C2/C2q/C2r/C4 | empty | as ruled | 1 |
 
+Further `snapshots` outcomes (copy ruling, SCENARIO-16):
+
+| Outcome | stdout | stderr | Exit |
+|---|---|---|---|
+| a listed `.sqlite` whose stat fails (folder readable, not searchable) | empty | `quarry: cannot read ~/Library/Application Support/quarry/snapshots: <OS reason per G1>` | 1 |
+| no snapshots and store unreadable | header only; JSON `snapshots:[]`, `store_snapshot:null` | the no-snapshots line, then `quarry: warning: cannot tell which snapshot the store was built from: <reason>`; `warnings[]` carries both in that order without prefixes | 0 |
+| manifest decodes but `taken_at` does not parse, or `source` is empty | that cell reads `unknown`; Status still follows `schema.verified` (never `no manifest`); `--json` only the affected field is `null` | nothing | 0 |
+| store of this format with zero import runs | table, nothing marked; `store_snapshot:null` | `quarry: warning: cannot tell which snapshot the store was built from: the store has no import history` | 0 |
+| store of another format (R2) that names no snapshot path | table, nothing marked; `store_snapshot:null` | `quarry: warning: cannot tell which snapshot the store was built from: the store was built by another version of quarry` | 0 |
+| interrupted (SIGINT/SIGTERM); `ctx.Err()` is checked before any store-fault classification | empty | `quarry: snapshots interrupted` | 1 |
+
+An R2 store that does name a snapshot path stays readable: that snapshot is marked (and protected by prune).
+
 ### `quarry snapshots prune`
 - Use `prune`; Short `Delete all but the newest snapshots`
 - Long:
@@ -196,6 +209,14 @@ With --dry-run, prune lists what it would delete and deletes nothing.
 | positional argument | empty | `quarry: prune takes no arguments; Run 'quarry snapshots prune --help' for usage.` | 2 |
 | folder unreadable | empty | as `snapshots` | 1 |
 | C1/C2/C2q/C2r/C4 | empty | as ruled | 1 |
+
+Further `prune` outcomes (copy ruling, SCENARIO-16; all apply to `--dry-run` too):
+
+| Outcome | stdout | stderr | Exit |
+|---|---|---|---|
+| store of this format with zero import runs | empty | `quarry: cannot tell which snapshot the store at ~/Library/Application Support/quarry/quarry.duckdb was built from (the store has no import history), so no snapshot was deleted; run quarry sync to rebuild the store, then prune again` | 1 |
+| store of another format (R2) naming no snapshot path | empty | `quarry: cannot tell which snapshot the store at ~/Library/Application Support/quarry/quarry.duckdb was built from (the store was built by another version of quarry), so no snapshot was deleted; run quarry sync to rebuild the store, then prune again` | 1 |
+| interrupted before any delete | empty | `quarry: snapshots prune interrupted` | 1 |
 
 - `--json` (one shape): `{"dry_run":false,"keep":12,"store_snapshot":{…}|null,"deleted":[{"id","path","bytes"}],"would_delete":[{"id","path","bytes"}],"failed":[{"id","path","reason"}],"warnings":[]}`. `would_delete` `[]` in a real run; `deleted`/`failed` `[]` in a dry run; partial failure still prints JSON, exit 1.
 
@@ -242,6 +263,7 @@ if there is exactly one.
 6. Unchanged (still true): `documentsUnreadableRefusal`, `quickenDocumentsUnreadableRefusal` (`discover.go:154-168`); `outcome.go:26`, `import.go:198` "the snapshot is kept at …".
 7. `duckstore/status.go:27`, `duckstore.go:175` → latest `import_runs` row (P2c-10).
 8. PRD `docs/initial-prd.md` :127, :146, :163 per P2c-13.
+10. R3 reason for a store with no import run (`duckstore/status.go` `errImportRunCount`; wording `expected exactly one import run, found 0` is false now that history holds several) → `quarry: cannot read the store at ~/Library/Application Support/quarry/quarry.duckdb: the store has no import history; run quarry sync to rebuild it` (exit 1); update pinned tests. Owner: SCENARIO-16.
 9. Close debts when 2c ships: 2a spec:15, 2a STATE:72, 2b STATE "Snapshots accumulate … until 2c"; 2b STATE "Parallel report pipeline" (PRE-01).
 
 ---
