@@ -1,6 +1,6 @@
 ---
 id: PRE-01
-status: open
+status: done
 ---
 
 # PRE-01: Report-pipeline de-duplication and the R3 reason phrase moved to `internal/store`
