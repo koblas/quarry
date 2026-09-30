@@ -51,6 +51,10 @@ func Test_sync_and_import_names_the_history_fault_reason_in_the_warning(t *testi
 			"its import_runs table is incomplete",
 		},
 		{
+			"an id too large to follow", &store.OpenError{Fault: store.OpenFaultOther, Path: storePath, Reason: "its import_runs table has an id too large to follow"},
+			"its import_runs table has an id too large to follow",
+		},
+		{
 			"other fault names the store by its display path", &store.OpenError{Fault: store.OpenFaultOther, Path: storePath, Reason: "cannot open " + storePath + ": broken"},
 			"cannot open ~/quarry/quarry.duckdb: broken",
 		},

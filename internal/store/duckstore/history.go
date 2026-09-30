@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"slices"
 	"strings"
@@ -40,6 +41,7 @@ WHERE database_name = current_database() AND schema_name = 'main' AND table_name
 // The phrases a sync prints for a history fault found after the store opened, each naming the previous store as "it".
 const (
 	reasonRunsRepeatID   = "its import_runs table repeats an id"
+	reasonRunsIDTooLarge = "its import_runs table has an id too large to follow"
 	reasonRunsMissing    = "it has no import_runs table"
 	reasonRunsIncomplete = "its import_runs table is incomplete"
 )
@@ -47,6 +49,7 @@ const (
 var (
 	errRunsMissing  = errors.New("import_runs table is absent")
 	errRunsRepeatID = errors.New("import_runs holds an id twice")
+	errRunsIDLimit  = errors.New("import_runs holds the largest id, which no run can follow")
 )
 
 // readHistory reads the import_runs of the store at s.Path() and closes it before returning.
@@ -82,13 +85,15 @@ func historyFault(path string, err error) *store.OpenError {
 		reason = reasonRunsMissing
 	case errors.Is(err, errRunsRepeatID):
 		reason = reasonRunsRepeatID
+	case errors.Is(err, errRunsIDLimit):
+		reason = reasonRunsIDTooLarge
 	}
 	return &store.OpenError{Fault: store.OpenFaultOther, Path: path, Reason: reason, Err: err}
 }
 
-// readRuns reads every import_runs row through db; the SELECT names only the fixed columns,
-// never ones the store's own catalog reports. It fails with errRunsMissing when the store
-// has no import_runs table, errRunsRepeatID when two rows share an id, else with the read's own fault.
+// readRuns reads every import_runs row through db, selecting only the fixed columns. It fails
+// with errRunsMissing (no table), errRunsRepeatID (an id twice), errRunsIDLimit (an id no run
+// can follow), else with the read's own fault.
 func readRuns(ctx context.Context, db ReadDB) (history, error) {
 	present := map[string]bool{}
 	err := db.QueryRows(ctx, runColumnsQuery, nil, func(scan func(dest ...any) error) error {
@@ -132,6 +137,9 @@ func readRuns(ctx context.Context, db ReadDB) (history, error) {
 		})
 	if err != nil {
 		return history{}, fmt.Errorf("read import_runs: %w", err)
+	}
+	if carried.maxID == math.MaxInt64 {
+		return history{}, errRunsIDLimit
 	}
 	return carried, nil
 }

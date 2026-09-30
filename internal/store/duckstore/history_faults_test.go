@@ -3,6 +3,7 @@ package duckstore_test
 import (
 	"context"
 	"database/sql"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,6 +19,7 @@ const (
 	reasonRepeatedID = "its import_runs table repeats an id"
 	reasonNoTable    = "it has no import_runs table"
 	reasonIncomplete = "its import_runs table is incomplete"
+	reasonIDTooLarge = "its import_runs table has an id too large to follow"
 )
 
 // importRunsColumns are the 19 columns every store format has, each with the cell of a valid run.
@@ -141,6 +143,28 @@ func Test_replace_names_a_repeated_import_run_id_as_the_history_fault(t *testing
 	assert.Equal(t, reasonRepeatedID, historyReason(t, st, replaced))
 	assert.Equal(t, 1, spy.closes)
 	assert.Equal(t, []int64{1}, importRunIDs(t, st))
+}
+
+func Test_replace_names_an_import_run_id_at_the_int64_maximum_as_the_history_fault(t *testing.T) {
+	t.Parallel()
+	st := newStoreFile(t, importRunsTable("", "", 1)+" UPDATE import_runs SET id = 9223372036854775807;")
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Equal(t, reasonIDTooLarge, historyReason(t, st, replaced))
+	assert.Equal(t, []int64{1}, importRunIDs(t, st))
+}
+
+func Test_replace_carries_an_import_run_id_one_below_the_int64_maximum_and_numbers_the_new_run_at_it(t *testing.T) {
+	t.Parallel()
+	st := newStoreFile(t, importRunsTable("", "", 1)+" UPDATE import_runs SET id = 9223372036854775806;")
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Nil(t, replaced.HistoryFault)
+	assert.Equal(t, []int64{math.MaxInt64 - 1, math.MaxInt64}, importRunIDs(t, st))
 }
 
 func Test_replace_names_a_missing_import_runs_table_as_the_history_fault(t *testing.T) {
