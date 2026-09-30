@@ -56,7 +56,7 @@ func linkedTrackingWarning(name string) string {
 func Test_spend_captions_the_named_accounts(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, namedAccounts(), spendTagNow, &stdout, &stderr, "--account", "visa infinite", "--account", chequingID)
+	err := executeSpend(t, namedAccounts(), spendNow, &stdout, &stderr, "--account", "visa infinite", "--account", chequingID)
 
 	require.NoError(t, err)
 	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in Visa Infinite, Chequing\n\nCategory  Currency  Spent\n", stdout.String())
@@ -65,7 +65,7 @@ func Test_spend_captions_the_named_accounts(t *testing.T) {
 func Test_spend_json_lists_the_named_accounts_in_account_filter(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, withSpending(namedAccounts()), spendTagNow, &stdout, &stderr,
+	err := executeSpend(t, withSpending(namedAccounts()), spendNow, &stdout, &stderr,
 		"--account", "visa infinite", "--account", chequingID, "--json")
 
 	require.NoError(t, err)
@@ -80,7 +80,7 @@ func Test_spend_passes_every_account_flag_to_the_report(t *testing.T) {
 	fake := namedAccounts()
 	fake.gotSpending = &got
 
-	err := executeSpend(t, fake, spendTagNow, &stdout, &stderr, "--account", "Old Card", "--account", visaID)
+	err := executeSpend(t, fake, spendNow, &stdout, &stderr, "--account", "Old Card", "--account", visaID)
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{oldCardID, visaID}, got.AccountIDs)
@@ -91,7 +91,7 @@ func Test_spend_json_puts_w2_in_warnings_unprefixed_before_w1(t *testing.T) {
 	fake := namedAccounts()
 	fake.spending = store.Spending{MultiTagSplits: 2}
 
-	err := executeSpend(t, fake, spendTagNow, &stdout, &stderr, "--by", "tag", "--account", "Old Card", "--json")
+	err := executeSpend(t, fake, spendNow, &stdout, &stderr, "--by", "tag", "--account", "Old Card", "--json")
 
 	require.NoError(t, err)
 	const w1 = "2 splits carry more than one tag, so the rows add up to more than the total"
@@ -106,7 +106,7 @@ func Test_spend_json_puts_w2_in_warnings_unprefixed_before_w1(t *testing.T) {
 func Test_spend_warns_once_per_named_account_left_out_of_reports_in_the_order_given(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, withSpending(namedAccounts()), spendTagNow, &stdout, &stderr,
+	err := executeSpend(t, withSpending(namedAccounts()), spendNow, &stdout, &stderr,
 		"--account", "Old Card", "--account", chequingID, "--account", oldBankID, "--account", "old card")
 
 	require.NoError(t, err)
@@ -117,7 +117,7 @@ func Test_spend_warns_once_per_named_account_left_out_of_reports_in_the_order_gi
 func Test_spend_warns_about_a_linked_tracking_account_in_the_order_given_among_the_left_out_warnings(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, withSpending(namedAccounts()), spendTagNow, &stdout, &stderr,
+	err := executeSpend(t, withSpending(namedAccounts()), spendNow, &stdout, &stderr,
 		"--account", "Old Card", "--account", linkedID, "--account", oldBankID, "--account", chequingID)
 
 	require.NoError(t, err)
@@ -128,7 +128,7 @@ func Test_spend_warns_about_a_linked_tracking_account_in_the_order_given_among_t
 func Test_spend_warns_only_that_linked_tracking_leaves_out_an_account_that_is_also_not_in_reports(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, withSpending(namedAccounts()), spendTagNow, &stdout, &stderr, "--account", bothID)
+	err := executeSpend(t, withSpending(namedAccounts()), spendNow, &stdout, &stderr, "--account", bothID)
 
 	require.NoError(t, err)
 	assert.Equal(t, "quarry: warning: "+linkedTrackingWarning("Old 401(k)")+"\n", stderr.String())
@@ -137,7 +137,7 @@ func Test_spend_warns_only_that_linked_tracking_leaves_out_an_account_that_is_al
 func Test_spend_json_lists_a_linked_tracking_warning_before_a_left_out_of_reports_one_unprefixed(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, withSpending(namedAccounts()), spendTagNow, &stdout, &stderr,
+	err := executeSpend(t, withSpending(namedAccounts()), spendNow, &stdout, &stderr,
 		"--account", linkedID, "--account", "Old Card", "--json")
 
 	require.NoError(t, err)
@@ -151,7 +151,7 @@ func Test_spend_json_lists_a_linked_tracking_warning_before_a_left_out_of_report
 func Test_spend_does_not_warn_about_an_account_in_reports(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, withSpending(namedAccounts()), spendTagNow, &stdout, &stderr, "--account", chequingID)
+	err := executeSpend(t, withSpending(namedAccounts()), spendNow, &stdout, &stderr, "--account", chequingID)
 
 	require.NoError(t, err)
 	assert.Empty(t, stderr.String())
@@ -160,7 +160,7 @@ func Test_spend_does_not_warn_about_an_account_in_reports(t *testing.T) {
 func Test_spend_refuses_an_unknown_account_without_warning_about_an_excluded_one(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, namedAccounts(), spendTagNow, &stdout, &stderr, "--account", "Old Card", "--account", "Nowhere")
+	err := executeSpend(t, namedAccounts(), spendNow, &stdout, &stderr, "--account", "Old Card", "--account", "Nowhere")
 
 	require.EqualError(t, err, "no account named \"Nowhere\"; run quarry accounts --all to list them")
 	assert.Empty(t, stderr.String())
@@ -170,7 +170,7 @@ func Test_spend_refuses_an_unknown_account_without_warning_about_an_excluded_one
 func Test_spend_refuses_an_unknown_account_without_warning_about_a_linked_tracking_one(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, namedAccounts(), spendTagNow, &stdout, &stderr, "--account", linkedID, "--account", "Nowhere")
+	err := executeSpend(t, namedAccounts(), spendNow, &stdout, &stderr, "--account", linkedID, "--account", "Nowhere")
 
 	require.EqualError(t, err, "no account named \"Nowhere\"; run quarry accounts --all to list them")
 	assert.Empty(t, stderr.String())

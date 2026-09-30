@@ -13,8 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var spendWindowNow = time.Date(2026, time.September, 29, 12, 0, 0, 0, time.UTC)
-
 func civilDay(year int, month time.Month, day int) time.Time {
 	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 }
@@ -47,7 +45,7 @@ func Test_spend_reads_the_period_its_since_and_until_flags_name(t *testing.T) {
 			var got store.SpendingParams
 			var stdout, stderr bytes.Buffer
 
-			err := executeSpend(t, fakeReportStore{gotSpending: &got}, spendWindowNow, &stdout, &stderr, c.args...)
+			err := executeSpend(t, fakeReportStore{gotSpending: &got}, spendNow, &stdout, &stderr, c.args...)
 
 			require.NoError(t, err)
 			assert.Equal(t, c.want, got.Window)
@@ -92,7 +90,7 @@ func Test_spend_refuses_a_period_it_cannot_use_before_reading_the_store(t *testi
 		t.Run(c.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
-			err := executeSpend(t, fakeReportStore{err: errStoreRead}, spendWindowNow, &stdout, &stderr, c.args...)
+			err := executeSpend(t, fakeReportStore{err: errStoreRead}, spendNow, &stdout, &stderr, c.args...)
 
 			var usage cli.UsageError
 			require.ErrorAs(t, err, &usage)
@@ -107,7 +105,7 @@ func Test_spend_refuses_a_bad_period_before_opening_the_report(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := cli.Env{
 		Stdout: &stdout, Stderr: &stderr,
-		Now: func() time.Time { return spendWindowNow },
+		Now: func() time.Time { return spendNow },
 		NewReport: func(context.Context, string) (*report.Server, error) {
 			return nil, errStoreRead
 		},
@@ -134,7 +132,7 @@ func Test_spend_refuses_an_empty_period_flag_as_a_bad_date(t *testing.T) {
 		t.Run(c.flag, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
-			err := executeSpend(t, fakeReportStore{}, spendWindowNow, &stdout, &stderr, c.flag, "")
+			err := executeSpend(t, fakeReportStore{}, spendNow, &stdout, &stderr, c.flag, "")
 
 			var usage cli.UsageError
 			require.ErrorAs(t, err, &usage)
@@ -146,7 +144,7 @@ func Test_spend_refuses_an_empty_period_flag_as_a_bad_date(t *testing.T) {
 func Test_spend_refuses_a_by_that_names_no_grouping_before_a_bad_period(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, fakeReportStore{}, spendWindowNow, &stdout, &stderr, "--by", "vendor", "--since", "2024-13")
+	err := executeSpend(t, fakeReportStore{}, spendNow, &stdout, &stderr, "--by", "vendor", "--since", "2024-13")
 
 	require.EqualError(t, err, "--by must be category, payee, tag or month")
 }
@@ -154,7 +152,7 @@ func Test_spend_refuses_a_by_that_names_no_grouping_before_a_bad_period(t *testi
 func Test_spend_help_shows_the_since_and_until_flags(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, fakeReportStore{}, spendWindowNow, &stdout, &stderr, "--help")
+	err := executeSpend(t, fakeReportStore{}, spendNow, &stdout, &stderr, "--help")
 
 	require.NoError(t, err)
 	assert.Regexp(t, `--since date +count transactions dated on or after date `+
@@ -166,7 +164,7 @@ func Test_spend_help_shows_the_since_and_until_flags(t *testing.T) {
 func Test_spend_help_shows_the_account_flag(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := executeSpend(t, fakeReportStore{}, spendWindowNow, &stdout, &stderr, "--help")
+	err := executeSpend(t, fakeReportStore{}, spendNow, &stdout, &stderr, "--help")
 
 	require.NoError(t, err)
 	assert.Regexp(t, `--account name +count only the account with this name or id; repeat for more`, stdout.String())
