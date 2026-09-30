@@ -9,6 +9,7 @@
 | SCENARIO-08 | code-first | A, B1, B2, V | 0/2/3/0 | yes (findings read-fault reason and silent format-3 rows unpinned; test-only fix); 1 copy ruling (both carry faults) |
 | SCENARIO-09 (+10) | code-first (light) | L, V | 0/1/0/2 | yes (reverse-order day bound unpinned; test-only fix) |
 | SCENARIO-11 (+12, 13) | code-first | A, B1, B2, V | 0/1/5/2 | yes (false unreachable on unknown-type rows; fallback + MINOR folds); 1 copy ruling (uncategorized Long row) |
+| SCENARIO-14 | code-first (light) | L, V | 0/3/1/0 | yes (counts per field, null payee, stdout write fault unpinned; test-only + helper extraction) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
