@@ -7,6 +7,7 @@ import (
 	"os"
 	"slices"
 	"testing"
+	"time"
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
 	"github.com/koblas/quarry/internal/platform/duckdb"
@@ -109,4 +110,9 @@ func skipAsRoot(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file modes")
 	}
+}
+
+// day is the civil day year-month-dayOfMonth at UTC midnight.
+func day(year int, month time.Month, dayOfMonth int) time.Time {
+	return time.Date(year, month, dayOfMonth, 0, 0, 0, 0, time.UTC)
 }
