@@ -224,6 +224,6 @@ func Test_run_status_refuses_a_store_without_an_import_run(t *testing.T) {
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
 	assert.Equal(t, "quarry: cannot read the store at "+abbreviated(t, storePathUnder(home), home)+
-		": expected exactly one import run, found 0; run quarry sync to rebuild it\n",
+		": the store has no import history; run quarry sync to rebuild it\n",
 		stderr.String())
 }

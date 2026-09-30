@@ -4,13 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 
 	"github.com/koblas/quarry/internal/store"
 )
 
-// errImportRunCount refuses a store whose import_runs holds no run.
-var errImportRunCount = errors.New("expected exactly one import run")
+// errNoImportRuns refuses a store whose import_runs holds no run; its text is the phrase a user reads.
+var errNoImportRuns = errors.New("the store has no import history")
 
 // statusQuery reads store_info, the import run and the transaction dates; NULL check counts read as zero.
 const statusQuery = `
@@ -59,7 +58,7 @@ func (s *Store) Status(ctx context.Context) (store.Status, error) {
 		return store.Status{}, openFault(st.Path, err)
 	}
 	if !found {
-		return store.Status{}, openFault(st.Path, fmt.Errorf("%w, found 0", errImportRunCount))
+		return store.Status{}, openFault(st.Path, errNoImportRuns)
 	}
 
 	run.Snapshot.TakenAt = takenAt.Time

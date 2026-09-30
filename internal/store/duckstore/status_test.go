@@ -136,7 +136,7 @@ func Test_status_refuses_a_store_without_an_import_run(t *testing.T) {
 
 	_, err = st.Status(t.Context())
 
-	assertOtherFault(t, err, "expected exactly one import run, found 0")
+	assertOtherFault(t, err, "the store has no import history")
 }
 
 func Test_status_fails_on_a_missing_store_without_creating_it(t *testing.T) {
