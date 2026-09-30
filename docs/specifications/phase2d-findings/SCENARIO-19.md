@@ -35,6 +35,7 @@ Contract. Text: `Findings` row after `Transfers` (`%-10s`), exactly `Findings  1
 - [x] Step 7: full verification block + `spec-check.py phase2d-findings`; tick SCENARIO-19 with its acceptance test and SCENARIO-20 `— delivered by SCENARIO-19 — ` + its test (test reference last on the line); rewrite `STATE.md`
 
 ## Handoff
+- Superseded by orchestrator ruling before run A: suffix stripping is `config.Problem` in `internal/config/refusal.go` (one owner), not a private cli const; Long paragraph 2 and `status --json` `warnings[]` follow the spec's SCENARIO-19 mid-feature rulings.
 
 **Binding decisions** — a later scenario must not contradict these without saying so:
 - Config refused on `status` => ignore list is nil, NOT "unknown": would-be-ignored findings are in `open` (and `new`), `ignored` is null in JSON and absent from text — the spec's "counted as open", pinned by the folded acceptance test.

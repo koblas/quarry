@@ -67,4 +67,4 @@ Scenarios complete: SCENARIO-01..20 (02, 03 delivered by 01; 05 by 04; 07 by 06;
 
 ## Open debts
 - Orchestrator: the Reference check (real-file review of heuristic findings) runs after SCENARIO-28, before the gate round (unowned until then)
-- Orchestrator: config warnings (C3, W1) in `--json` `warnings[]` name `<config>` abbreviated (`~/...`), a 2c-era deviation from the 2a absolute-in-`--json` rule — raise at the final product-vision pass (unowned). Same pass: `status --json` `warnings[]` carrying the bad-config line (unprefixed) was unruled by product-vision, mirroring `findings --json` (SCENARIO-19)
+- Orchestrator: config warnings (C3, W1) in `--json` `warnings[]` name `<config>` abbreviated (`~/...`), a 2c-era deviation from the 2a absolute-in-`--json` rule — raise at the final product-vision pass (unowned). Includes `status --json`'s bad-config entry (ruled at SCENARIO-19 to use the same form as the other config warnings)
