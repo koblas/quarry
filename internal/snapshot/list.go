@@ -200,35 +200,44 @@ func (s *Server) storeSnapshot(ctx context.Context) (string, string, error) {
 	return "", openErr.UnreadableReason(homepath.Abbreviate(s.home, openErr.Path)), nil
 }
 
-// markStoreSnapshot sets Store on the one entry that is the file recorded names, or on none.
-// storeEntryIndex decides which.
+// markStoreSnapshot sets Store on the one entry the store's recorded snapshot path resolves to, or
+// on none; that entry is the one prune and auto-prune never delete.
 func markStoreSnapshot(entries []Entry, recorded string) {
 	if i := storeEntryIndex(entries, recorded); i >= 0 {
 		entries[i].Store = true
 	}
 }
 
-// storeEntryIndex is the entry that is the recorded file on disk, preferring the recorded ID, else
-// the newest; failing that the entry whose ID is the recorded one's, letter case aside; else -1.
+// storeEntryIndex is the index of the entry, newest first, that recorded resolves to, or -1: the one
+// place that decides which snapshot is the store's.
 func storeEntryIndex(entries []Entry, recorded string) int {
-	id := ID(recorded)
-	sameFile := -1
-	if want, err := os.Stat(recorded); err == nil {
-		for i, entry := range entries {
-			if info, err := os.Stat(entry.Path); err != nil || !os.SameFile(want, info) {
-				continue
-			}
-			// A hard link under another ID must not outrank the file the store recorded.
-			if strings.EqualFold(entry.ID, id) {
-				return i
-			}
-			if sameFile < 0 {
-				sameFile = i
-			}
+	sameFile := entriesAt(entries, recorded)
+	// The entry that is the recorded file under the recorded name is the one the path resolves to. The symlink-free
+	// name goes first: a hard link carrying the symlink's own name is not what the symlink points at.
+	resolved, _ := filepath.EvalSymlinks(recorded)
+	for _, name := range []string{ID(resolved), ID(recorded)} {
+		if i := slices.IndexFunc(sameFile, func(i int) bool { return strings.EqualFold(entries[i].ID, name) }); i >= 0 {
+			return sameFile[i]
 		}
 	}
-	if sameFile >= 0 {
-		return sameFile
+	// The recorded file lies outside the folder and shares an entry's content by hard link: the newest such entry.
+	if len(sameFile) > 0 {
+		return sameFile[0]
 	}
-	return slices.IndexFunc(entries, func(e Entry) bool { return strings.EqualFold(e.ID, id) })
+	// No entry is the recorded file, which is gone or a separate file elsewhere: the entry carrying its ID, if any.
+	return slices.IndexFunc(entries, func(e Entry) bool { return strings.EqualFold(e.ID, ID(recorded)) })
+}
+
+// entriesAt returns the indexes of the entries that are the file at path, symlinks followed and
+// letter case as the volume reads it; none when no file is there.
+func entriesAt(entries []Entry, path string) []int {
+	// os.SameFile is false for a path that did not stat, so neither Stat error needs a branch.
+	want, _ := os.Stat(path)
+	var same []int
+	for i, entry := range entries {
+		if info, _ := os.Stat(entry.Path); os.SameFile(want, info) {
+			same = append(same, i)
+		}
+	}
+	return same
 }

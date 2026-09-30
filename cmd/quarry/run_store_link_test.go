@@ -4,7 +4,6 @@ package main
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -12,32 +11,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// linkID is a valid snapshot ID older than every fixture, given to a hard link of the store's snapshot.
+// linkID is a valid snapshot ID older than every fixture, given to a link of the store's snapshot.
 const linkID = "20200101T000000Z"
 
-// hardLinkStoreSnapshot links the store's snapshot, pruneOldest, into the snapshots folder under linkID.
-func hardLinkStoreSnapshot(t *testing.T, dir string) {
-	t.Helper()
-	require.NoError(t, os.Link(filepath.Join(dir, pruneOldest+".sqlite"), filepath.Join(dir, linkID+".sqlite")))
-}
-
-// storeMarkedIDs returns the id of each entry stdout's "snapshots" array marks "store": true.
-func storeMarkedIDs(t *testing.T, stdout string) []string {
+// storeIdentity returns, from stdout's snapshots --json document, the id of each entry marked
+// "store": true and the id under "store_snapshot".
+func storeIdentity(t *testing.T, stdout string) ([]string, string) {
 	t.Helper()
 	var doc struct {
 		Snapshots []struct {
 			ID    string `json:"id"`
 			Store bool   `json:"store"`
 		} `json:"snapshots"`
+		StoreSnapshot struct {
+			ID string `json:"id"`
+		} `json:"store_snapshot"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(stdout), &doc))
-	var ids []string
+	marked := []string{}
 	for _, entry := range doc.Snapshots {
 		if entry.Store {
-			ids = append(ids, entry.ID)
+			marked = append(marked, entry.ID)
 		}
 	}
-	return ids
+	return marked, doc.StoreSnapshot.ID
 }
 
 func Test_run_snapshots_prune_dry_run_keeps_the_recorded_snapshot_and_counts_its_hard_link_as_deletable(t *testing.T) {
@@ -45,7 +42,7 @@ func Test_run_snapshots_prune_dry_run_keeps_the_recorded_snapshot_and_counts_its
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
-	hardLinkStoreSnapshot(t, dir)
+	hardLink(t, snapshotFile(dir, pruneOldest), snapshotFile(dir, linkID))
 	buildStoreFrom(t, home, filepath.Join(dir, pruneOldest+".sqlite"))
 
 	exitCode, stdout, stderr := runPrune(t, "--keep", "1", "--dry-run")
@@ -66,18 +63,13 @@ func Test_run_snapshots_json_marks_only_the_recorded_snapshot_when_another_is_a_
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
-	hardLinkStoreSnapshot(t, dir)
+	hardLink(t, snapshotFile(dir, pruneOldest), snapshotFile(dir, linkID))
 	buildStoreFrom(t, home, filepath.Join(dir, pruneOldest+".sqlite"))
 
 	exitCode, stdout, stderr := runSnapshotsJSON(t)
 
 	require.Equal(t, 0, exitCode, stderr)
-	assert.Equal(t, []string{pruneOldest}, storeMarkedIDs(t, stdout))
-	var doc struct {
-		StoreSnapshot struct {
-			ID string `json:"id"`
-		} `json:"store_snapshot"`
-	}
-	require.NoError(t, json.Unmarshal([]byte(stdout), &doc))
-	assert.Equal(t, pruneOldest, doc.StoreSnapshot.ID)
+	marked, storeSnapshotID := storeIdentity(t, stdout)
+	assert.Equal(t, []string{pruneOldest}, marked)
+	assert.Equal(t, pruneOldest, storeSnapshotID)
 }
