@@ -24,11 +24,14 @@ func Test_run_sync_help_names_both_documents_folders(t *testing.T) {
 
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())
-	assert.Contains(t, stdout.String(), "Without --quicken, quarry looks for .quicken files in ~/Documents and in\n"+
+	assert.Contains(t, stdout.String(), "Without --quicken, quarry uses quicken.path from\n"+
+		"~/Library/Application Support/quarry/config.toml if it is set. Otherwise it\n"+
+		"looks for .quicken files in ~/Documents and in\n"+
 		"~/Library/Application Support/Quicken/Documents, and uses the one it finds\n"+
 		"if there is exactly one.")
-	assert.Contains(t, stdout.String(),
-		"path to the .quicken file to snapshot (default: the only one in ~/Documents or Quicken's Documents folder)")
+	//nolint:dupword // the --quicken placeholder "path" is followed by usage text that starts with it
+	assert.Contains(t, stdout.String(), "--quicken path    path to the .quicken file to snapshot "+
+		"(default: quicken.path in the config file, else the only one in ~/Documents or Quicken's Documents folder)")
 }
 
 func Test_run_prints_the_sync_help(t *testing.T) {

@@ -134,7 +134,7 @@ func dedupeByIdentity(candidates []bundleCandidate) []bundleCandidate {
 // location.
 func noBundleFoundRefusal() error {
 	return RefusalError{msg: "no .quicken file found in ~/Documents or " +
-		"~/Library/Application Support/Quicken/Documents; pass one with --quicken <path>"}
+		"~/Library/Application Support/Quicken/Documents; pass one with --quicken <path> or set quicken.path in " + configFileShown}
 }
 
 // multipleQuickenBundlesRefusal reports every distinct bundle found, as full
@@ -146,8 +146,8 @@ func multipleQuickenBundlesRefusal(home string, candidates []bundleCandidate) er
 	}
 	sort.Strings(paths)
 	return RefusalError{msg: fmt.Sprintf(
-		"found %s .quicken files (%s); choose one with --quicken <path>",
-		humanize.Thousands(len(paths)), strings.Join(paths, ", "))}
+		"found %s .quicken files (%s); choose one with --quicken <path> or set quicken.path in %s",
+		humanize.Thousands(len(paths)), strings.Join(paths, ", "), configFileShown)}
 }
 
 // documentsUnreadableRefusal reports that ~/Documents could not be read.

@@ -30,8 +30,8 @@ var errFromWithQuickenUsage = UsageError{
 	msg: "--from and --quicken cannot be used together; --from rebuilds from a snapshot without reading Quicken",
 }
 
-// newSyncCommand builds the sync subcommand: resolve or discover the
-// bundle, sync it, and render the result.
+// newSyncCommand builds the sync subcommand: resolve the bundle (--quicken,
+// quicken.path or discovery), sync it, and render the result.
 func newSyncCommand(newServer ServerFactory, loadConfig ConfigLoader, jsonOut *bool) *cobra.Command {
 	var quickenPath, fromValue string
 
@@ -52,7 +52,9 @@ fails, the previous store is left unchanged.
 Quicken must be running with the file open: it encrypts the database when
 the file is closed. quarry only reads the Quicken file; it never writes to it.
 
-Without --quicken, quarry looks for .quicken files in ~/Documents and in
+Without --quicken, quarry uses quicken.path from
+~/Library/Application Support/quarry/config.toml if it is set. Otherwise it
+looks for .quicken files in ~/Documents and in
 ~/Library/Application Support/Quicken/Documents, and uses the one it finds
 if there is exactly one.
 
@@ -93,7 +95,8 @@ does not read Quicken at all.`,
 			if cmd.Flags().Changed("from") {
 				outcome, err = srv.ImportFrom(cmd.Context(), fromValue)
 			} else {
-				bundlePath, resolveErr := resolveBundle(cmd, home, quickenPath)
+				choice := snapshot.BundleChoice{Flag: quickenPath, Configured: cfg.QuickenPath}
+				bundlePath, resolveErr := snapshot.ResolveBundle(home, choice)
 				if resolveErr != nil {
 					return &runtimeError{err: resolveErr}
 				}
@@ -138,18 +141,9 @@ does not read Quicken at all.`,
 		},
 	}
 	cmd.Flags().StringVar(&quickenPath, "quicken", "",
-		"`path` to the .quicken file to snapshot (default: the only one in ~/Documents or Quicken's Documents folder)")
+		"`path` to the .quicken file to snapshot (default: quicken.path in the config file, else the only one in ~/Documents or Quicken's Documents folder)")
 	cmd.Flags().StringVar(&fromValue, "from", "",
 		"`snapshot` to rebuild the store from instead of reading Quicken: an ID such as 20260927T143005Z, or the path to its .sqlite file")
 
 	return cmd
-}
-
-// resolveBundle returns the bundle a plain sync snapshots: the --quicken
-// value when given, else the one bundle discovery finds.
-func resolveBundle(cmd *cobra.Command, home, quickenPath string) (string, error) {
-	if cmd.Flags().Changed("quicken") {
-		return snapshot.ResolveBundlePath(home, quickenPath) //nolint:wrapcheck // a RefusalError is final user copy; a prefix would change it
-	}
-	return snapshot.DiscoverBundle(home) //nolint:wrapcheck // a RefusalError is final user copy; a prefix would change it
 }
