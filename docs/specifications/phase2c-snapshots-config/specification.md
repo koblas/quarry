@@ -262,6 +262,7 @@ Prune `--json` rulings (copy ruling, SCENARIO-28; refines U7 — "not consulted"
 |---|---|
 | open or read fault | `store.OpenError.UnreadableReason`, verbatim (e.g. `the file is not a DuckDB database`) |
 | ids in `import_runs` not unique | `its import_runs table repeats an id` |
+| highest id in `import_runs` is 9223372036854775807 (no next id) | `its import_runs table has an id too large to follow` |
 | no `import_runs` table | `it has no import_runs table` |
 | a required column (`id`, `snapshot_path`, `snapshot_sha256`) missing or NULL, or any other row-read fault on a readable file | `its import_runs table is incomplete` |
 
