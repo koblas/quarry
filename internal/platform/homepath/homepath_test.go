@@ -67,6 +67,7 @@ func Test_Abbreviate_ignores_trailing_slashes_on_home(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, c.want, homepath.Abbreviate(c.home, c.path))
 		})
 	}
