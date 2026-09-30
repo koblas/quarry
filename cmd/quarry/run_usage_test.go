@@ -148,6 +148,21 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 			wantStderr: "quarry: snapshots takes no arguments; to delete old snapshots run quarry snapshots prune; Run 'quarry snapshots --help' for usage.\n",
 		},
 		{
+			name:       "prune with a negative keep",
+			args:       []string{"snapshots", "prune", "--keep", "-1"},
+			wantStderr: "quarry: --keep must be 1 or more; the snapshot the store was built from is always kept; Run 'quarry snapshots prune --help' for usage.\n",
+		},
+		{
+			name:       "prune with a keep that is not a number",
+			args:       []string{"snapshots", "prune", "--keep", "abc"},
+			wantStderr: "quarry: invalid argument \"abc\" for \"--keep\" flag: strconv.ParseInt: parsing \"abc\": invalid syntax; Run 'quarry snapshots prune --help' for usage.\n",
+		},
+		{
+			name:       "prune with a positional argument",
+			args:       []string{"snapshots", "prune", "extra"},
+			wantStderr: "quarry: prune takes no arguments; Run 'quarry snapshots prune --help' for usage.\n",
+		},
+		{
 			name:       "unknown command",
 			args:       []string{"frob"},
 			wantStderr: "quarry: unknown command \"frob\" for \"quarry\"; Run 'quarry --help' for usage.\n",

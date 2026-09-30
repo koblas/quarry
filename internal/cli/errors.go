@@ -18,3 +18,9 @@ func noArgs(cmd *cobra.Command, args []string) error {
 	}
 	return nil
 }
+
+// ReportedError is a failure the command has already reported on stderr: the process exits 1 and prints nothing more.
+type ReportedError struct{}
+
+// unreachable: Execute returns ReportedError as is and the process entry point tests for it without reading its text.
+func (ReportedError) Error() string { return "already reported" }

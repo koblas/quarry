@@ -174,6 +174,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 // runWith is run against an explicit Env.
 func runWith(ctx context.Context, args []string, env cli.Env) int {
 	if err := cli.Execute(ctx, args, env); err != nil {
+		if _, ok := errors.AsType[cli.ReportedError](err); ok {
+			return 1
+		}
 		_, _ = fmt.Fprintf(env.Stderr, "quarry: %s\n", err)
 
 		if _, ok := errors.AsType[cli.UsageError](err); ok {

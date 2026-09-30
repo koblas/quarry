@@ -65,6 +65,9 @@ func Execute(ctx context.Context, args []string, env Env) error {
 	if ue, ok := errors.AsType[UsageError](err); ok {
 		return ue
 	}
+	if re, ok := errors.AsType[ReportedError](err); ok {
+		return re
+	}
 	if re, ok := errors.AsType[*runtimeError](err); ok {
 		return re.err
 	}

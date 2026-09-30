@@ -32,6 +32,11 @@ func renderSnapshots(l snapshot.Listing) string {
 		rows = append(rows, []string{tableTotalLabel, "", formatMB(l.TotalBytes), "", ""})
 	}
 
+	return alignSnapshotRows(rows, "")
+}
+
+// alignSnapshotRows lays rows out in columns behind indent, the Size column right-aligned and no row ending in a space.
+func alignSnapshotRows(rows [][]string, indent string) string {
 	widths := make([]int, len(rows[0]))
 	for _, row := range rows {
 		for i, cell := range row {
@@ -48,7 +53,7 @@ func renderSnapshots(l snapshot.Listing) string {
 				cells[i] = padLeft(cell, widths[i])
 			}
 		}
-		b.WriteString(strings.TrimRight(strings.Join(cells, accountsColumnGap), " ") + "\n")
+		b.WriteString(indent + strings.TrimRight(strings.Join(cells, accountsColumnGap), " ") + "\n")
 	}
 	return b.String()
 }

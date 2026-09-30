@@ -12,7 +12,7 @@ const snapshotsCommand = "snapshots"
 // newSnapshotsCommand builds the snapshots subcommand: list the snapshots
 // quarry has taken and mark the one the store was built from, as JSON when *jsonOut is set.
 func newSnapshotsCommand(newSnapshots SnapshotsFactory, loadConfig ConfigLoader, jsonOut *bool) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   snapshotsCommand,
 		Short: "List the snapshots quarry has taken and which one the store was built from",
 		Long: `List the snapshots quarry sync has taken, newest first: when each was
@@ -76,4 +76,6 @@ quarry sync --from <ID>.`,
 			return nil
 		},
 	}
+	cmd.AddCommand(newPruneCommand(newSnapshots))
+	return cmd
 }
