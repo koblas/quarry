@@ -10,6 +10,7 @@
 | SCENARIO-15 | code-first (light) | L, V | 0/0/1/0 | no (MINOR → STATE.md) |
 | SCENARIO-16 (+03, 17, 19, 20, 34) | code-first | A, B1, B2, V | 0/0/3/1 | no (MINORs → STATE.md); 1 mid-feature copy ruling (6 outcomes) |
 | SCENARIO-18 | code-first (light) | L, V | 0/0/2/0 | no (MINORs → STATE.md) |
+| SCENARIO-21 (+23, 25, 26, 27) | test-first | A, B1, B2, B3, B4, V | 0/2/6/2 | yes (ticked test missing; false unreachable marker); 1 copy ruling (U1–U7), plan amended once; 3 architect API 529s |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
