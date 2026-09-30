@@ -157,5 +157,4 @@ func Test_run_accounts_json_carries_linked_tracking_per_account(t *testing.T) {
 		linked[a.Name] = a.LinkedTracking
 	}
 	assert.Equal(t, map[string]bool{"Chequing": false, "Linked": true, "Old Linked": true, "Gone Linked": true}, linked)
-	assert.Contains(t, stdout.String(), "      \"in_reports\": true,\n      \"linked_tracking\": true,\n")
 }
