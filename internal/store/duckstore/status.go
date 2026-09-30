@@ -4,13 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 
 	"github.com/koblas/quarry/internal/store"
 )
 
-// errImportRunCount refuses a store that does not pair one import run with one store_info row.
-var errImportRunCount = errors.New("expected exactly one import run")
+// errNoImportRuns refuses a store whose import_runs holds no run; its text is the phrase a user reads.
+var errNoImportRuns = errors.New("the store has no import history")
 
 // statusQuery reads store_info, the import run and the transaction dates; NULL check counts read as zero.
 const statusQuery = `
@@ -24,11 +23,12 @@ SELECT i.format_version, i.quarry_version, i.built_at,
 	COALESCE(r.balances_never_reconciled, 0), COALESCE(r.investment_accounts, 0),
 	COALESCE(r.transfers_paired, 0), COALESCE(r.transfers_cross_currency, 0),
 	(SELECT min(date) FROM transactions), (SELECT max(date) FROM transactions)
-FROM store_info i CROSS JOIN import_runs r`
+FROM store_info i CROSS JOIN import_runs r
+ORDER BY r.id DESC LIMIT 1`
 
-// Status reads back what the store records about itself. It refuses a store
-// it cannot open or read, whose format is not this build's, or that holds
-// other than one import run, with *store.OpenError; a NULL
+// Status reads back what the store records about itself, from the highest-id
+// import run. It refuses a store it cannot open or read, whose format is not
+// this build's, or whose import_runs is empty, with *store.OpenError; a NULL
 // snapshot_taken_at or source_path reads as the zero value.
 func (s *Store) Status(ctx context.Context) (store.Status, error) {
 	db, err := s.openRead(ctx)
@@ -42,9 +42,9 @@ func (s *Store) Status(ctx context.Context) (store.Status, error) {
 	c := &run.Counts
 	var takenAt, first, last sql.NullTime
 	var source sql.NullString
-	found := 0
+	found := false
 	err = db.QueryRows(ctx, statusQuery, nil, func(scan func(dest ...any) error) error {
-		found++
+		found = true
 		return scan(&st.FormatVersion, &st.QuarryVersion, &st.BuiltAt,
 			&run.ID, &run.StartedAt, &run.FinishedAt, &run.Snapshot.Path, &run.Snapshot.SHA256, &run.Snapshot.SchemaFingerprint,
 			&c.Accounts, &c.Categories, &c.Payees, &c.Tags, &c.Transactions, &c.Splits, &c.SplitTags, &c.Transfers,
@@ -57,8 +57,8 @@ func (s *Store) Status(ctx context.Context) (store.Status, error) {
 	if err != nil {
 		return store.Status{}, openFault(st.Path, err)
 	}
-	if found != 1 {
-		return store.Status{}, openFault(st.Path, fmt.Errorf("%w, found %d", errImportRunCount, found))
+	if !found {
+		return store.Status{}, openFault(st.Path, errNoImportRuns)
 	}
 
 	run.Snapshot.TakenAt = takenAt.Time

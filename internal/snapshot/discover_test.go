@@ -42,7 +42,8 @@ func Test_DiscoverBundle_refuses_when_no_bundle_is_found(t *testing.T) {
 			var re snapshot.RefusalError
 			require.ErrorAs(t, err, &re)
 			assert.Equal(t, "no .quicken file found in ~/Documents or "+
-				"~/Library/Application Support/Quicken/Documents; pass one with --quicken <path>", re.Error())
+				"~/Library/Application Support/Quicken/Documents; pass one with --quicken <path> "+
+				"or set quicken.path in ~/Library/Application Support/quarry/config.toml", re.Error())
 		})
 	}
 }
@@ -158,13 +159,14 @@ func Test_DiscoverBundle_refuses_when_multiple_bundles_exist(t *testing.T) {
 			name:    "two arbitrary bundles",
 			bundles: []string{"B.quicken", "A.quicken"},
 			wantStderr: "found 2 .quicken files (~/Documents/A.quicken, ~/Documents/B.quicken); " +
-				"choose one with --quicken <path>",
+				"choose one with --quicken <path> or set quicken.path in ~/Library/Application Support/quarry/config.toml",
 		},
 		{
 			name:    "three names created out of order",
 			bundles: []string{"Old.quicken", "Business.quicken", "Home.quicken"},
 			wantStderr: "found 3 .quicken files (~/Documents/Business.quicken, ~/Documents/Home.quicken, " +
-				"~/Documents/Old.quicken); choose one with --quicken <path>",
+				"~/Documents/Old.quicken); choose one with --quicken <path> " +
+				"or set quicken.path in ~/Library/Application Support/quarry/config.toml",
 		},
 	}
 
@@ -211,7 +213,8 @@ func Test_DiscoverBundle_refuses_when_the_only_match_has_no_data_file(t *testing
 	var re snapshot.RefusalError
 	require.ErrorAs(t, err, &re)
 	assert.Equal(t, "~/Documents/Home.quicken is not a Quicken for Mac file "+
-		"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path>",
+		"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path> "+
+		"or set quicken.path in ~/Library/Application Support/quarry/config.toml",
 		re.Error())
 }
 

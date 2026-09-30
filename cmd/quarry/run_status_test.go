@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,6 +56,27 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 	assert.Equal(t, want, stdout.String())
 }
 
+func Test_run_status_reports_the_latest_build_when_import_runs_holds_several(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bundle := writeStatusFixtureBundle(t, home)
+	syncBundle(t, bundle)
+	snapshotsDir := filepath.Join(storeDirUnder(home), "snapshots")
+	earlierPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
+	laterPath := filepath.Join(snapshotsDir, "later-build.sqlite")
+	var before bytes.Buffer
+	require.Equal(t, 0, run(context.Background(), []string{"status"}, &before, &bytes.Buffer{}))
+	editStore(t, home, "INSERT INTO import_runs SELECT * REPLACE (2 AS id) FROM import_runs") //nolint:unqueryvet // a copy of the row is the point
+	editStore(t, home, "UPDATE import_runs SET snapshot_path = '"+laterPath+"' WHERE id = 2")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.Equal(t, strings.Replace(before.String(), snapshotID(earlierPath), "later-build", 1), stdout.String())
+}
+
 func Test_run_status_refuses_when_home_is_unset(t *testing.T) {
 	t.Setenv("HOME", "")
 	var stdout, stderr bytes.Buffer
@@ -99,6 +121,7 @@ quarry never writes to the Quicken file.`)
 		"  accounts    List accounts with their current balances\n"+
 		"  cashflow    Show income, spending and savings rate by month or year\n"+
 		"  help        Help about any command\n"+
+		"  snapshots   List the snapshots quarry has taken and which one the store was built from\n"+
 		"  spend       Show spending by category, payee, tag or month\n"+
 		"  sql         Run a read-only SQL query against quarry's store\n"+
 		"  status      Show which snapshot the store was built from and what it holds\n"+

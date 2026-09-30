@@ -24,11 +24,14 @@ func Test_run_sync_help_names_both_documents_folders(t *testing.T) {
 
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())
-	assert.Contains(t, stdout.String(), "Without --quicken, quarry looks for .quicken files in ~/Documents and in\n"+
+	assert.Contains(t, stdout.String(), "Without --quicken, quarry uses quicken.path from\n"+
+		"~/Library/Application Support/quarry/config.toml if it is set. Otherwise it\n"+
+		"looks for .quicken files in ~/Documents and in\n"+
 		"~/Library/Application Support/Quicken/Documents, and uses the one it finds\n"+
 		"if there is exactly one.")
-	assert.Contains(t, stdout.String(),
-		"path to the .quicken file to snapshot (default: the only one in ~/Documents or Quicken's Documents folder)")
+	//nolint:dupword // the --quicken placeholder "path" is followed by usage text that starts with it
+	assert.Contains(t, stdout.String(), "--quicken path    path to the .quicken file to snapshot "+
+		"(default: quicken.path in the config file, else the only one in ~/Documents or Quicken's Documents folder)")
 }
 
 func Test_run_prints_the_sync_help(t *testing.T) {
@@ -49,6 +52,10 @@ func Test_run_prints_the_sync_help(t *testing.T) {
 		"must add up to the balance of its last reconciled statement in Quicken to the\n"+
 		"cent, and every transaction must equal the sum of its splits; if a check\n"+
 		"fails, the previous store is left unchanged.")
+	assert.Contains(t, syncStdout.String(), "After it rebuilds the store, sync deletes the oldest snapshots beyond the\n"+
+		"newest 12 (snapshots.keep in ~/Library/Application Support/quarry/config.toml),\n"+
+		"never the one the store was built from; a failed sync deletes nothing. Run\n"+
+		"quarry snapshots to list them.")
 	assert.Contains(t, syncStdout.String(), "With --from, quarry rebuilds the store from a snapshot it took earlier and\n"+
 		"does not read Quicken at all.")
 	assert.Contains(t, syncStdout.String(), "  quarry sync --quicken ~/Documents/Home.quicken\n  quarry sync --from 20260927T143005Z\n")
@@ -140,6 +147,26 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 			wantStderr: "quarry: flag needs an argument: --quicken; Run 'quarry sync --help' for usage.\n",
 		},
 		{
+			name:       "snapshots with a positional argument",
+			args:       []string{"snapshots", "list"},
+			wantStderr: "quarry: snapshots takes no arguments; to delete old snapshots run quarry snapshots prune; Run 'quarry snapshots --help' for usage.\n",
+		},
+		{
+			name:       "prune with a negative keep",
+			args:       []string{"snapshots", "prune", "--keep", "-1"},
+			wantStderr: "quarry: --keep must be 1 or more; the snapshot the store was built from is always kept; Run 'quarry snapshots prune --help' for usage.\n",
+		},
+		{
+			name:       "prune with a keep that is not a number",
+			args:       []string{"snapshots", "prune", "--keep", "abc"},
+			wantStderr: "quarry: invalid argument \"abc\" for \"--keep\" flag: strconv.ParseInt: parsing \"abc\": invalid syntax; Run 'quarry snapshots prune --help' for usage.\n",
+		},
+		{
+			name:       "prune with a positional argument",
+			args:       []string{"snapshots", "prune", "extra"},
+			wantStderr: "quarry: prune takes no arguments; Run 'quarry snapshots prune --help' for usage.\n",
+		},
+		{
 			name:       "unknown command",
 			args:       []string{"frob"},
 			wantStderr: "quarry: unknown command \"frob\" for \"quarry\"; Run 'quarry --help' for usage.\n",
@@ -179,6 +206,10 @@ func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
 		{
 			name: "cashflow", args: []string{"cashflow", "--bogus"},
 			wantStderr: "quarry: unknown flag: --bogus; Run 'quarry cashflow --help' for usage.\n",
+		},
+		{
+			name: "snapshots", args: []string{"snapshots", "--bogus"},
+			wantStderr: "quarry: unknown flag: --bogus; Run 'quarry snapshots --help' for usage.\n",
 		},
 		{name: "root", args: []string{"spending"}, wantStderr: "quarry: unknown command \"spending\" for \"quarry\"; Run 'quarry --help' for usage.\n"},
 	}
@@ -228,6 +259,16 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 		var stdout, stderr bytes.Buffer
 
 		exitCode := run(context.Background(), []string{"sync", "--help"}, &stdout, &stderr)
+
+		assert.Equal(t, 0, exitCode)
+		assert.NotEmpty(t, stdout.String())
+		assert.Empty(t, stderr.String())
+	})
+
+	t.Run("snapshots help", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+
+		exitCode := run(context.Background(), []string{"snapshots", "--help"}, &stdout, &stderr)
 
 		assert.Equal(t, 0, exitCode)
 		assert.NotEmpty(t, stdout.String())

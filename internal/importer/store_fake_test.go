@@ -12,17 +12,18 @@ import (
 type fakeStore struct {
 	Rows         store.Rows
 	Path         string
+	historyFault *store.OpenError
 	nextErr      error
 	replaceCalls int
 }
 
 func (f *fakeStore) failNext(err error) { f.nextErr = err }
 
-func (f *fakeStore) Replace(_ context.Context, rows store.Rows) (string, error) {
+func (f *fakeStore) Replace(_ context.Context, rows store.Rows) (store.Replaced, error) {
 	f.replaceCalls++
 	if f.nextErr != nil {
-		return "", f.nextErr
+		return store.Replaced{}, f.nextErr
 	}
 	f.Rows = rows
-	return f.Path, nil
+	return store.Replaced{Path: f.Path, HistoryFault: f.historyFault}, nil
 }

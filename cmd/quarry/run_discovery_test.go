@@ -194,7 +194,8 @@ func Test_run_pools_bundles_across_both_documents_folders(t *testing.T) {
 			name:  "both folders missing",
 			setup: func(_ *testing.T, _ string) {},
 			wantStderr: "quarry: no .quicken file found in ~/Documents or " +
-				"~/Library/Application Support/Quicken/Documents; pass one with --quicken <path>\n",
+				"~/Library/Application Support/Quicken/Documents; pass one with --quicken <path> or set quicken.path in " +
+				configShown + "\n",
 		},
 		{
 			name: "both folders exist and are empty",
@@ -204,7 +205,8 @@ func Test_run_pools_bundles_across_both_documents_folders(t *testing.T) {
 				require.NoError(t, os.MkdirAll(quickenDocumentsDir(home), 0o700))
 			},
 			wantStderr: "quarry: no .quicken file found in ~/Documents or " +
-				"~/Library/Application Support/Quicken/Documents; pass one with --quicken <path>\n",
+				"~/Library/Application Support/Quicken/Documents; pass one with --quicken <path> or set quicken.path in " +
+				configShown + "\n",
 		},
 		{
 			name: "bundles only under the Quicken Backups folder",
@@ -214,7 +216,8 @@ func Test_run_pools_bundles_across_both_documents_folders(t *testing.T) {
 				require.NoError(t, os.MkdirAll(filepath.Join(backups, "Home.quicken"), 0o700))
 			},
 			wantStderr: "quarry: no .quicken file found in ~/Documents or " +
-				"~/Library/Application Support/Quicken/Documents; pass one with --quicken <path>\n",
+				"~/Library/Application Support/Quicken/Documents; pass one with --quicken <path> or set quicken.path in " +
+				configShown + "\n",
 		},
 		{
 			name: "one bundle in each folder",
@@ -224,7 +227,8 @@ func Test_run_pools_bundles_across_both_documents_folders(t *testing.T) {
 				require.NoError(t, os.MkdirAll(filepath.Join(quickenDocumentsDir(home), "B.quicken"), 0o700))
 			},
 			wantStderr: "quarry: found 2 .quicken files (~/Documents/A.quicken, " +
-				"~/Library/Application Support/Quicken/Documents/B.quicken); choose one with --quicken <path>\n",
+				"~/Library/Application Support/Quicken/Documents/B.quicken); choose one with --quicken <path> or set quicken.path in " +
+				configShown + "\n",
 		},
 		{
 			name: "same basename in both folders, three distinct bundles",
@@ -235,7 +239,8 @@ func Test_run_pools_bundles_across_both_documents_folders(t *testing.T) {
 				require.NoError(t, os.MkdirAll(filepath.Join(quickenDocumentsDir(home), "Home.quicken"), 0o700))
 			},
 			wantStderr: "quarry: found 3 .quicken files (~/Documents/Business.quicken, ~/Documents/Home.quicken, " +
-				"~/Library/Application Support/Quicken/Documents/Home.quicken); choose one with --quicken <path>\n",
+				"~/Library/Application Support/Quicken/Documents/Home.quicken); choose one with --quicken <path> or set quicken.path in " +
+				configShown + "\n",
 		},
 		{
 			name: "two bundles in ~/Documents, none in the Quicken folder",
@@ -245,7 +250,8 @@ func Test_run_pools_bundles_across_both_documents_folders(t *testing.T) {
 				require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "B.quicken"), 0o700))
 			},
 			wantStderr: "quarry: found 2 .quicken files (~/Documents/A.quicken, ~/Documents/B.quicken); " +
-				"choose one with --quicken <path>\n",
+				"choose one with --quicken <path> or set quicken.path in " +
+				configShown + "\n",
 		},
 		{
 			name: "two bundles in the Quicken folder, none in ~/Documents",
@@ -255,7 +261,8 @@ func Test_run_pools_bundles_across_both_documents_folders(t *testing.T) {
 				require.NoError(t, os.MkdirAll(filepath.Join(quickenDocumentsDir(home), "B.quicken"), 0o700))
 			},
 			wantStderr: "quarry: found 2 .quicken files (~/Library/Application Support/Quicken/Documents/A.quicken, " +
-				"~/Library/Application Support/Quicken/Documents/B.quicken); choose one with --quicken <path>\n",
+				"~/Library/Application Support/Quicken/Documents/B.quicken); choose one with --quicken <path> or set quicken.path in " +
+				configShown + "\n",
 		},
 	}
 
@@ -381,4 +388,19 @@ func Test_run_refuses_when_a_discovery_location_is_unreadable(t *testing.T) {
 			assert.ErrorIs(t, statErr, os.ErrNotExist)
 		})
 	}
+}
+
+func Test_run_sync_names_quicken_path_when_the_only_discovered_bundle_is_not_a_bundle(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "Empty.quicken"), 0o700))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: ~/Documents/Empty.quicken is not a Quicken for Mac file "+
+		"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path> "+
+		"or set quicken.path in ~/Library/Application Support/quarry/config.toml\n", stderr.String())
 }

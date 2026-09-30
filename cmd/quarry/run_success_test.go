@@ -135,7 +135,7 @@ func Test_run_prints_the_manifest_as_json_with_the_json_flag(t *testing.T) {
 
 	var parsed map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &parsed))
-	assert.ElementsMatch(t, []string{"snapshot", "schema", "store", "warnings"}, slices.Collect(maps.Keys(parsed)))
+	assert.ElementsMatch(t, []string{"snapshot", "schema", "store", "pruned", "warnings"}, slices.Collect(maps.Keys(parsed)))
 	assert.JSONEq(t, string(manifest["snapshot"]), string(parsed["snapshot"]))
 	assert.JSONEq(t, string(manifest["schema"]), string(parsed["schema"]))
 	assert.JSONEq(t, string(manifest["warnings"]), string(parsed["warnings"]))

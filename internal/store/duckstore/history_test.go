@@ -1,0 +1,193 @@
+package duckstore_test
+
+import (
+	"context"
+	"errors"
+	"os"
+	"testing"
+
+	"github.com/koblas/quarry/internal/platform/duckdb"
+	"github.com/koblas/quarry/internal/store/duckstore"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// phase1ImportRunsDDL is Phase 1's import_runs: 19 columns, one run (id 4), and no store_info beside it.
+const phase1ImportRunsDDL = `CREATE TABLE import_runs (
+	id BIGINT PRIMARY KEY, started_at TIMESTAMP NOT NULL, finished_at TIMESTAMP NOT NULL,
+	snapshot_path VARCHAR NOT NULL, snapshot_sha256 VARCHAR NOT NULL, schema_fingerprint VARCHAR NOT NULL,
+	accounts_rows BIGINT NOT NULL, categories_rows BIGINT NOT NULL, payees_rows BIGINT NOT NULL, tags_rows BIGINT NOT NULL,
+	transactions_rows BIGINT NOT NULL, splits_rows BIGINT NOT NULL, split_tags_rows BIGINT NOT NULL, transfers_rows BIGINT NOT NULL,
+	balances_checked BIGINT NOT NULL, balances_mismatched BIGINT NOT NULL, splits_mismatched BIGINT NOT NULL,
+	transfers_one_sided BIGINT NOT NULL, investment_transactions_not_imported BIGINT NOT NULL);
+INSERT INTO import_runs VALUES (4, '2026-06-01 10:00:00', '2026-06-01 10:00:02', '/snapshots/phase1.sqlite', 'abc', 'sha256:fp',
+	7, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13);`
+
+// importRunTexts is every import_runs row of st's store as text, ordered by id.
+func importRunTexts(t *testing.T, st *duckstore.Store) []string {
+	t.Helper()
+	db := openReadOnly(t, st.Path())
+	var texts []string
+	require.NoError(t, db.QueryRows(t.Context(), "SELECT CAST(r AS VARCHAR) FROM import_runs r ORDER BY r.id", nil,
+		func(scan func(dest ...any) error) error {
+			var text string
+			if err := scan(&text); err != nil {
+				return err
+			}
+			texts = append(texts, text)
+			return nil
+		}))
+	require.NoError(t, db.Close())
+	return texts
+}
+
+// importRunIDs is the ids of st's import_runs rows in ascending order.
+func importRunIDs(t *testing.T, st *duckstore.Store) []int64 {
+	t.Helper()
+	db := openReadOnly(t, st.Path())
+	var ids []int64
+	require.NoError(t, db.QueryRows(t.Context(), "SELECT id FROM import_runs ORDER BY id", nil,
+		func(scan func(dest ...any) error) error {
+			var id int64
+			if err := scan(&id); err != nil {
+				return err
+			}
+			ids = append(ids, id)
+			return nil
+		}))
+	require.NoError(t, db.Close())
+	return ids
+}
+
+var errNoStoreToOpen = errors.New("no store to open")
+
+// eventReadDB records its Close in events.
+type eventReadDB struct {
+	duckstore.ReadDB
+
+	events *[]string
+}
+
+func (e eventReadDB) Close() error {
+	*e.events = append(*e.events, "closed")
+	return e.ReadDB.Close()
+}
+
+func Test_replace_carries_the_previous_import_runs_unchanged(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir())
+	_, err := st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	addImportRun(t, st, 3, "/snapshots/run-3.sqlite", 33)
+	before := importRunTexts(t, st)
+	next := minimalRows()
+	next.ImportRuns[0].Snapshot.Path = "/snapshots/next.sqlite"
+
+	_, err = st.Replace(t.Context(), next)
+
+	require.NoError(t, err)
+	after := importRunTexts(t, st)
+	require.Len(t, before, 2)
+	require.Len(t, after, 3)
+	assert.Equal(t, before, after[:2])
+}
+
+func Test_replace_carries_null_for_columns_an_older_store_lacks(t *testing.T) {
+	t.Parallel()
+	st := newStoreFile(t, phase1ImportRunsDDL)
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Nil(t, replaced.HistoryFault)
+	db := openReadOnly(t, st.Path())
+	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM import_runs WHERE id = 4
+		AND snapshot_path = '/snapshots/phase1.sqlite' AND accounts_rows = 7 AND investment_transactions_not_imported = 13
+		AND snapshot_taken_at IS NULL AND source_path IS NULL AND balances_never_reconciled IS NULL
+		AND investment_accounts IS NULL AND transfers_paired IS NULL AND transfers_cross_currency IS NULL`, "1")
+}
+
+func Test_replace_numbers_the_new_run_after_the_highest_carried_id(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir())
+	_, err := st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	addImportRun(t, st, 5, "/snapshots/run-5.sqlite", 55)
+	addImportRun(t, st, 2, "/snapshots/run-2.sqlite", 22)
+
+	_, err = st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Equal(t, []int64{1, 2, 5, 6}, importRunIDs(t, st))
+}
+
+func Test_replace_numbers_the_first_run_1_when_import_runs_is_empty(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir())
+	rows := minimalRows()
+	rows.ImportRuns = nil
+	_, err := st.Replace(t.Context(), rows)
+	require.NoError(t, err)
+
+	_, err = st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Equal(t, []int64{1}, importRunIDs(t, st))
+}
+
+func Test_replace_reads_the_previous_history_before_it_creates_the_build_file(t *testing.T) {
+	t.Parallel()
+	var events []string
+	st := newBuiltStore(t,
+		duckstore.WithOpenReadOnly(func(ctx context.Context, path string) (duckstore.ReadDB, error) {
+			db, err := duckdb.OpenReadOnly(ctx, path)
+			if err != nil {
+				return nil, err
+			}
+			events = append(events, "opened")
+			return eventReadDB{ReadDB: db, events: &events}, nil
+		}),
+		duckstore.WithCreate(func(ctx context.Context, path string) (duckstore.DB, error) {
+			events = append(events, "created")
+			db, err := duckdb.Create(ctx, path)
+			if err != nil {
+				return nil, err
+			}
+			return db, nil
+		}))
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"opened", "closed", "created"}, events)
+}
+
+func Test_replace_starts_history_silently_when_no_store_exists(t *testing.T) {
+	t.Parallel()
+	opens := 0
+	st := duckstore.New(t.TempDir(), duckstore.WithOpenReadOnly(func(context.Context, string) (duckstore.ReadDB, error) {
+		opens++
+		return nil, errNoStoreToOpen
+	}))
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Nil(t, replaced.HistoryFault)
+	assert.Zero(t, opens)
+	assert.Equal(t, []int64{1}, importRunIDs(t, st))
+}
+
+func Test_replace_starts_history_silently_when_the_store_vanishes_before_it_is_opened(t *testing.T) {
+	t.Parallel()
+	st := newBuiltStore(t, duckstore.WithOpenReadOnly(func(_ context.Context, path string) (duckstore.ReadDB, error) {
+		require.NoError(t, os.Remove(path))
+		return nil, driverIOError(`IO Error: Cannot open database "x.duckdb" in read-only mode: database does not exist`)
+	}))
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Nil(t, replaced.HistoryFault)
+	assert.Equal(t, []int64{1}, importRunIDs(t, st))
+}

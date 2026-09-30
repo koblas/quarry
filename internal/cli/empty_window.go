@@ -41,16 +41,20 @@ func leftOutOfReportsWarning(a store.Account, command string) string {
 // account named in accounts is left out: the warnings before it already say why.
 func appendEmptyWindowWarning(warnings []string, subject string, accounts []store.Account, window store.Window, span store.TransactionRange) []string {
 	named := len(accounts) > 0
-	leftOut := 0
-	for _, a := range accounts {
-		if a.LeftOutOfReports() {
-			leftOut++
-		}
-	}
-	if named && leftOut == len(accounts) {
+	if named && allLeftOut(accounts) {
 		return warnings
 	}
 	return append(warnings, emptyWindowWarning(subject, window, named, span))
+}
+
+// allLeftOut reports whether every account in accounts is left out of reports; true for none.
+func allLeftOut(accounts []store.Account) bool {
+	for _, a := range accounts {
+		if !a.LeftOutOfReports() {
+			return false
+		}
+	}
+	return true
 }
 
 // emptyWindowWarning is the note that window held no subject ("spending"), naming where span's

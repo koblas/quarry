@@ -2,7 +2,6 @@ package report
 
 import (
 	"context"
-	"time"
 
 	"github.com/koblas/quarry/internal/store"
 )
@@ -47,26 +46,19 @@ type Spending struct {
 // still has a total, so it is not empty.
 func (s Spending) Empty() bool { return len(s.Totals) == 0 }
 
-// DefaultWindow is January 1 of now's year through now's day, both read in
-// now's own zone.
-func DefaultWindow(now time.Time) store.Window {
-	year, month, day := now.Date()
-	return store.Window{
-		Since: time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC),
-		Until: time.Date(year, month, day, 0, 0, 0, 0, time.UTC),
-	}
-}
+// spendCommand names spend in its refusals; it equals the cli command word.
+const spendCommand = "spend"
 
 // Spend reads the spending inside req.Window, grouped by req.By, in the accounts req.Accounts
 // name (every account when none). An account it cannot pick is a RefusalError.
 func (s *Server) Spend(ctx context.Context, req SpendRequest) (Spending, error) {
-	accounts, accountIDs, err := s.namedAccounts(ctx, "spend", req.Accounts)
+	accounts, accountIDs, err := s.namedAccounts(ctx, spendCommand, req.Accounts)
 	if err != nil {
 		return Spending{}, err
 	}
 	spending, err := s.store.Spending(ctx, store.SpendingParams{Window: req.Window, By: req.By, AccountIDs: accountIDs})
 	if err != nil {
-		return Spending{}, s.readRefusal(ctx, "spend", err)
+		return Spending{}, s.readRefusal(ctx, spendCommand, err)
 	}
 	result := Spending{
 		Totals:         spending.Totals,
@@ -76,34 +68,30 @@ func (s *Server) Spend(ctx context.Context, req SpendRequest) (Spending, error) 
 		By:             req.By,
 		Accounts:       accounts,
 	}
-	for _, r := range spending.Rows {
-		result.Rows = append(result.Rows, SpendingRow{SpendingRow: r})
-	}
 	if req.By == store.SpendByMonth {
-		result.Rows = fillMonths(result, req.Window)
+		result.Rows = fillSeries(monthSeries(req.Window), currencyList(spending.Totals, spendingTotalCurrency), spending.Rows, spendingRowPeriod, blankSpendingRow, wrapSpendingRow)
+		return result, nil
+	}
+	for _, r := range spending.Rows {
+		result.Rows = append(result.Rows, wrapSpendingRow(r, false))
 	}
 	return result, nil
 }
 
-// fillMonths is a month spending's rows with a row for every month of the window in every
-// currency of its Totals: the store's row where it has one, else zero.
-func fillMonths(spending Spending, window store.Window) []SpendingRow {
-	type monthCurrency struct{ label, currency string }
-	found := make(map[monthCurrency]SpendingRow, len(spending.Rows))
-	for _, r := range spending.Rows {
-		found[monthCurrency{*r.Key, r.Currency}] = r
-	}
-	series := monthSeries(window)
-	rows := make([]SpendingRow, 0, len(series)*len(spending.Totals))
-	for _, p := range series {
-		for _, total := range spending.Totals {
-			row, ok := found[monthCurrency{p.Label, total.Currency}]
-			if !ok {
-				row = SpendingRow{Key: new(p.Label), Currency: total.Currency}
-			}
-			row.Partial = p.Partial
-			rows = append(rows, row)
-		}
-	}
-	return rows
+// spendingTotalCurrency is the currency of a spending total.
+func spendingTotalCurrency(t store.SpendingTotal) string { return t.Currency }
+
+// spendingRowPeriod is the month and currency a month-grouped row reports.
+func spendingRowPeriod(r store.SpendingRow) periodKey {
+	return periodKey{label: *r.Key, currency: r.Currency}
+}
+
+// blankSpendingRow is the row of a month the store found no spending in.
+func blankSpendingRow(k periodKey) store.SpendingRow {
+	return store.SpendingRow{Key: &k.label, Currency: k.currency}
+}
+
+// wrapSpendingRow is a spend row with the month's Partial.
+func wrapSpendingRow(r store.SpendingRow, partial bool) SpendingRow {
+	return SpendingRow{SpendingRow: r, Partial: partial}
 }

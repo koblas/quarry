@@ -67,4 +67,8 @@ type StoreProbe interface {
 	Path() string
 	// Exists reports whether a store file is already at Path.
 	Exists() bool
+	// BuiltFrom returns the snapshot path the store's latest import run
+	// recorded, or a *store.OpenError when the store cannot be read (Missing
+	// and OtherFormat included).
+	BuiltFrom(ctx context.Context) (snapshotPath string, err error)
 }

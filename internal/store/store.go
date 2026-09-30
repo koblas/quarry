@@ -129,7 +129,8 @@ type SplitTag struct {
 	TagID   string
 }
 
-// Rows is every row a store build writes, grouped by table.
+// Rows is every row a store build writes, grouped by table. ImportRuns holds
+// the new build's run only; the store carries earlier runs forward itself.
 type Rows struct {
 	Accounts     []Account
 	Categories   []Category
@@ -154,7 +155,7 @@ type SnapshotRef struct {
 
 // ImportRun is one row of the import_runs table, describing the build that
 // wrote it. FinishedAt is stamped before the store is written and swapped
-// in; both times are UTC.
+// in; both times are UTC. A build hands ImportRun.ID unset: the store numbers it.
 type ImportRun struct {
 	ID                                int64
 	StartedAt, FinishedAt             time.Time
@@ -200,12 +201,22 @@ type Counts struct {
 // Result is what a store build returns. Built is false when a check failed:
 // Path is then empty (Replace never ran) but Counts, Validation and
 // NotImported still describe the rows the build would have written.
+// HistoryFault is why the previous store's import runs were not carried
+// into a built store; nil when they were, or no store existed.
 type Result struct {
-	Path        string
-	Built       bool
-	Counts      Counts
-	Validation  Validation
-	NotImported NotImported
+	Path         string
+	Built        bool
+	Counts       Counts
+	Validation   Validation
+	NotImported  NotImported
+	HistoryFault *OpenError
+}
+
+// Replaced is what Store.Replace reports: the path it wrote, and the fault
+// that kept the previous store's import runs from being carried, if any.
+type Replaced struct {
+	Path         string
+	HistoryFault *OpenError
 }
 
 // NotImported counts source rows a build deliberately leaves out of the

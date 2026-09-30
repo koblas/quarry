@@ -20,6 +20,12 @@ const leftoverMaxAge = time.Hour
 // leftoverPartialPattern matches a quarry partial name and its -journal/-wal/-shm companions.
 var leftoverPartialPattern = regexp.MustCompile(`^\.\d{8}T\d{6}Z(_\d+)?\.(sqlite|json)\.partial(-journal|-wal|-shm)?$`)
 
+// snapshotFilePattern matches a snapshot's file name; its groups are the ID's timestamp and _N digits.
+var snapshotFilePattern = regexp.MustCompile(`^(\d{8}T\d{6}Z)(?:_(\d+))?\.sqlite$`)
+
+// manifestFilePattern matches a manifest's file name; its group is the snapshot ID.
+var manifestFilePattern = regexp.MustCompile(`^(\d{8}T\d{6}Z(?:_\d+)?)\.json$`)
+
 // dirDestination is the production Destination adapter: a directory on disk
 // holding committed snapshots and manifests plus their exclusively-created
 // partials, named "<name>.sqlite"/"<name>.json" and

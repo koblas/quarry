@@ -15,7 +15,9 @@ var cashFlowKeys = map[store.CashFlowPeriod]string{
 	store.CashFlowByYear:  "strftime(date, '%Y')",
 }
 
-// ErrUnsupportedPeriod is what CashFlow returns for a period unit it cannot read.
+// ErrUnsupportedPeriod is what CashFlow returns for a period unit it cannot read. The cashflow
+// command refuses every --by value other than month and year before a read, so only a caller
+// bypassing that table reaches it.
 var ErrUnsupportedPeriod = errors.New("cash-flow period is not supported")
 
 // cashFlowQuery reads per-period and per-currency-total income, spending and net in cents from
@@ -75,11 +77,7 @@ func (s *Store) CashFlow(ctx context.Context, params store.CashFlowParams) (stor
 		return nil
 	})
 	if err == nil && len(flow.Totals) == 0 {
-		var first, last sql.NullTime
-		err = db.QueryRows(ctx, transactionRangeQuery(accounts), accounts.args(), func(scan func(dest ...any) error) error {
-			return scan(&first, &last)
-		})
-		flow.Transactions = store.TransactionRange{First: first.Time, Last: last.Time}
+		flow.Transactions, err = transactionRange(ctx, db, accounts)
 	}
 	if err != nil {
 		return store.CashFlow{}, openFault(s.Path(), err)

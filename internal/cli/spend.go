@@ -9,13 +9,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// spendCommand is the word that names spend on the command line and in its warnings.
+const spendCommand = "spend"
+
 // newSpendCommand builds spend: the spending in the --since/--until period (default this year to now()) grouped by --by.
 func newSpendCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var by string
-	var accounts []string
-	var period windowFlags
+	var flags reportFlags
 	cmd := &cobra.Command{
-		Use:   "spend",
+		Use:   spendCommand,
 		Short: "Show spending by category, payee, tag or month",
 		Long: `Show how much you spent, grouped by category, payee, tag or month, in each
 account's own currency: CAD and USD are listed separately, never added
@@ -48,7 +50,7 @@ the rows can add up to more than the total.`,
 				return err
 			}
 
-			window, err := period.window(cmd, now())
+			window, err := flags.window(cmd, now())
 			if err != nil {
 				return err
 			}
@@ -58,32 +60,26 @@ the rows can add up to more than the total.`,
 				return err
 			}
 
-			spending, err := srv.Spend(cmd.Context(), report.SpendRequest{Window: window, By: group, Accounts: accounts})
+			spending, err := srv.Spend(cmd.Context(), report.SpendRequest{Window: window, By: group, Accounts: flags.accounts})
 			if err != nil {
 				return &runtimeError{err: err}
 			}
 
 			warnings := spendWarnings(spending)
-			out, err := renderResult(*jsonOut,
+			return emitReport(cmd, *jsonOut, warnings,
 				func() ([]byte, error) { return renderSpendingJSON(spending, warnings) },
 				func() string { return renderSpending(spending) })
-			if err != nil {
-				// unreachable: renderResult errors only when renderSpendingJSON does, and that returns only marshalDocument's error, which is unreachable; see renderResult.
-				return err
-			}
-			return emit(cmd, out, "quarry: warning: ", warnings)
 		},
 	}
 	cmd.Flags().StringVar(&by, "by", spendGroupings[store.SpendByCategory].name, "group spending by `group`: category, payee, tag or month")
-	period.bind(cmd)
-	cmd.Flags().StringArrayVar(&accounts, "account", nil, "count only the account with this `name` or id; repeat for more")
+	flags.bind(cmd)
 	return cmd
 }
 
 // spendWarnings is s's warnings, unprefixed and never nil: one per named account left out (W2 or W3),
 // then the multi-tag-splits note, then a note that the window held no spending.
 func spendWarnings(s report.Spending) []string {
-	warnings := leftOutWarnings(s.Accounts, "spend")
+	warnings := leftOutWarnings(s.Accounts, spendCommand)
 	if s.By == store.SpendByTag && s.MultiTagSplits > 0 {
 		warnings = append(warnings, humanize.Count(s.MultiTagSplits, "split carries", "splits carry")+
 			" more than one tag, so the rows add up to more than the total")

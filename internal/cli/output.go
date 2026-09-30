@@ -29,6 +29,17 @@ func renderResult(asJSON bool, renderJSON func() ([]byte, error), renderText fun
 	return out, nil
 }
 
+// emitReport writes a read command's result, JSON when asJSON else text, then its warnings to stderr.
+func emitReport(cmd *cobra.Command, asJSON bool, warnings []string, renderJSON func() ([]byte, error), renderText func() string) error {
+	out, err := renderResult(asJSON, renderJSON, renderText)
+	if err != nil {
+		// unreachable: renderResult fails only via marshalDocument. spend's document holds strings, bools and slices;
+		// cashflow's savings_rate_pct is finite (BIGINT tenths/10.0 or NULL; its sole production source: duckstore cashFlowQuery); see marshalDocument.
+		return err
+	}
+	return emit(cmd, out, "quarry: warning: ", warnings)
+}
+
 // emit writes out to cmd's stdout, then each warning to stderr behind
 // warningPrefix, only once the stdout write succeeded.
 func emit(cmd *cobra.Command, out []byte, warningPrefix string, warnings []string) error {
@@ -48,4 +59,12 @@ func writeResult(cmd *cobra.Command, out []byte) error {
 		return &runtimeError{err: fmt.Errorf("cannot write the result to stdout: %w", err)}
 	}
 	return nil
+}
+
+// printConfigWarnings writes each config-file warning to cmd's stderr as
+// "quarry: warning: <warning>", before the command's own output.
+func printConfigWarnings(cmd *cobra.Command, warnings []string) {
+	for _, warning := range warnings {
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: warning: "+warning)
+	}
 }

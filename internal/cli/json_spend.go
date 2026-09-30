@@ -7,19 +7,28 @@ import (
 
 // spendDocument is spend's --json stdout shape.
 type spendDocument struct {
-	Since         string                 `json:"since"`
-	Until         string                 `json:"until"`
-	By            string                 `json:"by"`
-	AccountFilter []spendAccountDocument `json:"account_filter"`
-	Rows          []any                  `json:"rows"`
-	Totals        []spendTotalDocument   `json:"totals"`
-	Warnings      []string               `json:"warnings"`
+	Since         string                  `json:"since"`
+	Until         string                  `json:"until"`
+	By            string                  `json:"by"`
+	AccountFilter []accountFilterDocument `json:"account_filter"`
+	Rows          []any                   `json:"rows"`
+	Totals        []spendTotalDocument    `json:"totals"`
+	Warnings      []string                `json:"warnings"`
 }
 
-// spendAccountDocument names one account spend was limited to.
-type spendAccountDocument struct {
+// accountFilterDocument names one account a report was limited to.
+type accountFilterDocument struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+}
+
+// accountFilterDocuments is accounts as a report's "account_filter": [] rather than null when none.
+func accountFilterDocuments(accounts []store.Account) []accountFilterDocument {
+	filter := make([]accountFilterDocument, len(accounts))
+	for i, a := range accounts {
+		filter[i] = accountFilterDocument{ID: a.ID, Name: a.Name}
+	}
+	return filter
 }
 
 // spendCategoryRowDocument is one entry of "rows" grouped by category; Category
@@ -72,15 +81,11 @@ func renderSpendingJSON(s report.Spending, warnings []string) ([]byte, error) {
 	for i, t := range s.Totals {
 		totals[i] = spendTotalDocument{Currency: t.Currency, Spent: jsonMoney(t.Spent)}
 	}
-	accountFilter := make([]spendAccountDocument, len(s.Accounts))
-	for i, a := range s.Accounts {
-		accountFilter[i] = spendAccountDocument{ID: a.ID, Name: a.Name}
-	}
 	return marshalDocument(spendDocument{
 		Since:         s.Window.Since.Format(jsonDateLayout),
 		Until:         s.Window.Until.Format(jsonDateLayout),
 		By:            spendGroupings[s.By].name,
-		AccountFilter: accountFilter,
+		AccountFilter: accountFilterDocuments(s.Accounts),
 		Rows:          rows,
 		Totals:        totals,
 		Warnings:      warnings,

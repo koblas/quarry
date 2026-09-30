@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/cli"
+	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/importer"
 	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/report"
@@ -42,9 +43,10 @@ func signalContext(parent context.Context) (context.Context, context.CancelFunc)
 
 // newServerFactory returns cli.Execute's ServerFactory: it resolves the
 // home directory and the embedded reference schema, then builds the Server
-// against them, passing storeOpts to the store it builds.
+// against them, passing storeOpts to the store it builds and appending the
+// Server options the caller passes.
 func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
-	return func(ctx context.Context) (*snapshot.Server, error) {
+	return func(ctx context.Context, opts ...snapshot.Option) (*snapshot.Server, error) {
 		home, err := resolveHome("sync")
 		if err != nil {
 			return nil, err
@@ -58,13 +60,13 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 		storeDir := storeDirUnder(home)
 		info, _ := debug.ReadBuildInfo()
 		st := duckstore.New(storeDir, append([]duckstore.Option{duckstore.WithQuarryVersion(buildVersion(info))}, storeOpts...)...)
-		srv := snapshot.NewServer(
-			snapshot.WithSnapshotDir(filepath.Join(storeDir, "snapshots")),
+		srv := snapshot.NewServer(append([]snapshot.Option{
+			snapshot.WithSnapshotDir(snapshotsDirUnder(home)),
 			snapshot.WithReference(v9.ReferenceLabel, ref),
 			snapshot.WithHome(home),
 			snapshot.WithImporter(importer.NewServer(importer.WithStore(st))),
 			snapshot.WithStoreProbe(st),
-		)
+		}, opts...)...)
 		return srv, nil
 	}
 }
@@ -93,9 +95,45 @@ func newReportFactory(storeOpts ...duckstore.Option) cli.ReportFactory {
 	}
 }
 
+// newSnapshotsFactory returns cli.Execute's SnapshotsFactory: a Server over the snapshots
+// folder and the store's probe, with no reference schema and no importer.
+func newSnapshotsFactory(storeOpts ...duckstore.Option) cli.SnapshotsFactory {
+	return func(_ context.Context, command string) (*snapshot.Server, error) {
+		home, err := resolveHome(command)
+		if err != nil {
+			return nil, err
+		}
+
+		storeDir := storeDirUnder(home)
+		return snapshot.NewServer(
+			snapshot.WithSnapshotDir(snapshotsDirUnder(home)),
+			snapshot.WithHome(home),
+			snapshot.WithStoreProbe(duckstore.New(storeDir, storeOpts...)),
+		), nil
+	}
+}
+
+// newConfigLoader returns cli.Execute's ConfigLoader: it resolves the home
+// directory and loads the config file in quarry's store directory.
+func newConfigLoader() cli.ConfigLoader {
+	return func(command string) (config.Config, error) {
+		home, err := resolveHome(command)
+		if err != nil {
+			return config.Config{}, err
+		}
+
+		return config.Load(home, filepath.Join(storeDirUnder(home), "config.toml"))
+	}
+}
+
 // storeDirUnder is the directory holding quarry's store and snapshots.
 func storeDirUnder(home string) string {
 	return filepath.Join(home, "Library", "Application Support", "quarry")
+}
+
+// snapshotsDirUnder is the directory holding the snapshots quarry has taken.
+func snapshotsDirUnder(home string) string {
+	return filepath.Join(storeDirUnder(home), "snapshots")
 }
 
 // errNoHome is the home-directory refusal's lead; resolveHome appends what to do.
@@ -116,12 +154,14 @@ func resolveHome(command string) (string, error) {
 // streams, and the factories over the default store.
 func defaultEnv(stdout, stderr io.Writer) cli.Env {
 	return cli.Env{
-		Stdin:     os.Stdin,
-		Stdout:    stdout,
-		Stderr:    stderr,
-		NewServer: newServerFactory(),
-		NewReport: newReportFactory(),
-		Now:       time.Now,
+		Stdin:        os.Stdin,
+		Stdout:       stdout,
+		Stderr:       stderr,
+		NewServer:    newServerFactory(),
+		NewReport:    newReportFactory(),
+		NewSnapshots: newSnapshotsFactory(),
+		LoadConfig:   newConfigLoader(),
+		Now:          time.Now,
 	}
 }
 
@@ -133,13 +173,22 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 // runWith is run against an explicit Env.
 func runWith(ctx context.Context, args []string, env cli.Env) int {
-	if err := cli.Execute(ctx, args, env); err != nil {
-		_, _ = fmt.Fprintf(env.Stderr, "quarry: %s\n", err)
+	return exitCode(cli.Execute(ctx, args, env), env.Stderr)
+}
 
-		if _, ok := errors.AsType[cli.UsageError](err); ok {
-			return 2
-		}
+// exitCode is the process exit code for err (0 for nil, 2 for a usage error, else 1),
+// printing err to stderr unless the command already reported it.
+func exitCode(err error, stderr io.Writer) int {
+	if err == nil {
+		return 0
+	}
+	if _, ok := errors.AsType[cli.ReportedError](err); ok {
 		return 1
 	}
-	return 0
+	_, _ = fmt.Fprintf(stderr, "quarry: %s\n", err)
+
+	if _, ok := errors.AsType[cli.UsageError](err); ok {
+		return 2
+	}
+	return 1
 }

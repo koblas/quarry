@@ -22,5 +22,5 @@ type SourceOpener func(ctx context.Context, path string) (Source, error)
 // builds a new store from rows and swaps it in only once the build
 // succeeds, returning the path it wrote to.
 type Store interface {
-	Replace(ctx context.Context, rows store.Rows) (string, error)
+	Replace(ctx context.Context, rows store.Rows) (store.Replaced, error)
 }

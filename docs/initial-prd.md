@@ -124,7 +124,7 @@ The store has a small set of normalized tables plus derived views; every analysi
 | `fx_rates` | CAD/USD rate by date | Quicken keeps only the current rate per pair, so history is a daily series (Bank of Canada) fetched by `quarry sync` |
 | `investment_txns` | Action (buy, sell, dividend, reinvest, share transfer, split), security, shares, price, fees, amount | Cash side also appears in `transactions` |
 | `findings` | Data-quality issues per import: type, affected rows, suggested Quicken fix, status | Feeds the cleanup worklist |
-| `import_runs` | Snapshot hash, Quicken version, row counts, validation results | One row per import; audit trail |
+| `import_runs` | Snapshot hash, row counts, validation results | One row per successful build, kept across rebuilds; audit trail |
 
 **Derived views:** `v_spending` (expense splits, transfers removed, refunds netted), `v_cash_flow` (monthly income vs expense), `v_balances_daily` and `v_net_worth` (per account and total), `v_recurring` (detected series), `v_holdings` (shares and value by date).
 
@@ -143,7 +143,7 @@ The store has a small set of normalized tables plus derived views; every analysi
 - It rejects a snapshot with no accounts, runs SQLite's integrity check, records the hash, and keeps the snapshot read-only.
 - It then rebuilds the store from that snapshot in one transaction; a failed build leaves the previous store untouched. `quarry sync --from <snapshot>` rebuilds from an existing snapshot without touching Quicken.
 - Snapshots are capped by count: `snapshots.keep` in config, default 12, minimum 1. After a sync swaps in the new store, the oldest snapshots beyond the cap are deleted. The snapshot the current store was built from is never deleted, and a failed sync deletes nothing.
-- A rejected snapshot (no accounts, failed integrity check) is deleted at once and never counts toward the cap. `import_runs` keeps each pruned snapshot's hash as the audit trail.
+- A rejected snapshot (no accounts, failed integrity check) is deleted at once and never counts toward the cap. `import_runs` keeps one row per successful build, carried across rebuilds, so the hash of every snapshot a store was built from outlives the snapshot. A snapshot that was never built into a store keeps its hash only in its manifest, which is deleted with it.
 - Each sync writes a new store file and swaps it in atomically; the previous `quarry.duckdb` is deleted after the swap, so only one store exists at a time. Scheduled jobs need no extra step: every successful sync prunes.
 - `quarry snapshots` lists snapshots and `quarry snapshots prune` applies the cap by hand (see CLI).
 - Validation runs on every build (see Testing) and fails the sync if balances don't reconcile.
@@ -160,7 +160,7 @@ Every command supports `--json` for machine consumers and a readable table by de
 | Command | Purpose |
 | --- | --- |
 | `quarry sync` | Backup snapshot from the open Quicken file + build + validate + detect findings + refresh Bank of Canada exchange rates; `--from <snapshot>` to rebuild from an existing one |
-| `quarry snapshots` | List snapshots: ID, taken at, size, Quicken version, and which one the store was built from. `prune` deletes all but the newest `--keep N` (default `snapshots.keep`), never the store's own; `--dry-run` to preview |
+| `quarry snapshots` | List snapshots: ID, taken at, size, and which one the store was built from. `prune` deletes all but the newest `--keep N` (default `snapshots.keep`), never the store's own; `--dry-run` to preview |
 | `quarry status` | Last sync, row counts, validation results, staleness, FX rate coverage |
 | `quarry accounts` | Accounts with current balances, closed ones on request |
 | `quarry spend` | Spending by category / payee / tag / month, with `--since`, `--until`, `--account` |

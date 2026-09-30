@@ -30,9 +30,9 @@ var errFromWithQuickenUsage = UsageError{
 	msg: "--from and --quicken cannot be used together; --from rebuilds from a snapshot without reading Quicken",
 }
 
-// newSyncCommand builds the sync subcommand: resolve or discover the
-// bundle, sync it, and render the result.
-func newSyncCommand(newServer ServerFactory, jsonOut *bool) *cobra.Command {
+// newSyncCommand builds the sync subcommand: resolve the bundle (--quicken,
+// quicken.path or discovery), sync it, and render the result.
+func newSyncCommand(newServer ServerFactory, loadConfig ConfigLoader, jsonOut *bool) *cobra.Command {
 	var quickenPath, fromValue string
 
 	cmd := &cobra.Command{
@@ -49,10 +49,17 @@ must add up to the balance of its last reconciled statement in Quicken to the
 cent, and every transaction must equal the sum of its splits; if a check
 fails, the previous store is left unchanged.
 
+After it rebuilds the store, sync deletes the oldest snapshots beyond the
+newest 12 (snapshots.keep in ~/Library/Application Support/quarry/config.toml),
+never the one the store was built from; a failed sync deletes nothing. Run
+quarry snapshots to list them.
+
 Quicken must be running with the file open: it encrypts the database when
 the file is closed. quarry only reads the Quicken file; it never writes to it.
 
-Without --quicken, quarry looks for .quicken files in ~/Documents and in
+Without --quicken, quarry uses quicken.path from
+~/Library/Application Support/quarry/config.toml if it is set. Otherwise it
+looks for .quicken files in ~/Documents and in
 ~/Library/Application Support/Quicken/Documents, and uses the one it finds
 if there is exactly one.
 
@@ -75,7 +82,13 @@ does not read Quicken at all.`,
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			srv, err := newServer(cmd.Context())
+			cfg, err := loadConfig("sync")
+			if err != nil {
+				return &runtimeError{err: err}
+			}
+			printConfigWarnings(cmd, cfg.Warnings)
+
+			srv, err := newServer(cmd.Context(), snapshot.WithAutoPrune(cfg.Keep))
 			if err != nil {
 				return &runtimeError{err: err}
 			}
@@ -85,7 +98,8 @@ does not read Quicken at all.`,
 			if cmd.Flags().Changed("from") {
 				outcome, err = srv.ImportFrom(cmd.Context(), fromValue)
 			} else {
-				bundlePath, resolveErr := resolveBundle(cmd, home, quickenPath)
+				choice := snapshot.BundleChoice{Flag: quickenPath, Configured: cfg.QuickenPath}
+				bundlePath, resolveErr := snapshot.ResolveBundle(home, choice)
 				if resolveErr != nil {
 					return &runtimeError{err: resolveErr}
 				}
@@ -94,13 +108,15 @@ does not read Quicken at all.`,
 			var mismatch snapshot.MismatchError
 			isMismatch := errors.As(err, &mismatch)
 			validationFailed := outcome.Store != nil && !outcome.Store.Built
-			if err != nil && !isMismatch && !validationFailed {
+			// An error beside a rebuilt store is auto-prune's interrupt: the result is still owed.
+			rebuilt := outcome.Store != nil && outcome.Store.Built
+			if err != nil && !isMismatch && !validationFailed && !rebuilt {
 				return &runtimeError{err: err}
 			}
 
 			var output string
 			if *jsonOut {
-				data, encErr := renderJSON(outcome)
+				data, encErr := renderJSON(outcome, cfg.Warnings)
 				if encErr != nil {
 					// unreachable: renderJSON's own error path is unreachable for any value SyncAndImport builds; see there.
 					return &runtimeError{err: encErr}
@@ -113,6 +129,9 @@ does not read Quicken at all.`,
 					output += renderStoreFailure(*outcome.Store, outcome.StoreExisted, home)
 				case outcome.Store != nil:
 					output += renderStore(*outcome.Store, home)
+					if outcome.Pruned != nil {
+						output += renderPrunedLine(*outcome.Pruned)
+					}
 				}
 			}
 			if _, writeErr := fmt.Fprint(cmd.OutOrStdout(), output); writeErr != nil {
@@ -123,25 +142,16 @@ does not read Quicken at all.`,
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: warning: "+warning)
 			}
 
-			if isMismatch || validationFailed {
+			if err != nil {
 				return &runtimeError{err: err}
 			}
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&quickenPath, "quicken", "",
-		"`path` to the .quicken file to snapshot (default: the only one in ~/Documents or Quicken's Documents folder)")
+		"`path` to the .quicken file to snapshot (default: quicken.path in the config file, else the only one in ~/Documents or Quicken's Documents folder)")
 	cmd.Flags().StringVar(&fromValue, "from", "",
 		"`snapshot` to rebuild the store from instead of reading Quicken: an ID such as 20260927T143005Z, or the path to its .sqlite file")
 
 	return cmd
-}
-
-// resolveBundle returns the bundle a plain sync snapshots: the --quicken
-// value when given, else the one bundle discovery finds.
-func resolveBundle(cmd *cobra.Command, home, quickenPath string) (string, error) {
-	if cmd.Flags().Changed("quicken") {
-		return snapshot.ResolveBundlePath(home, quickenPath) //nolint:wrapcheck // a RefusalError is final user copy; a prefix would change it
-	}
-	return snapshot.DiscoverBundle(home) //nolint:wrapcheck // a RefusalError is final user copy; a prefix would change it
 }

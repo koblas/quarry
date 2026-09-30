@@ -6,19 +6,30 @@ import (
 	"io"
 	"time"
 
+	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/snapshot"
 )
 
-// ServerFactory builds the Server sync needs. It is called only from
-// inside sync's RunE, so building the command tree, --help and a usage
-// error never depend on it.
-type ServerFactory func(ctx context.Context) (srv *snapshot.Server, err error)
+// ServerFactory builds the Server sync needs, applying opts after its own
+// options. It is called only from inside sync's RunE, so building the
+// command tree, --help and a usage error never depend on it.
+type ServerFactory func(ctx context.Context, opts ...snapshot.Option) (srv *snapshot.Server, err error)
 
 // ReportFactory builds the Server a read command needs; command is the name
 // of the command asking, for refusals that say which command to run again.
 // Like ServerFactory it is called only from a command's RunE.
 type ReportFactory func(ctx context.Context, command string) (srv *report.Server, err error)
+
+// SnapshotsFactory builds the Server the snapshots command needs; command is
+// the name of the command asking, for the home-directory refusal. Like the
+// other factories it is called only from a command's RunE.
+type SnapshotsFactory func(ctx context.Context, command string) (srv *snapshot.Server, err error)
+
+// ConfigLoader reads quarry's config file for command, the name of the
+// command asking, for refusals that say which command to run again. Like
+// the factories it is called only from a command's RunE.
+type ConfigLoader func(command string) (config.Config, error)
 
 // Env is everything Execute takes from the process: its streams, the clock
 // and the factories that build each command family's Server. Now must be
@@ -28,6 +39,8 @@ type Env struct {
 	Stdout, Stderr io.Writer
 	NewServer      ServerFactory
 	NewReport      ReportFactory
+	NewSnapshots   SnapshotsFactory
+	LoadConfig     ConfigLoader
 	Now            func() time.Time
 }
 
@@ -51,6 +64,9 @@ func Execute(ctx context.Context, args []string, env Env) error {
 
 	if ue, ok := errors.AsType[UsageError](err); ok {
 		return ue
+	}
+	if re, ok := errors.AsType[ReportedError](err); ok {
+		return re
 	}
 	if re, ok := errors.AsType[*runtimeError](err); ok {
 		return re.err

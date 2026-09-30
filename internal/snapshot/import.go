@@ -17,21 +17,32 @@ import (
 // errImportNotWired is SyncAndImport's error when the Server has no Importer or StoreProbe configured.
 var errImportNotWired = errors.New("no importer or store probe configured")
 
-// Outcome is what SyncAndImport returns: the snapshot's Manifest and the
-// import's store.Result, when one ran. Store is nil on a schema mismatch
-// or Sync failure. StoreExisted (meaningful only when Store != nil &&
+// Outcome is what SyncAndImport and ImportFrom return: the snapshot's Manifest
+// and the import's store.Result, when one ran. Store is nil on a schema
+// mismatch or Sync failure. StoreExisted (meaningful only when Store != nil &&
 // !Store.Built) decides the V1 block's NOT REBUILT vs NOT BUILT line.
 type Outcome struct {
 	Manifest     Manifest
 	Store        *store.Result
 	StoreExisted bool
+	// Pruned is what auto-prune did once the store was built; nil when none was built or the Server has no WithAutoPrune.
+	Pruned *Pruned
+
+	// historyWarning is the warning for a built store whose previous import
+	// history could not be carried forward; empty when it was carried.
+	historyWarning string
+	// pruneWarning is the warning for a snapshots folder auto-prune could not list, and
+	// pruneWarningAbsolute the same warning naming the folder by its absolute path.
+	pruneWarning, pruneWarningAbsolute string
 }
 
 // Warnings returns every warning o carries, without the "quarry: warning: "
-// prefix: the manifest's own, then the one-sided-transfer warning when a
-// built store kept one or more legs with no counterpart. An unbuilt store
-// kept nothing, so it adds no warning.
-func (o Outcome) Warnings() []string {
+// prefix: the manifest's own, then, for a built store only, the one-sided
+// transfer, import-history restart and auto-prune warnings, in that order.
+func (o Outcome) Warnings() []string { return o.warnings(o.pruneWarning) }
+
+// warnings is Warnings with listWarning as the warning for a snapshots folder that could not be listed.
+func (o Outcome) warnings(listWarning string) []string {
 	warnings := o.Manifest.Warnings
 	if o.Store == nil || !o.Store.Built {
 		return warnings
@@ -39,7 +50,16 @@ func (o Outcome) Warnings() []string {
 	if n := len(o.Store.Validation.Transfers.OneSided); n > 0 {
 		warnings = append(slices.Clip(warnings), oneSidedWarning(n))
 	}
-	return warnings
+	if o.historyWarning != "" {
+		warnings = append(slices.Clip(warnings), o.historyWarning)
+	}
+	return append(slices.Clip(warnings), o.pruneWarnings(listWarning)...)
+}
+
+// historyRestartWarning renders the warning that the previous store's import
+// history could not be carried forward, for a reason from UnreadableReason.
+func historyRestartWarning(reason string) string {
+	return "cannot carry import history forward from the previous store (" + reason + "); import_runs starts again with this sync"
 }
 
 // oneSidedWarning renders the warning for n one-sided transfers, singular
@@ -64,19 +84,16 @@ func (e causedRefusalError) Error() string { return e.msg }
 // Unwrap returns the error the refusal wraps.
 func (e causedRefusalError) Unwrap() error { return e.cause }
 
-// snapshotID returns the id a refusal names for path: its basename with the
-// .sqlite extension removed.
-func snapshotID(path string) string {
+// ID returns the id a snapshot goes by for its .sqlite path: the base name
+// with the extension removed.
+func ID(path string) string {
 	return strings.TrimSuffix(filepath.Base(path), ".sqlite")
 }
 
-// SyncAndImport takes a snapshot of bundlePath, then imports it through the
-// configured Importer, skipping the import (Store left nil) on a schema
-// mismatch or any other Sync failure. An import failure never replaces the
-// already-committed snapshot: it comes back as a store refusal wrapping the
-// importer's error, so errors.As still reaches it. A failed check (V1) sets
-// Store to the unbuilt result, so a later stdout write against it still
-// gets the O1b refusal.
+// SyncAndImport takes a snapshot of bundlePath, then imports it through the configured Importer,
+// leaving Store nil on a Sync failure. An import failure never replaces the committed snapshot: it
+// wraps the importer's error in a store refusal. A Server with WithAutoPrune then deletes old
+// snapshots; interrupted with any left, it returns the built Outcome beside a refusal.
 func (s *Server) SyncAndImport(ctx context.Context, bundlePath string) (Outcome, error) {
 	manifest, err := s.Sync(ctx, bundlePath)
 	if err != nil {
@@ -107,7 +124,12 @@ func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome
 		return Outcome{Manifest: manifest}, s.importFailureRefusal(ctx, manifest, err)
 	}
 
-	return Outcome{Manifest: manifest, Store: &result}, nil
+	outcome := Outcome{Manifest: manifest, Store: &result}
+	if fault := result.HistoryFault; fault != nil {
+		outcome.historyWarning = historyRestartWarning(fault.UnreadableReason(homepath.Abbreviate(s.home, s.storeProbe.Path())))
+	}
+	err = s.autoPrune(ctx, &outcome)
+	return outcome, err
 }
 
 // recordedTakenAt parses a manifest's taken_at into UTC; an unparseable
@@ -124,7 +146,7 @@ func recordedTakenAt(s string) time.Time {
 // failure, wrapping err so errors.As still reaches it: I2 once ctx has
 // ended, else S4, S1, S2 by the store sentinel err matches, else S3.
 func (s *Server) importFailureRefusal(ctx context.Context, manifest Manifest, err error) error {
-	id := snapshotID(manifest.Snapshot.Path)
+	id := ID(manifest.Snapshot.Path)
 	probed := s.storeProbe.Path()
 	storeDir := homepath.Abbreviate(s.home, filepath.Dir(probed))
 	storePath := homepath.Abbreviate(s.home, probed)
@@ -160,7 +182,7 @@ func (s *Server) validationFailedRefusal(manifest Manifest, v store.Validation, 
 	return causedRefusalError{
 		msg: fmt.Sprintf("validation failed: %s; %s was not changed; each difference is listed on stdout; "+
 			"fix the account in Quicken and run quarry sync, or run quarry sync --from %s after updating quarry",
-			strings.Join(clauses, " and "), homepath.Abbreviate(s.home, s.storeProbe.Path()), snapshotID(manifest.Snapshot.Path)),
+			strings.Join(clauses, " and "), homepath.Abbreviate(s.home, s.storeProbe.Path()), ID(manifest.Snapshot.Path)),
 		cause: cause,
 	}
 }
@@ -200,5 +222,5 @@ func (o Outcome) StdoutWriteRefusal(home string, err error) error {
 	}
 	return fmt.Errorf(
 		"cannot write the result to stdout: %w; run quarry sync --from %s --json to see it again",
-		err, snapshotID(o.Manifest.Snapshot.Path))
+		err, ID(o.Manifest.Snapshot.Path))
 }

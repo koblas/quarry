@@ -376,7 +376,7 @@ func Test_import_from_refuses_an_id_form_value_with_no_matching_snapshot(t *test
 
 	_, err := srv.ImportFrom(t.Context(), "20260927T143005Z")
 
-	require.EqualError(t, err, "no snapshot 20260927T143005Z in ~/snapshots; check the ID passed to --from")
+	require.EqualError(t, err, "no snapshot 20260927T143005Z in ~/snapshots; run quarry snapshots to list the ones kept")
 	assert.Empty(t, fake.calls)
 }
 

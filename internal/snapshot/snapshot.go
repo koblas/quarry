@@ -34,6 +34,8 @@ type Server struct {
 	destination Destination
 	importer    Importer
 	storeProbe  StoreProbe
+	remove      func(path string) error
+	autoKeep    int
 }
 
 // Option configures a Server built by NewServer.
@@ -90,9 +92,21 @@ func WithStoreProbe(probe StoreProbe) Option {
 	return func(s *Server) { s.storeProbe = probe }
 }
 
+// WithRemove sets the function that deletes a file in the snapshots
+// directory; it defaults to os.Remove. Tests use it to inject a failing delete.
+func WithRemove(remove func(path string) error) Option {
+	return func(s *Server) { s.remove = remove }
+}
+
+// WithAutoPrune makes SyncAndImport and ImportFrom delete the snapshots beyond the newest
+// keep once the store is built; unset or below 1, they delete nothing.
+func WithAutoPrune(keep int) Option {
+	return func(s *Server) { s.autoKeep = keep }
+}
+
 // NewServer builds a Server from opts.
 func NewServer(opts ...Option) *Server {
-	s := &Server{busyTimeout: DefaultBusyTimeout}
+	s := &Server{busyTimeout: DefaultBusyTimeout, remove: os.Remove}
 	for _, opt := range opts {
 		opt(s)
 	}

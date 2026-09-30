@@ -7,7 +7,7 @@ type cashFlowDocument struct {
 	Since         string                   `json:"since"`
 	Until         string                   `json:"until"`
 	By            string                   `json:"by"`
-	AccountFilter []spendAccountDocument   `json:"account_filter"`
+	AccountFilter []accountFilterDocument  `json:"account_filter"`
 	Periods       []cashFlowPeriodDocument `json:"periods"`
 	Totals        []cashFlowTotalDocument  `json:"totals"`
 	Warnings      []string                 `json:"warnings"`
@@ -52,15 +52,11 @@ func renderCashFlowJSON(c report.CashFlow, warnings []string) ([]byte, error) {
 			SavingsRatePct: t.SavingsRatePct,
 		}
 	}
-	accountFilter := make([]spendAccountDocument, len(c.Accounts))
-	for i, a := range c.Accounts {
-		accountFilter[i] = spendAccountDocument{ID: a.ID, Name: a.Name}
-	}
 	return marshalDocument(cashFlowDocument{
 		Since:         c.Window.Since.Format(jsonDateLayout),
 		Until:         c.Window.Until.Format(jsonDateLayout),
 		By:            cashFlowPeriods[c.By].name,
-		AccountFilter: accountFilter,
+		AccountFilter: accountFilterDocuments(c.Accounts),
 		Periods:       periods,
 		Totals:        totals,
 		Warnings:      warnings,

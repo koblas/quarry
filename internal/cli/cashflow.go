@@ -8,6 +8,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// cashFlowCommand is the word that names cashflow on the command line and in its warnings.
+const cashFlowCommand = "cashflow"
+
 // cashFlowPeriod is how cashflow presents one --by value: the flag word and the column-1 header.
 type cashFlowPeriod struct {
 	name, header string
@@ -35,10 +38,9 @@ func parseCashFlowPeriod(name string) (store.CashFlowPeriod, error) {
 // newCashFlowCommand builds cashflow: the income, spending and savings rate in the --since/--until period per month or year.
 func newCashFlowCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var by string
-	var accounts []string
-	var window windowFlags
+	var flags reportFlags
 	cmd := &cobra.Command{
-		Use:   "cashflow",
+		Use:   cashFlowCommand,
 		Short: "Show income, spending and savings rate by month or year",
 		Long: `Show income, spending and what was left over for each month or year, in
 each account's own currency: CAD and USD are listed separately, never added
@@ -65,7 +67,7 @@ less. A period that --since or --until cuts short is marked partial.`,
 				return err
 			}
 
-			resolved, err := window.window(cmd, now())
+			resolved, err := flags.window(cmd, now())
 			if err != nil {
 				return err
 			}
@@ -75,32 +77,26 @@ less. A period that --since or --until cuts short is marked partial.`,
 				return err
 			}
 
-			flow, err := srv.CashFlow(cmd.Context(), report.CashFlowRequest{Window: resolved, By: period, Accounts: accounts})
+			flow, err := srv.CashFlow(cmd.Context(), report.CashFlowRequest{Window: resolved, By: period, Accounts: flags.accounts})
 			if err != nil {
 				return &runtimeError{err: err}
 			}
 
 			warnings := cashFlowWarnings(flow)
-			out, err := renderResult(*jsonOut,
+			return emitReport(cmd, *jsonOut, warnings,
 				func() ([]byte, error) { return renderCashFlowJSON(flow, warnings) },
 				func() string { return renderCashFlow(flow) })
-			if err != nil {
-				// unreachable: renderResult fails only via marshalDocument; savings_rate_pct is finite (BIGINT tenths/10.0 or NULL; its sole production source: duckstore cashFlowQuery); see marshalDocument.
-				return err
-			}
-			return emit(cmd, out, "quarry: warning: ", warnings)
 		},
 	}
 	cmd.Flags().StringVar(&by, "by", cashFlowPeriods[store.CashFlowByMonth].name, "group by `period`: month or year")
-	window.bind(cmd)
-	cmd.Flags().StringArrayVar(&accounts, "account", nil, "count only the account with this `name` or id; repeat for more")
+	flags.bind(cmd)
 	return cmd
 }
 
 // cashFlowWarnings is c's warnings, unprefixed and never nil: one per named account left out (W2 or W3),
 // then a note that the window held no income or spending.
 func cashFlowWarnings(c report.CashFlow) []string {
-	warnings := leftOutWarnings(c.Accounts, "cashflow")
+	warnings := leftOutWarnings(c.Accounts, cashFlowCommand)
 	if c.Empty() {
 		warnings = appendEmptyWindowWarning(warnings, "income or spending", c.Accounts, c.Window, c.Transactions)
 	}

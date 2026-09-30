@@ -42,21 +42,6 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 			},
 		},
 		{
-			name: "an unknown ID",
-			setup: func(t *testing.T) (string, string) {
-				t.Helper()
-				home := t.TempDir()
-				t.Setenv("HOME", home)
-				return home, "20260927T143005Z"
-			},
-			want: func(t *testing.T, home, _ string) string {
-				t.Helper()
-				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-				return "quarry: no snapshot 20260927T143005Z in " + abbreviated(t, snapshotsDir, home) +
-					"; check the ID passed to --from"
-			},
-		},
-		{
 			name: "a directory",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
@@ -181,6 +166,19 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 			assert.ErrorIs(t, err, os.ErrNotExist)
 		})
 	}
+}
+
+func Test_run_sync_from_an_unknown_id_points_at_quarry_snapshots(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--from", "20260601T090000Z"}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: no snapshot 20260601T090000Z in ~/Library/Application Support/quarry/snapshots; "+
+		"run quarry snapshots to list the ones kept\n", stderr.String())
 }
 
 // writeManifestForTest writes the .json manifest next to snapshotPath, recording content's real SHA-256.

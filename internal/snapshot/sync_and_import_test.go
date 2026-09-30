@@ -56,14 +56,21 @@ type unmappableError struct{ reason string }
 func (e unmappableError) Error() string        { return e.reason }
 func (e unmappableError) Is(target error) bool { return target == store.ErrUnmappable }
 
-// fakeStoreProbe is a hand-written StoreProbe fake reporting a fixed path and existence.
+// fakeStoreProbe is a hand-written StoreProbe fake reporting a fixed path and existence,
+// and answering BuiltFrom with builtFrom, or builtFromErr when set.
 type fakeStoreProbe struct {
-	path   string
-	exists bool
+	path         string
+	exists       bool
+	builtFrom    string
+	builtFromErr error
 }
 
 func (f *fakeStoreProbe) Path() string { return f.path }
 func (f *fakeStoreProbe) Exists() bool { return f.exists }
+
+func (f *fakeStoreProbe) BuiltFrom(context.Context) (string, error) {
+	return f.builtFrom, f.builtFromErr
+}
 
 // newImportServer builds a Server whose snapshots and store live under home; opts override those.
 func newImportServer(t *testing.T, home string, imp snapshot.Importer, opts ...snapshot.Option) *snapshot.Server {

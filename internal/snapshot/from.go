@@ -15,7 +15,8 @@ import (
 )
 
 // ImportFrom rebuilds the store from an earlier snapshot, named by ID or by
-// .sqlite path, without touching Quicken or writing the snapshots directory.
+// .sqlite path, without touching Quicken or writing a new snapshot; a Server
+// with WithAutoPrune then deletes old ones as SyncAndImport does.
 // It refuses when from does not resolve to a usable snapshot, and returns a
 // MismatchError when the current reference finds a missing table or column.
 func (s *Server) ImportFrom(ctx context.Context, from string) (Outcome, error) {
@@ -97,7 +98,7 @@ func fromPathRefusal(home, snapshotDir, snapshotPath string, isPath bool) error 
 		if isPath {
 			return pathNotFoundRefusal(home, snapshotPath)
 		}
-		return idNotFoundRefusal(home, snapshotDir, snapshotID(snapshotPath))
+		return idNotFoundRefusal(home, snapshotDir, ID(snapshotPath))
 	case err != nil:
 		return fromUnreadableRefusal(home, snapshotPath, err)
 	case info.IsDir() && strings.EqualFold(filepath.Ext(snapshotPath), ".quicken"):
@@ -116,7 +117,7 @@ func pathNotFoundRefusal(home, snapshotPath string) error {
 // idNotFoundRefusal reports an ID-form --from value naming no snapshot in snapshotDir.
 func idNotFoundRefusal(home, snapshotDir, id string) error {
 	return RefusalError{msg: fmt.Sprintf(
-		"no snapshot %s in %s; check the ID passed to --from", id, homepath.Abbreviate(home, snapshotDir))}
+		"no snapshot %s in %s; run quarry snapshots to list the ones kept", id, homepath.Abbreviate(home, snapshotDir))}
 }
 
 // notASnapshotFileRefusal reports that snapshotPath exists but is not a regular file.

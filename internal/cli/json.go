@@ -4,21 +4,30 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store"
 )
 
 // jsonDateLayout is the format of every calendar date quarry prints, in text and in --json.
-const jsonDateLayout = "2006-01-02"
+const jsonDateLayout = time.DateOnly
 
 // resultDocument is sync's --json stdout shape: the manifest, the store
-// result (nil before an import is attempted), and every warning.
+// result (nil before an import is attempted), what auto-prune did (nil unless the store was built), and every warning.
 type resultDocument struct {
 	Snapshot snapshot.Info       `json:"snapshot"`
 	Schema   snapshot.SchemaInfo `json:"schema"`
 	Store    *storeDocument      `json:"store"`
+	Pruned   *syncPrunedDocument `json:"pruned"`
 	Warnings []string            `json:"warnings"`
+}
+
+// syncPrunedDocument is the --json "pruned" object.
+type syncPrunedDocument struct {
+	Keep    int                    `json:"keep"`
+	Deleted []prunedEntryDocument  `json:"deleted"`
+	Failed  []pruneFailureDocument `json:"failed"`
 }
 
 // storeDocument is the --json "store" object.
@@ -116,13 +125,16 @@ type notImportedDocument struct {
 }
 
 // renderJSON renders outcome as sync's --json document: 2-space indented
-// JSON with a trailing newline, matching Manifest.Encode's formatting.
-func renderJSON(outcome snapshot.Outcome) ([]byte, error) {
+// JSON with a trailing newline, matching Manifest.Encode's formatting. Its
+// warnings are configWarnings, then the outcome's own with absolute paths.
+func renderJSON(outcome snapshot.Outcome, configWarnings []string) ([]byte, error) {
+	warnings := append([]string{}, configWarnings...)
 	doc := resultDocument{
 		Snapshot: outcome.Manifest.Snapshot,
 		Schema:   outcome.Manifest.Schema,
 		Store:    newStoreDocument(outcome.Store),
-		Warnings: outcome.Warnings(),
+		Pruned:   newSyncPrunedDocument(outcome.Pruned),
+		Warnings: append(warnings, outcome.WarningsAbsolute()...),
 	}
 	return marshalDocument(doc)
 }
@@ -155,6 +167,14 @@ func newStoreDocument(result *store.Result) *storeDocument {
 		Transfers:   newTransfersDocument(result.Validation.Transfers),
 		NotImported: notImportedDocument{InvestmentTransactions: result.NotImported.InvestmentTransactions},
 	}
+}
+
+// newSyncPrunedDocument converts p into the --json pruned object, nil when auto-prune did not run; its lists are never nil.
+func newSyncPrunedDocument(p *snapshot.Pruned) *syncPrunedDocument {
+	if p == nil {
+		return nil
+	}
+	return &syncPrunedDocument{Keep: p.Keep, Deleted: newPrunedEntryDocuments(p.Deleted), Failed: newPruneFailureDocuments(p.Failed)}
 }
 
 // newRowsDocument converts c's table counts into the --json shape.
