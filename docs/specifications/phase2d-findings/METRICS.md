@@ -27,6 +27,7 @@
 | --- | --- | --- | --- | --- |
 | 1 | arch, correctness ×2, test ×2, refactor | 0/8/~20/~6 | 0 / 20, 636s | BLOCKED |
 | 2 | correctness, test | 0/0/5/1 | 1 / 8, 439s (equivalent) | PASS WITH FOLLOW-UPS |
+| 3 (after final product-vision SHIP WITH CHANGES) | correctness, test | 0/0/8/1 | 0 / 1, 75s | PASS WITH FOLLOW-UPS |
 
 ## Tokens
 
