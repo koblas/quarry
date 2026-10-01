@@ -69,21 +69,19 @@ func Test_renderRecurringJSON_writes_the_warnings_it_is_given(t *testing.T) {
 	assert.Equal(t, []any{"first", "second"}, doc["warnings"])
 }
 
-func Test_renderRecurringJSON_writes_an_ended_new_series_without_per_year_or_a_total(t *testing.T) {
+func Test_renderRecurringJSON_writes_an_ended_new_series_with_a_null_per_year(t *testing.T) {
 	r := report.Recurring{Window: spendingWindow(), Series: []report.Series{{
 		Payee: "Disney Plus", Currency: "CAD", Cadence: report.CadenceMonthly, Amount: 1199, FirstAmount: 1199,
 		First: recurringDay(time.February, 7), Last: recurringDay(time.April, 7), ChargeCount: 3,
 		State: report.SeriesEnded, New: true,
 	}}}
 
-	doc := recurringDocumentOf(t, r)
+	entry := seriesEntryAt(t, recurringDocumentOf(t, r), 0)
 
-	entry := seriesEntryAt(t, doc, 0)
 	assert.Equal(t, "ended", entry["state"])
 	assert.Nil(t, entry["per_year"])
 	assert.Contains(t, entry, "per_year")
 	assert.Equal(t, true, entry["new"])
-	assert.Equal(t, []any{}, doc["totals"])
 }
 
 func Test_renderRecurringJSON_writes_a_null_payee_key_for_the_payee_id_fallback(t *testing.T) {

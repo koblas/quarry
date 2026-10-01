@@ -163,3 +163,23 @@ func Test_run_recurring_merges_payees_differing_in_store_numbers_and_splits_curr
 	assert.Equal(t, []recurringIDName{{ID: "payee-Netflix.com", Name: "Netflix.com"}}, usd.Payees)
 	assert.Equal(t, []recurringTotalJSON{{Currency: "CAD", PerYear: "180.00"}, {Currency: "USD", PerYear: "144.00"}}, doc.Totals)
 }
+
+func Test_run_recurring_json_marks_new_only_for_a_series_first_charged_inside_the_window(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	charges := slices.Concat(
+		monthlySeries("Netflix.com", 2026, time.February, slices.Repeat([]int64{1199}, 8)...),
+		monthlySeries("Spotify", 2026, time.July, slices.Repeat([]int64{1099}, 3)...),
+	)
+	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, charges...))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"recurring", "--since", "2026-05-01", "--json"}, spendEnv(&stdout, &stderr))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	isNew := map[string]bool{}
+	for _, s := range decodeRecurringJSON(t, stdout.String()).Series {
+		isNew[s.Payee] = s.New
+	}
+	assert.Equal(t, map[string]bool{"Netflix.com": false, "Spotify": true}, isNew)
+}
