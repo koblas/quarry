@@ -105,7 +105,7 @@ Total        CAD                        1,792.16
  "price_changes":[{"date":"2016-05-12","from":"9.99","to":"11.99","change_pct":20.0}]}],
  "totals":[{"currency":"CAD","per_year":"1792.16"}],"warnings":[]}
 ```
-  `payee_key` null for the payee_id fallback. Arrays `[]`, never null. Money a 2-decimal string. Text and JSON order identical.
+  `payee_key` null for the payee_id fallback. Arrays `[]`, never null. Money a 2-decimal string. Text and JSON order identical. `price_changes[].date` is the later charge's date; `payees` and `accounts` are distinct by id in first-appearance order within the run (ruled at SCENARIO-07 planning).
 
 ### `quarry anomalies`
 - Use `anomalies`; Short `List charges unusually large for their payee or category`
