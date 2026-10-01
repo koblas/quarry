@@ -254,7 +254,6 @@ Rules for it:
   the option plus its wiring in `cmd/quarry`.
 - **A feature package never imports another feature package.** Shared types move down to
   `internal/platform/*`, or consumer declares interface and wiring supplies it.
-- **Cross-surface rule in `## Surface & Copy` gets one pin per site**, or one chokepoint test that fails if a site bypasses shared helper. Per-arm pins, one read per command, read-back of machine formats: `.claude/briefs/build.md` → *Planning*.
 - **Name user-visible contract in plan**: exact command line, what lands on
   stdout vs stderr, exit code for each failure class. Plan test to cover
   input-validation matrix (happy path / malformed input / missing required argument /

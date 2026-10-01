@@ -1,10 +1,10 @@
 # Brief: feature metrics
 
-Orchestrator only — no agent reads this or ledger it describes.
+Orchestrator only — no build-stage agent reads this or ledger it describes (`pipeline-reviewer` retro does).
 
 ## Feature metrics
 
-`docs/specifications/<feature-slug>/METRICS.md` is feature's cost ledger. **No agent reads it** — exists so person can compare cadences and gate cost across features, and judge pipeline changes against `docs/pipeline-efficiency-adoption.md` baseline. Orchestrator appends; nobody rewrites. `intent-and-goal` creates it from template below.
+`docs/specifications/<feature-slug>/METRICS.md` is feature's cost ledger. **No build-stage agent reads it** (retro does) — exists so person can compare cadences and gate cost across features, and judge pipeline changes against `docs/pipeline-efficiency-adoption.md` baseline. Orchestrator appends; nobody rewrites. `intent-and-goal` creates it from template below.
 
 ```markdown
 # Metrics: <feature-slug>
