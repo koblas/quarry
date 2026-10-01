@@ -24,8 +24,8 @@ No new port: the unconverted facts ride extra fields on `store.Spending`/`store.
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_spend_unconverted_test.go` (new) `Test_run_spend_lists_a_split_before_the_first_rate_in_its_own_currency_and_warns` — `replaceStoreWithRates` + `rateOnJan2`, USD split before it, `spend` in CAD: USD row + USD Total, stderr and `warnings[]` carry the "before" line verbatim, exit 0
-- [ ] Step 2: same file `Test_run_spend_without_rates_lists_each_currency_natively_and_warns_only_when_a_conversion_is_needed` — `replaceStore` (no rates) rows: CAD+USD data CAD mode -> "no rates" line; all-CAD in CAD -> empty stderr and `warnings: []`. No stubs needed; both fail at the missing-warning assertion
+- [x] Step 1: `cmd/quarry/run_spend_unconverted_test.go` (new) `Test_run_spend_lists_a_split_before_the_first_rate_in_its_own_currency_and_warns` — `replaceStoreWithRates` + `rateOnJan2`, USD split before it, `spend` in CAD: USD row + USD Total, stderr and `warnings[]` carry the "before" line verbatim, exit 0
+- [x] Step 2: same file `Test_run_spend_without_rates_lists_each_currency_natively_and_warns_only_when_a_conversion_is_needed` — `replaceStore` (no rates) rows: CAD+USD data CAD mode -> "no rates" line; all-CAD in CAD -> empty stderr and `warnings: []`. No stubs needed; both fail at the missing-warning assertion
 
 ### Build
 - [ ] Step 3 (B1, duckstore): `internal/store/store.go:526-535,579-585` new `store.Unconverted{Transactions int; FirstRate time.Time}` (FirstRate zero = no rates) as field on `Spending` and `CashFlow`; new `internal/store/duckstore/unconverted.go` `unconvertedQuery(view, convertedCol, flowFilter, accounts)` (one statement: distinct-transaction count + `min(fx_rates.date)`, same `$1/$2` window and `accounts.and("account_id")`); call it in `spending.go:118-` after the rows query and before the multi-tag query (`:147`), in `cashflow.go:67-` after the rows query, both skipped for `money.Native`. Do NOT touch `spendingSource`/`cashFlowSource`. Tests `internal/store/duckstore/unconverted_test.go` (reuse `fxSpendRows`/`expense`/`newStoreWithRates`, `views_fx_test.go`): CAD mode USD pre-rate -> count + first rate; USD mode CAD pre-rate; no rates -> count, zero FirstRate; two splits of one transaction -> 1; post-rate split and weekend split -> 0; `--account` on a CAD-only account -> 0 though another account holds a pre-rate USD split; window excluding the pre-rate split -> 0; third currency -> 0; native with pre-rate USD -> zero struct; `--by tag` multi-tag split counted once; consistency: `Unconverted.Transactions > 0` iff Rows hold a currency other than the target (both reads); cashflow count includes a pre-rate income split spend's leaves out; fault test per read: `spyReadDB{passQueries: 1, queryFault}` -> `assertOtherFault` (second query is the count; query order is rows, count, multi-tag, transactionRange)
@@ -58,3 +58,16 @@ No new port: the unconverted facts ride extra fields on `store.Spending`/`store.
 - Existing USD goldens on an unrated `replaceStore` in default CAD now print the "no rates" line (step 5 lists them); do not "fix" by seeding rates, which changes what they test.
 - `spyReadDB.passQueries` counts the rows query as the first read; the count is second, before multi-tag.
 - `-run` is case-sensitive; keep `(?i)`.
+
+## Phase report
+
+Run A (steps 1-2) done; both ticked. Nothing else built.
+
+- Files: `cmd/quarry/run_spend_unconverted_test.go` (new, only file touched). No stubs needed.
+- Test 1 `Test_run_spend_lists_a_split_before_the_first_rate_in_its_own_currency_and_warns`: red at `stderr` (text) and `warnings[]` (json) assertions; actual `""` / `[]`. Seed: `replaceStoreWithRates` + `rateOnJan2`, TWO USD splits on 2026-01-01 (N=2, "are"), one post-rate USD split (converted, must not count), one CAD split. Text pins stdout rows (USD rows + CAD/USD Totals, by category: no periods, so no fillSeries rows) and stderr; json pins `totals` and `warnings[]`. Line const `beforeFirstRateLine` is the spec text with N=2.
+- Test 2 `Test_run_spend_without_rates_lists_each_currency_natively_and_warns_only_when_a_conversion_is_needed`: subtest "CAD and USD data warns..." red at stderr / `warnings[]` (actual empty); its stdout rows assertion already passes (native listing exists). Subtest "all-CAD data in CAD ... stays quiet" is GREEN ON ARRIVAL by design: it is the control arm guarding against over-warning once the no-rates warning exists.
+- Helpers added in that file: `unconvertedDoc`, `runSpendUnconverted(t)` (json doc + stderr); consts `beforeFirstRateLine`, `noRatesLine`. Did not extend `spendReport` (adding `Warnings` would break existing struct equality: nil vs `[]`).
+- Deliberately not asserted (pending ruling): warning order vs multi-tag note, EUR, fillSeries zero rows.
+- Lint on `cmd/quarry`: 0 issues. Not yet committed beyond this run's commit; no production code touched.
+- Next (B1): store.Unconverted + duckstore count (step 3). Tests use no network (`TestMain` swaps `newRatesSource`; these use `replaceStore*` direct).
+
