@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-04
-status: open
+status: done
 ---
 
 # SCENARIO-04: Rates survive the rebuild, including sync --from an older snapshot (folds SCENARIO-02)
@@ -27,10 +27,10 @@ Surveyed (no new port): `RatesSource`/`RatesRequest{Need,Have}` frozen by 07/01;
 - [x] Step 5 (batch 3, Have + cumulative floor; 02 arms): `history.go:113-168` `readRuns` records the floor = latest-by-id non-NULL `rates_checked_from`; `rates.go:48-71` `refreshRates` sends `Have` = [min(floor, min(date)), max(date)] (zero with no carried rates; floor ignored when no rates were carried), `askedFrom` becomes the cumulative floor = min(previous floor, Need.First) when asked with no FetchError and Need non-empty, else the previous floor carried (NULL only if none ever). Tests: `Test_replace_tells_the_source_what_the_carried_rates_already_cover` (floor older than first rate; floor NULL; run 3 NULL after run 2 non-NULL → run 2's; no rates + floor → zero), `Test_replace_keeps_the_earliest_checked_floor_across_runs` (older-then-newer AND newer-then-older Need.First; FetchError carries previous; no transactions carries previous; first-ever NULL stays NULL), `Test_replace_forgets_the_checked_floor_when_the_carried_rates_cannot_be_read`. Cmd cells, each text + `--json` (`first,last,added:0,fetch_error:null`): tail asked and answered empty → `(up to date)`; Need covered by a carried 2099 rate (`replaceStoreWithRates`, `run_sql_fx_test.go:25`) → zero requests, `(up to date)`; no transactions but rates carried → `USD/CAD <first> to <last> (up to date)`; an older Need.First answered empty lowers the floor, and the next sync sends no head request
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `readRates`, `ratesFault`, `RatesFault`, `ratesCarryWarning`; repoint any pin the carry moved (import_runs rates floors, `Warnings()` order tests)
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `readRates`, `ratesFault`, `RatesFault`, `ratesCarryWarning`; repoint any pin the carry moved (import_runs rates floors, `Warnings()` order tests)
 
 ### Verify
-- [ ] Step 7: full verification + `spec-check.py phase2f-fx` → tick SCENARIO-04 with its acceptance test, and SCENARIO-02 as `delivered by SCENARIO-04 — ` then its test (test reference stays last on the line)
+- [x] Step 7: full verification + `spec-check.py phase2f-fx` → tick SCENARIO-04 with its acceptance test, and SCENARIO-02 as `delivered by SCENARIO-04 — ` then its test (test reference stays last on the line)
 
 ## Handoff
 
@@ -51,9 +51,9 @@ Surveyed (no new port): `RatesSource`/`RatesRequest{Need,Have}` frozen by 07/01;
 
 ## Phase report
 
-Run B2 (step 5) done. Floor work only; B1 had already pulled the basic `Have` forward.
+Run V (steps 6-7) done. Nothing changed in production code.
 
-Changed: `history.go` (`history.ratesFloor` = newest non-NULL `rates_checked_from` by run id, set in the `readRuns` row loop, reset to zero when `readHistory` records a `RatesFault`); `rates.go` (`refreshRates` takes the whole `history`; `coveredBy(rates, floor)` = [earliest(floor, first rate), last rate], empty with no rates; `earliest` ignores a zero time; `askedFrom(need, refresh, previous)` = earliest(previous, Need.First), previous carried on a FetchError or an empty Need).
-Tests: new `duckstore/rates_floor_test.go` (stores built from DDL with seeded floors: `newStoreWithFloors`; Have table, cumulative-floor table, no-source carry, rates-lost reset) and `cmd/quarry/run_sync_rates_floor_test.go` (tail answered empty, Need covered by a carried 2099 rate, no transactions with carried rates, lowered floor means no head request; each text and `--json`, added 0).
-Green on arrival: the three cmd arms other than the lowered floor (the B1 `Have` already covers them); the rates-lost reset test passed before the code too, and reddens only under the mutation.
-Mutations all red: floor = Need.First; floor kept when rates lost; Have ignores floor; floor claimed with no rates; latest -> first non-NULL; failed fetch zeroes the floor; zero-time not ignored; empty Need not carrying previous. Lint 0 issues, narrow loop green. Not run: covered full suite (V).
+Verify: `go build ./...` ok; covered full suite `go test rc=0`; `uncovered-diff.py` against c1867cc: 0 uncovered added lines; `-race` on duckstore, importer, snapshot, cmd/quarry green; `golangci-lint run ./...` 0 issues; `spec-check.py phase2f-fx` OK.
+test-stats --base c1867cc --changed: cmd/quarry 413 (+16), internal/importer 151 (+1), internal/snapshot 269 (+5), internal/store/duckstore 388 (+19), TOTAL 1221 (+41); tempdir +23, disk +14.
+Ticked SCENARIO-04 and SCENARIO-02 (delivered by SCENARIO-04) in specification.md; STATE.md rewritten; status: done.
+Doc comments: `ratesFault`, `readRates`, `RatesFault` present; the plan's `ratesCarryWarning` was built as `ratesRestartWarning` beside `combinedCarryWarning` (`snapshot/import.go:80-90`).
