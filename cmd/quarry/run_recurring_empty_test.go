@@ -125,3 +125,17 @@ func Test_run_recurring_prints_each_empty_period_warning_on_stderr_and_in_the_js
 		})
 	}
 }
+
+func Test_run_recurring_lists_nothing_for_a_future_period_that_until_allows(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, bakeryHistory()...))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"recurring", "--since", "2030", "--until", "2031"}, spendEnv(&stdout, &stderr))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Equal(t, "Recurring charges 2030-01-01 to 2031-12-31 in all accounts\n\n"+recurringHeaderOnly, stdout.String())
+	assert.Equal(t, "quarry: warning: no recurring charges from 2030-01-01 to 2031-12-31; "+
+		"the store's transactions run 2003-01-04 to 2025-12-31\n", stderr.String())
+}

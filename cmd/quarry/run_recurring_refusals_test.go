@@ -99,7 +99,12 @@ func Test_run_recurring_rejects_a_period_it_cannot_use(t *testing.T) {
 		{
 			name:       "a since after today",
 			args:       []string{"recurring", "--since", "2099"},
-			wantStderr: "quarry: --since 2099 is after today; pass --until to include future-dated transactions\n",
+			wantStderr: "quarry: --since 2099 is after today; recurring lists charges up to today only, so pass an earlier --since\n",
+		},
+		{
+			name:       "a since after today, with --json",
+			args:       []string{"recurring", "--json", "--since", "2099"},
+			wantStderr: "quarry: --since 2099 is after today; recurring lists charges up to today only, so pass an earlier --since\n",
 		},
 	}
 

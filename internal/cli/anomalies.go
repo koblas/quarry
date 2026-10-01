@@ -19,17 +19,18 @@ var anomaliesFlagHelp = reportFlagHelp{
 
 // newAnomaliesCommand builds anomalies: the charges in the --since/--until period unusually large for their payee or category.
 func newAnomaliesCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
-	var flags reportFlags
+	flags := reportFlags{chargesCommand: anomaliesCommand}
 	cmd := &cobra.Command{
 		Use:   anomaliesCommand,
 		Short: "List charges unusually large for their payee or category",
-		Long: `List charges that are unusually large: more than 2 times the median of
-the payee's earlier charges, when there are at least 3, or else more than
-5 times the median of the category's earlier charges, when there are at
-least 10. Charges under 100.00 are never listed. Charges follow the rules
-of quarry spend, and a transaction counts once, with all its splits; an
+		Long: `List charges that are unusually large: more than 2 times the median of the
+payee's earlier charges, when there are at least 3, or else more than 5
+times the median of the category's earlier charges, when there are at least
+10. Charges under 100.00 are never listed. Charges follow the rules of
+quarry spend, and a transaction counts once, with all its splits; an
 uncategorized or split charge from a payee with little history cannot be
-judged. Possible duplicates are listed by quarry findings, not here.
+judged. Possible duplicates are listed by quarry findings, not here. Charges
+dated after today are left out, even with a later --until.
 
 --since and --until choose which charges to list; each is compared with
 every earlier charge, however old. --account lists only charges in those

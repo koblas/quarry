@@ -9,9 +9,12 @@ import (
 )
 
 // reportFlags is the --since, --until and --account flags shared by the commands that report on a period.
+// chargesCommand is set for a command that lists charges up to today only, and names it in the
+// refusal of a future --since.
 type reportFlags struct {
-	since, until string
-	accounts     []string
+	since, until   string
+	accounts       []string
+	chargesCommand string
 }
 
 // reportFlagHelp is the usage text of the --since, --until and --account flags of one command.
@@ -42,7 +45,13 @@ func (w *reportFlags) window(cmd *cobra.Command, now time.Time) (store.Window, e
 	if cmd.Flags().Changed("until") {
 		until = &w.until
 	}
-	window, err := report.ParseWindow(since, until, now)
+	parse := report.ParseWindow
+	if w.chargesCommand != "" {
+		parse = func(since, until *string, now time.Time) (store.Window, error) {
+			return report.ParseChargeWindow(w.chargesCommand, since, until, now)
+		}
+	}
+	window, err := parse(since, until, now)
 	if err != nil {
 		return store.Window{}, UsageError{msg: err.Error()}
 	}

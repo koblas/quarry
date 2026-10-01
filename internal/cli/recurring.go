@@ -19,7 +19,7 @@ var recurringFlagHelp = reportFlagHelp{
 
 // newRecurringCommand builds recurring: the charges that repeat on a schedule and were running in the --since/--until period.
 func newRecurringCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
-	var flags reportFlags
+	flags := reportFlags{chargesCommand: recurringCommand}
 	cmd := &cobra.Command{
 		Use:   recurringCommand,
 		Short: "List charges that repeat every week, month, quarter or year",
@@ -28,7 +28,8 @@ week, month, quarter or year, at a steady amount. quarry finds them in all
 your history, with the rules of quarry spend: expense splits only, without
 transfers, refunds or accounts left out of reports. A transaction counts
 once, with all its splits. Payees whose names differ only in store or
-reference numbers count as one payee.
+reference numbers count as one payee. Charges dated after today are left
+out, even with a later --until.
 
 A charge that comes off schedule starts the series again. A series has
 ended when no charge has come for 14 days (weekly), 45 days (monthly), 120
