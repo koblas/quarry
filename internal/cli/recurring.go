@@ -20,6 +20,7 @@ var recurringFlagHelp = reportFlagHelp{
 // newRecurringCommand builds recurring: the charges that repeat on a schedule and were running in the --since/--until period.
 func newRecurringCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
 	flags := reportFlags{chargesCommand: recurringCommand}
+	var currency currencyFlag
 	cmd := &cobra.Command{
 		Use:   recurringCommand,
 		Short: "List charges that repeat every week, month, quarter or year",
@@ -44,7 +45,7 @@ active series only.`,
 		Example: `  quarry recurring
   quarry recurring --since 2026-09 --until 2026-09 --json
   quarry recurring --since 2000`,
-		Args: noArgs,
+		Args: currency.args,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			at := now()
 			resolved, err := flags.window(cmd, at)
@@ -69,6 +70,7 @@ active series only.`,
 		},
 	}
 	flags.bind(cmd, recurringFlagHelp)
+	currency.bind(cmd, reportCurrencyHelp)
 	return cmd
 }
 

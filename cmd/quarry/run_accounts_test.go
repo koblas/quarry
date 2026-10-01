@@ -95,7 +95,7 @@ accounts are left out unless --all is given.
 
 Brokerage and retirement accounts show "not imported": quarry does not
 import investment transactions yet, so it cannot compute their balance.`)
-	assert.Contains(t, stdout.String(), "      --all    include closed accounts\n")
+	assert.Regexp(t, `(?m)^ +--all +include closed accounts$`, stdout.String())
 }
 
 // syncAccountsFixture builds the store from open CAD, USD and inactive accounts,

@@ -1,6 +1,9 @@
 package money
 
-import "math/big"
+import (
+	"math/big"
+	"strings"
+)
 
 // Rate is CAD per one USD, in millionths: 1.25 is Rate(1250000).
 type Rate int64
@@ -15,6 +18,34 @@ const (
 	CAD
 	USD
 )
+
+// ParseCurrency reads text as CAD, USD or native in any letter case. It does not trim, and
+// reports false for anything else, the empty string included.
+func ParseCurrency(text string) (Currency, bool) {
+	switch strings.ToLower(text) {
+	case "cad":
+		return CAD, true
+	case "usd":
+		return USD, true
+	case "native":
+		return Native, true
+	default:
+		return Native, false
+	}
+}
+
+// String is the canonical spelling of c: CAD, USD or native, which ParseCurrency reads back.
+// A value outside the three constants reads as native.
+func (c Currency) String() string {
+	switch c { //nolint:exhaustive // every value but CAD and USD reads as native
+	case CAD:
+		return "CAD"
+	case USD:
+		return "USD"
+	default:
+		return "native"
+	}
+}
 
 // millionth is the divisor between a Rate and a plain multiplier.
 const millionth = 1_000_000

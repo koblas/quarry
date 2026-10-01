@@ -20,6 +20,7 @@ var anomaliesFlagHelp = reportFlagHelp{
 // newAnomaliesCommand builds anomalies: the charges in the --since/--until period unusually large for their payee or category.
 func newAnomaliesCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
 	flags := reportFlags{chargesCommand: anomaliesCommand}
+	var currency currencyFlag
 	cmd := &cobra.Command{
 		Use:   anomaliesCommand,
 		Short: "List charges unusually large for their payee or category",
@@ -38,7 +39,7 @@ accounts; the payee's charges in other accounts still count as history.`,
 		Example: `  quarry anomalies
   quarry anomalies --since 2026-09 --until 2026-09
   quarry anomalies --account "Visa Infinite" --json`,
-		Args: noArgs,
+		Args: currency.args,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			at := now()
 			resolved, err := flags.window(cmd, at)
@@ -63,6 +64,7 @@ accounts; the payee's charges in other accounts still count as history.`,
 		},
 	}
 	flags.bind(cmd, anomaliesFlagHelp)
+	currency.bind(cmd, reportCurrencyHelp)
 	return cmd
 }
 

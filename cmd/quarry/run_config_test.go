@@ -175,6 +175,14 @@ func Test_run_sync_refuses_a_bad_config_value_with_the_ruled_copy(t *testing.T) 
 			name: "quicken as a plain value", content: "quicken = \"x\"\n",
 			line: configShown + ": quicken must be a table, such as quicken.path = \"~/Documents/Home.quicken\", got \"x\"",
 		},
+		{
+			name: "reporting.currency another currency", content: "reporting.currency = \"EUR\"\n",
+			line: configShown + ": reporting.currency must be CAD, USD or native, got \"EUR\"",
+		},
+		{
+			name: "reporting as a plain value", content: "reporting = \"CAD\"\n",
+			line: configShown + ": reporting must be a table, such as reporting.currency = \"CAD\", got \"CAD\"",
+		},
 	}
 
 	for _, c := range cases {
@@ -262,6 +270,19 @@ func Test_run_findings_refuses_a_bad_config_before_looking_for_a_store(t *testin
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
 	assert.Equal(t, "quarry: "+configShown+": snapshots.keep must be a whole number of 1 or more, got 0"+configFix+"\n", stderr.String())
+}
+
+func Test_run_findings_refuses_a_bad_reporting_currency_before_looking_for_a_store(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, "reporting.currency = \"EUR\"\n")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: "+configShown+": reporting.currency must be CAD, USD or native, got \"EUR\""+configFix+"\n", stderr.String())
 }
 
 func Test_run_findings_lists_after_warning_about_an_unknown_config_key(t *testing.T) {

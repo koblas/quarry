@@ -22,7 +22,7 @@ Batch order is money+config → binder → resolver → cmd rows (the sizing's 1
 - [x] Step 2: `cmd/quarry/run_read_usage_test.go` (new test after :70) `Test_run_read_commands_refuse_a_bad_currency_flag` — `--currency EUR` × the five; exit 2, stdout empty, stderr `quarry: --currency must be CAD, USD or native\n`. Red today at stderr (cobra's unknown flag). No stubs: both compile now.
 
 ### Build
-- [ ] Step 3: money + config.
+- [x] Step 3: money + config.
   - `internal/platform/money/money.go:8-17`: add `ParseCurrency` (case-insensitive, no trim) and `(Currency).String` (`CAD`/`USD`/`native`), tested in `money_test.go`.
     - Accepted arms: `CAD`, `cad`, `Cad`, `USD`, `usd`, `native`, `NATIVE`.
     - Refused: `""`, `EUR`, `" CAD"`, `"CAD "`, `nativ`.
@@ -40,7 +40,7 @@ Batch order is money+config → binder → resolver → cmd rows (the sizing's 1
     - Order row: bad ignore + bad currency → ignore refusal (precedent `:365`).
     - Warnings: `reporting.colour` warns; `Reporting.Currency` warns and is ignored (precedent `:300`/`:342`).
     - `ProblemAbsolute` form.
-- [ ] Step 4: binder. New `internal/cli/currency.go` `currencyFlag`.
+- [x] Step 4: binder. New `internal/cli/currency.go` `currencyFlag`.
   - `bind` takes a `code` placeholder, a `""` default and two help consts (four reports / accounts, ruled copy).
   - Validation runs in Args after `noArgs` (`errors.go:15-20`), only when `Changed("currency")`. It returns `UsageError{"--currency must be CAD, USD or native"}`.
   - Bind and Args in: `spend.go:46,74-75`, `cashflow.go:63,92`, `recurring.go:47,71`, `anomalies.go:41,65`, `accounts.go:18,44`.
@@ -108,9 +108,19 @@ Batch order is money+config → binder → resolver → cmd rows (the sizing's 1
 
 ## Phase report
 
-Run A (steps 1-2) done. Both acceptance tests compile with no stubs and fail at their assertions.
+Run B1 (steps 3-4) done; steps 5-8 open. Narrow loop green: money, config, cli. cmd: `Test_run_read_commands_refuse_a_bad_currency_flag` (SCENARIO-15) is green; `Test_run_read_commands_refuse_a_bad_reporting_currency` stays red (no resolver yet, B2 turns it green).
 
-- `cmd/quarry/run_read_refusals_test.go:84` `Test_run_read_commands_refuse_a_bad_reporting_currency`: 9 rows (spend, cashflow, recurring, anomalies, accounts with `"EUR"`; `""`, `12`, `true` x spend; sql). Red on 8 rows. The sql row passes today and stays as the control: sql ignores config, so it gets the no-store refusal. Failure: expected `quarry: ~/Library/Application Support/quarry/config.toml: reporting.currency must be CAD, USD or native, got "EUR"; fix the file and run the command again`, actual `quarry: no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it`. The test pins no sync, status, findings or snapshots rows (ruling pending).
-- `cmd/quarry/run_read_usage_test.go:77` `Test_run_read_commands_refuse_a_bad_currency_flag`: 5 rows. Red: expected `quarry: --currency must be CAD, USD or native`, actual `quarry: unknown flag: --currency; Run 'quarry spend --help' for usage.`
-- Today read commands never load the config, so a bad key shows no warning either.
-- Next (B1): steps 3-4 (money.ParseCurrency/String, config.Currency, binder). `golangci-lint run ./cmd/...` is 0 issues.
+- `internal/platform/money/money.go`: `ParseCurrency` (strings.ToLower, no trim; the long-s fold is refused) and `Currency.String` (out of range reads `native`), with a `//nolint:exhaustive` on its switch.
+- `internal/config/config.go`, `parse.go`: `Config.Currency` (CAD when the file is missing or the key unset), `reportingSetting`, `document.currency()` after `ignore`, and known keys `reporting` and `reporting.currency`. The table-shape refusal comes from `lookup` with the ruled copy, `got` as written.
+- `internal/cli/currency.go`: `currencyFlag{code}` with `bind(cmd, help)` and `args` (noArgs, then validation only when Changed). Consts `reportCurrencyHelp` and `accountsCurrencyHelp` hold the ruled help. Bound and set as `Args: currency.args` in spend, cashflow, recurring, anomalies and accounts. `resolve` and the ConfigLoader are NOT built (B2).
+- Tests: `internal/config/currency_test.go` (new), rows in `problem_test.go`, defaults in `config_test.go`, `money_test.go` (3 tests), `internal/cli/currency_test.go` (new; its Env already carries a LoadConfig), `report_help_test.go` (new `Test_each_report_shows_the_currency_flag_without_a_cobra_default`, cashflow `--currency` row).
+- Ruled-behaviour pins owned by B1 and green now (all cmd/quarry):
+  - sync: rows `reporting.currency = "EUR"` and `reporting = "CAD"` in `Test_run_sync_refuses_a_bad_config_value_with_the_ruled_copy`.
+  - snapshots: a row in `Test_run_snapshots_refuses_a_bad_config_value_with_nothing_on_stdout`.
+  - snapshots prune: a row in `Test_run_snapshots_prune_refuses_a_bad_config_value_with_nothing_deleted`.
+  - findings: `Test_run_findings_refuses_a_bad_reporting_currency_before_looking_for_a_store`.
+  - status: two rows in `statusConfigRefusals()`, so the text and `--json` tests both pin the P2d-10 warning, exit 0 and `"ignored": null`.
+- B2 still owns: the five read-command cmd rows in step 6 (bad currency flag, `--currency=`, bare flag, the `run_config_test.go:209` split, the unknown-key warning test). `--json` absolute-path pins for sync, snapshots and findings are not added (existing sync `--from` json test covers sync only).
+- Changed an existing pin: `cmd/quarry/run_accounts_test.go:98` `--all` help row is now a regexp, because the longer `--currency code` column re-pads it.
+- Mutations (all red as expected, restored): `Changed` guard removed -> `Test_currency_flag_is_checked_only_when_given` (all 5 subtests); validation disabled -> that test plus `..._refuses_a_value_it_cannot_read...` and `..._refused_before_the_command_checks_its_other_flags`; noArgs skipped -> `..._refused_after_the_check_for_a_positional_argument`; `doc.currency()` result dropped -> 7 config and cmd tests.
+- `golangci-lint run ./...`: 0 issues. test-stats `--base b41dec1`: cmd/quarry 438 (+3), internal/cli 359 (+6), internal/config 58 (+9), internal/platform/money 11 (+3).

@@ -16,6 +16,7 @@ const spendCommand = "spend"
 func newSpendCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var by string
 	var flags reportFlags
+	var currency currencyFlag
 	cmd := &cobra.Command{
 		Use:   spendCommand,
 		Short: "Show spending by category, payee, tag or month",
@@ -43,7 +44,7 @@ the rows can add up to more than the total.`,
   quarry spend --by payee --since 2025-01 --until 2025-03
   quarry spend --since 2024 --until 2024 --json
   quarry spend --account "Visa Infinite" --account Chequing`,
-		Args: noArgs,
+		Args: currency.args,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			group, err := parseSpendGrouping(by)
 			if err != nil {
@@ -73,6 +74,7 @@ the rows can add up to more than the total.`,
 	}
 	cmd.Flags().StringVar(&by, "by", spendGroupings[store.SpendByCategory].name, "group spending by `group`: category, payee, tag or month")
 	flags.bind(cmd, transactionFlagHelp)
+	currency.bind(cmd, reportCurrencyHelp)
 	return cmd
 }
 

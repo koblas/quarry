@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/platform/osreason"
 )
 
@@ -26,6 +27,8 @@ type Config struct {
 	QuickenPath string
 	// Ignore is findings.ignore as written: file order, duplicates and any text kept, nil when unset.
 	Ignore []string
+	// Currency is reporting.currency: money.CAD when the file is missing or leaves it unset.
+	Currency money.Currency
 	// Warnings holds one line per unknown key, in file order.
 	Warnings []string
 	// WarningsAbsolute is Warnings with the config file named by its absolute path, for machine-readable output.
@@ -36,11 +39,11 @@ type Config struct {
 // or empty file yields the defaults. It refuses, with an error whose text is
 // the whole line for the user, a file that cannot be read, is not valid TOML,
 // or holds a bad value for a known key (snapshots.keep, quicken.path,
-// findings.ignore); unknown keys are Config.Warnings.
+// findings.ignore, reporting.currency); unknown keys are Config.Warnings.
 func Load(home, path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return Config{Path: path, Keep: DefaultKeep}, nil
+		return Config{Path: path, Keep: DefaultKeep, Currency: money.CAD}, nil
 	}
 	f := file{home: home, path: path, shown: homepath.Abbreviate(home, path), data: bytes.TrimPrefix(data, utf8BOM)}
 	if err != nil {

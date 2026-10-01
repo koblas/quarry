@@ -78,6 +78,10 @@ func Test_run_snapshots_prune_refuses_a_bad_config_value_with_nothing_deleted(t 
 			name: "quicken.path relative", content: "quicken.path = \"Home.quicken\"\n",
 			line: configShown + ": quicken.path must be a full path or start with ~/, got \"Home.quicken\"",
 		},
+		{
+			name: "reporting.currency another currency", content: "reporting.currency = \"EUR\"\n",
+			line: configShown + ": reporting.currency must be CAD, USD or native, got \"EUR\"",
+		},
 	}
 
 	for _, c := range cases {

@@ -6,6 +6,7 @@ import "github.com/spf13/cobra"
 // with --all, as JSON when *jsonOut is set.
 func newAccountsCommand(newReport ReportFactory, jsonOut *bool) *cobra.Command {
 	var all bool
+	var currency currencyFlag
 	cmd := &cobra.Command{
 		Use:   "accounts",
 		Short: "List accounts with their current balances",
@@ -15,7 +16,7 @@ accounts are left out unless --all is given.
 
 Brokerage and retirement accounts show "not imported": quarry does not
 import investment transactions yet, so it cannot compute their balance.`,
-		Args: noArgs,
+		Args: currency.args,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			srv, err := openReport(cmd, newReport)
 			if err != nil {
@@ -42,5 +43,6 @@ import investment transactions yet, so it cannot compute their balance.`,
 		},
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "include closed accounts")
+	currency.bind(cmd, accountsCurrencyHelp)
 	return cmd
 }

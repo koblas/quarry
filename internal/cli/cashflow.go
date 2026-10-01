@@ -39,6 +39,7 @@ func parseCashFlowPeriod(name string) (store.CashFlowPeriod, error) {
 func newCashFlowCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var by string
 	var flags reportFlags
+	var currency currencyFlag
 	cmd := &cobra.Command{
 		Use:   cashFlowCommand,
 		Short: "Show income, spending and savings rate by month or year",
@@ -60,7 +61,7 @@ less. A period that --since or --until cuts short is marked partial.`,
 		Example: `  quarry cashflow
   quarry cashflow --by year --since 2020 --until 2025
   quarry cashflow --account Chequing --json`,
-		Args: noArgs,
+		Args: currency.args,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			period, err := parseCashFlowPeriod(by)
 			if err != nil {
@@ -90,6 +91,7 @@ less. A period that --since or --until cuts short is marked partial.`,
 	}
 	cmd.Flags().StringVar(&by, "by", cashFlowPeriods[store.CashFlowByMonth].name, "group by `period`: month or year")
 	flags.bind(cmd, transactionFlagHelp)
+	currency.bind(cmd, reportCurrencyHelp)
 	return cmd
 }
 

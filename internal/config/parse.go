@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
+	"github.com/koblas/quarry/internal/platform/money"
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/pelletier/go-toml/v2/unstable"
 )
@@ -34,6 +35,8 @@ var (
 	keepSetting   = setting{table: "snapshots", name: "keep", example: "snapshots.keep = 12"}
 	pathSetting   = setting{table: "quicken", name: "path", example: `quicken.path = "~/Documents/Home.quicken"`}
 	ignoreSetting = setting{table: "findings", name: "ignore", example: "findings.ignore = " + ignoreExample}
+
+	reportingSetting = setting{table: "reporting", name: "currency", example: `reporting.currency = "CAD"`}
 )
 
 func (s setting) String() string { return strings.Join(s.key(), ".") }
@@ -47,7 +50,7 @@ type file struct {
 }
 
 // parse validates the whole file: syntax first, then snapshots.keep, then
-// quicken.path, then findings.ignore, then unknown keys.
+// quicken.path, then findings.ignore, then reporting.currency, then unknown keys.
 func (f file) parse() (Config, error) {
 	tree, err := f.tree()
 	if err != nil {
@@ -68,11 +71,17 @@ func (f file) parse() (Config, error) {
 		return Config{}, err
 	}
 
+	currency, err := doc.currency()
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		Path:             f.path,
 		Keep:             keep,
 		QuickenPath:      homepath.Expand(f.home, quickenPath),
 		Ignore:           ignore,
+		Currency:         currency,
 		Warnings:         doc.unknownKeys(f.shown),
 		WarningsAbsolute: doc.unknownKeys(f.path),
 	}, nil
@@ -233,6 +242,22 @@ func (d document) ignore() ([]string, error) {
 	return ids, nil
 }
 
+// currency is reporting.currency in any letter case: money.CAD when unset, else a string
+// money.ParseCurrency reads.
+func (d document) currency() (money.Currency, error) {
+	value, present, err := d.lookup(reportingSetting)
+	if err != nil || !present {
+		return money.CAD, err
+	}
+	if text, isString := value.(string); isString {
+		if currency, ok := money.ParseCurrency(text); ok {
+			return currency, nil
+		}
+	}
+
+	return money.Native, d.badValue(reportingSetting.String()+" must be CAD, USD or native", d.got(reportingSetting.key()))
+}
+
 // itemText is items[i] as the file wrote it, collapsed to one line, from the split text
 // raw; when raw and the decoded items disagree in count it is the decoded value.
 func itemText(raw []string, items []any, i int) string {
@@ -295,6 +320,8 @@ var knownKeys = [][]string{
 	pathSetting.key(),
 	{ignoreSetting.table},
 	ignoreSetting.key(),
+	{reportingSetting.table},
+	reportingSetting.key(),
 }
 
 // unknownKeys is one warning per key the file has beyond the known ones, in

@@ -113,3 +113,67 @@ func Test_convert_refuses_a_result_that_does_not_fit_an_int64(t *testing.T) {
 
 	assert.False(t, ok)
 }
+
+func Test_ParseCurrency_reads_each_currency_in_any_letter_case(t *testing.T) {
+	cases := []struct {
+		text string
+		want money.Currency
+	}{
+		{text: "CAD", want: money.CAD},
+		{text: "cad", want: money.CAD},
+		{text: "Cad", want: money.CAD},
+		{text: "USD", want: money.USD},
+		{text: "usd", want: money.USD},
+		{text: "native", want: money.Native},
+		{text: "NATIVE", want: money.Native},
+	}
+
+	for _, c := range cases {
+		t.Run(c.text, func(t *testing.T) {
+			got, ok := money.ParseCurrency(c.text)
+
+			assert.True(t, ok)
+			assert.Equal(t, c.want, got)
+		})
+	}
+}
+
+func Test_ParseCurrency_refuses_anything_else_without_trimming(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+	}{
+		{name: "empty", text: ""},
+		{name: "another currency", text: "EUR"},
+		{name: "leading space", text: " CAD"},
+		{name: "trailing space", text: "CAD "},
+		{name: "truncated native", text: "nativ"},
+		{name: "long s folds to nothing", text: "UſD"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, ok := money.ParseCurrency(c.text)
+
+			assert.False(t, ok)
+		})
+	}
+}
+
+func Test_Currency_String_is_the_canonical_spelling_ParseCurrency_reads_back(t *testing.T) {
+	cases := []struct {
+		cur  money.Currency
+		want string
+	}{
+		{cur: money.CAD, want: "CAD"},
+		{cur: money.USD, want: "USD"},
+		{cur: money.Native, want: "native"},
+		{cur: money.Currency(99), want: "native"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.want, func(t *testing.T) {
+			assert.Equal(t, c.want, c.cur.String())
+		})
+	}
+}

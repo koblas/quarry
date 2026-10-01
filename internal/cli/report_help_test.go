@@ -119,6 +119,7 @@ func Test_cashflow_help_shows_each_flag(t *testing.T) {
 			want: `--until date +count transactions dated on or before date \(YYYY, YYYY-MM or YYYY-MM-DD; default today\)`,
 		},
 		{flag: "--account", want: `--account name +count only the account with this name or id; repeat for more`},
+		{flag: "--currency", want: `(?m)--currency code +` + regexp.QuoteMeta(reportCurrencyHelp) + `$`},
 	}
 
 	for _, c := range cases {
@@ -129,6 +130,36 @@ func Test_cashflow_help_shows_each_flag(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Regexp(t, c.want, stdout.String())
+		})
+	}
+}
+
+const (
+	reportCurrencyHelp   = "show amounts in currency code: CAD, USD, or native for each account's own (default reporting.currency in the config file, else CAD)"
+	accountsCurrencyHelp = "add a column with each balance in currency code: CAD or USD; native adds none (default reporting.currency in the config file, else CAD)"
+)
+
+func Test_each_report_shows_the_currency_flag_without_a_cobra_default(t *testing.T) {
+	cases := []struct {
+		command string
+		help    string
+	}{
+		{command: "spend", help: reportCurrencyHelp},
+		{command: "cashflow", help: reportCurrencyHelp},
+		{command: "recurring", help: reportCurrencyHelp},
+		{command: "anomalies", help: reportCurrencyHelp},
+		{command: "accounts", help: accountsCurrencyHelp},
+	}
+
+	for _, c := range cases {
+		t.Run(c.command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			env := cli.Env{Stdout: &stdout, Stderr: &stderr, Now: func() time.Time { return spendNow }}
+
+			err := cli.Execute(t.Context(), []string{c.command, "--help"}, env)
+
+			require.NoError(t, err)
+			assert.Regexp(t, `(?m)--currency code +`+regexp.QuoteMeta(c.help)+`$`, stdout.String())
 		})
 	}
 }

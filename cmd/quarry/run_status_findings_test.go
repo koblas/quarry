@@ -94,6 +94,14 @@ func statusConfigRefusals() []statusConfigRefusal {
 			problem: configShown + ": snapshots.keep must be a whole number of 1 or more, got 0",
 		},
 		{
+			name: "reporting.currency another currency", setup: writing("[reporting]\ncurrency = \"EUR\"\n"),
+			problem: configShown + `: reporting.currency must be CAD, USD or native, got "EUR"`,
+		},
+		{
+			name: "reporting as a plain value", setup: writing("reporting = \"CAD\"\n"),
+			problem: configShown + `: reporting must be a table, such as reporting.currency = "CAD", got "CAD"`,
+		},
+		{
 			name: "findings.ignore not a list", setup: writing("[findings]\nignore = \"x\"\n"),
 			problem: configShown + `: findings.ignore must be a list of finding ids in quotes, such as ["duplicate:txn-4410+txn-4412"], got "x"`,
 		},
