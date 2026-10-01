@@ -3,12 +3,14 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"testing"
 	"time"
 
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,6 +31,63 @@ func Test_recurring_returns_the_report_fault(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
 	err := executeRecurring(t, fakeReportStore{err: errStoreRead}, &stdout, &stderr)
+
+	require.ErrorIs(t, err, errStoreRead)
+	assert.Empty(t, stdout.String())
+	assert.Empty(t, stderr.String())
+}
+
+func monthlyCharges(payee string, cents ...int64) store.Charges {
+	rows := make([]store.Charge, len(cents))
+	for i, c := range cents {
+		rows[i] = store.Charge{
+			TransactionID: "txn", SourceID: int64(i + 1),
+			Date:    time.Date(2026, time.Month(2+i), 12, 0, 0, 0, 0, time.UTC),
+			Account: store.Account{ID: "acct-1", Name: "Chequing", Currency: "CAD"},
+			PayeeID: new("payee-1"), Payee: &payee, Currency: "CAD", Amount: c, ExpenseSplits: 1,
+		}
+	}
+	return store.Charges{Rows: rows}
+}
+
+func Test_recurring_json_prints_the_document_and_no_table(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	fake := fakeReportStore{charges: monthlyCharges("Netflix.com", 999, 999, 999, 999)}
+
+	err := executeRecurring(t, fake, &stdout, &stderr, "--since", "2000", "--json")
+
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String())
+	var doc struct {
+		Since  string `json:"since"`
+		Series []struct {
+			Payee  string `json:"payee"`
+			Amount string `json:"amount"`
+		} `json:"series"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
+	assert.Equal(t, "2000-01-01", doc.Since)
+	require.Len(t, doc.Series, 1)
+	assert.Equal(t, "Netflix.com", doc.Series[0].Payee)
+	assert.Equal(t, "9.99", doc.Series[0].Amount)
+	assert.NotContains(t, stdout.String(), "Recurring charges")
+}
+
+func Test_recurring_without_json_prints_the_table(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	fake := fakeReportStore{charges: monthlyCharges("Netflix.com", 999, 999, 999, 999)}
+
+	err := executeRecurring(t, fake, &stdout, &stderr, "--since", "2000")
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), "Recurring charges 2000-01-01 to 2026-09-29 in all accounts")
+	assert.NotContains(t, stdout.String(), `"series"`)
+}
+
+func Test_recurring_json_returns_the_report_fault_with_nothing_on_stdout(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeRecurring(t, fakeReportStore{err: errStoreRead}, &stdout, &stderr, "--json")
 
 	require.ErrorIs(t, err, errStoreRead)
 	assert.Empty(t, stdout.String())

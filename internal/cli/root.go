@@ -30,7 +30,7 @@ quarry never writes to the Quicken file.`,
 	root.AddCommand(newAccountsCommand(env.NewReport, jsonOut))
 	root.AddCommand(newSpendCommand(env.NewReport, env.Now, jsonOut))
 	root.AddCommand(newCashFlowCommand(env.NewReport, env.Now, jsonOut))
-	root.AddCommand(newRecurringCommand(env.NewReport, env.Now))
+	root.AddCommand(newRecurringCommand(env.NewReport, env.Now, jsonOut))
 	root.AddCommand(newFindingsCommand(env.NewReport, env.LoadConfig, jsonOut))
 	root.AddCommand(newSQLCommand(env.NewReport, jsonOut))
 	root.AddCommand(newSnapshotsCommand(env.NewSnapshots, env.LoadConfig, jsonOut))

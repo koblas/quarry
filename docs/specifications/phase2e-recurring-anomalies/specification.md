@@ -410,10 +410,10 @@ Ruled (sizing pass 2026-10-01):
 - [x] SCENARIO-04: a split transaction counts once and a refund does not break the series — delivered by SCENARIO-01: `cmd/quarry/run_recurring_test.go` `Test_run_recurring_counts_a_split_charge_once_and_leaves_a_refund_out`
 - [x] SCENARIO-05: a series ends after its cadence's quiet period — `cmd/quarry/run_recurring_state_test.go` `Test_run_recurring_marks_a_series_ended_one_day_past_its_cadences_quiet_period`
 - [x] SCENARIO-06: a series first charged in the window is marked new — delivered by SCENARIO-05: `cmd/quarry/run_recurring_state_test.go` `Test_run_recurring_marks_a_series_first_charged_in_the_window_as_new`
-- [ ] SCENARIO-07: price changes are listed both ways with first to latest
-- [ ] SCENARIO-08: recurring --json returns the series document
-- [ ] SCENARIO-09: a bill whose amount changes most months is not listed
-- [ ] SCENARIO-10: payees differing in store numbers are one series, currencies are two
+- [x] SCENARIO-07: price changes are listed both ways with first to latest — `cmd/quarry/run_recurring_price_test.go` `Test_run_recurring_lists_price_changes_both_ways_from_first_to_latest`
+- [x] SCENARIO-08: recurring --json returns the series document — delivered by SCENARIO-07: `cmd/quarry/run_recurring_json_test.go` `Test_run_recurring_json_returns_the_series_document`
+- [x] SCENARIO-09: a bill whose amount changes most months is not listed — delivered by SCENARIO-07: `cmd/quarry/run_recurring_price_test.go` `Test_run_recurring_leaves_out_a_bill_whose_amount_changes_most_months`
+- [x] SCENARIO-10: payees differing in store numbers are one series, currencies are two — delivered by SCENARIO-07: `cmd/quarry/run_recurring_json_test.go` `Test_run_recurring_merges_payees_differing_in_store_numbers_and_splits_currencies`
 - [ ] SCENARIO-11: recurring --account lists only series charged in that account
 - [ ] SCENARIO-12: no series in the window says so
 - [ ] SCENARIO-13: recurring refuses usage and store problems

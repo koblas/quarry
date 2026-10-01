@@ -34,7 +34,8 @@ func emitReport(cmd *cobra.Command, asJSON bool, warnings []string, renderJSON f
 	out, err := renderResult(asJSON, renderJSON, renderText)
 	if err != nil {
 		// unreachable: renderResult fails only via marshalDocument. spend's document holds strings, bools and slices;
-		// cashflow's savings_rate_pct is finite (BIGINT tenths/10.0 or NULL; its sole production source: duckstore cashFlowQuery); see marshalDocument.
+		// cashflow's savings_rate_pct is finite (BIGINT tenths/10.0 or NULL; its sole production source: duckstore cashFlowQuery);
+		// recurring's document holds strings, bools, ints and change_pct, an int64 tenths/10.0; see marshalDocument.
 		return err
 	}
 	return emit(cmd, out, "quarry: warning: ", warnings)

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/koblas/quarry/internal/report"
@@ -36,6 +37,28 @@ func statusCell(s report.Series) string {
 	return recurringStatus[s.State]
 }
 
+// priceChangesCell is the Price changes cell of s: "N: first -> latest (±p%)", p the change from the
+// run's first charge to its latest; empty when the price never moved.
+func priceChangesCell(s report.Series) string {
+	if len(s.PriceChanges) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d: %s -> %s (%s)", len(s.PriceChanges), formatMoney(s.FirstAmount), formatMoney(s.Amount), signedTenths(s.ChangeTenths))
+}
+
+// signedTenths renders tenths of a percent as "+11.8%" or "-8.3%"; zero is "0.0%", unsigned.
+func signedTenths(tenths int64) string {
+	sign := ""
+	switch {
+	case tenths > 0:
+		sign = "+"
+	case tenths < 0:
+		sign = "-"
+		tenths = -tenths
+	}
+	return fmt.Sprintf("%s%d.%d%%", sign, tenths/10, tenths%10)
+}
+
 // renderRecurring renders r as the recurring table: caption, header, one row per series and a Total
 // row per currency whose only filled cell is Per year.
 func renderRecurring(r report.Recurring) string {
@@ -48,7 +71,7 @@ func renderRecurring(r report.Recurring) string {
 		}
 		rows = append(rows, []string{
 			escapeCell(s.Payee), s.Currency, recurringEvery[s.Cadence], formatMoney(s.Amount), perYear,
-			s.First.Format(time.DateOnly), s.Last.Format(time.DateOnly), statusCell(s), "",
+			s.First.Format(time.DateOnly), s.Last.Format(time.DateOnly), statusCell(s), priceChangesCell(s),
 		})
 	}
 	for _, t := range r.Totals {

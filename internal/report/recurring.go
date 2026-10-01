@@ -124,8 +124,8 @@ type Series struct {
 	Payee    string
 	Currency string
 	Cadence  Cadence
-	// Amount is the latest charge, in cents.
-	Amount int64
+	// Amount is the latest charge, in cents; FirstAmount is the run's first.
+	Amount, FirstAmount int64
 	// PerYear is Amount times the cadence's charges a year; nil for an ended series.
 	PerYear *int64
 	// First and Last are the dates of the run's first and latest charge.
@@ -135,8 +135,22 @@ type Series struct {
 	// New is whether the first charge falls on or after the window's start; a listed series
 	// always starts by the window's end.
 	New bool
+	// PriceChanges are the run's steps past PriceChangeMinPct, oldest first; ChangeTenths is the first
+	// charge to the latest as tenths of a percent, half away from zero.
+	PriceChanges []PriceChange
+	ChangeTenths int64
+	// PayeeKey is the key the run was grouped by; nil when it was grouped by payee id.
+	PayeeKey *string
+	// Payees and Accounts are the run's distinct payees and accounts in order of first appearance.
+	Payees   []SeriesPayee
+	Accounts []store.Account
 
 	key groupKey
+}
+
+// SeriesPayee is one payee a series was charged by.
+type SeriesPayee struct {
+	ID, Name string
 }
 
 // RecurringTotal is the yearly cost of one currency's active series, in cents.
@@ -171,7 +185,7 @@ func (s *Server) Recurring(ctx context.Context, req RecurringRequest) (Recurring
 			continue
 		}
 		series := seriesOf(group.key, run, rule, today)
-		if !series.runsDuring(req.Window, today) {
+		if !series.steady() || !series.runsDuring(req.Window, today) {
 			continue
 		}
 		series.New = !series.First.Before(req.Window.Since)
@@ -187,14 +201,21 @@ func (s *Server) Recurring(ctx context.Context, req RecurringRequest) (Recurring
 func seriesOf(key groupKey, run []store.Charge, rule cadenceRule, today time.Time) Series {
 	latest := run[len(run)-1]
 	series := Series{
-		Payee:       *latest.Payee,
-		Currency:    latest.Currency,
-		Cadence:     rule.cadence,
-		Amount:      latest.Amount,
-		First:       run[0].Date,
-		Last:        latest.Date,
-		ChargeCount: len(run),
-		key:         key,
+		Payee:        *latest.Payee,
+		Currency:     latest.Currency,
+		Cadence:      rule.cadence,
+		Amount:       latest.Amount,
+		FirstAmount:  run[0].Amount,
+		First:        run[0].Date,
+		Last:         latest.Date,
+		ChargeCount:  len(run),
+		PriceChanges: priceChangesOf(run),
+		ChangeTenths: changeTenths(run[0].Amount, latest.Amount),
+		key:          key,
+	}
+	series.Payees, series.Accounts = identitiesOf(run)
+	if key.kind == keyByPayeeKey {
+		series.PayeeKey = &key.value
 	}
 	if daysBetween(latest.Date, today) > rule.endedAfter {
 		series.State = SeriesEnded

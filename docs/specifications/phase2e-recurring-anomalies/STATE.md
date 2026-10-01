@@ -1,6 +1,6 @@
 # phase2e-recurring-anomalies — current state
 
-Scenarios complete: SCENARIO-01..06 (02-04 folded into 01, 06 into 05). Last updated by SCENARIO-05.
+Scenarios complete: SCENARIO-01..10 (02-04 folded into 01, 06 into 05, 08-10 into 07). Last updated by SCENARIO-07.
 
 ## Binding decisions
 - One port method `report.Store.Charges(ctx, store.ChargeParams{Through})` returns `store.Charges{Rows []Charge, Transactions TransactionRange}`: no window, no account ids, `Transactions` always filled (whole store). Anomalies (S14) and the empty window (S11, S20) read this; reopening it reopens three fakes, the adapter and the `cmd/quarry/run.go:29` guard (SCENARIO-01)
@@ -8,7 +8,11 @@ Scenarios complete: SCENARIO-01..06 (02-04 folded into 01, 06 into 05). Last upd
 - Detection lives in package `report` (no leaf package): `charges.go` holds the group key (tagged `keyKind` PayeeKey vs payee_id, so the two never merge; S07's `payee_key: null` reads the tag; S14 adds its median here); `recurring.go` holds the named cadence consts (`cadenceRules`, gap range / min charges / ended-after / per-year factor), `latestRun` walk and `Server.Recurring` (SCENARIO-01)
 - Through = `DefaultWindow(req.Now).Until`, the local civil date, never `Window.Until`; the adapter computes no date. Duckstore filters `date <= Through` in SQL because `v_spending` keeps future-dated rows (SCENARIO-01)
 - `Server.Recurring` makes one `Charges` read (pinned by `chargesReads`); a read fault is `readRefusal` naming recurring (SCENARIO-01)
-- Interim until S07/S11: `newRecurringCommand(newReport, now)` has no `jsonOut`, so `recurring --json` prints text (`emitReport` gets `false`, JSON closure carries `// unreachable:`); `--account` is bound but ignored (SCENARIO-01)
+- Interim until S11: `--account` is bound but ignored; `recurringDocument.account_filter` is `accountFilterDocuments(nil)` (always `[]`) and `warnings` is `[]string{}` passed by the command. S11 adds `RecurringRequest.Accounts`, passes `accountFilterDocuments(rec.Accounts)` and `recurringWarnings` there (SCENARIO-01, SCENARIO-07)
+- Price change and steady gate use integer cents, never floats (a float `> 0.05` misfires at exactly 5%): `|to-from|*100 > 5*from`; `Series.PriceChanges[i].Tenths` and `Series.ChangeTenths` (first to latest) are tenths of a percent, half away from zero. Text shows tenths with `+`/`-`, none at 0; JSON `change_pct` is `float64(tenths)/10`. A price change carries the later charge's date (SCENARIO-07)
+- Steady gate sits in `Server.Recurring` before listing (`changes <= steps/4`, floor): a dropped group is in neither `Series` nor `Totals`; S11's window/`--account` filters apply to survivors only. A fixture with a >5% step needs enough charges for the gate to keep it (3 charges allow 0 changes) (SCENARIO-07)
+- `Series.PayeeKey` is nil only for the payee_id fallback (reads `key.kind`); `Series.Payees` (`SeriesPayee{ID, Name}`) and `Series.Accounts` are the run's distinct values by id in first-appearance order, never nil. S11's `--account` match and JSON `accounts` read `Series.Accounts` (SCENARIO-07)
+- `recurring --json` is `renderRecurringJSON(r, warnings)` in `internal/cli/json_recurring.go`; every array built non-nil (`[]`), `per_year` null when ended, `payee_key` null on fallback; text and JSON iterate `r.Series` once, same order. `jsonOut` is the persistent flag at `root.go:26` (SCENARIO-07)
 - `reportFlags.bind(cmd, reportFlagHelp)` takes per-command flag help (spend/cashflow pass today's strings, byte-identical); `renderTable` takes per-column alignment and trims trailing spaces (SCENARIO-01)
 - Recurring table column widths come from the padding rule (widest cell after `escapeCell`, two-space gaps), not from the spec sample's bytes; the sample header implies Every 6 wide but its Total row is 48 chars (SCENARIO-01)
 - `Series.New` is `!First.Before(Window.Since)`, set after the `runsDuring` listing filter (a listed series already starts by `Until`, so no upper check); the Status cell is the state word plus `, new` (`active, new`, `ended, new`), no trailing space. Any `--since 2000` fixture therefore reads `, new`. S07's `new` JSON field reads `Series.New` (SCENARIO-05)
@@ -16,7 +20,6 @@ Scenarios complete: SCENARIO-01..06 (02-04 folded into 01, 06 into 05). Last upd
 - Read-command pins already include recurring: root Available Commands pin (`cmd/quarry/run_status_test.go`), `Test_run_read_commands_ignore_a_malformed_config` (fixture holds one active Costco monthly series so stderr stays empty once S11's E1 lands) (SCENARIO-01)
 
 ## Left unbuilt
-- `renderRecurringJSON`, `recurringDocument`, `Series.PriceChanges`, `Series.Payees`/`Accounts`, the steady gate (P2e-7) — S07
 - `RecurringRequest.Accounts`, the `namedAccounts` call, `recurringWarnings` (W2/W3, E1/E2), refusal outline, I1 — S11
 - `report.Server.Anomalies`, `anomalies` command, `anomalies.go`, anomalies pins in root help / never-load-config / PRD P2d-10 list — S14
 - `docs/initial-prd.md` change 1 and `report/doc.go` / `cli/root.go` recurring mentions are done; anomalies mentions land with S14

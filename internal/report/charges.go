@@ -1,6 +1,8 @@
 package report
 
 import (
+	"slices"
+
 	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/store"
 )
@@ -59,4 +61,19 @@ func groupCharges(charges []store.Charge) []chargeGroup {
 		groups[i].charges = append(groups[i].charges, c)
 	}
 	return groups
+}
+
+// identitiesOf is the distinct payees (by id) and accounts (by id) of run, in order of first appearance;
+// neither is nil.
+func identitiesOf(run []store.Charge) ([]SeriesPayee, []store.Account) {
+	payees, accounts := []SeriesPayee{}, []store.Account{}
+	for _, c := range run {
+		if !slices.ContainsFunc(payees, func(p SeriesPayee) bool { return p.ID == *c.PayeeID }) {
+			payees = append(payees, SeriesPayee{ID: *c.PayeeID, Name: *c.Payee})
+		}
+		if !slices.ContainsFunc(accounts, func(a store.Account) bool { return a.ID == c.Account.ID }) {
+			accounts = append(accounts, c.Account)
+		}
+	}
+	return payees, accounts
 }

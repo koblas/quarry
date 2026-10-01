@@ -139,3 +139,68 @@ func Test_renderRecurring_prints_the_caption_and_header_only_for_no_series(t *te
 		"Payee  Currency  Every  Amount  Per year  First  Last  Status  Price changes\n"
 	assert.Equal(t, want, got)
 }
+
+func Test_renderRecurring_prints_the_ruled_sample_row_with_its_price_change(t *testing.T) {
+	r := report.Recurring{
+		Window: spendingWindow(),
+		Series: []report.Series{{
+			Payee: "Rogers", Currency: "CAD", Cadence: report.CadenceMonthly, Amount: 9500, FirstAmount: 8500, PerYear: new(int64(114000)),
+			First: recurringDay(time.May, 3), Last: recurringDay(time.September, 3), State: report.SeriesActive,
+			PriceChanges: []report.PriceChange{{Date: recurringDay(time.July, 3), From: 8500, To: 9500, Tenths: 118}},
+			ChangeTenths: 118,
+		}},
+	}
+
+	row := strings.Split(renderRecurring(r), "\n")[3]
+
+	assert.Equal(t, "Rogers  CAD       month   95.00  1,140.00  2026-05-03  2026-09-03  active  1: 85.00 -> 95.00 (+11.8%)", row)
+}
+
+func Test_renderRecurring_writes_the_first_to_latest_change_in_the_price_changes_cell(t *testing.T) {
+	cases := []struct {
+		name         string
+		changes      int
+		first, last  int64
+		changeTenths int64
+		want         string
+	}{
+		{name: "a rise is signed plus", changes: 1, first: 8500, last: 9500, changeTenths: 118, want: "1: 85.00 -> 95.00 (+11.8%)"},
+		{name: "a fall is signed minus", changes: 2, first: 1199, last: 1099, changeTenths: -83, want: "2: 11.99 -> 10.99 (-8.3%)"},
+		{name: "no net change is unsigned", changes: 2, first: 10000, last: 10000, changeTenths: 0, want: "2: 100.00 -> 100.00 (0.0%)"},
+		{name: "a sub-tenth fall that rounds to zero is unsigned", changes: 3, first: 10000, last: 9999, changeTenths: 0, want: "3: 100.00 -> 99.99 (0.0%)"},
+		{name: "a fraction under one percent keeps its leading zero", changes: 1, first: 10000, last: 10050, changeTenths: 5, want: "1: 100.00 -> 100.50 (+0.5%)"},
+		{name: "amounts of a thousand or more are grouped", changes: 1, first: 99900, last: 123456, changeTenths: 236, want: "1: 999.00 -> 1,234.56 (+23.6%)"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := report.Recurring{
+				Window: spendingWindow(),
+				Series: []report.Series{{
+					Payee: "A", Currency: "CAD", Cadence: report.CadenceMonthly, Amount: c.last, FirstAmount: c.first,
+					First: recurringDay(time.January, 5), Last: recurringDay(time.February, 5), State: report.SeriesEnded,
+					PriceChanges: make([]report.PriceChange, c.changes), ChangeTenths: c.changeTenths,
+				}},
+			}
+
+			row := strings.Split(renderRecurring(r), "\n")[3]
+
+			assert.True(t, strings.HasSuffix(row, "  "+c.want), row)
+		})
+	}
+}
+
+func Test_renderRecurring_leaves_the_price_changes_cell_empty_without_a_change(t *testing.T) {
+	r := report.Recurring{
+		Window: spendingWindow(),
+		Series: []report.Series{{
+			Payee: "A", Currency: "CAD", Cadence: report.CadenceMonthly, Amount: 1000, FirstAmount: 1040,
+			First: recurringDay(time.January, 5), Last: recurringDay(time.February, 5), State: report.SeriesEnded,
+			ChangeTenths: -38,
+		}},
+	}
+
+	row := strings.Split(renderRecurring(r), "\n")[3]
+
+	assert.True(t, strings.HasSuffix(row, "ended"), row)
+}
