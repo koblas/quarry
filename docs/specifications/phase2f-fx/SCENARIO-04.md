@@ -18,8 +18,8 @@ Surveyed (no new port): `RatesSource`/`RatesRequest{Need,Have}` frozen by 07/01;
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_sync_rates_carry_test.go` (new) `Test_run_sync_from_an_older_snapshot_keeps_every_carried_rate` — `runWith` with `fx.NewServer(WithHTTPClient(<recording wrapper over fakeValet, run_sync_rates_test.go:28-44>))`. Sync bundle A (txn 2017-01-03; valet serves 01-03, 01-04) and take its snapshot id (`syncThenWrite` pattern, `run_sync_prune_test.go:121`); sync bundle B (txns 2017-01-03 and 01-10; valet serves 01-05, 01-06); then `sync --from <A's id>` against an EMPTY valet. Asserts: `quarry sql` still lists all four rates (the source no longer serves them, so only a carry keeps them), the request log is one FXUSDCAD request starting 2017-01-07, Rates line `USD/CAD 2017-01-03 to 2017-01-06 (up to date)`. Red at the fx_rates assertion
-- [ ] Step 2: same file `Test_run_sync_asks_only_for_the_dates_after_the_last_stored_rate` (02) — sync, then sync again with valet newly serving 01-05, 01-06: one request starting 2017-01-05 (`start_date`), four rates, `(2 new)`. Red at the request assertion. No stubs needed: both compile today
+- [x] Step 1: `cmd/quarry/run_sync_rates_carry_test.go` (new) `Test_run_sync_from_an_older_snapshot_keeps_every_carried_rate` — `runWith` with `fx.NewServer(WithHTTPClient(<recording wrapper over fakeValet, run_sync_rates_test.go:28-44>))`. Sync bundle A (txn 2017-01-03; valet serves 01-03, 01-04) and take its snapshot id (`syncThenWrite` pattern, `run_sync_prune_test.go:121`); sync bundle B (txns 2017-01-03 and 01-10; valet serves 01-05, 01-06); then `sync --from <A's id>` against an EMPTY valet. Asserts: `quarry sql` still lists all four rates (the source no longer serves them, so only a carry keeps them), the request log is one FXUSDCAD request starting 2017-01-07, Rates line `USD/CAD 2017-01-03 to 2017-01-06 (up to date)`. Red at the fx_rates assertion
+- [x] Step 2: same file `Test_run_sync_asks_only_for_the_dates_after_the_last_stored_rate` (02) — sync, then sync again with valet newly serving 01-05, 01-06: one request starting 2017-01-05 (`start_date`), four rates, `(2 new)`. Red at the request assertion. No stubs needed: both compile today
 
 ### Build
 - [ ] Step 3 (batch 1, carry): `history.go:23-31` `history` gains `rates []store.Rate`, `ratesCarried bool`; `history.go:54-84` `readHistory` calls new `readRates` after findings (template: `readFindings` `history.go:175-215`; an absent fx_rates table = none, silently; usd_cad read as millionths, never float); `rates.go:23-46` `finishBuild` takes `carried history` (`duckstore.go:319`) and appends carried rows before the fetched ones, with or without a source. Tests `rates_test.go`/`history_test.go`: `Test_replace_carries_the_rates_of_the_previous_store` (dates, exact millionths, series), carried + fetched rows coexist, carried with no `WithRates`, `Test_replace_carries_no_rates_and_stays_silent_from_a_store_without_fx_rates` (`newStoreFile` + `phase1ImportRunsDDL`, `history_test.go:97`); faults on rates presence query, rows query, row scan (`spyReadDB` `passQueries`, `history_faults_test.go:346`) close the connection; ctx ended during the read keeps the previous store
@@ -48,3 +48,15 @@ Surveyed (no new port): `RatesSource`/`RatesRequest{Need,Have}` frozen by 07/01;
 - `DROP TABLE fx_rates` alone fails in a test: `v_account_balances`/`v_cash_flow`/`v_spending` depend on it (`CASCADE`)
 - A repeated carried date would PK-fail the whole build, so it must surface as `RatesFault`, never as a build error
 - Existing `askedFrom` tests assume no previous run; the FetchError-NULL arm stays valid only on a fresh store
+
+## Phase report
+
+Run A (steps 1-2) done. No production code touched.
+
+Files: `cmd/quarry/run_sync_rates_carry_test.go` (new): `recordingValet` (logs `<series> <start_date>` over any RoundTripper, e.g. `fakeValet`), `januaryDay`, `writeChequingBundle(t, dir, days...)`, `syncThrough(t, valet, args...)` (sync through an fx server on `valet`, exit 0 required, returns stdout), `storedRateDates(t)`, plus the two acceptance tests. Bundles A and B live in `home/A` and `home/B`; A's snapshot id is taken right after sync A.
+
+Red now (both fail at their assertions, expected reason: no carry, `Have` zero):
+- `Test_run_sync_from_an_older_snapshot_keeps_every_carried_rate`: fx_rates is `"date\n"`, not the four dates; requests are `[FXUSDCAD 2017-01-03 IEXE0101 2017-01-03]`, not `[FXUSDCAD 2017-01-07]`; Rates line is `none (the Bank of Canada has no rates ...)`.
+- `Test_run_sync_asks_only_for_the_dates_after_the_last_stored_rate`: requests `[FXUSDCAD 2017-01-03]` not `[FXUSDCAD 2017-01-05]`; Rates line `(4 new)` not `(2 new)`. The four-rates assertion already passes (the valet serves all four), so the request assertion is the discriminating one.
+
+Next (B1): steps 3-4 per plan. Do not assert the two rates reason phrases until the copy ruling lands. Lint clean on `./cmd/quarry/...`.
