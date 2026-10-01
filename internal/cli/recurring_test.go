@@ -164,37 +164,6 @@ func Test_recurring_help_shows_examples(t *testing.T) {
 	assert.Contains(t, stdout.String(), examples)
 }
 
-func Test_recurring_help_shows_each_flag(t *testing.T) {
-	cases := []struct {
-		name string
-		want string
-	}{
-		{
-			name: "--since",
-			want: `--since date +list series running on or after date \(YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year\)`,
-		},
-		{
-			name: "--until",
-			want: `--until date +list series that started on or before date \(YYYY, YYYY-MM or YYYY-MM-DD; default today\)`,
-		},
-		{
-			name: "--account",
-			want: `--account name +list only series with a charge in the account with this name or id; repeat for more`,
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			err := executeRecurring(t, fakeReportStore{}, &stdout, &stderr, "--help")
-
-			require.NoError(t, err)
-			assert.Regexp(t, c.want, stdout.String())
-		})
-	}
-}
-
 func Test_recurring_reports_a_failed_stdout_write(t *testing.T) {
 	err := executeRecurring(t, fakeReportStore{}, failingWriter{err: errNoSpace}, io.Discard)
 

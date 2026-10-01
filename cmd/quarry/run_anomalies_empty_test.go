@@ -41,37 +41,37 @@ func Test_run_anomalies_prints_each_empty_window_warning_on_stderr_and_in_the_js
 	cases := []struct {
 		name        string
 		args        []string
-		noCharges   bool
+		charges     []chargeTxn
 		wantCaption string
 		wantWarns   []string
 	}{
 		{
-			name: "a store with no transactions", args: []string{}, noCharges: true,
+			name: "a store with no transactions", args: []string{},
 			wantCaption: "all accounts",
 			wantWarns:   []string{anomaliesEmptyWindow + "; the store has no transactions"},
 		},
 		{
-			name: "the named account has transactions, none in the period", args: []string{"--account", "Chequing"},
+			name: "the named account has transactions, none in the period", args: []string{"--account", "Chequing"}, charges: bakeryHistory(),
 			wantCaption: "Chequing",
 			wantWarns:   []string{anomaliesEmptyWindow + " in the named accounts; " + anomaliesAccountsSpan},
 		},
 		{
-			name: "the named account has no transactions", args: []string{"--account", "Visa"},
+			name: "the named account has no transactions", args: []string{"--account", "Visa"}, charges: bakeryHistory(),
 			wantCaption: "Visa",
 			wantWarns:   []string{anomaliesEmptyWindow + " in the named accounts; they have no transactions"},
 		},
 		{
-			name: "the only named account is not in reports", args: []string{"--account", "Old Card"},
+			name: "the only named account is not in reports", args: []string{"--account", "Old Card"}, charges: bakeryHistory(),
 			wantCaption: "Old Card",
 			wantWarns:   []string{anomaliesOldCardLine},
 		},
 		{
-			name: "the only named account uses linked tracking", args: []string{"--account", "Linked"},
+			name: "the only named account uses linked tracking", args: []string{"--account", "Linked"}, charges: bakeryHistory(),
 			wantCaption: "Linked",
 			wantWarns:   []string{anomaliesLinkedLine},
 		},
 		{
-			name: "an account not in reports named beside one that is", args: []string{"--account", "Old Card", "--account", "Chequing"},
+			name: "an account not in reports named beside one that is", args: []string{"--account", "Old Card", "--account", "Chequing"}, charges: bakeryHistory(),
 			wantCaption: "Old Card, Chequing",
 			wantWarns:   []string{anomaliesOldCardLine, anomaliesEmptyWindow + " in the named accounts; " + anomaliesAccountsSpan},
 		},
@@ -86,14 +86,7 @@ func Test_run_anomalies_prints_each_empty_window_warning_on_stderr_and_in_the_js
 				{ID: "acct-old", SourceID: 3, Name: "Old Card", Type: "credit_card", Currency: "CAD", Active: true, NotInReports: true},
 				{ID: "acct-401k", SourceID: 4, Name: "Linked", Type: "chequing", Currency: "CAD", Active: true, LinkedTracking: true},
 			}
-			charges := []chargeTxn{
-				groceryCharge("Bakery", day(2003, 1, 4), 1000),
-				groceryCharge("Bakery", day(2025, 12, 31), 500),
-			}
-			if c.noCharges {
-				charges = nil
-			}
-			replaceStore(t, home, chargeRows(accounts, charges...))
+			replaceStore(t, home, chargeRows(accounts, c.charges...))
 			var textOut, textErr, jsonOut, jsonErr bytes.Buffer
 
 			textExit := runWith(context.Background(), append([]string{"anomalies"}, c.args...), spendEnv(&textOut, &textErr))

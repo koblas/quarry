@@ -39,7 +39,8 @@ accounts; the payee's charges in other accounts still count as history.`,
   quarry anomalies --account "Visa Infinite" --json`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			resolved, err := flags.window(cmd, now())
+			at := now()
+			resolved, err := flags.window(cmd, at)
 			if err != nil {
 				return err
 			}
@@ -49,7 +50,7 @@ accounts; the payee's charges in other accounts still count as history.`,
 				return err
 			}
 
-			found, err := srv.Anomalies(cmd.Context(), report.AnomaliesRequest{Window: resolved, Now: now(), Accounts: flags.accounts})
+			found, err := srv.Anomalies(cmd.Context(), report.AnomaliesRequest{Window: resolved, Now: at, Accounts: flags.accounts})
 			if err != nil {
 				return &runtimeError{err: err}
 			}

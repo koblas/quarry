@@ -132,11 +132,14 @@ func Test_charges_ignores_rows_dated_after_through(t *testing.T) {
 func Test_charges_leaves_out_what_spending_leaves_out(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name     string
-		spec     chargeSpec
-		transfer *store.Transfer
+		name      string
+		spec      chargeSpec
+		transfers []store.Transfer
 	}{
-		{name: "a transfer leg", spec: oneSplit("left-out", 2, 500), transfer: &store.Transfer{ID: "xfer", FromSplitID: "left-out-a", ToSplitID: new("peer-leg")}},
+		{
+			name: "a transfer leg", spec: oneSplit("left-out", 2, 500),
+			transfers: []store.Transfer{{ID: "xfer", FromSplitID: "left-out-a", ToSplitID: new("peer-leg")}},
+		},
 		{name: "an account left out of reports", spec: chargeSpec{id: "left-out", sourceID: 2, account: acctNotReports, splits: []splitPart{{new(catExpense), -500}}}},
 		{name: "a linked-tracking account", spec: chargeSpec{id: "left-out", sourceID: 2, account: acctLinked, splits: []splitPart{{new(catExpense), -500}}}},
 	}
@@ -147,9 +150,7 @@ func Test_charges_leaves_out_what_spending_leaves_out(t *testing.T) {
 			rows := chargeRowsFor()
 			addCharge(&rows, oneSplit("kept", 1, 100))
 			addCharge(&rows, c.spec)
-			if c.transfer != nil {
-				rows.Transfers = append(rows.Transfers, *c.transfer)
-			}
+			rows.Transfers = append(rows.Transfers, c.transfers...)
 
 			got := chargesOf(t, rows)
 

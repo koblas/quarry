@@ -141,20 +141,17 @@ func payeesOf(result report.Recurring) []string {
 }
 
 func Test_recurring_starts_the_series_again_after_a_charge_off_schedule(t *testing.T) {
-	charges := store.Charges{Rows: []store.Charge{
+	charges := []store.Charge{
 		chargeOn(t, 1, "2026-03-05"),
 		chargeOn(t, 2, "2026-04-05"),
 		chargeOn(t, 3, "2026-05-05"),
 		chargeOn(t, 4, "2026-07-14"),
 		chargeOn(t, 5, "2026-08-14"),
 		chargeOn(t, 6, "2026-09-14"),
-	}}
-	srv := report.NewServer(report.WithStore(fakeStore{charges: charges}))
-	window := store.Window{Since: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), Until: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)}
+	}
 
-	result, err := srv.Recurring(t.Context(), report.RecurringRequest{Window: window, Now: recurringNow})
+	result := recurringOf(t, charges)
 
-	require.NoError(t, err)
 	require.Len(t, result.Series, 1)
 	assert.Equal(t, time.Date(2026, 7, 14, 0, 0, 0, 0, time.UTC), result.Series[0].First)
 	assert.Equal(t, 3, result.Series[0].ChargeCount)

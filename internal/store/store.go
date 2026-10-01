@@ -539,7 +539,8 @@ type Charge struct {
 	TransactionID string
 	SourceID      int64
 	Date          time.Time
-	Account       Account
+	// Account holds only ID, Name, Currency, Closed and Active; its other fields are zero.
+	Account Account
 	// PayeeID and Payee are nil when the transaction has no payee.
 	PayeeID, Payee *string
 	Currency       string

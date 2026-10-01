@@ -5,7 +5,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -75,19 +74,8 @@ func Test_run_anomalies_json_names_the_account_and_counts_only_its_charges(t *te
 	exitCode := runWith(context.Background(), []string{"anomalies", "--json", "--account", "Visa"}, spendEnv(&stdout, &stderr))
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	var doc struct {
-		AccountFilter []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		} `json:"account_filter"`
-		Anomalies []json.RawMessage `json:"anomalies"`
-		Checked   int               `json:"checked"`
-		NotJudged int               `json:"not_judged"`
-	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
-	assert.Equal(t, "acct-visa", doc.AccountFilter[0].ID)
-	assert.Equal(t, "Visa", doc.AccountFilter[0].Name)
-	assert.Len(t, doc.AccountFilter, 1)
+	doc := decodeAnomaliesJSON(t, stdout.String())
+	assert.Equal(t, []recurringIDName{{ID: "acct-visa", Name: "Visa"}}, doc.AccountFilter)
 	assert.Len(t, doc.Anomalies, 1)
 	assert.Equal(t, 1, doc.Checked)
 	assert.Equal(t, 0, doc.NotJudged)

@@ -62,6 +62,32 @@ func Test_renderRecurring_measures_the_payee_column_after_escaping_the_name(t *t
 	assert.Equal(t, want, got)
 }
 
+func Test_renderRecurring_measures_the_payee_column_in_characters_not_bytes(t *testing.T) {
+	r := report.Recurring{
+		Window: spendingWindow(),
+		Series: []report.Series{
+			{
+				Payee: "Société", Currency: "CAD", Cadence: report.CadenceWeekly, Amount: 500, PerYear: new(int64(26000)),
+				First: recurringDay(time.January, 5), Last: recurringDay(time.February, 5), State: report.SeriesActive,
+			},
+			{
+				Payee: "Rogers", Currency: "CAD", Cadence: report.CadenceWeekly, Amount: 500, PerYear: new(int64(26000)),
+				First: recurringDay(time.January, 5), Last: recurringDay(time.February, 5), State: report.SeriesActive,
+			},
+		},
+	}
+
+	got := renderRecurring(r)
+
+	want := "" +
+		"Recurring charges 2026-01-01 to 2026-03-09 in all accounts\n" +
+		"\n" +
+		"Payee    Currency  Every  Amount  Per year  First       Last        Status  Price changes\n" +
+		"Société  CAD       week     5.00    260.00  2026-01-05  2026-02-05  active\n" +
+		"Rogers   CAD       week     5.00    260.00  2026-01-05  2026-02-05  active\n"
+	assert.Equal(t, want, got)
+}
+
 func Test_renderRecurring_names_each_cadence_in_the_Every_cell(t *testing.T) {
 	cases := []struct {
 		cadence report.Cadence

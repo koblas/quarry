@@ -45,7 +45,8 @@ active series only.`,
   quarry recurring --since 2000`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			resolved, err := flags.window(cmd, now())
+			at := now()
+			resolved, err := flags.window(cmd, at)
 			if err != nil {
 				return err
 			}
@@ -55,7 +56,7 @@ active series only.`,
 				return err
 			}
 
-			rec, err := srv.Recurring(cmd.Context(), report.RecurringRequest{Window: resolved, Now: now(), Accounts: flags.accounts})
+			rec, err := srv.Recurring(cmd.Context(), report.RecurringRequest{Window: resolved, Now: at, Accounts: flags.accounts})
 			if err != nil {
 				return &runtimeError{err: err}
 			}

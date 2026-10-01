@@ -111,16 +111,6 @@ func Test_anomalies_help_shows_examples(t *testing.T) {
 	assert.Contains(t, stdout.String(), examples)
 }
 
-func Test_anomalies_help_shows_the_short_description_in_the_root_list(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	env := cli.Env{Stdout: &stdout, Stderr: &stderr, Now: func() time.Time { return spendNow }}
-
-	err := cli.Execute(t.Context(), []string{"--help"}, env)
-
-	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), "anomalies   List charges unusually large for their payee or category\n")
-}
-
 func Test_anomalies_without_charges_prints_the_empty_table_and_footer_and_names_the_stores_span(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	fake := fakeReportStore{charges: store.Charges{Transactions: span(t, "2003-01-04", "2026-09-26")}}

@@ -47,6 +47,21 @@ func Test_renderAnomalies_pads_each_column_and_trims_the_trailing_spaces_of_a_ro
 	assert.Equal(t, want, got)
 }
 
+func Test_renderAnomalies_measures_the_payee_column_in_characters_not_bytes(t *testing.T) {
+	accented := anomalyOf(new("Société"), &store.ChargeCategory{Path: "Home"}, 1)
+	plain := anomalyOf(new("Rogers"), &store.ChargeCategory{Path: "Home"}, 1)
+
+	got := renderAnomalies(listed(accented, plain))
+
+	want := anomaliesCaption +
+		"Date        Account         Payee    Category  Amount  Usual  Times  Compared with\n" +
+		"2026-03-02  Chequing (CAD)  Société  Home      412.00  96.05   4.3x  payee, 38 earlier\n" +
+		"2026-03-02  Chequing (CAD)  Rogers   Home      412.00  96.05   4.3x  payee, 38 earlier\n" +
+		"\n" +
+		"2 charges checked\n"
+	assert.Equal(t, want, got)
+}
+
 func Test_renderAnomalies_shows_a_charge_without_a_category_as_uncategorized(t *testing.T) {
 	got := renderAnomalies(listed(anomalyOf(new("Rogers"), nil, 1)))
 

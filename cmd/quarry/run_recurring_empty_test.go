@@ -39,6 +39,14 @@ const (
 	recurringAccountsSpan = "their transactions run 2003-01-04 to 2025-12-31"
 )
 
+// bakeryHistory is two charges from one payee, 2003-01-04 and 2025-12-31: none runs in the default period.
+func bakeryHistory() []chargeTxn {
+	return []chargeTxn{
+		groceryCharge("Bakery", day(2003, 1, 4), 1000),
+		groceryCharge("Bakery", day(2025, 12, 31), 500),
+	}
+}
+
 // warningLines is the stderr text of warnings: each on its own prefixed line.
 func warningLines(warnings []string) string {
 	var text strings.Builder
@@ -52,37 +60,37 @@ func Test_run_recurring_prints_each_empty_period_warning_on_stderr_and_in_the_js
 	cases := []struct {
 		name        string
 		args        []string
-		noCharges   bool
+		charges     []chargeTxn
 		wantCaption string
 		wantWarns   []string
 	}{
 		{
-			name: "a store with no transactions", args: []string{}, noCharges: true,
+			name: "a store with no transactions", args: []string{},
 			wantCaption: "all accounts",
 			wantWarns:   []string{recurringEmptyWindow + "; the store has no transactions"},
 		},
 		{
-			name: "the named account has transactions, none recurring in the period", args: []string{"--account", "Chequing"},
+			name: "the named account has transactions, none recurring in the period", args: []string{"--account", "Chequing"}, charges: bakeryHistory(),
 			wantCaption: "Chequing",
 			wantWarns:   []string{recurringEmptyWindow + " in the named accounts; " + recurringAccountsSpan},
 		},
 		{
-			name: "the named account has no transactions", args: []string{"--account", "Visa"},
+			name: "the named account has no transactions", args: []string{"--account", "Visa"}, charges: bakeryHistory(),
 			wantCaption: "Visa",
 			wantWarns:   []string{recurringEmptyWindow + " in the named accounts; they have no transactions"},
 		},
 		{
-			name: "the only named account is not in reports", args: []string{"--account", "Old Card"},
+			name: "the only named account is not in reports", args: []string{"--account", "Old Card"}, charges: bakeryHistory(),
 			wantCaption: "Old Card",
 			wantWarns:   []string{recurringOldCardLine},
 		},
 		{
-			name: "the only named account uses linked tracking", args: []string{"--account", "Linked"},
+			name: "the only named account uses linked tracking", args: []string{"--account", "Linked"}, charges: bakeryHistory(),
 			wantCaption: "Linked",
 			wantWarns:   []string{recurringLinkedLine},
 		},
 		{
-			name: "an account not in reports named beside one that is", args: []string{"--account", "Old Card", "--account", "Chequing"},
+			name: "an account not in reports named beside one that is", args: []string{"--account", "Old Card", "--account", "Chequing"}, charges: bakeryHistory(),
 			wantCaption: "Old Card, Chequing",
 			wantWarns:   []string{recurringOldCardLine, recurringEmptyWindow + " in the named accounts; " + recurringAccountsSpan},
 		},
@@ -97,14 +105,7 @@ func Test_run_recurring_prints_each_empty_period_warning_on_stderr_and_in_the_js
 				{ID: "acct-old", SourceID: 3, Name: "Old Card", Type: "credit_card", Currency: "CAD", Active: true, NotInReports: true},
 				{ID: "acct-401k", SourceID: 4, Name: "Linked", Type: "chequing", Currency: "CAD", Active: true, LinkedTracking: true},
 			}
-			charges := []chargeTxn{
-				groceryCharge("Bakery", day(2003, 1, 4), 1000),
-				groceryCharge("Bakery", day(2025, 12, 31), 500),
-			}
-			if c.noCharges {
-				charges = nil
-			}
-			replaceStore(t, home, chargeRows(accounts, charges...))
+			replaceStore(t, home, chargeRows(accounts, c.charges...))
 			var textOut, textErr, jsonOut, jsonErr bytes.Buffer
 
 			textExit := runWith(context.Background(), append([]string{"recurring"}, c.args...), spendEnv(&textOut, &textErr))

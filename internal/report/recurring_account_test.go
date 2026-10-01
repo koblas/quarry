@@ -65,7 +65,7 @@ func Test_recurring_lists_a_series_when_any_charge_of_its_run_is_in_a_named_acco
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			run := onAccountOf(chqAccount, monthlyEndingOn(t, "2026-09-12", 5))
+			run := onAccountOf(chqAccount, monthlyEndingOn(t, "2026-09-12", 5, ofAmount(1200)))
 			run[c.which].Account = midAccount
 
 			result, err := recurringNamed(t, accountsOf(chqAccount, midAccount), slices.Clone(run), "Mid")

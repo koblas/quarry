@@ -17,19 +17,19 @@ func Test_run_anomalies_refuses_usage_and_store_problems(t *testing.T) {
 		args     []string
 		accounts []store.Account
 		wantExit int
-		wantLine func(t *testing.T, home string) string
+		wantLine string
 	}{
 		{
 			name: "an argument", args: []string{"anomalies", "extra"}, accounts: []store.Account{chequingAccount("acct-cad", 1)},
-			wantExit: 2, wantLine: line("quarry: anomalies takes no arguments\n"),
+			wantExit: 2, wantLine: "quarry: anomalies takes no arguments\n",
 		},
 		{
 			name: "an until that is not a date", args: []string{"anomalies", "--until", "2026-02-30"}, accounts: []store.Account{chequingAccount("acct-cad", 1)},
-			wantExit: 2, wantLine: line("quarry: --until \"2026-02-30\" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD\n"),
+			wantExit: 2, wantLine: "quarry: --until \"2026-02-30\" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD\n",
 		},
 		{
 			name: "an account no account is named", args: []string{"anomalies", "--account", "Nope"}, accounts: []store.Account{chequingAccount("acct-cad", 1)},
-			wantExit: 1, wantLine: line("quarry: no account named \"Nope\"; run quarry accounts --all to list them\n"),
+			wantExit: 1, wantLine: "quarry: no account named \"Nope\"; run quarry accounts --all to list them\n",
 		},
 		{
 			name: "an account name two accounts share", args: []string{"anomalies", "--account", "Visa"},
@@ -37,36 +37,45 @@ func Test_run_anomalies_refuses_usage_and_store_problems(t *testing.T) {
 				{ID: "acct-812", SourceID: 1, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
 				{ID: "acct-977", SourceID: 2, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
 			},
-			wantExit: 1, wantLine: line("quarry: 2 accounts are named \"Visa\"; pass one of their ids instead: acct-812, acct-977\n"),
+			wantExit: 1, wantLine: "quarry: 2 accounts are named \"Visa\"; pass one of their ids instead: acct-812, acct-977\n",
 		},
 		{
 			name: "an account no account is named, with --json", args: []string{"anomalies", "--json", "--account", "Nope"},
 			accounts: []store.Account{chequingAccount("acct-cad", 1)},
-			wantExit: 1, wantLine: line("quarry: no account named \"Nope\"; run quarry accounts --all to list them\n"),
+			wantExit: 1, wantLine: "quarry: no account named \"Nope\"; run quarry accounts --all to list them\n",
 		},
 		{
 			name: "a since that is not a date, with --json", args: []string{"anomalies", "--json", "--since", "2026-13"},
 			accounts: []store.Account{chequingAccount("acct-cad", 1)},
-			wantExit: 2, wantLine: line("quarry: --since \"2026-13\" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD\n"),
+			wantExit: 2, wantLine: "quarry: --since \"2026-13\" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD\n",
 		},
-		{name: "no store", args: []string{"anomalies"}, wantExit: 1, wantLine: noStoreLine},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
-			if c.accounts != nil {
-				replaceStore(t, home, chargeRows(c.accounts))
-			}
+			replaceStore(t, home, chargeRows(c.accounts))
 			var stdout, stderr bytes.Buffer
 
 			exitCode := runWith(context.Background(), c.args, spendEnv(&stdout, &stderr))
 
 			assert.Equal(t, c.wantExit, exitCode)
 			assert.Empty(t, stdout.String())
-			assert.Equal(t, c.wantLine(t, home), stderr.String())
+			assert.Equal(t, c.wantLine, stderr.String())
 		})
 	}
+}
+
+func Test_run_anomalies_refuses_when_there_is_no_store(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"anomalies"}, spendEnv(&stdout, &stderr))
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, noStoreLine(t, home), stderr.String())
 }
 
 // HOME holds no store: exit 2 (not the missing-store 1) shows each check runs first.
