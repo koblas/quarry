@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-07
-status: open
+status: done
 ---
 
 # SCENARIO-07: Store views carry exact converted amounts
@@ -31,10 +31,10 @@ Probe (done at plan time, DuckDB v1.5.5): DECIMAL/DECIMAL and DECIMAL/INTEGER �
 - [x] Step 6: views — `schema.go:128-144` `v_account_balances` + `balance_cad`, `balance_usd` (sum first, then convert at the latest rate on or before `current_date`); `schema.go:151-171` `v_cash_flow` + `amount_cad`, `amount_usd`, `usd_cad` (ASOF LEFT JOIN fx_rates); `schema.go:174-181` `v_spending` + `spent_cad`, `spent_usd`, `usd_cad`. New `views_fx_test.go`, one row per arm: weekend → Friday rate; on a rate date → that rate; ±0.125 each way; same-currency identity with no rates and before the first rate; cross-currency before the first rate → NULL; `usd_cad` set on CAD rows; investment account NULL balance stays NULL; a 2099 rate never applies to balances; spent_* = −amount_* per row. `Test_money_convert_matches_every_spending_rows_converted_columns` (every v_spending row, both targets). Column/type pins: extend `views_test.go:223-244`, `:349-370`; add one for `v_account_balances`. `internal/cli/sql.go:39-40` ruled paragraph (Surface & Copy → sql Long) inserted right after "…negative is money leaving the account.", rewrapped; pin verbatim at `sql_test.go:191-215`
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `money`, `Convert`, `RatesSource`, `WithRates`, `store.Rate*`; `doc.go` (duckstore) names fx_rates
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `money`, `Convert`, `RatesSource`, `WithRates`, `store.Rate*`; `doc.go` (duckstore) names fx_rates
 
 ### Verify
-- [ ] Step 8: full verification + `.claude/scripts/spec-check.py phase2f-fx` → tick SCENARIO-07 with its acceptance test
+- [x] Step 8: full verification + `.claude/scripts/spec-check.py phase2f-fx` → tick SCENARIO-07 with its acceptance test
 
 ## Handoff
 
