@@ -142,9 +142,8 @@ func statusRank(s finding.Status) int {
 	return 0
 }
 
-// findingOrder is the display order of the open and ignored findings of typ: by latest item date descending for
-// the transfer types and duplicate, by size then payee for uncategorized and mixed-categories, by transactions for
-// payee-variants, else by id.
+// findingOrder is the display order of typ's open and ignored findings: newest item date for transfers and
+// duplicates, size then payee for uncategorized and mixed, transactions for payee-variants, else id.
 func findingOrder(typ finding.Type) func(a, b store.Finding) int {
 	switch typ { //nolint:exhaustive // every other type sorts by id
 	case finding.Duplicate, finding.UnlinkedTransfer, finding.OneSidedTransfer:

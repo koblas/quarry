@@ -397,3 +397,16 @@ func Test_findings_gives_only_a_payee_variants_item_the_payee_total(t *testing.T
 
 	assert.Equal(t, []int{2, 0, 0}, []int{variants.Items[0].Transactions, uncategorized.Items[0].Transactions, duplicate.Items[0].Transactions})
 }
+
+func Test_findings_counts_a_payee_variants_transaction_once_however_many_splits_it_has(t *testing.T) {
+	t.Parallel()
+	rows := variantRows(variantPayee{name: "Tim Hortons", txns: 1}, variantPayee{name: "TIM HORTONS", txns: 1})
+	rows.Splits = []store.Split{
+		{ID: "split-1", SourceID: 1, TransactionID: "txn-1", Amount: -400},
+		{ID: "split-2", SourceID: 2, TransactionID: "txn-1", Amount: -600},
+	}
+
+	got := readFinding(t, rows, "payee-variants:tim-hortons")
+
+	assert.Equal(t, []int{1, 1}, []int{got.Items[0].Transactions, got.Items[1].Transactions})
+}

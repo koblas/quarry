@@ -281,8 +281,7 @@ func mixedRows(findings []report.ListedFinding, view findingsView) []string {
 	return lines
 }
 
-// payeeVariantRows renders each payee-variants finding as an id line (id padded to the widest, payee and transaction
-// counts, ignored marker) over one four-space row per payee: its name padded to the widest in the finding, then its right-aligned count.
+// payeeVariantRows renders each payee-variants finding as an id line over one row per payee with its transaction count.
 func payeeVariantRows(findings []report.ListedFinding, view findingsView) []string {
 	ids := make([]string, len(findings))
 	for i, f := range findings {

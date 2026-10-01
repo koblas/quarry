@@ -143,3 +143,11 @@ func Test_replace_lists_variants_by_transactions_then_name_ignoring_case_then_id
 
 	assert.Equal(t, "payee-variants:tim-hortons=payee-5,payee-1,payee-2,payee-3,payee-4", got)
 }
+
+func Test_replace_breaks_a_transactions_tie_by_name_ignoring_case_before_id(t *testing.T) {
+	t.Parallel()
+
+	got := variantFindings(t, variantPayee{name: "tim.hortons", txns: 1}, variantPayee{name: "Tim Hortons", txns: 1})
+
+	assert.Equal(t, "payee-variants:tim-hortons=payee-2,payee-1", got)
+}

@@ -64,6 +64,7 @@ func Test_PayeeKey(t *testing.T) {
 		{"cut at a hash with letters after it", "Tim #Hortons", "tim"},
 		{"a diacritic is kept", "Café", "café"},
 		{"no diacritic folding", "Cafe", "cafe"},
+		{"a combining mark is a separator", "Cafe\u0301 Nord", "cafe-nord"},
 		{"punctuation splits a word", "Tim's Hortons.", "tim-s-hortons"},
 		{"runs of spaces collapse", "  Tim   Hortons  ", "tim-hortons"},
 		{"a numeric token is dropped, not the whole name", "Store 24", "store"},
@@ -77,6 +78,7 @@ func Test_PayeeKey(t *testing.T) {
 		{"all punctuation", "..., -!", ""},
 		{"non-Latin letters are kept", "Москва", "москва"},
 		{"Arabic-Indic digits are digits", "Store ٢٤", "store"},
+		{"a token holding an Arabic-Indic digit is dropped whole", "a٢b", ""},
 		{"a vulgar fraction is a separator, not a digit", "Half½Price", "half-price"},
 	}
 
