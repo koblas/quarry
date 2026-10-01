@@ -2,6 +2,7 @@ package duckstore_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"testing"
@@ -105,7 +106,46 @@ func Test_replace_carries_null_for_columns_an_older_store_lacks(t *testing.T) {
 	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM import_runs WHERE id = 4
 		AND snapshot_path = '/snapshots/phase1.sqlite' AND accounts_rows = 7 AND investment_transactions_not_imported = 13
 		AND snapshot_taken_at IS NULL AND source_path IS NULL AND balances_never_reconciled IS NULL
-		AND investment_accounts IS NULL AND transfers_paired IS NULL AND transfers_cross_currency IS NULL`, "1")
+		AND investment_accounts IS NULL AND transfers_paired IS NULL AND transfers_cross_currency IS NULL
+		AND rates_first IS NULL AND rates_last IS NULL AND rates_fetch_error IS NULL`, "1")
+}
+
+func Test_replace_carries_the_rates_columns_of_a_run_into_the_next_store(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir())
+	_, err := st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	execOnStore(t, st, `UPDATE import_runs SET rates_first = DATE '2026-01-02', rates_last = DATE '2026-01-05',
+		rates_fetch_error = 'rates host unreachable' WHERE id = 1`)
+
+	_, err = st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	db := openReadOnly(t, st.Path())
+	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM import_runs WHERE id = 1 AND rates_first = DATE '2026-01-02'
+		AND rates_last = DATE '2026-01-05' AND rates_fetch_error = 'rates host unreachable'`, "1")
+}
+
+func Test_replace_records_no_rates_columns_for_the_new_run(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir())
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	db := openReadOnly(t, st.Path())
+	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM import_runs WHERE id = 1
+		AND rates_first IS NULL AND rates_last IS NULL AND rates_fetch_error IS NULL`, "1")
+}
+
+// execOnStore runs query against st's file through a writable connection closed before any read.
+func execOnStore(t *testing.T, st *duckstore.Store, query string) {
+	t.Helper()
+	conn, err := sql.Open("duckdb", st.Path())
+	require.NoError(t, err)
+	_, err = conn.ExecContext(t.Context(), query)
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
 }
 
 func Test_replace_numbers_the_new_run_after_the_highest_carried_id(t *testing.T) {

@@ -101,7 +101,15 @@ CREATE TABLE import_runs (
 	balances_never_reconciled BIGINT,
 	investment_accounts BIGINT,
 	transfers_paired BIGINT,
-	transfers_cross_currency BIGINT
+	transfers_cross_currency BIGINT,
+	rates_first DATE,
+	rates_last DATE,
+	rates_fetch_error VARCHAR
+);
+CREATE TABLE fx_rates (
+	date DATE PRIMARY KEY,
+	usd_cad DECIMAL(10,6) NOT NULL CHECK (usd_cad > 0),
+	series VARCHAR NOT NULL
 );
 CREATE TABLE findings (
 	id VARCHAR PRIMARY KEY,

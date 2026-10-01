@@ -11,15 +11,17 @@ import (
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
 	"github.com/koblas/quarry/internal/platform/duckdb"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/require"
 )
 
-// newBuiltStore builds a store of minimalRows in a fresh directory and returns a Store over it built with opts.
+// newBuiltStore builds a store of minimalRows and one exchange rate in a fresh directory and returns a Store over it built with opts.
 func newBuiltStore(t *testing.T, opts ...duckstore.Option) *duckstore.Store {
 	t.Helper()
 	dir := t.TempDir()
-	_, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+	src := &fakeRates{refresh: store.RatesRefresh{Rates: []store.Rate{ratesOn(13, 1_250_000, "IEXE")}}}
+	_, err := duckstore.New(dir, duckstore.WithRates(src)).Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
 	return duckstore.New(dir, opts...)
 }
