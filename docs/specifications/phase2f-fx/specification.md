@@ -161,7 +161,16 @@ The rows stay as they are: each row is in one currency, the Currency column stay
   - fx_rates and the new import_runs columns arrive with v5.
   - The existing other-version refusal (report/refusal.go:53) is unchanged.
   - A v4 store carries findings and import_runs (readHistory is column-tolerant); its absent fx_rates means nothing is carried and no warning is given.
-  - An unreadable fx_rates gives this sync warning, then a full fetch: `could not carry exchange rates from the previous store (<reason>); fetching them all again`
+  - An unreadable fx_rates gives this sync warning, then a full fetch: `cannot carry exchange rates forward from the previous store (<reason>); fetching them all again`
+    *(Mid-feature ruling, SCENARIO-04.)* The `<reason>` phrases are:
+    - `its fx_rates table repeats a date`
+    - `its fx_rates table is incomplete` (a NULL cell or missing column; also the fallback for any other read failure)
+    - `its fx_rates table holds an impossible rate` (a rate ≤ 0 or out of range)
+    - `its fx_rates table names an unknown series` (a series that is not FXUSDCAD or IEXE0101)
+  - A wholly unreadable previous store gives no separate rates line; the combined line covers it (see Changes to existing surfaces).
+  - A v4 store is silent.
+  - Order on stderr and in `warnings[]`: manifest, history, findings, rates, prune. Exit 0.
+  - `status` says nothing about a carry fault.
 
 ## Which commands
 | Command | Ruling |
@@ -300,6 +309,11 @@ Mid-feature ruling, SCENARIO-01 — nothing fetched, nothing failed (no warning,
 | Quicken closed, recon failed, fingerprint changed | existing copy; no fetch; no Rates line | | | |
 
 ### Changes to existing surfaces
+- **Combined carry warning** *(mid-feature ruling, SCENARIO-04)*.
+  - Old (internal/snapshot/import.go:78): `cannot carry import history and findings forward from the previous store (<reason>); both start again with this sync`
+  - New: `cannot carry import history, findings or exchange rates forward from the previous store (<reason>); all three start again with this sync`
+  - Repoint its pins.
+  - The `Warnings()` doc reads "the import-history restart, findings restart, exchange-rates restart and auto-prune warnings, in that order".
 - **spend.go:20-23 Long.** The first paragraph becomes `Show how much you spent, grouped by category, payee, tag or month.` + P.
 - **cashflow.go:45-47 Long.** It opens `Show income, spending and what was left over for each month or year.` + P. `…equals quarry spend's total for the same period and accounts.` becomes `…for the same period, accounts and currency.`
 - **P (shared; pinned in report_help_test.go):**
@@ -371,7 +385,7 @@ Scenario Outline: SCENARIO-03 — Failed rate fetch warns and the sync still suc
 Scenario: SCENARIO-04 — Rates survive the rebuild, including sync --from an older snapshot
   Given a store with rates and an older snapshot
   When I run quarry sync --from that snapshot
-  Then every carried rate is still in fx_rates and only missing dates are fetched (a v4 store carries none, silently; an unreadable fx_rates warns "could not carry exchange rates from the previous store (<reason>); fetching them all again")
+  Then every carried rate is still in fx_rates and only missing dates are fetched (a v4 store carries none, silently; an unreadable fx_rates warns "cannot carry exchange rates forward from the previous store (<reason>); fetching them all again")
 
 Scenario: SCENARIO-05 — A sync that fails before the swap never fetches rates
   Given Quicken is open or the snapshot fails validation
