@@ -18,8 +18,8 @@ Batch order is money+config → binder → resolver → cmd rows (the sizing's 1
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_read_refusals_test.go` (new test after :81) `Test_run_read_commands_refuse_a_bad_reporting_currency`. HOME has a config and no store. Rows: `reporting.currency = "EUR"` × spend, cashflow, recurring, anomalies, accounts; `""`, `12` and `true` × spend. Each row: exit 1, stdout empty, stderr `quarry: <configShown>: reporting.currency must be CAD, USD or native, got <as written>` + configFix. The sql row gets the no-store refusal, which shows sql ignores config. Red today at stderr, because the no-store refusal wins.
-- [ ] Step 2: `cmd/quarry/run_read_usage_test.go` (new test after :70) `Test_run_read_commands_refuse_a_bad_currency_flag` — `--currency EUR` × the five; exit 2, stdout empty, stderr `quarry: --currency must be CAD, USD or native\n`. Red today at stderr (cobra's unknown flag). No stubs: both compile now.
+- [x] Step 1: `cmd/quarry/run_read_refusals_test.go` (new test after :81) `Test_run_read_commands_refuse_a_bad_reporting_currency`. HOME has a config and no store. Rows: `reporting.currency = "EUR"` × spend, cashflow, recurring, anomalies, accounts; `""`, `12` and `true` × spend. Each row: exit 1, stdout empty, stderr `quarry: <configShown>: reporting.currency must be CAD, USD or native, got <as written>` + configFix. The sql row gets the no-store refusal, which shows sql ignores config. Red today at stderr, because the no-store refusal wins.
+- [x] Step 2: `cmd/quarry/run_read_usage_test.go` (new test after :70) `Test_run_read_commands_refuse_a_bad_currency_flag` — `--currency EUR` × the five; exit 2, stdout empty, stderr `quarry: --currency must be CAD, USD or native\n`. Red today at stderr (cobra's unknown flag). No stubs: both compile now.
 
 ### Build
 - [ ] Step 3: money + config.
@@ -105,3 +105,12 @@ Batch order is money+config → binder → resolver → cmd rows (the sizing's 1
 - Two warning slices: passing the concatenated list to `emitReport` prints config warnings twice, once in absolute form.
 - A nil `LoadConfig` panics. Every `Env` that runs one of the five needs a loader.
 - `got` is as written: `"eur"` refuses with `got "eur"`, never upper-cased.
+
+## Phase report
+
+Run A (steps 1-2) done. Both acceptance tests compile with no stubs and fail at their assertions.
+
+- `cmd/quarry/run_read_refusals_test.go:84` `Test_run_read_commands_refuse_a_bad_reporting_currency`: 9 rows (spend, cashflow, recurring, anomalies, accounts with `"EUR"`; `""`, `12`, `true` x spend; sql). Red on 8 rows. The sql row passes today and stays as the control: sql ignores config, so it gets the no-store refusal. Failure: expected `quarry: ~/Library/Application Support/quarry/config.toml: reporting.currency must be CAD, USD or native, got "EUR"; fix the file and run the command again`, actual `quarry: no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it`. The test pins no sync, status, findings or snapshots rows (ruling pending).
+- `cmd/quarry/run_read_usage_test.go:77` `Test_run_read_commands_refuse_a_bad_currency_flag`: 5 rows. Red: expected `quarry: --currency must be CAD, USD or native`, actual `quarry: unknown flag: --currency; Run 'quarry spend --help' for usage.`
+- Today read commands never load the config, so a bad key shows no warning either.
+- Next (B1): steps 3-4 (money.ParseCurrency/String, config.Currency, binder). `golangci-lint run ./cmd/...` is 0 issues.

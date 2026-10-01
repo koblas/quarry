@@ -69,6 +69,21 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 	}
 }
 
+func Test_run_read_commands_refuse_a_bad_currency_flag(t *testing.T) {
+	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts"} {
+		t.Run(command, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), []string{command, "--currency", "EUR"}, &stdout, &stderr)
+
+			assert.Equal(t, 2, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, "quarry: --currency must be CAD, USD or native\n", stderr.String())
+		})
+	}
+}
+
 func Test_run_sql_refuses_a_multi_line_query_that_starts_with_a_dash_as_an_unknown_flag(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	var stdout, stderr bytes.Buffer
