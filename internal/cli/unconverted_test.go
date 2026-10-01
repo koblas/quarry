@@ -119,6 +119,7 @@ func Test_spend_by_tag_puts_the_exchange_rate_warning_between_the_left_out_accou
 	require.Len(t, doc.Warnings, 3)
 	assert.Contains(t, doc.Warnings[0], "Old Card")
 	assert.Equal(t, []string{noRatesWarning, multiTagWarning}, doc.Warnings[1:])
+	assert.Equal(t, warningText(doc.Warnings), stderr.String())
 }
 
 func Test_cashflow_puts_the_exchange_rate_warning_after_the_left_out_account(t *testing.T) {
@@ -135,6 +136,7 @@ func Test_cashflow_puts_the_exchange_rate_warning_after_the_left_out_account(t *
 	require.Len(t, doc.Warnings, 2)
 	assert.Contains(t, doc.Warnings[0], "Old Card")
 	assert.Equal(t, noRatesWarning, doc.Warnings[1])
+	assert.Equal(t, warningText(doc.Warnings), stderr.String())
 }
 
 // warningText is the stderr text of warnings: each on its own prefixed line.

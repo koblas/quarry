@@ -536,7 +536,7 @@ type Unconverted struct {
 type Spending struct {
 	Rows   []SpendingRow
 	Totals []SpendingTotal
-	// Unconverted is the splits left in their own currency; see Unconverted.
+	// Unconverted is the transactions left in their own currency; see Unconverted.
 	Unconverted Unconverted
 	// MultiTagSplits counts the splits in the window that carry more than one
 	// tag; it is set only when grouping by tag.
@@ -591,7 +591,7 @@ type CashFlowTotal struct {
 type CashFlow struct {
 	Rows   []CashFlowRow
 	Totals []CashFlowTotal
-	// Unconverted is the income and spending left in their own currency; see Unconverted.
+	// Unconverted is the transactions left in their own currency; see Unconverted.
 	Unconverted Unconverted
 	// Transactions is set only when the window holds no income or spending (no Totals), as for Spending.
 	Transactions TransactionRange

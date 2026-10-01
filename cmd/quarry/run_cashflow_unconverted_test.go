@@ -25,6 +25,7 @@ func Test_run_cashflow_warns_with_the_count_of_its_own_accounts_and_currency(t *
 	cells := []unconvertedCell{
 		{name: "CAD mode counts income and expense in USD", want: []string{usdPreRateLine}},
 		{name: "USD mode counts the CAD transaction", args: []string{"--currency", "USD"}, want: []string{cadPreRateLine}},
+		{name: "the USD account alone warns with its own count", args: []string{"--account", "acct-usd"}, want: []string{usdPreRateLine}},
 		{name: "the CAD account alone stays silent in CAD", args: []string{"--account", "acct-cad"}},
 		{name: "by year warns once", args: []string{"--by", "year"}, want: []string{usdPreRateLine}},
 		{name: "native converts nothing", args: []string{"--currency", "native"}},
@@ -86,6 +87,45 @@ func Test_run_cashflow_without_rates_warns_only_when_a_conversion_is_needed(t *t
 	}
 }
 
+func Test_run_cashflow_in_usd_without_rates_warns_only_when_a_conversion_is_needed(t *testing.T) {
+	cases := []struct {
+		name    string
+		account store.Account
+		split   spendSplit
+		want    []string
+	}{
+		{
+			name:    "all-USD data in USD",
+			account: usdChequingAccount("acct-usd", 2),
+			split:   spendSplit{id: "s01", account: "acct-usd", category: "cat-salary", currency: "USD", day: day(2026, 3, 10), cents: 8000},
+		},
+		{
+			name:    "all-CAD data in USD",
+			account: chequingAccount("acct-cad", 1),
+			split:   spendSplit{id: "s01", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 3, 10), cents: 100000},
+			want:    []string{noRatesLine},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			replaceStore(t, home, cashFlowRows([]store.Account{c.account}, c.split))
+			args := []string{"--currency", "USD", "--since", "2026-03", "--until", "2026-03"}
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), append([]string{"cashflow"}, args...), spendEnv(&stdout, &stderr))
+			doc, echoedStderr := runCashFlowJSON(t, args...)
+
+			require.Equal(t, 0, exitCode, stderr.String())
+			assert.Equal(t, warningLines(c.want), stderr.String())
+			assert.Equal(t, warningLines(c.want), echoedStderr)
+			assert.ElementsMatch(t, c.want, doc.Warnings)
+		})
+	}
+}
+
 func Test_run_cashflow_json_gives_a_period_in_the_other_currency_only_where_the_store_found_one(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -116,7 +156,9 @@ func Test_run_cashflow_of_an_unrated_empty_window_gives_only_the_empty_window_no
 	exitCode := runWith(context.Background(), []string{"cashflow", "--since", "2020-01-01", "--until", "2020-12-31"}, spendEnv(&stdout, &stderr))
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, "quarry: warning: no income or spending from 2020-01-01 to 2020-12-31; the store's transactions run 2026-03-10 to 2026-03-10\n", stderr.String())
-	_, echoedStderr := runCashFlowJSON(t, "--since", "2020-01-01", "--until", "2020-12-31")
+	const note = "no income or spending from 2020-01-01 to 2020-12-31; the store's transactions run 2026-03-10 to 2026-03-10"
+	assert.Equal(t, warningLines([]string{note}), stderr.String())
+	doc, echoedStderr := runCashFlowJSON(t, "--since", "2020-01-01", "--until", "2020-12-31")
 	assert.Equal(t, stderr.String(), echoedStderr)
+	assert.Equal(t, []string{note}, doc.Warnings)
 }

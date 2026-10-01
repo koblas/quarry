@@ -52,8 +52,8 @@ func cashFlowFillKeys(t *testing.T, flow store.CashFlow, currency money.Currency
 	return keys
 }
 
-// fillCase is a read whose store returned one row in the other currency, in January only, for a
-// report in currency; want lists the rows both reports must give.
+// fillCase is a report in currency over a store whose Totals are totals and whose rows are stored,
+// each "<month> <currency>"; want lists the rows both reports must give.
 type fillCase struct {
 	name     string
 	currency money.Currency

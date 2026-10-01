@@ -60,16 +60,14 @@ func currencyList[T any](totals []T, currency func(T) string) []string {
 	return currencies
 }
 
-// fillSeries is a row for each period of series: the stored row keyed by keyOf where there is
-// one, else blank(key). With target empty (native) every one of currencies is filled in every
-// period; with a target currency only that one is, first in the period, and another currency
-// appears only in a period that stored one, after it in currencies order. wrap makes each into
-// the report's row with the period's Partial.
+// fillSeries is a row for each period of series: the stored row keyed by keyOf, else blank(key),
+// wrapped with the period's Partial; which currencies a period lists is fillOrder's.
 func fillSeries[S, R any](series []period, currencies []string, target string, stored []S, keyOf func(S) periodKey, blank func(periodKey) S, wrap func(S, bool) R) []R {
 	found := make(map[periodKey]S, len(stored))
 	for _, r := range stored {
 		found[keyOf(r)] = r
 	}
+	// Empty target (native) blank-fills every currency in every period; else only target, and another currency appears where stored.
 	order := fillOrder(currencies, target)
 	rows := make([]R, 0, len(series)*len(order))
 	for _, p := range series {

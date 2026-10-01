@@ -9,8 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Rates are fridayAndMonday's: the first is 2026-03-13; march(10) is before it.
-
 // also adds a second split of cents to the transaction of the split named of.
 func also(rows *store.Rows, of, id string, cents int64) {
 	rows.Splits = append(rows.Splits, store.Split{
@@ -134,6 +132,18 @@ func Test_spending_counts_only_unconverted_splits_inside_the_window(t *testing.T
 	}
 }
 
+func Test_spending_counts_an_unconverted_split_dated_on_the_first_and_last_day_of_the_window(t *testing.T) {
+	t.Parallel()
+	rows := fxSpendRows()
+	expense(&rows, "usd-unrated", "USD", march(10), -700)
+	params := spendingIn(money.CAD, store.SpendByCategory)
+	params.Window = store.Window{Since: march(10), Until: march(10)}
+
+	got := unconvertedOfSpending(t, rows, params)
+
+	assert.Equal(t, 1, got.Transactions)
+}
+
 func Test_spending_in_native_gives_the_zero_unconverted_even_with_a_split_before_the_first_rate(t *testing.T) {
 	t.Parallel()
 	rows := fxSpendRows()
@@ -232,6 +242,37 @@ func Test_cash_flow_counts_only_the_named_accounts_and_the_window_and_nothing_in
 	}
 }
 
+func Test_cash_flow_counts_an_unconverted_split_dated_on_the_first_and_last_day_of_the_window(t *testing.T) {
+	t.Parallel()
+	rows := fxSpendRows()
+	earn(&rows, "usd-pay", "USD", march(10), 5000)
+	params := cashFlowIn(money.CAD, store.CashFlowByMonth)
+	params.Window = store.Window{Since: march(10), Until: march(10)}
+
+	got, err := newStoreWithRates(t, rows, fridayAndMonday()...).CashFlow(t.Context(), params)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, got.Unconverted.Transactions)
+}
+
+func Test_cash_flow_counts_the_named_usd_account_without_the_other_accounts_unconverted_split(t *testing.T) {
+	t.Parallel()
+	rows := fxSpendRows()
+	earn(&rows, "usd-pay", "USD", march(10), 5000)
+	addSplit(&rows, splitSpec{id: "usd-elsewhere", account: acctInReports, currency: "USD", date: march(10), category: new(catExpense), amount: -700})
+	st := newStoreWithRates(t, rows, fridayAndMonday()...)
+	named := namedCashFlowAccounts(acctUSD)
+	named.Currency = money.CAD
+
+	one, err := st.CashFlow(t.Context(), named)
+	require.NoError(t, err)
+	all, err := st.CashFlow(t.Context(), cashFlowIn(money.CAD, store.CashFlowByMonth))
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, one.Unconverted.Transactions)
+	assert.Equal(t, 2, all.Unconverted.Transactions)
+}
+
 func Test_cash_flow_ignores_a_pre_rate_split_in_a_category_that_is_neither_income_nor_expense(t *testing.T) {
 	t.Parallel()
 	rows := fxSpendRows()
@@ -286,6 +327,20 @@ func Test_unconverted_transactions_are_positive_exactly_when_the_rows_list_the_o
 		},
 		{
 			name: "no rates, USD data in CAD", currency: money.CAD, target: "CAD",
+			build: func(rows *store.Rows) {
+				expense(rows, "u", "USD", march(16), -700)
+				earn(rows, "p", "USD", march(16), 900)
+			},
+		},
+		{
+			name: "no rates, CAD data in USD", currency: money.USD, target: "USD",
+			build: func(rows *store.Rows) {
+				expense(rows, "c", "CAD", march(16), -700)
+				earn(rows, "p", "CAD", march(16), 900)
+			},
+		},
+		{
+			name: "no rates, all USD data in USD", currency: money.USD, target: "USD",
 			build: func(rows *store.Rows) {
 				expense(rows, "u", "USD", march(16), -700)
 				earn(rows, "p", "USD", march(16), 900)

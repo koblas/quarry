@@ -9,14 +9,12 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// noRatesWarning is the warning for a report that had to convert while the store holds no
-// exchange rates.
+// noRatesWarning is the warning for a report that had to convert while the store holds no rates.
 const noRatesWarning = "the store has no exchange rates, so amounts are listed in each account's own currency; " +
 	"run quarry sync to fetch them"
 
-// unconvertedWarnings is the warning, if any, that u's transactions were listed in their own
-// currency in a report in currency: none when u counts no transaction, the no-rates line when
-// the store has no rate at all, else the line naming how many predate the first rate.
+// unconvertedWarnings is the warning, if any, that u's transactions were listed in their own currency
+// in a report in currency: the no-rates line, or the line counting those before the first rate.
 func unconvertedWarnings(currency money.Currency, u store.Unconverted) []string {
 	switch {
 	case u.Transactions == 0:

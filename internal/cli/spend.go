@@ -85,7 +85,7 @@ the rows can add up to more than the total.`,
 	return cmd
 }
 
-// spendWarnings is s's warnings, unprefixed and never nil: one per named account left out (W2 or W3),
+// spendWarnings is s's warnings, unprefixed and never nil: one per named account left out,
 // then the unconverted-amounts note, the multi-tag-splits note, and a note that the window held no spending.
 func spendWarnings(s report.Spending) []string {
 	warnings := append(leftOutWarnings(s.Accounts, spendCommand), unconvertedWarnings(s.Currency, s.Unconverted)...)
