@@ -10,6 +10,7 @@
 | SCENARIO-14 (+15, 16) | code-first | A, B1, B2, V | 0/0/6/1 | no (MINORs → STATE.md); 1 copy ruling (not_judged scope, empty-window trigger, no-payee cell) |
 | SCENARIO-17 (+18) | code-first (light) | L, V | 0/0/0/1 | no (NIT → STATE.md) |
 | SCENARIO-19 | code-first (light) | L, V | 0/0/0/2 | no (NITs → STATE.md) |
+| SCENARIO-20 (+21, 22) | code-first | A, B1, B2+B3, V | 0/1/0/0 | yes (no-payee `--account` tally unpinned; test-only) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
