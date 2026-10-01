@@ -23,6 +23,7 @@ type recurringIDName struct {
 // recurringPriceChangeJSON is one entry of a series' "price_changes".
 type recurringPriceChangeJSON struct {
 	Date      string  `json:"date"`
+	Currency  string  `json:"currency"`
 	From      string  `json:"from"`
 	To        string  `json:"to"`
 	ChangePct float64 `json:"change_pct"`
@@ -30,21 +31,24 @@ type recurringPriceChangeJSON struct {
 
 // recurringSeriesJSON is one entry of the document's "series".
 type recurringSeriesJSON struct {
-	Payee        string                     `json:"payee"`
-	PayeeKey     *string                    `json:"payee_key"`
-	Payees       []recurringIDName          `json:"payees"`
-	Currency     string                     `json:"currency"`
-	Cadence      string                     `json:"cadence"`
-	Amount       string                     `json:"amount"`
-	FirstAmount  string                     `json:"first_amount"`
-	PerYear      *string                    `json:"per_year"`
-	FirstCharge  string                     `json:"first_charge"`
-	LastCharge   string                     `json:"last_charge"`
-	ChargeCount  int                        `json:"charge_count"`
-	State        string                     `json:"state"`
-	New          bool                       `json:"new"`
-	Accounts     []recurringIDName          `json:"accounts"`
-	PriceChanges []recurringPriceChangeJSON `json:"price_changes"`
+	Payee             string                     `json:"payee"`
+	PayeeKey          *string                    `json:"payee_key"`
+	Payees            []recurringIDName          `json:"payees"`
+	Currency          string                     `json:"currency"`
+	Cadence           string                     `json:"cadence"`
+	Amount            string                     `json:"amount"`
+	FirstAmount       string                     `json:"first_amount"`
+	PerYear           *string                    `json:"per_year"`
+	NativeCurrency    string                     `json:"native_currency"`
+	NativeAmount      string                     `json:"native_amount"`
+	NativeFirstAmount string                     `json:"native_first_amount"`
+	FirstCharge       string                     `json:"first_charge"`
+	LastCharge        string                     `json:"last_charge"`
+	ChargeCount       int                        `json:"charge_count"`
+	State             string                     `json:"state"`
+	New               bool                       `json:"new"`
+	Accounts          []recurringIDName          `json:"accounts"`
+	PriceChanges      []recurringPriceChangeJSON `json:"price_changes"`
 }
 
 // recurringTotalJSON is one entry of the document's "totals".
@@ -57,6 +61,7 @@ type recurringTotalJSON struct {
 type recurringJSONDoc struct {
 	Since         string                `json:"since"`
 	Until         string                `json:"until"`
+	Currency      string                `json:"currency"`
 	AccountFilter []recurringIDName     `json:"account_filter"`
 	Series        []recurringSeriesJSON `json:"series"`
 	Totals        []recurringTotalJSON  `json:"totals"`

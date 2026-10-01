@@ -624,6 +624,11 @@ type Charge struct {
 	PayeeID, Payee *string
 	Currency       string
 	Amount         int64
+	// AmountCAD and AmountUSD are Amount converted at the charge date's rate, each the sum of its
+	// v_spending rows' converted cells; nil when the date has no rate.
+	AmountCAD, AmountUSD *int64
+	// USDCAD is the rate on the charge's date, or 0 when no rate is on or before it.
+	USDCAD money.Rate
 	// Category is set only when every expense row has the same non-NULL category.
 	Category *ChargeCategory
 	// ExpenseSplits is how many v_spending rows the transaction has.
@@ -637,4 +642,6 @@ type Charges struct {
 	// Transactions is the span of every transaction in the store, or of those of the reported
 	// accounts ChargeParams.AccountIDs names; Rows are never filtered by account.
 	Transactions TransactionRange
+	// FirstRate is the date of the store's first exchange rate; zero when it has none.
+	FirstRate time.Time
 }

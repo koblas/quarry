@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -119,6 +120,8 @@ type RecurringRequest struct {
 	Window   store.Window
 	Now      time.Time
 	Accounts []string
+	// Currency is the currency Amount and PerYear are listed in; Native lists every series in its own.
+	Currency money.Currency
 }
 
 // Series is one detected recurring charge: its latest run of charges at one cadence.
@@ -126,8 +129,12 @@ type Series struct {
 	Payee    string
 	Currency string
 	Cadence  Cadence
-	// Amount is the latest charge, in cents; FirstAmount is the run's first.
+	// Amount is the latest charge, in cents; FirstAmount is the run's first. Both are in Currency.
 	Amount, FirstAmount int64
+	// NativeCurrency, NativeAmount and NativeFirstAmount are the series' own currency and its Amount and
+	// FirstAmount in it; they equal Currency, Amount and FirstAmount when the series is not converted.
+	NativeCurrency                  string
+	NativeAmount, NativeFirstAmount int64
 	// PerYear is Amount times the cadence's charges a year; nil for an ended series.
 	PerYear *int64
 	// First and Last are the dates of the run's first and latest charge.
@@ -170,6 +177,10 @@ type Recurring struct {
 	// Accounts is the accounts the request named, in the order given and without repeats;
 	// empty means every account.
 	Accounts []store.Account
+	// Currency is the currency the request asked the series to be listed in.
+	Currency money.Currency
+	// Unconverted counts the listed series shown in their own currency for want of a rate.
+	Unconverted store.Unconverted
 	// Transactions is store.Charges.Transactions: the span of the store's transactions, or of the named accounts'.
 	Transactions store.TransactionRange
 }
