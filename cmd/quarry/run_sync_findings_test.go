@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ func syncFindingsBundle(t *testing.T, home string, b *v9fixture.Builder) (*duckd
 	return db, stdout
 }
 
-// syncFindingsBundleIn syncs b written under home/dir and returns sync's last stdout line, leaving no store connection open.
+// syncFindingsBundleIn syncs b written under home/dir and returns sync's Findings line, leaving no store connection open.
 func syncFindingsBundleIn(t *testing.T, home, dir string, b *v9fixture.Builder) string {
 	t.Helper()
 	bundle := b.WriteBundle(t, filepath.Join(home, dir))
@@ -37,8 +38,16 @@ func syncFindingsBundleIn(t *testing.T, home, dir string, b *v9fixture.Builder) 
 	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	lines := strings.Split(strings.TrimSuffix(stdout.String(), "\n"), "\n")
-	return lines[len(lines)-1]
+	return findingsLine(t, stdout.String())
+}
+
+// findingsLine is the Findings line of sync's stdout.
+func findingsLine(t *testing.T, stdout string) string {
+	t.Helper()
+	lines := strings.Split(stdout, "\n")
+	at := slices.IndexFunc(lines, func(line string) bool { return strings.HasPrefix(line, "Findings  ") })
+	require.GreaterOrEqual(t, at, 0, stdout)
+	return lines[at]
 }
 
 // uncategorizedPayeeBundle mints the same payee key on every call, so the finding id is the same in every sync.
@@ -77,8 +86,7 @@ func Test_run_sync_records_findings_and_prints_the_findings_line(t *testing.T) {
 
 	db, stdout := syncFindingsBundle(t, home, b)
 
-	lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
-	require.Equal(t, "Findings  3 open; run quarry findings to list them", lines[len(lines)-1])
+	require.Equal(t, "Findings  3 open; run quarry findings to list them", findingsLine(t, stdout))
 	assert.Equal(t, map[string]string{
 		fmt.Sprintf("uncategorized:payee-%d", amazonPK):        "uncategorized",
 		"uncategorized:no-payee":                               "uncategorized",
@@ -293,8 +301,7 @@ func Test_run_sync_from_an_older_snapshot_reopens_and_fixes_findings(t *testing.
 	exitCode := run(context.Background(), []string{"sync", "--from", firstID}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	lines := strings.Split(strings.TrimSuffix(stdout.String(), "\n"), "\n")
-	assert.Equal(t, "Findings  1 open, 1 fixed since the last sync; run quarry findings to list them", lines[len(lines)-1])
+	assert.Equal(t, "Findings  1 open, 1 fixed since the last sync; run quarry findings to list them", findingsLine(t, stdout.String()))
 	assert.Equal(t, firstFoundAt+"|NULL", importRunQuery(t, home,
 		"SELECT id, CAST(first_found_at AS VARCHAR) || '|' || COALESCE(CAST(fixed_at AS VARCHAR), 'NULL') FROM findings")[xID])
 }
@@ -316,8 +323,7 @@ func Test_run_sync_counts_an_ignored_finding_as_ignored_not_open_or_new(t *testi
 	exitCode, stdout, stderr := syncIgnoringTheNewFinding(t, home)
 
 	require.Equal(t, 0, exitCode, stderr)
-	lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
-	assert.Equal(t, "Findings  1 open, 1 ignored; run quarry findings to list them", lines[len(lines)-1])
+	assert.Equal(t, "Findings  1 open, 1 ignored; run quarry findings to list them", findingsLine(t, stdout))
 }
 
 func Test_run_sync_json_counts_an_ignored_finding_as_ignored_not_open_or_new(t *testing.T) {
@@ -347,8 +353,7 @@ func Test_run_sync_counts_a_new_open_finding_beside_an_ignored_one(t *testing.T)
 	exitCode, stdout, stderr := syncNewBundle(t, home, "DocumentsB", second)
 
 	require.Equal(t, 0, exitCode, stderr)
-	lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
-	assert.Equal(t, "Findings  1 open (1 new), 1 ignored; run quarry findings to list them", lines[len(lines)-1])
+	assert.Equal(t, "Findings  1 open (1 new), 1 ignored; run quarry findings to list them", findingsLine(t, stdout))
 }
 
 func Test_run_sync_from_counts_an_ignored_finding_as_ignored_not_open(t *testing.T) {
@@ -364,8 +369,7 @@ func Test_run_sync_from_counts_an_ignored_finding_as_ignored_not_open(t *testing
 	exitCode := run(context.Background(), []string{"sync", "--from", firstID}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	lines := strings.Split(strings.TrimSuffix(stdout.String(), "\n"), "\n")
-	assert.Equal(t, "Findings  none open, 1 ignored", lines[len(lines)-1])
+	assert.Equal(t, "Findings  none open, 1 ignored", findingsLine(t, stdout.String()))
 }
 
 func Test_run_sync_says_nothing_about_an_ignored_id_that_is_not_a_finding(t *testing.T) {

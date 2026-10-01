@@ -41,6 +41,16 @@ type storeDocument struct {
 	Transfers   transfersDocument   `json:"transfers"`
 	Findings    *findingsDocument   `json:"findings"`
 	NotImported notImportedDocument `json:"not_imported"`
+	Rates       *ratesDocument      `json:"rates"`
+}
+
+// ratesDocument is the --json "store.rates" object: the stored span (null when none), how many rates this
+// sync fetched, and the reason a fetch fell short (null when it did not).
+type ratesDocument struct {
+	First      *string `json:"first"`
+	Last       *string `json:"last"`
+	Added      int     `json:"added"`
+	FetchError *string `json:"fetch_error"`
 }
 
 // findingsDocument is the --json "store.findings" object: the open count and
@@ -165,7 +175,7 @@ func marshalDocument(doc any) ([]byte, error) {
 }
 
 // newStoreDocument converts result into the --json store document, nil when the
-// import was never attempted (a schema mismatch); findings are null unless built.
+// import was never attempted (a schema mismatch); findings and rates are null unless built.
 func newStoreDocument(result *store.Result) *storeDocument {
 	if result == nil {
 		return nil
@@ -179,7 +189,25 @@ func newStoreDocument(result *store.Result) *storeDocument {
 		Transfers:   newTransfersDocument(result.Validation.Transfers),
 		Findings:    newFindingsDocument(result),
 		NotImported: notImportedDocument{InvestmentTransactions: result.NotImported.InvestmentTransactions},
+		Rates:       newRatesDocument(result),
 	}
+}
+
+// newRatesDocument converts result's rates summary into the --json shape, nil when no build was reached.
+func newRatesDocument(result *store.Result) *ratesDocument {
+	if !result.Built {
+		return nil
+	}
+	rates := result.Rates
+	doc := ratesDocument{Added: rates.Added}
+	if !rates.First.IsZero() {
+		first, last := rates.First.Format(jsonDateLayout), rates.Last.Format(jsonDateLayout)
+		doc.First, doc.Last = &first, &last
+	}
+	if rates.FetchError != "" {
+		doc.FetchError = &rates.FetchError
+	}
+	return &doc
 }
 
 // newFindingsDocument converts result's finding counts into the --json shape, nil when no build was reached.

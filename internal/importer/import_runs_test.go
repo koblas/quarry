@@ -128,3 +128,18 @@ func Test_import_returns_whether_the_stores_findings_were_carried(t *testing.T) 
 	require.NoError(t, err)
 	assert.True(t, result.FindingsCarried)
 }
+
+func Test_import_passes_the_rates_summary_through_to_the_result(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	bundle := b.WriteBundle(t, t.TempDir())
+	rates := store.RatesSummary{
+		First: time.Date(2005, 3, 1, 0, 0, 0, 0, time.UTC), Last: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), Added: 7, FetchError: "unreachable",
+	}
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{rates: rates})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.Equal(t, rates, result.Rates)
+}

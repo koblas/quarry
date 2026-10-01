@@ -249,8 +249,8 @@ func Test_renderStore_prints_the_transfers_count_line_without_one_sided_rows(t *
 
 	got := renderStore(result, "/Users/dave")
 
-	assert.True(t, strings.HasSuffix(got, "Transfers 2 paired, 1 one-sided\n"+
-		"Findings  2 open; run quarry findings to list them\n"), got)
+	assert.Contains(t, got, "Transfers 2 paired, 1 one-sided\n"+
+		"Findings  2 open; run quarry findings to list them\n")
 	assert.NotContains(t, got, "?")
 }
 
@@ -269,7 +269,7 @@ func Test_renderStore_prints_new_findings_only_when_the_history_was_carried(t *t
 		t.Run(c.name, func(t *testing.T) {
 			got := renderStore(store.Result{Findings: counts, FindingsCarried: c.carried}, "/Users/dave")
 
-			assert.True(t, strings.HasSuffix(got, c.want), got)
+			assert.Contains(t, got, c.want)
 		})
 	}
 }
@@ -293,7 +293,48 @@ func Test_renderStore_renders_the_store_rows_balances_splits_and_transfers_lines
 		"Balances  1 account matches Quicken's last reconciled balance\n"+
 		"Splits    the 1 transaction equals the sum of its splits\n"+
 		"Transfers 2 paired\n"+
-		"Findings  none open\n", got)
+		"Findings  none open\n"+
+		"Rates     none (the Bank of Canada has no rates for your transaction dates)\n", got)
+}
+
+func Test_renderStore_ends_with_the_rates_line(t *testing.T) {
+	result := store.Result{
+		Counts: store.Counts{Transactions: 1},
+		Rates:  store.RatesSummary{First: time.Date(2005, 3, 1, 0, 0, 0, 0, time.UTC), Last: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), Added: 12},
+	}
+
+	got := renderStore(result, "/Users/dave")
+
+	assert.True(t, strings.HasSuffix(got, "Findings  none open\nRates     USD/CAD 2005-03-01 to 2026-03-01 (12 new)\n"), got)
+}
+
+func Test_ratesPhrase(t *testing.T) {
+	first, last := time.Date(2005, 3, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name         string
+		rates        store.RatesSummary
+		transactions int
+		want         string
+	}{
+		{name: "rates fetched", rates: store.RatesSummary{First: first, Last: last, Added: 12}, transactions: 5, want: "USD/CAD 2005-03-01 to 2026-03-01 (12 new)"},
+		{name: "one rate fetched", rates: store.RatesSummary{First: first, Last: last, Added: 1}, transactions: 5, want: "USD/CAD 2005-03-01 to 2026-03-01 (1 new)"},
+		{name: "new rates thousands-grouped", rates: store.RatesSummary{First: first, Last: last, Added: 6012}, transactions: 5, want: "USD/CAD 2005-03-01 to 2026-03-01 (6,012 new)"},
+		{name: "rates stored, none fetched", rates: store.RatesSummary{First: first, Last: last}, transactions: 5, want: "USD/CAD 2005-03-01 to 2026-03-01 (up to date)"},
+		{
+			name: "rates stored, the fetch failed", rates: store.RatesSummary{First: first, Last: last, FetchError: "unreachable"}, transactions: 5,
+			want: "USD/CAD 2005-03-01 to 2026-03-01 (not refreshed; see warning)",
+		},
+		{name: "no rates, no transactions", transactions: 0, want: "none (no transactions to convert)"},
+		{name: "no rates, transactions exist", transactions: 1, want: "none (the Bank of Canada has no rates for your transaction dates)"},
+		{name: "no rates, the fetch failed", rates: store.RatesSummary{FetchError: "unreachable"}, transactions: 1, want: "none (not fetched; see warning)"},
+		{name: "no rates, the fetch failed, no transactions", rates: store.RatesSummary{FetchError: "unreachable"}, want: "none (not fetched; see warning)"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, ratesPhrase(c.rates, c.transactions))
+		})
+	}
 }
 
 func Test_findingsPhrase(t *testing.T) {

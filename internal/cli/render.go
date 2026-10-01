@@ -85,7 +85,7 @@ func writeDiffRow(b *strings.Builder, sign, label, value string) {
 }
 
 // renderStore renders result's Store, Rows, Balances, Splits, Transfers and
-// Findings lines, appended after renderSuccess's block once a build was reached.
+// Findings and Rates lines, appended after renderSuccess's block once a build was reached.
 func renderStore(result store.Result, home string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", homepath.Abbreviate(home, result.Path))
@@ -95,7 +95,37 @@ func renderStore(result store.Result, home string) string {
 	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits.Checked))
 	writeTransfersLine(&b, result.Validation.Transfers)
 	fmt.Fprintf(&b, "%-10s%s\n", "Findings", findingsPhrase(result.Findings, result.FindingsCarried))
+	fmt.Fprintf(&b, "%-10s%s\n", "Rates", ratesPhrase(result.Rates, result.Counts.Transactions))
 	return b.String()
+}
+
+// ratesPhrase renders the rates a build stored: the span with "(N new)" or "(up to date)", or why there are none.
+// transactions tells an empty store apart from one the Bank of Canada has no rates for.
+func ratesPhrase(rates store.RatesSummary, transactions int) string {
+	if rates.First.IsZero() {
+		return noRatesPhrase(rates.FetchError != "", transactions)
+	}
+	span := "USD/CAD " + rates.First.Format(jsonDateLayout) + " to " + rates.Last.Format(jsonDateLayout)
+	switch {
+	case rates.FetchError != "":
+		return span + " (not refreshed; see warning)"
+	case rates.Added > 0:
+		return span + " (" + humanize.Thousands(rates.Added) + " new)"
+	default:
+		return span + " (up to date)"
+	}
+}
+
+// noRatesPhrase renders the Rates line of a store with no rates.
+func noRatesPhrase(fetchFailed bool, transactions int) string {
+	switch {
+	case fetchFailed:
+		return "none (not fetched; see warning)"
+	case transactions == 0:
+		return "none (no transactions to convert)"
+	default:
+		return "none (the Bank of Canada has no rates for your transaction dates)"
+	}
 }
 
 // findingsPhrase renders the open count, with "(M new)" once history was carried and

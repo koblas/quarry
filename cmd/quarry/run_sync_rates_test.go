@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
@@ -87,4 +88,65 @@ func Test_run_sync_back_fills_rates_from_the_earliest_transaction(t *testing.T) 
 		"2017-01-03,1.343500,FXUSDCAD\n"+
 		"2017-01-04,1.331500,FXUSDCAD\n",
 		sqlOut.String())
+}
+
+// syncWithValet syncs a one-account bundle, with a transaction on each date in days, against valet and returns exit code, stdout and stderr.
+func syncWithValet(t *testing.T, valet fakeValet, days []time.Time, extraArgs ...string) (int, string, string) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	b := v9fixture.NewBuilder()
+	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	for _, day := range days {
+		txn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-5.00", PostedDate: &day})
+		b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "-5.00"})
+	}
+	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	var stdout, stderr bytes.Buffer
+	env := defaultEnv(&stdout, &stderr)
+	env.NewServer = newServerFactory(duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(&http.Client{Transport: valet}))))
+
+	exitCode := runWith(context.Background(), append([]string{"sync", "--quicken", bundle.Dir}, extraArgs...), env)
+
+	return exitCode, stdout.String(), stderr.String()
+}
+
+func Test_run_sync_json_reports_the_rates_it_fetched(t *testing.T) {
+	valet := fakeValet{"FXUSDCAD": {"2017-01-03": "1.3435", "2017-01-04": "1.3315"}}
+
+	exitCode, stdout, stderr := syncWithValet(t, valet, []time.Time{time.Date(2017, 1, 3, 0, 0, 0, 0, time.UTC)}, "--json")
+
+	require.Equal(t, 0, exitCode, stderr)
+	var doc struct {
+		Store struct {
+			Rates struct {
+				First      *string `json:"first"`
+				Last       *string `json:"last"`
+				Added      int     `json:"added"`
+				FetchError *string `json:"fetch_error"`
+			} `json:"rates"`
+		} `json:"store"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &doc))
+	assert.Equal(t, "2017-01-03", *doc.Store.Rates.First)
+	assert.Equal(t, "2017-01-04", *doc.Store.Rates.Last)
+	assert.Equal(t, 2, doc.Store.Rates.Added)
+	assert.Nil(t, doc.Store.Rates.FetchError)
+}
+
+func Test_run_sync_says_the_bank_has_no_rates_when_it_answers_empty_for_the_transaction_dates(t *testing.T) {
+	valet := fakeValet{"FXUSDCAD": {}, "IEXE0101": {}}
+
+	exitCode, stdout, stderr := syncWithValet(t, valet, []time.Time{time.Date(2017, 1, 3, 0, 0, 0, 0, time.UTC)})
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Empty(t, stderr)
+	assert.Contains(t, strings.Split(stdout, "\n"), "Rates     none (the Bank of Canada has no rates for your transaction dates)")
+}
+
+func Test_run_sync_says_there_are_no_transactions_to_convert_when_the_file_has_none(t *testing.T) {
+	exitCode, stdout, stderr := syncWithValet(t, fakeValet{}, nil)
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Contains(t, strings.Split(stdout, "\n"), "Rates     none (no transactions to convert)")
 }

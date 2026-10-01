@@ -53,6 +53,12 @@ sync then looks for things to clean up in Quicken, such as uncategorized
 splits, one-sided transfers and possible duplicates; run quarry findings to
 list them. Findings never fail a sync.
 
+sync then fetches the Bank of Canada's daily USD/CAD exchange rates for any
+dates the store does not have, back to your earliest transaction. This is
+quarry's only use of the network, and the request carries nothing but the
+dates. If the fetch fails, sync still succeeds, warns, and reports convert
+with the rates the store already has.
+
 After it rebuilds the store, sync deletes the oldest snapshots beyond the
 newest 12 (snapshots.keep in ~/Library/Application Support/quarry/config.toml),
 never the one the store was built from; a failed sync deletes nothing. Run

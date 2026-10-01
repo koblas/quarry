@@ -316,7 +316,8 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, e
 		return store.Replaced{}, buildError(err)
 	}
 
-	if err := s.finishBuild(ctx, db, rows, builtAt); err != nil {
+	ratesSummary, err := s.finishBuild(ctx, db, rows, builtAt)
+	if err != nil {
 		_ = db.Close()
 		removePartial(partialPath)
 		return store.Replaced{}, buildError(err)
@@ -348,6 +349,7 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, e
 	return store.Replaced{
 		Path: finalPath, HistoryFault: historyFault, Findings: finding.Classify(states, nil).Counts, FindingStates: states,
 		FindingsCarried: carried.findingsCarried, FindingsFault: carried.findingsFault, StoreUnreadable: carried.unreadable,
+		Rates: ratesSummary,
 	}, nil
 }
 

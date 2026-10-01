@@ -36,7 +36,7 @@ var requiredRunColumns = []string{
 // optionalRunColumns are the columns an older store format lacks; history carries NULL for each it does not have.
 var optionalRunColumns = []string{
 	"snapshot_taken_at", "source_path", "balances_never_reconciled", "investment_accounts", "transfers_paired", "transfers_cross_currency",
-	"rates_first", "rates_last", "rates_fetch_error",
+	"rates_checked_from", "rates_last", "rates_fetch_error",
 }
 
 // runColumnsQuery lists the columns of the store's import_runs table, none when it has no such table.
@@ -228,7 +228,7 @@ type carriedRun struct {
 	takenAt                                                      sql.NullTime
 	source                                                       sql.NullString
 	neverReconciled, investmentAccounts, paired, crossCurrencies sql.NullInt64
-	ratesFirst, ratesLast                                        sql.NullTime
+	ratesCheckedFrom, ratesLast                                  sql.NullTime
 	ratesFetchError                                              sql.NullString
 }
 
@@ -239,7 +239,7 @@ func (r *carriedRun) targets() []any {
 		out = append(out, &r.counts[i])
 	}
 	return append(out, &r.takenAt, &r.source, &r.neverReconciled, &r.investmentAccounts, &r.paired, &r.crossCurrencies,
-		&r.ratesFirst, &r.ratesLast, &r.ratesFetchError)
+		&r.ratesCheckedFrom, &r.ratesLast, &r.ratesFetchError)
 }
 
 // values are the row's cells as importRunRows appends them.
@@ -251,7 +251,7 @@ func (r *carriedRun) values() []any {
 	return append(out, nullValue(r.takenAt.Valid, r.takenAt.Time), nullValue(r.source.Valid, r.source.String),
 		nullValue(r.neverReconciled.Valid, r.neverReconciled.Int64), nullValue(r.investmentAccounts.Valid, r.investmentAccounts.Int64),
 		nullValue(r.paired.Valid, r.paired.Int64), nullValue(r.crossCurrencies.Valid, r.crossCurrencies.Int64),
-		nullValue(r.ratesFirst.Valid, r.ratesFirst.Time), nullValue(r.ratesLast.Valid, r.ratesLast.Time),
+		nullValue(r.ratesCheckedFrom.Valid, r.ratesCheckedFrom.Time), nullValue(r.ratesLast.Valid, r.ratesLast.Time),
 		nullValue(r.ratesFetchError.Valid, r.ratesFetchError.String))
 }
 

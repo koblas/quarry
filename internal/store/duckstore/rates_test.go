@@ -268,6 +268,158 @@ func Test_replace_keeps_the_previous_store_when_fetched_rates_break_a_constraint
 	}
 }
 
+// latestRunRatesText reads the rates columns of the newest import run as "<checked_from>, <last>", NULL spelled out.
+const latestRunRatesText = `SELECT coalesce(CAST(rates_checked_from AS VARCHAR), 'NULL') || ', ' || coalesce(CAST(rates_last AS VARCHAR), 'NULL')
+FROM import_runs ORDER BY id DESC LIMIT 1`
+
+func Test_replace_records_the_asked_floor_and_the_last_rate_on_the_new_run(t *testing.T) {
+	t.Parallel()
+	src := &fakeRates{refresh: store.RatesRefresh{Rates: []store.Rate{
+		ratesOn(13, 1_250_000, "IEXE"), ratesOn(16, 1_310_000, "FXUSDCAD"),
+	}, Added: 2}}
+	st := duckstore.New(t.TempDir(), duckstore.WithRates(src))
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	db := openReadOnly(t, replaced.Path)
+	assertScalar(t, db, latestRunRatesText, "2026-03-15, 2026-03-16")
+}
+
+func Test_replace_records_the_rates_columns_by_what_the_fetch_answered(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		refresh store.RatesRefresh
+		noTxns  bool
+		want    string
+	}{
+		{name: "an empty answer still advances the floor", refresh: store.RatesRefresh{}, want: "2026-03-15, NULL"},
+		{
+			name:    "a failed fetch leaves the floor null even with a partial result",
+			refresh: store.RatesRefresh{Rates: []store.Rate{ratesOn(13, 1_250_000, "IEXE")}, Added: 1, FetchError: "unreachable", Partial: true},
+			want:    "NULL, 2026-03-13",
+		},
+		{name: "nothing was asked when there are no transactions", refresh: store.RatesRefresh{}, noTxns: true, want: "NULL, NULL"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			rows := minimalRows()
+			if c.noTxns {
+				rows.Transactions, rows.Splits, rows.SplitTags, rows.Transfers = nil, nil, nil, nil
+			}
+			st := duckstore.New(t.TempDir(), duckstore.WithRates(&fakeRates{refresh: c.refresh}))
+
+			replaced, err := st.Replace(t.Context(), rows)
+
+			require.NoError(t, err)
+			assertScalar(t, openReadOnly(t, replaced.Path), latestRunRatesText, c.want)
+		})
+	}
+}
+
+func Test_replace_leaves_the_rates_columns_of_earlier_runs_alone(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	first := &fakeRates{refresh: store.RatesRefresh{Rates: []store.Rate{ratesOn(13, 1_250_000, "IEXE")}, Added: 1}}
+	_, err := duckstore.New(dir, duckstore.WithRates(first)).Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	second := &fakeRates{refresh: store.RatesRefresh{Rates: []store.Rate{ratesOn(16, 1_310_000, "FXUSDCAD")}, Added: 1}}
+
+	replaced, err := duckstore.New(dir, duckstore.WithRates(second)).Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assertScalar(t, openReadOnly(t, replaced.Path), `SELECT string_agg(CAST(id AS VARCHAR) || ' ' || coalesce(CAST(rates_last AS VARCHAR), 'NULL'), ', ' ORDER BY id) FROM import_runs`,
+		"1 2026-03-13, 2 2026-03-16")
+}
+
+func Test_replace_reports_the_stored_rate_span_and_what_this_fetch_added(t *testing.T) {
+	t.Parallel()
+	src := &fakeRates{refresh: store.RatesRefresh{Rates: []store.Rate{
+		ratesOn(16, 1_310_000, "FXUSDCAD"), ratesOn(13, 1_250_000, "IEXE"), ratesOn(14, 1_260_000, "IEXE"),
+	}, Added: 3, FetchError: "unreachable"}}
+	st := duckstore.New(t.TempDir(), duckstore.WithRates(src))
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Equal(t, store.RatesSummary{
+		First: time.Date(2026, 3, 13, 0, 0, 0, 0, time.UTC), Last: time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC),
+		Added: 3, FetchError: "unreachable",
+	}, replaced.Rates)
+}
+
+func Test_replace_reports_no_rate_span_when_none_are_stored(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir())
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Equal(t, store.RatesSummary{}, replaced.Rates)
+}
+
+func Test_replace_keeps_the_previous_store_when_the_run_cannot_record_its_rates(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	replaced, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	before, err := os.ReadFile(replaced.Path)
+	require.NoError(t, err)
+	fault := &faultDB{execFaultOn: duckstore.RecordRatesQuery, execFault: &duckdbdriver.Error{
+		Type: duckdbdriver.ErrorTypeIO, Msg: `IO Error: Could not write file "quarry.duckdb.partial": No space left on device`,
+	}}
+	rows := minimalRows()
+	rows.Transactions[0].Amount = 999
+
+	_, err = newFaultStore(dir, fault, duckstore.WithRates(&fakeRates{})).Replace(t.Context(), rows)
+
+	require.ErrorIs(t, err, store.ErrDiskFull)
+	require.ErrorContains(t, err, "record exchange rates")
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"quarry.duckdb"}, direntNames(entries))
+	after, err := os.ReadFile(replaced.Path)
+	require.NoError(t, err)
+	assert.Equal(t, before, after)
+}
+
+func Test_replace_keeps_the_previous_store_when_the_stored_rates_cannot_be_read(t *testing.T) {
+	t.Parallel()
+	readFault := ioFault(`query rows "SELECT"`)
+	cases := []struct {
+		name  string
+		fault *faultDB
+	}{
+		{name: "the query fails", fault: &faultDB{queryFaultOn: duckstore.StoredRatesQuery, queryFault: readFault}},
+		{name: "the row cannot be scanned", fault: &faultDB{queryFaultOn: duckstore.StoredRatesQuery, scanFault: readFault}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			replaced, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+			require.NoError(t, err)
+			before, err := os.ReadFile(replaced.Path)
+			require.NoError(t, err)
+
+			_, err = newFaultStore(dir, c.fault, duckstore.WithRates(&fakeRates{})).Replace(t.Context(), minimalRows())
+
+			require.ErrorIs(t, err, readFault)
+			require.ErrorContains(t, err, "read stored exchange rates")
+			entries, err := os.ReadDir(dir)
+			require.NoError(t, err)
+			assert.Equal(t, []string{"quarry.duckdb"}, direntNames(entries))
+			after, err := os.ReadFile(replaced.Path)
+			require.NoError(t, err)
+			assert.Equal(t, before, after)
+		})
+	}
+}
+
 func localDate(now time.Time) time.Time {
 	y, m, d := now.Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)

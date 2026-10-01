@@ -97,7 +97,8 @@ func Test_run_reports_the_store_result_alongside_the_manifest_as_json(t *testing
 			]
 		},
 		"findings": {"open": 4, "ignored": 0, "fixed": 0, "new": 4, "newly_fixed": 0},
-		"not_imported": {"investment_transactions": 0}
+		"not_imported": {"investment_transactions": 0},
+		"rates": {"first": "2026-01-02", "last": "2026-01-02", "added": 1, "fetch_error": null}
 	}`, storePathUnder(home), chequingPK, savingsPK, missingLeg, namedLeg, savingsPK, noMatchLeg)
 	assert.JSONEq(t, wantStore, string(parsed["store"]))
 }

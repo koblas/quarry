@@ -55,7 +55,13 @@ func Test_run_prints_the_sync_help(t *testing.T) {
 	assert.Contains(t, syncStdout.String(), "sync then looks for things to clean up in Quicken, such as uncategorized\n"+
 		"splits, one-sided transfers and possible duplicates; run quarry findings to\n"+
 		"list them. Findings never fail a sync.")
-	assert.Contains(t, syncStdout.String(), "After it rebuilds the store, sync deletes the oldest snapshots beyond the\n"+
+	assert.Contains(t, syncStdout.String(), "list them. Findings never fail a sync.\n\n"+
+		"sync then fetches the Bank of Canada's daily USD/CAD exchange rates for any\n"+
+		"dates the store does not have, back to your earliest transaction. This is\n"+
+		"quarry's only use of the network, and the request carries nothing but the\n"+
+		"dates. If the fetch fails, sync still succeeds, warns, and reports convert\n"+
+		"with the rates the store already has.\n\n"+
+		"After it rebuilds the store, sync deletes the oldest snapshots beyond the\n"+
 		"newest 12 (snapshots.keep in ~/Library/Application Support/quarry/config.toml),\n"+
 		"never the one the store was built from; a failed sync deletes nothing. Run\n"+
 		"quarry snapshots to list them.")

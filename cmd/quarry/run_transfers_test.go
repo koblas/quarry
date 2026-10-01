@@ -84,6 +84,7 @@ func Test_run_pairs_transfers_between_the_users_accounts(t *testing.T) {
 		[2]string{"Splits", "all 4 transactions equal the sum of their splits"},
 		[2]string{"Transfers", "2 paired"},
 		[2]string{"Findings", "none open"},
+		[2]string{"Rates", fakeRatesText},
 	), stdout.String())
 
 	db, err := duckdb.OpenReadOnly(t.Context(), storePath)
@@ -136,6 +137,7 @@ func Test_run_reports_no_transfers_for_a_file_with_no_transactions(t *testing.T)
 		[2]string{"Splits", "no transactions to check"},
 		[2]string{"Transfers", "none"},
 		[2]string{"Findings", "none open"},
+		[2]string{"Rates", fakeRatesText},
 	), stdout.String())
 }
 
@@ -176,6 +178,7 @@ func Test_run_counts_investment_transactions_without_importing_them(t *testing.T
 		[2]string{"Splits", "all 2 transactions equal the sum of their splits"},
 		[2]string{"Transfers", "1 paired"},
 		[2]string{"Findings", "none open"},
+		[2]string{"Rates", fakeRatesText},
 	), stdout.String())
 
 	db, err := duckdb.OpenReadOnly(t.Context(), storePath)
@@ -224,6 +227,7 @@ func Test_run_lists_one_sided_transfers_only_as_findings_on_a_successful_sync(t 
 		[2]string{"Splits", "all 5 transactions equal the sum of their splits"},
 		[2]string{"Transfers", "1 paired, 3 one-sided"},
 		[2]string{"Findings", "3 open; run quarry findings to list them"},
+		[2]string{"Rates", fakeRatesText},
 	), stdout.String())
 	assert.Empty(t, stderr.String())
 

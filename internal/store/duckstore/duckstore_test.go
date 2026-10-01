@@ -2,6 +2,7 @@ package duckstore_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"math"
@@ -488,6 +489,8 @@ type faultDB struct {
 	queryFaultOn     string // the build query that fails with queryFault, or whose first row's scan fails with scanFault
 	queryFault       error
 	scanFault        error
+	execFaultOn      string // the statement Exec fails with execFault
+	execFault        error
 	appended         []string // every table AppendRows was asked to load, in order
 	checkpoints      int      // CheckpointClose calls
 }
@@ -502,6 +505,14 @@ func (f *faultDB) QueryRows(ctx context.Context, query string, args []any, row f
 		return row(func(...any) error { return f.scanFault })
 	}
 	return f.DB.QueryRows(ctx, query, args, row)
+}
+
+// Exec fails with execFault for the statement execFaultOn, else runs it for real.
+func (f *faultDB) Exec(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	if f.execFault != nil && query == f.execFaultOn {
+		return nil, f.execFault
+	}
+	return f.DB.Exec(ctx, query, args...)
 }
 
 // AppendRows fails with appendFault for appendFaultTable, else appends for real.

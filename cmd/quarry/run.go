@@ -14,6 +14,7 @@ import (
 
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/config"
+	"github.com/koblas/quarry/internal/fx"
 	"github.com/koblas/quarry/internal/importer"
 	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/report"
@@ -27,7 +28,13 @@ var (
 	_ importer.Store      = (*duckstore.Store)(nil)
 	_ snapshot.StoreProbe = (*duckstore.Store)(nil)
 	_ report.Store        = (*duckstore.Store)(nil)
+
+	_ duckstore.RatesSource = (*fx.Server)(nil)
 )
+
+// newRatesSource builds the exchange-rate source every sync's store fetches from; it is the one place quarry
+// reaches the network, and tests replace it so none does.
+var newRatesSource = func() duckstore.RatesSource { return fx.NewServer() }
 
 // signalContext wraps parent with SIGINT/SIGTERM handling: ctx.Done() closes
 // on either signal, and a goroutine calls stop once it does, so a second
@@ -59,7 +66,9 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 
 		storeDir := storeDirUnder(home)
 		info, _ := debug.ReadBuildInfo()
-		st := duckstore.New(storeDir, append([]duckstore.Option{duckstore.WithQuarryVersion(buildVersion(info))}, storeOpts...)...)
+		st := duckstore.New(storeDir, append([]duckstore.Option{
+			duckstore.WithQuarryVersion(buildVersion(info)), duckstore.WithRates(newRatesSource()),
+		}, storeOpts...)...)
 		srv := snapshot.NewServer(append([]snapshot.Option{
 			snapshot.WithSnapshotDir(snapshotsDirUnder(home)),
 			snapshot.WithReference(v9.ReferenceLabel, ref),

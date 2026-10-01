@@ -102,7 +102,7 @@ CREATE TABLE import_runs (
 	investment_accounts BIGINT,
 	transfers_paired BIGINT,
 	transfers_cross_currency BIGINT,
-	rates_first DATE,
+	rates_checked_from DATE,
 	rates_last DATE,
 	rates_fetch_error VARCHAR
 );

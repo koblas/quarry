@@ -80,7 +80,7 @@ func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *tes
 	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
 
 	want := fmt.Sprintf(
-		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 5 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
+		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 5 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
 		"Snapshot", abbreviated(t, snapshotPath, home),
 		"Manifest", abbreviated(t, manifestPath, home),
 		"Source", abbreviated(t, bundle.Dir, home),
@@ -93,6 +93,7 @@ func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *tes
 		"Splits", "all 4 transactions equal the sum of their splits",
 		"Transfers", "none",
 		"Findings", "1 open; run quarry findings to list them",
+		"Rates", fakeRatesText,
 	)
 	require.Equal(t, want, stdout.String())
 
