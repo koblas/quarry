@@ -45,3 +45,10 @@ Scenarios complete: SCENARIO-07, SCENARIO-01, SCENARIO-04 (delivers 02), SCENARI
 - Partial warning does not say "later dates convert at the <last> rate" as the nothing-new warning does (product-vision flag, declined for scope in 03); unowned - dies unless re-opened (SCENARIO-03)
 - Unverified network facts (the probe fetch was declined) - 20 confirms against the real service: the URL `https://www.bankofcanada.ca/valet/observations/<series>/json?start_date=&end_date=`; the JSON shape `observations[{d, <SERIES>:{v:"1.3456"}}]` and how a missing value is encoded; that IEXE0101 exists, its start date, and that its unit is CAD per USD; that FXUSDCAD starts around 2017-01-03 and the series overlap; whether an empty range is a 200 with no observations or a 404 (SCENARIO-01)
 - DuckDB `current_date` (view cutoff) is assumed to use the local TimeZone like Need.Last; the Go side is pinned, the SQL side is not - close in 12 with a zone-pinned view test, else unowned - dies unless re-opened (SCENARIO-07)
+- SCENARIO-06 checkpoint MINORs (no fix pass; cheap test or comment folds for the gate fix pass):
+  - `internal/store/duckstore/status.go:26`: a v5 store with no `fx_rates` table makes Status refuse as unreadable. This is intended but unpinned; add a drop-CASCADE test.
+  - `internal/cli/json_status_internal_test.go:80`: no `rates` null-form row in `Test_renderStatusJSON`.
+  - `internal/cli/status_rates_test.go:130`: the edge rows are text-only. Add a JSON assert that a last rate after today keeps `last`.
+  - `internal/store/duckstore/status.go:41-44`: the `Status` doc is over budget. Delete the "Rates takes its first and last…" sentence.
+  - `internal/cli/render_status_internal_test.go:197`: the row-form `want`s lack a leading `\n`.
+  - cmd: no end-to-end test runs sync with a failed fetch and then status showing the clause (optional).

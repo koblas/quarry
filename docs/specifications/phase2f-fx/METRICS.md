@@ -7,6 +7,7 @@
 | SCENARIO-01 | test-first (Replace import_runs rates UPDATE) | A, B1, B2, V | 0/2/3/1 | yes (later-span failure unreached; Valet scheme/header unpinned; test-only + comments); 1 copy ruling (rates_checked_from, store.rates placement, nothing-fetched lines) |
 | SCENARIO-04 (+02) | test-first (carry + floor in Replace) | A, B1, B2, V | 0/2/4/0 | yes (rates-before-prune order unpinned; rates surviving unreadable import_runs unpinned; test-only + comments); 1 copy ruling (carry reasons, combined line) |
 | SCENARIO-03 (+05) | test-first (failed fetch still swaps) | A, B1, B2, V | 0/1/4/0 | yes (per-request timeout scope unpinned; test-only + docs); 1 copy ruling (warning order, partial Rates line, stop rule) |
+| SCENARIO-06 | code-first (light) | L, V | 0/0/6/0 | no (MINORs → STATE.md) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
