@@ -234,6 +234,7 @@ type Result struct {
 	FindingsCarried bool
 	FindingsFault   *OpenError
 	StoreUnreadable bool
+	Rates           RatesSummary
 }
 
 // Replaced is what Store.Replace reports: the path it wrote, the fault that
@@ -249,6 +250,16 @@ type Replaced struct {
 	FindingsCarried bool
 	FindingsFault   *OpenError
 	StoreUnreadable bool
+	Rates           RatesSummary
+}
+
+// RatesSummary is the exchange rates a build stored: the first and last
+// dates in fx_rates (zero when none), how many were fetched this build, and
+// the reason a fetch fell short, if it did.
+type RatesSummary struct {
+	First, Last time.Time
+	Added       int
+	FetchError  string
 }
 
 // Rate is one day's USD/CAD exchange rate and the series it came from.

@@ -15,8 +15,8 @@ Size: OWNS A RUN — 5 batches, 1 new feature package (`internal/fx`) + duckstor
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_sync_rates_test.go` (new) `Test_run_sync_back_fills_rates_from_the_earliest_transaction` — v9fixture bundle with transactions back to 2005; env `NewServer = newServerFactory(duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(<fake Valet RoundTripper>))))`; asserts fx_rates rows+series via `quarry sql` and the `Rates     USD/CAD <first> to <last> (<n> new)` line, exit 0
-- [ ] Step 2: stubs — `internal/fx/doc.go`, `fx.go` (`Server`, `Option`, `NewServer`, `WithHTTPClient`, `WithSource`, `Refresh` returning empty); `store.go:224-252` `RatesSummary{First, Last time.Time; Added int; FetchError string}` as `Result.Rates` and `Replaced.Rates`. Red at the fx_rates/Rates-line assertion
+- [x] Step 1: `cmd/quarry/run_sync_rates_test.go` (new) `Test_run_sync_back_fills_rates_from_the_earliest_transaction` — v9fixture bundle with transactions back to 2005; env `NewServer = newServerFactory(duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(<fake Valet RoundTripper>))))`; asserts fx_rates rows+series via `quarry sql` and the `Rates     USD/CAD <first> to <last> (<n> new)` line, exit 0
+- [x] Step 2: stubs — `internal/fx/doc.go`, `fx.go` (`Server`, `Option`, `NewServer`, `WithHTTPClient`, `WithSource`, `Refresh` returning empty); `store.go:224-252` `RatesSummary{First, Last time.Time; Added int; FetchError string}` as `Result.Rates` and `Replaced.Rates`. Red at the fx_rates/Rates-line assertion
 
 ### Build
 - [ ] Step 3: `internal/fx/source.go` `Source` port + `valet.go` adapter + `testdata/valet_fxusdcad.json`, `testdata/valet_iexe0101.json` (documented shape, see Traps) + `valet_test.go` over a fake RoundTripper. R7 pin: GET, path carries the series, query is exactly `start_date`+`end_date`, no body. Parse arms: observation without the series key skipped; rate `1.3456` → 1345600. Bounds: 6 decimals in / 7 out; 9999.999999 in / 10000 out (DECIMAL(10,6)); `0`, negative, non-numeric refused — a refusal fails the whole answer (FetchError via step 5), never drops the observation. Faults: `Do` error, non-200 status, body read error, JSON decode error, bad `d` date, bad rate
@@ -58,3 +58,22 @@ Size: OWNS A RUN — 5 batches, 1 new feature package (`internal/fx`) + duckstor
   - that IEXE0101 exists, its start date, and its unit (CAD per USD, not the inverse);
   - that FXUSDCAD starts around 2017-01-03 and the series overlap;
   - whether an empty range is a 200 with no observations, or a 404.
+
+## Phase report
+
+Run A (steps 1-2) done. Acceptance is RED at its assertions, for the expected reason (stub Refresh returns nothing).
+
+Files:
+- `cmd/quarry/run_sync_rates_test.go` (new): `Test_run_sync_back_fills_rates_from_the_earliest_transaction`, plus helpers `fakeValet` (a `http.RoundTripper` that answers `/valet/observations/<series>/json?start_date=&end_date=` filtered to the range; `{"observations":[{"d":..,"<SERIES>":{"v":".."}}]}`; unknown series 404) and `valetResponse`. Reused by step 7's `--json` test.
+- `internal/fx/{doc,source,fx}.go` (new, stubs): `Server`, `Option`, `NewServer`, `WithHTTPClient(*http.Client)`, `WithSource(Source)`, `Refresh` returns `store.RatesRefresh{}`. `source.go` already declares `Source{Observations(ctx, series string, span store.DateSpan) ([]Observation, error)}` and `Observation{Date, Rate}` because `WithSource` needs the type. That shape is B1's to refine.
+- `internal/store/store.go`: `RatesSummary{First, Last time.Time; Added int; FetchError string}` added as `Result.Rates` and `Replaced.Rates` (not yet filled or rendered; the `Result`/`Replaced` doc comments do not mention it yet).
+
+Red output (`go test ./cmd/quarry/ -run Test_run_sync_back_fills`):
+- line 78: stdout lines (ending `Findings  1 open; ...`) do not contain `Rates     USD/CAD 2005-03-01 to 2017-01-04 (5 new)`.
+- line 82: `quarry sql --csv` of fx_rates is the header only, expected 5 rows.
+
+Test shape: bundle with transactions 2005-03-01 and 2026-03-01; fake Valet serves IEXE0101 2005-03-01, 2005-03-02, 2017-01-02 and FXUSDCAD 2017-01-03, 2017-01-04. Expected fx_rates is those 5 rows (usd_cad printed `1.234500`, DECIMAL(10,6) format guessed from the 2-decimal views, so confirm it at green). Last = 2017-01-04 is deterministic whatever today is.
+
+Asserts only the ruled `(N new)` text line and fx_rates contents. It does not assert `rates_first`, the JSON `rates` placement, or the nothing-fetched copy (pending ruling).
+
+Lint on touched packages: 0 issues. Narrow loop for B1: `go test ./internal/fx/`. B2 and the acceptance test stay red until step 6/7 render the Rates line and step 5 fills the rates; the fx_rates rows go green after steps 3-5.
