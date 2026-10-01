@@ -142,12 +142,22 @@ func accountBalancesViewDDL() string {
 	// transactions are future-dated is still listed.
 	return `
 CREATE VIEW v_account_balances AS
-SELECT a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed, a.active,
-	CASE WHEN a.type IN (` + strings.Join(quoted, ", ") + `) THEN NULL
-		ELSE CAST(COALESCE(sum(t.amount), 0) AS DECIMAL(18,2)) END AS balance
-FROM accounts a
-LEFT JOIN transactions t ON t.account_id = a.id AND t.date <= current_date
-GROUP BY a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed, a.active;
+WITH b AS (
+	SELECT a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed, a.active,
+		CASE WHEN a.type IN (` + strings.Join(quoted, ", ") + `) THEN NULL
+			ELSE CAST(COALESCE(sum(t.amount), 0) AS DECIMAL(18,2)) END AS balance
+	FROM accounts a
+	LEFT JOIN transactions t ON t.account_id = a.id AND t.date <= current_date
+	GROUP BY a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed, a.active
+), r AS (
+	SELECT usd_cad FROM fx_rates WHERE date <= current_date ORDER BY date DESC LIMIT 1
+)
+SELECT b.id, b.source_id, b.name, b.type, b.currency, b.institution, b.closed, b.active, b.balance,
+	` + convertedTo("CAD", "b.balance", "b.currency", "r.usd_cad") + ` AS balance_cad,
+	` + convertedTo("USD", "b.balance", "b.currency", "r.usd_cad") + ` AS balance_usd
+FROM b
+LEFT JOIN r ON true;
+COMMENT ON VIEW v_account_balances IS 'balance_cad and balance_usd convert balance at the latest fx_rates rate dated today or earlier; NULL when there is none.';
 `
 }
 
@@ -155,8 +165,10 @@ GROUP BY a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed,
 // it is the SQL form of the negation of store.Account.LeftOutOfReports.
 const reportedAccount = "a.in_reports AND NOT a.linked_tracking"
 
-// cashFlowViewDDL creates v_cash_flow: each split that counts as income or spending in Quicken's reports.
-const cashFlowViewDDL = `
+// cashFlowViewDDL creates v_cash_flow: each split that counts as income or spending in Quicken's reports,
+// with its amount in CAD and in USD at the latest fx_rates rate dated on or before the split's date.
+func cashFlowViewDDL() string {
+	return `
 CREATE VIEW v_cash_flow AS
 SELECT s.id AS split_id, s.transaction_id, t.account_id, t.date,
 	CAST(date_trunc('month', t.date) AS DATE) AS month, t.currency,
@@ -164,12 +176,16 @@ SELECT s.id AS split_id, s.transaction_id, t.account_id, t.date,
 	CASE WHEN s.category_id IS NOT NULL THEN c.kind
 		WHEN s.amount < 0 THEN 'expense'
 		ELSE 'income' END AS flow,
-	s.amount
+	s.amount,
+	` + convertedTo("CAD", "s.amount", "t.currency", "r.usd_cad") + ` AS amount_cad,
+	` + convertedTo("USD", "s.amount", "t.currency", "r.usd_cad") + ` AS amount_usd,
+	r.usd_cad
 FROM splits s
 JOIN transactions t ON t.id = s.transaction_id
 JOIN accounts a ON a.id = t.account_id
 LEFT JOIN categories c ON c.id = s.category_id
 LEFT JOIN payees p ON p.id = t.payee_id
+ASOF LEFT JOIN fx_rates r ON t.date >= r.date
 WHERE ` + reportedAccount + `
 	AND NOT t.excluded_from_reports
 	AND c.kind IS DISTINCT FROM 'system'
@@ -177,12 +193,14 @@ WHERE ` + reportedAccount + `
 	AND NOT EXISTS (SELECT 1 FROM transfers x WHERE x.from_split_id = s.id OR x.to_split_id = s.id);
 COMMENT ON VIEW v_cash_flow IS 'excludes accounts where accounts.in_reports is false or accounts.linked_tracking is true, as Quicken reports do.';
 `
+}
 
 // spendingViewDDL creates v_spending: the expense rows of v_cash_flow, amount sign flipped.
 const spendingViewDDL = `
 CREATE VIEW v_spending AS
 SELECT split_id, transaction_id, account_id, date, month, currency,
-	category_id, category, payee_id, payee, -amount AS spent
+	category_id, category, payee_id, payee, -amount AS spent,
+	-amount_cad AS spent_cad, -amount_usd AS spent_usd, usd_cad
 FROM v_cash_flow
 WHERE flow = 'expense';
 COMMENT ON VIEW v_spending IS 'expense splits of v_cash_flow with spent = -amount; same exclusions as v_cash_flow, so totals match quarry spend.';

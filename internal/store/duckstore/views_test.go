@@ -240,6 +240,9 @@ func Test_cash_flow_lists_its_columns_in_order(t *testing.T) {
 		{Name: "payee", Type: "VARCHAR"},
 		{Name: "flow", Type: "VARCHAR"},
 		{Name: "amount", Type: "DECIMAL(18,2)"},
+		{Name: "amount_cad", Type: "DECIMAL(18,2)"},
+		{Name: "amount_usd", Type: "DECIMAL(18,2)"},
+		{Name: "usd_cad", Type: "DECIMAL(10,6)"},
 	}, got.Columns)
 }
 
@@ -365,6 +368,9 @@ func Test_spending_lists_its_columns_in_order(t *testing.T) {
 		{Name: "payee_id", Type: "VARCHAR"},
 		{Name: "payee", Type: "VARCHAR"},
 		{Name: "spent", Type: "DECIMAL(18,2)"},
+		{Name: "spent_cad", Type: "DECIMAL(18,2)"},
+		{Name: "spent_usd", Type: "DECIMAL(18,2)"},
+		{Name: "usd_cad", Type: "DECIMAL(10,6)"},
 	}, got.Columns)
 }
 
