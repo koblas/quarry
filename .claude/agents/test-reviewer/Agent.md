@@ -29,7 +29,7 @@ questions — skip the full procedure below:
    `## Implementation Plan` ticked?
 3. Are `.claude/briefs/build.md` → *Planning* items present for this diff: one fault test per
    fallible call, every numeric bound just outside, every error-mapper fallback, one
-   decode-fault test per decoded record kind, one pin per ruled string, edge row and rule arm the scenario owns, and, for each destructive guard, a test where the same file is reached
+   decode-fault test per decoded record kind, one pin per ruled string, edge row and rule arm the scenario owns (each edge row crossed with each flag and output format the plan lists — name any absent cell), and, for each destructive guard, a test where the same file is reached
    under another name (case, hard link, symlink, extension)? Unpinned ruled copy or edge row
    is MAJOR; a destructive guard decided by name is MAJOR.
 4. Does the diff touch only what the plan's steps name? Production file, behaviour or public
