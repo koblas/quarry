@@ -90,3 +90,8 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report) + duckstore Spending 
 - Step 6 doc comments all present (`SpendingParams.Currency`, `SpendRequest.Currency`, `Spending.Currency`, `windowCaption`, `spendingSource`); pin bumps were done in B1.
 - specification.md: SCENARIO-08 ticked, SCENARIO-14 ticked as delivered by SCENARIO-08; `spec-check.py phase2f-fx` OK.
 - STATE.md rewritten; status set to done.
+
+**Checkpoint fix pass (tests and comment trims only; no runtime change):**
+- MAJOR 1: `Test_spending_by_month_keeps_an_unrated_split_native_beside_the_converted_ones` (duckstore, CAD mode, one rated and one pre-rate USD split). Mutation `spending.go` `spendingByMonthQuery` wrapper `currency` -> `'CAD' AS currency`: that test red (`expected CAD 1300 + USD 700 rows; actual one CAD 2000 row`); restored, byte-identical.
+- MAJOR 2: `Test_run_spend_of_an_empty_window_...` now runs text and json per currency, pinning the caption, header and the single empty-window note on stderr. Mutation `render_table.go` `windowCaption` `currency == money.Native` -> `|| currency == money.USD`: `.../USD/text` red (`expected "... in all accounts, amounts in USD\n\nCategory ..."; actual "... in all accounts\n\n..."`); restored, byte-identical.
+- MINOR: USD cad-unrated test now pins `Rows`; new `Test_spending_by_tag_in_usd_keeps_an_unrated_cad_split_native_ahead_of_the_usd_total`; edge matrix asserts empty stderr for text and json; five comment trims done. These are coverage additions on already-correct behaviour, green on arrival.

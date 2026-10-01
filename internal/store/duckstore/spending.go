@@ -10,14 +10,12 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// spendingQueryFor is a spending query for the accounts of a filter over source, a relation of
-// v_spending's columns (see spendingSource); each takes the window's first and last day as $1
-// and $2, then one parameter per named account.
+// spendingQueryFor is a spending query over source, a relation of v_spending's columns
+// (see spendingSource); $1 and $2 are the window's first and last day.
 type spendingQueryFor func(accounts accountFilter, source string) string
 
-// spendingSource is the relation a spending read counts, in the shape of v_spending: native is
-// v_spending itself; CAD and USD give each split its converted spent and that currency, except a
-// split with no converted cell, which keeps its own spent and currency so a total never mixes.
+// spendingSource is the relation a spending read counts, in v_spending's shape: native is
+// v_spending; CAD and USD convert each split, one with no converted cell keeping its own currency.
 func spendingSource(currency money.Currency) string {
 	var converted, target string
 	switch currency { //nolint:exhaustive // Native, and any value outside the three, reads v_spending as it is

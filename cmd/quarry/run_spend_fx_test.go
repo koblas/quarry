@@ -47,8 +47,7 @@ func runSpendJSON(t *testing.T, args ...string) (spendReport, string) {
 }
 
 func Test_run_spend_converts_every_split_to_cad_by_default(t *testing.T) {
-	// Each 0.10 USD split is 0.125 CAD at 1.25, so it rounds to 0.13 before it is summed:
-	// the two make 0.26, where summing first would give 0.25.
+	// Two 0.10 USD splits at 1.25 make 0.26 rounded each, 0.25 summed first.
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	replaceStoreWithRates(t, home, spendRows(
@@ -261,8 +260,10 @@ func Test_run_spend_converts_the_edge_cases_in_each_reporting_currency(t *testin
 				exitCode := runWith(context.Background(), append([]string{"spend"}, args...), spendEnv(&stdout, &stderr))
 				require.Equal(t, 0, exitCode, stderr.String())
 				gotCaption, gotTotals := spendTextView(stdout.String())
-				doc, _ := runSpendJSON(t, args...)
+				doc, jsonStderr := runSpendJSON(t, args...)
 
+				assert.Empty(t, stderr.String(), currency)
+				assert.Empty(t, jsonStderr, currency)
 				assert.Equal(t, wantCaption, gotCaption, currency)
 				assert.Equal(t, totalCells(c.want[currency]), gotTotals, currency)
 				assert.Equal(t, currency, doc.Currency)
@@ -273,7 +274,10 @@ func Test_run_spend_converts_the_edge_cases_in_each_reporting_currency(t *testin
 }
 
 func Test_run_spend_of_an_empty_window_names_the_currency_and_warns_only_of_the_empty_window(t *testing.T) {
-	for _, currency := range []string{"CAD", "USD", "native"} {
+	const emptyWindowWarning = "quarry: warning: no spending from 2020-01-01 to 2020-12-31; the store's transactions run 2026-03-11 to 2026-03-11\n"
+	const caption = "Spending 2020-01-01 to 2020-12-31 in all accounts"
+	suffixes := map[string]string{"CAD": ", amounts in CAD", "USD": ", amounts in USD", "native": ""}
+	for currency, suffix := range suffixes {
 		t.Run(currency, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
@@ -281,12 +285,25 @@ func Test_run_spend_of_an_empty_window_names_the_currency_and_warns_only_of_the_
 				[]store.Account{usdChequingAccount("acct-usd", 2)},
 				spendSplit{id: "s1", account: "acct-usd", category: "cat-groceries", currency: "USD", day: day(2026, 3, 11), cents: -8000},
 			), rateOnJan2)
+			window := []string{"--currency", currency, "--since", "2020-01-01", "--until", "2020-12-31"}
 
-			doc, stderr := runSpendJSON(t, "--currency", currency, "--since", "2020-01-01", "--until", "2020-12-31")
+			t.Run("text", func(t *testing.T) {
+				var stdout, stderr bytes.Buffer
 
-			assert.Equal(t, currency, doc.Currency)
-			assert.Empty(t, doc.Totals)
-			assert.Equal(t, "quarry: warning: no spending from 2020-01-01 to 2020-12-31; the store's transactions run 2026-03-11 to 2026-03-11\n", stderr)
+				exitCode := runWith(context.Background(), append([]string{"spend"}, window...), spendEnv(&stdout, &stderr))
+
+				require.Equal(t, 0, exitCode, stderr.String())
+				assert.Equal(t, caption+suffix+"\n\nCategory  Currency  Spent\n", stdout.String())
+				assert.Equal(t, emptyWindowWarning, stderr.String())
+			})
+
+			t.Run("json", func(t *testing.T) {
+				doc, stderr := runSpendJSON(t, window...)
+
+				assert.Equal(t, currency, doc.Currency)
+				assert.Empty(t, doc.Totals)
+				assert.Equal(t, emptyWindowWarning, stderr)
+			})
 		})
 	}
 }

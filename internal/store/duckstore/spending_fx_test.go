@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Rates in these tests: Friday 2026-03-13 at 1.25 and Monday 2026-03-16 at 1.30 CAD per USD
-// (fridayAndMonday). 2026-03-10 is before the first rate; 2026-03-14 is a Saturday.
+// Rates: Friday 2026-03-13 at 1.25 and Monday 2026-03-16 at 1.30 CAD per USD; 2026-03-10
+// is before the first rate.
 
 // fxSpendRows is fxRows with no splits, so a test's splits are the only spending.
 func fxSpendRows() store.Rows {
@@ -115,6 +115,9 @@ func Test_spending_in_usd_keeps_a_cad_split_before_the_first_rate_on_a_cad_row_a
 	got, err := st.Spending(t.Context(), spendingIn(money.USD, store.SpendByCategory))
 
 	require.NoError(t, err)
+	assert.Equal(t, spendingRowsOf(
+		store.SpendingRow{Key: new("Groceries"), Currency: "CAD", Spent: 700},
+		store.SpendingRow{Key: new("Groceries"), Currency: "USD", Spent: 500}), got.Rows)
 	assert.Equal(t, []store.SpendingTotal{{Currency: "CAD", Spent: 700}, {Currency: "USD", Spent: 500}}, got.Totals)
 }
 
@@ -213,6 +216,23 @@ func Test_spending_by_tag_keeps_an_unrated_split_native_in_its_row_and_the_total
 	assert.Equal(t, []store.SpendingTotal{{Currency: "USD", Spent: 700}}, got.Totals)
 }
 
+func Test_spending_by_tag_in_usd_keeps_an_unrated_cad_split_native_ahead_of_the_usd_total(t *testing.T) {
+	t.Parallel()
+	rows := fxSpendRows()
+	addTag(&rows, "t-trip", "Trip")
+	addSplit(&rows, splitSpec{id: "cad-unrated", date: march(10), category: new(catExpense), amount: -700, tags: []string{"t-trip"}})
+	addSplit(&rows, splitSpec{id: "usd", account: acctUSD, currency: "USD", date: march(16), category: new(catExpense), amount: -500, tags: []string{"t-trip"}})
+	st := newStoreWithRates(t, rows, fridayAndMonday()...)
+
+	got, err := st.Spending(t.Context(), spendingIn(money.USD, store.SpendByTag))
+
+	require.NoError(t, err)
+	assert.Equal(t, spendingRowsOf(
+		store.SpendingRow{Key: new("Trip"), Currency: "CAD", Spent: 700},
+		store.SpendingRow{Key: new("Trip"), Currency: "USD", Spent: 500}), got.Rows)
+	assert.Equal(t, []store.SpendingTotal{{Currency: "CAD", Spent: 700}, {Currency: "USD", Spent: 500}}, got.Totals)
+}
+
 func Test_spending_by_month_converts_a_usd_split_into_its_months_cad_row(t *testing.T) {
 	t.Parallel()
 	rows := fxSpendRows()
@@ -224,6 +244,22 @@ func Test_spending_by_month_converts_a_usd_split_into_its_months_cad_row(t *test
 
 	require.NoError(t, err)
 	assert.Equal(t, spendingRowsOf(store.SpendingRow{Key: new("2026-03"), Currency: "CAD", Spent: 1800}), got.Rows)
+}
+
+func Test_spending_by_month_keeps_an_unrated_split_native_beside_the_converted_ones(t *testing.T) {
+	t.Parallel()
+	rows := fxSpendRows()
+	expense(&rows, "usd-rated", "USD", march(16), -1000)
+	expense(&rows, "usd-unrated", "USD", march(10), -700)
+	st := newStoreWithRates(t, rows, fridayAndMonday()...)
+
+	got, err := st.Spending(t.Context(), spendingIn(money.CAD, store.SpendByMonth))
+
+	require.NoError(t, err)
+	assert.Equal(t, spendingRowsOf(
+		store.SpendingRow{Key: new("2026-03"), Currency: "CAD", Spent: 1300},
+		store.SpendingRow{Key: new("2026-03"), Currency: "USD", Spent: 700}), got.Rows)
+	assert.Equal(t, []store.SpendingTotal{{Currency: "CAD", Spent: 1300}, {Currency: "USD", Spent: 700}}, got.Totals)
 }
 
 func Test_spending_by_payee_ranks_a_usd_payee_first_only_once_converted(t *testing.T) {

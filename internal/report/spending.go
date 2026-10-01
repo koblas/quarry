@@ -10,12 +10,12 @@ import (
 // SpendRequest is what a spend read needs from its caller: the window to
 // count, resolved by ParseWindow or DefaultWindow, what to group by
 // (category when unset), and the accounts to count (each an id or a name;
-// none means every account) and the currency to report in; the zero value,
-// money.Native, converts nothing.
+// none means every account).
 type SpendRequest struct {
 	Window   store.Window
 	By       store.SpendingGroup
 	Accounts []string
+	// Currency is the currency to report in; the zero value, money.Native, converts nothing.
 	Currency money.Currency
 }
 
