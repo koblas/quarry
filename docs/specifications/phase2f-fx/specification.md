@@ -189,6 +189,15 @@ The rows stay as they are: each row is in one currency, the Currency column stay
   - When read, a malformed file gets the existing `cannot read <path>: <detail>; fix the file and run the command again` refusal, exit 1.
   - Unknown-key warnings go to stderr in `~` form and to `warnings[]` in absolute form, as findings does (findings.go:77-96).
 - **sql** keeps ignoring config. run_config_test.go:209 is split: the five commands refuse, sql still ignores.
+- **Mid-feature ruling (SCENARIO-16):**
+  - **One parser.** The flag and the key share one parser: case-insensitive on input, no trimming. `usd`, `Usd` and `NATIVE` are accepted; `" CAD"` is refused. Output is always canonical `CAD`/`USD`/`native`, in captions and JSON. The bad-flag line never echoes the input.
+  - **Table-shape refusal.** Exit 1, `got` as written:
+    `quarry: ~/Library/Application Support/quarry/config.toml: reporting must be a table, such as reporting.currency = "CAD", got "CAD"; fix the file and run the command again`
+  - **status never refuses.** A bad reporting.currency gets the existing P2d-10 status warning (exit 0, `"ignored": null`). Use the existing prefix:
+    `cannot tell which findings you ignored: ~/Library/Application Support/quarry/config.toml: reporting.currency must be CAD, USD or native, got "EUR"; findings you ignored are counted as open`
+  - **These refuse with the Bad value line** (exit 1, stdout empty, absolute path in `--json`), because the whole file is validated: sync (including `--from`), snapshots, snapshots prune and findings.
+  - **Error order.** A usage error (exit 2) comes before a config refusal, which comes before the no-store refusal.
+  - **P2d-10 amended.** spend, cashflow, recurring, anomalies and accounts load and validate the whole file when `--currency` is absent. Known keys gain `reporting.currency`.
 
 
 ## Surface & Copy
