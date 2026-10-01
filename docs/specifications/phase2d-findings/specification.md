@@ -30,7 +30,7 @@
 - P2d-9 (ignore): `findings.ignore` in config.toml, array of strings; absent or `[]` = nothing ignored; quarry never writes config.toml; un-ignore = remove the id. Duplicate elements, `""`, unknown type prefixes and ids matching no finding are accepted (W1 warning in `findings` only), never refused.
 - P2d-10 (config loading, replaces P2c-2): `sync` (and `--from`), `snapshots`, `snapshots prune`, `findings` load and validate the whole file (every C row refuses, exit 1; C3 warns). `status` loads best-effort for the ignored count only: never refuses, prints no C3 warnings; on any C refusal prints the status config warning, omits the ignored clause, `"ignored": null`. `accounts`, `spend`, `cashflow`, `sql` never load config. P2c-1 amended: known keys are exactly `snapshots.keep`, `quicken.path`, `findings.ignore`.
 - P2d-11 (one-sided output folded): on a successful build, sync drops the `?` rows under `Transfers` and the one-sided stderr warning / `warnings[]` entry; the `Transfers` count line stays; `store.transfers.one_sided` stays in `sync --json`; the validation-failure block (`renderStoreFailure`) keeps its `?` rows.
-- P2d-12 (CSV writer, one owner in `internal/cli`, shared by `sql --csv` and `findings --csv`): header = column names; a field is quoted when it contains `,`, `"`, CR or LF, or is the empty string; `"` doubled; NULL = unquoted empty field, `""` = empty string (custom quoter; `encoding/csv` cannot distinguish); values = `QueryValue.Text` except NULL; `\n \t \r` kept verbatim inside quotes; line ending `\n`; no BOM; zero rows → header only, exit 0; no formula-injection escaping.
+- P2d-12 (CSV writer, one owner in `internal/cli`, shared by `sql --csv` and `findings --csv`): header = column names; a field is quoted when it contains `,`, `"`, CR or LF, or is the empty string; `"` doubled; NULL = unquoted empty field, `""` = empty string (custom quoter; `encoding/csv` cannot distinguish); values = `QueryValue.Text` except NULL; `\n \t \r` kept verbatim inside quotes; line ending `\n`; no BOM; zero rows → header only, exit 0; no formula-injection escaping; a record whose only field is NULL is written as `""` so no data line is blank (one-column results only; ruled at the gate).
 - P2d-13 (`sql --csv` limit): under `--csv` the default is every row; an explicit `--limit` is honoured with the existing stderr truncation note.
 - P2d-14 (real-file gate): the last scenario runs `quarry findings --status all` on the real Quicken file; for each heuristic type (`unlinked-transfer`, `mixed-categories`, `payee-variants`, `similar-categories`, `unused-category`) David reviews up to 20 findings; more than half false positives for a type → that type's rule is re-ruled (mid-feature ruling) before the gate round.
 
@@ -308,7 +308,8 @@ List the tables and views with: quarry sql "SHOW TABLES"
 
 At most --limit rows are printed (500 unless set, every row with --csv);
 when there are more, quarry says so on stderr. --limit 0 prints every row.
-With --csv, an empty field is NULL and "" is an empty string.
+With --csv, an empty field is NULL and "" is an empty string, except in a
+one-column result, where NULL is also written as "" so no row is blank.
 ```
 3. V1 tail (`internal/snapshot/import.go` `validationFailedRefusal`): `fix the account in Quicken and run quarry sync, …` → `fix them in Quicken and run quarry sync, or run quarry sync --from <id> after updating quarry` (closes the 2a STATE debt; update pinned tests).
 4. CF2 `historyRestartWarning`: the store-level case gets the combined line above.

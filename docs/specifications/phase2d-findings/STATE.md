@@ -42,7 +42,6 @@ Scenarios complete: SCENARIO-01..28 (02, 03 delivered by 01; 05 by 04; 07 by 06;
 ## Left unbuilt
 
 ## Traps
-- `QueryValue.Text` is `"NULL"` for a NULL: decide by `.Null` (csv) ; a one-column NULL row is a blank line that `encoding/csv` readers skip (see Open debts) (SCENARIO-21)
 - `fakeReportStore.Query` ignores `maxRows` (records `gotMaxRows`): assert the recorded value, not truncation, unless the test feeds `limit+1` rows (SCENARIO-21)
 - A fixed finding has no items: `latestDate`/`payeeOf`-based sorts must not run on it. `fixed_at` is UTC in the store and `--json`, local only in text; text tests pin `time.Local` to a fixed zone (no `t.Parallel`) (SCENARIO-18)
 - Text renders `  <id>  ignored` / `  <id>  fixed <local date>` at line end (id line for multi-line types); padding widths over non-fixed rows only; `-run 'findings|Findings'` misses `Test_findingLines_*`/`Test_findingsFooter_*`: run the whole `internal/cli` package (SCENARIO-18)
@@ -84,5 +83,4 @@ Scenarios complete: SCENARIO-01..28 (02, 03 delivered by 01; 05 by 04; 07 by 06;
 
 ## Open debts
 - Orchestrator: config warnings (C3, W1) in `--json` `warnings[]` name `<config>` abbreviated (`~/...`), a 2c-era deviation from the 2a absolute-in-`--json` rule — raise at the final product-vision pass (unowned). Includes `status --json`'s bad-config entry (ruled at SCENARIO-19 to use the same form as the other config warnings)
-- Orchestrator: `sql --csv` one-column NULL row renders as a blank line (P2d-12 applied literally, as PostgreSQL COPY CSV does); `encoding/csv` readers skip blank lines — raise at the final product-vision pass (unowned)
 - Orchestrator: `unlinked-transfer` items in `--json`/`--csv` give `category` null for both an uncategorized and a split transaction (`(uncategorized)`/`(split)` are text-only) — raise at the final product-vision pass (unowned)
