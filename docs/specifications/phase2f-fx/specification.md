@@ -240,7 +240,32 @@ The rows stay as they are: each row is in one currency, the Currency column stay
   - New `converted_balance` is in the top-level currency. It is null in native mode, for a not-imported account, or when there is no rate.
 - In native mode `currency == native_currency` and `amount == native_amount`, so the key set is the same in both modes.
 
-### Report warnings (stderr with `quarry: warning: `, the same text in warnings[], exit 0)
+#### Recurring (mid-feature ruling, SCENARIO-17)
+- **JSON key order.**
+  - Series: `payee, payee_key, payees, currency, cadence, amount, first_amount, per_year, native_currency, native_amount, native_first_amount, first_charge, last_charge, charge_count, state, new, accounts, price_changes`.
+  - Price change: `date, currency, from, to, change_pct`.
+  - Top level: `since, until, currency, account_filter, series, totals, warnings`.
+  - Native mode has the same key set.
+- **Currency cell and prefix.** The Currency cell is `<row> (<native>)`, and the price-change prefix is `<native> `, only when native differs from the row. In USD mode a CAD series reads `USD (CAD)` and `1: CAD 9.99 -> CAD 12.99 (+30.0%)`. An unconverted row is plain, with no prefix.
+- **Sort.** A last tier follows the group key: the row-currency series comes before a converted one, then native code ascending. The tiers in order are currency, state, standing, lower(payee), group key, then this new tier.
+- **Recurring Long, wrapped at ≤74 columns.**
+  - Paragraph inserted after paragraph 1:
+    ```
+    Series are found in each account's own currency, so a change in the
+    exchange rate is never a price change, and a payee that charges in both
+    CAD and USD has two series. Amount and Per year are converted to the
+    reporting currency (--currency, else reporting.currency in the config
+    file, else CAD) at the rate on the latest charge's date; price changes
+    stay in the series' own currency. With --currency native nothing is
+    converted.
+    ```
+  - Paragraph 3's last two lines become:
+    ```
+    the next, in the series' own currency. Per year is the latest amount
+    times the charges in a year, for active series only.
+    ```
+
+## Report warnings (stderr with `quarry: warning: `, the same text in warnings[], exit 0)
 - **No rates and a conversion is needed:**
   `the store has no exchange rates, so amounts are listed in each account's own currency; run quarry sync to fetch them`
 - **Before the first rate** (N via humanize.Count; `is` for 1, `are` for more):
