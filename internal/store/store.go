@@ -123,8 +123,8 @@ type Transfer struct {
 	FromSplitID   string
 	ToSplitID     *string
 	CrossCurrency bool
-	// OtherAccount is the account name a one-sided leg recorded instead of a
-	// link; nil for a pair and for a leg linked by account id.
+	// OtherAccount is the account name a one-sided leg recorded in name form;
+	// nil for a pair and for a numeric link, which records no name.
 	OtherAccount *string
 }
 
@@ -137,7 +137,8 @@ type SplitTag struct {
 // Rows is every row a store build writes, grouped by table. ImportRuns holds
 // the new build's run only; the store carries earlier runs forward itself.
 // ReferencedCategoryIDs is not a table: sorted unique ids of categories that rows
-// not stored as splits use (budgets, loans, rules), nil when none; never persisted.
+// not stored as splits use (split entries under transactions the import does not keep,
+// budgets, loans, rules), nil when none; never persisted.
 type Rows struct {
 	Accounts     []Account
 	Categories   []Category

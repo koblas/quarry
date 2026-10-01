@@ -84,7 +84,7 @@ prints one row per item, for a spreadsheet.
 	assert.Contains(t, stdout.String(), long)
 }
 
-func Test_findings_help_shows_its_short_line_and_examples(t *testing.T) {
+func Test_findings_help_shows_examples(t *testing.T) {
 	const examples = `Examples:
   quarry findings
   quarry findings --type duplicate
@@ -93,11 +93,17 @@ func Test_findings_help_shows_its_short_line_and_examples(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
 	err := executeFindings(t, fakeReportStore{}, &stdout, &stderr, "--help")
+
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), examples)
+}
 
+func Test_root_help_lists_findings_with_its_short_line(t *testing.T) {
 	var list bytes.Buffer
-	require.NoError(t, cli.Execute(t.Context(), []string{"--help"}, cli.Env{Stdout: &list, Stderr: io.Discard}))
+
+	err := cli.Execute(t.Context(), []string{"--help"}, cli.Env{Stdout: &list, Stderr: io.Discard})
+
+	require.NoError(t, err)
 	assert.Regexp(t, `(?m)^  findings +List what to clean up in Quicken$`, list.String())
 }
 

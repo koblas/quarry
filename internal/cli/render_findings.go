@@ -136,7 +136,7 @@ func liveFindingLines(typ finding.Type, findings []report.ListedFinding, view fi
 	case finding.UnusedCategory:
 		return unusedCategoryRows(findings, view)
 	}
-	return nil // unreachable: the cases above cover every finding.Types() entry, and report.Findings groups only those
+	return nil // unreachable: the exhaustive linter fails a switch missing a finding.Types() entry, and report.Findings groups only those
 }
 
 // pairRows is each finding's id line, with the ignored marker, then one four-space row per item as rowsOf lays them out.
@@ -343,7 +343,8 @@ func unusedCategoryRows(findings []report.ListedFinding, view findingsView) []st
 // topCategory is the path of the first of items, the unused category itself.
 func topCategory(items []store.FindingItem) string {
 	if len(items) == 0 || items[0].Category == nil {
-		return "" // unreachable: only listed (open or ignored) findings reach here, findingLines routes fixed ones (the only findings without items) away, and full_path is NOT NULL (duckstore/schema.go:30)
+		// unreachable: only a fixed finding lacks items (mergeFindings writes them for detected ones, each >= 1) and findingLines routes it away; full_path is NOT NULL (schema.go:30)
+		return ""
 	}
 	return *items[0].Category
 }

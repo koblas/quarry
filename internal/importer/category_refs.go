@@ -14,6 +14,7 @@ type categoryRefs struct {
 	pks      map[int64]bool
 }
 
+// newCategoryRefs returns an empty collector that records only categories in existing, keyed by source id.
 func newCategoryRefs(existing map[int64]bool) *categoryRefs {
 	return &categoryRefs{existing: existing, pks: make(map[int64]bool)}
 }
@@ -50,6 +51,8 @@ type categoryRefSource struct {
 	query string
 }
 
+// categoryRefSources lists every non-split source of category references; a new source is one more row.
+// Split entries under transactions the import does not keep are collected by mapSplits, not here.
 var categoryRefSources = []categoryRefSource{
 	{"budget line items", `
 SELECT ZCATEGORYTAG FROM ZBUDGETLINEITEM

@@ -120,6 +120,7 @@ func (t *categoryTree) unusedFindings() []detectedFinding {
 	return found
 }
 
+// unusedCategoryItem is the finding item naming category n; it carries the category id only.
 func unusedCategoryItem(n *categoryNode) findingItem {
 	return findingItem{categoryID: sql.NullString{String: n.id, Valid: true}}
 }

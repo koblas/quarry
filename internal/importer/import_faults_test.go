@@ -72,23 +72,24 @@ func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
 	cases := []struct {
 		name  string
 		match string
+		want  string
 	}{
-		{"Z_PRIMARYKEY", "Z_PRIMARYKEY"},
-		{"ZACCOUNT", "ZTYPENAME"},
-		{"ZRECONCILERECORD", "ZRECONCILERECORD"},
-		{"ZTAG categories", "ZPARENTCATEGORY"},
-		{"ZTAG tags", "COALESCE(ZNAME, '')\nFROM ZTAG"},
-		{"ZUSERPAYEE", "ZUSERPAYEE"},
-		{"ZTRANSACTION ids", "ZDELETIONCOUNT, 0) FROM ZTRANSACTION"},
-		{"ZTRANSACTION", "ZPOSTEDDATE"},
-		{"ZCASHFLOWTRANSACTIONENTRY", "FROM ZCASHFLOWTRANSACTIONENTRY"},
-		{"Z_15USERTAGS", "Z_15USERTAGS"},
-		{"ZBUDGETLINEITEM", "FROM ZBUDGETLINEITEM"},
-		{"ZLOANSPLITENTRY", "FROM ZLOANSPLITENTRY"},
-		{"ZACCOUNT loan interest", "ZLOANINTERESTCATEGORY"},
-		{"ZQUICKFILLRULESPLITENTRY", "FROM ZQUICKFILLRULESPLITENTRY"},
-		{"ZPRODUCTSERVICE", "FROM ZPRODUCTSERVICE"},
-		{"ZCUSTOMERCREDITLINEITEM", "FROM ZCUSTOMERCREDITLINEITEM"},
+		{"Z_PRIMARYKEY", "Z_PRIMARYKEY", "resolve entities"},
+		{"ZACCOUNT", "ZTYPENAME", "read accounts"},
+		{"ZRECONCILERECORD", "ZRECONCILERECORD", "read reconcile records"},
+		{"ZTAG categories", "ZPARENTCATEGORY", "read categories"},
+		{"ZTAG tags", "COALESCE(ZNAME, '')\nFROM ZTAG", "read tags"},
+		{"ZUSERPAYEE", "ZUSERPAYEE", "read payees"},
+		{"ZTRANSACTION ids", "ZDELETIONCOUNT, 0) FROM ZTRANSACTION", "read transaction ids"},
+		{"ZTRANSACTION", "ZPOSTEDDATE", "read transactions"},
+		{"ZCASHFLOWTRANSACTIONENTRY", "FROM ZCASHFLOWTRANSACTIONENTRY", "read splits"},
+		{"Z_15USERTAGS", "Z_15USERTAGS", "read split tags"},
+		{"ZBUDGETLINEITEM", "FROM ZBUDGETLINEITEM", "read budget line items"},
+		{"ZLOANSPLITENTRY", "FROM ZLOANSPLITENTRY", "read loan split entries"},
+		{"ZACCOUNT loan interest", "ZLOANINTERESTCATEGORY", "read loan interest categories"},
+		{"ZQUICKFILLRULESPLITENTRY", "FROM ZQUICKFILLRULESPLITENTRY", "read quickfill rule split entries"},
+		{"ZPRODUCTSERVICE", "FROM ZPRODUCTSERVICE", "read product and service categories"},
+		{"ZCUSTOMERCREDITLINEITEM", "FROM ZCUSTOMERCREDITLINEITEM", "read customer credit line item categories"},
 	}
 
 	for _, c := range cases {
@@ -99,6 +100,7 @@ func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
 			_, err := srv.Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 			require.ErrorIs(t, err, errBoom)
+			require.ErrorContains(t, err, c.want)
 		})
 	}
 }
@@ -157,23 +159,24 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 	cases := []struct {
 		name  string
 		match string
+		want  string
 	}{
-		{"Z_PRIMARYKEY", "Z_PRIMARYKEY"},
-		{"ZACCOUNT", "ZTYPENAME"},
-		{"ZRECONCILERECORD", "ZRECONCILERECORD"},
-		{"ZTAG categories", "ZPARENTCATEGORY"},
-		{"ZTAG tags", "COALESCE(ZNAME, '')\nFROM ZTAG"},
-		{"ZUSERPAYEE", "ZUSERPAYEE"},
-		{"ZTRANSACTION ids", "ZDELETIONCOUNT, 0) FROM ZTRANSACTION"},
-		{"ZTRANSACTION", "ZPOSTEDDATE"},
-		{"ZCASHFLOWTRANSACTIONENTRY", "FROM ZCASHFLOWTRANSACTIONENTRY"},
-		{"Z_15USERTAGS", "Z_15USERTAGS"},
-		{"ZBUDGETLINEITEM", "FROM ZBUDGETLINEITEM"},
-		{"ZLOANSPLITENTRY", "FROM ZLOANSPLITENTRY"},
-		{"ZACCOUNT loan interest", "ZLOANINTERESTCATEGORY"},
-		{"ZQUICKFILLRULESPLITENTRY", "FROM ZQUICKFILLRULESPLITENTRY"},
-		{"ZPRODUCTSERVICE", "FROM ZPRODUCTSERVICE"},
-		{"ZCUSTOMERCREDITLINEITEM", "FROM ZCUSTOMERCREDITLINEITEM"},
+		{"Z_PRIMARYKEY", "Z_PRIMARYKEY", "resolve entities"},
+		{"ZACCOUNT", "ZTYPENAME", "read accounts"},
+		{"ZRECONCILERECORD", "ZRECONCILERECORD", "read reconcile records"},
+		{"ZTAG categories", "ZPARENTCATEGORY", "read categories"},
+		{"ZTAG tags", "COALESCE(ZNAME, '')\nFROM ZTAG", "read tags"},
+		{"ZUSERPAYEE", "ZUSERPAYEE", "read payees"},
+		{"ZTRANSACTION ids", "ZDELETIONCOUNT, 0) FROM ZTRANSACTION", "read transaction ids"},
+		{"ZTRANSACTION", "ZPOSTEDDATE", "read transactions"},
+		{"ZCASHFLOWTRANSACTIONENTRY", "FROM ZCASHFLOWTRANSACTIONENTRY", "read splits"},
+		{"Z_15USERTAGS", "Z_15USERTAGS", "read split tags"},
+		{"ZBUDGETLINEITEM", "FROM ZBUDGETLINEITEM", "read budget line items"},
+		{"ZLOANSPLITENTRY", "FROM ZLOANSPLITENTRY", "read loan split entries"},
+		{"ZACCOUNT loan interest", "ZLOANINTERESTCATEGORY", "read loan interest categories"},
+		{"ZQUICKFILLRULESPLITENTRY", "FROM ZQUICKFILLRULESPLITENTRY", "read quickfill rule split entries"},
+		{"ZPRODUCTSERVICE", "FROM ZPRODUCTSERVICE", "read product and service categories"},
+		{"ZCUSTOMERCREDITLINEITEM", "FROM ZCUSTOMERCREDITLINEITEM", "read customer credit line item categories"},
 	}
 
 	for _, c := range cases {
@@ -184,6 +187,7 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 			_, err := srv.Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 			require.ErrorIs(t, err, errBoom)
+			require.ErrorContains(t, err, c.want)
 		})
 	}
 }

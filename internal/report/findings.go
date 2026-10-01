@@ -97,14 +97,10 @@ func CountFindings(st store.Status, ignore []string) finding.Counts {
 // knownFindings is the findings of list whose type this binary knows, with each one's finding.State
 // at the same index; rows of any other type are neither listed nor counted.
 func knownFindings(list store.FindingList) ([]store.Finding, []finding.State) {
-	known := map[finding.Type]bool{}
-	for _, typ := range finding.Types() {
-		known[typ] = true
-	}
 	var stored []store.Finding
 	var states []finding.State
 	for _, f := range list.Findings {
-		if known[f.Type] {
+		if f.Type.Known() {
 			stored = append(stored, f)
 			states = append(states, finding.State{ID: f.ID, Fixed: f.FixedAt != nil, New: f.New, NewlyFixed: f.NewlyFixed})
 		}
@@ -176,7 +172,8 @@ func findingOrder(typ finding.Type) func(a, b store.Finding) int {
 			return cmp.Or(cmp.Compare(strings.ToLower(categoryOf(a)), strings.ToLower(categoryOf(b))), cmp.Compare(a.ID, b.ID))
 		}
 	}
-	return func(a, b store.Finding) int { return cmp.Compare(a.ID, b.ID) } // unreachable: the cases above cover every finding.Types() entry, and knownFindings drops rows of any other type
+	// unreachable: the exhaustive linter fails a switch missing a finding.Types() entry, and knownFindings drops rows of any other type.
+	return func(a, b store.Finding) int { return cmp.Compare(a.ID, b.ID) }
 }
 
 // transactionsOf is the sum of f's items' Transactions.
@@ -211,7 +208,8 @@ func latestDate(f store.Finding) time.Time {
 // categoryOf is the path of f's first item, the unused category itself; "" when f has none.
 func categoryOf(f store.Finding) string {
 	if len(f.Items) == 0 || f.Items[0].Category == nil {
-		return "" // unreachable: listedOrder sends fixed findings (the only ones without items) to its fixed_at branch, and full_path is NOT NULL (duckstore/schema.go:30)
+		// unreachable: only a fixed finding lacks items (mergeFindings writes them for detected ones, each >= 1) and listedOrder sends it to fixed_at; full_path is NOT NULL (schema.go:30)
+		return ""
 	}
 	return *f.Items[0].Category
 }

@@ -250,6 +250,15 @@ func Test_findings_refuses_with_the_store_refusal_copy(t *testing.T) {
 	assert.EqualError(t, err, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it")
 }
 
+func Test_findings_returns_a_store_fault_that_is_not_a_refusal_unchanged(t *testing.T) {
+	srv := report.NewServer(report.WithStore(fakeStore{err: errDiskRead}), report.WithHome(refusalHome))
+
+	got, err := srv.Findings(t.Context(), report.FindingsRequest{})
+
+	assert.Equal(t, errDiskRead, err)
+	assert.Equal(t, report.FindingsListing{}, got)
+}
+
 func Test_findings_reports_an_interrupt_before_any_store_refusal(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

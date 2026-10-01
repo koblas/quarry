@@ -21,6 +21,14 @@ func Test_types_returns_a_fresh_slice_each_call(t *testing.T) {
 	assert.Equal(t, finding.Duplicate, finding.Types()[0])
 }
 
+func Test_known_is_true_for_each_listed_type_and_false_for_any_other(t *testing.T) {
+	for _, typ := range finding.Types() {
+		assert.True(t, typ.Known(), typ)
+	}
+	assert.False(t, finding.Type("future-kind").Known())
+	assert.False(t, finding.Type("").Known())
+}
+
 func Test_id_joins_type_and_entity_with_a_colon(t *testing.T) {
 	assert.Equal(t, "uncategorized:payee-88", finding.ID(finding.Uncategorized, "payee-88"))
 }
@@ -40,6 +48,8 @@ func Test_pair_id_puts_the_lower_numeric_source_id_first(t *testing.T) {
 		{name: "numeric, not string, order", a: "txn-10", b: "txn-9", want: "duplicate:txn-9+txn-10"},
 		{name: "ids without a number compare as strings", a: "txn-b", b: "txn-a", want: "duplicate:txn-a+txn-b"},
 		{name: "equal numbers fall back to string order", a: "txn-7", b: "acct-7", want: "duplicate:acct-7+txn-7"},
+		{name: "a number sorts before a non-number arriving second", a: "txn-b", b: "txn-9", want: "duplicate:txn-9+txn-b"},
+		{name: "a number sorts before a non-number arriving first", a: "txn-9", b: "txn-b", want: "duplicate:txn-9+txn-b"},
 	}
 
 	for _, c := range cases {
@@ -49,7 +59,7 @@ func Test_pair_id_puts_the_lower_numeric_source_id_first(t *testing.T) {
 	}
 }
 
-func Test_PayeeKey(t *testing.T) {
+func Test_PayeeKey_reduces_a_payee_name_to_the_key_its_variants_share(t *testing.T) {
 	cases := []struct {
 		name string
 		in   string
@@ -89,7 +99,7 @@ func Test_PayeeKey(t *testing.T) {
 	}
 }
 
-func Test_CategoryKey(t *testing.T) {
+func Test_CategoryKey_reduces_a_category_path_to_the_key_its_look_alikes_share(t *testing.T) {
 	cases := []struct {
 		name     string
 		kind     string

@@ -1,6 +1,7 @@
 package finding
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -29,6 +30,11 @@ func Types() []Type {
 		Duplicate, OneSidedTransfer, UnlinkedTransfer, Uncategorized,
 		MixedCategories, PayeeVariants, SimilarCategories, UnusedCategory,
 	}
+}
+
+// Known reports whether t is one of the types Types lists; a store written by a newer quarry may hold others.
+func (t Type) Known() bool {
+	return slices.Contains(Types(), t)
 }
 
 // NoPayee is the entity of the uncategorized finding for splits whose

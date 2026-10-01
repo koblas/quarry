@@ -197,7 +197,8 @@ func detectUncategorized(ctx context.Context, db DB) ([]detectedFinding, error) 
 }
 
 // mergeFindings turns detected and carried findings into findings and finding_items rows; a carried finding keeps
-// its first_found_at and type, and is fixed at builtAt the first build that no longer detects it.
+// its first_found_at and type, and is fixed at builtAt the first build that no longer detects it. A carried
+// finding of a type this binary does not know is kept but left out of the states, as the findings reads leave it out.
 func mergeFindings(detected []detectedFinding, carried []carriedFinding, builtAt time.Time) ([][]any, [][]any, []finding.State) {
 	prior := make(map[string]carriedFinding, len(carried))
 	for _, c := range carried {
@@ -229,7 +230,9 @@ func mergeFindings(detected []detectedFinding, carried []carriedFinding, builtAt
 		if newlyFixed {
 			fixedAt = sql.NullTime{Time: builtAt, Valid: true}
 		}
-		states = append(states, finding.State{ID: c.id, Fixed: true, NewlyFixed: newlyFixed})
+		if finding.Type(c.typ).Known() {
+			states = append(states, finding.State{ID: c.id, Fixed: true, NewlyFixed: newlyFixed})
+		}
 		findingRows = append(findingRows, []any{c.id, c.typ, c.firstFoundAt, fixedAt.Time})
 	}
 	return findingRows, itemRows, states

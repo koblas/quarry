@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_basicString_quotes_and_escapes(t *testing.T) {
+func Test_BasicString_writes_text_as_one_quoted_line_with_its_special_characters_escaped(t *testing.T) {
 	cases := []struct {
 		name string
 		in   string

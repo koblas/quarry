@@ -1,12 +1,14 @@
 package duckstore_test
 
 import (
+	"context"
 	"os"
 	"slices"
 	"testing"
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
 	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
@@ -277,4 +279,29 @@ func Test_replace_reports_each_findings_state_new_carried_reopened_and_newly_fix
 		{ID: "one-sided-transfer:xfer-3", Fixed: true, NewlyFixed: true},
 		{ID: "uncategorized:no-payee"},
 	}, replaced.FindingStates)
+}
+
+func Test_replace_keeps_a_carried_finding_of_an_unknown_type_out_of_the_findings_states(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	withUnknown := duckstore.WithCreate(func(ctx context.Context, path string) (duckstore.DB, error) {
+		db, err := duckdb.Create(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		return &editDB{DB: db, statements: []string{`INSERT INTO findings VALUES ('future-kind:x', 'future-kind', now(), NULL)`}}, nil
+	})
+	_, err := duckstore.New(dir, withUnknown).Replace(t.Context(), withFindingCandidates())
+	require.NoError(t, err)
+
+	replaced, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []finding.State{
+		{ID: "one-sided-transfer:xfer-3"},
+		{ID: "uncategorized:payee-1", Fixed: true, NewlyFixed: true},
+		{ID: "uncategorized:no-payee", Fixed: true, NewlyFixed: true},
+	}, replaced.FindingStates)
+	assert.Equal(t, finding.Counts{Open: 1, Fixed: 2, NewlyFixed: 2}, replaced.Findings)
+	assert.Contains(t, findingTimes(t, duckstore.New(dir)), "future-kind:x|future-kind|")
 }

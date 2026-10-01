@@ -37,7 +37,7 @@ func Test_load_leaves_findings_ignore_empty_when_unset_or_an_empty_list(t *testi
 			_, cfg, err := load(t, c.content)
 
 			require.NoError(t, err)
-			assert.Empty(t, cfg.Ignore)
+			assert.Nil(t, cfg.Ignore)
 			assert.Empty(t, cfg.Warnings)
 		})
 	}
@@ -70,7 +70,7 @@ func Test_load_ignores_findings_ignore_spelled_with_another_letter_case(t *testi
 	_, cfg, err := load(t, "[Findings]\nIgnore = [\"a\"]\n")
 
 	require.NoError(t, err)
-	assert.Empty(t, cfg.Ignore)
+	assert.Nil(t, cfg.Ignore)
 	assert.Equal(t, []string{shownPath + ": unknown key Findings; quarry ignores it"}, cfg.Warnings)
 }
 

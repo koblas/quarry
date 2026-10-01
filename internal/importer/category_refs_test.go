@@ -130,11 +130,6 @@ func Test_import_records_no_category_for_a_reference_that_is_gone(t *testing.T) 
 		{"a budget line item with no category", func(b *v9fixture.Builder, _ int64) {
 			b.BudgetLineItem(v9fixture.BudgetLineItemRow{})
 		}},
-		{"a split under an imported transaction", func(b *v9fixture.Builder, category int64) {
-			acct := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-			txn := b.Transaction(v9fixture.TransactionRow{Account: acct, Amount: "-4.00", PostedDate: &day})
-			b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "-4.00", CategoryTag: category})
-		}},
 	}
 
 	for _, c := range cases {
@@ -149,6 +144,20 @@ func Test_import_records_no_category_for_a_reference_that_is_gone(t *testing.T) 
 			assert.Nil(t, ids)
 		})
 	}
+}
+
+func Test_import_records_no_category_for_a_split_the_store_keeps(t *testing.T) {
+	t.Parallel()
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	b := v9fixture.NewBuilder()
+	category := b.Category(v9fixture.TagRow{Name: "Spend", Type: new(int64(1))})
+	acct := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	txn := b.Transaction(v9fixture.TransactionRow{Account: acct, Amount: "-4.00", PostedDate: &day})
+	b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "-4.00", CategoryTag: category})
+
+	ids := importReferencedCategories(t, b)
+
+	assert.Nil(t, ids)
 }
 
 func Test_import_lists_each_referenced_category_once_in_source_id_order(t *testing.T) {
