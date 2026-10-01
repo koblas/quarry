@@ -45,12 +45,9 @@ func NewServer(opts ...Option) *Server {
 // requestTimeout bounds each request to the Source; the sync warning's "within 30 seconds" is this value.
 const requestTimeout = 30 * time.Second
 
-// Refresh fetches the rates for req.Need that req.Have does not cover, oldest first, none dated
-// inside Have and none out of range. A source that answers with nothing is not a failure.
-// A failed Source call does not drop what answered: the span's FXUSDCAD rates survive a failed IEXE0101 call,
-// and spans that answered survive a failed one. Partial is then set (FetchError set and at least one rate kept)
-// and FetchError carries the first failure's reason. After a timeout or an unreachable bank the later spans are
-// not asked; after any other failure they are. It returns an error only when ctx ended.
+// Refresh fetches the rates for req.Need that req.Have does not cover, oldest first, none dated inside Have.
+// A failed Source call keeps what answered: FetchError is the first failure's reason, and Partial is set when
+// any rate was kept. A source that answers with nothing is not a failure. It returns an error only when ctx ended.
 func (s *Server) Refresh(ctx context.Context, req store.RatesRequest) (store.RatesRefresh, error) {
 	var out store.RatesRefresh
 	for _, ask := range planSpans(req) {
@@ -66,7 +63,7 @@ func (s *Server) Refresh(ctx context.Context, req store.RatesRequest) (store.Rat
 		if out.FetchError == "" {
 			out.FetchError = reason
 		}
-		if stop {
+		if stop { // a timeout or an unreachable bank would make every later span wait as long
 			break
 		}
 	}
@@ -75,15 +72,14 @@ func (s *Server) Refresh(ctx context.Context, req store.RatesRequest) (store.Rat
 	return out, nil
 }
 
-// fetch returns one run's rates: FXUSDCAD's, plus the legacy series' for the days before FXUSDCAD's first
-// observation when the run may use it. The cutover is whatever FXUSDCAD answered with, never a constant.
-// When only the legacy series fails it returns FXUSDCAD's rates beside the error.
+// fetch returns one span's rates: FXUSDCAD's, plus the legacy series' for the days before FXUSDCAD's first
+// observation when the span may use it.
 func (s *Server) fetch(ctx context.Context, ask askSpan) ([]store.Rate, error) {
 	current, err := s.observe(ctx, seriesCurrent, ask.span)
 	if err != nil {
 		return nil, err
 	}
-	legacySpan := ask.span
+	legacySpan := ask.span // the cutover is whatever FXUSDCAD answered with, never a constant
 	if len(current) > 0 {
 		legacySpan.Last = dayBefore(current[0].Date)
 	}
@@ -92,14 +88,13 @@ func (s *Server) fetch(ctx context.Context, ask askSpan) ([]store.Rate, error) {
 	}
 	legacy, err := s.observe(ctx, seriesLegacy, legacySpan)
 	if err != nil {
-		return toRates(current, seriesCurrent), err
+		return toRates(current, seriesCurrent), err // FXUSDCAD's rates survive a failed legacy call
 	}
 	return append(toRates(legacy, seriesLegacy), toRates(current, seriesCurrent)...), nil
 }
 
-// observe asks the source for a series over span, within requestTimeout, and returns its valid observations
-// dated inside span, oldest first, the first of any repeated date kept. A rate the store could not hold fails
-// the answer as errNotRates; a request that outlived requestTimeout fails as errTimeout.
+// observe asks the source for series over span within requestTimeout and returns its valid observations
+// dated inside span, oldest first. A rate the store cannot hold fails as errNotRates, an overrun as errTimeout.
 func (s *Server) observe(ctx context.Context, series string, span store.DateSpan) ([]Observation, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -119,6 +114,7 @@ func (s *Server) observe(ctx context.Context, series string, span store.DateSpan
 		if err := checkRate(o.Rate); err != nil {
 			return nil, fmt.Errorf("%s on %s: %w: %w", series, o.Date.Format(time.DateOnly), errNotRates, err)
 		}
+		// the first of a repeated date wins
 		if slices.ContainsFunc(kept, func(k Observation) bool { return k.Date.Equal(o.Date) }) {
 			continue
 		}

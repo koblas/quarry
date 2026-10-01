@@ -65,3 +65,16 @@ Mutation checks run in V (render.go `ratesPhrase`, import.go `fetchWarning`; bot
 Note: `-run` is case sensitive; a first pass with `Rates|Fetch` matched nothing and ran green. The runs above used `(?i)`.
 
 Nothing left for this scenario.
+
+### Checkpoint fix pass
+
+Tests added (all green on arrival: behaviour already existed) and doc trims; no runtime change.
+- `internal/fx/refresh_failure_test.go` `Test_refresh_times_each_request_alone_so_slow_answers_that_each_beat_30_seconds_all_count`: head+tail spans (20 s each) and a span+legacy request (20 s each) all kept, `FetchError` empty.
+- `cmd/quarry/run_sync_rates_fetch_warnings_test.go`: v4 store (`noRatesTable`) synced against an unreachable bank, text and `--json` (only the nothing-stored line, `none (not fetched; see warning)`, no carry line); `Test_run_sync_again_fetches_the_rates_a_legacy_outage_left_out` (sync 1 legacy 503 = partial, sync 2 stores IEXE0101 rates, `(2 new)`).
+- Doc trims: `Refresh` 3 lines, `fetch` 2, `observe` 2; keep/stop detail now an inline comment beside the `break` and the legacy `return`. `Source` doc drops `maxAnswerBytes` for "16 MiB".
+
+Mutations (fx.go, restored, diff clean), `-run times_each_request`:
+- A: `observe` timeout removed, `context.WithTimeout(ctx, requestTimeout)` wrapping the whole `Refresh`: red in both rows, `Error: Received unexpected error:` (parent deadline surfaces as Refresh error).
+- B: same timeout wrapping `fetch` (one span): red in `.../a_span_and_its_legacy_request`: actual `FetchError:"no answer from www.bankofcanada.ca within 30 seconds"`, `Partial:true`, only the FXUSDCAD rate kept; the head+tail row stays green (each span is alone under 30 s).
+
+Verify: `go test rc=0`, `uncovered-diff.py` 0 lines since 1f3e7e2, lint 0 issues, `-race` fx green. test-stats since 1f3e7e2: cmd/quarry 435 (+3), internal/fx 45 (+1), TOTAL 480 (+4).

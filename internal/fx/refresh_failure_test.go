@@ -175,6 +175,48 @@ func Test_refresh_gives_the_timeout_reason_only_after_30_seconds(t *testing.T) {
 	}
 }
 
+func Test_refresh_times_each_request_alone_so_slow_answers_that_each_beat_30_seconds_all_count(t *testing.T) {
+	const slow = 20 * time.Second
+	cases := []struct {
+		name    string
+		need    store.RatesRequest
+		replies map[string]roundTripFunc
+		want    store.RatesRefresh
+	}{
+		{
+			name: "a head span and a tail span",
+			need: headAndTail,
+			replies: map[string]roundTripFunc{
+				startOf(current, 0): answeringAfter(slow, ratesBody(current, 0, 1)),
+				startOf(current, 7): answeringAfter(slow, ratesBody(current, 8)),
+			},
+			want: store.RatesRefresh{Rates: []store.Rate{rateOn(0, current), rateOn(1, current), rateOn(8, current)}, Added: 3},
+		},
+		{
+			name: "a span and its legacy request",
+			need: store.RatesRequest{Need: span(d(0), d(2))},
+			replies: map[string]roundTripFunc{
+				startOf(current, 0): answeringAfter(slow, ratesBody(current, 2)),
+				startOf(legacy, 0):  answeringAfter(slow, ratesBody(legacy, 0)),
+			},
+			want: store.RatesRefresh{Rates: []store.Rate{rateOn(0, legacy), rateOn(2, current)}, Added: 2},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				b := &bank{replies: c.replies}
+
+				got, err := b.refresher().Refresh(t.Context(), c.need)
+
+				require.NoError(t, err)
+				assert.Equal(t, c.want, got)
+			})
+		})
+	}
+}
+
 func Test_refresh_returns_an_error_when_the_parent_ends_during_a_timed_request(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())

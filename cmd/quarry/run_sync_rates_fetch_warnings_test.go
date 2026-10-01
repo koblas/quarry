@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -88,6 +89,23 @@ func Test_run_sync_json_lists_the_carry_warning_then_the_fetch_warning(t *testin
 	require.Equal(t, 0, exitCode, stderr)
 	doc := decodeFetchSyncDoc(t, stdout)
 	assert.Equal(t, []string{ratesRepeatWarning, noRatesPrefix + cannotReach + nothingStoredTail}, doc.Warnings)
+	assert.JSONEq(t, ratesJSON("", "", 0, cannotReach), string(doc.Store.Rates))
+}
+
+func Test_run_sync_prints_only_the_fetch_warning_when_a_v4_store_is_synced_while_the_bank_is_unreachable(t *testing.T) {
+	exitCode, stdout, stderr := fetchAfterUnreadableRates(t, noRatesTable)
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Equal(t, warningPrefix+noRatesPrefix+cannotReach+nothingStoredTail+"\n", stderr)
+	assert.Contains(t, strings.Split(stdout, "\n"), notFetchedLine)
+}
+
+func Test_run_sync_json_lists_only_the_fetch_warning_when_a_v4_store_is_synced_while_the_bank_is_unreachable(t *testing.T) {
+	exitCode, stdout, stderr := fetchAfterUnreadableRates(t, noRatesTable, "--json")
+
+	require.Equal(t, 0, exitCode, stderr)
+	doc := decodeFetchSyncDoc(t, stdout)
+	assert.Equal(t, []string{noRatesPrefix + cannotReach + nothingStoredTail}, doc.Warnings)
 	assert.JSONEq(t, ratesJSON("", "", 0, cannotReach), string(doc.Store.Rates))
 }
 
@@ -219,4 +237,25 @@ func Test_run_sync_from_json_lists_the_fetch_warning_and_reason(t *testing.T) {
 	doc := decodeFetchSyncDoc(t, stdout)
 	assert.Equal(t, []string{noRatesPrefix + noAnswerInTime + nothingNewTail}, doc.Warnings)
 	assert.JSONEq(t, ratesJSON("2017-01-03", "2017-01-04", 0, noAnswerInTime), string(doc.Store.Rates))
+}
+
+// syncTwiceAroundALegacyOutage syncs a bundle dated before the current series while the legacy series is down,
+// then syncs it again with the bank whole, returning the second sync's stdout.
+func syncTwiceAroundALegacyOutage(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), time.Date(2016, time.December, 30, 0, 0, 0, 0, time.UTC))
+	current := januaryBank()
+	syncThrough(t, legacyDown(current), "--quicken", bundle.Dir)
+	whole := fakeValet{"FXUSDCAD": current["FXUSDCAD"], "IEXE0101": {"2016-12-30": "1.3400", "2017-01-02": "1.3410"}}
+
+	return syncThrough(t, whole, "--quicken", bundle.Dir)
+}
+
+func Test_run_sync_again_fetches_the_rates_a_legacy_outage_left_out(t *testing.T) {
+	stdout := syncTwiceAroundALegacyOutage(t)
+
+	assert.Contains(t, strings.Split(stdout, "\n"), "Rates     USD/CAD 2016-12-30 to 2017-01-04 (2 new)")
+	assert.Equal(t, "date\n2016-12-30\n2017-01-02\n2017-01-03\n2017-01-04\n", storedRateDates(t))
 }
