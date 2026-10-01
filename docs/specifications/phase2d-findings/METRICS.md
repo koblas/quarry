@@ -17,6 +17,7 @@
 | SCENARIO-21 | code-first | A, B1, V | 0/0/1/1 | no (comment MINOR → STATE.md) |
 | SCENARIO-22 (+23) | code-first (light) | L, V | 0/4/2/0 | yes (listing fault, id columns, --csv --json precedence, ignored row unpinned; test-only + rename) |
 | SCENARIO-24 | code-first | A, B1, B2, V | 0/1/3/0 | yes (deposit-first pair unpinned; test-only + comment trims) |
+| SCENARIO-25 | code-first | A, B1, B2, V | 0/1/5/2 | yes (count join not type-gated; SQL gate + test + comment trims) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
