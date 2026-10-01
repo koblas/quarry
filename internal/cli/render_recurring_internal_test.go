@@ -89,6 +89,33 @@ func Test_renderRecurring_names_each_cadence_in_the_Every_cell(t *testing.T) {
 	}
 }
 
+func Test_renderRecurring_adds_new_to_the_status_of_a_new_series(t *testing.T) {
+	cases := []struct {
+		name  string
+		state report.SeriesState
+		want  string
+	}{
+		{name: "active", state: report.SeriesActive, want: "active, new"},
+		{name: "ended", state: report.SeriesEnded, want: "ended, new"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := report.Recurring{
+				Window: spendingWindow(),
+				Series: []report.Series{{
+					Payee: "A", Currency: "CAD", Cadence: report.CadenceMonthly, Amount: 100,
+					First: recurringDay(time.January, 5), Last: recurringDay(time.February, 5), State: c.state, New: true,
+				}},
+			}
+
+			row := strings.Split(renderRecurring(r), "\n")[3]
+
+			assert.True(t, strings.HasSuffix(row, "  "+c.want), row)
+		})
+	}
+}
+
 func Test_renderRecurring_keeps_the_currency_totals_in_the_order_given(t *testing.T) {
 	r := report.Recurring{
 		Window: spendingWindow(),

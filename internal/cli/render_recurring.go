@@ -25,6 +25,17 @@ var recurringStatus = map[report.SeriesState]string{
 	report.SeriesEnded:  "ended",
 }
 
+// recurringNewSuffix follows the state word of a series first charged in the window.
+const recurringNewSuffix = ", new"
+
+// statusCell is the Status cell of s: its state, plus the new suffix when it is new.
+func statusCell(s report.Series) string {
+	if s.New {
+		return recurringStatus[s.State] + recurringNewSuffix
+	}
+	return recurringStatus[s.State]
+}
+
 // renderRecurring renders r as the recurring table: caption, header, one row per series and a Total
 // row per currency whose only filled cell is Per year.
 func renderRecurring(r report.Recurring) string {
@@ -37,7 +48,7 @@ func renderRecurring(r report.Recurring) string {
 		}
 		rows = append(rows, []string{
 			escapeCell(s.Payee), s.Currency, recurringEvery[s.Cadence], formatMoney(s.Amount), perYear,
-			s.First.Format(time.DateOnly), s.Last.Format(time.DateOnly), recurringStatus[s.State], "",
+			s.First.Format(time.DateOnly), s.Last.Format(time.DateOnly), statusCell(s), "",
 		})
 	}
 	for _, t := range r.Totals {

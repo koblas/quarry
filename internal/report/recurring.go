@@ -132,6 +132,9 @@ type Series struct {
 	First, Last time.Time
 	ChargeCount int
 	State       SeriesState
+	// New is whether the first charge falls on or after the window's start; a listed series
+	// always starts by the window's end.
+	New bool
 
 	key groupKey
 }
@@ -167,9 +170,12 @@ func (s *Server) Recurring(ctx context.Context, req RecurringRequest) (Recurring
 		if !ok {
 			continue
 		}
-		if series := seriesOf(group.key, run, rule, today); series.runsDuring(req.Window, today) {
-			result.Series = append(result.Series, series)
+		series := seriesOf(group.key, run, rule, today)
+		if !series.runsDuring(req.Window, today) {
+			continue
 		}
+		series.New = !series.First.Before(req.Window.Since)
+		result.Series = append(result.Series, series)
 	}
 	slices.SortStableFunc(result.Series, compareSeries)
 	result.Totals = yearlyTotals(result.Series)

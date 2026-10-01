@@ -217,12 +217,12 @@ Scenario Outline: SCENARIO-05 — a series ends after its cadence's quiet period
   Then its Status is <status>
   Examples:
     | cadence   | days | status |
-    | weekly    | 14   | active |
-    | weekly    | 15   | ended  |
-    | monthly   | 45   | active |
-    | monthly   | 46   | ended  |
-    | quarterly | 121  | ended  |
-    | annual    | 400  | active |
+    | weekly    | 14   | active, new |
+    | weekly    | 15   | ended, new  |
+    | monthly   | 45   | active, new |
+    | monthly   | 46   | ended, new  |
+    | quarterly | 121  | ended, new  |
+    | annual    | 400  | active, new |
 ```
 
 ```gherkin
@@ -408,8 +408,8 @@ Ruled (sizing pass 2026-10-01):
 - [x] SCENARIO-02: recurring detects weekly, quarterly and yearly series — delivered by SCENARIO-01: `cmd/quarry/run_recurring_test.go` `Test_run_recurring_detects_weekly_quarterly_and_yearly_series`
 - [x] SCENARIO-03: a charge off schedule starts the series again — delivered by SCENARIO-01: `internal/report/recurring_test.go` `Test_recurring_starts_the_series_again_after_a_charge_off_schedule`
 - [x] SCENARIO-04: a split transaction counts once and a refund does not break the series — delivered by SCENARIO-01: `cmd/quarry/run_recurring_test.go` `Test_run_recurring_counts_a_split_charge_once_and_leaves_a_refund_out`
-- [ ] SCENARIO-05: a series ends after its cadence's quiet period
-- [ ] SCENARIO-06: a series first charged in the window is marked new
+- [x] SCENARIO-05: a series ends after its cadence's quiet period — `cmd/quarry/run_recurring_state_test.go` `Test_run_recurring_marks_a_series_ended_one_day_past_its_cadences_quiet_period`
+- [x] SCENARIO-06: a series first charged in the window is marked new — delivered by SCENARIO-05: `cmd/quarry/run_recurring_state_test.go` `Test_run_recurring_marks_a_series_first_charged_in_the_window_as_new`
 - [ ] SCENARIO-07: price changes are listed both ways with first to latest
 - [ ] SCENARIO-08: recurring --json returns the series document
 - [ ] SCENARIO-09: a bill whose amount changes most months is not listed
