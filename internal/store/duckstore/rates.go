@@ -12,10 +12,8 @@ import (
 // rateWidth and rateScale match schemaDDL's fx_rates.usd_cad DECIMAL(10,6).
 const rateWidth, rateScale = 10, 6
 
-// finishBuild fetches the rates the store needs, appends them to fx_rates,
-// then appends store_info last: a file carrying it is complete. It fails only
-// when ctx ended or a row cannot be written; a fetch that fell short is not a
-// failure and keeps whatever rates it returned.
+// finishBuild appends the fetched rates, then store_info last. It fails only when ctx ended or a row cannot
+// be written; a fetch that fell short keeps whatever rates it returned.
 func (s *Store) finishBuild(ctx context.Context, db DB, rows store.Rows, builtAt time.Time) error {
 	refresh, err := s.refreshRates(ctx, rows.Transactions)
 	if err != nil {
@@ -28,6 +26,7 @@ func (s *Store) finishBuild(ctx context.Context, db DB, rows store.Rows, builtAt
 	if err := appendTable(ctx, db, "fx_rates", fxRows); err != nil {
 		return err
 	}
+	// A file carrying store_info is complete, so it goes last.
 	return appendTable(ctx, db, "store_info", [][]any{{int32(FormatVersion), s.quarryVersion, builtAt}})
 }
 

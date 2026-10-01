@@ -157,7 +157,6 @@ SELECT b.id, b.source_id, b.name, b.type, b.currency, b.institution, b.closed, b
 	` + convertedTo("USD", "b.balance", "b.currency", "r.usd_cad") + ` AS balance_usd
 FROM b
 LEFT JOIN r ON true;
-COMMENT ON VIEW v_account_balances IS 'balance_cad and balance_usd convert balance at the latest fx_rates rate dated today or earlier; NULL when there is none.';
 `
 }
 

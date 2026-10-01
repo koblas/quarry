@@ -74,3 +74,8 @@ Files:
 Green: money, store/..., cli, cmd/quarry packages; `golangci-lint run ./...` 0 issues. Full suite not run.
 Mutations (restored): `2000000 +`->`-` -> CAD-to-USD rounding rows + parity test; ASOF `>=`->`>` -> rate-date test + parity; drop `date <= current_date` in `r` -> 2099 test; `-amount_cad`->`amount_cad` -> spending negation + parity; `LEFT JOIN r ON false` -> 4 balance tests; USD branch -> EUR -> weekend/after-last/third-currency tests.
 V to do: doc.go (duckstore) must name fx_rates and the converted view columns; doc comments on money/Convert/RatesSource/WithRates/store.Rate*; full verify; spec tick; STATE.md.
+
+Checkpoint fix pass (run V follow-up):
+- Replace-hook mutations the checkpoint re-verified, restored: ignoring the Refresh error -> `Test_replace_does_no_build_work_after_a_rate_fetch_the_context_interrupted`; abort on FetchError -> `Test_replace_swaps_in_the_store_when_the_rate_fetch_fails` + `Test_replace_swaps_in_the_store_with_no_rates_when_the_fetch_returns_none`; dropping the fx_rates append -> `Test_replace_stores_each_fetched_rate_with_its_series`.
+- fx_rates constraints: `Test_replace_keeps_the_previous_store_when_fetched_rates_break_a_constraint` (duplicate date, zero, negative). Mutations: drop `PRIMARY KEY` -> the duplicate-date subtest; drop `CHECK (usd_cad > 0)` -> the zero and negative subtests.
+- Local date: `Test_needSpan_ends_on_the_local_calendar_date_of_the_instant` and the synctest `Test_replace_asks_for_rates_up_to_the_local_date_when_it_differs_from_the_utc_date`. Under TZ=UTC, `time.Now().UTC()` in refreshRates -> the Replace test; `now.UTC().Date()` in needSpan -> the Replace test and both needSpan subtests.

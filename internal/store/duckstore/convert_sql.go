@@ -2,13 +2,11 @@ package duckstore
 
 import "fmt"
 
-// convertedTo is the SQL for amount (a DECIMAL(18,2) in currency) expressed in target, "CAD" or "USD", at
-// rate (CAD per USD, DECIMAL(10,6)). It is DECIMAL(18,2), and NULL when amount is NULL, the currency is
-// neither CAD nor USD, or a conversion is needed and rate is NULL. It rounds half away from zero, as
-// money.Convert does: DuckDB's cast to DECIMAL(18,2) rounds a half away from zero, and the DECIMAL(38,2)
-// operand keeps the product from overflowing the 18 digits an amount already has.
+// convertedTo is the SQL for amount (DECIMAL(18,2) in currency) in target, "CAD" or "USD", at rate (CAD
+// per USD): NULL when amount is NULL, the currency is neither, or a conversion needs a NULL rate.
 func convertedTo(target, amount, currency, rate string) string {
 	if target == "CAD" {
+		// The DECIMAL(38,2) operand keeps the product from overflowing 18 digits; the cast back rounds half away from zero.
 		return fmt.Sprintf(`CASE WHEN %[2]s = 'CAD' THEN %[1]s
 		WHEN %[2]s = 'USD' THEN CAST(CAST(%[1]s AS DECIMAL(38,2)) * %[3]s AS DECIMAL(18,2)) END`,
 			amount, currency, rate)

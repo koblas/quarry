@@ -19,10 +19,9 @@ const (
 // millionth is the divisor between a Rate and a plain multiplier.
 const millionth = 1_000_000
 
-// Convert converts cents held in from into to at rate (CAD per USD), rounding
-// half away from zero. It reports false when no conversion exists: from is
-// Native, to is neither Native nor a known currency, or the currencies differ
-// and rate is not positive. to == Native and from == to return cents unchanged.
+// Convert converts cents from one currency to another at rate (CAD per USD), rounding half away from zero.
+// It reports false for a Native source, an unknown target, an unrepresentable result, or a cross-currency
+// conversion at a rate <= 0; a Native target or the same currency returns cents unchanged.
 func Convert(cents int64, from, to Currency, rate Rate) (int64, bool) {
 	switch {
 	case from == Native:

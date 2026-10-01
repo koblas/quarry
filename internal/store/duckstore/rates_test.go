@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
@@ -85,6 +86,26 @@ func Test_replace_asks_for_rates_from_the_earliest_transaction_to_today(t *testi
 	assert.Equal(t, time.Date(2025, 12, 30, 0, 0, 0, 0, time.UTC), got.Need.First)
 	assert.Contains(t, []time.Time{dayBefore, dayAfter}, got.Need.Last)
 	assert.Equal(t, store.DateSpan{}, got.Have)
+}
+
+// Moves the process zone and the clock: no t.Parallel.
+func Test_replace_asks_for_rates_up_to_the_local_date_when_it_differs_from_the_utc_date(t *testing.T) {
+	saved := time.Local                            //nolint:gosmopolitan // the test swaps the process-local zone; Cleanup restores it
+	time.Local = time.FixedZone("UTC-5", -5*60*60) //nolint:gosmopolitan // see above
+	t.Cleanup(func() { time.Local = saved })       //nolint:gosmopolitan // restores the zone
+	src := &fakeRates{}
+	st := duckstore.New(t.TempDir(), duckstore.WithRates(src))
+
+	synctest.Test(t, func(t *testing.T) {
+		time.Sleep(2 * time.Hour) // the bubble clock starts at 2000-01-01 00:00 UTC: 02:00 UTC, 21:00 on 1999-12-31 local
+
+		_, err := st.Replace(t.Context(), minimalRows())
+
+		require.NoError(t, err)
+	})
+
+	require.Len(t, src.requests, 1)
+	assert.Equal(t, time.Date(1999, 12, 31, 0, 0, 0, 0, time.UTC), src.requests[0].Need.Last)
 }
 
 func Test_replace_asks_for_no_dates_when_there_are_no_transactions(t *testing.T) {
@@ -207,6 +228,44 @@ func Test_replace_keeps_the_previous_store_when_a_rate_does_not_fit_the_column(t
 	after, err := os.ReadFile(replaced.Path)
 	require.NoError(t, err)
 	assert.Equal(t, before, after)
+}
+
+func Test_replace_keeps_the_previous_store_when_fetched_rates_break_a_constraint(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		rates   []store.Rate
+		wantErr string
+	}{
+		{name: "two rates on one date", rates: []store.Rate{ratesOn(13, 1_250_000, "IEXE"), ratesOn(13, 1_260_000, "FXUSDCAD")}, wantErr: "2026-03-13"},
+		{name: "a zero rate", rates: []store.Rate{ratesOn(13, 0, "IEXE")}, wantErr: "CHECK"},
+		{name: "a negative rate", rates: []store.Rate{ratesOn(13, -1_250_000, "IEXE")}, wantErr: "CHECK"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			replaced, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+			require.NoError(t, err)
+			before, err := os.ReadFile(replaced.Path)
+			require.NoError(t, err)
+			src := &fakeRates{refresh: store.RatesRefresh{Rates: c.rates}}
+			rows := minimalRows()
+			rows.Transactions[0].Amount = 999
+
+			_, err = duckstore.New(dir, duckstore.WithRates(src)).Replace(t.Context(), rows)
+
+			require.ErrorContains(t, err, "load fx_rates")
+			require.ErrorContains(t, err, c.wantErr)
+			entries, err := os.ReadDir(dir)
+			require.NoError(t, err)
+			assert.Equal(t, []string{"quarry.duckdb"}, direntNames(entries))
+			after, err := os.ReadFile(replaced.Path)
+			require.NoError(t, err)
+			assert.Equal(t, before, after)
+		})
+	}
 }
 
 func localDate(now time.Time) time.Time {

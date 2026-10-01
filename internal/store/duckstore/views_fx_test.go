@@ -165,6 +165,29 @@ func Test_cash_flow_leaves_a_third_currency_unconverted(t *testing.T) {
 	assert.Equal(t, [][]string{{"NULL", "NULL"}}, got)
 }
 
+func Test_spending_leaves_a_third_currency_unconverted(t *testing.T) {
+	t.Parallel()
+	rows := fxRows()
+	expense(&rows, "x", "EUR", march(13), -250)
+	st := newStoreWithRates(t, rows, fridayAndMonday()...)
+
+	got := queryTexts(t, st, "SELECT spent_cad, spent_usd FROM v_spending WHERE split_id = 'x'")
+
+	assert.Equal(t, [][]string{{"NULL", "NULL"}}, got)
+}
+
+func Test_spending_keeps_an_amount_in_its_own_currency_when_the_store_has_no_rates(t *testing.T) {
+	t.Parallel()
+	rows := fxRows()
+	expense(&rows, "x", "CAD", march(13), -250)
+	expense(&rows, "y", "USD", march(13), -300)
+	st := newStoreWithRates(t, rows)
+
+	got := queryTexts(t, st, "SELECT split_id, spent_cad, spent_usd, usd_cad FROM v_spending WHERE split_id IN ('x', 'y') ORDER BY split_id")
+
+	assert.Equal(t, [][]string{{"x", "2.50", "NULL", "NULL"}, {"y", "NULL", "3.00", "NULL"}}, got)
+}
+
 func Test_spending_carries_each_cash_flow_rows_converted_amounts_negated(t *testing.T) {
 	t.Parallel()
 	rows := fxRows()
@@ -178,25 +201,27 @@ func Test_spending_carries_each_cash_flow_rows_converted_amounts_negated(t *test
 
 func Test_money_convert_matches_every_spending_rows_converted_columns(t *testing.T) {
 	t.Parallel()
+	currencies := map[string]money.Currency{"CAD": money.CAD, "USD": money.USD}
+	rateDates := []int{13, 16, 17}
 	rows := fxRows()
 	var id int
-	for _, currency := range []string{"CAD", "USD"} {
+	for currency := range currencies {
 		for _, cents := range []int64{-1, 1, 10, -10, 20, -20, 99, 12_345, -99_999_999} {
-			id++
-			expense(&rows, "s"+strconv.Itoa(id), currency, march(13+3*(id%2)), cents)
+			for _, rateDate := range rateDates {
+				id++
+				expense(&rows, "s"+strconv.Itoa(id), currency, march(rateDate), cents)
+			}
 		}
 	}
-	st := newStoreWithRates(t, rows, ratesOn(13, 1_250_000, "FXUSDCAD"), ratesOn(16, 1_600_001, "FXUSDCAD"))
+	st := newStoreWithRates(t, rows,
+		ratesOn(13, 1_250_000, "FXUSDCAD"), ratesOn(16, 1_600_001, "FXUSDCAD"), ratesOn(17, 1_249_999, "FXUSDCAD"))
 	got, err := st.Query(t.Context(), `SELECT currency, CAST(spent * 100 AS BIGINT), CAST(usd_cad * 1000000 AS BIGINT),
 		CAST(spent_cad * 100 AS BIGINT), CAST(spent_usd * 100 AS BIGINT) FROM v_spending WHERE split_id <> 'keep'`, 0)
 	require.NoError(t, err)
 
-	require.Len(t, got.Rows, 18)
+	require.Len(t, got.Rows, id)
 	for _, row := range got.Rows {
-		currency := money.CAD
-		if row[0].Text == "USD" {
-			currency = money.USD
-		}
+		currency := currencies[row[0].Text]
 		cents, rate := nativeInt(t, row[1]), money.Rate(nativeInt(t, row[2]))
 		wantCAD, okCAD := money.Convert(cents, currency, money.CAD, rate)
 		wantUSD, okUSD := money.Convert(cents, currency, money.USD, rate)
@@ -280,6 +305,17 @@ func Test_account_balances_leave_an_investment_accounts_balance_empty_in_both_cu
 	got := balancesOf(t, st, acctInvestment)
 
 	assert.Equal(t, [][]string{{"NULL", "NULL", "NULL"}}, got)
+}
+
+func Test_account_balances_leave_a_third_currency_unconverted(t *testing.T) {
+	t.Parallel()
+	rows := fxRows()
+	rows.Accounts = append(rows.Accounts, store.Account{ID: "acct-eur", SourceID: 5, Name: "Euro Chequing", Type: "chequing", Currency: "EUR", Active: true})
+	st := newStoreWithRates(t, rows, ratesOn(13, fridayRate, "FXUSDCAD"))
+
+	got := balancesOf(t, st, "acct-eur")
+
+	assert.Equal(t, [][]string{{"0.00", "NULL", "NULL"}}, got)
 }
 
 func Test_account_balances_lists_its_columns_in_order(t *testing.T) {

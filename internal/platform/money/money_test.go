@@ -80,11 +80,12 @@ func Test_convert_rounds_half_a_cent_away_from_zero(t *testing.T) {
 	}{
 		{name: "USD to CAD half cent up", cents: 10, from: money.USD, to: money.CAD, rate: rate125, want: 13},
 		{name: "USD to CAD negative half cent down", cents: -10, from: money.USD, to: money.CAD, rate: rate125, want: -13},
-		{name: "USD to CAD just below half", cents: 9, from: money.USD, to: money.CAD, rate: rate125, want: 11},
+		{name: "USD to CAD just below half a cent", cents: 10, from: money.USD, to: money.CAD, rate: 1_249_999, want: 12},
+		{name: "USD to CAD negative just below half a cent", cents: -10, from: money.USD, to: money.CAD, rate: 1_249_999, want: -12},
 		{name: "CAD to USD half cent up", cents: 20, from: money.CAD, to: money.USD, rate: rate16, want: 13},
 		{name: "CAD to USD negative half cent down", cents: -20, from: money.CAD, to: money.USD, rate: rate16, want: -13},
-		{name: "CAD to USD just below half", cents: 19, from: money.CAD, to: money.USD, rate: rate16, want: 12},
-		{name: "CAD to USD negative just below half", cents: -19, from: money.CAD, to: money.USD, rate: rate16, want: -12},
+		{name: "CAD to USD just below half a cent", cents: 20, from: money.CAD, to: money.USD, rate: 1_600_001, want: 12},
+		{name: "CAD to USD negative just below half a cent", cents: -20, from: money.CAD, to: money.USD, rate: 1_600_001, want: -12},
 		{name: "zero converts to zero", cents: 0, from: money.CAD, to: money.USD, rate: rate16, want: 0},
 	}
 
