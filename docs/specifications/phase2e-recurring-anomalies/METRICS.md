@@ -17,6 +17,7 @@
 | --- | --- | --- | --- | --- |
 | 1 | arch, correctness ×2, test ×2, refactor | 0/2/~25/~10 | 0 / 20, 589s | BLOCKED |
 | 2 | correctness, test | 0/0/0/1 | developer mutations 4/4 red | PASS |
+| 3 (after final product-vision SHIP WITH CHANGES) | correctness, test | 0/0/1/0 | developer mutations 6/6 red | PASS WITH FOLLOW-UPS |
 
 ## Tokens
 

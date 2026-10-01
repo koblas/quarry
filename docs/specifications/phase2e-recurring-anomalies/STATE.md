@@ -55,3 +55,5 @@
 - Orchestrator: recurring Payee column has no width cap — one long payee widens the table to ~77 cols on the real file; raise at the final product-vision pass (unowned)
 - Gate R1 deferred (REVIEW-01): refactor MINORs (Long hard-codes policy numbers, now guarded by a constants test; wire words reuse display maps; positional `cadenceRules`; `Server.Anomalies` compose; duplicate command consts; split-category rule in two mappers; tenths/percent consts; `steady()` placement); int64 overflow (unreachable); test-A NITs; cmd oracle duplication; R2/R3 cmd rows for new commands
 - Gate R2 NIT: `internal/cli/report_clock_test.go:41-48` fixture loop in test body
+- Gate R3 MINOR: anomalies twin of the `--since 2030 --until 2031` E1 pin
+- Orchestrator: PRD §Security "redaction on import" is not implemented — a real payee carries an unmasked 18-digit cheque number (predates 2e; spend/findings print it too); needs its own feature before Phase 3 MCP (unowned)
