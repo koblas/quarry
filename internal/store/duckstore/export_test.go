@@ -14,6 +14,7 @@ var FormatCheckQueries = []string{columnExistsQuery, formatVersionQuery, snapsho
 const (
 	MixedCategoriesQuery  = mixedCategoriesQuery
 	OneSidedTransferQuery = oneSidedTransferQuery
+	PayeeVariantsQuery    = payeeVariantsQuery
 	UncategorizedQuery    = uncategorizedQuery
 	UnlinkedTransferQuery = unlinkedTransferQuery
 )

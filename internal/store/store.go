@@ -378,7 +378,7 @@ type FindingItem struct {
 	Payee          string
 	Category       *string // an unlinked-transfer item's sole split's full path, nil if none or several; a mixed-categories item's category path
 	Splits         int     // an unlinked-transfer item's split count
-	Transactions   int     // a mixed-categories item's payee's transactions in its category; 0 for every other type
+	Transactions   int     // a mixed-categories item's payee's transactions in its category, a payee-variants item's payee's transactions; 0 for every other type
 	Amount         int64
 	OtherAccount   *string
 	OtherAccountID *string

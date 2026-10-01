@@ -166,6 +166,17 @@ func Test_renderFindingsJSON_gives_a_mixed_categories_item_its_payee_category_an
 	}, items[0])
 }
 
+func Test_renderFindingsJSON_gives_a_payee_variants_item_its_payee_and_count_and_null_everything_else(t *testing.T) {
+	items := itemsJSON(t, finding.PayeeVariants, store.FindingItem{PayeeID: new("payee-12"), Payee: "TIM HORTONS #1234", Transactions: 212})
+
+	assert.Equal(t, map[string]any{
+		"transaction_id": nil, "split_id": nil, "payee_id": "payee-12", "category_id": nil,
+		"date": nil, "account_id": nil, "account": nil, "currency": nil,
+		"payee": "TIM HORTONS #1234", "category": nil, "amount": nil,
+		"other_account": nil, "other_account_id": nil, "transactions": float64(212), "splits": nil,
+	}, items[0])
+}
+
 func Test_renderFindingsJSON_keeps_the_date_account_and_amount_of_a_transaction_item_and_a_null_transactions(t *testing.T) {
 	items := itemsJSON(t, finding.Duplicate, store.FindingItem{
 		TransactionID: new("txn-1"), Date: findingDay(2026, 8, 3), AccountID: "acct-3", Account: "Chequing", Currency: "CAD",

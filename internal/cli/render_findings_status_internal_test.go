@@ -115,11 +115,11 @@ func Test_findingLines_ends_an_ignored_finding_with_a_marker_under_the_all_view(
 		},
 		{
 			name: "a type with no row layout marks its id line",
-			group: report.FindingsGroup{Type: finding.PayeeVariants, Findings: []report.ListedFinding{
-				withStatus(openFinding(store.Finding{ID: "payee-variants:tim-hortons", Type: finding.PayeeVariants}), finding.StatusIgnored),
-				openFinding(store.Finding{ID: "payee-variants:visa", Type: finding.PayeeVariants}),
+			group: report.FindingsGroup{Type: finding.UnusedCategory, Findings: []report.ListedFinding{
+				withStatus(openFinding(store.Finding{ID: "unused-category:cat-17", Type: finding.UnusedCategory}), finding.StatusIgnored),
+				openFinding(store.Finding{ID: "unused-category:cat-40", Type: finding.UnusedCategory}),
 			}},
-			want: []string{"  payee-variants:tim-hortons  ignored", "  payee-variants:visa"},
+			want: []string{"  unused-category:cat-17  ignored", "  unused-category:cat-40"},
 		},
 	}
 
@@ -131,11 +131,11 @@ func Test_findingLines_ends_an_ignored_finding_with_a_marker_under_the_all_view(
 }
 
 func Test_findingLines_leaves_an_ignored_finding_unmarked_when_the_view_lists_only_ignored_ones(t *testing.T) {
-	group := report.FindingsGroup{Type: finding.PayeeVariants, Findings: []report.ListedFinding{
-		withStatus(openFinding(store.Finding{ID: "payee-variants:tim-hortons", Type: finding.PayeeVariants}), finding.StatusIgnored),
+	group := report.FindingsGroup{Type: finding.UnusedCategory, Findings: []report.ListedFinding{
+		withStatus(openFinding(store.Finding{ID: "unused-category:cat-17", Type: finding.UnusedCategory}), finding.StatusIgnored),
 	}}
 
-	assert.Equal(t, []string{"  payee-variants:tim-hortons"}, findingLines(group, ignoredView))
+	assert.Equal(t, []string{"  unused-category:cat-17"}, findingLines(group, ignoredView))
 }
 
 func Test_findingLines_shows_a_fixed_finding_as_one_unpadded_line_with_the_local_date_of_its_fixed_at(t *testing.T) {

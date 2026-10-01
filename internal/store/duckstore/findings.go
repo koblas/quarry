@@ -44,7 +44,8 @@ FROM v_cash_flow
 WHERE category_id IS NULL
 ORDER BY payee_id NULLS FIRST, split_id`
 
-// findingItem is one row of finding_items; a NULL column is an invalid sql.NullString.
+// findingItem is one row of finding_items; a NULL column is an invalid sql.NullString. A payee-variants item
+// holds payeeID only.
 type findingItem struct {
 	transactionID, splitID, payeeID, categoryID sql.NullString
 }
@@ -95,7 +96,11 @@ func detectFindings(ctx context.Context, db DB) ([]detectedFinding, error) {
 	if err != nil {
 		return nil, fmt.Errorf("detect %s findings: %w", finding.MixedCategories, err)
 	}
-	return slices.Concat(duplicates, oneSided, unlinked, uncategorized, mixed), nil
+	variants, err := detectPayeeVariants(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("detect %s findings: %w", finding.PayeeVariants, err)
+	}
+	return slices.Concat(duplicates, oneSided, unlinked, uncategorized, mixed, variants), nil
 }
 
 // detectDuplicates returns one finding per duplicate pair, its items the two transactions.

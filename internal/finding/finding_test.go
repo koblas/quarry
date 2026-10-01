@@ -49,6 +49,44 @@ func Test_pair_id_puts_the_lower_numeric_source_id_first(t *testing.T) {
 	}
 }
 
+func Test_PayeeKey(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"a trailing store number is cut", "TIM HORTONS #1234", "tim-hortons"},
+		{"case is ignored", "Tim Hortons", "tim-hortons"},
+		{"hyphens split like spaces", "TIM-HORTONS", "tim-hortons"},
+		{"cut at the first star", "AMZN Mktp CA*1A2B3", "amzn-mktp-ca"},
+		{"cut at whichever of star and hash comes first", "A#B*C", "a"},
+		{"cut at a star with letters after it", "SQ *Coffee Shop", "sq"},
+		{"cut at a hash with letters after it", "Tim #Hortons", "tim"},
+		{"a diacritic is kept", "Café", "café"},
+		{"no diacritic folding", "Cafe", "cafe"},
+		{"punctuation splits a word", "Tim's Hortons.", "tim-s-hortons"},
+		{"runs of spaces collapse", "  Tim   Hortons  ", "tim-hortons"},
+		{"a numeric token is dropped, not the whole name", "Store 24", "store"},
+		{"a hyphen splits before the digit drop", "7-Eleven #123", "eleven"},
+		{"a token holding a digit is dropped whole", "7Eleven", ""},
+		{"only a store number", "#1234", ""},
+		{"only digits", "12345", ""},
+		{"only a star", "*", ""},
+		{"only a hash", "#", ""},
+		{"empty", "", ""},
+		{"all punctuation", "..., -!", ""},
+		{"non-Latin letters are kept", "Москва", "москва"},
+		{"Arabic-Indic digits are digits", "Store ٢٤", "store"},
+		{"a vulgar fraction is a separator, not a digit", "Half½Price", "half-price"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, finding.PayeeKey(c.in))
+		})
+	}
+}
+
 func Test_status_of_derives_one_status_from_fixed_and_ignored(t *testing.T) {
 	cases := []struct {
 		name    string

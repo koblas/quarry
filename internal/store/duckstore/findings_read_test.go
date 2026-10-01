@@ -368,3 +368,32 @@ func Test_findings_counts_no_transactions_for_an_item_of_any_other_type_naming_a
 
 	assert.Equal(t, []int{3, 0, 0}, []int{mixed.Items[0].Transactions, uncategorized.Items[0].Transactions, duplicate.Items[0].Transactions})
 }
+
+func Test_findings_reads_a_payee_variants_item_as_its_payee_with_the_payees_transactions_and_no_category_or_date(t *testing.T) {
+	t.Parallel()
+	rows := variantRows(variantPayee{name: "Tim Hortons", txns: 1}, variantPayee{name: "TIM HORTONS #1234", txns: 2})
+
+	got := readFinding(t, rows, "payee-variants:tim-hortons")
+
+	assert.Equal(t, finding.PayeeVariants, got.Type)
+	assert.Equal(t, []store.FindingItem{
+		{PayeeID: new("payee-2"), Payee: "TIM HORTONS #1234", Transactions: 2},
+		{PayeeID: new("payee-1"), Payee: "Tim Hortons", Transactions: 1},
+	}, got.Items)
+}
+
+func Test_findings_gives_only_a_payee_variants_item_the_payee_total(t *testing.T) {
+	t.Parallel()
+	rows := variantRows(variantPayee{name: "Tim Hortons", txns: 2}, variantPayee{name: "TIM HORTONS", txns: 1})
+	probe := func(id, typ string) string {
+		return `INSERT INTO findings VALUES ('` + id + `', '` + typ + `', now(), NULL);
+			INSERT INTO finding_items (finding_id, payee_id) VALUES ('` + id + `', 'payee-1')`
+	}
+	edits := []string{probe("uncategorized:probe", "uncategorized"), probe("duplicate:probe", "duplicate")}
+
+	variants := readEdited(t, rows, "payee-variants:tim-hortons", edits...)
+	uncategorized := readEdited(t, rows, "uncategorized:probe", edits...)
+	duplicate := readEdited(t, rows, "duplicate:probe", edits...)
+
+	assert.Equal(t, []int{2, 0, 0}, []int{variants.Items[0].Transactions, uncategorized.Items[0].Transactions, duplicate.Items[0].Transactions})
+}

@@ -3,6 +3,7 @@ package finding
 import (
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // Type names one kind of finding; its string form is the id prefix and the
@@ -39,6 +40,26 @@ const MatchDays = 3
 
 // MixedMin is the fewest categorized transactions a payee needs before it can be a mixed-categories finding.
 const MixedMin = 3
+
+// PayeeKey returns the payee-variants entity for a payee name, or "" when nothing is left to compare.
+// Ids are a contract (users write them into config.toml), so the rule never changes silently: cut at the first
+// "*" or "#", lower-case, split on every rune that is no letter or digit, drop each token holding a digit, join with "-".
+// No diacritic folding: "Café" and "Cafe" are different keys.
+func PayeeKey(name string) string {
+	if i := strings.IndexAny(name, "*#"); i >= 0 {
+		name = name[:i]
+	}
+	tokens := strings.FieldsFunc(strings.ToLower(name), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+	kept := tokens[:0]
+	for _, token := range tokens {
+		if !strings.ContainsFunc(token, unicode.IsDigit) {
+			kept = append(kept, token)
+		}
+	}
+	return strings.Join(kept, "-")
+}
 
 // idSeparator splits a finding id into its type and entity.
 const idSeparator = ":"

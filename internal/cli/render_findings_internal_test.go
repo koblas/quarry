@@ -236,9 +236,9 @@ func Test_renderFindings_shows_the_ignore_hint_only_when_asked_and_a_finding_is_
 func Test_renderFindings_lists_one_id_per_finding_of_a_type_with_no_row_layout(t *testing.T) {
 	listing := report.FindingsListing{
 		Groups: []report.FindingsGroup{
-			{Type: finding.PayeeVariants, Findings: []report.ListedFinding{
-				openFinding(store.Finding{ID: "payee-variants:tim-hortons", Type: finding.PayeeVariants}),
-				openFinding(store.Finding{ID: "payee-variants:visa", Type: finding.PayeeVariants}),
+			{Type: finding.UnusedCategory, Findings: []report.ListedFinding{
+				openFinding(store.Finding{ID: "unused-category:cat-17", Type: finding.UnusedCategory}),
+				openFinding(store.Finding{ID: "unused-category:cat-40", Type: finding.UnusedCategory}),
 			}},
 			{Type: finding.Uncategorized, Findings: []report.ListedFinding{
 				uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)),
@@ -249,9 +249,9 @@ func Test_renderFindings_lists_one_id_per_finding_of_a_type_with_no_row_layout(t
 
 	got := renderFindings(listing, openView, false)
 
-	assert.Equal(t, "Payee variants (2): rename each group to one payee in Quicken and add a renaming rule\n"+
-		"  payee-variants:tim-hortons\n"+
-		"  payee-variants:visa\n"+
+	assert.Equal(t, "Unused categories (2): no transaction uses them; check that no scheduled transaction or budget does, then delete them in Quicken\n"+
+		"  unused-category:cat-17\n"+
+		"  unused-category:cat-40\n"+
 		"\n"+
 		"Uncategorized (1 payee, 1 split)"+uncategorizedFix+
 		"  uncategorized:payee-1  Amazon  1 split  2026-03-01\n"+

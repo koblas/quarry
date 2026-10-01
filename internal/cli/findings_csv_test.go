@@ -168,6 +168,8 @@ func Test_findings_csv_refuses_a_failed_stdout_write(t *testing.T) {
 
 const mixedFixCSV = `"Pick one category for this payee's transactions in Quicken, or ignore it if the mix is intended"`
 
+const variantsFixCSV = `"Rename these payees to one in Quicken and add a renaming rule, or ignore the group if they are different merchants"`
+
 const unlinkedFixCSV = `"Make the pair one transfer between the two accounts in Quicken, or ignore it if no money moved between your accounts"`
 
 // unlinkedFake is one unlinked-transfer finding of first and second, both in Chequing (CAD) with payee Rent.
@@ -220,4 +222,18 @@ func Test_findings_csv_puts_a_mixed_categories_item_in_its_payee_category_and_co
 	require.NoError(t, err)
 	assert.Equal(t, findingsCSVHeader+
 		"mixed-categories:payee-12,mixed-categories,open,,,,Costco,Groceries,,,30,,,,payee-12,cat-3,"+mixedFixCSV+"\n", stdout.String())
+}
+
+func Test_findings_csv_puts_a_payee_variants_item_in_its_payee_and_count_columns_with_the_transaction_cells_empty(t *testing.T) {
+	fake := fakeReportStore{findings: store.FindingList{Findings: []store.Finding{{
+		ID: "payee-variants:tim-hortons", Type: finding.PayeeVariants, FirstFoundAt: csvFindingDay(1),
+		Items: []store.FindingItem{{PayeeID: new("payee-12"), Payee: "TIM HORTONS #1234", Transactions: 212}},
+	}}}}
+	var stdout bytes.Buffer
+
+	err := executeFindings(t, fake, &stdout, &bytes.Buffer{}, "--csv")
+
+	require.NoError(t, err)
+	assert.Equal(t, findingsCSVHeader+
+		"payee-variants:tim-hortons,payee-variants,open,,,,TIM HORTONS #1234,,,,212,,,,payee-12,,"+variantsFixCSV+"\n", stdout.String())
 }

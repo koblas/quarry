@@ -69,9 +69,12 @@ func findingsHeader(group report.FindingsGroup) string {
 	return header + ": " + fix.GroupClause
 }
 
-// findingsGroupCount is the count in a group header: the findings listed, and for uncategorized
-// the payees and the splits they list, the splits left out when none is listed.
+// findingsGroupCount is the count in a group header: the findings listed, as groups for payee-variants, and for
+// uncategorized the payees and the splits they list, the splits left out when none is listed.
 func findingsGroupCount(group report.FindingsGroup) string {
+	if group.Type == finding.PayeeVariants {
+		return humanize.Count(len(group.Findings), "group", "groups")
+	}
 	if group.Type != finding.Uncategorized {
 		return humanize.Thousands(len(group.Findings))
 	}
@@ -126,6 +129,8 @@ func liveFindingLines(typ finding.Type, findings []report.ListedFinding, view fi
 		return uncategorizedRows(findings, view)
 	case finding.MixedCategories:
 		return mixedRows(findings, view)
+	case finding.PayeeVariants:
+		return payeeVariantRows(findings, view)
 	}
 	lines := make([]string, len(findings))
 	for i, f := range findings {
@@ -263,25 +268,63 @@ func mixedRows(findings []report.ListedFinding, view findingsView) []string {
 	}
 	idWidth, payeeWidth := widestRunes(ids), widestRunes(payees)
 
-	var lines []string
+	lines := make([]string, 0, len(findings))
 	for i, f := range findings {
-		total := 0
 		paths := make([]string, len(f.Items))
-		counts := make([]string, len(f.Items))
 		for j, item := range f.Items {
-			total += item.Transactions
 			paths[j] = categoryCell(item)
-			counts[j] = humanize.Count(item.Transactions, "transaction", "transactions")
 		}
 		lines = append(lines, "  "+padRight(ids[i], idWidth)+"  "+padRight(payees[i], payeeWidth)+"  "+
-			humanize.Count(len(f.Items), "category", "categories")+", "+humanize.Count(total, "transaction", "transactions")+
-			ignoredMarker(f, view))
-		pathWidth, countWidth := widestRunes(paths), widestRunes(counts)
-		for j := range f.Items {
-			lines = append(lines, "    "+padRight(paths[j], pathWidth)+"  "+padLeft(counts[j], countWidth))
-		}
+			humanize.Count(len(f.Items), "category", "categories")+", "+transactionsText(f.Items)+ignoredMarker(f, view))
+		lines = append(lines, transactionRows(paths, f.Items)...)
 	}
 	return lines
+}
+
+// payeeVariantRows renders each payee-variants finding as an id line (id padded to the widest, payee and transaction
+// counts, ignored marker) over one four-space row per payee: its name padded to the widest in the finding, then its right-aligned count.
+func payeeVariantRows(findings []report.ListedFinding, view findingsView) []string {
+	ids := make([]string, len(findings))
+	for i, f := range findings {
+		ids[i] = f.ID
+	}
+	idWidth := widestRunes(ids)
+
+	lines := make([]string, 0, len(findings))
+	for _, f := range findings {
+		names := make([]string, len(f.Items))
+		for j, item := range f.Items {
+			names[j] = item.Payee
+		}
+		lines = append(lines, "  "+padRight(f.ID, idWidth)+"  "+humanize.Count(len(f.Items), "payee", "payees")+", "+
+			transactionsText(f.Items)+ignoredMarker(f, view))
+		lines = append(lines, transactionRows(names, f.Items)...)
+	}
+	return lines
+}
+
+// transactionsText is the sum of items' Transactions as "N transactions".
+func transactionsText(items []store.FindingItem) string {
+	total := 0
+	for _, item := range items {
+		total += item.Transactions
+	}
+	return humanize.Count(total, "transaction", "transactions")
+}
+
+// transactionRows is one four-space row per item: its label padded to the widest, then its right-aligned transaction count.
+func transactionRows(labels []string, items []store.FindingItem) []string {
+	counts := make([]string, len(items))
+	for i, item := range items {
+		counts[i] = humanize.Count(item.Transactions, "transaction", "transactions")
+	}
+	labelWidth, countWidth := widestRunes(labels), widestRunes(counts)
+
+	rows := make([]string, len(items))
+	for i := range items {
+		rows[i] = "    " + padRight(labels[i], labelWidth) + "  " + padLeft(counts[i], countWidth)
+	}
+	return rows
 }
 
 // payeeOf is the payee name of the first of items; the items of one finding share their payee.

@@ -46,6 +46,15 @@ func mixed(id, payee string, counts ...int) store.Finding {
 	return f
 }
 
+// variants is an open payee-variants finding with one item per transaction count.
+func variants(id string, counts ...int) store.Finding {
+	f := store.Finding{ID: id, Type: finding.PayeeVariants}
+	for _, n := range counts {
+		f.Items = append(f.Items, store.FindingItem{Transactions: n})
+	}
+	return f
+}
+
 func findingsOf(t *testing.T, fs ...store.Finding) report.FindingsListing {
 	t.Helper()
 	srv := report.NewServer(report.WithStore(fakeStore{findings: store.FindingList{Findings: fs}}))
@@ -134,6 +143,16 @@ func Test_findings_sorts_a_mixed_categories_group_by_transaction_sum_descending_
 		"mixed-categories:payee-6", "mixed-categories:payee-5", "mixed-categories:payee-2", "mixed-categories:payee-1",
 		"mixed-categories:payee-3", "mixed-categories:payee-4",
 	}, idsOf(got.Groups[0]))
+}
+
+func Test_findings_sorts_a_payee_variants_group_by_transaction_sum_descending_then_id(t *testing.T) {
+	got := findingsOf(t,
+		variants("payee-variants:a", 3),
+		variants("payee-variants:c", 10),
+		variants("payee-variants:b", 6, 4),
+		variants("payee-variants:d", 40))
+
+	assert.Equal(t, []string{"payee-variants:d", "payee-variants:b", "payee-variants:c", "payee-variants:a"}, idsOf(got.Groups[0]))
 }
 
 func Test_findings_sorts_a_type_without_a_ruled_order_by_id(t *testing.T) {

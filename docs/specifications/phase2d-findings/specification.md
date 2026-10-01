@@ -601,7 +601,7 @@ Ruled: the finding core (type list and order, id grammar, P2d-3 status function,
 - [x] SCENARIO-23: findings rejects usage it cannot use — delivered by SCENARIO-22 — `cmd/quarry/run_findings_usage_test.go` `Test_run_findings_rejects_usage_it_cannot_use`
 - [x] SCENARIO-24: opposite amounts in two accounts not linked as a transfer are an unlinked transfer — `cmd/quarry/run_sync_unlinked_test.go` `Test_run_sync_records_opposite_amounts_in_two_cad_accounts_as_an_unlinked_transfer_and_not_the_cad_usd_pair`
 - [x] SCENARIO-25: a payee whose category goes back and forth is in mixed categories — `cmd/quarry/run_sync_mixed_test.go` `Test_run_sync_records_costco_as_mixed_categories_and_not_shell`
-- [ ] SCENARIO-26: payees that differ only in case, punctuation or numbers are variants
+- [x] SCENARIO-26: payees that differ only in case, punctuation or numbers are variants — `cmd/quarry/run_sync_payee_variants_test.go` `Test_run_sync_records_tim_hortons_variants_and_not_unrelated_payees`
 - [ ] SCENARIO-27: categories that differ only in case, punctuation or a plural are similar
 - [ ] SCENARIO-28: an unused category is reported only when nothing imported or counted uses it
 
