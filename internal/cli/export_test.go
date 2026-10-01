@@ -1,3 +1,4 @@
+// Black-box seam: UseZone lets the cli_test package pin the process-local zone for local-time rendering.
 package cli
 
 import (

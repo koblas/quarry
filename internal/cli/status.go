@@ -33,12 +33,12 @@ it never looks at Quicken. Run quarry sync to bring the store up to date.`,
 				return &runtimeError{err: err}
 			}
 
-			ignore, warnings := statusIgnore(loadConfig)
+			ignore, warnings, warningsAbsolute := statusIgnore(loadConfig)
 			printConfigWarnings(cmd, warnings)
 			findings := statusFindings{counts: report.CountFindings(st, ignore), ignoreKnown: len(warnings) == 0}
 
 			out, err := renderResult(*jsonOut,
-				func() ([]byte, error) { return renderStatusJSON(st, findings, warnings) },
+				func() ([]byte, error) { return renderStatusJSON(st, findings, warningsAbsolute) },
 				func() string { return renderStatus(st, findings, srv.Home(), time.Now()) })
 			if err != nil {
 				return err
@@ -48,13 +48,18 @@ it never looks at Quicken. Run quarry sync to bring the store up to date.`,
 	}
 }
 
-// statusIgnore returns findings.ignore and the warnings to print. Status never refuses over the
-// config: when it cannot be read the list is nil and warnings holds the one line saying why.
-func statusIgnore(loadConfig ConfigLoader) ([]string, []string) {
+// statusIgnore returns findings.ignore and the warnings to print, ~-abbreviated and then with absolute
+// paths for --json. Status never refuses over the config: when it cannot be read the list is nil and
+// each warnings list holds the one line saying why.
+func statusIgnore(loadConfig ConfigLoader) ([]string, []string, []string) {
 	cfg, err := loadConfig("status")
 	if err != nil {
-		return nil, []string{"cannot tell which findings you ignored: " + config.Problem(err) +
-			"; findings you ignored are counted as open"}
+		return nil, []string{cannotTellIgnored(config.Problem(err))}, []string{cannotTellIgnored(config.ProblemAbsolute(err))}
 	}
-	return cfg.Ignore, nil
+	return cfg.Ignore, nil, nil
+}
+
+// cannotTellIgnored is the warning for a config that cannot be read, naming problem.
+func cannotTellIgnored(problem string) string {
+	return "cannot tell which findings you ignored: " + problem + "; findings you ignored are counted as open"
 }

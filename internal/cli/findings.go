@@ -93,13 +93,14 @@ prints one row per item, for a spreadsheet.`,
 			}
 			unmatched := unmatchedIgnoreWarnings(homepath.Abbreviate(srv.Home(), cfg.Path), listing.Unmatched)
 			printConfigWarnings(cmd, unmatched)
+			jsonWarnings := append(slices.Clone(cfg.WarningsAbsolute), unmatchedIgnoreWarnings(cfg.Path, listing.Unmatched)...)
 			render := func() string { return renderFindings(listing, view, len(req.Ignore) == 0) }
 			if csvOut {
 				render = func() string { return renderFindingsCSV(listing) }
 			}
 			out, err := renderResult(*jsonOut,
 				func() ([]byte, error) {
-					return renderFindingsJSON(listing, view, append(slices.Clone(cfg.Warnings), unmatched...))
+					return renderFindingsJSON(listing, view, jsonWarnings)
 				},
 				render)
 			if err != nil {
@@ -113,12 +114,12 @@ prints one row per item, for a spreadsheet.`,
 		"show only findings whose status is `status`: open, ignored, fixed or all")
 	cmd.Flags().StringVar(&typ, "type", "",
 		"show only findings of this `type`: duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, payee-variants, similar-categories or unused-category")
-	cmd.Flags().BoolVar(&csvOut, "csv", false, "print one row per transaction or split as CSV")
+	cmd.Flags().BoolVar(&csvOut, "csv", false, "print one row per transaction, split, payee or category as CSV")
 	return cmd
 }
 
 // unmatchedIgnoreWarnings is one line per findings.ignore element that names no finding, each
-// naming configShown, the config file as the user sees it.
+// naming the config file as configShown: ~-abbreviated for stderr, absolute for --json.
 func unmatchedIgnoreWarnings(configShown string, unmatched []string) []string {
 	lines := make([]string, len(unmatched))
 	for i, id := range unmatched {

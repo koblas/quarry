@@ -50,6 +50,9 @@ func corruptPreviousStore(t *testing.T, home string) {
 }
 
 // writeConfig writes content as the config file under home.
+// configPath is the config file's absolute path under home, as --json names it.
+func configPath(home string) string { return filepath.Join(storeDirUnder(home), "config.toml") }
+
 func writeConfig(t *testing.T, home, content string) {
 	t.Helper()
 	dir := storeDirUnder(home)
@@ -314,7 +317,7 @@ func Test_run_sync_json_lists_config_warnings_before_its_own_without_the_prefix(
 	}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
 	assert.Equal(t, []string{
-		configShown + ": unknown key snapshot.keep; quarry ignores it",
+		configPath(home) + ": unknown key snapshot.keep; quarry ignores it",
 		combinedCarryWarning,
 	}, doc.Warnings)
 }
@@ -335,7 +338,7 @@ func Test_run_sync_json_lists_the_history_warning_after_the_config_warning_witho
 	}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
 	assert.Equal(t, []string{
-		configShown + ": unknown key snapshot.keep; quarry ignores it",
+		configPath(home) + ": unknown key snapshot.keep; quarry ignores it",
 		combinedCarryWarning,
 	}, doc.Warnings)
 }
@@ -372,7 +375,26 @@ func Test_run_sync_json_lists_a_quoted_unknown_config_key_without_the_prefix(t *
 	}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
 	assert.Equal(t, []string{
-		configShown + ": unknown key \"a\\nb\"; quarry ignores it",
+		configPath(home) + ": unknown key \"a\\nb\"; quarry ignores it",
 		combinedCarryWarning,
 	}, doc.Warnings)
+}
+
+func Test_run_sync_from_json_names_the_config_file_by_its_absolute_path_and_stderr_abbreviates_it(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncBundle(t, writeNamedAccountBundle(t, filepath.Join(home, "Documents"), "Chequing"))
+	manifest := onlyFileWithSuffix(t, filepath.Join(storeDirUnder(home), "snapshots"), ".json")
+	writeConfig(t, home, "snapshot.keep = 3\n")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--from", strings.TrimSuffix(filepath.Base(manifest), ".json"), "--json"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	var doc struct {
+		Warnings []string `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	assert.Equal(t, []string{configPath(home) + ": unknown key snapshot.keep; quarry ignores it"}, doc.Warnings)
+	assert.Equal(t, "quarry: warning: "+configShown+": unknown key snapshot.keep; quarry ignores it\n", stderr.String())
 }

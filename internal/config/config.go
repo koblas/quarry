@@ -28,6 +28,8 @@ type Config struct {
 	Ignore []string
 	// Warnings holds one line per unknown key, in file order.
 	Warnings []string
+	// WarningsAbsolute is Warnings with the config file named by its absolute path, for machine-readable output.
+	WarningsAbsolute []string
 }
 
 // Load reads the config file at path, resolving "~/" against home. A missing
@@ -42,7 +44,7 @@ func Load(home, path string) (Config, error) {
 	}
 	f := file{home: home, path: path, shown: homepath.Abbreviate(home, path), data: bytes.TrimPrefix(data, utf8BOM)}
 	if err != nil {
-		return Config{}, f.refuse("cannot read "+f.shown+": "+osreason.Reason(err), err)
+		return Config{}, f.cannotRead(osreason.Reason(err), err)
 	}
 
 	return f.parse()

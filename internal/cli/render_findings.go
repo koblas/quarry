@@ -169,7 +169,7 @@ func categoryCell(item store.FindingItem) string {
 	case item.Category == nil:
 		return "(uncategorized)"
 	}
-	return *item.Category
+	return escapeCell(*item.Category)
 }
 
 // itemRows renders one row per item: date, account label and payee padded to the widest among them,
@@ -293,7 +293,7 @@ func payeeVariantRows(findings []report.ListedFinding, view findingsView) []stri
 	for _, f := range findings {
 		names := make([]string, len(f.Items))
 		for j, item := range f.Items {
-			names[j] = item.Payee
+			names[j] = escapeCell(item.Payee)
 		}
 		lines = append(lines, "  "+padRight(f.ID, idWidth)+"  "+humanize.Count(len(f.Items), "payee", "payees")+", "+
 			transactionsText(f.Items)+ignoredMarker(f, view))
@@ -315,7 +315,8 @@ func similarCategoryRows(findings []report.ListedFinding, view findingsView) []s
 		paths := make([]string, len(f.Items))
 		counts := make([]string, len(f.Items))
 		for j, item := range f.Items {
-			paths[j] = *cmp.Or(item.Category, new(string)) // unreachable: items come from categories rows in one Replace and full_path is NOT NULL (duckstore/schema.go:30), so the join never yields nil
+			// unreachable: items come from categories rows in one Replace and full_path is NOT NULL (duckstore/schema.go:30), so the join never yields nil
+			paths[j] = escapeCell(*cmp.Or(item.Category, new(string)))
 			counts[j] = humanize.Count(item.Splits, "split", "splits")
 		}
 		lines = append(lines, "  "+padRight(f.ID, idWidth)+"  "+humanize.Count(len(f.Items), "category", "categories")+ignoredMarker(f, view))
@@ -346,7 +347,7 @@ func topCategory(items []store.FindingItem) string {
 		// unreachable: only a fixed finding lacks items (mergeFindings writes them for detected ones, each >= 1) and findingLines routes it away; full_path is NOT NULL (schema.go:30)
 		return ""
 	}
-	return *items[0].Category
+	return escapeCell(*items[0].Category)
 }
 
 // subcategoriesClause is " (and N subcategories)", or nothing when n is below 1.

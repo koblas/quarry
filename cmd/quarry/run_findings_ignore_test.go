@@ -96,7 +96,10 @@ func Test_run_findings_json_lists_an_unmatched_ignore_id_after_the_config_warnin
 		Warnings []string `json:"warnings"`
 	}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
-	assert.Equal(t, []string{unknownKey, unmatched}, doc.Warnings)
+	assert.Equal(t, []string{
+		strings.Replace(unknownKey, configShown, configPath(home), 1),
+		strings.Replace(unmatched, configShown, configPath(home), 1),
+	}, doc.Warnings)
 }
 
 func Test_run_findings_quotes_and_orders_every_unmatched_ignore_id_in_stderr_and_json_warnings(t *testing.T) {
@@ -108,6 +111,10 @@ func Test_run_findings_quotes_and_orders_every_unmatched_ignore_id_in_stderr_and
 		return configShown + ": findings.ignore lists " + quoted + ", which is not a finding in quarry's store; quarry skips it"
 	}
 	want := []string{lists(`""`), lists(`"a\"b\\c\n\u0001"`), lists(`""`), lists(`"last:1"`)}
+	wantJSON := make([]string, len(want))
+	for i, line := range want {
+		wantJSON[i] = strings.Replace(line, configShown, configPath(home), 1)
+	}
 	var stdout, stderr bytes.Buffer
 
 	exitCode := run(context.Background(), []string{"findings", "--json"}, &stdout, &stderr)
@@ -118,7 +125,7 @@ func Test_run_findings_quotes_and_orders_every_unmatched_ignore_id_in_stderr_and
 		Warnings []string `json:"warnings"`
 	}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
-	assert.Equal(t, want, doc.Warnings)
+	assert.Equal(t, wantJSON, doc.Warnings)
 }
 
 func Test_run_findings_shows_the_hint_when_findings_ignore_is_an_empty_list(t *testing.T) {

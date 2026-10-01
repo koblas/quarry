@@ -214,13 +214,13 @@ func Test_renderFindings_shows_the_ignore_hint_when_asked_and_a_finding_is_open(
 func Test_renderFindings_leaves_out_the_ignore_hint_when_not_asked(t *testing.T) {
 	got := renderFindings(openUncategorizedListing(), openView, false)
 
-	assert.NotContains(t, got, "Ignore a finding")
+	assert.NotContains(t, got, ignoreHint)
 }
 
 func Test_renderFindings_leaves_out_the_ignore_hint_when_no_finding_is_open(t *testing.T) {
 	got := renderFindings(report.FindingsListing{}, openView, true)
 
-	assert.NotContains(t, got, "Ignore a finding")
+	assert.NotContains(t, got, ignoreHint)
 }
 
 func Test_uncategorizedSpan_takes_the_earliest_and_latest_date_whatever_the_item_order(t *testing.T) {

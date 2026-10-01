@@ -150,8 +150,8 @@ func Test_run_status_json_carries_the_config_warning_unprefixed_and_a_null_ignor
 			require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
 			assert.Nil(t, got.Findings.Ignored)
 			assert.Equal(t, 4, got.Findings.Open)
-			assert.Equal(t, []string{statusIgnoreWarningLead + c.problem + statusIgnoreWarningTail}, got.Warnings)
-			assert.Equal(t, "quarry: warning: "+got.Warnings[0]+"\n", stderr.String())
+			assert.Equal(t, []string{statusIgnoreWarningLead + strings.ReplaceAll(c.problem, configShown, configPath(home)) + statusIgnoreWarningTail}, got.Warnings)
+			assert.Equal(t, "quarry: warning: "+statusIgnoreWarningLead+c.problem+statusIgnoreWarningTail+"\n", stderr.String())
 		})
 	}
 }

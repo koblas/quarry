@@ -120,7 +120,7 @@ does not read Quicken at all.`,
 
 			var output string
 			if *jsonOut {
-				data, encErr := renderJSON(outcome, cfg.Warnings)
+				data, encErr := renderJSON(outcome, cfg.WarningsAbsolute)
 				if encErr != nil {
 					// unreachable: renderJSON's own error path is unreachable for any value SyncAndImport builds; see there.
 					return &runtimeError{err: encErr}

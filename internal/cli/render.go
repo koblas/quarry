@@ -269,7 +269,7 @@ func accountLabel(name, currency string, closed, active bool) string {
 	case !active:
 		suffix = ", inactive"
 	}
-	return fmt.Sprintf("%s (%s%s)", name, currency, suffix)
+	return fmt.Sprintf("%s (%s%s)", escapeCell(name), currency, suffix)
 }
 
 // balanceMismatchRows renders one "!" row per mismatch, in the order
@@ -332,7 +332,7 @@ func payeeLabel(payee string) string {
 	if payee == "" {
 		return "(no payee)"
 	}
-	return payee
+	return escapeCell(payee)
 }
 
 // oneSidedRows renders one "?" row per one-sided leg, in the order given, each
@@ -377,9 +377,9 @@ func otherAccountLabel(leg store.OneSidedTransfer) string {
 	case leg.OtherAccount == nil:
 		return "unknown"
 	case leg.OtherAccountID == nil:
-		return *leg.OtherAccount + " (not in this file)"
+		return escapeCell(*leg.OtherAccount) + " (not in this file)"
 	default:
-		return *leg.OtherAccount
+		return escapeCell(*leg.OtherAccount)
 	}
 }
 

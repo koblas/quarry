@@ -69,11 +69,12 @@ func (f file) parse() (Config, error) {
 	}
 
 	return Config{
-		Path:        f.path,
-		Keep:        keep,
-		QuickenPath: homepath.Expand(f.home, quickenPath),
-		Ignore:      ignore,
-		Warnings:    doc.unknownKeys(),
+		Path:             f.path,
+		Keep:             keep,
+		QuickenPath:      homepath.Expand(f.home, quickenPath),
+		Ignore:           ignore,
+		Warnings:         doc.unknownKeys(f.shown),
+		WarningsAbsolute: doc.unknownKeys(f.path),
 	}, nil
 }
 
@@ -88,12 +89,12 @@ func (f file) tree() (map[string]any, error) {
 	decodeErr, ok := errors.AsType[*toml.DecodeError](err)
 	if !ok {
 		// unreachable: go-toml v2.4.3 decode_fused.go raises only parser and tracker errors and wrapError makes them *toml.DecodeError; 23 malformed scalars, keys and strings probed, all *toml.DecodeError.
-		return nil, f.refuse("cannot read "+f.shown+": "+err.Error(), err)
+		return nil, f.cannotRead(err.Error(), err)
 	}
 	line, _ := decodeErr.Position()
 	message, _, _ := strings.Cut(strings.TrimPrefix(decodeErr.Error(), "toml: "), "\n")
 
-	return nil, f.refuse("cannot read "+f.shown+": line "+strconv.Itoa(line)+": "+message, err)
+	return nil, f.cannotRead("line "+strconv.Itoa(line)+": "+message, err)
 }
 
 // entry is one header or key of the file at its full key path, exactly as written:
@@ -297,8 +298,8 @@ var knownKeys = [][]string{
 }
 
 // unknownKeys is one warning per key the file has beyond the known ones, in
-// file order, matched by exact spelling. A table is named once, not once per child.
-func (d document) unknownKeys() []string {
+// file order, matched by exact spelling, each naming the file as path. A table is named once, not once per child.
+func (d document) unknownKeys(path string) []string {
 	var warnings []string
 	var reported [][]string
 	for _, e := range d.entries {
@@ -309,7 +310,7 @@ func (d document) unknownKeys() []string {
 			continue
 		}
 		reported = append(reported, e.key)
-		warnings = append(warnings, d.shown+": unknown key "+keyText(e.key)+"; quarry ignores it")
+		warnings = append(warnings, path+": unknown key "+keyText(e.key)+"; quarry ignores it")
 	}
 
 	return warnings

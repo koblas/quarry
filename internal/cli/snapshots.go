@@ -57,7 +57,7 @@ quarry sync --from <ID>.`,
 
 			out, err := renderResult(*jsonOut,
 				func() ([]byte, error) {
-					return renderSnapshotsJSON(listing, cfg.Keep, snapshotsWarnings(cfg.Warnings, listing))
+					return renderSnapshotsJSON(listing, cfg.Keep, snapshotsWarnings(cfg.WarningsAbsolute, listing))
 				},
 				func() string { return renderSnapshots(listing) })
 			if err != nil {

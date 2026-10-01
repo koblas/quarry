@@ -162,7 +162,7 @@ func Test_run_findings_json_lists_a_config_warning_without_the_prefix_and_prints
 	}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
 	assert.Equal(t, []any{}, doc.Findings)
-	assert.Equal(t, []string{configShown + ": unknown key snapshot.keep; quarry ignores it"}, doc.Warnings)
+	assert.Equal(t, []string{configPath(home) + ": unknown key snapshot.keep; quarry ignores it"}, doc.Warnings)
 	assert.Equal(t, "quarry: warning: "+configShown+": unknown key snapshot.keep; quarry ignores it\n", stderr.String())
 }
 

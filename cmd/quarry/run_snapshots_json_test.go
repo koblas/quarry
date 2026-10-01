@@ -247,6 +247,7 @@ func Test_run_snapshots_json_lists_config_then_no_snapshots_then_store_warnings_
 	writeConfig(t, home, "snapshot.keep = 3\n")
 	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
 	configWarning := configShown + ": unknown key snapshot.keep; quarry ignores it"
+	absoluteConfigWarning := configPath(home) + ": unknown key snapshot.keep; quarry ignores it"
 	noSnapshots := "no snapshots in " + snapshotsShown + " yet; run quarry sync to take one"
 	storeWarning := "cannot tell which snapshot the store was built from: the file is not a DuckDB database"
 
@@ -261,7 +262,7 @@ func Test_run_snapshots_json_lists_config_then_no_snapshots_then_store_warnings_
 		"  \"snapshots\": [],\n"+
 		"  \"total_bytes\": 0,\n"+
 		"  \"warnings\": [\n"+
-		"    \""+configWarning+"\",\n"+
+		"    \""+absoluteConfigWarning+"\",\n"+
 		"    \""+noSnapshots+"\",\n"+
 		"    \""+storeWarning+"\"\n"+
 		"  ]\n"+

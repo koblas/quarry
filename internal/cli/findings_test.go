@@ -122,7 +122,7 @@ func Test_findings_help_shows_each_flag(t *testing.T) {
 			help: "show only findings of this type: duplicate, one-sided-transfer, unlinked-transfer, " +
 				"uncategorized, mixed-categories, payee-variants, similar-categories or unused-category",
 		},
-		{flag: "--csv", usage: "--csv", help: "print one row per transaction or split as CSV"},
+		{flag: "--csv", usage: "--csv", help: "print one row per transaction, split, payee or category as CSV"},
 	}
 
 	for _, c := range cases {

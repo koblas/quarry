@@ -69,7 +69,7 @@ With --dry-run, prune lists what it would delete and deletes nothing.`,
 			if pruneErr != nil && pruned.Keep == 0 {
 				return &runtimeError{err: pruneErr}
 			}
-			return reportPruned(cmd, srv, pruned, pruneErr, *jsonOut, cfg.Warnings)
+			return reportPruned(cmd, srv, pruned, pruneErr, *jsonOut, cfg.WarningsAbsolute)
 		},
 	}
 	cmd.Flags().IntVar(&keep, keepFlag, 0, "keep the newest `n` snapshots (default: snapshots.keep in the config file, 12 unless set)")

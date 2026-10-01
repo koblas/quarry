@@ -18,7 +18,7 @@ func renderSpending(s report.Spending) string {
 	for _, r := range s.Rows {
 		key := grouping.missing
 		if r.Key != nil {
-			key = *r.Key
+			key = escapeCell(*r.Key)
 		}
 		status := ""
 		if r.Partial {

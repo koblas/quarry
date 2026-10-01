@@ -63,7 +63,13 @@ func accountsCaption(accounts []store.Account) string {
 	}
 	names := make([]string, len(accounts))
 	for i, a := range accounts {
-		names[i] = a.Name
+		names[i] = escapeCell(a.Name)
 	}
 	return strings.Join(names, ", ")
 }
+
+// cellEscaper writes the characters that would break a text line as backslash forms.
+var cellEscaper = strings.NewReplacer("\n", `\n`, "\t", `\t`, "\r", `\r`)
+
+// escapeCell is s as one line of a text table: the only escaper any text renderer uses for a name.
+func escapeCell(s string) string { return cellEscaper.Replace(s) }

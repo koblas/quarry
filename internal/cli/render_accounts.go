@@ -20,7 +20,7 @@ func renderAccounts(list store.AccountList) string {
 	rows := make([][]string, 0, 1+len(list.Accounts))
 	rows = append(rows, header)
 	for _, a := range list.Accounts {
-		rows = append(rows, []string{a.Name, a.Type, a.Currency, accountBalance(a.Balance), accountStatus(a.Account)})
+		rows = append(rows, []string{escapeCell(a.Name), a.Type, a.Currency, accountBalance(a.Balance), accountStatus(a.Account)})
 	}
 
 	widths := make([]int, len(header)-1)
