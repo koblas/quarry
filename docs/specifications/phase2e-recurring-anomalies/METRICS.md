@@ -15,12 +15,15 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
+| 1 | arch, correctness ×2, test ×2, refactor | 0/2/~25/~10 | 0 / 20, 589s | BLOCKED |
 
 ## Tokens
 
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
 | --- | --- | --- | --- |
+| gate R1 | H1 refusal rows missing for recurring/anomalies | `cmd/quarry/run_spend_refusals_test.go:67` | SCENARIO-11, SCENARIO-20 |
+| gate R1 | non-ASCII column width unpinned after `renderTable` rewrite | `internal/cli/render_table.go:31` | SCENARIO-01 |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |
