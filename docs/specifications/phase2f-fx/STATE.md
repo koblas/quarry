@@ -1,6 +1,6 @@
 # phase2f-fx — current state
 
-Scenarios complete: SCENARIO-07, SCENARIO-01, SCENARIO-04 (delivers 02), SCENARIO-03 (delivers 05). Last updated by SCENARIO-03.
+Scenarios complete: SCENARIO-07, SCENARIO-01, SCENARIO-04 (delivers 02), SCENARIO-03 (delivers 05), SCENARIO-06. Last updated by SCENARIO-06.
 
 ## Binding decisions
 - Rates port, frozen (03 filled its fields; never reshape): `duckstore.RatesSource{Refresh(ctx, store.RatesRequest) (store.RatesRefresh, error)}`; `store.RatesRequest{Need, Have DateSpan}` (zero = empty); `store.RatesRefresh{Rates []Rate; Added int; FetchError string; Partial bool}`; `store.Rate{Date, USDCAD money.Rate, Series}`. Types live in driver-free `internal/store`, so `*fx.Server` satisfies the port directly (guard `_ duckstore.RatesSource = (*fx.Server)(nil)` in `cmd/quarry/run.go`); fx never imports duckstore. Series names are `store.SeriesCurrent` (FXUSDCAD) / `store.SeriesLegacy` (IEXE0101) (SCENARIO-07, 01, 04)
@@ -22,14 +22,17 @@ Scenarios complete: SCENARIO-07, SCENARIO-01, SCENARIO-04 (delivers 02), SCENARI
 - `internal/platform/money` (leaf): `Rate` = CAD per 1 USD in millionths; `Convert(cents, from, to, rate) (int64, bool)` half away from zero, parity with the SQL views. View columns in `duckstore/convert_sql.go` `convertedTo`: `v_account_balances` +`balance_cad/usd` (latest rate <= `current_date`); `v_cash_flow` / `v_spending` +amount/spent cad/usd, `usd_cad` (ASOF join). Same-currency needs no rate; cross-currency with none, or another currency, is NULL. `quarry sql` Long's converted-columns paragraph pinned verbatim (SCENARIO-07)
 - TestMain fake (`cmd/quarry/main_test.go`): swaps `newRatesSource` for `fakeRates` returning one rate dated 2026-01-02, so every cmd sync stores a rate and no test reaches the network (SCENARIO-01)
 
+- Status (06): `Status.Rates{First, Last, FetchError}` rides the one `statusQuery` (`min/max(fx_rates.date)`, latest run's `rates_fetch_error`); no second port call. Text `Rates` row after Findings; `--json` `rates{first,last,fetch_error}` sits right after `findings`, before `not_imported` (position is ours; spec rules only the keys). Age = civil-date difference in `time.Local` between `Env.Now()` and `Rates.Last`, <= 0 (including a last rate dated after today) reads `today`; `newStatusCommand` takes `now`. A v4 store is refused by `checkFormat` before the query, so status has no v4 rates branch (SCENARIO-06)
+
 ## Left unbuilt
-- Status Rates line and its failure clause (from `import_runs.rates_fetch_error`, now written) - 06; `money.ParseCurrency` - 16; every read command's converted output, `--currency` - 08-19
+- `money.ParseCurrency` - 16; every read command's converted output, `--currency` - 08-19
 
 ## Traps
 - Classify interruption by the PARENT `ctx.Err()`: a `DeadlineExceeded` check would turn the child timeout into "interrupted" (SCENARIO-01, 03)
 - cmd `valetResponse` (`run_sync_rates_test.go:46`) sets `Status` without the code: reading `resp.Status` passes in prod and fails in tests (SCENARIO-03)
 - A synctest fake RoundTripper that ignores `req.Context()` never times out, so an outside-the-bound case passes as success (SCENARIO-03)
-- `go test -run` is case sensitive: `Rates|Fetch` misses `..._rate_fetch_...` and runs green on nothing; use `(?i)` (SCENARIO-03)
+- `go test -run` is case sensitive: `Rates|Fetch` or `status` misses `..._rate_fetch_...` / `Test_Status_...` and runs green on nothing; use `(?i)` (SCENARIO-03, 06)
+- cmd status tests that pin the full Rates line `DELETE FROM fx_rates` first: the age follows the real clock, only the none arm is stable (SCENARIO-06)
 - Fake sources must drop rates inside `req.Have` as the real contract does (`fakeRates` in `cmd/quarry/run_sql_fx_test.go:19`): one returning rates blindly collides with carried dates and PK-fails the build (SCENARIO-04)
 - `DROP TABLE fx_rates` in a test needs `CASCADE`: `v_account_balances`/`v_cash_flow`/`v_spending` depend on it (SCENARIO-04)
 - A repeated carried date would PK-fail the whole build, so it must stay a `RatesFault`, never a build error (SCENARIO-04)

@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-06
-status: open
+status: done
 ---
 
 # SCENARIO-06: Status shows rate coverage
@@ -23,10 +23,10 @@ Size: LIGHT — 3 steps, internal/store/duckstore + internal/cli
 - [x] Step 4: JSON and Long. `cli/json_status.go:11-21,66-96` `Rates statusRatesDocument{first,last,fetch_error}` between findings and not_imported (null forms); `status.go:17-23` Long append `Rates shows the Bank of Canada USD/CAD rates the store holds, and why the last sync could not fetch new ones if it could not.`; pins: `json_status_internal_test.go` fullStatusJSON + null row (empty store, error set), `cmd/quarry/run_status_json_test.go:~96` want, `run_status_test.go:149` Long, each arm × `--json` in `status_rates_test.go`
 
 ### Sweep
-- [ ] Step 5: `go build ./... && golangci-lint run ./...` to `0 issues`; doc comments (`Status`, `StatusRates`, `renderStatus`, `statusQuery`)
+- [x] Step 5: `go build ./... && golangci-lint run ./...` to `0 issues`; doc comments (`Status`, `StatusRates`, `renderStatus`, `statusQuery`)
 
 ### Verify
-- [ ] Step 6: full verification; `spec-check.py phase2f-fx`; tick SCENARIO-06; rewrite STATE.md (drop "Status Rates line" from Left unbuilt)
+- [x] Step 6: full verification; `spec-check.py phase2f-fx`; tick SCENARIO-06; rewrite STATE.md (drop "Status Rates line" from Left unbuilt)
 
 ## Handoff
 
@@ -46,3 +46,9 @@ Tests re-pointed: `render_status_internal_test.go` (fixture Rates, full block, C
 v4/older store: n/a. `Status` reads through `openRead` -> `checkFormat`, which refuses a non-current format before the query (`open_test.go:180` `Test_open_read_refuses_a_store_of_another_format`, "an older format"); no new branch.
 One read per command: the rates ride `statusQuery`; no second port call.
 Do not redo: mutation checks (none, code-first). Paper mutations: dropping `.In(time.Local)` in `rateAge` reddens "last rate today" (ratesNow is 03:30 UTC, local date a day earlier); `<= 0` -> `< 0` reddens "last rate after today reads today" and the today row; `After` -> `!Before` reddens the same-date acceptance rows.
+
+Run V. Sweep: `go build` and `golangci-lint run ./...` 0 issues. Paper mutations (each reverted, tree clean after), `go test ./internal/cli/ -run '(?i)status'`:
+- drop `.In(time.Local)`: reddens `..._for_each_coverage_state` rows last rate today / 1 day / 2 days ago, first-after-first-transaction, last-fetch-failed, and `Test_status_rates_line_edge_rows` (3 rows).
+- `<= 0` -> `< 0`: reddens the today row, first-after-first-transaction and two edge rows (the today-dated ones); "after today" stays green because `< 0` still catches negatives.
+- `After` -> `!Before`: reddens `Test_renderStatus/full_block`, today/1/2-days/fetch-failed rows (same-date first and first transaction) and the after-today edge row.
+Verify: full suite rc=0; uncovered-diff 0 lines; `-race` cli and duckstore ok; test-stats vs e0b5c8f: cmd/quarry 435 (+0), internal/cli 353 (+3), duckstore 398 (+4), total 1186 (+7).
