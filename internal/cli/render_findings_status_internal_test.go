@@ -29,14 +29,6 @@ func fixedFinding(id string, typ finding.Type, at time.Time) report.ListedFindin
 	return report.ListedFinding{ID: id, Type: typ, FixedAt: &at, Status: finding.StatusFixed}
 }
 
-// inZone makes zone the local time zone for the test; the tests using it do not run in parallel.
-func inZone(t *testing.T, zone *time.Location) {
-	t.Helper()
-	saved := time.Local                      //nolint:gosmopolitan // the test swaps the process-local zone; Cleanup restores it
-	time.Local = zone                        //nolint:gosmopolitan // see above
-	t.Cleanup(func() { time.Local = saved }) //nolint:gosmopolitan // restores the zone
-}
-
 func Test_findingsFooter_by_view(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -44,6 +36,12 @@ func Test_findingsFooter_by_view(t *testing.T) {
 		counts finding.Counts
 		want   string
 	}{
+		{name: "open one open", view: openView, counts: finding.Counts{Open: 1}, want: "1 open finding"},
+		{name: "open two open", view: openView, counts: finding.Counts{Open: 2}, want: "2 open findings"},
+		{name: "open a thousands-grouped count", view: openView, counts: finding.Counts{Open: 1204}, want: "1,204 open findings"},
+		{name: "open ignored only", view: openView, counts: finding.Counts{Open: 2, Ignored: 4}, want: "2 open findings; 4 ignored not shown (--status all)"},
+		{name: "open fixed only", view: openView, counts: finding.Counts{Open: 2, Fixed: 12}, want: "2 open findings; 12 fixed not shown (--status all)"},
+		{name: "open ignored and fixed", view: openView, counts: finding.Counts{Open: 1, Ignored: 4, Fixed: 12}, want: "1 open finding; 4 ignored and 12 fixed not shown (--status all)"},
 		{name: "all lists each status", view: allView, counts: finding.Counts{Open: 5, Ignored: 4, Fixed: 12}, want: "21 findings: 5 open, 4 ignored, 12 fixed"},
 		{name: "all omits a zero clause", view: allView, counts: finding.Counts{Open: 2, Fixed: 1}, want: "3 findings: 2 open, 1 fixed"},
 		{name: "all with one finding is singular", view: allView, counts: finding.Counts{Fixed: 1}, want: "1 finding: 1 fixed"},
@@ -131,7 +129,7 @@ func Test_findingLines_leaves_an_ignored_finding_unmarked_when_the_view_lists_on
 }
 
 func Test_findingLines_shows_a_fixed_finding_as_one_unpadded_line_with_the_local_date_of_its_fixed_at(t *testing.T) {
-	inZone(t, time.FixedZone("UTC-5", -5*60*60))
+	useZone(t, time.FixedZone("UTC-5", -5*60*60))
 	group := report.FindingsGroup{Type: finding.Uncategorized, Findings: []report.ListedFinding{
 		uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)),
 		uncategorizedFinding("uncategorized:payee-2", "Bar", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)),
@@ -148,7 +146,7 @@ func Test_findingLines_shows_a_fixed_finding_as_one_unpadded_line_with_the_local
 }
 
 func Test_findingLines_shows_the_local_date_when_it_is_later_than_the_utc_date(t *testing.T) {
-	inZone(t, time.FixedZone("UTC+9", 9*60*60))
+	useZone(t, time.FixedZone("UTC+9", 9*60*60))
 	group := report.FindingsGroup{Type: finding.Duplicate, Findings: []report.ListedFinding{
 		fixedFinding("duplicate:txn-1+txn-2", finding.Duplicate, time.Date(2026, 10, 1, 20, 0, 0, 0, time.UTC)),
 	}}
@@ -231,7 +229,7 @@ func Test_findingsHeader_counts_the_splits_of_an_uncategorized_group_only_when_i
 func fixedTime() time.Time { return time.Date(2026, 10, 2, 3, 0, 0, 0, time.UTC) }
 
 func Test_renderFindings_lists_a_fixed_group_with_its_count_and_no_fix_under_the_fixed_view(t *testing.T) {
-	inZone(t, time.UTC)
+	useZone(t, time.UTC)
 	listing := report.FindingsListing{
 		Groups: []report.FindingsGroup{{Type: finding.Duplicate, Findings: []report.ListedFinding{
 			fixedFinding("duplicate:txn-1+txn-2", finding.Duplicate, fixedTime()),

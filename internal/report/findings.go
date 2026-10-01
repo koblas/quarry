@@ -87,15 +87,11 @@ func (s *Server) Findings(ctx context.Context, req FindingsRequest) (FindingsLis
 	return FindingsListing{Groups: groups, Counts: counts, Unmatched: classified.Unmatched}, nil
 }
 
-// FindingCounts tallies every finding of a known type by status: an id in ignore is ignored unless
-// fixed. It refuses like Status.
-func (s *Server) FindingCounts(ctx context.Context, ignore []string) (finding.Counts, error) {
-	list, err := s.store.Findings(ctx)
-	if err != nil {
-		return finding.Counts{}, s.readRefusal(ctx, statusCommand, err)
-	}
-	_, states := knownFindings(list)
-	return finding.Classify(states, ignore).Counts, nil
+// CountFindings tallies the findings st carries, those of a type this binary knows, by status: an
+// id in ignore is ignored unless fixed. It reads nothing, so it agrees with the rest of st.
+func CountFindings(st store.Status, ignore []string) finding.Counts {
+	_, states := knownFindings(store.FindingList{Findings: st.Findings})
+	return finding.Classify(states, ignore).Counts
 }
 
 // knownFindings is the findings of list whose type this binary knows, with each one's finding.State

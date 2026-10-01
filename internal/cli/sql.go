@@ -54,7 +54,8 @@ List the tables and views with: quarry sql "SHOW TABLES"
 
 At most --limit rows are printed (500 unless set, every row with --csv);
 when there are more, quarry says so on stderr. --limit 0 prints every row.
-With --csv, an empty field is NULL and "" is an empty string.`,
+With --csv, an empty field is NULL and "" is an empty string, except in a
+one-column result, where NULL is also written as "" so no row is blank.`,
 		Example: `  quarry sql "SELECT name, currency FROM accounts WHERE NOT closed"
   quarry sql --limit 0 --json - < monthly.sql
   quarry sql --csv "SELECT * FROM transactions" > transactions.csv`,

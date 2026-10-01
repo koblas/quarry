@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/config"
+	"github.com/koblas/quarry/internal/report"
 	"github.com/spf13/cobra"
 )
 
@@ -33,12 +34,8 @@ it never looks at Quicken. Run quarry sync to bring the store up to date.`,
 			}
 
 			ignore, warnings := statusIgnore(loadConfig)
-			counts, err := srv.FindingCounts(cmd.Context(), ignore)
-			if err != nil {
-				return &runtimeError{err: err}
-			}
 			printConfigWarnings(cmd, warnings)
-			findings := statusFindings{counts: counts, ignoreKnown: len(warnings) == 0}
+			findings := statusFindings{counts: report.CountFindings(st, ignore), ignoreKnown: len(warnings) == 0}
 
 			out, err := renderResult(*jsonOut,
 				func() ([]byte, error) { return renderStatusJSON(st, findings, warnings) },

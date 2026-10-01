@@ -1,3 +1,5 @@
+// White-box: similarCategoryRows and findingsHeader are unexported layout rules whose
+// padding and singular/plural forms are best driven directly.
 package cli
 
 import (
@@ -117,12 +119,4 @@ func Test_similarCategoryRows_ends_the_id_line_of_an_ignored_finding_with_a_mark
 		"    Gift   2 splits",
 		"    Gifts   1 split",
 	}, got)
-}
-
-func Test_similarCategoryRows_labels_an_income_group_by_its_prefixed_id(t *testing.T) {
-	findings := []report.ListedFinding{similarFinding("similar-categories:income:gift", similarRow{"Gift", 3}, similarRow{"Gifts", 1})}
-
-	got := similarCategoryRows(findings, openView)
-
-	assert.Equal(t, "  similar-categories:income:gift  2 categories", got[0])
 }

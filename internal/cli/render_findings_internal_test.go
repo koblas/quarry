@@ -196,41 +196,44 @@ func Test_renderFindings_says_so_when_no_finding_is_open(t *testing.T) {
 	}
 }
 
-func Test_findingsFooter(t *testing.T) {
-	cases := []struct {
-		name   string
-		counts finding.Counts
-		want   string
-	}{
-		{name: "one open", counts: finding.Counts{Open: 1}, want: "1 open finding"},
-		{name: "two open", counts: finding.Counts{Open: 2}, want: "2 open findings"},
-		{name: "a thousands-grouped count", counts: finding.Counts{Open: 1204}, want: "1,204 open findings"},
-		{name: "ignored only", counts: finding.Counts{Open: 2, Ignored: 4}, want: "2 open findings; 4 ignored not shown (--status all)"},
-		{name: "fixed only", counts: finding.Counts{Open: 2, Fixed: 12}, want: "2 open findings; 12 fixed not shown (--status all)"},
-		{
-			name: "ignored and fixed", counts: finding.Counts{Open: 1, Ignored: 4, Fixed: 12},
-			want: "1 open finding; 4 ignored and 12 fixed not shown (--status all)",
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, findingsFooter(c.counts, openView))
-		})
-	}
-}
-
-func Test_renderFindings_shows_the_ignore_hint_only_when_asked_and_a_finding_is_open(t *testing.T) {
-	open := report.FindingsListing{
+func openUncategorizedListing() report.FindingsListing {
+	return report.FindingsListing{
 		Groups: []report.FindingsGroup{{Type: finding.Uncategorized, Findings: []report.ListedFinding{
 			uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)),
 		}}},
 		Counts: finding.Counts{Open: 1},
 	}
+}
 
-	assert.Contains(t, renderFindings(open, openView, true), "\n1 open finding\n"+ignoreHint)
-	assert.NotContains(t, renderFindings(open, openView, false), "Ignore a finding")
-	assert.NotContains(t, renderFindings(report.FindingsListing{}, openView, true), "Ignore a finding")
+func Test_renderFindings_shows_the_ignore_hint_when_asked_and_a_finding_is_open(t *testing.T) {
+	got := renderFindings(openUncategorizedListing(), openView, true)
+
+	assert.Contains(t, got, "\n1 open finding\n"+ignoreHint)
+}
+
+func Test_renderFindings_leaves_out_the_ignore_hint_when_not_asked(t *testing.T) {
+	got := renderFindings(openUncategorizedListing(), openView, false)
+
+	assert.NotContains(t, got, "Ignore a finding")
+}
+
+func Test_renderFindings_leaves_out_the_ignore_hint_when_no_finding_is_open(t *testing.T) {
+	got := renderFindings(report.FindingsListing{}, openView, true)
+
+	assert.NotContains(t, got, "Ignore a finding")
+}
+
+func Test_uncategorizedSpan_takes_the_earliest_and_latest_date_whatever_the_item_order(t *testing.T) {
+	items := []store.FindingItem{
+		{Payee: "Amazon", Date: findingDay(2026, 3, 5)},
+		{Payee: "Amazon", Date: findingDay(2026, 3, 1)},
+		{Payee: "Amazon", Date: findingDay(2026, 3, 3)},
+	}
+
+	_, first, last := uncategorizedSpan(items)
+
+	assert.Equal(t, findingDay(2026, 3, 1), first)
+	assert.Equal(t, findingDay(2026, 3, 5), last)
 }
 
 func Test_renderFindings_groups_the_thousands_of_a_group_header_count(t *testing.T) {

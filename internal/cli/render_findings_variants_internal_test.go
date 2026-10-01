@@ -1,3 +1,5 @@
+// White-box: payeeVariantRows and findingsHeader are unexported layout rules whose
+// padding and singular/plural forms are best driven directly.
 package cli
 
 import (

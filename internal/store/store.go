@@ -184,7 +184,8 @@ type ImportRun struct {
 // Status is what a built store says about itself: its path, the format and
 // build that wrote it, its import run and the dates its transactions cover.
 // A zero Run.Snapshot.TakenAt or empty Source means NULL was recorded; the
-// dates are zero when there are no transactions.
+// dates are zero when there are no transactions. Findings holds each recorded
+// finding's id, type and state without its items, read from the same build as the rest.
 type Status struct {
 	Path                string
 	FormatVersion       int
@@ -192,6 +193,7 @@ type Status struct {
 	BuiltAt             time.Time
 	Run                 ImportRun
 	FirstDate, LastDate time.Time
+	Findings            []Finding
 }
 
 // Counts is the row count of each table after a build; Transfers counts

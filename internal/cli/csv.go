@@ -23,8 +23,12 @@ func csvField(c csvCell) string {
 	return `"` + strings.ReplaceAll(c.Text, `"`, `""`) + `"`
 }
 
-// csvRecord is cells as one CSV line: the fields joined by commas, ending in a newline.
+// csvRecord is cells as one CSV line: the fields joined by commas, ending in a newline. A record
+// whose only field is NULL is written as `""`, because a blank line is not a record to CSV readers.
 func csvRecord(cells []csvCell) string {
+	if len(cells) == 1 && cells[0].Null {
+		return "\"\"\n"
+	}
 	fields := make([]string, len(cells))
 	for i, c := range cells {
 		fields[i] = csvField(c)

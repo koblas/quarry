@@ -60,9 +60,9 @@ func Test_renderSQLCSV(t *testing.T) {
 			want:   "id,payee\n",
 		},
 		{
-			name:   "a one-column NULL row is a blank line",
+			name:   "a one-column NULL row is two quotes, never a blank line",
 			result: store.QueryResult{Columns: []store.QueryColumn{text("memo")}, Rows: [][]store.QueryValue{{{Text: "NULL", Null: true}}}},
-			want:   "memo\n\n",
+			want:   "memo\n\"\"\n",
 		},
 		{
 			name:   "a one-column empty string row is two quotes",

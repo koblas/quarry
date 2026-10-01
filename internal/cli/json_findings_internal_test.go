@@ -177,6 +177,20 @@ func Test_renderFindingsJSON_gives_a_payee_variants_item_its_payee_and_count_and
 	}, items[0])
 }
 
+func Test_renderFindingsJSON_gives_a_one_sided_transfer_item_its_other_account_name_and_id(t *testing.T) {
+	items := itemsJSON(t, finding.OneSidedTransfer, store.FindingItem{
+		TransactionID: new("txn-9"), SplitID: new("split-9"), Date: findingDay(2026, 8, 3), AccountID: "acct-3", Account: "Visa",
+		Currency: "CAD", Payee: "Payment", Amount: 120000, OtherAccount: new("Savings"), OtherAccountID: new("acct-2"),
+	})
+
+	assert.Equal(t, map[string]any{
+		"transaction_id": "txn-9", "split_id": "split-9", "payee_id": nil, "category_id": nil,
+		"date": "2026-08-03", "account_id": "acct-3", "account": "Visa", "currency": "CAD",
+		"payee": "Payment", "category": nil, "amount": "1200.00",
+		"other_account": "Savings", "other_account_id": "acct-2", "transactions": nil, "splits": nil,
+	}, items[0])
+}
+
 func Test_renderFindingsJSON_keeps_the_date_account_and_amount_of_a_transaction_item_and_a_null_transactions(t *testing.T) {
 	items := itemsJSON(t, finding.Duplicate, store.FindingItem{
 		TransactionID: new("txn-1"), Date: findingDay(2026, 8, 3), AccountID: "acct-3", Account: "Chequing", Currency: "CAD",

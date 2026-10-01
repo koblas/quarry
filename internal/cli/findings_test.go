@@ -251,6 +251,7 @@ func filterFakeFindings() fakeReportStore {
 }
 
 func Test_findings_passes_status_and_type_on_to_the_listing(t *testing.T) {
+	cli.UseZone(t, time.UTC)
 	cases := []struct {
 		name string
 		args []string

@@ -1,22 +1,17 @@
 package report_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func findingCountsOf(t *testing.T, ignore []string, fs ...store.Finding) finding.Counts {
 	t.Helper()
-	srv := report.NewServer(report.WithStore(fakeStore{findings: store.FindingList{Findings: fs}}))
-	got, err := srv.FindingCounts(t.Context(), ignore)
-	require.NoError(t, err)
-	return got
+	return report.CountFindings(store.Status{Findings: fs}, ignore)
 }
 
 func newFinding(id string, typ finding.Type) store.Finding {
@@ -73,31 +68,4 @@ func Test_findingCounts_skips_a_finding_of_a_type_this_binary_does_not_know(t *t
 		dated("mystery:thing-1", finding.Type("mystery"), march1))
 
 	assert.Equal(t, finding.Counts{Open: 1}, got)
-}
-
-func Test_findingCounts_returns_the_store_fault(t *testing.T) {
-	srv := report.NewServer(report.WithStore(fakeStore{err: errDiskRead}))
-
-	_, err := srv.FindingCounts(t.Context(), nil)
-
-	require.ErrorIs(t, err, errDiskRead)
-}
-
-func Test_findingCounts_refuses_a_missing_store_naming_status(t *testing.T) {
-	openErr := &store.OpenError{Fault: store.OpenFaultMissing, Path: storePath}
-	srv := report.NewServer(report.WithStore(fakeStore{err: openErr}), report.WithHome(refusalHome))
-
-	_, err := srv.FindingCounts(t.Context(), nil)
-
-	assert.EqualError(t, err, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it")
-}
-
-func Test_findingCounts_is_interrupted_when_its_context_is_done(t *testing.T) {
-	srv := report.NewServer(report.WithStore(fakeStore{err: errDiskRead}))
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-
-	_, err := srv.FindingCounts(ctx, nil)
-
-	assert.EqualError(t, err, "status interrupted")
 }

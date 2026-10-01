@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"bytes"
+	"encoding/csv"
 	"fmt"
 	"io"
 	"strconv"
@@ -154,6 +155,8 @@ func Test_sql_csv_with_json_loses_to_the_other_usage_errors(t *testing.T) {
 	}{
 		{name: "no query", args: []string{"--csv", "--json"}, want: "sql needs a query; pass it as one quoted argument, or - to read it from stdin"},
 		{name: "a negative limit", args: []string{"--csv", "--json", "--limit", "-1", "SELECT 1"}, want: "--limit must be 0 or more; 0 prints every row"},
+		{name: "a blank query", args: []string{"--csv", "--json", "  "}, want: "sql needs a query; pass it as one quoted argument, or - to read it from stdin"},
+		{name: "two queries", args: []string{"--csv", "--json", "SELECT 1", "SELECT 2"}, want: "sql takes one query; quote it as one argument"},
 	}
 
 	for _, c := range cases {
@@ -201,4 +204,19 @@ func Test_sql_csv_prints_nothing_when_the_query_fails(t *testing.T) {
 			assert.Empty(t, stderr.String())
 		})
 	}
+}
+
+func Test_sql_csv_of_a_one_column_result_keeps_every_row_when_read_back_as_csv(t *testing.T) {
+	result := store.QueryResult{
+		Columns: []store.QueryColumn{{Name: "memo", Type: "VARCHAR"}},
+		Rows:    [][]store.QueryValue{{{Text: "NULL", Null: true}}, {{Text: "a"}}, {{Text: "NULL", Null: true}}},
+	}
+	var stdout bytes.Buffer
+
+	err := executeSQL(t, fakeReportStore{result: result}, &stdout, "--csv", "SELECT memo FROM t")
+
+	require.NoError(t, err)
+	records, readErr := csv.NewReader(&stdout).ReadAll()
+	require.NoError(t, readErr)
+	assert.Equal(t, [][]string{{"memo"}, {""}, {"a"}, {""}}, records)
 }
