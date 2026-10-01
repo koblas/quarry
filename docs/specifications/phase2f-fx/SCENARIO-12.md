@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-12
-status: open
+status: done
 ---
 
 # SCENARIO-12: Amounts dated before the first rate stay native with a warning (folds SCENARIO-13)
@@ -33,10 +33,10 @@ No new port: the unconverted facts ride extra fields on `store.Spending`/`store.
 - [x] Step 5 (B2, cmd cross cells): `cmd/quarry/run_spend_unconverted_test.go` + new `run_cashflow_unconverted_test.go`, one case per cell, each text and `--json`: before-first in CAD mode and in USD mode; two transactions -> `2 transactions ... are`; `--account` USD account warns with its count, `--account` CAD-only account silent; spend `--by tag`/`--by month`/`--by payee` warn once; cashflow before-first (income+expense) and no-rates; `--currency native` with pre-rate USD silent; unrated + empty window -> empty note only (spend and cashflow); all-USD data in USD silent, all-CAD data in USD mode warns. Flip `run_cashflow_fx_test.go:266-335` `..._without_a_warning` (rename, assert the "before" line on stderr/`warnings[]` for CAD and USD, native stays silent). Bump the goldens that now see the "no rates" line because they run USD data in default CAD on an unrated `replaceStore`: `run_spend_test.go:17-50` (`:39`), `run_spend_json_test.go:16-80` (`:35`, `warnings` at `:75`), `run_spend_by_test.go:16-47` (`:36`) and `:49-80` (by-tag: no-rates line then multi-tag note), plus any the toolchain lists. Covered already, no new case: future-dated, weekend, closed account (edge matrix asserts empty stderr, `run_spend_fx_test.go:202-274`); invariant before-first cells (`run_cashflow_invariant_test.go:87`, s07/s08 already pre-rate, stderr unasserted)
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments (`store.Unconverted` + the two fields, `unconvertedQuery`, `unconvertedWarnings`) within the `clean-architecture` budget
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments (`store.Unconverted` + the two fields, `unconvertedQuery`, `unconvertedWarnings`) within the `clean-architecture` budget
 
 ### Verify
-- [ ] Step 7: full verification + `spec-check.py phase2f-fx`; tick SCENARIO-12 and tick SCENARIO-13 "delivered by SCENARIO-12" (acceptance test last on the line); rewrite STATE.md: drop the Interim line, move the `current_date` debt to 19, note the unruled items below as decided
+- [x] Step 7: full verification + `spec-check.py phase2f-fx`; tick SCENARIO-12 and tick SCENARIO-13 "delivered by SCENARIO-12" (acceptance test last on the line); rewrite STATE.md: drop the Interim line, move the `current_date` debt to 19, note the unruled items below as decided
 
 ## Handoff
 
@@ -61,12 +61,4 @@ No new port: the unconverted facts ride extra fields on `store.Spending`/`store.
 
 ## Phase report
 
-Runs A, B1, B2 done; steps 1-5 ticked. V (6-7) remains: lint is already `0 issues` and `go test -count=1 ./...` rc=0 at B2's end, but the covered full-suite run, `uncovered-diff.py`, `test-stats.py`, spec tick, `spec-check.py` and the STATE.md rewrite are V's. Both acceptance tests are green.
-
-- Built: `internal/report/period.go` `fillSeries(series, currencies, target, ...)` plus `fillOrder`/`fillTarget`. A CAD/USD report fills zero rows for the target only, first in each period, other currencies only where the store returned one, in `currencyList(Totals)` order; native (`target == ""`) fills every currency as before; an empty window gives the target's zero rows. `report.Spending`/`report.CashFlow` carry `Unconverted` (`spending.go`, `cashflow.go`). `internal/cli/fx_warning.go`: `noRatesWarning`, `unconvertedWarnings(currency, u)`, `beforeFirstRateWarning`, `nativeOf`. Keyed on `Transactions > 0`; `FirstRate.IsZero()` picks "no rates". Wired in `spend.go` (`spendWarnings`) and `cashflow.go` (`cashFlowWarnings`) right after `leftOutWarnings`: left-out, FX, multi-tag, empty.
-- Tests: report `fill_test.go` (shared case table run for spend `--by month` and cashflow, native control, empty window, passthrough, one read); `fakeStore` gained `spendingReads`/`cashFlowReads`. cli `unconverted_test.go` (table: no rates, n=1 `is`, n=2 `are`, 1,000, USD mode swap, count 0 with rates; text + `--json`; order tests). cmd: `run_spend_unconverted_test.go` (cell table, by-month zero fill text/json/native control, unrated empty window), new `run_cashflow_unconverted_test.go` (cells, no-rates, period rows, unrated empty window).
-- Goldens flipped: `run_spend_test.go`, `run_spend_json_test.go`, `run_spend_by_test.go` (payee and tag) now carry the no-rates line; `run_cashflow_fx_test.go` before-first test renamed `..._and_warns`: CAD asserts the "before" line (text, `--json` stderr, `warnings[]`) and no USD row in Jan/Feb; USD and native assert silence; empty-window test now expects the target's 12 zero rows in CAD/USD and none in native; `run_cashflow_refusals_test.go` and `cli/cashflow_test.go` (kept native for its empty-periods assertion) follow.
-- Deviation: the flipped before-first test has no pre-rate CAD split, so its USD case is silent; USD-mode "before" is pinned in the two new cmd files instead.
-- Mutations (restored, diff clean): `FirstRate.IsZero()` inverted -> cli `Test_spend_warns_of_unconverted_transactions_in_text_and_json` (5 subtests) and the cashflow twin red; fill-every-currency (`if false`) -> report fill tests (8 subtests), `Test_run_spend_by_month_lists_the_other_currency_only_in_the_month_that_holds_it` (text, json), `Test_run_cashflow_json_gives_a_period_in_the_other_currency_only_where_the_store_found_one`, the CAD case of the before-first cashflow test; FX after the multi-tag note -> `Test_spend_by_tag_puts_the_exchange_rate_warning_between_...` and `Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_total_and_warns`.
-- STATE.md: the fillSeries Open debt is removed (closed here). The `Interim` line, the "Left unbuilt" 12/13 line and the `current_date` debt are V's to rewrite.
-- Behaviour to know: an empty window in CAD/USD now prints the target's zero row per period (spend `--by month`, cashflow text and `--json` `periods`), as ruled; native keeps none.
+All runs done (A, B1, B2, V); steps 1-7 ticked, status done. Verify: `go test -count=1 -coverpkg=./... ./...` rc=0, `uncovered-diff.py` 0 uncovered added lines since d849c6c, `-race` on duckstore, report, cli, cmd/quarry rc=0, lint `0 issues`. test-stats: cmd/quarry 464 (+9), internal/cli 382 (+4), internal/report 237 (+4), internal/store/duckstore 452 (+20), TOTAL 1535 (+37). SCENARIO-12 ticked with its acceptance test, SCENARIO-13 ticked delivered by SCENARIO-12; `spec-check.py phase2f-fx` OK. STATE.md rewritten.
