@@ -404,10 +404,10 @@ Ruled (sizing pass 2026-10-01):
 | 22 (21) | FOLD into 20 — reused refusal helpers |
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01: recurring lists a monthly subscription with its yearly cost
-- [ ] SCENARIO-02: recurring detects weekly, quarterly and yearly series
-- [ ] SCENARIO-03: a charge off schedule starts the series again
-- [ ] SCENARIO-04: a split transaction counts once and a refund does not break the series
+- [x] SCENARIO-01: recurring lists a monthly subscription with its yearly cost — `cmd/quarry/run_recurring_test.go` `Test_run_recurring_lists_a_monthly_subscription_with_its_yearly_cost`
+- [x] SCENARIO-02: recurring detects weekly, quarterly and yearly series — delivered by SCENARIO-01: `cmd/quarry/run_recurring_test.go` `Test_run_recurring_detects_weekly_quarterly_and_yearly_series`
+- [x] SCENARIO-03: a charge off schedule starts the series again — delivered by SCENARIO-01: `internal/report/recurring_test.go` `Test_recurring_starts_the_series_again_after_a_charge_off_schedule`
+- [x] SCENARIO-04: a split transaction counts once and a refund does not break the series — delivered by SCENARIO-01: `cmd/quarry/run_recurring_test.go` `Test_run_recurring_counts_a_split_charge_once_and_leaves_a_refund_out`
 - [ ] SCENARIO-05: a series ends after its cadence's quiet period
 - [ ] SCENARIO-06: a series first charged in the window is marked new
 - [ ] SCENARIO-07: price changes are listed both ways with first to latest

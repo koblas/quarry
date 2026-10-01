@@ -72,7 +72,7 @@ the rows can add up to more than the total.`,
 		},
 	}
 	cmd.Flags().StringVar(&by, "by", spendGroupings[store.SpendByCategory].name, "group spending by `group`: category, payee, tag or month")
-	flags.bind(cmd)
+	flags.bind(cmd, transactionFlagHelp)
 	return cmd
 }
 

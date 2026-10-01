@@ -5,6 +5,9 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
+// spendAligns is the alignment of the spend table's columns: Spent right, the rest left.
+var spendAligns = []tableAlign{alignLeft, alignLeft, alignRight, alignLeft}
+
 // renderSpending renders s as the spend table: caption, header, one row per group and a Total
 // row per currency; a month grouping adds a trailing, unpadded Status column.
 func renderSpending(s report.Spending) string {
@@ -29,5 +32,5 @@ func renderSpending(s report.Spending) string {
 	for _, t := range s.Totals {
 		rows = append(rows, []string{tableTotalLabel, t.Currency, formatMoney(t.Spent), ""})
 	}
-	return renderTable(windowCaption("Spending", s.Window, s.Accounts), rows)
+	return renderTable(windowCaption("Spending", s.Window, s.Accounts), spendAligns, rows)
 }

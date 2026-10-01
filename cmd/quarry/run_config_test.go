@@ -213,12 +213,16 @@ func Test_run_read_commands_ignore_a_malformed_config(t *testing.T) {
 		[]store.Account{chequingAccount("acct-chq", 1)},
 		spendSplit{id: "s01", account: "acct-chq", category: "cat-salary", currency: "CAD", day: day(2026, 3, 1), cents: 50000},
 		spendSplit{id: "s02", account: "acct-chq", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -12000},
+		spendSplit{id: "s03", account: "acct-chq", category: "cat-groceries", payee: "payee-costco", currency: "CAD", day: day(2026, 7, 5), cents: -2000},
+		spendSplit{id: "s04", account: "acct-chq", category: "cat-groceries", payee: "payee-costco", currency: "CAD", day: day(2026, 8, 5), cents: -2000},
+		spendSplit{id: "s05", account: "acct-chq", category: "cat-groceries", payee: "payee-costco", currency: "CAD", day: day(2026, 9, 5), cents: -2000},
 	))
 	commands := map[string][]string{
-		"accounts": {"accounts"},
-		"spend":    {"spend", "--since", "2026-01", "--until", "2026-09"},
-		"cashflow": {"cashflow", "--since", "2026-01", "--until", "2026-09"},
-		"sql":      {"sql", "SELECT name FROM accounts"},
+		"accounts":  {"accounts"},
+		"spend":     {"spend", "--since", "2026-01", "--until", "2026-09"},
+		"cashflow":  {"cashflow", "--since", "2026-01", "--until", "2026-09"},
+		"recurring": {"recurring", "--since", "2026-01", "--until", "2026-09"},
+		"sql":       {"sql", "SELECT name FROM accounts"},
 	}
 	before := map[string]string{}
 	for name, args := range commands {

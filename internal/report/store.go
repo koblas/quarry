@@ -17,6 +17,8 @@ type Store interface {
 	Spending(ctx context.Context, params store.SpendingParams) (store.Spending, error)
 	// CashFlow reads income and spending in params.Window, per period and currency, filtered as params says.
 	CashFlow(ctx context.Context, params store.CashFlowParams) (store.CashFlow, error)
+	// Charges lists every charge dated through params.Through, with the span of the store's transactions.
+	Charges(ctx context.Context, params store.ChargeParams) (store.Charges, error)
 	// Findings lists every finding in the store with its items.
 	Findings(ctx context.Context) (store.FindingList, error)
 	// Query runs query verbatim and returns at most maxRows rows, every row when maxRows is 0.

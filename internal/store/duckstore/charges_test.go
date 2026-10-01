@@ -1,0 +1,313 @@
+package duckstore_test
+
+import (
+	"testing"
+	"time"
+
+	"github.com/koblas/quarry/internal/store"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const (
+	catFuel  = "cat-fuel"
+	payeeGym = "payee-gym"
+	nameGym  = "Gym"
+)
+
+// chargesThrough is the last day the charges tests read.
+var chargesThrough = day(2026, 9, 29)
+
+// splitPart is one split of a chargeSpec; negative cents is money out and a nil category is none.
+type splitPart struct {
+	category *string
+	cents    int64
+}
+
+// chargeSpec is one transaction of any number of splits; account defaults to acctInReports,
+// currency to CAD and date to 2026-03-15.
+type chargeSpec struct {
+	id       string
+	sourceID int64
+	account  string
+	currency string
+	payee    *string
+	date     time.Time
+	splits   []splitPart
+}
+
+// addCharge appends spec's transaction and its splits to rows.
+func addCharge(rows *store.Rows, spec chargeSpec) {
+	account, currency, date := spec.account, spec.currency, spec.date
+	if account == "" {
+		account = acctInReports
+	}
+	if currency == "" {
+		currency = "CAD"
+	}
+	if date.IsZero() {
+		date = day(2026, 3, 15)
+	}
+	var amount int64
+	for i, part := range spec.splits {
+		amount += part.cents
+		rows.Splits = append(rows.Splits, store.Split{
+			ID: spec.id + "-" + string(rune('a'+i)), SourceID: int64(len(rows.Splits) + 1), TransactionID: "txn-" + spec.id,
+			CategoryID: part.category, Amount: part.cents,
+		})
+	}
+	rows.Transactions = append(rows.Transactions, store.Transaction{
+		ID: "txn-" + spec.id, SourceID: spec.sourceID, AccountID: account, Date: date, PayeeID: spec.payee,
+		Amount: amount, Currency: currency, Status: "uncleared",
+	})
+}
+
+// chargeRowsFor is spendRows with the Gym payee and a fuel category.
+func chargeRowsFor() store.Rows {
+	rows := spendRows(expenseCategory(catFuel, "Fuel"))
+	rows.Payees = []store.Payee{{ID: payeeGym, SourceID: 1, Name: nameGym}}
+	return rows
+}
+
+// oneSplit is a charge of cents in catExpense.
+func oneSplit(id string, sourceID int64, cents int64) chargeSpec {
+	return chargeSpec{id: id, sourceID: sourceID, splits: []splitPart{{category: new(catExpense), cents: -cents}}}
+}
+
+func chargesOf(t *testing.T, rows store.Rows) store.Charges {
+	t.Helper()
+	got, err := newStoreWith(t, rows).Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
+	require.NoError(t, err)
+	return got
+}
+
+func amountsOf(charges store.Charges) []int64 {
+	amounts := make([]int64, len(charges.Rows))
+	for i, c := range charges.Rows {
+		amounts[i] = c.Amount
+	}
+	return amounts
+}
+
+func Test_charges_sums_a_split_transaction_into_one_charge(t *testing.T) {
+	t.Parallel()
+	rows := chargeRowsFor()
+	addCharge(&rows, chargeSpec{id: "split", sourceID: 1, splits: []splitPart{{new(catExpense), -300}, {new(catFuel), -200}}})
+
+	got := chargesOf(t, rows)
+
+	require.Len(t, got.Rows, 1)
+	assert.Equal(t, int64(500), got.Rows[0].Amount)
+	assert.Equal(t, 2, got.Rows[0].ExpenseSplits)
+	assert.Equal(t, "txn-split", got.Rows[0].TransactionID)
+}
+
+func Test_charges_drops_refunds_and_net_zero_transactions(t *testing.T) {
+	t.Parallel()
+	rows := chargeRowsFor()
+	addCharge(&rows, chargeSpec{id: "refund", sourceID: 1, splits: []splitPart{{new(catExpense), 900}}})
+	addCharge(&rows, chargeSpec{id: "net-zero", sourceID: 2, splits: []splitPart{{new(catExpense), -500}, {new(catFuel), 500}}})
+	addCharge(&rows, chargeSpec{id: "net-negative", sourceID: 3, splits: []splitPart{{new(catExpense), -500}, {new(catFuel), 700}}})
+	addCharge(&rows, chargeSpec{id: "penny", sourceID: 4, splits: []splitPart{{new(catExpense), -1}}})
+	addCharge(&rows, oneSplit("normal", 5, 1200))
+
+	got := chargesOf(t, rows)
+
+	assert.Equal(t, []int64{1, 1200}, amountsOf(got))
+}
+
+func Test_charges_ignores_rows_dated_after_through(t *testing.T) {
+	t.Parallel()
+	rows := chargeRowsFor()
+	onThrough, afterThrough := oneSplit("on-through", 1, 100), oneSplit("after-through", 2, 200)
+	onThrough.date, afterThrough.date = chargesThrough, chargesThrough.AddDate(0, 0, 1)
+	addCharge(&rows, onThrough)
+	addCharge(&rows, afterThrough)
+
+	got := chargesOf(t, rows)
+
+	assert.Equal(t, []int64{100}, amountsOf(got))
+}
+
+func Test_charges_leaves_out_what_spending_leaves_out(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		spec     chargeSpec
+		transfer *store.Transfer
+	}{
+		{name: "a transfer leg", spec: oneSplit("left-out", 2, 500), transfer: &store.Transfer{ID: "xfer", FromSplitID: "left-out-a", ToSplitID: new("peer-leg")}},
+		{name: "an account left out of reports", spec: chargeSpec{id: "left-out", sourceID: 2, account: acctNotReports, splits: []splitPart{{new(catExpense), -500}}}},
+		{name: "a linked-tracking account", spec: chargeSpec{id: "left-out", sourceID: 2, account: acctLinked, splits: []splitPart{{new(catExpense), -500}}}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			rows := chargeRowsFor()
+			addCharge(&rows, oneSplit("kept", 1, 100))
+			addCharge(&rows, c.spec)
+			if c.transfer != nil {
+				rows.Transfers = append(rows.Transfers, *c.transfer)
+			}
+
+			got := chargesOf(t, rows)
+
+			assert.Equal(t, []int64{100}, amountsOf(got))
+		})
+	}
+}
+
+func Test_charges_sets_the_category_only_when_every_expense_row_shares_one(t *testing.T) {
+	t.Parallel()
+	groceries := &store.ChargeCategory{ID: catExpense, Path: "Groceries"}
+	cases := []struct {
+		name   string
+		splits []splitPart
+		want   *store.ChargeCategory
+		parts  int
+	}{
+		{name: "one split in one category", splits: []splitPart{{new(catExpense), -100}}, want: groceries, parts: 1},
+		{name: "two splits in the same category", splits: []splitPart{{new(catExpense), -100}, {new(catExpense), -200}}, want: groceries, parts: 2},
+		{name: "no category on any split", splits: []splitPart{{nil, -100}, {nil, -200}}, want: nil, parts: 2},
+		{name: "two different categories", splits: []splitPart{{new(catExpense), -100}, {new(catFuel), -200}}, want: nil, parts: 2},
+		{name: "a NULL category and one category", splits: []splitPart{{nil, -100}, {new(catExpense), -200}}, want: nil, parts: 2},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			rows := chargeRowsFor()
+			addCharge(&rows, chargeSpec{id: "only", sourceID: 1, splits: c.splits})
+
+			got := chargesOf(t, rows)
+
+			require.Len(t, got.Rows, 1)
+			assert.Equal(t, c.want, got.Rows[0].Category)
+			assert.Equal(t, c.parts, got.Rows[0].ExpenseSplits)
+		})
+	}
+}
+
+func Test_charges_names_the_payee(t *testing.T) {
+	t.Parallel()
+	rows := chargeRowsFor()
+	spec := oneSplit("gym", 1, 1200)
+	spec.payee = new(payeeGym)
+	addCharge(&rows, spec)
+
+	got := chargesOf(t, rows)
+
+	require.Len(t, got.Rows, 1)
+	assert.Equal(t, new(payeeGym), got.Rows[0].PayeeID)
+	assert.Equal(t, new(nameGym), got.Rows[0].Payee)
+}
+
+func Test_charges_keeps_a_charge_with_no_payee(t *testing.T) {
+	t.Parallel()
+	rows := chargeRowsFor()
+	addCharge(&rows, oneSplit("anonymous", 1, 1200))
+
+	got := chargesOf(t, rows)
+
+	require.Len(t, got.Rows, 1)
+	assert.Nil(t, got.Rows[0].PayeeID)
+	assert.Nil(t, got.Rows[0].Payee)
+	assert.Equal(t, int64(1200), got.Rows[0].Amount)
+}
+
+func Test_charges_fills_the_account_and_currency(t *testing.T) {
+	t.Parallel()
+	rows := chargeRowsFor()
+	rows.Accounts = append(rows.Accounts, store.Account{ID: "acct-old", SourceID: 9, Name: "Old Visa", Type: "credit_card", Currency: "USD", Closed: true})
+	spec := oneSplit("old", 1, 1200)
+	spec.account, spec.currency, spec.date = "acct-old", "USD", day(2026, 4, 5)
+	addCharge(&rows, spec)
+
+	got := chargesOf(t, rows)
+
+	require.Len(t, got.Rows, 1)
+	assert.Equal(t, store.Account{ID: "acct-old", Name: "Old Visa", Currency: "USD", Closed: true}, got.Rows[0].Account)
+	assert.Equal(t, "USD", got.Rows[0].Currency)
+	assert.Equal(t, day(2026, 4, 5), got.Rows[0].Date)
+}
+
+func Test_charges_orders_by_date_then_numeric_source_id(t *testing.T) {
+	t.Parallel()
+	ten, nine := oneSplit("ten", 10, 100), oneSplit("nine", 9, 100)
+	late, early := oneSplit("late", 1, 100), oneSplit("early", 2, 100)
+	late.date, early.date = day(2026, 5, 1), day(2026, 4, 1)
+	cases := []struct {
+		name  string
+		specs []chargeSpec
+		want  []int64
+	}{
+		{name: "the higher source id inserted first", specs: []chargeSpec{ten, nine}, want: []int64{9, 10}},
+		{name: "the lower source id inserted first", specs: []chargeSpec{nine, ten}, want: []int64{9, 10}},
+		{name: "an earlier date outranks a lower source id", specs: []chargeSpec{late, early}, want: []int64{2, 1}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			rows := chargeRowsFor()
+			for _, spec := range c.specs {
+				addCharge(&rows, spec)
+			}
+
+			got := chargesOf(t, rows)
+
+			ids := make([]int64, len(got.Rows))
+			for i, charge := range got.Rows {
+				ids[i] = charge.SourceID
+			}
+			assert.Equal(t, c.want, ids)
+		})
+	}
+}
+
+func Test_charges_gives_the_span_of_every_transaction_in_the_store(t *testing.T) {
+	t.Parallel()
+	rows := chargeRowsFor()
+	early, late := oneSplit("early", 1, 100), oneSplit("late", 2, 100)
+	early.date, late.date = day(2003, 1, 4), day(2026, 8, 1)
+	future := chargeSpec{id: "future", sourceID: 3, account: acctNotReports, date: day(2027, 2, 2), splits: []splitPart{{new(catExpense), 900}}}
+	addCharge(&rows, early)
+	addCharge(&rows, late)
+	addCharge(&rows, future)
+
+	got := chargesOf(t, rows)
+
+	assert.Equal(t, store.TransactionRange{First: day(2003, 1, 4), Last: day(2027, 2, 2)}, got.Transactions)
+	assert.Len(t, got.Rows, 2)
+}
+
+func Test_charges_gives_no_rows_and_a_zero_span_for_a_store_without_transactions(t *testing.T) {
+	t.Parallel()
+
+	got := chargesOf(t, spendRows())
+
+	assert.Empty(t, got.Rows)
+	assert.Zero(t, got.Transactions)
+}
+
+func Test_charges_returns_the_transaction_range_query_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	fault := ioFault(`query rows "SELECT min"`)
+	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, queryFault: fault}))
+
+	_, err := st.Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
+
+	assertOtherFault(t, err, "disk read failed")
+	assert.ErrorIs(t, err, fault)
+}
+
+func Test_charges_returns_a_transaction_range_scan_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, scanFault: errScanFailed}))
+
+	_, err := st.Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
+
+	assertOtherFault(t, err, errScanFailed.Error())
+	assert.ErrorIs(t, err, errScanFailed)
+}
