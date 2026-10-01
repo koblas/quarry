@@ -8,6 +8,7 @@
 | SCENARIO-07 (+08, 09, 10) | code-first | A, B1, B2, V | 0/1/1/1 | yes (JSON `new:false` arm unpinned; test-only) |
 | SCENARIO-11 (+12, 13) | code-first | A, B1, B2, V | 0/1/1/0 | yes (closed-account `--account` edge row unpinned; test-only + comment) |
 | SCENARIO-14 (+15, 16) | code-first | A, B1, B2, V | 0/0/6/1 | no (MINORs → STATE.md); 1 copy ruling (not_judged scope, empty-window trigger, no-payee cell) |
+| SCENARIO-17 (+18) | code-first (light) | L, V | 0/0/0/1 | no (NIT → STATE.md) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
