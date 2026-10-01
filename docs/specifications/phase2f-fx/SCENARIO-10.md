@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-10
-status: open
+status: done
 ---
 
 # SCENARIO-10: Cashflow converts each period
@@ -41,10 +41,10 @@ Existence (go doc, grep): `CashFlowParams`/`CashFlowRequest`/`report.CashFlow` h
   - Not re-pinned: cross-currency transfer excluded (view).
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Doc comments on `CashFlowParams.Currency`, `CashFlowRequest.Currency`, `CashFlow.Currency`, `cashFlowSource`. Bump the caption pins that gain `, amounts in CAD`: `cmd/quarry/run_cashflow_test.go:45,83`, `run_cashflow_refusals_test.go:57`, `internal/cli/cashflow_test.go:65,81,234`. Bump the JSON pin `cmd/quarry/run_cashflow_json_test.go:35` (add `"currency": "CAD"` after `by`). Replace the pinned cashflow Long in `report_help_test.go:75`.
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Doc comments on `CashFlowParams.Currency`, `CashFlowRequest.Currency`, `CashFlow.Currency`, `cashFlowSource`. Bump the caption pins that gain `, amounts in CAD`: `cmd/quarry/run_cashflow_test.go:45,83`, `run_cashflow_refusals_test.go:57`, `internal/cli/cashflow_test.go:65,81,234`. Bump the JSON pin `cmd/quarry/run_cashflow_json_test.go:35` (add `"currency": "CAD"` after `by`). Replace the pinned cashflow Long in `report_help_test.go:75`.
 
 ### Verify
-- [ ] Step 7: full verification + `spec-check.py phase2f-fx`; tick SCENARIO-10 with its acceptance test, tick SCENARIO-09 as `delivered by SCENARIO-10` with `Test_run_cashflow_spent_equals_spend_total_in_every_reporting_currency` last on the line; rewrite STATE.md (drop the cashflow trap and the cashflow "Left unbuilt" item).
+- [x] Step 7: full verification + `spec-check.py phase2f-fx`; tick SCENARIO-10 with its acceptance test, tick SCENARIO-09 as `delivered by SCENARIO-10` with `Test_run_cashflow_spent_equals_spend_total_in_every_reporting_currency` last on the line; rewrite STATE.md (drop the cashflow trap and the cashflow "Left unbuilt" item).
 
 ## Handoff
 
@@ -68,17 +68,8 @@ Existence (go doc, grep): `CashFlowParams`/`CashFlowRequest`/`report.CashFlow` h
 
 ## Phase report
 
-Runs A and B1 done (steps 1-5 ticked). Both acceptance tests green; narrow loop and `golangci-lint run ./...` (0 issues) green. Step 6's pin bumps and doc comments were done in B1 because the new surface broke those pins; V still owns the Sweep re-check and Verify (step 7).
+Run V done. Covered full suite rc=0; `uncovered-diff.py` 0 uncovered added lines since 31c4648; `-race` on duckstore, report, cli, cmd/quarry rc=0; `golangci-lint run ./...` 0 issues; `spec-check.py phase2f-fx` OK. SCENARIO-10 and SCENARIO-09 (delivered by 10) ticked in specification.md; STATE.md rewritten; steps 6-7 ticked; status done.
 
-Built:
-- `store.CashFlowParams.Currency`; `duckstore/cashflow.go` `cashFlowSource(currency)` (native = literal `v_cash_flow`; CAD/USD project `amount_cad|usd` as `amount`, target as `currency`, NULL cell keeps native via `CASE`/`COALESCE`), spliced into `cashFlowQuery(key, accounts, source)`.
-- `report.CashFlowRequest.Currency` / `CashFlow.Currency`; `cli/cashflow.go` threads `reportCurrency`, Long = opening + `reportCurrencyLong` + rules paragraph ending `...accounts and currency.`; `render_cashflow.go` caption uses `c.Currency`; `json_cashflow.go` `currency` after `by`.
-- Tests: `duckstore/cashflow_fx_test.go` (14 `Test_cash_flow_read_*`), `report/cashflow_test.go` currency test, `cli/cashflow_currency_test.go`, key-order and caption rows in the two internal cli tests, `cmd/quarry/run_cashflow_fx_test.go` edge matrix (5 cases x currencies, empty window x3, before-first-rate x3 literal tables, JSON read-back). Pins bumped: cmd `run_cashflow_test.go`, `run_cashflow_refusals_test.go`, `run_cashflow_json_test.go`; cli `cashflow_test.go`, `json_cashflow_internal_test.go`, `report_help_test.go` (cashflow Long).
-- Run A defect fixed: the acceptance text test built its table with `cashFlowLine`, whose widths are fixed for other fixtures; replaced by the literal table (numbers unchanged).
+Counts (`test-stats.py --base 31c4648 --changed`): cmd/quarry 455 (+6), internal/cli 378 (+3), internal/report 233 (+1), internal/store/duckstore 432 (+15); TOTAL 1498 (+25).
 
-Mutations (all restored, diffed):
-- NULL arm dropped (`currency` always the target) -> reddened `Test_cash_flow_read_keeps_an_unrated_split_native_beside_the_converted_ones`, `..._by_year_keeps_an_unrated_split_native_...`, `..._in_usd_keeps_a_cad_split_before_the_first_rate_...`, `..._in_cad_keeps_a_split_in_another_currency_...`.
-- Round-then-sum (CAD converted as unrounded `amount * usd_cad`) -> reddened `Test_cash_flow_read_rounds_each_split_to_the_cent_before_adding_them`, `..._rounds_spending_split_by_split_...`, `..._takes_the_savings_rate_from_the_converted_sums_...`.
-- `money.Native` placeholder back in `render_cashflow.go` -> reddened `Test_run_cashflow_converts_each_period_to_cad_by_default/text`.
-
-Left for V: full covered suite + `uncovered-diff.py`, `test-stats.py`, `spec-check.py`, ticks in specification.md, STATE.md rewrite (drop the cashflow trap and the cashflow Left-unbuilt item), METRICS handled by caller.
+Open for the final product-vision pass (recorded in STATE.md Open debts): zero USD row from `fillSeries` beside CAD in each period when one USD split predates the first rate.
