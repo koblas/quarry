@@ -18,7 +18,7 @@ var recurringFlagHelp = reportFlagHelp{
 }
 
 // newRecurringCommand builds recurring: the charges that repeat on a schedule and were running in the --since/--until period.
-func newRecurringCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
+func newRecurringCommand(newReport ReportFactory, loadConfig ConfigLoader, now func() time.Time, jsonOut *bool) *cobra.Command {
 	flags := reportFlags{chargesCommand: recurringCommand}
 	var currency currencyFlag
 	cmd := &cobra.Command{
@@ -53,6 +53,11 @@ active series only.`,
 				return err
 			}
 
+			_, configWarnings, err := currency.resolve(cmd, loadConfig)
+			if err != nil {
+				return err
+			}
+
 			srv, err := openReport(cmd, newReport)
 			if err != nil {
 				return err
@@ -65,7 +70,7 @@ active series only.`,
 
 			warnings := recurringWarnings(rec)
 			return emitReport(cmd, *jsonOut, warnings,
-				func() ([]byte, error) { return renderRecurringJSON(rec, warnings) },
+				func() ([]byte, error) { return renderRecurringJSON(rec, withConfigWarnings(configWarnings, warnings)) },
 				func() string { return renderRecurring(rec) })
 		},
 	}

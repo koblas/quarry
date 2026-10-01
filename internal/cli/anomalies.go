@@ -18,7 +18,7 @@ var anomaliesFlagHelp = reportFlagHelp{
 }
 
 // newAnomaliesCommand builds anomalies: the charges in the --since/--until period unusually large for their payee or category.
-func newAnomaliesCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
+func newAnomaliesCommand(newReport ReportFactory, loadConfig ConfigLoader, now func() time.Time, jsonOut *bool) *cobra.Command {
 	flags := reportFlags{chargesCommand: anomaliesCommand}
 	var currency currencyFlag
 	cmd := &cobra.Command{
@@ -47,6 +47,11 @@ accounts; the payee's charges in other accounts still count as history.`,
 				return err
 			}
 
+			_, configWarnings, err := currency.resolve(cmd, loadConfig)
+			if err != nil {
+				return err
+			}
+
 			srv, err := openReport(cmd, newReport)
 			if err != nil {
 				return err
@@ -59,7 +64,9 @@ accounts; the payee's charges in other accounts still count as history.`,
 
 			warnings := anomaliesWarnings(found)
 			return emitReport(cmd, *jsonOut, warnings,
-				func() ([]byte, error) { return renderAnomaliesJSON(found, warnings) },
+				func() ([]byte, error) {
+					return renderAnomaliesJSON(found, withConfigWarnings(configWarnings, warnings))
+				},
 				func() string { return renderAnomalies(found) })
 		},
 	}

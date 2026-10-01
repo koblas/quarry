@@ -29,7 +29,8 @@ func linkedCashFlowWarning(name string) string {
 func executeCashFlow(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
 	t.Helper()
 	env := cli.Env{
-		Stdout: stdout, Stderr: stderr,
+		LoadConfig: cadConfig,
+		Stdout:     stdout, Stderr: stderr,
 		Now: func() time.Time { return spendNow },
 		NewReport: func(context.Context, string) (*report.Server, error) {
 			return report.NewServer(report.WithStore(fake)), nil
@@ -102,7 +103,8 @@ func Test_cashflow_refuses_a_by_that_names_no_period_before_reading_the_store(t 
 func Test_cashflow_refuses_a_by_before_it_looks_at_the_window_or_opens_the_report(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := cli.Env{
-		Stdout: &stdout, Stderr: &stderr,
+		LoadConfig: cadConfig,
+		Stdout:     &stdout, Stderr: &stderr,
 		Now:       time.Now,
 		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
 	}
@@ -117,7 +119,8 @@ func Test_cashflow_refuses_a_by_before_it_looks_at_the_window_or_opens_the_repor
 func Test_cashflow_refuses_a_window_before_opening_the_report(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := cli.Env{
-		Stdout: &stdout, Stderr: &stderr,
+		LoadConfig: cadConfig,
+		Stdout:     &stdout, Stderr: &stderr,
 		Now:       time.Now,
 		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
 	}
@@ -176,7 +179,8 @@ func Test_cashflow_returns_the_report_fault(t *testing.T) {
 func Test_cashflow_returns_the_report_factory_fault(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := cli.Env{
-		Stdout: &stdout, Stderr: &stderr,
+		LoadConfig: cadConfig,
+		Stdout:     &stdout, Stderr: &stderr,
 		Now:       time.Now,
 		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
 	}

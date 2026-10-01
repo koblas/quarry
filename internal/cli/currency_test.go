@@ -3,6 +3,9 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,6 +22,9 @@ const badCurrencyFlag = "--currency must be CAD, USD or native"
 // currencyCommands are the commands that take --currency.
 var currencyCommands = []string{"spend", "cashflow", "recurring", "anomalies", "accounts"}
 
+// cadConfig is a ConfigLoader for a config file that leaves reporting.currency at its CAD default.
+func cadConfig(string) (config.Config, error) { return config.Config{Currency: money.CAD}, nil }
+
 // currencyEnv is an Env whose report opens an empty store and whose config leaves the currency at CAD.
 func currencyEnv(stdout, stderr *bytes.Buffer) cli.Env {
 	return cli.Env{
@@ -27,7 +33,7 @@ func currencyEnv(stdout, stderr *bytes.Buffer) cli.Env {
 		NewReport: func(context.Context, string) (*report.Server, error) {
 			return report.NewServer(report.WithStore(fakeReportStore{})), nil
 		},
-		LoadConfig: func(string) (config.Config, error) { return config.Config{Currency: money.CAD}, nil },
+		LoadConfig: cadConfig,
 	}
 }
 
@@ -129,4 +135,121 @@ func Test_currency_flag_is_refused_after_the_check_for_a_positional_argument(t *
 			assert.EqualError(t, err, command+" takes no arguments")
 		})
 	}
+}
+
+const (
+	unknownKeyShown    = "~/Library/Application Support/quarry/config.toml: unknown key \"colour\"; quarry ignores it"
+	unknownKeyAbsolute = "/Users/me/Library/Application Support/quarry/config.toml: unknown key \"colour\"; quarry ignores it"
+)
+
+var errConfigRead = errors.New("cannot read config.toml: permission denied")
+
+// loaderEnv is currencyEnv whose config loader is load.
+func loaderEnv(stdout, stderr *bytes.Buffer, load cli.ConfigLoader) cli.Env {
+	env := currencyEnv(stdout, stderr)
+	env.LoadConfig = load
+
+	return env
+}
+
+// warningConfig is a ConfigLoader for a config file with one unknown key.
+func warningConfig(string) (config.Config, error) {
+	return config.Config{
+		Currency:         money.CAD,
+		Warnings:         []string{unknownKeyShown},
+		WarningsAbsolute: []string{unknownKeyAbsolute},
+	}, nil
+}
+
+func Test_read_commands_read_the_config_once_and_only_without_the_currency_flag(t *testing.T) {
+	for _, command := range currencyCommands {
+		t.Run(command+" without the flag", func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			var asked []string
+			env := loaderEnv(&stdout, &stderr, func(name string) (config.Config, error) {
+				asked = append(asked, name)
+
+				return cadConfig(name)
+			})
+
+			err := cli.Execute(t.Context(), []string{command}, env)
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{command}, asked)
+		})
+		t.Run(command+" with the flag", func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			calls := 0
+			env := loaderEnv(&stdout, &stderr, func(string) (config.Config, error) {
+				calls++
+
+				return config.Config{}, errConfigRead
+			})
+
+			err := cli.Execute(t.Context(), []string{command, "--currency", "usd"}, env)
+
+			require.NoError(t, err)
+			assert.Zero(t, calls)
+		})
+	}
+}
+
+func Test_read_commands_refuse_an_unreadable_config_as_a_runtime_error(t *testing.T) {
+	for _, command := range currencyCommands {
+		t.Run(command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			env := loaderEnv(&stdout, &stderr, func(string) (config.Config, error) { return config.Config{}, errConfigRead })
+
+			err := cli.Execute(t.Context(), []string{command}, env)
+
+			require.ErrorIs(t, err, errConfigRead)
+			assert.NotErrorAs(t, err, new(cli.UsageError))
+			assert.Empty(t, stdout.String())
+		})
+	}
+}
+
+func Test_read_commands_print_the_configs_warnings_in_home_form_on_stderr_before_the_result(t *testing.T) {
+	for _, command := range currencyCommands {
+		t.Run(command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := cli.Execute(t.Context(), []string{command}, loaderEnv(&stdout, &stderr, warningConfig))
+
+			require.NoError(t, err)
+			assert.True(t, strings.HasPrefix(stderr.String(), "quarry: warning: "+unknownKeyShown+"\n"), stderr.String())
+		})
+	}
+}
+
+func Test_read_commands_name_the_configs_warnings_absolutely_first_in_json_and_in_home_form_on_stderr(t *testing.T) {
+	for _, command := range currencyCommands {
+		t.Run(command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := cli.Execute(t.Context(), []string{command, "--json"}, loaderEnv(&stdout, &stderr, warningConfig))
+
+			require.NoError(t, err)
+			var doc struct {
+				Warnings []string `json:"warnings"`
+			}
+			require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+			require.NotEmpty(t, doc.Warnings)
+			assert.Equal(t, unknownKeyAbsolute, doc.Warnings[0])
+			assert.True(t, strings.HasPrefix(stderr.String(), "quarry: warning: "+unknownKeyShown+"\n"), stderr.String())
+			assert.NotContains(t, stderr.String(), unknownKeyAbsolute)
+		})
+	}
+}
+
+func Test_spend_prints_the_configs_warnings_before_its_own_and_lists_them_once_on_stderr(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := cli.Execute(t.Context(), []string{"spend"}, loaderEnv(&stdout, &stderr, warningConfig))
+
+	require.NoError(t, err)
+	lines := strings.Split(strings.TrimSuffix(stderr.String(), "\n"), "\n")
+	require.Len(t, lines, 2)
+	assert.Equal(t, "quarry: warning: "+unknownKeyShown, lines[0])
+	assert.Contains(t, lines[1], "no spending")
 }

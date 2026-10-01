@@ -52,7 +52,7 @@ Batch order is money+config → binder → resolver → cmd rows (the sizing's 1
     - `--currency usd` accepted;
     - `--currency EUR --by bogus` → the currency message;
     - `extra --currency EUR` → the noArgs message.
-- [ ] Step 5: resolver + wiring.
+- [x] Step 5: resolver + wiring.
   - `currency.go` `resolve(cmd, loadConfig)` returns the currency, config warnings (`~` and absolute) and an error:
     - Changed → the parsed flag, loader never called;
     - otherwise `loadConfig(cmd.Name())`; an error → `&runtimeError`;
@@ -66,7 +66,7 @@ Batch order is money+config → binder → resolver → cmd rows (the sizing's 1
     - unknown-key warnings × 5 × {text: `~` line on stderr before the command's own warning; `--json`: `warnings[0]` absolute, stderr `~`};
     - loader error → exit 1 with its text.
     - Internal `currency_internal_test.go` covers `resolve`, because the resolved value cannot be observed through `cli.Run` until 08: the flag beats config, the config's USD applies when the flag is absent, and a CAD default applies when the config leaves it unset.
-- [ ] Step 6: cmd all-commands rows.
+- [x] Step 6: cmd all-commands rows.
   - `run_read_usage_test.go:30-60` rows: `spend --currency=`, `spend --currency EUR --by bogus`. New `Test_run_spend_refuses_a_bad_currency_flag_before_reading_a_bad_config` (exit 2).
   - `run_usage_test.go:199-218`: bare `--currency` × 5 → `quarry: flag needs an argument: --currency; Run 'quarry <cmd> --help' for usage.`
   - Split `run_config_test.go:209-252` into:
@@ -108,19 +108,17 @@ Batch order is money+config → binder → resolver → cmd rows (the sizing's 1
 
 ## Phase report
 
-Run B1 (steps 3-4) done; steps 5-8 open. Narrow loop green: money, config, cli. cmd: `Test_run_read_commands_refuse_a_bad_currency_flag` (SCENARIO-15) is green; `Test_run_read_commands_refuse_a_bad_reporting_currency` stays red (no resolver yet, B2 turns it green).
+Run B2 (steps 5-6) done; steps 7-8 (Sweep, Verify, ticks, STATE.md, `status: done`) open for V. Narrow loop green (money, config, cli, cmd). `golangci-lint run ./...`: 0 issues. Both acceptance tests green: `Test_run_read_commands_refuse_a_bad_reporting_currency`, `Test_run_read_commands_refuse_a_bad_currency_flag`. Full covered suite NOT run yet (V).
 
-- `internal/platform/money/money.go`: `ParseCurrency` (strings.ToLower, no trim; the long-s fold is refused) and `Currency.String` (out of range reads `native`), with a `//nolint:exhaustive` on its switch.
-- `internal/config/config.go`, `parse.go`: `Config.Currency` (CAD when the file is missing or the key unset), `reportingSetting`, `document.currency()` after `ignore`, and known keys `reporting` and `reporting.currency`. The table-shape refusal comes from `lookup` with the ruled copy, `got` as written.
-- `internal/cli/currency.go`: `currencyFlag{code}` with `bind(cmd, help)` and `args` (noArgs, then validation only when Changed). Consts `reportCurrencyHelp` and `accountsCurrencyHelp` hold the ruled help. Bound and set as `Args: currency.args` in spend, cashflow, recurring, anomalies and accounts. `resolve` and the ConfigLoader are NOT built (B2).
-- Tests: `internal/config/currency_test.go` (new), rows in `problem_test.go`, defaults in `config_test.go`, `money_test.go` (3 tests), `internal/cli/currency_test.go` (new; its Env already carries a LoadConfig), `report_help_test.go` (new `Test_each_report_shows_the_currency_flag_without_a_cobra_default`, cashflow `--currency` row).
-- Ruled-behaviour pins owned by B1 and green now (all cmd/quarry):
-  - sync: rows `reporting.currency = "EUR"` and `reporting = "CAD"` in `Test_run_sync_refuses_a_bad_config_value_with_the_ruled_copy`.
-  - snapshots: a row in `Test_run_snapshots_refuses_a_bad_config_value_with_nothing_on_stdout`.
-  - snapshots prune: a row in `Test_run_snapshots_prune_refuses_a_bad_config_value_with_nothing_deleted`.
-  - findings: `Test_run_findings_refuses_a_bad_reporting_currency_before_looking_for_a_store`.
-  - status: two rows in `statusConfigRefusals()`, so the text and `--json` tests both pin the P2d-10 warning, exit 0 and `"ignored": null`.
-- B2 still owns: the five read-command cmd rows in step 6 (bad currency flag, `--currency=`, bare flag, the `run_config_test.go:209` split, the unknown-key warning test). `--json` absolute-path pins for sync, snapshots and findings are not added (existing sync `--from` json test covers sync only).
-- Changed an existing pin: `cmd/quarry/run_accounts_test.go:98` `--all` help row is now a regexp, because the longer `--currency code` column re-pads it.
-- Mutations (all red as expected, restored): `Changed` guard removed -> `Test_currency_flag_is_checked_only_when_given` (all 5 subtests); validation disabled -> that test plus `..._refuses_a_value_it_cannot_read...` and `..._refused_before_the_command_checks_its_other_flags`; noArgs skipped -> `..._refused_after_the_check_for_a_positional_argument`; `doc.currency()` result dropped -> 7 config and cmd tests.
-- `golangci-lint run ./...`: 0 issues. test-stats `--base b41dec1`: cmd/quarry 438 (+3), internal/cli 359 (+6), internal/config 58 (+9), internal/platform/money 11 (+3).
+- `internal/cli/currency.go`: `(*currencyFlag).resolve(cmd, loadConfig) (money.Currency, []string, error)` and `withConfigWarnings(config, own)`.
+  - Deviation from the plan: `resolve` itself prints the `~` config warnings (`printConfigWarnings`) and returns the ABSOLUTE ones for `--json`; it returns no `~` slice. Flag given: loader never called, returns nil warnings. Loader error: `&runtimeError`.
+  - Call sites: `_, configWarnings, err := currency.resolve(cmd, loadConfig)` in spend, cashflow, recurring, anomalies, accounts, after their own flag checks and before `openReport`. The value is discarded with `_`. The JSON renderer gets `withConfigWarnings(configWarnings, warnings)` (never nil); `emitReport`/`emit` keep own `warnings` only.
+- Constructors `newSpendCommand`, `newCashFlowCommand`, `newRecurringCommand`, `newAnomaliesCommand` take `loadConfig ConfigLoader` before `now`; `newAccountsCommand` before `jsonOut`; `root.go` passes `env.LoadConfig`.
+- cli tests: `cadConfig` helper in `currency_test.go`, `LoadConfig: cadConfig` on the 18 `cli.Env` literals; new tests in `currency_test.go` (config read once / not with flag, loader error, `~` warnings before result, JSON `warnings[0]` absolute, spend config warning before its own) and `currency_internal_test.go` (`resolve`: flag beats config, config USD, any case, command name passed, runtime error wrap; `withConfigWarnings`).
+- cmd tests:
+  - `run_read_usage_test.go`: `badCurrencyFlag` const, rows `spend --currency=` and `spend --currency EUR --by bogus`, new `Test_run_spend_refuses_a_bad_currency_flag_before_reading_a_bad_config`.
+  - `run_usage_test.go`: `Test_run_read_commands_need_a_value_for_the_currency_flag` (x5, bare flag).
+  - `run_config_test.go`: split into `readCommandFixture`/`malformedConfigFixture` helpers plus `Test_run_read_commands_refuse_a_malformed_config`, `..._ignore_a_malformed_config_when_given_a_currency`, `Test_run_sql_ignores_a_malformed_config`, `Test_run_spend_refuses_a_bad_flag_before_reading_a_malformed_config`, `Test_run_spend_warns_about_an_unknown_config_key_and_json_names_it_absolutely` (text and json subtests).
+- Not added (told to skip): `--json` absolute-path pins for sync, snapshots and findings refusals.
+- Mutations, each reverted and verified (`cmp`): config-skip shortcut removed -> `..._read_the_config_once_and_only_without_the_currency_flag/<cmd>_with_the_flag` x5, `..._ignore_a_malformed_config_when_given_a_currency` x5, `Test_resolve_prefers_the_flag...`; validate-always (Changed guard in `args`) -> `Test_cashflow_refuses_a_by_that_names_no_period...`, anomalies warning tests (bare commands refused) and the B1 `Test_currency_flag_is_checked_only_when_given`; `printConfigWarnings` dropped -> `~` tests x5 plus the cmd text/json test; absolute warnings dropped -> JSON `warnings[0]` tests x5 plus cmd json; loader error swallowed -> runtime-error test x5 plus the acceptance test rows.
+- test-stats `--base b41dec1`: cmd/quarry 444 (+9), internal/cli 370 (+17), internal/config 58 (+9), internal/platform/money 11 (+3).

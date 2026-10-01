@@ -13,7 +13,7 @@ import (
 const spendCommand = "spend"
 
 // newSpendCommand builds spend: the spending in the --since/--until period (default this year to now()) grouped by --by.
-func newSpendCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
+func newSpendCommand(newReport ReportFactory, loadConfig ConfigLoader, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var by string
 	var flags reportFlags
 	var currency currencyFlag
@@ -56,6 +56,11 @@ the rows can add up to more than the total.`,
 				return err
 			}
 
+			_, configWarnings, err := currency.resolve(cmd, loadConfig)
+			if err != nil {
+				return err
+			}
+
 			srv, err := openReport(cmd, newReport)
 			if err != nil {
 				return err
@@ -68,7 +73,9 @@ the rows can add up to more than the total.`,
 
 			warnings := spendWarnings(spending)
 			return emitReport(cmd, *jsonOut, warnings,
-				func() ([]byte, error) { return renderSpendingJSON(spending, warnings) },
+				func() ([]byte, error) {
+					return renderSpendingJSON(spending, withConfigWarnings(configWarnings, warnings))
+				},
 				func() string { return renderSpending(spending) })
 		},
 	}

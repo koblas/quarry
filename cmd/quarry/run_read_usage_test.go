@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const badCurrencyFlag = "quarry: --currency must be CAD, USD or native\n"
+
 func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 	const (
 		u5 = "quarry: sql needs a query; pass it as one quoted argument, or - to read it from stdin\n"
@@ -35,6 +37,8 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 		{name: "sql with a query that starts with a dash", args: []string{"sql", "-- note"}, wantStderr: u9},
 		{name: "sql with two arguments", args: []string{"sql", "SELECT 1", "extra"}, wantStderr: u6},
 		{name: "sql with a negative limit", args: []string{"sql", "--limit", "-1", "SELECT 1"}, wantStderr: u7},
+		{name: "spend with an empty currency", args: []string{"spend", "--currency="}, wantStderr: badCurrencyFlag},
+		{name: "spend with a bad currency and a bad grouping", args: []string{"spend", "--currency", "EUR", "--by", "bogus"}, wantStderr: badCurrencyFlag},
 		{name: "status with an argument", args: []string{"status", "extra"}, wantStderr: "quarry: status takes no arguments\n"},
 		{name: "accounts with an argument", args: []string{"accounts", "extra"}, wantStderr: "quarry: accounts takes no arguments\n"},
 		{name: "spend with an argument", args: []string{"spend", "extra"}, wantStderr: "quarry: spend takes no arguments\n"},
@@ -79,7 +83,7 @@ func Test_run_read_commands_refuse_a_bad_currency_flag(t *testing.T) {
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
-			assert.Equal(t, "quarry: --currency must be CAD, USD or native\n", stderr.String())
+			assert.Equal(t, badCurrencyFlag, stderr.String())
 		})
 	}
 }
@@ -105,4 +109,17 @@ func Test_run_findings_rejects_a_bad_status_before_looking_for_a_store(t *testin
 	assert.Equal(t, 2, exitCode)
 	assert.Empty(t, stdout.String())
 	assert.Equal(t, "quarry: --status must be open, ignored, fixed or all\n", stderr.String())
+}
+
+func Test_run_spend_refuses_a_bad_currency_flag_before_reading_a_bad_config(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, "reporting.currency = \"EUR\"\n")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"spend", "--currency", "EUR"}, &stdout, &stderr)
+
+	assert.Equal(t, 2, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, badCurrencyFlag, stderr.String())
 }

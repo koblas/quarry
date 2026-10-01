@@ -18,7 +18,8 @@ import (
 func executeRecurring(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
 	t.Helper()
 	env := cli.Env{
-		Stdout: stdout, Stderr: stderr,
+		LoadConfig: cadConfig,
+		Stdout:     stdout, Stderr: stderr,
 		Now: func() time.Time { return spendNow },
 		NewReport: func(context.Context, string) (*report.Server, error) {
 			return report.NewServer(report.WithStore(fake)), nil
@@ -97,7 +98,8 @@ func Test_recurring_json_returns_the_report_fault_with_nothing_on_stdout(t *test
 func Test_recurring_refuses_a_window_before_opening_the_report(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := cli.Env{
-		Stdout: &stdout, Stderr: &stderr,
+		LoadConfig: cadConfig,
+		Stdout:     &stdout, Stderr: &stderr,
 		Now:       time.Now,
 		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
 	}
@@ -112,7 +114,8 @@ func Test_recurring_refuses_a_window_before_opening_the_report(t *testing.T) {
 func Test_recurring_returns_the_report_factory_fault(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := cli.Env{
-		Stdout: &stdout, Stderr: &stderr,
+		LoadConfig: cadConfig,
+		Stdout:     &stdout, Stderr: &stderr,
 		Now:       time.Now,
 		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
 	}

@@ -36,7 +36,7 @@ func parseCashFlowPeriod(name string) (store.CashFlowPeriod, error) {
 }
 
 // newCashFlowCommand builds cashflow: the income, spending and savings rate in the --since/--until period per month or year.
-func newCashFlowCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
+func newCashFlowCommand(newReport ReportFactory, loadConfig ConfigLoader, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var by string
 	var flags reportFlags
 	var currency currencyFlag
@@ -73,6 +73,11 @@ less. A period that --since or --until cuts short is marked partial.`,
 				return err
 			}
 
+			_, configWarnings, err := currency.resolve(cmd, loadConfig)
+			if err != nil {
+				return err
+			}
+
 			srv, err := openReport(cmd, newReport)
 			if err != nil {
 				return err
@@ -85,7 +90,7 @@ less. A period that --since or --until cuts short is marked partial.`,
 
 			warnings := cashFlowWarnings(flow)
 			return emitReport(cmd, *jsonOut, warnings,
-				func() ([]byte, error) { return renderCashFlowJSON(flow, warnings) },
+				func() ([]byte, error) { return renderCashFlowJSON(flow, withConfigWarnings(configWarnings, warnings)) },
 				func() string { return renderCashFlow(flow) })
 		},
 	}

@@ -27,7 +27,8 @@ func advancingClock() func() time.Time {
 func executeAtAdvancingClock(t *testing.T, command string, fake fakeReportStore, stdout *bytes.Buffer) error {
 	t.Helper()
 	env := cli.Env{
-		Stdout: stdout, Stderr: &bytes.Buffer{},
+		LoadConfig: cadConfig,
+		Stdout:     stdout, Stderr: &bytes.Buffer{},
 		Now: advancingClock(),
 		NewReport: func(context.Context, string) (*report.Server, error) {
 			return report.NewServer(report.WithStore(fake)), nil

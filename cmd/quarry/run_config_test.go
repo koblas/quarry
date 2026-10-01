@@ -214,7 +214,21 @@ func Test_run_sync_refuses_a_config_it_cannot_read(t *testing.T) {
 	assert.Equal(t, 1, exitCode)
 }
 
-func Test_run_read_commands_ignore_a_malformed_config(t *testing.T) {
+// readCommandArgs is one invocation of each read command over the store malformedConfigFixture builds.
+func readCommandArgs() map[string][]string {
+	return map[string][]string{
+		"accounts":  {"accounts"},
+		"anomalies": {"anomalies", "--since", "2026-01", "--until", "2026-09"},
+		"spend":     {"spend", "--since", "2026-01", "--until", "2026-09"},
+		"cashflow":  {"cashflow", "--since", "2026-01", "--until", "2026-09"},
+		"recurring": {"recurring", "--since", "2026-01", "--until", "2026-09"},
+	}
+}
+
+// readCommandFixture builds a store every readCommandArgs invocation reads, with no config file;
+// it returns HOME and each invocation's output.
+func readCommandFixture(t *testing.T) (string, map[string]string) {
+	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	replaceStore(t, home, cashFlowRows(
@@ -229,34 +243,79 @@ func Test_run_read_commands_ignore_a_malformed_config(t *testing.T) {
 		spendSplit{id: "s08", account: "acct-chq", category: "cat-groceries", payee: "payee-bakery", currency: "CAD", day: day(2026, 5, 1), cents: -10000},
 		spendSplit{id: "s09", account: "acct-chq", category: "cat-groceries", payee: "payee-bakery", currency: "CAD", day: day(2026, 6, 1), cents: -25000},
 	))
-	commands := map[string][]string{
-		"accounts":  {"accounts"},
-		"anomalies": {"anomalies", "--since", "2026-01", "--until", "2026-09"},
-		"spend":     {"spend", "--since", "2026-01", "--until", "2026-09"},
-		"cashflow":  {"cashflow", "--since", "2026-01", "--until", "2026-09"},
-		"recurring": {"recurring", "--since", "2026-01", "--until", "2026-09"},
-		"sql":       {"sql", "SELECT name FROM accounts"},
-	}
 	before := map[string]string{}
-	for name, args := range commands {
+	for name, args := range readCommandArgs() {
 		var stdout, stderr bytes.Buffer
 		require.Equal(t, 0, runWith(context.Background(), args, spendEnv(&stdout, &stderr)), stderr.String())
 		before[name] = stdout.String()
 	}
 	require.Contains(t, before["anomalies"], "Bakery")
+
+	return home, before
+}
+
+// malformedConfigFixture is readCommandFixture followed by a config file that is not valid TOML;
+// it returns each invocation's output from before the file was written.
+func malformedConfigFixture(t *testing.T) map[string]string {
+	t.Helper()
+	home, before := readCommandFixture(t)
 	writeConfig(t, home, "[snapshots\nkeep = 24\n")
 
-	for name, args := range commands {
+	return before
+}
+
+func Test_run_read_commands_refuse_a_malformed_config(t *testing.T) {
+	malformedConfigFixture(t)
+
+	for name, args := range readCommandArgs() {
 		t.Run(name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
 			exitCode := runWith(context.Background(), args, spendEnv(&stdout, &stderr))
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Regexp(t, "^"+regexp.QuoteMeta("quarry: cannot read "+configShown+": line 1: ")+"[^\n]+"+regexp.QuoteMeta(configFix)+"\n$", stderr.String())
+		})
+	}
+}
+
+func Test_run_read_commands_ignore_a_malformed_config_when_given_a_currency(t *testing.T) {
+	before := malformedConfigFixture(t)
+
+	for name, args := range readCommandArgs() {
+		t.Run(name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), append(args, "--currency", "CAD"), spendEnv(&stdout, &stderr))
 
 			assert.Equal(t, before[name], stdout.String())
 			assert.Empty(t, stderr.String())
 			assert.Equal(t, 0, exitCode)
 		})
 	}
+}
+
+func Test_run_sql_ignores_a_malformed_config(t *testing.T) {
+	malformedConfigFixture(t)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"sql", "SELECT name FROM accounts"}, spendEnv(&stdout, &stderr))
+
+	assert.Equal(t, 0, exitCode, stderr.String())
+	assert.Contains(t, stdout.String(), "Chequing")
+	assert.Empty(t, stderr.String())
+}
+
+func Test_run_spend_refuses_a_bad_flag_before_reading_a_malformed_config(t *testing.T) {
+	malformedConfigFixture(t)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"spend", "--since", "bogus"}, spendEnv(&stdout, &stderr))
+
+	assert.Equal(t, 2, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.NotContains(t, stderr.String(), "cannot read")
 }
 
 func Test_run_findings_refuses_a_bad_config_before_looking_for_a_store(t *testing.T) {
@@ -428,4 +487,32 @@ func Test_run_sync_from_json_names_the_config_file_by_its_absolute_path_and_stde
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
 	assert.Equal(t, []string{configPath(home) + ": unknown key snapshot.keep; quarry ignores it"}, doc.Warnings)
 	assert.Equal(t, "quarry: warning: "+configShown+": unknown key snapshot.keep; quarry ignores it\n", stderr.String())
+}
+
+func Test_run_spend_warns_about_an_unknown_config_key_and_json_names_it_absolutely(t *testing.T) {
+	t.Run("text", func(t *testing.T) {
+		home, _ := readCommandFixture(t)
+		writeConfig(t, home, "snapshot.keep = 3\n")
+		var stdout, stderr bytes.Buffer
+
+		exitCode := runWith(context.Background(), readCommandArgs()["spend"], spendEnv(&stdout, &stderr))
+
+		require.Equal(t, 0, exitCode, stderr.String())
+		assert.Equal(t, "quarry: warning: "+configShown+": unknown key snapshot.keep; quarry ignores it\n", stderr.String())
+	})
+	t.Run("json", func(t *testing.T) {
+		home, _ := readCommandFixture(t)
+		writeConfig(t, home, "snapshot.keep = 3\n")
+		var stdout, stderr bytes.Buffer
+
+		exitCode := runWith(context.Background(), append(readCommandArgs()["spend"], "--json"), spendEnv(&stdout, &stderr))
+
+		require.Equal(t, 0, exitCode, stderr.String())
+		var doc struct {
+			Warnings []string `json:"warnings"`
+		}
+		require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+		assert.Equal(t, []string{configPath(home) + ": unknown key snapshot.keep; quarry ignores it"}, doc.Warnings)
+		assert.Equal(t, "quarry: warning: "+configShown+": unknown key snapshot.keep; quarry ignores it\n", stderr.String())
+	})
 }

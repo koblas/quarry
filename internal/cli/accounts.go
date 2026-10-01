@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // newAccountsCommand builds accounts: balances per account, closed ones only
 // with --all, as JSON when *jsonOut is set.
-func newAccountsCommand(newReport ReportFactory, jsonOut *bool) *cobra.Command {
+func newAccountsCommand(newReport ReportFactory, loadConfig ConfigLoader, jsonOut *bool) *cobra.Command {
 	var all bool
 	var currency currencyFlag
 	cmd := &cobra.Command{
@@ -18,6 +18,11 @@ Brokerage and retirement accounts show "not imported": quarry does not
 import investment transactions yet, so it cannot compute their balance.`,
 		Args: currency.args,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			_, configWarnings, err := currency.resolve(cmd, loadConfig)
+			if err != nil {
+				return err
+			}
+
 			srv, err := openReport(cmd, newReport)
 			if err != nil {
 				return err
@@ -34,7 +39,9 @@ import investment transactions yet, so it cannot compute their balance.`,
 			}
 
 			out, err := renderResult(*jsonOut,
-				func() ([]byte, error) { return renderAccountsJSON(listing.AccountList, warnings) },
+				func() ([]byte, error) {
+					return renderAccountsJSON(listing.AccountList, withConfigWarnings(configWarnings, warnings))
+				},
 				func() string { return renderAccounts(listing.AccountList) })
 			if err != nil {
 				return err

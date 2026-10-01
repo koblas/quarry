@@ -34,7 +34,8 @@ func closedAccounts(n int) store.AccountList {
 func executeAccounts(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
 	t.Helper()
 	env := cli.Env{
-		Stdout: stdout, Stderr: stderr,
+		LoadConfig: cadConfig,
+		Stdout:     stdout, Stderr: stderr,
 		NewReport: func(context.Context, string) (*report.Server, error) {
 			return report.NewServer(report.WithStore(fake)), nil
 		},
@@ -134,7 +135,8 @@ func Test_accounts_returns_the_report_fault(t *testing.T) {
 func Test_accounts_returns_the_report_factory_fault(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := cli.Env{
-		Stdout: &stdout, Stderr: &stderr,
+		LoadConfig: cadConfig,
+		Stdout:     &stdout, Stderr: &stderr,
 		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
 	}
 
@@ -158,7 +160,8 @@ func Test_status_and_accounts_take_no_arguments(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			var stdout bytes.Buffer
 			env := cli.Env{
-				Stdout: &stdout, Stderr: io.Discard,
+				LoadConfig: cadConfig,
+				Stdout:     &stdout, Stderr: io.Discard,
 				NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
 			}
 

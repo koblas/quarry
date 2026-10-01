@@ -202,6 +202,21 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 	}
 }
 
+func Test_run_read_commands_need_a_value_for_the_currency_flag(t *testing.T) {
+	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts"} {
+		t.Run(command, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), []string{command, "--currency"}, &stdout, &stderr)
+
+			assert.Equal(t, 2, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, "quarry: flag needs an argument: --currency; Run 'quarry "+command+" --help' for usage.\n", stderr.String())
+		})
+	}
+}
+
 func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
 	cases := []struct {
 		name       string
