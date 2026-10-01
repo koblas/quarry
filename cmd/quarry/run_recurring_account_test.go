@@ -41,3 +41,25 @@ func Test_run_recurring_lists_only_the_series_charged_in_the_named_account(t *te
 		[]string{"Total", "CAD", "", "", "251.88", "", "", "", ""}),
 		stdout.String())
 }
+
+func Test_run_recurring_lists_an_ended_series_charged_in_a_closed_account(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	oldCard := store.Account{ID: "acct-old", SourceID: 2, Name: "Old Card", Type: "credit_card", Currency: "CAD", Closed: true}
+	var charges []chargeTxn
+	for month := time.July; len(charges) < 12; month++ {
+		charge := groceryCharge("Gym", day(2024, month, 12), 4000)
+		charge.account = "acct-old"
+		charges = append(charges, charge)
+	}
+	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1), oldCard}, charges...))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"recurring", "--since", "2000", "--account", "Old Card"}, spendEnv(&stdout, &stderr))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in Old Card",
+		[]string{"Gym", "CAD", "month", "40.00", "", "2024-07-12", "2025-06-12", "ended, new", ""}),
+		stdout.String())
+}

@@ -70,8 +70,8 @@ active series only.`,
 	return cmd
 }
 
-// recurringWarnings is r's warnings, unprefixed and never nil: one per named account left out (W2 or W3),
-// then a note that no series runs in the period.
+// recurringWarnings is r's warnings, unprefixed and never nil: one per named account left out of the
+// report, then a note when no series runs in the period.
 func recurringWarnings(r report.Recurring) []string {
 	warnings := leftOutWarnings(r.Accounts, recurringCommand)
 	if r.Empty() {
