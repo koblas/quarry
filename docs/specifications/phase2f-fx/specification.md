@@ -565,8 +565,8 @@ Ruled (sizing pass 2026-10-01, architect):
 - [x] SCENARIO-06: Status shows rate coverage — `internal/cli/status_rates_test.go` `Test_status_prints_the_rates_line_for_each_coverage_state`
 - [x] SCENARIO-16: A bad reporting.currency value refuses the read commands — `cmd/quarry/run_read_refusals_test.go` `Test_run_read_commands_refuse_a_bad_reporting_currency`
 - [x] SCENARIO-15: A bad --currency value is a usage error — delivered by SCENARIO-16 — `cmd/quarry/run_read_usage_test.go` `Test_run_read_commands_refuse_a_bad_currency_flag`
-- [ ] SCENARIO-08: Spend converts to the reporting currency by default
-- [ ] SCENARIO-14: reporting.currency in config sets the default, the flag wins
+- [x] SCENARIO-08: Spend converts to the reporting currency by default — `cmd/quarry/run_spend_fx_test.go` `Test_run_spend_converts_every_split_to_cad_by_default`
+- [x] SCENARIO-14: reporting.currency in config sets the default, the flag wins — delivered by SCENARIO-08 — `cmd/quarry/run_spend_fx_test.go` `Test_run_spend_takes_its_currency_from_the_config_unless_the_flag_names_one`
 - [ ] SCENARIO-10: Cashflow converts each period
 - [ ] SCENARIO-09: Spend in USD and cashflow agree in every currency
 - [ ] SCENARIO-12: Amounts dated before the first rate stay native with a warning

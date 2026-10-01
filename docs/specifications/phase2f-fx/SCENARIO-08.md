@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-08
-status: open
+status: done
 ---
 
 # SCENARIO-08: Spend converts to the reporting currency by default
@@ -44,7 +44,7 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report) + duckstore Spending 
   - Before-first-rate and no-rates warnings are owned by 12/13.
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Doc comments on `SpendingParams.Currency`, `SpendRequest.Currency`, `Spending.Currency`, `windowCaption`, and the source helper. Bump the caption pins that now gain `, amounts in CAD`:
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Doc comments on `SpendingParams.Currency`, `SpendRequest.Currency`, `Spending.Currency`, `windowCaption`, and the source helper. Bump the caption pins that now gain `, amounts in CAD`:
   - `cmd/quarry/run_spend_empty_test.go:16`
   - `run_spend_account_test.go:38,62,82`
   - `run_spend_by_test.go:38,69,101`
@@ -57,7 +57,7 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report) + duckstore Spending 
   Bump the JSON pins that gain `currency`: `run_spend_json_test.go:38`, `spend_test.go:116`, and `json_spend_internal_test.go:37,80,123,158` (zero `Currency` renders `"native"`).
 
 ### Verify
-- [ ] Step 7: run the full verification and `spec-check.py phase2f-fx`. Tick SCENARIO-08 with its acceptance test. Tick SCENARIO-14 as `delivered by SCENARIO-08` with `Test_run_spend_takes_its_currency_from_the_config_unless_the_flag_names_one` last on the line. Rewrite STATE.md.
+- [x] Step 7: run the full verification and `spec-check.py phase2f-fx`. Tick SCENARIO-08 with its acceptance test. Tick SCENARIO-14 as `delivered by SCENARIO-08` with `Test_run_spend_takes_its_currency_from_the_config_unless_the_flag_names_one` last on the line. Rewrite STATE.md.
 
 ## Handoff
 
@@ -84,11 +84,9 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report) + duckstore Spending 
 
 ## Phase report
 
-**Run A (steps 1-2) done: acceptance red.** `cmd/quarry/run_spend_fx_test.go` holds both acceptance tests (helpers `spendReport`, `spendMoney`, `rateOnJan2`, `runSpendJSON`).
-
-**Run B1 (steps 3-5) done: acceptance green.**
-- Store: `SpendingParams.Currency`; `duckstore/spending.go` `spendingSource(currency)` is the one relation every query reads (native = `v_spending` verbatim; CAD/USD project `spent_cad`/`spent_usd` and the target code, except a NULL cell keeps native `spent` and `currency` via `CASE`/`COALESCE`). `spendingQueryFor` is now `func(accounts, source)`; `multiTagSplitsQuery` and `charges.go` still read `v_spending` (currency-blind counts). Totals order is alphabetical by currency, so CAD sorts first in every mode.
-- `report.SpendRequest.Currency` / `Spending.Currency` echoed. `cli/spend.go` threads the resolved currency; `windowCaption(title, window, accounts, currency)`; cashflow, recurring and anomalies renderers pass literal `money.Native` (10/17/18 replace). JSON `currency` after `by`. Shared `reportCurrencyLong` const in `cli/currency.go` (10 reuses it).
-- Tests added: `duckstore/spending_fx_test.go` (17; NULL-arm mutation named by the plan is `Test_spending_keeps_a_split_with_no_rate_on_a_row_of_its_own_currency`), `report/spending_test.go` currency row, `cli/spend_currency_test.go` (resolver arms), `cli/render_table_internal_test.go`, key-order test in `json_spend_internal_test.go`, cmd edge matrix + empty window + JSON read-back in `run_spend_fx_test.go`.
-- Step 6 pin bumps were done here (they broke the narrow loop): captions and JSON `currency` in every spend test the plan lists, and `report_help_test.go` spend Long. `go build`, `golangci-lint` (0 issues) and `go test ./...` were clean at the end of B1.
-- V still owes: the covered full-suite run and `uncovered-diff.py`, `test-stats.py`, spec-check, ticking 08/14 in `specification.md`, STATE.md rewrite, and a check that every Step 6 doc comment exists.
+**Run V (steps 6-7) done: scenario complete.**
+- Full covered suite `go test rc=0`; `uncovered-diff.py` against 31fa6d6: 0 uncovered added lines; `-race` clean on duckstore, report, cli, cmd/quarry; `golangci-lint` 0 issues.
+- `test-stats.py --base 31fa6d6 --changed`: cmd/quarry 449 (+5), internal/cli 375 (+3), internal/report 232 (+1), internal/store/duckstore 415 (+17); TOTAL 1471 (+26), tempdir 552 (+5), disk 505 (+5).
+- Step 6 doc comments all present (`SpendingParams.Currency`, `SpendRequest.Currency`, `Spending.Currency`, `windowCaption`, `spendingSource`); pin bumps were done in B1.
+- specification.md: SCENARIO-08 ticked, SCENARIO-14 ticked as delivered by SCENARIO-08; `spec-check.py phase2f-fx` OK.
+- STATE.md rewritten; status set to done.
