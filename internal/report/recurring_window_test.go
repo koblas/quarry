@@ -80,6 +80,28 @@ func Test_recurring_lists_an_ended_series_only_when_the_window_touches_its_first
 	}
 }
 
+func Test_recurring_lists_an_active_series_only_when_the_window_starts_by_today(t *testing.T) {
+	cases := []struct {
+		name  string
+		since string
+		want  int
+	}{
+		{name: "window starting today", since: "2026-09-29", want: 1},
+		{name: "window starting tomorrow", since: "2026-09-30", want: 0},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			active := monthlyEndingOn(t, "2026-09-15", 3)
+			window := store.Window{Since: dateOf(t, c.since), Until: dateOf(t, "2026-12-31")}
+
+			result := recurringIn(t, window, active)
+
+			assert.Len(t, result.Series, c.want)
+		})
+	}
+}
+
 func Test_recurring_lists_an_active_series_whose_last_charge_is_before_the_window(t *testing.T) {
 	monthly := monthlyEndingOn(t, "2026-09-01", 3, paidTo("payee-gym", "Gym"))
 	weekly := everyDaysEndingOn(t, "2026-09-01", 7, 4, paidTo("payee-paper", "Paper"))

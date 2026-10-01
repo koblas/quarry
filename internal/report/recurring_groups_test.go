@@ -74,6 +74,14 @@ func Test_recurring_never_makes_a_series_of_charges_with_no_payee(t *testing.T) 
 	assert.Empty(t, result.Series)
 }
 
+func Test_recurring_never_makes_a_series_of_charges_with_a_payee_id_but_no_payee_name(t *testing.T) {
+	nameless := func(c *store.Charge) { c.PayeeID, c.Payee = new("payee-gym"), nil }
+
+	result := recurringOf(t, chargesOn(t, monthlyDates(t), nameless))
+
+	assert.Empty(t, result.Series)
+}
+
 func Test_recurring_groups_a_payee_with_no_key_by_its_id(t *testing.T) {
 	dates := monthlyDates(t)
 	first := chargesOn(t, dates[:3], paidTo("payee-77", "#4411"))

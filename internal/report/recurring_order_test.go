@@ -49,6 +49,15 @@ func Test_recurring_lists_CAD_series_before_USD_ones_whatever_they_cost(t *testi
 	assert.Equal(t, []string{"Bbb", "Aaa"}, payeesOf(result))
 }
 
+func Test_recurring_lists_an_ended_CAD_series_before_an_active_USD_one(t *testing.T) {
+	endedCAD := monthlyOf(t, "Aaa", endedLast, 1000)
+	activeUSD := monthlyOf(t, "Bbb", activeLast, 1000, billedIn("USD"))
+
+	result := recurringOf(t, activeUSD, endedCAD)
+
+	assert.Equal(t, []string{"Aaa", "Bbb"}, payeesOf(result))
+}
+
 func Test_recurring_lists_active_series_before_ended_ones_even_when_the_ended_one_charged_later(t *testing.T) {
 	active := monthlyOf(t, "Zed", "2026-08-20", 1000)
 	ended := everyDaysEndingOn(t, "2026-09-10", 7, 4, paidTo("payee-abe", "Abe"))

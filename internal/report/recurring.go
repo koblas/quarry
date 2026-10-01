@@ -25,8 +25,7 @@ const (
 	CadenceAnnual
 )
 
-// The numbers of each cadence's rule: the days between two charges (both ends inclusive), the
-// fewest charges, the most days since the last charge a series stays active, and the charges in a year.
+// Each cadence's rule: gap days between charges (inclusive), fewest charges, quiet-period days, charges a year.
 const (
 	weeklyMinGapDays, weeklyMaxGapDays = 6, 8
 	weeklyMinCharges                   = 4
@@ -222,8 +221,7 @@ func compareSeries(a, b Series) int {
 	)
 }
 
-// compareStanding puts the costlier of two active series first, and the more recent of two ended
-// ones; compareSeries calls it only after the states tie, so an ended series' nil yearly cost is never read.
+// compareStanding puts the costlier of two active series first, and the more recent of two ended ones.
 func compareStanding(a, b Series) int {
 	if a.PerYear != nil && b.PerYear != nil {
 		return cmp.Compare(*b.PerYear, *a.PerYear)

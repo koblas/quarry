@@ -219,7 +219,7 @@ func Test_charges_keeps_a_charge_with_no_payee(t *testing.T) {
 func Test_charges_fills_the_account_and_currency(t *testing.T) {
 	t.Parallel()
 	rows := chargeRowsFor()
-	rows.Accounts = append(rows.Accounts, store.Account{ID: "acct-old", SourceID: 9, Name: "Old Visa", Type: "credit_card", Currency: "USD", Closed: true})
+	rows.Accounts = append(rows.Accounts, store.Account{ID: "acct-old", SourceID: 9, Name: "Old Visa", Type: "credit_card", Currency: "EUR", Closed: true})
 	spec := oneSplit("old", 1, 1200)
 	spec.account, spec.currency, spec.date = "acct-old", "USD", day(2026, 4, 5)
 	addCharge(&rows, spec)
@@ -227,7 +227,7 @@ func Test_charges_fills_the_account_and_currency(t *testing.T) {
 	got := chargesOf(t, rows)
 
 	require.Len(t, got.Rows, 1)
-	assert.Equal(t, store.Account{ID: "acct-old", Name: "Old Visa", Currency: "USD", Closed: true}, got.Rows[0].Account)
+	assert.Equal(t, store.Account{ID: "acct-old", Name: "Old Visa", Currency: "EUR", Closed: true}, got.Rows[0].Account)
 	assert.Equal(t, "USD", got.Rows[0].Currency)
 	assert.Equal(t, day(2026, 4, 5), got.Rows[0].Date)
 }
