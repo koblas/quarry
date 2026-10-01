@@ -12,7 +12,7 @@ import (
 // errNoImportRuns refuses a store whose import_runs holds no run; its text is the phrase a user reads.
 var errNoImportRuns = errors.New("the store has no import history")
 
-// statusQuery reads store_info, the import run and the transaction dates; NULL check counts read as zero.
+// statusQuery reads store_info, the import run, the transaction dates and the rate coverage in one pass; NULL check counts read as zero.
 const statusQuery = `
 SELECT i.format_version, i.quarry_version, i.built_at,
 	r.id, r.started_at, r.finished_at, r.snapshot_path, r.snapshot_sha256, r.schema_fingerprint,
@@ -23,7 +23,8 @@ SELECT i.format_version, i.quarry_version, i.built_at,
 	r.snapshot_taken_at, r.source_path,
 	COALESCE(r.balances_never_reconciled, 0), COALESCE(r.investment_accounts, 0),
 	COALESCE(r.transfers_paired, 0), COALESCE(r.transfers_cross_currency, 0),
-	(SELECT min(date) FROM transactions), (SELECT max(date) FROM transactions)
+	(SELECT min(date) FROM transactions), (SELECT max(date) FROM transactions),
+	(SELECT min(date) FROM fx_rates), (SELECT max(date) FROM fx_rates), r.rates_fetch_error
 FROM store_info i CROSS JOIN import_runs r
 ORDER BY r.id DESC LIMIT 1`
 
@@ -38,7 +39,9 @@ ORDER BY f.id`
 // import run. It refuses a store it cannot open or read, whose format is not
 // this build's, or whose import_runs is empty, with *store.OpenError, and
 // reads the findings on the same connection so both describe one build; a NULL
-// snapshot_taken_at or source_path reads as the zero value.
+// snapshot_taken_at or source_path reads as the zero value. Rates takes its
+// first and last dates from fx_rates and its fetch error from that run, in the
+// same query as the rest.
 func (s *Store) Status(ctx context.Context) (store.Status, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {
@@ -50,7 +53,8 @@ func (s *Store) Status(ctx context.Context) (store.Status, error) {
 	run := &st.Run
 	c := &run.Counts
 	var takenAt, first, last sql.NullTime
-	var source sql.NullString
+	var source, fetchError sql.NullString
+	var firstRate, lastRate sql.NullTime
 	found := false
 	err = db.QueryRows(ctx, statusQuery, nil, func(scan func(dest ...any) error) error {
 		found = true
@@ -61,7 +65,7 @@ func (s *Store) Status(ctx context.Context) (store.Status, error) {
 			&run.InvestmentTransactionsNotImported,
 			&takenAt, &source,
 			&run.BalancesNeverReconciled, &run.InvestmentAccounts, &run.TransfersPaired, &run.TransfersCrossCurrency,
-			&first, &last)
+			&first, &last, &firstRate, &lastRate, &fetchError)
 	})
 	if err != nil {
 		return store.Status{}, openFault(st.Path, err)
@@ -91,5 +95,6 @@ func (s *Store) Status(ctx context.Context) (store.Status, error) {
 	run.Snapshot.TakenAt = takenAt.Time
 	run.Snapshot.Source = source.String
 	st.FirstDate, st.LastDate = first.Time, last.Time
+	st.Rates = store.StatusRates{First: firstRate.Time, Last: lastRate.Time, FetchError: fetchError.String}
 	return st, nil
 }

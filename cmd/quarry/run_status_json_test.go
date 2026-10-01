@@ -98,6 +98,11 @@ func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
     "new": 2,
     "newly_fixed": 0
   },
+  "rates": {
+    "first": "2026-01-02",
+    "last": "2026-01-02",
+    "fetch_error": null
+  },
   "not_imported": {
     "investment_transactions": 0
   },

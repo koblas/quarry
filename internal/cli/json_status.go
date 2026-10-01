@@ -16,6 +16,7 @@ type statusDocument struct {
 	Splits      statusSplitsDocument    `json:"splits"`
 	Transfers   statusTransfersDocument `json:"transfers"`
 	Findings    statusFindingsDocument  `json:"findings"`
+	Rates       statusRatesDocument     `json:"rates"`
 	NotImported notImportedDocument     `json:"not_imported"`
 	Warnings    []string                `json:"warnings"`
 }
@@ -77,6 +78,14 @@ type statusFindingsDocument struct {
 	NewlyFixed int  `json:"newly_fixed"`
 }
 
+// statusRatesDocument is the --json "rates" object: the first and last dates in fx_rates and the
+// reason the last sync's fetch fell short; each is null when there is none.
+type statusRatesDocument struct {
+	First      *string `json:"first"`
+	Last       *string `json:"last"`
+	FetchError *string `json:"fetch_error"`
+}
+
 // renderStatusJSON renders st, its findings tally and warnings as status's --json document,
 // encoded like sync's: 2-space indent, trailing newline.
 func renderStatusJSON(st store.Status, findings statusFindings, warnings []string) ([]byte, error) {
@@ -114,7 +123,10 @@ func newStatusDocument(st store.Status, findings statusFindings, warnings []stri
 			CrossCurrency: run.TransfersCrossCurrency,
 			OneSided:      run.TransfersOneSided,
 		},
-		Findings:    newStatusFindingsDocument(findings),
+		Findings: newStatusFindingsDocument(findings),
+		Rates: statusRatesDocument{
+			First: jsonNullDate(st.Rates.First), Last: jsonNullDate(st.Rates.Last), FetchError: jsonNullString(st.Rates.FetchError),
+		},
 		NotImported: notImportedDocument{InvestmentTransactions: run.InvestmentTransactionsNotImported},
 		Warnings:    append([]string{}, warnings...),
 	}

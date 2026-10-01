@@ -61,6 +61,11 @@ const fullStatusJSON = `{
     "new": 2,
     "newly_fixed": 1
   },
+  "rates": {
+    "first": "2003-01-04",
+    "last": "2026-09-28",
+    "fetch_error": null
+  },
   "not_imported": {
     "investment_transactions": 1605
   },

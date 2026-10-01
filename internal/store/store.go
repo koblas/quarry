@@ -196,6 +196,15 @@ type Status struct {
 	Run                 ImportRun
 	FirstDate, LastDate time.Time
 	Findings            []Finding
+	Rates               StatusRates
+}
+
+// StatusRates is the exchange-rate coverage Status reports: the first and last
+// dates in fx_rates (zero when it is empty) and the reason the latest sync's
+// fetch fell short, empty when it did not.
+type StatusRates struct {
+	First, Last time.Time
+	FetchError  string
 }
 
 // Counts is the row count of each table after a build; Transfers counts

@@ -50,7 +50,7 @@ func Test_run_status_shows_the_findings_line_with_open_and_ignored_counts(t *tes
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.True(t, strings.HasSuffix(stdout.String(), "\nFindings  3 open, 1 ignored; run quarry findings to list them\n"), stdout.String())
+	assert.Contains(t, stdout.String(), "\nFindings  3 open, 1 ignored; run quarry findings to list them\n")
 }
 
 func Test_run_status_warns_on_a_bad_config_and_still_reports(t *testing.T) {
@@ -65,7 +65,7 @@ func Test_run_status_warns_on_a_bad_config_and_still_reports(t *testing.T) {
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: cannot tell which findings you ignored: "+configShown+
 		": snapshots.keep must be a whole number of 1 or more, got 0; findings you ignored are counted as open\n", stderr.String())
-	assert.True(t, strings.HasSuffix(stdout.String(), "\nFindings  4 open; run quarry findings to list them\n"), stdout.String())
+	assert.Contains(t, stdout.String(), "\nFindings  4 open; run quarry findings to list them\n")
 }
 
 const (
@@ -117,7 +117,7 @@ func Test_run_status_warns_once_and_counts_every_finding_open_for_each_kind_of_b
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Equal(t, "quarry: warning: "+statusIgnoreWarningLead+c.problem+statusIgnoreWarningTail+"\n", stderr.String())
-			assert.True(t, strings.HasSuffix(stdout.String(), "\nFindings  4 open; run quarry findings to list them\n"), stdout.String())
+			assert.Contains(t, stdout.String(), "\nFindings  4 open; run quarry findings to list them\n")
 		})
 	}
 }
@@ -204,7 +204,7 @@ func Test_run_status_reports_every_finding_open_without_a_warning_when_there_is_
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.True(t, strings.HasSuffix(stdout.String(), "\nFindings  4 open; run quarry findings to list them\n"), stdout.String())
+	assert.Contains(t, stdout.String(), "\nFindings  4 open; run quarry findings to list them\n")
 }
 
 func Test_run_status_refuses_a_missing_store_without_reading_the_config(t *testing.T) {

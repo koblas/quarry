@@ -26,7 +26,7 @@ quarry never writes to the Quicken file.`,
 	root.PersistentFlags().BoolVar(jsonOut, "json", false, "print the result as JSON on stdout")
 
 	root.AddCommand(newSyncCommand(env.NewServer, env.LoadConfig, jsonOut))
-	root.AddCommand(newStatusCommand(env.NewReport, env.LoadConfig, jsonOut))
+	root.AddCommand(newStatusCommand(env.NewReport, env.LoadConfig, env.Now, jsonOut))
 	root.AddCommand(newAccountsCommand(env.NewReport, jsonOut))
 	root.AddCommand(newSpendCommand(env.NewReport, env.Now, jsonOut))
 	root.AddCommand(newCashFlowCommand(env.NewReport, env.Now, jsonOut))

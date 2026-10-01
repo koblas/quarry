@@ -23,7 +23,7 @@ type statusFindings struct {
 }
 
 // renderStatus renders st's Store, Snapshot, Source, Dates, Rows, Balances,
-// Splits, Transfers and Findings lines, ages measured against now.
+// Splits, Transfers, Findings and Rates lines, ages measured against now.
 func renderStatus(st store.Status, findings statusFindings, home string, now time.Time) string {
 	run := st.Run
 	var b strings.Builder
@@ -36,7 +36,40 @@ func renderStatus(st store.Status, findings statusFindings, home string, now tim
 	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(run.Counts.Transactions))
 	fmt.Fprintf(&b, "%-10s%s\n", "Transfers", transfersPhrase(run.TransfersPaired, run.TransfersOneSided))
 	fmt.Fprintf(&b, "%-10s%s\n", "Findings", statusFindingsPhrase(findings))
+	fmt.Fprintf(&b, "%-10s%s\n", "Rates", statusRatesPhrase(st, now))
 	return b.String()
+}
+
+// statusRatesPhrase is the Rates row text: the stored coverage and its age, or that there is none,
+// then a clause when transactions precede the first rate and one when the last sync's fetch failed.
+func statusRatesPhrase(st store.Status, now time.Time) string {
+	rates := st.Rates
+	var b strings.Builder
+	if rates.Last.IsZero() {
+		b.WriteString("none, so amounts are not converted; run quarry sync to fetch them from the Bank of Canada")
+	} else {
+		fmt.Fprintf(&b, "USD/CAD from the Bank of Canada, %s to %s (%s)",
+			rates.First.Format(jsonDateLayout), rates.Last.Format(jsonDateLayout), rateAge(now, rates.Last))
+		if !st.FirstDate.IsZero() && rates.First.After(st.FirstDate) {
+			b.WriteString("; transactions before " + rates.First.Format(jsonDateLayout) + " are not converted")
+		}
+	}
+	if rates.FetchError != "" {
+		b.WriteString("; the last sync could not fetch new rates: " + rates.FetchError)
+	}
+	return b.String()
+}
+
+// rateAge renders how many calendar days before now's local date the stored day last is: "today",
+// "1 day ago" or "N days ago". A day after today reads "today".
+func rateAge(now, last time.Time) string {
+	local := now.In(time.Local) //nolint:gosmopolitan // the age counts the user's own calendar days; last is a stored day, not an instant
+	today := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, time.UTC)
+	days := int(today.Sub(time.Date(last.Year(), last.Month(), last.Day(), 0, 0, 0, 0, time.UTC)) / (24 * time.Hour))
+	if days <= 0 {
+		return "today"
+	}
+	return humanize.Count(days, "day", "days") + " ago"
 }
 
 // statusFindingsPhrase is the Findings row text: the open count and, when findings.ignore was read,

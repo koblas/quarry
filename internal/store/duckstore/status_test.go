@@ -127,6 +127,77 @@ func Test_status_reads_the_latest_import_run(t *testing.T) {
 	assert.Equal(t, 33, got.Run.Counts.Accounts)
 }
 
+// setFetchError sets run id's rates_fetch_error through a writable connection closed before any read.
+func setFetchError(t *testing.T, st *duckstore.Store, id int, reason any) {
+	t.Helper()
+	conn, err := sql.Open("duckdb", st.Path())
+	require.NoError(t, err)
+	_, err = conn.ExecContext(t.Context(), "UPDATE import_runs SET rates_fetch_error = ? WHERE id = ?", reason, id)
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+}
+
+func Test_status_reads_the_rate_coverage_from_fx_rates_and_the_run_that_fetched_them(t *testing.T) {
+	t.Parallel()
+	src := &fakeRates{refresh: store.RatesRefresh{
+		Rates:      []store.Rate{ratesOn(16, 1_310_000, "FXUSDCAD"), ratesOn(13, 1_250_000, "IEXE0101")},
+		FetchError: "www.bankofcanada.ca answered 503 Service Unavailable",
+	}}
+	st := duckstore.New(t.TempDir(), duckstore.WithRates(src))
+	_, err := st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+
+	got, err := st.Status(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, store.StatusRates{
+		First:      time.Date(2026, 3, 13, 0, 0, 0, 0, time.UTC),
+		Last:       time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC),
+		FetchError: "www.bankofcanada.ca answered 503 Service Unavailable",
+	}, got.Rates)
+}
+
+func Test_status_reads_no_rate_coverage_from_a_store_without_rates_or_a_fetch_error(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir())
+	_, err := st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+
+	got, err := st.Status(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, store.StatusRates{}, got.Rates)
+}
+
+func Test_status_reads_the_fetch_error_of_the_latest_run_not_an_earlier_one(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir())
+	_, err := st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	addImportRun(t, st, 2, "/snapshots/run-2.sqlite", 22)
+	setFetchError(t, st, 2, "cannot reach www.bankofcanada.ca")
+
+	got, err := st.Status(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, "cannot reach www.bankofcanada.ca", got.Rates.FetchError)
+}
+
+func Test_status_reads_no_fetch_error_when_only_an_earlier_run_had_one(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir())
+	_, err := st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	setFetchError(t, st, 1, "cannot reach www.bankofcanada.ca")
+	addImportRun(t, st, 2, "/snapshots/run-2.sqlite", 22)
+	setFetchError(t, st, 2, nil)
+
+	got, err := st.Status(t.Context())
+
+	require.NoError(t, err)
+	assert.Empty(t, got.Rates.FetchError)
+}
+
 func Test_status_refuses_a_store_without_an_import_run(t *testing.T) {
 	t.Parallel()
 	rows := minimalRows()

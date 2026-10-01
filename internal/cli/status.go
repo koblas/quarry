@@ -10,7 +10,7 @@ import (
 
 // newStatusCommand builds the status subcommand: read the store's own
 // description and its findings tally and render them, as JSON when *jsonOut is set.
-func newStatusCommand(newReport ReportFactory, loadConfig ConfigLoader, jsonOut *bool) *cobra.Command {
+func newStatusCommand(newReport ReportFactory, loadConfig ConfigLoader, now func() time.Time, jsonOut *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show which snapshot the store was built from and what it holds",
@@ -20,7 +20,9 @@ transactions cover, the checks sync ran when it built the store, and how
 many findings are open.
 
 status reads quarry's store, and the config file for the findings you ignored;
-it never looks at Quicken. Run quarry sync to bring the store up to date.`,
+it never looks at Quicken. Run quarry sync to bring the store up to date.
+
+Rates shows the Bank of Canada USD/CAD rates the store holds, and why the last sync could not fetch new ones if it could not.`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			srv, err := openReport(cmd, newReport)
@@ -39,7 +41,7 @@ it never looks at Quicken. Run quarry sync to bring the store up to date.`,
 
 			out, err := renderResult(*jsonOut,
 				func() ([]byte, error) { return renderStatusJSON(st, findings, warningsAbsolute) },
-				func() string { return renderStatus(st, findings, srv.Home(), time.Now()) })
+				func() string { return renderStatus(st, findings, srv.Home(), now()) })
 			if err != nil {
 				return err
 			}
