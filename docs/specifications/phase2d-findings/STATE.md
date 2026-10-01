@@ -40,7 +40,6 @@ Scenarios complete: SCENARIO-01..28 (02, 03 delivered by 01; 05 by 04; 07 by 06;
 - Mixed text: id line `  <id>  <payee>  N categories, M transactions` (id and payee padded to widest across findings), four-space rows `<path>  <N transactions>` (paths padded within the finding, counts right-aligned, `humanize.Count`); sort by sum of item `Transactions` desc, payee ci, id. `findingItemDocument` `date/account_id/account/currency/amount` are `*string`, null iff no `transaction_id` and no `split_id`; 26-28 payee/category items reuse that rule (SCENARIO-25)
 
 ## Left unbuilt
-- `ZFITRANSACTION` category columns are not read as category references (no schema evidence of a ZTAG reference); real-file check is the Reference check below (SCENARIO-28)
 
 ## Traps
 - `QueryValue.Text` is `"NULL"` for a NULL: decide by `.Null` (csv) ; a one-column NULL row is a blank line that `encoding/csv` readers skip (see Open debts) (SCENARIO-21)
@@ -84,8 +83,6 @@ Scenarios complete: SCENARIO-01..28 (02, 03 delivered by 01; 05 by 04; 07 by 06;
 - The spec's mixed-categories example spacing (`    Groceries           30 transactions`, 11 spaces) contradicts its own column rule; built to the rule (width of widest path + two-space gap, right-aligned count) like payee-variants/similar-categories examples (SCENARIO-25)
 
 ## Open debts
-- Orchestrator: the Reference check (real-file review of heuristic findings) is now due, before the gate round; it must also confirm the importer sees real investment/budget category references and whether `ZFITRANSACTION` carries one (unowned until run)
-- Orchestrator: `ZPRODUCTSERVICE.ZCATEGORY` and `ZCUSTOMERCREDITLINEITEM.ZCATEGORY` are read as references beyond the specification's SCENARIO-28 list (safety: fewer delete-advice reports); the spec text names only four columns plus non-imported entries, so either amend it or drop the two rows at the Reference check (unowned)
 - Orchestrator: config warnings (C3, W1) in `--json` `warnings[]` name `<config>` abbreviated (`~/...`), a 2c-era deviation from the 2a absolute-in-`--json` rule — raise at the final product-vision pass (unowned). Includes `status --json`'s bad-config entry (ruled at SCENARIO-19 to use the same form as the other config warnings)
 - Orchestrator: `sql --csv` one-column NULL row renders as a blank line (P2d-12 applied literally, as PostgreSQL COPY CSV does); `encoding/csv` readers skip blank lines — raise at the final product-vision pass (unowned)
 - Orchestrator: `unlinked-transfer` items in `--json`/`--csv` give `category` null for both an uncategorized and a split transaction (`(uncategorized)`/`(split)` are text-only) — raise at the final product-vision pass (unowned)
