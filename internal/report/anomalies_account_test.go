@@ -15,10 +15,16 @@ import (
 // anomaliesNamed reads thisYear's anomalies over charges, ordered by date, naming accounts from list.
 func anomaliesNamed(t *testing.T, list store.AccountList, charges []store.Charge, names ...string) report.Anomalies {
 	t.Helper()
+	return anomaliesNamedIn(t, thisYear, list, charges, names...)
+}
+
+// anomaliesNamedIn is anomaliesNamed over window.
+func anomaliesNamedIn(t *testing.T, window store.Window, list store.AccountList, charges []store.Charge, names ...string) report.Anomalies {
+	t.Helper()
 	slices.SortStableFunc(charges, func(a, b store.Charge) int { return a.Date.Compare(b.Date) })
 	srv := report.NewServer(report.WithStore(fakeStore{accounts: list, charges: store.Charges{Rows: charges}}))
 
-	got, err := srv.Anomalies(t.Context(), report.AnomaliesRequest{Window: thisYear, Now: recurringNow, Accounts: names})
+	got, err := srv.Anomalies(t.Context(), report.AnomaliesRequest{Window: window, Now: recurringNow, Accounts: names})
 
 	require.NoError(t, err)
 	return got
@@ -109,6 +115,64 @@ func Test_anomalies_count_only_the_named_accounts_charges_as_checked_and_not_jud
 			assert.Equal(t, c.wantListed, amountsOf(got.Listed))
 			assert.Equal(t, c.wantChecked, got.Checked)
 			assert.Equal(t, c.wantNotJudged, got.NotJudged)
+		})
+	}
+}
+
+func Test_anomalies_list_and_count_only_the_named_accounts_payeeless_category_charges(t *testing.T) {
+	cases := []struct {
+		name         string
+		names        []string
+		wantAccounts []string
+		wantChecked  int
+	}{
+		{name: "a named account", names: []string{"Visa"}, wantAccounts: []string{"acct-visa"}, wantChecked: 1},
+		{name: "no account named", names: nil, wantAccounts: []string{"acct-visa", "acct-chq"}, wantChecked: 2},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			charges := slices.Concat(onAccountOf(chqAccount, categoryHistory(t, 10, 20000)), []store.Charge{
+				onAccountOf(visaAccount, []store.Charge{chargeOn(t, 9, "2026-09-02", unpaid(), inGroceries(), ofAmount(100001))})[0],
+				onAccountOf(chqAccount, []store.Charge{chargeOn(t, 10, "2026-09-02", unpaid(), inGroceries(), ofAmount(100001))})[0],
+			})
+
+			got := anomaliesNamedIn(t, since(t, "2026-09-01"), bothAccounts, charges, c.names...)
+
+			ids := make([]string, 0, len(got.Listed))
+			for _, a := range got.Listed {
+				assert.Equal(t, report.BaselineCategory, a.Baseline)
+				assert.Equal(t, 10, a.Earlier)
+				ids = append(ids, a.Account.ID)
+			}
+			assert.ElementsMatch(t, c.wantAccounts, ids)
+			assert.Equal(t, c.wantChecked, got.Checked)
+		})
+	}
+}
+
+func Test_anomalies_count_only_the_named_accounts_payeeless_charges_without_a_baseline_as_not_judged(t *testing.T) {
+	cases := []struct {
+		name          string
+		names         []string
+		wantNotJudged int
+	}{
+		{name: "a named account", names: []string{"Visa"}, wantNotJudged: 1},
+		{name: "no account named", names: nil, wantNotJudged: 2},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			charges := []store.Charge{
+				onAccountOf(visaAccount, []store.Charge{chargeOn(t, 9, "2026-09-02", unpaid(), ofAmount(10000))})[0],
+				onAccountOf(chqAccount, []store.Charge{chargeOn(t, 10, "2026-09-03", unpaid(), ofAmount(10000))})[0],
+			}
+
+			got := anomaliesNamed(t, bothAccounts, charges, c.names...)
+
+			assert.Equal(t, c.wantNotJudged, got.NotJudged)
+			assert.Equal(t, c.wantNotJudged, got.Checked)
+			assert.Empty(t, got.Listed)
 		})
 	}
 }
