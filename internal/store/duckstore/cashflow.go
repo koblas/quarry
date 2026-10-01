@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -20,9 +21,28 @@ var cashFlowKeys = map[store.CashFlowPeriod]string{
 // bypassing that table reaches it.
 var ErrUnsupportedPeriod = errors.New("cash-flow period is not supported")
 
+// cashFlowSource is the relation a cash-flow read counts, in v_cash_flow's account_id, date,
+// currency, flow and amount columns: native is v_cash_flow; CAD and USD convert each split, one
+// with no converted cell keeping its own currency.
+func cashFlowSource(currency money.Currency) string {
+	var converted, target string
+	switch currency { //nolint:exhaustive // Native, and any value outside the three, reads v_cash_flow as it is
+	case money.CAD:
+		converted, target = "amount_cad", "CAD"
+	case money.USD:
+		converted, target = "amount_usd", "USD"
+	default:
+		return "v_cash_flow"
+	}
+	return fmt.Sprintf(`(SELECT account_id, date, flow,
+	CASE WHEN %[1]s IS NULL THEN currency ELSE '%[2]s' END AS currency,
+	COALESCE(%[1]s, amount) AS amount
+	FROM v_cash_flow)`, converted, target)
+}
+
 // cashFlowQuery reads per-period and per-currency-total income, spending and net in cents from
-// v_cash_flow, and the savings rate as BIGINT tenths / 10.0 (always finite), or NULL.
-func cashFlowQuery(key string, accounts accountFilter) string {
+// source (see cashFlowSource), and the savings rate as BIGINT tenths / 10.0 (always finite), or NULL.
+func cashFlowQuery(key string, accounts accountFilter, source string) string {
 	// Integer rounding half away from zero never yields a negative zero; income <= 0 has no rate.
 	return fmt.Sprintf(`
 SELECT period_key, currency, income, spent, income - spent,
@@ -33,11 +53,11 @@ FROM (
 		CAST(COALESCE(sum(CASE WHEN flow = 'income' THEN amount END), 0) * 100 AS BIGINT) AS income,
 		CAST(COALESCE(sum(CASE WHEN flow = 'expense' THEN -amount END), 0) * 100 AS BIGINT) AS spent,
 		GROUPING(period_key) AS grp
-	FROM (SELECT account_id, date, currency, flow, amount, %s AS period_key FROM v_cash_flow)
+	FROM (SELECT account_id, date, currency, flow, amount, %s AS period_key FROM %s)
 	WHERE date >= CAST($1 AS DATE) AND date <= CAST($2 AS DATE)%s
 	GROUP BY GROUPING SETS ((period_key, currency), (currency))
 )
-ORDER BY grp, period_key, currency`, key, accounts.and("account_id"))
+ORDER BY grp, period_key, currency`, key, source, accounts.and("account_id"))
 }
 
 // CashFlow reads income and spending in params.Window (both days counted), per period and
@@ -57,7 +77,7 @@ func (s *Store) CashFlow(ctx context.Context, params store.CashFlowParams) (stor
 
 	var flow store.CashFlow
 	accounts := accountFilter(params.AccountIDs)
-	err = db.QueryRows(ctx, cashFlowQuery(key, accounts), readArgs(params.Window, accounts), func(scan func(dest ...any) error) error {
+	err = db.QueryRows(ctx, cashFlowQuery(key, accounts, cashFlowSource(params.Currency)), readArgs(params.Window, accounts), func(scan func(dest ...any) error) error {
 		var period sql.NullString
 		var currency string
 		var income, spent, net, grouping int64

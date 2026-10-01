@@ -5,6 +5,7 @@ package cli
 import (
 	"testing"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -37,6 +38,7 @@ func Test_renderCashFlowJSON_writes_a_year_period_a_negative_rate_a_zero_rate_an
   "since": "2026-01-01",
   "until": "2026-09-29",
   "by": "year",
+  "currency": "native",
   "account_filter": [],
   "periods": [
     {
@@ -83,10 +85,34 @@ func Test_renderCashFlowJSON_writes_empty_lists_not_null_for_an_empty_cash_flow(
   "since": "2026-01-01",
   "until": "2026-09-29",
   "by": "month",
+  "currency": "native",
   "account_filter": [],
   "periods": [],
   "totals": [],
   "warnings": []
 }
 `, string(got))
+}
+
+func Test_renderCashFlowJSON_puts_currency_after_by_and_names_the_reporting_currency(t *testing.T) {
+	cases := []struct {
+		name     string
+		currency money.Currency
+		want     string
+	}{
+		{name: "CAD", currency: money.CAD, want: "CAD"},
+		{name: "native is the zero value", currency: money.Native, want: "native"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			flow := report.CashFlow{Window: spendWindow(), Currency: c.currency}
+
+			got, err := renderCashFlowJSON(flow, []string{})
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{"since", "until", "by", "currency", "account_filter", "periods", "totals", "warnings"}, topLevelKeys(t, got))
+			assert.Contains(t, string(got), `"currency": "`+c.want+`"`)
+		})
+	}
 }

@@ -551,6 +551,8 @@ type CashFlowParams struct {
 	Window     Window
 	By         CashFlowPeriod
 	AccountIDs []string
+	// Currency is the currency to report in; the zero value, money.Native, converts nothing.
+	Currency money.Currency
 }
 
 // CashFlowRow is one period's income, spending and net in one currency, in cents.

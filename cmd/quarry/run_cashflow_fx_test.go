@@ -6,8 +6,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -53,13 +57,13 @@ func Test_run_cashflow_converts_each_period_to_cad_by_default(t *testing.T) {
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Empty(t, stderr.String())
-		const w = 7
-		assert.Equal(t, "Cash flow 2026-01-01 to 2026-02-28 in all accounts, amounts in CAD\n\n"+
-			cashFlowLine(w, "Month", "Currency", "Income", "Spent", "Net", "Savings rate", "Status")+
-			cashFlowLine(w, "2026-01", "CAD", "1,100.00", "200.26", "899.74", "81.8%", "")+
-			cashFlowLine(w, "2026-02", "CAD", "0.00", "110.00", "-110.00", "n/a", "")+
-			cashFlowLine(w, "Total", "CAD", "1,100.00", "310.26", "789.74", "71.8%", ""),
-			stdout.String())
+		assert.Equal(t, `Cash flow 2026-01-01 to 2026-02-28 in all accounts, amounts in CAD
+
+Month    Currency    Income   Spent      Net  Savings rate  Status
+2026-01  CAD       1,100.00  200.26   899.74         81.8%
+2026-02  CAD           0.00  110.00  -110.00           n/a
+Total    CAD       1,100.00  310.26   789.74         71.8%
+`, stdout.String())
 	})
 
 	t.Run("json", func(t *testing.T) {
@@ -80,4 +84,256 @@ func Test_run_cashflow_converts_each_period_to_cad_by_default(t *testing.T) {
 			Totals: []cashFlowMark{{Currency: "CAD", Income: "1100.00", Spent: "310.26", Net: "789.74", SavingsRatePct: new(71.8)}},
 		}, doc)
 	})
+}
+
+// runCashFlowJSON runs cashflow with args plus --json and decodes its document.
+func runCashFlowJSON(t *testing.T, args ...string) (cashFlowReport, string) {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	exitCode := runWith(context.Background(), append([]string{"cashflow", "--json"}, args...), spendEnv(&stdout, &stderr))
+	require.Equal(t, 0, exitCode, stderr.String())
+	var doc cashFlowReport
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
+	return doc, stderr.String()
+}
+
+// cashFlowTextView is the first line of a cashflow table and the cells of each of its Total rows.
+func cashFlowTextView(out string) (string, [][]string) {
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	var totals [][]string
+	for _, line := range lines[1:] {
+		if strings.HasPrefix(line, "Total") {
+			totals = append(totals, strings.Fields(line))
+		}
+	}
+	return lines[0], totals
+}
+
+// totalMarkCells are the Total rows of a text table for totals, as cashFlowTextView reads them.
+func totalMarkCells(totals []cashFlowMark) [][]string {
+	cells := make([][]string, 0, len(totals))
+	for _, t := range totals {
+		cells = append(cells, []string{"Total", t.Currency, t.Income, t.Spent, t.Net, fmt.Sprintf("%.1f%%", *t.SavingsRatePct)})
+	}
+	return cells
+}
+
+func Test_run_cashflow_converts_the_edge_cases_in_each_reporting_currency(t *testing.T) {
+	const thisYear = "Cash flow 2026-01-01 to 2026-09-29 in "
+	cad := []cashFlowMark{{Currency: "CAD", Income: "100.00", Spent: "50.00", Net: "50.00", SavingsRatePct: new(50.0)}}
+	usd := []cashFlowMark{{Currency: "USD", Income: "80.00", Spent: "40.00", Net: "40.00", SavingsRatePct: new(50.0)}}
+	fridayRate := store.Rate{Date: day(2026, 3, 13), USDCAD: money.Rate(1_250_000), Series: "FXUSDCAD"}
+	closedUSD := store.Account{ID: "acct-usd", SourceID: 2, Name: "US Chequing", Type: "chequing", Currency: "USD", Closed: true}
+	usdSplits := func(when time.Time) []spendSplit {
+		return []spendSplit{
+			{id: "s1", account: "acct-usd", category: "cat-salary", currency: "USD", day: when, cents: 8000},
+			{id: "s2", account: "acct-usd", category: "cat-groceries", currency: "USD", day: when, cents: -4000},
+		}
+	}
+	cadSplit := spendSplit{id: "s3", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 3, 10), cents: 10000}
+	cases := []struct {
+		name       string
+		accounts   []store.Account
+		splits     []spendSplit
+		rate       store.Rate
+		args       []string
+		caption    string
+		currencies []string
+		want       map[string][]cashFlowMark
+	}{
+		{
+			name:     "a closed USD account converts",
+			accounts: []store.Account{closedUSD}, splits: usdSplits(day(2026, 3, 11)), rate: rateOnJan2,
+			caption: thisYear + "all accounts", currencies: []string{"CAD", "USD", "native"},
+			want: map[string][]cashFlowMark{"CAD": cad, "USD": usd, "native": usd},
+		},
+		{
+			name:     "one USD account converts to a CAD total",
+			accounts: []store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
+			splits:   append(usdSplits(day(2026, 3, 11)), cadSplit), rate: rateOnJan2,
+			args: []string{"--account", "US Chequing"}, caption: thisYear + "US Chequing", currencies: []string{"CAD", "USD", "native"},
+			want: map[string][]cashFlowMark{"CAD": cad, "USD": usd, "native": usd},
+		},
+		{
+			name:     "a split dated after the last rate converts at the latest rate",
+			accounts: []store.Account{usdChequingAccount("acct-usd", 2)}, splits: usdSplits(day(2099, 6, 1)), rate: rateOnJan2,
+			args: []string{"--until", "2099-12-31"}, caption: "Cash flow 2026-01-01 to 2099-12-31 in all accounts", currencies: []string{"CAD", "USD"},
+			want: map[string][]cashFlowMark{"CAD": cad, "USD": usd},
+		},
+		{
+			name:     "a weekend split converts at the Friday rate",
+			accounts: []store.Account{usdChequingAccount("acct-usd", 2)}, splits: usdSplits(day(2026, 3, 14)), rate: fridayRate,
+			caption: thisYear + "all accounts", currencies: []string{"CAD", "USD"},
+			want: map[string][]cashFlowMark{"CAD": cad, "USD": usd},
+		},
+		{
+			name:     "by year converts the same total",
+			accounts: []store.Account{usdChequingAccount("acct-usd", 2)}, splits: usdSplits(day(2026, 3, 11)), rate: rateOnJan2,
+			args: []string{"--by", "year"}, caption: thisYear + "all accounts", currencies: []string{"CAD", "USD", "native"},
+			want: map[string][]cashFlowMark{"CAD": cad, "USD": usd, "native": usd},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			replaceStoreWithRates(t, home, cashFlowRows(c.accounts, c.splits...), c.rate)
+
+			for _, currency := range c.currencies {
+				args := append([]string{"--currency", currency}, c.args...)
+				wantCaption := c.caption + map[string]string{"CAD": ", amounts in CAD", "USD": ", amounts in USD", "native": ""}[currency]
+
+				var stdout, stderr bytes.Buffer
+				exitCode := runWith(context.Background(), append([]string{"cashflow"}, args...), spendEnv(&stdout, &stderr))
+				require.Equal(t, 0, exitCode, stderr.String())
+				gotCaption, gotTotals := cashFlowTextView(stdout.String())
+				doc, jsonStderr := runCashFlowJSON(t, args...)
+
+				assert.Empty(t, stderr.String(), currency)
+				assert.Empty(t, jsonStderr, currency)
+				assert.Equal(t, wantCaption, gotCaption, currency)
+				assert.Equal(t, totalMarkCells(c.want[currency]), gotTotals, currency)
+				assert.Equal(t, currency, doc.Currency)
+				assert.Equal(t, c.want[currency], doc.Totals, currency)
+			}
+		})
+	}
+}
+
+func Test_run_cashflow_of_an_empty_window_names_the_currency_and_warns_only_of_the_empty_window(t *testing.T) {
+	const emptyWindowWarning = "quarry: warning: no income or spending from 2020-01-01 to 2020-12-31; the store's transactions run 2026-03-11 to 2026-03-11\n"
+	const caption = "Cash flow 2020-01-01 to 2020-12-31 in all accounts"
+	suffixes := map[string]string{"CAD": ", amounts in CAD", "USD": ", amounts in USD", "native": ""}
+	for currency, suffix := range suffixes {
+		t.Run(currency, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			replaceStoreWithRates(t, home, cashFlowRows(
+				[]store.Account{usdChequingAccount("acct-usd", 2)},
+				spendSplit{id: "s1", account: "acct-usd", category: "cat-salary", currency: "USD", day: day(2026, 3, 11), cents: 8000},
+			), rateOnJan2)
+			window := []string{"--currency", currency, "--since", "2020-01-01", "--until", "2020-12-31"}
+
+			t.Run("text", func(t *testing.T) {
+				var stdout, stderr bytes.Buffer
+
+				exitCode := runWith(context.Background(), append([]string{"cashflow"}, window...), spendEnv(&stdout, &stderr))
+
+				require.Equal(t, 0, exitCode, stderr.String())
+				assert.Equal(t, caption+suffix+"\n\nMonth  Currency  Income  Spent  Net  Savings rate  Status\n", stdout.String())
+				assert.Equal(t, emptyWindowWarning, stderr.String())
+			})
+
+			t.Run("json", func(t *testing.T) {
+				doc, stderr := runCashFlowJSON(t, window...)
+
+				assert.Equal(t, currency, doc.Currency)
+				assert.Empty(t, doc.Periods)
+				assert.Empty(t, doc.Totals)
+				assert.Equal(t, emptyWindowWarning, stderr)
+			})
+		})
+	}
+}
+
+func Test_run_cashflow_json_reads_back_with_every_amount_in_the_reporting_currency(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStoreWithRates(t, home, cashFlowRows(
+		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
+		spendSplit{id: "s1", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 3, 10), cents: 123456},
+		spendSplit{id: "s2", account: "acct-usd", category: "cat-salary", currency: "USD", day: day(2026, 4, 11), cents: 8001},
+		spendSplit{id: "s3", account: "acct-usd", category: "cat-fuel", currency: "USD", day: day(2026, 4, 12), cents: -3333},
+		spendSplit{id: "s4", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 5, 13), cents: -777},
+	), rateOnJan2)
+
+	doc, _ := runCashFlowJSON(t, "--since", "2026-03", "--until", "2026-05")
+
+	require.Len(t, doc.Totals, 1)
+	var income, spent int64
+	for _, r := range append(append([]cashFlowMark{}, doc.Periods...), doc.Totals...) {
+		assert.Equal(t, doc.Currency, r.Currency)
+	}
+	for _, r := range doc.Periods {
+		income += centsOf(t, r.Income)
+		spent += centsOf(t, r.Spent)
+	}
+	assert.Equal(t, centsOf(t, doc.Totals[0].Income), income)
+	assert.Equal(t, centsOf(t, doc.Totals[0].Spent), spent)
+}
+
+func Test_run_cashflow_lists_splits_before_the_first_rate_in_their_own_currency_without_a_warning(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStoreWithRates(t, home, cashFlowRows(
+		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
+		spendSplit{id: "s1", account: "acct-usd", category: "cat-salary", currency: "USD", day: day(2025, 12, 20), cents: 8000},
+		spendSplit{id: "s2", account: "acct-usd", category: "cat-groceries", currency: "USD", day: day(2026, 1, 15), cents: -4000},
+		spendSplit{id: "s3", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 1, 15), cents: 10000},
+	), rateOnJan2)
+	cases := []struct {
+		currency string
+		want     string
+		totals   []string
+	}{
+		{currency: "CAD", totals: []string{"CAD", "USD"}, want: `Cash flow 2025-12-01 to 2026-02-28 in all accounts, amounts in CAD
+
+Month    Currency  Income  Spent    Net  Savings rate  Status
+2025-12  CAD         0.00   0.00   0.00           n/a
+2025-12  USD        80.00   0.00  80.00        100.0%
+2026-01  CAD       100.00  50.00  50.00         50.0%
+2026-01  USD         0.00   0.00   0.00           n/a
+2026-02  CAD         0.00   0.00   0.00           n/a
+2026-02  USD         0.00   0.00   0.00           n/a
+Total    CAD       100.00  50.00  50.00         50.0%
+Total    USD        80.00   0.00  80.00        100.0%
+`},
+		{currency: "USD", totals: []string{"USD"}, want: `Cash flow 2025-12-01 to 2026-02-28 in all accounts, amounts in USD
+
+Month    Currency  Income  Spent     Net  Savings rate  Status
+2025-12  USD        80.00   0.00   80.00        100.0%
+2026-01  USD        80.00  40.00   40.00         50.0%
+2026-02  USD         0.00   0.00    0.00           n/a
+Total    USD       160.00  40.00  120.00         75.0%
+`},
+		{currency: "native", totals: []string{"CAD", "USD"}, want: `Cash flow 2025-12-01 to 2026-02-28 in all accounts
+
+Month    Currency  Income  Spent     Net  Savings rate  Status
+2025-12  CAD         0.00   0.00    0.00           n/a
+2025-12  USD        80.00   0.00   80.00        100.0%
+2026-01  CAD       100.00   0.00  100.00        100.0%
+2026-01  USD         0.00  40.00  -40.00           n/a
+2026-02  CAD         0.00   0.00    0.00           n/a
+2026-02  USD         0.00   0.00    0.00           n/a
+Total    CAD       100.00   0.00  100.00        100.0%
+Total    USD        80.00  40.00   40.00         50.0%
+`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.currency, func(t *testing.T) {
+			window := []string{"--currency", c.currency, "--since", "2025-12", "--until", "2026-02"}
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), append([]string{"cashflow"}, window...), spendEnv(&stdout, &stderr))
+			doc, jsonStderr := runCashFlowJSON(t, window...)
+
+			require.Equal(t, 0, exitCode, stderr.String())
+			assert.Empty(t, stderr.String())
+			assert.Empty(t, jsonStderr)
+			assert.Equal(t, c.want, stdout.String())
+			assert.Equal(t, c.currency, doc.Currency)
+			assert.Equal(t, c.totals, markCurrencies(doc.Totals))
+		})
+	}
+}
+
+// markCurrencies is the currency of each mark, in order.
+func markCurrencies(marks []cashFlowMark) []string {
+	currencies := make([]string, len(marks))
+	for i, m := range marks {
+		currencies[i] = m.Currency
+	}
+	return currencies
 }

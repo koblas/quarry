@@ -43,9 +43,9 @@ func newCashFlowCommand(newReport ReportFactory, loadConfig ConfigLoader, now fu
 	cmd := &cobra.Command{
 		Use:   cashFlowCommand,
 		Short: "Show income, spending and savings rate by month or year",
-		Long: `Show income, spending and what was left over for each month or year, in
-each account's own currency: CAD and USD are listed separately, never added
-together.
+		Long: `Show income, spending and what was left over for each month or year.
+
+` + reportCurrencyLong + `
 
 Income and spending follow the same rules as quarry spend: transfers between
 your own accounts, Quicken's system categories and transactions marked
@@ -54,7 +54,7 @@ leaves out of reports ("not in reports" in quarry accounts) and accounts
 that use Quicken's linked account tracking ("linked tracking") are left out
 here too. Uncategorized splits count as income when they bring money in and
 as spending when they take money out. The Spent column equals quarry spend's
-total for the same period and accounts.
+total for the same period, accounts and currency.
 
 Savings rate is net divided by income, and shows n/a when income is zero or
 less. A period that --since or --until cuts short is marked partial.`,
@@ -73,7 +73,7 @@ less. A period that --since or --until cuts short is marked partial.`,
 				return err
 			}
 
-			_, configWarnings, err := currency.resolve(cmd, loadConfig)
+			reportCurrency, configWarnings, err := currency.resolve(cmd, loadConfig)
 			if err != nil {
 				return err
 			}
@@ -83,7 +83,7 @@ less. A period that --since or --until cuts short is marked partial.`,
 				return err
 			}
 
-			flow, err := srv.CashFlow(cmd.Context(), report.CashFlowRequest{Window: resolved, By: period, Accounts: flags.accounts})
+			flow, err := srv.CashFlow(cmd.Context(), report.CashFlowRequest{Window: resolved, By: period, Accounts: flags.accounts, Currency: reportCurrency})
 			if err != nil {
 				return &runtimeError{err: err}
 			}

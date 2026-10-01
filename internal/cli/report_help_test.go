@@ -73,9 +73,16 @@ func Test_spend_help_shows_the_by_flag_and_its_default(t *testing.T) {
 }
 
 func Test_cashflow_help_says_what_cashflow_counts(t *testing.T) {
-	const long = `Show income, spending and what was left over for each month or year, in
-each account's own currency: CAD and USD are listed separately, never added
-together.
+	const long = `Show income, spending and what was left over for each month or year.
+
+Amounts are in CAD unless --currency or reporting.currency in
+~/Library/Application Support/quarry/config.toml names another currency.
+Each split converts at the Bank of Canada rate for its date, or the latest
+earlier rate on weekends, holidays and dates after the last stored rate,
+and is rounded to the cent before it is added. With --currency native, CAD
+and USD are listed separately, never added together. Amounts dated before
+the first stored rate stay in their own currency, on rows of their own,
+with a warning.
 
 Income and spending follow the same rules as quarry spend: transfers between
 your own accounts, Quicken's system categories and transactions marked
@@ -84,7 +91,7 @@ leaves out of reports ("not in reports" in quarry accounts) and accounts
 that use Quicken's linked account tracking ("linked tracking") are left out
 here too. Uncategorized splits count as income when they bring money in and
 as spending when they take money out. The Spent column equals quarry spend's
-total for the same period and accounts.
+total for the same period, accounts and currency.
 
 Savings rate is net divided by income, and shows n/a when income is zero or
 less. A period that --since or --until cuts short is marked partial.

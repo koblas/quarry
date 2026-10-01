@@ -62,7 +62,7 @@ func Test_cashflow_reads_the_months_of_the_default_window_and_heads_the_first_co
 		Since: time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC),
 		Until: time.Date(2026, time.September, 29, 0, 0, 0, 0, time.UTC),
 	}, got.Window)
-	assert.Equal(t, "Cash flow 2026-09-01 to 2026-09-29 in all accounts\n\n"+
+	assert.Equal(t, "Cash flow 2026-09-01 to 2026-09-29 in all accounts, amounts in CAD\n\n"+
 		"Month    Currency    Income     Spent       Net  Savings rate  Status\n"+
 		"2026-09  CAD       9,100.00  6,200.00  2,900.00         31.9%  partial\n"+
 		"Total    CAD       9,100.00  6,200.00  2,900.00         31.9%\n", stdout.String())
@@ -78,7 +78,7 @@ func Test_cashflow_by_year_reads_the_year_period_and_heads_the_first_column_Year
 
 	require.NoError(t, err)
 	assert.Equal(t, store.CashFlowByYear, got.By)
-	assert.Equal(t, "Cash flow 2026-01-01 to 2026-09-29 in all accounts\n\n"+
+	assert.Equal(t, "Cash flow 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD\n\n"+
 		"Year   Currency  Income  Spent   Net  Savings rate  Status\n"+
 		"2026   CAD         0.00   0.00  0.00           n/a  partial\n"+
 		"Total  CAD         1.00   0.00  0.00           n/a\n", stdout.String())
@@ -231,7 +231,7 @@ func Test_cashflow_captions_the_named_accounts_and_passes_their_ids_to_the_repor
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{visaID, chequingID}, got.AccountIDs)
-	assert.Contains(t, stdout.String(), "Cash flow 2026-01-01 to 2026-09-29 in Visa Infinite, Chequing\n\n")
+	assert.Contains(t, stdout.String(), "Cash flow 2026-01-01 to 2026-09-29 in Visa Infinite, Chequing, amounts in CAD\n\n")
 }
 
 func Test_cashflow_warns_once_per_named_account_left_out_of_reports_saying_cashflow_leaves_it_out(t *testing.T) {

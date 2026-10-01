@@ -7,6 +7,7 @@ type cashFlowDocument struct {
 	Since         string                   `json:"since"`
 	Until         string                   `json:"until"`
 	By            string                   `json:"by"`
+	Currency      string                   `json:"currency"`
 	AccountFilter []accountFilterDocument  `json:"account_filter"`
 	Periods       []cashFlowPeriodDocument `json:"periods"`
 	Totals        []cashFlowTotalDocument  `json:"totals"`
@@ -56,6 +57,7 @@ func renderCashFlowJSON(c report.CashFlow, warnings []string) ([]byte, error) {
 		Since:         c.Window.Since.Format(jsonDateLayout),
 		Until:         c.Window.Until.Format(jsonDateLayout),
 		By:            cashFlowPeriods[c.By].name,
+		Currency:      c.Currency.String(),
 		AccountFilter: accountFilterDocuments(c.Accounts),
 		Periods:       periods,
 		Totals:        totals,

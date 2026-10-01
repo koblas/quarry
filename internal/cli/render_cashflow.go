@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/koblas/quarry/internal/platform/humanize"
-	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 )
 
@@ -30,7 +29,7 @@ func renderCashFlow(c report.CashFlow) string {
 	for _, t := range c.Totals {
 		rows = append(rows, cashFlowCells(tableTotalLabel, t.Currency, t.Income, t.Spent, t.Net, t.SavingsRatePct, ""))
 	}
-	return renderTable(windowCaption("Cash flow", c.Window, c.Accounts, money.Native), cashFlowAligns, rows)
+	return renderTable(windowCaption("Cash flow", c.Window, c.Accounts, c.Currency), cashFlowAligns, rows)
 }
 
 // cashFlowCells is one table row: its amounts in cents formatted as money, rate as a percentage.

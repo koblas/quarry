@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -264,4 +265,15 @@ func Test_cashflow_reports_an_interrupt_during_the_accounts_read(t *testing.T) {
 	_, err := srv.CashFlow(ctx, report.CashFlowRequest{Accounts: []string{"Chequing"}})
 
 	assert.EqualError(t, err, "cashflow interrupted")
+}
+
+func Test_cashflow_reads_the_requested_currency_and_returns_it_with_the_result(t *testing.T) {
+	var got store.CashFlowParams
+	srv := report.NewServer(report.WithStore(fakeStore{gotCashFlow: &got}))
+
+	result, err := srv.CashFlow(t.Context(), report.CashFlowRequest{Currency: money.USD})
+
+	require.NoError(t, err)
+	assert.Equal(t, money.USD, got.Currency)
+	assert.Equal(t, money.USD, result.Currency)
 }
