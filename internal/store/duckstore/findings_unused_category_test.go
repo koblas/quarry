@@ -129,6 +129,10 @@ func Test_replace_never_reports_a_hidden_category_or_one_under_it(t *testing.T) 
 		{"a hidden leaf", []unusedCat{cat("Old", 0, hiddenCat)}},
 		{"an unused child of a used hidden parent", []unusedCat{cat("Old", 0, hiddenCat, withSplits(1)), cat("Old:Child", 1)}},
 		{"a visible unused parent with a hidden child", []unusedCat{cat("Auto", 0), cat("Auto:Old", 1, hiddenCat)}},
+		{"a hidden grandchild under an unused visible chain", []unusedCat{cat("Auto", 0), cat("Auto:Fuel", 1), cat("Auto:Fuel:Old", 2, hiddenCat)}},
+		{"an unused leaf under a used middle and a used hidden grandparent", []unusedCat{
+			cat("Old", 0, hiddenCat, withSplits(1)), cat("Old:Fuel", 1, withSplits(1)), cat("Old:Fuel:Premium", 2),
+		}},
 	}
 
 	for _, c := range cases {
@@ -138,6 +142,14 @@ func Test_replace_never_reports_a_hidden_category_or_one_under_it(t *testing.T) 
 			assert.Empty(t, unusedFindings(t, nil, c.cats...))
 		})
 	}
+}
+
+func Test_replace_still_reports_an_unused_child_of_a_used_parent_that_has_a_hidden_sibling(t *testing.T) {
+	t.Parallel()
+
+	got := unusedFindings(t, nil, cat("Auto", 0, withSplits(1)), cat("Auto:Fuel", 1), cat("Auto:Old", 1, hiddenCat))
+
+	assert.Equal(t, "unused-category:cat-2=cat-2", got)
 }
 
 func Test_replace_never_reports_a_system_category(t *testing.T) {

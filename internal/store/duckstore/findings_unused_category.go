@@ -88,14 +88,16 @@ func (t *categoryTree) markUsed(referenced []string) {
 
 // markBlocked marks every hidden category, its ancestors and its descendants.
 func (t *categoryTree) markBlocked() {
+	blockAncestor := func(a *categoryNode) { a.blocked = true }
 	for _, n := range t.order {
-		t.climb(n, func(a *categoryNode) {
+		blockUnderHidden := func(a *categoryNode) {
 			if a.hidden {
 				n.blocked = true
 			}
-		})
+		}
+		t.climb(n, blockUnderHidden)
 		if n.hidden {
-			t.climb(n, func(a *categoryNode) { a.blocked = true })
+			t.climb(n, blockAncestor)
 		}
 	}
 }

@@ -174,7 +174,7 @@ func Test_status_carries_each_finding_with_its_state_from_the_latest_build(t *te
 	got, err := duckstore.New(dir).Status(t.Context())
 
 	require.NoError(t, err)
-	var states []finding.State
+	states := make([]finding.State, 0, len(got.Findings))
 	for _, f := range got.Findings {
 		states = append(states, finding.State{ID: f.ID, Fixed: f.FixedAt != nil, New: f.New, NewlyFixed: f.NewlyFixed})
 	}
