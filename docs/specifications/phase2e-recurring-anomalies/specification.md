@@ -65,7 +65,7 @@ week, month, quarter or year, at a steady amount. quarry finds them in all
 your history, with the rules of quarry spend: expense splits only, without
 transfers, refunds or accounts left out of reports. A transaction counts
 once, with all its splits. Payees whose names differ only in store or
-reference numbers count as one payee.
+reference numbers count as one payee. Charges dated after today are left out, even with a later --until.
 
 A charge that comes off schedule starts the series again. A series has
 ended when no charge has come for 14 days (weekly), 45 days (monthly), 120
@@ -118,6 +118,7 @@ least 10. Charges under 100.00 are never listed. Charges follow the rules
 of quarry spend, and a transaction counts once, with all its splits; an
 uncategorized or split charge from a payee with little history cannot be
 judged. Possible duplicates are listed by quarry findings, not here.
+Charges dated after today are left out, even with a later --until.
 
 --since and --until choose which charges to list; each is compared with
 every earlier charge, however old. --account lists only charges in those
@@ -140,7 +141,7 @@ Date        Account         Payee        Category           Amount   Usual  Time
 - `--json`: `{"since","until","account_filter":[],"anomalies":[{"transaction_id","date","account_id","account","currency","payee","category","amount","baseline":"payee"|"category","usual":"210.40","earlier":212,"times":8.8}],"checked":1204,"not_judged":87,"warnings":[]}`. `category` null in both the uncategorized and the split case (ruled at SCENARIO-19: also null for two splits of one category, which read `(split)` in text); `payee` null for a NULL-payee charge judged against its category.
 
 ### Refusals and warnings (both commands; reuse verbatim, `<cmd>` = recurring/anomalies)
-R1, R2, R3a/b/c, R3, O2, H1 as in 2a. I1 `quarry: <cmd> interrupted` (1). S1, S2, S2d, S3, S5, S6 as in 2b (S1–S3 exit 2; S5, S6 exit 1). U8 `quarry: <cmd> takes no arguments` (2). No `--by`, so no S4. W2/W3 with `<cmd>`, 2b ordering and every-account-left-out rules (0). Empty result: caption + header (anomalies adds its footer, `0 charges checked`), and E1/E2/E1a/E2a via `appendEmptyWindowWarning` with subject `recurring charges` / `unusually large charges`, e.g. `quarry: warning: no recurring charges from 2026-01-01 to 2026-10-01; the store's transactions run 2003-01-04 to 2026-09-26` (0). Warnings go to `warnings[]` without the prefix and to stderr after stdout. `--json` with a refusal: stdout empty.
+R1, R2, R3a/b/c, R3, O2, H1 as in 2a. I1 `quarry: <cmd> interrupted` (1). S1, S2, S2d, S3, S5, S6 as in 2b (S1–S3 exit 2; S5, S6 exit 1). U8 `quarry: <cmd> takes no arguments` (2). S3 for these two commands (ruled at the final pass; spend/cashflow S3 unchanged): `quarry: --since 2030 is after today; <cmd> lists charges up to today only, so pass an earlier --since` (2; stdout empty, also under `--json`); `--since` future with `--until` keeps E1, exit 0. No `--by`, so no S4. W2/W3 with `<cmd>`, 2b ordering and every-account-left-out rules (0). Empty result: caption + header (anomalies adds its footer, `0 charges checked`), and E1/E2/E1a/E2a via `appendEmptyWindowWarning` with subject `recurring charges` / `unusually large charges`, e.g. `quarry: warning: no recurring charges from 2026-01-01 to 2026-10-01; the store's transactions run 2003-01-04 to 2026-09-26` (0). Warnings go to `warnings[]` without the prefix and to stderr after stdout. `--json` with a refusal: stdout empty.
 
 ### Edge cases
 | Input | Result |

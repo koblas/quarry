@@ -24,6 +24,7 @@
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
 | --- | --- | --- | --- |
 | gate R1 | H1 refusal rows missing for recurring/anomalies | `cmd/quarry/run_spend_refusals_test.go:67` | SCENARIO-11, SCENARIO-20 |
+| final pass | S3 refusal fix line (pass --until) is a dead end for recurring/anomalies, which drop future-dated charges | `internal/report/window.go:67-69` | SCENARIO-13, SCENARIO-22 |
 | gate R1 | non-ASCII column width unpinned after `renderTable` rewrite | `internal/cli/render_table.go:31` | SCENARIO-01 |
 
 ## Escaped defects
