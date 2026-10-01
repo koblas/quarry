@@ -57,7 +57,9 @@ func Test_spending_in_cad_gives_a_store_of_only_cad_the_same_rows_as_native(t *t
 	got, err := st.Spending(t.Context(), spendingIn(money.CAD, store.SpendByCategory))
 
 	require.NoError(t, err)
-	assert.Equal(t, native, got)
+	assert.Equal(t, native.Rows, got.Rows)
+	assert.Equal(t, native.Totals, got.Totals)
+	assert.Zero(t, got.Unconverted.Transactions)
 }
 
 func Test_spending_in_cad_converts_a_usd_split_at_its_dates_rate_and_adds_it_to_the_cad_row(t *testing.T) {

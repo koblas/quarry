@@ -521,11 +521,23 @@ type TransactionRange struct {
 	First, Last time.Time
 }
 
+// Unconverted is the transactions a CAD or USD report lists in their own currency because the
+// store has no rate for their date; the zero value means none, and a native report never fills it.
+type Unconverted struct {
+	// Transactions counts the distinct CAD and USD transactions in the report's own view and window
+	// whose amount stayed unconverted.
+	Transactions int
+	// FirstRate is the earliest exchange rate in the store, held as UTC midnight; zero means the store has none.
+	FirstRate time.Time
+}
+
 // Spending is the rows of a spending read in display order, and one Total
 // per currency present, CAD before USD.
 type Spending struct {
 	Rows   []SpendingRow
 	Totals []SpendingTotal
+	// Unconverted is the splits left in their own currency; see Unconverted.
+	Unconverted Unconverted
 	// MultiTagSplits counts the splits in the window that carry more than one
 	// tag; it is set only when grouping by tag.
 	MultiTagSplits int
@@ -579,6 +591,8 @@ type CashFlowTotal struct {
 type CashFlow struct {
 	Rows   []CashFlowRow
 	Totals []CashFlowTotal
+	// Unconverted is the income and spending left in their own currency; see Unconverted.
+	Unconverted Unconverted
 	// Transactions is set only when the window holds no income or spending (no Totals), as for Spending.
 	Transactions TransactionRange
 }

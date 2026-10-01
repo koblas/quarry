@@ -62,7 +62,8 @@ ORDER BY grp, period_key, currency`, key, source, accounts.and("account_id"))
 
 // CashFlow reads income and spending in params.Window (both days counted), per period and
 // currency, counting only params.AccountIDs when any (every account otherwise); Totals give one
-// row per currency. A window with no income or spending also gets Transactions, as Spending does.
+// row per currency. It fills Unconverted, and Transactions when the window holds no income or
+// spending, as Spending does.
 // An unsupported period is ErrUnsupportedPeriod, and a store it cannot open or read is a *store.OpenError.
 func (s *Store) CashFlow(ctx context.Context, params store.CashFlowParams) (store.CashFlow, error) {
 	key, ok := cashFlowKeys[params.By]
@@ -77,7 +78,8 @@ func (s *Store) CashFlow(ctx context.Context, params store.CashFlowParams) (stor
 
 	var flow store.CashFlow
 	accounts := accountFilter(params.AccountIDs)
-	err = db.QueryRows(ctx, cashFlowQuery(key, accounts, cashFlowSource(params.Currency)), readArgs(params.Window, accounts), func(scan func(dest ...any) error) error {
+	args := readArgs(params.Window, accounts)
+	err = db.QueryRows(ctx, cashFlowQuery(key, accounts, cashFlowSource(params.Currency)), args, func(scan func(dest ...any) error) error {
 		var period sql.NullString
 		var currency string
 		var income, spent, net, grouping int64
@@ -96,6 +98,9 @@ func (s *Store) CashFlow(ctx context.Context, params store.CashFlowParams) (stor
 		flow.Rows = append(flow.Rows, store.CashFlowRow{Period: period.String, Currency: currency, Income: income, Spent: spent, Net: net, SavingsRatePct: ratePct})
 		return nil
 	})
+	if err == nil {
+		flow.Unconverted, err = cashFlowUnconverted.read(ctx, db, params.Currency, accounts, args)
+	}
 	if err == nil && len(flow.Totals) == 0 {
 		flow.Transactions, err = transactionRange(ctx, db, accounts)
 	}

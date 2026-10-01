@@ -113,8 +113,8 @@ var ErrUnsupportedGrouping = errors.New("spending grouping is not supported")
 
 // Spending reads the spending in params.Window (both days counted) grouped by params.By over
 // params.AccountIDs (every account when empty), dropping a group netting to zero; Totals keep it.
-// It fills MultiTagSplits and Transactions as store.Spending documents. An unknown grouping is
-// ErrUnsupportedGrouping; a store it cannot open or read is a *store.OpenError.
+// It fills Unconverted, MultiTagSplits and Transactions as store.Spending documents. An unknown
+// grouping is ErrUnsupportedGrouping; a store it cannot open or read is a *store.OpenError.
 func (s *Store) Spending(ctx context.Context, params store.SpendingParams) (store.Spending, error) {
 	queryFor, ok := spendingQueries[params.By]
 	if !ok {
@@ -143,6 +143,9 @@ func (s *Store) Spending(ctx context.Context, params store.SpendingParams) (stor
 		spending.Rows = append(spending.Rows, store.SpendingRow{Key: nullStringPtr(key), Currency: currency, Spent: cents})
 		return nil
 	})
+	if err == nil {
+		spending.Unconverted, err = spendingUnconverted.read(ctx, db, params.Currency, accounts, args)
+	}
 	if err == nil && params.By == store.SpendByTag {
 		err = db.QueryRows(ctx, multiTagSplitsQuery(accounts), args, func(scan func(dest ...any) error) error {
 			return scan(&spending.MultiTagSplits)
