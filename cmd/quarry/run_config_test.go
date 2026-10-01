@@ -49,10 +49,10 @@ func corruptPreviousStore(t *testing.T, home string) {
 	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a database"), 0o600))
 }
 
-// writeConfig writes content as the config file under home.
 // configPath is the config file's absolute path under home, as --json names it.
 func configPath(home string) string { return filepath.Join(storeDirUnder(home), "config.toml") }
 
+// writeConfig writes content as the config file under home.
 func writeConfig(t *testing.T, home, content string) {
 	t.Helper()
 	dir := storeDirUnder(home)

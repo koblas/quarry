@@ -10,7 +10,12 @@ const fixIt = "; fix the file and run the command again"
 
 // Problem is err's text without the closing instruction to fix the file, for a caller that words
 // its own next step; an error that does not end with it is returned as text unchanged.
-func Problem(err error) string { return strings.TrimSuffix(err.Error(), fixIt) }
+func Problem(err error) string {
+	if refusal, ok := errors.AsType[*refusalError](err); ok {
+		return strings.TrimSuffix(refusal.msg, fixIt)
+	}
+	return strings.TrimSuffix(err.Error(), fixIt)
+}
 
 // refusalError is a config refusal: its text is the complete line for the
 // user, without the "quarry: " lead the command adds.

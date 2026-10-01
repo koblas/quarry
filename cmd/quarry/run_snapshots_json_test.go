@@ -235,7 +235,7 @@ func Test_run_snapshots_json_prints_an_empty_list_and_the_no_snapshots_line_when
 		"  \"snapshots\": [],\n"+
 		"  \"total_bytes\": 0,\n"+
 		"  \"warnings\": [\n"+
-		"    \"no snapshots in "+snapshotsShown+" yet; run quarry sync to take one\"\n"+
+		"    \"no snapshots in "+snapshotsDir(home)+" yet; run quarry sync to take one\"\n"+
 		"  ]\n"+
 		"}\n", stdout)
 	assert.NoDirExists(t, snapshotsDir(home))
@@ -249,6 +249,7 @@ func Test_run_snapshots_json_lists_config_then_no_snapshots_then_store_warnings_
 	configWarning := configShown + ": unknown key snapshot.keep; quarry ignores it"
 	absoluteConfigWarning := configPath(home) + ": unknown key snapshot.keep; quarry ignores it"
 	noSnapshots := "no snapshots in " + snapshotsShown + " yet; run quarry sync to take one"
+	absoluteNoSnapshots := "no snapshots in " + snapshotsDir(home) + " yet; run quarry sync to take one"
 	storeWarning := "cannot tell which snapshot the store was built from: the file is not a DuckDB database"
 
 	exitCode, stdout, stderr := runSnapshotsJSON(t)
@@ -263,7 +264,7 @@ func Test_run_snapshots_json_lists_config_then_no_snapshots_then_store_warnings_
 		"  \"total_bytes\": 0,\n"+
 		"  \"warnings\": [\n"+
 		"    \""+absoluteConfigWarning+"\",\n"+
-		"    \""+noSnapshots+"\",\n"+
+		"    \""+absoluteNoSnapshots+"\",\n"+
 		"    \""+storeWarning+"\"\n"+
 		"  ]\n"+
 		"}\n", stdout)

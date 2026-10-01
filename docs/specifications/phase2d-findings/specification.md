@@ -231,6 +231,7 @@ Ignore a finding by adding its id to findings.ignore in ~/Library/Application Su
 }
 ```
   `type` = `--type` value or null; `counts` follows `--type`, not `--status`; item keys always present, null where not applicable; amounts are strings; `transactions`/`splits` are counts for payee and category items; a fixed finding has `"items": []`. For unlinked-transfer items, `category` is null when the transaction has no category or has more than one split; text shows `(uncategorized)` or `(split)` (final pass). Config warnings (C3, W1, status bad-config) in every command's `--json` `warnings[]` name `<config>` by its absolute path; stderr keeps `~` (final pass).
+  `snapshots --json` names the snapshots folder in its no-snapshots warning by its absolute path; stderr keeps `~` (final pass).
 - `--csv` header: `finding_id,type,status,date,account,currency,payee,category,amount,other_account,transactions,splits,transaction_id,split_id,payee_id,category_id,fix`; one row per item; a fixed finding gets one row with item fields empty (NULL); same filters and order as text; P2d-12 writer.
 
 ### Sync
