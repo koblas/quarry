@@ -343,7 +343,7 @@ func unusedCategoryRows(findings []report.ListedFinding, view findingsView) []st
 // topCategory is the path of the first of items, the unused category itself.
 func topCategory(items []store.FindingItem) string {
 	if len(items) == 0 || items[0].Category == nil {
-		return "" // unreachable: an open unused-category finding always has its category as the first item, with the path joined from categories.full_path (NOT NULL, duckstore/schema.go:30)
+		return "" // unreachable: only listed (open or ignored) findings reach here, findingLines routes fixed ones (the only findings without items) away, and full_path is NOT NULL (duckstore/schema.go:30)
 	}
 	return *items[0].Category
 }

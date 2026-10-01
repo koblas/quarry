@@ -215,7 +215,7 @@ func latestDate(f store.Finding) time.Time {
 // categoryOf is the path of f's first item, the unused category itself; "" when f has none.
 func categoryOf(f store.Finding) string {
 	if len(f.Items) == 0 || f.Items[0].Category == nil {
-		return "" // unreachable: an open unused-category finding always has its category as the first item, with the path joined from categories.full_path (NOT NULL)
+		return "" // unreachable: listedOrder sends fixed findings (the only ones without items) to its fixed_at branch, and full_path is NOT NULL (duckstore/schema.go:30)
 	}
 	return *f.Items[0].Category
 }

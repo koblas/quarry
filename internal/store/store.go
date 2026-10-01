@@ -136,11 +136,8 @@ type SplitTag struct {
 
 // Rows is every row a store build writes, grouped by table. ImportRuns holds
 // the new build's run only; the store carries earlier runs forward itself.
-// ReferencedCategoryIDs is not a table: the category ids that rows the import
-// does not store as splits use (entries under a parent it does not import,
-// budget lines, loans, memorized-payee rules, products and services, customer
-// credits), deduplicated and sorted, nil when none. The store reads it for
-// detection and never persists it.
+// ReferencedCategoryIDs is not a table: sorted unique ids of categories that rows
+// not stored as splits use (budgets, loans, rules), nil when none; never persisted.
 type Rows struct {
 	Accounts     []Account
 	Categories   []Category

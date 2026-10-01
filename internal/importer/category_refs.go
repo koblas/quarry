@@ -71,9 +71,8 @@ SELECT ZCATEGORY FROM ZCUSTOMERCREDITLINEITEM
 WHERE ZCATEGORY IS NOT NULL AND COALESCE(ZDELETIONCOUNT, 0) = 0`},
 }
 
-// readCategoryRefs adds to refs the category every non-deleted budget line
-// item, loan split entry, loan account, quickfill rule split entry, product or
-// service and customer credit line item names.
+// readCategoryRefs adds to refs the category every non-deleted row of
+// categoryRefSources names.
 func readCategoryRefs(ctx context.Context, src Source, refs *categoryRefs) error {
 	for _, s := range categoryRefSources {
 		err := src.QueryRows(ctx, s.query, nil, func(scan func(dest ...any) error) error {

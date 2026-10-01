@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const missingCategoryPK = 9999
+const missingPK = 9999
 
 func importReferencedCategories(t *testing.T, b *v9fixture.Builder) []string {
 	t.Helper()
@@ -44,7 +44,7 @@ func Test_import_records_the_categories_every_non_imported_reference_uses(t *tes
 			b.Entry(v9fixture.EntryRow{Amount: "-4.00", CategoryTag: category})
 		}},
 		{"an entry whose parent does not exist", func(b *v9fixture.Builder, category int64) {
-			b.Entry(v9fixture.EntryRow{Parent: missingCategoryPK, Amount: "-4.00", CategoryTag: category})
+			b.Entry(v9fixture.EntryRow{Parent: missingPK, Amount: "-4.00", CategoryTag: category})
 		}},
 		{"an entry under a deleted transaction", func(b *v9fixture.Builder, category int64) {
 			acct := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -125,7 +125,7 @@ func Test_import_records_no_category_for_a_reference_that_is_gone(t *testing.T) 
 			b.BudgetLineItem(v9fixture.BudgetLineItemRow{Category: gone})
 		}},
 		{"a quickfill rule split entry naming a missing category", func(b *v9fixture.Builder, _ int64) {
-			b.QuickfillRuleSplitEntry(v9fixture.QuickfillRuleSplitEntryRow{Category: missingCategoryPK})
+			b.QuickfillRuleSplitEntry(v9fixture.QuickfillRuleSplitEntryRow{Category: missingPK})
 		}},
 		{"a budget line item with no category", func(b *v9fixture.Builder, _ int64) {
 			b.BudgetLineItem(v9fixture.BudgetLineItemRow{})
@@ -154,18 +154,23 @@ func Test_import_records_no_category_for_a_reference_that_is_gone(t *testing.T) 
 func Test_import_lists_each_referenced_category_once_in_source_id_order(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	categories := make([]int64, 0, 10)
-	for _, name := range []string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"} {
+	categories := make([]int64, 0, 12)
+	for _, name := range []string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"} {
 		categories = append(categories, b.Category(v9fixture.TagRow{Name: name, Type: new(int64(1))}))
 	}
-	tenth, ninth := categories[9], categories[8]
+	third, fifth, ninth, tenth, eleventh, twelfth := categories[2], categories[4], categories[8], categories[9], categories[10], categories[11]
+	b.BudgetLineItem(v9fixture.BudgetLineItemRow{Category: twelfth})
 	b.BudgetLineItem(v9fixture.BudgetLineItemRow{Category: tenth})
 	b.BudgetLineItem(v9fixture.BudgetLineItemRow{Category: tenth})
-	b.QuickfillRuleSplitEntry(v9fixture.QuickfillRuleSplitEntryRow{Category: ninth})
-	b.Entry(v9fixture.EntryRow{Amount: "-4.00", CategoryTag: tenth})
+	b.LoanSplitEntry(v9fixture.LoanSplitEntryRow{Category: ninth})
+	b.QuickfillRuleSplitEntry(v9fixture.QuickfillRuleSplitEntryRow{Category: fifth})
+	b.Account(v9fixture.AccountRow{Name: "Mortgage", Type: "CHECKING", Currency: "CAD", Active: true, LoanInterestCategory: third})
+	b.Entry(v9fixture.EntryRow{Amount: "-4.00", CategoryTag: eleventh})
 
 	ids := importReferencedCategories(t, b)
 
-	assert.Equal(t, []string{"cat-" + itoa(ninth), "cat-" + itoa(tenth)}, ids)
-	assert.Greater(t, tenth, int64(9), "ids span two digit widths, so a text sort would put the tenth first")
+	want := []string{"cat-" + itoa(third), "cat-" + itoa(fifth), "cat-" + itoa(ninth), "cat-" + itoa(tenth), "cat-" + itoa(eleventh), "cat-" + itoa(twelfth)}
+	assert.Equal(t, want, ids)
+	assert.Less(t, ninth, int64(10), "ids span one and two digit widths, so a text sort would put the tenth before the ninth")
+	assert.Greater(t, tenth, int64(9))
 }
