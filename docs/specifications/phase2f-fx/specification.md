@@ -563,8 +563,8 @@ Ruled (sizing pass 2026-10-01, architect):
 - [x] SCENARIO-03: Failed rate fetch warns and the sync still succeeds — `cmd/quarry/run_sync_rates_fetch_test.go` `Test_run_sync_warns_and_swaps_the_store_in_when_the_rate_fetch_fails`
 - [x] SCENARIO-05: A sync that fails before the swap never fetches rates — delivered by SCENARIO-03 — `cmd/quarry/run_sync_rates_prefetch_test.go` `Test_run_sync_makes_no_rate_request_when_it_fails_before_the_swap`
 - [x] SCENARIO-06: Status shows rate coverage — `internal/cli/status_rates_test.go` `Test_status_prints_the_rates_line_for_each_coverage_state`
-- [ ] SCENARIO-16: A bad reporting.currency value refuses the read commands
-- [ ] SCENARIO-15: A bad --currency value is a usage error
+- [x] SCENARIO-16: A bad reporting.currency value refuses the read commands — `cmd/quarry/run_read_refusals_test.go` `Test_run_read_commands_refuse_a_bad_reporting_currency`
+- [x] SCENARIO-15: A bad --currency value is a usage error — delivered by SCENARIO-16 — `cmd/quarry/run_read_usage_test.go` `Test_run_read_commands_refuse_a_bad_currency_flag`
 - [ ] SCENARIO-08: Spend converts to the reporting currency by default
 - [ ] SCENARIO-14: reporting.currency in config sets the default, the flag wins
 - [ ] SCENARIO-10: Cashflow converts each period

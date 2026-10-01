@@ -1,6 +1,6 @@
 # phase2f-fx — current state
 
-Scenarios complete: SCENARIO-07, SCENARIO-01, SCENARIO-04 (delivers 02), SCENARIO-03 (delivers 05), SCENARIO-06. Last updated by SCENARIO-06.
+Scenarios complete: SCENARIO-07, SCENARIO-01, SCENARIO-04 (delivers 02), SCENARIO-03 (delivers 05), SCENARIO-06, SCENARIO-16 (delivers 15). Last updated by SCENARIO-16.
 
 ## Binding decisions
 - Rates port, frozen (03 filled its fields; never reshape): `duckstore.RatesSource{Refresh(ctx, store.RatesRequest) (store.RatesRefresh, error)}`; `store.RatesRequest{Need, Have DateSpan}` (zero = empty); `store.RatesRefresh{Rates []Rate; Added int; FetchError string; Partial bool}`; `store.Rate{Date, USDCAD money.Rate, Series}`. Types live in driver-free `internal/store`, so `*fx.Server` satisfies the port directly (guard `_ duckstore.RatesSource = (*fx.Server)(nil)` in `cmd/quarry/run.go`); fx never imports duckstore. Series names are `store.SeriesCurrent` (FXUSDCAD) / `store.SeriesLegacy` (IEXE0101) (SCENARIO-07, 01, 04)
@@ -24,8 +24,15 @@ Scenarios complete: SCENARIO-07, SCENARIO-01, SCENARIO-04 (delivers 02), SCENARI
 
 - Status (06): `Status.Rates{First, Last, FetchError}` rides the one `statusQuery` (`min/max(fx_rates.date)`, latest run's `rates_fetch_error`); no second port call. Text `Rates` row after Findings; `--json` `rates{first,last,fetch_error}` sits right after `findings`, before `not_imported` (position is ours; spec rules only the keys). Age = civil-date difference in `time.Local` between `Env.Now()` and `Rates.Last`, <= 0 (including a last rate dated after today) reads `today`; `newStatusCommand` takes `now`. A v4 store is refused by `checkFormat` before the query, so status has no v4 rates branch (SCENARIO-06)
 
+- Reporting currency (16, delivers 15): `money.ParseCurrency(string) (Currency, bool)` (case-insensitive, no trim) is the one parser for the flag and the `reporting.currency` key; `Currency.String()` = `CAD`/`USD`/`native` is the canonical output form (08+ JSON `currency`, captions). `config.Config.Currency` is CAD when the file is missing/empty or the key is unset; `got` in the refusal is as written (`"eur"` stays `"eur"`). Whole-file validation, so a bad key also refuses sync, snapshots, snapshots prune and findings, and status turns it into its P2d-10 `cannot tell which findings you ignored: ...` warning (exit 0) (SCENARIO-16)
+- Resolver (16): `internal/cli/currency.go` `(*currencyFlag).resolve(cmd, loadConfig) (money.Currency, []string, error)`. Flag Changed -> parsed flag, loader never called, nil warnings. Otherwise `loadConfig(cmd.Name())` (error -> `&runtimeError`, exit 1) and `cfg.Currency`. The value is HELD NOWHERE yet: all five RunEs (`spend.go`, `cashflow.go`, `recurring.go`, `anomalies.go`, `accounts.go`) discard it with `_`. 08 (spend, adds `report.SpendRequest.Currency`), 10 (cashflow), 17-19 (recurring, anomalies, accounts) each thread it into their request (SCENARIO-16)
+- Warning plumbing (16): `resolve` itself prints the config's unknown-key warnings in `~` form to stderr (`printConfigWarnings`) BEFORE the command's own output, and returns the ABSOLUTE ones. Text path: `emitReport`/`emit` get the command's own `warnings` only. JSON path: renderer gets `withConfigWarnings(configWarnings, warnings)` (absolute config ones first, then own; never nil). Pass the concatenation to `emitReport` and config warnings print twice, once absolute (SCENARIO-16)
+- Error order (16, ruled): Args (`noArgs`, then `--currency` validity, only when Changed) -> RunE's own flag checks (`--by`, window) -> `resolve` (config, only without the flag) -> `openReport` (no-store refusal). Exit 2 beats a config refusal beats the no-store refusal. `--currency CAD` makes a malformed config irrelevant (not read). `quarry sql` ignores config entirely (SCENARIO-16)
+- P2d-10 amended (16): spend, cashflow, recurring, anomalies and accounts now load and validate the whole config file when `--currency` is absent (they did not read it before); known keys gain `reporting.currency` (`reporting` must be a table, else the table-shape refusal). The constructors `newSpendCommand`/`newCashFlowCommand`/`newRecurringCommand`/`newAnomaliesCommand`/`newAccountsCommand` take a `ConfigLoader`; `root.go` passes `env.LoadConfig` (SCENARIO-16)
+
 ## Left unbuilt
-- `money.ParseCurrency` - 16; every read command's converted output, `--currency` - 08-19
+- `report.SpendRequest.Currency`/`CashFlowRequest.Currency` - 08/10; request fields for recurring, anomalies, accounts - 17-19; every read command's converted output, top-level `currency` JSON key and captions - 08-19
+- Long-help edits for the five commands (the `--currency` flag help is built; Long texts untouched) - 08/10/17/18/19
 
 ## Traps
 - Classify interruption by the PARENT `ctx.Err()`: a `DeadlineExceeded` check would turn the child timeout into "interrupted" (SCENARIO-01, 03)
@@ -40,6 +47,8 @@ Scenarios complete: SCENARIO-07, SCENARIO-01, SCENARIO-04 (delivers 02), SCENARI
 - DECIMAL x anything keeps width 18 and overflows: widen to DECIMAL(38,.) before multiplying; DECIMAL/DECIMAL is DOUBLE (SCENARIO-07)
 - A carried import_runs row must have 28 cells or the v5->v5 Appender fails (SCENARIO-07)
 - `current_date` cannot be moved in tests: use past rates plus a 2099 rate (`replaceStoreWithRates`, `fakeRates`) (SCENARIO-07)
+
+- `cadConfig` fake rule (16): every cli test `Env` that runs one of the five commands needs `LoadConfig: cadConfig` (`internal/cli/currency_test.go`, returns `config.Config{Currency: money.CAD}`). A nil `LoadConfig` panics; a bare `config.Config{}` has Currency zero = `money.Native` and silently puts the command in native mode. Validate `--currency` only when Changed: a `""` default would refuse every bare command, a non-empty default adds `(default "CAD")` to the help (SCENARIO-16)
 
 ## Open debts
 - Partial warning does not say "later dates convert at the <last> rate" as the nothing-new warning does (product-vision flag, declined for scope in 03); unowned - dies unless re-opened (SCENARIO-03)

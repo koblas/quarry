@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-16
-status: open
+status: done
 ---
 
 # SCENARIO-16: A bad reporting.currency value refuses the read commands
@@ -82,10 +82,10 @@ Batch order is money+config → binder → resolver → cmd rows (the sizing's 1
     - `run_cashflow_invariant_test.go:76`: belongs to 10.
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Add doc comments on `ParseCurrency`, `String`, `Config.Currency`, `currencyFlag` and `resolve`. Leave the Long texts alone (08/10/17-19 own them).
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Add doc comments on `ParseCurrency`, `String`, `Config.Currency`, `currencyFlag` and `resolve`. Leave the Long texts alone (08/10/17-19 own them).
 
 ### Verify
-- [ ] Step 8: run full verification and `spec-check.py phase2f-fx`. Tick SCENARIO-16 with its acceptance test, and SCENARIO-15 with "delivered by SCENARIO-16" before its test.
+- [x] Step 8: run full verification and `spec-check.py phase2f-fx`. Tick SCENARIO-16 with its acceptance test, and SCENARIO-15 with "delivered by SCENARIO-16" before its test.
 
 ## Handoff
 
@@ -108,17 +108,6 @@ Batch order is money+config → binder → resolver → cmd rows (the sizing's 1
 
 ## Phase report
 
-Run B2 (steps 5-6) done; steps 7-8 (Sweep, Verify, ticks, STATE.md, `status: done`) open for V. Narrow loop green (money, config, cli, cmd). `golangci-lint run ./...`: 0 issues. Both acceptance tests green: `Test_run_read_commands_refuse_a_bad_reporting_currency`, `Test_run_read_commands_refuse_a_bad_currency_flag`. Full covered suite NOT run yet (V).
-
-- `internal/cli/currency.go`: `(*currencyFlag).resolve(cmd, loadConfig) (money.Currency, []string, error)` and `withConfigWarnings(config, own)`.
-  - Deviation from the plan: `resolve` itself prints the `~` config warnings (`printConfigWarnings`) and returns the ABSOLUTE ones for `--json`; it returns no `~` slice. Flag given: loader never called, returns nil warnings. Loader error: `&runtimeError`.
-  - Call sites: `_, configWarnings, err := currency.resolve(cmd, loadConfig)` in spend, cashflow, recurring, anomalies, accounts, after their own flag checks and before `openReport`. The value is discarded with `_`. The JSON renderer gets `withConfigWarnings(configWarnings, warnings)` (never nil); `emitReport`/`emit` keep own `warnings` only.
-- Constructors `newSpendCommand`, `newCashFlowCommand`, `newRecurringCommand`, `newAnomaliesCommand` take `loadConfig ConfigLoader` before `now`; `newAccountsCommand` before `jsonOut`; `root.go` passes `env.LoadConfig`.
-- cli tests: `cadConfig` helper in `currency_test.go`, `LoadConfig: cadConfig` on the 18 `cli.Env` literals; new tests in `currency_test.go` (config read once / not with flag, loader error, `~` warnings before result, JSON `warnings[0]` absolute, spend config warning before its own) and `currency_internal_test.go` (`resolve`: flag beats config, config USD, any case, command name passed, runtime error wrap; `withConfigWarnings`).
-- cmd tests:
-  - `run_read_usage_test.go`: `badCurrencyFlag` const, rows `spend --currency=` and `spend --currency EUR --by bogus`, new `Test_run_spend_refuses_a_bad_currency_flag_before_reading_a_bad_config`.
-  - `run_usage_test.go`: `Test_run_read_commands_need_a_value_for_the_currency_flag` (x5, bare flag).
-  - `run_config_test.go`: split into `readCommandFixture`/`malformedConfigFixture` helpers plus `Test_run_read_commands_refuse_a_malformed_config`, `..._ignore_a_malformed_config_when_given_a_currency`, `Test_run_sql_ignores_a_malformed_config`, `Test_run_spend_refuses_a_bad_flag_before_reading_a_malformed_config`, `Test_run_spend_warns_about_an_unknown_config_key_and_json_names_it_absolutely` (text and json subtests).
-- Not added (told to skip): `--json` absolute-path pins for sync, snapshots and findings refusals.
-- Mutations, each reverted and verified (`cmp`): config-skip shortcut removed -> `..._read_the_config_once_and_only_without_the_currency_flag/<cmd>_with_the_flag` x5, `..._ignore_a_malformed_config_when_given_a_currency` x5, `Test_resolve_prefers_the_flag...`; validate-always (Changed guard in `args`) -> `Test_cashflow_refuses_a_by_that_names_no_period...`, anomalies warning tests (bare commands refused) and the B1 `Test_currency_flag_is_checked_only_when_given`; `printConfigWarnings` dropped -> `~` tests x5 plus the cmd text/json test; absolute warnings dropped -> JSON `warnings[0]` tests x5 plus cmd json; loader error swallowed -> runtime-error test x5 plus the acceptance test rows.
-- test-stats `--base b41dec1`: cmd/quarry 444 (+9), internal/cli 370 (+17), internal/config 58 (+9), internal/platform/money 11 (+3).
+Run V done. Sweep: `go build` and `golangci-lint run ./...` 0 issues; doc comments already present on `ParseCurrency`, `Currency.String`, `Config.Currency`, `currencyFlag`, `resolve`. Verify: covered full suite `go test rc=0`; `uncovered-diff.py` against b41dec1 = 0 uncovered added lines; `-race` green on money, config, cli, cmd/quarry; `spec-check.py phase2f-fx` OK.
+- test-stats `--base b41dec1`: cmd/quarry 444 (+9), internal/cli 370 (+17), internal/config 58 (+9), internal/platform/money 11 (+3), TOTAL 883 (+38).
+- SCENARIO-16 ticked with its acceptance test; SCENARIO-15 ticked "delivered by SCENARIO-16". STATE.md rewritten. `status: done`.
