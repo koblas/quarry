@@ -74,3 +74,9 @@ Scenarios complete: SCENARIO-07, SCENARIO-01, SCENARIO-04 (delivers 02), SCENARI
   - `internal/store/duckstore/status.go:41-44`: the `Status` doc is over budget. Delete the "Rates takes its first and last…" sentence.
   - `internal/cli/render_status_internal_test.go:197`: the row-form `want`s lack a leading `\n`.
   - cmd: no end-to-end test runs sync with a failed fetch and then status showing the clause (optional).
+- SCENARIO-10 checkpoint MINORs (no fix pass; fold cheaply into the gate fix pass):
+  - cmd/quarry/run_cashflow_invariant_test.go:88-89: the 2-line body comment is inaccurate (s09/s10 are not half-cent pairs). Cut it to one true line.
+  - internal/store/duckstore/cashflow.go:24-26: the `cashFlowSource` doc is 3 lines. Trim it to 2.
+  - internal/store/duckstore/cashflow_fx_test.go:~108: the USD-mode NULL arm is pinned only on by-month Totals. Add a CashFlowByYear USD rows+Totals assertion.
+  - cmd/quarry/run_cashflow_fx_test.go:314-329: the before-first-rate `--json` case asserts only the Totals currencies. Also assert the period currencies.
+  - cmd/quarry/run_cashflow_fx_test.go:240-264: the read-back test only compares the document with itself. Assert `doc.Currency` "CAD", 3 periods, and the literal Total.
