@@ -29,3 +29,4 @@ Scenarios complete: SCENARIO-01..06 (02-04 folded into 01, 06 into 05). Last upd
 ## Open debts
 - Reference check on the real Quicken file after SCENARIO-22, before the gate round (`REFERENCE-CHECK.md`) — unowned until the architect schedules it; dies unless run
 - Checkpoint (5a) MINOR/NIT findings for SCENARIO-01, if any, are recorded here by the orchestrator
+- Checkpoint 05 MINOR: `cmd/quarry/run_recurring_state_test.go:19-40` `quietSeriesOutput` asserts inside the helper and returns three unnamed strings — return a struct or move the assertions to test bodies
