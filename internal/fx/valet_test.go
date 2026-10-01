@@ -59,9 +59,8 @@ func Test_valet_asks_for_the_series_over_the_span_with_a_plain_get(t *testing.T)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodGet, got.Method)
-	assert.Equal(t, "www.bankofcanada.ca", got.URL.Host)
-	assert.Equal(t, "/valet/observations/FXUSDCAD/json", got.URL.Path)
-	assert.Equal(t, map[string][]string{"start_date": {"2017-01-03"}, "end_date": {"2017-01-06"}}, map[string][]string(got.URL.Query()))
+	assert.Equal(t, "https://www.bankofcanada.ca/valet/observations/FXUSDCAD/json?end_date=2017-01-06&start_date=2017-01-03", got.URL.String())
+	assert.Empty(t, got.Header)
 	assert.Nil(t, got.Body)
 }
 

@@ -29,15 +29,21 @@ type call struct {
 }
 
 // fakeSource answers each series with its fixed observations whatever the span asked, so a test can
-// see what Refresh keeps; failures[series] makes that series fail.
+// see what Refresh keeps; failures[series] makes that series fail, callFailures[c] makes only that
+// one request fail.
 type fakeSource struct {
-	answers  map[string][]fx.Observation
-	failures map[string]error
-	calls    []call
+	answers      map[string][]fx.Observation
+	failures     map[string]error
+	callFailures map[call]error
+	calls        []call
 }
 
 func (f *fakeSource) Observations(_ context.Context, series string, sp store.DateSpan) ([]fx.Observation, error) {
-	f.calls = append(f.calls, call{Series: series, Span: sp})
+	asked := call{Series: series, Span: sp}
+	f.calls = append(f.calls, asked)
+	if err := f.callFailures[asked]; err != nil {
+		return nil, err
+	}
 	if err := f.failures[series]; err != nil {
 		return nil, err
 	}
@@ -236,17 +242,19 @@ func Test_refresh_reports_a_source_failure_as_a_fetch_error_with_no_rates(t *tes
 	}
 }
 
-func Test_refresh_reports_a_failure_on_a_later_span_with_no_rates(t *testing.T) {
+func Test_refresh_drops_the_rates_of_the_head_span_when_the_tail_span_fails(t *testing.T) {
+	head, tail := span(d(0), d(2)), span(d(7), d(9))
 	src := &fakeSource{
-		answers:  map[string][]fx.Observation{current: {obs(1, 1_300_000)}},
-		failures: map[string]error{legacy: errBoom},
+		answers:      map[string][]fx.Observation{current: {obs(1, 1_300_000)}},
+		callFailures: map[call]error{{Series: current, Span: tail}: errBoom},
 	}
 
 	got, err := newRefresher(src).Refresh(t.Context(), store.RatesRequest{Need: span(d(0), d(9)), Have: span(d(3), d(6))})
 
 	require.NoError(t, err)
-	assert.Empty(t, got.Rates)
-	assert.Equal(t, errBoom.Error(), got.FetchError)
+	assert.Equal(t, head, src.spansAsked(current)[0])
+	assert.Equal(t, tail, src.spansAsked(current)[1])
+	assert.Equal(t, store.RatesRefresh{FetchError: errBoom.Error()}, got)
 }
 
 func Test_refresh_reports_a_rate_the_store_cannot_hold_as_a_fetch_error(t *testing.T) {
@@ -299,6 +307,37 @@ func Test_refresh_returns_an_error_when_the_context_ends_during_a_fetch(t *testi
 	})}
 
 	got, err := fx.NewServer(fx.WithHTTPClient(client)).Refresh(ctx, store.RatesRequest{Need: span(d(0), d(5))})
+
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, store.RatesRefresh{}, got)
+}
+
+func Test_refresh_returns_an_error_when_the_context_deadline_has_passed(t *testing.T) {
+	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+	defer cancel()
+	src := &fakeSource{failures: map[string]error{current: context.DeadlineExceeded}}
+
+	got, err := newRefresher(src).Refresh(ctx, store.RatesRequest{Need: span(d(0), d(5))})
+
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Equal(t, store.RatesRefresh{}, got)
+}
+
+type cancellingSource struct {
+	cancel context.CancelFunc
+	answer []fx.Observation
+}
+
+func (c cancellingSource) Observations(context.Context, string, store.DateSpan) ([]fx.Observation, error) {
+	c.cancel()
+	return c.answer, nil
+}
+
+func Test_refresh_returns_an_error_when_the_context_ends_though_the_source_answered(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	src := cancellingSource{cancel: cancel, answer: []fx.Observation{obs(0, 1_300_000)}}
+
+	got, err := newRefresher(src).Refresh(ctx, store.RatesRequest{Need: span(d(0), d(0))})
 
 	require.ErrorIs(t, err, context.Canceled)
 	assert.Equal(t, store.RatesRefresh{}, got)

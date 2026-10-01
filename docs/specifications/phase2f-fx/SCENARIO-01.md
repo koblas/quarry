@@ -65,3 +65,13 @@ Run V done; all steps ticked, `status: done`, SCENARIO-01 ticked in specificatio
 - Verify: one covered full run `go test rc=0`; uncovered-diff first run listed `cmd/quarry/run.go:37` (`newRatesSource` default) and `internal/fx/valet.go:42` (`NewValet(nil)`), covered by `Test_newRatesSource_reads_rates_through_the_fx_server` (cmd/quarry/run_sync_rates_test.go, via `realRatesSource` in main_test.go) and `Test_NewValet_without_a_client_uses_the_default_transport` (valet_test.go); re-run 0 uncovered. `-race` ok on fx, duckstore, importer, cli, cmd/quarry.
 - test-stats: cmd/quarry 397 (+6), internal/cli 350 (+5), internal/fx 31 (+31), internal/importer 150 (+1), internal/store/duckstore 369 (+7), TOTAL 1297 (+50).
 - STATE.md rewritten for 07+01; Valet body cap debt -> 03, unverified network facts -> 20.
+
+### Checkpoint fix pass
+
+Tests and comments only; no runtime change. `fakeSource` gained `callFailures map[call]error` (fail one request, not a series). Mutations, each reverted and diffed byte-identical:
+- fx.go Refresh `FetchError` return gains `Rates: rates` -> `Test_refresh_drops_the_rates_of_the_head_span_when_the_tail_span_fails` red (actual carries the head's rate).
+- valet.go `valetObservations` `https` -> `http` -> `Test_valet_asks_for_the_series_over_the_span_with_a_plain_get` red (full-URL assertion).
+- valet.go request build adds `Accept` header -> same test red (`Should be empty, but was map[Accept:[application/json]]`).
+- fx.go ctx gate `ctx.Err()` -> `errors.Is(err, context.Canceled)` -> `Test_refresh_returns_an_error_when_the_context_deadline_has_passed` red (nil error, wanted DeadlineExceeded) and `..._when_the_context_ends_though_the_source_answered` red.
+- fx.go ctx gate made conditional on `err != nil` -> `..._when_the_context_ends_though_the_source_answered` red (`Expected error with "context canceled" in chain but got nil`).
+Verify: `go test rc=0`, uncovered-diff 0 since bb3bef0, lint 0 issues, `-race` fx and cmd/quarry ok. test-stats: internal/fx 33 (+2), cmd/quarry 397 (+0), TOTAL 430 (+2).

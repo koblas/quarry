@@ -32,8 +32,7 @@ var (
 	_ duckstore.RatesSource = (*fx.Server)(nil)
 )
 
-// newRatesSource builds the exchange-rate source every sync's store fetches from; it is the one place quarry
-// reaches the network, and tests replace it so none does.
+// newRatesSource builds the rates source every sync fetches from; tests replace it so none reaches the network.
 var newRatesSource = func() duckstore.RatesSource { return fx.NewServer() }
 
 // signalContext wraps parent with SIGINT/SIGTERM handling: ctx.Done() closes

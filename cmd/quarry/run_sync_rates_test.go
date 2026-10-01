@@ -128,6 +128,8 @@ func Test_run_sync_json_reports_the_rates_it_fetched(t *testing.T) {
 		} `json:"store"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(stdout), &doc))
+	require.NotNil(t, doc.Store.Rates.First)
+	require.NotNil(t, doc.Store.Rates.Last)
 	assert.Equal(t, "2017-01-03", *doc.Store.Rates.First)
 	assert.Equal(t, "2017-01-04", *doc.Store.Rates.Last)
 	assert.Equal(t, 2, doc.Store.Rates.Added)
