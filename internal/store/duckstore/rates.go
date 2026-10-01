@@ -28,7 +28,7 @@ WHERE id = (SELECT max(id) FROM import_runs)`
 // finishBuild appends the carried rates, then the fetched ones, records them on the new import run, then store_info
 // last. It fails only when ctx ended or a row cannot be written; a fetch that fell short keeps whatever rates it returned.
 func (s *Store) finishBuild(ctx context.Context, db DB, rows store.Rows, carried history, builtAt time.Time) (store.RatesSummary, error) {
-	need, refresh, err := s.refreshRates(ctx, rows.Transactions, carried.rates)
+	need, refresh, err := s.refreshRates(ctx, rows.Transactions, carried)
 	if err != nil {
 		return store.RatesSummary{}, err
 	}
@@ -44,7 +44,7 @@ func (s *Store) finishBuild(ctx context.Context, db DB, rows store.Rows, carried
 		return store.RatesSummary{}, err
 	}
 	summary.Added, summary.FetchError = refresh.Added, refresh.FetchError
-	if err := recordRates(ctx, db, askedFrom(need, refresh), summary.Last); err != nil {
+	if err := recordRates(ctx, db, askedFrom(need, refresh, carried.ratesFloor), summary.Last); err != nil {
 		return store.RatesSummary{}, err
 	}
 	// A file carrying store_info is complete, so it goes last.
@@ -53,33 +53,43 @@ func (s *Store) finishBuild(ctx context.Context, db DB, rows store.Rows, carried
 
 // refreshRates asks the rates source for every date from the earliest transaction to today that the carried
 // rates (in date order) do not cover. It returns the span it asked for, empty when there is no source, and an empty refresh.
-func (s *Store) refreshRates(ctx context.Context, transactions []store.Transaction, carried []store.Rate) (store.DateSpan, store.RatesRefresh, error) {
+func (s *Store) refreshRates(ctx context.Context, transactions []store.Transaction, carried history) (store.DateSpan, store.RatesRefresh, error) {
 	if s.rates == nil {
 		return store.DateSpan{}, store.RatesRefresh{}, nil
 	}
 	need := needSpan(transactions, time.Now())
-	refresh, err := s.rates.Refresh(ctx, store.RatesRequest{Need: need, Have: coveredBy(carried)})
+	refresh, err := s.rates.Refresh(ctx, store.RatesRequest{Need: need, Have: coveredBy(carried.rates, carried.ratesFloor)})
 	if err != nil {
 		return store.DateSpan{}, store.RatesRefresh{}, fmt.Errorf("fetch exchange rates: %w", err)
 	}
 	return need, refresh, nil
 }
 
-// coveredBy is the span from the first to the last of rates, in date order; empty when there are none.
-func coveredBy(rates []store.Rate) store.DateSpan {
+// coveredBy is the span the source need not answer again: from the earlier of the first of rates (in date order)
+// and floor, the date they were last asked from, to the last of rates. Empty when there are no rates, whatever floor is.
+func coveredBy(rates []store.Rate, floor time.Time) store.DateSpan {
 	if len(rates) == 0 {
 		return store.DateSpan{}
 	}
-	return store.DateSpan{First: rates[0].Date, Last: rates[len(rates)-1].Date}
+	return store.DateSpan{First: earliest(floor, rates[0].Date), Last: rates[len(rates)-1].Date}
 }
 
-// askedFrom is the first date of the span the source answered, or the zero time when it asked nothing
-// or failed: an answer, even an empty one, means the dates before it have no rate and need no new request.
-func askedFrom(need store.DateSpan, refresh store.RatesRefresh) time.Time {
-	if refresh.FetchError != "" {
-		return time.Time{}
+// earliest is the earlier of a and b, ignoring a zero time.
+func earliest(a, b time.Time) time.Time {
+	if a.IsZero() || b.Before(a) {
+		return b
 	}
-	return need.First
+	return a
+}
+
+// askedFrom is the earliest date the source has answered from: the earlier of previous and this run's first
+// needed date. A run that asked nothing or failed keeps previous (zero if none ever): an answer, even an empty
+// one, means the dates from it have no rate and need no new request.
+func askedFrom(need store.DateSpan, refresh store.RatesRefresh, previous time.Time) time.Time {
+	if refresh.FetchError != "" || need.First.IsZero() {
+		return previous
+	}
+	return earliest(previous, need.First)
 }
 
 // storedRates reads the first and last date in fx_rates, zero when it is empty.

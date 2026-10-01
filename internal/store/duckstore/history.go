@@ -18,7 +18,7 @@ import (
 
 // history is what Replace carries from the store it replaces: its import_runs rows in importRunRows's
 // column order with the highest id among them, its findings, with findingsCarried true iff that table was read,
-// and its exchange rates in date order.
+// its exchange rates in date order, and the earliest date those rates were last asked from.
 type history struct {
 	rows            [][]any
 	maxID           int64
@@ -27,6 +27,7 @@ type history struct {
 	findingsFault   *store.OpenError // why a findings table that exists could not be read
 	rates           []store.Rate
 	ratesFault      *store.OpenError // why an fx_rates table that exists could not be read
+	ratesFloor      time.Time        // the newest non-NULL rates_checked_from by run id; zero when none, or the rates were lost
 	unreadable      bool             // true iff the store could not be opened
 }
 
@@ -118,7 +119,7 @@ func (s *Store) readHistory(ctx context.Context) (history, *store.OpenError) {
 	rates, present, err := readRates(ctx, db)
 	switch {
 	case err != nil:
-		carried.ratesFault = ratesFault(path, err)
+		carried.ratesFault, carried.ratesFloor = ratesFault(path, err), time.Time{}
 	case present:
 		carried.rates = rates
 	}
@@ -206,6 +207,9 @@ func readRuns(ctx context.Context, db ReadDB) (history, error) {
 			seen[r.id] = true
 			carried.rows = append(carried.rows, r.values())
 			carried.maxID = max(carried.maxID, r.id)
+			if r.ratesCheckedFrom.Valid {
+				carried.ratesFloor = r.ratesCheckedFrom.Time
+			}
 			return nil
 		})
 	if err != nil {
