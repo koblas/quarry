@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/platform/money"
 )
 
 // Account is one row of the accounts table.
@@ -248,6 +249,33 @@ type Replaced struct {
 	FindingsCarried bool
 	FindingsFault   *OpenError
 	StoreUnreadable bool
+}
+
+// Rate is one day's USD/CAD exchange rate and the series it came from.
+type Rate struct {
+	Date   time.Time
+	USDCAD money.Rate
+	Series string
+}
+
+// DateSpan is an inclusive run of dates; the zero value is empty.
+type DateSpan struct {
+	First, Last time.Time
+}
+
+// RatesRequest is what a build needs: the dates Need covers, of which Have
+// is already stored.
+type RatesRequest struct {
+	Need, Have DateSpan
+}
+
+// RatesRefresh is the rates a fetch returned, how many are new, the reason
+// the fetch fell short if it did, and whether Rates is only part of Need.
+type RatesRefresh struct {
+	Rates      []Rate
+	Added      int
+	FetchError string
+	Partial    bool
 }
 
 // NotImported counts source rows a build deliberately leaves out of the

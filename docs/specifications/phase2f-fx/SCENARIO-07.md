@@ -21,8 +21,8 @@ Probe (done at plan time, DuckDB v1.5.5): DECIMAL/DECIMAL and DECIMAL/INTEGER �
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_sql_fx_test.go` (new) `Test_run_sql_views_carry_each_amount_converted_at_its_dates_rate` + `replaceStoreWithRates`, `fakeRates`. Fixture: CAD and USD accounts; rates on Fri 2026-01-02 and Mon 2026-01-05; a Saturday txn; a txn on a rate date; USD 0.10 @1.25 and CAD 0.20 @1.6 (half-cent), with negatives; a CAD and a USD txn before the first rate
-- [ ] Step 2: signature-only stubs — `internal/platform/money` (new: `doc.go`, `Rate`, `Currency`), `internal/store/store.go:236-251` beside `Replaced` (`Rate`, `RatesRequest`, `RatesRefresh`, `DateSpan`), `duckstore.go:79-118` `RatesSource` port + `WithRates` (no-op)
+- [x] Step 1: `cmd/quarry/run_sql_fx_test.go` (new) `Test_run_sql_views_carry_each_amount_converted_at_its_dates_rate` + `replaceStoreWithRates`, `fakeRates`. Fixture: CAD and USD accounts; rates on Fri 2026-01-02 and Mon 2026-01-05; a Saturday txn; a txn on a rate date; USD 0.10 @1.25 and CAD 0.20 @1.6 (half-cent), with negatives; a CAD and a USD txn before the first rate
+- [x] Step 2: signature-only stubs — `internal/platform/money` (new: `doc.go`, `Rate`, `Currency`), `internal/store/store.go:236-251` beside `Replaced` (`Rate`, `RatesRequest`, `RatesRefresh`, `DateSpan`), `duckstore.go:79-118` `RatesSource` port + `WithRates` (no-op)
 
 ### Build
 - [ ] Step 3: `internal/platform/money/money.go` (new) `Convert` + `Currency` (CAD/USD/Native) + `money_test.go`. Pin in-package: identity per currency and to Native with rate 0; USD→CAD and CAD→USD at ±0.125 (→ ±0.13) with a just-below-half control (→ 0.12) each way; zero amount; cross-currency with rate 0 or negative → !ok; Native as source → !ok; largest DECIMAL(18,2) amount at a rate below 1 without overflow (out-of-range result: n/a, cannot be stored)
@@ -63,3 +63,15 @@ Probe (done at plan time, DuckDB v1.5.5): DECIMAL/DECIMAL and DECIMAL/INTEGER �
 - Not verified: DuckDB `current_date` uses the local TimeZone, which is how Need.Last is computed.
 
 ## Phase report
+Run A done (steps 1-2). Acceptance is red; nothing else is built.
+
+Files:
+- `cmd/quarry/run_sql_fx_test.go` (new): `fakeRates`, `replaceStoreWithRates(t, home, rows, rates...)`, the acceptance test. It reads `--csv` of one UNION ALL over `v_account_balances`/`v_cash_flow`/`v_spending` (cols source,id,native,in_cad,in_usd,cad_type,usd_type); types print quoted `"DECIMAL(18,2)"`. Fixture: rates Fri 01-02 @1.25, Mon 01-05 @1.6; txns c0/u0 (12-31, before first rate), u1 (rate date), u2 (Saturday), c1 (rate date), c2 (Tue). Expected values are hand-derived, not yet run green: if B2's output differs, check the derivation (balance_usd of -5.00 CAD @1.6 = -3.13) before changing the view.
+- `internal/platform/money/{doc.go,money.go}` (new): `Rate int64`, `Currency` (Native=0, CAD, USD). No `Convert` yet (step 3).
+- `internal/store/store.go`: `Rate`, `DateSpan`, `RatesRequest`, `RatesRefresh` before `NotImported` (imports money).
+- `internal/store/duckstore/duckstore.go`: `RatesSource` and a no-op `WithRates` (before `WithQuarryVersion`). No `Store.rates` field yet (step 5).
+
+Red, verbatim: `run_sql_fx_test.go:60 Not equal: expected 0 actual 1; Messages: quarry: query failed: Binder Error: Referenced column "balance_cad" not found in FROM clause!`
+
+Green: build, lint (0 issues on touched packages), vet. Full suite not run.
+Next: B1 steps 3-5. Remove the `WithRates` no-op body when step 5 stores the source.

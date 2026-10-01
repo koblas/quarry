@@ -83,6 +83,13 @@ type Store struct {
 	quarryVersion string
 }
 
+// RatesSource supplies the exchange rates a build stores. Refresh returns a
+// non-nil error only when ctx ended; any other failure comes back as
+// RatesRefresh.FetchError.
+type RatesSource interface {
+	Refresh(ctx context.Context, req store.RatesRequest) (store.RatesRefresh, error)
+}
+
 // Option configures a Store.
 type Option func(*Store)
 
@@ -96,6 +103,11 @@ func WithCreate(create func(ctx context.Context, path string) (DB, error)) Optio
 // which by default is duckdb.OpenReadOnly. open must not write to path.
 func WithOpenReadOnly(open func(ctx context.Context, path string) (ReadDB, error)) Option {
 	return func(s *Store) { s.openReadOnly = open }
+}
+
+// WithRates sets where Replace gets exchange rates from.
+func WithRates(RatesSource) Option {
+	return func(*Store) {}
 }
 
 // WithQuarryVersion sets the quarry_version Replace records; an empty v keeps
