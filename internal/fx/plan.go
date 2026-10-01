@@ -8,8 +8,8 @@ import (
 
 // The Valet series: FXUSDCAD is current; IEXE0101 is the discontinued one covering the days before it.
 const (
-	seriesCurrent = "FXUSDCAD"
-	seriesLegacy  = "IEXE0101"
+	seriesCurrent = store.SeriesCurrent
+	seriesLegacy  = store.SeriesLegacy
 )
 
 // askSpan is one run of dates to fetch. legacy says the legacy series may cover the days FXUSDCAD does not.

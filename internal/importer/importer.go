@@ -140,6 +140,7 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 		Path: replaced.Path, Built: true, Counts: counts, Validation: validation, NotImported: notImported,
 		HistoryFault: replaced.HistoryFault, Findings: replaced.Findings, FindingStates: replaced.FindingStates, FindingsCarried: replaced.FindingsCarried,
 		FindingsFault: replaced.FindingsFault, StoreUnreadable: replaced.StoreUnreadable, Rates: replaced.Rates,
+		RatesFault: replaced.RatesFault,
 	}, nil
 }
 

@@ -37,8 +37,8 @@ const (
 	configShown = "~/Library/Application Support/quarry/config.toml"
 	configFix   = "; fix the file and run the command again"
 
-	combinedCarryWarning = "cannot carry import history and findings forward from the previous store (the file is not a DuckDB database); " +
-		"both start again with this sync"
+	combinedCarryWarning = "cannot carry import history, findings or exchange rates forward from the previous store (the file is not a DuckDB database); " +
+		"all three start again with this sync"
 )
 
 // corruptPreviousStore syncs once, then replaces the store with bytes DuckDB cannot open.

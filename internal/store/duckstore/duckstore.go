@@ -288,9 +288,10 @@ func hasColumn(ctx context.Context, db ReadDB, table, column string) (bool, erro
 }
 
 // Replace swaps rows into quarry.duckdb through a build file, carrying the previous store's
-// import_runs ahead of the new run, and its findings. An unreadable history restarts at id 1
-// (Replaced.HistoryFault). On failure the existing store is untouched; a permission fault
-// matches store.ErrStoreNotWritable, disk-full store.ErrDiskFull.
+// import_runs ahead of the new run, its findings and its exchange rates. An unreadable history restarts
+// at id 1 (Replaced.HistoryFault); unreadable rates are fetched again (Replaced.RatesFault). On failure
+// the existing store is untouched; a permission fault matches store.ErrStoreNotWritable, disk-full
+// store.ErrDiskFull.
 func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, error) {
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return store.Replaced{}, buildError(err)
@@ -316,7 +317,7 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, e
 		return store.Replaced{}, buildError(err)
 	}
 
-	ratesSummary, err := s.finishBuild(ctx, db, rows, builtAt)
+	ratesSummary, err := s.finishBuild(ctx, db, rows, carried, builtAt)
 	if err != nil {
 		_ = db.Close()
 		removePartial(partialPath)
@@ -349,7 +350,7 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, e
 	return store.Replaced{
 		Path: finalPath, HistoryFault: historyFault, Findings: finding.Classify(states, nil).Counts, FindingStates: states,
 		FindingsCarried: carried.findingsCarried, FindingsFault: carried.findingsFault, StoreUnreadable: carried.unreadable,
-		Rates: ratesSummary,
+		Rates: ratesSummary, RatesFault: carried.ratesFault,
 	}, nil
 }
 

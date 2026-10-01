@@ -12,17 +12,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 )
 
 // history is what Replace carries from the store it replaces: its import_runs rows in importRunRows's
-// column order with the highest id among them, and its findings, with findingsCarried true iff that table was read.
+// column order with the highest id among them, its findings, with findingsCarried true iff that table was read,
+// and its exchange rates in date order.
 type history struct {
 	rows            [][]any
 	maxID           int64
 	findings        []carriedFinding
 	findingsCarried bool
 	findingsFault   *store.OpenError // why a findings table that exists could not be read
+	rates           []store.Rate
+	ratesFault      *store.OpenError // why an fx_rates table that exists could not be read
 	unreadable      bool             // true iff the store could not be opened
 }
 
@@ -47,6 +51,13 @@ WHERE database_name = current_database() AND schema_name = 'main' AND table_name
 const findingColumnsQuery = `SELECT column_name FROM duckdb_columns()
 WHERE database_name = current_database() AND schema_name = 'main' AND table_name = 'findings'`
 
+// rateColumnsQuery lists the columns of the store's fx_rates table, none when it has no such table.
+const rateColumnsQuery = `SELECT column_name FROM duckdb_columns()
+WHERE database_name = current_database() AND schema_name = 'main' AND table_name = 'fx_rates'`
+
+// ratesQuery reads fx_rates with each rate as exact millionths, never a float.
+const ratesQuery = `SELECT date, CAST(usd_cad * 1000000 AS BIGINT), series FROM fx_rates ORDER BY date`
+
 // The phrases a sync prints for a history fault found after the store opened, each naming the previous store as "it".
 const (
 	reasonRunsRepeatID   = "its import_runs table repeats an id"
@@ -56,6 +67,11 @@ const (
 
 	reasonFindingsRepeatID   = "its findings table repeats an id"
 	reasonFindingsIncomplete = "its findings table is incomplete"
+
+	reasonRatesRepeatDate = "its fx_rates table repeats a date"
+	reasonRatesImpossible = "its fx_rates table holds an impossible rate"
+	reasonRatesUnknown    = "its fx_rates table names an unknown series"
+	reasonRatesIncomplete = "its fx_rates table is incomplete"
 )
 
 var (
@@ -64,6 +80,10 @@ var (
 	errRunsIDLimit  = errors.New("import_runs holds the largest id, which no run can follow")
 
 	errFindingsRepeatID = errors.New("findings holds an id twice")
+
+	errRatesRepeatDate = errors.New("fx_rates holds a date twice")
+	errRatesImpossible = errors.New("fx_rates holds a rate the column cannot hold")
+	errRatesUnknown    = errors.New("fx_rates holds a series quarry does not read")
 )
 
 // readHistory reads the import_runs and findings of the store at s.Path() and closes it before returning.
@@ -95,6 +115,13 @@ func (s *Store) readHistory(ctx context.Context) (history, *store.OpenError) {
 	case present:
 		carried.findings, carried.findingsCarried = findings, true
 	}
+	rates, present, err := readRates(ctx, db)
+	switch {
+	case err != nil:
+		carried.ratesFault = ratesFault(path, err)
+	case present:
+		carried.rates = rates
+	}
 	return carried, fault
 }
 
@@ -119,6 +146,21 @@ func findingsFault(path string, err error) *store.OpenError {
 	reason := reasonFindingsIncomplete
 	if errors.Is(err, errFindingsRepeatID) {
 		reason = reasonFindingsRepeatID
+	}
+	return &store.OpenError{Fault: store.OpenFaultOther, Path: path, Reason: reason, Err: err}
+}
+
+// ratesFault is the fault of an fx_rates read that failed after the store opened: an
+// OpenFaultOther whose Reason is a fixed phrase, never driver text.
+func ratesFault(path string, err error) *store.OpenError {
+	reason := reasonRatesIncomplete
+	switch {
+	case errors.Is(err, errRatesRepeatDate):
+		reason = reasonRatesRepeatDate
+	case errors.Is(err, errRatesImpossible):
+		reason = reasonRatesImpossible
+	case errors.Is(err, errRatesUnknown):
+		reason = reasonRatesUnknown
 	}
 	return &store.OpenError{Fault: store.OpenFaultOther, Path: path, Reason: reason, Err: err}
 }
@@ -216,6 +258,50 @@ func readFindings(ctx context.Context, db ReadDB) ([]carriedFinding, bool, error
 		return nil, false, fmt.Errorf("read findings: %w", err)
 	}
 	return found, true, nil
+}
+
+// readRates reads every fx_rates row through db in date order; present is false, without a fault, when the
+// store has no fx_rates table. It fails with errRatesRepeatDate (a date twice), errRatesImpossible (a rate the
+// column cannot hold), errRatesUnknown (a series quarry never stores), else with the read's own fault: a row
+// failing any of these would fail the new store's fx_rates load, so none is carried.
+func readRates(ctx context.Context, db ReadDB) ([]store.Rate, bool, error) {
+	present := false
+	err := db.QueryRows(ctx, rateColumnsQuery, nil, func(scan func(dest ...any) error) error {
+		var column string
+		present = true
+		return scan(&column)
+	})
+	if err != nil {
+		return nil, false, fmt.Errorf("read fx_rates columns: %w", err)
+	}
+	if !present {
+		return nil, false, nil
+	}
+	var rates []store.Rate
+	seen := map[time.Time]bool{}
+	err = db.QueryRows(ctx, ratesQuery, nil, func(scan func(dest ...any) error) error {
+		var r store.Rate
+		var millionths int64
+		if err := scan(&r.Date, &millionths, &r.Series); err != nil {
+			return err
+		}
+		r.USDCAD = money.Rate(millionths)
+		switch {
+		case seen[r.Date]:
+			return errRatesRepeatDate
+		case r.USDCAD <= 0 || r.USDCAD > maxStoredRate:
+			return errRatesImpossible
+		case r.Series != store.SeriesCurrent && r.Series != store.SeriesLegacy:
+			return errRatesUnknown
+		}
+		seen[r.Date] = true
+		rates = append(rates, r)
+		return nil
+	})
+	if err != nil {
+		return nil, false, fmt.Errorf("read fx_rates: %w", err)
+	}
+	return rates, true, nil
 }
 
 // carriedRun is one import_runs row as read: the required columns typed, the

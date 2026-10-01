@@ -20,7 +20,7 @@ import (
 func newBuiltStore(t *testing.T, opts ...duckstore.Option) *duckstore.Store {
 	t.Helper()
 	dir := t.TempDir()
-	src := &fakeRates{refresh: store.RatesRefresh{Rates: []store.Rate{ratesOn(13, 1_250_000, "IEXE")}}}
+	src := &fakeRates{refresh: store.RatesRefresh{Rates: []store.Rate{ratesOn(13, 1_250_000, "IEXE0101")}}}
 	_, err := duckstore.New(dir, duckstore.WithRates(src)).Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
 	return duckstore.New(dir, opts...)

@@ -24,7 +24,11 @@ func findingsRestartLine(reason string) string {
 }
 
 func combinedCarryLine(reason string) string {
-	return "cannot carry import history and findings forward from the previous store (" + reason + "); both start again with this sync"
+	return "cannot carry import history, findings or exchange rates forward from the previous store (" + reason + "); all three start again with this sync"
+}
+
+func ratesRestartLine(reason string) string {
+	return "cannot carry exchange rates forward from the previous store (" + reason + "); fetching them all again"
 }
 
 func Test_sync_and_import_names_the_combined_reason_when_the_previous_store_cannot_be_read(t *testing.T) {
@@ -154,10 +158,80 @@ func Test_sync_and_import_warns_of_a_findings_fault_alone_when_the_store_is_flag
 	assert.Equal(t, []string{findingsRestartLine("its findings table is incomplete")}, outcome.Warnings())
 }
 
+func Test_sync_and_import_names_the_rates_fault_reason_in_the_warning(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	storePath := filepath.Join(home, "quarry", "quarry.duckdb")
+	reasons := []string{
+		"its fx_rates table repeats a date",
+		"its fx_rates table is incomplete",
+		"its fx_rates table holds an impossible rate",
+		"its fx_rates table names an unknown series",
+	}
+
+	for _, reason := range reasons {
+		t.Run(reason, func(t *testing.T) {
+			t.Parallel()
+			fault := &store.OpenError{Fault: store.OpenFaultOther, Path: storePath, Reason: reason}
+			srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, RatesFault: fault}})
+
+			outcome, err := srv.SyncAndImport(t.Context(), v9fixture.OpenBundle(t, t.TempDir()).Dir)
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{ratesRestartLine(reason)}, outcome.Warnings())
+		})
+	}
+}
+
+func Test_sync_and_import_prints_the_history_findings_and_rates_lines_in_that_order_when_all_three_tables_are_faulty(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	storePath := filepath.Join(home, "quarry", "quarry.duckdb")
+	history := &store.OpenError{Fault: store.OpenFaultOther, Path: storePath, Reason: "its import_runs table is incomplete"}
+	findings := &store.OpenError{Fault: store.OpenFaultOther, Path: storePath, Reason: "its findings table repeats an id"}
+	rates := &store.OpenError{Fault: store.OpenFaultOther, Path: storePath, Reason: "its fx_rates table repeats a date"}
+	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, HistoryFault: history, FindingsFault: findings, RatesFault: rates}})
+
+	outcome, err := srv.SyncAndImport(t.Context(), v9fixture.OpenBundle(t, t.TempDir()).Dir)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		historyRestartLine("its import_runs table is incomplete"),
+		findingsRestartLine("its findings table repeats an id"),
+		ratesRestartLine("its fx_rates table repeats a date"),
+	}, outcome.Warnings())
+}
+
+func Test_sync_and_import_warns_of_a_rates_fault_alone_when_the_store_is_flagged_unreadable(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: filepath.Join(home, "quarry", "quarry.duckdb"), Reason: "its fx_rates table is incomplete"}
+	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, StoreUnreadable: true, RatesFault: fault}})
+
+	outcome, err := srv.SyncAndImport(t.Context(), v9fixture.OpenBundle(t, t.TempDir()).Dir)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{ratesRestartLine("its fx_rates table is incomplete")}, outcome.Warnings())
+}
+
+func Test_sync_and_import_prints_the_combined_line_alone_when_the_unreadable_store_also_carries_a_rates_fault(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	storePath := filepath.Join(home, "quarry", "quarry.duckdb")
+	history := &store.OpenError{Fault: store.OpenFaultNotDuckDB, Path: storePath}
+	rates := &store.OpenError{Fault: store.OpenFaultOther, Path: storePath, Reason: "its fx_rates table is incomplete"}
+	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, StoreUnreadable: true, HistoryFault: history, RatesFault: rates}})
+
+	outcome, err := srv.SyncAndImport(t.Context(), v9fixture.OpenBundle(t, t.TempDir()).Dir)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{combinedCarryLine("the file is not a DuckDB database")}, outcome.Warnings())
+}
+
 func Test_outcome_adds_no_carry_warning_for_a_store_that_was_not_built(t *testing.T) {
 	t.Parallel()
 	fault := &store.OpenError{Fault: store.OpenFaultNotDuckDB, Path: "quarry.duckdb"}
-	unbuilt := snapshot.Outcome{Store: &store.Result{HistoryFault: fault, FindingsFault: fault, StoreUnreadable: true}}
+	unbuilt := snapshot.Outcome{Store: &store.Result{HistoryFault: fault, FindingsFault: fault, RatesFault: fault, StoreUnreadable: true}}
 
 	assert.Empty(t, unbuilt.Warnings())
 }
@@ -207,4 +281,22 @@ func Test_import_from_puts_the_findings_warning_after_the_manifest_warning(t *te
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{taken.Warnings[0], findingsRestartLine("its findings table repeats an id")}, outcome.Warnings())
+}
+
+func Test_import_from_puts_the_rates_warning_after_the_manifest_warning(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	ref, err := v9.Reference(t.Context())
+	require.NoError(t, err)
+	delete(ref, "ZALERT")
+	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: filepath.Join(home, "quarry", "quarry.duckdb"), Reason: "its fx_rates table names an unknown series"}
+	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, RatesFault: fault}},
+		snapshot.WithReference(v9.ReferenceLabel, ref))
+	taken := takeSnapshot(t, srv)
+	require.Len(t, taken.Warnings, 1)
+
+	outcome, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{taken.Warnings[0], ratesRestartLine("its fx_rates table names an unknown series")}, outcome.Warnings())
 }

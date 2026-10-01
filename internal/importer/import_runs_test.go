@@ -91,6 +91,20 @@ func Test_import_passes_the_carry_faults_through_to_the_result(t *testing.T) {
 	assert.True(t, result.StoreUnreadable)
 }
 
+func Test_import_passes_the_rates_fault_through_to_the_result(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: "/store/quarry.duckdb", Reason: "its fx_rates table repeats a date"}
+	fake := &fakeStore{ratesFault: fault}
+
+	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.Same(t, fault, result.RatesFault)
+}
+
 func Test_import_returns_the_stores_findings_counts(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()

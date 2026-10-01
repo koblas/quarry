@@ -4,14 +4,19 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/duckdb"
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 )
 
 // rateWidth and rateScale match schemaDDL's fx_rates.usd_cad DECIMAL(10,6).
 const rateWidth, rateScale = 10, 6
+
+// maxStoredRate is the largest rate in millionths that fits rateWidth digits: DECIMAL(10,6)'s 9999.999999.
+const maxStoredRate = money.Rate(9_999_999_999)
 
 // storedRatesQuery reads the first and last date in fx_rates; both are NULL when it is empty.
 const storedRatesQuery = `SELECT min(date), max(date) FROM fx_rates`
@@ -20,14 +25,14 @@ const storedRatesQuery = `SELECT min(date), max(date) FROM fx_rates`
 const recordRatesQuery = `UPDATE import_runs SET rates_checked_from = CAST(? AS DATE), rates_last = CAST(? AS DATE)
 WHERE id = (SELECT max(id) FROM import_runs)`
 
-// finishBuild appends the fetched rates, records them on the new import run, then store_info last. It fails only
-// when ctx ended or a row cannot be written; a fetch that fell short keeps whatever rates it returned.
-func (s *Store) finishBuild(ctx context.Context, db DB, rows store.Rows, builtAt time.Time) (store.RatesSummary, error) {
-	need, refresh, err := s.refreshRates(ctx, rows.Transactions)
+// finishBuild appends the carried rates, then the fetched ones, records them on the new import run, then store_info
+// last. It fails only when ctx ended or a row cannot be written; a fetch that fell short keeps whatever rates it returned.
+func (s *Store) finishBuild(ctx context.Context, db DB, rows store.Rows, carried history, builtAt time.Time) (store.RatesSummary, error) {
+	need, refresh, err := s.refreshRates(ctx, rows.Transactions, carried.rates)
 	if err != nil {
 		return store.RatesSummary{}, err
 	}
-	fxRows, err := rateRows(refresh.Rates)
+	fxRows, err := rateRows(append(slices.Clone(carried.rates), refresh.Rates...))
 	if err != nil {
 		return store.RatesSummary{}, err
 	}
@@ -46,18 +51,26 @@ func (s *Store) finishBuild(ctx context.Context, db DB, rows store.Rows, builtAt
 	return summary, appendTable(ctx, db, "store_info", [][]any{{int32(FormatVersion), s.quarryVersion, builtAt}})
 }
 
-// refreshRates asks the rates source for every date from the earliest transaction to today. It returns the
-// span it asked for, empty when there is no source, and an empty refresh.
-func (s *Store) refreshRates(ctx context.Context, transactions []store.Transaction) (store.DateSpan, store.RatesRefresh, error) {
+// refreshRates asks the rates source for every date from the earliest transaction to today that the carried
+// rates (in date order) do not cover. It returns the span it asked for, empty when there is no source, and an empty refresh.
+func (s *Store) refreshRates(ctx context.Context, transactions []store.Transaction, carried []store.Rate) (store.DateSpan, store.RatesRefresh, error) {
 	if s.rates == nil {
 		return store.DateSpan{}, store.RatesRefresh{}, nil
 	}
 	need := needSpan(transactions, time.Now())
-	refresh, err := s.rates.Refresh(ctx, store.RatesRequest{Need: need})
+	refresh, err := s.rates.Refresh(ctx, store.RatesRequest{Need: need, Have: coveredBy(carried)})
 	if err != nil {
 		return store.DateSpan{}, store.RatesRefresh{}, fmt.Errorf("fetch exchange rates: %w", err)
 	}
 	return need, refresh, nil
+}
+
+// coveredBy is the span from the first to the last of rates, in date order; empty when there are none.
+func coveredBy(rates []store.Rate) store.DateSpan {
+	if len(rates) == 0 {
+		return store.DateSpan{}
+	}
+	return store.DateSpan{First: rates[0].Date, Last: rates[len(rates)-1].Date}
 }
 
 // askedFrom is the first date of the span the source answered, or the zero time when it asked nothing

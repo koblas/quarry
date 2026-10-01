@@ -221,6 +221,7 @@ type Counts struct {
 // FindingsCarried is true iff the previous store's findings were read.
 // FindingsFault is why a previous store that opened had findings that could not be read.
 // StoreUnreadable is true iff the previous store could not be opened at all.
+// RatesFault is why a previous store that opened had exchange rates that could not be read.
 type Result struct {
 	Path         string
 	Built        bool
@@ -235,12 +236,13 @@ type Result struct {
 	FindingsFault   *OpenError
 	StoreUnreadable bool
 	Rates           RatesSummary
+	RatesFault      *OpenError
 }
 
 // Replaced is what Store.Replace reports: the path it wrote, the fault that
 // kept the previous store's import runs from being carried, if any, the counts
 // of the findings it recorded, their states, and whether the previous store's findings were carried.
-// FindingsFault and StoreUnreadable mean what they do on Result.
+// FindingsFault, StoreUnreadable and RatesFault mean what they do on Result.
 type Replaced struct {
 	Path         string
 	HistoryFault *OpenError
@@ -251,6 +253,7 @@ type Replaced struct {
 	FindingsFault   *OpenError
 	StoreUnreadable bool
 	Rates           RatesSummary
+	RatesFault      *OpenError
 }
 
 // RatesSummary is the exchange rates a build stored: the first and last
@@ -261,6 +264,12 @@ type RatesSummary struct {
 	Added       int
 	FetchError  string
 }
+
+// The series a stored Rate comes from: the current Bank of Canada series and the discontinued one before it.
+const (
+	SeriesCurrent = "FXUSDCAD"
+	SeriesLegacy  = "IEXE0101"
+)
 
 // Rate is one day's USD/CAD exchange rate and the series it came from.
 type Rate struct {

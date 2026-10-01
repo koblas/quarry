@@ -15,11 +15,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeRates is a duckstore.RatesSource that returns the same rates to every request.
+// fakeRates is a duckstore.RatesSource that returns its rates to every request, except those the request already has.
 type fakeRates struct{ rates []store.Rate }
 
-func (f fakeRates) Refresh(context.Context, store.RatesRequest) (store.RatesRefresh, error) {
-	return store.RatesRefresh{Rates: f.rates, Added: len(f.rates)}, nil
+func (f fakeRates) Refresh(_ context.Context, req store.RatesRequest) (store.RatesRefresh, error) {
+	var fresh []store.Rate
+	for _, r := range f.rates {
+		if r.Date.Before(req.Have.First) || r.Date.After(req.Have.Last) {
+			fresh = append(fresh, r)
+		}
+	}
+	return store.RatesRefresh{Rates: fresh, Added: len(fresh)}, nil
 }
 
 // replaceStoreWithRates is replaceStore with rates fetched into the store, skipping Quicken and the network.
