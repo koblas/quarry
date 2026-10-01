@@ -77,7 +77,7 @@ func renderRecurringJSON(r report.Recurring, warnings []string) ([]byte, error) 
 	return marshalDocument(recurringDocument{
 		Since:         r.Window.Since.Format(jsonDateLayout),
 		Until:         r.Window.Until.Format(jsonDateLayout),
-		AccountFilter: accountFilterDocuments(nil),
+		AccountFilter: accountFilterDocuments(r.Accounts),
 		Series:        series,
 		Totals:        totals,
 		Warnings:      warnings,

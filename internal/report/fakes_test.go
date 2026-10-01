@@ -24,6 +24,8 @@ type fakeStore struct {
 	accountsReads *int
 	chargesReads  *int
 	err           error
+	// chargesErr, when set, is what Charges fails with instead of err.
+	chargesErr error
 }
 
 func (f fakeStore) Status(context.Context) (store.Status, error) { return f.status, f.err }
@@ -55,6 +57,9 @@ func (f fakeStore) Charges(_ context.Context, params store.ChargeParams) (store.
 	}
 	if f.chargesReads != nil {
 		*f.chargesReads++
+	}
+	if f.chargesErr != nil {
+		return store.Charges{}, f.chargesErr
 	}
 	return f.charges, f.err
 }

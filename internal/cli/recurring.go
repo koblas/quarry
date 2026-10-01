@@ -7,6 +7,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// recurringCommand is the word that names recurring on the command line and in its warnings.
+const recurringCommand = "recurring"
+
 // recurringFlagHelp is the usage text of recurring's --since, --until and --account flags.
 var recurringFlagHelp = reportFlagHelp{
 	since:   "list series running on or after `date` (YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year)",
@@ -18,7 +21,7 @@ var recurringFlagHelp = reportFlagHelp{
 func newRecurringCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var flags reportFlags
 	cmd := &cobra.Command{
-		Use:   "recurring",
+		Use:   recurringCommand,
 		Short: "List charges that repeat every week, month, quarter or year",
 		Long: `List charges that repeat on a schedule: the same payee and currency every
 week, month, quarter or year, at a steady amount. quarry finds them in all
@@ -52,16 +55,27 @@ active series only.`,
 				return err
 			}
 
-			rec, err := srv.Recurring(cmd.Context(), report.RecurringRequest{Window: resolved, Now: now()})
+			rec, err := srv.Recurring(cmd.Context(), report.RecurringRequest{Window: resolved, Now: now(), Accounts: flags.accounts})
 			if err != nil {
 				return &runtimeError{err: err}
 			}
 
-			return emitReport(cmd, *jsonOut, []string{},
-				func() ([]byte, error) { return renderRecurringJSON(rec, []string{}) },
+			warnings := recurringWarnings(rec)
+			return emitReport(cmd, *jsonOut, warnings,
+				func() ([]byte, error) { return renderRecurringJSON(rec, warnings) },
 				func() string { return renderRecurring(rec) })
 		},
 	}
 	flags.bind(cmd, recurringFlagHelp)
 	return cmd
+}
+
+// recurringWarnings is r's warnings, unprefixed and never nil: one per named account left out (W2 or W3),
+// then a note that no series runs in the period.
+func recurringWarnings(r report.Recurring) []string {
+	warnings := leftOutWarnings(r.Accounts, recurringCommand)
+	if r.Empty() {
+		warnings = appendEmptyWindowWarning(warnings, "recurring charges", r.Accounts, r.Window, r.Transactions)
+	}
+	return warnings
 }

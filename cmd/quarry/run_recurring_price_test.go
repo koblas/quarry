@@ -47,6 +47,7 @@ func Test_run_recurring_leaves_out_a_bill_whose_amount_changes_most_months(t *te
 	exitCode := runWith(context.Background(), []string{"recurring", "--since", "2000"}, spendEnv(&stdout, &stderr))
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Equal(t, "quarry: warning: no recurring charges from 2000-01-01 to 2026-09-29; "+
+		"the store's transactions run 2026-02-12 to 2026-09-12\n", stderr.String())
 	assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts"), stdout.String())
 }

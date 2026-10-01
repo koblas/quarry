@@ -311,3 +311,71 @@ func Test_charges_returns_a_transaction_range_scan_fault_as_another_fault(t *tes
 	assertOtherFault(t, err, errScanFailed.Error())
 	assert.ErrorIs(t, err, errScanFailed)
 }
+
+// namedChargesOf reads chargesOf's charges with the span scoped to ids.
+func namedChargesOf(t *testing.T, rows store.Rows, ids ...string) store.Charges {
+	t.Helper()
+	got, err := newStoreWith(t, rows).Charges(t.Context(), store.ChargeParams{Through: chargesThrough, AccountIDs: ids})
+	require.NoError(t, err)
+	return got
+}
+
+// chargeRowsWithAccounts is chargeRowsFor plus the second in-report account.
+func chargeRowsWithAccounts() store.Rows {
+	rows := chargeRowsFor()
+	rows.Accounts = append(rows.Accounts,
+		store.Account{ID: acctSecond, SourceID: 3, Name: "Savings", Type: "chequing", Currency: "CAD", Active: true})
+	return rows
+}
+
+func transactionIDsOf(charges store.Charges) []string {
+	ids := make([]string, len(charges.Rows))
+	for i, c := range charges.Rows {
+		ids[i] = c.TransactionID
+	}
+	return ids
+}
+
+func Test_charges_spans_only_the_named_reported_accounts_and_keeps_every_row(t *testing.T) {
+	t.Parallel()
+	rows := chargeRowsWithAccounts()
+	linked := chargeSpec{id: "linked", sourceID: 1, account: acctLinked, date: day(1999, 1, 1), splits: []splitPart{{new(catExpense), -100}}}
+	left := chargeSpec{id: "left-out", sourceID: 2, account: acctNotReports, date: day(2001, 5, 5), splits: []splitPart{{new(catExpense), -100}}}
+	named := oneSplit("named", 3, 100)
+	named.date = day(2019, 3, 2)
+	other := oneSplit("other", 4, 100)
+	other.account, other.date = acctSecond, day(2025, 8, 8)
+	for _, spec := range []chargeSpec{linked, left, named, other} {
+		addCharge(&rows, spec)
+	}
+
+	got := namedChargesOf(t, rows, acctNotReports, acctLinked, acctInReports)
+
+	assert.Equal(t, store.TransactionRange{First: day(2019, 3, 2), Last: day(2019, 3, 2)}, got.Transactions)
+	assert.Equal(t, []string{"txn-named", "txn-other"}, transactionIDsOf(got))
+}
+
+func Test_charges_spans_every_account_when_none_is_named(t *testing.T) {
+	t.Parallel()
+	rows := chargeRowsWithAccounts()
+	named, other := oneSplit("named", 1, 100), oneSplit("other", 2, 100)
+	named.date = day(2019, 3, 2)
+	other.account, other.date = acctSecond, day(2025, 8, 8)
+	addCharge(&rows, named)
+	addCharge(&rows, other)
+
+	got := namedChargesOf(t, rows)
+
+	assert.Equal(t, store.TransactionRange{First: day(2019, 3, 2), Last: day(2025, 8, 8)}, got.Transactions)
+}
+
+func Test_charges_gives_a_zero_span_when_the_named_accounts_have_no_transactions(t *testing.T) {
+	t.Parallel()
+	rows := chargeRowsWithAccounts()
+	addCharge(&rows, oneSplit("unnamed", 1, 100))
+
+	got := namedChargesOf(t, rows, acctSecond)
+
+	assert.Zero(t, got.Transactions)
+	assert.Equal(t, []string{"txn-unnamed"}, transactionIDsOf(got))
+}

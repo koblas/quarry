@@ -113,10 +113,12 @@ const (
 )
 
 // RecurringRequest is what a recurring read needs from its caller: the window of
-// series to list and the clock reading that decides today.
+// series to list, the clock reading that decides today, and the accounts whose charges
+// to list (each an id or a name; none means every account).
 type RecurringRequest struct {
-	Window store.Window
-	Now    time.Time
+	Window   store.Window
+	Now      time.Time
+	Accounts []string
 }
 
 // Series is one detected recurring charge: its latest run of charges at one cadence.
@@ -165,27 +167,40 @@ type Recurring struct {
 	Window store.Window
 	Series []Series
 	Totals []RecurringTotal
+	// Accounts is the accounts the request named, in the order given and without repeats;
+	// empty means every account.
+	Accounts []store.Account
+	// Transactions is store.Charges.Transactions: the span of the store's transactions, or of the named accounts'.
+	Transactions store.TransactionRange
 }
+
+// Empty is whether no series was listed.
+func (r Recurring) Empty() bool { return len(r.Series) == 0 }
 
 // recurringCommand names recurring in its refusals; it equals the cli command word.
 const recurringCommand = "recurring"
 
 // Recurring lists the series detected over every charge dated through the day req.Now falls on,
-// that were running at any time in req.Window. A store it cannot read is a RefusalError.
+// that were running at any time in req.Window and, when req.Accounts names any, charged in one of
+// those accounts at least once. An account it cannot pick, or a store it cannot read, is a RefusalError.
 func (s *Server) Recurring(ctx context.Context, req RecurringRequest) (Recurring, error) {
+	accounts, accountIDs, err := s.namedAccounts(ctx, recurringCommand, req.Accounts)
+	if err != nil {
+		return Recurring{}, err
+	}
 	today := DefaultWindow(req.Now).Until
-	charges, err := s.store.Charges(ctx, store.ChargeParams{Through: today})
+	charges, err := s.store.Charges(ctx, store.ChargeParams{Through: today, AccountIDs: accountIDs})
 	if err != nil {
 		return Recurring{}, s.readRefusal(ctx, recurringCommand, err)
 	}
-	result := Recurring{Window: req.Window}
+	result := Recurring{Window: req.Window, Accounts: accounts, Transactions: charges.Transactions}
 	for _, group := range groupCharges(charges.Rows) {
 		run, rule, ok := latestRun(group.charges)
 		if !ok {
 			continue
 		}
 		series := seriesOf(group.key, run, rule, today)
-		if !series.steady() || !series.runsDuring(req.Window, today) {
+		if !series.steady() || !series.runsDuring(req.Window, today) || !series.chargedIn(accountIDs) {
 			continue
 		}
 		series.New = !series.First.Before(req.Window.Since)
@@ -234,6 +249,14 @@ func (s Series) runsDuring(window store.Window, today time.Time) bool {
 		end = today
 	}
 	return !s.First.After(window.Until) && !end.Before(window.Since)
+}
+
+// chargedIn is whether the series was charged in one of the accounts ids names; no ids names every account.
+func (s Series) chargedIn(ids []string) bool {
+	if len(ids) == 0 {
+		return true
+	}
+	return slices.ContainsFunc(s.Accounts, func(a store.Account) bool { return slices.Contains(ids, a.ID) })
 }
 
 // compareSeries orders series by currency, active before ended, yearly cost descending (ended:

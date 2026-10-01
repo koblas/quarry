@@ -77,5 +77,5 @@ func renderRecurring(r report.Recurring) string {
 	for _, t := range r.Totals {
 		rows = append(rows, []string{tableTotalLabel, t.Currency, "", "", formatMoney(t.PerYear), "", "", "", ""})
 	}
-	return renderTable(windowCaption("Recurring charges", r.Window, nil), recurringAligns, rows)
+	return renderTable(windowCaption("Recurring charges", r.Window, r.Accounts), recurringAligns, rows)
 }

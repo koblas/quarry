@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -203,4 +204,15 @@ func Test_renderRecurring_leaves_the_price_changes_cell_empty_without_a_change(t
 	row := strings.Split(renderRecurring(r), "\n")[3]
 
 	assert.True(t, strings.HasSuffix(row, "ended"), row)
+}
+
+func Test_renderRecurring_captions_the_named_accounts_escaped_and_joined(t *testing.T) {
+	r := report.Recurring{
+		Window:   spendingWindow(),
+		Accounts: []store.Account{{ID: "acct-1", Name: "Foo\nBar"}, {ID: "acct-2", Name: "Chequing"}},
+	}
+
+	got := renderRecurring(r)
+
+	assert.Contains(t, got, "Recurring charges 2026-01-01 to 2026-03-09 in Foo\\nBar, Chequing\n\n")
 }

@@ -414,9 +414,9 @@ Ruled (sizing pass 2026-10-01):
 - [x] SCENARIO-08: recurring --json returns the series document — delivered by SCENARIO-07: `cmd/quarry/run_recurring_json_test.go` `Test_run_recurring_json_returns_the_series_document`
 - [x] SCENARIO-09: a bill whose amount changes most months is not listed — delivered by SCENARIO-07: `cmd/quarry/run_recurring_price_test.go` `Test_run_recurring_leaves_out_a_bill_whose_amount_changes_most_months`
 - [x] SCENARIO-10: payees differing in store numbers are one series, currencies are two — delivered by SCENARIO-07: `cmd/quarry/run_recurring_json_test.go` `Test_run_recurring_merges_payees_differing_in_store_numbers_and_splits_currencies`
-- [ ] SCENARIO-11: recurring --account lists only series charged in that account
-- [ ] SCENARIO-12: no series in the window says so
-- [ ] SCENARIO-13: recurring refuses usage and store problems
+- [x] SCENARIO-11: recurring --account lists only series charged in that account — `cmd/quarry/run_recurring_account_test.go` `Test_run_recurring_lists_only_the_series_charged_in_the_named_account`
+- [x] SCENARIO-12: no series in the window says so — delivered by SCENARIO-11: `cmd/quarry/run_recurring_empty_test.go` `Test_run_recurring_says_when_no_series_runs_in_the_period`
+- [x] SCENARIO-13: recurring refuses usage and store problems — delivered by SCENARIO-11: `cmd/quarry/run_recurring_refusals_test.go` `Test_run_recurring_refuses_usage_and_account_problems`
 - [ ] SCENARIO-14: a charge over twice the payee's usual is listed
 - [ ] SCENARIO-15: anomaly thresholds hold at their boundaries
 - [ ] SCENARIO-16: each report's window flags describe what that report does with them

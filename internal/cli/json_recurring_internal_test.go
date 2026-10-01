@@ -174,3 +174,17 @@ func Test_renderRecurringJSON_keeps_the_series_and_currency_totals_in_the_order_
 		map[string]any{"currency": "CAD", "per_year": "1234.56"},
 	}, doc["totals"])
 }
+
+func Test_renderRecurringJSON_writes_the_id_and_name_of_each_named_account_in_account_filter(t *testing.T) {
+	r := report.Recurring{
+		Window:   spendingWindow(),
+		Accounts: []store.Account{{ID: "acct-2", Name: "Visa"}, {ID: "acct-1", Name: "Chequing"}},
+	}
+
+	doc := recurringDocumentOf(t, r)
+
+	assert.Equal(t, []any{
+		map[string]any{"id": "acct-2", "name": "Visa"},
+		map[string]any{"id": "acct-1", "name": "Chequing"},
+	}, doc["account_filter"])
+}

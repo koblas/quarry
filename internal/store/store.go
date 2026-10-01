@@ -519,9 +519,12 @@ type CashFlow struct {
 }
 
 // ChargeParams is what a charges read varies by: Through, the last civil day it
-// reads, held as UTC midnight. Rows dated later are not charges yet.
+// reads, held as UTC midnight (rows dated later are not charges yet), and the accounts
+// whose transaction span it gives.
 type ChargeParams struct {
 	Through time.Time
+	// AccountIDs scopes only Charges.Transactions, as for Spending; empty spans every account.
+	AccountIDs []string
 }
 
 // ChargeCategory is the category of a charge's expense rows.
@@ -548,9 +551,10 @@ type Charge struct {
 }
 
 // Charges is every charge dated through ChargeParams.Through, ordered by date
-// then numeric source id, and the span of the store's transactions.
+// then numeric source id, and the span of the transactions Transactions describes.
 type Charges struct {
 	Rows []Charge
-	// Transactions is the span of every transaction in the store, whatever its account.
+	// Transactions is the span of every transaction in the store, or of those of the reported
+	// accounts ChargeParams.AccountIDs names; Rows are never filtered by account.
 	Transactions TransactionRange
 }

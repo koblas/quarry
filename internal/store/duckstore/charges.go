@@ -30,8 +30,8 @@ WHERE t.date <= CAST($1 AS DATE)
 ORDER BY t.date, t.source_id`
 
 // Charges reads every charge dated through params.Through (that day included) and the span of
-// every transaction in the store, as store.Charges documents. A store it cannot open or read is
-// a *store.OpenError.
+// the store's transactions, or of params.AccountIDs' reported accounts, as store.Charges
+// documents. A store it cannot open or read is a *store.OpenError.
 func (s *Store) Charges(ctx context.Context, params store.ChargeParams) (store.Charges, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {
@@ -49,7 +49,7 @@ func (s *Store) Charges(ctx context.Context, params store.ChargeParams) (store.C
 		return nil
 	})
 	if err == nil {
-		charges.Transactions, err = transactionRange(ctx, db, nil)
+		charges.Transactions, err = transactionRange(ctx, db, accountFilter(params.AccountIDs))
 	}
 	if err != nil {
 		return store.Charges{}, openFault(s.Path(), err)
