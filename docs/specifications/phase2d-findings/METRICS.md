@@ -20,6 +20,7 @@
 | SCENARIO-25 | code-first | A, B1, B2, V | 0/1/5/2 | yes (count join not type-gated; SQL gate + test + comment trims) |
 | SCENARIO-26 | code-first | A, B1, B2, V | 0/2/3/1 | yes (key Unicode rows, name tiebreak unpinned; test-only + comment trims) |
 | SCENARIO-27 | code-first | A, B1, B2, V | 0/2/2/1 | yes (key Unicode rows, path sort tier unpinned; test-only + unreachable marker); 1 id ruling (income prefix) |
+| SCENARIO-28 | code-first | A, B1, B2, B3, V | 0/1/4/1 | yes (plan/spec drift for two extra reference sources; docs + deterministic sort test); 2 reference-scope rulings |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
