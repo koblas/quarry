@@ -40,10 +40,8 @@ func (f *currencyFlag) args(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// resolve is the currency cmd reports in: the --currency flag when given, else reporting.currency
-// from the config file (CAD when unset). It never reads the file when the flag is given. A config
-// read failure is a runtime error. The config's warnings go to stderr in ~ form before the
-// command's output; the second result is the same warnings with absolute paths, for --json.
+// resolve is the --currency flag when given, else reporting.currency from the config (loader unread
+// with the flag); the second result is the config's absolute warnings, its ~ form printed to stderr.
 func (f *currencyFlag) resolve(cmd *cobra.Command, loadConfig ConfigLoader) (money.Currency, []string, error) {
 	if cmd.Flags().Changed(currencyFlagName) {
 		// The flag was validated in args.

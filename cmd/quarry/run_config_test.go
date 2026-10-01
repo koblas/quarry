@@ -315,7 +315,7 @@ func Test_run_spend_refuses_a_bad_flag_before_reading_a_malformed_config(t *test
 
 	assert.Equal(t, 2, exitCode)
 	assert.Empty(t, stdout.String())
-	assert.NotContains(t, stderr.String(), "cannot read")
+	assert.Equal(t, "quarry: --since \"bogus\" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD\n", stderr.String())
 }
 
 func Test_run_findings_refuses_a_bad_config_before_looking_for_a_store(t *testing.T) {

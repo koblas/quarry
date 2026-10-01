@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// resolve's value is not observable through Execute yet, so these call it on a bound command.
+// resolveWith calls resolve on a spend-shaped command bound with args.
 func resolveWith(t *testing.T, load ConfigLoader, args ...string) (money.Currency, []string, error) {
 	t.Helper()
 	var f currencyFlag
@@ -34,10 +34,14 @@ func Test_resolve_prefers_the_flag_over_the_configs_currency(t *testing.T) {
 }
 
 func Test_resolve_uses_the_configs_currency_when_the_flag_is_absent(t *testing.T) {
-	got, _, err := resolveWith(t, loaderOf(config.Config{Currency: money.USD}))
+	for _, want := range []money.Currency{money.CAD, money.USD, money.Native} {
+		t.Run(want.String(), func(t *testing.T) {
+			got, _, err := resolveWith(t, loaderOf(config.Config{Currency: want}))
 
-	require.NoError(t, err)
-	assert.Equal(t, money.USD, got)
+			require.NoError(t, err)
+			assert.Equal(t, want, got)
+		})
+	}
 }
 
 func Test_resolve_reads_a_flag_in_any_letter_case(t *testing.T) {

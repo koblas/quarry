@@ -253,3 +253,68 @@ func Test_spend_prints_the_configs_warnings_before_its_own_and_lists_them_once_o
 	assert.Equal(t, "quarry: warning: "+unknownKeyShown, lines[0])
 	assert.Contains(t, lines[1], "no spending")
 }
+
+func Test_read_commands_refuse_their_own_bad_flags_before_reading_the_config(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "spend --by", args: []string{"spend", "--by", "bogus"}},
+		{name: "spend --since", args: []string{"spend", "--since", "2024-13"}},
+		{name: "cashflow --by", args: []string{"cashflow", "--by", "bogus"}},
+		{name: "cashflow --since", args: []string{"cashflow", "--since", "2024-13"}},
+		{name: "recurring --since", args: []string{"recurring", "--since", "2024-13"}},
+		{name: "anomalies --since", args: []string{"anomalies", "--since", "2024-13"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			calls := 0
+			env := loaderEnv(&stdout, &stderr, func(string) (config.Config, error) {
+				calls++
+
+				return config.Config{}, errConfigRead
+			})
+
+			err := cli.Execute(t.Context(), c.args, env)
+
+			var usage cli.UsageError
+			require.ErrorAs(t, err, &usage)
+			assert.Zero(t, calls)
+		})
+	}
+}
+
+func Test_accounts_lists_the_configs_warnings_before_the_all_closed_note(t *testing.T) {
+	const note = "all 2 accounts are closed; pass --all to list them"
+	newEnv := func(stdout, stderr *bytes.Buffer) cli.Env {
+		env := loaderEnv(stdout, stderr, warningConfig)
+		env.NewReport = func(context.Context, string) (*report.Server, error) {
+			return report.NewServer(report.WithStore(fakeReportStore{accounts: closedAccounts(2)})), nil
+		}
+
+		return env
+	}
+
+	t.Run("json", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+
+		err := cli.Execute(t.Context(), []string{"accounts", "--json"}, newEnv(&stdout, &stderr))
+
+		require.NoError(t, err)
+		var doc struct {
+			Warnings []string `json:"warnings"`
+		}
+		require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+		assert.Equal(t, []string{unknownKeyAbsolute, note}, doc.Warnings)
+	})
+	t.Run("text", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+
+		err := cli.Execute(t.Context(), []string{"accounts"}, newEnv(&stdout, &stderr))
+
+		require.NoError(t, err)
+		assert.Equal(t, "quarry: warning: "+unknownKeyShown+"\nquarry: warning: "+note+"\n", stderr.String())
+	})
+}
