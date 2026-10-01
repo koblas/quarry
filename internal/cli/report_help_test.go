@@ -167,9 +167,9 @@ func Test_each_reports_window_flags_describe_what_it_does_with_them(t *testing.T
 			err := cli.Execute(t.Context(), []string{c.command, "--help"}, env)
 
 			require.NoError(t, err)
-			assert.Regexp(t, `--since date +`+regexp.QuoteMeta(c.since), stdout.String())
-			assert.Regexp(t, `--until date +`+regexp.QuoteMeta(c.until), stdout.String())
-			assert.Regexp(t, `--account name +`+regexp.QuoteMeta(c.account), stdout.String())
+			assert.Regexp(t, `(?m)--since date +`+regexp.QuoteMeta(c.since)+`$`, stdout.String())
+			assert.Regexp(t, `(?m)--until date +`+regexp.QuoteMeta(c.until)+`$`, stdout.String())
+			assert.Regexp(t, `(?m)--account name +`+regexp.QuoteMeta(c.account)+`$`, stdout.String())
 		})
 	}
 }

@@ -54,7 +54,7 @@ accounts; the payee's charges in other accounts still count as history.`,
 				return &runtimeError{err: err}
 			}
 
-			warnings := []string{}
+			warnings := anomaliesWarnings(found)
 			return emitReport(cmd, *jsonOut, warnings,
 				func() ([]byte, error) { return renderAnomaliesJSON(found, warnings) },
 				func() string { return renderAnomalies(found) })
@@ -62,4 +62,14 @@ accounts; the payee's charges in other accounts still count as history.`,
 	}
 	flags.bind(cmd, anomaliesFlagHelp)
 	return cmd
+}
+
+// anomaliesWarnings is a's warnings, unprefixed and never nil: one per named account left out of the
+// report, then a note when no charge was checked in the period.
+func anomaliesWarnings(a report.Anomalies) []string {
+	warnings := leftOutWarnings(a.Accounts, anomaliesCommand)
+	if a.Checked == 0 {
+		warnings = appendEmptyWindowWarning(warnings, "unusually large charges", a.Accounts, a.Window, a.Transactions)
+	}
+	return warnings
 }

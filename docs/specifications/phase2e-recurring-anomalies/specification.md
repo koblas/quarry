@@ -424,9 +424,9 @@ Ruled (sizing pass 2026-10-01):
 - [x] SCENARIO-17: a payee with little history is judged against its category — `cmd/quarry/run_anomalies_category_test.go` `Test_run_anomalies_judges_a_first_time_payee_against_its_category`
 - [x] SCENARIO-18: a charge with no usable history is counted as not judged — delivered by SCENARIO-17: `cmd/quarry/run_anomalies_category_test.go` `Test_run_anomalies_counts_an_uncategorized_first_time_charge_as_not_judged`
 - [x] SCENARIO-19: anomalies --json returns the anomalies document — `cmd/quarry/run_anomalies_json_test.go` `Test_run_anomalies_json_returns_the_anomalies_document`
-- [ ] SCENARIO-20: history outside the window and other accounts still counts
-- [ ] SCENARIO-21: no charges in the window says so
-- [ ] SCENARIO-22: anomalies refuses usage and store problems
+- [x] SCENARIO-20: history outside the window and other accounts still counts — `cmd/quarry/run_anomalies_account_test.go` `Test_run_anomalies_account_judges_the_named_accounts_charge_against_history_from_every_account`
+- [x] SCENARIO-21: no charges in the window says so — delivered by SCENARIO-20: `cmd/quarry/run_anomalies_empty_test.go` `Test_run_anomalies_says_when_no_charge_falls_in_the_window`
+- [x] SCENARIO-22: anomalies refuses usage and store problems — delivered by SCENARIO-20: `cmd/quarry/run_anomalies_refusals_test.go` `Test_run_anomalies_refuses_usage_and_store_problems`
 
 ## Reference check
 Last step before the gate round (step 7). Outcome recorded in `REFERENCE-CHECK.md` beside this file.

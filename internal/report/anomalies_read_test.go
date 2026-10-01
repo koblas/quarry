@@ -24,6 +24,16 @@ func Test_anomalies_read_the_charges_once_through_today_whatever_the_window(t *t
 	assert.Equal(t, store.ChargeParams{Through: dateOf(t, "2026-09-29")}, got)
 }
 
+func Test_anomalies_read_the_charges_through_the_local_date_when_the_utc_date_is_later(t *testing.T) {
+	var got store.ChargeParams
+	srv := report.NewServer(report.WithStore(fakeStore{gotCharges: &got}))
+
+	_, err := srv.Anomalies(t.Context(), report.AnomaliesRequest{Window: thisYear, Now: windowNow})
+
+	require.NoError(t, err)
+	assert.Equal(t, store.ChargeParams{Through: dateOf(t, "2026-09-29")}, got)
+}
+
 func Test_anomalies_return_the_window_and_the_transaction_span_of_the_read(t *testing.T) {
 	span := store.TransactionRange{First: dateOf(t, "2003-01-04"), Last: dateOf(t, "2026-09-26")}
 	srv := report.NewServer(report.WithStore(fakeStore{charges: store.Charges{Transactions: span}}))

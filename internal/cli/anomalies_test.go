@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -119,17 +121,29 @@ func Test_anomalies_help_shows_the_short_description_in_the_root_list(t *testing
 	assert.Contains(t, stdout.String(), "anomalies   List charges unusually large for their payee or category\n")
 }
 
-func Test_anomalies_without_charges_prints_the_empty_table_and_footer(t *testing.T) {
+func Test_anomalies_without_charges_prints_the_empty_table_and_footer_and_names_the_stores_span(t *testing.T) {
 	var stdout, stderr bytes.Buffer
+	fake := fakeReportStore{charges: store.Charges{Transactions: span(t, "2003-01-04", "2026-09-26")}}
 
-	err := executeAnomalies(t, fakeReportStore{}, &stdout, &stderr)
+	err := executeAnomalies(t, fake, &stdout, &stderr)
 
 	require.NoError(t, err)
 	assert.Equal(t, ""+
 		"Unusually large charges 2026-01-01 to 2026-09-29 in all accounts\n\n"+
 		"Date  Account  Payee  Category  Amount  Usual  Times  Compared with\n\n"+
 		"0 charges checked\n", stdout.String())
+	assert.Equal(t, "quarry: warning: "+anomaliesEmpty+"; the store's transactions run 2003-01-04 to 2026-09-26\n", stderr.String())
+}
+
+func Test_anomalies_charges_exist_but_none_unusual_prints_no_warning(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	fake := fakeReportStore{charges: store.Charges{Rows: ordinaryCharge()}}
+
+	err := executeAnomalies(t, fake, &stdout, &stderr)
+
+	require.NoError(t, err)
 	assert.Empty(t, stderr.String())
+	assert.True(t, strings.HasSuffix(stdout.String(), "\n1 charge checked\n"), stdout.String())
 }
 
 func Test_anomalies_reports_a_failed_stdout_write(t *testing.T) {

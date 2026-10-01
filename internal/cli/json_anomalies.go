@@ -43,7 +43,7 @@ func renderAnomaliesJSON(a report.Anomalies, warnings []string) ([]byte, error) 
 	return marshalDocument(anomaliesDocument{
 		Since:         a.Window.Since.Format(jsonDateLayout),
 		Until:         a.Window.Until.Format(jsonDateLayout),
-		AccountFilter: accountFilterDocuments(nil),
+		AccountFilter: accountFilterDocuments(a.Accounts),
 		Anomalies:     listed,
 		Checked:       a.Checked,
 		NotJudged:     a.NotJudged,

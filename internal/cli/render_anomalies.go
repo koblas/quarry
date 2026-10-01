@@ -44,7 +44,7 @@ func renderAnomalies(a report.Anomalies) string {
 			fmt.Sprintf("%s, %s earlier", anomaliesBaselineWord[an.Baseline], humanize.Thousands(an.Earlier)),
 		})
 	}
-	return renderTable(windowCaption("Unusually large charges", a.Window, nil), anomaliesAligns, rows) +
+	return renderTable(windowCaption("Unusually large charges", a.Window, a.Accounts), anomaliesAligns, rows) +
 		"\n" + anomaliesFooter(a.Checked, a.NotJudged) + "\n"
 }
 

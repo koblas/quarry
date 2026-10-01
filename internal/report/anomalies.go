@@ -38,8 +38,8 @@ const (
 )
 
 // AnomaliesRequest is what an anomalies read needs from its caller: the window of charges to
-// list, the clock reading that decides today, and the accounts whose charges to list (each an
-// id or a name; none means every account).
+// list, the clock reading that decides today, and the accounts whose charges to list and count
+// (each an id or a name; none means every account).
 type AnomaliesRequest struct {
 	Window   store.Window
 	Now      time.Time
@@ -62,26 +62,36 @@ type Anomaly struct {
 // Anomalies is an anomalies read: the window it listed and the charges unusually large in it.
 type Anomalies struct {
 	Window store.Window
-	Listed []Anomaly
-	// Checked is how many charges the window held; NotJudged is how many of them, of 100.00 or more, had no baseline.
+	// Accounts is the accounts the request named, in the order given and without repeats; none when it named none.
+	Accounts []store.Account
+	Listed   []Anomaly
+	// Checked is how many charges the window held in the listed accounts; NotJudged is how many of them, of 100.00 or more, had no baseline.
 	Checked, NotJudged int
-	// Transactions is store.Charges.Transactions: the span of the store's transactions.
+	// Transactions is store.Charges.Transactions: the span of the named accounts' transactions, or of the store's when none is named.
 	Transactions store.TransactionRange
 }
 
-// Anomalies lists the charges dated in req.Window that are unusually large for their payee, or for their
-// category when the payee has little history, judged against strictly earlier charges in every account.
-// A store it cannot read is a RefusalError.
+// Anomalies lists the charges dated in req.Window, in the accounts req.Accounts names (every account when
+// none), that are unusually large for their payee, or for their category when the payee has little history.
+// Baselines hold strictly earlier charges from every account. An account it cannot pick, or a store it
+// cannot read, is a RefusalError.
 func (s *Server) Anomalies(ctx context.Context, req AnomaliesRequest) (Anomalies, error) {
+	accounts, accountIDs, err := s.namedAccounts(ctx, anomaliesCommand, req.Accounts)
+	if err != nil {
+		return Anomalies{}, err
+	}
 	today := DefaultWindow(req.Now).Until
-	charges, err := s.store.Charges(ctx, store.ChargeParams{Through: today})
+	charges, err := s.store.Charges(ctx, store.ChargeParams{Through: today, AccountIDs: accountIDs})
 	if err != nil {
 		return Anomalies{}, s.readRefusal(ctx, anomaliesCommand, err)
 	}
-	result := Anomalies{Window: req.Window, Transactions: charges.Transactions}
+	result := Anomalies{Window: req.Window, Accounts: accounts, Transactions: charges.Transactions}
+	tallied := func(c store.Charge) bool {
+		return inWindow(req.Window, c.Date) && (len(accountIDs) == 0 || slices.Contains(accountIDs, c.Account.ID))
+	}
 	categories := groupByCategory(charges.Rows)
 	for _, c := range charges.Rows {
-		if _, ok := chargeKey(c); !ok && inWindow(req.Window, c.Date) {
+		if _, ok := chargeKey(c); !ok && tallied(c) {
 			result.tally(judge(c, nil, categories.before(c)))
 		}
 	}
@@ -91,7 +101,7 @@ func (s *Server) Anomalies(ctx context.Context, req AnomaliesRequest) (Anomalies
 			if i > 0 && !c.Date.Equal(group.charges[i-1].Date) {
 				dayStart = i
 			}
-			if inWindow(req.Window, c.Date) {
+			if tallied(c) {
 				result.tally(judge(c, group.charges[:dayStart], categories.before(c)))
 			}
 		}

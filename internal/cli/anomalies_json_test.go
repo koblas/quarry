@@ -79,15 +79,16 @@ func Test_anomalies_json_prints_every_ruled_key_and_no_table(t *testing.T) {
 
 func Test_anomalies_json_holds_empty_arrays_rather_than_null_when_nothing_is_listed(t *testing.T) {
 	var stdout, stderr bytes.Buffer
+	fake := fakeReportStore{charges: store.Charges{Rows: ordinaryCharge()}}
 
-	err := executeAnomalies(t, fakeReportStore{}, &stdout, &stderr, "--json")
+	err := executeAnomalies(t, fake, &stdout, &stderr, "--json")
 
 	require.NoError(t, err)
 	raw := rawAnomaliesDocument(t, stdout.String())
 	assert.Equal(t, []any{}, raw["anomalies"])
 	assert.Equal(t, []any{}, raw["account_filter"])
 	assert.Equal(t, []any{}, raw["warnings"])
-	assert.InDelta(t, 0, raw["checked"], 0)
+	assert.InDelta(t, 1, raw["checked"], 0)
 }
 
 func Test_anomalies_json_prints_the_amounts_as_two_decimal_strings_and_times_as_a_number(t *testing.T) {

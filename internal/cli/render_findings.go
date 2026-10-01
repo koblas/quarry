@@ -160,8 +160,7 @@ func unlinkedRows(items []store.FindingItem) []string {
 	return rows
 }
 
-// categoryCell is an item's category as text shows it: "(split)" for several splits, "(uncategorized)" for
-// none, else the full path.
+// categoryCell is item's category cell, as categoryText renders it.
 func categoryCell(item store.FindingItem) string {
 	return categoryText(item.Splits, item.Category)
 }
