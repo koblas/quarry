@@ -64,11 +64,11 @@ func findingRow(lead, middle []csvCell, last csvCell) []csvCell {
 // item does not carry are NULL, as in the --json item.
 func findingItemCSVCells(item findingItemDocument) []csvCell {
 	return []csvCell{
-		{Text: item.Date},
-		{Text: item.Account},
-		{Text: item.Currency},
+		csvOptional(item.Date),
+		csvOptional(item.Account),
+		csvOptional(item.Currency),
 		csvOptional(item.Payee), csvOptional(item.Category),
-		{Text: item.Amount},
+		csvOptional(item.Amount),
 		csvOptional(item.OtherAccount), csvOptionalCount(item.Transactions), csvOptionalCount(item.Splits),
 		csvOptional(item.TransactionID), csvOptional(item.SplitID), csvOptional(item.PayeeID), csvOptional(item.CategoryID),
 	}

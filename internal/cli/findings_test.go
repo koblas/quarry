@@ -244,7 +244,7 @@ func filterFakeFindings() fakeReportStore {
 	return fakeReportStore{findings: store.FindingList{Findings: []store.Finding{
 		{
 			ID: "uncategorized:payee-7", Type: finding.Uncategorized, FirstFoundAt: foundAt,
-			Items: []store.FindingItem{{Account: "Visa", Currency: "CAD", Active: true, Payee: "Amazon", Date: foundAt, Amount: -1000}},
+			Items: []store.FindingItem{{TransactionID: new("txn-7"), SplitID: new("split-7"), Account: "Visa", Currency: "CAD", Active: true, Payee: "Amazon", Date: foundAt, Amount: -1000}},
 		},
 		{ID: "duplicate:txn-1+txn-2", Type: finding.Duplicate, FirstFoundAt: foundAt, FixedAt: &fixedAt},
 	}}}

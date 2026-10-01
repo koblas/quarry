@@ -73,7 +73,7 @@ func Test_findings_csv_leaves_the_payee_of_a_no_payee_item_as_an_empty_field_not
 }
 
 func Test_findings_csv_applies_the_status_and_type_filters(t *testing.T) {
-	const uncategorizedRow = "uncategorized:payee-7,uncategorized,open,2026-09-01,Visa,CAD,Amazon,,-10.00,,,,,,,," + uncategorizedFixCSV + "\n"
+	const uncategorizedRow = "uncategorized:payee-7,uncategorized,open,2026-09-01,Visa,CAD,Amazon,,-10.00,,,,txn-7,split-7,,," + uncategorizedFixCSV + "\n"
 	const fixedRow = "duplicate:txn-1+txn-2,duplicate,fixed,,,,,,,,,,,,,," + duplicateFixCSV + "\n"
 	const ignoredRow = "one-sided-transfer:xfer-3,one-sided-transfer,ignored,2026-08-02,Visa,USD,Payment,,-5.00,Savings,,,txn-3,split-3,,," + oneSidedFixCSV + "\n"
 	cases := []struct {
@@ -108,10 +108,10 @@ func Test_findings_csv_applies_the_status_and_type_filters(t *testing.T) {
 }
 
 func Test_findings_csv_puts_the_payee_and_category_ids_in_their_own_columns(t *testing.T) {
-	payeeID, categoryID := "payee-7", "cat-3"
+	txn, payeeID, categoryID := "txn-7", "payee-7", "cat-3"
 	fake := fakeReportStore{findings: store.FindingList{Findings: []store.Finding{{
 		ID: "uncategorized:payee-7", Type: finding.Uncategorized, FirstFoundAt: csvFindingDay(1),
-		Items: []store.FindingItem{{PayeeID: &payeeID, CategoryID: &categoryID, Date: csvFindingDay(2), Account: "Visa", Currency: "CAD", Payee: "Amazon", Amount: -1000}},
+		Items: []store.FindingItem{{TransactionID: &txn, PayeeID: &payeeID, CategoryID: &categoryID, Date: csvFindingDay(2), Account: "Visa", Currency: "CAD", Payee: "Amazon", Amount: -1000}},
 	}}}}
 	var stdout bytes.Buffer
 
@@ -119,7 +119,7 @@ func Test_findings_csv_puts_the_payee_and_category_ids_in_their_own_columns(t *t
 
 	require.NoError(t, err)
 	assert.Equal(t, findingsCSVHeader+
-		"uncategorized:payee-7,uncategorized,open,2026-08-02,Visa,CAD,Amazon,,-10.00,,,,,,payee-7,cat-3,"+uncategorizedFixCSV+"\n", stdout.String())
+		"uncategorized:payee-7,uncategorized,open,2026-08-02,Visa,CAD,Amazon,,-10.00,,,,txn-7,,payee-7,cat-3,"+uncategorizedFixCSV+"\n", stdout.String())
 }
 
 func Test_findings_csv_prints_nothing_when_the_listing_fails(t *testing.T) {
@@ -166,10 +166,13 @@ func Test_findings_csv_refuses_a_failed_stdout_write(t *testing.T) {
 	require.EqualError(t, err, "cannot write the result to stdout: write /dev/stdout: no space left on device")
 }
 
+const mixedFixCSV = `"Pick one category for this payee's transactions in Quicken, or ignore it if the mix is intended"`
+
 const unlinkedFixCSV = `"Make the pair one transfer between the two accounts in Quicken, or ignore it if no money moved between your accounts"`
 
 // unlinkedFake is one unlinked-transfer finding of first and second, both in Chequing (CAD) with payee Rent.
 func unlinkedFake(first, second store.FindingItem) fakeReportStore {
+	first.TransactionID, second.TransactionID = new("txn-1"), new("txn-2")
 	for _, item := range []*store.FindingItem{&first, &second} {
 		item.Account, item.Currency, item.Payee, item.Amount = "Chequing", "CAD", "Rent", -1000
 	}
@@ -187,8 +190,8 @@ func Test_findings_csv_puts_the_category_path_of_an_unlinked_transfer_item_in_it
 
 	require.NoError(t, err)
 	assert.Equal(t, findingsCSVHeader+
-		"unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-02,Chequing,CAD,Rent,Income:Other,-10.00,,,,,,,,"+unlinkedFixCSV+"\n"+
-		`unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-03,Chequing,CAD,Rent,"Bills, fixed",-10.00,,,,,,,,`+unlinkedFixCSV+"\n",
+		"unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-02,Chequing,CAD,Rent,Income:Other,-10.00,,,,txn-1,,,,"+unlinkedFixCSV+"\n"+
+		`unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-03,Chequing,CAD,Rent,"Bills, fixed",-10.00,,,,txn-2,,,,`+unlinkedFixCSV+"\n",
 		stdout.String())
 }
 
@@ -200,7 +203,21 @@ func Test_findings_csv_leaves_the_category_of_a_split_or_uncategorized_unlinked_
 
 	require.NoError(t, err)
 	assert.Equal(t, findingsCSVHeader+
-		"unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-02,Chequing,CAD,Rent,,-10.00,,,,,,,,"+unlinkedFixCSV+"\n"+
-		"unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-03,Chequing,CAD,Rent,,-10.00,,,,,,,,"+unlinkedFixCSV+"\n",
+		"unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-02,Chequing,CAD,Rent,,-10.00,,,,txn-1,,,,"+unlinkedFixCSV+"\n"+
+		"unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-03,Chequing,CAD,Rent,,-10.00,,,,txn-2,,,,"+unlinkedFixCSV+"\n",
 		stdout.String())
+}
+
+func Test_findings_csv_puts_a_mixed_categories_item_in_its_payee_category_and_count_columns_with_the_transaction_cells_empty(t *testing.T) {
+	fake := fakeReportStore{findings: store.FindingList{Findings: []store.Finding{{
+		ID: "mixed-categories:payee-12", Type: finding.MixedCategories, FirstFoundAt: csvFindingDay(1),
+		Items: []store.FindingItem{{PayeeID: new("payee-12"), CategoryID: new("cat-3"), Payee: "Costco", Category: new("Groceries"), Transactions: 30}},
+	}}}}
+	var stdout bytes.Buffer
+
+	err := executeFindings(t, fake, &stdout, &bytes.Buffer{}, "--csv")
+
+	require.NoError(t, err)
+	assert.Equal(t, findingsCSVHeader+
+		"mixed-categories:payee-12,mixed-categories,open,,,,Costco,Groceries,,,30,,,,payee-12,cat-3,"+mixedFixCSV+"\n", stdout.String())
 }

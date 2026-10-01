@@ -124,6 +124,8 @@ func liveFindingLines(typ finding.Type, findings []report.ListedFinding, view fi
 		return oneSidedFindingRows(findings, view)
 	case finding.Uncategorized:
 		return uncategorizedRows(findings, view)
+	case finding.MixedCategories:
+		return mixedRows(findings, view)
 	}
 	lines := make([]string, len(findings))
 	for i, f := range findings {
@@ -153,8 +155,8 @@ func unlinkedRows(items []store.FindingItem) []string {
 	return rows
 }
 
-// categoryCell is an unlinked-transfer item's category as text shows it: "(split)" for several splits,
-// "(uncategorized)" for none, else the full path.
+// categoryCell is an item's category as text shows it: "(split)" for several splits, "(uncategorized)" for
+// none, else the full path.
 func categoryCell(item store.FindingItem) string {
 	switch {
 	case item.Splits > 1:
@@ -248,6 +250,47 @@ func uncategorizedRows(findings []report.ListedFinding, view findingsView) []str
 			padLeft(counts[i], countWidth) + "  " + spans[i] + ignoredMarker(findings[i], view)
 	}
 	return rows
+}
+
+// mixedRows renders each mixed-categories finding as an id line (id and payee padded to the widest among
+// the findings, then its category and transaction counts and the ignored marker) over one four-space row
+// per category: its path padded to the widest in the finding, then its transaction count right-aligned.
+func mixedRows(findings []report.ListedFinding, view findingsView) []string {
+	ids := make([]string, len(findings))
+	payees := make([]string, len(findings))
+	for i, f := range findings {
+		ids[i] = f.ID
+		payees[i] = payeeLabel(payeeOf(f.Items))
+	}
+	idWidth, payeeWidth := widestRunes(ids), widestRunes(payees)
+
+	var lines []string
+	for i, f := range findings {
+		total := 0
+		paths := make([]string, len(f.Items))
+		counts := make([]string, len(f.Items))
+		for j, item := range f.Items {
+			total += item.Transactions
+			paths[j] = categoryCell(item)
+			counts[j] = humanize.Count(item.Transactions, "transaction", "transactions")
+		}
+		lines = append(lines, "  "+padRight(ids[i], idWidth)+"  "+padRight(payees[i], payeeWidth)+"  "+
+			humanize.Count(len(f.Items), "category", "categories")+", "+humanize.Count(total, "transaction", "transactions")+
+			ignoredMarker(f, view))
+		pathWidth, countWidth := widestRunes(paths), widestRunes(counts)
+		for j := range f.Items {
+			lines = append(lines, "    "+padRight(paths[j], pathWidth)+"  "+padLeft(counts[j], countWidth))
+		}
+	}
+	return lines
+}
+
+// payeeOf is the payee name of the first of items; the items of one finding share their payee.
+func payeeOf(items []store.FindingItem) string {
+	if len(items) == 0 {
+		return ""
+	}
+	return items[0].Payee
 }
 
 // uncategorizedSpan is the payee the items share and the earliest and latest of their dates.

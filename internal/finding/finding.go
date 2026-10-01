@@ -37,6 +37,9 @@ const NoPayee = "no-payee"
 // (duplicate, unlinked-transfer), inclusive.
 const MatchDays = 3
 
+// MixedMin is the fewest categorized transactions a payee needs before it can be a mixed-categories finding.
+const MixedMin = 3
+
 // idSeparator splits a finding id into its type and entity.
 const idSeparator = ":"
 

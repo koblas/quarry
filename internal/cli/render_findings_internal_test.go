@@ -236,9 +236,9 @@ func Test_renderFindings_shows_the_ignore_hint_only_when_asked_and_a_finding_is_
 func Test_renderFindings_lists_one_id_per_finding_of_a_type_with_no_row_layout(t *testing.T) {
 	listing := report.FindingsListing{
 		Groups: []report.FindingsGroup{
-			{Type: finding.MixedCategories, Findings: []report.ListedFinding{
-				openFinding(store.Finding{ID: "mixed-categories:payee-3", Type: finding.MixedCategories}),
-				openFinding(store.Finding{ID: "mixed-categories:payee-7", Type: finding.MixedCategories}),
+			{Type: finding.PayeeVariants, Findings: []report.ListedFinding{
+				openFinding(store.Finding{ID: "payee-variants:tim-hortons", Type: finding.PayeeVariants}),
+				openFinding(store.Finding{ID: "payee-variants:visa", Type: finding.PayeeVariants}),
 			}},
 			{Type: finding.Uncategorized, Findings: []report.ListedFinding{
 				uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)),
@@ -249,9 +249,9 @@ func Test_renderFindings_lists_one_id_per_finding_of_a_type_with_no_row_layout(t
 
 	got := renderFindings(listing, openView, false)
 
-	assert.Equal(t, "Payees in mixed categories (2): pick one category per payee in Quicken, or ignore a payee whose mix is intended\n"+
-		"  mixed-categories:payee-3\n"+
-		"  mixed-categories:payee-7\n"+
+	assert.Equal(t, "Payee variants (2): rename each group to one payee in Quicken and add a renaming rule\n"+
+		"  payee-variants:tim-hortons\n"+
+		"  payee-variants:visa\n"+
 		"\n"+
 		"Uncategorized (1 payee, 1 split)"+uncategorizedFix+
 		"  uncategorized:payee-1  Amazon  1 split  2026-03-01\n"+
@@ -292,4 +292,102 @@ func Test_renderFindings_pads_columns_by_runes_not_bytes_for_a_non_ASCII_payee(t
 
 	assert.Contains(t, got, "    2026-05-01  Chequing (CAD)  Café  -4.50\n    2026-05-02  Chequing (CAD)  Bar   -4.50\n")
 	assert.Contains(t, got, "  uncategorized:payee-1  Café  2 splits  2026-03-01\n  uncategorized:payee-2  Bar    1 split  2026-03-01\n")
+}
+
+// mixedRow is one category of a mixed-categories finding and its transaction count.
+type mixedRow struct {
+	path string
+	n    int
+}
+
+// mixedFinding is an open mixed-categories finding of payee with one item per row.
+func mixedFinding(id, payee string, rows ...mixedRow) report.ListedFinding {
+	items := make([]store.FindingItem, len(rows))
+	for i, r := range rows {
+		items[i] = store.FindingItem{Payee: payee, Category: &r.path, Transactions: r.n}
+	}
+	return openFinding(store.Finding{ID: id, Type: finding.MixedCategories, Items: items})
+}
+
+func mixedGroup(findings ...report.ListedFinding) report.FindingsGroup {
+	return report.FindingsGroup{Type: finding.MixedCategories, Findings: findings}
+}
+
+func Test_renderFindings_the_specification_example_for_a_mixed_categories_payee(t *testing.T) {
+	listing := report.FindingsListing{
+		Groups: []report.FindingsGroup{mixedGroup(mixedFinding("mixed-categories:payee-12", "Costco",
+			mixedRow{"Groceries", 30}, mixedRow{"Household", 12}, mixedRow{"Auto:Fuel", 6}))},
+		Counts: finding.Counts{Open: 1},
+	}
+
+	got := renderFindings(listing, openView, true)
+
+	assert.Equal(t, "Payees in mixed categories (1): pick one category per payee in Quicken, or ignore a payee whose mix is intended\n"+
+		"  mixed-categories:payee-12  Costco  3 categories, 48 transactions\n"+
+		"    Groceries  30 transactions\n"+
+		"    Household  12 transactions\n"+
+		"    Auto:Fuel   6 transactions\n"+
+		"\n1 open finding\n"+ignoreHint, got)
+}
+
+func Test_mixedRows_singularises_a_one_transaction_row_and_right_aligns_counts_to_the_widest(t *testing.T) {
+	findings := []report.ListedFinding{mixedFinding("mixed-categories:payee-3", "Bakery", mixedRow{"Food", 12}, mixedRow{"Gifts", 1})}
+
+	got := mixedRows(findings, openView)
+
+	assert.Equal(t, []string{
+		"  mixed-categories:payee-3  Bakery  2 categories, 13 transactions",
+		"    Food   12 transactions",
+		"    Gifts    1 transaction",
+	}, got)
+}
+
+func Test_mixedRows_pads_ids_and_payees_across_findings_and_paths_and_counts_within_each(t *testing.T) {
+	findings := []report.ListedFinding{
+		mixedFinding("mixed-categories:payee-3", "Bakery", mixedRow{"Food", 20}, mixedRow{"Gifts", 5}),
+		mixedFinding("mixed-categories:payee-12", "Café Nord", mixedRow{"Dining:Out", 2}, mixedRow{"Fuel", 100}),
+	}
+
+	got := mixedRows(findings, openView)
+
+	assert.Equal(t, []string{
+		"  mixed-categories:payee-3   Bakery     2 categories, 25 transactions",
+		"    Food   20 transactions",
+		"    Gifts   5 transactions",
+		"  mixed-categories:payee-12  Café Nord  2 categories, 102 transactions",
+		"    Dining:Out    2 transactions",
+		"    Fuel        100 transactions",
+	}, got)
+}
+
+func Test_mixedRows_groups_the_thousands_of_a_transaction_count(t *testing.T) {
+	findings := []report.ListedFinding{mixedFinding("mixed-categories:payee-3", "Costco", mixedRow{"Groceries", 1200}, mixedRow{"Fuel", 34})}
+
+	got := mixedRows(findings, openView)
+
+	assert.Equal(t, []string{
+		"  mixed-categories:payee-3  Costco  2 categories, 1,234 transactions",
+		"    Groceries  1,200 transactions",
+		"    Fuel          34 transactions",
+	}, got)
+}
+
+func Test_mixedRows_ends_the_id_line_of_an_ignored_finding_with_a_marker_under_the_all_view(t *testing.T) {
+	findings := []report.ListedFinding{withStatus(mixedFinding("mixed-categories:payee-3", "Bakery", mixedRow{"Food", 2}, mixedRow{"Gifts", 1}), finding.StatusIgnored)}
+
+	got := mixedRows(findings, allView)
+
+	assert.Equal(t, []string{
+		"  mixed-categories:payee-3  Bakery  2 categories, 3 transactions  ignored",
+		"    Food   2 transactions",
+		"    Gifts   1 transaction",
+	}, got)
+}
+
+func Test_mixedRows_names_a_payee_less_finding_with_the_no_payee_label(t *testing.T) {
+	findings := []report.ListedFinding{mixedFinding("mixed-categories:payee-3", "", mixedRow{"Food", 2})}
+
+	got := mixedRows(findings, openView)
+
+	assert.Equal(t, "  mixed-categories:payee-3  (no payee)  1 category, 2 transactions", got[0])
 }

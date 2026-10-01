@@ -143,7 +143,8 @@ func statusRank(s finding.Status) int {
 }
 
 // findingOrder is the display order of the open and ignored findings of typ: duplicate, unlinked-transfer
-// and one-sided by latest item date descending, uncategorized by item count then payee, all else by id.
+// and one-sided by latest item date descending, uncategorized by item count then payee, mixed-categories by
+// transaction count then payee, all else by id.
 func findingOrder(typ finding.Type) func(a, b store.Finding) int {
 	switch typ { //nolint:exhaustive // every other type sorts by id
 	case finding.Duplicate, finding.UnlinkedTransfer, finding.OneSidedTransfer:
@@ -158,8 +159,25 @@ func findingOrder(typ finding.Type) func(a, b store.Finding) int {
 				cmp.Compare(a.ID, b.ID),
 			)
 		}
+	case finding.MixedCategories:
+		return func(a, b store.Finding) int {
+			return cmp.Or(
+				cmp.Compare(transactionsOf(b), transactionsOf(a)),
+				cmp.Compare(strings.ToLower(payeeOf(a)), strings.ToLower(payeeOf(b))),
+				cmp.Compare(a.ID, b.ID),
+			)
+		}
 	}
 	return func(a, b store.Finding) int { return cmp.Compare(a.ID, b.ID) }
+}
+
+// transactionsOf is the sum of f's items' Transactions.
+func transactionsOf(f store.Finding) int {
+	total := 0
+	for _, item := range f.Items {
+		total += item.Transactions
+	}
+	return total
 }
 
 // latestDate is the date of f's latest item; the zero time when f has none.
@@ -173,7 +191,7 @@ func latestDate(f store.Finding) time.Time {
 	return latest
 }
 
-// payeeOf is the payee name of f's first item; every item of an uncategorized finding shares it.
+// payeeOf is the payee name of f's first item; every item of an uncategorized or mixed-categories finding shares it.
 func payeeOf(f store.Finding) string {
 	if len(f.Items) == 0 {
 		return ""

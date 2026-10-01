@@ -115,11 +115,11 @@ func Test_findingLines_ends_an_ignored_finding_with_a_marker_under_the_all_view(
 		},
 		{
 			name: "a type with no row layout marks its id line",
-			group: report.FindingsGroup{Type: finding.MixedCategories, Findings: []report.ListedFinding{
-				withStatus(openFinding(store.Finding{ID: "mixed-categories:payee-3", Type: finding.MixedCategories}), finding.StatusIgnored),
-				openFinding(store.Finding{ID: "mixed-categories:payee-7", Type: finding.MixedCategories}),
+			group: report.FindingsGroup{Type: finding.PayeeVariants, Findings: []report.ListedFinding{
+				withStatus(openFinding(store.Finding{ID: "payee-variants:tim-hortons", Type: finding.PayeeVariants}), finding.StatusIgnored),
+				openFinding(store.Finding{ID: "payee-variants:visa", Type: finding.PayeeVariants}),
 			}},
-			want: []string{"  mixed-categories:payee-3  ignored", "  mixed-categories:payee-7"},
+			want: []string{"  payee-variants:tim-hortons  ignored", "  payee-variants:visa"},
 		},
 	}
 
@@ -131,11 +131,11 @@ func Test_findingLines_ends_an_ignored_finding_with_a_marker_under_the_all_view(
 }
 
 func Test_findingLines_leaves_an_ignored_finding_unmarked_when_the_view_lists_only_ignored_ones(t *testing.T) {
-	group := report.FindingsGroup{Type: finding.MixedCategories, Findings: []report.ListedFinding{
-		withStatus(openFinding(store.Finding{ID: "mixed-categories:payee-3", Type: finding.MixedCategories}), finding.StatusIgnored),
+	group := report.FindingsGroup{Type: finding.PayeeVariants, Findings: []report.ListedFinding{
+		withStatus(openFinding(store.Finding{ID: "payee-variants:tim-hortons", Type: finding.PayeeVariants}), finding.StatusIgnored),
 	}}
 
-	assert.Equal(t, []string{"  mixed-categories:payee-3"}, findingLines(group, ignoredView))
+	assert.Equal(t, []string{"  payee-variants:tim-hortons"}, findingLines(group, ignoredView))
 }
 
 func Test_findingLines_shows_a_fixed_finding_as_one_unpadded_line_with_the_local_date_of_its_fixed_at(t *testing.T) {

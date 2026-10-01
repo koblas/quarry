@@ -109,12 +109,12 @@ func Test_renderFindingsJSON_entries_follow_each_findings_status_and_fixed_at(t 
 	assert.Equal(t, []any{}, doc.Findings[1].Items)
 }
 
-// unlinkedItemsJSON renders one unlinked-transfer finding of items as --json and returns its items' decoded objects.
-func unlinkedItemsJSON(t *testing.T, items ...store.FindingItem) []map[string]any {
+// itemsJSON renders one open finding of typ with items as --json and returns its items' decoded objects.
+func itemsJSON(t *testing.T, typ finding.Type, items ...store.FindingItem) []map[string]any {
 	t.Helper()
 	listing := report.FindingsListing{Groups: []report.FindingsGroup{{
-		Type:     finding.UnlinkedTransfer,
-		Findings: []report.ListedFinding{openFinding(store.Finding{ID: "unlinked-transfer:txn-1+txn-2", Type: finding.UnlinkedTransfer, Items: items})},
+		Type:     typ,
+		Findings: []report.ListedFinding{openFinding(store.Finding{ID: string(typ) + ":x", Type: typ, Items: items})},
 	}}}
 	data, err := renderFindingsJSON(listing, openView, nil)
 	require.NoError(t, err)
@@ -126,6 +126,11 @@ func unlinkedItemsJSON(t *testing.T, items ...store.FindingItem) []map[string]an
 	require.NoError(t, json.Unmarshal(data, &doc))
 	require.Len(t, doc.Findings, 1)
 	return doc.Findings[0].Items
+}
+
+func unlinkedItemsJSON(t *testing.T, items ...store.FindingItem) []map[string]any {
+	t.Helper()
+	return itemsJSON(t, finding.UnlinkedTransfer, items...)
 }
 
 func Test_renderFindingsJSON_gives_an_unlinked_transfer_item_its_category_path_and_a_null_category_id(t *testing.T) {
@@ -146,4 +151,31 @@ func Test_renderFindingsJSON_gives_an_unlinked_transfer_item_with_several_splits
 	assert.Nil(t, items[0]["category"])
 	assert.Contains(t, items[1], "category")
 	assert.Nil(t, items[1]["category"])
+}
+
+func Test_renderFindingsJSON_gives_a_mixed_categories_item_its_payee_category_and_count_and_null_transaction_fields(t *testing.T) {
+	items := itemsJSON(t, finding.MixedCategories, store.FindingItem{
+		PayeeID: new("payee-12"), CategoryID: new("cat-3"), Payee: "Costco", Category: new("Groceries"), Transactions: 30,
+	})
+
+	assert.Equal(t, map[string]any{
+		"transaction_id": nil, "split_id": nil, "payee_id": "payee-12", "category_id": "cat-3",
+		"date": nil, "account_id": nil, "account": nil, "currency": nil,
+		"payee": "Costco", "category": "Groceries", "amount": nil,
+		"other_account": nil, "other_account_id": nil, "transactions": float64(30), "splits": nil,
+	}, items[0])
+}
+
+func Test_renderFindingsJSON_keeps_the_date_account_and_amount_of_a_transaction_item_and_a_null_transactions(t *testing.T) {
+	items := itemsJSON(t, finding.Duplicate, store.FindingItem{
+		TransactionID: new("txn-1"), Date: findingDay(2026, 8, 3), AccountID: "acct-3", Account: "Chequing", Currency: "CAD",
+		Payee: "Hydro One", Amount: -14217,
+	})
+
+	assert.Equal(t, map[string]any{
+		"transaction_id": "txn-1", "split_id": nil, "payee_id": nil, "category_id": nil,
+		"date": "2026-08-03", "account_id": "acct-3", "account": "Chequing", "currency": "CAD",
+		"payee": "Hydro One", "category": nil, "amount": "-142.17",
+		"other_account": nil, "other_account_id": nil, "transactions": nil, "splits": nil,
+	}, items[0])
 }

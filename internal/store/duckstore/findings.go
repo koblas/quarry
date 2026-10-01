@@ -46,7 +46,7 @@ ORDER BY payee_id NULLS FIRST, split_id`
 
 // findingItem is one row of finding_items; a NULL column is an invalid sql.NullString.
 type findingItem struct {
-	transactionID, splitID sql.NullString
+	transactionID, splitID, payeeID, categoryID sql.NullString
 }
 
 // detectedFinding is one finding a build's detection produced, with the items that name what it is about.
@@ -91,7 +91,11 @@ func detectFindings(ctx context.Context, db DB) ([]detectedFinding, error) {
 	if err != nil {
 		return nil, fmt.Errorf("detect %s findings: %w", finding.Uncategorized, err)
 	}
-	return slices.Concat(duplicates, oneSided, unlinked, uncategorized), nil
+	mixed, err := detectMixedCategories(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("detect %s findings: %w", finding.MixedCategories, err)
+	}
+	return slices.Concat(duplicates, oneSided, unlinked, uncategorized, mixed), nil
 }
 
 // detectDuplicates returns one finding per duplicate pair, its items the two transactions.
@@ -200,7 +204,7 @@ func mergeFindings(detected []detectedFinding, carried []carriedFinding, builtAt
 		states = append(states, finding.State{ID: d.id, New: !carriedBefore})
 		findingRows = append(findingRows, []any{d.id, string(d.typ), firstFoundAt, nil})
 		for _, item := range d.items {
-			itemRows = append(itemRows, []any{d.id, nullableNull(item.transactionID), nullableNull(item.splitID), nil, nil})
+			itemRows = append(itemRows, []any{d.id, nullableNull(item.transactionID), nullableNull(item.splitID), nullableNull(item.payeeID), nullableNull(item.categoryID)})
 		}
 	}
 	for _, c := range carried {

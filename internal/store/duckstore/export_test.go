@@ -12,6 +12,7 @@ var FormatCheckQueries = []string{columnExistsQuery, formatVersionQuery, snapsho
 
 // The detector queries build runs, so a test fake can fail one of them.
 const (
+	MixedCategoriesQuery  = mixedCategoriesQuery
 	OneSidedTransferQuery = oneSidedTransferQuery
 	UncategorizedQuery    = uncategorizedQuery
 	UnlinkedTransferQuery = unlinkedTransferQuery

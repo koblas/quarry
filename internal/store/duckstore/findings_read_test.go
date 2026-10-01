@@ -287,3 +287,34 @@ func Test_findings_reads_no_category_or_split_count_for_the_items_of_a_duplicate
 	assert.Equal(t, []categoryAndSplits{{nil, 0}, {nil, 0}},
 		[]categoryAndSplits{{got.Items[0].Category, got.Items[0].Splits}, {got.Items[1].Category, got.Items[1].Splits}})
 }
+
+func Test_findings_reads_a_mixed_item_as_its_payee_and_category_with_the_payees_transactions_in_it(t *testing.T) {
+	t.Parallel()
+
+	got := readFinding(t, mixedRows(mixedSeq(mixedPayee, "ababa", 1)...), mixedIDOf(mixedPayee))
+
+	assert.Equal(t, finding.MixedCategories, got.Type)
+	assert.Equal(t, []store.FindingItem{
+		{PayeeID: new(mixedPayee), CategoryID: new("cat-a"), Payee: "Costco", Category: new("Groceries"), Transactions: 3},
+		{PayeeID: new(mixedPayee), CategoryID: new("cat-b"), Payee: "Costco", Category: new("Household"), Transactions: 2},
+	}, got.Items)
+}
+
+func Test_findings_counts_a_mixed_item_without_the_transactions_of_other_payees_in_its_category(t *testing.T) {
+	t.Parallel()
+	fixtures := append(mixedSeq(mixedPayee, "aba", 1), mixedSeq(mixedOtherPayee, "aa", 10)...)
+
+	got := readFinding(t, mixedRows(fixtures...), mixedIDOf(mixedPayee))
+
+	assert.Equal(t, []int{2, 1}, []int{got.Items[0].Transactions, got.Items[1].Transactions})
+}
+
+func Test_findings_counts_a_mixed_item_without_a_transaction_split_over_categories(t *testing.T) {
+	t.Parallel()
+	fixtures := mixedSeq(mixedPayee, "abaaba", 1)
+	fixtures[3] = fixtures[3].splitInto("a", "a")
+
+	got := readFinding(t, mixedRows(fixtures...), mixedIDOf(mixedPayee))
+
+	assert.Equal(t, []int{3, 2}, []int{got.Items[0].Transactions, got.Items[1].Transactions})
+}

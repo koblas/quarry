@@ -25,19 +25,20 @@ type findingEntryDocument struct {
 	Items        []findingItemDocument `json:"items"`
 }
 
-// findingItemDocument is one entry of a finding's "items": every key is always present and null where it does not apply.
+// findingItemDocument is one entry of a finding's "items": every key is always present and null where it does not
+// apply. Date, AccountID, Account, Currency and Amount are null for an item that is a payee or category, not a transaction or split.
 type findingItemDocument struct {
 	TransactionID  *string `json:"transaction_id"`
 	SplitID        *string `json:"split_id"`
 	PayeeID        *string `json:"payee_id"`
 	CategoryID     *string `json:"category_id"`
-	Date           string  `json:"date"`
-	AccountID      string  `json:"account_id"`
-	Account        string  `json:"account"`
-	Currency       string  `json:"currency"`
+	Date           *string `json:"date"`
+	AccountID      *string `json:"account_id"`
+	Account        *string `json:"account"`
+	Currency       *string `json:"currency"`
 	Payee          *string `json:"payee"`
 	Category       *string `json:"category"`
-	Amount         string  `json:"amount"`
+	Amount         *string `json:"amount"`
 	OtherAccount   *string `json:"other_account"`
 	OtherAccountID *string `json:"other_account_id"`
 	Transactions   *int    `json:"transactions"`
@@ -80,13 +81,21 @@ func newFindingEntryDocument(f report.ListedFinding) findingEntryDocument {
 	return doc
 }
 
-// newFindingItemDocument converts item into its --json entry; category is an unlinked-transfer item's path or null,
-// and transactions and splits stay null until a type carries them.
+// newFindingItemDocument converts item into its --json entry: date, account, currency and amount are null for
+// an item with neither transaction nor split, category is its path or null, and transactions is null where 0.
 func newFindingItemDocument(item store.FindingItem) findingItemDocument {
-	return findingItemDocument{
+	doc := findingItemDocument{
 		TransactionID: item.TransactionID, SplitID: item.SplitID, PayeeID: item.PayeeID, CategoryID: item.CategoryID,
-		Date: item.Date.Format(jsonDateLayout), AccountID: item.AccountID, Account: item.Account, Currency: item.Currency,
-		Payee: jsonNullString(item.Payee), Category: item.Category, Amount: jsonMoney(item.Amount),
+		Payee: jsonNullString(item.Payee), Category: item.Category,
 		OtherAccount: item.OtherAccount, OtherAccountID: item.OtherAccountID,
 	}
+	if item.Transactions > 0 {
+		doc.Transactions = &item.Transactions
+	}
+	if item.TransactionID == nil && item.SplitID == nil {
+		return doc
+	}
+	date, amount := item.Date.Format(jsonDateLayout), jsonMoney(item.Amount)
+	doc.Date, doc.AccountID, doc.Account, doc.Currency, doc.Amount = &date, &item.AccountID, &item.Account, &item.Currency, &amount
+	return doc
 }

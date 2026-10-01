@@ -37,6 +37,15 @@ func paid(id, payee string, items int) store.Finding {
 	return f
 }
 
+// mixed is an open mixed-categories finding of payee with one item per transaction count.
+func mixed(id, payee string, counts ...int) store.Finding {
+	f := store.Finding{ID: id, Type: finding.MixedCategories}
+	for _, n := range counts {
+		f.Items = append(f.Items, store.FindingItem{Payee: payee, Transactions: n})
+	}
+	return f
+}
+
 func findingsOf(t *testing.T, fs ...store.Finding) report.FindingsListing {
 	t.Helper()
 	srv := report.NewServer(report.WithStore(fakeStore{findings: store.FindingList{Findings: fs}}))
@@ -109,6 +118,21 @@ func Test_findings_sorts_an_uncategorized_group_by_item_count_descending_then_pa
 
 	assert.Equal(t, []string{
 		"uncategorized:payee-2", "uncategorized:payee-1", "uncategorized:payee-3", "uncategorized:payee-4", "uncategorized:payee-5",
+	}, idsOf(got.Groups[0]))
+}
+
+func Test_findings_sorts_a_mixed_categories_group_by_transaction_sum_descending_then_payee_ignoring_case_then_id(t *testing.T) {
+	got := findingsOf(t,
+		mixed("mixed-categories:payee-1", "Zed", 10),
+		mixed("mixed-categories:payee-2", "amazon", 10),
+		mixed("mixed-categories:payee-3", "Bakery", 3, 3),
+		mixed("mixed-categories:payee-4", "Bakery", 3, 3),
+		mixed("mixed-categories:payee-5", "Cafe", 40),
+		mixed("mixed-categories:payee-6", "Dairy", 30, 30))
+
+	assert.Equal(t, []string{
+		"mixed-categories:payee-6", "mixed-categories:payee-5", "mixed-categories:payee-2", "mixed-categories:payee-1",
+		"mixed-categories:payee-3", "mixed-categories:payee-4",
 	}, idsOf(got.Groups[0]))
 }
 
