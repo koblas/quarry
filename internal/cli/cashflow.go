@@ -89,7 +89,7 @@ less. A period that --since or --until cuts short is marked partial.`,
 		},
 	}
 	cmd.Flags().StringVar(&by, "by", cashFlowPeriods[store.CashFlowByMonth].name, "group by `period`: month or year")
-	flags.bind(cmd)
+	flags.bind(cmd, transactionFlagHelp)
 	return cmd
 }
 

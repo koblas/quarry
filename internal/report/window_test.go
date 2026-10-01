@@ -142,6 +142,40 @@ func Test_parse_window_refuses_a_since_after_today_only_when_until_is_absent(t *
 	})
 }
 
+func Test_parse_charge_window_names_the_command_in_the_refusal_of_a_since_after_today(t *testing.T) {
+	cases := []struct {
+		command string
+		since   string
+		want    string
+	}{
+		{command: "recurring", since: "2030", want: "--since 2030 is after today; recurring lists charges up to today only, so pass an earlier --since"},
+		{command: "anomalies", since: "2026-09-30", want: "--since 2026-09-30 is after today; anomalies lists charges up to today only, so pass an earlier --since"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.command, func(t *testing.T) {
+			_, err := report.ParseChargeWindow(c.command, &c.since, nil, windowNow)
+
+			var refusal report.WindowError
+			require.ErrorAs(t, err, &refusal)
+			assert.EqualError(t, err, c.want)
+		})
+	}
+}
+
+func Test_parse_charge_window_lets_a_future_since_through_when_until_is_given(t *testing.T) {
+	got, err := report.ParseChargeWindow("recurring", new("2030"), new("2031"), windowNow)
+
+	require.NoError(t, err)
+	assert.Equal(t, store.Window{Since: day(2030, time.January, 1), Until: day(2031, time.December, 31)}, got)
+}
+
+func Test_parse_charge_window_refuses_the_other_periods_as_parse_window_does(t *testing.T) {
+	_, err := report.ParseChargeWindow("recurring", new("2025"), new("2024"), windowNow)
+
+	assert.EqualError(t, err, "--since 2025 is after --until 2024")
+}
+
 func Test_parse_window_refuses_an_until_before_the_default_since(t *testing.T) {
 	t.Run("the last day of last year is refused with the default since resolved", func(t *testing.T) {
 		_, err := report.ParseWindow(nil, new("2025-12-31"), windowNow)

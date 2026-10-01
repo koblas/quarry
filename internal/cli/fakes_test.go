@@ -18,16 +18,19 @@ var spendNow = time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
 type fakeReportStore struct {
 	report.Store
 
-	accounts    store.AccountList
-	spending    store.Spending
-	cashFlow    store.CashFlow
-	findings    store.FindingList
-	result      store.QueryResult
-	gotQuery    *string
-	gotMaxRows  *int
-	gotSpending *store.SpendingParams
-	gotCashFlow *store.CashFlowParams
-	err         error
+	accounts     store.AccountList
+	spending     store.Spending
+	cashFlow     store.CashFlow
+	charges      store.Charges
+	findings     store.FindingList
+	result       store.QueryResult
+	gotQuery     *string
+	gotMaxRows   *int
+	gotSpending  *store.SpendingParams
+	gotCashFlow  *store.CashFlowParams
+	gotCharges   *store.ChargeParams
+	chargesReads *int
+	err          error
 }
 
 func (f fakeReportStore) Accounts(context.Context) (store.AccountList, error) {
@@ -46,6 +49,16 @@ func (f fakeReportStore) CashFlow(_ context.Context, params store.CashFlowParams
 		*f.gotCashFlow = params
 	}
 	return f.cashFlow, f.err
+}
+
+func (f fakeReportStore) Charges(_ context.Context, params store.ChargeParams) (store.Charges, error) {
+	if f.gotCharges != nil {
+		*f.gotCharges = params
+	}
+	if f.chargesReads != nil {
+		*f.chargesReads++
+	}
+	return f.charges, f.err
 }
 
 func (f fakeReportStore) Findings(context.Context) (store.FindingList, error) {

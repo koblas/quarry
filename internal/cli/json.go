@@ -158,7 +158,7 @@ func marshalDocument(doc any) ([]byte, error) {
 	enc := json.NewEncoder(&buf)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(doc); err != nil {
-		// unreachable: docs hold strings, bools, ints, pointers, slices, finite floats: jsonSQLCell's and savings_rate_pct (BIGINT tenths/10.0 or NULL; its sole production source: duckstore cashFlowQuery).
+		// unreachable: docs hold only strings, bools, ints, pointers, slices, finite floats (savings_rate_pct, change_pct, times: int64 tenths/10.0, or NULL) and jsonSQLCell values
 		return nil, fmt.Errorf("encode document: %w", err)
 	}
 	return buf.Bytes(), nil

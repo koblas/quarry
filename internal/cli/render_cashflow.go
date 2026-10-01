@@ -11,6 +11,9 @@ import (
 // cashFlowNoRate is the Savings rate cell of a row with no income to divide by.
 const cashFlowNoRate = "n/a"
 
+// cashFlowAligns is the alignment of the cashflow table's columns: the amounts and rate right, the rest left.
+var cashFlowAligns = []tableAlign{alignLeft, alignLeft, alignRight, alignRight, alignRight, alignRight, alignLeft}
+
 // renderCashFlow renders c as the cashflow table: a window caption, a header, one row per period and
 // currency, then a Total row per currency. The trailing Status column is unpadded.
 func renderCashFlow(c report.CashFlow) string {
@@ -26,7 +29,7 @@ func renderCashFlow(c report.CashFlow) string {
 	for _, t := range c.Totals {
 		rows = append(rows, cashFlowCells(tableTotalLabel, t.Currency, t.Income, t.Spent, t.Net, t.SavingsRatePct, ""))
 	}
-	return renderTable(windowCaption("Cash flow", c.Window, c.Accounts), rows)
+	return renderTable(windowCaption("Cash flow", c.Window, c.Accounts), cashFlowAligns, rows)
 }
 
 // cashFlowCells is one table row: its amounts in cents formatted as money, rate as a percentage.

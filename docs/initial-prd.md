@@ -126,7 +126,7 @@ The store has a small set of normalized tables plus derived views; every analysi
 | `findings`, `finding_items` | What each sync found to clean up: id, type, when first found, when fixed; `finding_items` names the transactions, splits, payees or categories | Status (open, fixed, ignored) and the suggested fix come from `quarry findings`; ignore decisions live in the config file |
 | `import_runs` | Snapshot hash, row counts, validation results | One row per successful build, kept across rebuilds; audit trail |
 
-**Derived views:** `v_spending` (expense splits, transfers removed, refunds netted), `v_cash_flow` (monthly income vs expense), `v_balances_daily` and `v_net_worth` (per account and total), `v_recurring` (detected series), `v_holdings` (shares and value by date).
+**Derived views:** `v_spending` (expense splits, transfers removed, refunds netted), `v_cash_flow` (monthly income vs expense), `v_balances_daily` and `v_net_worth` (per account and total), `v_holdings` (shares and value by date). Recurring series and anomalies are computed by the core library; `quarry recurring --json` / `anomalies --json` are the shapes the Phase 3 `recurring_charges` / `anomalies` tools return.
 
 **Conventions**
 

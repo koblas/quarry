@@ -517,3 +517,45 @@ type CashFlow struct {
 	// Transactions is set only when the window holds no income or spending (no Totals), as for Spending.
 	Transactions TransactionRange
 }
+
+// ChargeParams is what a charges read varies by: Through, the last civil day it
+// reads, held as UTC midnight (rows dated later are not charges yet), and the accounts
+// whose transaction span it gives.
+type ChargeParams struct {
+	Through time.Time
+	// AccountIDs scopes only Charges.Transactions, as for Spending; empty spans every account.
+	AccountIDs []string
+}
+
+// ChargeCategory is the category of a charge's expense rows.
+type ChargeCategory struct {
+	ID   string
+	Path string
+}
+
+// Charge is one transaction's expense: the sum of its v_spending rows, in cents,
+// kept only when positive.
+type Charge struct {
+	TransactionID string
+	SourceID      int64
+	Date          time.Time
+	// Account holds only ID, Name, Currency, Closed and Active; its other fields are zero.
+	Account Account
+	// PayeeID and Payee are nil when the transaction has no payee.
+	PayeeID, Payee *string
+	Currency       string
+	Amount         int64
+	// Category is set only when every expense row has the same non-NULL category.
+	Category *ChargeCategory
+	// ExpenseSplits is how many v_spending rows the transaction has.
+	ExpenseSplits int
+}
+
+// Charges is every charge dated through ChargeParams.Through, ordered by date
+// then numeric source id, and the span of the transactions Transactions describes.
+type Charges struct {
+	Rows []Charge
+	// Transactions is the span of every transaction in the store, or of those of the reported
+	// accounts ChargeParams.AccountIDs names; Rows are never filtered by account.
+	Transactions TransactionRange
+}

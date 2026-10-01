@@ -17,7 +17,7 @@ type readOp struct {
 	call func(context.Context, *duckstore.Store) error
 }
 
-// rowReads are the reads that scan rows: Status, Accounts and Findings.
+// rowReads are the reads that scan rows: Status, Accounts, Charges and Findings.
 func rowReads() []readOp {
 	return []readOp{
 		{name: "Status", call: func(ctx context.Context, st *duckstore.Store) error {
@@ -26,6 +26,10 @@ func rowReads() []readOp {
 		}},
 		{name: "Accounts", call: func(ctx context.Context, st *duckstore.Store) error {
 			_, err := st.Accounts(ctx)
+			return err
+		}},
+		{name: "Charges", call: func(ctx context.Context, st *duckstore.Store) error {
+			_, err := st.Charges(ctx, store.ChargeParams{Through: day(2026, 9, 29)})
 			return err
 		}},
 		{name: "Findings", call: func(ctx context.Context, st *duckstore.Store) error {

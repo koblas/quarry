@@ -14,15 +14,18 @@ const tableTotalLabel = "Total"
 // tablePartialStatus is the Status cell of a period the window cuts short.
 const tablePartialStatus = "partial"
 
-// tableFixedColumns is how many leading columns of a table are left-aligned; the rest are right-aligned.
-const tableFixedColumns = 2
+// tableAlign is which edge of its column a table cell sits against.
+type tableAlign int
 
-// renderTable renders a report table: caption, a blank line, then rows (header first). Every cell
-// but the last of a row is padded to its column; the first tableFixedColumns are left-aligned, the
-// rest right-aligned. The last cell is the Status, unpadded and written only when non-empty.
-func renderTable(caption string, rows [][]string) string {
-	padded := len(rows[0]) - 1
-	widths := make([]int, padded)
+const (
+	alignLeft tableAlign = iota
+	alignRight
+)
+
+// renderTable renders a report table: caption, a blank line, then rows (header first). Each cell is
+// padded to its column's widest cell, on the side aligns names; a row loses its trailing spaces.
+func renderTable(caption string, aligns []tableAlign, rows [][]string) string {
+	widths := make([]int, len(aligns))
 	for _, row := range rows {
 		for i := range widths {
 			widths[i] = max(widths[i], utf8.RuneCountInString(row[i]))
@@ -32,20 +35,15 @@ func renderTable(caption string, rows [][]string) string {
 	var b strings.Builder
 	b.WriteString(caption + "\n\n")
 	for _, row := range rows {
-		for i := range padded {
-			if i > 0 {
-				b.WriteString(accountsColumnGap)
-			}
-			if i < tableFixedColumns {
-				b.WriteString(padRight(row[i], widths[i]))
+		cells := make([]string, len(aligns))
+		for i, align := range aligns {
+			if align == alignLeft {
+				cells[i] = padRight(row[i], widths[i])
 			} else {
-				b.WriteString(padLeft(row[i], widths[i]))
+				cells[i] = padLeft(row[i], widths[i])
 			}
 		}
-		if status := row[padded]; status != "" {
-			b.WriteString(accountsColumnGap + status)
-		}
-		b.WriteString("\n")
+		b.WriteString(strings.TrimRight(strings.Join(cells, accountsColumnGap), " ") + "\n")
 	}
 	return b.String()
 }

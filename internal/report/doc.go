@@ -1,5 +1,5 @@
 // Package report answers quarry's read commands (status, accounts, spend,
-// cashflow, snapshots and findings) from the store sync built:
+// cashflow, recurring, anomalies, snapshots and findings) from the store sync built:
 // it opens the store through its Store port and returns driver-free values
 // for the cli package to render, or the one-line refusal copy when the store
 // cannot be read. It never writes the store and never reads Quicken.

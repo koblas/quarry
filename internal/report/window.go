@@ -43,6 +43,21 @@ func DefaultWindow(now time.Time) store.Window {
 // all of it. It returns a WindowError for a value that is not a date and for a period
 // that is empty, or a future one when no until allows it.
 func ParseWindow(since, until *string, now time.Time) (store.Window, error) {
+	return parseWindow(since, until, now, func(since string) string {
+		return fmt.Sprintf("--since %s is after today; pass --until to include future-dated transactions", since)
+	})
+}
+
+// ParseChargeWindow is ParseWindow for a command that lists charges up to today only: a
+// future --since given without --until is refused with a message naming command.
+func ParseChargeWindow(command string, since, until *string, now time.Time) (store.Window, error) {
+	return parseWindow(since, until, now, func(since string) string {
+		return fmt.Sprintf("--since %s is after today; %s lists charges up to today only, so pass an earlier --since", since, command)
+	})
+}
+
+// parseWindow is ParseWindow with the refusal for a future since given by sinceAfterToday.
+func parseWindow(since, until *string, now time.Time, sinceAfterToday func(since string) string) (store.Window, error) {
 	window := DefaultWindow(now)
 	today := window.Until
 	defaultSince := window.Since
@@ -65,8 +80,7 @@ func ParseWindow(since, until *string, now time.Time) (store.Window, error) {
 
 	switch {
 	case since != nil && until == nil && window.Since.After(today):
-		return store.Window{}, WindowError{msg: fmt.Sprintf(
-			"--since %s is after today; pass --until to include future-dated transactions", *since)}
+		return store.Window{}, WindowError{msg: sinceAfterToday(*since)}
 	case since != nil && until != nil && window.Since.After(window.Until):
 		return store.Window{}, WindowError{msg: fmt.Sprintf("--since %s is after --until %s", *since, *until)}
 	case since == nil && until != nil && window.Until.Before(defaultSince):

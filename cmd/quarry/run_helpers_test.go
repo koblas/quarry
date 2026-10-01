@@ -165,6 +165,56 @@ func spendRows(accounts []store.Account, splits ...spendSplit) store.Rows {
 	return rows
 }
 
+// chargeSplit is one split of a chargeTxn; "" category means none, negative cents is money out.
+type chargeSplit struct {
+	category string
+	cents    int64
+}
+
+// chargeTxn is one transaction of any number of splits; "" payee means none, and the
+// payee is stored under the id "payee-<name>".
+type chargeTxn struct {
+	id, account, payee, currency string
+	day                          time.Time
+	splits                       []chargeSplit
+}
+
+// chargeRows is spendRows' reference data (without its payees) plus txns, each given the
+// next source id from 1 and a payee row per distinct name, so a transaction may hold several splits.
+func chargeRows(accounts []store.Account, txns ...chargeTxn) store.Rows {
+	rows := spendRows(accounts)
+	rows.Payees = nil
+	known := map[string]bool{}
+	for i, tx := range txns {
+		var payeeID *string
+		if tx.payee != "" {
+			id := "payee-" + tx.payee
+			if !known[id] {
+				known[id] = true
+				rows.Payees = append(rows.Payees, store.Payee{ID: id, SourceID: int64(len(rows.Payees) + 1), Name: tx.payee})
+			}
+			payeeID = &id
+		}
+		var amount int64
+		for j, sp := range tx.splits {
+			var category *string
+			if sp.category != "" {
+				category = new(sp.category)
+			}
+			amount += sp.cents
+			rows.Splits = append(rows.Splits, store.Split{
+				ID: fmt.Sprintf("split-%s-%d", tx.id, j), SourceID: int64(j + 1), TransactionID: "txn-" + tx.id,
+				CategoryID: category, Amount: sp.cents,
+			})
+		}
+		rows.Transactions = append(rows.Transactions, store.Transaction{
+			ID: "txn-" + tx.id, SourceID: int64(i + 1), AccountID: tx.account, Date: tx.day,
+			Amount: amount, Currency: tx.currency, Status: "uncleared", PayeeID: payeeID,
+		})
+	}
+	return rows
+}
+
 // day is the civil day y-m-d at UTC midnight, as the store dates transactions.
 func day(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
 

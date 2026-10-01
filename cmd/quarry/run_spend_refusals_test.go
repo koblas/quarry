@@ -74,6 +74,14 @@ func Test_run_report_commands_refuse_when_home_is_unset(t *testing.T) {
 			command:    "cashflow",
 			wantStderr: "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry cashflow again\n",
 		},
+		{
+			command:    "recurring",
+			wantStderr: "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry recurring again\n",
+		},
+		{
+			command:    "anomalies",
+			wantStderr: "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry anomalies again\n",
+		},
 	}
 
 	for _, c := range cases {
