@@ -138,6 +138,17 @@ func Test_replace_keeps_the_earliest_checked_floor_across_runs(t *testing.T) {
 	}
 }
 
+func Test_replace_keeps_the_checked_floor_on_a_partial_fetch(t *testing.T) {
+	t.Parallel()
+	partial := store.RatesRefresh{Rates: []store.Rate{ratesOn(16, 1_310_000, "FXUSDCAD")}, Added: 1, FetchError: "unreachable", Partial: true}
+	st := newStoreWithFloors(t, []int{20}, []int{13}, duckstore.WithRates(&fakeRates{refresh: partial}))
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assertScalar(t, openReadOnly(t, replaced.Path), latestFloorText, "2026-03-20")
+}
+
 func Test_replace_without_a_rates_source_carries_the_checked_floor(t *testing.T) {
 	t.Parallel()
 	st := newStoreWithFloors(t, []int{1}, []int{13})

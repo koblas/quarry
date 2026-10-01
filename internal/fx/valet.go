@@ -26,10 +26,10 @@ const (
 	maxRate    = money.Rate(9_999_999_999)
 )
 
-var (
-	errStatus = errors.New("unexpected status")
-	errRate   = errors.New("unreadable rate")
-)
+// maxAnswerBytes bounds the answer Valet reads; the largest real one, a series over some sixty years, is about 2 MB.
+const maxAnswerBytes = 16 << 20
+
+var errRate = errors.New("unreadable rate")
 
 // Valet is the Source that reads the Bank of Canada Valet web service.
 type Valet struct {
@@ -46,7 +46,7 @@ func NewValet(client *http.Client) *Valet {
 
 // Observations returns the series' published rates dated within span, in the order Valet lists them.
 // A day with no published rate is skipped. The whole answer fails on a transport or status fault, on
-// a body that is not a Valet observation list, or on any date or rate it cannot read.
+// a body past maxAnswerBytes or that is not a Valet observation list, or on any date or rate it cannot read.
 func (v *Valet) Observations(ctx context.Context, series string, span store.DateSpan) ([]Observation, error) {
 	body, err := v.get(ctx, series, span)
 	if err != nil {
@@ -67,15 +67,18 @@ func (v *Valet) get(ctx context.Context, series string, span store.DateSpan) ([]
 	}
 	resp, err := v.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("fetch %s: %w", series, err)
+		return nil, fmt.Errorf("fetch %s: %w: %w", series, errUnreachable, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch %s: %w %s", series, errStatus, resp.Status)
+		return nil, fmt.Errorf("fetch %s: %w", series, statusError{Code: resp.StatusCode})
 	}
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxAnswerBytes+1))
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", series, err)
+		return nil, fmt.Errorf("read %s: %w: %w", series, errUnreachable, err)
+	}
+	if len(body) > maxAnswerBytes {
+		return nil, fmt.Errorf("read %s: %w: more than %d bytes", series, errNotRates, maxAnswerBytes)
 	}
 	return body, nil
 }
@@ -86,13 +89,13 @@ func parseObservations(series string, body []byte) ([]Observation, error) {
 		Observations []map[string]json.RawMessage `json:"observations"`
 	}
 	if err := json.Unmarshal(body, &answer); err != nil {
-		return nil, fmt.Errorf("decode %s: %w", series, err)
+		return nil, fmt.Errorf("decode %s: %w: %w", series, errNotRates, err)
 	}
 	var out []Observation
 	for _, raw := range answer.Observations {
 		obs, ok, err := parseObservation(series, raw)
 		if err != nil {
-			return nil, fmt.Errorf("decode %s: %w", series, err)
+			return nil, fmt.Errorf("decode %s: %w: %w", series, errNotRates, err)
 		}
 		if ok {
 			out = append(out, obs)

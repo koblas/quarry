@@ -2,6 +2,7 @@ package fx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -41,27 +42,41 @@ func NewServer(opts ...Option) *Server {
 	return s
 }
 
+// requestTimeout bounds each request to the Source; the sync warning's "within 30 seconds" is this value.
+const requestTimeout = 30 * time.Second
+
 // Refresh fetches the rates for req.Need that req.Have does not cover, oldest first, none dated
 // inside Have and none out of range. A source that answers with nothing is not a failure.
-// It returns an error only when ctx ended; every other failure comes back as RatesRefresh.FetchError
-// with no rates.
+// A failed span keeps the rates of the spans that answered (Partial) and FetchError carries the first failure's
+// reason; after a timeout or an unreachable bank the later spans are not asked.
+// It returns an error only when ctx ended.
 func (s *Server) Refresh(ctx context.Context, req store.RatesRequest) (store.RatesRefresh, error) {
-	var rates []store.Rate
+	var out store.RatesRefresh
 	for _, ask := range planSpans(req) {
 		got, err := s.fetch(ctx, ask)
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return store.RatesRefresh{}, fmt.Errorf("fetch rates: %w", ctxErr)
 		}
-		if err != nil {
-			return store.RatesRefresh{FetchError: err.Error()}, nil //nolint:nilerr // a failed fetch is reported in FetchError, not as an error
+		out.Rates = append(out.Rates, got...)
+		if err == nil {
+			continue
 		}
-		rates = append(rates, got...)
+		reason, stop := fetchReason(err)
+		if out.FetchError == "" {
+			out.FetchError = reason
+		}
+		if stop {
+			break
+		}
 	}
-	return store.RatesRefresh{Rates: rates, Added: len(rates)}, nil
+	out.Added = len(out.Rates)
+	out.Partial = out.FetchError != "" && len(out.Rates) > 0
+	return out, nil
 }
 
 // fetch returns one run's rates: FXUSDCAD's, plus the legacy series' for the days before FXUSDCAD's first
 // observation when the run may use it. The cutover is whatever FXUSDCAD answered with, never a constant.
+// When only the legacy series fails it returns FXUSDCAD's rates beside the error.
 func (s *Server) fetch(ctx context.Context, ask askSpan) ([]store.Rate, error) {
 	current, err := s.observe(ctx, seriesCurrent, ask.span)
 	if err != nil {
@@ -76,16 +91,23 @@ func (s *Server) fetch(ctx context.Context, ask askSpan) ([]store.Rate, error) {
 	}
 	legacy, err := s.observe(ctx, seriesLegacy, legacySpan)
 	if err != nil {
-		return nil, err
+		return toRates(current, seriesCurrent), err
 	}
 	return append(toRates(legacy, seriesLegacy), toRates(current, seriesCurrent)...), nil
 }
 
-// observe asks the source for a series over span and returns its valid observations dated inside span,
-// oldest first, the first of any repeated date kept. A rate the store could not hold fails the answer.
+// observe asks the source for a series over span, within requestTimeout, and returns its valid observations
+// dated inside span, oldest first, the first of any repeated date kept. A rate the store could not hold fails
+// the answer as errNotRates; a request that outlived requestTimeout fails as errTimeout.
 func (s *Server) observe(ctx context.Context, series string, span store.DateSpan) ([]Observation, error) {
-	got, err := s.source.Observations(ctx, series, span)
+	reqCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	got, err := s.source.Observations(reqCtx, series, span)
 	if err != nil {
+		// A read cut by the deadline may drop the cause, so the request's own clock decides too.
+		if errors.Is(reqCtx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, fmt.Errorf("%w: %w", errTimeout, err)
+		}
 		return nil, err //nolint:wrapcheck // Source errors already name their series
 	}
 	var kept []Observation
@@ -94,7 +116,7 @@ func (s *Server) observe(ctx context.Context, series string, span store.DateSpan
 			continue
 		}
 		if err := checkRate(o.Rate); err != nil {
-			return nil, fmt.Errorf("%s on %s: %w", series, o.Date.Format(time.DateOnly), err)
+			return nil, fmt.Errorf("%s on %s: %w: %w", series, o.Date.Format(time.DateOnly), errNotRates, err)
 		}
 		if slices.ContainsFunc(kept, func(k Observation) bool { return k.Date.Equal(o.Date) }) {
 			continue

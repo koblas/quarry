@@ -166,6 +166,52 @@ func Test_valet_fails_the_answer_when_the_body_is_not_an_observation_list(t *tes
 	}
 }
 
+func Test_valet_accepts_an_answer_exactly_at_the_cap(t *testing.T) {
+	valet := newValet(t, answering(http.StatusOK, paddedAnswer(answerCap)))
+
+	got, err := valet.Observations(t.Context(), "FXUSDCAD", span(d(0), d(0)))
+
+	require.NoError(t, err)
+	assert.Equal(t, []fx.Observation{obs(0, 1_300_000)}, got)
+}
+
+func Test_valet_refuses_an_answer_one_byte_over_the_cap(t *testing.T) {
+	valet := newValet(t, answering(http.StatusOK, paddedAnswer(answerCap+1)))
+
+	got, err := valet.Observations(t.Context(), "FXUSDCAD", span(d(0), d(0)))
+
+	require.Error(t, err)
+	assert.Empty(t, got)
+}
+
+// blanks is a reader of size spaces that counts what was taken from it.
+type blanks struct{ size, taken int }
+
+func (b *blanks) Read(p []byte) (int, error) {
+	n := min(len(p), b.size-b.taken)
+	for i := range p[:n] {
+		p[i] = ' '
+	}
+	b.taken += n
+	if n == 0 {
+		return 0, io.EOF
+	}
+	return n, nil
+}
+
+func Test_valet_stops_reading_an_answer_at_the_cap(t *testing.T) {
+	endless := &blanks{size: 2 * answerCap}
+	body := io.NopCloser(io.MultiReader(strings.NewReader(`{"observations":[]}`), endless))
+	valet := newValet(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return reply(req, http.StatusOK, body), nil
+	}))
+
+	_, err := valet.Observations(t.Context(), "FXUSDCAD", january2017)
+
+	require.Error(t, err)
+	assert.LessOrEqual(t, endless.taken, answerCap)
+}
+
 func Test_valet_fails_when_the_request_cannot_be_made(t *testing.T) {
 	valet := newValet(t, roundTripFunc(func(*http.Request) (*http.Response, error) { return nil, errDial }))
 

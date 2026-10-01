@@ -21,12 +21,12 @@ const maxStoredRate = money.Rate(9_999_999_999)
 // storedRatesQuery reads the first and last date in fx_rates; both are NULL when it is empty.
 const storedRatesQuery = `SELECT min(date), max(date) FROM fx_rates`
 
-// recordRatesQuery stamps the run this build added, the highest id, with how far its rates reach.
-const recordRatesQuery = `UPDATE import_runs SET rates_checked_from = CAST(? AS DATE), rates_last = CAST(? AS DATE)
+// recordRatesQuery stamps the run this build added, the highest id, with how far its rates reach and why its fetch fell short.
+const recordRatesQuery = `UPDATE import_runs SET rates_checked_from = CAST(? AS DATE), rates_last = CAST(? AS DATE), rates_fetch_error = ?
 WHERE id = (SELECT max(id) FROM import_runs)`
 
 // finishBuild appends the carried rates, then the fetched ones, records them on the new import run, then store_info
-// last. It fails only when ctx ended or a row cannot be written; a fetch that fell short keeps whatever rates it returned.
+// last. It fails only when ctx ended or a row cannot be written; a fetch that fell short keeps whatever rates it returned and writes its reason.
 func (s *Store) finishBuild(ctx context.Context, db DB, rows store.Rows, carried history, builtAt time.Time) (store.RatesSummary, error) {
 	need, refresh, err := s.refreshRates(ctx, rows.Transactions, carried)
 	if err != nil {
@@ -43,8 +43,8 @@ func (s *Store) finishBuild(ctx context.Context, db DB, rows store.Rows, carried
 	if err != nil {
 		return store.RatesSummary{}, err
 	}
-	summary.Added, summary.FetchError = refresh.Added, refresh.FetchError
-	if err := recordRates(ctx, db, askedFrom(need, refresh, carried.ratesFloor), summary.Last); err != nil {
+	summary.Added, summary.FetchError, summary.Partial = refresh.Added, refresh.FetchError, refresh.Partial
+	if err := recordRates(ctx, db, askedFrom(need, refresh, carried.ratesFloor), summary.Last, refresh.FetchError); err != nil {
 		return store.RatesSummary{}, err
 	}
 	// A file carrying store_info is complete, so it goes last.
@@ -103,9 +103,10 @@ func storedRates(ctx context.Context, db DB) (store.RatesSummary, error) {
 	return store.RatesSummary{First: first.Time, Last: last.Time}, nil
 }
 
-// recordRates stamps the build's import run with the dates it asked from and its last stored rate; a zero time is NULL.
-func recordRates(ctx context.Context, db DB, checkedFrom, last time.Time) error {
-	if _, err := db.Exec(ctx, recordRatesQuery, nullIfZero(checkedFrom), nullIfZero(last)); err != nil {
+// recordRates stamps the build's import run with the dates it asked from, its last stored rate and the reason its
+// fetch fell short; a zero time or an empty reason is NULL.
+func recordRates(ctx context.Context, db DB, checkedFrom, last time.Time, fetchError string) error {
+	if _, err := db.Exec(ctx, recordRatesQuery, nullIfZero(checkedFrom), nullIfZero(last), nullIfEmpty(fetchError)); err != nil {
 		return fmt.Errorf("record exchange rates: %w", err)
 	}
 	return nil
@@ -117,6 +118,14 @@ func nullIfZero(t time.Time) any {
 		return nil
 	}
 	return t
+}
+
+// nullIfEmpty is s, or nil for the empty string.
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // needSpan is the dates from the earliest transaction to now's local calendar

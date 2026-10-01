@@ -221,42 +221,6 @@ func Test_refresh_reports_no_failure_and_no_rates_when_the_source_answers_with_n
 	assert.Equal(t, store.RatesRefresh{}, got)
 }
 
-func Test_refresh_reports_a_source_failure_as_a_fetch_error_with_no_rates(t *testing.T) {
-	cases := []struct {
-		name     string
-		failures map[string]error
-	}{
-		{name: "the current series fails", failures: map[string]error{current: errBoom}},
-		{name: "the legacy series fails after the current one answered", failures: map[string]error{legacy: errBoom}},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			src := &fakeSource{answers: map[string][]fx.Observation{current: {obs(2, 1_300_000)}}, failures: c.failures}
-
-			got, err := newRefresher(src).Refresh(t.Context(), store.RatesRequest{Need: span(d(0), d(5))})
-
-			require.NoError(t, err)
-			assert.Equal(t, store.RatesRefresh{FetchError: errBoom.Error()}, got)
-		})
-	}
-}
-
-func Test_refresh_drops_the_rates_of_the_head_span_when_the_tail_span_fails(t *testing.T) {
-	head, tail := span(d(0), d(2)), span(d(7), d(9))
-	src := &fakeSource{
-		answers:      map[string][]fx.Observation{current: {obs(1, 1_300_000)}},
-		callFailures: map[call]error{{Series: current, Span: tail}: errBoom},
-	}
-
-	got, err := newRefresher(src).Refresh(t.Context(), store.RatesRequest{Need: span(d(0), d(9)), Have: span(d(3), d(6))})
-
-	require.NoError(t, err)
-	assert.Equal(t, head, src.spansAsked(current)[0])
-	assert.Equal(t, tail, src.spansAsked(current)[1])
-	assert.Equal(t, store.RatesRefresh{FetchError: errBoom.Error()}, got)
-}
-
 func Test_refresh_reports_a_rate_the_store_cannot_hold_as_a_fetch_error(t *testing.T) {
 	cases := []struct {
 		name string
@@ -274,8 +238,7 @@ func Test_refresh_reports_a_rate_the_store_cannot_hold_as_a_fetch_error(t *testi
 			got, err := newRefresher(src).Refresh(t.Context(), store.RatesRequest{Need: span(d(0), d(1))})
 
 			require.NoError(t, err)
-			assert.Empty(t, got.Rates)
-			assert.Contains(t, got.FetchError, current+" on 2020-01-02")
+			assert.Equal(t, store.RatesRefresh{FetchError: notAList}, got)
 		})
 	}
 }
@@ -295,7 +258,7 @@ func Test_refresh_reports_a_source_timeout_as_a_fetch_error_while_the_context_is
 	got, err := newRefresher(src).Refresh(t.Context(), store.RatesRequest{Need: span(d(0), d(5))})
 
 	require.NoError(t, err)
-	assert.Equal(t, context.DeadlineExceeded.Error(), got.FetchError)
+	assert.Equal(t, noAnswerInTime, got.FetchError)
 }
 
 func Test_refresh_returns_an_error_when_the_context_ends_during_a_fetch(t *testing.T) {

@@ -320,6 +320,33 @@ func Test_replace_records_the_rates_columns_by_what_the_fetch_answered(t *testin
 	}
 }
 
+// latestFetchErrorText reads the newest import run's rates_fetch_error, NULL spelled out.
+const latestFetchErrorText = `SELECT coalesce(rates_fetch_error, 'NULL') FROM import_runs ORDER BY id DESC LIMIT 1`
+
+func Test_replace_records_the_fetch_reason_on_the_new_run(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		refresh store.RatesRefresh
+		want    string
+	}{
+		{name: "a failed fetch records its reason", refresh: store.RatesRefresh{FetchError: "cannot reach www.bankofcanada.ca"}, want: "cannot reach www.bankofcanada.ca"},
+		{name: "a fetch that answered records NULL", refresh: store.RatesRefresh{Rates: []store.Rate{ratesOn(13, 1_250_000, "IEXE0101")}, Added: 1}, want: "NULL"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := duckstore.New(t.TempDir(), duckstore.WithRates(&fakeRates{refresh: c.refresh}))
+
+			replaced, err := st.Replace(t.Context(), minimalRows())
+
+			require.NoError(t, err)
+			assertScalar(t, openReadOnly(t, replaced.Path), latestFetchErrorText, c.want)
+		})
+	}
+}
+
 func Test_replace_leaves_the_rates_columns_of_earlier_runs_alone(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -349,6 +376,19 @@ func Test_replace_reports_the_stored_rate_span_and_what_this_fetch_added(t *test
 		First: time.Date(2026, 3, 13, 0, 0, 0, 0, time.UTC), Last: time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC),
 		Added: 3, FetchError: "unreachable",
 	}, replaced.Rates)
+}
+
+func Test_replace_reports_a_partial_fetch_in_its_summary(t *testing.T) {
+	t.Parallel()
+	src := &fakeRates{refresh: store.RatesRefresh{
+		Rates: []store.Rate{ratesOn(13, 1_250_000, "IEXE0101")}, Added: 1, FetchError: "unreachable", Partial: true,
+	}}
+	st := duckstore.New(t.TempDir(), duckstore.WithRates(src))
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.True(t, replaced.Rates.Partial)
 }
 
 func Test_replace_reports_no_rate_span_when_none_are_stored(t *testing.T) {
