@@ -412,6 +412,7 @@ func TestSessionExpiresAfterMaxAge(t *testing.T) {
 }
 ```
 
+- **Formatted local dates pin the zone.** Test asserting a date or time rendered in local time sets `time.Local` to a fixed zone with `t.Cleanup` restore (no `t.Parallel`), and uses an instant whose local and UTC dates differ. Unpinned, test passes or fails by machine.
 - A library that itself reads the wall clock must stay on real time — do NOT bubble it, else the code under test desyncs from the library's window. Tests that bind real sockets also stay real-time; they assert routing, not time progression.
 
 ## Test file size & grouping
