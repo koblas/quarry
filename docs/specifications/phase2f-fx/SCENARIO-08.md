@@ -16,8 +16,8 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report) + duckstore Spending 
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_spend_fx_test.go` (new) — both acceptance tests through `runWith`, store from `replaceStoreWithRates` (`run_sql_fx_test.go:32`), config via `writeConfig` (`run_config_test.go:56`). 08: CAD + USD spending with a rate before the earliest split; a pair of USD splits that each convert to a half cent (Total reachable only by rounding each split before summing), and at least one USD row whose CAD figure differs from its native one; text caption ends `, amounts in CAD`, every row and the single Total are CAD; `--json` `currency` is `"CAD"`. 14: the six Examples rows (unset→CAD, `USD`→USD, `native`→native, `usd`→USD, config `USD` + `--currency CAD`→CAD, malformed file + `--currency CAD`→CAD with empty stderr), each crossed with text and `--json`.
-- [ ] Step 2: no stubs needed (tests call only `runWith` and existing helpers); confirm both fail at the caption/`currency` assertion, not at setup.
+- [x] Step 1: `cmd/quarry/run_spend_fx_test.go` (new) — both acceptance tests through `runWith`, store from `replaceStoreWithRates` (`run_sql_fx_test.go:32`), config via `writeConfig` (`run_config_test.go:56`). 08: CAD + USD spending with a rate before the earliest split; a pair of USD splits that each convert to a half cent (Total reachable only by rounding each split before summing), and at least one USD row whose CAD figure differs from its native one; text caption ends `, amounts in CAD`, every row and the single Total are CAD; `--json` `currency` is `"CAD"`. 14: the six Examples rows (unset→CAD, `USD`→USD, `native`→native, `usd`→USD, config `USD` + `--currency CAD`→CAD, malformed file + `--currency CAD`→CAD with empty stderr), each crossed with text and `--json`.
+- [x] Step 2: no stubs needed (tests call only `runWith` and existing helpers); confirm both fail at the caption/`currency` assertion, not at setup.
 
 ### Build
 - [ ] Step 3: `internal/store/store.go:493-500` `SpendingParams.Currency money.Currency`; `internal/store/duckstore/spending.go:12-86,97-137` — one source relation chosen by currency feeds every query: category/payee (`:18-34`), month subquery (`:37-39`), both halves of the tag UNION (`:47-62`). Native is literally `v_spending`, so its SQL text is unchanged. CAD/USD project `spent_cad`/`spent_usd` as `spent` and the reporting currency as `currency`, except where the converted cell is NULL: that split keeps its native `spent` and `currency` in the same statement, so a Total never mixes. Rows and totals stay one `QueryRows`. There is no new fallible call, so the existing fault tests at `spending_test.go:197-228` cover it. New `spending_fx_test.go` (via `newStoreWithRates`, `views_fx_test.go:42`) pins one arm per case:
@@ -83,3 +83,11 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report) + duckstore Spending 
 - `-run` is case-sensitive; keep the narrow loop's `(?i)`.
 
 ## Phase report
+
+**Run A (steps 1-2) done: acceptance red.**
+- `cmd/quarry/run_spend_fx_test.go` (new) holds both acceptance tests, each with `text` and `json` subtests. Helpers: `spendReport`/`spendMoney` (decode of the spend `--json` fields `currency`, `rows`, `totals`), `rateOnJan2` (1.25, 2026-01-02), `runSpendJSON(t, args...)`. B1/V reuse them for the Step 5 edge matrix.
+- 08 fixture: CAD 123.45 + two USD 0.10 splits (-> 0.13 each at 1.25, so Groceries CAD 123.71 where sum-then-round gives 123.70) + USD 80.00 fuel (-> 100.00 CAD) + CAD 10.00 fuel. Expected CAD Total 233.71. Text width format `%-14s  %-8s  %6s`.
+- 14 fixture: CAD 100.00 + USD 80.00 groceries; CAD mode 200.00, USD mode 160.00, native 100.00 CAD + 80.00 USD. Six rows, each text + json; config written with `writeConfig` as `reporting.currency = "<v>"` (unset = no file; malformed = `[snapshots\nkeep = 24\n`).
+- Red, as observed: text fails at the whole-output Equal (caption lacks `, amounts in CAD`, USD rows still present); json fails at the doc Equal (`currency` `""`, USD rows). `native in the config / text` passes on arrival: native output is today's output, so that arm is a regression guard, not red.
+- No stubs were needed. No network: the rates come from `fakeRates` via `replaceStoreWithRates`.
+- B1 still owes Steps 3-5 and the Step 6 pin bumps; Step 6 caption/JSON pins listed in the plan are not yet touched.
