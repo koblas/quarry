@@ -83,3 +83,53 @@ func Test_run_cashflow_total_spent_equals_spend_total_per_currency(t *testing.T)
 		})
 	}
 }
+
+func Test_run_cashflow_spent_equals_spend_total_in_every_reporting_currency(t *testing.T) {
+	// s07 (USD) and s08 (CAD) precede the first rate, so one of them has no converted cell in CAD or USD mode.
+	// s04 and s05 are 0.10 USD each, s09 and s10 0.03 CAD each: the half-cent pairs of each direction.
+	cases := []struct {
+		name      string
+		currency  string
+		accounts  []string
+		wantSpent map[string]string
+	}{
+		{name: "CAD, every account", currency: "CAD", wantSpent: map[string]string{"CAD": "220.32", "USD": "40.00"}},
+		{name: "USD, every account", currency: "USD", wantSpent: map[string]string{"CAD": "20.00", "USD": "200.24"}},
+		{name: "native, every account", currency: "native", wantSpent: map[string]string{"CAD": "120.06", "USD": "120.20"}},
+		{name: "CAD, one USD account", currency: "CAD", accounts: []string{"US Chequing"}, wantSpent: map[string]string{"CAD": "100.26", "USD": "40.00"}},
+		{name: "USD, one USD account", currency: "USD", accounts: []string{"US Chequing"}, wantSpent: map[string]string{"USD": "120.20"}},
+		{name: "native, one USD account", currency: "native", accounts: []string{"US Chequing"}, wantSpent: map[string]string{"USD": "120.20"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			replaceStoreWithRates(t, home, cashFlowRows(
+				[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
+				spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -10000},
+				spendSplit{id: "s02", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 3, 11), cents: 50000},
+				spendSplit{id: "s03", account: "acct-usd", category: "cat-salary", currency: "USD", day: day(2026, 4, 4), cents: 1000},
+				spendSplit{id: "s04", account: "acct-usd", category: "cat-groceries", currency: "USD", day: day(2026, 4, 1), cents: -10},
+				spendSplit{id: "s05", account: "acct-usd", category: "cat-groceries", currency: "USD", day: day(2026, 4, 2), cents: -10},
+				spendSplit{id: "s06", account: "acct-usd", category: "cat-groceries", currency: "USD", day: day(2026, 4, 3), cents: -8000},
+				spendSplit{id: "s07", account: "acct-usd", category: "cat-groceries", currency: "USD", day: day(2025, 12, 15), cents: -4000},
+				spendSplit{id: "s08", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2025, 12, 16), cents: -2000},
+				spendSplit{id: "s09", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 12), cents: -3},
+				spendSplit{id: "s10", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 13), cents: -3},
+			), rateOnJan2)
+			args := []string{"--since", "2025-12", "--until", "2026-04", "--currency", c.currency}
+			for _, a := range c.accounts {
+				args = append(args, "--account", a)
+			}
+			var spendOut, cashFlowOut, stderr bytes.Buffer
+
+			spendExit := runWith(context.Background(), append([]string{"spend"}, args...), spendEnv(&spendOut, &stderr))
+			cashFlowExit := runWith(context.Background(), append([]string{"cashflow"}, args...), spendEnv(&cashFlowOut, &stderr))
+
+			require.Equal(t, 0, spendExit, stderr.String())
+			require.Equal(t, 0, cashFlowExit, stderr.String())
+			assert.Equal(t, c.wantSpent, totalsColumn(spendOut.String(), 2))
+			assert.Equal(t, c.wantSpent, totalsColumn(cashFlowOut.String(), 3))
+		})
+	}
+}
