@@ -1,10 +1,10 @@
 # Brief: feature metrics
 
-Orchestrator only — no agent reads this or ledger it describes.
+Orchestrator only — no build-stage agent reads this or ledger it describes (`pipeline-reviewer` retro does).
 
 ## Feature metrics
 
-`docs/specifications/<feature-slug>/METRICS.md` is feature's cost ledger. **No agent reads it** — exists so person can compare cadences and gate cost across features, and judge pipeline changes against `docs/pipeline-efficiency-adoption.md` baseline. Orchestrator appends; nobody rewrites. `intent-and-goal` creates it from template below.
+`docs/specifications/<feature-slug>/METRICS.md` is feature's cost ledger. **No build-stage agent reads it** (retro does) — exists so person can compare cadences and gate cost across features, and judge pipeline changes against `docs/pipeline-efficiency-adoption.md` baseline. Orchestrator appends; nobody rewrites. `intent-and-goal` creates it from template below.
 
 ```markdown
 # Metrics: <feature-slug>
@@ -22,6 +22,10 @@ Orchestrator only — no agent reads this or ledger it describes.
 ## Tokens
 <output of `.claude/scripts/feature-metrics.py --strict <feature-slug>`, pasted once at SHIP>
 
+## Caught late
+| Stage | Finding | Where (file:line) | Scenario that shipped it |
+| --- | --- | --- | --- |
+
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |
 | --- | --- | --- | --- |
@@ -30,4 +34,5 @@ Orchestrator only — no agent reads this or ledger it describes.
 - **Scenarios** row appended at step 5b, after checkpoint (and its fix pass, if any). Light-lane scenario: cadence cell reads `code-first (light)`, so light and planned units compare.
 - **Final gate** row appended per `/run-reviewers` round at step 7/9; findings counts from that round's `REVIEW-NN.md`.
 - **Tokens** pasted once at SHIP. Attribution comes from run tags (CLAUDE.md → *Rules* → Run tags): triage, product-vision (all passes) → `scope`; architect incl. sizing pass → `plan`; developer runs `A`/`B*`/`L`/`V` → `build`; checkpoint → `checkpoint`, its fix → `checkpoint-fix`; gate reviewers → `review`, fix passes incl. SHIP WITH CHANGES → `gate-fix`; retro → `retro`. Unit `-` for feature-wide runs; `--strict` exits 1 if any run untagged — fix the tag habit, then paste anyway with attribution line intact. Orchestrator row is upper bound for session windows that ran feature's agents. "Weighted" = input-equivalent tokens; compare features on it, not on raw cache reads.
+- **Caught late** — row per gate BLOCKER/MAJOR (stage `gate R<n>`) and per final product-vision change (stage `final pass`), with scenario whose checkpoint let it through. Appended when round or pass is recorded; next retro ranks rule changes by it.
 - **Escaped defects** — row added whenever bug found in feature's code within 30 days of merge (issue, later feature's triage, user report). Append-only; earlier rows never edited. Empty section after 30 days is data, not omission.

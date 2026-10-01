@@ -50,7 +50,7 @@ Start from the diff you were given (`.claude/briefs/review.md`). For each change
 Prompt that says **retro <feature-slug>** skips the procedure above. Read
 `docs/specifications/<slug>/METRICS.md` (its `## Tokens` table is
 `.claude/scripts/feature-metrics.py` output — run the script only if that table is missing)
-and the `REVIEW-*.md` reports `/run-reviewers` wrote. Report:
+and the `REVIEW-*.md` reports `/run-reviewers` wrote; rank by its `## Caught late` rows. Report:
 
 - Where the tokens went: three most expensive scenarios and fix-pass share of total.
 - Findings that reached the final gate and belong to an earlier stage: coverage gap the
