@@ -33,7 +33,7 @@ func Test_run_spend_by_payee_groups_spending_by_payee_and_currency_biggest_first
 	exitCode := runWith(context.Background(), []string{"spend", "--by", "payee"}, env)
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Equal(t, "quarry: warning: "+noRatesLine+"\n", stderr.String())
 	const row = "%-10s  %-8s  %6s\n"
 	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD\n\n"+
 		fmt.Sprintf(row, "Payee", "Currency", "Spent")+
@@ -75,7 +75,8 @@ func Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_to
 		fmt.Sprintf(row, "Total", "CAD", "167.08")+
 		fmt.Sprintf(row, "Total", "USD", "312.10"),
 		stdout.String())
-	assert.Equal(t, "quarry: warning: 1 split carries more than one tag, so the rows add up to more than the total\n",
+	assert.Equal(t, "quarry: warning: "+noRatesLine+"\n"+
+		"quarry: warning: 1 split carries more than one tag, so the rows add up to more than the total\n",
 		stderr.String())
 }
 

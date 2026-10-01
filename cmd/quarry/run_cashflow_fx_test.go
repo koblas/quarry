@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ type cashFlowReport struct {
 	Currency string         `json:"currency"`
 	Periods  []cashFlowMark `json:"periods"`
 	Totals   []cashFlowMark `json:"totals"`
+	Warnings []string       `json:"warnings"`
 }
 
 // cashFlowMark is one amount of a cashflow document: a period's row and a total alike.
@@ -81,7 +83,8 @@ Total    CAD       1,100.00  310.26   789.74         71.8%
 				{Period: "2026-01", Currency: "CAD", Income: "1100.00", Spent: "200.26", Net: "899.74", SavingsRatePct: new(81.8)},
 				{Period: "2026-02", Currency: "CAD", Income: "0.00", Spent: "110.00", Net: "-110.00"},
 			},
-			Totals: []cashFlowMark{{Currency: "CAD", Income: "1100.00", Spent: "310.26", Net: "789.74", SavingsRatePct: new(71.8)}},
+			Totals:   []cashFlowMark{{Currency: "CAD", Income: "1100.00", Spent: "310.26", Net: "789.74", SavingsRatePct: new(71.8)}},
+			Warnings: []string{},
 		}, doc)
 	})
 }
@@ -188,10 +191,10 @@ func Test_run_cashflow_converts_the_edge_cases_in_each_reporting_currency(t *tes
 				exitCode := runWith(context.Background(), append([]string{"cashflow"}, args...), spendEnv(&stdout, &stderr))
 				require.Equal(t, 0, exitCode, stderr.String())
 				gotCaption, gotTotals := cashFlowTextView(stdout.String())
-				doc, jsonStderr := runCashFlowJSON(t, args...)
+				doc, echoedStderr := runCashFlowJSON(t, args...)
 
 				assert.Empty(t, stderr.String(), currency)
-				assert.Empty(t, jsonStderr, currency)
+				assert.Empty(t, echoedStderr, currency)
 				assert.Equal(t, wantCaption, gotCaption, currency)
 				assert.Equal(t, totalMarkCells(c.want[currency]), gotTotals, currency)
 				assert.Equal(t, currency, doc.Currency)
@@ -204,8 +207,26 @@ func Test_run_cashflow_converts_the_edge_cases_in_each_reporting_currency(t *tes
 func Test_run_cashflow_of_an_empty_window_names_the_currency_and_warns_only_of_the_empty_window(t *testing.T) {
 	const emptyWindowWarning = "quarry: warning: no income or spending from 2020-01-01 to 2020-12-31; the store's transactions run 2026-03-11 to 2026-03-11\n"
 	const caption = "Cash flow 2020-01-01 to 2020-12-31 in all accounts"
-	suffixes := map[string]string{"CAD": ", amounts in CAD", "USD": ", amounts in USD", "native": ""}
-	for currency, suffix := range suffixes {
+	const emptyHeader = "Month  Currency  Income  Spent  Net  Savings rate  Status\n"
+	const zeroHeader = "Month    Currency  Income  Spent   Net  Savings rate  Status\n"
+	const zeroRow = "2020-%02d  %s         0.00   0.00  0.00           n/a\n"
+	zeroYear := func(currency string) string {
+		var rows strings.Builder
+		for month := 1; month <= 12; month++ {
+			fmt.Fprintf(&rows, zeroRow, month, currency)
+		}
+		return zeroHeader + rows.String()
+	}
+	cases := []struct {
+		currency, suffix, table string
+		periods                 int
+	}{
+		{currency: "CAD", suffix: ", amounts in CAD", table: zeroYear("CAD"), periods: 12},
+		{currency: "USD", suffix: ", amounts in USD", table: zeroYear("USD"), periods: 12},
+		{currency: "native", table: emptyHeader},
+	}
+	for _, c := range cases {
+		currency := c.currency
 		t.Run(currency, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
@@ -221,7 +242,7 @@ func Test_run_cashflow_of_an_empty_window_names_the_currency_and_warns_only_of_t
 				exitCode := runWith(context.Background(), append([]string{"cashflow"}, window...), spendEnv(&stdout, &stderr))
 
 				require.Equal(t, 0, exitCode, stderr.String())
-				assert.Equal(t, caption+suffix+"\n\nMonth  Currency  Income  Spent  Net  Savings rate  Status\n", stdout.String())
+				assert.Equal(t, caption+c.suffix+"\n\n"+c.table, stdout.String())
 				assert.Equal(t, emptyWindowWarning, stderr.String())
 			})
 
@@ -229,7 +250,7 @@ func Test_run_cashflow_of_an_empty_window_names_the_currency_and_warns_only_of_t
 				doc, stderr := runCashFlowJSON(t, window...)
 
 				assert.Equal(t, currency, doc.Currency)
-				assert.Empty(t, doc.Periods)
+				assert.Equal(t, slices.Repeat([]string{currency}, c.periods), markCurrencies(doc.Periods))
 				assert.Empty(t, doc.Totals)
 				assert.Equal(t, emptyWindowWarning, stderr)
 			})
@@ -263,7 +284,10 @@ func Test_run_cashflow_json_reads_back_with_every_amount_in_the_reporting_curren
 	assert.Equal(t, centsOf(t, doc.Totals[0].Spent), spent)
 }
 
-func Test_run_cashflow_lists_splits_before_the_first_rate_in_their_own_currency_without_a_warning(t *testing.T) {
+const oneUSDBeforeFirstRateLine = "1 transaction dated before 2026-01-02, the first exchange rate in the store, " +
+	"is listed in USD, not converted to CAD"
+
+func Test_run_cashflow_lists_splits_before_the_first_rate_in_their_own_currency_and_warns(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	replaceStoreWithRates(t, home, cashFlowRows(
@@ -276,16 +300,15 @@ func Test_run_cashflow_lists_splits_before_the_first_rate_in_their_own_currency_
 		currency string
 		want     string
 		totals   []string
+		warnings []string
 	}{
-		{currency: "CAD", totals: []string{"CAD", "USD"}, want: `Cash flow 2025-12-01 to 2026-02-28 in all accounts, amounts in CAD
+		{currency: "CAD", warnings: []string{oneUSDBeforeFirstRateLine}, totals: []string{"CAD", "USD"}, want: `Cash flow 2025-12-01 to 2026-02-28 in all accounts, amounts in CAD
 
 Month    Currency  Income  Spent    Net  Savings rate  Status
 2025-12  CAD         0.00   0.00   0.00           n/a
 2025-12  USD        80.00   0.00  80.00        100.0%
 2026-01  CAD       100.00  50.00  50.00         50.0%
-2026-01  USD         0.00   0.00   0.00           n/a
 2026-02  CAD         0.00   0.00   0.00           n/a
-2026-02  USD         0.00   0.00   0.00           n/a
 Total    CAD       100.00  50.00  50.00         50.0%
 Total    USD        80.00   0.00  80.00        100.0%
 `},
@@ -317,14 +340,15 @@ Total    USD        80.00  40.00   40.00         50.0%
 			var stdout, stderr bytes.Buffer
 
 			exitCode := runWith(context.Background(), append([]string{"cashflow"}, window...), spendEnv(&stdout, &stderr))
-			doc, jsonStderr := runCashFlowJSON(t, window...)
+			doc, echoedStderr := runCashFlowJSON(t, window...)
 
 			require.Equal(t, 0, exitCode, stderr.String())
-			assert.Empty(t, stderr.String())
-			assert.Empty(t, jsonStderr)
 			assert.Equal(t, c.want, stdout.String())
 			assert.Equal(t, c.currency, doc.Currency)
 			assert.Equal(t, c.totals, markCurrencies(doc.Totals))
+			assert.Equal(t, warningLines(c.warnings), stderr.String())
+			assert.Equal(t, warningLines(c.warnings), echoedStderr)
+			assert.ElementsMatch(t, c.warnings, doc.Warnings)
 		})
 	}
 }

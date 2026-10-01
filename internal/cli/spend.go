@@ -86,9 +86,9 @@ the rows can add up to more than the total.`,
 }
 
 // spendWarnings is s's warnings, unprefixed and never nil: one per named account left out (W2 or W3),
-// then the multi-tag-splits note, then a note that the window held no spending.
+// then the unconverted-amounts note, the multi-tag-splits note, and a note that the window held no spending.
 func spendWarnings(s report.Spending) []string {
-	warnings := leftOutWarnings(s.Accounts, spendCommand)
+	warnings := append(leftOutWarnings(s.Accounts, spendCommand), unconvertedWarnings(s.Currency, s.Unconverted)...)
 	if s.By == store.SpendByTag && s.MultiTagSplits > 0 {
 		warnings = append(warnings, humanize.Count(s.MultiTagSplits, "split carries", "splits carry")+
 			" more than one tag, so the rows add up to more than the total")

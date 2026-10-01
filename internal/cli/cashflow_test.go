@@ -204,7 +204,7 @@ func Test_cashflow_json_lists_the_warnings_unprefixed_beside_the_prefixed_stderr
 	var stdout, stderr bytes.Buffer
 	fake := fakeReportStore{cashFlow: store.CashFlow{Transactions: span(t, "2003-01-04", "2026-09-26")}}
 
-	err := executeCashFlow(t, fake, &stdout, &stderr, "--json")
+	err := executeCashFlow(t, fake, &stdout, &stderr, "--json", "--currency", "native")
 
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), "\"periods\": [],\n  \"totals\": [],\n  \"warnings\": [\n    \""+

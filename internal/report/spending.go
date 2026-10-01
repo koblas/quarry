@@ -37,6 +37,8 @@ type Spending struct {
 	MultiTagSplits int
 	// Transactions is store.Spending.Transactions.
 	Transactions store.TransactionRange
+	// Unconverted is store.Spending.Unconverted.
+	Unconverted store.Unconverted
 
 	Window store.Window
 	By     store.SpendingGroup
@@ -70,13 +72,14 @@ func (s *Server) Spend(ctx context.Context, req SpendRequest) (Spending, error) 
 		Totals:         spending.Totals,
 		MultiTagSplits: spending.MultiTagSplits,
 		Transactions:   spending.Transactions,
+		Unconverted:    spending.Unconverted,
 		Window:         req.Window,
 		By:             req.By,
 		Accounts:       accounts,
 		Currency:       req.Currency,
 	}
 	if req.By == store.SpendByMonth {
-		result.Rows = fillSeries(monthSeries(req.Window), currencyList(spending.Totals, spendingTotalCurrency), spending.Rows, spendingRowPeriod, blankSpendingRow, wrapSpendingRow)
+		result.Rows = fillSeries(monthSeries(req.Window), currencyList(spending.Totals, spendingTotalCurrency), fillTarget(req.Currency), spending.Rows, spendingRowPeriod, blankSpendingRow, wrapSpendingRow)
 		return result, nil
 	}
 	for _, r := range spending.Rows {

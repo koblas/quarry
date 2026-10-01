@@ -36,7 +36,7 @@ func Test_run_spend_shows_this_years_spending_by_category_in_each_currency(t *te
 	exitCode := runWith(context.Background(), []string{"spend"}, env)
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Equal(t, "quarry: warning: "+noRatesLine+"\n", stderr.String())
 	const row = "%-15s  %-8s  %8s\n"
 	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD\n\n"+
 		fmt.Sprintf(row, "Category", "Currency", "Spent")+

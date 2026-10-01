@@ -32,7 +32,7 @@ func Test_run_spend_json_returns_spending_as_a_document(t *testing.T) {
 	exitCode := runWith(context.Background(), []string{"spend", "--json"}, env)
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Equal(t, "quarry: warning: "+noRatesLine+"\n", stderr.String())
 	//nolint:testifylint // bytes are the contract
 	assert.Equal(t, `{
   "since": "2026-01-01",
@@ -72,7 +72,9 @@ func Test_run_spend_json_returns_spending_as_a_document(t *testing.T) {
       "spent": "312.10"
     }
   ],
-  "warnings": []
+  "warnings": [
+    "`+noRatesLine+`"
+  ]
 }
 `, stdout.String())
 }

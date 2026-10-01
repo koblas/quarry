@@ -33,6 +33,8 @@ type CashFlow struct {
 	Totals []store.CashFlowTotal
 	// Transactions is store.CashFlow.Transactions.
 	Transactions store.TransactionRange
+	// Unconverted is store.CashFlow.Unconverted.
+	Unconverted store.Unconverted
 
 	Window store.Window
 	By     store.CashFlowPeriod
@@ -63,9 +65,10 @@ func (s *Server) CashFlow(ctx context.Context, req CashFlowRequest) (CashFlow, e
 		return CashFlow{}, s.readRefusal(ctx, cashFlowCommand, err)
 	}
 	return CashFlow{
-		Rows:         fillSeries(cashFlowSeries(req), currencyList(flow.Totals, cashFlowTotalCurrency), flow.Rows, cashFlowRowPeriod, blankCashFlowRow, wrapCashFlowRow),
+		Rows:         fillSeries(cashFlowSeries(req), currencyList(flow.Totals, cashFlowTotalCurrency), fillTarget(req.Currency), flow.Rows, cashFlowRowPeriod, blankCashFlowRow, wrapCashFlowRow),
 		Totals:       flow.Totals,
 		Transactions: flow.Transactions,
+		Unconverted:  flow.Unconverted,
 		Window:       req.Window,
 		By:           req.By,
 		Currency:     req.Currency,

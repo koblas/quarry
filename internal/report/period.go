@@ -3,6 +3,7 @@ package report
 import (
 	"time"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -59,24 +60,54 @@ func currencyList[T any](totals []T, currency func(T) string) []string {
 	return currencies
 }
 
-// fillSeries is a row for every period of series in every one of currencies: the stored row
-// keyed by keyOf where there is one, else blank(key). wrap makes each into the report's row
-// with the period's Partial.
-func fillSeries[S, R any](series []period, currencies []string, stored []S, keyOf func(S) periodKey, blank func(periodKey) S, wrap func(S, bool) R) []R {
+// fillSeries is a row for each period of series: the stored row keyed by keyOf where there is
+// one, else blank(key). With target empty (native) every one of currencies is filled in every
+// period; with a target currency only that one is, first in the period, and another currency
+// appears only in a period that stored one, after it in currencies order. wrap makes each into
+// the report's row with the period's Partial.
+func fillSeries[S, R any](series []period, currencies []string, target string, stored []S, keyOf func(S) periodKey, blank func(periodKey) S, wrap func(S, bool) R) []R {
 	found := make(map[periodKey]S, len(stored))
 	for _, r := range stored {
 		found[keyOf(r)] = r
 	}
-	rows := make([]R, 0, len(series)*len(currencies))
+	order := fillOrder(currencies, target)
+	rows := make([]R, 0, len(series)*len(order))
 	for _, p := range series {
-		for _, currency := range currencies {
+		for _, currency := range order {
 			key := periodKey{label: p.Label, currency: currency}
 			row, ok := found[key]
 			if !ok {
+				if target != "" && currency != target {
+					continue
+				}
 				row = blank(key)
 			}
 			rows = append(rows, wrap(row, p.Partial))
 		}
 	}
 	return rows
+}
+
+// fillOrder is the currencies a period lists, in order: currencies as given for a native report
+// (empty target), else target first and the others after it.
+func fillOrder(currencies []string, target string) []string {
+	if target == "" {
+		return currencies
+	}
+	order := []string{target}
+	for _, c := range currencies {
+		if c != target {
+			order = append(order, c)
+		}
+	}
+	return order
+}
+
+// fillTarget is the currency fillSeries must always list: c's code, or empty for native, which
+// converts nothing and so has no currency of its own to fill.
+func fillTarget(c money.Currency) string {
+	if c == money.Native {
+		return ""
+	}
+	return c.String()
 }

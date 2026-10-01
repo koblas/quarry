@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/koblas/quarry/internal/store"
@@ -120,12 +121,136 @@ func Test_run_spend_without_rates_lists_each_currency_natively_and_warns_only_wh
 }
 
 // runSpendUnconverted runs spend --json and returns its document and stderr.
-func runSpendUnconverted(t *testing.T) (unconvertedDoc, string) {
+func runSpendUnconverted(t *testing.T, args ...string) (unconvertedDoc, string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	exitCode := runWith(context.Background(), []string{"spend", "--json"}, spendEnv(&stdout, &stderr))
+	exitCode := runWith(context.Background(), append([]string{"spend", "--json"}, args...), spendEnv(&stdout, &stderr))
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc unconvertedDoc
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
 	return doc, stderr.String()
+}
+
+// unconvertedCell is one report on a store, in text and --json, with the warnings it must give.
+type unconvertedCell struct {
+	name string
+	args []string
+	want []string
+}
+
+const (
+	usdPreRateLine = "2 transactions dated before 2026-01-02, the first exchange rate in the store, " +
+		"are listed in USD, not converted to CAD"
+	cadPreRateLine = "1 transaction dated before 2026-01-02, the first exchange rate in the store, " +
+		"is listed in CAD, not converted to USD"
+)
+
+func Test_run_spend_warns_once_per_report_with_the_count_of_its_own_accounts_and_currency(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStoreWithRates(t, home, spendRows(
+		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
+		spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -12345},
+		spendSplit{id: "s02", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 1, 1), cents: -500},
+		spendSplit{id: "s03", account: "acct-usd", category: "cat-groceries", currency: "USD", day: day(2026, 1, 1), cents: -1000},
+		spendSplit{id: "s04", account: "acct-usd", category: "cat-fuel", currency: "USD", day: day(2026, 1, 1), cents: -2000},
+		spendSplit{id: "s05", account: "acct-usd", category: "cat-fuel", currency: "USD", day: day(2026, 5, 2), cents: -8000},
+	), rateOnJan2)
+	cells := []unconvertedCell{
+		{name: "CAD mode counts the USD transactions", want: []string{usdPreRateLine}},
+		{name: "USD mode counts the CAD transactions", args: []string{"--currency", "USD"}, want: []string{cadPreRateLine}},
+		{name: "the USD account alone warns with its own count", args: []string{"--account", "acct-usd"}, want: []string{usdPreRateLine}},
+		{name: "the CAD account alone stays silent in CAD", args: []string{"--account", "acct-cad"}},
+		{name: "native converts nothing", args: []string{"--currency", "native"}},
+		{name: "by payee warns once", args: []string{"--by", "payee"}, want: []string{usdPreRateLine}},
+		{name: "by tag warns once", args: []string{"--by", "tag"}, want: []string{usdPreRateLine}},
+		{name: "by month warns once", args: []string{"--by", "month"}, want: []string{usdPreRateLine}},
+	}
+
+	for _, c := range cells {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), append([]string{"spend"}, c.args...), spendEnv(&stdout, &stderr))
+			doc, echoedStderr := runSpendUnconverted(t, c.args...)
+
+			require.Equal(t, 0, exitCode, stderr.String())
+			assert.Equal(t, warningLines(c.want), stderr.String())
+			assert.Equal(t, warningLines(c.want), echoedStderr)
+			assert.ElementsMatch(t, c.want, doc.Warnings)
+		})
+	}
+}
+
+func Test_run_spend_by_month_lists_the_other_currency_only_in_the_month_that_holds_it(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStoreWithRates(t, home, spendRows(
+		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
+		spendSplit{id: "s01", account: "acct-usd", category: "cat-fuel", currency: "USD", day: day(2026, 1, 1), cents: -1000},
+		spendSplit{id: "s02", account: "acct-cad", category: "cat-fuel", currency: "CAD", day: day(2026, 2, 10), cents: -5000},
+		spendSplit{id: "s03", account: "acct-cad", category: "cat-fuel", currency: "CAD", day: day(2026, 3, 10), cents: -2000},
+	), rateOnJan2)
+	args := []string{"--by", "month", "--since", "2026-01", "--until", "2026-03"}
+	wantRows := []string{"2026-01 CAD", "2026-01 USD", "2026-02 CAD", "2026-03 CAD"}
+
+	t.Run("text", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+
+		exitCode := runWith(context.Background(), append([]string{"spend"}, args...), spendEnv(&stdout, &stderr))
+
+		require.Equal(t, 0, exitCode, stderr.String())
+		assert.Equal(t, "Spending 2026-01-01 to 2026-03-31 in all accounts, amounts in CAD\n\n"+
+			"Month    Currency  Spent  Status\n"+
+			"2026-01  CAD        0.00\n"+
+			"2026-01  USD       10.00\n"+
+			"2026-02  CAD       50.00\n"+
+			"2026-03  CAD       20.00\n"+
+			"Total    CAD       70.00\n"+
+			"Total    USD       10.00\n", stdout.String())
+	})
+
+	t.Run("json", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+
+		exitCode := runWith(context.Background(), append([]string{"spend", "--json"}, args...), spendEnv(&stdout, &stderr))
+
+		require.Equal(t, 0, exitCode, stderr.String())
+		var doc struct {
+			Rows []struct {
+				Month    string `json:"month"`
+				Currency string `json:"currency"`
+			} `json:"rows"`
+		}
+		require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
+		gotRows := make([]string, len(doc.Rows))
+		for i, r := range doc.Rows {
+			gotRows[i] = r.Month + " " + r.Currency
+		}
+		assert.Equal(t, wantRows, gotRows)
+	})
+
+	t.Run("native fills every currency in every month", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+
+		exitCode := runWith(context.Background(), append([]string{"spend", "--currency", "native"}, args...), spendEnv(&stdout, &stderr))
+
+		require.Equal(t, 0, exitCode, stderr.String())
+		assert.Equal(t, 6, strings.Count(stdout.String(), "\n2026-0"), stdout.String())
+	})
+}
+
+func Test_run_spend_of_an_unrated_empty_window_gives_only_the_empty_window_note(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStore(t, home, spendRows(
+		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
+		spendSplit{id: "s01", account: "acct-usd", category: "cat-fuel", currency: "USD", day: day(2026, 3, 10), cents: -1000},
+	))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"spend", "--since", "2020-01-01", "--until", "2020-12-31"}, spendEnv(&stdout, &stderr))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Equal(t, "quarry: warning: no spending from 2020-01-01 to 2020-12-31; the store's transactions run 2026-03-10 to 2026-03-10\n", stderr.String())
 }
