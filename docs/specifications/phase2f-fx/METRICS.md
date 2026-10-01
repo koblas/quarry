@@ -11,6 +11,7 @@
 | SCENARIO-16 (+15) | code-first | A, B1, B2, V | 0/3/2/0 | yes (usage-before-config order unpinned at 3 sites; resolve CAD default unpinned; accounts warnings order unpinned; test-only + docs); 1 behaviour/copy ruling (table-shape refusal, status warns, sync/findings/snapshots refuse, P2d-10 amended) |
 | SCENARIO-08 (+14) | code-first | A, B1, V | 0/2/3/0 | yes (month NULL arm unpinned; empty-window USD/native text cells; test-only + comments) |
 | SCENARIO-10 (+09) | code-first | A, B1, V | 0/0/5/0 | no (MINORs → STATE.md) |
+| SCENARIO-12 (+13) | code-first | A, B1, B2, V | 0/4/7/1 | yes (zero-fill not in plan; inclusive window bounds; USD-mode unrated + empty-window json cells; cashflow --account positive cell; test-only + plan + comments); 1 copy ruling (warning order, FX scope, zero fill) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
