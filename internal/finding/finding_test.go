@@ -89,6 +89,44 @@ func Test_PayeeKey(t *testing.T) {
 	}
 }
 
+func Test_CategoryKey(t *testing.T) {
+	cases := []struct {
+		name     string
+		kind     string
+		fullPath string
+		want     string
+	}{
+		{"a plural is cut", "expense", "Groceries", "grocery"},
+		{"the singular is the key", "expense", "Grocery", "grocery"},
+		{"case is ignored", "expense", "GROCERY", "grocery"},
+		{"an income key carries the income prefix", "income", "Grocery", "income:grocery"},
+		{"levels join with a slash", "expense", "Auto:Fuel", "auto/fuel"},
+		{"punctuation splits a word", "expense", "Auto & Fuel", "auto-fuel"},
+		{"ies becomes y", "expense", "Utilities", "utility"},
+		{"ss is kept", "expense", "Business", "business"},
+		{"a token of three runes is untouched", "expense", "Gas", "gas"},
+		{"a four-rune token ending in ss is kept", "expense", "Gass", "gass"},
+		{"a four-rune token loses its s", "expense", "Cats", "cat"},
+		{"length counts runes, not bytes", "expense", "Ées", "ées"},
+		{"a diacritic is kept when the s is cut", "expense", "Cafés", "café"},
+		{"digits are kept", "expense", "Auto 2024", "auto-2024"},
+		{"the literal rule cuts a plural-looking singular", "expense", "Taxes", "taxe"},
+		{"no diacritic folding", "expense", "Café", "café"},
+		{"an empty level stays empty", "expense", "Auto:&:Fuel", "auto//fuel"},
+		{"empty", "expense", "", ""},
+		{"punctuation only", "expense", "&&", ""},
+		{"separators only", "expense", "::", ""},
+		{"a kind other than income and expense has no key", "system", "Groceries", ""},
+		{"an empty kind has no key", "", "Groceries", ""},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, finding.CategoryKey(c.kind, c.fullPath))
+		})
+	}
+}
+
 func Test_status_of_derives_one_status_from_fixed_and_ignored(t *testing.T) {
 	cases := []struct {
 		name    string

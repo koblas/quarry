@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 	"time"
@@ -69,10 +70,10 @@ func findingsHeader(group report.FindingsGroup) string {
 	return header + ": " + fix.GroupClause
 }
 
-// findingsGroupCount is the count in a group header: the findings listed, as groups for payee-variants, and for
-// uncategorized the payees and the splits they list, the splits left out when none is listed.
+// findingsGroupCount is the count in a group header: the findings listed, as groups for payee-variants and
+// similar-categories, and for uncategorized the payees and the splits they list, the splits left out when none is listed.
 func findingsGroupCount(group report.FindingsGroup) string {
-	if group.Type == finding.PayeeVariants {
+	if group.Type == finding.PayeeVariants || group.Type == finding.SimilarCategories {
 		return humanize.Count(len(group.Findings), "group", "groups")
 	}
 	if group.Type != finding.Uncategorized {
@@ -131,6 +132,8 @@ func liveFindingLines(typ finding.Type, findings []report.ListedFinding, view fi
 		return mixedRows(findings, view)
 	case finding.PayeeVariants:
 		return payeeVariantRows(findings, view)
+	case finding.SimilarCategories:
+		return similarCategoryRows(findings, view)
 	}
 	lines := make([]string, len(findings))
 	for i, f := range findings {
@@ -302,6 +305,28 @@ func payeeVariantRows(findings []report.ListedFinding, view findingsView) []stri
 	return lines
 }
 
+// similarCategoryRows renders each similar-categories finding as an id line over one row per category with its split count.
+func similarCategoryRows(findings []report.ListedFinding, view findingsView) []string {
+	ids := make([]string, len(findings))
+	for i, f := range findings {
+		ids[i] = f.ID
+	}
+	idWidth := widestRunes(ids)
+
+	lines := make([]string, 0, len(findings))
+	for _, f := range findings {
+		paths := make([]string, len(f.Items))
+		counts := make([]string, len(f.Items))
+		for j, item := range f.Items {
+			paths[j] = *cmp.Or(item.Category, new(string))
+			counts[j] = humanize.Count(item.Splits, "split", "splits")
+		}
+		lines = append(lines, "  "+padRight(f.ID, idWidth)+"  "+humanize.Count(len(f.Items), "category", "categories")+ignoredMarker(f, view))
+		lines = append(lines, countRows(paths, counts)...)
+	}
+	return lines
+}
+
 // transactionsText is the sum of items' Transactions as "N transactions".
 func transactionsText(items []store.FindingItem) string {
 	total := 0
@@ -317,10 +342,15 @@ func transactionRows(labels []string, items []store.FindingItem) []string {
 	for i, item := range items {
 		counts[i] = humanize.Count(item.Transactions, "transaction", "transactions")
 	}
+	return countRows(labels, counts)
+}
+
+// countRows is one four-space row per label, padded to the widest, then its right-aligned count text.
+func countRows(labels, counts []string) []string {
 	labelWidth, countWidth := widestRunes(labels), widestRunes(counts)
 
-	rows := make([]string, len(items))
-	for i := range items {
+	rows := make([]string, len(labels))
+	for i := range labels {
 		rows[i] = "    " + padRight(labels[i], labelWidth) + "  " + padLeft(counts[i], countWidth)
 	}
 	return rows

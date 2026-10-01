@@ -248,7 +248,7 @@ func Test_replace_records_one_item_per_category_in_count_then_path_then_id_order
 			var got string
 
 			require.NoError(t, mixedStore(t, mixedSeq(mixedPayee, c.seq, 1)...).QueryRows(t.Context(),
-				`SELECT string_agg(category_id, ',' ORDER BY rowid) FROM finding_items`, nil,
+				`SELECT string_agg(category_id, ',' ORDER BY rowid) FROM finding_items WHERE finding_id LIKE 'mixed-categories:%'`, nil,
 				func(scan func(dest ...any) error) error { return scan(&got) }))
 
 			assert.Equal(t, c.want, got)

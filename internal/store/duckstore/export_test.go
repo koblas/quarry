@@ -12,11 +12,12 @@ var FormatCheckQueries = []string{columnExistsQuery, formatVersionQuery, snapsho
 
 // The detector queries build runs, so a test fake can fail one of them.
 const (
-	MixedCategoriesQuery  = mixedCategoriesQuery
-	OneSidedTransferQuery = oneSidedTransferQuery
-	PayeeVariantsQuery    = payeeVariantsQuery
-	UncategorizedQuery    = uncategorizedQuery
-	UnlinkedTransferQuery = unlinkedTransferQuery
+	MixedCategoriesQuery   = mixedCategoriesQuery
+	OneSidedTransferQuery  = oneSidedTransferQuery
+	PayeeVariantsQuery     = payeeVariantsQuery
+	SimilarCategoriesQuery = similarCategoriesQuery
+	UncategorizedQuery     = uncategorizedQuery
+	UnlinkedTransferQuery  = unlinkedTransferQuery
 )
 
 // DuplicateQuery is the duplicate detector's query.

@@ -16,7 +16,7 @@ SELECT f.id, f.type, f.first_found_at, f.fixed_at,
 	fi.finding_id IS NOT NULL, fi.transaction_id, fi.split_id, fi.payee_id, fi.category_id,
 	t.date, a.id, a.name, a.currency, a.closed, a.active, p.name,
 	CAST(COALESCE(s.amount, t.amount) * 100 AS BIGINT), x.other_account, s.transfer_account_id,
-	c.full_path, COALESCE(ts.n, 0), COALESCE(mc.n, pc.n, 0)
+	c.full_path, COALESCE(ts.n, cs.n, 0), COALESCE(mc.n, pc.n, 0)
 FROM findings f
 CROSS JOIN store_info i
 LEFT JOIN finding_items fi ON fi.finding_id = f.id
@@ -31,6 +31,7 @@ LEFT JOIN categories c ON c.id = COALESCE(fi.category_id, CASE WHEN ts.n = 1 THE
 LEFT JOIN (SELECT payee_id, category_id, count(*) AS n FROM (` + mixedTransactions + `) GROUP BY payee_id, category_id) mc
 	ON mc.payee_id = fi.payee_id AND mc.category_id = fi.category_id AND f.type = 'mixed-categories'
 LEFT JOIN (` + payeeTransactions + `) pc ON pc.payee_id = fi.payee_id AND f.type = 'payee-variants'
+LEFT JOIN (` + categorySplits + `) cs ON cs.category_id = fi.category_id AND f.type = 'similar-categories'
 ORDER BY f.id, fi.rowid`
 
 // Findings reads every finding, open and fixed, with its items, sorted by id; a fixed finding has no items. It

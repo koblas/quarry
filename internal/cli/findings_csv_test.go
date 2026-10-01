@@ -237,3 +237,23 @@ func Test_findings_csv_puts_a_payee_variants_item_in_its_payee_and_count_columns
 	assert.Equal(t, findingsCSVHeader+
 		"payee-variants:tim-hortons,payee-variants,open,,,,TIM HORTONS #1234,,,,212,,,,payee-12,,"+variantsFixCSV+"\n", stdout.String())
 }
+
+const similarFixCSV = `"Merge these categories into one in Quicken, or ignore the group if they mean different things"`
+
+func Test_findings_csv_puts_a_similar_categories_item_in_its_category_and_splits_columns_with_a_zero_count_as_0(t *testing.T) {
+	fake := fakeReportStore{findings: store.FindingList{Findings: []store.Finding{{
+		ID: "similar-categories:grocery", Type: finding.SimilarCategories, FirstFoundAt: csvFindingDay(1),
+		Items: []store.FindingItem{
+			{CategoryID: new("cat-3"), Category: new("Groceries"), Splits: 812},
+			{CategoryID: new("cat-9"), Category: new("Grocery"), Splits: 0},
+		},
+	}}}}
+	var stdout bytes.Buffer
+
+	err := executeFindings(t, fake, &stdout, &bytes.Buffer{}, "--csv")
+
+	require.NoError(t, err)
+	assert.Equal(t, findingsCSVHeader+
+		"similar-categories:grocery,similar-categories,open,,,,,Groceries,,,,812,,,,cat-3,"+similarFixCSV+"\n"+
+		"similar-categories:grocery,similar-categories,open,,,,,Grocery,,,,0,,,,cat-9,"+similarFixCSV+"\n", stdout.String())
+}

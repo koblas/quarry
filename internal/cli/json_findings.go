@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 )
@@ -63,11 +64,15 @@ func renderFindingsJSON(listing report.FindingsListing, view findingsView, warni
 	})
 }
 
-// newFindingEntryDocument converts f into its --json entry: fixed_at is set only for a fixed finding, which has no items.
+// newFindingEntryDocument converts f into its --json entry: fixed_at is set only for a fixed finding, which has no items,
+// and splits only for the items of a similar-categories finding.
 func newFindingEntryDocument(f report.ListedFinding) findingEntryDocument {
 	items := make([]findingItemDocument, len(f.Items))
 	for i, item := range f.Items {
 		items[i] = newFindingItemDocument(item)
+		if f.Type == finding.SimilarCategories {
+			items[i].Splits = &item.Splits
+		}
 	}
 	doc := findingEntryDocument{
 		ID: f.ID, Type: string(f.Type), Status: string(f.Status),

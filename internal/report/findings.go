@@ -143,7 +143,8 @@ func statusRank(s finding.Status) int {
 }
 
 // findingOrder is the display order of typ's open and ignored findings: newest item date for transfers and
-// duplicates, size then payee for uncategorized and mixed, transactions for payee-variants, else id.
+// duplicates, size then payee for uncategorized and mixed, transactions for payee-variants, splits for
+// similar-categories, else id.
 func findingOrder(typ finding.Type) func(a, b store.Finding) int {
 	switch typ { //nolint:exhaustive // every other type sorts by id
 	case finding.Duplicate, finding.UnlinkedTransfer, finding.OneSidedTransfer:
@@ -170,6 +171,10 @@ func findingOrder(typ finding.Type) func(a, b store.Finding) int {
 		return func(a, b store.Finding) int {
 			return cmp.Or(cmp.Compare(transactionsOf(b), transactionsOf(a)), cmp.Compare(a.ID, b.ID))
 		}
+	case finding.SimilarCategories:
+		return func(a, b store.Finding) int {
+			return cmp.Or(cmp.Compare(splitsOf(b), splitsOf(a)), cmp.Compare(a.ID, b.ID))
+		}
 	}
 	return func(a, b store.Finding) int { return cmp.Compare(a.ID, b.ID) }
 }
@@ -179,6 +184,15 @@ func transactionsOf(f store.Finding) int {
 	total := 0
 	for _, item := range f.Items {
 		total += item.Transactions
+	}
+	return total
+}
+
+// splitsOf is the sum of f's items' Splits.
+func splitsOf(f store.Finding) int {
+	total := 0
+	for _, item := range f.Items {
+		total += item.Splits
 	}
 	return total
 }

@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // Type names one kind of finding; its string form is the id prefix and the
@@ -59,6 +60,65 @@ func PayeeKey(name string) string {
 		}
 	}
 	return strings.Join(kept, "-")
+}
+
+// Category kinds that similar-categories compares; any other kind has no key.
+const (
+	kindIncome  = "income"
+	kindExpense = "expense"
+)
+
+// incomeKeyPrefix keeps an income group's entity apart from an expense group with the same key; a key never holds ":".
+const incomeKeyPrefix = kindIncome + idSeparator
+
+// singularMinRunes is the shortest token whose plural ending is cut.
+const singularMinRunes = 4
+
+// CategoryKey returns the similar-categories entity for a category of the given kind and full path, or "" when the
+// kind is no income or expense or no level holds a letter or digit. Ids are a contract (users write them into
+// config.toml), so the rule never changes silently: split the path on ":", lower-case each level, split it on every
+// rune that is no letter or digit, singularise each token, join tokens with "-" and levels with "/". Income keys
+// start with "income:". No diacritic folding: "Café" and "Cafe" are different keys.
+func CategoryKey(kind, fullPath string) string {
+	prefix := ""
+	switch kind {
+	case kindIncome:
+		prefix = incomeKeyPrefix
+	case kindExpense:
+	default:
+		return ""
+	}
+	levels := strings.Split(fullPath, ":")
+	named := false
+	for i, level := range levels {
+		tokens := strings.FieldsFunc(strings.ToLower(level), func(r rune) bool {
+			return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+		})
+		named = named || len(tokens) > 0
+		for j, token := range tokens {
+			tokens[j] = singular(token)
+		}
+		levels[i] = strings.Join(tokens, "-")
+	}
+	if !named {
+		return ""
+	}
+	return prefix + strings.Join(levels, "/")
+}
+
+// singular cuts a plural ending off a token of at least singularMinRunes runes: "ies" becomes "y", a final "s"
+// after anything but another "s" goes.
+func singular(token string) string {
+	if utf8.RuneCountInString(token) < singularMinRunes {
+		return token
+	}
+	if stem, ok := strings.CutSuffix(token, "ies"); ok {
+		return stem + "y"
+	}
+	if strings.HasSuffix(token, "ss") {
+		return token
+	}
+	return strings.TrimSuffix(token, "s")
 }
 
 // idSeparator splits a finding id into its type and entity.

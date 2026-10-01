@@ -203,3 +203,25 @@ func Test_renderFindingsJSON_keeps_the_date_account_and_amount_of_an_item_with_o
 		"other_account": nil, "other_account_id": nil, "transactions": nil, "splits": nil,
 	}, items[0])
 }
+
+func Test_renderFindingsJSON_gives_a_similar_categories_item_its_category_and_splits_and_null_everything_else(t *testing.T) {
+	items := itemsJSON(t, finding.SimilarCategories,
+		store.FindingItem{CategoryID: new("cat-3"), Category: new("Groceries"), Splits: 812},
+		store.FindingItem{CategoryID: new("cat-9"), Category: new("Grocery"), Splits: 0})
+
+	assert.Equal(t, map[string]any{
+		"transaction_id": nil, "split_id": nil, "payee_id": nil, "category_id": "cat-3",
+		"date": nil, "account_id": nil, "account": nil, "currency": nil,
+		"payee": nil, "category": "Groceries", "amount": nil,
+		"other_account": nil, "other_account_id": nil, "transactions": nil, "splits": float64(812),
+	}, items[0])
+	assert.Equal(t, []any{float64(0), "cat-9"}, []any{items[1]["splits"], items[1]["category_id"]})
+}
+
+func Test_renderFindingsJSON_leaves_splits_null_for_an_unlinked_transfer_item_that_carries_a_split_count(t *testing.T) {
+	items := unlinkedItemsJSON(t,
+		store.FindingItem{TransactionID: new("txn-1"), Date: findingDay(2026, 7, 2), Category: new("Income:Other"), Splits: 1})
+
+	assert.Contains(t, items[0], "splits")
+	assert.Nil(t, items[0]["splits"])
+}

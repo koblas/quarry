@@ -410,3 +410,41 @@ func Test_findings_counts_a_payee_variants_transaction_once_however_many_splits_
 
 	assert.Equal(t, []int{1, 1}, []int{got.Items[0].Transactions, got.Items[1].Transactions})
 }
+
+func Test_findings_reads_a_similar_categories_item_as_its_category_path_with_the_categorys_splits_and_no_transactions_or_date(t *testing.T) {
+	t.Parallel()
+	rows := similarRows(similarCat{path: "Auto:Fuel", splits: 3}, similarCat{path: "Auto:Fuels", splits: 1})
+
+	got := readFinding(t, rows, "similar-categories:auto/fuel")
+
+	assert.Equal(t, finding.SimilarCategories, got.Type)
+	assert.Equal(t, []store.FindingItem{
+		{CategoryID: new("cat-1"), Category: new("Auto:Fuel"), Splits: 3},
+		{CategoryID: new("cat-2"), Category: new("Auto:Fuels"), Splits: 1},
+	}, got.Items)
+}
+
+func Test_findings_reads_a_similar_categories_item_of_an_unused_category_with_zero_splits(t *testing.T) {
+	t.Parallel()
+	rows := similarRows(similarCat{path: "Groceries", splits: 2}, similarCat{path: "Grocery"})
+
+	got := readFinding(t, rows, "similar-categories:grocery")
+
+	assert.Equal(t, []int{2, 0}, []int{got.Items[0].Splits, got.Items[1].Splits})
+}
+
+func Test_findings_gives_only_a_similar_categories_item_the_category_total(t *testing.T) {
+	t.Parallel()
+	rows := similarRows(similarCat{path: "Groceries", splits: 2}, similarCat{path: "Grocery", splits: 1})
+	probe := func(id, typ string) string {
+		return `INSERT INTO findings VALUES ('` + id + `', '` + typ + `', now(), NULL);
+			INSERT INTO finding_items (finding_id, category_id) VALUES ('` + id + `', 'cat-1')`
+	}
+	edits := []string{probe("mixed-categories:probe", "mixed-categories"), probe("uncategorized:probe", "uncategorized")}
+
+	similar := readEdited(t, rows, "similar-categories:grocery", edits...)
+	mixed := readEdited(t, rows, "mixed-categories:probe", edits...)
+	uncategorized := readEdited(t, rows, "uncategorized:probe", edits...)
+
+	assert.Equal(t, []int{2, 0, 0}, []int{similar.Items[0].Splits, mixed.Items[0].Splits, uncategorized.Items[0].Splits})
+}

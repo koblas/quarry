@@ -55,6 +55,15 @@ func variants(id string, counts ...int) store.Finding {
 	return f
 }
 
+// similar is an open similar-categories finding with one item per split count.
+func similar(id string, counts ...int) store.Finding {
+	f := store.Finding{ID: id, Type: finding.SimilarCategories}
+	for _, n := range counts {
+		f.Items = append(f.Items, store.FindingItem{Splits: n})
+	}
+	return f
+}
+
 func findingsOf(t *testing.T, fs ...store.Finding) report.FindingsListing {
 	t.Helper()
 	srv := report.NewServer(report.WithStore(fakeStore{findings: store.FindingList{Findings: fs}}))
@@ -153,6 +162,16 @@ func Test_findings_sorts_a_payee_variants_group_by_transaction_sum_descending_th
 		variants("payee-variants:d", 40))
 
 	assert.Equal(t, []string{"payee-variants:d", "payee-variants:b", "payee-variants:c", "payee-variants:a"}, idsOf(got.Groups[0]))
+}
+
+func Test_findings_sorts_a_similar_categories_group_by_split_sum_descending_then_id(t *testing.T) {
+	got := findingsOf(t,
+		similar("similar-categories:a", 3),
+		similar("similar-categories:c", 10),
+		similar("similar-categories:b", 6, 4),
+		similar("similar-categories:d", 40))
+
+	assert.Equal(t, []string{"similar-categories:d", "similar-categories:b", "similar-categories:c", "similar-categories:a"}, idsOf(got.Groups[0]))
 }
 
 func Test_findings_sorts_a_type_without_a_ruled_order_by_id(t *testing.T) {
