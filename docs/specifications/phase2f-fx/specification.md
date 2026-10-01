@@ -253,6 +253,7 @@ The rows stay as they are: each row is in one currency, the Currency column stay
 - `Rates     USD/CAD 1990-01-02 to 2026-09-30 (12 new)`
 - `Rates     USD/CAD 1990-01-02 to 2026-09-30 (up to date)`
 - `Rates     USD/CAD 1990-01-02 to 2026-09-24 (not refreshed; see warning)`
+- `Rates     USD/CAD <first> to <last> (<n> new, not all fetched; see warning)`: a partial fetch (FetchError set, n ≥ 1 kept). `--json` gives `added: n` and `fetch_error` set. *(Mid-feature ruling, SCENARIO-03.)*
 - `Rates     none (not fetched; see warning)`
 - `Rates     none (no transactions to convert)`: no rates and no transactions.
 - `Rates     none (the Bank of Canada has no rates for your transaction dates)`: no rates, transactions exist, the source answered empty.
@@ -260,6 +261,12 @@ The rows stay as they are: each row is in one currency, the Currency column stay
 - **JSON:** store.rates {"first","last","added": int,"fetch_error": null|"<reason>"}, the last key of store (after not_imported); null when the store was not built. *(Mid-feature ruling, SCENARIO-01.)*
 
 ### sync fetch warnings (exit 0; the store is still swapped in)
+*(Mid-feature ruling, SCENARIO-03.)*
+- **Order** on stderr and in `warnings[]`: manifest, history, findings, rates-carry, rates-fetch, prune. A sync prints at most one fetch warning.
+- **Carry fault followed by a failed full fetch**: the carry line, then the nothing-stored fetch line, then `Rates     none (not fetched; see warning)`.
+- **Stop rule**: after a timeout or a cannot-reach failure, later spans are not asked, so the worst case is 30 s. After a 503 or a not-a-list answer, later spans are still asked. FetchError is the first failure's reason.
+- **Body cap**: 16 MiB. An answer over the cap counts as "not a list of exchange rates".
+- **Unrecognised error**: falls back to `cannot reach www.bankofcanada.ca`.
 - **Nothing new, some rates stored:** `could not fetch exchange rates from the Bank of Canada: <reason>; the store has rates from <first> to <last>, and later dates convert at the <last> rate; run quarry sync again to retry`
 - **Nothing stored:** `could not fetch exchange rates from the Bank of Canada: <reason>; the store has no rates, so reports list amounts in each account's own currency; run quarry sync again to retry`
 - **Partial range:** `could not fetch every exchange rate from the Bank of Canada: <reason>; the store has rates from <first> to <last>; run quarry sync again to fetch the rest`
@@ -302,7 +309,7 @@ Mid-feature ruling, SCENARIO-01 — nothing fetched, nothing failed (no warning,
 | Anomaly in a USD account | label `(USD)`; Amount and Usual converted | native fields | | footer unchanged |
 | findings with a USD account | unchanged | unchanged | | |
 | accounts, not-imported | `In CAD` blank | converted_balance:null | | no Total |
-| Sync: fetch fails mid-range | `(not refreshed…)` or the partial warning | rates.fetch_error | | |
+| Sync: fetch fails mid-range | `(<n> new, not all fetched; see warning)` + the partial warning | rates.fetch_error, added n | | |
 | Sync: zero new | `(up to date)` | added:0 | | |
 | Sync `--from` an old snapshot | carried rates kept; fetch the missing ones | | | |
 | First sync after the 4→5 upgrade | full back-fill; offline → "no rates" warning, native reports | | | |
@@ -373,7 +380,7 @@ Scenario: SCENARIO-02 — Later sync fetches only the missing dates
 Scenario Outline: SCENARIO-03 — Failed rate fetch warns and the sync still succeeds
   Given the Bank of Canada fetch fails with <failure>
   When I run quarry sync
-  Then exit is 0, the new store is swapped in, stderr has the ruled one-line warning with reason "<reason>", --json warnings[] and rates.fetch_error carry it, and the Rates line says "(not refreshed; see warning)" or "none (not fetched; see warning)"
+  Then exit is 0, the new store is swapped in, stderr has the ruled one-line warning with reason "<reason>", --json warnings[] and rates.fetch_error carry it, and the Rates line says "(not refreshed; see warning)", "(<n> new, not all fetched; see warning)" or "none (not fetched; see warning)"
   Examples:
     | failure        | reason                                                                   |
     | unreachable    | cannot reach www.bankofcanada.ca                                         |
