@@ -77,3 +77,14 @@ func identitiesOf(run []store.Charge) ([]SeriesPayee, []store.Account) {
 	}
 	return payees, accounts
 }
+
+// medianCents is the median of amounts, sorting them in place: the middle one, or for an even
+// count the mean of the two middles rounded half up (amounts are positive). amounts is not empty.
+func medianCents(amounts []int64) int64 {
+	slices.Sort(amounts)
+	mid := len(amounts) / 2
+	if len(amounts)%2 == 1 {
+		return amounts[mid]
+	}
+	return (amounts[mid-1] + amounts[mid] + 1) / 2
+}

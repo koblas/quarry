@@ -1,9 +1,9 @@
 # phase2e-recurring-anomalies — current state
 
-Scenarios complete: SCENARIO-01..13 (02-04 folded into 01, 06 into 05, 08-10 into 07, 12-13 into 11). Last updated by SCENARIO-11.
+Scenarios complete: SCENARIO-01..16 (02-04 folded into 01, 06 into 05, 08-10 into 07, 12-13 into 11, 15-16 into 14). Last updated by SCENARIO-14.
 
 ## Binding decisions
-- One port method `report.Store.Charges(ctx, store.ChargeParams{Through, AccountIDs})` returns `store.Charges{Rows []Charge, Transactions TransactionRange}`: no window; `Rows` are never filtered by account; `Transactions` is the whole store's span, or with `AccountIDs` set the span of those reported accounts only (spend's E1a range, so E1a/E2a say "their transactions"). Anomalies (S14, S20) read this single call; reopening it reopens three fakes, the adapter and the `cmd/quarry/run.go:29` guard (SCENARIO-01, SCENARIO-11)
+- One port method `report.Store.Charges(ctx, store.ChargeParams{Through, AccountIDs})` returns `store.Charges{Rows []Charge, Transactions TransactionRange}`: no window; `Rows` are never filtered by account; `Transactions` is the whole store's span, or with `AccountIDs` set the span of those reported accounts only (spend's E1a range, so E1a/E2a say "their transactions"). Anomalies (S14 built, S17/S20 extend) read this single call; reopening it reopens three fakes, the adapter and the `cmd/quarry/run.go:29` guard (SCENARIO-01, SCENARIO-11)
 - `store.Charge` carries TransactionID, SourceID, Date, Account (`store.Account`: ID/Name/Currency/Closed/Active, for `accountLabel`), PayeeID/Payee `*string`, Currency, Amount (cents), Category `*ChargeCategory{ID, Path}` (set only when every expense row shares one non-NULL category), ExpenseSplits (count of `v_spending` rows). S14/S17: category baseline when Category != nil; cell `(split)` when ExpenseSplits > 1, else `(uncategorized)` when Category is nil. One kind enum cannot express two same-category splits (SCENARIO-01)
 - Detection lives in package `report` (no leaf package): `charges.go` holds the group key (tagged `keyKind` PayeeKey vs payee_id, so the two never merge; S07's `payee_key: null` reads the tag; S14 adds its median here); `recurring.go` holds the named cadence consts (`cadenceRules`, gap range / min charges / ended-after / per-year factor), `latestRun` walk and `Server.Recurring` (SCENARIO-01)
 - Through = `DefaultWindow(req.Now).Until`, the local civil date, never `Window.Until`; the adapter computes no date. Duckstore filters `date <= Through` in SQL because `v_spending` keeps future-dated rows (SCENARIO-01)
@@ -20,14 +20,29 @@ Scenarios complete: SCENARIO-01..13 (02-04 folded into 01, 06 into 05, 08-10 int
 - Ended bound is pinned at bound and bound+1 per cadence (weekly 14/15, monthly 45/46, quarterly 120/121, annual 400/401), local-date pin `Test_recurring_counts_days_since_the_last_charge_from_the_local_date` (SCENARIO-05)
 - Read-command pins already include recurring: root Available Commands pin (`cmd/quarry/run_status_test.go`), `Test_run_read_commands_ignore_a_malformed_config` (fixture holds one active Costco monthly series so stderr stays empty now that E1 is live) (SCENARIO-01)
 
+- `Server.Anomalies` makes one `Charges` read (`chargesReads == 1`), no window in the read; history = same `groupKey`, strictly earlier date (same-day is not history), every account, same currency, all time. S17/S20 add to that read, never a second one (SCENARIO-14)
+- Flag rule in integer cents: `Amount >= AnomalyMinAmount (10000) && Amount > AnomalyPayeeMultiplier(2)*median`, history gate `>= AnomalyPayeeMinHistory (3)`; even-count median `(a+b+1)/2`; `TimesTenths` half away from zero. `Anomaly` carries the whole `store.Charge` plus `Baseline`, `Usual`, `Earlier`, `TimesTenths`; S19's JSON reads those same fields (SCENARIO-14)
+- Ruled at S14 planning (product-vision, three): (1) `not_judged` = every in-window charge with no baseline whatever its amount, so an under-100.00 first-time charge counts; (2) empty-window warning only when `checked` = 0 (subject `unusually large charges`), none when charges exist but none is unusual (stderr empty, `warnings` `[]`); (3) NULL payee reads `(no payee)` in text and `null` in `--json` `payee`; `checked` includes NULL-payee charges (SCENARIO-14)
+- Category cell is one shared helper `categoryText(splits, path)` (findings + anomalies): `(split)` when splits > 1, else `(uncategorized)` when no category, else escaped path; findings' pins unchanged control (SCENARIO-14)
+- Interim until S19/S20: `anomalies --json` prints the text table (`emitReport(cmd, false, []string{}, nil, text)`), and `--account` is bound for help only (`Accounts` passed, ignored; caption always says "all accounts") (SCENARIO-14)
+- Window-flag help is per report (`reportFlagHelp`): spend/cashflow `transactionFlagHelp`, recurring and anomalies own strings; pinned by `Test_each_reports_window_flags_describe_what_it_does_with_them` (SCENARIO-14)
+
 ## Left unbuilt
-- `report.Server.Anomalies`, `anomalies` command, `anomalies.go`, anomalies pins in root help / never-load-config / PRD P2d-10 list — S14
-- `docs/initial-prd.md` change 1 and `report/doc.go` / `cli/root.go` recurring mentions are done; anomalies mentions land with S14
+- `BaselineCategory`, `AnomalyCategoryMinHistory`, `AnomalyCategoryMultiplier`, the `category, N earlier` cell (hook: `anomaliesBaselineWord`, `render_anomalies.go`) — S17
+- `renderAnomaliesJSON` and the `jsonOut` parameter of `newAnomaliesCommand` — S19
+- `AnomaliesRequest.Accounts` honoured: `namedAccounts`, listing filter, W2/W3, E1/E2 `anomaliesWarnings` via `appendEmptyWindowWarning`; caption naming accounts — S20
+- `run_read_usage_test.go:42` / `run_read_refusals_test.go:55,171` anomalies rows (U8, R1, I1) — S20
+- Anomalies pins already in place: root Available Commands (`run_status_test.go`) and never-load-config (`run_config_test.go`, fixture holds a Bakery anomaly); no doc list to amend for P2d-10 (SCENARIO-14)
 
 ## Traps
 - `v_spending` keeps future-dated rows (spend and cashflow count them); any new `Charges`-style read must filter on Through in SQL (SCENARIO-01)
 - `fakeStore` / `fakeReportStore` methods have value receivers, so counters need pointer fields (`accountsReads` precedent) (SCENARIO-01)
 - A store fault through `Server.Recurring` is a `RefusalError` only for recognised kinds; the cli test asserts `ErrorIs`, exit 1 comes from `Execute` unwrapping `runtimeError` (SCENARIO-01)
+
+- Not_judged fixtures need `Category == nil`: a one-category fixture becomes category-judged in S17 and breaks S14's pins (SCENARIO-14)
+- Payee cell dereferences a non-nil payee (nil reads `""` so `payeeLabel` gives `(no payee)`); only S17's category baseline can list a NULL-payee charge (SCENARIO-14)
+- `Charges.Rows` run through today only: `--until` past today lists nothing extra, but `checked` uses the request window, not today (SCENARIO-14)
+- `-run` patterns are case-sensitive: the plan's `Anomal` misses `Test_run_anomalies_*` in `cmd/quarry`; use `anomal|Anomal` in narrow loops (SCENARIO-14)
 
 ## Open debts
 - I1 (`recurring interrupted`) on the accounts read and on the `Charges` read is pinned in `internal/report` only; the cmd-level I1 row cancels before the store opens. Low risk, no owner — dies unless re-opened (SCENARIO-11)

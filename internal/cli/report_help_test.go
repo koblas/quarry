@@ -2,8 +2,11 @@ package cli_test
 
 import (
 	"bytes"
+	"regexp"
 	"testing"
+	"time"
 
+	"github.com/koblas/quarry/internal/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -126,6 +129,47 @@ func Test_cashflow_help_shows_each_flag(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Regexp(t, c.want, stdout.String())
+		})
+	}
+}
+
+func Test_each_reports_window_flags_describe_what_it_does_with_them(t *testing.T) {
+	const (
+		countSince   = "count transactions dated on or after date (YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year)"
+		countUntil   = "count transactions dated on or before date (YYYY, YYYY-MM or YYYY-MM-DD; default today)"
+		countAccount = "count only the account with this name or id; repeat for more"
+	)
+	cases := []struct {
+		command               string
+		since, until, account string
+	}{
+		{command: "spend", since: countSince, until: countUntil, account: countAccount},
+		{command: "cashflow", since: countSince, until: countUntil, account: countAccount},
+		{
+			command: "recurring",
+			since:   "list series running on or after date (YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year)",
+			until:   "list series that started on or before date (YYYY, YYYY-MM or YYYY-MM-DD; default today)",
+			account: "list only series with a charge in the account with this name or id; repeat for more",
+		},
+		{
+			command: "anomalies",
+			since:   "list charges dated on or after date (YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year)",
+			until:   "list charges dated on or before date (YYYY, YYYY-MM or YYYY-MM-DD; default today)",
+			account: "list only charges in the account with this name or id; repeat for more",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			env := cli.Env{Stdout: &stdout, Stderr: &stderr, Now: func() time.Time { return spendNow }}
+
+			err := cli.Execute(t.Context(), []string{c.command, "--help"}, env)
+
+			require.NoError(t, err)
+			assert.Regexp(t, `--since date +`+regexp.QuoteMeta(c.since), stdout.String())
+			assert.Regexp(t, `--until date +`+regexp.QuoteMeta(c.until), stdout.String())
+			assert.Regexp(t, `--account name +`+regexp.QuoteMeta(c.account), stdout.String())
 		})
 	}
 }

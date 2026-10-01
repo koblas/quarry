@@ -163,13 +163,19 @@ func unlinkedRows(items []store.FindingItem) []string {
 // categoryCell is an item's category as text shows it: "(split)" for several splits, "(uncategorized)" for
 // none, else the full path.
 func categoryCell(item store.FindingItem) string {
+	return categoryText(item.Splits, item.Category)
+}
+
+// categoryText is a transaction's category as text shows it: "(split)" for several splits,
+// "(uncategorized)" for no path, else the escaped path.
+func categoryText(splits int, path *string) string {
 	switch {
-	case item.Splits > 1:
+	case splits > 1:
 		return "(split)"
-	case item.Category == nil:
+	case path == nil:
 		return "(uncategorized)"
 	}
-	return escapeCell(*item.Category)
+	return escapeCell(*path)
 }
 
 // itemRows renders one row per item: date, account label and payee padded to the widest among them,

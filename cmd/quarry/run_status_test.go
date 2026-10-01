@@ -120,6 +120,7 @@ quarry never writes to the Quicken file.`)
 	assert.Contains(t, stdout.String(), ""+
 		"Available Commands:\n"+
 		"  accounts    List accounts with their current balances\n"+
+		"  anomalies   List charges unusually large for their payee or category\n"+
 		"  cashflow    Show income, spending and savings rate by month or year\n"+
 		"  findings    List what to clean up in Quicken\n"+
 		"  help        Help about any command\n"+

@@ -418,9 +418,9 @@ Ruled (sizing pass 2026-10-01):
 - [x] SCENARIO-11: recurring --account lists only series charged in that account — `cmd/quarry/run_recurring_account_test.go` `Test_run_recurring_lists_only_the_series_charged_in_the_named_account`
 - [x] SCENARIO-12: no series in the window says so — delivered by SCENARIO-11: `cmd/quarry/run_recurring_empty_test.go` `Test_run_recurring_says_when_no_series_runs_in_the_period`
 - [x] SCENARIO-13: recurring refuses usage and store problems — delivered by SCENARIO-11: `cmd/quarry/run_recurring_refusals_test.go` `Test_run_recurring_refuses_usage_and_account_problems`
-- [ ] SCENARIO-14: a charge over twice the payee's usual is listed
-- [ ] SCENARIO-15: anomaly thresholds hold at their boundaries
-- [ ] SCENARIO-16: each report's window flags describe what that report does with them
+- [x] SCENARIO-14: a charge over twice the payee's usual is listed — `cmd/quarry/run_anomalies_test.go` `Test_run_anomalies_lists_a_charge_over_twice_the_payees_usual`
+- [x] SCENARIO-15: anomaly thresholds hold at their boundaries — delivered by SCENARIO-14: `internal/report/anomalies_test.go` `Test_anomalies_thresholds_hold_at_their_boundaries`
+- [x] SCENARIO-16: each report's window flags describe what that report does with them — delivered by SCENARIO-14: `internal/cli/report_help_test.go` `Test_each_reports_window_flags_describe_what_it_does_with_them`
 - [ ] SCENARIO-17: a payee with little history is judged against its category
 - [ ] SCENARIO-18: a charge with no usable history is counted as not judged
 - [ ] SCENARIO-19: anomalies --json returns the anomalies document

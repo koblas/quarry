@@ -216,9 +216,14 @@ func Test_run_read_commands_ignore_a_malformed_config(t *testing.T) {
 		spendSplit{id: "s03", account: "acct-chq", category: "cat-groceries", payee: "payee-costco", currency: "CAD", day: day(2026, 7, 5), cents: -2000},
 		spendSplit{id: "s04", account: "acct-chq", category: "cat-groceries", payee: "payee-costco", currency: "CAD", day: day(2026, 8, 5), cents: -2000},
 		spendSplit{id: "s05", account: "acct-chq", category: "cat-groceries", payee: "payee-costco", currency: "CAD", day: day(2026, 9, 5), cents: -2000},
+		spendSplit{id: "s06", account: "acct-chq", category: "cat-groceries", payee: "payee-bakery", currency: "CAD", day: day(2026, 3, 1), cents: -10000},
+		spendSplit{id: "s07", account: "acct-chq", category: "cat-groceries", payee: "payee-bakery", currency: "CAD", day: day(2026, 4, 1), cents: -10000},
+		spendSplit{id: "s08", account: "acct-chq", category: "cat-groceries", payee: "payee-bakery", currency: "CAD", day: day(2026, 5, 1), cents: -10000},
+		spendSplit{id: "s09", account: "acct-chq", category: "cat-groceries", payee: "payee-bakery", currency: "CAD", day: day(2026, 6, 1), cents: -25000},
 	))
 	commands := map[string][]string{
 		"accounts":  {"accounts"},
+		"anomalies": {"anomalies", "--since", "2026-01", "--until", "2026-09"},
 		"spend":     {"spend", "--since", "2026-01", "--until", "2026-09"},
 		"cashflow":  {"cashflow", "--since", "2026-01", "--until", "2026-09"},
 		"recurring": {"recurring", "--since", "2026-01", "--until", "2026-09"},
@@ -230,6 +235,7 @@ func Test_run_read_commands_ignore_a_malformed_config(t *testing.T) {
 		require.Equal(t, 0, runWith(context.Background(), args, spendEnv(&stdout, &stderr)), stderr.String())
 		before[name] = stdout.String()
 	}
+	require.Contains(t, before["anomalies"], "Bakery")
 	writeConfig(t, home, "[snapshots\nkeep = 24\n")
 
 	for name, args := range commands {
