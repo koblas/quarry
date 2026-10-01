@@ -248,7 +248,23 @@ The rows stay as they are: each row is in one currency, the Currency column stay
   - anomalies: the same sentence with `charges`.
   - recurring: `2 series with a charge dated before 1990-01-02, the first exchange rate in the store, are listed in USD, not converted to CAD`. A series with its first or latest charge uncovered is shown entirely native.
 - **accounts with no rates:** the "no rates" line.
-- **Ordering:** after the existing left-out-account warnings and before the empty-window note.
+- **Ordering** *(mid-feature ruling, SCENARIO-12)*: stderr and `warnings[]` share one order:
+  1. config warnings
+  2. left-out account(s)
+  3. FX ("no rates" or "before")
+  4. spend `--by tag` multi-tag note
+  5. empty-window note
+
+  An empty window gets no FX line.
+- **Scope of the FX lines.** Third-currency splits (unreachable: the importer accepts only CAD/USD) get no FX warning, stay native, and are not counted. N counts distinct transactions in the report's own view, so spend and cashflow may differ on one store.
+- **Zero fill** *(mid-feature ruling, SCENARIO-12)*:
+  - In CAD or USD mode, `fillSeries` fills zero rows for the target currency only.
+  - A row in another currency appears only in a period where the store returned one.
+  - Within a period, the target row comes first, then the other currencies in `currencyList(Totals)` order.
+  - Native mode is unchanged: every currency is filled in every period.
+  - The same applies to text and `--json` rows.
+  - Totals, grouping and keys are unchanged.
+  - An empty window gets the target's zero rows only.
 
 ### status (%-10s, after Findings)
 - **Covered:** `Rates     USD/CAD from the Bank of Canada, 1990-01-02 to 2026-09-30 (1 day ago)` (age: `today`, `1 day ago`, `N days ago`).
@@ -301,7 +317,7 @@ Mid-feature ruling, SCENARIO-01 — nothing fetched, nothing failed (no warning,
 | USD, USD | identity | base | base | base |
 | Weekend or holiday | silent (ASOF) | base | base | base |
 | After the last rate | silent; status shows the age | base | base | base |
-| Before the first rate | native rows + the "before" warning | row currency ≠ .currency | base | extra native Total |
+| Before the first rate | a native row only in periods holding such an amount + the "before" warning | row currency ≠ .currency | base | extra native Total |
 | Empty fx_rates, conversion needed | native rows + the "no rates" warning | same | base | per currency |
 | Empty fx_rates, all CAD in CAD | silent | base | base | base |
 | `--currency native` | exactly today | currency:"native" + additive fields | today | today |
@@ -311,6 +327,7 @@ Mid-feature ruling, SCENARIO-01 — nothing fetched, nothing failed (no warning,
 | Closed account | converts | | | |
 | Future-dated | latest prior rate, silent | | | |
 | Cross-currency transfer | still excluded | | | |
+| Same store, spend vs cashflow | N may differ: each counts the transactions in its own report | | | |
 | Empty window | existing empty note only; no FX warning | currency still set | | none |
 | One USD `--account`, default CAD | converted; caption names the account and `amounts in CAD` | base | it | CAD Total |
 | Recurring USD series in CAD | `CAD (USD)`; price changes `USD ...` | native fields | | included in the CAD Total |
