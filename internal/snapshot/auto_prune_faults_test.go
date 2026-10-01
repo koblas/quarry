@@ -70,8 +70,9 @@ func Test_outcome_lists_prune_warnings_after_the_history_warning(t *testing.T) {
 	home := t.TempDir()
 	ids := oldIDs(2)
 	prunable(t, home, ids...)
-	result := *builtWithOneSided(1)
+	result := store.Result{Built: true}
 	result.HistoryFault = &store.OpenError{Fault: store.OpenFaultNotDuckDB, Path: filepath.Join(home, "quarry", "quarry.duckdb")}
+	result.StoreUnreadable = true
 	srv := newImportServer(t, home, &fakeImporter{result: result},
 		snapshot.WithAutoPrune(1), snapshot.WithRemove(failingRemover(syscall.EACCES, ids[0]+".sqlite").remove))
 
@@ -79,8 +80,25 @@ func Test_outcome_lists_prune_warnings_after_the_history_warning(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{
-		"1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer",
-		historyRestartLine("the file is not a DuckDB database"),
+		combinedCarryLine("the file is not a DuckDB database"),
+		deleteFailureLine(ids[0], "permission denied"),
+	}, outcome.Warnings())
+}
+
+func Test_outcome_lists_prune_warnings_after_the_findings_warning(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	ids := oldIDs(2)
+	prunable(t, home, ids...)
+	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: filepath.Join(home, "quarry", "quarry.duckdb"), Reason: "its findings table is incomplete"}
+	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, FindingsFault: fault}},
+		snapshot.WithAutoPrune(1), snapshot.WithRemove(failingRemover(syscall.EACCES, ids[0]+".sqlite").remove))
+
+	outcome, err := syncBundle(t, srv)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		findingsRestartLine("its findings table is incomplete"),
 		deleteFailureLine(ids[0], "permission denied"),
 	}, outcome.Warnings())
 }
@@ -88,7 +106,7 @@ func Test_outcome_lists_prune_warnings_after_the_history_warning(t *testing.T) {
 func Test_outcome_adds_no_prune_warning_for_a_store_that_was_not_built(t *testing.T) {
 	t.Parallel()
 	failed := []snapshot.PruneFailure{{Entry: snapshot.Entry{ID: idOldest}, Reason: "permission denied"}}
-	built := snapshot.Outcome{Store: builtWithOneSided(0), Pruned: &snapshot.Pruned{Failed: failed}}
+	built := snapshot.Outcome{Store: &store.Result{Built: true}, Pruned: &snapshot.Pruned{Failed: failed}}
 	unbuilt := snapshot.Outcome{Store: &store.Result{}, Pruned: &snapshot.Pruned{Failed: failed}}
 
 	assert.Equal(t, []string{deleteFailureLine(idOldest, "permission denied")}, built.Warnings())
@@ -136,7 +154,7 @@ func Test_outcome_names_the_unlistable_folder_by_its_absolute_path_in_the_absolu
 func Test_outcome_absolute_warnings_match_the_warnings_when_no_folder_could_not_be_listed(t *testing.T) {
 	t.Parallel()
 	failed := []snapshot.PruneFailure{{Entry: snapshot.Entry{ID: idOldest}, Reason: "permission denied"}}
-	outcome := snapshot.Outcome{Store: builtWithOneSided(1), Pruned: &snapshot.Pruned{Failed: failed}}
+	outcome := snapshot.Outcome{Store: &store.Result{Built: true}, Pruned: &snapshot.Pruned{Failed: failed}}
 
 	assert.Equal(t, outcome.Warnings(), outcome.WarningsAbsolute())
 }

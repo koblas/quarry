@@ -4,6 +4,8 @@ import (
 	"errors"
 	"slices"
 	"time"
+
+	"github.com/koblas/quarry/internal/finding"
 )
 
 // Account is one row of the accounts table.
@@ -121,6 +123,9 @@ type Transfer struct {
 	FromSplitID   string
 	ToSplitID     *string
 	CrossCurrency bool
+	// OtherAccount is the account name a one-sided leg recorded in name form;
+	// nil for a pair and for a numeric link, which records no name.
+	OtherAccount *string
 }
 
 // SplitTag links one split to one tag (the split_tags table).
@@ -131,6 +136,9 @@ type SplitTag struct {
 
 // Rows is every row a store build writes, grouped by table. ImportRuns holds
 // the new build's run only; the store carries earlier runs forward itself.
+// ReferencedCategoryIDs is not a table: sorted unique ids of categories that rows
+// not stored as splits use (split entries under transactions the import does not keep,
+// budgets, loans, rules), nil when none; never persisted.
 type Rows struct {
 	Accounts     []Account
 	Categories   []Category
@@ -141,6 +149,8 @@ type Rows struct {
 	SplitTags    []SplitTag
 	Transfers    []Transfer
 	ImportRuns   []ImportRun
+
+	ReferencedCategoryIDs []string
 }
 
 // SnapshotRef identifies the snapshot a build reads: its absolute Path,
@@ -175,7 +185,8 @@ type ImportRun struct {
 // Status is what a built store says about itself: its path, the format and
 // build that wrote it, its import run and the dates its transactions cover.
 // A zero Run.Snapshot.TakenAt or empty Source means NULL was recorded; the
-// dates are zero when there are no transactions.
+// dates are zero when there are no transactions. Findings holds each recorded
+// finding's id, type and state without its items, read from the same build as the rest.
 type Status struct {
 	Path                string
 	FormatVersion       int
@@ -183,6 +194,7 @@ type Status struct {
 	BuiltAt             time.Time
 	Run                 ImportRun
 	FirstDate, LastDate time.Time
+	Findings            []Finding
 }
 
 // Counts is the row count of each table after a build; Transfers counts
@@ -202,7 +214,12 @@ type Counts struct {
 // Path is then empty (Replace never ran) but Counts, Validation and
 // NotImported still describe the rows the build would have written.
 // HistoryFault is why the previous store's import runs were not carried
-// into a built store; nil when they were, or no store existed.
+// into a built store; nil when they were, or no store existed. Findings
+// tallies FindingStates with no findings.ignore list, zero when Built is false;
+// FindingStates is the state of each finding the build recorded;
+// FindingsCarried is true iff the previous store's findings were read.
+// FindingsFault is why a previous store that opened had findings that could not be read.
+// StoreUnreadable is true iff the previous store could not be opened at all.
 type Result struct {
 	Path         string
 	Built        bool
@@ -210,13 +227,27 @@ type Result struct {
 	Validation   Validation
 	NotImported  NotImported
 	HistoryFault *OpenError
+	Findings     finding.Counts
+
+	FindingStates   []finding.State
+	FindingsCarried bool
+	FindingsFault   *OpenError
+	StoreUnreadable bool
 }
 
-// Replaced is what Store.Replace reports: the path it wrote, and the fault
-// that kept the previous store's import runs from being carried, if any.
+// Replaced is what Store.Replace reports: the path it wrote, the fault that
+// kept the previous store's import runs from being carried, if any, the counts
+// of the findings it recorded, their states, and whether the previous store's findings were carried.
+// FindingsFault and StoreUnreadable mean what they do on Result.
 type Replaced struct {
 	Path         string
 	HistoryFault *OpenError
+	Findings     finding.Counts
+
+	FindingStates   []finding.State
+	FindingsCarried bool
+	FindingsFault   *OpenError
+	StoreUnreadable bool
 }
 
 // NotImported counts source rows a build deliberately leaves out of the
@@ -317,6 +348,47 @@ type OneSidedTransfer struct {
 	Amount            int64
 	OtherAccount      *string
 	OtherAccountID    *string
+}
+
+// FindingList is every finding the store holds, open and fixed alike; ignored
+// is not stored, so callers derive it from the config.
+type FindingList struct {
+	Findings []Finding
+}
+
+// Finding is one row of the findings table with its items. FixedAt is nil
+// while the finding is open; a fixed finding has no Items. New and NewlyFixed
+// mean first found or fixed by the store's own build.
+type Finding struct {
+	ID           string
+	Type         finding.Type
+	FirstFoundAt time.Time
+	FixedAt      *time.Time
+	New          bool
+	NewlyFixed   bool
+	Items        []FindingItem
+}
+
+// FindingItem is what a finding is about: a transaction or split with its account and payee, or a payee or
+// category. Amount is in cents, the split's when SplitID is set; OtherAccount* describe a one-sided leg as
+// OneSidedTransfer does.
+type FindingItem struct {
+	TransactionID  *string
+	SplitID        *string
+	PayeeID        *string
+	CategoryID     *string
+	Date           time.Time
+	AccountID      string
+	Account        string
+	Currency       string
+	Closed, Active bool
+	Payee          string
+	Category       *string // an unlinked-transfer item's sole split's full path, nil if none or several; a mixed-categories, similar-categories or unused-category item's category path
+	Splits         int     // an unlinked-transfer item's split count; a similar-categories item's category's splits; 0 for an unused-category item
+	Transactions   int     // a mixed-categories item's payee's transactions in its category, a payee-variants item's payee's transactions; 0 for every other type
+	Amount         int64
+	OtherAccount   *string
+	OtherAccountID *string
 }
 
 // AccountBalance is one account with its balance in cents; Balance is nil

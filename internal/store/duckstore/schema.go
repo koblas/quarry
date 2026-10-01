@@ -68,7 +68,8 @@ CREATE TABLE transfers (
 	id VARCHAR PRIMARY KEY,
 	from_split_id VARCHAR NOT NULL,
 	to_split_id VARCHAR,
-	cross_currency BOOLEAN NOT NULL
+	cross_currency BOOLEAN NOT NULL,
+	other_account VARCHAR
 );
 CREATE TABLE split_tags (
 	split_id VARCHAR NOT NULL,
@@ -101,6 +102,19 @@ CREATE TABLE import_runs (
 	investment_accounts BIGINT,
 	transfers_paired BIGINT,
 	transfers_cross_currency BIGINT
+);
+CREATE TABLE findings (
+	id VARCHAR PRIMARY KEY,
+	type VARCHAR NOT NULL,
+	first_found_at TIMESTAMP NOT NULL,
+	fixed_at TIMESTAMP
+);
+CREATE TABLE finding_items (
+	finding_id VARCHAR NOT NULL,
+	transaction_id VARCHAR,
+	split_id VARCHAR,
+	payee_id VARCHAR,
+	category_id VARCHAR
 );
 CREATE TABLE store_info (
 	format_version INTEGER NOT NULL,

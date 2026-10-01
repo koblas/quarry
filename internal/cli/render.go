@@ -5,6 +5,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/platform/sqlschema"
@@ -83,8 +84,8 @@ func writeDiffRow(b *strings.Builder, sign, label, value string) {
 	fmt.Fprintf(b, "  %s %-8s%s\n", sign, label, value)
 }
 
-// renderStore renders result's Store, Rows, Balances, Splits and Transfers
-// lines, appended after renderSuccess's block once a build was reached.
+// renderStore renders result's Store, Rows, Balances, Splits, Transfers and
+// Findings lines, appended after renderSuccess's block once a build was reached.
 func renderStore(result store.Result, home string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", homepath.Abbreviate(home, result.Path))
@@ -92,15 +93,48 @@ func renderStore(result store.Result, home string) string {
 	bc := result.Validation.Balances
 	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(balanceCounts{Checked: bc.Checked, NeverReconciled: len(bc.NeverReconciled), InvestmentAccounts: bc.InvestmentAccounts}))
 	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits.Checked))
-	writeTransfers(&b, result.Validation.Transfers)
+	writeTransfersLine(&b, result.Validation.Transfers)
+	fmt.Fprintf(&b, "%-10s%s\n", "Findings", findingsPhrase(result.Findings, result.FindingsCarried))
 	return b.String()
 }
 
-// writeTransfers appends tc's Transfers line, then one "?" row per
-// one-sided leg.
-func writeTransfers(b *strings.Builder, tc store.TransferCheck) {
+// findingsPhrase renders the open count, with "(M new)" once history was carried and
+// "K fixed since the last sync" and "J ignored"; "run quarry findings" follows only while any are open.
+func findingsPhrase(c finding.Counts, carried bool) string {
+	if c.Open == 0 {
+		return "none open" + fixedClause(c.NewlyFixed) + ignoredClause(c.Ignored)
+	}
+	phrase := humanize.Thousands(c.Open) + " open"
+	if carried && c.New > 0 {
+		phrase += " (" + humanize.Thousands(c.New) + " new)"
+	}
+	return phrase + fixedClause(c.NewlyFixed) + ignoredClause(c.Ignored) + "; run quarry findings to list them"
+}
+
+// ignoredClause renders ", J ignored", empty when none are ignored.
+func ignoredClause(ignored int) string {
+	if ignored == 0 {
+		return ""
+	}
+	return ", " + humanize.Thousands(ignored) + " ignored"
+}
+
+// fixedClause renders ", K fixed since the last sync", empty when none were fixed.
+func fixedClause(newlyFixed int) string {
+	if newlyFixed == 0 {
+		return ""
+	}
+	return ", " + humanize.Thousands(newlyFixed) + " fixed since the last sync"
+}
+
+// writeTransfersLine appends tc's Transfers count line.
+func writeTransfersLine(b *strings.Builder, tc store.TransferCheck) {
 	fmt.Fprintf(b, "%-10s%s\n", "Transfers", transfersPhrase(tc.Paired, len(tc.OneSided)))
-	for _, row := range oneSidedRows(tc.OneSided) {
+}
+
+// writeOneSidedRows appends one "?" row per one-sided leg.
+func writeOneSidedRows(b *strings.Builder, legs []store.OneSidedTransfer) {
+	for _, row := range oneSidedRows(legs) {
 		fmt.Fprintln(b, row)
 	}
 }
@@ -235,7 +269,7 @@ func accountLabel(name, currency string, closed, active bool) string {
 	case !active:
 		suffix = ", inactive"
 	}
-	return fmt.Sprintf("%s (%s%s)", name, currency, suffix)
+	return fmt.Sprintf("%s (%s%s)", escapeCell(name), currency, suffix)
 }
 
 // balanceMismatchRows renders one "!" row per mismatch, in the order
@@ -298,13 +332,22 @@ func payeeLabel(payee string) string {
 	if payee == "" {
 		return "(no payee)"
 	}
-	return payee
+	return escapeCell(payee)
 }
 
-// oneSidedRows renders one "?" row per one-sided leg, in the order given:
-// date fixed, account label and payee columns padded to the widest among
-// these rows, the amount right-aligned, then the account the leg names.
+// oneSidedRows renders one "?" row per one-sided leg, in the order given, each
+// behind the lead "  ? ".
 func oneSidedRows(legs []store.OneSidedTransfer) []string {
+	leads := make([]string, len(legs))
+	for i := range leads {
+		leads[i] = "  ? "
+	}
+	return legRows(legs, leads)
+}
+
+// legRows renders one row per one-sided leg behind its own lead: date, padded
+// label and payee columns, the amount right-aligned, then the other account.
+func legRows(legs []store.OneSidedTransfer, leads []string) []string {
 	labels := make([]string, len(legs))
 	payees := make([]string, len(legs))
 	amounts := make([]string, len(legs))
@@ -319,8 +362,8 @@ func oneSidedRows(legs []store.OneSidedTransfer) []string {
 
 	rows := make([]string, len(legs))
 	for i, leg := range legs {
-		rows[i] = fmt.Sprintf("  ? %s  %-*s%-*s%*s  other account: %s",
-			leg.Date.Format("2006-01-02"), labelWidth, labels[i], payeeWidth, payees[i],
+		rows[i] = fmt.Sprintf("%s%s  %-*s%-*s%*s  other account: %s",
+			leads[i], leg.Date.Format("2006-01-02"), labelWidth, labels[i], payeeWidth, payees[i],
 			amountWidth, amounts[i], otherAccountLabel(leg))
 	}
 	return rows
@@ -334,9 +377,9 @@ func otherAccountLabel(leg store.OneSidedTransfer) string {
 	case leg.OtherAccount == nil:
 		return "unknown"
 	case leg.OtherAccountID == nil:
-		return *leg.OtherAccount + " (not in this file)"
+		return escapeCell(*leg.OtherAccount) + " (not in this file)"
 	default:
-		return *leg.OtherAccount
+		return escapeCell(*leg.OtherAccount)
 	}
 }
 
@@ -374,7 +417,8 @@ func renderStoreFailure(result store.Result, storeExisted bool, home string) str
 	} else {
 		fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits.Checked))
 	}
-	writeTransfers(&b, result.Validation.Transfers)
+	writeTransfersLine(&b, result.Validation.Transfers)
+	writeOneSidedRows(&b, result.Validation.Transfers.OneSided)
 	return b.String()
 }
 

@@ -1,0 +1,450 @@
+package duckstore_test
+
+import (
+	"context"
+	"slices"
+	"testing"
+
+	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/platform/duckdb"
+	"github.com/koblas/quarry/internal/store"
+	"github.com/koblas/quarry/internal/store/duckstore"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// readFinding builds rows in a fresh store and returns the finding with id from its Findings read.
+func readFinding(t *testing.T, rows store.Rows, id string) store.Finding {
+	t.Helper()
+	dir := t.TempDir()
+	_, err := duckstore.New(dir).Replace(t.Context(), rows)
+	require.NoError(t, err)
+	return findingIn(t, duckstore.New(dir), id)
+}
+
+// findingIn is the finding with id in st's Findings read.
+func findingIn(t *testing.T, st *duckstore.Store, id string) store.Finding {
+	t.Helper()
+	list, err := st.Findings(t.Context())
+	require.NoError(t, err)
+	i := slices.IndexFunc(list.Findings, func(f store.Finding) bool { return f.ID == id })
+	require.GreaterOrEqual(t, i, 0, "finding %s not listed", id)
+	return list.Findings[i]
+}
+
+// oneSidedRows is minimalRows plus a one-sided transfer leg split-3 of -1.20 on txn-5 (-3.00), recording other and linked.
+func oneSidedRows(other, linked *string) store.Rows {
+	rows := withFindingCandidates()
+	i := slices.IndexFunc(rows.Splits, func(s store.Split) bool { return s.ID == "split-3" })
+	rows.Splits[i].Amount = -120
+	rows.Splits[i].TransferAccountID = linked
+	j := slices.IndexFunc(rows.Transfers, func(x store.Transfer) bool { return x.ID == "xfer-3" })
+	rows.Transfers[j].OtherAccount = other
+	return rows
+}
+
+func Test_findings_lists_the_two_transactions_of_a_duplicate_in_lower_id_order(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	first, second := dupTxn(9, "acct-1", day(2026, 8, 3), duplicateAmount, uncleared), dupTxn(10, "acct-1", day(2026, 8, 4), duplicateAmount, uncleared)
+	first.PayeeID = new("payee-1")
+	rows.Transactions = []store.Transaction{first, second}
+	rows.Splits, rows.SplitTags, rows.Transfers = nil, nil, nil
+
+	got := readFinding(t, rows, "duplicate:txn-9+txn-10")
+
+	assert.Equal(t, finding.Duplicate, got.Type)
+	assert.Nil(t, got.FixedAt)
+	assert.Equal(t, []store.FindingItem{
+		{
+			TransactionID: new("txn-9"), Date: day(2026, 8, 3), AccountID: "acct-1", Account: "Chequing", Currency: "CAD",
+			Active: true, Payee: "Coffee Shop", Amount: duplicateAmount,
+		},
+		{
+			TransactionID: new("txn-10"), Date: day(2026, 8, 4), AccountID: "acct-1", Account: "Chequing", Currency: "CAD",
+			Active: true, Amount: duplicateAmount,
+		},
+	}, got.Items)
+}
+
+func Test_findings_carries_a_closed_foreign_currency_account_on_its_items(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	rows.Accounts = append(rows.Accounts, store.Account{
+		ID: "acct-2", SourceID: 2, Name: "Old Visa", Type: "credit", Currency: "USD", Closed: true,
+	})
+	first, second := dupTxn(9, "acct-2", day(2026, 8, 3), duplicateAmount, uncleared), dupTxn(10, "acct-2", day(2026, 8, 3), duplicateAmount, uncleared)
+	first.Currency, second.Currency = "USD", "USD"
+	rows.Transactions = []store.Transaction{first, second}
+	rows.Splits, rows.SplitTags, rows.Transfers = nil, nil, nil
+
+	got := readFinding(t, rows, "duplicate:txn-9+txn-10")
+
+	require.Len(t, got.Items, 2)
+	assert.Equal(t, []string{"acct-2", "Old Visa", "USD"}, []string{got.Items[0].AccountID, got.Items[0].Account, got.Items[0].Currency})
+	assert.True(t, got.Items[0].Closed)
+	assert.False(t, got.Items[0].Active)
+}
+
+func Test_findings_lists_a_one_sided_leg_with_its_split_amount_and_the_name_not_in_the_file(t *testing.T) {
+	t.Parallel()
+
+	got := readFinding(t, oneSidedRows(new("Savings"), nil), "one-sided-transfer:xfer-3")
+
+	assert.Equal(t, finding.OneSidedTransfer, got.Type)
+	assert.Equal(t, []store.FindingItem{{
+		TransactionID: new("txn-5"), SplitID: new("split-3"), Date: day(2026, 3, 16), AccountID: "acct-1", Account: "Chequing",
+		Currency: "CAD", Active: true, Amount: -120, OtherAccount: new("Savings"),
+	}}, got.Items)
+}
+
+func Test_findings_lists_a_one_sided_leg_whose_name_matches_an_account_with_that_account_id(t *testing.T) {
+	t.Parallel()
+
+	got := readFinding(t, oneSidedRows(new("Chequing"), new("acct-1")), "one-sided-transfer:xfer-3")
+
+	require.Len(t, got.Items, 1)
+	assert.Equal(t, []*string{new("Chequing"), new("acct-1")}, []*string{got.Items[0].OtherAccount, got.Items[0].OtherAccountID})
+}
+
+func Test_findings_lists_a_one_sided_leg_linked_by_number_with_no_other_account(t *testing.T) {
+	t.Parallel()
+
+	got := readFinding(t, oneSidedRows(nil, nil), "one-sided-transfer:xfer-3")
+
+	require.Len(t, got.Items, 1)
+	assert.Equal(t, []*string{nil, nil}, []*string{got.Items[0].OtherAccount, got.Items[0].OtherAccountID})
+}
+
+func Test_findings_lists_one_uncategorized_finding_per_payee_with_an_item_per_split(t *testing.T) {
+	t.Parallel()
+
+	got := readFinding(t, withFindingCandidates(), "uncategorized:payee-1")
+
+	assert.Equal(t, finding.Uncategorized, got.Type)
+	assert.Equal(t, []store.FindingItem{
+		{
+			TransactionID: new("txn-3"), SplitID: new("split-6"), Date: day(2026, 3, 16), AccountID: "acct-1", Account: "Chequing",
+			Currency: "CAD", Active: true, Payee: "Coffee Shop", Amount: -700,
+		},
+		{
+			TransactionID: new("txn-4"), SplitID: new("split-7"), Date: day(2026, 3, 16), AccountID: "acct-1", Account: "Chequing",
+			Currency: "CAD", Active: true, Payee: "Coffee Shop", Amount: -900,
+		},
+	}, got.Items)
+}
+
+func Test_findings_lists_uncategorized_splits_without_a_payee_under_no_payee_with_an_empty_payee(t *testing.T) {
+	t.Parallel()
+
+	got := readFinding(t, withFindingCandidates(), "uncategorized:no-payee")
+
+	require.Len(t, got.Items, 1)
+	assert.Equal(t, []any{"split-5", "", int64(-500)}, []any{*got.Items[0].SplitID, got.Items[0].Payee, got.Items[0].Amount})
+}
+
+func Test_findings_lists_every_finding_sorted_by_id(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	_, err := duckstore.New(dir).Replace(t.Context(), withFindingCandidates())
+	require.NoError(t, err)
+
+	list, err := duckstore.New(dir).Findings(t.Context())
+
+	require.NoError(t, err)
+	ids := make([]string, len(list.Findings))
+	for i, f := range list.Findings {
+		ids[i] = f.ID
+	}
+	assert.Equal(t, []string{"one-sided-transfer:xfer-3", "uncategorized:no-payee", "uncategorized:payee-1"}, ids)
+}
+
+func Test_findings_lists_no_findings_for_a_store_with_none(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	rows.Transfers = rows.Transfers[:1]
+	dir := t.TempDir()
+	_, err := duckstore.New(dir).Replace(t.Context(), rows)
+	require.NoError(t, err)
+
+	list, err := duckstore.New(dir).Findings(t.Context())
+
+	require.NoError(t, err)
+	assert.Empty(t, list.Findings)
+}
+
+func Test_findings_lists_a_fixed_finding_with_its_fix_time_and_no_items(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	_, err := duckstore.New(dir).Replace(t.Context(), withFindingCandidates())
+	require.NoError(t, err)
+	_, err = duckstore.New(dir).Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+
+	got := findingIn(t, duckstore.New(dir), "uncategorized:payee-1")
+
+	assert.NotNil(t, got.FixedAt)
+	assert.Empty(t, got.Items)
+}
+
+func Test_findings_marks_new_and_newly_fixed_by_the_latest_build_only(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	_, err := duckstore.New(dir).Replace(t.Context(), withFindingCandidates())
+	require.NoError(t, err)
+	_, err = duckstore.New(dir).Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	st := duckstore.New(dir)
+	flags := func(id string) []bool {
+		f := findingIn(t, st, id)
+		return []bool{f.New, f.NewlyFixed}
+	}
+
+	assert.Equal(t, []bool{false, true}, flags("uncategorized:payee-1"), "fixed by the latest build")
+	assert.Equal(t, []bool{false, false}, flags("one-sided-transfer:xfer-3"), "open since an earlier build")
+
+	_, err = st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+
+	assert.Equal(t, []bool{false, false}, flags("uncategorized:payee-1"), "fixed by an earlier build")
+}
+
+func Test_findings_marks_a_finding_first_found_by_the_latest_build_as_new(t *testing.T) {
+	t.Parallel()
+
+	got := readFinding(t, withFindingCandidates(), "uncategorized:payee-1")
+
+	assert.True(t, got.New)
+	assert.False(t, got.NewlyFixed)
+}
+
+// categoryAndSplits is the two fields an unlinked-transfer item reads beyond its transaction's columns.
+type categoryAndSplits struct {
+	Category *string
+	Splits   int
+}
+
+// unlinkedPair builds an unlinked pair txn-1 (acct-1, -500.00) and txn-2 (acct-2, +500.00) with category cat-2
+// "Income:Other" added, applies splits to the rows, and returns what the read gives for each item.
+func unlinkedPair(t *testing.T, splits ...store.Split) []categoryAndSplits {
+	t.Helper()
+	rows := unlinkedRows(func(r *store.Rows) {
+		r.Categories = append(r.Categories, store.Category{ID: "cat-2", SourceID: 2, Name: "Other", FullPath: "Income:Other", Kind: "income"})
+		r.Splits = splits
+	},
+		dupTxn(1, "acct-1", day(2026, 8, 3), -unlinkedAmount, uncleared),
+		dupTxn(2, "acct-2", day(2026, 8, 4), unlinkedAmount, uncleared))
+	got := readFinding(t, rows, "unlinked-transfer:txn-1+txn-2")
+	out := make([]categoryAndSplits, len(got.Items))
+	for i, item := range got.Items {
+		out[i] = categoryAndSplits{item.Category, item.Splits}
+	}
+	return out
+}
+
+func Test_findings_reads_the_category_path_of_the_sole_split_of_each_unlinked_transfer_item(t *testing.T) {
+	t.Parallel()
+
+	got := unlinkedPair(t,
+		store.Split{ID: "split-1", SourceID: 1, TransactionID: "txn-1", CategoryID: new("cat-2"), Amount: -unlinkedAmount},
+		store.Split{ID: "split-2", SourceID: 2, TransactionID: "txn-2", CategoryID: new("cat-1"), Amount: unlinkedAmount})
+
+	assert.Equal(t, []categoryAndSplits{{new("Income:Other"), 1}, {new("Groceries"), 1}}, got)
+}
+
+func Test_findings_reads_no_category_for_an_unlinked_transfer_item_whose_only_split_has_none_or_that_has_no_split(t *testing.T) {
+	t.Parallel()
+
+	got := unlinkedPair(t, store.Split{ID: "split-1", SourceID: 1, TransactionID: "txn-1", Amount: -unlinkedAmount})
+
+	assert.Equal(t, []categoryAndSplits{{nil, 1}, {nil, 0}}, got)
+}
+
+func Test_findings_reads_the_split_count_and_no_category_for_an_unlinked_transfer_item_with_two_categorized_splits(t *testing.T) {
+	t.Parallel()
+
+	got := unlinkedPair(t,
+		store.Split{ID: "split-1", SourceID: 1, TransactionID: "txn-1", CategoryID: new("cat-1"), Amount: -30000},
+		store.Split{ID: "split-4", SourceID: 4, TransactionID: "txn-1", CategoryID: new("cat-2"), Amount: -20000},
+		store.Split{ID: "split-2", SourceID: 2, TransactionID: "txn-2", CategoryID: new("cat-1"), Amount: unlinkedAmount})
+
+	assert.Equal(t, []categoryAndSplits{{nil, 2}, {new("Groceries"), 1}}, got)
+}
+
+func Test_findings_reads_no_category_or_split_count_for_the_items_of_a_duplicate(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	rows.Transactions = []store.Transaction{
+		dupTxn(9, "acct-1", day(2026, 8, 3), duplicateAmount, uncleared), dupTxn(10, "acct-1", day(2026, 8, 4), duplicateAmount, uncleared),
+	}
+	rows.Splits = []store.Split{
+		{ID: "split-9", SourceID: 9, TransactionID: "txn-9", CategoryID: new("cat-1"), Amount: duplicateAmount},
+		{ID: "split-10", SourceID: 10, TransactionID: "txn-10", CategoryID: new("cat-1"), Amount: duplicateAmount},
+	}
+	rows.SplitTags, rows.Transfers = nil, nil
+
+	got := readFinding(t, rows, "duplicate:txn-9+txn-10")
+
+	require.Len(t, got.Items, 2)
+	assert.Equal(t, []categoryAndSplits{{nil, 0}, {nil, 0}},
+		[]categoryAndSplits{{got.Items[0].Category, got.Items[0].Splits}, {got.Items[1].Category, got.Items[1].Splits}})
+}
+
+func Test_findings_reads_a_mixed_item_as_its_payee_and_category_with_the_payees_transactions_in_it(t *testing.T) {
+	t.Parallel()
+
+	got := readFinding(t, mixedRows(mixedSeq(mixedPayee, "ababa", 1)...), mixedIDOf(mixedPayee))
+
+	assert.Equal(t, finding.MixedCategories, got.Type)
+	assert.Equal(t, []store.FindingItem{
+		{PayeeID: new(mixedPayee), CategoryID: new("cat-a"), Payee: "Costco", Category: new("Groceries"), Transactions: 3},
+		{PayeeID: new(mixedPayee), CategoryID: new("cat-b"), Payee: "Costco", Category: new("Household"), Transactions: 2},
+	}, got.Items)
+}
+
+func Test_findings_counts_a_mixed_item_without_the_transactions_of_other_payees_in_its_category(t *testing.T) {
+	t.Parallel()
+	fixtures := append(mixedSeq(mixedPayee, "aba", 1), mixedSeq(mixedOtherPayee, "aa", 10)...)
+
+	got := readFinding(t, mixedRows(fixtures...), mixedIDOf(mixedPayee))
+
+	assert.Equal(t, []int{2, 1}, []int{got.Items[0].Transactions, got.Items[1].Transactions})
+}
+
+func Test_findings_counts_a_mixed_item_without_a_transaction_split_over_categories(t *testing.T) {
+	t.Parallel()
+	fixtures := mixedSeq(mixedPayee, "abaaba", 1)
+	fixtures[3] = fixtures[3].splitInto("a", "a")
+
+	got := readFinding(t, mixedRows(fixtures...), mixedIDOf(mixedPayee))
+
+	assert.Equal(t, []int{3, 2}, []int{got.Items[0].Transactions, got.Items[1].Transactions})
+}
+
+// editDB runs statements against the store being built after its build and before its checkpoint.
+type editDB struct {
+	duckstore.DB
+
+	statements []string
+}
+
+func (e *editDB) CheckpointClose(ctx context.Context) error {
+	for _, statement := range e.statements {
+		if _, err := e.Exec(ctx, statement); err != nil {
+			return err
+		}
+	}
+	return e.DB.CheckpointClose(ctx)
+}
+
+// readEdited builds rows with statements applied to the built store and returns the finding with id from its Findings read.
+func readEdited(t *testing.T, rows store.Rows, id string, statements ...string) store.Finding {
+	t.Helper()
+	dir := t.TempDir()
+	create := duckstore.WithCreate(func(ctx context.Context, path string) (duckstore.DB, error) {
+		db, err := duckdb.Create(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		return &editDB{DB: db, statements: statements}, nil
+	})
+	_, err := duckstore.New(dir, create).Replace(t.Context(), rows)
+	require.NoError(t, err)
+	return findingIn(t, duckstore.New(dir), id)
+}
+
+func Test_findings_counts_no_transactions_for_an_item_of_any_other_type_naming_a_mixed_payee_and_category(t *testing.T) {
+	t.Parallel()
+	rows := mixedRows(mixedSeq(mixedPayee, "ababa", 1)...)
+	probe := func(id, typ string) string {
+		return `INSERT INTO findings VALUES ('` + id + `', '` + typ + `', now(), NULL);
+			INSERT INTO finding_items (finding_id, payee_id, category_id) VALUES ('` + id + `', '` + mixedPayee + `', 'cat-a')`
+	}
+	edits := []string{probe("uncategorized:probe", "uncategorized"), probe("duplicate:probe", "duplicate")}
+
+	mixed := readEdited(t, rows, mixedIDOf(mixedPayee), edits...)
+	uncategorized := readEdited(t, rows, "uncategorized:probe", edits...)
+	duplicate := readEdited(t, rows, "duplicate:probe", edits...)
+
+	assert.Equal(t, []int{3, 0, 0}, []int{mixed.Items[0].Transactions, uncategorized.Items[0].Transactions, duplicate.Items[0].Transactions})
+}
+
+func Test_findings_reads_a_payee_variants_item_as_its_payee_with_the_payees_transactions_and_no_category_or_date(t *testing.T) {
+	t.Parallel()
+	rows := variantRows(variantPayee{name: "Tim Hortons", txns: 1}, variantPayee{name: "TIM HORTONS #1234", txns: 2})
+
+	got := readFinding(t, rows, "payee-variants:tim-hortons")
+
+	assert.Equal(t, finding.PayeeVariants, got.Type)
+	assert.Equal(t, []store.FindingItem{
+		{PayeeID: new("payee-2"), Payee: "TIM HORTONS #1234", Transactions: 2},
+		{PayeeID: new("payee-1"), Payee: "Tim Hortons", Transactions: 1},
+	}, got.Items)
+}
+
+func Test_findings_gives_only_a_payee_variants_item_the_payee_total(t *testing.T) {
+	t.Parallel()
+	rows := variantRows(variantPayee{name: "Tim Hortons", txns: 2}, variantPayee{name: "TIM HORTONS", txns: 1})
+	probe := func(id, typ string) string {
+		return `INSERT INTO findings VALUES ('` + id + `', '` + typ + `', now(), NULL);
+			INSERT INTO finding_items (finding_id, payee_id) VALUES ('` + id + `', 'payee-1')`
+	}
+	edits := []string{probe("uncategorized:probe", "uncategorized"), probe("duplicate:probe", "duplicate")}
+
+	variants := readEdited(t, rows, "payee-variants:tim-hortons", edits...)
+	uncategorized := readEdited(t, rows, "uncategorized:probe", edits...)
+	duplicate := readEdited(t, rows, "duplicate:probe", edits...)
+
+	assert.Equal(t, []int{2, 0, 0}, []int{variants.Items[0].Transactions, uncategorized.Items[0].Transactions, duplicate.Items[0].Transactions})
+}
+
+func Test_findings_counts_a_payee_variants_transaction_once_however_many_splits_it_has(t *testing.T) {
+	t.Parallel()
+	rows := variantRows(variantPayee{name: "Tim Hortons", txns: 1}, variantPayee{name: "TIM HORTONS", txns: 1})
+	rows.Splits = []store.Split{
+		{ID: "split-1", SourceID: 1, TransactionID: "txn-1", Amount: -400},
+		{ID: "split-2", SourceID: 2, TransactionID: "txn-1", Amount: -600},
+	}
+
+	got := readFinding(t, rows, "payee-variants:tim-hortons")
+
+	assert.Equal(t, []int{1, 1}, []int{got.Items[0].Transactions, got.Items[1].Transactions})
+}
+
+func Test_findings_reads_a_similar_categories_item_as_its_category_path_with_the_categorys_splits_and_no_transactions_or_date(t *testing.T) {
+	t.Parallel()
+	rows := similarRows(similarCat{path: "Auto:Fuel", splits: 3}, similarCat{path: "Auto:Fuels", splits: 1})
+
+	got := readFinding(t, rows, "similar-categories:auto/fuel")
+
+	assert.Equal(t, finding.SimilarCategories, got.Type)
+	assert.Equal(t, []store.FindingItem{
+		{CategoryID: new("cat-1"), Category: new("Auto:Fuel"), Splits: 3},
+		{CategoryID: new("cat-2"), Category: new("Auto:Fuels"), Splits: 1},
+	}, got.Items)
+}
+
+func Test_findings_reads_a_similar_categories_item_of_an_unused_category_with_zero_splits(t *testing.T) {
+	t.Parallel()
+	rows := similarRows(similarCat{path: "Groceries", splits: 2}, similarCat{path: "Grocery"})
+
+	got := readFinding(t, rows, "similar-categories:grocery")
+
+	assert.Equal(t, []int{2, 0}, []int{got.Items[0].Splits, got.Items[1].Splits})
+}
+
+func Test_findings_gives_only_a_similar_categories_item_the_category_total(t *testing.T) {
+	t.Parallel()
+	rows := similarRows(similarCat{path: "Groceries", splits: 2}, similarCat{path: "Grocery", splits: 1})
+	probe := func(id, typ string) string {
+		return `INSERT INTO findings VALUES ('` + id + `', '` + typ + `', now(), NULL);
+			INSERT INTO finding_items (finding_id, category_id) VALUES ('` + id + `', 'cat-1')`
+	}
+	edits := []string{probe("mixed-categories:probe", "mixed-categories"), probe("uncategorized:probe", "uncategorized")}
+
+	similar := readEdited(t, rows, "similar-categories:grocery", edits...)
+	mixed := readEdited(t, rows, "mixed-categories:probe", edits...)
+	uncategorized := readEdited(t, rows, "uncategorized:probe", edits...)
+
+	assert.Equal(t, []int{2, 0, 0}, []int{similar.Items[0].Splits, mixed.Items[0].Splits, uncategorized.Items[0].Splits})
+}

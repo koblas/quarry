@@ -20,6 +20,11 @@ const (
 	reasonNoTable    = "it has no import_runs table"
 	reasonIncomplete = "its import_runs table is incomplete"
 	reasonIDTooLarge = "its import_runs table has an id too large to follow"
+
+	reasonFindingsRepeatedID = "its findings table repeats an id"
+	reasonFindingsIncomplete = "its findings table is incomplete"
+	previousOpenFindingID    = "uncategorized:payee-9"
+	previousOpenFindingType  = "uncategorized"
 )
 
 // importRunsColumns are the 19 columns every store format has, each with the cell of a valid run.
@@ -62,6 +67,52 @@ func importRunsTable(omit, nullCell string, runs int) string {
 	}
 	insert := "INSERT INTO import_runs VALUES (" + strings.Join(cells, ", ") + ");"
 	return "CREATE TABLE import_runs (" + strings.Join(columns, ", ") + "); " + strings.Repeat(insert, runs)
+}
+
+// findingsColumns are the four columns of a findings table, each with the cell of an open finding.
+var findingsColumns = [][3]string{
+	{"id", "VARCHAR", "'" + previousOpenFindingID + "'"},
+	{"type", "VARCHAR", "'" + previousOpenFindingType + "'"},
+	{"first_found_at", "TIMESTAMP", "'2026-06-01 10:00:00'"},
+	{"fixed_at", "TIMESTAMP", "NULL"},
+}
+
+// findingsTable is DDL for a findings table with one row per id, without the omit column and with a NULL
+// in the nullCell column; it has no primary key, so a repeated id is stored.
+func findingsTable(omit, nullCell string, ids ...string) string {
+	var columns []string
+	for _, column := range findingsColumns {
+		if column[0] != omit {
+			columns = append(columns, column[0]+" "+column[1])
+		}
+	}
+	var ddl strings.Builder
+	ddl.WriteString("CREATE TABLE findings (" + strings.Join(columns, ", ") + ");")
+	for _, id := range ids {
+		cells := make([]string, 0, len(findingsColumns))
+		for _, column := range findingsColumns {
+			cell := column[2]
+			switch column[0] {
+			case omit:
+				continue
+			case "id":
+				cell = "'" + id + "'"
+			}
+			if column[0] == nullCell {
+				cell = "NULL"
+			}
+			cells = append(cells, cell)
+		}
+		ddl.WriteString(" INSERT INTO findings VALUES (" + strings.Join(cells, ", ") + ");")
+	}
+	return ddl.String()
+}
+
+// findingsReason is the phrase a sync would print for replaced's findings fault.
+func findingsReason(t *testing.T, st *duckstore.Store, replaced store.Replaced) string {
+	t.Helper()
+	require.NotNil(t, replaced.FindingsFault)
+	return replaced.FindingsFault.UnreadableReason(st.Path())
 }
 
 // historyReason is the phrase a sync would print for replaced's history fault.
@@ -127,9 +178,93 @@ func Test_replace_restarts_history_when_the_previous_store_cannot_be_read(t *tes
 			require.NotNil(t, replaced.HistoryFault)
 			assert.Equal(t, c.wantFault, replaced.HistoryFault.Fault)
 			assert.Equal(t, c.wantWhy, replaced.HistoryFault.UnreadableReason(st.Path()))
+			assert.True(t, replaced.StoreUnreadable)
+			assert.Nil(t, replaced.FindingsFault)
 			assert.Equal(t, []int64{1}, importRunIDs(t, st))
 		})
 	}
+}
+
+func Test_replace_names_a_repeated_findings_id_as_the_findings_fault(t *testing.T) {
+	t.Parallel()
+	spy := &spyReadDB{}
+	st := newStoreFile(t, importRunsTable("", "", 1)+findingsTable("", "", previousOpenFindingID, previousOpenFindingID), spyOpener(spy))
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Equal(t, reasonFindingsRepeatedID, findingsReason(t, st, replaced))
+	assert.Equal(t, store.OpenFaultOther, replaced.FindingsFault.Fault)
+	assert.False(t, replaced.FindingsCarried)
+	assert.False(t, replaced.StoreUnreadable)
+	assert.Nil(t, replaced.HistoryFault)
+	assert.Equal(t, 1, spy.closes)
+}
+
+func Test_replace_carries_findings_whose_ids_are_all_distinct(t *testing.T) {
+	t.Parallel()
+	st := newStoreFile(t, importRunsTable("", "", 1)+findingsTable("", "", previousOpenFindingID, "uncategorized:payee-10"))
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Nil(t, replaced.FindingsFault)
+	assert.True(t, replaced.FindingsCarried)
+}
+
+func Test_replace_names_a_findings_table_without_a_required_cell_as_incomplete(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		ddl  string
+	}{
+		{name: "no id column", ddl: findingsTable("id", "", previousOpenFindingID)},
+		{name: "no type column", ddl: findingsTable("type", "", previousOpenFindingID)},
+		{name: "no first_found_at column", ddl: findingsTable("first_found_at", "", previousOpenFindingID)},
+		{name: "no fixed_at column", ddl: findingsTable("fixed_at", "", previousOpenFindingID)},
+		{name: "a NULL id", ddl: findingsTable("", "id", previousOpenFindingID)},
+		{name: "a NULL type", ddl: findingsTable("", "type", previousOpenFindingID)},
+		{name: "a NULL first_found_at", ddl: findingsTable("", "first_found_at", previousOpenFindingID)},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newStoreFile(t, importRunsTable("", "", 1)+c.ddl)
+
+			replaced, err := st.Replace(t.Context(), minimalRows())
+
+			require.NoError(t, err)
+			assert.Equal(t, reasonFindingsIncomplete, findingsReason(t, st, replaced))
+			assert.False(t, replaced.FindingsCarried)
+			assert.Nil(t, replaced.HistoryFault)
+		})
+	}
+}
+
+func Test_replace_names_both_tables_as_faulty_when_each_is_unreadable_after_the_store_opens(t *testing.T) {
+	t.Parallel()
+	st := newStoreFile(t, importRunsTable("", "", 2)+findingsTable("", "", previousOpenFindingID, previousOpenFindingID))
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Equal(t, reasonRepeatedID, historyReason(t, st, replaced))
+	assert.Equal(t, reasonFindingsRepeatedID, findingsReason(t, st, replaced))
+	assert.False(t, replaced.StoreUnreadable)
+}
+
+func Test_replace_marks_nothing_fixed_when_the_previous_findings_cannot_be_read(t *testing.T) {
+	t.Parallel()
+	st := newStoreFile(t, importRunsTable("", "", 1)+findingsTable("", "", previousOpenFindingID, previousOpenFindingID))
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.NotZero(t, replaced.Findings.Open)
+	assert.Zero(t, replaced.Findings.NewlyFixed)
+	assert.Equal(t, replaced.Findings.Open, replaced.Findings.New)
+	assertScalar(t, openReadOnly(t, st.Path()), "SELECT CAST(count(*) AS VARCHAR) FROM findings WHERE id = '"+previousOpenFindingID+"'", "0")
 }
 
 func Test_replace_names_a_repeated_import_run_id_as_the_history_fault(t *testing.T) {

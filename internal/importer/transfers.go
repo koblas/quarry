@@ -134,7 +134,7 @@ func nameFormLeg(split *store.Split, name string, namedAccount map[string]store.
 		split.TransferAccountID = &id
 		oneSided.OtherAccountID = &id
 	}
-	return store.Transfer{ID: oneSided.ID, FromSplitID: split.ID}, oneSided
+	return store.Transfer{ID: oneSided.ID, FromSplitID: split.ID, OtherAccount: &name}, oneSided
 }
 
 // transferID is a transfer's stable id, derived from its from leg's source

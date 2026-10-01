@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
 	"github.com/koblas/quarry/internal/platform/duckdb"
@@ -107,6 +108,16 @@ func Test_run_never_replaces_the_store_when_the_build_fails(t *testing.T) {
 			},
 		},
 		{
+			name: "a detection fault",
+			arrange: func(*testing.T, string, context.CancelFunc) *faultDB {
+				return &faultDB{duplicateTable: "findings"}
+			},
+			wantStderr: func(storeDir, _, id string) string {
+				return "quarry: cannot build the store in " + storeDir + ": database/sql/driver: could not close appender: " +
+					`Failed to append: Duplicate key "id: uncategorized:no-payee" violates primary key constraint.; run quarry sync --from ` + id + "\n"
+			},
+		},
+		{
 			name: "SIGINT before the swap",
 			arrange: func(_ *testing.T, _ string, cancel context.CancelFunc) *faultDB {
 				return &faultDB{afterCheckpoint: cancel}
@@ -128,7 +139,10 @@ func Test_run_never_replaces_the_store_when_the_build_fails(t *testing.T) {
 			sentinel := []byte("previous store bytes, untouched by a failed build")
 			require.NoError(t, os.WriteFile(storePath, sentinel, 0o600))
 			b := v9fixture.NewBuilder()
-			b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+			chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+			day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+			txn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-5.00", PostedDate: &day})
+			b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "-5.00"})
 			bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 			ctx, cancel := context.WithCancel(context.Background())
 			t.Cleanup(cancel)

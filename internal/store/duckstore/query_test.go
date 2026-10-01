@@ -27,8 +27,8 @@ func Test_query_reads_a_built_store(t *testing.T) {
 // storeRelations are the tables and views a built store holds, for sql users to query.
 func storeRelations() []string {
 	return []string{
-		"accounts", "categories", "import_runs", "payees", "split_tags", "splits", "store_info", "tags",
-		"transactions", "transfers", "v_account_balances", "v_cash_flow", "v_spending",
+		"accounts", "categories", "finding_items", "findings", "import_runs", "payees", "split_tags", "splits",
+		"store_info", "tags", "transactions", "transfers", "v_account_balances", "v_cash_flow", "v_spending",
 	}
 }
 

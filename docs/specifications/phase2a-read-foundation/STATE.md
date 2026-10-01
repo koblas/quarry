@@ -66,12 +66,12 @@ Scenarios complete: SCENARIO-01..21 (all; 05 folded into 04, 06 into 07; 10 into
 - `uncovered-diff.py` is blind to untracked files: `git add` before running it. `cmd/quarry`'s test binary links DuckDB (linux-small CI OOM history). `internal/platform/duckdb`'s mid-iteration ctx-cancel test flakes under full-suite load. (Phase 1)
 
 ## Open debts
-- NIT (final product-vision): `internal/cli/sql.go` Long — blank lines around the indented `quarry sql -- "-- monthly totals / SELECT ..."` example and re-wrap to ≤80 cols; fold into the next edit of sql.go (2b/2d) with the matching spec change.
+- ~~NIT (final product-vision): `internal/cli/sql.go` Long re-wrap to ≤80 cols.~~ Closed by Phase 2d (SCENARIO-21, Long rewritten with the `--csv` change).
 - MINOR (REVIEW-02): `cmd/quarry/run_status_json_test.go:1` lacks the white-box `package main` header.
 - NIT (REVIEW-02): `internal/platform/duckdb/text_test.go:150-174` TZ test needs host zoneinfo — `_ "time/tzdata"` or skip on `LoadLocation` error; rename `jsonDateLayout` → `dateLayout` (now shared by text output); `zoneOffsetText`/`timeTZOffsetText` share the `±HH[:MM]` prefix (optional).
 - ~~Snapshots accumulate (~200 MB each) until 2c.~~ Closed by Phase 2c (`snapshots.keep`, `quarry snapshots prune`, sync auto-prune).
 - Phase 1 doc-budget MINORs, TOCTOU on `--from`, Compose-method refactors and the other Phase 1 debts (`docs/specifications/phase1-import-store/STATE.md`) - unowned - die unless re-opened.
-- Phase 2 copy candidate: V1 stderr tail `fix the account in Quicken and run quarry sync` reads off when only splits fail - unowned until findings copy (2d).
+- ~~Phase 2 copy candidate: V1 stderr tail `fix the account in Quicken and run quarry sync` reads off when only splits fail.~~ Closed by Phase 2d (SCENARIO-04).
 - Arch MINORs: sql refusal copy lives in cli `queryFailure` while status/accounts use `report.readRefusal` (optional: `report.Server.Query` returns `RefusalError`); `readStdinQuery` I/O policy in cli - unowned.
 - Refactor/test MINORs: duckstore Status/Accounts/Query fault tests copy-pasted (~12) and `OpenReadOnly`+cleanup ×6 in `duckstore_test.go` → one table/helper; cmd fixtures beyond `syncBundle` (one-account bundle ×2, `writeStatusFixtureBundle` vs `run_store_info_test.go`, sql tests asserting values defined in `syncAccountsFixture`); no cli-level status command fault / `--json`-refusal tests - unowned.
 - `//nolint:wrapcheck` on the two `store.Interrupted` returns (`duckstore/query.go`): cleaner as `store.Interrupted(` in `.golangci.yaml` `extra-ignore-sigs` (config change not made) - unowned.

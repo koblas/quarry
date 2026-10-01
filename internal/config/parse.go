@@ -27,9 +27,13 @@ type setting struct {
 	table, name, example string
 }
 
+// ignoreExample is a findings.ignore list as a user writes it, right of the equal sign.
+const ignoreExample = `["duplicate:txn-4410+txn-4412"]`
+
 var (
-	keepSetting = setting{table: "snapshots", name: "keep", example: "snapshots.keep = 12"}
-	pathSetting = setting{table: "quicken", name: "path", example: `quicken.path = "~/Documents/Home.quicken"`}
+	keepSetting   = setting{table: "snapshots", name: "keep", example: "snapshots.keep = 12"}
+	pathSetting   = setting{table: "quicken", name: "path", example: `quicken.path = "~/Documents/Home.quicken"`}
+	ignoreSetting = setting{table: "findings", name: "ignore", example: "findings.ignore = " + ignoreExample}
 )
 
 func (s setting) String() string { return strings.Join(s.key(), ".") }
@@ -43,7 +47,7 @@ type file struct {
 }
 
 // parse validates the whole file: syntax first, then snapshots.keep, then
-// quicken.path, then unknown keys.
+// quicken.path, then findings.ignore, then unknown keys.
 func (f file) parse() (Config, error) {
 	tree, err := f.tree()
 	if err != nil {
@@ -59,11 +63,18 @@ func (f file) parse() (Config, error) {
 		return Config{}, err
 	}
 
+	ignore, err := doc.ignore()
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
-		Path:        f.path,
-		Keep:        keep,
-		QuickenPath: homepath.Expand(f.home, quickenPath),
-		Warnings:    doc.unknownKeys(),
+		Path:             f.path,
+		Keep:             keep,
+		QuickenPath:      homepath.Expand(f.home, quickenPath),
+		Ignore:           ignore,
+		Warnings:         doc.unknownKeys(f.shown),
+		WarningsAbsolute: doc.unknownKeys(f.path),
 	}, nil
 }
 
@@ -78,12 +89,12 @@ func (f file) tree() (map[string]any, error) {
 	decodeErr, ok := errors.AsType[*toml.DecodeError](err)
 	if !ok {
 		// unreachable: go-toml v2.4.3 decode_fused.go raises only parser and tracker errors and wrapError makes them *toml.DecodeError; 23 malformed scalars, keys and strings probed, all *toml.DecodeError.
-		return nil, f.refuse("cannot read "+f.shown+": "+err.Error(), err)
+		return nil, f.cannotRead(err.Error(), err)
 	}
 	line, _ := decodeErr.Position()
 	message, _, _ := strings.Cut(strings.TrimPrefix(decodeErr.Error(), "toml: "), "\n")
 
-	return nil, f.refuse("cannot read "+f.shown+": line "+strconv.Itoa(line)+": "+message, err)
+	return nil, f.cannotRead("line "+strconv.Itoa(line)+": "+message, err)
 }
 
 // entry is one header or key of the file at its full key path, exactly as written:
@@ -198,6 +209,51 @@ func (d document) quickenPath() (string, error) {
 	return text, nil
 }
 
+// ignore is findings.ignore as written, file order and duplicates kept, nil when unset:
+// a list whose items are all strings. An item that is not one is refused by its place.
+func (d document) ignore() ([]string, error) {
+	value, present, err := d.lookup(ignoreSetting)
+	if err != nil || !present {
+		return nil, err
+	}
+	items, isList := value.([]any)
+	written, isWritten := d.written(ignoreSetting.key())
+	if !isList || !isWritten {
+		return nil, d.badValue(ignoreSetting.String()+" must be a list of finding ids in quotes, such as "+ignoreExample, d.got(ignoreSetting.key()))
+	}
+	var ids []string
+	for i, item := range items {
+		id, isString := item.(string)
+		if !isString {
+			return nil, d.badValue(ignoreSetting.String()+" must hold only finding ids in quotes", itemText(arrayItems(written.value), items, i)+" as item "+strconv.Itoa(i+1))
+		}
+		ids = append(ids, id)
+	}
+
+	return ids, nil
+}
+
+// itemText is items[i] as the file wrote it, collapsed to one line, from the split text
+// raw; when raw and the decoded items disagree in count it is the decoded value.
+func itemText(raw []string, items []any, i int) string {
+	if len(raw) != len(items) {
+		return fmt.Sprint(items[i])
+	}
+
+	return strings.Join(strings.Fields(raw[i]), " ")
+}
+
+// written is the key-value entry at key, which a header or dotted keys never make.
+func (d document) written(key []string) (entry, bool) {
+	for _, e := range d.entries {
+		if e.kind == unstable.KeyValue && slices.Equal(e.key, key) {
+			return e, true
+		}
+	}
+
+	return entry{}, false
+}
+
 // lookup finds s in the values. A table written as a plain value is refused.
 func (d document) lookup(s setting) (any, bool, error) {
 	entry, found := d.tree[s.table]
@@ -232,11 +288,18 @@ func (d document) got(key []string) string {
 }
 
 // knownKeys are the paths quarry reads; a header or key at any other path is unknown.
-var knownKeys = [][]string{{keepSetting.table}, keepSetting.key(), {pathSetting.table}, pathSetting.key()}
+var knownKeys = [][]string{
+	{keepSetting.table},
+	keepSetting.key(),
+	{pathSetting.table},
+	pathSetting.key(),
+	{ignoreSetting.table},
+	ignoreSetting.key(),
+}
 
 // unknownKeys is one warning per key the file has beyond the known ones, in
-// file order, matched by exact spelling. A table is named once, not once per child.
-func (d document) unknownKeys() []string {
+// file order, matched by exact spelling, each naming the file as path. A table is named once, not once per child.
+func (d document) unknownKeys(path string) []string {
 	var warnings []string
 	var reported [][]string
 	for _, e := range d.entries {
@@ -247,7 +310,7 @@ func (d document) unknownKeys() []string {
 			continue
 		}
 		reported = append(reported, e.key)
-		warnings = append(warnings, d.shown+": unknown key "+keyText(e.key)+"; quarry ignores it")
+		warnings = append(warnings, path+": unknown key "+keyText(e.key)+"; quarry ignores it")
 	}
 
 	return warnings
@@ -267,14 +330,21 @@ func keyText(key []string) string {
 	return strings.Join(parts, ".")
 }
 
-// keyPartText is part bare when TOML allows it, else a basic string with control characters escaped.
+// keyPartText is part bare when TOML allows it, else BasicString(part).
 func keyPartText(part string) string {
 	if bareKey.MatchString(part) {
 		return part
 	}
+
+	return BasicString(part)
+}
+
+// BasicString writes s as a TOML basic string, always quoted: quote, backslash, newline and tab are
+// escaped, other control characters as \uXXXX, and everything else kept, so s shows on one line.
+func BasicString(s string) string {
 	var b strings.Builder
 	b.WriteByte('"')
-	for _, r := range part {
+	for _, r := range s {
 		switch {
 		case r == '"':
 			b.WriteString(`\"`)

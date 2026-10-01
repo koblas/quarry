@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
@@ -160,4 +161,47 @@ func assertOtherFault(t *testing.T, err error, reason string) {
 	require.True(t, ok, "want *store.OpenError, got %v", err)
 	assert.Equal(t, store.OpenFaultOther, openErr.Fault)
 	assert.Equal(t, reason, openErr.Reason)
+}
+
+func Test_status_carries_each_finding_with_its_state_from_the_latest_build(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	_, err := duckstore.New(dir).Replace(t.Context(), withFindingCandidates())
+	require.NoError(t, err)
+	_, err = duckstore.New(dir).Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+
+	got, err := duckstore.New(dir).Status(t.Context())
+
+	require.NoError(t, err)
+	states := make([]finding.State, 0, len(got.Findings))
+	for _, f := range got.Findings {
+		states = append(states, finding.State{ID: f.ID, Fixed: f.FixedAt != nil, New: f.New, NewlyFixed: f.NewlyFixed})
+	}
+	assert.Equal(t, []finding.State{
+		{ID: "one-sided-transfer:xfer-3"},
+		{ID: "uncategorized:no-payee", Fixed: true, NewlyFixed: true},
+		{ID: "uncategorized:payee-1", Fixed: true, NewlyFixed: true},
+	}, states)
+}
+
+func Test_status_returns_a_findings_query_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	fault := ioFault(`query rows "SELECT"`)
+	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault, passQueries: 1}))
+
+	_, err := st.Status(t.Context())
+
+	assertOtherFault(t, err, "disk read failed")
+	assert.ErrorIs(t, err, fault)
+}
+
+func Test_status_returns_a_findings_scan_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	st := newBuiltStore(t, spyOpener(&spyReadDB{scanFault: errScanFailed, passQueries: 1}))
+
+	_, err := st.Status(t.Context())
+
+	assertOtherFault(t, err, errScanFailed.Error())
+	assert.ErrorIs(t, err, errScanFailed)
 }

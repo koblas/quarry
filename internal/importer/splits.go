@@ -18,13 +18,13 @@ ORDER BY e.ZPARENT, e.Z_PK
 
 // mapSplits reads every non-deleted ZCASHFLOWTRANSACTIONENTRY row. An entry
 // with no imported parent transaction (NULL, dangling, deleted, Smart/Investment
-// or itself excluded) is silently skipped. An entry under an imported
-// transaction whose amount is missing, stored as text or blob, has more than 2
-// decimals beyond the snap tolerance or is too large, is added to off and
-// excluded. A category reference to a deleted or missing category, or to a PK
-// in uncategorized, stores NULL.
+// or itself excluded) is skipped, its category recorded in refs. An entry under
+// an imported transaction whose amount is missing, stored as text or blob, has
+// more than 2 decimals beyond the snap tolerance or is too large, is added to
+// off and excluded. A category reference to a deleted or missing category, or
+// to a PK in uncategorized, stores NULL.
 func mapSplits(
-	ctx context.Context, src Source, txns map[int64]txnRef, existingCategories, uncategorized map[int64]bool, off *offenders,
+	ctx context.Context, src Source, txns map[int64]txnRef, existingCategories, uncategorized map[int64]bool, refs *categoryRefs, off *offenders,
 ) ([]store.Split, []transferLink, map[int64]string, error) {
 	var rows []store.Split
 	var links []transferLink
@@ -44,11 +44,13 @@ func mapSplits(
 		}
 
 		if !parent.Valid {
+			refs.add(category)
 			return nil
 		}
 		txn, ok := txns[parent.Int64]
 		if !ok {
-			return nil // parent is missing, deleted, Smart/Investment, or itself excluded
+			refs.add(category) // parent is missing, deleted, Smart/Investment, or itself excluded
+			return nil
 		}
 		dateStr := txn.Date.Format(dateLayout)
 

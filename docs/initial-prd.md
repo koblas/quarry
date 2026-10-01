@@ -123,7 +123,7 @@ The store has a small set of normalized tables plus derived views; every analysi
 | `securities`, `prices` | Symbol, name, type, currency; historical prices | Prices as recorded in Quicken, no external feed in v1 |
 | `fx_rates` | CAD/USD rate by date | Quicken keeps only the current rate per pair, so history is a daily series (Bank of Canada) fetched by `quarry sync` |
 | `investment_txns` | Action (buy, sell, dividend, reinvest, share transfer, split), security, shares, price, fees, amount | Cash side also appears in `transactions` |
-| `findings` | Data-quality issues per import: type, affected rows, suggested Quicken fix, status | Feeds the cleanup worklist |
+| `findings`, `finding_items` | What each sync found to clean up: id, type, when first found, when fixed; `finding_items` names the transactions, splits, payees or categories | Status (open, fixed, ignored) and the suggested fix come from `quarry findings`; ignore decisions live in the config file |
 | `import_runs` | Snapshot hash, row counts, validation results | One row per successful build, kept across rebuilds; audit trail |
 
 **Derived views:** `v_spending` (expense splits, transfers removed, refunds netted), `v_cash_flow` (monthly income vs expense), `v_balances_daily` and `v_net_worth` (per account and total), `v_recurring` (detected series), `v_holdings` (shares and value by date).
@@ -133,7 +133,7 @@ The store has a small set of normalized tables plus derived views; every analysi
 - Money is `DECIMAL(18,2)` in the account's native currency; no floats. Reporting-currency views convert with the rate in effect on the transaction date.
 - Every row keeps `source_id` (Quicken's primary key) for traceability back to the file.
 - `quarry` IDs are derived deterministically from source IDs, so a re-import keeps IDs stable and a finding can be tracked from open to fixed across snapshots.
-- Real fixes happen in Quicken. `quarry` only stores decisions about findings (ignore, not an issue), so no second, divergent copy of the truth builds up.
+- Real fixes happen in Quicken. `quarry` stores only decisions about findings: the ids the user lists under `findings.ignore` in `config.toml`, which quarry reads and never writes, so no second, divergent copy of the truth builds up and rebuilding the store loses no decision.
 
 ## Components and requirements
 
@@ -169,7 +169,7 @@ Every command supports `--json` for machine consumers and a readable table by de
 | `quarry recurring` | Detected recurring charges, start date, price changes |
 | `quarry anomalies` | Unusually large transactions (duplicates are `findings`) |
 | `quarry acb` | Adjusted cost base per security and realized capital gains by tax year, in CAD |
-| `quarry findings` | The cleanup worklist to apply in Quicken; `--csv` to export |
+| `quarry findings` | The cleanup worklist to apply in Quicken; `--csv` to export; ignore a finding by listing its id under `findings.ignore` in the config file |
 | `quarry sql` | Read-only SQL against the store |
 | `quarry mcp` | Start the MCP server (stdio) |
 
@@ -224,12 +224,13 @@ A thin wrapper over the core library, launched by the Claude desktop app as a lo
 | Uncategorized or `Uncategorized`-category splits | Recategorize; list grouped by payee so one rule fixes many |
 | Payee variants of one merchant (`AMZN MKTP CA*2K4`, `Amazon.ca`) | Rename to one payee and add a renaming rule |
 | Same payee split across several categories without a pattern | Pick one category, or confirm the split is intended |
-| Transfer booked as income or expense, or a one-sided transfer | Convert to a transfer between the two accounts |
-| Likely duplicates (same account, amount, date within 3 days) | Delete one, or mark as not a duplicate |
-| Near-duplicate or unused categories | Merge or delete the category |
+| Transfer booked as income or expense (`unlinked-transfer`), or a one-sided transfer | Convert to a transfer between the two accounts |
+| Likely duplicates (same account, amount, date within 3 days), unless both are reconciled | Delete one, or mark as not a duplicate |
+| Near-duplicate categories (`similar-categories`) or unused categories (`unused-category`) | Merge the near-duplicates; for an unused category, check that no scheduled transaction or budget uses it, then delete it |
 
 - Each item names the exact transactions (date, account, payee, amount) so they can be found in Quicken's register.
-- Findings have a status: open, fixed (gone on re-import), or ignored (decision stored in `quarry`).
+- Safety rule for `unused-category`: a category counts as used when it, or any subcategory, is referenced anywhere `quarry` can see a reference: an imported split in any account (closed and excluded included), an investment or scheduled-transaction entry the importer counts but does not import, a budget line, a loan split or loan interest category, or a memorized-payee rule. Hidden categories, anything under a hidden category, and a category with a hidden subcategory are never reported. Where `quarry` cannot see a reference, the fix text tells the user to check first and then delete in Quicken; `quarry` never deletes anything.
+- Findings have a status: open, fixed (gone on re-import), or ignored (id listed in `findings.ignore`; remove it to list the finding again).
 
 ### Reporting currency and ACB
 
@@ -299,7 +300,7 @@ Each phase ships only when its check passes.
 | --- | --- | --- |
 | 0 — Port prior art | dweekly schema, recipes, skill; backup snapshot | Schema verified on your v9 file |
 | **1 — Import + store** | Banking, credit, splits, transfers, categories | Balances reconcile for all cash accounts |
-| 2 — CLI + analysis | Views, CLI, cleanup worklist, anomaly detection (slices 2a–2f; `export` dropped for `sql --csv`) | Matches Quicken reports, 2 years |
+| 2 — CLI + analysis | Views, CLI, cleanup worklist, anomaly detection (slices 2a–2f; `export` dropped for `sql --csv`; 2d covers every finding type) | Matches Quicken reports, 2 years |
 | 3 — Skill + MCP | `SKILL.md`, named tools, read-only query | Claude answers the use-case questions correctly |
 | 4 — Investments | Holdings, ACB, prices, net worth; monthly scheduled summary | Share counts match Quicken |
 

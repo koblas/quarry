@@ -91,6 +91,13 @@ func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
     "cross_currency": 1,
     "one_sided": 1
   },
+  "findings": {
+    "open": 2,
+    "ignored": 0,
+    "fixed": 0,
+    "new": 2,
+    "newly_fixed": 0
+  },
   "not_imported": {
     "investment_transactions": 0
   },

@@ -57,8 +57,7 @@ func Test_run_reports_the_store_result_alongside_the_manifest_as_json(t *testing
 	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode)
-	assert.Equal(t, "quarry: warning: 3 transfers have no matching transaction in another account; "+
-		"quarry keeps them as one-sided transfers\n", stderr.String())
+	assert.Empty(t, stderr.String())
 
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
@@ -72,8 +71,7 @@ func Test_run_reports_the_store_result_alongside_the_manifest_as_json(t *testing
 	assert.JSONEq(t, string(manifest["snapshot"]), string(parsed["snapshot"]))
 	assert.JSONEq(t, string(manifest["schema"]), string(parsed["schema"]))
 
-	wantWarnings := `["3 transfers have no matching transaction in another account; quarry keeps them as one-sided transfers"]`
-	assert.JSONEq(t, wantWarnings, string(parsed["warnings"]))
+	assert.JSONEq(t, `[]`, string(parsed["warnings"]))
 
 	wantStore := fmt.Sprintf(`{
 		"path": %q,
@@ -98,6 +96,7 @@ func Test_run_reports_the_store_result_alongside_the_manifest_as_json(t *testing
 				{"id":"xfer-%d","date":"2026-03-01","account":"Savings","currency":"CAD","payee":null,"amount":"-1204.17","other_account":"Old Visa","other_account_id":null}
 			]
 		},
+		"findings": {"open": 4, "ignored": 0, "fixed": 0, "new": 4, "newly_fixed": 0},
 		"not_imported": {"investment_transactions": 0}
 	}`, storePathUnder(home), chequingPK, savingsPK, missingLeg, namedLeg, savingsPK, noMatchLeg)
 	assert.JSONEq(t, wantStore, string(parsed["store"]))
@@ -146,6 +145,7 @@ func Test_run_prints_the_unbuilt_store_as_json_when_validation_fails(t *testing.
 	var built bool
 	require.NoError(t, json.Unmarshal(store["built"], &built))
 	assert.False(t, built)
+	assert.JSONEq(t, "null", string(store["findings"]))
 	var path string
 	require.NoError(t, json.Unmarshal(store["path"], &path))
 	assert.Equal(t, storePath, path)
@@ -179,7 +179,7 @@ func Test_run_prints_the_unbuilt_store_as_json_when_validation_fails(t *testing.
 	assert.Equal(t,
 		"quarry: validation failed: 1 of 1 account does not match Quicken's last reconciled balance and "+
 			"1 transaction does not equal the sum of its splits; "+abbreviated(t, storePath, home)+
-			" was not changed; each difference is listed on stdout; fix the account in Quicken and run quarry sync, "+
+			" was not changed; each difference is listed on stdout; fix them in Quicken and run quarry sync, "+
 			"or run quarry sync --from "+snapshotID(snapshotPath)+" after updating quarry\n",
 		stderr.String())
 }

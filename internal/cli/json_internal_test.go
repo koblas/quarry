@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -104,4 +105,40 @@ func Test_renderJSON_encodes_pruned_lists_as_empty_arrays_and_no_pruned_as_null(
 	assert.Equal(t, map[string]any{"keep": float64(12), "deleted": []any{}, "failed": []any{}}, doc["pruned"])
 	assert.Contains(t, bare, "pruned")
 	assert.Nil(t, bare["pruned"])
+}
+
+func Test_renderJSON_encodes_the_five_finding_counts_for_a_built_store(t *testing.T) {
+	built := store.Result{Path: "/store", Built: true, Findings: finding.Counts{Open: 5, Ignored: 4, Fixed: 3, New: 2, NewlyFixed: 1}}
+
+	data, err := renderJSON(snapshot.Outcome{Store: &built}, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"open": float64(5), "ignored": float64(4), "fixed": float64(3), "new": float64(2), "newly_fixed": float64(1)}, storeField(t, data, "findings"))
+}
+
+func Test_renderJSON_encodes_findings_as_null_when_the_store_was_not_built(t *testing.T) {
+	unbuilt := store.Result{Path: "/store", Findings: finding.Counts{Open: 5}}
+
+	data, err := renderJSON(snapshot.Outcome{Store: &unbuilt}, nil)
+
+	require.NoError(t, err)
+	assert.Nil(t, storeField(t, data, "findings"))
+	assert.Contains(t, string(data), `"findings": null`)
+}
+
+func Test_renderJSON_encodes_no_store_as_null_when_the_import_was_not_attempted(t *testing.T) {
+	data, err := renderJSON(snapshot.Outcome{}, nil)
+
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `"store": null`)
+}
+
+// storeField decodes the "store" object of data and returns its field key.
+func storeField(t *testing.T, data []byte, key string) any {
+	t.Helper()
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(data, &doc))
+	store, ok := doc["store"].(map[string]any)
+	require.True(t, ok)
+	return store[key]
 }

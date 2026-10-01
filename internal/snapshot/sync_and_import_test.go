@@ -500,7 +500,7 @@ func Test_sync_and_import_reports_a_failed_check_in_the_validation_refusal(t *te
 			wantResult.Path = storePath
 			assert.Equal(t, wantResult, *outcome.Store)
 			want := fmt.Sprintf("validation failed: %s; %s was not changed; each difference is listed on stdout; "+
-				"fix the account in Quicken and run quarry sync, or run quarry sync --from %s after updating quarry",
+				"fix them in Quicken and run quarry sync, or run quarry sync --from %s after updating quarry",
 				c.wantClause, homepath.Abbreviate(home, storePath), snapshotIDFromPath(outcome.Manifest.Snapshot.Path))
 			assert.Equal(t, want, err.Error())
 		})

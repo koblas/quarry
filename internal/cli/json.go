@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store"
 )
@@ -38,7 +39,18 @@ type storeDocument struct {
 	Balances    balancesDocument    `json:"balances"`
 	Splits      splitsDocument      `json:"splits"`
 	Transfers   transfersDocument   `json:"transfers"`
+	Findings    *findingsDocument   `json:"findings"`
 	NotImported notImportedDocument `json:"not_imported"`
+}
+
+// findingsDocument is the --json "store.findings" object: the open count and
+// the ignored, fixed, new and newly fixed counts beside it.
+type findingsDocument struct {
+	Open       int `json:"open"`
+	Ignored    int `json:"ignored"`
+	Fixed      int `json:"fixed"`
+	New        int `json:"new"`
+	NewlyFixed int `json:"newly_fixed"`
 }
 
 // rowsDocument is the --json "store.rows" object: one count per table.
@@ -152,8 +164,8 @@ func marshalDocument(doc any) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// newStoreDocument converts result into the --json store document, nil
-// when the import was never attempted (a schema mismatch).
+// newStoreDocument converts result into the --json store document, nil when the
+// import was never attempted (a schema mismatch); findings are null unless built.
 func newStoreDocument(result *store.Result) *storeDocument {
 	if result == nil {
 		return nil
@@ -165,8 +177,23 @@ func newStoreDocument(result *store.Result) *storeDocument {
 		Balances:    newBalancesDocument(result.Validation.Balances),
 		Splits:      newSplitsDocument(result.Validation.Splits),
 		Transfers:   newTransfersDocument(result.Validation.Transfers),
+		Findings:    newFindingsDocument(result),
 		NotImported: notImportedDocument{InvestmentTransactions: result.NotImported.InvestmentTransactions},
 	}
+}
+
+// newFindingsDocument converts result's finding counts into the --json shape, nil when no build was reached.
+func newFindingsDocument(result *store.Result) *findingsDocument {
+	if !result.Built {
+		return nil
+	}
+	doc := newFindingCountsDocument(result.Findings)
+	return &doc
+}
+
+// newFindingCountsDocument converts c into the --json finding-counts shape shared by sync and findings.
+func newFindingCountsDocument(c finding.Counts) findingsDocument {
+	return findingsDocument{Open: c.Open, Ignored: c.Ignored, Fixed: c.Fixed, New: c.New, NewlyFixed: c.NewlyFixed}
 }
 
 // newSyncPrunedDocument converts p into the --json pruned object, nil when auto-prune did not run; its lists are never nil.

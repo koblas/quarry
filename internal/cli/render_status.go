@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/report"
@@ -14,9 +15,16 @@ import (
 // takenLayout is the format of the snapshot's local moment.
 const takenLayout = "2006-01-02 15:04 MST"
 
+// statusFindings is the findings tally status reports; ignoreKnown is false when findings.ignore
+// could not be read, so every ignored finding is counted open and "ignored" cannot be said.
+type statusFindings struct {
+	counts      finding.Counts
+	ignoreKnown bool
+}
+
 // renderStatus renders st's Store, Snapshot, Source, Dates, Rows, Balances,
-// Splits and Transfers lines, ages measured against now.
-func renderStatus(st store.Status, home string, now time.Time) string {
+// Splits, Transfers and Findings lines, ages measured against now.
+func renderStatus(st store.Status, findings statusFindings, home string, now time.Time) string {
 	run := st.Run
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", homepath.Abbreviate(home, st.Path))
@@ -27,7 +35,19 @@ func renderStatus(st store.Status, home string, now time.Time) string {
 	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(balanceCounts{Checked: run.BalancesChecked, NeverReconciled: run.BalancesNeverReconciled, InvestmentAccounts: run.InvestmentAccounts}))
 	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(run.Counts.Transactions))
 	fmt.Fprintf(&b, "%-10s%s\n", "Transfers", transfersPhrase(run.TransfersPaired, run.TransfersOneSided))
+	fmt.Fprintf(&b, "%-10s%s\n", "Findings", statusFindingsPhrase(findings))
 	return b.String()
+}
+
+// statusFindingsPhrase is the Findings row text: the open count and, when findings.ignore was read,
+// the ignored one, without the new and fixed clauses sync prints.
+func statusFindingsPhrase(f statusFindings) string {
+	c := f.counts
+	c.New, c.NewlyFixed = 0, 0
+	if !f.ignoreKnown {
+		c.Ignored = 0
+	}
+	return findingsPhrase(c, false)
 }
 
 // snapshotLine renders the snapshot's ID with when it was taken, or says the

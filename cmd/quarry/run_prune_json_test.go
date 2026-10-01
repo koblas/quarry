@@ -520,11 +520,12 @@ func Test_run_snapshots_prune_json_carries_a_config_warning_in_warnings_and_pref
 	writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, "snapshot.keep = 3\n")
 	warning := configShown + ": unknown key snapshot.keep; quarry ignores it"
+	absoluteWarning := configPath(home) + ": unknown key snapshot.keep; quarry ignores it"
 
 	exitCode, stdout, stderr := runPrune(t, "--json")
 
 	require.Equal(t, 0, exitCode, stderr)
-	assert.JSONEq(t, `["`+warning+`"]`, string(pruneDocument(t, stdout)["warnings"]))
+	assert.JSONEq(t, `["`+absoluteWarning+`"]`, string(pruneDocument(t, stdout)["warnings"]))
 	assert.Equal(t, "quarry: warning: "+warning+"\n", stderr)
 }
 

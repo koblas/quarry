@@ -88,7 +88,7 @@ func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
 
 	want := fmt.Sprintf(
-		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 2 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
+		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 2 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
 		"Snapshot", abbreviated(t, snapshotPath, home),
 		"Manifest", abbreviated(t, manifestPath, home),
 		"Source", abbreviated(t, bundle.Dir, home),
@@ -100,6 +100,7 @@ func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 		"Balances", "no accounts to check; 2 never reconciled",
 		"Splits", "all 2 transactions equal the sum of their splits",
 		"Transfers", "none",
+		"Findings", "none open",
 	)
 	require.Equal(t, want, stdout.String())
 

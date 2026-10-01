@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/store"
@@ -73,4 +74,57 @@ func Test_import_reports_no_history_fault_when_the_store_returns_none(t *testing
 	require.NoError(t, err)
 	assert.True(t, result.Built)
 	assert.Nil(t, result.HistoryFault)
+}
+
+func Test_import_passes_the_carry_faults_through_to_the_result(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: "/store/quarry.duckdb", Reason: "its findings table repeats an id"}
+	fake := &fakeStore{findingsFault: fault, unreadable: true}
+
+	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.Same(t, fault, result.FindingsFault)
+	assert.True(t, result.StoreUnreadable)
+}
+
+func Test_import_returns_the_stores_findings_counts(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	bundle := b.WriteBundle(t, t.TempDir())
+	counts := finding.Counts{Open: 4, New: 3}
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{findings: counts})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.Equal(t, counts, result.Findings)
+}
+
+func Test_import_passes_the_finding_states_through_to_the_result(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	bundle := b.WriteBundle(t, t.TempDir())
+	states := []finding.State{{ID: "uncategorized:payee-1", New: true}, {ID: "duplicate:txn-1:txn-2", Fixed: true, NewlyFixed: true}}
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{states: states})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.Equal(t, states, result.FindingStates)
+}
+
+func Test_import_returns_whether_the_stores_findings_were_carried(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{carried: true})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.True(t, result.FindingsCarried)
 }

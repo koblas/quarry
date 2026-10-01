@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -26,9 +27,17 @@ SELECT i.format_version, i.quarry_version, i.built_at,
 FROM store_info i CROSS JOIN import_runs r
 ORDER BY r.id DESC LIMIT 1`
 
+// statusFindingsQuery reads each finding's id, type and state without its items; new and newly fixed are at the build time.
+const statusFindingsQuery = `
+SELECT f.id, f.type, f.fixed_at,
+	COALESCE(f.first_found_at = i.built_at, false), COALESCE(f.fixed_at = i.built_at, false)
+FROM findings f CROSS JOIN store_info i
+ORDER BY f.id`
+
 // Status reads back what the store records about itself, from the highest-id
 // import run. It refuses a store it cannot open or read, whose format is not
-// this build's, or whose import_runs is empty, with *store.OpenError; a NULL
+// this build's, or whose import_runs is empty, with *store.OpenError, and
+// reads the findings on the same connection so both describe one build; a NULL
 // snapshot_taken_at or source_path reads as the zero value.
 func (s *Store) Status(ctx context.Context) (store.Status, error) {
 	db, err := s.openRead(ctx)
@@ -59,6 +68,24 @@ func (s *Store) Status(ctx context.Context) (store.Status, error) {
 	}
 	if !found {
 		return store.Status{}, openFault(st.Path, errNoImportRuns)
+	}
+
+	err = db.QueryRows(ctx, statusFindingsQuery, nil, func(scan func(dest ...any) error) error {
+		var f store.Finding
+		var typ string
+		var fixedAt sql.NullTime
+		if err := scan(&f.ID, &typ, &fixedAt, &f.New, &f.NewlyFixed); err != nil {
+			return err
+		}
+		f.Type = finding.Type(typ)
+		if fixedAt.Valid {
+			f.FixedAt = &fixedAt.Time
+		}
+		st.Findings = append(st.Findings, f)
+		return nil
+	})
+	if err != nil {
+		return store.Status{}, openFault(st.Path, err)
 	}
 
 	run.Snapshot.TakenAt = takenAt.Time

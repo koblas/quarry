@@ -49,6 +49,8 @@ type Listing struct {
 	TotalBytes int64
 	// NoSnapshots is the note that no snapshot exists yet; "" when one does.
 	NoSnapshots string
+	// NoSnapshotsAbsolute is NoSnapshots naming the folder by its absolute path; machine-readable output carries this form.
+	NoSnapshotsAbsolute string
 	// StoreUnreadable is why the store's snapshot cannot be told, a bare phrase; "" when it can, or there is no store.
 	StoreUnreadable string
 	// StoreWarning is StoreUnreadable as the warning a listing prints; "" when StoreUnreadable is.
@@ -88,9 +90,15 @@ func (s *Server) listFolder() (Listing, error) {
 		listing.TotalBytes += f.bytes
 	}
 	if len(files) == 0 {
-		listing.NoSnapshots = "no snapshots in " + homepath.Abbreviate(s.home, s.snapshotDir) + " yet; run quarry sync to take one"
+		listing.NoSnapshots = noSnapshotsNote(homepath.Abbreviate(s.home, s.snapshotDir))
+		listing.NoSnapshotsAbsolute = noSnapshotsNote(s.snapshotDir)
 	}
 	return listing, nil
+}
+
+// noSnapshotsNote is the note that no snapshot exists yet in a snapshots folder shown as folder.
+func noSnapshotsNote(folder string) string {
+	return "no snapshots in " + folder + " yet; run quarry sync to take one"
 }
 
 // manifestPath is where the manifest of the snapshot with id lives.

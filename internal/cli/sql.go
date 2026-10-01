@@ -13,13 +13,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// defaultSQLLimit is how many rows sql prints unless --limit says otherwise.
+// defaultSQLLimit is how many rows sql prints unless --limit says otherwise; --csv prints every row.
 const defaultSQLLimit = 500
 
 // newSQLCommand builds sql: one query run verbatim against the store, at most
-// --limit rows of its result printed as a table, or as JSON when *jsonOut is set.
+// --limit rows of its result printed as a table, as JSON when *jsonOut is
+// set, or as CSV with --csv.
 func newSQLCommand(newReport ReportFactory, jsonOut *bool) *cobra.Command {
 	var limit int
+	var csvOut bool
 	cmd := &cobra.Command{
 		Use:   "sql <query>",
 		Short: "Run a read-only SQL query against quarry's store",
@@ -40,13 +42,23 @@ v_cash_flow: they already leave out transfers between your own accounts,
 Quicken's system categories, transactions excluded from reports and
 accounts Quicken leaves out of reports, so their totals match quarry spend
 and quarry cashflow. A transfer leg is any split named in
-transfers.from_split_id or transfers.to_split_id. List the tables and views
-with: quarry sql "SHOW TABLES"
+transfers.from_split_id or transfers.to_split_id.
 
-At most --limit rows are printed (500 unless set); when there are more,
-quarry says so on stderr. --limit 0 prints every row.`,
+findings holds what sync found to clean up in Quicken, and finding_items
+the transactions, splits, payees or categories each one is about;
+fixed_at is set once a finding is no longer found. Which findings you
+ignored is set in the config file, not the store: quarry findings shows
+each one's status.
+
+List the tables and views with: quarry sql "SHOW TABLES"
+
+At most --limit rows are printed (500 unless set, every row with --csv);
+when there are more, quarry says so on stderr. --limit 0 prints every row.
+With --csv, an empty field is NULL and "" is an empty string, except in a
+one-column result, where NULL is also written as "" so no row is blank.`,
 		Example: `  quarry sql "SELECT name, currency FROM accounts WHERE NOT closed"
-  quarry sql --limit 0 --json - < monthly.sql`,
+  quarry sql --limit 0 --json - < monthly.sql
+  quarry sql --csv "SELECT * FROM transactions" > transactions.csv`,
 		Args: func(_ *cobra.Command, args []string) error {
 			switch {
 			case len(args) == 0:
@@ -57,6 +69,8 @@ quarry says so on stderr. --limit 0 prints every row.`,
 				return errSQLNegativeLimit
 			case strings.TrimSpace(args[0]) == "":
 				return errSQLNeedsQuery
+			case csvOut && *jsonOut:
+				return errCSVAndJSON
 			}
 			return nil
 		},
@@ -75,27 +89,46 @@ quarry says so on stderr. --limit 0 prints every row.`,
 				return err
 			}
 
-			result, err := srv.Query(cmd.Context(), query, limit)
+			rows := rowLimit(cmd, limit, csvOut)
+			result, err := srv.Query(cmd.Context(), query, rows)
 			if err != nil {
 				return &runtimeError{err: queryFailure(err)}
 			}
 
 			warnings := []string{}
 			if result.Truncated {
-				warnings = append(warnings, truncationNote(limit))
+				warnings = append(warnings, truncationNote(rows))
 			}
 
+			renderText := func() string { return renderSQLTable(result.QueryResult) }
+			if csvOut {
+				renderText = func() string { return renderSQLCSV(result.QueryResult) }
+			}
 			out, err := renderResult(*jsonOut,
-				func() ([]byte, error) { return renderSQLJSON(result, limit, warnings) },
-				func() string { return renderSQLTable(result.QueryResult) })
+				func() ([]byte, error) { return renderSQLJSON(result, rows, warnings) },
+				renderText)
 			if err != nil {
 				return err
 			}
 			return emit(cmd, out, "quarry: warning: ", warnings)
 		},
 	}
-	cmd.Flags().IntVar(&limit, "limit", defaultSQLLimit, "print at most `n` rows (0 prints every row)")
+	cmd.Flags().BoolVar(&csvOut, "csv", false, "print the rows as CSV, with a header line")
+	// The flag's own default is 0 so help prints no "(default ...)" beside the ruled text; rowLimit applies 500.
+	cmd.Flags().IntVar(&limit, "limit", 0, "print at most `n` rows (500 unless set, every row with --csv; 0 prints every row)")
 	return cmd
+}
+
+// rowLimit is how many rows sql keeps: the --limit given, else every row
+// under --csv and defaultSQLLimit otherwise. 0 means every row.
+func rowLimit(cmd *cobra.Command, limit int, csvOut bool) int {
+	switch {
+	case cmd.Flags().Changed("limit"):
+		return limit
+	case csvOut:
+		return 0
+	}
+	return defaultSQLLimit
 }
 
 // readQueryFromStdin is the query argument that reads the query from stdin.

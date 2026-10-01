@@ -85,6 +85,42 @@ func Test_builder_seeds_a_deleted_row_and_a_transaction_status(t *testing.T) {
 	assert.Equal(t, int64(2), queryInt(t, db, "SELECT ZRECONCILESTATUS FROM ZTRANSACTION WHERE Z_PK = ?", txnPK))
 }
 
+func Test_builder_seeds_the_category_references_the_unused_category_check_reads(t *testing.T) {
+	b := v9fixture.NewBuilder()
+	categoryPK := b.Category(v9fixture.TagRow{Name: "Charity", Type: new(int64(1))})
+	accountPK := b.Account(v9fixture.AccountRow{Name: "Mortgage", LoanInterestCategory: categoryPK})
+	noInterestPK := b.Account(v9fixture.AccountRow{Name: "Chequing"})
+	budgetPK := b.BudgetLineItem(v9fixture.BudgetLineItemRow{Category: categoryPK})
+	deletedBudgetPK := b.BudgetLineItem(v9fixture.BudgetLineItemRow{Category: categoryPK, Deleted: true})
+	loanPK := b.LoanSplitEntry(v9fixture.LoanSplitEntryRow{Category: categoryPK})
+	deletedLoanPK := b.LoanSplitEntry(v9fixture.LoanSplitEntryRow{Category: categoryPK, Deleted: true})
+	quickfillPK := b.QuickfillRuleSplitEntry(v9fixture.QuickfillRuleSplitEntryRow{Category: categoryPK})
+	deletedQuickfillPK := b.QuickfillRuleSplitEntry(v9fixture.QuickfillRuleSplitEntryRow{Category: categoryPK, Deleted: true})
+	productPK := b.ProductService(v9fixture.ProductServiceRow{Category: categoryPK})
+	deletedProductPK := b.ProductService(v9fixture.ProductServiceRow{Category: categoryPK, Deleted: true})
+	creditPK := b.CustomerCreditLineItem(v9fixture.CustomerCreditLineItemRow{Category: categoryPK})
+	deletedCreditPK := b.CustomerCreditLineItem(v9fixture.CustomerCreditLineItemRow{Category: categoryPK, Deleted: true})
+
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	db, err := sqlite.OpenReadOnly(t.Context(), bundle.DataPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	assert.Equal(t, categoryPK, queryInt(t, db, "SELECT ZLOANINTERESTCATEGORY FROM ZACCOUNT WHERE Z_PK = ?", accountPK))
+	assert.Equal(t, int64(0), queryInt(t, db, "SELECT count(*) FROM ZACCOUNT WHERE Z_PK = ? AND ZLOANINTERESTCATEGORY IS NOT NULL", noInterestPK))
+	assert.Equal(t, categoryPK, queryInt(t, db, "SELECT ZCATEGORYTAG FROM ZBUDGETLINEITEM WHERE Z_PK = ? AND ZDELETIONCOUNT = 0", budgetPK))
+	assert.Equal(t, int64(1), queryInt(t, db, "SELECT ZDELETIONCOUNT FROM ZBUDGETLINEITEM WHERE Z_PK = ?", deletedBudgetPK))
+	assert.Equal(t, categoryPK, queryInt(t, db, "SELECT ZCATEGORY FROM ZLOANSPLITENTRY WHERE Z_PK = ? AND ZDELETIONCOUNT = 0", loanPK))
+	assert.Equal(t, int64(1), queryInt(t, db, "SELECT count(*) FROM ZLOANSPLITENTRY WHERE Z_PK = ? AND ZDELETIONCOUNT = 1 AND ZCATEGORY = ?", deletedLoanPK, categoryPK))
+	assert.Equal(t, categoryPK, queryInt(t, db, "SELECT ZCATEGORYTAG FROM ZQUICKFILLRULESPLITENTRY WHERE Z_PK = ? AND ZDELETIONCOUNT = 0", quickfillPK))
+	assert.Equal(t, int64(1), queryInt(t, db, "SELECT count(*) FROM ZQUICKFILLRULESPLITENTRY WHERE Z_PK = ? AND ZDELETIONCOUNT = 1 AND ZCATEGORYTAG = ?", deletedQuickfillPK, categoryPK))
+	assert.Equal(t, categoryPK, queryInt(t, db, "SELECT ZCATEGORY FROM ZPRODUCTSERVICE WHERE Z_PK = ? AND ZDELETIONCOUNT = 0", productPK))
+	assert.Equal(t, int64(1), queryInt(t, db, "SELECT count(*) FROM ZPRODUCTSERVICE WHERE Z_PK = ? AND ZDELETIONCOUNT = 1 AND ZCATEGORY = ?", deletedProductPK, categoryPK))
+	assert.Equal(t, categoryPK, queryInt(t, db, "SELECT ZCATEGORY FROM ZCUSTOMERCREDITLINEITEM WHERE Z_PK = ? AND ZDELETIONCOUNT = 0", creditPK))
+	assert.Equal(t, int64(1), queryInt(t, db, "SELECT count(*) FROM ZCUSTOMERCREDITLINEITEM WHERE Z_PK = ? AND ZDELETIONCOUNT = 1 AND ZCATEGORY = ?", deletedCreditPK, categoryPK))
+}
+
 func queryString(t *testing.T, db *sqlite.DB, query string, args ...any) string {
 	t.Helper()
 	var got string

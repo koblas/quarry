@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/koblas/quarry/internal/platform/duckdb"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -189,5 +190,130 @@ func Test_replace_starts_history_silently_when_the_store_vanishes_before_it_is_o
 
 	require.NoError(t, err)
 	assert.Nil(t, replaced.HistoryFault)
+	assert.False(t, replaced.StoreUnreadable)
 	assert.Equal(t, []int64{1}, importRunIDs(t, st))
+}
+
+// findingsTableDDL is the v4 findings table holding one open finding of a payee no build detects.
+const findingsTableDDL = `CREATE TABLE findings (id VARCHAR PRIMARY KEY, type VARCHAR NOT NULL, first_found_at TIMESTAMP NOT NULL, fixed_at TIMESTAMP);
+INSERT INTO findings VALUES ('uncategorized:payee-9', 'uncategorized', '2026-06-01 10:00:00', NULL);`
+
+func Test_replace_reports_the_findings_carried_when_the_previous_store_has_a_findings_table(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		rows func() store.Rows
+	}{
+		{name: "holding findings", rows: minimalRows},
+		{name: "holding none", rows: func() store.Rows {
+			rows := minimalRows()
+			rows.Transfers = rows.Transfers[:1]
+			return rows
+		}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			_, err := duckstore.New(dir).Replace(t.Context(), c.rows())
+			require.NoError(t, err)
+
+			replaced, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
+
+			require.NoError(t, err)
+			assert.True(t, replaced.FindingsCarried)
+		})
+	}
+}
+
+func Test_replace_reports_no_findings_carried_when_the_previous_store_has_no_findings_table(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		newStore func(t *testing.T) *duckstore.Store
+	}{
+		{name: "no store", newStore: func(t *testing.T) *duckstore.Store {
+			t.Helper()
+			return duckstore.New(t.TempDir())
+		}},
+		{name: "an earlier format", newStore: func(t *testing.T) *duckstore.Store {
+			t.Helper()
+			return newStoreFile(t, phase1ImportRunsDDL)
+		}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			replaced, err := c.newStore(t).Replace(t.Context(), minimalRows())
+
+			require.NoError(t, err)
+			assert.Nil(t, replaced.HistoryFault)
+			assert.Nil(t, replaced.FindingsFault)
+			assert.False(t, replaced.StoreUnreadable)
+			assert.False(t, replaced.FindingsCarried)
+		})
+	}
+}
+
+func Test_replace_carries_the_findings_beside_an_import_runs_table_it_cannot_read(t *testing.T) {
+	t.Parallel()
+	st := newStoreFile(t, importRunsTable("", "", 2)+findingsTableDDL)
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Equal(t, reasonRepeatedID, historyReason(t, st, replaced))
+	assert.True(t, replaced.FindingsCarried)
+	assert.Nil(t, replaced.FindingsFault)
+	assert.False(t, replaced.StoreUnreadable)
+	db := openReadOnly(t, st.Path())
+	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM findings WHERE id = 'uncategorized:payee-9'
+		AND first_found_at = TIMESTAMP '2026-06-01 10:00:00' AND fixed_at IS NOT NULL`, "1")
+}
+
+func Test_replace_names_a_failed_findings_read_as_incomplete_and_closes_the_connection(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		spy  *spyReadDB
+	}{
+		{name: "the columns query", spy: &spyReadDB{passQueries: 2, queryFault: ioFault(`query rows "SELECT"`)}},
+		{name: "a column name scan", spy: &spyReadDB{passQueries: 2, scanFault: ioFault(`scan column`)}},
+		{name: "the rows query", spy: &spyReadDB{passQueries: 3, queryFault: ioFault(`query rows "SELECT"`)}},
+		{name: "a row scan", spy: &spyReadDB{passQueries: 3, scanFault: ioFault(`scan row`)}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
+
+			replaced, err := st.Replace(t.Context(), minimalRows())
+
+			require.NoError(t, err)
+			assert.Nil(t, replaced.HistoryFault)
+			assert.False(t, replaced.FindingsCarried)
+			assert.False(t, replaced.StoreUnreadable)
+			require.NotNil(t, replaced.FindingsFault)
+			assert.Equal(t, store.OpenFaultOther, replaced.FindingsFault.Fault)
+			assert.Equal(t, "its findings table is incomplete", findingsReason(t, st, replaced))
+			assert.Equal(t, 1, c.spy.closes)
+			assert.Equal(t, []int64{1, 2}, importRunIDs(t, st))
+		})
+	}
+}
+
+func Test_replace_reads_the_history_in_four_queries_and_carries_the_findings_after_the_fourth(t *testing.T) {
+	t.Parallel()
+	spy := &spyReadDB{passQueries: 4, queryFault: ioFault(`query rows "SELECT"`)}
+	st := newBuiltStore(t, spyOpener(spy))
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.True(t, replaced.FindingsCarried)
+	assert.Equal(t, 4, spy.queries)
 }

@@ -186,6 +186,7 @@ func Test_list_totals_every_snapshot_including_one_with_no_manifest(t *testing.T
 	assert.EqualValues(t, 7000, listing.TotalBytes)
 	assert.Equal(t, []int64{4000, 2000, 1000}, []int64{listing.Entries[0].Bytes, listing.Entries[1].Bytes, listing.Entries[2].Bytes})
 	assert.Empty(t, listing.NoSnapshots)
+	assert.Empty(t, listing.NoSnapshotsAbsolute)
 	assert.Equal(t, dir, listing.Dir)
 }
 
@@ -323,6 +324,7 @@ func Test_list_says_how_to_take_a_snapshot_when_the_folder_holds_none(t *testing
 			assert.Empty(t, listing.Entries)
 			assert.Zero(t, listing.TotalBytes)
 			assert.Equal(t, "no snapshots in ~/snapshots yet; run quarry sync to take one", listing.NoSnapshots)
+			assert.Equal(t, "no snapshots in "+filepath.Join(home, "snapshots")+" yet; run quarry sync to take one", listing.NoSnapshotsAbsolute)
 		})
 	}
 }

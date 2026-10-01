@@ -119,6 +119,8 @@ type spendSplit struct {
 //	cat-fuel "Auto:Fuel", cat-groceries "Food:Groceries"
 //	payee-costco "Costco", payee-bakery "Bakery"
 //	tag-vacation "Vacation", tag-alpha "alpha"
+//
+// Both categories are referenced, so no store of it has an unused-category finding.
 func spendRows(accounts []store.Account, splits ...spendSplit) store.Rows {
 	rows := store.Rows{
 		Accounts: accounts,
@@ -134,6 +136,7 @@ func spendRows(accounts []store.Account, splits ...spendSplit) store.Rows {
 			{ID: "cat-fuel", SourceID: 1, Name: "Fuel", FullPath: "Auto:Fuel", Kind: "expense"},
 			{ID: "cat-groceries", SourceID: 2, Name: "Groceries", FullPath: "Food:Groceries", Kind: "expense"},
 		},
+		ReferencedCategoryIDs: []string{"cat-fuel", "cat-groceries"},
 		ImportRuns: []store.ImportRun{{
 			ID: 1, StartedAt: time.Unix(0, 0).UTC(), FinishedAt: time.Unix(0, 0).UTC(),
 			Snapshot: store.SnapshotRef{Path: "/snapshots/20260929T000000Z.sqlite", SHA256: "9f86", SchemaFingerprint: "sha256:abc"},

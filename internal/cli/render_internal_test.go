@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -237,18 +238,40 @@ func Test_transfersPhrase(t *testing.T) {
 	}
 }
 
-func Test_renderStore_lists_one_sided_transfers_after_the_transfers_line(t *testing.T) {
+func Test_renderStore_prints_the_transfers_count_line_without_one_sided_rows(t *testing.T) {
 	result := store.Result{
 		Path: "/Users/dave/Library/Application Support/quarry/quarry.duckdb",
 		Validation: store.Validation{Transfers: store.TransferCheck{Paired: 2, OneSided: []store.OneSidedTransfer{
 			{Date: time.Date(2019, 6, 14, 0, 0, 0, 0, time.UTC), Account: "Chequing", Currency: "CAD", Active: true, Amount: -50000},
 		}}},
+		Findings: finding.Counts{Open: 2},
 	}
 
 	got := renderStore(result, "/Users/dave")
 
 	assert.True(t, strings.HasSuffix(got, "Transfers 2 paired, 1 one-sided\n"+
-		"  ? 2019-06-14  Chequing (CAD)  (no payee)  -500.00  other account: unknown\n"), got)
+		"Findings  2 open; run quarry findings to list them\n"), got)
+	assert.NotContains(t, got, "?")
+}
+
+func Test_renderStore_prints_new_findings_only_when_the_history_was_carried(t *testing.T) {
+	counts := finding.Counts{Open: 2, New: 1}
+	cases := []struct {
+		name    string
+		carried bool
+		want    string
+	}{
+		{name: "carried", carried: true, want: "Findings  2 open (1 new); run quarry findings to list them\n"},
+		{name: "not carried", carried: false, want: "Findings  2 open; run quarry findings to list them\n"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := renderStore(store.Result{Findings: counts, FindingsCarried: c.carried}, "/Users/dave")
+
+			assert.True(t, strings.HasSuffix(got, c.want), got)
+		})
+	}
 }
 
 func Test_renderStore_renders_the_store_rows_balances_splits_and_transfers_lines(t *testing.T) {
@@ -269,7 +292,61 @@ func Test_renderStore_renders_the_store_rows_balances_splits_and_transfers_lines
 		"Rows      1 transaction, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 3 investment transactions not imported\n"+
 		"Balances  1 account matches Quicken's last reconciled balance\n"+
 		"Splits    the 1 transaction equals the sum of its splits\n"+
-		"Transfers 2 paired\n", got)
+		"Transfers 2 paired\n"+
+		"Findings  none open\n", got)
+}
+
+func Test_findingsPhrase(t *testing.T) {
+	cases := []struct {
+		name    string
+		counts  finding.Counts
+		carried bool
+		want    string
+	}{
+		{name: "none open", want: "none open"},
+		{name: "one open", counts: finding.Counts{Open: 1, New: 1}, want: "1 open; run quarry findings to list them"},
+		{name: "many open, thousands-grouped", counts: finding.Counts{Open: 1204}, want: "1,204 open; run quarry findings to list them"},
+		{
+			name: "new but not carried", counts: finding.Counts{Open: 12, New: 12}, carried: false,
+			want: "12 open; run quarry findings to list them",
+		},
+		{
+			name: "carried, none new", counts: finding.Counts{Open: 12}, carried: true,
+			want: "12 open; run quarry findings to list them",
+		},
+		{
+			name: "carried, some new and some fixed", counts: finding.Counts{Open: 12, New: 3, Fixed: 2, NewlyFixed: 2}, carried: true,
+			want: "12 open (3 new), 2 fixed since the last sync; run quarry findings to list them",
+		},
+		{
+			name: "carried, new count thousands-grouped", counts: finding.Counts{Open: 2000, New: 1500}, carried: true,
+			want: "2,000 open (1,500 new); run quarry findings to list them",
+		},
+		{name: "none open, some fixed", counts: finding.Counts{Fixed: 2, NewlyFixed: 2}, carried: true, want: "none open, 2 fixed since the last sync"},
+		{name: "none open, fixed earlier not counted", counts: finding.Counts{Fixed: 2}, carried: true, want: "none open"},
+		{
+			name: "fixed clause without new", counts: finding.Counts{Open: 1, Fixed: 1, NewlyFixed: 1}, carried: true,
+			want: "1 open, 1 fixed since the last sync; run quarry findings to list them",
+		},
+		{name: "fixed count thousands-grouped", counts: finding.Counts{NewlyFixed: 1200}, carried: true, want: "none open, 1,200 fixed since the last sync"},
+		{
+			name: "new, fixed and ignored", counts: finding.Counts{Open: 12, New: 3, Ignored: 4, Fixed: 2, NewlyFixed: 2}, carried: true,
+			want: "12 open (3 new), 2 fixed since the last sync, 4 ignored; run quarry findings to list them",
+		},
+		{name: "open and ignored", counts: finding.Counts{Open: 1, Ignored: 1}, want: "1 open, 1 ignored; run quarry findings to list them"},
+		{name: "none open, some ignored", counts: finding.Counts{Ignored: 4}, want: "none open, 4 ignored"},
+		{
+			name: "none open, fixed and ignored", counts: finding.Counts{Ignored: 4, Fixed: 2, NewlyFixed: 2}, carried: true,
+			want: "none open, 2 fixed since the last sync, 4 ignored",
+		},
+		{name: "ignored count thousands-grouped", counts: finding.Counts{Ignored: 1200}, want: "none open, 1,200 ignored"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, findingsPhrase(c.counts, c.carried))
+		})
+	}
 }
 
 func Test_balancesPhrase(t *testing.T) {

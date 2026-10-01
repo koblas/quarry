@@ -80,7 +80,7 @@ func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *tes
 	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
 
 	want := fmt.Sprintf(
-		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 5 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
+		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 5 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
 		"Snapshot", abbreviated(t, snapshotPath, home),
 		"Manifest", abbreviated(t, manifestPath, home),
 		"Source", abbreviated(t, bundle.Dir, home),
@@ -92,6 +92,7 @@ func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *tes
 		"Balances", "3 accounts match Quicken's last reconciled balance; 1 never reconciled and 1 investment account not checked",
 		"Splits", "all 4 transactions equal the sum of their splits",
 		"Transfers", "none",
+		"Findings", "1 open; run quarry findings to list them",
 	)
 	require.Equal(t, want, stdout.String())
 
@@ -171,7 +172,7 @@ func Test_run_refuses_a_balance_mismatch_and_leaves_no_store(t *testing.T) {
 	assert.Equal(t,
 		"quarry: validation failed: 1 of 2 accounts does not match Quicken's last reconciled balance; "+
 			abbreviated(t, storePath, home)+" was not changed; each difference is listed on stdout; "+
-			"fix the account in Quicken and run quarry sync, or run quarry sync --from "+
+			"fix them in Quicken and run quarry sync, or run quarry sync --from "+
 			snapshotID(snapshotPath)+" after updating quarry\n",
 		stderr.String())
 
@@ -288,7 +289,7 @@ func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *t
 	assert.Equal(t,
 		"quarry: validation failed: 3 of 3 accounts do not match Quicken's last reconciled balance; "+
 			abbreviated(t, storePath, home)+" was not changed; each difference is listed on stdout; "+
-			"fix the account in Quicken and run quarry sync, or run quarry sync --from "+
+			"fix them in Quicken and run quarry sync, or run quarry sync --from "+
 			snapshotID(snapshotPath)+" after updating quarry\n",
 		stderr.String())
 
@@ -350,7 +351,12 @@ func Test_run_lists_mismatched_splits_in_the_failed_validation_stdout_block(t *t
 		"Transfers", "none",
 	)
 	assert.Equal(t, wantStdout, stdout.String())
-	assert.Contains(t, stderr.String(), "1 transaction does not equal the sum of its splits")
+	assert.Equal(t,
+		"quarry: validation failed: 1 transaction does not equal the sum of its splits; "+
+			abbreviated(t, storePath, home)+" was not changed; each difference is listed on stdout; "+
+			"fix them in Quicken and run quarry sync, or run quarry sync --from "+
+			snapshotID(snapshotPath)+" after updating quarry\n",
+		stderr.String())
 
 	_, err = os.Stat(storePath)
 	assert.ErrorIs(t, err, os.ErrNotExist)

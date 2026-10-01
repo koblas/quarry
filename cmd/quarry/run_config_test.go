@@ -36,7 +36,21 @@ func countFilesWithSuffix(t *testing.T, dir, suffix string) int {
 const (
 	configShown = "~/Library/Application Support/quarry/config.toml"
 	configFix   = "; fix the file and run the command again"
+
+	combinedCarryWarning = "cannot carry import history and findings forward from the previous store (the file is not a DuckDB database); " +
+		"both start again with this sync"
 )
+
+// corruptPreviousStore syncs once, then replaces the store with bytes DuckDB cannot open.
+func corruptPreviousStore(t *testing.T, home string) {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	require.Equal(t, 0, run(context.Background(), []string{"sync"}, &stdout, &stderr), stderr.String())
+	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a database"), 0o600))
+}
+
+// configPath is the config file's absolute path under home, as --json names it.
+func configPath(home string) string { return filepath.Join(storeDirUnder(home), "config.toml") }
 
 // writeConfig writes content as the config file under home.
 func writeConfig(t *testing.T, home, content string) {
@@ -201,7 +215,6 @@ func Test_run_read_commands_ignore_a_malformed_config(t *testing.T) {
 		spendSplit{id: "s02", account: "acct-chq", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -12000},
 	))
 	commands := map[string][]string{
-		"status":   {"status"},
 		"accounts": {"accounts"},
 		"spend":    {"spend", "--since", "2026-01", "--until", "2026-09"},
 		"cashflow": {"cashflow", "--since", "2026-01", "--until", "2026-09"},
@@ -228,10 +241,39 @@ func Test_run_read_commands_ignore_a_malformed_config(t *testing.T) {
 	}
 }
 
+func Test_run_findings_refuses_a_bad_config_before_looking_for_a_store(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, "snapshots.keep = 0\n")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: "+configShown+": snapshots.keep must be a whole number of 1 or more, got 0"+configFix+"\n", stderr.String())
+}
+
+func Test_run_findings_lists_after_warning_about_an_unknown_config_key(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStore(t, home, spendRows([]store.Account{chequingAccount("acct-1", 1)},
+		spendSplit{id: "1", account: "acct-1", category: "cat-fuel", payee: "payee-costco", currency: "CAD", day: day(2026, 9, 1), cents: -4500}))
+	writeConfig(t, home, "snapshot.keep = 3\n")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+
+	assert.Equal(t, 0, exitCode)
+	assert.Equal(t, "No open findings\n", stdout.String())
+	assert.Equal(t, "quarry: warning: "+configShown+": unknown key snapshot.keep; quarry ignores it\n", stderr.String())
+}
+
 func Test_run_sync_warns_about_unknown_config_keys_before_its_own_warnings(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	writeStatusFixtureBundle(t, home)
+	corruptPreviousStore(t, home)
 	writeConfig(t, home, "snapshot.keep = 3\n")
 	var stdout, stderr bytes.Buffer
 
@@ -239,7 +281,7 @@ func Test_run_sync_warns_about_unknown_config_keys_before_its_own_warnings(t *te
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: "+configShown+": unknown key snapshot.keep; quarry ignores it\n"+
-		"quarry: warning: 1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer\n",
+		"quarry: warning: "+combinedCarryWarning+"\n",
 		stderr.String())
 }
 
@@ -247,6 +289,7 @@ func Test_run_sync_warns_about_a_config_key_that_differs_from_a_known_one_only_i
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	writeStatusFixtureBundle(t, home)
+	corruptPreviousStore(t, home)
 	writeConfig(t, home, "[Snapshots]\nKeep = 50\n")
 	var stdout, stderr bytes.Buffer
 
@@ -254,7 +297,7 @@ func Test_run_sync_warns_about_a_config_key_that_differs_from_a_known_one_only_i
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: "+configShown+": unknown key Snapshots; quarry ignores it\n"+
-		"quarry: warning: 1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer\n",
+		"quarry: warning: "+combinedCarryWarning+"\n",
 		stderr.String())
 }
 
@@ -262,6 +305,7 @@ func Test_run_sync_json_lists_config_warnings_before_its_own_without_the_prefix(
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	writeStatusFixtureBundle(t, home)
+	corruptPreviousStore(t, home)
 	writeConfig(t, home, "snapshot.keep = 3\n")
 	var stdout, stderr bytes.Buffer
 
@@ -273,21 +317,18 @@ func Test_run_sync_json_lists_config_warnings_before_its_own_without_the_prefix(
 	}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
 	assert.Equal(t, []string{
-		configShown + ": unknown key snapshot.keep; quarry ignores it",
-		"1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer",
+		configPath(home) + ": unknown key snapshot.keep; quarry ignores it",
+		combinedCarryWarning,
 	}, doc.Warnings)
 }
 
-func Test_run_sync_json_lists_the_history_warning_after_config_and_transfer_warnings_without_the_prefix(t *testing.T) {
+func Test_run_sync_json_lists_the_history_warning_after_the_config_warning_without_the_prefix(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	writeStatusFixtureBundle(t, home)
-	var stdout, stderr bytes.Buffer
-	require.Equal(t, 0, run(context.Background(), []string{"sync"}, &stdout, &stderr), stderr.String())
-	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a database"), 0o600))
+	corruptPreviousStore(t, home)
 	writeConfig(t, home, "snapshot.keep = 3\n")
-	stdout.Reset()
-	stderr.Reset()
+	var stdout, stderr bytes.Buffer
 
 	exitCode := run(context.Background(), []string{"sync", "--json"}, &stdout, &stderr)
 
@@ -297,9 +338,8 @@ func Test_run_sync_json_lists_the_history_warning_after_config_and_transfer_warn
 	}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
 	assert.Equal(t, []string{
-		configShown + ": unknown key snapshot.keep; quarry ignores it",
-		"1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer",
-		"cannot carry import history forward from the previous store (the file is not a DuckDB database); import_runs starts again with this sync",
+		configPath(home) + ": unknown key snapshot.keep; quarry ignores it",
+		combinedCarryWarning,
 	}, doc.Warnings)
 }
 
@@ -307,6 +347,7 @@ func Test_run_sync_quotes_an_unknown_config_key_that_is_not_a_bare_key(t *testin
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	writeStatusFixtureBundle(t, home)
+	corruptPreviousStore(t, home)
 	writeConfig(t, home, "\"snapshots.keep\" = 5\n")
 	var stdout, stderr bytes.Buffer
 
@@ -314,7 +355,7 @@ func Test_run_sync_quotes_an_unknown_config_key_that_is_not_a_bare_key(t *testin
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: "+configShown+": unknown key \"snapshots.keep\"; quarry ignores it\n"+
-		"quarry: warning: 1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer\n",
+		"quarry: warning: "+combinedCarryWarning+"\n",
 		stderr.String())
 }
 
@@ -322,6 +363,7 @@ func Test_run_sync_json_lists_a_quoted_unknown_config_key_without_the_prefix(t *
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	writeStatusFixtureBundle(t, home)
+	corruptPreviousStore(t, home)
 	writeConfig(t, home, "\"a\\nb\" = 1\n")
 	var stdout, stderr bytes.Buffer
 
@@ -333,7 +375,26 @@ func Test_run_sync_json_lists_a_quoted_unknown_config_key_without_the_prefix(t *
 	}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
 	assert.Equal(t, []string{
-		configShown + ": unknown key \"a\\nb\"; quarry ignores it",
-		"1 transfer has no matching transaction in another account; quarry keeps it as a one-sided transfer",
+		configPath(home) + ": unknown key \"a\\nb\"; quarry ignores it",
+		combinedCarryWarning,
 	}, doc.Warnings)
+}
+
+func Test_run_sync_from_json_names_the_config_file_by_its_absolute_path_and_stderr_abbreviates_it(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncBundle(t, writeNamedAccountBundle(t, filepath.Join(home, "Documents"), "Chequing"))
+	manifest := onlyFileWithSuffix(t, filepath.Join(storeDirUnder(home), "snapshots"), ".json")
+	writeConfig(t, home, "snapshot.keep = 3\n")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--from", strings.TrimSuffix(filepath.Base(manifest), ".json"), "--json"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	var doc struct {
+		Warnings []string `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	assert.Equal(t, []string{configPath(home) + ": unknown key snapshot.keep; quarry ignores it"}, doc.Warnings)
+	assert.Equal(t, "quarry: warning: "+configShown+": unknown key snapshot.keep; quarry ignores it\n", stderr.String())
 }
