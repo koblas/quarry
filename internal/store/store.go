@@ -263,6 +263,7 @@ type RatesSummary struct {
 	First, Last time.Time
 	Added       int
 	FetchError  string
+	Partial     bool
 }
 
 // The series a stored Rate comes from: the current Bank of Canada series and the discontinued one before it.
