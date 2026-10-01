@@ -38,7 +38,7 @@ func Test_run_spend_shows_this_years_spending_by_category_in_each_currency(t *te
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
 	const row = "%-15s  %-8s  %8s\n"
-	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in all accounts\n\n"+
+	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD\n\n"+
 		fmt.Sprintf(row, "Category", "Currency", "Spent")+
 		fmt.Sprintf(row, "(uncategorized)", "CAD", "42.08")+
 		fmt.Sprintf(row, "Auto:Fuel", "CAD", "1,204.50")+
@@ -68,7 +68,7 @@ func Test_run_spend_leaves_out_accounts_quicken_does_not_use_in_reports(t *testi
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
 	const row = "%-14s  %-8s  %5s\n"
-	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in all accounts\n\n"+
+	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD\n\n"+
 		fmt.Sprintf(row, "Category", "Currency", "Spent")+
 		fmt.Sprintf(row, "Food:Groceries", "CAD", "25.00")+
 		fmt.Sprintf(row, "Total", "CAD", "25.00"),

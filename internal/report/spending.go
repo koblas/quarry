@@ -3,17 +3,20 @@ package report
 import (
 	"context"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 )
 
 // SpendRequest is what a spend read needs from its caller: the window to
 // count, resolved by ParseWindow or DefaultWindow, what to group by
 // (category when unset), and the accounts to count (each an id or a name;
-// none means every account).
+// none means every account) and the currency to report in; the zero value,
+// money.Native, converts nothing.
 type SpendRequest struct {
 	Window   store.Window
 	By       store.SpendingGroup
 	Accounts []string
+	Currency money.Currency
 }
 
 // SpendingRow is one row of a spend read: what the store found, or for a
@@ -40,6 +43,9 @@ type Spending struct {
 	// Accounts is the accounts the request named, in the order given and
 	// without repeats; empty means every account was counted.
 	Accounts []store.Account
+	// Currency is the currency the request asked to report in; individual rows and
+	// totals still carry their own, because a split with no rate stays native.
+	Currency money.Currency
 }
 
 // Empty is whether the window held no spending at all: a currency whose spending nets to zero
@@ -56,7 +62,7 @@ func (s *Server) Spend(ctx context.Context, req SpendRequest) (Spending, error) 
 	if err != nil {
 		return Spending{}, err
 	}
-	spending, err := s.store.Spending(ctx, store.SpendingParams{Window: req.Window, By: req.By, AccountIDs: accountIDs})
+	spending, err := s.store.Spending(ctx, store.SpendingParams{Window: req.Window, By: req.By, AccountIDs: accountIDs, Currency: req.Currency})
 	if err != nil {
 		return Spending{}, s.readRefusal(ctx, spendCommand, err)
 	}
@@ -67,6 +73,7 @@ func (s *Server) Spend(ctx context.Context, req SpendRequest) (Spending, error) 
 		Window:         req.Window,
 		By:             req.By,
 		Accounts:       accounts,
+		Currency:       req.Currency,
 	}
 	if req.By == store.SpendByMonth {
 		result.Rows = fillSeries(monthSeries(req.Window), currencyList(spending.Totals, spendingTotalCurrency), spending.Rows, spendingRowPeriod, blankSpendingRow, wrapSpendingRow)

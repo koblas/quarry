@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 )
 
@@ -77,5 +78,5 @@ func renderRecurring(r report.Recurring) string {
 	for _, t := range r.Totals {
 		rows = append(rows, []string{tableTotalLabel, t.Currency, "", "", formatMoney(t.PerYear), "", "", "", ""})
 	}
-	return renderTable(windowCaption("Recurring charges", r.Window, r.Accounts), recurringAligns, rows)
+	return renderTable(windowCaption("Recurring charges", r.Window, r.Accounts, money.Native), recurringAligns, rows)
 }

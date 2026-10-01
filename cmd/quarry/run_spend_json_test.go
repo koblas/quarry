@@ -38,6 +38,7 @@ func Test_run_spend_json_returns_spending_as_a_document(t *testing.T) {
   "since": "2026-01-01",
   "until": "2026-09-29",
   "by": "category",
+  "currency": "CAD",
   "account_filter": [],
   "rows": [
     {

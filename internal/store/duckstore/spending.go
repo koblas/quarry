@@ -6,37 +6,60 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 )
 
-// spendingQueryFor is a spending query for the accounts of a filter; each takes the window's
-// first and last day as $1 and $2, then one parameter per named account.
-type spendingQueryFor func(accountFilter) string
+// spendingQueryFor is a spending query for the accounts of a filter over source, a relation of
+// v_spending's columns (see spendingSource); each takes the window's first and last day as $1
+// and $2, then one parameter per named account.
+type spendingQueryFor func(accounts accountFilter, source string) string
 
-// spendingQuery reads per-group and per-currency-total spending from v_spending, grouped by
-// the key column and ordered by rowOrder after the total rows.
-func spendingQuery(key, rowOrder string) spendingQueryFor {
-	return spendingQueryFrom("v_spending", key, rowOrder)
+// spendingSource is the relation a spending read counts, in the shape of v_spending: native is
+// v_spending itself; CAD and USD give each split its converted spent and that currency, except a
+// split with no converted cell, which keeps its own spent and currency so a total never mixes.
+func spendingSource(currency money.Currency) string {
+	var converted, target string
+	switch currency { //nolint:exhaustive // Native, and any value outside the three, reads v_spending as it is
+	case money.CAD:
+		converted, target = "spent_cad", "CAD"
+	case money.USD:
+		converted, target = "spent_usd", "USD"
+	default:
+		return "v_spending"
+	}
+	return fmt.Sprintf(`(SELECT split_id, account_id, date, month, category, payee,
+	CASE WHEN %[1]s IS NULL THEN currency ELSE '%[2]s' END AS currency,
+	COALESCE(%[1]s, spent) AS spent
+	FROM v_spending)`, converted, target)
 }
 
-// spendingQueryFrom is spendingQuery over source, a relation of v_spending's account_id, date,
-// currency and spent columns plus the key column.
-func spendingQueryFrom(source, key, rowOrder string) spendingQueryFor {
-	return func(accounts accountFilter) string {
-		return fmt.Sprintf(`
+// spendingQuery reads per-group and per-currency-total spending, grouped by the key column and
+// ordered by rowOrder after the total rows.
+func spendingQuery(key, rowOrder string) spendingQueryFor {
+	return func(accounts accountFilter, source string) string {
+		return spendingQueryFrom(source, key, rowOrder, accounts)
+	}
+}
+
+// spendingQueryFrom is the query of spendingQuery over source, a relation of v_spending's
+// account_id, date, currency and spent columns plus the key column.
+func spendingQueryFrom(source, key, rowOrder string, accounts accountFilter) string {
+	return fmt.Sprintf(`
 SELECT %[1]s, currency, CAST(sum(spent) * 100 AS BIGINT), GROUPING(%[1]s)
 FROM %[3]s
 WHERE date >= CAST($1 AS DATE) AND date <= CAST($2 AS DATE)%[4]s
 GROUP BY GROUPING SETS ((%[1]s, currency), (currency))
 HAVING GROUPING(%[1]s) = 1 OR sum(spent) <> 0
 ORDER BY GROUPING(%[1]s), %[2]s`, key, rowOrder, source, accounts.and("account_id"))
-	}
 }
 
 // spendingByMonthQuery keys each split by its month as YYYY-MM text, not a scanned DATE.
-var spendingByMonthQuery = spendingQueryFrom(
-	"(SELECT account_id, date, currency, spent, strftime(month, '%Y-%m') AS month_key FROM v_spending)",
-	"month_key", "month_key, currency")
+func spendingByMonthQuery(accounts accountFilter, source string) string {
+	return spendingQueryFrom(
+		"(SELECT account_id, date, currency, spent, strftime(month, '%Y-%m') AS month_key FROM "+source+")",
+		"month_key", "month_key, currency", accounts)
+}
 
 // splitTagNames is a CTE of each split's distinct tag names; a link to a missing tag has none.
 const splitTagNames = `WITH split_tag_names AS (
@@ -44,17 +67,17 @@ const splitTagNames = `WITH split_tag_names AS (
 )`
 
 // spendingByTagQuery reads spending per tag, then per-currency totals counting each split once.
-func spendingByTagQuery(accounts accountFilter) string {
+func spendingByTagQuery(accounts accountFilter, source string) string {
 	return splitTagNames + `
 SELECT tag, currency, cents, grp FROM (
 	SELECT n.name AS tag, s.currency, CAST(sum(s.spent) * 100 AS BIGINT) AS cents, 0 AS grp
-	FROM v_spending s LEFT JOIN split_tag_names n ON n.split_id = s.split_id
+	FROM ` + source + ` s LEFT JOIN split_tag_names n ON n.split_id = s.split_id
 	WHERE s.date >= CAST($1 AS DATE) AND s.date <= CAST($2 AS DATE)` + accounts.and("s.account_id") + `
 	GROUP BY n.name, s.currency
 	HAVING sum(s.spent) <> 0
 	UNION ALL
 	SELECT NULL, currency, CAST(sum(spent) * 100 AS BIGINT), 1
-	FROM v_spending
+	FROM ` + source + `
 	WHERE date >= CAST($1 AS DATE) AND date <= CAST($2 AS DATE)` + accounts.and("account_id") + `
 	GROUP BY currency
 )
@@ -108,7 +131,7 @@ func (s *Store) Spending(ctx context.Context, params store.SpendingParams) (stor
 	var spending store.Spending
 	accounts := accountFilter(params.AccountIDs)
 	args := readArgs(params.Window, accounts)
-	err = db.QueryRows(ctx, queryFor(accounts), args, func(scan func(dest ...any) error) error {
+	err = db.QueryRows(ctx, queryFor(accounts, spendingSource(params.Currency)), args, func(scan func(dest ...any) error) error {
 		var key sql.NullString
 		var currency string
 		var cents, grouping int64

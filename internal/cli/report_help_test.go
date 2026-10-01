@@ -12,9 +12,16 @@ import (
 )
 
 func Test_spend_help_says_what_spend_counts(t *testing.T) {
-	const long = `Show how much you spent, grouped by category, payee, tag or month, in each
-account's own currency: CAD and USD are listed separately, never added
-together.
+	const long = `Show how much you spent, grouped by category, payee, tag or month.
+
+Amounts are in CAD unless --currency or reporting.currency in
+~/Library/Application Support/quarry/config.toml names another currency.
+Each split converts at the Bank of Canada rate for its date, or the latest
+earlier rate on weekends, holidays and dates after the last stored rate,
+and is rounded to the cent before it is added. With --currency native, CAD
+and USD are listed separately, never added together. Amounts dated before
+the first stored rate stay in their own currency, on rows of their own,
+with a warning.
 
 Spending is every split in an expense category, plus uncategorized splits
 that take money out. Refunds in an expense category are netted against it,

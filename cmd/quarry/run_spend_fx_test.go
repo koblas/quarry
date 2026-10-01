@@ -7,7 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
@@ -174,4 +177,147 @@ func Test_run_spend_takes_its_currency_from_the_config_unless_the_flag_names_one
 			})
 		})
 	}
+}
+
+// spendTextView is the first line of a spend table and the cells of each of its Total rows.
+func spendTextView(out string) (string, [][]string) {
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	var totals [][]string
+	for _, line := range lines[1:] {
+		if strings.HasPrefix(line, "Total") {
+			totals = append(totals, strings.Fields(line))
+		}
+	}
+	return lines[0], totals
+}
+
+// totalCells are the Total rows of a text table for totals, as spendTextView reads them.
+func totalCells(totals []spendMoney) [][]string {
+	cells := make([][]string, 0, len(totals))
+	for _, t := range totals {
+		cells = append(cells, []string{"Total", t.Currency, t.Spent})
+	}
+	return cells
+}
+
+func Test_run_spend_converts_the_edge_cases_in_each_reporting_currency(t *testing.T) {
+	const thisYear = "Spending 2026-01-01 to 2026-09-29 in "
+	cad100 := []spendMoney{{Currency: "CAD", Spent: "100.00"}}
+	usd80 := []spendMoney{{Currency: "USD", Spent: "80.00"}}
+	fridayRate := store.Rate{Date: day(2026, 3, 13), USDCAD: money.Rate(1_250_000), Series: "FXUSDCAD"}
+	closedUSD := store.Account{ID: "acct-usd", SourceID: 2, Name: "US Chequing", Type: "chequing", Currency: "USD", Closed: true}
+	usdSplit := func(when time.Time) spendSplit {
+		return spendSplit{id: "s1", account: "acct-usd", category: "cat-groceries", currency: "USD", day: when, cents: -8000}
+	}
+	cadSplit := spendSplit{id: "s2", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -10000}
+	cases := []struct {
+		name       string
+		accounts   []store.Account
+		splits     []spendSplit
+		rate       store.Rate
+		args       []string
+		caption    string
+		currencies []string
+		want       map[string][]spendMoney
+	}{
+		{
+			name:     "a closed USD account converts",
+			accounts: []store.Account{closedUSD}, splits: []spendSplit{usdSplit(day(2026, 3, 11))}, rate: rateOnJan2,
+			caption: thisYear + "all accounts", currencies: []string{"CAD", "USD", "native"},
+			want: map[string][]spendMoney{"CAD": cad100, "USD": usd80, "native": usd80},
+		},
+		{
+			name:     "one USD account converts to a CAD total",
+			accounts: []store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
+			splits:   []spendSplit{usdSplit(day(2026, 3, 11)), cadSplit}, rate: rateOnJan2,
+			args: []string{"--account", "US Chequing"}, caption: thisYear + "US Chequing", currencies: []string{"CAD", "USD", "native"},
+			want: map[string][]spendMoney{"CAD": cad100, "USD": usd80, "native": usd80},
+		},
+		{
+			name:     "a split dated after the last rate converts at the latest rate",
+			accounts: []store.Account{usdChequingAccount("acct-usd", 2)}, splits: []spendSplit{usdSplit(day(2099, 6, 1))}, rate: rateOnJan2,
+			args: []string{"--until", "2099-12-31"}, caption: "Spending 2026-01-01 to 2099-12-31 in all accounts", currencies: []string{"CAD", "USD"},
+			want: map[string][]spendMoney{"CAD": cad100, "USD": usd80},
+		},
+		{
+			name:     "a weekend split converts at the Friday rate",
+			accounts: []store.Account{usdChequingAccount("acct-usd", 2)}, splits: []spendSplit{usdSplit(day(2026, 3, 14))}, rate: fridayRate,
+			caption: thisYear + "all accounts", currencies: []string{"CAD", "USD"},
+			want: map[string][]spendMoney{"CAD": cad100, "USD": usd80},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			replaceStoreWithRates(t, home, spendRows(c.accounts, c.splits...), c.rate)
+
+			for _, currency := range c.currencies {
+				args := append([]string{"--currency", currency}, c.args...)
+				wantCaption := c.caption + map[string]string{"CAD": ", amounts in CAD", "USD": ", amounts in USD", "native": ""}[currency]
+
+				var stdout, stderr bytes.Buffer
+				exitCode := runWith(context.Background(), append([]string{"spend"}, args...), spendEnv(&stdout, &stderr))
+				require.Equal(t, 0, exitCode, stderr.String())
+				gotCaption, gotTotals := spendTextView(stdout.String())
+				doc, _ := runSpendJSON(t, args...)
+
+				assert.Equal(t, wantCaption, gotCaption, currency)
+				assert.Equal(t, totalCells(c.want[currency]), gotTotals, currency)
+				assert.Equal(t, currency, doc.Currency)
+				assert.Equal(t, c.want[currency], doc.Totals, currency)
+			}
+		})
+	}
+}
+
+func Test_run_spend_of_an_empty_window_names_the_currency_and_warns_only_of_the_empty_window(t *testing.T) {
+	for _, currency := range []string{"CAD", "USD", "native"} {
+		t.Run(currency, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			replaceStoreWithRates(t, home, spendRows(
+				[]store.Account{usdChequingAccount("acct-usd", 2)},
+				spendSplit{id: "s1", account: "acct-usd", category: "cat-groceries", currency: "USD", day: day(2026, 3, 11), cents: -8000},
+			), rateOnJan2)
+
+			doc, stderr := runSpendJSON(t, "--currency", currency, "--since", "2020-01-01", "--until", "2020-12-31")
+
+			assert.Equal(t, currency, doc.Currency)
+			assert.Empty(t, doc.Totals)
+			assert.Equal(t, "quarry: warning: no spending from 2020-01-01 to 2020-12-31; the store's transactions run 2026-03-11 to 2026-03-11\n", stderr)
+		})
+	}
+}
+
+func Test_run_spend_json_reads_back_with_every_amount_in_the_reporting_currency(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStoreWithRates(t, home, spendRows(
+		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
+		spendSplit{id: "s1", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -12345},
+		spendSplit{id: "s2", account: "acct-usd", category: "cat-groceries", currency: "USD", day: day(2026, 3, 11), cents: -8001},
+		spendSplit{id: "s3", account: "acct-usd", category: "cat-fuel", currency: "USD", day: day(2026, 3, 12), cents: -3333},
+	), rateOnJan2)
+
+	doc, _ := runSpendJSON(t, "--by", "category")
+
+	require.Len(t, doc.Totals, 1)
+	var rowCents int64
+	for _, r := range append(append([]spendMoney{}, doc.Rows...), doc.Totals...) {
+		assert.Equal(t, doc.Currency, r.Currency)
+	}
+	for _, r := range doc.Rows {
+		rowCents += centsOf(t, r.Spent)
+	}
+	assert.Equal(t, centsOf(t, doc.Totals[0].Spent), rowCents)
+}
+
+// centsOf is a spend document's amount, "123.71", in cents.
+func centsOf(t *testing.T, amount string) int64 {
+	t.Helper()
+	cents, err := strconv.ParseInt(strings.Replace(amount, ".", "", 1), 10, 64)
+	require.NoError(t, err)
+	return cents
 }

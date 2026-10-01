@@ -35,7 +35,7 @@ func Test_run_spend_counts_only_the_accounts_it_is_given(t *testing.T) {
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
 	const row = "%-14s  %-8s  %5s\n"
-	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in Chequing, Visa Infinite\n\n"+
+	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in Chequing, Visa Infinite, amounts in CAD\n\n"+
 		fmt.Sprintf(row, "Category", "Currency", "Spent")+
 		fmt.Sprintf(row, "Food:Groceries", "CAD", "15.00")+
 		fmt.Sprintf(row, "Total", "CAD", "15.00"),
@@ -59,7 +59,7 @@ func Test_run_spend_warns_that_a_named_account_is_left_out_of_reports(t *testing
 	assert.Equal(t, "quarry: warning: account \"Old Card\" is not used in reports in Quicken, so spend leaves it out; "+
 		"to include it, turn on reports for it in Quicken's account settings, then run quarry sync\n",
 		stderr.String())
-	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in Old Card\n\nCategory  Currency  Spent\n", stdout.String())
+	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in Old Card, amounts in CAD\n\nCategory  Currency  Spent\n", stdout.String())
 }
 
 func Test_run_spend_warns_that_a_named_linked_tracking_account_is_left_out(t *testing.T) {
@@ -79,7 +79,7 @@ func Test_run_spend_warns_that_a_named_linked_tracking_account_is_left_out(t *te
 	assert.Equal(t, "quarry: warning: account \"Netskope 401(k)\" uses linked account tracking in Quicken, "+
 		"so spend leaves it out, as Quicken's reports do\n",
 		stderr.String())
-	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in Netskope 401(k)\n\nCategory  Currency  Spent\n", stdout.String())
+	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in Netskope 401(k), amounts in CAD\n\nCategory  Currency  Spent\n", stdout.String())
 }
 
 func Test_run_spend_ranges_a_linked_and_a_reported_named_account_over_the_reported_one(t *testing.T) {

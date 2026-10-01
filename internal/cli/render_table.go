@@ -5,6 +5,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -48,10 +49,15 @@ func renderTable(caption string, aligns []tableAlign, rows [][]string) string {
 	return b.String()
 }
 
-// windowCaption is title, the window's first and last day and the accounts it counts, as a table caption.
-func windowCaption(title string, window store.Window, accounts []store.Account) string {
-	return title + " " + window.Since.Format(time.DateOnly) + " to " + window.Until.Format(time.DateOnly) +
+// windowCaption is title, the window's first and last day and the accounts it counts, as a table caption;
+// a report in CAD or USD ends with ", amounts in <currency>", and a native one adds nothing.
+func windowCaption(title string, window store.Window, accounts []store.Account, currency money.Currency) string {
+	caption := title + " " + window.Since.Format(time.DateOnly) + " to " + window.Until.Format(time.DateOnly) +
 		" in " + accountsCaption(accounts)
+	if currency == money.Native {
+		return caption
+	}
+	return caption + ", amounts in " + currency.String()
 }
 
 // accountsCaption is the names of accounts joined by ", ", or "all accounts" when none.

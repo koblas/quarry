@@ -13,7 +13,7 @@ import (
 )
 
 func Test_run_spend_says_when_the_period_holds_nothing(t *testing.T) {
-	const emptyTable = "Spending 2026-01-01 to 2026-02-28 in all accounts\n\nCategory  Currency  Spent\n"
+	const emptyTable = "Spending 2026-01-01 to 2026-02-28 in all accounts, amounts in CAD\n\nCategory  Currency  Spent\n"
 	cases := []struct {
 		name       string
 		splits     []spendSplit

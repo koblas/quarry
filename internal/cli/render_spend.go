@@ -32,5 +32,5 @@ func renderSpending(s report.Spending) string {
 	for _, t := range s.Totals {
 		rows = append(rows, []string{tableTotalLabel, t.Currency, formatMoney(t.Spent), ""})
 	}
-	return renderTable(windowCaption("Spending", s.Window, s.Accounts), spendAligns, rows)
+	return renderTable(windowCaption("Spending", s.Window, s.Accounts, s.Currency), spendAligns, rows)
 }

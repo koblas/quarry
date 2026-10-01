@@ -14,6 +14,16 @@ const (
 	accountsCurrencyHelp = "add a column with each balance in currency `code`: CAD or USD; native adds none (default reporting.currency in the config file, else CAD)"
 )
 
+// reportCurrencyLong is the paragraph of a report's Long help that says which currency its amounts are in.
+const reportCurrencyLong = `Amounts are in CAD unless --currency or reporting.currency in
+~/Library/Application Support/quarry/config.toml names another currency.
+Each split converts at the Bank of Canada rate for its date, or the latest
+earlier rate on weekends, holidays and dates after the last stored rate,
+and is rounded to the cent before it is added. With --currency native, CAD
+and USD are listed separately, never added together. Amounts dated before
+the first stored rate stay in their own currency, on rows of their own,
+with a warning.`
+
 // currencyFlag is the --currency flag shared by the commands that report in a chosen currency.
 type currencyFlag struct {
 	code string

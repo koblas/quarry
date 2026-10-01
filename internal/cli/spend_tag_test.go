@@ -30,7 +30,7 @@ func Test_spend_by_tag_heads_the_first_column_Tag_and_labels_untagged_splits(t *
 
 	require.NoError(t, err)
 	assert.Equal(t, store.SpendByTag, got.By)
-	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in all accounts\n\n"+
+	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD\n\n"+
 		"Tag       Currency   Spent\n"+
 		"(no tag)  CAD        42.08\n"+
 		"trip      CAD       300.00\n"+
@@ -43,7 +43,7 @@ func Test_spend_by_tag_json_names_the_row_key_tag_and_carries_the_warning_unpref
 	err := executeSpend(t, tagSpending(2), spendNow, &stdout, &stderr, "--by", "tag", "--json")
 
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"since":"2026-01-01","until":"2026-09-29","by":"tag","account_filter":[],
+	assert.JSONEq(t, `{"since":"2026-01-01","until":"2026-09-29","by":"tag","currency":"CAD","account_filter":[],
 		"rows":[{"tag":null,"currency":"CAD","spent":"42.08"},{"tag":"trip","currency":"CAD","spent":"300.00"}],
 		"totals":[{"currency":"CAD","spent":"342.08"}],
 		"warnings":["2 splits carry more than one tag, so the rows add up to more than the total"]}`, stdout.String())

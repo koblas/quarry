@@ -488,12 +488,16 @@ const (
 )
 
 // SpendingParams is everything a spending read varies by: the Window,
-// the grouping, and the accounts to count (every account in reports when
-// AccountIDs is empty).
+// the grouping, the accounts to count (every account in reports when
+// AccountIDs is empty) and the currency to report in.
 type SpendingParams struct {
 	Window     Window
 	By         SpendingGroup
 	AccountIDs []string
+	// Currency is the currency every split is converted to at its date's rate;
+	// a split with no rate stays in its own currency, on rows of that currency.
+	// The zero value, money.Native, converts nothing.
+	Currency money.Currency
 }
 
 // SpendingRow is one group's spending in one currency, in cents. Key is nil

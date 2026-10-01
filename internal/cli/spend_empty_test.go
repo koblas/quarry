@@ -65,7 +65,7 @@ func Test_spend_json_puts_the_empty_window_note_in_warnings_unprefixed(t *testin
 	err := executeSpend(t, fake, spendNow, &stdout, &stderr, "--json")
 
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"since":"2026-01-01","until":"2026-09-29","by":"category","account_filter":[],
+	assert.JSONEq(t, `{"since":"2026-01-01","until":"2026-09-29","by":"category","currency":"CAD","account_filter":[],
 		"rows":[],"totals":[],"warnings":["no spending from 2026-01-01 to 2026-09-29; the store's transactions run 2003-01-04 to 2026-09-26"]}`,
 		stdout.String())
 }

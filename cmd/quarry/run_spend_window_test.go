@@ -23,25 +23,25 @@ func Test_run_spend_counts_the_whole_period_it_is_given(t *testing.T) {
 		{
 			name:  "a bare year covers January 1 to December 31",
 			since: "2024", until: "2024",
-			caption: "Spending 2024-01-01 to 2024-12-31 in all accounts",
+			caption: "Spending 2024-01-01 to 2024-12-31 in all accounts, amounts in CAD",
 			total:   "30.00",
 		},
 		{
 			name:  "a bare month covers its last day",
 			since: "2024-12", until: "2025-01",
-			caption: "Spending 2024-12-01 to 2025-01-31 in all accounts",
+			caption: "Spending 2024-12-01 to 2025-01-31 in all accounts, amounts in CAD",
 			total:   "60.00",
 		},
 		{
 			name:  "one day is a period of its own",
 			since: "2024-12-31", until: "2024-12-31",
-			caption: "Spending 2024-12-31 to 2024-12-31 in all accounts",
+			caption: "Spending 2024-12-31 to 2024-12-31 in all accounts, amounts in CAD",
 			total:   "20.00",
 		},
 		{
 			name:  "a period after today counts what is dated in it",
 			since: "2099", until: "2099",
-			caption: "Spending 2099-01-01 to 2099-12-31 in all accounts",
+			caption: "Spending 2099-01-01 to 2099-12-31 in all accounts, amounts in CAD",
 			total:   "80.00",
 		},
 	}

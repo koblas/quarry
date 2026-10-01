@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -65,6 +66,17 @@ func Test_spend_reads_the_requested_grouping_and_returns_it_with_the_result(t *t
 	require.NoError(t, err)
 	assert.Equal(t, store.SpendByPayee, got.By)
 	assert.Equal(t, store.SpendByPayee, result.By)
+}
+
+func Test_spend_reads_the_requested_currency_and_returns_it_with_the_result(t *testing.T) {
+	var got store.SpendingParams
+	srv := report.NewServer(report.WithStore(fakeStore{gotSpending: &got}))
+
+	result, err := srv.Spend(t.Context(), report.SpendRequest{Currency: money.USD})
+
+	require.NoError(t, err)
+	assert.Equal(t, money.USD, got.Currency)
+	assert.Equal(t, money.USD, result.Currency)
 }
 
 func Test_spend_returns_the_store_fault(t *testing.T) {

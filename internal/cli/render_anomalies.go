@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/humanize"
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 )
 
@@ -44,7 +45,7 @@ func renderAnomalies(a report.Anomalies) string {
 			fmt.Sprintf("%s, %s earlier", anomaliesBaselineWord[an.Baseline], humanize.Thousands(an.Earlier)),
 		})
 	}
-	return renderTable(windowCaption("Unusually large charges", a.Window, a.Accounts), anomaliesAligns, rows) +
+	return renderTable(windowCaption("Unusually large charges", a.Window, a.Accounts, money.Native), anomaliesAligns, rows) +
 		"\n" + anomaliesFooter(a.Checked, a.NotJudged) + "\n"
 }
 

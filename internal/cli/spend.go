@@ -20,9 +20,9 @@ func newSpendCommand(newReport ReportFactory, loadConfig ConfigLoader, now func(
 	cmd := &cobra.Command{
 		Use:   spendCommand,
 		Short: "Show spending by category, payee, tag or month",
-		Long: `Show how much you spent, grouped by category, payee, tag or month, in each
-account's own currency: CAD and USD are listed separately, never added
-together.
+		Long: `Show how much you spent, grouped by category, payee, tag or month.
+
+` + reportCurrencyLong + `
 
 Spending is every split in an expense category, plus uncategorized splits
 that take money out. Refunds in an expense category are netted against it,
@@ -56,7 +56,7 @@ the rows can add up to more than the total.`,
 				return err
 			}
 
-			_, configWarnings, err := currency.resolve(cmd, loadConfig)
+			reportCurrency, configWarnings, err := currency.resolve(cmd, loadConfig)
 			if err != nil {
 				return err
 			}
@@ -66,7 +66,7 @@ the rows can add up to more than the total.`,
 				return err
 			}
 
-			spending, err := srv.Spend(cmd.Context(), report.SpendRequest{Window: window, By: group, Accounts: flags.accounts})
+			spending, err := srv.Spend(cmd.Context(), report.SpendRequest{Window: window, By: group, Accounts: flags.accounts, Currency: reportCurrency})
 			if err != nil {
 				return &runtimeError{err: err}
 			}
