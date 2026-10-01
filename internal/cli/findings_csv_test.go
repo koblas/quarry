@@ -257,3 +257,23 @@ func Test_findings_csv_puts_a_similar_categories_item_in_its_category_and_splits
 		"similar-categories:grocery,similar-categories,open,,,,,Groceries,,,,812,,,,cat-3,"+similarFixCSV+"\n"+
 		"similar-categories:grocery,similar-categories,open,,,,,Grocery,,,,0,,,,cat-9,"+similarFixCSV+"\n", stdout.String())
 }
+
+const unusedFixCSV = `"No transaction uses it; check that no scheduled transaction or budget does, then delete it in Quicken, or ignore it to keep it"`
+
+func Test_findings_csv_puts_an_unused_category_item_in_its_category_columns_with_everything_else_empty(t *testing.T) {
+	fake := fakeReportStore{findings: store.FindingList{Findings: []store.Finding{{
+		ID: "unused-category:cat-40", Type: finding.UnusedCategory, FirstFoundAt: csvFindingDay(1),
+		Items: []store.FindingItem{
+			{CategoryID: new("cat-40"), Category: new("Vacation")},
+			{CategoryID: new("cat-41"), Category: new("Vacation:Hotel")},
+		},
+	}}}}
+	var stdout bytes.Buffer
+
+	err := executeFindings(t, fake, &stdout, &bytes.Buffer{}, "--csv")
+
+	require.NoError(t, err)
+	assert.Equal(t, findingsCSVHeader+
+		"unused-category:cat-40,unused-category,open,,,,,Vacation,,,,,,,,cat-40,"+unusedFixCSV+"\n"+
+		"unused-category:cat-40,unused-category,open,,,,,Vacation:Hotel,,,,,,,,cat-41,"+unusedFixCSV+"\n", stdout.String())
+}

@@ -115,6 +115,8 @@ func Test_replace_keeps_the_previous_store_when_detection_fails(t *testing.T) {
 		{"scanning a payee-variants row", &faultDB{queryFaultOn: duckstore.PayeeVariantsQuery, scanFault: queryFault}, "detect payee-variants findings"},
 		{"the similar-categories query", &faultDB{queryFaultOn: duckstore.SimilarCategoriesQuery, queryFault: queryFault}, "detect similar-categories findings"},
 		{"scanning a similar-categories row", &faultDB{queryFaultOn: duckstore.SimilarCategoriesQuery, scanFault: queryFault}, "detect similar-categories findings"},
+		{"the unused-category query", &faultDB{queryFaultOn: duckstore.UnusedCategoryQuery, queryFault: queryFault}, "detect unused-category findings"},
+		{"scanning an unused-category row", &faultDB{queryFaultOn: duckstore.UnusedCategoryQuery, scanFault: queryFault}, "detect unused-category findings"},
 		{"the uncategorized query", &faultDB{queryFaultOn: duckstore.UncategorizedQuery, queryFault: queryFault}, "detect uncategorized findings"},
 		{"scanning a one-sided row", &faultDB{queryFaultOn: duckstore.OneSidedTransferQuery, scanFault: queryFault}, "detect one-sided-transfer findings"},
 		{"scanning an uncategorized row", &faultDB{queryFaultOn: duckstore.UncategorizedQuery, scanFault: queryFault}, "detect uncategorized findings"},

@@ -59,8 +59,8 @@ type detectedFinding struct {
 
 // loadFindings detects the findings in the loaded tables, merges them with the carried ones, writes
 // findings and finding_items, and returns each finding's state; any fault is a build fault.
-func loadFindings(ctx context.Context, db DB, carried []carriedFinding, builtAt time.Time) ([]finding.State, error) {
-	detected, err := detectFindings(ctx, db)
+func loadFindings(ctx context.Context, db DB, carried []carriedFinding, referenced []string, builtAt time.Time) ([]finding.State, error) {
+	detected, err := detectFindings(ctx, db, referenced)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func loadFindings(ctx context.Context, db DB, carried []carriedFinding, builtAt 
 }
 
 // detectFindings runs every detector against the build connection, in finding.Types order.
-func detectFindings(ctx context.Context, db DB) ([]detectedFinding, error) {
+func detectFindings(ctx context.Context, db DB, referenced []string) ([]detectedFinding, error) {
 	duplicates, err := detectDuplicates(ctx, db)
 	if err != nil {
 		return nil, fmt.Errorf("detect %s findings: %w", finding.Duplicate, err)
@@ -104,7 +104,11 @@ func detectFindings(ctx context.Context, db DB) ([]detectedFinding, error) {
 	if err != nil {
 		return nil, fmt.Errorf("detect %s findings: %w", finding.SimilarCategories, err)
 	}
-	return slices.Concat(duplicates, oneSided, unlinked, uncategorized, mixed, variants, similar), nil
+	unused, err := detectUnusedCategories(ctx, db, referenced)
+	if err != nil {
+		return nil, fmt.Errorf("detect %s findings: %w", finding.UnusedCategory, err)
+	}
+	return slices.Concat(duplicates, oneSided, unlinked, uncategorized, mixed, variants, similar, unused), nil
 }
 
 // detectDuplicates returns one finding per duplicate pair, its items the two transactions.

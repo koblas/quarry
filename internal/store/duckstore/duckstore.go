@@ -399,7 +399,7 @@ func build(ctx context.Context, db DB, rows store.Rows, carried history, quarryV
 	if err := loadRows(ctx, db, rows, carried); err != nil {
 		return nil, err
 	}
-	states, err := loadFindings(ctx, db, carried.findings, builtAt)
+	states, err := loadFindings(ctx, db, carried.findings, rows.ReferencedCategoryIDs, builtAt)
 	if err != nil {
 		return nil, err
 	}

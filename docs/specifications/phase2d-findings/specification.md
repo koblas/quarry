@@ -603,7 +603,7 @@ Ruled: the finding core (type list and order, id grammar, P2d-3 status function,
 - [x] SCENARIO-25: a payee whose category goes back and forth is in mixed categories — `cmd/quarry/run_sync_mixed_test.go` `Test_run_sync_records_costco_as_mixed_categories_and_not_shell`
 - [x] SCENARIO-26: payees that differ only in case, punctuation or numbers are variants — `cmd/quarry/run_sync_payee_variants_test.go` `Test_run_sync_records_tim_hortons_variants_and_not_unrelated_payees`
 - [x] SCENARIO-27: categories that differ only in case, punctuation or a plural are similar — `cmd/quarry/run_sync_similar_categories_test.go` `Test_run_sync_records_similar_expense_categories_and_not_the_income_one`
-- [ ] SCENARIO-28: an unused category is reported only when nothing imported or counted uses it
+- [x] SCENARIO-28: an unused category is reported only when nothing imported or counted uses it — `cmd/quarry/run_sync_unused_category_test.go` `Test_run_sync_records_unused_categories_but_not_one_an_investment_or_budget_uses`
 
 ## Reference check
 Last step before the gate round (step 7), per the reference-check rule; not a BDD scenario because it has no Go acceptance test. Outcome recorded in `REFERENCE-CHECK.md` beside this file.

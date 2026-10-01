@@ -136,6 +136,11 @@ type SplitTag struct {
 
 // Rows is every row a store build writes, grouped by table. ImportRuns holds
 // the new build's run only; the store carries earlier runs forward itself.
+// ReferencedCategoryIDs is not a table: the category ids that rows the import
+// does not store as splits use (entries under a parent it does not import,
+// budget lines, loans, memorized-payee rules, products and services, customer
+// credits), deduplicated and sorted, nil when none. The store reads it for
+// detection and never persists it.
 type Rows struct {
 	Accounts     []Account
 	Categories   []Category
@@ -146,6 +151,8 @@ type Rows struct {
 	SplitTags    []SplitTag
 	Transfers    []Transfer
 	ImportRuns   []ImportRun
+
+	ReferencedCategoryIDs []string
 }
 
 // SnapshotRef identifies the snapshot a build reads: its absolute Path,
@@ -376,8 +383,8 @@ type FindingItem struct {
 	Currency       string
 	Closed, Active bool
 	Payee          string
-	Category       *string // an unlinked-transfer item's sole split's full path, nil if none or several; a mixed-categories or similar-categories item's category path
-	Splits         int     // an unlinked-transfer item's split count; a similar-categories item's category's splits
+	Category       *string // an unlinked-transfer item's sole split's full path, nil if none or several; a mixed-categories, similar-categories or unused-category item's category path
+	Splits         int     // an unlinked-transfer item's split count; a similar-categories item's category's splits; 0 for an unused-category item
 	Transactions   int     // a mixed-categories item's payee's transactions in its category, a payee-variants item's payee's transactions; 0 for every other type
 	Amount         int64
 	OtherAccount   *string

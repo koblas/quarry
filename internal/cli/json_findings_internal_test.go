@@ -225,3 +225,14 @@ func Test_renderFindingsJSON_leaves_splits_null_for_an_unlinked_transfer_item_th
 	assert.Contains(t, items[0], "splits")
 	assert.Nil(t, items[0]["splits"])
 }
+
+func Test_renderFindingsJSON_gives_an_unused_category_item_its_category_and_null_everything_else(t *testing.T) {
+	items := itemsJSON(t, finding.UnusedCategory, store.FindingItem{CategoryID: new("cat-40"), Category: new("Vacation")})
+
+	assert.Equal(t, map[string]any{
+		"transaction_id": nil, "split_id": nil, "payee_id": nil, "category_id": "cat-40",
+		"date": nil, "account_id": nil, "account": nil, "currency": nil,
+		"payee": nil, "category": "Vacation", "amount": nil,
+		"other_account": nil, "other_account_id": nil, "transactions": nil, "splits": nil,
+	}, items[0])
+}

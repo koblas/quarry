@@ -17,6 +17,7 @@ const (
 	PayeeVariantsQuery     = payeeVariantsQuery
 	SimilarCategoriesQuery = similarCategoriesQuery
 	UncategorizedQuery     = uncategorizedQuery
+	UnusedCategoryQuery    = unusedCategoryQuery
 	UnlinkedTransferQuery  = unlinkedTransferQuery
 )
 

@@ -52,8 +52,13 @@ func openerFailingOn(match string, err error) importer.SourceOpener {
 func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	catPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: new(int64(1))})
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true, LoanInterestCategory: catPK})
+	b.BudgetLineItem(v9fixture.BudgetLineItemRow{Category: catPK})
+	b.LoanSplitEntry(v9fixture.LoanSplitEntryRow{Category: catPK})
+	b.QuickfillRuleSplitEntry(v9fixture.QuickfillRuleSplitEntryRow{Category: catPK})
+	b.ProductService(v9fixture.ProductServiceRow{Category: catPK})
+	b.CustomerCreditLineItem(v9fixture.CustomerCreditLineItemRow{Category: catPK})
 	b.Payee(v9fixture.PayeeRow{Name: "Coffee Shop"})
 	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
@@ -78,6 +83,12 @@ func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
 		{"ZTRANSACTION", "ZPOSTEDDATE"},
 		{"ZCASHFLOWTRANSACTIONENTRY", "FROM ZCASHFLOWTRANSACTIONENTRY"},
 		{"Z_15USERTAGS", "Z_15USERTAGS"},
+		{"ZBUDGETLINEITEM", "FROM ZBUDGETLINEITEM"},
+		{"ZLOANSPLITENTRY", "FROM ZLOANSPLITENTRY"},
+		{"ZACCOUNT loan interest", "ZLOANINTERESTCATEGORY"},
+		{"ZQUICKFILLRULESPLITENTRY", "FROM ZQUICKFILLRULESPLITENTRY"},
+		{"ZPRODUCTSERVICE", "FROM ZPRODUCTSERVICE"},
+		{"ZCUSTOMERCREDITLINEITEM", "FROM ZCUSTOMERCREDITLINEITEM"},
 	}
 
 	for _, c := range cases {
@@ -126,8 +137,13 @@ func openerScanFailingOn(match string, err error) importer.SourceOpener {
 func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	catPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: new(int64(1))})
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true, LoanInterestCategory: catPK})
+	b.BudgetLineItem(v9fixture.BudgetLineItemRow{Category: catPK})
+	b.LoanSplitEntry(v9fixture.LoanSplitEntryRow{Category: catPK})
+	b.QuickfillRuleSplitEntry(v9fixture.QuickfillRuleSplitEntryRow{Category: catPK})
+	b.ProductService(v9fixture.ProductServiceRow{Category: catPK})
+	b.CustomerCreditLineItem(v9fixture.CustomerCreditLineItemRow{Category: catPK})
 	b.Payee(v9fixture.PayeeRow{Name: "Coffee Shop"})
 	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
@@ -152,6 +168,12 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 		{"ZTRANSACTION", "ZPOSTEDDATE"},
 		{"ZCASHFLOWTRANSACTIONENTRY", "FROM ZCASHFLOWTRANSACTIONENTRY"},
 		{"Z_15USERTAGS", "Z_15USERTAGS"},
+		{"ZBUDGETLINEITEM", "FROM ZBUDGETLINEITEM"},
+		{"ZLOANSPLITENTRY", "FROM ZLOANSPLITENTRY"},
+		{"ZACCOUNT loan interest", "ZLOANINTERESTCATEGORY"},
+		{"ZQUICKFILLRULESPLITENTRY", "FROM ZQUICKFILLRULESPLITENTRY"},
+		{"ZPRODUCTSERVICE", "FROM ZPRODUCTSERVICE"},
+		{"ZCUSTOMERCREDITLINEITEM", "FROM ZCUSTOMERCREDITLINEITEM"},
 	}
 
 	for _, c := range cases {

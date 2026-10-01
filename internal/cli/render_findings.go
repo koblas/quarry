@@ -116,10 +116,9 @@ func ignoredMarker(f report.ListedFinding, view findingsView) string {
 	return ""
 }
 
-// liveFindingLines is the rows of findings that are open or ignored, in order; a type without a
-// row layout gets one id line per finding.
+// liveFindingLines is the rows of findings that are open or ignored, in order.
 func liveFindingLines(typ finding.Type, findings []report.ListedFinding, view findingsView) []string {
-	switch typ { //nolint:exhaustive // the other types' rows arrive with their detectors
+	switch typ {
 	case finding.Duplicate:
 		return pairRows(findings, view, itemRows)
 	case finding.UnlinkedTransfer:
@@ -134,12 +133,10 @@ func liveFindingLines(typ finding.Type, findings []report.ListedFinding, view fi
 		return payeeVariantRows(findings, view)
 	case finding.SimilarCategories:
 		return similarCategoryRows(findings, view)
+	case finding.UnusedCategory:
+		return unusedCategoryRows(findings, view)
 	}
-	lines := make([]string, len(findings))
-	for i, f := range findings {
-		lines[i] = "  " + f.ID + ignoredMarker(f, view)
-	}
-	return lines
+	return nil // unreachable: the cases above cover every finding.Types() entry, and report.Findings groups only those
 }
 
 // pairRows is each finding's id line, with the ignored marker, then one four-space row per item as rowsOf lays them out.
@@ -325,6 +322,38 @@ func similarCategoryRows(findings []report.ListedFinding, view findingsView) []s
 		lines = append(lines, countRows(paths, counts)...)
 	}
 	return lines
+}
+
+// unusedCategoryRows renders one row per unused-category finding: its id padded to the widest, the category's path,
+// " (and N subcategories)" when it has any, then the ignored marker.
+func unusedCategoryRows(findings []report.ListedFinding, view findingsView) []string {
+	ids := make([]string, len(findings))
+	for i, f := range findings {
+		ids[i] = f.ID
+	}
+	idWidth := widestRunes(ids)
+
+	rows := make([]string, len(findings))
+	for i, f := range findings {
+		rows[i] = "  " + padRight(f.ID, idWidth) + "  " + topCategory(f.Items) + subcategoriesClause(len(f.Items)-1) + ignoredMarker(f, view)
+	}
+	return rows
+}
+
+// topCategory is the path of the first of items, the unused category itself.
+func topCategory(items []store.FindingItem) string {
+	if len(items) == 0 || items[0].Category == nil {
+		return "" // unreachable: an open unused-category finding always has its category as the first item, with the path joined from categories.full_path (NOT NULL, duckstore/schema.go:30)
+	}
+	return *items[0].Category
+}
+
+// subcategoriesClause is " (and N subcategories)", or nothing when n is below 1.
+func subcategoriesClause(n int) string {
+	if n < 1 {
+		return ""
+	}
+	return " (and " + humanize.Count(n, "subcategory", "subcategories") + ")"
 }
 
 // transactionsText is the sum of items' Transactions as "N transactions".

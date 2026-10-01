@@ -113,14 +113,6 @@ func Test_findingLines_ends_an_ignored_finding_with_a_marker_under_the_all_view(
 				"  uncategorized:payee-2  Bar     2 splits  2026-03-01 to 2026-03-05",
 			},
 		},
-		{
-			name: "a type with no row layout marks its id line",
-			group: report.FindingsGroup{Type: finding.UnusedCategory, Findings: []report.ListedFinding{
-				withStatus(openFinding(store.Finding{ID: "unused-category:cat-17", Type: finding.UnusedCategory}), finding.StatusIgnored),
-				openFinding(store.Finding{ID: "unused-category:cat-40", Type: finding.UnusedCategory}),
-			}},
-			want: []string{"  unused-category:cat-17  ignored", "  unused-category:cat-40"},
-		},
 	}
 
 	for _, c := range cases {
@@ -131,11 +123,11 @@ func Test_findingLines_ends_an_ignored_finding_with_a_marker_under_the_all_view(
 }
 
 func Test_findingLines_leaves_an_ignored_finding_unmarked_when_the_view_lists_only_ignored_ones(t *testing.T) {
-	group := report.FindingsGroup{Type: finding.UnusedCategory, Findings: []report.ListedFinding{
-		withStatus(openFinding(store.Finding{ID: "unused-category:cat-17", Type: finding.UnusedCategory}), finding.StatusIgnored),
+	group := report.FindingsGroup{Type: finding.Uncategorized, Findings: []report.ListedFinding{
+		withStatus(uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)), finding.StatusIgnored),
 	}}
 
-	assert.Equal(t, []string{"  unused-category:cat-17"}, findingLines(group, ignoredView))
+	assert.Equal(t, []string{"  uncategorized:payee-1  Amazon  1 split  2026-03-01"}, findingLines(group, ignoredView))
 }
 
 func Test_findingLines_shows_a_fixed_finding_as_one_unpadded_line_with_the_local_date_of_its_fixed_at(t *testing.T) {

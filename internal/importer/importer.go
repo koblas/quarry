@@ -91,8 +91,12 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	if err != nil {
 		return store.Result{}, err
 	}
-	splits, links, splitIDs, err := mapSplits(ctx, src, txnRefs, existingCategories, uncategorized, off)
+	refs := newCategoryRefs(existingCategories)
+	splits, links, splitIDs, err := mapSplits(ctx, src, txnRefs, existingCategories, uncategorized, refs, off)
 	if err != nil {
+		return store.Result{}, err
+	}
+	if err := readCategoryRefs(ctx, src, refs); err != nil {
 		return store.Result{}, err
 	}
 	splitTags, err := mapSplitTags(ctx, src, splitIDs, existingTags)
@@ -113,6 +117,7 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	rows := store.Rows{
 		Accounts: accounts, Categories: categories, Payees: payees, Tags: tags,
 		Transactions: transactions, Splits: splits, SplitTags: splitTags, Transfers: transfers,
+		ReferencedCategoryIDs: refs.ids(),
 	}
 	counts := store.Counts{
 		Accounts: len(accounts), Categories: len(categories), Payees: len(payees), Tags: len(tags),

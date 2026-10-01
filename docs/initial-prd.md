@@ -226,9 +226,10 @@ A thin wrapper over the core library, launched by the Claude desktop app as a lo
 | Same payee split across several categories without a pattern | Pick one category, or confirm the split is intended |
 | Transfer booked as income or expense (`unlinked-transfer`), or a one-sided transfer | Convert to a transfer between the two accounts |
 | Likely duplicates (same account, amount, date within 3 days), unless both are reconciled | Delete one, or mark as not a duplicate |
-| Near-duplicate or unused categories | Merge or delete the category |
+| Near-duplicate categories (`similar-categories`) or unused categories (`unused-category`) | Merge the near-duplicates; for an unused category, check that no scheduled transaction or budget uses it, then delete it |
 
 - Each item names the exact transactions (date, account, payee, amount) so they can be found in Quicken's register.
+- Safety rule for `unused-category`: a category counts as used when it, or any subcategory, is referenced anywhere `quarry` can see a reference: an imported split in any account (closed and excluded included), an investment or scheduled-transaction entry the importer counts but does not import, a budget line, a loan split or loan interest category, or a memorized-payee rule. Hidden categories, anything under a hidden category, and a category with a hidden subcategory are never reported. Where `quarry` cannot see a reference, the fix text tells the user to check first and then delete in Quicken; `quarry` never deletes anything.
 - Findings have a status: open, fixed (gone on re-import), or ignored (id listed in `findings.ignore`; remove it to list the finding again).
 
 ### Reporting currency and ACB

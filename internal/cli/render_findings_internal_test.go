@@ -233,31 +233,6 @@ func Test_renderFindings_shows_the_ignore_hint_only_when_asked_and_a_finding_is_
 	assert.NotContains(t, renderFindings(report.FindingsListing{}, openView, true), "Ignore a finding")
 }
 
-func Test_renderFindings_lists_one_id_per_finding_of_a_type_with_no_row_layout(t *testing.T) {
-	listing := report.FindingsListing{
-		Groups: []report.FindingsGroup{
-			{Type: finding.UnusedCategory, Findings: []report.ListedFinding{
-				openFinding(store.Finding{ID: "unused-category:cat-17", Type: finding.UnusedCategory}),
-				openFinding(store.Finding{ID: "unused-category:cat-40", Type: finding.UnusedCategory}),
-			}},
-			{Type: finding.Uncategorized, Findings: []report.ListedFinding{
-				uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)),
-			}},
-		},
-		Counts: finding.Counts{Open: 3},
-	}
-
-	got := renderFindings(listing, openView, false)
-
-	assert.Equal(t, "Unused categories (2): no transaction uses them; check that no scheduled transaction or budget does, then delete them in Quicken\n"+
-		"  unused-category:cat-17\n"+
-		"  unused-category:cat-40\n"+
-		"\n"+
-		"Uncategorized (1 payee, 1 split)"+uncategorizedFix+
-		"  uncategorized:payee-1  Amazon  1 split  2026-03-01\n"+
-		"\n3 open findings\n", got)
-}
-
 func Test_renderFindings_groups_the_thousands_of_a_group_header_count(t *testing.T) {
 	findings := make([]report.ListedFinding, 1204)
 	for i := range findings {

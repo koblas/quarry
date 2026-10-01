@@ -64,6 +64,11 @@ func similar(id string, counts ...int) store.Finding {
 	return f
 }
 
+// unused is an open unused-category finding whose first item is the category at path.
+func unused(id, path string) store.Finding {
+	return store.Finding{ID: id, Type: finding.UnusedCategory, Items: []store.FindingItem{{Category: &path}}}
+}
+
 func findingsOf(t *testing.T, fs ...store.Finding) report.FindingsListing {
 	t.Helper()
 	srv := report.NewServer(report.WithStore(fakeStore{findings: store.FindingList{Findings: fs}}))
@@ -174,12 +179,14 @@ func Test_findings_sorts_a_similar_categories_group_by_split_sum_descending_then
 	assert.Equal(t, []string{"similar-categories:d", "similar-categories:b", "similar-categories:c", "similar-categories:a"}, idsOf(got.Groups[0]))
 }
 
-func Test_findings_sorts_a_type_without_a_ruled_order_by_id(t *testing.T) {
+func Test_findings_sorts_unused_categories_by_path_ignoring_case_then_id(t *testing.T) {
 	got := findingsOf(t,
-		dated("unused-category:cat-9", finding.UnusedCategory),
-		dated("unused-category:cat-10", finding.UnusedCategory))
+		unused("unused-category:cat-1", "Bank"),
+		unused("unused-category:cat-9", "auto:parking"),
+		unused("unused-category:cat-20", "Zoo"),
+		unused("unused-category:cat-10", "Auto:Parking"))
 
-	assert.Equal(t, []string{"unused-category:cat-10", "unused-category:cat-9"}, idsOf(got.Groups[0]))
+	assert.Equal(t, []string{"unused-category:cat-10", "unused-category:cat-9", "unused-category:cat-1", "unused-category:cat-20"}, idsOf(got.Groups[0]))
 }
 
 func Test_findings_counts_ignored_and_fixed_findings_without_listing_them(t *testing.T) {

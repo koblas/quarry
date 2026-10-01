@@ -47,6 +47,7 @@ func uncategorizedPayeeBundle(categorized bool, amount string) (*v9fixture.Build
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	amazonPK := b.Payee(v9fixture.PayeeRow{Name: "Amazon"})
 	foodPK := b.Category(v9fixture.TagRow{Name: "Food", Type: new(int64(1))})
+	b.BudgetLineItem(v9fixture.BudgetLineItemRow{Category: foodPK})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	txn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: amount, PostedDate: &day, Payee: amazonPK})
 	entry := v9fixture.EntryRow{Parent: txn, Amount: amount}
@@ -257,6 +258,7 @@ func twoPayeeBundleKeys(xCategorized, yCategorized bool) (*v9fixture.Builder, in
 	xPK := b.Payee(v9fixture.PayeeRow{Name: "Amazon"})
 	yPK := b.Payee(v9fixture.PayeeRow{Name: "Landlord"})
 	foodPK := b.Category(v9fixture.TagRow{Name: "Food", Type: new(int64(1))})
+	b.BudgetLineItem(v9fixture.BudgetLineItemRow{Category: foodPK})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	// The amounts differ so the two transactions are not duplicates of each other.
 	for _, p := range []struct {

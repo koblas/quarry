@@ -48,6 +48,9 @@ type AccountRow struct {
 	// SimpleInvesting is ZSIMPLEINVESTING (linked account tracking): nil
 	// writes NULL, 0 off, 1 on.
 	SimpleInvesting *int64
+	// LoanInterestCategory is ZLOANINTERESTCATEGORY, a zero ref to a category
+	// tag (0 writes NULL).
+	LoanInterestCategory int64
 }
 
 // TransactionRow is one ZTRANSACTION row. Entity defaults to the Builder's
@@ -79,6 +82,41 @@ type EntryRow struct {
 	QuickenID   int64
 	Note        string
 	Deleted     bool
+}
+
+// BudgetLineItemRow is one ZBUDGETLINEITEM row. Category is a zero ref to a
+// category tag (0 writes NULL).
+type BudgetLineItemRow struct {
+	Category int64
+	Deleted  bool
+}
+
+// LoanSplitEntryRow is one ZLOANSPLITENTRY row. Category is a zero ref to a
+// category tag (0 writes NULL).
+type LoanSplitEntryRow struct {
+	Category int64
+	Deleted  bool
+}
+
+// QuickfillRuleSplitEntryRow is one ZQUICKFILLRULESPLITENTRY row. Category is
+// a zero ref to a category tag (0 writes NULL).
+type QuickfillRuleSplitEntryRow struct {
+	Category int64
+	Deleted  bool
+}
+
+// ProductServiceRow is one ZPRODUCTSERVICE row. Category is a zero ref to a
+// category tag (0 writes NULL).
+type ProductServiceRow struct {
+	Category int64
+	Deleted  bool
+}
+
+// CustomerCreditLineItemRow is one ZCUSTOMERCREDITLINEITEM row. Category is a
+// zero ref to a category tag (0 writes NULL).
+type CustomerCreditLineItemRow struct {
+	Category int64
+	Deleted  bool
 }
 
 // ReconcileRow is one ZRECONCILERECORD row. Account is a zero ref (0 writes
@@ -132,6 +170,11 @@ type Builder struct {
 	transactions []pkRow[TransactionRow]
 	entries      []pkRow[EntryRow]
 	reconciles   []pkRow[ReconcileRow]
+	budgetLines  []pkRow[BudgetLineItemRow]
+	loanSplits   []pkRow[LoanSplitEntryRow]
+	quickfills   []pkRow[QuickfillRuleSplitEntryRow]
+	products     []pkRow[ProductServiceRow]
+	creditLines  []pkRow[CustomerCreditLineItemRow]
 	tags         []pkRow[TagRow]
 	payees       []pkRow[PayeeRow]
 	institutions []pkRow[InstitutionRow]
@@ -204,6 +247,43 @@ func (b *Builder) Entry(row EntryRow) int64 {
 func (b *Builder) Reconcile(row ReconcileRow) int64 {
 	pk := b.nextPKFor("ZRECONCILERECORD")
 	b.reconciles = append(b.reconciles, pkRow[ReconcileRow]{pk: pk, row: row})
+	return pk
+}
+
+// BudgetLineItem adds row and returns its assigned ZBUDGETLINEITEM.Z_PK.
+func (b *Builder) BudgetLineItem(row BudgetLineItemRow) int64 {
+	pk := b.nextPKFor("ZBUDGETLINEITEM")
+	b.budgetLines = append(b.budgetLines, pkRow[BudgetLineItemRow]{pk: pk, row: row})
+	return pk
+}
+
+// LoanSplitEntry adds row and returns its assigned ZLOANSPLITENTRY.Z_PK.
+func (b *Builder) LoanSplitEntry(row LoanSplitEntryRow) int64 {
+	pk := b.nextPKFor("ZLOANSPLITENTRY")
+	b.loanSplits = append(b.loanSplits, pkRow[LoanSplitEntryRow]{pk: pk, row: row})
+	return pk
+}
+
+// QuickfillRuleSplitEntry adds row and returns its assigned
+// ZQUICKFILLRULESPLITENTRY.Z_PK.
+func (b *Builder) QuickfillRuleSplitEntry(row QuickfillRuleSplitEntryRow) int64 {
+	pk := b.nextPKFor("ZQUICKFILLRULESPLITENTRY")
+	b.quickfills = append(b.quickfills, pkRow[QuickfillRuleSplitEntryRow]{pk: pk, row: row})
+	return pk
+}
+
+// ProductService adds row and returns its assigned ZPRODUCTSERVICE.Z_PK.
+func (b *Builder) ProductService(row ProductServiceRow) int64 {
+	pk := b.nextPKFor("ZPRODUCTSERVICE")
+	b.products = append(b.products, pkRow[ProductServiceRow]{pk: pk, row: row})
+	return pk
+}
+
+// CustomerCreditLineItem adds row and returns its assigned
+// ZCUSTOMERCREDITLINEITEM.Z_PK.
+func (b *Builder) CustomerCreditLineItem(row CustomerCreditLineItemRow) int64 {
+	pk := b.nextPKFor("ZCUSTOMERCREDITLINEITEM")
+	b.creditLines = append(b.creditLines, pkRow[CustomerCreditLineItemRow]{pk: pk, row: row})
 	return pk
 }
 
@@ -301,9 +381,12 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 
 	for _, a := range b.accounts {
 		exec(tb, ctx, db,
-			"INSERT INTO ZACCOUNT (Z_PK, ZNAME, ZTYPENAME, ZCURRENCY, ZFINANCIALINSTITUTION, ZCLOSED, ZACTIVE, ZDELETIONCOUNT, ZUSEDINREPORTS, ZSIMPLEINVESTING) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			`INSERT INTO ZACCOUNT
+				(Z_PK, ZNAME, ZTYPENAME, ZCURRENCY, ZFINANCIALINSTITUTION, ZCLOSED, ZACTIVE, ZDELETIONCOUNT, ZUSEDINREPORTS, ZSIMPLEINVESTING, ZLOANINTERESTCATEGORY)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			a.pk, nullableString(a.row.Name), nullableString(a.row.Type), nullableString(a.row.Currency),
-			nullableRef(a.row.Institution), a.row.Closed, a.row.Active, deletionCount(a.row.Deleted), nullableInt(a.row.UsedInReports), nullableInt(a.row.SimpleInvesting))
+			nullableRef(a.row.Institution), a.row.Closed, a.row.Active, deletionCount(a.row.Deleted),
+			nullableInt(a.row.UsedInReports), nullableInt(a.row.SimpleInvesting), nullableRef(a.row.LoanInterestCategory))
 	}
 
 	for _, i := range b.institutions {
@@ -326,6 +409,36 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 			"INSERT INTO ZCASHFLOWTRANSACTIONENTRY (Z_PK, ZPARENT, ZAMOUNT, ZCATEGORYTAG, ZTRANSFER, ZQUICKENID, ZNOTE, ZDELETIONCOUNT) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 			e.pk, nullableRef(e.row.Parent), nullableString(e.row.Amount), nullableRef(e.row.CategoryTag), nullableString(e.row.Transfer),
 			e.row.QuickenID, nullableString(e.row.Note), deletionCount(e.row.Deleted))
+	}
+
+	for _, l := range b.budgetLines {
+		exec(tb, ctx, db,
+			"INSERT INTO ZBUDGETLINEITEM (Z_PK, ZCATEGORYTAG, ZDELETIONCOUNT) VALUES (?, ?, ?)",
+			l.pk, nullableRef(l.row.Category), deletionCount(l.row.Deleted))
+	}
+
+	for _, l := range b.loanSplits {
+		exec(tb, ctx, db,
+			"INSERT INTO ZLOANSPLITENTRY (Z_PK, ZCATEGORY, ZDELETIONCOUNT) VALUES (?, ?, ?)",
+			l.pk, nullableRef(l.row.Category), deletionCount(l.row.Deleted))
+	}
+
+	for _, q := range b.quickfills {
+		exec(tb, ctx, db,
+			"INSERT INTO ZQUICKFILLRULESPLITENTRY (Z_PK, ZCATEGORYTAG, ZDELETIONCOUNT) VALUES (?, ?, ?)",
+			q.pk, nullableRef(q.row.Category), deletionCount(q.row.Deleted))
+	}
+
+	for _, p := range b.products {
+		exec(tb, ctx, db,
+			"INSERT INTO ZPRODUCTSERVICE (Z_PK, ZCATEGORY, ZDELETIONCOUNT) VALUES (?, ?, ?)",
+			p.pk, nullableRef(p.row.Category), deletionCount(p.row.Deleted))
+	}
+
+	for _, c := range b.creditLines {
+		exec(tb, ctx, db,
+			"INSERT INTO ZCUSTOMERCREDITLINEITEM (Z_PK, ZCATEGORY, ZDELETIONCOUNT) VALUES (?, ?, ?)",
+			c.pk, nullableRef(c.row.Category), deletionCount(c.row.Deleted))
 	}
 
 	for _, r := range b.reconciles {

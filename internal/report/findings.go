@@ -144,9 +144,9 @@ func statusRank(s finding.Status) int {
 
 // findingOrder is the display order of typ's open and ignored findings: newest item date for transfers and
 // duplicates, size then payee for uncategorized and mixed, transactions for payee-variants, splits for
-// similar-categories, else id.
+// similar-categories, category path for unused-category.
 func findingOrder(typ finding.Type) func(a, b store.Finding) int {
-	switch typ { //nolint:exhaustive // every other type sorts by id
+	switch typ {
 	case finding.Duplicate, finding.UnlinkedTransfer, finding.OneSidedTransfer:
 		return func(a, b store.Finding) int {
 			return cmp.Or(latestDate(b).Compare(latestDate(a)), cmp.Compare(a.ID, b.ID))
@@ -175,8 +175,12 @@ func findingOrder(typ finding.Type) func(a, b store.Finding) int {
 		return func(a, b store.Finding) int {
 			return cmp.Or(cmp.Compare(splitsOf(b), splitsOf(a)), cmp.Compare(a.ID, b.ID))
 		}
+	case finding.UnusedCategory:
+		return func(a, b store.Finding) int {
+			return cmp.Or(cmp.Compare(strings.ToLower(categoryOf(a)), strings.ToLower(categoryOf(b))), cmp.Compare(a.ID, b.ID))
+		}
 	}
-	return func(a, b store.Finding) int { return cmp.Compare(a.ID, b.ID) }
+	return func(a, b store.Finding) int { return cmp.Compare(a.ID, b.ID) } // unreachable: the cases above cover every finding.Types() entry, and knownFindings drops rows of any other type
 }
 
 // transactionsOf is the sum of f's items' Transactions.
@@ -206,6 +210,14 @@ func latestDate(f store.Finding) time.Time {
 		}
 	}
 	return latest
+}
+
+// categoryOf is the path of f's first item, the unused category itself; "" when f has none.
+func categoryOf(f store.Finding) string {
+	if len(f.Items) == 0 || f.Items[0].Category == nil {
+		return "" // unreachable: an open unused-category finding always has its category as the first item, with the path joined from categories.full_path (NOT NULL)
+	}
+	return *f.Items[0].Category
 }
 
 // payeeOf is the payee name of f's first item; every item of an uncategorized or mixed-categories finding shares it.
