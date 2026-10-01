@@ -6,14 +6,17 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/koblas/quarry/internal/fx"
+	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -52,9 +55,18 @@ func legacyDown(current fakeValet) http.RoundTripper {
 // syncCapturing runs quarry sync with args, fetching rates through bank, and returns exit code, stdout and stderr.
 func syncCapturing(t *testing.T, bank http.RoundTripper, args ...string) (int, string, string) {
 	t.Helper()
+	return syncCapturingRemoving(t, bank, os.Remove, args...)
+}
+
+// syncCapturingRemoving is syncCapturing with the Server deleting snapshots through remove.
+func syncCapturingRemoving(t *testing.T, bank http.RoundTripper, remove func(string) error, args ...string) (int, string, string) {
+	t.Helper()
 	var stdout, stderr bytes.Buffer
 	env := defaultEnv(&stdout, &stderr)
-	env.NewServer = newServerFactory(duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(&http.Client{Transport: bank}))))
+	base := newServerFactory(duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(&http.Client{Transport: bank}))))
+	env.NewServer = func(ctx context.Context, opts ...snapshot.Option) (*snapshot.Server, error) {
+		return base(ctx, append(opts, snapshot.WithRemove(remove))...)
+	}
 
 	exitCode := runWith(context.Background(), append([]string{"sync"}, args...), env)
 
@@ -83,6 +95,7 @@ const (
 	rateDates         = "date\n2017-01-03\n2017-01-04\n"
 	noRateDates       = "date\n"
 	notRefreshedLine  = "Rates     USD/CAD 2017-01-03 to 2017-01-04 (not refreshed; see warning)"
+	partialLine       = "Rates     USD/CAD 2017-01-03 to 2017-01-04 (2 new, not all fetched; see warning)"
 	notFetchedLine    = "Rates     none (not fetched; see warning)"
 )
 
@@ -91,45 +104,67 @@ func januaryBank() fakeValet {
 	return fakeValet{"FXUSDCAD": {"2017-01-03": "1.3435", "2017-01-04": "1.3315"}}
 }
 
-func Test_run_sync_warns_and_swaps_the_store_in_when_the_rate_fetch_fails(t *testing.T) {
-	cases := []struct {
-		name        string
-		days        []time.Time
-		earlier     []fakeValet // banks of syncs that succeed before the failing one
-		bank        http.RoundTripper
-		ratesLines  []string // empty leaves the Rates line unpinned
-		warning     string
-		reason      string
-		storedDates string
-	}{
+// fetchFailureCase is one way the rate fetch falls short, with what a sync prints and records for it.
+type fetchFailureCase struct {
+	name       string
+	days       []time.Time
+	earlier    []fakeValet // banks of syncs that succeed before the failing one
+	bank       http.RoundTripper
+	ratesLine  string
+	warning    string
+	reason     string
+	ratesJSON  string // the store.rates member of --json
+	storedDate string
+}
+
+// ratesJSON is the store.rates member for a store holding first to last, "" for none.
+func ratesJSON(first, last string, added int, reason string) string {
+	quoted := func(s string) string {
+		if s == "" {
+			return "null"
+		}
+		return `"` + s + `"`
+	}
+	return fmt.Sprintf(`{"first":%s,"last":%s,"added":%d,"fetch_error":%q}`, quoted(first), quoted(last), added, reason)
+}
+
+func fetchFailureCases() []fetchFailureCase {
+	return []fetchFailureCase{
 		{
 			name: "bank unreachable, nothing stored", days: []time.Time{januaryDay(3)},
-			bank:       failing(&net.OpError{Op: "dial", Net: "tcp", Err: errConnectionRefused}),
-			ratesLines: []string{notFetchedLine}, warning: noRatesPrefix + cannotReach + nothingStoredTail, reason: cannotReach, storedDates: noRateDates,
+			bank:      failing(&net.OpError{Op: "dial", Net: "tcp", Err: errConnectionRefused}),
+			ratesLine: notFetchedLine, warning: noRatesPrefix + cannotReach + nothingStoredTail, reason: cannotReach,
+			ratesJSON: ratesJSON("", "", 0, cannotReach), storedDate: noRateDates,
 		},
 		{
 			name: "request timed out, earlier rates kept", days: []time.Time{januaryDay(3)}, earlier: []fakeValet{januaryBank()},
-			bank:       failing(context.DeadlineExceeded),
-			ratesLines: []string{notRefreshedLine}, warning: noRatesPrefix + noAnswerInTime + nothingNewTail, reason: noAnswerInTime, storedDates: rateDates,
+			bank:      failing(context.DeadlineExceeded),
+			ratesLine: notRefreshedLine, warning: noRatesPrefix + noAnswerInTime + nothingNewTail, reason: noAnswerInTime,
+			ratesJSON: ratesJSON("2017-01-03", "2017-01-04", 0, noAnswerInTime), storedDate: rateDates,
 		},
 		{
 			name: "HTTP 503, earlier rates kept", days: []time.Time{januaryDay(3)}, earlier: []fakeValet{januaryBank()},
-			bank:       answering(http.StatusServiceUnavailable, ""),
-			ratesLines: []string{notRefreshedLine}, warning: noRatesPrefix + answered503 + nothingNewTail, reason: answered503, storedDates: rateDates,
+			bank:      answering(http.StatusServiceUnavailable, ""),
+			ratesLine: notRefreshedLine, warning: noRatesPrefix + answered503 + nothingNewTail, reason: answered503,
+			ratesJSON: ratesJSON("2017-01-03", "2017-01-04", 0, answered503), storedDate: rateDates,
 		},
 		{
 			name: "answer is not a list of rates, nothing stored", days: []time.Time{januaryDay(3)},
-			bank:       answering(http.StatusOK, "<html>maintenance</html>"),
-			ratesLines: []string{notFetchedLine}, warning: noRatesPrefix + notAList + nothingStoredTail, reason: notAList, storedDates: noRateDates,
+			bank:      answering(http.StatusOK, "<html>maintenance</html>"),
+			ratesLine: notFetchedLine, warning: noRatesPrefix + notAList + nothingStoredTail, reason: notAList,
+			ratesJSON: ratesJSON("", "", 0, notAList), storedDate: noRateDates,
 		},
 		{
 			name: "partial range, the current series kept", days: []time.Time{time.Date(2016, time.December, 30, 0, 0, 0, 0, time.UTC)},
-			bank:    legacyDown(januaryBank()),
-			warning: partialPrefix + answered503 + partialTail, reason: answered503, storedDates: rateDates,
+			bank:      legacyDown(januaryBank()),
+			ratesLine: partialLine, warning: partialPrefix + answered503 + partialTail, reason: answered503,
+			ratesJSON: ratesJSON("2017-01-03", "2017-01-04", 2, answered503), storedDate: rateDates,
 		},
 	}
+}
 
-	for _, c := range cases {
+func Test_run_sync_warns_and_swaps_the_store_in_when_the_rate_fetch_fails(t *testing.T) {
+	for _, c := range fetchFailureCases() {
 		t.Run(c.name, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
@@ -141,12 +176,10 @@ func Test_run_sync_warns_and_swaps_the_store_in_when_the_rate_fetch_fails(t *tes
 			exitCode, stdout, stderr := syncCapturing(t, c.bank, "--quicken", bundle.Dir)
 
 			require.Equal(t, 0, exitCode, stderr)
-			assert.Contains(t, strings.Split(stderr, "\n"), "quarry: warning: "+c.warning)
-			assert.Equal(t, c.storedDates, storedRateDates(t))
+			assert.Equal(t, "quarry: warning: "+c.warning+"\n", stderr)
+			assert.Equal(t, c.storedDate, storedRateDates(t))
 			assert.Equal(t, "rates_fetch_error\n"+c.reason+"\n", lastFetchError(t))
-			for _, line := range c.ratesLines {
-				assert.Contains(t, strings.Split(stdout, "\n"), line)
-			}
+			assert.Contains(t, strings.Split(stdout, "\n"), c.ratesLine)
 		})
 	}
 }

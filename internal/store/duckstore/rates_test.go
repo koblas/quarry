@@ -183,6 +183,19 @@ func Test_replace_does_no_build_work_after_a_rate_fetch_the_context_interrupted(
 	assert.Equal(t, before, after)
 }
 
+func Test_replace_asks_for_no_rates_when_the_build_fails(t *testing.T) {
+	t.Parallel()
+	src := &fakeRates{refresh: store.RatesRefresh{Rates: []store.Rate{ratesOn(13, 1_250_000, "IEXE0101")}}}
+	st := newFaultStore(t.TempDir(), &faultDB{appendFaultTable: "transactions", appendFault: &duckdbdriver.Error{
+		Type: duckdbdriver.ErrorTypeConstraint, Msg: "Constraint Error: Duplicate key violates primary key constraint.",
+	}}, duckstore.WithRates(src))
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.ErrorContains(t, err, "load transactions")
+	assert.Empty(t, src.requests)
+}
+
 func Test_replace_keeps_the_previous_store_when_the_rates_cannot_be_written(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

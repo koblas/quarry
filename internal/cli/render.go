@@ -99,7 +99,7 @@ func renderStore(result store.Result, home string) string {
 	return b.String()
 }
 
-// ratesPhrase renders the rates a build stored: the span with "(N new)" or "(up to date)", or why there are none.
+// ratesPhrase renders the rates a build stored: the span with "(N new)", "(up to date)" or a failed-fetch clause, or why there are none.
 // transactions tells an empty store apart from one the Bank of Canada has no rates for.
 func ratesPhrase(rates store.RatesSummary, transactions int) string {
 	if rates.First.IsZero() {
@@ -107,6 +107,8 @@ func ratesPhrase(rates store.RatesSummary, transactions int) string {
 	}
 	span := "USD/CAD " + rates.First.Format(jsonDateLayout) + " to " + rates.Last.Format(jsonDateLayout)
 	switch {
+	case rates.Partial:
+		return span + " (" + humanize.Thousands(rates.Added) + " new, not all fetched; see warning)"
 	case rates.FetchError != "":
 		return span + " (not refreshed; see warning)"
 	case rates.Added > 0:

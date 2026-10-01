@@ -324,6 +324,18 @@ func Test_ratesPhrase(t *testing.T) {
 			name: "rates stored, the fetch failed", rates: store.RatesSummary{First: first, Last: last, FetchError: "unreachable"}, transactions: 5,
 			want: "USD/CAD 2005-03-01 to 2026-03-01 (not refreshed; see warning)",
 		},
+		{
+			name: "some rates fetched, the rest not", rates: store.RatesSummary{First: first, Last: last, Added: 12, FetchError: "unreachable", Partial: true}, transactions: 5,
+			want: "USD/CAD 2005-03-01 to 2026-03-01 (12 new, not all fetched; see warning)",
+		},
+		{
+			name: "one rate fetched, the rest not", rates: store.RatesSummary{First: first, Last: last, Added: 1, FetchError: "unreachable", Partial: true}, transactions: 5,
+			want: "USD/CAD 2005-03-01 to 2026-03-01 (1 new, not all fetched; see warning)",
+		},
+		{
+			name: "thousands of rates fetched, the rest not", rates: store.RatesSummary{First: first, Last: last, Added: 6012, FetchError: "unreachable", Partial: true}, transactions: 5,
+			want: "USD/CAD 2005-03-01 to 2026-03-01 (6,012 new, not all fetched; see warning)",
+		},
 		{name: "no rates, no transactions", transactions: 0, want: "none (no transactions to convert)"},
 		{name: "no rates, transactions exist", transactions: 1, want: "none (the Bank of Canada has no rates for your transaction dates)"},
 		{name: "no rates, the fetch failed", rates: store.RatesSummary{FetchError: "unreachable"}, transactions: 1, want: "none (not fetched; see warning)"},

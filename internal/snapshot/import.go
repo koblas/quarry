@@ -37,6 +37,8 @@ type Outcome struct {
 	findingsWarning string
 	// ratesWarning is the warning for a built store whose previous exchange rates could not be carried forward.
 	ratesWarning string
+	// fetchWarning is the warning for a built store whose exchange-rate fetch fell short; empty when it did not.
+	fetchWarning string
 	// pruneWarning is the warning for a snapshots folder auto-prune could not list, and
 	// pruneWarningAbsolute the same warning naming the folder by its absolute path.
 	pruneWarning, pruneWarningAbsolute string
@@ -44,7 +46,7 @@ type Outcome struct {
 
 // Warnings returns every warning o carries, without the "quarry: warning: "
 // prefix: the manifest's own, then, for a built store only, the import-history
-// restart, findings restart, exchange-rates restart and auto-prune warnings, in that order.
+// restart, findings restart, exchange-rates restart, rate-fetch and auto-prune warnings, in that order.
 func (o Outcome) Warnings() []string { return o.warnings(o.pruneWarning) }
 
 // warnings is Warnings with listWarning as the warning for a snapshots folder that could not be listed.
@@ -61,6 +63,9 @@ func (o Outcome) warnings(listWarning string) []string {
 	}
 	if o.ratesWarning != "" {
 		warnings = append(slices.Clip(warnings), o.ratesWarning)
+	}
+	if o.fetchWarning != "" {
+		warnings = append(slices.Clip(warnings), o.fetchWarning)
 	}
 	return append(slices.Clip(warnings), o.pruneWarnings(listWarning)...)
 }
@@ -87,6 +92,27 @@ func ratesRestartWarning(reason string) string {
 // so none of its import history, findings or exchange rates were carried.
 func combinedCarryWarning(reason string) string {
 	return "cannot carry import history, findings or exchange rates forward from the previous store (" + reason + "); all three start again with this sync"
+}
+
+// fetchWarning renders the warning for a rate fetch that fell short of rates, "" when it did not.
+// A partial fetch kept some rates; otherwise the store holds the rates it had, or none.
+func fetchWarning(rates store.RatesSummary) string {
+	if rates.FetchError == "" {
+		return ""
+	}
+	span := rates.First.Format(time.DateOnly) + " to " + rates.Last.Format(time.DateOnly)
+	switch {
+	case rates.Partial:
+		return "could not fetch every exchange rate from the Bank of Canada: " + rates.FetchError +
+			"; the store has rates from " + span + "; run quarry sync again to fetch the rest"
+	case rates.First.IsZero():
+		return "could not fetch exchange rates from the Bank of Canada: " + rates.FetchError +
+			"; the store has no rates, so reports list amounts in each account's own currency; run quarry sync again to retry"
+	default:
+		return "could not fetch exchange rates from the Bank of Canada: " + rates.FetchError +
+			"; the store has rates from " + span + ", and later dates convert at the " + rates.Last.Format(time.DateOnly) +
+			" rate; run quarry sync again to retry"
+	}
 }
 
 // carryWarnings maps a built store's carry faults to the history, findings and rates warnings they print.
@@ -164,6 +190,7 @@ func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome
 	result.Findings = finding.Classify(result.FindingStates, s.ignore).Counts
 	outcome := Outcome{Manifest: manifest, Store: &result}
 	outcome.historyWarning, outcome.findingsWarning, outcome.ratesWarning = carryWarnings(result, homepath.Abbreviate(s.home, s.storeProbe.Path()))
+	outcome.fetchWarning = fetchWarning(result.Rates)
 	err = s.autoPrune(ctx, &outcome)
 	return outcome, err
 }
