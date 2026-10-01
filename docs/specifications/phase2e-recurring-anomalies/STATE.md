@@ -52,3 +52,4 @@
 - Checkpoint 19 NIT: `internal/cli/anomalies_json_test.go:21` `payeeHistory` doc says "three charges" (variadic)
 - Orchestrator: recurring Payee column has no width cap — one long payee widens the table to ~77 cols on the real file; raise at the final product-vision pass (unowned)
 - Gate R1 deferred (REVIEW-01): refactor MINORs (Long hard-codes policy numbers; wire words reuse display maps; positional `cadenceRules`; `Server.Anomalies` compose; duplicate command consts; split-category rule in two mappers; tenths/percent consts; `steady()` placement); int64 overflow (unreachable); test-A NITs; cmd oracle duplication; R2/R3 cmd rows for new commands
+- Gate R2 NIT: `internal/cli/report_clock_test.go:41-48` fixture loop in test body
