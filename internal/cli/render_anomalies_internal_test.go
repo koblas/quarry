@@ -95,6 +95,18 @@ func Test_renderAnomalies_groups_thousands_in_the_earlier_count(t *testing.T) {
 	assert.Contains(t, got, "payee, 1,204 earlier\n")
 }
 
+func Test_renderAnomalies_names_the_category_as_the_baseline_of_a_charge_judged_by_it(t *testing.T) {
+	an := anomalyOf(nil, &store.ChargeCategory{Path: "Home"}, 1)
+	an.Baseline, an.Earlier = report.BaselineCategory, 212
+
+	got := renderAnomalies(listed(an))
+
+	assert.Equal(t, anomaliesCaption+
+		"Date        Account         Payee       Category  Amount  Usual  Times  Compared with\n"+
+		"2026-03-02  Chequing (CAD)  (no payee)  Home      412.00  96.05   4.3x  category, 212 earlier\n"+
+		"\n1 charge checked\n", got)
+}
+
 func Test_renderAnomalies_without_a_listing_prints_the_caption_header_and_footer(t *testing.T) {
 	got := renderAnomalies(report.Anomalies{Window: spendingWindow()})
 

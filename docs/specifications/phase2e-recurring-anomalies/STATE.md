@@ -1,6 +1,6 @@
 # phase2e-recurring-anomalies — current state
 
-Scenarios complete: SCENARIO-01..16 (02-04 folded into 01, 06 into 05, 08-10 into 07, 12-13 into 11, 15-16 into 14). Last updated by SCENARIO-14.
+Scenarios complete: SCENARIO-01..18 (02-04 folded into 01, 06 into 05, 08-10 into 07, 12-13 into 11, 15-16 into 14, 18 into 17). Last updated by SCENARIO-17.
 
 ## Binding decisions
 - One port method `report.Store.Charges(ctx, store.ChargeParams{Through, AccountIDs})` returns `store.Charges{Rows []Charge, Transactions TransactionRange}`: no window; `Rows` are never filtered by account; `Transactions` is the whole store's span, or with `AccountIDs` set the span of those reported accounts only (spend's E1a range, so E1a/E2a say "their transactions"). Anomalies (S14 built, S17/S20 extend) read this single call; reopening it reopens three fakes, the adapter and the `cmd/quarry/run.go:29` guard (SCENARIO-01, SCENARIO-11)
@@ -25,10 +25,10 @@ Scenarios complete: SCENARIO-01..16 (02-04 folded into 01, 06 into 05, 08-10 int
 - Ruled at S14 planning (product-vision, three): (1) `not_judged` = in-window charges of 100.00 or more with no baseline; a charge under 100.00 is judged by the floor and never counted (spec P2e-13); (2) empty-window warning only when `checked` = 0 (subject `unusually large charges`), none when charges exist but none is unusual (stderr empty, `warnings` `[]`); (3) NULL payee reads `(no payee)` in text and `null` in `--json` `payee`; `checked` includes NULL-payee charges (SCENARIO-14)
 - Category cell is one shared helper `categoryText(splits, path)` (findings + anomalies): `(split)` when splits > 1, else `(uncategorized)` when no category, else escaped path; findings' pins unchanged control (SCENARIO-14)
 - Interim until S19/S20: `anomalies --json` prints the text table (`emitReport(cmd, false, []string{}, nil, text)`), and `--account` is bound for help only (`Accounts` passed, ignored; caption always says "all accounts") (SCENARIO-14)
+- Category baseline (`AnomalyCategoryMinHistory` 10, `AnomalyCategoryMultiplier` 5, `BaselineCategory`, cell `category, N earlier`): history = any payee, any account, any date strictly before, same `Category.ID` and currency (`categoryKey`; `categoryCharges` binary-searches strictly earlier). Payee baseline wins whenever the payee has >= 3 earlier charges, else category when >= 10. `Category == nil` (uncategorized or multi-category) is neither judged by category nor history; two splits of one category count. A NULL-payee charge is listed via category as `(no payee)`. Rule in integer cents like the payee rule (SCENARIO-17)
 - Window-flag help is per report (`reportFlagHelp`): spend/cashflow `transactionFlagHelp`, recurring and anomalies own strings; pinned by `Test_each_reports_window_flags_describe_what_it_does_with_them` (SCENARIO-14)
 
 ## Left unbuilt
-- `BaselineCategory`, `AnomalyCategoryMinHistory`, `AnomalyCategoryMultiplier`, the `category, N earlier` cell (hook: `anomaliesBaselineWord`, `render_anomalies.go`) — S17
 - `renderAnomaliesJSON` and the `jsonOut` parameter of `newAnomaliesCommand` — S19
 - `AnomaliesRequest.Accounts` honoured: `namedAccounts`, listing filter, W2/W3, E1/E2 `anomaliesWarnings` via `appendEmptyWindowWarning`; caption naming accounts — S20
 - `run_read_usage_test.go:42` / `run_read_refusals_test.go:55,171` anomalies rows (U8, R1, I1) — S20
@@ -39,8 +39,8 @@ Scenarios complete: SCENARIO-01..16 (02-04 folded into 01, 06 into 05, 08-10 int
 - `fakeStore` / `fakeReportStore` methods have value receivers, so counters need pointer fields (`accountsReads` precedent) (SCENARIO-01)
 - A store fault through `Server.Recurring` is a `RefusalError` only for recognised kinds; the cli test asserts `ErrorIs`, exit 1 comes from `Execute` unwrapping `runtimeError` (SCENARIO-01)
 
-- Not_judged fixtures need `Category == nil`: a one-category fixture becomes category-judged in S17 and breaks S14's pins (SCENARIO-14)
-- Payee cell dereferences a non-nil payee (nil reads `""` so `payeeLabel` gives `(no payee)`); only S17's category baseline can list a NULL-payee charge (SCENARIO-14)
+- Not_judged fixtures need `Category == nil`: a charge with a category and >= 10 earlier same-category charges is category-judged, not counted as not judged (SCENARIO-14, SCENARIO-17)
+- Payee cell dereferences a non-nil payee (nil reads `""` so `payeeLabel` gives `(no payee)`); only the category baseline can list a NULL-payee charge, so S19 JSON `payee` must be `null` there (SCENARIO-14, SCENARIO-17)
 - `Charges.Rows` run through today only: `--until` past today lists nothing extra, but `checked` uses the request window, not today (SCENARIO-14)
 - `-run` patterns are case-sensitive: the plan's `Anomal` misses `Test_run_anomalies_*` in `cmd/quarry`; use `anomal|Anomal` in narrow loops (SCENARIO-14)
 
@@ -49,5 +49,5 @@ Scenarios complete: SCENARIO-01..16 (02-04 folded into 01, 06 into 05, 08-10 int
 - Reference check on the real Quicken file after SCENARIO-22, before the gate round (`REFERENCE-CHECK.md`) — unowned until the architect schedules it; dies unless run
 - Checkpoint (5a) MINOR/NIT findings for SCENARIO-01, if any, are recorded here by the orchestrator
 - Checkpoint 05 MINOR: `cmd/quarry/run_recurring_state_test.go:19-40` `quietSeriesOutput` asserts inside the helper and returns three unnamed strings — return a struct or move the assertions to test bodies
-- Checkpoint 14 MINORs: `internal/report/anomalies.go:60` `NotJudged` doc must say "of 100.00 or more"; no stdout-write-fault test for `anomalies` or `recurring` (`failingWriter`, mirror `spend_test.go:144`); `internal/cli/report_help_test.go:170-172` flag-help regexps unanchored; anomalies Through not pinned to the local civil date (non-UTC `Now`); `render_findings.go:163-165` `categoryCell` doc restates `categoryText` — one line. S20 owns flipping `Test_anomalies_without_charges_prints_the_empty_table_and_footer` to expect E1 and pinning "charges exist, none unusual → no warning"
+- Checkpoint 14 MINORs: no stdout-write-fault test for `anomalies` or `recurring` (`failingWriter`, mirror `spend_test.go:144`); `internal/cli/report_help_test.go:170-172` flag-help regexps unanchored; anomalies Through not pinned to the local civil date (non-UTC `Now`); `render_findings.go:163-165` `categoryCell` doc restates `categoryText` — one line. S20 owns flipping `Test_anomalies_without_charges_prints_the_empty_table_and_footer` to expect E1 and pinning "charges exist, none unusual → no warning"
 - Orchestrator: `internal/platform/duckdb` `Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration` (`exec_query_test.go:170`) flaked twice under a loaded full `-coverpkg` run (passes alone) — watch at the gate (unowned)

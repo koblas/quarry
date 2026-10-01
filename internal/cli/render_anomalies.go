@@ -15,7 +15,8 @@ var anomaliesAligns = []tableAlign{
 
 // anomaliesBaselineWord is the word of each baseline in the Compared with cell.
 var anomaliesBaselineWord = map[report.AnomalyBaseline]string{
-	report.BaselinePayee: "payee",
+	report.BaselinePayee:    "payee",
+	report.BaselineCategory: "category",
 }
 
 // renderAnomalies renders a as the anomalies table (caption, header, one row per listed charge), a
