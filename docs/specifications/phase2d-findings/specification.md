@@ -16,7 +16,7 @@
 - P2d-3 (status, one core function, never stored): `fixed_at` set → `fixed` (even when ignored); else id in `findings.ignore` → `ignored`; else → `open`.
 - P2d-4 (lifecycle): detected = present in this build's detection. A carried finding not detected gets `fixed_at` = this build's `store_info.built_at`; a fixed finding keeps its row forever, items gone. A fixed finding detected again: `fixed_at` cleared, `first_found_at` kept, not counted `new`. `new` = open findings with `first_found_at` = latest `built_at`; `newly_fixed` = findings with `fixed_at` = latest `built_at`. An ignore decision sticks to the id whatever its items become. Time is recorded as timestamps, not run ids.
 - P2d-5 (detection): runs inside the build after validation, on the build file (like views), for `sync` and `sync --from`. A fault in detection is a build fault (existing build refusals, previous store untouched, exit 1). Open findings never make sync exit non-zero.
-- P2d-6 (carry): findings carried from the previous store through the 2c carry seam (read-only, before the build file exists). Previous store has no `findings` table (format 3) → silent, history starts; no previous store → silent (CF1). Carry faults → warnings (see Surface & Copy), build proceeds; after a carry fault nothing is marked fixed and the sync line drops `(M new)` and the fixed clause.
+- P2d-6 (carry): findings carried from the previous store through the 2c carry seam (read-only, before the build file exists). Previous store has no `findings` table (format 3) → silent, history starts; no previous store → silent (CF1). Carry faults → warnings (see Surface & Copy), build proceeds; after a findings carry fault (the previous store unreadable, or its `findings` table faulty) nothing is marked fixed and the sync line drops `(M new)` and the fixed clause; an `import_runs`-only fault carries findings as usual (final pass).
 - P2d-7 (types, one owner per rule, never re-derived):
   - `duplicate`: two transactions in the same account, equal non-zero `transactions.amount`, |d1 − d2| ≤ 3 days inclusive; excluded when both have status `reconciled`. Every account (closed, excluded-from-reports, linked-tracking included), transfer legs included, payee ignored. 3+ matches → one finding per pair. ID `duplicate:txn-A+txn-B`; items: 2 rows (`transaction_id`).
   - `one-sided-transfer`: exactly `transfers.to_split_id IS NULL` (same set as `sync --json` `store.transfers.one_sided`); every account. ID `one-sided-transfer:xfer-N`; items: 1 row (`transaction_id`, `split_id` of the from-split).
@@ -115,10 +115,10 @@ prints one row per item, for a spreadsheet.
 - Flags (local to `findings`):
   - `--status` default `open`; source ``"show only findings whose status is `status`: open, ignored, fixed or all"`` → renders `--status status   show only findings whose status is status: open, ignored, fixed or all (default "open")`.
   - `--type` default empty; source ``"show only findings of this `type`: duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, payee-variants, similar-categories or unused-category"`` → `--type type`.
-  - `--csv`: `"print one row per transaction or split as CSV"`.
+  - `--csv`: `"print one row per transaction, split, payee or category as CSV"` (amended at the final pass).
 - Group order (text, JSON, CSV): `duplicate`, `one-sided-transfer`, `unlinked-transfer`, `uncategorized`, `mixed-categories`, `payee-variants`, `similar-categories`, `unused-category`; blank line between groups.
 - Sort within groups: duplicate / unlinked-transfer — the pair's later date descending, then id; one-sided — date descending, then id; uncategorized — split count descending, then payee name case-insensitive, then id; mixed-categories — transactions descending, then payee name case-insensitive, then id; payee-variants — total transactions descending, then id; similar-categories — total splits descending, then id; unused-category — `full_path` case-insensitive, then id; fixed findings — `fixed_at` descending, then id.
-- Layout: two-space gaps, no trailing spaces; amounts `formatMoney`, right-aligned per column; account labels `accountLabel`; payees `payeeLabel`; no CAD+USD sums; uncategorized rows carry no amount.
+- Layout: two-space gaps, no trailing spaces; text cells escape `\n`, `\t`, `\r` as the `sql` table does (one escaper; `--json`/`--csv` stay raw; final pass); amounts `formatMoney`, right-aligned per column; account labels `accountLabel`; payees `payeeLabel`; no CAD+USD sums; uncategorized rows carry no amount.
 - Fix table (one table in the core library; JSON `fix` = sentence; text header = group form after `: `, shown only when the group lists ≥ 1 open finding):
 
 | Type | JSON `fix` | Text header |
@@ -230,7 +230,7 @@ Ignore a finding by adding its id to findings.ignore in ~/Library/Application Su
   "warnings": []
 }
 ```
-  `type` = `--type` value or null; `counts` follows `--type`, not `--status`; item keys always present, null where not applicable; amounts are strings; `transactions`/`splits` are counts for payee and category items; a fixed finding has `"items": []`.
+  `type` = `--type` value or null; `counts` follows `--type`, not `--status`; item keys always present, null where not applicable; amounts are strings; `transactions`/`splits` are counts for payee and category items; a fixed finding has `"items": []`. For unlinked-transfer items, `category` is null when the transaction has no category or has more than one split; text shows `(uncategorized)` or `(split)` (final pass). Config warnings (C3, W1, status bad-config) in every command's `--json` `warnings[]` name `<config>` by its absolute path; stderr keeps `~` (final pass).
 - `--csv` header: `finding_id,type,status,date,account,currency,payee,category,amount,other_account,transactions,splits,transaction_id,split_id,payee_id,category_id,fix`; one row per item; a fixed finding gets one row with item fields empty (NULL); same filters and order as text; P2d-12 writer.
 
 ### Sync
@@ -260,7 +260,7 @@ Ignore a finding by adding its id to findings.ignore in ~/Library/Application Su
 status reads quarry's store, and the config file for the findings you ignored;
 it never looks at Quicken. Run quarry sync to bring the store up to date.
 ```
-- `status --json` `warnings[]` (existing, today always `[]`) carries the config warning unprefixed, one entry, on any C refusal; stderr still prints it; C3 and W1 never reach it. `<config>` in that entry uses the same form as the other config warnings in `--json` (abbreviated today; see STATE open debt on the 2a absolute-path rule).
+- `status --json` `warnings[]` (existing, today always `[]`) carries the config warning unprefixed, one entry, on any C refusal; stderr still prints it; C3 and W1 never reach it. `<config>` in that entry is absolute, like every path in `--json` (final pass).
 
 ### Config: `findings.ignore`
 | # | Condition | stderr | Exit |
