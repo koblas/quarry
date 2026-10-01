@@ -150,3 +150,7 @@ func Test_run_sync_says_there_are_no_transactions_to_convert_when_the_file_has_n
 	require.Equal(t, 0, exitCode, stderr)
 	assert.Contains(t, strings.Split(stdout, "\n"), "Rates     none (no transactions to convert)")
 }
+
+func Test_newRatesSource_reads_rates_through_the_fx_server(t *testing.T) {
+	assert.IsType(t, &fx.Server{}, realRatesSource())
+}

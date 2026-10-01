@@ -527,7 +527,7 @@ Ruled (sizing pass 2026-10-01, architect):
 
 ## BDD Acceptance Progress
 - [x] SCENARIO-07: Store views carry exact converted amounts — `cmd/quarry/run_sql_fx_test.go` `Test_run_sql_views_carry_each_amount_converted_at_its_dates_rate`
-- [ ] SCENARIO-01: First sync back-fills exchange rates from the earliest transaction
+- [x] SCENARIO-01: First sync back-fills exchange rates from the earliest transaction — `cmd/quarry/run_sync_rates_test.go` `Test_run_sync_back_fills_rates_from_the_earliest_transaction`
 - [ ] SCENARIO-04: Rates survive the rebuild, including sync --from an older snapshot
 - [ ] SCENARIO-02: Later sync fetches only the missing dates
 - [ ] SCENARIO-03: Failed rate fetch warns and the sync still succeeds

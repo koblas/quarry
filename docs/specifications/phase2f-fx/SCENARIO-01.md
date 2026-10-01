@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01
-status: open
+status: done
 ---
 
 # SCENARIO-01: First sync back-fills exchange rates from the earliest transaction
@@ -26,10 +26,10 @@ Size: OWNS A RUN — 5 batches, 1 new feature package (`internal/fx`) + duckstor
 - [x] Step 7: cli + wiring. `render.go:89-99` `renderStore` Rates line after Findings: `(N new)` (humanize.Thousands) and `(up to date)` (Added 0, rates stored, no FetchError) arms. `json.go:35-44,172-183` `storeDocument.Rates` `{first,last,added,fetch_error}` after `findings`, dates `jsonDateLayout`, nulls when none. `sync.go:56` sync Long paragraph verbatim (spec *Changes to existing surfaces*). `run.go:24-30` guard `_ duckstore.RatesSource = (*fx.Server)(nil)`; `run.go:48-72` prepend `duckstore.WithRates(newRatesSource())` before storeOpts; package var `newRatesSource` → `fx.NewServer()`. `cmd/quarry/main_test.go` (new) `TestMain` sets it to a fixed-date fake (reuse `fakeRates`, `run_sql_fx_test.go:18-23`). Pins: renderStore arms (`render_internal_test.go:241-300`), Long verbatim (`run_usage_test.go:55-60`), `cmd/quarry/run_sync_rates_test.go` `Test_run_sync_json_reports_the_rates_it_fetched` — `--json` read back with `encoding/json` (first/last/added values, fetch_error null) + the key-set pin (`json_internal_test.go:40-130`); repoint every "Findings is the last line" pin to the Findings line (`run_sync_findings_test.go:41,81,297,320,351,368`, `run_findings_carry_test.go:77`)
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on fx exports, `Source`, `RatesSummary`, `newRatesSource`; fx doc.go names the Valet endpoint and the series rule
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on fx exports, `Source`, `RatesSummary`, `newRatesSource`; fx doc.go names the Valet endpoint and the series rule
 
 ### Verify
-- [ ] Step 9: full verification + `spec-check.py phase2f-fx` → tick SCENARIO-01 with its acceptance test
+- [x] Step 9: full verification + `spec-check.py phase2f-fx` → tick SCENARIO-01 with its acceptance test
 
 ## Handoff
 
@@ -60,16 +60,8 @@ Size: OWNS A RUN — 5 batches, 1 new feature package (`internal/fx`) + duckstor
 
 ## Phase report
 
-Run B2 (steps 6-7) done; steps 6-7 ticked. `go test` green on fx, duckstore, importer, cli, cmd/quarry; `golangci-lint run ./...` 0 issues. Acceptance `Test_run_sync_back_fills_rates_from_the_earliest_transaction` now passes. V owns Sweep (fx doc.go endpoint/series rule is still open), full covered run, spec tick, STATE.md rewrite, `status: done`.
-
-Files:
-- `duckstore/rates.go`: `finishBuild` returns `store.RatesSummary`; `refreshRates` returns the asked `Need`; `askedFrom` (Need.First iff no FetchError, else zero), `storedRates` (`storedRatesQuery` min/max(fx_rates.date)), `recordRates` (`recordRatesQuery` UPDATE of the max-id run: `rates_checked_from`, `rates_last`; zero time = NULL). Wrap strings: "read stored exchange rates", "record exchange rates".
-- `duckstore.go` Replace sets `Replaced.Rates`; `schema.go`, `history.go`, `history_test.go`: `rates_first` renamed `rates_checked_from` (SCENARIO-07.md audit trail still says rates_first, left as is).
-- `importer.go` copies `replaced.Rates`; `cli/render.go` `ratesPhrase`/`noRatesPhrase`; `cli/json.go` `ratesDocument`, `storeDocument.Rates` last key; `cli/sync.go` Long paragraph (wrapped like its neighbours, pinned wrapped); `cmd/quarry/run.go` `newRatesSource` var + `duckstore.WithRates(newRatesSource())` prepended before storeOpts, guard `_ duckstore.RatesSource = (*fx.Server)(nil)`; `cmd/quarry/main_test.go` new TestMain + `fakeRatesText`.
-- Tests: `duckstore/rates_test.go` (record/arms/earlier-runs/summary/exec fault/read fault), `duckstore_test.go` faultDB `Exec` fault, `export_test.go` `StoredRatesQuery`/`RecordRatesQuery`; `importer/import_runs_test.go`; `cli/render_internal_test.go`, `json_internal_test.go` (incl. last-key pin); `cmd/quarry/run_sync_rates_test.go` (JSON read-back, empty-answer and no-transaction lines); existing Rates-line pins repointed (`findingsLine` helper, `fakeRatesText` rows).
-
-Decisions / for V and later runs:
-- Placeholder arms rendered in `ratesPhrase` and pinned in a unit test only: `(not refreshed; see warning)` (rates stored + FetchError) and `none (not fetched; see warning)`. Those are 03's; no warning prints yet, so 03 must add the warnings and an e2e pin.
-- `Replaced.Rates.Added/FetchError` come from the refresh; First/Last from min/max(fx_rates). `rates_checked_from` has no cumulative min yet (04).
-- Mutations run (both red): UPDATE dropped -> `Test_replace_records_the_asked_floor_and_the_last_rate_on_the_new_run` (+ 4 more); UPDATE fault swallowed -> `Test_replace_keeps_the_previous_store_when_the_run_cannot_record_its_rates`.
-- Not red-first (code-first, off the mandatory set beyond the UPDATE): importer pass-through, cli render/json, cmd wiring.
+Run V done; all steps ticked, `status: done`, SCENARIO-01 ticked in specification.md, spec-check OK.
+- Sweep: `go build ./...` ok, `golangci-lint run ./...` 0 issues; `internal/fx/doc.go` now names the Valet endpoint, both series and the cutover rule.
+- Verify: one covered full run `go test rc=0`; uncovered-diff first run listed `cmd/quarry/run.go:37` (`newRatesSource` default) and `internal/fx/valet.go:42` (`NewValet(nil)`), covered by `Test_newRatesSource_reads_rates_through_the_fx_server` (cmd/quarry/run_sync_rates_test.go, via `realRatesSource` in main_test.go) and `Test_NewValet_without_a_client_uses_the_default_transport` (valet_test.go); re-run 0 uncovered. `-race` ok on fx, duckstore, importer, cli, cmd/quarry.
+- test-stats: cmd/quarry 397 (+6), internal/cli 350 (+5), internal/fx 31 (+31), internal/importer 150 (+1), internal/store/duckstore 369 (+7), TOTAL 1297 (+50).
+- STATE.md rewritten for 07+01; Valet body cap debt -> 03, unverified network facts -> 20.

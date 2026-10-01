@@ -210,3 +210,19 @@ func Test_valet_fails_when_the_request_cannot_be_built(t *testing.T) {
 
 	require.Error(t, err)
 }
+
+func Test_NewValet_without_a_client_uses_the_default_transport(t *testing.T) {
+	var reached bool
+	prev := http.DefaultTransport
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		reached = true
+		return reply(req, http.StatusOK, io.NopCloser(strings.NewReader(`{"observations":[]}`))), nil
+	})
+	t.Cleanup(func() { http.DefaultTransport = prev })
+
+	got, err := fx.NewValet(nil).Observations(t.Context(), "FXUSDCAD", store.DateSpan{First: day(2026, 1, 2), Last: day(2026, 1, 2)})
+
+	require.NoError(t, err)
+	assert.Empty(t, got)
+	assert.True(t, reached, "the default client's transport carried the request")
+}
