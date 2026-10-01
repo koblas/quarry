@@ -103,14 +103,21 @@ func recurringIn(t *testing.T, window store.Window, groups ...[]store.Charge) re
 // recurringAt is recurringIn read at now.
 func recurringAt(t *testing.T, now time.Time, window store.Window, groups ...[]store.Charge) report.Recurring {
 	t.Helper()
+	return recurringRead(t, report.RecurringRequest{Window: window, Now: now}, time.Time{}, groups...)
+}
+
+// recurringRead answers req from the merged charges of groups (oldest first, numbered in that order)
+// on a store whose first exchange rate is dated firstRate.
+func recurringRead(t *testing.T, req report.RecurringRequest, firstRate time.Time, groups ...[]store.Charge) report.Recurring {
+	t.Helper()
 	merged := slices.Concat(groups...)
 	slices.SortStableFunc(merged, func(a, b store.Charge) int { return a.Date.Compare(b.Date) })
 	for i := range merged {
 		merged[i].SourceID = int64(i + 1)
 	}
-	srv := report.NewServer(report.WithStore(fakeStore{charges: store.Charges{Rows: merged}}))
+	srv := report.NewServer(report.WithStore(fakeStore{charges: store.Charges{Rows: merged, FirstRate: firstRate}}))
 
-	result, err := srv.Recurring(t.Context(), report.RecurringRequest{Window: window, Now: now})
+	result, err := srv.Recurring(t.Context(), req)
 
 	require.NoError(t, err)
 	return result

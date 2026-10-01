@@ -58,6 +58,14 @@ func (s *Store) Accounts(ctx context.Context) (store.AccountList, error) {
 	return list, nil
 }
 
+// nullInt64Ptr returns n's value, or nil when n is NULL.
+func nullInt64Ptr(n sql.NullInt64) *int64 {
+	if !n.Valid {
+		return nil
+	}
+	return &n.Int64
+}
+
 // nullStringPtr returns s's value, or nil when s is NULL.
 func nullStringPtr(s sql.NullString) *string {
 	if !s.Valid {

@@ -155,6 +155,8 @@ type Series struct {
 	Accounts []store.Account
 
 	key groupKey
+	// unconverted is whether a CAD or USD series is listed in its own currency for want of a rate.
+	unconverted bool
 }
 
 // SeriesPayee is one payee a series was charged by.
@@ -204,41 +206,69 @@ func (s *Server) Recurring(ctx context.Context, req RecurringRequest) (Recurring
 	if err != nil {
 		return Recurring{}, s.readRefusal(ctx, recurringCommand, err)
 	}
-	result := Recurring{Window: req.Window, Accounts: accounts, Transactions: charges.Transactions}
+	result := Recurring{Window: req.Window, Accounts: accounts, Currency: req.Currency, Transactions: charges.Transactions}
 	for _, group := range groupCharges(charges.Rows) {
 		run, rule, ok := latestRun(group.charges)
 		if !ok {
 			continue
 		}
-		series := seriesOf(group.key, run, rule, today)
+		series := seriesOf(group.key, run, rule, today, req.Currency)
 		if !series.steady() || !series.runsDuring(req.Window, today) || !series.chargedIn(accountIDs) {
 			continue
 		}
 		series.New = !series.First.Before(req.Window.Since)
 		result.Series = append(result.Series, series)
+		if series.unconverted {
+			result.Unconverted.Transactions++
+		}
+	}
+	if req.Currency != money.Native {
+		result.Unconverted.FirstRate = charges.FirstRate
 	}
 	slices.SortStableFunc(result.Series, compareSeries)
 	result.Totals = yearlyTotals(result.Series)
 	return result, nil
 }
 
-// seriesOf is the series a run of charges makes as of today: its latest charge gives the payee
-// and amount, and the days since that charge give the state.
-func seriesOf(key groupKey, run []store.Charge, rule cadenceRule, today time.Time) Series {
+// chargeIn is c's amount in target, in cents; ok is false when target is a currency c has no converted amount in.
+// Native, and a charge already in target, need no conversion.
+func chargeIn(c store.Charge, target money.Currency) (int64, bool) {
+	if target == money.Native || c.Currency == target.String() {
+		return c.Amount, true
+	}
+	cell := c.AmountCAD
+	if target == money.USD {
+		cell = c.AmountUSD
+	}
+	if cell == nil {
+		return 0, false
+	}
+	return *cell, true
+}
+
+// seriesOf is the series a run of charges makes as of today, listed in target: its latest charge gives
+// the payee and amount, and the days since that charge give the state. The run is judged in its own
+// currency; only Amount, FirstAmount and PerYear are converted, and a run whose first or latest charge
+// cannot be converted stays entirely in its own currency.
+func seriesOf(key groupKey, run []store.Charge, rule cadenceRule, today time.Time, target money.Currency) Series {
 	latest := run[len(run)-1]
 	series := Series{
-		Payee:        *latest.Payee,
-		Currency:     latest.Currency,
-		Cadence:      rule.cadence,
-		Amount:       latest.Amount,
-		FirstAmount:  run[0].Amount,
-		First:        run[0].Date,
-		Last:         latest.Date,
-		ChargeCount:  len(run),
-		PriceChanges: priceChangesOf(run),
-		ChangeTenths: changeTenths(run[0].Amount, latest.Amount),
-		key:          key,
+		Payee:             *latest.Payee,
+		Currency:          latest.Currency,
+		Cadence:           rule.cadence,
+		Amount:            latest.Amount,
+		FirstAmount:       run[0].Amount,
+		NativeCurrency:    latest.Currency,
+		NativeAmount:      latest.Amount,
+		NativeFirstAmount: run[0].Amount,
+		First:             run[0].Date,
+		Last:              latest.Date,
+		ChargeCount:       len(run),
+		PriceChanges:      priceChangesOf(run),
+		ChangeTenths:      changeTenths(run[0].Amount, latest.Amount),
+		key:               key,
 	}
+	series = series.listedIn(target, run[0], latest)
 	series.Payees, series.Accounts = identitiesOf(run)
 	if key.kind == keyByPayeeKey {
 		series.PayeeKey = &key.value
@@ -247,9 +277,25 @@ func seriesOf(key groupKey, run []store.Charge, rule cadenceRule, today time.Tim
 		series.State = SeriesEnded
 		return series
 	}
-	perYear := latest.Amount * rule.perYear
+	perYear := series.Amount * rule.perYear
 	series.PerYear = &perYear
 	return series
+}
+
+// listedIn is s with Amount and FirstAmount converted into target from the converted amounts of the run's
+// first and latest charge. A CAD or USD series it cannot convert is marked unconverted; any other currency has no rate to want.
+func (s Series) listedIn(target money.Currency, first, latest store.Charge) Series {
+	amount, amountOK := chargeIn(latest, target)
+	firstAmount, firstOK := chargeIn(first, target)
+	if amountOK && firstOK {
+		if target != money.Native {
+			s.Currency = target.String()
+		}
+		s.Amount, s.FirstAmount = amount, firstAmount
+		return s
+	}
+	s.unconverted = latest.Currency == money.CAD.String() || latest.Currency == money.USD.String()
+	return s
 }
 
 // runsDuring is whether the series ran at any time in window: from its first charge to today when
@@ -271,7 +317,8 @@ func (s Series) chargedIn(ids []string) bool {
 }
 
 // compareSeries orders series by currency, active before ended, yearly cost descending (ended:
-// last charge descending), lower-cased payee, then group key.
+// last charge descending), lower-cased payee, group key, then a series listed in its own currency
+// before a converted one, then native currency ascending.
 func compareSeries(a, b Series) int {
 	return cmp.Or(
 		cmp.Compare(a.Currency, b.Currency),
@@ -279,7 +326,17 @@ func compareSeries(a, b Series) int {
 		compareStanding(a, b),
 		cmp.Compare(strings.ToLower(a.Payee), strings.ToLower(b.Payee)),
 		cmp.Compare(a.key.value, b.key.value),
+		cmp.Compare(a.convertedRank(), b.convertedRank()),
+		cmp.Compare(a.NativeCurrency, b.NativeCurrency),
 	)
+}
+
+// convertedRank is 0 for a series listed in its own currency and 1 for a converted one.
+func (s Series) convertedRank() int {
+	if s.NativeCurrency == s.Currency {
+		return 0
+	}
+	return 1
 }
 
 // compareStanding puts the costlier of two active series first, and the more recent of two ended ones.
