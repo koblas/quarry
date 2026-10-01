@@ -238,14 +238,17 @@ The rows stay as they are: each row is in one currency, the Currency column stay
 - **Last fetch failed:** append `; the last sync could not fetch new rates: <reason>`
 - **None:** `Rates     none, so amounts are not converted; run quarry sync to fetch them from the Bank of Canada`, plus the failure clause if one is recorded.
 - **JSON:** `"rates": {"first": "1990-01-02"|null, "last": "2026-09-30"|null, "fetch_error": null|"<reason>"}`
-- **Store:** import_runs gains `rates_first DATE`, `rates_last DATE`, `rates_fetch_error VARCHAR`.
+- **Store:** import_runs gains rates_checked_from DATE (the earliest date quarry has asked the Bank of Canada for and got an answer; dates before it have no rate, and quarry does not ask again), rates_last DATE (the latest rate in fx_rates after this run), rates_fetch_error VARCHAR (this run's <reason>, NULL when the fetch succeeded or nothing was asked). *(Mid-feature ruling, SCENARIO-01: renamed from rates_first.)* rates_checked_from is cumulative: min(previous run's value, Need.First when this run asked that span with no FetchError), otherwise the previous value carried; NULL only if no fetch ever succeeded. Status, the sync Rates line and Replaced.Rates take first/last from min/max(fx_rates.date).
 
 ### sync Rates line (after Findings)
 - `Rates     USD/CAD 1990-01-02 to 2026-09-30 (12 new)`
 - `Rates     USD/CAD 1990-01-02 to 2026-09-30 (up to date)`
 - `Rates     USD/CAD 1990-01-02 to 2026-09-24 (not refreshed; see warning)`
 - `Rates     none (not fetched; see warning)`
-- **JSON:** `"rates": {"first","last","added": int,"fetch_error": null|"<reason>"}`
+- `Rates     none (no transactions to convert)`: no rates and no transactions.
+- `Rates     none (the Bank of Canada has no rates for your transaction dates)`: no rates, transactions exist, the source answered empty.
+- The Rates line is never omitted when the store was built. Its absence is reserved for a sync that failed before the swap (SCENARIO-05). An empty answer is not a FetchError and gives no warning.
+- **JSON:** store.rates {"first","last","added": int,"fetch_error": null|"<reason>"}, the last key of store (after not_imported); null when the store was not built. *(Mid-feature ruling, SCENARIO-01.)*
 
 ### sync fetch warnings (exit 0; the store is still swapped in)
 - **Nothing new, some rates stored:** `could not fetch exchange rates from the Bank of Canada: <reason>; the store has rates from <first> to <last>, and later dates convert at the <last> rate; run quarry sync again to retry`
@@ -258,6 +261,15 @@ The rows stay as they are: each row is in one currency, the Currency column stay
   - `www.bankofcanada.ca sent an answer that is not a list of exchange rates`
 
 ### Edge rows (only cells that differ from the base)
+Mid-feature ruling, SCENARIO-01 — nothing fetched, nothing failed (no warning, exit 0):
+
+| Case | Text line | store.rates |
+|---|---|---|
+| Rates stored, nothing to ask (Need covered, or no transactions but rates carried) | `Rates     USD/CAD <first> to <last> (up to date)` | `{first,last,added:0,fetch_error:null}` |
+| Rates stored, source answered empty for the asked span | `Rates     USD/CAD <first> to <last> (up to date)` | same; rates_checked_from advances |
+| No rates, no transactions | `Rates     none (no transactions to convert)` | `{first:null,last:null,added:0,fetch_error:null}` |
+| No rates, transactions exist, source answered empty | `Rates     none (the Bank of Canada has no rates for your transaction dates)` | same; later reports get the "no exchange rates" warning |
+
 | Input | Text | json | --account | Totals |
 |---|---|---|---|---|
 | All-CAD, CAD | caption `amounts in CAD`; same numbers | currency:"CAD" | base | base |
