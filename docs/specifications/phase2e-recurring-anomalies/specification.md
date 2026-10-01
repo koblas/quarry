@@ -431,4 +431,4 @@ Ruled (sizing pass 2026-10-01):
 ## Reference check
 Last step before the gate round (step 7). Outcome recorded in `REFERENCE-CHECK.md` beside this file.
 
-- [ ] Series and anomalies on the real Quicken file hold up to review: run `quarry recurring --since 2000` and `quarry anomalies --since 2000` on David's file (scratch HOME from the latest snapshot); David reviews up to 20 series and 20 anomalies. A command with more than half false positives has its rule re-ruled (mid-feature product-vision ruling) and the fix appended as a new scenario before the gate round.
+- [x] Series and anomalies on the real Quicken file hold up to review (see `REFERENCE-CHECK.md`, 2026-10-01): run `quarry recurring --since 2000` and `quarry anomalies --since 2000` on David's file (scratch HOME from the latest snapshot); David reviews up to 20 series and 20 anomalies. A command with more than half false positives has its rule re-ruled (mid-feature product-vision ruling) and the fix appended as a new scenario before the gate round.

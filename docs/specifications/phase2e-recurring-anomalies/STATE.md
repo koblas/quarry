@@ -1,6 +1,5 @@
 # phase2e-recurring-anomalies — current state
 
-Scenarios complete: SCENARIO-01..22 (02-04 folded into 01, 06 into 05, 08-10 into 07, 12-13 into 11, 15-16 into 14, 18 into 17, 21-22 into 20). Last updated by SCENARIO-20. Next: Reference check (`REFERENCE-CHECK.md`), then the gate round.
 
 ## Binding decisions
 - One port method `report.Store.Charges(ctx, store.ChargeParams{Through, AccountIDs})` returns `store.Charges{Rows []Charge, Transactions TransactionRange}`: no window; `Rows` are never filtered by account; `Transactions` is the whole store's span, or with `AccountIDs` set the span of those reported accounts only (spend's E1a range, so E1a/E2a say "their transactions"). Anomalies (S14, S17, S20) read this single call; reopening it reopens three fakes, the adapter and the `cmd/quarry/run.go:29` guard (SCENARIO-01, SCENARIO-11)
@@ -31,7 +30,6 @@ Scenarios complete: SCENARIO-01..22 (02-04 folded into 01, 06 into 05, 08-10 int
 - Window-flag help is per report (`reportFlagHelp`): spend/cashflow `transactionFlagHelp`, recurring and anomalies own strings; pinned by `Test_each_reports_window_flags_describe_what_it_does_with_them` (SCENARIO-14)
 
 ## Left unbuilt
-- Reference check on the real Quicken file (`REFERENCE-CHECK.md`, spec `## Reference check`) — scheduled before the gate round; unowned until the orchestrator runs it (SCENARIO-20)
 - Anomalies pins already in place: root Available Commands (`run_status_test.go`), never-load-config (`run_config_test.go`), U8/R1/I1 rows in `run_read_usage_test.go` / `run_read_refusals_test.go` (SCENARIO-14, SCENARIO-20)
 
 ## Traps
@@ -47,9 +45,9 @@ Scenarios complete: SCENARIO-01..22 (02-04 folded into 01, 06 into 05, 08-10 int
 
 ## Open debts
 - I1 (`recurring interrupted`, `anomalies interrupted`) on the accounts read and on the `Charges` read is pinned in `internal/report` only; the cmd-level I1 row cancels before the store opens. Low risk, no owner — dies unless re-opened (SCENARIO-11, SCENARIO-20)
-- Reference check on the real Quicken file, before the gate round (`REFERENCE-CHECK.md`) — unowned until the orchestrator runs it; dies unless run
 - Checkpoint (5a) MINOR/NIT findings for SCENARIO-01, if any, are recorded here by the orchestrator
 - Checkpoint 05 MINOR: `cmd/quarry/run_recurring_state_test.go:19-40` `quietSeriesOutput` asserts inside the helper and returns three unnamed strings — return a struct or move the assertions to test bodies
 - Orchestrator: `internal/platform/duckdb` `Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration` (`exec_query_test.go:170`) flaked twice under a loaded full `-coverpkg` run (passes alone) — watch at the gate (unowned)
 - Checkpoint 17 NIT: `internal/report/anomalies_category_test.go:64` loop rewrites history amounts in Given (use a helper); exact-5× row should also assert `NotJudged == 0`
 - Checkpoint 19 NIT: `internal/cli/anomalies_json_test.go:21` `payeeHistory` doc says "three charges" (variadic)
+- Orchestrator: recurring Payee column has no width cap — one long payee widens the table to ~77 cols on the real file; raise at the final product-vision pass (unowned)
