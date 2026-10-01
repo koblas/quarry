@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-03
-status: open
+status: done
 ---
 
 # SCENARIO-03: Failed rate fetch warns and the sync still succeeds
@@ -26,10 +26,10 @@ Size: OWNS A RUN — 4 batches; fx + store/duckstore + snapshot + cli (+ cmd tes
 - [x] Step 6: folded 05. `cmd/quarry/run_sync_rates_prefetch_test.go` (new) `Test_run_sync_makes_no_rate_request_when_it_fails_before_the_swap` — counting `duckstore.RatesSource` via `newServerFactory(duckstore.WithRates(counter))`; rows: not open (`v9fixture.ClosedWALBundle`), validation failed (`unreconciledBundle` run_sync_prune_test.go:49), schema changed (`v9fixture.MissingSchemaBundle`); control row: good bundle → exactly 1 call. Each row: existing exit code, 0 calls, no line starting `Rates ` on stdout. `Test_run_sync_json_makes_no_rate_request_when_it_fails_before_the_swap`: validation failed → `store.rates` null; not open / schema → no `store`. duckstore `Test_replace_asks_for_no_rates_when_the_build_fails` (append fault via `faultDB`, 0 Refresh calls)
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (fx.go:56 `//nolint:nilerr` stays only if still needed); doc comments on `Refresh` (fx.go:44-47: partial keep, reasons), `Observations` (cap), `RatesSummary.Partial`, `fetchWarning`, `Outcome.Warnings` order; `go doc ./internal/fx`
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (fx.go:56 `//nolint:nilerr` stays only if still needed); doc comments on `Refresh` (fx.go:44-47: partial keep, reasons), `Observations` (cap), `RatesSummary.Partial`, `fetchWarning`, `Outcome.Warnings` order; `go doc ./internal/fx`
 
 ### Verify
-- [ ] Step 8: full verification + `.claude/scripts/spec-check.py phase2f-fx` → tick SCENARIO-03 with its acceptance test; tick SCENARIO-05 `— delivered by SCENARIO-03 —` with its folded acceptance test; rewrite STATE.md (drop the Valet body-cap debt and the legacy-tail trap)
+- [x] Step 8: full verification + `.claude/scripts/spec-check.py phase2f-fx` → tick SCENARIO-03 with its acceptance test; tick SCENARIO-05 `— delivered by SCENARIO-03 —` with its folded acceptance test; rewrite STATE.md (drop the Valet body-cap debt and the legacy-tail trap)
 
 ## Handoff
 
@@ -54,12 +54,14 @@ Size: OWNS A RUN — 4 batches; fx + store/duckstore + snapshot + cli (+ cmd tes
 
 ## Phase report
 
-Run B2 done (steps 5-6). Full covered suite green (`go test rc=0`), `uncovered-diff.py` 0 added lines since 518ca8a, `golangci-lint run ./...` 0 issues. Acceptance tests of 03 and 05 pass. V still owns: doc comments (`RatesSummary.Partial`, `Observations` cap, `Refresh`), `go doc ./internal/fx`, spec ticks, STATE.md rewrite.
+Run V done (steps 7-8). Full covered suite green (`go test rc=0`), `uncovered-diff.py` 0 added lines since 518ca8a, `-race` green on fx, duckstore, snapshot, cli, cmd/quarry, `golangci-lint run ./...` 0 issues. test-stats since 518ca8a: TOTAL 1498 tests (+42): cmd/quarry 432 (+19), internal/fx 44 (+11), internal/snapshot 278 (+8), internal/store/duckstore 394 (+4), internal/cli 350 (+0, subtests only).
 
-Files: `internal/snapshot/import.go` (`Outcome.fetchWarning`, `fetchWarning(RatesSummary)`, set in `importVerified`, appended after ratesWarning and before prune in `warnings`); `internal/cli/render.go` `ratesPhrase` (Partial arm `(<n> new, not all fetched; see warning)`, checked before FetchError). Tests: `internal/snapshot/import_rates_fetch_test.go` (new: 3 warning arms in Warnings and WarningsAbsolute, reason passthrough, no-FetchError and not-built controls, fetch-before-prune, after rates-carry, after combined carry, full manifest..prune order), `internal/cli/render_internal_test.go` (3 partial rows), `internal/store/duckstore/rates_test.go` (`Test_replace_asks_for_no_rates_when_the_build_fails`, green on arrival: the Refresh-after-build order already existed), cmd: `run_sync_rates_fetch_test.go` (shared `fetchFailureCases()`, acceptance now asserts whole stderr and the partial Rates line), `run_sync_rates_fetch_warnings_test.go` (new: --json warnings[] and store.rates per row, carry then fetch, combined then fetch, fetch before prune, two spans failing differently = one warning with the first reason, `--from`; each text and --json), `run_sync_rates_prefetch_test.go` (new: folded 05, counting source, control = 1 call, text and --json).
+Doc comments added (no code change): `store.RatesSummary.Partial` (store.go), `Refresh` (fx.go: what survives a failed call, Partial, stop rule), `Source` (source.go: errors become the fetch reason, Valet cap). `Valet.Observations` and `fetchWarning` already documented.
 
-Deviations: ruling applied (partial Rates line, order, one warning per sync); acceptance test's `ratesLines` slice became `ratesLine` and stderr is asserted whole (`Equal`) instead of `Contains`. No `fakeValet` expectation needed changing. --json also prints each warning on stderr (existing behaviour), so the JSON tests pin both.
+Mutation checks run in V (render.go `ratesPhrase`, import.go `fetchWarning`; both restored, diff clean):
+- Partial and FetchError arms of `ratesPhrase` swapped: red in `Test_ratesPhrase/some_rates_fetched,_the_rest_not` (and `one_rate...`, `thousands_of_rates...`) and `Test_run_sync_warns_and_swaps_the_store_in_when_the_rate_fetch_fails/partial_range,_the_current_series_kept`.
+- `fetchWarning` nothing-stored arm condition `rates.First.IsZero()` inverted (arms swapped): red in `Test_sync_and_import_names_the_failed_rate_fetch_in_a_warning/nothing_stored` and `/nothing_new,_rates_stored`, plus `Test_run_sync_warns_and_swaps_the_store_in_when_the_rate_fetch_fails` rows (unreachable, timeout, 503, not-a-list), `Test_run_sync_json_carries_the_fetch_reason_in_warnings_and_rates`, `Test_run_sync_prints_the_carry_warning_then_the_fetch_warning`.
 
-Green on arrival at cmd level (production landed from snapshot-level red first): all cmd rows above; 05 rows (early exits never reach Replace, nothing to build).
+Note: `-run` is case sensitive; a first pass with `Rates|Fetch` matched nothing and ran green. The runs above used `(?i)`.
 
-Do not redo: nothing in V needs production code.
+Nothing left for this scenario.

@@ -258,7 +258,8 @@ type Replaced struct {
 
 // RatesSummary is the exchange rates a build stored: the first and last
 // dates in fx_rates (zero when none), how many were fetched this build, and
-// the reason a fetch fell short, if it did.
+// the reason a fetch fell short, if it did. Partial is set when it fell short
+// after fetching some rates: Added is then the rates kept, not all of Need.
 type RatesSummary struct {
 	First, Last time.Time
 	Added       int

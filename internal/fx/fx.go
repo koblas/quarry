@@ -47,9 +47,10 @@ const requestTimeout = 30 * time.Second
 
 // Refresh fetches the rates for req.Need that req.Have does not cover, oldest first, none dated
 // inside Have and none out of range. A source that answers with nothing is not a failure.
-// A failed span keeps the rates of the spans that answered (Partial) and FetchError carries the first failure's
-// reason; after a timeout or an unreachable bank the later spans are not asked.
-// It returns an error only when ctx ended.
+// A failed Source call does not drop what answered: the span's FXUSDCAD rates survive a failed IEXE0101 call,
+// and spans that answered survive a failed one. Partial is then set (FetchError set and at least one rate kept)
+// and FetchError carries the first failure's reason. After a timeout or an unreachable bank the later spans are
+// not asked; after any other failure they are. It returns an error only when ctx ended.
 func (s *Server) Refresh(ctx context.Context, req store.RatesRequest) (store.RatesRefresh, error) {
 	var out store.RatesRefresh
 	for _, ask := range planSpans(req) {

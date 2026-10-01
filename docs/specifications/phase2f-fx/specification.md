@@ -551,8 +551,8 @@ Ruled (sizing pass 2026-10-01, architect):
 - [x] SCENARIO-01: First sync back-fills exchange rates from the earliest transaction — `cmd/quarry/run_sync_rates_test.go` `Test_run_sync_back_fills_rates_from_the_earliest_transaction`
 - [x] SCENARIO-04: Rates survive the rebuild, including sync --from an older snapshot — `cmd/quarry/run_sync_rates_carry_test.go` `Test_run_sync_from_an_older_snapshot_keeps_every_carried_rate`
 - [x] SCENARIO-02: Later sync fetches only the missing dates — delivered by SCENARIO-04 — `cmd/quarry/run_sync_rates_carry_test.go` `Test_run_sync_asks_only_for_the_dates_after_the_last_stored_rate`
-- [ ] SCENARIO-03: Failed rate fetch warns and the sync still succeeds
-- [ ] SCENARIO-05: A sync that fails before the swap never fetches rates
+- [x] SCENARIO-03: Failed rate fetch warns and the sync still succeeds — `cmd/quarry/run_sync_rates_fetch_test.go` `Test_run_sync_warns_and_swaps_the_store_in_when_the_rate_fetch_fails`
+- [x] SCENARIO-05: A sync that fails before the swap never fetches rates — delivered by SCENARIO-03 — `cmd/quarry/run_sync_rates_prefetch_test.go` `Test_run_sync_makes_no_rate_request_when_it_fails_before_the_swap`
 - [ ] SCENARIO-06: Status shows rate coverage
 - [ ] SCENARIO-16: A bad reporting.currency value refuses the read commands
 - [ ] SCENARIO-15: A bad --currency value is a usage error
