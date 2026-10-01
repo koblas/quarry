@@ -9,6 +9,7 @@
 | SCENARIO-03 (+05) | test-first (failed fetch still swaps) | A, B1, B2, V | 0/1/4/0 | yes (per-request timeout scope unpinned; test-only + docs); 1 copy ruling (warning order, partial Rates line, stop rule) |
 | SCENARIO-06 | code-first (light) | L, V | 0/0/6/0 | no (MINORs → STATE.md) |
 | SCENARIO-16 (+15) | code-first | A, B1, B2, V | 0/3/2/0 | yes (usage-before-config order unpinned at 3 sites; resolve CAD default unpinned; accounts warnings order unpinned; test-only + docs); 1 behaviour/copy ruling (table-shape refusal, status warns, sync/findings/snapshots refuse, P2d-10 amended) |
+| SCENARIO-08 (+14) | code-first | A, B1, V | 0/2/3/0 | yes (month NULL arm unpinned; empty-window USD/native text cells; test-only + comments) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
