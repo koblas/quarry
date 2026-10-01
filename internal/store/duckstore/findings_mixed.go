@@ -9,9 +9,7 @@ import (
 	"github.com/koblas/quarry/internal/finding"
 )
 
-// mixedTransactions selects the transactions a mixed-categories finding judges, as a parenthesizable SELECT of
-// payee_id, date, source_id, category_id and category path: those with a payee and exactly one categorized
-// v_cash_flow row. The detector and the read's per-category count both select from it.
+// mixedTransactions selects the transactions a mixed-categories finding judges: a payee and one categorized v_cash_flow row.
 const mixedTransactions = `SELECT payee_id, date, source_id, category_id, category FROM (
   SELECT cf.payee_id, cf.date, t.source_id, cf.category_id, cf.category, count(*) OVER (PARTITION BY cf.transaction_id) AS n
   FROM v_cash_flow cf JOIN transactions t ON t.id = cf.transaction_id

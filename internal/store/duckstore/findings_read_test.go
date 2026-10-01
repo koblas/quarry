@@ -1,10 +1,12 @@
 package duckstore_test
 
 import (
+	"context"
 	"slices"
 	"testing"
 
 	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
@@ -317,4 +319,52 @@ func Test_findings_counts_a_mixed_item_without_a_transaction_split_over_categori
 	got := readFinding(t, mixedRows(fixtures...), mixedIDOf(mixedPayee))
 
 	assert.Equal(t, []int{3, 2}, []int{got.Items[0].Transactions, got.Items[1].Transactions})
+}
+
+// editDB runs statements against the store being built after its build and before its checkpoint.
+type editDB struct {
+	duckstore.DB
+
+	statements []string
+}
+
+func (e *editDB) CheckpointClose(ctx context.Context) error {
+	for _, statement := range e.statements {
+		if _, err := e.Exec(ctx, statement); err != nil {
+			return err
+		}
+	}
+	return e.DB.CheckpointClose(ctx)
+}
+
+// readEdited builds rows with statements applied to the built store and returns the finding with id from its Findings read.
+func readEdited(t *testing.T, rows store.Rows, id string, statements ...string) store.Finding {
+	t.Helper()
+	dir := t.TempDir()
+	create := duckstore.WithCreate(func(ctx context.Context, path string) (duckstore.DB, error) {
+		db, err := duckdb.Create(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		return &editDB{DB: db, statements: statements}, nil
+	})
+	_, err := duckstore.New(dir, create).Replace(t.Context(), rows)
+	require.NoError(t, err)
+	return findingIn(t, duckstore.New(dir), id)
+}
+
+func Test_findings_counts_no_transactions_for_an_item_of_any_other_type_naming_a_mixed_payee_and_category(t *testing.T) {
+	t.Parallel()
+	rows := mixedRows(mixedSeq(mixedPayee, "ababa", 1)...)
+	probe := func(id, typ string) string {
+		return `INSERT INTO findings VALUES ('` + id + `', '` + typ + `', now(), NULL);
+			INSERT INTO finding_items (finding_id, payee_id, category_id) VALUES ('` + id + `', '` + mixedPayee + `', 'cat-a')`
+	}
+	edits := []string{probe("uncategorized:probe", "uncategorized"), probe("duplicate:probe", "duplicate")}
+
+	mixed := readEdited(t, rows, mixedIDOf(mixedPayee), edits...)
+	uncategorized := readEdited(t, rows, "uncategorized:probe", edits...)
+	duplicate := readEdited(t, rows, "duplicate:probe", edits...)
+
+	assert.Equal(t, []int{3, 0, 0}, []int{mixed.Items[0].Transactions, uncategorized.Items[0].Transactions, duplicate.Items[0].Transactions})
 }

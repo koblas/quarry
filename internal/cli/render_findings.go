@@ -252,9 +252,8 @@ func uncategorizedRows(findings []report.ListedFinding, view findingsView) []str
 	return rows
 }
 
-// mixedRows renders each mixed-categories finding as an id line (id and payee padded to the widest among
-// the findings, then its category and transaction counts and the ignored marker) over one four-space row
-// per category: its path padded to the widest in the finding, then its transaction count right-aligned.
+// mixedRows renders each mixed-categories finding as an id line (id, payee, counts, ignored marker) over one
+// four-space row per category: its path padded to the widest in the finding, then its right-aligned count.
 func mixedRows(findings []report.ListedFinding, view findingsView) []string {
 	ids := make([]string, len(findings))
 	payees := make([]string, len(findings))

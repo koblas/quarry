@@ -179,3 +179,16 @@ func Test_renderFindingsJSON_keeps_the_date_account_and_amount_of_a_transaction_
 		"other_account": nil, "other_account_id": nil, "transactions": nil, "splits": nil,
 	}, items[0])
 }
+
+func Test_renderFindingsJSON_keeps_the_date_account_and_amount_of_an_item_with_only_a_split(t *testing.T) {
+	items := itemsJSON(t, finding.Uncategorized, store.FindingItem{
+		SplitID: new("split-4"), Date: findingDay(2026, 8, 3), AccountID: "acct-3", Account: "Chequing", Currency: "CAD", Amount: -500,
+	})
+
+	assert.Equal(t, map[string]any{
+		"transaction_id": nil, "split_id": "split-4", "payee_id": nil, "category_id": nil,
+		"date": "2026-08-03", "account_id": "acct-3", "account": "Chequing", "currency": "CAD",
+		"payee": nil, "category": nil, "amount": "-5.00",
+		"other_account": nil, "other_account_id": nil, "transactions": nil, "splits": nil,
+	}, items[0])
+}

@@ -29,7 +29,7 @@ LEFT JOIN (SELECT transaction_id, count(*) AS n, min(category_id) AS category_id
 	ON ts.transaction_id = fi.transaction_id AND f.type = 'unlinked-transfer'
 LEFT JOIN categories c ON c.id = COALESCE(fi.category_id, CASE WHEN ts.n = 1 THEN ts.category_id END)
 LEFT JOIN (SELECT payee_id, category_id, count(*) AS n FROM (` + mixedTransactions + `) GROUP BY payee_id, category_id) mc
-	ON mc.payee_id = fi.payee_id AND mc.category_id = fi.category_id
+	ON mc.payee_id = fi.payee_id AND mc.category_id = fi.category_id AND f.type = 'mixed-categories'
 ORDER BY f.id, fi.rowid`
 
 // Findings reads every finding, open and fixed, with its items, sorted by id; a fixed finding has no items. It
