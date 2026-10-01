@@ -157,3 +157,24 @@ func Test_replace_reports_no_rates_fault_for_a_healthy_carry(t *testing.T) {
 	assert.Nil(t, replaced.RatesFault)
 	assertScalar(t, openReadOnly(t, replaced.Path), fxRatesText, "2026-03-13 1.250000 IEXE0101")
 }
+
+func Test_replace_keeps_the_previous_store_when_the_source_answers_a_date_already_carried(t *testing.T) {
+	t.Parallel()
+	dir := storeWithRates(t, ratesOn(13, 1_250_000, legacySeries))
+	before, err := os.ReadFile(filepath.Join(dir, duckstore.FileName))
+	require.NoError(t, err)
+	src := &fakeRates{refresh: store.RatesRefresh{Rates: []store.Rate{ratesOn(13, 1_260_000, currentSeries)}, Added: 1}}
+	rows := minimalRows()
+	rows.Transactions[0].Amount = 999
+
+	_, err = duckstore.New(dir, duckstore.WithRates(src)).Replace(t.Context(), rows)
+
+	require.ErrorContains(t, err, "load fx_rates")
+	require.ErrorContains(t, err, "2026-03-13")
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Equal(t, []string{duckstore.FileName}, direntNames(entries))
+	after, err := os.ReadFile(filepath.Join(dir, duckstore.FileName))
+	require.NoError(t, err)
+	assert.Equal(t, before, after)
+}

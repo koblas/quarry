@@ -103,6 +103,34 @@ func Test_outcome_lists_prune_warnings_after_the_findings_warning(t *testing.T) 
 	}, outcome.Warnings())
 }
 
+func Test_outcome_lists_prune_warnings_after_the_history_findings_and_rates_warnings(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	ids := oldIDs(2)
+	prunable(t, home, ids...)
+	storePath := filepath.Join(home, "quarry", "quarry.duckdb")
+	result := store.Result{
+		Built:         true,
+		HistoryFault:  &store.OpenError{Fault: store.OpenFaultOther, Path: storePath, Reason: "its import_runs table is incomplete"},
+		FindingsFault: &store.OpenError{Fault: store.OpenFaultOther, Path: storePath, Reason: "its findings table repeats an id"},
+		RatesFault:    &store.OpenError{Fault: store.OpenFaultOther, Path: storePath, Reason: "its fx_rates table repeats a date"},
+	}
+	srv := newImportServer(t, home, &fakeImporter{result: result},
+		snapshot.WithAutoPrune(1), snapshot.WithRemove(failingRemover(syscall.EACCES, ids[0]+".sqlite").remove))
+
+	outcome, err := syncBundle(t, srv)
+
+	require.NoError(t, err)
+	want := []string{
+		historyRestartLine("its import_runs table is incomplete"),
+		findingsRestartLine("its findings table repeats an id"),
+		ratesRestartLine("its fx_rates table repeats a date"),
+		deleteFailureLine(ids[0], "permission denied"),
+	}
+	assert.Equal(t, want, outcome.Warnings())
+	assert.Equal(t, want, outcome.WarningsAbsolute())
+}
+
 func Test_outcome_adds_no_prune_warning_for_a_store_that_was_not_built(t *testing.T) {
 	t.Parallel()
 	failed := []snapshot.PruneFailure{{Entry: snapshot.Entry{ID: idOldest}, Reason: "permission denied"}}

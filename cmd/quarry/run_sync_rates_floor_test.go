@@ -92,9 +92,8 @@ func syncNoTransactionsWithRates(t *testing.T, extraArgs ...string) (string, []s
 	return stdout, source.requested()
 }
 
-// syncAfterAnOlderDateWasAnsweredEmpty syncs a 2017-01-10 transaction (bank publishes 01-10 and 01-11), then a bundle
-// reaching back to 01-03 against a bank with nothing to add, then the same bundle again with extraArgs. It returns
-// the requests of the middle sync (which must reach back) and the last sync's stdout and requests.
+// syncAfterAnOlderDateWasAnsweredEmpty syncs a 2017-01-10 bundle, then one reaching back to 01-03 against an empty bank,
+// then that bundle again with extraArgs. It returns the middle sync's requests, then the last sync's stdout and requests.
 func syncAfterAnOlderDateWasAnsweredEmpty(t *testing.T, extraArgs ...string) ([]string, string, []string) {
 	t.Helper()
 	home := t.TempDir()

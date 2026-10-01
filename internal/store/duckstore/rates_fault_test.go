@@ -17,6 +17,9 @@ const (
 
 	// looseRatesTable is fx_rates without the primary key or CHECK a v5 store gives it, so a corrupt row can be stored.
 	looseRatesTable = `DROP TABLE fx_rates CASCADE; CREATE TABLE fx_rates (date DATE, usd_cad DECIMAL(18, 6), series VARCHAR);`
+
+	// looseRunsTable is import_runs without its primary key, so a repeated id can be stored.
+	looseRunsTable = `CREATE TABLE import_runs_loose AS FROM import_runs; DROP TABLE import_runs; ALTER TABLE import_runs_loose RENAME TO import_runs;`
 )
 
 // storeWithRatesRows is a built store whose fx_rates table is looseRatesTable holding inserts, one SQL VALUES tuple per row.
@@ -159,4 +162,36 @@ func Test_replace_carries_none_of_the_rates_and_asks_for_them_all_when_the_carri
 	assertScalar(t, openReadOnly(t, replaced.Path), fxRatesText, "2026-03-17 1.320000 FXUSDCAD")
 	require.Len(t, src.requests, 1)
 	assert.Equal(t, store.DateSpan{}, src.requests[0].Have)
+}
+
+func Test_replace_carries_the_rates_and_their_span_when_the_import_runs_cannot_be_read(t *testing.T) {
+	t.Parallel()
+	const checkedFrom = "UPDATE import_runs SET rates_checked_from = DATE '2026-03-01'; "
+	cases := []struct {
+		name       string
+		ddl        string
+		wantReason string
+	}{
+		{name: "an id twice", ddl: looseRunsTable + " INSERT INTO import_runs FROM import_runs;", wantReason: reasonRepeatedID},
+		{name: "an id twice beside a floor", ddl: checkedFrom + looseRunsTable + " INSERT INTO import_runs FROM import_runs;", wantReason: reasonRepeatedID},
+		{name: "an id too large to follow beside a floor", ddl: checkedFrom + looseRunsTable + " UPDATE import_runs SET id = 9223372036854775807;", wantReason: reasonIDTooLarge},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			src := &fakeRates{}
+			st := newBuiltStore(t, duckstore.WithRates(src))
+			execOnStore(t, st, c.ddl)
+
+			replaced, err := st.Replace(t.Context(), minimalRows())
+
+			require.NoError(t, err)
+			assert.Equal(t, c.wantReason, historyReason(t, st, replaced))
+			assert.Nil(t, replaced.RatesFault)
+			assertScalar(t, openReadOnly(t, replaced.Path), fxRatesText, "2026-03-13 1.250000 IEXE0101")
+			require.Len(t, src.requests, 1)
+			assert.Equal(t, store.DateSpan{First: day(2026, 3, 13), Last: day(2026, 3, 13)}, src.requests[0].Have)
+		})
+	}
 }

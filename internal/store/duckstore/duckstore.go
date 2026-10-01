@@ -287,11 +287,9 @@ func hasColumn(ctx context.Context, db ReadDB, table, column string) (bool, erro
 	return n > 0, nil
 }
 
-// Replace swaps rows into quarry.duckdb through a build file, carrying the previous store's
-// import_runs ahead of the new run, its findings and its exchange rates. An unreadable history restarts
-// at id 1 (Replaced.HistoryFault); unreadable rates are fetched again (Replaced.RatesFault). On failure
-// the existing store is untouched; a permission fault matches store.ErrStoreNotWritable, disk-full
-// store.ErrDiskFull.
+// Replace swaps rows into quarry.duckdb through a build file, carrying the previous store's import_runs, findings and
+// exchange rates. An unreadable table restarts (Replaced.HistoryFault, FindingsFault, RatesFault). On failure the existing
+// store is untouched; a permission fault matches store.ErrStoreNotWritable, disk-full store.ErrDiskFull.
 func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, error) {
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return store.Replaced{}, buildError(err)

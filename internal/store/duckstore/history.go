@@ -16,9 +16,8 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// history is what Replace carries from the store it replaces: its import_runs rows in importRunRows's
-// column order with the highest id among them, its findings, with findingsCarried true iff that table was read,
-// its exchange rates in date order, and the earliest date those rates were last asked from.
+// history is what Replace carries from the store it replaces: its import_runs rows and highest id, its findings,
+// its exchange rates in date order, and the date those rates were last asked from.
 type history struct {
 	rows            [][]any
 	maxID           int64
@@ -264,10 +263,8 @@ func readFindings(ctx context.Context, db ReadDB) ([]carriedFinding, bool, error
 	return found, true, nil
 }
 
-// readRates reads every fx_rates row through db in date order; present is false, without a fault, when the
-// store has no fx_rates table. It fails with errRatesRepeatDate (a date twice), errRatesImpossible (a rate the
-// column cannot hold), errRatesUnknown (a series quarry never stores), else with the read's own fault: a row
-// failing any of these would fail the new store's fx_rates load, so none is carried.
+// readRates reads every fx_rates row through db in date order; present is false, without a fault, when there is no table.
+// It fails with errRatesRepeatDate, errRatesImpossible or errRatesUnknown for a row the new table would refuse, else with the read's own fault.
 func readRates(ctx context.Context, db ReadDB) ([]store.Rate, bool, error) {
 	present := false
 	err := db.QueryRows(ctx, rateColumnsQuery, nil, func(scan func(dest ...any) error) error {

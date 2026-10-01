@@ -82,9 +82,8 @@ func earliest(a, b time.Time) time.Time {
 	return a
 }
 
-// askedFrom is the earliest date the source has answered from: the earlier of previous and this run's first
-// needed date. A run that asked nothing or failed keeps previous (zero if none ever): an answer, even an empty
-// one, means the dates from it have no rate and need no new request.
+// askedFrom is the earlier of previous and this run's first needed date; a run that asked nothing or failed keeps previous.
+// An empty answer still counts: its dates have no rate and need no new request.
 func askedFrom(need store.DateSpan, refresh store.RatesRefresh, previous time.Time) time.Time {
 	if refresh.FetchError != "" || need.First.IsZero() {
 		return previous
