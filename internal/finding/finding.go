@@ -76,9 +76,8 @@ const singularMinRunes = 4
 
 // CategoryKey returns the similar-categories entity for a category of the given kind and full path, or "" when the
 // kind is no income or expense or no level holds a letter or digit. Ids are a contract (users write them into
-// config.toml), so the rule never changes silently: split the path on ":", lower-case each level, split it on every
-// rune that is no letter or digit, singularise each token, join tokens with "-" and levels with "/". Income keys
-// start with "income:". No diacritic folding: "Café" and "Cafe" are different keys.
+// config.toml), so the rule never changes silently. Income keys start with "income:". No diacritic folding:
+// "Café" and "Cafe" are different keys.
 func CategoryKey(kind, fullPath string) string {
 	prefix := ""
 	switch kind {
@@ -88,6 +87,8 @@ func CategoryKey(kind, fullPath string) string {
 	default:
 		return ""
 	}
+	// Per level: lower-case, split on every rune that is no letter or digit, singularise each token, join with "-";
+	// levels join with "/".
 	levels := strings.Split(fullPath, ":")
 	named := false
 	for i, level := range levels {

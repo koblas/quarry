@@ -126,11 +126,3 @@ func Test_similarCategoryRows_labels_an_income_group_by_its_prefixed_id(t *testi
 
 	assert.Equal(t, "  similar-categories:income:gift  2 categories", got[0])
 }
-
-func Test_similarCategoryRows_prints_an_empty_label_for_an_item_without_a_category(t *testing.T) {
-	f := openFinding(store.Finding{ID: "similar-categories:x", Type: finding.SimilarCategories, Items: []store.FindingItem{{Splits: 4}}})
-
-	got := similarCategoryRows([]report.ListedFinding{f}, openView)
-
-	assert.Equal(t, []string{"  similar-categories:x  1 category", "      4 splits"}, got)
-}

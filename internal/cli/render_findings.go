@@ -318,7 +318,7 @@ func similarCategoryRows(findings []report.ListedFinding, view findingsView) []s
 		paths := make([]string, len(f.Items))
 		counts := make([]string, len(f.Items))
 		for j, item := range f.Items {
-			paths[j] = *cmp.Or(item.Category, new(string))
+			paths[j] = *cmp.Or(item.Category, new(string)) // unreachable: items come from categories rows in one Replace and full_path is NOT NULL (duckstore/schema.go:30), so the join never yields nil
 			counts[j] = humanize.Count(item.Splits, "split", "splits")
 		}
 		lines = append(lines, "  "+padRight(f.ID, idWidth)+"  "+humanize.Count(len(f.Items), "category", "categories")+ignoredMarker(f, view))

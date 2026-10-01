@@ -189,6 +189,14 @@ func Test_replace_lists_similar_categories_by_splits_then_path_ignoring_case_the
 	assert.Equal(t, "similar-categories:grocery=cat-4,cat-1,cat-2,cat-3", got)
 }
 
+func Test_replace_lists_equal_split_similar_categories_by_path_before_id(t *testing.T) {
+	t.Parallel()
+
+	got := similarFindings(t, similarCat{path: "Grocery", splits: 1}, similarCat{path: "Groceries", splits: 1})
+
+	assert.Equal(t, "similar-categories:grocery=cat-2,cat-1", got)
+}
+
 func Test_replace_counts_a_categorys_splits_in_a_closed_account(t *testing.T) {
 	t.Parallel()
 
