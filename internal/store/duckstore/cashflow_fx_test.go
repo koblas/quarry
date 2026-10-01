@@ -60,9 +60,9 @@ func Test_cash_flow_read_in_cad_gives_a_store_of_only_cad_the_same_rows_as_nativ
 	got, err := st.CashFlow(t.Context(), cashFlowIn(money.CAD, store.CashFlowByMonth))
 
 	require.NoError(t, err)
-	assert.Equal(t, native.Rows, got.Rows)
-	assert.Equal(t, native.Totals, got.Totals)
-	assert.Zero(t, got.Unconverted.Transactions)
+	assert.Equal(t, store.Unconverted{FirstRate: march(13)}, got.Unconverted)
+	got.Unconverted = native.Unconverted
+	assert.Equal(t, native, got)
 }
 
 func Test_cash_flow_read_in_cad_converts_usd_income_and_spending_at_their_dates_rates_into_the_cad_row(t *testing.T) {

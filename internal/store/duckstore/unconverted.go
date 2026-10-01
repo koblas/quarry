@@ -23,8 +23,7 @@ var (
 )
 
 // unconvertedQuery counts the distinct transactions of view in the window and accounts whose
-// column converted to the report currency is NULL, and gives the store's first rate date. A split
-// in neither CAD nor USD stays native by design and counts nothing.
+// convertedColumn is NULL, and gives the first rate date; a split in neither CAD nor USD counts nothing.
 func unconvertedQuery(view unconvertedView, convertedColumn string, accounts accountFilter) string {
 	filter := ""
 	if view.where != "" {
