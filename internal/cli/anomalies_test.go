@@ -131,3 +131,10 @@ func Test_anomalies_without_charges_prints_the_empty_table_and_footer(t *testing
 		"0 charges checked\n", stdout.String())
 	assert.Empty(t, stderr.String())
 }
+
+func Test_anomalies_reports_a_failed_stdout_write(t *testing.T) {
+	err := executeAnomalies(t, fakeReportStore{}, failingWriter{err: errNoSpace}, io.Discard)
+
+	require.EqualError(t, err, "cannot write the result to stdout: write /dev/stdout: no space left on device")
+	assert.ErrorIs(t, err, errNoSpace)
+}

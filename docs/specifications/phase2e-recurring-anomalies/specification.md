@@ -137,7 +137,7 @@ Date        Account         Payee        Category           Amount   Usual  Time
 ```
 - Ruled at SCENARIO-14 planning: the empty-window warning fires only when the window holds no charges (`checked` = 0), via `appendEmptyWindowWarning` with subject `unusually large charges`; when charges exist but none is unusual there is no warning (caption, header, footer e.g. `1,204 charges checked`; stderr empty; `warnings` `[]`; exit 0). A charge with no payee shows `(no payee)` (`payeeLabel`) in text and `null` in `--json` `payee`.
 - Sort: date desc, then transaction source id desc. Footer always printed in text mode (`1 charge checked`; `; N had…` omitted when 0; `1 had`). `x`, not `×`.
-- `--json`: `{"since","until","account_filter":[],"anomalies":[{"transaction_id","date","account_id","account","currency","payee","category","amount","baseline":"payee"|"category","usual":"210.40","earlier":212,"times":8.8}],"checked":1204,"not_judged":87,"warnings":[]}`. `category` null in both the uncategorized and the split case.
+- `--json`: `{"since","until","account_filter":[],"anomalies":[{"transaction_id","date","account_id","account","currency","payee","category","amount","baseline":"payee"|"category","usual":"210.40","earlier":212,"times":8.8}],"checked":1204,"not_judged":87,"warnings":[]}`. `category` null in both the uncategorized and the split case (ruled at SCENARIO-19: also null for two splits of one category, which read `(split)` in text); `payee` null for a NULL-payee charge judged against its category.
 
 ### Refusals and warnings (both commands; reuse verbatim, `<cmd>` = recurring/anomalies)
 R1, R2, R3a/b/c, R3, O2, H1 as in 2a. I1 `quarry: <cmd> interrupted` (1). S1, S2, S2d, S3, S5, S6 as in 2b (S1–S3 exit 2; S5, S6 exit 1). U8 `quarry: <cmd> takes no arguments` (2). No `--by`, so no S4. W2/W3 with `<cmd>`, 2b ordering and every-account-left-out rules (0). Empty result: caption + header (anomalies adds its footer, `0 charges checked`), and E1/E2/E1a/E2a via `appendEmptyWindowWarning` with subject `recurring charges` / `unusually large charges`, e.g. `quarry: warning: no recurring charges from 2026-01-01 to 2026-10-01; the store's transactions run 2003-01-04 to 2026-09-26` (0). Warnings go to `warnings[]` without the prefix and to stderr after stdout. `--json` with a refusal: stdout empty.
@@ -423,7 +423,7 @@ Ruled (sizing pass 2026-10-01):
 - [x] SCENARIO-16: each report's window flags describe what that report does with them — delivered by SCENARIO-14: `internal/cli/report_help_test.go` `Test_each_reports_window_flags_describe_what_it_does_with_them`
 - [x] SCENARIO-17: a payee with little history is judged against its category — `cmd/quarry/run_anomalies_category_test.go` `Test_run_anomalies_judges_a_first_time_payee_against_its_category`
 - [x] SCENARIO-18: a charge with no usable history is counted as not judged — delivered by SCENARIO-17: `cmd/quarry/run_anomalies_category_test.go` `Test_run_anomalies_counts_an_uncategorized_first_time_charge_as_not_judged`
-- [ ] SCENARIO-19: anomalies --json returns the anomalies document
+- [x] SCENARIO-19: anomalies --json returns the anomalies document — `cmd/quarry/run_anomalies_json_test.go` `Test_run_anomalies_json_returns_the_anomalies_document`
 - [ ] SCENARIO-20: history outside the window and other accounts still counts
 - [ ] SCENARIO-21: no charges in the window says so
 - [ ] SCENARIO-22: anomalies refuses usage and store problems

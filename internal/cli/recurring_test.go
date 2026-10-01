@@ -194,3 +194,10 @@ func Test_recurring_help_shows_each_flag(t *testing.T) {
 		})
 	}
 }
+
+func Test_recurring_reports_a_failed_stdout_write(t *testing.T) {
+	err := executeRecurring(t, fakeReportStore{}, failingWriter{err: errNoSpace}, io.Discard)
+
+	require.EqualError(t, err, "cannot write the result to stdout: write /dev/stdout: no space left on device")
+	assert.ErrorIs(t, err, errNoSpace)
+}
