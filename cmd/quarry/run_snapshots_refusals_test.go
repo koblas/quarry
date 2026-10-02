@@ -243,7 +243,7 @@ func Test_run_snapshots_shows_unknown_for_a_taken_at_or_source_the_manifest_does
 func Test_run_snapshots_factory_names_itself_when_the_home_directory_cannot_be_resolved(t *testing.T) {
 	t.Setenv("HOME", "")
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
+	env := testEnv(&stdout, &stderr)
 	env.LoadConfig = func(string) (config.Config, error) { return config.Config{}, nil }
 
 	exitCode := runWith(context.Background(), []string{"snapshots"}, env)

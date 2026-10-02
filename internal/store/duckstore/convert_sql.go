@@ -1,6 +1,30 @@
 package duckstore
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/koblas/quarry/internal/platform/money"
+)
+
+// convertedColumn returns the column of a view holding column's value converted into currency, column_cad or
+// column_usd, and that currency's code; the bool is false for Native and any value outside the three, which convert nothing.
+func convertedColumn(column string, currency money.Currency) (string, string, bool) {
+	switch currency { //nolint:exhaustive // Native, and any value outside the three, converts nothing
+	case money.CAD:
+		return column + "_cad", "CAD", true
+	case money.USD:
+		return column + "_usd", "USD", true
+	default:
+		return "", "", false
+	}
+}
+
+// keepOwnCurrency is the currency and column projections of a relation converting column into code through
+// converted: a split with no converted cell keeps its own currency and amount, so a total never mixes them.
+func keepOwnCurrency(column, converted, code string) string {
+	return fmt.Sprintf(`CASE WHEN %[1]s IS NULL THEN currency ELSE '%[2]s' END AS currency,
+	COALESCE(%[1]s, %[3]s) AS %[3]s`, converted, code, column)
+}
 
 // convertedTo is the SQL for amount (DECIMAL(18,2) in currency) in target, "CAD" or "USD", at rate (CAD
 // per USD): NULL when amount is NULL, the currency is neither, or a conversion needs a NULL rate.

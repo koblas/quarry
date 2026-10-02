@@ -70,7 +70,7 @@ func Test_run_sql_reads_the_query_from_stdin(t *testing.T) {
 	t.Setenv("HOME", home)
 	syncAccountsFixture(t, home)
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
+	env := testEnv(&stdout, &stderr)
 	env.Stdin = strings.NewReader("SELECT name\nFROM accounts\nWHERE source_id = 1;\n")
 
 	exitCode := runWith(context.Background(), []string{"sql", "-"}, env)

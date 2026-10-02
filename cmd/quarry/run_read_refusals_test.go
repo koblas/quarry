@@ -193,7 +193,7 @@ func Test_run_status_refuses_a_store_removed_while_it_opens(t *testing.T) {
 	t.Setenv("HOME", home)
 	syncAccountsFixture(t, home)
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
+	env := testEnv(&stdout, &stderr)
 	env.NewReport = newReportFactory(removingOpener(t))
 
 	exitCode := runWith(context.Background(), []string{"status"}, env)

@@ -70,7 +70,7 @@ func Test_run_sync_back_fills_rates_from_the_earliest_transaction(t *testing.T) 
 		"FXUSDCAD": {"2017-01-03": "1.3435", "2017-01-04": "1.3315"},
 	}
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
+	env := testEnv(&stdout, &stderr)
 	env.NewServer = newServerFactory(duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(&http.Client{Transport: valet}))))
 
 	exitCode := runWith(context.Background(), []string{"sync", "--quicken", bundle.Dir}, env)
@@ -103,7 +103,7 @@ func syncWithValet(t *testing.T, valet fakeValet, days []time.Time, extraArgs ..
 	}
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
+	env := testEnv(&stdout, &stderr)
 	env.NewServer = newServerFactory(duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(&http.Client{Transport: valet}))))
 
 	exitCode := runWith(context.Background(), append([]string{"sync", "--quicken", bundle.Dir}, extraArgs...), env)
@@ -151,8 +151,4 @@ func Test_run_sync_says_there_are_no_transactions_to_convert_when_the_file_has_n
 
 	require.Equal(t, 0, exitCode, stderr)
 	assert.Contains(t, strings.Split(stdout, "\n"), "Rates     none (no transactions to convert)")
-}
-
-func Test_newRatesSource_reads_rates_through_the_fx_server(t *testing.T) {
-	assert.IsType(t, &fx.Server{}, realRatesSource())
 }

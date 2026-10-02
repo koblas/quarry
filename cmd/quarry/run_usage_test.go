@@ -332,7 +332,7 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 	for _, c := range usageErrors {
 		t.Run(c.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
-			env := defaultEnv(&stdout, &stderr)
+			env := testEnv(&stdout, &stderr)
 			env.Stdin = strings.NewReader(c.stdin)
 
 			exitCode := runWith(context.Background(), c.args, env)
@@ -358,4 +358,13 @@ func Test_run_reports_exit_1_when_the_context_is_already_cancelled(t *testing.T)
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
 	assert.Equal(t, "quarry: sync interrupted; nothing was kept; run quarry sync again\n", stderr.String())
+}
+
+func Test_runProcess_returns_the_usage_exit_code_for_an_unknown_command(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runProcess(t.Context(), []string{"frob"}, &stdout, &stderr)
+
+	assert.Equal(t, 2, exitCode)
+	assert.Equal(t, "quarry: unknown command \"frob\" for \"quarry\"; Run 'quarry --help' for usage.\n", stderr.String())
 }

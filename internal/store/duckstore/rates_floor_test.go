@@ -130,8 +130,8 @@ func Test_replace_keeps_the_earliest_checked_floor_across_runs(t *testing.T) {
 		{name: "a failed fetch with no floor ever stays null", floors: []int{noFloor}, refresh: store.RatesRefresh{FetchError: "unreachable"}, rows: minimalRows(), want: "NULL"},
 		{name: "no transactions carries the previous floor", floors: []int{1}, refresh: store.RatesRefresh{}, rows: noTransactionRows(), want: "2026-03-01"},
 		{name: "a failed fetch after a run with no floor stays null", floors: []int{1, noFloor}, refresh: store.RatesRefresh{FetchError: "unreachable"}, rows: minimalRows(), want: "NULL"},
-			{name: "only future-dated transactions leave a null floor null", floors: []int{noFloor}, refresh: store.RatesRefresh{}, rows: futureRows(), want: "NULL"},
-			{name: "only future-dated transactions carry the previous floor", floors: []int{1}, refresh: store.RatesRefresh{}, rows: futureRows(), want: "2026-03-01"},
+		{name: "only future-dated transactions leave a null floor null", floors: []int{noFloor}, refresh: store.RatesRefresh{}, rows: futureRows(), want: "NULL"},
+		{name: "only future-dated transactions carry the previous floor", floors: []int{1}, refresh: store.RatesRefresh{}, rows: futureRows(), want: "2026-03-01"},
 		{name: "a failed fetch carries the newest floor, not the earliest", floors: []int{5, 20}, refresh: store.RatesRefresh{FetchError: "unreachable"}, rows: minimalRows(), want: "2026-03-20"},
 	}
 

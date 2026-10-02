@@ -289,6 +289,9 @@ type Rate struct {
 	Series string
 }
 
+// MaxRate is the largest rate fx_rates.usd_cad holds, in millionths: DECIMAL(10,6)'s 9999.999999.
+const MaxRate = money.Rate(9_999_999_999)
+
 // DateSpan is an inclusive run of dates; the zero value is empty.
 type DateSpan struct {
 	First, Last time.Time

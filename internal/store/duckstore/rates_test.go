@@ -306,28 +306,25 @@ func Test_replace_records_the_rates_columns_by_what_the_fetch_answered(t *testin
 	cases := []struct {
 		name    string
 		refresh store.RatesRefresh
-		noTxns  bool
+		rows    store.Rows
 		want    string
 	}{
-		{name: "an empty answer still advances the floor", refresh: store.RatesRefresh{}, want: "2026-03-15, NULL"},
+		{name: "an empty answer still advances the floor", refresh: store.RatesRefresh{}, rows: minimalRows(), want: "2026-03-15, NULL"},
 		{
 			name:    "a failed fetch leaves the floor null even with a partial result",
 			refresh: store.RatesRefresh{Rates: []store.Rate{ratesOn(13, 1_250_000, "IEXE0101")}, Added: 1, FetchError: "unreachable", Partial: true},
+			rows:    minimalRows(),
 			want:    "NULL, 2026-03-13",
 		},
-		{name: "nothing was asked when there are no transactions", refresh: store.RatesRefresh{}, noTxns: true, want: "NULL, NULL"},
+		{name: "nothing was asked when there are no transactions", refresh: store.RatesRefresh{}, rows: noTransactionRows(), want: "NULL, NULL"},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			rows := minimalRows()
-			if c.noTxns {
-				rows.Transactions, rows.Splits, rows.SplitTags, rows.Transfers = nil, nil, nil, nil
-			}
 			st := duckstore.New(t.TempDir(), duckstore.WithRates(&fakeRates{refresh: c.refresh}))
 
-			replaced, err := st.Replace(t.Context(), rows)
+			replaced, err := st.Replace(t.Context(), c.rows)
 
 			require.NoError(t, err)
 			assertScalar(t, openReadOnly(t, replaced.Path), latestRunRatesText, c.want)

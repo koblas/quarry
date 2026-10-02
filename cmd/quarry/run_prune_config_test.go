@@ -211,7 +211,7 @@ func Test_run_snapshots_prune_prints_config_warnings_before_its_failed_delete_li
 func Test_run_snapshots_prune_factory_names_itself_when_the_home_directory_cannot_be_resolved(t *testing.T) {
 	t.Setenv("HOME", "")
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
+	env := testEnv(&stdout, &stderr)
 	env.LoadConfig = func(string) (config.Config, error) { return config.Config{}, nil }
 
 	exitCode := runWith(context.Background(), []string{"snapshots", "prune"}, env)

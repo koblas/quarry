@@ -149,7 +149,7 @@ func Test_run_never_replaces_the_store_when_the_build_fails(t *testing.T) {
 			fault := c.arrange(t, storeDir, cancel)
 			var stdout, stderr bytes.Buffer
 
-			env := defaultEnv(&stdout, &stderr)
+			env := testEnv(&stdout, &stderr)
 			env.NewServer = newServerFactory(withFault(fault))
 
 			exitCode := runWith(ctx, []string{"sync", "--quicken", bundle.Dir}, env)

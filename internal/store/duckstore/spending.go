@@ -17,19 +17,13 @@ type spendingQueryFor func(accounts accountFilter, source string) string
 // spendingSource is the relation a spending read counts, in v_spending's shape: native is
 // v_spending; CAD and USD convert each split, one with no converted cell keeping its own currency.
 func spendingSource(currency money.Currency) string {
-	var converted, target string
-	switch currency { //nolint:exhaustive // Native, and any value outside the three, reads v_spending as it is
-	case money.CAD:
-		converted, target = "spent_cad", "CAD"
-	case money.USD:
-		converted, target = "spent_usd", "USD"
-	default:
+	converted, code, ok := convertedColumn("spent", currency)
+	if !ok {
 		return "v_spending"
 	}
 	return fmt.Sprintf(`(SELECT split_id, account_id, date, month, category, payee,
-	CASE WHEN %[1]s IS NULL THEN currency ELSE '%[2]s' END AS currency,
-	COALESCE(%[1]s, spent) AS spent
-	FROM v_spending)`, converted, target)
+	%s
+	FROM v_spending)`, keepOwnCurrency("spent", converted, code))
 }
 
 // spendingQuery reads per-group and per-currency-total spending, grouped by the key column and

@@ -86,7 +86,7 @@ func spendEnv(stdout, stderr *bytes.Buffer) cli.Env {
 
 // spendEnvAt is spendEnv with the clock at now.
 func spendEnvAt(stdout, stderr *bytes.Buffer, now time.Time) cli.Env {
-	e := defaultEnv(stdout, stderr)
+	e := testEnv(stdout, stderr)
 	e.Now = func() time.Time { return now }
 	return e
 }

@@ -346,7 +346,7 @@ func Test_replace_names_a_failed_findings_read_as_incomplete_and_closes_the_conn
 	}
 }
 
-func Test_replace_reads_the_history_in_four_queries_and_the_rates_in_the_fifth_and_sixth(t *testing.T) {
+func Test_replace_reads_the_history_in_four_queries_and_asks_for_the_rates_columns_in_a_fifth(t *testing.T) {
 	t.Parallel()
 	spy := &spyReadDB{passQueries: 4, queryFault: ioFault(`query rows "SELECT"`)}
 	st := newBuiltStore(t, spyOpener(spy))

@@ -139,7 +139,7 @@ func (a Anomaly) listedIn(target money.Currency) (Anomaly, bool) {
 		return a, true
 	}
 	amount, amountOK := chargeIn(a.Charge, target)
-	own, _ := money.ParseCurrency(a.Currency)
+	own, _ := money.ParseCurrency(a.Currency) // an unknown code reads as Native, which Convert refuses: the charge stays unconverted
 	usual, usualOK := money.Convert(a.Usual, own, target, a.USDCAD)
 	if !amountOK || !usualOK {
 		return a, false

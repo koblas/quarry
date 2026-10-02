@@ -40,7 +40,7 @@ func runPruneRemoving(ctx context.Context, t *testing.T, remove func(string) err
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
+	env := testEnv(&stdout, &stderr)
 	env.NewSnapshots = func(context.Context, string) (*snapshot.Server, error) {
 		return snapshot.NewServer(
 			snapshot.WithSnapshotDir(snapshotsDirUnder(home)),

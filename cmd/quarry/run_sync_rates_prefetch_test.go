@@ -35,7 +35,7 @@ type countedSync struct {
 func syncCountingRateRequests(bundle v9fixture.Bundle, args ...string) countedSync {
 	var out, errOut bytes.Buffer
 	counter := &countingRates{}
-	env := defaultEnv(&out, &errOut)
+	env := testEnv(&out, &errOut)
 	env.NewServer = newServerFactory(duckstore.WithRates(counter))
 
 	exitCode := runWith(context.Background(), append([]string{"sync", "--quicken", bundle.Dir}, args...), env)

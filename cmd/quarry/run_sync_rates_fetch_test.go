@@ -62,7 +62,7 @@ func syncCapturing(t *testing.T, bank http.RoundTripper, args ...string) (int, s
 func syncCapturingRemoving(t *testing.T, bank http.RoundTripper, remove func(string) error, args ...string) (int, string, string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
+	env := testEnv(&stdout, &stderr)
 	base := newServerFactory(duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(&http.Client{Transport: bank}))))
 	env.NewServer = func(ctx context.Context, opts ...snapshot.Option) (*snapshot.Server, error) {
 		return base(ctx, append(opts, snapshot.WithRemove(remove))...)

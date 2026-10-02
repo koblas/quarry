@@ -61,7 +61,7 @@ func writeChequingBundle(t *testing.T, dir string, days ...time.Time) v9fixture.
 func syncThrough(t *testing.T, valet http.RoundTripper, args ...string) string {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
+	env := testEnv(&stdout, &stderr)
 	env.NewServer = newServerFactory(duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(&http.Client{Transport: valet}))))
 
 	exitCode := runWith(context.Background(), append([]string{"sync"}, args...), env)

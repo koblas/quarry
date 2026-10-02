@@ -32,9 +32,6 @@ var (
 	_ duckstore.RatesSource = (*fx.Server)(nil)
 )
 
-// newRatesSource builds the rates source every sync fetches from; tests replace it so none reaches the network.
-var newRatesSource = func() duckstore.RatesSource { return fx.NewServer() }
-
 // signalContext wraps parent with SIGINT/SIGTERM handling: ctx.Done() closes
 // on either signal, and a goroutine calls stop once it does, so a second
 // signal falls through to the OS default instead of staying diverted.
@@ -66,7 +63,7 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 		storeDir := storeDirUnder(home)
 		info, _ := debug.ReadBuildInfo()
 		st := duckstore.New(storeDir, append([]duckstore.Option{
-			duckstore.WithQuarryVersion(buildVersion(info)), duckstore.WithRates(newRatesSource()),
+			duckstore.WithQuarryVersion(buildVersion(info)), duckstore.WithRates(fx.NewServer()),
 		}, storeOpts...)...)
 		srv := snapshot.NewServer(append([]snapshot.Option{
 			snapshot.WithSnapshotDir(snapshotsDirUnder(home)),
@@ -173,13 +170,13 @@ func defaultEnv(stdout, stderr io.Writer) cli.Env {
 	}
 }
 
-// run is the process entrypoint's testable body: it delegates to
-// cli.Execute, returning the process exit code (0 success, 1 failure, 2 usage).
-func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+// runProcess is the process entrypoint's testable body: it delegates to
+// cli.Execute over the real wiring, returning the process exit code (0 success, 1 failure, 2 usage).
+func runProcess(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	return runWith(ctx, args, defaultEnv(stdout, stderr))
 }
 
-// runWith is run against an explicit Env.
+// runWith is runProcess against an explicit Env.
 func runWith(ctx context.Context, args []string, env cli.Env) int {
 	return exitCode(cli.Execute(ctx, args, env), env.Stderr)
 }

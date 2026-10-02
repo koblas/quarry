@@ -25,19 +25,13 @@ var ErrUnsupportedPeriod = errors.New("cash-flow period is not supported")
 // currency, flow and amount columns: native is v_cash_flow; CAD and USD convert each split, one
 // with no converted cell keeping its own currency.
 func cashFlowSource(currency money.Currency) string {
-	var converted, target string
-	switch currency { //nolint:exhaustive // Native, and any value outside the three, reads v_cash_flow as it is
-	case money.CAD:
-		converted, target = "amount_cad", "CAD"
-	case money.USD:
-		converted, target = "amount_usd", "USD"
-	default:
+	converted, code, ok := convertedColumn("amount", currency)
+	if !ok {
 		return "v_cash_flow"
 	}
 	return fmt.Sprintf(`(SELECT account_id, date, flow,
-	CASE WHEN %[1]s IS NULL THEN currency ELSE '%[2]s' END AS currency,
-	COALESCE(%[1]s, amount) AS amount
-	FROM v_cash_flow)`, converted, target)
+	%s
+	FROM v_cash_flow)`, keepOwnCurrency("amount", converted, code))
 }
 
 // cashFlowQuery reads per-period and per-currency-total income, spending and net in cents from

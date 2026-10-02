@@ -290,7 +290,7 @@ func readRates(ctx context.Context, db ReadDB) ([]store.Rate, bool, error) {
 		switch {
 		case seen[r.Date]:
 			return errRatesRepeatDate
-		case r.USDCAD <= 0 || r.USDCAD > maxStoredRate:
+		case r.USDCAD <= 0 || r.USDCAD > store.MaxRate:
 			return errRatesImpossible
 		case r.Series != store.SeriesCurrent && r.Series != store.SeriesLegacy:
 			return errRatesUnknown

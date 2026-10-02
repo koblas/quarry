@@ -61,7 +61,7 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
-			env := defaultEnv(&stdout, &stderr)
+			env := testEnv(&stdout, &stderr)
 			env.Stdin = strings.NewReader(c.stdin)
 
 			exitCode := runWith(context.Background(), c.args, env)
@@ -91,7 +91,7 @@ func Test_run_read_commands_refuse_a_bad_currency_flag(t *testing.T) {
 func Test_run_sql_refuses_a_multi_line_query_that_starts_with_a_dash_as_an_unknown_flag(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
+	env := testEnv(&stdout, &stderr)
 
 	exitCode := runWith(context.Background(), []string{"sql", "-- monthly totals\nSELECT 1"}, env)
 

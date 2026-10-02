@@ -34,8 +34,11 @@ LEFT JOIN payees p ON p.id = t.payee_id
 WHERE t.date <= CAST($1 AS DATE)
 ORDER BY t.date, t.source_id`
 
-// firstRateQuery reads the date of the store's first exchange rate.
-const firstRateQuery = "SELECT min(date) FROM fx_rates"
+// firstRateQuery reads the date of the store's first exchange rate; firstRateSubquery is it inside a larger statement.
+const (
+	firstRateQuery    = "SELECT min(date) FROM fx_rates"
+	firstRateSubquery = "(" + firstRateQuery + ")"
+)
 
 // Charges reads every charge dated through params.Through (that day included), the span of
 // the store's transactions, or of params.AccountIDs' reported accounts, and the first rate's

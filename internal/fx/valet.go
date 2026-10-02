@@ -19,11 +19,10 @@ import (
 // valetObservations is the Bank of Canada Valet endpoint; a series name and "/json" follow it.
 const valetObservations = "https://www.bankofcanada.ca/valet/observations/"
 
-// A stored rate is DECIMAL(10,6): ratePlaces decimal places, millionths per unit, and at most maxRate.
+// A stored rate is DECIMAL(10,6): ratePlaces decimal places, millionths per unit, and at most store.MaxRate.
 const (
 	ratePlaces = 6
 	millionth  = 1_000_000
-	maxRate    = money.Rate(9_999_999_999)
 )
 
 // maxAnswerBytes bounds the answer Valet reads; the largest real one, a series over some sixty years, is about 2 MB.
@@ -138,7 +137,7 @@ func parseRate(s string) (money.Rate, error) {
 		return 0, fmt.Errorf("%w %q: more than %d decimal places", errRate, s, ratePlaces)
 	}
 	units, err := strconv.ParseUint(whole, 10, 64)
-	if err != nil || units > uint64(maxRate)/millionth {
+	if err != nil || units > uint64(store.MaxRate)/millionth {
 		return 0, fmt.Errorf("%w %q: not a number in range", errRate, s)
 	}
 	fraction := uint64(0)
@@ -154,7 +153,7 @@ func parseRate(s string) (money.Rate, error) {
 
 // checkRate refuses a rate the store cannot hold: zero, negative, or past DECIMAL(10,6).
 func checkRate(r money.Rate) error {
-	if r <= 0 || r > maxRate {
+	if r <= 0 || r > store.MaxRate {
 		return fmt.Errorf("%w %d millionths: out of range", errRate, r)
 	}
 	return nil

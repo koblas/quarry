@@ -107,6 +107,7 @@ func (s *Server) observe(ctx context.Context, series string, span store.DateSpan
 		return nil, err //nolint:wrapcheck // Source errors already name their series
 	}
 	var kept []Observation
+	seen := map[time.Time]bool{}
 	for _, o := range got {
 		if o.Date.Before(span.First) || o.Date.After(span.Last) {
 			continue
@@ -115,9 +116,10 @@ func (s *Server) observe(ctx context.Context, series string, span store.DateSpan
 			return nil, fmt.Errorf("%s on %s: %w: %w", series, o.Date.Format(time.DateOnly), errNotRates, err)
 		}
 		// the first of a repeated date wins
-		if slices.ContainsFunc(kept, func(k Observation) bool { return k.Date.Equal(o.Date) }) {
+		if seen[o.Date] {
 			continue
 		}
+		seen[o.Date] = true
 		kept = append(kept, o)
 	}
 	slices.SortFunc(kept, func(a, b Observation) int { return a.Date.Compare(b.Date) })

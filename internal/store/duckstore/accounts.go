@@ -13,7 +13,7 @@ const accountsQuery = `
 SELECT d.as_of, d.first_rate, v.id, v.source_id, v.name, v.type, v.currency, v.institution, v.closed, v.active,
 	NOT a.in_reports, a.linked_tracking, CAST(v.balance * 100 AS BIGINT),
 	CAST(v.balance_cad * 100 AS BIGINT), CAST(v.balance_usd * 100 AS BIGINT)
-FROM (SELECT current_date AS as_of, (SELECT min(date) FROM fx_rates) AS first_rate) d
+FROM (SELECT current_date AS as_of, ` + firstRateSubquery + ` AS first_rate) d
 LEFT JOIN v_account_balances v ON true
 LEFT JOIN accounts a ON a.id = v.id
 ORDER BY lower(v.name), v.name, v.source_id`

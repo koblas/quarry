@@ -8,15 +8,11 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/duckdb"
-	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 )
 
 // rateWidth and rateScale match schemaDDL's fx_rates.usd_cad DECIMAL(10,6).
 const rateWidth, rateScale = 10, 6
-
-// maxStoredRate is the largest rate in millionths that fits rateWidth digits: DECIMAL(10,6)'s 9999.999999.
-const maxStoredRate = money.Rate(9_999_999_999)
 
 // storedRatesQuery reads the first and last date in fx_rates; both are NULL when it is empty.
 const storedRatesQuery = `SELECT min(date), max(date) FROM fx_rates`
