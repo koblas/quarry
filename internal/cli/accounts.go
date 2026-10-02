@@ -18,7 +18,7 @@ Brokerage and retirement accounts show "not imported": quarry does not
 import investment transactions yet, so it cannot compute their balance.`,
 		Args: currency.args,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			_, configWarnings, err := currency.resolve(cmd, loadConfig)
+			reporting, configWarnings, err := currency.resolve(cmd, loadConfig)
 			if err != nil {
 				return err
 			}
@@ -28,7 +28,7 @@ import investment transactions yet, so it cannot compute their balance.`,
 				return err
 			}
 
-			listing, err := srv.Accounts(cmd.Context(), all)
+			listing, err := srv.Accounts(cmd.Context(), all, reporting)
 			if err != nil {
 				return &runtimeError{err: err}
 			}

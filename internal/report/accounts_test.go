@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -36,7 +37,7 @@ func Test_accounts_leaves_closed_accounts_out_unless_asked(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			srv := report.NewServer(report.WithStore(fakeStore{accounts: all}))
 
-			got, err := srv.Accounts(t.Context(), c.includeClosed)
+			got, err := srv.Accounts(t.Context(), c.includeClosed, money.Native)
 
 			require.NoError(t, err)
 			assert.Equal(t, c.want, got)
@@ -53,7 +54,7 @@ func Test_accounts_counts_the_closed_accounts_it_left_out(t *testing.T) {
 		accounts: store.AccountList{Accounts: []store.AccountBalance{closed("acct-1"), open, closed("acct-2"), closed("acct-3")}},
 	}))
 
-	got, err := srv.Accounts(t.Context(), false)
+	got, err := srv.Accounts(t.Context(), false, money.Native)
 
 	require.NoError(t, err)
 	assert.Equal(t, 3, got.Hidden)
@@ -78,7 +79,7 @@ func Test_accounts_reports_every_account_hidden_only_when_none_are_left(t *testi
 		t.Run(c.name, func(t *testing.T) {
 			srv := report.NewServer(report.WithStore(fakeStore{accounts: store.AccountList{Accounts: c.accounts}}))
 
-			got, err := srv.Accounts(t.Context(), c.includeClosed)
+			got, err := srv.Accounts(t.Context(), c.includeClosed, money.Native)
 
 			require.NoError(t, err)
 			assert.Equal(t, c.want, got.AllHidden())
@@ -89,7 +90,7 @@ func Test_accounts_reports_every_account_hidden_only_when_none_are_left(t *testi
 func Test_accounts_returns_the_store_fault(t *testing.T) {
 	srv := report.NewServer(report.WithStore(fakeStore{err: errDiskRead}))
 
-	_, err := srv.Accounts(t.Context(), true)
+	_, err := srv.Accounts(t.Context(), true, money.Native)
 
 	require.ErrorIs(t, err, errDiskRead)
 }

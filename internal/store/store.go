@@ -456,12 +456,19 @@ type AccountBalance struct {
 	Account
 
 	Balance *int64
+
+	// BalanceCAD and BalanceUSD are Balance in cents in that currency at the latest rate dated on or before AsOf;
+	// nil when Balance is nil or no rate converts it.
+	BalanceCAD, BalanceUSD *int64
 }
 
 // AccountList is every account with its balance as of the store's today.
 type AccountList struct {
 	AsOf     time.Time
 	Accounts []AccountBalance
+
+	// FirstRate is the date of the store's earliest exchange rate; zero when it holds none.
+	FirstRate time.Time
 }
 
 // Window is an inclusive range of civil days: Since and Until are each a

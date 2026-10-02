@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -13,6 +14,9 @@ type AccountListing struct {
 	store.AccountList
 
 	Hidden int
+
+	// Currency is the reporting currency the listing was asked for.
+	Currency money.Currency
 }
 
 // AllHidden reports whether the listing is empty only because every account
@@ -24,7 +28,7 @@ func (l AccountListing) AllHidden() bool {
 // Accounts lists the store's accounts in the store's order with their
 // balances; closed accounts are left out, and counted in Hidden, unless
 // includeClosed is set. It refuses like Status.
-func (s *Server) Accounts(ctx context.Context, includeClosed bool) (AccountListing, error) {
+func (s *Server) Accounts(ctx context.Context, includeClosed bool, _ money.Currency) (AccountListing, error) {
 	list, err := s.store.Accounts(ctx)
 	if err != nil {
 		return AccountListing{}, s.readRefusal(ctx, "accounts", err)
