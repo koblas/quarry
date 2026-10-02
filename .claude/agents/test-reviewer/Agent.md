@@ -32,6 +32,9 @@ questions — skip the full procedure below:
    decode-fault test per decoded record kind, one pin per ruled string, edge row and rule arm the scenario owns (each cell of the cross-product rule; name any absent cell), and, for each destructive guard, a test where the same file is reached
    under another name (case, hard link, symlink, extension)? Unpinned ruled copy or edge row
    is MAJOR; a destructive guard decided by name is MAJOR.
+   Stored coverage claim (span, floor, watermark the code later skips work for) with no stated
+   invariant and no grid over its operands, each mirror side a row, is MAJOR. Production wiring
+   line (constructor option, adapter registration) whose deletion no test fails is MAJOR.
 4. Does the diff touch only what the plan's steps name? Production file, behaviour or public
    symbol no step names is scope creep — name it, and whether a later scenario owns it. Plan
    with `Size: LIGHT` was written by developer itself: judge scope against spec's scenario.
