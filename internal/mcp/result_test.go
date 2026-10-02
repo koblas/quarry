@@ -34,15 +34,29 @@ func Test_a_refused_call_is_one_text_block_and_one_stderr_line(t *testing.T) {
 	assert.True(t, result.IsError)
 	assert.Equal(t, "the report factory broke", textOf(t, result))
 	assert.Nil(t, result.StructuredContent)
-	assert.Equal(t, logPrefixQuery+"the report factory broke\n", h.stderr.String())
+	assert.Equal(t, logPrefixQuery+failedLogLine+"\n", h.stderr.String())
 }
 
-func Test_a_call_the_schema_refuses_writes_one_stderr_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{}, nil)
+func Test_a_call_the_schema_refuses_logs_only_that_its_arguments_were_refused(t *testing.T) {
+	cases := []struct {
+		name      string
+		arguments map[string]any
+	}{
+		{name: "sql missing", arguments: map[string]any{"limit": 5}},
+		{name: "sql of the wrong type", arguments: map[string]any{"sql": 42}},
+		{name: "limit out of range, sql in the call", arguments: map[string]any{"sql": "SELECT 'Chequing' AS payee", "limit": 0}},
+		{name: "unknown property, sql in the call", arguments: map[string]any{"sql": "SELECT 'Chequing' AS payee", "extra": "Chequing"}},
+	}
 
-	result := h.query(t, map[string]any{"limit": 5})
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t, &fakeStore{}, nil)
 
-	assert.True(t, result.IsError)
-	assert.Equal(t, logPrefixQuery+textOf(t, result)+"\n", h.stderr.String())
-	assert.Empty(t, h.store.asked)
+			result := h.query(t, c.arguments)
+
+			assert.True(t, result.IsError)
+			assert.Equal(t, logPrefixQuery+argsRefusedLog+"\n", h.stderr.String())
+			assert.Empty(t, h.store.asked)
+		})
+	}
 }

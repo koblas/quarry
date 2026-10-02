@@ -91,7 +91,7 @@ func Test_sync_status_answers_a_store_fault_as_isError_with_its_text_and_one_std
 
 	assert.True(t, result.IsError)
 	assert.Equal(t, errDiskOnFire.Error(), textOf(t, result))
-	assert.Equal(t, logPrefix+errDiskOnFire.Error()+"\n", h.stderr.String())
+	assert.Equal(t, logPrefix+failedLogLine+"\n", h.stderr.String())
 	assert.Empty(t, stub.commands)
 }
 

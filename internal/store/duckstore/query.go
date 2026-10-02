@@ -35,7 +35,6 @@ func (s *Store) Query(ctx context.Context, query string, maxRows int) (store.Que
 // queryRefusal classifies a failed query as one of Query's refusals.
 func queryRefusal(ctx context.Context, err error) error {
 	// First: the driver's interrupt error reads "context canceled", which would pass as a query error.
-	// It does not always carry the context error itself, so InterruptedBy attaches it.
 	if ctx.Err() != nil {
 		return store.InterruptedBy(ctx, err) //nolint:wrapcheck // InterruptedBy is the wrap
 	}

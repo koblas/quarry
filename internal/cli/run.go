@@ -26,10 +26,9 @@ type ReportFactory func(ctx context.Context, command string) (srv *report.Server
 // other factories it is called only from a command's RunE.
 type SnapshotsFactory func(ctx context.Context, command string) (srv *snapshot.Server, err error)
 
-// MCPServeFunc serves MCP to a client over stdin and stdout until the client
-// closes stdin or ctx ends. It calls ready once it is committed to serving,
-// and returns nil, context.Canceled or syscall.EPIPE (wrapped or not) for a
-// normal stop and any other error for a failure. stdout carries only the protocol.
+// MCPServeFunc serves MCP over stdin and stdout until the client closes stdin or ctx ends, calling
+// ready once it is committed to serving. It returns nil, context.Canceled or syscall.EPIPE (wrapped
+// or not) for a normal stop and any other error for a failure.
 type MCPServeFunc func(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, ready func()) error
 
 // TerminalProbe reports whether r is an interactive terminal rather than a

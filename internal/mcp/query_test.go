@@ -70,8 +70,7 @@ func Test_query_refuses_a_limit_the_schema_rejects_without_touching_the_store(t 
 			assert.True(t, result.IsError)
 			assert.Empty(t, h.store.asked)
 			assert.Zero(t, h.built)
-			assert.Equal(t, 1, countLines(h.stderr.String()))
-			assert.Contains(t, h.stderr.String(), logPrefixQuery)
+			assert.Equal(t, logPrefixQuery+argsRefusedLog+"\n", h.stderr.String())
 		})
 	}
 }
@@ -110,7 +109,7 @@ func Test_query_with_arguments_missing_sql_is_refused_not_panicked(t *testing.T)
 
 			assert.True(t, result.IsError)
 			assert.Empty(t, h.store.asked)
-			assert.Equal(t, 1, countLines(h.stderr.String()))
+			assert.Equal(t, logPrefixQuery+argsRefusedLog+"\n", h.stderr.String())
 		})
 	}
 }
@@ -131,6 +130,7 @@ func Test_query_refuses_with_the_report_factory_text_when_it_fails(t *testing.T)
 
 	assert.True(t, result.IsError)
 	assert.Equal(t, errNoHome.Error(), textOf(t, result))
+	assert.Equal(t, logPrefixQuery+failedLogLine+"\n", h.stderr.String())
 	assert.Empty(t, h.store.asked)
 }
 
@@ -141,5 +141,5 @@ func Test_query_returns_a_store_fault_it_cannot_classify_unchanged(t *testing.T)
 
 	assert.True(t, result.IsError)
 	assert.Equal(t, "disk on fire", textOf(t, result))
-	assert.Equal(t, logPrefixQuery+"disk on fire\n", h.stderr.String())
+	assert.Equal(t, logPrefixQuery+failedLogLine+"\n", h.stderr.String())
 }

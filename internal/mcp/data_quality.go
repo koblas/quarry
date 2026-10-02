@@ -10,12 +10,15 @@ import (
 	"github.com/koblas/quarry/internal/report/document"
 )
 
-// dataQuality lists the findings in.Status and in.Type select, at most in.Limit of them and
-// maxItems items each, with a warning for each cut; a config that cannot be read refuses.
+// configRefusalLog is the stderr line of a config that cannot be read; its reason can quote the file or a value in it.
+const configRefusalLog = "cannot read quarry's config file; run quarry findings to see why"
+
+// dataQuality lists the findings in.Status and in.Type select, at most in.Limit with maxItems items each,
+// and a warning for each cut.
 func (s *Server) dataQuality(ctx context.Context, in dataQualityInput) (any, error) {
 	cfg, err := s.newConfig(commandName)
 	if err != nil {
-		return nil, err
+		return nil, withLog(err, configRefusalLog)
 	}
 	srv, err := s.newReport(ctx, commandName)
 	if err != nil {
@@ -35,8 +38,7 @@ func (s *Server) dataQuality(ctx context.Context, in dataQualityInput) (any, err
 	return document.NewFindingsList(kept, status, typ, append(warnings, itemWarnings...)), nil
 }
 
-// capFindings keeps the first limit findings of listing in listing order, and reports how many
-// listing held and whether any were dropped. Counts and Unmatched are listing's own.
+// capFindings keeps the first limit findings of listing and reports how many it held and whether any were cut.
 func capFindings(listing report.FindingsListing, limit int) (report.FindingsListing, int, bool) {
 	kept := report.FindingsListing{Counts: listing.Counts, Unmatched: listing.Unmatched}
 	total, left := 0, limit
@@ -51,8 +53,7 @@ func capFindings(listing report.FindingsListing, limit int) (report.FindingsList
 	return kept, total, total > limit
 }
 
-// capItems keeps the first maxItems items of each finding in listing, copying what it cuts so the
-// caller's listing is untouched, and returns a warning per cut finding in listing order.
+// capItems keeps the first maxItems items of each finding in a copy of listing, with a warning per cut finding.
 func capItems(listing report.FindingsListing) (report.FindingsListing, []string) {
 	var warnings []string
 	capped := report.FindingsListing{Counts: listing.Counts, Unmatched: listing.Unmatched}

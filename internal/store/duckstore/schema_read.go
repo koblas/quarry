@@ -28,10 +28,9 @@ const (
 	schemaDatesQuery      = `SELECT min(date), max(date) FROM transactions`
 )
 
-// Schema reads the store's tables and views with their columns, every account and category, and
-// the first and last transaction dates, on one connection. Relations come from DuckDB's catalog
-// at call time, tables first, each by name; accounts and categories are in no order. It refuses a
-// store it cannot open or read with *store.OpenError.
+// Schema reads the store's tables and views with their columns (tables first, each by name), every
+// account and category in no order, and the first and last transaction dates, on one connection.
+// It refuses a store it cannot open or read with *store.OpenError.
 func (s *Store) Schema(ctx context.Context) (store.Schema, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {

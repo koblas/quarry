@@ -20,6 +20,7 @@ import (
 
 const (
 	dqLogPrefix = "quarry: mcp: data_quality: "
+	dqConfigLog = "cannot read quarry's config file; run quarry findings to see why"
 	dqConfig    = testHome + "/Library/Application Support/quarry/config.toml"
 )
 
@@ -175,7 +176,7 @@ func Test_data_quality_refuses_a_bad_config_before_touching_the_store(t *testing
 
 	assert.True(t, result.IsError)
 	assert.Equal(t, refusal.Error(), textOf(t, result))
-	assert.Equal(t, dqLogPrefix+refusal.Error()+"\n", h.stderr.String())
+	assert.Equal(t, dqLogPrefix+dqConfigLog+"\n", h.stderr.String())
 	assert.Zero(t, h.built)
 	assert.Zero(t, h.store.findingsReads)
 }
@@ -188,7 +189,7 @@ func Test_data_quality_refuses_a_loader_failure_that_is_not_a_config_refusal_the
 
 	assert.True(t, result.IsError)
 	assert.Equal(t, errNoHome.Error(), textOf(t, result))
-	assert.Equal(t, dqLogPrefix+errNoHome.Error()+"\n", h.stderr.String())
+	assert.Equal(t, dqLogPrefix+dqConfigLog+"\n", h.stderr.String())
 	assert.Zero(t, h.built)
 }
 
@@ -199,7 +200,7 @@ func Test_data_quality_answers_a_report_factory_failure_as_isError_with_its_text
 
 	assert.True(t, result.IsError)
 	assert.Equal(t, errFactoryBroke.Error(), textOf(t, result))
-	assert.Equal(t, dqLogPrefix+errFactoryBroke.Error()+"\n", h.stderr.String())
+	assert.Equal(t, dqLogPrefix+failedLogLine+"\n", h.stderr.String())
 }
 
 func Test_data_quality_answers_a_store_fault_as_isError_with_its_text(t *testing.T) {
@@ -209,7 +210,7 @@ func Test_data_quality_answers_a_store_fault_as_isError_with_its_text(t *testing
 
 	assert.True(t, result.IsError)
 	assert.Equal(t, errDiskOnFire.Error(), textOf(t, result))
-	assert.Equal(t, dqLogPrefix+errDiskOnFire.Error()+"\n", h.stderr.String())
+	assert.Equal(t, dqLogPrefix+failedLogLine+"\n", h.stderr.String())
 	assert.Nil(t, result.StructuredContent)
 }
 
@@ -329,35 +330,32 @@ func Test_data_quality_words_the_findings_cap_for_each_status(t *testing.T) {
 
 func Test_data_quality_words_the_findings_cap_tail_by_limit_and_type(t *testing.T) {
 	cases := []struct {
-		name string
-		args map[string]any
-		want string
+		name  string
+		args  map[string]any
+		total int
+		want  string
 	}{
 		{
-			name: "limit under 500, no type", args: map[string]any{"limit": 2},
+			name: "limit under 500, no type", args: map[string]any{"limit": 2}, total: 3,
 			want: "listed the first 2 of 3 open findings; pass type to narrow the list, or a larger limit (at most 500)",
 		},
 		{
-			name: "limit under 500, type given", args: map[string]any{"limit": 2, "type": "uncategorized"},
+			name: "limit under 500, type given", args: map[string]any{"limit": 2, "type": "uncategorized"}, total: 3,
 			want: "listed the first 2 of 3 open findings; pass a larger limit (at most 500)",
 		},
 		{
-			name: "limit 500, no type", args: map[string]any{"limit": 500},
+			name: "limit 500, no type", args: map[string]any{"limit": 500}, total: 501,
 			want: "listed the first 500 of 501 open findings; pass type to narrow the list",
 		},
 		{
-			name: "limit 500, type given", args: map[string]any{"limit": 500, "type": "uncategorized"},
+			name: "limit 500, type given", args: map[string]any{"limit": 500, "type": "uncategorized"}, total: 501,
 			want: "listed the first 500 of 501 open findings",
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			total := 3
-			if c.args["limit"] == 500 {
-				total = 501
-			}
-			h := newHarness(t, listOf(uncategorized(total)...), nil, mcp.WithConfig((&configStub{}).load))
+			h := newHarness(t, listOf(uncategorized(c.total)...), nil, mcp.WithConfig((&configStub{}).load))
 
 			doc := decodeFindings(t, h.dataQuality(t, c.args))
 

@@ -4,8 +4,9 @@ package mcp
 import (
 	"bytes"
 	"context"
-	"strings"
+	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/koblas/quarry/internal/report"
@@ -15,11 +16,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// logged runs a tools/call for tool "query" through errorLog(w) with next answering res, and returns w's text.
-func logged(ctx context.Context, res sdk.Result, err error) string {
+// logged runs a tools/call for tool "query" through errorLog(w) with next answering res and recording line when it is not "".
+func logged(ctx context.Context, res sdk.Result, line string) string {
 	var w bytes.Buffer
 	call := &sdk.CallToolRequest{Params: &sdk.CallToolParamsRaw{Name: "query"}}
-	next := func(context.Context, string, sdk.Request) (sdk.Result, error) { return res, err }
+	next := func(ctx context.Context, _ string, _ sdk.Request) (sdk.Result, error) {
+		if line != "" {
+			recordLog(ctx, line)
+		}
+		return res, nil
+	}
 
 	_, _ = errorLog(&w)(next)(ctx, "tools/call", call)
 
@@ -30,25 +36,35 @@ func refusalResult(text string) *sdk.CallToolResult {
 	return &sdk.CallToolResult{IsError: true, Content: []sdk.Content{&sdk.TextContent{Text: text}}}
 }
 
-func Test_errorLog_writes_the_line_of_a_refusal_whose_context_is_live(t *testing.T) {
-	assert.Equal(t, "quarry: mcp: query: boom\n", logged(t.Context(), refusalResult("boom"), nil))
+func Test_errorLog_writes_the_line_the_handler_recorded_not_the_text_the_client_gets(t *testing.T) {
+	const modelText = "query failed: Conversion Error: Could not convert string 'Chequing' to INT32"
+
+	got := logged(t.Context(), refusalResult(modelText), "query failed: Conversion Error; details went to the client only")
+
+	assert.Equal(t, "quarry: mcp: query: query failed: Conversion Error; details went to the client only\n", got)
+}
+
+func Test_errorLog_logs_an_argument_refusal_for_a_refusal_with_no_recorded_line(t *testing.T) {
+	got := logged(t.Context(), refusalResult("validating arguments: sql is 'SELECT 1; DROP'"), "")
+
+	assert.Equal(t, "quarry: mcp: query: refused the call's arguments; details went to the client only\n", got)
 }
 
 func Test_errorLog_writes_nothing_for_a_call_whose_context_is_done(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	assert.Empty(t, logged(ctx, refusalResult("context canceled"), nil))
+	assert.Empty(t, logged(ctx, refusalResult("context canceled"), "recorded"))
 }
 
 func Test_errorLog_writes_nothing_for_a_call_the_server_answered_with_a_protocol_error(t *testing.T) {
 	var nilResult *sdk.CallToolResult
 
-	assert.Empty(t, logged(t.Context(), nilResult, context.Canceled))
+	assert.Empty(t, logged(t.Context(), nilResult, ""))
 }
 
-func Test_errorLog_writes_an_empty_text_for_a_refusal_with_no_text_block(t *testing.T) {
-	assert.Equal(t, "quarry: mcp: query: \n", logged(t.Context(), &sdk.CallToolResult{IsError: true}, nil))
+func Test_errorLog_writes_nothing_for_a_call_that_succeeded(t *testing.T) {
+	assert.Empty(t, logged(t.Context(), &sdk.CallToolResult{}, ""))
 }
 
 // fakeQueryStore records the maxRows Query is asked for.
@@ -81,10 +97,28 @@ func Test_query_caps_a_limit_the_schema_did_not_check(t *testing.T) {
 	}
 }
 
-func Test_errorLog_keeps_concurrent_refusals_lines_whole(t *testing.T) {
+// overlapWriter counts writes that begin while another is still in progress.
+type overlapWriter struct {
+	active   atomic.Int32
+	overlaps atomic.Int32
+}
+
+func (w *overlapWriter) Write(p []byte) (int, error) {
+	if w.active.Add(1) > 1 {
+		w.overlaps.Add(1)
+	}
+	for range 10 {
+		runtime.Gosched()
+	}
+	w.active.Add(-1)
+	return len(p), nil
+}
+
+func Test_errorLog_never_writes_two_lines_at_once(t *testing.T) {
 	const calls = 64
-	var w bytes.Buffer
-	log := errorLog(&w)(func(context.Context, string, sdk.Request) (sdk.Result, error) {
+	var w overlapWriter
+	log := errorLog(&w)(func(ctx context.Context, _ string, _ sdk.Request) (sdk.Result, error) {
+		recordLog(ctx, "boom")
 		return refusalResult("boom"), nil
 	})
 	call := &sdk.CallToolRequest{Params: &sdk.CallToolParamsRaw{Name: "query"}}
@@ -95,5 +129,5 @@ func Test_errorLog_keeps_concurrent_refusals_lines_whole(t *testing.T) {
 	}
 	wg.Wait()
 
-	assert.Equal(t, strings.Repeat("quarry: mcp: query: boom\n", calls), w.String())
+	assert.Zero(t, w.overlaps.Load())
 }

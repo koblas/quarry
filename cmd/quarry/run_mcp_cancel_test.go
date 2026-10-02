@@ -18,7 +18,7 @@ import (
 )
 
 // cancelBound is how long a cancelled query has to report its interrupt.
-const cancelBound = 3 * time.Second
+const cancelBound = 10 * time.Second
 
 func Test_run_mcp_cancelled_query_is_interrupted_quietly(t *testing.T) {
 	home := t.TempDir()

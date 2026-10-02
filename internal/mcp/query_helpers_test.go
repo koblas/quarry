@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/koblas/quarry/internal/mcp"
@@ -21,6 +20,8 @@ const (
 	testStorePath  = testHome + "/Library/Application Support/quarry/quarry.duckdb"
 	blankSQLLine   = "query needs SQL in the sql parameter"
 	logPrefixQuery = "quarry: mcp: query: "
+	failedLogLine  = "failed; details went to the client only"
+	argsRefusedLog = "refused the call's arguments; details went to the client only"
 )
 
 var (
@@ -96,7 +97,7 @@ func newHarness(t *testing.T, st *fakeStore, buildErr error, opts ...mcp.Option)
 		}
 		return report.NewServer(report.WithStore(st), report.WithHome(testHome)), nil
 	}
-	h.running = startServerLogging(t, mcp.NewServer(append([]mcp.Option{mcp.WithReport(factory)}, opts...)...), h.stderr)
+	h.running = startServerLogging(t, newServer(append([]mcp.Option{mcp.WithReport(factory)}, opts...)...), h.stderr)
 	return h
 }
 
@@ -157,6 +158,3 @@ func jsonOf(t *testing.T, v any) string {
 	require.NoError(t, err)
 	return string(encoded)
 }
-
-// countLines is how many newline-terminated lines s holds.
-func countLines(s string) int { return strings.Count(s, "\n") }

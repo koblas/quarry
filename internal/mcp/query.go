@@ -16,7 +16,7 @@ var errBlankSQL = errors.New("query needs SQL in the sql parameter")
 // effective limit's rows, with a warning when it cut some off.
 func (s *Server) query(ctx context.Context, in queryInput) (any, error) {
 	if strings.TrimSpace(in.SQL) == "" {
-		return nil, errBlankSQL
+		return nil, verbatim(errBlankSQL)
 	}
 	srv, err := s.newReport(ctx, commandName)
 	if err != nil {

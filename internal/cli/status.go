@@ -58,10 +58,7 @@ when the last sync could not fetch new ones, why.`,
 func statusIgnore(loadConfig ConfigLoader) ([]string, []string, []string) {
 	cfg, err := loadConfig("status")
 	if err != nil {
-		_, warnings := document.StatusIgnore(nil, config.Problem(err))
-		ignore, warningsAbsolute := document.StatusIgnore(nil, config.ProblemAbsolute(err))
-		return ignore, warnings, warningsAbsolute
+		return nil, []string{document.CannotTellIgnored(config.Problem(err))}, []string{document.CannotTellIgnored(config.ProblemAbsolute(err))}
 	}
-	ignore, _ := document.StatusIgnore(cfg.Ignore, "")
-	return ignore, nil, nil
+	return cfg.Ignore, nil, nil
 }

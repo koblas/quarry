@@ -22,6 +22,7 @@ const (
 	mcpExternalRefusal    = "query reads only quarry's store; other files, databases and extensions are turned off"
 	mcpUnprintableRefusal = `cannot print column "doc" of type JSON; cast it in the query, e.g. CAST(doc AS VARCHAR)`
 	mcpBadColumnRefusal   = `query failed: Binder Error: Referenced column "missing_column" not found in FROM clause!`
+	mcpParserRefusal      = `query failed: Parser Error: syntax error at or near "SELEKT"`
 )
 
 func Test_run_mcp_query_returns_the_sql_json_document(t *testing.T) {
@@ -78,34 +79,33 @@ func Test_run_mcp_query_over_its_limit_returns_the_first_rows_and_says_so(t *tes
 	const cutTail = "; the query has more; aggregate or filter in SQL to see the rest"
 	cases := []struct {
 		name          string
-		query         string
-		limit         int // 0 leaves the argument out
+		arguments     map[string]any
 		wantRows      int
 		wantLimit     int
 		wantTruncated bool
 		wantWarnings  []string
 	}{
 		{
-			name: "more rows than an explicit limit", query: "SELECT range AS n FROM range(10)", limit: 3,
+			name: "more rows than an explicit limit", arguments: map[string]any{"sql": "SELECT range AS n FROM range(10)", "limit": 3},
 			wantRows: 3, wantLimit: 3, wantTruncated: true,
 			wantWarnings: []string{"returned the first 3 rows" + cutTail},
 		},
 		{
-			name: "limit 1 is worded in the singular", query: "SELECT range AS n FROM range(2)", limit: 1,
+			name: "limit 1 is worded in the singular", arguments: map[string]any{"sql": "SELECT range AS n FROM range(2)", "limit": 1},
 			wantRows: 1, wantLimit: 1, wantTruncated: true,
 			wantWarnings: []string{"returned the first 1 row" + cutTail},
 		},
 		{
-			name: "more rows than the default limit", query: "SELECT range AS n FROM range(501)",
+			name: "more rows than the default limit", arguments: map[string]any{"sql": "SELECT range AS n FROM range(501)"},
 			wantRows: 500, wantLimit: 500, wantTruncated: true,
 			wantWarnings: []string{"returned the first 500 rows" + cutTail},
 		},
 		{
-			name: "exactly the limit is not truncated", query: "SELECT range AS n FROM range(3)", limit: 3,
+			name: "exactly the limit is not truncated", arguments: map[string]any{"sql": "SELECT range AS n FROM range(3)", "limit": 3},
 			wantRows: 3, wantLimit: 3, wantWarnings: []string{},
 		},
 		{
-			name: "no rows at all", query: "SELECT 1 AS n WHERE false",
+			name: "no rows at all", arguments: map[string]any{"sql": "SELECT 1 AS n WHERE false"},
 			wantRows: 0, wantLimit: 500, wantWarnings: []string{},
 		},
 	}
@@ -113,12 +113,7 @@ func Test_run_mcp_query_over_its_limit_returns_the_first_rows_and_says_so(t *tes
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			arguments := map[string]any{"sql": c.query}
-			if c.limit != 0 {
-				arguments["limit"] = c.limit
-			}
-
-			result := callQuery(ctx, t, peer, arguments)
+			result := callQuery(ctx, t, peer, c.arguments)
 
 			require.False(t, result.IsError, textOf(result))
 			var doc struct {
@@ -146,14 +141,22 @@ func Test_run_mcp_query_refuses_what_it_cannot_run(t *testing.T) {
 		name     string
 		query    string
 		wantLine string
+		wantLog  string
 	}{
-		{name: "a write statement", query: "CREATE TABLE notes (body VARCHAR)", wantLine: mcpWriteRefusal},
-		{name: "a read of another file", query: "SELECT n FROM read_csv('" + source + "')", wantLine: mcpExternalRefusal},
-		{name: "whitespace only", query: " \n\t ", wantLine: mcpBlankSQLLine},
-		{name: "a bare semicolon", query: ";", wantLine: mcpBlankSQLLine},
-		{name: "a comment only", query: "-- note", wantLine: mcpBlankSQLLine},
-		{name: "invalid SQL", query: "SELECT missing_column FROM accounts", wantLine: mcpBadColumnRefusal},
-		{name: "a column it cannot print", query: `SELECT '{"a": 1}'::JSON AS doc`, wantLine: mcpUnprintableRefusal},
+		{name: "a write statement", query: "CREATE TABLE notes (body VARCHAR)", wantLine: mcpWriteRefusal, wantLog: mcpWriteRefusal},
+		{name: "a read of another file", query: "SELECT n FROM read_csv('" + source + "')", wantLine: mcpExternalRefusal, wantLog: mcpExternalRefusal},
+		{name: "whitespace only", query: " \n\t ", wantLine: mcpBlankSQLLine, wantLog: mcpBlankSQLLine},
+		{name: "a bare semicolon", query: ";", wantLine: mcpBlankSQLLine, wantLog: mcpBlankSQLLine},
+		{name: "a comment only", query: "-- note", wantLine: mcpBlankSQLLine, wantLog: mcpBlankSQLLine},
+		{name: "malformed SQL", query: "SELEKT 1", wantLine: mcpParserRefusal, wantLog: "query failed: Parser Error; details went to the client only"},
+		{
+			name: "a missing column", query: "SELECT missing_column FROM accounts", wantLine: mcpBadColumnRefusal,
+			wantLog: "query failed: Binder Error; details went to the client only",
+		},
+		{
+			name: "a column it cannot print", query: `SELECT '{"a": 1}'::JSON AS doc`, wantLine: mcpUnprintableRefusal,
+			wantLog: "query failed: a result column has a type quarry cannot print; details went to the client only",
+		},
 	}
 	ctx, peer := newQueryPeer(t)
 
@@ -167,9 +170,20 @@ func Test_run_mcp_query_refuses_what_it_cannot_run(t *testing.T) {
 			require.Len(t, result.Content, 1)
 			assert.Equal(t, c.wantLine, textOf(result))
 			assert.Nil(t, result.StructuredContent)
-			assert.Equal(t, "quarry: mcp: query: "+c.wantLine+"\n", peer.stderr.String()[loggedBefore:])
+			assert.Equal(t, "quarry: mcp: query: "+c.wantLog+"\n", peer.stderr.String()[loggedBefore:])
 		})
 	}
+}
+
+func Test_run_mcp_query_logs_no_stored_value_and_no_sql_when_a_cast_of_a_stored_name_fails(t *testing.T) {
+	const query = "SELECT CAST(name AS INTEGER) AS chequing_as_number FROM accounts"
+	ctx, peer := newQueryPeer(t)
+
+	result := callQuery(ctx, t, peer, map[string]any{"sql": query})
+
+	require.True(t, result.IsError)
+	assert.Contains(t, textOf(result), "Chequing")
+	assert.Equal(t, "quarry: mcp: query: query failed: Conversion Error; details went to the client only\n", peer.stderr.String())
 }
 
 // newQueryPeer syncs the accounts fixture under a fresh HOME and connects a client to quarry mcp.

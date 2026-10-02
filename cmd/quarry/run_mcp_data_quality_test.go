@@ -78,7 +78,8 @@ func Test_run_mcp_data_quality_refuses_an_unreadable_config(t *testing.T) {
 	assert.True(t, result.IsError)
 	assert.Equal(t, refusal, textOf(result))
 	assert.Contains(t, refusal, configShown)
-	assert.Equal(t, "quarry: mcp: data_quality: "+refusal+"\n", peer.stderr.String())
+	assert.Equal(t, "quarry: mcp: data_quality: cannot read quarry's config file; run quarry findings to see why\n", peer.stderr.String())
+	assert.NotContains(t, peer.stderr.String(), home)
 }
 
 // syncManyUncategorizedPayees syncs a file of 60 payees with one uncategorized split each, plus a payee whose

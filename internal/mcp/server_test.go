@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/koblas/quarry/internal/mcp"
+	"github.com/koblas/quarry/internal/report"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,6 +24,12 @@ var errClientGone = errors.New("client gone")
 type failingWriter struct{}
 
 func (failingWriter) Write([]byte) (int, error) { return 0, errClientGone }
+
+// newServer is a Server with a report factory and config loader, which Serve requires, and opts.
+func newServer(opts ...mcp.Option) *mcp.Server {
+	factory := func(context.Context, string) (*report.Server, error) { return nil, errFactoryBroke }
+	return mcp.NewServer(append([]mcp.Option{mcp.WithReport(factory), mcp.WithConfig((&configStub{}).load)}, opts...)...)
+}
 
 // running is a Serve call wired to an in-process MCP client.
 type running struct {
@@ -79,7 +87,7 @@ func Test_serve_identifies_an_unversioned_build_as_devel(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			r := startServer(t, mcp.NewServer(c.options...))
+			r := startServer(t, newServer(c.options...))
 
 			got := r.session.InitializeResult().ServerInfo
 
@@ -88,8 +96,28 @@ func Test_serve_identifies_an_unversioned_build_as_devel(t *testing.T) {
 	}
 }
 
+func Test_serve_refuses_a_server_built_without_its_report_factory_or_config_loader(t *testing.T) {
+	factory := func(context.Context, string) (*report.Server, error) { return nil, errFactoryBroke }
+	cases := []struct {
+		name    string
+		options []mcp.Option
+	}{
+		{name: "neither", options: nil},
+		{name: "no config loader", options: []mcp.Option{mcp.WithReport(factory)}},
+		{name: "no report factory", options: []mcp.Option{mcp.WithConfig((&configStub{}).load)}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := mcp.NewServer(c.options...).Serve(t.Context(), strings.NewReader(""), io.Discard, io.Discard)
+
+			assert.EqualError(t, err, "mcp: Server needs WithReport and WithConfig")
+		})
+	}
+}
+
 func Test_serve_returns_nil_when_the_client_closes_stdin(t *testing.T) {
-	r := startServer(t, mcp.NewServer())
+	r := startServer(t, newServer())
 
 	require.NoError(t, r.session.Close())
 
@@ -100,7 +128,7 @@ func Test_serve_returns_the_write_error_when_stdout_fails(t *testing.T) {
 	serverStdin, toServer := io.Pipe()
 	served := make(chan error, 1)
 	go func() {
-		served <- mcp.NewServer().Serve(t.Context(), serverStdin, failingWriter{}, io.Discard)
+		served <- newServer().Serve(t.Context(), serverStdin, failingWriter{}, io.Discard)
 	}()
 
 	_, err := toServer.Write([]byte(`{"jsonrpc":"2.0","id":1,"method":"ping"}` + "\n"))
@@ -119,7 +147,7 @@ func Test_serve_returns_the_context_error_when_the_context_ends(t *testing.T) {
 	serverStdin, _ := io.Pipe()
 	served := make(chan error, 1)
 	go func() {
-		served <- mcp.NewServer().Serve(ctx, serverStdin, io.Discard, io.Discard)
+		served <- newServer().Serve(ctx, serverStdin, io.Discard, io.Discard)
 	}()
 
 	cancel()

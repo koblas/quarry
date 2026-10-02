@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"io"
 	"time"
 
@@ -18,6 +19,9 @@ const develVersion = "(devel)"
 
 // commandName is the command the report factory is asked for, as in the home-directory refusal's "run quarry mcp again".
 const commandName = "mcp"
+
+// errIncomplete is Serve's refusal of a Server built without the report factory or config loader it reads through.
+var errIncomplete = errors.New("mcp: Server needs WithReport and WithConfig")
 
 // ReportFactory builds the report server one tool call reads through, for command; it is called
 // per call, so the store is never held between calls.
@@ -49,17 +53,17 @@ func WithVersion(version string) Option {
 	}
 }
 
-// WithReport sets the factory the tools read the store through; a Server without one cannot answer them.
+// WithReport sets the factory the tools read the store through; Serve requires it.
 func WithReport(newReport ReportFactory) Option {
 	return func(s *Server) { s.newReport = newReport }
 }
 
-// WithConfig sets the loader the tools read the config through; a Server without one cannot answer sync_status.
+// WithConfig sets the loader the tools read the config through; Serve requires it.
 func WithConfig(newConfig ConfigLoader) Option {
 	return func(s *Server) { s.newConfig = newConfig }
 }
 
-// WithTimeout sets the deadline of each tool call, in whole seconds, which the timeout lines name.
+// WithTimeout sets the deadline of each tool call, in whole seconds.
 func WithTimeout(d time.Duration) Option {
 	return func(s *Server) { s.timeout = d }
 }
@@ -73,10 +77,13 @@ func NewServer(opts ...Option) *Server {
 	return s
 }
 
-// Serve speaks MCP as newline-delimited JSON-RPC on stdin and stdout until
-// the client closes stdin or ctx ends, and logs each call that ends isError to stderr. It returns the transport's error
-// unwrapped: nil at EOF, ctx.Err() when ctx ends, the write error otherwise.
+// Serve speaks MCP as newline-delimited JSON-RPC on stdin and stdout until the client closes stdin or ctx ends,
+// logging each isError call to stderr. It returns the transport's error unwrapped (nil at EOF, ctx.Err() when
+// ctx ends), or errIncomplete when WithReport or WithConfig is missing.
 func (s *Server) Serve(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer) error {
+	if s.newReport == nil || s.newConfig == nil {
+		return errIncomplete
+	}
 	srv := sdk.NewServer(
 		&sdk.Implementation{Name: serverName, Version: s.version},
 		&sdk.ServerOptions{Instructions: instructions},

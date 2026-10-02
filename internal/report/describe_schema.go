@@ -20,11 +20,9 @@ type Schema struct {
 	AccountsTotal, CategoriesTotal int
 }
 
-// DescribeSchema describes the store from one read. Relations come tables first, then by name;
-// accounts in quarry accounts order (name ignoring case, then name, then id); categories by full
-// path. Accounts and categories are sorted, then cut to the first maxListed each; a maxListed of 0
-// or less keeps every one. It refuses with a RefusalError when interrupted or when the store
-// cannot be opened; other store errors are returned unchanged.
+// DescribeSchema describes the store from one read: relations tables first then by name, accounts in
+// quarry accounts order, categories by full path, the last two cut to the first maxListed each (none
+// cut when maxListed <= 0). It refuses with a RefusalError when interrupted or the store cannot be opened.
 func (s *Server) DescribeSchema(ctx context.Context, maxListed int) (Schema, error) {
 	read, err := s.store.Schema(ctx)
 	if err != nil {

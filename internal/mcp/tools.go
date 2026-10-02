@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/report"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -90,7 +91,7 @@ func (s *Server) addTools(srv *sdk.Server) {
 	}, "sql")), handler(s.timeout, queryStoppedLine, s.query))
 	sdk.AddTool(srv, tool(toolSyncStatus, syncStatusDescription, objectSchema(nil)), handler(s.timeout, stoppedLine(toolSyncStatus), s.syncStatus))
 	sdk.AddTool(srv, tool(toolDataQuality, dataQualityDescription, objectSchema(map[string]*jsonschema.Schema{
-		"status": {Type: "string", Enum: []any{"open", "ignored", "fixed", "all"}, Default: []byte(`"open"`)},
+		"status": {Type: "string", Enum: []any{string(finding.StatusOpen), string(finding.StatusIgnored), string(finding.StatusFixed), string(report.FindingsAll)}, Default: []byte(`"open"`)},
 		"type":   {Type: "string", Enum: findingTypes()},
 		"limit":  limitSchema(defaultFindLimit),
 	})), handler(s.timeout, stoppedLine(toolDataQuality), s.dataQuality))
