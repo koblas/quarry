@@ -5,11 +5,13 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const mcpPingRequest = `{"jsonrpc":"2.0","id":1,"method":"ping"}` + "\n"
@@ -128,4 +130,35 @@ func deadlineContext(t *testing.T, cancelled bool) context.Context {
 		cancel()
 	}
 	return ctx
+}
+
+// mcpPipeSubprocessEnv, when set to "1" in the child's environment, makes
+// Test_quarry_mcp_exits_0_when_the_real_stdout_pipe_breaks run as the quarry mcp process.
+const mcpPipeSubprocessEnv = "QUARRY_MCP_PIPE_SUBPROCESS"
+
+// Re-executes the test binary: only a real process dies of SIGPIPE on a broken fd 1.
+func Test_quarry_mcp_exits_0_when_the_real_stdout_pipe_breaks(t *testing.T) {
+	if os.Getenv(mcpPipeSubprocessEnv) == "1" {
+		os.Exit(runProcess(t.Context(), []string{"mcp"}, os.Stdout, os.Stderr))
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], //nolint:gosec // re-executes this test binary with a fixed -test.run
+		"-test.run=^Test_quarry_mcp_exits_0_when_the_real_stdout_pipe_breaks$")
+	cmd.Env = append(os.Environ(), mcpPipeSubprocessEnv+"=1", "HOME="+t.TempDir())
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	stdin, err := cmd.StdinPipe()
+	require.NoError(t, err)
+	stdout, err := cmd.StdoutPipe()
+	require.NoError(t, err)
+	require.NoError(t, cmd.Start())
+
+	require.NoError(t, stdout.Close())
+	_, writeErr := io.WriteString(stdin, mcpPingRequest)
+	waitErr := cmd.Wait()
+
+	require.NoError(t, writeErr)
+	assert.NoError(t, waitErr)
+	assert.Empty(t, stderr.String())
 }

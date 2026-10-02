@@ -28,7 +28,7 @@ func Test_newMCPServe_reports_the_build_infos_module_version(t *testing.T) {
 			serverStdin, toServer := io.Pipe()
 			serverStdout, fromServer := io.Pipe()
 			go func() {
-				_ = newMCPServe(c.info)(ctx, serverStdin, fromServer, io.Discard)
+				_ = newMCPServe(c.info)(ctx, serverStdin, fromServer, io.Discard, func() {})
 				_ = fromServer.Close()
 			}()
 

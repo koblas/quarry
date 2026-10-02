@@ -27,12 +27,13 @@ type ReportFactory func(ctx context.Context, command string) (srv *report.Server
 type SnapshotsFactory func(ctx context.Context, command string) (srv *snapshot.Server, err error)
 
 // MCPServeFunc serves MCP to a client over stdin and stdout until the client
-// closes stdin or ctx ends, returning a transport or protocol failure.
-// stderr is for diagnostics only; stdout carries nothing but the protocol.
-type MCPServeFunc func(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer) error
+// closes stdin or ctx ends. It calls ready once it is committed to serving,
+// and returns nil, context.Canceled or syscall.EPIPE (wrapped or not) for a
+// normal stop and any other error for a failure. stdout carries only the protocol.
+type MCPServeFunc func(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, ready func()) error
 
 // TerminalProbe reports whether r is an interactive terminal rather than a
-// pipe, file or in-memory reader.
+// pipe, file or in-memory reader. A nil probe means "not a terminal".
 type TerminalProbe func(r io.Reader) bool
 
 // ConfigLoader reads quarry's config file for command, the name of the

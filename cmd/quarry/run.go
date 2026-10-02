@@ -133,9 +133,19 @@ func newConfigLoader() cli.ConfigLoader {
 }
 
 // newMCPServe returns cli.Execute's MCPServeFunc: an MCP server reporting the
-// module version in info, the same one store_info.quarry_version records.
+// module version in info, the same one store_info.quarry_version records. It
+// refuses with resolveHome's error, before calling ready, when $HOME is unset.
 func newMCPServe(info *debug.BuildInfo) cli.MCPServeFunc {
-	return mcp.NewServer(mcp.WithVersion(buildVersion(info))).Serve
+	srv := mcp.NewServer(mcp.WithVersion(buildVersion(info)))
+	return func(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, ready func()) error {
+		if _, err := resolveHome("mcp"); err != nil {
+			return err
+		}
+		// A broken stdout must surface as EPIPE from the write, not kill the process.
+		signal.Ignore(syscall.SIGPIPE)
+		ready()
+		return srv.Serve(ctx, stdin, stdout, stderr)
+	}
 }
 
 // storeDirUnder is the directory holding quarry's store and snapshots.
@@ -175,6 +185,7 @@ func defaultEnv(stdout, stderr io.Writer) cli.Env {
 		NewSnapshots: newSnapshotsFactory(),
 		LoadConfig:   newConfigLoader(),
 		ServeMCP:     newMCPServe(info),
+		IsTerminal:   isTerminal,
 		Now:          time.Now,
 	}
 }

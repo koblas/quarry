@@ -1,14 +1,26 @@
 package cli
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"syscall"
+
 	"github.com/spf13/cobra"
 )
 
-// newMCPCommand builds mcp: it hands the command's streams to serve and
-// returns serve's error as a runtime failure, never a usage error.
-func newMCPCommand(serve MCPServeFunc) *cobra.Command {
+const (
+	mcpJSONRefusal  = "mcp always speaks JSON on stdout; drop --json"
+	mcpTerminalHint = "quarry: mcp: this is an MCP server for Claude and other MCP clients; it reads JSON-RPC on stdin. Press Ctrl-D to stop."
+)
+
+// newMCPCommand builds mcp: it refuses --json, hands the command's streams to
+// serve and returns a failed serve's error as a runtime failure, never a usage
+// error. When isTerminal says stdin is a terminal, serve's ready call prints a hint.
+func newMCPCommand(serve MCPServeFunc, isTerminal TerminalProbe, jsonOut *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   "mcp",
+		Args:  noArgs,
 		Short: "Serve quarry's store to Claude over MCP (stdio)",
 		Long: `Run quarry as a local MCP server for Claude and other MCP clients. The
 client starts it and talks to it over stdin and stdout; quarry opens no
@@ -25,10 +37,25 @@ them: quarry does not yet mask account or card numbers written in them.
 
 Tools: describe_schema, query, sync_status, data_quality.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := serve(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()); err != nil {
+			if *jsonOut {
+				return UsageError{msg: mcpJSONRefusal}
+			}
+			stdin, stderr := cmd.InOrStdin(), cmd.ErrOrStderr()
+			ready := func() {
+				if isTerminal != nil && isTerminal(stdin) {
+					_, _ = fmt.Fprintln(stderr, mcpTerminalHint)
+				}
+			}
+			if err := serve(cmd.Context(), stdin, cmd.OutOrStdout(), stderr, ready); !mcpStopped(err) {
 				return &runtimeError{err: err}
 			}
 			return nil
 		},
 	}
+}
+
+// mcpStopped reports whether err from serving is a normal stop: the client
+// closed stdin (nil), the process was told to stop, or the client stopped reading stdout.
+func mcpStopped(err error) bool {
+	return err == nil || errors.Is(err, context.Canceled) || errors.Is(err, syscall.EPIPE)
 }
