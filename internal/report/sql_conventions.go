@@ -1,7 +1,7 @@
 package report
 
 // SQLConventions is the paragraph that tells a query writer what the store's amounts, views and transfers mean;
-// quarry sql's help and the MCP schema description both carry it.
+// quarry sql's help and the describe_schema document both carry it.
 const SQLConventions = `Amounts are DECIMAL(18,2) in each account's own currency; negative is money
 leaving the account. v_cash_flow and v_spending also carry each amount in
 CAD and in USD (amount_cad and amount_usd; spent_cad and spent_usd),

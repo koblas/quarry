@@ -13,8 +13,7 @@ import (
 var errBlankSQL = errors.New("query needs SQL in the sql parameter")
 
 // query runs in.SQL read-only and returns the sql document: at most the
-// effective limit's rows, with a warning when it cut some off. The report
-// server is built for this call, so the store is read as it is now.
+// effective limit's rows, with a warning when it cut some off.
 func (s *Server) query(ctx context.Context, in queryInput) (any, error) {
 	if strings.TrimSpace(in.SQL) == "" {
 		return nil, errBlankSQL

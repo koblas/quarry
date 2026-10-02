@@ -13,9 +13,8 @@ import (
 // toolFunc is a tool's logic: the document to send, or the error to refuse with.
 type toolFunc[In any] func(ctx context.Context, in In) (document any, err error)
 
-// handler adapts run to the SDK: a document becomes one compact JSON text
-// block plus the same bytes as structuredContent; an error is returned as is,
-// for the SDK to send as the one text block of an isError result.
+// handler adapts run to the SDK: a document becomes one compact JSON text block
+// plus the same bytes as structuredContent; an error becomes an isError result.
 func handler[In any](run toolFunc[In]) sdk.ToolHandlerFor[In, any] {
 	return func(ctx context.Context, _ *sdk.CallToolRequest, in In) (*sdk.CallToolResult, any, error) {
 		document, err := run(ctx, in)
@@ -34,9 +33,8 @@ func handler[In any](run toolFunc[In]) sdk.ToolHandlerFor[In, any] {
 	}
 }
 
-// errorLog is the tools/call middleware that writes one line to w, "quarry:
-// mcp: <tool>: <text>", for each call that ends isError, whoever refused it.
-// A call whose context is done writes nothing: the client already gave up.
+// errorLog is the tools/call middleware that writes "quarry: mcp: <tool>: <text>"
+// to w for each isError call, none once the call's context is done.
 func errorLog(w io.Writer) sdk.Middleware {
 	var mu sync.Mutex
 	return func(next sdk.MethodHandler) sdk.MethodHandler {

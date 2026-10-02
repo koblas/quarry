@@ -592,8 +592,8 @@ Sizing pass (architect, opus) 2026-10-02 — 17 IDs → 8 runs. Full report and 
 - [x] SCENARIO-03: query returns rows as the sql --json document — `cmd/quarry/run_mcp_query_test.go` `Test_run_mcp_query_returns_the_sql_json_document`
 - [x] SCENARIO-04: query over its limit returns the first rows and says so — delivered by SCENARIO-03 — `cmd/quarry/run_mcp_query_test.go` `Test_run_mcp_query_over_its_limit_returns_the_first_rows_and_says_so`
 - [x] SCENARIO-05: query refuses what it cannot run — delivered by SCENARIO-03 — `cmd/quarry/run_mcp_query_test.go` `Test_run_mcp_query_refuses_what_it_cannot_run`
-- [ ] SCENARIO-07: describe_schema describes the store
-- [ ] SCENARIO-08: describe_schema bounds long account and category lists
+- [x] SCENARIO-07: describe_schema describes the store — `cmd/quarry/run_mcp_describe_test.go` `Test_run_mcp_describe_schema_describes_the_store`
+- [x] SCENARIO-08: describe_schema bounds long account and category lists — delivered by SCENARIO-07 — `cmd/quarry/run_mcp_describe_test.go` `Test_run_mcp_describe_schema_lists_the_first_500_categories_and_says_so`
 - [ ] SCENARIO-09: sync_status returns the status document
 - [ ] SCENARIO-10: sync_status still answers when the config is unreadable
 - [ ] SCENARIO-14: A sync while the server runs is seen without restart

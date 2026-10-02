@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-07
-status: open
+status: done
 ---
 
 # SCENARIO-07: describe_schema describes the store
@@ -27,10 +27,10 @@ Surface delivered (verbatim, spec §2.6): document keys `conventions, relations,
 - [x] Step 5: `internal/report/document/schema.go` (new) `Schema` + `NewSchema(report.Schema, warnings)` — `Conventions: report.SQLConventions`, dates via `nullDate` (`status.go:172`), empty lists `[]`; tests: exact compact-JSON key order, empty store `accounts:[]`/`categories:[]`/both dates null, `Test_sql_conventions_never_mention_masking` (in `internal/report`). `internal/mcp/describe_schema.go` (new) `(*Server).describeSchema(ctx, noInput)` — `s.newReport(ctx, commandName)`, `DescribeSchema(ctx, maxRows)`, warnings accounts-then-categories when total > len; `tools.go:91` `notBuilt[noInput]` → `handler(s.describeSchema)`; drop the describe_schema row at `server_test.go:160`. mcp fake `query_helpers_test.go:33` gains `Schema` + read counter. Tests (`describe_schema_test.go`): one store read per call, a fresh report per call, both warnings and their order, `1,001` grouping, 500 → no warning, factory error passes through, a store `RefusalError` is the one text line + one stderr line
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new symbols; fold S03 doc-budget MINORs: `internal/mcp/query.go:15-17`, `internal/mcp/result.go:16-18` (handler), `:37-39` (errorLog) to ≤2 lines; `internal/mcp/server.go:44` `WithReport` doc says "tools", not "the query tool"; re-check `internal/report/sql_conventions.go:3-4` now its MCP consumer exists
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new symbols; fold S03 doc-budget MINORs: `internal/mcp/query.go:15-17`, `internal/mcp/result.go:16-18` (handler), `:37-39` (errorLog) to ≤2 lines; `internal/mcp/server.go:44` `WithReport` doc says "tools", not "the query tool"; re-check `internal/report/sql_conventions.go:3-4` now its MCP consumer exists
 
 ### Verify
-- [ ] Step 7: full verification + `spec-check.py phase3a-mcp-core` → tick SCENARIO-07 and SCENARIO-08 ("delivered by SCENARIO-07") with their acceptance tests; STATE.md rewrite (close the SQLConventions direct-test debt and the S07 comment MINOR)
+- [x] Step 7: full verification + `spec-check.py phase3a-mcp-core` → tick SCENARIO-07 and SCENARIO-08 ("delivered by SCENARIO-07") with their acceptance tests; STATE.md rewrite (close the SQLConventions direct-test debt and the S07 comment MINOR)
 
 ## Handoff
 
@@ -54,16 +54,9 @@ Surface delivered (verbatim, spec §2.6): document keys `conventions, relations,
 
 ## Phase report
 
-Run B1 (steps 3-5) done; both acceptance tests green, `golangci-lint run ./...` 0 issues.
+Run V (steps 6-7) done; scenario complete.
 
-Files:
-- `internal/store/store.go` (end of file): `RelationTable`/`RelationView`, `Column`, `Relation`, `Schema` (store fills only ID/Name/Type/Currency/Closed on accounts, ID/Name/FullPath/Kind/Hidden on categories).
-- `internal/store/duckstore/schema_read.go` (new): `(*Store).Schema`, four queries (relations join, accounts, categories, dates) on one `openRead`. Tests `schema_read_test.go` (oracle = `information_schema`, DDL order, closed/hidden, dates, empty store, query + scan fault per query via `passQueries`); `read_faults_test.go` `rowReads` gained a `Schema` row.
-- `internal/report/store.go` `Store.Schema`; `internal/report/describe_schema.go` (new) `Schema`, `(*Server).DescribeSchema`; tests `describe_schema_test.go`; `fakes_test.go` `fakeStore.schema`/`schemaReads`.
-- `internal/report/document/schema.go` (new) `Schema`, `NewSchema`; `schema_test.go` (key order, empty store).
-- `internal/mcp/describe_schema.go` (new) `(*Server).describeSchema`, `listCutWarning`; `tools.go:91` now `handler(s.describeSchema)`; `server_test.go` describe_schema row dropped from the unbuilt test; `query_helpers_test.go` fakeStore `Schema` + `schemaReads`, `harness.describeSchema`; tests `describe_schema_test.go`.
-- `internal/report/sql_conventions_test.go` (new): `Test_sql_conventions_never_mention_masking` plus a phrase pin (closes the SQLConventions direct-test debt).
+Files: doc-budget folds in `internal/mcp/query.go:15-16`, `internal/mcp/result.go:15-16` and `:34-35`; `internal/mcp/server.go:44` WithReport doc says "tools"; `internal/report/sql_conventions.go:3-4` now names the describe_schema document. Doc-only, behaviour-neutral. `specification.md` S07 and S08 ticked (S08 "delivered by SCENARIO-07"); `STATE.md` rewritten.
 
-Mutations (all reverted, diff clean): `maxListed > 0` -> `>= 0` reddened `Test_describe_schema_keeps_every_account_and_category_when_the_cap_is_zero` ("[]" should have 501 item(s), but has 0); cut before sort reddened `Test_describe_schema_keeps_500_and_cuts_501/501_accounts_and_categories_lose_the_last_in_order`; accounts cut `maxListed` -> `maxListed+1` reddened the same 501 row ("should have 500 item(s), but has 501").
-
-Run V must not redo: tests above; remaining plan step 6 (doc-budget MINOR folds: `internal/mcp/query.go:15-17`, `result.go:16-18`/`:37-39`, `server.go:44` WithReport doc, `sql_conventions.go:3-4` comment re-check), step 7 (full verify, spec tick S07 + S08 folded, STATE.md, `status: done`). Lint is already at 0 issues; coverage gate (`uncovered-diff.py`) and `test-stats.py` not yet run.
+Verify: build ok; full suite rc=0; `uncovered-diff.py` 0 uncovered added lines; `-race` ok on internal/mcp, report, report/document, store, store/duckstore, cmd/quarry; `golangci-lint run ./...` 0 issues; `spec-check.py` and `--run` both OK.
+test-stats --base 32c949ab0f77 --changed: cmd/quarry 519 (+2), internal/mcp 30 (+6), internal/report 293 (+15), internal/report/document 22 (+2), internal/store/duckstore 491 (+7), TOTAL 1355 (+32).

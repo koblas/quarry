@@ -41,7 +41,7 @@ func WithVersion(version string) Option {
 	}
 }
 
-// WithReport sets the factory the query tool reads the store through; a Server without one cannot answer query.
+// WithReport sets the factory the tools read the store through; a Server without one cannot answer them.
 func WithReport(newReport ReportFactory) Option {
 	return func(s *Server) { s.newReport = newReport }
 }
