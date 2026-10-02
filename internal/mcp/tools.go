@@ -1,8 +1,6 @@
 package mcp
 
 import (
-	"context"
-	"errors"
 	"strconv"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -18,10 +16,11 @@ const (
 	toolDataQuality = "data_quality"
 )
 
-// Row limits: the most any tool returns, and data_quality's default.
+// Row limits: the most any tool returns, data_quality's default, and the most items it lists per finding.
 const (
 	maxRows          = 500
 	defaultFindLimit = 50
+	maxItems         = 25
 )
 
 // instructions is sent to every client at initialize.
@@ -62,9 +61,6 @@ the user fixes them in Quicken and runs quarry sync, and fixed findings
 drop off. To ignore a finding the user adds its id to findings.ignore in
 quarry's config file.`
 
-// errNotBuilt is what data_quality answers until its handler lands.
-var errNotBuilt = errors.New("this tool is not available yet")
-
 type (
 	// queryInput is the query tool's arguments.
 	queryInput struct {
@@ -81,11 +77,6 @@ type (
 	noInput struct{}
 )
 
-// notBuilt answers every tool call with errNotBuilt.
-func notBuilt[In any](context.Context, *sdk.CallToolRequest, In) (*sdk.CallToolResult, any, error) {
-	return nil, nil, errNotBuilt
-}
-
 // addTools registers quarry's four tools on srv.
 func (s *Server) addTools(srv *sdk.Server) {
 	sdk.AddTool(srv, tool(toolDescribe, describeSchemaDescription, objectSchema(nil)), handler(s.describeSchema))
@@ -98,7 +89,7 @@ func (s *Server) addTools(srv *sdk.Server) {
 		"status": {Type: "string", Enum: []any{"open", "ignored", "fixed", "all"}, Default: []byte(`"open"`)},
 		"type":   {Type: "string", Enum: findingTypes()},
 		"limit":  limitSchema(defaultFindLimit),
-	})), notBuilt[dataQualityInput])
+	})), handler(s.dataQuality))
 }
 
 // tool describes one tool; its result is a JSON object.

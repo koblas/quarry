@@ -132,8 +132,8 @@ func Test_serve_returns_the_context_error_when_the_context_ends(t *testing.T) {
 	}
 }
 
-func Test_a_tool_call_with_absent_null_or_empty_arguments_reaches_the_handler(t *testing.T) {
-	r := startServer(t, mcp.NewServer())
+func Test_a_tool_call_with_absent_null_or_empty_arguments_reaches_the_handler_with_the_schema_defaults(t *testing.T) {
+	h := newHarness(t, listOf(uncategorized(60)...), nil, mcp.WithConfig((&configStub{}).load))
 
 	for name, args := range map[string]any{
 		"omitted": nil,
@@ -141,31 +141,10 @@ func Test_a_tool_call_with_absent_null_or_empty_arguments_reaches_the_handler(t 
 		"empty":   map[string]any{},
 	} {
 		t.Run(name, func(t *testing.T) {
-			got, err := r.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "data_quality", Arguments: args})
+			doc := decodeFindings(t, h.dataQuality(t, args))
 
-			require.NoError(t, err)
-			require.NotEmpty(t, got.Content)
-			assert.Equal(t, &sdk.TextContent{Text: "this tool is not available yet"}, got.Content[0])
-		})
-	}
-}
-
-func Test_an_unbuilt_tool_answers_isError(t *testing.T) {
-	r := startServer(t, mcp.NewServer())
-
-	for _, tool := range []struct {
-		name string
-		args map[string]any
-	}{
-		{"data_quality", nil},
-	} {
-		t.Run(tool.name, func(t *testing.T) {
-			got, err := r.session.CallTool(t.Context(), &sdk.CallToolParams{Name: tool.name, Arguments: tool.args})
-
-			require.NoError(t, err)
-			assert.True(t, got.IsError)
-			require.NotEmpty(t, got.Content)
-			assert.Equal(t, &sdk.TextContent{Text: "this tool is not available yet"}, got.Content[0])
+			assert.Equal(t, "open", doc.Status)
+			assert.Equal(t, uncategorizedIDs(50), findingIDs(doc))
 		})
 	}
 }

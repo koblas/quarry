@@ -8,9 +8,8 @@ import (
 	"github.com/koblas/quarry/internal/report/document"
 )
 
-// syncStatus returns the status document from one read of the store and one load of the config,
-// both made for this call. A config that cannot be read never refuses: the ignore list is
-// dropped and a warning says so, as in quarry status --json.
+// syncStatus returns the status document from one read of the store and one load of the config.
+// A config that cannot be read never refuses: the ignore list is dropped and a warning says so.
 func (s *Server) syncStatus(ctx context.Context, _ noInput) (any, error) {
 	srv, err := s.newReport(ctx, commandName)
 	if err != nil {

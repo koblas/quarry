@@ -42,6 +42,15 @@ type fakeStore struct {
 
 	status      store.Status
 	statusReads int
+
+	findings      store.FindingList
+	findingsReads int
+}
+
+// Findings answers with findings, or err when set, counting the reads.
+func (f *fakeStore) Findings(context.Context) (store.FindingList, error) {
+	f.findingsReads++
+	return f.findings, f.err
 }
 
 // Status answers with status, or err when set, counting the reads.
@@ -111,6 +120,14 @@ func (h *harness) describeSchema(t *testing.T) *sdk.CallToolResult {
 func (h *harness) syncStatus(t *testing.T) *sdk.CallToolResult {
 	t.Helper()
 	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "sync_status", Arguments: map[string]any{}})
+	require.NoError(t, err)
+	return result
+}
+
+// dataQuality calls the data_quality tool with arguments.
+func (h *harness) dataQuality(t *testing.T, arguments any) *sdk.CallToolResult {
+	t.Helper()
+	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "data_quality", Arguments: arguments})
 	require.NoError(t, err)
 	return result
 }
