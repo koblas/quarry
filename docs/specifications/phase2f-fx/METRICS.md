@@ -14,6 +14,7 @@
 | SCENARIO-12 (+13) | code-first | A, B1, B2, V | 0/4/7/1 | yes (zero-fill not in plan; inclusive window bounds; USD-mode unrated + empty-window json cells; cashflow --account positive cell; test-only + plan + comments); 1 copy ruling (warning order, FX scope, zero fill) |
 | SCENARIO-17 | code-first | A, B1, B2, V | 0/2/5/0 | yes (recurring left-out→FX order unpinned; --json edge cells missing; test-only + comments); 1 copy ruling (JSON key order, cell/prefix rule, sort tier, Long wrap) |
 | SCENARIO-18 | code-first | A, B1, B2, V | 0/0/4/2 | no (MINORs → STATE.md); 1 copy ruling (Long wrap, JSON keys, prefix) |
+| SCENARIO-19 (+11) | code-first | A, B1, V | 0/1/4/1 | yes (blank cell before Status unpinned; test-only + plan + comments); 1 copy ruling (accounts warnings, key order, alignment, Long) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
