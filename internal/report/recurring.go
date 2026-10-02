@@ -315,7 +315,7 @@ func (s Series) chargedIn(ids []string) bool {
 }
 
 // compareSeries orders series by currency, state, yearly cost descending (ended: last charge descending),
-// payee, group key, own-currency before converted, then native currency.
+// payee, group key, then own-currency before converted.
 func compareSeries(a, b Series) int {
 	return cmp.Or(
 		cmp.Compare(a.Currency, b.Currency),
@@ -324,8 +324,6 @@ func compareSeries(a, b Series) int {
 		cmp.Compare(strings.ToLower(a.Payee), strings.ToLower(b.Payee)),
 		cmp.Compare(a.key.value, b.key.value),
 		cmp.Compare(a.convertedRank(), b.convertedRank()),
-		// Tie-breaker only: no CAD/USD input reaches it.
-		cmp.Compare(a.NativeCurrency, b.NativeCurrency),
 	)
 }
 

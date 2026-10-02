@@ -32,7 +32,7 @@ func nothingNewLine(reason string) string {
 
 func partialFetchLine(reason string) string {
 	return "could not fetch every exchange rate from the Bank of Canada: " + reason +
-		"; the store has rates from 2017-01-03 to 2017-01-04; run quarry sync again to fetch the rest"
+		"; the store has rates from 2017-01-03 to 2017-01-04, and later dates convert at the 2017-01-04 rate; run quarry sync again to fetch the rest"
 }
 
 func fetchFailed() store.RatesSummary {

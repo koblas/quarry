@@ -273,7 +273,7 @@ func Test_run_spend_converts_the_edge_cases_in_each_reporting_currency(t *testin
 	}
 }
 
-func Test_run_spend_of_an_empty_window_names_the_currency_and_warns_only_of_the_empty_window(t *testing.T) {
+func Test_run_spend_of_an_empty_window_names_the_currency_and_lists_no_rows_beside_the_empty_window_note(t *testing.T) {
 	const emptyWindowWarning = "quarry: warning: no spending from 2020-01-01 to 2020-12-31; the store's transactions run 2026-03-11 to 2026-03-11\n"
 	const caption = "Spending 2020-01-01 to 2020-12-31 in all accounts"
 	suffixes := map[string]string{"CAD": ", amounts in CAD", "USD": ", amounts in USD", "native": ""}
@@ -301,7 +301,8 @@ func Test_run_spend_of_an_empty_window_names_the_currency_and_warns_only_of_the_
 				doc, stderr := runSpendJSON(t, window...)
 
 				assert.Equal(t, currency, doc.Currency)
-				assert.Empty(t, doc.Totals)
+				assert.Equal(t, []spendMoney{}, doc.Rows)
+				assert.Equal(t, []spendMoney{}, doc.Totals)
 				assert.Equal(t, emptyWindowWarning, stderr)
 			})
 		})

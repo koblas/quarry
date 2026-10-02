@@ -55,9 +55,7 @@ func Test_run_cashflow_refuses_and_reports_empty_periods_like_spend(t *testing.T
 			},
 			wantExit: 0,
 			wantStdout: "Cash flow 2026-01-01 to 2026-02-28 in all accounts, amounts in CAD\n\n" +
-				"Month    Currency  Income  Spent   Net  Savings rate  Status\n" +
-				"2026-01  CAD         0.00   0.00  0.00           n/a\n" +
-				"2026-02  CAD         0.00   0.00  0.00           n/a\n",
+				"Month  Currency  Income  Spent  Net  Savings rate  Status\n",
 			wantStderr: "quarry: warning: no income or spending from 2026-01-01 to 2026-02-28; " +
 				"the store's transactions run 2003-01-04 to 2025-12-31\n",
 		},

@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -204,29 +203,12 @@ func Test_run_cashflow_converts_the_edge_cases_in_each_reporting_currency(t *tes
 	}
 }
 
-func Test_run_cashflow_of_an_empty_window_names_the_currency_and_warns_only_of_the_empty_window(t *testing.T) {
+func Test_run_cashflow_of_an_empty_window_names_the_currency_and_lists_no_rows_beside_the_empty_window_note(t *testing.T) {
 	const emptyWindowWarning = "quarry: warning: no income or spending from 2020-01-01 to 2020-12-31; the store's transactions run 2026-03-11 to 2026-03-11\n"
 	const caption = "Cash flow 2020-01-01 to 2020-12-31 in all accounts"
 	const emptyHeader = "Month  Currency  Income  Spent  Net  Savings rate  Status\n"
-	const zeroHeader = "Month    Currency  Income  Spent   Net  Savings rate  Status\n"
-	const zeroRow = "2020-%02d  %s         0.00   0.00  0.00           n/a\n"
-	zeroYear := func(currency string) string {
-		var rows strings.Builder
-		for month := 1; month <= 12; month++ {
-			fmt.Fprintf(&rows, zeroRow, month, currency)
-		}
-		return zeroHeader + rows.String()
-	}
-	cases := []struct {
-		currency, suffix, table string
-		periods                 int
-	}{
-		{currency: "CAD", suffix: ", amounts in CAD", table: zeroYear("CAD"), periods: 12},
-		{currency: "USD", suffix: ", amounts in USD", table: zeroYear("USD"), periods: 12},
-		{currency: "native", table: emptyHeader},
-	}
-	for _, c := range cases {
-		currency := c.currency
+	suffixes := map[string]string{"CAD": ", amounts in CAD", "USD": ", amounts in USD", "native": ""}
+	for currency, suffix := range suffixes {
 		t.Run(currency, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
@@ -242,7 +224,7 @@ func Test_run_cashflow_of_an_empty_window_names_the_currency_and_warns_only_of_t
 				exitCode := runWith(context.Background(), append([]string{"cashflow"}, window...), spendEnv(&stdout, &stderr))
 
 				require.Equal(t, 0, exitCode, stderr.String())
-				assert.Equal(t, caption+c.suffix+"\n\n"+c.table, stdout.String())
+				assert.Equal(t, caption+suffix+"\n\n"+emptyHeader, stdout.String())
 				assert.Equal(t, emptyWindowWarning, stderr.String())
 			})
 
@@ -250,12 +232,37 @@ func Test_run_cashflow_of_an_empty_window_names_the_currency_and_warns_only_of_t
 				doc, stderr := runCashFlowJSON(t, window...)
 
 				assert.Equal(t, currency, doc.Currency)
-				assert.Equal(t, slices.Repeat([]string{currency}, c.periods), markCurrencies(doc.Periods))
-				assert.Empty(t, doc.Totals)
+				assert.Equal(t, []cashFlowMark{}, doc.Periods)
+				assert.Equal(t, []cashFlowMark{}, doc.Totals)
 				assert.Equal(t, emptyWindowWarning, stderr)
 			})
 		})
 	}
+}
+
+func Test_run_cashflow_by_month_of_a_window_holding_only_unconverted_rows_still_lists_the_report_currency_zero_rows(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStoreWithRates(t, home, cashFlowRows(
+		[]store.Account{usdChequingAccount("acct-usd", 2)},
+		spendSplit{id: "s1", account: "acct-usd", category: "cat-salary", currency: "USD", day: day(2025, 12, 20), cents: 8000},
+	), rateOnJan2)
+	window := []string{"--since", "2025-11", "--until", "2025-12"}
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), append([]string{"cashflow"}, window...), spendEnv(&stdout, &stderr))
+	doc, _ := runCashFlowJSON(t, window...)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Equal(t, `Cash flow 2025-11-01 to 2025-12-31 in all accounts, amounts in CAD
+
+Month    Currency  Income  Spent    Net  Savings rate  Status
+2025-11  CAD         0.00   0.00   0.00           n/a
+2025-12  CAD         0.00   0.00   0.00           n/a
+2025-12  USD        80.00   0.00  80.00        100.0%
+Total    USD        80.00   0.00  80.00        100.0%
+`, stdout.String())
+	assert.Equal(t, []string{"2025-11 CAD", "2025-12 CAD", "2025-12 USD"}, periodKeys(doc.Periods))
 }
 
 func Test_run_cashflow_json_reads_back_with_every_amount_in_the_reporting_currency(t *testing.T) {
@@ -360,4 +367,13 @@ func markCurrencies(marks []cashFlowMark) []string {
 		currencies[i] = m.Currency
 	}
 	return currencies
+}
+
+// periodKeys is each mark as "<period> <currency>", in order.
+func periodKeys(marks []cashFlowMark) []string {
+	keys := make([]string, len(marks))
+	for i, m := range marks {
+		keys[i] = m.Period + " " + m.Currency
+	}
+	return keys
 }

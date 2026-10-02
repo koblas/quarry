@@ -100,17 +100,19 @@ func fetchWarning(rates store.RatesSummary) string {
 	if rates.FetchError == "" {
 		return ""
 	}
-	span := rates.First.Format(time.DateOnly) + " to " + rates.Last.Format(time.DateOnly)
+	last := rates.Last.Format(time.DateOnly)
+	span := rates.First.Format(time.DateOnly) + " to " + last
 	switch {
 	case rates.Partial:
 		return "could not fetch every exchange rate from the Bank of Canada: " + rates.FetchError +
-			"; the store has rates from " + span + "; run quarry sync again to fetch the rest"
+			"; the store has rates from " + span + ", and later dates convert at the " + last +
+			" rate; run quarry sync again to fetch the rest"
 	case rates.First.IsZero():
 		return "could not fetch exchange rates from the Bank of Canada: " + rates.FetchError +
 			"; the store has no rates, so reports list amounts in each account's own currency; run quarry sync again to retry"
 	default:
 		return "could not fetch exchange rates from the Bank of Canada: " + rates.FetchError +
-			"; the store has rates from " + span + ", and later dates convert at the " + rates.Last.Format(time.DateOnly) +
+			"; the store has rates from " + span + ", and later dates convert at the " + last +
 			" rate; run quarry sync again to retry"
 	}
 }

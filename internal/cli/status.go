@@ -22,7 +22,8 @@ many findings are open.
 status reads quarry's store, and the config file for the findings you ignored;
 it never looks at Quicken. Run quarry sync to bring the store up to date.
 
-Rates shows the Bank of Canada USD/CAD rates the store holds, and why the last sync could not fetch new ones if it could not.`,
+Rates shows the span of Bank of Canada USD/CAD rates the store holds and,
+when the last sync could not fetch new ones, why.`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			srv, err := openReport(cmd, newReport)

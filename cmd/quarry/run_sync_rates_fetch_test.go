@@ -89,7 +89,7 @@ const (
 	notAList          = "www.bankofcanada.ca sent an answer that is not a list of exchange rates"
 	nothingStoredTail = "; the store has no rates, so reports list amounts in each account's own currency; run quarry sync again to retry"
 	nothingNewTail    = "; the store has rates from 2017-01-03 to 2017-01-04, and later dates convert at the 2017-01-04 rate; run quarry sync again to retry"
-	partialTail       = "; the store has rates from 2017-01-03 to 2017-01-04; run quarry sync again to fetch the rest"
+	partialTail       = "; the store has rates from 2017-01-03 to 2017-01-04, and later dates convert at the 2017-01-04 rate; run quarry sync again to fetch the rest"
 	noRatesPrefix     = "could not fetch exchange rates from the Bank of Canada: "
 	partialPrefix     = "could not fetch every exchange rate from the Bank of Canada: "
 	rateDates         = "date\n2017-01-03\n2017-01-04\n"

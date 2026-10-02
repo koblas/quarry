@@ -84,8 +84,12 @@ var fillCases = []fillCase{
 		want: []string{"2026-01 CAD", "2026-02 CAD", "2026-02 USD", "2026-03 CAD"},
 	},
 	{
-		name: "an empty window gets the target's zero rows only", currency: money.USD,
-		want: []string{"2026-01 USD", "2026-02 USD", "2026-03 USD"},
+		name: "an empty window gets no rows in USD mode", currency: money.USD,
+		want: []string{},
+	},
+	{
+		name: "an empty window gets no rows in CAD mode", currency: money.CAD,
+		want: []string{},
 	},
 	{
 		name: "native fills every currency in every period", currency: money.Native,

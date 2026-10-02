@@ -45,9 +45,10 @@ func NewServer(opts ...Option) *Server {
 // requestTimeout bounds each request to the Source; the sync warning's "within 30 seconds" is this value.
 const requestTimeout = 30 * time.Second
 
-// Refresh fetches the rates for req.Need that req.Have does not cover, oldest first, none dated inside Have.
-// A failed Source call keeps what answered: FetchError is the first failure's reason, and Partial is set when
-// any rate was kept. A source that answers with nothing is not a failure. It returns an error only when ctx ended.
+// Refresh fetches the rates for req.Need that req.Have does not cover, plus the bridge days that join Have and
+// the answer into one interval, oldest first, none dated inside Have. A failed Source call keeps what answered:
+// FetchError is the first failure's reason, and Partial is set when any rate was kept. An empty answer is not a
+// failure. It returns an error only when ctx ended.
 func (s *Server) Refresh(ctx context.Context, req store.RatesRequest) (store.RatesRefresh, error) {
 	var out store.RatesRefresh
 	for _, ask := range planSpans(req) {

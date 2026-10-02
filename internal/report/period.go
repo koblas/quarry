@@ -61,8 +61,12 @@ func currencyList[T any](totals []T, currency func(T) string) []string {
 }
 
 // fillSeries is a row for each period of series: the stored row keyed by keyOf, else blank(key),
-// wrapped with the period's Partial; which currencies a period lists is fillOrder's.
+// wrapped with the period's Partial; which currencies a period lists is fillOrder's. No currencies
+// (the empty window the empty-window note reports) gives no rows in any mode.
 func fillSeries[S, R any](series []period, currencies []string, target string, stored []S, keyOf func(S) periodKey, blank func(periodKey) S, wrap func(S, bool) R) []R {
+	if len(currencies) == 0 {
+		return []R{}
+	}
 	found := make(map[periodKey]S, len(stored))
 	for _, r := range stored {
 		found[keyOf(r)] = r

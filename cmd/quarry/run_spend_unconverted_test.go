@@ -24,6 +24,7 @@ const (
 
 // unconvertedDoc is the part of spend's --json document these tests read.
 type unconvertedDoc struct {
+	Rows     []spendMoney `json:"rows"`
 	Totals   []spendMoney `json:"totals"`
 	Warnings []string     `json:"warnings"`
 }
@@ -298,7 +299,7 @@ func Test_run_spend_of_an_unrated_empty_window_gives_only_the_empty_window_note(
 	assert.Equal(t, []string{note}, doc.Warnings)
 }
 
-func Test_run_spend_by_month_of_an_empty_window_lists_a_zero_row_in_the_report_currency_for_each_month(t *testing.T) {
+func Test_run_spend_by_month_of_an_empty_window_lists_no_rows_beside_the_empty_window_note(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	replaceStoreWithRates(t, home, spendRows(
@@ -313,9 +314,40 @@ func Test_run_spend_by_month_of_an_empty_window_lists_a_zero_row_in_the_report_c
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Spending 2020-01-01 to 2020-03-31 in all accounts, amounts in CAD\n\n"+
-		"Month    Currency  Spent  Status\n"+
-		"2020-01  CAD        0.00\n"+
-		"2020-02  CAD        0.00\n"+
-		"2020-03  CAD        0.00\n", stdout.String())
+		"Month  Currency  Spent  Status\n", stdout.String())
+	assert.Equal(t, []spendMoney{}, doc.Rows)
+	assert.Equal(t, []spendMoney{}, doc.Totals)
 	assert.Equal(t, []string{"no spending from 2020-01-01 to 2020-03-31; the store's transactions run 2026-03-10 to 2026-03-10"}, doc.Warnings)
+}
+
+func Test_run_spend_by_month_of_a_window_holding_only_unconverted_rows_still_lists_the_report_currency_zero_rows(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStoreWithRates(t, home, spendRows(
+		[]store.Account{usdChequingAccount("acct-usd", 2)},
+		spendSplit{id: "s01", account: "acct-usd", category: "cat-fuel", currency: "USD", day: day(2025, 12, 20), cents: -1000},
+	), rateOnJan2)
+	args := []string{"--by", "month", "--since", "2025-11", "--until", "2025-12"}
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), append([]string{"spend"}, args...), spendEnv(&stdout, &stderr))
+	doc, _ := runSpendUnconverted(t, args...)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Equal(t, "Spending 2025-11-01 to 2025-12-31 in all accounts, amounts in CAD\n\n"+
+		"Month    Currency  Spent  Status\n"+
+		"2025-11  CAD        0.00\n"+
+		"2025-12  CAD        0.00\n"+
+		"2025-12  USD       10.00\n"+
+		"Total    USD       10.00\n", stdout.String())
+	assert.Equal(t, []string{"CAD", "CAD", "USD"}, spendCurrencies(doc.Rows))
+}
+
+// spendCurrencies is the currency of each row, in order.
+func spendCurrencies(rows []spendMoney) []string {
+	currencies := make([]string, len(rows))
+	for i, r := range rows {
+		currencies[i] = r.Currency
+	}
+	return currencies
 }

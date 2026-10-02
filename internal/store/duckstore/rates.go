@@ -48,7 +48,8 @@ func (s *Store) finishBuild(ctx context.Context, db DB, rows store.Rows, carried
 }
 
 // refreshRates asks the rates source for every date from the earliest transaction to today that the carried
-// rates (in date order) do not cover. It returns the span it asked for, empty when there is no source, and an empty refresh.
+// rates (in date order) do not cover, and for the bridge days that join the two into one interval.
+// It returns the span it asked for, empty when there is no source, and an empty refresh.
 func (s *Store) refreshRates(ctx context.Context, transactions []store.Transaction, carried history) (store.DateSpan, store.RatesRefresh, error) {
 	if s.rates == nil {
 		return store.DateSpan{}, store.RatesRefresh{}, nil
