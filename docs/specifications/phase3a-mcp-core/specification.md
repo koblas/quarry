@@ -304,7 +304,7 @@ Call this before writing SQL for query.
 - **Field names are the store's own column names** (`full_path`, `closed`), so what the model sees is what it queries.
 - Payees, tags and amounts are left out.
 - **Bound:** `accounts` and `categories` each hold at most 500 entries.
-  - Sorted: accounts by name then id; categories by `full_path`.
+  - Sorted: accounts by name then id; categories by `full_path`. (Orchestrator ruling, SCENARIO-07: accounts sort as `quarry accounts` does — `lower(name)`, then `name`, then `id` — so CLI and MCP never disagree. `<n>` formatted with `humanize.Thousands` (`1,001`); when both lists overflow, the accounts warning precedes the categories warning.)
   - Over the cap, add the warning `describe_schema lists the first 500 categories of <n>; query the categories table for the rest` (the same with `accounts`).
   - `relations` is not capped; its size is set by the schema, not by history.
 - **`dates`** has the same null rules as status `dates`: both null when there are no transactions.
