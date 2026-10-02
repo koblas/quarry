@@ -26,7 +26,7 @@ type history struct {
 	findingsFault   *store.OpenError // why a findings table that exists could not be read
 	rates           []store.Rate
 	ratesFault      *store.OpenError // why an fx_rates table that exists could not be read
-	ratesFloor      time.Time        // the newest non-NULL rates_checked_from by run id; zero when none, or the rates were lost
+	ratesFloor      time.Time        // the newest run's rates_checked_from; zero when it is NULL, or the rates were lost
 	unreadable      bool             // true iff the store could not be opened
 }
 
@@ -121,6 +121,8 @@ func (s *Store) readHistory(ctx context.Context) (history, *store.OpenError) {
 		carried.ratesFault, carried.ratesFloor = ratesFault(path, err), time.Time{}
 	case present:
 		carried.rates = rates
+	default:
+		carried.ratesFloor = time.Time{} // a floor claims dates whose rates are gone
 	}
 	return carried, fault
 }
@@ -206,9 +208,7 @@ func readRuns(ctx context.Context, db ReadDB) (history, error) {
 			seen[r.id] = true
 			carried.rows = append(carried.rows, r.values())
 			carried.maxID = max(carried.maxID, r.id)
-			if r.ratesCheckedFrom.Valid {
-				carried.ratesFloor = r.ratesCheckedFrom.Time
-			}
+			carried.ratesFloor = r.ratesCheckedFrom.Time // rows arrive by id, so the last is the newest run's; NULL is the zero time
 			return nil
 		})
 	if err != nil {

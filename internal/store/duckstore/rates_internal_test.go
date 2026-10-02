@@ -49,3 +49,33 @@ func Test_needSpan_is_empty_when_there_are_no_transactions(t *testing.T) {
 
 	assert.Equal(t, store.DateSpan{}, got)
 }
+
+func Test_needSpan_is_empty_when_every_transaction_is_dated_after_now(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 3, 14, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name         string
+		transactions []store.Transaction
+	}{
+		{name: "one transaction tomorrow", transactions: []store.Transaction{{Date: time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)}}},
+		{name: "several transactions later still", transactions: []store.Transaction{
+			{Date: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)}, {Date: time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC)},
+		}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, store.DateSpan{}, needSpan(c.transactions, now))
+		})
+	}
+}
+
+func Test_needSpan_starts_on_today_for_a_transaction_dated_today(t *testing.T) {
+	t.Parallel()
+	today := time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC)
+
+	got := needSpan([]store.Transaction{{Date: today}}, time.Date(2026, 3, 14, 12, 0, 0, 0, time.UTC))
+
+	assert.Equal(t, store.DateSpan{First: today, Last: today}, got)
+}

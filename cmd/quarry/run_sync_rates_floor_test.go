@@ -56,17 +56,52 @@ func syncTailAnsweredEmpty(t *testing.T, extraArgs ...string) (string, []string)
 	return stdout, source.requested()
 }
 
-// syncWithCoveringRate syncs a 2017-01-03 transaction over a store already holding a 2017-01-02 rate and a 2099 rate,
-// with extraArgs; it returns stdout and the requests the bank saw.
+// syncWithCoveringRate syncs a 2017-01-03 transaction over a store holding a rate on every day from 2017-01-02 to
+// 2099-12-31, with extraArgs; it returns stdout and the requests the bank saw.
 func syncWithCoveringRate(t *testing.T, extraArgs ...string) (string, []string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	replaceStoreWithRates(t, home, spendRows([]store.Account{chequingAccount("acct-cad", 1)}),
-		store.Rate{Date: dayOf(2017, time.January, 2), USDCAD: money.Rate(1_340_000), Series: "IEXE0101"},
-		store.Rate{Date: dayOf(2099, time.December, 31), USDCAD: money.Rate(1_250_000), Series: "FXUSDCAD"},
-	)
+	rates := []store.Rate{{Date: dayOf(2017, time.January, 2), USDCAD: money.Rate(1_340_000), Series: "IEXE0101"}}
+	for d := dayOf(2017, time.January, 3); !d.After(dayOf(2099, time.December, 31)); d = d.AddDate(0, 0, 1) {
+		rates = append(rates, store.Rate{Date: d, USDCAD: money.Rate(1_250_000), Series: "FXUSDCAD"})
+	}
+	replaceStoreWithRates(t, home, spendRows([]store.Account{chequingAccount("acct-cad", 1)}), rates...)
 	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), januaryDay(3))
+	source := &recordingValet{next: emptyValet()}
+
+	stdout := syncThrough(t, source, append([]string{"--quicken", bundle.Dir}, extraArgs...)...)
+
+	return stdout, source.requested()
+}
+
+// syncLaterBundleOverEarlierRates syncs a 2017-01-03 bundle against a bank publishing 01-03 and 01-04, then a bundle
+// whose earliest transaction is 2017-01-10 against an empty bank, with extraArgs. It returns the second sync's stdout and requests.
+func syncLaterBundleOverEarlierRates(t *testing.T, extraArgs ...string) (string, []string) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	early := writeChequingBundle(t, filepath.Join(home, "Early"), januaryDay(3))
+	later := writeChequingBundle(t, filepath.Join(home, "Later"), januaryDay(10))
+	syncThrough(t, fakeValet{"FXUSDCAD": {"2017-01-03": "1.3435", "2017-01-04": "1.3315"}}, "--quicken", early.Dir)
+	source := &recordingValet{next: emptyValet()}
+
+	stdout := syncThrough(t, source, append([]string{"--quicken", later.Dir}, extraArgs...)...)
+
+	return stdout, source.requested()
+}
+
+// syncFutureDatedBundle syncs a bundle whose only transaction is dated 2099-01-01 over a store holding the 2017-01-03 and 01-04 rates,
+// with extraArgs; it returns stdout and the requests the bank saw.
+func syncFutureDatedBundle(t *testing.T, extraArgs ...string) (string, []string) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStoreWithRates(t, home, spendRows([]store.Account{chequingAccount("acct-cad", 1)}),
+		store.Rate{Date: januaryDay(3), USDCAD: money.Rate(1_343_500), Series: "FXUSDCAD"},
+		store.Rate{Date: januaryDay(4), USDCAD: money.Rate(1_331_500), Series: "FXUSDCAD"},
+	)
+	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), dayOf(2099, time.January, 1))
 	source := &recordingValet{next: emptyValet()}
 
 	stdout := syncThrough(t, source, append([]string{"--quicken", bundle.Dir}, extraArgs...)...)
@@ -161,6 +196,26 @@ func Test_run_sync_json_reports_nothing_added_after_an_older_date_was_answered_e
 	_, stdout, _ := syncAfterAnOlderDateWasAnsweredEmpty(t, "--json")
 
 	assert.Equal(t, ratesDoc{First: new("2017-01-10"), Last: new("2017-01-11")}, decodeSyncRates(t, stdout))
+}
+
+func Test_run_sync_continues_from_the_day_after_the_last_stored_rate_when_the_earliest_transaction_is_later(t *testing.T) {
+	stdout, requests := syncLaterBundleOverEarlierRates(t)
+
+	assert.Equal(t, []string{"FXUSDCAD 2017-01-05"}, requests)
+	assert.Contains(t, outputLines(stdout), "Rates     USD/CAD 2017-01-03 to 2017-01-04 (up to date)")
+}
+
+func Test_run_sync_asks_for_nothing_when_every_transaction_is_dated_after_today(t *testing.T) {
+	stdout, requests := syncFutureDatedBundle(t)
+
+	assert.Empty(t, requests)
+	assert.Contains(t, outputLines(stdout), "Rates     USD/CAD 2017-01-03 to 2017-01-04 (up to date)")
+}
+
+func Test_run_sync_json_reports_nothing_added_when_every_transaction_is_dated_after_today(t *testing.T) {
+	stdout, _ := syncFutureDatedBundle(t, "--json")
+
+	assert.Equal(t, ratesDoc{First: new("2017-01-03"), Last: new("2017-01-04")}, decodeSyncRates(t, stdout))
 }
 
 func outputLines(stdout string) []string { return strings.Split(stdout, "\n") }

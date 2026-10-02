@@ -128,8 +128,8 @@ func nullIfEmpty(s string) any {
 	return s
 }
 
-// needSpan is the dates from the earliest transaction to now's local calendar
-// date (now carries the local zone), or empty when there are no transactions.
+// needSpan is the dates from the earliest transaction to now's local calendar date (now carries the local zone),
+// or empty when there are no transactions or the earliest is dated after that date.
 func needSpan(transactions []store.Transaction, now time.Time) store.DateSpan {
 	if len(transactions) == 0 {
 		return store.DateSpan{}
@@ -141,7 +141,11 @@ func needSpan(transactions []store.Transaction, now time.Time) store.DateSpan {
 		}
 	}
 	year, month, day := now.Date()
-	return store.DateSpan{First: first, Last: time.Date(year, month, day, 0, 0, 0, 0, time.UTC)}
+	today := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	if first.After(today) {
+		return store.DateSpan{}
+	}
+	return store.DateSpan{First: first, Last: today}
 }
 
 func rateRows(rates []store.Rate) ([][]any, error) {

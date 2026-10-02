@@ -95,11 +95,13 @@ func Test_replace_asks_for_rates_up_to_the_local_date_when_it_differs_from_the_u
 	t.Cleanup(func() { time.Local = saved })       //nolint:gosmopolitan // restores the zone
 	src := &fakeRates{}
 	st := duckstore.New(t.TempDir(), duckstore.WithRates(src))
+	rows := minimalRows()
+	rows.Transactions[0].Date = day(1999, 12, 1)
 
 	synctest.Test(t, func(t *testing.T) {
 		time.Sleep(2 * time.Hour) // the bubble clock starts at 2000-01-01 00:00 UTC: 02:00 UTC, 21:00 on 1999-12-31 local
 
-		_, err := st.Replace(t.Context(), minimalRows())
+		_, err := st.Replace(t.Context(), rows)
 
 		require.NoError(t, err)
 	})

@@ -2,6 +2,7 @@ package duckstore_test
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -48,6 +49,13 @@ func newStoreWithFloors(t *testing.T, floors, rateDays []int, opts ...duckstore.
 	return newStoreFile(t, ddl.String(), opts...)
 }
 
+// futureRows is minimalRows with its one transaction dated 2099-01-01, after any date the clock can show.
+func futureRows() store.Rows {
+	rows := minimalRows()
+	rows.Transactions[0].Date = day(2099, 1, 1)
+	return rows
+}
+
 func noTransactionRows() store.Rows {
 	rows := minimalRows()
 	rows.Transactions, rows.Splits, rows.SplitTags, rows.Transfers = nil, nil, nil, nil
@@ -78,11 +86,11 @@ func Test_replace_tells_the_source_the_span_from_the_checked_floor_to_the_last_c
 			want: store.DateSpan{First: day(2026, 3, 13), Last: day(2026, 3, 16)},
 		},
 		{
-			name: "a newest run with a null floor defers to the run before it", floors: []int{1, noFloor}, rateDays: []int{13},
-			want: store.DateSpan{First: day(2026, 3, 1), Last: day(2026, 3, 13)},
+			name: "a newest run with a null floor claims nothing, whatever the runs before it checked", floors: []int{1, noFloor}, rateDays: []int{13},
+			want: store.DateSpan{First: day(2026, 3, 13), Last: day(2026, 3, 13)},
 		},
 		{
-			name: "the newest non-null floor wins over an older run's", floors: []int{1, 5}, rateDays: []int{13},
+			name: "the newest run's floor wins over an older run's", floors: []int{1, 5}, rateDays: []int{13},
 			want: store.DateSpan{First: day(2026, 3, 5), Last: day(2026, 3, 13)},
 		},
 		{
@@ -121,7 +129,9 @@ func Test_replace_keeps_the_earliest_checked_floor_across_runs(t *testing.T) {
 		{name: "a failed fetch carries the previous floor", floors: []int{1}, refresh: store.RatesRefresh{FetchError: "unreachable"}, rows: minimalRows(), want: "2026-03-01"},
 		{name: "a failed fetch with no floor ever stays null", floors: []int{noFloor}, refresh: store.RatesRefresh{FetchError: "unreachable"}, rows: minimalRows(), want: "NULL"},
 		{name: "no transactions carries the previous floor", floors: []int{1}, refresh: store.RatesRefresh{}, rows: noTransactionRows(), want: "2026-03-01"},
-		{name: "a failed fetch carries the newest non-null floor", floors: []int{1, noFloor}, refresh: store.RatesRefresh{FetchError: "unreachable"}, rows: minimalRows(), want: "2026-03-01"},
+		{name: "a failed fetch after a run with no floor stays null", floors: []int{1, noFloor}, refresh: store.RatesRefresh{FetchError: "unreachable"}, rows: minimalRows(), want: "NULL"},
+			{name: "only future-dated transactions leave a null floor null", floors: []int{noFloor}, refresh: store.RatesRefresh{}, rows: futureRows(), want: "NULL"},
+			{name: "only future-dated transactions carry the previous floor", floors: []int{1}, refresh: store.RatesRefresh{}, rows: futureRows(), want: "2026-03-01"},
 		{name: "a failed fetch carries the newest floor, not the earliest", floors: []int{5, 20}, refresh: store.RatesRefresh{FetchError: "unreachable"}, rows: minimalRows(), want: "2026-03-20"},
 	}
 
@@ -172,4 +182,62 @@ func Test_replace_forgets_the_checked_floor_when_the_carried_rates_cannot_be_rea
 	require.Len(t, src.requests, 1)
 	assert.Equal(t, store.DateSpan{}, src.requests[0].Have)
 	assertScalar(t, openReadOnly(t, replaced.Path), latestFloorText, "2026-03-15")
+}
+
+func Test_replace_asks_for_nothing_when_every_transaction_is_dated_after_today(t *testing.T) {
+	t.Parallel()
+	src := &fakeRates{}
+	st := newStoreWithFloors(t, []int{noFloor}, nil, duckstore.WithRates(src))
+
+	_, err := st.Replace(t.Context(), futureRows())
+
+	require.NoError(t, err)
+	require.Len(t, src.requests, 1)
+	assert.Equal(t, store.DateSpan{}, src.requests[0].Need)
+}
+
+// haveOnTheNextSync replaces st's store once, then builds again from the result and returns the Have that second build gave its source.
+func haveOnTheNextSync(t *testing.T, st *duckstore.Store) store.DateSpan {
+	t.Helper()
+	_, err := st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+	next := &fakeRates{}
+
+	_, err = duckstore.New(filepath.Dir(st.Path()), duckstore.WithRates(next)).Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	require.Len(t, next.requests, 1)
+	return next.requests[0].Have
+}
+
+func Test_replace_does_not_bring_back_a_floor_forgotten_after_a_rates_fault_on_the_next_sync(t *testing.T) {
+	t.Parallel()
+	partialTail := store.RatesRefresh{Rates: []store.Rate{ratesOn(16, 1_310_000, "FXUSDCAD")}, Added: 1, FetchError: "unreachable", Partial: true}
+	spy := &spyReadDB{passQueries: 3, queryFault: ioFault(`query rows "SELECT"`)}
+	st := newStoreWithFloors(t, []int{1}, []int{13}, spyOpener(spy), duckstore.WithRates(&fakeRates{refresh: partialTail}))
+
+	have := haveOnTheNextSync(t, st)
+
+	assert.Equal(t, store.DateSpan{First: day(2026, 3, 16), Last: day(2026, 3, 16)}, have)
+}
+
+func Test_replace_does_not_bring_back_a_floor_forgotten_with_an_absent_fx_rates_table_on_the_next_sync(t *testing.T) {
+	t.Parallel()
+	partialTail := store.RatesRefresh{Rates: []store.Rate{ratesOn(16, 1_310_000, "FXUSDCAD")}, Added: 1, FetchError: "unreachable", Partial: true}
+	st := newStoreWithFloors(t, []int{1}, nil, duckstore.WithRates(&fakeRates{refresh: partialTail}))
+	execOnStore(t, st, "DROP TABLE fx_rates CASCADE")
+
+	have := haveOnTheNextSync(t, st)
+
+	assert.Equal(t, store.DateSpan{First: day(2026, 3, 16), Last: day(2026, 3, 16)}, have)
+}
+
+func Test_replace_keeps_the_floor_of_an_empty_fx_rates_table_on_the_next_sync(t *testing.T) {
+	t.Parallel()
+	partialTail := store.RatesRefresh{Rates: []store.Rate{ratesOn(16, 1_310_000, "FXUSDCAD")}, Added: 1, FetchError: "unreachable", Partial: true}
+	st := newStoreWithFloors(t, []int{1}, nil, duckstore.WithRates(&fakeRates{refresh: partialTail}))
+
+	have := haveOnTheNextSync(t, st)
+
+	assert.Equal(t, store.DateSpan{First: day(2026, 3, 1), Last: day(2026, 3, 16)}, have)
 }

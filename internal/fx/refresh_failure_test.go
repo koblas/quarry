@@ -116,6 +116,8 @@ func Test_refresh_gives_each_failure_its_ruled_reason(t *testing.T) {
 		{name: "a status with no standard text shows the code alone", src: valetVia(answering(599, "")), want: "www.bankofcanada.ca answered 599"},
 		{name: "the answer is not JSON", src: valetVia(answering(http.StatusOK, "<html>maintenance</html>")), want: notAList},
 		{name: "a source offers a rate the store cannot hold", src: &fakeSource{answers: map[string][]fx.Observation{current: {obs(0, 0)}}}, want: notAList},
+		{name: "the answer holds a rate with more decimals than the store keeps", src: valetVia(answering(http.StatusOK, `{"observations":[{"d":"2020-01-01","FXUSDCAD":{"v":"1.3456789"}}]}`)), want: notAList},
+		{name: "the answer holds a date that is not a day", src: valetVia(answering(http.StatusOK, `{"observations":[{"d":"2020-13-45","FXUSDCAD":{"v":"1.3456"}}]}`)), want: notAList},
 		{name: "the answer is one byte over the size cap", src: valetVia(answering(http.StatusOK, paddedAnswer(answerCap+1))), want: notAList},
 		{
 			name: "the connection drops while the answer is read", want: cannotReach,
