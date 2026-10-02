@@ -54,18 +54,20 @@ func accountsFXStore(t *testing.T) {
 
 func Test_run_accounts_shows_each_balance_in_the_reporting_currency(t *testing.T) {
 	accountsFXStore(t)
-	// Balance is 12 wide ("not imported"), the reporting-currency cell 9 wide; a blank last cell leaves no trailing space.
+	// Balance is 12 wide ("not imported"); the reporting-currency cell is as wide as its widest amount, 9 in CAD and 8 in USD.
+	// A blank last cell leaves no trailing space.
 	const row = "%-11s  %-9s  %-8s  %12s  %9s"
+	const usdRow = "%-11s  %-9s  %-8s  %12s  %8s"
 	cadText := "" +
 		fmt.Sprintf(row, "Account", "Type", "Currency", "Balance", "In CAD") + "  Status\n" +
 		strings.TrimRight(fmt.Sprintf(row, "Brokerage", "brokerage", "USD", "not imported", ""), " ") + "\n" +
 		fmt.Sprintf(row, "Chequing", "chequing", "CAD", "12,345.67", "12,345.67") + "\n" +
 		fmt.Sprintf(row, "US Chequing", "chequing", "USD", "8,310.00", "10,387.50") + "\n"
 	usdText := "" +
-		fmt.Sprintf(row, "Account", "Type", "Currency", "Balance", "In USD") + "  Status\n" +
-		strings.TrimRight(fmt.Sprintf(row, "Brokerage", "brokerage", "USD", "not imported", ""), " ") + "\n" +
-		fmt.Sprintf(row, "Chequing", "chequing", "CAD", "12,345.67", "9,876.54") + "\n" +
-		fmt.Sprintf(row, "US Chequing", "chequing", "USD", "8,310.00", "8,310.00") + "\n"
+		fmt.Sprintf(usdRow, "Account", "Type", "Currency", "Balance", "In USD") + "  Status\n" +
+		strings.TrimRight(fmt.Sprintf(usdRow, "Brokerage", "brokerage", "USD", "not imported", ""), " ") + "\n" +
+		fmt.Sprintf(usdRow, "Chequing", "chequing", "CAD", "12,345.67", "9,876.54") + "\n" +
+		fmt.Sprintf(usdRow, "US Chequing", "chequing", "USD", "8,310.00", "8,310.00") + "\n"
 
 	cases := []struct {
 		name     string

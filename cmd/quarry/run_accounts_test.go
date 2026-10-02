@@ -21,7 +21,7 @@ func Test_run_accounts_lists_open_accounts_with_their_balances(t *testing.T) {
 	syncAccountsFixture(t, home)
 	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts"}, &stdout, &stderr)
+	exitCode := run(context.Background(), []string{"accounts", "--currency", "native"}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -40,7 +40,7 @@ func Test_run_accounts_all_lists_closed_accounts(t *testing.T) {
 	syncAccountsFixture(t, home)
 	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--all"}, &stdout, &stderr)
+	exitCode := run(context.Background(), []string{"accounts", "--all", "--currency", "native"}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -94,7 +94,13 @@ currency: the sum of its transactions dated today or earlier. Closed
 accounts are left out unless --all is given.
 
 Brokerage and retirement accounts show "not imported": quarry does not
-import investment transactions yet, so it cannot compute their balance.`)
+import investment transactions yet, so it cannot compute their balance.
+
+A column shows each balance in the reporting currency (--currency, else
+reporting.currency in the config file, else CAD) at today's Bank of
+Canada rate, or the latest earlier one; --currency native leaves it
+out. quarry does not add balances together: a total that leaves out
+investment accounts would not be your net worth.`)
 	assert.Regexp(t, `(?m)^ +--all +include closed accounts$`, stdout.String())
 }
 
@@ -145,7 +151,7 @@ func Test_run_accounts_says_how_to_list_them_when_every_account_is_closed(t *tes
 	syncClosedAccountsFixture(t, home, 3)
 	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts"}, &stdout, &stderr)
+	exitCode := run(context.Background(), []string{"accounts", "--currency", "native"}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode)
 	assert.Equal(t, "Account  Type  Currency  Balance  Status\n", stdout.String())
@@ -158,7 +164,7 @@ func Test_run_accounts_all_lists_closed_accounts_without_a_note(t *testing.T) {
 	syncClosedAccountsFixture(t, home, 3)
 	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--all"}, &stdout, &stderr)
+	exitCode := run(context.Background(), []string{"accounts", "--all", "--currency", "native"}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -191,7 +197,7 @@ func Test_run_accounts_all_marks_accounts_left_out_of_reports(t *testing.T) {
 	syncNotInReportsFixture(t, home)
 	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--all"}, &stdout, &stderr)
+	exitCode := run(context.Background(), []string{"accounts", "--all", "--currency", "native"}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -223,7 +229,7 @@ func Test_run_accounts_all_marks_accounts_that_use_linked_account_tracking(t *te
 	syncLinkedTrackingFixture(t, home)
 	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--all"}, &stdout, &stderr)
+	exitCode := run(context.Background(), []string{"accounts", "--all", "--currency", "native"}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

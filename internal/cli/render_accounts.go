@@ -4,6 +4,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/koblas/quarry/internal/platform/money"
+	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -13,35 +15,65 @@ const notImportedBalance = "not imported"
 // accountsColumnGap separates the accounts table's columns.
 const accountsColumnGap = "  "
 
-// renderAccounts renders list as the accounts table: a header row, then one row
-// per account in list's order, Balance right-aligned.
-func renderAccounts(list store.AccountList) string {
-	header := []string{"Account", "Type", "Currency", "Balance", "Status"}
-	rows := make([][]string, 0, 1+len(list.Accounts))
+// noRateCell is the reporting-currency cell of an imported balance no rate converts.
+const noRateCell = "no rate"
+
+// renderAccounts renders l as the accounts table: a header row, then one row per account in l's order,
+// Balance and the reporting-currency column (absent in a native listing) right-aligned, trailing spaces trimmed.
+func renderAccounts(l report.AccountListing) string {
+	converted := l.Currency != money.Native
+	header := []string{"Account", "Type", "Currency", "Balance"}
+	if converted {
+		header = append(header, "In "+l.Currency.String())
+	}
+	header = append(header, "Status")
+	rows := make([][]string, 0, 1+len(l.Accounts))
 	rows = append(rows, header)
-	for _, a := range list.Accounts {
-		rows = append(rows, []string{escapeCell(a.Name), a.Type, a.Currency, accountBalance(a.Balance), accountStatus(a.Account)})
+	for _, a := range l.Accounts {
+		row := []string{escapeCell(a.Name), a.Type, a.Currency, accountBalance(a.Balance)}
+		if converted {
+			row = append(row, convertedCell(l, a))
+		}
+		rows = append(rows, append(row, accountStatus(a.Account)))
 	}
 
-	widths := make([]int, len(header)-1)
+	statusAt := len(header) - 1
+	widths := make([]int, statusAt)
 	for _, row := range rows {
 		for i := range widths {
 			widths[i] = max(widths[i], utf8.RuneCountInString(row[i]))
 		}
 	}
 
+	const firstRightAligned = 3
 	var b strings.Builder
 	for _, row := range rows {
-		b.WriteString(padRight(row[0], widths[0]) + accountsColumnGap +
-			padRight(row[1], widths[1]) + accountsColumnGap +
-			padRight(row[2], widths[2]) + accountsColumnGap +
-			padLeft(row[3], widths[3]))
-		if status := row[4]; status != "" {
-			b.WriteString(accountsColumnGap + status)
+		cells := make([]string, 0, len(row))
+		for i, cell := range row[:statusAt] {
+			if i < firstRightAligned {
+				cell = padRight(cell, widths[i])
+			} else {
+				cell = padLeft(cell, widths[i])
+			}
+			cells = append(cells, cell)
 		}
-		b.WriteString("\n")
+		if status := row[statusAt]; status != "" {
+			cells = append(cells, status)
+		}
+		b.WriteString(strings.TrimRight(strings.Join(cells, accountsColumnGap), " ") + "\n")
 	}
 	return b.String()
+}
+
+// convertedCell is a's balance in l's currency, "no rate" when a rate should have converted it, else blank.
+func convertedCell(l report.AccountListing, a store.AccountBalance) string {
+	if cents := l.ConvertedBalance(a); cents != nil {
+		return formatMoney(*cents)
+	}
+	if l.NeedsRate(a) {
+		return noRateCell
+	}
+	return ""
 }
 
 // accountBalance renders a balance in cents, or "not imported" when nil.

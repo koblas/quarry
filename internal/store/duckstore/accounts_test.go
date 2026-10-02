@@ -38,6 +38,16 @@ func replaceWith(t *testing.T, accounts []store.Account, txns []store.Transactio
 	return st
 }
 
+// ownBalances is accounts without their converted cells, which the conversion tests pin.
+func ownBalances(accounts []store.AccountBalance) []store.AccountBalance {
+	out := make([]store.AccountBalance, len(accounts))
+	for i, a := range accounts {
+		a.BalanceCAD, a.BalanceUSD = nil, nil
+		out[i] = a
+	}
+	return out
+}
+
 func Test_accounts_reads_each_accounts_balance(t *testing.T) {
 	t.Parallel()
 	past := time.Date(2025, 6, 2, 0, 0, 0, 0, time.UTC)
@@ -66,7 +76,7 @@ func Test_accounts_reads_each_accounts_balance(t *testing.T) {
 		{Account: savings, Balance: new(int64(0))},
 		{Account: usChequing, Balance: new(int64(800))},
 		{Account: visa, Balance: new(int64(-2500))},
-	}, got.Accounts)
+	}, ownBalances(got.Accounts))
 }
 
 func Test_accounts_reads_which_accounts_use_linked_account_tracking(t *testing.T) {
@@ -85,7 +95,7 @@ func Test_accounts_reads_which_accounts_use_linked_account_tracking(t *testing.T
 		{Account: both, Balance: new(int64(0))},
 		{Account: chequing, Balance: new(int64(0))},
 		{Account: linked, Balance: nil},
-	}, got.Accounts)
+	}, ownBalances(got.Accounts))
 }
 
 func Test_accounts_counts_transactions_dated_today_but_not_tomorrow(t *testing.T) {

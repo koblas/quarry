@@ -8,18 +8,21 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// accountsQuery reads today's date and every account's balance in cents; as_of survives zero accounts.
+// accountsQuery reads today's date, the earliest rate's date and every account's balance in cents, native and
+// in CAD and USD; as_of and first_rate survive zero accounts.
 const accountsQuery = `
-SELECT d.as_of, v.id, v.source_id, v.name, v.type, v.currency, v.institution, v.closed, v.active,
-	NOT a.in_reports, a.linked_tracking, CAST(v.balance * 100 AS BIGINT)
-FROM (SELECT current_date AS as_of) d
+SELECT d.as_of, d.first_rate, v.id, v.source_id, v.name, v.type, v.currency, v.institution, v.closed, v.active,
+	NOT a.in_reports, a.linked_tracking, CAST(v.balance * 100 AS BIGINT),
+	CAST(v.balance_cad * 100 AS BIGINT), CAST(v.balance_usd * 100 AS BIGINT)
+FROM (SELECT current_date AS as_of, (SELECT min(date) FROM fx_rates) AS first_rate) d
 LEFT JOIN v_account_balances v ON true
 LEFT JOIN accounts a ON a.id = v.id
 ORDER BY lower(v.name), v.name, v.source_id`
 
 // Accounts reads every account, closed ones included, with its balance
-// and the store's today as AsOf, sorted by name ignoring case, then name,
-// then source id. It refuses a store it cannot open or read with
+// native and in CAD and USD, the store's today as AsOf and its earliest
+// rate as FirstRate, sorted by name ignoring case, then name, then source
+// id. It refuses a store it cannot open or read with
 // *store.OpenError.
 func (s *Store) Accounts(ctx context.Context) (store.AccountList, error) {
 	db, err := s.openRead(ctx)
@@ -31,13 +34,15 @@ func (s *Store) Accounts(ctx context.Context) (store.AccountList, error) {
 	var list store.AccountList
 	err = db.QueryRows(ctx, accountsQuery, nil, func(scan func(dest ...any) error) error {
 		var asOf time.Time
+		var firstRate sql.NullTime
 		var id, name, typ, currency, institution sql.NullString
-		var sourceID, balance sql.NullInt64
+		var sourceID, balance, balanceCAD, balanceUSD sql.NullInt64
 		var closed, active, notInReports, linkedTracking sql.NullBool
-		if err := scan(&asOf, &id, &sourceID, &name, &typ, &currency, &institution, &closed, &active, &notInReports, &linkedTracking, &balance); err != nil {
+		if err := scan(&asOf, &firstRate, &id, &sourceID, &name, &typ, &currency, &institution, &closed, &active, &notInReports, &linkedTracking, &balance, &balanceCAD, &balanceUSD); err != nil {
 			return err
 		}
 		list.AsOf = asOf
+		list.FirstRate = firstRate.Time
 		if !id.Valid {
 			return nil
 		}
@@ -45,9 +50,7 @@ func (s *Store) Accounts(ctx context.Context) (store.AccountList, error) {
 			ID: id.String, SourceID: sourceID.Int64, Name: name.String, Type: typ.String, Currency: currency.String,
 			Institution: nullStringPtr(institution), Closed: closed.Bool, Active: active.Bool, NotInReports: notInReports.Bool,
 			LinkedTracking: linkedTracking.Bool,
-		}
-		if balance.Valid {
-			acct.Balance = &balance.Int64
+			Balance:        nullInt64Ptr(balance), BalanceCAD: nullInt64Ptr(balanceCAD), BalanceUSD: nullInt64Ptr(balanceUSD),
 		}
 		list.Accounts = append(list.Accounts, acct)
 		return nil

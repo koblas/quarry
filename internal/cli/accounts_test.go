@@ -74,7 +74,7 @@ func Test_accounts_all_closed_note(t *testing.T) {
 		t.Run(c.name+", human", func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
-			err := executeAccounts(t, fakeReportStore{accounts: c.list}, &stdout, &stderr, c.args...)
+			err := executeAccounts(t, fakeReportStore{accounts: c.list}, &stdout, &stderr, append([]string{"--currency", "native"}, c.args...)...)
 
 			require.NoError(t, err)
 			assert.Equal(t, c.human, stdout.String())
@@ -83,7 +83,7 @@ func Test_accounts_all_closed_note(t *testing.T) {
 		t.Run(c.name+", json", func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
-			err := executeAccounts(t, fakeReportStore{accounts: c.list}, &stdout, &stderr, append([]string{"--json"}, c.args...)...)
+			err := executeAccounts(t, fakeReportStore{accounts: c.list}, &stdout, &stderr, append([]string{"--json", "--currency", "native"}, c.args...)...)
 
 			require.NoError(t, err)
 			var got struct {

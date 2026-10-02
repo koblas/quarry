@@ -80,7 +80,7 @@ func Test_oneSidedRows_measure_widths_after_escaping(t *testing.T) {
 }
 
 func Test_renderAccounts_escapes_an_account_name_and_pads_after_it(t *testing.T) {
-	got := renderAccounts(store.AccountList{Accounts: []store.AccountBalance{
+	got := renderAccounts(report.AccountListing{Accounts: []store.AccountBalance{
 		balanceRow("\tAccount Not Synced", "chequing", "CAD", new(int64(100)), false, true),
 		balanceRow("Chequing", "chequing", "CAD", new(int64(100)), false, true),
 	}})

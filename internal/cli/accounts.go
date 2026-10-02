@@ -15,7 +15,13 @@ currency: the sum of its transactions dated today or earlier. Closed
 accounts are left out unless --all is given.
 
 Brokerage and retirement accounts show "not imported": quarry does not
-import investment transactions yet, so it cannot compute their balance.`,
+import investment transactions yet, so it cannot compute their balance.
+
+A column shows each balance in the reporting currency (--currency, else
+reporting.currency in the config file, else CAD) at today's Bank of
+Canada rate, or the latest earlier one; --currency native leaves it
+out. quarry does not add balances together: a total that leaves out
+investment accounts would not be your net worth.`,
 		Args: currency.args,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			reporting, configWarnings, err := currency.resolve(cmd, loadConfig)
@@ -37,12 +43,13 @@ import investment transactions yet, so it cannot compute their balance.`,
 			if listing.AllHidden() {
 				warnings = append(warnings, allClosedNote(listing.Hidden))
 			}
+			warnings = append(warnings, accountsFXWarnings(listing)...)
 
 			out, err := renderResult(*jsonOut,
 				func() ([]byte, error) {
-					return renderAccountsJSON(listing.AccountList, withConfigWarnings(configWarnings, warnings))
+					return renderAccountsJSON(listing, withConfigWarnings(configWarnings, warnings))
 				},
-				func() string { return renderAccounts(listing.AccountList) })
+				func() string { return renderAccounts(listing) })
 			if err != nil {
 				return err
 			}

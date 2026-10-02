@@ -94,3 +94,84 @@ func Test_accounts_returns_the_store_fault(t *testing.T) {
 
 	require.ErrorIs(t, err, errDiskRead)
 }
+
+func Test_accounts_echoes_the_currency_it_was_asked_for(t *testing.T) {
+	cases := []struct {
+		name     string
+		currency money.Currency
+		closed   bool
+	}{
+		{name: "CAD with closed accounts left out", currency: money.CAD},
+		{name: "USD with closed accounts left out", currency: money.USD},
+		{name: "native with closed accounts left out", currency: money.Native},
+		{name: "USD with closed accounts listed", currency: money.USD, closed: true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := report.NewServer(report.WithStore(fakeStore{accounts: store.AccountList{}}))
+
+			got, err := srv.Accounts(t.Context(), c.closed, c.currency)
+
+			require.NoError(t, err)
+			assert.Equal(t, c.currency, got.Currency)
+		})
+	}
+}
+
+func Test_accounts_reads_the_store_once(t *testing.T) {
+	var reads int
+	srv := report.NewServer(report.WithStore(fakeStore{accountsReads: &reads}))
+
+	_, err := srv.Accounts(t.Context(), false, money.CAD)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, reads)
+}
+
+func Test_accounts_converted_balance_picks_the_cell_of_the_listings_currency(t *testing.T) {
+	a := store.AccountBalance{Balance: new(int64(800)), BalanceCAD: new(int64(1000)), BalanceUSD: new(int64(790))}
+	cases := []struct {
+		name     string
+		currency money.Currency
+		want     *int64
+	}{
+		{name: "CAD listing reads the CAD cell", currency: money.CAD, want: new(int64(1000))},
+		{name: "USD listing reads the USD cell", currency: money.USD, want: new(int64(790))},
+		{name: "native listing has none", currency: money.Native, want: nil},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			listing := report.AccountListing{Currency: c.currency}
+
+			assert.Equal(t, c.want, listing.ConvertedBalance(a))
+		})
+	}
+}
+
+func Test_accounts_needs_a_rate_only_for_an_imported_balance_with_no_cell_in_a_converted_listing(t *testing.T) {
+	imported := store.AccountBalance{Balance: new(int64(800))}
+	notImported := store.AccountBalance{}
+	converted := store.AccountBalance{Balance: new(int64(800)), BalanceCAD: new(int64(1000))}
+	cases := []struct {
+		name     string
+		currency money.Currency
+		account  store.AccountBalance
+		want     bool
+	}{
+		{name: "imported, no cell, CAD", currency: money.CAD, account: imported, want: true},
+		{name: "imported, no cell, USD", currency: money.USD, account: imported, want: true},
+		{name: "imported with its cell", currency: money.CAD, account: converted, want: false},
+		{name: "not imported", currency: money.CAD, account: notImported, want: false},
+		{name: "native listing", currency: money.Native, account: imported, want: false},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			listing := report.AccountListing{Currency: c.currency}
+
+			assert.Equal(t, c.want, listing.NeedsRate(c.account))
+		})
+	}
+}
