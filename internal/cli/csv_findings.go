@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 )
 
 // findingItemCSVColumns is how many of findings --csv's columns describe an item.
@@ -29,7 +30,7 @@ func renderFindingsCSV(listing report.FindingsListing) string {
 	b.WriteString(csvRecord(header))
 	for _, group := range listing.Groups {
 		for _, f := range group.Findings {
-			for _, row := range findingCSVRows(newFindingEntryDocument(f)) {
+			for _, row := range findingCSVRows(document.NewFindingEntry(f)) {
 				b.WriteString(csvRecord(row))
 			}
 		}
@@ -38,7 +39,7 @@ func renderFindingsCSV(listing report.FindingsListing) string {
 }
 
 // findingCSVRows is the rows of one finding: its id, type, status and fix around each item's cells.
-func findingCSVRows(entry findingEntryDocument) [][]csvCell {
+func findingCSVRows(entry document.FindingEntry) [][]csvCell {
 	lead := []csvCell{{Text: entry.ID}, {Text: entry.Type}, {Text: entry.Status}}
 	fix := csvCell{Text: entry.Fix}
 	if len(entry.Items) == 0 {
@@ -62,7 +63,7 @@ func findingRow(lead, middle []csvCell, last csvCell) []csvCell {
 
 // findingItemCSVCells is item's cells in the header's order from date to category_id; fields the
 // item does not carry are NULL, as in the --json item.
-func findingItemCSVCells(item findingItemDocument) []csvCell {
+func findingItemCSVCells(item document.FindingItem) []csvCell {
 	return []csvCell{
 		csvOptional(item.Date),
 		csvOptional(item.Account),

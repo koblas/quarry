@@ -5,6 +5,7 @@ import (
 
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/spf13/cobra"
 )
 
@@ -38,7 +39,7 @@ when the last sync could not fetch new ones, why.`,
 
 			ignore, warnings, warningsAbsolute := statusIgnore(loadConfig)
 			printConfigWarnings(cmd, warnings)
-			findings := statusFindings{counts: report.CountFindings(st, ignore), ignoreKnown: len(warnings) == 0}
+			findings := document.FindingsTally{Counts: report.CountFindings(st, ignore), IgnoreKnown: len(warnings) == 0}
 
 			out, err := renderResult(*jsonOut,
 				func() ([]byte, error) { return renderStatusJSON(st, findings, warningsAbsolute) },
@@ -57,12 +58,7 @@ when the last sync could not fetch new ones, why.`,
 func statusIgnore(loadConfig ConfigLoader) ([]string, []string, []string) {
 	cfg, err := loadConfig("status")
 	if err != nil {
-		return nil, []string{cannotTellIgnored(config.Problem(err))}, []string{cannotTellIgnored(config.ProblemAbsolute(err))}
+		return nil, []string{document.CannotTellIgnored(config.Problem(err))}, []string{document.CannotTellIgnored(config.ProblemAbsolute(err))}
 	}
 	return cfg.Ignore, nil, nil
-}
-
-// cannotTellIgnored is the warning for a config that cannot be read, naming problem.
-func cannotTellIgnored(problem string) string {
-	return "cannot tell which findings you ignored: " + problem + "; findings you ignored are counted as open"
 }

@@ -1,9 +1,9 @@
-package config_test
+package tomlstr_test
 
 import (
 	"testing"
 
-	"github.com/koblas/quarry/internal/config"
+	"github.com/koblas/quarry/internal/platform/tomlstr"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -26,7 +26,7 @@ func Test_BasicString_writes_text_as_one_quoted_line_with_its_special_characters
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, config.BasicString(c.in))
+			assert.Equal(t, c.want, tomlstr.BasicString(c.in))
 		})
 	}
 }

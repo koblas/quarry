@@ -15,6 +15,7 @@ type fakeStore struct {
 	cashFlow   store.CashFlow
 	charges    store.Charges
 	findings   store.FindingList
+	schema     store.Schema
 	rows       [][]store.QueryValue
 	gotMaxRows *int
 
@@ -23,6 +24,7 @@ type fakeStore struct {
 	gotCharges    *store.ChargeParams
 	accountsReads *int
 	chargesReads  *int
+	schemaReads   *int
 	spendingReads *int
 	cashFlowReads *int
 	err           error
@@ -31,6 +33,13 @@ type fakeStore struct {
 }
 
 func (f fakeStore) Status(context.Context) (store.Status, error) { return f.status, f.err }
+
+func (f fakeStore) Schema(context.Context) (store.Schema, error) {
+	if f.schemaReads != nil {
+		*f.schemaReads++
+	}
+	return f.schema, f.err
+}
 
 func (f fakeStore) Accounts(context.Context) (store.AccountList, error) {
 	if f.accountsReads != nil {

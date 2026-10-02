@@ -1,6 +1,5 @@
-// White-box: jsonMoney and renderJSON's list-emptiness behaviour are
-// unexported rules best driven directly, rather than through a full
-// command run for every case.
+// White-box: renderJSON's list-emptiness behaviour is an unexported rule
+// best driven directly, rather than through a full command run for every case.
 package cli
 
 import (
@@ -15,26 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func Test_jsonMoney(t *testing.T) {
-	cases := []struct {
-		name  string
-		cents int64
-		want  string
-	}{
-		{name: "zero", cents: 0, want: "0.00"},
-		{name: "negative with a zero integer part", cents: -1, want: "-0.01"},
-		{name: "negative below one unit", cents: -50, want: "-0.50"},
-		{name: "positive with both parts", cents: 120417, want: "1204.17"},
-		{name: "large negative has no thousands grouping", cents: -100000000, want: "-1000000.00"},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, jsonMoney(c.cents))
-		})
-	}
-}
 
 // The nil arm proves absent lists encode as []; the populated control arm
 // proves the same fields still carry real content, not a hardcoded [].

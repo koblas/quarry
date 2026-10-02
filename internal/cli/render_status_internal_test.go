@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 )
@@ -80,8 +81,8 @@ func statusFixture() store.Status {
 	}
 }
 
-func findingsFixture() statusFindings {
-	return statusFindings{counts: finding.Counts{Open: 12, Ignored: 4}, ignoreKnown: true}
+func findingsFixture() document.FindingsTally {
+	return document.FindingsTally{Counts: finding.Counts{Open: 12, Ignored: 4}, IgnoreKnown: true}
 }
 
 func Test_renderStatus(t *testing.T) {
@@ -163,31 +164,31 @@ func Test_renderStatus(t *testing.T) {
 	t.Run("findings row forms", func(t *testing.T) {
 		cases := []struct {
 			name     string
-			findings statusFindings
+			findings document.FindingsTally
 			want     string
 		}{
 			{
-				name: "open and ignored", findings: statusFindings{counts: finding.Counts{Open: 12, Ignored: 4}, ignoreKnown: true},
+				name: "open and ignored", findings: document.FindingsTally{Counts: finding.Counts{Open: 12, Ignored: 4}, IgnoreKnown: true},
 				want: "Findings  12 open, 4 ignored; run quarry findings to list them\n",
 			},
 			{
-				name: "none open", findings: statusFindings{ignoreKnown: true},
+				name: "none open", findings: document.FindingsTally{IgnoreKnown: true},
 				want: "Findings  none open\n",
 			},
 			{
-				name: "none open, some ignored", findings: statusFindings{counts: finding.Counts{Ignored: 4}, ignoreKnown: true},
+				name: "none open, some ignored", findings: document.FindingsTally{Counts: finding.Counts{Ignored: 4}, IgnoreKnown: true},
 				want: "Findings  none open, 4 ignored\n",
 			},
 			{
-				name: "counts are thousands-grouped", findings: statusFindings{counts: finding.Counts{Open: 1234}, ignoreKnown: true},
+				name: "counts are thousands-grouped", findings: document.FindingsTally{Counts: finding.Counts{Open: 1234}, IgnoreKnown: true},
 				want: "Findings  1,234 open; run quarry findings to list them\n",
 			},
 			{
-				name: "new and newly fixed findings add no clause", findings: statusFindings{counts: finding.Counts{Open: 3, New: 3, NewlyFixed: 2}, ignoreKnown: true},
+				name: "new and newly fixed findings add no clause", findings: document.FindingsTally{Counts: finding.Counts{Open: 3, New: 3, NewlyFixed: 2}, IgnoreKnown: true},
 				want: "Findings  3 open; run quarry findings to list them\n",
 			},
 			{
-				name: "an unreadable ignore list drops the ignored clause", findings: statusFindings{counts: finding.Counts{Open: 4, Ignored: 1}},
+				name: "an unreadable ignore list drops the ignored clause", findings: document.FindingsTally{Counts: finding.Counts{Open: 4, Ignored: 1}},
 				want: "Findings  4 open; run quarry findings to list them\n",
 			},
 		}

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -65,6 +66,21 @@ var ErrQueryInterrupted = errors.New("query interrupted")
 func Interrupted(err error) error {
 	return fmt.Errorf("%w: %w", ErrQueryInterrupted, err)
 }
+
+// InterruptedBy is Interrupted(err) for a query ctx stopped: it also unwraps to ctx.Err(), so
+// errors.Is tells a deadline from a cancel whatever err carries. Its text is Interrupted(err)'s.
+func InterruptedBy(ctx context.Context, err error) error {
+	return interruptedError{error: Interrupted(err), ctxErr: ctx.Err()}
+}
+
+// interruptedError is an Interrupted error that also unwraps to the context error behind it.
+type interruptedError struct {
+	error
+
+	ctxErr error
+}
+
+func (e interruptedError) Unwrap() []error { return []error{e.error, e.ctxErr} }
 
 // QueryError is a query the database rejected; Reason is the first line of
 // the database's own message, verbatim.

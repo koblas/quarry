@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -76,15 +77,15 @@ type spendTotalDocument struct {
 func renderSpendingJSON(s report.Spending, warnings []string) ([]byte, error) {
 	rows := make([]any, len(s.Rows))
 	for i, r := range s.Rows {
-		rows[i] = spendRowDocumentFor(s.By, r, jsonMoney(r.Spent))
+		rows[i] = spendRowDocumentFor(s.By, r, document.Money(r.Spent))
 	}
 	totals := make([]spendTotalDocument, len(s.Totals))
 	for i, t := range s.Totals {
-		totals[i] = spendTotalDocument{Currency: t.Currency, Spent: jsonMoney(t.Spent)}
+		totals[i] = spendTotalDocument{Currency: t.Currency, Spent: document.Money(t.Spent)}
 	}
 	return marshalDocument(spendDocument{
-		Since:         s.Window.Since.Format(jsonDateLayout),
-		Until:         s.Window.Until.Format(jsonDateLayout),
+		Since:         s.Window.Since.Format(document.DateLayout),
+		Until:         s.Window.Until.Format(document.DateLayout),
 		By:            spendGroupings[s.By].name,
 		Currency:      s.Currency.String(),
 		AccountFilter: accountFilterDocuments(s.Accounts),

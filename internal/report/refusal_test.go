@@ -4,6 +4,7 @@ import (
 	"context"
 	"io/fs"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
@@ -184,4 +185,50 @@ func Test_reads_return_a_fault_that_is_not_a_store_refusal_unchanged(t *testing.
 	_, err := srv.Status(t.Context())
 
 	assert.Equal(t, errDiskRead, err)
+}
+
+func Test_reads_keep_the_deadline_apart_from_a_cancel(t *testing.T) {
+	reads := []struct {
+		name string
+		read func(ctx context.Context, srv *report.Server) error
+	}{
+		{"status", func(ctx context.Context, srv *report.Server) error { _, err := srv.Status(ctx); return err }},
+		{"findings", func(ctx context.Context, srv *report.Server) error {
+			_, err := srv.Findings(ctx, report.FindingsRequest{})
+			return err
+		}},
+		{"describe_schema", func(ctx context.Context, srv *report.Server) error { _, err := srv.DescribeSchema(ctx, 0); return err }},
+	}
+	ends := []struct {
+		name  string
+		end   func(parent context.Context) context.Context
+		is    error
+		isNot error
+	}{
+		{"deadline", func(parent context.Context) context.Context {
+			ctx, cancel := context.WithDeadline(parent, time.Now().Add(-time.Second))
+			t.Cleanup(cancel)
+			return ctx
+		}, context.DeadlineExceeded, context.Canceled},
+		{"cancel", func(parent context.Context) context.Context {
+			ctx, cancel := context.WithCancel(parent)
+			cancel()
+			return ctx
+		}, context.Canceled, context.DeadlineExceeded},
+	}
+
+	for _, r := range reads {
+		for _, e := range ends {
+			t.Run(r.name+" "+e.name, func(t *testing.T) {
+				openErr := &store.OpenError{Fault: store.OpenFaultMissing, Path: storePath}
+				srv := report.NewServer(report.WithStore(fakeStore{err: openErr}), report.WithHome(refusalHome))
+
+				err := r.read(e.end(t.Context()), srv)
+
+				require.ErrorIs(t, err, e.is)
+				require.NotErrorIs(t, err, e.isNot)
+				assert.ErrorIs(t, err, openErr)
+			})
+		}
+	}
 }

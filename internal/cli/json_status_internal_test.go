@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -73,8 +74,8 @@ const fullStatusJSON = `{
 }
 `
 
-func jsonFindingsFixture() statusFindings {
-	return statusFindings{counts: finding.Counts{Open: 12, Ignored: 4, Fixed: 7, New: 2, NewlyFixed: 1}, ignoreKnown: true}
+func jsonFindingsFixture() document.FindingsTally {
+	return document.FindingsTally{Counts: finding.Counts{Open: 12, Ignored: 4, Fixed: 7, New: 2, NewlyFixed: 1}, IgnoreKnown: true}
 }
 
 func Test_renderStatusJSON(t *testing.T) {
@@ -88,7 +89,7 @@ func Test_renderStatusJSON(t *testing.T) {
 		st.Run.TransfersCrossCurrency = 41
 		return st
 	}
-	renderWith := func(t *testing.T, st store.Status, findings statusFindings, warnings []string) string {
+	renderWith := func(t *testing.T, st store.Status, findings document.FindingsTally, warnings []string) string {
 		t.Helper()
 		out, err := renderStatusJSON(st, findings, warnings)
 		require.NoError(t, err)
@@ -151,7 +152,7 @@ func Test_renderStatusJSON(t *testing.T) {
 
 	t.Run("an unreadable ignore list makes ignored null and keeps the other counts", func(t *testing.T) {
 		findings := jsonFindingsFixture()
-		findings.ignoreKnown = false
+		findings.IgnoreKnown = false
 
 		got := renderWith(t, newStatus(), findings, nil)
 

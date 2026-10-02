@@ -16,6 +16,7 @@ import (
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/fx"
 	"github.com/koblas/quarry/internal/importer"
+	"github.com/koblas/quarry/internal/mcp"
 	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/snapshot"
@@ -131,6 +132,25 @@ func newConfigLoader() cli.ConfigLoader {
 	}
 }
 
+// newMCPServe returns cli.Execute's MCPServeFunc: an MCP server reporting the module version,
+// reading the store through newReportFactory, then opts. It refuses without calling ready when $HOME is unset.
+func newMCPServe(info *debug.BuildInfo, opts ...mcp.Option) cli.MCPServeFunc {
+	return func(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, ready func()) error {
+		if _, err := resolveHome("mcp"); err != nil {
+			return err
+		}
+		srv := mcp.NewServer(append([]mcp.Option{
+			mcp.WithVersion(buildVersion(info)),
+			mcp.WithReport(mcp.ReportFactory(newReportFactory())),
+			mcp.WithConfig(mcp.ConfigLoader(newConfigLoader())),
+		}, opts...)...)
+		// A broken stdout must surface as EPIPE from the write, not kill the process.
+		signal.Ignore(syscall.SIGPIPE)
+		ready()
+		return srv.Serve(ctx, stdin, stdout, stderr)
+	}
+}
+
 // storeDirUnder is the directory holding quarry's store and snapshots.
 func storeDirUnder(home string) string {
 	return filepath.Join(home, "Library", "Application Support", "quarry")
@@ -158,6 +178,7 @@ func resolveHome(command string) (string, error) {
 // defaultEnv is the process's wiring: the real stdin, the given output
 // streams, and the factories over the default store.
 func defaultEnv(stdout, stderr io.Writer) cli.Env {
+	info, _ := debug.ReadBuildInfo()
 	return cli.Env{
 		Stdin:        os.Stdin,
 		Stdout:       stdout,
@@ -166,6 +187,8 @@ func defaultEnv(stdout, stderr io.Writer) cli.Env {
 		NewReport:    newReportFactory(),
 		NewSnapshots: newSnapshotsFactory(),
 		LoadConfig:   newConfigLoader(),
+		ServeMCP:     newMCPServe(info),
+		IsTerminal:   isTerminal,
 		Now:          time.Now,
 	}
 }

@@ -1,6 +1,9 @@
 package cli
 
-import "github.com/koblas/quarry/internal/report"
+import (
+	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
+)
 
 // cashFlowDocument is cashflow's --json stdout shape.
 type cashFlowDocument struct {
@@ -41,7 +44,7 @@ func renderCashFlowJSON(c report.CashFlow, warnings []string) ([]byte, error) {
 	for i, r := range c.Rows {
 		periods[i] = cashFlowPeriodDocument{
 			Period: r.Period, Currency: r.Currency,
-			Income: jsonMoney(r.Income), Spent: jsonMoney(r.Spent), Net: jsonMoney(r.Net),
+			Income: document.Money(r.Income), Spent: document.Money(r.Spent), Net: document.Money(r.Net),
 			SavingsRatePct: r.SavingsRatePct, Partial: r.Partial,
 		}
 	}
@@ -49,13 +52,13 @@ func renderCashFlowJSON(c report.CashFlow, warnings []string) ([]byte, error) {
 	for i, t := range c.Totals {
 		totals[i] = cashFlowTotalDocument{
 			Currency: t.Currency,
-			Income:   jsonMoney(t.Income), Spent: jsonMoney(t.Spent), Net: jsonMoney(t.Net),
+			Income:   document.Money(t.Income), Spent: document.Money(t.Spent), Net: document.Money(t.Net),
 			SavingsRatePct: t.SavingsRatePct,
 		}
 	}
 	return marshalDocument(cashFlowDocument{
-		Since:         c.Window.Since.Format(jsonDateLayout),
-		Until:         c.Window.Until.Format(jsonDateLayout),
+		Since:         c.Window.Since.Format(document.DateLayout),
+		Until:         c.Window.Until.Format(document.DateLayout),
 		By:            cashFlowPeriods[c.By].name,
 		Currency:      c.Currency.String(),
 		AccountFilter: accountFilterDocuments(c.Accounts),

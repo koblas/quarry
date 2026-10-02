@@ -176,6 +176,11 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 			wantStderr: "quarry: prune takes no arguments; Run 'quarry snapshots prune --help' for usage.\n",
 		},
 		{
+			name:       "mcp with a positional argument",
+			args:       []string{"mcp", "extra"},
+			wantStderr: "quarry: mcp takes no arguments\n",
+		},
+		{
 			name:       "unknown command",
 			args:       []string{"frob"},
 			wantStderr: "quarry: unknown command \"frob\" for \"quarry\"; Run 'quarry --help' for usage.\n",
@@ -243,6 +248,7 @@ func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
 			name: "snapshots", args: []string{"snapshots", "--bogus"},
 			wantStderr: "quarry: unknown flag: --bogus; Run 'quarry snapshots --help' for usage.\n",
 		},
+		{name: "mcp", args: []string{"mcp", "--bogus"}, wantStderr: "quarry: unknown flag: --bogus; Run 'quarry mcp --help' for usage.\n"},
 		{name: "root", args: []string{"spending"}, wantStderr: "quarry: unknown command \"spending\" for \"quarry\"; Run 'quarry --help' for usage.\n"},
 	}
 
@@ -301,6 +307,16 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 		var stdout, stderr bytes.Buffer
 
 		exitCode := run(context.Background(), []string{"snapshots", "--help"}, &stdout, &stderr)
+
+		assert.Equal(t, 0, exitCode)
+		assert.NotEmpty(t, stdout.String())
+		assert.Empty(t, stderr.String())
+	})
+
+	t.Run("mcp help", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+
+		exitCode := run(context.Background(), []string{"mcp", "--help"}, &stdout, &stderr)
 
 		assert.Equal(t, 0, exitCode)
 		assert.NotEmpty(t, stdout.String())
