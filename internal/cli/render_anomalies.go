@@ -52,11 +52,11 @@ func renderAnomalies(a report.Anomalies) string {
 
 // anomalyMoney is the Amount and Usual cells of an in a report in target: converted when an was, else in its
 // own currency, with its code in front when that is not target.
-func anomalyMoney(an report.Anomaly, target money.Currency) (amount, usual string) {
+func anomalyMoney(an report.Anomaly, target money.Currency) (string, string) {
 	if an.ListedCurrency != "" {
 		return formatMoney(an.ListedAmount), formatMoney(an.ListedUsual)
 	}
-	amount, usual = formatMoney(an.Amount), formatMoney(an.Usual)
+	amount, usual := formatMoney(an.Amount), formatMoney(an.Usual)
 	if target != money.Native && an.Currency != target.String() {
 		return an.Currency + " " + amount, an.Currency + " " + usual
 	}

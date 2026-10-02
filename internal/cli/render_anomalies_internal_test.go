@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -154,4 +155,75 @@ func Test_renderAnomalies_ends_with_the_footer_of_its_counts(t *testing.T) {
 	got := renderAnomalies(a)
 
 	assert.Equal(t, anomaliesCaption+anomaliesHeaderLine+"\n1,204 charges checked; 87 had too little history to judge\n", got)
+}
+
+// usdAnomaly is anomalyOf in a USD account: 250.00 against a usual 40.00, listed as it was charged.
+func usdAnomaly() report.Anomaly {
+	an := anomalyOf(new("Hardware"), &store.ChargeCategory{Path: "Home"}, 1)
+	an.Account = store.Account{ID: "acct-usd", Name: "US Chequing", Currency: "USD", Active: true}
+	an.Currency, an.Amount, an.Usual, an.TimesTenths, an.Earlier = "USD", 125000, 4000, 313, 5
+	return an
+}
+
+func Test_renderAnomalies_shows_the_converted_amount_and_usual_with_the_report_currency_in_the_caption(t *testing.T) {
+	an := usdAnomaly()
+	an.ListedCurrency, an.ListedAmount, an.ListedUsual = "CAD", 175000, 5600
+	found := listed(an)
+	found.Currency = money.CAD
+
+	got := renderAnomalies(found)
+
+	want := "Unusually large charges 2026-01-01 to 2026-03-09 in all accounts, amounts in CAD\n\n" +
+		"Date        Account            Payee     Category    Amount  Usual  Times  Compared with\n" +
+		"2026-03-02  US Chequing (USD)  Hardware  Home      1,750.00  56.00  31.3x  payee, 5 earlier\n" +
+		"\n" +
+		"1 charge checked\n"
+	assert.Equal(t, want, got)
+}
+
+func Test_renderAnomalies_prefixes_both_cells_of_a_charge_left_in_its_own_currency(t *testing.T) {
+	cases := []struct {
+		name     string
+		currency money.Currency
+		native   string
+		want     string
+	}{
+		{name: "a USD charge in a CAD report", currency: money.CAD, native: "USD", want: "USD 1,250.00  USD 40.00"},
+		{name: "a CAD charge in a USD report", currency: money.USD, native: "CAD", want: "CAD 1,250.00  CAD 40.00"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			an := usdAnomaly()
+			an.Currency = c.native
+			found := listed(an)
+			found.Currency = c.currency
+
+			got := renderAnomalies(found)
+
+			assert.Contains(t, got, c.want)
+		})
+	}
+}
+
+func Test_renderAnomalies_adds_no_prefix_for_a_charge_in_the_report_currency_or_in_native_mode(t *testing.T) {
+	cases := []struct {
+		name     string
+		currency money.Currency
+	}{
+		{name: "native mode", currency: money.Native},
+		{name: "a USD charge in a USD report", currency: money.USD},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			found := listed(usdAnomaly())
+			found.Currency = c.currency
+
+			got := renderAnomalies(found)
+
+			assert.Contains(t, got, "1,250.00  40.00")
+			assert.NotContains(t, got, "USD 1,250.00")
+		})
+	}
 }

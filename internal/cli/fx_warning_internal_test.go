@@ -36,6 +36,14 @@ func Test_unconvertedWarnings_words_the_before_the_first_rate_line_for_each_coun
 			want: "2 series with a charge dated before 1990-01-02, the first exchange rate in the store, are listed in CAD, not converted to USD",
 		},
 		{
+			name: "one charge", currency: money.CAD, noun: chargesNoun, count: 1,
+			want: "1 charge dated before 1990-01-02, the first exchange rate in the store, is listed in USD, not converted to CAD",
+		},
+		{
+			name: "two charges in USD", currency: money.USD, noun: chargesNoun, count: 2,
+			want: "2 charges dated before 1990-01-02, the first exchange rate in the store, are listed in CAD, not converted to USD",
+		},
+		{
 			name: "a thousand series are grouped", currency: money.CAD, noun: seriesNoun, count: 1234,
 			want: "1,234 series with a charge dated before 1990-01-02, the first exchange rate in the store, are listed in USD, not converted to CAD",
 		},

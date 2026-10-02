@@ -133,8 +133,8 @@ func (s *Server) Anomalies(ctx context.Context, req AnomaliesRequest) (Anomalies
 }
 
 // listedIn is a with Amount and Usual converted into target at the rate of the charge's own date. Both convert or
-// neither does; ok is false when a stays in its own currency because target is a currency it has no rate for.
-func (a Anomaly) listedIn(target money.Currency) (converted Anomaly, ok bool) {
+// neither does; the result is false when a stays in its own currency for want of a rate.
+func (a Anomaly) listedIn(target money.Currency) (Anomaly, bool) {
 	if target == money.Native {
 		return a, true
 	}
