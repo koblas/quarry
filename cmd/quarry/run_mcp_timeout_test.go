@@ -91,6 +91,16 @@ func (d *signallingDB) QueryTable(ctx context.Context, query string, maxRows int
 	return d.ReadDB.QueryTable(ctx, query, maxRows)
 }
 
+// awaitRunning waits until a statement starts running, failing the test if none does by ctx's deadline.
+func (r *queryRecorder) awaitRunning(ctx context.Context, t *testing.T) {
+	t.Helper()
+	select {
+	case <-r.running:
+	case <-ctx.Done():
+		require.FailNow(t, "no query started")
+	}
+}
+
 // nextError is the error of the next Query to finish, failing the test if none does by ctx's deadline.
 func (r *queryRecorder) nextError(ctx context.Context, t *testing.T) error {
 	t.Helper()

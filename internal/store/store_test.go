@@ -1,10 +1,14 @@
 package store_test
 
 import (
+	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_IsInvestmentAccount(t *testing.T) {
@@ -70,4 +74,44 @@ func Test_query_error_reads_as_its_reason(t *testing.T) {
 	err := &store.QueryError{Reason: "Binder Error: Referenced column \"x\" not found in FROM clause!"}
 
 	assert.EqualError(t, err, "Binder Error: Referenced column \"x\" not found in FROM clause!")
+}
+
+var errDriverInterrupt = errors.New("interrupt error: interrupted")
+
+func Test_InterruptedBy_reads_as_Interrupted_and_unwraps_to_the_context_error(t *testing.T) {
+	cases := []struct {
+		name  string
+		end   func(t *testing.T) context.Context
+		cause error
+		other error
+	}{
+		{name: "a cancelled context", end: cancelledContext, cause: context.Canceled, other: context.DeadlineExceeded},
+		{name: "an expired deadline", end: expiredContext, cause: context.DeadlineExceeded, other: context.Canceled},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := store.InterruptedBy(c.end(t), errDriverInterrupt)
+
+			assert.Equal(t, store.Interrupted(errDriverInterrupt).Error(), err.Error())
+			require.ErrorIs(t, err, store.ErrQueryInterrupted)
+			require.ErrorIs(t, err, errDriverInterrupt)
+			require.ErrorIs(t, err, c.cause)
+			require.NotErrorIs(t, err, c.other)
+		})
+	}
+}
+
+func cancelledContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	return ctx
+}
+
+func expiredContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithDeadline(t.Context(), time.Unix(0, 0))
+	t.Cleanup(cancel)
+	return ctx
 }

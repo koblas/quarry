@@ -40,7 +40,7 @@ func Test_run_mcp_cancelled_query_is_interrupted_quietly(t *testing.T) {
 		_, err := peer.session.CallTool(slowCtx, &sdk.CallToolParams{Name: "query", Arguments: map[string]any{"sql": slowQuery}})
 		slowDone <- err
 	}()
-	<-queries.running
+	queries.awaitRunning(ctx, t)
 
 	cancelSlow()
 	interrupted := queries.nextErrorWithin(ctx, t, cancelBound)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -16,6 +17,8 @@ func Test_query_words_each_failure_for_the_model(t *testing.T) {
 		atStore      = "~/Library/Application Support/quarry/quarry.duckdb"
 		snapshotPath = testHome + "/Library/Application Support/quarry/snapshots/20260927T143005Z.sqlite"
 	)
+	expired, cancelExpired := context.WithDeadline(t.Context(), time.Unix(0, 0))
+	defer cancelExpired()
 	cases := []struct {
 		name string
 		err  error
@@ -34,6 +37,10 @@ func Test_query_words_each_failure_for_the_model(t *testing.T) {
 		{name: "a write wrapped by the store", err: fmt.Errorf("run: %w", store.ErrReadOnlyQuery), want: writeLine},
 		{name: "another file", err: store.ErrExternalAccess, want: externalLine},
 		{name: "an interrupted query keeps its text", err: store.Interrupted(context.Canceled), want: "query interrupted: context canceled"},
+		{
+			name: "a query a deadline interrupted", err: store.InterruptedBy(expired, errDriverInterrupt),
+			want: "query stopped after 30 seconds; aggregate or filter it in SQL, then try again",
+		},
 		{name: "a fault with no reason of its own", err: errDiskOnFire, want: "disk on fire"},
 		{
 			name: "no store yet", err: &store.OpenError{Fault: store.OpenFaultMissing, Path: testStorePath},

@@ -24,9 +24,8 @@ type stoppedError string
 
 func (e stoppedError) Error() string { return string(e) }
 
-// handler adapts run to the SDK: a document becomes one compact JSON text block plus the same
-// bytes as structuredContent; an error becomes an isError result. run gets ctx bounded by timeout,
-// and an error that carries context.DeadlineExceeded is answered with stopped's line instead.
+// handler adapts run to the SDK: a document becomes one JSON text block plus structuredContent, an error an isError result.
+// run's ctx ends at timeout, and an error carrying context.DeadlineExceeded is answered with stopped's line.
 func handler[In any](timeout time.Duration, stopped stoppedFunc, run toolFunc[In]) sdk.ToolHandlerFor[In, any] {
 	return func(ctx context.Context, _ *sdk.CallToolRequest, in In) (*sdk.CallToolResult, any, error) {
 		ctx, cancel := context.WithTimeout(ctx, timeout)
