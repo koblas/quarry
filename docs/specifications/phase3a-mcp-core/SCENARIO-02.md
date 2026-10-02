@@ -15,8 +15,8 @@ Size: OWNS A RUN — 3 batches, 0 feature packages (`internal/mcp` is a delivery
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `go.mod:5-11`, `go.sum` — `go get github.com/modelcontextprotocol/go-sdk@v1.8.0`. Try `GOPROXY=off` first, because `go env GOMODCACHE` already holds v1.8.0 and jsonschema-go v0.4.3. Fall back to the network: proxy.golang.org, sum.golang.org. `go mod tidy` runs only after code imports it (Sweep).
-- [ ] Step 2: `cmd/quarry/run_mcp_test.go` (new) `Test_run_mcp_lists_quarrys_four_tools_over_json_rpc`:
+- [x] Step 1: `go.mod:5-11`, `go.sum` — `go get github.com/modelcontextprotocol/go-sdk@v1.8.0`. Try `GOPROXY=off` first, because `go env GOMODCACHE` already holds v1.8.0 and jsonschema-go v0.4.3. Fall back to the network: proxy.golang.org, sum.golang.org. `go mod tidy` runs only after code imports it (Sweep).
+- [x] Step 2: `cmd/quarry/run_mcp_test.go` (new) `Test_run_mcp_lists_quarrys_four_tools_over_json_rpc`:
   - `runWith(ctx, {"mcp"}, testEnv(...))` runs in a goroutine with `Stdin`/`Stdout` on `io.Pipe` pairs. Stdout is teed into a buffer. The SDK client uses `IOTransport` over the other ends.
   - The client connects (initialize) and calls ListTools, then closes the session and waits for `runWith` to return.
   - Asserts:
@@ -25,7 +25,7 @@ Size: OWNS A RUN — 3 batches, 0 feature packages (`internal/mcp` is a delivery
     - Exactly 4 tools. Each has its description verbatim (§2.4–2.7), its `InputSchema` JSONEq to a literal, and `OutputSchema` JSONEq to `{"type":"object"}`.
     - Every captured stdout line unmarshals with `"jsonrpc":"2.0"`, and stderr is empty.
   - One timeout ctx bounds connect, list and the wait on `runWith`. Exit code is not asserted (S15 owns it).
-- [ ] Step 3: signature-only stubs so the test compiles:
+- [x] Step 3: signature-only stubs so the test compiles:
   - `internal/mcp/doc.go` (new), plus `internal/mcp/server.go` (new) with `Server`, `Option`, `NewServer`, `WithVersion`, and `(*Server).Serve(ctx, stdin io.Reader, stdout, stderr io.Writer) error` returning nil.
   - `internal/cli/run.go:14-45`: type `MCPServeFunc` (same signature) and field `Env.ServeMCP`.
   - Red: the client's initialize fails because there is no `mcp` command yet. Quote it.
@@ -93,3 +93,13 @@ Size: OWNS A RUN — 3 batches, 0 feature packages (`internal/mcp` is a delivery
 - An acceptance test without a deadline hangs for 10 minutes on any wiring regression.
 
 ## Phase report
+
+Run A done (steps 1-3). Acceptance red at its assertion; nothing else started.
+
+- `go.mod`/`go.sum`: sdk v1.8.0 added and `GOPROXY=off go mod tidy` already run offline (jsonschema-go v0.4.3 is still `// indirect` until code imports it; re-tidy in Sweep). `go get` also bumped golang.org/x/{mod,sync,sys,telemetry,tools}; keep.
+- `cmd/quarry/run_mcp_test.go` (new, package main like its siblings): `Test_run_mcp_lists_quarrys_four_tools_over_json_rpc`. The server goroutine closes the stdout pipe once `runWith` returns, so a missing `mcp` command fails fast instead of at the deadline. Expected version literal is `(devel)` (probed: go test binary `Main.Version`). Query description includes the orchestrator-ruled last line. Schema literals: query/data_quality/no-input as in plan, no property descriptions, no-input = `{"type":"object","additionalProperties":false}` (B1: if the SDK adds `properties:{}`, adjust the literal or the schema and say so).
+- `internal/mcp/doc.go`, `internal/mcp/server.go` (new): signature-only stubs (`Server`, `Option`, `WithVersion`, `NewServer`, `Serve` returns nil). No SDK import yet.
+- `internal/cli/run.go`: `MCPServeFunc` and `Env.ServeMCP` added. `defaultEnv` NOT wired, no `mcp` command (steps 5-6).
+- Red now: `run_mcp_test.go:103 require.NoError(connect)`: `connection closed: calling "initialize": client is closing: EOF` (cmd exits 2, unknown command mcp).
+- Green: `go build ./...`, `go vet` of the three packages.
+- Next run (B1) must not redo: go get/tidy, the test file, stubs. Replace stub bodies in place.

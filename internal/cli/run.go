@@ -26,6 +26,11 @@ type ReportFactory func(ctx context.Context, command string) (srv *report.Server
 // other factories it is called only from a command's RunE.
 type SnapshotsFactory func(ctx context.Context, command string) (srv *snapshot.Server, err error)
 
+// MCPServeFunc serves MCP to a client over stdin and stdout until the client
+// closes stdin or ctx ends, returning a transport or protocol failure.
+// stderr is for diagnostics only; stdout carries nothing but the protocol.
+type MCPServeFunc func(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer) error
+
 // ConfigLoader reads quarry's config file for command, the name of the
 // command asking, for refusals that say which command to run again. Like
 // the factories it is called only from a command's RunE.
@@ -41,6 +46,7 @@ type Env struct {
 	NewReport      ReportFactory
 	NewSnapshots   SnapshotsFactory
 	LoadConfig     ConfigLoader
+	ServeMCP       MCPServeFunc
 	Now            func() time.Time
 }
 
