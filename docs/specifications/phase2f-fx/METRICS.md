@@ -22,6 +22,7 @@
 | 1 | arch, correctness ×2, test ×2, refactor | 1/5/~30/~10 | 0 / 20, 866s | BLOCKED |
 | 2 | arch, correctness-A, test-A | 0/2/3/2 | 0 / 8, 445s | BLOCKED |
 | 3 | correctness-A, test-A | 0/0/1/2 | 0 / 2, 297s | PASS WITH FOLLOW-UPS |
+| 4 (after final product-vision SHIP WITH CHANGES) | correctness-B, test-B | 0/0/3/1 | 0 / 1, 68s | PASS WITH FOLLOW-UPS |
 
 ## Tokens
 <output of `.claude/scripts/feature-metrics.py --strict phase2f-fx`, pasted once at SHIP>

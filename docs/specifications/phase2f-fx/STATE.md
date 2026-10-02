@@ -96,3 +96,7 @@ Scenarios complete: SCENARIO-07, SCENARIO-01, SCENARIO-04 (delivers 02), SCENARI
   - No repo test pins partial-failure adjacency.
   - `run_sync_wiring_test.go:42` is FXUSDCAD-only (NIT).
   - `refresh_grid_test.go` empty-need test has an inline predicate (NIT).
+- Round 4 follow-ups (REVIEW-04):
+  - The `period.go:63` and `duckstore/rates.go:50` docs are 3 lines.
+  - The control-arm tests should split text and json into separate tests.
+  - `periodKeys`/`spendCurrencies` duplicate `markCurrencies` (NIT).
