@@ -9,6 +9,7 @@ import (
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/platform/sqlschema"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store"
 )
@@ -105,7 +106,7 @@ func ratesPhrase(rates store.RatesSummary, transactions int) string {
 	if rates.First.IsZero() {
 		return noRatesPhrase(rates.FetchError != "", transactions)
 	}
-	span := "USD/CAD " + rates.First.Format(jsonDateLayout) + " to " + rates.Last.Format(jsonDateLayout)
+	span := "USD/CAD " + rates.First.Format(document.DateLayout) + " to " + rates.Last.Format(document.DateLayout)
 	switch {
 	case rates.Partial:
 		return span + " (" + humanize.Thousands(rates.Added) + " new, not all fetched; see warning)"

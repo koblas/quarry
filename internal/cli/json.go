@@ -4,15 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"time"
 
-	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store"
 )
-
-// jsonDateLayout is the format of every calendar date quarry prints, in text and in --json.
-const jsonDateLayout = time.DateOnly
 
 // resultDocument is sync's --json stdout shape: the manifest, the store
 // result (nil before an import is attempted), what auto-prune did (nil unless the store was built), and every warning.
@@ -33,15 +29,15 @@ type syncPrunedDocument struct {
 
 // storeDocument is the --json "store" object.
 type storeDocument struct {
-	Path        string              `json:"path"`
-	Built       bool                `json:"built"`
-	Rows        rowsDocument        `json:"rows"`
-	Balances    balancesDocument    `json:"balances"`
-	Splits      splitsDocument      `json:"splits"`
-	Transfers   transfersDocument   `json:"transfers"`
-	Findings    *findingsDocument   `json:"findings"`
-	NotImported notImportedDocument `json:"not_imported"`
-	Rates       *ratesDocument      `json:"rates"`
+	Path        string                  `json:"path"`
+	Built       bool                    `json:"built"`
+	Rows        document.Rows           `json:"rows"`
+	Balances    balancesDocument        `json:"balances"`
+	Splits      splitsDocument          `json:"splits"`
+	Transfers   transfersDocument       `json:"transfers"`
+	Findings    *document.FindingCounts `json:"findings"`
+	NotImported document.NotImported    `json:"not_imported"`
+	Rates       *ratesDocument          `json:"rates"`
 }
 
 // ratesDocument is the --json "store.rates" object: the stored span (null when none), how many rates this
@@ -51,28 +47,6 @@ type ratesDocument struct {
 	Last       *string `json:"last"`
 	Added      int     `json:"added"`
 	FetchError *string `json:"fetch_error"`
-}
-
-// findingsDocument is the --json "store.findings" object: the open count and
-// the ignored, fixed, new and newly fixed counts beside it.
-type findingsDocument struct {
-	Open       int `json:"open"`
-	Ignored    int `json:"ignored"`
-	Fixed      int `json:"fixed"`
-	New        int `json:"new"`
-	NewlyFixed int `json:"newly_fixed"`
-}
-
-// rowsDocument is the --json "store.rows" object: one count per table.
-type rowsDocument struct {
-	Accounts     int `json:"accounts"`
-	Categories   int `json:"categories"`
-	Payees       int `json:"payees"`
-	Tags         int `json:"tags"`
-	Transactions int `json:"transactions"`
-	Splits       int `json:"splits"`
-	SplitTags    int `json:"split_tags"`
-	Transfers    int `json:"transfers"`
 }
 
 // balancesDocument is the --json "store.balances" object.
@@ -141,11 +115,6 @@ type oneSidedDocument struct {
 	OtherAccountID *string `json:"other_account_id"`
 }
 
-// notImportedDocument is the --json "store.not_imported" object.
-type notImportedDocument struct {
-	InvestmentTransactions int `json:"investment_transactions"`
-}
-
 // renderJSON renders outcome as sync's --json document: 2-space indented
 // JSON with a trailing newline, matching Manifest.Encode's formatting. Its
 // warnings are configWarnings, then the outcome's own with absolute paths.
@@ -168,7 +137,7 @@ func marshalDocument(doc any) ([]byte, error) {
 	enc := json.NewEncoder(&buf)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(doc); err != nil {
-		// unreachable: docs hold only strings, bools, ints, pointers, slices, finite floats (savings_rate_pct, change_pct, times: int64 tenths/10.0, or NULL) and jsonSQLCell values
+		// unreachable: docs hold only strings, bools, ints, pointers, slices, finite floats (savings_rate_pct, change_pct, times: int64 tenths/10.0, or NULL) and the sql document's cell values
 		return nil, fmt.Errorf("encode document: %w", err)
 	}
 	return buf.Bytes(), nil
@@ -183,12 +152,12 @@ func newStoreDocument(result *store.Result) *storeDocument {
 	return &storeDocument{
 		Path:        result.Path,
 		Built:       result.Built,
-		Rows:        newRowsDocument(result.Counts),
+		Rows:        document.NewRows(result.Counts),
 		Balances:    newBalancesDocument(result.Validation.Balances),
 		Splits:      newSplitsDocument(result.Validation.Splits),
 		Transfers:   newTransfersDocument(result.Validation.Transfers),
 		Findings:    newFindingsDocument(result),
-		NotImported: notImportedDocument{InvestmentTransactions: result.NotImported.InvestmentTransactions},
+		NotImported: document.NotImported{InvestmentTransactions: result.NotImported.InvestmentTransactions},
 		Rates:       newRatesDocument(result),
 	}
 }
@@ -201,7 +170,7 @@ func newRatesDocument(result *store.Result) *ratesDocument {
 	rates := result.Rates
 	doc := ratesDocument{Added: rates.Added}
 	if !rates.First.IsZero() {
-		first, last := rates.First.Format(jsonDateLayout), rates.Last.Format(jsonDateLayout)
+		first, last := rates.First.Format(document.DateLayout), rates.Last.Format(document.DateLayout)
 		doc.First, doc.Last = &first, &last
 	}
 	if rates.FetchError != "" {
@@ -211,17 +180,12 @@ func newRatesDocument(result *store.Result) *ratesDocument {
 }
 
 // newFindingsDocument converts result's finding counts into the --json shape, nil when no build was reached.
-func newFindingsDocument(result *store.Result) *findingsDocument {
+func newFindingsDocument(result *store.Result) *document.FindingCounts {
 	if !result.Built {
 		return nil
 	}
-	doc := newFindingCountsDocument(result.Findings)
+	doc := document.NewFindingCounts(result.Findings)
 	return &doc
-}
-
-// newFindingCountsDocument converts c into the --json finding-counts shape shared by sync and findings.
-func newFindingCountsDocument(c finding.Counts) findingsDocument {
-	return findingsDocument{Open: c.Open, Ignored: c.Ignored, Fixed: c.Fixed, New: c.New, NewlyFixed: c.NewlyFixed}
 }
 
 // newSyncPrunedDocument converts p into the --json pruned object, nil when auto-prune did not run; its lists are never nil.
@@ -230,14 +194,6 @@ func newSyncPrunedDocument(p *snapshot.Pruned) *syncPrunedDocument {
 		return nil
 	}
 	return &syncPrunedDocument{Keep: p.Keep, Deleted: newPrunedEntryDocuments(p.Deleted), Failed: newPruneFailureDocuments(p.Failed)}
-}
-
-// newRowsDocument converts c's table counts into the --json shape.
-func newRowsDocument(c store.Counts) rowsDocument {
-	return rowsDocument{
-		Accounts: c.Accounts, Categories: c.Categories, Payees: c.Payees, Tags: c.Tags,
-		Transactions: c.Transactions, Splits: c.Splits, SplitTags: c.SplitTags, Transfers: c.Transfers,
-	}
 }
 
 // newBalancesDocument converts bc into the --json shape; its lists are
@@ -266,10 +222,10 @@ func newBalanceMismatchDocuments(mismatches []store.BalanceMismatch) []balanceMi
 	for i, m := range mismatches {
 		out[i] = balanceMismatchDocument{
 			ID: m.ID, Name: m.Name, Currency: m.Currency, Closed: m.Closed, Active: m.Active,
-			StatementDate: m.StatementDate.Format(jsonDateLayout),
-			Quarry:        jsonMoney(m.Quarry),
-			Quicken:       jsonMoney(m.Quicken),
-			Difference:    jsonMoney(m.Difference),
+			StatementDate: m.StatementDate.Format(document.DateLayout),
+			Quarry:        document.Money(m.Quarry),
+			Quicken:       document.Money(m.Quicken),
+			Difference:    document.Money(m.Difference),
 		}
 	}
 	return out
@@ -286,8 +242,8 @@ func newSplitMismatchDocuments(mismatches []store.SplitMismatch) []splitMismatch
 	out := make([]splitMismatchDocument, len(mismatches))
 	for i, m := range mismatches {
 		out[i] = splitMismatchDocument{
-			ID: m.ID, Date: m.Date.Format(jsonDateLayout), Account: m.Account, Currency: m.Currency,
-			Payee: jsonNullString(m.Payee), Amount: jsonMoney(m.Amount), SplitsTotal: jsonMoney(m.SplitsTotal),
+			ID: m.ID, Date: m.Date.Format(document.DateLayout), Account: m.Account, Currency: m.Currency,
+			Payee: document.NullString(m.Payee), Amount: document.Money(m.Amount), SplitsTotal: document.Money(m.SplitsTotal),
 		}
 	}
 	return out
@@ -304,32 +260,10 @@ func newOneSidedDocuments(legs []store.OneSidedTransfer) []oneSidedDocument {
 	out := make([]oneSidedDocument, len(legs))
 	for i, leg := range legs {
 		out[i] = oneSidedDocument{
-			ID: leg.ID, Date: leg.Date.Format(jsonDateLayout), Account: leg.Account, Currency: leg.Currency,
-			Payee: jsonNullString(leg.Payee), Amount: jsonMoney(leg.Amount),
+			ID: leg.ID, Date: leg.Date.Format(document.DateLayout), Account: leg.Account, Currency: leg.Currency,
+			Payee: document.NullString(leg.Payee), Amount: document.Money(leg.Amount),
 			OtherAccount: leg.OtherAccount, OtherAccountID: leg.OtherAccountID,
 		}
 	}
 	return out
-}
-
-// jsonNullString returns nil for the empty string, else a pointer to s.
-func jsonNullString(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
-// jsonMoney renders cents as a 2-decimal amount with a leading "-" for a
-// negative value and no thousands grouping.
-func jsonMoney(cents int64) string {
-	negative := cents < 0
-	if negative {
-		cents = -cents
-	}
-	s := fmt.Sprintf("%d.%02d", cents/100, cents%100)
-	if negative {
-		return "-" + s
-	}
-	return s
 }

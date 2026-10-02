@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"time"
+
 	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -10,7 +13,7 @@ import (
 type findingsListDocument struct {
 	Status   string                 `json:"status"`
 	Type     *string                `json:"type"`
-	Counts   findingsDocument       `json:"counts"`
+	Counts   document.FindingCounts `json:"counts"`
 	Findings []findingEntryDocument `json:"findings"`
 	Warnings []string               `json:"warnings"`
 }
@@ -57,8 +60,8 @@ func renderFindingsJSON(listing report.FindingsListing, view findingsView, warni
 	}
 	return marshalDocument(findingsListDocument{
 		Status:   string(view.status),
-		Type:     jsonNullString(string(view.typ)),
-		Counts:   newFindingCountsDocument(listing.Counts),
+		Type:     document.NullString(string(view.typ)),
+		Counts:   document.NewFindingCounts(listing.Counts),
 		Findings: entries,
 		Warnings: append([]string{}, warnings...),
 	})
@@ -91,7 +94,7 @@ func newFindingEntryDocument(f report.ListedFinding) findingEntryDocument {
 func newFindingItemDocument(item store.FindingItem) findingItemDocument {
 	doc := findingItemDocument{
 		TransactionID: item.TransactionID, SplitID: item.SplitID, PayeeID: item.PayeeID, CategoryID: item.CategoryID,
-		Payee: jsonNullString(item.Payee), Category: item.Category,
+		Payee: document.NullString(item.Payee), Category: item.Category,
 		OtherAccount: item.OtherAccount, OtherAccountID: item.OtherAccountID,
 	}
 	if item.Transactions > 0 {
@@ -100,7 +103,12 @@ func newFindingItemDocument(item store.FindingItem) findingItemDocument {
 	if item.TransactionID == nil && item.SplitID == nil {
 		return doc
 	}
-	date, amount := item.Date.Format(jsonDateLayout), jsonMoney(item.Amount)
+	date, amount := item.Date.Format(document.DateLayout), document.Money(item.Amount)
 	doc.Date, doc.AccountID, doc.Account, doc.Currency, doc.Amount = &date, &item.AccountID, &item.Account, &item.Currency, &amount
 	return doc
+}
+
+// jsonTimestamp formats t as RFC 3339 in UTC.
+func jsonTimestamp(t time.Time) string {
+	return t.UTC().Format(time.RFC3339)
 }

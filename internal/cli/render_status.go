@@ -5,26 +5,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
 )
 
 // takenLayout is the format of the snapshot's local moment.
 const takenLayout = "2006-01-02 15:04 MST"
 
-// statusFindings is the findings tally status reports; ignoreKnown is false when findings.ignore
-// could not be read, so every ignored finding is counted open and "ignored" cannot be said.
-type statusFindings struct {
-	counts      finding.Counts
-	ignoreKnown bool
-}
-
 // renderStatus renders st's Store, Snapshot, Source, Dates, Rows, Balances,
 // Splits, Transfers, Findings and Rates lines, ages measured against now.
-func renderStatus(st store.Status, findings statusFindings, home string, now time.Time) string {
+func renderStatus(st store.Status, findings document.FindingsTally, home string, now time.Time) string {
 	run := st.Run
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", homepath.Abbreviate(home, st.Path))
@@ -49,9 +42,9 @@ func statusRatesPhrase(st store.Status, now time.Time) string {
 		b.WriteString("none, so amounts are not converted; run quarry sync to fetch them from the Bank of Canada")
 	} else {
 		fmt.Fprintf(&b, "USD/CAD from the Bank of Canada, %s to %s (%s)",
-			rates.First.Format(jsonDateLayout), rates.Last.Format(jsonDateLayout), rateAge(now, rates.Last))
+			rates.First.Format(document.DateLayout), rates.Last.Format(document.DateLayout), rateAge(now, rates.Last))
 		if !st.FirstDate.IsZero() && rates.First.After(st.FirstDate) {
-			b.WriteString("; transactions before " + rates.First.Format(jsonDateLayout) + " are not converted")
+			b.WriteString("; transactions before " + rates.First.Format(document.DateLayout) + " are not converted")
 		}
 	}
 	if rates.FetchError != "" {
@@ -74,10 +67,10 @@ func rateAge(now, last time.Time) string {
 
 // statusFindingsPhrase is the Findings row text: the open count and, when findings.ignore was read,
 // the ignored one, without the new and fixed clauses sync prints.
-func statusFindingsPhrase(f statusFindings) string {
-	c := f.counts
+func statusFindingsPhrase(f document.FindingsTally) string {
+	c := f.Counts
 	c.New, c.NewlyFixed = 0, 0
-	if !f.ignoreKnown {
+	if !f.IgnoreKnown {
 		c.Ignored = 0
 	}
 	return findingsPhrase(c, false)
@@ -108,7 +101,7 @@ func datesLine(first, last time.Time) string {
 	if first.IsZero() {
 		return "no transactions"
 	}
-	return first.Format(jsonDateLayout) + " to " + last.Format(jsonDateLayout)
+	return first.Format(document.DateLayout) + " to " + last.Format(document.DateLayout)
 }
 
 // snapshotTakenPhrase renders takenAt in the local zone with its age at now

@@ -1,6 +1,9 @@
 package cli
 
-import "github.com/koblas/quarry/internal/report"
+import (
+	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
+)
 
 // anomaliesDocument is anomalies' --json stdout shape; Currency is the reporting currency ("native"
 // lists every anomaly in its own).
@@ -48,8 +51,8 @@ func renderAnomaliesJSON(a report.Anomalies, warnings []string) ([]byte, error) 
 		listed[i] = anomalyEntry(an)
 	}
 	return marshalDocument(anomaliesDocument{
-		Since:         a.Window.Since.Format(jsonDateLayout),
-		Until:         a.Window.Until.Format(jsonDateLayout),
+		Since:         a.Window.Since.Format(document.DateLayout),
+		Until:         a.Window.Until.Format(document.DateLayout),
 		Currency:      a.Currency.String(),
 		AccountFilter: accountFilterDocuments(a.Accounts),
 		Anomalies:     listed,
@@ -71,18 +74,18 @@ func anomalyEntry(an report.Anomaly) anomalyDocument {
 	}
 	return anomalyDocument{
 		TransactionID:  an.TransactionID,
-		Date:           an.Date.Format(jsonDateLayout),
+		Date:           an.Date.Format(document.DateLayout),
 		AccountID:      an.Account.ID,
 		Account:        an.Account.Name,
 		Currency:       currency,
 		Payee:          an.Payee,
 		Category:       category,
-		Amount:         jsonMoney(amount),
+		Amount:         document.Money(amount),
 		Baseline:       anomaliesBaselineWord[an.Baseline],
-		Usual:          jsonMoney(usual),
+		Usual:          document.Money(usual),
 		NativeCurrency: an.Currency,
-		NativeAmount:   jsonMoney(an.Amount),
-		NativeUsual:    jsonMoney(an.Usual),
+		NativeAmount:   document.Money(an.Amount),
+		NativeUsual:    document.Money(an.Usual),
 		Earlier:        an.Earlier,
 		Times:          float64(an.TimesTenths) / tenthsPerMultiple,
 	}

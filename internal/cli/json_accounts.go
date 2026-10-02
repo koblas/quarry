@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 )
 
 // accountsDocument is accounts's --json stdout shape.
@@ -41,7 +42,7 @@ func renderAccountsJSON(list report.AccountListing, warnings []string) ([]byte, 
 			Balance:        jsonNullMoney(a.Balance), ConvertedBalance: jsonNullMoney(list.ConvertedBalance(a)),
 		}
 	}
-	return marshalDocument(accountsDocument{AsOf: list.AsOf.Format(jsonDateLayout), Currency: list.Currency.String(), Accounts: rows, Warnings: warnings})
+	return marshalDocument(accountsDocument{AsOf: list.AsOf.Format(document.DateLayout), Currency: list.Currency.String(), Accounts: rows, Warnings: warnings})
 }
 
 // jsonNullInstitution is nil for a missing or empty institution name.
@@ -49,7 +50,7 @@ func jsonNullInstitution(name *string) *string {
 	if name == nil {
 		return nil
 	}
-	return jsonNullString(*name)
+	return document.NullString(*name)
 }
 
 // jsonNullMoney is jsonMoney of cents, or nil when cents is nil.
@@ -57,6 +58,6 @@ func jsonNullMoney(cents *int64) *string {
 	if cents == nil {
 		return nil
 	}
-	s := jsonMoney(*cents)
+	s := document.Money(*cents)
 	return &s
 }
