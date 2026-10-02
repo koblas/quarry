@@ -30,7 +30,7 @@ Survey. Exists, reused: `v_account_balances.balance_cad/usd` (`duckstore/schema.
   - `Test_accounts_use_the_local_date_in_every_zone` (re-exec `os.Args[0]` with TZ=Pacific/Kiritimati and TZ=Pacific/Pago_Pago, +14 and -11: their dates always differ, so one of them differs from UTC at any instant): seed a rate dated the Go-local today and a different one dated Go-local tomorrow; assert `AsOf` and the converted cell use the local today. Closes the STATE.md debt.
   - report tests: each currency picks its cell; native nil; echoed; `accountsReads == 1`; fault test unchanged (`refusal_test.go:92`).
 - [x] Step 5: `cli/render_accounts.go:18-43` `renderAccounts(report.AccountListing)`, `cli/fx_warning.go` `accountsFXWarnings`, `cli/accounts.go:30-47` — the column only when `Currency != Native`, after Balance, header `In <CAD|USD>`, right-aligned, blank / `no rate`; the line is right-trimmed (a blank last cell leaves no trailing spaces; native has none, so it stays byte-identical). No Total anywhere. Warning `noRatesWarning` when `FirstRate` is zero AND some row `NeedsRate`; order config, all-closed note, FX (the first two and an FX line cannot coexist: all-closed means no rows).
-  - Tests: `render_accounts_internal_test.go` (8 call sites rewrap in a zero-Currency `AccountListing`, so every existing native want stays literal): CAD and USD headers, blank vs `no rate`, widths with a wide `no rate`, status after the column, header-only (all closed) keeps the column, trailing-space pin, closed account converts under `--all`. `fx_warning_internal_test.go` + cli: warns on unrated USD; silent on an all-CAD unrated store in CAD; silent when native; rated store silent; rates only after today = `no rate` cells with no warning (n/a otherwise: `FirstRate` set); one USD `--account`-style cross is n/a (accounts has no filter).
+  - Tests: `render_accounts_internal_test.go` (8 call sites rewrap in a zero-Currency `AccountListing`, so every existing native want stays literal): CAD and USD headers, blank vs `no rate`, widths with a wide `no rate`, status after the column, header-only (all closed) keeps the column, trailing-space pin, closed account converts under `--all`. `fx_warning_internal_test.go` + cli: warns on unrated USD; silent on an all-CAD unrated store in CAD; silent when native; rated store silent; rates all dated after today = `no rate` cells with the ruled "dated after today … check the Mac's date and time" warning, which supersedes this plan's earlier no-warning choice (silent otherwise: `FirstRate` set and not future); one USD `--account`-style cross is n/a (accounts has no filter).
   - Repoint (default CAD now adds the column; keep native goldens by adding `--currency native` where the test is not about the column): `cmd/quarry/run_accounts_test.go:18-231` (6 goldens, headers at :29,48,151,166,199,231), `run_accounts_json_test.go:38-150`.
 - [x] Step 6: `cli/json_accounts.go:7-43` — top-level `currency` after `as_of`, row `converted_balance` after `balance`, null in native / not imported / no rate. `cli/accounts.go:11-17` Long appended with the ruled paragraph (wrapped at 72 columns, words verbatim). Tests: key-ORDER pin with `topLevelKeys` (top level and a row, CAD, USD, native: identical key set), null forms, read-back with `encoding/json` (row count, balances, `accounts []` for none, `warnings` incl. the FX line), `json_accounts_internal_test.go:14-120` rewrapped, Long verbatim in `run_accounts_test.go:84-140`.
 
@@ -52,7 +52,7 @@ Survey. Exists, reused: `v_account_balances.balance_cad/usd` (`duckstore/schema.
 - `currency` JSON key sits after `as_of` (accounts has no `until`); `converted_balance` is the last row key.
 - In CAD cell right-aligned; `no rate` right-aligned; trailing spaces trimmed.
 - Some accounts convert and others do not (unrated store, CAD accounts identity): the one ruled no-rates line, nothing per account. Its wording ("amounts are listed in each account's own currency") fits accounts loosely.
-- Rates all dated after today: `no rate` cells, no warning.
+- Rates all dated after today: `no rate` cells and the ruled "dated after today … check the Mac's date and time" warning; the ruling superseded this plan's first choice of no warning.
 - Header-only (all closed) in CAD mode keeps the `In CAD` column; USD mode header `In USD` is ruled only via "`In CAD`/`In USD`".
 - Long wrap: 72 columns, ruled words verbatim.
 
@@ -67,3 +67,11 @@ Survey. Exists, reused: `v_account_balances.balance_cad/usd` (`duckstore/schema.
 ## Phase report
 
 Run V done: Sweep (doc comments trimmed to budget in `duckstore/accounts.go`; lint 0 issues), covered full suite rc=0, uncovered-diff 0 lines, race green on duckstore, report, cli, cmd/quarry. Steps 7-8 ticked, SCENARIO-19 and 11 ticked, spec-check OK, STATE.md rewritten, status done. Nothing left for later runs.
+
+### Checkpoint fix pass
+
+Tests only, no runtime change; every new test was green on arrival, so each is proven by mutation:
+- `renderAccounts` skipping a blank cell when a Status follows (`cell` blank and `row[statusAt] != ""` -> `continue`) reddened exactly the three new `render_accounts_internal_test.go` cases (CAD closed, CAD not in reports, USD not in reports) and `Test_run_accounts_all_pads_a_blank_cell_so_a_closed_Status_follows_it_in_the_column`.
+- `withConfigWarnings(configWarnings[:0], warnings)` in `cli/accounts.go` (config warnings dropped) reddened `Test_run_accounts_lists_the_config_warning_before_the_no_rates_warning_in_both_forms` alone.
+- `run_accounts_fx_test.go` expected text is now literal; comments trimmed to budget; Step 5 and Handoff corrected to the ruled "dated after today" warning.
+- Covered full suite rc=0, uncovered-diff 0 lines, lint 0 issues, race green on `internal/cli` and `cmd/quarry`; test-stats: `cmd/quarry` 497 (+2), `internal/cli` 417 (+0, three table cases added).

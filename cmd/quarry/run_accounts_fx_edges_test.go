@@ -37,9 +37,9 @@ func seedAccounts(t *testing.T, accounts []store.Account, rates ...store.Rate) {
 	replaceStoreWithRates(t, home, spendRows(accounts), rates...)
 }
 
-// accountsOutput runs accounts with args in text and then --json form, returning both runs' output.
 type accountsOutput struct{ text, textErr, json, jsonErr string }
 
+// runAccountsBothForms runs accounts with args in text and then --json form, returning both runs' output.
 func runAccountsBothForms(t *testing.T, args ...string) accountsOutput {
 	t.Helper()
 	var textOut, textErr, jsonOut, jsonErr bytes.Buffer
@@ -170,4 +170,33 @@ func Test_run_accounts_all_converts_a_closed_account_like_any_other(t *testing.T
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
 	assert.Equal(t, "Account      Type      Currency  Balance  In CAD  Status\nUS Chequing  chequing  USD          0.00    0.00  closed\n", stdout.String())
+}
+
+func Test_run_accounts_all_pads_a_blank_cell_so_a_closed_Status_follows_it_in_the_column(t *testing.T) {
+	seedAccounts(t, []store.Account{chequingAccount("acct-cad", 1), closedAccount(brokerageAccount("acct-brk", 2, "USD"))}, pastRate)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"accounts", "--all"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.Equal(t, ""+
+		"Account    Type       Currency       Balance  In CAD  Status\n"+
+		"Brokerage  brokerage  USD       not imported          closed\n"+
+		"Chequing   chequing   CAD               0.00    0.00\n", stdout.String())
+}
+
+func Test_run_accounts_lists_the_config_warning_before_the_no_rates_warning_in_both_forms(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStoreWithRates(t, home, spendRows([]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)}))
+	writeConfig(t, home, "snapshot.keep = 3\n")
+	configWarning := configShown + ": unknown key snapshot.keep; quarry ignores it"
+
+	got := runAccountsBothForms(t)
+
+	stderr := "quarry: warning: " + configWarning + "\nquarry: warning: " + noRatesCADWarning + "\n"
+	assert.Equal(t, stderr, got.textErr)
+	assert.Equal(t, stderr, got.jsonErr)
+	assert.Equal(t, []string{configPath(home) + ": unknown key snapshot.keep; quarry ignores it", noRatesCADWarning}, warningsOf(t, got.json))
 }

@@ -152,6 +152,30 @@ func Test_renderAccounts_adds_the_reporting_currency_column_after_Balance(t *tes
 				"Old US   chequing  USD          1.00    1.25  closed\n",
 		},
 		{
+			name:    "CAD: a blank cell is padded to the column so a closed Status starts two spaces after it",
+			listing: listingIn(money.CAD, chequing, balanceRow("Brokerage", "brokerage", "USD", nil, true, true)),
+			want: "" +
+				"Account    Type       Currency       Balance     In CAD  Status\n" +
+				"Chequing   chequing   CAD          12,345.67  12,345.67\n" +
+				"Brokerage  brokerage  USD       not imported             closed\n",
+		},
+		{
+			name:    "CAD: a blank cell is padded to the column so a not in reports Status starts two spaces after it",
+			listing: listingIn(money.CAD, chequing, withNotInReports(brokerage)),
+			want: "" +
+				"Account    Type       Currency       Balance     In CAD  Status\n" +
+				"Chequing   chequing   CAD          12,345.67  12,345.67\n" +
+				"Brokerage  brokerage  USD       not imported             not in reports\n",
+		},
+		{
+			name:    "USD: a blank cell is padded to the narrower column so Status starts two spaces after it",
+			listing: listingIn(money.USD, chequing, withNotInReports(brokerage)),
+			want: "" +
+				"Account    Type       Currency       Balance    In USD  Status\n" +
+				"Chequing   chequing   CAD          12,345.67  9,876.54\n" +
+				"Brokerage  brokerage  USD       not imported            not in reports\n",
+		},
+		{
 			name:    "no accounts keeps the column in the header",
 			listing: listingIn(money.USD),
 			want:    "Account  Type  Currency  Balance  In USD  Status\n",

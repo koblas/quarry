@@ -12,9 +12,8 @@ type accountsDocument struct {
 	Warnings []string             `json:"warnings"`
 }
 
-// accountRowDocument is one entry of "accounts"; Institution is null when the
-// account has none, Balance when quarry cannot compute it, ConvertedBalance when
-// that is so, the listing is native or no rate converts it.
+// accountRowDocument is one entry of "accounts"; Institution, Balance and ConvertedBalance
+// are null when absent, not imported, or unconverted (native listing or no rate).
 type accountRowDocument struct {
 	ID               string  `json:"id"`
 	Name             string  `json:"name"`

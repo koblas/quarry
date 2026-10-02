@@ -14,9 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// nativeStoreRows is a CAD chequing account, a USD chequing account and a USD brokerage account holding: a monthly
-// CAD Gym and USD Netflix, a USD Hardware payee whose 250.00 charge on 2026-03-02 is five times its usual, and a salary.
-// Every date is in the past.
+// nativeStoreRows is a CAD and a USD chequing account and a USD brokerage account, with monthly Gym and Netflix,
+// a Hardware anomaly and a salary, all dated in the past.
 func nativeStoreRows() store.Rows {
 	accounts := []store.Account{
 		chequingAccount("acct-cad", 1),
@@ -44,8 +43,7 @@ func nativeStoreRows() store.Rows {
 	return rows
 }
 
-// nativeCommands are the five reports with a currency, each with the arguments that make its output independent of
-// today and the text it printed before the reporting currency existed, captured from that tree.
+// nativeCommands are the five reports with a currency, with arguments that make them independent of today.
 var nativeCommands = []struct {
 	name string
 	args []string
