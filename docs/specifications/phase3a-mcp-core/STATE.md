@@ -73,3 +73,4 @@ Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 07, 08, 09, 10, 11, 12, 14, 15,
 - Checkpoint S03 MINOR: `internal/mcp/result.go:47-48` errorLog mutex unpinned (deleting `mu` stays green; unobservable with os.Stderr) — S06 may pin with a concurrent-refusals -race test; else unowned
 - Checkpoint S07 doc-budget MINORs: `internal/report/describe_schema.go:23-27` DescribeSchema doc 5-6 lines (states how); `internal/store/duckstore/schema_read.go:31-35` Schema doc 5 lines — trim to contract; fold into next run touching them (gate fix pass otherwise)
 - Checkpoint S07 NIT: `internal/report/describe_schema.go` `maxListed > 0` tested only at 0; add -1 row — unowned
+- Checkpoint S11 doc-budget MINORs: `internal/mcp/data_quality.go:14-17` dataQuality doc 4 lines (states load order); `internal/mcp/data_quality.go:89-91` findingsCapWarning doc 3 lines (states tail logic) — budget 1-2; fold into S06's run (touches internal/mcp)
