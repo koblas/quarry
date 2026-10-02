@@ -582,7 +582,7 @@ Sizing pass (architect, opus) 2026-10-02 — 17 IDs → 8 runs. Full report and 
 | SCENARIO-17 | FOLD into SCENARIO-06 — third arm of the same outcome classifier |
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01: CLI output is unchanged after the shared documents move out of cli
+- [x] SCENARIO-01: CLI output is unchanged after the shared documents move out of cli — `cmd/quarry/run_shared_documents_test.go` `Test_run_prints_the_sql_status_and_findings_documents_byte_for_byte`
 - [ ] SCENARIO-02: An MCP client connects and sees quarry's four tools
 - [ ] SCENARIO-15: quarry mcp ends with the ruled exit code
 - [ ] SCENARIO-16: quarry mcp run at a terminal says what it is

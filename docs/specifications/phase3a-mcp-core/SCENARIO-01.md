@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01
-status: open
+status: done
 ---
 
 # SCENARIO-01: CLI output is unchanged after the shared documents move out of cli
@@ -25,10 +25,10 @@ Size: OWNS A RUN — 5 batches, 1 feature package (report + new report/document;
 - [x] Step 6: `internal/report/query_failure.go` (new) — query-error classification (reason + detail: unprintable column, `QueryError.Reason`, empty, read-only, external access, interrupted, other) out of `internal/cli/sql.go:188-208 queryFailure`; cli `queryFailure` keeps its copy and returns the **same error types and unwrap chain** (`errSQLNeedsQuery` UsageError, `*refusalError`, err unchanged for other). `report` test: one row per reason built from the error shape duckstore returns (wrapped, not bare sentinel), plus a `RefusalError`/unknown error → other. `internal/report/sql_conventions.go` (new) `SQLConventions` = `sql.go:39-51` paragraph verbatim; `sql.go:28-64` Long concatenates it. CLI pins: `sql_test.go:191` help, `:250` each refusal, `:292` unprintable, `run_sql_test.go:83-173`
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on every exported document/report/tomlstr symbol; `json.go:171` unreachable comment names `jsonSQLCell` — rename to the moved symbol; `go doc ./internal/report/document` reads as a contract
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on every exported document/report/tomlstr symbol; `json.go:171` unreachable comment names `jsonSQLCell` — rename to the moved symbol; `go doc ./internal/report/document` reads as a contract
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase3a-mcp-core` → tick SCENARIO-01 with its acceptance test; STATE.md written (first one for this feature)
+- [x] Step 8: full verification + `spec-check.py phase3a-mcp-core` → tick SCENARIO-01 with its acceptance test; STATE.md written (first one for this feature)
 
 ## Handoff
 
@@ -53,12 +53,10 @@ Size: OWNS A RUN — 5 batches, 1 feature package (report + new report/document;
 
 ## Phase report
 
-Run B2 (done): steps 5-6 green on the Narrow loop (plus Classify|Unmatched|NewFinding); committed. Steps 7-8 (run V) untouched.
+Run V (done): steps 7-8 green; scenario complete, status: done, spec ticked, STATE.md written.
 
-- `internal/report/document/findings.go` (new): `FindingsList`, `FindingEntry`, `FindingItem`, `NewFindingsList(listing, status, typ, warnings)`, `NewFindingEntry`, `NewFindingItem`, `UnmatchedIgnoreWarnings(configShown, unmatched)`. Tests `findings_test.go`. cli `json_findings.go` is now just `renderFindingsJSON` -> `marshalDocument(document.NewFindingsList(...))`; local `jsonTimestamp` deleted. `csv_findings.go` and `findings.go` retargeted to `document.*`.
-- `internal/platform/tomlstr/` (new): `doc.go`, `tomlstr.go` (`BasicString`), `tomlstr_test.go` (git-mv'd from config, retargeted). `config/parse.go keyPartText` calls it; `config.BasicString` is gone.
-- `internal/report/query_failure.go` (new): `QueryFailureKind` (Other/Unprintable/Rejected/Empty/ReadOnly/ExternalAccess/Interrupted), `QueryFailure{Kind, Detail, Err}`, `ClassifyQueryFailure`; test `query_failure_test.go`. cli `sql.go queryFailure` switches on it, copy and returned error types unchanged (`failure.Err` is the typed unprintable error wrapped with %w).
-- `internal/report/sql_conventions.go` (new): `SQLConventions` const; `sql.go` Long concatenates it (help pin green, wrap unchanged).
-- Acceptance test `Test_run_prints_the_sql_status_and_findings_documents_byte_for_byte` still green, literals untouched.
-- V owes: `golangci-lint` (exhaustive on the `queryFailure` switch: `QueryFailureOther` case is listed empty), doc-comment pass over document exports (`go doc ./internal/report/document`), full Verify, spec tick, STATE.md.
-- Not done / judgement: no test directly on `SQLConventions` (pinned only via `sql --help` byte pin).
+- Lint: 4 issues fixed (`internal/report/query_failure_test.go` err113 -> reuses `errDiskRead`, gofumpt table layout; `internal/report/document/findings_test.go` two modernize `embedlit` literals flattened). `internal/cli/json_accounts.go:56` and `internal/cli/json.go:140` comments retargeted to `document.Money` / `document.NewSQL`. `golangci-lint run ./...` -> `0 issues`.
+- Verify: `go test -count=1 -coverpkg=./... ./...` rc=0; `uncovered-diff.py` -> 0 uncovered added lines; `-race` green on report, report/document, cli, tomlstr, config, cmd/quarry.
+- test-stats vs base: cmd/quarry 503 (+1); internal/cli 415 (-2); internal/config 57 (-1); internal/platform/tomlstr 1 (+1); internal/report 278 (+2); internal/report/document 20 (+20); TOTAL 1274 (+21).
+- Acceptance test was green on arrival by design (pins pre-move output); never red.
+- Judgement: no direct test on `report.SQLConventions` (pinned only through the `sql --help` byte pin).

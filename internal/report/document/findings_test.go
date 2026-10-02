@@ -45,14 +45,16 @@ func Test_NewFindingsList_encodes_empty_findings_and_warnings_as_arrays_and_no_t
 
 func Test_NewFindingEntry_sets_fixed_at_for_a_fixed_finding_and_splits_for_a_similar_categories_item(t *testing.T) {
 	fixedAt := time.Date(2026, 10, 2, 3, 0, 0, 0, time.UTC)
-	fixed := report.ListedFinding{Status: finding.StatusFixed, Finding: store.Finding{
-		ID: "uncategorized:x", Type: finding.Uncategorized,
+	fixed := report.ListedFinding{
+		Status: finding.StatusFixed,
+		ID:     "uncategorized:x", Type: finding.Uncategorized,
 		FirstFoundAt: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), FixedAt: &fixedAt,
-	}}
-	similar := report.ListedFinding{Status: finding.StatusOpen, Finding: store.Finding{
-		ID: "similar-categories:y", Type: finding.SimilarCategories,
+	}
+	similar := report.ListedFinding{
+		Status: finding.StatusOpen,
+		ID:     "similar-categories:y", Type: finding.SimilarCategories,
 		Items: []store.FindingItem{{Splits: 3}},
-	}}
+	}
 
 	fixedEntry := document.NewFindingEntry(fixed)
 	similarEntry := document.NewFindingEntry(similar)

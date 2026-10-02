@@ -53,7 +53,7 @@ func jsonNullInstitution(name *string) *string {
 	return document.NullString(*name)
 }
 
-// jsonNullMoney is jsonMoney of cents, or nil when cents is nil.
+// jsonNullMoney is document.Money of cents, or nil when cents is nil.
 func jsonNullMoney(cents *int64) *string {
 	if cents == nil {
 		return nil
