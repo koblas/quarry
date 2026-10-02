@@ -15,7 +15,7 @@ Size: OWNS A RUN — 5 batches, 1 feature package (report + new report/document;
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_shared_documents_test.go` (new) `Test_run_prints_the_sql_status_and_findings_documents_byte_for_byte` — table through `run()`, each row asserts exact stdout (`assert.Equal`, never `JSONEq`), exact stderr, exit code. Rows: `sql --json "SELECT 1 AS a; SELECT 2 AS b"` (only `b`'s column and row — the multi-statement pin); `status --json` with an unreadable config (`"ignored": null`, absolute-path warning; reuse `run_status_findings_test.go:23 syncStatusFindingsFixture`, `run_status_json_test.go:21-115` substitution for `built_at`/paths); `findings --json` with an unmatched ignore id needing TOML escaping (quote/backslash); `sql --help` full stdout. **Green on arrival**: write and commit it on the unmodified tree so the literals are pre-move output; no stubs exist to write. A pin written after the move proves nothing. Report it green, with this reason
+- [x] Step 1: `cmd/quarry/run_shared_documents_test.go` (new) `Test_run_prints_the_sql_status_and_findings_documents_byte_for_byte` — table through `run()`, each row asserts exact stdout (`assert.Equal`, never `JSONEq`), exact stderr, exit code. Rows: `sql --json "SELECT 1 AS a; SELECT 2 AS b"` (only `b`'s column and row — the multi-statement pin); `status --json` with an unreadable config (`"ignored": null`, absolute-path warning; reuse `run_status_findings_test.go:23 syncStatusFindingsFixture`, `run_status_json_test.go:21-115` substitution for `built_at`/paths); `findings --json` with an unmatched ignore id needing TOML escaping (quote/backslash); `sql --help` full stdout. **Green on arrival**: write and commit it on the unmodified tree so the literals are pre-move output; no stubs exist to write. A pin written after the move proves nothing. Report it green, with this reason
 
 ### Build
 - [ ] Step 2: `internal/report/document/doc.go` (new) + shared primitives moved from `internal/cli/json.go:14-15` `jsonDateLayout`, `:56-64` `findingsDocument`, `:66-76` `rowsDocument`, `:144-147` `notImportedDocument`, `:222-225` `newFindingCountsDocument`, `:235-241` `newRowsDocument`, `:315-321` `jsonNullString`, `:323-335` `jsonMoney` — exported in document, cli copies deleted, every cli caller retargeted (`json.go`, `json_accounts.go`, `json_anomalies.go`, `json_cashflow.go`, `json_spend.go`, `json_recurring.go`, `json_snapshots.go`, `render.go`, `render_status.go`); move `json_internal_test.go:19-37 Test_jsonMoney` to document. Narrow loop must stay green on every `cmd/quarry/run_*_json_test.go` and `run_json_test.go` byte pin (sync/spend/cashflow/accounts/anomalies/recurring/snapshots)
@@ -50,3 +50,15 @@ Size: OWNS A RUN — 5 batches, 1 feature package (report + new report/document;
 - `queryFailure` empty-query arm returns `errSQLNeedsQuery` (a `cli.UsageError`), which `cmd/quarry/run.go:186-195 exitCode` maps to exit 2 — matching the copy but returning a different type changes the exit code.
 - Existing findings `--json` pins (`run_findings_json_test.go:26,129`) use `JSONEq`: green after a field reorder. Only the acceptance test sees key order.
 - `jsonDateLayout` is used by text renderers (`render.go`, `render_status.go`) too — deleting the cli copy breaks text, not JSON.
+
+## Phase report
+
+Run A (done). Acceptance test written and committed on the unmodified tree; green on arrival by design (behaviour-neutral move, nothing to stub), so its literals are pre-move output.
+
+- New: `cmd/quarry/run_shared_documents_test.go` `Test_run_prints_the_sql_status_and_findings_documents_byte_for_byte` — four rows through `run()`, `assert.Equal` on stdout and stderr, exit 0: `sql --json` multi-statement (only `b`), `status --json` with `[snapshots] keep = 0` (null `ignored`, absolute-path warning; built_at/snapshot/paths/sha substituted via `fmt.Sprintf` indexed verbs), `findings --json` with ignore id `we"ird\id` (escaped warning, 4 open findings, key order), `sql --help` full stdout.
+- Pre-move literals captured from the unmodified tree; `golangci-lint run ./cmd/quarry/...` 0 issues.
+- Sensitivity check: swapping `Type`/`Status` fields in `internal/cli/json_findings.go` `findingEntryDocument` turned the `findings` row red (reverted; tree clean). So the byte pin sees key order that `JSONEq` pins cannot.
+- Helper added: `storeBuiltAt(t)` (runs `status --json` once to read `built_at`) in the same file.
+- Not touched: any production file. Steps 2-8 untouched; B1 starts at Step 2.
+- Do not rewrite the expected literals after the move; a diff there is a behaviour change.
+
