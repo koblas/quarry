@@ -259,7 +259,7 @@ All data stays on the Mac; the only data that leaves is the result of a query Da
 
 - **Read-only against Quicken.** `quarry` touches the live database only through SQLite's read-only backup API during sync; every query runs on a snapshot, and neither is ever written.
 - **Encrypted at rest.** Snapshots and `quarry.duckdb` live under `~/Library/Application Support/quarry/` on a FileVault volume; files are `0600`. Optional DuckDB encryption with the key in the macOS Keychain.
-- **Redaction on import.** Account numbers are masked to the last four digits; free-text fields are scanned for card and account number patterns and masked.
+- **Account numbers in configuration.** `quarry` imports no account-number field from Quicken. Where the user writes an account number into `quarry`'s config (for example to name an account in the account-classification setting), `quarry` shows it masked to the last four digits in everything it prints or serves, CLI and MCP alike. Free text (payees, memos, notes) is not scanned: card and account numbers there are already masked by the institution's download or by Quicken, so `quarry` passes it through as Quicken holds it.
 - **MCP boundary.** The MCP server is local stdio only (no network listener), SQL is read-only (enforced by a read-only connection), and results are row-capped so a stray `SELECT *` can't dump the whole history into a conversation.
 - **Snapshot retention.** Snapshots are capped by count (default 12) and the oldest are deleted after each successful sync; the rules live under Sync.
 - **No telemetry.** The only outbound network call in v1 is `quarry sync` fetching exchange rates from the Bank of Canada; it sends no user data.
@@ -316,7 +316,7 @@ The main risk is Quicken's undocumented schema; reconciliation on every sync is 
 | Semantics hidden in the schema (split transfers, voided items, pending, scheduled vs posted) | Subtly wrong totals | Golden fixture file covering each case; balance reconciliation catches drift |
 | Investment lots and cost basis may be computed by Quicken rather than stored | Phase 4 cannot match Quicken's gains | Import transactions first; reproduce cost basis only if validation shows it is needed |
 | A snapshot taken while Quicken is closed (encrypted, no accounts) or mid-write | Corrupt snapshot | Backup API while Quicken is open; import rejects empty snapshots and runs an integrity check |
-| Sensitive data reaching a conversation | Privacy exposure | Row caps, masking on import, local-only MCP |
+| Sensitive data reaching a conversation | Privacy exposure | Row caps, account numbers from config masked to the last four digits, local-only MCP; card and account numbers in free text are masked upstream by the institution or Quicken |
 
 **Decisions**
 
@@ -333,6 +333,7 @@ The main risk is Quicken's undocumented schema; reconciliation on every sync is 
 - Feedback: findings go back into Quicken as a cleanup worklist so later snapshots and exports are clean.
 - Command names: the worklist is `quarry findings`, snapshot housekeeping is `quarry snapshots` / `quarry snapshots prune`; no command is called `cleanup`, since it reads as either.
 - Snapshot retention: a count cap (`snapshots.keep`, default 12), applied after every successful sync and by `snapshots prune`; the store's own snapshot is always kept. No size or age caps in v1.
+- Redaction: only account numbers held in `quarry`'s config are masked (last four digits). Free text is passed through as Quicken holds it, since institutions and Quicken already mask card and account numbers there.
 - Dashboards: out of scope for v1.
 - Language: Go, shipped as a single binary (duckdb-go, official MCP Go SDK).
 - Store engine: DuckDB, for exact `DECIMAL` money, ASOF joins against FX rates and prices, and analytical SQL. Tables use standard types only, so a move to SQLite stays a port. Syncs write a new file and swap it in atomically, since DuckDB allows one writer.
