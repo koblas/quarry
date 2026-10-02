@@ -41,6 +41,7 @@ Size: OWNS A RUN — 3 batches, 0 feature packages (`internal/mcp` is a delivery
     - describe_schema and sync_status: empty object.
     - data_quality: `status` enum open|ignored|fixed|all default open; `type` enum built from `finding.Types()`; `limit` 1..500 default 50.
     - Every schema sets `additionalProperties:false`.
+  - `internal/mcp/arguments.go` (unplanned addition): `absentNullArguments` receiving middleware, because the SDK panics applying a schema default to a null `arguments`.
   - One shared `notBuilt` handler for all 4 returns an error.
   - Tests:
     - `Test_serve_identifies_an_unversioned_build_as_devel`: table of `""` → `(devel)` and `v1.2.3` → itself.

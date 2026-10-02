@@ -41,12 +41,9 @@ func NewServer(opts ...Option) *Server {
 	return s
 }
 
-// Serve speaks MCP as newline-delimited JSON-RPC, reading requests from
-// stdin and writing responses to stdout, until the client closes stdin or
-// ctx ends. It returns the transport's error unwrapped: nil when stdin
-// reaches EOF, ctx.Err() when ctx ends, the write error when stdout fails.
-// stdout carries nothing but the protocol, and the SDK's own logging is
-// discarded.
+// Serve speaks MCP as newline-delimited JSON-RPC on stdin and stdout until
+// the client closes stdin or ctx ends. It returns the transport's error
+// unwrapped: nil at EOF, ctx.Err() when ctx ends, the write error otherwise.
 func (s *Server) Serve(ctx context.Context, stdin io.Reader, stdout, _ io.Writer) error {
 	srv := sdk.NewServer(
 		&sdk.Implementation{Name: serverName, Version: s.version},

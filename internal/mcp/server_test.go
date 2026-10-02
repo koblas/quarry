@@ -126,14 +126,22 @@ func Test_serve_returns_the_context_error_when_the_context_ends(t *testing.T) {
 	}
 }
 
-func Test_a_tool_call_with_null_arguments_reaches_the_handler_with_defaults_applied(t *testing.T) {
+func Test_a_tool_call_with_absent_null_or_empty_arguments_reaches_the_handler(t *testing.T) {
 	r := startServer(t, mcp.NewServer())
 
-	got, err := r.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "data_quality", Arguments: json.RawMessage("null")})
+	for name, args := range map[string]any{
+		"omitted": nil,
+		"null":    json.RawMessage("null"),
+		"empty":   map[string]any{},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := r.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "data_quality", Arguments: args})
 
-	require.NoError(t, err)
-	require.NotEmpty(t, got.Content)
-	assert.Equal(t, &sdk.TextContent{Text: "this tool is not available yet"}, got.Content[0])
+			require.NoError(t, err)
+			require.NotEmpty(t, got.Content)
+			assert.Equal(t, &sdk.TextContent{Text: "this tool is not available yet"}, got.Content[0])
+		})
+	}
 }
 
 func Test_an_unbuilt_tool_answers_isError(t *testing.T) {
@@ -153,6 +161,8 @@ func Test_an_unbuilt_tool_answers_isError(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.True(t, got.IsError)
+			require.NotEmpty(t, got.Content)
+			assert.Equal(t, &sdk.TextContent{Text: "this tool is not available yet"}, got.Content[0])
 		})
 	}
 }

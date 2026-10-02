@@ -133,9 +133,8 @@ func newConfigLoader() cli.ConfigLoader {
 }
 
 // newMCPServe returns cli.Execute's MCPServeFunc: an MCP server reporting the
-// build's module version, the same one store_info.quarry_version records.
-func newMCPServe() cli.MCPServeFunc {
-	info, _ := debug.ReadBuildInfo()
+// module version in info, the same one store_info.quarry_version records.
+func newMCPServe(info *debug.BuildInfo) cli.MCPServeFunc {
 	return mcp.NewServer(mcp.WithVersion(buildVersion(info))).Serve
 }
 
@@ -166,6 +165,7 @@ func resolveHome(command string) (string, error) {
 // defaultEnv is the process's wiring: the real stdin, the given output
 // streams, and the factories over the default store.
 func defaultEnv(stdout, stderr io.Writer) cli.Env {
+	info, _ := debug.ReadBuildInfo()
 	return cli.Env{
 		Stdin:        os.Stdin,
 		Stdout:       stdout,
@@ -174,7 +174,7 @@ func defaultEnv(stdout, stderr io.Writer) cli.Env {
 		NewReport:    newReportFactory(),
 		NewSnapshots: newSnapshotsFactory(),
 		LoadConfig:   newConfigLoader(),
-		ServeMCP:     newMCPServe(),
+		ServeMCP:     newMCPServe(info),
 		Now:          time.Now,
 	}
 }

@@ -4,10 +4,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newMCPCommand builds mcp: quarry as a local MCP server, speaking JSON-RPC
-// with the client over the command's stdin and stdout until the client
-// closes stdin. It hands the streams to serve and returns serve's error as
-// a runtime failure, never as a usage error.
+// newMCPCommand builds mcp: it hands the command's streams to serve and
+// returns serve's error as a runtime failure, never a usage error.
 func newMCPCommand(serve MCPServeFunc) *cobra.Command {
 	return &cobra.Command{
 		Use:   "mcp",
