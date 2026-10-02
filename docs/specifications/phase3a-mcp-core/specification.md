@@ -12,7 +12,7 @@
 - Named analysis tools `spending`, `cash_flow`, `recurring_charges`, `anomalies`, `search_transactions` (Phase 3b; their `--json` documents move to `internal/report/document` then).
 - Skill, references, plugin manifest, MCP client config, use-case eval (Phase 3c).
 - `net_worth`, `acb` (Phase 4). No stubs.
-- **Redaction on import** — user decision 2026-10-02: skipped for now. Open security debt: payee, memo, split-note, account and category text reaches the MCP client as Quicken holds it (e.g. a payee carrying an 18-digit cheque number, `docs/specifications/phase2e-recurring-anomalies/STATE.md:59`). One honest line in `quarry mcp` Long help; nowhere else.
+- **Redaction** — user decision 2026-10-02, PRD §Security "Account numbers in configuration" and §Decisions "Redaction:": quarry masks only account numbers the user writes into quarry's config, and no config key holds one until account classification (Phase 4). Free text (payees, memos, split notes, account and category names) is passed through as Quicken holds it; card and account numbers there are masked upstream by the institution or Quicken. One plain line in `quarry mcp` Long help; nowhere else.
 - Config keys `mcp.max_rows`, `mcp.query_timeout` — reserved by name only, not built.
 - A `currency` parameter on any of the four tools.
 
@@ -110,7 +110,7 @@ No `.claude-plugin`, `plugin.json`, `.mcp.json`, product SKILL.md outside `docs/
 4. `data_quality` bounded: 50 findings default (500 max), 25 items per finding, overflow via `warnings`.
 5. stdout protocol-only with a test; stderr only TTY hint + per-error log line.
 6. `query` cap hard 500; `mcp.max_rows` / `mcp.query_timeout` reserved by name only.
-7. Exit-0-on-signal deviation and redaction doc debts recorded (Rule 8, `### Changes to existing surfaces`).
+7. Exit-0-on-signal deviation recorded (Rule 8); redaction scope settled by the PRD (2026-10-02) and stated once in `quarry mcp` Long help (`### Changes to existing surfaces`).
 
 ## Surface & Copy
 
@@ -156,8 +156,8 @@ snapshots and never touches Quicken. Each request reads the store as it
 is then, so after you run quarry sync the client sees the new data
 without a restart. SQL runs read-only and returns at most 500 rows.
 
-Payee names, memos and category names reach the client as Quicken holds
-them: quarry does not yet mask account or card numbers written in them.
+Payee names, memos, account names and category names reach the client
+as Quicken holds them; quarry does not rewrite or mask them.
 
 Tools: describe_schema, query, sync_status, data_quality.
 ```
@@ -480,13 +480,10 @@ quarry's config file.
 
 Data text from the user's file (payees, memos, account and category names) is carried as JSON strings with standard escaping. Control characters are `\u00XX` escapes, and empty string stays separate from null, exactly as in `--json`. There is no table or CSV form in MCP, so no other channel needs a ruling.
 
-#### 5. Redaction debt
+#### 5. Redaction scope
 
-- Put one honest line in `quarry mcp` Long help (§2.1, paragraph 3). Nowhere else in user-facing copy.
-- Existing copy this makes false, to record as **doc debt** in STATE.md `## Open debts` (do not edit the PRD silently):
-  - PRD §Security "Redaction on import" bullet;
-  - PRD Risks table "masking on import" mitigation;
-  - PRD §Decisions has no entry for the deferral. Add one when the user confirms the wording.
+- Settled by PRD §Security "Account numbers in configuration" and §Decisions "Redaction:" (2026-10-02). Not a debt.
+- One plain line in `quarry mcp` Long help (§2.1, paragraph 3) saying free text reaches the client as Quicken holds it. Nowhere else in user-facing copy; the conventions and instructions never mention masking.
 - Also update the `newRootCommand` doc comment (`internal/cli/root.go:6-10`) to name `mcp`.
 
 #### Costs and what dies
@@ -506,7 +503,7 @@ Ranked:
 4. **Bound `data_quality`:** at most 50 findings by default (500 max), at most 25 items per finding, reported through `warnings` with the copy above. Reason: Q7; uncategorized items are one per split and unbounded.
 5. **stdout carries only protocol traffic**, with a test. stderr holds only the TTY hint and the per-error log line, never SQL or row data. Reason: one stray byte on stdout breaks the client session.
 6. **The `query` cap is a hard 500 the model can't raise.** Name `mcp.max_rows` and `mcp.query_timeout` as reserved keys, but don't build them. Reason: Q7, and operator policy gets a name before the design hardens.
-7. **Record the exit-0-on-signal deviation and the redaction doc debts in the spec.** Reason: so the final gate doesn't reopen them.
+7. **Record the exit-0-on-signal deviation in the spec, and state the redaction scope once in `quarry mcp` Long help.** Reason: so the final gate doesn't reopen them; the PRD (2026-10-02) settles redaction, so no doc debt remains.
 
 Key files: `/Users/koblas/repos/github.com/koblas/quarry/.claude/worktrees/synced-data-cleanup-b34b42/internal/cli/sql.go` (conventions paragraph, `queryFailure`), `/Users/koblas/repos/github.com/koblas/quarry/.claude/worktrees/synced-data-cleanup-b34b42/internal/cli/json_status.go`, `/Users/koblas/repos/github.com/koblas/quarry/.claude/worktrees/synced-data-cleanup-b34b42/internal/cli/json_findings.go`, `/Users/koblas/repos/github.com/koblas/quarry/.claude/worktrees/synced-data-cleanup-b34b42/internal/cli/json_sql.go`, `/Users/koblas/repos/github.com/koblas/quarry/.claude/worktrees/synced-data-cleanup-b34b42/internal/report/refusal.go`, `/Users/koblas/repos/github.com/koblas/quarry/.claude/worktrees/synced-data-cleanup-b34b42/internal/store/duckstore/query.go:36-56` (`queryRefusal` folds deadline into interrupt), `/Users/koblas/repos/github.com/koblas/quarry/.claude/worktrees/synced-data-cleanup-b34b42/cmd/quarry/run.go:80-200`.
 
@@ -515,7 +512,8 @@ Key files: `/Users/koblas/repos/github.com/koblas/quarry/.claude/worktrees/synce
 - `quarry sql --help` Long: the conventions paragraph ("Amounts are DECIMAL(18,2)…" through "…transfers.to_split_id.") moves to one exported constant in `internal/report`; rendered byte-identically — no copy change.
 - `internal/cli/root.go:6-10` `newRootCommand` doc comment: name `mcp` among the commands.
 - Root `quarry --help` command list gains `mcp` with the ruled Short.
-- PRD `docs/initial-prd.md` §Security "Redaction on import" bullet, Risks table "masking on import" mitigation: now false until redaction ships. **Doc debt** → STATE.md `## Open debts` (do not edit the PRD silently; PRD §Decisions entry for the deferral added when the user confirms wording).
+- PRD `docs/initial-prd.md` redaction text: updated by the user in commit 9264a2e (§Security "Account numbers in configuration", Risks row, §Decisions "Redaction:"). No doc debt remains.
+- `quarry mcp` Long paragraph 3: "Payee names, memos and category names reach the client as Quicken holds them: quarry does not yet mask account or card numbers written in them." → "Payee names, memos, account names and category names reach the client as Quicken holds them; quarry does not rewrite or mask them."
 - No existing CLI stdout/stderr line changes.
 
 ---
@@ -840,4 +838,4 @@ Each folded scenario keeps its own acceptance test, recorded on an `Acceptance t
 - **Stub handlers.** S02 registers all 4 tools so `tools/list` is complete, with stub handlers that later scenarios replace. Name them in S02's Left unbuilt.
 - **Hand-written input schemas are now contract.** Do not rely on inference; pin `tools/list` input schemas in S02.
 - **Reserved config keys.** `mcp.max_rows` and `mcp.query_timeout` are reserved by name only. Do not build them.
-- **Doc-debt items from verdict §5** go to STATE.md `## Open debts` in S02: the PRD redaction lines, plus the `internal/cli/root.go:6-10` doc comment naming `mcp`.
+- **Doc-debt items from verdict §5** go to STATE.md `## Open debts` in S02: the `internal/cli/root.go:6-10` doc comment naming `mcp`. (The PRD redaction lines were settled by commit 9264a2e.)

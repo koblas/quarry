@@ -36,8 +36,8 @@ snapshots and never touches Quicken. Each request reads the store as it
 is then, so after you run quarry sync the client sees the new data
 without a restart. SQL runs read-only and returns at most 500 rows.
 
-Payee names, memos and category names reach the client as Quicken holds
-them: quarry does not yet mask account or card numbers written in them.
+Payee names, memos, account names and category names reach the client
+as Quicken holds them; quarry does not rewrite or mask them.
 
 Tools: describe_schema, query, sync_status, data_quality.
 `

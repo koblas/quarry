@@ -71,7 +71,6 @@ Scenarios complete: SCENARIO-01..17 (04, 05 delivered by 03; 08 by 07; 10, 14 by
 - `mcpTestDeadline` (30 s) equals `callTimeout`: a test relying on the default deadline never sees it fire. A "no stderr line" assertion before the cancelled call's response frame is vacuous: sync on that id's frame (`peer.stdout`) first; the SDK may serve calls concurrently (SCENARIO-06)
 
 ## Open debts
-- `quarry mcp` Long help line "quarry does not yet mask account or card numbers written in them" now contradicts the PRD (user decision 2026-10-02: only account numbers in quarry's config are masked; free text is masked upstream by institutions/Quicken, never by quarry). "not yet" implies a coming feature — needs a copy ruling to reword (user-visible change; pipeline). Config-account-number masking itself has no consumer until the account-classification setting exists (Phase 4)
 - Checkpoint S01 MINOR: `internal/report/query_failure_test.go:12` pins precedence only QueryError over Interrupted; unprintable vs QueryError and read-only vs external-access order unpinned (add rows if constructible) — unowned
 - Checkpoint S01 MINOR: `internal/report/document/findings_test.go:42` two behaviours under one "and" name; `assert.Empty(fixedEntry.Items)` on a finding given no items proves nothing — split, give items — unowned
 - Checkpoint S01 MINOR: `internal/report/document/status_test.go:41` derefs `*read.Findings.Ignored` without `require.NotNil` — unowned
