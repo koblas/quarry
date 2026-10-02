@@ -15,12 +15,14 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
+| 1 | arch, correctness, test, refactor | 0/1/13/10 | 0 / 20, 901s | BLOCKED |
 
 ## Tokens
 
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
 | --- | --- | --- | --- |
+| gate R1 | stderr log line copies DuckDB reason (row values/SQL) — Rule 4 | internal/mcp/result.go:58 | SCENARIO-03 |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |
