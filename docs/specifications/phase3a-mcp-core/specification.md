@@ -251,7 +251,7 @@ The number shown is the effective limit.
 
 **Multiple statements:** no refusal specific to MCP. Behaviour is whatever the driver does for `quarry sql`, and one test pins it for both surfaces. Add the sentence `Send one statement; if you send several, only the last one's rows come back.` to the description **only if** that test shows last-statement semantics. Otherwise the driver's error reaches the model as `query failed: <reason>`.
 
-**Timeout: 30 s per call, applied by the MCP server only.** The CLI user has Ctrl-C; the model doesn't.
+**Timeout: 30 s per call, applied by the MCP server only.** (Orchestrator ruling, SCENARIO-06: every timeout line renders the server's configured timeout as `humanize.Count(<whole seconds>, "second", "seconds")`, so production reads "30 seconds" and a test injecting 1 s reads "1 second"; `WithTimeout` takes whole seconds only.) The CLI user has Ctrl-C; the model doesn't.
 
 Two requirements **block this part of the slice**:
 1. Store and duckstore classification must keep `context.DeadlineExceeded` separate from cancel. Today `queryRefusal` folds every `ctx.Err()` into `ErrQueryInterrupted`.
