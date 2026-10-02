@@ -19,6 +19,9 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
+| 1 | arch, correctness ×2, test ×2, refactor | 1/5/~30/~10 | 0 / 20, 866s | BLOCKED |
+| 2 | arch, correctness-A, test-A | 0/2/3/2 | 0 / 8, 445s | BLOCKED |
+| 3 | correctness-A, test-A | 0/0/1/2 | 0 / 2, 297s | PASS WITH FOLLOW-UPS |
 
 ## Tokens
 <output of `.claude/scripts/feature-metrics.py --strict phase2f-fx`, pasted once at SHIP>
@@ -26,6 +29,13 @@
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
 | --- | --- | --- | --- |
+| gate R1 | BLOCKER interior fx_rates gap after last stored rate (silent stale conversion) | internal/fx/plan.go:36-38 | SCENARIO-04 (Have/planner; spans from 01) |
+| gate R1 | MAJOR checked floor resurrected after rates fault | internal/store/duckstore/history.go:193,226 | SCENARIO-04 |
+| gate R1 | MAJOR newRatesSource mutable package global | cmd/quarry/run.go:36 | SCENARIO-01 |
+| gate R1 | MAJOR Valet per-observation decode reason unpinned (mutant survived) | internal/fx/valet.go:98 | SCENARIO-03 |
+| gate R1 | MAJOR inverted Need (all transactions future) sent to Valet | internal/store/duckstore/rates.go needSpan | SCENARIO-07 |
+| gate R2 | MAJOR head-span gap (mirror of R1 BLOCKER) | internal/fx/plan.go:35 | SCENARIO-01 |
+| gate R2 | MAJOR shipped fx wiring unpinned after global removed | cmd/quarry/run.go:66 | gate fix pass 1 |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |

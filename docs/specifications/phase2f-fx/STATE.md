@@ -94,3 +94,8 @@ Scenarios complete: SCENARIO-07, SCENARIO-01, SCENARIO-04 (delivers 02), SCENARI
   - `run_anomalies_fx_test.go:15`: doc is 3 lines.
   - `json_anomalies.go:18`: `anomalyDocument` doc is 4 lines.
 
+- Gate round 3 follow-ups (REVIEW-03):
+  - `fx.go:48` and `duckstore/rates.go:50-51`: docs should say bridge days are asked.
+  - No repo test pins partial-failure adjacency.
+  - `run_sync_wiring_test.go:42` is FXUSDCAD-only (NIT).
+  - `refresh_grid_test.go` empty-need test has an inline predicate (NIT).
