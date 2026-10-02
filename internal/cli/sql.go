@@ -36,7 +36,7 @@ that starts with - (such as a -- comment) goes after --:
   quarry sql -- "-- monthly totals
   SELECT ..."
 
-`+report.SQLConventions+`
+` + report.SQLConventions + `
 
 findings holds what sync found to clean up in Quicken, and finding_items
 the transactions, splits, payees or categories each one is about;
