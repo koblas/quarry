@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-15
-status: open
+status: done
 ---
 
 # SCENARIO-15: quarry mcp ends with the ruled exit code (SCENARIO-16 folded: TTY hint)
@@ -28,10 +28,10 @@ Design: stop-mapping lives in `cli` `mcp.go` RunE (delivery policy; `mcp.Serve` 
 - [x] Step 5: `internal/cli/mcp.go` RunE, `internal/cli/run.go:42-51`, `cmd/quarry/run.go:167-180` `defaultEnv`, new `cmd/quarry/terminal.go` `isTerminal(io.Reader) bool` — `go get golang.org/x/term` (x/term is NOT in the module cache: needs `allowed_domains` proxy.golang.org, sum.golang.org, storage.googleapis.com; may move `x/sys` off v0.41.0; `go mod tidy`). `Env.IsTerminal TerminalProbe` nil-safe (nil = not a terminal; existing cli Env literals stay valid). RunE passes serve a `ready` callback (see Design) that prints the hint to `cmd.ErrOrStderr()` when `env.IsTerminal(cmd.InOrStdin())`; serve calls it after `resolveHome`. Add cli test: `ready` not called by a fake serve → no hint; `MCPServeFunc` doc names `ready`. `isTerminal` = `*os.File` assertion + `term.IsTerminal(int(f.Fd()))`; never `ModeCharDevice`. Tests: cli (probe true → hint then serve called, stderr exactly hint; probe false/nil → silent; probe receives Env stdin); cmd/quarry `Test_defaultEnv_probes_stdin_for_a_terminal` (wiring pin: `defaultEnv(...).IsTerminal != nil`), `newMCPServe` unit: `HOME=""` → `ready` never called, `Test_isTerminal_reports_dev_null_as_no_terminal` (`/dev/null` file, pipe, `bytes.Buffer` → false). Positive tty case only if a pty is constructible in a few lines on darwin; otherwise say so in the phase report
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `TerminalProbe`, `isTerminal`, `mcpStopped`; run `go mod tidy` and confirm `x/sys` stays at the version `go.mod` pins or note the bump
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `TerminalProbe`, `isTerminal`, `mcpStopped`; run `go mod tidy` and confirm `x/sys` stays at the version `go.mod` pins or note the bump
 
 ### Verify
-- [ ] Step 7: full verification block (`.claude/rules/agent-briefs.md`) + `.claude/scripts/spec-check.py phase3a-mcp-core`; tick SCENARIO-15 and SCENARIO-16 in `specification.md` (S16 line: "delivered by SCENARIO-15", test last on line); rewrite `STATE.md` (drop the S15 line from Left unbuilt, add decisions below)
+- [x] Step 7: full verification block (`.claude/rules/agent-briefs.md`) + `.claude/scripts/spec-check.py phase3a-mcp-core`; tick SCENARIO-15 and SCENARIO-16 in `specification.md` (S16 line: "delivered by SCENARIO-15", test last on line); rewrite `STATE.md` (drop the S15 line from Left unbuilt, add decisions below)
 
 ## Handoff
 
@@ -54,8 +54,4 @@ Design: stop-mapping lives in `cli` `mcp.go` RunE (delivery policy; `mcp.Serve` 
 
 ## Phase report
 
-Run B1 done (Steps 3-5). Both acceptance tests green; narrow loop green (`go test ./internal/cli/ -run mcp`, `go test ./cmd/quarry/ -run 'Mcp|MCP|mcp|Usage|Help|Terminal|usage'`); `golangci-lint run ./...` 0 issues (run A's earlier lint notes for fmt apply).
-Built: `internal/cli/mcp.go` (`newMCPCommand(serve, isTerminal, jsonOut)`, `Args: noArgs`, `--json` UsageError, `ready` prints hint, `mcpStopped` = nil/Canceled/EPIPE), `root.go` wiring, `run.go` (`MCPServeFunc` gains `ready func()`; doc names normal stops; nil `IsTerminal` = no terminal), `cmd/quarry/run.go` (`newMCPServe` closure: `resolveHome("mcp")`, then `signal.Ignore(SIGPIPE)`, `ready()`, `Serve`; `defaultEnv` sets `IsTerminal: isTerminal`), `cmd/quarry/terminal.go` (`isTerminal`, x/term). go.mod: `golang.org/x/term` v0.46.0 now direct (was indirect v0.39.0); `x/sys` bumped v0.41.0 -> v0.48.0 (pulled by x/term) - note for review.
-Tests added: cli `mcp_test.go` (normal-stop rows incl. wrapped, other errors not swallowed [DeadlineExceeded, net.ErrClosed], refusals + serve-not-called, hint/no-hint/never-ready, probe receives Env stdin); cmd/quarry `run_mcp_wiring_test.go` (newMCPServe HOME unset + ready never called, ready called when serving, defaultEnv probe wired, isTerminal /dev/null + pipe + Buffer false), `Test_quarry_mcp_exits_0_when_the_real_stdout_pipe_breaks` in `run_mcp_exit_test.go`; mcp rows in `run_read_usage_test.go`, `run_usage_test.go` (positional-arg row, `mcp --bogus` hint row). `run_mcp_version_test.go` call updated for `ready`.
-Mutations (all red as planned, files restored byte-identical): EPIPE arm -> "the client stops reading stdout" row (+2 cli rows); Canceled arm -> "the process is told to stop" row (+2 cli rows); `resolveHome` removal -> both "$HOME is unset" rows; `signal.Ignore(SIGPIPE)` removal -> `Test_quarry_mcp_exits_0_when_the_real_stdout_pipe_breaks` (child killed by signal); `IsTerminal: isTerminal` removal -> `Test_defaultEnv_probes_stdin_for_a_terminal`; termios swapped for `ModeCharDevice` -> `Test_isTerminal_reports_dev_null_as_no_terminal`.
-Not done: positive pty test for `isTerminal` (no pty constructible in a few lines on darwin; termios positive path is pinned only by the wiring + /dev/null negative). For V: full verify block, `test-stats.py`, spec-check, tick S15/S16 in specification.md, rewrite STATE.md (drop S15 from Left unbuilt; note the `x/sys` bump and the ready-callback decision).
+Run V done (Steps 6-7). `go build ./...` ok; `go mod tidy` no diff; full covered suite `go test rc=0`; `uncovered-diff.py` 0 uncovered added lines; `go test -race` on cmd/quarry, internal/cli, internal/mcp ok; `golangci-lint run ./...` 0 issues; `test-stats.py --base a288000 --changed`: cmd/quarry 512 (+7) tempdir 457 (+2) disk 418 (+2); internal/cli 425 (+6); TOTAL 937 (+13). `spec-check.py phase3a-mcp-core` and `--run` both OK. S15 and S16 ticked in specification.md; STATE.md rewritten. x/sys v0.41.0 -> v0.48.0 (via x/term v0.46.0): nothing regressed. Doc comments on `TerminalProbe`, `isTerminal`, `MCPServeFunc` present. Not done: positive pty test for `isTerminal` (unowned MINOR, in STATE.md).

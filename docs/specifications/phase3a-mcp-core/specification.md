@@ -584,8 +584,8 @@ Sizing pass (architect, opus) 2026-10-02 — 17 IDs → 8 runs. Full report and 
 ## BDD Acceptance Progress
 - [x] SCENARIO-01: CLI output is unchanged after the shared documents move out of cli — `cmd/quarry/run_shared_documents_test.go` `Test_run_prints_the_sql_status_and_findings_documents_byte_for_byte`
 - [x] SCENARIO-02: An MCP client connects and sees quarry's four tools — `cmd/quarry/run_mcp_test.go` `Test_run_mcp_lists_quarrys_four_tools_over_json_rpc`
-- [ ] SCENARIO-15: quarry mcp ends with the ruled exit code
-- [ ] SCENARIO-16: quarry mcp run at a terminal says what it is
+- [x] SCENARIO-15: quarry mcp ends with the ruled exit code — `cmd/quarry/run_mcp_exit_test.go` `Test_run_mcp_ends_with_the_ruled_exit_code`
+- [x] SCENARIO-16: quarry mcp run at a terminal says what it is — delivered by SCENARIO-15 — `cmd/quarry/run_mcp_terminal_test.go` `Test_run_mcp_at_a_terminal_prints_the_hint_and_keeps_serving`
 - [ ] SCENARIO-03: query returns rows as the sql --json document
 - [ ] SCENARIO-04: query over its limit returns the first rows and says so
 - [ ] SCENARIO-05: query refuses what it cannot run
