@@ -4,10 +4,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/spf13/cobra"
 )
 
@@ -91,9 +91,9 @@ prints one row per item, for a spreadsheet.`,
 			if err != nil {
 				return &runtimeError{err: err}
 			}
-			unmatched := unmatchedIgnoreWarnings(homepath.Abbreviate(srv.Home(), cfg.Path), listing.Unmatched)
+			unmatched := document.UnmatchedIgnoreWarnings(homepath.Abbreviate(srv.Home(), cfg.Path), listing.Unmatched)
 			printConfigWarnings(cmd, unmatched)
-			jsonWarnings := append(slices.Clone(cfg.WarningsAbsolute), unmatchedIgnoreWarnings(cfg.Path, listing.Unmatched)...)
+			jsonWarnings := append(slices.Clone(cfg.WarningsAbsolute), document.UnmatchedIgnoreWarnings(cfg.Path, listing.Unmatched)...)
 			render := func() string { return renderFindings(listing, view, len(req.Ignore) == 0) }
 			if csvOut {
 				render = func() string { return renderFindingsCSV(listing) }
@@ -116,17 +116,6 @@ prints one row per item, for a spreadsheet.`,
 		"show only findings of this `type`: duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, payee-variants, similar-categories or unused-category")
 	cmd.Flags().BoolVar(&csvOut, "csv", false, "print one row per transaction, split, payee or category as CSV")
 	return cmd
-}
-
-// unmatchedIgnoreWarnings is one line per findings.ignore element that names no finding, each
-// naming the config file as configShown: ~-abbreviated for stderr, absolute for --json.
-func unmatchedIgnoreWarnings(configShown string, unmatched []string) []string {
-	lines := make([]string, len(unmatched))
-	for i, id := range unmatched {
-		lines[i] = configShown + ": findings.ignore lists " + config.BasicString(id) +
-			", which is not a finding in quarry's store; quarry skips it"
-	}
-	return lines
 }
 
 // validateFindingsFlags refuses a --status that is not open, ignored, fixed or all, and a --type

@@ -2,13 +2,13 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/platform/osreason"
+	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/spf13/cobra"
 )
@@ -36,19 +36,7 @@ that starts with - (such as a -- comment) goes after --:
   quarry sql -- "-- monthly totals
   SELECT ..."
 
-Amounts are DECIMAL(18,2) in each account's own currency; negative is money
-leaving the account. v_cash_flow and v_spending also carry each amount in
-CAD and in USD (amount_cad and amount_usd; spent_cad and spent_usd),
-converted per split at the Bank of Canada rate for its date and rounded to
-the cent, as quarry spend and quarry cashflow convert; they are NULL for a
-date before the first rate. v_account_balances has balance_cad and
-balance_usd at today's rate. fx_rates holds one rate per business day:
-usd_cad is the Canadian dollars in one US dollar. For spending and income,
-query v_spending and v_cash_flow: they already leave out transfers between
-your own accounts, Quicken's system categories, transactions excluded from
-reports and accounts Quicken leaves out of reports, so their totals match
-quarry spend and quarry cashflow. A transfer leg is any split named in
-transfers.from_split_id or transfers.to_split_id.
+`+report.SQLConventions+`
 
 findings holds what sync found to clean up in Quicken, and finding_items
 the transactions, splits, payees or categories each one is about;
@@ -188,21 +176,21 @@ func truncationNote(limit int) string {
 // queryFailure is the error sql reports for a failed query: the ruled
 // refusal copy for each store refusal, otherwise err unchanged.
 func queryFailure(err error) error {
-	if unprintable, ok := errors.AsType[*store.UnprintableValueError](err); ok {
-		return fmt.Errorf("%w; cast it in the query, e.g. CAST(%s AS VARCHAR)", unprintable, unprintable.Column)
-	}
-	if queryErr, ok := errors.AsType[*store.QueryError](err); ok {
-		return &refusalError{text: "query failed: " + queryErr.Reason, cause: err}
-	}
-	switch {
-	case errors.Is(err, store.ErrEmptyQuery):
+	failure := report.ClassifyQueryFailure(err)
+	switch failure.Kind {
+	case report.QueryFailureUnprintable:
+		return fmt.Errorf("%w; cast it in the query, e.g. CAST(%s AS VARCHAR)", failure.Err, failure.Detail)
+	case report.QueryFailureRejected:
+		return &refusalError{text: "query failed: " + failure.Detail, cause: err}
+	case report.QueryFailureEmpty:
 		return errSQLNeedsQuery
-	case errors.Is(err, store.ErrReadOnlyQuery):
+	case report.QueryFailureReadOnly:
 		return &refusalError{text: "quarry sql only reads the store; change the data in Quicken and run quarry sync", cause: err}
-	case errors.Is(err, store.ErrExternalAccess):
+	case report.QueryFailureExternalAccess:
 		return &refusalError{text: "quarry sql reads only quarry's store; other files, databases and extensions are turned off", cause: err}
-	case errors.Is(err, store.ErrQueryInterrupted):
+	case report.QueryFailureInterrupted:
 		return &refusalError{text: "query interrupted", cause: err}
+	case report.QueryFailureOther:
 	}
 	return err
 }

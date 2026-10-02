@@ -8,10 +8,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/money"
+	"github.com/koblas/quarry/internal/platform/tomlstr"
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/pelletier/go-toml/v2/unstable"
 )
@@ -357,37 +357,11 @@ func keyText(key []string) string {
 	return strings.Join(parts, ".")
 }
 
-// keyPartText is part bare when TOML allows it, else BasicString(part).
+// keyPartText is part bare when TOML allows it, else tomlstr.BasicString(part).
 func keyPartText(part string) string {
 	if bareKey.MatchString(part) {
 		return part
 	}
 
-	return BasicString(part)
-}
-
-// BasicString writes s as a TOML basic string, always quoted: quote, backslash, newline and tab are
-// escaped, other control characters as \uXXXX, and everything else kept, so s shows on one line.
-func BasicString(s string) string {
-	var b strings.Builder
-	b.WriteByte('"')
-	for _, r := range s {
-		switch {
-		case r == '"':
-			b.WriteString(`\"`)
-		case r == '\\':
-			b.WriteString(`\\`)
-		case r == '\n':
-			b.WriteString(`\n`)
-		case r == '\t':
-			b.WriteString(`\t`)
-		case unicode.IsControl(r):
-			fmt.Fprintf(&b, `\u%04X`, r)
-		default:
-			b.WriteRune(r)
-		}
-	}
-	b.WriteByte('"')
-
-	return b.String()
+	return tomlstr.BasicString(part)
 }
