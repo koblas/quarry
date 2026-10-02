@@ -10,6 +10,7 @@
 | SCENARIO-07 (+08) | code-first | A, B1, V | 0/0/3/2 | no (MINORs → STATE.md); 1 orchestrator ordering ruling (account sort = quarry accounts order, overflow grouping, warning order) |
 | SCENARIO-09 (+10, +14) | code-first | A, B1, V | 0/0/1/1 | no (MINOR → STATE.md) |
 | SCENARIO-11 (+12) | code-first | A, B1, V | 0/0/2/0 | no (MINORs → STATE.md); 1 copy ruling (warning order, status word for all, advice tail by limit/type) |
+| SCENARIO-06 (+13, +17) | code-first | A, B1, V | 0/1/4/3 | yes (handler Canceled arm unpinned; InterruptedBy own-package test, refusal chain row, bounded wait, doc trim); 1 orchestrator copy ruling (timeout line renders configured seconds) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
