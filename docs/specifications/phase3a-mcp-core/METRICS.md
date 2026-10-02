@@ -8,6 +8,7 @@
 | SCENARIO-15 (+16) | code-first | A, B1, V | 0/0/4/2 | no (MINORs → STATE.md; handoff contradiction fixed by orchestrator) |
 | SCENARIO-03 (+04, +05) | code-first | A, B1 (+B2 steps), V | 0/0/4/1 | no (MINORs → STATE.md); 1 copy ruling (limit-1 wording, no-statement SQL) |
 | SCENARIO-07 (+08) | code-first | A, B1, V | 0/0/3/2 | no (MINORs → STATE.md); 1 orchestrator ordering ruling (account sort = quarry accounts order, overflow grouping, warning order) |
+| SCENARIO-09 (+10, +14) | code-first | A, B1, V | 0/0/1/1 | no (MINOR → STATE.md) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
