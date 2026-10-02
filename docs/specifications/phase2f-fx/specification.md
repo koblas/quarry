@@ -665,7 +665,7 @@ Ruled (sizing pass 2026-10-01, architect):
 
 ## Reference check
 This is SCENARIO-20, the last step before the gate round. The outcome is recorded in `REFERENCE-CHECK.md` beside this file.
-- [ ] Rates and conversions on the real Quicken file hold up to review. Steps:
+- [x] Rates and conversions on the real Quicken file hold up to review (see `REFERENCE-CHECK.md`, 2026-10-01). Steps:
   - Use a scratch HOME from the latest snapshot and run `sync --from`.
   - Run spend, cashflow, recurring, anomalies and accounts with `--currency CAD` and `--currency USD`.
   - Compare a sampled USD charge's converted amount against the Bank of Canada's published rate for its date.
