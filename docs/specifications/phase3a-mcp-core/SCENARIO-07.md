@@ -65,4 +65,4 @@ Red now (both fail at `require.False(result.IsError)` with message `this tool is
 
 Lint on cmd/quarry: 0 issues. No production code touched, no stubs needed.
 
-Next run B1 (steps 3-5 are 3 batches; B1 = step 3 store/duckstore/report port): do not weaken the oracles. Plan's sort step and its case-pair test now follow the ruling.
+Next run B1 (steps 3-5): do not weaken the oracles. Plan's sort step and its case-pair test now follow the ruling.
