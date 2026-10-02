@@ -660,8 +660,8 @@ Ruled (sizing pass 2026-10-01, architect):
 - [x] SCENARIO-13: With no rates stored, reports fall back to native with a warning — delivered by SCENARIO-12 — `cmd/quarry/run_spend_unconverted_test.go` `Test_run_spend_without_rates_lists_each_currency_natively_and_warns_only_when_a_conversion_is_needed`
 - [x] SCENARIO-17: Recurring detects in native currency and shows converted amounts — `cmd/quarry/run_recurring_fx_test.go` `Test_run_recurring_detects_in_native_currency_and_converts_at_the_latest_charges_rate`
 - [x] SCENARIO-18: Anomalies are judged in native currency and shown converted — `cmd/quarry/run_anomalies_fx_test.go` `Test_run_anomalies_judges_in_native_currency_and_shows_converted_amounts`
-- [ ] SCENARIO-19: Accounts show each balance in the reporting currency, never a total
-- [ ] SCENARIO-11: --currency native reproduces today's output
+- [x] SCENARIO-19: Accounts show each balance in the reporting currency, never a total — `cmd/quarry/run_accounts_fx_test.go` `Test_run_accounts_shows_each_balance_in_the_reporting_currency`
+- [x] SCENARIO-11: --currency native reproduces today's output — delivered by SCENARIO-19 — `cmd/quarry/run_currency_native_test.go` `Test_run_currency_native_reproduces_the_pre_fx_output`
 
 ## Reference check
 This is SCENARIO-20, the last step before the gate round. The outcome is recorded in `REFERENCE-CHECK.md` beside this file.

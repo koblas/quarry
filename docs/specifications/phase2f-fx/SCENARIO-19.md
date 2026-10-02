@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-19
-status: open
+status: done
 ---
 
 # SCENARIO-19: Accounts show each balance in the reporting currency, never a total (folds SCENARIO-11)
@@ -35,10 +35,10 @@ Survey. Exists, reused: `v_account_balances.balance_cad/usd` (`duckstore/schema.
 - [x] Step 6: `cli/json_accounts.go:7-43` — top-level `currency` after `as_of`, row `converted_balance` after `balance`, null in native / not imported / no rate. `cli/accounts.go:11-17` Long appended with the ruled paragraph (wrapped at 72 columns, words verbatim). Tests: key-ORDER pin with `topLevelKeys` (top level and a row, CAD, USD, native: identical key set), null forms, read-back with `encoding/json` (row count, balances, `accounts []` for none, `warnings` incl. the FX line), `json_accounts_internal_test.go:14-120` rewrapped, Long verbatim in `run_accounts_test.go:84-140`.
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments (`AccountList.FirstRate`, `ConvertedBalance`); bump any exact-count pin (`test-stats`).
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments (`AccountList.FirstRate`, `ConvertedBalance`); bump any exact-count pin (`test-stats`).
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase2f-fx`; tick SCENARIO-19 and SCENARIO-11 ("delivered by SCENARIO-19", test last on the line); rewrite STATE.md (delete the `current_date` debt and the 19/11 Left-unbuilt row).
+- [x] Step 8: full verification + `spec-check.py phase2f-fx`; tick SCENARIO-19 and SCENARIO-11 ("delivered by SCENARIO-19", test last on the line); rewrite STATE.md (delete the `current_date` debt and the 19/11 Left-unbuilt row).
 
 ## Handoff
 

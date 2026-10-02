@@ -8,8 +8,7 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// accountsQuery reads today's date, the earliest rate's date and every account's balance in cents, native and
-// in CAD and USD; as_of and first_rate survive zero accounts.
+// accountsQuery reads today, the earliest rate and every balance in cents, native, CAD and USD.
 const accountsQuery = `
 SELECT d.as_of, d.first_rate, v.id, v.source_id, v.name, v.type, v.currency, v.institution, v.closed, v.active,
 	NOT a.in_reports, a.linked_tracking, CAST(v.balance * 100 AS BIGINT),
@@ -19,11 +18,9 @@ LEFT JOIN v_account_balances v ON true
 LEFT JOIN accounts a ON a.id = v.id
 ORDER BY lower(v.name), v.name, v.source_id`
 
-// Accounts reads every account, closed ones included, with its balance
-// native and in CAD and USD, the store's today as AsOf and its earliest
-// rate as FirstRate, sorted by name ignoring case, then name, then source
-// id. It refuses a store it cannot open or read with
-// *store.OpenError.
+// Accounts reads every account, closed ones included, with its balance native and in CAD and USD,
+// the store's today as AsOf and its earliest rate as FirstRate, sorted by name ignoring case,
+// then name, then source id. It refuses a store it cannot open or read with *store.OpenError.
 func (s *Store) Accounts(ctx context.Context) (store.AccountList, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {
