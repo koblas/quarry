@@ -157,7 +157,6 @@ func Test_an_unbuilt_tool_answers_isError(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"describe_schema", nil},
 		{"sync_status", nil},
 		{"data_quality", nil},
 	} {

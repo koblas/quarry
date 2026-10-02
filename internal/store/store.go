@@ -655,3 +655,30 @@ type Charges struct {
 	// FirstRate is the date of the store's first exchange rate; zero when it has none.
 	FirstRate time.Time
 }
+
+// Relation kinds: a relation is a base table or a view.
+const (
+	RelationTable = "table"
+	RelationView  = "view"
+)
+
+// Column is one column of a Relation: its name and the type DuckDB declares it.
+type Column struct {
+	Name, Type string
+}
+
+// Relation is one table or view of the store's main schema, with its columns in declared order.
+type Relation struct {
+	Name, Kind string
+	Columns    []Column
+}
+
+// Schema is what a store holds, read in one pass: its relations, and every account and category
+// with only the fields a schema description needs (ID, Name, Type, Currency and Closed; ID, Name,
+// FullPath, Kind and Hidden). Transactions is the zero value when the store has none.
+type Schema struct {
+	Relations    []Relation
+	Accounts     []Account
+	Categories   []Category
+	Transactions TransactionRange
+}

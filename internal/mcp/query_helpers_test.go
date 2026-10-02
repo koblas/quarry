@@ -36,6 +36,15 @@ type fakeStore struct {
 	result store.QueryResult
 	err    error
 	asked  []int
+
+	schema      store.Schema
+	schemaReads int
+}
+
+// Schema answers with schema, or err when set, counting the reads.
+func (f *fakeStore) Schema(context.Context) (store.Schema, error) {
+	f.schemaReads++
+	return f.schema, f.err
 }
 
 func (f *fakeStore) Query(_ context.Context, _ string, maxRows int) (store.QueryResult, error) {
@@ -77,6 +86,14 @@ func newHarness(t *testing.T, st *fakeStore, buildErr error) *harness {
 func (h *harness) query(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
 	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "query", Arguments: arguments})
+	require.NoError(t, err)
+	return result
+}
+
+// describeSchema calls the describe_schema tool with no arguments.
+func (h *harness) describeSchema(t *testing.T) *sdk.CallToolResult {
+	t.Helper()
+	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "describe_schema", Arguments: map[string]any{}})
 	require.NoError(t, err)
 	return result
 }

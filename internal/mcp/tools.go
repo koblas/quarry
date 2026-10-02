@@ -88,7 +88,7 @@ func notBuilt[In any](context.Context, *sdk.CallToolRequest, In) (*sdk.CallToolR
 
 // addTools registers quarry's four tools on srv.
 func (s *Server) addTools(srv *sdk.Server) {
-	sdk.AddTool(srv, tool(toolDescribe, describeSchemaDescription, objectSchema(nil)), notBuilt[noInput])
+	sdk.AddTool(srv, tool(toolDescribe, describeSchemaDescription, objectSchema(nil)), handler(s.describeSchema))
 	sdk.AddTool(srv, tool(toolQuery, queryDescription, objectSchema(map[string]*jsonschema.Schema{
 		"sql":   {Type: "string", MinLength: new(1)},
 		"limit": limitSchema(maxRows),

@@ -22,6 +22,8 @@ type Store interface {
 	Charges(ctx context.Context, params store.ChargeParams) (store.Charges, error)
 	// Findings lists every finding in the store with its items.
 	Findings(ctx context.Context) (store.FindingList, error)
+	// Schema describes what the store holds: its tables and views, accounts, categories and transaction dates.
+	Schema(ctx context.Context) (store.Schema, error)
 	// Query runs query verbatim and returns at most maxRows rows, every row when maxRows is 0.
 	Query(ctx context.Context, query string, maxRows int) (store.QueryResult, error)
 }
