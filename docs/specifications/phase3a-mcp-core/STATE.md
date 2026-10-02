@@ -58,3 +58,6 @@ Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 15, 16 (04, 05 delivered by 03;
 - Checkpoint S01 MINOR: `internal/report/query_failure_test.go:12` pins precedence only QueryError over Interrupted; unprintable vs QueryError and read-only vs external-access order unpinned (add rows if constructible) — unowned
 - Checkpoint S01 MINOR: `internal/report/document/findings_test.go:42` two behaviours under one "and" name; `assert.Empty(fixedEntry.Items)` on a finding given no items proves nothing — split, give items — unowned
 - Checkpoint S01 MINOR: `internal/report/document/status_test.go:41` derefs `*read.Findings.Ignored` without `require.NotNil` — unowned
+- Checkpoint S03 doc-budget MINORs: `internal/mcp/query.go:15-17` query doc 3 lines; `internal/mcp/result.go:15-17` handler doc 3 lines; `internal/mcp/result.go:36-38` errorLog doc 3 lines (budget 1-2) — fold into S07's run (touches internal/mcp)
+- Checkpoint S03 MINOR: `internal/mcp/result.go:47-48` errorLog mutex unpinned (deleting `mu` stays green; unobservable with os.Stderr) — S06 may pin with a concurrent-refusals -race test; else unowned
+- Checkpoint S03 NIT: `cmd/quarry/run_mcp_query_test.go:1-2` duplicate package-clause comment — drop when next touched
