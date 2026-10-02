@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-06
-status: open
+status: done
 ---
 
 # SCENARIO-06: A slow call stops at its deadline
@@ -29,10 +29,10 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report; store/duckstore chain
 - [x] Step 6: `internal/mcp/log_internal_test.go` `Test_errorLog_keeps_concurrent_refusals_lines_whole` — white-box, N goroutines through `errorLog` into one writer, run with `-race` (pins the S03 mutex MINOR)
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `WithTimeout`, `callTimeout`, `handler`; trim `internal/mcp/data_quality.go:13-15` (`dataQuality` doc → 1-2 lines, drop load order) and `:73-75` (`findingsCapWarning` doc → 1-2 lines, drop tail logic) (S11 debt; STATE's `:14-17`/`:89-91` anchors have drifted); update `Serve`/`WithReport` docs only if now false
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `WithTimeout`, `callTimeout`, `handler`; trim `internal/mcp/data_quality.go:13-15` (`dataQuality` doc → 1-2 lines, drop load order) and `:73-75` (`findingsCapWarning` doc → 1-2 lines, drop tail logic) (S11 debt; STATE's `:14-17`/`:89-91` anchors have drifted); update `Serve`/`WithReport` docs only if now false
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase3a-mcp-core` → tick SCENARIO-06, SCENARIO-13 and SCENARIO-17 (13, 17 "delivered by SCENARIO-06") with their acceptance tests; rewrite STATE.md (drop the S06/S13 owed items from Left unbuilt, close S03 mutex and S11 doc debts)
+- [x] Step 8: full verification + `spec-check.py phase3a-mcp-core` → tick SCENARIO-06, SCENARIO-13 and SCENARIO-17 (13, 17 "delivered by SCENARIO-06") with their acceptance tests; rewrite STATE.md (drop the S06/S13 owed items from Left unbuilt, close S03 mutex and S11 doc debts)
 
 ## Handoff
 
@@ -55,13 +55,4 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report; store/duckstore chain
 
 ## Phase report
 
-Run B1 (steps 4-6) done. Commit: see `git log` (feat(mcp): per-call deadline ...).
-
-Files: `internal/store/query.go` (`InterruptedBy(ctx, err)`: `Interrupted(err)` text, also unwraps to `ctx.Err()`; `Interrupted` untouched), `internal/store/duckstore/query.go:22,40` (open path AND `queryRefusal` use it), `internal/report/refusal.go` `readRefusal` (cause = `errors.Join(err, ctx.Err())`), `internal/mcp/{tools,server,result,query_refusal}.go` (`callTimeout`, `NewServer` default, `handler(timeout, stopped, run)` + `stoppedError`, `stoppedLine`/`queryStoppedLine`, split Interrupted arm), tests `internal/mcp/timeout_test.go`, `log_internal_test.go` (errorLog -race pin), `internal/report/refusal_test.go`, `internal/store/duckstore/query_test.go`, `cmd/quarry/run_mcp_timeout_test.go` (recorder now opens via `duckstore.WithOpenReadOnly` and signals `running` when the statement starts), `cmd/quarry/run_mcp_cancel_test.go`.
-
-Green: all three acceptance tests (`-count=10 -race`), narrow loop, CLI "<cmd> interrupted" tests, full-package runs of cmd/quarry, cli, mcp, report, store, duckstore; lint `0 issues`.
-Finding: the real driver does NOT put the ctx error in its chain when it interrupts a running query ("query interrupted: INTERRUPT Error: Interrupted!" with no Canceled; the 1 s real-deadline row passes even without the fix, the cancel does not). So the query path needed `InterruptedBy` too, not only the open path; `interruptFault()` (joins Canceled) is a shape the driver does not reliably return, hence `driverInterrupt()` in the new rows.
-Cancel acceptance now lands the cancel after the statement started (QueryTable entry) via the exported opener seam; no production seam added.
-Mutations (all restored, `git diff` clean): handler WithTimeout removed -> acceptance red + 30_second red; `opts` dropped in newMCPServe (`nil...`) -> acceptance red; NewServer default `0` -> 30_second red; readRefusal join removed -> 6 `deadline_apart` rows red; duckstore open path `InterruptedBy`->`Interrupted` -> open rows red; query path same -> 2 query rows red (real-duckdb deadline row stays green); errorLog mutex removed -> `-race` DATA RACE; queryRefusal Interrupted arm returning `failure.Err` -> query row of `ruled_line` red. The plan's `query_refusal_test.go:36` chain row was not added: that table asserts text only; the chain is pinned by the query row of `Test_each_tool_answers_its_deadline_with_its_ruled_line`.
-Already done for V: Step 7 doc trims of `dataQuality`/`findingsCapWarning` (data_quality.go) and lint to 0. Left for V: coverage gate, full verify, spec tick, STATE.md (add: real driver chain lacks ctx error; `InterruptedBy` is the attach point; close S03 mutex and S11 doc debts).
-Do not redo: mutations, stubs, tests above.
+All runs done (A, B1, V). Run V: B1 mutation check confirmed clean (`git status` clean; `result.go` diff in 9a5448e is the intended timeout wrap, `stoppedError`, `stoppedLine`/`queryStoppedLine`, no leftover mutant). Build, lint `0 issues`, full covered suite rc=0, `uncovered-diff.py` 0 added lines uncovered, `-race` green on mcp/report/store/cmd/quarry. test-stats: cmd/quarry 528 (+3), internal/mcp 68 (+4), internal/report 294 (+1), internal/store/duckstore 492 (+1), TOTAL 1382 (+9). Spec ticked for SCENARIO-06, 13, 17; `spec-check.py` and `--run` both OK (rc 0). STATE.md rewritten.

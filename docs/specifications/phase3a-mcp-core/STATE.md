@@ -1,6 +1,6 @@
 # phase3a-mcp-core — current state
 
-Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 07, 08, 09, 10, 11, 12, 14, 15, 16 (04, 05 delivered by 03; 08 by 07; 10, 14 by 09; 12 by 11; 16 by 15). Last updated by SCENARIO-11.
+Scenarios complete: SCENARIO-01..17 (04, 05 delivered by 03; 08 by 07; 10, 14 by 09; 12 by 11; 16 by 15; 13, 17 by 06). Last updated by SCENARIO-06.
 
 ## Binding decisions
 - `internal/report/document` owns the sql, status and findings `--json` documents plus shared primitives (`DateLayout`, `Money`, `NullString`, `Rows`, `FindingCounts`, `NotImported`); MCP tools render from these same builders (`NewSQL`, `NewStatus`, `NewFindingsList`) — a second copy is the drift PRD:108 forbids (SCENARIO-01)
@@ -23,7 +23,7 @@ Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 07, 08, 09, 10, 11, 12, 14, 15,
 - go.mod: `golang.org/x/term` v0.46.0 direct; `go get` bumped `x/sys` v0.41.0 -> v0.48.0; full suite, race on touched packages and lint green after the bump (SCENARIO-15)
 - `internal/mcp/result.go` is the only place a tool result and the stderr line are built: tools pass `handler(func(ctx, In) (doc, error))`; success = compact `json.Marshal` as `StructuredContent` (`json.RawMessage`) plus one identical `TextContent`; failure = the error text as the one `TextContent`, no document. Stderr is the `errorLog` receiving middleware on `tools/call` (`quarry: mcp: <tool>: <text>\n`, one `Write` under a mutex, silent when the call ctx is done) because SDK-side schema refusals are `isError` results that never reach a handler. S07/S09/S11 never touch `CallToolResult` (SCENARIO-03)
 - `mcp.WithReport(ReportFactory)`: type declared in mcp (`func(ctx, command string) (*report.Server, error)`), cmd converts `newReportFactory()`; called per tool call with command `"mcp"`, never cached. `newMCPServe` builds the Server inside the closure after `resolveHome`. S07/S09 take it (SCENARIO-03)
-- A `report.RefusalError` passes through as the error text verbatim (the ruled `~` line), so a new tool needs no store-refusal mapping; query-specific copy lives only in `query_refusal.go`. `QueryFailureInterrupted` and `Other` share one arm returning the error unchanged (SCENARIO-03)
+- A `report.RefusalError` passes through as the error text verbatim (the ruled `~` line), so a new tool needs no store-refusal mapping; query-specific copy lives only in `query_refusal.go`. `QueryFailureInterrupted` has its own arm returning the original error unchanged (its chain feeds the timeout line); `Other` returns it unchanged too (SCENARIO-03, 06)
 - `report.Store.Schema` is one open returning `store.Schema`; ordering and the cap live in `report.Server.DescribeSchema(ctx, maxListed)` (sort THEN cut; <=0 keeps all), not the store, so a future CLI `schema` command reuses it. mcp passes `maxRows` (500) and owns the overflow warning copy naming the tool (`listCutWarning`, accounts then categories, `humanize.Thousands`); `document.NewSchema` takes warnings as given (SCENARIO-07)
 - `mcp.WithConfig(ConfigLoader)`: `ConfigLoader` is `func(command string) (config.Config, error)` declared in mcp, fed `mcp.ConfigLoader(newConfigLoader())` by `newMCPServe`; called per tool call with `commandName`, never cached (spec rule 3, §2.2: config edits take effect with no restart). S11 reuses it unchanged; a Server without it panics on a config-reading tool like a nil factory (SCENARIO-09)
 - `internal/mcp` imports `internal/config` (platform-only leaf); still never `cli` or another feature package (SCENARIO-09)
@@ -33,14 +33,14 @@ Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 07, 08, 09, 10, 11, 12, 14, 15,
 - Caps live in mcp, not `report`/`document` (`findings --json` unchanged): findings cut (`limit`, schema default 50, 1..500) over groups in listing order, THEN items cap (`maxItems` 25) on kept findings only; `counts` and `Unmatched` always from the uncut listing; cap helpers build fresh groups, never mutate store slices. Warning order: `cfg.WarningsAbsolute`, unmatched-ignore, findings-cap (max one), items-cap lines in listing order; copy ruled in spec §2.7 (SCENARIO-11)
 - `status`/`limit` defaults come from the schema `default` plus `absentNullArguments` and the SDK default step; handlers add none (a handler default is dead code). `Test_a_tool_call_with_absent_null_or_empty_arguments_reaches_the_handler` pins omitted/`null`/`{}` and the schema bounds are pinned for 0, 501 (SCENARIO-02, 11)
 - query handler clamps limit outside 1..500 to 500 and the schema `default` is pinned separately (omitted -> store asked 501); truncation warning uses `humanize.Count` (limit 1 reads "the first 1 row") (SCENARIO-03)
+- The per-call deadline is applied inside `handler(timeout, stopped, run)` (`result.go`), never as outer middleware: `errorLog` is silent when its ctx is done, so an outer deadline would eat the timeout's stderr line. Only `errors.Is(err, context.DeadlineExceeded)` maps to the tool's ruled line (`stoppedLine`/`queryStoppedLine`, configured whole seconds via `humanize.Count`); Canceled and everything else pass unchanged. Default `callTimeout` 30 s, `WithTimeout` whole seconds only; `newMCPServe(info, opts ...mcp.Option)` appends opts after the shipped ones (SCENARIO-06)
+- `store.InterruptedBy(ctx, err)` is the attach point for "interrupted" decisions (duckstore open path AND `queryRefusal`; `report.readRefusal` joins `ctx.Err()`): same text as `Interrupted`, also unwraps to the ctx's own error, so `errors.Is` matches exactly one of DeadlineExceeded/Canceled. mcp `queryRefusal` returns the original `err` for the Interrupted arm (SCENARIO-06)
 
 ## Left unbuilt
 - spend/cashflow/recurring/anomalies/accounts/snapshots/sync documents stay in `internal/cli/json_*.go` — phase 3b moves the first four (SCENARIO-01)
 - `marshalDocument` stays in cli; no compact encoder in document — mcp owns it in `result.go` (SCENARIO-03)
-- sync_status and data_quality `30 seconds` timeout lines (`data_quality stopped after 30 seconds; try again`): S06; sync_status and data_quality rows of the cross-tool no-store table: S13 (S11 pins config and store faults through the handler, not the no-store line); (S09 pins only the no-import-history refusal through the handler); any `age` field is ruled out (§2.5) (SCENARIO-09)
+- Any `age` field on a tool document is ruled out (§2.5); config keys `mcp.max_rows`, `mcp.query_timeout` are reserved by name only (spec §2.4) (SCENARIO-09, 06)
 - Any new `findings`/`document` field for cut or total counts is ruled out (warnings only, Rule 6) (SCENARIO-11)
-- Per-call timeout option (`WithTimeout`), deadline/cancel mapping (incl. `describe_schema stopped after 30 seconds; try again`) and `QueryFailureInterrupted` split out of the generic arm in `query_refusal.go`: S06 (SCENARIO-02, 03, 07)
-- Cross-tool no-store refusal table rows for `describe_schema` and sync_status: S13 (S07, S09 pin one refusal through the handler) (SCENARIO-07, 09)
 - Positive pty test for `isTerminal` (termios true path pinned only by the `defaultEnv` wiring pin and the `/dev/null`/pipe/Buffer negatives) — unowned, MINOR (SCENARIO-15)
 - Process-level SIGTERM -> exit 0 end-to-end: `signalContext` tests plus the cancelled-ctx row cover it; no subprocess test — unowned, MINOR (SCENARIO-15)
 
@@ -63,14 +63,16 @@ Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 07, 08, 09, 10, 11, 12, 14, 15,
 - `status --json` refuses a store with no import run: a fixture without `ImportRuns` cannot use it as an oracle (S11/S13 fixtures too) (SCENARIO-07, 09)
 - `store.built_at` is RFC 3339 to the second: two syncs in one second can share it, so tests prove a new store by `snapshot.id`, `store.rows` and equality with `status --json` after the sync (SCENARIO-09)
 - `fakeStore.Status` override (and `statusReads`) is needed or sync_status unit tests panic; `newHarness(..., opts ...mcp.Option)` takes extra options (SCENARIO-09)
-- SDK still writes an `isError` "context canceled" result for a cancelled id; `errorLog` stays silent when the call ctx is done — S06 pins it, S17 relies on it (SCENARIO-03)
+- SDK still writes an `isError` "context canceled" result for a cancelled id; `errorLog` stays silent when the call ctx is done, which is the S17 silence (SCENARIO-03, 06)
+
+- The real duckdb driver does NOT put the ctx error in its chain when it interrupts a running query (`query interrupted: INTERRUPT Error: Interrupted!`): never trust the driver's chain for deadline vs cancel; tests use `driverInterrupt()`, not `interruptFault()` (which joins Canceled) (SCENARIO-06)
+- `report.ClassifyQueryFailure`'s Interrupted arm drops the chain (`Err: store.ErrQueryInterrupted`): classify from the original `err`, or query never gets its timeout line (SCENARIO-06)
+- `mcpTestDeadline` (30 s) equals `callTimeout`: a test relying on the default deadline never sees it fire. A "no stderr line" assertion before the cancelled call's response frame is vacuous: sync on that id's frame (`peer.stdout`) first; the SDK may serve calls concurrently (SCENARIO-06)
 
 ## Open debts
 - PRD `docs/initial-prd.md` §Security "Redaction on import" bullet and Risks table "masking on import" mitigation are now false: redaction deferred by user 2026-10-02. Do not edit silently; PRD §Decisions entry added when user confirms wording — unowned until then
 - Checkpoint S01 MINOR: `internal/report/query_failure_test.go:12` pins precedence only QueryError over Interrupted; unprintable vs QueryError and read-only vs external-access order unpinned (add rows if constructible) — unowned
 - Checkpoint S01 MINOR: `internal/report/document/findings_test.go:42` two behaviours under one "and" name; `assert.Empty(fixedEntry.Items)` on a finding given no items proves nothing — split, give items — unowned
 - Checkpoint S01 MINOR: `internal/report/document/status_test.go:41` derefs `*read.Findings.Ignored` without `require.NotNil` — unowned
-- Checkpoint S03 MINOR: `internal/mcp/result.go:47-48` errorLog mutex unpinned (deleting `mu` stays green; unobservable with os.Stderr) — S06 may pin with a concurrent-refusals -race test; else unowned
 - Checkpoint S07 doc-budget MINORs: `internal/report/describe_schema.go:23-27` DescribeSchema doc 5-6 lines (states how); `internal/store/duckstore/schema_read.go:31-35` Schema doc 5 lines — trim to contract; fold into next run touching them (gate fix pass otherwise)
 - Checkpoint S07 NIT: `internal/report/describe_schema.go` `maxListed > 0` tested only at 0; add -1 row — unowned
-- Checkpoint S11 doc-budget MINORs: `internal/mcp/data_quality.go:14-17` dataQuality doc 4 lines (states load order); `internal/mcp/data_quality.go:89-91` findingsCapWarning doc 3 lines (states tail logic) — budget 1-2; fold into S06's run (touches internal/mcp)

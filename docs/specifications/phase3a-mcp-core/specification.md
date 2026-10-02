@@ -611,9 +611,9 @@ Sizing pass (architect, opus) 2026-10-02 — 17 IDs → 8 runs. Full report and 
 - [x] SCENARIO-14: A sync while the server runs is seen without restart — delivered by SCENARIO-09 — `cmd/quarry/run_mcp_status_test.go` `Test_run_mcp_sync_status_sees_a_sync_between_calls`
 - [x] SCENARIO-11: data_quality lists open findings within its bounds — `cmd/quarry/run_mcp_data_quality_test.go` `Test_run_mcp_data_quality_returns_the_first_50_open_findings_with_the_ruled_warnings`
 - [x] SCENARIO-12: data_quality refuses an unreadable config — delivered by SCENARIO-11 — `cmd/quarry/run_mcp_data_quality_test.go` `Test_run_mcp_data_quality_refuses_an_unreadable_config`
-- [ ] SCENARIO-06: A slow call stops at its deadline
-- [ ] SCENARIO-13: Every tool refuses before the first sync
-- [ ] SCENARIO-17: A cancelled call is interrupted quietly
+- [x] SCENARIO-06: A slow call stops at its deadline — `cmd/quarry/run_mcp_timeout_test.go` `Test_run_mcp_query_stops_at_its_deadline`
+- [x] SCENARIO-13: Every tool refuses before the first sync — delivered by SCENARIO-06 — `cmd/quarry/run_mcp_no_store_test.go` `Test_run_mcp_every_tool_refuses_before_the_first_sync`
+- [x] SCENARIO-17: A cancelled call is interrupted quietly — delivered by SCENARIO-06 — `cmd/quarry/run_mcp_cancel_test.go` `Test_run_mcp_cancelled_query_is_interrupted_quietly`
 
 ---
 
