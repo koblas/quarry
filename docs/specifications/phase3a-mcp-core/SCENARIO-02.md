@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-02
-status: open
+status: done
 ---
 
 # SCENARIO-02: An MCP client connects and sees quarry's four tools
@@ -61,10 +61,10 @@ Size: OWNS A RUN — 3 batches, 0 feature packages (`internal/mcp` is a delivery
   - Acceptance goes green. Run the three mutation checks from the header.
 
 ### Sweep
-- [ ] Step 7: `go mod tidy` (jsonschema-go becomes a direct require). Then fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Add doc comments on `MCPServeFunc`, `Env.ServeMCP`, `mcp.Server`/`NewServer`/`WithVersion`/`Serve`, and `newMCPServe`. Check with `go doc ./internal/mcp`.
+- [x] Step 7: `go mod tidy` (jsonschema-go becomes a direct require). Then fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Add doc comments on `MCPServeFunc`, `Env.ServeMCP`, `mcp.Server`/`NewServer`/`WithVersion`/`Serve`, and `newMCPServe`. Check with `go doc ./internal/mcp`.
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase3a-mcp-core` → tick SCENARIO-02 with its acceptance test. Rewrite STATE.md:
+- [x] Step 8: full verification + `spec-check.py phase3a-mcp-core` → tick SCENARIO-02 with its acceptance test. Rewrite STATE.md:
   - Drop the `root.go:6-10` debt.
   - Re-own the S01 comment MINORs: `document/doc.go:1-2` → S03, `report/sql_conventions.go:3-4` → S07, `document/status.go:12` → S09. S02 makes none of them true yet.
 
@@ -94,13 +94,4 @@ Size: OWNS A RUN — 3 batches, 0 feature packages (`internal/mcp` is a delivery
 
 ## Phase report
 
-Run B1 done (steps 4-6). Acceptance `Test_run_mcp_lists_quarrys_four_tools_over_json_rpc` GREEN on first run (no schema literal adjustment: no-input schema serialises as `{"type":"object","additionalProperties":false}`). Narrow loop green; `golangci-lint run ./internal/mcp/... ./internal/cli/... ./cmd/...` was 0 issues after fixes. NOT yet run: full suite, `go mod tidy`, doc comments check, spec tick, STATE.md (run V).
-
-- `internal/mcp/server.go`: real `Serve` (sdk `IOTransport` over `io.NopCloser(stdin)` + `nopWriteCloser{stdout}`; Run's error returned unwrapped, `//nolint:wrapcheck` with reason); `WithVersion("")` keeps `(devel)`.
-- `internal/mcp/tools.go`: instructions + 4 description consts verbatim (query has the ruled last line); `addTools` registers 4 tools via `sdk.AddTool` with hand-written schemas (`additionalProperties:false`, output `{"type":"object"}`, `type` enum from `finding.Types()`); one generic `notBuilt[In]` handler -> `errNotBuilt` ("this tool is not available yet"). Input structs `queryInput`, `dataQualityInput`, `noInput`.
-- `internal/mcp/arguments.go` (NEW, not in plan): receiving middleware `absentNullArguments`. SDK v1.8.0 panics the whole server ("assignment to entry in nil map", jsonschema-go `applyDefaults`) when `tools/call` carries `"arguments": null` and the schema has a `default` (query, data_quality). Middleware rewrites null to absent. Red seen first (panic), then green; S03/S11 inherit the guard.
-- `internal/mcp/server_test.go`: devel table (3 rows), nil-on-EOF, write-error-identity (`assert.Same`), ctx-cancel returns `context.Canceled` with stdin still open (does not hang), null-arguments, unbuilt-tool-isError (4 subtests).
-- `internal/cli/mcp.go`, `root.go` (registered + doc comment names mcp), `internal/cli/mcp_test.go` (4 tests).
-- `cmd/quarry/run.go`: `newMCPServe()` + `ServeMCP` in `defaultEnv`; `run_usage_test.go`: "mcp help" subtest.
-- Mutations (all red, all restored byte-identical): (1) `ServeMCP` line deleted -> acceptance panics nil func in `cli/mcp.go:30` (RunE calls a nil serve; no assertion-level red, a nil `ServeMCP` panics like other nil factories); (2) `StdioTransport` for `IOTransport` -> acceptance fails fast at `run_mcp_test.go:103` "calling initialize: client is closing: EOF" (no hang); (3) `(devel)` default removed -> `Test_serve_identifies_an_unversioned_build_as_devel` no-version/empty rows red; (4) `AddReceivingMiddleware` removed -> `Test_a_tool_call_with_null_arguments...` panics.
-- V must not redo: tests/code above. V does: `go mod tidy` (jsonschema-go now direct), doc comments (`go doc ./internal/mcp`; `Option` etc. exist), full verify block, spec tick, STATE.md (add the null-arguments trap; drop root.go debt; re-own S01 comment MINORs per plan step 8), `status: done`.
+Run V done (steps 7-8). `GOPROXY=off go mod tidy` promoted jsonschema-go to a direct require; lint 0 issues; `go doc ./internal/mcp` shows doc comments on every exported symbol. Full suite rc=0, `uncovered-diff.py` 0 uncovered, `-race` green on mcp/cli/cmd. One missed consumer fixed: root help pin `cmd/quarry/run_status_test.go` `Test_run_help_prints_quarrys_description` gained the `mcp` row. Spec ticked, `spec-check.py` OK, STATE.md rewritten (root.go debt dropped, S01 comment MINORs re-owned to S03/S07/S09, null-arguments trap and `absentNullArguments` guard recorded as binding for S03/S11).
