@@ -133,17 +133,17 @@ func newConfigLoader() cli.ConfigLoader {
 }
 
 // newMCPServe returns cli.Execute's MCPServeFunc: an MCP server reporting the module version,
-// reading the store through newReportFactory. It refuses without calling ready when $HOME is unset.
-func newMCPServe(info *debug.BuildInfo) cli.MCPServeFunc {
+// reading the store through newReportFactory, then opts. It refuses without calling ready when $HOME is unset.
+func newMCPServe(info *debug.BuildInfo, opts ...mcp.Option) cli.MCPServeFunc {
 	return func(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, ready func()) error {
 		if _, err := resolveHome("mcp"); err != nil {
 			return err
 		}
-		srv := mcp.NewServer(
+		srv := mcp.NewServer(append([]mcp.Option{
 			mcp.WithVersion(buildVersion(info)),
 			mcp.WithReport(mcp.ReportFactory(newReportFactory())),
 			mcp.WithConfig(mcp.ConfigLoader(newConfigLoader())),
-		)
+		}, opts...)...)
 		// A broken stdout must surface as EPIPE from the write, not kill the process.
 		signal.Ignore(syscall.SIGPIPE)
 		ready()

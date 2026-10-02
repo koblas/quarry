@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/report"
@@ -32,6 +33,7 @@ type Server struct {
 	version   string
 	newReport ReportFactory
 	newConfig ConfigLoader
+	timeout   time.Duration
 }
 
 // Option configures a Server.
@@ -55,6 +57,11 @@ func WithReport(newReport ReportFactory) Option {
 // WithConfig sets the loader the tools read the config through; a Server without one cannot answer sync_status.
 func WithConfig(newConfig ConfigLoader) Option {
 	return func(s *Server) { s.newConfig = newConfig }
+}
+
+// WithTimeout sets the deadline of each tool call, in whole seconds; the timeout lines name it.
+func WithTimeout(d time.Duration) Option {
+	return func(s *Server) { s.timeout = d }
 }
 
 // NewServer builds a Server from opts.
