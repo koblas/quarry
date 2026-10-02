@@ -77,12 +77,10 @@ Architect writes run groups on plan's `Runs:` header line; orchestrator spawns *
 
 Scenario the sizing pass rated **LIGHT** (architect → *Size verdict*) skips its per-scenario `architect` run. Two developer runs instead:
 
-- `L` — writes `SCENARIO-XX.md` itself (no plan exists yet; read spec's scenario and `STATE.md` instead), same shape as architect plan, **≤15 lines** under `## Implementation Plan`, header `Size: LIGHT — <n> steps, <package>` and `Runs: L | V`, no `## Handoff` beyond anything a later scenario must not contradict. Then executes Acceptance (red) and Build, ends with phase report.
+- `L` — writes `SCENARIO-XX.md` itself (no plan exists yet; read spec's scenario and `STATE.md` instead), same shape as architect plan, **≤15 lines** under `## Implementation Plan`, header `Size: LIGHT — <n> steps, <package>` and `Runs: L | V`, no `## Handoff` beyond anything a later scenario must not contradict. Then executes Acceptance (red) and Build, ends with phase report. Plan names every `## Surface & Copy` line the scenario delivers (help Long, warning, refusal, status line) with the test asserting it; Long text asserted at wrap width.
 - `V` — as above.
 
-`L` plan names every `## Surface & Copy` line the scenario delivers (help Long, warning, refusal, status line) with the test asserting it; Long text asserted at wrap width. Scenario delivering more than 3 lines of ruled copy is not LIGHT.
-
-Checkpoint still runs after `V`. Plan touching mandatory test-first item, or growing past 3 Build steps while being written → `L` stops, returns `PARTIAL: needs architect`; orchestrator runs `architect` and continues normally.
+Checkpoint still runs after `V`. Plan touching mandatory test-first item, growing past 3 Build steps while being written, or delivering more than 3 ruled `## Surface & Copy` lines → `L` stops, returns `PARTIAL: needs architect`; orchestrator runs `architect` and continues normally.
 
 ## Planning: coverage the gate will demand
 
