@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -44,6 +45,8 @@ type AnomaliesRequest struct {
 	Window   store.Window
 	Now      time.Time
 	Accounts []string
+	// Currency is the currency Amount and Usual are listed in; Native lists every anomaly in its own.
+	Currency money.Currency
 }
 
 // Anomaly is one charge unusually large for its baseline.
@@ -57,6 +60,13 @@ type Anomaly struct {
 	Earlier int
 	// TimesTenths is the charge as a multiple of Usual, in tenths.
 	TimesTenths int64
+	// ListedCurrency is the currency ListedAmount and ListedUsual are in; empty when the anomaly is listed in its own currency,
+	// Amount and Usual.
+	ListedCurrency string
+	// ListedAmount and ListedUsual are Amount and Usual in ListedCurrency, at the charge's own rate.
+	ListedAmount, ListedUsual int64
+	// Unconverted is whether a CAD or USD charge is listed in its own currency for want of a rate.
+	Unconverted bool
 }
 
 // Anomalies is an anomalies read: the window it listed and the charges unusually large in it.
@@ -69,6 +79,10 @@ type Anomalies struct {
 	Checked, NotJudged int
 	// Transactions is store.Charges.Transactions: the span of the named accounts' transactions, or of the store's when none is named.
 	Transactions store.TransactionRange
+	// Currency is the currency the request asked the anomalies to be listed in.
+	Currency money.Currency
+	// Unconverted counts the listed anomalies shown in their own currency for want of a rate.
+	Unconverted store.Unconverted
 }
 
 // Anomalies lists the charges dated in req.Window, in the accounts req.Accounts names (every account when

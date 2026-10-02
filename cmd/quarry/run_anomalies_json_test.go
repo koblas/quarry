@@ -25,14 +25,19 @@ type anomalyJSON struct {
 	Amount        string  `json:"amount"`
 	Baseline      string  `json:"baseline"`
 	Usual         string  `json:"usual"`
-	Earlier       int     `json:"earlier"`
-	Times         float64 `json:"times"`
+	// NativeCurrency, NativeAmount and NativeUsual are the charge's own currency, Amount and Usual.
+	NativeCurrency string  `json:"native_currency"`
+	NativeAmount   string  `json:"native_amount"`
+	NativeUsual    string  `json:"native_usual"`
+	Earlier        int     `json:"earlier"`
+	Times          float64 `json:"times"`
 }
 
 // anomaliesJSONDoc is quarry anomalies --json's stdout.
 type anomaliesJSONDoc struct {
 	Since         string            `json:"since"`
 	Until         string            `json:"until"`
+	Currency      string            `json:"currency"`
 	AccountFilter []recurringIDName `json:"account_filter"`
 	Anomalies     []anomalyJSON     `json:"anomalies"`
 	Checked       int               `json:"checked"`
