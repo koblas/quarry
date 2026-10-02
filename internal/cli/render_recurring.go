@@ -37,9 +37,8 @@ func statusCell(s report.Series) string {
 	return recurringStatus[s.State]
 }
 
-// priceChangesCell is the Price changes cell of s: "N: first -> latest (±p%)" in the series' own
-// currency, p the change from the run's first charge to its latest, with the currency code in front of
-// each amount when s is listed in another currency; empty when the price never moved.
+// priceChangesCell is the Price changes cell of s: "N: first -> latest (±p%)" in the series' own currency,
+// each amount prefixed with its code when s is listed in another; empty when the price never moved.
 func priceChangesCell(s report.Series) string {
 	if len(s.PriceChanges) == 0 {
 		return ""

@@ -241,23 +241,30 @@ func Test_renderRecurringJSON_keeps_the_same_keys_in_every_reporting_currency(t 
 		{name: "USD", currency: money.USD, want: "USD"},
 		{name: "native", currency: money.Native, want: "native"},
 	}
+	_, cadKeys := documentKeysIn(t, money.CAD)
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			s := convertedUSDSeries()
-			out, err := renderRecurringJSON(report.Recurring{Window: spendingWindow(), Currency: c.currency, Series: []report.Series{s}}, []string{})
-			require.NoError(t, err)
-			var doc struct {
-				Currency string            `json:"currency"`
-				Series   []json.RawMessage `json:"series"`
-			}
-			require.NoError(t, json.Unmarshal(out, &doc))
-			require.Len(t, doc.Series, 1)
+			currency, keys := documentKeysIn(t, c.currency)
 
-			assert.Equal(t, c.want, doc.Currency)
-			assert.Len(t, topLevelKeys(t, doc.Series[0]), 18)
+			assert.Equal(t, c.want, currency)
+			assert.Equal(t, cadKeys, keys)
 		})
 	}
+}
+
+// documentKeysIn is the "currency" value and the ordered keys of the one series of a document rendered in currency.
+func documentKeysIn(t *testing.T, currency money.Currency) (string, []string) {
+	t.Helper()
+	out, err := renderRecurringJSON(report.Recurring{Window: spendingWindow(), Currency: currency, Series: []report.Series{convertedUSDSeries()}}, []string{})
+	require.NoError(t, err)
+	var doc struct {
+		Currency string            `json:"currency"`
+		Series   []json.RawMessage `json:"series"`
+	}
+	require.NoError(t, json.Unmarshal(out, &doc))
+	require.Len(t, doc.Series, 1)
+	return doc.Currency, topLevelKeys(t, doc.Series[0])
 }
 
 func Test_renderRecurringJSON_reads_back_converted_native_ended_and_unchanged_series(t *testing.T) {

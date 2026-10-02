@@ -13,9 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// recurringFXStore holds, under a fresh HOME, a USD Netflix whose price never moves while the rate
-// does (1.30 to 1.40 in June) and a Gym charging in CAD and in USD, the USD one stepping 12.00 to
-// 15.00 in June. A rate dated after the last charge (1.50) is there to be ignored.
+// recurringFXStore holds, under a fresh HOME, a steady USD Netflix and a Gym in CAD and in USD (12.00 to 15.00),
+// with rates 1.30, 1.40 from June and, after the last charge, 1.50.
 func recurringFXStore(t *testing.T) {
 	t.Helper()
 	home := t.TempDir()

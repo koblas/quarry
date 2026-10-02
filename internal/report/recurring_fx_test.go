@@ -254,7 +254,7 @@ func Test_recurring_lists_a_usd_series_before_a_converted_one_of_the_same_payee_
 	}
 }
 
-func Test_recurring_lists_native_series_by_their_own_currency_for_a_payee_charging_in_both(t *testing.T) {
+func Test_recurring_in_native_orders_a_payees_series_by_currency(t *testing.T) {
 	usd := monthlyEndingOn(t, activeLast, 4, paidTo("payee-gym", "Gym"), billedIn("USD"), ofAmount(1000))
 	cad := monthlyEndingOn(t, activeLast, 3, paidTo("payee-gym", "Gym"), ofAmount(1000))
 

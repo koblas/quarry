@@ -256,7 +256,7 @@ func Test_renderRecurring_shows_the_native_currency_after_a_converted_rows_curre
 			},
 			{
 				Payee: "Rent", Currency: "CAD", NativeCurrency: "CAD", Cadence: report.CadenceMonthly,
-				Amount: 5000, FirstAmount: 5000, NativeAmount: 5000, NativeFirstAmount: 5000, PerYear: new(int64(60000)),
+				Amount: 5000, FirstAmount: 4000, NativeAmount: 5000, NativeFirstAmount: 4000, PerYear: new(int64(60000)),
 				First: recurringDay(time.February, 12), Last: recurringDay(time.September, 12), State: report.SeriesActive,
 				PriceChanges: []report.PriceChange{{Date: recurringDay(time.June, 12), From: 4000, To: 5000, Tenths: 250}}, ChangeTenths: 250,
 			},
@@ -271,7 +271,7 @@ func Test_renderRecurring_shows_the_native_currency_after_a_converted_rows_curre
 		"\n" +
 		"Payee  Currency   Every  Amount  Per year  First       Last        Status       Price changes\n" +
 		"Gym    CAD (USD)  month   21.00    252.00  2026-02-12  2026-09-12  active, new  1: USD 12.00 -> USD 15.00 (+25.0%)\n" +
-		"Rent   CAD        month   50.00    600.00  2026-02-12  2026-09-12  active       1: 50.00 -> 50.00 (+25.0%)\n" +
+		"Rent   CAD        month   50.00    600.00  2026-02-12  2026-09-12  active       1: 40.00 -> 50.00 (+25.0%)\n" +
 		"Total  CAD                         852.00\n"
 	assert.Equal(t, want, got)
 }

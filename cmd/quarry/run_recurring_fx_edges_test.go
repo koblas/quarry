@@ -97,11 +97,21 @@ func Test_run_recurring_native_on_a_store_with_rates_lists_every_series_as_it_wa
 		assert.Empty(t, stderr)
 		doc := decodeRecurringJSON(t, stdout)
 		assert.Equal(t, "native", doc.Currency)
-		require.Len(t, doc.Series, 3)
-		for _, s := range doc.Series {
-			assert.Equal(t, []string{s.Currency, s.Amount, s.FirstAmount}, []string{s.NativeCurrency, s.NativeAmount, s.NativeFirstAmount}, s.Payee)
-		}
+		assert.Equal(t, [][]string{
+			{"Gym", "CAD", "20.00", "20.00", "CAD", "20.00", "20.00"},
+			{"Gym", "USD", "15.00", "12.00", "USD", "15.00", "12.00"},
+			{"Netflix.com", "USD", "10.00", "10.00", "USD", "10.00", "10.00"},
+		}, amountsOf(doc.Series))
 	})
+}
+
+// amountsOf is each series' payee, currency, amount and first amount, then its native currency, amount and first amount.
+func amountsOf(series []recurringSeriesJSON) [][]string {
+	rows := make([][]string, len(series))
+	for i, s := range series {
+		rows[i] = []string{s.Payee, s.Currency, s.Amount, s.FirstAmount, s.NativeCurrency, s.NativeAmount, s.NativeFirstAmount}
+	}
+	return rows
 }
 
 func Test_run_recurring_narrows_to_one_usd_account_and_converts_it_to_cad(t *testing.T) {
@@ -200,6 +210,47 @@ func Test_run_recurring_lists_a_series_charged_before_the_first_rate_in_its_own_
 	})
 }
 
+func Test_run_recurring_in_usd_lists_cad_series_charged_before_the_first_rate_in_cad_with_a_warning(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	usdGym := inUSD(monthlySeries("Gym", 2026, time.February, slices.Repeat([]int64{1200}, 8)...))
+	cadRent := monthlySeries("Rent", 2026, time.February, slices.Repeat([]int64{5000}, 8)...)
+	cadPhone := monthlySeries("Phone", 2026, time.February, slices.Repeat([]int64{3000}, 8)...)
+	replaceStoreWithRates(t, home,
+		chargeRows([]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)}, slices.Concat(usdGym, cadRent, cadPhone)...),
+		store.Rate{Date: day(2026, time.April, 1), USDCAD: money.Rate(1_300_000), Series: "FXUSDCAD"},
+		store.Rate{Date: day(2026, time.June, 1), USDCAD: money.Rate(1_400_000), Series: "FXUSDCAD"})
+	const warning = "2 series with a charge dated before 2026-04-01, the first exchange rate in the store, " +
+		"are listed in CAD, not converted to USD"
+
+	t.Run("text lists the CAD rows plain ahead of the USD one", func(t *testing.T) {
+		stdout, stderr := runRecurring(t, "--currency", "USD")
+
+		assert.Equal(t, warningLines([]string{warning}), stderr)
+		assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts, amounts in USD",
+			monthlyRow("Rent", "CAD", "50.00", "600.00", ""),
+			monthlyRow("Phone", "CAD", "30.00", "360.00", ""),
+			monthlyRow("Gym", "USD", "12.00", "144.00", ""),
+			[]string{"Total", "CAD", "", "", "960.00", "", "", "", ""},
+			[]string{"Total", "USD", "", "", "144.00", "", "", "", ""}),
+			stdout)
+	})
+
+	t.Run("json echoes the warning and names USD as the reporting currency", func(t *testing.T) {
+		stdout, stderr := runRecurring(t, "--currency", "USD", "--json")
+
+		assert.Equal(t, warningLines([]string{warning}), stderr)
+		doc := decodeRecurringJSON(t, stdout)
+		assert.Equal(t, "USD", doc.Currency)
+		assert.Equal(t, []string{warning}, doc.Warnings)
+		assert.Equal(t, [][]string{
+			{"Rent", "CAD", "50.00", "50.00", "CAD", "50.00", "50.00"},
+			{"Phone", "CAD", "30.00", "30.00", "CAD", "30.00", "30.00"},
+			{"Gym", "USD", "12.00", "12.00", "USD", "12.00", "12.00"},
+		}, amountsOf(doc.Series))
+	})
+}
+
 func Test_run_recurring_on_a_store_without_rates_warns_only_when_a_usd_series_needs_converting(t *testing.T) {
 	const noRates = "the store has no exchange rates, so amounts are listed in each account's own currency; run quarry sync to fetch them"
 	home := t.TempDir()
@@ -222,6 +273,21 @@ func Test_run_recurring_on_a_store_without_rates_warns_only_when_a_usd_series_ne
 			stdout)
 	})
 
+	t.Run("json for an unrated USD series carries the line and the series' own values as native", func(t *testing.T) {
+		replaceStore(t, home, chargeRows(accounts, slices.Concat(usdGym, cadRent)...))
+
+		stdout, stderr := runRecurring(t, "--json")
+
+		assert.Equal(t, warningLines([]string{noRates}), stderr)
+		doc := decodeRecurringJSON(t, stdout)
+		assert.Equal(t, "CAD", doc.Currency)
+		assert.Equal(t, []string{noRates}, doc.Warnings)
+		assert.Equal(t, [][]string{
+			{"Rent", "CAD", "50.00", "50.00", "CAD", "50.00", "50.00"},
+			{"Gym", "USD", "12.00", "12.00", "USD", "12.00", "12.00"},
+		}, amountsOf(doc.Series))
+	})
+
 	t.Run("all-CAD series in CAD are silent", func(t *testing.T) {
 		replaceStore(t, home, chargeRows(accounts, cadRent...))
 
@@ -232,6 +298,17 @@ func Test_run_recurring_on_a_store_without_rates_warns_only_when_a_usd_series_ne
 			monthlyRow("Rent", "CAD", "50.00", "600.00", ""),
 			[]string{"Total", "CAD", "", "", "600.00", "", "", "", ""}),
 			stdout)
+	})
+
+	t.Run("json for all-CAD series in CAD has no warnings", func(t *testing.T) {
+		replaceStore(t, home, chargeRows(accounts, cadRent...))
+
+		stdout, stderr := runRecurring(t, "--json")
+
+		assert.Empty(t, stderr)
+		doc := decodeRecurringJSON(t, stdout)
+		assert.Equal(t, []string{}, doc.Warnings)
+		assert.Equal(t, [][]string{{"Rent", "CAD", "50.00", "50.00", "CAD", "50.00", "50.00"}}, amountsOf(doc.Series))
 	})
 
 	t.Run("native is silent whatever the store holds", func(t *testing.T) {

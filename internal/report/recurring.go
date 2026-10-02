@@ -246,10 +246,8 @@ func chargeIn(c store.Charge, target money.Currency) (int64, bool) {
 	return *cell, true
 }
 
-// seriesOf is the series a run of charges makes as of today, listed in target: its latest charge gives
-// the payee and amount, and the days since that charge give the state. The run is judged in its own
-// currency; only Amount, FirstAmount and PerYear are converted, and a run whose first or latest charge
-// cannot be converted stays entirely in its own currency.
+// seriesOf is the series a run of charges makes as of today, listed in target; the run is judged in its
+// own currency, and one whose first or latest charge cannot be converted stays in it.
 func seriesOf(key groupKey, run []store.Charge, rule cadenceRule, today time.Time, target money.Currency) Series {
 	latest := run[len(run)-1]
 	series := Series{
@@ -316,9 +314,8 @@ func (s Series) chargedIn(ids []string) bool {
 	return slices.ContainsFunc(s.Accounts, func(a store.Account) bool { return slices.Contains(ids, a.ID) })
 }
 
-// compareSeries orders series by currency, active before ended, yearly cost descending (ended:
-// last charge descending), lower-cased payee, group key, then a series listed in its own currency
-// before a converted one, then native currency ascending.
+// compareSeries orders series by currency, state, yearly cost descending (ended: last charge descending),
+// payee, group key, own-currency before converted, then native currency.
 func compareSeries(a, b Series) int {
 	return cmp.Or(
 		cmp.Compare(a.Currency, b.Currency),
@@ -327,6 +324,7 @@ func compareSeries(a, b Series) int {
 		cmp.Compare(strings.ToLower(a.Payee), strings.ToLower(b.Payee)),
 		cmp.Compare(a.key.value, b.key.value),
 		cmp.Compare(a.convertedRank(), b.convertedRank()),
+		// Tie-breaker only: no CAD/USD input reaches it.
 		cmp.Compare(a.NativeCurrency, b.NativeCurrency),
 	)
 }

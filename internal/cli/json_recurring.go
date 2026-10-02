@@ -14,10 +14,8 @@ type recurringDocument struct {
 	Warnings      []string                  `json:"warnings"`
 }
 
-// recurringSeriesDocument is one entry of "series"; PerYear is null for an ended series and
-// PayeeKey for a series grouped by payee id. Currency, Amount, FirstAmount and PerYear are in the
-// reporting currency unless the series is listed unconverted; the Native fields are always the
-// series' own.
+// recurringSeriesDocument is one entry of "series"; PerYear is null when ended, PayeeKey when grouped by payee id.
+// The Native fields are the series' own; the rest are in the reporting currency unless unconverted.
 type recurringSeriesDocument struct {
 	Payee             string                         `json:"payee"`
 	PayeeKey          *string                        `json:"payee_key"`

@@ -51,10 +51,20 @@ func Test_unconvertedWarnings_words_the_before_the_first_rate_line_for_each_coun
 }
 
 func Test_unconvertedWarnings_says_the_store_has_no_rates_without_naming_what_it_counts(t *testing.T) {
-	for _, noun := range []countedNoun{transactionsNoun, seriesNoun} {
-		got := unconvertedWarnings(money.CAD, store.Unconverted{Transactions: 4}, noun)
+	cases := []struct {
+		name string
+		noun countedNoun
+	}{
+		{name: "transactions", noun: transactionsNoun},
+		{name: "series", noun: seriesNoun},
+	}
 
-		assert.Equal(t, []string{noRatesWarning}, got)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := unconvertedWarnings(money.CAD, store.Unconverted{Transactions: 4}, c.noun)
+
+			assert.Equal(t, []string{noRatesWarning}, got)
+		})
 	}
 }
 

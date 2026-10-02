@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -75,4 +76,39 @@ func Test_recurring_warns_of_a_series_dated_before_the_first_rate_in_the_config_
 	assert.Equal(t, "quarry: warning: 1 series with a charge dated before 2026-04-01, the first exchange rate in the store, "+
 		"is listed in CAD, not converted to USD\n", stderr.String())
 	assert.Contains(t, stdout.String(), "Gym    CAD       month   10.00")
+}
+
+func Test_recurring_prints_the_left_out_account_warning_before_the_unconverted_series_warning(t *testing.T) {
+	charges := chargesOn(chequingID)
+	for i := range charges.Rows {
+		charges.Rows[i].Currency = "USD"
+	}
+	charges.FirstRate = time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC)
+	want := []string{
+		leftOutRecurringWarning("Old Card"),
+		"1 series with a charge dated before 2026-04-01, the first exchange rate in the store, is listed in USD, not converted to CAD",
+	}
+	args := []string{"--since", "2000", "--account", "Old Card", "--account", chequingID}
+
+	t.Run("text prints them on stderr in that order", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+
+		err := executeRecurring(t, withCharges(namedAccounts(), charges), &stdout, &stderr, args...)
+
+		require.NoError(t, err)
+		assert.Equal(t, warningLines(want), stderr.String())
+	})
+
+	t.Run("json lists them in that order in warnings", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+
+		err := executeRecurring(t, withCharges(namedAccounts(), charges), &stdout, &stderr, append([]string{"--json"}, args...)...)
+
+		require.NoError(t, err)
+		var doc struct {
+			Warnings []string `json:"warnings"`
+		}
+		require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
+		assert.Equal(t, want, doc.Warnings)
+	})
 }
