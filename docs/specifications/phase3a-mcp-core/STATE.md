@@ -65,3 +65,6 @@ Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 07, 08, 15, 16 (04, 05 delivere
 - Checkpoint S01 MINOR: `internal/report/document/status_test.go:41` derefs `*read.Findings.Ignored` without `require.NotNil` — unowned
 - Checkpoint S03 MINOR: `internal/mcp/result.go:47-48` errorLog mutex unpinned (deleting `mu` stays green; unobservable with os.Stderr) — S06 may pin with a concurrent-refusals -race test; else unowned
 - Checkpoint S03 NIT: `cmd/quarry/run_mcp_query_test.go:1-2` duplicate package-clause comment — drop when next touched
+- Checkpoint S07 doc-budget MINORs: `internal/report/describe_schema.go:23-27` DescribeSchema doc 5-6 lines (states how); `internal/store/duckstore/schema_read.go:31-35` Schema doc 5 lines — trim to contract; fold into next run touching them (gate fix pass otherwise)
+- Checkpoint S07 MINOR: `cmd/quarry/run_mcp_describe_test.go:1-2` duplicate package-clause comment (same as S03 NIT on run_mcp_query_test.go:1-2) — S09 drops both, and must not add a third
+- Checkpoint S07 NIT: `internal/report/describe_schema.go` `maxListed > 0` tested only at 0; add -1 row — unowned
