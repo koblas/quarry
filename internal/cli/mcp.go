@@ -14,9 +14,8 @@ const (
 	mcpTerminalHint = "quarry: mcp: this is an MCP server for Claude and other MCP clients; it reads JSON-RPC on stdin. Press Ctrl-D to stop."
 )
 
-// newMCPCommand builds mcp: it refuses --json, hands the command's streams to
-// serve and returns a failed serve's error as a runtime failure, never a usage
-// error. When isTerminal says stdin is a terminal, serve's ready call prints a hint.
+// newMCPCommand builds mcp: it refuses --json and runs serve on the command's streams,
+// returning its failure as a runtime error; at a terminal, serve's ready call prints a hint.
 func newMCPCommand(serve MCPServeFunc, isTerminal TerminalProbe, jsonOut *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   "mcp",

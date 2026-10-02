@@ -589,9 +589,9 @@ Sizing pass (architect, opus) 2026-10-02 — 17 IDs → 8 runs. Full report and 
 - [x] SCENARIO-02: An MCP client connects and sees quarry's four tools — `cmd/quarry/run_mcp_test.go` `Test_run_mcp_lists_quarrys_four_tools_over_json_rpc`
 - [x] SCENARIO-15: quarry mcp ends with the ruled exit code — `cmd/quarry/run_mcp_exit_test.go` `Test_run_mcp_ends_with_the_ruled_exit_code`
 - [x] SCENARIO-16: quarry mcp run at a terminal says what it is — delivered by SCENARIO-15 — `cmd/quarry/run_mcp_terminal_test.go` `Test_run_mcp_at_a_terminal_prints_the_hint_and_keeps_serving`
-- [ ] SCENARIO-03: query returns rows as the sql --json document
-- [ ] SCENARIO-04: query over its limit returns the first rows and says so
-- [ ] SCENARIO-05: query refuses what it cannot run
+- [x] SCENARIO-03: query returns rows as the sql --json document — `cmd/quarry/run_mcp_query_test.go` `Test_run_mcp_query_returns_the_sql_json_document`
+- [x] SCENARIO-04: query over its limit returns the first rows and says so — delivered by SCENARIO-03 — `cmd/quarry/run_mcp_query_test.go` `Test_run_mcp_query_over_its_limit_returns_the_first_rows_and_says_so`
+- [x] SCENARIO-05: query refuses what it cannot run — delivered by SCENARIO-03 — `cmd/quarry/run_mcp_query_test.go` `Test_run_mcp_query_refuses_what_it_cannot_run`
 - [ ] SCENARIO-07: describe_schema describes the store
 - [ ] SCENARIO-08: describe_schema bounds long account and category lists
 - [ ] SCENARIO-09: sync_status returns the status document

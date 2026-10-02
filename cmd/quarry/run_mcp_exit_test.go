@@ -132,8 +132,7 @@ func deadlineContext(t *testing.T, cancelled bool) context.Context {
 	return ctx
 }
 
-// mcpPipeSubprocessEnv, when set to "1" in the child's environment, makes
-// Test_quarry_mcp_exits_0_when_the_real_stdout_pipe_breaks run as the quarry mcp process.
+// mcpPipeSubprocessEnv set to "1" makes the re-executed test binary run as quarry mcp.
 const mcpPipeSubprocessEnv = "QUARRY_MCP_PIPE_SUBPROCESS"
 
 // Re-executes the test binary: only a real process dies of SIGPIPE on a broken fd 1.

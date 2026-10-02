@@ -1,6 +1,6 @@
 # phase3a-mcp-core — current state
 
-Scenarios complete: SCENARIO-01, 02, 15, 16 (16 delivered by 15). Last updated by SCENARIO-15.
+Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 15, 16 (04, 05 delivered by 03; 16 by 15). Last updated by SCENARIO-03.
 
 ## Binding decisions
 - `internal/report/document` owns the sql, status and findings `--json` documents plus shared primitives (`DateLayout`, `Money`, `NullString`, `Rows`, `FindingCounts`, `NotImported`); MCP tools render from these same builders (`NewSQL`, `NewStatus`, `NewFindingsList`) — a second copy is the drift PRD:108 forbids (SCENARIO-01)
@@ -16,20 +16,23 @@ Scenarios complete: SCENARIO-01, 02, 15, 16 (16 delivered by 15). Last updated b
 - Instructions and descriptions keep the spec code blocks' hard line breaks, no trailing newline; the query description's last line ("Send one statement; ...") was copy-ruled. Tool results use `Out = any`, `OutputSchema {"type":"object"}`, handlers set `StructuredContent: json.RawMessage` (SCENARIO-02)
 - `absentNullArguments` (`internal/mcp/arguments.go`) is registered via `AddReceivingMiddleware` and must stay: SDK v1.8.0 panics the whole server (nil map in jsonschema-go `applyDefaults`) on `tools/call` with `"arguments": null` when the schema has a `default` (query, data_quality). S03 and S11 inherit it and must keep their `default`s covered by `Test_a_tool_call_with_null_arguments...` (SCENARIO-02)
 - Root help pin `cmd/quarry/run_status_test.go` `Test_run_help_prints_quarrys_description` lists every subcommand; a new command adds its row there (SCENARIO-02)
-- `MCPServeFunc` takes a trailing `ready func()`: cli RunE passes one that prints the TTY hint (when `env.IsTerminal(stdin)`); the `newMCPServe` closure calls `resolveHome("mcp")` first (error returned, `ready` never called, so no hint), then `signal.Ignore(SIGPIPE)`, `ready()`, `Serve`. S03/S09/S11 add `WithReport`/`WithConfig` wiring after the `$HOME` check and keep that order (SCENARIO-15)
+- `MCPServeFunc` takes a trailing `ready func()`: cli RunE passes one that prints the TTY hint (when `env.IsTerminal(stdin)`); the `newMCPServe` closure calls `resolveHome("mcp")` first (error returned, `ready` never called, so no hint), then `signal.Ignore(SIGPIPE)`, `ready()`, `Serve`. S09/S11 add `WithConfig` wiring after the `$HOME` check and keep that order (SCENARIO-15)
 - `Env.IsTerminal TerminalProbe` is nil-safe (nil = not a terminal; existing Env literals stay valid); `defaultEnv` wires `isTerminal` (`cmd/quarry/terminal.go`, termios via `golang.org/x/term`, never `ModeCharDevice`: `/dev/null` is a char device) (SCENARIO-15)
 - `signal.Ignore(SIGPIPE)` is on the mcp path only, so a broken fd 1 reaches the EPIPE arm instead of killing the process; other commands keep Go's default (SCENARIO-15)
 - `mcp` refuses args and `--json` as `UsageError` (exit 2, no `Run ... --help` suffix) via `Args: noArgs` and a RunE check on `Execute`'s `jsonOut` pointer (SCENARIO-15)
 - go.mod: `golang.org/x/term` v0.46.0 direct; `go get` bumped `x/sys` v0.41.0 -> v0.48.0; full suite, race on touched packages and lint green after the bump (SCENARIO-15)
+- `internal/mcp/result.go` is the only place a tool result and the stderr line are built: tools pass `handler(func(ctx, In) (doc, error))`; success = compact `json.Marshal` as `StructuredContent` (`json.RawMessage`) plus one identical `TextContent`; failure = the error text as the one `TextContent`, no document. Stderr is the `errorLog` receiving middleware on `tools/call` (`quarry: mcp: <tool>: <text>\n`, one `Write` under a mutex, silent when the call ctx is done) because SDK-side schema refusals are `isError` results that never reach a handler. S07/S09/S11 never touch `CallToolResult` (SCENARIO-03)
+- `mcp.WithReport(ReportFactory)`: type declared in mcp (`func(ctx, command string) (*report.Server, error)`), cmd converts `newReportFactory()`; called per tool call with command `"mcp"`, never cached. `newMCPServe` builds the Server inside the closure after `resolveHome`. S07/S09 take it; S09/S11 add `WithConfig` the same way (SCENARIO-03)
+- A `report.RefusalError` passes through as the error text verbatim (the ruled `~` line), so a new tool needs no store-refusal mapping; query-specific copy lives only in `query_refusal.go`. `QueryFailureInterrupted` and `Other` share one arm returning the error unchanged (SCENARIO-03)
+- query handler clamps limit outside 1..500 to 500 and the schema `default` is pinned separately (omitted -> store asked 501); truncation warning uses `humanize.Count` (limit 1 reads "the first 1 row") (SCENARIO-03)
 
 ## Left unbuilt
 - spend/cashflow/recurring/anomalies/accounts/snapshots/sync documents stay in `internal/cli/json_*.go` — phase 3b moves the first four (SCENARIO-01)
-- `marshalDocument` stays in cli; no compact encoder in document — mcp owns it (SCENARIO-03+)
-- Multi-statement `sql` pin is CLI-only so far; MCP side is SCENARIO-03 (SCENARIO-01)
-- `notBuilt` (`internal/mcp/tools.go`): shared stub handler for all four tools. S03 (query), S07 (describe_schema), S09 (sync_status), S11 (data_quality) replace it; S11 deletes it and `Test_an_unbuilt_tool_answers_isError` (SCENARIO-02)
-- `mcp.WithReport` / `mcp.WithConfig` options and cmd/quarry wiring via `newReportFactory`/`newConfigLoader`: S03, S09, S11 (SCENARIO-02)
-- Schema-validation pins (limit 0/501 refused, default applied, `sql:" "` reaching the handler): S03 query, S11 data_quality (SCENARIO-02)
-- Per-call timeout option and stderr error line: S06 and S03 (SCENARIO-02)
+- `marshalDocument` stays in cli; no compact encoder in document — mcp owns it in `result.go` (SCENARIO-03)
+- `notBuilt` (`internal/mcp/tools.go`): stub for describe_schema, sync_status, data_quality; S07, S09, S11 replace theirs; S11 deletes it and `Test_an_unbuilt_tool_answers_isError` (SCENARIO-02)
+- `mcp.WithConfig` option and cmd/quarry wiring via `newConfigLoader`: S09, S11 (SCENARIO-02)
+- Schema-validation pins for data_quality (limit bounds, default applied): S11 (SCENARIO-02)
+- Per-call timeout option (`WithTimeout`), deadline/cancel mapping and `QueryFailureInterrupted` split out of the generic arm in `query_refusal.go`: S06 (SCENARIO-02, 03)
 - Positive pty test for `isTerminal` (termios true path pinned only by the `defaultEnv` wiring pin and the `/dev/null`/pipe/Buffer negatives) — unowned, MINOR (SCENARIO-15)
 - Process-level SIGTERM -> exit 0 end-to-end: `signalContext` tests plus the cancelled-ctx row cover it; no subprocess test — unowned, MINOR (SCENARIO-15)
 
@@ -44,12 +47,14 @@ Scenarios complete: SCENARIO-01, 02, 15, 16 (16 delivered by 15). Last updated b
 - `--json` is a persistent root flag bound to `Execute`'s `jsonOut`; `newMCPCommand` takes that pointer, not the flag by name (SCENARIO-15)
 - An in-process fake-EPIPE writer cannot see SIGPIPE death: only `Test_quarry_mcp_exits_0_when_the_real_stdout_pipe_breaks` (re-exec) proves the real binary exits 0 (SCENARIO-15)
 - With `$HOME` unset at a terminal only the `$HOME` line prints (`ready` is never called) (SCENARIO-15)
+- The SDK client decodes `StructuredContent` into a map, losing key order: assert order on a raw frame (`peer.stdout`) or the `TextContent`. `json.Marshal` HTML-escapes like CLI `marshalDocument`; `SetEscapeHTML(false)` would diverge (SCENARIO-03)
+- A nil report factory panics in the query handler (as nil `Env.ServeMCP`): tests of `query` pass `WithReport` (SCENARIO-03)
+- SDK still writes an `isError` "context canceled" result for a cancelled id; `errorLog` stays silent when the call ctx is done — S06 pins it, S17 relies on it (SCENARIO-03)
 
 ## Open debts
 - PRD `docs/initial-prd.md` §Security "Redaction on import" bullet and Risks table "masking on import" mitigation are now false: redaction deferred by user 2026-10-02. Do not edit silently; PRD §Decisions entry added when user confirms wording — unowned until then
-- S01 comment MINORs (comments name MCP consumers not built yet; S02 makes none true): `internal/report/document/doc.go:1-2` -> S03, `internal/report/sql_conventions.go:3-4` -> S07, `internal/report/document/status.go:12` -> S09; each re-checks its comment when its consumer lands
+- S01 comment MINORs (comments name MCP consumers not built yet): `internal/report/sql_conventions.go:3-4` -> S07, `internal/report/document/status.go:12` -> S09; each re-checks its comment when its consumer lands
 - No direct unit test on `report.SQLConventions`; pinned only through the `sql --help` byte pin — unowned, MINOR
 - Checkpoint S01 MINOR: `internal/report/query_failure_test.go:12` pins precedence only QueryError over Interrupted; unprintable vs QueryError and read-only vs external-access order unpinned (add rows if constructible) — unowned
 - Checkpoint S01 MINOR: `internal/report/document/findings_test.go:42` two behaviours under one "and" name; `assert.Empty(fixedEntry.Items)` on a finding given no items proves nothing — split, give items — unowned
 - Checkpoint S01 MINOR: `internal/report/document/status_test.go:41` derefs `*read.Findings.Ignored` without `require.NotNil` — unowned
-- Checkpoint S15 doc-budget MINORs: `cmd/quarry/run.go:135-138` newMCPServe doc 3 lines (budget 1-2); `internal/cli/mcp.go:17-19` newMCPCommand doc 3 lines; `cmd/quarry/run_mcp_exit_test.go:~139` const `mcpPipeSubprocessEnv` comment 2 lines and names a test — fold into next developer run touching these files (S03 touches run.go)

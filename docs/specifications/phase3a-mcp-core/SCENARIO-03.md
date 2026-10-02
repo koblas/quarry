@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-03
-status: open
+status: done
 ---
 
 # SCENARIO-03: query returns rows as the sql --json document (folds SCENARIO-04, SCENARIO-05)
@@ -30,10 +30,10 @@ Existing surface (go doc / LSP, no Glob needed): `internal/mcp` has `Server`, `N
 - [x] Step 7: `internal/mcp/query_refusal.go` (new) — map `report.ClassifyQueryFailure` to the ruled MCP copy: Unprintable `<Err text>; cast it in the query, e.g. CAST(<col> AS VARCHAR)`, Rejected `query failed: <Detail>`, Empty → the blank-sql line (reached by `;` / `-- note`), ReadOnly and ExternalAccess lines from §4; `QueryFailureInterrupted` and `Other` share one explicit case returning the error text unchanged (the `exhaustive` linter lists every kind; S06 splits Interrupted out there). Unit tests through a real `report.Server` over a fake store, one row per kind, plus the store refusals the generic path must carry verbatim in `~` form (`report.WithHome`): missing, other-format with `SnapshotPath` (`--from` rebuild form), not-DuckDB/permission/other (`cannot read the store at …`), locked (`close that program…`); and a plain store error with no classification. Wrapped errors (`fmt.Errorf("%w")`) also classify
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; fold S15 doc-budget MINORs: `cmd/quarry/run.go:135-137` `newMCPServe` doc to ≤2 lines, `internal/cli/mcp.go:17-19` `newMCPCommand` doc ≤2 lines, `cmd/quarry/run_mcp_exit_test.go:135-137` `mcpPipeSubprocessEnv` comment ≤1 line without a test name; reword `internal/report/document/doc.go:1-2` so it states only what is true once S03 lands (documents shared by CLI and MCP, no claim that every one is returned over MCP yet); doc comments on `WithReport`, the wrapper and `queryRefusal`
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; fold S15 doc-budget MINORs: `cmd/quarry/run.go:135-137` `newMCPServe` doc to ≤2 lines, `internal/cli/mcp.go:17-19` `newMCPCommand` doc ≤2 lines, `cmd/quarry/run_mcp_exit_test.go:135-137` `mcpPipeSubprocessEnv` comment ≤1 line without a test name; reword `internal/report/document/doc.go:1-2` so it states only what is true once S03 lands (documents shared by CLI and MCP, no claim that every one is returned over MCP yet); doc comments on `WithReport`, the wrapper and `queryRefusal`
 
 ### Verify
-- [ ] Step 9: full verification + `spec-check.py` → tick SCENARIO-03, then SCENARIO-04 and SCENARIO-05 with "delivered by SCENARIO-03" and their own acceptance tests (test reference last on the line); STATE.md rewrite
+- [x] Step 9: full verification + `spec-check.py` → tick SCENARIO-03, then SCENARIO-04 and SCENARIO-05 with "delivered by SCENARIO-03" and their own acceptance tests (test reference last on the line); STATE.md rewrite
 
 ## Handoff
 
@@ -59,12 +59,10 @@ Existing surface (go doc / LSP, no Glob needed): `internal/mcp` has `Server`, `N
 
 ## Phase report
 
-Run B1 (steps 4-6) done. Narrow loop green (`go test ./internal/mcp/`, `go test ./cmd/quarry/ -run 'MCP|Mcp|mcp'`, `-race` on mcp), `golangci-lint run ./internal/mcp/... ./cmd/...` 0 issues. All three acceptance tests green. Step 7 (`query_refusal.go`) was built here too, so it is ticked; B2 has only its tests left to review.
+Run V (steps 8-9) done; scenario complete, `status: done`. Nothing for a later run of this scenario.
 
-- New: `internal/mcp/result.go` (`toolFunc`, `handler`, `errorLog`, `errorText`; handler takes no tool name, the log middleware reads it from the request), `query.go` (`Server.query`, `effectiveLimit`, `truncationWarning`, `errBlankSQL`), `query_refusal.go` (`queryRefusal`, `errWriteRefused`, `errExternalRefused`; Interrupted and Other share one arm).
-- Edited: `server.go` (`ReportFactory`, `WithReport`, `commandName`, `Serve` passes stderr to `errorLog`), `tools.go:90` (`addTools` is a `Server` method; `query` uses `handler(s.query)`), `cmd/quarry/run.go` `newMCPServe` (server built inside the closure after `resolveHome`; its doc is already 2 lines).
-- Tests: `internal/mcp/{result,query,query_refusal}_test.go`, `query_helpers_test.go` (`fakeStore`, `newHarness`, `rowsOf`), `log_internal_test.go` (white-box: errorLog ctx-done / nil result / no-text arms, `effectiveLimit` clamp via `Server.query`); `server_test.go` has `startServerLogging` and no `query` row in the unbuilt test. Null/omitted/empty `query` arguments are pinned in `query_test.go`, not by adding rows to the data_quality test.
-- `cmd/quarry/run_mcp_query_test.go:58` (Run A): the HTML `Contains` asserted the unescaped `"<a&b>"`, contradicting the equality above it; now `"\u003ca\u0026b\u003e"`. No other edit to Run A tests.
-- Mutations (all red, restored byte-identical): drop `|| !result.IsError` -> `Test_a_successful_call_writes_nothing_to_stderr`; blank guard to `== "\x00"` -> `Test_query_refuses_blank_sql_without_touching_the_store`; cap guard to `limit < 1` -> `Test_query_caps_a_limit_the_schema_did_not_check` (501 vs 502); `Query(.., maxRows)` -> `Test_query_asks_the_store_for_the_effective_limit` (2 vs 501); delete `WithReport` line -> nil-pointer panic in `Test_run_mcp_query_*`.
-- Not done (V): Step 8 other doc-budget folds (`internal/cli/mcp.go:17-19`, `run_mcp_exit_test.go:~135`, `document/doc.go:1-2`, doc comments check), full verify, spec tick, STATE.md, `status: done`. No `go doc`/count figures yet.
-- Trap: tests that read `peer.stderr` between calls rely on `errorLog` writing before the SDK sends the response (true: the middleware wraps the handler).
+- Doc-budget folds: `internal/cli/mcp.go:17-18` (newMCPCommand, 2 lines), `cmd/quarry/run_mcp_exit_test.go:135` (`mcpPipeSubprocessEnv`, 1 line, no test name), `internal/report/document/doc.go:1-2` (shared by CLI and MCP, no per-document MCP claim); `newMCPServe` doc was already 2 lines; doc comments on `WithReport`, `handler`, `queryRefusal` already present.
+- `internal/mcp/query_refusal.go:35`: the post-switch `return err` is marked `// unreachable:` (every kind has a case; `exhaustive` fails the build otherwise). Only uncovered added line the gate found.
+- Gates: `go build ./...` ok; `golangci-lint run ./...` 0 issues; full covered suite rc=0; `uncovered-diff.py` 0 uncovered, 2 declared unreachable (`query_refusal.go:35`, `result.go:28`); `go test -race ./internal/mcp/... ./cmd/quarry/` ok.
+- test-stats vs 177742c65366: cmd/quarry 517 (+5), internal/mcp 24 (+18), TOTAL 541 (+23); tempdir 459 (+2); disk 419 (+1).
+- `spec-check.py` and `--run` both OK; S03, S04, S05 ticked in specification.md. STATE.md rewritten.
