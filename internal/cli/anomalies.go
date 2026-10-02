@@ -26,12 +26,19 @@ func newAnomaliesCommand(newReport ReportFactory, loadConfig ConfigLoader, now f
 		Short: "List charges unusually large for their payee or category",
 		Long: `List charges that are unusually large: more than 2 times the median of the
 payee's earlier charges, when there are at least 3, or else more than 5
-times the median of the category's earlier charges, when there are at least
-10. Charges under 100.00 are never listed. Charges follow the rules of
-quarry spend, and a transaction counts once, with all its splits; an
-uncategorized or split charge from a payee with little history cannot be
-judged. Possible duplicates are listed by quarry findings, not here. Charges
-dated after today are left out, even with a later --until.
+times the median of the category's earlier charges, when there are at
+least 10. Charges under 100.00 in their account's own currency are never
+listed. Charges follow the rules of quarry spend, and a transaction counts
+once, with all its splits; an uncategorized or split charge from a payee
+with little history cannot be judged. Possible duplicates are listed by
+quarry findings, not here. Charges dated after today are left out, even
+with a later --until.
+
+Charges are judged in their account's own currency, so a change in the
+exchange rate never makes a charge unusual. Amount and Usual are then
+shown in the reporting currency (--currency, else reporting.currency in
+the config file, else CAD) at the rate on the charge's date.
+With --currency native nothing is converted.
 
 --since and --until choose which charges to list; each is compared with
 every earlier charge, however old. --account lists only charges in those

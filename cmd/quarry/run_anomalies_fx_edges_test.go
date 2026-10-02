@@ -29,6 +29,11 @@ func runAnomaliesOK(t *testing.T, args ...string) (string, string) {
 	return stdout.String(), stderr.String()
 }
 
+// jsonCells is the currency, amount and usual of an entry, then its native twins.
+func jsonCells(a anomalyJSON) []string {
+	return []string{a.Currency, a.Amount, a.Usual, a.NativeCurrency, a.NativeAmount, a.NativeUsual}
+}
+
 // hardwareHistory is five Hardware charges of 38.00 to 42.00 (median 40.00), weekly from 2025-03-03.
 func hardwareHistory() []chargeTxn {
 	history := make([]chargeTxn, 0, 5)
@@ -81,8 +86,9 @@ func Test_run_anomalies_in_usd_lists_a_usd_charge_as_it_was_charged_and_says_not
 		assert.Empty(t, stderr)
 		doc := decodeAnomaliesJSON(t, stdout)
 		assert.Equal(t, []string{}, doc.Warnings)
+		assert.Equal(t, "USD", doc.Currency)
 		require.Len(t, doc.Anomalies, 1)
-		assert.Equal(t, "250.00", doc.Anomalies[0].Amount)
+		assert.Equal(t, []string{"USD", "250.00", "40.00", "USD", "250.00", "40.00"}, jsonCells(doc.Anomalies[0]))
 	})
 }
 
@@ -104,8 +110,9 @@ func Test_run_anomalies_lists_a_usd_charge_before_the_first_rate_in_usd_with_a_w
 		assert.Equal(t, warningLines([]string{beforeAprilUSDInCAD}), stderr)
 		doc := decodeAnomaliesJSON(t, stdout)
 		assert.Equal(t, []string{beforeAprilUSDInCAD}, doc.Warnings)
+		assert.Equal(t, "CAD", doc.Currency)
 		require.Len(t, doc.Anomalies, 1)
-		assert.Equal(t, "USD", doc.Anomalies[0].Currency)
+		assert.Equal(t, []string{"USD", "250.00", "40.00", "USD", "250.00", "40.00"}, jsonCells(doc.Anomalies[0]))
 	})
 }
 
@@ -127,8 +134,9 @@ func Test_run_anomalies_in_usd_lists_a_cad_charge_before_the_first_rate_in_cad_w
 		assert.Equal(t, warningLines([]string{beforeAprilCADInUSD}), stderr)
 		doc := decodeAnomaliesJSON(t, stdout)
 		assert.Equal(t, []string{beforeAprilCADInUSD}, doc.Warnings)
+		assert.Equal(t, "USD", doc.Currency)
 		require.Len(t, doc.Anomalies, 1)
-		assert.Equal(t, "CAD", doc.Anomalies[0].Currency)
+		assert.Equal(t, []string{"CAD", "250.00", "40.00", "CAD", "250.00", "40.00"}, jsonCells(doc.Anomalies[0]))
 	})
 }
 
@@ -155,7 +163,12 @@ func Test_run_anomalies_counts_each_unconverted_listed_charge_and_says_are(t *te
 		stdout, stderr := runAnomaliesOK(t, "--json")
 
 		assert.Equal(t, warningLines([]string{want}), stderr)
-		assert.Equal(t, []string{want}, decodeAnomaliesJSON(t, stdout).Warnings)
+		doc := decodeAnomaliesJSON(t, stdout)
+		assert.Equal(t, []string{want}, doc.Warnings)
+		require.Len(t, doc.Anomalies, 2)
+		for _, entry := range doc.Anomalies {
+			assert.Equal(t, []string{"USD", "250.00", "40.00", "USD", "250.00", "40.00"}, jsonCells(entry))
+		}
 	})
 }
 
@@ -176,7 +189,11 @@ func Test_run_anomalies_on_a_store_without_rates_warns_only_when_a_usd_charge_ne
 		stdout, stderr := runAnomaliesOK(t, "--json")
 
 		assert.Equal(t, warningLines([]string{noRatesLine}), stderr)
-		assert.Equal(t, []string{noRatesLine}, decodeAnomaliesJSON(t, stdout).Warnings)
+		doc := decodeAnomaliesJSON(t, stdout)
+		assert.Equal(t, []string{noRatesLine}, doc.Warnings)
+		assert.Equal(t, "CAD", doc.Currency)
+		require.Len(t, doc.Anomalies, 1)
+		assert.Equal(t, []string{"USD", "250.00", "40.00", "USD", "250.00", "40.00"}, jsonCells(doc.Anomalies[0]))
 	})
 
 	t.Run("an all-CAD store in CAD is silent and plain", func(t *testing.T) {
@@ -195,7 +212,11 @@ func Test_run_anomalies_on_a_store_without_rates_warns_only_when_a_usd_charge_ne
 		stdout, stderr := runAnomaliesOK(t, "--json")
 
 		assert.Empty(t, stderr)
-		assert.Equal(t, []string{}, decodeAnomaliesJSON(t, stdout).Warnings)
+		doc := decodeAnomaliesJSON(t, stdout)
+		assert.Equal(t, []string{}, doc.Warnings)
+		assert.Equal(t, "CAD", doc.Currency)
+		require.Len(t, doc.Anomalies, 1)
+		assert.Equal(t, []string{"CAD", "250.00", "40.00", "CAD", "250.00", "40.00"}, jsonCells(doc.Anomalies[0]))
 	})
 }
 
@@ -216,8 +237,9 @@ func Test_run_anomalies_native_on_a_rated_usd_store_prints_what_it_printed_befor
 		assert.Empty(t, stderr)
 		doc := decodeAnomaliesJSON(t, stdout)
 		assert.Equal(t, []string{}, doc.Warnings)
+		assert.Equal(t, "native", doc.Currency)
 		require.Len(t, doc.Anomalies, 1)
-		assert.Equal(t, []string{"USD", "250.00"}, []string{doc.Anomalies[0].Currency, doc.Anomalies[0].Amount})
+		assert.Equal(t, []string{"USD", "250.00", "40.00", "USD", "250.00", "40.00"}, jsonCells(doc.Anomalies[0]))
 	})
 }
 
@@ -246,6 +268,8 @@ func Test_run_anomalies_converts_a_category_baseline_anomaly_with_no_payee(t *te
 		require.Len(t, doc.Anomalies, 1)
 		assert.Nil(t, doc.Anomalies[0].Payee)
 		assert.Equal(t, "category", doc.Anomalies[0].Baseline)
+		assert.Equal(t, "CAD", doc.Currency)
+		assert.Equal(t, []string{"CAD", "840.00", "56.00", "USD", "600.00", "40.00"}, jsonCells(doc.Anomalies[0]))
 	})
 }
 
@@ -265,6 +289,7 @@ func Test_run_anomalies_keeps_the_not_judged_count_in_every_reporting_currency(t
 			assert.True(t, strings.HasSuffix(text, "\n"+footer+"\n"), text)
 			doc := decodeAnomaliesJSON(t, js)
 			assert.Equal(t, []int{2, 1}, []int{doc.Checked, doc.NotJudged})
+			assert.Equal(t, currency, doc.Currency)
 		})
 	}
 }
@@ -289,6 +314,8 @@ func Test_run_anomalies_narrows_to_one_usd_account_and_converts_it_to_cad(t *tes
 		doc := decodeAnomaliesJSON(t, stdout)
 		assert.Equal(t, []recurringIDName{{ID: "acct-usd", Name: "US Chequing"}}, doc.AccountFilter)
 		require.Len(t, doc.Anomalies, 1)
+		assert.Equal(t, "CAD", doc.Currency)
+		assert.Equal(t, []string{"CAD", "350.00", "56.00", "USD", "250.00", "40.00"}, jsonCells(doc.Anomalies[0]))
 	})
 }
 
@@ -318,6 +345,8 @@ func Test_run_anomalies_converts_a_charge_in_a_closed_usd_account(t *testing.T) 
 		assert.Equal(t, []string{}, doc.Warnings)
 		require.Len(t, doc.Anomalies, 1)
 		assert.Equal(t, "Old USD", doc.Anomalies[0].Account)
+		assert.Equal(t, "CAD", doc.Currency)
+		assert.Equal(t, []string{"CAD", "350.00", "56.00", "USD", "250.00", "40.00"}, jsonCells(doc.Anomalies[0]))
 	})
 }
 
@@ -339,6 +368,7 @@ func Test_run_anomalies_on_an_unrated_usd_store_says_only_that_the_period_is_emp
 			assert.Equal(t, anomaliesTable("Unusually large charges 2026-09-01 to 2026-09-29 in all accounts"+c.caption, "0 charges checked"), text)
 			doc := decodeAnomaliesJSON(t, js)
 			assert.Equal(t, []string{empty}, doc.Warnings)
+			assert.Equal(t, c.currency, doc.Currency)
 			assert.Equal(t, []anomalyJSON{}, doc.Anomalies)
 		})
 	}
