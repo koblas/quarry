@@ -19,7 +19,7 @@ func (s *Store) Query(ctx context.Context, query string, maxRows int) (store.Que
 	db, err := s.openRead(ctx)
 	if err != nil {
 		if ctx.Err() != nil {
-			return store.QueryResult{}, store.Interrupted(err) //nolint:wrapcheck // Interrupted is the wrap
+			return store.QueryResult{}, store.InterruptedBy(ctx, err) //nolint:wrapcheck // InterruptedBy is the wrap
 		}
 		return store.QueryResult{}, err
 	}
@@ -35,8 +35,9 @@ func (s *Store) Query(ctx context.Context, query string, maxRows int) (store.Que
 // queryRefusal classifies a failed query as one of Query's refusals.
 func queryRefusal(ctx context.Context, err error) error {
 	// First: the driver's interrupt error reads "context canceled", which would pass as a query error.
+	// It does not always carry the context error itself, so InterruptedBy attaches it.
 	if ctx.Err() != nil {
-		return store.Interrupted(err) //nolint:wrapcheck // Interrupted is the wrap
+		return store.InterruptedBy(ctx, err) //nolint:wrapcheck // InterruptedBy is the wrap
 	}
 	if unprintable, ok := errors.AsType[*duckdb.UnprintableValueError](err); ok {
 		return &store.UnprintableValueError{Column: unprintable.Column, Type: unprintable.Type}

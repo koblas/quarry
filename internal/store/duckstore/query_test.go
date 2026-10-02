@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
 	"github.com/koblas/quarry/internal/store"
+	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -168,6 +170,83 @@ func Test_query_reports_an_open_interrupted_by_its_context(t *testing.T) {
 	assert.ErrorAs(t, err, &openErr)
 }
 
+func Test_query_interrupted_by_its_deadline_is_not_a_cancel(t *testing.T) {
+	t.Parallel()
+	const slowQuery = "SELECT sum(a.range * b.range) FROM range(1000000) a, range(1000000) b"
+	cases := []struct {
+		name  string
+		start func(t *testing.T) (context.Context, *duckstore.Store)
+		is    error
+		isNot error
+	}{
+		{
+			name: "a query past its deadline",
+			start: func(t *testing.T) (context.Context, *duckstore.Store) {
+				t.Helper()
+				ctx := deadlineIn(t, 500*time.Millisecond)
+				return ctx, newBuiltStore(t, spyOpener(&spyReadDB{queryFault: driverInterrupt(), onQuery: func() { <-ctx.Done() }}))
+			},
+			is: context.DeadlineExceeded, isNot: context.Canceled,
+		},
+		{
+			name: "a query cancelled",
+			start: func(t *testing.T) (context.Context, *duckstore.Store) {
+				t.Helper()
+				ctx, cancel := context.WithCancel(t.Context())
+				return ctx, newBuiltStore(t, spyOpener(&spyReadDB{queryFault: driverInterrupt(), onQuery: cancel}))
+			},
+			is: context.Canceled, isNot: context.DeadlineExceeded,
+		},
+		{
+			name: "an open past its deadline",
+			start: func(t *testing.T) (context.Context, *duckstore.Store) {
+				t.Helper()
+				return deadlineIn(t, -time.Second), newBuiltStore(t, failingOpener(ioFault("open store read-only")))
+			},
+			is: context.DeadlineExceeded, isNot: context.Canceled,
+		},
+		{
+			name: "an open cancelled",
+			start: func(t *testing.T) (context.Context, *duckstore.Store) {
+				t.Helper()
+				ctx, cancel := context.WithCancel(t.Context())
+				cancel()
+				return ctx, newBuiltStore(t, failingOpener(ioFault("open store read-only")))
+			},
+			is: context.Canceled, isNot: context.DeadlineExceeded,
+		},
+		{
+			name: "a real slow query past its deadline",
+			start: func(t *testing.T) (context.Context, *duckstore.Store) {
+				t.Helper()
+				return deadlineIn(t, time.Second), newBuiltStore(t)
+			},
+			is: context.DeadlineExceeded, isNot: context.Canceled,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			ctx, st := c.start(t)
+
+			_, err := st.Query(ctx, slowQuery, 0)
+
+			require.ErrorIs(t, err, store.ErrQueryInterrupted)
+			require.ErrorIs(t, err, c.is)
+			assert.NotErrorIs(t, err, c.isNot)
+		})
+	}
+}
+
+// deadlineIn is a context whose deadline is d from now, a negative d being already past.
+func deadlineIn(t *testing.T, d time.Duration) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), d)
+	t.Cleanup(cancel)
+	return ctx
+}
+
 func Test_query_refuses_a_value_it_cannot_print(t *testing.T) {
 	t.Parallel()
 	st := newBuiltStore(t)
@@ -179,7 +258,12 @@ func Test_query_refuses_a_value_it_cannot_print(t *testing.T) {
 	assert.Equal(t, store.UnprintableValueError{Column: "doc", Type: "JSON"}, *unprintable)
 }
 
-// interruptFault is the error chain the driver returns for a query its context interrupted.
+// driverInterrupt is the error the driver returns for a query it interrupted mid-run, which does not carry the context's error.
+func driverInterrupt() error {
+	return &duckdbdriver.Error{Type: duckdbdriver.ErrorTypeInterrupt, Msg: "INTERRUPT Error: Interrupted!"}
+}
+
+// interruptFault is a driver interrupt error that also carries the context's own error.
 func interruptFault() error {
 	return errors.Join(context.Canceled, &duckdbdriver.Error{Type: duckdbdriver.ErrorTypeInterrupt, Msg: "INTERRUPT Error: Interrupted!"})
 }

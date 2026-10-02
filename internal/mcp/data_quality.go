@@ -11,8 +11,7 @@ import (
 )
 
 // dataQuality lists the findings in.Status and in.Type select, at most in.Limit of them and
-// maxItems items each, with a warning for each cut. The config is loaded before the store, as
-// quarry findings does, and a config that cannot be read refuses; counts are never cut.
+// maxItems items each, with a warning for each cut; a config that cannot be read refuses.
 func (s *Server) dataQuality(ctx context.Context, in dataQualityInput) (any, error) {
 	cfg, err := s.newConfig(commandName)
 	if err != nil {
@@ -71,8 +70,7 @@ func capItems(listing report.FindingsListing) (report.FindingsListing, []string)
 }
 
 // findingsCapWarning is the warning that data_quality listed only the first limit of total
-// findings of status, with the ways to see more: a type filter when none was given, and a larger
-// limit unless limit is already maxRows.
+// findings of status, naming the ways to see more.
 func findingsCapWarning(limit, total int, status finding.Status, typ finding.Type) string {
 	word := ""
 	if status != report.FindingsAll {

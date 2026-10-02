@@ -28,7 +28,10 @@ func queryRefusal(err error) error {
 		return errWriteRefused
 	case report.QueryFailureExternalAccess:
 		return errExternalRefused
-	case report.QueryFailureInterrupted, report.QueryFailureOther:
+	case report.QueryFailureInterrupted:
+		// The classified Err drops the context error, which handler needs to tell a deadline from a cancel.
+		return err
+	case report.QueryFailureOther:
 		return err
 	}
 	// unreachable: every QueryFailureKind has a case above and the exhaustive linter fails the build when one is added

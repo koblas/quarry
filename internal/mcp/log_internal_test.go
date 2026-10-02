@@ -4,6 +4,8 @@ package mcp
 import (
 	"bytes"
 	"context"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/koblas/quarry/internal/report"
@@ -77,4 +79,21 @@ func Test_query_caps_a_limit_the_schema_did_not_check(t *testing.T) {
 			assert.Equal(t, []int{maxRows + 1}, st.asked)
 		})
 	}
+}
+
+func Test_errorLog_keeps_concurrent_refusals_lines_whole(t *testing.T) {
+	const calls = 64
+	var w bytes.Buffer
+	log := errorLog(&w)(func(context.Context, string, sdk.Request) (sdk.Result, error) {
+		return refusalResult("boom"), nil
+	})
+	call := &sdk.CallToolRequest{Params: &sdk.CallToolParamsRaw{Name: "query"}}
+	var wg sync.WaitGroup
+
+	for range calls {
+		wg.Go(func() { _, _ = log(t.Context(), "tools/call", call) })
+	}
+	wg.Wait()
+
+	assert.Equal(t, strings.Repeat("quarry: mcp: query: boom\n", calls), w.String())
 }

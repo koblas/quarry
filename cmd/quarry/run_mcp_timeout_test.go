@@ -7,6 +7,7 @@ import (
 
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/mcp"
+	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
@@ -48,23 +49,46 @@ func Test_run_mcp_query_stops_at_its_deadline(t *testing.T) {
 	require.NotErrorIs(t, stopped, context.Canceled)
 }
 
-// queryRecorder is a report factory over the real store that signals each Query's start and records its error.
+// queryRecorder is a report factory over the real store that signals when a statement starts
+// running and records each Query's error.
 type queryRecorder struct {
-	started chan struct{}
+	running chan struct{}
 	errs    chan error
 }
 
 func newQueryRecorder() *queryRecorder {
 	const room = 8
-	return &queryRecorder{started: make(chan struct{}, room), errs: make(chan error, room)}
+	return &queryRecorder{running: make(chan struct{}, room), errs: make(chan error, room)}
 }
 
 // factory builds report servers over the store under home, each reading through r.
 func (r *queryRecorder) factory(home string) mcp.ReportFactory {
 	return func(context.Context, string) (*report.Server, error) {
-		recorded := &recordedStore{Store: duckstore.New(storeDirUnder(home)), recorder: r}
+		st := duckstore.New(storeDirUnder(home), duckstore.WithOpenReadOnly(r.open))
+		recorded := &recordedStore{Store: st, recorder: r}
 		return report.NewServer(report.WithStore(recorded), report.WithHome(home)), nil
 	}
+}
+
+// open opens the store file for real, handing back a connection that signals when its query starts.
+func (r *queryRecorder) open(ctx context.Context, path string) (duckstore.ReadDB, error) {
+	db, err := duckdb.OpenReadOnly(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	return &signallingDB{ReadDB: db, recorder: r}, nil
+}
+
+// signallingDB is a read connection that signals its recorder as each table query starts.
+type signallingDB struct {
+	duckstore.ReadDB
+
+	recorder *queryRecorder
+}
+
+func (d *signallingDB) QueryTable(ctx context.Context, query string, maxRows int) (duckdb.Table, error) {
+	d.recorder.running <- struct{}{}
+	return d.ReadDB.QueryTable(ctx, query, maxRows)
 }
 
 // nextError is the error of the next Query to finish, failing the test if none does by ctx's deadline.
@@ -87,7 +111,7 @@ func (r *queryRecorder) nextErrorWithin(ctx context.Context, t *testing.T, bound
 	return r.nextError(boundCtx, t)
 }
 
-// recordedStore is a report.Store whose Query reports to its recorder.
+// recordedStore is a report.Store whose Query records its error.
 type recordedStore struct {
 	report.Store
 
@@ -95,7 +119,6 @@ type recordedStore struct {
 }
 
 func (s *recordedStore) Query(ctx context.Context, query string, maxRows int) (store.QueryResult, error) {
-	s.recorder.started <- struct{}{}
 	result, err := s.Store.Query(ctx, query, maxRows)
 	s.recorder.errs <- err
 	return result, err

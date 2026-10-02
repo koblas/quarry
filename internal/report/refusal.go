@@ -26,9 +26,10 @@ func (e RefusalError) Error() string { return e.msg }
 func (e RefusalError) Unwrap() error { return e.cause }
 
 // readRefusal is command's refusal of err: interrupted when ctx is done, else the store's refusal.
+// An interrupted refusal also unwraps to ctx.Err(), so a deadline stays apart from a cancel.
 func (s *Server) readRefusal(ctx context.Context, command string, err error) error {
 	if ctx.Err() != nil {
-		return RefusalError{msg: command + " interrupted", cause: err}
+		return RefusalError{msg: command + " interrupted", cause: errors.Join(err, ctx.Err())}
 	}
 	return storeRefusal(err, s.home)
 }

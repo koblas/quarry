@@ -59,14 +59,14 @@ func WithConfig(newConfig ConfigLoader) Option {
 	return func(s *Server) { s.newConfig = newConfig }
 }
 
-// WithTimeout sets the deadline of each tool call, in whole seconds; the timeout lines name it.
+// WithTimeout sets the deadline of each tool call, in whole seconds, which the timeout lines name.
 func WithTimeout(d time.Duration) Option {
 	return func(s *Server) { s.timeout = d }
 }
 
 // NewServer builds a Server from opts.
 func NewServer(opts ...Option) *Server {
-	s := &Server{version: develVersion}
+	s := &Server{version: develVersion, timeout: callTimeout}
 	for _, opt := range opts {
 		opt(s)
 	}

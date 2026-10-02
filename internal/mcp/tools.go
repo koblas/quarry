@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/koblas/quarry/internal/finding"
@@ -22,6 +23,9 @@ const (
 	defaultFindLimit = 50
 	maxItems         = 25
 )
+
+// callTimeout is the deadline of a tool call unless WithTimeout sets another.
+const callTimeout = 30 * time.Second
 
 // instructions is sent to every client at initialize.
 const instructions = `quarry serves David's Quicken Classic for Mac data from a local, read-only
@@ -79,17 +83,17 @@ type (
 
 // addTools registers quarry's four tools on srv.
 func (s *Server) addTools(srv *sdk.Server) {
-	sdk.AddTool(srv, tool(toolDescribe, describeSchemaDescription, objectSchema(nil)), handler(s.describeSchema))
+	sdk.AddTool(srv, tool(toolDescribe, describeSchemaDescription, objectSchema(nil)), handler(s.timeout, stoppedLine(toolDescribe), s.describeSchema))
 	sdk.AddTool(srv, tool(toolQuery, queryDescription, objectSchema(map[string]*jsonschema.Schema{
 		"sql":   {Type: "string", MinLength: new(1)},
 		"limit": limitSchema(maxRows),
-	}, "sql")), handler(s.query))
-	sdk.AddTool(srv, tool(toolSyncStatus, syncStatusDescription, objectSchema(nil)), handler(s.syncStatus))
+	}, "sql")), handler(s.timeout, queryStoppedLine, s.query))
+	sdk.AddTool(srv, tool(toolSyncStatus, syncStatusDescription, objectSchema(nil)), handler(s.timeout, stoppedLine(toolSyncStatus), s.syncStatus))
 	sdk.AddTool(srv, tool(toolDataQuality, dataQualityDescription, objectSchema(map[string]*jsonschema.Schema{
 		"status": {Type: "string", Enum: []any{"open", "ignored", "fixed", "all"}, Default: []byte(`"open"`)},
 		"type":   {Type: "string", Enum: findingTypes()},
 		"limit":  limitSchema(defaultFindLimit),
-	})), handler(s.dataQuality))
+	})), handler(s.timeout, stoppedLine(toolDataQuality), s.dataQuality))
 }
 
 // tool describes one tool; its result is a JSON object.
