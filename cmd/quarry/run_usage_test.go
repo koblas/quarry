@@ -55,7 +55,13 @@ func Test_run_prints_the_sync_help(t *testing.T) {
 	assert.Contains(t, syncStdout.String(), "sync then looks for things to clean up in Quicken, such as uncategorized\n"+
 		"splits, one-sided transfers and possible duplicates; run quarry findings to\n"+
 		"list them. Findings never fail a sync.")
-	assert.Contains(t, syncStdout.String(), "After it rebuilds the store, sync deletes the oldest snapshots beyond the\n"+
+	assert.Contains(t, syncStdout.String(), "list them. Findings never fail a sync.\n\n"+
+		"sync then fetches the Bank of Canada's daily USD/CAD exchange rates for any\n"+
+		"dates the store does not have, back to your earliest transaction. This is\n"+
+		"quarry's only use of the network, and the request carries nothing but the\n"+
+		"dates. If the fetch fails, sync still succeeds, warns, and reports convert\n"+
+		"with the rates the store already has.\n\n"+
+		"After it rebuilds the store, sync deletes the oldest snapshots beyond the\n"+
 		"newest 12 (snapshots.keep in ~/Library/Application Support/quarry/config.toml),\n"+
 		"never the one the store was built from; a failed sync deletes nothing. Run\n"+
 		"quarry snapshots to list them.")
@@ -196,6 +202,21 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 	}
 }
 
+func Test_run_read_commands_need_a_value_for_the_currency_flag(t *testing.T) {
+	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts"} {
+		t.Run(command, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), []string{command, "--currency"}, &stdout, &stderr)
+
+			assert.Equal(t, 2, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, "quarry: flag needs an argument: --currency; Run 'quarry "+command+" --help' for usage.\n", stderr.String())
+		})
+	}
+}
+
 func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -311,7 +332,7 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 	for _, c := range usageErrors {
 		t.Run(c.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
-			env := defaultEnv(&stdout, &stderr)
+			env := testEnv(&stdout, &stderr)
 			env.Stdin = strings.NewReader(c.stdin)
 
 			exitCode := runWith(context.Background(), c.args, env)
@@ -337,4 +358,13 @@ func Test_run_reports_exit_1_when_the_context_is_already_cancelled(t *testing.T)
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
 	assert.Equal(t, "quarry: sync interrupted; nothing was kept; run quarry sync again\n", stderr.String())
+}
+
+func Test_runProcess_returns_the_usage_exit_code_for_an_unknown_command(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runProcess(t.Context(), []string{"frob"}, &stdout, &stderr)
+
+	assert.Equal(t, 2, exitCode)
+	assert.Equal(t, "quarry: unknown command \"frob\" for \"quarry\"; Run 'quarry --help' for usage.\n", stderr.String())
 }

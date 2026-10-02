@@ -25,6 +25,7 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 	bundle := writeStatusFixtureBundle(t, home)
 
 	syncBundle(t, bundle)
+	editStore(t, home, "DELETE FROM fx_rates") // the Rates line's age follows the real clock; the none arm does not
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
 	raw, err := os.ReadFile(onlyFileWithSuffix(t, snapshotsDir, ".json"))
@@ -43,7 +44,7 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	want := fmt.Sprintf("%-10s%s\n%-10s%s, taken %s (just now)\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
+	want := fmt.Sprintf("%-10s%s\n%-10s%s, taken %s (just now)\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
 		"Store", abbreviated(t, storePathUnder(home), home),
 		"Snapshot", snapshotID(snapshotPath), takenAt.In(time.Local).Format("2006-01-02 15:04 MST"), //nolint:gosmopolitan // status prints the user's local zone
 		"Source", abbreviated(t, bundle.Dir, home),
@@ -53,6 +54,7 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 		"Splits", "all 4 transactions equal the sum of their splits",
 		"Transfers", "1 paired, 1 one-sided",
 		"Findings", "2 open; run quarry findings to list them",
+		"Rates", "none, so amounts are not converted; run quarry sync to fetch them from the Bank of Canada",
 	)
 	assert.Equal(t, want, stdout.String())
 }
@@ -146,7 +148,10 @@ transactions cover, the checks sync ran when it built the store, and how
 many findings are open.
 
 status reads quarry's store, and the config file for the findings you ignored;
-it never looks at Quicken. Run quarry sync to bring the store up to date.`)
+it never looks at Quicken. Run quarry sync to bring the store up to date.
+
+Rates shows the span of Bank of Canada USD/CAD rates the store holds and,
+when the last sync could not fetch new ones, why.`)
 }
 
 // writeStatusFixtureBundle writes a bundle with reconciled, never-reconciled and

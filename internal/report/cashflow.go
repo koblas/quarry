@@ -3,6 +3,7 @@ package report
 import (
 	"context"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -12,6 +13,8 @@ type CashFlowRequest struct {
 	Window   store.Window
 	By       store.CashFlowPeriod
 	Accounts []string
+	// Currency is the currency to report in; the zero value, money.Native, converts nothing.
+	Currency money.Currency
 }
 
 // CashFlowRow is one period's cash flow in one currency: what the store found, or for a
@@ -30,9 +33,14 @@ type CashFlow struct {
 	Totals []store.CashFlowTotal
 	// Transactions is store.CashFlow.Transactions.
 	Transactions store.TransactionRange
+	// Unconverted is store.CashFlow.Unconverted.
+	Unconverted store.Unconverted
 
 	Window store.Window
 	By     store.CashFlowPeriod
+	// Currency is the currency the request asked to report in; individual rows and
+	// totals still name their own currency, which differs only for unconverted amounts.
+	Currency money.Currency
 	// Accounts is the accounts the request named, in the order given and without repeats;
 	// empty means every account was counted.
 	Accounts []store.Account
@@ -52,16 +60,18 @@ func (s *Server) CashFlow(ctx context.Context, req CashFlowRequest) (CashFlow, e
 	if err != nil {
 		return CashFlow{}, err
 	}
-	flow, err := s.store.CashFlow(ctx, store.CashFlowParams{Window: req.Window, By: req.By, AccountIDs: accountIDs})
+	flow, err := s.store.CashFlow(ctx, store.CashFlowParams{Window: req.Window, By: req.By, AccountIDs: accountIDs, Currency: req.Currency})
 	if err != nil {
 		return CashFlow{}, s.readRefusal(ctx, cashFlowCommand, err)
 	}
 	return CashFlow{
-		Rows:         fillSeries(cashFlowSeries(req), currencyList(flow.Totals, cashFlowTotalCurrency), flow.Rows, cashFlowRowPeriod, blankCashFlowRow, wrapCashFlowRow),
+		Rows:         fillSeries(cashFlowSeries(req), currencyList(flow.Totals, cashFlowTotalCurrency), fillTarget(req.Currency), flow.Rows, cashFlowRowPeriod, blankCashFlowRow, wrapCashFlowRow),
 		Totals:       flow.Totals,
 		Transactions: flow.Transactions,
+		Unconverted:  flow.Unconverted,
 		Window:       req.Window,
 		By:           req.By,
+		Currency:     req.Currency,
 		Accounts:     accounts,
 	}, nil
 }

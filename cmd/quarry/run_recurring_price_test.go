@@ -25,15 +25,15 @@ func Test_run_recurring_lists_price_changes_both_ways_from_first_to_latest(t *te
 
 	require.Equal(t, 0, textCode, textErr.String())
 	require.Equal(t, 0, jsonCode, jsonErr.String())
-	assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts",
+	assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts, amounts in CAD",
 		[]string{"Netflix.com", "CAD", "month", "10.99", "131.88", "2024-10-12", "2026-09-12", "active, new", "2: 9.99 -> 10.99 (+10.0%)"},
 		[]string{"Total", "CAD", "", "", "131.88", "", "", "", ""}),
 		textOut.String())
 	doc := decodeRecurringJSON(t, jsonOut.String())
 	require.Len(t, doc.Series, 1)
 	assert.Equal(t, []recurringPriceChangeJSON{
-		{Date: "2025-06-12", From: "9.99", To: "11.99", ChangePct: 20.0},
-		{Date: "2026-02-12", From: "11.99", To: "10.99", ChangePct: -8.3},
+		{Date: "2025-06-12", Currency: "CAD", From: "9.99", To: "11.99", ChangePct: 20.0},
+		{Date: "2026-02-12", Currency: "CAD", From: "11.99", To: "10.99", ChangePct: -8.3},
 	}, doc.Series[0].PriceChanges)
 }
 
@@ -49,5 +49,5 @@ func Test_run_recurring_leaves_out_a_bill_whose_amount_changes_most_months(t *te
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: no recurring charges from 2000-01-01 to 2026-09-29; "+
 		"the store's transactions run 2026-02-12 to 2026-09-12\n", stderr.String())
-	assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts"), stdout.String())
+	assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts, amounts in CAD"), stdout.String())
 }

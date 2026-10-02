@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
@@ -73,8 +72,7 @@ func Test_run_sync_after_a_findings_fault_prints_the_findings_line_without_new_o
 	exitCode, stdout, stderr := syncWithFaultedFindings(t, home, findingsTableRepeating)
 
 	require.Equal(t, 0, exitCode, stderr)
-	lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
-	assert.Equal(t, "Findings  1 open; run quarry findings to list them", lines[len(lines)-1])
+	assert.Equal(t, "Findings  1 open; run quarry findings to list them", findingsLine(t, stdout))
 }
 
 func Test_run_sync_json_after_a_findings_fault_lists_the_findings_warning_and_counts_every_open_finding_as_new(t *testing.T) {

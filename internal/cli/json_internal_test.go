@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"testing"
 	"time"
@@ -141,4 +142,59 @@ func storeField(t *testing.T, data []byte, key string) any {
 	store, ok := doc["store"].(map[string]any)
 	require.True(t, ok)
 	return store[key]
+}
+
+func Test_renderJSON_encodes_the_rates_a_build_stored(t *testing.T) {
+	built := store.Result{Path: "/store", Built: true, Rates: store.RatesSummary{
+		First: time.Date(2005, 3, 1, 0, 0, 0, 0, time.UTC), Last: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), Added: 12, FetchError: "unreachable",
+	}}
+
+	data, err := renderJSON(snapshot.Outcome{Store: &built}, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"first": "2005-03-01", "last": "2026-03-01", "added": float64(12), "fetch_error": "unreachable"}, storeField(t, data, "rates"))
+}
+
+func Test_renderJSON_encodes_no_rates_as_nulls_and_an_unbuilt_store_as_null(t *testing.T) {
+	built := store.Result{Path: "/store", Built: true}
+	unbuilt := store.Result{Path: "/store", Rates: store.RatesSummary{Added: 3}}
+
+	builtData, err := renderJSON(snapshot.Outcome{Store: &built}, nil)
+	require.NoError(t, err)
+	unbuiltData, err := renderJSON(snapshot.Outcome{Store: &unbuilt}, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, map[string]any{"first": nil, "last": nil, "added": float64(0), "fetch_error": nil}, storeField(t, builtData, "rates"))
+	assert.Nil(t, storeField(t, unbuiltData, "rates"))
+	assert.Contains(t, string(unbuiltData), `"rates": null`)
+}
+
+func Test_renderJSON_ends_the_store_object_with_rates(t *testing.T) {
+	built := store.Result{Path: "/store", Built: true}
+
+	data, err := renderJSON(snapshot.Outcome{Store: &built}, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"path", "built", "rows", "balances", "splits", "transfers", "findings", "not_imported", "rates"}, storeKeys(t, data))
+}
+
+// storeKeys lists the keys of data's "store" object in document order.
+func storeKeys(t *testing.T, data []byte) []string {
+	t.Helper()
+	var doc struct {
+		Store json.RawMessage `json:"store"`
+	}
+	require.NoError(t, json.Unmarshal(data, &doc))
+	dec := json.NewDecoder(bytes.NewReader(doc.Store))
+	_, err := dec.Token()
+	require.NoError(t, err)
+	var keys []string
+	for dec.More() {
+		key, err := dec.Token()
+		require.NoError(t, err)
+		keys = append(keys, key.(string)) //nolint:forcetypeassert // an object's keys are strings
+		var skip json.RawMessage
+		require.NoError(t, dec.Decode(&skip))
+	}
+	return keys
 }

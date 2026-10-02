@@ -18,7 +18,8 @@ import (
 func executeAnomalies(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
 	t.Helper()
 	env := cli.Env{
-		Stdout: stdout, Stderr: stderr,
+		LoadConfig: cadConfig,
+		Stdout:     stdout, Stderr: stderr,
 		Now: func() time.Time { return spendNow },
 		NewReport: func(context.Context, string) (*report.Server, error) {
 			return report.NewServer(report.WithStore(fake)), nil
@@ -40,7 +41,8 @@ func Test_anomalies_returns_the_report_fault(t *testing.T) {
 func Test_anomalies_returns_the_report_factory_fault(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := cli.Env{
-		Stdout: &stdout, Stderr: &stderr,
+		LoadConfig: cadConfig,
+		Stdout:     &stdout, Stderr: &stderr,
 		Now:       time.Now,
 		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
 	}
@@ -54,7 +56,8 @@ func Test_anomalies_returns_the_report_factory_fault(t *testing.T) {
 func Test_anomalies_refuses_a_window_before_opening_the_report(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := cli.Env{
-		Stdout: &stdout, Stderr: &stderr,
+		LoadConfig: cadConfig,
+		Stdout:     &stdout, Stderr: &stderr,
 		Now:       time.Now,
 		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
 	}
@@ -79,12 +82,19 @@ func Test_anomalies_takes_no_arguments(t *testing.T) {
 func Test_anomalies_help_says_what_anomalies_lists(t *testing.T) {
 	const long = `List charges that are unusually large: more than 2 times the median of the
 payee's earlier charges, when there are at least 3, or else more than 5
-times the median of the category's earlier charges, when there are at least
-10. Charges under 100.00 are never listed. Charges follow the rules of
-quarry spend, and a transaction counts once, with all its splits; an
-uncategorized or split charge from a payee with little history cannot be
-judged. Possible duplicates are listed by quarry findings, not here. Charges
-dated after today are left out, even with a later --until.
+times the median of the category's earlier charges, when there are at
+least 10. Charges under 100.00 in their account's own currency are never
+listed. Charges follow the rules of quarry spend, and a transaction counts
+once, with all its splits; an uncategorized or split charge from a payee
+with little history cannot be judged. Possible duplicates are listed by
+quarry findings, not here. Charges dated after today are left out, even
+with a later --until.
+
+Charges are judged in their account's own currency, so a change in the
+exchange rate never makes a charge unusual. Amount and Usual are then
+shown in the reporting currency (--currency, else reporting.currency in
+the config file, else CAD) at the rate on the charge's date.
+With --currency native nothing is converted.
 
 --since and --until choose which charges to list; each is compared with
 every earlier charge, however old. --account lists only charges in those
@@ -120,7 +130,7 @@ func Test_anomalies_without_charges_prints_the_empty_table_and_footer_and_names_
 
 	require.NoError(t, err)
 	assert.Equal(t, ""+
-		"Unusually large charges 2026-01-01 to 2026-09-29 in all accounts\n\n"+
+		"Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD\n\n"+
 		"Date  Account  Payee  Category  Amount  Usual  Times  Compared with\n\n"+
 		"0 charges checked\n", stdout.String())
 	assert.Equal(t, "quarry: warning: "+anomaliesEmpty+"; the store's transactions run 2003-01-04 to 2026-09-26\n", stderr.String())

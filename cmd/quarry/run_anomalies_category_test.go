@@ -27,7 +27,7 @@ func Test_run_anomalies_judges_a_first_time_payee_against_its_category(t *testin
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts", "1 charge checked",
+	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "1 charge checked",
 		[]string{"2026-08-14", "Chequing (CAD)", "Home Depot", "Food:Groceries", "1,842.10", "210.40", "8.8x", "category, 10 earlier"}),
 		stdout.String())
 }
@@ -47,6 +47,6 @@ func Test_run_anomalies_counts_an_uncategorized_first_time_charge_as_not_judged(
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts",
+	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD",
 		"2 charges checked; 1 had too little history to judge"), stdout.String())
 }

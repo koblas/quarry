@@ -47,7 +47,7 @@ func Test_recurring_captions_the_named_accounts_and_passes_their_ids_to_the_repo
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{visaID, chequingID}, got.AccountIDs)
-	assert.Contains(t, stdout.String(), "Recurring charges 2000-01-01 to 2026-09-29 in Visa Infinite, Chequing\n\n")
+	assert.Contains(t, stdout.String(), "Recurring charges 2000-01-01 to 2026-09-29 in Visa Infinite, Chequing, amounts in CAD\n\n")
 }
 
 func Test_recurring_json_names_the_accounts_it_was_limited_to(t *testing.T) {
@@ -172,6 +172,6 @@ func Test_recurring_text_prints_caption_and_header_only_for_an_empty_period(t *t
 	err := executeRecurring(t, fakeReportStore{}, &stdout, &stderr)
 
 	require.NoError(t, err)
-	assert.Equal(t, "Recurring charges 2026-01-01 to 2026-09-29 in all accounts\n\n"+
+	assert.Equal(t, "Recurring charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD\n\n"+
 		"Payee  Currency  Every  Amount  Per year  First  Last  Status  Price changes\n", stdout.String())
 }

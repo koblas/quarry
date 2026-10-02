@@ -51,6 +51,10 @@ func Test_run_snapshots_refuses_a_bad_config_value_with_nothing_on_stdout(t *tes
 			name: "quicken.path relative", content: "quicken.path = \"Home.quicken\"\n",
 			line: configShown + ": quicken.path must be a full path or start with ~/, got \"Home.quicken\"",
 		},
+		{
+			name: "reporting.currency another currency", content: "reporting.currency = \"EUR\"\n",
+			line: configShown + ": reporting.currency must be CAD, USD or native, got \"EUR\"",
+		},
 	}
 
 	for _, c := range cases {
@@ -239,7 +243,7 @@ func Test_run_snapshots_shows_unknown_for_a_taken_at_or_source_the_manifest_does
 func Test_run_snapshots_factory_names_itself_when_the_home_directory_cannot_be_resolved(t *testing.T) {
 	t.Setenv("HOME", "")
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
+	env := testEnv(&stdout, &stderr)
 	env.LoadConfig = func(string) (config.Config, error) { return config.Config{}, nil }
 
 	exitCode := runWith(context.Background(), []string{"snapshots"}, env)

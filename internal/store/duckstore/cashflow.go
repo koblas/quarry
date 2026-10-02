@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -20,9 +21,22 @@ var cashFlowKeys = map[store.CashFlowPeriod]string{
 // bypassing that table reaches it.
 var ErrUnsupportedPeriod = errors.New("cash-flow period is not supported")
 
+// cashFlowSource is the relation a cash-flow read counts, in v_cash_flow's account_id, date,
+// currency, flow and amount columns: native is v_cash_flow; CAD and USD convert each split, one
+// with no converted cell keeping its own currency.
+func cashFlowSource(currency money.Currency) string {
+	converted, code, ok := convertedColumn("amount", currency)
+	if !ok {
+		return "v_cash_flow"
+	}
+	return fmt.Sprintf(`(SELECT account_id, date, flow,
+	%s
+	FROM v_cash_flow)`, keepOwnCurrency("amount", converted, code))
+}
+
 // cashFlowQuery reads per-period and per-currency-total income, spending and net in cents from
-// v_cash_flow, and the savings rate as BIGINT tenths / 10.0 (always finite), or NULL.
-func cashFlowQuery(key string, accounts accountFilter) string {
+// source (see cashFlowSource), and the savings rate as BIGINT tenths / 10.0 (always finite), or NULL.
+func cashFlowQuery(key string, accounts accountFilter, source string) string {
 	// Integer rounding half away from zero never yields a negative zero; income <= 0 has no rate.
 	return fmt.Sprintf(`
 SELECT period_key, currency, income, spent, income - spent,
@@ -33,17 +47,17 @@ FROM (
 		CAST(COALESCE(sum(CASE WHEN flow = 'income' THEN amount END), 0) * 100 AS BIGINT) AS income,
 		CAST(COALESCE(sum(CASE WHEN flow = 'expense' THEN -amount END), 0) * 100 AS BIGINT) AS spent,
 		GROUPING(period_key) AS grp
-	FROM (SELECT account_id, date, currency, flow, amount, %s AS period_key FROM v_cash_flow)
+	FROM (SELECT account_id, date, currency, flow, amount, %s AS period_key FROM %s)
 	WHERE date >= CAST($1 AS DATE) AND date <= CAST($2 AS DATE)%s
 	GROUP BY GROUPING SETS ((period_key, currency), (currency))
 )
-ORDER BY grp, period_key, currency`, key, accounts.and("account_id"))
+ORDER BY grp, period_key, currency`, key, source, accounts.and("account_id"))
 }
 
 // CashFlow reads income and spending in params.Window (both days counted), per period and
-// currency, counting only params.AccountIDs when any (every account otherwise); Totals give one
-// row per currency. A window with no income or spending also gets Transactions, as Spending does.
-// An unsupported period is ErrUnsupportedPeriod, and a store it cannot open or read is a *store.OpenError.
+// currency, over params.AccountIDs when any, with one Total per currency, plus Unconverted and,
+// for a window with none, Transactions, as Spending does. An unsupported period is
+// ErrUnsupportedPeriod; a store it cannot open or read is a *store.OpenError.
 func (s *Store) CashFlow(ctx context.Context, params store.CashFlowParams) (store.CashFlow, error) {
 	key, ok := cashFlowKeys[params.By]
 	if !ok {
@@ -57,7 +71,8 @@ func (s *Store) CashFlow(ctx context.Context, params store.CashFlowParams) (stor
 
 	var flow store.CashFlow
 	accounts := accountFilter(params.AccountIDs)
-	err = db.QueryRows(ctx, cashFlowQuery(key, accounts), readArgs(params.Window, accounts), func(scan func(dest ...any) error) error {
+	args := readArgs(params.Window, accounts)
+	err = db.QueryRows(ctx, cashFlowQuery(key, accounts, cashFlowSource(params.Currency)), args, func(scan func(dest ...any) error) error {
 		var period sql.NullString
 		var currency string
 		var income, spent, net, grouping int64
@@ -76,6 +91,9 @@ func (s *Store) CashFlow(ctx context.Context, params store.CashFlowParams) (stor
 		flow.Rows = append(flow.Rows, store.CashFlowRow{Period: period.String, Currency: currency, Income: income, Spent: spent, Net: net, SavingsRatePct: ratePct})
 		return nil
 	})
+	if err == nil {
+		flow.Unconverted, err = cashFlowUnconverted.read(ctx, db, params.Currency, accounts, args)
+	}
 	if err == nil && len(flow.Totals) == 0 {
 		flow.Transactions, err = transactionRange(ctx, db, accounts)
 	}

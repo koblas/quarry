@@ -33,6 +33,7 @@ func Test_run_cashflow_json_returns_cash_flow_as_a_document(t *testing.T) {
   "since": "2026-01-01",
   "until": "2026-02-28",
   "by": "month",
+  "currency": "CAD",
   "account_filter": [],
   "periods": [
     {

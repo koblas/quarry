@@ -80,6 +80,50 @@ func Test_run_read_commands_refuse_when_there_is_no_store(t *testing.T) {
 	}
 }
 
+func Test_run_read_commands_refuse_a_bad_reporting_currency(t *testing.T) {
+	refusal := func(got string) func(string) string {
+		return func(string) string {
+			return "quarry: " + configShown + ": reporting.currency must be CAD, USD or native, got " + got + configFix + "\n"
+		}
+	}
+	cases := []struct {
+		name   string
+		config string
+		args   []string
+		want   func(home string) string
+	}{
+		{name: "spend", config: `reporting.currency = "EUR"`, args: []string{"spend"}, want: refusal(`"EUR"`)},
+		{name: "cashflow", config: `reporting.currency = "EUR"`, args: []string{"cashflow"}, want: refusal(`"EUR"`)},
+		{name: "recurring", config: `reporting.currency = "EUR"`, args: []string{"recurring"}, want: refusal(`"EUR"`)},
+		{name: "anomalies", config: `reporting.currency = "EUR"`, args: []string{"anomalies"}, want: refusal(`"EUR"`)},
+		{name: "accounts", config: `reporting.currency = "EUR"`, args: []string{"accounts"}, want: refusal(`"EUR"`)},
+		{name: "an empty string", config: `reporting.currency = ""`, args: []string{"spend"}, want: refusal(`""`)},
+		{name: "a number", config: `reporting.currency = 12`, args: []string{"spend"}, want: refusal("12")},
+		{name: "a boolean", config: `reporting.currency = true`, args: []string{"spend"}, want: refusal("true")},
+		{
+			name: "sql, which ignores the config", config: `reporting.currency = "EUR"`, args: []string{"sql", "SELECT 1"},
+			want: func(home string) string {
+				return "quarry: no store at " + abbreviated(t, storePathUnder(home), home) + " yet; run quarry sync to build it\n"
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			writeConfig(t, home, c.config+"\n")
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), c.args, &stdout, &stderr)
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, c.want(home), stderr.String())
+		})
+	}
+}
+
 func Test_run_status_refuses_a_store_built_by_another_version(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -149,7 +193,7 @@ func Test_run_status_refuses_a_store_removed_while_it_opens(t *testing.T) {
 	t.Setenv("HOME", home)
 	syncAccountsFixture(t, home)
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
+	env := testEnv(&stdout, &stderr)
 	env.NewReport = newReportFactory(removingOpener(t))
 
 	exitCode := runWith(context.Background(), []string{"status"}, env)

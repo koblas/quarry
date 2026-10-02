@@ -23,6 +23,7 @@ type recurringIDName struct {
 // recurringPriceChangeJSON is one entry of a series' "price_changes".
 type recurringPriceChangeJSON struct {
 	Date      string  `json:"date"`
+	Currency  string  `json:"currency"`
 	From      string  `json:"from"`
 	To        string  `json:"to"`
 	ChangePct float64 `json:"change_pct"`
@@ -30,21 +31,24 @@ type recurringPriceChangeJSON struct {
 
 // recurringSeriesJSON is one entry of the document's "series".
 type recurringSeriesJSON struct {
-	Payee        string                     `json:"payee"`
-	PayeeKey     *string                    `json:"payee_key"`
-	Payees       []recurringIDName          `json:"payees"`
-	Currency     string                     `json:"currency"`
-	Cadence      string                     `json:"cadence"`
-	Amount       string                     `json:"amount"`
-	FirstAmount  string                     `json:"first_amount"`
-	PerYear      *string                    `json:"per_year"`
-	FirstCharge  string                     `json:"first_charge"`
-	LastCharge   string                     `json:"last_charge"`
-	ChargeCount  int                        `json:"charge_count"`
-	State        string                     `json:"state"`
-	New          bool                       `json:"new"`
-	Accounts     []recurringIDName          `json:"accounts"`
-	PriceChanges []recurringPriceChangeJSON `json:"price_changes"`
+	Payee             string                     `json:"payee"`
+	PayeeKey          *string                    `json:"payee_key"`
+	Payees            []recurringIDName          `json:"payees"`
+	Currency          string                     `json:"currency"`
+	Cadence           string                     `json:"cadence"`
+	Amount            string                     `json:"amount"`
+	FirstAmount       string                     `json:"first_amount"`
+	PerYear           *string                    `json:"per_year"`
+	NativeCurrency    string                     `json:"native_currency"`
+	NativeAmount      string                     `json:"native_amount"`
+	NativeFirstAmount string                     `json:"native_first_amount"`
+	FirstCharge       string                     `json:"first_charge"`
+	LastCharge        string                     `json:"last_charge"`
+	ChargeCount       int                        `json:"charge_count"`
+	State             string                     `json:"state"`
+	New               bool                       `json:"new"`
+	Accounts          []recurringIDName          `json:"accounts"`
+	PriceChanges      []recurringPriceChangeJSON `json:"price_changes"`
 }
 
 // recurringTotalJSON is one entry of the document's "totals".
@@ -57,6 +61,7 @@ type recurringTotalJSON struct {
 type recurringJSONDoc struct {
 	Since         string                `json:"since"`
 	Until         string                `json:"until"`
+	Currency      string                `json:"currency"`
 	AccountFilter []recurringIDName     `json:"account_filter"`
 	Series        []recurringSeriesJSON `json:"series"`
 	Totals        []recurringTotalJSON  `json:"totals"`
@@ -108,16 +113,18 @@ func Test_run_recurring_json_returns_the_series_document(t *testing.T) {
 	assert.Equal(t, recurringJSONDoc{
 		Since:         "2000-01-01",
 		Until:         "2026-09-29",
+		Currency:      "CAD",
 		AccountFilter: []recurringIDName{},
 		Series: []recurringSeriesJSON{{
-			Payee:       "Netflix.com",
-			PayeeKey:    new("netflix-com"),
-			Payees:      []recurringIDName{{ID: "payee-Netflix.com", Name: "Netflix.com"}},
-			Currency:    "CAD",
-			Cadence:     "monthly",
-			Amount:      "11.99",
-			FirstAmount: "9.99",
-			PerYear:     new("143.88"),
+			Payee:          "Netflix.com",
+			PayeeKey:       new("netflix-com"),
+			Payees:         []recurringIDName{{ID: "payee-Netflix.com", Name: "Netflix.com"}},
+			Currency:       "CAD",
+			Cadence:        "monthly",
+			Amount:         "11.99",
+			FirstAmount:    "9.99",
+			PerYear:        new("143.88"),
+			NativeCurrency: "CAD", NativeAmount: "11.99", NativeFirstAmount: "9.99",
 			FirstCharge: "2026-02-12",
 			LastCharge:  "2026-09-12",
 			ChargeCount: 8,
@@ -125,7 +132,7 @@ func Test_run_recurring_json_returns_the_series_document(t *testing.T) {
 			New:         true,
 			Accounts:    []recurringIDName{{ID: "acct-cad", Name: "Chequing"}},
 			PriceChanges: []recurringPriceChangeJSON{
-				{Date: "2026-06-12", From: "9.99", To: "11.99", ChangePct: 20.0},
+				{Date: "2026-06-12", Currency: "CAD", From: "9.99", To: "11.99", ChangePct: 20.0},
 			},
 		}},
 		Totals:   []recurringTotalJSON{{Currency: "CAD", PerYear: "143.88"}},

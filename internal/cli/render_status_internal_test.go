@@ -3,7 +3,6 @@
 package cli
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -74,6 +73,10 @@ func statusFixture() store.Status {
 		},
 		FirstDate: time.Date(2003, 1, 4, 0, 0, 0, 0, time.UTC),
 		LastDate:  time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC),
+		Rates: store.StatusRates{
+			First: time.Date(2003, 1, 4, 0, 0, 0, 0, time.UTC),
+			Last:  time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC),
+		},
 	}
 }
 
@@ -95,7 +98,8 @@ func Test_renderStatus(t *testing.T) {
 			"Balances  35 accounts match Quicken's last reconciled balance; 3 never reconciled and 4 investment accounts not checked\n" +
 			"Splits    all 18,204 transactions equal the sum of their splits\n" +
 			"Transfers 3,112 paired, 29 one-sided\n" +
-			"Findings  12 open, 4 ignored; run quarry findings to list them\n"
+			"Findings  12 open, 4 ignored; run quarry findings to list them\n" +
+			"Rates     USD/CAD from the Bank of Canada, 2003-01-04 to 2026-09-28 (1 day ago)\n"
 
 		assert.Equal(t, want, renderStatus(statusFixture(), findingsFixture(), home, now))
 	})
@@ -190,7 +194,7 @@ func Test_renderStatus(t *testing.T) {
 
 		for _, c := range cases {
 			t.Run(c.name, func(t *testing.T) {
-				assert.True(t, strings.HasSuffix(renderStatus(statusFixture(), c.findings, home, now), c.want))
+				assert.Contains(t, renderStatus(statusFixture(), c.findings, home, now), c.want)
 			})
 		}
 	})

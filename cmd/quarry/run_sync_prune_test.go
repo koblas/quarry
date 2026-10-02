@@ -106,7 +106,7 @@ func Test_run_sync_deletes_nothing_when_validation_fails(t *testing.T) {
 // runSyncRemoving runs quarry sync with args under ctx, its Server removing files through remove.
 func runSyncRemoving(ctx context.Context, remove func(string) error, args ...string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
+	env := testEnv(&stdout, &stderr)
 	base := env.NewServer
 	env.NewServer = func(ctx context.Context, opts ...snapshot.Option) (*snapshot.Server, error) {
 		return base(ctx, append(opts, snapshot.WithRemove(remove))...)

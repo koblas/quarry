@@ -167,7 +167,7 @@ func Test_run_snapshots_prune_reports_each_snapshot_it_could_not_delete_and_exit
 	dir := writeSnapshots(t, home, five[0], five[1], five[4])
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
+	env := testEnv(&stdout, &stderr)
 	env.NewSnapshots = func(context.Context, string) (*snapshot.Server, error) {
 		return snapshot.NewServer(
 			snapshot.WithSnapshotDir(snapshotsDirUnder(home)),

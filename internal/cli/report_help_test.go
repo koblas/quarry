@@ -12,9 +12,16 @@ import (
 )
 
 func Test_spend_help_says_what_spend_counts(t *testing.T) {
-	const long = `Show how much you spent, grouped by category, payee, tag or month, in each
-account's own currency: CAD and USD are listed separately, never added
-together.
+	const long = `Show how much you spent, grouped by category, payee, tag or month.
+
+Amounts are in CAD unless --currency or reporting.currency in
+~/Library/Application Support/quarry/config.toml names another currency.
+Each split converts at the Bank of Canada rate for its date, or the latest
+earlier rate on weekends, holidays and dates after the last stored rate,
+and is rounded to the cent before it is added. With --currency native, CAD
+and USD are listed separately, never added together. Amounts dated before
+the first stored rate stay in their own currency, on rows of their own,
+with a warning.
 
 Spending is every split in an expense category, plus uncategorized splits
 that take money out. Refunds in an expense category are netted against it,
@@ -39,6 +46,27 @@ the rows can add up to more than the total.
 
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), long)
+}
+
+func Test_recurring_help_says_series_are_found_in_their_own_currency(t *testing.T) {
+	const converted = `Series are found in each account's own currency, so a change in the
+exchange rate is never a price change, and a payee that charges in both
+CAD and USD has two series. Amount and Per year are converted to the
+reporting currency (--currency, else reporting.currency in the config
+file, else CAD) at the rate on the latest charge's date; price changes
+stay in the series' own currency. With --currency native nothing is
+converted.
+`
+	const priceChange = `the next, in the series' own currency. Per year is the latest amount
+times the charges in a year, for active series only.
+`
+	var stdout, stderr bytes.Buffer
+
+	err := executeRecurring(t, fakeReportStore{}, &stdout, &stderr, "--help")
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), "out, even with a later --until.\n\n"+converted+"\nA charge that comes off schedule")
+	assert.Contains(t, stdout.String(), priceChange)
 }
 
 func Test_spend_help_shows_examples(t *testing.T) {
@@ -66,9 +94,16 @@ func Test_spend_help_shows_the_by_flag_and_its_default(t *testing.T) {
 }
 
 func Test_cashflow_help_says_what_cashflow_counts(t *testing.T) {
-	const long = `Show income, spending and what was left over for each month or year, in
-each account's own currency: CAD and USD are listed separately, never added
-together.
+	const long = `Show income, spending and what was left over for each month or year.
+
+Amounts are in CAD unless --currency or reporting.currency in
+~/Library/Application Support/quarry/config.toml names another currency.
+Each split converts at the Bank of Canada rate for its date, or the latest
+earlier rate on weekends, holidays and dates after the last stored rate,
+and is rounded to the cent before it is added. With --currency native, CAD
+and USD are listed separately, never added together. Amounts dated before
+the first stored rate stay in their own currency, on rows of their own,
+with a warning.
 
 Income and spending follow the same rules as quarry spend: transfers between
 your own accounts, Quicken's system categories and transactions marked
@@ -77,7 +112,7 @@ leaves out of reports ("not in reports" in quarry accounts) and accounts
 that use Quicken's linked account tracking ("linked tracking") are left out
 here too. Uncategorized splits count as income when they bring money in and
 as spending when they take money out. The Spent column equals quarry spend's
-total for the same period and accounts.
+total for the same period, accounts and currency.
 
 Savings rate is net divided by income, and shows n/a when income is zero or
 less. A period that --since or --until cuts short is marked partial.
@@ -119,6 +154,7 @@ func Test_cashflow_help_shows_each_flag(t *testing.T) {
 			want: `--until date +count transactions dated on or before date \(YYYY, YYYY-MM or YYYY-MM-DD; default today\)`,
 		},
 		{flag: "--account", want: `--account name +count only the account with this name or id; repeat for more`},
+		{flag: "--currency", want: `(?m)--currency code +` + regexp.QuoteMeta(reportCurrencyHelp) + `$`},
 	}
 
 	for _, c := range cases {
@@ -129,6 +165,36 @@ func Test_cashflow_help_shows_each_flag(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Regexp(t, c.want, stdout.String())
+		})
+	}
+}
+
+const (
+	reportCurrencyHelp   = "show amounts in currency code: CAD, USD, or native for each account's own (default reporting.currency in the config file, else CAD)"
+	accountsCurrencyHelp = "add a column with each balance in currency code: CAD or USD; native adds none (default reporting.currency in the config file, else CAD)"
+)
+
+func Test_each_report_shows_the_currency_flag_without_a_cobra_default(t *testing.T) {
+	cases := []struct {
+		command string
+		help    string
+	}{
+		{command: "spend", help: reportCurrencyHelp},
+		{command: "cashflow", help: reportCurrencyHelp},
+		{command: "recurring", help: reportCurrencyHelp},
+		{command: "anomalies", help: reportCurrencyHelp},
+		{command: "accounts", help: accountsCurrencyHelp},
+	}
+
+	for _, c := range cases {
+		t.Run(c.command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			env := cli.Env{Stdout: &stdout, Stderr: &stderr, Now: func() time.Time { return spendNow }}
+
+			err := cli.Execute(t.Context(), []string{c.command, "--help"}, env)
+
+			require.NoError(t, err)
+			assert.Regexp(t, `(?m)--currency code +`+regexp.QuoteMeta(c.help)+`$`, stdout.String())
 		})
 	}
 }

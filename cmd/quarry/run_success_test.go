@@ -50,7 +50,7 @@ func Test_run_writes_a_verified_snapshot_and_reports_success(t *testing.T) {
 
 	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
 	want := fmt.Sprintf(
-		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 2 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
+		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 2 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
 		"Snapshot", abbreviated(t, snapshotPath, home),
 		"Manifest", abbreviated(t, manifestPath, home),
 		"Source", abbreviated(t, bundle.Dir, home),
@@ -63,6 +63,7 @@ func Test_run_writes_a_verified_snapshot_and_reports_success(t *testing.T) {
 		"Splits", "no transactions to check",
 		"Transfers", "none",
 		"Findings", "none open",
+		"Rates", fakeRatesText,
 	)
 	assert.Equal(t, want, stdout.String())
 }

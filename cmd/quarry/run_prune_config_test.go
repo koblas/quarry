@@ -78,6 +78,10 @@ func Test_run_snapshots_prune_refuses_a_bad_config_value_with_nothing_deleted(t 
 			name: "quicken.path relative", content: "quicken.path = \"Home.quicken\"\n",
 			line: configShown + ": quicken.path must be a full path or start with ~/, got \"Home.quicken\"",
 		},
+		{
+			name: "reporting.currency another currency", content: "reporting.currency = \"EUR\"\n",
+			line: configShown + ": reporting.currency must be CAD, USD or native, got \"EUR\"",
+		},
 	}
 
 	for _, c := range cases {
@@ -207,7 +211,7 @@ func Test_run_snapshots_prune_prints_config_warnings_before_its_failed_delete_li
 func Test_run_snapshots_prune_factory_names_itself_when_the_home_directory_cannot_be_resolved(t *testing.T) {
 	t.Setenv("HOME", "")
 	var stdout, stderr bytes.Buffer
-	env := defaultEnv(&stdout, &stderr)
+	env := testEnv(&stdout, &stderr)
 	env.LoadConfig = func(string) (config.Config, error) { return config.Config{}, nil }
 
 	exitCode := runWith(context.Background(), []string{"snapshots", "prune"}, env)

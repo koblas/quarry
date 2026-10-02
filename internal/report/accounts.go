@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -13,6 +14,26 @@ type AccountListing struct {
 	store.AccountList
 
 	Hidden int
+
+	// Currency is the reporting currency the listing was asked for.
+	Currency money.Currency
+}
+
+// ConvertedBalance is a's balance in cents in the listing's currency; nil in a native listing, for a
+// balance quarry cannot compute, and when no rate on or before AsOf converts it.
+func (l AccountListing) ConvertedBalance(a store.AccountBalance) *int64 {
+	if l.Currency == money.CAD {
+		return a.BalanceCAD
+	}
+	if l.Currency == money.USD {
+		return a.BalanceUSD
+	}
+	return nil
+}
+
+// NeedsRate reports whether a's balance should convert but no rate converts it.
+func (l AccountListing) NeedsRate(a store.AccountBalance) bool {
+	return a.Balance != nil && l.Currency != money.Native && l.ConvertedBalance(a) == nil
 }
 
 // AllHidden reports whether the listing is empty only because every account
@@ -22,15 +43,15 @@ func (l AccountListing) AllHidden() bool {
 }
 
 // Accounts lists the store's accounts in the store's order with their
-// balances; closed accounts are left out, and counted in Hidden, unless
-// includeClosed is set. It refuses like Status.
-func (s *Server) Accounts(ctx context.Context, includeClosed bool) (AccountListing, error) {
+// balances in currency; closed accounts are left out, and counted in Hidden,
+// unless includeClosed is set. It refuses like Status.
+func (s *Server) Accounts(ctx context.Context, includeClosed bool, currency money.Currency) (AccountListing, error) {
 	list, err := s.store.Accounts(ctx)
 	if err != nil {
 		return AccountListing{}, s.readRefusal(ctx, "accounts", err)
 	}
 	if includeClosed {
-		return AccountListing{AccountList: list}, nil
+		return AccountListing{AccountList: list, Currency: currency}, nil
 	}
 
 	open := list.Accounts[:0:0]
@@ -41,7 +62,7 @@ func (s *Server) Accounts(ctx context.Context, includeClosed bool) (AccountListi
 	}
 	hidden := len(list.Accounts) - len(open)
 	list.Accounts = open
-	return AccountListing{AccountList: list, Hidden: hidden}, nil
+	return AccountListing{AccountList: list, Hidden: hidden, Currency: currency}, nil
 }
 
 // resolveAccounts is the accounts args name, in the order given and without repeats: each arg is an

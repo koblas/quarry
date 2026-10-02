@@ -23,3 +23,9 @@ const (
 
 // DuplicateQuery is the duplicate detector's query.
 const DuplicateQuery = duplicateQuery
+
+// The rates queries finishBuild runs, so a test fake can fail one of them.
+const (
+	StoredRatesQuery = storedRatesQuery
+	RecordRatesQuery = recordRatesQuery
+)

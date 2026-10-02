@@ -14,6 +14,7 @@ import (
 
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/config"
+	"github.com/koblas/quarry/internal/fx"
 	"github.com/koblas/quarry/internal/importer"
 	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/report"
@@ -27,6 +28,8 @@ var (
 	_ importer.Store      = (*duckstore.Store)(nil)
 	_ snapshot.StoreProbe = (*duckstore.Store)(nil)
 	_ report.Store        = (*duckstore.Store)(nil)
+
+	_ duckstore.RatesSource = (*fx.Server)(nil)
 )
 
 // signalContext wraps parent with SIGINT/SIGTERM handling: ctx.Done() closes
@@ -59,7 +62,9 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 
 		storeDir := storeDirUnder(home)
 		info, _ := debug.ReadBuildInfo()
-		st := duckstore.New(storeDir, append([]duckstore.Option{duckstore.WithQuarryVersion(buildVersion(info))}, storeOpts...)...)
+		st := duckstore.New(storeDir, append([]duckstore.Option{
+			duckstore.WithQuarryVersion(buildVersion(info)), duckstore.WithRates(fx.NewServer()),
+		}, storeOpts...)...)
 		srv := snapshot.NewServer(append([]snapshot.Option{
 			snapshot.WithSnapshotDir(snapshotsDirUnder(home)),
 			snapshot.WithReference(v9.ReferenceLabel, ref),
@@ -165,13 +170,13 @@ func defaultEnv(stdout, stderr io.Writer) cli.Env {
 	}
 }
 
-// run is the process entrypoint's testable body: it delegates to
-// cli.Execute, returning the process exit code (0 success, 1 failure, 2 usage).
-func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+// runProcess is the process entrypoint's testable body: it delegates to
+// cli.Execute over the real wiring, returning the process exit code (0 success, 1 failure, 2 usage).
+func runProcess(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	return runWith(ctx, args, defaultEnv(stdout, stderr))
 }
 
-// runWith is run against an explicit Env.
+// runWith is runProcess against an explicit Env.
 func runWith(ctx context.Context, args []string, env cli.Env) int {
 	return exitCode(cli.Execute(ctx, args, env), env.Stderr)
 }

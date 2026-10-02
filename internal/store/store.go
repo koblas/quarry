@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/platform/money"
 )
 
 // Account is one row of the accounts table.
@@ -195,6 +196,15 @@ type Status struct {
 	Run                 ImportRun
 	FirstDate, LastDate time.Time
 	Findings            []Finding
+	Rates               StatusRates
+}
+
+// StatusRates is the exchange-rate coverage Status reports: the first and last
+// dates in fx_rates (zero when it is empty) and the reason the latest sync's
+// fetch fell short, empty when it did not.
+type StatusRates struct {
+	First, Last time.Time
+	FetchError  string
 }
 
 // Counts is the row count of each table after a build; Transfers counts
@@ -220,6 +230,7 @@ type Counts struct {
 // FindingsCarried is true iff the previous store's findings were read.
 // FindingsFault is why a previous store that opened had findings that could not be read.
 // StoreUnreadable is true iff the previous store could not be opened at all.
+// RatesFault is why a previous store that opened had exchange rates that could not be read.
 type Result struct {
 	Path         string
 	Built        bool
@@ -233,12 +244,14 @@ type Result struct {
 	FindingsCarried bool
 	FindingsFault   *OpenError
 	StoreUnreadable bool
+	Rates           RatesSummary
+	RatesFault      *OpenError
 }
 
 // Replaced is what Store.Replace reports: the path it wrote, the fault that
 // kept the previous store's import runs from being carried, if any, the counts
 // of the findings it recorded, their states, and whether the previous store's findings were carried.
-// FindingsFault and StoreUnreadable mean what they do on Result.
+// FindingsFault, StoreUnreadable and RatesFault mean what they do on Result.
 type Replaced struct {
 	Path         string
 	HistoryFault *OpenError
@@ -248,6 +261,55 @@ type Replaced struct {
 	FindingsCarried bool
 	FindingsFault   *OpenError
 	StoreUnreadable bool
+	Rates           RatesSummary
+	RatesFault      *OpenError
+}
+
+// RatesSummary is the exchange rates a build stored: the first and last
+// dates in fx_rates (zero when none), how many were fetched this build, and
+// the reason a fetch fell short, if it did. Partial is set when it fell short
+// after fetching some rates: Added is then the rates kept, not all of Need.
+type RatesSummary struct {
+	First, Last time.Time
+	Added       int
+	FetchError  string
+	Partial     bool
+}
+
+// The series a stored Rate comes from: the current Bank of Canada series and the discontinued one before it.
+const (
+	SeriesCurrent = "FXUSDCAD"
+	SeriesLegacy  = "IEXE0101"
+)
+
+// Rate is one day's USD/CAD exchange rate and the series it came from.
+type Rate struct {
+	Date   time.Time
+	USDCAD money.Rate
+	Series string
+}
+
+// MaxRate is the largest rate fx_rates.usd_cad holds, in millionths: DECIMAL(10,6)'s 9999.999999.
+const MaxRate = money.Rate(9_999_999_999)
+
+// DateSpan is an inclusive run of dates; the zero value is empty.
+type DateSpan struct {
+	First, Last time.Time
+}
+
+// RatesRequest is what a build needs: the dates Need covers, of which Have
+// is already stored.
+type RatesRequest struct {
+	Need, Have DateSpan
+}
+
+// RatesRefresh is the rates a fetch returned, how many are new, the reason
+// the fetch fell short if it did, and whether Rates is only part of Need.
+type RatesRefresh struct {
+	Rates      []Rate
+	Added      int
+	FetchError string
+	Partial    bool
 }
 
 // NotImported counts source rows a build deliberately leaves out of the
@@ -397,12 +459,19 @@ type AccountBalance struct {
 	Account
 
 	Balance *int64
+
+	// BalanceCAD and BalanceUSD are Balance in cents in that currency at the latest rate dated on or before AsOf;
+	// nil when Balance is nil or no rate converts it.
+	BalanceCAD, BalanceUSD *int64
 }
 
 // AccountList is every account with its balance as of the store's today.
 type AccountList struct {
 	AsOf     time.Time
 	Accounts []AccountBalance
+
+	// FirstRate is the date of the store's earliest exchange rate; zero when it holds none.
+	FirstRate time.Time
 }
 
 // Window is an inclusive range of civil days: Since and Until are each a
@@ -429,12 +498,16 @@ const (
 )
 
 // SpendingParams is everything a spending read varies by: the Window,
-// the grouping, and the accounts to count (every account in reports when
-// AccountIDs is empty).
+// the grouping, the accounts to count (every account in reports when
+// AccountIDs is empty) and the currency to report in.
 type SpendingParams struct {
 	Window     Window
 	By         SpendingGroup
 	AccountIDs []string
+	// Currency is the currency every split is converted to at its date's rate;
+	// a split with no rate stays in its own currency, on rows of that currency.
+	// The zero value, money.Native, converts nothing.
+	Currency money.Currency
 }
 
 // SpendingRow is one group's spending in one currency, in cents. Key is nil
@@ -458,11 +531,23 @@ type TransactionRange struct {
 	First, Last time.Time
 }
 
+// Unconverted is the transactions a CAD or USD report lists in their own currency because the
+// store has no rate for their date; the zero value means none, and a native report never fills it.
+type Unconverted struct {
+	// Transactions counts the distinct CAD and USD transactions in the report's own view and window
+	// whose amount stayed unconverted.
+	Transactions int
+	// FirstRate is the earliest exchange rate in the store, held as UTC midnight; zero means the store has none.
+	FirstRate time.Time
+}
+
 // Spending is the rows of a spending read in display order, and one Total
 // per currency present, CAD before USD.
 type Spending struct {
 	Rows   []SpendingRow
 	Totals []SpendingTotal
+	// Unconverted is the transactions left in their own currency; see Unconverted.
+	Unconverted Unconverted
 	// MultiTagSplits counts the splits in the window that carry more than one
 	// tag; it is set only when grouping by tag.
 	MultiTagSplits int
@@ -488,6 +573,8 @@ type CashFlowParams struct {
 	Window     Window
 	By         CashFlowPeriod
 	AccountIDs []string
+	// Currency is the currency to report in; the zero value, money.Native, converts nothing.
+	Currency money.Currency
 }
 
 // CashFlowRow is one period's income, spending and net in one currency, in cents.
@@ -514,6 +601,8 @@ type CashFlowTotal struct {
 type CashFlow struct {
 	Rows   []CashFlowRow
 	Totals []CashFlowTotal
+	// Unconverted is the transactions left in their own currency; see Unconverted.
+	Unconverted Unconverted
 	// Transactions is set only when the window holds no income or spending (no Totals), as for Spending.
 	Transactions TransactionRange
 }
@@ -545,6 +634,11 @@ type Charge struct {
 	PayeeID, Payee *string
 	Currency       string
 	Amount         int64
+	// AmountCAD and AmountUSD are Amount converted at the charge date's rate, each the sum of its
+	// v_spending rows' converted cells; nil when the date has no rate.
+	AmountCAD, AmountUSD *int64
+	// USDCAD is the rate on the charge's date, or 0 when no rate is on or before it.
+	USDCAD money.Rate
 	// Category is set only when every expense row has the same non-NULL category.
 	Category *ChargeCategory
 	// ExpenseSplits is how many v_spending rows the transaction has.
@@ -558,4 +652,6 @@ type Charges struct {
 	// Transactions is the span of every transaction in the store, or of those of the reported
 	// accounts ChargeParams.AccountIDs names; Rows are never filtered by account.
 	Transactions TransactionRange
+	// FirstRate is the date of the store's first exchange rate; zero when it has none.
+	FirstRate time.Time
 }

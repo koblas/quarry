@@ -59,7 +59,7 @@ func Test_spend_captions_the_named_accounts(t *testing.T) {
 	err := executeSpend(t, namedAccounts(), spendNow, &stdout, &stderr, "--account", "visa infinite", "--account", chequingID)
 
 	require.NoError(t, err)
-	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in Visa Infinite, Chequing\n\nCategory  Currency  Spent\n", stdout.String())
+	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in Visa Infinite, Chequing, amounts in CAD\n\nCategory  Currency  Spent\n", stdout.String())
 }
 
 func Test_spend_json_lists_the_named_accounts_in_account_filter(t *testing.T) {
@@ -69,7 +69,7 @@ func Test_spend_json_lists_the_named_accounts_in_account_filter(t *testing.T) {
 		"--account", "visa infinite", "--account", chequingID, "--json")
 
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"since":"2026-01-01","until":"2026-09-29","by":"category",
+	assert.JSONEq(t, `{"since":"2026-01-01","until":"2026-09-29","by":"category","currency":"CAD",
 		"account_filter":[{"id":"acct-visa","name":"Visa Infinite"},{"id":"acct-chq","name":"Chequing"}],
 		"rows":[],"totals":[{"currency":"CAD","spent":"1.00"}],"warnings":[]}`, stdout.String())
 }
@@ -97,7 +97,7 @@ func Test_spend_json_puts_w2_in_warnings_unprefixed_before_w1(t *testing.T) {
 	const w1 = "2 splits carry more than one tag, so the rows add up to more than the total"
 	warnings, err := json.Marshal([]string{leftOutWarning("Old Card"), w1})
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"since":"2026-01-01","until":"2026-09-29","by":"tag",
+	assert.JSONEq(t, `{"since":"2026-01-01","until":"2026-09-29","by":"tag","currency":"CAD",
 		"account_filter":[{"id":"acct-old","name":"Old Card"}],"rows":[],"totals":[],
 		"warnings":`+string(warnings)+`}`, stdout.String())
 	assert.Equal(t, "quarry: warning: "+leftOutWarning("Old Card")+"\nquarry: warning: "+w1+"\n", stderr.String())

@@ -104,7 +104,8 @@ func Test_spend_refuses_a_period_it_cannot_use_before_reading_the_store(t *testi
 func Test_spend_refuses_a_bad_period_before_opening_the_report(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := cli.Env{
-		Stdout: &stdout, Stderr: &stderr,
+		LoadConfig: cadConfig,
+		Stdout:     &stdout, Stderr: &stderr,
 		Now: func() time.Time { return spendNow },
 		NewReport: func(context.Context, string) (*report.Server, error) {
 			return nil, errStoreRead

@@ -18,19 +18,27 @@ var anomaliesFlagHelp = reportFlagHelp{
 }
 
 // newAnomaliesCommand builds anomalies: the charges in the --since/--until period unusually large for their payee or category.
-func newAnomaliesCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
+func newAnomaliesCommand(newReport ReportFactory, loadConfig ConfigLoader, now func() time.Time, jsonOut *bool) *cobra.Command {
 	flags := reportFlags{chargesCommand: anomaliesCommand}
+	var currency currencyFlag
 	cmd := &cobra.Command{
 		Use:   anomaliesCommand,
 		Short: "List charges unusually large for their payee or category",
 		Long: `List charges that are unusually large: more than 2 times the median of the
 payee's earlier charges, when there are at least 3, or else more than 5
-times the median of the category's earlier charges, when there are at least
-10. Charges under 100.00 are never listed. Charges follow the rules of
-quarry spend, and a transaction counts once, with all its splits; an
-uncategorized or split charge from a payee with little history cannot be
-judged. Possible duplicates are listed by quarry findings, not here. Charges
-dated after today are left out, even with a later --until.
+times the median of the category's earlier charges, when there are at
+least 10. Charges under 100.00 in their account's own currency are never
+listed. Charges follow the rules of quarry spend, and a transaction counts
+once, with all its splits; an uncategorized or split charge from a payee
+with little history cannot be judged. Possible duplicates are listed by
+quarry findings, not here. Charges dated after today are left out, even
+with a later --until.
+
+Charges are judged in their account's own currency, so a change in the
+exchange rate never makes a charge unusual. Amount and Usual are then
+shown in the reporting currency (--currency, else reporting.currency in
+the config file, else CAD) at the rate on the charge's date.
+With --currency native nothing is converted.
 
 --since and --until choose which charges to list; each is compared with
 every earlier charge, however old. --account lists only charges in those
@@ -38,10 +46,15 @@ accounts; the payee's charges in other accounts still count as history.`,
 		Example: `  quarry anomalies
   quarry anomalies --since 2026-09 --until 2026-09
   quarry anomalies --account "Visa Infinite" --json`,
-		Args: noArgs,
+		Args: currency.args,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			at := now()
 			resolved, err := flags.window(cmd, at)
+			if err != nil {
+				return err
+			}
+
+			reportCurrency, configWarnings, err := currency.resolve(cmd, loadConfig)
 			if err != nil {
 				return err
 			}
@@ -51,25 +64,28 @@ accounts; the payee's charges in other accounts still count as history.`,
 				return err
 			}
 
-			found, err := srv.Anomalies(cmd.Context(), report.AnomaliesRequest{Window: resolved, Now: at, Accounts: flags.accounts})
+			found, err := srv.Anomalies(cmd.Context(), report.AnomaliesRequest{Window: resolved, Now: at, Accounts: flags.accounts, Currency: reportCurrency})
 			if err != nil {
 				return &runtimeError{err: err}
 			}
 
 			warnings := anomaliesWarnings(found)
 			return emitReport(cmd, *jsonOut, warnings,
-				func() ([]byte, error) { return renderAnomaliesJSON(found, warnings) },
+				func() ([]byte, error) {
+					return renderAnomaliesJSON(found, withConfigWarnings(configWarnings, warnings))
+				},
 				func() string { return renderAnomalies(found) })
 		},
 	}
 	flags.bind(cmd, anomaliesFlagHelp)
+	currency.bind(cmd, reportCurrencyHelp)
 	return cmd
 }
 
 // anomaliesWarnings is a's warnings, unprefixed and never nil: one per named account left out of the
-// report, then a note when no charge was checked in the period.
+// report, then the unconverted-charge note, then a note when no charge was checked in the period.
 func anomaliesWarnings(a report.Anomalies) []string {
-	warnings := leftOutWarnings(a.Accounts, anomaliesCommand)
+	warnings := append(leftOutWarnings(a.Accounts, anomaliesCommand), unconvertedWarnings(a.Currency, a.Unconverted, chargesNoun)...)
 	if a.Checked == 0 {
 		warnings = appendEmptyWindowWarning(warnings, "unusually large charges", a.Accounts, a.Window, a.Transactions)
 	}

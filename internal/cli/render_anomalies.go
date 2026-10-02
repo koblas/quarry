@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/humanize"
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 )
 
@@ -33,19 +34,33 @@ func renderAnomalies(a report.Anomalies) string {
 		if an.Category != nil {
 			path = &an.Category.Path
 		}
+		amount, usual := anomalyMoney(an, a.Currency)
 		rows = append(rows, []string{
 			an.Date.Format(time.DateOnly),
 			accountLabel(an.Account.Name, an.Account.Currency, an.Account.Closed, an.Account.Active),
 			payeeLabel(payee),
 			categoryText(an.ExpenseSplits, path),
-			formatMoney(an.Amount),
-			formatMoney(an.Usual),
+			amount,
+			usual,
 			timesCell(an.TimesTenths),
 			fmt.Sprintf("%s, %s earlier", anomaliesBaselineWord[an.Baseline], humanize.Thousands(an.Earlier)),
 		})
 	}
-	return renderTable(windowCaption("Unusually large charges", a.Window, a.Accounts), anomaliesAligns, rows) +
+	return renderTable(windowCaption("Unusually large charges", a.Window, a.Accounts, a.Currency), anomaliesAligns, rows) +
 		"\n" + anomaliesFooter(a.Checked, a.NotJudged) + "\n"
+}
+
+// anomalyMoney is the Amount and Usual cells of an in a report in target: converted when an was, else in its
+// own currency, with its code in front when that is not target.
+func anomalyMoney(an report.Anomaly, target money.Currency) (string, string) {
+	if an.ListedCurrency != "" {
+		return formatMoney(an.ListedAmount), formatMoney(an.ListedUsual)
+	}
+	amount, usual := formatMoney(an.Amount), formatMoney(an.Usual)
+	if target != money.Native && an.Currency != target.String() {
+		return an.Currency + " " + amount, an.Currency + " " + usual
+	}
+	return amount, usual
 }
 
 // timesCell is tenths as a multiple with one decimal: 43 is "4.3x".

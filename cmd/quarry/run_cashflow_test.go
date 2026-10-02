@@ -42,7 +42,7 @@ func Test_run_cashflow_shows_income_spending_and_savings_rate_by_month(t *testin
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
 	const w = 7
-	assert.Equal(t, "Cash flow 2026-01-01 to 2026-09-29 in all accounts\n\n"+
+	assert.Equal(t, "Cash flow 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD\n\n"+
 		cashFlowLine(w, "Month", "Currency", "Income", "Spent", "Net", "Savings rate", "Status")+
 		cashFlowLine(w, "2026-01", "CAD", "9,100.00", "6,200.00", "2,900.00", "31.9%", "")+
 		cashFlowLine(w, "2026-02", "CAD", "5,000.00", "0.00", "5,000.00", "100.0%", "")+
@@ -80,7 +80,7 @@ func Test_run_cashflow_by_year_shows_one_row_per_year_and_na_without_income(t *t
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
 	const w = 5
-	assert.Equal(t, "Cash flow 2020-01-01 to 2025-12-31 in all accounts\n\n"+
+	assert.Equal(t, "Cash flow 2020-01-01 to 2025-12-31 in all accounts, amounts in CAD\n\n"+
 		cashFlowLine(w, "Year", "Currency", "Income", "Spent", "Net", "Savings rate", "Status")+
 		cashFlowLine(w, "2020", "CAD", "10,000.00", "4,000.00", "6,000.00", "60.0%", "")+
 		cashFlowLine(w, "2021", "CAD", "3,000.00", "0.00", "3,000.00", "100.0%", "")+

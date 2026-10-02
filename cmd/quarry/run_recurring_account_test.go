@@ -36,7 +36,7 @@ func Test_run_recurring_lists_only_the_series_charged_in_the_named_account(t *te
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in Visa",
+	assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in Visa, amounts in CAD",
 		[]string{"Netflix.com", "CAD", "month", "20.99", "251.88", "2025-10-12", "2026-09-12", "active, new", ""},
 		[]string{"Total", "CAD", "", "", "251.88", "", "", "", ""}),
 		stdout.String())
@@ -59,7 +59,7 @@ func Test_run_recurring_lists_an_ended_series_charged_in_a_closed_account(t *tes
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in Old Card",
+	assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in Old Card, amounts in CAD",
 		[]string{"Gym", "CAD", "month", "40.00", "", "2024-07-12", "2025-06-12", "ended, new", ""}),
 		stdout.String())
 }

@@ -3,8 +3,10 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -84,6 +86,26 @@ func Test_formatRate(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			assert.Equal(t, c.want, formatRate(c.rate))
+		})
+	}
+}
+
+func Test_renderCashFlow_captions_a_converted_report_with_its_currency(t *testing.T) {
+	cases := []struct {
+		name     string
+		currency money.Currency
+		want     string
+	}{
+		{name: "CAD", currency: money.CAD, want: "Cash flow 2026-01-01 to 2026-03-09 in all accounts, amounts in CAD\n"},
+		{name: "USD", currency: money.USD, want: "Cash flow 2026-01-01 to 2026-03-09 in all accounts, amounts in USD\n"},
+		{name: "native adds nothing", currency: money.Native, want: "Cash flow 2026-01-01 to 2026-03-09 in all accounts\n"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			flow := report.CashFlow{Window: spendingWindow(), Currency: c.currency}
+
+			assert.True(t, strings.HasPrefix(renderCashFlow(flow), c.want), renderCashFlow(flow))
 		})
 	}
 }

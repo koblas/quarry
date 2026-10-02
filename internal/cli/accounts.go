@@ -4,8 +4,9 @@ import "github.com/spf13/cobra"
 
 // newAccountsCommand builds accounts: balances per account, closed ones only
 // with --all, as JSON when *jsonOut is set.
-func newAccountsCommand(newReport ReportFactory, jsonOut *bool) *cobra.Command {
+func newAccountsCommand(newReport ReportFactory, loadConfig ConfigLoader, jsonOut *bool) *cobra.Command {
 	var all bool
+	var currency currencyFlag
 	cmd := &cobra.Command{
 		Use:   "accounts",
 		Short: "List accounts with their current balances",
@@ -14,15 +15,26 @@ currency: the sum of its transactions dated today or earlier. Closed
 accounts are left out unless --all is given.
 
 Brokerage and retirement accounts show "not imported": quarry does not
-import investment transactions yet, so it cannot compute their balance.`,
-		Args: noArgs,
+import investment transactions yet, so it cannot compute their balance.
+
+A column shows each balance in the reporting currency (--currency, else
+reporting.currency in the config file, else CAD) at today's Bank of
+Canada rate, or the latest earlier one; --currency native leaves it
+out. quarry does not add balances together: a total that leaves out
+investment accounts would not be your net worth.`,
+		Args: currency.args,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			reporting, configWarnings, err := currency.resolve(cmd, loadConfig)
+			if err != nil {
+				return err
+			}
+
 			srv, err := openReport(cmd, newReport)
 			if err != nil {
 				return err
 			}
 
-			listing, err := srv.Accounts(cmd.Context(), all)
+			listing, err := srv.Accounts(cmd.Context(), all, reporting)
 			if err != nil {
 				return &runtimeError{err: err}
 			}
@@ -31,10 +43,13 @@ import investment transactions yet, so it cannot compute their balance.`,
 			if listing.AllHidden() {
 				warnings = append(warnings, allClosedNote(listing.Hidden))
 			}
+			warnings = append(warnings, accountsFXWarnings(listing)...)
 
 			out, err := renderResult(*jsonOut,
-				func() ([]byte, error) { return renderAccountsJSON(listing.AccountList, warnings) },
-				func() string { return renderAccounts(listing.AccountList) })
+				func() ([]byte, error) {
+					return renderAccountsJSON(listing, withConfigWarnings(configWarnings, warnings))
+				},
+				func() string { return renderAccounts(listing) })
 			if err != nil {
 				return err
 			}
@@ -42,5 +57,6 @@ import investment transactions yet, so it cannot compute their balance.`,
 		},
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "include closed accounts")
+	currency.bind(cmd, accountsCurrencyHelp)
 	return cmd
 }

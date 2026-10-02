@@ -52,7 +52,7 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	before := time.Now()
 
-	exitCode := run(context.Background(), []string{"accounts", "--json"}, &stdout, &stderr)
+	exitCode := run(context.Background(), []string{"accounts", "--json", "--currency", "native"}, &stdout, &stderr)
 
 	after := time.Now()
 	require.Equal(t, 0, exitCode, stderr.String())
@@ -60,6 +60,7 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
 	want := func(asOf time.Time) string {
 		return fmt.Sprintf(`{
   "as_of": "%s",
+  "currency": "native",
   "accounts": [
     {
       "id": "acct-%d",
@@ -71,7 +72,8 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
       "active": true,
       "in_reports": true,
       "linked_tracking": false,
-      "balance": "12345.67"
+      "balance": "12345.67",
+      "converted_balance": null
     },
     {
       "id": "acct-%d",
@@ -83,7 +85,8 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
       "active": true,
       "in_reports": true,
       "linked_tracking": false,
-      "balance": null
+      "balance": null,
+      "converted_balance": null
     },
     {
       "id": "acct-%d",
@@ -95,7 +98,8 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
       "active": true,
       "in_reports": true,
       "linked_tracking": false,
-      "balance": "0.00"
+      "balance": "0.00",
+      "converted_balance": null
     }
   ],
   "warnings": []
@@ -111,7 +115,7 @@ func Test_run_accounts_json_reports_the_all_closed_note_in_both_streams(t *testi
 	syncClosedAccountsFixture(t, home, 3)
 	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--json"}, &stdout, &stderr)
+	exitCode := run(context.Background(), []string{"accounts", "--json", "--currency", "native"}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var got accountsJSON
@@ -128,7 +132,7 @@ func Test_run_accounts_json_carries_in_reports_per_account(t *testing.T) {
 	syncNotInReportsFixture(t, home)
 	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--all", "--json"}, &stdout, &stderr)
+	exitCode := run(context.Background(), []string{"accounts", "--all", "--json", "--currency", "native"}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var got accountsJSON
@@ -147,7 +151,7 @@ func Test_run_accounts_json_carries_linked_tracking_per_account(t *testing.T) {
 	syncLinkedTrackingFixture(t, home)
 	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--all", "--json"}, &stdout, &stderr)
+	exitCode := run(context.Background(), []string{"accounts", "--all", "--json", "--currency", "native"}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var got accountsJSON

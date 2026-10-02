@@ -20,7 +20,8 @@ var utcMinus5 = time.FixedZone("UTC-5", -5*60*60)
 func executeSpend(t *testing.T, fake fakeReportStore, now time.Time, stdout, stderr io.Writer, args ...string) error {
 	t.Helper()
 	env := cli.Env{
-		Stdout: stdout, Stderr: stderr,
+		LoadConfig: cadConfig,
+		Stdout:     stdout, Stderr: stderr,
 		Now: func() time.Time { return now },
 		NewReport: func(context.Context, string) (*report.Server, error) {
 			return report.NewServer(report.WithStore(fake)), nil
@@ -44,7 +45,7 @@ func Test_spend_reads_the_window_from_the_env_clock(t *testing.T) {
 		Until: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC),
 	}, got.Window)
 	assert.Equal(t, store.SpendByCategory, got.By)
-	assert.Equal(t, "Spending 2026-01-01 to 2026-12-31 in all accounts\n\nCategory  Currency  Spent\nTotal     CAD        1.00\n", stdout.String())
+	assert.Equal(t, "Spending 2026-01-01 to 2026-12-31 in all accounts, amounts in CAD\n\nCategory  Currency  Spent\nTotal     CAD        1.00\n", stdout.String())
 	assert.Empty(t, stderr.String())
 }
 
@@ -60,7 +61,7 @@ func Test_spend_by_payee_reads_the_payee_grouping_and_heads_the_first_column_Pay
 
 	require.NoError(t, err)
 	assert.Equal(t, store.SpendByPayee, got.By)
-	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in all accounts\n\n"+
+	assert.Equal(t, "Spending 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD\n\n"+
 		"Payee       Currency  Spent\n"+
 		"(no payee)  CAD       42.08\n"+
 		"Total       CAD       42.08\n", stdout.String())
@@ -85,7 +86,8 @@ func Test_spend_refuses_a_by_that_names_no_grouping_before_reading_the_store(t *
 func Test_spend_refuses_a_by_that_names_no_grouping_before_opening_the_report(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := cli.Env{
-		Stdout: &stdout, Stderr: &stderr,
+		LoadConfig: cadConfig,
+		Stdout:     &stdout, Stderr: &stderr,
 		Now: time.Now,
 		NewReport: func(context.Context, string) (*report.Server, error) {
 			return nil, errStoreRead
@@ -111,7 +113,7 @@ func Test_spend_json_puts_the_report_window_and_rows_in_the_document(t *testing.
 	err := executeSpend(t, fake, spendNow, &stdout, &stderr, "--json")
 
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"since":"2026-01-01","until":"2026-09-29","by":"category","account_filter":[],
+	assert.JSONEq(t, `{"since":"2026-01-01","until":"2026-09-29","by":"category","currency":"CAD","account_filter":[],
 		"rows":[{"category":"Auto:Fuel","currency":"CAD","spent":"1204.50"}],
 		"totals":[{"currency":"CAD","spent":"1204.50"}],"warnings":[]}`, stdout.String())
 	assert.Empty(t, stderr.String())
@@ -130,7 +132,8 @@ func Test_spend_returns_the_report_fault(t *testing.T) {
 func Test_spend_returns_the_report_factory_fault(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := cli.Env{
-		Stdout: &stdout, Stderr: &stderr,
+		LoadConfig: cadConfig,
+		Stdout:     &stdout, Stderr: &stderr,
 		Now:       time.Now,
 		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
 	}

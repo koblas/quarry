@@ -30,7 +30,7 @@ func Test_run_recurring_leaves_out_a_charge_dated_after_the_local_day_even_when_
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, recurringTable("Recurring charges 2026-01-01 to 2027-12-31 in all accounts",
+	assert.Equal(t, recurringTable("Recurring charges 2026-01-01 to 2027-12-31 in all accounts, amounts in CAD",
 		[]string{"Netflix.com", "CAD", "month", "9.99", "119.88", "2026-06-29", "2026-09-29", "active, new", ""},
 		[]string{"Total", "CAD", "", "", "119.88", "", "", "", ""}),
 		stdout.String())
@@ -51,7 +51,7 @@ func Test_run_anomalies_leaves_out_a_charge_dated_after_the_local_day_even_when_
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2027-12-31 in all accounts", "3 charges checked"), stdout.String())
+	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2027-12-31 in all accounts, amounts in CAD", "3 charges checked"), stdout.String())
 }
 
 func Test_run_anomalies_lists_a_charge_of_two_categories_as_split_against_its_payees_usual(t *testing.T) {
@@ -71,7 +71,7 @@ func Test_run_anomalies_lists_a_charge_of_two_categories_as_split_against_its_pa
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts", "1 charge checked",
+	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "1 charge checked",
 		[]string{"2026-03-02", "Chequing (CAD)", "Bell Canada", "(split)", "412.00", "96.05", "4.3x", "payee, 5 earlier"}),
 		stdout.String())
 }
@@ -87,6 +87,6 @@ func Test_run_anomalies_counts_a_first_large_charge_without_a_payee_as_too_littl
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts",
+	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD",
 		"1 charge checked; 1 had too little history to judge"), stdout.String())
 }

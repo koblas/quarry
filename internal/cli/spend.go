@@ -13,15 +13,16 @@ import (
 const spendCommand = "spend"
 
 // newSpendCommand builds spend: the spending in the --since/--until period (default this year to now()) grouped by --by.
-func newSpendCommand(newReport ReportFactory, now func() time.Time, jsonOut *bool) *cobra.Command {
+func newSpendCommand(newReport ReportFactory, loadConfig ConfigLoader, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var by string
 	var flags reportFlags
+	var currency currencyFlag
 	cmd := &cobra.Command{
 		Use:   spendCommand,
 		Short: "Show spending by category, payee, tag or month",
-		Long: `Show how much you spent, grouped by category, payee, tag or month, in each
-account's own currency: CAD and USD are listed separately, never added
-together.
+		Long: `Show how much you spent, grouped by category, payee, tag or month.
+
+` + reportCurrencyLong + `
 
 Spending is every split in an expense category, plus uncategorized splits
 that take money out. Refunds in an expense category are netted against it,
@@ -43,7 +44,7 @@ the rows can add up to more than the total.`,
   quarry spend --by payee --since 2025-01 --until 2025-03
   quarry spend --since 2024 --until 2024 --json
   quarry spend --account "Visa Infinite" --account Chequing`,
-		Args: noArgs,
+		Args: currency.args,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			group, err := parseSpendGrouping(by)
 			if err != nil {
@@ -55,31 +56,39 @@ the rows can add up to more than the total.`,
 				return err
 			}
 
+			reportCurrency, configWarnings, err := currency.resolve(cmd, loadConfig)
+			if err != nil {
+				return err
+			}
+
 			srv, err := openReport(cmd, newReport)
 			if err != nil {
 				return err
 			}
 
-			spending, err := srv.Spend(cmd.Context(), report.SpendRequest{Window: window, By: group, Accounts: flags.accounts})
+			spending, err := srv.Spend(cmd.Context(), report.SpendRequest{Window: window, By: group, Accounts: flags.accounts, Currency: reportCurrency})
 			if err != nil {
 				return &runtimeError{err: err}
 			}
 
 			warnings := spendWarnings(spending)
 			return emitReport(cmd, *jsonOut, warnings,
-				func() ([]byte, error) { return renderSpendingJSON(spending, warnings) },
+				func() ([]byte, error) {
+					return renderSpendingJSON(spending, withConfigWarnings(configWarnings, warnings))
+				},
 				func() string { return renderSpending(spending) })
 		},
 	}
 	cmd.Flags().StringVar(&by, "by", spendGroupings[store.SpendByCategory].name, "group spending by `group`: category, payee, tag or month")
 	flags.bind(cmd, transactionFlagHelp)
+	currency.bind(cmd, reportCurrencyHelp)
 	return cmd
 }
 
-// spendWarnings is s's warnings, unprefixed and never nil: one per named account left out (W2 or W3),
-// then the multi-tag-splits note, then a note that the window held no spending.
+// spendWarnings is s's warnings, unprefixed and never nil: one per named account left out,
+// then the unconverted-amounts note, the multi-tag-splits note, and a note that the window held no spending.
 func spendWarnings(s report.Spending) []string {
-	warnings := leftOutWarnings(s.Accounts, spendCommand)
+	warnings := append(leftOutWarnings(s.Accounts, spendCommand), unconvertedWarnings(s.Currency, s.Unconverted, transactionsNoun)...)
 	if s.By == store.SpendByTag && s.MultiTagSplits > 0 {
 		warnings = append(warnings, humanize.Count(s.MultiTagSplits, "split carries", "splits carry")+
 			" more than one tag, so the rows add up to more than the total")

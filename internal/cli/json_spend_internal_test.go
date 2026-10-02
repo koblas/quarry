@@ -3,9 +3,12 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -37,6 +40,7 @@ func Test_renderSpendingJSON_writes_a_null_key_for_uncategorized_and_a_signed_am
   "since": "2026-01-01",
   "until": "2026-09-29",
   "by": "category",
+  "currency": "native",
   "account_filter": [],
   "rows": [
     {
@@ -80,6 +84,7 @@ func Test_renderSpendingJSON_names_the_row_key_and_by_for_the_payee_grouping(t *
   "since": "2026-01-01",
   "until": "2026-09-29",
   "by": "payee",
+  "currency": "native",
   "account_filter": [],
   "rows": [
     {
@@ -123,6 +128,7 @@ func Test_renderSpendingJSON_writes_month_rows_with_their_partial_flag(t *testin
   "since": "2026-01-01",
   "until": "2026-09-29",
   "by": "month",
+  "currency": "native",
   "account_filter": [],
   "rows": [
     {
@@ -158,10 +164,52 @@ func Test_renderSpendingJSON_writes_empty_lists_when_nothing_was_spent(t *testin
   "since": "2026-01-01",
   "until": "2026-09-29",
   "by": "category",
+  "currency": "native",
   "account_filter": [],
   "rows": [],
   "totals": [],
   "warnings": []
 }
 `, string(got))
+}
+
+// topLevelKeys is the keys of the JSON object in doc, in document order.
+func topLevelKeys(t *testing.T, doc []byte) []string {
+	t.Helper()
+	dec := json.NewDecoder(bytes.NewReader(doc))
+	_, err := dec.Token()
+	require.NoError(t, err)
+	var keys []string
+	for dec.More() {
+		key, err := dec.Token()
+		require.NoError(t, err)
+		name, ok := key.(string)
+		require.True(t, ok)
+		keys = append(keys, name)
+		var skipped json.RawMessage
+		require.NoError(t, dec.Decode(&skipped))
+	}
+	return keys
+}
+
+func Test_renderSpendingJSON_puts_currency_right_after_by_in_every_mode(t *testing.T) {
+	want := []string{"since", "until", "by", "currency", "account_filter", "rows", "totals", "warnings"}
+	cases := []struct {
+		name     string
+		currency money.Currency
+	}{
+		{name: "CAD", currency: money.CAD},
+		{name: "USD", currency: money.USD},
+		{name: "native", currency: money.Native},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := renderSpendingJSON(report.Spending{Window: spendWindow(), Currency: c.currency}, []string{})
+
+			require.NoError(t, err)
+			assert.Equal(t, want, topLevelKeys(t, got))
+			assert.Contains(t, string(got), `"currency": "`+c.currency.String()+`",`)
+		})
+	}
 }

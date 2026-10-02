@@ -2,6 +2,7 @@ package duckstore_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"math"
@@ -488,6 +489,10 @@ type faultDB struct {
 	queryFaultOn     string // the build query that fails with queryFault, or whose first row's scan fails with scanFault
 	queryFault       error
 	scanFault        error
+	execFaultOn      string // the statement Exec fails with execFault
+	execFault        error
+	appended         []string // every table AppendRows was asked to load, in order
+	checkpoints      int      // CheckpointClose calls
 }
 
 // QueryRows fails with queryFault for the query queryFaultOn, hands its row callback a scan that
@@ -502,8 +507,17 @@ func (f *faultDB) QueryRows(ctx context.Context, query string, args []any, row f
 	return f.DB.QueryRows(ctx, query, args, row)
 }
 
+// Exec fails with execFault for the statement execFaultOn, else runs it for real.
+func (f *faultDB) Exec(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	if f.execFault != nil && query == f.execFaultOn {
+		return nil, f.execFault
+	}
+	return f.DB.Exec(ctx, query, args...)
+}
+
 // AppendRows fails with appendFault for appendFaultTable, else appends for real.
 func (f *faultDB) AppendRows(ctx context.Context, table string, rows [][]any) error {
+	f.appended = append(f.appended, table)
 	if f.appendFault != nil && table == f.appendFaultTable {
 		return fmt.Errorf("append %s: %w", table, f.appendFault)
 	}
@@ -513,6 +527,7 @@ func (f *faultDB) AppendRows(ctx context.Context, table string, rows [][]any) er
 // CheckpointClose returns checkpointFault wrapped as duckdb.CheckpointClose
 // wraps a driver error, or runs the real one and then afterCheckpoint.
 func (f *faultDB) CheckpointClose(ctx context.Context) error {
+	f.checkpoints++
 	if f.checkpointFault != nil {
 		return fmt.Errorf("checkpoint %s: %w", f.path, f.checkpointFault)
 	}
@@ -534,16 +549,17 @@ func (f *faultDB) Close() error {
 }
 
 // newFaultStore returns a Store over dir that builds its partial file
-// through f over a real DuckDB connection.
-func newFaultStore(dir string, f *faultDB) *duckstore.Store {
-	return duckstore.New(dir, duckstore.WithCreate(func(ctx context.Context, path string) (duckstore.DB, error) {
+// through f over a real DuckDB connection, configured further by opts.
+func newFaultStore(dir string, f *faultDB, opts ...duckstore.Option) *duckstore.Store {
+	create := duckstore.WithCreate(func(ctx context.Context, path string) (duckstore.DB, error) {
 		db, err := duckdb.Create(ctx, path)
 		if err != nil {
 			return nil, err
 		}
 		f.DB, f.path = db, path
 		return f, nil
-	}))
+	})
+	return duckstore.New(dir, append([]duckstore.Option{create}, opts...)...)
 }
 
 func Test_replace_removes_the_partial_and_wal_when_the_checkpoint_fails(t *testing.T) {

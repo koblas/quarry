@@ -10,6 +10,7 @@ type spendDocument struct {
 	Since         string                  `json:"since"`
 	Until         string                  `json:"until"`
 	By            string                  `json:"by"`
+	Currency      string                  `json:"currency"`
 	AccountFilter []accountFilterDocument `json:"account_filter"`
 	Rows          []any                   `json:"rows"`
 	Totals        []spendTotalDocument    `json:"totals"`
@@ -85,6 +86,7 @@ func renderSpendingJSON(s report.Spending, warnings []string) ([]byte, error) {
 		Since:         s.Window.Since.Format(jsonDateLayout),
 		Until:         s.Window.Until.Format(jsonDateLayout),
 		By:            spendGroupings[s.By].name,
+		Currency:      s.Currency.String(),
 		AccountFilter: accountFilterDocuments(s.Accounts),
 		Rows:          rows,
 		Totals:        totals,

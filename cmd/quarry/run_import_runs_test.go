@@ -107,8 +107,8 @@ func Test_run_sync_from_warns_and_restarts_history_when_the_previous_store_is_no
 	exitCode := run(context.Background(), []string{"sync", "--from", strings.TrimSuffix(filepath.Base(manifest), ".json")}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, "quarry: warning: cannot carry import history and findings forward from the previous store (the file is not a DuckDB database); "+
-		"both start again with this sync\n", stderr.String())
+	assert.Equal(t, "quarry: warning: cannot carry import history, findings or exchange rates forward from the previous store (the file is not a DuckDB database); "+
+		"all three start again with this sync\n", stderr.String())
 	assert.Equal(t, map[string]string{"1": manifestSHA256(t, manifest)}, importRunQuery(t, home, "SELECT CAST(id AS VARCHAR), snapshot_sha256 FROM import_runs"))
 }
 

@@ -25,14 +25,19 @@ type anomalyJSON struct {
 	Amount        string  `json:"amount"`
 	Baseline      string  `json:"baseline"`
 	Usual         string  `json:"usual"`
-	Earlier       int     `json:"earlier"`
-	Times         float64 `json:"times"`
+	// NativeCurrency, NativeAmount and NativeUsual are the charge's own currency, Amount and Usual.
+	NativeCurrency string  `json:"native_currency"`
+	NativeAmount   string  `json:"native_amount"`
+	NativeUsual    string  `json:"native_usual"`
+	Earlier        int     `json:"earlier"`
+	Times          float64 `json:"times"`
 }
 
 // anomaliesJSONDoc is quarry anomalies --json's stdout.
 type anomaliesJSONDoc struct {
 	Since         string            `json:"since"`
 	Until         string            `json:"until"`
+	Currency      string            `json:"currency"`
 	AccountFilter []recurringIDName `json:"account_filter"`
 	Anomalies     []anomalyJSON     `json:"anomalies"`
 	Checked       int               `json:"checked"`
@@ -73,20 +78,24 @@ func Test_run_anomalies_json_returns_the_anomalies_document(t *testing.T) {
 	assert.Equal(t, anomaliesJSONDoc{
 		Since:         "2026-01-01",
 		Until:         "2026-09-29",
+		Currency:      "CAD",
 		AccountFilter: []recurringIDName{},
 		Anomalies: []anomalyJSON{{
-			TransactionID: "txn-Bell Canada2026-03-02",
-			Date:          "2026-03-02",
-			AccountID:     "acct-cad",
-			Account:       "Chequing",
-			Currency:      "CAD",
-			Payee:         new("Bell Canada"),
-			Category:      new("Food:Groceries"),
-			Amount:        "412.00",
-			Baseline:      "payee",
-			Usual:         "96.05",
-			Earlier:       5,
-			Times:         4.3,
+			TransactionID:  "txn-Bell Canada2026-03-02",
+			Date:           "2026-03-02",
+			AccountID:      "acct-cad",
+			Account:        "Chequing",
+			Currency:       "CAD",
+			Payee:          new("Bell Canada"),
+			Category:       new("Food:Groceries"),
+			Amount:         "412.00",
+			Baseline:       "payee",
+			Usual:          "96.05",
+			NativeCurrency: "CAD",
+			NativeAmount:   "412.00",
+			NativeUsual:    "96.05",
+			Earlier:        5,
+			Times:          4.3,
 		}},
 		Checked:   2,
 		NotJudged: 1,

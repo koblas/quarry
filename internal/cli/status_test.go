@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/config"
@@ -38,6 +39,7 @@ func Test_status_counts_the_findings_from_the_same_read_as_the_rest_of_the_statu
 			return report.NewServer(report.WithStore(fake)), nil
 		},
 		LoadConfig: func(string) (config.Config, error) { return config.Config{}, nil },
+		Now:        time.Now,
 	}
 
 	err := cli.Execute(t.Context(), []string{"status"}, env)

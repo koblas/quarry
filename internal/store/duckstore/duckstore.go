@@ -22,7 +22,7 @@ import (
 const FileName = "quarry.duckdb"
 
 // FormatVersion is the store format this build of quarry writes and reads.
-const FormatVersion = 4
+const FormatVersion = 5
 
 // develVersion is the quarry_version recorded when no build version is known.
 const develVersion = "(devel)"
@@ -81,6 +81,14 @@ type Store struct {
 	create        func(ctx context.Context, path string) (DB, error)
 	openReadOnly  func(ctx context.Context, path string) (ReadDB, error)
 	quarryVersion string
+	rates         RatesSource
+}
+
+// RatesSource supplies the exchange rates a build stores. Refresh returns a
+// non-nil error only when ctx ended; any other failure comes back as
+// RatesRefresh.FetchError.
+type RatesSource interface {
+	Refresh(ctx context.Context, req store.RatesRequest) (store.RatesRefresh, error)
 }
 
 // Option configures a Store.
@@ -96,6 +104,12 @@ func WithCreate(create func(ctx context.Context, path string) (DB, error)) Optio
 // which by default is duckdb.OpenReadOnly. open must not write to path.
 func WithOpenReadOnly(open func(ctx context.Context, path string) (ReadDB, error)) Option {
 	return func(s *Store) { s.openReadOnly = open }
+}
+
+// WithRates sets where Replace gets exchange rates from; without it the
+// store's fx_rates table is left empty.
+func WithRates(src RatesSource) Option {
+	return func(s *Store) { s.rates = src }
 }
 
 // WithQuarryVersion sets the quarry_version Replace records; an empty v keeps
@@ -273,10 +287,9 @@ func hasColumn(ctx context.Context, db ReadDB, table, column string) (bool, erro
 	return n > 0, nil
 }
 
-// Replace swaps rows into quarry.duckdb through a build file, carrying the previous store's
-// import_runs ahead of the new run, and its findings. An unreadable history restarts at id 1
-// (Replaced.HistoryFault). On failure the existing store is untouched; a permission fault
-// matches store.ErrStoreNotWritable, disk-full store.ErrDiskFull.
+// Replace swaps rows into quarry.duckdb through a build file, carrying the previous store's import_runs, findings and
+// exchange rates. An unreadable table restarts (Replaced.HistoryFault, FindingsFault, RatesFault). On failure the existing
+// store is untouched; a permission fault matches store.ErrStoreNotWritable, disk-full store.ErrDiskFull.
 func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, error) {
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return store.Replaced{}, buildError(err)
@@ -295,7 +308,14 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, e
 	}
 
 	builtAt := time.Now().UTC()
-	states, err := build(ctx, db, rows, carried, s.quarryVersion, builtAt)
+	states, err := build(ctx, db, rows, carried, builtAt)
+	if err != nil {
+		_ = db.Close()
+		removePartial(partialPath)
+		return store.Replaced{}, buildError(err)
+	}
+
+	ratesSummary, err := s.finishBuild(ctx, db, rows, carried, builtAt)
 	if err != nil {
 		_ = db.Close()
 		removePartial(partialPath)
@@ -328,6 +348,7 @@ func (s *Store) Replace(ctx context.Context, rows store.Rows) (store.Replaced, e
 	return store.Replaced{
 		Path: finalPath, HistoryFault: historyFault, Findings: finding.Classify(states, nil).Counts, FindingStates: states,
 		FindingsCarried: carried.findingsCarried, FindingsFault: carried.findingsFault, StoreUnreadable: carried.unreadable,
+		Rates: ratesSummary, RatesFault: carried.ratesFault,
 	}, nil
 }
 
@@ -390,10 +411,10 @@ func removePartial(path string) {
 	_ = os.Remove(path + ".wal")
 }
 
-// build loads schema, views, rows, then findings merged with carried, then store_info last: a store
-// carrying it is complete. It returns the state of each finding it recorded.
-func build(ctx context.Context, db DB, rows store.Rows, carried history, quarryVersion string, builtAt time.Time) ([]finding.State, error) {
-	if _, err := db.Exec(ctx, schemaDDL+accountBalancesViewDDL()+cashFlowViewDDL+spendingViewDDL); err != nil {
+// build loads schema, views, rows, then findings merged with carried. It returns the state of each
+// finding it recorded. finishBuild completes the file; until it appends store_info the file is not a store.
+func build(ctx context.Context, db DB, rows store.Rows, carried history, builtAt time.Time) ([]finding.State, error) {
+	if _, err := db.Exec(ctx, schemaDDL+accountBalancesViewDDL()+cashFlowViewDDL()+spendingViewDDL); err != nil {
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
 	if err := loadRows(ctx, db, rows, carried); err != nil {
@@ -401,9 +422,6 @@ func build(ctx context.Context, db DB, rows store.Rows, carried history, quarryV
 	}
 	states, err := loadFindings(ctx, db, carried.findings, rows.ReferencedCategoryIDs, builtAt)
 	if err != nil {
-		return nil, err
-	}
-	if err := appendTable(ctx, db, "store_info", [][]any{{int32(FormatVersion), quarryVersion, builtAt}}); err != nil {
 		return nil, err
 	}
 	return states, nil
@@ -572,6 +590,7 @@ func importRunRows(carried history, runs []store.ImportRun) [][]any {
 			nullableTime(r.Snapshot.TakenAt), nullableNonEmpty(r.Snapshot.Source),
 			int64(r.BalancesNeverReconciled), int64(r.InvestmentAccounts),
 			int64(r.TransfersPaired), int64(r.TransfersCrossCurrency),
+			nil, nil, nil,
 		})
 	}
 	return out

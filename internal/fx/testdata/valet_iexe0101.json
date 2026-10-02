@@ -1,0 +1,9 @@
+{
+  "terms": {"url": "https://www.bankofcanada.ca/terms/"},
+  "seriesDetail": {"IEXE0101": {"label": "US dollar, daily average", "description": "Discontinued; replaced by FXUSDCAD in 2017"}},
+  "observations": [
+    {"d": "2005-03-01", "IEXE0101": {"v": "1.2345"}},
+    {"d": "2005-03-02", "IEXE0101": {"v": "1.2400"}},
+    {"d": "2005-03-03"}
+  ]
+}

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/koblas/quarry/internal/config"
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -60,7 +61,7 @@ func Test_load_returns_defaults_for_a_missing_file(t *testing.T) {
 	cfg, err := config.Load(home, path)
 
 	require.NoError(t, err)
-	assert.Equal(t, config.Config{Path: path, Keep: config.DefaultKeep}, cfg)
+	assert.Equal(t, config.Config{Path: path, Keep: config.DefaultKeep, Currency: money.CAD}, cfg)
 }
 
 func Test_load_returns_defaults_for_an_empty_file(t *testing.T) {
@@ -80,7 +81,7 @@ func Test_load_returns_defaults_for_an_empty_file(t *testing.T) {
 			cfg, err := config.Load(home, path)
 
 			require.NoError(t, err)
-			assert.Equal(t, config.Config{Path: path, Keep: config.DefaultKeep}, cfg)
+			assert.Equal(t, config.Config{Path: path, Keep: config.DefaultKeep, Currency: money.CAD}, cfg)
 		})
 	}
 }
@@ -167,7 +168,7 @@ func Test_load_sets_the_config_path_and_leaves_quicken_path_empty_when_unset(t *
 	cfg, err := config.Load(home, path)
 
 	require.NoError(t, err)
-	assert.Equal(t, config.Config{Path: path, Keep: 3}, cfg)
+	assert.Equal(t, config.Config{Path: path, Keep: 3, Currency: money.CAD}, cfg)
 }
 
 func Test_load_accepts_a_snapshots_keep_of_one(t *testing.T) {
@@ -533,5 +534,5 @@ func Test_load_returns_defaults_for_a_file_holding_only_a_byte_order_mark(t *tes
 	cfg, err := config.Load(home, path)
 
 	require.NoError(t, err)
-	assert.Equal(t, config.Config{Path: path, Keep: config.DefaultKeep}, cfg)
+	assert.Equal(t, config.Config{Path: path, Keep: config.DefaultKeep, Currency: money.CAD}, cfg)
 }

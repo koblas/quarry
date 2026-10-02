@@ -69,11 +69,11 @@ func Test_anomalies_json_prints_every_ruled_key_and_no_table(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, stderr.String())
 	raw := rawAnomaliesDocument(t, stdout.String())
-	assert.ElementsMatch(t, []string{"since", "until", "account_filter", "anomalies", "checked", "not_judged", "warnings"}, keysOf(raw))
+	assert.ElementsMatch(t, []string{"since", "until", "currency", "account_filter", "anomalies", "checked", "not_judged", "warnings"}, keysOf(raw))
 	entry := listedAnomalies(t, stdout.String())[0]
 	assert.ElementsMatch(t, []string{
 		"transaction_id", "date", "account_id", "account", "currency", "payee", "category",
-		"amount", "baseline", "usual", "earlier", "times",
+		"amount", "baseline", "usual", "native_currency", "native_amount", "native_usual", "earlier", "times",
 	}, keysOf(entry))
 }
 

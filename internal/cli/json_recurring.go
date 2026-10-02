@@ -2,34 +2,39 @@ package cli
 
 import "github.com/koblas/quarry/internal/report"
 
-// recurringDocument is recurring's --json stdout shape.
+// recurringDocument is recurring's --json stdout shape; Currency is the reporting currency
+// ("native" lists every series in its own).
 type recurringDocument struct {
 	Since         string                    `json:"since"`
 	Until         string                    `json:"until"`
+	Currency      string                    `json:"currency"`
 	AccountFilter []accountFilterDocument   `json:"account_filter"`
 	Series        []recurringSeriesDocument `json:"series"`
 	Totals        []recurringTotalDocument  `json:"totals"`
 	Warnings      []string                  `json:"warnings"`
 }
 
-// recurringSeriesDocument is one entry of "series"; PerYear is null for an ended series and
-// PayeeKey for a series grouped by payee id.
+// recurringSeriesDocument is one entry of "series"; PerYear is null when ended, PayeeKey when grouped by payee id.
+// The Native fields are the series' own; the rest are in the reporting currency unless unconverted.
 type recurringSeriesDocument struct {
-	Payee        string                         `json:"payee"`
-	PayeeKey     *string                        `json:"payee_key"`
-	Payees       []recurringPayeeDocument       `json:"payees"`
-	Currency     string                         `json:"currency"`
-	Cadence      string                         `json:"cadence"`
-	Amount       string                         `json:"amount"`
-	FirstAmount  string                         `json:"first_amount"`
-	PerYear      *string                        `json:"per_year"`
-	FirstCharge  string                         `json:"first_charge"`
-	LastCharge   string                         `json:"last_charge"`
-	ChargeCount  int                            `json:"charge_count"`
-	State        string                         `json:"state"`
-	New          bool                           `json:"new"`
-	Accounts     []accountFilterDocument        `json:"accounts"`
-	PriceChanges []recurringPriceChangeDocument `json:"price_changes"`
+	Payee             string                         `json:"payee"`
+	PayeeKey          *string                        `json:"payee_key"`
+	Payees            []recurringPayeeDocument       `json:"payees"`
+	Currency          string                         `json:"currency"`
+	Cadence           string                         `json:"cadence"`
+	Amount            string                         `json:"amount"`
+	FirstAmount       string                         `json:"first_amount"`
+	PerYear           *string                        `json:"per_year"`
+	NativeCurrency    string                         `json:"native_currency"`
+	NativeAmount      string                         `json:"native_amount"`
+	NativeFirstAmount string                         `json:"native_first_amount"`
+	FirstCharge       string                         `json:"first_charge"`
+	LastCharge        string                         `json:"last_charge"`
+	ChargeCount       int                            `json:"charge_count"`
+	State             string                         `json:"state"`
+	New               bool                           `json:"new"`
+	Accounts          []accountFilterDocument        `json:"accounts"`
+	PriceChanges      []recurringPriceChangeDocument `json:"price_changes"`
 }
 
 // recurringPayeeDocument is one entry of a series' "payees".
@@ -38,9 +43,11 @@ type recurringPayeeDocument struct {
 	Name string `json:"name"`
 }
 
-// recurringPriceChangeDocument is one entry of a series' "price_changes"; Date is the later charge's.
+// recurringPriceChangeDocument is one entry of a series' "price_changes"; Date is the later charge's
+// and Currency the series' own currency, the one From and To are in.
 type recurringPriceChangeDocument struct {
 	Date      string  `json:"date"`
+	Currency  string  `json:"currency"`
 	From      string  `json:"from"`
 	To        string  `json:"to"`
 	ChangePct float64 `json:"change_pct"`
@@ -77,6 +84,7 @@ func renderRecurringJSON(r report.Recurring, warnings []string) ([]byte, error) 
 	return marshalDocument(recurringDocument{
 		Since:         r.Window.Since.Format(jsonDateLayout),
 		Until:         r.Window.Until.Format(jsonDateLayout),
+		Currency:      r.Currency.String(),
 		AccountFilter: accountFilterDocuments(r.Accounts),
 		Series:        series,
 		Totals:        totals,
@@ -93,7 +101,7 @@ func recurringSeriesOf(s report.Series) recurringSeriesDocument {
 	changes := make([]recurringPriceChangeDocument, len(s.PriceChanges))
 	for i, c := range s.PriceChanges {
 		changes[i] = recurringPriceChangeDocument{
-			Date: c.Date.Format(jsonDateLayout), From: jsonMoney(c.From), To: jsonMoney(c.To),
+			Date: c.Date.Format(jsonDateLayout), Currency: s.NativeCurrency, From: jsonMoney(c.From), To: jsonMoney(c.To),
 			ChangePct: float64(c.Tenths) / tenthsPerPercent,
 		}
 	}
@@ -105,6 +113,7 @@ func recurringSeriesOf(s report.Series) recurringSeriesDocument {
 		Payee: s.Payee, PayeeKey: s.PayeeKey, Payees: payees,
 		Currency: s.Currency, Cadence: recurringCadences[s.Cadence],
 		Amount: jsonMoney(s.Amount), FirstAmount: jsonMoney(s.FirstAmount), PerYear: perYear,
+		NativeCurrency: s.NativeCurrency, NativeAmount: jsonMoney(s.NativeAmount), NativeFirstAmount: jsonMoney(s.NativeFirstAmount),
 		FirstCharge: s.First.Format(jsonDateLayout), LastCharge: s.Last.Format(jsonDateLayout),
 		ChargeCount: s.ChargeCount, State: recurringStatus[s.State], New: s.New,
 		Accounts: accountFilterDocuments(s.Accounts), PriceChanges: changes,
