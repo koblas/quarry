@@ -123,7 +123,7 @@ func Test_anomalies_without_charges_prints_the_empty_table_and_footer_and_names_
 
 	require.NoError(t, err)
 	assert.Equal(t, ""+
-		"Unusually large charges 2026-01-01 to 2026-09-29 in all accounts\n\n"+
+		"Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD\n\n"+
 		"Date  Account  Payee  Category  Amount  Usual  Times  Compared with\n\n"+
 		"0 charges checked\n", stdout.String())
 	assert.Equal(t, "quarry: warning: "+anomaliesEmpty+"; the store's transactions run 2003-01-04 to 2026-09-26\n", stderr.String())

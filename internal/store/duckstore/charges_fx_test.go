@@ -1,6 +1,7 @@
 package duckstore_test
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/koblas/quarry/internal/platform/money"
@@ -62,6 +63,55 @@ func Test_charges_sums_the_converted_splits_of_a_charge_not_its_converted_total(
 
 	require.Len(t, got.Rows, 1)
 	assert.Equal(t, int64(2), got.Rows[0].Amount)
+	assert.Equal(t, int64(2), *got.Rows[0].AmountCAD)
+}
+
+func Test_charges_cells_match_money_convert_for_single_split_charges(t *testing.T) {
+	t.Parallel()
+	rows := fxSpendRows()
+	var id int64
+	for _, currency := range []string{"CAD", "USD"} {
+		for _, cents := range []int64{1, 10, 20, 99, 12_345, 99_999_999} {
+			for _, day := range []int{13, 16, 17} {
+				id++
+				spec := chargeSpec{id: "c" + strconv.FormatInt(id, 10), sourceID: id, date: march(day), splits: []splitPart{{category: new(catExpense), cents: -cents}}}
+				if currency == "USD" {
+					spec.account, spec.currency = acctUSD, "USD"
+				}
+				addCharge(&rows, spec)
+			}
+		}
+	}
+	st := newStoreWithRates(t, rows, ratesOn(13, 1_250_000, "FXUSDCAD"), ratesOn(16, 1_600_001, "FXUSDCAD"), ratesOn(17, 1_249_999, "FXUSDCAD"))
+
+	got, err := st.Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
+
+	require.NoError(t, err)
+	require.Len(t, got.Rows, int(id))
+	for _, c := range got.Rows {
+		own, _ := money.ParseCurrency(c.Currency)
+		wantCAD, okCAD := money.Convert(c.Amount, own, money.CAD, c.USDCAD)
+		wantUSD, okUSD := money.Convert(c.Amount, own, money.USD, c.USDCAD)
+		require.True(t, okCAD && okUSD)
+		require.NotNil(t, c.AmountCAD)
+		require.NotNil(t, c.AmountUSD)
+		assert.Equal(t, []int64{wantCAD, wantUSD}, []int64{*c.AmountCAD, *c.AmountUSD}, "%s %d at %d", c.Currency, c.Amount, c.USDCAD)
+	}
+}
+
+func Test_charges_cell_of_a_split_charge_differs_from_converting_its_total(t *testing.T) {
+	t.Parallel()
+	rows := fxSpendRows()
+	spec := usdCharge("split", 0, 13)
+	spec.splits = []splitPart{{new(catExpense), -1}, {new(catExpense), -1}}
+	addCharge(&rows, spec)
+
+	got := ratedChargesOf(t, rows)
+
+	require.Len(t, got.Rows, 1)
+	converted, ok := money.Convert(got.Rows[0].Amount, money.USD, money.CAD, got.Rows[0].USDCAD)
+	require.True(t, ok)
+	assert.Equal(t, int64(3), converted)
 	assert.Equal(t, int64(2), *got.Rows[0].AmountCAD)
 }
 

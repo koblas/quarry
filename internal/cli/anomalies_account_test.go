@@ -48,7 +48,7 @@ func Test_anomalies_captions_the_named_accounts_and_passes_their_ids_to_the_repo
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{visaID, chequingID}, got.AccountIDs)
-	assert.Contains(t, stdout.String(), "Unusually large charges 2026-01-01 to 2026-09-29 in Visa Infinite, Chequing\n\n")
+	assert.Contains(t, stdout.String(), "Unusually large charges 2026-01-01 to 2026-09-29 in Visa Infinite, Chequing, amounts in CAD\n\n")
 }
 
 func Test_anomalies_escapes_a_line_break_in_a_named_accounts_caption(t *testing.T) {
@@ -58,7 +58,7 @@ func Test_anomalies_escapes_a_line_break_in_a_named_accounts_caption(t *testing.
 	err := executeAnomalies(t, fake, &stdout, &stderr, "--account", chequingID)
 
 	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), `in Chq\nOne`+"\n\n")
+	assert.Contains(t, stdout.String(), `in Chq\nOne, amounts in CAD`+"\n\n")
 }
 
 func Test_anomalies_json_names_the_accounts_it_was_limited_to(t *testing.T) {

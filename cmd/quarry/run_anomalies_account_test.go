@@ -31,7 +31,7 @@ func Test_run_anomalies_account_judges_the_named_accounts_charge_against_history
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in Visa", "1 charge checked",
+	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in Visa, amounts in CAD", "1 charge checked",
 		[]string{"2026-03-02", "Visa (CAD)", "Bell Canada", "Food:Groceries", "412.00", "93.00", "4.4x", "payee, 3 earlier"}),
 		stdout.String())
 }
@@ -58,7 +58,7 @@ func Test_run_anomalies_lists_a_charge_in_a_closed_account(t *testing.T) {
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in Old Card", "1 charge checked",
+	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in Old Card, amounts in CAD", "1 charge checked",
 		[]string{"2026-03-02", "Old Card (CAD, closed)", "Bell Canada", "Food:Groceries", "412.00", "93.00", "4.4x", "payee, 3 earlier"}),
 		stdout.String())
 }

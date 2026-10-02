@@ -47,7 +47,7 @@ accounts; the payee's charges in other accounts still count as history.`,
 				return err
 			}
 
-			_, configWarnings, err := currency.resolve(cmd, loadConfig)
+			reportCurrency, configWarnings, err := currency.resolve(cmd, loadConfig)
 			if err != nil {
 				return err
 			}
@@ -57,7 +57,7 @@ accounts; the payee's charges in other accounts still count as history.`,
 				return err
 			}
 
-			found, err := srv.Anomalies(cmd.Context(), report.AnomaliesRequest{Window: resolved, Now: at, Accounts: flags.accounts})
+			found, err := srv.Anomalies(cmd.Context(), report.AnomaliesRequest{Window: resolved, Now: at, Accounts: flags.accounts, Currency: reportCurrency})
 			if err != nil {
 				return &runtimeError{err: err}
 			}
@@ -76,9 +76,9 @@ accounts; the payee's charges in other accounts still count as history.`,
 }
 
 // anomaliesWarnings is a's warnings, unprefixed and never nil: one per named account left out of the
-// report, then a note when no charge was checked in the period.
+// report, then the unconverted-charge note, then a note when no charge was checked in the period.
 func anomaliesWarnings(a report.Anomalies) []string {
-	warnings := leftOutWarnings(a.Accounts, anomaliesCommand)
+	warnings := append(leftOutWarnings(a.Accounts, anomaliesCommand), unconvertedWarnings(a.Currency, a.Unconverted, chargesNoun)...)
 	if a.Checked == 0 {
 		warnings = appendEmptyWindowWarning(warnings, "unusually large charges", a.Accounts, a.Window, a.Transactions)
 	}

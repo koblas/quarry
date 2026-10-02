@@ -24,7 +24,7 @@ func Test_run_anomalies_says_when_no_charge_falls_in_the_window(t *testing.T) {
 	exitCode := runWith(context.Background(), []string{"anomalies"}, spendEnv(&stdout, &stderr))
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts", "0 charges checked"), stdout.String())
+	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "0 charges checked"), stdout.String())
 	assert.Equal(t, "quarry: warning: no unusually large charges from 2026-01-01 to 2026-09-29; "+
 		"the store's transactions run 2003-01-04 to 2025-12-31\n", stderr.String())
 }
@@ -95,7 +95,7 @@ func Test_run_anomalies_prints_each_empty_window_warning_on_stderr_and_in_the_js
 			require.Equal(t, 0, textExit, textErr.String())
 			require.Equal(t, 0, jsonExit, jsonErr.String())
 			wantStderr := warningLines(c.wantWarns)
-			assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in "+c.wantCaption, "0 charges checked"), textOut.String())
+			assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in "+c.wantCaption+", amounts in CAD", "0 charges checked"), textOut.String())
 			assert.Equal(t, wantStderr, textErr.String())
 			assert.Equal(t, wantStderr, jsonErr.String())
 			var doc struct {
@@ -119,7 +119,7 @@ func Test_run_anomalies_prints_no_warning_when_charges_were_checked_but_none_is_
 
 	require.Equal(t, 0, textExit, textErr.String())
 	require.Equal(t, 0, jsonExit, jsonErr.String())
-	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts", "1 charge checked"), textOut.String())
+	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "1 charge checked"), textOut.String())
 	assert.Empty(t, textErr.String())
 	assert.Empty(t, jsonErr.String())
 	var doc struct {

@@ -16,9 +16,10 @@ const noRatesWarning = "the store has no exchange rates, so amounts are listed i
 // countedNoun names what a report counts in its before-the-first-rate line, in the singular and the plural.
 type countedNoun struct{ singular, plural string }
 
-// The nouns the reports count: spend and cashflow count transactions, recurring counts series.
+// The nouns the reports count: spend and cashflow count transactions, recurring counts series, anomalies count charges.
 var (
 	transactionsNoun = countedNoun{"transaction", "transactions"}
+	chargesNoun      = countedNoun{"charge", "charges"}
 	seriesNoun       = countedNoun{"series with a charge", "series with a charge"}
 )
 

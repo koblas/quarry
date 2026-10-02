@@ -65,8 +65,6 @@ type Anomaly struct {
 	ListedCurrency string
 	// ListedAmount and ListedUsual are Amount and Usual in ListedCurrency, at the charge's own rate.
 	ListedAmount, ListedUsual int64
-	// Unconverted is whether a CAD or USD charge is listed in its own currency for want of a rate.
-	Unconverted bool
 }
 
 // Anomalies is an anomalies read: the window it listed and the charges unusually large in it.
@@ -99,7 +97,7 @@ func (s *Server) Anomalies(ctx context.Context, req AnomaliesRequest) (Anomalies
 	if err != nil {
 		return Anomalies{}, s.readRefusal(ctx, anomaliesCommand, err)
 	}
-	result := Anomalies{Window: req.Window, Accounts: accounts, Transactions: charges.Transactions}
+	result := Anomalies{Window: req.Window, Accounts: accounts, Currency: req.Currency, Transactions: charges.Transactions}
 	tallied := func(c store.Charge) bool {
 		return inWindow(req.Window, c.Date) && (len(accountIDs) == 0 || slices.Contains(accountIDs, c.Account.ID))
 	}
@@ -120,8 +118,39 @@ func (s *Server) Anomalies(ctx context.Context, req AnomaliesRequest) (Anomalies
 			}
 		}
 	}
+	for i, an := range result.Listed {
+		converted, ok := an.listedIn(req.Currency)
+		result.Listed[i] = converted
+		if !ok && isCADOrUSD(an.Currency) {
+			result.Unconverted.Transactions++
+		}
+	}
+	if req.Currency != money.Native {
+		result.Unconverted.FirstRate = charges.FirstRate
+	}
 	slices.SortFunc(result.Listed, compareAnomalies)
 	return result, nil
+}
+
+// listedIn is a with Amount and Usual converted into target at the rate of the charge's own date. Both convert or
+// neither does; ok is false when a stays in its own currency because target is a currency it has no rate for.
+func (a Anomaly) listedIn(target money.Currency) (converted Anomaly, ok bool) {
+	if target == money.Native {
+		return a, true
+	}
+	amount, amountOK := chargeIn(a.Charge, target)
+	own, _ := money.ParseCurrency(a.Currency)
+	usual, usualOK := money.Convert(a.Usual, own, target, a.USDCAD)
+	if !amountOK || !usualOK {
+		return a, false
+	}
+	a.ListedCurrency, a.ListedAmount, a.ListedUsual = target.String(), amount, usual
+	return a, true
+}
+
+// isCADOrUSD is whether currency is one a rate can convert.
+func isCADOrUSD(currency string) bool {
+	return currency == money.CAD.String() || currency == money.USD.String()
 }
 
 // tally counts a judged charge, and lists it when it is unusual.

@@ -64,7 +64,7 @@ func Test_run_anomalies_lists_a_charge_over_twice_the_payees_usual(t *testing.T)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts", "1 charge checked",
+	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "1 charge checked",
 		[]string{"2026-03-02", "Chequing (CAD)", "Bell Canada", "Food:Groceries", "412.00", "96.05", "4.3x", "payee, 5 earlier"}),
 		stdout.String())
 }

@@ -292,7 +292,7 @@ func (s Series) listedIn(target money.Currency, first, latest store.Charge) Seri
 		s.Amount, s.FirstAmount = amount, firstAmount
 		return s
 	}
-	s.unconverted = latest.Currency == money.CAD.String() || latest.Currency == money.USD.String()
+	s.unconverted = isCADOrUSD(latest.Currency)
 	return s
 }
 
