@@ -39,7 +39,7 @@ Design: stop-mapping lives in `cli` `mcp.go` RunE (delivery policy; `mcp.Serve` 
 - Exit policy for a stopped server lives in `cli` `mcp.go`, not `mcp.Serve` — `Serve` keeps returning `Run`'s error unwrapped (S02's pins); S03+ handlers must never return `context.Canceled`/`EPIPE` as a runtime failure of `Serve`
 - `$HOME` check is inside `newMCPServe`'s closure before `Serve` — S03/S09/S11 add `WithReport`/`WithConfig` wiring there and keep the check first
 - Stop arms swallow only nil, `context.Canceled`, `syscall.EPIPE`; `DeadlineExceeded` from a ctx deadline is a runtime error (S06's per-call timeout is inside the tool call, not Serve's ctx)
-- Terminal probe is `Env.IsTerminal` (nil-safe, termios via x/term); hint printed by cli RunE, so with `$HOME` unset and a terminal both lines appear (hint first) — accepted
+- Terminal probe is `Env.IsTerminal` (nil-safe, termios via x/term); hint printed by cli RunE's `ready` callback, called only after `resolveHome` succeeds; with `$HOME` unset and a terminal only the `$HOME` line prints (orchestrator ruling 2)
 
 **Left unbuilt**:
 - Positive pty test for `isTerminal` unless constructible — unowned, MINOR
