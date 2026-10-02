@@ -16,6 +16,7 @@
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
 | 1 | arch, correctness, test, refactor | 0/1/13/10 | 0 / 20, 901s | BLOCKED |
+| 2 | correctness, test, refactor | 0/0/8/7 | 0 / 4, 214s | PASS WITH FOLLOW-UPS |
 
 ## Tokens
 
