@@ -246,6 +246,7 @@ The model cannot raise the cap. 500 is the hard maximum (Q7). It is a named cons
 
 **Cap hit:** `truncated: true`, plus the warning
 `returned the first 500 rows; the query has more; aggregate or filter in SQL to see the rest`
+<n> via humanize.Count: "1 row" at limit 1, "<n> rows" otherwise (mid-feature ruling, SCENARIO-03).
 The number shown is the effective limit.
 
 **Multiple statements:** no refusal specific to MCP. Behaviour is whatever the driver does for `quarry sql`, and one test pins it for both surfaces. Add the sentence `Send one statement; if you send several, only the last one's rows come back.` to the description **only if** that test shows last-statement semantics. Otherwise the driver's error reaches the model as `query failed: <reason>`.
@@ -356,7 +357,7 @@ quarry's config file.
 | Input | Owner | Copy |
 |---|---|---|
 | Missing `sql`, wrong JSON type, `limit` out of range, enum mismatch, unknown param (if the SDK sets additionalProperties false) | SDK schema validation | **SDK text, not ruled.** The requirement is only that it refuses and never silently ignores. The architect verifies the unknown-param behaviour. If the SDK ignores unknown params, that is acceptable for these four tools (no param is safety-relevant). |
-| `sql` blank or whitespace | handler | `query needs SQL in the sql parameter` |
+| `sql` blank, whitespace, or no statement (`;`, comments only) | handler (blank) / shared classifier `QueryFailureEmpty` (no statement; reaches the store, so with no store the no-store line wins) — mid-feature ruling, SCENARIO-03 | `query needs SQL in the sql parameter` |
 | Unknown tool name | SDK | SDK text |
 
 #### 4. Edge-case table
@@ -491,6 +492,8 @@ Scenario Outline: SCENARIO-05 — query refuses what it cannot run
     | a write statement       | ruled write refusal                   |
     | read_csv of a file      | ruled external-access refusal         |
     | whitespace only         | query needs SQL in the sql parameter  |
+    | ;                       | query needs SQL in the sql parameter  |
+    | -- note                 | query needs SQL in the sql parameter  |
     | invalid SQL             | query failed: <DuckDB first line>     |
     | a JSON-typed column     | ruled unprintable-value line          |
 
