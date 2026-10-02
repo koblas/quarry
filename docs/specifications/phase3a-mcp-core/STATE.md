@@ -1,6 +1,6 @@
 # phase3a-mcp-core — current state
 
-Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 07, 08, 09, 10, 14, 15, 16 (04, 05 delivered by 03; 08 by 07; 10, 14 by 09; 16 by 15). Last updated by SCENARIO-09.
+Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 07, 08, 09, 10, 11, 12, 14, 15, 16 (04, 05 delivered by 03; 08 by 07; 10, 14 by 09; 12 by 11; 16 by 15). Last updated by SCENARIO-11.
 
 ## Binding decisions
 - `internal/report/document` owns the sql, status and findings `--json` documents plus shared primitives (`DateLayout`, `Money`, `NullString`, `Rows`, `FindingCounts`, `NotImported`); MCP tools render from these same builders (`NewSQL`, `NewStatus`, `NewFindingsList`) — a second copy is the drift PRD:108 forbids (SCENARIO-01)
@@ -29,14 +29,16 @@ Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 07, 08, 09, 10, 14, 15, 16 (04,
 - `internal/mcp` imports `internal/config` (platform-only leaf); still never `cli` or another feature package (SCENARIO-09)
 - sync_status = the `status --json` policy in the CLI's order: `srv.Status` first, THEN config (a refusing store must not depend on config); `StatusIgnore(cfg.Ignore, "")`, or `StatusIgnore(nil, config.ProblemAbsolute(err))` on any loader error (never `isError`). `Config.Warnings` are not surfaced here; S11's data_quality is where absolute unknown-key lines appear (SCENARIO-09)
 - Account sort is `quarry accounts` order (`lower(name)`, `name`, `id`); relations tables-then-views then name; categories by `full_path`. Relations come from `duckdb_tables/views/columns` filtered `database_name = current_database() AND schema_name = 'main' AND NOT internal` at call time, no hand-written list (SCENARIO-07)
+- data_quality = `internal/mcp/data_quality.go`: config FIRST (`s.newConfig`), THEN store (`s.newReport`/`Findings`), the CLI `findings` order; sync_status is the reverse (store first). Both errors pass as-is (`isError` + stderr line). S13's cross-tool no-store/refusal tables must not assume one order (SCENARIO-09, 11)
+- Caps live in mcp, not `report`/`document` (`findings --json` unchanged): findings cut (`limit`, schema default 50, 1..500) over groups in listing order, THEN items cap (`maxItems` 25) on kept findings only; `counts` and `Unmatched` always from the uncut listing; cap helpers build fresh groups, never mutate store slices. Warning order: `cfg.WarningsAbsolute`, unmatched-ignore, findings-cap (max one), items-cap lines in listing order; copy ruled in spec §2.7 (SCENARIO-11)
+- `status`/`limit` defaults come from the schema `default` plus `absentNullArguments` and the SDK default step; handlers add none (a handler default is dead code). `Test_a_tool_call_with_absent_null_or_empty_arguments_reaches_the_handler` pins omitted/`null`/`{}` and the schema bounds are pinned for 0, 501 (SCENARIO-02, 11)
 - query handler clamps limit outside 1..500 to 500 and the schema `default` is pinned separately (omitted -> store asked 501); truncation warning uses `humanize.Count` (limit 1 reads "the first 1 row") (SCENARIO-03)
 
 ## Left unbuilt
 - spend/cashflow/recurring/anomalies/accounts/snapshots/sync documents stay in `internal/cli/json_*.go` — phase 3b moves the first four (SCENARIO-01)
 - `marshalDocument` stays in cli; no compact encoder in document — mcp owns it in `result.go` (SCENARIO-03)
-- `notBuilt`, `errNotBuilt` (`internal/mcp/tools.go`) now serve data_quality only; S11 replaces its handler, deletes them and `Test_an_unbuilt_tool_answers_isError` (its last row) (SCENARIO-02, 07, 09)
-- sync_status `30 seconds` timeout line: S06; sync_status row of the cross-tool no-store table: S13 (S09 pins only the no-import-history refusal through the handler); any `age` field is ruled out (§2.5) (SCENARIO-09)
-- Schema-validation pins for data_quality (limit bounds, default applied): S11 (SCENARIO-02)
+- sync_status and data_quality `30 seconds` timeout lines (`data_quality stopped after 30 seconds; try again`): S06; sync_status and data_quality rows of the cross-tool no-store table: S13 (S11 pins config and store faults through the handler, not the no-store line); (S09 pins only the no-import-history refusal through the handler); any `age` field is ruled out (§2.5) (SCENARIO-09)
+- Any new `findings`/`document` field for cut or total counts is ruled out (warnings only, Rule 6) (SCENARIO-11)
 - Per-call timeout option (`WithTimeout`), deadline/cancel mapping (incl. `describe_schema stopped after 30 seconds; try again`) and `QueryFailureInterrupted` split out of the generic arm in `query_refusal.go`: S06 (SCENARIO-02, 03, 07)
 - Cross-tool no-store refusal table rows for `describe_schema` and sync_status: S13 (S07, S09 pin one refusal through the handler) (SCENARIO-07, 09)
 - Positive pty test for `isTerminal` (termios true path pinned only by the `defaultEnv` wiring pin and the `/dev/null`/pipe/Buffer negatives) — unowned, MINOR (SCENARIO-15)
@@ -54,6 +56,7 @@ Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 07, 08, 09, 10, 14, 15, 16 (04,
 - An in-process fake-EPIPE writer cannot see SIGPIPE death: only `Test_quarry_mcp_exits_0_when_the_real_stdout_pipe_breaks` (re-exec) proves the real binary exits 0 (SCENARIO-15)
 - With `$HOME` unset at a terminal only the `$HOME` line prints (`ready` is never called) (SCENARIO-15)
 - The SDK client decodes `StructuredContent` into a map, losing key order: assert order on a raw frame (`peer.stdout`) or the `TextContent`. `json.Marshal` HTML-escapes like CLI `marshalDocument`; `SetEscapeHTML(false)` would diverge (SCENARIO-03)
+- An uncategorized finding is per payee, items per split: a data_quality fixture needing an over-cap finding uses one transaction whose entries sum to its amount; stray payee-variants or duplicates change totals (SCENARIO-11)
 - A nil report factory or nil config loader panics in the handlers (as nil `Env.ServeMCP`): tests pass `WithReport` and, for sync_status/data_quality, `WithConfig` (SCENARIO-03, 07, 09)
 - `cli` fakes and mcp `fakeStore` embed `report.Store`: they compile without `Schema` and panic if a test calls it (SCENARIO-07)
 - `read_faults_test.go`'s query-fault row fails only the first query; further `QueryRows` calls need `passQueries` rows or the coverage gate lists them (SCENARIO-07)
@@ -70,4 +73,3 @@ Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 07, 08, 09, 10, 14, 15, 16 (04,
 - Checkpoint S03 MINOR: `internal/mcp/result.go:47-48` errorLog mutex unpinned (deleting `mu` stays green; unobservable with os.Stderr) — S06 may pin with a concurrent-refusals -race test; else unowned
 - Checkpoint S07 doc-budget MINORs: `internal/report/describe_schema.go:23-27` DescribeSchema doc 5-6 lines (states how); `internal/store/duckstore/schema_read.go:31-35` Schema doc 5 lines — trim to contract; fold into next run touching them (gate fix pass otherwise)
 - Checkpoint S07 NIT: `internal/report/describe_schema.go` `maxListed > 0` tested only at 0; add -1 row — unowned
-- Checkpoint S09 doc-budget MINOR: `internal/mcp/sync_status.go:10-12` syncStatus doc 3 lines (budget 1-2) — fold into S11's run (touches internal/mcp)

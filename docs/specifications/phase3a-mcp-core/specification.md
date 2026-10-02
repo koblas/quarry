@@ -609,8 +609,8 @@ Sizing pass (architect, opus) 2026-10-02 — 17 IDs → 8 runs. Full report and 
 - [x] SCENARIO-09: sync_status returns the status document — `cmd/quarry/run_mcp_status_test.go` `Test_run_mcp_sync_status_returns_the_status_json_document`
 - [x] SCENARIO-10: sync_status still answers when the config is unreadable — delivered by SCENARIO-09 — `cmd/quarry/run_mcp_status_test.go` `Test_run_mcp_sync_status_answers_when_the_config_is_unreadable`
 - [x] SCENARIO-14: A sync while the server runs is seen without restart — delivered by SCENARIO-09 — `cmd/quarry/run_mcp_status_test.go` `Test_run_mcp_sync_status_sees_a_sync_between_calls`
-- [ ] SCENARIO-11: data_quality lists open findings within its bounds
-- [ ] SCENARIO-12: data_quality refuses an unreadable config
+- [x] SCENARIO-11: data_quality lists open findings within its bounds — `cmd/quarry/run_mcp_data_quality_test.go` `Test_run_mcp_data_quality_returns_the_first_50_open_findings_with_the_ruled_warnings`
+- [x] SCENARIO-12: data_quality refuses an unreadable config — delivered by SCENARIO-11 — `cmd/quarry/run_mcp_data_quality_test.go` `Test_run_mcp_data_quality_refuses_an_unreadable_config`
 - [ ] SCENARIO-06: A slow call stops at its deadline
 - [ ] SCENARIO-13: Every tool refuses before the first sync
 - [ ] SCENARIO-17: A cancelled call is interrupted quietly

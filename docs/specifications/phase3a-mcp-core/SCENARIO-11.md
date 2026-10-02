@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-11
-status: open
+status: done
 ---
 
 # SCENARIO-11: data_quality lists open findings within its bounds (absorbs SCENARIO-12, unreadable config)
@@ -28,10 +28,10 @@ RULED (specification §2.7, mid-feature copy ruling). Warning order: `cfg.Warnin
 - [x] Step 4 (batch 3, items cap): `data_quality.go` `capItems` on kept findings only, `itemsCapWarning(id, n)` with `humanize.Count`; `Items` re-sliced into a copy so the fake store's slice is not mutated (assert by calling twice). Tests: finding with exactly 25 items -> no warning, 26 -> warning `finding <id> lists the first 25 of 26 items; ...`, `1,234` grouping row; two over-cap findings -> two warnings in listed order; a finding beyond the findings cap with 400 items yields no items warning; a fixed finding (no items) and an item-less finding untouched; `Test_data_quality_orders_its_warnings`: all four warning kinds present -> order config, unmatched, findings-cap, items-cap (items-cap lines in listed order); id interpolated verbatim.
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `dataQuality` and the two cap helpers (1-2 lines, contract only); `go doc ./internal/mcp` unchanged exported surface.
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `dataQuality` and the two cap helpers (1-2 lines, contract only); `go doc ./internal/mcp` unchanged exported surface.
 
 ### Verify
-- [ ] Step 6: full verification block (`.claude/rules/agent-briefs.md`), `.claude/scripts/spec-check.py phase3a-mcp-core`, tick SCENARIO-11 with its acceptance test and SCENARIO-12 as `delivered by SCENARIO-11` with its acceptance test, rewrite `STATE.md` (drop `notBuilt`/`errNotBuilt` from Left unbuilt, close the S09 doc-budget debt), set `status: done`.
+- [x] Step 6: full verification block (`.claude/rules/agent-briefs.md`), `.claude/scripts/spec-check.py phase3a-mcp-core`, tick SCENARIO-11 with its acceptance test and SCENARIO-12 as `delivered by SCENARIO-11` with its acceptance test, rewrite `STATE.md` (drop `notBuilt`/`errNotBuilt` from Left unbuilt, close the S09 doc-budget debt), set `status: done`.
 
 ## Handoff
 
@@ -61,3 +61,5 @@ Run B1 (steps 2-4, build). Start 1cef9dd; commit follows. Narrow loop green: bot
 - Mutations (restored, diffed identical): counts from the cut listing (`kept.Counts = finding.Counts{Open: min(total, limit)}` in `capFindings`) reddened `Test_data_quality_never_trims_counts` (expected `{Open:6, Fixed:1}` actual `{Open:2}`) and the ignored-status test; config loaded after the store reddened `Test_data_quality_refuses_a_bad_config_before_touching_the_store` and the `errNoHome` sibling (`Should be zero, but was 1`).
 - Lint: `golangci-lint run ./...` 0 issues. Full covered suite, `test-stats.py`, spec tick, STATE.md, `status: done` are run V's.
 - Run V note: STATE.md Left unbuilt `notBuilt`/`errNotBuilt` and Open debts S09 doc-budget entries are now stale; drop them.
+
+Run V (steps 5-6, verify). `go build ./...` ok; full covered suite `go test rc=0`; `uncovered-diff.py` 0 uncovered added lines since 1cef9dd; `go test -race ./internal/mcp/... ./cmd/quarry/...` rc=0; `golangci-lint run ./...` 0 issues rc=0; `go vet ./internal/mcp/` ok. test-stats: cmd/quarry 525 (+2), internal/mcp 64 (+25), total 589 (+27), tempdir/disk unchanged in mcp (+0). spec-check both modes rc=0. S11 ticked with its acceptance test, S12 ticked `delivered by SCENARIO-11`. STATE.md rewritten (notBuilt line, S09 doc debt, schema-pin line dropped; data_quality order and cap placement recorded).
