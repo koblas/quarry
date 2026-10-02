@@ -72,7 +72,7 @@ func Test_run_recurring_lists_a_monthly_subscription_with_its_yearly_cost(t *tes
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, recurringTable("Recurring charges 2026-01-01 to 2026-09-29 in all accounts",
+	assert.Equal(t, recurringTable("Recurring charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD",
 		[]string{"Netflix.com", "CAD", "month", "20.99", "251.88", "2025-10-12", "2026-09-12", "active", ""},
 		[]string{"Total", "CAD", "", "", "251.88", "", "", "", ""}),
 		stdout.String())
@@ -110,7 +110,7 @@ func Test_run_recurring_detects_weekly_quarterly_and_yearly_series(t *testing.T)
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Empty(t, stderr.String())
-			assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts",
+			assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts, amounts in CAD",
 				[]string{"Gym", "CAD", c.every, c.amount, c.perYear, c.first, "2026-09-20", "active, new", ""},
 				[]string{"Total", "CAD", "", "", c.perYear, "", "", "", ""}),
 				stdout.String())
@@ -143,7 +143,7 @@ func Test_run_recurring_counts_a_split_charge_once_and_leaves_a_refund_out(t *te
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts",
+	assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts, amounts in CAD",
 		[]string{"Gym", "CAD", "month", "20.99", "251.88", "2026-04-10", "2026-09-10", "active, new", ""},
 		[]string{"Total", "CAD", "", "", "251.88", "", "", "", ""}),
 		stdout.String())

@@ -103,7 +103,7 @@ less. A period that --since or --until cuts short is marked partial.`,
 // cashFlowWarnings is c's warnings, unprefixed and never nil: one per named account left out,
 // then the unconverted-amounts note, then a note that the window held no income or spending.
 func cashFlowWarnings(c report.CashFlow) []string {
-	warnings := append(leftOutWarnings(c.Accounts, cashFlowCommand), unconvertedWarnings(c.Currency, c.Unconverted)...)
+	warnings := append(leftOutWarnings(c.Accounts, cashFlowCommand), unconvertedWarnings(c.Currency, c.Unconverted, transactionsNoun)...)
 	if c.Empty() {
 		warnings = appendEmptyWindowWarning(warnings, "income or spending", c.Accounts, c.Window, c.Transactions)
 	}

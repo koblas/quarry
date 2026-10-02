@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 )
 
@@ -38,13 +37,28 @@ func statusCell(s report.Series) string {
 	return recurringStatus[s.State]
 }
 
-// priceChangesCell is the Price changes cell of s: "N: first -> latest (±p%)", p the change from the
-// run's first charge to its latest; empty when the price never moved.
+// priceChangesCell is the Price changes cell of s: "N: first -> latest (±p%)" in the series' own
+// currency, p the change from the run's first charge to its latest, with the currency code in front of
+// each amount when s is listed in another currency; empty when the price never moved.
 func priceChangesCell(s report.Series) string {
 	if len(s.PriceChanges) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%d: %s -> %s (%s)", len(s.PriceChanges), formatMoney(s.FirstAmount), formatMoney(s.Amount), signedTenths(s.ChangeTenths))
+	prefix := ""
+	if s.NativeCurrency != s.Currency {
+		prefix = s.NativeCurrency + " "
+	}
+	return fmt.Sprintf("%d: %s%s -> %s%s (%s)", len(s.PriceChanges),
+		prefix, formatMoney(s.NativeFirstAmount), prefix, formatMoney(s.NativeAmount), signedTenths(s.ChangeTenths))
+}
+
+// currencyCell is the Currency cell of s: the currency it is listed in, with its own currency after it
+// in parentheses when the two differ.
+func currencyCell(s report.Series) string {
+	if s.NativeCurrency != s.Currency {
+		return s.Currency + " (" + s.NativeCurrency + ")"
+	}
+	return s.Currency
 }
 
 // signedTenths renders tenths of a percent as "+11.8%" or "-8.3%"; zero is "0.0%", unsigned.
@@ -71,12 +85,12 @@ func renderRecurring(r report.Recurring) string {
 			perYear = formatMoney(*s.PerYear)
 		}
 		rows = append(rows, []string{
-			escapeCell(s.Payee), s.Currency, recurringEvery[s.Cadence], formatMoney(s.Amount), perYear,
+			escapeCell(s.Payee), currencyCell(s), recurringEvery[s.Cadence], formatMoney(s.Amount), perYear,
 			s.First.Format(time.DateOnly), s.Last.Format(time.DateOnly), statusCell(s), priceChangesCell(s),
 		})
 	}
 	for _, t := range r.Totals {
 		rows = append(rows, []string{tableTotalLabel, t.Currency, "", "", formatMoney(t.PerYear), "", "", "", ""})
 	}
-	return renderTable(windowCaption("Recurring charges", r.Window, r.Accounts, money.Native), recurringAligns, rows)
+	return renderTable(windowCaption("Recurring charges", r.Window, r.Accounts, r.Currency), recurringAligns, rows)
 }

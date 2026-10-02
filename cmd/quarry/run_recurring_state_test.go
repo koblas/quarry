@@ -53,7 +53,7 @@ func Test_run_recurring_keeps_a_series_active_on_the_last_day_of_its_cadences_qu
 		t.Run(c.name, func(t *testing.T) {
 			stdout, first, last := quietSeriesOutput(t, c)
 
-			assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts",
+			assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts, amounts in CAD",
 				[]string{"Gym", "CAD", c.every, "10.00", c.perYear, first, last, "active, new", ""},
 				[]string{"Total", "CAD", "", "", c.perYear, "", "", "", ""}),
 				stdout)
@@ -73,7 +73,7 @@ func Test_run_recurring_marks_a_series_ended_one_day_past_its_cadences_quiet_per
 		t.Run(c.name, func(t *testing.T) {
 			stdout, first, last := quietSeriesOutput(t, c)
 
-			assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts",
+			assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts, amounts in CAD",
 				[]string{"Gym", "CAD", c.every, "10.00", "", first, last, "ended, new", ""}),
 				stdout)
 		})
@@ -98,7 +98,7 @@ func Test_run_recurring_marks_a_series_first_charged_in_the_window_as_new(t *tes
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, recurringTable("Recurring charges 2026-01-01 to 2026-09-29 in all accounts",
+	assert.Equal(t, recurringTable("Recurring charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD",
 		[]string{"Rogers", "CAD", "month", "25.00", "300.00", "2025-12-03", "2026-09-03", "active", ""},
 		[]string{"Crave", "CAD", "month", "15.00", "180.00", "2026-03-02", "2026-09-02", "active, new", ""},
 		[]string{"Total", "CAD", "", "", "480.00", "", "", "", ""}),

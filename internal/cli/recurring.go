@@ -32,6 +32,14 @@ once, with all its splits. Payees whose names differ only in store or
 reference numbers count as one payee. Charges dated after today are left
 out, even with a later --until.
 
+Series are found in each account's own currency, so a change in the
+exchange rate is never a price change, and a payee that charges in both
+CAD and USD has two series. Amount and Per year are converted to the
+reporting currency (--currency, else reporting.currency in the config
+file, else CAD) at the rate on the latest charge's date; price changes
+stay in the series' own currency. With --currency native nothing is
+converted.
+
 A charge that comes off schedule starts the series again. A series has
 ended when no charge has come for 14 days (weekly), 45 days (monthly), 120
 days (quarterly) or 400 days (yearly). Bills whose amount changes most
@@ -40,8 +48,8 @@ times, such as hydro, are not listed; see quarry spend --by payee.
 --since and --until choose which series to list: those running at any
 time in the period. A series whose first charge falls in the period is
 marked new. A price change is a step of more than 5% from one charge to
-the next. Per year is the latest amount times the charges in a year, for
-active series only.`,
+the next, in the series' own currency. Per year is the latest amount
+times the charges in a year, for active series only.`,
 		Example: `  quarry recurring
   quarry recurring --since 2026-09 --until 2026-09 --json
   quarry recurring --since 2000`,
@@ -53,7 +61,7 @@ active series only.`,
 				return err
 			}
 
-			_, configWarnings, err := currency.resolve(cmd, loadConfig)
+			reportCurrency, configWarnings, err := currency.resolve(cmd, loadConfig)
 			if err != nil {
 				return err
 			}
@@ -63,7 +71,7 @@ active series only.`,
 				return err
 			}
 
-			rec, err := srv.Recurring(cmd.Context(), report.RecurringRequest{Window: resolved, Now: at, Accounts: flags.accounts})
+			rec, err := srv.Recurring(cmd.Context(), report.RecurringRequest{Window: resolved, Now: at, Accounts: flags.accounts, Currency: reportCurrency})
 			if err != nil {
 				return &runtimeError{err: err}
 			}
@@ -80,9 +88,9 @@ active series only.`,
 }
 
 // recurringWarnings is r's warnings, unprefixed and never nil: one per named account left out of the
-// report, then a note when no series runs in the period.
+// report, then the unconverted-series note, then a note when no series runs in the period.
 func recurringWarnings(r report.Recurring) []string {
-	warnings := leftOutWarnings(r.Accounts, recurringCommand)
+	warnings := append(leftOutWarnings(r.Accounts, recurringCommand), unconvertedWarnings(r.Currency, r.Unconverted, seriesNoun)...)
 	if r.Empty() {
 		warnings = appendEmptyWindowWarning(warnings, "recurring charges", r.Accounts, r.Window, r.Transactions)
 	}

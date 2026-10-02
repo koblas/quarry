@@ -30,7 +30,7 @@ func Test_run_recurring_leaves_out_a_charge_dated_after_the_local_day_even_when_
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, recurringTable("Recurring charges 2026-01-01 to 2027-12-31 in all accounts",
+	assert.Equal(t, recurringTable("Recurring charges 2026-01-01 to 2027-12-31 in all accounts, amounts in CAD",
 		[]string{"Netflix.com", "CAD", "month", "9.99", "119.88", "2026-06-29", "2026-09-29", "active, new", ""},
 		[]string{"Total", "CAD", "", "", "119.88", "", "", "", ""}),
 		stdout.String())

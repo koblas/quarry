@@ -25,7 +25,7 @@ func Test_run_recurring_says_when_no_series_runs_in_the_period(t *testing.T) {
 	exitCode := runWith(context.Background(), []string{"recurring"}, spendEnv(&stdout, &stderr))
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, recurringTable("Recurring charges 2026-01-01 to 2026-09-29 in all accounts"), stdout.String())
+	assert.Equal(t, recurringTable("Recurring charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD"), stdout.String())
 	assert.Equal(t, "quarry: warning: no recurring charges from 2026-01-01 to 2026-09-29; "+
 		"the store's transactions run 2003-01-04 to 2025-12-31\n", stderr.String())
 }
@@ -114,7 +114,7 @@ func Test_run_recurring_prints_each_empty_period_warning_on_stderr_and_in_the_js
 			require.Equal(t, 0, textExit, textErr.String())
 			require.Equal(t, 0, jsonExit, jsonErr.String())
 			wantStderr := warningLines(c.wantWarns)
-			assert.Equal(t, "Recurring charges 2026-01-01 to 2026-09-29 in "+c.wantCaption+"\n\n"+recurringHeaderOnly, textOut.String())
+			assert.Equal(t, "Recurring charges 2026-01-01 to 2026-09-29 in "+c.wantCaption+", amounts in CAD\n\n"+recurringHeaderOnly, textOut.String())
 			assert.Equal(t, wantStderr, textErr.String())
 			assert.Equal(t, wantStderr, jsonErr.String())
 			var doc struct {
@@ -135,7 +135,7 @@ func Test_run_recurring_lists_nothing_for_a_future_period_that_until_allows(t *t
 	exitCode := runWith(context.Background(), []string{"recurring", "--since", "2030", "--until", "2031"}, spendEnv(&stdout, &stderr))
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, "Recurring charges 2030-01-01 to 2031-12-31 in all accounts\n\n"+recurringHeaderOnly, stdout.String())
+	assert.Equal(t, "Recurring charges 2030-01-01 to 2031-12-31 in all accounts, amounts in CAD\n\n"+recurringHeaderOnly, stdout.String())
 	assert.Equal(t, "quarry: warning: no recurring charges from 2030-01-01 to 2031-12-31; "+
 		"the store's transactions run 2003-01-04 to 2025-12-31\n", stderr.String())
 }

@@ -54,7 +54,7 @@ func Test_recurring_judges_a_series_by_the_same_day_its_window_ends_on(t *testin
 	err := executeAtAdvancingClock(t, "recurring", fakeReportStore{charges: store.Charges{Rows: rows}}, &stdout)
 
 	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), "Recurring charges 2026-01-01 to 2026-09-29 in all accounts")
+	assert.Contains(t, stdout.String(), "Recurring charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD")
 	assert.Contains(t, stdout.String(), "2026-08-15  active, new")
 }
 

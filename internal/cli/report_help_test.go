@@ -48,6 +48,27 @@ the rows can add up to more than the total.
 	assert.Contains(t, stdout.String(), long)
 }
 
+func Test_recurring_help_says_series_are_found_in_their_own_currency(t *testing.T) {
+	const converted = `Series are found in each account's own currency, so a change in the
+exchange rate is never a price change, and a payee that charges in both
+CAD and USD has two series. Amount and Per year are converted to the
+reporting currency (--currency, else reporting.currency in the config
+file, else CAD) at the rate on the latest charge's date; price changes
+stay in the series' own currency. With --currency native nothing is
+converted.
+`
+	const priceChange = `the next, in the series' own currency. Per year is the latest amount
+times the charges in a year, for active series only.
+`
+	var stdout, stderr bytes.Buffer
+
+	err := executeRecurring(t, fakeReportStore{}, &stdout, &stderr, "--help")
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), "out, even with a later --until.\n\n"+converted+"\nA charge that comes off schedule")
+	assert.Contains(t, stdout.String(), priceChange)
+}
+
 func Test_spend_help_shows_examples(t *testing.T) {
 	const examples = `Examples:
   quarry spend
