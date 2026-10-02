@@ -27,3 +27,7 @@ Scenarios complete: SCENARIO-01. Last updated by SCENARIO-01.
 - PRD `docs/initial-prd.md` §Security "Redaction on import" bullet and Risks table "masking on import" mitigation are now false: redaction deferred by user 2026-10-02. Do not edit silently; PRD §Decisions entry added when user confirms wording — unowned until then
 - `internal/cli/root.go:6-10` `newRootCommand` doc comment lists subcommands and must name `mcp` — SCENARIO-02
 - No direct unit test on `report.SQLConventions`; pinned only through the `sql --help` byte pin — unowned, MINOR
+- Checkpoint S01 comment MINORs (fold into SCENARIO-02's run): `internal/report/sql_conventions.go:3-4` and `internal/report/document/status.go:12`, `document/doc.go:1-2` name MCP consumers not built yet — state only what code does now, or leave until the consumer lands in S02/S07/S09 and re-check then
+- Checkpoint S01 MINOR: `internal/report/query_failure_test.go:12` pins precedence only QueryError over Interrupted; unprintable vs QueryError and read-only vs external-access order unpinned (add rows if constructible) — unowned
+- Checkpoint S01 MINOR: `internal/report/document/findings_test.go:42` two behaviours under one "and" name; `assert.Empty(fixedEntry.Items)` on a finding given no items proves nothing — split, give items — unowned
+- Checkpoint S01 MINOR: `internal/report/document/status_test.go:41` derefs `*read.Findings.Ignored` without `require.NotNil` — unowned
