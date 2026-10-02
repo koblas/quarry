@@ -18,8 +18,9 @@ type askSpan struct {
 	legacy bool
 }
 
-// planSpans returns the runs of Need that Have does not cover, oldest first. A run after Have always starts the day
-// after Have.Last, even when Need starts later, so the stored rates stay one unbroken interval.
+// planSpans returns the runs to ask so that Have plus those runs is one unbroken interval covering Need. A run
+// before Have ends the day before Have.First, even when Need ends sooner, and a run after Have starts the day after
+// Have.Last, even when Need starts later: a stored gap would be claimed by the floor and converted at a stale rate.
 func planSpans(req store.RatesRequest) []askSpan {
 	need, have := req.Need, req.Have
 	if empty(need) {
@@ -32,7 +33,7 @@ func planSpans(req store.RatesRequest) []askSpan {
 	var spans []askSpan
 	if need.First.Before(have.First) {
 		// Only a run reaching back before Have may use the legacy series; later days are only ever FXUSDCAD's.
-		spans = append(spans, askSpan{span: store.DateSpan{First: need.First, Last: earlier(need.Last, dayBefore(have.First))}, legacy: true})
+		spans = append(spans, askSpan{span: store.DateSpan{First: need.First, Last: dayBefore(have.First)}, legacy: true})
 	}
 	if need.Last.After(have.Last) {
 		spans = append(spans, askSpan{span: store.DateSpan{First: dayAfter(have.Last), Last: need.Last}})
@@ -45,10 +46,3 @@ func empty(s store.DateSpan) bool { return s.First.IsZero() || s.Last.Before(s.F
 
 func dayBefore(t time.Time) time.Time { return t.AddDate(0, 0, -1) }
 func dayAfter(t time.Time) time.Time  { return t.AddDate(0, 0, 1) }
-
-func earlier(a, b time.Time) time.Time {
-	if b.Before(a) {
-		return b
-	}
-	return a
-}

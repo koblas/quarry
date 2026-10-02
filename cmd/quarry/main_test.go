@@ -1,5 +1,5 @@
-// run is unexported, so its tests live in package main rather than
-// importing main from outside.
+// Tests for the command line live in package main, since runProcess and the factories are unexported.
+// run is the test wiring: runProcess's command line over testEnv, whose sync never reaches the network.
 package main
 
 import (

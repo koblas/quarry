@@ -85,7 +85,7 @@ func Test_refresh_asks_only_for_the_dates_have_does_not_cover(t *testing.T) {
 		{name: "have ending the day before need asks for need", need: span(d(5), d(9)), have: span(d(0), d(4)), want: []store.DateSpan{span(d(5), d(9))}},
 		{name: "a need ending before it starts asks for nothing", need: span(d(9), d(5))},
 		{name: "a need ending before it starts asks for nothing beside a have", need: span(d(9), d(5)), have: span(d(0), d(2))},
-		{name: "have wholly after need asks for all of need", need: span(d(0), d(2)), have: span(d(5), d(9)), want: []store.DateSpan{span(d(0), d(2))}},
+		{name: "have wholly after need asks for the days up to have", need: span(d(0), d(2)), have: span(d(5), d(9)), want: []store.DateSpan{span(d(0), d(4))}},
 	}
 
 	for _, c := range cases {

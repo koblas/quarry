@@ -40,7 +40,7 @@
   - A cancel during the fetch is the existing interrupted outcome (exit 1, previous store untouched).
   - A fetch failure still swaps the new store in, with exit 0.
 - R6 — Sync fetches the part of [earliest transaction date, today] not covered by [first, last] stored, at both ends.
-  - *Amended at gate round 1:* fx_rates is always one interval. The forward span starts the day after the last stored rate, even when the earliest transaction is later, so no gap ever opens after `last`. A Need whose first date is after its last (every transaction future-dated) is empty: no request, floor unchanged. After a rates fault, the floor carried by earlier runs is forgotten in the store too, not only in memory.
+  - *Amended at gate round 1:* fx_rates is always one interval. The forward span starts the day after the last stored rate, even when the earliest transaction is later, so no gap ever opens after `last`. Likewise the backward span ends the day before the first stored rate, even when the earliest transaction's whole range ends sooner, so no gap opens before `first` either (gate round 2). A Need whose first date is after its last (every transaction future-dated) is empty: no request, floor unchanged. After a rates fault, the floor carried by earlier runs is forgotten in the store too, not only in memory.
   - FXUSDCAD wins where it has a date; IEXE0101 is used only before it. `fx_rates.series` records which.
   - Carried rates are never deleted.
   - A permanent gap before the legacy series' first date is neither a failure nor refetched every sync. The SCENARIO-01 plan confirms IEXE0101's real start date with one fetch.
