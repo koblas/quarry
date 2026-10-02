@@ -31,6 +31,10 @@ type SnapshotsFactory func(ctx context.Context, command string) (srv *snapshot.S
 // stderr is for diagnostics only; stdout carries nothing but the protocol.
 type MCPServeFunc func(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer) error
 
+// TerminalProbe reports whether r is an interactive terminal rather than a
+// pipe, file or in-memory reader.
+type TerminalProbe func(r io.Reader) bool
+
 // ConfigLoader reads quarry's config file for command, the name of the
 // command asking, for refusals that say which command to run again. Like
 // the factories it is called only from a command's RunE.
@@ -47,6 +51,7 @@ type Env struct {
 	NewSnapshots   SnapshotsFactory
 	LoadConfig     ConfigLoader
 	ServeMCP       MCPServeFunc
+	IsTerminal     TerminalProbe
 	Now            func() time.Time
 }
 

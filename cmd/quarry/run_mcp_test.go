@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/cli"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -86,29 +87,14 @@ const (
 func Test_run_mcp_lists_quarrys_four_tools_over_json_rpc(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
 	defer cancel()
-	serverStdin, toServer := io.Pipe()
-	serverStdout, fromServer := io.Pipe()
-	var stdout, stderr bytes.Buffer
-	finished := make(chan struct{})
-	go func() {
-		defer close(finished)
-		env := testEnv(io.MultiWriter(fromServer, &stdout), &stderr)
-		env.Stdin = serverStdin
-		runWith(ctx, []string{"mcp"}, env)
-		_ = fromServer.Close()
-	}()
+	peer := startMCP(ctx, t, func(*cli.Env) {})
+	session := peer.session
 
-	client := sdk.NewClient(&sdk.Implementation{Name: "test-client", Version: "v0.0.0"}, nil)
-	session, err := client.Connect(ctx, &sdk.IOTransport{Reader: serverStdout, Writer: toServer}, nil)
-	require.NoError(t, err)
 	listed, err := session.ListTools(ctx, nil)
 	require.NoError(t, err)
 	require.NoError(t, session.Close())
-	select {
-	case <-finished:
-	case <-ctx.Done():
-		require.FailNow(t, "quarry mcp did not return after the client closed its session")
-	}
+	peer.waitForExit(ctx, t)
+	stdout, stderr := peer.stdout, peer.stderr
 
 	initialized := session.InitializeResult()
 	assert.Equal(t, &sdk.Implementation{Name: "quarry", Version: mcpTestServerVersion}, initialized.ServerInfo)
@@ -145,4 +131,46 @@ func assertJSONEqualAny(t *testing.T, want string, got any, msg string) {
 	encoded, err := json.Marshal(got)
 	require.NoError(t, err, msg)
 	assert.JSONEq(t, want, string(encoded), msg)
+}
+
+// mcpPeer is a quarry mcp running in-process with an MCP client connected to it over pipes.
+type mcpPeer struct {
+	session        *sdk.ClientSession
+	exit           <-chan int
+	stdout, stderr *bytes.Buffer
+}
+
+// startMCP runs quarry mcp over pipes, lets tweak adjust its Env, and connects a client.
+func startMCP(ctx context.Context, t *testing.T, tweak func(*cli.Env)) *mcpPeer {
+	t.Helper()
+	serverStdin, toServer := io.Pipe()
+	serverStdout, fromServer := io.Pipe()
+	peer := &mcpPeer{stdout: &bytes.Buffer{}, stderr: &bytes.Buffer{}}
+	exit := make(chan int, 1)
+	peer.exit = exit
+	go func() {
+		env := testEnv(io.MultiWriter(fromServer, peer.stdout), peer.stderr)
+		env.Stdin = serverStdin
+		tweak(&env)
+		exit <- runWith(ctx, []string{"mcp"}, env)
+		_ = fromServer.Close()
+	}()
+
+	client := sdk.NewClient(&sdk.Implementation{Name: "test-client", Version: "v0.0.0"}, nil)
+	session, err := client.Connect(ctx, &sdk.IOTransport{Reader: serverStdout, Writer: toServer}, nil)
+	require.NoError(t, err)
+	peer.session = session
+	return peer
+}
+
+// waitForExit returns quarry mcp's exit code, failing the test if it has not exited by ctx's deadline.
+func (p *mcpPeer) waitForExit(ctx context.Context, t *testing.T) int {
+	t.Helper()
+	select {
+	case code := <-p.exit:
+		return code
+	case <-ctx.Done():
+		require.FailNow(t, "quarry mcp did not return after the client closed its session")
+		return 0
+	}
 }
