@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-18
-status: open
+status: done
 ---
 
 # SCENARIO-18: Anomalies are judged in native currency and shown converted
@@ -29,10 +29,10 @@ Survey (existing, reused): `report.chargeIn` (`recurring.go:235`) picks the cell
 - [x] Step 5: `internal/cli/json_anomalies.go:5-13,26-41,51-74` `currency` right after `until`; `native_currency, native_amount, native_usual` per entry; `currency`/`amount`/`usual` converted; `times` native. `internal/cli/anomalies.go:27-38` Long. Tests: new `json_anomalies_internal_test.go` key-ORDER pin with `topLevelKeys` (`json_spend_internal_test.go:177`) for top level and an entry, converted + unconverted + native; add the new keys to `anomalies_json_test.go:62` key-set pin; read-back test with `encoding/json` (count, converted vs native values, `anomalies []` not null, one entry for a no-payee category-baseline charge, `warnings []`); `cmd/quarry/run_anomalies_json_test.go:54` typed doc gains the new fields. Long: edit `Charges under 100.00 …` to the ruled sentence, add the ruled paragraph, re-pin verbatim at `anomalies_test.go:81` (`Test_anomalies_help_says_what_anomalies_lists`).
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new fields.
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new fields.
 
 ### Verify
-- [ ] Step 7: full verification + `spec-check.py phase2f-fx` → tick SCENARIO-18 with its acceptance test; rewrite STATE.md.
+- [x] Step 7: full verification + `spec-check.py phase2f-fx` → tick SCENARIO-18 with its acceptance test; rewrite STATE.md.
 
 ## Handoff
 
@@ -54,6 +54,8 @@ Survey (existing, reused): `report.chargeIn` (`recurring.go:235`) picks the cell
 - Warning noun: `charge`/`charges` (spec: "the same sentence with `charges`").
 
 ## Phase report
+
+Run V done: build ok, full covered suite rc=0, uncovered-diff 0 lines since 6c75b4a, `-race` ok on duckstore/report/cli/cmd, lint `0 issues`, spec-check OK; SCENARIO-18 ticked; STATE.md rewritten (77 lines). Test counts vs `<start>`: cmd/quarry 489 (+12), internal/cli 409 (+12), internal/report 272 (+16), duckstore 468 (+2), total 1638 (+42). Earlier runs' report follows.
 
 Run B2 done; steps 1-5 ticked. Sweep (6) and Verify (7) are V's. Already green at B2's end: `go build ./...`, `golangci-lint run ./...` 0 issues, full covered suite rc=0, `uncovered-diff.py` 0 uncovered lines since `<start>` 6c75b4a, `go test -race ./internal/cli/` ok. Test counts vs `<start>` (cumulative A-B2): cmd/quarry 489 (+12), internal/cli 409 (+12), internal/report 272 (+16), duckstore 468 (+2), total 1638 (+42).
 
