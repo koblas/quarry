@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-09
-status: open
+status: done
 ---
 
 # SCENARIO-09: sync_status returns the status document (folds SCENARIO-10, SCENARIO-14)
@@ -34,10 +34,10 @@ Orientation: `go doc ./internal/mcp`, `./internal/report/document`, `./internal/
 - [x] Step 6: `cmd/quarry/run.go:135-150` `newMCPServe` add `mcp.WithConfig(mcp.ConfigLoader(newConfigLoader()))` after the `resolveHome` check, before `signal.Ignore` (keep that order); `Test_run_mcp_sync_status_refuses_a_store_without_an_import_run` in `run_mcp_status_test.go` (`syncAccountsFixture` + `editStore(...,"DELETE FROM import_runs")` as `run_read_refusals_test.go:267`) — `isError` text equals the CLI `status` stderr line minus `quarry: ` and newline, and mcp stderr is `quarry: mcp: sync_status: <that text>\n`. Debt closes: drop the first two package-clause comment lines of `run_mcp_query_test.go:1-2` and `run_mcp_describe_test.go:1-2` and add none to the new file; recheck `internal/report/document/status.go:12` (its MCP consumer now exists; edit only if it is still untrue)
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `WithConfig`, `ConfigLoader`, `syncStatus` within budget (`go doc ./internal/mcp`)
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `WithConfig`, `ConfigLoader`, `syncStatus` within budget (`go doc ./internal/mcp`)
 
 ### Verify
-- [ ] Step 8: full verification per `.claude/rules/agent-briefs.md`, `spec-check.py phase3a-mcp-core`; tick SCENARIO-09 with its acceptance test, and SCENARIO-10 and SCENARIO-14 with "delivered by SCENARIO-09" before each test reference; rewrite STATE.md (S09/S11 owed items: `WithConfig`, `notBuilt` shrinks to data_quality, close the S01 `status.go:12` and the duplicate-comment debts)
+- [x] Step 8: full verification per `.claude/rules/agent-briefs.md`, `spec-check.py phase3a-mcp-core`; tick SCENARIO-09 with its acceptance test, and SCENARIO-10 and SCENARIO-14 with "delivered by SCENARIO-09" before each test reference; rewrite STATE.md (S09/S11 owed items: `WithConfig`, `notBuilt` shrinks to data_quality, close the S01 `status.go:12` and the duplicate-comment debts)
 
 ## Handoff
 
@@ -59,7 +59,9 @@ Orientation: `go doc ./internal/mcp`, `./internal/report/document`, `./internal/
 
 ## Phase report
 
-Run B1 (steps 4-6) done; Sweep/Verify (V) remain. Narrow loop green; `golangci-lint run ./...` 0 issues; all four plan mutations run, each red (config cached -> `.../the_config_is_read_on_every_call`; Status memoised -> `.../a_re-sync_shows_the_new_store`; `IgnoreKnown: true` -> `..._answers_when_the_config_is_unreadable` plus two unit tests; `Problem` for `ProblemAbsolute` -> same acceptance test and `Test_sync_status_says_it_cannot_tell_what_is_ignored_when_the_config_is_refused`). Files restored, diffed identical.
+Run V done: all phases ticked.
+
+Run B1 (steps 4-6) done. Narrow loop green; `golangci-lint run ./...` 0 issues; all four plan mutations run, each red (config cached -> `.../the_config_is_read_on_every_call`; Status memoised -> `.../a_re-sync_shows_the_new_store`; `IgnoreKnown: true` -> `..._answers_when_the_config_is_unreadable` plus two unit tests; `Problem` for `ProblemAbsolute` -> same acceptance test and `Test_sync_status_says_it_cannot_tell_what_is_ignored_when_the_config_is_refused`). Files restored, diffed identical.
 
 Changed: `internal/mcp/server.go` (`ConfigLoader`, `WithConfig`, `newConfig`), `internal/mcp/tools.go` (sync_status -> `handler(s.syncStatus)`), new `internal/mcp/sync_status.go` (`syncStatus`, `statusIgnore`), new `internal/mcp/sync_status_test.go`, `query_helpers_test.go` (`fakeStore.Status`/`statusReads`, `newHarness(..., opts ...mcp.Option)`, `harness.syncStatus`), `server_test.go` (sync_status row dropped), `cmd/quarry/run.go` (`mcp.WithConfig` after the `resolveHome` check), `cmd/quarry/run_mcp_status_test.go` (+ `Test_run_mcp_sync_status_refuses_a_store_without_an_import_run`), package comments dropped from `run_mcp_query_test.go` and `run_mcp_describe_test.go`.
 

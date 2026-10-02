@@ -1,6 +1,6 @@
 # phase3a-mcp-core — current state
 
-Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 07, 08, 15, 16 (04, 05 delivered by 03; 08 by 07; 16 by 15). Last updated by SCENARIO-07.
+Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 07, 08, 09, 10, 14, 15, 16 (04, 05 delivered by 03; 08 by 07; 10, 14 by 09; 16 by 15). Last updated by SCENARIO-09.
 
 ## Binding decisions
 - `internal/report/document` owns the sql, status and findings `--json` documents plus shared primitives (`DateLayout`, `Money`, `NullString`, `Rows`, `FindingCounts`, `NotImported`); MCP tools render from these same builders (`NewSQL`, `NewStatus`, `NewFindingsList`) — a second copy is the drift PRD:108 forbids (SCENARIO-01)
@@ -16,26 +16,29 @@ Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 07, 08, 15, 16 (04, 05 delivere
 - Instructions and descriptions keep the spec code blocks' hard line breaks, no trailing newline; the query description's last line ("Send one statement; ...") was copy-ruled. Tool results use `Out = any`, `OutputSchema {"type":"object"}`, handlers set `StructuredContent: json.RawMessage` (SCENARIO-02)
 - `absentNullArguments` (`internal/mcp/arguments.go`) is registered via `AddReceivingMiddleware` and must stay: SDK v1.8.0 panics the whole server (nil map in jsonschema-go `applyDefaults`) on `tools/call` with `"arguments": null` when the schema has a `default` (query, data_quality). S03 and S11 inherit it and must keep their `default`s covered by `Test_a_tool_call_with_null_arguments...` (SCENARIO-02)
 - Root help pin `cmd/quarry/run_status_test.go` `Test_run_help_prints_quarrys_description` lists every subcommand; a new command adds its row there (SCENARIO-02)
-- `MCPServeFunc` takes a trailing `ready func()`: cli RunE passes one that prints the TTY hint (when `env.IsTerminal(stdin)`); the `newMCPServe` closure calls `resolveHome("mcp")` first (error returned, `ready` never called, so no hint), then `signal.Ignore(SIGPIPE)`, `ready()`, `Serve`. S09/S11 add `WithConfig` wiring after the `$HOME` check and keep that order (SCENARIO-15)
+- `MCPServeFunc` takes a trailing `ready func()`: cli RunE passes one that prints the TTY hint (when `env.IsTerminal(stdin)`); the `newMCPServe` closure calls `resolveHome("mcp")` first (error returned, `ready` never called, so no hint), then `signal.Ignore(SIGPIPE)`, `ready()`, `Serve`. `WithConfig` is wired there after the `$HOME` check, before `signal.Ignore`; keep that order (SCENARIO-09, 15)
 - `Env.IsTerminal TerminalProbe` is nil-safe (nil = not a terminal; existing Env literals stay valid); `defaultEnv` wires `isTerminal` (`cmd/quarry/terminal.go`, termios via `golang.org/x/term`, never `ModeCharDevice`: `/dev/null` is a char device) (SCENARIO-15)
 - `signal.Ignore(SIGPIPE)` is on the mcp path only, so a broken fd 1 reaches the EPIPE arm instead of killing the process; other commands keep Go's default (SCENARIO-15)
 - `mcp` refuses args and `--json` as `UsageError` (exit 2, no `Run ... --help` suffix) via `Args: noArgs` and a RunE check on `Execute`'s `jsonOut` pointer (SCENARIO-15)
 - go.mod: `golang.org/x/term` v0.46.0 direct; `go get` bumped `x/sys` v0.41.0 -> v0.48.0; full suite, race on touched packages and lint green after the bump (SCENARIO-15)
 - `internal/mcp/result.go` is the only place a tool result and the stderr line are built: tools pass `handler(func(ctx, In) (doc, error))`; success = compact `json.Marshal` as `StructuredContent` (`json.RawMessage`) plus one identical `TextContent`; failure = the error text as the one `TextContent`, no document. Stderr is the `errorLog` receiving middleware on `tools/call` (`quarry: mcp: <tool>: <text>\n`, one `Write` under a mutex, silent when the call ctx is done) because SDK-side schema refusals are `isError` results that never reach a handler. S07/S09/S11 never touch `CallToolResult` (SCENARIO-03)
-- `mcp.WithReport(ReportFactory)`: type declared in mcp (`func(ctx, command string) (*report.Server, error)`), cmd converts `newReportFactory()`; called per tool call with command `"mcp"`, never cached. `newMCPServe` builds the Server inside the closure after `resolveHome`. S07/S09 take it; S09/S11 add `WithConfig` the same way (SCENARIO-03)
+- `mcp.WithReport(ReportFactory)`: type declared in mcp (`func(ctx, command string) (*report.Server, error)`), cmd converts `newReportFactory()`; called per tool call with command `"mcp"`, never cached. `newMCPServe` builds the Server inside the closure after `resolveHome`. S07/S09 take it (SCENARIO-03)
 - A `report.RefusalError` passes through as the error text verbatim (the ruled `~` line), so a new tool needs no store-refusal mapping; query-specific copy lives only in `query_refusal.go`. `QueryFailureInterrupted` and `Other` share one arm returning the error unchanged (SCENARIO-03)
 - `report.Store.Schema` is one open returning `store.Schema`; ordering and the cap live in `report.Server.DescribeSchema(ctx, maxListed)` (sort THEN cut; <=0 keeps all), not the store, so a future CLI `schema` command reuses it. mcp passes `maxRows` (500) and owns the overflow warning copy naming the tool (`listCutWarning`, accounts then categories, `humanize.Thousands`); `document.NewSchema` takes warnings as given (SCENARIO-07)
+- `mcp.WithConfig(ConfigLoader)`: `ConfigLoader` is `func(command string) (config.Config, error)` declared in mcp, fed `mcp.ConfigLoader(newConfigLoader())` by `newMCPServe`; called per tool call with `commandName`, never cached (spec rule 3, §2.2: config edits take effect with no restart). S11 reuses it unchanged; a Server without it panics on a config-reading tool like a nil factory (SCENARIO-09)
+- `internal/mcp` imports `internal/config` (platform-only leaf); still never `cli` or another feature package (SCENARIO-09)
+- sync_status = the `status --json` policy in the CLI's order: `srv.Status` first, THEN config (a refusing store must not depend on config); `StatusIgnore(cfg.Ignore, "")`, or `StatusIgnore(nil, config.ProblemAbsolute(err))` on any loader error (never `isError`). `Config.Warnings` are not surfaced here; S11's data_quality is where absolute unknown-key lines appear (SCENARIO-09)
 - Account sort is `quarry accounts` order (`lower(name)`, `name`, `id`); relations tables-then-views then name; categories by `full_path`. Relations come from `duckdb_tables/views/columns` filtered `database_name = current_database() AND schema_name = 'main' AND NOT internal` at call time, no hand-written list (SCENARIO-07)
 - query handler clamps limit outside 1..500 to 500 and the schema `default` is pinned separately (omitted -> store asked 501); truncation warning uses `humanize.Count` (limit 1 reads "the first 1 row") (SCENARIO-03)
 
 ## Left unbuilt
 - spend/cashflow/recurring/anomalies/accounts/snapshots/sync documents stay in `internal/cli/json_*.go` — phase 3b moves the first four (SCENARIO-01)
 - `marshalDocument` stays in cli; no compact encoder in document — mcp owns it in `result.go` (SCENARIO-03)
-- `notBuilt` (`internal/mcp/tools.go`): stub for sync_status and data_quality; S09, S11 replace theirs; S11 deletes it and `Test_an_unbuilt_tool_answers_isError` (SCENARIO-02, 07)
-- `mcp.WithConfig` option and cmd/quarry wiring via `newConfigLoader`: S09, S11 (SCENARIO-02)
+- `notBuilt`, `errNotBuilt` (`internal/mcp/tools.go`) now serve data_quality only; S11 replaces its handler, deletes them and `Test_an_unbuilt_tool_answers_isError` (its last row) (SCENARIO-02, 07, 09)
+- sync_status `30 seconds` timeout line: S06; sync_status row of the cross-tool no-store table: S13 (S09 pins only the no-import-history refusal through the handler); any `age` field is ruled out (§2.5) (SCENARIO-09)
 - Schema-validation pins for data_quality (limit bounds, default applied): S11 (SCENARIO-02)
 - Per-call timeout option (`WithTimeout`), deadline/cancel mapping (incl. `describe_schema stopped after 30 seconds; try again`) and `QueryFailureInterrupted` split out of the generic arm in `query_refusal.go`: S06 (SCENARIO-02, 03, 07)
-- Cross-tool no-store refusal table row for `describe_schema`: S13 (S07 pins one refusal through the handler for coverage only) (SCENARIO-07)
+- Cross-tool no-store refusal table rows for `describe_schema` and sync_status: S13 (S07, S09 pin one refusal through the handler) (SCENARIO-07, 09)
 - Positive pty test for `isTerminal` (termios true path pinned only by the `defaultEnv` wiring pin and the `/dev/null`/pipe/Buffer negatives) — unowned, MINOR (SCENARIO-15)
 - Process-level SIGTERM -> exit 0 end-to-end: `signalContext` tests plus the cancelled-ctx row cover it; no subprocess test — unowned, MINOR (SCENARIO-15)
 
@@ -51,20 +54,19 @@ Scenarios complete: SCENARIO-01, 02, 03, 04, 05, 07, 08, 15, 16 (04, 05 delivere
 - An in-process fake-EPIPE writer cannot see SIGPIPE death: only `Test_quarry_mcp_exits_0_when_the_real_stdout_pipe_breaks` (re-exec) proves the real binary exits 0 (SCENARIO-15)
 - With `$HOME` unset at a terminal only the `$HOME` line prints (`ready` is never called) (SCENARIO-15)
 - The SDK client decodes `StructuredContent` into a map, losing key order: assert order on a raw frame (`peer.stdout`) or the `TextContent`. `json.Marshal` HTML-escapes like CLI `marshalDocument`; `SetEscapeHTML(false)` would diverge (SCENARIO-03)
-- A nil report factory panics in the query and describe_schema handlers (as nil `Env.ServeMCP`): tests pass `WithReport` (SCENARIO-03, 07)
+- A nil report factory or nil config loader panics in the handlers (as nil `Env.ServeMCP`): tests pass `WithReport` and, for sync_status/data_quality, `WithConfig` (SCENARIO-03, 07, 09)
 - `cli` fakes and mcp `fakeStore` embed `report.Store`: they compile without `Schema` and panic if a test calls it (SCENARIO-07)
 - `read_faults_test.go`'s query-fault row fails only the first query; further `QueryRows` calls need `passQueries` rows or the coverage gate lists them (SCENARIO-07)
-- `status --json` refuses a store with no import run: a fixture without `ImportRuns` cannot use it as a dates oracle (SCENARIO-07)
+- `status --json` refuses a store with no import run: a fixture without `ImportRuns` cannot use it as an oracle (S11/S13 fixtures too) (SCENARIO-07, 09)
+- `store.built_at` is RFC 3339 to the second: two syncs in one second can share it, so tests prove a new store by `snapshot.id`, `store.rows` and equality with `status --json` after the sync (SCENARIO-09)
+- `fakeStore.Status` override (and `statusReads`) is needed or sync_status unit tests panic; `newHarness(..., opts ...mcp.Option)` takes extra options (SCENARIO-09)
 - SDK still writes an `isError` "context canceled" result for a cancelled id; `errorLog` stays silent when the call ctx is done — S06 pins it, S17 relies on it (SCENARIO-03)
 
 ## Open debts
 - PRD `docs/initial-prd.md` §Security "Redaction on import" bullet and Risks table "masking on import" mitigation are now false: redaction deferred by user 2026-10-02. Do not edit silently; PRD §Decisions entry added when user confirms wording — unowned until then
-- S01 comment MINOR (comment names an MCP consumer not built yet): `internal/report/document/status.go:12` -> S09 re-checks it when its consumer lands
 - Checkpoint S01 MINOR: `internal/report/query_failure_test.go:12` pins precedence only QueryError over Interrupted; unprintable vs QueryError and read-only vs external-access order unpinned (add rows if constructible) — unowned
 - Checkpoint S01 MINOR: `internal/report/document/findings_test.go:42` two behaviours under one "and" name; `assert.Empty(fixedEntry.Items)` on a finding given no items proves nothing — split, give items — unowned
 - Checkpoint S01 MINOR: `internal/report/document/status_test.go:41` derefs `*read.Findings.Ignored` without `require.NotNil` — unowned
 - Checkpoint S03 MINOR: `internal/mcp/result.go:47-48` errorLog mutex unpinned (deleting `mu` stays green; unobservable with os.Stderr) — S06 may pin with a concurrent-refusals -race test; else unowned
-- Checkpoint S03 NIT: `cmd/quarry/run_mcp_query_test.go:1-2` duplicate package-clause comment — drop when next touched
 - Checkpoint S07 doc-budget MINORs: `internal/report/describe_schema.go:23-27` DescribeSchema doc 5-6 lines (states how); `internal/store/duckstore/schema_read.go:31-35` Schema doc 5 lines — trim to contract; fold into next run touching them (gate fix pass otherwise)
-- Checkpoint S07 MINOR: `cmd/quarry/run_mcp_describe_test.go:1-2` duplicate package-clause comment (same as S03 NIT on run_mcp_query_test.go:1-2) — S09 drops both, and must not add a third
 - Checkpoint S07 NIT: `internal/report/describe_schema.go` `maxListed > 0` tested only at 0; add -1 row — unowned
