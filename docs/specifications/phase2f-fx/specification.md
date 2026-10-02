@@ -265,6 +265,34 @@ The rows stay as they are: each row is in one currency, the Currency column stay
     times the charges in a year, for active series only.
     ```
 
+### Anomalies (mid-feature ruling, SCENARIO-18)
+- **Long** (anomalies.go:27), wrapped greedily at ≤74 columns. Paragraph 1 becomes:
+  ```
+  List charges that are unusually large: more than 2 times the median of the
+  payee's earlier charges, when there are at least 3, or else more than 5
+  times the median of the category's earlier charges, when there are at
+  least 10. Charges under 100.00 in their account's own currency are never
+  listed. Charges follow the rules of quarry spend, and a transaction counts
+  once, with all its splits; an uncategorized or split charge from a payee
+  with little history cannot be judged. Possible duplicates are listed by
+  quarry findings, not here. Charges dated after today are left out, even
+  with a later --until.
+  ```
+  A new paragraph goes after paragraph 1 and before the `--since`/`--until` paragraph, which stays unchanged. No line starts with `--currency`:
+  ```
+  Charges are judged in their account's own currency, so a change in the
+  exchange rate never makes a charge unusual. Amount and Usual are then
+  shown in the reporting currency (--currency, else reporting.currency in
+  the config file, else CAD) at the rate on the charge's date.
+  With --currency native nothing is converted.
+  ```
+- **JSON key order.**
+  - Entry: `transaction_id, date, account_id, account, currency, payee, category, amount, baseline, usual, native_currency, native_amount, native_usual, earlier, times`.
+  - Top level: `since, until, currency, account_filter, anomalies, checked, not_judged, warnings`.
+  - Native mode has the same keys, with the native_* fields equal to their twins.
+- **Prefix.** When an Amount or Usual cell is left native and native differs from the target, the cell reads `<native> 250.00` (`USD 250.00` in CAD mode, `CAD 250.00` in USD mode). Both cells always carry the prefix together. Converted cells are plain. Native mode never adds a prefix. The Account label keeps `(USD)`. Times and the footer stay native.
+- **FX warning noun:** `charge`/`charges`, with `is`/`are`.
+
 ## Report warnings (stderr with `quarry: warning: `, the same text in warnings[], exit 0)
 - **No rates and a conversion is needed:**
   `the store has no exchange rates, so amounts are listed in each account's own currency; run quarry sync to fetch them`
