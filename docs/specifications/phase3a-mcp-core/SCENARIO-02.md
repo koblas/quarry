@@ -31,7 +31,7 @@ Size: OWNS A RUN — 3 batches, 0 feature packages (`internal/mcp` is a delivery
   - Red: the client's initialize fails because there is no `mcp` command yet. Quote it.
 
 ### Build
-- [ ] Step 4: `internal/mcp/server.go`, `internal/mcp/tools.go` (new), `internal/mcp/server_test.go` (new):
+- [x] Step 4: `internal/mcp/server.go`, `internal/mcp/tools.go` (new), `internal/mcp/server_test.go` (new):
   - SDK imported under an alias (`sdk`). `Serve` runs `sdk.NewServer(&Implementation{Name:"quarry", Version}, &ServerOptions{Instructions})` over `sdk.IOTransport`. The Env streams are wrapped in no-op closers. Pass no Logger.
   - `WithVersion("")` keeps the `(devel)` default.
   - `instructions` and the 4 description consts are verbatim.
@@ -47,7 +47,7 @@ Size: OWNS A RUN — 3 batches, 0 feature packages (`internal/mcp` is a delivery
     - `Test_serve_returns_nil_when_the_client_closes_stdin`.
     - `Test_serve_returns_the_write_error_when_stdout_fails` (fault): a failing writer; assert `errors.Is` its sentinel, and that the error is not wrapped.
     - `Test_an_unbuilt_tool_answers_isError` (stub).
-- [ ] Step 5: `internal/cli/mcp.go` (new) `newMCPCommand`, `internal/cli/root.go:6-10,25-34`, `internal/cli/mcp_test.go` (new):
+- [x] Step 5: `internal/cli/mcp.go` (new) `newMCPCommand`, `internal/cli/root.go:6-10,25-34`, `internal/cli/mcp_test.go` (new):
   - Command: Use/Short/Long verbatim (§2.1), no Example, no flags. RunE calls `serve(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())` and returns its error as `&runtimeError{err}`.
   - `root.go`: register the command, and name `mcp` in the doc comment (STATE debt).
   - Tests:
@@ -55,7 +55,7 @@ Size: OWNS A RUN — 3 batches, 0 feature packages (`internal/mcp` is a delivery
     - `Test_root_help_lists_mcp_with_its_short_line`.
     - `Test_mcp_hands_the_env_streams_to_the_server`: a recording `ServeMCP` fake.
     - `Test_mcp_returns_a_server_error_unwrapped_not_as_usage` (fault).
-- [ ] Step 6: `cmd/quarry/run.go:79-101,158-171`, `cmd/quarry/run_usage_test.go:277-306`:
+- [x] Step 6: `cmd/quarry/run.go:79-101,158-171`, `cmd/quarry/run_usage_test.go:277-306`:
   - `run.go`: `newMCPServe() cli.MCPServeFunc` does `mcp.NewServer(mcp.WithVersion(buildVersion(info))).Serve` from `debug.ReadBuildInfo`, the same source as `store_info.quarry_version` (`:66`). Wire `ServeMCP` in `defaultEnv`.
   - `run_usage_test.go`: add an "mcp help" subtest to `Test_run_help_and_usage_errors_do_not_need_home`.
   - Acceptance goes green. Run the three mutation checks from the header.
@@ -94,12 +94,13 @@ Size: OWNS A RUN — 3 batches, 0 feature packages (`internal/mcp` is a delivery
 
 ## Phase report
 
-Run A done (steps 1-3). Acceptance red at its assertion; nothing else started.
+Run B1 done (steps 4-6). Acceptance `Test_run_mcp_lists_quarrys_four_tools_over_json_rpc` GREEN on first run (no schema literal adjustment: no-input schema serialises as `{"type":"object","additionalProperties":false}`). Narrow loop green; `golangci-lint run ./internal/mcp/... ./internal/cli/... ./cmd/...` was 0 issues after fixes. NOT yet run: full suite, `go mod tidy`, doc comments check, spec tick, STATE.md (run V).
 
-- `go.mod`/`go.sum`: sdk v1.8.0 added and `GOPROXY=off go mod tidy` already run offline (jsonschema-go v0.4.3 is still `// indirect` until code imports it; re-tidy in Sweep). `go get` also bumped golang.org/x/{mod,sync,sys,telemetry,tools}; keep.
-- `cmd/quarry/run_mcp_test.go` (new, package main like its siblings): `Test_run_mcp_lists_quarrys_four_tools_over_json_rpc`. The server goroutine closes the stdout pipe once `runWith` returns, so a missing `mcp` command fails fast instead of at the deadline. Expected version literal is `(devel)` (probed: go test binary `Main.Version`). Query description includes the orchestrator-ruled last line. Schema literals: query/data_quality/no-input as in plan, no property descriptions, no-input = `{"type":"object","additionalProperties":false}` (B1: if the SDK adds `properties:{}`, adjust the literal or the schema and say so).
-- `internal/mcp/doc.go`, `internal/mcp/server.go` (new): signature-only stubs (`Server`, `Option`, `WithVersion`, `NewServer`, `Serve` returns nil). No SDK import yet.
-- `internal/cli/run.go`: `MCPServeFunc` and `Env.ServeMCP` added. `defaultEnv` NOT wired, no `mcp` command (steps 5-6).
-- Red now: `run_mcp_test.go:103 require.NoError(connect)`: `connection closed: calling "initialize": client is closing: EOF` (cmd exits 2, unknown command mcp).
-- Green: `go build ./...`, `go vet` of the three packages.
-- Next run (B1) must not redo: go get/tidy, the test file, stubs. Replace stub bodies in place.
+- `internal/mcp/server.go`: real `Serve` (sdk `IOTransport` over `io.NopCloser(stdin)` + `nopWriteCloser{stdout}`; Run's error returned unwrapped, `//nolint:wrapcheck` with reason); `WithVersion("")` keeps `(devel)`.
+- `internal/mcp/tools.go`: instructions + 4 description consts verbatim (query has the ruled last line); `addTools` registers 4 tools via `sdk.AddTool` with hand-written schemas (`additionalProperties:false`, output `{"type":"object"}`, `type` enum from `finding.Types()`); one generic `notBuilt[In]` handler -> `errNotBuilt` ("this tool is not available yet"). Input structs `queryInput`, `dataQualityInput`, `noInput`.
+- `internal/mcp/arguments.go` (NEW, not in plan): receiving middleware `absentNullArguments`. SDK v1.8.0 panics the whole server ("assignment to entry in nil map", jsonschema-go `applyDefaults`) when `tools/call` carries `"arguments": null` and the schema has a `default` (query, data_quality). Middleware rewrites null to absent. Red seen first (panic), then green; S03/S11 inherit the guard.
+- `internal/mcp/server_test.go`: devel table (3 rows), nil-on-EOF, write-error-identity (`assert.Same`), ctx-cancel returns `context.Canceled` with stdin still open (does not hang), null-arguments, unbuilt-tool-isError (4 subtests).
+- `internal/cli/mcp.go`, `root.go` (registered + doc comment names mcp), `internal/cli/mcp_test.go` (4 tests).
+- `cmd/quarry/run.go`: `newMCPServe()` + `ServeMCP` in `defaultEnv`; `run_usage_test.go`: "mcp help" subtest.
+- Mutations (all red, all restored byte-identical): (1) `ServeMCP` line deleted -> acceptance panics nil func in `cli/mcp.go:30` (RunE calls a nil serve; no assertion-level red, a nil `ServeMCP` panics like other nil factories); (2) `StdioTransport` for `IOTransport` -> acceptance fails fast at `run_mcp_test.go:103` "calling initialize: client is closing: EOF" (no hang); (3) `(devel)` default removed -> `Test_serve_identifies_an_unversioned_build_as_devel` no-version/empty rows red; (4) `AddReceivingMiddleware` removed -> `Test_a_tool_call_with_null_arguments...` panics.
+- V must not redo: tests/code above. V does: `go mod tidy` (jsonschema-go now direct), doc comments (`go doc ./internal/mcp`; `Option` etc. exist), full verify block, spec tick, STATE.md (add the null-arguments trap; drop root.go debt; re-own S01 comment MINORs per plan step 8), `status: done`.

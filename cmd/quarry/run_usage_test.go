@@ -307,6 +307,16 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 		assert.Empty(t, stderr.String())
 	})
 
+	t.Run("mcp help", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+
+		exitCode := run(context.Background(), []string{"mcp", "--help"}, &stdout, &stderr)
+
+		assert.Equal(t, 0, exitCode)
+		assert.NotEmpty(t, stdout.String())
+		assert.Empty(t, stderr.String())
+	})
+
 	t.Run("unknown command is still a usage error, not the home-directory refusal", func(t *testing.T) {
 		var stdout, stderr bytes.Buffer
 

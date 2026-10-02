@@ -16,6 +16,7 @@ import (
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/fx"
 	"github.com/koblas/quarry/internal/importer"
+	"github.com/koblas/quarry/internal/mcp"
 	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/snapshot"
@@ -131,6 +132,13 @@ func newConfigLoader() cli.ConfigLoader {
 	}
 }
 
+// newMCPServe returns cli.Execute's MCPServeFunc: an MCP server reporting the
+// build's module version, the same one store_info.quarry_version records.
+func newMCPServe() cli.MCPServeFunc {
+	info, _ := debug.ReadBuildInfo()
+	return mcp.NewServer(mcp.WithVersion(buildVersion(info))).Serve
+}
+
 // storeDirUnder is the directory holding quarry's store and snapshots.
 func storeDirUnder(home string) string {
 	return filepath.Join(home, "Library", "Application Support", "quarry")
@@ -166,6 +174,7 @@ func defaultEnv(stdout, stderr io.Writer) cli.Env {
 		NewReport:    newReportFactory(),
 		NewSnapshots: newSnapshotsFactory(),
 		LoadConfig:   newConfigLoader(),
+		ServeMCP:     newMCPServe(),
 		Now:          time.Now,
 	}
 }
