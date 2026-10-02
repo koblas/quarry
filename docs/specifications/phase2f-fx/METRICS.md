@@ -25,7 +25,48 @@
 | 4 (after final product-vision SHIP WITH CHANGES) | correctness-B, test-B | 0/0/3/1 | 0 / 1, 68s | PASS WITH FOLLOW-UPS |
 
 ## Tokens
-<output of `.claude/scripts/feature-metrics.py --strict phase2f-fx`, pasted once at SHIP>
+Tokens for `phase2f-fx` across 6 project dir(s). Weighted = input-equivalent tokens (IE): cache read x0.1, cache write x1.25 (5m) / x2 (1h), output x5. Attribution: 104 tagged, 0 heuristic. Orchestrator row counts the main session between the feature's first and last run in each session, so it may include other work.
+
+| Agent | Runs | Model(s) | Input | Cache write | Cache read | Output | Weighted (IE) | Share |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| developer | 55 | claude-sonnet-5-5 | 3k | 6,276k | 140,889k | 102k | 22,447k | 61% |
+| test-reviewer | 17 | claude-sonnet-5-5 | 1k | 2,189k | 30,893k | 45k | 6,053k | 16% |
+| architect | 12 | claude-opus-5-5, claude-sonnet-5-5 | 1k | 1,557k | 25,905k | 34k | 4,709k | 13% |
+| correctness-reviewer | 5 | claude-opus-5-5 | 0k | 548k | 11,662k | 9k | 1,899k | 5% |
+| product-vision | 11 | claude-opus-5-5 | 0k | 603k | 4,079k | 13k | 1,226k | 3% |
+| triage | 1 | claude-sonnet-5-5 | 0k | 149k | 1,998k | 2k | 397k | 1% |
+| arch-reviewer | 2 | claude-sonnet-5-5 | 0k | 83k | 336k | 1k | 143k | 0% |
+| refactor-advisor | 1 | claude-sonnet-5-5 | 0k | 46k | 182k | 1k | 82k | 0% |
+| **subagent total** | 104 | | 4k | 11,451k | 215,945k | 209k | 36,956k | 100% |
+| orchestrator (upper bound) | - | claude-opus-5-5 | 0k | 1,160k | 74,744k | 160k | 10,594k | - |
+
+| Run kind | Runs | Weighted (IE) | Share |
+| --- | --- | --- | --- |
+| scope | 13 | 1,910k | 5% |
+| plan | 11 | 4,422k | 12% |
+| build | 43 | 16,736k | 45% |
+| checkpoint | 12 | 3,496k | 9% |
+| checkpoint-fix | 9 | 2,919k | 8% |
+| review | 13 | 4,680k | 13% |
+| gate-fix | 3 | 2,793k | 8% |
+
+| Unit | Plan | Build | Checkpoint | Checkpoint fix | Gate fix | Weighted (IE) | Share |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| - | 0 | 0 | 0 | 0 | 3 | 8,784k | 24% |
+| SCENARIO-01 | 1 | 4 | 1 | 1 | 0 | 2,750k | 7% |
+| SCENARIO-03 | 1 | 4 | 1 | 1 | 0 | 2,981k | 8% |
+| SCENARIO-04 | 1 | 4 | 1 | 1 | 0 | 2,971k | 8% |
+| SCENARIO-06 | 0 | 2 | 1 | 0 | 0 | 960k | 3% |
+| SCENARIO-07 | 1 | 4 | 1 | 1 | 0 | 2,253k | 6% |
+| SCENARIO-08 | 1 | 3 | 1 | 1 | 0 | 1,738k | 5% |
+| SCENARIO-10 | 1 | 3 | 1 | 0 | 0 | 1,522k | 4% |
+| SCENARIO-12 | 1 | 4 | 1 | 1 | 0 | 2,816k | 8% |
+| SCENARIO-16 | 1 | 4 | 1 | 1 | 0 | 2,261k | 6% |
+| SCENARIO-17 | 1 | 4 | 1 | 1 | 0 | 2,803k | 8% |
+| SCENARIO-18 | 1 | 4 | 1 | 0 | 0 | 2,443k | 7% |
+| SCENARIO-19 | 1 | 3 | 1 | 1 | 0 | 2,673k | 7% |
+
+Developer runs: 55; weighted per run median 311k, p90 762k, max 1,701k.
 
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
