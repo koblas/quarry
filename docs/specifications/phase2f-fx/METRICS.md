@@ -36,6 +36,9 @@
 | gate R1 | MAJOR inverted Need (all transactions future) sent to Valet | internal/store/duckstore/rates.go needSpan | SCENARIO-07 |
 | gate R2 | MAJOR head-span gap (mirror of R1 BLOCKER) | internal/fx/plan.go:35 | SCENARIO-01 |
 | gate R2 | MAJOR shipped fx wiring unpinned after global removed | cmd/quarry/run.go:66 | gate fix pass 1 |
+| final pass | MAJOR empty window zero-fills rows beside the empty note; --json periods/rows no longer [] | internal/report/period.go fillSeries | SCENARIO-12 (zero-fill ruling) |
+| final pass | MAJOR partial-fetch warning omits "later dates convert at the <last> rate" | internal/snapshot/import.go:106 | SCENARIO-03 (ruled copy) |
+| final pass | MAJOR status Long Rates paragraph unwrapped (113 cols) | internal/cli/status.go:25 | SCENARIO-06 (ruled copy) |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |

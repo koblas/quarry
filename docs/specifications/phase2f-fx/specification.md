@@ -248,7 +248,7 @@ The rows stay as they are: each row is in one currency, the Currency column stay
   - Top level: `since, until, currency, account_filter, series, totals, warnings`.
   - Native mode has the same key set.
 - **Currency cell and prefix.** The Currency cell is `<row> (<native>)`, and the price-change prefix is `<native> `, only when native differs from the row. In USD mode a CAD series reads `USD (CAD)` and `1: CAD 9.99 -> CAD 12.99 (+30.0%)`. An unconverted row is plain, with no prefix.
-- **Sort.** A last tier follows the group key: the row-currency series comes before a converted one, then native code ascending. The tiers in order are currency, state, standing, lower(payee), group key, then this new tier.
+- **Sort.** A last tier follows the group key: the row-currency series comes before a converted one. The tiers in order are currency, state, standing, lower(payee), group key, then this new tier.
 - **Recurring Long, wrapped at ≤74 columns.**
   - Paragraph inserted after paragraph 1:
     ```
@@ -335,7 +335,7 @@ The rows stay as they are: each row is in one currency, the Currency column stay
   - Native mode is unchanged: every currency is filled in every period.
   - The same applies to text and `--json` rows.
   - Totals, grouping and keys are unchanged.
-  - An empty window gets the target's zero rows only.
+  - *(Final product-vision pass)* An empty window (the store returned no rows; the empty-window note fires) gets no rows in any mode, as before 2f: text prints the header and the note, --json has "periods": [] (cashflow) or "rows": [] (spend), and "totals": [].
 
 ### status (%-10s, after Findings)
 - **Covered:** `Rates     USD/CAD from the Bank of Canada, 1990-01-02 to 2026-09-30 (1 day ago)` (age: `today`, `1 day ago`, `N days ago`).
@@ -365,7 +365,7 @@ The rows stay as they are: each row is in one currency, the Currency column stay
 - **Unrecognised error**: falls back to `cannot reach www.bankofcanada.ca`.
 - **Nothing new, some rates stored:** `could not fetch exchange rates from the Bank of Canada: <reason>; the store has rates from <first> to <last>, and later dates convert at the <last> rate; run quarry sync again to retry`
 - **Nothing stored:** `could not fetch exchange rates from the Bank of Canada: <reason>; the store has no rates, so reports list amounts in each account's own currency; run quarry sync again to retry`
-- **Partial range:** `could not fetch every exchange rate from the Bank of Canada: <reason>; the store has rates from <first> to <last>; run quarry sync again to fetch the rest`
+- **Partial range:** `could not fetch every exchange rate from the Bank of Canada: <reason>; the store has rates from <first> to <last>, and later dates convert at the <last> rate; run quarry sync again to fetch the rest`
 - **`<reason>`**:
   - `cannot reach www.bankofcanada.ca`
   - `no answer from www.bankofcanada.ca within 30 seconds` (a fixed 30 s timeout per request)
@@ -441,7 +441,11 @@ with a warning.
 - **sql.go:39 Long.** After the Amounts sentence:
   `v_cash_flow and v_spending also carry each amount in CAD and in USD (amount_cad and amount_usd; spent_cad and spent_usd), converted per split at the Bank of Canada rate for its date and rounded to the cent, as quarry spend and quarry cashflow convert; they are NULL for a date before the first rate. v_account_balances has balance_cad and balance_usd at today's rate. fx_rates holds one rate per business day: usd_cad is the Canadian dollars in one US dollar.`
 - **status Long.** Append:
-  `Rates shows the Bank of Canada USD/CAD rates the store holds, and why the last sync could not fetch new ones if it could not.`
+  *(Final pass: replaced, wrapped)*
+  ```
+  Rates shows the span of Bank of Canada USD/CAD rates the store holds and,
+  when the last sync could not fetch new ones, why.
+  ```
 - **sync Long.** Insert before the snapshots paragraph:
   `sync then fetches the Bank of Canada's daily USD/CAD exchange rates for any dates the store does not have, back to your earliest transaction. This is quarry's only use of the network, and the request carries nothing but the dates. If the fetch fails, sync still succeeds, warns, and reports convert with the rates the store already has.`
 - **PRD.**
