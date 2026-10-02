@@ -22,7 +22,7 @@
 - Rule 1: Each tool's structured result is the CLI `--json` document for that data, built by the same constructor in `internal/report/document`. Only encoding (compact vs indented) and next-step warning lines that name a CLI flag may differ.
 - Rule 2: `internal/mcp` is a delivery peer of `internal/cli`: cli never imports mcp, mcp never imports cli. `cmd/quarry` wires `cli.Env`'s MCP hook to `mcp.NewServer` using the existing report factory and config loader.
 - Rule 3: The server never holds the store open between tool calls; config is loaded per call.
-- Rule 4: stdout carries MCP JSON-RPC only. stderr carries only the TTY hint and one `quarry: mcp: <tool>: <error text>` line per call that ends `isError`. SQL text, row values and finding items never reach stderr.
+- Rule 4: stdout carries MCP JSON-RPC only. stderr carries only the TTY hint and one `quarry: mcp: <tool>: <log line>` per call that ends `isError`. The log line is chosen by the outcome classifier, never copied from the isError text. Fixed copy (write/external/blank refusals, timeouts, store refusals in `~` form) is logged verbatim. Any outcome whose text carries DuckDB reasons, column names or types, config values, or SDK validation detail logs only its class, ending `; details went to the client only`. SQL text, row values, column names, config values and finding items never reach stderr. (Gate R1 copy ruling; strings in §2.1a.)
 - Rule 5: `query` returns at most 500 rows (hard max; `limit` 1..500, default 500). Every tool call has a 30 s deadline (named constant, injectable for tests). Deadline is classified distinctly from cancel all the way up the error chain.
 - Rule 6: `data_quality` returns at most `limit` findings (default 50, 1..500) and at most 25 items per finding; overflow is reported only through `warnings`, `counts` never trimmed.
 - Rule 7: Warnings go in the document's `warnings` array (`[]`, never null). Refusals are `isError: true` with one text line, no "quarry: " prefix, no document.
@@ -204,6 +204,87 @@ Quicken, then the user runs quarry sync.
 2. one line per tool call that ends `isError`: `quarry: mcp: <tool>: <error text>`. This is the after-the-fact log that Claude Desktop saves to its MCP log.
 
 SQL text, row values and finding items never go to stderr. Successful calls write nothing.
+
+##### 2.1a stderr log lines (mid-feature copy ruling, gate R1 — correctness MAJOR)
+
+###### The rule
+
+The stderr line is chosen by the outcome classifier. It is never copied from the isError text.
+
+Every logged line has the shape `quarry: mcp: <tool>: <log line>`. The log line comes from one of two families:
+
+- **Fixed copy is logged verbatim.** This covers lines quarry writes itself with no value taken from the call, the store or the config, other than the store path in `~` form. The model's line and the log line are the same.
+- **Anything carrying outside text is withheld.** This covers DuckDB reasons, column aliases, type names, config values or parse details, and SDK validation text. The log line names the outcome class and ends `; details went to the client only`.
+
+The model's isError text is unchanged in every case.
+
+Mechanism (the architect's call; this is the constraint): `errorLog` must stop reading `result.Content`. `errorText` dies, so delete it.
+- The handler records the log line for every error it returns. One way: the middleware puts a slot in ctx and the handler fills it. Do not use `_meta`, because that reaches the client.
+- An isError result with no recorded line can only be an SDK argument refusal, and gets that line.
+
+###### Exact strings
+
+**query**
+
+| Outcome | stderr line |
+|---|---|
+| DuckDB rejected the query | `quarry: mcp: query: query failed: <class>; details went to the client only` |
+| Unprintable value | `quarry: mcp: query: query failed: a result column has a type quarry cannot print; details went to the client only` |
+| Write attempt | `quarry: mcp: query: query only reads quarry's store; it cannot change data. Fixes are made in Quicken, then the user runs quarry sync` (verbatim) |
+| External file, database or extension | `quarry: mcp: query: query reads only quarry's store; other files, databases and extensions are turned off` (verbatim) |
+| Blank, `;` or comment-only SQL | `quarry: mcp: query: query needs SQL in the sql parameter` (verbatim) |
+| Timeout | `quarry: mcp: query: query stopped after 30 seconds; aggregate or filter it in SQL, then try again` (verbatim) |
+
+How `<class>` is picked for a rejected query:
+- Take the text before the first `": "` of DuckDB's first line. Keep it only if it matches `^[A-Z][A-Za-z]*( [A-Z][A-Za-z]*)* Error$`. Examples: `Binder Error`, `Conversion Error`, `Parser Error`, `Catalog Error`.
+- Otherwise `<class>` is `SQL error`.
+- Example: `quarry: mcp: query: query failed: Conversion Error; details went to the client only`.
+- `Catalog Error: Table with name /etc/hosts …` logs as `Catalog Error` only.
+
+The unprintable line drops the type as well as the alias. A DuckDB type name can carry data, for example `ENUM('Chequing', …)` or `STRUCT(payee …)`.
+
+**Store refusals (all four tools)** are logged verbatim, in `~` form, exactly as `report.storeRefusal` words them:
+- `no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it`
+- the `OtherFormat` line
+- `cannot read the store at …: <reason>; run quarry sync to rebuild it`
+- the `OpenFaultLocked` line, ending `; close that program and run the command again`
+
+They are file-level and run before any statement, so no row or SQL can be in them. The `OpenFaultOther` reason is DuckDB's open error with the path replaced, and it stays verbatim too.
+
+**describe_schema**
+- Store refusals: verbatim, as above.
+- Timeout: `quarry: mcp: describe_schema: describe_schema stopped after 30 seconds; try again`
+- Nothing else is ruled; any other error takes the fallthrough line below.
+
+**sync_status**
+- Store refusals: verbatim, as above.
+- Timeout: `quarry: mcp: sync_status: sync_status stopped after 30 seconds; try again`
+- A config it cannot read does not refuse. It is a document warning, so it writes no stderr line (unchanged).
+
+**data_quality**
+- Store refusals: verbatim, as above.
+- Timeout: `quarry: mcp: data_quality: data_quality stopped after 30 seconds; try again`
+- Config refusal: `quarry: mcp: data_quality: cannot read quarry's config file; run quarry findings to see why`
+
+Why the config line is withheld:
+- `badValue` echoes `got <value>`, and `findings.ignore` keeps "any text".
+- A TOML parse detail can quote a line of the file.
+
+The line names no path, so no path has to be passed through. `quarry findings` loads the same config and prints the full refusal with the path, so the operator's next step is concrete.
+
+**SDK argument refusals (any tool)** are isError results the handler never saw: missing or blank `sql`, wrong type, `limit` out of range, enum mismatch, unknown property. They log as:
+
+`quarry: mcp: <tool>: refused the call's arguments; details went to the client only`
+
+SDK validation text can echo argument values, including `sql`. An unknown tool name is a JSON-RPC protocol error, not an isError result, so it gets no line (unchanged).
+
+**Fallthrough (any tool)** covers factory errors, unclassified store or read errors, findings-read errors and `QueryFailureOther`. They log as:
+
+`quarry: mcp: <tool>: failed; details went to the client only`
+
+**Cancel or disconnect** writes no line (unchanged).
+
+The §4 edge table's isError column is the model's line; the stderr line for each row is ruled here and differs for "SQL error", "Unprintable value", "Config unparseable" (data_quality) and SDK schema refusals.
 
 ##### 2.2 Store and config lifetime (invariant; give it a scenario)
 
@@ -497,17 +578,18 @@ Scenario Outline: SCENARIO-05 — query refuses what it cannot run
   Given a built store
   When the client calls query with <sql>
   Then the result is isError with <line>
-  And stderr gets one "quarry: mcp: query: <line>" log line
+  And stderr gets one "quarry: mcp: query: <log>" line
 
   Examples:
-    | sql                     | line                                  |
-    | a write statement       | ruled write refusal                   |
-    | read_csv of a file      | ruled external-access refusal         |
-    | whitespace only         | query needs SQL in the sql parameter  |
-    | ;                       | query needs SQL in the sql parameter  |
-    | -- note                 | query needs SQL in the sql parameter  |
-    | invalid SQL             | query failed: <DuckDB first line>     |
-    | a JSON-typed column     | ruled unprintable-value line          |
+    | sql                         | line                                  | log |
+    | a write statement           | ruled write refusal                   | same as line |
+    | read_csv of a file          | ruled external-access refusal         | same as line |
+    | whitespace only             | query needs SQL in the sql parameter  | same as line |
+    | ;                           | query needs SQL in the sql parameter  | same as line |
+    | -- note                     | query needs SQL in the sql parameter  | same as line |
+    | invalid SQL                 | query failed: <DuckDB first line>     | query failed: Parser Error; details went to the client only |
+    | a JSON-typed column         | ruled unprintable-value line          | query failed: a result column has a type quarry cannot print; details went to the client only |
+    | CAST of a stored payee name | query failed: <DuckDB first line>     | query failed: Conversion Error; details went to the client only (stderr carries no stored value and no SQL text) |
 
 Scenario: SCENARIO-07 — describe_schema describes the store
   Given a built store
