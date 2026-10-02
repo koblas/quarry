@@ -293,6 +293,23 @@ The rows stay as they are: each row is in one currency, the Currency column stay
 - **Prefix.** When an Amount or Usual cell is left native and native differs from the target, the cell reads `<native> 250.00` (`USD 250.00` in CAD mode, `CAD 250.00` in USD mode). Both cells always carry the prefix together. Converted cells are plain. Native mode never adds a prefix. The Account label keeps `(USD)`. Times and the footer stay native.
 - **FX warning noun:** `charge`/`charges`, with `is`/`are`.
 
+### Accounts (mid-feature ruling, SCENARIO-19)
+- **JSON key order.** Top level: `as_of, currency, accounts, warnings`. Row: `id, name, type, currency, institution, closed, active, in_reports, linked_tracking, balance, converted_balance`. Native mode has the same keys, with `converted_balance: null` on every row.
+- **Alignment.** The `In CAD` / `In USD` cell is right-aligned to the column width, including `no rate` and the blank cell. Status follows after the usual two-space gap. Trailing spaces are trimmed on every line.
+- **Header.** USD mode: `Account  Type  Currency  Balance  In USD  Status`. With every account closed, the header-only output keeps the column, and only the all-closed note is printed (no FX line).
+- **Warnings.** These print on stderr with `quarry: warning: `, the same text goes into `warnings[]`, exit 0, slot 3 of the ordering. Each fires only when at least one listed row shows `no rate`.
+  - **No rates.** CAD mode: `the store has no exchange rates, so USD balances show no rate in the In CAD column; run quarry sync to fetch them`. USD mode swaps the currencies.
+  - **All rates dated after today.** CAD mode: `the first exchange rate in the store, <first>, is dated after today, so USD balances show no rate in the In CAD column; check the Mac's date and time`. USD mode swaps the currencies.
+  - **Silent cases:** all-CAD in CAD mode, a not-imported cross-currency account (blank cell), and header-only output.
+- **Long append.** A new paragraph after the "not imported" paragraph, wrapped at 72 columns:
+  ```
+  A column shows each balance in the reporting currency (--currency, else
+  reporting.currency in the config file, else CAD) at today's Bank of
+  Canada rate, or the latest earlier one; --currency native leaves it
+  out. quarry does not add balances together: a total that leaves out
+  investment accounts would not be your net worth.
+  ```
+
 ## Report warnings (stderr with `quarry: warning: `, the same text in warnings[], exit 0)
 - **No rates and a conversion is needed:**
   `the store has no exchange rates, so amounts are listed in each account's own currency; run quarry sync to fetch them`
@@ -300,7 +317,7 @@ The rows stay as they are: each row is in one currency, the Currency column stay
   - spend and cashflow: `3 transactions dated before 1990-01-02, the first exchange rate in the store, are listed in USD, not converted to CAD`
   - anomalies: the same sentence with `charges`.
   - recurring: `2 series with a charge dated before 1990-01-02, the first exchange rate in the store, are listed in USD, not converted to CAD`. A series with its first or latest charge uncovered is shown entirely native.
-- **accounts with no rates:** the "no rates" line.
+- **accounts with no rates:** see "### Accounts (mid-feature ruling, SCENARIO-19)". Accounts have their own lines, not the shared "no rates" line.
 - **Ordering** *(mid-feature ruling, SCENARIO-12)*: stderr and `warnings[]` share one order:
   1. config warnings
   2. left-out account(s)
