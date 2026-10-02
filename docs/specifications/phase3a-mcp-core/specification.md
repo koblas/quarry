@@ -345,6 +345,18 @@ quarry's config file.
   Uncategorized items are one per split, so they are unbounded. That is why this cap is needed.
   - Use `humanize.Count` grouping, the same as the CLI.
 
+**Mid-feature copy ruling (SCENARIO-11).**
+- Warning order: (1) config unknown-key lines `cfg.WarningsAbsolute` in loader order; (2) unmatched-ignore lines `document.UnmatchedIgnoreWarnings(cfg.Path, listing.Unmatched)`; (3) the findings-cap line (at most one); (4) items-cap lines, one per over-cap finding that was kept, in listing order. A finding dropped by the findings cap never gets an items-cap line. No warnings → `[]`.
+- Findings-cap format: `listed the first <limit> of <total> <statusword>findings<tail>` — status word `open `, `ignored `, `fixed `; dropped for `all`. `type` never appears. Numbers grouped as CLI (`1,234`).
+- Advice tail (example status=open, total 1,234):
+
+| limit | type | exact line |
+|---|---|---|
+| < 500 | not given | `listed the first 50 of 1,234 open findings; pass type to narrow the list, or a larger limit (at most 500)` |
+| < 500 | given | `listed the first 50 of 1,234 open findings; pass a larger limit (at most 500)` |
+| = 500 | not given | `listed the first 500 of 1,234 open findings; pass type to narrow the list` |
+| = 500 | given | `listed the first 500 of 1,234 open findings` |
+
 **Config:**
 - Unparseable config: `isError`, with the same refusal line `findings` prints, in `~` form.
 - Unknown keys: `cfg.WarningsAbsolute` in `warnings`.
