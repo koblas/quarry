@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-17
-status: open
+status: done
 ---
 
 # SCENARIO-17: Recurring detects in native currency and shows converted amounts
@@ -52,10 +52,10 @@ Size: OWNS A RUN — 4 batches, 1 feature package (`report`; duckstore is its St
   - `recurring.go:27-44` Long: insert the ruled paragraph after paragraph 1, and change `:42-43` "from one charge to the next." to "…, in the series' own currency.". Pin it verbatim with a new `Test_recurring_help_says_series_are_found_in_their_own_currency` in `report_help_test.go`.
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the new fields.
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the new fields.
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase2f-fx` → tick SCENARIO-17 with its acceptance test; rewrite STATE.md.
+- [x] Step 8: full verification + `spec-check.py phase2f-fx` → tick SCENARIO-17 with its acceptance test; rewrite STATE.md.
 
 Edge rows × currency × format — cmd tests in `run_recurring_fx_test.go` on `replaceStoreWithRates` unless stated; text cells in Step 5, `--json` cells in Step 6, each row in both:
 - USD series in CAD; same payee CAD+USD (Step 1). First charge before the first rate (USD row + USD Total + "series" line; json row currency ≠ `.currency`, `warnings[]`). Unrated USD series (no-rates line). Unrated all-CAD in CAD (silent). USD mode (`USD (CAD)`, `CAD ...` prefix).
@@ -92,13 +92,4 @@ Edge rows × currency × format — cmd tests in `run_recurring_fx_test.go` on `
 
 ## Phase report
 
-Runs A, B1 and B2 done (Steps 1-6). The acceptance test is green; covered full suite rc=0, `uncovered-diff.py` 0 added lines, lint 0 issues, `-race` cli and cmd ok. test-stats: cmd/quarry 476 (+9), internal/cli 396 (+14) (B2 alone; report 256 (+19) and duckstore 466 (+11) are from A/B1). Left for V: Step 7 sweep (already `0 issues`), Step 8 spec tick, `spec-check.py phase2f-fx`, STATE.md rewrite.
-- `fx_warning.go`: `unconvertedWarnings(currency, u, noun countedNoun)`; `transactionsNoun` (spend, cashflow call sites updated) and `seriesNoun` (`series with a charge`, same singular and plural, `is`/`are` still by count). `recurringWarnings` order: left-out, FX, empty-window; `recurring.go` threads `currency.resolve` into `RecurringRequest.Currency`. 18 passes a `charges` noun with no rewrite.
-- `render_recurring.go`: `currencyCell` (`CAD (USD)` only when native differs), `priceChangesCell` reads `NativeFirstAmount`/`NativeAmount` with the native code prefix only when native differs, caption `windowCaption(..., r.Currency)` (the placeholder is gone; `render_anomalies.go:48` still has its own for 18).
-- `json_recurring.go`: top-level `currency` after `until`; `native_currency/native_amount/native_first_amount` after `per_year`; `price_changes[].currency` (= native) after `date`. Key order pinned by `Test_renderRecurringJSON_orders_the_document_series_and_price_change_keys`; same 18 series keys in CAD/USD/native; read-back test decodes the document (converted, ended null `per_year`, `price_changes` `[]`).
-- Long: ruled paragraph inserted, "in the series' own currency." Pinned whole in `recurring_test.go` and by the new `Test_recurring_help_says_series_are_found_in_their_own_currency` (`report_help_test.go`).
-- Repoints: every CAD-mode `Recurring charges` caption pin now ends `, amounts in CAD`; `render_recurring_internal_test.go` fixtures carry `NativeCurrency`/`Native*` (zero `NativeCurrency` renders `CAD ()`).
-- New tests: `fx_warning_internal_test.go` (noun arms, 1/2/1,234, no-rates, zero), `recurring_currency_test.go` (config USD caption and `USD (CAD)`, flag native beats config, series line in USD mode), `run_recurring_fx_edges_test.go` (USD mode with `USD (CAD)`, `CAD ...` prefix, native on a rated store, one USD `--account`, closed-account ended series with null `per_year`, before-first-rate row and warning, unrated store arms with empty/non-empty stderr, empty window in all three currencies).
-- Edge matrix: same payee CAD+USD and new series are covered by the acceptance test; ended series by the closed-account test and `Test_renderRecurring_lists_an_ended_converted_series_...`.
-- Mutations (all reddened, files restored): `currencyCell` drops the native; price-change prefix dropped; `unconvertedWarnings` dropped from `recurringWarnings`; caption reverted to `money.Native`; `price_changes[].currency` reading the row currency; `Currency` not threaded into the request.
-- Not done: no mutation on the key-order pin (the struct field order is the only source of it).
+Run V done. Covered full suite rc=0, `uncovered-diff.py` against 93b66b2 reports 0 added lines, `-race` ok on duckstore, report, cli and cmd/quarry, lint 0 issues, `spec-check.py phase2f-fx` OK. test-stats (base 93b66b2): cmd/quarry 476 (+9), internal/cli 396 (+14), internal/report 256 (+19), internal/store/duckstore 466 (+11), TOTAL 1594 (+53). SCENARIO-17 ticked in the specification with its acceptance test; STATE.md rewritten. Runs A, B1 and B2 reports are folded into STATE.md.

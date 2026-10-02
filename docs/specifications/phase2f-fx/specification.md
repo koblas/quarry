@@ -613,7 +613,7 @@ Ruled (sizing pass 2026-10-01, architect):
 - [x] SCENARIO-09: Spend in USD and cashflow agree in every currency — delivered by SCENARIO-10 — `cmd/quarry/run_cashflow_invariant_test.go` `Test_run_cashflow_spent_equals_spend_total_in_every_reporting_currency`
 - [x] SCENARIO-12: Amounts dated before the first rate stay native with a warning — `cmd/quarry/run_spend_unconverted_test.go` `Test_run_spend_lists_a_split_before_the_first_rate_in_its_own_currency_and_warns`
 - [x] SCENARIO-13: With no rates stored, reports fall back to native with a warning — delivered by SCENARIO-12 — `cmd/quarry/run_spend_unconverted_test.go` `Test_run_spend_without_rates_lists_each_currency_natively_and_warns_only_when_a_conversion_is_needed`
-- [ ] SCENARIO-17: Recurring detects in native currency and shows converted amounts
+- [x] SCENARIO-17: Recurring detects in native currency and shows converted amounts — `cmd/quarry/run_recurring_fx_test.go` `Test_run_recurring_detects_in_native_currency_and_converts_at_the_latest_charges_rate`
 - [ ] SCENARIO-18: Anomalies are judged in native currency and shown converted
 - [ ] SCENARIO-19: Accounts show each balance in the reporting currency, never a total
 - [ ] SCENARIO-11: --currency native reproduces today's output
