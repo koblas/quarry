@@ -32,13 +32,19 @@ type running struct {
 // startServer serves srv to a connected client and returns once the client has initialized.
 func startServer(t *testing.T, srv *mcp.Server) running {
 	t.Helper()
+	return startServerLogging(t, srv, io.Discard)
+}
+
+// startServerLogging is startServer with the server's stderr going to stderr.
+func startServerLogging(t *testing.T, srv *mcp.Server, stderr io.Writer) running {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), serveDeadline)
 	t.Cleanup(cancel)
 	serverStdin, toServer := io.Pipe()
 	serverStdout, fromServer := io.Pipe()
 	served := make(chan error, 1)
 	go func() {
-		served <- srv.Serve(ctx, serverStdin, fromServer, io.Discard)
+		served <- srv.Serve(ctx, serverStdin, fromServer, stderr)
 		_ = fromServer.Close()
 	}()
 
@@ -151,7 +157,6 @@ func Test_an_unbuilt_tool_answers_isError(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"query", map[string]any{"sql": "SELECT 1"}},
 		{"describe_schema", nil},
 		{"sync_status", nil},
 		{"data_quality", nil},

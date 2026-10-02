@@ -1,0 +1,111 @@
+package mcp_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/koblas/quarry/internal/mcp"
+	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/store"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/stretchr/testify/require"
+)
+
+const (
+	testHome       = "/home/dave"
+	testStorePath  = testHome + "/Library/Application Support/quarry/quarry.duckdb"
+	blankSQLLine   = "query needs SQL in the sql parameter"
+	logPrefixQuery = "quarry: mcp: query: "
+)
+
+var (
+	errDiskOnFire   = errors.New("disk on fire")
+	errFactoryBroke = errors.New("the report factory broke")
+	errNoHome       = errors.New("cannot find your home directory ($HOME is not set); set HOME, then run quarry mcp again")
+)
+
+// fakeStore answers Query with result, or err when set, keeping at most maxRows rows as the real store does.
+type fakeStore struct {
+	report.Store
+
+	result store.QueryResult
+	err    error
+	asked  []int
+}
+
+func (f *fakeStore) Query(_ context.Context, _ string, maxRows int) (store.QueryResult, error) {
+	f.asked = append(f.asked, maxRows)
+	result := f.result
+	if maxRows > 0 && len(result.Rows) > maxRows {
+		result.Rows = result.Rows[:maxRows]
+	}
+	return result, f.err
+}
+
+// harness is a served query tool over a fake store, with the server's stderr captured.
+type harness struct {
+	running
+
+	store    *fakeStore
+	stderr   *bytes.Buffer
+	built    int
+	commands []string
+}
+
+// newHarness serves the query tool over st; buildErr, when set, is what the report factory fails with.
+func newHarness(t *testing.T, st *fakeStore, buildErr error) *harness {
+	t.Helper()
+	h := &harness{store: st, stderr: &bytes.Buffer{}}
+	factory := func(_ context.Context, command string) (*report.Server, error) {
+		h.built++
+		h.commands = append(h.commands, command)
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		return report.NewServer(report.WithStore(st), report.WithHome(testHome)), nil
+	}
+	h.running = startServerLogging(t, mcp.NewServer(mcp.WithReport(factory)), h.stderr)
+	return h
+}
+
+// query calls the query tool with arguments.
+func (h *harness) query(t *testing.T, arguments any) *sdk.CallToolResult {
+	t.Helper()
+	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "query", Arguments: arguments})
+	require.NoError(t, err)
+	return result
+}
+
+// rowsOf is a one-column result of n rows holding 0..n-1.
+func rowsOf(n int) store.QueryResult {
+	rows := make([][]store.QueryValue, n)
+	for i := range rows {
+		rows[i] = []store.QueryValue{{Text: strconv.Itoa(i), Native: int64(i)}}
+	}
+	return store.QueryResult{Columns: []store.QueryColumn{{Name: "n", Type: "BIGINT"}}, Rows: rows}
+}
+
+// textOf is the text of result's one content block.
+func textOf(t *testing.T, result *sdk.CallToolResult) string {
+	t.Helper()
+	require.Len(t, result.Content, 1)
+	text, ok := result.Content[0].(*sdk.TextContent)
+	require.True(t, ok, "content is not text")
+	return text.Text
+}
+
+// jsonOf is v, a decoded JSON value, encoded again.
+func jsonOf(t *testing.T, v any) string {
+	t.Helper()
+	encoded, err := json.Marshal(v)
+	require.NoError(t, err)
+	return string(encoded)
+}
+
+// countLines is how many newline-terminated lines s holds.
+func countLines(s string) int { return strings.Count(s, "\n") }

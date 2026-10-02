@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/koblas/quarry/internal/report"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -13,10 +14,18 @@ const serverName = "quarry"
 // develVersion is reported when the build carries no module version.
 const develVersion = "(devel)"
 
+// commandName is the command the report factory is asked for, as in the home-directory refusal's "run quarry mcp again".
+const commandName = "mcp"
+
+// ReportFactory builds the report server one tool call reads through, for command; it is called
+// per call, so the store is never held between calls.
+type ReportFactory func(ctx context.Context, command string) (*report.Server, error)
+
 // Server is quarry's MCP server: it answers one client's tool calls on the
 // streams Serve is given.
 type Server struct {
-	version string
+	version   string
+	newReport ReportFactory
 }
 
 // Option configures a Server.
@@ -32,6 +41,11 @@ func WithVersion(version string) Option {
 	}
 }
 
+// WithReport sets the factory the query tool reads the store through; a Server without one cannot answer query.
+func WithReport(newReport ReportFactory) Option {
+	return func(s *Server) { s.newReport = newReport }
+}
+
 // NewServer builds a Server from opts.
 func NewServer(opts ...Option) *Server {
 	s := &Server{version: develVersion}
@@ -42,15 +56,15 @@ func NewServer(opts ...Option) *Server {
 }
 
 // Serve speaks MCP as newline-delimited JSON-RPC on stdin and stdout until
-// the client closes stdin or ctx ends. It returns the transport's error
+// the client closes stdin or ctx ends, and logs each call that ends isError to stderr. It returns the transport's error
 // unwrapped: nil at EOF, ctx.Err() when ctx ends, the write error otherwise.
-func (s *Server) Serve(ctx context.Context, stdin io.Reader, stdout, _ io.Writer) error {
+func (s *Server) Serve(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer) error {
 	srv := sdk.NewServer(
 		&sdk.Implementation{Name: serverName, Version: s.version},
 		&sdk.ServerOptions{Instructions: instructions},
 	)
-	srv.AddReceivingMiddleware(absentNullArguments)
-	addTools(srv)
+	srv.AddReceivingMiddleware(absentNullArguments, errorLog(stderr))
+	s.addTools(srv)
 	// The streams belong to the process, so the transport must not close them.
 	return srv.Run(ctx, &sdk.IOTransport{ //nolint:wrapcheck // Serve documents the SDK error as returned unwrapped, so callers branch with errors.Is on the transport's own error
 		Reader: io.NopCloser(stdin),

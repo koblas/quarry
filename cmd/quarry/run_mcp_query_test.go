@@ -55,7 +55,7 @@ func Test_run_mcp_query_escapes_html_characters_like_the_cli(t *testing.T) {
 
 	require.False(t, result.IsError, textOf(result))
 	assert.Equal(t, compactJSON(t, cliStdout), textOf(result))
-	assert.Contains(t, textOf(result), `"<a&b>"`)
+	assert.Contains(t, textOf(result), `"\u003ca\u0026b\u003e"`)
 }
 
 func Test_run_mcp_query_with_several_statements_returns_the_last_ones_rows(t *testing.T) {
