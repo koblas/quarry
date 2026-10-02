@@ -142,6 +142,7 @@ func newMCPServe(info *debug.BuildInfo) cli.MCPServeFunc {
 		srv := mcp.NewServer(
 			mcp.WithVersion(buildVersion(info)),
 			mcp.WithReport(mcp.ReportFactory(newReportFactory())),
+			mcp.WithConfig(mcp.ConfigLoader(newConfigLoader())),
 		)
 		// A broken stdout must surface as EPIPE from the write, not kill the process.
 		signal.Ignore(syscall.SIGPIPE)

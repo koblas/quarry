@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/report"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -21,11 +22,16 @@ const commandName = "mcp"
 // per call, so the store is never held between calls.
 type ReportFactory func(ctx context.Context, command string) (*report.Server, error)
 
+// ConfigLoader loads quarry's config for command; it is called per tool call, so edits to the
+// config file apply without a restart.
+type ConfigLoader func(command string) (config.Config, error)
+
 // Server is quarry's MCP server: it answers one client's tool calls on the
 // streams Serve is given.
 type Server struct {
 	version   string
 	newReport ReportFactory
+	newConfig ConfigLoader
 }
 
 // Option configures a Server.
@@ -44,6 +50,11 @@ func WithVersion(version string) Option {
 // WithReport sets the factory the tools read the store through; a Server without one cannot answer them.
 func WithReport(newReport ReportFactory) Option {
 	return func(s *Server) { s.newReport = newReport }
+}
+
+// WithConfig sets the loader the tools read the config through; a Server without one cannot answer sync_status.
+func WithConfig(newConfig ConfigLoader) Option {
+	return func(s *Server) { s.newConfig = newConfig }
 }
 
 // NewServer builds a Server from opts.

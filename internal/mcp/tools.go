@@ -62,7 +62,7 @@ the user fixes them in Quicken and runs quarry sync, and fixed findings
 drop off. To ignore a finding the user adds its id to findings.ignore in
 quarry's config file.`
 
-// errNotBuilt is what a tool answers until its handler lands.
+// errNotBuilt is what data_quality answers until its handler lands.
 var errNotBuilt = errors.New("this tool is not available yet")
 
 type (
@@ -93,7 +93,7 @@ func (s *Server) addTools(srv *sdk.Server) {
 		"sql":   {Type: "string", MinLength: new(1)},
 		"limit": limitSchema(maxRows),
 	}, "sql")), handler(s.query))
-	sdk.AddTool(srv, tool(toolSyncStatus, syncStatusDescription, objectSchema(nil)), notBuilt[noInput])
+	sdk.AddTool(srv, tool(toolSyncStatus, syncStatusDescription, objectSchema(nil)), handler(s.syncStatus))
 	sdk.AddTool(srv, tool(toolDataQuality, dataQualityDescription, objectSchema(map[string]*jsonschema.Schema{
 		"status": {Type: "string", Enum: []any{"open", "ignored", "fixed", "all"}, Default: []byte(`"open"`)},
 		"type":   {Type: "string", Enum: findingTypes()},

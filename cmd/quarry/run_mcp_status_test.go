@@ -115,6 +115,26 @@ func Test_run_mcp_sync_status_sees_a_sync_between_calls(t *testing.T) {
 	})
 }
 
+func Test_run_mcp_sync_status_refuses_a_store_without_an_import_run(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncAccountsFixture(t, home)
+	editStore(t, home, "DELETE FROM import_runs")
+	var cliStdout, cliStderr bytes.Buffer
+	require.Equal(t, 1, run(t.Context(), []string{"status"}, &cliStdout, &cliStderr))
+	refusal := strings.TrimSuffix(strings.TrimPrefix(cliStderr.String(), "quarry: "), "\n")
+	ctx, peer := startStatusPeer(t)
+
+	result := callSyncStatus(ctx, t, peer)
+	require.NoError(t, peer.session.Close())
+	peer.waitForExit(ctx, t)
+
+	assert.True(t, result.IsError)
+	assert.Equal(t, refusal, textOf(result))
+	assert.Contains(t, refusal, "the store has no import history")
+	assert.Equal(t, "quarry: mcp: sync_status: "+refusal+"\n", peer.stderr.String())
+}
+
 // accountsBuilder is a Quicken file of one CAD chequing account per name, each with one transaction.
 func accountsBuilder(names ...string) *v9fixture.Builder {
 	b := v9fixture.NewBuilder()

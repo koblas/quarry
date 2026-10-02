@@ -157,7 +157,6 @@ func Test_an_unbuilt_tool_answers_isError(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"sync_status", nil},
 		{"data_quality", nil},
 	} {
 		t.Run(tool.name, func(t *testing.T) {

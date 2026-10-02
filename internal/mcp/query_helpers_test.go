@@ -39,6 +39,15 @@ type fakeStore struct {
 
 	schema      store.Schema
 	schemaReads int
+
+	status      store.Status
+	statusReads int
+}
+
+// Status answers with status, or err when set, counting the reads.
+func (f *fakeStore) Status(context.Context) (store.Status, error) {
+	f.statusReads++
+	return f.status, f.err
 }
 
 // Schema answers with schema, or err when set, counting the reads.
@@ -66,8 +75,8 @@ type harness struct {
 	commands []string
 }
 
-// newHarness serves the query tool over st; buildErr, when set, is what the report factory fails with.
-func newHarness(t *testing.T, st *fakeStore, buildErr error) *harness {
+// newHarness serves the tools over st with opts; buildErr, when set, is what the report factory fails with.
+func newHarness(t *testing.T, st *fakeStore, buildErr error, opts ...mcp.Option) *harness {
 	t.Helper()
 	h := &harness{store: st, stderr: &bytes.Buffer{}}
 	factory := func(_ context.Context, command string) (*report.Server, error) {
@@ -78,7 +87,7 @@ func newHarness(t *testing.T, st *fakeStore, buildErr error) *harness {
 		}
 		return report.NewServer(report.WithStore(st), report.WithHome(testHome)), nil
 	}
-	h.running = startServerLogging(t, mcp.NewServer(mcp.WithReport(factory)), h.stderr)
+	h.running = startServerLogging(t, mcp.NewServer(append([]mcp.Option{mcp.WithReport(factory)}, opts...)...), h.stderr)
 	return h
 }
 
@@ -94,6 +103,14 @@ func (h *harness) query(t *testing.T, arguments any) *sdk.CallToolResult {
 func (h *harness) describeSchema(t *testing.T) *sdk.CallToolResult {
 	t.Helper()
 	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "describe_schema", Arguments: map[string]any{}})
+	require.NoError(t, err)
+	return result
+}
+
+// syncStatus calls the sync_status tool with no arguments.
+func (h *harness) syncStatus(t *testing.T) *sdk.CallToolResult {
+	t.Helper()
+	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "sync_status", Arguments: map[string]any{}})
 	require.NoError(t, err)
 	return result
 }
