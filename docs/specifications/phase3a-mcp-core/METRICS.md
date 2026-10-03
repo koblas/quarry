@@ -19,6 +19,7 @@
 | 2 | correctness, test, refactor | 0/0/8/7 | 0 / 4, 214s | PASS WITH FOLLOW-UPS |
 | final product-vision | — | 0/0/2/1 | — | SHIP |
 | 3 (post-ship: cancel hang fix pass 2) | correctness, arch, test | 0/2/5/3 | 0 / 5, 102s | BLOCKED |
+| 4 (after fix pass 3) | correctness, test | 0/0/4/0 | 0 / 5, 279s | PASS WITH FOLLOW-UPS |
 
 ## Tokens
 Tokens for `phase3a-mcp-core` across 6 project dir(s). Weighted = input-equivalent tokens (IE): cache read x0.1, cache write x1.25 (5m) / x2 (1h), output x5. Attribution: 57 tagged, 0 heuristic. Orchestrator row counts the main session between the feature's first and last run in each session, so it may include other work.
