@@ -21,6 +21,8 @@ const (
 	toolDataQuality = "data_quality"
 	toolSpending    = "spending"
 	toolCashFlow    = "cash_flow"
+	toolRecurring   = "recurring_charges"
+	toolAnomalies   = "anomalies"
 )
 
 // Row limits: the most any tool returns, data_quality's default, and the most items it lists per finding.
@@ -87,6 +89,25 @@ equals spending's total for the same period, accounts and currency.
 Savings rate is net divided by income, null when income is zero or less.
 A period that since or until cuts short is marked partial.`
 
+const recurringDescription = `List charges that repeat every week, month, quarter or year at a steady
+amount (subscriptions, memberships, insurance), found in all of the
+user's history and listed when they were running during the period. Each
+series has its cadence, latest amount, cost per year while active, price
+changes and accounts. A series is found in its account's own currency, so
+an exchange-rate change is never a price change. Charges dated after today
+never count. Bills whose amount changes most times, such as utilities, are
+not listed; use spending with by payee for those. Returns at most 500
+series; totals count every series.`
+
+const anomaliesDescription = `List charges in the period that are unusually large: more than 2 times the
+median of the payee's earlier charges (when it has at least 3), else more
+than 5 times the median of the category's earlier charges (at least 10).
+Charges under 100.00 in their account's own currency are never listed.
+Each charge is compared with all earlier history, whatever the period.
+Possible duplicates are not listed here; data_quality lists them. Charges
+dated after today are never listed. Returns at most 500 charges, newest
+first.`
+
 // The descriptions of the parameters spending shares with the other report tools.
 const (
 	sinceDescription    = "First day to count: YYYY, YYYY-MM or YYYY-MM-DD; a year or month starts on its first day. Defaults to January 1 of this year."
@@ -95,6 +116,16 @@ const (
 	currencyDescription = "Currency for amounts: CAD, USD, or native to list each account's own currency separately. Defaults to reporting.currency in quarry's config file, else CAD."
 	spendingByDesc      = "Group by category (the default), payee, tag or month. A split with several tags counts under each tag."
 	cashFlowByDesc      = "One row per month (the default) or per year."
+)
+
+// The descriptions of the parameters recurring_charges and anomalies word for themselves.
+const (
+	recurringSinceDescription    = "List series still running on or after this date: YYYY, YYYY-MM or YYYY-MM-DD. Defaults to January 1 of this year."
+	recurringUntilDescription    = "List series that started on or before this date: YYYY, YYYY-MM or YYYY-MM-DD; a year or month ends on its last day. Defaults to today."
+	recurringAccountsDescription = "List only series with a charge in one of these accounts, each given by id or by name in any letter case. Omit it for every account."
+	anomaliesSinceDescription    = "List charges dated on or after this date: YYYY, YYYY-MM or YYYY-MM-DD. Defaults to January 1 of this year."
+	anomaliesUntilDescription    = "List charges dated on or before this date: YYYY, YYYY-MM or YYYY-MM-DD; a year or month ends on its last day. Defaults to today."
+	anomaliesAccountsDescription = "List only charges in these accounts, each given by id or by name in any letter case; the payee's charges in other accounts still count as history."
 )
 
 type (
@@ -124,6 +155,20 @@ type (
 		Accounts []string `json:"accounts"`
 		Currency string   `json:"currency"`
 		By       string   `json:"by"`
+	}
+	// recurringInput is the recurring_charges tool's arguments; Since and Until are nil when absent.
+	recurringInput struct {
+		Since    *string  `json:"since"`
+		Until    *string  `json:"until"`
+		Accounts []string `json:"accounts"`
+		Currency string   `json:"currency"`
+	}
+	// anomaliesInput is the anomalies tool's arguments; Since and Until are nil when absent.
+	anomaliesInput struct {
+		Since    *string  `json:"since"`
+		Until    *string  `json:"until"`
+		Accounts []string `json:"accounts"`
+		Currency string   `json:"currency"`
 	}
 	// noInput is the arguments of a tool that takes none.
 	noInput struct{}
@@ -156,6 +201,18 @@ func (s *Server) addTools(srv *sdk.Server) {
 		"currency": currencySchema(),
 		"by":       described(cashFlowByDesc, &jsonschema.Schema{Type: "string", Enum: cashFlowPeriods(), Default: []byte(`"month"`)}),
 	})), handler(s.timeout, stoppedLine(toolCashFlow), s.cashFlow))
+	sdk.AddTool(srv, tool(toolRecurring, recurringDescription, objectSchema(map[string]*jsonschema.Schema{
+		"since":    described(recurringSinceDescription, &jsonschema.Schema{Type: "string"}),
+		"until":    described(recurringUntilDescription, &jsonschema.Schema{Type: "string"}),
+		"accounts": accountsSchema(recurringAccountsDescription),
+		"currency": currencySchema(),
+	})), handler(s.timeout, stoppedLine(toolRecurring), s.recurringCharges))
+	sdk.AddTool(srv, tool(toolAnomalies, anomaliesDescription, objectSchema(map[string]*jsonschema.Schema{
+		"since":    described(anomaliesSinceDescription, &jsonschema.Schema{Type: "string"}),
+		"until":    described(anomaliesUntilDescription, &jsonschema.Schema{Type: "string"}),
+		"accounts": accountsSchema(anomaliesAccountsDescription),
+		"currency": currencySchema(),
+	})), handler(s.timeout, stoppedLine(toolAnomalies), s.anomalies))
 }
 
 // tool describes one tool; its result is a JSON object.

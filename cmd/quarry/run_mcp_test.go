@@ -75,6 +75,56 @@ equals spending's total for the same period, accounts and currency.
 Savings rate is net divided by income, null when income is zero or less.
 A period that since or until cuts short is marked partial.`
 
+const mcpRecurringDescription = `List charges that repeat every week, month, quarter or year at a steady
+amount (subscriptions, memberships, insurance), found in all of the
+user's history and listed when they were running during the period. Each
+series has its cadence, latest amount, cost per year while active, price
+changes and accounts. A series is found in its account's own currency, so
+an exchange-rate change is never a price change. Charges dated after today
+never count. Bills whose amount changes most times, such as utilities, are
+not listed; use spending with by payee for those. Returns at most 500
+series; totals count every series.`
+
+const mcpAnomaliesDescription = `List charges in the period that are unusually large: more than 2 times the
+median of the payee's earlier charges (when it has at least 3), else more
+than 5 times the median of the category's earlier charges (at least 10).
+Charges under 100.00 in their account's own currency are never listed.
+Each charge is compared with all earlier history, whatever the period.
+Possible duplicates are not listed here; data_quality lists them. Charges
+dated after today are never listed. Returns at most 500 charges, newest
+first.`
+
+const (
+	mcpRecurringInputSchema = `{
+		"type": "object",
+		"properties": {
+			"since": {"type": "string", "description": "List series still running on or after this date: YYYY, YYYY-MM or YYYY-MM-DD. ` +
+		`Defaults to January 1 of this year."},
+			"until": {"type": "string", "description": "List series that started on or before this date: YYYY, YYYY-MM or YYYY-MM-DD; a year or month ends on its last day. ` +
+		`Defaults to today."},
+			"accounts": {"type": "array", "items": {"type": "string"}, "description": "List only series with a charge in one of these accounts, each given by id or by name in any letter case. ` +
+		`Omit it for every account."},
+			"currency": {"type": "string", "enum": ["CAD", "USD", "native"], "description": "Currency for amounts: CAD, USD, or native to list each account's own currency separately. ` +
+		`Defaults to reporting.currency in quarry's config file, else CAD."}
+		},
+		"additionalProperties": false
+	}`
+	mcpAnomaliesInputSchema = `{
+		"type": "object",
+		"properties": {
+			"since": {"type": "string", "description": "List charges dated on or after this date: YYYY, YYYY-MM or YYYY-MM-DD. ` +
+		`Defaults to January 1 of this year."},
+			"until": {"type": "string", "description": "List charges dated on or before this date: YYYY, YYYY-MM or YYYY-MM-DD; a year or month ends on its last day. ` +
+		`Defaults to today."},
+			"accounts": {"type": "array", "items": {"type": "string"}, "description": "List only charges in these accounts, each given by id or by name in any letter case; ` +
+		`the payee's charges in other accounts still count as history."},
+			"currency": {"type": "string", "enum": ["CAD", "USD", "native"], "description": "Currency for amounts: CAD, USD, or native to list each account's own currency separately. ` +
+		`Defaults to reporting.currency in quarry's config file, else CAD."}
+		},
+		"additionalProperties": false
+	}`
+)
+
 const (
 	mcpCashFlowInputSchema = `{
 		"type": "object",
@@ -147,12 +197,14 @@ func Test_run_mcp_lists_quarrys_four_tools_over_json_rpc(t *testing.T) {
 	assert.Equal(t, &sdk.Implementation{Name: "quarry", Version: mcpTestServerVersion}, initialized.ServerInfo)
 	assert.Equal(t, mcpInstructions, initialized.Instructions)
 	wantTools := map[string]struct{ description, inputSchema string }{
-		"query":           {mcpQueryDescription, mcpQueryInputSchema},
-		"describe_schema": {mcpDescribeSchemaDescription, mcpNoInputSchema},
-		"sync_status":     {mcpSyncStatusDescription, mcpNoInputSchema},
-		"data_quality":    {mcpDataQualityDescription, mcpDataQualityInputSchema},
-		"spending":        {mcpSpendingDescription, mcpSpendingInputSchema},
-		"cash_flow":       {mcpCashFlowDescription, mcpCashFlowInputSchema},
+		"query":             {mcpQueryDescription, mcpQueryInputSchema},
+		"describe_schema":   {mcpDescribeSchemaDescription, mcpNoInputSchema},
+		"sync_status":       {mcpSyncStatusDescription, mcpNoInputSchema},
+		"data_quality":      {mcpDataQualityDescription, mcpDataQualityInputSchema},
+		"spending":          {mcpSpendingDescription, mcpSpendingInputSchema},
+		"cash_flow":         {mcpCashFlowDescription, mcpCashFlowInputSchema},
+		"recurring_charges": {mcpRecurringDescription, mcpRecurringInputSchema},
+		"anomalies":         {mcpAnomaliesDescription, mcpAnomaliesInputSchema},
 	}
 	require.Len(t, listed.Tools, len(wantTools))
 	for _, tool := range listed.Tools {
