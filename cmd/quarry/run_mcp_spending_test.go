@@ -21,6 +21,7 @@ const (
 		`to include it, turn on reports for it in Quicken's account settings, then run quarry sync`
 	spendingBeforeFirstRateLine = "3 transactions dated before 2026-03-01, the first exchange rate in the store, are listed in USD, not converted to CAD"
 	unknownKeyConfig            = "bogus = 1\n"
+	windowRefusedLog            = "refused the call's since or until; details went to the client only"
 )
 
 func Test_run_mcp_spending_returns_the_spend_json_document(t *testing.T) {
@@ -106,6 +107,59 @@ func Test_run_mcp_spending_reads_the_config_only_when_currency_is_absent(t *test
 		assert.Contains(t, refusal, configShown)
 		assert.Equal(t, spendingLogPrefix+spendingConfigLog+"\n", peer.stderr.String())
 	})
+}
+
+func Test_run_mcp_spending_refuses_a_bad_window_in_mcp_words(t *testing.T) {
+	cases := []struct {
+		name      string
+		arguments map[string]any
+		want      string
+	}{
+		{
+			name: "since is not a date", arguments: map[string]any{"since": "2024-13"},
+			want: `since "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`,
+		},
+		{
+			name: "since is empty", arguments: map[string]any{"since": ""},
+			want: `since "" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`,
+		},
+		{
+			name: "until is not a date", arguments: map[string]any{"until": "2024-13"},
+			want: `until "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`,
+		},
+		{
+			name: "since is after until", arguments: map[string]any{"since": "2025", "until": "2024"},
+			want: "since 2025 is after until 2024",
+		},
+		{
+			name: "until is before the default since", arguments: map[string]any{"until": "2025-03"},
+			want: "until 2025-03 is before the default since 2026-01-01; pass since too",
+		},
+		{
+			name: "since is in the future with no until", arguments: map[string]any{"since": "2099"},
+			want: "since 2099 is after today; pass until to include future-dated transactions",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			populatedAnalysisStore(t, home)
+			ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
+			defer cancel()
+			peer := startClockedMCP(ctx, t)
+
+			result, err := peer.session.CallTool(ctx, &sdk.CallToolParams{Name: "spending", Arguments: c.arguments})
+			require.NoError(t, err)
+			require.NoError(t, peer.session.Close())
+			peer.waitForExit(ctx, t)
+
+			assert.True(t, result.IsError)
+			assert.Equal(t, c.want, textOf(result))
+			assert.Equal(t, spendingLogPrefix+windowRefusedLog+"\n", peer.stderr.String())
+		})
+	}
 }
 
 func Test_run_mcp_spending_words_its_warnings_with_the_tool_name(t *testing.T) {
