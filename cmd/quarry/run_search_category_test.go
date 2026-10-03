@@ -162,3 +162,38 @@ func Test_run_search_text_names_the_category_in_the_caption(t *testing.T) {
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "Transactions in all accounts, all dates, category \"food:GROCERIES\", amount at least 50.00\n")
 }
+
+func Test_run_search_category_as_text(t *testing.T) {
+	cases := []struct {
+		name       string
+		args       []string
+		wantExit   int
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			name: "a known category no split uses prints the empty result and the no-match warning", args: []string{"--category", "Travel"},
+			wantStdout: "0 matching transactions\n",
+			wantStderr: "quarry: warning: no transactions match the search; the store's transactions run 2026-01-01 to 2026-01-05\n",
+		},
+		{
+			name: "a misspelling with a named account is refused on the category", args: []string{"--account", "Chequing", "--category", "Fod"}, wantExit: 1,
+			wantStderr: "quarry: no category named \"Fod\"; list them with quarry sql \"SELECT full_path FROM categories ORDER BY full_path\"\n",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			replaceStore(t, home, categorySearchStore())
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), append([]string{"search"}, c.args...), spendEnv(&stdout, &stderr))
+
+			require.Equal(t, c.wantExit, exitCode, stderr.String())
+			assert.Contains(t, stdout.String(), c.wantStdout)
+			assert.Equal(t, c.wantStderr, stderr.String())
+		})
+	}
+}

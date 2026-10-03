@@ -24,8 +24,7 @@ const (
 	searchFirstAccount = 8
 )
 
-// The cents of a transaction's amount, of its unsigned amount and of a split's. The DECIMAL(38,2) operand keeps the
-// product from overflowing 18 digits for an amount near the column's largest.
+// Cents of an amount, an unsigned amount and a split's; DECIMAL(38,2) keeps the product from overflowing.
 const (
 	searchTxnCents    = `CAST(CAST(t.amount AS DECIMAL(38,2)) * 100 AS BIGINT)`
 	searchAbsTxnCents = `CAST(CAST(abs(t.amount) AS DECIMAL(38,2)) * 100 AS BIGINT)`

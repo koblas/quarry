@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-09
-status: open
+status: done
 ---
 
 # SCENARIO-09: search_transactions returns the quarry search --json document
@@ -26,11 +26,11 @@ Size: OWNS A RUN — 3 batches, no feature package changed (internal/mcp deliver
 - [x] Step 5: `internal/mcp/search.go` cut line appended as the only warning when `found.Truncated()`: limit == `maxRows` → §2.6 "narrow the search" wording, limit < `maxRows` → "pass a higher limit, up to 500, or narrow" wording; N = rows listed, M = `Matched`, both `humanize.Thousands`. `internal/mcp/search_test.go` `Test_search_transactions_words_its_cut_line_by_the_limit_asked`: limit 500 vs 499 (just outside), limit 20, matched 1,234 (comma visible), not truncated → no line. S11 acceptance `Test_run_mcp_search_transactions_cuts_to_its_limit_with_the_mcp_cut_line` over `manySearchTxns(501)` (`run_search_helpers_test.go:134`, pattern `run_search_limit_test.go:13-47`): limit 20 and absent; rows, newest/oldest id, `matched` 501, `truncated`, exact warnings, empty stderr. S12b `cmd/quarry/run_config_test.go` after `:310-319` `Test_run_mcp_search_transactions_ignores_a_malformed_config`: `malformedConfigFixture` + `startClockedMCP` (startup reads no config: `run.go:137-152`), not `IsError`, a known payee in the doc, `warnings` `[]`, empty stderr. Do NOT add search or mcp to `readCommandArgs` (`run_config_test.go:218-226`)
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `searchTransactions`, `searchInput`, the cut-line func (budget: 1-2 lines)
-- [ ] Step 7: fold S04 checkpoint MINORs/NITs from STATE.md `## Open debts` (duckstore `search_category_test.go:~108` named-accounts UnknownCategory row; `run_search_category_test.go` text-mode `--category Travel` row; `run_search_refusals_test.go:111-113` blank line, `:33-38` literals; `duckstore/search.go:~27-30` one-line doc; top-value Amount assert) — tests and docs only, no runtime behaviour
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `searchTransactions`, `searchInput`, the cut-line func (budget: 1-2 lines)
+- [x] Step 7: fold S04 checkpoint MINORs/NITs from STATE.md `## Open debts` (duckstore `search_category_test.go:~108` named-accounts UnknownCategory row; `run_search_category_test.go` text-mode `--category Travel` row; `run_search_refusals_test.go:111-113` blank line, `:33-38` literals; `duckstore/search.go:~27-30` one-line doc; top-value Amount assert) — tests and docs only, no runtime behaviour
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase3c-search` and `spec-check.py phase3b-analysis-tools` → tick SCENARIO-09, SCENARIO-11 and SCENARIO-12b (folds "delivered by SCENARIO-09") with their acceptance tests
+- [x] Step 8: full verification + `spec-check.py phase3c-search` and `spec-check.py phase3b-analysis-tools` → tick SCENARIO-09, SCENARIO-11 and SCENARIO-12b (folds "delivered by SCENARIO-09") with their acceptance tests
 
 ## Handoff
 
@@ -53,14 +53,11 @@ Size: OWNS A RUN — 3 batches, no feature package changed (internal/mcp deliver
 
 ## Phase report
 
-Run B1 (start SHA `16b278210fefbe50046cc5a4f69095566a86195d`). Steps 3-5 ticked; Steps 6-8 (V) open. Narrow loop green (internal/mcp, cmd/quarry), all three acceptance tests green, `spec-check.py --run phase3b-analysis-tools` OK, `golangci-lint` 0 issues on both packages.
+Run V (start SHA `16b278210fefbe50046cc5a4f69095566a86195d`). Steps 6-8 ticked; scenario done. Full suite rc=0, `uncovered-diff.py` 0 added lines, `golangci-lint` 0 issues whole repo, `-race` green on `internal/mcp/...` and `cmd/quarry -run (?i)mcp`. `spec-check.py phase3c-search`, `--run phase3c-search` and `--run phase3b-analysis-tools` all rc=0. Counts vs start: cmd/quarry 600 (+5), internal/mcp 142 (+8), internal/store/duckstore 530 (+1), total 1272 (+14).
 
-Files:
-- `internal/mcp/search.go`: real `searchTransactions` (CheckSearchText -> ParseSearchAmounts -> ParseSearchWindow/`windowRefusal` -> factory -> `Search`/`accountRefusal` -> `SearchWarnings` + `searchCutLine`). Two `//nolint:wrapcheck` on the blank-text/amount returns: they come back as the CLI line until S10 wraps them (S10 drops the nolints when it wraps).
-- `internal/mcp/query_helpers_test.go`: `fakeStore.found`/`searched`/`Search` (cuts to `params.Limit`), `harness.searchTransactions`. `internal/mcp/search_test.go` (new): window refusal, factory failure, passthrough (Text/Category `""` non-nil/Limit), category nil when absent, cut-line wording table (500/499/20), no cut line when nothing cut. `server_test.go`: absent/null/empty -> Limit 500. `timeout_test.go`: `stallingStore.Search` + row.
-- `cmd/quarry/run_mcp_search_test.go`: S11 acceptance, `..._refuses_an_account_without_its_name_on_stderr`, `searchLogPrefix`. `run_config_test.go`: S12b acceptance. `run_mcp_descriptions_test.go`: renamed `Test_run_mcp_describes_every_tool`, `search_transactions` row, `mcpSearchDescription`/`mcpSearchInputSchema`. `run_mcp_test.go`: name added. `run_mcp_no_store_test.go`, `run_mcp_store_faults_test.go`: search rows (open, `DROP TABLE categories CASCADE`).
-- `docs/specifications/phase3b-analysis-tools/specification.md:747` repointed to `Test_run_mcp_describes_every_tool`.
+Run V changes (tests/docs only, no runtime change):
+- `internal/mcp/search_test.go`: `Test_search_transactions_refuses_blank_text_and_a_bad_amount_before_building_a_report` covers the two `//nolint:wrapcheck` returns (uncovered after B1); asserts IsError, no report built, store not asked, no wording. Mutants (check deleted, amount error swallowed) each reddened it; search.go restored byte-identical.
+- S04 folds: `duckstore/search_category_test.go` named-accounts UnknownCategory table; `cmd/quarry/run_search_category_test.go` `Test_run_search_category_as_text` (Travel no-match, `--account Chequing --category Fod`); `run_search_refusals_test.go` blank line and `badText*`/`badCategory*` literal consts; `duckstore/search.go` cents const doc to 1 line; `search_amount_test.go` returned Amount == top assert.
+- Spec ticks S09/S11/S12b; STATE.md rewritten (S04 folds dropped; S10 owes wrappers, class lines, nolint drop, order and SDK rows, `\xff` stdio pin, S13 copy).
 
-Green on arrival: all of Step 3-5 tests (code-first; handler written before tests). Mutations (8 of the plan's line, each reddened, files restored byte-identical): limit Default removed -> absent_null test (omitted/null/empty); `windowRefusal`->`err` -> bad_window test; `accountRefusal`->`err` -> account stderr acceptance; `errors.New(err.Error())` -> timeout row `search_transactions` ("search interrupted"); cut wording `<`->`>=` -> words table (3 rows) and S11 (2 rows); cut append deleted -> S11 (2 rows); nil warnings -> acceptance no-match rows (2); `resolveCurrency("")` -> S12b ("cannot read ~/Library/...config.toml").
-
-Run V must not redo: handler, pins, rows. V owns: Step 6 sweep (`go build ./... && golangci-lint run ./...`, doc comments on `searchInput`/`searchCutLine` already 1-2 lines), Step 7 S04 debts fold, Step 8 verify + spec-check phase3c-search/phase3b + ticks S09/S11/S12b + STATE.md rewrite + `status: done`. S10 wrappers: blank text/amount sites in `search.go` (nolint:wrapcheck there).
+Nothing left for this scenario.

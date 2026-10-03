@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -29,13 +28,10 @@ func Test_run_search_refuses_bad_input_with_the_ruled_line_and_exit_code(t *test
 		notAmount       = "; use digits with up to 2 decimals and no sign, such as 25 or 19.99\n"
 		unknownCategory = "; list them with quarry sql \"SELECT full_path FROM categories ORDER BY full_path\"\n"
 		usage           = "; Run 'quarry search --help' for usage.\n"
+		badTextFF       = "quarry: search text \"\\xff\" is not valid UTF-8; set your terminal or script to UTF-8\n"
+		badTextHalfRune = "quarry: search text \"caf\\xc3\" is not valid UTF-8; set your terminal or script to UTF-8\n"
+		badCategoryFF   = "quarry: --category \"\\xff\" is not valid UTF-8; set your terminal or script to UTF-8\n"
 	)
-	badText := func(value string) string {
-		return fmt.Sprintf("quarry: search text %q is not valid UTF-8; set your terminal or script to UTF-8\n", value)
-	}
-	badCategory := func(value string) string {
-		return fmt.Sprintf("quarry: --category %q is not valid UTF-8; set your terminal or script to UTF-8\n", value)
-	}
 	cases := []struct {
 		name string
 		args []string
@@ -56,9 +52,9 @@ func Test_run_search_refuses_bad_input_with_the_ruled_line_and_exit_code(t *test
 		{name: "an empty account", args: []string{"--account", ""}, exit: 1, want: "quarry: no account named \"\"; run quarry accounts --all to list them\n"},
 		{name: "a category no category is named", args: []string{"--category", "Fod"}, exit: 1, want: `quarry: no category named "Fod"` + unknownCategory},
 		{name: "an empty category", args: []string{"--category", ""}, exit: 1, want: `quarry: no category named ""` + unknownCategory},
-		{name: "a text that is not valid UTF-8", args: []string{"\xff"}, exit: 2, want: badText("\xff")},
-		{name: "a text that ends in half a rune", args: []string{"caf\xc3"}, exit: 2, want: badText("caf\xc3")},
-		{name: "a category that is not valid UTF-8", args: []string{"--category", "\xff"}, exit: 2, want: badCategory("\xff")},
+		{name: "a text that is not valid UTF-8", args: []string{"\xff"}, exit: 2, want: badTextFF},
+		{name: "a text that ends in half a rune", args: []string{"caf\xc3"}, exit: 2, want: badTextHalfRune},
+		{name: "a category that is not valid UTF-8", args: []string{"--category", "\xff"}, exit: 2, want: badCategoryFF},
 		{name: "a --currency flag", args: []string{"--currency", "CAD"}, exit: 2, want: "quarry: unknown flag: --currency" + usage},
 		{name: "a --csv flag", args: []string{"--csv"}, exit: 2, want: "quarry: unknown flag: --csv" + usage},
 	}
@@ -110,6 +106,7 @@ func Test_run_search_refuses_in_the_ruled_order(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			builtStore(t)
 			var stdout, stderr bytes.Buffer
+
 			exitCode := runWith(context.Background(), append([]string{"search", "--json"}, c.args...), spendEnv(&stdout, &stderr))
 
 			require.Equal(t, c.exit, exitCode, stderr.String())

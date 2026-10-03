@@ -162,6 +162,7 @@ func Test_search_amount_compares_the_largest_amount_the_column_holds(t *testing.
 	rows := searchRowsFor()
 	addSearch(&rows, signedTxn("deposit", 1, top))
 	addSearch(&rows, signedTxn("charge", 2, -top))
+	amounts := map[string]int64{"txn-deposit": top, "txn-charge": -top}
 	cases := []struct {
 		name     string
 		min, max *int64
@@ -180,6 +181,9 @@ func Test_search_amount_compares_the_largest_amount_the_column_holds(t *testing.
 			got := searchOf(t, rows, store.SearchParams{Min: c.min, Max: c.max})
 
 			assert.ElementsMatch(t, c.want, searchedIDs(got))
+			for _, row := range got.Rows {
+				assert.Equal(t, amounts[row.TransactionID], row.Amount, row.TransactionID)
+			}
 		})
 	}
 }

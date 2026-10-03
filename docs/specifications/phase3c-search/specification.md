@@ -749,9 +749,9 @@ Sizing pass (architect, opus) 2026-10-03 — 15 IDs → 6 runs, all code-first. 
 - [x] SCENARIO-03: --min and --max compare the amount without its sign — `cmd/quarry/run_search_amount_test.go` `Test_run_search_min_and_max_compare_the_amount_without_its_sign`
 - [x] SCENARIO-04: --category matches the category and any category under it — `cmd/quarry/run_search_category_test.go` `Test_run_search_category_lists_the_category_and_everything_under_it`
 - [x] SCENARIO-08: quarry search refuses bad input with the ruled line and exit code — delivered by SCENARIO-04 — `cmd/quarry/run_search_refusals_test.go` `Test_run_search_refuses_bad_input_with_the_ruled_line_and_exit_code`
-- [ ] SCENARIO-09: search_transactions returns the quarry search --json document
-- [ ] SCENARIO-11: search_transactions cuts to its limit with the MCP cut line
-- [ ] SCENARIO-12b: a broken config file never affects search_transactions
+- [x] SCENARIO-09: search_transactions returns the quarry search --json document — `cmd/quarry/run_mcp_search_test.go` `Test_run_mcp_search_transactions_returns_the_search_json_document`
+- [x] SCENARIO-11: search_transactions cuts to its limit with the MCP cut line — delivered by SCENARIO-09 — `cmd/quarry/run_mcp_search_test.go` `Test_run_mcp_search_transactions_cuts_to_its_limit_with_the_mcp_cut_line`
+- [x] SCENARIO-12b: a broken config file never affects search_transactions — delivered by SCENARIO-09 — `cmd/quarry/run_config_test.go` `Test_run_mcp_search_transactions_ignores_a_malformed_config`
 - [ ] SCENARIO-10: search_transactions refuses bad input without the caller's values on stderr
 - [ ] SCENARIO-13: the server names search to the client
 

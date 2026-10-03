@@ -144,6 +144,34 @@ func Test_search_category_flags_unknown_only_when_no_path_equals_it(t *testing.T
 	}
 }
 
+func Test_search_category_flags_unknown_with_named_accounts_whether_or_not_they_have_transactions(t *testing.T) {
+	t.Parallel()
+	rows := categoryRows()
+	cases := []struct {
+		name     string
+		category string
+		accounts []string
+		want     bool
+	}{
+		{name: "a misspelling with an account that has transactions", category: "Fod", accounts: []string{acctInReports}, want: true},
+		{name: "a misspelling with an account that has none", category: "Fod", accounts: []string{acctSecond}, want: true},
+		{name: "a misspelling with both", category: "Fod", accounts: []string{acctInReports, acctSecond}, want: true},
+		{name: "a known category no split uses with both", category: "Travel", accounts: []string{acctInReports, acctSecond}},
+		{name: "a known category with an account that has none", category: "Food", accounts: []string{acctSecond}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := searchOf(t, rows, store.SearchParams{Category: &c.category, AccountIDs: c.accounts})
+
+			assert.Equal(t, c.want, got.UnknownCategory)
+			assert.Empty(t, got.Rows)
+		})
+	}
+}
+
 func Test_search_category_known_with_no_transactions_in_the_store_is_not_unknown(t *testing.T) {
 	t.Parallel()
 	rows := searchRowsFor()

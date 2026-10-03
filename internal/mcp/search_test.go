@@ -55,6 +55,31 @@ func Test_search_transactions_refuses_a_bad_window_in_the_tools_words(t *testing
 	}
 }
 
+func Test_search_transactions_refuses_blank_text_and_a_bad_amount_before_building_a_report(t *testing.T) {
+	cases := []struct {
+		name      string
+		arguments map[string]any
+	}{
+		{"blank text", map[string]any{"text": "  "}},
+		{"a min that is not an amount", map[string]any{"min": "-12"}},
+		{"an empty max", map[string]any{"max": ""}},
+		{"a min above the max", map[string]any{"min": "50", "max": "20"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fake := &fakeStore{}
+			h := newHarness(t, fake, nil)
+
+			result := h.searchTransactions(t, c.arguments)
+
+			assert.True(t, result.IsError)
+			assert.Zero(t, h.built)
+			assert.Empty(t, fake.searched)
+		})
+	}
+}
+
 func Test_search_transactions_answers_a_report_factory_failure_with_the_generic_log_line(t *testing.T) {
 	h := newHarness(t, &fakeStore{}, errFactoryBroke)
 
