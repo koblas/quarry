@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-10
-status: open
+status: done
 ---
 
 # SCENARIO-10: recurring_charges returns the recurring --json document (folds SCENARIO-10b, 11, 11b)
@@ -43,10 +43,10 @@ Size: OWNS A RUN — 4 build batches (recurring handler, recurring window rows, 
   - new `Test_run_mcp_recurring_charges_refuses_an_account_without_its_name_on_stderr` / `Test_run_mcp_anomalies_refuses_an_account_without_its_name_on_stderr`, copying the three cases of `run_mcp_cash_flow_test.go:63-115`.
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on both handlers, twin consts and input types
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on both handlers, twin consts and input types
 
 ### Verify
-- [ ] Step 9: full verification block + `.claude/scripts/spec-check.py phase3b-analysis-tools` -> tick SCENARIO-10, 10b, 11, 11b (folded lines "delivered by SCENARIO-10", test last); rewrite STATE.md
+- [x] Step 9: full verification block + `.claude/scripts/spec-check.py phase3b-analysis-tools` -> tick SCENARIO-10, 10b, 11, 11b (folded lines "delivered by SCENARIO-10", test last); rewrite STATE.md
 
 ## Handoff
 
@@ -70,8 +70,9 @@ Size: OWNS A RUN — 4 build batches (recurring handler, recurring window rows, 
 
 ## Phase report
 
-Runs A (steps 1-3), B1 (4-6) and B2 (7) done; V (8-9) remains. Committed.
-- Step 7 rows added for `recurring_charges` and `anomalies`: no-store (`run_mcp_no_store_test.go`), timeout (`timeout_test.go` + `stallingStore.Charges`, records the deadline and stalls through `wait`), store-fault open-time (`directoryStore`) and statement-time (`brokenStore("DROP VIEW v_spending")`; reason `Table with name v_spending does not exist!` confirmed on first run for both tools), and `Test_run_mcp_recurring_charges_refuses_an_account_without_its_name_on_stderr` / `Test_run_mcp_anomalies_refuses_an_account_without_its_name_on_stderr` (three cases each, copied from cash_flow).
-- All step-7 tests were green on arrival: the handlers from B1 already carried `accountRefusal` and `capList`, and the stalling store only needed the missing `Charges`.
-- Mutation, red then restored: `accountRefusal(err)` -> `err` at the `Recurring` site reddens `Test_run_mcp_recurring_charges_refuses_an_account_without_its_name_on_stderr`; same at the `Anomalies` site reddens `Test_run_mcp_anomalies_refuses_an_account_without_its_name_on_stderr`. All B1 mutations are recorded above in run B1's report (drop `capList`, recurring twin, second `s.now()`, wrong tool name to `ParseChargeWindow`).
-- Not done (run V): lint, covered full verify, doc-comment pass on both handlers, twin consts and input types, specification.md ticks (10, 10b, 11, 11b), STATE.md rewrite. The two new account tests are 55-line copies of cash_flow's; if `dupl` fires in lint, hoist one table helper.
+Run V (steps 8-9) done; scenario complete.
+- Sweep: `golangci-lint run ./...` 0 issues; one `prealloc` hit fixed (`monthlyCharges`, `internal/mcp/recurring_charges_test.go:212`). `dupl` did not fire on the account tests. Doc comments on both handlers, twin const and input types already within budget; no edit.
+- Verify (start 2322c52): `go test rc=0` (covered full suite), `uncovered-diff.py` 0 uncovered added lines, `-race` green on `./internal/mcp/...` and `./cmd/quarry -run 'MCP|mcp'`.
+- test-stats: cmd/quarry 547 (+6), internal/mcp 132 (+24), TOTAL 679 (+30); tempdir 480 (+4), disk 436 (+4).
+- specification.md: SCENARIO-10, 10b, 11, 11b ticked (folded ones "delivered by SCENARIO-10"). `spec-check.py` rc=0, `spec-check.py --run` rc=0.
+- STATE.md rewritten. Next: S13 (eight-tool descriptions, rename of the tools/list pin test).
