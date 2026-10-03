@@ -43,3 +43,4 @@ Scenarios complete: SCENARIO-01, 02 (folds 06, 07, 12), 03. Last updated by SCEN
 - OWNED BY S13: per-parameter `description`s on the 3a tools (e.g. `data_quality.limit` counts findings) and the instructions string naming "David's" (phase3a final product-vision)
 - Phase3a gate R1/R2/R4 MINOR/NIT debts not listed here remain in the phase3a STATE (unowned); this feature does not close them
 - Checkpoint S02 NITs: `internal/mcp/tools.go:~88` `spendingByDesc` naming vs `*Description` siblings; `internal/mcp/spending.go:49` `slices.Clone` unpinned (harmless)
+- Checkpoint S03 MINOR (fold into S04's run): `internal/mcp/window.go:16,42`, `internal/report/window.go:55` `// unreachable:` reasons must cite how established (e.g. `parseWindow`/`parseDateBound` are the only `WindowError` constructors) per proof.md. NIT: `internal/mcp/window_internal_test.go` add a distinctive-Value case asserting absence from logLine
