@@ -7,6 +7,7 @@
 | SCENARIO-02 (+06, +07, +12) | code-first | A, B1, V | 0/0/2/2 | no (MINORs → STATE.md) |
 | SCENARIO-03 | code-first | A, B1, V | 0/0/1/2 | no (MINOR → STATE.md); + standalone fix 2482e84 (QueryRows/QueryTable lost mid-iteration cancel; pre-existing flake) |
 | SCENARIO-04 (+05) | code-first | A, B1, V | 0/0/0/2 | no (NITs only, accepted) |
+| SCENARIO-09 (+08, +14) | code-first | A, B1, B2, V | 0/1/2/1 | yes (by-default unprovable: silent parse fallback → error-on-miss; warnings non-empty pin; cap order pin) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
