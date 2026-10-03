@@ -742,3 +742,51 @@ type Schema struct {
 	Categories   []Category
 	Transactions TransactionRange
 }
+
+// SearchWindow is the dates a search lists; a nil bound is open, so the zero value lists every date.
+// Both bounds are civil days at UTC midnight, inclusive.
+type SearchWindow struct {
+	Since, Until *time.Time
+}
+
+// SearchParams is what a search varies by: the dates it lists, the accounts it lists
+// (empty lists every account) and the most transactions it returns (0 returns every one).
+type SearchParams struct {
+	Window     SearchWindow
+	AccountIDs []string
+	Limit      int
+}
+
+// SearchSplit is one split of a SearchRow. Category is the category's full path, nil for an uncategorized
+// split and for a transfer leg; Memo is nil for NULL and for "".
+type SearchSplit struct {
+	Category *string
+	Memo     *string
+	Amount   int64
+	Transfer bool
+}
+
+// SearchRow is one transaction of a Search, in its own currency. Account holds only ID, Name, Currency,
+// Closed and Active; Payee and Memo are nil when absent, Memo for both NULL and "". Transfer and Excluded
+// are the flags v_cash_flow's own exclusions give; Splits are in split source id order.
+type SearchRow struct {
+	TransactionID string
+	Date          time.Time
+	Account       Account
+	Payee, Memo   *string
+	Amount        int64
+	Currency      string
+	Transfer      bool
+	Excluded      bool
+	Splits        []SearchSplit
+}
+
+// Search is the newest SearchParams.Limit transactions the search matched, newest first, ties by
+// descending source id.
+type Search struct {
+	Rows []SearchRow
+	// Matched counts every match, including those the limit cut.
+	Matched int
+	// Transactions is the span of every transaction in the store, or of the named accounts' transactions.
+	Transactions TransactionRange
+}

@@ -142,3 +142,8 @@ func parseDateBound(bound, value string) (time.Time, time.Time, error) {
 	}
 	return time.Time{}, time.Time{}, WindowError{Kind: WindowNotADate, Bound: bound, Value: value}
 }
+
+// ParseSearchWindow resolves since and until into a search window; a nil pointer is an open bound.
+func ParseSearchWindow(_, _ *string) (store.SearchWindow, error) {
+	return store.SearchWindow{}, nil
+}

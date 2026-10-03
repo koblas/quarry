@@ -81,6 +81,10 @@ func (f fakeStore) Charges(_ context.Context, params store.ChargeParams) (store.
 	return f.charges, f.err
 }
 
+func (f fakeStore) Search(context.Context, store.SearchParams) (store.Search, error) {
+	return store.Search{}, f.err
+}
+
 func (f fakeStore) Findings(context.Context) (store.FindingList, error) { return f.findings, f.err }
 
 func (f fakeStore) Query(_ context.Context, _ string, maxRows int) (store.QueryResult, error) {

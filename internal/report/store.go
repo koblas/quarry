@@ -20,6 +20,9 @@ type Store interface {
 	// Charges lists every charge dated through params.Through, with the span of the store's
 	// transactions (of the named reported accounts' when params.AccountIDs is set).
 	Charges(ctx context.Context, params store.ChargeParams) (store.Charges, error)
+	// Search lists the newest params.Limit transactions matching params, with the full match count and the
+	// span of the store's transactions (of the named accounts' when params.AccountIDs is set).
+	Search(ctx context.Context, params store.SearchParams) (store.Search, error)
 	// Findings lists every finding in the store with its items.
 	Findings(ctx context.Context) (store.FindingList, error)
 	// Schema describes what the store holds: its tables and views, accounts, categories and transaction dates.
