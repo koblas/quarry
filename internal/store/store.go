@@ -749,9 +749,8 @@ type SearchWindow struct {
 	Since, Until *time.Time
 }
 
-// SearchParams is what a search varies by: dates, accounts (empty is every account), the text a payee or
-// memo must contain ("" keeps all), the category full path whose splits it lists (nil keeps all; "" names
-// nothing), the unsigned amount range in cents (nil is no bound) and the most transactions (0 returns all).
+// SearchParams is what a search varies by: dates, accounts (empty is every account), text ("" keeps all),
+// category full path (nil keeps all; "" names nothing), unsigned amount range in cents (nil is open) and limit (0 is all).
 type SearchParams struct {
 	Window     SearchWindow
 	AccountIDs []string

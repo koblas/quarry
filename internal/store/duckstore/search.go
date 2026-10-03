@@ -38,12 +38,11 @@ const searchTextMatch = `(CAST(` + searchText + ` AS VARCHAR) IS NULL
 			OR contains(lower(t.memo), lower(` + searchText + `))
 			OR EXISTS (SELECT 1 FROM splits ms WHERE ms.transaction_id = t.id AND contains(lower(ms.memo), lower(` + searchText + `))))`
 
-// searchAmountRange keeps a transaction whose unsigned amount is within the bounds, inclusive, never a split's; no bound keeps all.
+// searchAmountRange keeps a transaction whose unsigned amount is within the inclusive bounds; no bound keeps all.
 const searchAmountRange = `(CAST(` + searchMin + ` AS BIGINT) IS NULL OR ` + searchAbsTxnCents + ` >= ` + searchMin + `)
 			AND (CAST(` + searchMax + ` AS BIGINT) IS NULL OR ` + searchAbsTxnCents + ` <= ` + searchMax + `)`
 
 // searchCategoryMatch keeps a transaction with a split in the category or under it, ignoring case; no category keeps all.
-// An EXISTS, so a transaction with several matching splits counts once.
 const searchCategoryMatch = `(CAST(` + searchCategory + ` AS VARCHAR) IS NULL
 				OR EXISTS (SELECT 1 FROM splits cs JOIN categories cc ON cc.id = cs.category_id
 					WHERE cs.transaction_id = t.id
@@ -85,9 +84,8 @@ LEFT JOIN categories c ON c.id = s.category_id
 ORDER BY ` + searchOrder + `, s.source_id, s.id`
 }
 
-// searchSpanQuery is the first and last day of every transaction, or of the named accounts' transactions
-// whether or not Quicken's reports count them, and whether $1, the category, names no category. Its other
-// parameters are those accounts, numbered from $2.
+// searchSpanQuery is the first and last day of every transaction, or of the named accounts', and whether $1,
+// the category, names none; its other parameters are those accounts, from $2.
 func searchSpanQuery(accounts accountFilter) string {
 	const unknownCategory = "NOT (CAST($1 AS VARCHAR) IS NULL OR EXISTS (SELECT 1 FROM categories WHERE lower(full_path) = lower($1)))"
 	if len(accounts) == 0 {

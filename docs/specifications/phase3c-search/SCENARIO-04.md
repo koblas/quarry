@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-04
-status: open
+status: done
 ---
 
 # SCENARIO-04: --category matches the category and any category under it (folds SCENARIO-08, the CLI refusal matrix)
@@ -45,10 +45,10 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/report`; `store`, `
   - Order pins in `run_search_refusals_test.go` (`Test_run_search_refuses_in_the_ruled_order`): bad min < bad since < unknown account < unknown category (pairs: min+since, since+account, account+category -> account line exit 1, category+missing store -> store line, a valid category with a missing store); count/limit/blank already pinned (`run_search_limit_test.go:148`). `Test_run_search_text_with_a_nul_byte_matches_nothing_and_exits_0` (probe result). `--account` with invalid UTF-8 (green on arrival, say so).
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc budgets (S03 checkpoint): `report/search.go:17-21` (5 lines; move "does not compare the bounds" to `ParseSearchAmounts`), `store.go:752-756` (5 lines), `duckstore/search.go:32-33`-era `searchAmountRange` doc (2 lines -> 1), doc on `RefusalUnknownCategory`/`Category`; NIT `useDigits` used on one row only. `amount.go:49` Error() fallthrough: leave (WindowError precedent).
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc budgets (S03 checkpoint): `report/search.go:17-21` (5 lines; move "does not compare the bounds" to `ParseSearchAmounts`), `store.go:752-756` (5 lines), `duckstore/search.go:32-33`-era `searchAmountRange` doc (2 lines -> 1), doc on `RefusalUnknownCategory`/`Category`; NIT `useDigits` used on one row only. `amount.go:49` Error() fallthrough: leave (WindowError precedent).
 
 ### Verify
-- [ ] Step 7: full verification (`agent-briefs.md` → *Verification*) + `spec-check.py phase3c-search`; tick SCENARIO-04 and SCENARIO-08 (SCENARIO-08 line names "delivered by SCENARIO-04" then its test last); STATE.md rewrite; `status: done`.
+- [x] Step 7: full verification (`agent-briefs.md` → *Verification*) + `spec-check.py phase3c-search`; tick SCENARIO-04 and SCENARIO-08 (SCENARIO-08 line names "delivered by SCENARIO-04" then its test last); STATE.md rewrite; `status: done`.
 
 ## Handoff
 
@@ -68,9 +68,7 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/report`; `store`, `
 
 ## Phase report
 
-Run B2 (step 5) done; next V (steps 6-7). Narrow loop green, `golangci-lint run ./...` 0 issues. Step 2 matrix green (text and `--json`), step 1 green.
-- `internal/report/search.go`: `SearchInput` (`SearchInputText`, `SearchInputCategory`), `InvalidUTF8Error{Field, Value}` (`Error()` is the ruled CLI line), `CheckUTF8(field, *string)`. No `RefusalKind`, nothing in `mcp.refusalLine`, `Server.Search` does not call it (MCP decoder yields valid UTF-8, so no `// unreachable:` line exists to mark; S10 owes the stdio pin in STATE).
-- `internal/cli/search.go`: `searchArgs(limit, category *string)` runs text UTF-8 after blank text, then category UTF-8, as `UsageError` (Args, so before min/since and the store).
-- `cmd/quarry/run_search_refusals_test.go`: matrix gained `\xff` text, `caf\xc3` text, `--category "\xff"`; new `Test_run_search_refuses_in_the_ruled_order` (since<account, account<category, UTF-8 text<min, text<category, blank<category-UTF-8, limit<category-UTF-8, category-UTF-8<min; min<since already pinned in `run_search_amount_test.go`), `..._reads_the_store_before_it_looks_up_the_category`, `..._refuses_text_that_is_not_valid_UTF_8_before_the_store_opens`, `..._text_with_a_nul_byte_matches_nothing_and_exits_0`, `..._an_account_that_is_not_valid_UTF_8_is_an_unknown_account` (green on arrival: account resolves in Go). Helper `builtStore`. `report/search_test.go`: two `CheckUTF8` tests.
-- Mutations (all red): text UTF-8 call deleted, category call deleted, category check before blank text, `!utf8.ValidString` un-negated, label branch flipped.
-- Not touched, V owns: step 6 doc budgets (`report/search.go` SearchRequest doc, `store.go:752-756`, `duckstore/search.go` `searchAmountRange` doc, `RefusalUnknownCategory`/`Category` docs, `useDigits` NIT), step 7 verify/tick/STATE.
+Run V done (steps 6-7); scenario complete, `status: done`.
+- Doc budgets trimmed: `internal/report/search.go` SearchRequest (5 -> 2 lines), `internal/store/store.go` SearchParams (5 -> 2), `internal/store/duckstore/search.go` `searchAmountRange` (1 line), `searchCategoryMatch` (1 line), `searchSpanQuery` (3 -> 2). `RefusalUnknownCategory`/`Category` already within budget (Arg comment covers the kind), `InvalidUTF8Error`/`CheckUTF8` within budget. `useDigits` now used by all five amount rows in `cmd/quarry/run_search_amount_test.go`.
+- Verify: build ok, `golangci-lint run ./...` 0 issues, full suite rc=0, `uncovered-diff.py` 0 added lines uncovered since 76703260ed30, `-race` on report/duckstore/cli/mcp/cmd/quarry ok. `spec-check.py phase3c-search` and `--run` OK; SCENARIO-04 and SCENARIO-08 ticked in `specification.md`; `STATE.md` rewritten.
+- Next: SCENARIO-09 (`search_transactions`); S10 owns the MCP category wrapper and the stdio `\xff` pin.

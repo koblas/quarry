@@ -16,9 +16,8 @@ const searchCommand = "search"
 // ErrBlankSearchText is the refusal of search text that is empty or only whitespace.
 var ErrBlankSearchText = errors.New("search text is blank; leave it out to search by date, account, category or amount alone")
 
-// SearchRequest is what a search needs from its caller: the dates to list, the accounts to list (each an id or
-// a name; none means every account), the text a payee or memo must contain and the category whose splits it lists
-// (nil for none), the amount range from ParseSearchAmounts and the most transactions (0 returns every one).
+// SearchRequest is what a search needs from its caller: dates, accounts (ids or names; none is every account),
+// text and category (nil for none), the amount range from ParseSearchAmounts and the most transactions (0 is all).
 type SearchRequest struct {
 	Window   store.SearchWindow
 	Accounts []string
