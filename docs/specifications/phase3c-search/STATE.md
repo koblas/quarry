@@ -40,3 +40,6 @@ Scenarios complete: SCENARIO-01 (folds 05), SCENARIO-02 (folds 06, 07, 12a). Las
 - `platform/sqlite` `QueryRows` has the unchecked per-row `ctx.Err()` loop: unowned — dies unless re-opened (phase3b)
 - Phase3b/3a deferred MINOR/NIT lists stay in their STATE files (unowned); this feature does not close them
 - `instructions` still names "David's" (spec §3.7 NIT): fix if S09 touches it; else unowned — dies unless re-opened (phase3b)
+- Checkpoint S02 MINOR (fold into S03's run): text crossed with limit unpinned — add store row (3 text matches + 2 non-matches, Limit 2 → Matched 3, 2 rows newest first) in `internal/store/duckstore/search_text_test.go`, optional cmd row `search gym --limit 1` (matched = text matches, cut line "of N")
+- Checkpoint S02 MINOR (owned by S04's S08 matrix): text with invalid UTF-8 or embedded NUL (`quarry search $'\xff'`) unruled — probe and pin current behaviour; if it surfaces as an unruled store refusal, get a copy ruling
+- Checkpoint S02 NIT: `cmd/quarry/run_search_limit_test.go` `fiveSearchStore` comment restates its name
