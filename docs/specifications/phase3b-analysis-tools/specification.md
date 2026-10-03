@@ -729,7 +729,7 @@ Sizing pass (architect, opus) 2026-10-03 — 16 IDs → 7 runs. Order is binding
 | SCENARIO-13 | OWNS A RUN (sonnet) — 2 batches: 3a per-parameter descriptions, instructions, query description, 8-tool tools/list pin (rename test); mcp Long + pin |
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01: CLI output is unchanged after the analysis documents and warnings move to shared code
+- [x] SCENARIO-01: CLI output is unchanged after the analysis documents and warnings move to shared code — `cmd/quarry/run_analysis_documents_test.go` `Test_run_prints_spend_cashflow_recurring_and_anomalies_byte_for_byte`
 - [ ] SCENARIO-02: spending returns the spend --json document
 - [ ] SCENARIO-06: currency follows the config only when it is absent
 - [ ] SCENARIO-07: spending's warnings use the tool's name and keep "run quarry sync"

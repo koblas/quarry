@@ -15,10 +15,9 @@ type Anomalies struct {
 	Warnings      []string        `json:"warnings"`
 }
 
-// Anomaly is one entry of "anomalies"; Payee is null for a charge with no payee and Category
-// for an uncategorized or split charge. Currency, Amount and Usual are in the reporting currency unless the
-// charge could not be converted; the Native fields are always the charge's own. Times is the charge as a
-// multiple of its native Usual.
+// Anomaly is one entry of "anomalies"; Payee is null for a charge with no payee, Category for an uncategorized
+// or split charge. Currency, Amount and Usual are in the reporting currency unless the charge could not be
+// converted; the Native fields are always its own, and Times is the charge as a multiple of NativeUsual.
 type Anomaly struct {
 	TransactionID  string  `json:"transaction_id"`
 	Date           string  `json:"date"`

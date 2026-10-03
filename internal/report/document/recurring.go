@@ -2,7 +2,7 @@ package document
 
 import "github.com/koblas/quarry/internal/report"
 
-// Recurring is recurring's --json document and the recurring tool's structured result;
+// Recurring is recurring's --json document and the recurring_charges tool's structured result;
 // Currency is the reporting currency ("native" lists every series in its own).
 type Recurring struct {
 	Since         string            `json:"since"`

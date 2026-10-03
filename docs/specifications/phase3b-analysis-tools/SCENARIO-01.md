@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01
-status: open
+status: done
 ---
 
 # SCENARIO-01: CLI output is unchanged after the analysis documents and warnings move to shared code
@@ -25,10 +25,10 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report/document; store and pl
 - [x] Step 5: recurring + anomalies documents — `json_recurring.go:7-124` (incl. `recurringCadences`, `tenthsPerPercent`) → `document/recurring.go` `Recurring` + `NewRecurring(r, warnings)`; `json_anomalies.go:7-92` (incl. `tenthsPerMultiple`) → `document/anomalies.go` `Anomalies` + `NewAnomalies(a, warnings)`. `render_recurring.go:23-27 recurringStatus` → `document.RecurringStatus(report.SeriesState) string`, used by `render_recurring.go:33-40` and the builder; `render_anomalies.go:17-21 anomaliesBaselineWord` → `document.BaselineWord(report.AnomalyBaseline) string`, used by `render_anomalies.go:46`; each func tested per value plus unknown → `""`. Move `json_recurring_internal_test.go` (:44-324) and `json_anomalies_internal_test.go` (:52-133) to document through the same indent helper; cli wrappers stay one-line
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on every new exported symbol; retarget comments naming moved symbols (`internal/cli/output.go:36-38`, `json.go:140`); `go doc ./internal/report/document` reads as a contract
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on every new exported symbol; retarget comments naming moved symbols (`internal/cli/output.go:36-38`, `json.go:140`); `go doc ./internal/report/document` reads as a contract
 
 ### Verify
-- [ ] Step 7: full verification + `spec-check.py phase3b-analysis-tools` → tick SCENARIO-01 with its acceptance test; write STATE.md (first one for this feature), carrying the Handoff below
+- [x] Step 7: full verification + `spec-check.py phase3b-analysis-tools` → tick SCENARIO-01 with its acceptance test; write STATE.md (first one for this feature), carrying the Handoff below
 
 ## Handoff
 
@@ -53,10 +53,8 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report/document; store and pl
 
 ## Phase report
 
-Run B2 (step 5) done and committed. Acceptance `Test_run_prints_spend_cashflow_recurring_and_anomalies_byte_for_byte` green after the move; `cmd/quarry/run_analysis_documents_*_test.go` untouched (`git diff f388acf -- cmd` empty). Narrow loop green (store, money, document, cli, cmd/quarry); `golangci-lint run ./internal/... ./cmd/...` 0 issues.
+Run V (steps 6-7) done. Sweep: `internal/cli/output.go` (emitReport unreachable note now defers to marshalDocument) and `internal/cli/json.go` (marshalDocument note names the document builders) retargeted; `Anomaly` doc trimmed to 4 lines; tool names in the four document type docs corrected (spending, cash_flow, recurring_charges, anomalies). No other stale references to moved symbols (grep over *.go/*.md).
 
-Built: `document/recurring.go` (`Recurring`, `RecurringSeries`, `RecurringPayee`, `RecurringPriceChange`, `RecurringTotal`, `NewRecurring`, `RecurringStatus`), `document/anomalies.go` (`Anomalies`, `Anomaly`, `NewAnomalies`, `BaselineWord`). cli `json_recurring.go`/`json_anomalies.go` are one-line `marshalDocument(document.NewX(...))` wrappers; `render_recurring.go` (`statusCell`) and `render_anomalies.go` use `document.RecurringStatus`/`BaselineWord`; cli `recurringStatus`, `anomaliesBaselineWord`, `recurringCadences` deleted (cadence word is now private to document; cli `recurringEvery` stays).
+Verify: `go build ./...` ok; `golangci-lint run ./...` 0 issues; full covered suite `go test rc=0`; `uncovered-diff.py` 0 uncovered since 5d2d07e; race green on document, store, money, cli. `test-stats.py --base 5d2d07e --changed`: cmd/quarry 530 (+1), internal/cli 396 (-29), money 12 (+1), document 72 (+50), store 12 (+4), TOTAL 1022 (+27).
 
-Tests moved: `json_recurring_internal_test.go` and `json_anomalies_internal_test.go` -> `document/recurring_test.go`, `anomalies_test.go` (black-box, `indented` helper, `window` fixture so the window assertion reads 2026-09-29; local `day`, `anomalyOf`, `listed` helpers). Added per document: warnings-copy/nil test; `RecurringStatus` and `BaselineWord` per value plus unknown -> "". cli keeps `topLevelKeys`/`spendingWindow` (accounts and render tests use them).
-
-Next (V, steps 6-7): sweep - retarget comments naming moved symbols (`internal/cli/output.go:36-38`, `json.go:140` marshalDocument comment still names moved docs), doc comment review, `go doc ./internal/report/document`; then full verify, spec-check, tick, STATE.md.
+Ticked SCENARIO-01 in specification.md with its acceptance test; `spec-check.py` and `--run` OK. `status: done`. STATE.md written (first for this feature). Acceptance test was green on arrival by design (goldens written on the unmodified tree).

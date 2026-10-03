@@ -2,7 +2,7 @@ package document
 
 import "github.com/koblas/quarry/internal/report"
 
-// CashFlow is cashflow's --json document and the cash-flow tool's structured result.
+// CashFlow is cashflow's --json document and the cash_flow tool's structured result.
 type CashFlow struct {
 	Since         string              `json:"since"`
 	Until         string              `json:"until"`

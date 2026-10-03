@@ -5,7 +5,7 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// Spending is spend's --json document and the spend tool's structured result.
+// Spending is spend's --json document and the spending tool's structured result.
 type Spending struct {
 	Since         string          `json:"since"`
 	Until         string          `json:"until"`
