@@ -2,7 +2,6 @@ package duckstore_test
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"os"
 	"testing"
@@ -141,9 +140,9 @@ func Test_replace_records_no_rates_columns_for_the_new_run(t *testing.T) {
 // execOnStore runs query against st's file through a writable connection closed before any read.
 func execOnStore(t *testing.T, st *duckstore.Store, query string) {
 	t.Helper()
-	conn, err := sql.Open("duckdb", st.Path())
+	conn, err := duckdb.OpenReadWrite(t.Context(), st.Path())
 	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), query)
+	_, err = conn.Exec(t.Context(), query)
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
 }

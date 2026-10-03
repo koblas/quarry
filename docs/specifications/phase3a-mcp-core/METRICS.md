@@ -18,6 +18,8 @@
 | 1 | arch, correctness, test, refactor | 0/1/13/10 | 0 / 20, 901s | BLOCKED |
 | 2 | correctness, test, refactor | 0/0/8/7 | 0 / 4, 214s | PASS WITH FOLLOW-UPS |
 | final product-vision | — | 0/0/2/1 | — | SHIP |
+| 3 (post-ship: cancel hang fix pass 2) | correctness, arch, test | 0/2/5/3 | 0 / 5, 102s | BLOCKED |
+| 4 (after fix pass 3) | correctness, test | 0/0/4/0 | 0 / 5, 279s | PASS WITH FOLLOW-UPS |
 
 ## Tokens
 Tokens for `phase3a-mcp-core` across 6 project dir(s). Weighted = input-equivalent tokens (IE): cache read x0.1, cache write x1.25 (5m) / x2 (1h), output x5. Attribution: 57 tagged, 0 heuristic. Orchestrator row counts the main session between the feature's first and last run in each session, so it may include other work.
@@ -62,6 +64,7 @@ Developer runs: 28; weighted per run median 274k, p90 513k, max 1,011k.
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
 | --- | --- | --- | --- |
 | gate R1 | stderr log line copies DuckDB reason (row values/SQL) — Rule 4 | internal/mcp/result.go:58 | SCENARIO-03 |
+| post-gate (orchestrator loop) | next call hangs in cgo after early cancel (DuckDB shared instance cache) | internal/platform/duckdb/duckdb.go:80 | SCENARIO-06 |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |

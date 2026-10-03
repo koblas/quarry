@@ -1,7 +1,6 @@
 package duckstore_test
 
 import (
-	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
@@ -66,9 +66,9 @@ func Test_status_reads_null_check_counts_as_zero(t *testing.T) {
 	st := duckstore.New(dir)
 	_, err := st.Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
-	conn, err := sql.Open("duckdb", st.Path())
+	conn, err := duckdb.OpenReadWrite(t.Context(), st.Path())
 	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), `UPDATE import_runs SET balances_never_reconciled = NULL,
+	_, err = conn.Exec(t.Context(), `UPDATE import_runs SET balances_never_reconciled = NULL,
 		investment_accounts = NULL, transfers_paired = NULL, transfers_cross_currency = NULL`)
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
@@ -102,11 +102,11 @@ func Test_status_reports_no_dates_for_a_store_without_transactions(t *testing.T)
 // through a writable connection closed before any read.
 func addImportRun(t *testing.T, st *duckstore.Store, id int, snapshotPath string, accounts int) {
 	t.Helper()
-	conn, err := sql.Open("duckdb", st.Path())
+	conn, err := duckdb.OpenReadWrite(t.Context(), st.Path())
 	require.NoError(t, err)
 	const clone = "INSERT INTO import_runs SELECT * REPLACE (? AS id, ? AS snapshot_path, ? AS accounts_rows) " + //nolint:unqueryvet // a copy of the row is the point
 		"FROM import_runs WHERE id = (SELECT min(id) FROM import_runs)"
-	_, err = conn.ExecContext(t.Context(), clone, id, snapshotPath, accounts)
+	_, err = conn.Exec(t.Context(), clone, id, snapshotPath, accounts)
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
 }
@@ -130,9 +130,9 @@ func Test_status_reads_the_latest_import_run(t *testing.T) {
 // setFetchError sets run id's rates_fetch_error through a writable connection closed before any read.
 func setFetchError(t *testing.T, st *duckstore.Store, id int, reason any) {
 	t.Helper()
-	conn, err := sql.Open("duckdb", st.Path())
+	conn, err := duckdb.OpenReadWrite(t.Context(), st.Path())
 	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), "UPDATE import_runs SET rates_fetch_error = ? WHERE id = ?", reason, id)
+	_, err = conn.Exec(t.Context(), "UPDATE import_runs SET rates_fetch_error = ? WHERE id = ?", reason, id)
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
 }

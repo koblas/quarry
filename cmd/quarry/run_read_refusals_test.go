@@ -5,7 +5,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"os"
 	"testing"
 
@@ -241,9 +240,9 @@ func Test_run_read_commands_report_an_interrupt_during_the_open(t *testing.T) {
 // editStore runs stmt against the synced store through a writable connection of its own, closed before any read.
 func editStore(t *testing.T, home, stmt string) {
 	t.Helper()
-	conn, err := sql.Open("duckdb", storePathUnder(home))
+	conn, err := duckdb.OpenReadWrite(t.Context(), storePathUnder(home))
 	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), stmt)
+	_, err = conn.Exec(t.Context(), stmt)
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
 }

@@ -2,13 +2,13 @@ package duckstore_test
 
 import (
 	"context"
-	"database/sql"
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
@@ -377,11 +377,11 @@ func staleWALStore(t *testing.T) *duckstore.Store {
 	_, err := duckstore.New(dir).Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
 	path := filepath.Join(dir, duckstore.FileName)
-	db, err := sql.Open("duckdb", path)
+	db, err := duckdb.OpenReadWrite(t.Context(), path)
 	require.NoError(t, err)
-	_, err = db.ExecContext(t.Context(), "SET checkpoint_threshold = '1GB'")
+	_, err = db.Exec(t.Context(), "SET checkpoint_threshold = '1GB'")
 	require.NoError(t, err)
-	_, err = db.ExecContext(t.Context(), "INSERT INTO import_runs SELECT * REPLACE (7 AS id) FROM import_runs") //nolint:unqueryvet // a copy of the row is the point
+	_, err = db.Exec(t.Context(), "INSERT INTO import_runs SELECT * REPLACE (7 AS id) FROM import_runs") //nolint:unqueryvet // a copy of the row is the point
 	require.NoError(t, err)
 	wal, err := os.ReadFile(path + ".wal")
 	require.NoError(t, err)
