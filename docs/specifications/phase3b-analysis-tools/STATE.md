@@ -35,6 +35,7 @@ Scenarios complete: SCENARIO-01, 02 (folds 06, 07, 12), 03. Last updated by SCEN
 - Value quoting differs by window kind: only not-a-date uses `%q`, the rest print the raw value; `windowRefusal` never puts `Value`/`Other` in the log line, and string-replacing `--` on `Error()` would eat `--` inside a caller value (SCENARIO-03)
 - `go test -run 'Window'` is case-sensitive: older report tests are lowercase `window`; narrow loops use `(?i)window` (SCENARIO-03)
 - The `by` parse miss in `parseSpendingGroup` is `// unreachable:` behind the schema enum; add no handler default (SCENARIO-02)
+- `rows.Err()` alone misses a cancel: database/sql closes rows asynchronously, so a read can finish with a nil error. duckdb `QueryRows` and `QueryTable` check `ctx.Err()` per row; any new row loop over `*sql.Rows` needs the same. `platform/sqlite` `QueryRows` has the same unchecked loop (unowned) (fix(duckdb) pass)
 
 ## Open debts
 - OWNED BY S04: `internal/mcp/result.go:55` logs `report.RefusalError` verbatim; account refusals (`internal/report/refusal.go:63,68`) embed caller text, so classify them to class lines before the four tools ship; flip the pin at `internal/mcp/query_refusal_test.go:99-101` (phase3a gate R2)

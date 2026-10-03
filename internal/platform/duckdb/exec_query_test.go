@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/stretchr/testify/assert"
@@ -143,20 +144,14 @@ func Test_open_read_only_fails_when_the_context_is_already_cancelled(t *testing.
 	require.ErrorIs(t, err, context.Canceled)
 }
 
-// Enough rows to span several result chunks; the callback cancels ctx and returns nil,
-// so the cancellation surfaces through rows.Err(), not the callback's own error.
-// Not parallel: cancellation must win the race against iteration finishing
-// on its own, and CPU contention from sibling parallel tests changes which
-// side wins.
+// The callback cancels on the first row and returns nil, so only the per-row
+// context check can surface the cancellation.
 func Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration(t *testing.T) {
+	t.Parallel()
 	db, _ := newOpenDatabase(t)
 	_, err := db.Exec(t.Context(), "CREATE TABLE t (v INTEGER)")
 	require.NoError(t, err)
-	rows := make([][]any, 20000)
-	for i := range rows {
-		rows[i] = []any{int32(i)}
-	}
-	require.NoError(t, db.AppendRows(t.Context(), "t", rows))
+	require.NoError(t, db.AppendRows(t.Context(), "t", [][]any{{int32(1)}, {int32(2)}, {int32(3)}}))
 	ctx, cancel := context.WithCancel(t.Context())
 
 	calls := 0
@@ -167,9 +162,44 @@ func Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration(t *testin
 			return nil
 		})
 
-	require.Error(t, err)
-	assert.Less(t, calls, len(rows), "cancellation should have stopped iteration before the last row")
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, 1, calls)
 }
+
+func Test_query_rows_reports_a_deadline_that_passes_mid_iteration(t *testing.T) {
+	t.Parallel()
+	db, _ := newOpenDatabase(t)
+	_, err := db.Exec(t.Context(), "CREATE TABLE t (v INTEGER)")
+	require.NoError(t, err)
+	require.NoError(t, db.AppendRows(t.Context(), "t", [][]any{{int32(1)}, {int32(2)}, {int32(3)}}))
+
+	calls := 0
+	ctx := scriptedContext{err: func() error {
+		if calls > 0 {
+			return context.DeadlineExceeded
+		}
+		return nil
+	}}
+	err = db.QueryRows(ctx, "SELECT v FROM t ORDER BY v", nil,
+		func(func(dest ...any) error) error {
+			calls++
+			return nil
+		})
+
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Equal(t, 1, calls)
+}
+
+// scriptedContext is a context that never fires Done, so the driver's own interrupt
+// cannot be what stops a read; its Err is whatever err returns.
+type scriptedContext struct {
+	err func() error
+}
+
+func (scriptedContext) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (scriptedContext) Done() <-chan struct{}       { return nil }
+func (scriptedContext) Value(any) any               { return nil }
+func (c scriptedContext) Err() error                { return c.err() }
 
 // The Appender itself refuses a table that does not exist.
 func Test_append_rows_fails_when_the_table_does_not_exist(t *testing.T) {
