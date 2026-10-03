@@ -115,3 +115,53 @@ func expiredContext(t *testing.T) context.Context {
 	t.Cleanup(cancel)
 	return ctx
 }
+
+func Test_SpendingGroups_lists_every_grouping_in_by_order(t *testing.T) {
+	groups := store.SpendingGroups()
+
+	assert.Equal(t, []store.SpendingGroup{store.SpendByCategory, store.SpendByPayee, store.SpendByTag, store.SpendByMonth}, groups)
+}
+
+func Test_SpendingGroup_names_each_grouping_by_its_flag_word(t *testing.T) {
+	cases := []struct {
+		group store.SpendingGroup
+		want  string
+	}{
+		{group: store.SpendByCategory, want: "category"},
+		{group: store.SpendByPayee, want: "payee"},
+		{group: store.SpendByTag, want: "tag"},
+		{group: store.SpendByMonth, want: "month"},
+		{group: store.SpendingGroup(4), want: ""},
+		{group: store.SpendingGroup(-1), want: ""},
+	}
+
+	for _, c := range cases {
+		t.Run(c.want+" is the word", func(t *testing.T) {
+			assert.Equal(t, c.want, c.group.String())
+		})
+	}
+}
+
+func Test_CashFlowPeriods_lists_every_period_in_by_order(t *testing.T) {
+	periods := store.CashFlowPeriods()
+
+	assert.Equal(t, []store.CashFlowPeriod{store.CashFlowByMonth, store.CashFlowByYear}, periods)
+}
+
+func Test_CashFlowPeriod_names_each_period_by_its_flag_word(t *testing.T) {
+	cases := []struct {
+		period store.CashFlowPeriod
+		want   string
+	}{
+		{period: store.CashFlowByMonth, want: "month"},
+		{period: store.CashFlowByYear, want: "year"},
+		{period: store.CashFlowPeriod(2), want: ""},
+		{period: store.CashFlowPeriod(-1), want: ""},
+	}
+
+	for _, c := range cases {
+		t.Run(c.want+" is the word", func(t *testing.T) {
+			assert.Equal(t, c.want, c.period.String())
+		})
+	}
+}

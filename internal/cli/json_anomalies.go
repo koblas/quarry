@@ -8,14 +8,14 @@ import (
 // anomaliesDocument is anomalies' --json stdout shape; Currency is the reporting currency ("native"
 // lists every anomaly in its own).
 type anomaliesDocument struct {
-	Since         string                  `json:"since"`
-	Until         string                  `json:"until"`
-	Currency      string                  `json:"currency"`
-	AccountFilter []accountFilterDocument `json:"account_filter"`
-	Anomalies     []anomalyDocument       `json:"anomalies"`
-	Checked       int                     `json:"checked"`
-	NotJudged     int                     `json:"not_judged"`
-	Warnings      []string                `json:"warnings"`
+	Since         string                   `json:"since"`
+	Until         string                   `json:"until"`
+	Currency      string                   `json:"currency"`
+	AccountFilter []document.AccountFilter `json:"account_filter"`
+	Anomalies     []anomalyDocument        `json:"anomalies"`
+	Checked       int                      `json:"checked"`
+	NotJudged     int                      `json:"not_judged"`
+	Warnings      []string                 `json:"warnings"`
 }
 
 // anomalyDocument is one entry of "anomalies"; Payee is null for a charge with no payee and Category
@@ -54,7 +54,7 @@ func renderAnomaliesJSON(a report.Anomalies, warnings []string) ([]byte, error) 
 		Since:         a.Window.Since.Format(document.DateLayout),
 		Until:         a.Window.Until.Format(document.DateLayout),
 		Currency:      a.Currency.String(),
-		AccountFilter: accountFilterDocuments(a.Accounts),
+		AccountFilter: document.NewAccountFilters(a.Accounts),
 		Anomalies:     listed,
 		Checked:       a.Checked,
 		NotJudged:     a.NotJudged,

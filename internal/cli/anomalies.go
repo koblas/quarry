@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/spf13/cobra"
 )
 
@@ -69,7 +70,7 @@ accounts; the payee's charges in other accounts still count as history.`,
 				return &runtimeError{err: err}
 			}
 
-			warnings := anomaliesWarnings(found)
+			warnings := document.AnomaliesWarnings(found, anomaliesCommand)
 			return emitReport(cmd, *jsonOut, warnings,
 				func() ([]byte, error) {
 					return renderAnomaliesJSON(found, withConfigWarnings(configWarnings, warnings))
@@ -80,14 +81,4 @@ accounts; the payee's charges in other accounts still count as history.`,
 	flags.bind(cmd, anomaliesFlagHelp)
 	currency.bind(cmd, reportCurrencyHelp)
 	return cmd
-}
-
-// anomaliesWarnings is a's warnings, unprefixed and never nil: one per named account left out of the
-// report, then the unconverted-charge note, then a note when no charge was checked in the period.
-func anomaliesWarnings(a report.Anomalies) []string {
-	warnings := append(leftOutWarnings(a.Accounts, anomaliesCommand), unconvertedWarnings(a.Currency, a.Unconverted, chargesNoun)...)
-	if a.Checked == 0 {
-		warnings = appendEmptyWindowWarning(warnings, "unusually large charges", a.Accounts, a.Window, a.Transactions)
-	}
-	return warnings
 }

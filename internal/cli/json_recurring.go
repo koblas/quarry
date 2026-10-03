@@ -11,7 +11,7 @@ type recurringDocument struct {
 	Since         string                    `json:"since"`
 	Until         string                    `json:"until"`
 	Currency      string                    `json:"currency"`
-	AccountFilter []accountFilterDocument   `json:"account_filter"`
+	AccountFilter []document.AccountFilter  `json:"account_filter"`
 	Series        []recurringSeriesDocument `json:"series"`
 	Totals        []recurringTotalDocument  `json:"totals"`
 	Warnings      []string                  `json:"warnings"`
@@ -36,7 +36,7 @@ type recurringSeriesDocument struct {
 	ChargeCount       int                            `json:"charge_count"`
 	State             string                         `json:"state"`
 	New               bool                           `json:"new"`
-	Accounts          []accountFilterDocument        `json:"accounts"`
+	Accounts          []document.AccountFilter       `json:"accounts"`
 	PriceChanges      []recurringPriceChangeDocument `json:"price_changes"`
 }
 
@@ -88,7 +88,7 @@ func renderRecurringJSON(r report.Recurring, warnings []string) ([]byte, error) 
 		Since:         r.Window.Since.Format(document.DateLayout),
 		Until:         r.Window.Until.Format(document.DateLayout),
 		Currency:      r.Currency.String(),
-		AccountFilter: accountFilterDocuments(r.Accounts),
+		AccountFilter: document.NewAccountFilters(r.Accounts),
 		Series:        series,
 		Totals:        totals,
 		Warnings:      warnings,
@@ -119,6 +119,6 @@ func recurringSeriesOf(s report.Series) recurringSeriesDocument {
 		NativeCurrency: s.NativeCurrency, NativeAmount: document.Money(s.NativeAmount), NativeFirstAmount: document.Money(s.NativeFirstAmount),
 		FirstCharge: s.First.Format(document.DateLayout), LastCharge: s.Last.Format(document.DateLayout),
 		ChargeCount: s.ChargeCount, State: recurringStatus[s.State], New: s.New,
-		Accounts: accountFilterDocuments(s.Accounts), PriceChanges: changes,
+		Accounts: document.NewAccountFilters(s.Accounts), PriceChanges: changes,
 	}
 }

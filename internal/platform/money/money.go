@@ -47,6 +47,15 @@ func (c Currency) String() string {
 	}
 }
 
+// NativeOf is the currency a CAD or USD report leaves unconverted: the other one.
+// Any other currency reads as CAD.
+func NativeOf(c Currency) Currency {
+	if c == CAD {
+		return USD
+	}
+	return CAD
+}
+
 // millionth is the divisor between a Rate and a plain multiplier.
 const millionth = 1_000_000
 

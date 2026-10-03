@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/spf13/cobra"
 )
@@ -11,15 +12,15 @@ import (
 // cashFlowCommand is the word that names cashflow on the command line and in its warnings.
 const cashFlowCommand = "cashflow"
 
-// cashFlowPeriod is how cashflow presents one --by value: the flag word and the column-1 header.
+// cashFlowPeriod is how cashflow presents one --by value: the column-1 header.
 type cashFlowPeriod struct {
-	name, header string
+	header string
 }
 
 // cashFlowPeriods holds every --by value cashflow reads, indexed by period.
 var cashFlowPeriods = [...]cashFlowPeriod{
-	store.CashFlowByMonth: {name: "month", header: "Month"},
-	store.CashFlowByYear:  {name: "year", header: "Year"},
+	store.CashFlowByMonth: {header: "Month"},
+	store.CashFlowByYear:  {header: "Year"},
 }
 
 // errCashFlowByUnknown refuses a --by that names no period cashflow reads.
@@ -27,9 +28,9 @@ var errCashFlowByUnknown = UsageError{msg: "--by must be month or year"}
 
 // parseCashFlowPeriod returns the period named by a --by value, or errCashFlowByUnknown.
 func parseCashFlowPeriod(name string) (store.CashFlowPeriod, error) {
-	for period, p := range cashFlowPeriods {
-		if p.name == name {
-			return store.CashFlowPeriod(period), nil
+	for _, period := range store.CashFlowPeriods() {
+		if period.String() == name {
+			return period, nil
 		}
 	}
 	return 0, errCashFlowByUnknown
@@ -88,24 +89,14 @@ less. A period that --since or --until cuts short is marked partial.`,
 				return &runtimeError{err: err}
 			}
 
-			warnings := cashFlowWarnings(flow)
+			warnings := document.CashFlowWarnings(flow, cashFlowCommand)
 			return emitReport(cmd, *jsonOut, warnings,
 				func() ([]byte, error) { return renderCashFlowJSON(flow, withConfigWarnings(configWarnings, warnings)) },
 				func() string { return renderCashFlow(flow) })
 		},
 	}
-	cmd.Flags().StringVar(&by, "by", cashFlowPeriods[store.CashFlowByMonth].name, "group by `period`: month or year")
+	cmd.Flags().StringVar(&by, "by", store.CashFlowByMonth.String(), "group by `period`: month or year")
 	flags.bind(cmd, transactionFlagHelp)
 	currency.bind(cmd, reportCurrencyHelp)
 	return cmd
-}
-
-// cashFlowWarnings is c's warnings, unprefixed and never nil: one per named account left out,
-// then the unconverted-amounts note, then a note that the window held no income or spending.
-func cashFlowWarnings(c report.CashFlow) []string {
-	warnings := append(leftOutWarnings(c.Accounts, cashFlowCommand), unconvertedWarnings(c.Currency, c.Unconverted, transactionsNoun)...)
-	if c.Empty() {
-		warnings = appendEmptyWindowWarning(warnings, "income or spending", c.Accounts, c.Window, c.Transactions)
-	}
-	return warnings
 }

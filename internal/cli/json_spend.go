@@ -8,29 +8,14 @@ import (
 
 // spendDocument is spend's --json stdout shape.
 type spendDocument struct {
-	Since         string                  `json:"since"`
-	Until         string                  `json:"until"`
-	By            string                  `json:"by"`
-	Currency      string                  `json:"currency"`
-	AccountFilter []accountFilterDocument `json:"account_filter"`
-	Rows          []any                   `json:"rows"`
-	Totals        []spendTotalDocument    `json:"totals"`
-	Warnings      []string                `json:"warnings"`
-}
-
-// accountFilterDocument names one account a report was limited to.
-type accountFilterDocument struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-// accountFilterDocuments is accounts as a report's "account_filter": [] rather than null when none.
-func accountFilterDocuments(accounts []store.Account) []accountFilterDocument {
-	filter := make([]accountFilterDocument, len(accounts))
-	for i, a := range accounts {
-		filter[i] = accountFilterDocument{ID: a.ID, Name: a.Name}
-	}
-	return filter
+	Since         string                   `json:"since"`
+	Until         string                   `json:"until"`
+	By            string                   `json:"by"`
+	Currency      string                   `json:"currency"`
+	AccountFilter []document.AccountFilter `json:"account_filter"`
+	Rows          []any                    `json:"rows"`
+	Totals        []spendTotalDocument     `json:"totals"`
+	Warnings      []string                 `json:"warnings"`
 }
 
 // spendCategoryRowDocument is one entry of "rows" grouped by category; Category
@@ -86,9 +71,9 @@ func renderSpendingJSON(s report.Spending, warnings []string) ([]byte, error) {
 	return marshalDocument(spendDocument{
 		Since:         s.Window.Since.Format(document.DateLayout),
 		Until:         s.Window.Until.Format(document.DateLayout),
-		By:            spendGroupings[s.By].name,
+		By:            s.By.String(),
 		Currency:      s.Currency.String(),
-		AccountFilter: accountFilterDocuments(s.Accounts),
+		AccountFilter: document.NewAccountFilters(s.Accounts),
 		Rows:          rows,
 		Totals:        totals,
 		Warnings:      warnings,
