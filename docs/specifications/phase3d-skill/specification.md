@@ -311,6 +311,11 @@ Each recipe:
 - **Output:** `category VARCHAR, currency VARCHAR, income DECIMAL(18,2)`. A NULL category shows as `(uncategorized)`.
 - **Reads:** `v_cash_flow` rows where `flow = 'income'`. NULL conversions go on native-currency rows.
 
+**Shipped values (orchestrator ruling, 2026-10-03, at S04 planning).** The shipped values copy the commands' default window from §S.4 §4 ("this year to today"). They never go stale and never pick up future-dated splits.
+- **`spending-trend.sql`:** category `'Food:Groceries'`, payee NULL, grain `'year'`, since `DATE '2022-01-01'`, until `current_date`, currency `'CAD'`.
+- **`income-by-category.sql`:** since `date_trunc('year', current_date)`, until `current_date`, currency `'CAD'`.
+- **Where `current_date` may appear:** only in the shipped params line. Every eval replaces that line with explicit dates. The as-shipped spending-trend run reads fixture data from 2022 to 2026, which `current_date` (≥ 2026-10) always covers.
+
 **Eval assertions:**
 - `spending-trend` summed over a full year with no filter equals the `quarry spend --since Y --until Y --json` total in the same currency.
 - With a category set, it equals the sum of that subtree's `spend --by category` rows.
