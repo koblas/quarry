@@ -7,14 +7,59 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// WindowError is a refusal of a --since/--until pair: its message excludes the
-// "quarry: " prefix a caller adds before printing it to stderr.
+// WindowErrorKind is the reason a since/until pair was refused.
+type WindowErrorKind int
+
+// The reasons a window is refused.
+const (
+	// WindowNotADate: Value, the Bound's argument, names no year, month or day.
+	WindowNotADate WindowErrorKind = iota
+	// WindowSinceAfterToday: Value, a future since, was given without an until.
+	WindowSinceAfterToday
+	// WindowChargeSinceAfterToday is WindowSinceAfterToday for Command, which lists charges up to today only.
+	WindowChargeSinceAfterToday
+	// WindowSinceAfterUntil: Value, the since, is after Other, the until.
+	WindowSinceAfterUntil
+	// WindowUntilBeforeDefault: Value, the until, is before DefaultSince, the since taken when none was given.
+	WindowUntilBeforeDefault
+)
+
+// WindowError is a refusal of a since/until pair, carried as parts so each surface words it in its own
+// vocabulary. Bound is "since" or "until"; DefaultSince is a YYYY-MM-DD date. Error words it for the
+// command line, with "--" before each bound and without the "quarry: " prefix a caller adds.
 type WindowError struct {
-	msg string
+	Kind         WindowErrorKind
+	Bound        string
+	Value        string
+	Other        string
+	DefaultSince string
+	Command      string
 }
 
-// Error returns the refusal's message verbatim.
-func (e WindowError) Error() string { return e.msg }
+// Error is the command-line wording of the refusal.
+func (e WindowError) Error() string {
+	flag := "--" + e.Bound
+	switch e.Kind {
+	case WindowNotADate:
+		return fmt.Sprintf("%s %q is not a date; use YYYY, YYYY-MM or YYYY-MM-DD", flag, e.Value)
+	case WindowSinceAfterToday:
+		return fmt.Sprintf("%s %s is after today; pass --until to include future-dated transactions", flag, e.Value)
+	case WindowChargeSinceAfterToday:
+		return fmt.Sprintf("%s %s is after today; %s lists charges up to today only, so pass an earlier %s", flag, e.Value, e.Command, flag)
+	case WindowSinceAfterUntil:
+		return fmt.Sprintf("%s %s is after --%s %s", flag, e.Value, boundUntil, e.Other)
+	case WindowUntilBeforeDefault:
+		return fmt.Sprintf("%s %s is before the default --%s %s; pass --%s too", flag, e.Value, boundSince, e.DefaultSince, boundSince)
+	}
+	// unreachable: parseWindow builds a WindowError of one of the kinds above
+	return flag + " " + e.Value + " is refused"
+}
+
+// The bounds a WindowError names.
+const (
+	boundSince = "since"
+	boundUntil = "until"
+)
 
 // dateForms are the accepted layouts, each with the step from its first day to its last.
 var dateForms = []struct {
@@ -38,32 +83,28 @@ func DefaultWindow(now time.Time) store.Window {
 	}
 }
 
-// ParseWindow resolves --since and --until into a window; a nil pointer is a flag not
+// ParseWindow resolves since and until into a window; a nil pointer is an argument not
 // given and takes its default from now (see DefaultWindow). A bare year or month covers
 // all of it. It returns a WindowError for a value that is not a date and for a period
 // that is empty, or a future one when no until allows it.
 func ParseWindow(since, until *string, now time.Time) (store.Window, error) {
-	return parseWindow(since, until, now, func(since string) string {
-		return fmt.Sprintf("--since %s is after today; pass --until to include future-dated transactions", since)
-	})
+	return parseWindow(since, until, now, WindowSinceAfterToday, "")
 }
 
 // ParseChargeWindow is ParseWindow for a command that lists charges up to today only: a
-// future --since given without --until is refused with a message naming command.
+// future since given without an until is refused as WindowChargeSinceAfterToday, which carries command.
 func ParseChargeWindow(command string, since, until *string, now time.Time) (store.Window, error) {
-	return parseWindow(since, until, now, func(since string) string {
-		return fmt.Sprintf("--since %s is after today; %s lists charges up to today only, so pass an earlier --since", since, command)
-	})
+	return parseWindow(since, until, now, WindowChargeSinceAfterToday, command)
 }
 
-// parseWindow is ParseWindow with the refusal for a future since given by sinceAfterToday.
-func parseWindow(since, until *string, now time.Time, sinceAfterToday func(since string) string) (store.Window, error) {
+// parseWindow is ParseWindow with the refusal for a future since given by futureSince and command.
+func parseWindow(since, until *string, now time.Time, futureSince WindowErrorKind, command string) (store.Window, error) {
 	window := DefaultWindow(now)
 	today := window.Until
 	defaultSince := window.Since
 
 	if since != nil {
-		first, _, err := parseDateBound("--since", *since)
+		first, _, err := parseDateBound(boundSince, *since)
 		if err != nil {
 			return store.Window{}, err
 		}
@@ -71,7 +112,7 @@ func parseWindow(since, until *string, now time.Time, sinceAfterToday func(since
 	}
 	if until != nil {
 		// An until covers through the last day of the period it names.
-		_, last, err := parseDateBound("--until", *until)
+		_, last, err := parseDateBound(boundUntil, *until)
 		if err != nil {
 			return store.Window{}, err
 		}
@@ -80,25 +121,24 @@ func parseWindow(since, until *string, now time.Time, sinceAfterToday func(since
 
 	switch {
 	case since != nil && until == nil && window.Since.After(today):
-		return store.Window{}, WindowError{msg: sinceAfterToday(*since)}
+		return store.Window{}, WindowError{Kind: futureSince, Bound: boundSince, Value: *since, Command: command}
 	case since != nil && until != nil && window.Since.After(window.Until):
-		return store.Window{}, WindowError{msg: fmt.Sprintf("--since %s is after --until %s", *since, *until)}
+		return store.Window{}, WindowError{Kind: WindowSinceAfterUntil, Bound: boundSince, Value: *since, Other: *until}
 	case since == nil && until != nil && window.Until.Before(defaultSince):
-		return store.Window{}, WindowError{msg: fmt.Sprintf(
-			"--until %s is before the default --since %s; pass --since too",
-			*until, defaultSince.Format(time.DateOnly))}
+		return store.Window{}, WindowError{
+			Kind: WindowUntilBeforeDefault, Bound: boundUntil, Value: *until, DefaultSince: defaultSince.Format(time.DateOnly),
+		}
 	}
 	return window, nil
 }
 
 // parseDateBound is the first and last day of the year, month or day that
-// value names, or a WindowError naming flag when it names none.
-func parseDateBound(flag, value string) (time.Time, time.Time, error) {
+// value names, or a WindowNotADate error for bound when it names none.
+func parseDateBound(bound, value string) (time.Time, time.Time, error) {
 	for _, form := range dateForms {
 		if first, err := time.Parse(form.layout, value); err == nil {
 			return first, first.AddDate(form.years, form.months, form.days), nil
 		}
 	}
-	return time.Time{}, time.Time{}, WindowError{msg: fmt.Sprintf(
-		"%s %q is not a date; use YYYY, YYYY-MM or YYYY-MM-DD", flag, value)}
+	return time.Time{}, time.Time{}, WindowError{Kind: WindowNotADate, Bound: bound, Value: value}
 }

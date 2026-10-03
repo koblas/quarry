@@ -27,11 +27,12 @@ const (
 func Test_run_mcp_spending_returns_the_spend_json_document(t *testing.T) {
 	cases := []struct {
 		name      string
+		store     func(*testing.T, string)
 		cliArgs   []string
 		arguments map[string]any
 	}{
 		{
-			name: "all five given",
+			name: "all five given", store: populatedAnalysisStore,
 			cliArgs: []string{
 				"spend", "--since", "2026-01", "--until", "2026-08", "--by", "payee", "--currency", "CAD",
 				"--account", "Chequing", "--account", "US Chequing", "--account", "Linked", "--account", "Old Card",
@@ -41,13 +42,21 @@ func Test_run_mcp_spending_returns_the_spend_json_document(t *testing.T) {
 				"accounts": []string{"Chequing", "US Chequing", "Linked", "Old Card"},
 			},
 		},
-		{name: "none given", cliArgs: []string{"spend"}, arguments: map[string]any{}},
+		{name: "none given", store: populatedAnalysisStore, cliArgs: []string{"spend"}, arguments: map[string]any{}},
+		{
+			name: "native currency", store: populatedAnalysisStore,
+			cliArgs: []string{"spend", "--currency", "native"}, arguments: map[string]any{"currency": "native"},
+		},
+		{
+			name: "grouped by tag", store: multiTagAnalysisStore,
+			cliArgs: []string{"spend", "--by", "tag"}, arguments: map[string]any{"by": "tag"},
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			got := runBothSurfaces(t, toolDocumentRun{
-				store: populatedAnalysisStore, cliArgs: c.cliArgs, tool: "spending", arguments: c.arguments,
+				store: c.store, cliArgs: c.cliArgs, tool: "spending", arguments: c.arguments,
 			})
 
 			assert.Equal(t, got.cliBody, got.toolBody)

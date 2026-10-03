@@ -14,11 +14,11 @@ import (
 const spendTwin = "spend"
 
 // spending totals the spending the call's window, accounts and currency select, grouped by in.By, as spend --json does.
-// Today is read once, at the start. The config is read only when in.Currency is absent.
 func (s *Server) spending(ctx context.Context, in spendingInput) (any, error) {
+	// Today is read once per call, here: a second read could straddle midnight.
 	window, err := report.ParseWindow(in.Since, in.Until, s.now())
 	if err != nil {
-		return nil, err //nolint:wrapcheck // a WindowError is the tool's answer, sent verbatim
+		return nil, windowRefusal(err)
 	}
 	currency, configWarnings, err := s.resolveCurrency(in.Currency, spendTwin)
 	if err != nil {

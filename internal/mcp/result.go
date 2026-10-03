@@ -24,6 +24,7 @@ type stoppedFunc func(limit string) string
 const (
 	argumentsRefusedLog = "refused the call's arguments; details went to the client only"
 	failedLog           = "failed; details went to the client only"
+	windowRefusedLog    = "refused the call's since or until; details went to the client only"
 )
 
 // stoppedError is the isError text of a call that ran past its deadline.

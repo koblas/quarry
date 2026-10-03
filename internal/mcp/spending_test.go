@@ -16,6 +16,7 @@ import (
 const (
 	spendingLogPrefix = "quarry: mcp: spending: "
 	spendingConfigLog = "cannot read quarry's config file; run quarry spend to see why"
+	windowRefusedLine = "refused the call's since or until; details went to the client only"
 	missingStoreLine  = "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it"
 )
 
@@ -55,7 +56,7 @@ func Test_spending_reads_today_once_at_the_start_of_every_call(t *testing.T) {
 	assert.Equal(t, 2, clock.reads)
 }
 
-func Test_spending_refuses_a_window_it_cannot_read_before_the_config_or_the_store(t *testing.T) {
+func Test_spending_refuses_a_window_it_cannot_read_with_the_class_line_before_the_config_or_the_store(t *testing.T) {
 	stub := &configStub{}
 	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load))
 
@@ -63,8 +64,9 @@ func Test_spending_refuses_a_window_it_cannot_read_before_the_config_or_the_stor
 
 	assert.True(t, result.IsError)
 	assert.Empty(t, stub.commands)
+	assert.Equal(t, `since "last spring" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`, textOf(t, result))
 	assert.Zero(t, h.built)
-	assert.Equal(t, spendingLogPrefix+failedLogLine+"\n", h.stderr.String())
+	assert.Equal(t, spendingLogPrefix+windowRefusedLine+"\n", h.stderr.String())
 }
 
 func Test_spending_refuses_an_unreadable_config_before_building_the_report(t *testing.T) {
