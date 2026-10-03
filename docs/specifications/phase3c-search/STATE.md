@@ -52,6 +52,8 @@ Status: all scenarios done (01 folds 05; 02 folds 06, 07, 12a; 03; 04 folds 08; 
 - `go test -run 'Window'` is case-sensitive; use `(?i)window` (phase3b)
 
 ## Open debts
+- REVIEW-02 MINOR: out-of-range hand-built `AmountErrorKind` yields "" from `AmountError.Error()` (`internal/report/amount.go:44`) and `amountWording` (`internal/mcp/search.go:87`); no production constructor, `exhaustive` guards new kinds; unowned
+- REVIEW-02 NIT: white-box headers ~140 chars (`internal/cli/render_search_internal_test.go:1-2`, `internal/cli/search_internal_test.go:1-2`); unowned
 - `platform/sqlite` `QueryRows` (`internal/platform/sqlite/sqlite.go:131`) has the unchecked per-row `ctx.Err()` loop: unowned — dies unless re-opened (phase3b)
 - Phase3b/3a deferred MINOR/NIT lists stay in their STATE files (unowned); this feature does not close them
 - DuckDB `CAST(x * 100 AS BIGINT)` overflows for amounts of about $100 trillion or more (`Out of Range Error: Overflow in multiplication of DECIMAL(18)`). Fixed for search (DECIMAL(38,2) cast first, per `convert_sql.go`); same pattern remains in `internal/store/duckstore/accounts.go:14-15`, `cashflow.go:47-48`, `charges.go:25-26`, `findings_read.go:18`, `spending.go:41,65,71`; unreachable with real data; unowned
