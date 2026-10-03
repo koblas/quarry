@@ -1,6 +1,4 @@
-// White-box: renderRecurringJSON's null/[] choices and number formats are document rules,
-// driven directly over a report.Recurring and read back with encoding/json.
-package cli
+package document_test
 
 import (
 	"encoding/json"
@@ -9,18 +7,23 @@ import (
 
 	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// day is the given day of 2026.
+func day(month time.Month, d int) time.Time {
+	return time.Date(2026, month, d, 0, 0, 0, 0, time.UTC)
+}
+
 // recurringDocumentOf renders r with warnings and reads the document back as generic JSON.
 func recurringDocumentOf(t *testing.T, r report.Recurring, warnings ...string) map[string]any {
 	t.Helper()
-	out, err := renderRecurringJSON(r, append([]string{}, warnings...))
-	require.NoError(t, err)
+	out := indented(t, document.NewRecurring(r, warnings))
 	var doc map[string]any
-	require.NoError(t, json.Unmarshal(out, &doc), string(out))
+	require.NoError(t, json.Unmarshal([]byte(out), &doc), out)
 	return doc
 }
 
@@ -38,18 +41,18 @@ func seriesEntryAt(t *testing.T, doc map[string]any, i int) map[string]any {
 // firstSeriesOf renders a document of the one series s and returns its entry.
 func firstSeriesOf(t *testing.T, s report.Series) map[string]any {
 	t.Helper()
-	return seriesEntryAt(t, recurringDocumentOf(t, report.Recurring{Window: spendingWindow(), Series: []report.Series{s}}), 0)
+	return seriesEntryAt(t, recurringDocumentOf(t, report.Recurring{Window: window, Series: []report.Series{s}}), 0)
 }
 
-func Test_renderRecurringJSON_writes_empty_arrays_not_null_for_a_report_with_no_series(t *testing.T) {
-	doc := recurringDocumentOf(t, report.Recurring{Window: spendingWindow()})
+func Test_NewRecurring_writes_empty_arrays_not_null_for_a_report_with_no_series(t *testing.T) {
+	doc := recurringDocumentOf(t, report.Recurring{Window: window})
 
 	for _, key := range []string{"account_filter", "series", "totals", "warnings"} {
 		assert.Equal(t, []any{}, doc[key], key)
 	}
 }
 
-func Test_renderRecurringJSON_writes_empty_arrays_not_null_for_a_series_with_no_lists(t *testing.T) {
+func Test_NewRecurring_writes_empty_arrays_not_null_for_a_series_with_no_lists(t *testing.T) {
 	entry := firstSeriesOf(t, report.Series{Payee: "A", Currency: "CAD", Cadence: report.CadenceMonthly})
 
 	for _, key := range []string{"payees", "accounts", "price_changes"} {
@@ -57,23 +60,23 @@ func Test_renderRecurringJSON_writes_empty_arrays_not_null_for_a_series_with_no_
 	}
 }
 
-func Test_renderRecurringJSON_writes_the_window_as_since_and_until(t *testing.T) {
-	doc := recurringDocumentOf(t, report.Recurring{Window: spendingWindow()})
+func Test_NewRecurring_writes_the_window_as_since_and_until(t *testing.T) {
+	doc := recurringDocumentOf(t, report.Recurring{Window: window})
 
 	assert.Equal(t, "2026-01-01", doc["since"])
-	assert.Equal(t, "2026-03-09", doc["until"])
+	assert.Equal(t, "2026-09-29", doc["until"])
 }
 
-func Test_renderRecurringJSON_writes_the_warnings_it_is_given(t *testing.T) {
-	doc := recurringDocumentOf(t, report.Recurring{Window: spendingWindow()}, "first", "second")
+func Test_NewRecurring_writes_the_warnings_it_is_given(t *testing.T) {
+	doc := recurringDocumentOf(t, report.Recurring{Window: window}, "first", "second")
 
 	assert.Equal(t, []any{"first", "second"}, doc["warnings"])
 }
 
-func Test_renderRecurringJSON_writes_an_ended_new_series_with_a_null_per_year(t *testing.T) {
-	r := report.Recurring{Window: spendingWindow(), Series: []report.Series{{
+func Test_NewRecurring_writes_an_ended_new_series_with_a_null_per_year(t *testing.T) {
+	r := report.Recurring{Window: window, Series: []report.Series{{
 		Payee: "Disney Plus", Currency: "CAD", Cadence: report.CadenceMonthly, Amount: 1199, FirstAmount: 1199,
-		First: recurringDay(time.February, 7), Last: recurringDay(time.April, 7), ChargeCount: 3,
+		First: day(time.February, 7), Last: day(time.April, 7), ChargeCount: 3,
 		State: report.SeriesEnded, New: true,
 	}}}
 
@@ -85,14 +88,14 @@ func Test_renderRecurringJSON_writes_an_ended_new_series_with_a_null_per_year(t 
 	assert.Equal(t, true, entry["new"])
 }
 
-func Test_renderRecurringJSON_writes_a_null_payee_key_for_the_payee_id_fallback(t *testing.T) {
+func Test_NewRecurring_writes_a_null_payee_key_for_the_payee_id_fallback(t *testing.T) {
 	entry := firstSeriesOf(t, report.Series{Payee: "#4411", Currency: "CAD", Cadence: report.CadenceMonthly})
 
 	assert.Contains(t, entry, "payee_key")
 	assert.Nil(t, entry["payee_key"])
 }
 
-func Test_renderRecurringJSON_writes_the_payee_key_of_a_named_series(t *testing.T) {
+func Test_NewRecurring_writes_the_payee_key_of_a_named_series(t *testing.T) {
 	entry := firstSeriesOf(t, report.Series{
 		Payee: "Netflix.com", PayeeKey: new("netflix-com"), Currency: "CAD", Cadence: report.CadenceMonthly,
 	})
@@ -100,7 +103,7 @@ func Test_renderRecurringJSON_writes_the_payee_key_of_a_named_series(t *testing.
 	assert.Equal(t, "netflix-com", entry["payee_key"])
 }
 
-func Test_renderRecurringJSON_names_each_cadence(t *testing.T) {
+func Test_NewRecurring_names_each_cadence(t *testing.T) {
 	cases := []struct {
 		cadence report.Cadence
 		want    string
@@ -120,18 +123,18 @@ func Test_renderRecurringJSON_names_each_cadence(t *testing.T) {
 	}
 }
 
-func Test_renderRecurringJSON_writes_the_series_values_read_back(t *testing.T) {
+func Test_NewRecurring_writes_the_series_values_read_back(t *testing.T) {
 	s := report.Series{
 		Payee: "Netflix.com", PayeeKey: new("netflix-com"), Currency: "CAD", Cadence: report.CadenceMonthly,
 		Amount: 1099, FirstAmount: 999, PerYear: new(int64(13188)),
 		NativeCurrency: "CAD", NativeAmount: 1099, NativeFirstAmount: 999,
-		First: recurringDay(time.February, 12), Last: recurringDay(time.September, 12), ChargeCount: 24,
+		First: day(time.February, 12), Last: day(time.September, 12), ChargeCount: 24,
 		State: report.SeriesActive, New: true,
 		Payees:   []report.SeriesPayee{{ID: "payee-1", Name: "NETFLIX.COM 1234"}, {ID: "payee-2", Name: "Netflix.com"}},
 		Accounts: []store.Account{{ID: "acct-1", Name: "Chequing"}, {ID: "acct-2", Name: "Visa"}},
 		PriceChanges: []report.PriceChange{
-			{Date: recurringDay(time.June, 12), From: 999, To: 1199, Tenths: 200},
-			{Date: recurringDay(time.August, 12), From: 1199, To: 1099, Tenths: -83},
+			{Date: day(time.June, 12), From: 999, To: 1199, Tenths: 200},
+			{Date: day(time.August, 12), From: 1199, To: 1099, Tenths: -83},
 		},
 	}
 
@@ -158,9 +161,9 @@ func Test_renderRecurringJSON_writes_the_series_values_read_back(t *testing.T) {
 	}, entry)
 }
 
-func Test_renderRecurringJSON_keeps_the_series_and_currency_totals_in_the_order_given(t *testing.T) {
+func Test_NewRecurring_keeps_the_series_and_currency_totals_in_the_order_given(t *testing.T) {
 	r := report.Recurring{
-		Window: spendingWindow(),
+		Window: window,
 		Series: []report.Series{
 			{Payee: "Zed", Currency: "USD", Cadence: report.CadenceMonthly},
 			{Payee: "Amy", Currency: "CAD", Cadence: report.CadenceMonthly},
@@ -178,9 +181,9 @@ func Test_renderRecurringJSON_keeps_the_series_and_currency_totals_in_the_order_
 	}, doc["totals"])
 }
 
-func Test_renderRecurringJSON_writes_the_id_and_name_of_each_named_account_in_account_filter(t *testing.T) {
+func Test_NewRecurring_writes_the_id_and_name_of_each_named_account_in_account_filter(t *testing.T) {
 	r := report.Recurring{
-		Window:   spendingWindow(),
+		Window:   window,
 		Accounts: []store.Account{{ID: "acct-2", Name: "Visa"}, {ID: "acct-1", Name: "Chequing"}},
 	}
 
@@ -198,19 +201,18 @@ func convertedUSDSeries() report.Series {
 		Payee: "Gym", PayeeKey: new("gym"), Currency: "CAD", Cadence: report.CadenceMonthly,
 		Amount: 2100, FirstAmount: 1560, PerYear: new(int64(25200)),
 		NativeCurrency: "USD", NativeAmount: 1500, NativeFirstAmount: 1200,
-		First: recurringDay(time.February, 12), Last: recurringDay(time.September, 12), ChargeCount: 8,
+		First: day(time.February, 12), Last: day(time.September, 12), ChargeCount: 8,
 		State: report.SeriesActive, New: true, ChangeTenths: 250,
 		Payees:       []report.SeriesPayee{{ID: "payee-1", Name: "Gym"}},
 		Accounts:     []store.Account{{ID: "acct-usd", Name: "US Chequing"}},
-		PriceChanges: []report.PriceChange{{Date: recurringDay(time.June, 12), From: 1200, To: 1500, Tenths: 250}},
+		PriceChanges: []report.PriceChange{{Date: day(time.June, 12), From: 1200, To: 1500, Tenths: 250}},
 	}
 }
 
-func Test_renderRecurringJSON_orders_the_document_series_and_price_change_keys(t *testing.T) {
-	out, err := renderRecurringJSON(report.Recurring{
-		Window: spendingWindow(), Currency: money.CAD, Series: []report.Series{convertedUSDSeries()},
-	}, []string{})
-	require.NoError(t, err)
+func Test_NewRecurring_orders_the_document_series_and_price_change_keys(t *testing.T) {
+	out := []byte(indented(t, document.NewRecurring(report.Recurring{
+		Window: window, Currency: money.CAD, Series: []report.Series{convertedUSDSeries()},
+	}, []string{})))
 	var doc struct {
 		Series []json.RawMessage `json:"series"`
 	}
@@ -231,7 +233,7 @@ func Test_renderRecurringJSON_orders_the_document_series_and_price_change_keys(t
 	assert.Equal(t, []string{"date", "currency", "from", "to", "change_pct"}, topLevelKeys(t, entry.PriceChanges[0]))
 }
 
-func Test_renderRecurringJSON_keeps_the_same_keys_in_every_reporting_currency(t *testing.T) {
+func Test_NewRecurring_keeps_the_same_keys_in_every_reporting_currency(t *testing.T) {
 	cases := []struct {
 		name     string
 		currency money.Currency
@@ -256,8 +258,7 @@ func Test_renderRecurringJSON_keeps_the_same_keys_in_every_reporting_currency(t 
 // documentKeysIn is the "currency" value and the ordered keys of the one series of a document rendered in currency.
 func documentKeysIn(t *testing.T, currency money.Currency) (string, []string) {
 	t.Helper()
-	out, err := renderRecurringJSON(report.Recurring{Window: spendingWindow(), Currency: currency, Series: []report.Series{convertedUSDSeries()}}, []string{})
-	require.NoError(t, err)
+	out := []byte(indented(t, document.NewRecurring(report.Recurring{Window: window, Currency: currency, Series: []report.Series{convertedUSDSeries()}}, []string{})))
 	var doc struct {
 		Currency string            `json:"currency"`
 		Series   []json.RawMessage `json:"series"`
@@ -267,23 +268,22 @@ func documentKeysIn(t *testing.T, currency money.Currency) (string, []string) {
 	return doc.Currency, topLevelKeys(t, doc.Series[0])
 }
 
-func Test_renderRecurringJSON_reads_back_converted_native_ended_and_unchanged_series(t *testing.T) {
+func Test_NewRecurring_reads_back_converted_native_ended_and_unchanged_series(t *testing.T) {
 	ended := report.Series{
 		Payee: "Old", Currency: "CAD", Cadence: report.CadenceMonthly, Amount: 1400, FirstAmount: 1300,
 		NativeCurrency: "USD", NativeAmount: 1000, NativeFirstAmount: 1000,
-		First: recurringDay(time.January, 5), Last: recurringDay(time.March, 5), ChargeCount: 3, State: report.SeriesEnded,
+		First: day(time.January, 5), Last: day(time.March, 5), ChargeCount: 3, State: report.SeriesEnded,
 	}
 	plain := report.Series{
 		Payee: "Rent", Currency: "CAD", Cadence: report.CadenceMonthly, Amount: 5000, FirstAmount: 5000, PerYear: new(int64(60000)),
 		NativeCurrency: "CAD", NativeAmount: 5000, NativeFirstAmount: 5000,
-		First: recurringDay(time.January, 5), Last: recurringDay(time.March, 5), ChargeCount: 3, State: report.SeriesActive,
+		First: day(time.January, 5), Last: day(time.March, 5), ChargeCount: 3, State: report.SeriesActive,
 	}
-	out, err := renderRecurringJSON(report.Recurring{
-		Window: spendingWindow(), Currency: money.CAD,
+	out := []byte(indented(t, document.NewRecurring(report.Recurring{
+		Window: window, Currency: money.CAD,
 		Series: []report.Series{convertedUSDSeries(), ended, plain},
 		Totals: []report.RecurringTotal{{Currency: "CAD", PerYear: 85200}},
-	}, []string{})
-	require.NoError(t, err)
+	}, []string{})))
 	var doc struct {
 		Currency string `json:"currency"`
 		Series   []struct {
@@ -321,4 +321,20 @@ func Test_renderRecurringJSON_reads_back_converted_native_ended_and_unchanged_se
 	assert.NotNil(t, doc.Series[2].PriceChanges)
 	assert.Empty(t, doc.Series[2].PriceChanges)
 	assert.Contains(t, string(out), `"price_changes": []`)
+}
+
+func Test_NewRecurring_copies_the_warnings_and_turns_nil_into_an_empty_list(t *testing.T) {
+	given := []string{"first"}
+
+	got := document.NewRecurring(report.Recurring{Window: window}, given)
+	given[0] = "changed"
+
+	assert.Equal(t, []string{"first"}, got.Warnings)
+	assert.Equal(t, []string{}, document.NewRecurring(report.Recurring{Window: window}, nil).Warnings)
+}
+
+func Test_RecurringStatus_names_each_state_and_nothing_for_an_unknown_one(t *testing.T) {
+	assert.Equal(t, "active", document.RecurringStatus(report.SeriesActive))
+	assert.Equal(t, "ended", document.RecurringStatus(report.SeriesEnded))
+	assert.Empty(t, document.RecurringStatus(report.SeriesState(99)))
 }
