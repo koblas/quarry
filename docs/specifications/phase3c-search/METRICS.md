@@ -13,12 +13,16 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
+| 1 | arch, correctness, test, refactor | 0/3/21/7 | 0 / 20, 825s | BLOCKED |
 
 ## Tokens
 
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
 | --- | --- | --- | --- |
+| gate R1 | MCP `text ""`/`since ""`/`until ""` rows unpinned | internal/mcp/search_test.go:63 | SCENARIO-10 |
+| gate R1 | vacuous `assert.Zero` on zero sentinel | internal/report/search_test.go:118 | SCENARIO-04 |
+| gate R1 | unreachable arms on exported constructible type | internal/report/amount.go:49, internal/mcp/search.go:93 | SCENARIO-03 / SCENARIO-10 |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |
