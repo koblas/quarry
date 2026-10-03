@@ -53,7 +53,7 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report/document; store and pl
 
 ## Phase report
 
-Run B1 (steps 2-4) done and committed (`ddaffa4` steps 2-3, step 4 in the next commit). Acceptance `Test_run_prints_spend_cashflow_recurring_and_anomalies_byte_for_byte` green after the move; `cmd/quarry/run_analysis_documents_*_test.go` untouched (`git diff 5d2d07e -- cmd` empty). Narrow loop green (store, money, document, cli, cmd/quarry); `golangci-lint run ./internal/report/... ./internal/cli/... ./internal/store/... ./internal/platform/...` 0 issues.
+Run B1 (steps 2-4) done and committed (`ddaffa4` steps 2-3, step 4 in the next commit). Acceptance `Test_run_prints_spend_cashflow_recurring_and_anomalies_byte_for_byte` green after the move; `cmd/quarry/run_analysis_documents_*_test.go` untouched (`git diff f388acf -- cmd` empty). Narrow loop green (store, money, document, cli, cmd/quarry); `golangci-lint run ./internal/report/... ./internal/cli/... ./internal/store/... ./internal/platform/...` 0 issues.
 
 Built: `store.SpendingGroups/CashFlowPeriods` + `String()` (`store.go`); `money.NativeOf`; `document/account_filter.go`, `warnings.go` (`SpendingWarnings`/`CashFlowWarnings`/`RecurringWarnings`/`AnomaliesWarnings`), `spending.go`, `cashflow.go`; cli `empty_window.go`, `json_spend.go`/`json_cashflow.go` bodies deleted/one-line wrappers; cli `accountFilterDocument` gone (recurring/anomalies json now use `document.AccountFilter`/`NewAccountFilters`).
 
