@@ -29,5 +29,9 @@ Scenarios complete: SCENARIO-01 (with SCENARIO-07 folded), SCENARIO-02. Last upd
 - SKILL.md section 1 writes `<rates.last>` without backticks, so path pins match plain substrings, not backticked ones (SCENARIO-01)
 
 ## Open debts
+- Checkpoint S02 MINOR: `cmd/quarry/run_skill_schema_reference_test.go:113` `if *updateSchemaReference` branch in the test body; move it into a `refreshSchemaReference(t, got)` helper; unowned
+- Checkpoint S02 MINOR: `cmd/quarry/run_skill_schema_reference_test.go:114,118,197` hand-build `"../../"+path`, and `readSchemaReference` duplicates `repoFile` (`run_plugin_manifest_test.go:71`); reuse `repoFile`; unowned
+- Checkpoint S02 MINOR: `cmd/quarry/run_skill_schema_reference_test.go:173` `require.Len(comments, 2)` breaks when a third commented view is added; use `NotEmpty`; unowned
+- Checkpoint S02 MINOR: `cmd/quarry/run_skill_schema_reference_test.go:120` regenerate hint hard-codes the test name that `:70` derives; unowned
 - `THIRD_PARTY_NOTICES` "Used in:" keeps its existing parenthetical and appends `; plugin/ (…)`; S.9's "Now" column abbreviated it, so this is a flagged reading, not a ruled deletion — product-vision final pass to confirm
 - Proposed `.claude/CLAUDE.md` sentence about `plugin/` (spec "flagged only") not applied; outside this pipeline — unowned
