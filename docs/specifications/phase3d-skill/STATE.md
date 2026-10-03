@@ -1,6 +1,6 @@
 # phase3d-skill — current state
 
-Scenarios complete: SCENARIO-01 (with SCENARIO-07 folded). Last updated by SCENARIO-01.
+Scenarios complete: SCENARIO-01 (with SCENARIO-07 folded), SCENARIO-02. Last updated by SCENARIO-02.
 
 ## Binding decisions
 - Plugin files are static; no production Go. All pins are package-main tests in `cmd/quarry` reading repo files via `repoFile(t, rel)` (`run_plugin_manifest_test.go`), the one reader S02-S06 reuse (SCENARIO-01)
@@ -13,16 +13,19 @@ Scenarios complete: SCENARIO-01 (with SCENARIO-07 folded). Last updated by SCENA
 - Frontmatter description is a single plain-scalar line, no `: `, ≤ 1536 runes; no YAML parsing, no `go.mod` change (SCENARIO-01)
 - The notices clause and the four PRD replacement sentences are pinned by `Test_notices_and_prd_carry_the_ruled_plugin_edits` (whitespace-collapsed, so wrapping is free) (SCENARIO-01)
 - `claude plugin validate --strict plugin` and `--strict .` both pass (SCENARIO-01)
+- `plugin/skills/quarry/references/schema.md` is generated, never hand-edited: `generateSchemaReference(t, home)` in `run_skill_schema_reference_test.go` is the one generator (relations from `duckstore.Schema`, view comments from `duckdb_views()`, `report.SQLConventions`, `findings holds` paragraph from `run sql --help`). Regenerate with `go test ./cmd/quarry -run Test_skill_schema_reference_matches_the_committed_file -update`; the package-level `-update` flag is the only `flag.` use in `cmd/quarry`. S03 reads `schema.md` as a plain file and must not re-derive it (SCENARIO-02)
+- `schema.md` carries no user data: empty store equals populated store, no account/category/payee names, no `v_balances_daily`/`v_net_worth`/`v_holdings`; first line is the generated-by header (SCENARIO-02)
 
 ## Left unbuilt
-- `plugin/skills/quarry/references/*` (schema.md, five `.md` files, `sql/*.sql`) — S02, S03 batch 1, S04
+- `plugin/skills/quarry/references/*` (five `.md` files, `sql/*.sql`; `schema.md` is built) — S03 batch 1, S04
 - Link and path resolution (section 10 links; backticked `references/…` paths in sections 4 and 5, relative to `plugin/skills/quarry/`) — S03 batch 3
 - Command, flag, MCP tool and table/view resolution for SKILL.md and README — S03
 
 ## Traps
 - S.4 section 4 first table row has `\|` inside code spans; S03's drift check must read `--by category\|payee\|tag\|month` as one flag `--by`, not split on `\|` (SCENARIO-01)
 - Do not reflow or re-quote the description line: validator and pin both want the single plain line (SCENARIO-01)
-- `populatedAnalysisStore` must not be edited (exact-bytes goldens) (SCENARIO-01)
+- `populatedAnalysisStore` must not be edited (exact-bytes goldens; `schema.md` golden reads it read-only) (SCENARIO-01, SCENARIO-02)
+- A change to any `COMMENT ON VIEW` text in `internal/store/duckstore/schema.go` or to `report.SQLConventions` / `run sql --help` reddens the schema golden until regenerated with `-update` (SCENARIO-02)
 - SKILL.md section 1 writes `<rates.last>` without backticks, so path pins match plain substrings, not backticked ones (SCENARIO-01)
 
 ## Open debts

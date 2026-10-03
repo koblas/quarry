@@ -481,7 +481,7 @@ Sizing pass by architect (opus), 2026-10-03. The 7 IDs come out as 5 units, all 
 ## BDD Acceptance Progress
 - [x] SCENARIO-01: the marketplace lists the quarry plugin, which starts quarry's MCP server — `cmd/quarry/run_plugin_manifest_test.go` `Test_plugin_manifests_list_quarry_and_start_its_mcp_server`
 - [x] SCENARIO-07: SKILL.md carries the ruled frontmatter and the rules Claude must follow — delivered by SCENARIO-01 `cmd/quarry/run_skill_text_test.go` `Test_skill_text_carries_the_ruled_frontmatter_and_rules`
-- [ ] SCENARIO-02: references/schema.md is generated from the store and carries no user data
+- [x] SCENARIO-02: references/schema.md is generated from the store and carries no user data — `cmd/quarry/run_skill_schema_reference_test.go` `Test_skill_schema_reference_matches_the_committed_file`
 - [ ] SCENARIO-04: spending-trend.sql agrees with quarry spend
 - [ ] SCENARIO-05: income-by-category.sql agrees with quarry cashflow
 - [ ] SCENARIO-06: each in-scope use-case question is answered by the command the skill names

@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-02
-status: open
+status: done
 ---
 
 # SCENARIO-02: references/schema.md is generated from the store and carries no user data
@@ -23,18 +23,13 @@ Surface & Copy delivered: the §S.6 header line only, pinned by `Test_skill_sche
 - [x] Step 2: boundary pins: no account/category/payee name; empty store equals populated store; conventions verbatim; no `v_balances_daily`/`v_net_worth`/`v_holdings`; view comments and findings paragraph present; header per §S.6
 
 ### Sweep / Verify (run V)
-- [ ] lint, full suite, spec tick, `spec-check.py`, STATE.md
+- [x] lint, full suite, spec tick, `spec-check.py`, STATE.md
 
 ## Handoff
 `generateSchemaReference(t, home)` is the one generator; S03 reads `schema.md` as a plain file and must not re-derive it.
 
 ## Phase report
-Run L done; run V next (Sweep, Verify, spec tick, spec-check, STATE.md, status: done).
-- Files: `cmd/quarry/run_skill_schema_reference_test.go` (generator `generateSchemaReference`, package-level `-update` flag, acceptance + 7 pins), `plugin/skills/quarry/references/schema.md` (generated, committed).
-- Red (run A shape): acceptance failed at `require.NoError` on reading `schema.md`: `open ../../plugin/skills/quarry/references/schema.md: no such file or directory` (stub generator returned "").
-- Green now: all 8 `Test_skill_schema_reference*` on `go test ./cmd/quarry -run 'Test_skill_schema_reference'`; `golangci-lint run ./cmd/quarry/...` 0 issues.
-- `-update` check: no other `flag.` use in cmd/quarry (cobra owns `run`'s flags; subprocess tests pass only `-test.run`), so no conflict.
-- Mutations run: (1) one `COMMENT ON VIEW` text in schema.go edited -> golden and view-comment pin red, restored; (2) generator leaking account names -> golden, names pin and empty-store-equality red, restored.
-- Header is derived from the acceptance test's real function name (reflect), so a rename regenerates it; the header pin holds the literal.
-- Do not redo: no production code touched; `populatedAnalysisStore` untouched.
-- V: full suite + `uncovered-diff.py` (test-only files); tick SCENARIO-02 in spec as `cmd/quarry/run_skill_schema_reference_test.go` `Test_skill_schema_reference_matches_the_committed_file`.
+Run V done; scenario complete, `status: done`.
+- Verify: `go build ./...` rc=0; `golangci-lint run ./...` 0 issues rc=0; covered full suite rc=0; `uncovered-diff.py` rc=0 (no production Go lines added); `go test -race ./cmd/quarry/...` rc=0; `spec-check.py --run phase3d-skill` OK.
+- Ticked SCENARIO-02 in specification.md; STATE.md rewritten.
+- Do not redo: no production code in this scenario.
