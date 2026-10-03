@@ -307,6 +307,17 @@ func Test_run_sql_ignores_a_malformed_config(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
+func Test_run_search_ignores_a_malformed_config(t *testing.T) {
+	malformedConfigFixture(t)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"search"}, spendEnv(&stdout, &stderr))
+
+	assert.Equal(t, 0, exitCode, stderr.String())
+	assert.Contains(t, stdout.String(), "Costco")
+	assert.Empty(t, stderr.String())
+}
+
 func Test_run_spend_refuses_a_bad_flag_before_reading_a_malformed_config(t *testing.T) {
 	malformedConfigFixture(t)
 	var stdout, stderr bytes.Buffer

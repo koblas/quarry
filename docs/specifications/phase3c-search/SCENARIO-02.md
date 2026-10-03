@@ -20,8 +20,8 @@ Inventory (grep; nothing exported changes shape except additions): `store.Search
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_search_text_test.go` (new) acceptance table over one `searchRows` store (helpers `run_search_helpers_test.go:84`, `searchedJSON` `run_search_json_test.go:125`): payee Costco/`costco`, memo/`GIFT`, split-memo-only/`tip`, CAFÉ payee/`café`, `50 off`/`5%` none, `a_b` listed and `axb` not, backslash memo/`\`, account "Costco Visa"/`Visa` none. Fails at exit-0 `require` (cobra `NoArgs` gives exit 2) — no panic
-- [ ] Step 2: the three folded tests: `run_search_limit_test.go` (table: no args -> 500 rows, matched 501, truncated, stderr cut line; `--limit 0` -> 501, truncated false, empty stderr; add `manySearchTxns(n)` to `run_search_helpers_test.go`), `run_search_no_match_test.go` (exit 0, `transactions` `[]`, `matched` 0, stderr `quarry: warning: no transactions match the search; …`), `run_config_test.go:~299` `Test_run_search_ignores_a_malformed_config` (modelled on `Test_run_sql_ignores_a_malformed_config`; GREEN ON ARRIVAL — S01 never reads config; say so). No stubs needed: cmd tests use only `runWith`. S06 `--limit 0` red = unknown flag exit 2; S07 red = stderr assertion
+- [x] Step 1: `cmd/quarry/run_search_text_test.go` (new) acceptance table over one `searchRows` store (helpers `run_search_helpers_test.go:84`, `searchedJSON` `run_search_json_test.go:125`): payee Costco/`costco`, memo/`GIFT`, split-memo-only/`tip`, CAFÉ payee/`café`, `50 off`/`5%` none, `a_b` listed and `axb` not, backslash memo/`\`, account "Costco Visa"/`Visa` none. Fails at exit-0 `require` (cobra `NoArgs` gives exit 2) — no panic
+- [x] Step 2: the three folded tests: `run_search_limit_test.go` (table: no args -> 500 rows, matched 501, truncated, stderr cut line; `--limit 0` -> 501, truncated false, empty stderr; add `manySearchTxns(n)` to `run_search_helpers_test.go`), `run_search_no_match_test.go` (exit 0, `transactions` `[]`, `matched` 0, stderr `quarry: warning: no transactions match the search; …`), `run_config_test.go:~299` `Test_run_search_ignores_a_malformed_config` (modelled on `Test_run_sql_ignores_a_malformed_config`; GREEN ON ARRIVAL — S01 never reads config; say so). No stubs needed: cmd tests use only `runWith`. S06 `--limit 0` red = unknown flag exit 2; S07 red = stderr assertion
 
 ### Build
 - [ ] Step 3 (B1, text): `store/store.go:752-757` `SearchParams.Text` ("" = no filter); `duckstore/search.go:16-21,25-53,95-104` WHERE predicate `($4 IS NULL OR contains(lower(p.name), lower($4)) OR contains(lower(t.memo), lower($4)) OR EXISTS(split of t with contains(lower(ms.memo), lower($4))))`, nil bind when "", accounts renumbered from `$5` (cast `$4` if DuckDB cannot infer); still two statements; `report/search.go:12-45` `SearchRequest.Text *string`, `Search.Text` echo, `ErrBlankSearchText` (Error() = CLI line without `quarry: `) + exported `CheckSearchText(*string) error` (nil ok, `strings.TrimSpace==""` blank), `Server.Search` calls it first; `document/search.go:50-65` `Text` echo exactly as given; `cli/search.go:54-76` `Args` func (count>1 -> `UsageError` "search takes one text; quote it as one argument", then blank via `CheckSearchText` -> `UsageError`), RunE passes `&args[0]`; `render_search.go:46-48` caption ` matching %q` right after `Transactions`.
@@ -47,3 +47,22 @@ Inventory (grep; nothing exported changes shape except additions): `store.Search
 **Left unbuilt:** `--min`/`--max`, `SearchParams.Min/Max`, caption amount part (S03); `--category`, `RefusalUnknownCategory`, caption category part, S08 remainder: unknown flags, `--json` + refusal prints nothing, `--account ""`, `--category ""` (S04); `search_transactions`, MCP cut lines, blank-text MCP wording (S09/S10)
 
 **Traps:** `contains(NULL, x)` is NULL — OR-chain is safe, never negate it. `$4 IS NULL` with a nil bind may need a cast. Do not reuse `transactionRange` for the span (STATE). No test may pin cobra's `NoArgs` line (gone now). `Test_run_search_ignores_a_malformed_config` is green on arrival; its mutant is the factory loading config.
+
+## Phase report
+
+Run A (steps 1-2) done. Commit follows `<start>` 6c37b75. No production code touched.
+
+Files:
+- `cmd/quarry/run_search_text_test.go` (new): `textSearchStore()` (9 txns, one per rule) + acceptance table, 8 rows via `searchedJSON`.
+- `cmd/quarry/run_search_limit_test.go` (new): 2-row table, 501 txns, asserts first/oldest id, matched, truncated, exact stderr cut line.
+- `cmd/quarry/run_search_no_match_test.go` (new): `search --json zzz` on `searchStore()`; span `2026-01-20 to 2026-04-02`.
+- `cmd/quarry/run_config_test.go:~299` `Test_run_search_ignores_a_malformed_config`.
+- `cmd/quarry/run_search_helpers_test.go` end: `manySearchTxns(n)` (ids `n001`.., one day apart, newest highest).
+
+State (narrow loop `go test ./cmd/quarry/ -run 'Test_run_search|Test_run_sql_ignores'`):
+- RED at assertions, no panic: text table (all 8 rows: exit 2 `unknown command "costco" for "quarry search"` at `searchedJSON`'s exit-0 require, `run_search_json_test.go:134`); limit default row (stderr "" vs cut line, `run_search_limit_test.go:43`); `--limit 0` row (exit 2 unknown flag, `:36`); no-match (exit 2 unknown command "zzz", `run_search_no_match_test.go:20`).
+- GREEN ON ARRIVAL: `Test_run_search_ignores_a_malformed_config` (S01 never reads config). Limit default row also passes rows/matched/truncated assertions already (S01 computes them); only the stderr line is red.
+- All older search tests still green; `golangci-lint run ./cmd/...` 0 issues.
+
+Next runs must not: add search to `readCommandArgs`; pin the cobra `NoArgs` line. B1 reuses `textSearchStore()` and `transactionIDs`. The text table asserts ids only in `--json`; the Memo-cell/`splits[].memo` split-only pin, `-- "-50% off"`, combos and refusals are B1's cmd rows in `run_search_text_test.go`.
+

@@ -128,3 +128,16 @@ func optional(s string) *string {
 	}
 	return &s
 }
+
+// manySearchTxns is n single-split CAD transactions on acct-chq named "n001".."nNNN", one day apart,
+// the highest number newest.
+func manySearchTxns(n int) []searchTxn {
+	txns := make([]searchTxn, n)
+	for i := range txns {
+		txns[i] = searchTxn{
+			id: fmt.Sprintf("n%03d", i+1), account: "acct-chq", sourceID: int64(i + 1), day: day(2025, time.January, 1).AddDate(0, 0, i),
+			splits: []searchSplit{{sourceID: 1, cents: -100}},
+		}
+	}
+	return txns
+}
