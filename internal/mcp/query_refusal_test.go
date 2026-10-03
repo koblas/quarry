@@ -64,45 +64,53 @@ func Test_query_words_each_failure_for_the_model_and_logs_only_its_class(t *test
 	}
 }
 
-func Test_query_refuses_a_store_it_cannot_read_with_the_same_line_on_stderr(t *testing.T) {
+func Test_query_refuses_a_store_it_cannot_read_and_logs_its_text_unless_the_engine_wrote_it(t *testing.T) {
 	const (
 		atStore      = "~/Library/Application Support/quarry/quarry.duckdb"
 		snapshotPath = testHome + "/Library/Application Support/quarry/snapshots/20260927T143005Z.sqlite"
 	)
 	cases := []struct {
-		name string
-		err  error
-		want string
+		name    string
+		err     error
+		want    string
+		wantLog string
 	}{
 		{
 			name: "no store yet", err: &store.OpenError{Fault: store.OpenFaultMissing, Path: testStorePath},
-			want: "no store at " + atStore + " yet; run quarry sync to build it",
+			want:    "no store at " + atStore + " yet; run quarry sync to build it",
+			wantLog: "no store at " + atStore + " yet; run quarry sync to build it",
 		},
 		{
-			name: "a store from another version, naming its snapshot",
-			err:  &store.OpenError{Fault: store.OpenFaultOtherFormat, Path: testStorePath, SnapshotPath: snapshotPath},
-			want: "the store at " + atStore + " was built by another version of quarry; run quarry sync --from 20260927T143005Z to rebuild it",
+			name:    "a store from another version, naming its snapshot",
+			err:     &store.OpenError{Fault: store.OpenFaultOtherFormat, Path: testStorePath, SnapshotPath: snapshotPath},
+			want:    "the store at " + atStore + " was built by another version of quarry; run quarry sync --from 20260927T143005Z to rebuild it",
+			wantLog: "the store at " + atStore + " was built by another version of quarry; run quarry sync --from 20260927T143005Z to rebuild it",
 		},
 		{
-			name: "a store from another version, with no snapshot",
-			err:  &store.OpenError{Fault: store.OpenFaultOtherFormat, Path: testStorePath},
-			want: "the store at " + atStore + " was built by another version of quarry; run quarry sync to rebuild it",
+			name:    "a store from another version, with no snapshot",
+			err:     &store.OpenError{Fault: store.OpenFaultOtherFormat, Path: testStorePath},
+			want:    "the store at " + atStore + " was built by another version of quarry; run quarry sync to rebuild it",
+			wantLog: "the store at " + atStore + " was built by another version of quarry; run quarry sync to rebuild it",
 		},
 		{
 			name: "a store that is not DuckDB", err: &store.OpenError{Fault: store.OpenFaultNotDuckDB, Path: testStorePath},
-			want: "cannot read the store at " + atStore + ": the file is not a DuckDB database; run quarry sync to rebuild it",
+			want:    "cannot read the store at " + atStore + ": the file is not a DuckDB database; run quarry sync to rebuild it",
+			wantLog: "cannot read the store at " + atStore + ": the file is not a DuckDB database; run quarry sync to rebuild it",
 		},
 		{
 			name: "a store it may not read", err: &store.OpenError{Fault: store.OpenFaultPermission, Path: testStorePath},
-			want: "cannot read the store at " + atStore + ": permission denied; run quarry sync to rebuild it",
+			want:    "cannot read the store at " + atStore + ": permission denied; run quarry sync to rebuild it",
+			wantLog: "cannot read the store at " + atStore + ": permission denied; run quarry sync to rebuild it",
 		},
 		{
 			name: "a store unreadable for another reason", err: &store.OpenError{Fault: store.OpenFaultOther, Path: testStorePath, Reason: "IO Error at " + testStorePath},
-			want: "cannot read the store at " + atStore + ": IO Error at " + atStore + "; run quarry sync to rebuild it",
+			want:    "cannot read the store at " + atStore + ": IO Error at " + atStore + "; run quarry sync to rebuild it",
+			wantLog: "cannot read the store at " + atStore + "; details went to the client only",
 		},
 		{
 			name: "a store another program holds", err: &store.OpenError{Fault: store.OpenFaultLocked, Path: testStorePath},
-			want: "cannot read the store at " + atStore + ": another program has it open for writing; close that program and run the command again",
+			want:    "cannot read the store at " + atStore + ": another program has it open for writing; close that program and run the command again",
+			wantLog: "cannot read the store at " + atStore + ": another program has it open for writing; close that program and run the command again",
 		},
 	}
 
@@ -114,7 +122,7 @@ func Test_query_refuses_a_store_it_cannot_read_with_the_same_line_on_stderr(t *t
 
 			assert.True(t, result.IsError)
 			assert.Equal(t, c.want, textOf(t, result))
-			assert.Equal(t, logPrefixQuery+c.want+"\n", h.stderr.String())
+			assert.Equal(t, logPrefixQuery+c.wantLog+"\n", h.stderr.String())
 		})
 	}
 }

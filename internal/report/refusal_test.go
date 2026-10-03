@@ -2,6 +2,7 @@ package report_test
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"testing"
 	"time"
@@ -85,6 +86,56 @@ func Test_status_refuses_with_the_store_refusal_copy(t *testing.T) {
 			assert.EqualError(t, err, c.want)
 		})
 	}
+}
+
+func Test_a_store_refusal_exposes_its_kind_fault_and_home_relative_path(t *testing.T) {
+	const atStore = "~/Library/Application Support/quarry/quarry.duckdb"
+	cases := []struct {
+		name  string
+		path  string
+		home  string
+		fault store.OpenFault
+		at    string
+	}{
+		{name: "other", path: storePath, home: refusalHome, fault: store.OpenFaultOther, at: atStore},
+		{name: "missing", path: storePath, home: refusalHome, fault: store.OpenFaultMissing, at: atStore},
+		{name: "other format", path: storePath, home: refusalHome, fault: store.OpenFaultOtherFormat, at: atStore},
+		{name: "not duckdb", path: storePath, home: refusalHome, fault: store.OpenFaultNotDuckDB, at: atStore},
+		{name: "permission", path: storePath, home: refusalHome, fault: store.OpenFaultPermission, at: atStore},
+		{name: "locked", path: storePath, home: refusalHome, fault: store.OpenFaultLocked, at: atStore},
+		{name: "a store outside home", path: "/srv/quarry/quarry.duckdb", home: refusalHome, fault: store.OpenFaultOther, at: "/srv/quarry/quarry.duckdb"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			openErr := &store.OpenError{Fault: c.fault, Path: c.path}
+			srv := report.NewServer(report.WithStore(fakeStore{err: openErr}), report.WithHome(c.home))
+
+			_, err := srv.Status(t.Context())
+
+			refusal, ok := errors.AsType[report.RefusalError](err)
+			require.True(t, ok)
+			assert.Equal(t, report.RefusalStore, refusal.Kind)
+			assert.Equal(t, c.fault, refusal.Fault)
+			assert.Equal(t, c.at, refusal.At)
+			assert.Empty(t, refusal.Arg)
+			assert.Empty(t, refusal.IDs)
+		})
+	}
+}
+
+func Test_an_interrupted_read_is_a_generic_refusal(t *testing.T) {
+	openErr := &store.OpenError{Fault: store.OpenFaultOther, Path: storePath}
+	srv := report.NewServer(report.WithStore(fakeStore{err: openErr}), report.WithHome(refusalHome))
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := srv.Status(ctx)
+
+	refusal, ok := errors.AsType[report.RefusalError](err)
+	require.True(t, ok)
+	assert.Equal(t, report.RefusalGeneric, refusal.Kind)
+	assert.Empty(t, refusal.At)
 }
 
 func Test_accounts_refuses_with_the_store_refusal_copy(t *testing.T) {

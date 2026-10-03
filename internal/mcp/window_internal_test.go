@@ -78,3 +78,11 @@ func Test_windowRefusal_logs_the_class_line_without_the_callers_values(t *testin
 		})
 	}
 }
+
+func Test_windowRefusal_keeps_every_value_of_the_caller_off_the_log_line(t *testing.T) {
+	refusal := report.WindowError{Kind: report.WindowSinceAfterUntil, Bound: "since", Value: "zorblax-since", Other: "zorblax-until"}
+
+	got := logLine(windowRefusal(refusal))
+
+	assert.NotContains(t, got, "zorblax")
+}

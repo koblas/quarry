@@ -11,6 +11,7 @@ import (
 
 	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/store"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -25,7 +26,14 @@ const (
 	argumentsRefusedLog = "refused the call's arguments; details went to the client only"
 	failedLog           = "failed; details went to the client only"
 	windowRefusedLog    = "refused the call's since or until; details went to the client only"
+	unknownAccountLog   = "refused the call's accounts: one names no account; details went to the client only"
+	ambiguousAccountLog = "refused the call's accounts: one names more than one account; details went to the client only"
 )
+
+// withheldStoreLog is the stderr line of a store that failed for a reason only the client should read; at is its ~ path.
+func withheldStoreLog(at string) string {
+	return "cannot read the store at " + at + "; details went to the client only"
+}
 
 // stoppedError is the isError text of a call that ran past its deadline.
 type stoppedError string
@@ -47,15 +55,32 @@ func withLog(err error, line string) error { return loggedError{error: err, line
 // verbatim is err, logged to stderr as its own text; only for fixed copy that carries nothing from the call.
 func verbatim(err error) error { return withLog(err, err.Error()) }
 
-// logLine is the stderr line of err, a tool's failure: its recorded line, a store refusal's text, else the generic one.
+// logLine is the stderr line of err, a tool's failure: its recorded line, a report refusal's, else the generic one.
 func logLine(err error) string {
 	if logged, ok := errors.AsType[loggedError](err); ok {
 		return logged.line
 	}
 	if refusal, ok := errors.AsType[report.RefusalError](err); ok {
-		return refusal.Error()
+		return refusalLine(refusal)
 	}
 	return failedLog
+}
+
+// refusalLine is the stderr line of refusal: a class line where its text carries the caller's account or a
+// reason from the store's own engine, else its text, which is fixed copy.
+func refusalLine(refusal report.RefusalError) string {
+	switch refusal.Kind {
+	case report.RefusalUnknownAccount:
+		return unknownAccountLog
+	case report.RefusalAmbiguousAccount:
+		return ambiguousAccountLog
+	case report.RefusalStore:
+		if refusal.Fault == store.OpenFaultOther {
+			return withheldStoreLog(refusal.At)
+		}
+	case report.RefusalGeneric:
+	}
+	return refusal.Error()
 }
 
 // logSlot is where one tool call's handler leaves its stderr line for errorLog.

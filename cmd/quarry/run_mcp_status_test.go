@@ -123,6 +123,7 @@ func Test_run_mcp_sync_status_refuses_a_store_without_an_import_run(t *testing.T
 	var cliStdout, cliStderr bytes.Buffer
 	require.Equal(t, 1, run(t.Context(), []string{"status"}, &cliStdout, &cliStderr))
 	refusal := strings.TrimSuffix(strings.TrimPrefix(cliStderr.String(), "quarry: "), "\n")
+	at := abbreviated(t, storePathUnder(home), home)
 	ctx, peer := startStatusPeer(t)
 
 	result := callSyncStatus(ctx, t, peer)
@@ -132,7 +133,7 @@ func Test_run_mcp_sync_status_refuses_a_store_without_an_import_run(t *testing.T
 	assert.True(t, result.IsError)
 	assert.Equal(t, refusal, textOf(result))
 	assert.Contains(t, refusal, "the store has no import history")
-	assert.Equal(t, "quarry: mcp: sync_status: "+refusal+"\n", peer.stderr.String())
+	assert.Equal(t, "quarry: mcp: sync_status: cannot read the store at "+at+"; details went to the client only\n", peer.stderr.String())
 }
 
 // accountsBuilder is a Quicken file of one CAD chequing account per name, each with one transaction.

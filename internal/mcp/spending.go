@@ -30,7 +30,7 @@ func (s *Server) spending(ctx context.Context, in spendingInput) (any, error) {
 	}
 	spent, err := srv.Spend(ctx, report.SpendRequest{Window: window, By: parseSpendingGroup(in.By), Accounts: in.Accounts, Currency: currency})
 	if err != nil {
-		return nil, err //nolint:wrapcheck // a RefusalError is the tool's answer, sent verbatim
+		return nil, accountRefusal(err)
 	}
 	return document.NewSpending(spent, append(configWarnings, document.SpendingWarnings(spent, toolSpending)...)), nil
 }

@@ -11,12 +11,35 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
+// RefusalKind says which refusal a RefusalError is, for a surface that words it other than the command line does.
+type RefusalKind int
+
+// The refusals a surface words for itself; RefusalGeneric is every other, whose message is final.
+const (
+	RefusalGeneric RefusalKind = iota
+	RefusalUnknownAccount
+	RefusalAmbiguousAccount
+	RefusalStore
+)
+
 // RefusalError is a final, one-line refusal of a read: its message excludes
 // the "quarry: " prefix a caller adds before printing it to stderr, and it
 // unwraps to the store error that caused it, if a store error did.
+// The exported parts let a surface word it without the command-line copy.
 type RefusalError struct {
 	msg   string
 	cause error
+
+	// Kind says which of the parts below are set.
+	Kind RefusalKind
+	// Arg is the caller's account text (RefusalUnknownAccount, RefusalAmbiguousAccount).
+	Arg string
+	// IDs are the ids of the accounts Arg names, sorted (RefusalAmbiguousAccount).
+	IDs []string
+	// Fault is why the store could not be opened (RefusalStore).
+	Fault store.OpenFault
+	// At is the store's path in its ~ form (RefusalStore).
+	At string
 }
 
 // Error returns the refusal's message verbatim.
@@ -56,18 +79,24 @@ func storeRefusal(err error, home string) error {
 	case store.OpenFaultLocked:
 		msg = "cannot read the store at " + at + ": " + openErr.UnreadableReason(at) + "; close that program and run the command again"
 	}
-	return RefusalError{msg: msg, cause: err}
+	return RefusalError{msg: msg, cause: err, Kind: RefusalStore, Fault: openErr.Fault, At: at}
 }
 
 // unknownAccountRefusal refuses an --account value that names no account.
 func unknownAccountRefusal(arg string) error {
-	return RefusalError{msg: fmt.Sprintf("no account named %q; run quarry accounts --all to list them", arg)}
+	return RefusalError{
+		msg:  fmt.Sprintf("no account named %q; run quarry accounts --all to list them", arg),
+		Kind: RefusalUnknownAccount, Arg: arg,
+	}
 }
 
 // ambiguousAccountRefusal refuses an --account value naming the accounts with ids, which it lists sorted.
 func ambiguousAccountRefusal(arg string, ids []string) error {
 	sorted := slices.Sorted(slices.Values(ids))
-	return RefusalError{msg: fmt.Sprintf("%d accounts are named %q; pass one of their ids instead: %s", len(ids), arg, strings.Join(sorted, ", "))}
+	return RefusalError{
+		msg:  fmt.Sprintf("%d accounts are named %q; pass one of their ids instead: %s", len(ids), arg, strings.Join(sorted, ", ")),
+		Kind: RefusalAmbiguousAccount, Arg: arg, IDs: sorted,
+	}
 }
 
 // rebuildArgs is the --from argument naming the snapshot at snapshotPath, followed by a space; "" when there is none.

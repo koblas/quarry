@@ -51,7 +51,7 @@ func (e WindowError) Error() string {
 	case WindowUntilBeforeDefault:
 		return fmt.Sprintf("%s %s is before the default --%s %s; pass --%s too", flag, e.Value, boundSince, e.DefaultSince, boundSince)
 	}
-	// unreachable: parseWindow builds a WindowError of one of the kinds above
+	// unreachable: parseWindow and parseDateBound are the only WindowError constructors and each sets one of the kinds above
 	return flag + " " + e.Value + " is refused"
 }
 
