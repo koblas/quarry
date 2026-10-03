@@ -6,6 +6,7 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -136,3 +137,64 @@ func Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration(t *testin
 
 	require.Error(t, err)
 }
+
+// The context reports Canceled from the first row's callback on and never fires
+// Done, so only the per-row context check can surface the cancellation.
+func Test_query_rows_reports_a_cancel_that_lands_mid_iteration(t *testing.T) {
+	t.Parallel()
+	path := newMultiRowTestDatabase(t)
+	db, err := sqlite.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	calls := 0
+	ctx := scriptedContext{err: func() error {
+		if calls > 0 {
+			return context.Canceled
+		}
+		return nil
+	}}
+	err = db.QueryRows(ctx, "SELECT v FROM t ORDER BY id", nil,
+		func(func(dest ...any) error) error {
+			calls++
+			return nil
+		})
+
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, 1, calls)
+}
+
+func Test_query_rows_reports_a_deadline_that_passes_mid_iteration(t *testing.T) {
+	t.Parallel()
+	path := newMultiRowTestDatabase(t)
+	db, err := sqlite.OpenReadOnly(t.Context(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	calls := 0
+	ctx := scriptedContext{err: func() error {
+		if calls > 0 {
+			return context.DeadlineExceeded
+		}
+		return nil
+	}}
+	err = db.QueryRows(ctx, "SELECT v FROM t ORDER BY id", nil,
+		func(func(dest ...any) error) error {
+			calls++
+			return nil
+		})
+
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Equal(t, 1, calls)
+}
+
+// scriptedContext is a context that never fires Done, so the driver's own interrupt
+// cannot be what stops a read; its Err is whatever err returns.
+type scriptedContext struct {
+	err func() error
+}
+
+func (scriptedContext) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (scriptedContext) Done() <-chan struct{}       { return nil }
+func (scriptedContext) Value(any) any               { return nil }
+func (c scriptedContext) Err() error                { return c.err() }
