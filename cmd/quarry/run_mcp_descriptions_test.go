@@ -11,21 +11,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const mcpInstructions = `quarry serves David's Quicken Classic for Mac data from a local, read-only
-store. Call sync_status first and tell the user how old the snapshot is
-(snapshot.taken_at). For spending, income, recurring charges and unusually
-large charges call spending, cash_flow, recurring_charges and anomalies:
-they apply quarry's rules for transfers, refunds and currencies. For other
-questions call describe_schema before writing SQL for query: its
-conventions say which views already leave out transfers and how amounts,
-signs and currencies work. Every number you report must come from a tool
-result; never estimate. quarry cannot change data: fixes are made in
-Quicken, then the user runs quarry sync.`
+const mcpInstructions = `quarry serves the user's Quicken Classic for Mac data from a local,
+read-only store. Call sync_status first and tell the user how old the
+snapshot is (snapshot.taken_at). For spending, income, recurring charges
+and unusually large charges call spending, cash_flow, recurring_charges
+and anomalies: they apply quarry's rules for transfers, refunds and
+currencies. To find particular transactions by payee, memo, amount or
+date call search_transactions. For other questions call describe_schema
+before writing SQL for query: its conventions say which views already
+leave out transfers and how amounts, signs and currencies work. Every
+number you report must come from a tool result; never estimate. quarry
+cannot change data: fixes are made in Quicken, then the user runs quarry
+sync.`
 
 const mcpQueryDescription = `Run one read-only SQL query (DuckDB dialect) against quarry's store and
 return its columns and rows. Call describe_schema first for the tables,
 views and conventions. For spending and income totals call spending or
-cash_flow instead; in SQL use v_spending and v_cash_flow, which already
+cash_flow instead, and to find transactions by payee, memo or amount call
+search_transactions; in SQL use v_spending and v_cash_flow, which already
 leave out transfers between the user's own accounts. Returns at most
 ` + "`limit`" + ` rows (default 500, the most allowed); aggregate in SQL rather
 than paging through rows. The store cannot be changed, and other files,
@@ -247,7 +250,7 @@ func Test_run_mcp_describes_every_tool(t *testing.T) {
 
 		assert.Equal(t, 0, code)
 		assert.Contains(t, stdout.String(), "SQL runs read-only, and every list a tool returns\nstops at 500 entries.")
-		assert.Contains(t, stdout.String(), "Tools: describe_schema, query, sync_status, data_quality, spending,\ncash_flow, recurring_charges, anomalies.")
+		assert.Contains(t, stdout.String(), "Tools: describe_schema, query, sync_status, data_quality, spending,\ncash_flow, recurring_charges, anomalies, search_transactions.")
 		assert.Empty(t, stderr.String())
 	})
 }
