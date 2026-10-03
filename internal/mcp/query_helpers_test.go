@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/mcp"
 	"github.com/koblas/quarry/internal/report"
@@ -47,8 +48,10 @@ type fakeStore struct {
 	findings      store.FindingList
 	findingsReads int
 
-	spent store.Spending
-	flow  store.CashFlow
+	spent   store.Spending
+	flow    store.CashFlow
+	charges store.Charges
+	through []time.Time
 }
 
 // Spending answers with spent, or err when set.
@@ -59,6 +62,12 @@ func (f *fakeStore) Spending(context.Context, store.SpendingParams) (store.Spend
 // CashFlow answers with flow, or err when set.
 func (f *fakeStore) CashFlow(context.Context, store.CashFlowParams) (store.CashFlow, error) {
 	return f.flow, f.err
+}
+
+// Charges answers with charges, or err when set, recording the day it was asked to read through.
+func (f *fakeStore) Charges(_ context.Context, params store.ChargeParams) (store.Charges, error) {
+	f.through = append(f.through, params.Through)
+	return f.charges, f.err
 }
 
 // Findings answers with findings, or err when set, counting the reads.
@@ -162,6 +171,22 @@ func (h *harness) cashFlow(t *testing.T, arguments any) *sdk.CallToolResult {
 	return result
 }
 
+// recurringCharges calls the recurring_charges tool with arguments.
+func (h *harness) recurringCharges(t *testing.T, arguments any) *sdk.CallToolResult {
+	t.Helper()
+	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "recurring_charges", Arguments: arguments})
+	require.NoError(t, err)
+	return result
+}
+
+// anomalies calls the anomalies tool with arguments.
+func (h *harness) anomalies(t *testing.T, arguments any) *sdk.CallToolResult {
+	t.Helper()
+	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "anomalies", Arguments: arguments})
+	require.NoError(t, err)
+	return result
+}
+
 // rowsOf is a one-column result of n rows holding 0..n-1.
 func rowsOf(n int) store.QueryResult {
 	rows := make([][]store.QueryValue, n)
@@ -186,4 +211,10 @@ func jsonOf(t *testing.T, v any) string {
 	encoded, err := json.Marshal(v)
 	require.NoError(t, err)
 	return string(encoded)
+}
+
+// payeeNamed is the i-th of a run of payee names that are letters only, so each keeps its own payee key.
+func payeeNamed(i int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyz"
+	return string([]byte{letters[i/676%26], letters[i/26%26], letters[i%26]})
 }
