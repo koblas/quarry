@@ -27,7 +27,7 @@
 - Rule S6 window: absent `since`/`until` mean no bound (future-dated included); `report.ParseSearchWindow` (no clock) returns the existing `WindowError`.
 - Rule S7 order/limit: `date DESC, source_id DESC`; limit applied in the store with the full match count (`matched`), `truncated = matched > len(transactions)`; a cut drops the oldest. Deliberate deviation from 3b Rule 11 (no `capList`).
 - Rule S8: search never reads config and never reads the clock.
-- Rule S9 order of outcomes: argument shape → min → max → min>max → window → store open → account → category → read.
+- Rule S9 order of outcomes: argument shape (CLI: argument count → --limit → blank text → text not UTF-8 → --category not UTF-8; MCP: SDK schema check → blank text) → min → max → min>max → window → store open → account → category → read. (Mid-feature ruling, SCENARIO-04.)
 - An empty result exits 0 with the no-match warning; "not found" (exit 1) is for named resources (unknown account, unknown category).
 
 ---
@@ -558,6 +558,19 @@ Key files:
 - /Users/koblas/repos/github.com/koblas/quarry/.claude/worktrees/synced-data-cleanup-b34b42/internal/cli/mcp.go (Long tool list)
 - /Users/koblas/repos/github.com/koblas/quarry/.claude/worktrees/synced-data-cleanup-b34b42/cmd/quarry/run_status_test.go:110-136 (root help pin)
 - /Users/koblas/repos/github.com/koblas/quarry/.devenv/state/go/pkg/mod/github.com/modelcontextprotocol/go-sdk@v1.8.0/mcp/tool.go:94-139 (where arguments go through a map and floats)
+
+
+### Mid-feature copy ruling (SCENARIO-04): invalid UTF-8 text or category
+
+CLI refuses both as a usage error (exit 2) before the store opens; value quoted with Go `%q`; `--json` prints nothing on stdout, same line and exit.
+
+| # | Outcome | stdout | stderr | exit |
+|---|---|---|---|---|
+| 3a | text not valid UTF-8 (`$'\xff'`, `$'caf\xc3'`) | — | `quarry: search text "\xff" is not valid UTF-8; set your terminal or script to UTF-8` | 2 |
+| 3b | `--category` not valid UTF-8 | — | `quarry: --category "\xff" is not valid UTF-8; set your terminal or script to UTF-8` | 2 |
+| 3c | text containing NUL (valid UTF-8) | caption, header, `0 matching transactions` | `quarry: warning: no transactions match the search; …` | 0 |
+
+MCP: no row and no class line — go-sdk v1.8.0 decodes arguments with segmentio/encoding/json, which replaces invalid UTF-8 with U+FFFD, so the handler always sees valid UTF-8 (§4.2 row 20: falls through to row 17 no-match or row 13 unknown category). Any MCP-reachable check is `// unreachable:` with that reason; no MCP wrapper. `--account`, `since`/`until`, `min`/`max` are parsed in Go and unaffected. No new `RefusalKind` enters `mcp.refusalLine`.
 
 ---
 
