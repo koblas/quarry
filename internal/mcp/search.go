@@ -13,11 +13,11 @@ import (
 func (s *Server) searchTransactions(ctx context.Context, in searchInput) (any, error) {
 	// Text, amounts, window: the order the command line refuses them in.
 	if err := report.CheckSearchText(in.Text); err != nil {
-		return nil, err
+		return nil, err //nolint:wrapcheck // the client gets the command line's own refusal text
 	}
 	amounts, err := report.ParseSearchAmounts(in.Min, in.Max)
 	if err != nil {
-		return nil, err
+		return nil, err //nolint:wrapcheck // the client gets the command line's own refusal text
 	}
 	window, err := report.ParseSearchWindow(in.Since, in.Until)
 	if err != nil {

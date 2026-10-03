@@ -26,9 +26,9 @@ func decodeSearch(t *testing.T, result *sdk.CallToolResult) document.Search {
 	return doc
 }
 
-// matchesOf is a search that matched matched transactions and holds the newest n of them.
-func matchesOf(n, matched int) store.Search {
-	return store.Search{Rows: make([]store.SearchRow, n), Matched: matched}
+// matchesOf is a search of total matches that holds the newest n of them.
+func matchesOf(n, total int) store.Search {
+	return store.Search{Rows: make([]store.SearchRow, n), Matched: total}
 }
 
 func Test_search_transactions_refuses_a_bad_window_in_the_tools_words(t *testing.T) {
