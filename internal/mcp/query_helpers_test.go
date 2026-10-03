@@ -218,3 +218,13 @@ func payeeNamed(i int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyz"
 	return string([]byte{letters[i/676%26], letters[i/26%26], letters[i%26]})
 }
+
+// inUSD relists payee's charges in USD with no converted amount, so a CAD report cannot convert them.
+func inUSD(rows []store.Charge, payee string) {
+	for i := range rows {
+		if *rows[i].Payee == payee {
+			rows[i].Currency = "USD"
+			rows[i].Account.Currency = "USD"
+		}
+	}
+}

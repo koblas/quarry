@@ -8,6 +8,7 @@ import (
 
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/mcp"
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
@@ -192,18 +193,21 @@ func Test_anomalies_refuses_arguments_the_schema_rejects_without_reading_the_con
 
 func Test_anomalies_cuts_charges_to_the_cap_and_ends_the_warnings_with_the_line(t *testing.T) {
 	const payees = 501
-	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
-	fake := &fakeStore{charges: unusualCharges(payees)}
-	h := newHarness(t, fake, nil, mcp.WithConfig(stub.load), mcp.WithClock(func() time.Time { return anomaliesToday }))
+	stub := &configStub{cfg: config.Config{Currency: money.CAD, WarningsAbsolute: []string{configUnknownKeyWarning}}}
+	charges := unusualCharges(payees)
+	charges.FirstRate = time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	inUSD(charges.Rows, payeeNamed(payees-1))
+	h := newHarness(t, &fakeStore{charges: charges}, nil, mcp.WithConfig(stub.load), mcp.WithClock(func() time.Time { return anomaliesToday }))
 
 	doc := decodeAnomalies(t, h.anomalies(t, map[string]any{}))
 
 	assert.Len(t, doc.Anomalies, 500)
 	assert.Equal(t, payees*(report.AnomalyPayeeMinHistory+1), doc.Checked)
 	assert.Equal(t, payees*report.AnomalyPayeeMinHistory, doc.NotJudged)
-	require.Len(t, doc.Warnings, 2)
+	require.Len(t, doc.Warnings, 3)
 	assert.Equal(t, configUnknownKeyWarning, doc.Warnings[0])
-	assert.Equal(t, "anomalies lists the first 500 charges of 501; pass a shorter period or fewer accounts", doc.Warnings[1])
+	assert.Equal(t, "1 charge dated before 2026-03-01, the first exchange rate in the store, is listed in USD, not converted to CAD", doc.Warnings[1])
+	assert.Equal(t, "anomalies lists the first 500 charges of 501; pass a shorter period or fewer accounts", doc.Warnings[2])
 }
 
 // unusualCharges is n payees, each with report.AnomalyPayeeMinHistory usual charges and then one the payee's

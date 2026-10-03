@@ -7,6 +7,7 @@ import (
 
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/mcp"
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -193,18 +194,20 @@ func Test_recurring_charges_cuts_series_to_the_cap_and_ends_the_warnings_with_th
 		seriesCount = 501
 		amount      = 1000
 	)
-	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
-	fake := &fakeStore{charges: monthlyCharges(seriesCount, amount)}
-	h := newHarness(t, fake, nil, mcp.WithConfig(stub.load), mcp.WithClock(func() time.Time { return recurringChargesToday }))
+	stub := &configStub{cfg: config.Config{Currency: money.CAD, WarningsAbsolute: []string{configUnknownKeyWarning}}}
+	charges := monthlyCharges(seriesCount, amount)
+	charges.FirstRate = time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	inUSD(charges.Rows, payeeNamed(seriesCount-1))
+	h := newHarness(t, &fakeStore{charges: charges}, nil, mcp.WithConfig(stub.load), mcp.WithClock(func() time.Time { return recurringChargesToday }))
 
 	doc := decodeRecurring(t, h.recurringCharges(t, map[string]any{}))
 
 	require.Len(t, doc.Series, 500)
-	require.Len(t, doc.Totals, 1)
-	assert.Equal(t, "60120.00", doc.Totals[0].PerYear)
-	require.Len(t, doc.Warnings, 2)
+	require.Len(t, doc.Totals, 2)
+	require.Len(t, doc.Warnings, 3)
 	assert.Equal(t, configUnknownKeyWarning, doc.Warnings[0])
-	assert.Equal(t, "recurring_charges lists the first 500 series of 501; totals count every series; pass a shorter period or fewer accounts", doc.Warnings[1])
+	assert.Equal(t, "1 series with a charge dated before 2026-03-01, the first exchange rate in the store, is listed in USD, not converted to CAD", doc.Warnings[1])
+	assert.Equal(t, "recurring_charges lists the first 500 series of 501; totals count every series; pass a shorter period or fewer accounts", doc.Warnings[2])
 }
 
 // monthlyCharges is n payees, each charged amount on the 15th of July, August and September 2026.
