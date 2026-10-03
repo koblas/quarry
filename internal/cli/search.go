@@ -20,6 +20,22 @@ var searchFlagHelp = reportFlagHelp{
 // errSearchNegativeLimit refuses a --limit below zero.
 var errSearchNegativeLimit = UsageError{msg: "--limit must be 0 or more; 0 prints every transaction"}
 
+// searchAmounts reads --min and --max as cmd was given them, or refuses them as a UsageError. A flag that was
+// given empty is refused, not ignored.
+func searchAmounts(cmd *cobra.Command, least, most *string) (report.SearchAmounts, error) {
+	if !cmd.Flags().Changed("min") {
+		least = nil
+	}
+	if !cmd.Flags().Changed("max") {
+		most = nil
+	}
+	amounts, err := report.ParseSearchAmounts(least, most)
+	if err != nil {
+		return report.SearchAmounts{}, UsageError{msg: err.Error()}
+	}
+	return amounts, nil
+}
+
 // searchArgs refuses, as a UsageError and before anything is read, more than one text, then a negative
 // *limit, then blank text.
 func searchArgs(limit *int) cobra.PositionalArgs {
@@ -57,8 +73,9 @@ func searchCutNote(s report.Search) string {
 // period, in the --account accounts. It reads neither the clock nor the config file.
 func newSearchCommand(newReport ReportFactory, jsonOut *bool) *cobra.Command {
 	var (
-		flags reportFlags
-		limit int
+		flags          reportFlags
+		limit          int
+		minArg, maxArg string
 	)
 	cmd := &cobra.Command{
 		Use:   "search [text]",
@@ -93,6 +110,10 @@ unless set); when more match, quarry says so on stderr.`,
   quarry search --category Food --since 2026-09 --json`,
 		Args: searchArgs(&limit),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			amounts, err := searchAmounts(cmd, &minArg, &maxArg)
+			if err != nil {
+				return err
+			}
 			window, err := flags.searchWindow(cmd)
 			if err != nil {
 				return err
@@ -103,7 +124,7 @@ unless set); when more match, quarry says so on stderr.`,
 				return err
 			}
 
-			req := report.SearchRequest{Window: window, Accounts: flags.accounts, Limit: searchLimit(cmd, limit)}
+			req := report.SearchRequest{Window: window, Accounts: flags.accounts, Amounts: amounts, Limit: searchLimit(cmd, limit)}
 			if len(args) == 1 {
 				req.Text = &args[0]
 			}
@@ -123,6 +144,8 @@ unless set); when more match, quarry says so on stderr.`,
 		},
 	}
 	flags.bind(cmd, searchFlagHelp)
+	cmd.Flags().StringVar(&minArg, "min", "", "list only transactions of at least this `amount`, sign ignored, in the account's own currency")
+	cmd.Flags().StringVar(&maxArg, "max", "", "list only transactions of at most this `amount`, sign ignored, in the account's own currency")
 	// The flag's own default is 0 so help prints no "(default ...)" beside the ruled text; searchLimit applies 500.
 	cmd.Flags().IntVar(&limit, "limit", 0, "print at most `n` transactions, newest first (500 unless set; 0 prints every one)")
 	return cmd

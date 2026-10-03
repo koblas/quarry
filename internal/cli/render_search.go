@@ -43,13 +43,32 @@ func renderSearch(s report.Search) string {
 		"\n" + humanize.Count(s.Matched, "matching transaction", "matching transactions") + "\n"
 }
 
-// searchCaption is "Transactions[ matching "<text>"] in <accounts>, <dates>".
+// searchCaption is "Transactions[ matching "<text>"] in <accounts>, <dates>[, amount <range>]".
 func searchCaption(s report.Search) string {
 	caption := "Transactions"
 	if s.Text != nil {
 		caption += fmt.Sprintf(" matching %q", *s.Text)
 	}
-	return caption + " in " + accountsCaption(s.Accounts) + ", " + searchDates(s.Window)
+	caption += " in " + accountsCaption(s.Accounts) + ", " + searchDates(s.Window)
+	if amount := searchAmountRange(s.Amounts); amount != "" {
+		caption += ", amount " + amount
+	}
+	return caption
+}
+
+// searchAmountRange is the caption's amount: "A to B", "at least A", "at most B", "exactly A", or "" when unbounded.
+func searchAmountRange(a report.SearchAmounts) string {
+	switch {
+	case a.Min != nil && a.Max != nil && *a.Min == *a.Max:
+		return "exactly " + formatMoney(*a.Min)
+	case a.Min != nil && a.Max != nil:
+		return formatMoney(*a.Min) + " to " + formatMoney(*a.Max)
+	case a.Min != nil:
+		return "at least " + formatMoney(*a.Min)
+	case a.Max != nil:
+		return "at most " + formatMoney(*a.Max)
+	}
+	return ""
 }
 
 // searchDates is the caption's dates: "all dates", "from D", "through D" or "D to D".

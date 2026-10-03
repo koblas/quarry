@@ -105,6 +105,41 @@ func Test_searchCaption_names_the_accounts_the_search_was_limited_to(t *testing.
 	assert.Equal(t, `Transactions in Chequing, Sav\nings, all dates`, searchCaption(s))
 }
 
+func Test_searchCaption_names_the_amount_range_after_the_dates(t *testing.T) {
+	cents := func(c int64) *int64 { return &c }
+	cases := []struct {
+		name    string
+		amounts report.SearchAmounts
+		want    string
+	}{
+		{name: "no bound adds nothing", amounts: report.SearchAmounts{}, want: "Transactions in all accounts, all dates"},
+		{name: "both bounds are a range", amounts: report.SearchAmounts{Min: cents(2000), Max: cents(5000)}, want: "Transactions in all accounts, all dates, amount 20.00 to 50.00"},
+		{name: "min alone is at least", amounts: report.SearchAmounts{Min: cents(2000)}, want: "Transactions in all accounts, all dates, amount at least 20.00"},
+		{name: "max alone is at most", amounts: report.SearchAmounts{Max: cents(5000)}, want: "Transactions in all accounts, all dates, amount at most 50.00"},
+		{name: "equal bounds are exactly", amounts: report.SearchAmounts{Min: cents(4217), Max: cents(4217)}, want: "Transactions in all accounts, all dates, amount exactly 42.17"},
+		{name: "a bound of zero is still a bound", amounts: report.SearchAmounts{Min: cents(0)}, want: "Transactions in all accounts, all dates, amount at least 0.00"},
+		{name: "amounts are grouped by thousands", amounts: report.SearchAmounts{Min: cents(123400), Max: cents(123401)}, want: "Transactions in all accounts, all dates, amount 1,234.00 to 1,234.01"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, searchCaption(report.Search{Amounts: c.amounts}))
+		})
+	}
+}
+
+func Test_searchCaption_puts_the_amount_after_the_text_accounts_and_dates(t *testing.T) {
+	least := int64(10000)
+	s := report.Search{
+		Text:     new("costco"),
+		Accounts: []store.Account{{Name: "Visa"}},
+		Window:   store.SearchWindow{Since: searchDay(2025, time.January, 1)},
+		Amounts:  report.SearchAmounts{Min: &least},
+	}
+
+	assert.Equal(t, `Transactions matching "costco" in Visa, from 2025-01-01, amount at least 100.00`, searchCaption(s))
+}
+
 func Test_searchCategoryCell_labels_each_split_once_in_split_order(t *testing.T) {
 	cases := []struct {
 		name   string

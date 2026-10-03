@@ -177,3 +177,19 @@ func Test_run_search_refuses_the_search_flags_and_text_in_the_ruled_order_before
 		})
 	}
 }
+
+func Test_run_search_text_with_limit_counts_every_text_match_and_cuts_the_oldest(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStore(t, home, gymSearchStore())
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"search", "gym", "--limit", "1", "--json"}, spendEnv(&stdout, &stderr))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	doc := decodeSearchJSON(t, stdout.String())
+	assert.Equal(t, []string{"txn-visa-mar"}, transactionIDs(doc))
+	assert.Equal(t, 3, doc.Matched)
+	assert.True(t, doc.Truncated)
+	assert.Equal(t, "quarry: warning: showing the newest 1 of 3 matching transactions; pass --limit 0 to list every one\n", stderr.String())
+}
