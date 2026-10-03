@@ -1,6 +1,6 @@
 # phase3a-mcp-core — current state
 
-Scenarios complete: SCENARIO-01..17 (04, 05 delivered by 03; 08 by 07; 10, 14 by 09; 12 by 11; 16 by 15; 13, 17 by 06). Last updated by gate R1 fix pass (after SCENARIO-06).
+Scenarios complete: SCENARIO-01..17 (04, 05 delivered by 03; 08 by 07; 10, 14 by 09; 12 by 11; 16 by 15; 13, 17 by 06). Last updated by the cancel-hang fix pass (after gate R2).
 
 ## Binding decisions
 - `internal/report/document` owns the sql, status and findings `--json` documents plus shared primitives (`DateLayout`, `Money`, `NullString`, `Rows`, `FindingCounts`, `NotImported`); MCP tools render from these same builders (`NewSQL`, `NewStatus`, `NewFindingsList`) — a second copy is the drift PRD:108 forbids (SCENARIO-01)
@@ -37,6 +37,7 @@ Scenarios complete: SCENARIO-01..17 (04, 05 delivered by 03; 08 by 07; 10, 14 by
 - query handler clamps limit outside 1..500 to 500 and the schema `default` is pinned separately (omitted -> store asked 501); truncation warning uses `humanize.Count` (limit 1 reads "the first 1 row") (SCENARIO-03)
 - The per-call deadline is applied inside `handler(timeout, stopped, run)` (`result.go`), never as outer middleware: `errorLog` is silent when its ctx is done, so an outer deadline would eat the timeout's stderr line. Only `errors.Is(err, context.DeadlineExceeded)` maps to the tool's ruled line (`stoppedLine`/`queryStoppedLine`, configured whole seconds via `humanize.Count`); Canceled and everything else pass unchanged. Default `callTimeout` 30 s, `WithTimeout` whole seconds only; `newMCPServe(info, opts ...mcp.Option)` appends opts after the shipped ones (SCENARIO-06)
 - `store.InterruptedBy(ctx, err)` is the attach point for "interrupted" decisions (duckstore open path AND `queryRefusal`; `report.readRefusal` joins `ctx.Err()`): same text as `Interrupted`, also unwraps to the ctx's own error, so `errors.Is` matches exactly one of DeadlineExceeded/Canceled. mcp `queryRefusal` returns the original `err` for the Interrupted arm (SCENARIO-06)
+- `duckdb.OpenReadOnly` opens each database on an instance cache of its own (`internal/platform/duckdb/cache.go` `openDB`; `DB.release` destroys it after `Close`), never the driver's process-wide one, so a read open waits on and shares an instance with no other open (and sees the file now at the path after a sync rename). `Create` uses the shared cache through the same `openDB`. `duckdbdriver.GetInstanceCache` is replaced in `init`; every driver open in the process must go through `openDB` (a raw `sql.Open("duckdb")` is fine only when no `openDB` runs concurrently) (cancel-hang fix)
 
 ## Left unbuilt
 - spend/cashflow/recurring/anomalies/accounts/snapshots/sync documents stay in `internal/cli/json_*.go` — phase 3b moves the first four (SCENARIO-01)
@@ -69,6 +70,9 @@ Scenarios complete: SCENARIO-01..17 (04, 05 delivered by 03; 08 by 07; 10, 14 by
 - The real duckdb driver does NOT put the ctx error in its chain when it interrupts a running query (`query interrupted: INTERRUPT Error: Interrupted!`): never trust the driver's chain for deadline vs cancel; tests use `driverInterrupt()`, not `interruptFault()` (which joins Canceled) (SCENARIO-06)
 - `report.ClassifyQueryFailure`'s Interrupted arm drops the chain (`Err: store.ErrQueryInterrupted`): classify from the original `err`, or query never gets its timeout line (SCENARIO-06)
 - `mcpTestDeadline` (30 s) equals `callTimeout`: a test relying on the default deadline never sees it fire. A "no stderr line" assertion before the cancelled call's response frame is vacuous: sync on that id's frame (`peer.stdout`) first; the SDK may serve calls concurrently (SCENARIO-06)
+- A DuckDB instance can outlive its closed handle when a query is interrupted at the start of execution (cancel ~0.2-0.5 ms after the statement starts; about 1 in 1-2k such cancels, 1 in 10-50 through the MCP client path): the driver's shared cache then spins at 100% CPU in `duckdb_get_or_create_from_cache` on that path forever, and ctx cannot interrupt the cgo call. The per-open cache makes it harmless; the stranded instance (9 scheduler threads, memory) stays until process exit. Driver/DuckDB bug, no Go-side holder (`debug_bindings` counters show no live db/conn/stmt) (cancel-hang fix)
+- `Test_open_read_only_does_not_wait_for_an_instance_an_earlier_open_left_running` models the strand by pinning `db.conn` then closing the handle (no exported call can); red it leaves a spinning goroutine until the test binary exits. The hang itself is probabilistic, so `Test_run_mcp_cancelled_query_is_interrupted_quietly` looped serially (100 runs) is the end-to-end evidence, not a gate (cancel-hang fix)
+- A cancelled driver query returns ~500 ms after the cancel even when the interrupt lands at once: `runWithCtxInterrupt` waits for its interrupter goroutine's sleep, so `cancelBound` and similar waits must allow >= 0.5 s (cancel-hang fix)
 
 ## Open debts
 - Checkpoint S01 MINOR: `internal/report/query_failure_test.go:12` pins precedence only QueryError over Interrupted; unprintable vs QueryError and read-only vs external-access order unpinned (add rows if constructible) — unowned

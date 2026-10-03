@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2" // registers the "duckdb" database/sql driver
+	"github.com/duckdb/duckdb-go/v2/mapping"
 )
 
 // ErrExists is returned by Create when path already exists.
@@ -30,6 +31,8 @@ var errNotDuckDBConn = errors.New("connection is not a duckdb driver connection"
 type DB struct {
 	conn *sql.DB
 	path string
+	// cache is the instance cache OpenReadOnly made for this database, nil for one on the shared cache.
+	cache *mapping.InstanceCache
 }
 
 // Create makes a new DuckDB database file at path, refusing an existing one
@@ -43,10 +46,10 @@ func Create(ctx context.Context, path string) (*DB, error) {
 		return nil, fmt.Errorf("create %s: %w", path, err)
 	}
 
-	conn, err := sql.Open("duckdb", path)
+	conn, err := openDB(path, nil)
 	if err != nil {
 		// The duckdb driver opens (and for a new path, creates) the file
-		// inside sql.Open itself, so a permission fault on path or its
+		// inside openDB itself, so a permission fault on path or its
 		// parent directory surfaces here, not at PingContext below.
 		return nil, fmt.Errorf("create %s: %w", path, err)
 	}
@@ -76,21 +79,27 @@ const readOnlyDSN = "?access_mode=READ_ONLY&enable_external_access=false" +
 // locked down: no write reaches path, no other file, database or extension is
 // reachable, and the configuration cannot be changed. Every read-only open
 // in the process must use this one configuration.
+//
+// Each open is an instance of its own: it never waits on, and never reads
+// through, another open of path, so it sees the file now at path.
 func OpenReadOnly(ctx context.Context, path string) (*DB, error) {
-	conn, err := sql.Open("duckdb", path+readOnlyDSN)
+	cache := mapping.CreateInstanceCache()
+	conn, err := openDB(path+readOnlyDSN, &cache)
 	if err != nil {
-		// The duckdb driver opens the file inside sql.Open itself, so a
+		// The duckdb driver opens the file inside openDB itself, so a
 		// missing path or permission fault surfaces here, not at
 		// PingContext below.
+		mapping.DestroyInstanceCache(&cache)
 		return nil, fmt.Errorf("open %s read-only: %w", path, err)
 	}
 	conn.SetMaxOpenConns(1)
 
+	db := &DB{conn: conn, path: path, cache: &cache}
 	if err := conn.PingContext(ctx); err != nil {
-		_ = conn.Close()
+		_ = db.release()
 		return nil, fmt.Errorf("open %s read-only: %w", path, err)
 	}
-	return &DB{conn: conn, path: path}, nil
+	return db, nil
 }
 
 // Exec runs query against the connection.
@@ -171,7 +180,7 @@ func (d *DB) CheckpointClose(ctx context.Context) error {
 	if _, err := d.conn.ExecContext(ctx, "CHECKPOINT"); err != nil {
 		return fmt.Errorf("checkpoint %s: %w", d.path, err)
 	}
-	if err := d.conn.Close(); err != nil {
+	if err := d.release(); err != nil {
 		// unreachable: database/sql.DB.Close returns only the driver's own Close error
 		// for the one pooled connection, which CHECKPOINT just used successfully, and
 		// the duckdb driver's Close of a live connection does not fail.
@@ -197,7 +206,16 @@ func checkNoWAL(path string) error {
 
 // Close closes the underlying connection without running CHECKPOINT.
 func (d *DB) Close() error {
-	return d.conn.Close() //nolint:wrapcheck // thin adapter over *sql.DB; callers add context
+	return d.release()
+}
+
+// release closes the connection, then the instance cache OpenReadOnly made for it.
+func (d *DB) release() error {
+	err := d.conn.Close()
+	if d.cache != nil {
+		mapping.DestroyInstanceCache(d.cache)
+	}
+	return err //nolint:wrapcheck // callers add context
 }
 
 // Decimal returns a driver value representing unscaled x 10^-scale as
