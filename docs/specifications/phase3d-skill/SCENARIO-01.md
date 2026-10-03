@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01
-status: open
+status: done
 ---
 
 # SCENARIO-01: The marketplace lists the quarry plugin, which starts quarry's MCP server (absorbs SCENARIO-07)
@@ -65,16 +65,8 @@ Size: OWNS A RUN — 3 batches, 0 feature packages (static files plus `cmd/quarr
 
 ## Phase report
 
-Run B1 (steps 3-5) done; both acceptance tests green, plus the three new tests; lint on `./cmd/quarry/...` is `0 issues`.
+Run V (steps 6-8) done; status done.
 
-Files:
-- `.claude-plugin/marketplace.json`, `plugin/.claude-plugin/plugin.json` (new, byte-equal to the test constants).
-- `plugin/skills/quarry/SKILL.md` (new): sections 1-9 and the credit generated from the test constants; section 10 is hand-written (six links, one per line, in S.1 order, one-line jobs from S.6).
-- `README.md`: `## Use quarry with Claude Code` inserted before `## Credits`.
-- `cmd/quarry/run_plugin_manifest_test.go`: added `Test_plugin_manifests_agree_on_where_the_plugin_lives_and_how_it_starts_quarry` (decode pin).
-- `cmd/quarry/run_plugin_readme_test.go` (new): `Test_readme_section_for_claude_code_is_verbatim_and_precedes_credits`, constant `readmeClaudeCodeSection`.
-- `cmd/quarry/run_status_json_test.go`: `Test_status_json_carries_each_path_the_skill_reads` + `statusPath` helper. It checks each path against SKILL.md section 1 as a plain substring (section 1 writes `<rates.last>` without backticks, so a backticked match fails).
-
-Mutation checks (all four red, then restored, `git status` clean of mutations): `plugin/.mcp.json` added, section 6 word changed, README word changed, `fetch_error` tag renamed at `internal/report/document/status.go:82`.
-
-For V (steps 6-8): not done. Step 6 sweep edits (THIRD_PARTY_NOTICES, PRD lines) still to make; `go build`/full lint not yet run repo-wide; no full suite yet; spec tick, `spec-check.py`, STATE.md, `status: done` all open. No production Go was added.
+- Step 6: `THIRD_PARTY_NOTICES` "Used in:" keeps the existing parenthetical and appends `; plugin/ (…)`; `docs/initial-prd.md` skill references bullet, "generated from the store" clause, packaging bullet and one open-questions sentence edited per S.9; `:129` and `:117` untouched.
+- Step 7: build rc=0, covered suite rc=0, uncovered-diff: no production Go lines added, race on `cmd/quarry` rc=0, lint `0 issues`, test-stats `cmd/quarry 608 (+5)`; `claude plugin validate --strict plugin` and `--strict .` both passed.
+- Step 8: SCENARIO-01 and SCENARIO-07 ticked, `spec-check.py --run phase3d-skill` OK, `STATE.md` written.

@@ -479,8 +479,8 @@ Sizing pass by architect (opus), 2026-10-03. The 7 IDs come out as 5 units, all 
 | SCENARIO-03 | OWNS A RUN (opus), 3 batches in 1 package. (1) The five reference `.md` files (§S.6). (2) Command and flag extraction and resolution, with negative controls. (3) MCP tool names, tables and `v_*` views, and the §10 links, with controls. |
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01: the marketplace lists the quarry plugin, which starts quarry's MCP server
-- [ ] SCENARIO-07: SKILL.md carries the ruled frontmatter and the rules Claude must follow
+- [x] SCENARIO-01: the marketplace lists the quarry plugin, which starts quarry's MCP server — `cmd/quarry/run_plugin_manifest_test.go` `Test_plugin_manifests_list_quarry_and_start_its_mcp_server`
+- [x] SCENARIO-07: SKILL.md carries the ruled frontmatter and the rules Claude must follow — delivered by SCENARIO-01 `cmd/quarry/run_skill_text_test.go` `Test_skill_text_carries_the_ruled_frontmatter_and_rules`
 - [ ] SCENARIO-02: references/schema.md is generated from the store and carries no user data
 - [ ] SCENARIO-04: spending-trend.sql agrees with quarry spend
 - [ ] SCENARIO-05: income-by-category.sql agrees with quarry cashflow

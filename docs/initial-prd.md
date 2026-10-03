@@ -212,9 +212,9 @@ A thin wrapper over the core library, launched by the Claude desktop app as a lo
 `quarry` ships a Claude skill as the primary way Claude uses the data, with the MCP server for clients that can't load skills; this follows dweekly's finding that the skill is the better default path.
 
 - **`SKILL.md`**: when to use it, checking freshness with `quarry status` first, the conventions (sign, transfers, CAD reporting, cross-currency transfers), and the rule that every number comes from `quarry` output or SQL, never estimation.
-- **`references/`**: `schema.md` for `quarry`'s own tables and views (generated from the store, so it can't drift), plus `spending.md`, `net-worth.md`, `investments.md` and `findings.md` (walking David through the findings worklist), each with `.sql` recipes.
+- **`references/`**: `schema.md` for `quarry`'s own tables and views (generated from the store, so it can't drift; it lists tables, views and conventions only, never accounts or categories), plus `spending.md`, `cash-flow.md`, `recurring-and-anomalies.md`, `search.md` and `findings.md` (walking David through the findings worklist), with `.sql` recipes where no command answers the question; `net-worth.md` and `investments.md` arrive with Phase 4.
 - The skill calls `quarry … --json` and `quarry sql`; it contains no Quicken schema knowledge, so a Quicken change never breaks it.
-- Packaged as a Claude Code plugin that bundles the skill and the MCP server config, adapted from dweekly's plugin layout.
+- Packaged as a Claude Code plugin that bundles the skill and the MCP server config (in `plugin.json`), in `plugin/`, listed by `.claude-plugin/marketplace.json` at the repo root, adapted from dweekly's plugin layout.
 
 ### Data-quality feedback to Quicken
 
@@ -345,3 +345,5 @@ The main risk is Quicken's undocumented schema; reconciliation on every sync is 
 None block the design. Facts about a particular user's data (which accounts are registered, return-of-capital adjustments, whether trade history is complete) are gathered in session, not designed in: the skill asks for them when a report first needs them, stores the answers in `quarry`'s config, and `quarry` reports what is missing as findings.
 
 Pinning a snapshot (for example a tax year-end) so `prune` skips it is left out of v1; add it if the count cap proves too blunt.
+
+Quicken's category tax line is not imported; tax totals are by user-named category until it is.
