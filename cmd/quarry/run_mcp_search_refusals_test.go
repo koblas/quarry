@@ -47,43 +47,51 @@ func Test_run_mcp_search_transactions_refuses_bad_input_without_the_callers_valu
 			arguments  map[string]any
 			wantText   string
 			wantStderr string
-			absent     string
 		}{
 			{
 				name: "blank text", arguments: map[string]any{"text": "  "},
 				wantText:   "text is blank; leave it out to search by date, account, category or amount alone",
 				wantStderr: searchLogPrefix + textRefusedLog + "\n",
-				absent:     "  ",
+			},
+			{
+				name: "empty text", arguments: map[string]any{"text": ""},
+				wantText:   "text is blank; leave it out to search by date, account, category or amount alone",
+				wantStderr: searchLogPrefix + textRefusedLog + "\n",
 			},
 			{
 				name: "min with a sign", arguments: map[string]any{"min": "-12"},
 				wantText:   `min "-12" is not an amount; use digits with up to 2 decimals and no sign, such as "25" or "19.99"`,
 				wantStderr: searchLogPrefix + amountRefusedLog + "\n",
-				absent:     "-12",
 			},
 			{
 				name: "min above max", arguments: map[string]any{"min": "50", "max": "20"},
 				wantText:   "min 50 is more than max 20",
 				wantStderr: searchLogPrefix + amountRefusedLog + "\n",
-				absent:     "50",
 			},
 			{
 				name: "since not a date", arguments: map[string]any{"since": "2024-13"},
 				wantText:   `since "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`,
 				wantStderr: searchLogPrefix + windowRefusedLog + "\n",
-				absent:     "2024-13",
+			},
+			{
+				name: "empty since", arguments: map[string]any{"since": ""},
+				wantText:   `since "" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`,
+				wantStderr: searchLogPrefix + windowRefusedLog + "\n",
+			},
+			{
+				name: "empty until", arguments: map[string]any{"until": ""},
+				wantText:   `until "" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`,
+				wantStderr: searchLogPrefix + windowRefusedLog + "\n",
 			},
 			{
 				name: "account names none", arguments: map[string]any{"accounts": []string{"Nope"}},
 				wantText:   `no account named "Nope"; call describe_schema to list the accounts`,
 				wantStderr: searchLogPrefix + unknownAccountLog + "\n",
-				absent:     "Nope",
 			},
 			{
 				name: "category names none", arguments: map[string]any{"category": "Fod"},
 				wantText:   `no category named "Fod"; call describe_schema to list the categories`,
 				wantStderr: searchLogPrefix + unknownCategoryLog + "\n",
-				absent:     "Fod",
 			},
 		}
 
@@ -93,7 +101,6 @@ func Test_run_mcp_search_transactions_refuses_bad_input_without_the_callers_valu
 
 				assert.Equal(t, c.wantText, textOf(result))
 				assert.Equal(t, c.wantStderr, stderr)
-				assert.NotContains(t, stderr, c.absent)
 			})
 		}
 	})
@@ -107,6 +114,8 @@ func Test_run_mcp_search_transactions_refuses_bad_input_without_the_callers_valu
 			{name: "min as a JSON number", arguments: map[string]any{"min": 12}, wantField: "min"},
 			{name: "limit above 500", arguments: map[string]any{"limit": 501}, wantField: "limit"},
 			{name: "limit of 0", arguments: map[string]any{"limit": 0}, wantField: "limit"},
+			{name: "limit below 0", arguments: map[string]any{"limit": -1}, wantField: "limit"},
+			{name: "limit of null", arguments: map[string]any{"limit": nil}, wantField: "limit"},
 		}
 
 		for _, c := range cases {

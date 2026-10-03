@@ -46,6 +46,8 @@ func Test_run_search_refuses_bad_input_with_the_ruled_line_and_exit_code(t *test
 		{name: "a max that is not a number", args: []string{"--max", "abc"}, exit: 2, want: `quarry: --max "abc" is not an amount` + notAmount},
 		{name: "a min above the max", args: []string{"--min", "50", "--max", "20"}, exit: 2, want: "quarry: --min 50 is more than --max 20\n"},
 		{name: "a since that is not a date", args: []string{"--since", "2024-13"}, exit: 2, want: "quarry: --since \"2024-13\" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD\n"},
+		{name: "an empty since", args: []string{"--since", ""}, exit: 2, want: "quarry: --since \"\" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD\n"},
+		{name: "an empty until", args: []string{"--until", ""}, exit: 2, want: "quarry: --until \"\" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD\n"},
 		{name: "a since after the until", args: []string{"--since", "2025", "--until", "2024"}, exit: 2, want: "quarry: --since 2025 is after --until 2024\n"},
 		{name: "an account no account is named", args: []string{"--account", "Nope"}, exit: 1, want: "quarry: no account named \"Nope\"; run quarry accounts --all to list them\n"},
 		{name: "an account name two accounts share", args: []string{"--account", "Visa"}, exit: 1, want: "quarry: 2 accounts are named \"Visa\"; pass one of their ids instead: acct-812, acct-977\n"},

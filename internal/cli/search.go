@@ -36,8 +36,8 @@ func searchAmounts(cmd *cobra.Command, least, most *string) (report.SearchAmount
 	return amounts, nil
 }
 
-// searchArgs refuses, as a UsageError and before anything is read, more than one text, then a negative
-// *limit, then blank text, then text and --category that are not valid UTF-8.
+// searchArgs is search's argument check: a UsageError, before anything is read, for a second text, a negative
+// *limit, blank text, or text or *category that is not valid UTF-8.
 func searchArgs(limit *int, category *string) cobra.PositionalArgs {
 	return func(_ *cobra.Command, args []string) error {
 		if len(args) > 1 {
@@ -61,7 +61,7 @@ func searchArgs(limit *int, category *string) cobra.PositionalArgs {
 	}
 }
 
-// searchLimit is how many transactions search keeps: the --limit given, else defaultSearchLimit. 0 means every one.
+// searchLimit is how many transactions search lists: limit when --limit was given (0 lists every one), else defaultSearchLimit.
 func searchLimit(cmd *cobra.Command, limit int) int {
 	if cmd.Flags().Changed("limit") {
 		return limit

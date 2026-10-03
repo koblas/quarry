@@ -1,4 +1,4 @@
-// White-box: renderSearch's caption, cell and footer rules are unexported layout, driven directly.
+// White-box: the caption, cell and footer rules are unexported layout with many variants, cheaper to drive on a built report than through a store.
 package cli
 
 import (

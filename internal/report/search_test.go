@@ -107,7 +107,7 @@ func Test_search_truncated_is_true_only_when_matches_exceed_the_rows(t *testing.
 }
 
 func Test_search_refuses_an_account_it_cannot_pick_without_reading_matches(t *testing.T) {
-	var got store.SearchParams
+	got := store.SearchParams{Limit: 99}
 	srv := report.NewServer(report.WithStore(fakeStore{accounts: accountsOf(chqAccount), gotSearch: &got}))
 
 	_, err := srv.Search(t.Context(), report.SearchRequest{Accounts: []string{"Nowhere"}})
@@ -115,7 +115,7 @@ func Test_search_refuses_an_account_it_cannot_pick_without_reading_matches(t *te
 	var refusal report.RefusalError
 	require.ErrorAs(t, err, &refusal)
 	assert.Equal(t, report.RefusalUnknownAccount, refusal.Kind)
-	assert.Zero(t, got)
+	assert.Equal(t, store.SearchParams{Limit: 99}, got)
 }
 
 func Test_search_refuses_a_store_fault_as_a_store_refusal(t *testing.T) {
@@ -152,26 +152,33 @@ func Test_search_reports_an_interrupt_during_the_accounts_read(t *testing.T) {
 
 func Test_CheckSearchText_refuses_blank_text(t *testing.T) {
 	cases := []struct {
-		name    string
-		text    *string
-		refused bool
+		name string
+		text *string
+	}{
+		{name: "empty", text: new("")},
+		{name: "spaces", text: new("  ")},
+		{name: "tab and newline", text: new("\t\n")},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			require.ErrorIs(t, report.CheckSearchText(c.text), report.ErrBlankSearchText)
+		})
+	}
+}
+
+func Test_CheckSearchText_accepts_absent_or_non_blank_text(t *testing.T) {
+	cases := []struct {
+		name string
+		text *string
 	}{
 		{name: "no text", text: nil},
-		{name: "empty", text: new(""), refused: true},
-		{name: "spaces", text: new("  "), refused: true},
-		{name: "tab and newline", text: new("\t\n"), refused: true},
 		{name: "text with surrounding spaces", text: new(" a ")},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			err := report.CheckSearchText(c.text)
-
-			if c.refused {
-				require.ErrorIs(t, err, report.ErrBlankSearchText)
-				return
-			}
-			require.NoError(t, err)
+			require.NoError(t, report.CheckSearchText(c.text))
 		})
 	}
 }

@@ -124,7 +124,7 @@ func (s *Store) Search(ctx context.Context, params store.SearchParams) (store.Se
 	return found, nil
 }
 
-// searchArgs binds the rows statement: the window's open bounds, an unlimited Limit of 0, no text, no category and open amount bounds as NULL, then the accounts.
+// searchArgs binds the rows statement; an open bound, a Limit of 0, empty text and a nil category or amount bind NULL.
 func searchArgs(params store.SearchParams) []any {
 	var limit any
 	if params.Limit > 0 {

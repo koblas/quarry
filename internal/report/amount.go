@@ -27,9 +27,8 @@ const (
 // amountGrammar is up to 16 integer digits (DECIMAL(18,2) holds no more) and an optional one or two decimals.
 var amountGrammar = regexp.MustCompile(`^[0-9]{1,16}(\.[0-9]{1,2})?$`)
 
-// AmountError is a refusal of a min/max pair, carried as parts so each surface words it in its own
-// vocabulary. Bound is "min" or "max"; Value and Other are the arguments as given. Error words it for
-// the command line, with "--" before each bound and without the "quarry: " prefix a caller adds.
+// AmountError is a refusal of a min/max pair, carried as parts so each surface words it in its own vocabulary.
+// Bound is "min" or "max"; Value and Other are the arguments as given.
 type AmountError struct {
 	Kind  AmountErrorKind
 	Bound string
@@ -37,17 +36,17 @@ type AmountError struct {
 	Other string
 }
 
-// Error is the command-line wording of the refusal.
+// Error is the command-line wording of the refusal: "--" before each bound, no "quarry: " prefix.
 func (e AmountError) Error() string {
 	flag := "--" + e.Bound
+	var line string
 	switch e.Kind {
 	case AmountNotAnAmount:
-		return fmt.Sprintf("%s %q is not an amount; use digits with up to 2 decimals and no sign, such as 25 or 19.99", flag, e.Value)
+		line = fmt.Sprintf("%s %q is not an amount; use digits with up to 2 decimals and no sign, such as 25 or 19.99", flag, e.Value)
 	case AmountMinAboveMax:
-		return fmt.Sprintf("%s %s is more than --%s %s", flag, e.Value, boundMax, e.Other)
+		line = fmt.Sprintf("%s %s is more than --%s %s", flag, e.Value, boundMax, e.Other)
 	}
-	// unreachable: grep of AmountError{ over *.go finds constructors only in this file (parseAmountBound, ParseSearchAmounts), each setting a kind switched on above
-	return flag + " " + e.Value + " is refused"
+	return line
 }
 
 // SearchAmounts is the amount range a search lists, in cents of the amount without its sign; nil is no bound.

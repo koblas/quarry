@@ -83,12 +83,12 @@ func amountRefusal(err error) error {
 
 // amountWording is the model's text for refusal.
 func amountWording(refusal report.AmountError) string {
+	var line string
 	switch refusal.Kind {
 	case report.AmountNotAnAmount:
-		return refusal.Bound + " " + strconv.Quote(refusal.Value) + ` is not an amount; use digits with up to 2 decimals and no sign, such as "25" or "19.99"`
+		line = refusal.Bound + " " + strconv.Quote(refusal.Value) + ` is not an amount; use digits with up to 2 decimals and no sign, such as "25" or "19.99"`
 	case report.AmountMinAboveMax:
-		return refusal.Bound + " " + refusal.Value + " is more than max " + refusal.Other
+		line = refusal.Bound + " " + refusal.Value + " is more than max " + refusal.Other
 	}
-	// unreachable: every AmountErrorKind has a case above and the exhaustive linter fails the build when one is added
-	return refusal.Bound + " " + refusal.Value + " is refused"
+	return line
 }

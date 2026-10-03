@@ -132,7 +132,7 @@ func Test_logLine_classifies_each_refusal(t *testing.T) {
 	}
 }
 
-func Test_logLine_never_carries_the_callers_account_text(t *testing.T) {
+func Test_logLine_never_carries_the_callers_values(t *testing.T) {
 	const distinctive = "Zorblax"
 	cases := []struct {
 		name string

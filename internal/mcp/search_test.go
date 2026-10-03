@@ -40,6 +40,8 @@ func Test_search_transactions_refuses_a_bad_window_in_the_tools_words(t *testing
 		want      string
 	}{
 		{"a since that is not a date", map[string]any{"since": "last spring"}, `since "last spring" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`},
+		{"an empty since", map[string]any{"since": ""}, `since "" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`},
+		{"an empty until", map[string]any{"until": ""}, `until "" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`},
 		{"a since after until", map[string]any{"since": "2025", "until": "2024"}, "since 2025 is after until 2024"},
 	}
 
@@ -64,16 +66,20 @@ func Test_search_transactions_refuses_blank_text_and_a_bad_amount_before_buildin
 		arguments map[string]any
 		want      string
 		wantClass string
-		absent    string
 	}{
 		{
 			"blank text",
 			map[string]any{"text": "  "},
-			"text is blank; leave it out to search by date, account, category or amount alone", textRefusedLine, "  ",
+			"text is blank; leave it out to search by date, account, category or amount alone", textRefusedLine,
 		},
-		{"a min that is not an amount", map[string]any{"min": "-12"}, `min "-12" ` + amountHint, amountRefusedLine, "-12"},
-		{"an empty max", map[string]any{"max": ""}, `max "" ` + amountHint, amountRefusedLine, `""`},
-		{"a min above the max", map[string]any{"min": "50", "max": "20"}, "min 50 is more than max 20", amountRefusedLine, "50"},
+		{
+			"empty text",
+			map[string]any{"text": ""},
+			"text is blank; leave it out to search by date, account, category or amount alone", textRefusedLine,
+		},
+		{"a min that is not an amount", map[string]any{"min": "-12"}, `min "-12" ` + amountHint, amountRefusedLine},
+		{"an empty max", map[string]any{"max": ""}, `max "" ` + amountHint, amountRefusedLine},
+		{"a min above the max", map[string]any{"min": "50", "max": "20"}, "min 50 is more than max 20", amountRefusedLine},
 	}
 
 	for _, c := range cases {
@@ -88,7 +94,32 @@ func Test_search_transactions_refuses_blank_text_and_a_bad_amount_before_buildin
 			assert.Zero(t, h.built)
 			assert.Empty(t, fake.searched)
 			assert.Equal(t, searchLogPrefix+c.wantClass+"\n", h.stderr.String())
-			assert.NotContains(t, h.stderr.String(), c.absent)
+		})
+	}
+}
+
+func Test_search_transactions_refuses_a_limit_the_schema_rejects_without_searching(t *testing.T) {
+	cases := []struct {
+		name  string
+		limit any
+	}{
+		{"zero", 0},
+		{"negative", -1},
+		{"above the most the tool allows", 501},
+		{"null", nil},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fake := &fakeStore{}
+			h := newHarness(t, fake, nil)
+
+			result := h.searchTransactions(t, map[string]any{"limit": c.limit})
+
+			assert.True(t, result.IsError)
+			assert.Zero(t, h.built)
+			assert.Empty(t, fake.searched)
+			assert.Equal(t, searchLogPrefix+argsRefusedLog+"\n", h.stderr.String())
 		})
 	}
 }

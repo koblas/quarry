@@ -1,4 +1,4 @@
-// White-box: searchCutNote's wording and number grouping are unexported copy, pinned directly.
+// White-box: searchCutNote is unexported copy; its 1,234-match grouping would need a 1,234-transaction store through the command.
 package cli
 
 import (
