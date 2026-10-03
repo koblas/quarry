@@ -196,6 +196,25 @@ func Test_a_by_tool_call_with_absent_null_or_empty_arguments_applies_the_by_defa
 	}
 }
 
+func Test_a_search_call_with_absent_null_or_empty_arguments_searches_the_newest_500(t *testing.T) {
+	for name, args := range map[string]any{
+		"omitted": nil,
+		"null":    json.RawMessage("null"),
+		"empty":   map[string]any{},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fake := &fakeStore{}
+			h := newHarness(t, fake, nil)
+
+			doc := decodeSearch(t, h.searchTransactions(t, args))
+
+			require.Len(t, fake.searched, 1)
+			assert.Equal(t, 500, fake.searched[0].Limit)
+			assert.Equal(t, 500, doc.Limit)
+		})
+	}
+}
+
 // decodeCashFlow is result's one text block decoded as the cash flow document.
 func decodeCashFlow(t *testing.T, result *sdk.CallToolResult) document.CashFlow {
 	t.Helper()
