@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-04
-status: open
+status: done
 ---
 
 # SCENARIO-04: An unknown or ambiguous account is refused without its name reaching stderr (folds SCENARIO-05)
@@ -30,10 +30,10 @@ Surface (spec §4.2, §6.1 rows 10-12; verbatim, no new copy):
 - [x] Step 5: batch 3 — flip pins, finish the S05 table. `internal/mcp/query_refusal_test.go:99-101` row "a store unreadable for another reason": client `want` unchanged, add per-row `wantLog` (loop at `:109-121` asserts `logPrefixQuery+c.want` for all rows today) = withheld line for that row, verbatim for the rest. `cmd/quarry/run_mcp_status_test.go:118-136`: stderr assertion becomes the withheld line (client text and CLI parity unchanged). `internal/mcp/timeout_test.go:50-68` stalling store returns `OpenFaultOther`; confirm the deadline line still wins (no edit expected). Add the `query` open-time `OpenFaultOther` row (only if Step 2's directory fault does not classify Other: fake store at `internal/mcp`, `query_refusal_test.go` harness). Make Step 2 green. S09/S10 add `cash_flow`, `recurring_charges`, `anomalies` rows to the Step 2 table; record in STATE.md
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new exported `RefusalError` parts/`RefusalKind` (go doc budget) and on `accountRefusal`; `RefusalError` now holds a slice, so lint/`==` hits on it are in scope
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new exported `RefusalError` parts/`RefusalKind` (go doc budget) and on `accountRefusal`; `RefusalError` now holds a slice, so lint/`==` hits on it are in scope
 
 ### Verify
-- [ ] Step 7: full verification block (`.claude/rules/agent-briefs.md`), `spec-check.py phase3b-analysis-tools`; tick SCENARIO-04 with its acceptance test, and SCENARIO-05 with the "delivered by SCENARIO-04, covers 5 tools" line (test ref last); rewrite STATE.md (drop the two OWNED BY S04 debts and the S03 MINOR; record the flipped pins)
+- [x] Step 7: full verification block (`.claude/rules/agent-briefs.md`), `spec-check.py phase3b-analysis-tools`; tick SCENARIO-04 with its acceptance test, and SCENARIO-05 with the "delivered by SCENARIO-04, covers 5 tools" line (test ref last); rewrite STATE.md (drop the two OWNED BY S04 debts and the S03 MINOR; record the flipped pins)
 
 ## Handoff
 
@@ -51,7 +51,7 @@ Surface (spec §4.2, §6.1 rows 10-12; verbatim, no new copy):
 
 ## Phase report
 
-Run B1 (steps 3-5) done; both acceptance tests green, CLI refusal pins untouched and green, `golangci-lint run ./...` = 0 issues (whole repo). Step 6 sweep partly done (lint); V still owns full verification, spec tick, STATE.md, `status: done`.
+Run V (steps 6-7) done: build ok, lint 0 issues, full suite rc=0, uncovered-diff 0 added lines, -race green on internal/report and internal/mcp, spec-check both modes rc=0; test-stats since start: cmd/quarry 537 (+2), internal/mcp 91 (+6), internal/report 299 (+4), TOTAL 927 (+12). Run B1 (steps 3-5) done; both acceptance tests green, CLI refusal pins untouched and green, `golangci-lint run ./...` = 0 issues (whole repo). Step 6 sweep partly done (lint); V still owns full verification, spec tick, STATE.md, `status: done`.
 
 Production:
 - `internal/report/refusal.go:14-50`: `RefusalKind` (`RefusalGeneric` zero, `RefusalUnknownAccount`, `RefusalAmbiguousAccount`, `RefusalStore`); `RefusalError` gains `Kind`, `Arg`, `IDs` (the sorted copy), `Fault`, `At`; set in `storeRefusal`, `unknownAccountRefusal`, `ambiguousAccountRefusal`. `readRefusal`'s interrupted refusal stays generic. `Error()` unchanged
