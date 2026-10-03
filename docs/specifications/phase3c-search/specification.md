@@ -752,8 +752,8 @@ Sizing pass (architect, opus) 2026-10-03 — 15 IDs → 6 runs, all code-first. 
 - [x] SCENARIO-09: search_transactions returns the quarry search --json document — `cmd/quarry/run_mcp_search_test.go` `Test_run_mcp_search_transactions_returns_the_search_json_document`
 - [x] SCENARIO-11: search_transactions cuts to its limit with the MCP cut line — delivered by SCENARIO-09 — `cmd/quarry/run_mcp_search_test.go` `Test_run_mcp_search_transactions_cuts_to_its_limit_with_the_mcp_cut_line`
 - [x] SCENARIO-12b: a broken config file never affects search_transactions — delivered by SCENARIO-09 — `cmd/quarry/run_config_test.go` `Test_run_mcp_search_transactions_ignores_a_malformed_config`
-- [ ] SCENARIO-10: search_transactions refuses bad input without the caller's values on stderr
-- [ ] SCENARIO-13: the server names search to the client
+- [x] SCENARIO-10: search_transactions refuses bad input without the caller's values on stderr — `cmd/quarry/run_mcp_search_refusals_test.go` `Test_run_mcp_search_transactions_refuses_bad_input_without_the_callers_values_on_stderr`
+- [x] SCENARIO-13: the server names search to the client — delivered by SCENARIO-10 — `cmd/quarry/run_mcp_descriptions_test.go` `Test_run_mcp_describes_every_tool`
 
 ---
 

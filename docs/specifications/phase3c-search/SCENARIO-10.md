@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-10
-status: open
+status: done
 ---
 
 # SCENARIO-10: search_transactions refuses bad input without the caller's values on stderr (folds SCENARIO-13)
@@ -27,10 +27,10 @@ Read: STATE.md only (no prior SCENARIO file); `go doc`-level survey skipped, no 
 - [x] Step 5 (batch 3, S13 production copy + PRD): `internal/mcp/tools.go:39-49` `instructions`, `:51-59` `queryDescription` (keep the `` `limit` `` concat) → §2.8 items 1-2 verbatim; `internal/cli/mcp.go:38-39` Long Tools line → item 3; `docs/initial-prd.md:~170` CLI table row `quarry search` and a Decisions line in `:321-340` (item 7 text, verbatim); `newRootCommand` doc comment (`internal/cli/root.go`) only if it lists subcommands without `search`. Step 2's tests go green.
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (`golangci-lint run --fix` rewrites asserted copy: review); doc comments on the new wrappers.
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (`golangci-lint run --fix` rewrites asserted copy: review); doc comments on the new wrappers.
 
 ### Verify
-- [ ] Step 7: full verification (`.claude/rules/agent-briefs.md`) + `spec-check.py phase3c-search`; tick SCENARIO-10 with its acceptance test and SCENARIO-13 as `— delivered by SCENARIO-10 — ` + `cmd/quarry/run_mcp_descriptions_test.go` `Test_run_mcp_describes_every_tool` (test ref last on line, line not wrapped, `specification.md:755-756`); rewrite STATE.md (drop the S10 Left-unbuilt and "David's" debt, S09 checkpoint MINOR debt, `nolint` lines).
+- [x] Step 7: full verification (`.claude/rules/agent-briefs.md`) + `spec-check.py phase3c-search`; tick SCENARIO-10 with its acceptance test and SCENARIO-13 as `— delivered by SCENARIO-10 — ` + `cmd/quarry/run_mcp_descriptions_test.go` `Test_run_mcp_describes_every_tool` (test ref last on line, line not wrapped, `specification.md:755-756`); rewrite STATE.md (drop the S10 Left-unbuilt and "David's" debt, S09 checkpoint MINOR debt, `nolint` lines).
 
 ## Handoff
 
@@ -50,8 +50,4 @@ Read: STATE.md only (no prior SCENARIO file); `go doc`-level survey skipped, no 
 
 ## Phase report
 
-Runs A, B1, B2 done (steps 1-5). Start SHA `f859d5884f9dbac19fe27d6941845a9e1bc92371`. Run B2 (step 5, code-first, no new tests): `internal/mcp/tools.go` `instructions` and `queryDescription` replaced byte-for-byte from spec 2.8 items 1-2 (`limit` concat kept; "the user's"); `internal/cli/mcp.go` Long Tools line ends `anomalies, search_transactions.`; `docs/initial-prd.md` CLI row after `quarry anomalies` and a `- Search:` Decisions line after `Reporting currency`. `newRootCommand` doc comment (`root.go:9`) already lists `search`; untouched. `report.SQLConventions` untouched.
-
-Narrow loop green: `internal/mcp`, `internal/cli`, `cmd/quarry -run Test_run_mcp` (incl. `Test_run_mcp_describes_every_tool` and the cli Long pin, red since run A). `golangci-lint run ./internal/mcp/... ./internal/cli/...` 0 issues. Not run: full suite, spec tick, STATE.md (run V).
-
-For V: remaining "David's" in `docs/initial-prd.md:249` (ACB line) is PRD prose, not the MCP instructions debt; leave. STATE.md: drop S10 Left-unbuilt/"David's" debt, S09 checkpoint MINOR debt, `nolint` lines; tick SCENARIO-10 and SCENARIO-13 (folded) per step 7.
+Run V done (steps 6-7). Start SHA `f859d5884f9dbac19fe27d6941845a9e1bc92371`. Sweep: `go build ./...` rc=0, `golangci-lint run ./...` 0 issues (no `nolint` left in `internal/mcp`; wrappers `textRefusal`/`amountRefusal`/`categoryRefusal` carry doc comments). Verify: full covered suite rc=0, `uncovered-diff.py` 0 uncovered (1 declared unreachable, `internal/mcp/search.go:93`), `go test -race` green on `internal/mcp`, `internal/cli`, `internal/report/...`, `cmd/quarry`. SCENARIO-10 and SCENARIO-13 ticked in `specification.md`; `spec-check.py --run` OK for `phase3c-search` and `phase3b-analysis-tools`. `STATE.md` rewritten.
