@@ -32,7 +32,10 @@ func (s *Server) spending(ctx context.Context, in spendingInput) (any, error) {
 	if err != nil {
 		return nil, accountRefusal(err)
 	}
-	return document.NewSpending(spent, append(configWarnings, document.SpendingWarnings(spent, toolSpending)...)), nil
+	doc := document.NewSpending(spent, append(configWarnings, document.SpendingWarnings(spent, toolSpending)...))
+	doc.Rows, doc.Warnings = capList(doc.Rows, doc.Warnings, toolSpending, "rows",
+		"totals count every row; pass a shorter period or fewer accounts, or query v_spending for the rest")
+	return doc, nil
 }
 
 // resolveCurrency is name when given, else reporting.currency from the config and its warnings;

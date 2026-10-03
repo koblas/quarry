@@ -30,7 +30,10 @@ func (s *Server) cashFlow(ctx context.Context, in cashFlowInput) (any, error) {
 	if err != nil {
 		return nil, accountRefusal(err)
 	}
-	return document.NewCashFlow(flow, append(configWarnings, document.CashFlowWarnings(flow, toolCashFlow)...)), nil
+	doc := document.NewCashFlow(flow, append(configWarnings, document.CashFlowWarnings(flow, toolCashFlow)...))
+	doc.Periods, doc.Warnings = capList(doc.Periods, doc.Warnings, toolCashFlow, "periods",
+		"totals count every period; pass a later since, or by year")
+	return doc, nil
 }
 
 // parseCashFlowPeriod is the period whose String is name.

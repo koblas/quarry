@@ -4,9 +4,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/mcp"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -148,4 +150,20 @@ func Test_cash_flow_refuses_arguments_the_schema_rejects_without_reading_the_con
 			assert.Equal(t, cashFlowLogPrefix+argsRefusedLog+"\n", h.stderr.String())
 		})
 	}
+}
+
+const cashFlowConfigWarning = "/home/dave/config.toml: unknown key x"
+
+func Test_cash_flow_puts_the_cap_line_after_every_other_warning(t *testing.T) {
+	totals := []store.CashFlowTotal{{Currency: "CAD", Spent: 50100}}
+	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{cashFlowConfigWarning}}}
+	h := newHarness(t, &fakeStore{flow: store.CashFlow{Totals: totals, Unconverted: store.Unconverted{Transactions: 1}}}, nil, mcp.WithConfig(stub.load))
+
+	doc := decodeCashFlow(t, h.cashFlow(t, map[string]any{"since": "1985-01", "until": "2026-09"}))
+
+	assert.Len(t, doc.Periods, 500)
+	assert.Len(t, doc.Totals, 1)
+	require.Len(t, doc.Warnings, 3)
+	assert.Equal(t, cashFlowConfigWarning, doc.Warnings[0])
+	assert.Equal(t, "cash_flow lists the first 500 periods of 501; totals count every period; pass a later since, or by year", doc.Warnings[2])
 }

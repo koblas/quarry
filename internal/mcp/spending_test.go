@@ -2,9 +2,11 @@ package mcp_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/mcp"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
@@ -152,4 +154,25 @@ func Test_spending_refuses_arguments_the_schema_rejects_without_reading_the_conf
 			assert.Equal(t, spendingLogPrefix+argsRefusedLog+"\n", h.stderr.String())
 		})
 	}
+}
+
+const spendingConfigWarning = "/home/dave/config.toml: unknown key x"
+
+func Test_spending_cuts_rows_to_the_cap_keeps_every_total_and_ends_the_warnings_with_the_cap_line(t *testing.T) {
+	rows := make([]store.SpendingRow, 501)
+	for i := range rows {
+		key := fmt.Sprintf("Payee %03d", i)
+		rows[i] = store.SpendingRow{Key: &key, Currency: "CAD", Spent: 100}
+	}
+	totals := []store.SpendingTotal{{Currency: "CAD", Spent: 50100}, {Currency: "USD", Spent: 7}}
+	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{spendingConfigWarning}}}
+	h := newHarness(t, &fakeStore{spent: store.Spending{Rows: rows, Totals: totals, Unconverted: store.Unconverted{Transactions: 1}}}, nil, mcp.WithConfig(stub.load))
+
+	doc := decodeSpending(t, h.spending(t, map[string]any{"by": "payee"}))
+
+	assert.Len(t, doc.Rows, 500)
+	assert.Len(t, doc.Totals, 2)
+	require.Len(t, doc.Warnings, 3)
+	assert.Equal(t, spendingConfigWarning, doc.Warnings[0])
+	assert.Equal(t, "spending lists the first 500 rows of 501; totals count every row; pass a shorter period or fewer accounts, or query v_spending for the rest", doc.Warnings[2])
 }

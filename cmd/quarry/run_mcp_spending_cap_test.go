@@ -48,6 +48,7 @@ func Test_run_mcp_spending_cuts_a_list_over_500_rows_with_the_cap_warning(t *tes
 	require.Len(t, cli.Rows, rowCap+1)
 	assert.Equal(t, cli.Rows[:rowCap], tool.Rows)
 	assert.Equal(t, cli.Totals, tool.Totals)
+	require.NotEmpty(t, got.toolWarnings)
 	assert.Equal(t, spendingCapLine, got.toolWarnings[len(got.toolWarnings)-1])
 	assert.Equal(t, inToolWords(got.cliWarnings, "spend", "spending"), got.toolWarnings[:len(got.toolWarnings)-1])
 }
