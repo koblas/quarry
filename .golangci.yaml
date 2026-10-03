@@ -3,7 +3,6 @@ linters:
   default: all
   disable:
     - cyclop
-    - depguard
     - dupl
     - exhaustruct
     # 2.13 renamed this linter, same as wsl -> wsl_v5 below. `default: all`
@@ -30,6 +29,23 @@ linters:
     - noinlineerr # I link inline error handling
     - goconst # this is over agressive
   settings:
+    depguard:
+      rules:
+        duckdb-driver:
+          files:
+            - "$all"
+            - "!$test"
+            - "!**/internal/platform/duckdb/*.go"
+          deny:
+            - pkg: github.com/duckdb/duckdb-go/v2
+              desc: open DuckDB only through internal/platform/duckdb, which gives each open its own instance cache
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^(fmt\.Print(|f|ln)|print|println)$
+        - pattern: ^duckdb\.(NewConnector|Driver)$
+          pkg: ^github\.com/duckdb/duckdb-go/v2$
+          msg: open DuckDB only through internal/platform/duckdb, which gives each open its own instance cache
     gocritic:
       disabled-checks:
         - commentFormatting
@@ -81,6 +97,10 @@ linters:
       - legacy
       - std-error-handling
     rules:
+      - linters:
+          - forbidigo
+        path: internal/platform/duckdb/
+        text: "(NewConnector|Driver)`"
       - linters:
           - wrapcheck
         path: _test.go
