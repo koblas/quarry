@@ -27,8 +27,8 @@ Orchestrator ruling: `Test_run_mcp_lists_quarrys_four_tools_over_json_rpc` is RE
 - [x] Step 2: `cmd/quarry/run_mcp_test.go:184-227` rename `Test_run_mcp_lists_quarrys_four_tools_over_json_rpc` to `Test_run_mcp_lists_quarrys_tools_over_json_rpc`, repoint `phase3a-mcp-core/specification.md:681` to it — drop the description/schema/instructions asserts and the consts it no longer uses; keep server info, the eight tool names, frame check, empty stderr. Run: both new subtests fail at their assertions (old instructions; old Long)
 
 ### Build
-- [ ] Step 3: `internal/mcp/tools.go:38-45,47-54,180-189` `instructions`, `queryDescription`, `addTools` — replace the two consts verbatim from §3.7 and §3.8 (queryDescription stays a backtick-concat around "`limit`"; no trailing newline); add consts `querySQLDescription`, `queryLimitDescription`, `findingsStatusDescription`, `findingsTypeDescription`, `findingsLimitDescription` (§3.4 strings verbatim) and wrap the five schemas with `described(...)` (`limitSchema` stays shared; wrap its result per call). No handler or enum change. Gate: `Test_run_mcp_describes_all_eight_tools/tools/list_and_instructions` green; also `go test ./internal/mcp/` (the `absentNullArguments` test must stay green — defaults untouched)
-- [ ] Step 4: `internal/cli/mcp.go:24-37` Long and `internal/cli/mcp_test.go:28-50` `Test_mcp_help_prints_the_ruled_long_text` — replace Long with §3.6 verbatim (hard line breaks as ruled, ends `anomalies.`), update the test's `long` const to the same bytes (full-Long prefix assert stays). Gate: `mcp --help` subtest green. Fault/bound/validation matrix: n/a (no new input, branch or fallible call; `--json` refusal and arg refusal rows unchanged)
+- [x] Step 3: `internal/mcp/tools.go:38-45,47-54,180-189` `instructions`, `queryDescription`, `addTools` — replace the two consts verbatim from §3.7 and §3.8 (queryDescription stays a backtick-concat around "`limit`"; no trailing newline); add consts `querySQLDescription`, `queryLimitDescription`, `findingsStatusDescription`, `findingsTypeDescription`, `findingsLimitDescription` (§3.4 strings verbatim) and wrap the five schemas with `described(...)` (`limitSchema` stays shared; wrap its result per call). No handler or enum change. Gate: `Test_run_mcp_describes_all_eight_tools/tools/list_and_instructions` green; also `go test ./internal/mcp/` (the `absentNullArguments` test must stay green — defaults untouched)
+- [x] Step 4: `internal/cli/mcp.go:24-37` Long and `internal/cli/mcp_test.go:28-50` `Test_mcp_help_prints_the_ruled_long_text` — replace Long with §3.6 verbatim (hard line breaks as ruled, ends `anomalies.`), update the test's `long` const to the same bytes (full-Long prefix assert stays). Gate: `mcp --help` subtest green. Fault/bound/validation matrix: n/a (no new input, branch or fallible call; `--json` refusal and arg refusal rows unchanged)
 
 ### Sweep
 - [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/mcp` unchanged surface; no history in comments
@@ -57,15 +57,15 @@ Orchestrator ruling: `Test_run_mcp_lists_quarrys_four_tools_over_json_rpc` is RE
 
 ## Phase report
 
-Run A (steps 1-2) done. Acceptance red at its assertions.
+Run B1 (steps 3-4) done. Acceptance and narrow loop green; `go build ./...` and `golangci-lint run ./...` already 0 issues.
 
 Files:
-- `cmd/quarry/run_mcp_descriptions_test.go` (new): moved consts and `assertJSONEqualAny`; `mcpInstructions`, `mcpQueryDescription`, query/data_quality input schemas carry ruled copy (§3.7, §3.8, §3.4); `Test_run_mcp_describes_all_eight_tools` with subtests `tools/list and instructions`, `mcp --help`.
-- `cmd/quarry/run_mcp_test.go`: handshake test renamed `Test_run_mcp_lists_quarrys_tools_over_json_rpc`, trimmed to server info, eight names (`ElementsMatch`), frames, empty stderr. Green.
-- `docs/specifications/phase3a-mcp-core/specification.md:681` repointed to the new name; `spec-check.py --run phase3a-mcp-core` OK.
+- `internal/mcp/tools.go`: `instructions` and `queryDescription` replaced verbatim (§3.7, §3.8); five new param-description consts (`querySQLDescription`, `queryLimitDescription`, `findingsStatusDescription`, `findingsTypeDescription`, `findingsLimitDescription`) wrapped with `described(...)` in `addTools`; new `findingStatuses()` helper (extracted to keep the status line under the 200-col lint limit). Defaults and enums untouched.
+- `internal/cli/mcp.go` Long and `internal/cli/mcp_test.go` `long` const: §3.6 verbatim.
+- `cmd/quarry/run_mcp_descriptions_test.go`: only the two over-long JSON lines (data_quality `status`, `limit`) broken across lines for `lll`; bytes of copy unchanged.
 
-Red now (expected reasons):
-- `tools/list and instructions`: instructions still the 3a text; query description still the old "use v_spending" sentence; query `sql`/`limit` and data_quality `status`/`type`/`limit` schemas lack `description`.
-- `mcp --help`: Long still says "SQL runs read-only and returns at most 500 rows." and "Tools: ... data_quality."
+Mutations (both reddened `Test_run_mcp_describes_all_eight_tools/tools/list_and_instructions`, restored): unwrapped `described(...)` on data_quality `limit`; `Instructions: instructions` -> `ServerOptions{}`.
 
-Next (B1, steps 3-4): `internal/mcp/tools.go` consts (instructions, queryDescription, five param descriptions + `described(...)`) and `internal/cli/mcp.go` Long + `mcp_test.go` long const. Do not touch the test consts in the new file (already ruled copy). The other six tool descriptions/schemas already pass.
+Green: `cmd/quarry`, `internal/cli`, `internal/mcp` packages. `internal/report`, `sql_test.go`, `run_shared_documents_test.go` byte-unchanged (git diff empty).
+
+Next (V, steps 5-6): full verification block, spec-check (phase3b and `--run phase3a-mcp-core`), tick SCENARIO-13, rewrite STATE.md, `status: done`. Lint already clean; do not redo the wrap fixes.

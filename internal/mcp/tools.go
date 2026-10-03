@@ -38,7 +38,10 @@ const callTimeout = 30 * time.Second
 // instructions is sent to every client at initialize.
 const instructions = `quarry serves David's Quicken Classic for Mac data from a local, read-only
 store. Call sync_status first and tell the user how old the snapshot is
-(snapshot.taken_at). Call describe_schema before writing SQL: its
+(snapshot.taken_at). For spending, income, recurring charges and unusually
+large charges call spending, cash_flow, recurring_charges and anomalies:
+they apply quarry's rules for transfers, refunds and currencies. For other
+questions call describe_schema before writing SQL for query: its
 conventions say which views already leave out transfers and how amounts,
 signs and currencies work. Every number you report must come from a tool
 result; never estimate. quarry cannot change data: fixes are made in
@@ -46,11 +49,12 @@ Quicken, then the user runs quarry sync.`
 
 const queryDescription = `Run one read-only SQL query (DuckDB dialect) against quarry's store and
 return its columns and rows. Call describe_schema first for the tables,
-views and conventions. For spending and income use v_spending and
-v_cash_flow: they already leave out transfers between the user's own
-accounts. Returns at most ` + "`limit`" + ` rows (default 500, the most allowed);
-aggregate in SQL rather than paging through rows. The store cannot be
-changed, and other files, databases and extensions are off.
+views and conventions. For spending and income totals call spending or
+cash_flow instead; in SQL use v_spending and v_cash_flow, which already
+leave out transfers between the user's own accounts. Returns at most
+` + "`limit`" + ` rows (default 500, the most allowed); aggregate in SQL rather
+than paging through rows. The store cannot be changed, and other files,
+databases and extensions are off.
 Send one statement; if you send several, only the last one's rows come back.`
 
 const describeSchemaDescription = `Describe quarry's store: every table and view with its columns and types,
@@ -107,6 +111,15 @@ Each charge is compared with all earlier history, whatever the period.
 Possible duplicates are not listed here; data_quality lists them. Charges
 dated after today are never listed. Returns at most 500 charges, newest
 first.`
+
+// The descriptions of the parameters query and data_quality take.
+const (
+	querySQLDescription       = "One read-only SQL statement in DuckDB's dialect over quarry's tables and views; describe_schema lists them."
+	queryLimitDescription     = "Most rows to return, 1 to 500. Defaults to 500."
+	findingsStatusDescription = "Which findings to list: open (the default), ignored (the user listed the id in findings.ignore), fixed (no longer found since a later sync), or all."
+	findingsTypeDescription   = "List only findings of this type. Omit it to list every type."
+	findingsLimitDescription  = "Most findings to return, 1 to 500. Defaults to 50. counts always covers every finding, and each finding lists at most 25 items."
+)
 
 // The descriptions of the parameters spending shares with the other report tools.
 const (
@@ -178,14 +191,14 @@ type (
 func (s *Server) addTools(srv *sdk.Server) {
 	sdk.AddTool(srv, tool(toolDescribe, describeSchemaDescription, objectSchema(nil)), handler(s.timeout, stoppedLine(toolDescribe), s.describeSchema))
 	sdk.AddTool(srv, tool(toolQuery, queryDescription, objectSchema(map[string]*jsonschema.Schema{
-		"sql":   {Type: "string", MinLength: new(1)},
-		"limit": limitSchema(maxRows),
+		"sql":   described(querySQLDescription, &jsonschema.Schema{Type: "string", MinLength: new(1)}),
+		"limit": described(queryLimitDescription, limitSchema(maxRows)),
 	}, "sql")), handler(s.timeout, queryStoppedLine, s.query))
 	sdk.AddTool(srv, tool(toolSyncStatus, syncStatusDescription, objectSchema(nil)), handler(s.timeout, stoppedLine(toolSyncStatus), s.syncStatus))
 	sdk.AddTool(srv, tool(toolDataQuality, dataQualityDescription, objectSchema(map[string]*jsonschema.Schema{
-		"status": {Type: "string", Enum: []any{string(finding.StatusOpen), string(finding.StatusIgnored), string(finding.StatusFixed), string(report.FindingsAll)}, Default: []byte(`"open"`)},
-		"type":   {Type: "string", Enum: findingTypes()},
-		"limit":  limitSchema(defaultFindLimit),
+		"status": described(findingsStatusDescription, &jsonschema.Schema{Type: "string", Enum: findingStatuses(), Default: []byte(`"open"`)}),
+		"type":   described(findingsTypeDescription, &jsonschema.Schema{Type: "string", Enum: findingTypes()}),
+		"limit":  described(findingsLimitDescription, limitSchema(defaultFindLimit)),
 	})), handler(s.timeout, stoppedLine(toolDataQuality), s.dataQuality))
 	sdk.AddTool(srv, tool(toolSpending, spendingDescription, objectSchema(map[string]*jsonschema.Schema{
 		"since":    described(sinceDescription, &jsonschema.Schema{Type: "string"}),
@@ -275,6 +288,11 @@ func stringEnum[T fmt.Stringer](values []T) []any {
 		enum[i] = v.String()
 	}
 	return enum
+}
+
+// findingStatuses lists the statuses data_quality accepts.
+func findingStatuses() []any {
+	return []any{string(finding.StatusOpen), string(finding.StatusIgnored), string(finding.StatusFixed), string(report.FindingsAll)}
 }
 
 // findingTypes lists the finding types data_quality accepts.

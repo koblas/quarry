@@ -163,11 +163,13 @@ const (
 	mcpDataQualityInputSchema = `{
 		"type": "object",
 		"properties": {
-			"status": {"type": "string", "enum": ["open", "ignored", "fixed", "all"], "default": "open", "description": "Which findings to list: open (the default), ignored (the user listed the id in findings.ignore), fixed (no longer found since a later sync), or all."},
+			"status": {"type": "string", "enum": ["open", "ignored", "fixed", "all"], "default": "open",
+				"description": "Which findings to list: open (the default), ignored (the user listed the id in findings.ignore), fixed (no longer found since a later sync), or all."},
 			"type":   {"type": "string", "enum": [
 				"duplicate", "one-sided-transfer", "unlinked-transfer", "uncategorized",
 				"mixed-categories", "payee-variants", "similar-categories", "unused-category"], "description": "List only findings of this type. Omit it to list every type."},
-			"limit":  {"type": "integer", "minimum": 1, "maximum": 500, "default": 50, "description": "Most findings to return, 1 to 500. Defaults to 50. counts always covers every finding, and each finding lists at most 25 items."}
+			"limit":  {"type": "integer", "minimum": 1, "maximum": 500, "default": 50,
+				"description": "Most findings to return, 1 to 500. Defaults to 50. counts always covers every finding, and each finding lists at most 25 items."}
 		},
 		"additionalProperties": false
 	}`
