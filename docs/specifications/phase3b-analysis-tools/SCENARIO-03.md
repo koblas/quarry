@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-03
-status: open
+status: done
 ---
 
 # SCENARIO-03: spending refuses a bad window in MCP words
@@ -25,10 +25,10 @@ Surface survey (`ParseWindow`/`ParseChargeWindow`/`WindowError` callers, grep ov
 - [x] Step 4: S02 checkpoint folds — `internal/mcp/spending.go:15-17` doc cut to its first sentence (ordering fact, "today is read once", stays as a body comment beside `s.now()`); `cmd/quarry/run_mcp_spending_test.go:34-52` two rows in `Test_run_mcp_spending_returns_the_spend_json_document`: `currency: "native"` (CLI `--currency native`) on `populatedAnalysisStore`, and `by: "tag"` on `multiTagAnalysisStore` (`run_analysis_documents_test.go:174`). Test-only apart from the doc; both rows must pass first run (document logic exists), say so.
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (the `exhaustive` linter will list the kind switches); `go doc ./internal/report WindowError` reads as the parts contract.
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (the `exhaustive` linter will list the kind switches); `go doc ./internal/report WindowError` reads as the parts contract.
 
 ### Verify
-- [ ] Step 6: full verification block, `.claude/scripts/spec-check.py phase3b-analysis-tools`, tick SCENARIO-03 with its acceptance test, rewrite STATE.md, `status: done`. CLI pins `cmd/quarry/run_{spend,cashflow,recurring,anomalies}_refusals_test.go` must pass unedited.
+- [x] Step 6: full verification block, `.claude/scripts/spec-check.py phase3b-analysis-tools`, tick SCENARIO-03 with its acceptance test, rewrite STATE.md, `status: done`. CLI pins `cmd/quarry/run_{spend,cashflow,recurring,anomalies}_refusals_test.go` must pass unedited.
 
 ## Handoff
 
@@ -48,9 +48,8 @@ Surface survey (`ParseWindow`/`ParseChargeWindow`/`WindowError` callers, grep ov
 
 ## Phase report
 
-Run B1 (steps 2-4) done; acceptance and narrow loop green; `golangci-lint run ./...` already `0 issues`.
-- `internal/report/window.go`: `WindowErrorKind` + five kinds, `WindowError{Kind,Bound,Value,Other,DefaultSince,Command}`, `Error()` composes the `--` text per kind; `parseWindow(since, until, now, futureSince kind, command)`; `boundSince`/`boundUntil` consts. `window_test.go`: `Test_WindowError_carries_its_parts` (7 rows via real parsers; note `-run 'Window'` is case-sensitive, the older tests are lowercase `window`: use `(?i)window`).
-- `internal/mcp/window.go` (new): `windowRefusal(err)`, `windowWording`, `windowRefusedError` (string error type; err113/errname forced it). `result.go`: `windowRefusedLog`. `spending.go`: calls `windowRefusal`; doc cut to one sentence, "today read once" comment beside `s.now()`.
-- Tests: `internal/mcp/window_internal_test.go` (8 rows x text and class line); `spending_test.go` window test flipped to class line + client text; `cmd/quarry/run_mcp_spending_test.go` equality table gained `native currency` and `grouped by tag` rows (both passed on first run: document logic existed).
-- Mutations (all reddened, restored): `windowRefusal` returns err -> acceptance (6 subtests), window_internal text+log, spending_test; drop `withLog` -> acceptance stderr; log line + value -> `Test_windowRefusal_logs_the_class_line_...`; drop `--` in `Error()` -> 4 `Test_parse_*window*` tests. CLI refusal pins in cmd/quarry green unedited.
-- Left for V: full verification block (covered run, uncovered-diff vs cac30c6), spec tick, spec-check, STATE.md rewrite, `status: done`.
+Run V (steps 5-6) done; scenario complete.
+- `go doc ./internal/report WindowError` reads as the parts contract; doc budgets met on every new doc comment (no edits needed).
+- Covered full suite rc=0 on the second run (first run: `Test_query_rows_fails_when_the_context_is_cancelled_mid_iteration` in untouched `internal/platform/duckdb` failed under load; passes alone 3x, flake). `uncovered-diff.py`: 0 uncovered, 3 declared unreachable. Lint 0 issues; `-race` green on `internal/report`, `internal/mcp`.
+- test-stats vs cac30c6: cmd/quarry 535 (+1), internal/mcp 85 (+2), internal/report 295 (+1), TOTAL 915 (+4).
+- Ticked SCENARIO-03 in specification.md; `spec-check.py` and `--run` OK; STATE.md rewritten.
