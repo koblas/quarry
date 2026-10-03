@@ -6,7 +6,9 @@ import (
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/store"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -67,6 +69,24 @@ the user fixes them in Quicken and runs quarry sync, and fixed findings
 drop off. To ignore a finding the user adds its id to findings.ignore in
 quarry's config file.`
 
+const spendingDescription = `Total the user's spending for a period, grouped by category, payee, tag
+or month, with a total per currency. quarry's spending rules apply:
+transfers between the user's own accounts, Quicken's system categories,
+transactions marked "exclude from reports" and accounts Quicken leaves out
+of reports are not counted, and refunds are netted, so a category can come
+out negative. Each split is converted at the Bank of Canada rate for its
+date. Use this rather than query for spending totals. Returns at most 500
+rows; totals always count every row.`
+
+// The descriptions of the parameters spending shares with the other report tools.
+const (
+	sinceDescription    = "First day to count: YYYY, YYYY-MM or YYYY-MM-DD; a year or month starts on its first day. Defaults to January 1 of this year."
+	untilDescription    = "Last day to count: YYYY, YYYY-MM or YYYY-MM-DD; a year or month ends on its last day. Defaults to today; future-dated transactions count only when until is later than today."
+	accountsDescription = "Count only these accounts, each given by id or by name in any letter case. Omit it to count every account."
+	currencyDescription = "Currency for amounts: CAD, USD, or native to list each account's own currency separately. Defaults to reporting.currency in quarry's config file, else CAD."
+	spendingByDesc      = "Group by category (the default), payee, tag or month. A split with several tags counts under each tag."
+)
+
 type (
 	// queryInput is the query tool's arguments.
 	queryInput struct {
@@ -91,7 +111,7 @@ type (
 	noInput struct{}
 )
 
-// addTools registers quarry's four tools on srv.
+// addTools registers quarry's tools on srv.
 func (s *Server) addTools(srv *sdk.Server) {
 	sdk.AddTool(srv, tool(toolDescribe, describeSchemaDescription, objectSchema(nil)), handler(s.timeout, stoppedLine(toolDescribe), s.describeSchema))
 	sdk.AddTool(srv, tool(toolQuery, queryDescription, objectSchema(map[string]*jsonschema.Schema{
@@ -104,12 +124,12 @@ func (s *Server) addTools(srv *sdk.Server) {
 		"type":   {Type: "string", Enum: findingTypes()},
 		"limit":  limitSchema(defaultFindLimit),
 	})), handler(s.timeout, stoppedLine(toolDataQuality), s.dataQuality))
-	sdk.AddTool(srv, tool(toolSpending, "", objectSchema(map[string]*jsonschema.Schema{
-		"since":    {Type: "string"},
-		"until":    {Type: "string"},
-		"accounts": {Type: "array", Items: &jsonschema.Schema{Type: "string"}},
-		"currency": {Type: "string"},
-		"by":       {Type: "string"},
+	sdk.AddTool(srv, tool(toolSpending, spendingDescription, objectSchema(map[string]*jsonschema.Schema{
+		"since":    described(sinceDescription, &jsonschema.Schema{Type: "string"}),
+		"until":    described(untilDescription, &jsonschema.Schema{Type: "string"}),
+		"accounts": accountsSchema(accountsDescription),
+		"currency": currencySchema(),
+		"by":       described(spendingByDesc, &jsonschema.Schema{Type: "string", Enum: spendingGroups(), Default: []byte(`"category"`)}),
 	})), handler(s.timeout, stoppedLine(toolSpending), s.spending))
 }
 
@@ -141,6 +161,33 @@ func limitSchema(def int) *jsonschema.Schema {
 		Maximum: new(float64(maxRows)),
 		Default: []byte(strconv.Itoa(def)),
 	}
+}
+
+// described is schema with description set.
+func described(description string, schema *jsonschema.Schema) *jsonschema.Schema {
+	schema.Description = description
+	return schema
+}
+
+// accountsSchema is the schema of an accounts list described by description; absent and [] both mean every account.
+func accountsSchema(description string) *jsonschema.Schema {
+	return described(description, &jsonschema.Schema{Type: "array", Items: &jsonschema.Schema{Type: "string"}})
+}
+
+// currencySchema is the schema of the currency parameter. It has no default, which would override reporting.currency,
+// and its enum is exact-case where the CLI's flag is not.
+func currencySchema() *jsonschema.Schema {
+	return described(currencyDescription, &jsonschema.Schema{Type: "string", Enum: []any{money.CAD.String(), money.USD.String(), money.Native.String()}})
+}
+
+// spendingGroups lists the groupings spending accepts for by, in the order the store declares them.
+func spendingGroups() []any {
+	groups := store.SpendingGroups()
+	enum := make([]any, len(groups))
+	for i, g := range groups {
+		enum[i] = g.String()
+	}
+	return enum
 }
 
 // findingTypes lists the finding types data_quality accepts.

@@ -76,7 +76,7 @@ func WithClock(now func() time.Time) Option {
 
 // NewServer builds a Server from opts.
 func NewServer(opts ...Option) *Server {
-	s := &Server{version: develVersion, timeout: callTimeout}
+	s := &Server{version: develVersion, timeout: callTimeout, now: time.Now}
 	for _, opt := range opts {
 		opt(s)
 	}

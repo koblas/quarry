@@ -114,7 +114,7 @@ func Test_warnings_skip_the_empty_window_note_when_every_named_account_is_left_o
 		t.Run(c.name, func(t *testing.T) {
 			got := c.warn([]store.Account{linked}, window, span, "x")
 
-			assert.Len(t, got, 1)
+			assert.Equal(t, []string{`account "Old 401(k)" uses linked account tracking in Quicken, so x leaves it out, as Quicken's reports do`}, got)
 		})
 	}
 }
@@ -124,7 +124,10 @@ func Test_warnings_keep_the_empty_window_note_when_a_named_account_is_included_b
 		t.Run(c.name, func(t *testing.T) {
 			got := c.warn([]store.Account{linked, included}, window, span, "x")
 
-			assert.Len(t, got, 2)
+			assert.Equal(t, []string{
+				`account "Old 401(k)" uses linked account tracking in Quicken, so x leaves it out, as Quicken's reports do`,
+				"no " + c.subject + " from 2026-01-01 to 2026-09-29 in the named accounts; their transactions run 2020-03-04 to 2025-12-31",
+			}, got)
 		})
 	}
 }
@@ -152,17 +155,17 @@ func Test_anomalies_warnings_note_an_empty_window_only_when_no_charge_was_checke
 	cases := []struct {
 		name    string
 		checked int
-		want    int
+		want    []string
 	}{
-		{name: "none checked", checked: 0, want: 1},
-		{name: "one checked", checked: 1, want: 0},
+		{name: "none checked", checked: 0, want: []string{"no unusually large charges from 2026-01-01 to 2026-09-29; the store has no transactions"}},
+		{name: "one checked", checked: 1, want: []string{}},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			got := document.AnomaliesWarnings(report.Anomalies{Window: window, Checked: c.checked}, "x")
 
-			assert.Len(t, got, c.want)
+			assert.Equal(t, c.want, got)
 		})
 	}
 }

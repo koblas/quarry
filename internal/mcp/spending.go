@@ -2,12 +2,61 @@ package mcp
 
 import (
 	"context"
+	"slices"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/report/document"
+	"github.com/koblas/quarry/internal/store"
 )
 
-// spending answers the spending tool.
-func (s *Server) spending(context.Context, spendingInput) (any, error) {
-	return document.NewSpending(report.Spending{}, nil), nil
+// spendTwin is the quarry command whose output the spending tool matches.
+const spendTwin = "spend"
+
+// spending totals the spending the call's window, accounts and currency select, grouped by in.By, as spend --json does.
+// Today is read once, at the start. The config is read only when in.Currency is absent.
+func (s *Server) spending(ctx context.Context, in spendingInput) (any, error) {
+	window, err := report.ParseWindow(in.Since, in.Until, s.now())
+	if err != nil {
+		return nil, err //nolint:wrapcheck // a WindowError is the tool's answer, sent verbatim
+	}
+	currency, configWarnings, err := s.resolveCurrency(in.Currency, spendTwin)
+	if err != nil {
+		return nil, err
+	}
+	srv, err := s.newReport(ctx, commandName)
+	if err != nil {
+		return nil, err
+	}
+	spent, err := srv.Spend(ctx, report.SpendRequest{Window: window, By: parseSpendingGroup(in.By), Accounts: in.Accounts, Currency: currency})
+	if err != nil {
+		return nil, err //nolint:wrapcheck // a RefusalError is the tool's answer, sent verbatim
+	}
+	return document.NewSpending(spent, append(configWarnings, document.SpendingWarnings(spent, toolSpending)...)), nil
+}
+
+// resolveCurrency is the currency a call reports in: name when given, else reporting.currency from the config,
+// whose absolute warnings come second. An unreadable config is refused with a stderr line naming twin, the
+// command that explains it. The loader is not called when name is given.
+func (s *Server) resolveCurrency(name, twin string) (money.Currency, []string, error) {
+	if name != "" {
+		currency, _ := money.ParseCurrency(name) // the schema's enum admits only spellings it reads
+		return currency, nil, nil
+	}
+	cfg, err := s.newConfig(commandName)
+	if err != nil {
+		return money.Native, nil, withLog(err, configRefusalLog(twin))
+	}
+	return cfg.Currency, slices.Clone(cfg.WarningsAbsolute), nil
+}
+
+// parseSpendingGroup is the grouping whose String is name.
+func parseSpendingGroup(name string) store.SpendingGroup {
+	for _, group := range store.SpendingGroups() {
+		if group.String() == name {
+			return group
+		}
+	}
+	// unreachable: the schema's enum admits only the String of a SpendingGroup, and its default supplies category
+	return store.SpendByCategory
 }

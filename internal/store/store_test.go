@@ -124,19 +124,20 @@ func Test_SpendingGroups_lists_every_grouping_in_by_order(t *testing.T) {
 
 func Test_SpendingGroup_names_each_grouping_by_its_flag_word(t *testing.T) {
 	cases := []struct {
+		name  string
 		group store.SpendingGroup
 		want  string
 	}{
-		{group: store.SpendByCategory, want: "category"},
-		{group: store.SpendByPayee, want: "payee"},
-		{group: store.SpendByTag, want: "tag"},
-		{group: store.SpendByMonth, want: "month"},
-		{group: store.SpendingGroup(4), want: ""},
-		{group: store.SpendingGroup(-1), want: ""},
+		{name: "category", group: store.SpendByCategory, want: "category"},
+		{name: "payee", group: store.SpendByPayee, want: "payee"},
+		{name: "tag", group: store.SpendByTag, want: "tag"},
+		{name: "month", group: store.SpendByMonth, want: "month"},
+		{name: "past the last grouping", group: store.SpendingGroup(4), want: ""},
+		{name: "below the first grouping", group: store.SpendingGroup(-1), want: ""},
 	}
 
 	for _, c := range cases {
-		t.Run(c.want+" is the word", func(t *testing.T) {
+		t.Run(c.name+" is the word", func(t *testing.T) {
 			assert.Equal(t, c.want, c.group.String())
 		})
 	}
@@ -150,17 +151,18 @@ func Test_CashFlowPeriods_lists_every_period_in_by_order(t *testing.T) {
 
 func Test_CashFlowPeriod_names_each_period_by_its_flag_word(t *testing.T) {
 	cases := []struct {
+		name   string
 		period store.CashFlowPeriod
 		want   string
 	}{
-		{period: store.CashFlowByMonth, want: "month"},
-		{period: store.CashFlowByYear, want: "year"},
-		{period: store.CashFlowPeriod(2), want: ""},
-		{period: store.CashFlowPeriod(-1), want: ""},
+		{name: "month", period: store.CashFlowByMonth, want: "month"},
+		{name: "year", period: store.CashFlowByYear, want: "year"},
+		{name: "past the last period", period: store.CashFlowPeriod(2), want: ""},
+		{name: "below the first period", period: store.CashFlowPeriod(-1), want: ""},
 	}
 
 	for _, c := range cases {
-		t.Run(c.want+" is the word", func(t *testing.T) {
+		t.Run(c.name+" is the word", func(t *testing.T) {
 			assert.Equal(t, c.want, c.period.String())
 		})
 	}

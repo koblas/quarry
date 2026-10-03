@@ -63,6 +63,11 @@ func (s *stallingStore) Findings(ctx context.Context) (store.FindingList, error)
 	return store.FindingList{}, &store.OpenError{Fault: store.OpenFaultOther, Path: testStorePath, Err: errDriverInterrupt}
 }
 
+func (s *stallingStore) Spending(ctx context.Context, _ store.SpendingParams) (store.Spending, error) {
+	s.wait(ctx)
+	return store.Spending{}, &store.OpenError{Fault: store.OpenFaultOther, Path: testStorePath, Err: errDriverInterrupt}
+}
+
 // serveStalling serves the tools over st with opts, returning the client session and the server's stderr.
 func serveStalling(t *testing.T, st *stallingStore, opts ...mcp.Option) (*sdk.ClientSession, *bytes.Buffer) {
 	t.Helper()
@@ -93,6 +98,7 @@ func Test_each_tool_answers_its_deadline_with_its_ruled_line(t *testing.T) {
 		{"describe_schema", map[string]any{}, 2 * time.Second, "describe_schema stopped after 2 seconds; try again"},
 		{"sync_status", map[string]any{}, time.Second, "sync_status stopped after 1 second; try again"},
 		{"data_quality", map[string]any{}, time.Second, "data_quality stopped after 1 second; try again"},
+		{"spending", map[string]any{}, time.Second, "spending stopped after 1 second; try again"},
 	}
 
 	for _, c := range cases {

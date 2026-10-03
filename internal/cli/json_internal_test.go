@@ -178,6 +178,7 @@ func storeKeys(t *testing.T, data []byte) []string {
 	return keys
 }
 
+// spendWindow is January 1 through September 29, 2026, the window the JSON document tests report over.
 func spendWindow() store.Window {
 	return store.Window{
 		Since: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),

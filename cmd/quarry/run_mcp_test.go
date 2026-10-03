@@ -59,7 +59,32 @@ the user fixes them in Quicken and runs quarry sync, and fixed findings
 drop off. To ignore a finding the user adds its id to findings.ignore in
 quarry's config file.`
 
+const mcpSpendingDescription = `Total the user's spending for a period, grouped by category, payee, tag
+or month, with a total per currency. quarry's spending rules apply:
+transfers between the user's own accounts, Quicken's system categories,
+transactions marked "exclude from reports" and accounts Quicken leaves out
+of reports are not counted, and refunds are netted, so a category can come
+out negative. Each split is converted at the Bank of Canada rate for its
+date. Use this rather than query for spending totals. Returns at most 500
+rows; totals always count every row.`
+
 const (
+	mcpSpendingInputSchema = `{
+		"type": "object",
+		"properties": {
+			"since": {"type": "string", "description": "First day to count: YYYY, YYYY-MM or YYYY-MM-DD; a year or month starts on its first day. ` +
+		`Defaults to January 1 of this year."},
+			"until": {"type": "string", "description": "Last day to count: YYYY, YYYY-MM or YYYY-MM-DD; a year or month ends on its last day. ` +
+		`Defaults to today; future-dated transactions count only when until is later than today."},
+			"accounts": {"type": "array", "items": {"type": "string"}, "description": "Count only these accounts, each given by id or by name in any letter case. ` +
+		`Omit it to count every account."},
+			"currency": {"type": "string", "enum": ["CAD", "USD", "native"], "description": "Currency for amounts: CAD, USD, or native to list each account's own currency separately. ` +
+		`Defaults to reporting.currency in quarry's config file, else CAD."},
+			"by": {"type": "string", "enum": ["category", "payee", "tag", "month"], "default": "category", "description": "Group by category (the default), payee, tag or month. ` +
+		`A split with several tags counts under each tag."}
+		},
+		"additionalProperties": false
+	}`
 	mcpQueryInputSchema = `{
 		"type": "object",
 		"properties": {
@@ -104,6 +129,7 @@ func Test_run_mcp_lists_quarrys_four_tools_over_json_rpc(t *testing.T) {
 		"describe_schema": {mcpDescribeSchemaDescription, mcpNoInputSchema},
 		"sync_status":     {mcpSyncStatusDescription, mcpNoInputSchema},
 		"data_quality":    {mcpDataQualityDescription, mcpDataQualityInputSchema},
+		"spending":        {mcpSpendingDescription, mcpSpendingInputSchema},
 	}
 	require.Len(t, listed.Tools, len(wantTools))
 	for _, tool := range listed.Tools {
