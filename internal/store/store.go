@@ -749,14 +749,14 @@ type SearchWindow struct {
 	Since, Until *time.Time
 }
 
-// SearchParams is what a search varies by: the dates it lists, the accounts it lists
-// (empty lists every account), the text a payee, memo or split memo must contain, ignoring case ("" keeps
-// every transaction), the smallest and largest amount in cents it lists, compared without the amount's sign
-// and inclusive (nil is no bound), and the most transactions it returns (0 returns every one).
+// SearchParams is what a search varies by: dates, accounts (empty is every account), the text a payee or
+// memo must contain ("" keeps all), the category full path whose splits it lists (nil keeps all; "" names
+// nothing), the unsigned amount range in cents (nil is no bound) and the most transactions (0 returns all).
 type SearchParams struct {
 	Window     SearchWindow
 	AccountIDs []string
 	Text       string
+	Category   *string
 	Min, Max   *int64
 	Limit      int
 }
@@ -793,4 +793,6 @@ type Search struct {
 	Matched int
 	// Transactions is the span of every transaction in the store, or of the named accounts' transactions.
 	Transactions TransactionRange
+	// UnknownCategory is set only when SearchParams.Category is non-nil and equals no category's full path in any letter case.
+	UnknownCategory bool
 }

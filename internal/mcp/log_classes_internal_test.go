@@ -35,6 +35,10 @@ func (s refusingStore) Status(context.Context) (store.Status, error) {
 
 func (s refusingStore) Accounts(context.Context) (store.AccountList, error) { return s.accounts, nil }
 
+func (s refusingStore) Search(context.Context, store.SearchParams) (store.Search, error) {
+	return store.Search{UnknownCategory: true}, nil
+}
+
 func newRefusingServer(openErr error, names ...string) *report.Server {
 	list := store.AccountList{}
 	for i, name := range names {
@@ -46,6 +50,13 @@ func newRefusingServer(openErr error, names ...string) *report.Server {
 func storeRefusalFor(t *testing.T, openErr *store.OpenError) error {
 	t.Helper()
 	_, err := newRefusingServer(openErr).Status(t.Context())
+	require.Error(t, err)
+	return err
+}
+
+func categoryRefusalFor(t *testing.T, arg string) error {
+	t.Helper()
+	_, err := newRefusingServer(nil).Search(t.Context(), report.SearchRequest{Category: &arg})
 	require.Error(t, err)
 	return err
 }
@@ -65,6 +76,7 @@ func Test_logLine_classifies_each_refusal(t *testing.T) {
 	}{
 		{name: "an account that names none", err: accountRefusalFor(t, "Nope", "Chequing"), want: unknownAccountLog},
 		{name: "an account that names several", err: accountRefusalFor(t, "Visa", "Visa", "Visa"), want: ambiguousAccountLog},
+		{name: "a category that names none", err: categoryRefusalFor(t, "Fod"), want: unknownCategoryLog},
 		{
 			name: "a store that fails when opened, in the engine's words",
 			err:  storeRefusalFor(t, &store.OpenError{Fault: store.OpenFaultOther, Path: refusalStore, Reason: `Could not read from file "` + refusalStore + `": Is a directory`}),

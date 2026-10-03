@@ -28,6 +28,7 @@ const (
 	windowRefusedLog    = "refused the call's since or until; details went to the client only"
 	unknownAccountLog   = "refused the call's accounts: one names no account; details went to the client only"
 	ambiguousAccountLog = "refused the call's accounts: one names more than one account; details went to the client only"
+	unknownCategoryLog  = "refused the call's category: it names no category; details went to the client only"
 )
 
 // withheldStoreLog is the stderr line of a store that failed for a reason only the client should read; at is its ~ path.
@@ -74,6 +75,8 @@ func refusalLine(refusal report.RefusalError) string {
 		return unknownAccountLog
 	case report.RefusalAmbiguousAccount:
 		return ambiguousAccountLog
+	case report.RefusalUnknownCategory:
+		return unknownCategoryLog
 	case report.RefusalStore:
 		if refusal.Fault == store.OpenFaultOther {
 			return withheldStoreLog(refusal.At)

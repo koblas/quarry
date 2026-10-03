@@ -43,13 +43,16 @@ func renderSearch(s report.Search) string {
 		"\n" + humanize.Count(s.Matched, "matching transaction", "matching transactions") + "\n"
 }
 
-// searchCaption is "Transactions[ matching "<text>"] in <accounts>, <dates>[, amount <range>]".
+// searchCaption is "Transactions[ matching "<text>"] in <accounts>, <dates>[, category "<path>"][, amount <range>]".
 func searchCaption(s report.Search) string {
 	caption := "Transactions"
 	if s.Text != nil {
 		caption += fmt.Sprintf(" matching %q", *s.Text)
 	}
 	caption += " in " + accountsCaption(s.Accounts) + ", " + searchDates(s.Window)
+	if s.Category != nil {
+		caption += fmt.Sprintf(", category %q", *s.Category)
+	}
 	if amount := searchAmountRange(s.Amounts); amount != "" {
 		caption += ", amount " + amount
 	}

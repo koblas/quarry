@@ -73,9 +73,9 @@ func searchCutNote(s report.Search) string {
 // period, in the --account accounts. It reads neither the clock nor the config file.
 func newSearchCommand(newReport ReportFactory, jsonOut *bool) *cobra.Command {
 	var (
-		flags          reportFlags
-		limit          int
-		minArg, maxArg string
+		flags                    reportFlags
+		limit                    int
+		minArg, maxArg, category string
 	)
 	cmd := &cobra.Command{
 		Use:   "search [text]",
@@ -128,6 +128,9 @@ unless set); when more match, quarry says so on stderr.`,
 			if len(args) == 1 {
 				req.Text = &args[0]
 			}
+			if cmd.Flags().Changed("category") {
+				req.Category = &category
+			}
 			found, err := srv.Search(cmd.Context(), req)
 			if err != nil {
 				return &runtimeError{err: err}
@@ -144,6 +147,7 @@ unless set); when more match, quarry says so on stderr.`,
 		},
 	}
 	flags.bind(cmd, searchFlagHelp)
+	cmd.Flags().StringVar(&category, "category", "", "list only transactions with a split in this category or one under it, by full `path` such as Food:Groceries")
 	cmd.Flags().StringVar(&minArg, "min", "", "list only transactions of at least this `amount`, sign ignored, in the account's own currency")
 	cmd.Flags().StringVar(&maxArg, "max", "", "list only transactions of at most this `amount`, sign ignored, in the account's own currency")
 	// The flag's own default is 0 so help prints no "(default ...)" beside the ruled text; searchLimit applies 500.

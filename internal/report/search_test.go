@@ -209,3 +209,58 @@ func Test_search_without_text_passes_none_and_echoes_none(t *testing.T) {
 	assert.Empty(t, got.Text)
 	assert.Nil(t, result.Text)
 }
+
+func Test_search_passes_the_category_to_the_store_and_echoes_it(t *testing.T) {
+	var got store.SearchParams
+	srv := report.NewServer(report.WithStore(fakeStore{gotSearch: &got}))
+
+	result, err := srv.Search(t.Context(), report.SearchRequest{Category: new("food:Groceries")})
+
+	require.NoError(t, err)
+	assert.Equal(t, new("food:Groceries"), got.Category)
+	assert.Equal(t, new("food:Groceries"), result.Category)
+}
+
+func Test_search_without_a_category_passes_none_and_echoes_none(t *testing.T) {
+	var got store.SearchParams
+	srv := report.NewServer(report.WithStore(fakeStore{gotSearch: &got}))
+
+	result, err := srv.Search(t.Context(), report.SearchRequest{})
+
+	require.NoError(t, err)
+	assert.Nil(t, got.Category)
+	assert.Nil(t, result.Category)
+}
+
+func Test_search_refuses_a_category_the_store_says_names_none(t *testing.T) {
+	srv := report.NewServer(report.WithStore(fakeStore{search: store.Search{UnknownCategory: true}}))
+
+	_, err := srv.Search(t.Context(), report.SearchRequest{Category: new("Fod")})
+
+	var refusal report.RefusalError
+	require.ErrorAs(t, err, &refusal)
+	assert.Equal(t, report.RefusalUnknownCategory, refusal.Kind)
+	assert.Equal(t, "Fod", refusal.Arg)
+	assert.EqualError(t, err, `no category named "Fod"; list them with quarry sql "SELECT full_path FROM categories ORDER BY full_path"`)
+}
+
+func Test_search_refuses_an_account_it_cannot_pick_before_a_category_it_cannot_pick(t *testing.T) {
+	srv := report.NewServer(report.WithStore(fakeStore{accounts: accountsOf(chqAccount), search: store.Search{UnknownCategory: true}}))
+
+	_, err := srv.Search(t.Context(), report.SearchRequest{Accounts: []string{"Nowhere"}, Category: new("Fod")})
+
+	var refusal report.RefusalError
+	require.ErrorAs(t, err, &refusal)
+	assert.Equal(t, report.RefusalUnknownAccount, refusal.Kind)
+}
+
+func Test_search_refuses_a_store_fault_as_a_store_refusal_whatever_the_category(t *testing.T) {
+	openErr := &store.OpenError{Fault: store.OpenFaultMissing, Path: storePath}
+	srv := report.NewServer(report.WithStore(fakeStore{err: openErr, search: store.Search{UnknownCategory: true}}), report.WithHome(refusalHome))
+
+	_, err := srv.Search(t.Context(), report.SearchRequest{Category: new("Fod")})
+
+	var refusal report.RefusalError
+	require.ErrorAs(t, err, &refusal)
+	assert.Equal(t, report.RefusalStore, refusal.Kind)
+}

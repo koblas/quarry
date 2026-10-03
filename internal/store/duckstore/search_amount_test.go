@@ -155,3 +155,31 @@ func Test_search_amount_with_limit_counts_every_amount_match(t *testing.T) {
 	require.Equal(t, []string{"txn-c", "txn-b"}, searchedIDs(got))
 	assert.Equal(t, 3, got.Matched)
 }
+
+func Test_search_amount_compares_the_largest_amount_the_column_holds(t *testing.T) {
+	t.Parallel()
+	const top = int64(999999999999999999)
+	rows := searchRowsFor()
+	addSearch(&rows, signedTxn("deposit", 1, top))
+	addSearch(&rows, signedTxn("charge", 2, -top))
+	cases := []struct {
+		name     string
+		min, max *int64
+		want     []string
+	}{
+		{name: "min at the largest amount finds both signs", min: new(top), want: []string{"txn-deposit", "txn-charge"}},
+		{name: "min one cent above it finds nothing", min: new(top + 1)},
+		{name: "max at the largest amount finds both signs", max: new(top), want: []string{"txn-deposit", "txn-charge"}},
+		{name: "max one cent below it finds nothing", max: new(top - 1)},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := searchOf(t, rows, store.SearchParams{Min: c.min, Max: c.max})
+
+			assert.ElementsMatch(t, c.want, searchedIDs(got))
+		})
+	}
+}

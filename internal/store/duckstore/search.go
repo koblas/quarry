@@ -20,7 +20,16 @@ const (
 	searchText         = "$4"
 	searchMin          = "$5"
 	searchMax          = "$6"
-	searchFirstAccount = 7
+	searchCategory     = "$7"
+	searchFirstAccount = 8
+)
+
+// The cents of a transaction's amount, of its unsigned amount and of a split's. The DECIMAL(38,2) operand keeps the
+// product from overflowing 18 digits for an amount near the column's largest.
+const (
+	searchTxnCents    = `CAST(CAST(t.amount AS DECIMAL(38,2)) * 100 AS BIGINT)`
+	searchAbsTxnCents = `CAST(CAST(abs(t.amount) AS DECIMAL(38,2)) * 100 AS BIGINT)`
+	searchSplitCents  = `CAST(CAST(s.amount AS DECIMAL(38,2)) * 100 AS BIGINT)`
 )
 
 // searchTextMatch keeps a transaction whose payee, memo or a split memo contains the text, ignoring case; no text keeps all.
@@ -29,10 +38,17 @@ const searchTextMatch = `(CAST(` + searchText + ` AS VARCHAR) IS NULL
 			OR contains(lower(t.memo), lower(` + searchText + `))
 			OR EXISTS (SELECT 1 FROM splits ms WHERE ms.transaction_id = t.id AND contains(lower(ms.memo), lower(` + searchText + `))))`
 
-// searchAmountRange keeps a transaction whose amount without its sign is within the bounds, inclusive; no bound keeps all.
-// The amount is the transaction's, never a split's.
-const searchAmountRange = `(CAST(` + searchMin + ` AS BIGINT) IS NULL OR CAST(abs(t.amount) * 100 AS BIGINT) >= ` + searchMin + `)
-			AND (CAST(` + searchMax + ` AS BIGINT) IS NULL OR CAST(abs(t.amount) * 100 AS BIGINT) <= ` + searchMax + `)`
+// searchAmountRange keeps a transaction whose unsigned amount is within the bounds, inclusive, never a split's; no bound keeps all.
+const searchAmountRange = `(CAST(` + searchMin + ` AS BIGINT) IS NULL OR ` + searchAbsTxnCents + ` >= ` + searchMin + `)
+			AND (CAST(` + searchMax + ` AS BIGINT) IS NULL OR ` + searchAbsTxnCents + ` <= ` + searchMax + `)`
+
+// searchCategoryMatch keeps a transaction with a split in the category or under it, ignoring case; no category keeps all.
+// An EXISTS, so a transaction with several matching splits counts once.
+const searchCategoryMatch = `(CAST(` + searchCategory + ` AS VARCHAR) IS NULL
+				OR EXISTS (SELECT 1 FROM splits cs JOIN categories cc ON cc.id = cs.category_id
+					WHERE cs.transaction_id = t.id
+					AND (lower(cc.full_path) = lower(` + searchCategory + `)
+						OR starts_with(lower(cc.full_path), lower(` + searchCategory + `) || ':'))))`
 
 // searchRowsQuery reads each matching transaction's splits in split source id order. The transaction-grain
 // CTE counts every match before the limit cuts, so a transaction's splits are never counted or cut.
@@ -45,7 +61,7 @@ func searchRowsQuery(accounts accountFilter) string {
 WITH m AS (
 	SELECT t.id AS txn_id, t.date AS txn_date, t.source_id AS txn_source_id,
 		a.id AS account_id, a.name AS account_name, a.currency AS account_currency, a.closed, a.active,
-		p.name AS payee, NULLIF(t.memo, '') AS memo, CAST(t.amount * 100 AS BIGINT) AS amount, t.currency,
+		p.name AS payee, NULLIF(t.memo, '') AS memo, ` + searchTxnCents + ` AS amount, t.currency,
 		EXISTS (SELECT 1 FROM splits ts WHERE ts.transaction_id = t.id AND ` + transferLeg("ts") + `) AS transfer,
 		NOT (` + reportedTransaction + `) AS excluded,
 		count(*) OVER () AS matched
@@ -55,13 +71,14 @@ WITH m AS (
 	WHERE (` + searchSince + ` IS NULL OR t.date >= CAST(` + searchSince + ` AS DATE))
 		AND (` + searchUntil + ` IS NULL OR t.date <= CAST(` + searchUntil + ` AS DATE))
 		AND ` + searchTextMatch + `
-			AND ` + searchAmountRange + accountClause + `
+			AND ` + searchAmountRange + `
+			AND ` + searchCategoryMatch + accountClause + `
 	ORDER BY ` + searchOrder + `
 	LIMIT ` + searchLimit + `
 )
 SELECT m.txn_id, m.txn_date, m.account_id, m.account_name, m.account_currency, m.closed, m.active,
 	m.payee, m.memo, m.amount, m.currency, m.transfer, m.excluded, m.matched,
-	c.full_path, NULLIF(s.memo, ''), CAST(s.amount * 100 AS BIGINT), ` + transferLeg("s") + `
+	c.full_path, NULLIF(s.memo, ''), ` + searchSplitCents + `, ` + transferLeg("s") + `
 FROM m
 LEFT JOIN splits s ON s.transaction_id = m.txn_id
 LEFT JOIN categories c ON c.id = s.category_id
@@ -69,12 +86,14 @@ ORDER BY ` + searchOrder + `, s.source_id, s.id`
 }
 
 // searchSpanQuery is the first and last day of every transaction, or of the named accounts' transactions
-// whether or not Quicken's reports count them; its parameters are those accounts, numbered from $1.
+// whether or not Quicken's reports count them, and whether $1, the category, names no category. Its other
+// parameters are those accounts, numbered from $2.
 func searchSpanQuery(accounts accountFilter) string {
+	const unknownCategory = "NOT (CAST($1 AS VARCHAR) IS NULL OR EXISTS (SELECT 1 FROM categories WHERE lower(full_path) = lower($1)))"
 	if len(accounts) == 0 {
-		return "SELECT min(date), max(date) FROM transactions"
+		return "SELECT min(date), max(date), " + unknownCategory + " FROM transactions"
 	}
-	return "SELECT min(date), max(date) FROM transactions WHERE account_id IN (" + accounts.marks(1) + ")"
+	return "SELECT min(date), max(date), " + unknownCategory + " FROM transactions WHERE account_id IN (" + accounts.marks(2) + ")"
 }
 
 // Search lists the newest params.Limit transactions matching params, as store.Search documents.
@@ -92,9 +111,10 @@ func (s *Store) Search(ctx context.Context, params store.SearchParams) (store.Se
 		return scanSearchRow(scan, &found)
 	})
 	if err == nil {
-		err = db.QueryRows(ctx, searchSpanQuery(accounts), accounts.args(), func(scan func(dest ...any) error) error {
+		spanArgs := append([]any{searchCategoryArg(params.Category)}, accounts.args()...)
+		err = db.QueryRows(ctx, searchSpanQuery(accounts), spanArgs, func(scan func(dest ...any) error) error {
 			var first, last sql.NullTime
-			if err := scan(&first, &last); err != nil {
+			if err := scan(&first, &last, &found.UnknownCategory); err != nil {
 				return err
 			}
 			found.Transactions = store.TransactionRange{First: first.Time, Last: last.Time}
@@ -107,7 +127,7 @@ func (s *Store) Search(ctx context.Context, params store.SearchParams) (store.Se
 	return found, nil
 }
 
-// searchArgs binds the rows statement: the window's open bounds, an unlimited Limit of 0, no text and open amount bounds as NULL, then the accounts.
+// searchArgs binds the rows statement: the window's open bounds, an unlimited Limit of 0, no text, no category and open amount bounds as NULL, then the accounts.
 func searchArgs(params store.SearchParams) []any {
 	var limit any
 	if params.Limit > 0 {
@@ -120,8 +140,16 @@ func searchArgs(params store.SearchParams) []any {
 	}
 	args := make([]any, 0, searchFirstAccount-1+len(accounts))
 	args = append(args, searchDay(params.Window.Since), searchDay(params.Window.Until), limit, text,
-		searchCents(params.Min), searchCents(params.Max))
+		searchCents(params.Min), searchCents(params.Max), searchCategoryArg(params.Category))
 	return append(args, accounts...)
+}
+
+// searchCategoryArg is bound as the category path, or NULL for none.
+func searchCategoryArg(category *string) any {
+	if category == nil {
+		return nil
+	}
+	return *category
 }
 
 // searchCents is bound as the amount in cents, or NULL for an open bound.

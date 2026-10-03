@@ -183,3 +183,18 @@ func Test_NewSearch_leaves_an_amount_bound_null_that_the_search_did_not_give(t *
 
 	assert.Equal(t, [2]*string{nil, new("0.00")}, [2]*string{got.Min, got.Max})
 }
+
+func Test_NewSearch_echoes_the_category_exactly_as_given(t *testing.T) {
+	found := searched()
+	found.Category = new("food:GROCERIES")
+
+	got := document.NewSearch(found, nil)
+
+	assert.Equal(t, new("food:GROCERIES"), got.Category)
+}
+
+func Test_NewSearch_writes_null_category_when_the_search_gave_none(t *testing.T) {
+	got := document.NewSearch(searched(), nil)
+
+	assert.Nil(t, got.Category)
+}

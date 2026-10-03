@@ -289,3 +289,39 @@ func Test_searchCaption_quotes_text_that_has_a_quote_or_a_newline(t *testing.T) 
 
 	assert.Equal(t, `Transactions matching "say \"hi\"\n" in all accounts, all dates`, searchCaption(report.Search{Text: &text}))
 }
+
+func Test_searchCaption_names_the_category_after_the_dates_and_before_the_amount(t *testing.T) {
+	least := int64(10000)
+	since := searchDay(2025, time.January, 1)
+	cases := []struct {
+		name  string
+		found report.Search
+		want  string
+	}{
+		{name: "category alone", found: report.Search{Category: new("Food")}, want: `Transactions in all accounts, all dates, category "Food"`},
+		{
+			name:  "category after a date bound",
+			found: report.Search{Category: new("Food"), Window: store.SearchWindow{Since: since}},
+			want:  `Transactions in all accounts, from 2025-01-01, category "Food"`,
+		},
+		{
+			name:  "category before the amount",
+			found: report.Search{Category: new("Food"), Amounts: report.SearchAmounts{Min: &least}},
+			want:  `Transactions in all accounts, all dates, category "Food", amount at least 100.00`,
+		},
+		{
+			name: "category with text, accounts and dates",
+			found: report.Search{
+				Text: new("costco"), Accounts: []store.Account{{Name: "Visa"}}, Category: new("Food:Groceries"), Window: store.SearchWindow{Since: since},
+			},
+			want: `Transactions matching "costco" in Visa, from 2025-01-01, category "Food:Groceries"`,
+		},
+		{name: "category with a quote or a newline", found: report.Search{Category: new("a\"b\n")}, want: `Transactions in all accounts, all dates, category "a\"b\n"`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, searchCaption(c.found))
+		})
+	}
+}
