@@ -12,7 +12,6 @@ const recurringTwin = "recurring"
 
 // recurringCharges lists the recurring charge series of the call's window, accounts and currency, as recurring --json does.
 func (s *Server) recurringCharges(ctx context.Context, in recurringInput) (any, error) {
-	// Today is read once per call, here: the window and the report must agree on it across midnight.
 	now := s.now()
 	window, err := report.ParseChargeWindow(toolRecurring, in.Since, in.Until, now)
 	if err != nil {

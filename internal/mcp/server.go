@@ -38,7 +38,7 @@ type Server struct {
 	newReport ReportFactory
 	newConfig ConfigLoader
 	timeout   time.Duration
-	now       func() time.Time
+	now       func() time.Time // read once per call: a second read could straddle midnight between window and report
 }
 
 // Option configures a Server.

@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/koblas/quarry/internal/store"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -76,59 +75,5 @@ func Test_run_mcp_anomalies_refuses_a_future_since_in_its_own_words(t *testing.T
 }
 
 func Test_run_mcp_anomalies_refuses_an_account_without_its_name_on_stderr(t *testing.T) {
-	cases := []struct {
-		name       string
-		arg        string
-		want       string
-		wantStderr string
-		absent     []string
-	}{
-		{
-			name: "no account has the name", arg: "Nope",
-			want:       `no account named "Nope"; call describe_schema to list the accounts`,
-			wantStderr: anomaliesLogPrefix + unknownAccountLog + "\n",
-			absent:     []string{"Nope"},
-		},
-		{
-			name: "the name is empty", arg: "",
-			want:       `no account named ""; call describe_schema to list the accounts`,
-			wantStderr: anomaliesLogPrefix + unknownAccountLog + "\n",
-			absent:     []string{`""`},
-		},
-		{
-			name: "two accounts share the name", arg: "Visa",
-			want:       `2 accounts are named "Visa"; pass one of their ids instead: acct-812, acct-977`,
-			wantStderr: anomaliesLogPrefix + ambiguousAccountLog + "\n",
-			absent:     []string{"Visa", "acct-812", "acct-977"},
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
-			replaceStore(t, home, spendRows([]store.Account{
-				chequingAccount("acct-chq", 1),
-				{ID: "acct-977", SourceID: 2, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
-				{ID: "acct-812", SourceID: 3, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
-			}))
-			ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
-			defer cancel()
-			peer := startClockedMCP(ctx, t)
-
-			result, err := peer.session.CallTool(ctx, &sdk.CallToolParams{
-				Name: "anomalies", Arguments: map[string]any{"accounts": []string{c.arg}},
-			})
-			require.NoError(t, err)
-			require.NoError(t, peer.session.Close())
-			peer.waitForExit(ctx, t)
-
-			assert.True(t, result.IsError)
-			assert.Equal(t, c.want, textOf(result))
-			assert.Equal(t, c.wantStderr, peer.stderr.String())
-			for _, text := range c.absent {
-				assert.NotContains(t, peer.stderr.String(), text)
-			}
-		})
-	}
+	refuseAccountKeepingItsNameOffStderr(t, "anomalies", anomaliesLogPrefix)
 }

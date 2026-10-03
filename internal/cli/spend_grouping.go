@@ -19,13 +19,11 @@ var spendGroupings = [...]spendGrouping{
 // errSpendByUnknown refuses a --by that names no grouping spend reads.
 var errSpendByUnknown = UsageError{msg: "--by must be category, payee, tag or month"}
 
-// parseSpendGrouping returns the grouping named by a --by value, or
-// errSpendByUnknown.
+// parseSpendGrouping returns the grouping named by a --by value, or errSpendByUnknown.
 func parseSpendGrouping(name string) (store.SpendingGroup, error) {
-	for _, group := range store.SpendingGroups() {
-		if group.String() == name {
-			return group, nil
-		}
+	group, ok := store.ParseSpendingGroup(name)
+	if !ok {
+		return 0, errSpendByUnknown
 	}
-	return 0, errSpendByUnknown
+	return group, nil
 }

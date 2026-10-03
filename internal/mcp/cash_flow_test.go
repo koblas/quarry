@@ -6,6 +6,7 @@ import (
 
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/mcp"
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -154,7 +155,7 @@ func Test_cash_flow_refuses_arguments_the_schema_rejects_without_reading_the_con
 
 func Test_cash_flow_puts_the_cap_line_after_every_other_warning(t *testing.T) {
 	totals := []store.CashFlowTotal{{Currency: "CAD", Spent: 50100}}
-	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
+	stub := &configStub{cfg: config.Config{Currency: money.CAD, WarningsAbsolute: []string{configUnknownKeyWarning}}}
 	unconverted := store.Unconverted{Transactions: 1, FirstRate: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)}
 	h := newHarness(t, &fakeStore{flow: store.CashFlow{Totals: totals, Unconverted: unconverted}}, nil, mcp.WithConfig(stub.load))
 
@@ -166,6 +167,6 @@ func Test_cash_flow_puts_the_cap_line_after_every_other_warning(t *testing.T) {
 	assert.Len(t, doc.Totals, 1)
 	require.Len(t, doc.Warnings, 3)
 	assert.Equal(t, configUnknownKeyWarning, doc.Warnings[0])
-	assert.Equal(t, "1 transaction dated before 2026-03-01, the first exchange rate in the store, is listed in CAD, not converted to native", doc.Warnings[1])
+	assert.Equal(t, "1 transaction dated before 2026-03-01, the first exchange rate in the store, is listed in USD, not converted to CAD", doc.Warnings[1])
 	assert.Equal(t, "cash_flow lists the first 500 periods of 501; totals count every period; pass a later since, or by year", doc.Warnings[2])
 }

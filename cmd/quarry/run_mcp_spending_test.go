@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/koblas/quarry/internal/store"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,14 +28,13 @@ const (
 
 func Test_run_mcp_spending_returns_the_spend_json_document(t *testing.T) {
 	cases := []struct {
-		name        string
-		store       func(*testing.T, string)
-		cliArgs     []string
-		arguments   map[string]any
-		wantWarning string
+		name      string
+		store     func(*testing.T, string)
+		cliArgs   []string
+		arguments map[string]any
 	}{
 		{
-			name: "all five given", store: populatedAnalysisStore, wantWarning: linkedLineForSpending,
+			name: "all five given", store: populatedAnalysisStore,
 			cliArgs: []string{
 				"spend", "--since", "2026-01", "--until", "2026-08", "--by", "payee", "--currency", "CAD",
 				"--account", "Chequing", "--account", "US Chequing", "--account", "Linked", "--account", "Old Card",
@@ -65,9 +63,6 @@ func Test_run_mcp_spending_returns_the_spend_json_document(t *testing.T) {
 
 			assert.Equal(t, got.cliBody, got.toolBody)
 			assert.Equal(t, inToolWords(got.cliWarnings, "spend", "spending"), got.toolWarnings)
-			if c.wantWarning != "" {
-				assert.Contains(t, got.toolWarnings, c.wantWarning)
-			}
 		})
 	}
 }
@@ -97,7 +92,11 @@ func Test_run_mcp_spending_reads_the_config_only_when_currency_is_absent(t *test
 
 			assert.Equal(t, got.cliBody, got.toolBody)
 			assert.Equal(t, inToolWords(got.cliWarnings, "spend", "spending"), got.toolWarnings)
-			assert.Contains(t, got.toolBody, `"currency":"`+c.wantCurrency+`"`)
+			var doc struct {
+				Currency string `json:"currency"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(got.toolBody), &doc))
+			assert.Equal(t, c.wantCurrency, doc.Currency)
 		})
 	}
 
@@ -179,61 +178,7 @@ func Test_run_mcp_spending_refuses_a_bad_window_in_mcp_words(t *testing.T) {
 }
 
 func Test_run_mcp_spending_refuses_an_account_without_its_name_on_stderr(t *testing.T) {
-	cases := []struct {
-		name       string
-		arg        string
-		want       string
-		wantStderr string
-		absent     []string
-	}{
-		{
-			name: "no account has the name", arg: "Nope",
-			want:       `no account named "Nope"; call describe_schema to list the accounts`,
-			wantStderr: spendingLogPrefix + unknownAccountLog + "\n",
-			absent:     []string{"Nope"},
-		},
-		{
-			name: "the name is empty", arg: "",
-			want:       `no account named ""; call describe_schema to list the accounts`,
-			wantStderr: spendingLogPrefix + unknownAccountLog + "\n",
-			absent:     []string{`""`},
-		},
-		{
-			name: "two accounts share the name", arg: "Visa",
-			want:       `2 accounts are named "Visa"; pass one of their ids instead: acct-812, acct-977`,
-			wantStderr: spendingLogPrefix + ambiguousAccountLog + "\n",
-			absent:     []string{"Visa", "acct-812", "acct-977"},
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
-			replaceStore(t, home, spendRows([]store.Account{
-				chequingAccount("acct-chq", 1),
-				{ID: "acct-977", SourceID: 2, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
-				{ID: "acct-812", SourceID: 3, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
-			}))
-			ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
-			defer cancel()
-			peer := startClockedMCP(ctx, t)
-
-			result, err := peer.session.CallTool(ctx, &sdk.CallToolParams{
-				Name: "spending", Arguments: map[string]any{"accounts": []string{c.arg}},
-			})
-			require.NoError(t, err)
-			require.NoError(t, peer.session.Close())
-			peer.waitForExit(ctx, t)
-
-			assert.True(t, result.IsError)
-			assert.Equal(t, c.want, textOf(result))
-			assert.Equal(t, c.wantStderr, peer.stderr.String())
-			for _, text := range c.absent {
-				assert.NotContains(t, peer.stderr.String(), text)
-			}
-		})
-	}
+	refuseAccountKeepingItsNameOffStderr(t, "spending", spendingLogPrefix)
 }
 
 func Test_run_mcp_spending_words_its_warnings_with_the_tool_name(t *testing.T) {

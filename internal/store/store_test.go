@@ -167,3 +167,43 @@ func Test_CashFlowPeriod_names_each_period_by_its_flag_word(t *testing.T) {
 		})
 	}
 }
+
+func Test_ParseSpendingGroup_reads_each_flag_word_back_and_reports_a_miss(t *testing.T) {
+	for _, group := range store.SpendingGroups() {
+		t.Run(group.String()+" is read back", func(t *testing.T) {
+			got, ok := store.ParseSpendingGroup(group.String())
+
+			assert.True(t, ok)
+			assert.Equal(t, group, got)
+		})
+	}
+
+	for _, name := range []string{"", "week", "Category", "category "} {
+		t.Run("a miss on "+name, func(t *testing.T) {
+			got, ok := store.ParseSpendingGroup(name)
+
+			assert.False(t, ok)
+			assert.Equal(t, store.SpendingGroup(0), got)
+		})
+	}
+}
+
+func Test_ParseCashFlowPeriod_reads_each_flag_word_back_and_reports_a_miss(t *testing.T) {
+	for _, period := range store.CashFlowPeriods() {
+		t.Run(period.String()+" is read back", func(t *testing.T) {
+			got, ok := store.ParseCashFlowPeriod(period.String())
+
+			assert.True(t, ok)
+			assert.Equal(t, period, got)
+		})
+	}
+
+	for _, name := range []string{"", "week", "Month", "year "} {
+		t.Run("a miss on "+name, func(t *testing.T) {
+			got, ok := store.ParseCashFlowPeriod(name)
+
+			assert.False(t, ok)
+			assert.Equal(t, store.CashFlowPeriod(0), got)
+		})
+	}
+}

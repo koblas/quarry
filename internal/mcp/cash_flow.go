@@ -14,7 +14,6 @@ const cashFlowTwin = "cashflow"
 
 // cashFlow reports income, spending and net per period of the call's window, accounts and currency, as cashflow --json does.
 func (s *Server) cashFlow(ctx context.Context, in cashFlowInput) (any, error) {
-	// Today is read once per call, here: a second read could straddle midnight.
 	window, err := report.ParseWindow(in.Since, in.Until, s.now())
 	if err != nil {
 		return nil, windowRefusal(err)
@@ -23,10 +22,10 @@ func (s *Server) cashFlow(ctx context.Context, in cashFlowInput) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	by, err := parseCashFlowPeriod(in.By)
-	if err != nil {
-		// unreachable: see parseCashFlowPeriod
-		return nil, err
+	by, ok := store.ParseCashFlowPeriod(in.By)
+	if !ok {
+		// unreachable: the schema's enum admits only the String of a CashFlowPeriod, and its default supplies month
+		return nil, fmt.Errorf("%w: %q", errUnknownBy, in.By)
 	}
 	srv, err := s.newReport(ctx, commandName)
 	if err != nil {
@@ -40,15 +39,4 @@ func (s *Server) cashFlow(ctx context.Context, in cashFlowInput) (any, error) {
 	doc.Periods, doc.Warnings = capList(doc.Periods, doc.Warnings, toolCashFlow, "periods",
 		"totals count every period; pass a later since, or by year")
 	return doc, nil
-}
-
-// parseCashFlowPeriod is the period whose String is name; a name no period has is an error, never a default.
-func parseCashFlowPeriod(name string) (store.CashFlowPeriod, error) {
-	for _, period := range store.CashFlowPeriods() {
-		if period.String() == name {
-			return period, nil
-		}
-	}
-	// unreachable: the schema's enum admits only the String of a CashFlowPeriod, and its default supplies month
-	return 0, fmt.Errorf("%w: %q", errUnknownBy, name)
 }

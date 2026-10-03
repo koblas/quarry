@@ -28,12 +28,11 @@ var errCashFlowByUnknown = UsageError{msg: "--by must be month or year"}
 
 // parseCashFlowPeriod returns the period named by a --by value, or errCashFlowByUnknown.
 func parseCashFlowPeriod(name string) (store.CashFlowPeriod, error) {
-	for _, period := range store.CashFlowPeriods() {
-		if period.String() == name {
-			return period, nil
-		}
+	period, ok := store.ParseCashFlowPeriod(name)
+	if !ok {
+		return 0, errCashFlowByUnknown
 	}
-	return 0, errCashFlowByUnknown
+	return period, nil
 }
 
 // newCashFlowCommand builds cashflow: the income, spending and savings rate in the --since/--until period per month or year.

@@ -1,4 +1,4 @@
-// White-box: windowRefusal and logLine are unexported, and the charge kinds reach no tool yet.
+// White-box: windowRefusal and logLine are unexported, and every kind crossed with its bounds is a table here, not a server call each.
 package mcp
 
 import (
@@ -85,4 +85,22 @@ func Test_windowRefusal_keeps_every_value_of_the_caller_off_the_log_line(t *test
 	got := logLine(windowRefusal(refusal))
 
 	assert.NotContains(t, got, "zorblax")
+}
+
+func Test_windowRefusal_returns_an_error_that_is_no_window_refusal_unchanged(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+	}{
+		{name: "a plain error", err: errTestFault},
+		{name: "an account refusal", err: accountRefusalFor(t, "Visa", "Visa", "Visa")},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := windowRefusal(c.err)
+
+			assert.Equal(t, c.err, got)
+		})
+	}
 }

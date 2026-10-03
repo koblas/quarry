@@ -9,7 +9,6 @@ import (
 
 // anomalies lists the unusually large charges of the call's window, accounts and currency, as anomalies --json does.
 func (s *Server) anomalies(ctx context.Context, in anomaliesInput) (any, error) {
-	// Today is read once per call, here: the window and the report must agree on it across midnight.
 	now := s.now()
 	window, err := report.ParseChargeWindow(toolAnomalies, in.Since, in.Until, now)
 	if err != nil {

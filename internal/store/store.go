@@ -502,6 +502,17 @@ func SpendingGroups() []SpendingGroup {
 	return []SpendingGroup{SpendByCategory, SpendByPayee, SpendByTag, SpendByMonth}
 }
 
+// ParseSpendingGroup is the grouping whose String is name; the bool is false, and the grouping zero,
+// for a name no grouping has.
+func ParseSpendingGroup(name string) (SpendingGroup, bool) {
+	for _, g := range SpendingGroups() {
+		if g.String() == name {
+			return g, true
+		}
+	}
+	return 0, false
+}
+
 // String is the word that names g as a --by value: category, payee, tag or month.
 // A value outside the constants reads as "".
 func (g SpendingGroup) String() string {
@@ -591,6 +602,17 @@ const (
 // CashFlowPeriods lists every CashFlowPeriod, in the order the --by vocabulary names them.
 func CashFlowPeriods() []CashFlowPeriod {
 	return []CashFlowPeriod{CashFlowByMonth, CashFlowByYear}
+}
+
+// ParseCashFlowPeriod is the period whose String is name; the bool is false, and the period zero,
+// for a name no period has.
+func ParseCashFlowPeriod(name string) (CashFlowPeriod, bool) {
+	for _, p := range CashFlowPeriods() {
+		if p.String() == name {
+			return p, true
+		}
+	}
+	return 0, false
 }
 
 // String is the word that names p as a --by value: month or year.

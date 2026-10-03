@@ -24,9 +24,8 @@ var (
 	seriesNoun       = countedNoun{"series with a charge", "series with a charge"}
 )
 
-// SpendingWarnings is s's warnings, unprefixed and never nil: one per named account left out,
-// then the unconverted-amounts note, the multi-tag-splits note, and a note that the window held no spending.
-// word names the command in the left-out lines and nowhere else.
+// SpendingWarnings is s's warnings: one per named account left out, then the unconverted-amounts note,
+// the multi-tag-splits note, and a note that the window held no spending.
 func SpendingWarnings(s report.Spending, word string) []string {
 	warnings := append(leftOutWarnings(s.Accounts, word), unconvertedWarnings(s.Currency, s.Unconverted, transactionsNoun)...)
 	if s.By == store.SpendByTag && s.MultiTagSplits > 0 {
@@ -39,9 +38,8 @@ func SpendingWarnings(s report.Spending, word string) []string {
 	return warnings
 }
 
-// CashFlowWarnings is c's warnings, unprefixed and never nil: one per named account left out,
+// CashFlowWarnings is c's warnings: one per named account left out,
 // then the unconverted-amounts note, then a note that the window held no income or spending.
-// word names the command in the left-out lines and nowhere else.
 func CashFlowWarnings(c report.CashFlow, word string) []string {
 	warnings := append(leftOutWarnings(c.Accounts, word), unconvertedWarnings(c.Currency, c.Unconverted, transactionsNoun)...)
 	if c.Empty() {
@@ -50,9 +48,8 @@ func CashFlowWarnings(c report.CashFlow, word string) []string {
 	return warnings
 }
 
-// RecurringWarnings is r's warnings, unprefixed and never nil: one per named account left out of the
+// RecurringWarnings is r's warnings: one per named account left out of the
 // report, then the unconverted-series note, then a note when no series runs in the period.
-// word names the command in the left-out lines and nowhere else.
 func RecurringWarnings(r report.Recurring, word string) []string {
 	warnings := append(leftOutWarnings(r.Accounts, word), unconvertedWarnings(r.Currency, r.Unconverted, seriesNoun)...)
 	if r.Empty() {
@@ -61,9 +58,8 @@ func RecurringWarnings(r report.Recurring, word string) []string {
 	return warnings
 }
 
-// AnomaliesWarnings is a's warnings, unprefixed and never nil: one per named account left out of the
+// AnomaliesWarnings is a's warnings: one per named account left out of the
 // report, then the unconverted-charge note, then a note when no charge was checked in the period.
-// word names the command in the left-out lines and nowhere else.
 func AnomaliesWarnings(a report.Anomalies, word string) []string {
 	warnings := append(leftOutWarnings(a.Accounts, word), unconvertedWarnings(a.Currency, a.Unconverted, chargesNoun)...)
 	if a.Checked == 0 {

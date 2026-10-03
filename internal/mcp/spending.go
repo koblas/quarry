@@ -17,7 +17,6 @@ const spendTwin = "spend"
 
 // spending totals the spending the call's window, accounts and currency select, grouped by in.By, as spend --json does.
 func (s *Server) spending(ctx context.Context, in spendingInput) (any, error) {
-	// Today is read once per call, here: a second read could straddle midnight.
 	window, err := report.ParseWindow(in.Since, in.Until, s.now())
 	if err != nil {
 		return nil, windowRefusal(err)
@@ -26,10 +25,10 @@ func (s *Server) spending(ctx context.Context, in spendingInput) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	by, err := parseSpendingGroup(in.By)
-	if err != nil {
-		// unreachable: see parseSpendingGroup
-		return nil, err
+	by, ok := store.ParseSpendingGroup(in.By)
+	if !ok {
+		// unreachable: the schema's enum admits only the String of a SpendingGroup, and its default supplies category
+		return nil, fmt.Errorf("%w: %q", errUnknownBy, in.By)
 	}
 	srv, err := s.newReport(ctx, commandName)
 	if err != nil {
@@ -61,14 +60,3 @@ func (s *Server) resolveCurrency(name, twin string) (money.Currency, []string, e
 
 // errUnknownBy is a by value outside the schema enum, which no schema-validated call carries.
 var errUnknownBy = errors.New("by names no value of the tool's enum")
-
-// parseSpendingGroup is the grouping whose String is name; a name no grouping has is an error, never a default.
-func parseSpendingGroup(name string) (store.SpendingGroup, error) {
-	for _, group := range store.SpendingGroups() {
-		if group.String() == name {
-			return group, nil
-		}
-	}
-	// unreachable: the schema's enum admits only the String of a SpendingGroup, and its default supplies category
-	return 0, fmt.Errorf("%w: %q", errUnknownBy, name)
-}

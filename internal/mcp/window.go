@@ -12,7 +12,6 @@ import (
 func windowRefusal(err error) error {
 	refusal, ok := errors.AsType[report.WindowError](err)
 	if !ok {
-		// unreachable: ParseWindow returns only what report's parseWindow and parseDateBound construct, and both construct only WindowError
 		return err
 	}
 	return withLog(windowRefusedError(windowWording(refusal)), windowRefusedLog)
@@ -38,6 +37,6 @@ func windowWording(refusal report.WindowError) string {
 	case report.WindowUntilBeforeDefault:
 		return bound + " " + refusal.Value + " is before the default since " + refusal.DefaultSince + "; pass since too"
 	}
-	// unreachable: parseWindow and parseDateBound are the only WindowError constructors and each sets one of the kinds above
+	// unreachable: every WindowErrorKind has a case above and the exhaustive linter fails the build when one is added
 	return bound + " " + refusal.Value + " is refused"
 }
