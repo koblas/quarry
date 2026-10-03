@@ -209,3 +209,20 @@ func Test_search_text_combines_with_window_and_two_accounts(t *testing.T) {
 	assert.Equal(t, []string{"txn-g2", "txn-g1"}, searchedIDs(got))
 	assert.Equal(t, 2, got.Matched)
 }
+
+func Test_search_text_with_limit_counts_every_text_match(t *testing.T) {
+	t.Parallel()
+	rows := searchRowsFor()
+	for i, g := range []struct{ id, payee string }{
+		{"gym-old", "Gym"}, {"bakery", "Bakery"}, {"gym-mid", "Gym"}, {"gym-new", "Gym"}, {"bakery-new", "Bakery"},
+	} {
+		spec := textTxn(&rows, g.id, int64(i+1), g.payee, "", "")
+		spec.date = day(2026, time.March, 10+i)
+		addSearch(&rows, spec)
+	}
+
+	got := searchOf(t, rows, store.SearchParams{Text: "gym", Limit: 2})
+
+	require.Equal(t, []string{"txn-gym-new", "txn-gym-mid"}, searchedIDs(got))
+	assert.Equal(t, 3, got.Matched)
+}

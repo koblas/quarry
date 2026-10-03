@@ -57,12 +57,23 @@ func NewSearch(s report.Search, warnings []string) Search {
 		Until:         searchDay(s.Window.Until),
 		AccountFilter: NewAccountFilters(s.Accounts),
 		Text:          s.Text,
+		Min:           searchAmount(s.Amounts.Min),
+		Max:           searchAmount(s.Amounts.Max),
 		Limit:         s.Limit,
 		Matched:       s.Matched,
 		Truncated:     s.Truncated(),
 		Transactions:  transactions,
 		Warnings:      append([]string{}, warnings...),
 	}
+}
+
+// searchAmount is cents in Money form, or nil for an open bound.
+func searchAmount(cents *int64) *string {
+	if cents == nil {
+		return nil
+	}
+	formatted := Money(*cents)
+	return &formatted
 }
 
 // searchDay is day's date, or nil for an open bound.

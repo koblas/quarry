@@ -15,12 +15,14 @@ const searchCommand = "search"
 var ErrBlankSearchText = errors.New("search text is blank; leave it out to search by date, account, category or amount alone")
 
 // SearchRequest is what a search needs from its caller: the dates to list, the accounts to list
-// (each an id or a name; none means every account), the text a payee or memo must contain (nil for none)
-// and the most transactions to return (0 returns every one).
+// (each an id or a name; none means every account), the text a payee or memo must contain (nil for none),
+// the amount range and the most transactions to return (0 returns every one). Amounts come from
+// ParseSearchAmounts; Search does not compare the two bounds.
 type SearchRequest struct {
 	Window   store.SearchWindow
 	Accounts []string
 	Text     *string
+	Amounts  SearchAmounts
 	Limit    int
 }
 
@@ -32,8 +34,9 @@ type Search struct {
 	// Accounts is the accounts the request named, in the order given and without repeats; none when it named none.
 	Accounts []store.Account
 	// Text is the text exactly as the request gave it, untrimmed; nil when the request gave none.
-	Text  *string
-	Limit int
+	Text    *string
+	Amounts SearchAmounts
+	Limit   int
 }
 
 // Truncated reports whether the limit cut matches off the end of Rows.
@@ -58,7 +61,7 @@ func (s *Server) Search(ctx context.Context, req SearchRequest) (Search, error) 
 	if err != nil {
 		return Search{}, err
 	}
-	params := store.SearchParams{Window: req.Window, AccountIDs: accountIDs, Limit: req.Limit}
+	params := store.SearchParams{Window: req.Window, AccountIDs: accountIDs, Min: req.Amounts.Min, Max: req.Amounts.Max, Limit: req.Limit}
 	if req.Text != nil {
 		params.Text = *req.Text
 	}
@@ -66,5 +69,5 @@ func (s *Server) Search(ctx context.Context, req SearchRequest) (Search, error) 
 	if err != nil {
 		return Search{}, s.readRefusal(ctx, searchCommand, err)
 	}
-	return Search{Search: found, Window: req.Window, Accounts: accounts, Text: req.Text, Limit: req.Limit}, nil
+	return Search{Search: found, Window: req.Window, Accounts: accounts, Text: req.Text, Amounts: req.Amounts, Limit: req.Limit}, nil
 }

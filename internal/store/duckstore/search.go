@@ -18,7 +18,9 @@ const (
 	searchUntil        = "$2"
 	searchLimit        = "$3"
 	searchText         = "$4"
-	searchFirstAccount = 5
+	searchMin          = "$5"
+	searchMax          = "$6"
+	searchFirstAccount = 7
 )
 
 // searchTextMatch keeps a transaction whose payee, memo or a split memo contains the text, ignoring case; no text keeps all.
@@ -26,6 +28,11 @@ const searchTextMatch = `(CAST(` + searchText + ` AS VARCHAR) IS NULL
 			OR contains(lower(p.name), lower(` + searchText + `))
 			OR contains(lower(t.memo), lower(` + searchText + `))
 			OR EXISTS (SELECT 1 FROM splits ms WHERE ms.transaction_id = t.id AND contains(lower(ms.memo), lower(` + searchText + `))))`
+
+// searchAmountRange keeps a transaction whose amount without its sign is within the bounds, inclusive; no bound keeps all.
+// The amount is the transaction's, never a split's.
+const searchAmountRange = `(CAST(` + searchMin + ` AS BIGINT) IS NULL OR CAST(abs(t.amount) * 100 AS BIGINT) >= ` + searchMin + `)
+			AND (CAST(` + searchMax + ` AS BIGINT) IS NULL OR CAST(abs(t.amount) * 100 AS BIGINT) <= ` + searchMax + `)`
 
 // searchRowsQuery reads each matching transaction's splits in split source id order. The transaction-grain
 // CTE counts every match before the limit cuts, so a transaction's splits are never counted or cut.
@@ -47,7 +54,8 @@ WITH m AS (
 	LEFT JOIN payees p ON p.id = t.payee_id
 	WHERE (` + searchSince + ` IS NULL OR t.date >= CAST(` + searchSince + ` AS DATE))
 		AND (` + searchUntil + ` IS NULL OR t.date <= CAST(` + searchUntil + ` AS DATE))
-		AND ` + searchTextMatch + accountClause + `
+		AND ` + searchTextMatch + `
+			AND ` + searchAmountRange + accountClause + `
 	ORDER BY ` + searchOrder + `
 	LIMIT ` + searchLimit + `
 )
@@ -99,7 +107,7 @@ func (s *Store) Search(ctx context.Context, params store.SearchParams) (store.Se
 	return found, nil
 }
 
-// searchArgs binds the rows statement: the window's open bounds, an unlimited Limit of 0 and no text as NULL, then the accounts.
+// searchArgs binds the rows statement: the window's open bounds, an unlimited Limit of 0, no text and open amount bounds as NULL, then the accounts.
 func searchArgs(params store.SearchParams) []any {
 	var limit any
 	if params.Limit > 0 {
@@ -110,9 +118,18 @@ func searchArgs(params store.SearchParams) []any {
 	if params.Text != "" {
 		text = params.Text
 	}
-	args := make([]any, 0, 4+len(accounts))
-	args = append(args, searchDay(params.Window.Since), searchDay(params.Window.Until), limit, text)
+	args := make([]any, 0, searchFirstAccount-1+len(accounts))
+	args = append(args, searchDay(params.Window.Since), searchDay(params.Window.Until), limit, text,
+		searchCents(params.Min), searchCents(params.Max))
 	return append(args, accounts...)
+}
+
+// searchCents is bound as the amount in cents, or NULL for an open bound.
+func searchCents(bound *int64) any {
+	if bound == nil {
+		return nil
+	}
+	return *bound
 }
 
 // searchDay is bound as the day's civil date, or NULL for an open bound.

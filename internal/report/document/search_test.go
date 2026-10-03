@@ -165,3 +165,21 @@ func Test_NewSearch_writes_null_text_when_the_search_gave_none(t *testing.T) {
 
 	assert.Nil(t, got.Text)
 }
+
+func Test_NewSearch_writes_the_amount_bounds_in_money_form(t *testing.T) {
+	search := searched()
+	search.Amounts = report.SearchAmounts{Min: new(int64(1250)), Max: new(int64(500000))}
+
+	got := document.NewSearch(search, nil)
+
+	assert.Equal(t, [2]*string{new("12.50"), new("5000.00")}, [2]*string{got.Min, got.Max})
+}
+
+func Test_NewSearch_leaves_an_amount_bound_null_that_the_search_did_not_give(t *testing.T) {
+	search := searched()
+	search.Amounts = report.SearchAmounts{Max: new(int64(0))}
+
+	got := document.NewSearch(search, nil)
+
+	assert.Equal(t, [2]*string{nil, new("0.00")}, [2]*string{got.Min, got.Max})
+}

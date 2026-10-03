@@ -26,6 +26,29 @@ func Test_search_passes_the_window_the_accounts_ids_and_the_limit_to_the_store(t
 	}, got)
 }
 
+func Test_search_passes_the_amounts_to_the_store_and_echoes_them(t *testing.T) {
+	var got store.SearchParams
+	srv := report.NewServer(report.WithStore(fakeStore{gotSearch: &got}))
+	amounts := report.SearchAmounts{Min: new(int64(1250)), Max: new(int64(99900))}
+
+	result, err := srv.Search(t.Context(), report.SearchRequest{Amounts: amounts})
+
+	require.NoError(t, err)
+	assert.Equal(t, store.SearchParams{Min: new(int64(1250)), Max: new(int64(99900))}, got)
+	assert.Equal(t, amounts, result.Amounts)
+}
+
+func Test_search_leaves_both_amount_bounds_open_when_the_request_gives_none(t *testing.T) {
+	var got store.SearchParams
+	srv := report.NewServer(report.WithStore(fakeStore{gotSearch: &got}))
+
+	result, err := srv.Search(t.Context(), report.SearchRequest{})
+
+	require.NoError(t, err)
+	assert.Equal(t, store.SearchParams{}, got)
+	assert.Equal(t, report.SearchAmounts{}, result.Amounts)
+}
+
 func Test_search_names_every_account_when_none_is_given(t *testing.T) {
 	var got store.SearchParams
 	reads := 0
