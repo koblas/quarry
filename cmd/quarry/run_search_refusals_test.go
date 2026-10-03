@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -29,6 +30,12 @@ func Test_run_search_refuses_bad_input_with_the_ruled_line_and_exit_code(t *test
 		unknownCategory = "; list them with quarry sql \"SELECT full_path FROM categories ORDER BY full_path\"\n"
 		usage           = "; Run 'quarry search --help' for usage.\n"
 	)
+	badText := func(value string) string {
+		return fmt.Sprintf("quarry: search text %q is not valid UTF-8; set your terminal or script to UTF-8\n", value)
+	}
+	badCategory := func(value string) string {
+		return fmt.Sprintf("quarry: --category %q is not valid UTF-8; set your terminal or script to UTF-8\n", value)
+	}
 	cases := []struct {
 		name string
 		args []string
@@ -49,6 +56,9 @@ func Test_run_search_refuses_bad_input_with_the_ruled_line_and_exit_code(t *test
 		{name: "an empty account", args: []string{"--account", ""}, exit: 1, want: "quarry: no account named \"\"; run quarry accounts --all to list them\n"},
 		{name: "a category no category is named", args: []string{"--category", "Fod"}, exit: 1, want: `quarry: no category named "Fod"` + unknownCategory},
 		{name: "an empty category", args: []string{"--category", ""}, exit: 1, want: `quarry: no category named ""` + unknownCategory},
+		{name: "a text that is not valid UTF-8", args: []string{"\xff"}, exit: 2, want: badText("\xff")},
+		{name: "a text that ends in half a rune", args: []string{"caf\xc3"}, exit: 2, want: badText("caf\xc3")},
+		{name: "a category that is not valid UTF-8", args: []string{"--category", "\xff"}, exit: 2, want: badCategory("\xff")},
 		{name: "a --currency flag", args: []string{"--currency", "CAD"}, exit: 2, want: "quarry: unknown flag: --currency" + usage},
 		{name: "a --csv flag", args: []string{"--csv"}, exit: 2, want: "quarry: unknown flag: --csv" + usage},
 	}
@@ -67,6 +77,97 @@ func Test_run_search_refuses_bad_input_with_the_ruled_line_and_exit_code(t *test
 			})
 		}
 	}
+}
+
+func Test_run_search_refuses_in_the_ruled_order(t *testing.T) {
+	const (
+		blank         = "quarry: search text is blank; leave it out to search by date, account, category or amount alone\n"
+		negativeLimit = "quarry: --limit must be 0 or more; 0 prints every transaction\n"
+		badMin        = "quarry: --min \"-12\" is not an amount; use digits with up to 2 decimals and no sign, such as 25 or 19.99\n"
+		badSince      = "quarry: --since \"2024-13\" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD\n"
+		noAccount     = "quarry: no account named \"Nope\"; run quarry accounts --all to list them\n"
+		noCategory    = "quarry: no category named \"Fod\"; list them with quarry sql \"SELECT full_path FROM categories ORDER BY full_path\"\n"
+		badText       = "quarry: search text \"\\xff\" is not valid UTF-8; set your terminal or script to UTF-8\n"
+		badCategory   = "quarry: --category \"\\xfe\" is not valid UTF-8; set your terminal or script to UTF-8\n"
+	)
+	cases := []struct {
+		name string
+		args []string
+		exit int
+		want string
+	}{
+		{name: "a bad since beats an unknown account", args: []string{"--since", "2024-13", "--account", "Nope"}, exit: 2, want: badSince},
+		{name: "an unknown account beats an unknown category", args: []string{"--account", "Nope", "--category", "Fod"}, exit: 1, want: noAccount},
+		{name: "an unknown category alone", args: []string{"--category", "Fod"}, exit: 1, want: noCategory},
+		{name: "a text that is not valid UTF-8 beats a bad min", args: []string{"\xff", "--min", "-12"}, exit: 2, want: badText},
+		{name: "a text that is not valid UTF-8 beats a category that is not", args: []string{"\xff", "--category", "\xfe"}, exit: 2, want: badText},
+		{name: "blank text beats a category that is not valid UTF-8", args: []string{"", "--category", "\xfe"}, exit: 2, want: blank},
+		{name: "a negative limit beats a category that is not valid UTF-8", args: []string{"--limit", "-1", "--category", "\xfe"}, exit: 2, want: negativeLimit},
+		{name: "a category that is not valid UTF-8 beats a bad min", args: []string{"--category", "\xfe", "--min", "-12"}, exit: 2, want: badCategory},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			builtStore(t)
+			var stdout, stderr bytes.Buffer
+			exitCode := runWith(context.Background(), append([]string{"search", "--json"}, c.args...), spendEnv(&stdout, &stderr))
+
+			require.Equal(t, c.exit, exitCode, stderr.String())
+			assert.Equal(t, c.want, stderr.String())
+			assert.Empty(t, stdout.String())
+		})
+	}
+}
+
+func Test_run_search_reads_the_store_before_it_looks_up_the_category(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "an unknown category", args: []string{"--category", "Fod"}},
+		{name: "a known category", args: []string{"--category", "Food"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+
+			assertSearchFailed(t, append([]string{"search"}, c.args...), 1,
+				"quarry: no store at "+abbreviated(t, storePathUnder(home), home)+" yet; run quarry sync to build it\n")
+		})
+	}
+}
+
+func Test_run_search_refuses_text_that_is_not_valid_UTF_8_before_the_store_opens(t *testing.T) {
+	assertSearchRefused(t, []string{"search", "\xff"},
+		"quarry: search text \"\\xff\" is not valid UTF-8; set your terminal or script to UTF-8\n")
+}
+
+func Test_run_search_text_with_a_nul_byte_matches_nothing_and_exits_0(t *testing.T) {
+	builtStore(t)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"search", "a\x00b"}, spendEnv(&stdout, &stderr))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Contains(t, stdout.String(), "0 matching transactions")
+	assert.Contains(t, stderr.String(), "quarry: warning: no transactions match the search")
+}
+
+func Test_run_search_an_account_that_is_not_valid_UTF_8_is_an_unknown_account(t *testing.T) {
+	builtStore(t)
+
+	assertSearchFailed(t, []string{"search", "--account", "\xff"}, 1,
+		"quarry: no account named \"\\xff\"; run quarry accounts --all to list them\n")
+}
+
+// builtStore points HOME at a fresh directory holding refusalSearchStore.
+func builtStore(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStore(t, home, refusalSearchStore())
 }
 
 // assertSearchFailed runs args against the store under $HOME and requires wantExit, nothing on stdout and want on stderr.

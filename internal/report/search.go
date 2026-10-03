@@ -3,7 +3,9 @@ package report
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/koblas/quarry/internal/store"
 )
@@ -48,6 +50,39 @@ func (s Search) Truncated() bool { return s.Matched > len(s.Rows) }
 func CheckSearchText(text *string) error {
 	if text != nil && strings.TrimSpace(*text) == "" {
 		return ErrBlankSearchText
+	}
+	return nil
+}
+
+// SearchInput names the search input an InvalidUTF8Error refused.
+type SearchInput int
+
+// The inputs CheckUTF8 can refuse.
+const (
+	SearchInputText SearchInput = iota
+	SearchInputCategory
+)
+
+// InvalidUTF8Error is the refusal of search text or a category that is not valid UTF-8; Error() is the CLI line.
+type InvalidUTF8Error struct {
+	Field SearchInput
+	Value string
+}
+
+// Error words the refusal as the command line does, quoting the value with %q.
+func (e InvalidUTF8Error) Error() string {
+	label := "search text"
+	if e.Field == SearchInputCategory {
+		label = "--category"
+	}
+	return fmt.Sprintf("%s %q is not valid UTF-8; set your terminal or script to UTF-8", label, e.Value)
+}
+
+// CheckUTF8 returns an InvalidUTF8Error for a value that is not valid UTF-8; nil is fine. The MCP transport
+// decodes arguments to valid UTF-8, so only the command line calls it.
+func CheckUTF8(field SearchInput, value *string) error {
+	if value != nil && !utf8.ValidString(*value) {
+		return InvalidUTF8Error{Field: field, Value: *value}
 	}
 	return nil
 }

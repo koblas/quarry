@@ -176,6 +176,58 @@ func Test_CheckSearchText_refuses_blank_text(t *testing.T) {
 	}
 }
 
+func Test_CheckUTF8_accepts_nil_and_valid_values(t *testing.T) {
+	cases := []struct {
+		name  string
+		value *string
+	}{
+		{name: "nil", value: nil},
+		{name: "ascii", value: new("Food")},
+		{name: "multibyte", value: new("café ☕")},
+		{name: "empty", value: new("")},
+		{name: "a NUL byte", value: new("a\x00b")},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			require.NoError(t, report.CheckUTF8(report.SearchInputText, c.value))
+		})
+	}
+}
+
+func Test_CheckUTF8_refuses_invalid_bytes_with_the_field_and_the_value(t *testing.T) {
+	cases := []struct {
+		name  string
+		field report.SearchInput
+		value string
+		want  string
+	}{
+		{
+			name: "a lone continuation byte in text", field: report.SearchInputText, value: "\xff",
+			want: `search text "\xff" is not valid UTF-8; set your terminal or script to UTF-8`,
+		},
+		{
+			name: "a truncated rune in text", field: report.SearchInputText, value: "caf\xc3",
+			want: `search text "caf\xc3" is not valid UTF-8; set your terminal or script to UTF-8`,
+		},
+		{
+			name: "a lone continuation byte in the category", field: report.SearchInputCategory, value: "\xff",
+			want: `--category "\xff" is not valid UTF-8; set your terminal or script to UTF-8`,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := report.CheckUTF8(c.field, &c.value)
+
+			var bad report.InvalidUTF8Error
+			require.ErrorAs(t, err, &bad)
+			assert.Equal(t, report.InvalidUTF8Error{Field: c.field, Value: c.value}, bad)
+			assert.EqualError(t, err, c.want)
+		})
+	}
+}
+
 func Test_search_refuses_blank_text_without_reading(t *testing.T) {
 	got := store.SearchParams{Limit: 99}
 	reads := 0

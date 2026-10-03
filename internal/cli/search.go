@@ -37,8 +37,8 @@ func searchAmounts(cmd *cobra.Command, least, most *string) (report.SearchAmount
 }
 
 // searchArgs refuses, as a UsageError and before anything is read, more than one text, then a negative
-// *limit, then blank text.
-func searchArgs(limit *int) cobra.PositionalArgs {
+// *limit, then blank text, then text and --category that are not valid UTF-8.
+func searchArgs(limit *int, category *string) cobra.PositionalArgs {
 	return func(_ *cobra.Command, args []string) error {
 		if len(args) > 1 {
 			return UsageError{msg: "search takes one text; quote it as one argument"}
@@ -50,6 +50,12 @@ func searchArgs(limit *int) cobra.PositionalArgs {
 			if err := report.CheckSearchText(&args[0]); err != nil {
 				return UsageError{msg: err.Error()}
 			}
+			if err := report.CheckUTF8(report.SearchInputText, &args[0]); err != nil {
+				return UsageError{msg: err.Error()}
+			}
+		}
+		if err := report.CheckUTF8(report.SearchInputCategory, category); err != nil {
+			return UsageError{msg: err.Error()}
 		}
 		return nil
 	}
@@ -108,7 +114,7 @@ unless set); when more match, quarry says so on stderr.`,
   quarry search --min 42.17 --max 42.17
   quarry search "e-transfer" --account Chequing --since 2026-01
   quarry search --category Food --since 2026-09 --json`,
-		Args: searchArgs(&limit),
+		Args: searchArgs(&limit, &category),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			amounts, err := searchAmounts(cmd, &minArg, &maxArg)
 			if err != nil {
