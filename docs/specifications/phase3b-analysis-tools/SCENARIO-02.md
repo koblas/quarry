@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-02
-status: open
+status: done
 ---
 
 # SCENARIO-02: spending returns the spend --json document
@@ -27,10 +27,10 @@ Size: OWNS A RUN — 3 batches + equality harness, 0 new feature packages (mcp d
 - [x] Step 5: `spending.go` handler in §3.2 order: `*string` since/until → `report.ParseWindow(since, until, today)` → config via `s.newConfig(commandName)` only when currency absent (else `money.ParseCurrency`) → `s.newReport(ctx, commandName)` → `srv.Spend` → `cfg.WarningsAbsolute` then `document.SpendingWarnings(result, toolSpending)` → `document.NewSpending`. `data_quality.go:13-14,21` `configRefusalLog` becomes a per-twin line builder; spending passes `spend`, data_quality stays byte-identical (pins `data_quality_test.go:23`, `cmd/quarry/run_mcp_data_quality_test.go:81`). Tests: S06 `Test_run_mcp_spending_reads_the_config_only_when_currency_is_absent` (absent+USD config → USD doc; absent+no config → CAD; absent+unparseable → isError config line, stderr exactly `quarry: mcp: spending: cannot read quarry's config file; run quarry spend to see why`; CAD+unparseable → CAD doc, `warnings` exact with no config lines; absent+unknown key → absolute config line first); S07 `Test_run_mcp_spending_words_its_warnings_with_the_tool_name` (accounts Linked, Old Card, US Chequing → the §4.1 MCP lines verbatim, "run quarry sync" kept, before-first-rate line unchanged). Unit rows in `spending_test.go` over `fakeStore` (`query_helpers_test.go:33-74`, add `Spending` + `h.spending` beside `:129-135`): window error → isError + `failedLog`, config loader not called, factory not built (assert no client text); broken config + factory error → config refusal, `h.built == 0`; currency given → loader never called; factory error → `failedLog`; `Spend` `RefusalError` → its text verbatim; `Spend` plain error → `failedLog`. Rows in all-tools tables: `timeout_test.go:84-110` (+ `stallingStore.Spending`, `:21-65`, failing as the real adapter does) and `run_mcp_no_store_test.go:20-29`. Fold S01 checkpoint MINORs: `internal/report/document/warnings_composers_test.go:117,127` assert the exact lines, `:151-160` "none checked" asserts the empty-window string
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `WithClock`, `spending`, the property builders; S01 NITs: `internal/store/store_test.go:136,160` subtest `name` field, `internal/cli/json_internal_test.go:181` `spendWindow` doc line
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `WithClock`, `spending`, the property builders; S01 NITs: `internal/store/store_test.go:136,160` subtest `name` field, `internal/cli/json_internal_test.go:181` `spendWindow` doc line
 
 ### Verify
-- [ ] Step 7: full verification + `.claude/scripts/spec-check.py phase3b-analysis-tools` → tick SCENARIO-02, -06, -07, -12 (folded lines name "delivered by SCENARIO-02" before the test reference); rewrite STATE.md
+- [x] Step 7: full verification + `.claude/scripts/spec-check.py phase3b-analysis-tools` → tick SCENARIO-02, -06, -07, -12 (folded lines name "delivered by SCENARIO-02" before the test reference); rewrite STATE.md
 
 ## Handoff
 
@@ -55,16 +55,9 @@ Size: OWNS A RUN — 3 batches + equality harness, 0 new feature packages (mcp d
 
 ## Phase report
 
-Run B1 done (steps 3-5, mutation checks, S01 checkpoint MINOR folds). Narrow loop green: `go test ./internal/mcp/ ./internal/report/document/` and `go test ./cmd/quarry/ -run 'Test_run_mcp|Test_run_prints_spend|Test_tool_warning'`; the S02, S06, S07 and S12 acceptance tests pass. `golangci-lint run ./...` already prints `0 issues`; `golangci-lint fmt` applied.
+Run V done. SCENARIO-02 complete; `status: done`, all steps ticked; SCENARIO-02/-06/-07/-12 ticked in the specification, `spec-check.py` and `--run` both rc 0.
 
-Production:
-- `internal/mcp/server.go` `NewServer` defaults `now: time.Now`
-- `internal/mcp/spending.go` handler (window, `resolveCurrency` config only when currency absent, factory, `Spend`, `cfg.WarningsAbsolute` then `SpendingWarnings(.., toolSpending)`); `resolveCurrency(name, twin)` is the helper cash_flow/recurring/anomalies reuse; `parseSpendingGroup` (`// unreachable:` fallback); const `spendTwin`
-- `internal/mcp/tools.go` `spendingDescription`, shared description consts (`sinceDescription`, `untilDescription`, `accountsDescription`, `currencyDescription`), builders `described`, `accountsSchema(desc)`, `currencySchema()`, `spendingGroups()`
-- `internal/mcp/data_quality.go` `configRefusalLog(twin)` is now a func; data_quality passes `"findings"`
-
-Tests: `internal/mcp/spending_test.go` +8 funcs (window/config/factory/Spend refusal/plain fault/currency-given/config command name/SDK refusal table); `timeout_test.go` spending row + `stallingStore.Spending`; `cmd/quarry/run_mcp_test.go` spending row + `mcpSpendingInputSchema`/`mcpSpendingDescription` (tools/list pin, 5 tools); `run_mcp_no_store_test.go` spending row; S01 MINOR folds in `warnings_composers_test.go`; NITs in `store_test.go` (subtest `name`) and `json_internal_test.go` (`spendWindow` doc).
-
-Mutations (all restored, diffed): extra `s.now()` read per call -> `Test_spending_reads_today_once_at_the_start_of_every_call` (reads 2 vs 4, until 09-29 vs 09-30); clock frozen in `NewServer` -> same test (until 09-30 expected, 09-29 actual); config loaded even when currency given -> `Test_run_mcp_spending_reads_the_config_only_when_currency_is_absent/currency_given,_config_unparseable` and `Test_spending_does_not_read_the_config_when_the_call_names_a_currency`.
-
-Run V must not redo: step 6 content (lint is 0, doc comments, S01 NITs are done; tick it). V still owes: full verification block with `<start>`, `test-stats.py`, `uncovered-diff.py`, `spec-check.py`, ticks of SCENARIO-02/-06/-07/-12 (folded lines name "delivered by SCENARIO-02"), STATE.md rewrite (remove the S01-checkpoint MINOR/NIT debt; add the `resolveCurrency` / property-builder decisions), `status: done`. Note: NIT `Test_a_tool_call_with_absent_null_or_empty_arguments...` for spending (S14) stays S09.
+- Doc budget: `resolveCurrency` comment cut to 2 lines (`internal/mcp/spending.go:38`); other new comments within budget.
+- Verify: `go build`, full covered suite rc 0, `uncovered-diff` 0 uncovered (1 declared unreachable: `parseSpendingGroup`), `golangci-lint` 0 issues, `-race` green on `internal/mcp/...` and the `cmd/quarry` MCP subset.
+- test-stats vs start: cmd/quarry 534 (+4), internal/mcp 83 (+9), TOTAL 1097 (+13).
+- STATE.md rewritten.

@@ -1,6 +1,6 @@
 # phase3b-analysis-tools — current state
 
-Scenarios complete: SCENARIO-01. Last updated by SCENARIO-01. The phase3a MCP decisions (`docs/specifications/phase3a-mcp-core/STATE.md`: transport, `handler`/`errorLog`, `absentNullArguments`, `WithReport`/`WithConfig`, per-call deadline) still bind every tool added here.
+Scenarios complete: SCENARIO-01, 02 (folds 06, 07, 12). Last updated by SCENARIO-02. The phase3a MCP decisions (`docs/specifications/phase3a-mcp-core/STATE.md`: transport, `handler`/`errorLog`, `absentNullArguments`, `WithReport`/`WithConfig`, per-call deadline) still bind every tool added here.
 
 ## Binding decisions
 - `document.NewSpending/NewCashFlow/NewRecurring/NewAnomalies(result, warnings)` (`internal/report/document`) are the only builders of the four documents; MCP tools render from them, cli only indents via `marshalDocument` (SCENARIO-01)
@@ -9,10 +9,18 @@ Scenarios complete: SCENARIO-01. Last updated by SCENARIO-01. The phase3a MCP de
 - `money.NativeOf` is the one home of "the other of CAD/USD"; cli `accountsFXWarnings` and document both call it. `document.RecurringStatus` / `document.BaselineWord` are shared by the text renderers and the JSON documents (SCENARIO-01)
 - document imports only report, store, finding, platform (money, humanize, tomlstr); never cli, mcp, config (SCENARIO-01)
 - Output equality is pinned byte for byte by `cmd/quarry/run_analysis_documents_test.go` (18 rows, `--json` and text, stdout and stderr exact, fixed `Env.Now`) with goldens in `run_analysis_documents_golden_test.go`; S02's CLI-vs-MCP harness may rely on them as the CLI side (SCENARIO-01)
+- `mcp.WithClock(func() time.Time)`, default `time.Now` in `NewServer`, read once at handler start; later tools pass that one value to the window parse and `Request.Now` (two reads straddle midnight). Departs from the skill's "no injected clock" because the equality harness needs one fixed instant on both surfaces (SCENARIO-02)
+- `(*Server).resolveCurrency(name, twin)` is the one currency path: config read only when currency is absent, `cfg.WarningsAbsolute` first; cash_flow/recurring/anomalies reuse it. `configRefusalLog(twin)` names the CLI twin (`spend`, `cashflow`, `recurring`, `anomalies`; data_quality `findings`); `newConfig`/`newReport` keep `commandName` `mcp` (SCENARIO-02)
+- Shared schema builders in `internal/mcp/tools.go` (`described`, `accountsSchema`, `currencySchema`, `sinceDescription`/`untilDescription`/`accountsDescription`/`currencyDescription`): S09 reuses them; S10 swaps its own since/until/accounts strings, keeps currency. `currency` never gets a schema `default` (it overrides `reporting.currency`); `by` enum comes from `spendingGroups()` over `store.SpendingGroups()` (SCENARIO-02)
+- Handler order: window, config (only when currency absent), factory, `Spend`; warnings are `cfg.WarningsAbsolute`, then `document.*Warnings(result, toolName)`; copy it for the other three tools (SCENARIO-02)
+- Equality harness `cmd/quarry/run_mcp_documents_helpers_test.go` is the acceptance shape for S09/S10: CLI `--json` compacted vs tool `TextContent`, compared as bytes with `warnings` stripped from both, warnings mapped separately; fixtures stay under the 500 cap (SCENARIO-02)
 
 ## Left unbuilt
-- mcp clock (`WithClock`), compact encoding of these documents, list caps and their warning lines, MCP currency resolution, the four tool registrations and schemas — S02 (spending), S09 (cash_flow, caps), S10 (recurring_charges, anomalies); description/instructions copy — S13
-- Window refusal wording in MCP words (`WindowError` parts) — S03; account refusal parts, `logLine` classification and the OpenFaultOther withheld line — S04
+- MCP window refusal wording and the `refused the call's since or until; ...` class line — S03 (today a `WindowError` logs `failedLog`, client text still `--since`-worded)
+- Account refusal wording/class lines and the `OpenFaultOther` withheld line — S04 (`logLine` still logs a `RefusalError` verbatim)
+- cash_flow tool, list caps and their warning lines, compact encoding of those documents — S09; recurring_charges and anomalies — S10
+- `null`/omitted/`{}` arguments row for spending at `internal/mcp/server_test.go:163` — S09 (S14 in S09)
+- Per-param descriptions on the 3a tools, instructions, query description, mcp Long, rename of the tools/list pin test (`cmd/quarry/run_mcp_test.go`) — S13
 - `withConfigWarnings`, `currencyFlag.resolve`, `accountsFXWarnings`, `recurringEvery`, the `*Command` consts stay in cli; accounts/snapshots/sync documents stay in `internal/cli/json_*.go` (SCENARIO-01)
 
 ## Traps
@@ -22,10 +30,12 @@ Scenarios complete: SCENARIO-01. Last updated by SCENARIO-01. The phase3a MCP de
 - `String()` on the enums is safe only because duckstore formats them with `%d` (`duckstore/spending.go:115`, `cashflow.go:64`); a `%v` would change error text (SCENARIO-01)
 - The builders copy warnings with `append([]string{}, warnings...)`: neutral only because cli `withConfigWarnings` (`currency.go:71`) never returns nil; the document always emits `[]` (SCENARIO-01)
 - Tests must go through `runWith` with a fixed `Env.Now`, never `run()`: the real clock drifts the default window (SCENARIO-01)
+- Warning map in the harness substitutes on the `, so <word> leaves it out` template, never the bare word: `spend` sits inside `spending` and `recurring` inside `recurring charges` (SCENARIO-02)
+- No S02 test may assert window-refusal client text or a verbatim account-refusal stderr line: S03/S04 flip both (SCENARIO-02)
+- The `by` parse miss in `parseSpendingGroup` is `// unreachable:` behind the schema enum; add no handler default (SCENARIO-02)
 
 ## Open debts
 - OWNED BY S04: `internal/mcp/result.go:55` logs `report.RefusalError` verbatim; account refusals (`internal/report/refusal.go:63,68`) embed caller text, so classify them to class lines before the four tools ship; flip the pin at `internal/mcp/query_refusal_test.go:99-101` (phase3a gate R2)
 - OWNED BY S04 (folds S05): statement-time DuckDB read faults log the reason verbatim via `OpenFaultOther` (`internal/store/duckstore/schema_read.go:57,69,81,89`, `status.go:71,92`, `findings_read.go:88`); `logLine` maps `OpenFaultOther` to the withheld line for open- and statement-time faults, with a per-tool table (phase3a gate R2)
 - OWNED BY S13: per-parameter `description`s on the 3a tools (e.g. `data_quality.limit` counts findings) and the instructions string naming "David's" (phase3a final product-vision)
 - Phase3a gate R1/R2/R4 MINOR/NIT debts not listed here remain in the phase3a STATE (unowned); this feature does not close them
-- Checkpoint S01 MINORs (fold into S02's run, it touches document warnings): `internal/report/document/warnings_composers_test.go:112,122` assert only `Len` — assert the exact lines; `:151` none-checked row asserts only `Len` — assert the empty-window string. NITs: `internal/store/store_test.go:136,160` out-of-range rows share subtest name (add `name` field); `internal/cli/json_internal_test.go:181` `spendWindow` lacks a doc line

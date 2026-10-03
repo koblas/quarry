@@ -730,10 +730,10 @@ Sizing pass (architect, opus) 2026-10-03 — 16 IDs → 7 runs. Order is binding
 
 ## BDD Acceptance Progress
 - [x] SCENARIO-01: CLI output is unchanged after the analysis documents and warnings move to shared code — `cmd/quarry/run_analysis_documents_test.go` `Test_run_prints_spend_cashflow_recurring_and_anomalies_byte_for_byte`
-- [ ] SCENARIO-02: spending returns the spend --json document
-- [ ] SCENARIO-06: currency follows the config only when it is absent
-- [ ] SCENARIO-07: spending's warnings use the tool's name and keep "run quarry sync"
-- [ ] SCENARIO-12: "today" is read on every call
+- [x] SCENARIO-02: spending returns the spend --json document — `cmd/quarry/run_mcp_spending_test.go` `Test_run_mcp_spending_returns_the_spend_json_document`
+- [x] SCENARIO-06: currency follows the config only when it is absent — delivered by SCENARIO-02 — `cmd/quarry/run_mcp_spending_test.go` `Test_run_mcp_spending_reads_the_config_only_when_currency_is_absent`
+- [x] SCENARIO-07: spending's warnings use the tool's name and keep "run quarry sync" — delivered by SCENARIO-02 — `cmd/quarry/run_mcp_spending_test.go` `Test_run_mcp_spending_words_its_warnings_with_the_tool_name`
+- [x] SCENARIO-12: "today" is read on every call — delivered by SCENARIO-02 — `internal/mcp/spending_test.go` `Test_spending_reads_today_once_at_the_start_of_every_call`
 - [ ] SCENARIO-03: spending refuses a bad window in MCP words
 - [ ] SCENARIO-04: an unknown or ambiguous account is refused without its name reaching stderr
 - [ ] SCENARIO-05: a DuckDB read fault logs only the withheld store line

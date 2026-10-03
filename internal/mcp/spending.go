@@ -35,9 +35,8 @@ func (s *Server) spending(ctx context.Context, in spendingInput) (any, error) {
 	return document.NewSpending(spent, append(configWarnings, document.SpendingWarnings(spent, toolSpending)...)), nil
 }
 
-// resolveCurrency is the currency a call reports in: name when given, else reporting.currency from the config,
-// whose absolute warnings come second. An unreadable config is refused with a stderr line naming twin, the
-// command that explains it. The loader is not called when name is given.
+// resolveCurrency is name when given, else reporting.currency from the config and its warnings;
+// an unreadable config is refused with a stderr line naming twin.
 func (s *Server) resolveCurrency(name, twin string) (money.Currency, []string, error) {
 	if name != "" {
 		currency, _ := money.ParseCurrency(name) // the schema's enum admits only spellings it reads
