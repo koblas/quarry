@@ -9,6 +9,7 @@
 | SCENARIO-04 (+05) | code-first | A, B1, V | 0/0/0/2 | no (NITs only, accepted) |
 | SCENARIO-09 (+08, +14) | code-first | A, B1, B2, V | 0/1/2/1 | yes (by-default unprovable: silent parse fallback → error-on-miss; warnings non-empty pin; cap order pin) |
 | SCENARIO-10 (+10b, +11, +11b) | code-first | A, B1, B2, V | 0/1/0/1 | yes (cap-line-last ordering unpinned in both cap tests; test-only) |
+| SCENARIO-13 | code-first | A, B1, V | 0/0/1/1 | no (accepted) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
