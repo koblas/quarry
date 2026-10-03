@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-09
-status: open
+status: done
 ---
 
 # SCENARIO-09: cash_flow returns the cashflow --json document (folds SCENARIO-08 caps, SCENARIO-14 defaults)
@@ -27,10 +27,10 @@ Size: OWNS A RUN — 3 build batches (tool, all-tools rows, cap helper), 1 featu
 - [x] Step 6: cap — new `internal/mcp/cap.go` generic `capList` (list, tool/noun/advice -> cut list, §5 line): cuts to `maxRows` (`tools.go:87`) after the document is built, in order, numbers through `humanize.Thousands`; `spending.go:35` and `cash_flow.go` apply it to `doc.Rows` / `doc.Periods`, leave `Totals` untouched and append the line **last**, after config and document warnings. Lines verbatim from spec §5 (spending: `..., or query v_spending for the rest`; cash_flow: `pass a later since, or by year`). Unit tests white-box `cap_internal_test.go` `Test_capList_*`: 499/500 untouched with no line, 501 -> 500 + `of 501`, 1,234 -> `1,234`, order kept, empty list; and through `Server`: `Test_spending_*cap*` / `Test_cash_flow_puts_the_cap_line_after_every_other_warning` (fakeStore with 501 rows and a left-out warning plus a config warning; totals length equals the uncut result's). Cap line generic enough that S10 passes `series` / `anomalies` unchanged
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `cashFlow`, `capList`, `cashFlowPeriods`; `doc.go` unchanged
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `cashFlow`, `capList`, `cashFlowPeriods`; `doc.go` unchanged
 
 ### Verify
-- [ ] Step 8: full verification block + `.claude/scripts/spec-check.py phase3b-analysis-tools` -> tick SCENARIO-09, 08, 14 (08 and 14 lines "delivered by SCENARIO-09", test last) ; rewrite STATE.md
+- [x] Step 8: full verification block + `.claude/scripts/spec-check.py phase3b-analysis-tools` -> tick SCENARIO-09, 08, 14 (08 and 14 lines "delivered by SCENARIO-09", test last) ; rewrite STATE.md
 
 ## Handoff
 
@@ -54,14 +54,6 @@ Size: OWNS A RUN — 3 build batches (tool, all-tools rows, cap helper), 1 featu
 
 ## Phase report
 
-Run B2 (step 6) done. Steps 1-6 ticked; V (7-8) remains: sweep, full verify, spec tick (09, 08, 14), STATE.md rewrite, `status: done`. S09, S08 and S14 acceptance tests all green; `go test ./cmd/quarry/ -run 'MCP|mcp'` and the internal/mcp narrow loop pass, `golangci-lint run ./...` 0 issues.
+Run V (steps 7-8) done; SCENARIO-09 complete (status: done). SCENARIO-09, 08 and 14 ticked in the specification; STATE.md rewritten.
 
-Files:
-- `internal/mcp/cap.go` (new) - `capList[T](list, warnings, tool, noun, advice) ([]T, []string)`: cuts to `maxRows`, appends `<tool> lists the first 500 <noun> of N; <advice>` last; within the cap returns both untouched.
-- `internal/mcp/spending.go` (doc split, `capList` on `doc.Rows`), `internal/mcp/cash_flow.go` (same on `doc.Periods`); Totals untouched; advice carries the "totals count every row/period" clause, so S10's anomalies line (no totals clause) passes its own advice.
-- Tests: `internal/mcp/cap_internal_test.go` (white-box, 3 tests: 0/1/499/500 untouched, 501 cut + line, 1,234 grouping), `Test_spending_cuts_rows_to_the_cap_keeps_every_total_and_ends_the_warnings_with_the_cap_line` (spending_test.go), `Test_cash_flow_puts_the_cap_line_after_every_other_warning` (cash_flow_test.go; periods are window-filled, so it uses since 1985-01 until 2026-09 = 501 months, one CAD total).
-- `cmd/quarry/run_mcp_spending_cap_test.go` - `require.NotEmpty(t, got.toolWarnings)` before indexing; at HEAD it failed cleanly (rows not cut, warnings empty) instead of panicking.
-
-Mutations (restored): `len(list) <= maxRows` -> `<` reddens `Test_capList_leaves_...untouched/exactly_the_cap`; cap line prepended instead of last reddens `Test_capList_cuts_one_row_over...`, `Test_cash_flow_puts_the_cap_line_after_every_other_warning`, `Test_spending_cuts_rows_to_the_cap...`.
-
-Not done by B2: full covered verify, test-stats counts, uncovered-diff (V). Order-kept and empty-list capList cases are covered by the 0 and 501 rows.
+Verify: `go build ./...` ok; covered full suite rc=0; `uncovered-diff.py` 0 uncovered added lines, 1 declared unreachable (`cash_flow.go:47`); `golangci-lint run ./...` 0 issues; `-race` ok on `internal/mcp` and `cmd/quarry -run 'MCP|mcp'`; `spec-check.py` and `--run` both rc=0. Counts: cmd/quarry 541 (+4), internal/mcp 108 (+17), total 649 (+21).

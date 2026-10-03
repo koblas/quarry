@@ -1,6 +1,6 @@
 # phase3b-analysis-tools — current state
 
-Scenarios complete: SCENARIO-01, 02 (folds 06, 07, 12), 03, 04 (folds 05). Last updated by SCENARIO-04. The phase3a MCP decisions (`docs/specifications/phase3a-mcp-core/STATE.md`: transport, `handler`/`errorLog`, `absentNullArguments`, `WithReport`/`WithConfig`, per-call deadline) still bind every tool added here.
+Scenarios complete: SCENARIO-01, 02 (folds 06, 07, 12), 03, 04 (folds 05), 09 (folds 08, 14). Last updated by SCENARIO-09. The phase3a MCP decisions (`docs/specifications/phase3a-mcp-core/STATE.md`: transport, `handler`/`errorLog`, `absentNullArguments`, `WithReport`/`WithConfig`, per-call deadline) still bind every tool added here.
 
 ## Binding decisions
 - `document.NewSpending/NewCashFlow/NewRecurring/NewAnomalies(result, warnings)` (`internal/report/document`) are the only builders of the four documents; MCP tools render from them, cli only indents via `marshalDocument` (SCENARIO-01)
@@ -18,12 +18,14 @@ Scenarios complete: SCENARIO-01, 02 (folds 06, 07, 12), 03, 04 (folds 05). Last 
 - `report.RefusalError` stays one type with exported parts `Kind` (`RefusalGeneric` zero, `RefusalUnknownAccount`, `RefusalAmbiguousAccount`, `RefusalStore`), `Arg`, `IDs` (sorted), `Fault`, `At` (`~` path); zero `Fault` is `OpenFaultOther`, so classify on `Kind` first. `Error()` is the CLI text, untouched (SCENARIO-04)
 - `mcp.logLine` classifies a `RefusalError` through `refusalLine`: unknown/ambiguous account -> class lines; `RefusalStore` + `OpenFaultOther` -> `withheldStoreLog(At)` (open- and statement-time); every other fault and generic kind verbatim (fixed `UnreadableReason` phrases). `loggedError` still wins (SCENARIO-04)
 - `accountRefusal(err)` (`internal/mcp/accounts.go`) words the unknown-account client text and unwraps to the `RefusalError`; S09/S10 handlers MUST call it at their `Spend`/`CashFlow`/`Recurring`/`Anomalies` error site. S09/S10 also add `cash_flow`, `recurring_charges`, `anomalies` rows to the store-fault table (`cmd/quarry/run_mcp_store_faults_test.go`) and account rows to the account test (SCENARIO-04)
+- `capList[T](list, warnings, tool, noun, advice)` (`internal/mcp/cap.go`) cuts to `maxRows` after `document.New*` and appends `<tool> lists the first 500 <noun> of N; <advice>` as the LAST warning; document and CLI stay uncapped, Totals untouched. Advice is per caller and carries its own "totals count every ..." clause (spending: `..., or query v_spending for the rest`; cash_flow: `pass a later since, or by year`); S10 passes `series`/`anomalies` nouns and its own advice (anomalies has no totals clause) (SCENARIO-09)
+- `stringEnum` (`tools.go`) is the one `String()`-list-to-schema-enum helper behind `spendingGroups()` / `cashFlowPeriods()`; cash_flow `by` schema default is the quoted bytes `"month"`, the handler never defaults `by` (`parseCashFlowPeriod` miss is `// unreachable:`), so absent/null/`{}` rows depend on the schema default alone (SCENARIO-09)
+- cash_flow passes `"cashflow"` (`cashFlowTwin`) to `resolveCurrency` and `toolCashFlow` to `CashFlowWarnings`: stderr names the CLI twin, warnings name the tool; `accountRefusal` is called at its `CashFlow` error site (SCENARIO-09)
 
 ## Left unbuilt
-- `cash_flow` / `recurring_charges` / `anomalies` rows of the store-fault table and their account-refusal rows, per-tool `accountRefusal` call — S09/S10 (SCENARIO-04)
-- charge-variant window wording is built and unit-pinned (`Test_windowRefusal_words_every_kind`) but reaches no tool until S10; cash_flow tool (calls `windowRefusal`), list caps and their warning lines, compact encoding of those documents — S09; recurring_charges and anomalies — S10
-- `null`/omitted/`{}` arguments row for spending at `internal/mcp/server_test.go:163` — S09 (S14 in S09)
-- Per-param descriptions on the 3a tools, instructions, query description, mcp Long, rename of the tools/list pin test (`cmd/quarry/run_mcp_test.go`) — S13
+- `toolRecurring`/`toolAnomalies`, their handlers (each calling `accountRefusal`, `resolveCurrency` with twin `recurring`/`anomalies`, `capList`), and `recurring_charges` / `anomalies` rows in the five all-tools tables (no-store `run_mcp_no_store_test.go`, timeout `timeout_test.go` + `stallingStore`, store-fault `run_mcp_store_faults_test.go`, tools/list pin `run_mcp_test.go`, account refusal) — S10 (SCENARIO-04, 09)
+- charge-variant window wording is built and unit-pinned (`Test_windowRefusal_words_every_kind`) but reaches no tool until S10 (SCENARIO-03)
+- Per-param descriptions on the 3a tools, instructions, query description, mcp Long, rename of the tools/list pin test (`Test_run_mcp_lists_quarrys_four_tools_over_json_rpc`, now pins six tools) (`cmd/quarry/run_mcp_test.go`) — S13
 - `withConfigWarnings`, `currencyFlag.resolve`, `accountsFXWarnings`, `recurringEvery`, the `*Command` consts stay in cli; accounts/snapshots/sync documents stay in `internal/cli/json_*.go` (SCENARIO-01)
 
 ## Traps
@@ -41,6 +43,9 @@ Scenarios complete: SCENARIO-01, 02 (folds 06, 07, 12), 03, 04 (folds 05). Last 
 - `go test -run 'Window'` is case-sensitive: older report tests are lowercase `window`; narrow loops use `(?i)window` (SCENARIO-03)
 - The `by` parse miss in `parseSpendingGroup` is `// unreachable:` behind the schema enum; add no handler default (SCENARIO-02)
 - `rows.Err()` alone misses a cancel: database/sql closes rows asynchronously, so a read can finish with a nil error. duckdb `QueryRows` and `QueryTable` check `ctx.Err()` per row; any new row loop over `*sql.Rows` needs the same. `platform/sqlite` `QueryRows` has the same unchecked loop (unowned) (fix(duckdb) pass)
+- `document.Spending.Rows` is `[]any`, `document.CashFlow.Periods` is `[]CashFlowPeriodRow`: cap helpers must stay generic (SCENARIO-09)
+- cash_flow periods are window-filled, so a cap test needs a window of 501+ months (since 1985-01 until 2026-09), not 501 transactions (SCENARIO-09)
+- S04's ticked acceptance test `Test_run_mcp_spending_refuses_an_account_without_its_name_on_stderr` keeps its name; cash_flow has its own twin; renaming either breaks `spec-check.py` (SCENARIO-09)
 
 ## Open debts
 - OWNED BY S13: per-parameter `description`s on the 3a tools (e.g. `data_quality.limit` counts findings) and the instructions string naming "David's" (phase3a final product-vision)
