@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/koblas/quarry/internal/store"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -305,6 +306,35 @@ func Test_run_sql_ignores_a_malformed_config(t *testing.T) {
 	assert.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "Chequing")
 	assert.Empty(t, stderr.String())
+}
+
+func Test_run_search_ignores_a_malformed_config(t *testing.T) {
+	malformedConfigFixture(t)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"search"}, spendEnv(&stdout, &stderr))
+
+	assert.Equal(t, 0, exitCode, stderr.String())
+	assert.Contains(t, stdout.String(), "Costco")
+	assert.Empty(t, stderr.String())
+}
+
+func Test_run_mcp_search_transactions_ignores_a_malformed_config(t *testing.T) {
+	malformedConfigFixture(t)
+	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
+	defer cancel()
+	peer := startClockedMCP(ctx, t)
+
+	result, err := peer.session.CallTool(ctx, &sdk.CallToolParams{Name: "search_transactions", Arguments: map[string]any{}})
+	require.NoError(t, err)
+	require.NoError(t, peer.session.Close())
+	peer.waitForExit(ctx, t)
+
+	require.False(t, result.IsError, textOf(result))
+	doc := decodeSearchJSON(t, textOf(result))
+	assert.Contains(t, textOf(result), "Costco")
+	assert.Equal(t, []string{}, doc.Warnings)
+	assert.Empty(t, peer.stderr.String())
 }
 
 func Test_run_spend_refuses_a_bad_flag_before_reading_a_malformed_config(t *testing.T) {

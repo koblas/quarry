@@ -41,7 +41,7 @@ Payee names, memos, account names and category names reach the client
 as Quicken holds them; quarry does not rewrite or mask them.
 
 Tools: describe_schema, query, sync_status, data_quality, spending,
-cash_flow, recurring_charges, anomalies.
+cash_flow, recurring_charges, anomalies, search_transactions.
 `
 	var stdout bytes.Buffer
 

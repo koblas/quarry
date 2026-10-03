@@ -245,6 +245,10 @@ func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
 			wantStderr: "quarry: unknown flag: --bogus; Run 'quarry anomalies --help' for usage.\n",
 		},
 		{
+			name: "search", args: []string{"search", "--bogus"},
+			wantStderr: "quarry: unknown flag: --bogus; Run 'quarry search --help' for usage.\n",
+		},
+		{
 			name: "snapshots", args: []string{"snapshots", "--bogus"},
 			wantStderr: "quarry: unknown flag: --bogus; Run 'quarry snapshots --help' for usage.\n",
 		},

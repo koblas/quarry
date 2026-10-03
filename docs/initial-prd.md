@@ -168,6 +168,7 @@ Every command supports `--json` for machine consumers and a readable table by de
 | `quarry networth` | Net worth history, by account type and currency (Phase 4: needs investment holdings) |
 | `quarry recurring` | Detected recurring charges, start date, price changes |
 | `quarry anomalies` | Unusually large transactions (duplicates are `findings`) |
+| `quarry search` | Find transactions by payee, memo, amount, date, account or category; transfers and report-excluded transactions included and flagged |
 | `quarry acb` | Adjusted cost base per security and realized capital gains by tax year, in CAD |
 | `quarry findings` | The cleanup worklist to apply in Quicken; `--csv` to export; ignore a finding by listing its id under `findings.ignore` in the config file |
 | `quarry sql` | Read-only SQL against the store |
@@ -198,7 +199,7 @@ A thin wrapper over the core library, launched by the Claude desktop app as a lo
 | `spending`, `cash_flow`, `net_worth` | Correct, transfer-aware aggregates with period, filter and `currency` (`CAD`, `USD` or `native`) parameters; an absent `currency` uses the config default, as the CLI does |
 | `recurring_charges`, `anomalies` | The same detections the CLI uses |
 | `acb` | Adjusted cost base and realized gains by security and tax year (CAD) |
-| `search_transactions` | Payee / memo / amount / date search |
+| `search_transactions` | Find transactions by payee, memo, amount, date, account or category; transfers and report-excluded transactions included and flagged |
 | `sync_status` | Freshness of the data, last validation result |
 
 - `query` is the escape hatch for questions no tool anticipates; the named tools exist so common questions don't depend on Claude re-deriving transfer rules in SQL.
@@ -327,6 +328,7 @@ The main risk is Quicken's undocumented schema; reconciliation on every sync is 
 - Interfaces: CLI, MCP server and a Claude skill, the skill as Claude's primary path.
 - Reuse: build on dweekly/quicken-mac-mcp (and hardkoded/quicken-skills), both MIT, with notices preserved.
 - Reporting currency: selectable, CAD, USD or native (each account's own currency, unconverted); default from config `reporting.currency`, else CAD. CLI and MCP accept the same values; MCP's are exact-case.
+- Search: defaults to all dates; --min/--max compare absolute native amounts; no --currency; search is a lookup, not a report.
 - ACB: computed when reporting in CAD, per security across non-registered accounts, with trade-date FX.
 - FX history: daily series from the Bank of Canada, fetched incrementally by `quarry sync`, since Quicken stores only the current rate. A failed fetch warns but does not fail the sync.
 - Exit codes: `0` success (warnings included), `1` failure, `2` usage error, for every command.

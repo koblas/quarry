@@ -142,3 +142,28 @@ func parseDateBound(bound, value string) (time.Time, time.Time, error) {
 	}
 	return time.Time{}, time.Time{}, WindowError{Kind: WindowNotADate, Bound: bound, Value: value}
 }
+
+// ParseSearchWindow resolves since and until into a search window; a nil pointer is an open bound,
+// so no clock is read. A bare year or month covers all of it. It returns a WindowError for a value
+// that is not a date and for a since after the until.
+func ParseSearchWindow(since, until *string) (store.SearchWindow, error) {
+	var window store.SearchWindow
+	if since != nil {
+		first, _, err := parseDateBound(boundSince, *since)
+		if err != nil {
+			return store.SearchWindow{}, err
+		}
+		window.Since = &first
+	}
+	if until != nil {
+		_, last, err := parseDateBound(boundUntil, *until)
+		if err != nil {
+			return store.SearchWindow{}, err
+		}
+		window.Until = &last
+	}
+	if window.Since != nil && window.Until != nil && window.Since.After(*window.Until) {
+		return store.SearchWindow{}, WindowError{Kind: WindowSinceAfterUntil, Bound: boundSince, Value: *since, Other: *until}
+	}
+	return window, nil
+}

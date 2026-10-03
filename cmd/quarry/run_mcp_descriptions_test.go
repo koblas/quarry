@@ -11,21 +11,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const mcpInstructions = `quarry serves David's Quicken Classic for Mac data from a local, read-only
-store. Call sync_status first and tell the user how old the snapshot is
-(snapshot.taken_at). For spending, income, recurring charges and unusually
-large charges call spending, cash_flow, recurring_charges and anomalies:
-they apply quarry's rules for transfers, refunds and currencies. For other
-questions call describe_schema before writing SQL for query: its
-conventions say which views already leave out transfers and how amounts,
-signs and currencies work. Every number you report must come from a tool
-result; never estimate. quarry cannot change data: fixes are made in
-Quicken, then the user runs quarry sync.`
+const mcpInstructions = `quarry serves the user's Quicken Classic for Mac data from a local,
+read-only store. Call sync_status first and tell the user how old the
+snapshot is (snapshot.taken_at). For spending, income, recurring charges
+and unusually large charges call spending, cash_flow, recurring_charges
+and anomalies: they apply quarry's rules for transfers, refunds and
+currencies. To find particular transactions by payee, memo, amount or
+date call search_transactions. For other questions call describe_schema
+before writing SQL for query: its conventions say which views already
+leave out transfers and how amounts, signs and currencies work. Every
+number you report must come from a tool result; never estimate. quarry
+cannot change data: fixes are made in Quicken, then the user runs quarry
+sync.`
 
 const mcpQueryDescription = `Run one read-only SQL query (DuckDB dialect) against quarry's store and
 return its columns and rows. Call describe_schema first for the tables,
 views and conventions. For spending and income totals call spending or
-cash_flow instead; in SQL use v_spending and v_cash_flow, which already
+cash_flow instead, and to find transactions by payee, memo or amount call
+search_transactions; in SQL use v_spending and v_cash_flow, which already
 leave out transfers between the user's own accounts. Returns at most
 ` + "`limit`" + ` rows (default 500, the most allowed); aggregate in SQL rather
 than paging through rows. The store cannot be changed, and other files,
@@ -86,6 +89,16 @@ Each charge is compared with all earlier history, whatever the period.
 Possible duplicates are not listed here; data_quality lists them. Charges
 dated after today are never listed. Returns at most 500 charges, newest
 first.`
+
+const mcpSearchDescription = `Find the user's transactions by text, date, account, category or amount,
+newest first. text matches payee names, transaction memos and split
+memos, ignoring letter case; % and _ are plain characters. Every
+transaction is searched, including transfers between the user's own
+accounts (flagged transfer) and transactions Quicken's reports leave out
+(flagged excluded); spending and cash_flow do not count those, so call
+them for totals rather than adding up these rows. Amounts are in each
+account's own currency and are never converted. Returns at most limit
+transactions (default 500); matched counts every match.`
 
 const (
 	mcpRecurringInputSchema = `{
@@ -173,10 +186,30 @@ const (
 		},
 		"additionalProperties": false
 	}`
+	mcpSearchInputSchema = `{
+		"type": "object",
+		"properties": {
+			"text": {"type": "string", "description": "Words to find in payee names, transaction memos and split memos, in any letter case; every character is literal. ` +
+		`Omit it to search by the other parameters alone."},
+			"since": {"type": "string", "description": "Earliest date to list: YYYY, YYYY-MM or YYYY-MM-DD; a year or month starts on its first day. ` +
+		`Omit it to search from the first transaction."},
+			"until": {"type": "string", "description": "Latest date to list: YYYY, YYYY-MM or YYYY-MM-DD; a year or month ends on its last day. ` +
+		`Omit it to search every later date, future-dated transactions included."},
+			"accounts": {"type": "array", "items": {"type": "string"}, "description": "Search only these accounts, each given by id or by name in any letter case. ` +
+		`Omit it to search every account."},
+			"category": {"type": "string", "description": "List only transactions with a split in this category or one under it, given by its full path (such as Food:Groceries) in any letter case."},
+			"min": {"type": "string", "description": "Smallest amount to list, as a string such as \"25\" or \"19.99\", compared without its sign in the account's own currency."},
+			"max": {"type": "string", "description": "Largest amount to list, as a string such as \"100\" or \"250.50\", compared without its sign in the account's own currency. ` +
+		`Give min and max the same value to find one amount."},
+			"limit": {"type": "integer", "minimum": 1, "maximum": 500, "default": 500,
+				"description": "Most transactions to return, newest first, 1 to 500. Defaults to 500. matched always counts every match."}
+		},
+		"additionalProperties": false
+	}`
 	mcpObjectOutputSchema = `{"type": "object"}`
 )
 
-func Test_run_mcp_describes_all_eight_tools(t *testing.T) {
+func Test_run_mcp_describes_every_tool(t *testing.T) {
 	t.Run("tools/list and instructions", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
 		defer cancel()
@@ -190,14 +223,15 @@ func Test_run_mcp_describes_all_eight_tools(t *testing.T) {
 
 		assert.Equal(t, mcpInstructions, session.InitializeResult().Instructions)
 		wantTools := map[string]struct{ description, inputSchema string }{
-			"query":             {mcpQueryDescription, mcpQueryInputSchema},
-			"describe_schema":   {mcpDescribeSchemaDescription, mcpNoInputSchema},
-			"sync_status":       {mcpSyncStatusDescription, mcpNoInputSchema},
-			"data_quality":      {mcpDataQualityDescription, mcpDataQualityInputSchema},
-			"spending":          {mcpSpendingDescription, mcpSpendingInputSchema},
-			"cash_flow":         {mcpCashFlowDescription, mcpCashFlowInputSchema},
-			"recurring_charges": {mcpRecurringDescription, mcpRecurringInputSchema},
-			"anomalies":         {mcpAnomaliesDescription, mcpAnomaliesInputSchema},
+			"query":               {mcpQueryDescription, mcpQueryInputSchema},
+			"describe_schema":     {mcpDescribeSchemaDescription, mcpNoInputSchema},
+			"sync_status":         {mcpSyncStatusDescription, mcpNoInputSchema},
+			"data_quality":        {mcpDataQualityDescription, mcpDataQualityInputSchema},
+			"spending":            {mcpSpendingDescription, mcpSpendingInputSchema},
+			"cash_flow":           {mcpCashFlowDescription, mcpCashFlowInputSchema},
+			"recurring_charges":   {mcpRecurringDescription, mcpRecurringInputSchema},
+			"anomalies":           {mcpAnomaliesDescription, mcpAnomaliesInputSchema},
+			"search_transactions": {mcpSearchDescription, mcpSearchInputSchema},
 		}
 		require.Len(t, listed.Tools, len(wantTools))
 		for _, tool := range listed.Tools {
@@ -216,7 +250,7 @@ func Test_run_mcp_describes_all_eight_tools(t *testing.T) {
 
 		assert.Equal(t, 0, code)
 		assert.Contains(t, stdout.String(), "SQL runs read-only, and every list a tool returns\nstops at 500 entries.")
-		assert.Contains(t, stdout.String(), "Tools: describe_schema, query, sync_status, data_quality, spending,\ncash_flow, recurring_charges, anomalies.")
+		assert.Contains(t, stdout.String(), "Tools: describe_schema, query, sync_status, data_quality, spending,\ncash_flow, recurring_charges, anomalies, search_transactions.")
 		assert.Empty(t, stderr.String())
 	})
 }

@@ -23,6 +23,7 @@ const (
 	toolCashFlow    = "cash_flow"
 	toolRecurring   = "recurring_charges"
 	toolAnomalies   = "anomalies"
+	toolSearch      = "search_transactions"
 )
 
 // Row limits: the most any tool returns, data_quality's default, and the most items it lists per finding.
@@ -36,21 +37,24 @@ const (
 const callTimeout = 30 * time.Second
 
 // instructions is sent to every client at initialize.
-const instructions = `quarry serves David's Quicken Classic for Mac data from a local, read-only
-store. Call sync_status first and tell the user how old the snapshot is
-(snapshot.taken_at). For spending, income, recurring charges and unusually
-large charges call spending, cash_flow, recurring_charges and anomalies:
-they apply quarry's rules for transfers, refunds and currencies. For other
-questions call describe_schema before writing SQL for query: its
-conventions say which views already leave out transfers and how amounts,
-signs and currencies work. Every number you report must come from a tool
-result; never estimate. quarry cannot change data: fixes are made in
-Quicken, then the user runs quarry sync.`
+const instructions = `quarry serves the user's Quicken Classic for Mac data from a local,
+read-only store. Call sync_status first and tell the user how old the
+snapshot is (snapshot.taken_at). For spending, income, recurring charges
+and unusually large charges call spending, cash_flow, recurring_charges
+and anomalies: they apply quarry's rules for transfers, refunds and
+currencies. To find particular transactions by payee, memo, amount or
+date call search_transactions. For other questions call describe_schema
+before writing SQL for query: its conventions say which views already
+leave out transfers and how amounts, signs and currencies work. Every
+number you report must come from a tool result; never estimate. quarry
+cannot change data: fixes are made in Quicken, then the user runs quarry
+sync.`
 
 const queryDescription = `Run one read-only SQL query (DuckDB dialect) against quarry's store and
 return its columns and rows. Call describe_schema first for the tables,
 views and conventions. For spending and income totals call spending or
-cash_flow instead; in SQL use v_spending and v_cash_flow, which already
+cash_flow instead, and to find transactions by payee, memo or amount call
+search_transactions; in SQL use v_spending and v_cash_flow, which already
 leave out transfers between the user's own accounts. Returns at most
 ` + "`limit`" + ` rows (default 500, the most allowed); aggregate in SQL rather
 than paging through rows. The store cannot be changed, and other files,
@@ -112,6 +116,16 @@ Possible duplicates are not listed here; data_quality lists them. Charges
 dated after today are never listed. Returns at most 500 charges, newest
 first.`
 
+const searchDescription = `Find the user's transactions by text, date, account, category or amount,
+newest first. text matches payee names, transaction memos and split
+memos, ignoring letter case; % and _ are plain characters. Every
+transaction is searched, including transfers between the user's own
+accounts (flagged transfer) and transactions Quicken's reports leave out
+(flagged excluded); spending and cash_flow do not count those, so call
+them for totals rather than adding up these rows. Amounts are in each
+account's own currency and are never converted. Returns at most limit
+transactions (default 500); matched counts every match.`
+
 // The descriptions of the parameters query and data_quality take.
 const (
 	querySQLDescription       = "One read-only SQL statement in DuckDB's dialect over quarry's tables and views; describe_schema lists them."
@@ -139,6 +153,19 @@ const (
 	anomaliesSinceDescription    = "List charges dated on or after this date: YYYY, YYYY-MM or YYYY-MM-DD. Defaults to January 1 of this year."
 	anomaliesUntilDescription    = "List charges dated on or before this date: YYYY, YYYY-MM or YYYY-MM-DD; a year or month ends on its last day. Defaults to today."
 	anomaliesAccountsDescription = "List only charges in these accounts, each given by id or by name in any letter case; the payee's charges in other accounts still count as history."
+)
+
+// The descriptions of the parameters search_transactions takes.
+const (
+	searchTextDescription     = "Words to find in payee names, transaction memos and split memos, in any letter case; every character is literal. Omit it to search by the other parameters alone."
+	searchSinceDescription    = "Earliest date to list: YYYY, YYYY-MM or YYYY-MM-DD; a year or month starts on its first day. Omit it to search from the first transaction."
+	searchUntilDescription    = "Latest date to list: YYYY, YYYY-MM or YYYY-MM-DD; a year or month ends on its last day. Omit it to search every later date, future-dated transactions included."
+	searchAccountsDescription = "Search only these accounts, each given by id or by name in any letter case. Omit it to search every account."
+	searchCategoryDescription = "List only transactions with a split in this category or one under it, given by its full path (such as Food:Groceries) in any letter case."
+	searchMinDescription      = `Smallest amount to list, as a string such as "25" or "19.99", compared without its sign in the account's own currency.`
+	searchMaxDescription      = `Largest amount to list, as a string such as "100" or "250.50", compared without its sign in the account's own currency. ` +
+		"Give min and max the same value to find one amount."
+	searchLimitDescription = "Most transactions to return, newest first, 1 to 500. Defaults to 500. matched always counts every match."
 )
 
 type (
@@ -183,6 +210,18 @@ type (
 		Accounts []string `json:"accounts"`
 		Currency string   `json:"currency"`
 	}
+	// searchInput is the search_transactions tool's arguments. The string fields are pointers so absent (nil) stays
+	// apart from given and empty, which the handler refuses.
+	searchInput struct {
+		Text     *string  `json:"text"`
+		Since    *string  `json:"since"`
+		Until    *string  `json:"until"`
+		Accounts []string `json:"accounts"`
+		Category *string  `json:"category"`
+		Min      *string  `json:"min"`
+		Max      *string  `json:"max"`
+		Limit    int      `json:"limit"`
+	}
 	// noInput is the arguments of a tool that takes none.
 	noInput struct{}
 )
@@ -226,6 +265,16 @@ func (s *Server) addTools(srv *sdk.Server) {
 		"accounts": accountsSchema(anomaliesAccountsDescription),
 		"currency": currencySchema(),
 	})), handler(s.timeout, stoppedLine(toolAnomalies), s.anomalies))
+	sdk.AddTool(srv, tool(toolSearch, searchDescription, objectSchema(map[string]*jsonschema.Schema{
+		"text":     described(searchTextDescription, &jsonschema.Schema{Type: "string"}),
+		"since":    described(searchSinceDescription, &jsonschema.Schema{Type: "string"}),
+		"until":    described(searchUntilDescription, &jsonschema.Schema{Type: "string"}),
+		"accounts": accountsSchema(searchAccountsDescription),
+		"category": described(searchCategoryDescription, &jsonschema.Schema{Type: "string"}),
+		"min":      described(searchMinDescription, &jsonschema.Schema{Type: "string"}),
+		"max":      described(searchMaxDescription, &jsonschema.Schema{Type: "string"}),
+		"limit":    described(searchLimitDescription, limitSchema(maxRows)),
+	})), handler(s.timeout, stoppedLine(toolSearch), s.searchTransactions))
 }
 
 // tool describes one tool; its result is a JSON object.

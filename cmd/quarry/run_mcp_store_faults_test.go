@@ -73,6 +73,10 @@ func Test_run_mcp_logs_only_the_withheld_line_for_a_store_read_fault(t *testing.
 			damage: directoryStore, reason: `Could not read from file "{store}": Is a directory`,
 		},
 		{
+			name: "search_transactions, store cannot be opened", tool: "search_transactions",
+			damage: directoryStore, reason: `Could not read from file "{store}": Is a directory`,
+		},
+		{
 			name: "describe_schema, a table dropped", tool: "describe_schema",
 			damage: brokenStore("DROP TABLE categories CASCADE"), reason: "Table with name categories does not exist!",
 		},
@@ -99,6 +103,10 @@ func Test_run_mcp_logs_only_the_withheld_line_for_a_store_read_fault(t *testing.
 		{
 			name: "anomalies, its view dropped", tool: "anomalies",
 			damage: brokenStore("DROP VIEW v_spending"), reason: "Table with name v_spending does not exist!",
+		},
+		{
+			name: "search_transactions, a table dropped", tool: "search_transactions",
+			damage: brokenStore("DROP TABLE categories CASCADE"), reason: "Table with name categories does not exist!",
 		},
 	}
 

@@ -164,6 +164,15 @@ LEFT JOIN r ON true;
 // it is the SQL form of the negation of store.Account.LeftOutOfReports.
 const reportedAccount = "a.in_reports AND NOT a.linked_tracking"
 
+// reportedTransaction is the predicate, over transactions aliased t and accounts aliased a, for a
+// transaction Quicken's reports count: in a reported account and not marked "exclude from reports".
+const reportedTransaction = reportedAccount + " AND NOT t.excluded_from_reports"
+
+// transferLeg is the predicate for the split aliased alias being a leg of a transfer.
+func transferLeg(alias string) string {
+	return "EXISTS (SELECT 1 FROM transfers x WHERE x.from_split_id = " + alias + ".id OR x.to_split_id = " + alias + ".id)"
+}
+
 // cashFlowViewDDL creates v_cash_flow: each split that counts as income or spending in Quicken's reports,
 // with its amount in CAD and in USD at the latest fx_rates rate dated on or before the split's date.
 func cashFlowViewDDL() string {
@@ -185,11 +194,10 @@ JOIN accounts a ON a.id = t.account_id
 LEFT JOIN categories c ON c.id = s.category_id
 LEFT JOIN payees p ON p.id = t.payee_id
 ASOF LEFT JOIN fx_rates r ON t.date >= r.date
-WHERE ` + reportedAccount + `
-	AND NOT t.excluded_from_reports
+WHERE ` + reportedTransaction + `
 	AND c.kind IS DISTINCT FROM 'system'
 	AND NOT (s.category_id IS NULL AND s.amount = 0)
-	AND NOT EXISTS (SELECT 1 FROM transfers x WHERE x.from_split_id = s.id OR x.to_split_id = s.id);
+	AND NOT ` + transferLeg("s") + `;
 COMMENT ON VIEW v_cash_flow IS 'excludes accounts where accounts.in_reports is false or accounts.linked_tracking is true, as Quicken reports do.';
 `
 }

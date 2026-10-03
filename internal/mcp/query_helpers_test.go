@@ -52,6 +52,19 @@ type fakeStore struct {
 	flow    store.CashFlow
 	charges store.Charges
 	through []time.Time
+
+	found    store.Search
+	searched []store.SearchParams
+}
+
+// Search answers with found, or err when set, recording the params and keeping at most Limit rows as the real store does.
+func (f *fakeStore) Search(_ context.Context, params store.SearchParams) (store.Search, error) {
+	f.searched = append(f.searched, params)
+	found := f.found
+	if params.Limit > 0 && len(found.Rows) > params.Limit {
+		found.Rows = found.Rows[:params.Limit]
+	}
+	return found, f.err
 }
 
 // Spending answers with spent, or err when set.
@@ -183,6 +196,14 @@ func (h *harness) recurringCharges(t *testing.T, arguments any) *sdk.CallToolRes
 func (h *harness) anomalies(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
 	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "anomalies", Arguments: arguments})
+	require.NoError(t, err)
+	return result
+}
+
+// searchTransactions calls the search_transactions tool with arguments.
+func (h *harness) searchTransactions(t *testing.T, arguments any) *sdk.CallToolResult {
+	t.Helper()
+	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "search_transactions", Arguments: arguments})
 	require.NoError(t, err)
 	return result
 }

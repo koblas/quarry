@@ -20,6 +20,7 @@ const (
 	RefusalUnknownAccount
 	RefusalAmbiguousAccount
 	RefusalStore
+	RefusalUnknownCategory
 )
 
 // RefusalError is a final, one-line refusal of a read: its message excludes
@@ -32,7 +33,7 @@ type RefusalError struct {
 
 	// Kind says which of the parts below are set.
 	Kind RefusalKind
-	// Arg is the caller's account text (RefusalUnknownAccount, RefusalAmbiguousAccount).
+	// Arg is the caller's account or category text (RefusalUnknownAccount, RefusalAmbiguousAccount, RefusalUnknownCategory).
 	Arg string
 	// IDs are the ids of the accounts Arg names, sorted (RefusalAmbiguousAccount).
 	IDs []string
@@ -87,6 +88,14 @@ func unknownAccountRefusal(arg string) error {
 	return RefusalError{
 		msg:  fmt.Sprintf("no account named %q; run quarry accounts --all to list them", arg),
 		Kind: RefusalUnknownAccount, Arg: arg,
+	}
+}
+
+// unknownCategoryRefusal refuses a category value that names no category.
+func unknownCategoryRefusal(arg string) error {
+	return RefusalError{
+		msg:  fmt.Sprintf("no category named %q; list them with quarry sql \"SELECT full_path FROM categories ORDER BY full_path\"", arg),
+		Kind: RefusalUnknownCategory, Arg: arg,
 	}
 }
 

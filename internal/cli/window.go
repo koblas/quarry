@@ -57,3 +57,20 @@ func (w *reportFlags) window(cmd *cobra.Command, now time.Time) (store.Window, e
 	}
 	return window, nil
 }
+
+// searchWindow resolves the flags cmd was given into a search window, or refuses them as a UsageError.
+// An absent flag is an open bound.
+func (w *reportFlags) searchWindow(cmd *cobra.Command) (store.SearchWindow, error) {
+	var since, until *string
+	if cmd.Flags().Changed("since") {
+		since = &w.since
+	}
+	if cmd.Flags().Changed("until") {
+		until = &w.until
+	}
+	window, err := report.ParseSearchWindow(since, until)
+	if err != nil {
+		return store.SearchWindow{}, UsageError{msg: err.Error()}
+	}
+	return window, nil
+}

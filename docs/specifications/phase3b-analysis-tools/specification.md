@@ -744,7 +744,7 @@ Sizing pass (architect, opus) 2026-10-03 — 16 IDs → 7 runs. Order is binding
 - [x] SCENARIO-10b: recurring_charges refuses a future since in its own words — delivered by SCENARIO-10 — `cmd/quarry/run_mcp_recurring_charges_test.go` `Test_run_mcp_recurring_charges_refuses_a_future_since_in_its_own_words`
 - [x] SCENARIO-11: anomalies returns the anomalies --json document — delivered by SCENARIO-10 — `cmd/quarry/run_mcp_anomalies_test.go` `Test_run_mcp_anomalies_returns_the_anomalies_json_document`
 - [x] SCENARIO-11b: anomalies refuses a future since in its own words — delivered by SCENARIO-10 — `cmd/quarry/run_mcp_anomalies_test.go` `Test_run_mcp_anomalies_refuses_a_future_since_in_its_own_words`
-- [x] SCENARIO-13: the server describes all eight tools — `cmd/quarry/run_mcp_descriptions_test.go` `Test_run_mcp_describes_all_eight_tools`
+- [x] SCENARIO-13: the server describes all eight tools — `cmd/quarry/run_mcp_descriptions_test.go` `Test_run_mcp_describes_every_tool`
 
 ---
 
