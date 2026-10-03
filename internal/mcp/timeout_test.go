@@ -73,6 +73,11 @@ func (s *stallingStore) CashFlow(ctx context.Context, _ store.CashFlowParams) (s
 	return store.CashFlow{}, &store.OpenError{Fault: store.OpenFaultOther, Path: testStorePath, Err: errDriverInterrupt}
 }
 
+func (s *stallingStore) Charges(ctx context.Context, _ store.ChargeParams) (store.Charges, error) {
+	s.wait(ctx)
+	return store.Charges{}, &store.OpenError{Fault: store.OpenFaultOther, Path: testStorePath, Err: errDriverInterrupt}
+}
+
 // serveStalling serves the tools over st with opts, returning the client session and the server's stderr.
 func serveStalling(t *testing.T, st *stallingStore, opts ...mcp.Option) (*sdk.ClientSession, *bytes.Buffer) {
 	t.Helper()
@@ -105,6 +110,8 @@ func Test_each_tool_answers_its_deadline_with_its_ruled_line(t *testing.T) {
 		{"data_quality", map[string]any{}, time.Second, "data_quality stopped after 1 second; try again"},
 		{"spending", map[string]any{}, time.Second, "spending stopped after 1 second; try again"},
 		{"cash_flow", map[string]any{}, time.Second, "cash_flow stopped after 1 second; try again"},
+		{"recurring_charges", map[string]any{}, time.Second, "recurring_charges stopped after 1 second; try again"},
+		{"anomalies", map[string]any{}, time.Second, "anomalies stopped after 1 second; try again"},
 	}
 
 	for _, c := range cases {
