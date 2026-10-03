@@ -11,6 +11,7 @@ Scenarios complete: SCENARIO-01 (with SCENARIO-07 folded). Last updated by SCENA
 - Section 10 pinned only by six link targets in order (`references/schema.md`, `spending.md`, `cash-flow.md`, `recurring-and-anomalies.md`, `search.md`, `findings.md`) and the credit as last non-empty line; descriptive text after each link is free (SCENARIO-01)
 - `status --json` paths the skill reads (`snapshot.taken_at`, `dates.last`, `rates.fetch_error`, `rates.last`, `findings.open`) are pinned by `Test_status_json_carries_each_path_the_skill_reads` and must appear as plain substrings in SKILL.md section 1 (SCENARIO-01)
 - Frontmatter description is a single plain-scalar line, no `: `, ≤ 1536 runes; no YAML parsing, no `go.mod` change (SCENARIO-01)
+- The notices clause and the four PRD replacement sentences are pinned by `Test_notices_and_prd_carry_the_ruled_plugin_edits` (whitespace-collapsed, so wrapping is free) (SCENARIO-01)
 - `claude plugin validate --strict plugin` and `--strict .` both pass (SCENARIO-01)
 
 ## Left unbuilt
@@ -26,5 +27,4 @@ Scenarios complete: SCENARIO-01 (with SCENARIO-07 folded). Last updated by SCENA
 
 ## Open debts
 - `THIRD_PARTY_NOTICES` "Used in:" keeps its existing parenthetical and appends `; plugin/ (…)`; S.9's "Now" column abbreviated it, so this is a flagged reading, not a ruled deletion — product-vision final pass to confirm
-- PRD edits (`docs/initial-prd.md` skill section, open questions) are prose and unpinned by tests — unowned, dies unless re-opened
 - Proposed `.claude/CLAUDE.md` sentence about `plugin/` (spec "flagged only") not applied; outside this pipeline — unowned

@@ -40,7 +40,11 @@ var skillReferenceLinks = []string{
 	"references/findings.md",
 }
 
-var skillLinkTarget = regexp.MustCompile(`\]\((references/[^)]+)\)`)
+var skillLinkTarget = regexp.MustCompile(`\]\(([^)]+)\)`)
+
+func Test_ticks_turns_the_stand_in_into_a_backtick(t *testing.T) {
+	assert.Equal(t, "a`b", ticks("a¤b"))
+}
 
 func Test_skill_text_carries_the_ruled_frontmatter_and_rules(t *testing.T) {
 	raw := repoFile(t, skillPath)
@@ -65,9 +69,7 @@ func Test_skill_text_carries_the_ruled_frontmatter_and_rules(t *testing.T) {
 	}
 	for _, r := range ruled {
 		t.Run(r.heading, func(t *testing.T) {
-			want := ticks(r.body)
-			require.NotContains(t, want, "¤")
-			assert.Equal(t, want, skill.bodies[r.heading])
+			assert.Equal(t, ticks(r.body), skill.bodies[r.heading])
 		})
 	}
 
@@ -129,8 +131,8 @@ func (s skillText) description() string {
 	return ""
 }
 
-// referenceLinkTargets returns the references/ link target of each line that
-// carries one, failing when a line carries two.
+// referenceLinkTargets returns the target of every markdown link in section,
+// failing when a line carries two.
 func referenceLinkTargets(t *testing.T, section string) []string {
 	t.Helper()
 	var targets []string

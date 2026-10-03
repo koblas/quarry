@@ -147,22 +147,23 @@ func Test_status_json_carries_each_path_the_skill_reads(t *testing.T) {
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &status))
 	freshness := splitSkill(t, repoFile(t, skillPath)).bodies[skillHeadings[0]]
 
-	// wantType is the JSON type the skill relies on; nil allows null.
+	// wantType is the JSON type the skill relies on; nullable allows null.
 	paths := []struct {
 		path     string
 		wantType any
+		nullable bool
 	}{
-		{"snapshot.taken_at", ""},
-		{"dates.last", ""},
-		{"rates.fetch_error", nil},
-		{"rates.last", nil},
-		{"findings.open", float64(0)},
+		{"snapshot.taken_at", "", false},
+		{"dates.last", "", false},
+		{"rates.fetch_error", nil, true},
+		{"rates.last", "", false},
+		{"findings.open", float64(0), false},
 	}
 	for _, p := range paths {
 		t.Run(p.path, func(t *testing.T) {
 			got, ok := statusPath(status, p.path)
 			require.True(t, ok, "status --json has no %s", p.path)
-			if p.wantType != nil {
+			if !p.nullable {
 				assert.IsType(t, p.wantType, got)
 			}
 			assert.Contains(t, freshness, p.path)

@@ -37,11 +37,11 @@ Size: OWNS A RUN — 3 batches, 0 feature packages (static files plus `cmd/quarr
 - [x] Step 5: `README.md:5` insert `## Use quarry with Claude Code` (S.8 verbatim, incl. its two code fences) before `## Credits`; `cmd/quarry/run_plugin_readme_test.go` (new) `Test_readme_section_for_claude_code_is_verbatim_and_precedes_credits` — section from its heading to the next `## ` equals the constant (via `ticks`), and its index is below `## Credits`'s
 
 ### Sweep
-- [ ] Step 6: `THIRD_PARTY_NOTICES:7-8` dweekly "Used in:" — keep the existing parenthetical and append `; plugin/ (skill layout and the untrusted-data and reporting rules in SKILL.md)`; `docs/initial-prd.md:215` (references list and "generated from the store" clause, S.9 rows 1-2), `:217` (row 3), and one sentence under `**Open questions**` (~`:330`, row 4: "Quicken's category tax line is not imported; tax totals are by user-named category until it is."); leave `:129`, `:117`. These doc edits are not pinned by tests (prose, not contract). Then fix what `go build ./... && golangci-lint run ./...` reports, to `0 issues`
+- [x] Step 6: `THIRD_PARTY_NOTICES:7-8` dweekly "Used in:" — keep the existing parenthetical and append `; plugin/ (skill layout and the untrusted-data and reporting rules in SKILL.md)`; `docs/initial-prd.md:215` (references list and "generated from the store" clause, S.9 rows 1-2), `:217` (row 3), and one sentence under `**Open questions**` (~`:330`, row 4: "Quicken's category tax line is not imported; tax totals are by user-named category until it is."); leave `:129`, `:117`. These doc edits are not pinned by tests (prose, not contract). Then fix what `go build ./... && golangci-lint run ./...` reports, to `0 issues`
 
 ### Verify
-- [ ] Step 7: full verification per `.claude/rules/agent-briefs.md` → Verification (`uncovered-diff.py` reports nothing: no production line added); if `claude` is on PATH run `claude plugin validate --strict plugin` and `claude plugin validate --strict .` once each, foreground, and report both exit codes, else say unverified (the orchestrator's exit evidence covers it)
-- [ ] Step 8: `.claude/scripts/spec-check.py phase3d-skill`; tick SCENARIO-01 with its acceptance test and SCENARIO-07 as `delivered by SCENARIO-01` before the test reference (reference last on the line); write `STATE.md`; set `status: done`
+- [x] Step 7: full verification per `.claude/rules/agent-briefs.md` → Verification (`uncovered-diff.py` reports nothing: no production line added); if `claude` is on PATH run `claude plugin validate --strict plugin` and `claude plugin validate --strict .` once each, foreground, and report both exit codes, else say unverified (the orchestrator's exit evidence covers it)
+- [x] Step 8: `.claude/scripts/spec-check.py phase3d-skill`; tick SCENARIO-01 with its acceptance test and SCENARIO-07 as `delivered by SCENARIO-01` before the test reference (reference last on the line); write `STATE.md`; set `status: done`
 
 ## Handoff
 
