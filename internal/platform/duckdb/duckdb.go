@@ -31,7 +31,7 @@ var errNotDuckDBConn = errors.New("connection is not a duckdb driver connection"
 type DB struct {
 	conn *sql.DB
 	path string
-	// cache is the instance cache OpenReadOnly made for this database, nil for one on the shared cache.
+	// cache is the instance cache made for this database alone; release destroys it.
 	cache *mapping.InstanceCache
 }
 
@@ -46,17 +46,8 @@ func Create(ctx context.Context, path string) (*DB, error) {
 		return nil, fmt.Errorf("create %s: %w", path, err)
 	}
 
-	conn, err := openDB(path, nil)
+	db, err := openPrivate(ctx, path, path)
 	if err != nil {
-		// The duckdb driver opens (and for a new path, creates) the file
-		// inside openDB itself, so a permission fault on path or its
-		// parent directory surfaces here, not at PingContext below.
-		return nil, fmt.Errorf("create %s: %w", path, err)
-	}
-	conn.SetMaxOpenConns(1)
-
-	if err := conn.PingContext(ctx); err != nil {
-		_ = conn.Close()
 		return nil, fmt.Errorf("create %s: %w", path, err)
 	}
 
@@ -64,11 +55,11 @@ func Create(ctx context.Context, path string) (*DB, error) {
 		// unreachable: chmod on the path PingContext just validated fails only for an
 		// ownership or permission-flag change this single-user test process cannot
 		// construct without a race, and not portably across CI.
-		_ = conn.Close()
+		_ = db.release()
 		return nil, fmt.Errorf("create %s: %w", path, err)
 	}
 
-	return &DB{conn: conn, path: path}, nil
+	return db, nil
 }
 
 // readOnlyDSN locks a read session down: no write, no outside access, no SET.
@@ -83,21 +74,47 @@ const readOnlyDSN = "?access_mode=READ_ONLY&enable_external_access=false" +
 // Each open is an instance of its own: it never waits on, and never reads
 // through, another open of path, so it sees the file now at path.
 func OpenReadOnly(ctx context.Context, path string) (*DB, error) {
-	cache := mapping.CreateInstanceCache()
-	conn, err := openDB(path+readOnlyDSN, &cache)
+	db, err := openPrivate(ctx, path+readOnlyDSN, path)
 	if err != nil {
-		// The duckdb driver opens the file inside openDB itself, so a
-		// missing path or permission fault surfaces here, not at
-		// PingContext below.
-		mapping.DestroyInstanceCache(&cache)
 		return nil, fmt.Errorf("open %s read-only: %w", path, err)
+	}
+	return db, nil
+}
+
+// OpenReadWrite opens an existing DuckDB database file at path for reading
+// and writing, with none of OpenReadOnly's lockdown. It exists so a test can
+// edit a store behind quarry's back; production code opens a store only
+// through Create and OpenReadOnly. Like them, it is an instance of its own.
+func OpenReadWrite(ctx context.Context, path string) (*DB, error) {
+	db, err := openPrivate(ctx, path, path)
+	if err != nil {
+		return nil, fmt.Errorf("open %s read-write: %w", path, err)
+	}
+	return db, nil
+}
+
+// openPrivate opens dsn on a new instance cache that the returned DB owns.
+func openPrivate(ctx context.Context, dsn, path string) (*DB, error) {
+	cache := mapping.CreateInstanceCache()
+	return openOwned(ctx, &cache, dsn, path)
+}
+
+// openOwned opens dsn on cache and pings it, taking ownership of cache: the
+// returned DB's Close destroys it, and so does any failure here. The driver
+// opens the file inside openDB itself, so a missing path or permission fault
+// surfaces there, not at the ping.
+func openOwned(ctx context.Context, cache *mapping.InstanceCache, dsn, path string) (*DB, error) {
+	conn, err := openDB(dsn, cache)
+	if err != nil {
+		mapping.DestroyInstanceCache(cache)
+		return nil, err
 	}
 	conn.SetMaxOpenConns(1)
 
-	db := &DB{conn: conn, path: path, cache: &cache}
+	db := &DB{conn: conn, path: path, cache: cache}
 	if err := conn.PingContext(ctx); err != nil {
 		_ = db.release()
-		return nil, fmt.Errorf("open %s read-only: %w", path, err)
+		return nil, err //nolint:wrapcheck // callers add the path and operation
 	}
 	return db, nil
 }
@@ -209,12 +226,10 @@ func (d *DB) Close() error {
 	return d.release()
 }
 
-// release closes the connection, then the instance cache OpenReadOnly made for it.
+// release closes the connection, then destroys the instance cache made for it. Calling it again is a no-op.
 func (d *DB) release() error {
 	err := d.conn.Close()
-	if d.cache != nil {
-		mapping.DestroyInstanceCache(d.cache)
-	}
+	mapping.DestroyInstanceCache(d.cache)
 	return err //nolint:wrapcheck // callers add context
 }
 
