@@ -12,9 +12,11 @@ import (
 )
 
 const (
-	searchLogPrefix = "quarry: mcp: search_transactions: "
-	narrowWording   = "narrow the search with text, since, until, accounts, category, min or max"
-	higherWording   = "pass a higher limit, up to 500, or "
+	searchLogPrefix   = "quarry: mcp: search_transactions: "
+	textRefusedLine   = "refused the call's text; details went to the client only"
+	amountRefusedLine = "refused the call's min or max; details went to the client only"
+	narrowWording     = "narrow the search with text, since, until, accounts, category, min or max"
+	higherWording     = "pass a higher limit, up to 500, or "
 )
 
 // decodeSearch is result's one text block decoded as the search document.
@@ -56,14 +58,22 @@ func Test_search_transactions_refuses_a_bad_window_in_the_tools_words(t *testing
 }
 
 func Test_search_transactions_refuses_blank_text_and_a_bad_amount_before_building_a_report(t *testing.T) {
+	const amountHint = `is not an amount; use digits with up to 2 decimals and no sign, such as "25" or "19.99"`
 	cases := []struct {
 		name      string
 		arguments map[string]any
+		want      string
+		wantClass string
+		absent    string
 	}{
-		{"blank text", map[string]any{"text": "  "}},
-		{"a min that is not an amount", map[string]any{"min": "-12"}},
-		{"an empty max", map[string]any{"max": ""}},
-		{"a min above the max", map[string]any{"min": "50", "max": "20"}},
+		{
+			"blank text",
+			map[string]any{"text": "  "},
+			"text is blank; leave it out to search by date, account, category or amount alone", textRefusedLine, "  ",
+		},
+		{"a min that is not an amount", map[string]any{"min": "-12"}, `min "-12" ` + amountHint, amountRefusedLine, "-12"},
+		{"an empty max", map[string]any{"max": ""}, `max "" ` + amountHint, amountRefusedLine, `""`},
+		{"a min above the max", map[string]any{"min": "50", "max": "20"}, "min 50 is more than max 20", amountRefusedLine, "50"},
 	}
 
 	for _, c := range cases {
@@ -74,8 +84,11 @@ func Test_search_transactions_refuses_blank_text_and_a_bad_amount_before_buildin
 			result := h.searchTransactions(t, c.arguments)
 
 			assert.True(t, result.IsError)
+			assert.Equal(t, c.want, textOf(t, result))
 			assert.Zero(t, h.built)
 			assert.Empty(t, fake.searched)
+			assert.Equal(t, searchLogPrefix+c.wantClass+"\n", h.stderr.String())
+			assert.NotContains(t, h.stderr.String(), c.absent)
 		})
 	}
 }

@@ -61,6 +61,13 @@ func categoryRefusalFor(t *testing.T, arg string) error {
 	return err
 }
 
+func amountRefusalFor(t *testing.T, least, most *string) error {
+	t.Helper()
+	_, err := report.ParseSearchAmounts(least, most)
+	require.Error(t, err)
+	return err
+}
+
 func accountRefusalFor(t *testing.T, arg string, names ...string) error {
 	t.Helper()
 	_, err := newRefusingServer(nil, names...).Spend(t.Context(), report.SpendRequest{Accounts: []string{arg}})
@@ -77,6 +84,10 @@ func Test_logLine_classifies_each_refusal(t *testing.T) {
 		{name: "an account that names none", err: accountRefusalFor(t, "Nope", "Chequing"), want: unknownAccountLog},
 		{name: "an account that names several", err: accountRefusalFor(t, "Visa", "Visa", "Visa"), want: ambiguousAccountLog},
 		{name: "a category that names none", err: categoryRefusalFor(t, "Fod"), want: unknownCategoryLog},
+		{name: "the same, worded for the model", err: categoryRefusal(categoryRefusalFor(t, "Fod")), want: unknownCategoryLog},
+		{name: "blank search text", err: textRefusal(report.CheckSearchText(new(" "))), want: textRefusedLog},
+		{name: "a min that is not an amount", err: amountRefusal(amountRefusalFor(t, new("-12"), nil)), want: amountRefusedLog},
+		{name: "a min above the max", err: amountRefusal(amountRefusalFor(t, new("50"), new("20"))), want: amountRefusedLog},
 		{
 			name: "a store that fails when opened, in the engine's words",
 			err:  storeRefusalFor(t, &store.OpenError{Fault: store.OpenFaultOther, Path: refusalStore, Reason: `Could not read from file "` + refusalStore + `": Is a directory`}),
@@ -130,6 +141,8 @@ func Test_logLine_never_carries_the_callers_account_text(t *testing.T) {
 		{name: "an account that names none", err: accountRefusalFor(t, distinctive, "Chequing")},
 		{name: "the same, worded for the model", err: accountRefusal(accountRefusalFor(t, distinctive, "Chequing"))},
 		{name: "an account that names several", err: accountRefusalFor(t, distinctive, distinctive, distinctive)},
+		{name: "a category that names none, worded for the model", err: categoryRefusal(categoryRefusalFor(t, distinctive))},
+		{name: "a min that is not an amount", err: amountRefusal(amountRefusalFor(t, new(distinctive), nil))},
 	}
 
 	for _, c := range cases {
@@ -195,6 +208,86 @@ func Test_accountRefusal_words_unknown_and_leaves_the_rest(t *testing.T) {
 	for _, c := range passthrough {
 		t.Run(c.name, func(t *testing.T) {
 			got := accountRefusal(c.err)
+
+			assert.Equal(t, c.err, got)
+		})
+	}
+}
+
+func Test_amountRefusal_words_each_amount_error_from_its_parts(t *testing.T) {
+	const hint = `is not an amount; use digits with up to 2 decimals and no sign, such as "25" or "19.99"`
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "a min with a sign", err: amountRefusalFor(t, new("-12"), nil), want: `min "-12" ` + hint},
+		{name: "a max with a sign", err: amountRefusalFor(t, nil, new("-3")), want: `max "-3" ` + hint},
+		{name: "a quote stays escaped", err: amountRefusalFor(t, new(`1"2`), nil), want: `min "1\"2" ` + hint},
+		{name: "min above max shows the raw values", err: amountRefusalFor(t, new("50.00"), new("20")), want: "min 50.00 is more than max 20"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := amountRefusal(c.err)
+
+			require.EqualError(t, got, c.want)
+			assert.Equal(t, amountRefusedLog, logLine(got))
+		})
+	}
+
+	t.Run("an error that is no amount error comes back as is", func(t *testing.T) {
+		got := amountRefusal(errTestFault)
+
+		assert.Equal(t, errTestFault, got)
+	})
+}
+
+func Test_textRefusal_words_blank_text_and_leaves_the_rest(t *testing.T) {
+	got := textRefusal(report.ErrBlankSearchText)
+
+	require.EqualError(t, got, "text is blank; leave it out to search by date, account, category or amount alone")
+	assert.Equal(t, textRefusedLog, logLine(got))
+	assert.Equal(t, errTestFault, textRefusal(errTestFault))
+}
+
+func Test_categoryRefusal_words_unknown_and_leaves_the_rest(t *testing.T) {
+	const listing = "; call describe_schema to list the categories"
+	cases := []struct {
+		name string
+		arg  string
+		want string
+	}{
+		{name: "an ordinary name", arg: "Fod", want: `no category named "Fod"` + listing},
+		{name: "an empty name shows as empty quotes", arg: "", want: `no category named ""` + listing},
+		{name: "a quote and a verb stay as typed", arg: `Fo"d %d`, want: `no category named "Fo\"d %d"` + listing},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := categoryRefusal(categoryRefusalFor(t, c.arg))
+
+			require.EqualError(t, got, c.want)
+			assert.Equal(t, unknownCategoryLog, logLine(got))
+			refusal, ok := errors.AsType[report.RefusalError](got)
+			require.True(t, ok)
+			assert.Equal(t, report.RefusalUnknownCategory, refusal.Kind)
+		})
+	}
+
+	passthrough := []struct {
+		name string
+		err  error
+	}{
+		{name: "an unknown account", err: accountRefusalFor(t, "Nope", "Chequing")},
+		{name: "an ambiguous account", err: accountRefusalFor(t, "Visa", "Visa", "Visa")},
+		{name: "a store refusal", err: storeRefusalFor(t, &store.OpenError{Fault: store.OpenFaultMissing, Path: refusalStore})},
+		{name: "an error that is no refusal", err: errTestFault},
+	}
+
+	for _, c := range passthrough {
+		t.Run(c.name, func(t *testing.T) {
+			got := categoryRefusal(c.err)
 
 			assert.Equal(t, c.err, got)
 		})

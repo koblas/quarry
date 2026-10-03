@@ -162,15 +162,15 @@ func Test_search_amount_compares_the_largest_amount_the_column_holds(t *testing.
 	rows := searchRowsFor()
 	addSearch(&rows, signedTxn("deposit", 1, top))
 	addSearch(&rows, signedTxn("charge", 2, -top))
-	amounts := map[string]int64{"txn-deposit": top, "txn-charge": -top}
+	both := []listedAmount{{"txn-deposit", top}, {"txn-charge", -top}}
 	cases := []struct {
 		name     string
 		min, max *int64
-		want     []string
+		want     []listedAmount
 	}{
-		{name: "min at the largest amount finds both signs", min: new(top), want: []string{"txn-deposit", "txn-charge"}},
+		{name: "min at the largest amount finds both signs", min: new(top), want: both},
 		{name: "min one cent above it finds nothing", min: new(top + 1)},
-		{name: "max at the largest amount finds both signs", max: new(top), want: []string{"txn-deposit", "txn-charge"}},
+		{name: "max at the largest amount finds both signs", max: new(top), want: both},
 		{name: "max one cent below it finds nothing", max: new(top - 1)},
 	}
 
@@ -180,10 +180,21 @@ func Test_search_amount_compares_the_largest_amount_the_column_holds(t *testing.
 
 			got := searchOf(t, rows, store.SearchParams{Min: c.min, Max: c.max})
 
-			assert.ElementsMatch(t, c.want, searchedIDs(got))
-			for _, row := range got.Rows {
-				assert.Equal(t, amounts[row.TransactionID], row.Amount, row.TransactionID)
-			}
+			assert.ElementsMatch(t, c.want, listedAmounts(got))
 		})
 	}
+}
+
+// listedAmount is a listed transaction's id with the amount the store returned for it.
+type listedAmount struct {
+	id     string
+	amount int64
+}
+
+func listedAmounts(found store.Search) []listedAmount {
+	listed := make([]listedAmount, len(found.Rows))
+	for i, row := range found.Rows {
+		listed[i] = listedAmount{row.TransactionID, row.Amount}
+	}
+	return listed
 }

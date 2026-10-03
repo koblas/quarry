@@ -28,6 +28,8 @@ const (
 	windowRefusedLog    = "refused the call's since or until; details went to the client only"
 	unknownAccountLog   = "refused the call's accounts: one names no account; details went to the client only"
 	ambiguousAccountLog = "refused the call's accounts: one names more than one account; details went to the client only"
+	textRefusedLog      = "refused the call's text; details went to the client only"
+	amountRefusedLog    = "refused the call's min or max; details went to the client only"
 	unknownCategoryLog  = "refused the call's category: it names no category; details went to the client only"
 )
 

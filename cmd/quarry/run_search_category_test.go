@@ -173,7 +173,7 @@ func Test_run_search_category_as_text(t *testing.T) {
 	}{
 		{
 			name: "a known category no split uses prints the empty result and the no-match warning", args: []string{"--category", "Travel"},
-			wantStdout: "0 matching transactions\n",
+			wantStdout: "Transactions in all accounts, all dates, category \"Travel\"\n\nDate  Account  Payee  Category  Memo  Amount  Flags\n\n0 matching transactions\n",
 			wantStderr: "quarry: warning: no transactions match the search; the store's transactions run 2026-01-01 to 2026-01-05\n",
 		},
 		{
@@ -192,7 +192,7 @@ func Test_run_search_category_as_text(t *testing.T) {
 			exitCode := runWith(context.Background(), append([]string{"search"}, c.args...), spendEnv(&stdout, &stderr))
 
 			require.Equal(t, c.wantExit, exitCode, stderr.String())
-			assert.Contains(t, stdout.String(), c.wantStdout)
+			assert.Equal(t, c.wantStdout, stdout.String())
 			assert.Equal(t, c.wantStderr, stderr.String())
 		})
 	}
