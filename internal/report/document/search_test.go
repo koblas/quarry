@@ -18,7 +18,7 @@ func searchDay(month time.Month, dayOfMonth int) *time.Time {
 // searched is a search of Chequing, 2026-01-01 to 2026-03-31, matching 3 transactions of which 1 is listed.
 func searched(rows ...store.SearchRow) report.Search {
 	return report.Search{
-		Search:   store.Search{Rows: rows, Matched: 3},
+		Rows: rows, Matched: 3,
 		Window:   store.SearchWindow{Since: searchDay(time.January, 1), Until: searchDay(time.March, 31)},
 		Accounts: []store.Account{{ID: "acct-1", Name: "Chequing"}},
 		Limit:    1,
@@ -40,6 +40,7 @@ func costcoRow() store.SearchRow {
 func Test_NewSearch_writes_every_key_in_the_ruled_order(t *testing.T) {
 	got := indented(t, document.NewSearch(searched(costcoRow()), []string{"showing the newest 1"}))
 
+	//nolint:testifylint // key order is the contract under test; JSONEq ignores it
 	assert.Equal(t, `{
   "since": "2026-01-01",
   "until": "2026-03-31",
@@ -93,7 +94,7 @@ func Test_NewSearch_writes_every_key_in_the_ruled_order(t *testing.T) {
 
 func Test_NewSearch_gives_null_for_an_absent_payee_memo_split_category_and_open_bounds(t *testing.T) {
 	row := store.SearchRow{TransactionID: "txn-2", Date: *searchDay(time.March, 3), Account: store.Account{ID: "acct-1", Name: "Chequing"}, Currency: "CAD", Splits: []store.SearchSplit{{Amount: -100}}}
-	search := report.Search{Search: store.Search{Rows: []store.SearchRow{row}, Matched: 1}, Limit: 500}
+	search := report.Search{Rows: []store.SearchRow{row}, Matched: 1, Limit: 500}
 
 	got := document.NewSearch(search, nil)
 
@@ -141,7 +142,7 @@ func Test_NewSearch_marks_truncated_only_when_the_limit_cut_matches(t *testing.T
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			search := report.Search{Search: store.Search{Rows: make([]store.SearchRow, c.listed), Matched: c.matched}}
+			search := report.Search{Rows: make([]store.SearchRow, c.listed), Matched: c.matched}
 
 			got := document.NewSearch(search, nil)
 

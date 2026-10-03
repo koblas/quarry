@@ -92,11 +92,14 @@ func (s *Store) Search(ctx context.Context, params store.SearchParams) (store.Se
 
 // searchArgs binds the rows statement: the window's open bounds and an unlimited Limit of 0 as NULL, then the accounts.
 func searchArgs(params store.SearchParams) []any {
-	args := []any{searchDay(params.Window.Since), searchDay(params.Window.Until), nil}
+	var limit any
 	if params.Limit > 0 {
-		args[2] = int64(params.Limit)
+		limit = int64(params.Limit)
 	}
-	return append(args, accountFilter(params.AccountIDs).args()...)
+	accounts := accountFilter(params.AccountIDs).args()
+	args := make([]any, 0, 3+len(accounts))
+	args = append(args, searchDay(params.Window.Since), searchDay(params.Window.Until), limit)
+	return append(args, accounts...)
 }
 
 // searchDay is bound as the day's civil date, or NULL for an open bound.

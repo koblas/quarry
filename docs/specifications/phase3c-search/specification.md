@@ -727,8 +727,8 @@ Sizing pass (architect, opus) 2026-10-03 — 15 IDs → 6 runs, all code-first. 
 | SCENARIO-13 | FOLD into SCENARIO-10 |
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01: quarry search lists matching transactions newest first, flagged, with their splits
-- [ ] SCENARIO-05: without --since and --until every date is searched
+- [x] SCENARIO-01: quarry search lists matching transactions newest first, flagged, with their splits — `cmd/quarry/run_search_json_test.go` `Test_run_search_json_lists_every_transaction_newest_first_flagged_with_its_splits`
+- [x] SCENARIO-05: without --since and --until every date is searched — delivered by SCENARIO-01 — `cmd/quarry/run_search_window_test.go` `Test_run_search_without_since_or_until_searches_every_date`
 - [ ] SCENARIO-02: text matches payee, transaction memo and split memo, ignoring case, every character literal
 - [ ] SCENARIO-06: more matches than the limit print the newest ones
 - [ ] SCENARIO-07: no match prints an empty result and the no-match warning

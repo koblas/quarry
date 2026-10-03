@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01
-status: open
+status: done
 ---
 
 # SCENARIO-01: quarry search lists matching transactions newest first, flagged, with their splits
@@ -47,10 +47,10 @@ Size: OWNS A RUN: 4 batches, 1 feature package (`report` + `report/document`; `d
   - plus one cmd-level text run in `run_search_json_test.go` `Test_run_search_prints_the_transactions_table`
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the new symbols; `internal/report/doc.go` names search among the commands
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the new symbols; `internal/report/doc.go` names search among the commands
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase3c-search` → tick SCENARIO-01 and SCENARIO-05 (folded: "delivered by SCENARIO-01", then its test last on the line)
+- [x] Step 8: full verification + `spec-check.py phase3c-search` → tick SCENARIO-01 and SCENARIO-05 (folded: "delivered by SCENARIO-01", then its test last on the line)
 
 ## Handoff
 
@@ -77,19 +77,7 @@ Size: OWNS A RUN: 4 batches, 1 feature package (`report` + `report/document`; `d
 
 ## Phase report
 
-Runs B1 (steps 3-5) and B2 (step 6) done. Narrow loop green (duckstore, report, document, cli, cmd/quarry); both acceptance tests green; views/views_fx tests unedited. `golangci-lint run ./internal/cli/... ./cmd/...` is 0 issues; full-repo lint and the full suite NOT run (run V: steps 7-8).
-
-B1 files:
-- `internal/store/duckstore/schema.go`: `reportedTransaction` const and `transferLeg(alias)` func; `cashFlowViewDDL` uses both. `search.go`: `searchRowsQuery` (CTE `m` at transaction grain: `count(*) OVER ()`, `searchOrder`, `LIMIT $3` bound nil for 0; then LEFT JOIN splits ordered by split source_id, id), `searchSpanQuery` (no `reportedAccount`), `Search`, `scanSearchRow`. `SearchSplit.Transfer` = split is a leg in `transfers` (orchestrator ruling); a split with transfer_account_id but no transfers row is false (pinned in `search_test.go`).
-- tests: `duckstore/search_test.go` (new, 15 tests + 2 span-fault tests), `read_faults_test.go` (`Search` in `rowReads`), `report/window_test.go` (7 tests), `report/search_test.go` (new), `report/document/search_test.go` (new, byte-literal), `report/fakes_test.go` (`search`, `gotSearch`).
-- production: `report/window.go` `ParseSearchWindow`, `report/search.go`, `report/document/search.go` `NewSearch` (text/category/min/max stay nil), `cli/search.go` (flags via `reportFlags.bind`, `reportFlags.searchWindow`, `defaultSearchLimit`), `cli/root.go`.
-- pins: root help row, window-flags row, `Test_search_help_shows_its_long_text_and_examples`, no-store rows, interrupt row, HOME-unset row, usage-hint row, 6 cmd tests in `run_search_json_test.go`.
-- B1 acceptance fix: expected `Matched: 9` corrected to 8 (fixture has 8 transactions).
-
-B2 (step 6):
-- `internal/cli/render_search.go`: `renderSearch` plus `searchCaption` (`Transactions in <accountsCaption>, <dates>`; four date arms in `searchDates`: all dates / from / through / range), `searchCategoryCell`, `searchMemoCell`, `searchFlagsCell`. Caption has no ` matching %q`, `, category` or `, amount` parts yet: those need `report.Search` to carry text/category/min/max, which S02-S04 add together with the predicate.
-- `internal/cli/render_search_internal_test.go` (new, white-box, 12 top-level tests, table-driven per rule) and `Test_run_search_prints_the_transactions_table` in `cmd/quarry/run_search_json_test.go` (full 8-row table over `searchStore()`).
-- Removed the unused `searchCommand` const from `internal/cli/search.go` (lint `unused`).
-- Mutations run (each red as named): each of the four date-arm words and the `Transactions in ` prefix -> `Test_searchCaption_names_the_dates_the_window_bounds` subtest of that arm; Amount alignment right->left -> pad test + cmd table test; category dedup removed -> `a_repeated_label_shows_once`; `sp.Transfer` arm dropped -> `a_transfer_leg_is_a_transfer`; no-splits label -> `no_splits_is_uncategorized`; memo dedup / non-empty guard / escape / ` / ` separator -> matching `searchMemoCell` subtests; Transfer and Excluded flag arms -> `searchFlagsCell` subtests; footer `Matched`->`len(Rows)` -> `footer_counts_every_match_not_the_rows_listed`; category escape and `, ` separator -> their subtests.
-
-Left for run V: Sweep (step 7: full lint, doc comments, `internal/report/doc.go` names search) and Verify (step 8: covered full suite, `uncovered-diff.py`, `test-stats.py`, `spec-check.py`, tick SCENARIO-01 and folded SCENARIO-05, STATE.md).
+Run V (steps 7-8) done; SCENARIO-01 complete, all runs finished.
+- Sweep: full-repo `golangci-lint run ./...` 0 issues. Fixed 6 findings: gosec `rune` conversion in `duckstore/search_test.go` (now `fmt.Sprintf("d%02d")`), prealloc in `duckstore/search.go` `searchArgs`, three modernize embedlit in `document/search_test.go`. testifylint `encoded-compare` on the key-order byte-literal is `//nolint:testifylint` with reason (`--fix` had rewritten it to `JSONEq`, which would erase the pin; reverted). Doc comments all within `.claude/rules/go-code.md` budgets, none trimmed. `internal/report/doc.go` names search.
+- Verify: `go test rc=0` (covered full suite); `uncovered-diff.py`: 0 uncovered added lines (the `scanSearchRow` scan-error return is reached by the duckstore read-fault scan row); `-race` green on duckstore, report, document, cli, cmd/quarry. test-stats vs `cc215cd`: cmd/quarry 559 (+9), internal/cli 408 (+12), internal/report 315 (+16), internal/report/document 76 (+4), internal/store/duckstore 509 (+17), TOTAL 1867 (+58); tempdir +6, disk +5.
+- spec-check (both modes): OK. SCENARIO-01 and SCENARIO-05 ticked in `specification.md`; STATE.md written.

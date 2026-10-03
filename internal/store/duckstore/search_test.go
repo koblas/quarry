@@ -1,6 +1,7 @@
 package duckstore_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -367,7 +368,7 @@ func Test_search_bounds_dates_only_where_given(t *testing.T) {
 	}
 	rows := searchRowsFor()
 	for i, d := range []int{10, 11, 12, 13, 14} {
-		spec := spend("d"+string(rune('0'+d/10))+string(rune('0'+d%10)), int64(i+1), 100)
+		spec := spend(fmt.Sprintf("d%02d", d), int64(i+1), 100)
 		spec.date = day(2026, time.March, d)
 		addSearch(&rows, spec)
 	}
