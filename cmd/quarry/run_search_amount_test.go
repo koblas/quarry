@@ -168,11 +168,6 @@ func Test_run_search_refuses_blank_text_before_a_bad_min(t *testing.T) {
 func assertSearchRefused(t *testing.T, args []string, want string) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), args, spendEnv(&stdout, &stderr))
-
-	assert.Equal(t, 2, exitCode)
-	assert.Equal(t, want, stderr.String())
-	assert.Empty(t, stdout.String())
+	assertSearchFailed(t, args, 2, want)
 }
