@@ -17,8 +17,16 @@ const (
 	searchSince        = "$1"
 	searchUntil        = "$2"
 	searchLimit        = "$3"
-	searchFirstAccount = 4
+	searchText         = "$4"
+	searchFirstAccount = 5
 )
+
+// searchTextMatch keeps a transaction whose payee, memo or any split memo contains the text, ignoring case;
+// no text keeps all. contains is a literal substring test (no LIKE wildcards) and NULL contains nothing.
+const searchTextMatch = `(CAST(` + searchText + ` AS VARCHAR) IS NULL
+			OR contains(lower(p.name), lower(` + searchText + `))
+			OR contains(lower(t.memo), lower(` + searchText + `))
+			OR EXISTS (SELECT 1 FROM splits ms WHERE ms.transaction_id = t.id AND contains(lower(ms.memo), lower(` + searchText + `))))`
 
 // searchRowsQuery reads each matching transaction's splits in split source id order. The transaction-grain
 // CTE counts every match before the limit cuts, so a transaction's splits are never counted or cut.
@@ -39,7 +47,8 @@ WITH m AS (
 	JOIN accounts a ON a.id = t.account_id
 	LEFT JOIN payees p ON p.id = t.payee_id
 	WHERE (` + searchSince + ` IS NULL OR t.date >= CAST(` + searchSince + ` AS DATE))
-		AND (` + searchUntil + ` IS NULL OR t.date <= CAST(` + searchUntil + ` AS DATE))` + accountClause + `
+		AND (` + searchUntil + ` IS NULL OR t.date <= CAST(` + searchUntil + ` AS DATE))
+		AND ` + searchTextMatch + accountClause + `
 	ORDER BY ` + searchOrder + `
 	LIMIT ` + searchLimit + `
 )
@@ -91,15 +100,19 @@ func (s *Store) Search(ctx context.Context, params store.SearchParams) (store.Se
 	return found, nil
 }
 
-// searchArgs binds the rows statement: the window's open bounds and an unlimited Limit of 0 as NULL, then the accounts.
+// searchArgs binds the rows statement: the window's open bounds, an unlimited Limit of 0 and no text as NULL, then the accounts.
 func searchArgs(params store.SearchParams) []any {
 	var limit any
 	if params.Limit > 0 {
 		limit = int64(params.Limit)
 	}
 	accounts := accountFilter(params.AccountIDs).args()
-	args := make([]any, 0, 3+len(accounts))
-	args = append(args, searchDay(params.Window.Since), searchDay(params.Window.Until), limit)
+	var text any
+	if params.Text != "" {
+		text = params.Text
+	}
+	args := make([]any, 0, 4+len(accounts))
+	args = append(args, searchDay(params.Window.Since), searchDay(params.Window.Until), limit, text)
 	return append(args, accounts...)
 }
 

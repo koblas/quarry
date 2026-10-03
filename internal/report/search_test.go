@@ -126,3 +126,63 @@ func Test_search_reports_an_interrupt_during_the_accounts_read(t *testing.T) {
 
 	assert.EqualError(t, err, "search interrupted")
 }
+
+func Test_CheckSearchText_refuses_blank_text(t *testing.T) {
+	cases := []struct {
+		name    string
+		text    *string
+		refused bool
+	}{
+		{name: "no text", text: nil},
+		{name: "empty", text: new(""), refused: true},
+		{name: "spaces", text: new("  "), refused: true},
+		{name: "tab and newline", text: new("\t\n"), refused: true},
+		{name: "text with surrounding spaces", text: new(" a ")},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := report.CheckSearchText(c.text)
+
+			if c.refused {
+				require.ErrorIs(t, err, report.ErrBlankSearchText)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func Test_search_refuses_blank_text_without_reading(t *testing.T) {
+	got := store.SearchParams{Limit: 99}
+	reads := 0
+	srv := report.NewServer(report.WithStore(fakeStore{accounts: accountsOf(chqAccount), gotSearch: &got, accountsReads: &reads}))
+
+	_, err := srv.Search(t.Context(), report.SearchRequest{Text: new(" "), Accounts: []string{"Visa"}})
+
+	require.ErrorIs(t, err, report.ErrBlankSearchText)
+	assert.Equal(t, store.SearchParams{Limit: 99}, got)
+	assert.Zero(t, reads)
+}
+
+func Test_search_passes_the_text_untrimmed_and_echoes_it(t *testing.T) {
+	var got store.SearchParams
+	srv := report.NewServer(report.WithStore(fakeStore{gotSearch: &got}))
+
+	result, err := srv.Search(t.Context(), report.SearchRequest{Text: new(" Costco ")})
+
+	require.NoError(t, err)
+	assert.Equal(t, " Costco ", got.Text)
+	assert.Equal(t, new(" Costco "), result.Text)
+}
+
+func Test_search_without_text_passes_none_and_echoes_none(t *testing.T) {
+	var got store.SearchParams
+	srv := report.NewServer(report.WithStore(fakeStore{gotSearch: &got}))
+
+	result, err := srv.Search(t.Context(), report.SearchRequest{})
+
+	require.NoError(t, err)
+	assert.Empty(t, got.Text)
+	assert.Nil(t, result.Text)
+}

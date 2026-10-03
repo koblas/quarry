@@ -211,3 +211,46 @@ func Test_renderSearch_escapes_account_payee_category_and_memo(t *testing.T) {
 	assert.Contains(t, got, `2026-03-10  Cheq\nuing (CAD)  Cost\tco  Fo\nod    a\rb  -42.17`)
 	assert.Equal(t, 6, strings.Count(got, "\n"), got)
 }
+
+func Test_searchCaption_names_the_text_right_after_transactions(t *testing.T) {
+	text := "costco"
+	since := searchDay(2026, time.January, 1)
+	cases := []struct {
+		name  string
+		found report.Search
+		want  string
+	}{
+		{name: "text alone", found: report.Search{Text: &text}, want: `Transactions matching "costco" in all accounts, all dates`},
+		{
+			name: "text with accounts", found: report.Search{Text: &text, Accounts: []store.Account{{Name: "Chequing"}}},
+			want: `Transactions matching "costco" in Chequing, all dates`,
+		},
+		{
+			name:  "text with a since bound",
+			found: report.Search{Text: &text, Window: store.SearchWindow{Since: since}},
+			want:  `Transactions matching "costco" in all accounts, from 2026-01-01`,
+		},
+		{
+			name:  "text with an until bound",
+			found: report.Search{Text: &text, Window: store.SearchWindow{Until: since}},
+			want:  `Transactions matching "costco" in all accounts, through 2026-01-01`,
+		},
+		{
+			name:  "text with both bounds",
+			found: report.Search{Text: &text, Window: store.SearchWindow{Since: since, Until: searchDay(2026, time.March, 31)}},
+			want:  `Transactions matching "costco" in all accounts, 2026-01-01 to 2026-03-31`,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, searchCaption(c.found))
+		})
+	}
+}
+
+func Test_searchCaption_quotes_text_that_has_a_quote_or_a_newline(t *testing.T) {
+	text := "say \"hi\"\n"
+
+	assert.Equal(t, `Transactions matching "say \"hi\"\n" in all accounts, all dates`, searchCaption(report.Search{Text: &text}))
+}

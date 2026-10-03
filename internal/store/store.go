@@ -750,10 +750,12 @@ type SearchWindow struct {
 }
 
 // SearchParams is what a search varies by: the dates it lists, the accounts it lists
-// (empty lists every account) and the most transactions it returns (0 returns every one).
+// (empty lists every account), the text a payee, memo or split memo must contain, ignoring case ("" keeps
+// every transaction) and the most transactions it returns (0 returns every one).
 type SearchParams struct {
 	Window     SearchWindow
 	AccountIDs []string
+	Text       string
 	Limit      int
 }
 

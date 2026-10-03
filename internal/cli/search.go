@@ -16,8 +16,21 @@ var searchFlagHelp = reportFlagHelp{
 	account: "search only the account with this `name` or id; repeat for more",
 }
 
-// newSearchCommand builds search: the newest transactions dated in the --since/--until period, in the --account accounts.
-// It reads neither the clock nor the config file.
+// searchArgs refuses more than one text, then blank text, as a UsageError; both before anything is read.
+func searchArgs(_ *cobra.Command, args []string) error {
+	if len(args) > 1 {
+		return UsageError{msg: "search takes one text; quote it as one argument"}
+	}
+	if len(args) == 1 {
+		if err := report.CheckSearchText(&args[0]); err != nil {
+			return UsageError{msg: err.Error()}
+		}
+	}
+	return nil
+}
+
+// newSearchCommand builds search: the newest transactions containing the text, dated in the --since/--until period,
+// in the --account accounts. It reads neither the clock nor the config file.
 func newSearchCommand(newReport ReportFactory, jsonOut *bool) *cobra.Command {
 	var flags reportFlags
 	cmd := &cobra.Command{
@@ -51,8 +64,8 @@ unless set); when more match, quarry says so on stderr.`,
   quarry search --min 42.17 --max 42.17
   quarry search "e-transfer" --account Chequing --since 2026-01
   quarry search --category Food --since 2026-09 --json`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		Args: searchArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
 			window, err := flags.searchWindow(cmd)
 			if err != nil {
 				return err
@@ -63,7 +76,11 @@ unless set); when more match, quarry says so on stderr.`,
 				return err
 			}
 
-			found, err := srv.Search(cmd.Context(), report.SearchRequest{Window: window, Accounts: flags.accounts, Limit: defaultSearchLimit})
+			req := report.SearchRequest{Window: window, Accounts: flags.accounts, Limit: defaultSearchLimit}
+			if len(args) == 1 {
+				req.Text = &args[0]
+			}
+			found, err := srv.Search(cmd.Context(), req)
 			if err != nil {
 				return &runtimeError{err: err}
 			}

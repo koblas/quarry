@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -42,9 +43,13 @@ func renderSearch(s report.Search) string {
 		"\n" + humanize.Count(s.Matched, "matching transaction", "matching transactions") + "\n"
 }
 
-// searchCaption is "Transactions in <accounts>, <dates>".
+// searchCaption is "Transactions[ matching "<text>"] in <accounts>, <dates>".
 func searchCaption(s report.Search) string {
-	return "Transactions in " + accountsCaption(s.Accounts) + ", " + searchDates(s.Window)
+	caption := "Transactions"
+	if s.Text != nil {
+		caption += fmt.Sprintf(" matching %q", *s.Text)
+	}
+	return caption + " in " + accountsCaption(s.Accounts) + ", " + searchDates(s.Window)
 }
 
 // searchDates is the caption's dates: "all dates", "from D", "through D" or "D to D".

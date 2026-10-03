@@ -56,6 +56,7 @@ func NewSearch(s report.Search, warnings []string) Search {
 		Since:         searchDay(s.Window.Since),
 		Until:         searchDay(s.Window.Until),
 		AccountFilter: NewAccountFilters(s.Accounts),
+		Text:          s.Text,
 		Limit:         s.Limit,
 		Matched:       s.Matched,
 		Truncated:     s.Truncated(),

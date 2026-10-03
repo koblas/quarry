@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"testing"
 	"time"
 
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // textSearchStore: one transaction per text rule, none sharing a word with another.
@@ -46,6 +49,124 @@ func Test_run_search_text_lists_payee_memo_and_split_memo_matches_ignoring_case_
 			doc := searchedJSON(t, textSearchStore(), c.text)
 
 			assert.Equal(t, c.want, transactionIDs(doc))
+		})
+	}
+}
+
+// gymSearchStore: payee "Gym" on Chequing in February and March and on Visa in March, and a Bakery
+// payee on Chequing in March.
+func gymSearchStore() store.Rows {
+	visa := store.Account{ID: "acct-visa", SourceID: 2, Name: "Visa", Type: "credit", Currency: "CAD", Active: true}
+	return searchRows([]store.Account{chequingAccount("acct-chq", 1), visa}, nil,
+		searchTxn{id: "chq-feb", account: "acct-chq", payee: "Gym", sourceID: 1, day: day(2026, time.February, 1), splits: []searchSplit{{sourceID: 1, cents: -100}}},
+		searchTxn{id: "chq-mar", account: "acct-chq", payee: "Gym", sourceID: 2, day: day(2026, time.March, 10), splits: []searchSplit{{sourceID: 1, cents: -200}}},
+		searchTxn{id: "visa-mar", account: "acct-visa", payee: "Gym", sourceID: 3, day: day(2026, time.March, 11), splits: []searchSplit{{sourceID: 1, cents: -300}}},
+		searchTxn{id: "bakery", account: "acct-chq", payee: "Bakery", sourceID: 4, day: day(2026, time.March, 12), splits: []searchSplit{{sourceID: 1, cents: -400}}},
+	)
+}
+
+func Test_run_search_json_echoes_the_text_as_given_and_null_when_none_was_given(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want *string
+	}{
+		{name: "text as typed, not folded", args: []string{"COSTCO"}, want: new("COSTCO")},
+		{name: "no text", args: nil, want: nil},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			doc := searchedJSON(t, textSearchStore(), c.args...)
+
+			assert.Equal(t, c.want, doc.Text)
+		})
+	}
+}
+
+func Test_run_search_shows_a_split_memo_only_match_in_the_memo_cell(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStore(t, home, textSearchStore())
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"search", "tip"}, spendEnv(&stdout, &stderr))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	want := "Transactions matching \"tip\" in all accounts, all dates\n\n" +
+		"Date        Account         Payee       Category         Memo  Amount  Flags\n" +
+		"2026-03-03  Chequing (CAD)  (no payee)  (uncategorized)  tip    -3.00\n" +
+		"\n" +
+		"1 matching transaction\n"
+	assert.Equal(t, want, stdout.String())
+}
+
+func Test_run_search_json_lists_the_split_memo_of_a_split_memo_only_match(t *testing.T) {
+	doc := searchedJSON(t, textSearchStore(), "tip")
+
+	require.Len(t, doc.Transactions, 1)
+	assert.Equal(t, []searchSplitJSON{{Memo: new("tip"), Amount: "-3.00"}}, doc.Transactions[0].Splits)
+}
+
+func Test_run_search_finds_text_that_starts_with_a_dash_after_the_double_dash(t *testing.T) {
+	rows := searchRows([]store.Account{chequingAccount("acct-chq", 1)}, nil,
+		searchTxn{id: "dash", account: "acct-chq", payee: "-50% off", sourceID: 1, day: day(2026, time.March, 1), splits: []searchSplit{{sourceID: 1, cents: -100}}},
+		searchTxn{id: "plain", account: "acct-chq", payee: "50 off", sourceID: 2, day: day(2026, time.March, 2), splits: []searchSplit{{sourceID: 1, cents: -200}}},
+	)
+
+	doc := searchedJSON(t, rows, "--", "-50% off")
+
+	assert.Equal(t, []string{"txn-dash"}, transactionIDs(doc))
+	assert.Equal(t, new("-50% off"), doc.Text)
+}
+
+func Test_run_search_narrows_the_text_matches_by_account_and_since(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{name: "text alone", args: []string{"gym"}, want: []string{"txn-visa-mar", "txn-chq-mar", "txn-chq-feb"}},
+		{name: "text and account", args: []string{"gym", "--account", "Chequing"}, want: []string{"txn-chq-mar", "txn-chq-feb"}},
+		{name: "text and since", args: []string{"gym", "--since", "2026-03"}, want: []string{"txn-visa-mar", "txn-chq-mar"}},
+		{name: "text, account and since", args: []string{"gym", "--account", "Chequing", "--since", "2026-03"}, want: []string{"txn-chq-mar"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			doc := searchedJSON(t, gymSearchStore(), c.args...)
+
+			assert.Equal(t, c.want, transactionIDs(doc))
+			assert.Equal(t, len(c.want), doc.Matched)
+		})
+	}
+}
+
+func Test_run_search_refuses_two_texts_and_blank_text_before_reading_anything(t *testing.T) {
+	const blank = "quarry: search text is blank; leave it out to search by date, account, category or amount alone\n"
+	const twoTexts = "quarry: search takes one text; quote it as one argument\n"
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "two texts", args: []string{"search", "costco", "visa"}, want: twoTexts},
+		{name: "an empty text", args: []string{"search", ""}, want: blank},
+		{name: "a whitespace-only text", args: []string{"search", "  "}, want: blank},
+		{name: "a blank text beats a bad since", args: []string{"search", "", "--since", "nonsense"}, want: blank},
+		{name: "two texts with --json", args: []string{"search", "--json", "costco", "visa"}, want: twoTexts},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), c.args, spendEnv(&stdout, &stderr))
+
+			assert.Equal(t, 2, exitCode)
+			assert.Equal(t, c.want, stderr.String())
+			assert.Empty(t, stdout.String())
 		})
 	}
 }

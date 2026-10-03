@@ -150,3 +150,18 @@ func Test_NewSearch_marks_truncated_only_when_the_limit_cut_matches(t *testing.T
 		})
 	}
 }
+
+func Test_NewSearch_echoes_the_text_exactly_as_given(t *testing.T) {
+	found := searched()
+	found.Text = new(" Costco ")
+
+	got := document.NewSearch(found, nil)
+
+	assert.Equal(t, new(" Costco "), got.Text)
+}
+
+func Test_NewSearch_writes_null_text_when_the_search_gave_none(t *testing.T) {
+	got := document.NewSearch(searched(), nil)
+
+	assert.Nil(t, got.Text)
+}
