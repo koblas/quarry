@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-13
-status: open
+status: done
 ---
 
 # SCENARIO-13: the server describes all eight tools
@@ -31,10 +31,10 @@ Orchestrator ruling: `Test_run_mcp_lists_quarrys_four_tools_over_json_rpc` is RE
 - [x] Step 4: `internal/cli/mcp.go:24-37` Long and `internal/cli/mcp_test.go:28-50` `Test_mcp_help_prints_the_ruled_long_text` — replace Long with §3.6 verbatim (hard line breaks as ruled, ends `anomalies.`), update the test's `long` const to the same bytes (full-Long prefix assert stays). Gate: `mcp --help` subtest green. Fault/bound/validation matrix: n/a (no new input, branch or fallible call; `--json` refusal and arg refusal rows unchanged)
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/mcp` unchanged surface; no history in comments
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/mcp` unchanged surface; no history in comments
 
 ### Verify
-- [ ] Step 6: full verification block + `.claude/scripts/spec-check.py phase3b-analysis-tools`; confirm `git diff --stat` shows `internal/report/sql_conventions.go`, `internal/cli/sql_test.go` and `run_shared_documents_test.go` untouched; also `.claude/scripts/spec-check.py --run phase3a-mcp-core`; tick SCENARIO-13 with `cmd/quarry/run_mcp_descriptions_test.go` `Test_run_mcp_describes_all_eight_tools`; rewrite STATE.md (drop the S13 Left-unbuilt and the "OWNED BY S13" debt; mark all scenarios complete)
+- [x] Step 6: full verification block + `.claude/scripts/spec-check.py phase3b-analysis-tools`; confirm `git diff --stat` shows `internal/report/sql_conventions.go`, `internal/cli/sql_test.go` and `run_shared_documents_test.go` untouched; also `.claude/scripts/spec-check.py --run phase3a-mcp-core`; tick SCENARIO-13 with `cmd/quarry/run_mcp_descriptions_test.go` `Test_run_mcp_describes_all_eight_tools`; rewrite STATE.md (drop the S13 Left-unbuilt and the "OWNED BY S13" debt; mark all scenarios complete)
 
 ## Handoff
 

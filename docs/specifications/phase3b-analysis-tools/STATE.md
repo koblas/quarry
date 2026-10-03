@@ -1,6 +1,6 @@
 # phase3b-analysis-tools — current state
 
-Scenarios complete: SCENARIO-01, 02 (folds 06, 07, 12), 03, 04 (folds 05), 09 (folds 08, 14), 10 (folds 10b, 11, 11b). All eight tools exist. Last updated by SCENARIO-10. The phase3a MCP decisions (`docs/specifications/phase3a-mcp-core/STATE.md`: transport, `handler`/`errorLog`, `absentNullArguments`, `WithReport`/`WithConfig`, per-call deadline) still bind every tool added here.
+Scenarios complete: all 16 — SCENARIO-01, 02 (folds 06, 07, 12), 03, 04 (folds 05), 09 (folds 08, 14), 10 (folds 10b, 11, 11b), 13. All eight tools exist and are described. Last updated by SCENARIO-13. The phase3a MCP decisions (`docs/specifications/phase3a-mcp-core/STATE.md`: transport, `handler`/`errorLog`, `absentNullArguments`, `WithReport`/`WithConfig`, per-call deadline) still bind every tool added here.
 
 ## Binding decisions
 - `document.NewSpending/NewCashFlow/NewRecurring/NewAnomalies(result, warnings)` (`internal/report/document`) are the only builders of the four documents; MCP tools render from them, cli only indents via `marshalDocument` (SCENARIO-01)
@@ -21,10 +21,11 @@ Scenarios complete: SCENARIO-01, 02 (folds 06, 07, 12), 03, 04 (folds 05), 09 (f
 - `capList[T](list, warnings, tool, noun, advice)` (`internal/mcp/cap.go`) cuts to `maxRows` after `document.New*` and appends `<tool> lists the first 500 <noun> of N; <advice>` as the LAST warning; document and CLI stay uncapped, Totals untouched. Advice is per caller and carries its own "totals count every ..." clause (spending: `..., or query v_spending for the rest`; cash_flow: `pass a later since, or by year`); recurring_charges passes noun `series` with a `totals count every series; ...` advice, anomalies noun `charges` (its list is `doc.Anomalies`) with no totals clause; `checked`/`not_judged` stay uncut (SCENARIO-09, 10)
 - `stringEnum` (`tools.go`) is the one `String()`-list-to-schema-enum helper behind `spendingGroups()` / `cashFlowPeriods()`; cash_flow `by` schema default is the quoted bytes `"month"`, the handler never defaults `by`: `parseCashFlowPeriod` / `parseSpendingGroup` return an error on a miss (plain error, logs `failedLog`; the branch is `// unreachable:` behind the schema enum), so deleting a schema `Default` turns the absent/null/`{}` rows red (SCENARIO-09)
 - cash_flow passes `"cashflow"` (`cashFlowTwin`) to `resolveCurrency` and `toolCashFlow` to `CashFlowWarnings`: stderr names the CLI twin, warnings name the tool; `accountRefusal` is called at its `CashFlow` error site (SCENARIO-09)
+- Per-param `description` text lives in `internal/mcp/tools.go` consts (`querySQLDescription`, `queryLimitDescription`, `findings{Status,Type,Limit}Description`), never typed twice in production. `cmd/quarry/run_mcp_descriptions_test.go` `Test_run_mcp_describes_all_eight_tools` holds its own byte copy of every ruled string (descriptions, schemas, instructions, `quarry mcp` Long fragments) and is the only pin: a later wording change edits that file plus the const. The old handshake test is `Test_run_mcp_lists_quarrys_tools_over_json_rpc` (phase3a tick repointed). `report.SQLConventions` is untouched: it renders byte-identical into `sql --help` and `describe_schema`, and `query`'s description carries the "call spending or cash_flow instead" redirect on its own (SCENARIO-13)
 - recurring_charges and anomalies read the clock once (`s.now()`) and pass that value to `ParseChargeWindow` and `Request.Now` (Rule 12). `until` after today is not refused and the charge read's `Through` is still today. recurring passes twin `"recurring"` (`recurringTwin`) to `resolveCurrency`; anomalies passes `toolAnomalies` (tool == twin == CLI word). Neither tool has `by` (SCENARIO-10)
 
 ## Left unbuilt
-- Per-param descriptions on the 3a tools, the instructions string, the query description, `quarry mcp` Long, and the rename of the tools/list pin `Test_run_mcp_lists_quarrys_four_tools_over_json_rpc` (`cmd/quarry/run_mcp_test.go`, now pins eight tools) — S13
+- `search_transactions` and its CLI twin — phase 3c (SCENARIO-13)
 - `withConfigWarnings`, `currencyFlag.resolve`, `accountsFXWarnings`, `recurringEvery`, the `*Command` consts stay in cli; accounts/snapshots/sync documents stay in `internal/cli/json_*.go` (SCENARIO-01)
 
 ## Traps
@@ -44,12 +45,16 @@ Scenarios complete: SCENARIO-01, 02 (folds 06, 07, 12), 03, 04 (folds 05), 09 (f
 - `rows.Err()` alone misses a cancel: database/sql closes rows asynchronously, so a read can finish with a nil error. duckdb `QueryRows` and `QueryTable` check `ctx.Err()` per row; any new row loop over `*sql.Rows` needs the same. `platform/sqlite` `QueryRows` has the same unchecked loop (unowned) (fix(duckdb) pass)
 - `document.Spending.Rows` is `[]any`, `document.CashFlow.Periods` is `[]CashFlowPeriodRow`: cap helpers must stay generic (SCENARIO-09)
 - cash_flow periods are window-filled, so a cap test needs a window of 501+ months (since 1985-01 until 2026-09), not 501 transactions (SCENARIO-09)
+- Renaming a ticked acceptance test without repointing its spec line passes build and lint but turns `spec-check.py` red (SCENARIO-13)
+- `mcpQueryDescription` has a literal backtick pair around `limit`: raw-string consts need the `+ "`limit`" +` concat in production and test; the pin compares schemas through `assertJSONEqualAny` (key-order blind), instructions and descriptions byte for byte (SCENARIO-13)
+- `limitSchema` is shared by `query` and `data_quality`: wrap its result with `described(...)` per call, never put a description inside it (SCENARIO-13)
+- Do not "fix" `sql --help` / `SQLConventions` wording to match the MCP `query` description: "they already leave out" is correct for the CLI (SCENARIO-13)
 - anomalies' tool name == twin == CLI word, so `inToolWords` maps nothing and a twin swap is invisible to tests; only recurring's twin is mutation-pinned (SCENARIO-10)
 - `fakeStore` embeds a nil `report.Store`: `Recurring`/`Anomalies` call `namedAccounts`, so a unit test passing `accounts` panics; account rows live at cmd level (SCENARIO-10)
 - S04's ticked acceptance test `Test_run_mcp_spending_refuses_an_account_without_its_name_on_stderr` keeps its name; cash_flow has its own twin; renaming either breaks `spec-check.py` (SCENARIO-09)
 
 ## Open debts
-- OWNED BY S13: per-parameter `description`s on the 3a tools (e.g. `data_quality.limit` counts findings) and the instructions string naming "David's" (phase3a final product-vision)
+- `instructions` still names "David's": deferred NIT (spec §3.7); replace with a neutral possessive if a later pass touches it (unowned — dies unless re-opened) (SCENARIO-13)
 - Phase3a gate R1/R2/R4 MINOR/NIT debts not listed here remain in the phase3a STATE (unowned); this feature does not close them
 - `recurring_charges_test.go` and `anomalies_test.go` account-refusal tests are 55-line copies of cash_flow's (`dupl` did not fire); hoist one table helper if a fourth copy appears (SCENARIO-10)
 - Checkpoint S02 NITs: `internal/mcp/tools.go:~88` `spendingByDesc` naming vs `*Description` siblings; `internal/mcp/spending.go:49` `slices.Clone` unpinned (harmless)
