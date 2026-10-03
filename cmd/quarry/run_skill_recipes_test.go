@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/koblas/quarry/internal/report/document"
+	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -435,4 +436,207 @@ func Test_spending_trend_columns_are_period_currency_spent(t *testing.T) {
 	recipe := runShippedRecipe(t, spendingTrendFile)
 
 	assert.Equal(t, []document.SQLColumn{{Name: "period", Type: "DATE"}, {Name: "currency", Type: "VARCHAR"}, {Name: "spent", Type: "DECIMAL(18,2)"}}, recipe.Columns)
+}
+
+func Test_income_by_category_currency_usd_matches_cashflow_currency_usd(t *testing.T) {
+	recipeScenario(t)
+	command, _ := runCashFlowJSON(t, "--currency", "USD", "--by", "year", "--since", "2026", "--until", "2026")
+
+	recipe := runRecipe(t, incomeByCatFile, recipeParams{since: "2026-01-01", until: "2026-12-31", currency: "USD"})
+
+	require.Equal(t, "USD", command.Currency)
+	want := map[string]int64{}
+	for _, total := range command.Totals {
+		want[total.Currency] += centsOf(t, total.Income)
+	}
+	assert.Equal(t, []string{"USD"}, slices.Sorted(maps.Keys(withoutZeros(want))))
+	assert.Equal(t, withoutZeros(want), recipeTotals(t, recipe.Rows, 1))
+}
+
+// withoutZeros is totals less the currencies that summed to nothing; a report lists those, a query does not.
+func withoutZeros(totals map[string]int64) map[string]int64 {
+	kept := maps.Clone(totals)
+	maps.DeleteFunc(kept, func(_ string, cents int64) bool { return cents == 0 })
+	return kept
+}
+
+func Test_income_by_category_since_and_until_include_both_ends_only(t *testing.T) {
+	recipeScenario(t)
+
+	recipe := runRecipe(t, incomeByCatFile, recipeParams{since: "2024-06-10", until: "2024-06-20", currency: "CAD"})
+
+	assert.Equal(t, [][]any{{"Income:Interest", "CAD", "6.00"}}, recipe.Rows)
+}
+
+func Test_income_by_category_lists_cad_before_the_first_rate_natively_in_usd_mode(t *testing.T) {
+	recipeScenario(t)
+
+	recipe := runRecipe(t, incomeByCatFile, recipeParams{since: "2024-01-01", until: "2024-12-31", currency: "USD"})
+
+	assert.Equal(t, [][]any{{"Income:Interest", "CAD", "15.00"}}, recipe.Rows)
+}
+
+func Test_income_by_category_columns_are_category_currency_income(t *testing.T) {
+	recipeScenario(t)
+
+	recipe := runShippedRecipe(t, incomeByCatFile)
+
+	assert.Equal(t, []document.SQLColumn{{Name: "category", Type: "VARCHAR"}, {Name: "currency", Type: "VARCHAR"}, {Name: "income", Type: "DECIMAL(18,2)"}}, recipe.Columns)
+}
+
+func Test_income_by_category_runs_as_shipped(t *testing.T) {
+	recipeScenario(t)
+
+	recipe := runShippedRecipe(t, incomeByCatFile)
+
+	assert.NotEmpty(t, recipe.Rows)
+}
+
+// recipeFiles are the shipped recipes and the one view each reads.
+var recipeFiles = map[string]string{spendingTrendFile: "v_spending", incomeByCatFile: "v_cash_flow"}
+
+// recipeLiterals are the quoted strings each recipe may hold off its params row: structural branch labels, not values.
+var recipeLiterals = map[string][]string{
+	spendingTrendFile: {"':'", "'CAD'"},
+	incomeByCatFile:   {"'income'", "'CAD'", "'(uncategorized)'"},
+}
+
+var (
+	zTableName   = regexp.MustCompile(`\bZ[A-Z]\w*`)
+	likeOperator = regexp.MustCompile(`(?i)\bi?like\b`)
+	clockCall    = regexp.MustCompile(`(?i)\b(?:now|today)\s*\(`)
+	clockKeyword = regexp.MustCompile(`(?i)\bcurrent_(?:date|time|timestamp)\b`)
+	quotedValue  = regexp.MustCompile(`'[^']*'`)
+)
+
+// linesWithout is sql less its lines that start with prefix.
+func linesWithout(sql, prefix string) string {
+	var kept []string
+	for line := range strings.SplitSeq(sql, "\n") {
+		if !strings.HasPrefix(line, prefix) {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
+}
+
+// relationsNamed is the relations that sql names as whole words outside its `--` comment lines.
+func relationsNamed(sql string, relations []string) []string {
+	code := linesWithout(sql, "--")
+	var named []string
+	for _, relation := range relations {
+		if regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(relation) + `\b`).MatchString(code) {
+			named = append(named, relation)
+		}
+	}
+	return named
+}
+
+// forbiddenNames is what a recipe may not contain: a Quicken Z-table name, LIKE, or a clock read
+// (current_date is allowed on the params row only).
+func forbiddenNames(sql string) []string {
+	var found []string
+	for _, pattern := range []*regexp.Regexp{zTableName, likeOperator, clockCall} {
+		found = append(found, pattern.FindAllString(sql, -1)...)
+	}
+	return append(found, clockKeyword.FindAllString(linesWithout(sql, recipeParamsPrefix), -1)...)
+}
+
+// quotedOffParamsRow is the quoted strings in sql outside its params row and comment lines.
+func quotedOffParamsRow(sql string) []string {
+	return quotedValue.FindAllString(linesWithout(linesWithout(sql, recipeParamsPrefix), "--"), -1)
+}
+
+// openingProblems names what is wrong with the first two lines of a recipe.
+func openingProblems(sql string) []string {
+	lines := strings.SplitN(sql, "\n", 3)
+	var problems []string
+	if !strings.HasPrefix(lines[0], "-- ") || !strings.HasSuffix(lines[0], "?") {
+		problems = append(problems, "line 1 is not a `-- ` question")
+	}
+	if len(lines) < 2 || !strings.HasPrefix(lines[1], recipeParamsPrefix) {
+		problems = append(problems, "line 2 is not the params row")
+	}
+	return problems
+}
+
+// storeRelations is the names of the tables and views of the store under a fresh HOME.
+func storeRelations(t *testing.T) []string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	skillEvalStore(t, home)
+	schema, err := duckstore.New(storeDirUnder(home)).Schema(t.Context())
+	require.NoError(t, err)
+	names := make([]string, len(schema.Relations))
+	for i, relation := range schema.Relations {
+		names[i] = relation.Name
+	}
+	return names
+}
+
+func Test_recipes_read_only_their_view(t *testing.T) {
+	relations := storeRelations(t)
+
+	for file, view := range recipeFiles {
+		t.Run(file, func(t *testing.T) {
+			assert.Equal(t, []string{view}, relationsNamed(repoFile(t, recipeDir+file), relations))
+		})
+	}
+}
+
+func Test_recipes_name_no_quicken_table_like_or_clock(t *testing.T) {
+	for file := range recipeFiles {
+		t.Run(file, func(t *testing.T) {
+			assert.Empty(t, forbiddenNames(repoFile(t, recipeDir+file)))
+		})
+	}
+}
+
+func Test_recipes_open_with_a_question_and_the_params_row(t *testing.T) {
+	for file := range recipeFiles {
+		t.Run(file, func(t *testing.T) {
+			assert.Empty(t, openingProblems(repoFile(t, recipeDir+file)))
+		})
+	}
+}
+
+func Test_recipes_put_values_only_in_the_params_row(t *testing.T) {
+	for file, allowed := range recipeLiterals {
+		t.Run(file, func(t *testing.T) {
+			assert.Subset(t, allowed, quotedOffParamsRow(repoFile(t, recipeDir+file)))
+		})
+	}
+}
+
+func Test_recipe_scanners_flag_crafted_text(t *testing.T) {
+	relations := storeRelations(t)
+	cases := []struct {
+		name string
+		scan func(string) []string
+		text string
+		want []string
+	}{
+		{"table_outside_the_view", func(s string) []string { return relationsNamed(s, relations) }, "SELECT 1 FROM transactions t", []string{"transactions"}},
+		{"table_named_only_in_a_comment", func(s string) []string { return relationsNamed(s, relations) }, "-- from transactions\nSELECT 1 FROM v_spending", []string{"v_spending"}},
+		{"view_that_extends_a_relation_name", func(s string) []string { return relationsNamed(s, relations) }, "SELECT 1 FROM v_spending_extra", nil},
+		{"quicken_table", forbiddenNames, "SELECT ZPAYEE FROM x", []string{"ZPAYEE"}},
+		{"like", forbiddenNames, "WHERE a like 'x%'", []string{"like"}},
+		{"ilike", forbiddenNames, "WHERE a ILIKE 'x%'", []string{"ILIKE"}},
+		{"now", forbiddenNames, "SELECT now()", []string{"now("}},
+		{"today", forbiddenNames, "SELECT today ()", []string{"today ("}},
+		{"clock_keyword_off_the_params_row", forbiddenNames, recipeParamsPrefix + "current_date AS until)\nWHERE d < current_date", []string{"current_date"}},
+		{"clock_keyword_on_the_params_row", forbiddenNames, recipeParamsPrefix + "current_date AS until)\nSELECT 1", nil},
+		{"literal_off_the_params_row", quotedOffParamsRow, "SELECT 1 WHERE c = 'Food'", []string{"'Food'"}},
+		{"literal_on_the_params_row", quotedOffParamsRow, recipeParamsPrefix + "'Food' AS category)\nSELECT 1", nil},
+		{"literal_in_a_comment", quotedOffParamsRow, "-- what's 'Food'?\nSELECT 1", nil},
+		{"first_line_not_a_comment", openingProblems, "SELECT 1\n" + recipeParamsPrefix, []string{"line 1 is not a `-- ` question"}},
+		{"second_line_not_the_params_row", openingProblems, "-- Why?\nSELECT 1", []string{"line 2 is not the params row"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, c.scan(c.text))
+		})
+	}
 }
