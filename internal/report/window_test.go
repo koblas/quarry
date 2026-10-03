@@ -279,3 +279,108 @@ func Test_WindowError_carries_its_parts(t *testing.T) {
 		})
 	}
 }
+
+func Test_parse_search_window_without_bounds_is_open_on_both_sides(t *testing.T) {
+	got, err := report.ParseSearchWindow(nil, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, store.SearchWindow{}, got)
+}
+
+func Test_parse_search_window_since_alone_starts_on_the_first_day_of_its_period(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+		want  time.Time
+	}{
+		{name: "a year starts on January 1", value: "2024", want: day(2024, time.January, 1)},
+		{name: "a month starts on its first day", value: "2024-02", want: day(2024, time.February, 1)},
+		{name: "a day is itself", value: "2024-02-15", want: day(2024, time.February, 15)},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := report.ParseSearchWindow(&c.value, nil)
+
+			require.NoError(t, err)
+			assert.Equal(t, store.SearchWindow{Since: &c.want}, got)
+		})
+	}
+}
+
+func Test_parse_search_window_until_alone_ends_on_the_last_day_of_its_period(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+		want  time.Time
+	}{
+		{name: "a year ends on December 31", value: "2024", want: day(2024, time.December, 31)},
+		{name: "a leap-year February ends on the 29th", value: "2024-02", want: day(2024, time.February, 29)},
+		{name: "a day is itself", value: "2024-02-15", want: day(2024, time.February, 15)},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := report.ParseSearchWindow(nil, &c.value)
+
+			require.NoError(t, err)
+			assert.Equal(t, store.SearchWindow{Until: &c.want}, got)
+		})
+	}
+}
+
+func Test_parse_search_window_keeps_year_one_as_a_bound_not_an_open_end(t *testing.T) {
+	zero := "0001"
+
+	got, err := report.ParseSearchWindow(&zero, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, got.Since)
+	assert.True(t, got.Since.IsZero())
+	assert.Nil(t, got.Until)
+}
+
+func Test_parse_search_window_refuses_a_bound_that_is_not_a_date(t *testing.T) {
+	bad := "2024-13"
+	good := "2024-01"
+	cases := []struct {
+		name         string
+		since, until *string
+		want         string
+	}{
+		{name: "since", since: &bad, want: `--since "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`},
+		{name: "until", until: &bad, want: `--until "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`},
+		{name: "until after a good since", since: &good, until: &bad, want: `--until "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := report.ParseSearchWindow(c.since, c.until)
+
+			var refusal report.WindowError
+			require.ErrorAs(t, err, &refusal)
+			assert.Equal(t, report.WindowNotADate, refusal.Kind)
+			assert.EqualError(t, err, c.want)
+		})
+	}
+}
+
+func Test_parse_search_window_refuses_a_since_after_the_until(t *testing.T) {
+	since, until := "2026-04", "2026-03-31"
+
+	_, err := report.ParseSearchWindow(&since, &until)
+
+	var refusal report.WindowError
+	require.ErrorAs(t, err, &refusal)
+	assert.Equal(t, report.WindowSinceAfterUntil, refusal.Kind)
+	assert.EqualError(t, err, "--since 2026-04 is after --until 2026-03-31")
+}
+
+func Test_parse_search_window_accepts_a_since_on_the_same_day_as_the_until(t *testing.T) {
+	both := "2026-03-31"
+
+	got, err := report.ParseSearchWindow(&both, &both)
+
+	require.NoError(t, err)
+	assert.Equal(t, store.SearchWindow{Since: new(day(2026, time.March, 31)), Until: new(day(2026, time.March, 31))}, got)
+}

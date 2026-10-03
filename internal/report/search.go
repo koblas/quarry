@@ -6,6 +6,9 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
+// searchCommand names search in its refusals; it equals the cli command word.
+const searchCommand = "search"
+
 // SearchRequest is what a search needs from its caller: the dates to list, the accounts to list
 // (each an id or a name; none means every account) and the most transactions to return (0 returns every one).
 type SearchRequest struct {
@@ -24,7 +27,19 @@ type Search struct {
 	Limit    int
 }
 
-// Search lists the newest req.Limit transactions dated in req.Window, in the accounts req.Accounts names.
-func (*Server) Search(context.Context, SearchRequest) (Search, error) {
-	return Search{}, nil
+// Truncated reports whether the limit cut matches off the end of Rows.
+func (s Search) Truncated() bool { return s.Matched > len(s.Rows) }
+
+// Search lists the newest req.Limit transactions dated in req.Window, in the accounts req.Accounts names
+// (every account when none). An account it cannot pick, or a store it cannot read, is a RefusalError.
+func (s *Server) Search(ctx context.Context, req SearchRequest) (Search, error) {
+	accounts, accountIDs, err := s.namedAccounts(ctx, searchCommand, req.Accounts)
+	if err != nil {
+		return Search{}, err
+	}
+	found, err := s.store.Search(ctx, store.SearchParams{Window: req.Window, AccountIDs: accountIDs, Limit: req.Limit})
+	if err != nil {
+		return Search{}, s.readRefusal(ctx, searchCommand, err)
+	}
+	return Search{Search: found, Window: req.Window, Accounts: accounts, Limit: req.Limit}, nil
 }

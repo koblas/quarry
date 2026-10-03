@@ -7,7 +7,7 @@ import (
 )
 
 // fakeStore answers each read with a canned result or fault; Query returns at most maxRows of rows,
-// and the got*/accountsReads/chargesReads pointers, when set, record what Query, Spending, CashFlow, Charges and Accounts were given or how often.
+// and the got*/accountsReads/chargesReads pointers, when set, record what Query, Spending, CashFlow, Charges, Search and Accounts were given or how often.
 type fakeStore struct {
 	status     store.Status
 	accounts   store.AccountList
@@ -15,6 +15,7 @@ type fakeStore struct {
 	cashFlow   store.CashFlow
 	charges    store.Charges
 	findings   store.FindingList
+	search     store.Search
 	schema     store.Schema
 	rows       [][]store.QueryValue
 	gotMaxRows *int
@@ -22,6 +23,7 @@ type fakeStore struct {
 	gotSpending   *store.SpendingParams
 	gotCashFlow   *store.CashFlowParams
 	gotCharges    *store.ChargeParams
+	gotSearch     *store.SearchParams
 	accountsReads *int
 	chargesReads  *int
 	schemaReads   *int
@@ -81,8 +83,11 @@ func (f fakeStore) Charges(_ context.Context, params store.ChargeParams) (store.
 	return f.charges, f.err
 }
 
-func (f fakeStore) Search(context.Context, store.SearchParams) (store.Search, error) {
-	return store.Search{}, f.err
+func (f fakeStore) Search(_ context.Context, params store.SearchParams) (store.Search, error) {
+	if f.gotSearch != nil {
+		*f.gotSearch = params
+	}
+	return f.search, f.err
 }
 
 func (f fakeStore) Findings(context.Context) (store.FindingList, error) { return f.findings, f.err }
