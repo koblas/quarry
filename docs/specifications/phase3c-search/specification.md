@@ -729,10 +729,10 @@ Sizing pass (architect, opus) 2026-10-03 — 15 IDs → 6 runs, all code-first. 
 ## BDD Acceptance Progress
 - [x] SCENARIO-01: quarry search lists matching transactions newest first, flagged, with their splits — `cmd/quarry/run_search_json_test.go` `Test_run_search_json_lists_every_transaction_newest_first_flagged_with_its_splits`
 - [x] SCENARIO-05: without --since and --until every date is searched — delivered by SCENARIO-01 — `cmd/quarry/run_search_window_test.go` `Test_run_search_without_since_or_until_searches_every_date`
-- [ ] SCENARIO-02: text matches payee, transaction memo and split memo, ignoring case, every character literal
-- [ ] SCENARIO-06: more matches than the limit print the newest ones
-- [ ] SCENARIO-07: no match prints an empty result and the no-match warning
-- [ ] SCENARIO-12a: a broken config file never affects quarry search
+- [x] SCENARIO-02: text matches payee, transaction memo and split memo, ignoring case, every character literal — `cmd/quarry/run_search_text_test.go` `Test_run_search_text_lists_payee_memo_and_split_memo_matches_ignoring_case_with_every_character_literal`
+- [x] SCENARIO-06: more matches than the limit print the newest ones — delivered by SCENARIO-02 — `cmd/quarry/run_search_limit_test.go` `Test_run_search_prints_the_newest_500_of_501_matches_unless_limit_0`
+- [x] SCENARIO-07: no match prints an empty result and the no-match warning — delivered by SCENARIO-02 — `cmd/quarry/run_search_no_match_test.go` `Test_run_search_with_text_that_matches_nothing_prints_an_empty_result_and_the_no_match_warning`
+- [x] SCENARIO-12a: a broken config file never affects quarry search — delivered by SCENARIO-02 — `cmd/quarry/run_config_test.go` `Test_run_search_ignores_a_malformed_config`
 - [ ] SCENARIO-03: --min and --max compare the amount without its sign
 - [ ] SCENARIO-04: --category matches the category and any category under it
 - [ ] SCENARIO-08: quarry search refuses bad input with the ruled line and exit code

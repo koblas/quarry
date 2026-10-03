@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-02
-status: open
+status: done
 ---
 
 # SCENARIO-02: text matches payee, transaction memo and split memo (folds 06, 07, 12a)
@@ -30,10 +30,10 @@ Inventory (grep; nothing exported changes shape except additions): `store.Search
 - [x] Step 5 (B2, S06): `cli/search.go:10,22-76` `--limit` IntVar default 0, help ``print at most `n` transactions, newest first (500 unless set; 0 prints every one)``, `searchLimit(cmd, limit)` (Changed -> value else `defaultSearchLimit`), negative -> `UsageError` "--limit must be 0 or more; 0 prints every transaction" in `Args` between count and blank; `searchCutNote(report.Search)` `showing the newest 500 of 1,234 matching transactions; pass --limit 0 to list every one` (`humanize.Thousands`), appended to warnings when `Truncated()`, so CLI `--json` `warnings` carries it too. Tests: `internal/cli/report_help_test.go:~291` new `Test_search_help_lists_the_limit_flag` (pin modelled on `sql_test.go:238`) + internal `searchCutNote` pin at 1,234; cmd: text mode `--limit 2` of 5 (newest two, footer `5 matching transactions`, exact stderr line) and `--json` `--limit 2` of 5 (`truncated` true, `matched` 5, the line in `warnings` AND on stderr), boundary pair `--limit 5` of 5 (no cut, `truncated` false, empty stderr) vs `--limit 4` of 5 (cut, `truncated` true, line), `limit` echo (500 default, 0 with `--limit 0`), `--limit -1` refusal, `Test_run_search_refuses_in_the_ruled_order` (two texts + `--limit -1` -> texts line; one blank + `--limit -1` -> limit line; blank + bad `--since` -> blank line), cut and no-match never together
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `CheckSearchText`, `ErrBlankSearchText`, `SearchWarnings`, `searchCutNote`; update `newSearchCommand` doc comment (no longer "newest transactions" only)
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `CheckSearchText`, `ErrBlankSearchText`, `SearchWarnings`, `searchCutNote`; update `newSearchCommand` doc comment (no longer "newest transactions" only)
 
 ### Verify
-- [ ] Step 7: full verification block + `.claude/scripts/spec-check.py phase3c-search`; tick SCENARIO-02, -06, -07, -12a (each folded line: `… — delivered by SCENARIO-02 — ` + its test last); rewrite STATE.md
+- [x] Step 7: full verification block + `.claude/scripts/spec-check.py phase3c-search`; tick SCENARIO-02, -06, -07, -12a (each folded line: `… — delivered by SCENARIO-02 — ` + its test last); rewrite STATE.md
 
 ## Handoff
 
@@ -50,19 +50,8 @@ Inventory (grep; nothing exported changes shape except additions): `store.Search
 
 ## Phase report
 
-Run B2 (steps 4-5: S07 no-match composer, S06 --limit + cut line) done and committed. A, B1 earlier. V (steps 6-7) next.
+Run V (steps 6-7) done. All runs complete; scenario done.
 
-Production:
-- `document/warnings.go` `SearchWarnings(report.Search) []string`: `[]string{}` unless `Matched==0`, else one line, four variants (named = `len(Accounts)>0`; empty span = `store.TransactionRange{}`); does not use `appendEmptyWindowWarning`.
-- `cli/search.go`: `searchArgs(limit *int)` now returns the `cobra.PositionalArgs` (order count, `--limit` < 0 via `errSearchNegativeLimit`, blank); `searchLimit(cmd, limit)` (Changed -> value, else `defaultSearchLimit`); `searchCutNote(report.Search)` (`len(Rows)` of `Matched`, `humanize.Thousands`); RunE builds `warnings = SearchWarnings(found)` + cut note when `Truncated()`, passes the same slice to `emitReport` and `document.NewSearch`; `--limit` IntVar default 0 with ruled help.
-- `newSearchCommand` doc comment already updated; doc comments on `SearchWarnings`, `searchCutNote`, `searchLimit`, `searchArgs`, `errSearchNegativeLimit` written (CheckSearchText/ErrBlankSearchText done in B1).
-
-Tests added: `document/search_warnings_test.go` (2: five-row variants table incl. named left-out, empty-not-nil matched/cut); `cli/search_internal_test.go` (searchCutNote at 1,234); `cli/report_help_test.go` `Test_search_help_lists_the_limit_flag`; `cmd/quarry/run_search_limit_test.go` (+5: text `--limit 2` of 5, json cut in warnings and stderr, 5-of-5 vs 4-of-5 boundary, limit echo 500/0/3, ruled-order refusal table incl. `--limit -1`); `run_search_no_match_test.go` (+2: five-variant json warnings+stderr, text-mode listing).
-
-State: all four S02 acceptance tests GREEN (text, 500-of-501, no-match, malformed config). Narrow loops green; `golangci-lint run ./...` 0 issues. Full Verify, spec tick, STATE.md, status: done NOT done (run V).
-
-Mutations (each red, restored byte-identical): `Args` limit check after blank -> ruled-order row "a negative limit beats a blank text"; limit check before count -> row "two texts beat a negative limit"; `Changed` -> `false` -> S06 `limit_0_lists_every_match`, limit echo rows, `--limit 2`/`4` rows; Changed ignored via raw limit -> S06 `default_limit_drops_the_oldest`, echo `the_default_is_500`; `named` inverted and zero-span inverted -> `Test_SearchWarnings_say_where_the_no_match_search_ran` rows and cmd no-match rows; `Matched != 0` guard dropped -> `Test_SearchWarnings_is_an_empty_list_not_nil_when_something_matched` (both rows); `Truncated()` guard forced true -> `limit_equal_to_the_matches_lists_them_all` and no-match stderr rows (cut and no-match cannot coexist).
-
-Green on arrival: `Test_run_search_ignores_a_malformed_config` (since A). Cmd tests of B2 were written after code (code-first) so none was seen red apart from acceptance rows; mutations above prove each falsifiable.
-
-V must not: add search to `readCommandArgs`; pin cobra `NoArgs`. Search help Long still has the not-yet-built `--min/--max/--category` paragraphs (ruled copy, unchanged).
+- Doc budgets: trimmed `searchTextMatch` (duckstore/search.go) to one line; every other new doc comment (`CheckSearchText`, `ErrBlankSearchText`, `SearchWarnings`, `searchCutNote`, `searchLimit`, `searchArgs`, `errSearchNegativeLimit`, `newSearchCommand`) was already within budget.
+- Verify: `go test -count=1 -coverpkg=./... ./...` rc=0; `uncovered-diff.py --profile` 0 uncovered added lines; `-race` on duckstore/report/document/cli/cmd rc=0; `golangci-lint run ./...` rc=0, 0 issues. test-stats: cmd/quarry 577 (+17), internal/cli 412 (+4), internal/report 319 (+4), internal/report/document 80 (+4), internal/store/duckstore 517 (+7), TOTAL 1905 (+36).
+- Spec ticked SCENARIO-02, -06, -07, -12a; `spec-check.py phase3c-search` OK, `--run` OK. STATE.md rewritten.

@@ -21,8 +21,7 @@ const (
 	searchFirstAccount = 5
 )
 
-// searchTextMatch keeps a transaction whose payee, memo or any split memo contains the text, ignoring case;
-// no text keeps all. contains is a literal substring test (no LIKE wildcards) and NULL contains nothing.
+// searchTextMatch keeps a transaction whose payee, memo or a split memo contains the text, ignoring case; no text keeps all.
 const searchTextMatch = `(CAST(` + searchText + ` AS VARCHAR) IS NULL
 			OR contains(lower(p.name), lower(` + searchText + `))
 			OR contains(lower(t.memo), lower(` + searchText + `))
