@@ -8,8 +8,9 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// searchOrder is newest first, ties by descending source id; the cut and the final listing both use it.
-const searchOrder = "txn_date DESC, txn_source_id DESC"
+// searchOrder is newest first, ties by descending source id then id, so a transaction's rows never
+// interleave with another's; the cut and the final listing both use it.
+const searchOrder = "txn_date DESC, txn_source_id DESC, txn_id DESC"
 
 // Search parameters, numbered in the order searchArgs binds them; the named accounts follow from searchFirstAccount.
 const (

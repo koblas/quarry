@@ -248,6 +248,24 @@ func Test_search_counts_every_match_when_the_limit_cuts(t *testing.T) {
 	}
 }
 
+func Test_search_keeps_two_transactions_sharing_a_date_and_source_id_apart(t *testing.T) {
+	t.Parallel()
+	rows := searchRowsFor()
+	for _, id := range []string{"a", "b"} {
+		addSearch(&rows, searchSpec{id: id, sourceID: 4, parts: []searchPart{
+			{memo: new(id + " first"), sourceID: 1, cents: -100},
+			{memo: new(id + " second"), sourceID: 2, cents: -200},
+		}})
+	}
+
+	got := searchOf(t, rows, store.SearchParams{})
+
+	require.Len(t, got.Rows, 2)
+	assert.Equal(t, []string{"txn-b", "txn-a"}, searchedIDs(got))
+	assert.Equal(t, []store.SearchSplit{{Memo: new("b first"), Amount: -100}, {Memo: new("b second"), Amount: -200}}, got.Rows[0].Splits)
+	assert.Equal(t, []store.SearchSplit{{Memo: new("a first"), Amount: -100}, {Memo: new("a second"), Amount: -200}}, got.Rows[1].Splits)
+}
+
 func Test_search_keeps_every_split_of_a_transaction_the_limit_keeps(t *testing.T) {
 	t.Parallel()
 	rows := searchRowsFor()

@@ -79,9 +79,8 @@ type searchTxn struct {
 	splits                   []searchSplit
 }
 
-// searchRows is spendRows' reference data (without its payees) plus txns in the order given, each
-// priced in its account's currency at the sum of its splits, and a transfers row for each pair of
-// split ids in pairs (lower source id first).
+// searchRows is spendRows' reference data plus txns (each priced at the sum of its splits) and a
+// transfers row for each pair of split ids in pairs.
 func searchRows(accounts []store.Account, pairs [][2]string, txns ...searchTxn) store.Rows {
 	rows := spendRows(accounts)
 	rows.Payees = nil

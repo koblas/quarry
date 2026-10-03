@@ -4,7 +4,7 @@ Scenarios complete: SCENARIO-01 (folds 05). Last updated by SCENARIO-01. Phase 3
 
 ## Binding decisions
 - `report.Store.Search` runs exactly two statements: rows, then span. S02-S04 add only WHERE predicates plus args through the one builder (`searchRowsQuery`/`searchArgs`), never a statement. S04's category check folds into the span statement, or the read-fault rows re-point (SCENARIO-01)
-- The cut and `matched` happen at transaction grain inside the CTE (`count(*) OVER ()` before `LIMIT`), before the split join; `searchOrder` serves the CTE and the outer SELECT. Counting after the cut, or a second copy of the order, double-counts splits or masks a mutation (SCENARIO-01)
+- The cut and `matched` happen at transaction grain inside the CTE (`count(*) OVER ()` before `LIMIT`), before the split join; `searchOrder` (date, source id, then `txn_id`, all DESC) serves the CTE and the outer SELECT. Counting after the cut, or a second copy of the order, double-counts splits or masks a mutation; dropping the `txn_id` tiebreak interleaves two transactions sharing date and source id (SCENARIO-01)
 - `store.SearchWindow` open bounds are nil pointers, never a zero `time.Time`: `--since 0001` parses to exactly the zero time. Both bounds are civil days, inclusive (SCENARIO-01)
 - Limit 0 binds nil to `LIMIT $3` (DuckDB 1.5, go-duckdb v2.10505.0: `LIMIT NULL` is no limit). `lower('CAFÉ') = lower('café')` holds, which retires S02's case-folding risk (SCENARIO-01)
 - `transfer`/`excluded` flags come only from the fragments in `duckstore/schema.go` (`transferLeg(alias)`, `reportedTransaction`, `reportedAccount`), shared with `cashFlowViewDDL`; re-deriving either is a defect (SCENARIO-01)
@@ -13,6 +13,7 @@ Scenarios complete: SCENARIO-01 (folds 05). Last updated by SCENARIO-01. Phase 3
 - `newSearchCommand(newReport, jsonOut)` takes no clock and no config loader (Rule S8, enforced by the signature); CLI passes `defaultSearchLimit` = 500 so S02 does not re-point `limit` in the acceptance JSON (SCENARIO-01)
 - Help lists flags alphabetically like every sibling; no help pin asserts flag order (SCENARIO-01)
 - Caption is `Transactions in <accountsCaption>, <dates>` (`searchCaption`/`searchDates`: all dates / from / through / range). The ` matching %q`, `, category` and `, amount` parts are owed by S02 (text), S04 (category), S03 (min/max): each lands with `report.Search` carrying the field plus its predicate. The footer counts `Matched`, not rows (SCENARIO-01)
+- Memo ""→null is pinned at store level (`duckstore` `Test_search_gives_no_memo_for_a_null_or_empty_memo`), not in the document; `renderSearch` lists a transfer before a category and relies on the store contract that a transfer leg has no category (SCENARIO-01)
 - Cell escaping (`escapeCell`: `\n`, `\t`, `\r`) applies to account, payee, category and memo (SCENARIO-01)
 
 ## Left unbuilt

@@ -11,14 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// searchStore is the store the search tests share, in insertion order oldest first (the same-date
-// pair lowest source id first), so a listing that kept insertion order would be oldest first:
-//
-//	Tracked Loan: txn-linked 2026-01-20
-//	Old Card: txn-left-out 2026-02-01 (not in reports)
-//	Chequing: txn-marked 2026-02-14 (marked excluded), txn-low and txn-high 2026-03-10, txn-out 2026-03-20 (transfer leg),
-//	  txn-split 2026-04-02 (two splits, inserted fuel first)
-//	Savings: txn-in 2026-03-20 (other leg)
+// searchStore: transactions by account, oldest first, with the dates txn-marked 02-14, txn-low and
+// txn-high 03-10, txn-out and txn-in 03-20, txn-split 04-02.
 func searchStore() store.Rows {
 	chequing := chequingAccount("acct-chq", 1)
 	savings := store.Account{ID: "acct-sav", SourceID: 2, Name: "Savings", Type: "savings", Currency: "CAD", Active: true}
@@ -156,6 +150,37 @@ func Test_run_search_json_bounds_the_listing_by_since_and_until_and_echoes_their
 	assert.Equal(t, 7, doc.Matched)
 	assert.Equal(t, new("2026-01-01"), doc.Since)
 	assert.Equal(t, new("2026-03-31"), doc.Until)
+}
+
+func Test_run_search_json_bounds_the_listing_by_one_flag_alone(t *testing.T) {
+	cases := []struct {
+		name      string
+		args      []string
+		wantIDs   []string
+		wantSince *string
+		wantUntil *string
+	}{
+		{
+			name: "since alone leaves the end open", args: []string{"--since", "2026-03"},
+			wantIDs:   []string{"txn-split", "txn-in", "txn-out", "txn-high", "txn-low"},
+			wantSince: new("2026-03-01"),
+		},
+		{
+			name: "until alone leaves the start open", args: []string{"--until", "2026-02"},
+			wantIDs:   []string{"txn-marked", "txn-left-out", "txn-linked"},
+			wantUntil: new("2026-02-28"),
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			doc := searchedJSON(t, searchStore(), c.args...)
+
+			assert.Equal(t, c.wantIDs, transactionIDs(doc))
+			assert.Equal(t, c.wantSince, doc.Since)
+			assert.Equal(t, c.wantUntil, doc.Until)
+		})
+	}
 }
 
 func Test_run_search_json_with_an_account_lists_only_its_transactions_and_echoes_it(t *testing.T) {
