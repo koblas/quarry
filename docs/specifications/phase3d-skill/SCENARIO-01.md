@@ -32,9 +32,9 @@ Size: OWNS A RUN — 3 batches, 0 feature packages (static files plus `cmd/quarr
 - [x] Step 2: `cmd/quarry/run_skill_text_test.go` (new) `Test_skill_text_carries_the_ruled_frontmatter_and_rules` + `ticks` helper + section splitter — frontmatter, intro, sections 1-9 table rows (S.4, S.5), heading order, section 10 links, credit line. Red: `../../plugin/skills/quarry/SKILL.md` absent
 
 ### Build
-- [ ] Step 3: `.claude-plugin/marketplace.json`, `plugin/.claude-plugin/plugin.json` (new, verbatim S.2) + in the Step 1 test a decode pin: marketplace plugin `source` starts `./` and `<source>/.claude-plugin/plugin.json` exists; plugin `name` equals the marketplace plugin's `name`; `mcpServers.quarry` has `command` `quarry` and `args` `["mcp"]` — green on acceptance 1
-- [ ] Step 4: `plugin/skills/quarry/SKILL.md` (new; S.3 frontmatter, `# Answer questions from Quicken data with quarry`, intro, sections 1-10, credit line) + `Test_status_json_carries_each_path_the_skill_reads` in `cmd/quarry/run_status_json_test.go` after `:18-96` (or the skill text file; one test, one place) — green on acceptance 2. Section 10 one-liners: write from S.6 jobs
-- [ ] Step 5: `README.md:5` insert `## Use quarry with Claude Code` (S.8 verbatim, incl. its two code fences) before `## Credits`; `cmd/quarry/run_plugin_readme_test.go` (new) `Test_readme_section_for_claude_code_is_verbatim_and_precedes_credits` — section from its heading to the next `## ` equals the constant (via `ticks`), and its index is below `## Credits`'s
+- [x] Step 3: `.claude-plugin/marketplace.json`, `plugin/.claude-plugin/plugin.json` (new, verbatim S.2) + in the Step 1 test a decode pin: marketplace plugin `source` starts `./` and `<source>/.claude-plugin/plugin.json` exists; plugin `name` equals the marketplace plugin's `name`; `mcpServers.quarry` has `command` `quarry` and `args` `["mcp"]` — green on acceptance 1
+- [x] Step 4: `plugin/skills/quarry/SKILL.md` (new; S.3 frontmatter, `# Answer questions from Quicken data with quarry`, intro, sections 1-10, credit line) + `Test_status_json_carries_each_path_the_skill_reads` in `cmd/quarry/run_status_json_test.go` after `:18-96` (or the skill text file; one test, one place) — green on acceptance 2. Section 10 one-liners: write from S.6 jobs
+- [x] Step 5: `README.md:5` insert `## Use quarry with Claude Code` (S.8 verbatim, incl. its two code fences) before `## Credits`; `cmd/quarry/run_plugin_readme_test.go` (new) `Test_readme_section_for_claude_code_is_verbatim_and_precedes_credits` — section from its heading to the next `## ` equals the constant (via `ticks`), and its index is below `## Credits`'s
 
 ### Sweep
 - [ ] Step 6: `THIRD_PARTY_NOTICES:7-8` dweekly "Used in:" — keep the existing parenthetical and append `; plugin/ (skill layout and the untrusted-data and reporting rules in SKILL.md)`; `docs/initial-prd.md:215` (references list and "generated from the store" clause, S.9 rows 1-2), `:217` (row 3), and one sentence under `**Open questions**` (~`:330`, row 4: "Quicken's category tax line is not imported; tax totals are by user-named category until it is."); leave `:129`, `:117`. These doc edits are not pinned by tests (prose, not contract). Then fix what `go build ./... && golangci-lint run ./...` reports, to `0 issues`
@@ -65,18 +65,16 @@ Size: OWNS A RUN — 3 batches, 0 feature packages (static files plus `cmd/quarr
 
 ## Phase report
 
-Run A (steps 1-2) done. Red, both at the first `repoFile` read (`require.NoError`): `open ../../.claude-plugin/marketplace.json: no such file or directory` and `open ../../plugin/skills/quarry/SKILL.md: no such file or directory`. No production Go.
+Run B1 (steps 3-5) done; both acceptance tests green, plus the three new tests; lint on `./cmd/quarry/...` is `0 issues`.
 
 Files:
-- `cmd/quarry/run_plugin_manifest_test.go` (new): `wantMarketplaceJSON`, `wantPluginJSON` (byte-equal, end in `\n`), `repoFile(t, rel) string`, the acceptance test (also asserts `plugin/.mcp.json` absent; that arm passes today). Step 3 adds the decode pin here.
-- `cmd/quarry/run_skill_text_test.go` (new): `ticks`, `splitSkill`/`skillText`, `referenceLinkTargets`, `lastNonEmptyLine`, the acceptance test, and constants `skillFrontmatter`, `skillIntro`, `skillSection1..9`, `skillCredit` at file bottom, generated once from the spec's S.3-S.5 with the de-quote rule. `//nolint:lll` sits above the const block (lines over 200 chars).
-- Lint on `./cmd/quarry/...` is `0 issues` (fmt run).
+- `.claude-plugin/marketplace.json`, `plugin/.claude-plugin/plugin.json` (new, byte-equal to the test constants).
+- `plugin/skills/quarry/SKILL.md` (new): sections 1-9 and the credit generated from the test constants; section 10 is hand-written (six links, one per line, in S.1 order, one-line jobs from S.6).
+- `README.md`: `## Use quarry with Claude Code` inserted before `## Credits`.
+- `cmd/quarry/run_plugin_manifest_test.go`: added `Test_plugin_manifests_agree_on_where_the_plugin_lives_and_how_it_starts_quarry` (decode pin).
+- `cmd/quarry/run_plugin_readme_test.go` (new): `Test_readme_section_for_claude_code_is_verbatim_and_precedes_credits`, constant `readmeClaudeCodeSection`.
+- `cmd/quarry/run_status_json_test.go`: `Test_status_json_carries_each_path_the_skill_reads` + `statusPath` helper. It checks each path against SKILL.md section 1 as a plain substring (section 1 writes `<rates.last>` without backticks, so a backticked match fails).
 
-For B1 (step 4) when writing SKILL.md, the constants fix the shape:
-- Frontmatter is `---\nname: quarry\ndescription: <one line>\n---`; then a blank line, `# Answer questions from Quicken data with quarry`, blank, intro paragraph, blank, `## 1. …`.
-- Each section: heading, blank line, body, blank line. Bodies are trimmed of newlines before comparing. Blockquotes de-quoted: each non-list, non-fence line is its own paragraph; list items contiguous; blank line between a paragraph and a following list or fence.
-- Section 4 keeps `\|` in the first row; section 8 is the S.5 table only.
-- Section 10: one `](references/…)` link per line in S.1 order; credit sentence is the last non-empty line of the file. Anything else in section 10 is free.
-- The `status --json` path test (step 4) is not written yet; `Test_status_json_carries_each_path_the_skill_reads` still to add.
+Mutation checks (all four red, then restored, `git status` clean of mutations): `plugin/.mcp.json` added, section 6 word changed, README word changed, `fetch_error` tag renamed at `internal/report/document/status.go:82`.
 
-Do not redo: the constants; do not hand-edit them (they match the spec text byte for byte).
+For V (steps 6-8): not done. Step 6 sweep edits (THIRD_PARTY_NOTICES, PRD lines) still to make; `go build`/full lint not yet run repo-wide; no full suite yet; spec tick, `spec-check.py`, STATE.md, `status: done` all open. No production Go was added.

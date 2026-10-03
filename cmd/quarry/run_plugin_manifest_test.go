@@ -3,7 +3,10 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
+	"path"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,6 +39,32 @@ func Test_plugin_manifests_list_quarry_and_start_its_mcp_server(t *testing.T) {
 	assert.Equal(t, wantMarketplaceJSON, marketplace) //nolint:testifylint // byte-equal is the contract, not JSON-equivalence
 	assert.Equal(t, wantPluginJSON, plugin)           //nolint:testifylint // byte-equal is the contract, not JSON-equivalence
 	assert.NoFileExists(t, "../../plugin/.mcp.json")
+}
+
+func Test_plugin_manifests_agree_on_where_the_plugin_lives_and_how_it_starts_quarry(t *testing.T) {
+	var marketplace struct {
+		Plugins []struct {
+			Name   string `json:"name"`
+			Source string `json:"source"`
+		} `json:"plugins"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(repoFile(t, ".claude-plugin/marketplace.json")), &marketplace))
+	var plugin struct {
+		Name       string `json:"name"`
+		McpServers map[string]struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(repoFile(t, "plugin/.claude-plugin/plugin.json")), &plugin))
+
+	require.Len(t, marketplace.Plugins, 1)
+	listed := marketplace.Plugins[0]
+	assert.True(t, strings.HasPrefix(listed.Source, "./"), "marketplace source %q", listed.Source)
+	assert.FileExists(t, path.Join("../..", listed.Source, ".claude-plugin/plugin.json"))
+	assert.Equal(t, listed.Name, plugin.Name)
+	assert.Equal(t, "quarry", plugin.McpServers["quarry"].Command)
+	assert.Equal(t, []string{"mcp"}, plugin.McpServers["quarry"].Args)
 }
 
 // repoFile reads a file named relative to the repo root; go test runs in cmd/quarry.

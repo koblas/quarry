@@ -1,0 +1,8 @@
+{
+  "name": "quarry",
+  "owner": { "name": "David Koblas" },
+  "description": "quarry: answer questions from your Quicken Classic for Mac data",
+  "plugins": [
+    { "name": "quarry", "source": "./plugin", "description": "Skill and MCP server config for quarry, which reads your Quicken Classic for Mac data" }
+  ]
+}
