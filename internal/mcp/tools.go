@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -19,6 +20,7 @@ const (
 	toolSyncStatus  = "sync_status"
 	toolDataQuality = "data_quality"
 	toolSpending    = "spending"
+	toolCashFlow    = "cash_flow"
 )
 
 // Row limits: the most any tool returns, data_quality's default, and the most items it lists per finding.
@@ -78,6 +80,13 @@ out negative. Each split is converted at the Bank of Canada rate for its
 date. Use this rather than query for spending totals. Returns at most 500
 rows; totals always count every row.`
 
+const cashFlowDescription = `Report income, spending, net and savings rate for each month or year of a
+period, with totals per currency. The rules are spending's: transfers
+between the user's own accounts are neither income nor spending, and spent
+equals spending's total for the same period, accounts and currency.
+Savings rate is net divided by income, null when income is zero or less.
+A period that since or until cuts short is marked partial.`
+
 // The descriptions of the parameters spending shares with the other report tools.
 const (
 	sinceDescription    = "First day to count: YYYY, YYYY-MM or YYYY-MM-DD; a year or month starts on its first day. Defaults to January 1 of this year."
@@ -85,6 +94,7 @@ const (
 	accountsDescription = "Count only these accounts, each given by id or by name in any letter case. Omit it to count every account."
 	currencyDescription = "Currency for amounts: CAD, USD, or native to list each account's own currency separately. Defaults to reporting.currency in quarry's config file, else CAD."
 	spendingByDesc      = "Group by category (the default), payee, tag or month. A split with several tags counts under each tag."
+	cashFlowByDesc      = "One row per month (the default) or per year."
 )
 
 type (
@@ -101,6 +111,14 @@ type (
 	}
 	// spendingInput is the spending tool's arguments; Since and Until are nil when absent.
 	spendingInput struct {
+		Since    *string  `json:"since"`
+		Until    *string  `json:"until"`
+		Accounts []string `json:"accounts"`
+		Currency string   `json:"currency"`
+		By       string   `json:"by"`
+	}
+	// cashFlowInput is the cash_flow tool's arguments; Since and Until are nil when absent.
+	cashFlowInput struct {
 		Since    *string  `json:"since"`
 		Until    *string  `json:"until"`
 		Accounts []string `json:"accounts"`
@@ -131,6 +149,13 @@ func (s *Server) addTools(srv *sdk.Server) {
 		"currency": currencySchema(),
 		"by":       described(spendingByDesc, &jsonschema.Schema{Type: "string", Enum: spendingGroups(), Default: []byte(`"category"`)}),
 	})), handler(s.timeout, stoppedLine(toolSpending), s.spending))
+	sdk.AddTool(srv, tool(toolCashFlow, cashFlowDescription, objectSchema(map[string]*jsonschema.Schema{
+		"since":    described(sinceDescription, &jsonschema.Schema{Type: "string"}),
+		"until":    described(untilDescription, &jsonschema.Schema{Type: "string"}),
+		"accounts": accountsSchema(accountsDescription),
+		"currency": currencySchema(),
+		"by":       described(cashFlowByDesc, &jsonschema.Schema{Type: "string", Enum: cashFlowPeriods(), Default: []byte(`"month"`)}),
+	})), handler(s.timeout, stoppedLine(toolCashFlow), s.cashFlow))
 }
 
 // tool describes one tool; its result is a JSON object.
@@ -181,11 +206,16 @@ func currencySchema() *jsonschema.Schema {
 }
 
 // spendingGroups lists the groupings spending accepts for by, in the order the store declares them.
-func spendingGroups() []any {
-	groups := store.SpendingGroups()
-	enum := make([]any, len(groups))
-	for i, g := range groups {
-		enum[i] = g.String()
+func spendingGroups() []any { return stringEnum(store.SpendingGroups()) }
+
+// cashFlowPeriods lists the periods cash_flow accepts for by, in the order the store declares them.
+func cashFlowPeriods() []any { return stringEnum(store.CashFlowPeriods()) }
+
+// stringEnum is the String of each value, as a schema enum.
+func stringEnum[T fmt.Stringer](values []T) []any {
+	enum := make([]any, len(values))
+	for i, v := range values {
+		enum[i] = v.String()
 	}
 	return enum
 }

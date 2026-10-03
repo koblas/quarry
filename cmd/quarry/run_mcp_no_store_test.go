@@ -26,6 +26,7 @@ func Test_run_mcp_every_tool_refuses_before_the_first_sync(t *testing.T) {
 		{tool: "sync_status"},
 		{tool: "data_quality"},
 		{tool: "spending"},
+		{tool: "cash_flow"},
 	}
 
 	for _, c := range calls {

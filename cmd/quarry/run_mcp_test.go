@@ -68,7 +68,29 @@ out negative. Each split is converted at the Bank of Canada rate for its
 date. Use this rather than query for spending totals. Returns at most 500
 rows; totals always count every row.`
 
+const mcpCashFlowDescription = `Report income, spending, net and savings rate for each month or year of a
+period, with totals per currency. The rules are spending's: transfers
+between the user's own accounts are neither income nor spending, and spent
+equals spending's total for the same period, accounts and currency.
+Savings rate is net divided by income, null when income is zero or less.
+A period that since or until cuts short is marked partial.`
+
 const (
+	mcpCashFlowInputSchema = `{
+		"type": "object",
+		"properties": {
+			"since": {"type": "string", "description": "First day to count: YYYY, YYYY-MM or YYYY-MM-DD; a year or month starts on its first day. ` +
+		`Defaults to January 1 of this year."},
+			"until": {"type": "string", "description": "Last day to count: YYYY, YYYY-MM or YYYY-MM-DD; a year or month ends on its last day. ` +
+		`Defaults to today; future-dated transactions count only when until is later than today."},
+			"accounts": {"type": "array", "items": {"type": "string"}, "description": "Count only these accounts, each given by id or by name in any letter case. ` +
+		`Omit it to count every account."},
+			"currency": {"type": "string", "enum": ["CAD", "USD", "native"], "description": "Currency for amounts: CAD, USD, or native to list each account's own currency separately. ` +
+		`Defaults to reporting.currency in quarry's config file, else CAD."},
+			"by": {"type": "string", "enum": ["month", "year"], "default": "month", "description": "One row per month (the default) or per year."}
+		},
+		"additionalProperties": false
+	}`
 	mcpSpendingInputSchema = `{
 		"type": "object",
 		"properties": {
@@ -130,6 +152,7 @@ func Test_run_mcp_lists_quarrys_four_tools_over_json_rpc(t *testing.T) {
 		"sync_status":     {mcpSyncStatusDescription, mcpNoInputSchema},
 		"data_quality":    {mcpDataQualityDescription, mcpDataQualityInputSchema},
 		"spending":        {mcpSpendingDescription, mcpSpendingInputSchema},
+		"cash_flow":       {mcpCashFlowDescription, mcpCashFlowInputSchema},
 	}
 	require.Len(t, listed.Tools, len(wantTools))
 	for _, tool := range listed.Tools {
