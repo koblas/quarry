@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-03
-status: open
+status: done
 ---
 
 # SCENARIO-03: --min and --max compare the amount without its sign
@@ -38,10 +38,10 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/report`; `store`, `
 - [x] Step 4 (batch 3, `cli/search.go:84-127`, `render_search.go:47-53`): `--min`/`--max` string flags with the §2.2 help verbatim; RunE calls `ParseSearchAmounts` (pointer set only when `Changed`) before `searchWindow`, error -> `UsageError`; caption appends `, amount <range>` after dates via `formatMoney` (`20.00 to 50.00` | `at least` | `at most` | `exactly` when equal). Tests: `Test_searchCaption_names_the_amount_range` (all four arms, grouped `1,234.00`, with text and accounts, each arm differs in one variable; min==max is `exactly`, not `20.00 to 20.00`); help pin for both flag lines (`-h` output at wrap width); cmd `Test_run_search_json_echoes_min_and_max_normalized` (`12.5` -> `"12.50"`, null when absent) and text caption; cmd refusal rows `Test_run_search_refuses_a_bad_amount_with_the_ruled_line` (`--min "-12"` exact line, `--max "1,234.56"`, `--min ""`, 17 digits; exit 2; stdout empty; no store opened), `Test_run_search_refuses_min_above_max_before_a_bad_since`, `Test_run_search_refuses_a_bad_min_before_a_bad_since_and_before_a_bad_max`, `Test_run_search_refuses_blank_text_before_a_bad_min`; S02-debt cmd row `search gym --limit 1` (matched = text matches, cut line "of N")
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `ParseSearchAmounts`, `AmountError`, `SearchAmounts`; `golangci-lint --fix` may rewrite the order-sensitive `document` byte-literal test to `JSONEq` (undo, see STATE traps)
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `ParseSearchAmounts`, `AmountError`, `SearchAmounts`; `golangci-lint --fix` may rewrite the order-sensitive `document` byte-literal test to `JSONEq` (undo, see STATE traps)
 
 ### Verify
-- [ ] Step 6: full verification block (`agent-briefs.md`) + `.claude/scripts/spec-check.py phase3c-search`; tick SCENARIO-03 with its acceptance test; rewrite `STATE.md` (remove S03 from Left unbuilt, close the S02 text×limit debt)
+- [x] Step 6: full verification block (`agent-briefs.md`) + `.claude/scripts/spec-check.py phase3c-search`; tick SCENARIO-03 with its acceptance test; rewrite `STATE.md` (remove S03 from Left unbuilt, close the S02 text×limit debt)
 
 ## Handoff
 
@@ -62,11 +62,9 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/report`; `store`, `
 
 ## Phase report
 
-Runs A (1), B1 (2-3) and B2 (4) done. Run V (5-6) remains.
+All runs done (A, B1, B2, V); scenario complete, `status: done`.
 
-- Step 2 (B1): `internal/report/amount.go`: `ParseSearchAmounts(least, most *string)`, `SearchAmounts{Min, Max *int64}` (cents), `AmountError{Kind, Bound, Value, Other}` returned by value; `Error()` is the CLI line verbatim. Tests `amount_test.go`.
-- Step 3 (B1): `SearchParams.Min/Max`; duckstore `$5`/`$6` (`searchFirstAccount` = 7), `searchAmountRange`; `SearchRequest.Amounts` / `Search.Amounts`; `document.NewSearch` Min/Max via `Money`. S02 text x limit store row added.
-- Step 4 (B2): `internal/cli/search.go`: `searchAmounts(cmd, &minArg, &maxArg)` (pointer only when `Changed`; any parser error -> `UsageError{msg: err.Error()}`, like `searchWindow`) runs in RunE before `searchWindow`; `--min`/`--max` string flags with the ruled help (placeholder `amount`). `render_search.go`: caption appends `, amount <range>` via `searchAmountRange` (`exactly` when equal, `A to B`, `at least`, `at most`, `formatMoney`).
-- Tests added: `internal/cli/render_search_internal_test.go` (2 caption tests), `internal/cli/report_help_test.go` (`Test_search_help_lists_the_min_and_max_flags`), `cmd/quarry/run_search_amount_test.go` (JSON echo, text caption, refusal rows, three order pins, blank-text-before-min; helper `assertSearchRefused`), `cmd/quarry/run_search_limit_test.go` (`Test_run_search_text_with_limit_counts_every_text_match_and_cuts_the_oldest`, closes the S02 cmd row).
-- Order mutation (searchWindow before searchAmounts) reddened `refuses_min_above_max_before_a_bad_since` and the `a_bad_min_beats_a_bad_since` / `a_bad_max_beats_a_bad_since` rows. `Changed("min")` -> `*least == ""` reddened `an_empty_min_is_refused,_not_ignored`.
-- Green: narrow loop (report, duckstore, cli, cmd/quarry); acceptance `Test_run_search_min_and_max_compare_the_amount_without_its_sign` green; `golangci-lint run ./...` 0 issues. Not yet run: full covered suite, `uncovered-diff.py`, `spec-check.py`, spec tick, STATE rewrite (run V).
+- Run V: doc comments present; the two `// unreachable:` reasons in `internal/report/amount.go:49,88` sharpened to state how unreachability was established (grep of `AmountError{` constructors; grammar caps at 18 digits, int64 holds 19, 16-digit row parses).
+- Verify: `go build ./...` rc=0; covered full suite `go test rc=0`; `uncovered-diff.py`: 0 uncovered added lines, 2 declared unreachable; `-race` ok on report, report/document, duckstore, cli, cmd/quarry; `golangci-lint run ./...` rc=0, `0 issues.`
+- test-stats (base 2b733042a1c9): cmd/quarry 585 (+8), internal/cli 415 (+3), internal/report 331 (+12), internal/report/document 82 (+2), internal/store/duckstore 522 (+5); TOTAL 1935 (+30).
+- Ticked SCENARIO-03 in `specification.md`; `spec-check.py phase3c-search` and `--run` both rc=0 (OK). `STATE.md` rewritten.

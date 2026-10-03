@@ -733,7 +733,7 @@ Sizing pass (architect, opus) 2026-10-03 — 15 IDs → 6 runs, all code-first. 
 - [x] SCENARIO-06: more matches than the limit print the newest ones — delivered by SCENARIO-02 — `cmd/quarry/run_search_limit_test.go` `Test_run_search_prints_the_newest_500_of_501_matches_unless_limit_0`
 - [x] SCENARIO-07: no match prints an empty result and the no-match warning — delivered by SCENARIO-02 — `cmd/quarry/run_search_no_match_test.go` `Test_run_search_with_text_that_matches_nothing_prints_an_empty_result_and_the_no_match_warning`
 - [x] SCENARIO-12a: a broken config file never affects quarry search — delivered by SCENARIO-02 — `cmd/quarry/run_config_test.go` `Test_run_search_ignores_a_malformed_config`
-- [ ] SCENARIO-03: --min and --max compare the amount without its sign
+- [x] SCENARIO-03: --min and --max compare the amount without its sign — `cmd/quarry/run_search_amount_test.go` `Test_run_search_min_and_max_compare_the_amount_without_its_sign`
 - [ ] SCENARIO-04: --category matches the category and any category under it
 - [ ] SCENARIO-08: quarry search refuses bad input with the ruled line and exit code
 - [ ] SCENARIO-09: search_transactions returns the quarry search --json document

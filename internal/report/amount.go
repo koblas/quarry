@@ -46,7 +46,7 @@ func (e AmountError) Error() string {
 	case AmountMinAboveMax:
 		return fmt.Sprintf("%s %s is more than --%s %s", flag, e.Value, boundMax, e.Other)
 	}
-	// unreachable: ParseSearchAmounts is the only AmountError constructor and it sets one of the kinds above
+	// unreachable: grep of AmountError{ over *.go finds constructors only in this file (parseAmountBound, ParseSearchAmounts), each setting a kind switched on above
 	return flag + " " + e.Value + " is refused"
 }
 
@@ -84,7 +84,7 @@ func parseAmountBound(bound string, value *string) (*int64, error) {
 	fraction = (fraction + "00")[:2]
 	cents, err := strconv.ParseInt(whole+fraction, 10, 64)
 	if err != nil {
-		// unreachable: amountGrammar allows at most 18 digits here, which int64 holds
+		// unreachable: amountGrammar bounds whole+fraction to 18 digits and int64 holds 19; the 16-digit row of Test_ParseSearchAmounts parses
 		return nil, AmountError{Kind: AmountNotAnAmount, Bound: bound, Value: *value}
 	}
 	return &cents, nil
