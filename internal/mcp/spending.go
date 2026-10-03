@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"slices"
 
 	"github.com/koblas/quarry/internal/platform/money"
@@ -24,11 +26,16 @@ func (s *Server) spending(ctx context.Context, in spendingInput) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	by, err := parseSpendingGroup(in.By)
+	if err != nil {
+		// unreachable: see parseSpendingGroup
+		return nil, err
+	}
 	srv, err := s.newReport(ctx, commandName)
 	if err != nil {
 		return nil, err
 	}
-	spent, err := srv.Spend(ctx, report.SpendRequest{Window: window, By: parseSpendingGroup(in.By), Accounts: in.Accounts, Currency: currency})
+	spent, err := srv.Spend(ctx, report.SpendRequest{Window: window, By: by, Accounts: in.Accounts, Currency: currency})
 	if err != nil {
 		return nil, accountRefusal(err)
 	}
@@ -52,13 +59,16 @@ func (s *Server) resolveCurrency(name, twin string) (money.Currency, []string, e
 	return cfg.Currency, slices.Clone(cfg.WarningsAbsolute), nil
 }
 
-// parseSpendingGroup is the grouping whose String is name.
-func parseSpendingGroup(name string) store.SpendingGroup {
+// errUnknownBy is a by value outside the schema enum, which no schema-validated call carries.
+var errUnknownBy = errors.New("by names no value of the tool's enum")
+
+// parseSpendingGroup is the grouping whose String is name; a name no grouping has is an error, never a default.
+func parseSpendingGroup(name string) (store.SpendingGroup, error) {
 	for _, group := range store.SpendingGroups() {
 		if group.String() == name {
-			return group
+			return group, nil
 		}
 	}
 	// unreachable: the schema's enum admits only the String of a SpendingGroup, and its default supplies category
-	return store.SpendByCategory
+	return 0, fmt.Errorf("%w: %q", errUnknownBy, name)
 }

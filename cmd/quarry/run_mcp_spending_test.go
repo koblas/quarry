@@ -29,13 +29,14 @@ const (
 
 func Test_run_mcp_spending_returns_the_spend_json_document(t *testing.T) {
 	cases := []struct {
-		name      string
-		store     func(*testing.T, string)
-		cliArgs   []string
-		arguments map[string]any
+		name        string
+		store       func(*testing.T, string)
+		cliArgs     []string
+		arguments   map[string]any
+		wantWarning string
 	}{
 		{
-			name: "all five given", store: populatedAnalysisStore,
+			name: "all five given", store: populatedAnalysisStore, wantWarning: linkedLineForSpending,
 			cliArgs: []string{
 				"spend", "--since", "2026-01", "--until", "2026-08", "--by", "payee", "--currency", "CAD",
 				"--account", "Chequing", "--account", "US Chequing", "--account", "Linked", "--account", "Old Card",
@@ -64,6 +65,9 @@ func Test_run_mcp_spending_returns_the_spend_json_document(t *testing.T) {
 
 			assert.Equal(t, got.cliBody, got.toolBody)
 			assert.Equal(t, inToolWords(got.cliWarnings, "spend", "spending"), got.toolWarnings)
+			if c.wantWarning != "" {
+				assert.Contains(t, got.toolWarnings, c.wantWarning)
+			}
 		})
 	}
 }

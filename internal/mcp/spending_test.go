@@ -156,7 +156,8 @@ func Test_spending_refuses_arguments_the_schema_rejects_without_reading_the_conf
 	}
 }
 
-const spendingConfigWarning = "/home/dave/config.toml: unknown key x"
+// configUnknownKeyWarning is a config warning the cap tests seed to show it stays ahead of the cap line.
+const configUnknownKeyWarning = "/home/dave/config.toml: unknown key x"
 
 func Test_spending_cuts_rows_to_the_cap_keeps_every_total_and_ends_the_warnings_with_the_cap_line(t *testing.T) {
 	rows := make([]store.SpendingRow, 501)
@@ -165,7 +166,7 @@ func Test_spending_cuts_rows_to_the_cap_keeps_every_total_and_ends_the_warnings_
 		rows[i] = store.SpendingRow{Key: &key, Currency: "CAD", Spent: 100}
 	}
 	totals := []store.SpendingTotal{{Currency: "CAD", Spent: 50100}, {Currency: "USD", Spent: 7}}
-	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{spendingConfigWarning}}}
+	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
 	h := newHarness(t, &fakeStore{spent: store.Spending{Rows: rows, Totals: totals, Unconverted: store.Unconverted{Transactions: 1}}}, nil, mcp.WithConfig(stub.load))
 
 	doc := decodeSpending(t, h.spending(t, map[string]any{"by": "payee"}))
@@ -173,6 +174,6 @@ func Test_spending_cuts_rows_to_the_cap_keeps_every_total_and_ends_the_warnings_
 	assert.Len(t, doc.Rows, 500)
 	assert.Len(t, doc.Totals, 2)
 	require.Len(t, doc.Warnings, 3)
-	assert.Equal(t, spendingConfigWarning, doc.Warnings[0])
+	assert.Equal(t, configUnknownKeyWarning, doc.Warnings[0])
 	assert.Equal(t, "spending lists the first 500 rows of 501; totals count every row; pass a shorter period or fewer accounts, or query v_spending for the rest", doc.Warnings[2])
 }

@@ -152,18 +152,20 @@ func Test_cash_flow_refuses_arguments_the_schema_rejects_without_reading_the_con
 	}
 }
 
-const cashFlowConfigWarning = "/home/dave/config.toml: unknown key x"
-
 func Test_cash_flow_puts_the_cap_line_after_every_other_warning(t *testing.T) {
 	totals := []store.CashFlowTotal{{Currency: "CAD", Spent: 50100}}
-	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{cashFlowConfigWarning}}}
-	h := newHarness(t, &fakeStore{flow: store.CashFlow{Totals: totals, Unconverted: store.Unconverted{Transactions: 1}}}, nil, mcp.WithConfig(stub.load))
+	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
+	unconverted := store.Unconverted{Transactions: 1, FirstRate: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)}
+	h := newHarness(t, &fakeStore{flow: store.CashFlow{Totals: totals, Unconverted: unconverted}}, nil, mcp.WithConfig(stub.load))
 
 	doc := decodeCashFlow(t, h.cashFlow(t, map[string]any{"since": "1985-01", "until": "2026-09"}))
 
-	assert.Len(t, doc.Periods, 500)
+	require.Len(t, doc.Periods, 500)
+	assert.Equal(t, "1985-01", doc.Periods[0].Period)
+	assert.Equal(t, "2026-08", doc.Periods[499].Period)
 	assert.Len(t, doc.Totals, 1)
 	require.Len(t, doc.Warnings, 3)
-	assert.Equal(t, cashFlowConfigWarning, doc.Warnings[0])
+	assert.Equal(t, configUnknownKeyWarning, doc.Warnings[0])
+	assert.Equal(t, "1 transaction dated before 2026-03-01, the first exchange rate in the store, is listed in CAD, not converted to native", doc.Warnings[1])
 	assert.Equal(t, "cash_flow lists the first 500 periods of 501; totals count every period; pass a later since, or by year", doc.Warnings[2])
 }

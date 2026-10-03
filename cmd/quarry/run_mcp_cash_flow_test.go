@@ -10,16 +10,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const cashFlowLogPrefix = "quarry: mcp: cash_flow: "
+const (
+	cashFlowLogPrefix     = "quarry: mcp: cash_flow: "
+	linkedLineForCashFlow = `account "Linked" uses linked account tracking in Quicken, so cash_flow leaves it out, as Quicken's reports do`
+)
 
 func Test_run_mcp_cash_flow_returns_the_cashflow_json_document(t *testing.T) {
 	cases := []struct {
-		name      string
-		cliArgs   []string
-		arguments map[string]any
+		name        string
+		cliArgs     []string
+		arguments   map[string]any
+		wantWarning string
 	}{
 		{
-			name: "all five given",
+			name:        "all five given",
+			wantWarning: linkedLineForCashFlow,
 			cliArgs: []string{
 				"cashflow", "--since", "2026-01", "--until", "2026-08", "--by", "month", "--currency", "CAD",
 				"--account", "Chequing", "--account", "US Chequing", "--account", "Linked", "--account", "Old Card",
@@ -48,6 +53,9 @@ func Test_run_mcp_cash_flow_returns_the_cashflow_json_document(t *testing.T) {
 
 			assert.Equal(t, got.cliBody, got.toolBody)
 			assert.Equal(t, inToolWords(got.cliWarnings, "cashflow", "cash_flow"), got.toolWarnings)
+			if c.wantWarning != "" {
+				assert.Contains(t, got.toolWarnings, c.wantWarning)
+			}
 		})
 	}
 }
