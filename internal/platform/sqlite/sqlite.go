@@ -127,7 +127,7 @@ func (d *DB) QueryInt(ctx context.Context, query string, args ...any) (int, erro
 
 // QueryRows runs query and calls row once per result row, passing a scan
 // func bound to that row's columns. It stops and returns row's error as
-// soon as row returns one.
+// soon as row returns one, or ctx's error once ctx is done.
 func (d *DB) QueryRows(ctx context.Context, query string, args []any, row func(scan func(dest ...any) error) error) error {
 	rows, err := d.conn.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -136,6 +136,10 @@ func (d *DB) QueryRows(ctx context.Context, query string, args []any, row func(s
 	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
+		// database/sql closes rows asynchronously on cancel, so rows.Err() alone can miss it.
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("query rows %q: %w", query, err)
+		}
 		if err := row(rows.Scan); err != nil {
 			return err
 		}
