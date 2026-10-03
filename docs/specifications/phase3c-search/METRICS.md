@@ -5,6 +5,7 @@
 | --- | --- | --- | --- | --- |
 | SCENARIO-01 (+05) | code-first | A, B1, B2, V | 0/1/4/1 | yes (single-flag --since/--until arms unpinned; split interleave on duplicate source_id — real defect, txn_id tiebreak; doc trims) |
 | SCENARIO-02 (+06, +07, +12a) | code-first | A, B1, B2, V | 0/0/2/1 | no (MINORs → STATE.md) |
+| SCENARIO-03 | code-first | A, B1, B2, V | 0/0/3/1 | no (MINORs → STATE.md) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
