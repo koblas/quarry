@@ -6,9 +6,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// searchCommand is the word that names search on the command line.
-const searchCommand = "search"
-
 // defaultSearchLimit is how many transactions search lists.
 const defaultSearchLimit = 500
 

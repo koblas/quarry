@@ -218,3 +218,28 @@ func Test_run_search_refuses_a_since_after_the_until(t *testing.T) {
 	assert.Equal(t, 2, exitCode)
 	assert.Equal(t, "quarry: --since 2025 is after --until 2024\n", stderr.String())
 }
+
+func Test_run_search_prints_the_transactions_table(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStore(t, home, searchStore())
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"search"}, spendEnv(&stdout, &stderr))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.Equal(t, "Transactions in all accounts, all dates\n"+
+		"\n"+
+		"Date        Account             Payee       Category                   Memo                       Amount  Flags\n"+
+		"2026-04-02  Chequing (CAD)      Costco      Food:Groceries, Auto:Fuel  bulk run / milk and eggs  -100.00\n"+
+		"2026-03-20  Savings (CAD)       (no payee)  (transfer)                                            500.00  transfer\n"+
+		"2026-03-20  Chequing (CAD)      (no payee)  (transfer)                                           -500.00  transfer\n"+
+		"2026-03-10  Chequing (CAD)      Costco      Food:Groceries                                        -42.17\n"+
+		"2026-03-10  Chequing (CAD)      Bakery      Food:Groceries                                         -8.50\n"+
+		"2026-02-14  Chequing (CAD)      Bakery      Auto:Fuel                  hold for refund            -19.99  excluded\n"+
+		"2026-02-01  Old Card (CAD)      (no payee)  Food:Groceries                                        -25.00  excluded\n"+
+		"2026-01-20  Tracked Loan (CAD)  (no payee)  Auto:Fuel                                             -30.00  excluded\n"+
+		"\n"+
+		"8 matching transactions\n", stdout.String())
+}

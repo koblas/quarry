@@ -40,7 +40,7 @@ Size: OWNS A RUN: 4 batches, 1 feature package (`report` + `report/document`; `d
   - `run_spend_refusals_test.go:67-95` HOME-unset row; `run_usage_test.go:225-270` usage-hint row
   - `run_search_json_test.go`: given `--since 2026-01 --until 2026-03` echo first and last day; `--account` (account_filter, rows limited, a named linked account's rows flagged excluded); `--since 2024-13` → existing not-a-date line, exit 2; closed, left-out and USD rows in `--json`
   - n/a: `report_clock_test.go` (no clock); `run_read_refusals_test.go:82-120` and `run_config_test.go:218-226` (no config, Rule S8); `run_read_usage_test.go:47,79`, `run_usage_test.go:211` and `currency_test.go` (args and `--currency` belong to S02/S04); `run_analysis_documents_test.go` goldens (3b documents)
-- [ ] Step 6: `internal/cli/render_search.go` `renderSearch` per §2.5, `render_search_internal_test.go` (new):
+- [x] Step 6: `internal/cli/render_search.go` `renderSearch` per §2.5, `render_search_internal_test.go` (new):
   - caption: base, `accountsCaption`, all four date arms
   - columns: Category (distinct in split order, `(transfer)`, `(uncategorized)`, no splits); Memo (transaction memo then distinct differing split memos, ` / `); Amount signed `formatMoney`; Flags (all 4 arms); `accountLabel` closed and USD
   - footer counts matched, not rows; `escapeCell` (`\n`, `\t`, `\r`) on account, payee, category and memo
@@ -77,16 +77,19 @@ Size: OWNS A RUN: 4 batches, 1 feature package (`report` + `report/document`; `d
 
 ## Phase report
 
-Run B1 (steps 3-5) done: narrow loop green (duckstore, report, document, cli, cmd/quarry), both acceptance tests green, views/views_fx tests unedited and green. `golangci-lint` and the full suite NOT run (run V). Step 6 (`renderSearch`, text table) is run B2.
+Runs B1 (steps 3-5) and B2 (step 6) done. Narrow loop green (duckstore, report, document, cli, cmd/quarry); both acceptance tests green; views/views_fx tests unedited. `golangci-lint run ./internal/cli/... ./cmd/...` is 0 issues; full-repo lint and the full suite NOT run (run V: steps 7-8).
 
-Files:
+B1 files:
 - `internal/store/duckstore/schema.go`: `reportedTransaction` const and `transferLeg(alias)` func; `cashFlowViewDDL` uses both. `search.go`: `searchRowsQuery` (CTE `m` at transaction grain: `count(*) OVER ()`, `searchOrder`, `LIMIT $3` bound nil for 0; then LEFT JOIN splits ordered by split source_id, id), `searchSpanQuery` (no `reportedAccount`), `Search`, `scanSearchRow`. `SearchSplit.Transfer` = split is a leg in `transfers` (orchestrator ruling); a split with transfer_account_id but no transfers row is false (pinned in `search_test.go`).
 - tests: `duckstore/search_test.go` (new, 15 tests + 2 span-fault tests), `read_faults_test.go` (`Search` in `rowReads`), `report/window_test.go` (7 tests), `report/search_test.go` (new), `report/document/search_test.go` (new, byte-literal), `report/fakes_test.go` (`search`, `gotSearch`).
-- production: `report/window.go` `ParseSearchWindow`, `report/search.go` (`searchCommand`, `Truncated()`, `(*Server).Search`), `report/document/search.go` `NewSearch` (text/category/min/max stay nil), `cli/search.go` (flags via `reportFlags.bind`, `reportFlags.searchWindow` in `cli/window.go`, `defaultSearchLimit`), `cli/render_search.go` (signature-only stub returning ""), `cli/root.go`.
-- pins added: root help row, window-flags row, `Test_search_help_shows_its_long_text_and_examples` (`report_help_test.go`), no-store rows, interrupt row, HOME-unset row, usage-hint row, and 6 cmd tests in `run_search_json_test.go` (since/until echo, `--account`, linked account flagged excluded, closed+USD rows, bad since, since>until).
+- production: `report/window.go` `ParseSearchWindow`, `report/search.go`, `report/document/search.go` `NewSearch` (text/category/min/max stay nil), `cli/search.go` (flags via `reportFlags.bind`, `reportFlags.searchWindow`, `defaultSearchLimit`), `cli/root.go`.
+- pins: root help row, window-flags row, `Test_search_help_shows_its_long_text_and_examples`, no-store rows, interrupt row, HOME-unset row, usage-hint row, 6 cmd tests in `run_search_json_test.go`.
+- B1 acceptance fix: expected `Matched: 9` corrected to 8 (fixture has 8 transactions).
 
-Acceptance fix: `Test_run_search_json_...` expected `Matched: 9`; the fixture has 8 transactions. Corrected to 8.
+B2 (step 6):
+- `internal/cli/render_search.go`: `renderSearch` plus `searchCaption` (`Transactions in <accountsCaption>, <dates>`; four date arms in `searchDates`: all dates / from / through / range), `searchCategoryCell`, `searchMemoCell`, `searchFlagsCell`. Caption has no ` matching %q`, `, category` or `, amount` parts yet: those need `report.Search` to carry text/category/min/max, which S02-S04 add together with the predicate.
+- `internal/cli/render_search_internal_test.go` (new, white-box, 12 top-level tests, table-driven per rule) and `Test_run_search_prints_the_transactions_table` in `cmd/quarry/run_search_json_test.go` (full 8-row table over `searchStore()`).
+- Removed the unused `searchCommand` const from `internal/cli/search.go` (lint `unused`).
+- Mutations run (each red as named): each of the four date-arm words and the `Transactions in ` prefix -> `Test_searchCaption_names_the_dates_the_window_bounds` subtest of that arm; Amount alignment right->left -> pad test + cmd table test; category dedup removed -> `a_repeated_label_shows_once`; `sp.Transfer` arm dropped -> `a_transfer_leg_is_a_transfer`; no-splits label -> `no_splits_is_uncategorized`; memo dedup / non-empty guard / escape / ` / ` separator -> matching `searchMemoCell` subtests; Transfer and Excluded flag arms -> `searchFlagsCell` subtests; footer `Matched`->`len(Rows)` -> `footer_counts_every_match_not_the_rows_listed`; category escape and `, ` separator -> their subtests.
 
-Mutations run (all red as named): drop `OR x.to_split_id` -> to-leg rows of `Test_cash_flow_leaves_out_what_quicken_reports_leave_out` + `Test_search_flags_...`; drop `AND NOT a.linked_tracking` -> linked rows in same pair; drop `AND NOT t.excluded_from_reports` -> excluded rows in same pair; tie-break `source_id DESC->ASC` -> `Test_search_lists_newest_first_breaking_a_date_tie_by_source_id` + `..._keeps_the_higher_source_id_of_a_same_date_pair_when_the_limit_cuts`; `date DESC->ASC` -> same pair plus `Test_search_bounds_dates_only_where_given`; count after the cut -> `Test_search_counts_every_match_when_the_limit_cuts/a_limit_of_one_cuts_two` (got 1, want 3); open since arm dropped -> `Test_search_bounds_dates_only_where_given` (neither, until-alone) + `Test_run_search_without_since_or_until_searches_every_date`.
-
-Do not redo: stores, windows, document, command registration. Step 6 fills `renderSearch` (cli/render_search.go) per spec 2.5 + `render_search_internal_test.go` + `Test_run_search_prints_the_transactions_table` in `run_search_json_test.go`. Until it lands, text-mode `quarry search` prints nothing.
+Left for run V: Sweep (step 7: full lint, doc comments, `internal/report/doc.go` names search) and Verify (step 8: covered full suite, `uncovered-diff.py`, `test-stats.py`, `spec-check.py`, tick SCENARIO-01 and folded SCENARIO-05, STATE.md).
