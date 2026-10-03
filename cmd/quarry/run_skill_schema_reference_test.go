@@ -96,7 +96,7 @@ func findingsParagraph(t *testing.T) string {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
 	require.Equal(t, 0, run(t.Context(), []string{"sql", "--help"}, &stdout, &stderr), stderr.String())
-	for _, paragraph := range strings.SplitSeq(stdout.String(), "\n\n") {
+	for paragraph := range strings.SplitSeq(stdout.String(), "\n\n") {
 		if strings.HasPrefix(paragraph, findingsParagraphLead) {
 			return paragraph
 		}
