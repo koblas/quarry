@@ -46,6 +46,13 @@ type fakeStore struct {
 
 	findings      store.FindingList
 	findingsReads int
+
+	spent store.Spending
+}
+
+// Spending answers with spent, or err when set.
+func (f *fakeStore) Spending(context.Context, store.SpendingParams) (store.Spending, error) {
+	return f.spent, f.err
 }
 
 // Findings answers with findings, or err when set, counting the reads.
@@ -129,6 +136,14 @@ func (h *harness) syncStatus(t *testing.T) *sdk.CallToolResult {
 func (h *harness) dataQuality(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
 	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "data_quality", Arguments: arguments})
+	require.NoError(t, err)
+	return result
+}
+
+// spending calls the spending tool with arguments.
+func (h *harness) spending(t *testing.T, arguments any) *sdk.CallToolResult {
+	t.Helper()
+	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "spending", Arguments: arguments})
 	require.NoError(t, err)
 	return result
 }

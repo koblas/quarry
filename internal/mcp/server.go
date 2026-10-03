@@ -38,6 +38,7 @@ type Server struct {
 	newReport ReportFactory
 	newConfig ConfigLoader
 	timeout   time.Duration
+	now       func() time.Time
 }
 
 // Option configures a Server.
@@ -66,6 +67,11 @@ func WithConfig(newConfig ConfigLoader) Option {
 // WithTimeout sets the deadline of each tool call, in whole seconds.
 func WithTimeout(d time.Duration) Option {
 	return func(s *Server) { s.timeout = d }
+}
+
+// WithClock sets the clock the tools read "today" from, once per call.
+func WithClock(now func() time.Time) Option {
+	return func(s *Server) { s.now = now }
 }
 
 // NewServer builds a Server from opts.

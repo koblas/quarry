@@ -16,6 +16,7 @@ const (
 	toolDescribe    = "describe_schema"
 	toolSyncStatus  = "sync_status"
 	toolDataQuality = "data_quality"
+	toolSpending    = "spending"
 )
 
 // Row limits: the most any tool returns, data_quality's default, and the most items it lists per finding.
@@ -78,6 +79,14 @@ type (
 		Type   string `json:"type"`
 		Limit  int    `json:"limit"`
 	}
+	// spendingInput is the spending tool's arguments; Since and Until are nil when absent.
+	spendingInput struct {
+		Since    *string  `json:"since"`
+		Until    *string  `json:"until"`
+		Accounts []string `json:"accounts"`
+		Currency string   `json:"currency"`
+		By       string   `json:"by"`
+	}
 	// noInput is the arguments of a tool that takes none.
 	noInput struct{}
 )
@@ -95,6 +104,13 @@ func (s *Server) addTools(srv *sdk.Server) {
 		"type":   {Type: "string", Enum: findingTypes()},
 		"limit":  limitSchema(defaultFindLimit),
 	})), handler(s.timeout, stoppedLine(toolDataQuality), s.dataQuality))
+	sdk.AddTool(srv, tool(toolSpending, "", objectSchema(map[string]*jsonschema.Schema{
+		"since":    {Type: "string"},
+		"until":    {Type: "string"},
+		"accounts": {Type: "array", Items: &jsonschema.Schema{Type: "string"}},
+		"currency": {Type: "string"},
+		"by":       {Type: "string"},
+	})), handler(s.timeout, stoppedLine(toolSpending), s.spending))
 }
 
 // tool describes one tool; its result is a JSON object.
