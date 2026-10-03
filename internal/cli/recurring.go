@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/spf13/cobra"
 )
 
@@ -76,7 +77,7 @@ times the charges in a year, for active series only.`,
 				return &runtimeError{err: err}
 			}
 
-			warnings := recurringWarnings(rec)
+			warnings := document.RecurringWarnings(rec, recurringCommand)
 			return emitReport(cmd, *jsonOut, warnings,
 				func() ([]byte, error) { return renderRecurringJSON(rec, withConfigWarnings(configWarnings, warnings)) },
 				func() string { return renderRecurring(rec) })
@@ -85,14 +86,4 @@ times the charges in a year, for active series only.`,
 	flags.bind(cmd, recurringFlagHelp)
 	currency.bind(cmd, reportCurrencyHelp)
 	return cmd
-}
-
-// recurringWarnings is r's warnings, unprefixed and never nil: one per named account left out of the
-// report, then the unconverted-series note, then a note when no series runs in the period.
-func recurringWarnings(r report.Recurring) []string {
-	warnings := append(leftOutWarnings(r.Accounts, recurringCommand), unconvertedWarnings(r.Currency, r.Unconverted, seriesNoun)...)
-	if r.Empty() {
-		warnings = appendEmptyWindowWarning(warnings, "recurring charges", r.Accounts, r.Window, r.Transactions)
-	}
-	return warnings
 }

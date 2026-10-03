@@ -497,6 +497,38 @@ const (
 	SpendByMonth
 )
 
+// SpendingGroups lists every SpendingGroup, in the order the --by vocabulary names them.
+func SpendingGroups() []SpendingGroup {
+	return []SpendingGroup{SpendByCategory, SpendByPayee, SpendByTag, SpendByMonth}
+}
+
+// ParseSpendingGroup is the grouping whose String is name; the bool is false, and the grouping zero,
+// for a name no grouping has.
+func ParseSpendingGroup(name string) (SpendingGroup, bool) {
+	for _, g := range SpendingGroups() {
+		if g.String() == name {
+			return g, true
+		}
+	}
+	return 0, false
+}
+
+// String is the word that names g as a --by value: category, payee, tag or month.
+// A value outside the constants reads as "".
+func (g SpendingGroup) String() string {
+	switch g {
+	case SpendByCategory:
+		return "category"
+	case SpendByPayee:
+		return "payee"
+	case SpendByTag:
+		return "tag"
+	case SpendByMonth:
+		return "month"
+	}
+	return ""
+}
+
 // SpendingParams is everything a spending read varies by: the Window,
 // the grouping, the accounts to count (every account in reports when
 // AccountIDs is empty) and the currency to report in.
@@ -566,6 +598,34 @@ const (
 	// CashFlowByYear groups by calendar year; the key is YYYY.
 	CashFlowByYear
 )
+
+// CashFlowPeriods lists every CashFlowPeriod, in the order the --by vocabulary names them.
+func CashFlowPeriods() []CashFlowPeriod {
+	return []CashFlowPeriod{CashFlowByMonth, CashFlowByYear}
+}
+
+// ParseCashFlowPeriod is the period whose String is name; the bool is false, and the period zero,
+// for a name no period has.
+func ParseCashFlowPeriod(name string) (CashFlowPeriod, bool) {
+	for _, p := range CashFlowPeriods() {
+		if p.String() == name {
+			return p, true
+		}
+	}
+	return 0, false
+}
+
+// String is the word that names p as a --by value: month or year.
+// A value outside the constants reads as "".
+func (p CashFlowPeriod) String() string {
+	switch p {
+	case CashFlowByMonth:
+		return "month"
+	case CashFlowByYear:
+		return "year"
+	}
+	return ""
+}
 
 // CashFlowParams is everything a cash-flow read varies by: the Window, the period
 // unit, and the accounts to count (every account in reports when AccountIDs is empty).

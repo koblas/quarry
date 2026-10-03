@@ -1,7 +1,9 @@
 package duckdb_test
 
 import (
+	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
@@ -85,4 +87,21 @@ func Test_query_table_refuses_a_column_it_cannot_print(t *testing.T) {
 	require.ErrorAs(t, err, &unprintable)
 	assert.Equal(t, duckdb.UnprintableValueError{Column: "doc", Type: "JSON"}, *unprintable)
 	assert.EqualError(t, err, `cannot print column "doc" of type JSON`)
+}
+
+func Test_query_table_fails_when_the_context_is_cancelled_mid_iteration(t *testing.T) {
+	t.Parallel()
+	db, _ := newOpenDatabase(t)
+	var errCalls atomic.Int64
+	ctx := scriptedContext{err: func() error {
+		if errCalls.Add(1) > 500 {
+			return context.Canceled
+		}
+		return nil
+	}}
+
+	table, err := db.QueryTable(ctx, "SELECT i FROM range(5000) t(i)", 0)
+
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Empty(t, table.Rows)
 }

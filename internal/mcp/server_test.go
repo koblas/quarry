@@ -11,6 +11,7 @@ import (
 
 	"github.com/koblas/quarry/internal/mcp"
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -175,4 +176,31 @@ func Test_a_tool_call_with_absent_null_or_empty_arguments_reaches_the_handler_wi
 			assert.Equal(t, uncategorizedIDs(50), findingIDs(doc))
 		})
 	}
+}
+
+func Test_a_by_tool_call_with_absent_null_or_empty_arguments_applies_the_by_default(t *testing.T) {
+	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig((&configStub{}).load))
+	argumentShapes := map[string]any{
+		"omitted": nil,
+		"null":    json.RawMessage("null"),
+		"empty":   map[string]any{},
+	}
+
+	for name, args := range argumentShapes {
+		t.Run("spending "+name, func(t *testing.T) {
+			assert.Equal(t, "category", decodeSpending(t, h.spending(t, args)).By)
+		})
+		t.Run("cash_flow "+name, func(t *testing.T) {
+			assert.Equal(t, "month", decodeCashFlow(t, h.cashFlow(t, args)).By)
+		})
+	}
+}
+
+// decodeCashFlow is result's one text block decoded as the cash flow document.
+func decodeCashFlow(t *testing.T, result *sdk.CallToolResult) document.CashFlow {
+	t.Helper()
+	require.False(t, result.IsError, textOf(t, result))
+	var doc document.CashFlow
+	require.NoError(t, json.Unmarshal([]byte(textOf(t, result)), &doc))
+	return doc
 }

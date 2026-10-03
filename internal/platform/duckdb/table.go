@@ -41,10 +41,9 @@ func (e *UnprintableValueError) Error() string {
 	return `cannot print column "` + e.Column + `" of type ` + e.Type
 }
 
-// QueryTable runs query verbatim and returns its result, stopping after
-// maxRows rows (every row when maxRows is 0 or less). A query or driver
-// fault is returned as the driver's own error, unwrapped; a value it cannot
-// render, or a column type the driver refuses, is an *UnprintableValueError.
+// QueryTable runs query verbatim and returns its result, stopping after maxRows
+// rows (every row when maxRows is 0 or less). A driver fault or ctx's end is returned
+// unwrapped; a value or column type it cannot render is an *UnprintableValueError.
 func (d *DB) QueryTable(ctx context.Context, query string, maxRows int) (Table, error) {
 	rows, err := d.conn.QueryContext(ctx, query)
 	if err != nil {
@@ -70,6 +69,10 @@ func (d *DB) QueryTable(ctx context.Context, query string, maxRows int) (Table, 
 		dest[i] = &raw[i]
 	}
 	for (maxRows <= 0 || len(table.Rows) < maxRows) && rows.Next() {
+		// database/sql closes rows asynchronously on cancel, so rows.Err() alone can miss it.
+		if err := ctx.Err(); err != nil {
+			return Table{}, err //nolint:wrapcheck // callers classify ctx's own error
+		}
 		if err := rows.Scan(dest...); err != nil {
 			// unreachable: Scan into one *any per column errs only on closed rows, which only a ctx cancel racing this call does; callers check ctx first and report an interrupt.
 			return Table{}, err //nolint:wrapcheck // callers classify the driver's own error

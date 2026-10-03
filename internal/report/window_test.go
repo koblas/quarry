@@ -225,3 +225,57 @@ func Test_parse_window_reports_the_since_first_and_keeps_each_refusal_to_its_own
 		assert.EqualError(t, err, `--since "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`)
 	})
 }
+
+func Test_WindowError_carries_its_parts(t *testing.T) {
+	cases := []struct {
+		name  string
+		parse func() error
+		want  report.WindowError
+	}{
+		{
+			name:  "since that is not a date",
+			parse: func() error { _, err := report.ParseWindow(new("2024-13"), nil, windowNow); return err },
+			want:  report.WindowError{Kind: report.WindowNotADate, Bound: "since", Value: "2024-13"},
+		},
+		{
+			name:  "until that is not a date",
+			parse: func() error { _, err := report.ParseWindow(nil, new("2024-13"), windowNow); return err },
+			want:  report.WindowError{Kind: report.WindowNotADate, Bound: "until", Value: "2024-13"},
+		},
+		{
+			name:  "empty since is not a date",
+			parse: func() error { _, err := report.ParseWindow(new(""), nil, windowNow); return err },
+			want:  report.WindowError{Kind: report.WindowNotADate, Bound: "since", Value: ""},
+		},
+		{
+			name:  "since after today",
+			parse: func() error { _, err := report.ParseWindow(new("2099"), nil, windowNow); return err },
+			want:  report.WindowError{Kind: report.WindowSinceAfterToday, Bound: "since", Value: "2099"},
+		},
+		{
+			name:  "charge since after today names the command",
+			parse: func() error { _, err := report.ParseChargeWindow("anomalies", new("2099"), nil, windowNow); return err },
+			want:  report.WindowError{Kind: report.WindowChargeSinceAfterToday, Bound: "since", Value: "2099", Command: "anomalies"},
+		},
+		{
+			name:  "since after until",
+			parse: func() error { _, err := report.ParseWindow(new("2025"), new("2024"), windowNow); return err },
+			want:  report.WindowError{Kind: report.WindowSinceAfterUntil, Bound: "since", Value: "2025", Other: "2024"},
+		},
+		{
+			name:  "until before the default since",
+			parse: func() error { _, err := report.ParseWindow(nil, new("2025-03"), windowNow); return err },
+			want:  report.WindowError{Kind: report.WindowUntilBeforeDefault, Bound: "until", Value: "2025-03", DefaultSince: "2026-01-01"},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := c.parse()
+
+			var refusal report.WindowError
+			require.ErrorAs(t, err, &refusal)
+			assert.Equal(t, c.want, refusal)
+		})
+	}
+}

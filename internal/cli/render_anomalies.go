@@ -7,17 +7,12 @@ import (
 	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 )
 
 // anomaliesAligns is the alignment of the anomalies table's columns: Amount, Usual and Times right, the rest left.
 var anomaliesAligns = []tableAlign{
 	alignLeft, alignLeft, alignLeft, alignLeft, alignRight, alignRight, alignRight, alignLeft,
-}
-
-// anomaliesBaselineWord is the word of each baseline in the Compared with cell.
-var anomaliesBaselineWord = map[report.AnomalyBaseline]string{
-	report.BaselinePayee:    "payee",
-	report.BaselineCategory: "category",
 }
 
 // renderAnomalies renders a as the anomalies table (caption, header, one row per listed charge), a
@@ -43,7 +38,7 @@ func renderAnomalies(a report.Anomalies) string {
 			amount,
 			usual,
 			timesCell(an.TimesTenths),
-			fmt.Sprintf("%s, %s earlier", anomaliesBaselineWord[an.Baseline], humanize.Thousands(an.Earlier)),
+			fmt.Sprintf("%s, %s earlier", document.BaselineWord(an.Baseline), humanize.Thousands(an.Earlier)),
 		})
 	}
 	return renderTable(windowCaption("Unusually large charges", a.Window, a.Accounts, a.Currency), anomaliesAligns, rows) +

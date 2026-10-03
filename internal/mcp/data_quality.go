@@ -10,15 +10,18 @@ import (
 	"github.com/koblas/quarry/internal/report/document"
 )
 
-// configRefusalLog is the stderr line of a config that cannot be read; its reason can quote the file or a value in it.
-const configRefusalLog = "cannot read quarry's config file; run quarry findings to see why"
+// configRefusalLog is the stderr line of a config that cannot be read, naming twin, the quarry command that shows why;
+// the reason can quote the file or a value in it.
+func configRefusalLog(twin string) string {
+	return "cannot read quarry's config file; run quarry " + twin + " to see why"
+}
 
 // dataQuality lists the findings in.Status and in.Type select, at most in.Limit with maxItems items each,
 // and a warning for each cut.
 func (s *Server) dataQuality(ctx context.Context, in dataQualityInput) (any, error) {
 	cfg, err := s.newConfig(commandName)
 	if err != nil {
-		return nil, withLog(err, configRefusalLog)
+		return nil, withLog(err, configRefusalLog("findings"))
 	}
 	srv, err := s.newReport(ctx, commandName)
 	if err != nil {

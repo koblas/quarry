@@ -1,17 +1,32 @@
-// White-box: renderAnomaliesJSON's key order and the mapping of converted and native fields
-// are the unexported document's contract.
-package cli
+package document_test
 
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// anomalyOf is a payee-baseline anomaly of the given payee, category and splits: 412.00 against a
+// usual 96.05, 4.3 times, from 38 earlier charges, on 2026-03-02 in Chequing (CAD).
+func anomalyOf(payee *string, category *store.ChargeCategory, splits int) report.Anomaly {
+	return report.Anomaly{
+		Date:    time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC),
+		Account: store.Account{ID: "acct-1", Name: "Chequing", Currency: "CAD", Active: true},
+		Payee:   payee, Currency: "CAD", Amount: 41200, Category: category, ExpenseSplits: splits,
+		Baseline: report.BaselinePayee, Usual: 9605, Earlier: 38, TimesTenths: 43,
+	}
+}
+
+func listed(anomalies ...report.Anomaly) report.Anomalies {
+	return report.Anomalies{Window: window, Listed: anomalies, Checked: len(anomalies)}
+}
 
 // convertedAnomaly is anomalyOf's USD charge listed in CAD: 250.00 against a usual 50.00, shown as 340.00 and 68.00.
 func convertedAnomaly() report.Anomaly {
@@ -33,9 +48,7 @@ func anomaliesInJSON(t *testing.T, currency money.Currency, anomalies ...report.
 	t.Helper()
 	a := listed(anomalies...)
 	a.Currency = currency
-	got, err := renderAnomaliesJSON(a, []string{})
-	require.NoError(t, err)
-	return got
+	return []byte(indented(t, document.NewAnomalies(a, []string{})))
 }
 
 // firstEntry is the first element of the document's "anomalies", still raw.
@@ -49,7 +62,7 @@ func firstEntry(t *testing.T, doc []byte) []byte {
 	return parsed.Anomalies[0]
 }
 
-func Test_renderAnomaliesJSON_puts_currency_after_until_and_native_fields_after_usual_in_every_mode(t *testing.T) {
+func Test_NewAnomalies_puts_currency_after_until_and_native_fields_after_usual_in_every_mode(t *testing.T) {
 	wantTop := []string{"since", "until", "currency", "account_filter", "anomalies", "checked", "not_judged", "warnings"}
 	wantEntry := []string{
 		"transaction_id", "date", "account_id", "account", "currency", "payee", "category",
@@ -92,7 +105,7 @@ type anomaliesReadBack struct {
 	Warnings []string `json:"warnings"`
 }
 
-func Test_renderAnomaliesJSON_reads_back_converted_and_native_values_per_entry(t *testing.T) {
+func Test_NewAnomalies_reads_back_converted_and_native_values_per_entry(t *testing.T) {
 	categoryBaseline := anomalyOf(nil, &store.ChargeCategory{Path: "Home"}, 1)
 	categoryBaseline.Baseline = report.BaselineCategory
 
@@ -114,7 +127,7 @@ func Test_renderAnomaliesJSON_reads_back_converted_and_native_values_per_entry(t
 	assert.Equal(t, []string{}, doc.Warnings)
 }
 
-func Test_renderAnomaliesJSON_holds_native_fields_equal_to_their_twins_in_native_mode(t *testing.T) {
+func Test_NewAnomalies_holds_native_fields_equal_to_their_twins_in_native_mode(t *testing.T) {
 	got := anomaliesInJSON(t, money.Native, unconvertedAnomaly())
 
 	var doc anomaliesReadBack
@@ -125,9 +138,25 @@ func Test_renderAnomaliesJSON_holds_native_fields_equal_to_their_twins_in_native
 	assert.Equal(t, []string{entry.NativeCurrency, entry.NativeAmount, entry.NativeUsual}, []string{entry.Currency, entry.Amount, entry.Usual})
 }
 
-func Test_renderAnomaliesJSON_holds_an_empty_array_not_null_when_nothing_is_listed(t *testing.T) {
+func Test_NewAnomalies_holds_an_empty_array_not_null_when_nothing_is_listed(t *testing.T) {
 	got := anomaliesInJSON(t, money.USD)
 
 	assert.Contains(t, string(got), `"anomalies": []`)
 	assert.Contains(t, string(got), `"currency": "USD"`)
+}
+
+func Test_NewAnomalies_copies_the_warnings_and_turns_nil_into_an_empty_list(t *testing.T) {
+	given := []string{"first"}
+
+	got := document.NewAnomalies(listed(), given)
+	given[0] = "changed"
+
+	assert.Equal(t, []string{"first"}, got.Warnings)
+	assert.Equal(t, []string{}, document.NewAnomalies(listed(), nil).Warnings)
+}
+
+func Test_BaselineWord_names_each_baseline_and_nothing_for_an_unknown_one(t *testing.T) {
+	assert.Equal(t, "payee", document.BaselineWord(report.BaselinePayee))
+	assert.Equal(t, "category", document.BaselineWord(report.BaselineCategory))
+	assert.Empty(t, document.BaselineWord(report.AnomalyBaseline(99)))
 }

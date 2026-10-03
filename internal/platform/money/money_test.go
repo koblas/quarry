@@ -177,3 +177,21 @@ func Test_Currency_String_is_the_canonical_spelling_ParseCurrency_reads_back(t *
 		})
 	}
 }
+
+func Test_NativeOf_is_the_other_of_cad_and_usd(t *testing.T) {
+	cases := []struct {
+		name string
+		cur  money.Currency
+		want money.Currency
+	}{
+		{name: "a CAD report leaves USD unconverted", cur: money.CAD, want: money.USD},
+		{name: "a USD report leaves CAD unconverted", cur: money.USD, want: money.CAD},
+		{name: "native reads as CAD", cur: money.Native, want: money.CAD},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, money.NativeOf(c.cur))
+		})
+	}
+}

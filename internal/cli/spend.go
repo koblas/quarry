@@ -3,8 +3,8 @@ package cli
 import (
 	"time"
 
-	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/spf13/cobra"
 )
@@ -71,7 +71,7 @@ the rows can add up to more than the total.`,
 				return &runtimeError{err: err}
 			}
 
-			warnings := spendWarnings(spending)
+			warnings := document.SpendingWarnings(spending, spendCommand)
 			return emitReport(cmd, *jsonOut, warnings,
 				func() ([]byte, error) {
 					return renderSpendingJSON(spending, withConfigWarnings(configWarnings, warnings))
@@ -79,22 +79,8 @@ the rows can add up to more than the total.`,
 				func() string { return renderSpending(spending) })
 		},
 	}
-	cmd.Flags().StringVar(&by, "by", spendGroupings[store.SpendByCategory].name, "group spending by `group`: category, payee, tag or month")
+	cmd.Flags().StringVar(&by, "by", store.SpendByCategory.String(), "group spending by `group`: category, payee, tag or month")
 	flags.bind(cmd, transactionFlagHelp)
 	currency.bind(cmd, reportCurrencyHelp)
 	return cmd
-}
-
-// spendWarnings is s's warnings, unprefixed and never nil: one per named account left out,
-// then the unconverted-amounts note, the multi-tag-splits note, and a note that the window held no spending.
-func spendWarnings(s report.Spending) []string {
-	warnings := append(leftOutWarnings(s.Accounts, spendCommand), unconvertedWarnings(s.Currency, s.Unconverted, transactionsNoun)...)
-	if s.By == store.SpendByTag && s.MultiTagSplits > 0 {
-		warnings = append(warnings, humanize.Count(s.MultiTagSplits, "split carries", "splits carry")+
-			" more than one tag, so the rows add up to more than the total")
-	}
-	if s.Empty() {
-		warnings = appendEmptyWindowWarning(warnings, "spending", s.Accounts, s.Window, s.Transactions)
-	}
-	return warnings
 }

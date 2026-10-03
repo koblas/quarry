@@ -110,6 +110,34 @@ func Test_spend_refuses_an_ambiguous_name_listing_its_ids_sorted(t *testing.T) {
 	assert.Equal(t, `2 accounts are named "VISA"; pass one of their ids instead: acct-812, acct-977`, refusal.Error())
 }
 
+func Test_spend_refuses_an_unknown_account_with_the_callers_text_as_its_part(t *testing.T) {
+	list := accountsOf(chequing)
+
+	_, _, err := spendAccounts(t, list, "Chequeing")
+
+	refusal, ok := errors.AsType[report.RefusalError](err)
+	require.True(t, ok)
+	assert.Equal(t, report.RefusalUnknownAccount, refusal.Kind)
+	assert.Equal(t, "Chequeing", refusal.Arg)
+	assert.Empty(t, refusal.IDs)
+}
+
+func Test_spend_refuses_an_ambiguous_name_with_its_text_and_sorted_ids_as_parts(t *testing.T) {
+	list := accountsOf(
+		store.Account{ID: "acct-977", Name: "Visa"},
+		store.Account{ID: "acct-812", Name: "visa"},
+		chequing,
+	)
+
+	_, _, err := spendAccounts(t, list, "VISA")
+
+	refusal, ok := errors.AsType[report.RefusalError](err)
+	require.True(t, ok)
+	assert.Equal(t, report.RefusalAmbiguousAccount, refusal.Kind)
+	assert.Equal(t, "VISA", refusal.Arg)
+	assert.Equal(t, []string{"acct-812", "acct-977"}, refusal.IDs)
+}
+
 func Test_spend_refuses_an_empty_argument_even_when_an_account_has_an_empty_name(t *testing.T) {
 	list := accountsOf(chequing, store.Account{ID: "acct-400", Name: ""})
 

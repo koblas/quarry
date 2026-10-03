@@ -217,6 +217,8 @@ func Test_cashflow_refuses_an_unknown_account_without_asking_the_store_for_cash_
 	refusal, ok := errors.AsType[report.RefusalError](err)
 	require.True(t, ok)
 	assert.Equal(t, `no account named "Chequeing"; run quarry accounts --all to list them`, refusal.Error())
+	assert.Equal(t, report.RefusalUnknownAccount, refusal.Kind)
+	assert.Equal(t, "Chequeing", refusal.Arg)
 	assert.Equal(t, store.CashFlowParams{}, got)
 }
 

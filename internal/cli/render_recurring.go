@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 )
 
 // recurringAligns is the alignment of the recurring table's columns: Amount and Per year right, the rest left.
@@ -20,21 +21,15 @@ var recurringEvery = map[report.Cadence]string{
 	report.CadenceAnnual:    "year",
 }
 
-// recurringStatus is the Status cell of each series state.
-var recurringStatus = map[report.SeriesState]string{
-	report.SeriesActive: "active",
-	report.SeriesEnded:  "ended",
-}
-
 // recurringNewSuffix follows the state word of a series first charged in the window.
 const recurringNewSuffix = ", new"
 
 // statusCell is the Status cell of s: its state, plus the new suffix when it is new.
 func statusCell(s report.Series) string {
 	if s.New {
-		return recurringStatus[s.State] + recurringNewSuffix
+		return document.RecurringStatus(s.State) + recurringNewSuffix
 	}
-	return recurringStatus[s.State]
+	return document.RecurringStatus(s.State)
 }
 
 // priceChangesCell is the Price changes cell of s: "N: first -> latest (±p%)" in the series' own currency,

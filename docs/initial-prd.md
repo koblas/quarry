@@ -173,7 +173,7 @@ Every command supports `--json` for machine consumers and a readable table by de
 | `quarry sql` | Read-only SQL against the store |
 | `quarry mcp` | Start the MCP server (stdio) |
 
-Every reporting command takes `--currency CAD|USD` (default from config, CAD out of the box).
+Every reporting command takes `--currency CAD|USD|native` (default from config, CAD out of the box); `native` lists each account's own currency separately.
 
 `quarry findings` was named `cleanup` in earlier drafts; it was renamed so the worklist can't be mistaken for deleting old data. `quarry snapshots prune` with nothing to delete exits `0`; `--keep 0` is a usage error (exit `2`).
 
@@ -195,7 +195,7 @@ A thin wrapper over the core library, launched by the Claude desktop app as a lo
 | --- | --- |
 | `describe_schema` | Tables, views, columns, category tree, account list, data date range |
 | `query` | Read-only SQL with a row cap (default 500) and timeout |
-| `spending`, `cash_flow`, `net_worth` | Correct, transfer-aware aggregates with period, filter and `currency` (CAD or USD) parameters |
+| `spending`, `cash_flow`, `net_worth` | Correct, transfer-aware aggregates with period, filter and `currency` (`CAD`, `USD` or `native`) parameters; an absent `currency` uses the config default, as the CLI does |
 | `recurring_charges`, `anomalies` | The same detections the CLI uses |
 | `acb` | Adjusted cost base and realized gains by security and tax year (CAD) |
 | `search_transactions` | Payee / memo / amount / date search |
@@ -241,7 +241,7 @@ Every report can be produced in CAD or USD; when reporting in CAD, `quarry` also
 - Amounts stay stored in each account's native currency; conversion happens only in the views.
 - Each amount converts at the Bank of Canada rate for its transaction date (the latest prior business day on weekends and holidays, via an ASOF join); balances and holdings convert at the rate on the valuation date.
 - Cross-currency transfers between own accounts keep both legs, so they never show up as a gain, loss or expense.
-- CAD is the default; `--currency USD` (CLI) or `currency: "USD"` (MCP) switches any report.
+- CAD is the default (config `reporting.currency` overrides it); `--currency USD` (CLI) or `currency: "USD"` (MCP) switches any report, and `native` lists each account's own currency without converting.
 
 **ACB (CAD reporting only)**
 
@@ -326,7 +326,7 @@ The main risk is Quicken's undocumented schema; reconciliation on every sync is 
 - Input: `quarry sync` takes its own snapshot with SQLite's backup API while Quicken is open; no hand-made snapshot or import step.
 - Interfaces: CLI, MCP server and a Claude skill, the skill as Claude's primary path.
 - Reuse: build on dweekly/quicken-mac-mcp (and hardkoded/quicken-skills), both MIT, with notices preserved.
-- Reporting currency: selectable, CAD or USD, CAD by default.
+- Reporting currency: selectable, CAD, USD or native (each account's own currency, unconverted); default from config `reporting.currency`, else CAD. CLI and MCP accept the same values; MCP's are exact-case.
 - ACB: computed when reporting in CAD, per security across non-registered accounts, with trade-date FX.
 - FX history: daily series from the Bank of Canada, fetched incrementally by `quarry sync`, since Quicken stores only the current rate. A failed fetch warns but does not fail the sync.
 - Exit codes: `0` success (warnings included), `1` failure, `2` usage error, for every command.
