@@ -57,15 +57,4 @@ Orchestrator ruling: `Test_run_mcp_lists_quarrys_four_tools_over_json_rpc` is RE
 
 ## Phase report
 
-Run B1 (steps 3-4) done. Acceptance and narrow loop green; `go build ./...` and `golangci-lint run ./...` already 0 issues.
-
-Files:
-- `internal/mcp/tools.go`: `instructions` and `queryDescription` replaced verbatim (§3.7, §3.8); five new param-description consts (`querySQLDescription`, `queryLimitDescription`, `findingsStatusDescription`, `findingsTypeDescription`, `findingsLimitDescription`) wrapped with `described(...)` in `addTools`; new `findingStatuses()` helper (extracted to keep the status line under the 200-col lint limit). Defaults and enums untouched.
-- `internal/cli/mcp.go` Long and `internal/cli/mcp_test.go` `long` const: §3.6 verbatim.
-- `cmd/quarry/run_mcp_descriptions_test.go`: only the two over-long JSON lines (data_quality `status`, `limit`) broken across lines for `lll`; bytes of copy unchanged.
-
-Mutations (both reddened `Test_run_mcp_describes_all_eight_tools/tools/list_and_instructions`, restored): unwrapped `described(...)` on data_quality `limit`; `Instructions: instructions` -> `ServerOptions{}`.
-
-Green: `cmd/quarry`, `internal/cli`, `internal/mcp` packages. `internal/report`, `sql_test.go`, `run_shared_documents_test.go` byte-unchanged (git diff empty).
-
-Next (V, steps 5-6): full verification block, spec-check (phase3b and `--run phase3a-mcp-core`), tick SCENARIO-13, rewrite STATE.md, `status: done`. Lint already clean; do not redo the wrap fixes.
+Run V (steps 5-6) done; scenario complete. Build and lint 0 issues; full covered suite rc=0; uncovered-diff 0 added lines; `-race` green on `internal/mcp`, `internal/cli`, `cmd/quarry`. test-stats: `cmd/quarry` 548 (+1), `internal/cli` 396 (+0), TOTAL 944 (+1). `report/sql_conventions.go`, `cli/sql_test.go`, `run_shared_documents_test.go` untouched. spec-check OK for `phase3b-analysis-tools` (plain and `--run`) and `--run phase3a-mcp-core`. STATE.md rewritten.
