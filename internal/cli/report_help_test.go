@@ -223,6 +223,12 @@ func Test_each_reports_window_flags_describe_what_it_does_with_them(t *testing.T
 			until:   "list charges dated on or before date (YYYY, YYYY-MM or YYYY-MM-DD; default today)",
 			account: "list only charges in the account with this name or id; repeat for more",
 		},
+		{
+			command: "search",
+			since:   "list transactions dated on or after date (YYYY, YYYY-MM or YYYY-MM-DD; default the first transaction)",
+			until:   "list transactions dated on or before date (YYYY, YYYY-MM or YYYY-MM-DD; default no end, future-dated included)",
+			account: "search only the account with this name or id; repeat for more",
+		},
 	}
 
 	for _, c := range cases {
@@ -238,4 +244,48 @@ func Test_each_reports_window_flags_describe_what_it_does_with_them(t *testing.T
 			assert.Regexp(t, `(?m)--account name +`+regexp.QuoteMeta(c.account)+`$`, stdout.String())
 		})
 	}
+}
+
+func Test_search_help_shows_its_long_text_and_examples(t *testing.T) {
+	const long = `Find transactions by text, date, account, category or amount, newest
+first. The text matches payee names, transaction memos and split memos,
+ignoring letter case; every character is literal, so % and _ match only
+themselves. Leave the text out to search by the flags alone, or pass
+nothing at all to list the newest transactions. Text that starts with -
+goes after --: quarry search -- "-50% off"
+
+Every transaction is searched, closed accounts included. Transfers
+between your own accounts and transactions Quicken's reports leave out
+are listed too, flagged transfer or excluded, because quarry spend and
+quarry cashflow do not count them. Excluded means the transaction is
+marked "exclude from reports" in Quicken, or its account is not used in
+reports or uses linked account tracking. Spend also leaves out Quicken's
+system categories; those are not flagged.
+
+Amounts are in each account's own currency and are never converted.
+--min and --max compare the amount without its sign, so --min 100 finds
+charges and deposits of 100.00 or more; give both the same value to find
+one amount. --category matches a split in that category or in any
+category under it, by full path in any letter case.
+
+Without --since and --until every date is searched, future-dated
+transactions included. At most --limit transactions are printed (500
+unless set); when more match, quarry says so on stderr.
+
+Usage:
+  quarry search [text] [flags]
+
+Examples:
+  quarry search costco
+  quarry search --min 42.17 --max 42.17
+  quarry search "e-transfer" --account Chequing --since 2026-01
+  quarry search --category Food --since 2026-09 --json
+`
+	var stdout, stderr bytes.Buffer
+	env := cli.Env{Stdout: &stdout, Stderr: &stderr}
+
+	err := cli.Execute(t.Context(), []string{"search", "--help"}, env)
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), long)
 }

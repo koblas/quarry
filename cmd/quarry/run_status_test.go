@@ -128,6 +128,7 @@ quarry never writes to the Quicken file.`)
 		"  help        Help about any command\n"+
 		"  mcp         Serve quarry's store to Claude over MCP (stdio)\n"+
 		"  recurring   List charges that repeat every week, month, quarter or year\n"+
+		"  search      Find transactions by payee, memo, amount, date, account or category\n"+
 		"  snapshots   List the snapshots quarry has taken and which one the store was built from\n"+
 		"  spend       Show spending by category, payee, tag or month\n"+
 		"  sql         Run a read-only SQL query against quarry's store\n"+

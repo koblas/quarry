@@ -77,7 +77,7 @@ func Test_run_search_json_lists_every_transaction_newest_first_flagged_with_its_
 	assert.Equal(t, searchJSONDoc{
 		AccountFilter: []recurringIDName{},
 		Limit:         500,
-		Matched:       9,
+		Matched:       8,
 		Transactions: []searchTransactionJSON{
 			{
 				TransactionID: "txn-split", Date: "2026-04-02", AccountID: "acct-chq", Account: "Chequing",
@@ -125,4 +125,96 @@ func Test_run_search_json_lists_every_transaction_newest_first_flagged_with_its_
 		},
 		Warnings: []string{},
 	}, decodeSearchJSON(t, stdout.String()))
+}
+
+// searchedJSON runs quarry search --json with args against rows and returns the document, requiring exit 0.
+func searchedJSON(t *testing.T, rows store.Rows, args ...string) searchJSONDoc {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStore(t, home, rows)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), append([]string{"search", "--json"}, args...), spendEnv(&stdout, &stderr))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	return decodeSearchJSON(t, stdout.String())
+}
+
+func transactionIDs(doc searchJSONDoc) []string {
+	ids := make([]string, len(doc.Transactions))
+	for i, tx := range doc.Transactions {
+		ids[i] = tx.TransactionID
+	}
+	return ids
+}
+
+func Test_run_search_json_bounds_the_listing_by_since_and_until_and_echoes_their_days(t *testing.T) {
+	doc := searchedJSON(t, searchStore(), "--since", "2026-01", "--until", "2026-03")
+
+	assert.Equal(t, []string{"txn-in", "txn-out", "txn-high", "txn-low", "txn-marked", "txn-left-out", "txn-linked"}, transactionIDs(doc))
+	assert.Equal(t, 7, doc.Matched)
+	assert.Equal(t, new("2026-01-01"), doc.Since)
+	assert.Equal(t, new("2026-03-31"), doc.Until)
+}
+
+func Test_run_search_json_with_an_account_lists_only_its_transactions_and_echoes_it(t *testing.T) {
+	doc := searchedJSON(t, searchStore(), "--account", "savings")
+
+	assert.Equal(t, []string{"txn-in"}, transactionIDs(doc))
+	assert.Equal(t, 1, doc.Matched)
+	assert.Equal(t, []recurringIDName{{ID: "acct-sav", Name: "Savings"}}, doc.AccountFilter)
+}
+
+func Test_run_search_json_flags_a_named_left_out_accounts_transactions_excluded(t *testing.T) {
+	doc := searchedJSON(t, searchStore(), "--account", "Tracked Loan")
+
+	require.Len(t, doc.Transactions, 1)
+	assert.Equal(t, "txn-linked", doc.Transactions[0].TransactionID)
+	assert.True(t, doc.Transactions[0].Excluded)
+	assert.False(t, doc.Transactions[0].Transfer)
+}
+
+func Test_run_search_json_lists_closed_account_and_usd_transactions_in_their_own_currency(t *testing.T) {
+	closed := chequingAccount("acct-closed", 1)
+	closed.Name, closed.Closed, closed.Active = "Closed Chequing", true, false
+	rows := searchRows([]store.Account{closed, usdChequingAccount("acct-usd", 2)}, nil,
+		searchTxn{
+			id: "closed", account: "acct-closed", sourceID: 1, day: day(2020, time.May, 4),
+			splits: []searchSplit{{category: "cat-fuel", sourceID: 1, cents: -1500}},
+		},
+		searchTxn{
+			id: "usd", account: "acct-usd", sourceID: 2, day: day(2026, time.June, 1),
+			splits: []searchSplit{{category: "cat-fuel", sourceID: 1, cents: -2500}},
+		},
+	)
+
+	doc := searchedJSON(t, rows)
+
+	require.Len(t, doc.Transactions, 2)
+	assert.Equal(t, []string{"txn-usd", "USD", "-25.00"},
+		[]string{doc.Transactions[0].TransactionID, doc.Transactions[0].Currency, doc.Transactions[0].Amount})
+	assert.Equal(t, []string{"txn-closed", "CAD", "-15.00", "Closed Chequing"},
+		[]string{doc.Transactions[1].TransactionID, doc.Transactions[1].Currency, doc.Transactions[1].Amount, doc.Transactions[1].Account})
+}
+
+func Test_run_search_refuses_a_since_that_is_not_a_date_before_opening_the_store(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"search", "--since", "2024-13"}, spendEnv(&stdout, &stderr))
+
+	assert.Equal(t, 2, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: --since \"2024-13\" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD\n", stderr.String())
+}
+
+func Test_run_search_refuses_a_since_after_the_until(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"search", "--since", "2025", "--until", "2024"}, spendEnv(&stdout, &stderr))
+
+	assert.Equal(t, 2, exitCode)
+	assert.Equal(t, "quarry: --since 2025 is after --until 2024\n", stderr.String())
 }
