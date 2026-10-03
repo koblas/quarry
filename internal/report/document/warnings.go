@@ -68,6 +68,23 @@ func AnomaliesWarnings(a report.Anomalies, word string) []string {
 	return warnings
 }
 
+// SearchWarnings is s's warnings: one line when the search matched nothing, naming where the transactions
+// searched run (the named accounts' when s names any), and none otherwise. The list is never nil.
+func SearchWarnings(s report.Search) []string {
+	if s.Matched != 0 {
+		return []string{}
+	}
+	message, owner, have := "no transactions match the search", "the store's", "the store has"
+	if len(s.Accounts) > 0 {
+		message, owner, have = "no transactions in the named accounts match the search", "their", "they have"
+	}
+	if s.Transactions == (store.TransactionRange{}) {
+		return []string{message + "; " + have + " no transactions"}
+	}
+	return []string{fmt.Sprintf("%s; %s transactions run %s to %s", message, owner,
+		s.Transactions.First.Format(time.DateOnly), s.Transactions.Last.Format(time.DateOnly))}
+}
+
 // unconvertedWarnings is the warning, if any, that u's counted items were listed in their own currency
 // in a report in currency: the no-rates line, or the line counting those before the first rate.
 func unconvertedWarnings(currency money.Currency, u store.Unconverted, noun countedNoun) []string {

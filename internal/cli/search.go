@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/spf13/cobra"
@@ -16,23 +17,49 @@ var searchFlagHelp = reportFlagHelp{
 	account: "search only the account with this `name` or id; repeat for more",
 }
 
-// searchArgs refuses more than one text, then blank text, as a UsageError; both before anything is read.
-func searchArgs(_ *cobra.Command, args []string) error {
-	if len(args) > 1 {
-		return UsageError{msg: "search takes one text; quote it as one argument"}
-	}
-	if len(args) == 1 {
-		if err := report.CheckSearchText(&args[0]); err != nil {
-			return UsageError{msg: err.Error()}
+// errSearchNegativeLimit refuses a --limit below zero.
+var errSearchNegativeLimit = UsageError{msg: "--limit must be 0 or more; 0 prints every transaction"}
+
+// searchArgs refuses, as a UsageError and before anything is read, more than one text, then a negative
+// *limit, then blank text.
+func searchArgs(limit *int) cobra.PositionalArgs {
+	return func(_ *cobra.Command, args []string) error {
+		if len(args) > 1 {
+			return UsageError{msg: "search takes one text; quote it as one argument"}
 		}
+		if *limit < 0 {
+			return errSearchNegativeLimit
+		}
+		if len(args) == 1 {
+			if err := report.CheckSearchText(&args[0]); err != nil {
+				return UsageError{msg: err.Error()}
+			}
+		}
+		return nil
 	}
-	return nil
 }
 
-// newSearchCommand builds search: the newest transactions containing the text, dated in the --since/--until period,
-// in the --account accounts. It reads neither the clock nor the config file.
+// searchLimit is how many transactions search keeps: the --limit given, else defaultSearchLimit. 0 means every one.
+func searchLimit(cmd *cobra.Command, limit int) int {
+	if cmd.Flags().Changed("limit") {
+		return limit
+	}
+	return defaultSearchLimit
+}
+
+// searchCutNote is the warning that s lists only its newest transactions of the matches.
+func searchCutNote(s report.Search) string {
+	return "showing the newest " + humanize.Thousands(len(s.Rows)) + " of " + humanize.Thousands(s.Matched) +
+		" matching transactions; pass --limit 0 to list every one"
+}
+
+// newSearchCommand builds search: the newest --limit transactions containing the text, dated in the --since/--until
+// period, in the --account accounts. It reads neither the clock nor the config file.
 func newSearchCommand(newReport ReportFactory, jsonOut *bool) *cobra.Command {
-	var flags reportFlags
+	var (
+		flags reportFlags
+		limit int
+	)
 	cmd := &cobra.Command{
 		Use:   "search [text]",
 		Short: "Find transactions by payee, memo, amount, date, account or category",
@@ -64,7 +91,7 @@ unless set); when more match, quarry says so on stderr.`,
   quarry search --min 42.17 --max 42.17
   quarry search "e-transfer" --account Chequing --since 2026-01
   quarry search --category Food --since 2026-09 --json`,
-		Args: searchArgs,
+		Args: searchArgs(&limit),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			window, err := flags.searchWindow(cmd)
 			if err != nil {
@@ -76,7 +103,7 @@ unless set); when more match, quarry says so on stderr.`,
 				return err
 			}
 
-			req := report.SearchRequest{Window: window, Accounts: flags.accounts, Limit: defaultSearchLimit}
+			req := report.SearchRequest{Window: window, Accounts: flags.accounts, Limit: searchLimit(cmd, limit)}
 			if len(args) == 1 {
 				req.Text = &args[0]
 			}
@@ -85,11 +112,18 @@ unless set); when more match, quarry says so on stderr.`,
 				return &runtimeError{err: err}
 			}
 
-			return emitReport(cmd, *jsonOut, nil,
-				func() ([]byte, error) { return marshalDocument(document.NewSearch(found, nil)) },
+			warnings := document.SearchWarnings(found)
+			if found.Truncated() {
+				warnings = append(warnings, searchCutNote(found))
+			}
+
+			return emitReport(cmd, *jsonOut, warnings,
+				func() ([]byte, error) { return marshalDocument(document.NewSearch(found, warnings)) },
 				func() string { return renderSearch(found) })
 		},
 	}
 	flags.bind(cmd, searchFlagHelp)
+	// The flag's own default is 0 so help prints no "(default ...)" beside the ruled text; searchLimit applies 500.
+	cmd.Flags().IntVar(&limit, "limit", 0, "print at most `n` transactions, newest first (500 unless set; 0 prints every one)")
 	return cmd
 }

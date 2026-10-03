@@ -289,3 +289,13 @@ Examples:
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), long)
 }
+
+func Test_search_help_lists_the_limit_flag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	env := cli.Env{Stdout: &stdout, Stderr: &stderr}
+
+	err := cli.Execute(t.Context(), []string{"search", "--help"}, env)
+
+	require.NoError(t, err)
+	assert.Regexp(t, `(?m)--limit n +print at most n transactions, newest first \(500 unless set; 0 prints every one\)$`, stdout.String())
+}
