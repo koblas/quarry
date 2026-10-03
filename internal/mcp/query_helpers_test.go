@@ -48,11 +48,17 @@ type fakeStore struct {
 	findingsReads int
 
 	spent store.Spending
+	flow  store.CashFlow
 }
 
 // Spending answers with spent, or err when set.
 func (f *fakeStore) Spending(context.Context, store.SpendingParams) (store.Spending, error) {
 	return f.spent, f.err
+}
+
+// CashFlow answers with flow, or err when set.
+func (f *fakeStore) CashFlow(context.Context, store.CashFlowParams) (store.CashFlow, error) {
+	return f.flow, f.err
 }
 
 // Findings answers with findings, or err when set, counting the reads.
@@ -144,6 +150,14 @@ func (h *harness) dataQuality(t *testing.T, arguments any) *sdk.CallToolResult {
 func (h *harness) spending(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
 	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "spending", Arguments: arguments})
+	require.NoError(t, err)
+	return result
+}
+
+// cashFlow calls the cash_flow tool with arguments.
+func (h *harness) cashFlow(t *testing.T, arguments any) *sdk.CallToolResult {
+	t.Helper()
+	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "cash_flow", Arguments: arguments})
 	require.NoError(t, err)
 	return result
 }
