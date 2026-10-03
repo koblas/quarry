@@ -28,7 +28,7 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/report`; `store`, `
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_search_amount_test.go` (new) `Test_run_search_min_and_max_compare_the_amount_without_its_sign` — one `runWith` table over the four spec rows (`--min 100`, `--max 20`, `--min 20 --max 50`, `--min 42.17 --max 42.17`) on `searchRows` with a -150.00 charge, 120.00 deposit, -99.99, -20.00, -20.01, 20.00, 50.00, 50.01, 42.17 and -42.17; assert listed ids per row. Fails at the id assertion (flag is unknown today: exit 2 vs wanted 0), no panic; no stubs needed (cmd slice)
+- [x] Step 1: `cmd/quarry/run_search_amount_test.go` (new) `Test_run_search_min_and_max_compare_the_amount_without_its_sign` — one `runWith` table over the four spec rows (`--min 100`, `--max 20`, `--min 20 --max 50`, `--min 42.17 --max 42.17`) on `searchRows` with a -150.00 charge, 120.00 deposit, -99.99, -20.00, -20.01, 20.00, 50.00, 50.01, 42.17 and -42.17; assert listed ids per row. Fails at the id assertion (flag is unknown today: exit 2 vs wanted 0), no panic; no stubs needed (cmd slice)
 
 ### Build
 - [ ] Step 2 (batch 1, `internal/report/amount.go` new + `amount_test.go`): `ParseSearchAmounts`, `SearchAmounts`, `AmountError`; table `Test_ParseSearchAmounts_*`: accepted (`12`,`12.5`->1250,`12.50`,`0`,`0.05`,`9999999999999999.99`), one row per refused class (`1,234.56`, `-12`, `+12`, `$12`, `12.`, `.5`, `12.345`, `1e2`, leading space, trailing space, `""`), 16 digits accepted vs 17 refused (control differs by one digit), error parts per class, `Error()` lines pinned verbatim for min and max, order rows (bad min beats bad max; bad max beats min>max; min==max accepted; min>max by one cent refused; `50` vs `20` raw text kept in `Other`/`Value`), nil/nil and nil/one-sided
@@ -59,3 +59,12 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/report`; `store`, `
 - `abs` must wrap `t.amount` (the transaction), never split amounts (Rule S4: splits are not compared); a two-split transaction must count once in `matched`.
 - Pointer from `Changed("min")`, not from `!= ""`: `--min ""` must be refused, not ignored.
 - A Min>Max `SearchRequest` handed straight to `Server.Search` is not refused (by design); do not add a second check there without moving the raw-value order tests.
+
+## Phase report
+
+Run A (step 1) done. Runs B1 (2-3), B2 (4), V (5-6) remain.
+
+- Step 1: `cmd/quarry/run_search_amount_test.go` (new): `amountSearchStore` (ten single-split CHQ transactions dated March 1..10, ids `txn-charge-150`, `txn-deposit-120`, `txn-charge-99-99`, `txn-charge-20`, `txn-charge-20-01`, `txn-deposit-20`, `txn-deposit-50`, `txn-deposit-50-01`, `txn-deposit-42-17`, `txn-charge-42-17`) and the four-row acceptance table over `searchedJSON`/`transactionIDs`; it also asserts `doc.Matched == len(want)`.
+- Red: all four rows fail inside `searchedJSON`'s `require.Equal(exit 0)` at `run_search_json_test.go:134` (`expected: 0 actual: 2`, `quarry: unknown flag: --min` / `--max`); no panic, no stubs needed. The id assertion is not reached until the flags exist, so green is expected to need only step 4's flag plus steps 2-3's plumbing.
+- Expected lists (newest first): `--min 100` -> deposit-120, charge-150; `--max 20` -> deposit-20, charge-20; `--min 20 --max 50` -> charge-42-17, deposit-42-17, deposit-50, deposit-20, charge-20-01, charge-20 (50.00 in, 50.01 and 99.99 out); `--min 42.17 --max 42.17` -> charge-42-17, deposit-42-17.
+- `golangci-lint run ./cmd/quarry/` 0 issues (gofumpt applied).
