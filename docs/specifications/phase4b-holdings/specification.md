@@ -428,4 +428,4 @@ SCENARIO-16 is run by the orchestrator after SCENARIO-15 and before the gate, th
 
 **Unverified by user decision:** whether Quicken's price history is split-adjusted for past dates that cross a `ZSECURITYSPLIT` date, i.e. whether a past `value` would match Quicken's Portfolio view. The manual comparison was declined, and the conventions do not claim that past values are verified.
 
-- [ ] SCENARIO-16: Reference check against the real Quicken file
+- [x] SCENARIO-16: Reference check against the real Quicken file — manual run recorded in `REFERENCE-CHECK.md` (Run 1, 2026-10-04): 21 holdings / 20 securities, all priced, CLI total = SQL sum, shares = open spans, view 0.05 s
