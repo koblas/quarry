@@ -32,7 +32,7 @@ ORDER BY Z_PK
 `
 
 // mapSecurities reads the non-deleted securities of securityEnt, and the same by source id.
-// A NULL or "" ticker is stored NULL; a NULL or "" name goes to off. With no entity in the snapshot nothing is read.
+// A NULL or "" ticker or currency is stored NULL; a NULL or "" name goes to off. With no entity in the snapshot nothing is read.
 func mapSecurities(
 	ctx context.Context, src Source, securityEnt int64, hasEntity bool, off *offenders,
 ) ([]store.Security, map[int64]store.Security, error) {
@@ -54,7 +54,7 @@ func mapSecurities(
 		if ticker.Valid && ticker.String != "" {
 			sec.Ticker = &ticker.String
 		}
-		if currency.Valid {
+		if currency.Valid && currency.String != "" {
 			sec.Currency = &currency.String
 		}
 		rows = append(rows, sec)

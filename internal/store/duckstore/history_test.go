@@ -13,7 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// phase1ImportRunsDDL is Phase 1's import_runs: 19 columns, the last one since dropped, one run (id 4), and no store_info beside it.
+// phase1ImportRunsDDL is Phase 1's import_runs: 19 columns, one run (id 4), no store_info beside it;
+// the extra column is investment_transactions_not_imported.
 const phase1ImportRunsDDL = `CREATE TABLE import_runs (
 	id BIGINT PRIMARY KEY, started_at TIMESTAMP NOT NULL, finished_at TIMESTAMP NOT NULL,
 	snapshot_path VARCHAR NOT NULL, snapshot_sha256 VARCHAR NOT NULL, schema_fingerprint VARCHAR NOT NULL,

@@ -11,7 +11,7 @@ Scenarios complete: SCENARIO-01..10 (04 folds 05, 08; 06 folds 07; 09 folds 10).
 - Refusals are offenders, all `classMissingValue` (shares-without-security, split ratio, security with no name; the latter undated, name `(source id N)`). A split ratio side must be a positive number: NULL, zero, negative, beyond 6 decimals, too large or non-numeric all refuse. It prints as raw column text, NULL `none`, blob `blob`; every unreadable side uses one copy; the ` of "<security>"` clause drops when none resolves (spec S.5, ruled 2026-10-04). A nameless security (NULL or `""`) stays mapped and its quotes are not parsed, so neither cascades into a second refusal (SCENARIO-03)
 - Investment rows: date posted-else-entered (reverse of cash; the share walk orders by it); account skip precedes every refusal; undated precedes every other refusal, so no "no date" variants of the share/amount copy exist (SCENARIO-02)
 - `split_new_shares`/`split_old_shares` set only on `action = 'split'`; the split multiply reads them (SCENARIO-02, 04)
-- `securities.currency` stored as recorded: NULL only when NULL, `""` stays `""` (SCENARIO-01)
+- `securities.currency` is NULL when ZCURRENCY is NULL or `""` (same as ticker), so the SQL conventions' "NULL when Quicken records none" holds (SCENARIO-01, 11)
 - `securities_rows`/`prices_rows`/`investment_transactions_rows` are nullable BIGINT after `rates_fetch_error`, filled positionally by `importRunRows`, carried via `optionalRunColumns`/`carriedRun`, read with COALESCE→0 in `status.go`. `shares_checked` (S04) follows the same way, after `investment_transactions_rows`. `FormatVersion = 6` stays (SCENARIO-01, 02, 04)
 - `Builder.InvestmentTransaction` is the only way tests add investment rows; `b.Transaction` makes a cash row (SCENARIO-02)
 - A quote or position whose security is deleted/absent is skipped silently (I4-6 analogue); a non-zero-share investment row with no resolvable security refuses as an offender (SCENARIO-01, 02, 03)
@@ -47,8 +47,6 @@ Scenarios complete: SCENARIO-01..10 (04 folds 05, 08; 06 folds 07; 09 folds 10).
 
 ## Open debts
 - No Import-level test pins the `<v>` text in the share/amount refusal copy for negative or exponent values; only `parseShares` unit tests cover those forms. unowned — dies unless re-opened (SCENARIO-02, 03)
-- Spec S.7 conventions text says prices are in `securities.currency` "NULL when Quicken records none", but the importer stores `""` as `""`. Open question for the final product-vision pass (SCENARIO-01)
 - Every new `Z_ENT = ?` query needs an another-entity pin plus positive control, mutation-checked; securities, quotes, positions, investment transactions, lots are done (SCENARIO-01, 02, 04)
 - Table column width is measured in bytes (`widestLen`, `internal/cli/render.go`) while `fmt` `%-*s` pads by rune, so a non-ASCII account or security name misaligns the DIFFER rows; pre-existing in the balances and splits rows, now also shares. unowned — dies unless re-opened (SCENARIO-06)
-- `internal/store/duckstore/history_test.go:16` `phase1ImportRunsDDL` comment ends "the last one since dropped" (change narrative) — reword to a fixture fact when next touched (SCENARIO-09 checkpoint MINOR)
 - `docs/specifications/phase1-import-store/SCENARIO-01c.md:29` archived step still says the renamed test asserts the `not imported` Rows tail; fix if cheap (SCENARIO-09 checkpoint NIT)

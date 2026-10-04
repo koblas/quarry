@@ -42,6 +42,17 @@ func Test_notices_and_prd_carry_the_ruled_plugin_edits(t *testing.T) {
 			"docs/initial-prd.md",
 			"Quicken's category tax line is not imported; tax totals are by user-named category until it is.",
 		},
+		{
+			"prd notes the securities type and currency conventions",
+			"docs/initial-prd.md",
+			"(type from Phase 4b; currency as recorded, NULL when Quicken has none)",
+		},
+		{
+			"prd names the investment transactions table and defers its cash side",
+			"docs/initial-prd.md",
+			"| `investment_transactions` | Action (buy, sell, dividend, reinvest, share transfer, split), security, shares, price, fees, amount " +
+				"| Cash side also appears in `transactions` (from Phase 4c) |",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

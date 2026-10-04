@@ -65,15 +65,33 @@ func Test_import_stores_a_missing_ticker_as_null(t *testing.T) {
 	}
 }
 
-func Test_import_stores_a_security_with_no_currency_as_null(t *testing.T) {
+func Test_import_stores_a_missing_currency_as_null(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	b.Security(v9fixture.SecurityRow{Name: "Plain Co", Ticker: "PLN"})
+	cases := []struct {
+		name   string
+		update string
+	}{
+		{name: "NULL currency", update: "UPDATE ZSECURITY SET ZCURRENCY = NULL WHERE Z_PK = ?"},
+		{name: "empty currency", update: "UPDATE ZSECURITY SET ZCURRENCY = '' WHERE Z_PK = ?"},
+	}
 
-	fake, _ := importSecurities(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+			pk := b.Security(v9fixture.SecurityRow{Name: "Plain Co", Ticker: "PLN", Currency: "USD"})
+			bundle := b.WriteBundle(t, t.TempDir())
+			execOn(t, bundle.DataPath, c.update, pk)
+			fake := &fakeStore{}
 
-	require.Len(t, fake.Rows.Securities, 1)
-	assert.Nil(t, fake.Rows.Securities[0].Currency)
+			_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+			require.NoError(t, err)
+			require.Len(t, fake.Rows.Securities, 1)
+			assert.Nil(t, fake.Rows.Securities[0].Currency)
+		})
+	}
 }
 
 func Test_import_leaves_a_deleted_security_out(t *testing.T) {
