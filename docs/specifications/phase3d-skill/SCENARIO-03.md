@@ -15,10 +15,10 @@ Size: OWNS A RUN, 3 batches in 1 package (`cmd/quarry` tests) plus 5 static `plu
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_skill_drift_test.go` (new) `Test_every_quarry_name_the_skill_uses_exists`. It has three subtests, one per outline kind: "quarry commands and flags", "MCP tool names", "tables and v_* views".
+- [x] Step 1: `cmd/quarry/run_skill_drift_test.go` (new) `Test_every_quarry_name_the_skill_uses_exists`. It has three subtests, one per outline kind: "quarry commands and flags", "MCP tool names", "tables and v_* views".
   - Sources: SKILL.md (`repoFile`, `run_plugin_manifest_test.go:71-76`); the README section cut from `README.md` between `## Use quarry with Claude Code` and `## Credits`; and `references/*.md` plus `references/sql/*.sql`, both listed from disk.
   - Each subtest first requires one known positive: `snapshots prune` from SKILL §6, `sync_status` from §9, `v_spending` from the recipes. It then asserts zero mismatches.
-- [ ] Step 2: same file. Signature-only stubs `skillDriftSources`, `helpTree`, `commandMismatches`, `toolMismatches` and `relationMismatches`, returning empty. The test must go red at the positive `Contains`.
+- [x] Step 2: same file. Signature-only stubs `skillDriftSources`, `helpTree`, `commandMismatches`, `toolMismatches` and `relationMismatches`, returning empty. The test must go red at the positive `Contains`.
 
 ### Build
 - [ ] Step 3: `plugin/skills/quarry/references/{spending,cash-flow,recurring-and-anomalies,search,findings}.md` (new), written to their §S.6 job lines, plus `cmd/quarry/run_skill_references_test.go` (new).
@@ -102,6 +102,12 @@ Size: OWNS A RUN, 3 batches in 1 package (`cmd/quarry` tests) plus 5 static `plu
 - A `FROM` inside a function call (`EXTRACT(year FROM d)`) reads as a relation. Reference SQL avoids it.
 
 ## Phase report
+
+Run A (steps 1-2) done. `cmd/quarry/run_skill_drift_test.go` holds the acceptance test and signature-only stubs; red at the three positive `Contains` assertions (`snapshots prune`, `sync_status`, `v_spending`), not at compile.
+- Types: `driftSource{name,text}`, `driftCheck{resolved,mismatches []string}`, `helpNode{flags []string; children map[string]helpNode}`. A check returns what it resolved (the positive is asserted on `resolved`) and its `mismatches`.
+- Stubs return zero values, and B1/B2 replace their bodies: `skillDriftSources(t) []driftSource`, `helpTree(t) helpNode`, `commandMismatches(helpNode, []driftSource) driftCheck`, `toolMismatches([]driftSource, tools []string) driftCheck`, `relationMismatches([]driftSource, relations []string) driftCheck`. B1 and B2 may change these types if the build needs it, as long as the test keeps its three positives and zero-mismatch asserts.
+- The tool subtest takes its tool list from `startMCP`+`ListTools` in the test body and closes the session; the relation subtest uses `storeRelations(t)`.
+- Known lint at this point: four `unused` findings, the struct fields `name`, `text`, `flags`, `children`. They clear once B1 reads them.
 
 ## Orchestrator rulings (2026-10-03, before run A)
 - **Table names in reference prose** (outside SQL fences and `.sql` files) stay unchecked. This is accepted, and recorded in STATE.md `## Open debts` by run V. The `v_*` names and the SQL relations are checked, and `schema.md` is generated.
