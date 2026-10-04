@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-05
-status: open
+status: done
 ---
 
 # SCENARIO-05: Holdings on a past date (folds SCENARIO-11, refuses a date it cannot use)
@@ -34,10 +34,10 @@ Only the CLI source of `AsOf` changes (`cli/holdings.go:47` `report.Today(now())
 - [x] Step 5 (B2): `cmd/quarry/run_holdings_as_of_test.go` — `Test_run_holdings_as_of_forms_pick_the_shares_of_their_day` (split-day boundary on `seedSplitHoldingsStore`: `2025-09-14` 100 sh price 10.00; `2025-09-15` 200 sh; `2025-09` → caption 2025-09-30, 200 sh, 10.00; control `2025` 12.00); `Test_run_holdings_as_of_the_current_year_or_month_or_today_is_today` (`2026`, `2026-03`, `2026-03-12` → caption 2026-03-12, 250 sh, price 15.00, exit 0, stderr empty); `Test_run_holdings_refuses_a_bad_as_of_before_looking_for_a_store` (empty `HOME`, `2024-13` → exit 2 not 1, the S.4 line); `run_usage_test.go:235` add row `holdings --as-of` → `quarry: flag needs an argument: --as-of; Run 'quarry holdings --help' for usage.` (the table at `:212-222` is `--currency`-only; add a `--as-of` sibling loop only for holdings). `-json` as_of cell is covered in step 4
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `ParseAsOf` and `AsOfError` (exported budget ~4 lines)
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `ParseAsOf` and `AsOfError` (exported budget ~4 lines)
 
 ### Verify
-- [ ] Step 7: full verification block per `.claude/rules/agent-briefs.md` + `.claude/scripts/spec-check.py phase4b-holdings`; tick SCENARIO-05 with its acceptance test and SCENARIO-11 as `delivered by SCENARIO-05 — <its test>` (test reference last on the line); rewrite STATE.md; `status: done`
+- [x] Step 7: full verification block per `.claude/rules/agent-briefs.md` + `.claude/scripts/spec-check.py phase4b-holdings`; tick SCENARIO-05 with its acceptance test and SCENARIO-11 as `delivered by SCENARIO-05 — <its test>` (test reference last on the line); rewrite STATE.md; `status: done`
 
 ## Handoff
 
@@ -58,7 +58,9 @@ Only the CLI source of `AsOf` changes (`cli/holdings.go:47` `report.Today(now())
 
 ## Phase report
 
-Runs A, B1, B2 done (steps 1-5 ticked); V (steps 6-7) next. Both acceptance tests green.
+All runs done (steps 1-7 ticked), status done. Verify: `go build ./...` ok; `golangci-lint run ./...` 0 issues; covered full suite `go test -count=1 -coverpkg=./... ./...` all packages ok (rc 0); `uncovered-diff.py` 0 uncovered added lines; `go test -race` on report, document, cli ok; `test-stats.py --base e0b357a --changed`: cmd/quarry 689 (+6), internal/cli 458 (+6), internal/report 361 (+4), total 1508 (+16). `spec-check.py phase4b-holdings` OK. SCENARIO-05 and folded SCENARIO-11 ticked. STATE.md rewritten.
+
+Earlier-run record (B2): acceptance tests green; bad `--currency` beats bad `--as-of` (cobra Args), so the plan's "bad as-of plus bad currency -> as-of line" is untested and replaced by bad as-of vs unreadable config.
 
 B2 built: `internal/cli/holdings.go` flag `--as-of` (const `holdingsAsOfFlagHelp`, S.1 verbatim); `RunE` reads the clock once, no flag -> `report.Today(at)`, `Changed("as-of")` -> `report.ParseAsOf`, error -> `UsageError{msg: err.Error()}`, all before `currency.resolve` and `openReport`. `internal/cli/holdings_test.go`: const `holdingsAsOfHelp`, 5 new tests (help regexp, `--as-of 2025` reads 2025-12-31, JSON `as_of`, native caption, refusal table not-a-date/empty/after-today with the store never read, bad as-of before an unreadable config). `cmd/quarry/run_holdings_as_of_test.go`: `Test_run_holdings_as_of_forms_pick_the_shares_of_their_day`, `..._the_current_year_or_month_or_today_is_today`, `..._refuses_a_bad_as_of_before_looking_for_a_store`. `cmd/quarry/run_usage_test.go`: `Test_run_holdings_needs_a_value_for_the_as_of_flag`.
 

@@ -1,6 +1,6 @@
 # phase4b-holdings — current state
 
-Scenarios complete: SCENARIO-01 (folds 14), SCENARIO-02, SCENARIO-03, SCENARIO-04. Last updated by SCENARIO-04.
+Scenarios complete: SCENARIO-01 (folds 14), SCENARIO-02, SCENARIO-03, SCENARIO-04, SCENARIO-05 (folds 11). Last updated by SCENARIO-05.
 
 Inherited, still binding: `../phase4a-investments/STATE.md` — read its Binding decisions and Traps for the importer, the share gate (`CheckShares`, tolerance 0.000001), share formatters, `store.Action*`, DECIMAL(18,6) shares, `schema.md` regeneration and the `Z_ENT` / `CAST(... AS REAL)` fixture traps. Only what 4b changed or added is below.
 
@@ -16,15 +16,17 @@ Inherited, still binding: `../phase4a-investments/STATE.md` — read its Binding
 - Same-currency conversion needs no rate: CAD row `value_cad = value`, USD row `value_usd = value`, even before the first rate. S08's `no rate` cell and warning test that a conversion needed a rate, not `value_cad IS NULL` (NULL also covers no price, NULL currency, EUR) (SCENARIO-02)
 - Sort (S.2): plain, not case-folded, names — `a.name, a.source_id, v.account_id, v.security, s.source_id, v.security_id`. H-2 timing: warm `WHERE date = <recent>` ~50 ms; filter sits above the day expansion, below both ASOF joins (SCENARIO-02)
 - H-3, one owner: `report.Holdings.Totals` — a total exists for a currency iff at least one row contributes a non-nil value (zero counts, negative counts), not when the sum is non-zero; none when empty. Converted modes: one total in the reporting currency. Native (`nativeTotals`): one per non-NULL stored security currency summing each row's own `Value`, CAD, USD, then alphabetical; NULL-currency or unpriced rows never contribute. S08 appends the unconverted totals after the converted; renderers (`holdingsNativeTotalRow`: Currency cell width-2, Value cell width-1) and `document` only format it (SCENARIO-03, SCENARIO-04)
-- `report.Today(now)` (`window.go`) is the as-of default — now's calendar day in now's own zone as UTC midnight; `DefaultWindow` uses it; S05's `--as-of` defaults through it into `HoldingsRequest.AsOf` (SCENARIO-03)
+- `report.Today(now)` (`window.go`) is the as-of default — now's calendar day in now's own zone as UTC midnight; `DefaultWindow` uses it; no `--as-of` (flag `Changed`, not empty-string) defaults through it into `HoldingsRequest.AsOf` (SCENARIO-03, SCENARIO-05)
+- One as-of parser: `report.ParseAsOf(value, now)` and `report.AsOfError{Kind, Value}` (`AsOfNotADate`, `AsOfAfterToday`; `Error()` is the CLI wording, no `quarry: ` prefix) in `internal/report/asof.go`. Distinct from `WindowError`, so `mcp/window.go` gets no new case; S13's MCP `as_of` reuses it and words the error itself from `Kind`/`Value`. `datePeriod` (`report/window.go`) is the shared first/last-day helper with `parseDateBound`. A year or month containing today resolves to today, never refused; only a period starting after today is refused; both refusals quote `Value` as typed (`2099` → `--as-of 2099 is after today; …`); whitespace is not trimmed, `""` is not a date (SCENARIO-05)
+- `cli/holdings.go` parses `--as-of` before `currency.resolve` and before opening the store: a bad value is `UsageError` (exit 2) with no config or store read. A bad `--currency` still wins over a bad `--as-of` — cobra `Args` rejects it before `RunE` (orchestrator accepted) (SCENARIO-05)
 - Money formatting: `document.BigMoney` owns the `*big.Int` cents split (ungrouped, for JSON); cli `formatBigMoney` groups its whole part via `humanize.ThousandsDigits`; `formatPrice` groups thousands like `formatShares` (`1,234.50`, min 2 decimals) — S.2 did not rule on price grouping, this pin is the decision (SCENARIO-03)
 - `holdingInCell` is the single In-cell owner; it already drops the In column and the `, amounts in` caption suffix for `money.Native`. S07/S08 add arms by branching on row facts (security currency, whether a rate was needed), never on `Converted == nil` (SCENARIO-03)
 - Warnings, R3 order: config warnings first by structure (`currency.resolve` on stderr; `withConfigWarnings` first in JSON). `document.HoldingsWarnings` concatenates slots 2 non-investment `--account`, 3 empty, 4 no price, 5 no rates / before the first rate, 6 no currency, 7 other currency; it returns `[]string{}` today and each scenario adds its composer in its slot, no stubs (SCENARIO-03)
 - Holdings does not reuse the spend/cashflow/recurring composers: not-in-reports and linked-tracking accounts are listed with no left-out warning (SCENARIO-03)
 
 ## Left unbuilt
-- `--as-of` flag and refusals — SCENARIO-05/11; `--account`, its caption and non-empty `account_filter` — SCENARIO-10 (flags are unregistered until then, so usage and unknown-flag tables treat them as unknown)
-- `no price` warning and JSON row pin — SCENARIO-06/12; `not converted` — SCENARIO-07; `no rate` cell/warning and unconverted totals — SCENARIO-08; empty-result warnings — SCENARIO-09; MCP `holdings` — SCENARIO-13
+- `--account`, its caption and non-empty `account_filter` — SCENARIO-10 (flag is unregistered until then, so usage and unknown-flag tables treat it as unknown)
+- `no price` warning and JSON row pin — SCENARIO-06/12; `not converted` — SCENARIO-07; `no rate` cell/warning and unconverted totals — SCENARIO-08; empty-result warnings, including a past day before the first trade — SCENARIO-09; MCP `holdings` and its `as_of` argument (calls `ParseAsOf`) — SCENARIO-13
 - `holding_shares` / `v_holdings` sentence in `report/sql_conventions.go`, action-vocabulary sentence, SKILL.md and hand copies — SCENARIO-15
 
 ## Traps
@@ -42,6 +44,9 @@ Inherited, still binding: `../phase4a-investments/STATE.md` — read its Binding
 - `convertedCell` and `noRateCell` are taken in `render_accounts.go`: holdings cells use `holding*` names. A nil `Security` renders "" in text and `null` in JSON (SCENARIO-03)
 - `holdingsCurrencyHelp` test const lives in `internal/cli/holdings_test.go` and is reused by `report_help_test.go`; the help test matches the `--currency` line by regexp so S05/S10 can add flags (SCENARIO-03)
 - `musttag` lint: a JSON read-back struct in a test needs `json` tags on every field (SCENARIO-03)
+- Mutation runs: a narrow `go test` can report a cached `ok` after a source edit (seen once in S05); rerun with `-count=1` whenever a mutation reports green before believing the guard is unreachable (SCENARIO-05)
+- Test clocks and fixed as-of days must not be after the real date (DuckDB `current_date`); "tomorrow" rows derive from the clock, never the real date. `seedSplitHoldingsStore` (`run_holdings_as_of_test.go`) is the split fixture later past-day tests reuse (SCENARIO-05)
+- Help tests pin per flag line by regexp (`holdingsAsOfHelp` beside `holdingsCurrencyHelp`): S10 adds its own line, never replaces the whole-help pin (SCENARIO-05)
 
 ## Open debts
 - Sort of `Holdings` differs from `quarry accounts` (`accountsQuery` sorts `lower(name), name`, `holdingsQuery` plain `a.name`, S.2 ruling): mixed-case account names can order differently across the two commands — final product-vision pass rules on it (SCENARIO-02, SCENARIO-03)

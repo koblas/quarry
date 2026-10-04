@@ -404,8 +404,8 @@ Architect sizing pass 2026-10-04 (one pass over all 16; folds change no scenario
 - [x] SCENARIO-02: v_holdings values each holding on each day held — `cmd/quarry/run_holdings_view_test.go` `Test_run_sql_values_each_holding_on_a_date_from_v_holdings`
 - [x] SCENARIO-03: quarry holdings lists today's holdings in the reporting currency — `cmd/quarry/run_holdings_test.go` `Test_run_holdings_lists_todays_holdings_in_the_reporting_currency`
 - [x] SCENARIO-04: Native currency lists each currency's own total — `cmd/quarry/run_holdings_test.go` `Test_run_holdings_native_lists_each_currencys_own_total`
-- [ ] SCENARIO-05: Holdings on a past date
-- [ ] SCENARIO-11: quarry holdings refuses a date it cannot use
+- [x] SCENARIO-05: Holdings on a past date — `cmd/quarry/run_holdings_as_of_test.go` `Test_run_holdings_as_of_a_year_lists_the_shares_after_a_split_before_it`
+- [x] SCENARIO-11: quarry holdings refuses a date it cannot use — delivered by SCENARIO-05 — `cmd/quarry/run_holdings_as_of_test.go` `Test_run_holdings_refuses_a_date_it_cannot_use`
 - [ ] SCENARIO-06: A holding with no price is listed without value
 - [ ] SCENARIO-12: Holdings as JSON
 - [ ] SCENARIO-07: A security quarry cannot convert is left out of the total
