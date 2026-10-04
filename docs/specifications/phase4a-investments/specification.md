@@ -142,7 +142,7 @@ Shares    DIFFER for 1 of 145 holdings
 | --- | --- |
 | Unmapped `ZTYPE` | `an investment transaction on 2024-03-02 in "RRSP" has action code 14, which quarry does not map yet` |
 | Shares beyond 6 decimals (not residue) | `an investment transaction on 2024-03-02 in "RRSP" has 1.23456789 shares, which has more than 6 decimal places` |
-| Split ratio with a zero or NULL side | `a stock split on 2019-05-01 in "RRSP" of "iShares Core Equity ETF" has a ratio quarry cannot read (1:0)` — NULL side renders `none`, e.g. `(1:none)`; the security is always named by its name in double quotes |
+| Split ratio with a zero or NULL side | `a stock split on 2019-05-01 in "RRSP" of "iShares Core Equity ETF" has a ratio quarry cannot read (1:0)` — each side prints as Quicken's raw column text (NULL → `none`, blob → `blob`), e.g. `(1:none)`, `(n/a:12)`, `(blob:12)`; NULL, zero, non-number, beyond-6-decimals and too-large sides all use this one line; the security is named by its name in double quotes when one resolves, else the clause is dropped: `a stock split on <date> in "<account>" has a ratio quarry cannot read (1:0)` (ruled 2026-10-04, SCENARIO-03) |
 | NULL `ZTYPE` | `an investment transaction on 2024-03-02 in "RRSP" has no action code` |
 | Shares not a number (text/blob) | `an investment transaction on <date> in "<account>" has a share count that is not a number` |
 | Shares out of DECIMAL(18,6) range | `an investment transaction on <date> in "<account>" has <v> shares, which is too large for quarry's share counts` |
@@ -153,7 +153,7 @@ Shares    DIFFER for 1 of 145 holdings
 | Neither posted nor entered date | `an investment transaction in "<account>" (source id <N>) has no date` |
 | Non-zero shares on a position whose security is deleted or missing | existing `… has shares but no security` (zero/NULL shares → imports with NULL security, like cash-only) |
 | Non-zero units, no position | `an investment transaction on 2024-03-02 in "RRSP" has shares but no security` |
-| Security with no name | `a security (source id 12) has no name` |
+| Security with no name | `a security (source id 12) has no name` — NULL or empty ZNAME (whitespace follows the account rule); a deleted security and its quotes are ignored; a nameless security's quotes are skipped so no `a price of ""` line appears |
 
 ### S.6 Edge-case rows
 
