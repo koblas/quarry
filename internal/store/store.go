@@ -165,9 +165,13 @@ type HoldingsParams struct {
 
 // Holdings is every holding on the day asked for, in account name, account source id, security name,
 // security source id order. FirstRate is the date of the store's first exchange rate, zero when it has none.
+// FirstTransaction and LastTransaction are the earliest and latest investment transaction dates in the
+// accounts read, whatever the day asked for; both are zero when there are none.
 type Holdings struct {
-	Holdings  []Holding
-	FirstRate time.Time
+	Holdings         []Holding
+	FirstRate        time.Time
+	FirstTransaction time.Time
+	LastTransaction  time.Time
 }
 
 // Holding is one row of v_holdings: what an account holds of a security on a day, with its value.

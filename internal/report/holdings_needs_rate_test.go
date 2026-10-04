@@ -135,3 +135,17 @@ func Test_holdings_carries_the_first_rate_date_the_store_read(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, first, result.FirstRate)
 }
+
+func Test_holdings_carries_the_transaction_span_the_store_read_from_one_read(t *testing.T) {
+	first, last := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC), time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC)
+	reads := 0
+	srv := report.NewServer(report.WithStore(fakeStore{
+		holdings: store.Holdings{FirstTransaction: first, LastTransaction: last}, holdingsReads: &reads,
+	}))
+
+	result, err := srv.Holdings(t.Context(), report.HoldingsRequest{Currency: money.CAD})
+
+	require.NoError(t, err)
+	assert.Equal(t, []time.Time{first, last}, []time.Time{result.FirstTransaction, result.LastTransaction})
+	assert.Equal(t, 1, reads)
+}

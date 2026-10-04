@@ -37,7 +37,7 @@ func Test_HoldingsWarnings_name_each_named_account_that_is_not_an_investment_acc
 				namedAccount("a-1", "Zeta Chequing", accountTypeChequing),
 				namedAccount("a-2", "Alpha Savings", accountTypeSavings),
 			},
-			want: []string{notInvestmentLine("Alpha Savings"), notInvestmentLine("Zeta Chequing")},
+			want: []string{notInvestmentLine("Alpha Savings"), notInvestmentLine("Zeta Chequing"), namedNothingLine},
 		},
 		{
 			name: "by plain name, so a lower-case name follows an upper-case one",
@@ -45,13 +45,13 @@ func Test_HoldingsWarnings_name_each_named_account_that_is_not_an_investment_acc
 				namedAccount("a-1", "alpha", accountTypeChequing),
 				namedAccount("a-2", "Zeta", accountTypeSavings),
 			},
-			want: []string{notInvestmentLine("Zeta"), notInvestmentLine("alpha")},
+			want: []string{notInvestmentLine("Zeta"), notInvestmentLine("alpha"), namedNothingLine},
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := document.HoldingsWarnings(report.Holdings{Accounts: c.accounts, Currency: money.CAD})
+			got := document.HoldingsWarnings(report.Holdings{Accounts: c.accounts, Currency: money.CAD, AsOf: emptyAsOf})
 
 			assert.Equal(t, c.want, got)
 		})
@@ -73,6 +73,7 @@ func Test_HoldingsWarnings_leave_out_a_named_investment_account_whatever_its_sta
 	hidden := namedAccount("a-4", "Hidden Brokerage", store.AccountTypeBrokerage)
 	hidden.NotInReports = true
 	h := report.Holdings{
+		Rows:     []store.Holding{holdingsTestRow()},
 		Accounts: []store.Account{namedAccount("a-1", "Brokerage", store.AccountTypeBrokerage), namedAccount("a-2", "RRSP", store.AccountTypeRetirement), closed, hidden},
 		Currency: money.CAD,
 	}

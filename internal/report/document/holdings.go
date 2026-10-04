@@ -110,9 +110,9 @@ func nullableMoney(cents *big.Int) *string {
 }
 
 // HoldingsWarnings is the unprefixed warning lines for h, in the order holdings prints them; never nil.
-// Slots: named non-investment accounts, no price, no rate, no currency, other currency.
+// Slots: named non-investment accounts, nothing held, no price, no rate, no currency, other currency.
 func HoldingsWarnings(h report.Holdings) []string {
-	warnings := nonInvestmentWarnings(h)
+	warnings := append(nonInvestmentWarnings(h), emptyWarnings(h)...)
 	if line, ok := noPriceWarning(h); ok {
 		warnings = append(warnings, line)
 	}
@@ -139,6 +139,25 @@ func nonInvestmentWarnings(h report.Holdings) []string {
 		lines[i] = fmt.Sprintf("account %q is not a brokerage or retirement account, so it has no holdings", a.Name)
 	}
 	return lines
+}
+
+// emptyWarnings is one line when h has no rows: where the investment transactions in the accounts read start
+// and end, or that there are none; none when something is held.
+func emptyWarnings(h report.Holdings) []string {
+	if len(h.Rows) != 0 {
+		return nil
+	}
+	whose, they := "the store's", "the store has"
+	scope := ""
+	if h.Accounts != nil {
+		whose, they, scope = "their", "they have", " in the named accounts"
+	}
+	asOf := h.AsOf.Format(DateLayout)
+	if h.FirstTransaction.IsZero() {
+		return []string{fmt.Sprintf("no holdings on %s%s; %s no investment transactions", asOf, scope, they)}
+	}
+	return []string{fmt.Sprintf("no holdings on %s%s; %s investment transactions run %s to %s",
+		asOf, scope, whose, h.FirstTransaction.Format(DateLayout), h.LastTransaction.Format(DateLayout))}
 }
 
 // holdingsNoRatesWarning is the line for a store with no exchange rates at all.

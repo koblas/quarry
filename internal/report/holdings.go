@@ -28,14 +28,17 @@ type HoldingsTotal struct {
 
 // Holdings is the holdings on AsOf, in the store's order, with their totals.
 // FirstRate is the date of the store's first exchange rate, zero when it has none.
+// FirstTransaction and LastTransaction span the investment transactions in the accounts read, zero when none.
 // Accounts are the accounts the request named, in the order given and without repeats; nil when none.
 type Holdings struct {
-	Rows      []store.Holding
-	Totals    []HoldingsTotal
-	AsOf      time.Time
-	Currency  money.Currency
-	FirstRate time.Time
-	Accounts  []store.Account
+	Rows             []store.Holding
+	Totals           []HoldingsTotal
+	AsOf             time.Time
+	Currency         money.Currency
+	FirstRate        time.Time
+	FirstTransaction time.Time
+	LastTransaction  time.Time
+	Accounts         []store.Account
 }
 
 // Converted is h's value in the reporting currency in cents; nil in a native listing and when no
@@ -75,7 +78,10 @@ func (s *Server) Holdings(ctx context.Context, req HoldingsRequest) (Holdings, e
 	if err != nil {
 		return Holdings{}, s.readRefusal(ctx, "holdings", err)
 	}
-	listing := Holdings{Rows: read.Holdings, AsOf: req.AsOf, Currency: req.Currency, FirstRate: read.FirstRate, Accounts: accounts}
+	listing := Holdings{
+		Rows: read.Holdings, AsOf: req.AsOf, Currency: req.Currency, FirstRate: read.FirstRate, Accounts: accounts,
+		FirstTransaction: read.FirstTransaction, LastTransaction: read.LastTransaction,
+	}
 	listing.Totals = listing.total()
 	return listing, nil
 }

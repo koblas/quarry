@@ -184,7 +184,7 @@ func Test_NewHoldings_writes_a_value_past_int64_in_full(t *testing.T) {
 }
 
 func Test_HoldingsWarnings_is_empty_not_nil(t *testing.T) {
-	assert.Equal(t, []string{}, document.HoldingsWarnings(report.Holdings{}))
+	assert.Equal(t, []string{}, document.HoldingsWarnings(report.Holdings{Rows: []store.Holding{holdingsTestRow()}, Currency: money.CAD}))
 }
 
 func unpricedHoldings(n int) []store.Holding {

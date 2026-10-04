@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"testing"
 
 	"github.com/koblas/quarry/internal/store"
@@ -105,7 +104,7 @@ func Test_run_holdings_refuses_an_account_it_cannot_pick_with_nothing_on_stdout(
 	}
 }
 
-func Test_run_holdings_of_only_a_chequing_account_warns_and_lists_no_rows_and_no_total(t *testing.T) {
+func Test_run_holdings_of_only_a_non_investment_account_prints_both_warnings_in_order(t *testing.T) {
 	seedHoldingsAccounts(t)
 
 	exitCode, stdout, stderr := runHoldingsAccounts(t, "--account", "Chequing")
@@ -113,16 +112,16 @@ func Test_run_holdings_of_only_a_chequing_account_warns_and_lists_no_rows_and_no
 	require.Equal(t, 0, exitCode, stderr)
 	assert.Equal(t, "Holdings on 2026-03-12 in Chequing, amounts in CAD; cash not included\n\n"+
 		"Account  Security  Shares  Price  Priced on  Currency  Value  In CAD\n", stdout)
-	assert.Regexp(t, "^"+regexp.QuoteMeta(chequingWarning), stderr)
+	assert.Equal(t, chequingWarning+namedNothingWarning, stderr)
 }
 
-func Test_run_holdings_of_an_investment_account_with_nothing_held_has_no_non_investment_warning(t *testing.T) {
+func Test_run_holdings_of_an_investment_account_with_nothing_held_warns_only_that_nothing_is_held(t *testing.T) {
 	seedHoldingsAccounts(t)
 
 	exitCode, _, stderr := runHoldingsAccounts(t, "--account", "Empty")
 
 	require.Equal(t, 0, exitCode, stderr)
-	assert.NotContains(t, stderr, "not a brokerage")
+	assert.Equal(t, namedNothingWarning, stderr)
 }
 
 func Test_run_holdings_json_lists_the_named_accounts_and_the_warnings_stderr_prints(t *testing.T) {

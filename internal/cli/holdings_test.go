@@ -277,12 +277,23 @@ func Test_holdings_prints_the_table_header_and_no_total_when_nothing_is_held(t *
 
 func Test_holdings_prints_a_config_warning_on_stderr_and_still_lists_the_holdings(t *testing.T) {
 	var stdout, stderr bytes.Buffer
+	fake := fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{brokerageHolding()}}}
 
-	err := cli.Execute(t.Context(), []string{"holdings"}, holdingsEnv(warningConfig, fakeReportStore{}, &stdout, &stderr))
+	err := cli.Execute(t.Context(), []string{"holdings"}, holdingsEnv(warningConfig, fake, &stdout, &stderr))
 
 	require.NoError(t, err)
 	assert.Equal(t, "quarry: warning: "+unknownKeyShown+"\n", stderr.String())
 	assert.Contains(t, stdout.String(), "Holdings on 2026-09-29")
+}
+
+func Test_holdings_prints_the_config_warning_before_the_nothing_held_warning(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := cli.Execute(t.Context(), []string{"holdings"}, holdingsEnv(warningConfig, fakeReportStore{}, &stdout, &stderr))
+
+	require.NoError(t, err)
+	assert.Equal(t, "quarry: warning: "+unknownKeyShown+"\n"+
+		"quarry: warning: no holdings on 2026-09-29; the store has no investment transactions\n", stderr.String())
 }
 
 func Test_holdings_json_reads_back_the_listing_the_total_and_the_config_warning(t *testing.T) {
