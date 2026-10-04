@@ -226,7 +226,7 @@ Transfers 3,112 paired
 ```
 - `payee` is `null` when the transaction has no payee (key always present; `(no payee)` is human output only).
 - `store.path` is always the store's path; with `"built": false` the file there is unchanged, or absent on a first run.
-- `not_imported` always present; `investment_transactions` is 0 when none.
+- `not_imported` always present; `investment_transactions` is 0 when none. (Superseded by phase4a-investments I4-7: investment transactions now import, `not_imported` is gone, and `shares` takes its place.)
 - `balances.mismatched[]`: `{"id","name","currency","closed","active","statement_date":"2026-08-31","quarry":"-1204.17","quicken":"-1184.17","difference":"-20.00"}`; `difference` = quarry − quicken.
 - `splits.mismatched[]`: `{"id","date","account","currency","payee","amount","splits_total"}`.
 - `transfers.one_sided[]`: `{"id","date","account","currency","payee","amount","other_account","other_account_id"}`; `other_account` = the name as recorded, or `null`; `other_account_id` = the matching account's id, or `null` when no account matches.
@@ -524,7 +524,7 @@ Order is execution order. Folded scenarios are ticked with the delivering scenar
 - [x] SCENARIO-01c: sync pairs transfers between the user's accounts (absorbs 07, 12, 21) — `cmd/quarry/run_transfers_test.go` `Test_run_pairs_transfers_between_the_users_accounts`
 - [x] SCENARIO-07: transfers pair, including cross-currency and investment counterparts — FOLD → 01c, delivered by SCENARIO-01c — `internal/importer/transfers_test.go` `Test_import_pairs_cross_currency_and_brokerage_transfers`
 - [x] SCENARIO-12: a file with no transactions — FOLD → 01c, delivered by SCENARIO-01c — `cmd/quarry/run_transfers_test.go` `Test_run_reports_no_transfers_for_a_file_with_no_transactions`
-- [x] SCENARIO-21: investment transactions are counted, not imported — FOLD → 01c, delivered by SCENARIO-01c — `cmd/quarry/run_transfers_test.go` `Test_run_counts_investment_transactions_without_importing_them`
+- [x] SCENARIO-21: investment transactions are counted, not imported — FOLD → 01c, delivered by SCENARIO-01c — superseded by phase4a-investments I4-7: investment transactions now import, and the test pins that they stay out of `transactions` — `cmd/quarry/run_transfers_test.go` `Test_run_keeps_investment_transactions_out_of_the_cash_transactions_table`
 - [x] SCENARIO-08: a one-sided transfer is kept and warned about (absorbs 19) — `cmd/quarry/run_transfers_test.go` `Test_run_lists_one_sided_transfers_only_as_findings_on_a_successful_sync`
 - [x] SCENARIO-19: each build records an import_runs row — FOLD → 08, delivered by SCENARIO-08 — `cmd/quarry/run_import_runs_test.go` `Test_run_records_an_import_runs_row_for_the_build`
 - [x] SCENARIO-02: --json reports the store result alongside the manifest (absorbs 10, 18) — `cmd/quarry/run_json_test.go` `Test_run_reports_the_store_result_alongside_the_manifest_as_json`

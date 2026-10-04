@@ -13,7 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// phase1ImportRunsDDL is Phase 1's import_runs: 19 columns, one run (id 4), and no store_info beside it.
+// phase1ImportRunsDDL is Phase 1's import_runs: 19 columns, one run (id 4), no store_info beside it;
+// the extra column is investment_transactions_not_imported.
 const phase1ImportRunsDDL = `CREATE TABLE import_runs (
 	id BIGINT PRIMARY KEY, started_at TIMESTAMP NOT NULL, finished_at TIMESTAMP NOT NULL,
 	snapshot_path VARCHAR NOT NULL, snapshot_sha256 VARCHAR NOT NULL, schema_fingerprint VARCHAR NOT NULL,
@@ -103,10 +104,13 @@ func Test_replace_carries_null_for_columns_an_older_store_lacks(t *testing.T) {
 	assert.Nil(t, replaced.HistoryFault)
 	db := openReadOnly(t, st.Path())
 	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM import_runs WHERE id = 4
-		AND snapshot_path = '/snapshots/phase1.sqlite' AND accounts_rows = 7 AND investment_transactions_not_imported = 13
+		AND snapshot_path = '/snapshots/phase1.sqlite' AND accounts_rows = 7
 		AND snapshot_taken_at IS NULL AND source_path IS NULL AND balances_never_reconciled IS NULL
 		AND investment_accounts IS NULL AND transfers_paired IS NULL AND transfers_cross_currency IS NULL
-		AND rates_checked_from IS NULL AND rates_last IS NULL AND rates_fetch_error IS NULL`, "1")
+		AND rates_checked_from IS NULL AND rates_last IS NULL AND rates_fetch_error IS NULL
+		AND securities_rows IS NULL AND prices_rows IS NULL AND investment_transactions_rows IS NULL AND shares_checked IS NULL`, "1")
+	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM duckdb_columns()
+		WHERE table_name = 'import_runs' AND column_name = 'investment_transactions_not_imported'`, "0")
 }
 
 func Test_replace_carries_the_rates_columns_of_a_run_into_the_next_store(t *testing.T) {
@@ -123,6 +127,22 @@ func Test_replace_carries_the_rates_columns_of_a_run_into_the_next_store(t *test
 	db := openReadOnly(t, st.Path())
 	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM import_runs WHERE id = 1 AND rates_checked_from = DATE '2026-01-02'
 		AND rates_last = DATE '2026-01-05' AND rates_fetch_error = 'rates host unreachable'`, "1")
+}
+
+func Test_replace_carries_the_shares_checked_count_of_a_run_into_the_next_store(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir())
+	_, err := st.Replace(t.Context(), minimalRows())
+	require.NoError(t, err)
+
+	next := minimalRows()
+	next.ImportRuns[0].SharesChecked = 3
+	_, err = st.Replace(t.Context(), next)
+
+	require.NoError(t, err)
+	db := openReadOnly(t, st.Path())
+	assertScalar(t, db, `SELECT concat_ws(' ', id, shares_checked) FROM import_runs WHERE id = 1`, "1 21")
+	assertScalar(t, db, `SELECT concat_ws(' ', id, shares_checked) FROM import_runs WHERE id = 2`, "2 3")
 }
 
 func Test_replace_records_no_rates_columns_for_the_new_run(t *testing.T) {

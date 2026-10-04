@@ -20,3 +20,13 @@ func Test_sql_conventions_name_the_views_and_currencies_a_query_writer_needs(t *
 		assert.Contains(t, report.SQLConventions, phrase)
 	}
 }
+
+func Test_sql_conventions_explain_investment_data(t *testing.T) {
+	collapsed := strings.Join(strings.Fields(report.SQLConventions), " ")
+
+	for _, phrase := range []string{
+		"investment_transactions", "not in transactions", "split_new_shares", "quarry does not convert prices yet",
+	} {
+		assert.Contains(t, collapsed, phrase)
+	}
+}

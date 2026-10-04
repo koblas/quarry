@@ -65,6 +65,17 @@ func Create(ctx context.Context, path string) (*DB, error) {
 	return db, nil
 }
 
+// CreateInMemory opens a new empty in-memory database under Create's lock-down: no file, no
+// extension, no outside access. Each call is a database of its own; it is gone at Close, and
+// CheckpointClose is not for it.
+func CreateInMemory(ctx context.Context) (*DB, error) {
+	db, err := openPrivate(ctx, createDSN, "")
+	if err != nil {
+		return nil, fmt.Errorf("create in-memory database: %w", err)
+	}
+	return db, nil
+}
+
 // createDSN locks a write session out of extensions and outside access; spill to path.tmp still works.
 const createDSN = "?autoload_known_extensions=false&autoinstall_known_extensions=false&enable_external_access=false"
 

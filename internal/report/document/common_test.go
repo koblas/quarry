@@ -1,6 +1,7 @@
 package document_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/koblas/quarry/internal/finding"
@@ -25,6 +26,27 @@ func Test_Money(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			assert.Equal(t, c.want, document.Money(c.cents))
+		})
+	}
+}
+
+func Test_Shares(t *testing.T) {
+	cases := []struct {
+		name       string
+		millionths int64
+		want       string
+	}{
+		{name: "zero", millionths: 0, want: "0.000000"},
+		{name: "negative below one share", millionths: -1, want: "-0.000001"},
+		{name: "whole shares keep six decimals", millionths: 1_200_000_000, want: "1200.000000"},
+		{name: "fraction and whole part", millionths: 120_500_000, want: "120.500000"},
+		{name: "smallest int64 does not overflow on negation", millionths: math.MinInt64, want: "-9223372036854.775808"},
+		{name: "largest int64", millionths: math.MaxInt64, want: "9223372036854.775807"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, document.Shares(c.millionths))
 		})
 	}
 }

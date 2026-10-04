@@ -32,7 +32,7 @@ func Test_import_records_the_categories_every_non_imported_reference_uses(t *tes
 	}{
 		{"an entry under an investment transaction", func(b *v9fixture.Builder, category int64) {
 			acct := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-			txn := b.Transaction(v9fixture.TransactionRow{Entity: v9fixture.EntInvestmentTransaction, Account: acct, Amount: "-4.00", PostedDate: &day})
+			txn := b.InvestmentTransaction(v9fixture.TransactionRow{Type: new(int64(3)), Account: acct, Amount: "-4.00", PostedDate: &day})
 			b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "-4.00", CategoryTag: category})
 		}},
 		{"an entry under a smart transaction", func(b *v9fixture.Builder, category int64) {
@@ -99,7 +99,7 @@ func Test_import_records_no_category_for_a_reference_that_is_gone(t *testing.T) 
 	}{
 		{"a deleted entry under an investment transaction", func(b *v9fixture.Builder, category int64) {
 			acct := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-			txn := b.Transaction(v9fixture.TransactionRow{Entity: v9fixture.EntInvestmentTransaction, Account: acct, Amount: "-4.00", PostedDate: &day})
+			txn := b.InvestmentTransaction(v9fixture.TransactionRow{Type: new(int64(3)), Account: acct, Amount: "-4.00", PostedDate: &day})
 			b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "-4.00", CategoryTag: category, Deleted: true})
 		}},
 		{"a deleted budget line item", func(b *v9fixture.Builder, category int64) {

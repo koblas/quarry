@@ -67,10 +67,11 @@ func statusFixture() store.Status {
 			},
 			Counts: store.Counts{
 				Transactions: 18204, Splits: 21977, Transfers: 3141, Payees: 1873, Categories: 312, Tags: 14,
+				InvestmentTransactions: 1605, Securities: 84, Prices: 99352,
 			},
 			BalancesChecked: 35, BalancesNeverReconciled: 3, InvestmentAccounts: 4,
 			TransfersPaired: 3112, TransfersOneSided: 29,
-			InvestmentTransactionsNotImported: 1605,
+			SharesChecked: 7,
 		},
 		FirstDate: time.Date(2003, 1, 4, 0, 0, 0, 0, time.UTC),
 		LastDate:  time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC),
@@ -95,9 +96,11 @@ func Test_renderStatus(t *testing.T) {
 			"Snapshot  20260927T143005Z, taken 2026-09-27 10:30 EDT (2 days ago)\n" +
 			"Source    ~/Documents/Home.quicken\n" +
 			"Dates     2003-01-04 to 2026-09-26\n" +
-			"Rows      18,204 transactions, 21,977 splits, 3,141 transfers, 1,873 payees, 312 categories, 14 tags; 1,605 investment transactions not imported\n" +
+			"Rows      18,204 transactions, 21,977 splits, 3,141 transfers, 1,873 payees, 312 categories, 14 tags; " +
+			"1,605 investment transactions, 84 securities, 99,352 prices\n" +
 			"Balances  35 accounts match Quicken's last reconciled balance; 3 never reconciled and 4 investment accounts not checked\n" +
 			"Splits    all 18,204 transactions equal the sum of their splits\n" +
+			"Shares    7 holdings match Quicken's share counts\n" +
 			"Transfers 3,112 paired, 29 one-sided\n" +
 			"Findings  12 open, 4 ignored; run quarry findings to list them\n" +
 			"Rates     USD/CAD from the Bank of Canada, 2003-01-04 to 2026-09-28 (1 day ago)\n"
@@ -114,6 +117,27 @@ func Test_renderStatus(t *testing.T) {
 
 		assert.Contains(t, got, "Dates     no transactions\n")
 		assert.Contains(t, got, "Splits    no transactions to check\n")
+	})
+
+	t.Run("the Shares line follows the share check count", func(t *testing.T) {
+		cases := []struct {
+			name    string
+			checked int
+			want    string
+		}{
+			{name: "no holdings", checked: 0, want: "Shares    no holdings to check\n"},
+			{name: "one holding, singular", checked: 1, want: "Shares    1 holding matches Quicken's share count\n"},
+			{name: "many holdings, thousands-grouped", checked: 1234, want: "Shares    1,234 holdings match Quicken's share counts\n"},
+		}
+
+		for _, c := range cases {
+			t.Run(c.name, func(t *testing.T) {
+				st := statusFixture()
+				st.Run.SharesChecked = c.checked
+
+				assert.Contains(t, renderStatus(st, findingsFixture(), home, now), c.want)
+			})
+		}
 	})
 
 	t.Run("no one-sided transfers", func(t *testing.T) {

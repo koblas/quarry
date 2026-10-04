@@ -16,7 +16,7 @@ import (
 const takenLayout = "2006-01-02 15:04 MST"
 
 // renderStatus renders st's Store, Snapshot, Source, Dates, Rows, Balances,
-// Splits, Transfers, Findings and Rates lines, ages measured against now.
+// Splits, Shares, Transfers, Findings and Rates lines, ages measured against now.
 func renderStatus(st store.Status, findings document.FindingsTally, home string, now time.Time) string {
 	run := st.Run
 	var b strings.Builder
@@ -24,9 +24,10 @@ func renderStatus(st store.Status, findings document.FindingsTally, home string,
 	fmt.Fprintf(&b, "%-10s%s\n", "Snapshot", snapshotLine(run.Snapshot, now))
 	fmt.Fprintf(&b, "%-10s%s\n", "Source", sourceLine(run.Snapshot.Source, home))
 	fmt.Fprintf(&b, "%-10s%s\n", "Dates", datesLine(st.FirstDate, st.LastDate))
-	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(run.Counts, store.NotImported{InvestmentTransactions: run.InvestmentTransactionsNotImported}))
+	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(run.Counts))
 	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(balanceCounts{Checked: run.BalancesChecked, NeverReconciled: run.BalancesNeverReconciled, InvestmentAccounts: run.InvestmentAccounts}))
 	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(run.Counts.Transactions))
+	fmt.Fprintf(&b, "%-10s%s\n", "Shares", sharesPhrase(run.SharesChecked))
 	fmt.Fprintf(&b, "%-10s%s\n", "Transfers", transfersPhrase(run.TransfersPaired, run.TransfersOneSided))
 	fmt.Fprintf(&b, "%-10s%s\n", "Findings", statusFindingsPhrase(findings))
 	fmt.Fprintf(&b, "%-10s%s\n", "Rates", statusRatesPhrase(st, now))

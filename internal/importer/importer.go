@@ -45,7 +45,8 @@ func NewServer(opts ...Option) *Server {
 // It returns an *UnmappableError naming the first-ordered class's first
 // offender when one or more values cannot be mapped to quarry's schema, or
 // store.ErrValidationFailed with Result.Built false, never calling Replace,
-// when the balance or split-sum gate finds a mismatch.
+// when the balance, split-sum or share-count gate finds a mismatch. A share
+// check that cannot run returns its error, also without calling Replace.
 func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Result, error) {
 	startedAt := time.Now().UTC()
 	src, err := srv.open(ctx, snap.Path)
@@ -82,10 +83,6 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 		return store.Result{}, err
 	}
 	investmentEnt, hasInvestment := entities[investmentEntity]
-	investmentsNotImported, err := surveyTransactions(ctx, src, investmentEnt, hasInvestment, accountRefs)
-	if err != nil {
-		return store.Result{}, err
-	}
 	transactions, txnRefs, err := mapTransactions(
 		ctx, src, entities["CashFlowTransaction"], accountRefs, existingPayees, off)
 	if err != nil {
@@ -104,6 +101,33 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 		return store.Result{}, err
 	}
 
+	securityEnt, hasSecurity := entities[securityEntity]
+	securities, securityRefs, err := mapSecurities(ctx, src, securityEnt, hasSecurity, off)
+	if err != nil {
+		return store.Result{}, err
+	}
+	quoteEnt, hasQuote := entities[securityQuoteEntity]
+	prices, err := mapPrices(ctx, src, quoteEnt, hasQuote, securityRefs, off)
+	if err != nil {
+		return store.Result{}, err
+	}
+
+	positionEnt, hasPosition := entities[positionEntity]
+	positions, err := mapPositions(ctx, src, positionEnt, hasPosition, accountRefs)
+	if err != nil {
+		return store.Result{}, err
+	}
+	lotEnt, hasLot := entities[lotEntity]
+	quickenShares, err := mapLots(ctx, src, lotEnt, hasLot, positions, accountRefs, securityRefs, off)
+	if err != nil {
+		return store.Result{}, err
+	}
+	investments, err := mapInvestmentTransactions(ctx, src, investmentEnt, hasInvestment, accountRefs, positions, securityRefs, off)
+	if err != nil {
+		return store.Result{}, err
+	}
+	requireLots(hasLot, investments, off)
+
 	if err := off.firstError(); err != nil {
 		return store.Result{}, err
 	}
@@ -117,27 +141,34 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	rows := store.Rows{
 		Accounts: accounts, Categories: categories, Payees: payees, Tags: tags,
 		Transactions: transactions, Splits: splits, SplitTags: splitTags, Transfers: transfers,
-		ReferencedCategoryIDs: refs.ids(),
+		Securities: securities, Prices: prices, InvestmentTransactions: investments, ReferencedCategoryIDs: refs.ids(),
+		QuickenShares: quickenShares,
 	}
 	counts := store.Counts{
 		Accounts: len(accounts), Categories: len(categories), Payees: len(payees), Tags: len(tags),
 		Transactions: len(transactions), Splits: len(splits), SplitTags: len(splitTags), Transfers: len(transfers),
+		Securities: len(securities), Prices: len(prices), InvestmentTransactions: len(investments),
 	}
-	notImported := store.NotImported{InvestmentTransactions: investmentsNotImported}
 
 	validation := validate(rows, statements, transferCheck)
+	shares, err := srv.store.CheckShares(ctx, rows)
+	if err != nil {
+		return store.Result{}, fmt.Errorf("check share counts: %w", err)
+	}
+	shares.Mismatched = describeShareMismatches(rows, shares.Mismatched)
+	validation.Shares = shares
 	if validation.Failed() {
-		return store.Result{Built: false, Counts: counts, Validation: validation, NotImported: notImported}, store.ErrValidationFailed
+		return store.Result{Built: false, Counts: counts, Validation: validation}, store.ErrValidationFailed
 	}
 
-	rows.ImportRuns = []store.ImportRun{newImportRun(startedAt, snap, counts, validation, notImported)}
+	rows.ImportRuns = []store.ImportRun{newImportRun(startedAt, snap, counts, validation)}
 	replaced, err := srv.store.Replace(ctx, rows)
 	if err != nil {
 		return store.Result{}, fmt.Errorf("replace store: %w", err)
 	}
 
 	return store.Result{
-		Path: replaced.Path, Built: true, Counts: counts, Validation: validation, NotImported: notImported,
+		Path: replaced.Path, Built: true, Counts: counts, Validation: validation,
 		HistoryFault: replaced.HistoryFault, Findings: replaced.Findings, FindingStates: replaced.FindingStates, FindingsCarried: replaced.FindingsCarried,
 		FindingsFault: replaced.FindingsFault, StoreUnreadable: replaced.StoreUnreadable, Rates: replaced.Rates,
 		RatesFault: replaced.RatesFault,
@@ -146,15 +177,15 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 
 // newImportRun describes a build that passed validation, stamping its
 // finish time now, before the store is written; the store assigns its ID.
-func newImportRun(startedAt time.Time, snap store.SnapshotRef, counts store.Counts, v store.Validation, n store.NotImported) store.ImportRun {
+func newImportRun(startedAt time.Time, snap store.SnapshotRef, counts store.Counts, v store.Validation) store.ImportRun {
 	return store.ImportRun{
 		StartedAt: startedAt, FinishedAt: time.Now().UTC(), Snapshot: snap, Counts: counts,
 		BalancesChecked: v.Balances.Checked, BalancesMismatched: len(v.Balances.Mismatched),
 		SplitsMismatched: len(v.Splits.Mismatched), TransfersOneSided: len(v.Transfers.OneSided),
-		InvestmentTransactionsNotImported: n.InvestmentTransactions,
-		BalancesNeverReconciled:           len(v.Balances.NeverReconciled),
-		InvestmentAccounts:                v.Balances.InvestmentAccounts,
-		TransfersPaired:                   v.Transfers.Paired,
-		TransfersCrossCurrency:            v.Transfers.CrossCurrency,
+		SharesChecked:           v.Shares.Checked,
+		BalancesNeverReconciled: len(v.Balances.NeverReconciled),
+		InvestmentAccounts:      v.Balances.InvestmentAccounts,
+		TransfersPaired:         v.Transfers.Paired,
+		TransfersCrossCurrency:  v.Transfers.CrossCurrency,
 	}
 }

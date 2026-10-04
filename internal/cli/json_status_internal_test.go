@@ -28,7 +28,10 @@ const fullStatusJSON = `{
       "transactions": 18204,
       "splits": 21977,
       "split_tags": 5,
-      "transfers": 3141
+      "transfers": 3141,
+      "investment_transactions": 1605,
+      "securities": 84,
+      "prices": 99352
     }
   },
   "snapshot": {
@@ -50,6 +53,9 @@ const fullStatusJSON = `{
   "splits": {
     "checked": 18204
   },
+  "shares": {
+    "checked": 7
+  },
   "transfers": {
     "paired": 3112,
     "cross_currency": 41,
@@ -66,9 +72,6 @@ const fullStatusJSON = `{
     "first": "2003-01-04",
     "last": "2026-09-28",
     "fetch_error": null
-  },
-  "not_imported": {
-    "investment_transactions": 1605
   },
   "warnings": []
 }

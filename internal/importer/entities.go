@@ -12,19 +12,29 @@ import (
 // before reading any row, rather than hard-coding their Z_ENT numbers.
 var requiredEntities = []string{"CashFlowTransaction", "CategoryTag", "UserTag"}
 
-// investmentEntity is resolved with requiredEntities but optional; absent, it has no map entry.
-const investmentEntity = "InvestmentTransaction"
+// The optional entities: resolved with requiredEntities, but absent, each has no map entry
+// and the data it names is empty rather than a refusal.
+const (
+	investmentEntity    = "InvestmentTransaction"
+	securityEntity      = "Security"
+	securityQuoteEntity = "SecurityQuote"
+	positionEntity      = "Position"
+	lotEntity           = "Lot"
+)
+
+// optionalEntities lists every optional entity name resolveEntities looks up.
+var optionalEntities = []string{investmentEntity, securityEntity, securityQuoteEntity, positionEntity, lotEntity}
 
 // resolveEntities returns each entity's Z_ENT by name from Z_PRIMARYKEY, or
 // an *UnmappableError naming every missing required entity.
 func resolveEntities(ctx context.Context, src Source) (map[string]int64, error) {
-	names := append(slices.Clone(requiredEntities), investmentEntity)
+	names := slices.Concat(requiredEntities, optionalEntities)
 	found := make(map[string]int64, len(names))
 	args := make([]any, len(names))
 	for i, name := range names {
 		args[i] = name
 	}
-	query := "SELECT Z_ENT, Z_NAME FROM Z_PRIMARYKEY WHERE Z_NAME IN (?, ?, ?, ?)"
+	query := "SELECT Z_ENT, Z_NAME FROM Z_PRIMARYKEY WHERE Z_NAME IN (?" + strings.Repeat(", ?", len(names)-1) + ")"
 	err := src.QueryRows(ctx, query, args, func(scan func(dest ...any) error) error {
 		var ent int64
 		var name string

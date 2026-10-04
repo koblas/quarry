@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -177,43 +178,33 @@ func Test_renderSuccess_reports_the_exact_match_schema_line(t *testing.T) {
 
 func Test_rowsPhrase(t *testing.T) {
 	cases := []struct {
-		name        string
-		counts      store.Counts
-		notImported store.NotImported
-		want        string
+		name   string
+		counts store.Counts
+		want   string
 	}{
 		{
 			name:   "zero counts",
 			counts: store.Counts{},
-			want:   "0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags",
+			want:   "0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices",
 		},
 		{
 			name:   "singular at exactly one",
-			counts: store.Counts{Transactions: 1, Splits: 1, Transfers: 1, Payees: 1, Categories: 1, Tags: 1},
-			want:   "1 transaction, 1 split, 1 transfer, 1 payee, 1 category, 1 tag",
+			counts: store.Counts{Transactions: 1, Splits: 1, Transfers: 1, Payees: 1, Categories: 1, Tags: 1, InvestmentTransactions: 1, Securities: 1, Prices: 1},
+			want:   "1 transaction, 1 split, 1 transfer, 1 payee, 1 category, 1 tag; 1 investment transaction, 1 security, 1 price",
 		},
 		{
 			name: "thousands-grouped at many",
 			counts: store.Counts{
 				Transactions: 18204, Splits: 21977, Transfers: 3112, Payees: 1873, Categories: 312, Tags: 14,
+				InvestmentTransactions: 1605, Securities: 84, Prices: 99352,
 			},
-			want: "18,204 transactions, 21,977 splits, 3,112 transfers, 1,873 payees, 312 categories, 14 tags",
-		},
-		{
-			name:        "one investment transaction not imported, singular",
-			notImported: store.NotImported{InvestmentTransactions: 1},
-			want:        "0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 1 investment transaction not imported",
-		},
-		{
-			name:        "many investment transactions not imported, thousands-grouped",
-			notImported: store.NotImported{InvestmentTransactions: 1605},
-			want:        "0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 1,605 investment transactions not imported",
+			want: "18,204 transactions, 21,977 splits, 3,112 transfers, 1,873 payees, 312 categories, 14 tags; 1,605 investment transactions, 84 securities, 99,352 prices",
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, rowsPhrase(c.counts, c.notImported))
+			assert.Equal(t, c.want, rowsPhrase(c.counts))
 		})
 	}
 }
@@ -274,24 +265,25 @@ func Test_renderStore_prints_new_findings_only_when_the_history_was_carried(t *t
 	}
 }
 
-func Test_renderStore_renders_the_store_rows_balances_splits_and_transfers_lines(t *testing.T) {
+func Test_renderStore_renders_the_store_rows_balances_splits_shares_and_transfers_lines(t *testing.T) {
 	result := store.Result{
 		Path:   "/Users/dave/Library/Application Support/quarry/quarry.duckdb",
 		Counts: store.Counts{Transactions: 1},
 		Validation: store.Validation{
 			Balances:  store.BalanceCheck{Checked: 1},
 			Splits:    store.SplitCheck{Checked: 1},
+			Shares:    store.ShareCheck{Checked: 2},
 			Transfers: store.TransferCheck{Paired: 2},
 		},
-		NotImported: store.NotImported{InvestmentTransactions: 3},
 	}
 
 	got := renderStore(result, "/Users/dave")
 
 	assert.Equal(t, "Store     ~/Library/Application Support/quarry/quarry.duckdb\n"+
-		"Rows      1 transaction, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 3 investment transactions not imported\n"+
+		"Rows      1 transaction, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices\n"+
 		"Balances  1 account matches Quicken's last reconciled balance\n"+
 		"Splits    the 1 transaction equals the sum of its splits\n"+
+		"Shares    2 holdings match Quicken's share counts\n"+
 		"Transfers 2 paired\n"+
 		"Findings  none open\n"+
 		"Rates     none (the Bank of Canada has no rates for your transaction dates)\n", got)
@@ -448,6 +440,25 @@ func Test_splitsPhrase(t *testing.T) {
 	}
 }
 
+func Test_sharesPhrase(t *testing.T) {
+	cases := []struct {
+		name    string
+		checked int
+		want    string
+	}{
+		{name: "nothing to check", checked: 0, want: "no holdings to check"},
+		{name: "one holding", checked: 1, want: "1 holding matches Quicken's share count"},
+		{name: "two holdings", checked: 2, want: "2 holdings match Quicken's share counts"},
+		{name: "many holdings, thousands-grouped", checked: 1605, want: "1,605 holdings match Quicken's share counts"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, sharesPhrase(c.checked))
+		})
+	}
+}
+
 func Test_formatMoney(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -465,6 +476,73 @@ func Test_formatMoney(t *testing.T) {
 			assert.Equal(t, c.want, formatMoney(c.cents))
 		})
 	}
+}
+
+func Test_formatShares(t *testing.T) {
+	cases := []struct {
+		name       string
+		millionths int64
+		want       string
+	}{
+		{name: "one millionth", millionths: 1, want: "0.000001"},
+		{name: "negative one millionth keeps its sign", millionths: -1, want: "-0.000001"},
+		{name: "zero", millionths: 0, want: "0"},
+		{name: "whole count has no fraction", millionths: 10_000_000, want: "10"},
+		{name: "trailing fractional zeros are trimmed", millionths: 120_500_000, want: "120.5"},
+		{name: "whole count thousands-grouped", millionths: 1_200_000_000, want: "1,200"},
+		{name: "full six-decimal fraction", millionths: 1_000_001, want: "1.000001"},
+		{name: "smallest count does not overflow on negation", millionths: math.MinInt64, want: "-9,223,372,036,854.775808"},
+		{name: "largest count", millionths: math.MaxInt64, want: "9,223,372,036,854.775807"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, formatShares(c.millionths))
+		})
+	}
+}
+
+func Test_securityLabel(t *testing.T) {
+	cases := []struct {
+		name         string
+		securityName string
+		ticker       *string
+		want         string
+	}{
+		{name: "no ticker shows the name alone", securityName: "Bare Fund", ticker: nil, want: "Bare Fund"},
+		{name: "ticker equal to the name is not repeated", securityName: "XEQT", ticker: new("XEQT"), want: "XEQT"},
+		{name: "ticker differing from the name follows it", securityName: "iShares Core Equity ETF", ticker: new("XEQT"), want: "iShares Core Equity ETF (XEQT)"},
+		{name: "control characters in the name are escaped", securityName: "Bad\nFund", ticker: nil, want: `Bad\nFund`},
+		{name: "control characters in the ticker are escaped", securityName: "Fund", ticker: new("A\tB"), want: `Fund (A\tB)`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, securityLabel(c.securityName, c.ticker))
+		})
+	}
+}
+
+func Test_shareMismatchRows(t *testing.T) {
+	t.Run("single row needs no padding", func(t *testing.T) {
+		rows := shareMismatchRows([]store.ShareMismatch{
+			{Account: "RRSP", Currency: "CAD", Closed: true, Security: "iShares Core Equity ETF", Ticker: new("XEQT"), Quarry: 120_500_000, Quicken: 110_500_000, Difference: 10_000_000},
+		})
+
+		assert.Equal(t, []string{"  ! RRSP (CAD, closed)  iShares Core Equity ETF (XEQT)  quarry 120.5  Quicken 110.5  difference 10"}, rows)
+	})
+
+	t.Run("labels pad to the widest and figures right-align per column", func(t *testing.T) {
+		rows := shareMismatchRows([]store.ShareMismatch{
+			{Account: "Brokerage", Currency: "CAD", Active: true, Security: "Bare Fund", Quarry: 5_000_000, Quicken: 0, Difference: 5_000_000},
+			{Account: "RRSP", Currency: "USD", Closed: true, Security: "iShares Core Equity ETF", Ticker: new("XEQT"), Quarry: 1_200_000_000, Quicken: 1_199_999_999, Difference: -123},
+		})
+
+		assert.Equal(t, []string{
+			"  ! Brokerage (CAD)     Bare Fund                       quarry     5  Quicken            0  difference         5",
+			"  ! RRSP (USD, closed)  iShares Core Equity ETF (XEQT)  quarry 1,200  Quicken 1,199.999999  difference -0.000123",
+		}, rows)
+	})
 }
 
 func Test_accountLabel(t *testing.T) {
@@ -608,6 +686,7 @@ func Test_renderStoreFailure(t *testing.T) {
 					{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC), Quarry: 100, Quicken: 200, Difference: -100},
 				}},
 				Splits: store.SplitCheck{Checked: 5},
+				Shares: store.ShareCheck{Checked: 7},
 				Transfers: store.TransferCheck{Paired: 1, OneSided: []store.OneSidedTransfer{
 					{
 						Date: time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC), Account: "Chequing", Currency: "CAD", Active: true,
@@ -615,16 +694,16 @@ func Test_renderStoreFailure(t *testing.T) {
 					},
 				}},
 			},
-			NotImported: store.NotImported{InvestmentTransactions: 1},
 		}
 
 		got := renderStoreFailure(result, true, "/Users/dave")
 
 		assert.Equal(t, "Store     NOT REBUILT (~/Library/Application Support/quarry/quarry.duckdb unchanged)\n"+
-			"Rows      0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 1 investment transaction not imported\n"+
+			"Rows      0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices\n"+
 			"Balances  DIFFER for 1 of 2 accounts\n"+
 			"  ! Chequing (CAD)  2026-08-31  quarry 1.00  Quicken 2.00  difference -1.00\n"+
 			"Splits    all 5 transactions equal the sum of their splits\n"+
+			"Shares    7 holdings match Quicken's share counts\n"+
 			"Transfers 1 paired, 1 one-sided\n"+
 			"  ? 2026-08-02  Chequing (CAD)  Rent  -500.00  other account: Old Visa (not in this file)\n", got)
 	})
@@ -649,6 +728,81 @@ func Test_renderStoreFailure(t *testing.T) {
 
 		assert.Contains(t, got, "Splits    all 3 transactions equal the sum of their splits\n")
 		assert.NotContains(t, got, "Splits    DIFFER")
+	})
+
+	t.Run("Shares pass line shows when only Balances failed", func(t *testing.T) {
+		result := store.Result{
+			Validation: store.Validation{
+				Balances: store.BalanceCheck{Checked: 1, Mismatched: []store.BalanceMismatch{{Name: "Chequing", Active: true}}},
+				Shares:   store.ShareCheck{Checked: 1},
+			},
+		}
+
+		got := renderStoreFailure(result, true, "/Users/dave")
+
+		assert.Contains(t, got, "Shares    1 holding matches Quicken's share count\n")
+	})
+
+	t.Run("Shares DIFFER block sits between Splits and Transfers, and the pass line is replaced", func(t *testing.T) {
+		result := store.Result{
+			Validation: store.Validation{
+				Splits: store.SplitCheck{Checked: 5},
+				Shares: store.ShareCheck{Checked: 3, Mismatched: []store.ShareMismatch{
+					{Account: "RRSP", Currency: "CAD", Closed: true, Security: "iShares Core Equity ETF", Ticker: new("XEQT"), Quarry: 120500000, Quicken: 110500000, Difference: 10000000},
+				}},
+				Transfers: store.TransferCheck{Paired: 1},
+			},
+		}
+
+		got := renderStoreFailure(result, true, "/Users/dave")
+
+		assert.Contains(t, got, "Splits    all 5 transactions equal the sum of their splits\n"+
+			"Shares    DIFFER for 1 of 3 holdings\n"+
+			"  ! RRSP (CAD, closed)  iShares Core Equity ETF (XEQT)  quarry 120.5  Quicken 110.5  difference 10\n"+
+			"Transfers 1 paired\n")
+		assert.NotContains(t, got, "holdings match")
+	})
+
+	t.Run("Balances block precedes the Shares block when both DIFFER", func(t *testing.T) {
+		result := store.Result{
+			Validation: store.Validation{
+				Balances: store.BalanceCheck{Checked: 2, Mismatched: []store.BalanceMismatch{
+					{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC), Quarry: 100, Quicken: 200, Difference: -100},
+				}},
+				Splits: store.SplitCheck{Checked: 5},
+				Shares: store.ShareCheck{Checked: 3, Mismatched: []store.ShareMismatch{
+					{Account: "RRSP", Currency: "CAD", Active: true, Security: "Acme Corp", Quarry: 2000000, Quicken: 1000000, Difference: 1000000},
+				}},
+			},
+		}
+
+		got := renderStoreFailure(result, true, "/Users/dave")
+
+		assert.Contains(t, got, "Balances  DIFFER for 1 of 2 accounts\n"+
+			"  ! Chequing (CAD)  2026-08-31  quarry 1.00  Quicken 2.00  difference -1.00\n"+
+			"Splits    all 5 transactions equal the sum of their splits\n"+
+			"Shares    DIFFER for 1 of 3 holdings\n"+
+			"  ! RRSP (CAD)  Acme Corp  quarry 2  Quicken 1  difference 1\n")
+	})
+
+	t.Run("Shares DIFFER noun is singular at 1 of 1", func(t *testing.T) {
+		result := store.Result{
+			Validation: store.Validation{Shares: store.ShareCheck{Checked: 1, Mismatched: []store.ShareMismatch{{Account: "RRSP"}}}},
+		}
+
+		got := renderStoreFailure(result, true, "/Users/dave")
+
+		assert.Contains(t, got, "Shares    DIFFER for 1 of 1 holding\n")
+	})
+
+	t.Run("Shares DIFFER counts are plural and grouped by thousands", func(t *testing.T) {
+		result := store.Result{
+			Validation: store.Validation{Shares: store.ShareCheck{Checked: 1204, Mismatched: make([]store.ShareMismatch, 1000)}},
+		}
+
+		got := renderStoreFailure(result, true, "/Users/dave")
+
+		assert.Contains(t, got, "Shares    DIFFER for 1,000 of 1,204 holdings\n")
 	})
 
 	t.Run("singular DIFFER noun at 1 of 1", func(t *testing.T) {

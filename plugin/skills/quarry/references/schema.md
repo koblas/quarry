@@ -20,6 +20,19 @@ reports and accounts Quicken leaves out of reports, so their totals match
 quarry spend and quarry cashflow. A transfer leg is any split named in
 transfers.from_split_id or transfers.to_split_id.
 
+Investment transactions are in investment_transactions, not in transactions,
+v_cash_flow or v_spending, so dividends, interest and trades are not counted
+as income or spending there. Their amount is DECIMAL(18,2) in the account's
+own currency, negative when cash leaves the account; commission is
+DECIMAL(18,4) in the account's own currency as Quicken recorded it (some
+brokers charge fractions of a cent), NULL when there is none; shares is
+DECIMAL(18,6) as Quicken recorded each transaction, negative when shares
+leave. A split row carries split_new_shares and split_old_shares instead, so
+a sum of shares is not a holding. prices holds each security's closing price
+per day as Quicken recorded it, rounded to 6 decimals, in the security's
+currency (securities.currency, NULL when Quicken records none); quarry does
+not convert prices yet.
+
 ## Findings
 
 findings holds what sync found to clean up in Quicken, and finding_items
@@ -106,7 +119,6 @@ each one's status.
 | `balances_mismatched` | `BIGINT` |
 | `splits_mismatched` | `BIGINT` |
 | `transfers_one_sided` | `BIGINT` |
-| `investment_transactions_not_imported` | `BIGINT` |
 | `snapshot_taken_at` | `TIMESTAMP` |
 | `source_path` | `VARCHAR` |
 | `balances_never_reconciled` | `BIGINT` |
@@ -116,6 +128,28 @@ each one's status.
 | `rates_checked_from` | `DATE` |
 | `rates_last` | `DATE` |
 | `rates_fetch_error` | `VARCHAR` |
+| `securities_rows` | `BIGINT` |
+| `prices_rows` | `BIGINT` |
+| `investment_transactions_rows` | `BIGINT` |
+| `shares_checked` | `BIGINT` |
+
+### investment_transactions
+
+| column | type |
+| --- | --- |
+| `id` | `VARCHAR` |
+| `source_id` | `BIGINT` |
+| `account_id` | `VARCHAR` |
+| `security_id` | `VARCHAR` |
+| `date` | `DATE` |
+| `action` | `VARCHAR` |
+| `shares` | `DECIMAL(18,6)` |
+| `amount` | `DECIMAL(18,2)` |
+| `commission` | `DECIMAL(18,4)` |
+| `currency` | `VARCHAR` |
+| `memo` | `VARCHAR` |
+| `split_new_shares` | `DECIMAL(18,6)` |
+| `split_old_shares` | `DECIMAL(18,6)` |
 
 ### payees
 
@@ -124,6 +158,25 @@ each one's status.
 | `id` | `VARCHAR` |
 | `source_id` | `BIGINT` |
 | `name` | `VARCHAR` |
+
+### prices
+
+| column | type |
+| --- | --- |
+| `security_id` | `VARCHAR` |
+| `source_id` | `BIGINT` |
+| `date` | `DATE` |
+| `price` | `DECIMAL(18,6)` |
+
+### securities
+
+| column | type |
+| --- | --- |
+| `id` | `VARCHAR` |
+| `source_id` | `BIGINT` |
+| `name` | `VARCHAR` |
+| `ticker` | `VARCHAR` |
+| `currency` | `VARCHAR` |
 
 ### split_tags
 

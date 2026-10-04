@@ -50,7 +50,7 @@ func Test_run_writes_a_verified_snapshot_and_reports_success(t *testing.T) {
 
 	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
 	want := fmt.Sprintf(
-		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 2 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
+		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 2 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
 		"Snapshot", abbreviated(t, snapshotPath, home),
 		"Manifest", abbreviated(t, manifestPath, home),
 		"Source", abbreviated(t, bundle.Dir, home),
@@ -58,9 +58,10 @@ func Test_run_writes_a_verified_snapshot_and_reports_success(t *testing.T) {
 		"SHA-256", hex.EncodeToString(sum[:]),
 		"Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns)",
 		"Store", abbreviated(t, storePath, home),
-		"Rows", "0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags",
+		"Rows", "0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices",
 		"Balances", "no accounts to check; 2 never reconciled",
 		"Splits", "no transactions to check",
+		"Shares", "no holdings to check",
 		"Transfers", "none",
 		"Findings", "none open",
 		"Rates", fakeRatesText,

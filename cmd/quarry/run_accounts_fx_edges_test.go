@@ -97,16 +97,16 @@ func Test_accounts_warn_of_no_rates_only_when_a_balance_needed_one(t *testing.T)
 		{name: "an all-CAD store with no rates in CAD", accounts: []store.Account{chequingAccount("acct-cad", 1)}},
 		{name: "an all-USD store with no rates in USD", accounts: []store.Account{usdChequingAccount("acct-usd", 1)}, args: []string{"--currency", "USD"}},
 		{
-			name:     "a not imported USD account beside CAD ones with no rates in CAD",
+			name:     "a not valued USD account beside CAD ones with no rates in CAD",
 			accounts: []store.Account{chequingAccount("acct-cad", 1), brokerageAccount("acct-brk", 2, "USD")},
 		},
 		{
-			name:     "a not imported CAD account beside USD ones with no rates in USD",
+			name:     "a not valued CAD account beside USD ones with no rates in USD",
 			accounts: []store.Account{usdChequingAccount("acct-usd", 1), brokerageAccount("acct-brk", 2, "CAD")},
 			args:     []string{"--currency", "USD"},
 		},
 		{
-			name:     "a not imported cross-currency account with rates only after today",
+			name:     "a not valued cross-currency account with rates only after today",
 			accounts: []store.Account{chequingAccount("acct-cad", 1), brokerageAccount("acct-brk", 2, "USD")},
 			rates:    []store.Rate{futureRate},
 		},
@@ -181,9 +181,9 @@ func Test_run_accounts_all_pads_a_blank_cell_so_a_closed_Status_follows_it_in_th
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
 	assert.Equal(t, ""+
-		"Account    Type       Currency       Balance  In CAD  Status\n"+
-		"Brokerage  brokerage  USD       not imported          closed\n"+
-		"Chequing   chequing   CAD               0.00    0.00\n", stdout.String())
+		"Account    Type       Currency     Balance  In CAD  Status\n"+
+		"Brokerage  brokerage  USD       not valued          closed\n"+
+		"Chequing   chequing   CAD             0.00    0.00\n", stdout.String())
 }
 
 func Test_run_accounts_lists_the_config_warning_before_the_no_rates_warning_in_both_forms(t *testing.T) {

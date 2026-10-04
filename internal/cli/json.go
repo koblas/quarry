@@ -29,15 +29,15 @@ type syncPrunedDocument struct {
 
 // storeDocument is the --json "store" object.
 type storeDocument struct {
-	Path        string                  `json:"path"`
-	Built       bool                    `json:"built"`
-	Rows        document.Rows           `json:"rows"`
-	Balances    balancesDocument        `json:"balances"`
-	Splits      splitsDocument          `json:"splits"`
-	Transfers   transfersDocument       `json:"transfers"`
-	Findings    *document.FindingCounts `json:"findings"`
-	NotImported document.NotImported    `json:"not_imported"`
-	Rates       *ratesDocument          `json:"rates"`
+	Path      string                  `json:"path"`
+	Built     bool                    `json:"built"`
+	Rows      document.Rows           `json:"rows"`
+	Balances  balancesDocument        `json:"balances"`
+	Splits    splitsDocument          `json:"splits"`
+	Shares    sharesDocument          `json:"shares"`
+	Transfers transfersDocument       `json:"transfers"`
+	Findings  *document.FindingCounts `json:"findings"`
+	Rates     *ratesDocument          `json:"rates"`
 }
 
 // ratesDocument is the --json "store.rates" object: the stored span (null when none), how many rates this
@@ -83,6 +83,28 @@ type balanceMismatchDocument struct {
 type splitsDocument struct {
 	Checked    int                     `json:"checked"`
 	Mismatched []splitMismatchDocument `json:"mismatched"`
+}
+
+// sharesDocument is the --json "store.shares" object.
+type sharesDocument struct {
+	Checked    int                     `json:"checked"`
+	Mismatched []shareMismatchDocument `json:"mismatched"`
+}
+
+// shareMismatchDocument is one entry of "store.shares.mismatched"; share
+// counts are strings with exactly six decimals.
+type shareMismatchDocument struct {
+	AccountID  string  `json:"account_id"`
+	Account    string  `json:"account"`
+	Currency   string  `json:"currency"`
+	Closed     bool    `json:"closed"`
+	Active     bool    `json:"active"`
+	SecurityID string  `json:"security_id"`
+	Security   string  `json:"security"`
+	Ticker     *string `json:"ticker"`
+	Quarry     string  `json:"quarry"`
+	Quicken    string  `json:"quicken"`
+	Difference string  `json:"difference"`
 }
 
 // splitMismatchDocument is one entry of "store.splits.mismatched".
@@ -152,15 +174,15 @@ func newStoreDocument(result *store.Result) *storeDocument {
 		return nil
 	}
 	return &storeDocument{
-		Path:        result.Path,
-		Built:       result.Built,
-		Rows:        document.NewRows(result.Counts),
-		Balances:    newBalancesDocument(result.Validation.Balances),
-		Splits:      newSplitsDocument(result.Validation.Splits),
-		Transfers:   newTransfersDocument(result.Validation.Transfers),
-		Findings:    newFindingsDocument(result),
-		NotImported: document.NotImported{InvestmentTransactions: result.NotImported.InvestmentTransactions},
-		Rates:       newRatesDocument(result),
+		Path:      result.Path,
+		Built:     result.Built,
+		Rows:      document.NewRows(result.Counts),
+		Balances:  newBalancesDocument(result.Validation.Balances),
+		Splits:    newSplitsDocument(result.Validation.Splits),
+		Shares:    newSharesDocument(result.Validation.Shares),
+		Transfers: newTransfersDocument(result.Validation.Transfers),
+		Findings:  newFindingsDocument(result),
+		Rates:     newRatesDocument(result),
 	}
 }
 
@@ -249,6 +271,20 @@ func newSplitMismatchDocuments(mismatches []store.SplitMismatch) []splitMismatch
 		}
 	}
 	return out
+}
+
+// newSharesDocument converts sc into the --json shape; Mismatched is
+// always non-nil, even when empty.
+func newSharesDocument(sc store.ShareCheck) sharesDocument {
+	out := make([]shareMismatchDocument, len(sc.Mismatched))
+	for i, m := range sc.Mismatched {
+		out[i] = shareMismatchDocument{
+			AccountID: m.AccountID, Account: m.Account, Currency: m.Currency, Closed: m.Closed, Active: m.Active,
+			SecurityID: m.SecurityID, Security: m.Security, Ticker: m.Ticker,
+			Quarry: document.Shares(m.Quarry), Quicken: document.Shares(m.Quicken), Difference: document.Shares(m.Difference),
+		}
+	}
+	return sharesDocument{Checked: sc.Checked, Mismatched: out}
 }
 
 // newTransfersDocument converts tc into the --json shape; OneSided is

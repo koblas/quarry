@@ -64,7 +64,10 @@ func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
       "transactions": 4,
       "splits": 4,
       "split_tags": 0,
-      "transfers": 2
+      "transfers": 2,
+      "investment_transactions": 0,
+      "securities": 0,
+      "prices": 0
     }
   },
   "snapshot": {
@@ -86,6 +89,9 @@ func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
   "splits": {
     "checked": 4
   },
+  "shares": {
+    "checked": 0
+  },
   "transfers": {
     "paired": 1,
     "cross_currency": 1,
@@ -102,9 +108,6 @@ func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
     "first": "2026-01-02",
     "last": "2026-01-02",
     "fetch_error": null
-  },
-  "not_imported": {
-    "investment_transactions": 0
   },
   "warnings": []
 }

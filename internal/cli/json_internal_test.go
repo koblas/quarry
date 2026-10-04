@@ -154,7 +154,69 @@ func Test_renderJSON_ends_the_store_object_with_rates(t *testing.T) {
 	data, err := renderJSON(snapshot.Outcome{Store: &built}, nil)
 
 	require.NoError(t, err)
-	assert.Equal(t, []string{"path", "built", "rows", "balances", "splits", "transfers", "findings", "not_imported", "rates"}, storeKeys(t, data))
+	assert.Equal(t, []string{"path", "built", "rows", "balances", "splits", "shares", "transfers", "findings", "rates"}, storeKeys(t, data))
+}
+
+func Test_renderJSON_reports_the_shares_checked_with_an_empty_mismatched_array(t *testing.T) {
+	cases := []struct {
+		name    string
+		checked int
+	}{
+		{name: "nothing checked", checked: 0},
+		{name: "holdings checked", checked: 145},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			built := store.Result{Path: "/store", Built: true, Validation: store.Validation{Shares: store.ShareCheck{Checked: c.checked}}}
+
+			data, err := renderJSON(snapshot.Outcome{Store: &built}, nil)
+
+			require.NoError(t, err)
+			assert.Equal(t, map[string]any{"checked": float64(c.checked), "mismatched": []any{}}, storeField(t, data, "shares"))
+		})
+	}
+}
+
+func Test_renderJSON_reports_each_share_mismatch_with_six_decimal_counts_and_raw_text(t *testing.T) {
+	ticker := "XEQT"
+	failed := store.Result{Path: "/store", Validation: store.Validation{Shares: store.ShareCheck{
+		Checked: 3,
+		Mismatched: []store.ShareMismatch{
+			{
+				AccountID: "acct-7", SecurityID: "sec-9", Account: "RRSP\x1b", Currency: "CAD", Closed: true,
+				Security: "iShares Core", Ticker: &ticker, Quarry: 120_500_000, Quicken: 110_500_000, Difference: 10_000_000,
+			},
+			{
+				AccountID: "acct-8", SecurityID: "sec-4", Account: "Brokerage", Currency: "USD", Active: true,
+				Security: "Bare Fund", Quarry: 1, Quicken: 2, Difference: -1,
+			},
+		},
+	}}}
+
+	data, err := renderJSON(snapshot.Outcome{Store: &failed}, nil)
+
+	require.NoError(t, err)
+	var doc struct {
+		Store struct {
+			Shares struct {
+				Checked    int                     `json:"checked"`
+				Mismatched []shareMismatchDocument `json:"mismatched"`
+			} `json:"shares"`
+		} `json:"store"`
+	}
+	require.NoError(t, json.Unmarshal(data, &doc))
+	assert.Equal(t, 3, doc.Store.Shares.Checked)
+	assert.Equal(t, []shareMismatchDocument{
+		{
+			AccountID: "acct-7", Account: "RRSP\x1b", Currency: "CAD", Closed: true, Active: false, SecurityID: "sec-9",
+			Security: "iShares Core", Ticker: &ticker, Quarry: "120.500000", Quicken: "110.500000", Difference: "10.000000",
+		},
+		{
+			AccountID: "acct-8", Account: "Brokerage", Currency: "USD", Closed: false, Active: true, SecurityID: "sec-4",
+			Security: "Bare Fund", Ticker: nil, Quarry: "0.000001", Quicken: "0.000002", Difference: "-0.000001",
+		},
+	}, doc.Store.Shares.Mismatched)
 }
 
 // storeKeys lists the keys of data's "store" object in document order.

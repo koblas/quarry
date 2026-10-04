@@ -219,6 +219,19 @@ reports and accounts Quicken leaves out of reports, so their totals match
 quarry spend and quarry cashflow. A transfer leg is any split named in
 transfers.from_split_id or transfers.to_split_id.
 
+Investment transactions are in investment_transactions, not in transactions,
+v_cash_flow or v_spending, so dividends, interest and trades are not counted
+as income or spending there. Their amount is DECIMAL(18,2) in the account's
+own currency, negative when cash leaves the account; commission is
+DECIMAL(18,4) in the account's own currency as Quicken recorded it (some
+brokers charge fractions of a cent), NULL when there is none; shares is
+DECIMAL(18,6) as Quicken recorded each transaction, negative when shares
+leave. A split row carries split_new_shares and split_old_shares instead, so
+a sum of shares is not a holding. prices holds each security's closing price
+per day as Quicken recorded it, rounded to 6 decimals, in the security's
+currency (securities.currency, NULL when Quicken records none); quarry does
+not convert prices yet.
+
 findings holds what sync found to clean up in Quicken, and finding_items
 the transactions, splits, payees or categories each one is about;
 fixed_at is set once a finding is no longer found. Which findings you

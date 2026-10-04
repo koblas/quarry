@@ -414,10 +414,16 @@ func Test_sync_and_import_refuses_to_import_without_an_importer_or_store_probe(t
 // Count form is "X of Y <noun>": the noun agrees with Y, the verb with X.
 func Test_sync_and_import_reports_a_failed_check_in_the_validation_refusal(t *testing.T) {
 	t.Parallel()
+	const (
+		cashTail        = "fix them in Quicken and run quarry sync, or run quarry sync --from %s after updating quarry"
+		singleShareTail = "quarry read the holding's transactions differently from Quicken, so run quarry sync --from %s after updating quarry"
+		pluralShareTail = "quarry read those holdings' transactions differently from Quicken, so run quarry sync --from %s after updating quarry"
+	)
 	cases := []struct {
 		name       string
 		validation store.Validation
 		wantClause string
+		wantTail   string
 	}{
 		{
 			name: "one of one account mismatched",
@@ -425,6 +431,7 @@ func Test_sync_and_import_reports_a_failed_check_in_the_validation_refusal(t *te
 				Checked: 1, Mismatched: []store.BalanceMismatch{{ID: "acct-1"}},
 			}},
 			wantClause: "1 of 1 account does not match Quicken's last reconciled balance",
+			wantTail:   cashTail,
 		},
 		{
 			name: "one balance mismatch",
@@ -432,6 +439,7 @@ func Test_sync_and_import_reports_a_failed_check_in_the_validation_refusal(t *te
 				Checked: 3, Mismatched: []store.BalanceMismatch{{ID: "acct-1"}},
 			}},
 			wantClause: "1 of 3 accounts does not match Quicken's last reconciled balance",
+			wantTail:   cashTail,
 		},
 		{
 			name: "two balance mismatches",
@@ -439,6 +447,7 @@ func Test_sync_and_import_reports_a_failed_check_in_the_validation_refusal(t *te
 				Checked: 3, Mismatched: []store.BalanceMismatch{{ID: "acct-1"}, {ID: "acct-2"}},
 			}},
 			wantClause: "2 of 3 accounts do not match Quicken's last reconciled balance",
+			wantTail:   cashTail,
 		},
 		{
 			name: "every checked account mismatched",
@@ -446,11 +455,13 @@ func Test_sync_and_import_reports_a_failed_check_in_the_validation_refusal(t *te
 				Checked: 3, Mismatched: []store.BalanceMismatch{{ID: "acct-1"}, {ID: "acct-2"}, {ID: "acct-3"}},
 			}},
 			wantClause: "3 of 3 accounts do not match Quicken's last reconciled balance",
+			wantTail:   cashTail,
 		},
 		{
 			name:       "one split mismatch",
 			validation: store.Validation{Splits: store.SplitCheck{Mismatched: []store.SplitMismatch{{ID: "txn-1"}}}},
 			wantClause: "1 transaction does not equal the sum of its splits",
+			wantTail:   cashTail,
 		},
 		{
 			name: "two split mismatches",
@@ -458,6 +469,7 @@ func Test_sync_and_import_reports_a_failed_check_in_the_validation_refusal(t *te
 				Splits: store.SplitCheck{Mismatched: []store.SplitMismatch{{ID: "txn-1"}, {ID: "txn-2"}}},
 			},
 			wantClause: "2 transactions do not equal the sum of their splits",
+			wantTail:   cashTail,
 		},
 		{
 			name: "balance counts grouped by thousands",
@@ -465,11 +477,13 @@ func Test_sync_and_import_reports_a_failed_check_in_the_validation_refusal(t *te
 				Checked: 1035, Mismatched: make([]store.BalanceMismatch, 1000),
 			}},
 			wantClause: "1,000 of 1,035 accounts do not match Quicken's last reconciled balance",
+			wantTail:   cashTail,
 		},
 		{
 			name:       "split count grouped by thousands",
 			validation: store.Validation{Splits: store.SplitCheck{Mismatched: make([]store.SplitMismatch, 1204)}},
 			wantClause: "1,204 transactions do not equal the sum of their splits",
+			wantTail:   cashTail,
 		},
 		{
 			name: "a balance and a split mismatch joined",
@@ -479,6 +493,71 @@ func Test_sync_and_import_reports_a_failed_check_in_the_validation_refusal(t *te
 			},
 			wantClause: "1 of 3 accounts does not match Quicken's last reconciled balance and " +
 				"1 transaction does not equal the sum of its splits",
+			wantTail: cashTail,
+		},
+		{
+			name: "one share mismatch among many holdings",
+			validation: store.Validation{Shares: store.ShareCheck{
+				Checked: 145, Mismatched: []store.ShareMismatch{{AccountID: "acct-1"}},
+			}},
+			wantClause: "1 of 145 holdings does not match Quicken's share count",
+			wantTail:   singleShareTail,
+		},
+		{
+			name: "one of one holding mismatched",
+			validation: store.Validation{Shares: store.ShareCheck{
+				Checked: 1, Mismatched: []store.ShareMismatch{{AccountID: "acct-1"}},
+			}},
+			wantClause: "1 of 1 holding does not match Quicken's share count",
+			wantTail:   singleShareTail,
+		},
+		{
+			name: "several share mismatches",
+			validation: store.Validation{Shares: store.ShareCheck{
+				Checked: 145, Mismatched: []store.ShareMismatch{{AccountID: "acct-1"}, {AccountID: "acct-2"}},
+			}},
+			wantClause: "2 of 145 holdings do not match Quicken's share counts",
+			wantTail:   pluralShareTail,
+		},
+		{
+			name: "share counts grouped by thousands",
+			validation: store.Validation{Shares: store.ShareCheck{
+				Checked: 1035, Mismatched: make([]store.ShareMismatch, 1000),
+			}},
+			wantClause: "1,000 of 1,035 holdings do not match Quicken's share counts",
+			wantTail:   pluralShareTail,
+		},
+		{
+			name: "balances and shares joined",
+			validation: store.Validation{
+				Balances: store.BalanceCheck{Checked: 3, Mismatched: []store.BalanceMismatch{{ID: "acct-1"}}},
+				Shares:   store.ShareCheck{Checked: 145, Mismatched: []store.ShareMismatch{{AccountID: "acct-1"}}},
+			},
+			wantClause: "1 of 3 accounts does not match Quicken's last reconciled balance and " +
+				"1 of 145 holdings does not match Quicken's share count",
+			wantTail: cashTail,
+		},
+		{
+			name: "splits and shares joined",
+			validation: store.Validation{
+				Splits: store.SplitCheck{Mismatched: []store.SplitMismatch{{ID: "txn-1"}}},
+				Shares: store.ShareCheck{Checked: 145, Mismatched: []store.ShareMismatch{{AccountID: "acct-1"}, {AccountID: "acct-2"}}},
+			},
+			wantClause: "1 transaction does not equal the sum of its splits and " +
+				"2 of 145 holdings do not match Quicken's share counts",
+			wantTail: cashTail,
+		},
+		{
+			name: "balances, splits and shares in order",
+			validation: store.Validation{
+				Balances: store.BalanceCheck{Checked: 3, Mismatched: []store.BalanceMismatch{{ID: "acct-1"}}},
+				Splits:   store.SplitCheck{Mismatched: []store.SplitMismatch{{ID: "txn-1"}}},
+				Shares:   store.ShareCheck{Checked: 145, Mismatched: []store.ShareMismatch{{AccountID: "acct-1"}}},
+			},
+			wantClause: "1 of 3 accounts does not match Quicken's last reconciled balance and " +
+				"1 transaction does not equal the sum of its splits and " +
+				"1 of 145 holdings does not match Quicken's share count",
+			wantTail: cashTail,
 		},
 	}
 
@@ -499,8 +578,7 @@ func Test_sync_and_import_reports_a_failed_check_in_the_validation_refusal(t *te
 			wantResult := result
 			wantResult.Path = storePath
 			assert.Equal(t, wantResult, *outcome.Store)
-			want := fmt.Sprintf("validation failed: %s; %s was not changed; each difference is listed on stdout; "+
-				"fix them in Quicken and run quarry sync, or run quarry sync --from %s after updating quarry",
+			want := fmt.Sprintf("validation failed: %s; %s was not changed; each difference is listed on stdout; "+c.wantTail,
 				c.wantClause, homepath.Abbreviate(home, storePath), snapshotIDFromPath(outcome.Manifest.Snapshot.Path))
 			assert.Equal(t, want, err.Error())
 		})

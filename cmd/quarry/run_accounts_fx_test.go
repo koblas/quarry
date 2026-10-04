@@ -30,7 +30,7 @@ type accountFXJSON struct {
 }
 
 // accountsFXStore holds, under a fresh HOME, a CAD chequing account with 12,345.67, a USD one with 8,310.00 and a
-// USD brokerage account quarry does not import. USD/CAD is 1.25 from 2026-01-02 and 1.60 from 2099, which never applies.
+// USD brokerage account quarry does not value. USD/CAD is 1.25 from 2026-01-02 and 1.60 from 2099, which never applies.
 func accountsFXStore(t *testing.T) {
 	t.Helper()
 	home := t.TempDir()
@@ -53,15 +53,15 @@ func accountsFXStore(t *testing.T) {
 func Test_run_accounts_shows_each_balance_in_the_reporting_currency(t *testing.T) {
 	accountsFXStore(t)
 	cadText := "" +
-		"Account      Type       Currency       Balance     In CAD  Status\n" +
-		"Brokerage    brokerage  USD       not imported\n" +
-		"Chequing     chequing   CAD          12,345.67  12,345.67\n" +
-		"US Chequing  chequing   USD           8,310.00  10,387.50\n"
+		"Account      Type       Currency     Balance     In CAD  Status\n" +
+		"Brokerage    brokerage  USD       not valued\n" +
+		"Chequing     chequing   CAD        12,345.67  12,345.67\n" +
+		"US Chequing  chequing   USD         8,310.00  10,387.50\n"
 	usdText := "" +
-		"Account      Type       Currency       Balance    In USD  Status\n" +
-		"Brokerage    brokerage  USD       not imported\n" +
-		"Chequing     chequing   CAD          12,345.67  9,876.54\n" +
-		"US Chequing  chequing   USD           8,310.00  8,310.00\n"
+		"Account      Type       Currency     Balance    In USD  Status\n" +
+		"Brokerage    brokerage  USD       not valued\n" +
+		"Chequing     chequing   CAD        12,345.67  9,876.54\n" +
+		"US Chequing  chequing   USD         8,310.00  8,310.00\n"
 
 	cases := []struct {
 		name     string

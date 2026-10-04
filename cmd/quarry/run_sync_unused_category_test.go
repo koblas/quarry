@@ -23,8 +23,8 @@ func Test_run_sync_records_unused_categories_but_not_one_an_investment_or_budget
 	vacationPK := b.Category(v9fixture.TagRow{Name: "Vacation", Type: new(int64(1))})
 	hotelPK := b.Category(v9fixture.TagRow{Name: "Hotel", Type: new(int64(1)), ParentCategory: vacationPK})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	buyPK := b.Transaction(v9fixture.TransactionRow{
-		Entity: v9fixture.EntInvestmentTransaction, Account: brokeragePK, Amount: "-400.00", PostedDate: &day,
+	buyPK := b.InvestmentTransaction(v9fixture.TransactionRow{
+		Type: new(int64(3)), Account: brokeragePK, Amount: "-400.00", PostedDate: &day,
 	})
 	b.Entry(v9fixture.EntryRow{Parent: buyPK, Amount: "-400.00", CategoryTag: feesPK})
 	b.BudgetLineItem(v9fixture.BudgetLineItemRow{Category: charityPK})

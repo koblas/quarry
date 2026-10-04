@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"math/big"
 	"slices"
 	"time"
 
@@ -48,7 +49,7 @@ func InvestmentAccountTypes() []string {
 
 // IsInvestmentAccount reports whether accountType is a brokerage or
 // retirement account: sync never checks its balance, and accounts shows it
-// as not imported.
+// as not valued.
 func IsInvestmentAccount(accountType string) bool {
 	return slices.Contains(InvestmentAccountTypes(), accountType)
 }
@@ -135,11 +136,78 @@ type SplitTag struct {
 	TagID   string
 }
 
+// Security is one row of the securities table, recorded as Quicken has it.
+// Ticker is nil when Quicken records none, Currency when it records no currency.
+type Security struct {
+	ID       string
+	SourceID int64
+	Name     string
+	Ticker   *string
+	Currency *string
+}
+
+// Price is one row of the prices table: a security's closing price on one day,
+// in millionths of its currency's unit (DECIMAL(18,6)). SourceID is the
+// ZSECURITYQUOTE.Z_PK of the quote kept for that day.
+type Price struct {
+	SecurityID string
+	SourceID   int64
+	Date       time.Time
+	Price      int64
+}
+
+// The investment_transactions.action values.
+const (
+	ActionAddShares        = "add_shares"
+	ActionBuy              = "buy"
+	ActionMarginInterest   = "margin_interest"
+	ActionMiscExpense      = "misc_expense"
+	ActionCapitalGainLong  = "capital_gain_long"
+	ActionCapitalGainShort = "capital_gain_short"
+	ActionDividend         = "dividend"
+	ActionInterest         = "interest"
+	ActionMiscIncome       = "misc_income"
+	ActionReinvestDividend = "reinvest_dividend"
+	ActionRemoveShares     = "remove_shares"
+	ActionSell             = "sell"
+	ActionSplit            = "split"
+)
+
+// InvestmentTransaction is one row of the investment_transactions table. Shares,
+// SplitNewShares and SplitOldShares are millionths (DECIMAL(18,6)); Amount is
+// cents; Commission is ten-thousandths (DECIMAL(18,4)). SecurityID is nil for a
+// cash-only action, Shares nil when Quicken records none, and the split sides
+// are set only for a split.
+type InvestmentTransaction struct {
+	ID             string
+	SourceID       int64
+	AccountID      string
+	SecurityID     *string
+	Date           time.Time
+	Action         string
+	Shares         *int64
+	Amount         int64
+	Commission     *int64
+	Currency       string
+	Memo           *string
+	SplitNewShares *int64
+	SplitOldShares *int64
+}
+
+// QuickenShare is Quicken's own share count of one holding: the sum of its
+// counting lots' units, in millionths. A holding with a lot of zero units is
+// listed.
+type QuickenShare struct {
+	AccountID, SecurityID string
+	Millionths            *big.Int
+}
+
 // Rows is every row a store build writes, grouped by table. ImportRuns holds
 // the new build's run only; the store carries earlier runs forward itself.
 // ReferencedCategoryIDs is not a table: sorted unique ids of categories that rows
 // not stored as splits use (split entries under transactions the import does not keep,
-// budgets, loans, rules), nil when none; never persisted.
+// budgets, loans, rules), nil when none; never persisted. QuickenShares is not a
+// table either: the reference each holding's derived share count is checked against.
 type Rows struct {
 	Accounts     []Account
 	Categories   []Category
@@ -149,9 +217,14 @@ type Rows struct {
 	Splits       []Split
 	SplitTags    []SplitTag
 	Transfers    []Transfer
+	Securities   []Security
+	Prices       []Price
 	ImportRuns   []ImportRun
 
+	InvestmentTransactions []InvestmentTransaction
+
 	ReferencedCategoryIDs []string
+	QuickenShares         []QuickenShare
 }
 
 // SnapshotRef identifies the snapshot a build reads: its absolute Path,
@@ -168,19 +241,19 @@ type SnapshotRef struct {
 // wrote it. FinishedAt is stamped before the store is written and swapped
 // in; both times are UTC. A build hands ImportRun.ID unset: the store numbers it.
 type ImportRun struct {
-	ID                                int64
-	StartedAt, FinishedAt             time.Time
-	Snapshot                          SnapshotRef
-	Counts                            Counts
-	BalancesChecked                   int
-	BalancesMismatched                int
-	SplitsMismatched                  int
-	TransfersOneSided                 int
-	InvestmentTransactionsNotImported int
-	BalancesNeverReconciled           int
-	InvestmentAccounts                int
-	TransfersPaired                   int
-	TransfersCrossCurrency            int
+	ID                      int64
+	StartedAt, FinishedAt   time.Time
+	Snapshot                SnapshotRef
+	Counts                  Counts
+	BalancesChecked         int
+	BalancesMismatched      int
+	SplitsMismatched        int
+	TransfersOneSided       int
+	SharesChecked           int
+	BalancesNeverReconciled int
+	InvestmentAccounts      int
+	TransfersPaired         int
+	TransfersCrossCurrency  int
 }
 
 // Status is what a built store says about itself: its path, the format and
@@ -218,11 +291,15 @@ type Counts struct {
 	Splits       int
 	SplitTags    int
 	Transfers    int
+	Securities   int
+	Prices       int
+
+	InvestmentTransactions int
 }
 
 // Result is what a store build returns. Built is false when a check failed:
-// Path is then empty (Replace never ran) but Counts, Validation and
-// NotImported still describe the rows the build would have written.
+// Path is then empty (Replace never ran) but Counts and Validation still
+// describe the rows the build would have written.
 // HistoryFault is why the previous store's import runs were not carried
 // into a built store; nil when they were, or no store existed. Findings
 // tallies FindingStates with no findings.ignore list, zero when Built is false;
@@ -236,7 +313,6 @@ type Result struct {
 	Built        bool
 	Counts       Counts
 	Validation   Validation
-	NotImported  NotImported
 	HistoryFault *OpenError
 	Findings     finding.Counts
 
@@ -312,12 +388,6 @@ type RatesRefresh struct {
 	Partial    bool
 }
 
-// NotImported counts source rows a build deliberately leaves out of the
-// store.
-type NotImported struct {
-	InvestmentTransactions int
-}
-
 // ErrValidationFailed is Import's error when a build's checks find a mismatch.
 var ErrValidationFailed = errors.New("validation failed")
 
@@ -335,13 +405,14 @@ var ErrUnmappable = errors.New("unmappable value")
 type Validation struct {
 	Balances  BalanceCheck
 	Splits    SplitCheck
+	Shares    ShareCheck
 	Transfers TransferCheck
 }
 
-// Failed reports whether the balance or split-sum check found a mismatch.
-// Transfers never fail a build: a one-sided leg is stored, not refused.
+// Failed reports whether the balance, split-sum or share-count check found a
+// mismatch. Transfers never fail a build: a one-sided leg is stored, not refused.
 func (v Validation) Failed() bool {
-	return len(v.Balances.Mismatched) > 0 || len(v.Splits.Mismatched) > 0
+	return len(v.Balances.Mismatched) > 0 || len(v.Splits.Mismatched) > 0 || len(v.Shares.Mismatched) > 0
 }
 
 // BalanceCheck is the balance gate's result across every non-investment
@@ -383,6 +454,27 @@ type SplitMismatch struct {
 	Closed, Active               bool
 	Date                         time.Time
 	Amount, SplitsTotal          int64
+}
+
+// ShareCheck is the share-count gate's result across every holding: Checked
+// counts the holdings compared, Mismatched lists those whose counts differ.
+type ShareCheck struct {
+	Checked    int
+	Mismatched []ShareMismatch
+}
+
+// ShareMismatch is one holding whose derived share count differs from
+// Quicken's, in millionths of a share; Difference is Quarry - Quicken, clamped
+// to the int64 range. The importer fills the display fields from the ids, and
+// Ticker is nil when Quicken records none.
+type ShareMismatch struct {
+	AccountID, SecurityID       string
+	Quarry, Quicken, Difference int64
+	Account, Currency, Security string
+	Closed, Active              bool
+	AccountSourceID             int64
+	SecuritySourceID            int64
+	Ticker                      *string
 }
 
 // TransferCheck is the transfer-pairing result. CrossCurrency counts pairs

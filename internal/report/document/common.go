@@ -30,11 +30,10 @@ type Rows struct {
 	Splits       int `json:"splits"`
 	SplitTags    int `json:"split_tags"`
 	Transfers    int `json:"transfers"`
-}
 
-// NotImported is the --json "not_imported" object.
-type NotImported struct {
 	InvestmentTransactions int `json:"investment_transactions"`
+	Securities             int `json:"securities"`
+	Prices                 int `json:"prices"`
 }
 
 // NewFindingCounts converts c into its --json shape.
@@ -47,6 +46,7 @@ func NewRows(c store.Counts) Rows {
 	return Rows{
 		Accounts: c.Accounts, Categories: c.Categories, Payees: c.Payees, Tags: c.Tags,
 		Transactions: c.Transactions, Splits: c.Splits, SplitTags: c.SplitTags, Transfers: c.Transfers,
+		InvestmentTransactions: c.InvestmentTransactions, Securities: c.Securities, Prices: c.Prices,
 	}
 }
 
@@ -70,4 +70,15 @@ func Money(cents int64) string {
 		return "-" + s
 	}
 	return s
+}
+
+// Shares renders millionths of a share as a 6-decimal amount with a leading
+// "-" for a negative value and no thousands grouping.
+func Shares(millionths int64) string {
+	whole, fraction := millionths/1_000_000, millionths%1_000_000
+	if millionths < 0 {
+		// Negate the quotient and remainder, not millionths: -MinInt64 overflows.
+		return fmt.Sprintf("-%d.%06d", -whole, -fraction)
+	}
+	return fmt.Sprintf("%d.%06d", whole, fraction)
 }

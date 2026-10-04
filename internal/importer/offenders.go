@@ -17,14 +17,14 @@ const (
 	classMissingEntity        unmappableClass = iota // a Core Data entity quarry needs is absent
 	classCurrency                                    // an account in an unsupported currency
 	classAccountType                                 // an account type quarry does not map
-	classTransactionPrecision                        // a transaction amount with more than 2 decimals beyond the snap tolerance
+	classTransactionPrecision                        // a transaction, investment transaction or lot value (shares, amount, commission) beyond its decimals' snap tolerance
 	classSplitPrecision                              // a split amount with more than 2 decimals beyond the snap tolerance
 	classStatementPrecision                          // a statement balance with more than 2 decimals beyond the snap tolerance
 	classTooLarge                                    // an amount outside quarry's range
 	classNotANumber                                  // an amount stored as text or blob
 	classTransactionStatus                           // a reconcile status quarry does not map
 	classCategoryType                                // a category type quarry does not map
-	classMissingValue                                // a required value or reference is missing
+	classMissingValue                                // a required value or reference is missing, or a split ratio quarry cannot read
 )
 
 // offender is one row Import cannot map, in one unmappableClass. reason is that

@@ -129,7 +129,7 @@ const sqlLastStatementDocument = `{
 const statusUnreadableConfigDocument = `{
   "store": {
     "path": %[1]q,
-    "format_version": 5,
+    "format_version": 6,
     "quarry_version": "(devel)",
     "built_at": %[2]q,
     "rows": {
@@ -140,7 +140,10 @@ const statusUnreadableConfigDocument = `{
       "transactions": 4,
       "splits": 4,
       "split_tags": 0,
-      "transfers": 2
+      "transfers": 2,
+      "investment_transactions": 0,
+      "securities": 0,
+      "prices": 0
     }
   },
   "snapshot": {
@@ -162,6 +165,9 @@ const statusUnreadableConfigDocument = `{
   "splits": {
     "checked": 4
   },
+  "shares": {
+    "checked": 0
+  },
   "transfers": {
     "paired": 1,
     "cross_currency": 1,
@@ -178,9 +184,6 @@ const statusUnreadableConfigDocument = `{
     "first": "2026-01-02",
     "last": "2026-01-02",
     "fetch_error": null
-  },
-  "not_imported": {
-    "investment_transactions": 0
   },
   "warnings": [
     "cannot tell which findings you ignored: %[8]s: snapshots.keep must be a whole number of 1 or more, got 0; findings you ignored are counted as open"
@@ -356,6 +359,19 @@ your own accounts, Quicken's system categories, transactions excluded from
 reports and accounts Quicken leaves out of reports, so their totals match
 quarry spend and quarry cashflow. A transfer leg is any split named in
 transfers.from_split_id or transfers.to_split_id.
+
+Investment transactions are in investment_transactions, not in transactions,
+v_cash_flow or v_spending, so dividends, interest and trades are not counted
+as income or spending there. Their amount is DECIMAL(18,2) in the account's
+own currency, negative when cash leaves the account; commission is
+DECIMAL(18,4) in the account's own currency as Quicken recorded it (some
+brokers charge fractions of a cent), NULL when there is none; shares is
+DECIMAL(18,6) as Quicken recorded each transaction, negative when shares
+leave. A split row carries split_new_shares and split_old_shares instead, so
+a sum of shares is not a holding. prices holds each security's closing price
+per day as Quicken recorded it, rounded to 6 decimals, in the security's
+currency (securities.currency, NULL when Quicken records none); quarry does
+not convert prices yet.
 
 findings holds what sync found to clean up in Quicken, and finding_items
 the transactions, splits, payees or categories each one is about;

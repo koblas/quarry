@@ -23,7 +23,7 @@ func Test_import_hands_the_store_one_import_run_describing_the_build(t *testing.
 	transferLeg(b, chequingPK, "-20.00", 201, "202")
 	transferLeg(b, savingsPK, "15.00", 202, "201")
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	b.Transaction(v9fixture.TransactionRow{Entity: v9fixture.EntInvestmentTransaction, Account: brokeragePK, Amount: "-40.00", PostedDate: &day})
+	b.InvestmentTransaction(v9fixture.TransactionRow{Type: new(int64(3)), Account: brokeragePK, Amount: "-40.00", PostedDate: &day})
 	bundle := b.WriteBundle(t, t.TempDir())
 	snap := store.SnapshotRef{Path: bundle.DataPath, SHA256: "9f86d081", SchemaFingerprint: "sha256:abc"}
 	fake := &fakeStore{}
@@ -37,8 +37,8 @@ func Test_import_hands_the_store_one_import_run_describing_the_build(t *testing.
 	run := fake.Rows.ImportRuns[0]
 	assert.Equal(t, store.ImportRun{
 		StartedAt: run.StartedAt, FinishedAt: run.FinishedAt, Snapshot: snap,
-		Counts:          store.Counts{Accounts: 3, Transactions: 4, Splits: 4, Transfers: 2},
-		BalancesChecked: 1, TransfersOneSided: 1, InvestmentTransactionsNotImported: 1,
+		Counts:          store.Counts{Accounts: 3, Transactions: 4, Splits: 4, Transfers: 2, InvestmentTransactions: 1},
+		BalancesChecked: 1, TransfersOneSided: 1,
 		BalancesNeverReconciled: 1, InvestmentAccounts: 1, TransfersPaired: 1, TransfersCrossCurrency: 1,
 	}, run)
 	assert.Equal(t, time.UTC, run.StartedAt.Location())
@@ -46,6 +46,21 @@ func Test_import_hands_the_store_one_import_run_describing_the_build(t *testing.
 	assert.False(t, run.StartedAt.Before(before))
 	assert.False(t, run.FinishedAt.Before(run.StartedAt))
 	assert.False(t, after.Before(run.FinishedAt))
+}
+
+func Test_import_counts_securities_and_prices_in_the_import_run(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acmePK := newAcme(b)
+	barePK := b.Security(v9fixture.SecurityRow{Name: "Bare Fund", Currency: "USD"})
+	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay1, ClosingPrice: "12.5"})
+	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay2, ClosingPrice: "13"})
+	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: barePK, QuoteDate: &priceDay1, ClosingPrice: "4"})
+
+	fake, _ := importSecurities(t, b)
+
+	require.Len(t, fake.Rows.ImportRuns, 1)
+	assert.Equal(t, store.Counts{Accounts: 1, Securities: 2, Prices: 3}, fake.Rows.ImportRuns[0].Counts)
 }
 
 func Test_import_reports_the_history_fault_the_store_returns(t *testing.T) {

@@ -19,10 +19,10 @@ SELECT i.format_version, i.quarry_version, i.built_at,
 	r.accounts_rows, r.categories_rows, r.payees_rows, r.tags_rows,
 	r.transactions_rows, r.splits_rows, r.split_tags_rows, r.transfers_rows,
 	r.balances_checked, r.balances_mismatched, r.splits_mismatched, r.transfers_one_sided,
-	r.investment_transactions_not_imported,
 	r.snapshot_taken_at, r.source_path,
 	COALESCE(r.balances_never_reconciled, 0), COALESCE(r.investment_accounts, 0),
 	COALESCE(r.transfers_paired, 0), COALESCE(r.transfers_cross_currency, 0),
+	COALESCE(r.securities_rows, 0), COALESCE(r.prices_rows, 0), COALESCE(r.investment_transactions_rows, 0), COALESCE(r.shares_checked, 0),
 	(SELECT min(date) FROM transactions), (SELECT max(date) FROM transactions),
 	(SELECT min(date) FROM fx_rates), (SELECT max(date) FROM fx_rates), r.rates_fetch_error
 FROM store_info i CROSS JOIN import_runs r
@@ -62,9 +62,9 @@ func (s *Store) Status(ctx context.Context) (store.Status, error) {
 			&run.ID, &run.StartedAt, &run.FinishedAt, &run.Snapshot.Path, &run.Snapshot.SHA256, &run.Snapshot.SchemaFingerprint,
 			&c.Accounts, &c.Categories, &c.Payees, &c.Tags, &c.Transactions, &c.Splits, &c.SplitTags, &c.Transfers,
 			&run.BalancesChecked, &run.BalancesMismatched, &run.SplitsMismatched, &run.TransfersOneSided,
-			&run.InvestmentTransactionsNotImported,
 			&takenAt, &source,
 			&run.BalancesNeverReconciled, &run.InvestmentAccounts, &run.TransfersPaired, &run.TransfersCrossCurrency,
+			&c.Securities, &c.Prices, &c.InvestmentTransactions, &run.SharesChecked,
 			&first, &last, &firstRate, &lastRate, &fetchError)
 	})
 	if err != nil {

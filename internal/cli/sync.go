@@ -46,8 +46,9 @@ for Mac v9. A JSON manifest is written next to each snapshot.
 quarry then rebuilds its store, ~/Library/Application Support/quarry/quarry.duckdb,
 from the snapshot. In every reconciled account, the reconciled transactions
 must add up to the balance of its last reconciled statement in Quicken to the
-cent, and every transaction must equal the sum of its splits; if a check
-fails, the previous store is left unchanged.
+cent, and every transaction must equal the sum of its splits, and in every
+brokerage and retirement account each security's share count must equal
+Quicken's; if a check fails, the previous store is left unchanged.
 
 sync then looks for things to clean up in Quicken, such as uncategorized
 splits, one-sided transfers and possible duplicates; run quarry findings to

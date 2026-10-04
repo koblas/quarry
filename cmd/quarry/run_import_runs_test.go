@@ -32,8 +32,8 @@ func Test_run_records_an_import_runs_row_for_the_build(t *testing.T) {
 	b.Reconcile(v9fixture.ReconcileRow{Account: chequingPK, EndDate: &day, EndingBalance: "100.00"})
 	legTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-5.00", PostedDate: &day})
 	b.Entry(v9fixture.EntryRow{Parent: legTxn, Amount: "-5.00", QuickenID: 3001, Transfer: "Old Visa"})
-	buyTxn := b.Transaction(v9fixture.TransactionRow{
-		Entity: v9fixture.EntInvestmentTransaction, Account: brokeragePK, Amount: "-40.00", PostedDate: &day,
+	buyTxn := b.InvestmentTransaction(v9fixture.TransactionRow{
+		Type: new(int64(3)), Account: brokeragePK, Amount: "-40.00", PostedDate: &day,
 	})
 	b.Entry(v9fixture.EntryRow{Parent: buyTxn, Amount: "-40.00"})
 
@@ -65,9 +65,9 @@ func Test_run_records_an_import_runs_row_for_the_build(t *testing.T) {
 	assert.Equal(t, map[string]string{"1": "2 0 0 0 2 2 0 1"},
 		stringMap(t, db, "SELECT CAST(id AS VARCHAR), concat_ws(' ', accounts_rows, categories_rows, payees_rows, tags_rows, "+
 			"transactions_rows, splits_rows, split_tags_rows, transfers_rows) FROM import_runs"))
-	assert.Equal(t, map[string]string{"1": "1 0 0 1 1"},
+	assert.Equal(t, map[string]string{"1": "1 0 0 1"},
 		stringMap(t, db, "SELECT CAST(id AS VARCHAR), concat_ws(' ', balances_checked, balances_mismatched, splits_mismatched, "+
-			"transfers_one_sided, investment_transactions_not_imported) FROM import_runs"))
+			"transfers_one_sided) FROM import_runs"))
 	assert.Equal(t, map[string]string{"1": "true"},
 		stringMap(t, db, "SELECT CAST(id AS VARCHAR), CAST(started_at <= finished_at AS VARCHAR) FROM import_runs"))
 }

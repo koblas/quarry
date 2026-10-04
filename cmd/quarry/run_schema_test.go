@@ -96,7 +96,7 @@ func Test_run_reports_extra_schema_only_as_a_warning(t *testing.T) {
 	want := fmt.Sprintf(
 		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 1 account\n%-10s%s\n%-10s%s\n"+
 			"  + table   %s\n  + column  %s.%s\n  + column  %s.%s\n"+
-			"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
+			"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
 		"Snapshot", abbreviated(t, snapshotPath, home),
 		"Manifest", abbreviated(t, manifestPath, home),
 		"Source", abbreviated(t, bundle.Dir, home),
@@ -108,9 +108,10 @@ func Test_run_reports_extra_schema_only_as_a_warning(t *testing.T) {
 		v9fixture.ExtraSchemaAddedColumnTable1, v9fixture.ExtraSchemaAddedColumn1,
 		v9fixture.ExtraSchemaAddedColumnTable2, v9fixture.ExtraSchemaAddedColumn2,
 		"Store", abbreviated(t, storePath, home),
-		"Rows", "0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags",
+		"Rows", "0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices",
 		"Balances", "no accounts to check; 1 never reconciled",
 		"Splits", "no transactions to check",
+		"Shares", "no holdings to check",
 		"Transfers", "none",
 		"Findings", "none open",
 		"Rates", fakeRatesText,

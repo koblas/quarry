@@ -2,6 +2,7 @@ package importer
 
 import (
 	"cmp"
+	"math"
 	"slices"
 	"strings"
 
@@ -177,4 +178,46 @@ func checkSplits(ix rowIndex, rows store.Rows) store.SplitCheck {
 		})
 	}
 	return check
+}
+
+// describeShareMismatches fills each holding's display fields and Difference, then
+// sorts by account name, account source id, security name, security source id.
+func describeShareMismatches(rows store.Rows, mismatched []store.ShareMismatch) []store.ShareMismatch {
+	accounts := make(map[string]store.Account, len(rows.Accounts))
+	for _, a := range rows.Accounts {
+		accounts[a.ID] = a
+	}
+	securities := make(map[string]store.Security, len(rows.Securities))
+	for _, s := range rows.Securities {
+		securities[s.ID] = s
+	}
+
+	out := slices.Clone(mismatched)
+	for i := range out {
+		m := &out[i]
+		acct, sec := accounts[m.AccountID], securities[m.SecurityID]
+		m.Account, m.Currency, m.Closed, m.Active, m.AccountSourceID = acct.Name, acct.Currency, acct.Closed, acct.Active, acct.SourceID
+		m.Security, m.Ticker, m.SecuritySourceID = sec.Name, sec.Ticker, sec.SourceID
+		m.Difference = saturatingSub(m.Quarry, m.Quicken)
+	}
+	slices.SortFunc(out, func(a, b store.ShareMismatch) int {
+		return cmp.Or(
+			strings.Compare(a.Account, b.Account),
+			cmp.Compare(a.AccountSourceID, b.AccountSourceID),
+			strings.Compare(a.Security, b.Security),
+			cmp.Compare(a.SecuritySourceID, b.SecuritySourceID),
+		)
+	})
+	return out
+}
+
+// saturatingSub returns a - b, clamped to the int64 range instead of wrapping.
+func saturatingSub(a, b int64) int64 {
+	switch {
+	case b > 0 && a < math.MinInt64+b:
+		return math.MinInt64
+	case b < 0 && a > math.MaxInt64+b:
+		return math.MaxInt64
+	}
+	return a - b
 }

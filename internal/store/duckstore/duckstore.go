@@ -22,7 +22,7 @@ import (
 const FileName = "quarry.duckdb"
 
 // FormatVersion is the store format this build of quarry writes and reads.
-const FormatVersion = 5
+const FormatVersion = 6
 
 // develVersion is the quarry_version recorded when no build version is known.
 const develVersion = "(devel)"
@@ -51,6 +51,15 @@ var buildFilePattern = regexp.MustCompile(`^` + regexp.QuoteMeta(partialPrefix) 
 // moneyWidth and moneyScale match schemaDDL's DECIMAL(18,2) money columns.
 const moneyWidth, moneyScale = 18, 2
 
+// priceWidth and priceScale match schemaDDL's DECIMAL(18,6) price column.
+const priceWidth, priceScale = 18, 6
+
+// sharesWidth and sharesScale match schemaDDL's DECIMAL(18,6) shares and split columns.
+const sharesWidth, sharesScale = 18, 6
+
+// commissionWidth and commissionScale match schemaDDL's DECIMAL(18,4) commission column.
+const commissionWidth, commissionScale = 18, 4
+
 // DB is the connection a Store builds one partial file through.
 // *duckdb.DB is the production implementation.
 type DB interface {
@@ -63,6 +72,17 @@ type DB interface {
 }
 
 var _ DB = (*duckdb.DB)(nil)
+
+// ScratchDB is the in-memory connection CheckShares loads transactions into and walks.
+// *duckdb.DB is the production implementation.
+type ScratchDB interface {
+	Exec(ctx context.Context, query string, args ...any) (sql.Result, error)
+	AppendRows(ctx context.Context, table string, rows [][]any) error
+	QueryRows(ctx context.Context, query string, args []any, row func(scan func(dest ...any) error) error) error
+	Close() error
+}
+
+var _ ScratchDB = (*duckdb.DB)(nil)
 
 // ReadDB is the read-only connection a Store answers one read through.
 // *duckdb.DB is the production implementation.
@@ -80,6 +100,7 @@ type Store struct {
 	dir           string
 	create        func(ctx context.Context, path string) (DB, error)
 	openReadOnly  func(ctx context.Context, path string) (ReadDB, error)
+	scratch       func(ctx context.Context) (ScratchDB, error)
 	quarryVersion string
 	rates         RatesSource
 }
@@ -106,6 +127,12 @@ func WithOpenReadOnly(open func(ctx context.Context, path string) (ReadDB, error
 	return func(s *Store) { s.openReadOnly = open }
 }
 
+// WithScratch replaces how CheckShares opens its in-memory scratch database, which by
+// default is duckdb.CreateInMemory. scratch must return a database of its own each call.
+func WithScratch(scratch func(ctx context.Context) (ScratchDB, error)) Option {
+	return func(s *Store) { s.scratch = scratch }
+}
+
 // WithRates sets where Replace gets exchange rates from; without it the
 // store's fx_rates table is left empty.
 func WithRates(src RatesSource) Option {
@@ -124,7 +151,7 @@ func WithQuarryVersion(v string) Option {
 
 // New returns a Store that builds quarry.duckdb inside dir.
 func New(dir string, opts ...Option) *Store {
-	s := &Store{dir: dir, create: createDuckDB, openReadOnly: openDuckDBReadOnly, quarryVersion: develVersion}
+	s := &Store{dir: dir, create: createDuckDB, openReadOnly: openDuckDBReadOnly, scratch: createScratch, quarryVersion: develVersion}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -149,6 +176,16 @@ func createDuckDB(ctx context.Context, path string) (DB, error) {
 	db, err := duckdb.Create(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("create store file: %w", err)
+	}
+	return db, nil
+}
+
+// createScratch is New's default scratch opener; it returns a nil interface, never a typed nil, when
+// duckdb.CreateInMemory fails.
+func createScratch(ctx context.Context) (ScratchDB, error) {
+	db, err := duckdb.CreateInMemory(ctx)
+	if err != nil {
+		return nil, err //nolint:wrapcheck // CreateInMemory already names the operation
 	}
 	return db, nil
 }
@@ -461,11 +498,33 @@ func loadRows(ctx context.Context, db DB, rows store.Rows, carried history) erro
 	if err := appendTable(ctx, db, "transfers", transferRows(rows.Transfers)); err != nil {
 		return err
 	}
+	if err := appendTable(ctx, db, "securities", securityRows(rows.Securities)); err != nil {
+		return err
+	}
+	priceRows, err := priceRows(rows.Prices)
+	if err != nil {
+		return err
+	}
+	if err := appendTable(ctx, db, "prices", priceRows); err != nil {
+		return err
+	}
+	invRows, err := investmentTransactionRows(rows.InvestmentTransactions)
+	if err != nil {
+		return err
+	}
+	if err := appendTable(ctx, db, "investment_transactions", invRows); err != nil {
+		return err
+	}
 	return appendTable(ctx, db, "import_runs", importRunRows(carried, rows.ImportRuns))
 }
 
+// rowAppender is the bulk-load half of DB and ScratchDB.
+type rowAppender interface {
+	AppendRows(ctx context.Context, table string, rows [][]any) error
+}
+
 // appendTable bulk-loads rows into table, naming the table on failure.
-func appendTable(ctx context.Context, db DB, table string, rows [][]any) error {
+func appendTable(ctx context.Context, db rowAppender, table string, rows [][]any) error {
 	if err := db.AppendRows(ctx, table, rows); err != nil {
 		return fmt.Errorf("load %s: %w", table, err)
 	}
@@ -577,6 +636,58 @@ func transferRows(transfers []store.Transfer) [][]any {
 	return out
 }
 
+func securityRows(securities []store.Security) [][]any {
+	out := make([][]any, len(securities))
+	for i, sec := range securities {
+		out[i] = []any{sec.ID, sec.SourceID, sec.Name, nullableStr(sec.Ticker), nullableStr(sec.Currency)}
+	}
+	return out
+}
+
+func priceRows(prices []store.Price) ([][]any, error) {
+	out := make([][]any, len(prices))
+	for i, p := range prices {
+		price, err := duckdb.Decimal(p.Price, priceWidth, priceScale)
+		if err != nil {
+			return nil, fmt.Errorf("price of %s on %s: %w", p.SecurityID, p.Date.Format(time.DateOnly), err)
+		}
+		out[i] = []any{p.SecurityID, p.SourceID, p.Date, price}
+	}
+	return out, nil
+}
+
+func investmentTransactionRows(txns []store.InvestmentTransaction) ([][]any, error) {
+	out := make([][]any, len(txns))
+	for i, t := range txns {
+		shares, err1 := decimalCell("shares", t.Shares, sharesWidth, sharesScale)
+		amount, err2 := decimalCell("amount", &t.Amount, moneyWidth, moneyScale)
+		commission, err3 := decimalCell("commission", t.Commission, commissionWidth, commissionScale)
+		splitNew, err4 := decimalCell("split_new_shares", t.SplitNewShares, sharesWidth, sharesScale)
+		splitOld, err5 := decimalCell("split_old_shares", t.SplitOldShares, sharesWidth, sharesScale)
+		if err := errors.Join(err1, err2, err3, err4, err5); err != nil {
+			return nil, fmt.Errorf("investment transaction %s: %w", t.ID, err)
+		}
+		out[i] = []any{
+			t.ID, t.SourceID, t.AccountID, nullableStr(t.SecurityID), t.Date, t.Action, shares, amount, commission,
+			t.Currency, nullableStr(t.Memo), splitNew, splitOld,
+		}
+	}
+	return out, nil
+}
+
+// decimalCell is the append cell for v as DECIMAL(width, scale): NULL for nil, else v unscaled;
+// it names column when v is out of range.
+func decimalCell(column string, v *int64, width, scale uint8) (any, error) {
+	if v == nil {
+		return nil, nil //nolint:nilnil // a NULL cell has no error
+	}
+	cell, err := duckdb.Decimal(*v, width, scale)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", column, err)
+	}
+	return cell, nil
+}
+
 func importRunRows(carried history, runs []store.ImportRun) [][]any {
 	out := append([][]any(nil), carried.rows...)
 	for i, r := range runs {
@@ -586,11 +697,12 @@ func importRunRows(carried history, runs []store.ImportRun) [][]any {
 			int64(c.Accounts), int64(c.Categories), int64(c.Payees), int64(c.Tags),
 			int64(c.Transactions), int64(c.Splits), int64(c.SplitTags), int64(c.Transfers),
 			int64(r.BalancesChecked), int64(r.BalancesMismatched), int64(r.SplitsMismatched),
-			int64(r.TransfersOneSided), int64(r.InvestmentTransactionsNotImported),
+			int64(r.TransfersOneSided),
 			nullableTime(r.Snapshot.TakenAt), nullableNonEmpty(r.Snapshot.Source),
 			int64(r.BalancesNeverReconciled), int64(r.InvestmentAccounts),
 			int64(r.TransfersPaired), int64(r.TransfersCrossCurrency),
 			nil, nil, nil,
+			int64(c.Securities), int64(c.Prices), int64(c.InvestmentTransactions), int64(r.SharesChecked),
 		})
 	}
 	return out
