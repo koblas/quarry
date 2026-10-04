@@ -420,7 +420,7 @@ Architect sizing pass 2026-10-04 (one pass over all 16; folds change no scenario
 - [x] SCENARIO-10: Filtering by account — `cmd/quarry/run_holdings_account_test.go` `Test_run_holdings_account_filter_lists_the_named_accounts_and_warns_for_chequing`
 - [x] SCENARIO-09: Nothing held on the day — `cmd/quarry/run_holdings_empty_test.go` `Test_run_holdings_before_the_first_investment_transaction_warns_where_they_start_and_prints_no_total`
 - [x] SCENARIO-13: MCP holdings tool — `cmd/quarry/run_mcp_holdings_test.go` `Test_run_mcp_holdings_returns_the_holdings_json_document`
-- [ ] SCENARIO-15: Existing surfaces describe holdings
+- [x] SCENARIO-15: Existing surfaces describe holdings — `cmd/quarry/run_holdings_surfaces_test.go` `Test_run_accounts_and_sql_help_carry_the_holdings_copy`
 
 ## Reference check
 

@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-15
-status: open
+status: done
 ---
 
 # SCENARIO-15: Existing surfaces describe holdings
@@ -28,10 +28,10 @@ Surface survey: no new port or adapter; one new exported `store.Actions()` (alph
 - [x] Step 7 (B3, batch 3 rune widths): `internal/cli/render.go:494-501` `widestLen` → `utf8.RuneCountInString` (doc: rune count); callers :371-372, 398-399, 425-427, 467-469 need no edit; `render_internal_test.go` (849 lines; new `render_width_internal_test.go`) `Test_widestLen_counts_runes_not_bytes` (ASCII control, `é`, CJK, emoji; empty slice 0) and `Test_shareMismatchRows_align_non_ASCII_names` (two rows, one account `Épargne`, one security `日本株`; every `  quarry` column starts at the same rune offset; ASCII-only row is the control). Balance rows share the helper: add one non-ASCII balance row to `balanceMismatchRows` coverage in the same file
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (`lll` on the long pinned lines needs the existing `//nolint:lll // ruled copy …` form); doc comments on `store.Actions`, `SQLConventions`, `widestLen`
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (`lll` on the long pinned lines needs the existing `//nolint:lll // ruled copy …` form); doc comments on `store.Actions`, `SQLConventions`, `widestLen`
 
 ### Verify
-- [ ] Step 9: full verification + `.claude/scripts/spec-check.py phase4b-holdings` → tick SCENARIO-15 with its acceptance test; rewrite STATE.md (remove SCENARIO-15 from `## Left unbuilt`, close the two 4a debts it owns, keep the `render.go:222` wording debt as 4c)
+- [x] Step 9: full verification + `.claude/scripts/spec-check.py phase4b-holdings` → tick SCENARIO-15 with its acceptance test; rewrite STATE.md (remove SCENARIO-15 from `## Left unbuilt`, close the two 4a debts it owns, keep the `render.go:222` wording debt as 4c)
 
 ## Handoff
 
@@ -54,7 +54,7 @@ Surface survey: no new port or adapter; one new exported `store.Actions()` (alph
 
 ## Phase report
 
-Runs B1 (steps 3-4), B2 (steps 5-6) and B3 (step 7) done. Open for V (steps 8-9).
+All runs done. V: `go build` ok, `golangci-lint run ./...` 0 issues, covered full suite rc=0 (all packages ok), `uncovered-diff.py` 0 uncovered added lines since d35dedd, `go test -race` on cli/store/report/importer ok, `test-stats.py --base d35dedd --changed` TOTAL 1841 (+8) (cmd/quarry +1, cli +3, importer +1, report +1, store +2), `spec-check.py phase4b-holdings` OK. Spec ticked, STATE.md rewritten. Doc comments on `store.Actions`, `SQLConventions`, `widestLen` present.
 
 B3:
 - `internal/cli/render.go` `widestLen` counts `utf8.RuneCountInString` (import `unicode/utf8` added); callers unchanged. New `internal/cli/render_width_internal_test.go`: `Test_widestLen_counts_runes_not_bytes`, `Test_shareMismatchRows_pad_non_ASCII_names_by_runes`, `Test_balanceMismatchRows_pad_non_ASCII_labels_by_runes` (exact rows).
