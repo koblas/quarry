@@ -24,3 +24,10 @@ Method: the binary built from this branch runs `quarry sync --from 20260930T0720
 - Cash side: 14,061 transactions equals the Phase 1 probe's CashFlowTransaction count (investment rows stay out of `transactions`); `spend` runs, exit 0. Byte-equality of spend/cashflow with and without investment rows is pinned by `Test_run_spend_and_cashflow_are_unchanged_by_investment_transactions`, not re-measured here.
 
 PRD Phase 4 gate "Share counts match Quicken": met for the real file (145/145 holdings, tolerance 0.000001).
+
+## Run 3 — 2026-10-04, HEAD 6737fe3: v5 → v6 upgrade on a copy of the real store
+
+Scratch HOME holding a copy of the user's real v5 `quarry.duckdb` (2 `import_runs`, ids 1–2, `format_version` 5) plus the snapshot copy.
+- `sync --from 20260930T072052Z` (1st): exit 0, stderr empty; `Shares    145 holdings match Quicken's share counts`.
+- `sync --from 20260930T072052Z` (2nd): exit 0, stderr empty; same Shares line.
+- After: `import_runs` 4 rows (ids 1–4), the 2 pre-4a rows carried with `shares_checked` NULL; `format_version` 6; `status` exit 0.
