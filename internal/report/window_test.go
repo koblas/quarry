@@ -365,6 +365,10 @@ func Test_parse_search_window_refuses_a_bound_that_is_not_a_date(t *testing.T) {
 	}
 }
 
+func Test_today_is_the_calendar_day_in_the_instants_own_zone(t *testing.T) {
+	assert.Equal(t, day(2026, time.September, 29), report.Today(windowNow))
+}
+
 func Test_parse_search_window_refuses_a_since_after_the_until(t *testing.T) {
 	since, until := "2026-04", "2026-03-31"
 

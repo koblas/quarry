@@ -5,11 +5,16 @@ import "strconv"
 // Thousands renders n, which must be non-negative, with a comma every
 // three digits from the right: 1234567 is "1,234,567".
 func Thousands(n int) string {
-	s := strconv.Itoa(n)
-	for i := len(s) - 3; i > 0; i -= 3 {
-		s = s[:i] + "," + s[i:]
+	return ThousandsDigits(strconv.Itoa(n))
+}
+
+// ThousandsDigits groups digits, a string of decimal digits of any length, with a comma every
+// three digits from the right: "1234567" is "1,234,567".
+func ThousandsDigits(digits string) string {
+	for i := len(digits) - 3; i > 0; i -= 3 {
+		digits = digits[:i] + "," + digits[i:]
 	}
-	return s
+	return digits
 }
 
 // Count renders n thousands-grouped with singular at exactly 1 and plural
