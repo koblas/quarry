@@ -50,7 +50,7 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 		"Source", abbreviated(t, bundle.Dir, home),
 		"Dates", "2026-01-05 to 2026-03-20",
 		"Rows", "4 transactions, 4 splits, 2 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices",
-		"Balances", "1 account matches Quicken's last reconciled balance; 1 never reconciled and 1 investment account not checked",
+		"Balances", "1 account matches Quicken's last reconciled balance; 1 never reconciled and 1 investment account's cash not checked",
 		"Splits", "all 4 transactions equal the sum of their splits",
 		"Shares", "no holdings to check",
 		"Transfers", "1 paired, 1 one-sided",

@@ -11,14 +11,15 @@ leaving the account. v_cash_flow and v_spending also carry each amount in
 CAD and in USD (amount_cad and amount_usd; spent_cad and spent_usd),
 converted per split at the Bank of Canada rate for its date and rounded to
 the cent, as quarry spend and quarry cashflow convert; they are NULL for a
-date before the first rate. v_account_balances has balance_cad and
-balance_usd at today's rate. fx_rates holds one rate per business day:
-usd_cad is the Canadian dollars in one US dollar. For spending and income,
-query v_spending and v_cash_flow: they already leave out transfers between
-your own accounts, Quicken's system categories, transactions excluded from
-reports and accounts Quicken leaves out of reports, so their totals match
-quarry spend and quarry cashflow. A transfer leg is any split named in
-transfers.from_split_id or transfers.to_split_id.
+date before the first rate. v_account_balances (v_balances_daily for
+today) has balance_cad and balance_usd at today's rate. fx_rates holds
+one rate per business day: usd_cad is the Canadian dollars in one US
+dollar. For spending and income, query v_spending and v_cash_flow: they
+already leave out transfers between your own accounts, Quicken's system
+categories, transactions excluded from reports and accounts Quicken
+leaves out of reports, so their totals match quarry spend and quarry
+cashflow. A transfer leg is any split named in transfers.from_split_id
+or transfers.to_split_id.
 
 Each investment transaction that moves cash also has a row in transactions
 (investment_transaction_id names it; NULL for a register entry), one split per
@@ -284,9 +285,11 @@ each one's status.
 | `institution` | `VARCHAR` |
 | `closed` | `BOOLEAN` |
 | `active` | `BOOLEAN` |
-| `balance` | `DECIMAL(18,2)` |
-| `balance_cad` | `DECIMAL(18,2)` |
-| `balance_usd` | `DECIMAL(18,2)` |
+| `cash` | `DECIMAL(18,2)` |
+| `holdings_value` | `DECIMAL(38,2)` |
+| `balance` | `DECIMAL(38,2)` |
+| `balance_cad` | `DECIMAL(38,2)` |
+| `balance_usd` | `DECIMAL(38,2)` |
 
 ### v_balances_daily
 

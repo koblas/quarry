@@ -89,7 +89,7 @@ func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *tes
 		"Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns)",
 		"Store", abbreviated(t, storePath, home),
 		"Rows", "4 transactions, 4 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices",
-		"Balances", "3 accounts match Quicken's last reconciled balance; 1 never reconciled and 1 investment account not checked",
+		"Balances", "3 accounts match Quicken's last reconciled balance; 1 never reconciled and 1 investment account's cash not checked",
 		"Splits", "all 4 transactions equal the sum of their splits",
 		"Shares", "no holdings to check",
 		"Transfers", "none",

@@ -92,8 +92,9 @@ file, else CAD) at the Bank of Canada rate for the --as-of day, or the
 latest earlier one; --currency native leaves it out and totals each
 currency separately.
 
-The total is the value of the securities only. Cash held in investment
-accounts is not included, so it is not those accounts' balance.
+The total is the value of the securities only, without the cash held in
+investment accounts; quarry accounts shows each account's balance, cash
+included.
 `
 	var stdout, stderr bytes.Buffer
 

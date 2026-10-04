@@ -18,10 +18,10 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
 	list := store.AccountList{
 		AsOf: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC),
 		Accounts: []store.AccountBalance{
-			{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Institution: new("First Bank"), Active: true, LinkedTracking: true, Balance: 1234567},
-			{ID: "acct-2", Name: "Visa", Type: "credit_card", Currency: "CAD", Closed: true, Active: true, NotInReports: true, Balance: -120417},
+			{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Institution: new("First Bank"), Active: true, LinkedTracking: true, Balance: 1234567, Cash: 1234567},
+			{ID: "acct-2", Name: "Visa", Type: "credit_card", Currency: "CAD", Closed: true, Active: true, NotInReports: true, Balance: -120417, Cash: -120417},
 			{ID: "acct-3", Name: "Old Savings", Type: "savings", Currency: "USD", Balance: 0},
-			{ID: "acct-4", Name: "RRSP", Type: "retirement", Currency: "CAD", Institution: new("First Bank"), Active: true},
+			{ID: "acct-4", Name: "RRSP", Type: "retirement", Currency: "CAD", Institution: new("First Bank"), Active: true, Balance: 250000, Cash: 100000, HoldingsValue: new(int64(150000))},
 		},
 	}
 
@@ -43,6 +43,8 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
       "in_reports": true,
       "linked_tracking": true,
       "balance": "12345.67",
+      "cash": "12345.67",
+      "holdings_value": null,
       "converted_balance": null
     },
     {
@@ -56,6 +58,8 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
       "in_reports": false,
       "linked_tracking": false,
       "balance": "-1204.17",
+      "cash": "-1204.17",
+      "holdings_value": null,
       "converted_balance": null
     },
     {
@@ -69,6 +73,8 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
       "in_reports": true,
       "linked_tracking": false,
       "balance": "0.00",
+      "cash": "0.00",
+      "holdings_value": null,
       "converted_balance": null
     },
     {
@@ -81,7 +87,9 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
       "active": true,
       "in_reports": true,
       "linked_tracking": false,
-      "balance": "0.00",
+      "balance": "2500.00",
+      "cash": "1000.00",
+      "holdings_value": "1500.00",
       "converted_balance": null
     }
   ],
@@ -162,9 +170,9 @@ func jsonListing(currency money.Currency) report.AccountListing {
 	}
 }
 
-func Test_renderAccountsJSON_puts_currency_after_as_of_and_converted_balance_after_balance_in_every_mode(t *testing.T) {
+func Test_renderAccountsJSON_puts_currency_after_as_of_and_cash_and_holdings_value_between_balance_and_converted_balance_in_every_mode(t *testing.T) {
 	topLevel := []string{"as_of", "currency", "accounts", "warnings"}
-	row := []string{"id", "name", "type", "currency", "institution", "closed", "active", "in_reports", "linked_tracking", "balance", "converted_balance"}
+	row := []string{"id", "name", "type", "currency", "institution", "closed", "active", "in_reports", "linked_tracking", "balance", "cash", "holdings_value", "converted_balance"}
 	cases := []struct {
 		name     string
 		currency money.Currency
@@ -225,6 +233,33 @@ func Test_renderAccountsJSON_reads_back_each_balance_and_its_converted_balance(t
 	}
 }
 
+func Test_renderAccountsJSON_reads_back_cash_on_every_account_and_holdings_value_only_on_an_investment_account(t *testing.T) {
+	list := report.AccountListing{
+		AsOf: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC),
+		Accounts: []store.AccountBalance{
+			{ID: "acct-chq", Type: "chequing", Currency: "CAD", Balance: 1500, Cash: 1500},
+			{ID: "acct-brk", Type: "brokerage", Currency: "CAD", Balance: 13000, Cash: 10000, HoldingsValue: new(int64(3000))},
+			{ID: "acct-empty", Type: "brokerage", Currency: "CAD"},
+		},
+	}
+
+	got, err := renderAccountsJSON(list, []string{})
+
+	require.NoError(t, err)
+	var doc struct {
+		Accounts []struct {
+			Balance       string  `json:"balance"`
+			Cash          *string `json:"cash"`
+			HoldingsValue *string `json:"holdings_value"`
+		} `json:"accounts"`
+	}
+	require.NoError(t, json.Unmarshal(got, &doc))
+	require.Len(t, doc.Accounts, 3)
+	assert.Equal(t, []*string{new("15.00"), new("100.00"), new("0.00")}, []*string{doc.Accounts[0].Cash, doc.Accounts[1].Cash, doc.Accounts[2].Cash})
+	assert.Equal(t, []*string{nil, new("30.00"), nil}, []*string{doc.Accounts[0].HoldingsValue, doc.Accounts[1].HoldingsValue, doc.Accounts[2].HoldingsValue})
+	assert.Equal(t, []string{"15.00", "130.00", "0.00"}, []string{doc.Accounts[0].Balance, doc.Accounts[1].Balance, doc.Accounts[2].Balance})
+}
+
 func Test_renderAccountsJSON_leaves_the_converted_balance_null_for_an_imported_balance_no_rate_converts(t *testing.T) {
 	list := jsonListing(money.CAD)
 	list.Accounts[0].BalanceCAD = nil
@@ -232,7 +267,7 @@ func Test_renderAccountsJSON_leaves_the_converted_balance_null_for_an_imported_b
 	got, err := renderAccountsJSON(list, []string{})
 
 	require.NoError(t, err)
-	assert.Contains(t, string(got), "\"balance\": \"8.00\",\n      \"converted_balance\": null\n")
+	assert.Contains(t, string(got), "\"holdings_value\": null,\n      \"converted_balance\": null\n")
 }
 
 func Test_renderAccountsJSON_renders_no_accounts_in_the_reporting_currency_as_an_empty_list(t *testing.T) {

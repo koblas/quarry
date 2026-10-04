@@ -62,6 +62,17 @@ func Test_renderAccounts(t *testing.T) {
 				"Chequing  chequing  CAD       12,345.67\n",
 		},
 		{
+			name: "an investment account's Balance cell is cash plus holdings value, widening the column",
+			accounts: []store.AccountBalance{
+				{Name: "Brokerage", Type: "brokerage", Currency: "CAD", Active: true, Cash: 1000000, HoldingsValue: new(int64(20500000)), Balance: 21500000},
+				balanceRow("Chequing", "chequing", "CAD", 1234567, false, true),
+			},
+			want: "" +
+				"Account    Type       Currency     Balance  Status\n" +
+				"Brokerage  brokerage  CAD       215,000.00\n" +
+				"Chequing   chequing   CAD        12,345.67\n",
+		},
+		{
 			name: "a non-ASCII name padded by rune count",
 			accounts: []store.AccountBalance{
 				balanceRow("Chequing", "chequing", "CAD", 0, false, true),

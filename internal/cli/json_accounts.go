@@ -13,8 +13,8 @@ type accountsDocument struct {
 	Warnings []string             `json:"warnings"`
 }
 
-// accountRowDocument is one entry of "accounts"; Institution, Balance and ConvertedBalance
-// are null when absent, not valued, or unconverted (native listing or no rate).
+// accountRowDocument is one entry of "accounts"; Institution and ConvertedBalance are null when
+// absent or unconverted (native listing or no rate), HoldingsValue for a non-investment account.
 type accountRowDocument struct {
 	ID               string  `json:"id"`
 	Name             string  `json:"name"`
@@ -25,7 +25,9 @@ type accountRowDocument struct {
 	Active           bool    `json:"active"`
 	InReports        bool    `json:"in_reports"`
 	LinkedTracking   bool    `json:"linked_tracking"`
-	Balance          *string `json:"balance"`
+	Balance          string  `json:"balance"`
+	Cash             string  `json:"cash"`
+	HoldingsValue    *string `json:"holdings_value"`
 	ConvertedBalance *string `json:"converted_balance"`
 }
 
@@ -39,7 +41,9 @@ func renderAccountsJSON(list report.AccountListing, warnings []string) ([]byte, 
 			Institution: jsonNullInstitution(a.Institution),
 			Closed:      a.Closed, Active: a.Active, InReports: !a.NotInReports,
 			LinkedTracking: a.LinkedTracking,
-			Balance:        jsonNullMoney(&a.Balance), ConvertedBalance: jsonNullMoney(list.ConvertedBalance(a)),
+			Balance:        document.Money(a.Balance), Cash: document.Money(a.Cash),
+			HoldingsValue:    jsonNullMoney(a.HoldingsValue),
+			ConvertedBalance: jsonNullMoney(list.ConvertedBalance(a)),
 		}
 	}
 	return marshalDocument(accountsDocument{AsOf: list.AsOf.Format(document.DateLayout), Currency: list.Currency.String(), Accounts: rows, Warnings: warnings})

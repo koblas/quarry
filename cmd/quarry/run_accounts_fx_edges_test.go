@@ -197,18 +197,17 @@ func Test_run_accounts_all_converts_a_closed_account_like_any_other(t *testing.T
 	assert.Equal(t, "Account      Type      Currency  Balance  In CAD  Status\nUS Chequing  chequing  USD          0.00    0.00  closed\n", stdout.String())
 }
 
-func Test_run_accounts_all_pads_a_blank_cell_so_a_closed_Status_follows_it_in_the_column(t *testing.T) {
-	seedAccounts(t, []store.Account{chequingAccount("acct-cad", 1), closedAccount(brokerageAccount("acct-brk", 2, "USD"))}, pastRate)
+func Test_run_accounts_all_pads_a_no_rate_cell_so_a_closed_Status_follows_it_in_the_column(t *testing.T) {
+	seedAccounts(t, []store.Account{chequingAccount("acct-cad", 1), closedAccount(brokerageAccount("acct-brk", 2, "USD"))})
 	var stdout, stderr bytes.Buffer
 
 	exitCode := run(context.Background(), []string{"accounts", "--all"}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
 	assert.Equal(t, ""+
-		"Account    Type       Currency     Balance  In CAD  Status\n"+
-		"Brokerage  brokerage  USD       not valued          closed\n"+
-		"Chequing   chequing   CAD             0.00    0.00\n", stdout.String())
+		"Account    Type       Currency  Balance   In CAD  Status\n"+
+		"Brokerage  brokerage  USD          0.00  no rate  closed\n"+
+		"Chequing   chequing   CAD          0.00     0.00\n", stdout.String())
 }
 
 func Test_run_accounts_lists_the_config_warning_before_the_no_rates_warning_in_both_forms(t *testing.T) {
