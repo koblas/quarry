@@ -17,11 +17,19 @@ const (
 	holdingNoPriceCell      = "no price"
 	holdingNoCurrencyCell   = "none"
 	holdingNotConvertedCell = "not converted"
+	holdingNoRateCell       = "no rate"
 	holdingClosedSuffix     = " (closed)"
 )
 
+// The Currency and Value columns' positions in a holdings table row, the same in a native and a converted table.
+const (
+	holdingCurrencyColumn = 5
+	holdingValueColumn    = 6
+)
+
 // renderHoldings renders h as the holdings table: caption, header, one row per holding in h's order, and
-// a Total row holding only the converted total. A native listing has no In column and one Total row per currency.
+// one Total row per total. The reporting currency's total sits in the In column; every other total sits
+// under Value with its currency. A native listing has no In column.
 func renderHoldings(h report.Holdings) string {
 	converted := h.Currency != money.Native
 	header := []string{"Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value"}
@@ -39,22 +47,23 @@ func renderHoldings(h report.Holdings) string {
 		}
 		rows = append(rows, row)
 	}
-	if converted && len(h.Totals) > 0 {
-		rows = append(rows, holdingsTotalRow(len(header), formatBigMoney(h.Totals[0].Value)))
-	}
-	if !converted {
-		for _, total := range h.Totals {
-			rows = append(rows, holdingsNativeTotalRow(len(header), total))
+	for _, total := range h.Totals {
+		if converted && total.Currency == h.Currency.String() {
+			rows = append(rows, holdingsTotalRow(len(header), formatBigMoney(total.Value)))
+		} else {
+			rows = append(rows, holdingsCurrencyTotalRow(len(header), total))
 		}
 	}
 	return renderTable(holdingsCaption(h), aligns, rows)
 }
 
-// holdingsNativeTotalRow is the Total row of one currency in a native table width cells wide: the
-// label, the currency in the Currency column and the sum in the Value column, every other cell blank.
-func holdingsNativeTotalRow(width int, total report.HoldingsTotal) []string {
-	row := holdingsTotalRow(width, formatBigMoney(total.Value))
-	row[width-2] = total.Currency
+// holdingsCurrencyTotalRow is the Total row of one currency in a table width cells wide: the label, the
+// currency in the Currency column and the sum in the Value column, every other cell blank.
+func holdingsCurrencyTotalRow(width int, total report.HoldingsTotal) []string {
+	row := make([]string, width)
+	row[0] = tableTotalLabel
+	row[holdingCurrencyColumn] = total.Currency
+	row[holdingValueColumn] = formatBigMoney(total.Value)
 	return row
 }
 
@@ -137,7 +146,7 @@ func holdingValue(h store.Holding) string {
 }
 
 // holdingInCell is the value in the reporting currency: blank with no price, "not converted" for a
-// priced security quarry cannot convert, blank when the row has no converted value.
+// priced security quarry cannot convert, "no rate" for one only a missing exchange rate keeps unconverted.
 func holdingInCell(l report.Holdings, h store.Holding) string {
 	if h.Price == nil {
 		return ""
@@ -145,9 +154,13 @@ func holdingInCell(l report.Holdings, h store.Holding) string {
 	if !report.Convertible(h) {
 		return holdingNotConvertedCell
 	}
+	if l.NeedsRate(h) {
+		return holdingNoRateCell
+	}
 	if cents := l.Converted(h); cents != nil {
 		return formatBigMoney(cents)
 	}
+	// unreachable: a priced CAD or USD row converts to its own currency without a rate, and NeedsRate took every other row without a value
 	return ""
 }
 
