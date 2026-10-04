@@ -1,8 +1,11 @@
 package document
 
 import (
+	"cmp"
 	"fmt"
 	"math/big"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/humanize"
@@ -81,7 +84,7 @@ func NewHoldings(h report.Holdings, warnings []string) Holdings {
 	return Holdings{
 		AsOf:          h.AsOf.Format(DateLayout),
 		Currency:      h.Currency.String(),
-		AccountFilter: NewAccountFilters(nil),
+		AccountFilter: NewAccountFilters(h.Accounts),
 		Holdings:      rows,
 		Totals:        totals,
 		Warnings:      append([]string{}, warnings...),
@@ -107,15 +110,35 @@ func nullableMoney(cents *big.Int) *string {
 }
 
 // HoldingsWarnings is the unprefixed warning lines for h, in the order holdings prints them; never nil.
-// Slots: no price, no rate, no currency, other currency.
+// Slots: named non-investment accounts, no price, no rate, no currency, other currency.
 func HoldingsWarnings(h report.Holdings) []string {
-	warnings := []string{}
+	warnings := nonInvestmentWarnings(h)
 	if line, ok := noPriceWarning(h); ok {
 		warnings = append(warnings, line)
 	}
 	warnings = append(warnings, noRateWarnings(h)...)
 	warnings = append(warnings, noCurrencyWarnings(h)...)
 	return append(warnings, otherCurrencyWarnings(h)...)
+}
+
+// nonInvestmentWarnings is one line per named account that is not a brokerage or retirement account, in
+// the holdings table's account order; non-nil, so it seeds HoldingsWarnings.
+func nonInvestmentWarnings(h report.Holdings) []string {
+	var named []store.Account
+	for _, a := range h.Accounts {
+		if !store.IsInvestmentAccount(a.Type) {
+			named = append(named, a)
+		}
+	}
+	// The same key as the holdings query's ORDER BY: plain name, then source id, then id.
+	slices.SortFunc(named, func(a, b store.Account) int {
+		return cmp.Or(strings.Compare(a.Name, b.Name), cmp.Compare(a.SourceID, b.SourceID), strings.Compare(a.ID, b.ID))
+	})
+	lines := make([]string, len(named))
+	for i, a := range named {
+		lines[i] = fmt.Sprintf("account %q is not a brokerage or retirement account, so it has no holdings", a.Name)
+	}
+	return lines
 }
 
 // holdingsNoRatesWarning is the line for a store with no exchange rates at all.

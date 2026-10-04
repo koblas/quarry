@@ -69,7 +69,7 @@ func holdingsCurrencyTotalRow(width int, total report.HoldingsTotal) []string {
 
 // holdingsCaption names the day, the accounts and, in CAD or USD, the currency of the amounts.
 func holdingsCaption(h report.Holdings) string {
-	caption := "Holdings on " + h.AsOf.Format(time.DateOnly) + " in " + accountsCaption(nil)
+	caption := "Holdings on " + h.AsOf.Format(time.DateOnly) + " in " + accountsCaption(h.Accounts)
 	if h.Currency != money.Native {
 		caption += ", amounts in " + h.Currency.String()
 	}

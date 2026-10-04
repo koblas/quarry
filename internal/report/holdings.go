@@ -12,7 +12,8 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// HoldingsRequest is what Holdings reads: the holdings on AsOf, shown in Currency.
+// HoldingsRequest is what Holdings reads: the holdings on AsOf, shown in Currency, in the accounts
+// Accounts name by id or by name, or in every account when it is empty.
 type HoldingsRequest struct {
 	AsOf     time.Time
 	Currency money.Currency
@@ -27,6 +28,7 @@ type HoldingsTotal struct {
 
 // Holdings is the holdings on AsOf, in the store's order, with their totals.
 // FirstRate is the date of the store's first exchange rate, zero when it has none.
+// Accounts are the accounts the request named, in the order given and without repeats; nil when none.
 type Holdings struct {
 	Rows      []store.Holding
 	Totals    []HoldingsTotal
@@ -62,13 +64,18 @@ func (l Holdings) NeedsRate(h store.Holding) bool {
 }
 
 // Holdings lists the holdings on req.AsOf with the total of their values in req.Currency.
-// It refuses like Status, and reads the store once.
+// It refuses like Spend for an account name that picks none or several, else like Status,
+// and reads the holdings once.
 func (s *Server) Holdings(ctx context.Context, req HoldingsRequest) (Holdings, error) {
-	read, err := s.store.Holdings(ctx, store.HoldingsParams{AsOf: req.AsOf})
+	accounts, ids, err := s.namedAccounts(ctx, "holdings", req.Accounts)
+	if err != nil {
+		return Holdings{}, err
+	}
+	read, err := s.store.Holdings(ctx, store.HoldingsParams{AsOf: req.AsOf, AccountIDs: ids})
 	if err != nil {
 		return Holdings{}, s.readRefusal(ctx, "holdings", err)
 	}
-	listing := Holdings{Rows: read.Holdings, AsOf: req.AsOf, Currency: req.Currency, FirstRate: read.FirstRate}
+	listing := Holdings{Rows: read.Holdings, AsOf: req.AsOf, Currency: req.Currency, FirstRate: read.FirstRate, Accounts: accounts}
 	listing.Totals = listing.total()
 	return listing, nil
 }
