@@ -1,5 +1,5 @@
-// The reference files are read by repo-relative path, so these tests live in
-// package main beside the other cmd/quarry tests.
+// Package main: main cannot be imported, so these tests live beside the unexported run and
+// the test helpers the cmd/quarry tests share.
 package main
 
 import (
@@ -52,9 +52,6 @@ func findingTypeBullets(types []string) []string {
 	return bullets
 }
 
-// collapsed is text with every run of whitespace turned into one space.
-func collapsed(text string) string { return strings.Join(strings.Fields(text), " ") }
-
 // phase4OrQuickenNames is the Phase 4 views and Quicken Z-table names that text mentions.
 func phase4OrQuickenNames(text string) []string {
 	return append(phase4ViewPattern.FindAllString(text, -1), zTableName.FindAllString(text, -1)...)
@@ -67,6 +64,7 @@ func Test_reference_files_state_their_job(t *testing.T) {
 	}{
 		{"spending.md", []string{
 			"quarry spend", "--by", "--currency", "refund", "references/sql/spending-trend.sql",
+			"do not compare a partial period with a whole one as if they were equal",
 		}},
 		{"cash-flow.md", []string{
 			"quarry cashflow", "savings rate", "n/a", "partial", "references/sql/income-by-category.sql",
@@ -83,7 +81,7 @@ func Test_reference_files_state_their_job(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.file, func(t *testing.T) {
-			text := collapsed(repoFile(t, referencesDir+"/"+c.file))
+			text := collapseWhitespace(repoFile(t, referencesDir+"/"+c.file))
 
 			for _, phrase := range c.phrases {
 				assert.Contains(t, text, phrase)
@@ -143,7 +141,10 @@ func Test_references_name_scan_flags_crafted_tool_names(t *testing.T) {
 }
 
 func Test_references_name_no_mcp_tool(t *testing.T) {
-	assert.Empty(t, mcpToolSpans(referenceSources(t), mcpToolNames(t)))
+	tools := mcpToolNames(t)
+
+	require.Contains(t, tools, "sync_status")
+	assert.Empty(t, mcpToolSpans(referenceSources(t), tools))
 }
 
 func Test_references_name_no_phase_4_view_or_quicken_table(t *testing.T) {

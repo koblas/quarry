@@ -1,5 +1,5 @@
-// The skill's MCP tool names, views and links are checked against the product, so these tests
-// live in package main beside the other cmd/quarry tests.
+// Package main: main cannot be imported, so these tests live beside the unexported run and
+// the test helpers the cmd/quarry tests share.
 package main
 
 import (
@@ -173,7 +173,7 @@ func linkMismatches(sources []driftSource, exists func(rel string) bool) driftCh
 
 // repoFileExists is whether rel names a file or directory of the repository.
 func repoFileExists(rel string) bool {
-	_, err := os.Stat("../../" + rel)
+	_, err := os.Stat(repoRoot + rel)
 	return err == nil
 }
 

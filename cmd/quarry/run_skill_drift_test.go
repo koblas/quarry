@@ -47,25 +47,15 @@ func skillDriftSources(t *testing.T) []driftSource {
 	}, referenceSources(t)...)
 }
 
-// readmeClaudeCodeText is README.md from the Claude Code heading up to the Credits heading.
-func readmeClaudeCodeText(t *testing.T) string {
-	t.Helper()
-	_, afterStart, found := strings.Cut(repoFile(t, "README.md"), readmeClaudeCodeHeading+"\n")
-	require.True(t, found, "README.md must carry the Claude Code section")
-	section, _, found := strings.Cut(afterStart, readmeCreditsHeading)
-	require.True(t, found, "README.md must carry the Credits section after it")
-	return readmeClaudeCodeHeading + "\n" + section
-}
-
 // referenceSources is every file under references/, listed from disk and named by repo-relative path.
 func referenceSources(t *testing.T) []driftSource {
 	t.Helper()
 	var sources []driftSource
-	err := filepath.WalkDir("../../"+referencesDir, func(file string, entry fs.DirEntry, err error) error {
+	err := filepath.WalkDir(repoRoot+referencesDir, func(file string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
 		}
-		rel := path.Join(referencesDir, strings.TrimPrefix(filepath.ToSlash(file), "../../"+referencesDir+"/"))
+		rel := path.Join(referencesDir, strings.TrimPrefix(filepath.ToSlash(file), repoRoot+referencesDir+"/"))
 		sources = append(sources, driftSource{name: rel, text: repoFile(t, rel)})
 		return nil
 	})

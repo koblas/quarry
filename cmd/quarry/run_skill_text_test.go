@@ -1,5 +1,5 @@
-// The skill is read by repo-relative path, so these tests live in package main
-// beside the other cmd/quarry tests.
+// Package main: main cannot be imported, so these tests live beside the unexported run and
+// the test helpers the cmd/quarry tests share.
 package main
 
 import (

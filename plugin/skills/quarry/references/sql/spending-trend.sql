@@ -2,8 +2,8 @@
 WITH params AS (SELECT 'Food:Groceries' AS category, CAST(NULL AS VARCHAR) AS payee, 'year' AS grain, DATE '2022-01-01' AS since, current_date AS until, 'CAD' AS currency)
 SELECT
     CAST(date_trunc(p.grain, s.date) AS DATE) AS period,
-    CASE WHEN CASE p.currency WHEN 'CAD' THEN s.spent_cad ELSE s.spent_usd END IS NULL THEN s.currency ELSE p.currency END AS currency,
-    CAST(sum(COALESCE(CASE p.currency WHEN 'CAD' THEN s.spent_cad ELSE s.spent_usd END, s.spent)) AS DECIMAL(18,2)) AS spent
+    CASE WHEN CASE p.currency WHEN 'CAD' THEN s.spent_cad WHEN 'USD' THEN s.spent_usd END IS NULL THEN s.currency ELSE p.currency END AS currency,
+    CAST(sum(COALESCE(CASE p.currency WHEN 'CAD' THEN s.spent_cad WHEN 'USD' THEN s.spent_usd END, s.spent)) AS DECIMAL(18,2)) AS spent
 FROM v_spending s, params p
 WHERE s.date BETWEEN p.since AND p.until
     AND (p.category IS NULL

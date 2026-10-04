@@ -1,5 +1,5 @@
-// The use cases are evaluated through run, on the shared skill eval fixture, so these tests live in
-// package main beside the other cmd/quarry tests.
+// Package main: main cannot be imported, so these tests live beside the unexported run and
+// the test helpers the cmd/quarry tests share.
 package main
 
 import (
@@ -16,8 +16,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-const skillMDPath = "plugin/skills/quarry/SKILL.md"
 
 // skillUseCase is one in-scope question: the SKILL.md section 4 row that answers it, the
 // command line run for it, and the check on that command's JSON.
@@ -166,7 +164,7 @@ func Test_each_use_case_question_is_answered_by_the_command_the_skill_names(t *t
 }
 
 func Test_use_case_argv_matches_the_command_the_skill_names(t *testing.T) {
-	skill := repoFile(t, skillMDPath)
+	skill := repoFile(t, skillPath)
 
 	for _, c := range skillUseCases() {
 		t.Run(c.name, func(t *testing.T) {

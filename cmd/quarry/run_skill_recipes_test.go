@@ -1,5 +1,5 @@
-// The recipes are read by repo-relative path, so these tests live in package main
-// beside the other cmd/quarry tests.
+// Package main: main cannot be imported, so these tests live beside the unexported run and
+// the test helpers the cmd/quarry tests share.
 package main
 
 import (
@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"regexp"
 	"slices"
 	"strings"
@@ -21,10 +22,45 @@ import (
 )
 
 const (
-	recipeDir         = "plugin/skills/quarry/references/sql/"
+	recipeDir         = referencesDir + "/sql/"
 	spendingTrendFile = "spending-trend.sql"
 	incomeByCatFile   = "income-by-category.sql"
 )
+
+// recipeSpec is what the tests hold true of one shipped recipe file.
+type recipeSpec struct {
+	file       string
+	view       string   // the one view the recipe reads
+	paramNames []string // aliases of the params row, in order
+	paramsLine string   // line 2 as shipped
+	literals   []string // quoted strings allowed off the params row: structural branch labels, not values
+}
+
+// recipes is every file under references/sql/; Test_recipe_registry_lists_every_sql_file_on_disk keeps it so.
+var recipes = []recipeSpec{
+	{
+		file:       spendingTrendFile,
+		view:       "v_spending",
+		paramNames: []string{"category", "payee", "grain", "since", "until", "currency"},
+		paramsLine: recipeParamsPrefix + "'Food:Groceries' AS category, CAST(NULL AS VARCHAR) AS payee, 'year' AS grain, DATE '2022-01-01' AS since, current_date AS until, 'CAD' AS currency)",
+		literals:   []string{"':'", "'CAD'", "'USD'"},
+	},
+	{
+		file:       incomeByCatFile,
+		view:       "v_cash_flow",
+		paramNames: []string{"since", "until", "currency"},
+		paramsLine: recipeParamsPrefix + "date_trunc('year', current_date) AS since, current_date AS until, 'CAD' AS currency)",
+		literals:   []string{"'income'", "'CAD'", "'USD'", "'(uncategorized)'"},
+	},
+}
+
+// recipeNamed is the registry entry for file.
+func recipeNamed(t *testing.T, file string) recipeSpec {
+	t.Helper()
+	i := slices.IndexFunc(recipes, func(r recipeSpec) bool { return r.file == file })
+	require.GreaterOrEqual(t, i, 0, "%s is not in the recipe registry", file)
+	return recipes[i]
+}
 
 // recipeParams are the values spliced into a recipe's params row; "" category or payee is NULL.
 type recipeParams struct {
@@ -33,12 +69,6 @@ type recipeParams struct {
 
 // recipeParamsPrefix opens the one line of a recipe that holds its values.
 const recipeParamsPrefix = "WITH params AS (SELECT "
-
-// recipeParamNames are the aliases of each recipe's params row, in order.
-var recipeParamNames = map[string][]string{
-	spendingTrendFile: {"category", "payee", "grain", "since", "until", "currency"},
-	incomeByCatFile:   {"since", "until", "currency"},
-}
 
 var (
 	errNoParamsLine   = errors.New("no params line")
@@ -99,7 +129,7 @@ func (p recipeParams) sql(name string) string {
 // runRecipe runs the shipped recipe file with its params row replaced by p.
 func runRecipe(t *testing.T, file string, p recipeParams) document.SQL {
 	t.Helper()
-	sql, err := spliceParams(repoFile(t, recipeDir+file), recipeParamNames[file], p)
+	sql, err := spliceParams(repoFile(t, recipeDir+file), recipeNamed(t, file).paramNames, p)
 	require.NoError(t, err, file)
 	return runSQLText(t, sql)
 }
@@ -256,7 +286,7 @@ func Test_income_by_category_recipe_agrees_with_quarry_cashflow(t *testing.T) {
 }
 
 func Test_recipe_params_line_is_found_once_and_keeps_its_names(t *testing.T) {
-	names := recipeParamNames[incomeByCatFile]
+	names := recipeNamed(t, incomeByCatFile).paramNames
 	line := recipeParamsPrefix + "DATE '2020-01-01' AS since, current_date AS until, 'CAD' AS currency)"
 	params := recipeParams{since: "2026-01-01", until: "2026-12-31", currency: "CAD"}
 
@@ -475,21 +505,43 @@ func Test_income_by_category_columns_are_category_currency_income(t *testing.T) 
 	assert.Equal(t, []document.SQLColumn{{Name: "category", Type: "VARCHAR"}, {Name: "currency", Type: "VARCHAR"}, {Name: "income", Type: "DECIMAL(18,2)"}}, recipe.Columns)
 }
 
-func Test_income_by_category_runs_as_shipped(t *testing.T) {
+func Test_spending_trend_lists_each_currency_natively_for_a_currency_other_than_cad_or_usd(t *testing.T) {
 	recipeScenario(t)
+	hardware := [][]any{{"2025-01-01", "CAD", "200.00"}, {"2026-01-01", "CAD", "250.00"}}
+	cases := []struct {
+		name, currency, payee string
+		want                  [][]any
+	}{
+		{"native_keeps_cad_splits_in_cad", "native", "Hardware", hardware},
+		{"native_keeps_usd_splits_in_usd", "native", "Spotify", [][]any{{"2025-01-01", "USD", "21.98"}, {"2026-01-01", "USD", "54.95"}}},
+		{"lower_case_cad_is_not_cad", "cad", "Hardware", hardware},
+	}
 
-	recipe := runShippedRecipe(t, incomeByCatFile)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			recipe := runRecipe(t, spendingTrendFile, recipeParams{payee: c.payee, grain: "year", since: "2025-01-01", until: "2026-12-31", currency: c.currency})
 
-	assert.Len(t, recipe.Columns, 3)
+			assert.Equal(t, c.want, recipe.Rows)
+		})
+	}
 }
 
-// recipeFiles are the shipped recipes and the one view each reads.
-var recipeFiles = map[string]string{spendingTrendFile: "v_spending", incomeByCatFile: "v_cash_flow"}
+func Test_income_by_category_lists_each_currency_natively_for_a_currency_other_than_cad_or_usd(t *testing.T) {
+	recipeScenario(t)
+	cases := []struct{ name, currency string }{
+		{"native", "native"},
+		{"lower_case_cad", "cad"},
+	}
 
-// recipeLiterals are the quoted strings each recipe may hold off its params row: structural branch labels, not values.
-var recipeLiterals = map[string][]string{
-	spendingTrendFile: {"':'", "'CAD'"},
-	incomeByCatFile:   {"'income'", "'CAD'", "'(uncategorized)'"},
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			recipe := runRecipe(t, incomeByCatFile, recipeParams{since: "2026-01-01", until: "2026-12-31", currency: c.currency})
+
+			assert.Equal(t, [][]any{
+				{"(uncategorized)", "CAD", "128.00"}, {"Income:Salary", "CAD", "10000.00"}, {"Income:Salary", "USD", "1100.00"},
+			}, recipe.Rows)
+		})
+	}
 }
 
 var (
@@ -569,52 +621,64 @@ func storeRelations(t *testing.T) []string {
 func Test_recipes_read_only_their_view(t *testing.T) {
 	relations := storeRelations(t)
 
-	for file, view := range recipeFiles {
-		t.Run(file, func(t *testing.T) {
-			assert.Equal(t, []string{view}, relationsNamed(repoFile(t, recipeDir+file), relations))
+	for _, r := range recipes {
+		t.Run(r.file, func(t *testing.T) {
+			assert.Equal(t, []string{r.view}, relationsNamed(repoFile(t, recipeDir+r.file), relations))
 		})
 	}
 }
 
 func Test_recipes_name_no_quicken_table_like_or_clock(t *testing.T) {
-	for file := range recipeFiles {
-		t.Run(file, func(t *testing.T) {
-			assert.Empty(t, forbiddenNames(repoFile(t, recipeDir+file)))
+	for _, r := range recipes {
+		t.Run(r.file, func(t *testing.T) {
+			assert.Empty(t, forbiddenNames(repoFile(t, recipeDir+r.file)))
 		})
 	}
 }
 
 func Test_recipes_open_with_a_question_and_the_params_row(t *testing.T) {
-	for file := range recipeFiles {
-		t.Run(file, func(t *testing.T) {
-			assert.Empty(t, openingProblems(repoFile(t, recipeDir+file)))
+	for _, r := range recipes {
+		t.Run(r.file, func(t *testing.T) {
+			assert.Empty(t, openingProblems(repoFile(t, recipeDir+r.file)))
 		})
 	}
 }
 
-// shippedParamsLine is line 2 of each recipe: the values it ships with.
-var shippedParamsLine = map[string]string{
-	spendingTrendFile: recipeParamsPrefix + "'Food:Groceries' AS category, CAST(NULL AS VARCHAR) AS payee, 'year' AS grain, DATE '2022-01-01' AS since, current_date AS until, 'CAD' AS currency)",
-	incomeByCatFile:   recipeParamsPrefix + "date_trunc('year', current_date) AS since, current_date AS until, 'CAD' AS currency)",
-}
-
 func Test_recipes_ship_the_ruled_params_line(t *testing.T) {
-	for file, want := range shippedParamsLine {
-		t.Run(file, func(t *testing.T) {
-			lines := strings.SplitN(repoFile(t, recipeDir+file), "\n", 3)
+	for _, r := range recipes {
+		t.Run(r.file, func(t *testing.T) {
+			lines := strings.SplitN(repoFile(t, recipeDir+r.file), "\n", 3)
 
 			require.Greater(t, len(lines), 1)
-			assert.Equal(t, want, lines[1])
+			assert.Equal(t, r.paramsLine, lines[1])
 		})
 	}
 }
 
 func Test_recipes_put_values_only_in_the_params_row(t *testing.T) {
-	for file, allowed := range recipeLiterals {
-		t.Run(file, func(t *testing.T) {
-			assert.Subset(t, allowed, quotedOffParamsRow(repoFile(t, recipeDir+file)))
+	for _, r := range recipes {
+		t.Run(r.file, func(t *testing.T) {
+			assert.Subset(t, r.literals, quotedOffParamsRow(repoFile(t, recipeDir+r.file)))
 		})
 	}
+}
+
+func Test_recipe_registry_lists_every_sql_file_on_disk(t *testing.T) {
+	entries, err := os.ReadDir(repoRoot + recipeDir)
+	require.NoError(t, err)
+	var onDisk []string
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".sql") {
+			onDisk = append(onDisk, entry.Name())
+		}
+	}
+	registered := make([]string, len(recipes))
+	for i, r := range recipes {
+		registered[i] = r.file
+	}
+
+	require.NotEmpty(t, onDisk)
+	assert.ElementsMatch(t, registered, onDisk)
 }
 
 func Test_recipe_scanners_flag_crafted_text(t *testing.T) {

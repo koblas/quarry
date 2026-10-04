@@ -41,10 +41,11 @@ For one category or one payee over years or months, use `references/sql/spending
 | `category` | Full category path. Matches that category and every category under it, ignoring case: `Food:Groceries` includes `Food:Groceries:Organic` but not `Foodies`. NULL means any category. |
 | `payee` | Exact payee name, ignoring case. NULL means any payee. |
 | `grain` | `'year'` or `'month'`. |
-| `since`, `until` | Dates; both ends are included. |
+| `since`, `until` | Dates written `DATE 'YYYY-MM-DD'`; both ends are included. |
 | `currency` | `'CAD'` or `'USD'`. |
 
 - The shipped values are `Food:Groceries`, no payee, by year, from 2022-01-01 to today, in CAD. Change them to match the question and say in the answer what you asked for.
 - Each result row has `period`, `currency` and `spent`. `period` is the first day of the year or month.
 - A split dated before the first stored rate has no converted amount. It appears on a row of its own with its native currency in `currency` and `spent` in that currency. Report it separately.
+- The first and last periods can be partial, because `since` and `until` cut them short. Say so when you quote one, and do not compare a partial period with a whole one as if they were equal.
 - To compare two years, quote both rows and show the difference as arithmetic on them.

@@ -32,7 +32,7 @@ For "where did the income come from", use `references/sql/income-by-category.sql
 
 | Param | Value |
 | --- | --- |
-| `since`, `until` | Dates; both ends are included. |
+| `since`, `until` | Dates written `DATE 'YYYY-MM-DD'`; both ends are included. |
 | `currency` | `'CAD'` or `'USD'`. |
 
 - The shipped values are the start of this year to today, in CAD. Change them to match the question and say in the answer what you asked for.

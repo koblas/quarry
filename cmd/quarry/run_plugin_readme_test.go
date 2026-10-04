@@ -1,5 +1,5 @@
-// The README section is read by repo-relative path, so this test lives in
-// package main beside the other cmd/quarry tests.
+// Package main: main cannot be imported, so these tests live beside the unexported run and
+// the test helpers the cmd/quarry tests share.
 package main
 
 import (
@@ -18,15 +18,22 @@ const (
 func Test_readme_section_for_claude_code_is_verbatim_and_precedes_credits(t *testing.T) {
 	readme := repoFile(t, "README.md")
 
+	section := readmeClaudeCodeText(t)
+
+	assert.Equal(t, ticks(readmeClaudeCodeSection), section)
+	assert.Less(t, strings.Index(readme, readmeClaudeCodeHeading), strings.Index(readme, "\n"+readmeCreditsHeading+"\n"))
+}
+
+// readmeClaudeCodeText is README.md from the Claude Code heading to the end of that section, which the next `## ` heading closes.
+func readmeClaudeCodeText(t *testing.T) string {
+	t.Helper()
+	readme := repoFile(t, "README.md")
 	start := strings.Index(readme, readmeClaudeCodeHeading+"\n")
 	require.GreaterOrEqual(t, start, 0, "README.md must carry the Claude Code section")
 	rest := readme[start:]
 	end := strings.Index(rest[len(readmeClaudeCodeHeading):], "\n## ")
 	require.GreaterOrEqual(t, end, 0, "a section must follow the Claude Code section")
-	section := strings.TrimRight(rest[:len(readmeClaudeCodeHeading)+end], "\n")
-
-	assert.Equal(t, ticks(readmeClaudeCodeSection), section)
-	assert.Less(t, start, strings.Index(readme, "\n"+readmeCreditsHeading+"\n"))
+	return strings.TrimRight(rest[:len(readmeClaudeCodeHeading)+end], "\n")
 }
 
 // Ruled copy: the README section, byte for byte.
