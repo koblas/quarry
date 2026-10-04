@@ -76,3 +76,30 @@ func Test_create_fails_when_the_context_is_already_cancelled(t *testing.T) {
 
 	require.ErrorIs(t, err, context.Canceled)
 }
+
+func Test_create_never_fetches_an_extension(t *testing.T) {
+	t.Parallel()
+	db, err := duckdb.Create(t.Context(), filepath.Join(t.TempDir(), "data.duckdb"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	cases := []struct {
+		setting string
+		want    string
+	}{
+		{setting: "autoload_known_extensions", want: "false"},
+		{setting: "autoinstall_known_extensions", want: "false"},
+		{setting: "enable_external_access", want: "false"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.setting, func(t *testing.T) {
+			t.Parallel()
+
+			table, err := db.QueryTable(t.Context(), "SELECT current_setting('"+c.setting+"')::VARCHAR", 0)
+
+			require.NoError(t, err)
+			require.Len(t, table.Rows, 1)
+			assert.Equal(t, c.want, table.Rows[0][0].Text)
+		})
+	}
+}
