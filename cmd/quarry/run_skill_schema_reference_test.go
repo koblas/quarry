@@ -176,12 +176,6 @@ func Test_skill_schema_reference_carries_each_view_comment(t *testing.T) {
 	}
 }
 
-func Test_skill_schema_reference_does_not_name_a_view_the_store_lacks(t *testing.T) {
-	text := repoFile(t, schemaReferencePath)
-
-	assert.NotContains(t, text, "v_net_worth")
-}
-
 func Test_skill_schema_reference_opens_with_its_regeneration_header(t *testing.T) {
 	first, _, _ := strings.Cut(repoFile(t, schemaReferencePath), "\n")
 

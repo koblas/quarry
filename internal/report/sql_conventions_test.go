@@ -17,7 +17,7 @@ func Test_sql_conventions_never_mention_masking(t *testing.T) {
 }
 
 func Test_sql_conventions_name_the_views_and_currencies_a_query_writer_needs(t *testing.T) {
-	for _, phrase := range []string{"v_spending", "v_cash_flow", "v_account_balances", "v_balances_daily", "fx_rates", "transfers.from_split_id"} {
+	for _, phrase := range []string{"v_spending", "v_cash_flow", "v_account_balances", "v_balances_daily", "v_net_worth", "fx_rates", "transfers.from_split_id"} {
 		assert.Contains(t, report.SQLConventions, phrase)
 	}
 }
@@ -44,4 +44,13 @@ func Test_sql_conventions_end_with_the_daily_balances_paragraph(t *testing.T) {
 	paragraphs := strings.Split(report.SQLConventions, "\n\n")
 
 	assert.True(t, strings.HasPrefix(paragraphs[len(paragraphs)-1], "v_balances_daily has one row per account per day"))
+}
+
+func Test_sql_conventions_close_the_balances_paragraph_with_the_net_worth_view(t *testing.T) {
+	paragraphs := strings.Split(report.SQLConventions, "\n\n")
+	balances := strings.Join(strings.Fields(paragraphs[len(paragraphs)-1]), " ")
+
+	assert.True(t, strings.HasSuffix(balances, "v_net_worth has net worth by day, account type and currency "+
+		"over the accounts Quicken's reports count, as quarry networth does; sum balance_cad or balance_usd "+
+		"over one date for the total; a NULL there means no exchange rate for that day."))
 }

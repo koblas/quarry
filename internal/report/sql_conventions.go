@@ -47,4 +47,7 @@ v_balances_daily has one row per account per day from its first transaction
 through today; cash is the sum of its transactions to that day,
 holdings_value its holdings' value in its own currency (NULL outside
 brokerage and retirement accounts), balance is cash plus holdings_value, as
-quarry accounts and quarry networth use; filter by date.`
+quarry accounts and quarry networth use; filter by date. v_net_worth has
+net worth by day, account type and currency over the accounts Quicken's
+reports count, as quarry networth does; sum balance_cad or balance_usd over
+one date for the total; a NULL there means no exchange rate for that day.`
