@@ -8,9 +8,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newHoldingsCommand builds holdings: the securities held in each account today, with their value.
+const holdingsAsOfFlagHelp = "value holdings on `date` (YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day; default today)"
+
+// newHoldingsCommand builds holdings: the securities held in each account on one day, with their value.
 func newHoldingsCommand(newReport ReportFactory, loadConfig ConfigLoader, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var currency currencyFlag
+	var asOfFlag string
 	cmd := &cobra.Command{
 		Use:   "holdings",
 		Short: "List the securities held in each account and their value",
@@ -34,6 +37,16 @@ accounts is not included, so it is not those accounts' balance.`,
   quarry holdings --account RRSP --currency native --json`,
 		Args: currency.args,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			at := now()
+			asOf := report.Today(at)
+			if cmd.Flags().Changed("as-of") {
+				parsed, err := report.ParseAsOf(asOfFlag, at)
+				if err != nil {
+					return UsageError{msg: err.Error()}
+				}
+				asOf = parsed
+			}
+
 			reportCurrency, configWarnings, err := currency.resolve(cmd, loadConfig)
 			if err != nil {
 				return err
@@ -44,7 +57,7 @@ accounts is not included, so it is not those accounts' balance.`,
 				return err
 			}
 
-			holdings, err := srv.Holdings(cmd.Context(), report.HoldingsRequest{AsOf: report.Today(now()), Currency: reportCurrency})
+			holdings, err := srv.Holdings(cmd.Context(), report.HoldingsRequest{AsOf: asOf, Currency: reportCurrency})
 			if err != nil {
 				return &runtimeError{err: err}
 			}
@@ -57,6 +70,7 @@ accounts is not included, so it is not those accounts' balance.`,
 				func() string { return renderHoldings(holdings) })
 		},
 	}
+	cmd.Flags().StringVar(&asOfFlag, "as-of", "", holdingsAsOfFlagHelp)
 	currency.bind(cmd, holdingsCurrencyHelp)
 	return cmd
 }

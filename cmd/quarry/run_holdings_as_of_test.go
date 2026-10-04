@@ -70,20 +70,93 @@ func Test_run_holdings_as_of_a_year_lists_the_shares_after_a_split_before_it(t *
 		stdout.String())
 }
 
+func Test_run_holdings_as_of_forms_pick_the_shares_of_their_day(t *testing.T) {
+	tests := []struct {
+		name     string
+		asOf     string
+		caption  string
+		shares   string
+		price    string
+		pricedOn string
+		value    string
+	}{
+		{"the day before the split", "2025-09-14", "2025-09-14", "100", "10.00", "2025-06-02", "1,000.00"},
+		{"the split day", "2025-09-15", "2025-09-15", "200", "10.00", "2025-06-02", "2,000.00"},
+		{"a month is its last day", "2025-09", "2025-09-30", "200", "10.00", "2025-06-02", "2,000.00"},
+		{"a year is its last day", "2025", "2025-12-31", "200", "12.00", "2025-12-30", "2,400.00"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			seedSplitHoldingsStore(t)
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), []string{"holdings", "--as-of", tt.asOf},
+				spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+			require.Equal(t, 0, exitCode, stderr.String())
+			assert.Equal(t, "Holdings on "+tt.caption+" in all accounts, amounts in CAD; cash not included\n\n"+
+				holdingsAsOfLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In CAD")+
+				holdingsAsOfLine("Brokerage", "Acme Corp (ACME)", tt.shares, tt.price, tt.pricedOn, "CAD", tt.value, tt.value)+
+				holdingsAsOfLine("Total", "", "", "", "", "", "", tt.value),
+				stdout.String())
+		})
+	}
+}
+
+func Test_run_holdings_as_of_the_current_year_or_month_or_today_is_today(t *testing.T) {
+	for _, asOf := range []string{"2026", "2026-03", "2026-03-12"} {
+		t.Run(asOf, func(t *testing.T) {
+			seedSplitHoldingsStore(t)
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), []string{"holdings", "--as-of", asOf},
+				spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+			require.Equal(t, 0, exitCode, stderr.String())
+			assert.Empty(t, stderr.String())
+			assert.Equal(t, "Holdings on 2026-03-12 in all accounts, amounts in CAD; cash not included\n\n"+
+				holdingsAsOfLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In CAD")+
+				holdingsAsOfLine("Brokerage", "Acme Corp (ACME)", "250", "15.00", "2026-01-05", "CAD", "3,750.00", "3,750.00")+
+				holdingsAsOfLine("Total", "", "", "", "", "", "", "3,750.00"),
+				stdout.String())
+		})
+	}
+}
+
+func Test_run_holdings_refuses_a_bad_as_of_before_looking_for_a_store(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"holdings", "--as-of", "2024-13"},
+		spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+	assert.Equal(t, 2, exitCode)
+	assert.Equal(t, `quarry: --as-of "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`+"\n", stderr.String())
+	assert.Empty(t, stdout.String())
+}
+
 func Test_run_holdings_refuses_a_date_it_cannot_use(t *testing.T) {
 	tests := []struct {
 		name   string
 		asOf   string
 		stderr string
 	}{
-		{"not a date", "2024-13",
-			`quarry: --as-of "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD` + "\n"},
-		{"a day after today", "2099-01-01",
-			"quarry: --as-of 2099-01-01 is after today; holdings are valued up to today only, so pass an earlier --as-of\n"},
-		{"a year after today, quoted as typed", "2099",
-			"quarry: --as-of 2099 is after today; holdings are valued up to today only, so pass an earlier --as-of\n"},
-		{"a month after today, quoted as typed", "2026-11",
-			"quarry: --as-of 2026-11 is after today; holdings are valued up to today only, so pass an earlier --as-of\n"},
+		{
+			"not a date", "2024-13",
+			`quarry: --as-of "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD` + "\n",
+		},
+		{
+			"a day after today", "2099-01-01",
+			"quarry: --as-of 2099-01-01 is after today; holdings are valued up to today only, so pass an earlier --as-of\n",
+		},
+		{
+			"a year after today, quoted as typed", "2099",
+			"quarry: --as-of 2099 is after today; holdings are valued up to today only, so pass an earlier --as-of\n",
+		},
+		{
+			"a month after today, quoted as typed", "2026-11",
+			"quarry: --as-of 2026-11 is after today; holdings are valued up to today only, so pass an earlier --as-of\n",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

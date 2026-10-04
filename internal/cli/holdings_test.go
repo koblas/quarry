@@ -20,6 +20,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const holdingsAsOfHelp = "value holdings on date (YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day; default today)"
+
 const holdingsCurrencyHelp = "add a column with each value in currency code: CAD or USD; native adds none (default reporting.currency in the config file, else CAD)"
 
 // holdingsEnv is an Env whose config comes from load and whose report store is fake.
@@ -140,6 +142,87 @@ func Test_holdings_reads_the_day_of_the_clock_as_its_as_of_day(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, store.HoldingsParams{AsOf: time.Date(2026, time.September, 29, 0, 0, 0, 0, time.UTC)}, got)
+}
+
+func Test_holdings_help_shows_the_as_of_flag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeHoldings(t, fakeReportStore{}, &stdout, &stderr, "--help")
+
+	require.NoError(t, err)
+	assert.Regexp(t, `(?m)--as-of date +`+regexp.QuoteMeta(holdingsAsOfHelp)+`$`, stdout.String())
+}
+
+func Test_holdings_as_of_reads_the_last_day_of_the_period_it_names(t *testing.T) {
+	var got store.HoldingsParams
+	var stdout, stderr bytes.Buffer
+
+	err := executeHoldings(t, fakeReportStore{gotHoldings: &got}, &stdout, &stderr, "--as-of", "2025")
+
+	require.NoError(t, err)
+	assert.Equal(t, store.HoldingsParams{AsOf: time.Date(2025, time.December, 31, 0, 0, 0, 0, time.UTC)}, got)
+}
+
+func Test_holdings_as_of_names_its_day_in_the_json_document(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeHoldings(t, fakeReportStore{}, &stdout, &stderr, "--as-of", "2025", "--json")
+
+	require.NoError(t, err)
+	var doc holdingsDoc
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	assert.Equal(t, "2025-12-31", doc.AsOf)
+}
+
+func Test_holdings_as_of_names_its_day_in_the_native_caption(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeHoldings(t, fakeReportStore{}, &stdout, &stderr, "--as-of", "2025", "--currency", "native")
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), "Holdings on 2025-12-31 in all accounts; cash not included\n")
+}
+
+func Test_holdings_refuses_an_as_of_it_cannot_use_before_reading_anything(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"not a date", []string{"--as-of", "2024-13"}, `--as-of "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`},
+		{"empty", []string{"--as-of", ""}, `--as-of "" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`},
+		{
+			"after today",
+			[]string{"--as-of", "2099-01-01"},
+			"--as-of 2099-01-01 is after today; holdings are valued up to today only, so pass an earlier --as-of",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := store.HoldingsParams{AsOf: time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC)}
+			var stdout, stderr bytes.Buffer
+
+			err := executeHoldings(t, fakeReportStore{gotHoldings: &got}, &stdout, &stderr, c.args...)
+
+			var usage cli.UsageError
+			require.ErrorAs(t, err, &usage)
+			assert.Equal(t, c.want, usage.Error())
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC), got.AsOf, "the store was read")
+		})
+	}
+}
+
+func Test_holdings_refuses_a_bad_as_of_before_reading_the_config(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	unreadable := func(string) (config.Config, error) { return config.Config{}, errStoreRead }
+
+	err := cli.Execute(t.Context(), []string{"holdings", "--as-of", "2024-13"}, holdingsEnv(unreadable, fakeReportStore{}, &stdout, &stderr))
+
+	var usage cli.UsageError
+	require.ErrorAs(t, err, &usage)
+	assert.Equal(t, `--as-of "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`, usage.Error())
 }
 
 func Test_holdings_lists_each_value_in_the_reporting_currency_and_totals_it(t *testing.T) {
