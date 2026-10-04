@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-10
-status: open
+status: done
 ---
 
 # SCENARIO-10: Filtering by account
@@ -26,10 +26,10 @@ Surveyed (grep, production only): `store.HoldingsParams` is built in one place, 
 - [x] Step 5: cli surface — `cli/holdings.go:14,66-67` `--account` (`StringArrayVar`, `holdingsAccountFlagHelp` const beside `holdingsAsOfFlagHelp`, S.1 text verbatim: ``list only the account with this `name` or id; repeat for more``), `Accounts` into `HoldingsRequest` at `:50`; refusals stay `&runtimeError` (exit 1; `--as-of` parse still first). Tests: `internal/cli/holdings_account_test.go` help line by regexp `(?m)--account name +…$` beside `holdingsAsOfHelp` (`holdings_test.go:24`, never replacing the whole-help pin), flag value reaches `gotHoldings`; `cmd/quarry/run_holdings_account_test.go`: unknown name, empty arg, ambiguous name (two accounts called Visa) each exit 1 with the spend lines and empty stdout, text and `--json`; only non-investment named → stderr starts with the non-investment line (S09 appends the empty line after it: assert the first line, not the whole stream), stdout caption + header, no Total row, exit 0; named investment account with nothing held that day → `NotContains(stderr, "not a brokerage")` only; `--json` read-back `account_filter` `[{id,name}]` and `warnings` equal to the stderr lines in order, also with `--currency native`; `--account Brokerage --account acct-cad` lists once; no `--account` still `account_filter: []` and "all accounts"
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `HoldingsRequest.Accounts`, `Holdings.Accounts`, `HoldingsParams.AccountIDs`
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `HoldingsRequest.Accounts`, `Holdings.Accounts`, `HoldingsParams.AccountIDs`
 
 ### Verify
-- [ ] Step 7: full verification + `spec-check.py phase4b-holdings` → tick SCENARIO-10 with its acceptance test; STATE.md rewrite (drop `--account` from Left unbuilt)
+- [x] Step 7: full verification + `spec-check.py phase4b-holdings` → tick SCENARIO-10 with its acceptance test; STATE.md rewrite (drop `--account` from Left unbuilt)
 
 ## Handoff
 
@@ -52,7 +52,7 @@ Surveyed (grep, production only): `store.HoldingsParams` is built in one place, 
 
 ## Phase report
 
-Runs A (steps 1-2) and B1 (steps 3-5) done. Acceptance `Test_run_holdings_account_filter_lists_the_named_accounts_and_warns_for_chequing` green; narrow loops green; `go build ./...` and `golangci-lint run ./...` 0 issues (`golangci-lint fmt` fixed the stub's gci). Sweep (step 6) nothing left beyond doc comments, already written. No full-suite run, no `uncovered-diff.py`, no ticks or STATE.md yet: run V.
+Runs A, B1 and V done; scenario complete. Run V: `go build ./...` ok; covered full suite `go test rc=0` (no other test pinned the all-accounts caption, unknown-flag tables or holdings `--help`; nothing needed changing); `uncovered-diff.py --profile ... bb833a2`: 0 uncovered added lines; `golangci-lint run ./...` 0 issues; `go test -race` on report, document, cli, duckstore, cmd/quarry ok; `spec-check.py phase4b-holdings` OK; SCENARIO-10 ticked in `specification.md`; STATE.md rewritten. `test-stats.py --base bb833a2 --changed`: cmd/quarry 708 (+7), internal/cli 475 (+6), internal/report 381 (+6), internal/report/document 111 (+5), internal/store/duckstore 604 (+5), TOTAL 2279 (+29), tempdir 700 (+2), disk 624 (+1). Acceptance `Test_run_holdings_account_filter_lists_the_named_accounts_and_warns_for_chequing` green.
 
 Production (all code-first):
 - `internal/store/duckstore/holdings.go`: `holdingsQuery` const is now `holdingsSelect` + `holdingsOrder` consts and `holdingsQueryFor(accountFilter)` adding ` AND v.account_id IN (marks(2))`; `Holdings` binds `civilDay` then ids.
@@ -66,4 +66,4 @@ Deviations from the plan: the plan's "one-read fake whose second Holdings call r
 
 Mutations, each reddened: `IN` clause disabled (`len(accounts) > 99`) -> `Test_holdings_reads_only_the_named_accounts`, `..._reads_nothing_for_an_id_that_names_no_account`, `..._reads_a_named_closed_account`; `IsInvestmentAccount` predicate inverted -> `Test_HoldingsWarnings_name_each_named_account...` (both rows), `..._leave_out_a_named_investment_account_whatever_its_state`, `..._put_the_non_investment_line_before_the_no_price_line`; `NewAccountFilters(nil)` -> `Test_holdings_json_account_filter_lists_the_named_accounts/in_the_order_given`; sort replaced by `return 0` -> both rows of the slot-2 table (Zeta-before-Alpha and the plain-name one). All reverted.
 
-Run V to do: full covered suite + `uncovered-diff.py --profile`, `test-stats.py --base bb833a2 --changed`, `-race` on touched packages, `spec-check.py phase4b-holdings`, tick SCENARIO-10 in `specification.md` with `cmd/quarry/run_holdings_account_test.go` `Test_run_holdings_account_filter_lists_the_named_accounts_and_warns_for_chequing`, rewrite STATE.md (drop `--account` from Left unbuilt; fold this scenario's Handoff). Watch for other tests that pin the all-accounts caption, the unknown-flag table or `--help` of holdings (`--account` was unregistered per STATE.md): the narrow loops did not touch them.
+Nothing for a later run to redo or undo.

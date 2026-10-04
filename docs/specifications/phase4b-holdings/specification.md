@@ -410,7 +410,7 @@ Architect sizing pass 2026-10-04 (one pass over all 16; folds change no scenario
 - [x] SCENARIO-12: Holdings as JSON — delivered by SCENARIO-06 — `cmd/quarry/run_holdings_no_price_test.go` `Test_run_holdings_json_lists_the_unpriced_holding_with_nulls_and_a_warning`
 - [x] SCENARIO-07: A security quarry cannot convert is left out of the total — `cmd/quarry/run_holdings_not_converted_test.go` `Test_run_holdings_leaves_a_security_it_cannot_convert_out_of_the_total`
 - [x] SCENARIO-08: A day with no exchange rate totals each currency separately — `cmd/quarry/run_holdings_no_rate_test.go` `Test_run_holdings_before_the_first_rate_shows_no_rate_and_totals_usd_separately`
-- [ ] SCENARIO-10: Filtering by account
+- [x] SCENARIO-10: Filtering by account — `cmd/quarry/run_holdings_account_test.go` `Test_run_holdings_account_filter_lists_the_named_accounts_and_warns_for_chequing`
 - [ ] SCENARIO-09: Nothing held on the day
 - [ ] SCENARIO-13: MCP holdings tool
 - [ ] SCENARIO-15: Existing surfaces describe holdings
