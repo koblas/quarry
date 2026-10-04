@@ -85,6 +85,21 @@ CREATE TABLE prices (
 	price DECIMAL(18,6) NOT NULL,
 	PRIMARY KEY (security_id, date)
 );
+CREATE TABLE investment_transactions (
+	id VARCHAR PRIMARY KEY,
+	source_id BIGINT NOT NULL,
+	account_id VARCHAR NOT NULL,
+	security_id VARCHAR,
+	date DATE NOT NULL,
+	action VARCHAR NOT NULL,
+	shares DECIMAL(18,6),
+	amount DECIMAL(18,2) NOT NULL,
+	commission DECIMAL(18,2),
+	currency VARCHAR NOT NULL,
+	memo VARCHAR,
+	split_new_shares DECIMAL(18,6),
+	split_old_shares DECIMAL(18,6)
+);
 CREATE TABLE split_tags (
 	split_id VARCHAR NOT NULL,
 	tag_id VARCHAR NOT NULL,
