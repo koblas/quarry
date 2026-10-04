@@ -3,6 +3,7 @@ package importer
 import (
 	"context"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/koblas/quarry/internal/store"
@@ -88,18 +89,6 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	if err != nil {
 		return store.Result{}, err
 	}
-	refs := newCategoryRefs(existingCategories)
-	splits, links, splitIDs, err := mapSplits(ctx, src, txnRefs, existingCategories, uncategorized, refs, off)
-	if err != nil {
-		return store.Result{}, err
-	}
-	if err := readCategoryRefs(ctx, src, refs); err != nil {
-		return store.Result{}, err
-	}
-	splitTags, err := mapSplitTags(ctx, src, splitIDs, existingTags)
-	if err != nil {
-		return store.Result{}, err
-	}
 
 	securityEnt, hasSecurity := entities[securityEntity]
 	securities, securityRefs, err := mapSecurities(ctx, src, securityEnt, hasSecurity, off)
@@ -122,7 +111,23 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	if err != nil {
 		return store.Result{}, err
 	}
-	investments, err := mapInvestmentTransactions(ctx, src, investmentEnt, hasInvestment, accountRefs, positions, securityRefs, off)
+	investments, cashRows, cashRefs, err := mapInvestmentTransactions(
+		ctx, src, investmentEnt, hasInvestment, accountRefs, positions, securityRefs, off)
+	if err != nil {
+		return store.Result{}, err
+	}
+	transactions = append(transactions, cashRows...)
+	maps.Copy(txnRefs, cashRefs)
+
+	refs := newCategoryRefs(existingCategories)
+	splits, links, splitIDs, err := mapSplits(ctx, src, txnRefs, existingCategories, uncategorized, refs, off)
+	if err != nil {
+		return store.Result{}, err
+	}
+	if err := readCategoryRefs(ctx, src, refs); err != nil {
+		return store.Result{}, err
+	}
+	splitTags, err := mapSplitTags(ctx, src, splitIDs, existingTags)
 	if err != nil {
 		return store.Result{}, err
 	}

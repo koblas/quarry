@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,6 +19,14 @@ func execOn(t *testing.T, dataPath, query string, args ...any) {
 	defer func() { _ = db.Close() }()
 	_, err = db.ExecContext(t.Context(), query, args...)
 	require.NoError(t, err)
+}
+
+// investmentWithEntry adds an investment transaction with the one entry Quicken writes for it, in row's amount,
+// and returns its Z_PK.
+func investmentWithEntry(b *v9fixture.Builder, row v9fixture.TransactionRow) int64 {
+	pk := b.InvestmentTransaction(row)
+	b.Entry(v9fixture.EntryRow{Parent: pk, Amount: row.Amount})
+	return pk
 }
 
 func payeeIDs(fake *fakeStore) []string {

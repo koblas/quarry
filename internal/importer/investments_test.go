@@ -59,7 +59,7 @@ func Test_import_names_each_of_the_thirteen_mapped_action_codes(t *testing.T) {
 	accountPK := newBrokerage(b)
 	codes := []int64{2, 3, 6, 7, 8, 9, 10, 11, 12, 15, 17, 19, 23}
 	for _, code := range codes {
-		b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: &code, Amount: "1.00", PostedDate: &investDay, Numerator: "1", Denominator: "1"})
+		investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: &code, Amount: "1.00", PostedDate: &investDay, Numerator: "1", Denominator: "1"})
 	}
 
 	fake, result := importInvestments(t, b)
@@ -126,7 +126,7 @@ func Test_import_ignores_an_unreadable_action_code_in_a_deleted_account(t *testi
 			b := v9fixture.NewBuilder()
 			liveAccountPK := newBrokerage(b)
 			deletedAccountPK := b.Account(v9fixture.AccountRow{Name: "Old Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Deleted: true})
-			livePK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: liveAccountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
+			livePK := investmentWithEntry(b, v9fixture.TransactionRow{Account: liveAccountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
 			b.InvestmentTransaction(v9fixture.TransactionRow{Account: deletedAccountPK, Type: c.code, Amount: "1.00", PostedDate: &investDay})
 
 			fake, _ := importInvestments(t, b)
@@ -154,7 +154,7 @@ func Test_import_dates_an_investment_transaction_by_its_posted_day_else_its_ente
 			t.Parallel()
 			b := v9fixture.NewBuilder()
 			accountPK := newBrokerage(b)
-			b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: c.posted, EnteredDate: c.entered})
+			investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: c.posted, EnteredDate: c.entered})
 
 			fake, _ := importInvestments(t, b)
 
@@ -168,7 +168,7 @@ func Test_import_leaves_a_deleted_investment_transaction_out(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	accountPK := newBrokerage(b)
-	keptPK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
+	keptPK := investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
 	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "2.00", PostedDate: &investDay, Deleted: true})
 
 	fake, _ := importInvestments(t, b)
@@ -181,7 +181,7 @@ func Test_import_leaves_out_an_investment_row_of_another_entity(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	accountPK := newBrokerage(b)
-	keptPK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
+	keptPK := investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
 	b.InvestmentTransaction(v9fixture.TransactionRow{Entity: 999, Account: accountPK, Type: buyCode, Amount: "2.00", PostedDate: &investDay})
 
 	fake, _ := importInvestments(t, b)
@@ -196,7 +196,7 @@ func Test_import_resolves_the_security_of_an_investment_transaction_through_its_
 	accountPK := newBrokerage(b)
 	acmePK := newAcme(b)
 	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: acmePK})
-	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Position: positionPK, Units: "0"})
+	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Position: positionPK, Units: "0"})
 
 	fake, _ := importInvestments(t, b)
 
@@ -239,7 +239,7 @@ func Test_import_gives_a_zero_share_row_no_security_when_its_position_cannot_be_
 			accountPK := newBrokerage(b)
 			acmePK := newAcme(b)
 			positionPK := c.setup(b, accountPK, acmePK)
-			b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Position: positionPK, Units: "0"})
+			investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Position: positionPK, Units: "0"})
 
 			fake, _ := importInvestments(t, b)
 
@@ -254,7 +254,7 @@ func Test_import_skips_an_investment_transaction_with_no_account(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	accountPK := newBrokerage(b)
-	livePK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
+	livePK := investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
 	b.InvestmentTransaction(v9fixture.TransactionRow{Type: buyCode, Amount: "2.00", PostedDate: &investDay})
 	bundle := b.WriteBundle(t, t.TempDir())
 	execOn(t, bundle.DataPath, "INSERT INTO ZACCOUNT (Z_PK, ZNAME, ZTYPENAME, ZCURRENCY, ZACTIVE) VALUES (0, 'Zero', 'BROKERAGENORMAL', 'CAD', 1)")
@@ -274,7 +274,7 @@ func Test_import_gives_a_row_with_no_position_no_security_though_a_position_has_
 	accountPK := newBrokerage(b)
 	acmePK := newAcme(b)
 	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: acmePK})
-	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Units: "0"})
+	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Units: "0"})
 	bundle := b.WriteBundle(t, t.TempDir())
 	execOn(t, bundle.DataPath, "UPDATE ZPOSITION SET Z_PK = 0 WHERE Z_PK = ?", positionPK)
 	fake := &fakeStore{}
@@ -292,7 +292,7 @@ func Test_import_leaves_out_a_position_row_of_another_entity(t *testing.T) {
 	accountPK := newBrokerage(b)
 	acmePK := newAcme(b)
 	otherPositionPK := b.Position(v9fixture.PositionRow{Entity: 999, Account: accountPK, Security: acmePK})
-	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Position: otherPositionPK, Units: "0"})
+	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Position: otherPositionPK, Units: "0"})
 
 	fake, _ := importInvestments(t, b)
 
@@ -304,7 +304,7 @@ func Test_import_imports_investment_transactions_without_a_security_when_the_sna
 	t.Parallel()
 	b := v9fixture.NewBuilder().WithoutEntity("Position")
 	accountPK := newBrokerage(b)
-	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: dividendCode, Amount: "12.00", PostedDate: &investDay})
+	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: dividendCode, Amount: "12.00", PostedDate: &investDay})
 
 	fake, _ := importInvestments(t, b)
 
@@ -344,7 +344,7 @@ func Test_import_stores_commission_as_ten_thousandths_and_null_for_none_or_zero(
 			t.Parallel()
 			b := v9fixture.NewBuilder()
 			accountPK := newBrokerage(b)
-			b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Commission: c.commission})
+			investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Commission: c.commission})
 
 			fake, _ := importInvestments(t, b)
 
@@ -358,8 +358,8 @@ func Test_import_sets_the_split_columns_only_on_a_split(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	accountPK := newBrokerage(b)
-	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Numerator: "1", Denominator: "12"})
-	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: new(int64(23)), Amount: "0", PostedDate: &investDay, Numerator: "1", Denominator: "12"})
+	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Numerator: "1", Denominator: "12"})
+	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: new(int64(23)), Amount: "0", PostedDate: &investDay, Numerator: "1", Denominator: "12"})
 
 	fake, _ := importInvestments(t, b)
 
@@ -377,7 +377,7 @@ func Test_import_reads_shares_and_amount_in_quickens_sign_with_the_accounts_curr
 	usdPK := b.Account(v9fixture.AccountRow{Name: "US Brokerage", Type: "BROKERAGENORMAL", Currency: "USD", Active: true})
 	acmePK := newAcme(b)
 	positionPK := b.Position(v9fixture.PositionRow{Account: usdPK, Security: acmePK})
-	pk := b.InvestmentTransaction(v9fixture.TransactionRow{
+	pk := investmentWithEntry(b, v9fixture.TransactionRow{
 		Account: usdPK, Type: new(int64(19)), Amount: "400.25", PostedDate: &investDay, Position: positionPK, Units: "-4.5",
 	})
 
@@ -394,8 +394,8 @@ func Test_import_stores_an_investment_transactions_note_as_its_memo_and_an_empty
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	accountPK := newBrokerage(b)
-	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Note: "quarterly"})
-	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "2.00", PostedDate: &investDay})
+	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Note: "quarterly"})
+	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "2.00", PostedDate: &investDay})
 
 	fake, _ := importInvestments(t, b)
 
@@ -473,7 +473,7 @@ func Test_import_snaps_float_residue_in_shares_to_the_nearest_millionth(t *testi
 	accountPK := newBrokerage(b)
 	acmePK := newAcme(b)
 	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: acmePK})
-	b.InvestmentTransaction(v9fixture.TransactionRow{
+	investmentWithEntry(b, v9fixture.TransactionRow{
 		Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Position: positionPK, Units: "0.30000000000000004",
 	})
 
@@ -531,7 +531,7 @@ func Test_import_gives_a_row_with_zero_or_NULL_shares_and_no_position_no_securit
 			t.Parallel()
 			b := v9fixture.NewBuilder()
 			accountPK := newBrokerage(b)
-			b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Units: c.units})
+			investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Units: c.units})
 
 			fake, _ := importInvestments(t, b)
 
@@ -663,7 +663,7 @@ func Test_import_ignores_the_ratio_of_a_row_that_is_not_a_split(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	accountPK := newBrokerage(b)
-	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Numerator: "0", Denominator: "n/a"})
+	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Numerator: "0", Denominator: "n/a"})
 
 	fake, _ := importInvestments(t, b)
 

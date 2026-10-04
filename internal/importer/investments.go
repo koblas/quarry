@@ -48,7 +48,8 @@ const investmentsQuery = `
 SELECT t.Z_PK, t.ZACCOUNT, CAST(t.ZPOSTEDDATE AS REAL), CAST(t.ZENTEREDDATE AS REAL), t.ZTYPE, t.ZPOSITION, t.ZNOTE,
        typeof(t.ZUNITS), CAST(t.ZUNITS AS TEXT), typeof(t.ZAMOUNT), CAST(t.ZAMOUNT AS TEXT),
        typeof(t.ZCOMMISSION), CAST(t.ZCOMMISSION AS TEXT),
-       typeof(t.ZNUMERATOR), CAST(t.ZNUMERATOR AS TEXT), typeof(t.ZDENOMINATOR), CAST(t.ZDENOMINATOR AS TEXT)
+       typeof(t.ZNUMERATOR), CAST(t.ZNUMERATOR AS TEXT), typeof(t.ZDENOMINATOR), CAST(t.ZDENOMINATOR AS TEXT),
+       t.ZRECONCILESTATUS, COALESCE(t.ZEXCLUDEFROMREPORTS, 0) <> 0
 FROM ZTRANSACTION t
 WHERE t.Z_ENT = ? AND COALESCE(t.ZDELETIONCOUNT, 0) = 0
 ORDER BY t.Z_PK
@@ -100,38 +101,50 @@ type investmentRow struct {
 	note                      sql.NullString
 	units, amount, commission numberColumn
 	numerator, denominator    numberColumn
+	status                    sql.NullInt64
+	excluded                  bool
 }
 
 // mapInvestmentTransactions reads the investment transactions of investmentEnt in an imported account, dated posted
-// else entered; a row quarry cannot read goes to off. Its security is its position's, when imported.
+// else entered; a row quarry cannot read goes to off. Its security is its position's, when imported. It also returns
+// each one that moves cash (amount not 0) as a transactions row, with the txnRef that attaches its entries.
 func mapInvestmentTransactions(
 	ctx context.Context, src Source, investmentEnt int64, hasEntity bool,
 	accounts map[int64]accountRef, positions map[int64]positionRef, securities map[int64]store.Security, off *offenders,
-) ([]store.InvestmentTransaction, error) {
+) ([]store.InvestmentTransaction, []store.Transaction, map[int64]txnRef, error) {
+	cashRefs := make(map[int64]txnRef)
 	if !hasEntity {
-		return nil, nil
+		return nil, nil, cashRefs, nil
 	}
 	var rows []store.InvestmentTransaction
+	var cashRows []store.Transaction
 	err := src.QueryRows(ctx, investmentsQuery, []any{investmentEnt}, func(scan func(dest ...any) error) error {
 		var r investmentRow
 		if err := scan(&r.pk, &r.account, &r.posted, &r.entered, &r.code, &r.position, &r.note,
 			&r.units.typ, &r.units.text, &r.amount.typ, &r.amount.text, &r.commission.typ, &r.commission.text,
-			&r.numerator.typ, &r.numerator.text, &r.denominator.typ, &r.denominator.text); err != nil {
+			&r.numerator.typ, &r.numerator.text, &r.denominator.typ, &r.denominator.text,
+			&r.status, &r.excluded); err != nil {
 			return err
 		}
 		acct, ok := accounts[r.account.Int64]
 		if !r.account.Valid || !ok {
 			return nil
 		}
-		if txn, ok := buildInvestmentTransaction(r, acct, positions, securities, off); ok {
-			rows = append(rows, txn)
+		txn, cash, ok := buildInvestmentTransaction(r, acct, positions, securities, off)
+		if !ok {
+			return nil
+		}
+		rows = append(rows, txn)
+		if cash != nil {
+			cashRows = append(cashRows, *cash)
+			cashRefs[r.pk] = txnRef{ID: cash.ID, Date: cash.Date, AccountName: acct.Name}
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("read investment transactions: %w", err)
+		return nil, nil, nil, fmt.Errorf("read investment transactions: %w", err)
 	}
-	return rows, nil
+	return rows, cashRows, cashRefs, nil
 }
 
 // investmentSubject is one dated row of an imported account, for adding its offender.
@@ -148,9 +161,46 @@ func (s investmentSubject) refuse(class unmappableClass, reason string) {
 
 func (s investmentSubject) day() string { return s.date.Format(dateLayout) }
 
-// buildInvestmentTransaction maps one row of an imported account, reporting false after adding an
-// offender when quarry cannot read it. An undated row is refused before any other fault.
+// buildInvestmentTransaction maps one row of an imported account and, when its amount is not 0, the transactions
+// row for the cash it moves. It reports false after adding an offender when quarry cannot read the row.
 func buildInvestmentTransaction(
+	r investmentRow, acct accountRef, positions map[int64]positionRef, securities map[int64]store.Security, off *offenders,
+) (store.InvestmentTransaction, *store.Transaction, bool) {
+	txn, ok := readInvestmentTransaction(r, acct, positions, securities, off)
+	if !ok {
+		return txn, nil, false
+	}
+	s := investmentSubject{row: r, account: acct.Name, date: txn.Date, off: off}
+	cash, ok := s.cashRow(txn)
+	return txn, cash, ok
+}
+
+// cashRow returns the transactions row of txn, dated as txn is: nil when txn moves no cash (amount 0). It reports
+// false after adding an offender when the row's reconcile status is unmapped.
+func (s investmentSubject) cashRow(txn store.InvestmentTransaction) (*store.Transaction, bool) {
+	if txn.Amount == 0 {
+		return nil, true
+	}
+	status, ok := reconcileStatus(s.row.status)
+	if !ok {
+		s.refuse(classTransactionStatus, reasonTransactionStatus(s.day(), s.account, s.row.status.Int64))
+		return nil, false
+	}
+	cash := store.Transaction{
+		ID: fmt.Sprintf(transactionIDFormat, s.row.pk), SourceID: s.row.pk, AccountID: txn.AccountID, Date: txn.Date,
+		Amount: txn.Amount, Currency: txn.Currency, Status: status, ExcludedFromReports: s.row.excluded,
+		Memo: txn.Memo, InvestmentTransactionID: &txn.ID,
+	}
+	if s.row.posted.Valid {
+		postedDay := coreDataToDate(s.row.posted.Float64)
+		cash.PostedDate = &postedDay
+	}
+	return &cash, true
+}
+
+// readInvestmentTransaction maps one row of an imported account, reporting false after adding an
+// offender when quarry cannot read it. An undated row is refused before any other fault.
+func readInvestmentTransaction(
 	r investmentRow, acct accountRef, positions map[int64]positionRef, securities map[int64]store.Security, off *offenders,
 ) (store.InvestmentTransaction, bool) {
 	if !r.posted.Valid && !r.entered.Valid {
