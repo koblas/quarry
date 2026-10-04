@@ -22,7 +22,7 @@ Decisions (binding for this plan; sources: spec S.2/S.3/S.6, STATE.md):
 - **Totals:** `total()` returns converted total (reporting currency, only if a row converts) then, appended, one total per unconverted currency summing `row.Value` of NeedsRate rows (a priced zero counts). Text and `--json` `totals` follow that order.
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_holdings_no_rate_test.go` (new) `Test_run_holdings_before_the_first_rate_shows_no_rate_and_totals_usd_separately` — `seedHoldingsStore` (`run_holdings_test.go:43`, first rate day 10), `--as-of 2026-03-09`; asserts exact stdout (VTI In cell `no rate`; Acme and Maple are CAD rows and convert, so the converted `Total` row, then a `USD` Total row below it carrying 24,659.35) and the exact stderr singular warning line, exit 0. Own line helper (trap: In column width). Compiles against today's code; must fail at the stdout assertion.
+- [x] Step 1: `cmd/quarry/run_holdings_no_rate_test.go` (new) `Test_run_holdings_before_the_first_rate_shows_no_rate_and_totals_usd_separately` — `seedHoldingsStore` (`run_holdings_test.go:43`, first rate day 10), `--as-of 2026-03-09`; asserts exact stdout (VTI In cell `no rate`; Acme and Maple are CAD rows and convert, so the converted `Total` row, then a `USD` Total row below it carrying 24,659.35) and the exact stderr singular warning line, exit 0. Own line helper (trap: In column width). Compiles against today's code; must fail at the stdout assertion.
 
 ### Build
 - [ ] Step 2 (B1, batch 1: facts + decision + totals): `internal/store/store.go:164-168` `Holdings.FirstRate` (+ doc); `internal/store/duckstore/holdings.go:29-51` `(*Store).Holdings` read `firstRate` after the rows; `internal/report/holdings.go:26-31,58-84` `Holdings.FirstRate`, `NeedsRate`, `total()` appends unconverted totals (update `HoldingsTotal`/`total` docs). Tests: `duckstore/holdings_test.go` first-rate returned / zero with no rates, fault tests for the `SELECT min` query (`spyReadDB{passQueries: 1, queryFault}` per `charges_test.go:297`) and its scan; `report/holdings_test.go` NeedsRate table (USD-in-CAD true; CAD-in-CAD, USD-in-USD, EUR, NULL currency, unpriced, native, rate present each false), totals (USD-only total when nothing converts; converted-then-unconverted order; priced zero makes a total; unpriced does not; USD reporting mode gives a CAD total); fake store whose second `Holdings` call differs cannot mix (one call).
@@ -52,3 +52,15 @@ Decisions (binding for this plan; sources: spec S.2/S.3/S.6, STATE.md):
 - In a converted table the Value column is `width-2` (In is last); `holdingsNativeTotalRow` offsets (`width-2`/`width-1`) are native-only.
 - `value_cad IS NULL` / `USDCAD == 0` also mean no price, NULL/EUR currency or same-currency USD row: never use them alone as "no rate".
 - `beforeFirstRateWarning`/`noRatesWarning` (`document/warnings.go`) and `accountsFXWarnings` (`cli/fx_warning.go`) have different wording and subjects; copying them ships unruled copy.
+
+## Phase report
+
+Run A (step 1) done. Only file changed: `cmd/quarry/run_holdings_no_rate_test.go` (new, no production code, no stubs needed: compiles against today's code).
+
+- Red now: `go test ./cmd/quarry/ -run Test_run_holdings_before_the_first_rate` fails at both assertions (stderr and stdout), for the expected reason:
+  - stderr: expected the singular before-first-rate warning line, actual `""`.
+  - stdout: VTI In cell is blank (expected `no rate`), and the `Total … USD 24,659.35` row is missing (only the `37,754.00` converted Total prints).
+- Test pins: caption `Holdings on 2026-03-09 …, amounts in CAD`, USD Total row = `Total` + `USD` in the Currency column (left-aligned, 8 wide) + `24,659.35` in the Value column, In blank (renderTable trims the line), after the converted `37,754.00` Total row.
+- Test helper `holdingsNoRateLine` wraps `holdingsLine` and trims trailing spaces; const `holdingsBeforeFirstRateLine` is the ruled singular copy (reuse it in step 5 tests for USD-mode variants only if the wording matches; those need their own consts).
+- Step 5 tests go in this same file (`run_holdings_no_rate_test.go`).
+- Next run (B1) starts at step 2; nothing from run A to undo.
