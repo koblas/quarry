@@ -26,4 +26,5 @@ Scenarios complete: SCENARIO-01..01. Last updated by SCENARIO-01.
 
 ## Open debts
 - Spec S.7 conventions text says prices are in `securities.currency` "NULL when Quicken records none", but the importer stores `""` as `""`. Open question for the final product-vision pass, not changed now (SCENARIO-01)
-- `internal/importer/price.go:32` carries one declared-unreachable branch (`moneyNotANumber` after `isDecimalText`) for the final review to judge (SCENARIO-01)
+- `internal/importer/securities.go` `securitiesQuery` `WHERE Z_ENT = ?` has no another-entity test (twin of `Test_import_leaves_out_a_quote_row_of_another_entity`); SCENARIO-02's developer adds `Test_import_leaves_out_a_security_row_of_another_entity`-style pin with mutation (checkpoint-fix SCENARIO-01). Every new `Z_ENT = ?` query (positions, lots, investment transactions) needs the same pin
+- Doc-comment budget (`.claude/rules/go-code.md`) over on `securitiesQuery`, `quotesQuery` (`internal/importer/securities.go`) and `isDecimalText` (`internal/importer/price.go`); trim when next touched (SCENARIO-01)
