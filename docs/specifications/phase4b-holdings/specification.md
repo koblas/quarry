@@ -193,8 +193,8 @@ Total                                                                           
 ### S.3 Warnings
 
 Stderr lines take the prefix `quarry: warning: `. They exit 0, and each is also added to `warnings[]`.
-- **No price:** `1 holding has no price on or before 2026-10-04, so it has no value and is left out of the total; enter a price for it in Quicken, then run quarry sync`. The plural form is `N holdings have`.
-- **Before the first rate:** `1 holding valued on 2012-12-31, before 2013-01-02, the first exchange rate in the store, is not converted to CAD and is totalled in USD`. The plural follows the same pattern.
+- **No price:** `1 holding has no price on or before 2026-10-04, so it has no value and is left out of the total; enter a price for it in Quicken, then run quarry sync`. Plural (ruled 2026-10-04): `N holdings have no price on or before <d>, so they have no value and are left out of the total; enter a price for each in Quicken, then run quarry sync`.
+- **Before the first rate:** `1 holding valued on 2012-12-31, before 2013-01-02, the first exchange rate in the store, is not converted to CAD and is totalled in USD`. Plural (ruled 2026-10-04): `N holdings valued on <d>, before <first>, the first exchange rate in the store, are not converted to <CAD|USD> and are totalled in <USD|CAD>` — one warning always names one currency (only CAD/USD rows reach it; EUR/NULL have their own).
 - **No rates at all:** `the store has no exchange rates, so values are listed in each security's own currency; run quarry sync to fetch them`
 - **Currency NULL** (every mode, R1): `"<security>" has no currency in Quicken, so quarry leaves its value out of the total; set its currency in Quicken, then run quarry sync`
 - **Other currency** (CAD/USD modes only; native mode totals it, so no warning — R1): `"<security>" is priced in EUR, which quarry does not convert, so its value is left out of the total`
