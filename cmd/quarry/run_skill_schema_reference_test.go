@@ -170,7 +170,7 @@ func Test_skill_schema_reference_carries_each_view_comment(t *testing.T) {
 	comments := viewComments(t, home)
 	text := repoFile(t, schemaReferencePath)
 
-	require.Len(t, comments, 4)
+	require.Len(t, comments, 5)
 	for name, comment := range comments {
 		assert.Contains(t, text, "### "+name+"\n\n"+comment+"\n\n")
 	}

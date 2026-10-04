@@ -30,7 +30,7 @@ func Test_query_reads_a_built_store(t *testing.T) {
 func storeRelations() []string {
 	return []string{
 		"accounts", "categories", "finding_items", "findings", "fx_rates", "holding_shares", "import_runs", "investment_transactions", "payees", "prices", "securities", "split_tags", "splits",
-		"store_info", "tags", "transactions", "transfers", "v_account_balances", "v_balances_daily", "v_cash_flow", "v_holdings", "v_spending",
+		"store_info", "tags", "transactions", "transfers", "v_account_balances", "v_balances_daily", "v_cash_flow", "v_holdings", "v_net_worth", "v_spending",
 	}
 }
 

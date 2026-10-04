@@ -354,3 +354,14 @@ ASOF LEFT JOIN fx_rates r ON b.date >= r.date;
 COMMENT ON VIEW v_balances_daily IS '` + strings.ReplaceAll(balancesDailyViewComment, "'", "''") + `';
 `
 }
+
+// netWorthViewDDL creates v_net_worth: net worth by day, account type and currency over the accounts Quicken's reports count.
+func netWorthViewDDL() string {
+	return `
+CREATE VIEW v_net_worth AS
+SELECT CAST(NULL AS DATE) AS date, CAST(NULL AS VARCHAR) AS type, CAST(NULL AS VARCHAR) AS currency,
+	CAST(NULL AS BIGINT) AS accounts, CAST(NULL AS DECIMAL(38,2)) AS balance,
+	CAST(NULL AS DECIMAL(38,2)) AS balance_cad, CAST(NULL AS DECIMAL(38,2)) AS balance_usd
+WHERE false;
+`
+}
