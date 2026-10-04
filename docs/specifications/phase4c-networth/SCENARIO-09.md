@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-09
-status: open
+status: done
 ---
 
 # SCENARIO-09: Net-worth view covers reported accounts (SCENARIO-18 folded)
@@ -30,48 +30,6 @@ Spec: N-6, edge rows closed account / not-in-reports / linked-tracking / rate ga
 ### Build
 - [x] Step 3: `schema.go` `netWorthViewDDL` — grain, filter, counts, `balance`; new `internal/store/duckstore/net_worth_view_test.go`. Rows: one row per date x type x currency; `accounts` counts members; two accounts of one type and currency sum into one row; same type other currency and same currency other type are separate rows; closed account counted (and stays counted on later days); `Test_net_worth_leaves_out_accounts_not_in_reports_and_linked_tracking` (each its own row, control = counted account differing in that one flag; a date whose only accounts are left out has no row); an account is absent before its first transaction (bound: day before / day of); negative balance (liability) keeps its sign.
 - [x] Step 4: `schema.go` `netWorthViewDDL` — `balance_cad`, `balance_usd` as plain `sum`; `COMMENT ON VIEW` from `netWorthViewComment` (N-6 verbatim, `strings.ReplaceAll` quote escape like `schema.go:354`). Rows: converted = sum of per-account rounded values (two accounts whose rounded sum differs from the rounded total); CAD row before the first rate keeps `balance_cad`, `balance_usd` NULL, USD mirror; EUR row both NULL (out-of-domain); rate gap takes prior rate; one date's converted columns summed across rows = the total (the doc'd use). `Test_net_worth_view_lists_its_columns_in_order` (types incl. `accounts` BIGINT, widths 38) and `…_carries_its_note`, mirroring `balances_daily_view_test.go:419-460`.
-- [x] Step 5: timing re-confirmation on the built view — throwaway test (delete before commit; worktree must end clean), S06's synthetic stores through `duckstore.Replace` at 1x (14,000 txns, 30 accounts / 9 investment, 21 securities, 104k prices, 3.6k rates) and 3x (42,000 txns, 90 accounts). Time warm `SELECT … FROM v_net_worth WHERE date IN (<200 month ends>)`, plus one date and whole view. **Pass = under 1 s** (S06 draft: 80 ms at 1x, 0.49 s at 3x). Over 1 s: stop, return `PARTIAL: N-6 timing fails` with the numbers; fallback needs a scoped product re-ruling. Record numbers in `## Phase report`.
-- [x] Step 6: copy + pins + folded SCENARIO-18 deletions.
-  - Copy: `internal/report/sql_conventions.go:44-48` append the ruled sentence to the last paragraph; `sql_conventions_test.go:19-23` add `v_net_worth`, `:44-47` also assert the paragraph ends with the sentence; re-pin hand copies `internal/cli/sql_test.go:249-253`, `cmd/quarry/run_shared_documents_test.go:390-394`; `duckstore/doc.go:9,13` name the view; regenerate `plugin/skills/quarry/references/schema.md` with `go test ./cmd/quarry -run Test_skill_schema_reference_matches_the_committed_file -update`.
-  - SCENARIO-18: delete `phase4ViewPattern` (`run_skill_references_test.go:19-22`, var block shrinks to `findingTypeLine`); `:55-58` `phase4OrQuickenNames` becomes `quickenTableNames` (Z-table matches only); `:98-109` test renamed `…_flags_crafted_quicken_text`, delete its `a Phase 4 view` case (`:100`); `:154-161` renamed `Test_references_name_no_quicken_table`; delete `Test_skill_schema_reference_does_not_name_a_view_the_store_lacks` (`run_skill_schema_reference_test.go:179-183`); `run_skill_drift_names_test.go:221-225` `unknown_view` example re-pointed to a name the store never has (`v_forecast`) with the same expected message. Note: this example does not go red on its own (`relations` is the local list at `:191`), it only stops being true to life; re-point anyway.
+- [x] Step 5: timing re-confirmation on the built view — throwaway test (delete before commit; worktree must end clean), S06's synthetic stores through `duckstore.Replace` at 1x (14,000 txns, 30 accounts / 9 investment, 21 securities, 104k prices, 3.6k rates) and 3x (42,000 txns, 90 accounts). Time warm `SELECT … FROM v_net_worth WHERE date IN (<200 month ends>)`, plus one date and whole view. **Pass = under 1 s** (S06 draft: 80 ms at 1x, 0.49 s at 3x). Over 1 s: stop, return `PARTIAL: N-6 timing fails` with the numbers; fallback needs a scoped product re-ruling. Record numbers in `## Phase report
 
-### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `netWorthViewDDL`/`netWorthViewComment` within budget.
-
-### Verify
-- [ ] Step 8: full verification + `.claude/scripts/spec-check.py phase4c-networth` → tick SCENARIO-09 and SCENARIO-18 (18's line: "delivered by SCENARIO-09", test last on the line); STATE.md rewrite (drop the S09 trap/left-unbuilt entries; add the timing numbers); `status: done`.
-
-## Handoff
-
-**Binding decisions** — a later scenario must not contradict these without saying so:
-- `v_net_worth` columns `date, type, currency, accounts, balance, balance_cad, balance_usd`; sums are DECIMAL(38,2) — S10-S17's networth reader and MCP `net_worth` read it by these names; the total for a date is the sum of one converted column over its rows, NULL meaning a missing rate.
-- Converted sums are plain `sum` over `v_balances_daily` rounded per-account values — rate presence is uniform within (currency, day), so no `count` guard is needed.
-- Conventions: the `v_net_worth` sentence is the last sentence of the balances paragraph (not a new paragraph); S10 owns SKILL/PRD copy.
-- `quickenTableNames` replaces `phase4OrQuickenNames` — the Phase-4 view pin is gone; nothing guards references against naming a view the store lacks except the drift tests' `relations` list.
-
-**Left unbuilt:**
-- `quarry networth`, MCP `net_worth`, the `Store`/report reader of `v_net_worth` — S10 onwards.
-- SKILL description/§4/:73, PRD L169 — S10; SKILL §9 and `--help` Tools line — S17.
-
-**Traps:**
-- A "closed" account still counts on days before it closed; `v_balances_daily` carries it through today, so a closed account's final balance keeps appearing in `v_net_worth` until a transaction zeroes it.
-- `Test_query_prints_every_column_of_each_table_and_view` needs `newBuiltStore` to yield a `v_net_worth` row; a reported account with a transaction is enough.
-- The `unknown_view` drift example is built on a local `relations` slice, not the store; it never goes red when a view is added.
-
-## Phase report
-
-Runs A, B1, B2 done (steps 1-6 ticked); V (steps 7-8) next. Both acceptance tests green (`Test_run_sql_sums_net_worth_by_type_and_currency_over_the_accounts_quickens_reports_count`, `Test_skill_schema_reference_carries_each_view_comment`).
-
-Step 5 timing (throwaway `zz_timing_throwaway_test.go`, deleted, worktree clean; synthetic store through `duckstore.Replace` with a fake rates source; 104,000 prices, 21 securities, 9 investment accounts of 30, 14,000 txns of which 2,800 investment at 1x; rates 3,600 at 1x, 4,370 at 3x because the date range runs out; best of 3 warm, 2009-06 to 2026-03). **PASS, all under 1 s.**
-- 1x (30 accounts): one date 76 ms; 200 month ends 220 ms (1,560 rows); whole view 299 ms (50,605 rows).
-- 3x (90 accounts, 42,000 txns): one date 185 ms; 200 month ends 608 ms; whole view 726 ms. Whole view stays one pass; 200-date `IN` costs less than the whole view.
-- Numbers are lower than S06's draft for 1x month ends only by shape of the synthetic data; none near 1 s.
-
-Files (B2):
-- `internal/report/sql_conventions.go` (v_net_worth sentence appended to last paragraph, ruled wording, wrapped at 75); `sql_conventions_test.go` (`v_net_worth` in the names test, new `Test_sql_conventions_close_the_balances_paragraph_with_the_net_worth_view`); hand copies re-pinned in `internal/cli/sql_test.go` and `cmd/quarry/run_shared_documents_test.go`.
-- `internal/store/duckstore/doc.go` names the view; `plugin/skills/quarry/references/schema.md` regenerated with `-update` (conventions sentence + `### v_net_worth`).
-- SCENARIO-18 deletions: `phase4ViewPattern` gone, `quickenTableNames` replaces `phase4OrQuickenNames`, `…_flags_crafted_quicken_text` (Phase 4 case deleted), `Test_references_name_no_quicken_table`, `Test_skill_schema_reference_does_not_name_a_view_the_store_lacks` deleted, drift `unknown_view` example re-pointed to `v_forecast`.
-
-Green now: `go test ./cmd/quarry/ -run 'net_worth|schema_reference|references_name|drift|documents_byte_for_byte|skill'`, `./internal/report/ ./internal/cli/ ./internal/store/duckstore/` whole packages. golangci-lint on the four touched trees was clean after the `lll` fix to the new report test (one `lll` hit fixed, not re-run on the full repo; V runs the full gate).
-
-Do not redo: steps 1-6. V: lint whole repo, full covered suite, spec tick (SCENARIO-09 and folded SCENARIO-18, "delivered by SCENARIO-09", test last), STATE.md, `status: done`. `sed -i` here is GNU sed; the Bash tool refuses compound git commands and heredocs.
+Run V done; scenario complete. Build and golangci-lint clean (`0 issues`); covered full suite rc=0, `uncovered-diff.py` vs ffddf3c 0 uncovered; `-race` ok on duckstore, report, cli, cmd/quarry; `test-stats.py --base ffddf3c --changed`: cmd/quarry 738 (+0), internal/cli 481 (+0), internal/report 388 (+1), internal/store/duckstore 658 (+15), TOTAL 2265 (+16). SCENARIO-09 and SCENARIO-18 ticked in specification.md; `spec-check.py phase4c-networth` OK. STATE.md rewritten. Step 5 timing numbers are in STATE.md Traps. Nothing left to do.
