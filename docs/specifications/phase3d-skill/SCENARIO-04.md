@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-04
-status: open
+status: done
 ---
 
 # SCENARIO-04: spending-trend.sql agrees with quarry spend (absorbs SCENARIO-05)
@@ -37,10 +37,10 @@ Reuse, do not copy: `repoFile` `run_plugin_manifest_test.go:71-77`; `chargeRows`
 - [x] Step 7: Rule P4 static pins over both files: `Test_recipes_read_only_their_view` (every `Schema` relation except the own view absent at a word boundary; own view present as control); `Test_recipes_name_no_quicken_table_like_or_clock` (`\bZ[A-Z]`, `LIKE`/`ILIKE`, `now()`/`today()` anywhere, `current_date` anywhere off the params line — it is allowed there only, per the shipped-values ruling); `Test_recipes_open_with_a_question_and_the_params_row` (line 1 `-- `, line 2 the params prefix); `Test_recipes_put_values_only_in_the_params_row` (quoted or `DATE '` literals off the params line ⊆ a named structural allowlist). Each scanner gets a crafted-text control (`FROM transactions`, `'Food'`) that it flags
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; 1-2 line doc comments on the new helpers
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; 1-2 line doc comments on the new helpers
 
 ### Verify
-- [ ] Step 9: full verification + `spec-check.py phase3d-skill` → tick SCENARIO-04 and SCENARIO-05 ("delivered by SCENARIO-04" before its test reference); STATE.md rewrite
+- [x] Step 9: full verification + `spec-check.py phase3d-skill` → tick SCENARIO-04 and SCENARIO-05 ("delivered by SCENARIO-04" before its test reference); STATE.md rewrite
 
 **Fixture `skillEvalStore`** — accounts `chequingAccount("acct-cad",1)`, `usdChequingAccount("acct-usd",2)`, CAD `acct-savings`; add categories Food, Food:Groceries:Organic, Foodies (expense), Income:Salary, Income:Interest (income); every date ≤ 2026-09-29 (`spendEnv` clock). Row → what it feeds:
 - R1 Netflix `monthlySeries` 2026-02..09 (999×4, 1199×4) → S06 new + price change; 2026 totals
@@ -104,4 +104,4 @@ Mutations (copy-aside, restored, `diff` clean):
 
 Check over `skillEvalStore` (B1): anomalies = Hardware only; recurring = Netflix, Spotify only; findings = `duplicate:txn-gas-1+txn-gas-2` and `uncategorized:no-payee` only. Savings Sweep absent from all three.
 
-`go build ./...` and `golangci-lint run ./...`: 0 issues. Not yet run: the covered full suite, `test-stats.py`, `spec-check.py`, spec tick, STATE.md rewrite (run V).
+Run V done: `go build ./...` rc=0; `golangci-lint run ./...` 0 issues rc=0; covered full suite `go test rc=0`; `uncovered-diff.py`: no production Go lines added, rc=0; `go test -race ./cmd/quarry/...` rc=0; `test-stats.py --base 6c3fca60bb3c --changed`: `cmd/quarry 639 (+21) tempdir 514 (+4) disk 462 (+2)`; `spec-check.py --run phase3d-skill` OK. SCENARIO-04 ticked, SCENARIO-05 ticked as delivered by SCENARIO-04; STATE.md rewritten.
