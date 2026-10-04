@@ -6,6 +6,7 @@
 | SCENARIO-01a (+02) | code-first | A, B1, B2, V | 0/0/4/1 | no (MINOR → STATE.md) |
 | SCENARIO-01b (+05) | code-first | A, B1, B2, V | 0/0/3/1 | no (MINOR → STATE.md) |
 | SCENARIO-03 (+04) | code-first (light) | L (PARTIAL: 4 copy lines; ruled SKILL description → S10), L, V | 0/1/4/0 | yes (--account/--json cells for investment rows unpinned; folds: retirement account, misc by category, spend buy control) |
+| SCENARIO-06 | code-first | A, B1, B2, V | 0/1/1/0 | yes (cash/balance before first transaction unpinned — coalesce arm; fold: comment trim) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
