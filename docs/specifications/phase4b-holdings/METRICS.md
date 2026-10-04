@@ -12,6 +12,7 @@
 | SCENARIO-07 | code-first | A, B1, V | 0/0/1/2 | no (MINOR → STATE.md) |
 | SCENARIO-08 | code-first | A, B1, B2, V | 0/0/4/0 | no (MINOR → STATE.md; nil-deref path verified unreachable) |
 | SCENARIO-10 | code-first | A, B1, V | 0/0/3/0 | no (MINOR → STATE.md) |
+| SCENARIO-09 | code-first | A, B1, V | 0/0/4/1 | no (MINOR → STATE.md) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
