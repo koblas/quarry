@@ -313,8 +313,8 @@ Architect sizing pass 2026-10-03 (one pass over all 12; folds change no scenario
 - [x] SCENARIO-04: Sync reports holdings that match Quicken's share counts — `cmd/quarry/run_investments_test.go` `Test_run_sync_reports_holdings_that_match_quickens_share_counts`
 - [x] SCENARIO-05: Share count applies a stock split in date order — delivered by SCENARIO-04 — `cmd/quarry/run_investments_test.go` `Test_run_sync_applies_a_stock_split_in_date_order`
 - [x] SCENARIO-08: A file with no investment data — delivered by SCENARIO-04 — `cmd/quarry/run_investments_test.go` `Test_run_sync_reports_a_file_with_no_investment_data`
-- [ ] SCENARIO-06: Sync fails when holdings' share counts differ from Quicken
-- [ ] SCENARIO-07: A share failure joins a balance failure in one line
+- [x] SCENARIO-06: Sync fails when holdings' share counts differ from Quicken — `cmd/quarry/run_share_gate_test.go` `Test_run_sync_fails_when_holdings_share_counts_differ_from_quicken`
+- [x] SCENARIO-07: A share failure joins a balance failure in one line — delivered by SCENARIO-06 — `cmd/quarry/run_share_gate_test.go` `Test_run_sync_joins_a_share_failure_to_a_balance_failure_in_one_line`
 - [ ] SCENARIO-09: Status reports the share check without "not imported"
 - [ ] SCENARIO-10: Sync over a pre-4a store carries import history forward
 - [ ] SCENARIO-11: Existing surfaces stop saying investments are not imported

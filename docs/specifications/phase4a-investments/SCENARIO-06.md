@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-06
-status: open
+status: done
 ---
 
 # SCENARIO-06: Sync fails when holdings' share counts differ from Quicken (folds SCENARIO-07)
@@ -27,10 +27,10 @@ Developer model: sonnet suffices — display and copy over a settled seam.
 - [x] Step 6: `internal/snapshot/import.go:237-252` `validationFailedRefusal` + new `shareMismatchClause` beside `splitMismatchClause:268-275` — clause third after balances, splits; shares-only failure uses the S.3 share-specific tail, any cash clause present keeps the existing V1 tail. `sync_and_import_test.go:415-508` gains a want-tail column and rows: shares singular `1 of 145 holdings does not match Quicken's share count`, plural `N of M holdings do not match Quicken's share counts`, `1 of 1 holding`, thousands-grouped, balances+shares, splits+shares, all three in order. These rows run with no store present — that pins the first-run form ("was not changed" unchanged, phase1 V1) with no code change
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments now false: `validationFailedRefusal` ("balance or split-sum"), `renderStoreFailure` ("Shares … left out while a count differs"), `sharesDocument` ("always an empty array"), `ShareMismatch` (ids only)
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments now false: `validationFailedRefusal` ("balance or split-sum"), `renderStoreFailure` ("Shares … left out while a count differs"), `sharesDocument` ("always an empty array"), `ShareMismatch` (ids only)
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase4a-investments` → tick SCENARIO-06 and SCENARIO-07 (`— delivered by SCENARIO-06 —` before its test ref); STATE.md: drop line 21 (transitional `validation failed: ; …`, `[]`, omitted Shares line) and the S06/07 Left-unbuilt entry
+- [x] Step 8: full verification + `spec-check.py phase4a-investments` → tick SCENARIO-06 and SCENARIO-07 (`— delivered by SCENARIO-06 —` before its test ref); STATE.md: drop line 21 (transitional `validation failed: ; …`, `[]`, omitted Shares line) and the S06/07 Left-unbuilt entry
 
 ## Handoff
 
@@ -55,14 +55,9 @@ Developer model: sonnet suffices — display and copy over a settled seam.
 
 ## Phase report
 
-Run B2 (steps 5-6) done; Steps 1-6 ticked. Both acceptance tests green; narrow loop green; `golangci-lint run ./...` prints `0 issues`.
+Run V done; Steps 1-8 ticked, `status: done`.
 
-Files:
-- `internal/report/document/common.go` `Shares(millionths)` (6 decimals; negates quotient and remainder, not the int64) + `Test_Shares` in `common_test.go`.
-- `internal/cli/json.go` `sharesDocument.Mismatched []shareMismatchDocument`, `shareMismatchDocument` (S.4 order), `newSharesDocument`; `json_internal_test.go` `Test_renderJSON_reports_each_share_mismatch_with_six_decimal_counts_and_raw_text` (ticker null vs set, control char, negative difference).
-- `internal/snapshot/import.go` `validationFailedRefusal` (shares clause third; shares-only gets `shareOnlyTail`, singular "the holding's" at X=1, "those holdings'" at X>1; any cash clause keeps V1 tail), `shareMismatchClause`, `shareOnlyTail`.
-- `sync_and_import_test.go` table gained `wantTail` plus 7 share rows; `cmd/quarry/run_share_gate_test.go` acceptance re-pinned to the plural tail.
-
-Mutation (tail predicate `len(clauses) == 0` -> `n > 0`, i.e. "shares failed"): reddened `.../balances_and_shares_joined`, `.../splits_and_shares_joined`, `.../balances,_splits_and_shares_in_order` and `Test_run_sync_joins_a_share_failure_to_a_balance_failure_in_one_line` (expected the V1 `fix them in Quicken…` tail, got the share tail). File restored byte-identical.
-
-For V: sweep owes stale docs on `ShareMismatch` check, `renderStoreFailure` ("Shares … left out while a count differs"), `validationFailedRefusal` now updated. Run full Verify, `spec-check.py`, tick S06 + S07 in specification.md, STATE.md rewrite (drop line 21 and the S06/07 Left-unbuilt entry). The `--json` `store.shares.mismatched` is never nil (`make` of len 0).
+- Sweep: the four named doc comments (`validationFailedRefusal`, `renderStoreFailure`, `sharesDocument`, `ShareMismatch`) were already true after B1/B2; no further stale text found. `go build ./...` ok; `golangci-lint run ./...` prints `0 issues`.
+- Verify: `go test -count=1 -coverpkg=./... ./...` rc=0; `uncovered-diff.py --profile ... f6908e7`: 0 uncovered added lines; `go test -race` on importer, cli, snapshot, report/document, cmd/quarry ok.
+- `test-stats.py --base f6908e7 --changed`: cmd/quarry 674 (+2), internal/cli 423 (+4), internal/importer 243 (+8), internal/report/document 85 (+1), internal/snapshot 278 (+0); TOTAL 1703 (+15), tempdir 1030 (+3), disk 884 (+2).
+- specification.md: SCENARIO-06 and SCENARIO-07 (delivered by SCENARIO-06) ticked; `spec-check.py phase4a-investments` OK. STATE.md rewritten.

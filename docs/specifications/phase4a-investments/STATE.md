@@ -1,6 +1,6 @@
 # phase4a-investments — current state
 
-Scenarios complete: SCENARIO-01..05, 08 (04 folds 05, 08). Last updated by SCENARIO-04.
+Scenarios complete: SCENARIO-01..08 (04 folds 05, 08; 06 folds 07). Last updated by SCENARIO-06.
 
 ## Binding decisions
 - Optional entities (`Security`, `SecurityQuote`, `Position`) live in one slice in `internal/importer/entities.go` with generated placeholders; missing → that data is empty, never a refusal. `Lot` (S04) joined the slice, except: Lot missing while investment rows import refuses (spec S.6 ruling). `requireLots` sees mapped rows only, so that refusal outranks row-level ones when at least one investment row maps; when every row refuses, the row-level reason shows. Both pinned (SCENARIO-01, 02, 04)
@@ -18,12 +18,13 @@ Scenarios complete: SCENARIO-01..05, 08 (04 folds 05, 08). Last updated by SCENA
 - Seam C = (i): `importer.Store.CheckShares(ctx, rows) (store.ShareCheck, error)` builds an in-memory scratch DuckDB (`duckdb.CreateInMemory`, `schemaDDL` + `appendTable`) and walks it; Import calls it always, after `validate`, before the `Failed()` return, so Replace never runs on a failed check and a cash failure still carries shares. The guard is `Validation.Failed()`'s shares clause, not Replace. A CheckShares error returns `check share counts: %w`, no Replace (SCENARIO-04)
 - The walk (`duckstore/shares.go` `holdingShares`, QueryRows-only interface) is the single share-count owner; 4b runs it on a `ReadDB`, never re-derive. Exact rational compare, tolerance 0.000001 (`<=`); split multiplies new/old and adds nothing (a split row's `shares` is ignored); only `ShareMismatch.Quarry/Quicken` round half-even to millionths. `parseDecimal` fails with `errNotDecimal` on non-decimal text instead of dropping the value; only a fake `rowQuerier` reaches it (`shares_internal_test.go`) (SCENARIO-04)
 - Quicken's reference = Σ `ZLATESTUNITS` of non-deleted lots under non-deleted positions in imported accounts with an imported security (`Rows.QuickenShares`, not persisted); a holding on either side is checked, a missing count is 0 (SCENARIO-04)
-- Until S06: a share mismatch fails the build (`ErrValidationFailed`) but `store.shares.mismatched` serializes `[]` (no entry type), the failure block omits the Shares line (a "match" line would be false), and stderr prints `validation failed: ; …` for a shares-only failure — S04 pins none of it (SCENARIO-04)
+- Share-gate display (S06, 07): labels are joined in the importer after `CheckShares` (`describeShareMismatches`), never in duckstore, so the walk stays the id-only owner 4b reuses. `ShareMismatch.Difference` = saturating `Quarry − Quicken` on the rounded int64s (printed columns must subtract to the printed difference). Order is fixed in the importer: account name, account source id, security name, security source id (SCENARIO-06)
+- Share formatters: `formatShares` (trimmed, comma-grouped) for text, `document.Shares` (always 6 decimals) for `--json` `store.shares.mismatched`, never nil; 4b reuses both rather than adding a third. Failure block always prints a Shares line (DIFFER or `sharesPhrase`) (SCENARIO-06)
+- Stderr: clauses read balances, splits, shares; share-specific tail (`shareOnlyTail`, "the holding's" at X=1, "those holdings'" at X>1) only when shares is the sole failing check, any cash clause keeps the V1 `fix them in Quicken…` tail; first run keeps "was not changed" (SCENARIO-06, 07)
 - Rows line: cash clause `; ` investment clause (always) then `; N investment transactions not imported` while N > 0 — S09 drops the tail; status Rows/JSON `rows` carry the investment counts via the shared `rowsPhrase`/`NewRows`, but status prints no Shares line until S09 (SCENARIO-04)
 - `shares_checked` nullable BIGINT after `investment_transactions_rows`, carried by history, COALESCE→0 in status; sync `--json` `store.shares` = `{checked, mismatched}` after `splits` (SCENARIO-04)
 
 ## Left unbuilt
-- `ShareMismatch` display labels, DIFFER block, `store.shares.mismatched` entries, stderr shares clause (third clause after balances, splits in `snapshot/import.go` `validationFailedRefusal`) — SCENARIO-06, 07
 - Status/MCP `"shares":{"checked":N}` and the status Shares line from `run.SharesChecked`; dropping `investment_transactions_not_imported` from `requiredRunColumns`, `surveyTransactions`/`store.NotImported`, the Rows `not imported` tail — SCENARIO-09
 
 ## Traps
@@ -38,8 +39,12 @@ Scenarios complete: SCENARIO-01..05, 08 (04 folds 05, 08). Last updated by SCENA
 - A guard test for the shares clause must keep cash checks passing; a balance failure also keeps the store, so the mutation would stay green (SCENARIO-04)
 - `duckdb.Create` stats and chmods its path, no in-memory mode — use `CreateInMemory` (SCENARIO-04)
 - Real-store fixtures with holdings now hit the gate: their lots must equal the derived count (S02 fixture lot `0.541667` for the 1:12 split) (SCENARIO-04)
+- Negating `math.MinInt64` overflows and integer division drops the sign of `-0.000001`: both share formatters and the difference subtraction carry a negative flag / saturate (SCENARIO-06)
+- Pinning whole stdout of a share-failure run breaks at S09 when the Rows `not imported` tail goes — pin the Store line and Shares block only (SCENARIO-06)
+- `importer/share_gate_test.go` fake ids `acct-1`/`sec-1` resolve to nothing; label joining must leave zero-value labels without panicking (SCENARIO-06)
 
 ## Open debts
 - No Import-level test pins the `<v>` text in the share/amount refusal copy for negative or exponent values; only `parseShares` unit tests cover those forms. unowned — dies unless re-opened (SCENARIO-02, 03)
 - Spec S.7 conventions text says prices are in `securities.currency` "NULL when Quicken records none", but the importer stores `""` as `""`. Open question for the final product-vision pass (SCENARIO-01)
 - Every new `Z_ENT = ?` query needs an another-entity pin plus positive control, mutation-checked; securities, quotes, positions, investment transactions, lots are done (SCENARIO-01, 02, 04)
+- Table column width is measured in bytes (`widestLen`, `internal/cli/render.go`) while `fmt` `%-*s` pads by rune, so a non-ASCII account or security name misaligns the DIFFER rows; pre-existing in the balances and splits rows, now also shares. unowned — dies unless re-opened (SCENARIO-06)
