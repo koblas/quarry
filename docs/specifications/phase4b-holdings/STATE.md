@@ -1,6 +1,6 @@
 # phase4b-holdings — current state
 
-Scenarios complete: SCENARIO-01 (folds 14), SCENARIO-02, SCENARIO-03, SCENARIO-04, SCENARIO-05 (folds 11). Last updated by SCENARIO-05.
+Scenarios complete: SCENARIO-01 (folds 14), SCENARIO-02, SCENARIO-03, SCENARIO-04, SCENARIO-05 (folds 11), SCENARIO-06 (folds 12). Last updated by SCENARIO-06.
 
 Inherited, still binding: `../phase4a-investments/STATE.md` — read its Binding decisions and Traps for the importer, the share gate (`CheckShares`, tolerance 0.000001), share formatters, `store.Action*`, DECIMAL(18,6) shares, `schema.md` regeneration and the `Z_ENT` / `CAST(... AS REAL)` fixture traps. Only what 4b changed or added is below.
 
@@ -21,12 +21,15 @@ Inherited, still binding: `../phase4a-investments/STATE.md` — read its Binding
 - `cli/holdings.go` parses `--as-of` before `currency.resolve` and before opening the store: a bad value is `UsageError` (exit 2) with no config or store read. A bad `--currency` still wins over a bad `--as-of` — cobra `Args` rejects it before `RunE` (orchestrator accepted) (SCENARIO-05)
 - Money formatting: `document.BigMoney` owns the `*big.Int` cents split (ungrouped, for JSON); cli `formatBigMoney` groups its whole part via `humanize.ThousandsDigits`; `formatPrice` groups thousands like `formatShares` (`1,234.50`, min 2 decimals) — S.2 did not rule on price grouping, this pin is the decision (SCENARIO-03)
 - `holdingInCell` is the single In-cell owner; it already drops the In column and the `, amounts in` caption suffix for `money.Native`. S07/S08 add arms by branching on row facts (security currency, whether a rate was needed), never on `Converted == nil` (SCENARIO-03)
-- Warnings, R3 order: config warnings first by structure (`currency.resolve` on stderr; `withConfigWarnings` first in JSON). `document.HoldingsWarnings` concatenates slots 2 non-investment `--account`, 3 empty, 4 no price, 5 no rates / before the first rate, 6 no currency, 7 other currency; it returns `[]string{}` today and each scenario adds its composer in its slot, no stubs (SCENARIO-03)
+- Warnings, R3 order: config warnings first by structure (`currency.resolve` on stderr; `withConfigWarnings` first in JSON). `document.HoldingsWarnings` (single composer owner, takes `report.Holdings`, feeds stderr and JSON `warnings[]`) concatenates slots 2 non-investment `--account`, 3 empty, 4 no price (built), 5 no rates / before the first rate, 6 no currency, 7 other currency; each scenario adds one unexported helper and appends in its slot, no stubs; returns `[]string{}` when none. Built so far: 1 config, 4 no price (SCENARIO-03, SCENARIO-06)
+- "No price" means `store.Holding.Price == nil` (`noPriceWarning`); a priced zero is priced (value `0.00`, in total, no warning). Never key a warning, cell or total on `Value == nil`, which also covers no currency and no rate (SCENARIO-06)
+- No-price line is count-plural: `1 holding has no price on or before <as-of>, so it has no value and is left out of the total; enter a price for it in Quicken, then run quarry sync`; `N holdings have no price on or before <as-of>, so they have no value and are left out of the total; enter a price for each in Quicken, then run quarry sync` (N via `humanize.Count`, thousands-grouped). Date is `h.AsOf`, never the clock. Plural wording ruled in spec S.3; S08's before-first-rate warning is also plural-ruled and S08 implements it (SCENARIO-06)
+- Total-exclusion of unpriced rows is guarded by `contributed`/`row.Value == nil` in `report/holdings.go` `total` and `nativeTotals`; a mixed priced + unpriced sum cannot redden it, only the only-unpriced listing (no `Total` row) does — `Test_holdings_listing_of_only_unpriced_holdings_has_no_total_row` pins it (SCENARIO-06)
 - Holdings does not reuse the spend/cashflow/recurring composers: not-in-reports and linked-tracking accounts are listed with no left-out warning (SCENARIO-03)
 
 ## Left unbuilt
 - `--account`, its caption and non-empty `account_filter` — SCENARIO-10 (flag is unregistered until then, so usage and unknown-flag tables treat it as unknown)
-- `no price` warning and JSON row pin — SCENARIO-06/12; `not converted` — SCENARIO-07; `no rate` cell/warning and unconverted totals — SCENARIO-08; empty-result warnings, including a past day before the first trade — SCENARIO-09; MCP `holdings` and its `as_of` argument (calls `ParseAsOf`) — SCENARIO-13
+- `not converted` — SCENARIO-07; `no rate` cell/warning and unconverted totals — SCENARIO-08; empty-result warnings, including a past day before the first trade — SCENARIO-09; MCP `holdings` and its `as_of` argument (calls `ParseAsOf`) — SCENARIO-13
 - `holding_shares` / `v_holdings` sentence in `report/sql_conventions.go`, action-vocabulary sentence, SKILL.md and hand copies — SCENARIO-15
 
 ## Traps
@@ -46,6 +49,7 @@ Inherited, still binding: `../phase4a-investments/STATE.md` — read its Binding
 - `musttag` lint: a JSON read-back struct in a test needs `json` tags on every field (SCENARIO-03)
 - Mutation runs: a narrow `go test` can report a cached `ok` after a source edit (seen once in S05); rerun with `-count=1` whenever a mutation reports green before believing the guard is unreachable (SCENARIO-05)
 - Test clocks and fixed as-of days must not be after the real date (DuckDB `current_date`); "tomorrow" rows derive from the clock, never the real date. `seedSplitHoldingsStore` (`run_holdings_as_of_test.go`) is the split fixture later past-day tests reuse (SCENARIO-05)
+- No-price cell makes the Price column 8 wide: helpers with a fixed `%6s` price column (`run_holdings_test.go:16-25`) misalign a fixture holding one; `run_holdings_no_price_test.go` has its own line helper (SCENARIO-06)
 - Help tests pin per flag line by regexp (`holdingsAsOfHelp` beside `holdingsCurrencyHelp`): S10 adds its own line, never replaces the whole-help pin (SCENARIO-05)
 
 ## Open debts

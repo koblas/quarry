@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-06
-status: open
+status: done
 ---
 
 # SCENARIO-06: A holding with no price is listed without value (folds SCENARIO-12: Holdings as JSON)
@@ -32,10 +32,10 @@ S.3 rules only the singular line and "`N holdings have`". The plural tail is not
 - [x] Step 4: `internal/cli/holdings_test.go:276-334` pins at the command boundary on `fakeReportStore`: config warning precedes the no-price line on stderr and in `warnings[]` (R3 slot 1 before slot 4; later slots are S07/S08's pins); mixed priced + unpriced text total excludes the unpriced row in converted and `--currency native` modes (native: a per-currency total exists only from priced rows, and an all-unpriced listing has no `Total` row); `holdingsDoc` (`:45-62`) gains `price_date` for the null read-back
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comment on `HoldingsWarnings` says the slot it fills (4) and the rest are the later scenarios'
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comment on `HoldingsWarnings` says the slot it fills (4) and the rest are the later scenarios'
 
 ### Verify
-- [ ] Step 6: full verification block + `.claude/scripts/spec-check.py phase4b-holdings`; tick SCENARIO-06 and SCENARIO-12 (line "delivered by SCENARIO-06", test reference last) in `specification.md`; rewrite STATE.md (move "no price warning and JSON row pin" out of Left unbuilt; add the plural wording and composer-owner decisions)
+- [x] Step 6: full verification block + `.claude/scripts/spec-check.py phase4b-holdings`; tick SCENARIO-06 and SCENARIO-12 (line "delivered by SCENARIO-06", test reference last) in `specification.md`; rewrite STATE.md (move "no price warning and JSON row pin" out of Left unbuilt; add the plural wording and composer-owner decisions)
 
 ## Handoff
 
@@ -67,3 +67,5 @@ Mutations (each restored, byte-identical copy in scratchpad):
 - total exclusion: a nil-valued row adds nothing to a sum, so the mixed total cannot redden; the guard is `contributed`/`row.Value == nil` and is proven by the only-unpriced test: `contributed = true` before the nil check in `report/holdings.go` `total` -> red `Test_holdings_listing_of_only_unpriced_holdings_has_no_total_row/holdings`; dropping `|| row.Value == nil` from `nativeTotals` -> red `.../holdings_--currency_native`
 
 Plural wording implemented as ruled (spec S.3). Left for V: step 5 sweep (lint already 0 on the two trees; `go build ./...` and the whole repo not run), step 6 verification, spec tick, STATE.md. Not done: later R3 slots (2, 3, 5-7).
+
+Run V done. `go build ./...` ok; `golangci-lint run ./...` 0 issues. Full covered suite rc=0 (all 23 packages ok); `uncovered-diff.py` 0 uncovered added lines since 8ba8889; `go test -race ./internal/report/... ./internal/cli/` ok. test-stats: cmd/quarry 691 (+2), internal/cli 462 (+4), internal/report/document 99 (+5), TOTAL 1252 (+11). Spec ticked (06 and 12, 12 delivered by 06); `spec-check.py phase4b-holdings` OK. STATE.md rewritten. No new mutations run.
