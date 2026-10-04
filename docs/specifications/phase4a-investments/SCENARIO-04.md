@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-04
-status: open
+status: done
 ---
 
 # SCENARIO-04: Sync reports holdings that match Quicken's share counts
@@ -28,10 +28,10 @@ Size: OWNS A RUN — 5 batches (ceiling), 1 feature package (importer) plus its 
 - [x] Step 7: **JSON.** `internal/report/document/common.go:23-51` `Rows` + `NewRows` gain `investment_transactions`, `securities`, `prices` (after `transfers`); `internal/cli/json.go:30-41,148-165` `shares` object after `splits`: `{checked, mismatched}` with `mismatched` always `[]` (entries are S06). Tests: `json_internal_test.go` shares doc (0 checked, N checked, `[]` not null); re-pin `cmd/quarry/run_json_test.go:79`, `run_shared_documents_test.go:135-150`, `run_status_json_test.go:59-70`, `internal/cli/json_status_internal_test.go:23-35`; MCP `sync_status` follows status (`run_mcp_status_test.go:34`)
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `Validation.Failed` (`store.go:389-390`) and `Import` (`importer.go:42-48`), which say "balance or split-sum"; on `CheckShares`, `ShareCheck`, `Rows.QuickenShares`, the walk func (states it is the single share-count owner), in-memory create
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `Validation.Failed` (`store.go:389-390`) and `Import` (`importer.go:42-48`), which say "balance or split-sum"; on `CheckShares`, `ShareCheck`, `Rows.QuickenShares`, the walk func (states it is the single share-count owner), in-memory create
 
 ### Verify
-- [ ] Step 9: full verification + `spec-check.py phase4a-investments` → tick SCENARIO-04, SCENARIO-05 and SCENARIO-08, each folded line naming "delivered by SCENARIO-04" before its test
+- [x] Step 9: full verification + `spec-check.py phase4a-investments` → tick SCENARIO-04, SCENARIO-05 and SCENARIO-08, each folded line naming "delivered by SCENARIO-04" before its test
 
 ## Handoff
 
@@ -55,23 +55,4 @@ Size: OWNS A RUN — 5 batches (ceiling), 1 feature package (importer) plus its 
 
 ## Phase report
 
-Run B2 (steps 5-7) done. Narrow loop green (store, duckstore, importer, platform, cli, report, cmd/quarry); the three acceptance tests (S04, S05, S08) pass. Not run yet: lint, full covered suite, `uncovered-diff.py`, spec tick, STATE.md (run V).
-
-Files:
-- Gate: `internal/store/store.go` `Validation.Shares`, `Failed()` shares clause, `ImportRun.SharesChecked`; `internal/importer/ports.go` `Store.CheckShares`; `importer.go` calls it always after `validate`, error wrapped `check share counts: %w`, never reaches Replace; `newImportRun` sets `SharesChecked`
-- Column: `duckstore/schema.go` `shares_checked BIGINT` (after `investment_transactions_rows`), `history.go` optional + `carriedRun`, `duckstore.go` `importRunRows`, `status.go` COALESCE into `run.SharesChecked`; `plugin/skills/quarry/references/schema.md` regenerated
-- Text: `internal/cli/render.go` `rowsPhrase` (investment clause always, then the not-imported tail), `sharesPhrase`, Shares line in `renderStore` and, only while no share mismatch, in `renderStoreFailure`
-- JSON: `document/common.go` `Rows`/`NewRows` +3 keys (also status JSON `rows`); `cli/json.go` `sharesDocument{checked, mismatched []any{}}` after `splits`
-- Tests: `store_test.go` `Test_Validation_*`; `importer/share_gate_test.go`; `store_fake_test.go` `shareCheck`/`shareErr`; duckstore `history_test.go`/`status_test.go`/`duckstore_test.go` shares_checked; `cmd/quarry/run_investments_test.go` `oneHoldingBundle`, byte-identical guard + control, S02 fixture lot `0.541667`; cli `Test_sharesPhrase`, `Test_rowsPhrase`, failure subtests, `Test_renderJSON_reports_the_shares_checked_*`; Rows/Shares/JSON re-pins across cmd/quarry and cli
-
-Decisions made (not in plan):
-- `renderStoreFailure` omits the Shares line while shares mismatch (a "N holdings match" line would be false); S06 adds the DIFFER form. Pinned by `Shares line is left out while a count differs`
-- `store.shares.mismatched` is `[]any{}` (no entry type until S06)
-- Status text/JSON do not print Shares (S09), but their Rows line/object now carry the investment counts (`rowsPhrase`/`NewRows` shared)
-
-Mutation (backup-copy protocol): `store.go` `Failed()` dropped ` || len(v.Shares.Mismatched) > 0` reddened `Test_Validation_fails_when_a_share_count_differs` ("Should be true") and `Test_run_sync_leaves_the_previous_store_byte_identical_when_share_counts_differ` (exit 0 vs 1, store replaced). Restored, diff clean. The `<=`/`<` tolerance and `Z_ENT` mutations were done in B1.
-
-Run V must know:
-- Step 8 doc comments to check: `CheckShares`, `ShareCheck`, `Rows.QuickenShares`, the walk func, `CreateInMemory` (`Failed` and `Import` already say balance, split-sum or share-count)
-- Orchestrator-ruled in B1: missing-Lot-entity refusal outranks row-level refusals
-- Tick S04 plus folded S05, S08 in `specification.md`; STATE.md `## Left unbuilt` still lists `ZLOT`/Rows keys/Shares line, now built
+Run V (steps 8-9) done; scenario complete. Lint 0 issues (fixed one `lll` in `render_status_internal_test.go` and two testifylint `require` in `share_gate_test.go`). Doc comments on `CheckShares`, `ShareCheck`, `QuickenShare`/`Rows.QuickenShares`, `holdingShares`, `CreateInMemory`, `Failed`, `Import` already state the contract. Full covered suite rc=0; `uncovered-diff.py` 0 uncovered, 1 declared unreachable (`shares.go:129` `decimalOf`); race green on importer, store, duckstore, platform/duckdb, cli. Mutation: dropping the shares clause from `Failed()` reddens `Test_import_does_not_replace_the_store_when_share_counts_differ` ("Expected error with validation failed in chain but got nil"); restored. Spec: S04, S05, S08 ticked (S05/S08 note delivered by S04); spec-check OK. STATE.md rewritten.

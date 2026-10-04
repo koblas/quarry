@@ -72,7 +72,7 @@ func Test_import_returns_the_share_check_error_without_replacing_the_store(t *te
 	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
 
 	require.ErrorIs(t, err, errShareCheckFault)
-	assert.NotErrorIs(t, err, store.ErrValidationFailed)
-	assert.EqualError(t, err, "check share counts: scratch database unavailable")
+	require.NotErrorIs(t, err, store.ErrValidationFailed)
+	require.EqualError(t, err, "check share counts: scratch database unavailable")
 	assert.Zero(t, fake.replaceCalls)
 }
