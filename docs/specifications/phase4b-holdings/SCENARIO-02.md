@@ -17,7 +17,7 @@ Spec: `specification.md` SCENARIO-02, H-2 (comment text R2 verbatim), H-3, H-5, 
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_holdings_view_test.go` (new) `Test_run_sql_values_each_holding_on_a_date_from_v_holdings` — build the store with `replaceStoreWithRates` (`run_sql_fx_test.go:32`) and `usdRate` (`run_anomalies_fx_edges_test.go:47`). Fixture: one CAD and one USD holding (accounts, securities, investment transactions); prices on days before, on and after the queried date; two rates that differ on consecutive days; a shares×price product that is not whole cents. Then `run(... "sql", "SELECT … FROM v_holdings WHERE date = '…'")`, following `run_sql_fx_test.go`. Assert price, price_date, value, value_cad, value_usd and usd_cad for both rows. No stubs: red = non-zero exit at the exit-code assertion, because `v_holdings` does not exist yet.
+- [x] Step 1: `cmd/quarry/run_holdings_view_test.go` (new) `Test_run_sql_values_each_holding_on_a_date_from_v_holdings` — build the store with `replaceStoreWithRates` (`run_sql_fx_test.go:32`) and `usdRate` (`run_anomalies_fx_edges_test.go:47`). Fixture: one CAD and one USD holding (accounts, securities, investment transactions); prices on days before, on and after the queried date; two rates that differ on consecutive days; a shares×price product that is not whole cents. Then `run(... "sql", "SELECT … FROM v_holdings WHERE date = '…'")`, following `run_sql_fx_test.go`. Assert price, price_date, value, value_cad, value_usd and usd_cad for both rows. No stubs: red = non-zero exit at the exit-code assertion, because `v_holdings` does not exist yet.
 
 ### Build
 - [ ] Step 2: `internal/store/duckstore/schema.go:245-254` (new `holdingsViewDDL` after `spendingViewDDL`) + `duckstore.go:454` (append it to the build Exec) — the view's day expansion and `COMMENT ON VIEW v_holdings` (H-2 R2 text verbatim).
@@ -101,3 +101,16 @@ Spec: `specification.md` SCENARIO-02, H-2 (comment text R2 verbatim), H-3, H-5, 
 - **`convertedTo`'s 18,2 result is the default for existing callers.** Widening it in place would change four views' column types and the regenerated `schema.md`.
 - **Today is DuckDB's `current_date`.** Use `localToday()` (`accounts_test.go:19`) for "through today" arms. Fixed dates must not be after the real date.
 - **`phase4ViewPattern` is shared.** The schema.md regen, the `Len` 2→3 change and both pin retirements fail in isolation, so land them together.
+
+## Phase report
+
+Run A (step 1) done. Step 1 ticked; steps 2-6 open.
+
+- Added `cmd/quarry/run_holdings_view_test.go` (new, 63 lines): `Test_run_sql_values_each_holding_on_a_date_from_v_holdings`. No production code or stubs.
+- Red at the exit-code assertion (`run_holdings_view_test.go:51`): expected 0, actual 1, `quarry: query failed: Catalog Error: Table with name v_holdings does not exist!`.
+- Fixture: store built from `spendRows(accounts)` plus `Securities`, `InvestmentTransactions` (one buy each, 2026-03-02) and `Prices`, with `replaceStoreWithRates` and `usdRate`. Queried date 2026-03-12.
+  - CAD ACME 3.5 sh: prices day 9 / 11 / 13 (before, nearest before, after) -> uses 12.345678 dated 03-11; value 43.21.
+  - USD GLBX 2 sh: prices day 10 / 12 / 13 -> uses 20.123456 dated 03-12 (on the date); value 40.25.
+  - Rates 03-11 1.25, 03-12 1.30: value_usd of the CAD row 33.24 (1.25 would give 34.57); value_cad of the USD row 52.33 (half-cent product 52.325 rounds away; 1.25 would give 50.31).
+- Expected CSV derived by hand, unproven until Steps 2-3 turn it green. If a cell mismatches then, check the arithmetic before the view. `shares`/`price` render as DECIMAL(18,6) text, `usd_cad` as DECIMAL(10,6).
+- The Step 2 view alone leaves this test red on the value columns; Step 3 owns them.
