@@ -56,6 +56,15 @@ func minimalRows() store.Rows {
 		Prices: []store.Price{{
 			SecurityID: "sec-1", SourceID: 7, Date: time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC), Price: 12_345_678,
 		}},
+		InvestmentTransactions: []store.InvestmentTransaction{{
+			ID: "inv-1", SourceID: 21, AccountID: "acct-1", SecurityID: new("sec-1"),
+			Date: time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC), Action: "split", Shares: new(int64(1_500_000)),
+			Amount: 12_345, Commission: new(int64(150)), Currency: "CAD", Memo: new("note"),
+			SplitNewShares: new(int64(12_000_000)), SplitOldShares: new(int64(1_000_000)),
+		}, {
+			ID: "inv-2", SourceID: 22, AccountID: "acct-1",
+			Date: time.Date(2026, 3, 17, 0, 0, 0, 0, time.UTC), Action: "dividend", Amount: 500, Currency: "CAD",
+		}},
 		ImportRuns: []store.ImportRun{{
 			ID: 1, StartedAt: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), FinishedAt: time.Date(2026, 9, 27, 14, 30, 7, 0, time.UTC),
 			Snapshot: store.SnapshotRef{
@@ -64,7 +73,7 @@ func minimalRows() store.Rows {
 			},
 			Counts: store.Counts{
 				Accounts: 1, Categories: 2, Payees: 3, Tags: 4, Transactions: 5, Splits: 6, SplitTags: 7, Transfers: 8,
-				Securities: 18, Prices: 19,
+				Securities: 18, Prices: 19, InvestmentTransactions: 20,
 			},
 			BalancesChecked: 9, BalancesMismatched: 10, SplitsMismatched: 11, TransfersOneSided: 12, InvestmentTransactionsNotImported: 13,
 			BalancesNeverReconciled: 14, InvestmentAccounts: 15, TransfersPaired: 16, TransfersCrossCurrency: 17,
@@ -109,10 +118,37 @@ func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
 	assertScalar(t, db, "SELECT concat_ws(' ', CAST(snapshot_taken_at AS VARCHAR), source_path, balances_never_reconciled, "+
 		"investment_accounts, transfers_paired, transfers_cross_currency) FROM import_runs WHERE id = 1",
 		"2026-09-27 14:30:05 /Users/alex/Documents/Home.quicken 14 15 16 17")
-	assertScalar(t, db, "SELECT concat_ws(' ', securities_rows, prices_rows) FROM import_runs WHERE id = 1", "18 19")
+	assertScalar(t, db, "SELECT concat_ws(' ', securities_rows, prices_rows, investment_transactions_rows) FROM import_runs WHERE id = 1", "18 19 20")
 	assertScalar(t, db, "SELECT concat_ws(' ', source_id, name, ticker, currency) FROM securities WHERE id = 'sec-1'", "1 Acme Corp ACME CAD")
 	assertScalar(t, db, "SELECT concat_ws(' ', source_id, CAST(date AS VARCHAR), CAST(price AS VARCHAR)) FROM prices WHERE security_id = 'sec-1'",
 		"7 2026-03-15 12.345678")
+}
+
+func Test_replace_stores_an_investment_transaction_with_every_nullable_column_set(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir())
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	db := openReadOnly(t, st.Path())
+	assertScalar(t, db, "SELECT concat_ws(' ', source_id, account_id, security_id, CAST(date AS VARCHAR), action, CAST(shares AS VARCHAR), "+
+		"CAST(amount AS VARCHAR), CAST(commission AS VARCHAR), currency, memo, CAST(split_new_shares AS VARCHAR), CAST(split_old_shares AS VARCHAR)) "+
+		"FROM investment_transactions WHERE id = 'inv-1'", "21 acct-1 sec-1 2026-03-16 split 1.500000 123.45 1.50 CAD note 12.000000 1.000000")
+}
+
+func Test_replace_stores_an_investment_transaction_with_every_nullable_column_null(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir())
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	db := openReadOnly(t, st.Path())
+	assertScalar(t, db, "SELECT concat_ws(' ', source_id, action, CAST(amount AS VARCHAR), currency) FROM investment_transactions WHERE id = 'inv-2'",
+		"22 dividend 5.00 CAD")
+	assertScalar(t, db, "SELECT CAST(count(*) AS VARCHAR) FROM investment_transactions WHERE id = 'inv-2' AND security_id IS NULL AND shares IS NULL "+
+		"AND commission IS NULL AND memo IS NULL AND split_new_shares IS NULL AND split_old_shares IS NULL", "1")
 }
 
 func Test_replace_stores_a_security_with_no_ticker_or_currency_as_null(t *testing.T) {
@@ -360,6 +396,10 @@ func Test_replace_fails_when_any_tables_rows_fail_to_append(t *testing.T) {
 		{"transfers", func(r store.Rows) store.Rows { r.Transfers = append(r.Transfers, r.Transfers[0]); return r }},
 		{"securities", func(r store.Rows) store.Rows { r.Securities = append(r.Securities, r.Securities[0]); return r }},
 		{"prices", func(r store.Rows) store.Rows { r.Prices = append(r.Prices, r.Prices[0]); return r }},
+		{"investment_transactions", func(r store.Rows) store.Rows {
+			r.InvestmentTransactions = append(r.InvestmentTransactions, r.InvestmentTransactions[0])
+			return r
+		}},
 	}
 
 	for _, c := range cases {
@@ -430,6 +470,50 @@ func Test_replace_fails_when_a_price_is_out_of_range(t *testing.T) {
 	_, err := st.Replace(t.Context(), rows)
 
 	require.ErrorContains(t, err, "price of sec-1 on 2026-03-15")
+}
+
+func Test_replace_stores_the_largest_investment_amounts_and_shares_the_columns_hold(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	inv := &rows.InvestmentTransactions[0]
+	inv.Shares, inv.SplitNewShares, inv.SplitOldShares = new(int64(999_999_999_999_999_999)), new(int64(999_999_999_999_999_999)), new(int64(-999_999_999_999_999_999))
+	inv.Amount, inv.Commission = 999_999_999_999_999_999, new(int64(-999_999_999_999_999_999))
+	st := duckstore.New(t.TempDir())
+
+	_, err := st.Replace(t.Context(), rows)
+
+	require.NoError(t, err)
+	assertScalar(t, openReadOnly(t, st.Path()), "SELECT concat_ws(' ', CAST(shares AS VARCHAR), CAST(amount AS VARCHAR), CAST(commission AS VARCHAR), "+
+		"CAST(split_new_shares AS VARCHAR), CAST(split_old_shares AS VARCHAR)) FROM investment_transactions WHERE id = 'inv-1'",
+		"999999999999.999999 9999999999999999.99 -9999999999999999.99 999999999999.999999 -999999999999.999999")
+}
+
+func Test_replace_fails_when_an_investment_transaction_value_is_out_of_range(t *testing.T) {
+	t.Parallel()
+	const beyondScale6, beyondScale2 = 1_000_000_000_000_000_000, math.MaxInt64
+	cases := []struct {
+		name    string
+		corrupt func(*store.InvestmentTransaction)
+		column  string
+	}{
+		{"shares", func(i *store.InvestmentTransaction) { i.Shares = new(int64(beyondScale6)) }, "shares"},
+		{"amount", func(i *store.InvestmentTransaction) { i.Amount = beyondScale2 }, "amount"},
+		{"commission", func(i *store.InvestmentTransaction) { i.Commission = new(int64(beyondScale2)) }, "commission"},
+		{"split new shares", func(i *store.InvestmentTransaction) { i.SplitNewShares = new(int64(-beyondScale6)) }, "split_new_shares"},
+		{"split old shares", func(i *store.InvestmentTransaction) { i.SplitOldShares = new(int64(beyondScale6)) }, "split_old_shares"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			rows := minimalRows()
+			c.corrupt(&rows.InvestmentTransactions[0])
+
+			_, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
+
+			require.ErrorContains(t, err, "investment transaction inv-1: "+c.column)
+		})
+	}
 }
 
 func Test_replace_removes_the_partial_when_the_build_fails(t *testing.T) {

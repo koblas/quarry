@@ -70,7 +70,7 @@ func Test_status_reads_null_check_counts_as_zero(t *testing.T) {
 	require.NoError(t, err)
 	_, err = conn.Exec(t.Context(), `UPDATE import_runs SET balances_never_reconciled = NULL,
 		investment_accounts = NULL, transfers_paired = NULL, transfers_cross_currency = NULL,
-		securities_rows = NULL, prices_rows = NULL`)
+		securities_rows = NULL, prices_rows = NULL, investment_transactions_rows = NULL`)
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
 
@@ -83,6 +83,7 @@ func Test_status_reads_null_check_counts_as_zero(t *testing.T) {
 	assert.Zero(t, got.Run.TransfersCrossCurrency)
 	assert.Zero(t, got.Run.Counts.Securities)
 	assert.Zero(t, got.Run.Counts.Prices)
+	assert.Zero(t, got.Run.Counts.InvestmentTransactions)
 	assert.Equal(t, minimalRows().ImportRuns[0].BalancesChecked, got.Run.BalancesChecked)
 }
 

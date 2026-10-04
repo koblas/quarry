@@ -155,6 +155,26 @@ type Price struct {
 	Price      int64
 }
 
+// InvestmentTransaction is one row of the investment_transactions table. Shares,
+// SplitNewShares and SplitOldShares are millionths (DECIMAL(18,6)); Amount and
+// Commission are cents. SecurityID is nil for a cash-only action, Shares nil
+// when Quicken records none, and the split sides are set only for a split.
+type InvestmentTransaction struct {
+	ID             string
+	SourceID       int64
+	AccountID      string
+	SecurityID     *string
+	Date           time.Time
+	Action         string
+	Shares         *int64
+	Amount         int64
+	Commission     *int64
+	Currency       string
+	Memo           *string
+	SplitNewShares *int64
+	SplitOldShares *int64
+}
+
 // Rows is every row a store build writes, grouped by table. ImportRuns holds
 // the new build's run only; the store carries earlier runs forward itself.
 // ReferencedCategoryIDs is not a table: sorted unique ids of categories that rows
@@ -172,6 +192,8 @@ type Rows struct {
 	Securities   []Security
 	Prices       []Price
 	ImportRuns   []ImportRun
+
+	InvestmentTransactions []InvestmentTransaction
 
 	ReferencedCategoryIDs []string
 }
@@ -242,6 +264,8 @@ type Counts struct {
 	Transfers    int
 	Securities   int
 	Prices       int
+
+	InvestmentTransactions int
 }
 
 // Result is what a store build returns. Built is false when a check failed:

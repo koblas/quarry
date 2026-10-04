@@ -474,6 +474,13 @@ func loadRows(ctx context.Context, db DB, rows store.Rows, carried history) erro
 	if err := appendTable(ctx, db, "prices", priceRows); err != nil {
 		return err
 	}
+	invRows, err := investmentTransactionRows(rows.InvestmentTransactions)
+	if err != nil {
+		return err
+	}
+	if err := appendTable(ctx, db, "investment_transactions", invRows); err != nil {
+		return err
+	}
 	return appendTable(ctx, db, "import_runs", importRunRows(carried, rows.ImportRuns))
 }
 
@@ -610,6 +617,38 @@ func priceRows(prices []store.Price) ([][]any, error) {
 	return out, nil
 }
 
+func investmentTransactionRows(txns []store.InvestmentTransaction) ([][]any, error) {
+	out := make([][]any, len(txns))
+	for i, t := range txns {
+		shares, err1 := decimalCell("shares", t.Shares, priceWidth, priceScale)
+		amount, err2 := decimalCell("amount", &t.Amount, moneyWidth, moneyScale)
+		commission, err3 := decimalCell("commission", t.Commission, moneyWidth, moneyScale)
+		splitNew, err4 := decimalCell("split_new_shares", t.SplitNewShares, priceWidth, priceScale)
+		splitOld, err5 := decimalCell("split_old_shares", t.SplitOldShares, priceWidth, priceScale)
+		if err := errors.Join(err1, err2, err3, err4, err5); err != nil {
+			return nil, fmt.Errorf("investment transaction %s: %w", t.ID, err)
+		}
+		out[i] = []any{
+			t.ID, t.SourceID, t.AccountID, nullableStr(t.SecurityID), t.Date, t.Action, shares, amount, commission,
+			t.Currency, nullableStr(t.Memo), splitNew, splitOld,
+		}
+	}
+	return out, nil
+}
+
+// decimalCell is the append cell for v as DECIMAL(width, scale): NULL for nil, else v unscaled;
+// it names column when v is out of range.
+func decimalCell(column string, v *int64, width, scale uint8) (any, error) {
+	if v == nil {
+		return nil, nil //nolint:nilnil // a NULL cell has no error
+	}
+	cell, err := duckdb.Decimal(*v, width, scale)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", column, err)
+	}
+	return cell, nil
+}
+
 func importRunRows(carried history, runs []store.ImportRun) [][]any {
 	out := append([][]any(nil), carried.rows...)
 	for i, r := range runs {
@@ -624,7 +663,7 @@ func importRunRows(carried history, runs []store.ImportRun) [][]any {
 			int64(r.BalancesNeverReconciled), int64(r.InvestmentAccounts),
 			int64(r.TransfersPaired), int64(r.TransfersCrossCurrency),
 			nil, nil, nil,
-			int64(c.Securities), int64(c.Prices),
+			int64(c.Securities), int64(c.Prices), int64(c.InvestmentTransactions),
 		})
 	}
 	return out

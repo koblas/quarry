@@ -135,7 +135,8 @@ CREATE TABLE import_runs (
 	rates_last DATE,
 	rates_fetch_error VARCHAR,
 	securities_rows BIGINT,
-	prices_rows BIGINT
+	prices_rows BIGINT,
+	investment_transactions_rows BIGINT
 );
 CREATE TABLE fx_rates (
 	date DATE PRIMARY KEY,
