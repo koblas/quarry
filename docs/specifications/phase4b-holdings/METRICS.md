@@ -20,6 +20,8 @@
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
 | 1 | arch, correctness, test, refactor | 0/3/10/8 | 0 / 20 (1 timed out), 1212s | BLOCKED |
+| 2 | correctness, test | 0/0/0/0 | 0 / 6, 729s (first run aborted: isolated-copy duckstore failure, not reproduced) | PASS |
+| final pass | product-vision | 0/2/0/0 | - | SHIP WITH CHANGES |
 
 ## Tokens
 
