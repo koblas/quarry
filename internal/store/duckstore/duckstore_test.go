@@ -625,6 +625,7 @@ type faultDB struct {
 	execFault        error
 	appended         []string // every table AppendRows was asked to load, in order
 	checkpoints      int      // CheckpointClose calls
+	closes           int      // Close calls
 }
 
 // QueryRows fails with queryFault for the query queryFaultOn, hands its row callback a scan that
@@ -673,6 +674,7 @@ func (f *faultDB) CheckpointClose(ctx context.Context) error {
 // Close closes the real connection, then leaves a .wal beside the partial
 // when walOnClose is set, as a crash mid-checkpoint would.
 func (f *faultDB) Close() error {
+	f.closes++
 	err := f.DB.Close()
 	if f.walOnClose {
 		_ = os.WriteFile(f.path+".wal", []byte("wal"), 0o600)

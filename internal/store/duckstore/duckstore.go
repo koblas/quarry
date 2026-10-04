@@ -67,6 +67,17 @@ type DB interface {
 
 var _ DB = (*duckdb.DB)(nil)
 
+// ScratchDB is the in-memory connection CheckShares loads transactions into and walks.
+// *duckdb.DB is the production implementation.
+type ScratchDB interface {
+	Exec(ctx context.Context, query string, args ...any) (sql.Result, error)
+	AppendRows(ctx context.Context, table string, rows [][]any) error
+	QueryRows(ctx context.Context, query string, args []any, row func(scan func(dest ...any) error) error) error
+	Close() error
+}
+
+var _ ScratchDB = (*duckdb.DB)(nil)
+
 // ReadDB is the read-only connection a Store answers one read through.
 // *duckdb.DB is the production implementation.
 type ReadDB interface {
@@ -83,6 +94,7 @@ type Store struct {
 	dir           string
 	create        func(ctx context.Context, path string) (DB, error)
 	openReadOnly  func(ctx context.Context, path string) (ReadDB, error)
+	scratch       func(ctx context.Context) (ScratchDB, error)
 	quarryVersion string
 	rates         RatesSource
 }
@@ -109,6 +121,12 @@ func WithOpenReadOnly(open func(ctx context.Context, path string) (ReadDB, error
 	return func(s *Store) { s.openReadOnly = open }
 }
 
+// WithScratch replaces how CheckShares opens its in-memory scratch database, which by
+// default is duckdb.CreateInMemory. scratch must return a database of its own each call.
+func WithScratch(scratch func(ctx context.Context) (ScratchDB, error)) Option {
+	return func(s *Store) { s.scratch = scratch }
+}
+
 // WithRates sets where Replace gets exchange rates from; without it the
 // store's fx_rates table is left empty.
 func WithRates(src RatesSource) Option {
@@ -127,7 +145,7 @@ func WithQuarryVersion(v string) Option {
 
 // New returns a Store that builds quarry.duckdb inside dir.
 func New(dir string, opts ...Option) *Store {
-	s := &Store{dir: dir, create: createDuckDB, openReadOnly: openDuckDBReadOnly, quarryVersion: develVersion}
+	s := &Store{dir: dir, create: createDuckDB, openReadOnly: openDuckDBReadOnly, scratch: createScratch, quarryVersion: develVersion}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -152,6 +170,16 @@ func createDuckDB(ctx context.Context, path string) (DB, error) {
 	db, err := duckdb.Create(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("create store file: %w", err)
+	}
+	return db, nil
+}
+
+// createScratch is New's default scratch opener; it returns a nil interface, never a typed nil, when
+// duckdb.CreateInMemory fails.
+func createScratch(ctx context.Context) (ScratchDB, error) {
+	db, err := duckdb.CreateInMemory(ctx)
+	if err != nil {
+		return nil, err //nolint:wrapcheck // CreateInMemory already names the operation
 	}
 	return db, nil
 }
@@ -484,8 +512,13 @@ func loadRows(ctx context.Context, db DB, rows store.Rows, carried history) erro
 	return appendTable(ctx, db, "import_runs", importRunRows(carried, rows.ImportRuns))
 }
 
+// rowAppender is the bulk-load half of DB and ScratchDB.
+type rowAppender interface {
+	AppendRows(ctx context.Context, table string, rows [][]any) error
+}
+
 // appendTable bulk-loads rows into table, naming the table on failure.
-func appendTable(ctx context.Context, db DB, table string, rows [][]any) error {
+func appendTable(ctx context.Context, db rowAppender, table string, rows [][]any) error {
 	if err := db.AppendRows(ctx, table, rows); err != nil {
 		return fmt.Errorf("load %s: %w", table, err)
 	}

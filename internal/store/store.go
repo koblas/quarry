@@ -444,6 +444,21 @@ type SplitMismatch struct {
 	Amount, SplitsTotal          int64
 }
 
+// ShareCheck is the share-count gate's result across every holding: Checked
+// counts the holdings compared, Mismatched lists those whose counts differ.
+type ShareCheck struct {
+	Checked    int
+	Mismatched []ShareMismatch
+}
+
+// ShareMismatch is one holding (account and security ids) whose derived share
+// count differs from Quicken's, both in millionths of a share. A count too large
+// for an int64 reads as the largest one.
+type ShareMismatch struct {
+	AccountID, SecurityID string
+	Quarry, Quicken       int64
+}
+
 // TransferCheck is the transfer-pairing result. CrossCurrency counts pairs
 // whose legs' accounts differ in currency; OneSided lists every stored leg
 // with no counterpart.

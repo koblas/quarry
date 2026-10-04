@@ -31,9 +31,12 @@ func Test_import_sums_each_holdings_lot_units_into_one_share_count(t *testing.T)
 	acmePK := newAcme(b)
 	betaPK := b.Security(v9fixture.SecurityRow{Name: "Beta Corp"})
 	gammaPK := b.Security(v9fixture.SecurityRow{Name: "Gamma Corp"})
+	retirementPK := b.Account(v9fixture.AccountRow{Name: "Retirement", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	acmePosition := b.Position(v9fixture.PositionRow{Account: accountPK, Security: acmePK})
 	betaPosition := b.Position(v9fixture.PositionRow{Account: accountPK, Security: betaPK})
 	gammaPosition := b.Position(v9fixture.PositionRow{Account: accountPK, Security: gammaPK})
+	retirementPosition := b.Position(v9fixture.PositionRow{Account: retirementPK, Security: acmePK})
+	b.Lot(v9fixture.LotRow{Position: retirementPosition, LatestUnits: "1"})
 	b.Lot(v9fixture.LotRow{Position: gammaPosition, LatestUnits: "7"})
 	b.Lot(v9fixture.LotRow{Position: acmePosition, LatestUnits: "1.5"})
 	b.Lot(v9fixture.LotRow{Position: betaPosition, LatestUnits: "10"})
@@ -45,6 +48,7 @@ func Test_import_sums_each_holdings_lot_units_into_one_share_count(t *testing.T)
 		holding(accountPK, acmePK, "3750000"),
 		holding(accountPK, betaPK, "10000000"),
 		holding(accountPK, gammaPK, "7000000"),
+		holding(retirementPK, acmePK, "1000000"),
 	}, quickenShares(fake))
 }
 

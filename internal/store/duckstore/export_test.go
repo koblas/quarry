@@ -1,5 +1,11 @@
 package duckstore
 
+// SchemaDDL and HoldingWalkQuery are the statements CheckShares runs on its scratch database, so a test fake can fail one.
+const (
+	SchemaDDL        = schemaDDL
+	HoldingWalkQuery = holdingWalkQuery
+)
+
 // The format-check queries openRead runs before a read's own query, so a test fake can tell them apart.
 const (
 	ColumnExistsQuery  = columnExistsQuery
