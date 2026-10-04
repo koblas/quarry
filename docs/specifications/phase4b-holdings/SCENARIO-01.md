@@ -16,9 +16,9 @@ Size: OWNS A RUN — 4 batches, 1 feature package (`store/duckstore`; `cmd/quarr
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_holding_shares_test.go` (new) `Test_run_sync_records_each_holdings_share_count_over_time` — v9fixture bundle as `run_investments_test.go:436-463`: buy, two rows on one day, 1:2 split, sell, buy dated `time.Now()`+1y; lot = final count. Assert `holding_shares` rows (from/to/shares, `to_date` NULL on last), stdout `Shares    1 holding matches…`, `store_info.format_version` = literal `"7"` (not the constant). Read rows with a multi-row helper next to `importRunQuery` (`run_import_runs_test.go:180`)
-- [ ] Step 2: `internal/store/duckstore/rates_test.go` `Test_replace_asks_for_rates_from_the_earliest_investment_transaction` — `minimalRows()` + one investment transaction dated before the cash row, recording `fakeRates` (`rates_test.go:22-35`); assert `Need.First` = investment date
-- [ ] Step 3: `internal/store/duckstore/schema.go:102` — stub: `CREATE TABLE holding_shares` (spec H-1 columns, PK `(account_id, security_id, from_date)`) so Step 1 fails at its row assertion, not on a missing table
+- [x] Step 1: `cmd/quarry/run_holding_shares_test.go` (new) `Test_run_sync_records_each_holdings_share_count_over_time` — v9fixture bundle as `run_investments_test.go:436-463`: buy, two rows on one day, 1:2 split, sell, buy dated `time.Now()`+1y; lot = final count. Assert `holding_shares` rows (from/to/shares, `to_date` NULL on last), stdout `Shares    1 holding matches…`, `store_info.format_version` = literal `"7"` (not the constant). Read rows with a multi-row helper next to `importRunQuery` (`run_import_runs_test.go:180`)
+- [x] Step 2: `internal/store/duckstore/rates_test.go` `Test_replace_asks_for_rates_from_the_earliest_investment_transaction` — `minimalRows()` + one investment transaction dated before the cash row, recording `fakeRates` (`rates_test.go:22-35`); assert `Need.First` = investment date
+- [x] Step 3: `internal/store/duckstore/schema.go:102` — stub: `CREATE TABLE holding_shares` (spec H-1 columns, PK `(account_id, security_id, from_date)`) so Step 1 fails at its row assertion, not on a missing table
 
 ### Build
 - [ ] Step 4: `shares.go:27-114` `holdingWalkQuery` (+`date`) / `holdingShares` → `holdingSpans` (one function; every walked holding keyed, even with zero spans), returning per holding the exact final `big.Rat` **and** its spans; `deriveShares` `:57-75` feeds the gate the exact final count, unchanged. Spans: boundary on half-even millionths (`millionthsOf`) at the end of each date; same day netted; `to_date` = change date − 1; rounded zero not stored; negative stored. `shares_internal_test.go:15-29` `walkRow` emits the date. Tests: `Test_holding_spans_open_span_is_the_rounded_final_count` (`shares_internal_test.go`, real scratch DB; rows: plain buy, split-produced 8.3333333…, 1.5µ tie, non-zero exact rounding to 0 → no open span, negative, fully sold) asserts open span shares == `millionthsOf(final)` and no open span ⇔ that is 0; `Test_check_shares_counts_a_fully_sold_holding_as_zero` (still `Checked`, `Quarry 0` vs non-zero lot). Every existing `shares_test.go` row stays as is (`:126` `8.333332` remains a mismatch)
@@ -51,3 +51,13 @@ Size: OWNS A RUN — 4 batches, 1 feature package (`store/duckstore`; `cmd/quarr
 - `HoldingWalkQuery` now runs in `Replace` too: a `faultDB.queryFaultOn` on it fails the build, not just the scratch walk
 - DECIMAL(18,6) overflow is reachable only through a split multiply; it surfaces as the generic build failure (previous store kept) — no copy ruled, none invented
 - `cmd/quarry/run_investments_test.go` is in Open debts at 480 lines: new tests go in the new file
+
+## Phase report
+
+Run A (steps 1-3) done; cadence test-first. Both acceptance tests red at their assertions.
+- `cmd/quarry/run_holding_shares_test.go` (new): `Test_run_sync_records_each_holdings_share_count_over_time`. Fixture: buy 10 / two buys of 5 on one day / split numerator 1 denominator 2 / sell 4 / buy 3 dated today+1y, lot 9. Expected spans: `03-01..03-01 10`, `03-02..03-02 20`, `03-03..03-03 10`, `03-04..(future-1) 6`, `future..NULL 9`. Red: span rows `[]string(nil)` vs 5 expected; `format_version` "6" vs "7". The stdout Shares line already passes (gate unchanged).
+- `cmd/quarry/run_import_runs_test.go:186-205`: new helper `storeTextRows(t, home, query) []string` (one VARCHAR column, query order) beside `importRunQuery`.
+- `internal/store/duckstore/rates_test.go:67-81`: `Test_replace_asks_for_rates_from_the_earliest_investment_transaction` appends a no-security dividend `inv-0` dated 2026-03-01 to `minimalRows()` (cash row is 03-15). Red: `Need.First` 2026-03-15 vs 2026-03-01.
+- `internal/store/duckstore/schema.go:103-110`: stub `CREATE TABLE holding_shares` (spec H-1 columns, PK `(account_id, security_id, from_date)`). Nothing loads it yet.
+- Expected side effect of the stub, fixed in Step 6: `Test_query_show_tables_lists_every_table_and_view` (`query_test.go:30-35` `storeRelations`) and `Test_skill_schema_reference_matches_the_committed_file` (regenerate `schema.md`) fail now.
+- Not done, do not undo: `FormatVersion` still 6; no production code beyond the DDL stub; `needSpan` untouched.

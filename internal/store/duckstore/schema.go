@@ -100,6 +100,14 @@ CREATE TABLE investment_transactions (
 	split_new_shares DECIMAL(18,6),
 	split_old_shares DECIMAL(18,6)
 );
+CREATE TABLE holding_shares (
+	account_id VARCHAR NOT NULL,
+	security_id VARCHAR NOT NULL,
+	from_date DATE NOT NULL,
+	to_date DATE,
+	shares DECIMAL(18,6) NOT NULL,
+	PRIMARY KEY (account_id, security_id, from_date)
+);
 CREATE TABLE split_tags (
 	split_id VARCHAR NOT NULL,
 	tag_id VARCHAR NOT NULL,
