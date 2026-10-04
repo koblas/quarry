@@ -15,12 +15,16 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
+| 1 | arch, correctness, test, refactor | 0/3/14/9 | 0 / 20, 1431s | BLOCKED |
 
 ## Tokens
 
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
 | --- | --- | --- | --- |
+| gate R1 | I4-5 "all dates count" unpinned (future-dated walk filter survives) | internal/store/duckstore/shares.go:30-36 | SCENARIO-04 |
+| gate R1 | I4-1 security currency "no refusal for other values" unpinned | internal/importer/securities.go:57-59 | SCENARIO-01 |
+| gate R1 | whitespace-only security name unpinned | internal/importer/securities.go:50 | SCENARIO-03 |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |

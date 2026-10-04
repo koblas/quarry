@@ -170,7 +170,7 @@ Shares    DIFFER for 1 of 145 holdings
 | Quote with NULL date | Not stored, not counted, silent |
 | Positions and lots in skipped or deleted accounts | Excluded silently (P1-5d); no gate row |
 | Security, SecurityQuote, Position or Lot entity missing from Z_PRIMARYKEY | Optional when no investment transactions import: no investment data — `Shares    no holdings to check`, zero Rows counts. Lot missing while investment transactions import → S4 (S.5). Missing security/position under transactions → their existing reasons. `no holdings to check` only when there are no imported investment transactions and no counting lots. Schema drift still caught by M1/M1b |
-| Commission NULL, stored 0, or snapping to 0.00 | Stored NULL |
+| Commission NULL, stored 0, or snapping to 0.0000 | Stored NULL |
 | Share residue within tolerance | Snapped silently; no field |
 | Shares beyond scale | S4, exit 1 |
 | Split with NULL/zero numerator or denominator | S4, exit 1 |
@@ -221,7 +221,7 @@ Scenario: SCENARIO-01 — Sync imports securities and their prices
 Scenario: SCENARIO-02 — Sync imports investment transactions with named actions
   Given investment transactions for each of the 13 mapped action codes, a cash-only dividend with no position, zero-unit add and remove rows, and a 1:12 split
   When the user runs quarry sync
-  Then investment_transactions holds each with its action name, shares in Quicken's sign, amount and commission as DECIMAL(18,2), security_id NULL for the cash-only row, and split_new_shares/split_old_shares only on the split, while transactions, v_spending and v_cash_flow are unchanged
+  Then investment_transactions holds each with its action name, shares in Quicken's sign, amount as DECIMAL(18,2) and commission as DECIMAL(18,4) (SCENARIO-13), security_id NULL for the cash-only row, and split_new_shares/split_old_shares only on the split, while transactions, v_spending and v_cash_flow are unchanged
 
 Scenario Outline: SCENARIO-03 — Sync refuses an investment record quarry cannot read
   Given a Quicken file with <record>
