@@ -7,5 +7,6 @@
 //
 // The Spending, CashFlow, Recurring and Anomalies warnings composers return
 // unprefixed lines, never nil; their word argument names the command in the
-// left-out-of-reports lines and nowhere else.
+// left-out-of-reports lines and nowhere else. HoldingsWarnings follows the
+// same shape and takes no word: holdings lists every account.
 package document

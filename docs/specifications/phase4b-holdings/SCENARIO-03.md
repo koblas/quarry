@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-03
-status: open
+status: done
 ---
 
 # SCENARIO-03: quarry holdings lists today's holdings in the reporting currency
@@ -28,10 +28,10 @@ Spec: `specification.md` SCENARIO-03; copy from S.1, S.2, S.3 (order only), S.5;
 - [x] Step 7: all-commands tables, one row each: root help `run_status_test.go:123-137`; `report_help_test.go:172-199` (+ `holdingsCurrencyHelp` const); `currency_test.go:23`; `run_read_usage_test.go:38-50` (`quarry: holdings takes no arguments`) and `:79`; `run_usage_test.go:212` and `:229-245`; `run_read_refusals_test.go:47-60`, `:90-98`, `:210-222`; `run_config_test.go:218-227` (config warnings first, R3 slot 1). n/a: `currency_test.go:104-110,259-266` (no other flag until S05); `run_investments_test.go:205-215` (spend/cashflow leakage only); older-format store (shared `readRefusal`, pinned by spend); drift and completion (derived from help, completion disabled)
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the new exported symbols; add holdings to `internal/cli/root.go:7-10`, `internal/report/doc.go` and `internal/report/document/doc.go`
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the new exported symbols; add holdings to `internal/cli/root.go:7-10`, `internal/report/doc.go` and `internal/report/document/doc.go`
 
 ### Verify
-- [ ] Step 9: full verification + `spec-check.py phase4b-holdings` → tick SCENARIO-03 with its acceptance test; rewrite STATE.md
+- [x] Step 9: full verification + `spec-check.py phase4b-holdings` → tick SCENARIO-03 with its acceptance test; rewrite STATE.md
 
 ## Handoff
 
@@ -56,25 +56,11 @@ Spec: `specification.md` SCENARIO-03; copy from S.1, S.2, S.3 (order only), S.5;
 
 ## Phase report
 
-Run B2 (steps 6-7) done: narrow loop fully green (`./internal/report/... ./internal/cli/ ./internal/platform/humanize/ ./cmd/quarry/`, root help included). Steps 1-7 ticked; run V owns Sweep (lint not yet run on any new file) and Verify.
+Run V (steps 8-9) done; scenario complete, `status: done`.
 
-B2 files:
-- `internal/report/document/holdings.go`: `Holdings`, `Holding`, `HoldingsTotal`, `NewHoldings` (S.5 key order; `account_filter` is `NewAccountFilters(nil)`, so S10 fills it), generic `nullable` (price, price_date), `nullableMoney` (value, converted_value via `BigMoney`). `internal/cli/json_holdings.go` `renderHoldingsJSON` real (`marshalDocument`).
-- Tests: `document/holdings_test.go` (exact bytes, null vs value, converted per currency incl. native null, `[]` lists, past int64, `HoldingsWarnings`); `internal/cli/holdings_test.go` JSON read-back + config warning first in `warnings[]` + empty `[]`.
-- All-commands rows added: `holdings` in `currencyCommands` (`currency_test.go:23`), `report_help_test.go:186` currency-help table, `cmd/quarry` `run_status_test.go` root help, `run_read_usage_test.go` (no-arg row and bad `--currency`), `run_usage_test.go` (valueless `--currency`, unknown flag), `run_read_refusals_test.go` (no store, bad config currency, interrupt), `run_config_test.go` `readCommandArgs`.
-- Step 6 `Mutation checks:` none owned. `Closed -> account_closed: true` is pinned in the null-row test (`AccountClosed: true`).
-
-Older B1 report follows.
-
-Files:
-- `internal/report/holdings.go`: `Holdings.Converted` (CAD/USD pick, nil otherwise), `(*Server).Holdings` (one read, `readRefusal(ctx, "holdings", err)`), `Holdings.total()` (H-3: a total exists when one row contributes a non-nil value; none in native). `internal/report/window.go:76-91` `Today` extracted, `DefaultWindow` uses it. Tests `holdings_test.go`, `window_test.go` `Test_today_...`.
-- `internal/cli/holdings.go`: Long/Example verbatim, `Args: currency.args`, `--currency` with `holdingsCurrencyHelp` (`currency.go:14`), RunE in the cashflow order. `render_holdings.go`: `renderHoldings`, `holdingsCaption`, `holdingCells`, `holdingInCell`, `formatPrice`, `formatBigMoney`. Tests `holdings_test.go` (black-box), `render_holdings_internal_test.go`.
-- `internal/platform/humanize/humanize.go` `ThousandsDigits` (+ test). `internal/report/document/holdings.go`: `BigMoney` and `HoldingsWarnings` (real, returns `[]string{}`); tests `document/holdings_test.go`.
-
-Mutations (run, restored, diffed): `Converted` CAD and USD swapped -> `Test_holdings_converts_each_value_to_the_asked_currency/CAD_reads_the_CAD_value` and `/USD_reads_the_USD_value` red. Nil skip removed in `total()` -> `Test_holdings_total_leaves_out_values_with_no_conversion` red (nil dereference panic in `sum.Add`). Extra: `contributed` forced true -> `Test_holdings_has_no_total_when_no_row_converts` three subtests red.
-
-Run V must know:
-- `holdingsCurrencyHelp` test const stays in `internal/cli/holdings_test.go` (reused by `report_help_test.go`).
-- `renderHoldings` already drops the In column and the ", amounts in" caption suffix for `money.Native` (one test); native `Total` rows are not built (`Totals` is empty in native).
-- `holdingsCaption` calls `accountsCaption(nil)`: no `--account` flag exists.
-- Lint on the new files has not been run (Sweep).
+- Sweep: `golangci-lint fmt` reformatted one call in `internal/cli/holdings.go:53-57`; one `musttag` finding fixed by tagging the JSON read-back struct in `internal/cli/holdings_test.go:207-222`. `golangci-lint run ./...` prints `0 issues`.
+- Docs: holdings added to `internal/cli/root.go:7-10`, `internal/report/doc.go`, `internal/report/document/doc.go` (HoldingsWarnings shape); `HoldingsWarnings` doc comment states the contract, not "none yet". Other new doc comments already within budget.
+- Verify: `go build ./...` ok; covered full suite green (every package `ok`); `uncovered-diff.py` 0 uncovered added lines since 88a9b28; `-race` green on `internal/report/...`, `internal/cli`, `internal/platform/humanize`; `spec-check.py phase4b-holdings` OK.
+- `test-stats.py --base 88a9b28 --changed`: cmd/quarry 682 (+1), internal/cli 450 (+27), internal/platform/humanize 3 (+1), internal/report 353 (+13), internal/report/document 93 (+8), TOTAL 1581 (+50), tempdir 534 (+1), disk 481 (+1).
+- Spec ticked with `cmd/quarry/run_holdings_test.go` `Test_run_holdings_lists_todays_holdings_in_the_reporting_currency`; STATE.md rewritten.
+- No mutations run (none owned by V).

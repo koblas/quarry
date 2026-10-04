@@ -51,7 +51,9 @@ accounts is not included, so it is not those accounts' balance.`,
 
 			warnings := document.HoldingsWarnings(holdings)
 			return emitReport(cmd, *jsonOut, warnings,
-				func() ([]byte, error) { return renderHoldingsJSON(holdings, withConfigWarnings(configWarnings, warnings)) },
+				func() ([]byte, error) {
+					return renderHoldingsJSON(holdings, withConfigWarnings(configWarnings, warnings))
+				},
 				func() string { return renderHoldings(holdings) })
 		},
 	}

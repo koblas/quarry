@@ -204,18 +204,22 @@ func Test_holdings_json_reads_back_the_listing_the_total_and_the_config_warning(
 	err := cli.Execute(t.Context(), []string{"holdings", "--json"}, env)
 
 	require.NoError(t, err)
+	type total struct {
+		Currency string `json:"currency"`
+		Value    string `json:"value"`
+	}
 	var doc struct {
 		AsOf     string `json:"as_of"`
-		Currency string
+		Currency string `json:"currency"`
 		Holdings []struct {
-			Account        string
-			Security       *string
-			Price          *string
-			Value          *string
+			Account        string  `json:"account"`
+			Security       *string `json:"security"`
+			Price          *string `json:"price"`
+			Value          *string `json:"value"`
 			ConvertedValue *string `json:"converted_value"`
-		}
-		Totals   []struct{ Currency, Value string }
-		Warnings []string
+		} `json:"holdings"`
+		Totals   []total  `json:"totals"`
+		Warnings []string `json:"warnings"`
 	}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
 	assert.Equal(t, "2026-09-29", doc.AsOf)
@@ -224,7 +228,7 @@ func Test_holdings_json_reads_back_the_listing_the_total_and_the_config_warning(
 	assert.Equal(t, "Brokerage", doc.Holdings[0].Account)
 	assert.Equal(t, "37704.00", *doc.Holdings[0].Value)
 	assert.Equal(t, "50.00", *doc.Holdings[0].ConvertedValue)
-	assert.Equal(t, []struct{ Currency, Value string }{{Currency: "CAD", Value: "50.00"}}, doc.Totals)
+	assert.Equal(t, []total{{Currency: "CAD", Value: "50.00"}}, doc.Totals)
 	assert.Equal(t, []string{unknownKeyAbsolute}, doc.Warnings)
 }
 

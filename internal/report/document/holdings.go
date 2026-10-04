@@ -103,7 +103,7 @@ func nullableMoney(cents *big.Int) *string {
 	return &s
 }
 
-// HoldingsWarnings is h's warnings, none yet; it is never nil.
+// HoldingsWarnings is the unprefixed warning lines for h, in the order holdings prints them; never nil.
 func HoldingsWarnings(report.Holdings) []string {
 	return []string{}
 }
