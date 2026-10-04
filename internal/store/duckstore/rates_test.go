@@ -104,6 +104,20 @@ func Test_replace_asks_for_rates_from_the_earliest_investment_transaction(t *tes
 	assert.Equal(t, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), src.requests[0].Need.First)
 }
 
+func Test_replace_does_not_ask_for_rates_from_a_price_dated_before_every_transaction(t *testing.T) {
+	t.Parallel()
+	src := &fakeRates{}
+	rows := minimalRows()
+	rows.Prices[0].Date = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	st := duckstore.New(t.TempDir(), duckstore.WithRates(src))
+
+	_, err := st.Replace(t.Context(), rows)
+
+	require.NoError(t, err)
+	require.Len(t, src.requests, 1)
+	assert.Equal(t, time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC), src.requests[0].Need.First)
+}
+
 // Moves the process zone and the clock: no t.Parallel.
 func Test_replace_asks_for_rates_up_to_the_local_date_when_it_differs_from_the_utc_date(t *testing.T) {
 	saved := time.Local                            //nolint:gosmopolitan // the test swaps the process-local zone; Cleanup restores it

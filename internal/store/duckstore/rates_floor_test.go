@@ -58,7 +58,7 @@ func futureRows() store.Rows {
 
 func noTransactionRows() store.Rows {
 	rows := minimalRows()
-	rows.Transactions, rows.Splits, rows.SplitTags, rows.Transfers = nil, nil, nil, nil
+	rows.Transactions, rows.Splits, rows.SplitTags, rows.Transfers, rows.InvestmentTransactions = nil, nil, nil, nil, nil
 	return rows
 }
 

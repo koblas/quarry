@@ -24,7 +24,7 @@ WHERE id = (SELECT max(id) FROM import_runs)`
 // finishBuild appends the carried rates, then the fetched ones, records them on the new import run, then store_info
 // last. It fails only when ctx ended or a row cannot be written; a fetch that fell short keeps whatever rates it returned and writes its reason.
 func (s *Store) finishBuild(ctx context.Context, db DB, rows store.Rows, carried history, builtAt time.Time) (store.RatesSummary, error) {
-	need, refresh, err := s.refreshRates(ctx, rows.Transactions, carried)
+	need, refresh, err := s.refreshRates(ctx, rows, carried)
 	if err != nil {
 		return store.RatesSummary{}, err
 	}
@@ -47,14 +47,14 @@ func (s *Store) finishBuild(ctx context.Context, db DB, rows store.Rows, carried
 	return summary, appendTable(ctx, db, "store_info", [][]any{{int32(FormatVersion), s.quarryVersion, builtAt}})
 }
 
-// refreshRates asks the rates source for every date from the earliest transaction to today that the carried
-// rates (in date order) do not cover, and for the bridge days that join the two into one interval.
+// refreshRates asks the rates source for every date from the earliest cash or investment transaction to today that
+// the carried rates (in date order) do not cover, and for the bridge days that join the two into one interval.
 // It returns the span it asked for, empty when there is no source, and an empty refresh.
-func (s *Store) refreshRates(ctx context.Context, transactions []store.Transaction, carried history) (store.DateSpan, store.RatesRefresh, error) {
+func (s *Store) refreshRates(ctx context.Context, rows store.Rows, carried history) (store.DateSpan, store.RatesRefresh, error) {
 	if s.rates == nil {
 		return store.DateSpan{}, store.RatesRefresh{}, nil
 	}
-	need := needSpan(transactions, time.Now())
+	need := needSpan(rows.Transactions, rows.InvestmentTransactions, time.Now())
 	refresh, err := s.rates.Refresh(ctx, store.RatesRequest{Need: need, Have: coveredBy(carried.rates, carried.ratesFloor)})
 	if err != nil {
 		return store.DateSpan{}, store.RatesRefresh{}, fmt.Errorf("fetch exchange rates: %w", err)
@@ -125,17 +125,18 @@ func nullIfEmpty(s string) any {
 	return s
 }
 
-// needSpan is the dates from the earliest transaction to now's local calendar date (now carries the local zone),
-// or empty when there are no transactions or the earliest is dated after that date.
-func needSpan(transactions []store.Transaction, now time.Time) store.DateSpan {
-	if len(transactions) == 0 {
-		return store.DateSpan{}
+// needSpan is the dates from the earliest cash or investment transaction to now's local calendar date (now carries
+// the local zone), or empty when there are none or the earliest is dated after that date. Price dates never extend it.
+func needSpan(transactions []store.Transaction, investments []store.InvestmentTransaction, now time.Time) store.DateSpan {
+	var first time.Time
+	for _, t := range transactions {
+		first = earliest(first, t.Date)
 	}
-	first := transactions[0].Date
-	for _, t := range transactions[1:] {
-		if t.Date.Before(first) {
-			first = t.Date
-		}
+	for _, t := range investments {
+		first = earliest(first, t.Date)
+	}
+	if first.IsZero() {
+		return store.DateSpan{}
 	}
 	year, month, day := now.Date()
 	today := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
