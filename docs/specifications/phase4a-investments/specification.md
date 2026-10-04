@@ -325,7 +325,7 @@ Architect sizing pass 2026-10-03 (one pass over all 12; folds change no scenario
 - [x] SCENARIO-10: Sync over a pre-4a store carries import history forward — delivered by SCENARIO-09 — `cmd/quarry/run_sync_pre4a_store_test.go` `Test_run_sync_twice_over_a_version_5_store_carries_import_history_forward`
 - [x] SCENARIO-11: Existing surfaces stop saying investments are not imported — `cmd/quarry/run_accounts_not_valued_test.go` `Test_run_accounts_shows_not_valued_for_brokerage_and_retirement_accounts`
 
-- [ ] SCENARIO-13: Sync keeps a commission with fractions of a cent
+- [x] SCENARIO-13: Sync keeps a commission with fractions of a cent — `cmd/quarry/run_commission_test.go` `Test_run_sync_keeps_a_commission_with_fractions_of_a_cent`
 
 ## Reference check
 

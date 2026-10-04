@@ -1,6 +1,6 @@
 # phase4a-investments — current state
 
-Scenarios complete: SCENARIO-01..11 (04 folds 05, 08; 06 folds 07; 09 folds 10). Last updated by SCENARIO-11.
+Scenarios complete: SCENARIO-01..11, 13 (04 folds 05, 08; 06 folds 07; 09 folds 10); 12 is the orchestrator's reference check, re-run after 13. Last updated by SCENARIO-13.
 
 ## Binding decisions
 - Optional entities (`Security`, `SecurityQuote`, `Position`) live in one slice in `internal/importer/entities.go` with generated placeholders; missing → that data is empty, never a refusal. `Lot` (S04) joined the slice, except: Lot missing while investment rows import refuses (spec S.6 ruling). `requireLots` sees mapped rows only, so that refusal outranks row-level ones when at least one investment row maps; when every row refuses, the row-level reason shows. Both pinned (SCENARIO-01, 02, 04)
@@ -12,7 +12,7 @@ Scenarios complete: SCENARIO-01..11 (04 folds 05, 08; 06 folds 07; 09 folds 10).
 - Investment rows: date posted-else-entered (reverse of cash; the share walk orders by it); account skip precedes every refusal; undated precedes every other refusal, so no "no date" variants of the share/amount copy exist (SCENARIO-02)
 - `split_new_shares`/`split_old_shares` set only on `action = 'split'`; the split multiply reads them (SCENARIO-02, 04)
 - `securities.currency` is NULL when ZCURRENCY is NULL or `""` (same as ticker), so the SQL conventions' "NULL when Quicken records none" holds (SCENARIO-01, 11)
-- `securities_rows`/`prices_rows`/`investment_transactions_rows` are nullable BIGINT after `rates_fetch_error`, filled positionally by `importRunRows`, carried via `optionalRunColumns`/`carriedRun`, read with COALESCE→0 in `status.go`. `shares_checked` (S04) follows the same way, after `investment_transactions_rows`. `FormatVersion = 6` stays (SCENARIO-01, 02, 04)
+- `securities_rows`/`prices_rows`/`investment_transactions_rows` are nullable BIGINT after `rates_fetch_error`, filled positionally by `importRunRows`, carried via `optionalRunColumns`/`carriedRun`, read with COALESCE→0 in `status.go`. `shares_checked` (S04) follows the same way, after `investment_transactions_rows`. `FormatVersion = 6` stays: no v6 store has shipped (main is v5), so S13's `commission` DECIMAL(18,2)→(18,4) needs no bump (SCENARIO-01, 02, 04, 13)
 - `Builder.InvestmentTransaction` is the only way tests add investment rows; `b.Transaction` makes a cash row (SCENARIO-02)
 - A quote or position whose security is deleted/absent is skipped silently (I4-6 analogue); a non-zero-share investment row with no resolvable security refuses as an offender (SCENARIO-01, 02, 03)
 - Seam C = (i): `importer.Store.CheckShares(ctx, rows) (store.ShareCheck, error)` builds an in-memory scratch DuckDB (`duckdb.CreateInMemory`, `schemaDDL` + `appendTable`) and walks it; Import calls it always, after `validate`, before the `Failed()` return, so Replace never runs on a failed check and a cash failure still carries shares. The guard is `Validation.Failed()`'s shares clause, not Replace. A CheckShares error returns `check share counts: %w`, no Replace (SCENARIO-04)
@@ -24,10 +24,11 @@ Scenarios complete: SCENARIO-01..11 (04 folds 05, 08; 06 folds 07; 09 folds 10).
 - Rows line: cash clause `; ` investment clause (always); no `not imported` tail. `rowsPhrase(c)` is shared by sync success, sync failure and status; status `rows`/JSON carry the investment counts via `NewRows`. Status `shares` = `{checked}` right after `splits` in `document.Status` (mirrors sync order balances, splits, shares, transfers), text Shares line after Splits via the sync formatter `sharesPhrase(run.SharesChecked)`; `shares_checked` is the only persisted share fact, no `shares_mismatched` (SCENARIO-04, 09)
 - `not_imported` is gone everywhere (`importer.Result`, `store.NotImported`, `document.NotImported`, `ImportRun` field, column in `import_runs`); `requiredRunColumns` is the 18 columns every format has, so history carries an older store whose `import_runs` still has the column (dropped on rebuild). Sync over an older-format store works by design: `Replace`/`readHistory` never run `checkFormat`, only readers do (I4-9) — a format check in `readHistory` would break it (SCENARIO-09)
 - `not valued` (`notValuedBalance`, `render_accounts.go`) is the only investment-account balance cell; `--json` stays `balance: null`, no new field; 4b may replace the cell with a value, the `nil` cents path in `accountBalance` is the seam. SQL conventions const is the single source for `quarry sql` help, `describe_schema` and `schema.md`; `internal/cli/sql_test.go` and `cmd/quarry/run_shared_documents_test.go` hand-copy it byte-wise, so any const edit updates both. No production text says `not imported` for investments (SCENARIO-11)
+- Commission is `store.InvestmentTransaction.Commission` in ten-thousandths, DECIMAL(18,4) (`commissionScale`), parsed by `parseCommission` (fixed-point on decimal text: residue within 1e-8 snaps, beyond 4 decimals refuses with `… has a commission of <v>, which has more than 4 decimal places`, bound 10^14). `amount` keeps 2 decimals and its own refusal line; NULL, 0 and snap-to-0 store NULL/0 as before. Nothing else reads `Commission` yet; whether `amount` includes it is 4e's call (SCENARIO-13)
 - `shares_checked` nullable BIGINT after `investment_transactions_rows`, carried by history, COALESCE→0 in status; sync `--json` `store.shares` = `{checked, mismatched}` after `splits` (SCENARIO-04)
 
 ## Left unbuilt
-- SCENARIO-12 reference check (orchestrator, `REFERENCE-CHECK.md`); no `net-worth.md`/`investments.md` references, no MCP tool (4b/4c)
+- SCENARIO-12 reference check (orchestrator, `REFERENCE-CHECK.md`), re-run after S13 against the real file's 3-4 decimal sell commissions; no `net-worth.md`/`investments.md` references, no MCP tool (4b/4c)
 - `docs/adr/001-shared-store-package.md:22` still names `NotImported`: unowned, historical
 
 ## Traps
@@ -44,6 +45,7 @@ Scenarios complete: SCENARIO-01..11 (04 folds 05, 08; 06 folds 07; 09 folds 10).
 - Negating `math.MinInt64` overflows and integer division drops the sign of `-0.000001`: both share formatters and the difference subtraction carry a negative flag / saturate (SCENARIO-06)
 - `importer/share_gate_test.go` fake ids `acct-1`/`sec-1` resolve to nothing; label joining must leave zero-value labels without panicking (SCENARIO-06)
 
+- Commission byte pins moved to `DECIMAL(18,4)` / `9.9900`: SQL conventions const (`report/sql_conventions.go`), `internal/cli/sql_test.go`, `run_shared_documents_test.go`, `run_plugin_notices_test.go:53` (PRD L125), regenerated `schema.md` all hand-copy it (SCENARIO-13)
 - Every accounts table re-pin changes column widths, not just the cell text; re-run, do not hand-edit padding (SCENARIO-11)
 - `investmentEntity` stays (`entities.go`, `importer.go`): only its survey use was deleted (SCENARIO-09)
 - Status/Rows pins assert Store/Rows/Shares lines, never whole stdout; the Rows tail pins sit in `run_investments_test.go`, `run_transfers_test.go`, `render_internal_test.go` too (SCENARIO-09)

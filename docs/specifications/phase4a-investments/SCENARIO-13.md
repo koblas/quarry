@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-13
-status: open
+status: done
 ---
 
 # SCENARIO-13: Sync keeps a commission with fractions of a cent
