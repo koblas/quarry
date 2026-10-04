@@ -229,8 +229,18 @@ DECIMAL(18,6) as Quicken recorded each transaction, negative when shares
 leave. A split row carries split_new_shares and split_old_shares instead, so
 a sum of shares is not a holding. prices holds each security's closing price
 per day as Quicken recorded it, rounded to 6 decimals, in the security's
-currency (securities.currency, NULL when Quicken records none); quarry does
-not convert prices yet.
+currency (securities.currency, NULL when Quicken records none).
+holding_shares holds each account's count of each security, one row per span
+of days it is unchanged and not zero (from_date through to_date, NULL while
+still held), splits applied; these are the counts quarry sync checks against
+Quicken. v_holdings has one row per holding per day held, through today:
+price is the latest on or before date and price_date its day (NULL when
+none), value is shares times price rounded to the cent, value_cad and
+value_usd convert it at the rate for date, as quarry holdings does; filter
+it by date. Neither includes cash in investment accounts. action is one of
+add_shares, buy, capital_gain_long, capital_gain_short, dividend, interest,
+margin_interest, misc_expense, misc_income, reinvest_dividend,
+remove_shares, sell, split.
 
 findings holds what sync found to clean up in Quicken, and finding_items
 the transactions, splits, payees or categories each one is about;

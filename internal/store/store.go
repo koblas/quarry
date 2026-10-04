@@ -210,8 +210,23 @@ const (
 )
 
 // Actions returns every investment_transactions.action value, alphabetically, as a fresh slice.
+// A new Action constant is added here too: the SQL conventions text is pinned against this list.
 func Actions() []string {
-	return nil
+	return []string{
+		ActionAddShares,
+		ActionBuy,
+		ActionCapitalGainLong,
+		ActionCapitalGainShort,
+		ActionDividend,
+		ActionInterest,
+		ActionMarginInterest,
+		ActionMiscExpense,
+		ActionMiscIncome,
+		ActionReinvestDividend,
+		ActionRemoveShares,
+		ActionSell,
+		ActionSplit,
+	}
 }
 
 // InvestmentTransaction is one row of the investment_transactions table. Shares,
