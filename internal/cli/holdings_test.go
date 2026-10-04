@@ -20,17 +20,43 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func executeHoldings(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
-	t.Helper()
-	env := cli.Env{
-		LoadConfig: cadConfig,
+const holdingsCurrencyHelp = "add a column with each value in currency code: CAD or USD; native adds none (default reporting.currency in the config file, else CAD)"
+
+// holdingsEnv is an Env whose config comes from load and whose report store is fake.
+func holdingsEnv(load func(string) (config.Config, error), fake fakeReportStore, stdout, stderr io.Writer) cli.Env {
+	return cli.Env{
+		LoadConfig: load,
 		Stdout:     stdout, Stderr: stderr,
 		Now: func() time.Time { return spendNow },
 		NewReport: func(context.Context, string) (*report.Server, error) {
 			return report.NewServer(report.WithStore(fake)), nil
 		},
 	}
-	return cli.Execute(t.Context(), append([]string{"holdings"}, args...), env)
+}
+
+func executeHoldings(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
+	t.Helper()
+	return cli.Execute(t.Context(), append([]string{"holdings"}, args...), holdingsEnv(cadConfig, fake, stdout, stderr))
+}
+
+// holdingsTotalDoc and holdingsDoc read back the --json keys these tests pin.
+type holdingsTotalDoc struct {
+	Currency string `json:"currency"`
+	Value    string `json:"value"`
+}
+
+type holdingsDoc struct {
+	AsOf     string `json:"as_of"`
+	Currency string `json:"currency"`
+	Holdings []struct {
+		Account        string  `json:"account"`
+		Security       *string `json:"security"`
+		Price          *string `json:"price"`
+		Value          *string `json:"value"`
+		ConvertedValue *string `json:"converted_value"`
+	} `json:"holdings"`
+	Totals   []holdingsTotalDoc `json:"totals"`
+	Warnings []string           `json:"warnings"`
 }
 
 // brokerageHolding is 1,200 shares of Acme Corp (ACME) priced 31.42 on 2026-09-23: 37,704.00 CAD,
@@ -96,8 +122,6 @@ func Test_holdings_help_shows_the_currency_flag(t *testing.T) {
 	assert.Regexp(t, `(?m)--currency code +`+regexp.QuoteMeta(holdingsCurrencyHelp)+`$`, stdout.String())
 }
 
-const holdingsCurrencyHelp = "add a column with each value in currency code: CAD or USD; native adds none (default reporting.currency in the config file, else CAD)"
-
 func Test_holdings_is_listed_in_the_root_help_with_its_short_description(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := cli.Env{Stdout: &stdout, Stderr: &stderr}
@@ -147,16 +171,10 @@ func Test_holdings_currency_flag_picks_the_value_the_column_and_total_show(t *te
 
 func Test_holdings_uses_the_config_currency_when_the_flag_is_absent(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	env := cli.Env{
-		LoadConfig: func(string) (config.Config, error) { return config.Config{Currency: money.USD}, nil },
-		Stdout:     &stdout, Stderr: &stderr,
-		Now: func() time.Time { return spendNow },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{brokerageHolding()}}})), nil
-		},
-	}
+	usdConfig := func(string) (config.Config, error) { return config.Config{Currency: money.USD}, nil }
+	fake := fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{brokerageHolding()}}}
 
-	err := cli.Execute(t.Context(), []string{"holdings"}, env)
+	err := cli.Execute(t.Context(), []string{"holdings"}, holdingsEnv(usdConfig, fake, &stdout, &stderr))
 
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), ", amounts in USD; cash not included\n")
@@ -174,16 +192,8 @@ func Test_holdings_prints_the_table_header_and_no_total_when_nothing_is_held(t *
 
 func Test_holdings_prints_a_config_warning_on_stderr_and_still_lists_the_holdings(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	env := cli.Env{
-		LoadConfig: warningConfig,
-		Stdout:     &stdout, Stderr: &stderr,
-		Now: func() time.Time { return spendNow },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fakeReportStore{})), nil
-		},
-	}
 
-	err := cli.Execute(t.Context(), []string{"holdings"}, env)
+	err := cli.Execute(t.Context(), []string{"holdings"}, holdingsEnv(warningConfig, fakeReportStore{}, &stdout, &stderr))
 
 	require.NoError(t, err)
 	assert.Equal(t, "quarry: warning: "+unknownKeyShown+"\n", stderr.String())
@@ -192,35 +202,12 @@ func Test_holdings_prints_a_config_warning_on_stderr_and_still_lists_the_holding
 
 func Test_holdings_json_reads_back_the_listing_the_total_and_the_config_warning(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	env := cli.Env{
-		LoadConfig: warningConfig,
-		Stdout:     &stdout, Stderr: &stderr,
-		Now: func() time.Time { return spendNow },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{brokerageHolding()}}})), nil
-		},
-	}
+	fake := fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{brokerageHolding()}}}
 
-	err := cli.Execute(t.Context(), []string{"holdings", "--json"}, env)
+	err := cli.Execute(t.Context(), []string{"holdings", "--json"}, holdingsEnv(warningConfig, fake, &stdout, &stderr))
 
 	require.NoError(t, err)
-	type total struct {
-		Currency string `json:"currency"`
-		Value    string `json:"value"`
-	}
-	var doc struct {
-		AsOf     string `json:"as_of"`
-		Currency string `json:"currency"`
-		Holdings []struct {
-			Account        string  `json:"account"`
-			Security       *string `json:"security"`
-			Price          *string `json:"price"`
-			Value          *string `json:"value"`
-			ConvertedValue *string `json:"converted_value"`
-		} `json:"holdings"`
-		Totals   []total  `json:"totals"`
-		Warnings []string `json:"warnings"`
-	}
+	var doc holdingsDoc
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
 	assert.Equal(t, "2026-09-29", doc.AsOf)
 	assert.Equal(t, "CAD", doc.Currency)
@@ -228,7 +215,7 @@ func Test_holdings_json_reads_back_the_listing_the_total_and_the_config_warning(
 	assert.Equal(t, "Brokerage", doc.Holdings[0].Account)
 	assert.Equal(t, "37704.00", *doc.Holdings[0].Value)
 	assert.Equal(t, "50.00", *doc.Holdings[0].ConvertedValue)
-	assert.Equal(t, []total{{Currency: "CAD", Value: "50.00"}}, doc.Totals)
+	assert.Equal(t, []holdingsTotalDoc{{Currency: "CAD", Value: "50.00"}}, doc.Totals)
 	assert.Equal(t, []string{unknownKeyAbsolute}, doc.Warnings)
 }
 

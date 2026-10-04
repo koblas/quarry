@@ -37,12 +37,14 @@ func totalValues(result report.Holdings) []string {
 
 func Test_holdings_reads_the_store_once_for_the_day_asked_and_returns_it_with_the_currency(t *testing.T) {
 	var got store.HoldingsParams
+	var reads int
 	asOf := time.Date(2026, 3, 12, 0, 0, 0, 0, time.UTC)
-	srv := report.NewServer(report.WithStore(fakeStore{gotHoldings: &got}))
+	srv := report.NewServer(report.WithStore(fakeStore{gotHoldings: &got, holdingsReads: &reads}))
 
 	result, err := srv.Holdings(t.Context(), report.HoldingsRequest{AsOf: asOf, Currency: money.USD})
 
 	require.NoError(t, err)
+	assert.Equal(t, 1, reads)
 	assert.Equal(t, store.HoldingsParams{AsOf: asOf}, got)
 	assert.Equal(t, report.Holdings{AsOf: asOf, Currency: money.USD}, result)
 }

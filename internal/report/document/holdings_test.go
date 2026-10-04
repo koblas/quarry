@@ -108,27 +108,52 @@ func Test_NewHoldings_reads_converted_value_from_the_reporting_currency(t *testi
 	row := holdingsTestRow()
 	row.Currency, row.ValueCAD, row.ValueUSD = new("USD"), big.NewInt(4_000_000), big.NewInt(3_770_400)
 	cases := []struct {
-		currency money.Currency
-		want     any
+		currency     money.Currency
+		wantCurrency string
+		want         any
 	}{
-		{currency: money.CAD, want: "40000.00"},
-		{currency: money.USD, want: "37704.00"},
-		{currency: money.Native, want: nil},
+		{currency: money.CAD, wantCurrency: "CAD", want: "40000.00"},
+		{currency: money.USD, wantCurrency: "USD", want: "37704.00"},
+		{currency: money.Native, wantCurrency: "native", want: nil},
 	}
 
 	for _, c := range cases {
 		t.Run(c.currency.String(), func(t *testing.T) {
 			var got struct {
+				Currency string           `json:"currency"`
 				Holdings []map[string]any `json:"holdings"`
 			}
 			h := report.Holdings{Rows: []store.Holding{row}, Currency: c.currency}
 
 			require.NoError(t, json.Unmarshal([]byte(indented(t, document.NewHoldings(h, nil))), &got))
 
+			assert.Equal(t, c.wantCurrency, got.Currency)
 			assert.Equal(t, "37704.00", got.Holdings[0]["value"])
 			assert.Equal(t, c.want, got.Holdings[0]["converted_value"])
 		})
 	}
+}
+
+func Test_NewHoldings_writes_a_zero_price_and_a_zero_value_as_amounts_not_null(t *testing.T) {
+	zero := holdingsTestRow()
+	zero.Price, zero.Value, zero.ValueCAD = new(int64(0)), big.NewInt(0), big.NewInt(0)
+	h := report.Holdings{
+		Rows:     []store.Holding{zero},
+		Totals:   []report.HoldingsTotal{{Currency: "CAD", Value: big.NewInt(0)}},
+		Currency: money.CAD,
+	}
+	var got struct {
+		Holdings []map[string]any `json:"holdings"`
+		Totals   []map[string]any `json:"totals"`
+	}
+
+	require.NoError(t, json.Unmarshal([]byte(indented(t, document.NewHoldings(h, nil))), &got))
+
+	require.Len(t, got.Holdings, 1)
+	assert.Equal(t, "0.000000", got.Holdings[0]["price"])
+	assert.Equal(t, "0.00", got.Holdings[0]["value"])
+	assert.Equal(t, "0.00", got.Holdings[0]["converted_value"])
+	assert.Equal(t, []map[string]any{{"currency": "CAD", "value": "0.00"}}, got.Totals)
 }
 
 func Test_NewHoldings_writes_empty_lists_not_null_for_no_holdings(t *testing.T) {
@@ -141,7 +166,6 @@ func Test_NewHoldings_writes_empty_lists_not_null_for_no_holdings(t *testing.T) 
 	assert.Equal(t, []any{}, got["totals"])
 	assert.Equal(t, []any{}, got["account_filter"])
 	assert.Equal(t, []any{}, got["warnings"])
-	assert.Equal(t, "native", document.NewHoldings(report.Holdings{Currency: money.Native}, nil).Currency)
 }
 
 func Test_NewHoldings_writes_a_value_past_int64_in_full(t *testing.T) {

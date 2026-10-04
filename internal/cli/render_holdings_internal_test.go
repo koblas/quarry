@@ -24,20 +24,14 @@ func heldRow() store.Holding {
 	}
 }
 
-func holdingsIn(currency money.Currency, rows ...store.Holding) report.Holdings {
-	h := report.Holdings{Rows: rows, AsOf: holdingsDay, Currency: currency}
-	sum := new(big.Int)
-	contributed := false
-	for _, row := range rows {
-		if value := h.Converted(row); value != nil {
-			sum.Add(sum, value)
-			contributed = true
-		}
-	}
-	if contributed {
-		h.Totals = []report.HoldingsTotal{{Currency: currency.String(), Value: sum}}
-	}
-	return h
+// holdingsIn is the listing of rows in currency with the totals given, none when totals is nil.
+func holdingsIn(currency money.Currency, totals []report.HoldingsTotal, rows ...store.Holding) report.Holdings {
+	return report.Holdings{Rows: rows, Totals: totals, AsOf: holdingsDay, Currency: currency}
+}
+
+// totalIn is the one total of cents in currency.
+func totalIn(currency money.Currency, cents int64) []report.HoldingsTotal {
+	return []report.HoldingsTotal{{Currency: currency.String(), Value: big.NewInt(cents)}}
 }
 
 func Test_holdingCells_account_cell(t *testing.T) {
@@ -86,11 +80,25 @@ func Test_holdingCells_security_cell(t *testing.T) {
 	}
 }
 
-func Test_holdingCells_currency_cell_is_none_when_the_security_has_no_currency(t *testing.T) {
-	row := heldRow()
-	row.Currency = nil
+func Test_holdingCells_currency_cell(t *testing.T) {
+	cases := []struct {
+		name     string
+		currency *string
+		want     string
+	}{
+		{name: "the security's own currency", currency: new("CAD"), want: "CAD"},
+		{name: "none when the security has no currency", currency: nil, want: "none"},
+		{name: "a newline in the code is escaped", currency: new("C\nAD"), want: `C\nAD`},
+	}
 
-	assert.Equal(t, "none", holdingCells(row)[5])
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			row := heldRow()
+			row.Currency = c.currency
+
+			assert.Equal(t, c.want, holdingCells(row)[5])
+		})
+	}
 }
 
 func Test_formatPrice(t *testing.T) {
@@ -139,7 +147,7 @@ func Test_renderHoldings_a_holding_with_no_price_has_no_value_and_is_not_in_the_
 	unpriced.Account, unpriced.Price, unpriced.PriceDate, unpriced.Value, unpriced.ValueCAD = "Unpriced", nil, nil, nil, nil
 	priced := heldRow()
 
-	got := renderHoldings(holdingsIn(money.CAD, unpriced, priced))
+	got := renderHoldings(holdingsIn(money.CAD, totalIn(money.CAD, 5_000), unpriced, priced))
 
 	assert.Equal(t, "Holdings on 2026-03-12 in all accounts, amounts in CAD; cash not included\n\n"+
 		"Account    Security  Shares     Price  Priced on   Currency  Value  In CAD\n"+
@@ -152,7 +160,7 @@ func Test_renderHoldings_a_zero_price_is_shown_and_its_zero_value_is_the_total(t
 	zero := heldRow()
 	zero.Price, zero.Value, zero.ValueCAD = new(int64(0)), big.NewInt(0), big.NewInt(0)
 
-	got := renderHoldings(holdingsIn(money.CAD, zero))
+	got := renderHoldings(holdingsIn(money.CAD, totalIn(money.CAD, 0), zero))
 
 	assert.Equal(t, "Holdings on 2026-03-12 in all accounts, amounts in CAD; cash not included\n\n"+
 		"Account    Security  Shares  Price  Priced on   Currency  Value  In CAD\n"+
@@ -164,7 +172,7 @@ func Test_renderHoldings_negative_shares_give_a_negative_value_that_is_in_the_to
 	short := heldRow()
 	short.Shares, short.Value, short.ValueCAD = -10_000_000, big.NewInt(-5_000), big.NewInt(-5_000)
 
-	got := renderHoldings(holdingsIn(money.CAD, short))
+	got := renderHoldings(holdingsIn(money.CAD, totalIn(money.CAD, -5_000), short))
 
 	assert.Equal(t, "Holdings on 2026-03-12 in all accounts, amounts in CAD; cash not included\n\n"+
 		"Account    Security  Shares  Price  Priced on   Currency   Value  In CAD\n"+
@@ -177,7 +185,7 @@ func Test_renderHoldings_the_total_row_holds_only_the_label_and_the_in_sum_for_r
 	usd := heldRow()
 	usd.Account, usd.Currency, usd.Value, usd.ValueUSD, usd.ValueCAD = "IRA", new("USD"), big.NewInt(1_000), big.NewInt(1_000), big.NewInt(1_360)
 
-	got := renderHoldings(holdingsIn(money.CAD, cad, usd))
+	got := renderHoldings(holdingsIn(money.CAD, totalIn(money.CAD, 6_360), cad, usd))
 
 	assert.Equal(t, "Holdings on 2026-03-12 in all accounts, amounts in CAD; cash not included\n\n"+
 		"Account    Security  Shares  Price  Priced on   Currency  Value  In CAD\n"+
@@ -190,13 +198,13 @@ func Test_renderHoldings_shows_an_old_price_and_the_placeholder_price_date_as_re
 	old := heldRow()
 	old.PriceDate = new(time.Date(1899, time.December, 29, 0, 0, 0, 0, time.UTC))
 
-	got := renderHoldings(holdingsIn(money.CAD, old))
+	got := renderHoldings(holdingsIn(money.CAD, totalIn(money.CAD, 5_000), old))
 
 	assert.Contains(t, got, "Brokerage  Fund          10   5.00  1899-12-29  CAD       50.00   50.00\n")
 }
 
 func Test_renderHoldings_names_the_reporting_currency_in_the_caption_and_the_column(t *testing.T) {
-	got := renderHoldings(holdingsIn(money.USD, heldRow()))
+	got := renderHoldings(holdingsIn(money.USD, totalIn(money.USD, 3_700), heldRow()))
 
 	assert.Equal(t, "Holdings on 2026-03-12 in all accounts, amounts in USD; cash not included\n\n"+
 		"Account    Security  Shares  Price  Priced on   Currency  Value  In USD\n"+
@@ -205,7 +213,7 @@ func Test_renderHoldings_names_the_reporting_currency_in_the_caption_and_the_col
 }
 
 func Test_renderHoldings_a_native_listing_has_no_in_column_and_no_amounts_in_caption(t *testing.T) {
-	got := renderHoldings(holdingsIn(money.Native, heldRow()))
+	got := renderHoldings(holdingsIn(money.Native, nil, heldRow()))
 
 	assert.Equal(t, "Holdings on 2026-03-12 in all accounts; cash not included\n\n"+
 		"Account    Security  Shares  Price  Priced on   Currency  Value\n"+
