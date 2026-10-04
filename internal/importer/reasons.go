@@ -134,3 +134,29 @@ func reasonInvestmentNoActionCode(date, account string) string {
 func reasonInvestmentNoDate(account string, sourceID int64) string {
 	return fmt.Sprintf("an investment transaction in \"%s\" (source id %d) has no date", account, sourceID)
 }
+
+func reasonInvestmentNoAmount(date, account string) string {
+	return fmt.Sprintf("an investment transaction on %s in \"%s\" has no amount", date, account)
+}
+
+// In the reasonInvestment value refusals below, what names the column: "a commission", "an amount" or "a share count".
+
+func reasonInvestmentNotANumber(date, account, what string) string {
+	return fmt.Sprintf("an investment transaction on %s in \"%s\" has %s that is not a number", date, account, what)
+}
+
+func reasonInvestmentMoneyPrecision(date, account, what, amount string) string {
+	return fmt.Sprintf("an investment transaction on %s in \"%s\" has %s of %s, which has more than 2 decimal places", date, account, what, amount)
+}
+
+func reasonInvestmentMoneyTooLarge(date, account, what, amount string) string {
+	return fmt.Sprintf("an investment transaction on %s in \"%s\" has %s of %s, which is too large for quarry's amounts", date, account, what, amount)
+}
+
+func reasonInvestmentSharesPrecision(date, account, shares string) string {
+	return fmt.Sprintf("an investment transaction on %s in \"%s\" has %s shares, which has more than 6 decimal places", date, account, shares)
+}
+
+func reasonInvestmentSharesTooLarge(date, account, shares string) string {
+	return fmt.Sprintf("an investment transaction on %s in \"%s\" has %s shares, which is too large for quarry's share counts", date, account, shares)
+}

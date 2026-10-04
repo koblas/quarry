@@ -69,6 +69,50 @@ func Test_parsePrice_refuses_a_price_whose_rounded_magnitude_reaches_the_bound(t
 	}
 }
 
+func Test_parse_shares_snaps_residue_within_tolerance_and_refuses_beyond(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		typ   string
+		text  string
+		want  int64
+		fault moneyFault
+	}{
+		{name: "residue of float noise snaps", typ: "real", text: "0.30000000000000004", want: 300_000, fault: moneyOK},
+		{name: "negative residue snaps", typ: "real", text: "-0.30000000000000004", want: -300_000, fault: moneyOK},
+		{name: "residue exactly at the tolerance snaps", typ: "real", text: "1.000000001", want: 1_000_000, fault: moneyOK},
+		{name: "residue just above the tolerance is refused", typ: "real", text: "1.0000000011", fault: moneyPrecision},
+		{name: "six decimals are exact", typ: "real", text: "12.345678", want: 12_345_678, fault: moneyOK},
+		{name: "seven decimals are refused", typ: "real", text: "1.2345678", fault: moneyPrecision},
+		{name: "a tie in exponent form is refused", typ: "real", text: "5.0e-07", fault: moneyPrecision},
+		{name: "a small exponent", typ: "real", text: "2.5e-05", want: 25, fault: moneyOK},
+		{name: "an integer", typ: "integer", text: "7", want: 7_000_000, fault: moneyOK},
+		{name: "a negative integer", typ: "integer", text: "-7", want: -7_000_000, fault: moneyOK},
+		{name: "zero", typ: "integer", text: "0", want: 0, fault: moneyOK},
+		{name: "the largest share count in range", typ: "real", text: "999999999999.999999", want: 999_999_999_999_999_999, fault: moneyOK},
+		{name: "seven decimals at the top of the range are refused", typ: "real", text: "999999999999.9999994", fault: moneyPrecision},
+		{name: "residue rounding up to the bound is too large", typ: "real", text: "999999999999.9999999999", fault: moneyTooLarge},
+		{name: "the bound itself", typ: "integer", text: "1000000000000", fault: moneyTooLarge},
+		{name: "the negative bound", typ: "integer", text: "-1000000000000", fault: moneyTooLarge},
+		{name: "a positive exponent far beyond it", typ: "real", text: "1.0e+20", fault: moneyTooLarge},
+		{name: "infinity", typ: "real", text: "Inf", fault: moneyTooLarge},
+		{name: "text storage", typ: "text", text: "12.5", fault: moneyNotANumber},
+		{name: "blob storage", typ: "blob", text: "12.5", fault: moneyNotANumber},
+		{name: "no digits", typ: "real", text: "n/a", fault: moneyNotANumber},
+		{name: "an exponent beyond big.Rat's range", typ: "real", text: "1e1000001", fault: moneyNotANumber},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			got, fault := parseShares(c.typ, c.text)
+
+			assert.Equal(t, c.fault, fault)
+			assert.Equal(t, c.want, got)
+		})
+	}
+}
+
 func Test_parsePrice_refuses_a_price_that_is_not_a_number(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

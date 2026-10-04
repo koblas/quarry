@@ -362,3 +362,186 @@ func Test_import_stores_an_investment_transactions_note_as_its_memo_and_an_empty
 	assert.Equal(t, new("quarterly"), fake.Rows.InvestmentTransactions[0].Memo)
 	assert.Nil(t, fake.Rows.InvestmentTransactions[1].Memo)
 }
+
+func Test_import_refuses_an_investment_value_quarry_cannot_read(t *testing.T) {
+	t.Parallel()
+	const prefix = `an investment transaction on 2026-03-01 in "Brokerage" `
+	cases := []struct {
+		name       string
+		units      string
+		amount     string
+		commission string
+		want       string
+	}{
+		{name: "shares beyond 6 decimals", units: "1.23456789", amount: "1.00", want: prefix + "has 1.23456789 shares, which has more than 6 decimal places"},
+		{name: "shares too large", units: "1000000000000", amount: "1.00", want: prefix + "has 1000000000000 shares, which is too large for quarry's share counts"},
+		{name: "shares not a number", units: "n/a", amount: "1.00", want: prefix + "has a share count that is not a number"},
+		{name: "amount beyond 2 decimals", amount: "1.234", want: prefix + "has an amount of 1.234, which has more than 2 decimal places"},
+		{name: "amount too large", amount: "10000000000000000", want: prefix + "has an amount of 10000000000000000, which is too large for quarry's amounts"},
+		{name: "amount not a number", amount: "n/a", want: prefix + "has an amount that is not a number"},
+		{name: "amount NULL", amount: "", want: prefix + "has no amount"},
+		{name: "commission beyond 2 decimals", amount: "1.00", commission: "1.234", want: prefix + "has a commission of 1.234, which has more than 2 decimal places"},
+		{name: "commission too large", amount: "1.00", commission: "10000000000000000", want: prefix + "has a commission of 10000000000000000, which is too large for quarry's amounts"},
+		{name: "commission not a number", amount: "1.00", commission: "n/a", want: prefix + "has a commission that is not a number"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			accountPK := newBrokerage(b)
+			b.InvestmentTransaction(v9fixture.TransactionRow{
+				Account: accountPK, Type: buyCode, PostedDate: &investDay, Units: c.units, Amount: c.amount, Commission: c.commission,
+			})
+
+			reason, fake := importInvestmentsRefused(t, b)
+
+			assert.Equal(t, c.want, reason)
+			assert.Zero(t, fake.replaceCalls)
+		})
+	}
+}
+
+func Test_import_refuses_a_blob_share_count(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	accountPK := newBrokerage(b)
+	pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Units: "1"})
+	bundle := b.WriteBundle(t, t.TempDir())
+	setColumnBlob(t, bundle.DataPath, "ZTRANSACTION", "ZUNITS", pk, []byte{0x01, 0x02})
+
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	assert.Equal(t, `an investment transaction on 2026-03-01 in "Brokerage" has a share count that is not a number`, importReason(t, err))
+}
+
+func Test_import_refuses_an_undated_investment_transaction_before_any_other_fault(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	accountPK := newBrokerage(b)
+	pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Units: "n/a", Amount: "n/a"})
+
+	reason, _ := importInvestmentsRefused(t, b)
+
+	assert.Equal(t, fmt.Sprintf(`an investment transaction in "Brokerage" (source id %d) has no date`, pk), reason)
+}
+
+func Test_import_snaps_float_residue_in_shares_to_the_nearest_millionth(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	accountPK := newBrokerage(b)
+	acmePK := newAcme(b)
+	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: acmePK})
+	b.InvestmentTransaction(v9fixture.TransactionRow{
+		Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Position: positionPK, Units: "0.30000000000000004",
+	})
+
+	fake, _ := importInvestments(t, b)
+
+	require.Len(t, fake.Rows.InvestmentTransactions, 1)
+	assert.Equal(t, new(int64(300_000)), fake.Rows.InvestmentTransactions[0].Shares)
+}
+
+func Test_import_fails_on_shares_without_a_security(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		setup func(b *v9fixture.Builder, accountPK int64) int64
+	}{
+		{name: "no position", setup: func(*v9fixture.Builder, int64) int64 { return 0 }},
+		{name: "position of a deleted security", setup: func(b *v9fixture.Builder, accountPK int64) int64 {
+			goneSecurityPK := b.Security(v9fixture.SecurityRow{Name: "Gone Inc", Ticker: "GONE", Currency: "CAD", Deleted: true})
+			return b.Position(v9fixture.PositionRow{Account: accountPK, Security: goneSecurityPK})
+		}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			accountPK := newBrokerage(b)
+			pk := b.InvestmentTransaction(v9fixture.TransactionRow{
+				Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Position: c.setup(b, accountPK), Units: "2",
+			})
+			bundle := b.WriteBundle(t, t.TempDir())
+			fake := &fakeStore{}
+
+			_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+			require.ErrorContains(t, err, fmt.Sprintf("investment transaction (source id %d) has shares but no security", pk))
+			assert.Zero(t, fake.replaceCalls)
+		})
+	}
+}
+
+func Test_import_gives_a_row_with_zero_or_NULL_shares_and_no_position_no_security(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		units string
+		want  *int64
+	}{
+		{name: "zero shares", units: "0", want: new(int64(0))},
+		{name: "NULL shares", units: "", want: nil},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			accountPK := newBrokerage(b)
+			b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Units: c.units})
+
+			fake, _ := importInvestments(t, b)
+
+			require.Len(t, fake.Rows.InvestmentTransactions, 1)
+			assert.Nil(t, fake.Rows.InvestmentTransactions[0].SecurityID)
+			assert.Equal(t, c.want, fake.Rows.InvestmentTransactions[0].Shares)
+		})
+	}
+}
+
+func Test_import_fails_on_a_split_with_an_unreadable_ratio(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name        string
+		numerator   string
+		denominator string
+	}{
+		{name: "NULL numerator", numerator: "", denominator: "12"},
+		{name: "NULL denominator", numerator: "1", denominator: ""},
+		{name: "zero numerator", numerator: "0", denominator: "12"},
+		{name: "zero denominator", numerator: "1", denominator: "0"},
+		{name: "unreadable numerator", numerator: "n/a", denominator: "12"},
+		{name: "unreadable denominator", numerator: "1", denominator: "n/a"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			accountPK := newBrokerage(b)
+			pk := b.InvestmentTransaction(v9fixture.TransactionRow{
+				Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Numerator: c.numerator, Denominator: c.denominator,
+			})
+			bundle := b.WriteBundle(t, t.TempDir())
+			fake := &fakeStore{}
+
+			_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+			require.ErrorContains(t, err, fmt.Sprintf("investment transaction (source id %d) has a split ratio quarry cannot read", pk))
+			assert.Zero(t, fake.replaceCalls)
+		})
+	}
+}
+
+func Test_import_ignores_the_ratio_of_a_row_that_is_not_a_split(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	accountPK := newBrokerage(b)
+	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Numerator: "0", Denominator: "n/a"})
+
+	fake, _ := importInvestments(t, b)
+
+	assert.Len(t, fake.Rows.InvestmentTransactions, 1)
+}

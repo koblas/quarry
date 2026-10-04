@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/koblas/quarry/internal/store"
 )
@@ -14,6 +15,13 @@ const investmentIDFormat = "itxn-%d"
 
 // splitAction is the action whose ZNUMERATOR and ZDENOMINATOR become the split columns.
 const splitAction = "split"
+
+// errSharesWithoutSecurity and errUnreadableSplitRatio fail an import whose investment row has shares but no
+// imported security, or a split with a NULL, zero or unreadable side; neither has ruled refusal copy yet.
+var (
+	errSharesWithoutSecurity = errors.New("has shares but no security")
+	errUnreadableSplitRatio  = errors.New("has a split ratio quarry cannot read")
+)
 
 // investmentActions maps ZTRANSACTION.ZTYPE to investment_transactions.action; any other code is unmappable.
 var investmentActions = map[int64]string{
@@ -101,8 +109,8 @@ type investmentRow struct {
 }
 
 // mapInvestmentTransactions reads the non-deleted investment transactions of investmentEnt in an imported
-// account, dated by posted day else entered day. A row with no date, no action code or an unmapped one is
-// added to off and excluded; its security is that of its position when the security was imported, else NULL.
+// account, dated by posted day else entered day. A row quarry cannot read is added to off and excluded;
+// its security is that of its position when the security was imported, else NULL.
 func mapInvestmentTransactions(
 	ctx context.Context, src Source, investmentEnt int64, hasEntity bool,
 	accounts map[int64]accountRef, positions map[int64]positionRef, securities map[int64]store.Security, off *offenders,
@@ -137,8 +145,22 @@ func mapInvestmentTransactions(
 	return rows, nil
 }
 
-// buildInvestmentTransaction maps one row of an imported account, reporting false
-// after adding an offender when the row cannot be mapped.
+// investmentSubject is one dated row of an imported account, for adding its offender.
+type investmentSubject struct {
+	row     investmentRow
+	account string
+	date    time.Time
+	off     *offenders
+}
+
+func (s investmentSubject) refuse(class unmappableClass, reason string) {
+	s.off.add(offender{class: class, reason: reason, dated: true, date: s.date, account: s.account, sourceID: s.row.pk})
+}
+
+func (s investmentSubject) day() string { return s.date.Format(dateLayout) }
+
+// buildInvestmentTransaction maps one row of an imported account, reporting false after adding an
+// offender when quarry cannot read it. An undated row is refused before any other fault.
 func buildInvestmentTransaction(
 	r investmentRow, acct accountRef, positions map[int64]positionRef, securities map[int64]store.Security, off *offenders,
 ) (store.InvestmentTransaction, bool, error) {
@@ -150,41 +172,25 @@ func buildInvestmentTransaction(
 	if r.posted.Valid {
 		seconds = r.posted.Float64
 	}
-	date := coreDataToDate(seconds)
-	dateStr := date.Format(dateLayout)
+	s := investmentSubject{row: r, account: acct.Name, date: coreDataToDate(seconds), off: off}
 
 	if !r.code.Valid {
-		off.add(offender{class: classMissingValue, reason: reasonInvestmentNoActionCode(dateStr, acct.Name), dated: true, date: date, account: acct.Name, sourceID: r.pk})
+		s.refuse(classMissingValue, reasonInvestmentNoActionCode(s.day(), acct.Name))
 		return store.InvestmentTransaction{}, false, nil
 	}
 	action, ok := investmentActions[r.code.Int64]
 	if !ok {
-		off.add(offender{class: classTransactionStatus, reason: reasonInvestmentActionCode(dateStr, acct.Name, r.code.Int64), dated: true, date: date, account: acct.Name, sourceID: r.pk})
+		s.refuse(classTransactionStatus, reasonInvestmentActionCode(s.day(), acct.Name, r.code.Int64))
 		return store.InvestmentTransaction{}, false, nil
 	}
 
 	txn := store.InvestmentTransaction{
 		ID: fmt.Sprintf(investmentIDFormat, r.pk), SourceID: r.pk, AccountID: acct.ID,
-		Date: date, Action: action, Currency: acct.Currency,
+		Date: s.date, Action: action, Currency: acct.Currency,
 	}
-	shares, err := shareColumn(r.pk, "shares", r.units)
-	if err != nil {
-		return txn, false, err
+	if !s.readValues(&txn) {
+		return txn, false, nil
 	}
-	txn.Shares = nullableInt(shares)
-	if r.amount.typ == "null" {
-		return txn, false, unreadableInvestmentValue(r.pk, "amount")
-	}
-	cents, fault := parseMoney(r.amount.typ, r.amount.text.String)
-	if fault != moneyOK {
-		return txn, false, unreadableInvestmentValue(r.pk, "amount")
-	}
-	txn.Amount = cents
-	commission, err := commissionColumn(r.pk, r.commission)
-	if err != nil {
-		return txn, false, err
-	}
-	txn.Commission = nullableInt(commission)
 	if r.note.Valid && r.note.String != "" {
 		txn.Memo = &r.note.String
 	}
@@ -193,42 +199,106 @@ func buildInvestmentTransaction(
 			txn.SecurityID = &sec.ID
 		}
 	}
+	if txn.SecurityID == nil && txn.Shares != nil && *txn.Shares != 0 {
+		return txn, false, fmt.Errorf("investment transaction (source id %d) %w", r.pk, errSharesWithoutSecurity)
+	}
 	if action == splitAction {
-		newShares, err := shareColumn(r.pk, "split numerator", r.numerator)
-		if err != nil {
-			return txn, false, err
+		newShares, oldShares, ok := splitSides(r)
+		if !ok {
+			return txn, false, fmt.Errorf("investment transaction (source id %d) %w", r.pk, errUnreadableSplitRatio)
 		}
-		oldShares, err := shareColumn(r.pk, "split denominator", r.denominator)
-		if err != nil {
-			return txn, false, err
-		}
-		txn.SplitNewShares, txn.SplitOldShares = nullableInt(newShares), nullableInt(oldShares)
+		txn.SplitNewShares, txn.SplitOldShares = &newShares, &oldShares
 	}
 	return txn, true, nil
 }
 
-// shareColumn returns the millionths of a share column; invalid when the column is NULL.
-func shareColumn(pk int64, name string, col numberColumn) (sql.NullInt64, error) {
-	if col.typ == "null" {
-		return sql.NullInt64{}, nil
+// readValues sets txn's shares, amount and commission, reporting false after adding an offender
+// for the first one quarry cannot read.
+func (s investmentSubject) readValues(txn *store.InvestmentTransaction) bool {
+	shares, ok := s.shares()
+	if !ok {
+		return false
 	}
-	millionths, fault := parsePrice(col.typ, col.text.String)
-	if fault != moneyOK {
-		return sql.NullInt64{}, unreadableInvestmentValue(pk, name)
+	txn.Shares = nullableInt(shares)
+
+	if s.row.amount.typ == "null" {
+		s.refuse(classMissingValue, reasonInvestmentNoAmount(s.day(), s.account))
+		return false
 	}
-	return sql.NullInt64{Int64: millionths, Valid: true}, nil
+	amount, ok := s.money(s.row.amount, "an amount")
+	if !ok {
+		return false
+	}
+	txn.Amount = amount
+
+	if s.row.commission.typ == "null" {
+		return true
+	}
+	commission, ok := s.money(s.row.commission, "a commission")
+	if !ok {
+		return false
+	}
+	if commission != 0 {
+		txn.Commission = &commission
+	}
+	return true
 }
 
-// commissionColumn returns the cents of a commission column; invalid when it is NULL or zero.
-func commissionColumn(pk int64, col numberColumn) (sql.NullInt64, error) {
+// shares returns the millionths of the units column; invalid when it is NULL.
+func (s investmentSubject) shares() (sql.NullInt64, bool) {
+	col := s.row.units
 	if col.typ == "null" {
-		return sql.NullInt64{}, nil
+		return sql.NullInt64{}, true
 	}
-	cents, fault := parseMoney(col.typ, col.text.String)
-	if fault != moneyOK {
-		return sql.NullInt64{}, unreadableInvestmentValue(pk, "commission")
+	text := col.text.String
+	millionths, fault := parseShares(col.typ, text)
+	switch fault {
+	case moneyOK:
+		return sql.NullInt64{Int64: millionths, Valid: true}, true
+	case moneyPrecision:
+		s.refuse(classTransactionPrecision, reasonInvestmentSharesPrecision(s.day(), s.account, text))
+	case moneyTooLarge:
+		s.refuse(classTooLarge, reasonInvestmentSharesTooLarge(s.day(), s.account, text))
+	case moneyNotANumber:
+		s.refuse(classNotANumber, reasonInvestmentNotANumber(s.day(), s.account, "a share count"))
 	}
-	return sql.NullInt64{Int64: cents, Valid: cents != 0}, nil
+	return sql.NullInt64{}, false
+}
+
+// money returns the cents of a non-NULL amount or commission column, named what in a refusal.
+func (s investmentSubject) money(col numberColumn, what string) (int64, bool) {
+	text := col.text.String
+	cents, fault := parseMoney(col.typ, text)
+	switch fault {
+	case moneyOK:
+		return cents, true
+	case moneyPrecision:
+		s.refuse(classTransactionPrecision, reasonInvestmentMoneyPrecision(s.day(), s.account, what, text))
+	case moneyTooLarge:
+		s.refuse(classTooLarge, reasonInvestmentMoneyTooLarge(s.day(), s.account, what, text))
+	case moneyNotANumber:
+		s.refuse(classNotANumber, reasonInvestmentNotANumber(s.day(), s.account, what))
+	}
+	return 0, false
+}
+
+// splitSides returns the millionths of a split row's numerator and denominator; false when either is
+// NULL, zero or unreadable.
+func splitSides(r investmentRow) (int64, int64, bool) {
+	newShares, ok := splitSide(r.numerator)
+	if !ok {
+		return 0, 0, false
+	}
+	oldShares, ok := splitSide(r.denominator)
+	return newShares, oldShares, ok
+}
+
+func splitSide(col numberColumn) (int64, bool) {
+	if col.typ == "null" {
+		return 0, false
+	}
+	millionths, fault := parseShares(col.typ, col.text.String)
+	return millionths, fault == moneyOK && millionths != 0
 }
 
 // nullableInt returns a pointer to n's value, nil when n is NULL.
@@ -237,11 +307,4 @@ func nullableInt(n sql.NullInt64) *int64 {
 		return nil
 	}
 	return &n.Int64
-}
-
-// errUnreadableInvestmentValue stands in for the ruled refusal of a share, amount or commission quarry cannot read.
-var errUnreadableInvestmentValue = errors.New("an investment value quarry cannot read")
-
-func unreadableInvestmentValue(pk int64, name string) error {
-	return fmt.Errorf("investment transaction (source id %d) %s: %w", pk, name, errUnreadableInvestmentValue)
 }

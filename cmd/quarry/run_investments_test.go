@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -166,4 +167,66 @@ func Test_run_sync_imports_investment_transactions_with_named_actions(t *testing
 		stringMap(t, db, `SELECT transaction_id, CAST(spent AS VARCHAR) FROM v_spending`))
 	assert.Equal(t, map[string]string{expenseID: "-50.00", incomeID: "100.00"},
 		stringMap(t, db, `SELECT transaction_id, CAST(amount AS VARCHAR) FROM v_cash_flow`))
+}
+
+// syncThenReport syncs a chequing account with two groceries rows and an empty brokerage account, plus two
+// brokerage rows in the same category and month when withInvestments, then returns the output of spend and
+// cashflow in text and JSON, and the investment_transactions row count.
+func syncThenReport(t *testing.T, withInvestments bool) (map[string]string, string) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	b := v9fixture.NewBuilder()
+	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	groceriesPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: new(int64(1))})
+	march := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	marchTenth := time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC)
+	for _, cash := range []struct {
+		amount string
+		day    *time.Time
+	}{{"-50.00", &march}, {"-30.00", &marchTenth}} {
+		pk := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: cash.amount, PostedDate: cash.day})
+		b.Entry(v9fixture.EntryRow{Parent: pk, Amount: cash.amount, CategoryTag: groceriesPK})
+	}
+	if withInvestments {
+		for _, investment := range []struct {
+			code   int64
+			amount string
+		}{{3, "-400.00"}, {10, "12.00"}} {
+			pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: &investment.code, Amount: investment.amount, PostedDate: &marchTenth})
+			b.Entry(v9fixture.EntryRow{Parent: pk, Amount: investment.amount, CategoryTag: groceriesPK})
+		}
+	}
+	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	var syncOut, syncErr bytes.Buffer
+	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncOut, &syncErr), syncErr.String())
+
+	reports := make(map[string]string)
+	for _, args := range [][]string{
+		{"spend", "--since", "2026-03", "--until", "2026-03"},
+		{"spend", "--json", "--since", "2026-03", "--until", "2026-03"},
+		{"cashflow", "--since", "2026-03", "--until", "2026-03"},
+		{"cashflow", "--json", "--since", "2026-03", "--until", "2026-03"},
+	} {
+		var stdout, stderr bytes.Buffer
+		require.Equal(t, 0, runWith(context.Background(), args, spendEnv(&stdout, &stderr)), stderr.String())
+		reports[strings.Join(args, " ")] = stdout.String() + "\n--- stderr ---\n" + stderr.String()
+	}
+
+	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	return reports, stringMap(t, db, `SELECT 'rows', CAST(count(*) AS VARCHAR) FROM investment_transactions`)["rows"]
+}
+
+func Test_run_spend_and_cashflow_are_unchanged_by_investment_transactions(t *testing.T) {
+	without, withoutRows := syncThenReport(t, false)
+	with, withRows := syncThenReport(t, true)
+
+	assert.Equal(t, "0", withoutRows)
+	assert.Equal(t, "2", withRows)
+	assert.Contains(t, without["spend --since 2026-03 --until 2026-03"], "Groceries")
+	assert.Equal(t, without, with)
 }
