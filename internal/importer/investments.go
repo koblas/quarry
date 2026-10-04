@@ -105,9 +105,8 @@ type investmentRow struct {
 	excluded                  bool
 }
 
-// mapInvestmentTransactions reads the investment transactions of investmentEnt in an imported account, dated posted
-// else entered; a row quarry cannot read goes to off. Its security is its position's, when imported. It also returns
-// each one that moves cash (amount not 0) as a transactions row, with the txnRef that attaches its entries.
+// mapInvestmentTransactions reads the investment transactions of investmentEnt in an imported account, sending an
+// unreadable row to off. It also returns each one with an amount as a cash row, with the txnRef that attaches its entries.
 func mapInvestmentTransactions(
 	ctx context.Context, src Source, investmentEnt int64, hasEntity bool,
 	accounts map[int64]accountRef, positions map[int64]positionRef, securities map[int64]store.Security, off *offenders,

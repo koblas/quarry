@@ -124,6 +124,7 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	if err != nil {
 		return store.Result{}, err
 	}
+	splits, links = addEntrylessSplits(cashRows, splits, links)
 	if err := readCategoryRefs(ctx, src, refs); err != nil {
 		return store.Result{}, err
 	}

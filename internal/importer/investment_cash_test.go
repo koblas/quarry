@@ -212,10 +212,48 @@ func Test_import_gives_an_investment_transactions_entry_a_split_with_its_categor
 	}}, fake.Rows.Splits)
 }
 
-func Test_import_fails_validation_for_an_investment_transaction_with_an_amount_and_no_entry(t *testing.T) {
+func Test_import_gives_an_entry_less_investment_transaction_one_uncategorized_split_of_its_amount(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: newBrokerage(b), Type: dividendCode, Amount: "12.00", PostedDate: &investDay})
+
+	fake, result := importInvestments(t, b)
+
+	assert.Equal(t, []store.Split{{
+		ID: fmt.Sprintf("split-itxn-%d", pk), SourceID: -pk, TransactionID: fmt.Sprintf("txn-%d", pk), Amount: 1200,
+	}}, fake.Rows.Splits)
+	assert.Zero(t, result.Validation.Splits.Mismatched)
+}
+
+func Test_import_gives_an_entry_less_investment_transaction_a_split_that_collides_with_no_entry_split(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	investmentPK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: newBrokerage(b), Type: dividendCode, Amount: "12.00", PostedDate: &investDay})
+	registerPK := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-5.00", PostedDate: &investDay})
+	entryPK := b.Entry(v9fixture.EntryRow{Parent: registerPK, Amount: "-5.00"})
+	require.Equal(t, investmentPK, entryPK)
+
+	fake, _ := importInvestments(t, b)
+
+	ids := make(map[string]bool)
+	sourceIDs := make(map[int64]bool)
+	for _, split := range fake.Rows.Splits {
+		ids[split.ID] = true
+		sourceIDs[split.SourceID] = true
+	}
+	assert.Len(t, fake.Rows.Splits, 2)
+	assert.Len(t, ids, 2)
+	assert.Len(t, sourceIDs, 2)
+}
+
+func Test_import_still_fails_validation_for_a_register_transaction_with_no_entry(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	pk := b.Transaction(v9fixture.TransactionRow{
+		Account: b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true}),
+		Amount:  "12.00", PostedDate: &investDay,
+	})
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
@@ -228,4 +266,124 @@ func Test_import_fails_validation_for_an_investment_transaction_with_an_amount_a
 	assert.Equal(t, int64(1200), mismatch.Amount)
 	assert.Zero(t, mismatch.SplitsTotal)
 	assert.Zero(t, fake.replaceCalls)
+}
+
+func Test_import_gives_an_entry_less_investment_transaction_with_amount_zero_no_row_and_no_split(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.InvestmentTransaction(v9fixture.TransactionRow{Account: newBrokerage(b), Type: dividendCode, Amount: "0", PostedDate: &investDay})
+
+	fake, _ := importInvestments(t, b)
+
+	assert.Empty(t, fake.Rows.Transactions)
+	assert.Empty(t, fake.Rows.Splits)
+}
+
+func Test_import_gives_an_investment_cash_row_the_currency_of_its_account(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	usdPK := b.Account(v9fixture.AccountRow{Name: "US Brokerage", Type: "BROKERAGENORMAL", Currency: "USD", Active: true})
+	pk := investmentWithEntry(b, v9fixture.TransactionRow{Account: usdPK, Type: dividendCode, Amount: "12.00", PostedDate: &investDay})
+
+	fake, _ := importInvestments(t, b)
+
+	assert.Equal(t, "USD", cashRowOf(t, fake, pk).Currency)
+}
+
+// investmentTransferLeg adds an investment transaction in account whose one entry carries quickenID and the
+// ZTRANSFER text link, returning the entry's Z_PK.
+func investmentTransferLeg(b *v9fixture.Builder, account int64, amount string, quickenID int64, link string) int64 {
+	pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: account, Type: dividendCode, Amount: amount, PostedDate: &investDay})
+	return b.Entry(v9fixture.EntryRow{Parent: pk, Amount: amount, QuickenID: quickenID, Transfer: link})
+}
+
+func Test_import_pairs_an_investment_transfer_entry_with_its_counterpart_leg(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name         string
+		counterpart  v9fixture.AccountRow
+		counterLeg   func(b *v9fixture.Builder, account int64, amount string, quickenID int64, link string) int64
+		wantTransfer store.TransferCheck
+	}{
+		{
+			name:         "a chequing register entry",
+			counterpart:  v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true},
+			counterLeg:   transferLeg,
+			wantTransfer: store.TransferCheck{Paired: 1},
+		},
+		{
+			name:         "an entry of another brokerage",
+			counterpart:  v9fixture.AccountRow{Name: "Second Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true},
+			counterLeg:   investmentTransferLeg,
+			wantTransfer: store.TransferCheck{Paired: 1},
+		},
+		{
+			name:         "a USD chequing register entry",
+			counterpart:  v9fixture.AccountRow{Name: "US Chequing", Type: "CHECKING", Currency: "USD", Active: true},
+			counterLeg:   transferLeg,
+			wantTransfer: store.TransferCheck{Paired: 1, CrossCurrency: 1},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			brokeragePK := newBrokerage(b)
+			counterpartPK := b.Account(c.counterpart)
+			investmentLeg := investmentTransferLeg(b, brokeragePK, "50.00", 101, "102")
+			counterLeg := c.counterLeg(b, counterpartPK, "-50.00", 102, "101")
+
+			fake, result := importInvestments(t, b)
+
+			assert.Equal(t, c.wantTransfer, result.Validation.Transfers)
+			assert.Empty(t, result.Validation.Splits.Mismatched)
+			assert.Equal(t, new(accountIDFor(counterpartPK)), splitByID(fake, splitIDFor(investmentLeg)).TransferAccountID)
+			assert.Equal(t, new(accountIDFor(brokeragePK)), splitByID(fake, splitIDFor(counterLeg)).TransferAccountID)
+		})
+	}
+}
+
+func Test_import_keeps_an_investment_transfer_entry_named_for_an_account_as_a_one_sided_transfer(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	leg := investmentTransferLeg(b, newBrokerage(b), "50.00", 101, "Chequing")
+
+	_, result := importInvestments(t, b)
+
+	require.Len(t, result.Validation.Transfers.OneSided, 1)
+	oneSided := result.Validation.Transfers.OneSided[0]
+	assert.Equal(t, leg, oneSided.SourceID)
+	assert.Equal(t, new(accountIDFor(chequingPK)), oneSided.OtherAccountID)
+}
+
+func Test_import_reports_an_investment_transfer_entry_that_differs_from_its_transaction_amount(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	accountPK := newBrokerage(b)
+	pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: dividendCode, Amount: "12.00", PostedDate: &investDay})
+	b.Entry(v9fixture.EntryRow{Parent: pk, Amount: "10.00", QuickenID: 101, Transfer: "Chequing"})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.ErrorIs(t, err, store.ErrValidationFailed)
+	require.Len(t, result.Validation.Splits.Mismatched, 1)
+	assert.Equal(t, fmt.Sprintf("txn-%d", pk), result.Validation.Splits.Mismatched[0].ID)
+	assert.Equal(t, int64(1000), result.Validation.Splits.Mismatched[0].SplitsTotal)
+}
+
+func Test_import_splits_an_investment_transaction_across_its_two_entries_with_no_synthetic_split(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: newBrokerage(b), Type: dividendCode, Amount: "12.00", PostedDate: &investDay})
+	first := b.Entry(v9fixture.EntryRow{Parent: pk, Amount: "7.00"})
+	second := b.Entry(v9fixture.EntryRow{Parent: pk, Amount: "5.00"})
+
+	fake, result := importInvestments(t, b)
+
+	assert.Equal(t, []string{splitIDFor(first), splitIDFor(second)}, []string{fake.Rows.Splits[0].ID, fake.Rows.Splits[1].ID})
+	assert.Len(t, fake.Rows.Splits, 2)
+	assert.Empty(t, result.Validation.Splits.Mismatched)
 }
