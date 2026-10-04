@@ -210,7 +210,7 @@ const (
 )
 
 // Actions returns every investment_transactions.action value, alphabetically, as a fresh slice.
-// A new Action constant is added here too: the SQL conventions text is pinned against this list.
+// It is exported as the one vocabulary list; a new Action constant is added here too.
 func Actions() []string {
 	return []string{
 		ActionAddShares,

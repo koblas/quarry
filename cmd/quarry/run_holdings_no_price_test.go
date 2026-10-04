@@ -74,8 +74,8 @@ type holdingsJSONDoc struct {
 		Currency string `json:"currency"`
 		Value    string `json:"value"`
 	} `json:"totals"`
-	AccountFilter []string `json:"account_filter"`
-	Warnings      []string `json:"warnings"`
+	AccountFilter json.RawMessage `json:"account_filter"`
+	Warnings      []string        `json:"warnings"`
 }
 
 func Test_run_holdings_json_lists_the_unpriced_holding_with_nulls_and_a_warning(t *testing.T) {
@@ -96,6 +96,6 @@ func Test_run_holdings_json_lists_the_unpriced_holding_with_nulls_and_a_warning(
 		Security: new("Bare Fund"), Shares: "40.000000", Currency: new("CAD"),
 	}, doc.Holdings[1])
 	assert.Equal(t, "71290.72", doc.Totals[0].Value)
-	assert.Empty(t, doc.AccountFilter)
+	assert.JSONEq(t, "[]", string(doc.AccountFilter))
 	assert.Equal(t, []string{holdingsNoPriceLine}, doc.Warnings)
 }

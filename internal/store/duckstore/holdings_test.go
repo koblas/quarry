@@ -83,6 +83,34 @@ func Test_holdings_leaves_nil_what_the_store_holds_as_null(t *testing.T) {
 	}}, got)
 }
 
+func Test_holdings_reads_a_zero_price_as_a_price_with_a_value_of_zero(t *testing.T) {
+	t.Parallel()
+	rows := holdingRows(buy(acctOne, secAcme, 1, marchDay(1), 2*oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(2), 0)}
+	st := newStoreWithRates(t, rows, ratesOn(1, 1_250_000, "FXUSDCAD"))
+
+	got := holdingsOn(t, st, marchDay(5))
+
+	require.Len(t, got, 1)
+	assert.Equal(t, new(int64(0)), got[0].Price)
+	assert.Equal(t, new(marchDay(2)), got[0].PriceDate)
+	assert.Equal(t, []string{"0", "0", "0"}, []string{got[0].Value.String(), got[0].ValueCAD.String(), got[0].ValueUSD.String()})
+}
+
+func Test_holdings_reads_the_placeholder_price_date_as_recorded(t *testing.T) {
+	t.Parallel()
+	placeholder := day(1899, time.December, 29)
+	rows := holdingRows(buy(acctOne, secAcme, 1, marchDay(1), 2*oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, placeholder, tenUnits)}
+	st := newStoreWith(t, rows)
+
+	got := holdingsOn(t, st, marchDay(5))
+
+	require.Len(t, got, 1)
+	assert.Equal(t, new(placeholder), got[0].PriceDate)
+	assert.Equal(t, big.NewInt(2000), got[0].Value)
+}
+
 func Test_holdings_lists_a_holding_whose_security_and_account_rows_are_missing(t *testing.T) {
 	t.Parallel()
 	st := newStoreWith(t, holdingRows(buy("acct-ghost", secGhost, 1, marchDay(1), oneShare)))

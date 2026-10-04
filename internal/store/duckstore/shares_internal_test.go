@@ -112,6 +112,29 @@ func openMillionths(walk *holdingWalk) int64 {
 	return 0
 }
 
+// spanTexts is each span of walk as "from..to shares", to empty for the open span.
+func spanTexts(walk *holdingWalk) []string {
+	texts := make([]string, 0, len(walk.spans))
+	for _, span := range walk.spans {
+		to := ""
+		if !span.open {
+			to = span.to.Format(time.DateOnly)
+		}
+		texts = append(texts, fmt.Sprintf("%s..%s %d", span.from.Format(time.DateOnly), to, span.millionths))
+	}
+	return texts
+}
+
+func Test_holding_spans_end_a_first_day_that_is_the_zero_time_before_the_next_day(t *testing.T) {
+	t.Parallel()
+	zeroDay := time.Time{}
+	txns := []store.InvestmentTransaction{walkTxn(1, "sec", zeroDay, oneMillion), walkTxn(2, "sec", walkDay, oneMillion)}
+
+	walk := walkOf(t, txns)[holdingKey{account: "acct", security: "sec"}]
+
+	assert.Equal(t, []string{"0001-01-01..2026-02-28 1000000", "2026-03-01.. 2000000"}, spanTexts(walk))
+}
+
 func Test_holding_spans_open_span_is_the_rounded_final_count(t *testing.T) {
 	t.Parallel()
 	day, next := walkDay, walkDay.AddDate(0, 0, 1)

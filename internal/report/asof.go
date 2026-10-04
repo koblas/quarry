@@ -31,6 +31,15 @@ func (e AsOfError) Error() string {
 	return fmt.Sprintf("--as-of %q is not a date; use YYYY, YYYY-MM or YYYY-MM-DD", e.Value)
 }
 
+// ResolveAsOf is the day holdings are valued on: today in now's own zone when value is nil, else ParseAsOf of
+// *value. A value given as "" is given, and is not a date.
+func ResolveAsOf(value *string, now time.Time) (time.Time, error) {
+	if value == nil {
+		return Today(now), nil
+	}
+	return ParseAsOf(*value, now)
+}
+
 // ParseAsOf resolves value, a year, month or day, into the day holdings are valued on: the last day
 // of the period, or today when the period contains today. It returns an AsOfError for a value that
 // names no date and for a period that begins after today, read in now's own zone.

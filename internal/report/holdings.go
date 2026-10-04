@@ -56,7 +56,7 @@ func (l Holdings) Converted(h store.Holding) *big.Int {
 // Convertible reports whether h's security is priced in CAD or USD, the only currencies quarry converts;
 // a security with no currency, or any other, is never converted.
 func Convertible(h store.Holding) bool {
-	return h.Currency != nil && (*h.Currency == "CAD" || *h.Currency == "USD")
+	return h.Currency != nil && (*h.Currency == money.CAD.String() || *h.Currency == money.USD.String())
 }
 
 // NeedsRate reports whether h is priced in the other of CAD and USD than the reporting currency and has no

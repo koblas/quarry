@@ -12,6 +12,30 @@ import (
 
 // windowNow's own day is 2026-09-29; its UTC day is already 2026-09-30.
 
+func Test_resolve_as_of_is_today_when_no_value_is_given(t *testing.T) {
+	got, err := report.ResolveAsOf(nil, windowNow)
+
+	require.NoError(t, err)
+	assert.Equal(t, day(2026, time.September, 29), got)
+}
+
+func Test_resolve_as_of_reads_a_value_that_is_given(t *testing.T) {
+	given := "2025-06-15"
+
+	got, err := report.ResolveAsOf(&given, windowNow)
+
+	require.NoError(t, err)
+	assert.Equal(t, day(2025, time.June, 15), got)
+}
+
+func Test_resolve_as_of_refuses_a_given_empty_string_rather_than_defaulting_to_today(t *testing.T) {
+	given := ""
+
+	_, err := report.ResolveAsOf(&given, windowNow)
+
+	assert.Equal(t, report.AsOfError{Kind: report.AsOfNotADate, Value: ""}, err)
+}
+
 func Test_parse_as_of_resolves_a_period_to_its_last_day(t *testing.T) {
 	cases := []struct {
 		name  string

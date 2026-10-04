@@ -189,16 +189,17 @@ func nullableSpanEnd(span shareSpan) any {
 type holdingWalker struct {
 	key        holdingKey
 	walk       *holdingWalk
-	day        time.Time // the date whose rows are being folded in; zero before the first row
+	started    bool      // false until the first row, whatever its date
+	day        time.Time // the date whose rows are being folded in
 	millionths int64     // the rounded count at the end of the last ended date
 }
 
 // endDayBefore ends the pending date when date is a later one, then makes date the pending one.
 func (w *holdingWalker) endDayBefore(date time.Time) {
-	if !w.day.IsZero() && !date.Equal(w.day) {
+	if w.started && !date.Equal(w.day) {
 		w.endDay()
 	}
-	w.day = date
+	w.started, w.day = true, date
 }
 
 // endDay closes the pending date: a rounded count unlike the last one ends the open span the day before

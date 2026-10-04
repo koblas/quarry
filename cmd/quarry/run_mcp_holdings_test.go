@@ -43,6 +43,10 @@ func Test_run_mcp_holdings_returns_the_holdings_json_document(t *testing.T) {
 			cliArgs: []string{"holdings", "--as-of", "2025"}, arguments: map[string]any{"as_of": "2025", "accounts": []string{}},
 		},
 		{
+			name: "no accounts named on a day with holdings", store: seedHoldingsToolStore,
+			cliArgs: []string{"holdings", "--as-of", "2026-03-12"}, arguments: map[string]any{"as_of": "2026-03-12", "accounts": []string{}},
+		},
+		{
 			name: "one account in native currencies", store: seedHoldingsToolStore,
 			cliArgs:   []string{"holdings", "--as-of", "2026-03-12", "--account", "Brokerage", "--currency", "native"},
 			arguments: map[string]any{"as_of": "2026-03-12", "accounts": []string{"Brokerage"}, "currency": "native"},

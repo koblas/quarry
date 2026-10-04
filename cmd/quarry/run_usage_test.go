@@ -234,6 +234,17 @@ func Test_run_holdings_needs_a_value_for_the_as_of_flag(t *testing.T) {
 	assert.Equal(t, "quarry: flag needs an argument: --as-of; Run 'quarry holdings --help' for usage.\n", stderr.String())
 }
 
+func Test_run_holdings_has_no_all_flag(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"holdings", "--all"}, &stdout, &stderr)
+
+	assert.Equal(t, 2, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: unknown flag: --all; Run 'quarry holdings --help' for usage.\n", stderr.String())
+}
+
 func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
 	cases := []struct {
 		name       string

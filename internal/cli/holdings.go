@@ -40,14 +40,13 @@ accounts is not included, so it is not those accounts' balance.`,
   quarry holdings --account RRSP --currency native --json`,
 		Args: currency.args,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			at := now()
-			asOf := report.Today(at)
+			var given *string
 			if cmd.Flags().Changed("as-of") {
-				parsed, err := report.ParseAsOf(asOfFlag, at)
-				if err != nil {
-					return UsageError{msg: err.Error()}
-				}
-				asOf = parsed
+				given = &asOfFlag
+			}
+			asOf, err := report.ResolveAsOf(given, now())
+			if err != nil {
+				return UsageError{msg: err.Error()}
 			}
 
 			reportCurrency, configWarnings, err := currency.resolve(cmd, loadConfig)

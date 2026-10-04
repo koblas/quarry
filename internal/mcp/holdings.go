@@ -15,14 +15,9 @@ const holdingsTwin = "holdings"
 // holdings lists the holdings on the call's day in its accounts and currency, as holdings --json does,
 // but at most maxRows of them; totals count every holding and a cut adds a warning.
 func (s *Server) holdings(ctx context.Context, in holdingsInput) (any, error) {
-	at := s.now()
-	asOf := report.Today(at)
-	if in.AsOf != nil {
-		parsed, err := report.ParseAsOf(*in.AsOf, at)
-		if err != nil {
-			return nil, asOfRefusal(err)
-		}
-		asOf = parsed
+	asOf, err := report.ResolveAsOf(in.AsOf, s.now())
+	if err != nil {
+		return nil, asOfRefusal(err)
 	}
 	currency, configWarnings, err := s.resolveCurrency(in.Currency, holdingsTwin)
 	if err != nil {
@@ -54,7 +49,7 @@ func (e asOfRefusedError) Error() string { return string(e) }
 func asOfRefusal(err error) error {
 	refusal, ok := errors.AsType[report.AsOfError](err)
 	if !ok {
-		// unreachable: report.ParseAsOf returns only an AsOfError (internal/report/asof.go:37-50)
+		// unreachable: report.ResolveAsOf returns only an AsOfError, built in ParseAsOf (internal/report/asof.go)
 		return err
 	}
 	return withLog(asOfRefusedError(asOfWording(refusal)), asOfRefusedLog)
