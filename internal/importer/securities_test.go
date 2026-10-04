@@ -158,6 +158,18 @@ func Test_import_refuses_a_security_with_no_name(t *testing.T) {
 	}
 }
 
+func Test_import_counts_a_second_security_with_no_name_as_one_more(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	firstPK := b.Security(v9fixture.SecurityRow{Ticker: "NONAME1", Currency: "CAD"})
+	b.Security(v9fixture.SecurityRow{Ticker: "NONAME2", Currency: "CAD"})
+
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: b.WriteBundle(t, t.TempDir()).DataPath})
+
+	assert.Equal(t, fmt.Sprintf("a security (source id %d) has no name (and 1 more)", firstPK), importReason(t, err))
+}
+
 func Test_import_ignores_a_deleted_security_with_no_name(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()

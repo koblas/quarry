@@ -287,7 +287,7 @@ func (s investmentSubject) money(col numberColumn, what string) (int64, bool) {
 }
 
 // splitSides returns the millionths of a split row's numerator and denominator; false when either is
-// NULL, zero or unreadable.
+// NULL, zero, negative or unreadable.
 func splitSides(r investmentRow) (int64, int64, bool) {
 	newShares, ok := splitSide(r.numerator)
 	if !ok {
@@ -309,12 +309,13 @@ func ratioSideText(col numberColumn) string {
 	return col.text.String
 }
 
+// splitSide returns the millionths of one split ratio side; false unless it is a positive number.
 func splitSide(col numberColumn) (int64, bool) {
 	if col.typ == "null" {
 		return 0, false
 	}
 	millionths, fault := parseShares(col.typ, col.text.String)
-	return millionths, fault == moneyOK && millionths != 0
+	return millionths, fault == moneyOK && millionths > 0
 }
 
 // nullableInt returns a pointer to n's value, nil when n is NULL.
