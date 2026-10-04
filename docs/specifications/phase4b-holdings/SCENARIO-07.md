@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-07
-status: open
+status: done
 ---
 
 # SCENARIO-07: A security quarry cannot convert is left out of the total
@@ -26,10 +26,10 @@ Rulings made here (binding below): security named by stored name via `%q` (not t
 - [x] Step 3: `internal/report/document/holdings.go:107-135` `HoldingsWarnings` — batch 2. Add unexported `noCurrencyWarnings(h)` (slot 6) and `otherCurrencyWarnings(h)` (slot 7) returning `[]string`, appended after `noPriceWarning`; rewrite the doc comment to the contract only (drop "so far"; list the slot order once). NULL line: every mode, fires for a priced or unpriced row. EUR line: converted modes only, priced rows only (an unpriced row is not "priced in" anything), currency code as stored. Name: `*Security`, falling back to `SecurityID` when nil. One line per distinct `SecurityID` among qualifying rows, first appearance in table order; several lines keep `h.Rows` order. Wording verbatim from spec S.3. Tests in `internal/report/document/holdings_test.go`: `Test_HoldingsWarnings_say_which_securities_have_no_conversion` rows — NULL in CAD/USD/native (line each); EUR in CAD/USD (line), native (none); CAD and USD rows (none); two accounts, one security (one line); two NULLs then two EUR codes (table order, codes named as stored); no-price + NULL + EUR together (slot order 4, 6, 7); unpriced NULL (no-price line and NULL line); unpriced EUR (no-price line only); nil `Security` (id fallback); name with a quote (`%q`)
 
 ### Sweep
-- [ ] Step 4: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; new test file under 480 lines; `holdingsRows` fixture reused, not re-seeded
+- [x] Step 4: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; new test file under 480 lines; `holdingsRows` fixture reused, not re-seeded
 
 ### Verify
-- [ ] Step 5: full verification block + `.claude/scripts/spec-check.py phase4b-holdings` → tick SCENARIO-07 with its acceptance test; rewrite STATE.md (fold Handoff; retire the `HoldingsWarnings` "so far" debt; add slots 6, 7 to the built list; remove `not converted` from Left unbuilt)
+- [x] Step 5: full verification block + `.claude/scripts/spec-check.py phase4b-holdings` → tick SCENARIO-07 with its acceptance test; rewrite STATE.md (fold Handoff; retire the `HoldingsWarnings` "so far" debt; add slots 6, 7 to the built list; remove `not converted` from Left unbuilt)
 
 ## Handoff
 
@@ -61,4 +61,4 @@ Run B1 (steps 2-3) done; acceptance and its two sibling tests now green, narrow 
 - `document.HoldingsWarnings` slots 6, 7: `noCurrencyWarnings`, `otherCurrencyWarnings`, shared `perSecurity` (one line per `SecurityID`, first row order, name `%q`, id fallback). Doc comment now contract only (`Slots: no price, no currency, other currency.`) — the "so far" narrative is retired. Table test `Test_HoldingsWarnings_say_which_securities_have_no_conversion` (14 rows).
 - Existing no-price tests in `document/holdings_test.go` gave rows no currency, which now also warns: `unpricedHoldings` and the "account closed"/"negative shares" rows carry `Currency: CAD`; the "currency unknown" row was dropped from `Test_HoldingsWarnings_count_an_unpriced_holding_whatever_else_it_lacks_or_is` (the new table's "unpriced security with no currency" row owns it).
 Mutations (each restored, diff empty): (1) `otherCurrencyWarnings` native guard `h.Currency == money.Native` → `money.Currency(99)` reddened `...say_which_securities_have_no_conversion/EUR_in_native_is_totalled_as_it_is,_so_no_line` (got the EUR line, want `[]string{}`); (2) `perSecurity` `|| seen[r.SecurityID]` dropped reddened `.../one_security_held_in_two_accounts_has_one_line` (two identical lines); (3) `holdingInCell` `Price == nil` arm removed reddened both rows of `Test_holdings_in_column_has_no_not_converted_where_the_row_is_unpriced_or_the_listing_native` (`not converted` on the unpriced rows) — the no-price NULL row lives in that second test, not the first, because the plan's single test would have mixed two assertion shapes.
-Next (V): step 4 sweep (`go build`, `golangci-lint`), step 5 full verify, spec tick, STATE.md rewrite (fold Handoff; drop the "so far" debt and `not converted` from Left unbuilt; add slots 6, 7 to Built).
+Run V (steps 4-5) done: `go build ./...` clean, `golangci-lint run ./...` `0 issues`, covered full suite rc=0 (all packages ok), `uncovered-diff.py` 0 uncovered added lines since 2df7c1a, `go test -race ./internal/report/... ./internal/cli/` ok. `test-stats.py --base 2df7c1a --changed`: cmd/quarry 694 (+3), internal/cli 464 (+2), internal/report 363 (+2), internal/report/document 100 (+1), TOTAL 1621 (+8), tempdir 539 (+1), disk 482 (+0). Spec ticked with acceptance test, `spec-check.py phase4b-holdings` OK, STATE.md rewritten.

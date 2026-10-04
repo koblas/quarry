@@ -408,7 +408,7 @@ Architect sizing pass 2026-10-04 (one pass over all 16; folds change no scenario
 - [x] SCENARIO-11: quarry holdings refuses a date it cannot use — delivered by SCENARIO-05 — `cmd/quarry/run_holdings_as_of_test.go` `Test_run_holdings_refuses_a_date_it_cannot_use`
 - [x] SCENARIO-06: A holding with no price is listed without value — `cmd/quarry/run_holdings_no_price_test.go` `Test_run_holdings_lists_a_holding_with_no_price_without_value`
 - [x] SCENARIO-12: Holdings as JSON — delivered by SCENARIO-06 — `cmd/quarry/run_holdings_no_price_test.go` `Test_run_holdings_json_lists_the_unpriced_holding_with_nulls_and_a_warning`
-- [ ] SCENARIO-07: A security quarry cannot convert is left out of the total
+- [x] SCENARIO-07: A security quarry cannot convert is left out of the total — `cmd/quarry/run_holdings_not_converted_test.go` `Test_run_holdings_leaves_a_security_it_cannot_convert_out_of_the_total`
 - [ ] SCENARIO-08: A day with no exchange rate totals each currency separately
 - [ ] SCENARIO-10: Filtering by account
 - [ ] SCENARIO-09: Nothing held on the day
