@@ -125,6 +125,7 @@ Shares    DIFFER for 1 of 145 holdings
 
 - Shares alone: `quarry: validation failed: 1 of 145 holdings does not match Quicken's share count; ~/Library/Application Support/quarry/quarry.duckdb was not changed; each difference is listed on stdout; quarry read the holding's transactions differently from Quicken, so run quarry sync --from 20260930T072052Z after updating quarry`
   - Plural: `N of M holdings do not match Quicken's share counts`.
+  - Plural tail (X mismatched > 1; ruled 2026-10-04, SCENARIO-06): `…; each difference is listed on stdout; quarry read those holdings' transactions differently from Quicken, so run quarry sync --from <id> after updating quarry`. X = 1 keeps "the holding's" (also for `1 of 3 holdings does not match`).
 - Shares together with Balances and/or Splits: clauses join with ` and ` in order balances, splits, shares, then the **existing** V1 tail.
 - First run (no previous store): store clause uses V1's existing first-run form.
 
