@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-11
-status: open
+status: done
 ---
 
 # SCENARIO-11: Existing surfaces stop saying investments are not imported
@@ -31,10 +31,10 @@ Survey (grep, whole tree minus `.git/.devenv/specifications/.claude`): remaining
 - [x] Step 5 (batch 3, reports + docs): `internal/report/sql_conventions.go:5-17` append S.7 paragraph (hard-wrapped like the rest; no `mask`/`redact`); pins: new `Test_sql_conventions_explain_investment_data` in `internal/report/sql_conventions_test.go` (phrases `investment_transactions`, `not in transactions`, `split_new_shares`, `quarry does not convert prices yet`), plus the two hand-copied help blocks that embed the conventions — `internal/cli/sql_test.go:206-220` (`Test_sql_help_describes_the_command_and_its_flags`) and `cmd/quarry/run_shared_documents_test.go:~349-361` (`Test_run_prints_the_sql_status_and_findings_documents_byte_for_byte`); `internal/mcp/describe_schema_test.go:53` and `report/document` schema tests compare against the const (no edit). Regenerate `plugin/skills/quarry/references/schema.md`: `go test ./cmd/quarry/ -run Test_skill_schema_reference_matches_the_committed_file -update` (STATE trap: other patterns match nothing). `docs/initial-prd.md:123` add "type from Phase 4b; currency as recorded, NULL when Quicken has none"; `:125` rename `investment_transactions` and "Cash side also appears in `transactions` (from Phase 4c)"; add both as rows in `cmd/quarry/run_plugin_notices_test.go` `Test_notices_and_prd_carry_the_ruled_plugin_edits` table (collapsed-whitespace match). `internal/store/store.go:50-52` `IsInvestmentAccount` comment: "accounts shows it as not valued". Fold STATE debt: `internal/store/duckstore/history_test.go:16` comment → a fixture fact ("Phase 1's import_runs: 19 columns, one run (id 4), no store_info beside it; the extra column is investment_transactions_not_imported"), no narrative
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `golangci-lint fmt ./...` first (copy tests carry `//nolint:lll` where lines are pinned byte-equal)
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `golangci-lint fmt ./...` first (copy tests carry `//nolint:lll` where lines are pinned byte-equal)
 
 ### Verify
-- [ ] Step 7: full verification block + `.claude/scripts/spec-check.py phase4a-investments`; tick SCENARIO-11 in `specification.md` with its acceptance test; rewrite `STATE.md` (drop SCENARIO-11 from Left unbuilt, add `not valued` decision, remove the `history_test.go:16` debt if folded); `status: done`
+- [x] Step 7: full verification block + `.claude/scripts/spec-check.py phase4a-investments`; tick SCENARIO-11 in `specification.md` with its acceptance test; rewrite `STATE.md` (drop SCENARIO-11 from Left unbuilt, add `not valued` decision, remove the `history_test.go:16` debt if folded); `status: done`
 
 Ruled copy → asserting test: accounts Long → `Test_run_accounts_help_describes_the_command_without_needing_home`; `not valued` cell → acceptance test + `Test_renderAccounts*`; sync Long → `Test_run_prints_the_sync_help`; SKILL description/72/73 → `Test_skill_text_carries_the_ruled_frontmatter_and_rules`; SQL paragraph → `Test_sql_conventions_explain_investment_data`, `Test_sql_help_describes_the_command_and_its_flags`, schema.md → `Test_skill_schema_reference_matches_the_committed_file`; PRD L123/L125 → `Test_notices_and_prd_carry_the_ruled_plugin_edits`.
 
@@ -53,8 +53,7 @@ Ruled copy → asserting test: accounts Long → `Test_run_accounts_help_describ
 
 ## Phase report
 
-Runs A, B1 and B2 done (steps 1-5). Next: V (steps 6-7).
-- B2 production: `internal/importer/securities.go:63` empty `ZCURRENCY` -> NULL (was `""`); red first (`Test_import_stores_a_missing_currency_as_null/empty_currency` failed at `assert.Nil`), replaces the NULL-only test; no test had pinned `""`. STATE currency debt and `history_test.go:16` debt dropped, binding-decision line reworded.
-- B2 copy: `SKILL.md:3,72,73` + byte pins in `run_skill_text_test.go`; `sql_conventions.go` paragraph (single source), `plugin/skills/quarry/references/schema.md` regenerated (+11 lines), hand copies in `internal/cli/sql_test.go` and `cmd/quarry/run_shared_documents_test.go`; new `Test_sql_conventions_explain_investment_data`; `docs/initial-prd.md` L123/L125 + two rows in `run_plugin_notices_test.go`; `history_test.go:16` comment is a fixture fact. `store.go` comment was done in B1.
-- Narrow loop green (cmd/quarry filter, `internal/cli`, `internal/report/...`, `internal/mcp`, `internal/importer`, `internal/store/...`); `go build ./...`, `golangci-lint run ./...` 0 issues.
-- V still owes: full verify block, `spec-check.py`, tick SCENARIO-11 in `specification.md`, STATE.md rewrite (drop SCENARIO-11 from Left unbuilt, add `not valued` decision), `status: done`.
+Runs A, B1, B2, V done; scenario complete (`status: done`).
+- V: `go build ./...` ok, `golangci-lint run ./...` 0 issues; covered full suite `go test rc=0`; `uncovered-diff.py --profile ... 014d2e7` 0 uncovered added lines; `go test -race` on internal/cli, report/..., importer ok. `test-stats.py --base 014d2e7 --changed`: cmd/quarry 677 (+1), internal/cli 423 (+0), internal/importer 240 (+0), internal/report 340 (+1), internal/store/duckstore 560 (+0), TOTAL 2240 (+2).
+- `spec-check.py phase4a-investments` OK; SCENARIO-11 ticked with its acceptance test.
+- Production grep `not imported|not_imported|NotImported` (excluding tests, specifications, .claude): `importer/investments.go:209` (skipped position, different meaning), `docs/initial-prd.md:349` (category tax line), `docs/adr/001-shared-store-package.md:22` (historical, unowned). Test hits: NotContains pins, pre-4a fixture column name `investment_transactions_not_imported`.
