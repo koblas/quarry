@@ -49,7 +49,7 @@ func (e asOfRefusedError) Error() string { return string(e) }
 func asOfRefusal(err error) error {
 	refusal, ok := errors.AsType[report.AsOfError](err)
 	if !ok {
-		// unreachable: report.ResolveAsOf returns only an AsOfError, built in ParseAsOf (internal/report/asof.go)
+		// unreachable: report.ResolveAsOf (internal/report/asof.go:36-41) returns Today or ParseAsOf's result, whose only errors are AsOfError (:49, :53)
 		return err
 	}
 	return withLog(asOfRefusedError(asOfWording(refusal)), asOfRefusedLog)

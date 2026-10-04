@@ -144,9 +144,9 @@ func (l Holdings) nativeTotals() []HoldingsTotal {
 // nativeRank puts CAD first and USD second; every other currency ties and falls to alphabetical order.
 func nativeRank(code string) int {
 	switch code {
-	case "CAD":
+	case money.CAD.String():
 		return 0
-	case "USD":
+	case money.USD.String():
 		return 1
 	default:
 		return 2
