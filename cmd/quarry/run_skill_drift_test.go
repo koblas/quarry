@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"io/fs"
+	"path"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/koblas/quarry/internal/cli"
@@ -30,7 +34,40 @@ type helpNode struct {
 
 // skillDriftSources is SKILL.md, the README's Claude Code section, and every file
 // under references/, read from disk.
-func skillDriftSources(_ *testing.T) []driftSource { return nil }
+func skillDriftSources(t *testing.T) []driftSource {
+	t.Helper()
+	return append([]driftSource{
+		{name: skillPath, text: repoFile(t, skillPath)},
+		{name: "README.md Claude Code section", text: readmeClaudeCodeText(t)},
+	}, referenceSources(t)...)
+}
+
+// readmeClaudeCodeText is README.md from the Claude Code heading up to the Credits heading.
+func readmeClaudeCodeText(t *testing.T) string {
+	t.Helper()
+	_, afterStart, found := strings.Cut(repoFile(t, "README.md"), readmeClaudeCodeHeading+"\n")
+	require.True(t, found, "README.md must carry the Claude Code section")
+	section, _, found := strings.Cut(afterStart, readmeCreditsHeading)
+	require.True(t, found, "README.md must carry the Credits section after it")
+	return readmeClaudeCodeHeading + "\n" + section
+}
+
+// referenceSources is every file under references/, listed from disk and named by repo-relative path.
+func referenceSources(t *testing.T) []driftSource {
+	t.Helper()
+	var sources []driftSource
+	err := filepath.WalkDir("../../"+referencesDir, func(file string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		rel := path.Join(referencesDir, strings.TrimPrefix(filepath.ToSlash(file), "../../"+referencesDir+"/"))
+		sources = append(sources, driftSource{name: rel, text: repoFile(t, rel)})
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, sources)
+	return sources
+}
 
 // helpTree is the command tree as `quarry <path> --help` prints it.
 func helpTree(_ *testing.T) helpNode { return helpNode{} }
