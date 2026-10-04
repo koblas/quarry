@@ -16,12 +16,14 @@ import (
 )
 
 const (
-	investmentCodeAddShares = 2
-	investmentCodeBuy       = 3
-	investmentCodeDividend  = 10
-	investmentCodeReinvest  = 15
-	investmentCodeRemove    = 17
-	investmentCodeSplit     = 23
+	investmentCodeAddShares  = 2
+	investmentCodeBuy        = 3
+	investmentCodeDividend   = 10
+	investmentCodeMiscIncome = 12
+	investmentCodeReinvest   = 15
+	investmentCodeRemove     = 17
+	investmentCodeSell       = 19
+	investmentCodeSplit      = 23
 
 	categoryKindIncome = 2
 	categoryKindSystem = 0
@@ -123,4 +125,50 @@ func Test_run_sync_gives_a_reinvested_dividend_no_row_and_no_income(t *testing.T
 		stringMap(t, db, `SELECT id, CAST(amount AS VARCHAR) FROM transactions`))
 	assert.Equal(t, map[string]string{"Dividends": "12.00"},
 		stringMap(t, db, `SELECT category, CAST(SUM(amount) AS VARCHAR) FROM v_cash_flow WHERE flow = 'income' GROUP BY category`))
+}
+
+func Test_run_sync_pairs_an_investment_transfer_entry_and_gives_an_entry_less_investment_one_uncategorized_split(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	b := v9fixture.NewBuilder()
+	inReports := new(int64(1))
+	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true, UsedInReports: inReports})
+	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true, UsedInReports: inReports})
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	later := day.AddDate(0, 0, 20)
+	dividendCode, miscIncomeCode := int64(investmentCodeDividend), int64(investmentCodeMiscIncome)
+
+	dividendPK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: &dividendCode, Amount: "12.00", PostedDate: &day})
+	dividendLeg := b.Entry(v9fixture.EntryRow{Parent: dividendPK, Amount: "12.00", QuickenID: 1001, Transfer: "2002"})
+	chequingTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-12.00", PostedDate: &day})
+	chequingLeg := b.Entry(v9fixture.EntryRow{Parent: chequingTxn, Amount: "-12.00", QuickenID: 2002, Transfer: "1001"})
+	miscPK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: &miscIncomeCode, Amount: "5.00", PostedDate: &later})
+
+	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	splitID := func(pk int64) string { return fmt.Sprintf("split-%d", pk) }
+	acctID := func(pk int64) string { return fmt.Sprintf("acct-%d", pk) }
+	syntheticID := fmt.Sprintf("split-itxn-%d", miscPK)
+	assert.Equal(t, map[string]string{
+		fmt.Sprintf("xfer-%d", dividendLeg): splitID(dividendLeg) + "|" + splitID(chequingLeg),
+	}, stringMap(t, db, "SELECT id, from_split_id || '|' || to_split_id FROM transfers"), "one paired transfer between the dividend entry and the chequing entry")
+	assert.Equal(t, map[string]string{
+		splitID(dividendLeg): acctID(chequingPK),
+		splitID(chequingLeg): acctID(brokeragePK),
+		syntheticID:          "NULL",
+	}, stringMap(t, db, "SELECT id, COALESCE(transfer_account_id, 'NULL') FROM splits"))
+	assert.Equal(t, map[string]string{syntheticID: "income|5.00|NULL"},
+		stringMap(t, db, "SELECT split_id, flow || '|' || CAST(amount AS VARCHAR) || '|' || COALESCE(category_id, 'NULL') FROM v_cash_flow"),
+		"only the entry-less row's split is cash flow; the transfer pair is not")
+	assert.Equal(t, []string{"uncategorized"}, storeTextRows(t, home, "SELECT type FROM findings"))
+	assert.Equal(t, []string{syntheticID}, storeTextRows(t, home,
+		"SELECT split_id FROM finding_items WHERE finding_id IN (SELECT id FROM findings WHERE type = 'uncategorized')"))
 }
