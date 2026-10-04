@@ -88,6 +88,7 @@ func Test_parsePrice_refuses_a_price_that_is_not_a_number(t *testing.T) {
 		{name: "an exponent with only a sign", typ: "real", text: "1e-"},
 		{name: "a doubled sign", typ: "real", text: "--1"},
 		{name: "infinity stored as an integer", typ: "integer", text: "Inf"},
+		{name: "an exponent beyond big.Rat's range", typ: "real", text: "1e1000001"},
 	}
 
 	for _, c := range cases {

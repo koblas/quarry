@@ -32,9 +32,8 @@ WHERE Z_ENT = ? AND COALESCE(ZDELETIONCOUNT, 0) = 0
 ORDER BY Z_PK
 `
 
-// mapSecurities reads every non-deleted security of securityEnt as recorded; a NULL or ""
-// ticker is stored NULL. The second return value is the same securities by source id, for
-// mapPrices. When hasEntity is false the snapshot has no securities and nothing is read.
+// mapSecurities reads the non-deleted securities of securityEnt, and the same by source id.
+// A NULL or "" ticker is stored NULL; with no entity in the snapshot nothing is read.
 func mapSecurities(ctx context.Context, src Source, securityEnt int64, hasEntity bool) ([]store.Security, map[int64]store.Security, error) {
 	if !hasEntity {
 		return nil, nil, nil
@@ -71,10 +70,8 @@ type priceKey struct {
 	date     time.Time
 }
 
-// mapPrices reads the quotes of the imported securities and keeps the highest Z_PK of each
-// (security, UTC day). Deleted quotes and quotes with no date or price never reach the dedupe;
-// every other quote is parsed, so an unreadable price is refused even when a later quote
-// supersedes it, and is added to off. When hasEntity is false nothing is read.
+// mapPrices keeps the highest-Z_PK quote of each (security, UTC day) of the imported securities.
+// An unreadable price is added to off even when a later quote supersedes it.
 func mapPrices(
 	ctx context.Context, src Source, quoteEnt int64, hasEntity bool, securities map[int64]store.Security, off *offenders,
 ) ([]store.Price, error) {

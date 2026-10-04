@@ -136,6 +136,18 @@ func Test_import_leaves_out_a_quote_with_no_security(t *testing.T) {
 	assert.Empty(t, fake.Rows.Prices)
 }
 
+func Test_import_leaves_out_a_quote_row_of_another_entity(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acmePK := newAcme(b)
+	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay1, ClosingPrice: "20"})
+	b.SecurityQuote(v9fixture.SecurityQuoteRow{Entity: 999, Security: acmePK, QuoteDate: &priceDay2, ClosingPrice: "10"})
+
+	fake, _ := importSecurities(t, b)
+
+	assert.Equal(t, []string{priceLine(acmePK, priceDay1, 20_000_000)}, priceLines(fake))
+}
+
 func Test_import_leaves_out_the_quotes_of_a_deleted_security_even_when_unreadable(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()

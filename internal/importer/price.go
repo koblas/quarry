@@ -11,9 +11,8 @@ var priceUnscaledBound = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 // priceScale is the factor from a price to its millionths, the DECIMAL(18,6) unscaled value.
 var priceScale = big.NewRat(1_000_000, 1)
 
-// parsePrice returns the millionths of one non-NULL price column from its typeof() and text. It
-// rounds half to even on the exact decimal text and refuses a value whose rounded magnitude
-// reaches the DECIMAL(18,6) bound with moneyTooLarge; text or blob is moneyNotANumber.
+// parsePrice returns the millionths of a price column from its typeof() and text, rounded half
+// to even; a value reaching the DECIMAL(18,6) bound is moneyTooLarge, non-numeric moneyNotANumber.
 func parsePrice(typ, text string) (int64, moneyFault) {
 	if typ != "integer" && typ != "real" {
 		return 0, moneyNotANumber
