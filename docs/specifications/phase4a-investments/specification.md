@@ -147,6 +147,8 @@ Shares    DIFFER for 1 of 145 holdings
 | Shares not a number (text/blob) | `an investment transaction on <date> in "<account>" has a share count that is not a number` |
 | Shares out of DECIMAL(18,6) range | `an investment transaction on <date> in "<account>" has <v> shares, which is too large for quarry's share counts` |
 | Commission not a number / too large / > 2 decimals after P1-7 snap | `… has a commission that is not a number` / `… has a commission of <v>, which is too large for quarry's amounts` / `… has a commission of <v>, which has more than 2 decimal places` (prefix `an investment transaction on <date> in "<account>"`) |
+| Lot `ZLATESTUNITS` NULL / not a number / > 6 decimals / too large, on a counting lot (not deleted, non-deleted position, imported account) (ruled 2026-10-04, SCENARIO-04) | `a lot of "<security name>" in "<account>" has no share count` / `… has a share count that is not a number` / `… has <v> shares, which has more than 6 decimal places` / `… has <v> shares, which is too large for quarry's share counts` (NULL never counts as 0) |
+| Lot entity missing while investment transactions import (ruled 2026-10-04, SCENARIO-04) | `the snapshot has investment transactions but no Quicken lots to check their share counts against` |
 | NULL `ZAMOUNT` (ruled 2026-10-03, SCENARIO-02) | `an investment transaction on <date> in "<account>" has no amount` (refuse; share-only actions store 0, not NULL) |
 | Amount, same three cases | as commission with "an amount" in place of "a commission" (existing cash copy with "investment " added) |
 | Price not a number / too large | `a price of "<security name>" on <date> is not a number` / `a price of "<security name>" on <date> is <v>, which is too large for quarry's prices` (more than 6 decimals is rounded, never refused) |
@@ -165,7 +167,7 @@ Shares    DIFFER for 1 of 145 holdings
 | Unmapped or NULL action code | S4, exit 1 |
 | Quote with NULL date | Not stored, not counted, silent |
 | Positions and lots in skipped or deleted accounts | Excluded silently (P1-5d); no gate row |
-| Security, SecurityQuote, Position or Lot entity missing from Z_PRIMARYKEY | Optional (as `investmentEntity` today): no investment data — `Shares    no holdings to check`, zero Rows counts; schema drift still caught by M1/M1b |
+| Security, SecurityQuote, Position or Lot entity missing from Z_PRIMARYKEY | Optional when no investment transactions import: no investment data — `Shares    no holdings to check`, zero Rows counts. Lot missing while investment transactions import → S4 (S.5). Missing security/position under transactions → their existing reasons. `no holdings to check` only when there are no imported investment transactions and no counting lots. Schema drift still caught by M1/M1b |
 | Commission NULL, stored 0, or snapping to 0.00 | Stored NULL |
 | Share residue within tolerance | Snapped silently; no field |
 | Shares beyond scale | S4, exit 1 |
