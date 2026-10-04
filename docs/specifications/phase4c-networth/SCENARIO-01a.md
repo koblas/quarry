@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01a
-status: open
+status: done
 ---
 
 # SCENARIO-01a: Investment cash joins transactions
@@ -26,10 +26,10 @@ Size: OWNS A RUN — 4 batches, 1 feature package (importer) + store adapter col
 - [x] Step 6: store + cmd + copy — narrow loop here is `go test ./cmd/quarry/` unfiltered (Findings lines shift in sync blocks a `-run` filter misses). `duckstore.go:24-25` `FormatVersion = 8`; `duckstore_test.go:166-189` sibling `Test_replace_stores_the_investment_transaction_id` (set vs NULL). cmd re-pins: `run_transfers_test.go:146-180` delete (coverage moved to Step 1); `run_investments_test.go:177-234` re-point `syncThenReport` at share-only and zero-amount actions (premise "investments leave spend unchanged" now false for Groceries-categorized cash), `:356`; `run_status_shares_test.go:26`; `run_shared_documents_test.go:132` literal 7→8; whatever else the package run reports. Copy (*Changes to existing surfaces*, verbatim): `internal/report/sql_conventions.go:19-21` investment sentence; hand copies `internal/cli/sql_test.go:213`, `cmd/quarry/run_shared_documents_test.go:354`; regenerate `plugin/skills/quarry/references/schema.md` with `go test ./cmd/quarry -run Test_skill_schema_reference_matches_the_committed_file -update`; `docs/initial-prd.md:125` drop "(from Phase 4c)"
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `InvestmentTransactionID`, the status helper, the changed `mapInvestmentTransactions`/`mapSplits` contracts
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `InvestmentTransactionID`, the status helper, the changed `mapInvestmentTransactions`/`mapSplits` contracts
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase4c-networth` → tick SCENARIO-01a and SCENARIO-02 ("delivered by SCENARIO-01a") with their acceptance tests; write `STATE.md` (first one for this feature)
+- [x] Step 8: full verification + `spec-check.py phase4c-networth` → tick SCENARIO-01a and SCENARIO-02 ("delivered by SCENARIO-01a") with their acceptance tests; write `STATE.md` (first one for this feature)
 
 ## Handoff
 
@@ -54,8 +54,6 @@ Size: OWNS A RUN — 4 batches, 1 feature package (importer) + store adapter col
 
 ## Phase report
 
-**Run B2 (step 6) — cmd green, committed.** `go test -count=1 ./cmd/quarry/` rc=0 (both acceptance tests green); `go test ./...` green after the `sql_conventions_test.go` fix; `golangci-lint run ./...` 0 issues (V still owns the final sweep and full covered run).
-- `duckstore.go` `FormatVersion = 8`; `duckstore_test.go` `Test_replace_stores_the_investment_transaction_id_of_a_cash_row_and_null_for_a_register_row` (green on arrival: run A's stub already wrote the column).
-- Copy verbatim from spec: `sql_conventions.go` investment sentence (ruled string ends "...security and shares:" and the old "Their amount is..." follows it, capital T after the colon, unreflowed; product-vision's final pass may want a lower-case or a full stop); hand copies `cli/sql_test.go`, `run_shared_documents_test.go` (also `format_version` 7->8 at :132); `schema.md` regenerated with `-update`; `docs/initial-prd.md` "(from Phase 4c)" dropped. `sql_conventions_test.go:29` phrase "not in transactions" -> "also has a row in transactions". Not done here (other scenarios own them): `v_balances_daily`/`v_net_worth` sentences, cashflow/spend/findings/holdings Long, SKILL.md, PRD L169.
-- cmd re-pins: `run_holding_shares_test.go:56` 7->8; `run_import_runs_test.go:65` transactions/splits 2->3; `run_investments_test.go` named-actions test now asserts `transactions` = 2 register + 10 non-zero cash rows and drops its v_spending/v_cash_flow asserts (uncategorised cash rows now flow there; categorised case is the acceptance test), `syncThenReport` re-pointed at add_shares/remove_shares zero-amount rows and the test renamed `..._unchanged_by_investment_transactions_that_move_no_cash`, holdings Rows line 1->4 transactions/splits; `run_status_shares_test.go:26` same; `run_plugin_notices_test.go` PRD pin (drop "(from Phase 4c)", subtest renamed); `run_transfers_test.go` `Test_run_keeps_investment_transactions_out_of_the_cash_transactions_table` deleted; `run_shared_documents_test.go:132` 7->8. Lint fix in `run_investment_cash_test.go:85` (strconv).
-- V: run full covered suite + `uncovered-diff.py`, doc comments (`InvestmentTransactionID` has one), tick SCENARIO-01a/02, STATE.md.
+**Run V (steps 7-8) — verified, committed.** `go build ./...` ok; `golangci-lint run ./...` 0 issues; covered full suite `go test -count=1 -coverpkg=./... ./...` rc=0; `uncovered-diff.py --profile ... da6065f`: 0 uncovered added lines; `go test -race` on importer, store, duckstore, report, cli, cmd/quarry green; `spec-check.py phase4c-networth` OK.
+- test-stats (--base da6065f --changed): cmd/quarry 724 (+1), internal/cli 479 (+0), internal/importer 254 (+10), internal/report 386 (+0), internal/store/duckstore 616 (+1); TOTAL 2459 (+12), tempdir 863 (+3), disk 777 (+3).
+- specification.md: SCENARIO-01a and SCENARIO-02 ticked (02 delivered by 01a). STATE.md written. Nothing left for this scenario.

@@ -456,9 +456,9 @@ Architect sizing pass, 2026-10-04. The S01 and S14 splits were approved by the u
 
 ## BDD Acceptance Progress
 
-- [ ] SCENARIO-01a: Investment cash joins transactions
+- [x] SCENARIO-01a: Investment cash joins transactions — `cmd/quarry/run_investment_cash_test.go` `Test_run_sync_gives_each_investment_transaction_that_moves_cash_a_row_in_transactions`
 - [ ] SCENARIO-01b: Investment cash rows pair transfers and keep entry-less transactions
-- [ ] SCENARIO-02: Reinvested dividend moves no cash
+- [x] SCENARIO-02: Reinvested dividend moves no cash — delivered by SCENARIO-01a — `cmd/quarry/run_investment_cash_test.go` `Test_run_sync_gives_a_reinvested_dividend_no_row_and_no_income`
 - [ ] SCENARIO-05: Findings ignore investment cash rows
 - [ ] SCENARIO-03: Investment income counts in cash flow
 - [ ] SCENARIO-04: Margin interest counts as spending
