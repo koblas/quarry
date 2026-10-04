@@ -194,6 +194,25 @@ type Holding struct {
 	USDCAD                     money.Rate
 }
 
+// NetWorthParams selects what NetWorth reads: the net worth on each of Dates, calendar days held as UTC midnight.
+type NetWorthParams struct {
+	Dates []time.Time
+}
+
+// NetWorth is the v_net_worth rows on the days asked for, in date, type, currency order.
+type NetWorth struct {
+	Rows []NetWorthRow
+}
+
+// NetWorthRow is one row of v_net_worth: the balance of the counted accounts of one type and currency on one
+// day, in cents, which can pass 64 bits. BalanceCAD and BalanceUSD are nil when no rate converts the balance.
+type NetWorthRow struct {
+	Date                            time.Time
+	Type, Currency                  string
+	Accounts                        int64
+	Balance, BalanceCAD, BalanceUSD *big.Int
+}
+
 // The investment_transactions.action values.
 const (
 	ActionAddShares        = "add_shares"

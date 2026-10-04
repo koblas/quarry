@@ -24,8 +24,8 @@ Contract: `quarry networth` → stdout gets caption `Net worth on <today>, amoun
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_networth_test.go` — both acceptance tests through `runWith(..., []string{"networth"[, "--currency","native"]}, spendEnvAt(..., holdingsClock()))`. Fixture via cmd store helpers: chequing CAD and USD, credit_card CAD (negative), brokerage USD with a priced holding, plus a closed account and a not-in-reports one. Text asserted byte-exact.
-- [ ] Step 2: signature-only stubs. `store.NetWorthParams`/`store.NetWorth`/`store.NetWorthRow` after `internal/store/store.go:161-175`. `report.Store.NetWorth` at `internal/report/store.go:26-27`; `(*duckstore.Store).NetWorth` in new `duckstore/networth.go`; `NetWorth` on `report/fakes_test.go:11-38` `fakeStore` and on `cli/fakes_test.go:17-35` `fakeReportStore` (it embeds a nil interface, so it would panic). `(*report.Server).NetWorth`; `newNetWorthCommand` registered at `internal/cli/root.go:32`. Red at the text assertion.
+- [x] Step 1: `cmd/quarry/run_networth_test.go` — both acceptance tests through `runWith(..., []string{"networth"[, "--currency","native"]}, spendEnvAt(..., holdingsClock()))`. Fixture via cmd store helpers: chequing CAD and USD, credit_card CAD (negative), brokerage USD with a priced holding, plus a closed account and a not-in-reports one. Text asserted byte-exact.
+- [x] Step 2: signature-only stubs. `store.NetWorthParams`/`store.NetWorth`/`store.NetWorthRow` after `internal/store/store.go:161-175`. `report.Store.NetWorth` at `internal/report/store.go:26-27`; `(*duckstore.Store).NetWorth` in new `duckstore/networth.go`; `NetWorth` on `report/fakes_test.go:11-38` `fakeStore` and on `cli/fakes_test.go:17-35` `fakeReportStore` (it embeds a nil interface, so it would panic). `(*report.Server).NetWorth`; `newNetWorthCommand` registered at `internal/cli/root.go:32`. Red at the text assertion.
 
 ### Build
 - [ ] Step 3: `duckstore/networth.go` `(*Store).NetWorth`, twin of `duckstore/holdings.go:13-67`. One open; `v_net_worth WHERE date IN (<params.Dates>)`; `ORDER BY date, type, currency` (alphabetical: account currency is CAD|USD only, `importer/accounts.go:27`); DECIMAL(38,2) → `*big.Int` cents, NULL converted → nil. Tests in `duckstore/net_worth_read_test.go`, rows: every column; NULL `balance_cad` → nil; types given in both orders; two dates read in one call; a date with no rows → empty; a transaction dated after the asked day not in its balance; amount past int64. Fault coverage: add a `NetWorth` row to `duckstore/read_faults_test.go:20-50` `rowReads` (open, query, scan, close).
@@ -71,3 +71,13 @@ Contract: `quarry networth` → stdout gets caption `Net worth on <today>, amoun
 - The help Example names `--as-of`/`--since` before they exist; no test checks it. Do not trim the ruled copy.
 
 ## Phase report
+
+Run A done. Acceptance (red), both tests failing at the text assertion (`expected: "Net worth on 2026-03-12, amounts in CAD\n\nType ..."` / `actual  : ""`).
+
+Files:
+- `cmd/quarry/run_networth_test.go`: both acceptance tests; `seedNetWorthStore` (CAD/USD chequing, CAD credit_card, USD brokerage 900.00 cash + 20.00 holding, closed CAD 25.00, not-in-reports 5.00; USD 1.36 from 03-10; clock `holdingsClock()` 2026-03-12); `netWorthLine`/`netWorthNativeLine` widths 11/8/8/8. Expected numbers are hand-derived (converted total 3,113.70; native CAD 774.50, USD 1,720.00), not yet seen green.
+- `internal/store/store.go`: `NetWorthParams`, `NetWorth{Rows}`, `NetWorthRow{Date, Type, Currency, Accounts int64, Balance, BalanceCAD, BalanceUSD *big.Int}` (types complete, not stubs).
+- `internal/report/store.go`: `Store.NetWorth`. Stubs: `internal/store/duckstore/networth.go` (returns zero), `internal/report/networth.go` (`NetWorthRequest{AsOf, Currency}`, `NetWorth{Rows, AsOf, Currency}`, `(*Server).NetWorth` returns zero), `internal/cli/networth.go` (`newNetWorthCommand`: Use, `--currency` bound, RunE returns nil; no Short/Long/Example), registered in `internal/cli/root.go`.
+- Fakes: `NetWorth` on `report/fakes_test.go` `fakeStore` and `cli/fakes_test.go` `fakeReportStore`, returning zero and `f.err`. `go vet ./...` clean.
+
+For B1: `report.NetWorth` shape (Dates/Totals/Converted) replaces the placeholder `Rows`; stub `newNetWorthCommand` has unused params. Root-help and all-commands pins are red by design until Step 7.

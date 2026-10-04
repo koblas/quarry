@@ -25,6 +25,8 @@ type Store interface {
 	Search(ctx context.Context, params store.SearchParams) (store.Search, error)
 	// Holdings lists what each account holds of each security on params.AsOf, with its value.
 	Holdings(ctx context.Context, params store.HoldingsParams) (store.Holdings, error)
+	// NetWorth lists the balance of each account type and currency on each of params.Dates.
+	NetWorth(ctx context.Context, params store.NetWorthParams) (store.NetWorth, error)
 	// Findings lists every finding in the store with its items.
 	Findings(ctx context.Context) (store.FindingList, error)
 	// Schema describes what the store holds: its tables and views, accounts, categories and transaction dates.

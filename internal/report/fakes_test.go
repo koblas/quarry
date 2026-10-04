@@ -115,3 +115,7 @@ func (f fakeStore) Query(_ context.Context, _ string, maxRows int) (store.QueryR
 	}
 	return store.QueryResult{Rows: rows}, f.err
 }
+
+func (f fakeStore) NetWorth(context.Context, store.NetWorthParams) (store.NetWorth, error) {
+	return store.NetWorth{}, f.err
+}

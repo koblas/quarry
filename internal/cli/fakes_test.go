@@ -98,3 +98,7 @@ func span(t *testing.T, first, last string) store.TransactionRange {
 	require.NoError(t, err)
 	return store.TransactionRange{First: from, Last: to}
 }
+
+func (f fakeReportStore) NetWorth(context.Context, store.NetWorthParams) (store.NetWorth, error) {
+	return store.NetWorth{}, f.err
+}
