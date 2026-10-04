@@ -395,6 +395,8 @@ In a Claude Code session with the plugin loaded (`claude --plugin-dir ./plugin`,
 
 Record the results in this section, with the date.
 
+**Result (2026-10-03, by the user):** passed. A Claude Code session with the plugin loaded against the user's real store answered the §S.10 questions to match quarry's output, opened with the "Data as of" line, declined net worth, wrote nothing on a recategorize request, and did not follow payee text. Both `claude plugin validate --strict` runs exit 0 (run V of SCENARIO-03). The Phase 3 gate in `docs/initial-prd.md` ("Claude answers the use-case questions correctly") is met.
+
 ---
 
 ## Scenarios (Gherkin)

@@ -12,4 +12,6 @@ Review gate not free, and largest avoidable cost is reviewers re-reading whole p
 
 **Say what you could not check.** Path you had no way to exercise — environment you cannot change, host you cannot detect — reported as unchecked, not silently passed, not guessed at. Unchecked = fact caller can act on; guess = one they cannot.
 
+**Copy that needs a ruling is MAJOR.** Finding that ruled copy is false (constructible failure: user is told something untrue — not a wording preference), or that an outcome has no ruled copy, is at least MAJOR — never NIT "needs product-vision ruling". Orchestrator routes it to scoped copy ruling in same round (CLAUDE.md → *Rule copy when new failure mode appears*); NIT label parks it until final pass, where it returns at ten times cost.
+
 **Never mutate worktree.** Reviewers run parallel; mutation in shared tree poisons every concurrent run. Mutate `git archive <sha>` export under `$TMPDIR` (`proof.md`).
