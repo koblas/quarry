@@ -81,7 +81,7 @@ func Test_reference_files_state_their_job(t *testing.T) {
 	}
 }
 
-func Test_phase_4_and_quicken_name_scan_flags_crafted_text(t *testing.T) {
+func Test_references_name_scan_flags_crafted_phase_4_and_quicken_text(t *testing.T) {
 	cases := []struct{ name, text, want string }{
 		{"a Phase 4 view", "Read `v_net_worth` for the total.", "v_net_worth"},
 		{"another Phase 4 view", "SELECT * FROM v_holdings", "v_holdings"},

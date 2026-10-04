@@ -7,7 +7,7 @@ Use this to find a transaction by payee, memo, amount, date, account or category
 - `quarry search costco --json` finds transactions whose payee name, transaction memo or split memo contains the text, ignoring letter case. Every character is literal, so `%` and `_` match only themselves.
 - Leave the text out to search by the flags alone: `quarry search --category Food --since 2026-09 --json`. With neither, quarry lists the newest transactions.
 - Results are newest first.
-- Text that starts with `-` goes after `--`: `quarry search -- "-50% off" --json`.
+- Text that starts with `-` goes after `--`: `quarry search --json -- "-50% off"`; flags go before the `--`, because everything after it is text.
 - `quarry search --account Chequing --json` searches only the account with this name or id. Repeat `--account` for more.
 - `quarry search --category Food:Groceries --json` matches a split in that category or in any category under it, by full path in any letter case.
 - `--since` and `--until` take `YYYY`, `YYYY-MM` or `YYYY-MM-DD`, and both ends are included. Without them every date is searched, future-dated transactions included.
