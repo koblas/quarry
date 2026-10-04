@@ -395,7 +395,7 @@ Architect sizing pass 2026-10-04 (one pass over all 16; folds change no scenario
 
 **H-2 precondition (measured by the architect, synthetic worst case):** 723,260 view rows (145 holdings × 40 spans, 2013→today, 520k prices, 3.6k rates): full `count(*)` 157 ms; `WHERE date = ?` 26–28 ms warm with the filter pushed below both ASOF joins. No fallback planned.
 
-**Confirmed by product-vision (2026-10-04, R1–R3 ruling):** span boundaries and zero test use the half-even millionths count; `to_date` inclusive (day before the change); gate count = shares of the `to_date IS NULL` span, else 0; "no exchange rates" warning only when a row shows `no rate`; `--account` naming only non-investment accounts prints both warnings. The view's `today` is DuckDB `current_date` (test clocks must not be later than the real date).
+**Confirmed by product-vision (2026-10-04, R1–R3 ruling):** span boundaries and zero test use the half-even millionths count; `to_date` inclusive (day before the change); the 4a gate stays an exact compare of the walk's final `big.Rat` count (unchanged; orchestrator ruling 2026-10-04) and the same walk emits the spans, so the open span's shares = that count rounded half-even to millionths, no open span ⇔ it rounds to 0; "no exchange rates" warning only when a row shows `no rate`; `--account` naming only non-investment accounts prints both warnings. The view's `today` is DuckDB `current_date` (test clocks must not be later than the real date).
 
 ## BDD Acceptance Progress
 
