@@ -33,7 +33,7 @@ Size: OWNS A RUN, 3 batches in 1 package (`cmd/quarry` tests) plus 5 static `plu
     - search: `quarry search`, `transfer`, `excluded`, `native`, `--limit`
     - findings: every type that `quarry findings --help` lists under "quarry looks for:" (parsed from the help, never typed out), `` in Quicken, then `quarry sync` ``, `findings.ignore`, `quarry findings --csv`, and `only when the user asks`
   - `Test_references_name_no_phase_4_view_or_quicken_table` covers references/**, SKILL.md and the README section. It reuses `zTableName` (`run_skill_recipes_test.go:495-501`). Its crafted rows each must be flagged: `v_net_worth` and `ZTRANSACTION`.
-- [ ] Step 4: `run_skill_drift_test.go`, `helpTree` + `commandMismatches`.
+- [x] Step 4: `run_skill_drift_test.go`, `helpTree` + `commandMismatches`.
   - **Help tree:** walk `run(<path> --help)` (`main_test.go:34-36`) down through each node's `Available Commands:`. Each node's flags are its `Flags:` ∪ `Global Flags:` long names.
   - `Test_drift_help_parser_reads_only_flag_sections`: crafted help whose Long text mentions `--limit` must not yield `--limit`.
   - `Test_drift_check_flags_crafted_command_text` runs against the real tree. One row per case (flagged unless marked otherwise):
@@ -51,7 +51,7 @@ Size: OWNS A RUN, 3 batches in 1 package (`cmd/quarry` tests) plus 5 static `plu
     - `colon_is_not_a_command`: `quarry: no store …; run quarry sync to build it` resolves
     - `fence_line`: a fence line is treated like a span
     - `standalone_unknown_flag`: `--bogus` on a line with no command
-- [ ] Step 5: new file `cmd/quarry/run_skill_drift_names_test.go` with `toolMismatches`, `relationMismatches` and `linkMismatches`, plus `Test_skill_links_and_reference_paths_resolve`.
+- [x] Step 5: new file `cmd/quarry/run_skill_drift_names_test.go` with `toolMismatches`, `relationMismatches` and `linkMismatches`, plus `Test_skill_links_and_reference_paths_resolve`.
   - **Tools:** §9 spans come from `splitSkill` (`run_skill_text_test.go:90-123`). The tool list comes from `startMCP`+`ListTools` (`run_mcp_test.go:26-37,69-90`).
   - **Relations:** checked against `storeRelations` (`run_skill_recipes_test.go:555-567`).
   - **Links:** `skillLinkTarget` (`run_skill_text_test.go:43`).
@@ -103,21 +103,29 @@ Size: OWNS A RUN, 3 batches in 1 package (`cmd/quarry` tests) plus 5 static `plu
 
 ## Phase report
 
-Runs A (steps 1-2) and B1 (step 3) done. B2 (steps 4-5) next.
-- **Acceptance** is still red at the three positive `Contains` assertions (`snapshots prune`, `sync_status`, `v_spending`), because `commandMismatches`, `toolMismatches` and `relationMismatches` are still stubs. `helpTree` is a stub too.
-- **Types:** `driftSource{name,text}`, `driftCheck{resolved,mismatches []string}`, `helpNode{flags []string; children map[string]helpNode}`. A check returns what it resolved (the positive is asserted on `resolved`) and its `mismatches`. B2 may change them, as long as the test keeps its three positives and zero-mismatch asserts.
-- **B1 built `skillDriftSources` for real** (it was a stub). It is SKILL.md, `readmeClaudeCodeText(t)` (README between the Claude Code and Credits headings), and `referenceSources(t)` (every file under `references/`, `.md` and `.sql`, named by repo-relative path). B2 reuses it unchanged. `referencesDir` is a const in `run_skill_references_test.go`.
-- **Reference files** are written to `plugin/skills/quarry/references/{spending,cash-flow,recurring-and-anomalies,search,findings}.md`. Layout: one paragraph, bullet or table row per physical line. Recipe paths are backticked `references/sql/<name>.sql`. Every `quarry <cmd> --flag` span was checked against the real `--help` tree with a throwaway script: 0 mismatches. Prose is taken from the `--help` text and the `document` package's field comments.
-- **`cmd/quarry/run_skill_references_test.go`** (new): `Test_reference_files_state_their_job` (findings types parsed from `findings --help` via `findingTypesInHelp`), `Test_references_name_scan_flags_crafted_phase_4_and_quicken_text` (controls `v_net_worth`, `v_holdings`, `ZTRANSACTION`), and `Test_references_name_no_phase_4_view_or_quicken_table` (every source from `skillDriftSources`, one subtest each). All three were green on arrival, because the prose was written first (code-first cadence).
-- **Hand mutations** (reverted): renaming `unused-category` and rewording `only when the user asks` in findings.md reddened `Test_reference_files_state_their_job/findings.md`. Appending `v_net_worth` to spending.md reddened `Test_references_name_no_phase_4_view_or_quicken_table/<spending.md>`.
-- **Lint:** 2 `unused` findings remain, the `helpNode` fields `flags` and `children`. B2's `helpTree` clears them. The `name`/`text` fields are now read.
-- **Left to B2 (JSON-field ruling):** the declared-field check. Declare the fields each file's prose backticks, paired with the command whose `--json` output carries them, and run the argv that produces each key: `spend --by month` for `partial`, `spend --by tag` for `tag`, `spend --by payee` for `payee`. A declared field is never dropped because one argv lacks it. Candidates by file:
-  - recurring-and-anomalies.md: `recurring` = `new`, `state`, `first_charge`, `last_charge`, `charge_count`, `price_changes`, `per_year`, `cadence`, `amount`, `first_amount`; `anomalies` = `usual`, `times`, `not_judged`, `checked`, `baseline`, `earlier`.
-  - search.md: `search` = `transfer`, `excluded`, `matched`, `limit`, `truncated`, `currency`, `amount`.
-  - spending.md: `spend` = `category`, `payee`, `tag`, `partial`, `totals`, `account_filter`, `since`, `until`, `currency`. Its recipe section's `period`, `currency` and `spent` are SQL output columns of `spending-trend.sql`, not `spend` JSON; pair the colliding names (`currency`, `spent`) with the right output.
-  - cash-flow.md: `cashflow` = `savings_rate_pct`, `net`, `income`, `spent`, `partial`, `periods`, `totals`. Its recipe columns `category`, `currency`, `income` belong to `income-by-category.sql`, not `cashflow`.
-  - findings.md: `findings` = `id`, `type`, `status`, `fix`, `items`, `counts` (`open`, `ignored`, `fixed` are keys inside `counts`).
-- **Facts verified against code, not help:** `findings` `counts` is by status (`open`, `ignored`, `fixed`, `new`, `newly_fixed`), not by type. `quarry search` flags must precede `--`: `search -- "-50% off" --json` exits 2 with "search takes one text".
+Runs A (steps 1-2), B1 (step 3) and B2 (steps 4-5) done, committed as d6d9549. V (steps 6-7) next.
+- **Acceptance is green** (`Test_every_quarry_name_the_skill_uses_exists`, all three subtests). Over the real sources the scan reads 642 code units and resolves commands `accounts anomalies cashflow findings recurring search snapshots prune spend sql status sync` and views `v_account_balances v_cash_flow v_spending`, with 0 mismatches.
+- **Lint is `0 issues`**, `go build ./...` clean. The sweep (step 6) is mostly done: doc comments are on every helper, trimmed to the 1-2 line budget. V only re-runs it.
+- **Signatures changed from the A stubs:**
+  - `toolMismatches(t, sources, tools, root helpNode)`. It needs `t` for `splitSkill` and the root for the `mcpNotTools` command check.
+  - `linkMismatches(sources, exists func(rel string) bool) driftCheck` returns what it resolved as well, so the real test asserts two positives.
+  - `parseHelp(help) ([]string, []string)` is split out of `helpNodeAt`, so the parser has its own crafted-text test.
+- **Where things live:**
+  - `run_skill_drift_test.go`: `parseHelp`, `helpTree`/`helpNodeAt`, `codeUnits` (spans and fenced lines), `commandScan`, `commandMismatches`, plus `Test_drift_help_parser_reads_only_flag_sections`, `Test_drift_check_flags_crafted_command_text` (17 rows) and `Test_drift_check_resolves_crafted_command_text` (positive controls).
+  - `run_skill_drift_names_test.go`: `toolMismatches`, `relationMismatches` (`relationLists`, `sqlOf`), `linkMismatches`, `Test_skill_links_and_reference_paths_resolve`, `Test_drift_check_flags_crafted_name_text` (17 rows).
+  - `run_skill_json_fields_test.go` (new, not in the plan's file list): `declaredFields` (file, argv or recipe, names), `Test_every_field_the_reference_prose_declares_is_in_the_output_and_the_prose`, and `Test_declared_field_check_flags_a_name_the_output_lacks` (the absent-field control, for `absentNames` and `unmentionedNames`).
+- **JSON fields:** the declared lists were green on arrival, because B1 wrote the prose from the field comments, and the argv pairing is as the B1 report ruled (`spend --by month` for `partial`, `--by payee` for `payee`, `--by tag` for `tag`; the recipe columns `period`/`currency`/`spent` and `category`/`currency`/`income` are checked against `runShippedRecipe` columns). Search is `search "Savings Sweep" --json`, because `transfer` is only present there.
+- **Mutations** (each reverted, `diff` identical; all in `run_skill_drift_test.go`):
+  1. Flags checked against any command (`checkFlag` to `checkAnyFlag` for an own occurrence). RED: `Test_drift_check_flags_crafted_command_text/flag_on_another_command` (expected `unknown flag --csv for "quarry search"`, actual nil), and also `flag_only_in_the_commands_own_prose`, `unknown_flag`, `quarry_line_with_the_same_flag`.
+  2. Any word accepted after a parent (the unknown-child `report` and `return` replaced by `break`). RED: `.../unknown_subcommand` (expected `unknown command "quarry snapshots bogus"`, actual nil), and `unknown_root_command`, `fence_line`.
+  3. Whole help text scanned (`parseHelp` flags re-collected over the full text). RED: `.../flag_only_in_the_commands_own_prose` (expected `unknown flag --from for "quarry snapshots"`, actual nil) and `Test_drift_help_parser_reads_only_flag_sections`.
+- **Mechanics worth knowing:**
+  - A flag binds to the nearest preceding `quarry` token in its unit; a unit that opens with a flag binds to the nearest `quarry` earlier on the line, else to any command. A flag after an unresolved command is skipped, since the command is already reported.
+  - Command words are stripped of trailing `.,;` but the `quarry` token must match exactly.
+  - `.sql` sources are skipped by the command scan. A relation FROM/JOIN list ends at the next clause keyword or `)`/`;`. Go regexp has no lookahead, so `relationLists` finds each keyword with `FindAllStringIndex` and cuts the tail itself.
+  - SQL fences are those opened with `sql` or holding a `SELECT`.
+  - Links are resolved relative to `path.Dir(source.name)`, so the README section (named `README.md Claude Code section`) resolves from the repo root.
+- **Left to V:** step 6's re-run, the full verification (covered full suite, `uncovered-diff.py`, `test-stats.py --base e19ff35`, `-race` on `cmd/quarry`), both `claude plugin validate --strict` runs, `spec-check.py phase3d-skill`, ticking SCENARIO-03 with its acceptance test, STATE.md rewrite, `status: done`. STATE.md `## Open debts` must record the ruled gap: bare table names (a backticked `transactions` outside SQL) in reference prose are unchecked, and bare command words not preceded by `quarry` are unresolved.
 
 ## Orchestrator rulings (2026-10-03, before run A)
 - **Table names in reference prose** (outside SQL fences and `.sql` files) stay unchecked. This is accepted, and recorded in STATE.md `## Open debts` by run V. The `v_*` names and the SQL relations are checked, and `schema.md` is generated.
