@@ -331,4 +331,4 @@ Architect sizing pass 2026-10-03 (one pass over all 12; folds change no scenario
 
 SCENARIO-12 (phase2f precedent): run by the orchestrator after SCENARIO-11, before the gate, with a scratch HOME holding a copy of snapshot `20260930T072052Z` (the real path is sandbox read-denied; user grants access). Command, date and the observed Rows/Shares lines are recorded in `REFERENCE-CHECK.md`. A rule gap it finds becomes a new scenario appended above.
 
-- [ ] SCENARIO-12: Reference check against the real Quicken file
+- [x] SCENARIO-12: Reference check against the real Quicken file — manual run recorded in `REFERENCE-CHECK.md` (Run 2, 2026-10-04): 145 holdings match, exit 0
