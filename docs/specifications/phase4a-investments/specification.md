@@ -147,6 +147,7 @@ Shares    DIFFER for 1 of 145 holdings
 | Shares not a number (text/blob) | `an investment transaction on <date> in "<account>" has a share count that is not a number` |
 | Shares out of DECIMAL(18,6) range | `an investment transaction on <date> in "<account>" has <v> shares, which is too large for quarry's share counts` |
 | Commission not a number / too large / > 2 decimals after P1-7 snap | `… has a commission that is not a number` / `… has a commission of <v>, which is too large for quarry's amounts` / `… has a commission of <v>, which has more than 2 decimal places` (prefix `an investment transaction on <date> in "<account>"`) |
+| NULL `ZAMOUNT` (ruled 2026-10-03, SCENARIO-02) | `an investment transaction on <date> in "<account>" has no amount` (refuse; share-only actions store 0, not NULL) |
 | Amount, same three cases | as commission with "an amount" in place of "a commission" (existing cash copy with "investment " added) |
 | Price not a number / too large | `a price of "<security name>" on <date> is not a number` / `a price of "<security name>" on <date> is <v>, which is too large for quarry's prices` (more than 6 decimals is rounded, never refused) |
 | Neither posted nor entered date | `an investment transaction in "<account>" (source id <N>) has no date` |
