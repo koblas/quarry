@@ -219,9 +219,12 @@ reports and accounts Quicken leaves out of reports, so their totals match
 quarry spend and quarry cashflow. A transfer leg is any split named in
 transfers.from_split_id or transfers.to_split_id.
 
-Investment transactions are in investment_transactions, not in transactions,
-v_cash_flow or v_spending, so dividends, interest and trades are not counted
-as income or spending there. Their amount is DECIMAL(18,2) in the account's
+Each investment transaction that moves cash also has a row in transactions
+(investment_transaction_id names it; NULL for a register entry), one split per
+Quicken entry, so an account's cash is the sum of its transactions. In
+v_cash_flow dividends, interest and capital-gain distributions are income;
+buys, sells and share moves are neither. investment_transactions holds each
+one's action, security and shares: Their amount is DECIMAL(18,2) in the account's
 own currency, negative when cash leaves the account; commission is
 DECIMAL(18,4) in the account's own currency as Quicken recorded it (some
 brokers charge fractions of a cent), NULL when there is none; shares is

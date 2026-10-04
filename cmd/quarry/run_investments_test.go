@@ -162,18 +162,25 @@ func Test_run_sync_imports_investment_transactions_with_named_actions(t *testing
 		COALESCE(CAST(split_new_shares AS VARCHAR), 'NULL'), COALESCE(CAST(split_old_shares AS VARCHAR), 'NULL'))
 		FROM investment_transactions`))
 
-	expenseID := fmt.Sprintf("txn-%d", expensePK)
-	incomeID := fmt.Sprintf("txn-%d", incomePK)
-	assert.Equal(t, map[string]string{expenseID: "-50.00", incomeID: "100.00"},
-		stringMap(t, db, `SELECT id, CAST(amount AS VARCHAR) FROM transactions`))
-	assert.Equal(t, map[string]string{expenseID: "50.00"},
-		stringMap(t, db, `SELECT transaction_id, CAST(spent AS VARCHAR) FROM v_spending`))
-	assert.Equal(t, map[string]string{expenseID: "-50.00", incomeID: "100.00"},
-		stringMap(t, db, `SELECT transaction_id, CAST(amount AS VARCHAR) FROM v_cash_flow`))
+	cashID := func(pk int64) string { return fmt.Sprintf("txn-%d", pk) }
+	assert.Equal(t, map[string]string{
+		cashID(expensePK):          "-50.00",
+		cashID(incomePK):           "100.00",
+		cashID(buyPK):              "-1000.50",
+		cashID(marginInterestPK):   "-3.25",
+		cashID(miscExpensePK):      "-5.00",
+		cashID(capitalGainLongPK):  "20.00",
+		cashID(capitalGainShortPK): "7.50",
+		cashID(dividendPK):         "12.00",
+		cashID(interestPK):         "1.10",
+		cashID(miscIncomePK):       "2.20",
+		cashID(reinvestPK):         "-6.00",
+		cashID(sellPK):             "400.25",
+	}, stringMap(t, db, `SELECT id, CAST(amount AS VARCHAR) FROM transactions`))
 }
 
-// syncThenReport syncs two groceries rows (plus brokerage rows in the same month when withInvestments), then returns
-// spend and cashflow output in text and JSON, and the investment_transactions row count.
+// syncThenReport syncs two groceries rows (plus brokerage rows that move no cash in the same month when
+// withInvestments), then returns spend and cashflow output in text and JSON, and the investment_transactions row count.
 func syncThenReport(t *testing.T, withInvestments bool) (map[string]string, string) {
 	t.Helper()
 	home := t.TempDir()
@@ -196,7 +203,7 @@ func syncThenReport(t *testing.T, withInvestments bool) (map[string]string, stri
 		for _, investment := range []struct {
 			code   int64
 			amount string
-		}{{3, "-400.00"}, {10, "12.00"}} {
+		}{{2, "0"}, {17, "0"}} {
 			pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: &investment.code, Amount: investment.amount, PostedDate: &marchTenth})
 			b.Entry(v9fixture.EntryRow{Parent: pk, Amount: investment.amount, CategoryTag: groceriesPK})
 		}
@@ -223,7 +230,7 @@ func syncThenReport(t *testing.T, withInvestments bool) (map[string]string, stri
 	return reports, stringMap(t, db, `SELECT 'rows', CAST(count(*) AS VARCHAR) FROM investment_transactions`)["rows"]
 }
 
-func Test_run_spend_and_cashflow_are_unchanged_by_investment_transactions(t *testing.T) {
+func Test_run_spend_and_cashflow_are_unchanged_by_investment_transactions_that_move_no_cash(t *testing.T) {
 	without, withoutRows := syncThenReport(t, false)
 	with, withRows := syncThenReport(t, true)
 
@@ -353,7 +360,7 @@ func Test_run_sync_reports_holdings_that_match_quickens_share_counts(t *testing.
 	require.Equal(t, 0, exitCode)
 	require.Empty(t, stderr.String())
 	assert.Contains(t, stdout.String(),
-		"Rows      1 transaction, 1 split, 0 transfers, 0 payees, 0 categories, 0 tags; 3 investment transactions, 2 securities, 3 prices\n")
+		"Rows      4 transactions, 4 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 3 investment transactions, 2 securities, 3 prices\n")
 	assert.Contains(t, stdout.String(), "Shares    2 holdings match Quicken's share counts\n")
 
 	var jsonOut, jsonErr bytes.Buffer

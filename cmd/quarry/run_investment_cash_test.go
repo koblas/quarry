@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -82,7 +83,7 @@ func Test_run_sync_gives_each_investment_transaction_that_moves_cash_a_row_in_tr
 	}, stringMap(t, db, `SELECT s.id, s.transaction_id || '|' || c.full_path || '|' || CAST(s.amount AS VARCHAR)
 		FROM splits s JOIN categories c ON c.id = s.category_id`))
 	assert.Equal(t, map[string]string{"cash": "-1008.50"},
-		stringMap(t, db, `SELECT 'cash', CAST(SUM(amount) AS VARCHAR) FROM transactions WHERE account_id = 'acct-`+fmt.Sprint(brokeragePK)+`'`))
+		stringMap(t, db, `SELECT 'cash', CAST(SUM(amount) AS VARCHAR) FROM transactions WHERE account_id = 'acct-`+strconv.FormatInt(brokeragePK, 10)+`'`))
 	assert.Equal(t, []string{"8"}, storeTextRows(t, home, "SELECT CAST(format_version AS VARCHAR) FROM store_info"))
 }
 

@@ -152,6 +152,23 @@ func Test_replace_stores_an_investment_transaction_with_every_nullable_column_nu
 		"AND commission IS NULL AND memo IS NULL AND split_new_shares IS NULL AND split_old_shares IS NULL", "1")
 }
 
+func Test_replace_stores_the_investment_transaction_id_of_a_cash_row_and_null_for_a_register_row(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	rows.Transactions = append(rows.Transactions, store.Transaction{
+		ID: "txn-2", SourceID: 2, AccountID: "acct-1", Date: time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC),
+		Amount: 500, Currency: "CAD", Status: "uncleared", InvestmentTransactionID: new("inv-2"),
+	})
+	st := duckstore.New(t.TempDir())
+
+	_, err := st.Replace(t.Context(), rows)
+
+	require.NoError(t, err)
+	db := openReadOnly(t, st.Path())
+	assertScalar(t, db, "SELECT COALESCE(investment_transaction_id, 'NULL') FROM transactions WHERE id = 'txn-1'", "NULL")
+	assertScalar(t, db, "SELECT investment_transaction_id FROM transactions WHERE id = 'txn-2'", "inv-2")
+}
+
 func Test_replace_stores_a_security_with_no_ticker_or_currency_as_null(t *testing.T) {
 	t.Parallel()
 	st := duckstore.New(t.TempDir())

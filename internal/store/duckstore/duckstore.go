@@ -22,7 +22,7 @@ import (
 const FileName = "quarry.duckdb"
 
 // FormatVersion is the store format this build of quarry writes and reads.
-const FormatVersion = 7
+const FormatVersion = 8
 
 // develVersion is the quarry_version recorded when no build version is known.
 const develVersion = "(devel)"

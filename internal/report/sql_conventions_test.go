@@ -26,7 +26,7 @@ func Test_sql_conventions_explain_investment_data(t *testing.T) {
 	collapsed := strings.Join(strings.Fields(report.SQLConventions), " ")
 
 	for _, phrase := range []string{
-		"investment_transactions", "not in transactions", "split_new_shares",
+		"investment_transactions", "also has a row in transactions", "split_new_shares",
 		"holding_shares", "v_holdings", "Neither includes cash in investment accounts",
 	} {
 		assert.Contains(t, collapsed, phrase)

@@ -62,7 +62,7 @@ func Test_run_records_an_import_runs_row_for_the_build(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	assert.Equal(t, map[string]string{"1": manifest.Snapshot.Path + " " + manifest.Snapshot.SHA256 + " " + manifest.Schema.Fingerprint},
 		stringMap(t, db, "SELECT CAST(id AS VARCHAR), snapshot_path || ' ' || snapshot_sha256 || ' ' || schema_fingerprint FROM import_runs"))
-	assert.Equal(t, map[string]string{"1": "2 0 0 0 2 2 0 1"},
+	assert.Equal(t, map[string]string{"1": "2 0 0 0 3 3 0 1"},
 		stringMap(t, db, "SELECT CAST(id AS VARCHAR), concat_ws(' ', accounts_rows, categories_rows, payees_rows, tags_rows, "+
 			"transactions_rows, splits_rows, split_tags_rows, transfers_rows) FROM import_runs"))
 	assert.Equal(t, map[string]string{"1": "1 0 0 1"},
