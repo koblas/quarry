@@ -1,6 +1,6 @@
 # phase4a-investments — current state
 
-Scenarios complete: SCENARIO-01..08 (04 folds 05, 08; 06 folds 07). Last updated by SCENARIO-06.
+Scenarios complete: SCENARIO-01..10 (04 folds 05, 08; 06 folds 07; 09 folds 10). Last updated by SCENARIO-09.
 
 ## Binding decisions
 - Optional entities (`Security`, `SecurityQuote`, `Position`) live in one slice in `internal/importer/entities.go` with generated placeholders; missing → that data is empty, never a refusal. `Lot` (S04) joined the slice, except: Lot missing while investment rows import refuses (spec S.6 ruling). `requireLots` sees mapped rows only, so that refusal outranks row-level ones when at least one investment row maps; when every row refuses, the row-level reason shows. Both pinned (SCENARIO-01, 02, 04)
@@ -21,17 +21,17 @@ Scenarios complete: SCENARIO-01..08 (04 folds 05, 08; 06 folds 07). Last updated
 - Share-gate display (S06, 07): labels are joined in the importer after `CheckShares` (`describeShareMismatches`), never in duckstore, so the walk stays the id-only owner 4b reuses. `ShareMismatch.Difference` = saturating `Quarry − Quicken` on the rounded int64s (printed columns must subtract to the printed difference). Order is fixed in the importer: account name, account source id, security name, security source id (SCENARIO-06)
 - Share formatters: `formatShares` (trimmed, comma-grouped) for text, `document.Shares` (always 6 decimals) for `--json` `store.shares.mismatched`, never nil; 4b reuses both rather than adding a third. Failure block always prints a Shares line (DIFFER or `sharesPhrase`) (SCENARIO-06)
 - Stderr: clauses read balances, splits, shares; share-specific tail (`shareOnlyTail`, "the holding's" at X=1, "those holdings'" at X>1) only when shares is the sole failing check, any cash clause keeps the V1 `fix them in Quicken…` tail; first run keeps "was not changed" (SCENARIO-06, 07)
-- Rows line: cash clause `; ` investment clause (always) then `; N investment transactions not imported` while N > 0 — S09 drops the tail; status Rows/JSON `rows` carry the investment counts via the shared `rowsPhrase`/`NewRows`, but status prints no Shares line until S09 (SCENARIO-04)
+- Rows line: cash clause `; ` investment clause (always); no `not imported` tail. `rowsPhrase(c)` is shared by sync success, sync failure and status; status `rows`/JSON carry the investment counts via `NewRows`. Status `shares` = `{checked}` right after `splits` in `document.Status` (mirrors sync order balances, splits, shares, transfers), text Shares line after Splits via the sync formatter `sharesPhrase(run.SharesChecked)`; `shares_checked` is the only persisted share fact, no `shares_mismatched` (SCENARIO-04, 09)
+- `not_imported` is gone everywhere (`importer.Result`, `store.NotImported`, `document.NotImported`, `ImportRun` field, column in `import_runs`); `requiredRunColumns` is the 18 columns every format has, so history carries an older store whose `import_runs` still has the column (dropped on rebuild). Sync over an older-format store works by design: `Replace`/`readHistory` never run `checkFormat`, only readers do (I4-9) — a format check in `readHistory` would break it (SCENARIO-09)
 - `shares_checked` nullable BIGINT after `investment_transactions_rows`, carried by history, COALESCE→0 in status; sync `--json` `store.shares` = `{checked, mismatched}` after `splits` (SCENARIO-04)
 
 ## Left unbuilt
-- Status/MCP `"shares":{"checked":N}` and the status Shares line from `run.SharesChecked`; dropping `investment_transactions_not_imported` from `requiredRunColumns`, `surveyTransactions`/`store.NotImported`, the Rows `not imported` tail — SCENARIO-09
+- Accounts `not valued` cell and help, sync Long, SKILL.md, `sql_conventions.go`, `store.IsInvestmentAccount` comment (`store.go:52`); remaining `not imported` production text lives only there (`render_accounts.go:13,79`, `accounts.go:17`, `json_accounts.go:17`) — SCENARIO-11. `docs/adr/001-shared-store-package.md:22` still names `NotImported`: unowned, historical
 
 ## Traps
 - `ZNUMERATOR`/`ZDENOMINATOR` are DECIMAL (NUMERIC affinity): an integer-valued REAL is stored as an integer, so a refusal prints `0`, never `0.0`; tests binding REAL `1.5:0.0` see `(1.5:0)` (SCENARIO-03)
 - `ZQUOTEDATE` and investment dates must be `CAST(... AS REAL)` or the driver returns a Unix-epoch `time.Time` (SCENARIO-01, 02)
 - A v9fixture row without its default `Z_ENT` is silently filtered by `Z_ENT = ?`; `TransactionRow.Entity` defaults to CashFlowTransaction (SCENARIO-01, 02)
-- `not_imported` still counts investment rows that now also import — expected until S09; do not "fix" (SCENARIO-02)
 - Fault-table row `ZTRANSACTION` matches `ZPOSTEDDATE`, which the investment query also contains — correct only while the cash query runs first; new rows match `ZUNITS` / `FROM ZPOSITION` (SCENARIO-02)
 - Plan's case-sensitive narrow `-run 'Investment|…'` misses `run_sync_imports_investment_*`; use `(?i)` (SCENARIO-02)
 - `schema.md` regenerates with `go test ./cmd/quarry/ -run Test_skill_schema_reference_matches_the_committed_file -update` (pattern `SchemaReference` matches nothing) (SCENARIO-01)
@@ -40,8 +40,10 @@ Scenarios complete: SCENARIO-01..08 (04 folds 05, 08; 06 folds 07). Last updated
 - `duckdb.Create` stats and chmods its path, no in-memory mode — use `CreateInMemory` (SCENARIO-04)
 - Real-store fixtures with holdings now hit the gate: their lots must equal the derived count (S02 fixture lot `0.541667` for the 1:12 split) (SCENARIO-04)
 - Negating `math.MinInt64` overflows and integer division drops the sign of `-0.000001`: both share formatters and the difference subtraction carry a negative flag / saturate (SCENARIO-06)
-- Pinning whole stdout of a share-failure run breaks at S09 when the Rows `not imported` tail goes — pin the Store line and Shares block only (SCENARIO-06)
 - `importer/share_gate_test.go` fake ids `acct-1`/`sec-1` resolve to nothing; label joining must leave zero-value labels without panicking (SCENARIO-06)
+
+- `investmentEntity` stays (`entities.go`, `importer.go`): only its survey use was deleted (SCENARIO-09)
+- Status/Rows pins assert Store/Rows/Shares lines, never whole stdout; the Rows tail pins sit in `run_investments_test.go`, `run_transfers_test.go`, `render_internal_test.go` too (SCENARIO-09)
 
 ## Open debts
 - No Import-level test pins the `<v>` text in the share/amount refusal copy for negative or exponent values; only `parseShares` unit tests cover those forms. unowned — dies unless re-opened (SCENARIO-02, 03)

@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-09
-status: open
+status: done
 ---
 
 # SCENARIO-09: Status reports the share check without "not imported" (folds SCENARIO-10)
@@ -38,10 +38,10 @@ Resolved against the code: I4-9 / S10 do not conflict. `checkFormat` runs only f
   - Regenerate `plugin/skills/quarry/references/schema.md` (row `:109` goes) with `go test ./cmd/quarry/ -run Test_skill_schema_reference_matches_the_committed_file -update`.
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `rowsPhrase`, `Result`, `ImportRun`, `requiredRunColumns` say what is now true; grep `not_imported|NotImported|not imported` for leftovers outside S11's accounts copy (`render_accounts.go:13`, `accounts.go:17`, `json_accounts.go:17`, `store.go:52`, fx and accounts tests: SCENARIO-11). Add the one-line superseded note to `docs/specifications/phase1-import-store/specification.md:216-228` (S.7).
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `rowsPhrase`, `Result`, `ImportRun`, `requiredRunColumns` say what is now true; grep `not_imported|NotImported|not imported` for leftovers outside S11's accounts copy (`render_accounts.go:13`, `accounts.go:17`, `json_accounts.go:17`, `store.go:52`, fx and accounts tests: SCENARIO-11). Add the one-line superseded note to `docs/specifications/phase1-import-store/specification.md:216-228` (S.7).
 
 ### Verify
-- [ ] Step 7: full verification per `.claude/rules/agent-briefs.md`, `spec-check.py phase4a-investments`; tick SCENARIO-09 with its acceptance test, tick SCENARIO-10 as `delivered by SCENARIO-09` with its own test last on the line; roll `STATE.md` (drop the `not_imported` Left-unbuilt and Traps lines).
+- [x] Step 7: full verification per `.claude/rules/agent-briefs.md`, `spec-check.py phase4a-investments`; tick SCENARIO-09 with its acceptance test, tick SCENARIO-10 as `delivered by SCENARIO-09` with its own test last on the line; roll `STATE.md` (drop the `not_imported` Left-unbuilt and Traps lines).
 
 ## Handoff
 
@@ -62,15 +62,10 @@ Resolved against the code: I4-9 / S10 do not conflict. `checkFormat` runs only f
 
 ## Phase report
 
-Run B2 (steps 4-5) done; steps 1-5 ticked. Steps 6-7 (Sweep, Verify, ticks, STATE.md, `status: done`) are run V's.
+Run V done; steps 1-7 ticked, `status: done`. Nothing left for this scenario.
 
-Production: `internal/importer/importer.go` (survey call, `notImported`, `newImportRun`'s `n` gone; `investmentEnt, hasInvestment` lookup kept for `mapInvestmentTransactions`), `transactions.go` (`transactionSurveyQuery`, `surveyTransactions` gone), `internal/store/store.go` (`ImportRun.InvestmentTransactionsNotImported`, `Result.NotImported`, `store.NotImported` gone), `duckstore/schema.go` (column dropped), `status.go`, `duckstore.go` (`importRunRows`), `history.go` (`requiredRunColumns` 18 columns, `carriedRun.counts [12]`). `plugin/skills/quarry/references/schema.md` regenerated (one row gone).
+Sweep: `go build ./...` ok, `golangci-lint run ./...` 0 issues. Doc comments on `rowsPhrase`, `requiredRunColumns` already state the current contract (no edit). The superseded note for phase1's `not_imported` bullet was already in place (`phase1-import-store/specification.md:224`, plus the S21 tick line); no further edit. Leftover `not imported` grep: production hits are SCENARIO-11's accounts copy only (`render_accounts.go:13,79`, `accounts.go:17`, `json_accounts.go:17`, `store.go:52`); test hits are Phase 1 DDL fixtures, the NotContains pins in `run_status_shares_test.go`, and accounts tests.
 
-Tests: deleted `importer/not_imported_test.go`; `import_faults_test.go` (both `ZTRANSACTION ids` rows), `import_runs_test.go`, `duckstore_test.go`, `run_import_runs_test.go` re-pinned; `history_test.go` (not-imported predicate dropped, new column-absent scalar on the rebuilt table); `history_faults_test.go` (row gone from `importRunsColumns`, new case "no transfers_one_sided column" = positive control, new test `Test_replace_carries_the_import_runs_of_a_store_whose_table_lacks_the_not_imported_column`).
-Phase1 survivor: `Test_run_counts_investment_transactions_without_importing_them` renamed `Test_run_keeps_investment_transactions_out_of_the_cash_transactions_table` (`run_transfers_test.go:146`); phase1 `specification.md` tick line (S21) and the `not_imported` JSON bullet amended with "superseded by phase4a-investments I4-7"; `SCENARIO-01c.md` name updated; `spec-check.py phase1-import-store` OK. S.7 note for phase4a's own spec (step 6) not yet added.
+Verify: full suite `go test rc=0` (one covered run); `uncovered-diff.py --profile ... ad2fbac`: 0 uncovered added lines; `go test -race` on cli, importer, store/..., report/... ok. `test-stats.py --base ad2fbac --changed`: cmd/quarry 676 (+2), internal/cli 423 (+0), internal/importer 240 (-5), internal/store/duckstore 560 (+1), TOTAL 1899 (-2) / tempdir 830 (-3) / disk 752 (-3). The -5 is the deleted `not_imported_test.go`.
 
-State: `go build ./...`, `golangci-lint run ./...` 0 issues, `go test ./cmd/quarry/ ./internal/...` all green. Both acceptance tests green; S10's test was red after step 4 (second sync) and green after step 5.
-
-Mutation (restored, diffed): `investment_transactions_not_imported` back into `requiredRunColumns` reddens `Test_run_sync_twice_over_a_version_5_store_carries_import_history_forward`, `Test_replace_carries_the_import_runs_of_a_store_whose_table_lacks_the_not_imported_column` and `Test_replace_carries_the_previous_import_runs_unchanged`.
-
-Leftovers for V: grep `not_imported|NotImported|not imported` outside S11's accounts copy is clean in production; test hits left are the Phase 1 DDL fixtures (`run_sync_pre4a_store_test.go`, `history_test.go`, `rates_floor_test.go`), the status assertions, and accounts tests (S11). `docs/adr/001-shared-store-package.md:22` still names `NotImported` (historical).
+Spec: SCENARIO-09 and SCENARIO-10 ticked (10 as delivered by 09, own test last); `spec-check.py phase4a-investments` and `phase1-import-store` run, see the report.
