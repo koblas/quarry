@@ -295,7 +295,8 @@ const balancesDailyViewComment = "one row per account per day from its first tra
 	"(NULL outside brokerage and retirement accounts), balance is cash plus holdings_value, " +
 	"as quarry accounts and quarry networth use; filter by date."
 
-// balancesDailyViewDDL creates v_balances_daily: one row per account per day, its cash and the value of its holdings.
+// balancesDailyViewDDL creates v_balances_daily: one row per account per day, its cash, the value of its holdings
+// and the balance in CAD and USD at the day's rate.
 func balancesDailyViewDDL() string {
 	quoted := make([]string, 0, len(store.InvestmentAccountTypes()))
 	for _, t := range store.InvestmentAccountTypes() {
@@ -339,12 +340,18 @@ WITH firsts AS (
 	JOIN accounts a ON a.id = c.account_id
 	LEFT JOIN held h ON h.account_id = c.account_id AND h.date = c.date
 )
-SELECT date, account_id, account, type, currency, cash,
-	CASE WHEN investment THEN CAST(held_value AS DECIMAL(38,2)) END AS holdings_value,
-	CASE WHEN investment THEN held_unvalued END AS holdings_unvalued,
-	CAST(NULL AS DECIMAL(38,2)) AS balance, CAST(NULL AS DECIMAL(38,2)) AS balance_cad,
-	CAST(NULL AS DECIMAL(38,2)) AS balance_usd, CAST(NULL AS DECIMAL(10,6)) AS usd_cad
-FROM parts;
+SELECT b.date, b.account_id, b.account, b.type, b.currency, b.cash,
+	CASE WHEN b.investment THEN CAST(b.held_value AS DECIMAL(38,2)) END AS holdings_value,
+	CASE WHEN b.investment THEN b.held_unvalued END AS holdings_unvalued,
+	b.balance,
+	` + convertedToWide("CAD", "b.balance", "b.currency", "r.usd_cad", 38) + ` AS balance_cad,
+	` + convertedToWide("USD", "b.balance", "b.currency", "r.usd_cad", 38) + ` AS balance_usd,
+	r.usd_cad
+FROM (
+	SELECT *, CAST(cash + CASE WHEN investment THEN held_value ELSE 0 END AS DECIMAL(38,2)) AS balance
+	FROM parts
+) b
+ASOF LEFT JOIN fx_rates r ON b.date >= r.date;
 COMMENT ON VIEW v_balances_daily IS '` + strings.ReplaceAll(balancesDailyViewComment, "'", "''") + `';
 `
 }

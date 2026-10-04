@@ -46,6 +46,12 @@ add_shares, buy, capital_gain_long, capital_gain_short, dividend, interest,
 margin_interest, misc_expense, misc_income, reinvest_dividend,
 remove_shares, sell, split.
 
+v_balances_daily has one row per account per day from its first transaction
+through today; cash is the sum of its transactions to that day,
+holdings_value its holdings' value in its own currency (NULL outside
+brokerage and retirement accounts), balance is cash plus holdings_value, as
+quarry accounts and quarry networth use; filter by date.
+
 ## Findings
 
 findings holds what sync found to clean up in Quicken, and finding_items
@@ -281,6 +287,25 @@ each one's status.
 | `balance` | `DECIMAL(18,2)` |
 | `balance_cad` | `DECIMAL(18,2)` |
 | `balance_usd` | `DECIMAL(18,2)` |
+
+### v_balances_daily
+
+one row per account per day from its first transaction through today; cash is the sum of its transactions to that day, holdings_value its holdings' value in its own currency (NULL outside brokerage and retirement accounts), balance is cash plus holdings_value, as quarry accounts and quarry networth use; filter by date.
+
+| column | type |
+| --- | --- |
+| `date` | `DATE` |
+| `account_id` | `VARCHAR` |
+| `account` | `VARCHAR` |
+| `type` | `VARCHAR` |
+| `currency` | `VARCHAR` |
+| `cash` | `DECIMAL(18,2)` |
+| `holdings_value` | `DECIMAL(38,2)` |
+| `holdings_unvalued` | `BIGINT` |
+| `balance` | `DECIMAL(38,2)` |
+| `balance_cad` | `DECIMAL(38,2)` |
+| `balance_usd` | `DECIMAL(38,2)` |
+| `usd_cad` | `DECIMAL(10,6)` |
 
 ### v_cash_flow
 

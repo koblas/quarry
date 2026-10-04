@@ -7,6 +7,7 @@ import (
 
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -302,4 +303,126 @@ func Test_balances_daily_values_holdings_in_the_accounts_currency(t *testing.T) 
 			assert.Equal(t, [][]string{{c.wantValue, c.wantUnvalued}}, got)
 		})
 	}
+}
+
+// convertedQuery is account's balance, balance_cad, balance_usd and usd_cad on March day.
+func convertedQuery(account string, day int) string {
+	return fmt.Sprintf("SELECT balance, balance_cad, balance_usd, usd_cad FROM v_balances_daily WHERE account_id = '%s' AND date = '2026-03-%02d'", account, day)
+}
+
+func Test_balances_daily_converts_balance_at_the_rate_for_the_day(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		account string
+		day     int
+		want    []string
+	}{
+		{
+			name: "a CAD account before the first rate keeps balance_cad and has no balance_usd", account: acctOne, day: 5,
+			want: []string{"100.01", "100.01", "NULL", "NULL"},
+		},
+		{
+			name: "a USD account before the first rate keeps balance_usd and has no balance_cad", account: acctTwo, day: 5,
+			want: []string{"100.01", "NULL", "100.01", "NULL"},
+		},
+		{
+			name: "a CAD account converts to USD at the rate and rounds", account: acctOne, day: 10,
+			want: []string{"100.01", "100.01", "80.01", "1.250000"},
+		},
+		{
+			name: "a USD account converts to CAD at the rate and rounds", account: acctTwo, day: 10,
+			want: []string{"100.01", "125.01", "100.01", "1.250000"},
+		},
+		{
+			name: "a day in a rate gap takes the prior rate", account: acctTwo, day: 15,
+			want: []string{"100.01", "125.01", "100.01", "1.250000"},
+		},
+		{
+			name: "a rate date takes its own rate", account: acctTwo, day: 16,
+			want: []string{"100.01", "130.01", "100.01", "1.300000"},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			rows := balanceRows()
+			rows.Transactions = []store.Transaction{
+				transaction("t1", acctOne, marchDay(1), 10_001), transaction("t2", acctTwo, marchDay(1), 10_001),
+			}
+			st := newStoreWithRates(t, rows, ratesOn(10, 1_250_000, "FXUSDCAD"), ratesOn(16, 1_300_000, "FXUSDCAD"))
+
+			got := queryTexts(t, st, convertedQuery(c.account, c.day))
+
+			assert.Equal(t, [][]string{c.want}, got)
+		})
+	}
+}
+
+func Test_balances_daily_has_no_converted_balance_for_an_account_in_another_currency(t *testing.T) {
+	t.Parallel()
+	rows := balanceRows()
+	rows.Transactions = []store.Transaction{transaction("t1", acctEUR, marchDay(1), 10_000)}
+	st := newStoreWithRates(t, rows, ratesOn(1, 1_250_000, "FXUSDCAD"))
+
+	got := queryTexts(t, st, convertedQuery(acctEUR, 5))
+
+	assert.Equal(t, [][]string{{"100.00", "NULL", "NULL", "1.250000"}}, got)
+}
+
+func Test_balances_daily_balance_adds_valued_holdings_to_cash(t *testing.T) {
+	t.Parallel()
+	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), 3*oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)}
+	rows.Transactions = []store.Transaction{transaction("t1", acctOne, marchDay(1), 10_000)}
+	st := newStoreWith(t, rows)
+
+	got := queryTexts(t, st, "SELECT cash, holdings_value, balance FROM v_balances_daily WHERE date = '2026-03-02'")
+
+	assert.Equal(t, [][]string{{"100.00", "30.00", "130.00"}}, got)
+}
+
+func Test_balances_daily_balance_is_cash_in_an_account_without_holdings_figures(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, cashRows(transaction("t1", acctOne, marchDay(1), 10_000)))
+
+	got := queryTexts(t, st, "SELECT cash, balance FROM v_balances_daily WHERE date = '2026-03-01'")
+
+	assert.Equal(t, [][]string{{"100.00", "100.00"}}, got)
+}
+
+func Test_balances_daily_view_lists_its_columns_in_order(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, balanceRows())
+
+	got, err := st.Query(t.Context(), "SELECT * FROM v_balances_daily", 0) //nolint:unqueryvet // every column is the point
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.QueryColumn{
+		{Name: "date", Type: "DATE"},
+		{Name: "account_id", Type: "VARCHAR"},
+		{Name: "account", Type: "VARCHAR"},
+		{Name: "type", Type: "VARCHAR"},
+		{Name: "currency", Type: "VARCHAR"},
+		{Name: "cash", Type: "DECIMAL(18,2)"},
+		{Name: "holdings_value", Type: "DECIMAL(38,2)"},
+		{Name: "holdings_unvalued", Type: "BIGINT"},
+		{Name: "balance", Type: "DECIMAL(38,2)"},
+		{Name: "balance_cad", Type: "DECIMAL(38,2)"},
+		{Name: "balance_usd", Type: "DECIMAL(38,2)"},
+		{Name: "usd_cad", Type: "DECIMAL(10,6)"},
+	}, got.Columns)
+}
+
+func Test_balances_daily_view_carries_its_note(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, balanceRows())
+
+	got := queryTexts(t, st, "SELECT comment FROM duckdb_views() WHERE view_name = 'v_balances_daily'")
+
+	assert.Equal(t, [][]string{{"one row per account per day from its first transaction through today; " +
+		"cash is the sum of its transactions to that day, holdings_value its holdings' value in its own currency " +
+		"(NULL outside brokerage and retirement accounts), balance is cash plus holdings_value, " +
+		"as quarry accounts and quarry networth use; filter by date."}}, got)
 }

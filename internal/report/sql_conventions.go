@@ -40,4 +40,10 @@ value_usd convert it at the rate for date, as quarry holdings does; filter
 it by date. Neither includes cash in investment accounts. action is one of
 add_shares, buy, capital_gain_long, capital_gain_short, dividend, interest,
 margin_interest, misc_expense, misc_income, reinvest_dividend,
-remove_shares, sell, split.`
+remove_shares, sell, split.
+
+v_balances_daily has one row per account per day from its first transaction
+through today; cash is the sum of its transactions to that day,
+holdings_value its holdings' value in its own currency (NULL outside
+brokerage and retirement accounts), balance is cash plus holdings_value, as
+quarry accounts and quarry networth use; filter by date.`
