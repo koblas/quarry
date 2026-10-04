@@ -136,3 +136,51 @@ func Test_run_status_json_reports_the_latest_build_when_import_runs_holds_severa
 	wantJSON = strings.ReplaceAll(wantJSON, snapshotID(earlierPath), "later-build")
 	assert.Equal(t, wantJSON, stdout.String()) //nolint:testifylint // the bytes are the contract
 }
+
+func Test_status_json_carries_each_path_the_skill_reads(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	syncBundle(t, writeStatusFixtureBundle(t, home))
+	var stdout, stderr bytes.Buffer
+	require.Equal(t, 0, run(context.Background(), []string{"status", "--json"}, &stdout, &stderr), stderr.String())
+	var status any
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &status))
+	freshness := splitSkill(t, repoFile(t, skillPath)).bodies[skillHeadings[0]]
+
+	// wantType is the JSON type the skill relies on; nullable allows null.
+	paths := []struct {
+		path     string
+		wantType any
+		nullable bool
+	}{
+		{"snapshot.taken_at", "", false},
+		{"dates.last", "", false},
+		{"rates.fetch_error", nil, true},
+		{"rates.last", "", false},
+		{"findings.open", float64(0), false},
+	}
+	for _, p := range paths {
+		t.Run(p.path, func(t *testing.T) {
+			got, ok := statusPath(status, p.path)
+			require.True(t, ok, "status --json has no %s", p.path)
+			if !p.nullable {
+				assert.IsType(t, p.wantType, got)
+			}
+			assert.Contains(t, freshness, p.path)
+		})
+	}
+}
+
+// statusPath walks a dotted path through decoded JSON objects.
+func statusPath(doc any, path string) (any, bool) {
+	for key := range strings.SplitSeq(path, ".") {
+		object, ok := doc.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		if doc, ok = object[key]; !ok {
+			return nil, false
+		}
+	}
+	return doc, true
+}

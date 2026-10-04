@@ -5,7 +5,8 @@ dweekly/quicken-mac-mcp
 https://github.com/dweekly/quicken-mac-mcp
 Commit 119e2724a3cb0eab8729147d70b0d25f49326f2c
 Used in: docs/prior-art/dweekly/ (schema reference, SQL recipes, skill layout,
-CSV exporter)
+CSV exporter); plugin/ (skill layout and the untrusted-data and reporting
+rules in SKILL.md)
 ================================================================================
 
 MIT License

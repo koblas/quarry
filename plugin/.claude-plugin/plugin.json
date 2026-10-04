@@ -1,0 +1,7 @@
+{
+  "name": "quarry",
+  "description": "Answer questions about your money from your Quicken Classic for Mac data with quarry. Requires the quarry binary on your PATH.",
+  "version": "0.1.0",
+  "author": { "name": "David Koblas" },
+  "mcpServers": { "quarry": { "command": "quarry", "args": ["mcp"] } }
+}
