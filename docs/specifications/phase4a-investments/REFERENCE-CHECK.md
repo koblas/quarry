@@ -21,6 +21,6 @@ Method: the binary built from this branch runs `quarry sync --from 20260930T0720
 - `sync --from … --json`: exit 0; `store.rows` investment_transactions 1605, securities 84, prices 99352; `store.shares` `{"checked":145,"mismatched":[]}`.
 - `status`: exit 0; same Rows and Shares lines.
 - `quarry sql`: 57 investment rows carry a commission, 18 of them below a cent (stored exactly), 1 `split` row.
-- Spend/cashflow unchanged: cash rows 14,061 transactions / 14,080 splits, identical to the Phase 1–3 counts.
+- Cash side: 14,061 transactions equals the Phase 1 probe's CashFlowTransaction count (investment rows stay out of `transactions`); `spend` runs, exit 0. Byte-equality of spend/cashflow with and without investment rows is pinned by `Test_run_spend_and_cashflow_are_unchanged_by_investment_transactions`, not re-measured here.
 
 PRD Phase 4 gate "Share counts match Quicken": met for the real file (145/145 holdings, tolerance 0.000001).
