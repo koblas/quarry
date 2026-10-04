@@ -297,14 +297,54 @@ const balancesDailyViewComment = "one row per account per day from its first tra
 
 // balancesDailyViewDDL creates v_balances_daily: one row per account per day, its cash and the value of its holdings.
 func balancesDailyViewDDL() string {
+	quoted := make([]string, 0, len(store.InvestmentAccountTypes()))
+	for _, t := range store.InvestmentAccountTypes() {
+		quoted = append(quoted, "'"+strings.ReplaceAll(t, "'", "''")+"'")
+	}
+	// A holding is valued when v_holdings gives its value in the account's currency; any other holding adds to
+	// holdings_unvalued instead. The running cash sum spans only the days listed, so a future-dated transaction
+	// never reaches a row.
 	return `
 CREATE VIEW v_balances_daily AS
-SELECT CAST(NULL AS DATE) AS date, CAST(NULL AS VARCHAR) AS account_id, CAST(NULL AS VARCHAR) AS account,
-	CAST(NULL AS VARCHAR) AS type, CAST(NULL AS VARCHAR) AS currency, CAST(NULL AS DECIMAL(18,2)) AS cash,
-	CAST(NULL AS DECIMAL(38,2)) AS holdings_value, CAST(NULL AS BIGINT) AS holdings_unvalued,
+WITH firsts AS (
+	SELECT account_id, min(d) AS first_day
+	FROM (SELECT account_id, date AS d FROM transactions UNION ALL SELECT account_id, from_date FROM holding_shares)
+	GROUP BY account_id
+), days AS (
+	SELECT account_id, CAST(unnest(generate_series(first_day, current_date, INTERVAL 1 DAY)) AS DATE) AS date
+	FROM firsts
+), flow AS (
+	SELECT account_id, date, sum(amount) AS amount FROM transactions GROUP BY account_id, date
+), cashed AS (
+	SELECT d.account_id, d.date,
+		CAST(sum(coalesce(f.amount, 0)) OVER (PARTITION BY d.account_id ORDER BY d.date) AS DECIMAL(18,2)) AS cash
+	FROM days d
+	LEFT JOIN flow f ON f.account_id = d.account_id AND f.date = d.date
+), valued AS (
+	SELECT h.account_id, h.date,
+		CASE WHEN h.currency = a.currency THEN h.value
+			WHEN a.currency = 'CAD' THEN h.value_cad
+			WHEN a.currency = 'USD' THEN h.value_usd END AS value
+	FROM v_holdings h
+	JOIN accounts a ON a.id = h.account_id
+), held AS (
+	SELECT account_id, date, sum(value) AS value, count(*) - count(value) AS unvalued
+	FROM valued
+	GROUP BY account_id, date
+), parts AS (
+	SELECT c.date, a.id AS account_id, a.name AS account, a.type, a.currency, c.cash,
+		a.type IN (` + strings.Join(quoted, ", ") + `) AS investment,
+		coalesce(h.value, 0) AS held_value, coalesce(h.unvalued, 0) AS held_unvalued
+	FROM cashed c
+	JOIN accounts a ON a.id = c.account_id
+	LEFT JOIN held h ON h.account_id = c.account_id AND h.date = c.date
+)
+SELECT date, account_id, account, type, currency, cash,
+	CASE WHEN investment THEN CAST(held_value AS DECIMAL(38,2)) END AS holdings_value,
+	CASE WHEN investment THEN held_unvalued END AS holdings_unvalued,
 	CAST(NULL AS DECIMAL(38,2)) AS balance, CAST(NULL AS DECIMAL(38,2)) AS balance_cad,
 	CAST(NULL AS DECIMAL(38,2)) AS balance_usd, CAST(NULL AS DECIMAL(10,6)) AS usd_cad
-WHERE false;
+FROM parts;
 COMMENT ON VIEW v_balances_daily IS '` + strings.ReplaceAll(balancesDailyViewComment, "'", "''") + `';
 `
 }
