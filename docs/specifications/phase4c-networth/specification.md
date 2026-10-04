@@ -24,7 +24,8 @@
 5. Net worth leaves out accounts Quicken marks "not in reports" or "linked tracking" (same rule as cash flow).
 6. MCP `net_worth` moves from 4f into 4c (LIGHT).
 7. The reference check includes one manual comparison: the user compares quarry's computed cash for the 9 investment accounts with Quicken.
-8. Scenarios approved 2026-10-04.
+8. Scenarios approved 2026-10-04; S01 and S14 splits approved the same day.
+10. Reinvested dividends (0.00 in Quicken) stay out of income; no estimated amount (N-3 (b), 2026-10-04).
 9. Investment account value = holdings + cash, computed by quarry (4b decision 1).
 
 ## Business Rules & Invariants
@@ -35,7 +36,7 @@
   - `date` = `investment_transactions.date`; status from `ZRECONCILESTATUS`; `excluded_from_reports` from `ZEXCLUDEFROMREPORTS`; payee NULL; memo copied;
   - one split per Quicken entry, with the entry's category, amount and transfer target; splits go through the existing transfer pairing and splits-sum check;
   - add_shares, remove_shares, split (amount 0) get no row;
-  - reinvest_dividend: see N-3.
+  - reinvest_dividend: no row (N-3 outcome (b)).
   - `FormatVersion` 7 → 8; an older store gets the existing format refusal; a re-sync rebuilds it.
 - **N-2 Cash-flow class = the entry category's kind** (the existing rule, `schema.go:225-227`); no action table. Expected per action (asserted on the real file in the reference scenario):
 
@@ -45,7 +46,7 @@
   | sell | + (system) | yes | neither |
   | add_shares, remove_shares, split | 0 | no | — |
   | dividend, interest, capital_gain_long, capital_gain_short | + (income) | yes | income |
-  | reinvest_dividend | 0 | N-3 | income of the dividend; cash unchanged |
+  | reinvest_dividend | 0 | no (N-3 (b)) | — (not income: Quicken records 0.00) |
   | margin_interest | − (expense) | yes | spending (reaches `quarry spend`, recurring, anomalies) |
   | misc_expense | − | yes | by entry: expense → spending, system → neither |
   | misc_income | + | yes | by entry: income → income, system → neither |
@@ -57,6 +58,7 @@
 - **N-3 Reinvest probe (architect runs first, counts only).**
   - (a) Entry amount X ≠ 0: a 0.00 row with splits +X (the entry's income category) and −X (the system category the file's buy entries carry). It counts as income.
   - (b) X = 0, or no single system category: no row. The cashflow sentence drops "reinvested dividends included", and the orchestrator tells the user before building.
+  - **Outcome (2026-10-04 probe): (b).** All 5 reinvest entries are 0.00 (shares non-zero); buys carry exactly 1 system category; 0 investment entries name a transfer account; 0 investment transactions lack an entry; 0 entries lack a category; every entry amount equals its transaction's amount; commission is inside the buy amount (22 of 22). User decision 10: reinvested dividends stay out of income.
 - **N-4 Findings.** `duplicateQuery` and `unlinkedTransferQuery` add `investment_transaction_id IS NULL` on both sides. The Rows line keeps counting table rows.
 - **N-5 `v_balances_daily`.**
   - Grain: one row per account per calendar day, from its first transaction or holding date through today. Closed and left-out accounts included.
@@ -255,7 +257,7 @@ Within one kind, warnings follow account name ignoring case. Lines 3–5 are als
 | --- | --- |
 | `sql_conventions.go:19-21` ("Investment transactions are in investment_transactions, not in transactions…") | `Each investment transaction that moves cash also has a row in transactions (investment_transaction_id names it; NULL for a register entry), one split per Quicken entry, so an account's cash is the sum of its transactions. In v_cash_flow dividends, interest and capital-gain distributions are income; buys, sells and share moves are neither. investment_transactions holds each one's action, security and shares:` (rest unchanged). Append the `v_balances_daily` and `v_net_worth` sentences (N-5, N-6 comments). `v_account_balances` gets "(v_balances_daily for today)". |
 | Hand copies (`cli/sql_test.go:213`, `run_shared_documents_test.go:354`), `schema.md` | Re-pin and regenerate |
-| cashflow Long, after "…left out here too." | `In brokerage and retirement accounts, dividends, interest and capital-gain distributions count as income, reinvested dividends included; buying, selling and moving shares count as neither.` (drop "reinvested dividends included" under N-3 (b)) |
+| cashflow Long, after "…left out here too." | `In brokerage and retirement accounts, dividends, interest and capital-gain distributions count as income; buying, selling and moving shares count as neither.` (N-3 (b): "reinvested dividends included" dropped) |
 | spend Long | Add: `Margin interest and other investment expenses Quicken puts in an expense category count as spending.` |
 | findings Long, after the list (`findings.go:39`) | `duplicate and unlinked-transfer compare register entries only, not buys, sells, dividends or other investment transactions.` |
 | holdings Long, last paragraph | `The total is the value of the securities only, without the cash held in investment accounts; quarry accounts shows each account's balance, cash included.` |
@@ -317,10 +319,10 @@ Feature: Net worth
     Then the first pairs with its other side like any transfer and leaves cash flow
     And the second has one uncategorized split and raises the uncategorized finding
 
-  Scenario: SCENARIO-02 Reinvested dividend is income without moving cash
-    Given a reinvested dividend whose entry amount is not zero
+  Scenario: SCENARIO-02 Reinvested dividend moves no cash
+    Given a reinvested dividend whose entry amount is zero, as Quicken records it
     When quarry sync runs
-    Then a 0.00 transaction has a split for the dividend's income category and an opposite split for the system category
+    Then it has no row in transactions and adds nothing to income
 
   Scenario: SCENARIO-03 Investment income counts in cash flow
     Given dividend, interest, capital-gain, buy and sell rows in a brokerage account
@@ -430,7 +432,7 @@ Architect sizing pass, 2026-10-04. The S01 and S14 splits were approved by the u
 | --- | --- |
 | SCENARIO-01a | OWNS A RUN (opus), 4 batches, importer. v9fixture entries; `investmentsQuery` reads entries, reconcile status, excluded and memo; the row/split builder for single-entry, non-transfer transactions; share-only actions get no row; `investment_transaction_id`; FormatVersion 7→8 with re-pins and schema.md. **Runs the N-3 probe first** (reinvest entry amounts, system categories on buy entries, entries with a transfer target, transactions with no entry). |
 | SCENARIO-01b | OWNS A RUN (sonnet), 4 batches, importer + report; absorbs 02 and 05. Transfer-target entries go through pairing and the splits-sum check; a no-entry transaction gets a NULL-category split, which raises `uncategorized`. Includes the N-4 predicates and the findings Long. |
-| SCENARIO-02 | FOLD into 01b if N-3 (a). If N-3 (b): no production code, and it goes back to the user. |
+| SCENARIO-02 | FOLD into 01a (N-3 (b), user decision 10): the reinvest is a zero-amount action, covered by 01a's no-row arm; its acceptance assertion rides in 01a's test. Gherkin reworded to the (b) outcome. |
 | SCENARIO-03 | LIGHT; absorbs 04. Coverage of 01's rows; cashflow Long (depends on N-3), spend Long, SKILL:74, and "dividend totals" dropped from the SKILL description. |
 | SCENARIO-04 | FOLD into 03. |
 | SCENARIO-05 | FOLD into 01b, so the findings goldens are re-pinned once. |
@@ -456,7 +458,7 @@ Architect sizing pass, 2026-10-04. The S01 and S14 splits were approved by the u
 
 - [ ] SCENARIO-01a: Investment cash joins transactions
 - [ ] SCENARIO-01b: Investment cash rows pair transfers and keep entry-less transactions
-- [ ] SCENARIO-02: Reinvested dividend is income without moving cash
+- [ ] SCENARIO-02: Reinvested dividend moves no cash
 - [ ] SCENARIO-05: Findings ignore investment cash rows
 - [ ] SCENARIO-03: Investment income counts in cash flow
 - [ ] SCENARIO-04: Margin interest counts as spending
