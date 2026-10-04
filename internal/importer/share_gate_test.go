@@ -31,7 +31,9 @@ func Test_import_does_not_replace_the_store_when_share_counts_differ(t *testing.
 	require.ErrorIs(t, err, store.ErrValidationFailed)
 	assert.Zero(t, fake.replaceCalls)
 	assert.False(t, result.Built)
-	assert.Equal(t, oneShareMismatch(), result.Validation.Shares)
+	assert.Equal(t, 2, result.Validation.Shares.Checked)
+	require.Len(t, result.Validation.Shares.Mismatched, 1)
+	assert.Equal(t, "acct-1", result.Validation.Shares.Mismatched[0].AccountID)
 }
 
 func Test_import_replaces_the_store_and_records_the_holdings_checked_when_share_counts_match(t *testing.T) {

@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -489,6 +490,73 @@ func Test_formatMoney(t *testing.T) {
 	}
 }
 
+func Test_formatShares(t *testing.T) {
+	cases := []struct {
+		name       string
+		millionths int64
+		want       string
+	}{
+		{name: "one millionth", millionths: 1, want: "0.000001"},
+		{name: "negative one millionth keeps its sign", millionths: -1, want: "-0.000001"},
+		{name: "zero", millionths: 0, want: "0"},
+		{name: "whole count has no fraction", millionths: 10_000_000, want: "10"},
+		{name: "trailing fractional zeros are trimmed", millionths: 120_500_000, want: "120.5"},
+		{name: "whole count thousands-grouped", millionths: 1_200_000_000, want: "1,200"},
+		{name: "full six-decimal fraction", millionths: 1_000_001, want: "1.000001"},
+		{name: "smallest count does not overflow on negation", millionths: math.MinInt64, want: "-9,223,372,036,854.775808"},
+		{name: "largest count", millionths: math.MaxInt64, want: "9,223,372,036,854.775807"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, formatShares(c.millionths))
+		})
+	}
+}
+
+func Test_securityLabel(t *testing.T) {
+	cases := []struct {
+		name         string
+		securityName string
+		ticker       *string
+		want         string
+	}{
+		{name: "no ticker shows the name alone", securityName: "Bare Fund", ticker: nil, want: "Bare Fund"},
+		{name: "ticker equal to the name is not repeated", securityName: "XEQT", ticker: new("XEQT"), want: "XEQT"},
+		{name: "ticker differing from the name follows it", securityName: "iShares Core Equity ETF", ticker: new("XEQT"), want: "iShares Core Equity ETF (XEQT)"},
+		{name: "control characters in the name are escaped", securityName: "Bad\nFund", ticker: nil, want: `Bad\nFund`},
+		{name: "control characters in the ticker are escaped", securityName: "Fund", ticker: new("A\tB"), want: `Fund (A\tB)`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, securityLabel(c.securityName, c.ticker))
+		})
+	}
+}
+
+func Test_shareMismatchRows(t *testing.T) {
+	t.Run("single row needs no padding", func(t *testing.T) {
+		rows := shareMismatchRows([]store.ShareMismatch{
+			{Account: "RRSP", Currency: "CAD", Closed: true, Security: "iShares Core Equity ETF", Ticker: new("XEQT"), Quarry: 120_500_000, Quicken: 110_500_000, Difference: 10_000_000},
+		})
+
+		assert.Equal(t, []string{"  ! RRSP (CAD, closed)  iShares Core Equity ETF (XEQT)  quarry 120.5  Quicken 110.5  difference 10"}, rows)
+	})
+
+	t.Run("labels pad to the widest and figures right-align per column", func(t *testing.T) {
+		rows := shareMismatchRows([]store.ShareMismatch{
+			{Account: "Brokerage", Currency: "CAD", Active: true, Security: "Bare Fund", Quarry: 5_000_000, Quicken: 0, Difference: 5_000_000},
+			{Account: "RRSP", Currency: "USD", Closed: true, Security: "iShares Core Equity ETF", Ticker: new("XEQT"), Quarry: 1_200_000_000, Quicken: 1_199_999_999, Difference: -123},
+		})
+
+		assert.Equal(t, []string{
+			"  ! Brokerage (CAD)     Bare Fund                       quarry     5  Quicken            0  difference         5",
+			"  ! RRSP (USD, closed)  iShares Core Equity ETF (XEQT)  quarry 1,200  Quicken 1,199.999999  difference -0.000123",
+		}, rows)
+	})
+}
+
 func Test_accountLabel(t *testing.T) {
 	cases := []struct {
 		name           string
@@ -688,16 +756,44 @@ func Test_renderStoreFailure(t *testing.T) {
 		assert.Contains(t, got, "Shares    1 holding matches Quicken's share count\n")
 	})
 
-	t.Run("Shares line is left out while a count differs", func(t *testing.T) {
+	t.Run("Shares DIFFER block sits between Splits and Transfers, and the pass line is replaced", func(t *testing.T) {
 		result := store.Result{
 			Validation: store.Validation{
-				Shares: store.ShareCheck{Checked: 2, Mismatched: []store.ShareMismatch{{AccountID: "acct-1", SecurityID: "sec-1"}}},
+				Splits: store.SplitCheck{Checked: 5},
+				Shares: store.ShareCheck{Checked: 3, Mismatched: []store.ShareMismatch{
+					{Account: "RRSP", Currency: "CAD", Closed: true, Security: "iShares Core Equity ETF", Ticker: new("XEQT"), Quarry: 120500000, Quicken: 110500000, Difference: 10000000},
+				}},
+				Transfers: store.TransferCheck{Paired: 1},
 			},
 		}
 
 		got := renderStoreFailure(result, true, "/Users/dave")
 
-		assert.NotContains(t, got, "Shares")
+		assert.Contains(t, got, "Splits    all 5 transactions equal the sum of their splits\n"+
+			"Shares    DIFFER for 1 of 3 holdings\n"+
+			"  ! RRSP (CAD, closed)  iShares Core Equity ETF (XEQT)  quarry 120.5  Quicken 110.5  difference 10\n"+
+			"Transfers 1 paired\n")
+		assert.NotContains(t, got, "holdings match")
+	})
+
+	t.Run("Shares DIFFER noun is singular at 1 of 1", func(t *testing.T) {
+		result := store.Result{
+			Validation: store.Validation{Shares: store.ShareCheck{Checked: 1, Mismatched: []store.ShareMismatch{{Account: "RRSP"}}}},
+		}
+
+		got := renderStoreFailure(result, true, "/Users/dave")
+
+		assert.Contains(t, got, "Shares    DIFFER for 1 of 1 holding\n")
+	})
+
+	t.Run("Shares DIFFER counts are plural and grouped by thousands", func(t *testing.T) {
+		result := store.Result{
+			Validation: store.Validation{Shares: store.ShareCheck{Checked: 1204, Mismatched: make([]store.ShareMismatch, 1000)}},
+		}
+
+		got := renderStoreFailure(result, true, "/Users/dave")
+
+		assert.Contains(t, got, "Shares    DIFFER for 1,000 of 1,204 holdings\n")
 	})
 
 	t.Run("singular DIFFER noun at 1 of 1", func(t *testing.T) {

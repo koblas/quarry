@@ -160,6 +160,7 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	if err != nil {
 		return store.Result{}, fmt.Errorf("check share counts: %w", err)
 	}
+	shares.Mismatched = describeShareMismatches(rows, shares.Mismatched)
 	validation.Shares = shares
 	if validation.Failed() {
 		return store.Result{Built: false, Counts: counts, Validation: validation, NotImported: notImported}, store.ErrValidationFailed

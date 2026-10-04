@@ -249,6 +249,11 @@ func splitsDifferPhrase(sc store.SplitCheck) string {
 	return "DIFFER for " + xOfYPhrase(len(sc.Mismatched), sc.Checked, "transaction", "transactions")
 }
 
+// sharesDifferPhrase renders sc's clause: how many of the checked holdings differ.
+func sharesDifferPhrase(sc store.ShareCheck) string {
+	return "DIFFER for " + xOfYPhrase(len(sc.Mismatched), sc.Checked, "holding", "holdings")
+}
+
 // splitsPhrase renders the checked clause: no transactions checked,
 // exactly one equalling its splits, or the plural count.
 func splitsPhrase(checked int) string {
@@ -310,6 +315,26 @@ func formatMoney(cents int64) string {
 	return s
 }
 
+// formatShares renders millionths of a share thousands-grouped with trailing
+// fractional zeros trimmed, and a leading "-" for a negative count.
+func formatShares(millionths int64) string {
+	const perShare = 1_000_000
+	// Split before negating: the whole and fraction parts of math.MinInt64 fit, its magnitude does not.
+	whole, frac := millionths/perShare, millionths%perShare
+	negative := millionths < 0
+	if negative {
+		whole, frac = -whole, -frac
+	}
+	s := humanize.Thousands(int(whole))
+	if frac != 0 {
+		s += "." + strings.TrimRight(fmt.Sprintf("%06d", frac), "0")
+	}
+	if negative {
+		return "-" + s
+	}
+	return s
+}
+
 // accountLabel renders "Name (CUR[, closed][, inactive])": inactive is
 // shown only when the account is open (not closed) and not active.
 func accountLabel(name, currency string, closed, active bool) string {
@@ -321,6 +346,43 @@ func accountLabel(name, currency string, closed, active bool) string {
 		suffix = ", inactive"
 	}
 	return fmt.Sprintf("%s (%s%s)", escapeCell(name), currency, suffix)
+}
+
+// securityLabel renders "Name (TICKER)": the ticker is shown only when
+// present and different from the name.
+func securityLabel(name string, ticker *string) string {
+	if ticker == nil || *ticker == name {
+		return escapeCell(name)
+	}
+	return fmt.Sprintf("%s (%s)", escapeCell(name), escapeCell(*ticker))
+}
+
+// shareMismatchRows renders one "!" row per mismatch, in the order given:
+// account and security label columns padded to the block's widest value,
+// share counts and difference right-aligned to their own column's widest.
+func shareMismatchRows(mismatches []store.ShareMismatch) []string {
+	accounts := make([]string, len(mismatches))
+	securities := make([]string, len(mismatches))
+	quarry := make([]string, len(mismatches))
+	quicken := make([]string, len(mismatches))
+	diff := make([]string, len(mismatches))
+	for i, m := range mismatches {
+		accounts[i] = accountLabel(m.Account, m.Currency, m.Closed, m.Active)
+		securities[i] = securityLabel(m.Security, m.Ticker)
+		quarry[i] = formatShares(m.Quarry)
+		quicken[i] = formatShares(m.Quicken)
+		diff[i] = formatShares(m.Difference)
+	}
+	accountWidth, securityWidth := widestLen(accounts), widestLen(securities)
+	quarryWidth, quickenWidth, diffWidth := widestLen(quarry), widestLen(quicken), widestLen(diff)
+
+	rows := make([]string, len(mismatches))
+	for i := range mismatches {
+		rows[i] = fmt.Sprintf("  ! %-*s  %-*s  quarry %*s  Quicken %*s  difference %*s",
+			accountWidth, accounts[i], securityWidth, securities[i],
+			quarryWidth, quarry[i], quickenWidth, quicken[i], diffWidth, diff[i])
+	}
+	return rows
 }
 
 // balanceMismatchRows renders one "!" row per mismatch, in the order
@@ -444,8 +506,7 @@ func widestLen(ss []string) int {
 }
 
 // renderStoreFailure renders the V1 block: Store, Rows, Transfers, and each
-// of Balances/Splits in its DIFFER form only when that check itself failed.
-// Shares shows only its pass line, so it is left out while a count differs.
+// of Balances/Splits/Shares in its DIFFER form only when that check itself failed.
 func renderStoreFailure(result store.Result, storeExisted bool, home string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", storeFailureLine(result.Path, storeExisted, home))
@@ -470,7 +531,12 @@ func renderStoreFailure(result store.Result, storeExisted bool, home string) str
 		fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits.Checked))
 	}
 
-	if len(result.Validation.Shares.Mismatched) == 0 {
+	if mismatched := result.Validation.Shares.Mismatched; len(mismatched) > 0 {
+		fmt.Fprintf(&b, "%-10s%s\n", "Shares", sharesDifferPhrase(result.Validation.Shares))
+		for _, row := range shareMismatchRows(mismatched) {
+			fmt.Fprintln(&b, row)
+		}
+	} else {
 		fmt.Fprintf(&b, "%-10s%s\n", "Shares", sharesPhrase(result.Validation.Shares.Checked))
 	}
 	writeTransfersLine(&b, result.Validation.Transfers)
