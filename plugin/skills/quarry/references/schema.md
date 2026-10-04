@@ -106,7 +106,6 @@ each one's status.
 | `balances_mismatched` | `BIGINT` |
 | `splits_mismatched` | `BIGINT` |
 | `transfers_one_sided` | `BIGINT` |
-| `investment_transactions_not_imported` | `BIGINT` |
 | `snapshot_taken_at` | `TIMESTAMP` |
 | `source_path` | `VARCHAR` |
 | `balances_never_reconciled` | `BIGINT` |

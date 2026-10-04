@@ -34,7 +34,7 @@ type history struct {
 var requiredRunColumns = []string{
 	"id", "started_at", "finished_at", "snapshot_path", "snapshot_sha256", "schema_fingerprint",
 	"accounts_rows", "categories_rows", "payees_rows", "tags_rows", "transactions_rows", "splits_rows", "split_tags_rows", "transfers_rows",
-	"balances_checked", "balances_mismatched", "splits_mismatched", "transfers_one_sided", "investment_transactions_not_imported",
+	"balances_checked", "balances_mismatched", "splits_mismatched", "transfers_one_sided",
 }
 
 // optionalRunColumns are the columns an older store format lacks; history carries NULL for each it does not have.
@@ -312,7 +312,7 @@ type carriedRun struct {
 	id                                                           int64
 	startedAt, finishedAt                                        time.Time
 	snapshotPath, snapshotSHA256, schemaFingerprint              string
-	counts                                                       [13]int64
+	counts                                                       [12]int64
 	takenAt                                                      sql.NullTime
 	source                                                       sql.NullString
 	neverReconciled, investmentAccounts, paired, crossCurrencies sql.NullInt64

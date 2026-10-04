@@ -143,7 +143,7 @@ func Test_run_reports_no_transfers_for_a_file_with_no_transactions(t *testing.T)
 	), stdout.String())
 }
 
-func Test_run_counts_investment_transactions_without_importing_them(t *testing.T) {
+func Test_run_keeps_investment_transactions_out_of_the_cash_transactions_table(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 

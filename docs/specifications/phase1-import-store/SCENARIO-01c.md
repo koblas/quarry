@@ -9,7 +9,7 @@ Cadence: code-first
 Acceptance test: `cmd/quarry/run_transfers_test.go` `Test_run_pairs_transfers_between_the_users_accounts`
 Acceptance test (SCENARIO-07, folded): `internal/importer/transfers_test.go` `Test_import_pairs_cross_currency_and_brokerage_transfers`
 Acceptance test (SCENARIO-12, folded): `cmd/quarry/run_transfers_test.go` `Test_run_reports_no_transfers_for_a_file_with_no_transactions`
-Acceptance test (SCENARIO-21, folded): `cmd/quarry/run_transfers_test.go` `Test_run_counts_investment_transactions_without_importing_them`
+Acceptance test (SCENARIO-21, folded): `cmd/quarry/run_transfers_test.go` `Test_run_keeps_investment_transactions_out_of_the_cash_transactions_table`
 Narrow loop: `go test ./internal/store/... ./internal/importer/... ./internal/cli/... ./cmd/quarry/...`
 Mutation checks: transfers kept out of `store.Validation.Failed()` → `Test_import_builds_the_store_with_a_one_sided_transfer`; numeric (not `split-N` string) ordering of the pair's legs → `Test_import_stores_each_split_in_at_most_one_transfer`
 
@@ -26,7 +26,7 @@ User-visible contract: `quarry sync` stdout adds a `Transfers` line after `Split
 - [x] Step 1: `cmd/quarry/run_transfers_test.go` (new).
   - `Test_run_pairs_transfers_between_the_users_accounts`: chequing↔savings and chequing↔credit-card pairs, where each leg's `EntryRow.Transfer` is the counterpart's `QuickenID` as text. Assert the full stdout block (Rows `2 transfers`, `Transfers  2 paired`). Assert both `transfers` rows via `stringMap` (`run_import_test.go:25`), plus each leg's `splits.transfer_account_id`. Exit 0.
   - `Test_run_reports_no_transfers_for_a_file_with_no_transactions`: accounts, 1 payee, 2 categories, 1 tag and 0 transactions. Assert Rows `0 transactions, 0 splits, 0 transfers, 1 payee, 2 categories, 1 tag`, Splits `no transactions to check`, Transfers `none`.
-  - `Test_run_counts_investment_transactions_without_importing_them`: a brokerage account with 2 `EntInvestmentTransaction` rows (with entries) and a chequing→brokerage contribution pair. Assert only the contribution's two transactions are in `transactions`, and that Rows ends `; 2 investment transactions not imported`.
+  - `Test_run_keeps_investment_transactions_out_of_the_cash_transactions_table`: a brokerage account with 2 `EntInvestmentTransaction` rows (with entries) and a chequing→brokerage contribution pair. Assert only the contribution's two transactions are in `transactions`, and that Rows ends `; 2 investment transactions not imported`.
   - All three fail at their stdout assertion.
 - [x] Step 2: `internal/importer/transfers_test.go` (new) `Test_import_pairs_cross_currency_and_brokerage_transfers`. Through `Server.Import` with `fakeStore`, cover a CAD→USD pair and a chequing→brokerage pair. Assert both are paired, the cross-currency row keeps both native split amounts, `Validation.Transfers.CrossCurrency == 1`, and the brokerage leg's transaction is in the brokerage account.
   - Stubs so it compiles: in `internal/store/store.go:83-126`, add `Transfer{ID, FromSplitID, ToSplitID *string, CrossCurrency}`, `Rows.Transfers`, `TransferCheck{Paired, CrossCurrency int; OneSided []OneSidedTransfer}`, `OneSidedTransfer{ID, SourceID, OtherAccount, OtherAccountID *string}`, `Validation.Transfers` and `Result.NotImported{InvestmentTransactions int}`.

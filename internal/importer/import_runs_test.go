@@ -38,7 +38,7 @@ func Test_import_hands_the_store_one_import_run_describing_the_build(t *testing.
 	assert.Equal(t, store.ImportRun{
 		StartedAt: run.StartedAt, FinishedAt: run.FinishedAt, Snapshot: snap,
 		Counts:          store.Counts{Accounts: 3, Transactions: 4, Splits: 4, Transfers: 2, InvestmentTransactions: 1},
-		BalancesChecked: 1, TransfersOneSided: 1, InvestmentTransactionsNotImported: 1,
+		BalancesChecked: 1, TransfersOneSided: 1,
 		BalancesNeverReconciled: 1, InvestmentAccounts: 1, TransfersPaired: 1, TransfersCrossCurrency: 1,
 	}, run)
 	assert.Equal(t, time.UTC, run.StartedAt.Location())

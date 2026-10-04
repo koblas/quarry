@@ -124,7 +124,6 @@ CREATE TABLE import_runs (
 	balances_mismatched BIGINT NOT NULL,
 	splits_mismatched BIGINT NOT NULL,
 	transfers_one_sided BIGINT NOT NULL,
-	investment_transactions_not_imported BIGINT NOT NULL,
 	snapshot_taken_at TIMESTAMP,
 	source_path VARCHAR,
 	balances_never_reconciled BIGINT,

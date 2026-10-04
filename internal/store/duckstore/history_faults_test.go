@@ -27,7 +27,7 @@ const (
 	previousOpenFindingType  = "uncategorized"
 )
 
-// importRunsColumns are the 19 columns every store format has, each with the cell of a valid run.
+// importRunsColumns are the 18 columns every store format has, each with the cell of a valid run.
 var importRunsColumns = [][3]string{
 	{"id", "BIGINT", "1"},
 	{"started_at", "TIMESTAMP", "'2026-06-01 10:00:00'"},
@@ -47,7 +47,6 @@ var importRunsColumns = [][3]string{
 	{"balances_mismatched", "BIGINT", "0"},
 	{"splits_mismatched", "BIGINT", "0"},
 	{"transfers_one_sided", "BIGINT", "0"},
-	{"investment_transactions_not_imported", "BIGINT", "0"},
 }
 
 // importRunsTable is DDL for an import_runs table holding runs identical rows, without the omit
@@ -280,6 +279,17 @@ func Test_replace_names_a_repeated_import_run_id_as_the_history_fault(t *testing
 	assert.Equal(t, []int64{1}, importRunIDs(t, st))
 }
 
+func Test_replace_carries_the_import_runs_of_a_store_whose_table_lacks_the_not_imported_column(t *testing.T) {
+	t.Parallel()
+	st := newStoreFile(t, importRunsTable("", "", 1))
+
+	replaced, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	assert.Nil(t, replaced.HistoryFault)
+	assert.Equal(t, []int64{1, 2}, importRunIDs(t, st))
+}
+
 func Test_replace_names_an_import_run_id_at_the_int64_maximum_as_the_history_fault(t *testing.T) {
 	t.Parallel()
 	st := newStoreFile(t, importRunsTable("", "", 1)+" UPDATE import_runs SET id = 9223372036854775807;")
@@ -323,6 +333,7 @@ func Test_replace_names_an_import_runs_table_without_a_required_cell_as_incomple
 		{name: "no snapshot_path column", ddl: importRunsTable("snapshot_path", "", 1)},
 		{name: "no snapshot_sha256 column", ddl: importRunsTable("snapshot_sha256", "", 1)},
 		{name: "no started_at column", ddl: importRunsTable("started_at", "", 1)},
+		{name: "no transfers_one_sided column", ddl: importRunsTable("transfers_one_sided", "", 1)},
 		{name: "only id and snapshot_path", ddl: importRunsDDL},
 		{name: "a NULL id", ddl: importRunsTable("", "id", 1)},
 		{name: "a NULL snapshot_path", ddl: importRunsTable("", "snapshot_path", 1)},

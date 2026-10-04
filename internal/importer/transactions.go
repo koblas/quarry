@@ -48,31 +48,6 @@ WHERE t.Z_ENT = ? AND COALESCE(t.ZDELETIONCOUNT, 0) = 0
 ORDER BY COALESCE(t.ZENTEREDDATE, t.ZPOSTEDDATE), t.ZACCOUNT, t.Z_PK
 `
 
-const transactionSurveyQuery = `SELECT Z_ENT, ZACCOUNT, COALESCE(ZDELETIONCOUNT, 0) FROM ZTRANSACTION`
-
-// surveyTransactions returns the count of investment transactions not imported.
-func surveyTransactions(
-	ctx context.Context, src Source, investmentEnt int64, hasInvestment bool, accounts map[int64]accountRef,
-) (int, error) {
-	var investments int
-	err := src.QueryRows(ctx, transactionSurveyQuery, nil, func(scan func(dest ...any) error) error {
-		var ent, account sql.NullInt64
-		var deletionCount int64
-		if err := scan(&ent, &account, &deletionCount); err != nil {
-			return err
-		}
-		_, accountImported := accounts[account.Int64]
-		if hasInvestment && ent.Int64 == investmentEnt && deletionCount == 0 && account.Valid && accountImported {
-			investments++
-		}
-		return nil
-	})
-	if err != nil {
-		return 0, fmt.Errorf("read transaction ids: %w", err)
-	}
-	return investments, nil
-}
-
 // mapTransactions reads every non-deleted transactionEntity row of
 // ZTRANSACTION. A row with no account, or whose account is deleted,
 // excluded or points to no row at all, is silently skipped. A row whose

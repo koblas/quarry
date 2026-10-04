@@ -75,7 +75,7 @@ func minimalRows() store.Rows {
 				Accounts: 1, Categories: 2, Payees: 3, Tags: 4, Transactions: 5, Splits: 6, SplitTags: 7, Transfers: 8,
 				Securities: 18, Prices: 19, InvestmentTransactions: 20,
 			},
-			BalancesChecked: 9, BalancesMismatched: 10, SplitsMismatched: 11, TransfersOneSided: 12, InvestmentTransactionsNotImported: 13,
+			BalancesChecked: 9, BalancesMismatched: 10, SplitsMismatched: 11, TransfersOneSided: 12,
 			BalancesNeverReconciled: 14, InvestmentAccounts: 15, TransfersPaired: 16, TransfersCrossCurrency: 17, SharesChecked: 21,
 		}},
 	}
@@ -113,8 +113,8 @@ func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
 	assertScalar(t, db, "SELECT concat_ws(' ', snapshot_path, snapshot_sha256, schema_fingerprint) FROM import_runs WHERE id = 1",
 		"/snapshots/20260927T143005Z.sqlite 9f86 sha256:abc")
 	assertScalar(t, db, "SELECT concat_ws(' ', accounts_rows, categories_rows, payees_rows, tags_rows, transactions_rows, splits_rows, "+
-		"split_tags_rows, transfers_rows, balances_checked, balances_mismatched, splits_mismatched, transfers_one_sided, "+
-		"investment_transactions_not_imported) FROM import_runs WHERE id = 1", "1 2 3 4 5 6 7 8 9 10 11 12 13")
+		"split_tags_rows, transfers_rows, balances_checked, balances_mismatched, splits_mismatched, transfers_one_sided) "+
+		"FROM import_runs WHERE id = 1", "1 2 3 4 5 6 7 8 9 10 11 12")
 	assertScalar(t, db, "SELECT concat_ws(' ', CAST(snapshot_taken_at AS VARCHAR), source_path, balances_never_reconciled, "+
 		"investment_accounts, transfers_paired, transfers_cross_currency) FROM import_runs WHERE id = 1",
 		"2026-09-27 14:30:05 /Users/alex/Documents/Home.quicken 14 15 16 17")

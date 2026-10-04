@@ -223,20 +223,19 @@ type SnapshotRef struct {
 // wrote it. FinishedAt is stamped before the store is written and swapped
 // in; both times are UTC. A build hands ImportRun.ID unset: the store numbers it.
 type ImportRun struct {
-	ID                                int64
-	StartedAt, FinishedAt             time.Time
-	Snapshot                          SnapshotRef
-	Counts                            Counts
-	BalancesChecked                   int
-	BalancesMismatched                int
-	SplitsMismatched                  int
-	TransfersOneSided                 int
-	InvestmentTransactionsNotImported int
-	SharesChecked                     int
-	BalancesNeverReconciled           int
-	InvestmentAccounts                int
-	TransfersPaired                   int
-	TransfersCrossCurrency            int
+	ID                      int64
+	StartedAt, FinishedAt   time.Time
+	Snapshot                SnapshotRef
+	Counts                  Counts
+	BalancesChecked         int
+	BalancesMismatched      int
+	SplitsMismatched        int
+	TransfersOneSided       int
+	SharesChecked           int
+	BalancesNeverReconciled int
+	InvestmentAccounts      int
+	TransfersPaired         int
+	TransfersCrossCurrency  int
 }
 
 // Status is what a built store says about itself: its path, the format and
@@ -281,8 +280,8 @@ type Counts struct {
 }
 
 // Result is what a store build returns. Built is false when a check failed:
-// Path is then empty (Replace never ran) but Counts, Validation and
-// NotImported still describe the rows the build would have written.
+// Path is then empty (Replace never ran) but Counts and Validation still
+// describe the rows the build would have written.
 // HistoryFault is why the previous store's import runs were not carried
 // into a built store; nil when they were, or no store existed. Findings
 // tallies FindingStates with no findings.ignore list, zero when Built is false;
@@ -296,7 +295,6 @@ type Result struct {
 	Built        bool
 	Counts       Counts
 	Validation   Validation
-	NotImported  NotImported
 	HistoryFault *OpenError
 	Findings     finding.Counts
 
@@ -370,12 +368,6 @@ type RatesRefresh struct {
 	Added      int
 	FetchError string
 	Partial    bool
-}
-
-// NotImported counts source rows a build deliberately leaves out of the
-// store.
-type NotImported struct {
-	InvestmentTransactions int
 }
 
 // ErrValidationFailed is Import's error when a build's checks find a mismatch.
