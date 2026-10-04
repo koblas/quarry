@@ -65,17 +65,18 @@ func Test_reference_files_state_their_job(t *testing.T) {
 		{"spending.md", []string{
 			"quarry spend", "--by", "--currency", "refund", "references/sql/spending-trend.sql",
 			"do not compare a partial period with a whole one as if they were equal",
-			"Use the `currency` that `quarry spend --json` reports, so the trend matches the user's other totals; " +
-				"`'native'` lists each currency unconverted, never added together.",
+			"| `currency` | `'CAD'`, `'USD'` or `'native'`. Use the `currency` that `quarry spend --json` reports, " +
+				"so the trend matches the user's other totals; `'native'` lists each currency unconverted, never added together. |",
 		}},
 		{"cash-flow.md", []string{
 			"quarry cashflow", "savings rate", "n/a", "partial", "references/sql/income-by-category.sql",
-			"Use the `currency` that `quarry cashflow --json` reports, so the recipe matches the user's other totals; " +
-				"`'native'` lists each currency unconverted, never added together.",
+			"| `currency` | `'CAD'`, `'USD'` or `'native'`. Use the `currency` that `quarry cashflow --json` reports, " +
+				"so the recipe matches the user's other totals; `'native'` lists each currency unconverted, never added together. |",
 		}},
 		{"recurring-and-anomalies.md", []string{
 			"quarry recurring --json", "quarry anomalies --json", "`new`", "`state`", "`first_charge`", "`price_changes`",
 			"`per_year`", "`usual`", "`times`", "`not_judged`", "no SQL form",
+			"more than 14 days (weekly), 45 days (monthly), 120 days (quarterly) or 400 days (annual)",
 		}},
 		{"search.md", []string{"quarry search", "transfer", "excluded", "native", "--limit"}},
 		{"findings.md", append(findingTypeBullets(findingTypesInHelp(t)), []string{

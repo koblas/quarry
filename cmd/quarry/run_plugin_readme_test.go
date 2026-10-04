@@ -57,6 +57,6 @@ claude plugin install quarry@quarry
 
 Ask Claude a question such as "How did our grocery spending change since 2022?" or "Which subscriptions started this year?", or type ¤/quarry:quarry¤ to load the skill yourself. Claude checks how fresh the data is with ¤quarry status¤, answers from quarry's output, and runs ¤quarry sync¤ only when you ask.
 
-quarry itself sends none of your data anywhere, but the output of the commands Claude runs becomes part of your conversation with Claude. Ask for totals rather than full transaction lists when that is all you need.
+quarry's only network request is the exchange-rate fetch during ¤quarry sync¤, which carries nothing but dates, back to the date of your earliest transaction. The output of the commands Claude runs becomes part of your conversation with Claude, so ask for totals rather than full transaction lists when that is all you need.
 
 To update the plugin: ¤claude plugin marketplace update quarry¤. Update the quarry binary at the same time; if Claude reports that quarry is older than the skill, update quarry.`

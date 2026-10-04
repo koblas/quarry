@@ -300,14 +300,14 @@ Each recipe:
   - `payee`: exact name, ignoring case. NULL means any payee.
   - `grain`: `'year'` or `'month'`.
   - `since`, `until`: DATEs; both ends are included.
-  - `currency`: `'CAD'` or `'USD'`. Use the `currency` that `quarry spend --json` reports, so the trend matches the user's other totals; `'native'` lists each currency unconverted, never added together.
+  - `currency`: `'CAD'`, `'USD'` or `'native'`. Use the `currency` that `quarry spend --json` reports, so the trend matches the user's other totals; `'native'` lists each currency unconverted, never added together.
 - **Shipped values:** grocery since 2022, i.e. `category` = `'Food:Groceries'`, `grain` = `'year'`, `since` = `2022-01-01`.
 - **Output:** `period DATE, currency VARCHAR, spent DECIMAL(18,2)`.
 - **NULL conversions:** splits whose converted amount is NULL appear on rows of their own, with `currency` set to their native currency and `spent` in that currency.
 - **Reads:** `v_spending` only.
 
 **`income-by-category.sql`**
-- **Params:** `since`, `until`, `currency`: `'CAD'` or `'USD'`. Use the `currency` that `quarry cashflow --json` reports, so the recipe matches the user's other totals; `'native'` lists each currency unconverted, never added together.
+- **Params:** `since`, `until`, `currency`: `'CAD'`, `'USD'` or `'native'`. Use the `currency` that `quarry cashflow --json` reports, so the recipe matches the user's other totals; `'native'` lists each currency unconverted, never added together.
 - **Output:** `category VARCHAR, currency VARCHAR, income DECIMAL(18,2)`. A NULL category shows as `(uncategorized)`.
 - **Reads:** `v_cash_flow` rows where `flow = 'income'`. NULL conversions go on native-currency rows.
 
@@ -344,7 +344,7 @@ claude plugin install quarry@quarry
 
 Ask Claude a question such as "How did our grocery spending change since 2022?" or "Which subscriptions started this year?", or type `/quarry:quarry` to load the skill yourself. Claude checks how fresh the data is with `quarry status`, answers from quarry's output, and runs `quarry sync` only when you ask.
 
-quarry itself sends none of your data anywhere, but the output of the commands Claude runs becomes part of your conversation with Claude. Ask for totals rather than full transaction lists when that is all you need.
+quarry's only network request is the exchange-rate fetch during `quarry sync`, which carries nothing but dates, back to the date of your earliest transaction. The output of the commands Claude runs becomes part of your conversation with Claude, so ask for totals rather than full transaction lists when that is all you need.
 
 To update the plugin: `claude plugin marketplace update quarry`. Update the quarry binary at the same time; if Claude reports that quarry is older than the skill, update quarry.
 ````
