@@ -117,6 +117,42 @@ func Test_replace_records_holding_share_spans(t *testing.T) {
 			},
 			want: "acct-1 sec-1 2026-03-01.. 1.000000; acct-1 sec-2 2026-03-01.. 2.000000; acct-2 sec-1 2026-03-01.. 3.000000",
 		},
+		{
+			name: "a short position bought back to positive closes the negative span",
+			txns: []store.InvestmentTransaction{
+				buy(acctOne, secAcme, 1, marchDay(1), -oneShare), buy(acctOne, secAcme, 2, marchDay(2), 3*oneShare),
+			},
+			want: "acct-1 sec-1 2026-03-01..2026-03-01 -1.000000; acct-1 sec-1 2026-03-02.. 2.000000",
+		},
+		{
+			name: "a short position bought back to exactly zero closes the negative span and opens none",
+			txns: []store.InvestmentTransaction{
+				buy(acctOne, secAcme, 1, marchDay(1), -oneShare), buy(acctOne, secAcme, 2, marchDay(2), oneShare),
+			},
+			want: "acct-1 sec-1 2026-03-01..2026-03-01 -1.000000",
+		},
+		{
+			name: "a one-day crossing from long to short closes the long span and opens the short one",
+			txns: []store.InvestmentTransaction{
+				buy(acctOne, secAcme, 1, marchDay(1), oneShare), buy(acctOne, secAcme, 2, marchDay(2), -2*oneShare),
+			},
+			want: "acct-1 sec-1 2026-03-01..2026-03-01 1.000000; acct-1 sec-1 2026-03-02.. -1.000000",
+		},
+		{
+			name: "a net-zero day in mid-history leaves one open span",
+			txns: []store.InvestmentTransaction{
+				buy(acctOne, secAcme, 1, marchDay(1), oneShare), buy(acctOne, secAcme, 2, marchDay(2), oneShare),
+				buy(acctOne, secAcme, 3, marchDay(2), -oneShare),
+			},
+			want: "acct-1 sec-1 2026-03-01.. 1.000000",
+		},
+		{
+			name: "a change of exactly one millionth opens a new span",
+			txns: []store.InvestmentTransaction{
+				buy(acctOne, secAcme, 1, marchDay(1), oneShare), buy(acctOne, secAcme, 2, marchDay(2), 1),
+			},
+			want: "acct-1 sec-1 2026-03-01..2026-03-01 1.000000; acct-1 sec-1 2026-03-02.. 1.000001",
+		},
 		{name: "no investment transactions store no spans", txns: nil, want: ""},
 	}
 

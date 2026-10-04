@@ -143,6 +143,11 @@ func Test_holding_spans_open_span_is_the_rounded_final_count(t *testing.T) {
 		},
 		{name: "negative count", txns: []store.InvestmentTransaction{walkTxn(1, "sec", day, -2*oneMillion)}, want: -2_000_000},
 		{
+			name: "negative count bought back to positive",
+			txns: []store.InvestmentTransaction{walkTxn(1, "sec", day, -2*oneMillion), walkTxn(2, "sec", next, 5*oneMillion)},
+			want: 3_000_000,
+		},
+		{
 			name: "fully sold",
 			txns: []store.InvestmentTransaction{walkTxn(1, "sec", day, oneMillion), walkTxn(2, "sec", next, -oneMillion)},
 			want: 0,
