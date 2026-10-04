@@ -169,9 +169,8 @@ func Test_run_sync_imports_investment_transactions_with_named_actions(t *testing
 		stringMap(t, db, `SELECT transaction_id, CAST(amount AS VARCHAR) FROM v_cash_flow`))
 }
 
-// syncThenReport syncs a chequing account with two groceries rows and an empty brokerage account, plus two
-// brokerage rows in the same category and month when withInvestments, then returns the output of spend and
-// cashflow in text and JSON, and the investment_transactions row count.
+// syncThenReport syncs two groceries rows (plus brokerage rows in the same month when withInvestments), then returns
+// spend and cashflow output in text and JSON, and the investment_transactions row count.
 func syncThenReport(t *testing.T, withInvestments bool) (map[string]string, string) {
 	t.Helper()
 	home := t.TempDir()

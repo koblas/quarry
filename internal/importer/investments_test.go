@@ -223,6 +223,9 @@ func Test_import_gives_a_zero_share_row_no_security_when_its_position_cannot_be_
 		{name: "position with no security", setup: func(b *v9fixture.Builder, accountPK, _ int64) int64 {
 			return b.Position(v9fixture.PositionRow{Account: accountPK})
 		}},
+		{name: "position with no account", setup: func(b *v9fixture.Builder, _, acmePK int64) int64 {
+			return b.Position(v9fixture.PositionRow{Security: acmePK})
+		}},
 		{name: "deleted security", setup: func(b *v9fixture.Builder, accountPK, _ int64) int64 {
 			goneSecurityPK := b.Security(v9fixture.SecurityRow{Name: "Gone Inc", Ticker: "GONE", Currency: "CAD", Deleted: true})
 			return b.Position(v9fixture.PositionRow{Account: accountPK, Security: goneSecurityPK})
@@ -244,6 +247,43 @@ func Test_import_gives_a_zero_share_row_no_security_when_its_position_cannot_be_
 			assert.Nil(t, fake.Rows.InvestmentTransactions[0].SecurityID)
 		})
 	}
+}
+
+// An account at Z_PK 0 exists, so a NULL account read as 0 would be checked against it.
+func Test_import_skips_an_investment_transaction_with_no_account(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	accountPK := newBrokerage(b)
+	livePK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
+	b.InvestmentTransaction(v9fixture.TransactionRow{Type: buyCode, Amount: "2.00", PostedDate: &investDay})
+	bundle := b.WriteBundle(t, t.TempDir())
+	execOn(t, bundle.DataPath, "INSERT INTO ZACCOUNT (Z_PK, ZNAME, ZTYPENAME, ZCURRENCY, ZACTIVE) VALUES (0, 'Zero', 'BROKERAGENORMAL', 'CAD', 1)")
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	require.Len(t, fake.Rows.InvestmentTransactions, 1)
+	assert.Equal(t, livePK, fake.Rows.InvestmentTransactions[0].SourceID)
+}
+
+// A position at Z_PK 0 exists, so a NULL position read as 0 would resolve to it.
+func Test_import_gives_a_row_with_no_position_no_security_though_a_position_has_pk_zero(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	accountPK := newBrokerage(b)
+	acmePK := newAcme(b)
+	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: acmePK})
+	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Units: "0"})
+	bundle := b.WriteBundle(t, t.TempDir())
+	execOn(t, bundle.DataPath, "UPDATE ZPOSITION SET Z_PK = 0 WHERE Z_PK = ?", positionPK)
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	require.Len(t, fake.Rows.InvestmentTransactions, 1)
+	assert.Nil(t, fake.Rows.InvestmentTransactions[0].SecurityID)
 }
 
 func Test_import_leaves_out_a_position_row_of_another_entity(t *testing.T) {
@@ -446,10 +486,12 @@ func Test_import_fails_on_shares_without_a_security(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name  string
+		units string
 		setup func(b *v9fixture.Builder, accountPK int64) int64
 	}{
-		{name: "no position", setup: func(*v9fixture.Builder, int64) int64 { return 0 }},
-		{name: "position of a deleted security", setup: func(b *v9fixture.Builder, accountPK int64) int64 {
+		{name: "no position", units: "2", setup: func(*v9fixture.Builder, int64) int64 { return 0 }},
+		{name: "negative shares and no position", units: "-4", setup: func(*v9fixture.Builder, int64) int64 { return 0 }},
+		{name: "position of a deleted security", units: "2", setup: func(b *v9fixture.Builder, accountPK int64) int64 {
 			goneSecurityPK := b.Security(v9fixture.SecurityRow{Name: "Gone Inc", Ticker: "GONE", Currency: "CAD", Deleted: true})
 			return b.Position(v9fixture.PositionRow{Account: accountPK, Security: goneSecurityPK})
 		}},
@@ -461,7 +503,7 @@ func Test_import_fails_on_shares_without_a_security(t *testing.T) {
 			b := v9fixture.NewBuilder()
 			accountPK := newBrokerage(b)
 			pk := b.InvestmentTransaction(v9fixture.TransactionRow{
-				Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Position: c.setup(b, accountPK), Units: "2",
+				Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Position: c.setup(b, accountPK), Units: c.units,
 			})
 			bundle := b.WriteBundle(t, t.TempDir())
 			fake := &fakeStore{}

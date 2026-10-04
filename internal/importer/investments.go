@@ -16,8 +16,7 @@ const investmentIDFormat = "itxn-%d"
 // splitAction is the action whose ZNUMERATOR and ZDENOMINATOR become the split columns.
 const splitAction = "split"
 
-// errSharesWithoutSecurity and errUnreadableSplitRatio fail an import whose investment row has shares but no
-// imported security, or a split with a NULL, zero or unreadable side; neither has ruled refusal copy yet.
+// errSharesWithoutSecurity and errUnreadableSplitRatio fail an import on a row quarry cannot place or read.
 var (
 	errSharesWithoutSecurity = errors.New("has shares but no security")
 	errUnreadableSplitRatio  = errors.New("has a split ratio quarry cannot read")
@@ -48,8 +47,7 @@ WHERE Z_ENT = ? AND COALESCE(ZDELETIONCOUNT, 0) = 0 AND ZACCOUNT IS NOT NULL AND
 ORDER BY Z_PK
 `
 
-// investmentsQuery reads each non-deleted investment transaction of one entity. Dates are cast to REAL
-// as in transactionsQuery; numbers come as typeof() and text so each is parsed exactly.
+// investmentsQuery reads each non-deleted investment transaction of one entity; numbers come as typeof() and text.
 const investmentsQuery = `
 SELECT t.Z_PK, t.ZACCOUNT, CAST(t.ZPOSTEDDATE AS REAL), CAST(t.ZENTEREDDATE AS REAL), t.ZTYPE, t.ZPOSITION, t.ZNOTE,
        typeof(t.ZUNITS), CAST(t.ZUNITS AS TEXT), typeof(t.ZAMOUNT), CAST(t.ZAMOUNT AS TEXT),
@@ -108,9 +106,8 @@ type investmentRow struct {
 	numerator, denominator    numberColumn
 }
 
-// mapInvestmentTransactions reads the non-deleted investment transactions of investmentEnt in an imported
-// account, dated by posted day else entered day. A row quarry cannot read is added to off and excluded;
-// its security is that of its position when the security was imported, else NULL.
+// mapInvestmentTransactions reads the investment transactions of investmentEnt in an imported account, dated posted
+// else entered; a row quarry cannot read goes to off. Its security is its position's, when imported.
 func mapInvestmentTransactions(
 	ctx context.Context, src Source, investmentEnt int64, hasEntity bool,
 	accounts map[int64]accountRef, positions map[int64]positionRef, securities map[int64]store.Security, off *offenders,

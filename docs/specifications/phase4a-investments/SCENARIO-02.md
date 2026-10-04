@@ -32,7 +32,7 @@ Size: OWNS A RUN — 4 batches, 1 feature package (importer) plus its duckstore 
 
 ## Handoff
 
-**Before dispatching B3** — copy ruling needed (CLAUDE.md *Rule copy*): NULL `ZAMOUNT` on an investment row has no S.5 line. Proposed: `an investment transaction on <date> in "<account>" has no amount` (cash `reasonTransactionNoAmount` with "investment " added). Not ruled; developer must not invent it.
+NULL `ZAMOUNT` copy is ruled (spec S.5): `an investment transaction on <date> in "<account>" has no amount`; implemented verbatim.
 
 **Binding decisions** — a later scenario must not contradict these without saying so:
 - `mapPositions` returns position Z_PK → (account, security) for non-deleted positions of the Position entity in imported accounts — S04 sums lots over this same map, so a position in a skipped account never forms a holding
