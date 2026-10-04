@@ -17,7 +17,7 @@ Surveyed (grep, production): `store.Holdings` is built in one place, `duckstore/
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_holdings_empty_test.go` `Test_run_holdings_before_the_first_investment_transaction_warns_where_they_start_and_prints_no_total` — `holdingsRows()` (`run_holdings_test.go:51`) with `inv-maple` moved to `holdingsDay(5)` so the span is `2026-03-02 to 2026-03-05`; `--as-of 2026-03-01`, clock `holdingsClock()`; stdout exactly caption `Holdings on 2026-03-01 in all accounts, amounts in CAD; cash not included` + blank line + header-only line, no Total; stderr exactly `quarry: warning: no holdings on 2026-03-01; the store's investment transactions run 2026-03-02 to 2026-03-05\n`; exit 0. Red at the stderr assertion
+- [x] Step 1: `cmd/quarry/run_holdings_empty_test.go` `Test_run_holdings_before_the_first_investment_transaction_warns_where_they_start_and_prints_no_total` — `holdingsRows()` (`run_holdings_test.go:51`) with `inv-maple` moved to `holdingsDay(5)` so the span is `2026-03-02 to 2026-03-05`; `--as-of 2026-03-01`, clock `holdingsClock()`; stdout exactly caption `Holdings on 2026-03-01 in all accounts, amounts in CAD; cash not included` + blank line + header-only line, no Total; stderr exactly `quarry: warning: no holdings on 2026-03-01; the store's investment transactions run 2026-03-02 to 2026-03-05\n`; exit 0. Red at the stderr assertion
 
 ### Build
 - [ ] Step 2: `store/store.go:165-171` `Holdings` + `duckstore/holdings.go:26-60` `(*Store).Holdings` + new `holdingsSpan` beside it (pattern `charges.go:75` `firstRate`) — add `FirstTransaction, LastTransaction time.Time` (UTC midnight, zero when none in scope) read by `SELECT min(date), max(date) FROM investment_transactions` plus ` WHERE account_id IN (marks(1))` when `params.AccountIDs` is non-empty (no day parameter here, ids start at `$1`; never `accountFilter.and`, which hard-codes `$3`), on the same handle after `firstRate`. Every investment-transaction row counts, whatever its action or security; future-dated ones too. Tests in `duckstore/holdings_test.go` (fixtures `holdingRows`, `buy`, `newStoreWith`, `marchDay`) and `holdings_account_test.go`: span of all accounts; span with none (both zero); `Test_holdings_reads_the_transaction_span_of_only_the_named_accounts` (other account's earlier and later rows excluded; id naming no account gives zero); span independent of the as-of day (a day before the first row still returns it). Fault tests: span query fault (`spyReadDB{passQueries: 2, ...}`) and span scan fault, each `assertOtherFault`; the existing `passQueries: 1` fault tests still hit the first-rate query
@@ -47,3 +47,10 @@ Surveyed (grep, production): `store.Holdings` is built in one place, `duckstore/
 - The span query text also begins `SELECT min`: fault tests key on `passQueries` (rows 0, first rate 1, span 2), not on the SQL substring
 - `accountFilter.and` hard-codes `$3` and `holdingsQueryFor` binds the day as `$1`; the span query has no day, so its ids start at `$1`: build it with `marks(1)`
 - Exact-empty stderr tests with an empty-rows fixture go stale (list in Step 4); a fixture meaning "no warning" needs a priced row
+
+## Phase report
+
+Run A (step 1) done. Ticked Step 1 only.
+- Added `cmd/quarry/run_holdings_empty_test.go` (new file, the acceptance test; no new symbols needed, so no stubs). Fixture: `holdingsRows()` with `rows.InvestmentTransactions[2].Date = holdingsDay(5)`, `--as-of 2026-03-01`, clock `holdingsClock()`.
+- Red at its stderr assertion (`run_holdings_empty_test.go:26`): expected `quarry: warning: no holdings on 2026-03-01; the store's investment transactions run 2026-03-02 to 2026-03-05\n`, actual `""`. The stdout assertion (caption + header-only line, no Total) already passes, so run B only needs the warning.
+- Nothing else touched. Run B1 starts at Step 2 (`store.Holdings` span fields + `holdingsSpan`).
