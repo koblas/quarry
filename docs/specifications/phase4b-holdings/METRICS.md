@@ -19,12 +19,16 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
+| 1 | arch, correctness, test, refactor | 0/3/10/8 | 0 / 20 (1 timed out), 1212s | BLOCKED |
 
 ## Tokens
 
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
 | --- | --- | --- | --- |
+| gate R1 | MCP holdings missing from deadline test | internal/mcp/timeout_test.go:104-121 | SCENARIO-13 |
+| gate R1 | S.1 "no --all flag" unpinned | cmd/quarry/run_usage_test.go | SCENARIO-03 |
+| gate R1 | zero / placeholder price not read through real reader | internal/store/duckstore/holdings_test.go | SCENARIO-02 |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |
