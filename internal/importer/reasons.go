@@ -145,8 +145,8 @@ func reasonInvestmentNotANumber(date, account, what string) string {
 	return fmt.Sprintf("an investment transaction on %s in \"%s\" has %s that is not a number", date, account, what)
 }
 
-func reasonInvestmentMoneyPrecision(date, account, what, amount string) string {
-	return fmt.Sprintf("an investment transaction on %s in \"%s\" has %s of %s, which has more than 2 decimal places", date, account, what, amount)
+func reasonInvestmentMoneyPrecision(date, account, what, amount string, places int) string {
+	return fmt.Sprintf("an investment transaction on %s in \"%s\" has %s of %s, which has more than %d decimal places", date, account, what, amount, places)
 }
 
 func reasonInvestmentMoneyTooLarge(date, account, what, amount string) string {

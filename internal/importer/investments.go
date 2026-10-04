@@ -229,7 +229,7 @@ func (s investmentSubject) readValues(txn *store.InvestmentTransaction) bool {
 		s.refuse(classMissingValue, reasonInvestmentNoAmount(s.day(), s.account))
 		return false
 	}
-	amount, ok := s.money(s.row.amount, "an amount")
+	amount, ok := s.money(s.row.amount, "an amount", amountColumn)
 	if !ok {
 		return false
 	}
@@ -238,7 +238,7 @@ func (s investmentSubject) readValues(txn *store.InvestmentTransaction) bool {
 	if s.row.commission.typ == "null" {
 		return true
 	}
-	commission, ok := s.money(s.row.commission, "a commission")
+	commission, ok := s.money(s.row.commission, "a commission", commissionColumn)
 	if !ok {
 		return false
 	}
@@ -269,15 +269,27 @@ func (s investmentSubject) shares() (sql.NullInt64, bool) {
 	return sql.NullInt64{}, false
 }
 
-// money returns the cents of a non-NULL amount or commission column, named what in a refusal.
-func (s investmentSubject) money(col numberColumn, what string) (int64, bool) {
+// moneyColumn is how an investment money column is read: its parser and its decimal places.
+type moneyColumn struct {
+	parse  func(typ, text string) (int64, moneyFault)
+	places int
+}
+
+var (
+	amountColumn     = moneyColumn{parse: parseMoney, places: 2}
+	commissionColumn = moneyColumn{parse: parseCommission, places: 4}
+)
+
+// money returns the units (cents for an amount, ten-thousandths for a commission) of a non-NULL
+// money column, named what in a refusal.
+func (s investmentSubject) money(col numberColumn, what string, kind moneyColumn) (int64, bool) {
 	text := col.text.String
-	cents, fault := parseMoney(col.typ, text)
+	units, fault := kind.parse(col.typ, text)
 	switch fault {
 	case moneyOK:
-		return cents, true
+		return units, true
 	case moneyPrecision:
-		s.refuse(classTransactionPrecision, reasonInvestmentMoneyPrecision(s.day(), s.account, what, text))
+		s.refuse(classTransactionPrecision, reasonInvestmentMoneyPrecision(s.day(), s.account, what, text, kind.places))
 	case moneyTooLarge:
 		s.refuse(classTooLarge, reasonInvestmentMoneyTooLarge(s.day(), s.account, what, text))
 	case moneyNotANumber:

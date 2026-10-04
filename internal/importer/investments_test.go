@@ -325,7 +325,7 @@ func Test_import_imports_no_investment_transactions_when_the_snapshot_has_no_inv
 	assert.Zero(t, result.Counts.InvestmentTransactions)
 }
 
-func Test_import_stores_commission_as_cents_and_null_for_none_or_zero(t *testing.T) {
+func Test_import_stores_commission_as_ten_thousandths_and_null_for_none_or_zero(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name       string
@@ -334,8 +334,9 @@ func Test_import_stores_commission_as_cents_and_null_for_none_or_zero(t *testing
 	}{
 		{name: "NULL", commission: "", want: nil},
 		{name: "stored zero", commission: "0", want: nil},
-		{name: "residue snapping to 0.00", commission: "0.0000001", want: nil},
-		{name: "1.50", commission: "1.50", want: new(int64(150))},
+		{name: "residue snapping to 0.0000", commission: "0.000000001", want: nil},
+		{name: "1.50", commission: "1.50", want: new(int64(15_000))},
+		{name: "8.4998", commission: "8.4998", want: new(int64(84_998))},
 	}
 
 	for _, c := range cases {
@@ -420,7 +421,7 @@ func Test_import_refuses_an_investment_value_quarry_cannot_read(t *testing.T) {
 		{name: "amount too large", amount: "10000000000000000", want: prefix + "has an amount of 10000000000000000, which is too large for quarry's amounts"},
 		{name: "amount not a number", amount: "n/a", want: prefix + "has an amount that is not a number"},
 		{name: "amount NULL", amount: "", want: prefix + "has no amount"},
-		{name: "commission beyond 2 decimals", amount: "1.00", commission: "1.234", want: prefix + "has a commission of 1.234, which has more than 2 decimal places"},
+		{name: "commission beyond 4 decimals", amount: "1.00", commission: "1.23456", want: prefix + "has a commission of 1.23456, which has more than 4 decimal places"},
 		{name: "commission too large", amount: "1.00", commission: "10000000000000000", want: prefix + "has a commission of 10000000000000000, which is too large for quarry's amounts"},
 		{name: "commission not a number", amount: "1.00", commission: "n/a", want: prefix + "has a commission that is not a number"},
 	}

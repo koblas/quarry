@@ -113,6 +113,39 @@ func Test_parse_shares_snaps_residue_within_tolerance_and_refuses_beyond(t *test
 	}
 }
 
+func Test_parse_commission_snaps_residue_within_tolerance_and_refuses_beyond(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		typ   string
+		text  string
+		want  int64
+		fault moneyFault
+	}{
+		{name: "four decimals are exact", typ: "real", text: "8.4998", want: 84_998, fault: moneyOK},
+		{name: "negative four decimals are exact", typ: "real", text: "-8.4998", want: -84_998, fault: moneyOK},
+		{name: "float residue snaps", typ: "real", text: "8.499800000000001", want: 84_998, fault: moneyOK},
+		{name: "residue exactly at the tolerance snaps", typ: "real", text: "1.00000001", want: 10_000, fault: moneyOK},
+		{name: "residue just above the tolerance is refused", typ: "real", text: "1.000000011", fault: moneyPrecision},
+		{name: "five decimals are refused", typ: "real", text: "1.23456", fault: moneyPrecision},
+		{name: "an integer", typ: "integer", text: "7", want: 70_000, fault: moneyOK},
+		{name: "the largest commission in range", typ: "real", text: "99999999999999.9999", want: 999_999_999_999_999_999, fault: moneyOK},
+		{name: "the bound itself", typ: "integer", text: "100000000000000", fault: moneyTooLarge},
+		{name: "the negative bound", typ: "integer", text: "-100000000000000", fault: moneyTooLarge},
+		{name: "text storage", typ: "text", text: "1.5", fault: moneyNotANumber},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			got, fault := parseCommission(c.typ, c.text)
+
+			assert.Equal(t, c.fault, fault)
+			assert.Equal(t, c.want, got)
+		})
+	}
+}
+
 func Test_parsePrice_refuses_a_price_that_is_not_a_number(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

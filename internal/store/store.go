@@ -157,8 +157,8 @@ type Price struct {
 }
 
 // InvestmentTransaction is one row of the investment_transactions table. Shares,
-// SplitNewShares and SplitOldShares are millionths (DECIMAL(18,6)); Amount and
-// Commission are cents. SecurityID is nil for a cash-only action, Shares nil
+// SplitNewShares and SplitOldShares are millionths (DECIMAL(18,6)); Amount is
+// cents; Commission is ten-thousandths (DECIMAL(18,4)). SecurityID is nil for a cash-only action, Shares nil
 // when Quicken records none, and the split sides are set only for a split.
 type InvestmentTransaction struct {
 	ID             string

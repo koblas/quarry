@@ -59,7 +59,7 @@ func minimalRows() store.Rows {
 		InvestmentTransactions: []store.InvestmentTransaction{{
 			ID: "inv-1", SourceID: 21, AccountID: "acct-1", SecurityID: new("sec-1"),
 			Date: time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC), Action: "split", Shares: new(int64(1_500_000)),
-			Amount: 12_345, Commission: new(int64(150)), Currency: "CAD", Memo: new("note"),
+			Amount: 12_345, Commission: new(int64(84_998)), Currency: "CAD", Memo: new("note"),
 			SplitNewShares: new(int64(12_000_000)), SplitOldShares: new(int64(1_000_000)),
 		}, {
 			ID: "inv-2", SourceID: 22, AccountID: "acct-1",
@@ -135,7 +135,7 @@ func Test_replace_stores_an_investment_transaction_with_every_nullable_column_se
 	db := openReadOnly(t, st.Path())
 	assertScalar(t, db, "SELECT concat_ws(' ', source_id, account_id, security_id, CAST(date AS VARCHAR), action, CAST(shares AS VARCHAR), "+
 		"CAST(amount AS VARCHAR), CAST(commission AS VARCHAR), currency, memo, CAST(split_new_shares AS VARCHAR), CAST(split_old_shares AS VARCHAR)) "+
-		"FROM investment_transactions WHERE id = 'inv-1'", "21 acct-1 sec-1 2026-03-16 split 1.500000 123.45 1.50 CAD note 12.000000 1.000000")
+		"FROM investment_transactions WHERE id = 'inv-1'", "21 acct-1 sec-1 2026-03-16 split 1.500000 123.45 8.4998 CAD note 12.000000 1.000000")
 }
 
 func Test_replace_stores_an_investment_transaction_with_every_nullable_column_null(t *testing.T) {
@@ -486,22 +486,22 @@ func Test_replace_stores_the_largest_investment_amounts_and_shares_the_columns_h
 	require.NoError(t, err)
 	assertScalar(t, openReadOnly(t, st.Path()), "SELECT concat_ws(' ', CAST(shares AS VARCHAR), CAST(amount AS VARCHAR), CAST(commission AS VARCHAR), "+
 		"CAST(split_new_shares AS VARCHAR), CAST(split_old_shares AS VARCHAR)) FROM investment_transactions WHERE id = 'inv-1'",
-		"999999999999.999999 9999999999999999.99 -9999999999999999.99 999999999999.999999 -999999999999.999999")
+		"999999999999.999999 9999999999999999.99 -99999999999999.9999 999999999999.999999 -999999999999.999999")
 }
 
 func Test_replace_fails_when_an_investment_transaction_value_is_out_of_range(t *testing.T) {
 	t.Parallel()
-	const beyondScale6, beyondScale2 = 1_000_000_000_000_000_000, math.MaxInt64
+	const beyond18Digits, beyondAmount = 1_000_000_000_000_000_000, math.MaxInt64
 	cases := []struct {
 		name    string
 		corrupt func(*store.InvestmentTransaction)
 		column  string
 	}{
-		{"shares", func(i *store.InvestmentTransaction) { i.Shares = new(int64(beyondScale6)) }, "shares"},
-		{"amount", func(i *store.InvestmentTransaction) { i.Amount = beyondScale2 }, "amount"},
-		{"commission", func(i *store.InvestmentTransaction) { i.Commission = new(int64(beyondScale2)) }, "commission"},
-		{"split new shares", func(i *store.InvestmentTransaction) { i.SplitNewShares = new(int64(-beyondScale6)) }, "split_new_shares"},
-		{"split old shares", func(i *store.InvestmentTransaction) { i.SplitOldShares = new(int64(beyondScale6)) }, "split_old_shares"},
+		{"shares", func(i *store.InvestmentTransaction) { i.Shares = new(int64(beyond18Digits)) }, "shares"},
+		{"amount", func(i *store.InvestmentTransaction) { i.Amount = beyondAmount }, "amount"},
+		{"commission", func(i *store.InvestmentTransaction) { i.Commission = new(int64(beyond18Digits)) }, "commission"},
+		{"split new shares", func(i *store.InvestmentTransaction) { i.SplitNewShares = new(int64(-beyond18Digits)) }, "split_new_shares"},
+		{"split old shares", func(i *store.InvestmentTransaction) { i.SplitOldShares = new(int64(beyond18Digits)) }, "split_old_shares"},
 	}
 
 	for _, c := range cases {

@@ -54,6 +54,9 @@ const moneyWidth, moneyScale = 18, 2
 // priceWidth and priceScale match schemaDDL's DECIMAL(18,6) price column.
 const priceWidth, priceScale = 18, 6
 
+// commissionWidth and commissionScale match schemaDDL's DECIMAL(18,4) commission column.
+const commissionWidth, commissionScale = 18, 4
+
 // DB is the connection a Store builds one partial file through.
 // *duckdb.DB is the production implementation.
 type DB interface {
@@ -655,7 +658,7 @@ func investmentTransactionRows(txns []store.InvestmentTransaction) ([][]any, err
 	for i, t := range txns {
 		shares, err1 := decimalCell("shares", t.Shares, priceWidth, priceScale)
 		amount, err2 := decimalCell("amount", &t.Amount, moneyWidth, moneyScale)
-		commission, err3 := decimalCell("commission", t.Commission, moneyWidth, moneyScale)
+		commission, err3 := decimalCell("commission", t.Commission, commissionWidth, commissionScale)
 		splitNew, err4 := decimalCell("split_new_shares", t.SplitNewShares, priceWidth, priceScale)
 		splitOld, err5 := decimalCell("split_old_shares", t.SplitOldShares, priceWidth, priceScale)
 		if err := errors.Join(err1, err2, err3, err4, err5); err != nil {

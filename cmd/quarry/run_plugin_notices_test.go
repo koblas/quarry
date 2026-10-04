@@ -50,7 +50,7 @@ func Test_notices_and_prd_carry_the_ruled_plugin_edits(t *testing.T) {
 		{
 			"prd names the investment transactions table and defers its cash side",
 			"docs/initial-prd.md",
-			"| `investment_transactions` | Action (buy, sell, dividend, reinvest, share transfer, split), security, shares, price, fees, amount " +
+			"| `investment_transactions` (commission DECIMAL(18,4)) | Action (buy, sell, dividend, reinvest, share transfer, split), security, shares, price, fees, amount " +
 				"| Cash side also appears in `transactions` (from Phase 4c) |",
 		},
 	}

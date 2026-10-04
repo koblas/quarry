@@ -11,11 +11,21 @@ var priceUnscaledBound = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 // priceScale is the factor from a price to its millionths, the DECIMAL(18,6) unscaled value.
 var priceScale = big.NewRat(1_000_000, 1)
 
-// sharesBound is the exclusive bound on a share count's magnitude: a DECIMAL(18,6) holds 10^12 shares.
-const sharesBound = 1_000_000_000_000
+// fixedPoint is a DECIMAL(18, n) column read exactly by parseFixed: scale is the factor from a value to its
+// unscaled units, bound the exclusive magnitude in whole units, toleranceInverse 1 over the distance within
+// which a REAL is float residue of its nearest unit.
+type fixedPoint struct {
+	scale            *big.Rat
+	bound            int64
+	toleranceInverse int64
+}
 
-// sharesSnapToleranceInverse is 1 over the share tolerance within which a REAL is float residue of its millionth.
-const sharesSnapToleranceInverse = 1_000_000_000 // tolerance 1e-9 shares
+// sharesFixed is the DECIMAL(18,6) share column: 10^12 shares, tolerance 1e-9.
+var sharesFixed = fixedPoint{scale: priceScale, bound: 1_000_000_000_000, toleranceInverse: 1_000_000_000}
+
+// commissionFixed is the DECIMAL(18,4) commission column: 10^14 units, tolerance 1e-8, so a value a
+// ten-thousandth apart from its neighbour is never mistaken for residue.
+var commissionFixed = fixedPoint{scale: big.NewRat(10_000, 1), bound: 100_000_000_000_000, toleranceInverse: 100_000_000}
 
 // parsePrice returns the millionths of a price column from its typeof() and text, rounded half
 // to even; a value reaching the DECIMAL(18,6) bound is moneyTooLarge, non-numeric moneyNotANumber.
@@ -35,29 +45,39 @@ func parsePrice(typ, text string) (int64, moneyFault) {
 	return millionths, moneyOK
 }
 
-// parseShares returns the millionths of a share column exactly: a value within the snap tolerance of a
-// millionth is that millionth, one further off is moneyPrecision, one reaching 10^12 shares moneyTooLarge.
+// parseShares returns the millionths of a share column exactly; see parseFixed.
 func parseShares(typ, text string) (int64, moneyFault) {
+	return parseFixed(typ, text, sharesFixed)
+}
+
+// parseCommission returns the ten-thousandths of a commission column exactly; see parseFixed.
+func parseCommission(typ, text string) (int64, moneyFault) {
+	return parseFixed(typ, text, commissionFixed)
+}
+
+// parseFixed returns the unscaled units of a numeric column exactly: a value within the snap tolerance of a
+// unit is that unit, one further off is moneyPrecision, one reaching the bound moneyTooLarge.
+func parseFixed(typ, text string, f fixedPoint) (int64, moneyFault) {
 	value, negative, fault := decimalColumn(typ, text)
 	if fault != moneyOK {
 		return 0, fault
 	}
-	if value.Cmp(big.NewRat(sharesBound, 1)) >= 0 {
+	if value.Cmp(big.NewRat(f.bound, 1)) >= 0 {
 		return 0, moneyTooLarge
 	}
-	millionths := roundHalfEven(new(big.Rat).Mul(value, priceScale))
-	snapped := new(big.Rat).SetFrac(millionths, priceScale.Num())
+	units := roundHalfEven(new(big.Rat).Mul(value, f.scale))
+	snapped := new(big.Rat).SetFrac(units, f.scale.Num())
 	distance := snapped.Sub(snapped, value)
-	if distance.Abs(distance).Cmp(big.NewRat(1, sharesSnapToleranceInverse)) > 0 {
+	if distance.Abs(distance).Cmp(big.NewRat(1, f.toleranceInverse)) > 0 {
 		return 0, moneyPrecision
 	}
-	if millionths.Cmp(priceUnscaledBound) >= 0 {
+	if units.Cmp(priceUnscaledBound) >= 0 {
 		return 0, moneyTooLarge
 	}
 	if negative {
-		return -millionths.Int64(), moneyOK
+		return -units.Int64(), moneyOK
 	}
-	return millionths.Int64(), moneyOK
+	return units.Int64(), moneyOK
 }
 
 // decimalColumn returns the magnitude and sign of a numeric column from its typeof() and text;

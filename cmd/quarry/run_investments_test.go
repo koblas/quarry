@@ -145,7 +145,7 @@ func Test_run_sync_imports_investment_transactions_with_named_actions(t *testing
 	acme := fmt.Sprintf("sec-%d", acmePK)
 	assert.Equal(t, map[string]string{
 		itxnID(addSharesPK):        "add_shares|0.000000|0.00|NULL|" + acme + "|NULL|NULL",
-		itxnID(buyPK):              "buy|10.000000|-1000.50|9.99|" + acme + "|NULL|NULL",
+		itxnID(buyPK):              "buy|10.000000|-1000.50|9.9900|" + acme + "|NULL|NULL",
 		itxnID(marginInterestPK):   "margin_interest|NULL|-3.25|NULL|NULL|NULL|NULL",
 		itxnID(miscExpensePK):      "misc_expense|NULL|-5.00|NULL|NULL|NULL|NULL",
 		itxnID(capitalGainLongPK):  "capital_gain_long|0.000000|20.00|NULL|" + acme + "|NULL|NULL",
@@ -155,7 +155,7 @@ func Test_run_sync_imports_investment_transactions_with_named_actions(t *testing
 		itxnID(miscIncomePK):       "misc_income|NULL|2.20|NULL|NULL|NULL|NULL",
 		itxnID(reinvestPK):         "reinvest_dividend|0.500000|-6.00|NULL|" + acme + "|NULL|NULL",
 		itxnID(removeSharesPK):     "remove_shares|0.000000|0.00|NULL|" + acme + "|NULL|NULL",
-		itxnID(sellPK):             "sell|-4.000000|400.25|4.95|" + acme + "|NULL|NULL",
+		itxnID(sellPK):             "sell|-4.000000|400.25|4.9500|" + acme + "|NULL|NULL",
 		itxnID(splitPK):            "split|0.000000|0.00|NULL|" + acme + "|1.000000|12.000000",
 	}, stringMap(t, db, `SELECT id, concat_ws('|', action, COALESCE(CAST(shares AS VARCHAR), 'NULL'), CAST(amount AS VARCHAR),
 		COALESCE(CAST(commission AS VARCHAR), 'NULL'), COALESCE(security_id, 'NULL'),
@@ -249,6 +249,10 @@ func Test_run_sync_refuses_an_investment_record_quarry_cannot_read(t *testing.T)
 			positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
 			b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: new(int64(3)), Amount: "1.00", PostedDate: &day, Position: positionPK, Units: "1.23456789"})
 			return brokerage + " has 1.23456789 shares, which has more than 6 decimal places"
+		}},
+		{name: "a commission of 1.23456", setup: func(b *v9fixture.Builder, brokeragePK int64) string {
+			b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: new(int64(3)), Amount: "1.00", PostedDate: &day, Commission: "1.23456"})
+			return brokerage + " has a commission of 1.23456, which has more than 4 decimal places"
 		}},
 		{name: "a split ratio 1:0", setup: func(b *v9fixture.Builder, brokeragePK int64) string {
 			acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})

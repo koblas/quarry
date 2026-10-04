@@ -94,7 +94,7 @@ CREATE TABLE investment_transactions (
 	action VARCHAR NOT NULL,
 	shares DECIMAL(18,6),
 	amount DECIMAL(18,2) NOT NULL,
-	commission DECIMAL(18,2),
+	commission DECIMAL(18,4),
 	currency VARCHAR NOT NULL,
 	memo VARCHAR,
 	split_new_shares DECIMAL(18,6),
