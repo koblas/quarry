@@ -392,6 +392,30 @@ func Test_balances_daily_balance_is_cash_in_an_account_without_holdings_figures(
 	assert.Equal(t, [][]string{{"100.00", "100.00"}}, got)
 }
 
+func Test_balances_daily_balance_is_holdings_value_in_an_account_with_no_transaction(t *testing.T) {
+	t.Parallel()
+	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), 3*oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)}
+	st := newStoreWith(t, rows)
+
+	got := queryTexts(t, st, "SELECT cash, holdings_value, balance, balance_cad FROM v_balances_daily WHERE account_id = '"+acctOne+"' AND date = '2026-03-02'")
+
+	assert.Equal(t, [][]string{{"0.00", "30.00", "30.00", "30.00"}}, got)
+}
+
+func Test_balances_daily_cash_is_zero_on_the_days_before_the_first_transaction(t *testing.T) {
+	t.Parallel()
+	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(2), oneShare))
+	rows.Transactions = []store.Transaction{transaction("t1", acctOne, marchDay(5), 10_000)}
+	st := newStoreWith(t, rows)
+
+	got := queryTexts(t, st, "SELECT CAST(date AS VARCHAR), cash, balance FROM v_balances_daily WHERE account_id = '"+acctOne+"' AND date BETWEEN '2026-03-02' AND '2026-03-05' ORDER BY date")
+
+	assert.Equal(t, [][]string{
+		{"2026-03-02", "0.00", "0.00"}, {"2026-03-03", "0.00", "0.00"}, {"2026-03-04", "0.00", "0.00"}, {"2026-03-05", "100.00", "100.00"},
+	}, got)
+}
+
 func Test_balances_daily_view_lists_its_columns_in_order(t *testing.T) {
 	t.Parallel()
 	st := newStoreWith(t, balanceRows())

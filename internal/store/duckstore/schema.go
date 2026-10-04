@@ -302,9 +302,7 @@ func balancesDailyViewDDL() string {
 	for _, t := range store.InvestmentAccountTypes() {
 		quoted = append(quoted, "'"+strings.ReplaceAll(t, "'", "''")+"'")
 	}
-	// A holding is valued when v_holdings gives its value in the account's currency; any other holding adds to
-	// holdings_unvalued instead. The running cash sum spans only the days listed, so a future-dated transaction
-	// never reaches a row.
+	// A holding is valued when v_holdings gives its value in the account's currency; any other counts as unvalued.
 	return `
 CREATE VIEW v_balances_daily AS
 WITH firsts AS (
