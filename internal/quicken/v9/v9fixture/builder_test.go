@@ -145,7 +145,9 @@ func Test_builder_seeds_securities_and_their_quotes_with_entity_rows(t *testing.
 	assert.Equal(t, int64(9068), queryInt(t, db, "SELECT Z_ENT FROM ZSECURITYQUOTE WHERE Z_PK = ?", quotePK))
 	assert.Equal(t, "real", queryString(t, db, "SELECT typeof(ZCLOSINGPRICE) FROM ZSECURITYQUOTE WHERE Z_PK = ?", quotePK))
 	assert.Equal(t, "integer", queryString(t, db, "SELECT typeof(ZCLOSINGPRICE) FROM ZSECURITYQUOTE WHERE Z_PK = ?", wholeQuotePK))
-	assert.Equal(t, int64(1), queryInt(t, db, "SELECT count(*) FROM ZSECURITYQUOTE WHERE Z_PK = ? AND ZSECURITY IS NULL AND ZQUOTEDATE IS NULL AND ZCLOSINGPRICE IS NULL AND ZDELETIONCOUNT = 1", bareQuotePK))
+	assert.Equal(t, int64(1), queryInt(t, db,
+		"SELECT count(*) FROM ZSECURITYQUOTE WHERE Z_PK = ? AND ZSECURITY IS NULL AND ZQUOTEDATE IS NULL"+
+			" AND ZCLOSINGPRICE IS NULL AND ZDELETIONCOUNT = 1", bareQuotePK))
 	assert.Equal(t, bareSecurityPK, queryInt(t, db, "SELECT Z_MAX FROM Z_PRIMARYKEY WHERE Z_ENT = ?", v9fixture.EntSecurity))
 	assert.Equal(t, bareQuotePK, queryInt(t, db, "SELECT Z_MAX FROM Z_PRIMARYKEY WHERE Z_ENT = ?", 9068))
 }

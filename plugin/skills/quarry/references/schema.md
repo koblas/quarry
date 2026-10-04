@@ -116,6 +116,8 @@ each one's status.
 | `rates_checked_from` | `DATE` |
 | `rates_last` | `DATE` |
 | `rates_fetch_error` | `VARCHAR` |
+| `securities_rows` | `BIGINT` |
+| `prices_rows` | `BIGINT` |
 
 ### payees
 
@@ -124,6 +126,25 @@ each one's status.
 | `id` | `VARCHAR` |
 | `source_id` | `BIGINT` |
 | `name` | `VARCHAR` |
+
+### prices
+
+| column | type |
+| --- | --- |
+| `security_id` | `VARCHAR` |
+| `source_id` | `BIGINT` |
+| `date` | `DATE` |
+| `price` | `DECIMAL(18,6)` |
+
+### securities
+
+| column | type |
+| --- | --- |
+| `id` | `VARCHAR` |
+| `source_id` | `BIGINT` |
+| `name` | `VARCHAR` |
+| `ticker` | `VARCHAR` |
+| `currency` | `VARCHAR` |
 
 ### split_tags
 

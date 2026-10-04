@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01
-status: open
+status: done
 ---
 
 # SCENARIO-01: Sync imports securities and their prices
@@ -24,10 +24,10 @@ Size: OWNS A RUN — 3 Build batches (+ fixture in A), 1 feature package (import
 - [x] Step 5: counts + import_runs + format — `store.go:212-221` `Counts.Securities/Prices` set at `importer.go:122-125`; `schema.go:79-108` nullable `securities_rows`, `prices_rows` BIGINT appended after `rates_fetch_error`; `duckstore.go:580-597` `importRunRows` appends both after the three rates `nil`s (rates are set by name, `rates.go:21`); `history.go:41-44` `optionalRunColumns` + `carriedRun` `:310-343` (NullInt64 targets/values); `status.go:16-29,59-68` `COALESCE(...,0)` into `Run.Counts`; `duckstore.go:25` `FormatVersion = 6`. Tests: `minimalRows` (`duckstore_test.go:25`) run gets non-zero security/price counts so `history_test.go:77-94` carries values; `history_test.go:96-110` adds both `IS NULL`; `status_test.go:18` read-back and `:63` NULL→0; importer test that `ImportRuns[0].Counts` carries both; cmd-level `Test_run_sync_records_security_and_price_counts_in_import_runs` in `run_investments_test.go`. Output arms: n/a — S01 renders nothing; Rows clause, `--json` `store.rows` keys are S04's
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; re-pin `cmd/quarry/run_shared_documents_test.go:132` `format_version` 6; `duckstore/query_test.go:30-35` `storeRelations` adds `prices`, `securities`; Builder doc comments naming "five entity kinds" (`builder.go:184-187,209-211,375-377`); doc comments on new types/funcs; regenerate `plugin/skills/quarry/references/schema.md` with `go test ./cmd/quarry/ -run SchemaReference -update`
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; re-pin `cmd/quarry/run_shared_documents_test.go:132` `format_version` 6; `duckstore/query_test.go:30-35` `storeRelations` adds `prices`, `securities`; Builder doc comments naming "five entity kinds" (`builder.go:184-187,209-211,375-377`); doc comments on new types/funcs; regenerate `plugin/skills/quarry/references/schema.md` with `go test ./cmd/quarry/ -run SchemaReference -update`
 
 ### Verify
-- [ ] Step 7: full verification + `spec-check.py phase4a-investments` → tick SCENARIO-01 with its acceptance test; write `STATE.md`
+- [x] Step 7: full verification + `spec-check.py phase4a-investments` → tick SCENARIO-01 with its acceptance test; write `STATE.md`
 
 ## Handoff
 
@@ -51,10 +51,8 @@ Size: OWNS A RUN — 3 Build batches (+ fixture in A), 1 feature package (import
 
 ## Phase report
 
-Run B1 (steps 3-5) done; acceptance test and the narrow loop are green, `golangci-lint` on importer/store/cmd is `0 issues`. Run V owns the rest.
-- Production: `internal/store/store.go` `Security`, `Price`, `Rows.Securities/Prices`, `Counts.Securities/Prices`; `internal/importer/entities.go` `optionalEntities` (+`securityEntity`, `securityQuoteEntity`, placeholders generated); `securities.go` (`mapSecurities`, `mapPrices`, queries; ZSECURITY probe `ZTICKER`, ZSECURITYQUOTE probe `ZCLOSINGPRICE` for fault tests); `price.go` (`parsePrice`, `roundHalfEven`, `priceUnscaledBound`); `reasons.go` price refusals; `importer.go` calls both before `off.firstError()`.
-- Store: `duckstore/schema.go` `securities`, `prices` (PK security_id,date), `securities_rows`/`prices_rows` after `rates_fetch_error`; `duckstore.go` `FormatVersion = 6`, `securityRows`/`priceRows`, `importRunRows` appends both counts; `history.go` optional columns + carriedRun; `status.go` COALESCE reads.
-- Tests: `importer/securities_test.go`, `prices_test.go`, `price_internal_test.go` (new); fault rows in `import_faults_test.go`; `import_runs_test.go` counts test; duckstore `minimalRows` (2 securities, 1 price, counts 18/19), round trip, NULL ticker/currency, dup-id rows, out-of-range price, history NULL carry, status NULL->0, `query_test.go` `storeRelations` (step 6 item done); cmd `Test_run_sync_records_security_and_price_counts_in_import_runs`.
-- Still red in the wider suite (V's step 6): `cmd/quarry/run_shared_documents_test.go:132` `format_version` 5 -> 6; `Test_skill_schema_reference_matches_the_committed_file` (run `go test ./cmd/quarry/ -run SchemaReference -update`). Nothing else failed in `./internal/store/... ./internal/importer/... ./cmd/quarry/` full runs.
-- Decisions: currency is stored as recorded (NULL only when NULL; `""` stays `""`); prices sort by security id string then date; "too large" refusal quotes the SQLite text of the price. No mutation checks planned.
-- Not run: full suite, coverage gate, `test-stats.py`, `-race`, repo-wide lint (V).
+Run V done; scenario complete, `status: done`.
+- Sweep: `cmd/quarry/run_shared_documents_test.go:132` `format_version` 6; `plugin/skills/quarry/references/schema.md` regenerated; `internal/quicken/v9/v9fixture/builder_test.go:148` wrapped (lll); Builder doc comments already correct ("seven entity kinds"); `query_test.go` `storeRelations` done in B1.
+- Verify: `go build ./...` ok; `golangci-lint run ./...` `0 issues`; full covered suite `go test rc=0`; `uncovered-diff.py` 0 uncovered since 7bfb7b5, 1 declared unreachable (`internal/importer/price.go:32`); `-race` on importer/store/quicken ok.
+- test-stats `--base 7bfb7b5 --changed`: cmd/quarry 664 (+2), internal/importer 176 (+25), v9fixture 8 (+1), duckstore 533 (+3), TOTAL 1381 (+31) tests, tempdir 804 (+9), disk 730 (+7).
+- Spec ticked; `spec-check.py phase4a-investments` OK; `STATE.md` written.
