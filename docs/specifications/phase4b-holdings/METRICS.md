@@ -6,6 +6,7 @@
 | SCENARIO-01 (+14) | test-first | A, B1, B2, V | 0/1/4/0 | yes (leaving a negative count unpinned; folds: negative DECIMAL edge, mid-history net-zero day, one-millionth boundary, overflow decision recorded) |
 | SCENARIO-02 | code-first | A, B1, V | 0/2/2/0 | yes (not-in-reports/linked-tracking listing unpinned; no-price row converted cells unpinned; folds: positional asserts, stale doc) |
 | SCENARIO-03 | code-first | A, B1, B2, V | 0/1/5/1 | yes (zero price/value in --json unpinned; folds: total-rule test copy, read counter, home-unset row, test structure, currency escape) |
+| SCENARIO-04 | code-first (light) | L, V | 0/0/2/0 | no (MINOR → STATE.md) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
