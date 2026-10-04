@@ -140,12 +140,21 @@ func parseWindow(since, until *string, now time.Time, futureSince WindowErrorKin
 // parseDateBound is the first and last day of the year, month or day that
 // value names, or a WindowNotADate error for bound when it names none.
 func parseDateBound(bound, value string) (time.Time, time.Time, error) {
+	first, last, ok := datePeriod(value)
+	if !ok {
+		return time.Time{}, time.Time{}, WindowError{Kind: WindowNotADate, Bound: bound, Value: value}
+	}
+	return first, last, nil
+}
+
+// datePeriod is the first and last day of the year, month or day that value names; ok is false when it names none.
+func datePeriod(value string) (time.Time, time.Time, bool) {
 	for _, form := range dateForms {
 		if first, err := time.Parse(form.layout, value); err == nil {
-			return first, first.AddDate(form.years, form.months, form.days), nil
+			return first, first.AddDate(form.years, form.months, form.days), true
 		}
 	}
-	return time.Time{}, time.Time{}, WindowError{Kind: WindowNotADate, Bound: bound, Value: value}
+	return time.Time{}, time.Time{}, false
 }
 
 // ParseSearchWindow resolves since and until into a search window; a nil pointer is an open bound,
