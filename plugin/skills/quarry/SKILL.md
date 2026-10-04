@@ -71,7 +71,7 @@ quarry never writes to Quicken and never edits its own store by request. To fix 
 ## 7. Not covered yet
 
 - **Net worth:** "quarry does not compute net worth yet: it values investment holdings but not the cash in investment accounts." `quarry accounts` lists the other balances and `quarry holdings` the holdings; don't add them up.
-- **Dividends, realized gains, ACB:** "quarry imports investment transactions and values holdings, but does not compute dividends, gains or ACB yet."
+- **Realized gains, ACB:** "quarry counts dividends, interest and capital-gain distributions as income (query v_cash_flow by category for their totals), but does not compute gains or ACB yet."
 - **Tax:** quarry has no tax-line data. Give totals for the categories the user names for the year, from `quarry spend --by category` and `references/sql/income-by-category.sql`. These are figures to review, not tax advice or a filing.
 
 ## 8. When a command fails

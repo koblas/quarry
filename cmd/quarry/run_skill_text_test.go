@@ -217,7 +217,7 @@ Write user-supplied values only in a recipe's ¤params¤ row, and double any sin
 	skillSection6 = `quarry never writes to Quicken and never edits its own store by request. To fix a category, payee, duplicate or transfer, the user makes the change in Quicken, then runs ¤quarry sync¤; findings it no longer finds are marked fixed. To stop listing a finding the user has checked, they add its id to ¤findings.ignore¤ in ¤~/Library/Application Support/quarry/config.toml¤; quarry never writes that file, and you don't either unless the user asks. Run ¤quarry sync¤ or ¤quarry snapshots prune¤, or write output to a file, only when the user asks.`
 
 	skillSection7 = `- **Net worth:** "quarry does not compute net worth yet: it values investment holdings but not the cash in investment accounts." ¤quarry accounts¤ lists the other balances and ¤quarry holdings¤ the holdings; don't add them up.
-- **Dividends, realized gains, ACB:** "quarry imports investment transactions and values holdings, but does not compute dividends, gains or ACB yet."
+- **Realized gains, ACB:** "quarry counts dividends, interest and capital-gain distributions as income (query v_cash_flow by category for their totals), but does not compute gains or ACB yet."
 - **Tax:** quarry has no tax-line data. Give totals for the categories the user names for the year, from ¤quarry spend --by category¤ and ¤references/sql/income-by-category.sql¤. These are figures to review, not tax advice or a filing.`
 
 	skillSection8 = `| Outcome | How Claude sees it | What Claude says or does |
