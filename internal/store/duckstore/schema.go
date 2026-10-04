@@ -355,13 +355,23 @@ COMMENT ON VIEW v_balances_daily IS '` + strings.ReplaceAll(balancesDailyViewCom
 `
 }
 
+// netWorthViewComment is the COMMENT ON VIEW text of v_net_worth.
+const netWorthViewComment = "net worth by day, account type and currency over the accounts Quicken's reports count, as quarry networth does; " +
+	"sum balance_cad or balance_usd over one date for the total; a NULL there means no exchange rate for that day."
+
 // netWorthViewDDL creates v_net_worth: net worth by day, account type and currency over the accounts Quicken's reports count.
 func netWorthViewDDL() string {
+	// Rate presence depends only on (currency, day), so within a row every account has a rate or none does and a plain sum is NULL exactly when one is missing.
 	return `
 CREATE VIEW v_net_worth AS
-SELECT CAST(NULL AS DATE) AS date, CAST(NULL AS VARCHAR) AS type, CAST(NULL AS VARCHAR) AS currency,
-	CAST(NULL AS BIGINT) AS accounts, CAST(NULL AS DECIMAL(38,2)) AS balance,
-	CAST(NULL AS DECIMAL(38,2)) AS balance_cad, CAST(NULL AS DECIMAL(38,2)) AS balance_usd
-WHERE false;
+SELECT b.date, b.type, b.currency, count(*) AS accounts,
+	CAST(sum(b.balance) AS DECIMAL(38,2)) AS balance,
+	CAST(sum(b.balance_cad) AS DECIMAL(38,2)) AS balance_cad,
+	CAST(sum(b.balance_usd) AS DECIMAL(38,2)) AS balance_usd
+FROM v_balances_daily b
+JOIN accounts a ON a.id = b.account_id
+WHERE ` + reportedAccount + `
+GROUP BY b.date, b.type, b.currency;
+COMMENT ON VIEW v_net_worth IS '` + strings.ReplaceAll(netWorthViewComment, "'", "''") + `';
 `
 }

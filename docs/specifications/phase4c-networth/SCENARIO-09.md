@@ -28,8 +28,8 @@ Spec: N-6, edge rows closed account / not-in-reports / linked-tracking / rate ga
 - [x] Step 2: `schema.go` after `:354` `netWorthViewDDL` + `netWorthViewComment` stub (columns only); append `netWorthViewDDL()` at the end of the `duckstore.go:454` Exec (after `accountBalancesViewDDL()`, ordering of the two untouched); `duckstore/query_test.go:31-35` `storeRelations` gains `v_net_worth` (its `NotEmpty` loop needs a row). Red at the CSV assertion. Expected red outside the loop until Step 6: `Test_skill_schema_reference_matches_the_committed_file`, `…_does_not_name_a_view_the_store_lacks`.
 
 ### Build
-- [ ] Step 3: `schema.go` `netWorthViewDDL` — grain, filter, counts, `balance`; new `internal/store/duckstore/net_worth_view_test.go`. Rows: one row per date x type x currency; `accounts` counts members; two accounts of one type and currency sum into one row; same type other currency and same currency other type are separate rows; closed account counted (and stays counted on later days); `Test_net_worth_leaves_out_accounts_not_in_reports_and_linked_tracking` (each its own row, control = counted account differing in that one flag; a date whose only accounts are left out has no row); an account is absent before its first transaction (bound: day before / day of); negative balance (liability) keeps its sign.
-- [ ] Step 4: `schema.go` `netWorthViewDDL` — `balance_cad`, `balance_usd` as plain `sum`; `COMMENT ON VIEW` from `netWorthViewComment` (N-6 verbatim, `strings.ReplaceAll` quote escape like `schema.go:354`). Rows: converted = sum of per-account rounded values (two accounts whose rounded sum differs from the rounded total); CAD row before the first rate keeps `balance_cad`, `balance_usd` NULL, USD mirror; EUR row both NULL (out-of-domain); rate gap takes prior rate; one date's converted columns summed across rows = the total (the doc'd use). `Test_net_worth_view_lists_its_columns_in_order` (types incl. `accounts` BIGINT, widths 38) and `…_carries_its_note`, mirroring `balances_daily_view_test.go:419-460`.
+- [x] Step 3: `schema.go` `netWorthViewDDL` — grain, filter, counts, `balance`; new `internal/store/duckstore/net_worth_view_test.go`. Rows: one row per date x type x currency; `accounts` counts members; two accounts of one type and currency sum into one row; same type other currency and same currency other type are separate rows; closed account counted (and stays counted on later days); `Test_net_worth_leaves_out_accounts_not_in_reports_and_linked_tracking` (each its own row, control = counted account differing in that one flag; a date whose only accounts are left out has no row); an account is absent before its first transaction (bound: day before / day of); negative balance (liability) keeps its sign.
+- [x] Step 4: `schema.go` `netWorthViewDDL` — `balance_cad`, `balance_usd` as plain `sum`; `COMMENT ON VIEW` from `netWorthViewComment` (N-6 verbatim, `strings.ReplaceAll` quote escape like `schema.go:354`). Rows: converted = sum of per-account rounded values (two accounts whose rounded sum differs from the rounded total); CAD row before the first rate keeps `balance_cad`, `balance_usd` NULL, USD mirror; EUR row both NULL (out-of-domain); rate gap takes prior rate; one date's converted columns summed across rows = the total (the doc'd use). `Test_net_worth_view_lists_its_columns_in_order` (types incl. `accounts` BIGINT, widths 38) and `…_carries_its_note`, mirroring `balances_daily_view_test.go:419-460`.
 - [ ] Step 5: timing re-confirmation on the built view — throwaway test (delete before commit; worktree must end clean), S06's synthetic stores through `duckstore.Replace` at 1x (14,000 txns, 30 accounts / 9 investment, 21 securities, 104k prices, 3.6k rates) and 3x (42,000 txns, 90 accounts). Time warm `SELECT … FROM v_net_worth WHERE date IN (<200 month ends>)`, plus one date and whole view. **Pass = under 1 s** (S06 draft: 80 ms at 1x, 0.49 s at 3x). Over 1 s: stop, return `PARTIAL: N-6 timing fails` with the numbers; fallback needs a scoped product re-ruling. Record numbers in `## Phase report`.
 - [ ] Step 6: copy + pins + folded SCENARIO-18 deletions.
   - Copy: `internal/report/sql_conventions.go:44-48` append the ruled sentence to the last paragraph; `sql_conventions_test.go:19-23` add `v_net_worth`, `:44-47` also assert the paragraph ends with the sentence; re-pin hand copies `internal/cli/sql_test.go:249-253`, `cmd/quarry/run_shared_documents_test.go:390-394`; `duckstore/doc.go:9,13` name the view; regenerate `plugin/skills/quarry/references/schema.md` with `go test ./cmd/quarry -run Test_skill_schema_reference_matches_the_committed_file -update`.
@@ -60,19 +60,21 @@ Spec: N-6, edge rows closed account / not-in-reports / linked-tracking / rate ga
 
 ## Phase report
 
-Run A (steps 1-2) done; B1 (steps 3-4) next.
+Runs A (steps 1-2) and B1 (steps 3-4) done; B2 (steps 5-6) next.
 
 Files:
-- `cmd/quarry/run_net_worth_view_test.go` (new): acceptance test; 5 accounts (CAD chequing, closed CAD chequing, USD chequing, not-in-reports CAD chequing, linked CAD chequing), one rate 1.25 from 03-05, query date 2026-03-10; expects CAD row `2,1250.00,1250.00,1000.00`, USD row `1,800.00,1000.00,800.00`.
-- `cmd/quarry/run_skill_schema_reference_test.go:173` `Len 4` to `5`.
-- `internal/store/duckstore/schema.go` (end): `netWorthViewDDL()` STUB, correct columns/types, `WHERE false` (no rows, no COMMENT). `netWorthViewComment` const NOT added yet (an unused const fails lint); step 4 adds it with the COMMENT.
-- `internal/store/duckstore/duckstore.go:454` Exec appends `netWorthViewDDL()`; `query_test.go:33` `storeRelations` gains `v_net_worth`.
+- `cmd/quarry/run_net_worth_view_test.go` (new, run A): acceptance test.
+- `cmd/quarry/run_skill_schema_reference_test.go:173` `Len 4` to `5` (run A).
+- `internal/store/duckstore/schema.go:358-381`: `netWorthViewComment` const + real `netWorthViewDDL` (one pass: `v_balances_daily` JOIN `accounts` WHERE `reportedAccount`, GROUP BY date, type, currency; `count(*)` accounts; plain `sum` cast DECIMAL(38,2) for balance/balance_cad/balance_usd; COMMENT with quote escape). Replaced the stub in place.
+- `internal/store/duckstore/duckstore.go:454` Exec appends `netWorthViewDDL()`; `query_test.go:33` `storeRelations` gains `v_net_worth` (run A).
+- `internal/store/duckstore/net_worth_view_test.go` (new, 15 top-level tests, two tables): grain (one row, other currency, other type), closed account stays counted, left-out table + all-left-out empty, first-transaction bound, negative sign, per-account rounding (0.02+0.02 at 1.25), rate gap, EUR, before-first-rate table, converted-sum-is-total, columns, comment.
 
-Red now (expected):
-- acceptance: `run_net_worth_view_test.go:41` actual is the header line only, expected two data rows.
-- `Test_skill_schema_reference_carries_each_view_comment` at `:173` `should have 5 item(s), but has 4` (stub has no COMMENT until step 4).
-- `Test_skill_schema_reference_matches_the_committed_file` (schema.md lacks v_net_worth until step 6 `-update`).
-- `duckstore` `Test_query_prints_every_column_of_each_table_and_view/v_net_worth` (`NotEmpty`; needs the real view, step 3).
-- `…_does_not_name_a_view_the_store_lacks` not checked in this run (output filtered); step 6 deletes it regardless.
+Green now: the acceptance test; `go test ./internal/store/duckstore/` whole package; `golangci-lint run ./internal/store/duckstore/...` 0 issues. New tests were green on arrival (code-first, view and tests written together).
 
-Do not redo: nothing else; B1 replaces the stub body in place. `sed -i ''` fails in this shell (GNU sed): use `sed -i`.
+Mutation on `netWorthViewDDL` WHERE, one at a time, restored byte-identical:
+- `WHERE NOT a.linked_tracking` (drop `a.in_reports`): `Test_net_worth_leaves_out_accounts_not_in_reports_and_linked_tracking/an_account_not_in_reports` red (expected `chequing,CAD,1,100.00`, actual `2,150.00`); `Test_net_worth_has_no_row_for_a_date_where_every_account_is_left_out` red (expected 0, actual 218).
+- `WHERE a.in_reports` (drop `NOT a.linked_tracking`): `…/a_linked-tracking_account` red (same 1 vs 2 rows).
+
+Red until B2 (expected): `Test_skill_schema_reference_matches_the_committed_file` (schema.md lacks v_net_worth until step 6 `-update`); `Test_skill_schema_reference_carries_each_view_comment` (the `v_net_worth` heading and comment are missing from the committed schema.md; the `-update` run in step 6 fixes both); `…_does_not_name_a_view_the_store_lacks` (step 6 deletes it). The conventions tests were not run.
+
+Do not redo: steps 1-4. `sed -i` here is GNU sed. The Bash tool in this worktree refuses compound git commands and python heredocs inside loops: keep them plain.
