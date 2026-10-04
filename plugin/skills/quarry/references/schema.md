@@ -97,6 +97,16 @@ each one's status.
 | `usd_cad` | `DECIMAL(10,6)` |
 | `series` | `VARCHAR` |
 
+### holding_shares
+
+| column | type |
+| --- | --- |
+| `account_id` | `VARCHAR` |
+| `security_id` | `VARCHAR` |
+| `from_date` | `DATE` |
+| `to_date` | `DATE` |
+| `shares` | `DECIMAL(18,6)` |
+
 ### import_runs
 
 | column | type |

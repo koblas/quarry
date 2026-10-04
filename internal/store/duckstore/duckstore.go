@@ -22,7 +22,7 @@ import (
 const FileName = "quarry.duckdb"
 
 // FormatVersion is the store format this build of quarry writes and reads.
-const FormatVersion = 6
+const FormatVersion = 7
 
 // develVersion is the quarry_version recorded when no build version is known.
 const develVersion = "(devel)"
@@ -455,6 +455,9 @@ func build(ctx context.Context, db DB, rows store.Rows, carried history, builtAt
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
 	if err := loadRows(ctx, db, rows, carried); err != nil {
+		return nil, err
+	}
+	if err := loadHoldingShares(ctx, db); err != nil {
 		return nil, err
 	}
 	states, err := loadFindings(ctx, db, carried.findings, rows.ReferencedCategoryIDs, builtAt)

@@ -21,7 +21,9 @@ func newBuiltStore(t *testing.T, opts ...duckstore.Option) *duckstore.Store {
 	t.Helper()
 	dir := t.TempDir()
 	src := &fakeRates{refresh: store.RatesRefresh{Rates: []store.Rate{ratesOn(13, 1_250_000, "IEXE0101")}}}
-	_, err := duckstore.New(dir, duckstore.WithRates(src)).Replace(t.Context(), minimalRows())
+	rows := minimalRows()
+	rows.InvestmentTransactions = append(rows.InvestmentTransactions, buy(acctOne, secAcme, 30, day(2026, time.March, 18), oneShare))
+	_, err := duckstore.New(dir, duckstore.WithRates(src)).Replace(t.Context(), rows)
 	require.NoError(t, err)
 	return duckstore.New(dir, opts...)
 }
