@@ -179,15 +179,6 @@ func rowsOfYear(rows [][]any, year string) [][]any {
 	return inYear
 }
 
-// cellPairs is the first two cells of each row.
-func cellPairs(rows [][]any) [][2]any {
-	pairs := make([][2]any, len(rows))
-	for i, row := range rows {
-		pairs[i] = [2]any{row[0], row[1]}
-	}
-	return pairs
-}
-
 func Test_spending_trend_recipe_agrees_with_quarry_spend(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -226,15 +217,15 @@ func Test_spending_trend_recipe_agrees_with_quarry_spend(t *testing.T) {
 	t.Run("shipped_values", func(t *testing.T) {
 		recipe := runShippedRecipe(t, spendingTrendFile)
 
-		assert.Equal(t, [][2]any{
-			{"2022-01-01", "CAD"},
-			{"2023-01-01", "CAD"},
-			{"2024-01-01", "CAD"},
-			{"2025-01-01", "CAD"},
-			{"2025-01-01", "USD"},
-			{"2026-01-01", "CAD"},
-			{"2026-01-01", "USD"},
-		}, cellPairs(recipe.Rows))
+		assert.Equal(t, [][]any{
+			{"2022-01-01", "CAD", "22.50"},
+			{"2023-01-01", "CAD", "33.75"},
+			{"2024-01-01", "CAD", "56.25"},
+			{"2025-01-01", "CAD", "255.50"},
+			{"2025-01-01", "USD", "21.98"},
+			{"2026-01-01", "CAD", "402.79"},
+			{"2026-01-01", "USD", "21.98"},
+		}, recipe.Rows)
 	})
 
 	t.Run("pre_rate_split_on_native_row", func(t *testing.T) {
@@ -489,7 +480,7 @@ func Test_income_by_category_runs_as_shipped(t *testing.T) {
 
 	recipe := runShippedRecipe(t, incomeByCatFile)
 
-	assert.NotEmpty(t, recipe.Rows)
+	assert.Len(t, recipe.Columns, 3)
 }
 
 // recipeFiles are the shipped recipes and the one view each reads.
@@ -601,6 +592,23 @@ func Test_recipes_open_with_a_question_and_the_params_row(t *testing.T) {
 	}
 }
 
+// shippedParamsLine is line 2 of each recipe: the values it ships with.
+var shippedParamsLine = map[string]string{
+	spendingTrendFile: recipeParamsPrefix + "'Food:Groceries' AS category, CAST(NULL AS VARCHAR) AS payee, 'year' AS grain, DATE '2022-01-01' AS since, current_date AS until, 'CAD' AS currency)",
+	incomeByCatFile:   recipeParamsPrefix + "date_trunc('year', current_date) AS since, current_date AS until, 'CAD' AS currency)",
+}
+
+func Test_recipes_ship_the_ruled_params_line(t *testing.T) {
+	for file, want := range shippedParamsLine {
+		t.Run(file, func(t *testing.T) {
+			lines := strings.SplitN(repoFile(t, recipeDir+file), "\n", 3)
+
+			require.Greater(t, len(lines), 1)
+			assert.Equal(t, want, lines[1])
+		})
+	}
+}
+
 func Test_recipes_put_values_only_in_the_params_row(t *testing.T) {
 	for file, allowed := range recipeLiterals {
 		t.Run(file, func(t *testing.T) {
@@ -631,6 +639,8 @@ func Test_recipe_scanners_flag_crafted_text(t *testing.T) {
 		{"literal_on_the_params_row", quotedOffParamsRow, recipeParamsPrefix + "'Food' AS category)\nSELECT 1", nil},
 		{"literal_in_a_comment", quotedOffParamsRow, "-- what's 'Food'?\nSELECT 1", nil},
 		{"first_line_not_a_comment", openingProblems, "SELECT 1\n" + recipeParamsPrefix, []string{"line 1 is not a `-- ` question"}},
+		{"question_without_the_mark", openingProblems, "-- Why\n" + recipeParamsPrefix, []string{"line 1 is not a `-- ` question"}},
+		{"comment_without_the_space", openingProblems, "--Why?\n" + recipeParamsPrefix, []string{"line 1 is not a `-- ` question"}},
 		{"second_line_not_the_params_row", openingProblems, "-- Why?\nSELECT 1", []string{"line 2 is not the params row"}},
 	}
 
