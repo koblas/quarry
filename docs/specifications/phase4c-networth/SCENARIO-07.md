@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-07
-status: open
+status: done
 ---
 
 # SCENARIO-07: Accounts shows investment balances (SCENARIO-08 folded)
@@ -28,10 +28,10 @@ Survey (no new port; `store.Store.Accounts` keeps its signature, `AccountBalance
 - [x] Step 6 (batch 4, folded 08 + copy): `render.go:223` `balancesExtrasPhrase` — `humanize.Count(n, "investment account's cash not checked", "investment accounts' cash not checked")`; one site feeds sync (`:96,518`), DIFFER (`:244,512`) and status (`render_status.go:28`). Pins: `render_internal_test.go:407-414` (3 rows), `render_status_internal_test.go:101`, `run_status_test.go:53`, `run_validation_test.go:92`; new row for `balancesDifferPhrase` with `InvestmentAccounts` (no test exists), plural and singular. `holdings.go:36-37` Long last paragraph → ruled sentence; pin in `run_holdings_surfaces_test.go`. Conventions: `sql_conventions.go:10` → `v_account_balances (v_balances_daily for today) has balance_cad and` re-wrapped; hand copies `cli/sql_test.go:213`, `run_shared_documents_test.go:354`; regenerate `plugin/skills/quarry/references/schema.md` (conventions at `:14`, `v_account_balances` table `:275-288`) with `go test ./cmd/quarry/ -run SchemaReference -update`, then diff
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/store AccountBalance` and `./internal/report` read true (no "not valued", no "cannot compute")
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/store AccountBalance` and `./internal/report` read true (no "not valued", no "cannot compute")
 
 ### Verify
-- [ ] Step 8: full verification block (`.claude/rules/agent-briefs.md`) + `spec-check.py phase4c-networth`; tick SCENARIO-07 with its acceptance test and SCENARIO-08 as "delivered by SCENARIO-07" with its test; rewrite STATE.md
+- [x] Step 8: full verification block (`.claude/rules/agent-briefs.md`) + `spec-check.py phase4c-networth`; tick SCENARIO-07 with its acceptance test and SCENARIO-08 as "delivered by SCENARIO-07" with its test; rewrite STATE.md
 
 ## Handoff
 
@@ -52,10 +52,8 @@ Survey (no new port; `store.Store.Accounts` keeps its signature, `AccountBalance
 
 ## Phase report
 
-Run B2 (steps 5-6) done. Both acceptance tests green. `go test ./internal/... ./cmd/...` green, lint `0 issues`. Sweep (step 7) and Verify (step 8) are V's.
+Run V (steps 7-8) done; scenario complete. Both acceptance tests green; full covered suite rc=0; `uncovered-diff.py` vs 1d5c656: 0 uncovered added lines; `go test -race` on store, report, cli, cmd/quarry green; lint `0 issues`; spec-check OK.
 
-Changed:
-- `internal/cli/json_accounts.go`: `Balance string`, `Cash string`, `HoldingsValue *string` between `balance` and `converted_balance`; row doc fixed. `accounts.go` Long: the two ruled texts. `render.go:~223` `balancesExtrasPhrase` ruled copy. `holdings.go` Long last paragraph. `report/sql_conventions.go` + hand copies (`cli/sql_test.go`, `run_shared_documents_test.go`) re-wrapped from the `fx_rates` sentence to the end of paragraph 1; `schema.md` regenerated (`go test ./cmd/quarry/ -run Test_skill_schema_reference -update`).
-- Tests: `json_accounts_internal_test.go` (key order incl. cash/holdings_value, new `Test_renderAccountsJSON_reads_back_cash_on_every_account_and_holdings_value_only_on_an_investment_account`), `render_accounts_internal_test.go` (new investment-balance widening case), `render_internal_test.go` (3 phrase rows + new `Test_balancesDifferPhrase_counts_investment_accounts_after_the_differing_accounts`, singular and plural), `render_status_internal_test.go`, `holdings_test.go`, cmd: `run_accounts_test.go`, `run_accounts_fx_test.go`, `run_accounts_json_test.go`, `run_currency_native_test.go`, `run_status_test.go`, `run_validation_test.go`, `run_holdings_surfaces_test.go` (accounts Long re-pin + new holdings Long pin), `run_accounts_fx_edges_test.go` (blank-cell padding test retargeted to a `no rate` cell: `Test_run_accounts_all_pads_a_no_rate_cell_so_a_closed_Status_follows_it_in_the_column`, no rates seeded).
+Added in V: `cmd/quarry/run_accounts_investment_balance_test.go` `Test_run_accounts_converts_an_investment_balance_as_cash_plus_holdings_value` (USD brokerage, cash 900.01 + valued holding 20.00 = 920.01; `--currency CAD` text and `--json` converted 1,150.01 at 1.25; `--currency USD` 920.01). Green on arrival: the behaviour was built in B1/B2; B1's cash-only-Balance mutation reddens it as well.
 
-Notes for V: no mutation checks belong to B2 (both listed ones were B1's). `uncovered-diff.py` not yet run for B2's range; `NeedsRate`-nil arm and `jsonNullMoney` still used (`HoldingsValue`, converted balance). Fixture RRSP (retirement, no holdings) now reads 1,000.00 (cash) in cmd goldens.
+Nothing left for later runs. Remaining work belongs to other scenarios (see STATE.md).

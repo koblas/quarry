@@ -463,8 +463,8 @@ Architect sizing pass, 2026-10-04. The S01 and S14 splits were approved by the u
 - [x] SCENARIO-03: Investment income counts in cash flow — `cmd/quarry/run_investment_cashflow_test.go` `Test_run_cashflow_counts_investment_dividends_interest_and_capital_gains_as_income_and_buys_and_sells_as_neither`
 - [x] SCENARIO-04: Margin interest counts as spending — delivered by SCENARIO-03 — `cmd/quarry/run_investment_cashflow_test.go` `Test_run_spend_counts_investment_margin_interest_as_spending`
 - [x] SCENARIO-06: Daily balances combine cash and holdings — `cmd/quarry/run_balances_daily_view_test.go` `Test_run_sql_combines_cash_and_valued_holdings_from_v_balances_daily`
-- [ ] SCENARIO-07: Accounts shows investment balances
-- [ ] SCENARIO-08: Balances line says what is not checked
+- [x] SCENARIO-07: Accounts shows investment balances — `cmd/quarry/run_accounts_investment_balance_test.go` `Test_run_accounts_shows_an_investment_balance_as_cash_plus_holdings_value`
+- [x] SCENARIO-08: Balances line says what is not checked — delivered by SCENARIO-07, `cmd/quarry/run_status_test.go` `Test_run_status_says_investment_accounts_cash_is_not_checked`
 - [ ] SCENARIO-09: Net-worth view covers reported accounts
 - [ ] SCENARIO-18: Docs and pins follow the new surface
 - [ ] SCENARIO-10: Net worth today

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -62,4 +63,69 @@ func Test_run_accounts_shows_an_investment_balance_as_cash_plus_holdings_value(t
 	assert.Equal(t, new("20.00"), brokerage.HoldingsValue)
 	assert.Equal(t, new("100.00"), chequing.Cash)
 	assert.Nil(t, chequing.HoldingsValue)
+}
+
+func Test_run_accounts_converts_an_investment_balance_as_cash_plus_holdings_value(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	when := day(2026, time.March, 2)
+	rows := spendRows(
+		[]store.Account{{ID: "acct-brokerage", SourceID: 1, Name: "Brokerage", Type: store.AccountTypeBrokerage, Currency: "USD", Active: true}},
+		spendSplit{id: "deposit", account: "acct-brokerage", currency: "USD", day: when, cents: 100_001},
+	)
+	rows.Securities = []store.Security{{ID: "sec-usd", SourceID: 1, Name: "Acme Corp", Ticker: new("ACME"), Currency: new("USD")}}
+	rows.InvestmentTransactions = []store.InvestmentTransaction{{
+		ID: "inv-usd", SourceID: 1, AccountID: "acct-brokerage", SecurityID: new("sec-usd"), Date: when,
+		Action: store.ActionBuy, Shares: new(int64(2_000_000)), Amount: -10_000, Currency: "USD",
+	}}
+	rows.Prices = []store.Price{{SecurityID: "sec-usd", SourceID: 1, Date: day(2026, time.March, 1), Price: 10_000_000}}
+	rows.Transactions = append(rows.Transactions, store.Transaction{
+		ID: "txn-inv-usd", SourceID: 3, AccountID: "acct-brokerage", Date: when, Amount: -10_000, Currency: "USD",
+		Status: "uncleared", InvestmentTransactionID: new("inv-usd"),
+	})
+	rows.Splits = append(rows.Splits, store.Split{ID: "split-inv-usd", SourceID: 3, TransactionID: "txn-inv-usd", Amount: -10_000})
+	replaceStoreWithRates(t, home, rows, store.Rate{Date: day(2026, time.January, 2), USDCAD: money.Rate(1_250_000), Series: "FXUSDCAD"})
+
+	cases := []struct {
+		name      string
+		currency  string
+		text      string
+		converted string
+	}{
+		{
+			name: "CAD", currency: "CAD", converted: "1150.01",
+			text: "Account    Type       Currency  Balance    In CAD  Status\n" +
+				"Brokerage  brokerage  USD        920.01  1,150.01\n",
+		},
+		{
+			name: "USD", currency: "USD", converted: "920.01",
+			text: "Account    Type       Currency  Balance  In USD  Status\n" +
+				"Brokerage  brokerage  USD        920.01  920.01\n",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name+" text", func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), []string{"accounts", "--currency", c.currency}, &stdout, &stderr)
+
+			require.Equal(t, 0, exitCode, stderr.String())
+			assert.Empty(t, stderr.String())
+			assert.Equal(t, c.text, stdout.String())
+		})
+
+		t.Run(c.name+" json", func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), []string{"accounts", "--json", "--currency", c.currency}, &stdout, &stderr)
+
+			require.Equal(t, 0, exitCode, stderr.String())
+			assert.Empty(t, stderr.String())
+			var doc accountsFXDoc
+			require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
+			assert.Equal(t, []accountFXJSON{
+				{Name: "Brokerage", Currency: "USD", Balance: new("920.01"), ConvertedBalance: new(c.converted)},
+			}, doc.Accounts)
+		})
+	}
 }
