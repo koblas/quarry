@@ -150,12 +150,12 @@ func Test_run_counts_investment_transactions_without_importing_them(t *testing.T
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 
-	buyTxn := b.Transaction(v9fixture.TransactionRow{
-		Entity: v9fixture.EntInvestmentTransaction, Account: brokeragePK, Amount: "-400.00", PostedDate: &day,
+	buyTxn := b.InvestmentTransaction(v9fixture.TransactionRow{
+		Type: new(int64(3)), Account: brokeragePK, Amount: "-400.00", PostedDate: &day,
 	})
 	b.Entry(v9fixture.EntryRow{Parent: buyTxn, Amount: "-400.00"})
-	dividendTxn := b.Transaction(v9fixture.TransactionRow{
-		Entity: v9fixture.EntInvestmentTransaction, Account: brokeragePK, Amount: "12.00", PostedDate: &day,
+	dividendTxn := b.InvestmentTransaction(v9fixture.TransactionRow{
+		Type: new(int64(10)), Account: brokeragePK, Amount: "12.00", PostedDate: &day,
 	})
 	b.Entry(v9fixture.EntryRow{Parent: dividendTxn, Amount: "12.00"})
 	contributionTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-1000.00", PostedDate: &day})

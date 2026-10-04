@@ -32,8 +32,8 @@ func Test_run_records_an_import_runs_row_for_the_build(t *testing.T) {
 	b.Reconcile(v9fixture.ReconcileRow{Account: chequingPK, EndDate: &day, EndingBalance: "100.00"})
 	legTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-5.00", PostedDate: &day})
 	b.Entry(v9fixture.EntryRow{Parent: legTxn, Amount: "-5.00", QuickenID: 3001, Transfer: "Old Visa"})
-	buyTxn := b.Transaction(v9fixture.TransactionRow{
-		Entity: v9fixture.EntInvestmentTransaction, Account: brokeragePK, Amount: "-40.00", PostedDate: &day,
+	buyTxn := b.InvestmentTransaction(v9fixture.TransactionRow{
+		Type: new(int64(3)), Account: brokeragePK, Amount: "-40.00", PostedDate: &day,
 	})
 	b.Entry(v9fixture.EntryRow{Parent: buyTxn, Amount: "-40.00"})
 

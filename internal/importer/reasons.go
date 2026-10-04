@@ -122,3 +122,15 @@ func reasonPriceNotANumber(security, date string) string {
 func reasonPriceTooLarge(security, date, price string) string {
 	return fmt.Sprintf("a price of \"%s\" on %s is %s, which is too large for quarry's prices", security, date, price)
 }
+
+func reasonInvestmentActionCode(date, account string, code int64) string {
+	return fmt.Sprintf("an investment transaction on %s in \"%s\" has action code %d, which quarry does not map yet", date, account, code)
+}
+
+func reasonInvestmentNoActionCode(date, account string) string {
+	return fmt.Sprintf("an investment transaction on %s in \"%s\" has no action code", date, account)
+}
+
+func reasonInvestmentNoDate(account string, sourceID int64) string {
+	return fmt.Sprintf("an investment transaction in \"%s\" (source id %d) has no date", account, sourceID)
+}

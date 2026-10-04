@@ -186,8 +186,8 @@ func Test_import_keeps_a_numeric_link_with_no_imported_counterpart_as_one_sided(
 	deletedTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-2.00", PostedDate: &day})
 	b.Entry(v9fixture.EntryRow{Parent: deletedTxn, Amount: "2.00", QuickenID: 555, Deleted: true})
 	b.Entry(v9fixture.EntryRow{Parent: deletedTxn, Amount: "-2.00", QuickenID: 556})
-	investmentTxn := b.Transaction(v9fixture.TransactionRow{
-		Entity: v9fixture.EntInvestmentTransaction, Account: brokeragePK, Amount: "3.00", PostedDate: &day,
+	investmentTxn := b.InvestmentTransaction(v9fixture.TransactionRow{
+		Type: new(int64(3)), Account: brokeragePK, Amount: "3.00", PostedDate: &day,
 	})
 	b.Entry(v9fixture.EntryRow{Parent: investmentTxn, Amount: "3.00", QuickenID: 666})
 	bundle := b.WriteBundle(t, t.TempDir())
