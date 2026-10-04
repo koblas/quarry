@@ -35,7 +35,7 @@ func Test_renderAccounts(t *testing.T) {
 		want     string
 	}{
 		{
-			name: "the specification's example, not imported widening Balance",
+			name: "the specification's example, not valued widening Balance",
 			accounts: []store.AccountBalance{
 				balanceRow("Chequing", "chequing", "CAD", new(int64(1234567)), false, true),
 				balanceRow("RRSP", "retirement", "CAD", nil, false, true),
@@ -43,11 +43,11 @@ func Test_renderAccounts(t *testing.T) {
 				balanceRow("Visa Infinite", "credit_card", "CAD", new(int64(-120417)), true, true),
 			},
 			want: "" +
-				"Account        Type         Currency       Balance  Status\n" +
-				"Chequing       chequing     CAD          12,345.67\n" +
-				"RRSP           retirement   CAD       not imported\n" +
-				"US Chequing    chequing     USD           8,310.00\n" +
-				"Visa Infinite  credit_card  CAD          -1,204.17  closed\n",
+				"Account        Type         Currency     Balance  Status\n" +
+				"Chequing       chequing     CAD        12,345.67\n" +
+				"RRSP           retirement   CAD       not valued\n" +
+				"US Chequing    chequing     USD         8,310.00\n" +
+				"Visa Infinite  credit_card  CAD        -1,204.17  closed\n",
 		},
 		{
 			name:     "header only when there are no accounts",
@@ -79,9 +79,9 @@ func Test_renderAccounts(t *testing.T) {
 				withLinkedTracking(balanceRow("Brokerage", "brokerage", "USD", nil, false, true)),
 			},
 			want: "" +
-				"Account          Type        Currency       Balance  Status\n" +
-				"Netskope 401(k)  retirement  USD       not imported  closed, not in reports, linked tracking\n" +
-				"Brokerage        brokerage   USD       not imported  linked tracking\n",
+				"Account          Type        Currency     Balance  Status\n" +
+				"Netskope 401(k)  retirement  USD       not valued  closed, not in reports, linked tracking\n" +
+				"Brokerage        brokerage   USD       not valued  linked tracking\n",
 		},
 	}
 
@@ -111,13 +111,13 @@ func Test_renderAccounts_adds_the_reporting_currency_column_after_Balance(t *tes
 		want    string
 	}{
 		{
-			name:    "CAD: each cell converted, the CAD cell identity, a not imported cell blank",
+			name:    "CAD: each cell converted, the CAD cell identity, a not valued cell blank",
 			listing: listingIn(money.CAD, chequing, usChequing, brokerage),
 			want: "" +
-				"Account      Type       Currency       Balance     In CAD  Status\n" +
-				"Chequing     chequing   CAD          12,345.67  12,345.67\n" +
-				"US Chequing  chequing   USD           8,310.00  10,387.50\n" +
-				"Brokerage    brokerage  USD       not imported\n",
+				"Account      Type       Currency     Balance     In CAD  Status\n" +
+				"Chequing     chequing   CAD        12,345.67  12,345.67\n" +
+				"US Chequing  chequing   USD         8,310.00  10,387.50\n" +
+				"Brokerage    brokerage  USD       not valued\n",
 		},
 		{
 			name:    "USD: the header names the reporting currency",
@@ -155,25 +155,25 @@ func Test_renderAccounts_adds_the_reporting_currency_column_after_Balance(t *tes
 			name:    "CAD: a blank cell is padded to the column so a closed Status starts two spaces after it",
 			listing: listingIn(money.CAD, chequing, balanceRow("Brokerage", "brokerage", "USD", nil, true, true)),
 			want: "" +
-				"Account    Type       Currency       Balance     In CAD  Status\n" +
-				"Chequing   chequing   CAD          12,345.67  12,345.67\n" +
-				"Brokerage  brokerage  USD       not imported             closed\n",
+				"Account    Type       Currency     Balance     In CAD  Status\n" +
+				"Chequing   chequing   CAD        12,345.67  12,345.67\n" +
+				"Brokerage  brokerage  USD       not valued             closed\n",
 		},
 		{
 			name:    "CAD: a blank cell is padded to the column so a not in reports Status starts two spaces after it",
 			listing: listingIn(money.CAD, chequing, withNotInReports(brokerage)),
 			want: "" +
-				"Account    Type       Currency       Balance     In CAD  Status\n" +
-				"Chequing   chequing   CAD          12,345.67  12,345.67\n" +
-				"Brokerage  brokerage  USD       not imported             not in reports\n",
+				"Account    Type       Currency     Balance     In CAD  Status\n" +
+				"Chequing   chequing   CAD        12,345.67  12,345.67\n" +
+				"Brokerage  brokerage  USD       not valued             not in reports\n",
 		},
 		{
 			name:    "USD: a blank cell is padded to the narrower column so Status starts two spaces after it",
 			listing: listingIn(money.USD, chequing, withNotInReports(brokerage)),
 			want: "" +
-				"Account    Type       Currency       Balance    In USD  Status\n" +
-				"Chequing   chequing   CAD          12,345.67  9,876.54\n" +
-				"Brokerage  brokerage  USD       not imported            not in reports\n",
+				"Account    Type       Currency     Balance    In USD  Status\n" +
+				"Chequing   chequing   CAD        12,345.67  9,876.54\n" +
+				"Brokerage  brokerage  USD       not valued            not in reports\n",
 		},
 		{
 			name:    "no accounts keeps the column in the header",
@@ -189,16 +189,16 @@ func Test_renderAccounts_adds_the_reporting_currency_column_after_Balance(t *tes
 	}
 }
 
-func Test_renderAccounts_leaves_a_not_imported_cell_blank_and_says_no_rate_for_a_missing_rate(t *testing.T) {
-	notImported := balanceRow("Brokerage", "brokerage", "USD", nil, false, true)
+func Test_renderAccounts_leaves_a_not_valued_cell_blank_and_says_no_rate_for_a_missing_rate(t *testing.T) {
+	notValued := balanceRow("Brokerage", "brokerage", "USD", nil, false, true)
 	missingRate := withCells(balanceRow("US Chequing", "chequing", "USD", new(int64(831000)), false, true), nil, new(int64(831000)))
 
-	got := renderAccounts(listingIn(money.CAD, notImported, missingRate))
+	got := renderAccounts(listingIn(money.CAD, notValued, missingRate))
 
 	assert.Equal(t, ""+
-		"Account      Type       Currency       Balance   In CAD  Status\n"+
-		"Brokerage    brokerage  USD       not imported\n"+
-		"US Chequing  chequing   USD           8,310.00  no rate\n", got)
+		"Account      Type       Currency     Balance   In CAD  Status\n"+
+		"Brokerage    brokerage  USD       not valued\n"+
+		"US Chequing  chequing   USD         8,310.00  no rate\n", got)
 }
 
 func Test_accountStatus(t *testing.T) {

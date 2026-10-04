@@ -26,11 +26,11 @@ func Test_run_accounts_lists_open_accounts_with_their_balances(t *testing.T) {
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
 	assert.Equal(t, ""+
-		"Account      Type        Currency       Balance  Status\n"+
-		"Chequing     chequing    CAD          12,345.67\n"+
-		"Old Savings  savings     CAD               0.00  inactive\n"+
-		"RRSP         retirement  CAD       not imported\n"+
-		"US Chequing  chequing    USD           8,310.00\n",
+		"Account      Type        Currency     Balance  Status\n"+
+		"Chequing     chequing    CAD        12,345.67\n"+
+		"Old Savings  savings     CAD             0.00  inactive\n"+
+		"RRSP         retirement  CAD       not valued\n"+
+		"US Chequing  chequing    USD         8,310.00\n",
 		stdout.String())
 }
 
@@ -45,12 +45,12 @@ func Test_run_accounts_all_lists_closed_accounts(t *testing.T) {
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
 	assert.Equal(t, ""+
-		"Account        Type         Currency       Balance  Status\n"+
-		"Chequing       chequing     CAD          12,345.67\n"+
-		"Old Savings    savings      CAD               0.00  inactive\n"+
-		"RRSP           retirement   CAD       not imported\n"+
-		"US Chequing    chequing     USD           8,310.00\n"+
-		"Visa Infinite  credit_card  CAD          -1,204.17  closed\n",
+		"Account        Type         Currency     Balance  Status\n"+
+		"Chequing       chequing     CAD        12,345.67\n"+
+		"Old Savings    savings      CAD             0.00  inactive\n"+
+		"RRSP           retirement   CAD       not valued\n"+
+		"US Chequing    chequing     USD         8,310.00\n"+
+		"Visa Infinite  credit_card  CAD        -1,204.17  closed\n",
 		stdout.String())
 }
 
@@ -93,8 +93,9 @@ func Test_run_accounts_help_describes_the_command_without_needing_home(t *testin
 currency: the sum of its transactions dated today or earlier. Closed
 accounts are left out unless --all is given.
 
-Brokerage and retirement accounts show "not imported": quarry does not
-import investment transactions yet, so it cannot compute their balance.
+Brokerage and retirement accounts show "not valued": quarry imports their
+transactions and checks their share counts against Quicken, but does not
+value holdings yet, so it cannot compute their balance.
 
 A column shows each balance in the reporting currency (--currency, else
 reporting.currency in the config file, else CAD) at today's Bank of

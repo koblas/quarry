@@ -21,7 +21,7 @@ Survey (grep, whole tree minus `.git/.devenv/specifications/.claude`): remaining
 - [x] Step 2: `render_accounts.go:12-13` `notImportedBalance` — rename `notValuedBalance` = `"not valued"` only as far as needed so the test compiles; must fail at its assertion first (cell still `not imported`)
 
 ### Build
-- [ ] Step 3 (batch 1, accounts + sync copy): `render_accounts.go:12-13,79` const + `accountBalance` doc; `json_accounts.go:17` doc comment (`absent, not valued, or unconverted`); `accounts.go:17-18` Long = S.7 sentence verbatim, hard-wrapped at the file's ~72-col style, rest of Long unchanged; `sync.go:46-50` Long = S.7 sentence verbatim wrapped the same way. Re-pin, then fix whatever the narrow loop reds (column width shrinks by 2 in every row of each table):
+- [x] Step 3 (batch 1, accounts + sync copy): `render_accounts.go:12-13,79` const + `accountBalance` doc; `json_accounts.go:17` doc comment (`absent, not valued, or unconverted`); `accounts.go:17-18` Long = S.7 sentence verbatim, hard-wrapped at the file's ~72-col style, rest of Long unchanged; `sync.go:46-50` Long = S.7 sentence verbatim wrapped the same way. Re-pin, then fix whatever the narrow loop reds (column width shrinks by 2 in every row of each table):
   - `run_accounts_test.go:32,51` cells + `:96-97` Long inside `Test_run_accounts_help_describes_the_command_without_needing_home` (Long asserted at wrap width) — this is the accounts-Long pin
   - `run_usage_test.go:49-54` inside `Test_run_prints_the_sync_help` — the sync-Long pin, byte-exact wrap
   - `run_accounts_fx_test.go:33,57,62`, `run_accounts_fx_edges_test.go:100,104,109,185`, `run_currency_native_test.go:91`
@@ -53,8 +53,9 @@ Ruled copy → asserting test: accounts Long → `Test_run_accounts_help_describ
 
 ## Phase report
 
-Run A (steps 1-2) done.
-- Added `cmd/quarry/run_accounts_not_valued_test.go:19` `Test_run_accounts_shows_not_valued_for_brokerage_and_retirement_accounts`: text `--currency native` whole stdout, `NotContains "not imported"`, and `accounts --json` first row `Balance == nil`. Reuses `addTransaction` (`run_accounts_test.go:132`) and `accountRowJSON` (`run_accounts_json_test.go`).
-- Step 2 needed no stub: the test references no new symbol, so there is no production edit. Const `notImportedBalance` (`render_accounts.go:12-13`) is still `"not imported"`; B1 renames it.
-- RED at the assertion: actual `"Account    Type        Currency       Balance  Status\nBrokerage  brokerage   CAD       not imported\nChequing   chequing    CAD             100.00\nIRA        retirement  CAD       not imported\n"` against expected `not valued` rows (Balance column 2 narrower); `NotContains "not imported"` also fails. The fixture syncs cleanly (cash-only dividend rows, exit 0, no share-gate failure). The JSON assertions pass on arrival (balance is already null) and are a regression pin only.
-- Next (B1, step 3): do not rewrite this test; it goes green once the cell text is `not valued`.
+Runs A (steps 1-2) and B1 (step 3) done.
+- B1 production edits: `render_accounts.go:12-13,79` (`notValuedBalance = "not valued"`, `accountBalance` doc), `json_accounts.go:17` doc, `accounts.go` Long (S.7 sentence, hard-wrapped at 76 cols), `sync.go` Long (S.7 sentence verbatim, rewrapped from "cent, ..."). `store.go:50-52` comment ("as not valued") was also edited here, ahead of step 5, so B2 need not touch it.
+- Re-pins: `run_accounts_test.go` (2 tables + Long), `run_usage_test.go` (sync Long, byte-exact wrap), `run_accounts_fx_test.go`, `run_accounts_fx_edges_test.go` (names, comment), `run_currency_native_test.go`, `internal/cli/render_accounts_internal_test.go` (7 tables, renamed `Test_renderAccounts_leaves_a_not_valued_cell_blank_...`), `fx_warning_internal_test.go`, `internal/report/accounts_test.go` (names). Every table: Balance column 2 narrower, rows re-padded by script, not by hand.
+- Acceptance test `Test_run_accounts_shows_not_valued_for_brokerage_and_retirement_accounts` green. Mutation (cell text reverted to `not imported`) reddens it; restored.
+- Narrow loop green (cmd/quarry filter, `internal/cli`, `internal/report/...`, `internal/mcp`); `go build ./...` and `golangci-lint run ./...` 0 issues.
+- Next B2 (steps 4-5): SKILL.md, SQL conventions, schema.md regen, PRD, `history_test.go:16` comment; `store.go` comment already done.

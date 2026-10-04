@@ -56,7 +56,7 @@ func Test_accountsFXWarnings_is_silent_unless_a_listed_row_shows_no_rate(t *test
 	future := time.Date(2099, time.January, 2, 0, 0, 0, 0, time.UTC)
 	cad := store.AccountBalance{Currency: "CAD", Balance: new(int64(800)), BalanceCAD: new(int64(800))}
 	usdNoRate := store.AccountBalance{Currency: "USD", Balance: new(int64(800))}
-	notImported := store.AccountBalance{Currency: "USD"}
+	notValued := store.AccountBalance{Currency: "USD"}
 	cases := []struct {
 		name     string
 		currency money.Currency
@@ -64,8 +64,8 @@ func Test_accountsFXWarnings_is_silent_unless_a_listed_row_shows_no_rate(t *test
 		accounts []store.AccountBalance
 	}{
 		{name: "an all-CAD store with no rates in CAD", currency: money.CAD, accounts: []store.AccountBalance{cad}},
-		{name: "a not imported cross-currency account with no rates", currency: money.CAD, accounts: []store.AccountBalance{notImported}},
-		{name: "a not imported cross-currency account with rates only after today", currency: money.CAD, first: future, accounts: []store.AccountBalance{notImported}},
+		{name: "a not valued cross-currency account with no rates", currency: money.CAD, accounts: []store.AccountBalance{notValued}},
+		{name: "a not valued cross-currency account with rates only after today", currency: money.CAD, first: future, accounts: []store.AccountBalance{notValued}},
 		{name: "no accounts with no rates", currency: money.CAD},
 		{name: "native with no rates", currency: money.Native, accounts: []store.AccountBalance{usdNoRate}},
 		{name: "a rate on or before today does not explain the missing cell", currency: money.CAD, first: past, accounts: []store.AccountBalance{usdNoRate}},

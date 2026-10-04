@@ -49,7 +49,7 @@ func InvestmentAccountTypes() []string {
 
 // IsInvestmentAccount reports whether accountType is a brokerage or
 // retirement account: sync never checks its balance, and accounts shows it
-// as not imported.
+// as not valued.
 func IsInvestmentAccount(accountType string) bool {
 	return slices.Contains(InvestmentAccountTypes(), accountType)
 }

@@ -9,8 +9,8 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// notImportedBalance is the Balance cell of an account quarry cannot sum.
-const notImportedBalance = "not imported"
+// notValuedBalance is the Balance cell of an account quarry imports but does not value.
+const notValuedBalance = "not valued"
 
 // accountsColumnGap separates the accounts table's columns.
 const accountsColumnGap = "  "
@@ -76,10 +76,10 @@ func convertedCell(l report.AccountListing, a store.AccountBalance) string {
 	return ""
 }
 
-// accountBalance renders a balance in cents, or "not imported" when nil.
+// accountBalance renders a balance in cents, or "not valued" when nil.
 func accountBalance(cents *int64) string {
 	if cents == nil {
-		return notImportedBalance
+		return notValuedBalance
 	}
 	return formatMoney(*cents)
 }

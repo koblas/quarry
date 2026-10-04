@@ -50,8 +50,9 @@ func Test_run_prints_the_sync_help(t *testing.T) {
 	assert.Contains(t, syncStdout.String(), "quarry then rebuilds its store, ~/Library/Application Support/quarry/quarry.duckdb,\n"+
 		"from the snapshot. In every reconciled account, the reconciled transactions\n"+
 		"must add up to the balance of its last reconciled statement in Quicken to the\n"+
-		"cent, and every transaction must equal the sum of its splits; if a check\n"+
-		"fails, the previous store is left unchanged.")
+		"cent, and every transaction must equal the sum of its splits, and in every\n"+
+		"brokerage and retirement account each security's share count must equal\n"+
+		"Quicken's; if a check fails, the previous store is left unchanged.")
 	assert.Contains(t, syncStdout.String(), "sync then looks for things to clean up in Quicken, such as uncategorized\n"+
 		"splits, one-sided transfers and possible duplicates; run quarry findings to\n"+
 		"list them. Findings never fail a sync.")
