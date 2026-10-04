@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const reasonNoLots = "the snapshot has investment transactions but no Quicken lots to check their share counts against"
+
 // quickenShares renders each reference entry as "account/security=millionths", in the order Import returned them.
 func quickenShares(fake *fakeStore) []string {
 	out := make([]string, len(fake.Rows.QuickenShares))
@@ -268,8 +270,55 @@ func Test_import_refuses_investment_transactions_when_the_snapshot_has_no_lot_en
 
 	reason, fake := importInvestmentsRefused(t, b)
 
-	assert.Equal(t, "the snapshot has investment transactions but no Quicken lots to check their share counts against", reason)
+	assert.Equal(t, reasonNoLots, reason)
 	assert.Zero(t, fake.replaceCalls)
+}
+
+// oneGoodAndOneBadInvestmentRow imports a dividend plus a buy with the given units and amount.
+func oneGoodAndOneBadInvestmentRow(b *v9fixture.Builder, units, amount string) {
+	accountPK := newBrokerage(b)
+	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: dividendCode, Amount: "12.00", PostedDate: &investDay})
+	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Units: units, Amount: amount, PostedDate: &investDay})
+}
+
+func Test_import_reports_the_missing_lot_entity_ahead_of_an_unreadable_investment_row(t *testing.T) {
+	t.Parallel()
+	const prefix = `an investment transaction on 2026-03-01 in "Brokerage" `
+	cases := []struct {
+		name          string
+		units, amount string
+		wantRow       string
+	}{
+		{name: "shares not a number", units: "n/a", amount: "1.00", wantRow: prefix + "has a share count that is not a number"},
+		{name: "amount NULL", units: "1", amount: "", wantRow: prefix + "has no amount"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			withoutLot := v9fixture.NewBuilder().WithoutEntity("Lot")
+			oneGoodAndOneBadInvestmentRow(withoutLot, c.units, c.amount)
+			withLot := v9fixture.NewBuilder()
+			oneGoodAndOneBadInvestmentRow(withLot, c.units, c.amount)
+
+			noLotReason, _ := importInvestmentsRefused(t, withoutLot)
+			controlReason, _ := importInvestmentsRefused(t, withLot)
+
+			assert.Equal(t, reasonNoLots, noLotReason)
+			assert.Equal(t, c.wantRow, controlReason)
+		})
+	}
+}
+
+func Test_import_reports_the_unreadable_row_when_no_lot_entity_and_no_investment_row_maps(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder().WithoutEntity("Lot")
+	accountPK := newBrokerage(b)
+	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Units: "1", PostedDate: &investDay})
+
+	reason, _ := importInvestmentsRefused(t, b)
+
+	assert.Equal(t, `an investment transaction on 2026-03-01 in "Brokerage" has no amount`, reason)
 }
 
 func Test_import_accepts_a_snapshot_with_no_lot_entity_and_no_imported_investment_transactions(t *testing.T) {

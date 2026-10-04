@@ -23,9 +23,8 @@ type holdingKey struct {
 	account, security string
 }
 
-// mapLots sums the latest units of the counting lots of each holding: a lot of a position that
-// mapPositions kept, whose security is imported and named. Such a lot with units quarry cannot
-// read goes to off. With no entity in the snapshot it returns nil.
+// mapLots sums each holding's lot units over the positions mapPositions kept, for imported, named securities.
+// A lot whose units quarry cannot read goes to off; with no Lot entity it returns nil.
 func mapLots(
 	ctx context.Context, src Source, lotEnt int64, hasEntity bool,
 	positions map[int64]positionRef, accounts map[int64]accountRef, securities map[int64]store.Security, off *offenders,

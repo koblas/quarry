@@ -262,9 +262,8 @@ func splitsPhrase(checked int) string {
 	}
 }
 
-// rowsPhrase renders c as the cash clause, then the investment clause (each
-// noun inflected on its own count), then n's investment-transaction clause
-// when nonzero.
+// rowsPhrase renders c as the cash clause, then the investment clause, then n's
+// investment-transaction clause when nonzero.
 func rowsPhrase(c store.Counts, n store.NotImported) string {
 	phrase := strings.Join([]string{
 		humanize.Count(c.Transactions, "transaction", "transactions"),

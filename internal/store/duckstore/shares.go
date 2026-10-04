@@ -24,6 +24,9 @@ const splitAction = "split"
 // errSplitRatio is the fault behind a split row whose new or old side is missing or not positive.
 var errSplitRatio = errors.New("ratio is not positive")
 
+// errNotDecimal is the fault behind DECIMAL column text that is not a decimal number.
+var errNotDecimal = errors.New("not a decimal number")
+
 // holdingWalkQuery lists the investment transactions of every holding, a holding's together and in walk order.
 const holdingWalkQuery = `
 SELECT account_id, security_id, action, CAST(shares AS VARCHAR), CAST(split_new_shares AS VARCHAR), CAST(split_old_shares AS VARCHAR)
@@ -75,9 +78,7 @@ func (s *Store) deriveShares(ctx context.Context, txns []store.InvestmentTransac
 }
 
 // holdingShares returns the derived share count of every holding with an investment transaction
-// that has a security. Walking a holding in date order, ties by source_id, shares add and a
-// split multiplies the running count by its new over old sides and adds nothing. It is the
-// single owner of that derivation.
+// that has a security. It is the single owner of that derivation.
 func holdingShares(ctx context.Context, db rowQuerier) (map[holdingKey]*big.Rat, error) {
 	counts := make(map[holdingKey]*big.Rat)
 	err := db.QueryRows(ctx, holdingWalkQuery, nil, func(scan func(dest ...any) error) error {
@@ -91,16 +92,22 @@ func holdingShares(ctx context.Context, db rowQuerier) (map[holdingKey]*big.Rat,
 			counts[key] = new(big.Rat)
 		}
 		if action == splitAction {
-			ratio := splitRatio(splitNew, splitOld)
-			if ratio == nil {
-				return fmt.Errorf("split of %s in %s: %w", security, account, errSplitRatio)
+			// a split scales the running count by new over old and adds nothing
+			ratio, err := splitRatio(splitNew, splitOld)
+			if err != nil {
+				return fmt.Errorf("split of %s in %s: %w", security, account, err)
 			}
 			counts[key].Mul(counts[key], ratio)
 			return nil
 		}
-		if added := decimalOf(shares); added != nil {
-			counts[key].Add(counts[key], added)
+		if !shares.Valid {
+			return nil
 		}
+		added, err := parseDecimal(shares.String)
+		if err != nil {
+			return err
+		}
+		counts[key].Add(counts[key], added)
 		return nil
 	})
 	if err != nil {
@@ -109,26 +116,32 @@ func holdingShares(ctx context.Context, db rowQuerier) (map[holdingKey]*big.Rat,
 	return counts, nil
 }
 
-// splitRatio returns newShares over oldShares, nil unless both are present and positive.
-func splitRatio(newShares, oldShares sql.NullString) *big.Rat {
-	numerator, denominator := decimalOf(newShares), decimalOf(oldShares)
-	if numerator == nil || denominator == nil || numerator.Sign() <= 0 || denominator.Sign() <= 0 {
-		return nil
+// splitRatio returns newShares over oldShares, or errSplitRatio unless both are present and positive.
+func splitRatio(newShares, oldShares sql.NullString) (*big.Rat, error) {
+	if !newShares.Valid || !oldShares.Valid {
+		return nil, errSplitRatio
 	}
-	return numerator.Quo(numerator, denominator)
+	numerator, err := parseDecimal(newShares.String)
+	if err != nil {
+		return nil, err
+	}
+	denominator, err := parseDecimal(oldShares.String)
+	if err != nil {
+		return nil, err
+	}
+	if numerator.Sign() <= 0 || denominator.Sign() <= 0 {
+		return nil, errSplitRatio
+	}
+	return numerator.Quo(numerator, denominator), nil
 }
 
-// decimalOf returns the value of a DECIMAL column read as text, nil when it is NULL.
-func decimalOf(col sql.NullString) *big.Rat {
-	if !col.Valid {
-		return nil
-	}
-	value, ok := new(big.Rat).SetString(col.String)
+// parseDecimal reads the text of a DECIMAL column, or fails with errNotDecimal.
+func parseDecimal(text string) (*big.Rat, error) {
+	value, ok := new(big.Rat).SetString(text)
 	if !ok {
-		// unreachable: the column is a DECIMAL cast to VARCHAR, which DuckDB renders as plain decimal text
-		return nil
+		return nil, fmt.Errorf("%q: %w", text, errNotDecimal)
 	}
-	return value
+	return value, nil
 }
 
 // compareShares checks every holding on either side: a missing count is 0, and counts match

@@ -303,8 +303,7 @@ func Test_run_sync_refuses_an_investment_record_quarry_cannot_read(t *testing.T)
 	}
 }
 
-// holdingsBundle is two holdings in two accounts, the second closed, with
-// lots equal to each holding's derived share count, plus a cash account.
+// The lots equal each holding's derived share count, so the share-count gate passes.
 func holdingsBundle(t *testing.T, home string) v9fixture.Bundle {
 	t.Helper()
 	day1 := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
@@ -412,7 +411,6 @@ func Test_run_sync_leaves_the_previous_store_byte_identical_when_share_counts_di
 	assert.Equal(t, sentinel, got)
 }
 
-// Control for the guard above: the same bundle with the lot at the derived count replaces the store.
 func Test_run_sync_replaces_the_store_when_the_lot_matches_the_derived_share_count(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
