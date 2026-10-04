@@ -50,3 +50,5 @@ Scenarios complete: SCENARIO-01..10 (04 folds 05, 08; 06 folds 07; 09 folds 10).
 - Spec S.7 conventions text says prices are in `securities.currency` "NULL when Quicken records none", but the importer stores `""` as `""`. Open question for the final product-vision pass (SCENARIO-01)
 - Every new `Z_ENT = ?` query needs an another-entity pin plus positive control, mutation-checked; securities, quotes, positions, investment transactions, lots are done (SCENARIO-01, 02, 04)
 - Table column width is measured in bytes (`widestLen`, `internal/cli/render.go`) while `fmt` `%-*s` pads by rune, so a non-ASCII account or security name misaligns the DIFFER rows; pre-existing in the balances and splits rows, now also shares. unowned — dies unless re-opened (SCENARIO-06)
+- `internal/store/duckstore/history_test.go:16` `phase1ImportRunsDDL` comment ends "the last one since dropped" (change narrative) — reword to a fixture fact when next touched (SCENARIO-09 checkpoint MINOR)
+- `docs/specifications/phase1-import-store/SCENARIO-01c.md:29` archived step still says the renamed test asserts the `not imported` Rows tail; fix if cheap (SCENARIO-09 checkpoint NIT)

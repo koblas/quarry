@@ -8,6 +8,7 @@
 | SCENARIO-03 | code-first (light) | L, V | 0/1/0/1 | yes (ratio cross-product cells unpinned; folds: negative ratio side refuses, two-nameless-securities pin) |
 | SCENARIO-04 (+05, +08) | test-first | A, B1, B2, V | 0/1/3/0 | yes (missing-Lot-entity ranking unpinned; folds: lot class order recorded, decimalOf silent drop → error, comment budgets) |
 | SCENARIO-06 (+07) | code-first | A, B1, B2, V | 0/1/2/1 | yes (cross-tier mismatch sort priority unpinned; folds: both-DIFFER render subtest, comment budgets) |
+| SCENARIO-09 (+10) | code-first | A, B1, B2, V | 0/0/1/1 | no (MINOR/NIT → STATE.md) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
