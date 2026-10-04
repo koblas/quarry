@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-03
-status: open
+status: done
 ---
 
 # SCENARIO-03: every quarry name the skill uses exists
@@ -66,10 +66,10 @@ Size: OWNS A RUN, 3 batches in 1 package (`cmd/quarry` tests) plus 5 static `plu
     - `anchor_and_url`: `#frag` and `http…` are skipped
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Add doc comments on the new helpers. No SKILL.md edit is planned; if one is needed, make it through the S01 constants.
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Add doc comments on the new helpers. No SKILL.md edit is planned; if one is needed, make it through the S01 constants.
 
 ### Verify
-- [ ] Step 7: full verification.
+- [x] Step 7: full verification.
   - `claude plugin validate --strict plugin` and `--strict .`.
   - `spec-check.py phase3d-skill`.
   - Tick SCENARIO-03 with its acceptance test. Rewrite STATE.md and set `status: done`.
@@ -103,29 +103,12 @@ Size: OWNS A RUN, 3 batches in 1 package (`cmd/quarry` tests) plus 5 static `plu
 
 ## Phase report
 
-Runs A (steps 1-2), B1 (step 3) and B2 (steps 4-5) done, committed as d6d9549. V (steps 6-7) next.
-- **Acceptance is green** (`Test_every_quarry_name_the_skill_uses_exists`, all three subtests). Over the real sources the scan reads 642 code units and resolves commands `accounts anomalies cashflow findings recurring search snapshots prune spend sql status sync` and views `v_account_balances v_cash_flow v_spending`, with 0 mismatches.
-- **Lint is `0 issues`**, `go build ./...` clean. The sweep (step 6) is mostly done: doc comments are on every helper, trimmed to the 1-2 line budget. V only re-runs it.
-- **Signatures changed from the A stubs:**
-  - `toolMismatches(t, sources, tools, root helpNode)`. It needs `t` for `splitSkill` and the root for the `mcpNotTools` command check.
-  - `linkMismatches(sources, exists func(rel string) bool) driftCheck` returns what it resolved as well, so the real test asserts two positives.
-  - `parseHelp(help) ([]string, []string)` is split out of `helpNodeAt`, so the parser has its own crafted-text test.
-- **Where things live:**
-  - `run_skill_drift_test.go`: `parseHelp`, `helpTree`/`helpNodeAt`, `codeUnits` (spans and fenced lines), `commandScan`, `commandMismatches`, plus `Test_drift_help_parser_reads_only_flag_sections`, `Test_drift_check_flags_crafted_command_text` (17 rows) and `Test_drift_check_resolves_crafted_command_text` (positive controls).
-  - `run_skill_drift_names_test.go`: `toolMismatches`, `relationMismatches` (`relationLists`, `sqlOf`), `linkMismatches`, `Test_skill_links_and_reference_paths_resolve`, `Test_drift_check_flags_crafted_name_text` (17 rows).
-  - `run_skill_json_fields_test.go` (new, not in the plan's file list): `declaredFields` (file, argv or recipe, names), `Test_every_field_the_reference_prose_declares_is_in_the_output_and_the_prose`, and `Test_declared_field_check_flags_a_name_the_output_lacks` (the absent-field control, for `absentNames` and `unmentionedNames`).
-- **JSON fields:** the declared lists were green on arrival, because B1 wrote the prose from the field comments, and the argv pairing is as the B1 report ruled (`spend --by month` for `partial`, `--by payee` for `payee`, `--by tag` for `tag`; the recipe columns `period`/`currency`/`spent` and `category`/`currency`/`income` are checked against `runShippedRecipe` columns). Search is `search "Savings Sweep" --json`, because `transfer` is only present there.
-- **Mutations** (each reverted, `diff` identical; all in `run_skill_drift_test.go`):
-  1. Flags checked against any command (`checkFlag` to `checkAnyFlag` for an own occurrence). RED: `Test_drift_check_flags_crafted_command_text/flag_on_another_command` (expected `unknown flag --csv for "quarry search"`, actual nil), and also `flag_only_in_the_commands_own_prose`, `unknown_flag`, `quarry_line_with_the_same_flag`.
-  2. Any word accepted after a parent (the unknown-child `report` and `return` replaced by `break`). RED: `.../unknown_subcommand` (expected `unknown command "quarry snapshots bogus"`, actual nil), and `unknown_root_command`, `fence_line`.
-  3. Whole help text scanned (`parseHelp` flags re-collected over the full text). RED: `.../flag_only_in_the_commands_own_prose` (expected `unknown flag --from for "quarry snapshots"`, actual nil) and `Test_drift_help_parser_reads_only_flag_sections`.
-- **Mechanics worth knowing:**
-  - A flag binds to the nearest preceding `quarry` token in its unit; a unit that opens with a flag binds to the nearest `quarry` earlier on the line, else to any command. A flag after an unresolved command is skipped, since the command is already reported.
-  - Command words are stripped of trailing `.,;` but the `quarry` token must match exactly.
-  - `.sql` sources are skipped by the command scan. A relation FROM/JOIN list ends at the next clause keyword or `)`/`;`. Go regexp has no lookahead, so `relationLists` finds each keyword with `FindAllStringIndex` and cuts the tail itself.
-  - SQL fences are those opened with `sql` or holding a `SELECT`.
-  - Links are resolved relative to `path.Dir(source.name)`, so the README section (named `README.md Claude Code section`) resolves from the repo root.
-- **Left to V:** step 6's re-run, the full verification (covered full suite, `uncovered-diff.py`, `test-stats.py --base e19ff35`, `-race` on `cmd/quarry`), both `claude plugin validate --strict` runs, `spec-check.py phase3d-skill`, ticking SCENARIO-03 with its acceptance test, STATE.md rewrite, `status: done`. STATE.md `## Open debts` must record the ruled gap: bare table names (a backticked `transactions` outside SQL) in reference prose are unchecked, and bare command words not preceded by `quarry` are unresolved.
+Run V (steps 6-7) done; scenario complete, `status: done`.
+- **Sweep:** `go build ./...` rc=0, `golangci-lint run ./...` rc=0 `0 issues`. No file edits were needed.
+- **Verify:** covered full suite `go test rc=0`; `uncovered-diff.py`: no production Go lines added since e19ff35 (rc=0); `go test -race ./cmd/quarry/...` rc=0; `test-stats.py --base e19ff35 --changed`: cmd/quarry 658 (+11) tests, 514 (+0) tempdir, 462 (+0) disk.
+- **Plugin validation:** `claude plugin validate --strict plugin` and `--strict .` both "Validation passed" (rc=0).
+- **Spec:** SCENARIO-03 ticked with `Test_every_quarry_name_the_skill_uses_exists`; `spec-check.py --run phase3d-skill` OK, all seven scenarios ticked.
+- **STATE.md** rewritten; the two ruled gaps (bare table names in prose, bare command words) are in Open debts.
 
 ## Orchestrator rulings (2026-10-03, before run A)
 - **Table names in reference prose** (outside SQL fences and `.sql` files) stay unchecked. This is accepted, and recorded in STATE.md `## Open debts` by run V. The `v_*` names and the SQL relations are checked, and `schema.md` is generated.

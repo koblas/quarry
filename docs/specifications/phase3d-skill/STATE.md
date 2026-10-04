@@ -1,6 +1,6 @@
 # phase3d-skill — current state
 
-Scenarios complete: SCENARIO-01 (with SCENARIO-07 folded), SCENARIO-02, SCENARIO-04 (with SCENARIO-05 folded), SCENARIO-06. Last updated by SCENARIO-06.
+Scenarios complete: SCENARIO-01..07 (07 folded into 01, 05 into 04); all scenarios done; gate next. Last updated by SCENARIO-03.
 
 ## Binding decisions
 - Plugin files are static; no production Go. All pins are package-main tests in `cmd/quarry` reading repo files via `repoFile(t, rel)` (`run_plugin_manifest_test.go`), the one reader S02-S06 reuse (SCENARIO-01)
@@ -22,24 +22,31 @@ Scenarios complete: SCENARIO-01 (with SCENARIO-07 folded), SCENARIO-02, SCENARIO
 - Use-case eval in `run_skill_use_cases_test.go`: `skillUseCases()` rows {name, SKILL.md §4 question, argv, answer} are the one table; `Test_each_use_case_question_is_answered_by_the_command_the_skill_names` runs each argv through `runWith` under `recipeScenario`, and `Test_use_case_argv_matches_the_command_the_skill_names` pins the same argv to the §4 Run cell. `skillRunCell(skill, question)` finds the §4 row by its Question cell; `argvMismatches(cell, argv)` checks the cell's first code span (literal words up to the first `<placeholder>`, `a|b` alternatives, every `--flag` argv uses must appear in the cell). Each has crafted-text controls. Row 3 uses `recurring --json --since 2000` so it prefix-matches the §4 cell and its `doc.Since == "2000-01-01"` assertion is what reddens if `--since 2000` is dropped; row 6 asserts the 2026 CAD period row, not only totals (SCENARIO-06)
 - `schema.md` carries no user data: empty store equals populated store, no account/category/payee names, no `v_balances_daily`/`v_net_worth`/`v_holdings`; first line is the generated-by header (SCENARIO-02)
 
+- Drift check (S03) lives in `run_skill_drift_test.go` (`parseHelp`, `helpTree`, `codeUnits`, `commandMismatches`), `run_skill_drift_names_test.go` (`toolMismatches`, `relationMismatches`, `linkMismatches`) and `run_skill_json_fields_test.go` (`declaredFields`); it scans code spans and fence lines of SKILL.md, the README section and `references/**`, and a new reference file or recipe is picked up from disk (SCENARIO-03)
+- Flags resolve per command against the help tree's `Flags:` ∪ `Global Flags:` sections, never help prose: bind to the nearest preceding `quarry` in the unit, else the same line, else the union of all commands. The tree is built from `<path> --help`, descending only while the node has children (SCENARIO-03)
+- §9 spans are MCP tool names except `mcpNotTools` = {`sync`}, which must be absent from `ListTools` and present as a root command; `v_*` and FROM/JOIN relations (minus CTEs) must be in `storeRelations`; links resolve relative to their file, backticked `references/…` relative to `plugin/skills/quarry/` (SCENARIO-03)
+- Reference prose names `--json` fields only as declared in `run_skill_json_fields_test.go`: each declared field must appear in its file and as a key in that command's output on `skillEvalStore`. Adding a field to prose means declaring it there (SCENARIO-03)
+- Reference files may not name MCP tools, Phase 4 views (`v_balances_daily`, `v_net_worth`, `v_holdings`) or Quicken `Z*` tables (`Test_references_name_no_phase_4_view_or_quicken_table`) (SCENARIO-03)
+
 ## Left unbuilt
-- `plugin/skills/quarry/references/*.md` prose (five files: spending, cash-flow, recurring-and-anomalies, search, findings; `schema.md` and `sql/spending-trend.sql`, `sql/income-by-category.sql` are built) — S03 batch 1
-- Link and path resolution (section 10 links; backticked `references/…` paths in sections 4 and 5, relative to `plugin/skills/quarry/`) — S03 batch 3
-- Command, flag, MCP tool and table/view resolution for SKILL.md and README — S03
+- None. Every planned symbol, file and check across SCENARIO-01..07 is built.
 
 ## Traps
-- S.4 section 4 first table row has `\|` inside code spans; S03's drift check must read `--by category\|payee\|tag\|month` as one flag `--by`, not split on `\|` (SCENARIO-01)
+- §4 first table row has `\|` inside code spans; the drift check reads `--by category\|payee\|tag\|month` as one flag `--by` (pinned by `alternatives_are_one_flag`) (SCENARIO-01, SCENARIO-03)
 - Expected subtree sets in recipe tests are literal category lists; re-deriving them with prefix logic in Go copies the code under test. Every equality first requires a non-empty command side (empty equals empty) (SCENARIO-04)
 - `sum` widens DECIMAL and `date_trunc` returns TIMESTAMP: recipes cast to `DECIMAL(18,2)` / `DATE` or the `columns` pins fail (SCENARIO-04)
 - `spend --by month` lists empty months as zero rows (`spendByMonth` drops them); `cashflow --currency USD` totals list a zero CAD entry (`withoutZeros`) (SCENARIO-04)
 - `rows.ReferencedCategoryIDs` must stay sorted and unique when `skillEvalRows` gains categories; new one-off payees or similar category names can raise anomaly, payee-variant or similar-category findings, so re-run the S04 check (anomalies, `recurring --since 2000`, `findings`) after adding rows (SCENARIO-04)
-- SKILL.md §4 Question cell text is the lookup key `skillRunCell` uses (exact `| <question> | ` line prefix): rewording a Question cell in SKILL.md or the S01 constants reddens the matching use-case pin, and S03's drift check should reuse `skillRunCell` rather than re-parse §4 (SCENARIO-06)
+- SKILL.md §4 Question cell text is the lookup key `skillRunCell` uses (exact `| <question> | ` line prefix): rewording a Question cell in SKILL.md or the S01 constants reddens the matching use-case pin (the drift check does not use `skillRunCell`; it binds flags per line) (SCENARIO-06, SCENARIO-03)
 - `findings` `first_found_at` is real-clock, so use-case tests assert finding ids only, never that field (SCENARIO-06)
 - `sed` in this shell is GNU: use `sed -i -e '...' file` for in-place edits (BSD `-i ''` form fails) (SCENARIO-06)
 - Do not reflow or re-quote the description line: validator and pin both want the single plain line (SCENARIO-01)
 - `populatedAnalysisStore` must not be edited (exact-bytes goldens; `schema.md` golden reads it read-only) (SCENARIO-01, SCENARIO-02)
 - A change to any `COMMENT ON VIEW` text in `internal/store/duckstore/schema.go` or to `report.SQLConventions` / `run sql --help` reddens the schema golden until regenerated with `-update` (SCENARIO-02)
 - SKILL.md section 1 writes `<rates.last>` without backticks, so path pins match plain substrings, not backticked ones (SCENARIO-01)
+
+- Exit codes prove nothing in the help walk: `quarry snapshots bogus --help` exits 0 and prints snapshots help. Resolve by descent, from `<path> --help` never `help <path>`; when probing from zsh quote each argument (SCENARIO-03)
+- A leaf's trailing words are legal arguments (`quarry sync to build it` is §8's ruled stderr text), so there is no "takes no arguments" check; a `FROM` inside a function call (`EXTRACT(year FROM d)`) reads as a relation, so reference SQL avoids it (SCENARIO-03)
 
 ## Open debts
 - Checkpoint S06 MINOR: `cmd/quarry/run_skill_use_cases_test.go:38-143` `skillUseCases` has seven assertion shapes in closures, two with filter loops (`:51`, `:84`); split per-row tests or name the helpers `newSeries`/`seriesNamed`; unowned
@@ -51,3 +58,5 @@ Scenarios complete: SCENARIO-01 (with SCENARIO-07 folded), SCENARIO-02, SCENARIO
 - Checkpoint S02 MINOR: `cmd/quarry/run_skill_schema_reference_test.go:120` regenerate hint hard-codes the test name that `:70` derives; unowned
 - `THIRD_PARTY_NOTICES` "Used in:" keeps its existing parenthetical and appends `; plugin/ (…)`; S.9's "Now" column abbreviated it, so this is a flagged reading, not a ruled deletion — product-vision final pass to confirm
 - Proposed `.claude/CLAUDE.md` sentence about `plugin/` (spec "flagged only") not applied; outside this pipeline — unowned
+- Unchecked by design (ruled): bare table names in reference prose (a backticked `transactions` outside SQL fences and `.sql` files) are not resolved against the store; `v_*` names and SQL relations are; unowned
+- Unchecked by design (ruled): bare command words that `quarry` does not precede (`spend`, `sync` in prose) are not resolved; only `quarry <cmd>` is; unowned
