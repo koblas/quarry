@@ -502,15 +502,13 @@ func Test_import_fails_on_shares_without_a_security(t *testing.T) {
 			t.Parallel()
 			b := v9fixture.NewBuilder()
 			accountPK := newBrokerage(b)
-			pk := b.InvestmentTransaction(v9fixture.TransactionRow{
+			b.InvestmentTransaction(v9fixture.TransactionRow{
 				Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Position: c.setup(b, accountPK), Units: c.units,
 			})
-			bundle := b.WriteBundle(t, t.TempDir())
-			fake := &fakeStore{}
 
-			_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+			reason, fake := importInvestmentsRefused(t, b)
 
-			require.ErrorContains(t, err, fmt.Sprintf("investment transaction (source id %d) has shares but no security", pk))
+			assert.Equal(t, `an investment transaction on 2026-03-01 in "Brokerage" has shares but no security`, reason)
 			assert.Zero(t, fake.replaceCalls)
 		})
 	}
@@ -549,13 +547,16 @@ func Test_import_fails_on_a_split_with_an_unreadable_ratio(t *testing.T) {
 		name        string
 		numerator   string
 		denominator string
+		want        string
 	}{
-		{name: "NULL numerator", numerator: "", denominator: "12"},
-		{name: "NULL denominator", numerator: "1", denominator: ""},
-		{name: "zero numerator", numerator: "0", denominator: "12"},
-		{name: "zero denominator", numerator: "1", denominator: "0"},
-		{name: "unreadable numerator", numerator: "n/a", denominator: "12"},
-		{name: "unreadable denominator", numerator: "1", denominator: "n/a"},
+		{name: "NULL numerator", numerator: "", denominator: "12", want: "(none:12)"},
+		{name: "NULL denominator", numerator: "1", denominator: "", want: "(1:none)"},
+		{name: "zero numerator", numerator: "0", denominator: "12", want: "(0:12)"},
+		{name: "zero denominator", numerator: "1", denominator: "0", want: "(1:0)"},
+		{name: "unreadable numerator", numerator: "n/a", denominator: "12", want: "(n/a:12)"},
+		{name: "unreadable denominator", numerator: "1", denominator: "n/a", want: "(1:n/a)"},
+		{name: "numerator beyond 6 decimals", numerator: "1.23456789", denominator: "12", want: "(1.23456789:12)"},
+		{name: "denominator too large", numerator: "1", denominator: "1000000000000", want: "(1:1000000000000)"},
 	}
 
 	for _, c := range cases {
@@ -563,18 +564,31 @@ func Test_import_fails_on_a_split_with_an_unreadable_ratio(t *testing.T) {
 			t.Parallel()
 			b := v9fixture.NewBuilder()
 			accountPK := newBrokerage(b)
-			pk := b.InvestmentTransaction(v9fixture.TransactionRow{
-				Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Numerator: c.numerator, Denominator: c.denominator,
+			positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: newAcme(b)})
+			b.InvestmentTransaction(v9fixture.TransactionRow{
+				Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Position: positionPK,
+				Numerator: c.numerator, Denominator: c.denominator,
 			})
-			bundle := b.WriteBundle(t, t.TempDir())
-			fake := &fakeStore{}
 
-			_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+			reason, fake := importInvestmentsRefused(t, b)
 
-			require.ErrorContains(t, err, fmt.Sprintf("investment transaction (source id %d) has a split ratio quarry cannot read", pk))
+			assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" of "Acme Corp" has a ratio quarry cannot read `+c.want, reason)
 			assert.Zero(t, fake.replaceCalls)
 		})
 	}
+}
+
+func Test_import_names_no_security_in_the_refusal_of_a_split_with_no_security(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	accountPK := newBrokerage(b)
+	b.InvestmentTransaction(v9fixture.TransactionRow{
+		Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Numerator: "1", Denominator: "0",
+	})
+
+	reason, _ := importInvestmentsRefused(t, b)
+
+	assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" has a ratio quarry cannot read (1:0)`, reason)
 }
 
 func Test_import_ignores_the_ratio_of_a_row_that_is_not_a_split(t *testing.T) {

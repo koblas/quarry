@@ -3,7 +3,6 @@ package importer
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"time"
 
@@ -16,11 +15,8 @@ const investmentIDFormat = "itxn-%d"
 // splitAction is the action whose ZNUMERATOR and ZDENOMINATOR become the split columns.
 const splitAction = "split"
 
-// errSharesWithoutSecurity and errUnreadableSplitRatio fail an import on a row quarry cannot place or read.
-var (
-	errSharesWithoutSecurity = errors.New("has shares but no security")
-	errUnreadableSplitRatio  = errors.New("has a split ratio quarry cannot read")
-)
+// ratioSideNone is how a refusal shows a NULL split side.
+const ratioSideNone = "none"
 
 // investmentActions maps ZTRANSACTION.ZTYPE to investment_transactions.action; any other code is unmappable.
 var investmentActions = map[int64]string{
@@ -127,11 +123,7 @@ func mapInvestmentTransactions(
 		if !r.account.Valid || !ok {
 			return nil
 		}
-		txn, ok, err := buildInvestmentTransaction(r, acct, positions, securities, off)
-		if err != nil {
-			return err
-		}
-		if ok {
+		if txn, ok := buildInvestmentTransaction(r, acct, positions, securities, off); ok {
 			rows = append(rows, txn)
 		}
 		return nil
@@ -160,10 +152,10 @@ func (s investmentSubject) day() string { return s.date.Format(dateLayout) }
 // offender when quarry cannot read it. An undated row is refused before any other fault.
 func buildInvestmentTransaction(
 	r investmentRow, acct accountRef, positions map[int64]positionRef, securities map[int64]store.Security, off *offenders,
-) (store.InvestmentTransaction, bool, error) {
+) (store.InvestmentTransaction, bool) {
 	if !r.posted.Valid && !r.entered.Valid {
 		off.add(offender{class: classMissingValue, reason: reasonInvestmentNoDate(acct.Name, r.pk), name: acct.Name, sourceID: r.pk})
-		return store.InvestmentTransaction{}, false, nil
+		return store.InvestmentTransaction{}, false
 	}
 	seconds := r.entered.Float64
 	if r.posted.Valid {
@@ -173,12 +165,12 @@ func buildInvestmentTransaction(
 
 	if !r.code.Valid {
 		s.refuse(classMissingValue, reasonInvestmentNoActionCode(s.day(), acct.Name))
-		return store.InvestmentTransaction{}, false, nil
+		return store.InvestmentTransaction{}, false
 	}
 	action, ok := investmentActions[r.code.Int64]
 	if !ok {
 		s.refuse(classTransactionStatus, reasonInvestmentActionCode(s.day(), acct.Name, r.code.Int64))
-		return store.InvestmentTransaction{}, false, nil
+		return store.InvestmentTransaction{}, false
 	}
 
 	txn := store.InvestmentTransaction{
@@ -186,27 +178,39 @@ func buildInvestmentTransaction(
 		Date: s.date, Action: action, Currency: acct.Currency,
 	}
 	if !s.readValues(&txn) {
-		return txn, false, nil
+		return txn, false
 	}
 	if r.note.Valid && r.note.String != "" {
 		txn.Memo = &r.note.String
 	}
-	if pos, ok := positions[r.position.Int64]; ok && r.position.Valid {
-		if sec, ok := securities[pos.Security]; ok {
-			txn.SecurityID = &sec.ID
-		}
+	sec, hasSecurity := resolveSecurity(r, positions, securities)
+	if hasSecurity {
+		txn.SecurityID = &sec.ID
 	}
-	if txn.SecurityID == nil && txn.Shares != nil && *txn.Shares != 0 {
-		return txn, false, fmt.Errorf("investment transaction (source id %d) %w", r.pk, errSharesWithoutSecurity)
+	if !hasSecurity && txn.Shares != nil && *txn.Shares != 0 {
+		s.refuse(classMissingValue, reasonInvestmentSharesWithoutSecurity(s.day(), acct.Name))
+		return txn, false
 	}
 	if action == splitAction {
 		newShares, oldShares, ok := splitSides(r)
 		if !ok {
-			return txn, false, fmt.Errorf("investment transaction (source id %d) %w", r.pk, errUnreadableSplitRatio)
+			s.refuse(classMissingValue, reasonSplitRatio(s.day(), acct.Name, sec.Name, ratioSideText(r.numerator), ratioSideText(r.denominator)))
+			return txn, false
 		}
 		txn.SplitNewShares, txn.SplitOldShares = &newShares, &oldShares
 	}
-	return txn, true, nil
+	return txn, true
+}
+
+// resolveSecurity returns the imported security of r's position; false when r has no position or
+// its position or security is not imported.
+func resolveSecurity(r investmentRow, positions map[int64]positionRef, securities map[int64]store.Security) (store.Security, bool) {
+	pos, ok := positions[r.position.Int64]
+	if !ok || !r.position.Valid {
+		return store.Security{}, false
+	}
+	sec, ok := securities[pos.Security]
+	return sec, ok
 }
 
 // readValues sets txn's shares, amount and commission, reporting false after adding an offender
@@ -288,6 +292,14 @@ func splitSides(r investmentRow) (int64, int64, bool) {
 	}
 	oldShares, ok := splitSide(r.denominator)
 	return newShares, oldShares, ok
+}
+
+// ratioSideText is one side of a split ratio as a refusal shows it: its column text, "none" when NULL.
+func ratioSideText(col numberColumn) string {
+	if col.typ == "null" {
+		return ratioSideNone
+	}
+	return col.text.String
 }
 
 func splitSide(col numberColumn) (int64, bool) {

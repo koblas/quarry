@@ -128,3 +128,58 @@ func Test_import_imports_no_securities_and_no_prices_when_the_snapshot_has_no_se
 	assert.Zero(t, result.Counts.Securities)
 	assert.Zero(t, result.Counts.Prices)
 }
+
+func Test_import_refuses_a_security_with_no_name(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{name: "NULL name", value: "NULL"},
+		{name: "empty name", value: "''"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+			b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
+			pk := b.Security(v9fixture.SecurityRow{Name: "Placeholder", Ticker: "NONAME", Currency: "CAD"})
+			bundle := b.WriteBundle(t, t.TempDir())
+			execOn(t, bundle.DataPath, "UPDATE ZSECURITY SET ZNAME = "+c.value+" WHERE Z_PK = ?", pk)
+			fake := &fakeStore{}
+
+			_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+			assert.Equal(t, fmt.Sprintf("a security (source id %d) has no name", pk), importReason(t, err))
+			assert.Zero(t, fake.replaceCalls)
+		})
+	}
+}
+
+func Test_import_ignores_a_deleted_security_with_no_name(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Security(v9fixture.SecurityRow{Ticker: "GONE", Currency: "CAD", Deleted: true})
+
+	fake, result := importSecurities(t, b)
+
+	assert.Empty(t, fake.Rows.Securities)
+	assert.Zero(t, result.Counts.Securities)
+}
+
+func Test_import_reports_a_security_with_no_name_once_when_a_transaction_holds_its_shares(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	accountPK := newBrokerage(b)
+	pk := b.Security(v9fixture.SecurityRow{Ticker: "NONAME", Currency: "CAD"})
+	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: pk})
+	b.InvestmentTransaction(v9fixture.TransactionRow{
+		Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Position: positionPK, Units: "2",
+	})
+
+	reason, _ := importInvestmentsRefused(t, b)
+
+	assert.Equal(t, fmt.Sprintf("a security (source id %d) has no name", pk), reason)
+}

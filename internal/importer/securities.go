@@ -32,8 +32,10 @@ ORDER BY Z_PK
 `
 
 // mapSecurities reads the non-deleted securities of securityEnt, and the same by source id.
-// A NULL or "" ticker is stored NULL; with no entity in the snapshot nothing is read.
-func mapSecurities(ctx context.Context, src Source, securityEnt int64, hasEntity bool) ([]store.Security, map[int64]store.Security, error) {
+// A NULL or "" ticker is stored NULL; a NULL or "" name goes to off. With no entity in the snapshot nothing is read.
+func mapSecurities(
+	ctx context.Context, src Source, securityEnt int64, hasEntity bool, off *offenders,
+) ([]store.Security, map[int64]store.Security, error) {
 	if !hasEntity {
 		return nil, nil, nil
 	}
@@ -41,12 +43,14 @@ func mapSecurities(ctx context.Context, src Source, securityEnt int64, hasEntity
 	bySource := make(map[int64]store.Security)
 	err := src.QueryRows(ctx, securitiesQuery, []any{securityEnt}, func(scan func(dest ...any) error) error {
 		var pk int64
-		var name string
-		var ticker, currency sql.NullString
+		var name, ticker, currency sql.NullString
 		if err := scan(&pk, &name, &ticker, &currency); err != nil {
 			return err
 		}
-		sec := store.Security{ID: fmt.Sprintf(securityIDFormat, pk), SourceID: pk, Name: name}
+		if !name.Valid || name.String == "" {
+			off.add(offender{class: classMissingValue, reason: reasonSecurityNoName(pk), name: fmt.Sprintf("(source id %d)", pk), sourceID: pk})
+		}
+		sec := store.Security{ID: fmt.Sprintf(securityIDFormat, pk), SourceID: pk, Name: name.String}
 		if ticker.Valid && ticker.String != "" {
 			sec.Ticker = &ticker.String
 		}

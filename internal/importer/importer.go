@@ -105,7 +105,7 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	}
 
 	securityEnt, hasSecurity := entities[securityEntity]
-	securities, securityRefs, err := mapSecurities(ctx, src, securityEnt, hasSecurity)
+	securities, securityRefs, err := mapSecurities(ctx, src, securityEnt, hasSecurity, off)
 	if err != nil {
 		return store.Result{}, err
 	}

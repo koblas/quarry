@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -228,4 +229,74 @@ func Test_run_spend_and_cashflow_are_unchanged_by_investment_transactions(t *tes
 	assert.Equal(t, "2", withRows)
 	assert.Contains(t, without["spend --since 2026-03 --until 2026-03"], "Groceries")
 	assert.Equal(t, without, with)
+}
+
+func Test_run_sync_refuses_an_investment_record_quarry_cannot_read(t *testing.T) {
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	const brokerage = "an investment transaction on 2026-03-01 in \"Brokerage\""
+	cases := []struct {
+		name  string
+		setup func(b *v9fixture.Builder, brokeragePK int64) string
+	}{
+		{name: "an action code 14", setup: func(b *v9fixture.Builder, brokeragePK int64) string {
+			b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: new(int64(14)), Amount: "1.00", PostedDate: &day})
+			return brokerage + " has action code 14, which quarry does not map yet"
+		}},
+		{name: "1.23456789 shares", setup: func(b *v9fixture.Builder, brokeragePK int64) string {
+			acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
+			positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
+			b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: new(int64(3)), Amount: "1.00", PostedDate: &day, Position: positionPK, Units: "1.23456789"})
+			return brokerage + " has 1.23456789 shares, which has more than 6 decimal places"
+		}},
+		{name: "a split ratio 1:0", setup: func(b *v9fixture.Builder, brokeragePK int64) string {
+			acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
+			positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
+			b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: new(int64(23)), Amount: "0", PostedDate: &day, Position: positionPK, Numerator: "1", Denominator: "0"})
+			return `a stock split on 2026-03-01 in "Brokerage" of "Acme Corp" has a ratio quarry cannot read (1:0)`
+		}},
+		{name: "a split ratio with a NULL denominator", setup: func(b *v9fixture.Builder, brokeragePK int64) string {
+			acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
+			positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
+			b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: new(int64(23)), Amount: "0", PostedDate: &day, Position: positionPK, Numerator: "1"})
+			return `a stock split on 2026-03-01 in "Brokerage" of "Acme Corp" has a ratio quarry cannot read (1:none)`
+		}},
+		{name: "non-zero units and no position", setup: func(b *v9fixture.Builder, brokeragePK int64) string {
+			b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: new(int64(3)), Amount: "1.00", PostedDate: &day, Units: "2"})
+			return brokerage + " has shares but no security"
+		}},
+		{name: "a security with no name", setup: func(b *v9fixture.Builder, _ int64) string {
+			pk := b.Security(v9fixture.SecurityRow{Ticker: "ACME", Currency: "CAD"})
+			return fmt.Sprintf("a security (source id %d) has no name", pk)
+		}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			quarryDir := filepath.Join(home, "Library", "Application Support", "quarry")
+			require.NoError(t, os.MkdirAll(quarryDir, 0o700))
+			storePath := filepath.Join(quarryDir, "quarry.duckdb")
+			sentinel := []byte("previous store bytes, untouched by an unreadable investment record")
+			require.NoError(t, os.WriteFile(storePath, sentinel, 0o600))
+			b := v9fixture.NewBuilder()
+			brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+			reason := c.setup(b, brokeragePK)
+			bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout.String())
+			id := snapshotID(onlyFileWithSuffix(t, filepath.Join(quarryDir, "snapshots"), ".sqlite"))
+			assert.Equal(t,
+				"quarry: cannot import snapshot "+id+": "+reason+"; "+abbreviated(t, storePath, home)+
+					" was not changed; run quarry sync --from "+id+" once quarry supports it\n",
+				stderr.String())
+			after, err := os.ReadFile(storePath)
+			require.NoError(t, err)
+			assert.Equal(t, sentinel, after)
+		})
+	}
 }

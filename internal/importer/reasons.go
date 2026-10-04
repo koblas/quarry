@@ -153,6 +153,23 @@ func reasonInvestmentMoneyTooLarge(date, account, what, amount string) string {
 	return fmt.Sprintf("an investment transaction on %s in \"%s\" has %s of %s, which is too large for quarry's amounts", date, account, what, amount)
 }
 
+func reasonInvestmentSharesWithoutSecurity(date, account string) string {
+	return fmt.Sprintf("an investment transaction on %s in \"%s\" has shares but no security", date, account)
+}
+
+// reasonSplitRatio names the split's security; an empty security leaves the "of" clause out.
+func reasonSplitRatio(date, account, security, numerator, denominator string) string {
+	of := ""
+	if security != "" {
+		of = fmt.Sprintf(" of \"%s\"", security)
+	}
+	return fmt.Sprintf("a stock split on %s in \"%s\"%s has a ratio quarry cannot read (%s:%s)", date, account, of, numerator, denominator)
+}
+
+func reasonSecurityNoName(sourceID int64) string {
+	return fmt.Sprintf("a security (source id %d) has no name", sourceID)
+}
+
 func reasonInvestmentSharesPrecision(date, account, shares string) string {
 	return fmt.Sprintf("an investment transaction on %s in \"%s\" has %s shares, which has more than 6 decimal places", date, account, shares)
 }
