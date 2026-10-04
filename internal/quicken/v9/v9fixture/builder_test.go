@@ -121,6 +121,35 @@ func Test_builder_seeds_the_category_references_the_unused_category_check_reads(
 	assert.Equal(t, int64(1), queryInt(t, db, "SELECT count(*) FROM ZCUSTOMERCREDITLINEITEM WHERE Z_PK = ? AND ZDELETIONCOUNT = 1 AND ZCATEGORY = ?", deletedCreditPK, categoryPK))
 }
 
+func Test_builder_seeds_securities_and_their_quotes_with_entity_rows(t *testing.T) {
+	quoteDay := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	b := v9fixture.NewBuilder().WithEntity("SecurityQuote", 9068)
+	securityPK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
+	bareSecurityPK := b.Security(v9fixture.SecurityRow{Name: "Bare Fund", Deleted: true})
+	quotePK := b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: securityPK, QuoteDate: &quoteDay, ClosingPrice: "12.5"})
+	wholeQuotePK := b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: securityPK, QuoteDate: &quoteDay, ClosingPrice: "3"})
+	bareQuotePK := b.SecurityQuote(v9fixture.SecurityQuoteRow{Deleted: true})
+
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	db, err := sqlite.OpenReadOnly(t.Context(), bundle.DataPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	assert.Equal(t, "Acme Corp", queryString(t, db, "SELECT ZNAME FROM ZSECURITY WHERE Z_PK = ?", securityPK))
+	assert.Equal(t, "ACME", queryString(t, db, "SELECT ZTICKER FROM ZSECURITY WHERE Z_PK = ?", securityPK))
+	assert.Equal(t, "CAD", queryString(t, db, "SELECT ZCURRENCY FROM ZSECURITY WHERE Z_PK = ?", securityPK))
+	assert.Equal(t, int64(v9fixture.EntSecurity), queryInt(t, db, "SELECT Z_ENT FROM ZSECURITY WHERE Z_PK = ?", securityPK))
+	assert.Equal(t, int64(1), queryInt(t, db, "SELECT count(*) FROM ZSECURITY WHERE Z_PK = ? AND ZTICKER IS NULL AND ZCURRENCY IS NULL AND ZDELETIONCOUNT = 1", bareSecurityPK))
+	assert.Equal(t, securityPK, queryInt(t, db, "SELECT ZSECURITY FROM ZSECURITYQUOTE WHERE Z_PK = ?", quotePK))
+	assert.Equal(t, int64(9068), queryInt(t, db, "SELECT Z_ENT FROM ZSECURITYQUOTE WHERE Z_PK = ?", quotePK))
+	assert.Equal(t, "real", queryString(t, db, "SELECT typeof(ZCLOSINGPRICE) FROM ZSECURITYQUOTE WHERE Z_PK = ?", quotePK))
+	assert.Equal(t, "integer", queryString(t, db, "SELECT typeof(ZCLOSINGPRICE) FROM ZSECURITYQUOTE WHERE Z_PK = ?", wholeQuotePK))
+	assert.Equal(t, int64(1), queryInt(t, db, "SELECT count(*) FROM ZSECURITYQUOTE WHERE Z_PK = ? AND ZSECURITY IS NULL AND ZQUOTEDATE IS NULL AND ZCLOSINGPRICE IS NULL AND ZDELETIONCOUNT = 1", bareQuotePK))
+	assert.Equal(t, bareSecurityPK, queryInt(t, db, "SELECT Z_MAX FROM Z_PRIMARYKEY WHERE Z_ENT = ?", v9fixture.EntSecurity))
+	assert.Equal(t, bareQuotePK, queryInt(t, db, "SELECT Z_MAX FROM Z_PRIMARYKEY WHERE Z_ENT = ?", 9068))
+}
+
 func queryString(t *testing.T, db *sqlite.DB, query string, args ...any) string {
 	t.Helper()
 	var got string

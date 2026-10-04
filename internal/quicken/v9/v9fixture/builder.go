@@ -19,6 +19,8 @@ const (
 	EntCashFlowTransaction      = 79
 	EntSmartCashFlowTransaction = 80
 	EntInvestmentTransaction    = 81
+	EntSecurity                 = 66
+	EntSecurityQuote            = 68
 )
 
 // coreDataEpoch is Core Data's reference date: TIMESTAMP columns store
@@ -140,6 +142,29 @@ type TagRow struct {
 	Deleted        bool
 }
 
+// SecurityRow is one ZSECURITY row. Entity defaults to the Builder's Security
+// entity number when zero. Name, Ticker and Currency write NULL when "".
+type SecurityRow struct {
+	Entity   int64
+	Name     string
+	Ticker   string
+	Currency string
+	Deleted  bool
+}
+
+// SecurityQuoteRow is one ZSECURITYQUOTE row. Entity defaults to the Builder's
+// SecurityQuote entity number when zero. Security is a zero ref to a Security
+// row (0 writes NULL); QuoteDate writes NULL when nil; ClosingPrice is a
+// decimal string bound as text, so SQLite's affinity picks integer, real or
+// text, and writes NULL when "".
+type SecurityQuoteRow struct {
+	Entity       int64
+	Security     int64
+	QuoteDate    *time.Time
+	ClosingPrice string
+	Deleted      bool
+}
+
 // PayeeRow is one ZUSERPAYEE row.
 type PayeeRow struct {
 	Name    string
@@ -178,13 +203,16 @@ type Builder struct {
 	tags         []pkRow[TagRow]
 	payees       []pkRow[PayeeRow]
 	institutions []pkRow[InstitutionRow]
+	securities   []pkRow[SecurityRow]
+	quotes       []pkRow[SecurityQuoteRow]
 	userTagLinks []userTagLink
 }
 
 // NewBuilder returns a Builder seeded with the reference schema's default
 // Z_PRIMARYKEY entity numbers (EntCategoryTag, EntUserTag,
 // EntCashFlowTransaction, EntSmartCashFlowTransaction,
-// EntInvestmentTransaction), each overridable via WithEntity.
+// EntInvestmentTransaction, EntSecurity, EntSecurityQuote), each
+// overridable via WithEntity.
 func NewBuilder() *Builder {
 	return &Builder{
 		entities: map[string]int64{
@@ -193,6 +221,8 @@ func NewBuilder() *Builder {
 			"CashFlowTransaction":      EntCashFlowTransaction,
 			"SmartCashFlowTransaction": EntSmartCashFlowTransaction,
 			"InvestmentTransaction":    EntInvestmentTransaction,
+			"Security":                 EntSecurity,
+			"SecurityQuote":            EntSecurityQuote,
 		},
 		omitted: make(map[string]bool),
 		nextPK:  make(map[string]int64),
@@ -208,7 +238,8 @@ func (b *Builder) WithoutEntity(name string) *Builder {
 
 // WithEntity overrides name's Z_PRIMARYKEY entity number. name is one of
 // "CategoryTag", "UserTag", "CashFlowTransaction",
-// "SmartCashFlowTransaction" or "InvestmentTransaction".
+// "SmartCashFlowTransaction", "InvestmentTransaction", "Security" or
+// "SecurityQuote".
 func (b *Builder) WithEntity(name string, ent int64) *Builder {
 	b.entities[name] = ent
 	return b
@@ -332,6 +363,26 @@ func (b *Builder) Institution(row InstitutionRow) int64 {
 	return pk
 }
 
+// Security adds row and returns its assigned ZSECURITY.Z_PK.
+func (b *Builder) Security(row SecurityRow) int64 {
+	if row.Entity == 0 {
+		row.Entity = b.entities["Security"]
+	}
+	pk := b.nextPKFor("ZSECURITY")
+	b.securities = append(b.securities, pkRow[SecurityRow]{pk: pk, row: row})
+	return pk
+}
+
+// SecurityQuote adds row and returns its assigned ZSECURITYQUOTE.Z_PK.
+func (b *Builder) SecurityQuote(row SecurityQuoteRow) int64 {
+	if row.Entity == 0 {
+		row.Entity = b.entities["SecurityQuote"]
+	}
+	pk := b.nextPKFor("ZSECURITYQUOTE")
+	b.quotes = append(b.quotes, pkRow[SecurityQuoteRow]{pk: pk, row: row})
+	return pk
+}
+
 func deletionCount(deleted bool) int {
 	if deleted {
 		return 1
@@ -373,7 +424,7 @@ func nullableRef(ref int64) any {
 
 // Seed executes every row accumulated on Builder against db, which must
 // already carry v9.ReferenceDDL, then writes a Z_PRIMARYKEY row for each of
-// Builder's five entity kinds, with Z_MAX set to the highest Z_PK Builder
+// Builder's seven entity kinds, with Z_MAX set to the highest Z_PK Builder
 // assigned that entity (0 when none were added).
 func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 	tb.Helper()
@@ -459,6 +510,18 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 			p.pk, p.row.Name, deletionCount(p.row.Deleted))
 	}
 
+	for _, sec := range b.securities {
+		exec(tb, ctx, db,
+			"INSERT INTO ZSECURITY (Z_PK, Z_ENT, ZNAME, ZTICKER, ZCURRENCY, ZDELETIONCOUNT) VALUES (?, ?, ?, ?, ?, ?)",
+			sec.pk, sec.row.Entity, nullableString(sec.row.Name), nullableString(sec.row.Ticker), nullableString(sec.row.Currency), deletionCount(sec.row.Deleted))
+	}
+
+	for _, q := range b.quotes {
+		exec(tb, ctx, db,
+			"INSERT INTO ZSECURITYQUOTE (Z_PK, Z_ENT, ZSECURITY, ZQUOTEDATE, ZCLOSINGPRICE, ZDELETIONCOUNT) VALUES (?, ?, ?, ?, ?, ?)",
+			q.pk, q.row.Entity, nullableRef(q.row.Security), nullableTime(q.row.QuoteDate), nullableString(q.row.ClosingPrice), deletionCount(q.row.Deleted))
+	}
+
 	for _, link := range b.userTagLinks {
 		exec(tb, ctx, db,
 			`INSERT INTO "Z_15USERTAGS" (Z_15CASHFLOWTRANSACTIONENTRIES, Z_76USERTAGS) VALUES (?, ?)`,
@@ -467,6 +530,7 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 
 	for _, name := range []string{
 		"CategoryTag", "UserTag", "CashFlowTransaction", "SmartCashFlowTransaction", "InvestmentTransaction",
+		"Security", "SecurityQuote",
 	} {
 		if b.omitted[name] {
 			continue
@@ -493,6 +557,18 @@ func (b *Builder) maxPKForEntity(name string) int64 {
 		for _, x := range b.transactions {
 			if x.row.Entity == ent {
 				maxPK = max(maxPK, x.pk)
+			}
+		}
+	case "Security":
+		for _, sec := range b.securities {
+			if sec.row.Entity == ent {
+				maxPK = max(maxPK, sec.pk)
+			}
+		}
+	case "SecurityQuote":
+		for _, q := range b.quotes {
+			if q.row.Entity == ent {
+				maxPK = max(maxPK, q.pk)
 			}
 		}
 	}
