@@ -209,6 +209,11 @@ const (
 	ActionSplit            = "split"
 )
 
+// Actions returns every investment_transactions.action value, alphabetically, as a fresh slice.
+func Actions() []string {
+	return nil
+}
+
 // InvestmentTransaction is one row of the investment_transactions table. Shares,
 // SplitNewShares and SplitOldShares are millionths (DECIMAL(18,6)); Amount is
 // cents; Commission is ten-thousandths (DECIMAL(18,4)). SecurityID is nil for a

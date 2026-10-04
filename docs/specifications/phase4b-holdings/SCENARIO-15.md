@@ -17,8 +17,8 @@ Surface survey: no new port or adapter; one new exported `store.Actions()` (alph
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_holdings_surfaces_test.go` (new) `Test_run_accounts_and_sql_help_carry_the_holdings_copy` — copy blocks verbatim from S.7; the conventions block is the hand copy, not `report.SQLConventions`
-- [ ] Step 2: `internal/store/store.go:196-210` `Actions` — signature-only stub (returns nil); fails at the action sentence assertion
+- [x] Step 1: `cmd/quarry/run_holdings_surfaces_test.go` (new) `Test_run_accounts_and_sql_help_carry_the_holdings_copy` — copy blocks verbatim from S.7; the conventions block is the hand copy, not `report.SQLConventions`
+- [x] Step 2: `internal/store/store.go:196-210` `Actions` — signature-only stub (returns nil); fails at the action sentence assertion
 
 ### Build
 - [ ] Step 3 (B1, batch 1 conventions): `store.go:196-210` `Actions() []string` (alphabetical, fresh slice) + `store_test.go` `Test_actions_are_the_thirteen_investment_transaction_actions` (literal list, plus every `Action*` const present); `internal/report/sql_conventions.go:1-26` const → `var`, last sentence `prices holds … (securities.currency, NULL when Quicken records none).` loses `quarry does not convert prices yet.`, append the S.7 holding_shares/v_holdings text then the action sentence built from `store.Actions()` and hard-wrapped to the file's 76-column width (unexported wrap helper in `report`; no `go doc` change); `sql_conventions_test.go:23-30` re-pin (phrases `holding_shares`, `v_holdings`, `Neither includes cash in investment accounts`; drop the retired phrase) + `Test_sql_conventions_list_the_action_values` (whitespace-collapsed `action is one of ` + `strings.Join(store.Actions(), ", ")`); `internal/importer/investments.go:21-36` + `investments_test.go` `Test_investment_action_map_covers_every_store_action` (values of `investmentActions` == `store.Actions()` as sets; production map unchanged)
@@ -37,7 +37,8 @@ Surface survey: no new port or adapter; one new exported `store.Actions()` (alph
 
 **Binding decisions:**
 - `store.Actions()` is the one action vocabulary list (alphabetical copy of the 13 consts): conventions text generates from it, the importer map is pinned against it, a new action is added to the consts and the list together — the phase4a rule "added there only" now has a test.
-- `report.SQLConventions` is a `var` built at init from a const body plus the generated, hard-wrapped action sentence — all four surfaces (sql help, describe_schema, schema.md, MCP) read the one value; the hand copies in `sql_test.go` and `run_shared_documents_test.go` pin the wrapped literal.
+- OVERRIDE (orchestrator, supersedes the next bullet): `report.SQLConventions` stays a `const` (no package-level `var`): the action sentence is written literally in the const, and a drift test asserts it equals the sentence built from `store.Actions()` (and the importer map). The hand copies in `sql_test.go` and `run_shared_documents_test.go` pin the wrapped literal.
+- (superseded by the override) `report.SQLConventions` is a `var` built at init from a const body plus the generated, hard-wrapped action sentence — all four surfaces (sql help, describe_schema, schema.md, MCP) read the one value.
 - `widestLen` counts runes (like `renderTable`), not display columns: wide CJK glyphs misalign by terminal width, accepted.
 
 **Left unbuilt:**
@@ -50,3 +51,14 @@ Surface survey: no new port or adapter; one new exported `store.Actions()` (alph
 - `SQLConventions` as a `var` initialised from `store.Actions()` must not depend on package init order across `report`; keep the helper pure.
 - Pins in `run_skill_text_test.go` use `¤` for backtick; SKILL.md edits must match byte for byte, including frontmatter on one line.
 - Verify the `-run` filters: `-run 'Holdings'` misses lowercase `Test_holdings_*` (STATE trap).
+
+## Phase report
+
+Run A done (steps 1-2).
+
+- `cmd/quarry/run_holdings_surfaces_test.go` (new): `Test_run_accounts_and_sql_help_carry_the_holdings_copy`. Red at all three `assert.Contains` (accounts Long at :23, sql conventions holding_shares/v_holdings block at :26, action sentence at :35); the accounts Long is step 5 (B2), so it fails first, not the action sentence as the plan guessed.
+- `internal/store/store.go:212-215`: `Actions()` signature-only stub returning nil; B1 fills it (alphabetical, fresh slice). The acceptance test does not call it (hand copy), so it compiles without it.
+- Wrap widths measured: sql conventions paragraph is greedy wrap at 76 columns (python `textwrap.wrap(..., 76)` reproduces the current paragraph exactly; 75 does not). The new sentence runs on in the same paragraph: `...none).` then `holding_shares holds ...`, then `Neither includes cash in investment accounts. action is one of ...` (action sentence continues on the same line as `Neither ...`). The test's literal blocks are that wrap; B1's const must match them byte for byte.
+- Accounts Long wrap: the existing paragraph's lines run 72-73 columns; the new sentence is wrapped at 72: `...quarry values their` / `holdings (quarry holdings) but not yet the cash in them, so it cannot` / `compute their balance.` B2 edits `internal/cli/accounts.go:17-19` and `cmd/quarry/run_accounts_test.go:96-98` to this wrap.
+- Orchestrator override recorded in `## Handoff`: `SQLConventions` stays a `const`; drift test against `store.Actions()` and the importer map replaces the var/generator.
+- Red now: the acceptance test. Not run: any other suite.
