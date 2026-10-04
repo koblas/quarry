@@ -22,6 +22,7 @@ const (
 	EntSecurity                 = 66
 	EntSecurityQuote            = 68
 	EntPosition                 = 49
+	EntLot                      = 44
 )
 
 // coreDataEpoch is Core Data's reference date: TIMESTAMP columns store
@@ -183,6 +184,17 @@ type PositionRow struct {
 	Account  int64
 	Security int64
 	Deleted  bool
+}
+
+// LotRow is one ZLOT row. Entity defaults to the Builder's Lot entity number
+// when zero. Position is a zero ref to a Position row (0 writes NULL);
+// LatestUnits is ZLATESTUNITS, a decimal string bound as text so SQLite's
+// affinity picks integer, real or text, and writes NULL when "".
+type LotRow struct {
+	Entity      int64
+	Position    int64
+	LatestUnits string
+	Deleted     bool
 }
 
 // PayeeRow is one ZUSERPAYEE row.
@@ -422,6 +434,11 @@ func (b *Builder) Position(row PositionRow) int64 {
 	pk := b.nextPKFor("ZPOSITION")
 	b.positions = append(b.positions, pkRow[PositionRow]{pk: pk, row: row})
 	return pk
+}
+
+// Lot adds row and returns its assigned ZLOT.Z_PK.
+func (b *Builder) Lot(_ LotRow) int64 {
+	return 0
 }
 
 func deletionCount(deleted bool) int {

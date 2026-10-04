@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -299,4 +300,117 @@ func Test_run_sync_refuses_an_investment_record_quarry_cannot_read(t *testing.T)
 			assert.Equal(t, sentinel, after)
 		})
 	}
+}
+
+// holdingsBundle is two holdings in two accounts, the second closed, with
+// lots equal to each holding's derived share count, plus a cash account.
+func holdingsBundle(t *testing.T, home string) v9fixture.Bundle {
+	t.Helper()
+	day1 := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	day2 := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+
+	b := v9fixture.NewBuilder()
+	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	rrspPK := b.Account(v9fixture.AccountRow{Name: "Old RRSP", Type: "RETIREMENTIRA", Currency: "CAD", Closed: true})
+	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
+	barePK := b.Security(v9fixture.SecurityRow{Name: "Bare Fund", Currency: "CAD"})
+	acmePosition := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
+	barePosition := b.Position(v9fixture.PositionRow{Account: rrspPK, Security: barePK})
+
+	cashPK := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-50.00", PostedDate: &day1})
+	b.Entry(v9fixture.EntryRow{Parent: cashPK, Amount: "-50.00"})
+	invest := func(code int64, row v9fixture.TransactionRow) {
+		row.PostedDate, row.Type = &day1, &code
+		pk := b.InvestmentTransaction(row)
+		b.Entry(v9fixture.EntryRow{Parent: pk, Amount: row.Amount})
+	}
+	invest(3, v9fixture.TransactionRow{Account: brokeragePK, Position: acmePosition, Units: "10", Amount: "-1000.00"})
+	invest(19, v9fixture.TransactionRow{Account: brokeragePK, Position: acmePosition, Units: "-4", Amount: "400.00"})
+	invest(3, v9fixture.TransactionRow{Account: rrspPK, Position: barePosition, Units: "5", Amount: "-50.00"})
+	b.Lot(v9fixture.LotRow{Position: acmePosition, LatestUnits: "4"})
+	b.Lot(v9fixture.LotRow{Position: acmePosition, LatestUnits: "2"})
+	b.Lot(v9fixture.LotRow{Position: barePosition, LatestUnits: "5"})
+	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &day1, ClosingPrice: "100"})
+	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &day2, ClosingPrice: "101"})
+	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: barePK, QuoteDate: &day1, ClosingPrice: "10"})
+
+	return b.WriteBundle(t, filepath.Join(home, "Documents"))
+}
+
+func Test_run_sync_reports_holdings_that_match_quickens_share_counts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bundle := holdingsBundle(t, home)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode)
+	require.Empty(t, stderr.String())
+	assert.Contains(t, stdout.String(),
+		"Rows      1 transaction, 1 split, 0 transfers, 0 payees, 0 categories, 0 tags; 3 investment transactions, 2 securities, 3 prices; 3 investment transactions not imported\n")
+	assert.Contains(t, stdout.String(), "Shares    2 holdings match Quicken's share counts\n")
+
+	var jsonOut, jsonErr bytes.Buffer
+	exitCode = run(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"}, &jsonOut, &jsonErr)
+
+	require.Equal(t, 0, exitCode, jsonErr.String())
+	var doc struct {
+		Store struct {
+			Rows   map[string]int  `json:"rows"`
+			Shares json.RawMessage `json:"shares"`
+		} `json:"store"`
+	}
+	require.NoError(t, json.Unmarshal(jsonOut.Bytes(), &doc))
+	assert.JSONEq(t, `{"checked":2,"mismatched":[]}`, string(doc.Store.Shares))
+	assert.Equal(t, 3, doc.Store.Rows["investment_transactions"])
+	assert.Equal(t, 2, doc.Store.Rows["securities"])
+	assert.Equal(t, 3, doc.Store.Rows["prices"])
+}
+
+func Test_run_sync_applies_a_stock_split_in_date_order(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	buyDay := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	splitDay := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+	sellDay := time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
+	b := v9fixture.NewBuilder()
+	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
+	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
+	invest := func(code int64, day time.Time, row v9fixture.TransactionRow) {
+		row.Account, row.Position, row.PostedDate, row.Type = brokeragePK, positionPK, &day, &code
+		pk := b.InvestmentTransaction(row)
+		b.Entry(v9fixture.EntryRow{Parent: pk, Amount: row.Amount})
+	}
+	invest(19, sellDay, v9fixture.TransactionRow{Units: "-10", Amount: "100.00"})
+	invest(3, buyDay, v9fixture.TransactionRow{Units: "120", Amount: "-1200.00"})
+	invest(23, splitDay, v9fixture.TransactionRow{Units: "0", Amount: "0", Numerator: "1", Denominator: "12"})
+	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "0"})
+	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode)
+	require.Empty(t, stderr.String())
+	assert.Contains(t, stdout.String(), "Shares    1 holding matches Quicken's share count\n")
+}
+
+func Test_run_sync_reports_a_file_with_no_investment_data(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode)
+	require.Empty(t, stderr.String())
+	assert.Contains(t, stdout.String(),
+		"Rows      0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices\n")
+	assert.Contains(t, stdout.String(), "Shares    no holdings to check\n")
 }
