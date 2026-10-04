@@ -237,6 +237,11 @@ MCP tool `holdings`:
 - Result: the same document.
 - Description: `Securities held on one day with share count, latest price and its date, and value; cash in investment accounts is not included.`
 - Refusals use the sibling tools' error shape.
+- MCP rulings (2026-10-04, SCENARIO-13):
+  - The MCP result lists at most 500 holdings; totals cover all. A cut adds the existing `listCutWarning` note (noun `holdings`, full count) to `warnings[]`. Below 500 it is byte-identical to `--json`.
+  - `quarry mcp --help` Tools line ends `…, search_transactions, holdings.`
+  - Parameter descriptions: `as_of`: `Day to value holdings on: YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day. Defaults to today.`; `accounts`: `List only these accounts, each given by id or by name in any letter case. Omit it for every account.`
+  - Refusals: `as_of "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`; `as_of 2027-01-01 is after today; holdings are valued up to today only, so pass an earlier as_of`; stderr `quarry: mcp: holdings: refused the call's as_of; details went to the client only`.
 
 ### S.6 Edge-case rows
 
@@ -273,6 +278,8 @@ MCP tool `holdings`:
 | SKILL.md:72 | `- **Net worth:** "quarry does not compute net worth yet: it values investment holdings but not the cash in investment accounts." quarry accounts lists the other balances and quarry holdings the holdings; don't add them up.` |
 | SKILL.md:73 | `- **Dividends, realized gains, ACB:** "quarry imports investment transactions and values holdings, but does not compute dividends, gains or ACB yet."` |
 | Pins | Remove `holdings` from `phase4ViewPattern` (`cmd/quarry/run_skill_references_test.go:21`) and its case `:100-101`; remove `v_holdings` from `run_skill_schema_reference_test.go:182`; re-pin `run_skill_text_test.go:165,218-219` |
+| SKILL.md:94 (§9 MCP tool list) | `search_transactions, data_quality` → `search_transactions, holdings, data_quality` (rest unchanged) |
+| PRD MCP table (row after `search_transactions`) | `\| holdings \| Securities held on one day (as_of, default today) with share count, latest price and its date, and value, with accounts and currency parameters; cash in investment accounts not included \|` |
 | `docs/initial-prd.md` | L123 `(type deferred: Quicken's type codes are unlabelled; …)`; derived views `v_holdings (shares and value by day, from holding_shares; Phase 4b)`; CLI table add `quarry holdings`; MCP table add `holdings` |
 | `internal/cli` `widestLen` | Measure runes (4a debt) |
 | MCP `instructions` const | Unchanged (grep for "investment" to confirm) |
