@@ -32,7 +32,7 @@
 - **I4-1 Tables.** Three new tables, visible through `quarry sql`, MCP `query`/`describe_schema` and the generated `plugin/skills/quarry/references/schema.md`:
   - `securities`: `id` (`sec-<Z_PK>`), `source_id`, `name`, `ticker` (NULL when NULL or empty), `currency` (`'CAD'`, `'USD'` or NULL, as Quicken records `ZSECURITY.ZCURRENCY`; no refusal for other values in 4a — nothing converts with it yet).
   - `prices`: `security_id`, `source_id`, `date` (`ZQUOTEDATE` as a UTC day, as P1-5c), `price` DECIMAL(18,6). One row per security-day; a duplicate (security, day) keeps the highest `Z_PK`, silently (real file: 0 duplicates). NULL `ZCLOSINGPRICE` → not stored, not counted, silent. Zero → stored as recorded. A price with more than 6 decimals is **rounded half-even to 6, silently** (real file: 17 quotes over 12 securities; deviation ≤ 5e-7).
-  - `investment_transactions`: `id` (`itxn-<Z_PK>`), `source_id`, `account_id`, `security_id` (via `ZPOSITION`→`ZSECURITY`; NULL for cash-only rows), `date` (`ZPOSTEDDATE`, else `ZENTEREDDATE`, per P1-5c), `action`, `shares` DECIMAL(18,6) (Quicken's sign: negative when shares leave; 0 when `ZUNITS` is 0; NULL when NULL), `amount` DECIMAL(18,2) native currency (negative when cash leaves the account), `commission` DECIMAL(18,2) (NULL when NULL, stored 0, or snapping to 0.00 under P1-7), `currency` (the account's), `memo` (`ZNOTE`), `split_new_shares`, `split_old_shares` (= `ZNUMERATOR`, `ZDENOMINATOR`; non-NULL only on `action = 'split'`; "split_new_shares new shares for every split_old_shares old"). No `price` column (derived; one owner later).
+  - `investment_transactions`: `id` (`itxn-<Z_PK>`), `source_id`, `account_id`, `security_id` (via `ZPOSITION`→`ZSECURITY`; NULL for cash-only rows), `date` (`ZPOSTEDDATE`, else `ZENTEREDDATE`, per P1-5c), `action`, `shares` DECIMAL(18,6) (Quicken's sign: negative when shares leave; 0 when `ZUNITS` is 0; NULL when NULL), `amount` DECIMAL(18,2) native currency (negative when cash leaves the account), `commission` DECIMAL(18,4) as Quicken recorded it (SCENARIO-13; NULL when NULL, stored 0, or snapping to 0.0000), `currency` (the account's), `memo` (`ZNOTE`), `split_new_shares`, `split_old_shares` (= `ZNUMERATOR`, `ZDENOMINATOR`; non-NULL only on `action = 'split'`; "split_new_shares new shares for every split_old_shares old"). No `price` column (derived; one owner later).
 - **I4-2 Action vocabulary** — closed set, chosen from `ZTYPE` alone (never from category; `ZACTION` is NULL on every real row). Code numbers are never exposed.
 
   | `ZTYPE` | `action` | | `ZTYPE` | `action` |
@@ -96,6 +96,7 @@
 6. Table named `investment_transactions` (not the PRD's `investment_txns`).
 7. Prices rounded half-even to 6, no refusal; shares keep snap-or-refuse.
 8. `securities.currency` enters 4a as recorded.
+10. Reference-check rule gap (2026-10-04, SCENARIO-13): 18 real `sell` commissions carry 3–4 decimals (exact at 4; 0 amounts beyond 2). `commission` is DECIMAL(18,4), stored as recorded, residue snap to 4 (tolerance ≤ 1e-8, ≥100× below 0.0001), beyond 4 refuses. Deliberate exception to "money is DECIMAL(18,2)": the requirement is exact values, no floats; `amount` stays DECIMAL(18,2). No output change beyond `quarry sql`/MCP `query`/schema.md. Whether `amount` includes commission is for 4e.
 9. Scoped copy ruling (2026-10-03, after sizing): NULL action code, non-number/too-large shares/commission/amount/price, NULL quote date, undated transaction, deleted security under shares, positions/lots in skipped accounts, optional entities, zero commission → S.5/S.6. Security named by name in every refusal. Checked holdings on the real file = 145.
 
 ## Surface & Copy
@@ -147,7 +148,7 @@ Shares    DIFFER for 1 of 145 holdings
 | NULL `ZTYPE` | `an investment transaction on 2024-03-02 in "RRSP" has no action code` |
 | Shares not a number (text/blob) | `an investment transaction on <date> in "<account>" has a share count that is not a number` |
 | Shares out of DECIMAL(18,6) range | `an investment transaction on <date> in "<account>" has <v> shares, which is too large for quarry's share counts` |
-| Commission not a number / too large / > 2 decimals after P1-7 snap | `… has a commission that is not a number` / `… has a commission of <v>, which is too large for quarry's amounts` / `… has a commission of <v>, which has more than 2 decimal places` (prefix `an investment transaction on <date> in "<account>"`) |
+| Commission not a number / too large / > 4 decimals after residue snap to 4 (SCENARIO-13, ruled 2026-10-04) | `… has a commission that is not a number` / `… has a commission of <v>, which is too large for quarry's amounts` / `… has a commission of <v>, which has more than 4 decimal places` (prefix `an investment transaction on <date> in "<account>"`) |
 | Lot `ZLATESTUNITS` NULL / not a number / > 6 decimals / too large, on a counting lot (not deleted, non-deleted position, imported account) (ruled 2026-10-04, SCENARIO-04) | `a lot of "<security name>" in "<account>" has no share count` / `… has a share count that is not a number` / `… has <v> shares, which has more than 6 decimal places` / `… has <v> shares, which is too large for quarry's share counts` (NULL never counts as 0) |
 | Lot entity missing while investment transactions import (ruled 2026-10-04, SCENARIO-04) | `the snapshot has investment transactions but no Quicken lots to check their share counts against` |
 | NULL `ZAMOUNT` (ruled 2026-10-03, SCENARIO-02) | `an investment transaction on <date> in "<account>" has no amount` (refuse; share-only actions store 0, not NULL) |
@@ -201,9 +202,9 @@ Shares    DIFFER for 1 of 145 holdings
 | `plugin/skills/quarry/SKILL.md` frontmatter `description` | "for net worth or investment questions beyond saying quarry does not cover them yet" | "for net worth, holdings, gains, dividend totals or ACB beyond saying quarry does not cover them yet" |
 | `SKILL.md:72` | Net worth not-covered line | `- **Net worth:** "quarry does not compute net worth yet: it does not value investment holdings, so a total of the balances it has would leave them out." \`quarry accounts\` can list the other accounts' balances; don't add them up.` |
 | `SKILL.md:73` | Investments not-covered line | `- **Investments, holdings, dividends, realized gains, ACB:** "quarry imports investment transactions but does not compute holdings, dividends, gains or ACB yet."` |
-| `internal/report/sql_conventions.go` (single source for `describe_schema` and `schema.md`; regenerate `schema.md`) | — | add: `Investment transactions are in investment_transactions, not in transactions, v_cash_flow or v_spending, so dividends, interest and trades are not counted as income or spending there. Their amount is DECIMAL(18,2) in the account's own currency, negative when cash leaves the account; shares is DECIMAL(18,6) as Quicken recorded each transaction, negative when shares leave. A split row carries split_new_shares and split_old_shares instead, so a sum of shares is not a holding. prices holds each security's closing price per day as Quicken recorded it, rounded to 6 decimals, in the security's currency (securities.currency, NULL when Quicken records none); quarry does not convert prices yet.` |
+| `internal/report/sql_conventions.go` (single source for `describe_schema` and `schema.md`; regenerate `schema.md`) | — | add: `Investment transactions are in investment_transactions, not in transactions, v_cash_flow or v_spending, so dividends, interest and trades are not counted as income or spending there. Their amount is DECIMAL(18,2) in the account's own currency, negative when cash leaves the account; commission is DECIMAL(18,4) in the account's own currency as Quicken recorded it (some brokers charge fractions of a cent), NULL when there is none; shares is DECIMAL(18,6) as Quicken recorded each transaction, negative when shares leave. A split row carries split_new_shares and split_old_shares instead, so a sum of shares is not a holding. prices holds each security's closing price per day as Quicken recorded it, rounded to 6 decimals, in the security's currency (securities.currency, NULL when Quicken records none); quarry does not convert prices yet.` |
 | `docs/initial-prd.md` L123 (`securities, prices` row) | — | add "type from Phase 4b; currency as recorded, NULL when Quicken has none" |
-| `docs/initial-prd.md` L125 | `investment_txns`; "Cash side also appears in `transactions`" | `investment_transactions`; "Cash side also appears in `transactions` (from Phase 4c)" |
+| `docs/initial-prd.md` L125 | `investment_txns`; "Cash side also appears in `transactions`" | `investment_transactions` (commission DECIMAL(18,4)); "Cash side also appears in `transactions` (from Phase 4c)" |
 | `docs/specifications/phase1-import-store/specification.md:216-228` | `not_imported` object | one-line note: superseded by phase4a-investments I4-7 |
 | No new MCP tool; `cmd/quarry/run_skill_references_test.go` Phase-4 view pin | — | unchanged (4b/4c) |
 
@@ -280,6 +281,10 @@ Scenario: SCENARIO-12 — Reference check against the real Quicken file
   Given the user's snapshot 20260930T072052Z
   When the user runs quarry sync --from 20260930T072052Z
   Then 1,605 investment transactions, 84 securities and 99,352 prices import, 145 holdings match Quicken's share counts, and the exit code is 0
+Scenario: SCENARIO-13 — Sync keeps a commission with fractions of a cent
+  Given an investment sell whose commission Quicken recorded as 8.4998
+  When the user runs quarry sync
+  Then investment_transactions holds commission 8.4998 exactly and the sync exits 0, while a commission of 1.23456 refuses with "has a commission of 1.23456, which has more than 4 decimal places"
 ```
 
 ---
@@ -301,6 +306,7 @@ Architect sizing pass 2026-10-03 (one pass over all 12; folds change no scenario
 | SCENARIO-09 | OWNS A RUN (opus), absorbs SCENARIO-10 — 3 batches, code-first; deletes `store.NotImported`, `document.NotImported`, `surveyTransactions`, `investmentEntity`, `not_imported_test.go`; re-pins the four `cmd/quarry` tests (Product Verdict 3) |
 | SCENARIO-10 | FOLD into SCENARIO-09 — dropping the column and tolerant carry land with deleting the field |
 | SCENARIO-11 | OWNS A RUN (sonnet) — 3 batches, cli + plugin + report; S.7 copy |
+| SCENARIO-13 | LIGHT — appended after the reference check (rule gap); commission scale 2→4, one refusal line, conventions sentence, PRD row |
 | SCENARIO-12 | No architect/developer — orchestrator manual reference run (see `## Reference check`) |
 
 **Seams.** A: FormatVersion bump in S01; every schema-changing scenario (S01, S02, S04, S09) regenerates schema.md with `-update`. B: each `*_rows` column lands with its table. C: S04 owns the gate function and port shape; it runs after `loadRows`, before findings/rates/`finishBuild`; S04's Handoff states how a cash failure with shares still computed works — (i) separate port method on a scratch build keeping P1-2 "Import never calls Replace when a check fails", or (ii) Replace runs and never swaps (rewrites P1-2's test, test-first). D: S04 Mutation checks need a direct mismatch test (no rename, previous store byte-identical). E: S04 adds store.rows keys (shared `document.NewRows` → sync, status, MCP) and re-pins status/MCP goldens; `store.not_imported` keeps rendering until S09. F: `surveyTransactions` stays until S09.
@@ -318,6 +324,8 @@ Architect sizing pass 2026-10-03 (one pass over all 12; folds change no scenario
 - [x] SCENARIO-09: Status reports the share check without "not imported" — `cmd/quarry/run_status_shares_test.go` `Test_run_status_reports_the_share_check`
 - [x] SCENARIO-10: Sync over a pre-4a store carries import history forward — delivered by SCENARIO-09 — `cmd/quarry/run_sync_pre4a_store_test.go` `Test_run_sync_twice_over_a_version_5_store_carries_import_history_forward`
 - [x] SCENARIO-11: Existing surfaces stop saying investments are not imported — `cmd/quarry/run_accounts_not_valued_test.go` `Test_run_accounts_shows_not_valued_for_brokerage_and_retirement_accounts`
+
+- [ ] SCENARIO-13: Sync keeps a commission with fractions of a cent
 
 ## Reference check
 
