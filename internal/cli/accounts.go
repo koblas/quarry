@@ -14,9 +14,9 @@ func newAccountsCommand(newReport ReportFactory, loadConfig ConfigLoader, jsonOu
 currency: the sum of its transactions dated today or earlier. Closed
 accounts are left out unless --all is given.
 
-Brokerage and retirement accounts show "not valued": quarry imports their
-transactions and checks their share counts against Quicken, but does not
-value holdings yet, so it cannot compute their balance.
+Brokerage and retirement accounts show "not valued": quarry values their
+holdings (quarry holdings) but not yet the cash in them, so it cannot
+compute their balance.
 
 A column shows each balance in the reporting currency (--currency, else
 reporting.currency in the config file, else CAD) at today's Bank of

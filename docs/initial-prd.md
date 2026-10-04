@@ -120,13 +120,13 @@ The store has a small set of normalized tables plus derived views; every analysi
 | `splits` | Transaction, category, amount, memo, transfer target account | Every transaction has at least one split; splits sum to the transaction amount |
 | `transfers` | Pairs of splits that move money between own accounts, including CAD to USD | Excluded from spending and income by default; cross-currency pairs keep both amounts |
 | `tags`, `split_tags` | Quicken tags | Many-to-many on splits |
-| `securities`, `prices` | Symbol, name, type, currency; historical prices | Prices as recorded in Quicken, no external feed in v1 (type from Phase 4b; currency as recorded, NULL when Quicken has none) |
+| `securities`, `prices` | Symbol, name, type, currency; historical prices | Prices as recorded in Quicken, no external feed in v1 (type deferred: Quicken's type codes are unlabelled; currency as recorded, NULL when Quicken has none) |
 | `fx_rates` | CAD/USD rate by date | Quicken keeps only the current rate per pair, so history is a daily series (Bank of Canada) fetched by `quarry sync` |
 | `investment_transactions` (commission DECIMAL(18,4)) | Action (buy, sell, dividend, reinvest, share transfer, split), security, shares, price, fees, amount | Cash side also appears in `transactions` (from Phase 4c) |
 | `findings`, `finding_items` | What each sync found to clean up: id, type, when first found, when fixed; `finding_items` names the transactions, splits, payees or categories | Status (open, fixed, ignored) and the suggested fix come from `quarry findings`; ignore decisions live in the config file |
 | `import_runs` | Snapshot hash, row counts, validation results | One row per successful build, kept across rebuilds; audit trail |
 
-**Derived views:** `v_spending` (expense splits, transfers removed, refunds netted), `v_cash_flow` (monthly income vs expense), `v_balances_daily` and `v_net_worth` (per account and total), `v_holdings` (shares and value by date). Recurring series and anomalies are computed by the core library; `quarry recurring --json` / `anomalies --json` are the shapes the Phase 3 `recurring_charges` / `anomalies` tools return.
+**Derived views:** `v_spending` (expense splits, transfers removed, refunds netted), `v_cash_flow` (monthly income vs expense), `v_balances_daily` and `v_net_worth` (per account and total), `v_holdings` (shares and value by day, from `holding_shares`; Phase 4b). Recurring series and anomalies are computed by the core library; `quarry recurring --json` / `anomalies --json` are the shapes the Phase 3 `recurring_charges` / `anomalies` tools return.
 
 **Conventions**
 
@@ -163,6 +163,7 @@ Every command supports `--json` for machine consumers and a readable table by de
 | `quarry snapshots` | List snapshots: ID, taken at, size, and which one the store was built from. `prune` deletes all but the newest `--keep N` (default `snapshots.keep`), never the store's own; `--dry-run` to preview |
 | `quarry status` | Last sync, row counts, validation results, staleness, FX rate coverage |
 | `quarry accounts` | Accounts with current balances, closed ones on request |
+| `quarry holdings` | Securities held in each investment account on one day (`--as-of`, default today) with share count, latest price and its date, and value; `--account` to narrow, cash in investment accounts not included |
 | `quarry spend` | Spending by category / payee / tag / month, with `--since`, `--until`, `--account` |
 | `quarry cashflow` | Income, expense, savings rate by period |
 | `quarry networth` | Net worth history, by account type and currency (Phase 4: needs investment holdings) |
@@ -200,6 +201,7 @@ A thin wrapper over the core library, launched by the Claude desktop app as a lo
 | `recurring_charges`, `anomalies` | The same detections the CLI uses |
 | `acb` | Adjusted cost base and realized gains by security and tax year (CAD) |
 | `search_transactions` | Find transactions by payee, memo, amount, date, account or category; transfers and report-excluded transactions included and flagged |
+| `holdings` | Securities held on one day (as_of, default today) with share count, latest price and its date, and value, with accounts and currency parameters; cash in investment accounts not included |
 | `sync_status` | Freshness of the data, last validation result |
 
 - `query` is the escape hatch for questions no tool anticipates; the named tools exist so common questions don't depend on Claude re-deriving transfer rules in SQL.
