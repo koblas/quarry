@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01b
-status: open
+status: done
 ---
 
 # SCENARIO-01b: Investment cash rows pair transfers and keep entry-less transactions (absorbs SCENARIO-05)
@@ -28,10 +28,10 @@ Surveyed (existing, not re-planned): `mapSplits` already routes cash-row entries
 - [x] Step 6: batch 4, findings Long. `internal/cli/findings.go:46-48` insert after the unused-category entry and its blank line (`findingTypesInHelp` stops at that blank, so the paragraph is not parsed as a type), `duplicate and unlinked-transfer compare register entries only, not buys, sells, dividends or other investment transactions.` wrapped at the Long's width; pin verbatim in `findings_test.go:42-85` (`Test_findings_help_says_what_findings_lists_and_how_to_ignore_one`, wrapped text).
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; docs on new symbols (`go doc ./internal/importer`); re-pin any `cmd/quarry` golden the synthetic split or N-4 moved, listing each `file:line` in the phase report.
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; docs on new symbols (`go doc ./internal/importer`); re-pin any `cmd/quarry` golden the synthetic split or N-4 moved, listing each `file:line` in the phase report.
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase4c-networth`; tick SCENARIO-01b and SCENARIO-05 (05 line: `delivered by SCENARIO-01b`, its acceptance test last); close 01b-tagged Open debts in STATE.md.
+- [x] Step 8: full verification + `spec-check.py phase4c-networth`; tick SCENARIO-01b and SCENARIO-05 (05 line: `delivered by SCENARIO-01b`, its acceptance test last); close 01b-tagged Open debts in STATE.md.
 
 ## Handoff
 
@@ -52,19 +52,8 @@ Surveyed (existing, not re-planned): `mapSplits` already routes cash-row entries
 
 ## Phase report
 
-Run B2 (steps 5-6) done. Green: `go test` on `internal/store/duckstore`, `internal/cli`, `internal/importer` (whole packages), the `cmd/quarry` narrow loop (`Findings|Investment|Status|Sync|Share|Commission|Plugin|Import`), lint `0 issues`. Both acceptance tests now pass (01b's and 05's, `-v` confirmed).
+Run V done. Full covered suite rc=0; `uncovered-diff.py` vs 011af93: 0 uncovered added lines; `go test -race` on importer, duckstore, cli, cmd/quarry ok; `golangci-lint run ./...` 0 issues; `spec-check.py phase4c-networth` OK.
 
-Files:
-- `internal/store/duckstore/findings.go:13-21,26-37` — `duplicateQuery` and `unlinkedTransferQuery` gain `AND a.investment_transaction_id IS NULL AND b.investment_transaction_id IS NULL` (WHERE, `ON` shapes untouched); docs say "register transactions (not investment cash rows)".
-- `internal/store/duckstore/findings_duplicate_test.go` — helpers `investmentCash`, `identity`; `Test_replace_does_not_flag_a_duplicate_when_either_transaction_is_an_investment_cash_row` (3 arms). The control is the existing same-day register-register row (`Test_replace_flags_two_same_amount_...`, identical amounts/dates).
-- `internal/store/duckstore/findings_unlinked_test.go` — `Test_replace_does_not_flag_an_unlinked_transfer_when_either_transaction_is_an_investment_cash_row` (3 arms; control: existing same-day row).
-- `internal/cli/findings.go:50-51` and `findings_test.go` (`Test_findings_help_says_what_findings_lists_and_how_to_ignore_one` long const) — spec sentence verbatim, wrapped at 72, between the unused-category entry and "To keep a finding".
+`test-stats.py --base 011af93 --changed`: cmd/quarry 726 (+2), internal/cli 479 (+0), internal/importer 262 (+8), internal/store/duckstore 618 (+2), TOTAL 2085 (+12); tempdir 866 (+3), disk 780 (+3).
 
-Mutations (all restored byte-identical), each reddened exactly its own subtest:
-- duplicate drop `b.` predicate: `.../the_lower_id_a_register_row,_the_higher_id_an_investment_cash_row`
-- duplicate drop `a.`: `.../the_lower_id_an_investment_cash_row,_the_higher_id_a_register_row`
-- unlinked drop `b.`: lower-register/higher-investment subtest; drop `a.`: lower-investment/higher-register subtest.
-
-Re-pins from the synthetic split / N-4 in `cmd/quarry`: none moved (narrow loop green unchanged, no golden edited).
-
-Not run: step 7 sweep beyond `go build` + lint, full suite, `test-stats.py`, spec tick, STATE.md, debt closure (run V). Findings help Long also appears nowhere else pinned (cmd loop green).
+Sweep: new symbol `addEntrylessSplits` documented; no `cmd/quarry` golden moved (no re-pins). Specification ticked: SCENARIO-01b and SCENARIO-05 (delivered by SCENARIO-01b). STATE.md rewritten; closed the USD currency, comment-budget, two-entry NIT, transfer-target-pin and entry-less interim debts; added the `plugin/skills/quarry/references/findings.md` debt.
