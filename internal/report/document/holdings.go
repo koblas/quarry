@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/report"
 )
 
@@ -104,6 +105,31 @@ func nullableMoney(cents *big.Int) *string {
 }
 
 // HoldingsWarnings is the unprefixed warning lines for h, in the order holdings prints them; never nil.
-func HoldingsWarnings(report.Holdings) []string {
-	return []string{}
+// So far it carries the no-price line; the other lines join it in their own slots as they are built.
+func HoldingsWarnings(h report.Holdings) []string {
+	warnings := []string{}
+	if line, ok := noPriceWarning(h); ok {
+		warnings = append(warnings, line)
+	}
+	return warnings
+}
+
+// noPriceWarning is the line that some of h's rows have no price on or before its as-of day, so they are
+// left out of the total; false when every row has one. A priced zero counts as priced.
+func noPriceWarning(h report.Holdings) (string, bool) {
+	unpriced := 0
+	for _, r := range h.Rows {
+		if r.Price == nil {
+			unpriced++
+		}
+	}
+	if unpriced == 0 {
+		return "", false
+	}
+	clause, remedy := "it has no value and is left out", "for it"
+	if unpriced != 1 {
+		clause, remedy = "they have no value and are left out", "for each"
+	}
+	return fmt.Sprintf("%s no price on or before %s, so %s of the total; enter a price %s in Quicken, then run quarry sync",
+		humanize.Count(unpriced, "holding has", "holdings have"), h.AsOf.Format(DateLayout), clause, remedy), true
 }

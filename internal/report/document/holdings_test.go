@@ -186,6 +186,91 @@ func Test_HoldingsWarnings_is_empty_not_nil(t *testing.T) {
 	assert.Equal(t, []string{}, document.HoldingsWarnings(report.Holdings{}))
 }
 
+func unpricedHoldings(n int) []store.Holding {
+	rows := make([]store.Holding, n)
+	for i := range rows {
+		rows[i] = store.Holding{AccountID: "a-1", SecurityID: "s-1", Shares: 1_000_000}
+	}
+	return rows
+}
+
+func Test_HoldingsWarnings_is_empty_when_every_holding_has_a_price(t *testing.T) {
+	h := report.Holdings{Rows: []store.Holding{holdingsTestRow()}, Currency: money.CAD}
+
+	assert.Equal(t, []string{}, document.HoldingsWarnings(h))
+}
+
+func Test_HoldingsWarnings_say_how_many_holdings_have_no_price(t *testing.T) {
+	const tail = ", so they have no value and are left out of the total; enter a price for each in Quicken, then run quarry sync"
+	cases := []struct {
+		name string
+		n    int
+		want string
+	}{
+		{
+			name: "one holding is singular throughout", n: 1,
+			want: "1 holding has no price on or before 2026-03-12, so it has no value and is left out of the total; " +
+				"enter a price for it in Quicken, then run quarry sync",
+		},
+		{name: "two holdings are plural throughout", n: 2, want: "2 holdings have no price on or before 2026-03-12" + tail},
+		{name: "a thousand holdings are grouped", n: 1000, want: "1,000 holdings have no price on or before 2026-03-12" + tail},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := report.Holdings{Rows: unpricedHoldings(c.n), AsOf: time.Date(2026, 3, 12, 0, 0, 0, 0, time.UTC), Currency: money.CAD}
+
+			assert.Equal(t, []string{c.want}, document.HoldingsWarnings(h))
+		})
+	}
+}
+
+func Test_HoldingsWarnings_does_not_count_a_zero_price_holding(t *testing.T) {
+	zero := holdingsTestRow()
+	zero.Price, zero.Value = new(int64(0)), big.NewInt(0)
+	h := report.Holdings{Rows: []store.Holding{zero, zero, unpricedHoldings(1)[0]}, AsOf: time.Date(2026, 3, 12, 0, 0, 0, 0, time.UTC), Currency: money.CAD}
+
+	got := document.HoldingsWarnings(h)
+
+	require.Len(t, got, 1)
+	assert.Contains(t, got[0], "1 holding has no price")
+}
+
+func Test_HoldingsWarnings_name_the_as_of_day_of_the_listing(t *testing.T) {
+	h := report.Holdings{Rows: unpricedHoldings(1), AsOf: time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC), Currency: money.CAD}
+
+	got := document.HoldingsWarnings(h)
+
+	require.Len(t, got, 1)
+	assert.Contains(t, got[0], "no price on or before 2025-12-31,")
+}
+
+func Test_HoldingsWarnings_count_an_unpriced_holding_whatever_else_it_lacks_or_is(t *testing.T) {
+	cases := []struct {
+		name string
+		row  store.Holding
+	}{
+		{name: "currency unknown", row: store.Holding{Shares: 1_000_000}},
+		{name: "currency CAD", row: store.Holding{Shares: 1_000_000, Currency: new("CAD")}},
+		{name: "currency EUR", row: store.Holding{Shares: 1_000_000, Currency: new("EUR")}},
+		{name: "account closed", row: store.Holding{Shares: 1_000_000, AccountClosed: true}},
+		{name: "negative shares", row: store.Holding{Shares: -500_000}},
+	}
+
+	for _, c := range cases {
+		for _, currency := range []money.Currency{money.CAD, money.Native} {
+			t.Run(c.name+" in "+currency.String(), func(t *testing.T) {
+				h := report.Holdings{Rows: []store.Holding{c.row}, Currency: currency}
+
+				got := document.HoldingsWarnings(h)
+
+				require.Len(t, got, 1)
+				assert.Contains(t, got[0], "1 holding has no price")
+			})
+		}
+	}
+}
+
 func Test_big_money_does_not_change_the_value_it_renders(t *testing.T) {
 	cents := big.NewInt(-123_456)
 

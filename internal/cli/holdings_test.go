@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/big"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -54,6 +55,7 @@ type holdingsDoc struct {
 		Account        string  `json:"account"`
 		Security       *string `json:"security"`
 		Price          *string `json:"price"`
+		PriceDate      *string `json:"price_date"`
 		Value          *string `json:"value"`
 		ConvertedValue *string `json:"converted_value"`
 	} `json:"holdings"`
@@ -321,6 +323,83 @@ func Test_holdings_native_json_has_one_total_per_stored_currency_cad_then_usd_th
 		{Currency: "CAD", Value: "5.50"}, {Currency: "USD", Value: "3.00"}, {Currency: "EUR", Value: "2.00"},
 	}, doc.Totals)
 	assert.Nil(t, doc.Holdings[0].ConvertedValue)
+}
+
+// bareHolding is 40 shares of Bare Fund with no price on or before the as-of day, so no value.
+func bareHolding() store.Holding {
+	return store.Holding{
+		AccountID: "acct-1", Account: "Brokerage", SecurityID: "sec-2", Security: new("Bare Fund"),
+		Shares: 40_000_000, Currency: new("CAD"),
+	}
+}
+
+const noPriceLine = "1 holding has no price on or before 2026-09-29, so it has no value and is left out of the total; " +
+	"enter a price for it in Quicken, then run quarry sync"
+
+func Test_holdings_prints_the_no_price_line_after_the_config_warning_on_stderr(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	fake := fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{brokerageHolding(), bareHolding()}}}
+
+	err := cli.Execute(t.Context(), []string{"holdings"}, holdingsEnv(warningConfig, fake, &stdout, &stderr))
+
+	require.NoError(t, err)
+	assert.Equal(t, "quarry: warning: "+unknownKeyShown+"\nquarry: warning: "+noPriceLine+"\n", stderr.String())
+}
+
+func Test_holdings_json_lists_the_no_price_line_after_the_config_warning_and_nulls_the_price(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	fake := fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{bareHolding()}}}
+
+	err := cli.Execute(t.Context(), []string{"holdings", "--json"}, holdingsEnv(warningConfig, fake, &stdout, &stderr))
+
+	require.NoError(t, err)
+	var doc holdingsDoc
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	assert.Equal(t, []string{unknownKeyAbsolute, noPriceLine}, doc.Warnings)
+	require.Len(t, doc.Holdings, 1)
+	assert.Nil(t, doc.Holdings[0].Price)
+	assert.Nil(t, doc.Holdings[0].PriceDate)
+	assert.Nil(t, doc.Holdings[0].Value)
+	assert.Nil(t, doc.Holdings[0].ConvertedValue)
+}
+
+func Test_holdings_total_leaves_out_a_holding_with_no_price(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "converted to the reporting currency", args: nil, want: `(?m)^Total +50\.00$`},
+		{name: "native", args: []string{"--currency", "native"}, want: `(?m)^Total +CAD +37,704\.00$`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			fake := fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{bareHolding(), brokerageHolding()}}}
+
+			err := executeHoldings(t, fake, &stdout, &stderr, c.args...)
+
+			require.NoError(t, err)
+			assert.Regexp(t, c.want, stdout.String())
+			assert.Contains(t, stdout.String(), "no price")
+		})
+	}
+}
+
+func Test_holdings_listing_of_only_unpriced_holdings_has_no_total_row(t *testing.T) {
+	for _, args := range [][]string{nil, {"--currency", "native"}} {
+		t.Run(strings.Join(append([]string{"holdings"}, args...), " "), func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			fake := fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{bareHolding()}}}
+
+			err := executeHoldings(t, fake, &stdout, &stderr, args...)
+
+			require.NoError(t, err)
+			assert.Contains(t, stdout.String(), "Bare Fund")
+			assert.NotContains(t, stdout.String(), "Total")
+		})
+	}
 }
 
 func Test_holdings_json_lists_no_holdings_as_an_empty_array(t *testing.T) {
