@@ -235,8 +235,7 @@ func (s *Server) importFailureRefusal(ctx context.Context, manifest Manifest, er
 }
 
 // validationFailedRefusal reports V1: a build reached the validation gate and
-// one or more checks failed. Clauses read balances, splits, shares; shares
-// alone gets the share-count tail, any cash clause keeps the cash tail.
+// one or more checks failed.
 func (s *Server) validationFailedRefusal(manifest Manifest, v store.Validation, cause error) error {
 	var clauses []string
 	if n := len(v.Balances.Mismatched); n > 0 {

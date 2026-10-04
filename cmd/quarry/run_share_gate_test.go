@@ -40,10 +40,8 @@ func objectKeysInOrder(t *testing.T, raw json.RawMessage) []string {
 	return keys
 }
 
-// shareGateBundle holds one cash account that matches its statement, a
-// matching holding (Acme, 10 shares), a holding with transactions and no lots
-// in an open account (Bare Fund, 5 shares), and a closed RRSP holding whose
-// derived 120.5 shares differ from its 110.5 lot units.
+// shareGateBundle builds a matching Acme holding, an open-account Bare Fund holding with no lots,
+// and a closed RRSP holding whose derived 120.5 shares differ from its 110.5 lot units.
 func shareGateBundle(t *testing.T, home string) (v9fixture.Bundle, int64, int64, int64, int64) {
 	t.Helper()
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)

@@ -180,11 +180,8 @@ func checkSplits(ix rowIndex, rows store.Rows) store.SplitCheck {
 	return check
 }
 
-// describeShareMismatches labels each mismatched holding with its account's
-// and security's display fields, sets Difference to the saturating
-// Quarry - Quicken, and sorts by account name, account source id, security
-// name, then security source id, source ids numerically. An id that resolves
-// to no row leaves its labels zero.
+// describeShareMismatches fills each holding's display fields and Difference, then
+// sorts by account name, account source id, security name, security source id.
 func describeShareMismatches(rows store.Rows, mismatched []store.ShareMismatch) []store.ShareMismatch {
 	accounts := make(map[string]store.Account, len(rows.Accounts))
 	for _, a := range rows.Accounts {

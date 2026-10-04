@@ -142,6 +142,33 @@ func Test_import_sorts_mismatched_holdings_of_equally_named_securities_by_numeri
 	assert.Equal(t, []string{"acct-1/sec-9", "acct-1/sec-10"}, holdingIDs(got))
 }
 
+func Test_import_sorts_mismatched_holdings_by_account_name_even_when_security_names_order_the_other_way(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	zetaAcct := b.Account(v9fixture.AccountRow{Name: "Zeta", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	alphaAcct := b.Account(v9fixture.AccountRow{Name: "Alpha", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	zetaSec := b.Security(v9fixture.SecurityRow{Name: "Zeta Fund"})
+	alphaSec := b.Security(v9fixture.SecurityRow{Name: "Alpha Fund"})
+
+	got := importShareMismatches(t, b, holdingOf(zetaAcct, alphaSec), holdingOf(alphaAcct, zetaSec))
+
+	assert.Equal(t, []string{"acct-2/sec-1", "acct-1/sec-2"}, holdingIDs(got))
+}
+
+func Test_import_sorts_mismatched_holdings_by_account_source_id_even_when_security_names_order_the_other_way(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	fillerAccounts(b, 8)
+	nine := b.Account(v9fixture.AccountRow{Name: "Same", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	ten := b.Account(v9fixture.AccountRow{Name: "Same", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	zetaSec := b.Security(v9fixture.SecurityRow{Name: "Zeta Fund"})
+	alphaSec := b.Security(v9fixture.SecurityRow{Name: "Alpha Fund"})
+
+	got := importShareMismatches(t, b, holdingOf(ten, alphaSec), holdingOf(nine, zetaSec))
+
+	assert.Equal(t, []string{"acct-9/sec-1", "acct-10/sec-2"}, holdingIDs(got))
+}
+
 func Test_import_reports_a_mismatched_holdings_difference_as_quarry_minus_quicken_clamped_to_int64(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

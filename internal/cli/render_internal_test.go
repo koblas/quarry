@@ -776,6 +776,28 @@ func Test_renderStoreFailure(t *testing.T) {
 		assert.NotContains(t, got, "holdings match")
 	})
 
+	t.Run("Balances block precedes the Shares block when both DIFFER", func(t *testing.T) {
+		result := store.Result{
+			Validation: store.Validation{
+				Balances: store.BalanceCheck{Checked: 2, Mismatched: []store.BalanceMismatch{
+					{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC), Quarry: 100, Quicken: 200, Difference: -100},
+				}},
+				Splits: store.SplitCheck{Checked: 5},
+				Shares: store.ShareCheck{Checked: 3, Mismatched: []store.ShareMismatch{
+					{Account: "RRSP", Currency: "CAD", Active: true, Security: "Acme Corp", Quarry: 2000000, Quicken: 1000000, Difference: 1000000},
+				}},
+			},
+		}
+
+		got := renderStoreFailure(result, true, "/Users/dave")
+
+		assert.Contains(t, got, "Balances  DIFFER for 1 of 2 accounts\n"+
+			"  ! Chequing (CAD)  2026-08-31  quarry 1.00  Quicken 2.00  difference -1.00\n"+
+			"Splits    all 5 transactions equal the sum of their splits\n"+
+			"Shares    DIFFER for 1 of 3 holdings\n"+
+			"  ! RRSP (CAD)  Acme Corp  quarry 2  Quicken 1  difference 1\n")
+	})
+
 	t.Run("Shares DIFFER noun is singular at 1 of 1", func(t *testing.T) {
 		result := store.Result{
 			Validation: store.Validation{Shares: store.ShareCheck{Checked: 1, Mismatched: []store.ShareMismatch{{Account: "RRSP"}}}},

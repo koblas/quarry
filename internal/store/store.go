@@ -454,11 +454,8 @@ type ShareCheck struct {
 }
 
 // ShareMismatch is one holding whose derived share count differs from
-// Quicken's, all counts in millionths of a share. A count too large for an
-// int64 reads as the largest one; Difference is Quarry - Quicken, clamped
-// rather than wrapped. The importer fills the display fields (Account,
-// Currency, Closed, Active, AccountSourceID, Security, Ticker,
-// SecuritySourceID) from the holding's ids; source ids order display only.
+// Quicken's, in millionths of a share; Difference is Quarry - Quicken, clamped
+// to the int64 range. The importer fills the display fields from the ids, and
 // Ticker is nil when Quicken records none.
 type ShareMismatch struct {
 	AccountID, SecurityID       string

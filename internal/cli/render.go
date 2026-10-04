@@ -357,9 +357,8 @@ func securityLabel(name string, ticker *string) string {
 	return fmt.Sprintf("%s (%s)", escapeCell(name), escapeCell(*ticker))
 }
 
-// shareMismatchRows renders one "!" row per mismatch, in the order given:
-// account and security label columns padded to the block's widest value,
-// share counts and difference right-aligned to their own column's widest.
+// shareMismatchRows renders one "!" row per mismatch, in the order given, with
+// label columns padded and count columns right-aligned to each column's widest.
 func shareMismatchRows(mismatches []store.ShareMismatch) []string {
 	accounts := make([]string, len(mismatches))
 	securities := make([]string, len(mismatches))
