@@ -147,6 +147,7 @@ func holdingValue(h store.Holding) string {
 
 // holdingInCell is the value in the reporting currency: blank with no price, "not converted" for a
 // priced security quarry cannot convert, "no rate" for one only a missing exchange rate keeps unconverted.
+// Every other priced row has a converted value: a row in the reporting currency needs no rate.
 func holdingInCell(l report.Holdings, h store.Holding) string {
 	if h.Price == nil {
 		return ""
@@ -157,11 +158,7 @@ func holdingInCell(l report.Holdings, h store.Holding) string {
 	if l.NeedsRate(h) {
 		return holdingNoRateCell
 	}
-	if cents := l.Converted(h); cents != nil {
-		return formatBigMoney(cents)
-	}
-	// unreachable: a priced CAD or USD row converts to its own currency without a rate, and NeedsRate took every other row without a value
-	return ""
+	return formatBigMoney(l.Converted(h))
 }
 
 // formatPrice renders millionths of a currency unit like formatShares, with at least two decimals.

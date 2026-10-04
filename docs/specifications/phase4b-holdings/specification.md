@@ -409,7 +409,7 @@ Architect sizing pass 2026-10-04 (one pass over all 16; folds change no scenario
 - [x] SCENARIO-06: A holding with no price is listed without value — `cmd/quarry/run_holdings_no_price_test.go` `Test_run_holdings_lists_a_holding_with_no_price_without_value`
 - [x] SCENARIO-12: Holdings as JSON — delivered by SCENARIO-06 — `cmd/quarry/run_holdings_no_price_test.go` `Test_run_holdings_json_lists_the_unpriced_holding_with_nulls_and_a_warning`
 - [x] SCENARIO-07: A security quarry cannot convert is left out of the total — `cmd/quarry/run_holdings_not_converted_test.go` `Test_run_holdings_leaves_a_security_it_cannot_convert_out_of_the_total`
-- [ ] SCENARIO-08: A day with no exchange rate totals each currency separately
+- [x] SCENARIO-08: A day with no exchange rate totals each currency separately — `cmd/quarry/run_holdings_no_rate_test.go` `Test_run_holdings_before_the_first_rate_shows_no_rate_and_totals_usd_separately`
 - [ ] SCENARIO-10: Filtering by account
 - [ ] SCENARIO-09: Nothing held on the day
 - [ ] SCENARIO-13: MCP holdings tool

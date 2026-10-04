@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-08
-status: open
+status: done
 ---
 
 # SCENARIO-08: A day with no exchange rate totals each currency separately
@@ -31,10 +31,10 @@ Decisions (binding for this plan; sources: spec S.2/S.3/S.6, STATE.md):
 - [x] Step 5 (B2, tests only: edge cells crossed with formats; `cmd/quarry/run_holdings_no_rate_test.go`): `--json` (`totals` order, `converted_value` null, `warnings[]` line), `--currency USD --as-of` before first rate (CAD row `no rate`, CAD total, warning names `USD`/`CAD`), `--currency native` before first rate (no `no rate`, no warning, per-currency totals), store with no rates (no-rates line, `no rate`), rate gap (rates day 10 and 12, `--as-of 2026-03-11`: converted, silent), CAD-only holding before first rate in CAD mode (no `no rate`, no warning). After-last-rate silence is already pinned by `Test_run_holdings_lists_todays_holdings_in_the_reporting_currency`; do not duplicate.
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; refresh doc comments naming the old totals/slots (`renderHoldings`, `HoldingsWarnings`, `store.Holdings`); the full suite may redden an older fixture holding a USD row with no rate.
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; refresh doc comments naming the old totals/slots (`renderHoldings`, `HoldingsWarnings`, `store.Holdings`); the full suite may redden an older fixture holding a USD row with no rate.
 
 ### Verify
-- [ ] Step 7: full verification + `spec-check.py phase4b-holdings` → tick SCENARIO-08 with its acceptance test; rewrite STATE.md.
+- [x] Step 7: full verification + `spec-check.py phase4b-holdings` → tick SCENARIO-08 with its acceptance test; rewrite STATE.md.
 
 ## Handoff
 
@@ -55,12 +55,12 @@ Decisions (binding for this plan; sources: spec S.2/S.3/S.6, STATE.md):
 
 ## Phase report
 
-Runs B1 (steps 2-3) and B2 (steps 4-5) done. Steps 6-7 (V) remain.
+Run V done (steps 6-7): `go build ./...` ok, `golangci-lint run ./...` 0 issues, covered full suite green (`go test` all ok), `uncovered-diff.py --profile ... 6986d91` 0 uncovered added lines, `go test -race ./internal/report/... ./internal/cli/ ./internal/store/duckstore/` green, `spec-check.py phase4b-holdings` OK, SCENARIO-08 ticked, STATE.md rewritten. No older fixture reddened beyond the one B1 already fixed.
+V change: `holdingInCell` (`internal/cli/render_holdings.go`) lost its `// unreachable:` trailing `return ""`; it now ends `return formatBigMoney(l.Converted(h))` (no test ever reached the old line; the real store gives every priced same-currency row a value, so a nil would be an invariant break that now fails loudly). Doc comment says so.
+test-stats vs 6986d91: cmd/quarry 701 (+7), internal/cli 469 (+5), internal/report 375 (+12), report/document 106 (+6), duckstore 599 (+4), total 2250 (+34).
 
-B2 production: `internal/cli/render_holdings.go` const `holdingNoRateCell`, `holdingCurrencyColumn`/`holdingValueColumn` (5/6, same in native and converted); `renderHoldings` loops every `Totals` entry — the one whose currency is the reporting currency is the In-column `holdingsTotalRow`, every other is `holdingsCurrencyTotalRow` (replaces `holdingsNativeTotalRow`); `holdingInCell` gains the `NeedsRate` arm, its trailing `return ""` is marked `// unreachable:`.
-B2 tests: `internal/cli/holdings_no_rate_test.go` (no-rate cell arms, no-`no rate` arms, converted + USD total order, only-unconverted total, USD-mode CAD total; native Total shape stays pinned by the existing native tests); `cmd/quarry/run_holdings_no_rate_test.go` adds JSON (totals order, null `converted_value`, `warnings[]` == stderr line), `--currency USD`, `--currency native`, store with no rates, rate gap, CAD-only in CAD. Steps 5's cmd tests were green on arrival: the behaviour came with B1 + step 4.
-B2 mutation (restored): `total.Currency == h.Currency.String()` -> `== h.Totals[0].Currency` in `renderHoldings`: `Test_holdings_total_rows_list_the_unconverted_total_when_nothing_converts` red (both assertions). All four plan mutation checks now run.
-B2 state: acceptance test and narrow loops green (`go test -count=1 ./cmd/quarry/ -run run_holdings`, `./internal/report/... ./internal/store/duckstore/ ./internal/cli/` Holdings subset); `golangci-lint run ./internal/cli/... ./cmd/quarry/...` 0 issues. Full suite, coverage gate, `go build ./...`, spec-check, tick and STATE.md remain for V.
+B1 and B2 reports (older, kept for the audit trail):
+B2: `holdingNoRateCell`, `holdingCurrencyColumn`/`holdingValueColumn`, `renderHoldings` loops every total (`holdingsTotalRow` for the reporting currency, `holdingsCurrencyTotalRow` for the rest), `holdingInCell` `NeedsRate` arm; tests `internal/cli/holdings_no_rate_test.go`, `cmd/quarry/run_holdings_no_rate_test.go`. Mutation `total.Currency == h.Currency.String()` -> `h.Totals[0].Currency` red, restored.
 
 B1 report:
 
