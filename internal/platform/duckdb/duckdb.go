@@ -39,6 +39,9 @@ type DB struct {
 // (ErrExists) so a caller never silently overwrites a store. The file is
 // created owner-only (0600). Unlike atomicfile.Create this is a stat then
 // open, not an O_EXCL claim: DuckDB refuses to open a pre-created empty file.
+// The session never loads or installs an extension and reaches no file,
+// database or URL but path (createDSN), so building a store makes no
+// network request of its own.
 func Create(ctx context.Context, path string) (*DB, error) {
 	if _, err := os.Stat(path); err == nil {
 		return nil, fmt.Errorf("create %s: %w", path, ErrExists)
@@ -46,7 +49,7 @@ func Create(ctx context.Context, path string) (*DB, error) {
 		return nil, fmt.Errorf("create %s: %w", path, err)
 	}
 
-	db, err := openPrivate(ctx, path, path)
+	db, err := openPrivate(ctx, path+createDSN, path)
 	if err != nil {
 		return nil, fmt.Errorf("create %s: %w", path, err)
 	}
@@ -61,6 +64,9 @@ func Create(ctx context.Context, path string) (*DB, error) {
 
 	return db, nil
 }
+
+// createDSN locks a write session out of extensions and outside access; spill to path.tmp still works.
+const createDSN = "?autoload_known_extensions=false&autoinstall_known_extensions=false&enable_external_access=false"
 
 // readOnlyDSN locks a read session down: no write, no outside access, no SET.
 const readOnlyDSN = "?access_mode=READ_ONLY&enable_external_access=false" +
