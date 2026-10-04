@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
@@ -187,6 +188,54 @@ func Test_holdings_prints_a_config_warning_on_stderr_and_still_lists_the_holding
 	require.NoError(t, err)
 	assert.Equal(t, "quarry: warning: "+unknownKeyShown+"\n", stderr.String())
 	assert.Contains(t, stdout.String(), "Holdings on 2026-09-29")
+}
+
+func Test_holdings_json_reads_back_the_listing_the_total_and_the_config_warning(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	env := cli.Env{
+		LoadConfig: warningConfig,
+		Stdout:     &stdout, Stderr: &stderr,
+		Now: func() time.Time { return spendNow },
+		NewReport: func(context.Context, string) (*report.Server, error) {
+			return report.NewServer(report.WithStore(fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{brokerageHolding()}}})), nil
+		},
+	}
+
+	err := cli.Execute(t.Context(), []string{"holdings", "--json"}, env)
+
+	require.NoError(t, err)
+	var doc struct {
+		AsOf     string `json:"as_of"`
+		Currency string
+		Holdings []struct {
+			Account        string
+			Security       *string
+			Price          *string
+			Value          *string
+			ConvertedValue *string `json:"converted_value"`
+		}
+		Totals   []struct{ Currency, Value string }
+		Warnings []string
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	assert.Equal(t, "2026-09-29", doc.AsOf)
+	assert.Equal(t, "CAD", doc.Currency)
+	require.Len(t, doc.Holdings, 1)
+	assert.Equal(t, "Brokerage", doc.Holdings[0].Account)
+	assert.Equal(t, "37704.00", *doc.Holdings[0].Value)
+	assert.Equal(t, "50.00", *doc.Holdings[0].ConvertedValue)
+	assert.Equal(t, []struct{ Currency, Value string }{{Currency: "CAD", Value: "50.00"}}, doc.Totals)
+	assert.Equal(t, []string{unknownKeyAbsolute}, doc.Warnings)
+}
+
+func Test_holdings_json_lists_no_holdings_as_an_empty_array(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeHoldings(t, fakeReportStore{}, &stdout, &stderr, "--json")
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), `"holdings": []`)
+	assert.Contains(t, stdout.String(), `"totals": []`)
 }
 
 func Test_holdings_returns_a_failed_store_read(t *testing.T) {

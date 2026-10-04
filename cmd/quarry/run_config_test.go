@@ -219,6 +219,7 @@ func Test_run_sync_refuses_a_config_it_cannot_read(t *testing.T) {
 func readCommandArgs() map[string][]string {
 	return map[string][]string{
 		"accounts":  {"accounts"},
+		"holdings":  {"holdings"},
 		"anomalies": {"anomalies", "--since", "2026-01", "--until", "2026-09"},
 		"spend":     {"spend", "--since", "2026-01", "--until", "2026-09"},
 		"cashflow":  {"cashflow", "--since", "2026-01", "--until", "2026-09"},

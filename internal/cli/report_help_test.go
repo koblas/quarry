@@ -184,6 +184,7 @@ func Test_each_report_shows_the_currency_flag_without_a_cobra_default(t *testing
 		{command: "recurring", help: reportCurrencyHelp},
 		{command: "anomalies", help: reportCurrencyHelp},
 		{command: "accounts", help: accountsCurrencyHelp},
+		{command: "holdings", help: holdingsCurrencyHelp},
 	}
 
 	for _, c := range cases {

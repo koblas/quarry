@@ -127,6 +127,7 @@ quarry never writes to the Quicken file.`)
 		"  cashflow    Show income, spending and savings rate by month or year\n"+
 		"  findings    List what to clean up in Quicken\n"+
 		"  help        Help about any command\n"+
+		"  holdings    List the securities held in each account and their value\n"+
 		"  mcp         Serve quarry's store to Claude over MCP (stdio)\n"+
 		"  recurring   List charges that repeat every week, month, quarter or year\n"+
 		"  search      Find transactions by payee, memo, amount, date, account or category\n"+
