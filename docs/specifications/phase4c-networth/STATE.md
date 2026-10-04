@@ -35,7 +35,11 @@ Scenarios complete: SCENARIO-01a (with 02 folded), SCENARIO-01b (with 05 folded)
 - The `v_balances_daily` COMMENT names `quarry networth` before that command exists; the skill drift test scans only code spans, so schema.md prose does not trip it (SCENARIO-06).
 - Fixture RRSP (retirement, no holdings) reads 1,000.00 (its cash) in cmd goldens, not "not valued" (SCENARIO-07).
 
+- `v_account_balances` timing (SCENARIO-07 B1 throwaway, 1× synthetic: 14k txns, 30 accounts, 21 securities, 104k prices, 3.6k rates): `SELECT * FROM v_account_balances` 70-78 ms warm, `Store.Accounts` 68-70 ms; every `--account` resolve (`report/accounts.go:71`) pays this. Re-time on the real store in SCENARIO-19.
+
 ## Open debts
+- Checkpoint 07 MINOR: setup-narrating comments — `cmd/quarry/run_status_test.go:63`, `cmd/quarry/run_accounts_investment_balance_test.go:16`; delete on next touch.
+- Checkpoint 07 MINOR: closed investment account with cash/holdings not pinned in `accounts --all --json` (`cmd/quarry/run_accounts_json_test.go`); no constructible failure today.
 - Conventions text (`internal/report/sql_conventions.go`, mirrors above): ruled sentence ends "...security and shares:" and the old "Their amount is..." follows with a capital T after the colon — final product-vision pass (SCENARIO-01a).
 - `plugin/skills/quarry/references/findings.md` says nothing about investment rows (duplicate / unlinked-transfer ignore them) — not in the spec's copy table; final product-vision pass (SCENARIO-01b).
 - Checkpoint 01b MINOR: const doc budgets (1 line) exceeded — `entrylessSplitIDFormat` (`internal/importer/splits.go:~91`), `duplicateQuery`/`unlinkedTransferQuery` (`internal/store/duckstore/findings.go:13-15,22-23`). Trim on next touch.
