@@ -24,8 +24,8 @@ S.3 rules only the singular line and "`N holdings have`". The plural tail is not
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_holdings_test.go:32-64` `seedHoldingsStore` — extract the rows so a new file can add one unpriced security (no price on or before the clock's day 12; give it a price dated day 13 so "on or before" is pinned) and a `--as-of` run; behaviour-neutral, `Test_run_holdings_*` stay green
-- [ ] Step 2: `cmd/quarry/run_holdings_no_price_test.go` (new) both acceptance tests via `runWith` + `spendEnvAt(…, holdingsClock())`: text — row has shares, `no price`, blank Priced on / Value / In, `Total` excludes it (mixed priced + unpriced), stderr is exactly `quarry: warning: 1 holding has no price on or before 2026-03-12, so it has no value and is left out of the total; enter a price for it in Quicken, then run quarry sync`, exit 0; JSON — 6-decimal `shares`/`price`, null `price`/`price_date`/`value`/`converted_value`/for the unpriced row, `holdings`/`totals`/`account_filter` present, `warnings` equals that line (no prefix), stdout read back with a tagged struct (`musttag`). Price column widens to 8 ("no price"): `holdingsLine` (price `%6s`) cannot be reused, give the new file its own line helper. Both red at their assertion (stderr/warnings empty)
+- [x] Step 1: `cmd/quarry/run_holdings_test.go:32-64` `seedHoldingsStore` — extract the rows so a new file can add one unpriced security (no price on or before the clock's day 12; give it a price dated day 13 so "on or before" is pinned) and a `--as-of` run; behaviour-neutral, `Test_run_holdings_*` stay green
+- [x] Step 2: `cmd/quarry/run_holdings_no_price_test.go` (new) both acceptance tests via `runWith` + `spendEnvAt(…, holdingsClock())`: text — row has shares, `no price`, blank Priced on / Value / In, `Total` excludes it (mixed priced + unpriced), stderr is exactly `quarry: warning: 1 holding has no price on or before 2026-03-12, so it has no value and is left out of the total; enter a price for it in Quicken, then run quarry sync`, exit 0; JSON — 6-decimal `shares`/`price`, null `price`/`price_date`/`value`/`converted_value`/for the unpriced row, `holdings`/`totals`/`account_filter` present, `warnings` equals that line (no prefix), stdout read back with a tagged struct (`musttag`). Price column widens to 8 ("no price"): `holdingsLine` (price `%6s`) cannot be reused, give the new file its own line helper. Both red at their assertion (stderr/warnings empty)
 
 ### Build
 - [ ] Step 3: `internal/report/document/holdings.go:106-109` `HoldingsWarnings` + unexported `noPriceWarning` (singular arm `holding has … it has … for it`, plural arm per the copy gap) + `document/holdings_test.go:185`: `Test_HoldingsWarnings_say_how_many_holdings_have_no_price` (0 → `[]string{}` kept; 1; 2; 1,000 grouped), `Test_HoldingsWarnings_does_not_count_a_zero_price_holding` (priced at 0: no warning, control beside a nil-price row), the date is `h.AsOf` not the clock, unpriced counted whatever its currency (nil, CAD, EUR), account closed, or shares sign, and the same in native mode
@@ -50,3 +50,17 @@ S.3 rules only the singular line and "`N holdings have`". The plural tail is not
 - No-price cell makes the Price column 8 wide: helpers with a fixed `%6s` price column (`run_holdings_test.go:16-25`) misalign a fixture holding one; give the new tests their own widths
 - Unpriced row also has a nil `Value`, so a total or warning keyed on `Value == nil` conflates unpriced with nothing; key on `Price`
 - Test clock day 12 vs `current_date`: the "price dated after as-of" fixture row only proves `on or before` if the view's through-today arm reaches that date (real date is later than 2026-03-13)
+
+## Phase report
+
+Run A (steps 1-2) done. Both acceptance tests red at their warning assertions; nothing else fails.
+
+Files:
+- `cmd/quarry/run_holdings_test.go:15-65` — `seedHoldingsStore` split into `holdingsDay(d)`, `holdingsBuy(...)`, `holdingsRows()` (rows only) and the seeder; behaviour-neutral, `Test_run_holdings_*` green
+- `cmd/quarry/run_holdings_no_price_test.go` (new) — `seedHoldingsStoreWithUnpricedHolding` (Bare Fund / BARE, CAD, 40 shares in Brokerage, only price dated day 13), `holdingsNoPriceTableLine` (Price col 8 wide; trims trailing blanks because the table ends a line at its last non-blank cell), const `holdingsNoPriceLine` (the singular line), `holdingsJSONRow`/`holdingsJSONDoc` read-back structs, both acceptance tests
+
+Red now (`go test ./cmd/quarry/ -run run_holdings`):
+- text: `expected: "quarry: warning: 1 holding has no price on or before 2026-03-12, so it has no value and is left out of the total; enter a price for it in Quicken, then run quarry sync\n"  actual: ""` (the table assertion already passes: row, `no price`, blank cells, total excluding it)
+- JSON: `warnings` expected `[]string{"1 holding has no price on or before 2026-03-12, ..."}` actual `[]string{}` (row nulls, 6-decimal shares/price, totals, empty `account_filter` already pass)
+
+Next runs: B1 builds `HoldingsWarnings` + `noPriceWarning` in `internal/report/document/holdings.go:106-109` (those two tests go green with it) and the document and cli unit pins. Do not widen `holdingsLine` (`%6s` price) — the new file owns its line helper. Plural wording still awaits a copy ruling: acceptance tests use one unpriced holding only.
