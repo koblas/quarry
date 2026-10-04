@@ -24,7 +24,7 @@ const (
 	classNotANumber                                  // an amount stored as text or blob
 	classTransactionStatus                           // a reconcile status quarry does not map
 	classCategoryType                                // a category type quarry does not map
-	classMissingValue                                // a required value or reference is missing
+	classMissingValue                                // a required value or reference is missing, or a split ratio quarry cannot read
 )
 
 // offender is one row Import cannot map, in one unmappableClass. reason is that

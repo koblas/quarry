@@ -578,6 +578,22 @@ func Test_import_fails_on_a_split_with_an_unreadable_ratio(t *testing.T) {
 	}
 }
 
+func Test_import_shows_a_REAL_stored_zero_split_side_as_a_plain_zero(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	accountPK := newBrokerage(b)
+	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: newAcme(b)})
+	pk := b.InvestmentTransaction(v9fixture.TransactionRow{
+		Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Position: positionPK, Numerator: "1", Denominator: "1",
+	})
+	bundle := b.WriteBundle(t, t.TempDir())
+	execOn(t, bundle.DataPath, "UPDATE ZTRANSACTION SET ZNUMERATOR = 1.5, ZDENOMINATOR = 0.0 WHERE Z_PK = ?", pk)
+
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" of "Acme Corp" has a ratio quarry cannot read (1.5:0)`, importReason(t, err))
+}
+
 func Test_import_names_no_security_in_the_refusal_of_a_split_with_no_security(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()

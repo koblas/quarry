@@ -25,10 +25,10 @@ Size: LIGHT — 3 steps, importer
 ## Handoff
 
 Rulings S03 made (spec S.5 left them open):
-- Ratio side text is the raw column text (`1`, `0`, `n/a`, `1.23456789`); non-number, beyond-scale and too-large sides all use the ratio copy, no separate copy
-- A split with no resolvable security refuses with the ratio copy minus the ` of "<security>"` clause (variant of the ruled line; needs product-vision confirmation at the final pass)
-- A security with no name is NULL or `""` (same as accounts)
-- Offender classes: ratio, shares-without-security and security-no-name all `classMissingValue`
+- Ratio side text is the raw column text (`1`, `0`, `n/a`, `1.23456789`); non-number, beyond-scale and too-large sides all use the ratio copy, no separate copy. `ZNUMERATOR`/`ZDENOMINATOR` are DECIMAL (NUMERIC affinity, `reference.sql`), so an integer-valued REAL is stored as an integer and prints `0`, never `0.0`
+- A split with no resolvable security refuses with the ratio copy minus the ` of "<security>"` clause — contradicts S.5's "always named"; scoped product-vision copy ruling wanted before the final pass
+- A security with no name is NULL or `""` (same as accounts); its quotes are not parsed (they would be refused as `a price of ""`), and the row stays mapped so its transactions raise no cascade refusal
+- Offender classes: ratio, shares-without-security and security-no-name all `classMissingValue` (its comment now says so)
 
 ## Phase report
 
@@ -36,7 +36,7 @@ Run L done (steps 1-4 ticked; SCENARIO-03 NOT yet ticked in specification.md, ST
 
 Red (before Build), `go test ./cmd/quarry/ -run Test_run_sync_refuses_an_investment_record`: 4 of 6 subtests failed at the stderr assertion — `a_split_ratio_1:0` and `..._NULL_denominator` got `quarry: cannot build the store in ~/Library/Application Support/quarry: has a split ratio quarry cannot read; run quarry sync --from <id>` (expected the S4 frame with the ruled reason); `non-zero_units_and_no_position` got the same shape with `has shares but no security`; `a_security_with_no_name` got `...: converting NULL to string is unsupported; ...`. Rows `an action code 14` and `1.23456789 shares` were green on arrival (SCENARIO-02). Now all 6 green.
 
-Files: `cmd/quarry/run_investments_test.go` (+`os` import, new test at end); `internal/importer/investments.go` (placeholders and `errors` import removed; `buildInvestmentTransaction` returns `(txn, bool)` — error return dropped as always nil; new `resolveSecurity`, `ratioSideText`, `ratioSideNone`); `reasons.go` (`reasonInvestmentSharesWithoutSecurity`, `reasonSplitRatio`, `reasonSecurityNoName`); `securities.go` (`mapSecurities` takes `off`, ZNAME scanned as `sql.NullString`; nameless stays in the map); `importer.go:108`; tests `investments_test.go` (shares-without-security repointed; split ratio repointed, 8 cases, plus `Test_import_names_no_security_in_the_refusal_of_a_split_with_no_security`), `securities_test.go` (+3).
+Files: `cmd/quarry/run_investments_test.go` (+`os` import, new test at end); `internal/importer/investments.go` (placeholders and `errors` import removed; `buildInvestmentTransaction` returns `(txn, bool)` — error return dropped as always nil; new `resolveSecurity`, `ratioSideText`, `ratioSideNone`); `reasons.go` (`reasonInvestmentSharesWithoutSecurity`, `reasonSplitRatio`, `reasonSecurityNoName`); `securities.go` (`mapSecurities` takes `off`, ZNAME scanned as `sql.NullString`; nameless stays in the map; `mapPrices` skips a nameless security's quotes — red first: with a nameless security and a not-a-number or too-large quote the reason was `a price of "" on ...` because `classNotANumber`/`classTooLarge` sort before `classMissingValue`); `importer.go:108`; `offenders.go:27` comment; tests `investments_test.go` (shares-without-security repointed; split ratio repointed, 8 cases, plus a no-security split case and a REAL-bound `1.5:0.0` case showing `(1.5:0)`), `securities_test.go` (+4 incl. the quote-ordering test, 2 rows).
 
 `go test ./internal/importer/` ok; `golangci-lint run ./internal/importer/... ./cmd/quarry/...` 0 issues. No full-suite, coverage, test-stats or spec tick yet (V). No mutations (plan: none).
 

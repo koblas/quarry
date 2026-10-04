@@ -169,6 +169,33 @@ func Test_import_ignores_a_deleted_security_with_no_name(t *testing.T) {
 	assert.Zero(t, result.Counts.Securities)
 }
 
+func Test_import_reports_a_security_with_no_name_ahead_of_its_unreadable_quotes(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		price string
+	}{
+		{name: "price that is not a number", price: "abc"},
+		{name: "price too large", price: "1000000000000"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+			pk := b.Security(v9fixture.SecurityRow{Ticker: "NONAME", Currency: "CAD"})
+			day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+			b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: pk, QuoteDate: &day, ClosingPrice: c.price})
+			bundle := b.WriteBundle(t, t.TempDir())
+
+			_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+			assert.Equal(t, fmt.Sprintf("a security (source id %d) has no name", pk), importReason(t, err))
+		})
+	}
+}
+
 func Test_import_reports_a_security_with_no_name_once_when_a_transaction_holds_its_shares(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()

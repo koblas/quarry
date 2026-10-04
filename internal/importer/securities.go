@@ -90,7 +90,7 @@ func mapPrices(
 			return err
 		}
 		sec, ok := securities[securityPK]
-		if !ok {
+		if !ok || sec.Name == "" { // a nameless security refuses the import; its quotes could only be named ""
 			return nil
 		}
 		date := coreDataToDate(seconds)
