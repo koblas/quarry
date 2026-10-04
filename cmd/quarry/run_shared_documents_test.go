@@ -140,7 +140,10 @@ const statusUnreadableConfigDocument = `{
       "transactions": 4,
       "splits": 4,
       "split_tags": 0,
-      "transfers": 2
+      "transfers": 2,
+      "investment_transactions": 0,
+      "securities": 0,
+      "prices": 0
     }
   },
   "snapshot": {

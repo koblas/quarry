@@ -41,7 +41,7 @@ var requiredRunColumns = []string{
 var optionalRunColumns = []string{
 	"snapshot_taken_at", "source_path", "balances_never_reconciled", "investment_accounts", "transfers_paired", "transfers_cross_currency",
 	"rates_checked_from", "rates_last", "rates_fetch_error", "securities_rows", "prices_rows",
-	"investment_transactions_rows",
+	"investment_transactions_rows", "shares_checked",
 }
 
 // runColumnsQuery lists the columns of the store's import_runs table, none when it has no such table.
@@ -318,7 +318,7 @@ type carriedRun struct {
 	neverReconciled, investmentAccounts, paired, crossCurrencies sql.NullInt64
 	ratesCheckedFrom, ratesLast                                  sql.NullTime
 	ratesFetchError                                              sql.NullString
-	securities, prices, investmentTransactions                   sql.NullInt64
+	securities, prices, investmentTransactions, sharesChecked    sql.NullInt64
 }
 
 // targets are the scan destinations, one per column, in SELECT order.
@@ -328,7 +328,7 @@ func (r *carriedRun) targets() []any {
 		out = append(out, &r.counts[i])
 	}
 	return append(out, &r.takenAt, &r.source, &r.neverReconciled, &r.investmentAccounts, &r.paired, &r.crossCurrencies,
-		&r.ratesCheckedFrom, &r.ratesLast, &r.ratesFetchError, &r.securities, &r.prices, &r.investmentTransactions)
+		&r.ratesCheckedFrom, &r.ratesLast, &r.ratesFetchError, &r.securities, &r.prices, &r.investmentTransactions, &r.sharesChecked)
 }
 
 // values are the row's cells as importRunRows appends them.
@@ -343,7 +343,7 @@ func (r *carriedRun) values() []any {
 		nullValue(r.ratesCheckedFrom.Valid, r.ratesCheckedFrom.Time), nullValue(r.ratesLast.Valid, r.ratesLast.Time),
 		nullValue(r.ratesFetchError.Valid, r.ratesFetchError.String),
 		nullValue(r.securities.Valid, r.securities.Int64), nullValue(r.prices.Valid, r.prices.Int64),
-		nullValue(r.investmentTransactions.Valid, r.investmentTransactions.Int64))
+		nullValue(r.investmentTransactions.Valid, r.investmentTransactions.Int64), nullValue(r.sharesChecked.Valid, r.sharesChecked.Int64))
 }
 
 // nullValue is v when valid, else nil.

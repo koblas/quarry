@@ -76,7 +76,7 @@ func Test_run_reports_the_store_result_alongside_the_manifest_as_json(t *testing
 	wantStore := fmt.Sprintf(`{
 		"path": %q,
 		"built": true,
-		"rows": {"accounts":3,"categories":0,"payees":1,"tags":0,"transactions":6,"splits":6,"split_tags":0,"transfers":4},
+		"rows": {"accounts":3,"categories":0,"payees":1,"tags":0,"transactions":6,"splits":6,"split_tags":0,"transfers":4,"investment_transactions":0,"securities":0,"prices":0},
 		"balances": {
 			"checked": 1,
 			"mismatched": [],
@@ -87,6 +87,7 @@ func Test_run_reports_the_store_result_alongside_the_manifest_as_json(t *testing
 			"investment_accounts": 0
 		},
 		"splits": {"checked": 6, "mismatched": []},
+		"shares": {"checked": 0, "mismatched": []},
 		"transfers": {
 			"paired": 1,
 			"cross_currency": 0,

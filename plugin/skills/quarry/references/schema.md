@@ -119,6 +119,7 @@ each one's status.
 | `securities_rows` | `BIGINT` |
 | `prices_rows` | `BIGINT` |
 | `investment_transactions_rows` | `BIGINT` |
+| `shares_checked` | `BIGINT` |
 
 ### investment_transactions
 

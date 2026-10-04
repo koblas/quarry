@@ -207,3 +207,15 @@ func Test_ParseCashFlowPeriod_reads_each_flag_word_back_and_reports_a_miss(t *te
 		})
 	}
 }
+
+func Test_Validation_fails_when_a_share_count_differs(t *testing.T) {
+	v := store.Validation{Shares: store.ShareCheck{Checked: 1, Mismatched: []store.ShareMismatch{{AccountID: "acct-1", SecurityID: "sec-1", Quarry: 1, Quicken: 2}}}}
+
+	assert.True(t, v.Failed())
+}
+
+func Test_Validation_passes_when_every_share_count_matches(t *testing.T) {
+	v := store.Validation{Shares: store.ShareCheck{Checked: 2}}
+
+	assert.False(t, v.Failed())
+}

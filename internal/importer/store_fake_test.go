@@ -23,9 +23,16 @@ type fakeStore struct {
 	ratesFault    *store.OpenError
 	nextErr       error
 	replaceCalls  int
+	shareCheck    store.ShareCheck
+	shareErr      error
 }
 
 func (f *fakeStore) failNext(err error) { f.nextErr = err }
+
+// CheckShares answers the configured shareCheck (default: nothing checked, no mismatch).
+func (f *fakeStore) CheckShares(context.Context, store.Rows) (store.ShareCheck, error) {
+	return f.shareCheck, f.shareErr
+}
 
 func (f *fakeStore) Replace(_ context.Context, rows store.Rows) (store.Replaced, error) {
 	f.replaceCalls++

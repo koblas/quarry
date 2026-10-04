@@ -232,6 +232,7 @@ type ImportRun struct {
 	SplitsMismatched                  int
 	TransfersOneSided                 int
 	InvestmentTransactionsNotImported int
+	SharesChecked                     int
 	BalancesNeverReconciled           int
 	InvestmentAccounts                int
 	TransfersPaired                   int
@@ -394,13 +395,14 @@ var ErrUnmappable = errors.New("unmappable value")
 type Validation struct {
 	Balances  BalanceCheck
 	Splits    SplitCheck
+	Shares    ShareCheck
 	Transfers TransferCheck
 }
 
-// Failed reports whether the balance or split-sum check found a mismatch.
-// Transfers never fail a build: a one-sided leg is stored, not refused.
+// Failed reports whether the balance, split-sum or share-count check found a
+// mismatch. Transfers never fail a build: a one-sided leg is stored, not refused.
 func (v Validation) Failed() bool {
-	return len(v.Balances.Mismatched) > 0 || len(v.Splits.Mismatched) > 0
+	return len(v.Balances.Mismatched) > 0 || len(v.Splits.Mismatched) > 0 || len(v.Shares.Mismatched) > 0
 }
 
 // BalanceCheck is the balance gate's result across every non-investment

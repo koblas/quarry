@@ -45,7 +45,8 @@ func NewServer(opts ...Option) *Server {
 // It returns an *UnmappableError naming the first-ordered class's first
 // offender when one or more values cannot be mapped to quarry's schema, or
 // store.ErrValidationFailed with Result.Built false, never calling Replace,
-// when the balance or split-sum gate finds a mismatch.
+// when the balance, split-sum or share-count gate finds a mismatch. A share
+// check that cannot run returns its error, also without calling Replace.
 func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Result, error) {
 	startedAt := time.Now().UTC()
 	src, err := srv.open(ctx, snap.Path)
@@ -155,6 +156,11 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	notImported := store.NotImported{InvestmentTransactions: investmentsNotImported}
 
 	validation := validate(rows, statements, transferCheck)
+	shares, err := srv.store.CheckShares(ctx, rows)
+	if err != nil {
+		return store.Result{}, fmt.Errorf("check share counts: %w", err)
+	}
+	validation.Shares = shares
 	if validation.Failed() {
 		return store.Result{Built: false, Counts: counts, Validation: validation, NotImported: notImported}, store.ErrValidationFailed
 	}
@@ -181,6 +187,7 @@ func newImportRun(startedAt time.Time, snap store.SnapshotRef, counts store.Coun
 		BalancesChecked: v.Balances.Checked, BalancesMismatched: len(v.Balances.Mismatched),
 		SplitsMismatched: len(v.Splits.Mismatched), TransfersOneSided: len(v.Transfers.OneSided),
 		InvestmentTransactionsNotImported: n.InvestmentTransactions,
+		SharesChecked:                     v.Shares.Checked,
 		BalancesNeverReconciled:           len(v.Balances.NeverReconciled),
 		InvestmentAccounts:                v.Balances.InvestmentAccounts,
 		TransfersPaired:                   v.Transfers.Paired,

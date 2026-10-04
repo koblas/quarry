@@ -127,6 +127,7 @@ func Test_run_sync_imports_investment_transactions_with_named_actions(t *testing
 	removeSharesPK := invest(17, v9fixture.TransactionRow{Position: positionPK, Units: "0", Amount: "0"})
 	sellPK := invest(19, v9fixture.TransactionRow{Position: positionPK, Units: "-4", Amount: "400.25", Commission: "4.95"})
 	splitPK := invest(23, v9fixture.TransactionRow{Position: positionPK, Units: "0", Amount: "0", Numerator: "1", Denominator: "12"})
+	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "0.541667"})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 	var stdout, stderr bytes.Buffer
@@ -367,6 +368,67 @@ func Test_run_sync_reports_holdings_that_match_quickens_share_counts(t *testing.
 	assert.Equal(t, 3, doc.Store.Rows["investment_transactions"])
 	assert.Equal(t, 2, doc.Store.Rows["securities"])
 	assert.Equal(t, 3, doc.Store.Rows["prices"])
+}
+
+// oneHoldingBundle is a reconciled chequing account that matches its statement
+// plus a 10-share holding whose only lot reads lotUnits.
+func oneHoldingBundle(t *testing.T, home, lotUnits string) v9fixture.Bundle {
+	t.Helper()
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	reconciled := int64(2)
+	b := v9fixture.NewBuilder()
+	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
+	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
+	cashPK := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "100.00", PostedDate: &day, Status: &reconciled})
+	b.Entry(v9fixture.EntryRow{Parent: cashPK, Amount: "100.00"})
+	b.Reconcile(v9fixture.ReconcileRow{Account: chequingPK, EndDate: &day, EndingBalance: "100.00"})
+	buyPK := b.InvestmentTransaction(v9fixture.TransactionRow{
+		Account: brokeragePK, Position: positionPK, Type: new(int64(3)), Units: "10", Amount: "-1000.00", PostedDate: &day,
+	})
+	b.Entry(v9fixture.EntryRow{Parent: buyPK, Amount: "-1000.00"})
+	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: lotUnits})
+	return b.WriteBundle(t, filepath.Join(home, "Documents"))
+}
+
+// Cash checks pass here, so a kept store can only come from the share-count gate.
+func Test_run_sync_leaves_the_previous_store_byte_identical_when_share_counts_differ(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	storePath := storePathUnder(home)
+	require.NoError(t, os.MkdirAll(filepath.Dir(storePath), 0o700))
+	sentinel := []byte("previous store bytes, untouched by a failing sync")
+	require.NoError(t, os.WriteFile(storePath, sentinel, 0o600))
+	bundle := oneHoldingBundle(t, home, "9")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Contains(t, stdout.String(), "NOT REBUILT")
+	got, err := os.ReadFile(storePath)
+	require.NoError(t, err)
+	assert.Equal(t, sentinel, got)
+}
+
+// Control for the guard above: the same bundle with the lot at the derived count replaces the store.
+func Test_run_sync_replaces_the_store_when_the_lot_matches_the_derived_share_count(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	storePath := storePathUnder(home)
+	require.NoError(t, os.MkdirAll(filepath.Dir(storePath), 0o700))
+	sentinel := []byte("previous store bytes, replaced by a passing sync")
+	require.NoError(t, os.WriteFile(storePath, sentinel, 0o600))
+	bundle := oneHoldingBundle(t, home, "10")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	got, err := os.ReadFile(storePath)
+	require.NoError(t, err)
+	assert.NotEqual(t, sentinel, got)
 }
 
 func Test_run_sync_applies_a_stock_split_in_date_order(t *testing.T) {

@@ -34,6 +34,7 @@ type storeDocument struct {
 	Rows        document.Rows           `json:"rows"`
 	Balances    balancesDocument        `json:"balances"`
 	Splits      splitsDocument          `json:"splits"`
+	Shares      sharesDocument          `json:"shares"`
 	Transfers   transfersDocument       `json:"transfers"`
 	Findings    *document.FindingCounts `json:"findings"`
 	NotImported document.NotImported    `json:"not_imported"`
@@ -83,6 +84,13 @@ type balanceMismatchDocument struct {
 type splitsDocument struct {
 	Checked    int                     `json:"checked"`
 	Mismatched []splitMismatchDocument `json:"mismatched"`
+}
+
+// sharesDocument is the --json "store.shares" object. Mismatched is always an
+// empty array: a differing count refuses the build and no entry shape is emitted yet.
+type sharesDocument struct {
+	Checked    int   `json:"checked"`
+	Mismatched []any `json:"mismatched"`
 }
 
 // splitMismatchDocument is one entry of "store.splits.mismatched".
@@ -157,6 +165,7 @@ func newStoreDocument(result *store.Result) *storeDocument {
 		Rows:        document.NewRows(result.Counts),
 		Balances:    newBalancesDocument(result.Validation.Balances),
 		Splits:      newSplitsDocument(result.Validation.Splits),
+		Shares:      sharesDocument{Checked: result.Validation.Shares.Checked, Mismatched: []any{}},
 		Transfers:   newTransfersDocument(result.Validation.Transfers),
 		Findings:    newFindingsDocument(result),
 		NotImported: document.NotImported{InvestmentTransactions: result.NotImported.InvestmentTransactions},

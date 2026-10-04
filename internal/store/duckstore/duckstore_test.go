@@ -76,7 +76,7 @@ func minimalRows() store.Rows {
 				Securities: 18, Prices: 19, InvestmentTransactions: 20,
 			},
 			BalancesChecked: 9, BalancesMismatched: 10, SplitsMismatched: 11, TransfersOneSided: 12, InvestmentTransactionsNotImported: 13,
-			BalancesNeverReconciled: 14, InvestmentAccounts: 15, TransfersPaired: 16, TransfersCrossCurrency: 17,
+			BalancesNeverReconciled: 14, InvestmentAccounts: 15, TransfersPaired: 16, TransfersCrossCurrency: 17, SharesChecked: 21,
 		}},
 	}
 }
@@ -119,6 +119,7 @@ func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
 		"investment_accounts, transfers_paired, transfers_cross_currency) FROM import_runs WHERE id = 1",
 		"2026-09-27 14:30:05 /Users/alex/Documents/Home.quicken 14 15 16 17")
 	assertScalar(t, db, "SELECT concat_ws(' ', securities_rows, prices_rows, investment_transactions_rows) FROM import_runs WHERE id = 1", "18 19 20")
+	assertScalar(t, db, "SELECT CAST(shares_checked AS VARCHAR) FROM import_runs WHERE id = 1", "21")
 	assertScalar(t, db, "SELECT concat_ws(' ', source_id, name, ticker, currency) FROM securities WHERE id = 'sec-1'", "1 Acme Corp ACME CAD")
 	assertScalar(t, db, "SELECT concat_ws(' ', source_id, CAST(date AS VARCHAR), CAST(price AS VARCHAR)) FROM prices WHERE security_id = 'sec-1'",
 		"7 2026-03-15 12.345678")

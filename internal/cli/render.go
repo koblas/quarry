@@ -85,7 +85,7 @@ func writeDiffRow(b *strings.Builder, sign, label, value string) {
 	fmt.Fprintf(b, "  %s %-8s%s\n", sign, label, value)
 }
 
-// renderStore renders result's Store, Rows, Balances, Splits, Transfers and
+// renderStore renders result's Store, Rows, Balances, Splits, Shares, Transfers and
 // Findings and Rates lines, appended after renderSuccess's block once a build was reached.
 func renderStore(result store.Result, home string) string {
 	var b strings.Builder
@@ -94,6 +94,7 @@ func renderStore(result store.Result, home string) string {
 	bc := result.Validation.Balances
 	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(balanceCounts{Checked: bc.Checked, NeverReconciled: len(bc.NeverReconciled), InvestmentAccounts: bc.InvestmentAccounts}))
 	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits.Checked))
+	fmt.Fprintf(&b, "%-10s%s\n", "Shares", sharesPhrase(result.Validation.Shares.Checked))
 	writeTransfersLine(&b, result.Validation.Transfers)
 	fmt.Fprintf(&b, "%-10s%s\n", "Findings", findingsPhrase(result.Findings, result.FindingsCarried))
 	fmt.Fprintf(&b, "%-10s%s\n", "Rates", ratesPhrase(result.Rates, result.Counts.Transactions))
@@ -261,8 +262,9 @@ func splitsPhrase(checked int) string {
 	}
 }
 
-// rowsPhrase renders c as one comma-separated clause, each noun inflected
-// on its own count, then n's investment-transaction clause when nonzero.
+// rowsPhrase renders c as the cash clause, then the investment clause (each
+// noun inflected on its own count), then n's investment-transaction clause
+// when nonzero.
 func rowsPhrase(c store.Counts, n store.NotImported) string {
 	phrase := strings.Join([]string{
 		humanize.Count(c.Transactions, "transaction", "transactions"),
@@ -272,10 +274,27 @@ func rowsPhrase(c store.Counts, n store.NotImported) string {
 		humanize.Count(c.Categories, "category", "categories"),
 		humanize.Count(c.Tags, "tag", "tags"),
 	}, ", ")
+	phrase += "; " + strings.Join([]string{
+		humanize.Count(c.InvestmentTransactions, "investment transaction", "investment transactions"),
+		humanize.Count(c.Securities, "security", "securities"),
+		humanize.Count(c.Prices, "price", "prices"),
+	}, ", ")
 	if n.InvestmentTransactions > 0 {
 		phrase += "; " + humanize.Count(n.InvestmentTransactions, "investment transaction", "investment transactions") + " not imported"
 	}
 	return phrase
+}
+
+// sharesPhrase renders the Shares line of a build whose share counts all matched Quicken's.
+func sharesPhrase(checked int) string {
+	switch checked {
+	case 0:
+		return "no holdings to check"
+	case 1:
+		return "1 holding matches Quicken's share count"
+	default:
+		return humanize.Thousands(checked) + " holdings match Quicken's share counts"
+	}
 }
 
 // formatMoney renders cents as a thousands-grouped, 2-decimal amount with a
@@ -427,6 +446,7 @@ func widestLen(ss []string) int {
 
 // renderStoreFailure renders the V1 block: Store, Rows, Transfers, and each
 // of Balances/Splits in its DIFFER form only when that check itself failed.
+// Shares shows only its pass line, so it is left out while a count differs.
 func renderStoreFailure(result store.Result, storeExisted bool, home string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", storeFailureLine(result.Path, storeExisted, home))
@@ -449,6 +469,10 @@ func renderStoreFailure(result store.Result, storeExisted bool, home string) str
 		}
 	} else {
 		fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits.Checked))
+	}
+
+	if len(result.Validation.Shares.Mismatched) == 0 {
+		fmt.Fprintf(&b, "%-10s%s\n", "Shares", sharesPhrase(result.Validation.Shares.Checked))
 	}
 	writeTransfersLine(&b, result.Validation.Transfers)
 	writeOneSidedRows(&b, result.Validation.Transfers.OneSided)

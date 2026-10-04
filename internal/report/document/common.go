@@ -30,6 +30,10 @@ type Rows struct {
 	Splits       int `json:"splits"`
 	SplitTags    int `json:"split_tags"`
 	Transfers    int `json:"transfers"`
+
+	InvestmentTransactions int `json:"investment_transactions"`
+	Securities             int `json:"securities"`
+	Prices                 int `json:"prices"`
 }
 
 // NotImported is the --json "not_imported" object.
@@ -47,6 +51,7 @@ func NewRows(c store.Counts) Rows {
 	return Rows{
 		Accounts: c.Accounts, Categories: c.Categories, Payees: c.Payees, Tags: c.Tags,
 		Transactions: c.Transactions, Splits: c.Splits, SplitTags: c.SplitTags, Transfers: c.Transfers,
+		InvestmentTransactions: c.InvestmentTransactions, Securities: c.Securities, Prices: c.Prices,
 	}
 }
 

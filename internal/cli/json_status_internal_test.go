@@ -28,7 +28,10 @@ const fullStatusJSON = `{
       "transactions": 18204,
       "splits": 21977,
       "split_tags": 5,
-      "transfers": 3141
+      "transfers": 3141,
+      "investment_transactions": 1605,
+      "securities": 84,
+      "prices": 99352
     }
   },
   "snapshot": {

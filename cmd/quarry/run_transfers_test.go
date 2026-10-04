@@ -79,9 +79,10 @@ func Test_run_pairs_transfers_between_the_users_accounts(t *testing.T) {
 	storePath := storePathUnder(home)
 	require.Equal(t, syncBlock(t, home, bundle.Dir, 3,
 		[2]string{"Store", abbreviated(t, storePath, home)},
-		[2]string{"Rows", "4 transactions, 4 splits, 2 transfers, 0 payees, 0 categories, 0 tags"},
+		[2]string{"Rows", "4 transactions, 4 splits, 2 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices"},
 		[2]string{"Balances", "no accounts to check; 3 never reconciled"},
 		[2]string{"Splits", "all 4 transactions equal the sum of their splits"},
+		[2]string{"Shares", "no holdings to check"},
 		[2]string{"Transfers", "2 paired"},
 		[2]string{"Findings", "none open"},
 		[2]string{"Rates", fakeRatesText},
@@ -132,9 +133,10 @@ func Test_run_reports_no_transfers_for_a_file_with_no_transactions(t *testing.T)
 	require.Empty(t, stderr.String())
 	assert.Equal(t, syncBlock(t, home, bundle.Dir, 2,
 		[2]string{"Store", abbreviated(t, storePathUnder(home), home)},
-		[2]string{"Rows", "0 transactions, 0 splits, 0 transfers, 1 payee, 2 categories, 1 tag"},
+		[2]string{"Rows", "0 transactions, 0 splits, 0 transfers, 1 payee, 2 categories, 1 tag; 0 investment transactions, 0 securities, 0 prices"},
 		[2]string{"Balances", "no accounts to check; 2 never reconciled"},
 		[2]string{"Splits", "no transactions to check"},
+		[2]string{"Shares", "no holdings to check"},
 		[2]string{"Transfers", "none"},
 		[2]string{"Findings", "none open"},
 		[2]string{"Rates", fakeRatesText},
@@ -173,9 +175,10 @@ func Test_run_counts_investment_transactions_without_importing_them(t *testing.T
 	storePath := storePathUnder(home)
 	require.Equal(t, syncBlock(t, home, bundle.Dir, 2,
 		[2]string{"Store", abbreviated(t, storePath, home)},
-		[2]string{"Rows", "2 transactions, 2 splits, 1 transfer, 0 payees, 0 categories, 0 tags; 2 investment transactions not imported"},
+		[2]string{"Rows", "2 transactions, 2 splits, 1 transfer, 0 payees, 0 categories, 0 tags; 2 investment transactions, 0 securities, 0 prices; 2 investment transactions not imported"},
 		[2]string{"Balances", "no accounts to check; 1 never reconciled and 1 investment account not checked"},
 		[2]string{"Splits", "all 2 transactions equal the sum of their splits"},
+		[2]string{"Shares", "no holdings to check"},
 		[2]string{"Transfers", "1 paired"},
 		[2]string{"Findings", "none open"},
 		[2]string{"Rates", fakeRatesText},
@@ -222,9 +225,10 @@ func Test_run_lists_one_sided_transfers_only_as_findings_on_a_successful_sync(t 
 	storePath := storePathUnder(home)
 	assert.Equal(t, syncBlock(t, home, bundle.Dir, 2,
 		[2]string{"Store", abbreviated(t, storePath, home)},
-		[2]string{"Rows", "5 transactions, 5 splits, 4 transfers, 1 payee, 0 categories, 0 tags"},
+		[2]string{"Rows", "5 transactions, 5 splits, 4 transfers, 1 payee, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices"},
 		[2]string{"Balances", "no accounts to check; 2 never reconciled"},
 		[2]string{"Splits", "all 5 transactions equal the sum of their splits"},
+		[2]string{"Shares", "no holdings to check"},
 		[2]string{"Transfers", "1 paired, 3 one-sided"},
 		[2]string{"Findings", "3 open; run quarry findings to list them"},
 		[2]string{"Rates", fakeRatesText},
@@ -263,11 +267,12 @@ func Test_run_lists_one_sided_transfers_without_warning_when_validation_fails(t 
 	storePath := storePathUnder(home)
 	assert.Equal(t, syncBlock(t, home, bundle.Dir, 2,
 		[2]string{"Store", "NOT BUILT (no store at " + abbreviated(t, storePath, home) + " yet)"},
-		[2]string{"Rows", "2 transactions, 2 splits, 1 transfer, 0 payees, 0 categories, 0 tags"},
+		[2]string{"Rows", "2 transactions, 2 splits, 1 transfer, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices"},
 		[2]string{"Balances", "no accounts to check; 2 never reconciled"},
 		[2]string{"Splits", "DIFFER for 1 of 2 transactions"},
 	)+
 		"  ! 2026-03-01  Chequing (CAD)  (no payee)  amount -10.00  splits -9.00\n"+
+		"Shares    no holdings to check\n"+
 		"Transfers 0 paired, 1 one-sided\n"+
 		"  ? 2026-03-01  Chequing (CAD)  (no payee)  -5.00  other account: Old Visa (not in this file)\n",
 		stdout.String())

@@ -49,7 +49,7 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 		"Snapshot", snapshotID(snapshotPath), takenAt.In(time.Local).Format("2006-01-02 15:04 MST"), //nolint:gosmopolitan // status prints the user's local zone
 		"Source", abbreviated(t, bundle.Dir, home),
 		"Dates", "2026-01-05 to 2026-03-20",
-		"Rows", "4 transactions, 4 splits, 2 transfers, 0 payees, 0 categories, 0 tags",
+		"Rows", "4 transactions, 4 splits, 2 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices",
 		"Balances", "1 account matches Quicken's last reconciled balance; 1 never reconciled and 1 investment account not checked",
 		"Splits", "all 4 transactions equal the sum of their splits",
 		"Transfers", "1 paired, 1 one-sided",

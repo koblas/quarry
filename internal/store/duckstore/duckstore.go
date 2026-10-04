@@ -696,7 +696,7 @@ func importRunRows(carried history, runs []store.ImportRun) [][]any {
 			int64(r.BalancesNeverReconciled), int64(r.InvestmentAccounts),
 			int64(r.TransfersPaired), int64(r.TransfersCrossCurrency),
 			nil, nil, nil,
-			int64(c.Securities), int64(c.Prices), int64(c.InvestmentTransactions),
+			int64(c.Securities), int64(c.Prices), int64(c.InvestmentTransactions), int64(r.SharesChecked),
 		})
 	}
 	return out
