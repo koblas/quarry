@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/report/document"
+	"github.com/koblas/quarry/internal/store"
 )
 
 // holdingsTwin is the quarry command whose output the holdings tool matches.
@@ -33,8 +35,22 @@ func (s *Server) holdings(ctx context.Context, in holdingsInput) (any, error) {
 	}
 	doc := document.NewHoldings(held, append(configWarnings, document.HoldingsWarnings(held)...))
 	doc.Holdings, doc.Warnings = capList(doc.Holdings, doc.Warnings, toolHoldings, "holdings",
-		"totals count every holding; pass fewer accounts, or query v_holdings where date = '"+doc.AsOf+"' for the rest")
+		"totals count every holding; pass fewer accounts, or query v_holdings where date = '"+doc.AsOf+"'"+
+			accountsPredicate(held.Accounts)+" for the rest")
 	return doc, nil
+}
+
+// accountsPredicate is the SQL tail that keeps v_holdings to accounts, " and account_id in ('<id>', ...)" in
+// the order given; empty when the call named none.
+func accountsPredicate(accounts []store.Account) string {
+	if accounts == nil {
+		return ""
+	}
+	ids := make([]string, len(accounts))
+	for i, a := range accounts {
+		ids[i] = "'" + strings.ReplaceAll(a.ID, "'", "''") + "'"
+	}
+	return " and account_id in (" + strings.Join(ids, ", ") + ")"
 }
 
 // asOfRefusedError is the isError text of an as_of the model must fix.

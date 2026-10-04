@@ -32,28 +32,20 @@ func Test_HoldingsWarnings_name_each_named_account_that_is_not_an_investment_acc
 		want     []string
 	}{
 		{
-			name: "in the table's account order, not the order given",
+			name: "in the order the accounts were given, though the table would sort the other way",
 			accounts: []store.Account{
-				namedAccount("a-1", "Zeta Chequing", accountTypeChequing),
-				namedAccount("a-2", "Alpha Savings", accountTypeSavings),
+				namedAccount("a-1", "IRA", accountTypeSavings),
+				namedAccount("a-2", "brokerage", accountTypeChequing),
 			},
-			want: []string{notInvestmentLine("Alpha Savings"), notInvestmentLine("Zeta Chequing"), namedNothingLine},
+			want: []string{notInvestmentLine("IRA"), notInvestmentLine("brokerage"), namedNothingLine},
 		},
 		{
-			name: "ignoring case, so a lower-case name sorts among the capitals",
-			accounts: []store.Account{
-				namedAccount("a-1", "Zeta", accountTypeChequing),
-				namedAccount("a-2", "alpha", accountTypeSavings),
-			},
-			want: []string{notInvestmentLine("alpha"), notInvestmentLine("Zeta"), namedNothingLine},
-		},
-		{
-			name: "by plain name when two names differ only in case",
+			name: "in the order given when two names differ only in case",
 			accounts: []store.Account{
 				namedAccount("a-1", "alpha", accountTypeChequing),
 				namedAccount("a-2", "Alpha", accountTypeSavings),
 			},
-			want: []string{notInvestmentLine("Alpha"), notInvestmentLine("alpha"), namedNothingLine},
+			want: []string{notInvestmentLine("alpha"), notInvestmentLine("Alpha"), namedNothingLine},
 		},
 	}
 

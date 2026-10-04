@@ -204,7 +204,7 @@ Stderr lines take the prefix `quarry: warning: `. They exit 0, and each is also 
   - with `--account`: `no holdings on <d> in the named accounts; their investment transactions run <a> to <b>`, or `…; they have no investment transactions`
   - no investment data: `no holdings on <d>; the store has no investment transactions`
 
-- **Order (R3)**, stderr and `warnings[]` alike: (1) config warnings, (2) non-investment `--account`, (3) empty result, (4) no price, (5) no exchange rates / before first rate, (6) no currency, (7) other currency. Several of one kind follow the table sort.
+- **Order (R3)**, stderr and `warnings[]` alike: (1) config warnings, (2) non-investment `--account`, (3) empty result, (4) no price, (5) no exchange rates / before first rate, (6) no currency, (7) other currency. Several of one kind follow the table sort, except slot 2, which follows the order the accounts were given.
 
 ### S.4 Refusals
 
@@ -238,7 +238,7 @@ MCP tool `holdings`:
 - Description: `Securities held on one day with share count, latest price and its date, and value; cash in investment accounts is not included.`
 - Refusals use the sibling tools' error shape.
 - MCP rulings (2026-10-04, SCENARIO-13):
-  - The MCP result lists at most 500 holdings; totals cover all. A cut adds the shared `capList` note (noun `holdings`, full count) last in `warnings[]`: `holdings lists the first 500 holdings of 501; totals count every holding; pass fewer accounts, or query v_holdings where date = '<as_of>' for the rest`. Below 500 it is byte-identical to `--json`.
+  - The MCP result lists at most 500 holdings; totals cover all. A cut adds the shared `capList` note (noun `holdings`, full count) last in `warnings[]`: `holdings lists the first 500 holdings of 501; totals count every holding; pass fewer accounts, or query v_holdings where date = '<as_of>' for the rest`. When the call named accounts, the SQL names them: `holdings lists the first 500 holdings of 501; totals count every holding; pass fewer accounts, or query v_holdings where date = '<as_of>' and account_id in ('<id1>', '<id2>') for the rest` — the quarry ids of the named accounts in the order given (repeats dropped), each single-quoted with `'` doubled, joined `, `; one account gives `in ('<id>')`. Below 500 it is byte-identical to `--json`.
   - `quarry mcp --help` Tools line ends `…, search_transactions, holdings.`
   - Parameter descriptions: `as_of`: `Day to value holdings on: YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day. Defaults to today.`; `accounts`: `List only these accounts, each given by id or by name in any letter case. Omit it for every account.`
   - Refusals: `as_of "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`; `as_of 2027-01-01 is after today; holdings are valued up to today only, so pass an earlier as_of`; stderr `quarry: mcp: holdings: refused the call's as_of; details went to the client only`.

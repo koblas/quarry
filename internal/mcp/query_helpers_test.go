@@ -58,6 +58,13 @@ type fakeStore struct {
 
 	held      store.Holdings
 	heldAsked []store.HoldingsParams
+
+	accounts store.AccountList
+}
+
+// Accounts answers with accounts, or err when set.
+func (f *fakeStore) Accounts(context.Context) (store.AccountList, error) {
+	return f.accounts, f.err
 }
 
 // Holdings answers with held, or err when set, recording the params.

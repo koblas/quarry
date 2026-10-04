@@ -62,6 +62,41 @@ func Test_holdings_lists_the_first_500_and_totals_every_holding_with_a_cut_note(
 	assert.Equal(t, []string{holdingsCutNote}, doc.Warnings)
 }
 
+func Test_holdings_cut_note_names_the_accounts_the_call_named_in_the_order_given(t *testing.T) {
+	cases := []struct {
+		name     string
+		accounts []string
+		want     string
+	}{
+		{name: "one account", accounts: []string{"Brokerage"}, want: " and account_id in ('acct-1')"},
+		{name: "two accounts, by name and by id, in the order given", accounts: []string{"acct-2", "Brokerage"}, want: " and account_id in ('acct-2', 'acct-1')"},
+		{name: "an id with a quote has it doubled", accounts: []string{"acct-3'x"}, want: " and account_id in ('acct-3''x')"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fake := &fakeStore{held: cadHoldings(501), accounts: namedAccountList()}
+			h := newHarness(t, fake, nil)
+
+			doc := decodeHoldings(t, h.holdings(t, map[string]any{"currency": "CAD", "as_of": "2026-03-31", "accounts": c.accounts}))
+
+			want := "holdings lists the first 500 holdings of 501; totals count every holding; pass fewer accounts, " +
+				"or query v_holdings where date = '2026-03-31'" + c.want + " for the rest"
+			assert.Equal(t, []string{want}, doc.Warnings)
+		})
+	}
+}
+
+// namedAccountList is three brokerage accounts; the third's id has a quote, which no store id does.
+func namedAccountList() store.AccountList {
+	account := func(id, name string) store.AccountBalance {
+		return store.AccountBalance{ID: id, Name: name, Type: store.AccountTypeBrokerage}
+	}
+	return store.AccountList{Accounts: []store.AccountBalance{
+		account("acct-1", "Brokerage"), account("acct-2", "Roth"), account("acct-3'x", "Odd"),
+	}}
+}
+
 func Test_holdings_lists_exactly_500_with_no_cut_note(t *testing.T) {
 	h := newHarness(t, &fakeStore{held: cadHoldings(500)}, nil)
 

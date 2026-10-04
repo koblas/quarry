@@ -1,11 +1,8 @@
 package document
 
 import (
-	"cmp"
 	"fmt"
 	"math/big"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/humanize"
@@ -122,22 +119,13 @@ func HoldingsWarnings(h report.Holdings) []string {
 }
 
 // nonInvestmentWarnings is one line per named account that is not a brokerage or retirement account, in
-// the holdings table's account order; non-nil, so it seeds HoldingsWarnings.
+// the order the accounts were given; non-nil, so it seeds HoldingsWarnings.
 func nonInvestmentWarnings(h report.Holdings) []string {
-	var named []store.Account
+	lines := []string{}
 	for _, a := range h.Accounts {
 		if !store.IsInvestmentAccount(a.Type) {
-			named = append(named, a)
+			lines = append(lines, fmt.Sprintf("account %q is not a brokerage or retirement account, so it has no holdings", a.Name))
 		}
-	}
-	// The same key as the holdings query's ORDER BY: name ignoring case, then name, source id, id.
-	slices.SortFunc(named, func(a, b store.Account) int {
-		return cmp.Or(strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)), strings.Compare(a.Name, b.Name),
-			cmp.Compare(a.SourceID, b.SourceID), strings.Compare(a.ID, b.ID))
-	})
-	lines := make([]string, len(named))
-	for i, a := range named {
-		lines[i] = fmt.Sprintf("account %q is not a brokerage or retirement account, so it has no holdings", a.Name)
 	}
 	return lines
 }
