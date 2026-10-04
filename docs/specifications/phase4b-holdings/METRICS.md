@@ -22,6 +22,8 @@
 | 1 | arch, correctness, test, refactor | 0/3/10/8 | 0 / 20 (1 timed out), 1212s | BLOCKED |
 | 2 | correctness, test | 0/0/0/0 | 0 / 6, 729s (first run aborted: isolated-copy duckstore failure, not reproduced) | PASS |
 | final pass | product-vision | 0/2/0/0 | - | SHIP WITH CHANGES |
+| 3 | correctness | 0/2/0/0 | 0 mutable lines | BLOCKED (both ruled by product-vision, fixed in pass 3) |
+| 4 | correctness, test | 0/0/5/2 | - | PASS WITH FOLLOW-UPS (fix-pass cap reached) |
 
 ## Tokens
 
