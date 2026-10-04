@@ -76,3 +76,14 @@ func Money(cents int64) string {
 	}
 	return s
 }
+
+// Shares renders millionths of a share as a 6-decimal amount with a leading
+// "-" for a negative value and no thousands grouping.
+func Shares(millionths int64) string {
+	whole, fraction := millionths/1_000_000, millionths%1_000_000
+	if millionths < 0 {
+		// Negate the quotient and remainder, not millionths: -MinInt64 overflows.
+		return fmt.Sprintf("-%d.%06d", -whole, -fraction)
+	}
+	return fmt.Sprintf("%d.%06d", whole, fraction)
+}

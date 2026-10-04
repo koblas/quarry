@@ -234,8 +234,9 @@ func (s *Server) importFailureRefusal(ctx context.Context, manifest Manifest, er
 	return causedRefusalError{msg: msg, cause: err}
 }
 
-// validationFailedRefusal reports V1: a build reached the balance or
-// split-sum gate and one or more checks failed.
+// validationFailedRefusal reports V1: a build reached the validation gate and
+// one or more checks failed. Clauses read balances, splits, shares; shares
+// alone gets the share-count tail, any cash clause keeps the cash tail.
 func (s *Server) validationFailedRefusal(manifest Manifest, v store.Validation, cause error) error {
 	var clauses []string
 	if n := len(v.Balances.Mismatched); n > 0 {
@@ -244,12 +245,29 @@ func (s *Server) validationFailedRefusal(manifest Manifest, v store.Validation, 
 	if n := len(v.Splits.Mismatched); n > 0 {
 		clauses = append(clauses, splitMismatchClause(n))
 	}
+	id := ID(manifest.Snapshot.Path)
+	tail := "fix them in Quicken and run quarry sync, or run quarry sync --from " + id + " after updating quarry"
+	if n := len(v.Shares.Mismatched); n > 0 {
+		if len(clauses) == 0 {
+			tail = shareOnlyTail(n, id)
+		}
+		clauses = append(clauses, shareMismatchClause(n, v.Shares.Checked))
+	}
 	return causedRefusalError{
-		msg: fmt.Sprintf("validation failed: %s; %s was not changed; each difference is listed on stdout; "+
-			"fix them in Quicken and run quarry sync, or run quarry sync --from %s after updating quarry",
-			strings.Join(clauses, " and "), homepath.Abbreviate(s.home, s.storeProbe.Path()), ID(manifest.Snapshot.Path)),
+		msg: fmt.Sprintf("validation failed: %s; %s was not changed; each difference is listed on stdout; %s",
+			strings.Join(clauses, " and "), homepath.Abbreviate(s.home, s.storeProbe.Path()), tail),
 		cause: cause,
 	}
+}
+
+// shareOnlyTail is the stderr tail when only the share-count check failed: a
+// share difference is a reading difference, so it points at --from, not Quicken.
+func shareOnlyTail(mismatched int, id string) string {
+	holdings := "the holding's"
+	if mismatched > 1 {
+		holdings = "those holdings'"
+	}
+	return fmt.Sprintf("quarry read %s transactions differently from Quicken, so run quarry sync --from %s after updating quarry", holdings, id)
 }
 
 // balanceMismatchClause renders n mismatched of checked accounts: the noun
@@ -264,6 +282,20 @@ func balanceMismatchClause(n, checked int) string {
 		verb = "does not match"
 	}
 	return fmt.Sprintf("%s of %s %s %s Quicken's last reconciled balance", humanize.Thousands(n), humanize.Thousands(checked), noun, verb)
+}
+
+// shareMismatchClause renders n mismatched of checked holdings: the noun
+// agrees with checked, the verb and the plural "counts" with n.
+func shareMismatchClause(n, checked int) string {
+	noun := "holdings"
+	if checked == 1 {
+		noun = "holding"
+	}
+	verb, count := "do not match", "counts"
+	if n == 1 {
+		verb, count = "does not match", "count"
+	}
+	return fmt.Sprintf("%s of %s %s %s Quicken's share %s", humanize.Thousands(n), humanize.Thousands(checked), noun, verb, count)
 }
 
 // splitMismatchClause renders n mismatched transactions, singular at n == 1.

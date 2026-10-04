@@ -102,7 +102,7 @@ func Test_run_sync_fails_when_holdings_share_counts_differ_from_quicken(t *testi
 	assert.Equal(t,
 		"quarry: validation failed: 2 of 3 holdings do not match Quicken's share counts; "+
 			abbreviated(t, storePath, home)+" was not changed; each difference is listed on stdout; "+
-			"quarry read the holding's transactions differently from Quicken, so run quarry sync --from "+
+			"quarry read those holdings' transactions differently from Quicken, so run quarry sync --from "+
 			snapshotID(snapshotPath)+" after updating quarry\n",
 		stderr.String())
 	got, err := os.ReadFile(storePath)
