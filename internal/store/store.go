@@ -611,6 +611,11 @@ type AccountBalance struct {
 
 	Balance *int64
 
+	// Cash is the account's cash in cents; HoldingsValue is its valued holdings in cents,
+	// nil outside a brokerage or retirement account.
+	Cash          int64
+	HoldingsValue *int64
+
 	// BalanceCAD and BalanceUSD are Balance in cents in that currency at the latest rate dated on or before AsOf;
 	// nil when Balance is nil or no rate converts it.
 	BalanceCAD, BalanceUSD *int64

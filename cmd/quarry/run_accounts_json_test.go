@@ -27,6 +27,8 @@ type accountRowJSON struct {
 	InReports      bool    `json:"in_reports"`
 	LinkedTracking bool    `json:"linked_tracking"`
 	Balance        *string `json:"balance"`
+	Cash           *string `json:"cash"`
+	HoldingsValue  *string `json:"holdings_value"`
 }
 
 type accountsJSON struct {

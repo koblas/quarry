@@ -60,6 +60,28 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 	assert.Equal(t, want, stdout.String())
 }
 
+// Cash-only investment rows keep the share gate out of the way.
+func Test_run_status_says_investment_accounts_cash_is_not_checked(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	b := v9fixture.NewBuilder()
+	brokerage := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	ira := b.Account(v9fixture.AccountRow{Name: "IRA", Type: "RETIREMENTIRA", Currency: "CAD", Active: true})
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	dividend := new(int64(10))
+	for _, account := range []int64{brokerage, ira} {
+		pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: account, PostedDate: &day, Type: dividend, Amount: "12.00"})
+		b.Entry(v9fixture.EntryRow{Parent: pk, Amount: "12.00"})
+	}
+	syncBundle(t, b.WriteBundle(t, filepath.Join(home, "Documents")))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Contains(t, stdout.String(), fmt.Sprintf("%-10s%s\n", "Balances", "no accounts to check; 2 investment accounts' cash not checked"))
+}
+
 func Test_run_status_reports_the_latest_build_when_import_runs_holds_several(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
