@@ -14,6 +14,7 @@
 | SCENARIO-10 | code-first | A, B1, V | 0/0/3/0 | no (MINOR → STATE.md) |
 | SCENARIO-09 | code-first | A, B1, V | 0/0/4/1 | no (MINOR → STATE.md) |
 | SCENARIO-13 | code-first (light) | L, V | 0/0/2/2 | no (MINOR → STATE.md); cap ruled mid-scenario, built in V |
+| SCENARIO-15 | code-first | A, B1, B2, B3, V | 0/0/2/2 | no (MINOR → STATE.md) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
