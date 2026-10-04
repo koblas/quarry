@@ -78,6 +78,7 @@ func Test_net_worth_leaves_out_accounts_not_in_reports_and_linked_tracking(t *te
 	}{
 		{name: "an account not in reports", flag: func(a *store.Account) { a.NotInReports = true }},
 		{name: "a linked-tracking account", flag: func(a *store.Account) { a.LinkedTracking = true }},
+		{name: "an account both not in reports and linked-tracking", flag: func(a *store.Account) { a.NotInReports, a.LinkedTracking = true, true }},
 	}
 
 	for _, c := range cases {
@@ -93,6 +94,34 @@ func Test_net_worth_leaves_out_accounts_not_in_reports_and_linked_tracking(t *te
 			assert.Equal(t, [][]string{{"chequing", "CAD", "1", "100.00"}}, got)
 		})
 	}
+}
+
+func Test_net_worth_balance_of_an_investment_account_adds_its_valued_holdings_to_cash(t *testing.T) {
+	t.Parallel()
+	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), 3*oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)}
+	rows.Transactions = []store.Transaction{
+		transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctChequing, marchDay(1), 5_000),
+	}
+	st := newStoreWith(t, rows)
+
+	got := queryTexts(t, st, netWorthQuery(2))
+
+	assert.Equal(t, [][]string{{"brokerage", "CAD", "1", "130.00"}, {"chequing", "CAD", "1", "50.00"}}, got)
+}
+
+func Test_net_worth_converts_an_investment_accounts_cash_plus_valued_holdings(t *testing.T) {
+	t.Parallel()
+	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), 3*oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)}
+	rows.Transactions = []store.Transaction{
+		transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctChequing, marchDay(1), 5_000),
+	}
+	st := newStoreWithRates(t, rows, ratesOn(1, 1_250_000, "FXUSDCAD"))
+
+	got := queryTexts(t, st, "SELECT type, balance_cad, balance_usd FROM v_net_worth WHERE date = '2026-03-02' ORDER BY type")
+
+	assert.Equal(t, [][]string{{"brokerage", "130.00", "104.00"}, {"chequing", "50.00", "40.00"}}, got)
 }
 
 func Test_net_worth_has_no_row_for_a_date_where_every_account_is_left_out(t *testing.T) {
