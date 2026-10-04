@@ -19,8 +19,8 @@ type AccountListing struct {
 	Currency money.Currency
 }
 
-// ConvertedBalance is a's balance in cents in the listing's currency; nil in a native listing, for a
-// balance quarry cannot compute, and when no rate on or before AsOf converts it.
+// ConvertedBalance is a's balance in cents in the listing's currency; nil in a native listing and
+// when no rate on or before AsOf converts it.
 func (l AccountListing) ConvertedBalance(a store.AccountBalance) *int64 {
 	if l.Currency == money.CAD {
 		return a.BalanceCAD
@@ -33,7 +33,7 @@ func (l AccountListing) ConvertedBalance(a store.AccountBalance) *int64 {
 
 // NeedsRate reports whether a's balance should convert but no rate converts it.
 func (l AccountListing) NeedsRate(a store.AccountBalance) bool {
-	return a.Balance != nil && l.Currency != money.Native && l.ConvertedBalance(a) == nil
+	return l.Currency != money.Native && l.ConvertedBalance(a) == nil
 }
 
 // AllHidden reports whether the listing is empty only because every account

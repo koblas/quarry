@@ -87,6 +87,45 @@ func Test_run_accounts_warns_of_the_missing_rate_and_shows_no_rate_in_both_forms
 	}
 }
 
+func Test_run_accounts_warns_of_the_missing_rate_for_an_investment_account_in_both_forms(t *testing.T) {
+	cases := []struct {
+		name     string
+		accounts []store.Account
+		rates    []store.Rate
+		args     []string
+		want     string
+	}{
+		{
+			name:     "a USD brokerage beside CAD chequing with no rates in CAD",
+			accounts: []store.Account{chequingAccount("acct-cad", 1), brokerageAccount("acct-brk", 2, "USD")},
+			want:     noRatesCADWarning,
+		},
+		{
+			name:     "a CAD brokerage beside USD chequing with no rates in USD",
+			accounts: []store.Account{usdChequingAccount("acct-usd", 1), brokerageAccount("acct-brk", 2, "CAD")},
+			args:     []string{"--currency", "USD"}, want: noRatesUSDWarning,
+		},
+		{
+			name:     "a USD brokerage beside CAD chequing with rates only after today",
+			accounts: []store.Account{chequingAccount("acct-cad", 1), brokerageAccount("acct-brk", 2, "USD")},
+			rates:    []store.Rate{futureRate}, want: futureCADWarning,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			seedAccounts(t, c.accounts, c.rates...)
+
+			got := runAccountsBothForms(t, c.args...)
+
+			assert.Equal(t, "quarry: warning: "+c.want+"\n", got.textErr)
+			assert.Contains(t, got.text, "no rate\n")
+			assert.Equal(t, []string{c.want}, warningsOf(t, got.json))
+			assert.Equal(t, "quarry: warning: "+c.want+"\n", got.jsonErr)
+		})
+	}
+}
+
 func Test_accounts_warn_of_no_rates_only_when_a_balance_needed_one(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -96,20 +135,6 @@ func Test_accounts_warn_of_no_rates_only_when_a_balance_needed_one(t *testing.T)
 	}{
 		{name: "an all-CAD store with no rates in CAD", accounts: []store.Account{chequingAccount("acct-cad", 1)}},
 		{name: "an all-USD store with no rates in USD", accounts: []store.Account{usdChequingAccount("acct-usd", 1)}, args: []string{"--currency", "USD"}},
-		{
-			name:     "a not valued USD account beside CAD ones with no rates in CAD",
-			accounts: []store.Account{chequingAccount("acct-cad", 1), brokerageAccount("acct-brk", 2, "USD")},
-		},
-		{
-			name:     "a not valued CAD account beside USD ones with no rates in USD",
-			accounts: []store.Account{usdChequingAccount("acct-usd", 1), brokerageAccount("acct-brk", 2, "CAD")},
-			args:     []string{"--currency", "USD"},
-		},
-		{
-			name:     "a not valued cross-currency account with rates only after today",
-			accounts: []store.Account{chequingAccount("acct-cad", 1), brokerageAccount("acct-brk", 2, "USD")},
-			rates:    []store.Rate{futureRate},
-		},
 		{name: "native with no rates", accounts: []store.Account{usdChequingAccount("acct-usd", 1)}, args: []string{"--currency", "native"}},
 		{
 			name:     "rates on or before today, in CAD",

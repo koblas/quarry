@@ -130,7 +130,7 @@ func Test_accounts_reads_the_store_once(t *testing.T) {
 }
 
 func Test_accounts_converted_balance_picks_the_cell_of_the_listings_currency(t *testing.T) {
-	a := store.AccountBalance{Balance: new(int64(800)), BalanceCAD: new(int64(1000)), BalanceUSD: new(int64(790))}
+	a := store.AccountBalance{Balance: 800, BalanceCAD: new(int64(1000)), BalanceUSD: new(int64(790))}
 	cases := []struct {
 		name     string
 		currency money.Currency
@@ -150,10 +150,10 @@ func Test_accounts_converted_balance_picks_the_cell_of_the_listings_currency(t *
 	}
 }
 
-func Test_accounts_needs_a_rate_only_for_an_imported_balance_with_no_cell_in_a_converted_listing(t *testing.T) {
-	imported := store.AccountBalance{Balance: new(int64(800))}
-	notValued := store.AccountBalance{}
-	converted := store.AccountBalance{Balance: new(int64(800)), BalanceCAD: new(int64(1000))}
+func Test_accounts_needs_a_rate_only_for_a_balance_with_no_cell_in_a_converted_listing(t *testing.T) {
+	imported := store.AccountBalance{Balance: 800}
+	investment := store.AccountBalance{Type: store.AccountTypeBrokerage, Currency: "USD", Cash: 800, HoldingsValue: new(int64(0)), Balance: 800}
+	converted := store.AccountBalance{Balance: 800, BalanceCAD: new(int64(1000))}
 	cases := []struct {
 		name     string
 		currency money.Currency
@@ -163,7 +163,7 @@ func Test_accounts_needs_a_rate_only_for_an_imported_balance_with_no_cell_in_a_c
 		{name: "imported, no cell, CAD", currency: money.CAD, account: imported, want: true},
 		{name: "imported, no cell, USD", currency: money.USD, account: imported, want: true},
 		{name: "imported with its cell", currency: money.CAD, account: converted, want: false},
-		{name: "not valued", currency: money.CAD, account: notValued, want: false},
+		{name: "a USD investment account, no cell, CAD", currency: money.CAD, account: investment, want: true},
 		{name: "native listing", currency: money.Native, account: imported, want: false},
 	}
 

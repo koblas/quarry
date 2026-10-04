@@ -9,9 +9,6 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// notValuedBalance is the Balance cell of an account quarry imports but does not value.
-const notValuedBalance = "not valued"
-
 // accountsColumnGap separates the accounts table's columns.
 const accountsColumnGap = "  "
 
@@ -30,7 +27,7 @@ func renderAccounts(l report.AccountListing) string {
 	rows := make([][]string, 0, 1+len(l.Accounts))
 	rows = append(rows, header)
 	for _, a := range l.Accounts {
-		row := []string{escapeCell(a.Name), a.Type, a.Currency, accountBalance(a.Balance)}
+		row := []string{escapeCell(a.Name), a.Type, a.Currency, formatMoney(a.Balance)}
 		if converted {
 			row = append(row, convertedCell(l, a))
 		}
@@ -74,14 +71,6 @@ func convertedCell(l report.AccountListing, a store.AccountBalance) string {
 		return noRateCell
 	}
 	return ""
-}
-
-// accountBalance renders a balance in cents, or "not valued" when nil.
-func accountBalance(cents *int64) string {
-	if cents == nil {
-		return notValuedBalance
-	}
-	return formatMoney(*cents)
 }
 
 // accountStatus joins, with ", ", the state (closed or inactive), "not in reports" and

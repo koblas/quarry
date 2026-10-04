@@ -21,7 +21,7 @@ func Test_query_reads_a_built_store(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, store.QueryResult{
-		Columns: []store.QueryColumn{{Name: "name", Type: "VARCHAR"}, {Name: "balance", Type: "DECIMAL(18,2)"}},
+		Columns: []store.QueryColumn{{Name: "name", Type: "VARCHAR"}, {Name: "balance", Type: "DECIMAL(38,2)"}},
 		Rows:    [][]store.QueryValue{{{Text: "Chequing", Native: "Chequing"}, {Text: "12.34", Native: "12.34"}}},
 	}, got)
 }

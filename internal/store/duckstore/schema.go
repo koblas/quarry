@@ -172,30 +172,35 @@ CREATE TABLE store_info (
 );
 `
 
-// accountBalancesViewDDL creates v_account_balances: each account with the sum of its
-// transactions dated today or earlier, NULL for an investment account.
-func accountBalancesViewDDL() string {
+// investmentTypesSQL is the SQL list of the accounts.type values that hold securities.
+func investmentTypesSQL() string {
 	quoted := make([]string, 0, len(store.InvestmentAccountTypes()))
 	for _, t := range store.InvestmentAccountTypes() {
 		quoted = append(quoted, "'"+strings.ReplaceAll(t, "'", "''")+"'")
 	}
-	// The date test sits in the join, not a WHERE, so an account whose only
-	// transactions are future-dated is still listed.
+	return strings.Join(quoted, ", ")
+}
+
+// accountBalancesViewDDL creates v_account_balances: each account with its cash, holdings value (NULL
+// outside investment accounts) and balance as v_balances_daily has them today.
+func accountBalancesViewDDL() string {
+	// The join to v_balances_daily is a LEFT JOIN, so an account with no row there (no transactions, or
+	// only future-dated ones) is still listed with 0.00.
 	return `
 CREATE VIEW v_account_balances AS
 WITH b AS (
 	SELECT a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed, a.active,
-		CASE WHEN a.type IN (` + strings.Join(quoted, ", ") + `) THEN NULL
-			ELSE CAST(COALESCE(sum(t.amount), 0) AS DECIMAL(18,2)) END AS balance
+		CAST(coalesce(d.cash, 0) AS DECIMAL(18,2)) AS cash,
+		CASE WHEN a.type IN (` + investmentTypesSQL() + `) THEN CAST(coalesce(d.holdings_value, 0) AS DECIMAL(38,2)) END AS holdings_value,
+		CAST(coalesce(d.balance, 0) AS DECIMAL(38,2)) AS balance
 	FROM accounts a
-	LEFT JOIN transactions t ON t.account_id = a.id AND t.date <= current_date
-	GROUP BY a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed, a.active
+	LEFT JOIN v_balances_daily d ON d.account_id = a.id AND d.date = current_date
 ), r AS (
 	SELECT usd_cad FROM fx_rates WHERE date <= current_date ORDER BY date DESC LIMIT 1
 )
-SELECT b.id, b.source_id, b.name, b.type, b.currency, b.institution, b.closed, b.active, b.balance,
-	` + convertedTo("CAD", "b.balance", "b.currency", "r.usd_cad") + ` AS balance_cad,
-	` + convertedTo("USD", "b.balance", "b.currency", "r.usd_cad") + ` AS balance_usd
+SELECT b.id, b.source_id, b.name, b.type, b.currency, b.institution, b.closed, b.active, b.cash, b.holdings_value, b.balance,
+	` + convertedToWide("CAD", "b.balance", "b.currency", "r.usd_cad", 38) + ` AS balance_cad,
+	` + convertedToWide("USD", "b.balance", "b.currency", "r.usd_cad", 38) + ` AS balance_usd
 FROM b
 LEFT JOIN r ON true;
 `
@@ -298,10 +303,6 @@ const balancesDailyViewComment = "one row per account per day from its first tra
 // balancesDailyViewDDL creates v_balances_daily: one row per account per day, its cash, the value of its holdings
 // and the balance in CAD and USD at the day's rate.
 func balancesDailyViewDDL() string {
-	quoted := make([]string, 0, len(store.InvestmentAccountTypes()))
-	for _, t := range store.InvestmentAccountTypes() {
-		quoted = append(quoted, "'"+strings.ReplaceAll(t, "'", "''")+"'")
-	}
 	// A holding is valued when v_holdings gives its value in the account's currency; any other counts as unvalued.
 	return `
 CREATE VIEW v_balances_daily AS
@@ -332,7 +333,7 @@ WITH firsts AS (
 	GROUP BY account_id, date
 ), parts AS (
 	SELECT c.date, a.id AS account_id, a.name AS account, a.type, a.currency, c.cash,
-		a.type IN (` + strings.Join(quoted, ", ") + `) AS investment,
+		a.type IN (` + investmentTypesSQL() + `) AS investment,
 		coalesce(h.value, 0) AS held_value, coalesce(h.unvalued, 0) AS held_unvalued
 	FROM cashed c
 	JOIN accounts a ON a.id = c.account_id

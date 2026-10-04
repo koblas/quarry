@@ -26,7 +26,7 @@ var asOf = time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
 func closedAccounts(n int) store.AccountList {
 	list := store.AccountList{AsOf: asOf}
 	for range n {
-		list.Accounts = append(list.Accounts, store.AccountBalance{ID: "acct", Name: "Old", Type: "chequing", Currency: "CAD", Closed: true, Active: true, Balance: new(int64(0))})
+		list.Accounts = append(list.Accounts, store.AccountBalance{ID: "acct", Name: "Old", Type: "chequing", Currency: "CAD", Closed: true, Active: true, Balance: 0})
 	}
 	return list
 }
@@ -45,7 +45,7 @@ func executeAccounts(t *testing.T, fake fakeReportStore, stdout, stderr io.Write
 
 func Test_accounts_all_closed_note(t *testing.T) {
 	const header = "Account  Type  Currency  Balance  Status\n"
-	open := store.AccountBalance{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true, Balance: new(int64(100))}
+	open := store.AccountBalance{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true, Balance: 100}
 	mixed := closedAccounts(2)
 	mixed.Accounts = append(mixed.Accounts, open)
 	cases := []struct {

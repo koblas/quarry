@@ -18,9 +18,9 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
 	list := store.AccountList{
 		AsOf: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC),
 		Accounts: []store.AccountBalance{
-			{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Institution: new("First Bank"), Active: true, LinkedTracking: true, Balance: new(int64(1234567))},
-			{ID: "acct-2", Name: "Visa", Type: "credit_card", Currency: "CAD", Closed: true, Active: true, NotInReports: true, Balance: new(int64(-120417))},
-			{ID: "acct-3", Name: "Old Savings", Type: "savings", Currency: "USD", Balance: new(int64(0))},
+			{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Institution: new("First Bank"), Active: true, LinkedTracking: true, Balance: 1234567},
+			{ID: "acct-2", Name: "Visa", Type: "credit_card", Currency: "CAD", Closed: true, Active: true, NotInReports: true, Balance: -120417},
+			{ID: "acct-3", Name: "Old Savings", Type: "savings", Currency: "USD", Balance: 0},
 			{ID: "acct-4", Name: "RRSP", Type: "retirement", Currency: "CAD", Institution: new("First Bank"), Active: true},
 		},
 	}
@@ -81,7 +81,7 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
       "active": true,
       "in_reports": true,
       "linked_tracking": false,
-      "balance": null,
+      "balance": "0.00",
       "converted_balance": null
     }
   ],
@@ -153,7 +153,7 @@ func Test_allClosedNote(t *testing.T) {
 func jsonListing(currency money.Currency) report.AccountListing {
 	usd := store.AccountBalance{
 		ID: "acct-usd", Name: "US Chequing", Type: "chequing", Currency: "USD", Active: true,
-		Balance: new(int64(800)), BalanceCAD: new(int64(1000)), BalanceUSD: new(int64(800)),
+		Balance: 800, BalanceCAD: new(int64(1000)), BalanceUSD: new(int64(800)),
 	}
 	brokerage := store.AccountBalance{ID: "acct-brk", Name: "Brokerage", Type: "brokerage", Currency: "USD", Active: true}
 	return report.AccountListing{
@@ -218,7 +218,7 @@ func Test_renderAccountsJSON_reads_back_each_balance_and_its_converted_balance(t
 			require.NoError(t, json.Unmarshal(got, &doc))
 			assert.Equal(t, c.currency.String(), doc.Currency)
 			require.Len(t, doc.Accounts, 2)
-			assert.Equal(t, []*string{new("8.00"), nil}, []*string{doc.Accounts[0].Balance, doc.Accounts[1].Balance})
+			assert.Equal(t, []*string{new("8.00"), new("0.00")}, []*string{doc.Accounts[0].Balance, doc.Accounts[1].Balance})
 			assert.Equal(t, c.want, []*string{doc.Accounts[0].ConvertedBalance, doc.Accounts[1].ConvertedBalance})
 			assert.Equal(t, []string{"a warning"}, doc.Warnings)
 		})

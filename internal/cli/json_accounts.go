@@ -39,7 +39,7 @@ func renderAccountsJSON(list report.AccountListing, warnings []string) ([]byte, 
 			Institution: jsonNullInstitution(a.Institution),
 			Closed:      a.Closed, Active: a.Active, InReports: !a.NotInReports,
 			LinkedTracking: a.LinkedTracking,
-			Balance:        jsonNullMoney(a.Balance), ConvertedBalance: jsonNullMoney(list.ConvertedBalance(a)),
+			Balance:        jsonNullMoney(&a.Balance), ConvertedBalance: jsonNullMoney(list.ConvertedBalance(a)),
 		}
 	}
 	return marshalDocument(accountsDocument{AsOf: list.AsOf.Format(document.DateLayout), Currency: list.Currency.String(), Accounts: rows, Warnings: warnings})

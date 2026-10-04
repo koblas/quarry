@@ -298,13 +298,13 @@ func Test_account_balances_stay_in_their_own_currency_when_the_store_has_no_rate
 	assert.Equal(t, [][]string{{acctInReports, "-10.00", "NULL"}, {acctUSD, "NULL", "10.00"}}, got)
 }
 
-func Test_account_balances_leave_an_investment_accounts_balance_empty_in_both_currencies(t *testing.T) {
+func Test_account_balances_give_an_investment_account_with_nothing_held_zero_in_both_currencies(t *testing.T) {
 	t.Parallel()
 	st := newStoreWithRates(t, fxRows(), ratesOn(13, fridayRate, "FXUSDCAD"))
 
 	got := balancesOf(t, st, acctInvestment)
 
-	assert.Equal(t, [][]string{{"NULL", "NULL", "NULL"}}, got)
+	assert.Equal(t, [][]string{{"0.00", "0.00", "0.00"}}, got)
 }
 
 func Test_account_balances_leave_a_third_currency_unconverted(t *testing.T) {
@@ -334,8 +334,10 @@ func Test_account_balances_lists_its_columns_in_order(t *testing.T) {
 		{Name: "institution", Type: "VARCHAR"},
 		{Name: "closed", Type: "BOOLEAN"},
 		{Name: "active", Type: "BOOLEAN"},
-		{Name: "balance", Type: "DECIMAL(18,2)"},
-		{Name: "balance_cad", Type: "DECIMAL(18,2)"},
-		{Name: "balance_usd", Type: "DECIMAL(18,2)"},
+		{Name: "cash", Type: "DECIMAL(18,2)"},
+		{Name: "holdings_value", Type: "DECIMAL(38,2)"},
+		{Name: "balance", Type: "DECIMAL(38,2)"},
+		{Name: "balance_cad", Type: "DECIMAL(38,2)"},
+		{Name: "balance_usd", Type: "DECIMAL(38,2)"},
 	}, got.Columns)
 }

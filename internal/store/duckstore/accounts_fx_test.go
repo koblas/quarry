@@ -45,7 +45,7 @@ func accountRates(t *testing.T, rates ...store.Rate) store.AccountList {
 func cells(list store.AccountList) [][]*int64 {
 	out := make([][]*int64, len(list.Accounts))
 	for i, a := range list.Accounts {
-		out[i] = []*int64{a.Balance, a.BalanceCAD, a.BalanceUSD}
+		out[i] = []*int64{new(a.Balance), a.BalanceCAD, a.BalanceUSD}
 	}
 	return out
 }
@@ -59,7 +59,7 @@ func Test_accounts_converts_at_the_latest_rate_dated_today_or_earlier_ignoring_a
 
 	assert.Equal(t, [][]*int64{
 		{new(int64(10000)), new(int64(10000)), new(int64(8000))},
-		{nil, nil, nil},
+		{new(int64(0)), new(int64(0)), new(int64(0))},
 		{new(int64(800)), new(int64(1000)), new(int64(800))},
 	}, cells(got))
 }
@@ -71,7 +71,7 @@ func Test_accounts_gives_a_cad_account_its_own_cad_cell_and_no_other_cell_withou
 
 	assert.Equal(t, [][]*int64{
 		{new(int64(10000)), new(int64(10000)), nil},
-		{nil, nil, nil},
+		{new(int64(0)), nil, new(int64(0))},
 		{new(int64(800)), nil, new(int64(800))},
 	}, cells(got))
 }

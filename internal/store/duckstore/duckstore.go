@@ -451,7 +451,7 @@ func removePartial(path string) {
 // build loads schema, views, rows, then findings merged with carried. It returns the state of each
 // finding it recorded. finishBuild completes the file; until it appends store_info the file is not a store.
 func build(ctx context.Context, db DB, rows store.Rows, carried history, builtAt time.Time) ([]finding.State, error) {
-	if _, err := db.Exec(ctx, schemaDDL+accountBalancesViewDDL()+cashFlowViewDDL()+spendingViewDDL+holdingsViewDDL()+balancesDailyViewDDL()); err != nil {
+	if _, err := db.Exec(ctx, schemaDDL+cashFlowViewDDL()+spendingViewDDL+holdingsViewDDL()+balancesDailyViewDDL()+accountBalancesViewDDL()); err != nil {
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
 	if err := loadRows(ctx, db, rows, carried); err != nil {

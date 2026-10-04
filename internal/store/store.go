@@ -35,7 +35,7 @@ func (a Account) LeftOutOfReports() bool {
 	return a.NotInReports || a.LinkedTracking
 }
 
-// Investment account types, whose balance quarry cannot compute.
+// Investment account types: their balance is cash plus the value of their holdings.
 const (
 	AccountTypeBrokerage  = "brokerage"
 	AccountTypeRetirement = "retirement"
@@ -48,8 +48,7 @@ func InvestmentAccountTypes() []string {
 }
 
 // IsInvestmentAccount reports whether accountType is a brokerage or
-// retirement account: sync never checks its balance, and accounts shows it
-// as not valued.
+// retirement account: sync never checks its balance.
 func IsInvestmentAccount(accountType string) bool {
 	return slices.Contains(InvestmentAccountTypes(), accountType)
 }
@@ -604,12 +603,12 @@ type FindingItem struct {
 	OtherAccountID *string
 }
 
-// AccountBalance is one account with its balance in cents; Balance is nil
-// when the store cannot compute it.
+// AccountBalance is one account with its balance in cents: Cash plus HoldingsValue, 0 for an account
+// with no transactions dated on or before AsOf.
 type AccountBalance struct {
 	Account
 
-	Balance *int64
+	Balance int64
 
 	// Cash is the account's cash in cents; HoldingsValue is its valued holdings in cents,
 	// nil outside a brokerage or retirement account.
@@ -617,7 +616,7 @@ type AccountBalance struct {
 	HoldingsValue *int64
 
 	// BalanceCAD and BalanceUSD are Balance in cents in that currency at the latest rate dated on or before AsOf;
-	// nil when Balance is nil or no rate converts it.
+	// nil when no rate converts it.
 	BalanceCAD, BalanceUSD *int64
 }
 
