@@ -53,7 +53,8 @@ CREATE TABLE transactions (
 	status VARCHAR NOT NULL,
 	cheque_number VARCHAR,
 	excluded_from_reports BOOLEAN NOT NULL,
-	posted_date DATE
+	posted_date DATE,
+	investment_transaction_id VARCHAR
 );
 CREATE TABLE splits (
 	id VARCHAR PRIMARY KEY,

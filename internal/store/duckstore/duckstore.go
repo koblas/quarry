@@ -604,6 +604,7 @@ func transactionRows(transactions []store.Transaction) ([][]any, error) {
 		out[i] = []any{
 			t.ID, t.SourceID, t.AccountID, t.Date, nullableStr(t.PayeeID), nullableStr(t.Memo),
 			amount, t.Currency, t.Status, nullableStr(t.ChequeNumber), t.ExcludedFromReports, nullablePtrTime(t.PostedDate),
+			nullableStr(t.InvestmentTransactionID),
 		}
 	}
 	return out, nil

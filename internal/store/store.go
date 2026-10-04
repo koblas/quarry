@@ -101,6 +101,9 @@ type Transaction struct {
 	// PostedDate is the bank's posting day, set whenever Quicken holds one,
 	// even when it equals Date.
 	PostedDate *time.Time
+	// InvestmentTransactionID names the investment transaction whose cash this row
+	// records; nil for a register entry.
+	InvestmentTransactionID *string
 }
 
 // Split is one row of the splits table, a share of its Transaction's amount

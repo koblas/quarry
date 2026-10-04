@@ -16,8 +16,8 @@ Size: OWNS A RUN — 4 batches, 1 feature package (importer) + store adapter col
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_investment_cash_test.go` (new) — sync a v9fixture brokerage with: buy and dividend (one entry each; dividend's entry in an income category, buy's in a system category), add_shares, remove_shares, split, reinvest_dividend (amount 0, each with a 0.00 entry as the real file has, so a deleted guard fails at the no-row assertion, not the splits check), plus one register row in the same account. Main test asserts via SQL: one `transactions` row per non-zero investment (`txn-<pk>`, `investment_transaction_id = itxn-<pk>`, NULL on the register row), one split per entry with entry's category and amount, account cash = sum(transactions.amount), no row for the share-only actions, `store_info.format_version` 8. Folded test: reinvest has no row and `v_cash_flow` income is the dividend only
-- [ ] Step 2: `internal/store/store.go:87-105` `Transaction.InvestmentTransactionID *string`; `internal/store/duckstore/schema.go:44-57` column `investment_transaction_id VARCHAR` (last column); `duckstore.go:597-610` `transactionRows` writes it — stub so the test fails at its row assertion, not at a SQL error
+- [x] Step 1: `cmd/quarry/run_investment_cash_test.go` (new) — sync a v9fixture brokerage with: buy and dividend (one entry each; dividend's entry in an income category, buy's in a system category), add_shares, remove_shares, split, reinvest_dividend (amount 0, each with a 0.00 entry as the real file has, so a deleted guard fails at the no-row assertion, not the splits check), plus one register row in the same account. Main test asserts via SQL: one `transactions` row per non-zero investment (`txn-<pk>`, `investment_transaction_id = itxn-<pk>`, NULL on the register row), one split per entry with entry's category and amount, account cash = sum(transactions.amount), no row for the share-only actions, `store_info.format_version` 8. Folded test: reinvest has no row and `v_cash_flow` income is the dividend only
+- [x] Step 2: `internal/store/store.go:87-105` `Transaction.InvestmentTransactionID *string`; `internal/store/duckstore/schema.go:44-57` column `investment_transaction_id VARCHAR` (last column); `duckstore.go:597-610` `transactionRows` writes it — stub so the test fails at its row assertion, not at a SQL error
 
 ### Build
 - [ ] Step 3: fixture entries first (harmless today: entries under investments take the skip path). Helper in `internal/importer/helpers_test.go` adding the one entry; give it to the success-path (`importInvestments`) entry-less fixtures in `investments_test.go` (18 callers), `lots_test.go:269-333`, `import_runs_test.go:26`. Refusal-path tests (`importInvestmentsRefused`) unchanged. Package stays green
@@ -53,3 +53,11 @@ Size: OWNS A RUN — 4 batches, 1 feature package (importer) + store adapter col
 - `offenders.firstError` sorts by `lessOffender`; moving `mapSplits` changes insertion order only, but check refusal tests with tied offenders.
 
 ## Phase report
+
+**Run A (steps 1-2) — acceptance red, committed.**
+- `cmd/quarry/run_investment_cash_test.go` (new): `Test_run_sync_gives_each_investment_transaction_that_moves_cash_a_row_in_transactions` (buy, dividend, add/remove shares, reinvest, split, each with one entry, plus one register row; Lot 0.875 satisfies the share gate) and the folded `Test_run_sync_gives_a_reinvested_dividend_no_row_and_no_income`.
+- Stubs: `internal/store/store.go` `Transaction.InvestmentTransactionID *string`; `internal/store/duckstore/schema.go` `transactions.investment_transaction_id VARCHAR` (last column); `duckstore.go` `transactionRows` writes it (`nullableStr`, always NULL until Step 4).
+- Red (assertion failures, not compile): main test — transactions map `{txn-7: "-20.00|NULL"}` vs expected 3 rows; splits map missing split-1/split-2; cash `-20.00` vs `-1008.50`; format_version `7` vs `8`. Folded test — transactions `{}` vs `{txn-1: "12.00"}`.
+- `go test ./internal/store/...` green. Full cmd/quarry suite not run (Step 6 owns re-pins).
+- Next run must not: re-add the column/field; the test's `invest` closure already gives every investment an entry (cmd fixtures elsewhere, Step 3 covers the importer fixtures).
+
