@@ -25,3 +25,7 @@ Scenarios complete: SCENARIO-01a (with SCENARIO-02 folded). Last updated by SCEN
 - Conventions text (`internal/report/sql_conventions.go`, mirrored in `internal/cli/sql_test.go`, `cmd/quarry/run_shared_documents_test.go`, `schema.md`): ruled sentence ends "...security and shares:" and the old "Their amount is..." follows with a capital T after the colon — for the final product-vision pass (SCENARIO-01a).
 - `Test_run_sync_imports_investment_transactions_with_named_actions` dropped its v_spending/v_cash_flow assertions; SCENARIO-03 must re-cover cash flow of investment rows, categorised and uncategorised (SCENARIO-01a).
 - 01b inherits: entry-less non-zero investment fails splits-sum (interim deviation); transfer-target entries unpinned.
+- Checkpoint 01a MINOR: buy row's absence from `v_cash_flow` unpinned (`cmd/quarry/run_investment_cash_test.go`, main test) — SCENARIO-03 pins it.
+- Checkpoint 01a MINOR: cash-row `Currency` unpinned for a USD brokerage (`internal/importer/investment_cash_test.go`, fields test) — add a USD case on next importer touch (01b).
+- Checkpoint 01a MINOR: comment budgets — `mapInvestmentTransactions` doc (`internal/importer/investments.go`) 3 lines, `mapSplits` doc (`internal/importer/splits.go:19-26`) ~10 lines with bad reflow; trim to 1-2 (01b touches both).
+- Checkpoint 01a NIT: two entries on one investment transaction not pinned (01b).
