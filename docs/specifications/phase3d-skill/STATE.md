@@ -42,6 +42,8 @@ Scenarios complete: SCENARIO-01 (with SCENARIO-07 folded), SCENARIO-02, SCENARIO
 - SKILL.md section 1 writes `<rates.last>` without backticks, so path pins match plain substrings, not backticked ones (SCENARIO-01)
 
 ## Open debts
+- Checkpoint S06 MINOR: `cmd/quarry/run_skill_use_cases_test.go:38-143` `skillUseCases` has seven assertion shapes in closures, two with filter loops (`:51`, `:84`); split per-row tests or name the helpers `newSeries`/`seriesNamed`; unowned
+- Checkpoint S06 NIT: `cmd/quarry/run_skill_use_cases_test.go:102` `*listed[0].Payee` panics on nil; add `require.NotNil` first; unowned
 - Use-case row 3 (`recurring --json --since 2000`) pins `--since` by name only via `argvMismatches`, not the `2000` value; the `doc.Since` assertion in the acceptance subtest covers the value; unowned
 - Checkpoint S02 MINOR: `cmd/quarry/run_skill_schema_reference_test.go:113` `if *updateSchemaReference` branch in the test body; move it into a `refreshSchemaReference(t, got)` helper; unowned
 - Checkpoint S02 MINOR: `cmd/quarry/run_skill_schema_reference_test.go:114,118,197` hand-build `"../../"+path`, and `readSchemaReference` duplicates `repoFile` (`run_plugin_manifest_test.go:71`); reuse `repoFile`; unowned
