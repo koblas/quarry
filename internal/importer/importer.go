@@ -104,6 +104,17 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 		return store.Result{}, err
 	}
 
+	securityEnt, hasSecurity := entities[securityEntity]
+	securities, securityRefs, err := mapSecurities(ctx, src, securityEnt, hasSecurity)
+	if err != nil {
+		return store.Result{}, err
+	}
+	quoteEnt, hasQuote := entities[securityQuoteEntity]
+	prices, err := mapPrices(ctx, src, quoteEnt, hasQuote, securityRefs, off)
+	if err != nil {
+		return store.Result{}, err
+	}
+
 	if err := off.firstError(); err != nil {
 		return store.Result{}, err
 	}
@@ -117,11 +128,12 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	rows := store.Rows{
 		Accounts: accounts, Categories: categories, Payees: payees, Tags: tags,
 		Transactions: transactions, Splits: splits, SplitTags: splitTags, Transfers: transfers,
-		ReferencedCategoryIDs: refs.ids(),
+		Securities: securities, Prices: prices, ReferencedCategoryIDs: refs.ids(),
 	}
 	counts := store.Counts{
 		Accounts: len(accounts), Categories: len(categories), Payees: len(payees), Tags: len(tags),
 		Transactions: len(transactions), Splits: len(splits), SplitTags: len(splitTags), Transfers: len(transfers),
+		Securities: len(securities), Prices: len(prices),
 	}
 	notImported := store.NotImported{InvestmentTransactions: investmentsNotImported}
 

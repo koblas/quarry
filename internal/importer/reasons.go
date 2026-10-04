@@ -114,3 +114,11 @@ func reasonStatementNoBalance(date, account string) string {
 func reasonStatementNoDate(account string, sourceID int64) string {
 	return fmt.Sprintf("a statement for \"%s\" (source id %d) has no date", account, sourceID)
 }
+
+func reasonPriceNotANumber(security, date string) string {
+	return fmt.Sprintf("a price of \"%s\" on %s is not a number", security, date)
+}
+
+func reasonPriceTooLarge(security, date, price string) string {
+	return fmt.Sprintf("a price of \"%s\" on %s is %s, which is too large for quarry's prices", security, date, price)
+}

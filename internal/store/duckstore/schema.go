@@ -71,6 +71,20 @@ CREATE TABLE transfers (
 	cross_currency BOOLEAN NOT NULL,
 	other_account VARCHAR
 );
+CREATE TABLE securities (
+	id VARCHAR PRIMARY KEY,
+	source_id BIGINT NOT NULL,
+	name VARCHAR NOT NULL,
+	ticker VARCHAR,
+	currency VARCHAR
+);
+CREATE TABLE prices (
+	security_id VARCHAR NOT NULL,
+	source_id BIGINT NOT NULL,
+	date DATE NOT NULL,
+	price DECIMAL(18,6) NOT NULL,
+	PRIMARY KEY (security_id, date)
+);
 CREATE TABLE split_tags (
 	split_id VARCHAR NOT NULL,
 	tag_id VARCHAR NOT NULL,
@@ -104,7 +118,9 @@ CREATE TABLE import_runs (
 	transfers_cross_currency BIGINT,
 	rates_checked_from DATE,
 	rates_last DATE,
-	rates_fetch_error VARCHAR
+	rates_fetch_error VARCHAR,
+	securities_rows BIGINT,
+	prices_rows BIGINT
 );
 CREATE TABLE fx_rates (
 	date DATE PRIMARY KEY,

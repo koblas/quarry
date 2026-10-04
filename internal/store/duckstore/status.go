@@ -23,6 +23,7 @@ SELECT i.format_version, i.quarry_version, i.built_at,
 	r.snapshot_taken_at, r.source_path,
 	COALESCE(r.balances_never_reconciled, 0), COALESCE(r.investment_accounts, 0),
 	COALESCE(r.transfers_paired, 0), COALESCE(r.transfers_cross_currency, 0),
+	COALESCE(r.securities_rows, 0), COALESCE(r.prices_rows, 0),
 	(SELECT min(date) FROM transactions), (SELECT max(date) FROM transactions),
 	(SELECT min(date) FROM fx_rates), (SELECT max(date) FROM fx_rates), r.rates_fetch_error
 FROM store_info i CROSS JOIN import_runs r
@@ -65,6 +66,7 @@ func (s *Store) Status(ctx context.Context) (store.Status, error) {
 			&run.InvestmentTransactionsNotImported,
 			&takenAt, &source,
 			&run.BalancesNeverReconciled, &run.InvestmentAccounts, &run.TransfersPaired, &run.TransfersCrossCurrency,
+			&c.Securities, &c.Prices,
 			&first, &last, &firstRate, &lastRate, &fetchError)
 	})
 	if err != nil {

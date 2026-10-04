@@ -135,6 +135,26 @@ type SplitTag struct {
 	TagID   string
 }
 
+// Security is one row of the securities table, recorded as Quicken has it.
+// Ticker is nil when Quicken records none, Currency when it records no currency.
+type Security struct {
+	ID       string
+	SourceID int64
+	Name     string
+	Ticker   *string
+	Currency *string
+}
+
+// Price is one row of the prices table: a security's closing price on one day,
+// in millionths of its currency's unit (DECIMAL(18,6)). SourceID is the
+// ZSECURITYQUOTE.Z_PK of the quote kept for that day.
+type Price struct {
+	SecurityID string
+	SourceID   int64
+	Date       time.Time
+	Price      int64
+}
+
 // Rows is every row a store build writes, grouped by table. ImportRuns holds
 // the new build's run only; the store carries earlier runs forward itself.
 // ReferencedCategoryIDs is not a table: sorted unique ids of categories that rows
@@ -149,6 +169,8 @@ type Rows struct {
 	Splits       []Split
 	SplitTags    []SplitTag
 	Transfers    []Transfer
+	Securities   []Security
+	Prices       []Price
 	ImportRuns   []ImportRun
 
 	ReferencedCategoryIDs []string
@@ -218,6 +240,8 @@ type Counts struct {
 	Splits       int
 	SplitTags    int
 	Transfers    int
+	Securities   int
+	Prices       int
 }
 
 // Result is what a store build returns. Built is false when a check failed:

@@ -106,7 +106,8 @@ func Test_replace_carries_null_for_columns_an_older_store_lacks(t *testing.T) {
 		AND snapshot_path = '/snapshots/phase1.sqlite' AND accounts_rows = 7 AND investment_transactions_not_imported = 13
 		AND snapshot_taken_at IS NULL AND source_path IS NULL AND balances_never_reconciled IS NULL
 		AND investment_accounts IS NULL AND transfers_paired IS NULL AND transfers_cross_currency IS NULL
-		AND rates_checked_from IS NULL AND rates_last IS NULL AND rates_fetch_error IS NULL`, "1")
+		AND rates_checked_from IS NULL AND rates_last IS NULL AND rates_fetch_error IS NULL
+		AND securities_rows IS NULL AND prices_rows IS NULL`, "1")
 }
 
 func Test_replace_carries_the_rates_columns_of_a_run_into_the_next_store(t *testing.T) {

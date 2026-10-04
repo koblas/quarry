@@ -22,7 +22,7 @@ import (
 const FileName = "quarry.duckdb"
 
 // FormatVersion is the store format this build of quarry writes and reads.
-const FormatVersion = 5
+const FormatVersion = 6
 
 // develVersion is the quarry_version recorded when no build version is known.
 const develVersion = "(devel)"
@@ -50,6 +50,9 @@ var buildFilePattern = regexp.MustCompile(`^` + regexp.QuoteMeta(partialPrefix) 
 
 // moneyWidth and moneyScale match schemaDDL's DECIMAL(18,2) money columns.
 const moneyWidth, moneyScale = 18, 2
+
+// priceWidth and priceScale match schemaDDL's DECIMAL(18,6) price column.
+const priceWidth, priceScale = 18, 6
 
 // DB is the connection a Store builds one partial file through.
 // *duckdb.DB is the production implementation.
@@ -461,6 +464,16 @@ func loadRows(ctx context.Context, db DB, rows store.Rows, carried history) erro
 	if err := appendTable(ctx, db, "transfers", transferRows(rows.Transfers)); err != nil {
 		return err
 	}
+	if err := appendTable(ctx, db, "securities", securityRows(rows.Securities)); err != nil {
+		return err
+	}
+	priceRows, err := priceRows(rows.Prices)
+	if err != nil {
+		return err
+	}
+	if err := appendTable(ctx, db, "prices", priceRows); err != nil {
+		return err
+	}
 	return appendTable(ctx, db, "import_runs", importRunRows(carried, rows.ImportRuns))
 }
 
@@ -577,6 +590,26 @@ func transferRows(transfers []store.Transfer) [][]any {
 	return out
 }
 
+func securityRows(securities []store.Security) [][]any {
+	out := make([][]any, len(securities))
+	for i, sec := range securities {
+		out[i] = []any{sec.ID, sec.SourceID, sec.Name, nullableStr(sec.Ticker), nullableStr(sec.Currency)}
+	}
+	return out
+}
+
+func priceRows(prices []store.Price) ([][]any, error) {
+	out := make([][]any, len(prices))
+	for i, p := range prices {
+		price, err := duckdb.Decimal(p.Price, priceWidth, priceScale)
+		if err != nil {
+			return nil, fmt.Errorf("price of %s on %s: %w", p.SecurityID, p.Date.Format(time.DateOnly), err)
+		}
+		out[i] = []any{p.SecurityID, p.SourceID, p.Date, price}
+	}
+	return out, nil
+}
+
 func importRunRows(carried history, runs []store.ImportRun) [][]any {
 	out := append([][]any(nil), carried.rows...)
 	for i, r := range runs {
@@ -591,6 +624,7 @@ func importRunRows(carried history, runs []store.ImportRun) [][]any {
 			int64(r.BalancesNeverReconciled), int64(r.InvestmentAccounts),
 			int64(r.TransfersPaired), int64(r.TransfersCrossCurrency),
 			nil, nil, nil,
+			int64(c.Securities), int64(c.Prices),
 		})
 	}
 	return out

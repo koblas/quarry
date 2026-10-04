@@ -49,6 +49,13 @@ func minimalRows() store.Rows {
 			{ID: "xfer-1", FromSplitID: "split-1", ToSplitID: new("split-2"), CrossCurrency: true},
 			{ID: "xfer-3", FromSplitID: "split-3", OtherAccount: new("Savings")},
 		},
+		Securities: []store.Security{
+			{ID: "sec-1", SourceID: 1, Name: "Acme Corp", Ticker: new("ACME"), Currency: new("CAD")},
+			{ID: "sec-2", SourceID: 2, Name: "Plain Fund"},
+		},
+		Prices: []store.Price{{
+			SecurityID: "sec-1", SourceID: 7, Date: time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC), Price: 12_345_678,
+		}},
 		ImportRuns: []store.ImportRun{{
 			ID: 1, StartedAt: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), FinishedAt: time.Date(2026, 9, 27, 14, 30, 7, 0, time.UTC),
 			Snapshot: store.SnapshotRef{
@@ -57,6 +64,7 @@ func minimalRows() store.Rows {
 			},
 			Counts: store.Counts{
 				Accounts: 1, Categories: 2, Payees: 3, Tags: 4, Transactions: 5, Splits: 6, SplitTags: 7, Transfers: 8,
+				Securities: 18, Prices: 19,
 			},
 			BalancesChecked: 9, BalancesMismatched: 10, SplitsMismatched: 11, TransfersOneSided: 12, InvestmentTransactionsNotImported: 13,
 			BalancesNeverReconciled: 14, InvestmentAccounts: 15, TransfersPaired: 16, TransfersCrossCurrency: 17,
@@ -101,6 +109,21 @@ func Test_replace_swaps_in_a_store_that_reads_back_every_row(t *testing.T) {
 	assertScalar(t, db, "SELECT concat_ws(' ', CAST(snapshot_taken_at AS VARCHAR), source_path, balances_never_reconciled, "+
 		"investment_accounts, transfers_paired, transfers_cross_currency) FROM import_runs WHERE id = 1",
 		"2026-09-27 14:30:05 /Users/alex/Documents/Home.quicken 14 15 16 17")
+	assertScalar(t, db, "SELECT concat_ws(' ', securities_rows, prices_rows) FROM import_runs WHERE id = 1", "18 19")
+	assertScalar(t, db, "SELECT concat_ws(' ', source_id, name, ticker, currency) FROM securities WHERE id = 'sec-1'", "1 Acme Corp ACME CAD")
+	assertScalar(t, db, "SELECT concat_ws(' ', source_id, CAST(date AS VARCHAR), CAST(price AS VARCHAR)) FROM prices WHERE security_id = 'sec-1'",
+		"7 2026-03-15 12.345678")
+}
+
+func Test_replace_stores_a_security_with_no_ticker_or_currency_as_null(t *testing.T) {
+	t.Parallel()
+	st := duckstore.New(t.TempDir())
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	db := openReadOnly(t, st.Path())
+	assertScalar(t, db, "SELECT concat_ws('|', ticker IS NULL, currency IS NULL) FROM securities WHERE id = 'sec-2'", "true|true")
 }
 
 func Test_replace_stores_the_report_flags_and_the_posted_date(t *testing.T) {
@@ -335,6 +358,8 @@ func Test_replace_fails_when_any_tables_rows_fail_to_append(t *testing.T) {
 		{"splits", func(r store.Rows) store.Rows { r.Splits = append(r.Splits, r.Splits[0]); return r }},
 		{"split_tags", func(r store.Rows) store.Rows { r.SplitTags = append(r.SplitTags, r.SplitTags[0]); return r }},
 		{"transfers", func(r store.Rows) store.Rows { r.Transfers = append(r.Transfers, r.Transfers[0]); return r }},
+		{"securities", func(r store.Rows) store.Rows { r.Securities = append(r.Securities, r.Securities[0]); return r }},
+		{"prices", func(r store.Rows) store.Rows { r.Prices = append(r.Prices, r.Prices[0]); return r }},
 	}
 
 	for _, c := range cases {
@@ -382,6 +407,29 @@ func Test_replace_fails_when_a_splits_amount_is_out_of_range(t *testing.T) {
 	_, err := st.Replace(t.Context(), rows)
 
 	require.Error(t, err)
+}
+
+func Test_replace_stores_the_largest_price_a_decimal_18_6_column_holds(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	rows.Prices[0].Price = 999_999_999_999_999_999
+	st := duckstore.New(t.TempDir())
+
+	_, err := st.Replace(t.Context(), rows)
+
+	require.NoError(t, err)
+	assertScalar(t, openReadOnly(t, st.Path()), "SELECT CAST(price AS VARCHAR) FROM prices", "999999999999.999999")
+}
+
+func Test_replace_fails_when_a_price_is_out_of_range(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	rows.Prices[0].Price = 1_000_000_000_000_000_000
+	st := duckstore.New(t.TempDir())
+
+	_, err := st.Replace(t.Context(), rows)
+
+	require.ErrorContains(t, err, "price of sec-1 on 2026-03-15")
 }
 
 func Test_replace_removes_the_partial_when_the_build_fails(t *testing.T) {

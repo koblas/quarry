@@ -66,6 +66,8 @@ func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
 	entryPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00", CategoryTag: catPK})
 	b.LinkUserTag(entryPK, tagPK)
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &posted, EndingBalance: "1.00"})
+	securityPK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
+	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: securityPK, QuoteDate: &posted, ClosingPrice: "12.5"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	errBoom := errSourceBoom
@@ -90,6 +92,8 @@ func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
 		{"ZQUICKFILLRULESPLITENTRY", "FROM ZQUICKFILLRULESPLITENTRY", "read quickfill rule split entries"},
 		{"ZPRODUCTSERVICE", "FROM ZPRODUCTSERVICE", "read product and service categories"},
 		{"ZCUSTOMERCREDITLINEITEM", "FROM ZCUSTOMERCREDITLINEITEM", "read customer credit line item categories"},
+		{"ZSECURITY", "ZTICKER", "read securities"},
+		{"ZSECURITYQUOTE", "ZCLOSINGPRICE", "read prices"},
 	}
 
 	for _, c := range cases {
@@ -153,6 +157,8 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 	entryPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00", CategoryTag: catPK})
 	b.LinkUserTag(entryPK, tagPK)
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &posted, EndingBalance: "1.00"})
+	securityPK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
+	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: securityPK, QuoteDate: &posted, ClosingPrice: "12.5"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	errBoom := errSourceBoom
@@ -177,6 +183,8 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 		{"ZQUICKFILLRULESPLITENTRY", "FROM ZQUICKFILLRULESPLITENTRY", "read quickfill rule split entries"},
 		{"ZPRODUCTSERVICE", "FROM ZPRODUCTSERVICE", "read product and service categories"},
 		{"ZCUSTOMERCREDITLINEITEM", "FROM ZCUSTOMERCREDITLINEITEM", "read customer credit line item categories"},
+		{"ZSECURITY", "ZTICKER", "read securities"},
+		{"ZSECURITYQUOTE", "ZCLOSINGPRICE", "read prices"},
 	}
 
 	for _, c := range cases {

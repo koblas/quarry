@@ -48,6 +48,21 @@ func Test_import_hands_the_store_one_import_run_describing_the_build(t *testing.
 	assert.False(t, after.Before(run.FinishedAt))
 }
 
+func Test_import_counts_securities_and_prices_in_the_import_run(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acmePK := newAcme(b)
+	barePK := b.Security(v9fixture.SecurityRow{Name: "Bare Fund", Currency: "USD"})
+	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay1, ClosingPrice: "12.5"})
+	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay2, ClosingPrice: "13"})
+	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: barePK, QuoteDate: &priceDay1, ClosingPrice: "4"})
+
+	fake, _ := importSecurities(t, b)
+
+	require.Len(t, fake.Rows.ImportRuns, 1)
+	assert.Equal(t, store.Counts{Accounts: 1, Securities: 2, Prices: 3}, fake.Rows.ImportRuns[0].Counts)
+}
+
 func Test_import_reports_the_history_fault_the_store_returns(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
