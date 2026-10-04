@@ -1,6 +1,6 @@
 # phase4b-holdings — current state
 
-Scenarios complete: SCENARIO-01 (folds 14), SCENARIO-02, SCENARIO-03, SCENARIO-04, SCENARIO-05 (folds 11), SCENARIO-06 (folds 12), SCENARIO-07, SCENARIO-08, SCENARIO-09, SCENARIO-10. Last updated by SCENARIO-09.
+Scenarios complete: SCENARIO-01 (folds 14), SCENARIO-02, SCENARIO-03, SCENARIO-04, SCENARIO-05 (folds 11), SCENARIO-06 (folds 12), SCENARIO-07, SCENARIO-08, SCENARIO-09, SCENARIO-10, SCENARIO-13. Last updated by SCENARIO-13.
 
 Inherited, still binding: `../phase4a-investments/STATE.md` — read its Binding decisions and Traps for the importer, the share gate (`CheckShares`, tolerance 0.000001), share formatters, `store.Action*`, DECIMAL(18,6) shares, `schema.md` regeneration and the `Z_ENT` / `CAST(... AS REAL)` fixture traps. Only what 4b changed or added is below.
 
@@ -37,16 +37,19 @@ Inherited, still binding: `../phase4a-investments/STATE.md` — read its Binding
 - No-price line is count-plural: `1 holding has no price on or before <as-of>, so it has no value and is left out of the total; enter a price for it in Quicken, then run quarry sync`; `N holdings have no price on or before <as-of>, so they have no value and are left out of the total; enter a price for each in Quicken, then run quarry sync` (N via `humanize.Count`, thousands-grouped). Date is `h.AsOf`, never the clock. Plural wording ruled in spec S.3; the before-first-rate line is plural-ruled the same way (SCENARIO-06, SCENARIO-08)
 - Total-exclusion of unpriced rows is guarded by `contributed`/`row.Value == nil` in `report/holdings.go` `total` and `nativeTotals`; a mixed priced + unpriced sum cannot redden it, only the only-unpriced listing (no `Total` row) does — `Test_holdings_listing_of_only_unpriced_holdings_has_no_total_row` pins it (SCENARIO-06)
 - Holdings does not reuse the spend/cashflow/recurring composers: not-in-reports and linked-tracking accounts are listed with no left-out warning (SCENARIO-03)
+- MCP `holdings` (`internal/mcp/holdings.go`): `as_of` parsed first through `report.ParseAsOf` with `s.now()` read once, before config and store; `Server.Holdings` then `document.NewHoldings` with config warnings first. The document is `--json` capped at `maxRows` (500) listed holdings: totals and every other warning computed over all, a cut appends `listCutWarning(toolHoldings, "holdings", "v_holdings", total)` last in `warnings[]`; exactly 500 is uncut and identical to `--json`. `listCutWarning` now takes tool and table (describe_schema passes its own); no `capList` (it words its own line) (SCENARIO-13)
+- `as_of` refusals are model-worded, not the CLI's: `as_of "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`, `as_of 2099 is after today; holdings are valued up to today only, so pass an earlier as_of` (value quoted via `%q` only when not a date, as typed); stderr is the class line `refused the call's as_of; details went to the client only`, never the value (`asOfRefusal`, `withLog`). Account refusals reuse `refuseAccountKeepingItsNameOffStderr` (SCENARIO-13)
 
 ## Left unbuilt
-- MCP `holdings` with its `as_of` (calls `ParseAsOf`) and `accounts` arguments — SCENARIO-13
-- `holding_shares` / `v_holdings` sentence in `report/sql_conventions.go`, action-vocabulary sentence, SKILL.md, hand copies and the `--account` skill/reference copy — SCENARIO-15
+- `holding_shares` / `v_holdings` sentence in `report/sql_conventions.go`, action-vocabulary sentence, SKILL.md, hand copies and the `--account` skill/reference copy — SCENARIO-15; also SKILL.md:94 §9 tool list (`search_transactions, holdings, data_quality`) with `run_skill_text_test.go:236`, and the PRD MCP table `holdings` row — ruled text in spec S.7 (SCENARIO-13)
 
 ## Traps
 - `minimalRows()` carries investment rows, which start the rate span: tests meaning "no transactions" use `noTransactionRows()`, `futureRows()` nils them too; the narrow loop missed this, only the full suite caught it (SCENARIO-01)
 - `newBuiltStore` / `minimalRows` buy fixture: a holding's lot must equal the derived count or the gate refuses (SCENARIO-01)
 - `HoldingWalkQuery` runs in `Replace` too: a `faultDB.queryFaultOn` on it fails the build (SCENARIO-01)
 - LSP `findReferences` on `FormatVersion` / `refreshRates` misses `rates.go` call sites and every test; use grep (SCENARIO-01)
+- `-run` is case-sensitive: `go test -run 'Holdings'` misses `Test_holdings_*` in `internal/mcp` and `cmd/quarry`; use `holdings` (SCENARIO-13)
+- A failing `assert.Len` / `require.Len` on a 501-row document prints every row; assert a `len` held in a helper (`listed` in `internal/mcp/holdings_test.go`) (SCENARIO-13)
 - Worktree-isolation hook refuses `go test` / `uncovered-diff.py` whose path comes from a shell variable, and any compound command (`cd ... &&`, heredoc, `> file`): pass the coverage profile as a literal absolute path under the scratchpad, one plain command per call; write files with Edit/Write (SCENARIO-01, SCENARIO-02, SCENARIO-03)
 - `cmd/quarry/run_investments_test.go` is at 480 lines: new `cmd/quarry` holdings tests go in their own files (`run_holdings_test.go`, `run_holdings_view_test.go`, `run_holding_shares_test.go`) (SCENARIO-01, SCENARIO-03)
 - `run_holdings_test.go` shares `seedHoldingsStore`, `holdingsClock`, `holdingsNativeLine` (CAD + USD + closed-account fixture): later holdings command tests reuse them rather than re-seeding (SCENARIO-04)
@@ -69,6 +72,7 @@ Inherited, still binding: `../phase4a-investments/STATE.md` — read its Binding
 - A fixture meaning "no warnings" needs a priced holding: an empty-rows fixture now prints the slot 3 line. `cmd/quarry/run_config_test.go` `readCommandFixture` carries a brokerage holding for this; the span query's `SELECT min` shares its text prefix with other queries, so fault tests key on `passQueries` (rows 0, first rate 1, span 2), not on SQL (SCENARIO-09)
 
 ## Open debts
+- MCP cut note says `query the v_holdings table for the rest`, but `v_holdings` has one row per holding per day, so an unfiltered query returns every day: final product-vision pass rules whether the advice should name `WHERE date = '<as_of>'` (spec S.5 ruled only noun `holdings` and the full count) (SCENARIO-13)
 - Sort of `Holdings` differs from `quarry accounts` (`accountsQuery` sorts `lower(name), name`, `holdingsQuery` plain `a.name`, S.2 ruling): mixed-case account names can order differently across the two commands — final product-vision pass rules on it (SCENARIO-02, SCENARIO-03)
 - 4a final-pass follow-ups owned by 4b, closed by SCENARIO-15 unless re-opened: "N investment accounts not checked" wording at `internal/cli/render.go:221`; action vocabulary sentence in SQL conventions / `schema.md`; byte-vs-rune column width (`widestLen`) (see `../phase4a-investments/STATE.md`)
 - 4a gate-round-1 deferrals (test-file splits, duplicated half-even `QuoRem` in `price.go` `roundHalfEven` and `shares.go` `millionthsOf`, etc.) stay unowned — dies unless re-opened

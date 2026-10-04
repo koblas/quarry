@@ -2,6 +2,8 @@ package mcp_test
 
 import (
 	"encoding/json"
+	"fmt"
+	"math/big"
 	"testing"
 	"time"
 
@@ -27,6 +29,59 @@ func decodeHoldings(t *testing.T, result *sdk.CallToolResult) document.Holdings 
 	var doc document.Holdings
 	require.NoError(t, json.Unmarshal([]byte(textOf(t, result)), &doc))
 	return doc
+}
+
+// cadHoldings is n priced CAD holdings, each worth 1.00, security ids sec-000 upward.
+func cadHoldings(n int) store.Holdings {
+	rows := make([]store.Holding, n)
+	for i := range rows {
+		price, currency := int64(1_000_000), "CAD"
+		rows[i] = store.Holding{
+			AccountID: "acct-1", SecurityID: fmt.Sprintf("sec-%03d", i), Account: "Brokerage",
+			Currency: &currency, Shares: 1_000_000, Price: &price,
+			Value: big.NewInt(100), ValueCAD: big.NewInt(100),
+		}
+	}
+	return store.Holdings{Holdings: rows}
+}
+
+// listed is how many holdings doc lists; a count keeps a failure from printing every row.
+func listed(doc document.Holdings) int { return len(doc.Holdings) }
+
+func Test_holdings_lists_the_first_500_and_totals_every_holding_with_a_cut_note(t *testing.T) {
+	h := newHarness(t, &fakeStore{held: cadHoldings(501)}, nil)
+
+	doc := decodeHoldings(t, h.holdings(t, map[string]any{"currency": "CAD"}))
+
+	require.Equal(t, 500, listed(doc))
+	assert.Equal(t, "sec-000", doc.Holdings[0].SecurityID)
+	assert.Equal(t, "sec-499", doc.Holdings[499].SecurityID)
+	assert.Equal(t, []document.HoldingsTotal{{Currency: "CAD", Value: "501.00"}}, doc.Totals)
+	assert.Equal(t, []string{"holdings lists the first 500 holdings of 501; query the v_holdings table for the rest"}, doc.Warnings)
+}
+
+func Test_holdings_lists_exactly_500_with_no_cut_note(t *testing.T) {
+	h := newHarness(t, &fakeStore{held: cadHoldings(500)}, nil)
+
+	doc := decodeHoldings(t, h.holdings(t, map[string]any{"currency": "CAD"}))
+
+	assert.Equal(t, 500, listed(doc))
+	assert.Equal(t, []document.HoldingsTotal{{Currency: "CAD", Value: "500.00"}}, doc.Totals)
+	assert.Empty(t, doc.Warnings)
+}
+
+func Test_holdings_puts_the_cut_note_after_the_config_warnings_and_the_holdings_warnings(t *testing.T) {
+	held := cadHoldings(501)
+	held.Holdings[0].Price, held.Holdings[0].Value, held.Holdings[0].ValueCAD = nil, nil, nil
+	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
+	h := newHarness(t, &fakeStore{held: held}, nil, mcp.WithConfig(stub.load))
+
+	doc := decodeHoldings(t, h.holdings(t, map[string]any{}))
+
+	require.Len(t, doc.Warnings, 3)
+	assert.Equal(t, configUnknownKeyWarning, doc.Warnings[0])
+	assert.Contains(t, doc.Warnings[1], "has no price")
+	assert.Equal(t, "holdings lists the first 500 holdings of 501; query the v_holdings table for the rest", doc.Warnings[2])
 }
 
 func Test_holdings_reads_today_once_at_the_start_of_every_call(t *testing.T) {

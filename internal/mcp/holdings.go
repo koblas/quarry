@@ -12,7 +12,8 @@ import (
 // holdingsTwin is the quarry command whose output the holdings tool matches.
 const holdingsTwin = "holdings"
 
-// holdings lists the holdings on the call's day in its accounts and currency, as holdings --json does.
+// holdings lists the holdings on the call's day in its accounts and currency, as holdings --json does,
+// but at most maxRows of them; totals count every holding and a cut adds a warning.
 func (s *Server) holdings(ctx context.Context, in holdingsInput) (any, error) {
 	at := s.now()
 	asOf := report.Today(at)
@@ -35,7 +36,12 @@ func (s *Server) holdings(ctx context.Context, in holdingsInput) (any, error) {
 	if err != nil {
 		return nil, accountRefusal(err)
 	}
-	return document.NewHoldings(held, append(configWarnings, document.HoldingsWarnings(held)...)), nil
+	doc := document.NewHoldings(held, append(configWarnings, document.HoldingsWarnings(held)...))
+	if total := len(doc.Holdings); total > maxRows {
+		doc.Holdings = doc.Holdings[:maxRows]
+		doc.Warnings = append(doc.Warnings, listCutWarning(toolHoldings, "holdings", "v_holdings", total))
+	}
+	return doc, nil
 }
 
 // asOfRefusedError is the isError text of an as_of the model must fix.

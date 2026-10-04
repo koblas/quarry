@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-13
-status: open
+status: done
 ---
 
 # SCENARIO-13: MCP holdings tool
@@ -23,21 +23,19 @@ Copy: ruled — tool description (S.5, one line, `Test_run_mcp_describes_every_t
 - [x] Step 3: tool-list pins — `run_mcp_test.go:42-45`, `run_mcp_descriptions_test.go` (description, `mcpHoldingsInputSchema`, Tools line), `run_mcp_no_store_test.go`, `run_mcp_store_faults_test.go`, `internal/cli/mcp.go:38-39` + `mcp_test.go:44`
 
 ### Sweep
-- [ ] Step 4: `go build ./... && golangci-lint run ./...` down to `0 issues`
+- [x] Step 4: `go build ./... && golangci-lint run ./...` down to `0 issues`
 
 ### Verify
-- [ ] Step 5: full verification, `spec-check.py`, tick SCENARIO-13, rewrite STATE.md
+- [x] Step 5: full verification, `spec-check.py`, tick SCENARIO-13, rewrite STATE.md
 
 ## Handoff
 
-- MCP `holdings` is uncapped (S.5 "same document"); `internal/cli/mcp.go` says every list stops at 500 entries — ruling owed.
+- MCP `holdings` lists at most 500 holdings (ruled, S.5); `internal/cli/mcp.go` "every list stops at 500 entries" is true again.
 - SKILL.md §9 tool mapping and the PRD MCP table name no `holdings` yet — SCENARIO-15.
 
 ## Phase report
 
-Run L done: plan written, steps 1-3 green; V owns steps 4-5 (sweep, full verify, tick, STATE).
-- Red (step 1): all 6 rows of `Test_run_mcp_holdings_returns_the_holdings_json_document` failed at `run_mcp_documents_helpers_test.go:54` `require.NoError`: `calling "tools/call": unknown tool "holdings"` (the CLI half ran; the tool was absent, so no body assertion is reachable). Green after step 2.
-- Production: `internal/mcp/holdings.go` (`holdings`, `asOfRefusal`, `asOfWording`, `asOfRefusedError`); `tools.go` (`toolHoldings`, `holdingsDescription`, `holdingsAsOf/AccountsDescription`, `holdingsInput`, registration); `result.go` `asOfRefusedLog`; `internal/cli/mcp.go:39` Tools line gained `, holdings`. `asOfRefusal`'s non-`AsOfError` branch is marked `// unreachable:`.
-- Tests: `cmd/quarry/run_mcp_holdings_test.go` (acceptance table of 6 + as_of refusals + account refusals via the shared helper); `internal/mcp/holdings_test.go` (11 tests; `fakeStore.Holdings`/`held`/`heldAsked` and `h.holdings` in `query_helpers_test.go`); pins extended: `run_mcp_test.go:44`, `run_mcp_descriptions_test.go` (description, `mcpHoldingsInputSchema`, Tools line), `run_mcp_no_store_test.go`, `run_mcp_store_faults_test.go` (2 rows), `internal/cli/mcp_test.go:44`. Instructions const unchanged and pinned unchanged (`mcpInstructions`). Narrow loop green: `cmd/quarry` mcp/holdings/skill/plugin, `internal/mcp`, `internal/cli`.
-- Copy worded here, not ruled (see header `Copy:`): as_of/accounts descriptions, two as_of refusals, class line, Tools line. Uncapped by design (no `capList`).
-- V must not redo: nothing in `internal/mcp` is capped; do not add `capList` without a ruling. V still owes: lint, full covered suite, `uncovered-diff.py`, tick SCENARIO-13, STATE.md (add: S15 owns SKILL.md §9 tool mapping line `plugin/skills/quarry/SKILL.md:94` + `run_skill_text_test.go:236` and the PRD MCP table; open debt: 500-cap vs `internal/cli/mcp.go` "every list a tool returns stops at 500 entries" and `mcp --help` Tools line addition unruled).
+Run V done: sweep (`go build`, lint `0 issues`), full covered suite green (rc 0), `uncovered-diff.py` 0 uncovered (1 declared unreachable, `holdings.go:58`), `go test -race ./internal/mcp/` ok, spec tick, `spec-check.py` OK, STATE.md rewritten.
+- Ruled cap built test-first in `internal/mcp/holdings.go:40-43`: `doc.Holdings` cut to `maxRows` after `document.NewHoldings` (totals and warnings over all), cut note appended last. `listCutWarning` (`describe_schema.go:33`) gained `tool` and `table` params; describe_schema call sites pass `toolDescribe`.
+- Tests (`internal/mcp/holdings_test.go`): 501 -> 500 listed + note + total 501.00 (red: 501 != 500); exactly 500 no note (control, green on arrival); note ordered after config and no-price warnings (red: 2 != 3 warnings). Mutation `total > maxRows` -> `>=` reddened `Test_holdings_lists_exactly_500_with_no_cut_note`; restored.
+- Counts vs a9a73b1: cmd/quarry 716 (+3), internal/cli 476 (+0), internal/mcp 160 (+14), total 1352 (+17).

@@ -20,17 +20,17 @@ func (s *Server) describeSchema(ctx context.Context, _ noInput) (any, error) {
 	}
 	warnings := []string{}
 	if schema.AccountsTotal > len(schema.Accounts) {
-		warnings = append(warnings, listCutWarning("accounts", schema.AccountsTotal))
+		warnings = append(warnings, listCutWarning(toolDescribe, "accounts", "accounts", schema.AccountsTotal))
 	}
 	if schema.CategoriesTotal > len(schema.Categories) {
-		warnings = append(warnings, listCutWarning("categories", schema.CategoriesTotal))
+		warnings = append(warnings, listCutWarning(toolDescribe, "categories", "categories", schema.CategoriesTotal))
 	}
 	return document.NewSchema(schema, warnings), nil
 }
 
-// listCutWarning is the document warning that describe_schema listed only the first maxRows of
-// total entries of kind, a table's name, and where to read the rest.
-func listCutWarning(kind string, total int) string {
-	return toolDescribe + " lists the first " + humanize.Thousands(maxRows) + " " + kind + " of " + humanize.Thousands(total) +
-		"; query the " + kind + " table for the rest"
+// listCutWarning is the document warning that tool listed only the first maxRows of total entries
+// of kind, and that table holds the rest.
+func listCutWarning(tool, kind, table string, total int) string {
+	return tool + " lists the first " + humanize.Thousands(maxRows) + " " + kind + " of " + humanize.Thousands(total) +
+		"; query the " + table + " table for the rest"
 }
