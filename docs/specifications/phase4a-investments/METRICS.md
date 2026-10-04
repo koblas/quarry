@@ -10,6 +10,7 @@
 | SCENARIO-06 (+07) | code-first | A, B1, B2, V | 0/1/2/1 | yes (cross-tier mismatch sort priority unpinned; folds: both-DIFFER render subtest, comment budgets) |
 | SCENARIO-09 (+10) | code-first | A, B1, B2, V | 0/0/1/1 | no (MINOR/NIT → STATE.md) |
 | SCENARIO-11 | code-first | A, B1, B2, V | 0/0/0/1 | no |
+| SCENARIO-13 | code-first (light) | L, V | 0/0/3/1 | no (MINOR/NIT → STATE.md); appended after reference check run 1 |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
