@@ -26,6 +26,7 @@ const (
 	argumentsRefusedLog = "refused the call's arguments; details went to the client only"
 	failedLog           = "failed; details went to the client only"
 	windowRefusedLog    = "refused the call's since or until; details went to the client only"
+	asOfRefusedLog      = "refused the call's as_of; details went to the client only"
 	unknownAccountLog   = "refused the call's accounts: one names no account; details went to the client only"
 	ambiguousAccountLog = "refused the call's accounts: one names more than one account; details went to the client only"
 	textRefusedLog      = "refused the call's text; details went to the client only"

@@ -24,6 +24,7 @@ const (
 	toolRecurring   = "recurring_charges"
 	toolAnomalies   = "anomalies"
 	toolSearch      = "search_transactions"
+	toolHoldings    = "holdings"
 )
 
 // Row limits: the most any tool returns, data_quality's default, and the most items it lists per finding.
@@ -126,6 +127,14 @@ them for totals rather than adding up these rows. Amounts are in each
 account's own currency and are never converted. Returns at most limit
 transactions (default 500); matched counts every match.`
 
+const holdingsDescription = "Securities held on one day with share count, latest price and its date, and value; cash in investment accounts is not included."
+
+// The descriptions of the parameters holdings takes; its currency is currencyDescription.
+const (
+	holdingsAsOfDescription     = "Day to value holdings on: YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day. Defaults to today."
+	holdingsAccountsDescription = "List only these accounts, each given by id or by name in any letter case. Omit it for every account."
+)
+
 // The descriptions of the parameters query and data_quality take.
 const (
 	querySQLDescription       = "One read-only SQL statement in DuckDB's dialect over quarry's tables and views; describe_schema lists them."
@@ -222,6 +231,12 @@ type (
 		Max      *string  `json:"max"`
 		Limit    int      `json:"limit"`
 	}
+	// holdingsInput is the holdings tool's arguments; AsOf is nil when absent.
+	holdingsInput struct {
+		AsOf     *string  `json:"as_of"`
+		Accounts []string `json:"accounts"`
+		Currency string   `json:"currency"`
+	}
 	// noInput is the arguments of a tool that takes none.
 	noInput struct{}
 )
@@ -275,6 +290,11 @@ func (s *Server) addTools(srv *sdk.Server) {
 		"max":      described(searchMaxDescription, &jsonschema.Schema{Type: "string"}),
 		"limit":    described(searchLimitDescription, limitSchema(maxRows)),
 	})), handler(s.timeout, stoppedLine(toolSearch), s.searchTransactions))
+	sdk.AddTool(srv, tool(toolHoldings, holdingsDescription, objectSchema(map[string]*jsonschema.Schema{
+		"as_of":    described(holdingsAsOfDescription, &jsonschema.Schema{Type: "string"}),
+		"accounts": accountsSchema(holdingsAccountsDescription),
+		"currency": currencySchema(),
+	})), handler(s.timeout, stoppedLine(toolHoldings), s.holdings))
 }
 
 // tool describes one tool; its result is a JSON object.

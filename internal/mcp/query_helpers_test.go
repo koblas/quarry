@@ -55,6 +55,15 @@ type fakeStore struct {
 
 	found    store.Search
 	searched []store.SearchParams
+
+	held      store.Holdings
+	heldAsked []store.HoldingsParams
+}
+
+// Holdings answers with held, or err when set, recording the params.
+func (f *fakeStore) Holdings(_ context.Context, params store.HoldingsParams) (store.Holdings, error) {
+	f.heldAsked = append(f.heldAsked, params)
+	return f.held, f.err
 }
 
 // Search answers with found, or err when set, recording the params and keeping at most Limit rows as the real store does.
@@ -204,6 +213,14 @@ func (h *harness) anomalies(t *testing.T, arguments any) *sdk.CallToolResult {
 func (h *harness) searchTransactions(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
 	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "search_transactions", Arguments: arguments})
+	require.NoError(t, err)
+	return result
+}
+
+// holdings calls the holdings tool with arguments.
+func (h *harness) holdings(t *testing.T, arguments any) *sdk.CallToolResult {
+	t.Helper()
+	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "holdings", Arguments: arguments})
 	require.NoError(t, err)
 	return result
 }

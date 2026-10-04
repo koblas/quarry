@@ -42,6 +42,7 @@ func Test_run_mcp_lists_quarrys_tools_over_json_rpc(t *testing.T) {
 	assert.ElementsMatch(t, []string{
 		"query", "describe_schema", "sync_status", "data_quality",
 		"spending", "cash_flow", "recurring_charges", "anomalies", "search_transactions",
+		"holdings",
 	}, names)
 	frames := strings.Split(strings.TrimSuffix(stdout.String(), "\n"), "\n")
 	assert.GreaterOrEqual(t, len(frames), 2)
