@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-06
-status: open
+status: done
 ---
 
 # SCENARIO-06: each in-scope use-case question is answered by the command the skill names
@@ -24,7 +24,7 @@ Surface & Copy delivered: none (the commands and SKILL.md already exist; nothing
 - [x] Step 3: crafted-text controls for `skillRunCell` (unknown question, escaped pipes) and `argvMismatches` (wrong subcommand, wrong flag value, flag not in the cell); mutation proof per row
 
 ### Sweep / Verify (run V)
-- [ ] lint, full suite, spec tick, `spec-check.py`, STATE.md
+- [x] lint, full suite, spec tick, `spec-check.py`, STATE.md
 
 ## Handoff
 `skillUseCases()` rows are S06's eval table; S03 does not touch them. Rows read `skillEvalStore` as it stands (R1-R14).
@@ -38,3 +38,5 @@ Run L done (acceptance + 3 Build steps ticked; V remains).
 - Mutations run, each reddened exactly the named subtest: expected values rows 1-7 (acceptance subtest of that row); argv rows 1, 2, 3, 5, 6, 7 reddened the acceptance subtest (row 5 also its pin); row 4 (extra `--since 2000`) reddened only its pin, since the answer is unchanged; SKILL.md §4 cell edits (anomalies command renamed, search renamed, cashflow `\|year` alternative dropped, findings `--json` dropped) each reddened only that row's pin subtest. Restored; tree clean of mutations.
 - Narrow loop green; `golangci-lint run ./cmd/quarry/...` 0 issues. Full suite, `spec-check.py`, spec tick, STATE.md are run V's.
 - Left: spec tick line should name `cmd/quarry/run_skill_use_cases_test.go` `Test_each_use_case_question_is_answered_by_the_command_the_skill_names`.
+
+Run V done: build ok; covered suite rc=0; uncovered-diff: no production Go lines added; race cmd/quarry rc=0; lint 0 issues; cmd/quarry 647 (+7); spec ticked, spec-check OK, STATE.md rewritten.

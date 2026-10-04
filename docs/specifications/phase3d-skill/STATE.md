@@ -1,6 +1,6 @@
 # phase3d-skill — current state
 
-Scenarios complete: SCENARIO-01 (with SCENARIO-07 folded), SCENARIO-02, SCENARIO-04 (with SCENARIO-05 folded). Last updated by SCENARIO-04.
+Scenarios complete: SCENARIO-01 (with SCENARIO-07 folded), SCENARIO-02, SCENARIO-04 (with SCENARIO-05 folded), SCENARIO-06. Last updated by SCENARIO-06.
 
 ## Binding decisions
 - Plugin files are static; no production Go. All pins are package-main tests in `cmd/quarry` reading repo files via `repoFile(t, rel)` (`run_plugin_manifest_test.go`), the one reader S02-S06 reuse (SCENARIO-01)
@@ -19,11 +19,11 @@ Scenarios complete: SCENARIO-01 (with SCENARIO-07 folded), SCENARIO-02, SCENARIO
 - Rule P4 static pins over both recipes (own view only, no Quicken `Z*` table / `LIKE` / `now()` / `today()`, params row opens line 2, quoted literals off the params row ⊆ `recipeLiterals` allowlist) each have a crafted-text control in `Test_recipe_scanners_flag_crafted_text`. A new recipe file must be added to those tests and, if it has a literal, to `recipeLiterals` (SCENARIO-04)
 - `skillEvalStore(t, home)` (`run_skill_eval_fixture_test.go`, rows in `skillEvalRows`) is S06's fixture, rows R1-R14, one rate `usdRate(2026-03-01, 1.30)`, clock 2026-09-29. **S06 may only add rows, never edit or remove R1-R14**; every existing assertion reads these exact values. R1 Netflix monthly 2026-02..09 (9.99 x4 then 11.99 x4); R2 Hardware history 38-42 weekly from 2025-03-03 plus 250.00 on 2026-03-02; R3 Spotify USD-native 10.99 x7 from 2025-11; R4 salary 5000.00 on 2026-03-01 and 04-01; R5 the one rate; R6 transfer "Savings Sweep" 500.00 acct-cad to acct-savings 2026-04-15 (`rows.Transfers`); R7 Food 11.00 / Food:Groceries:Organic 22.00 / Foodies 44.00 (2026-05-05..07); R8 grocery no-payee 2022..2025 on 03-15 plus 2021-12-31; R9 grocery bounds 1/2/4/8 on 2024-06-09/10/20/21; R10 interest on acct-savings; R11 "Gas Bar" Auto:Fuel 37.00 on 2026-06-01 and 06-03; R12 uncategorized -64.00 2026-07-01; R13 uncategorized +128.00 2026-07-02; R14 "US Client" Income:Salary USD 1000.00 (2026-02-15) and 100.00 (2026-04-15). **R10 deviates from the first plan**: interest is 3.00/2.50/3.50/6.00 (not 1/2/4/8) because equal-and-opposite amounts on the same days made `findings` report three `unlinked-transfer` pairs; income bounds window still sums 6.00, 2024 total 15.00 (SCENARIO-04)
 - S06 can assert on this fixture: recurring = Netflix (new, with a price change 9.99 to 11.99) and Spotify only; anomalies = Hardware only (250.00 vs usual 40.00); findings = `duplicate:txn-gas-1+txn-gas-2` (Gas Bar 37.00) and `uncategorized:no-payee` only; transfer "Savings Sweep" 500.00 is absent from `spend --by payee`, anomalies, recurring and findings, present in `search "Savings Sweep"` flagged transfer; "Savings Sweep" never gets an ordinary split (SCENARIO-04)
+- Use-case eval in `run_skill_use_cases_test.go`: `skillUseCases()` rows {name, SKILL.md §4 question, argv, answer} are the one table; `Test_each_use_case_question_is_answered_by_the_command_the_skill_names` runs each argv through `runWith` under `recipeScenario`, and `Test_use_case_argv_matches_the_command_the_skill_names` pins the same argv to the §4 Run cell. `skillRunCell(skill, question)` finds the §4 row by its Question cell; `argvMismatches(cell, argv)` checks the cell's first code span (literal words up to the first `<placeholder>`, `a|b` alternatives, every `--flag` argv uses must appear in the cell). Each has crafted-text controls. Row 3 uses `recurring --json --since 2000` so it prefix-matches the §4 cell and its `doc.Since == "2000-01-01"` assertion is what reddens if `--since 2000` is dropped; row 6 asserts the 2026 CAD period row, not only totals (SCENARIO-06)
 - `schema.md` carries no user data: empty store equals populated store, no account/category/payee names, no `v_balances_daily`/`v_net_worth`/`v_holdings`; first line is the generated-by header (SCENARIO-02)
 
 ## Left unbuilt
 - `plugin/skills/quarry/references/*.md` prose (five files: spending, cash-flow, recurring-and-anomalies, search, findings; `schema.md` and `sql/spending-trend.sql`, `sql/income-by-category.sql` are built) — S03 batch 1
-- Use-case tests over `skillEvalStore` (recurring, spend by payee, cash flow by year, search, anomalies, findings) — S06
 - Link and path resolution (section 10 links; backticked `references/…` paths in sections 4 and 5, relative to `plugin/skills/quarry/`) — S03 batch 3
 - Command, flag, MCP tool and table/view resolution for SKILL.md and README — S03
 
@@ -33,12 +33,16 @@ Scenarios complete: SCENARIO-01 (with SCENARIO-07 folded), SCENARIO-02, SCENARIO
 - `sum` widens DECIMAL and `date_trunc` returns TIMESTAMP: recipes cast to `DECIMAL(18,2)` / `DATE` or the `columns` pins fail (SCENARIO-04)
 - `spend --by month` lists empty months as zero rows (`spendByMonth` drops them); `cashflow --currency USD` totals list a zero CAD entry (`withoutZeros`) (SCENARIO-04)
 - `rows.ReferencedCategoryIDs` must stay sorted and unique when `skillEvalRows` gains categories; new one-off payees or similar category names can raise anomaly, payee-variant or similar-category findings, so re-run the S04 check (anomalies, `recurring --since 2000`, `findings`) after adding rows (SCENARIO-04)
+- SKILL.md §4 Question cell text is the lookup key `skillRunCell` uses (exact `| <question> | ` line prefix): rewording a Question cell in SKILL.md or the S01 constants reddens the matching use-case pin, and S03's drift check should reuse `skillRunCell` rather than re-parse §4 (SCENARIO-06)
+- `findings` `first_found_at` is real-clock, so use-case tests assert finding ids only, never that field (SCENARIO-06)
+- `sed` in this shell is GNU: use `sed -i -e '...' file` for in-place edits (BSD `-i ''` form fails) (SCENARIO-06)
 - Do not reflow or re-quote the description line: validator and pin both want the single plain line (SCENARIO-01)
 - `populatedAnalysisStore` must not be edited (exact-bytes goldens; `schema.md` golden reads it read-only) (SCENARIO-01, SCENARIO-02)
 - A change to any `COMMENT ON VIEW` text in `internal/store/duckstore/schema.go` or to `report.SQLConventions` / `run sql --help` reddens the schema golden until regenerated with `-update` (SCENARIO-02)
 - SKILL.md section 1 writes `<rates.last>` without backticks, so path pins match plain substrings, not backticked ones (SCENARIO-01)
 
 ## Open debts
+- Use-case row 3 (`recurring --json --since 2000`) pins `--since` by name only via `argvMismatches`, not the `2000` value; the `doc.Since` assertion in the acceptance subtest covers the value; unowned
 - Checkpoint S02 MINOR: `cmd/quarry/run_skill_schema_reference_test.go:113` `if *updateSchemaReference` branch in the test body; move it into a `refreshSchemaReference(t, got)` helper; unowned
 - Checkpoint S02 MINOR: `cmd/quarry/run_skill_schema_reference_test.go:114,118,197` hand-build `"../../"+path`, and `readSchemaReference` duplicates `repoFile` (`run_plugin_manifest_test.go:71`); reuse `repoFile`; unowned
 - Checkpoint S02 MINOR: `cmd/quarry/run_skill_schema_reference_test.go:173` `require.Len(comments, 2)` breaks when a third commented view is added; use `NotEmpty`; unowned

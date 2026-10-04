@@ -489,7 +489,7 @@ Sizing pass by architect (opus), 2026-10-03. The 7 IDs come out as 5 units, all 
 - [x] SCENARIO-02: references/schema.md is generated from the store and carries no user data — `cmd/quarry/run_skill_schema_reference_test.go` `Test_skill_schema_reference_matches_the_committed_file`
 - [x] SCENARIO-04: spending-trend.sql agrees with quarry spend — `cmd/quarry/run_skill_recipes_test.go` `Test_spending_trend_recipe_agrees_with_quarry_spend`
 - [x] SCENARIO-05: income-by-category.sql agrees with quarry cashflow — delivered by SCENARIO-04 — `cmd/quarry/run_skill_recipes_test.go` `Test_income_by_category_recipe_agrees_with_quarry_cashflow`
-- [ ] SCENARIO-06: each in-scope use-case question is answered by the command the skill names
+- [x] SCENARIO-06: each in-scope use-case question is answered by the command the skill names — `cmd/quarry/run_skill_use_cases_test.go` `Test_each_use_case_question_is_answered_by_the_command_the_skill_names`
 - [ ] SCENARIO-03: every quarry name the skill uses exists
 
 ---
