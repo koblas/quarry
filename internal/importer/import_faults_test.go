@@ -71,6 +71,7 @@ func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: securityPK})
 	b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: new(int64(3)), Amount: "1.00", PostedDate: &posted, Position: positionPK, Units: "1"})
+	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "1"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	errBoom := errSourceBoom
@@ -98,6 +99,7 @@ func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
 		{"ZSECURITY", "ZTICKER", "read securities"},
 		{"ZSECURITYQUOTE", "ZCLOSINGPRICE", "read prices"},
 		{"ZPOSITION", "FROM ZPOSITION", "read positions"},
+		{"ZLOT", "FROM ZLOT", "read lots"},
 		{"ZTRANSACTION investments", "ZUNITS", "read investment transactions"},
 	}
 
@@ -167,6 +169,7 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: securityPK})
 	b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: new(int64(3)), Amount: "1.00", PostedDate: &posted, Position: positionPK, Units: "1"})
+	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "1"})
 	bundle := b.WriteBundle(t, t.TempDir())
 
 	errBoom := errSourceBoom
@@ -194,6 +197,7 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 		{"ZSECURITY", "ZTICKER", "read securities"},
 		{"ZSECURITYQUOTE", "ZCLOSINGPRICE", "read prices"},
 		{"ZPOSITION", "FROM ZPOSITION", "read positions"},
+		{"ZLOT", "FROM ZLOT", "read lots"},
 		{"ZTRANSACTION investments", "ZUNITS", "read investment transactions"},
 	}
 

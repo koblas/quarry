@@ -238,14 +238,15 @@ type Builder struct {
 	securities   []pkRow[SecurityRow]
 	quotes       []pkRow[SecurityQuoteRow]
 	positions    []pkRow[PositionRow]
+	lots         []pkRow[LotRow]
 	userTagLinks []userTagLink
 }
 
 // NewBuilder returns a Builder seeded with the reference schema's default
 // Z_PRIMARYKEY entity numbers (EntCategoryTag, EntUserTag,
 // EntCashFlowTransaction, EntSmartCashFlowTransaction,
-// EntInvestmentTransaction, EntSecurity, EntSecurityQuote, EntPosition), each
-// overridable via WithEntity.
+// EntInvestmentTransaction, EntSecurity, EntSecurityQuote, EntPosition, EntLot),
+// each overridable via WithEntity.
 func NewBuilder() *Builder {
 	return &Builder{
 		entities: map[string]int64{
@@ -257,6 +258,7 @@ func NewBuilder() *Builder {
 			"Security":                 EntSecurity,
 			"SecurityQuote":            EntSecurityQuote,
 			"Position":                 EntPosition,
+			"Lot":                      EntLot,
 		},
 		omitted: make(map[string]bool),
 		nextPK:  make(map[string]int64),
@@ -272,8 +274,8 @@ func (b *Builder) WithoutEntity(name string) *Builder {
 
 // WithEntity overrides name's Z_PRIMARYKEY entity number. name is one of
 // "CategoryTag", "UserTag", "CashFlowTransaction",
-// "SmartCashFlowTransaction", "InvestmentTransaction", "Security" or
-// "SecurityQuote" or "Position".
+// "SmartCashFlowTransaction", "InvestmentTransaction", "Security",
+// "SecurityQuote", "Position" or "Lot".
 func (b *Builder) WithEntity(name string, ent int64) *Builder {
 	b.entities[name] = ent
 	return b
@@ -437,8 +439,13 @@ func (b *Builder) Position(row PositionRow) int64 {
 }
 
 // Lot adds row and returns its assigned ZLOT.Z_PK.
-func (b *Builder) Lot(_ LotRow) int64 {
-	return 0
+func (b *Builder) Lot(row LotRow) int64 {
+	if row.Entity == 0 {
+		row.Entity = b.entities["Lot"]
+	}
+	pk := b.nextPKFor("ZLOT")
+	b.lots = append(b.lots, pkRow[LotRow]{pk: pk, row: row})
+	return pk
 }
 
 func deletionCount(deleted bool) int {
@@ -482,7 +489,7 @@ func nullableRef(ref int64) any {
 
 // Seed executes every row accumulated on Builder against db, which must
 // already carry v9.ReferenceDDL, then writes a Z_PRIMARYKEY row for each of
-// Builder's eight entity kinds, with Z_MAX set to the highest Z_PK Builder
+// Builder's nine entity kinds, with Z_MAX set to the highest Z_PK Builder
 // assigned that entity (0 when none were added).
 func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 	tb.Helper()
@@ -589,6 +596,12 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 			pos.pk, pos.row.Entity, nullableRef(pos.row.Account), nullableRef(pos.row.Security), deletionCount(pos.row.Deleted))
 	}
 
+	for _, lot := range b.lots {
+		exec(tb, ctx, db,
+			"INSERT INTO ZLOT (Z_PK, Z_ENT, ZPOSITION, ZLATESTUNITS, ZDELETIONCOUNT) VALUES (?, ?, ?, ?, ?)",
+			lot.pk, lot.row.Entity, nullableRef(lot.row.Position), nullableString(lot.row.LatestUnits), deletionCount(lot.row.Deleted))
+	}
+
 	for _, link := range b.userTagLinks {
 		exec(tb, ctx, db,
 			`INSERT INTO "Z_15USERTAGS" (Z_15CASHFLOWTRANSACTIONENTRIES, Z_76USERTAGS) VALUES (?, ?)`,
@@ -597,7 +610,7 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 
 	for _, name := range []string{
 		"CategoryTag", "UserTag", "CashFlowTransaction", "SmartCashFlowTransaction", "InvestmentTransaction",
-		"Security", "SecurityQuote", "Position",
+		"Security", "SecurityQuote", "Position", "Lot",
 	} {
 		if b.omitted[name] {
 			continue
@@ -642,6 +655,12 @@ func (b *Builder) maxPKForEntity(name string) int64 {
 		for _, pos := range b.positions {
 			if pos.row.Entity == ent {
 				maxPK = max(maxPK, pos.pk)
+			}
+		}
+	case "Lot":
+		for _, lot := range b.lots {
+			if lot.row.Entity == ent {
+				maxPK = max(maxPK, lot.pk)
 			}
 		}
 	}

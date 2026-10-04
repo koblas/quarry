@@ -191,6 +191,30 @@ func Test_builder_seeds_positions_and_investment_transaction_fields(t *testing.T
 			" AND ZNUMERATOR IS NULL AND ZDENOMINATOR IS NULL AND ZCOMMISSION IS NULL", barePK))
 }
 
+func Test_builder_seeds_lots(t *testing.T) {
+	b := v9fixture.NewBuilder().WithEntity("Lot", 9044)
+	accountPK := b.Account(v9fixture.AccountRow{Name: "Brokerage"})
+	securityPK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp"})
+	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: securityPK})
+	fullPK := b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "2.5"})
+	wholePK := b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "10"})
+	bareDeletedPK := b.Lot(v9fixture.LotRow{Deleted: true})
+
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	db, err := sqlite.OpenReadOnly(t.Context(), bundle.DataPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	assert.Equal(t, int64(9044), queryInt(t, db, "SELECT Z_ENT FROM ZLOT WHERE Z_PK = ?", fullPK))
+	assert.Equal(t, positionPK, queryInt(t, db, "SELECT ZPOSITION FROM ZLOT WHERE Z_PK = ?", fullPK))
+	assert.Equal(t, "real", queryString(t, db, "SELECT typeof(ZLATESTUNITS) FROM ZLOT WHERE Z_PK = ?", fullPK))
+	assert.Equal(t, "integer", queryString(t, db, "SELECT typeof(ZLATESTUNITS) FROM ZLOT WHERE Z_PK = ?", wholePK))
+	assert.Equal(t, int64(1), queryInt(t, db,
+		"SELECT count(*) FROM ZLOT WHERE Z_PK = ? AND ZPOSITION IS NULL AND ZLATESTUNITS IS NULL AND ZDELETIONCOUNT = 1", bareDeletedPK))
+	assert.Equal(t, bareDeletedPK, queryInt(t, db, "SELECT Z_MAX FROM Z_PRIMARYKEY WHERE Z_ENT = ?", 9044))
+}
+
 func queryString(t *testing.T, db *sqlite.DB, query string, args ...any) string {
 	t.Helper()
 	var got string

@@ -19,10 +19,11 @@ const (
 	securityEntity      = "Security"
 	securityQuoteEntity = "SecurityQuote"
 	positionEntity      = "Position"
+	lotEntity           = "Lot"
 )
 
 // optionalEntities lists every optional entity name resolveEntities looks up.
-var optionalEntities = []string{investmentEntity, securityEntity, securityQuoteEntity, positionEntity}
+var optionalEntities = []string{investmentEntity, securityEntity, securityQuoteEntity, positionEntity, lotEntity}
 
 // resolveEntities returns each entity's Z_ENT by name from Z_PRIMARYKEY, or
 // an *UnmappableError naming every missing required entity.

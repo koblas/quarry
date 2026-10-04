@@ -177,3 +177,22 @@ func reasonInvestmentSharesPrecision(date, account, shares string) string {
 func reasonInvestmentSharesTooLarge(date, account, shares string) string {
 	return fmt.Sprintf("an investment transaction on %s in \"%s\" has %s shares, which is too large for quarry's share counts", date, account, shares)
 }
+
+// reasonNoLotEntity is the refusal of imported investment transactions with no Lot entity to check them against.
+const reasonNoLotEntity = "the snapshot has investment transactions but no Quicken lots to check their share counts against"
+
+func reasonLotNoShareCount(security, account string) string {
+	return fmt.Sprintf("a lot of \"%s\" in \"%s\" has no share count", security, account)
+}
+
+func reasonLotNotANumber(security, account string) string {
+	return fmt.Sprintf("a lot of \"%s\" in \"%s\" has a share count that is not a number", security, account)
+}
+
+func reasonLotSharesPrecision(security, account, shares string) string {
+	return fmt.Sprintf("a lot of \"%s\" in \"%s\" has %s shares, which has more than 6 decimal places", security, account, shares)
+}
+
+func reasonLotSharesTooLarge(security, account, shares string) string {
+	return fmt.Sprintf("a lot of \"%s\" in \"%s\" has %s shares, which is too large for quarry's share counts", security, account, shares)
+}

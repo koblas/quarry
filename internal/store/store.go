@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"math/big"
 	"slices"
 	"time"
 
@@ -175,11 +176,20 @@ type InvestmentTransaction struct {
 	SplitOldShares *int64
 }
 
+// QuickenShare is Quicken's own share count of one holding: the sum of its
+// counting lots' units, in millionths. A holding with a lot of zero units is
+// listed.
+type QuickenShare struct {
+	AccountID, SecurityID string
+	Millionths            *big.Int
+}
+
 // Rows is every row a store build writes, grouped by table. ImportRuns holds
 // the new build's run only; the store carries earlier runs forward itself.
 // ReferencedCategoryIDs is not a table: sorted unique ids of categories that rows
 // not stored as splits use (split entries under transactions the import does not keep,
-// budgets, loans, rules), nil when none; never persisted.
+// budgets, loans, rules), nil when none; never persisted. QuickenShares is not a
+// table either: the reference each holding's derived share count is checked against.
 type Rows struct {
 	Accounts     []Account
 	Categories   []Category
@@ -196,6 +206,7 @@ type Rows struct {
 	InvestmentTransactions []InvestmentTransaction
 
 	ReferencedCategoryIDs []string
+	QuickenShares         []QuickenShare
 }
 
 // SnapshotRef identifies the snapshot a build reads: its absolute Path,

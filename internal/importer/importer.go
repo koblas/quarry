@@ -120,10 +120,16 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	if err != nil {
 		return store.Result{}, err
 	}
+	lotEnt, hasLot := entities[lotEntity]
+	quickenShares, err := mapLots(ctx, src, lotEnt, hasLot, positions, accountRefs, securityRefs, off)
+	if err != nil {
+		return store.Result{}, err
+	}
 	investments, err := mapInvestmentTransactions(ctx, src, investmentEnt, hasInvestment, accountRefs, positions, securityRefs, off)
 	if err != nil {
 		return store.Result{}, err
 	}
+	requireLots(hasLot, investments, off)
 
 	if err := off.firstError(); err != nil {
 		return store.Result{}, err
@@ -139,6 +145,7 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 		Accounts: accounts, Categories: categories, Payees: payees, Tags: tags,
 		Transactions: transactions, Splits: splits, SplitTags: splitTags, Transfers: transfers,
 		Securities: securities, Prices: prices, InvestmentTransactions: investments, ReferencedCategoryIDs: refs.ids(),
+		QuickenShares: quickenShares,
 	}
 	counts := store.Counts{
 		Accounts: len(accounts), Categories: len(categories), Payees: len(payees), Tags: len(tags),
