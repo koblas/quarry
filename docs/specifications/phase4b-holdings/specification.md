@@ -47,7 +47,7 @@
   - Columns: `date`, `account_id`, `security_id`, `security`, `ticker`, `shares`, `price`, `price_date`, `currency`, `value`, `value_cad`, `value_usd`, `usd_cad`.
   - `price` and `price_date` come from the latest `prices` row on or before `date` (ASOF). Zero and placeholder (1899-12-29) prices are used as recorded.
   - `currency` is `securities.currency` as stored. NULL stays NULL; there is no fallback to the account's currency.
-  - `value` = `CAST(shares*price AS DECIMAL(18,2))`. The product is exact at DECIMAL(36,12); the cast rounds half away from zero, as `convertedTo` does. `value` is NULL when there is no price.
+  - `value` = `CAST(shares*price AS DECIMAL(38,2))` (orchestrator ruling 2026-10-04, SCENARIO-02: `value`, `value_cad`, `value_usd` are DECIMAL(38,2) so no holding can overflow; operands cast to DECIMAL(19,6), product exact at DECIMAL(38,12)); the cast rounds half away from zero, as `convertedTo` does. `value` is NULL when there is no price.
   - `value_cad` and `value_usd` = `convertedTo(value, currency, rate)` at the ASOF rate on `date` (PRD L243). They are NULL when `currency` is NULL, when it is not CAD/USD, or when there is no rate.
   - The CLI and MCP read this view.
   - `COMMENT ON VIEW v_holdings` (R2): `one row per holding per day it is held, through today, so filter by date; value is shares times price rounded to the cent, value_cad and value_usd convert it at the rate for date as quarry holdings does; cash in investment accounts is not included.` (schema.md view-comment pin 2 → 3)
