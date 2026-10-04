@@ -23,12 +23,14 @@ type fakeReportStore struct {
 	cashFlow     store.CashFlow
 	charges      store.Charges
 	findings     store.FindingList
+	holdings     store.Holdings
 	result       store.QueryResult
 	gotQuery     *string
 	gotMaxRows   *int
 	gotSpending  *store.SpendingParams
 	gotCashFlow  *store.CashFlowParams
 	gotCharges   *store.ChargeParams
+	gotHoldings  *store.HoldingsParams
 	chargesReads *int
 	err          error
 }
@@ -59,6 +61,13 @@ func (f fakeReportStore) Charges(_ context.Context, params store.ChargeParams) (
 		*f.chargesReads++
 	}
 	return f.charges, f.err
+}
+
+func (f fakeReportStore) Holdings(_ context.Context, params store.HoldingsParams) (store.Holdings, error) {
+	if f.gotHoldings != nil {
+		*f.gotHoldings = params
+	}
+	return f.holdings, f.err
 }
 
 func (f fakeReportStore) Findings(context.Context) (store.FindingList, error) {

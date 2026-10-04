@@ -15,6 +15,7 @@ type fakeStore struct {
 	cashFlow   store.CashFlow
 	charges    store.Charges
 	findings   store.FindingList
+	holdings   store.Holdings
 	search     store.Search
 	schema     store.Schema
 	rows       [][]store.QueryValue
@@ -24,6 +25,7 @@ type fakeStore struct {
 	gotCashFlow   *store.CashFlowParams
 	gotCharges    *store.ChargeParams
 	gotSearch     *store.SearchParams
+	gotHoldings   *store.HoldingsParams
 	accountsReads *int
 	chargesReads  *int
 	schemaReads   *int
@@ -88,6 +90,13 @@ func (f fakeStore) Search(_ context.Context, params store.SearchParams) (store.S
 		*f.gotSearch = params
 	}
 	return f.search, f.err
+}
+
+func (f fakeStore) Holdings(_ context.Context, params store.HoldingsParams) (store.Holdings, error) {
+	if f.gotHoldings != nil {
+		*f.gotHoldings = params
+	}
+	return f.holdings, f.err
 }
 
 func (f fakeStore) Findings(context.Context) (store.FindingList, error) { return f.findings, f.err }
