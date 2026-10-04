@@ -16,8 +16,45 @@
 | 2 | correctness, test | 0/0/1/2 | skipped (no production Go) | PASS WITH FOLLOW-UPS |
 | final pass | product-vision | 0/3/0/1 | - | SHIP WITH CHANGES |
 | 3 | correctness, test | 0/2/0/2 (1 MAJOR rejected) | skipped (no production Go) | BLOCKED |
+| 4 | correctness, test | 0/0/1/0 | skipped (no production Go) | PASS WITH FOLLOW-UPS |
 
 ## Tokens
+
+Tokens for `phase3d-skill` across 6 project dir(s). Weighted = input-equivalent tokens (IE): cache read x0.1, cache write x1.25 (5m) / x2 (1h), output x5. Attribution: 44 tagged, 0 heuristic. Orchestrator row counts the main session between the feature's first and last run in each session, so it may include other work.
+
+| Agent | Runs | Model(s) | Input | Cache write | Cache read | Output | Weighted (IE) | Share |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| developer | 21 | claude-sonnet-5-5 | 1k | 1,813k | 28,118k | 10k | 5,131k | 55% |
+| test-reviewer | 9 | claude-sonnet-5-5 | 0k | 644k | 5,159k | 6k | 1,351k | 14% |
+| architect | 4 | claude-opus-5-5, claude-sonnet-5-5 | 0k | 442k | 5,671k | 2k | 1,130k | 12% |
+| correctness-reviewer | 4 | claude-opus-5-5 | 0k | 330k | 6,676k | 1k | 1,085k | 12% |
+| product-vision | 3 | claude-opus-5-5 | 0k | 205k | 2,083k | 1k | 470k | 5% |
+| triage | 1 | claude-sonnet-5-5 | 0k | 48k | 146k | 0k | 74k | 1% |
+| refactor-advisor | 1 | claude-sonnet-5-5 | 0k | 40k | 214k | 0k | 72k | 1% |
+| arch-reviewer | 1 | claude-sonnet-5-5 | 0k | 33k | 80k | 0k | 51k | 1% |
+| **subagent total** | 44 | | 1k | 3,554k | 48,148k | 21k | 9,364k | 100% |
+| orchestrator (upper bound) | - | claude-opus-5-5 | 0k | 236k | 20,519k | 79k | 2,920k | - |
+
+| Run kind | Runs | Weighted (IE) | Share |
+| --- | --- | --- | --- |
+| scope | 4 | 544k | 6% |
+| plan | 4 | 1,130k | 12% |
+| build | 15 | 3,602k | 38% |
+| checkpoint | 5 | 609k | 7% |
+| checkpoint-fix | 3 | 483k | 5% |
+| review | 10 | 1,950k | 21% |
+| gate-fix | 3 | 1,046k | 11% |
+
+| Unit | Plan | Build | Checkpoint | Checkpoint fix | Gate fix | Weighted (IE) | Share |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| - | 1 | 0 | 0 | 0 | 3 | 3,802k | 41% |
+| SCENARIO-01 | 1 | 3 | 1 | 1 | 0 | 957k | 10% |
+| SCENARIO-02 | 0 | 2 | 1 | 0 | 0 | 480k | 5% |
+| SCENARIO-03 | 1 | 4 | 1 | 1 | 0 | 1,795k | 19% |
+| SCENARIO-04 | 1 | 4 | 1 | 1 | 0 | 1,770k | 19% |
+| SCENARIO-06 | 0 | 2 | 1 | 0 | 0 | 559k | 6% |
+
+Developer runs: 21; weighted per run median 208k, p90 423k, max 587k.
 
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |

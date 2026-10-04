@@ -53,6 +53,7 @@ Scenarios complete: SCENARIO-01..07 (07 folded into 01, 05 into 04); all scenari
 - A leaf's trailing words are legal arguments (`quarry sync to build it` is §8's ruled stderr text), so there is no "takes no arguments" check; a `FROM` inside a function call (`EXTRACT(year FROM d)`) reads as a relation, so reference SQL avoids it (SCENARIO-03)
 
 ## Open debts
+- REVIEW-04 MINOR: `internal/platform/duckdb/duckdb.go:50` `Create` DSN lacks `autoload_known_extensions=false&autoinstall_known_extensions=false`; a future build needing an unbundled extension would add a network request and falsify README.md:23; unowned (task chip)
 - REVIEW-02 MINOR: `cmd/quarry/run_skill_recipes_test.go:381-397` loops/if in the registry test body; extract `sqlFilesOn`/`recipeFileNames`; unowned
 - REVIEW-02 NIT: `run_skill_recipes_test.go:382` registry reads top level of `references/sql/` only; `run_skill_references_test.go:67` partial-period pin covers half the bullet; unowned
 - Gate REVIEW-01 MINOR (unowned, test shape): `run_skill_recipes_test.go:288` `if c.err` branch in `Test_recipe_params_line_is_found_once_and_keeps_its_names` (split into two tables); `run_status_json_test.go:166` `if !p.nullable` in a subtest body; `run_skill_json_fields_test.go` field checks are one-directional (prose not checked against declared fields, keys match at any depth, mentions counted file-wide)
