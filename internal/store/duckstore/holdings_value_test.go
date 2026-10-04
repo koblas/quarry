@@ -148,6 +148,22 @@ func Test_holdings_view_values_the_largest_holding_without_overflow(t *testing.T
 	}, got)
 }
 
+func Test_holdings_view_leaves_every_value_NULL_for_a_holding_with_no_price_even_with_a_rate_in_force(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, security string }{{"a CAD holding", secAcme}, {"a USD holding", secUSD}}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newStoreWithRates(t, holdingRows(buy(acctOne, c.security, 1, marchDay(1), oneShare)), fridayAndMonday()...)
+
+			got := queryTexts(t, st, "SELECT value, value_cad, value_usd, usd_cad FROM v_holdings WHERE date = '2026-03-13'")
+
+			assert.Equal(t, [][]string{{"NULL", "NULL", "NULL", "1.250000"}}, got)
+		})
+	}
+}
+
 func Test_holdings_view_converts_a_value_at_the_rate_in_force_on_the_date(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

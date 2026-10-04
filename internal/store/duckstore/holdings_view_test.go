@@ -35,7 +35,7 @@ func holdingRows(txns ...store.InvestmentTransaction) store.Rows {
 	return rows
 }
 
-// dayList is the dates joined the way heldDays prints them.
+// dayList is dates joined with commas, as heldDaysQuery returns them.
 func dayList(days ...time.Time) string {
 	texts := make([]string, len(days))
 	for i, d := range days {
@@ -141,6 +141,18 @@ func Test_holdings_view_lists_a_holding_whose_security_row_is_missing(t *testing
 	got := queryTexts(t, st, "SELECT security_id, security, ticker, currency, price, value FROM v_holdings")
 
 	assert.Equal(t, [][]string{{secGhost, "NULL", "NULL", "NULL", "NULL", "NULL"}}, got)
+}
+
+func Test_holdings_view_lists_accounts_left_out_of_reports(t *testing.T) {
+	t.Parallel()
+	rows := holdingRows(buy(acctOne, secAcme, 1, marchDay(1), oneShare), buy(acctTwo, secAcme, 2, marchDay(1), oneShare))
+	rows.Accounts[0].NotInReports = true
+	rows.Accounts[1].LinkedTracking = true
+	st := newStoreWith(t, rows)
+
+	got := queryTexts(t, st, "SELECT account_id FROM v_holdings WHERE date = '2026-03-01' ORDER BY account_id")
+
+	assert.Equal(t, [][]string{{acctOne}, {acctTwo}}, got)
 }
 
 func Test_holdings_view_lists_its_columns_in_order(t *testing.T) {

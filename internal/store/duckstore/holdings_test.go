@@ -201,9 +201,24 @@ func Test_holdings_reads_the_largest_holding_in_exact_cents(t *testing.T) {
 	got := holdingsOn(t, st, marchDay(1))
 
 	require.Len(t, got, 2)
-	// "Brokerage USD" (acct-2, negative) sorts before "Chequing" (acct-1).
+	byAccount := map[string]store.Holding{got[0].AccountID: got[0], got[1].AccountID: got[1]}
+	long, short := byAccount[acctOne], byAccount[acctTwo]
 	assert.Equal(t, []*big.Int{cents("99999999999999999800000000"), cents("99999999999999999800000000"), cents("124999999999999999750000000")},
-		[]*big.Int{got[1].Value, got[1].ValueUSD, got[1].ValueCAD})
+		[]*big.Int{long.Value, long.ValueUSD, long.ValueCAD})
 	assert.Equal(t, []*big.Int{cents("-99999999999999999800000000"), cents("-99999999999999999800000000"), cents("-124999999999999999750000000")},
-		[]*big.Int{got[0].Value, got[0].ValueUSD, got[0].ValueCAD})
+		[]*big.Int{short.Value, short.ValueUSD, short.ValueCAD})
+}
+
+func Test_holdings_lists_accounts_quicken_leaves_out_of_its_reports(t *testing.T) {
+	t.Parallel()
+	hidden := brokerage("acct-hidden", 1, "Hidden")
+	hidden.NotInReports = true
+	linked := brokerage("acct-linked", 2, "Linked")
+	linked.LinkedTracking = true
+	accounts := []store.Account{hidden, linked, brokerage("acct-plain", 3, "Plain")}
+	held := []heldPair{{"acct-hidden", secAcme}, {"acct-linked", secAcme}, {"acct-plain", secAcme}}
+
+	got := holdingOrder(t, accounts, []store.Security{fund(secAcme, 1, "Acme")}, held)
+
+	assert.Equal(t, []string{"acct-hidden/" + secAcme, "acct-linked/" + secAcme, "acct-plain/" + secAcme}, got)
 }
