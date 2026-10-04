@@ -34,7 +34,8 @@ const holdingsOrder = `
 ORDER BY a.name, a.source_id, v.account_id, v.security, s.source_id, v.security_id`
 
 // Holdings reads the holdings on params.AsOf in params.AccountIDs, the store's first rate date and the span of
-// those accounts' investment transactions, as store.Holdings documents; a day with none, or one after today, is an empty result. A store it cannot open or read is a *store.OpenError.
+// those accounts' investment transactions, as store.Holdings documents; a day with none, or one after today,
+// is an empty result. A store it cannot open or read is a *store.OpenError.
 func (s *Store) Holdings(ctx context.Context, params store.HoldingsParams) (store.Holdings, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {
@@ -67,13 +68,13 @@ func (s *Store) Holdings(ctx context.Context, params store.HoldingsParams) (stor
 
 // holdingsSpan is the first and last date of the investment transactions of the named accounts, or of every
 // account when none is named, through db; both are zero when there are none.
-func holdingsSpan(ctx context.Context, db ReadDB, accounts accountFilter) (first, last time.Time, err error) {
+func holdingsSpan(ctx context.Context, db ReadDB, accounts accountFilter) (time.Time, time.Time, error) {
 	query := "SELECT min(date), max(date) FROM investment_transactions"
 	if len(accounts) > 0 {
 		query += " WHERE account_id IN (" + accounts.marks(1) + ")"
 	}
 	var earliest, latest sql.NullTime
-	err = db.QueryRows(ctx, query, accounts.args(), func(scan func(dest ...any) error) error {
+	err := db.QueryRows(ctx, query, accounts.args(), func(scan func(dest ...any) error) error {
 		return scan(&earliest, &latest)
 	})
 	return earliest.Time, latest.Time, err //nolint:wrapcheck // callers classify the driver's own error with openFault

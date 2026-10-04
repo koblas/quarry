@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-09
-status: open
+status: done
 ---
 
 # SCENARIO-09: Nothing held on the day
@@ -25,10 +25,10 @@ Surveyed (grep, production): `store.Holdings` is built in one place, `duckstore/
 - [x] Step 4: cross-pins and stale tests. New `cmd/quarry/run_holdings_empty_test.go` rows (each its own test, helper-free header-only expectation): no investment data at all (`rows.InvestmentTransactions = nil`, `--as-of 2026-03-01`) gives `no holdings on 2026-03-01; the store has no investment transactions`; `--account Brokerage --as-of 2026-03-01` gives the named wording with only Brokerage's span (`2026-03-02 to 2026-03-02`, scope-discriminating because Maple is on day 5); `--currency native` empty (caption without `, amounts in`, no In column, no Total, same stderr line); `--json` empty (`holdings` `[]`, `totals` `[]`, `warnings` equal to the stderr line, `account_filter` `[]`); `Test_run_holdings_of_only_a_non_investment_account_prints_both_warnings_in_order` (`--account Chequing`: slot 2 line then `no holdings on 2026-03-12 in the named accounts; they have no investment transactions`). Fix the stale tests: `run_holdings_account_test.go:110-116` (assert both stderr lines, not the `^` regexp) and `:119-125` (assert exact stderr: only the slot 3 named line, no `not a brokerage`); `internal/cli/holdings_test.go:278-284` config-warning test gives `fakeReportStore` `brokerageHolding()` so stderr stays the one config line (separate cli test for config line first, empty line second); `document/holdings_test.go:186-188` `Test_HoldingsWarnings_is_empty_not_nil` uses a holding row; `document/holdings_account_test.go:36-58` (table wants the slot 3 line appended) and `:70-83` (give it a priced row so `Empty` still holds). Grep `report.Holdings{` and `store.Holdings{` across tests for any other empty-rows case asserting exact warnings
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the new fields (one line each) and `emptyWarnings`
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the new fields (one line each) and `emptyWarnings`
 
 ### Verify
-- [ ] Step 6: full verification per `.claude/rules/agent-briefs.md`, `spec-check.py phase4b-holdings`, tick SCENARIO-09 with its acceptance test, rewrite STATE.md (remove slot 3 and span from Left unbuilt, drop the stale-stderr trap)
+- [x] Step 6: full verification per `.claude/rules/agent-briefs.md`, `spec-check.py phase4b-holdings`, tick SCENARIO-09 with its acceptance test, rewrite STATE.md (remove slot 3 and span from Left unbuilt, drop the stale-stderr trap)
 
 ## Handoff
 
@@ -50,9 +50,9 @@ Surveyed (grep, production): `store.Holdings` is built in one place, `duckstore/
 
 ## Phase report
 
-Runs A and B1 (steps 1-4) done and ticked. Acceptance test green; narrow loops green (`go test ./internal/store/duckstore/ ./internal/report/... ./internal/cli/ -run 'Holdings|holdings'`, `go test ./cmd/quarry/ -run 'run_holdings|run_read_commands'`). Run V (steps 5-6) is next: sweep (lint, doc budgets), full covered suite, spec tick, STATE.md.
+All runs done (A, B1, V); scenario complete, `status: done`, ticked in `specification.md`, `spec-check.py phase4b-holdings` OK, STATE.md rewritten. Run V: one lint finding (`nonamedreturns` on `holdingsSpan`, fixed; doc budgets on `emptyWarnings`, the new fields and `holdingsSpan` already within budget), full covered suite green with no further stale fixture, `uncovered-diff.py` 0 added lines, `-race` green on duckstore, report, document, cli. `test-stats --base 1d7b5b3 --changed` TOTAL 2297 (+18).
 - Production: `store/store.go` `Holdings.FirstTransaction/LastTransaction`; `duckstore/holdings.go` `holdingsSpan` (after `firstRate`, ids from `$1`); `report/holdings.go` carries both fields; `document/holdings.go` `emptyWarnings` (slot 3, between `nonInvestmentWarnings` and `noPriceWarning`), `HoldingsWarnings` doc slot list updated.
 - New tests: `duckstore/holdings_span_test.go` (8, incl. 2 fault tests at `passQueries: 2`; used a new file, not `holdings_test.go`/`holdings_account_test.go`), `document/holdings_empty_test.go` (3, table of 6), `report/holdings_needs_rate_test.go` one-read span carry, `cli/holdings_test.go` config-then-empty line, `cmd/quarry/run_holdings_empty_test.go` (+4 cross-pins).
 - Stale tests fixed: `run_holdings_account_test.go` (Chequing test renamed `Test_run_holdings_of_only_a_non_investment_account_prints_both_warnings_in_order`; Empty test asserts the exact slot 3 line), `cli/holdings_test.go` config-warning test now has a row, `document/holdings_test.go` is-empty-not-nil, `document/holdings_account_test.go` (table + held-row case). Found by the full `go test ./...`, not by the plan: `cmd/quarry/run_config_test.go` `readCommandFixture` now has a brokerage holding, since `holdings` over the old fixture warned "nothing held" and broke the empty-stderr assertion.
 - Mutations (each reddened, restored byte-identical): span scope dropped (`holdingsSpan(..., nil)`) -> `Test_holdings_reads_the_transaction_span_of_only_the_named_accounts` + `..._for_an_id_that_names_no_account`; empty gate removed -> `Test_HoldingsWarnings_say_nothing_about_an_empty_result_when_something_is_held`; variant key inverted -> all four store-wide/named rows of `Test_HoldingsWarnings_word_an_empty_result_by_what_the_store_holds`; slot 3 before slot 2 -> `Test_run_holdings_of_only_a_non_investment_account_prints_both_warnings_in_order`.
-- V must not redo: nothing mutated. Not yet run: golangci-lint, covered full run, `uncovered-diff.py`, `test-stats.py`.
+- Nothing left for a later run. Checkpoint reviews range `1d7b5b3`..HEAD plus the V commit.
