@@ -13,8 +13,7 @@ import (
 // securityIDFormat renders a security's quarry id from its ZSECURITY.Z_PK.
 const securityIDFormat = "sec-%d"
 
-// securitiesQuery reads each non-deleted security of one entity. ZNAME is
-// scanned as a plain string, so a NULL name fails the read.
+// securitiesQuery reads each non-deleted security of one entity.
 const securitiesQuery = `
 SELECT Z_PK, ZNAME, ZTICKER, ZCURRENCY
 FROM ZSECURITY
@@ -23,8 +22,8 @@ ORDER BY Z_PK
 `
 
 // quotesQuery reads each non-deleted quote that has a security, a date and a price.
-// ZQUOTEDATE is cast to REAL: left as TIMESTAMP, the driver turns it into a Unix-epoch time.Time.
 const quotesQuery = `
+-- ZQUOTEDATE is cast to REAL: as TIMESTAMP the driver returns a Unix-epoch time.Time.
 SELECT Z_PK, ZSECURITY, CAST(ZQUOTEDATE AS REAL), typeof(ZCLOSINGPRICE), CAST(ZCLOSINGPRICE AS TEXT)
 FROM ZSECURITYQUOTE
 WHERE Z_ENT = ? AND COALESCE(ZDELETIONCOUNT, 0) = 0

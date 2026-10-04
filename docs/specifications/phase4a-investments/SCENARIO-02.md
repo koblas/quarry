@@ -25,10 +25,10 @@ Size: OWNS A RUN — 4 batches, 1 feature package (importer) plus its duckstore 
 - [x] Step 6: `cmd/quarry/run_investments_test.go` `Test_run_spend_and_cashflow_are_unchanged_by_investment_transactions` — two fixtures differing only in investment rows (brokerage account in both); the investment row's entry uses a category the cash rows use, dated in the same window; `spend` and `cashflow` stdout (text and `--json`) byte-equal across arms, compared raw (a per-build field that differs → stop and report, do not strip); the "with" arm asserts `investment_transactions` non-empty. `v_cash_flow` (`schema.go:194-217`) filters only `in_reports`/`linked_tracking`, so a leaked brokerage entry does reach the output
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `Import` (`importer.go:42-48`), `Rows`, `Counts`, new symbols; trim `securitiesQuery`/`quotesQuery`/`isDecimalText` docs if touched (STATE debt); exact-count bumps where a fixture's investment row now counts; regenerate `schema.md` (`go test ./cmd/quarry/ -run Test_skill_schema_reference_matches_the_committed_file -update`)
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `Import` (`importer.go:42-48`), `Rows`, `Counts`, new symbols; trim `securitiesQuery`/`quotesQuery`/`isDecimalText` docs if touched (STATE debt); exact-count bumps where a fixture's investment row now counts; regenerate `schema.md` (`go test ./cmd/quarry/ -run Test_skill_schema_reference_matches_the_committed_file -update`)
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase4a-investments` → tick SCENARIO-02 with its acceptance test; STATE.md drops the securities `Z_ENT` debt once its mutation reddened the existing test
+- [x] Step 8: full verification + `spec-check.py phase4a-investments` → tick SCENARIO-02 with its acceptance test; STATE.md drops the securities `Z_ENT` debt once its mutation reddened the existing test
 
 ## Handoff
 
@@ -56,14 +56,9 @@ Size: OWNS A RUN — 4 batches, 1 feature package (importer) plus its duckstore 
 
 ## Phase report
 
-Run B3 (steps 5-6) done, code-first; steps 1-6 ticked, Sweep (7) and Verify (8) left for V. Green: `go test ./internal/importer/ ./internal/store/duckstore/ ./internal/quicken/v9/v9fixture/`; `go test ./cmd/quarry/ -run '(?i)investment|spend|cashflow|import_runs|transfers|unused_category'` (the plan's case-sensitive pattern misses `run_sync_imports_investment_*`); `golangci-lint run ./...` 0 issues. Acceptance test green since B2. `Test_skill_schema_reference_matches_the_committed_file` still red by design (Step 7).
+Run V (steps 7-8) done; all steps ticked, SCENARIO-02 ticked in specification.md, `spec-check.py phase4a-investments` OK.
 
-Changed:
-- `importer/price.go`: `parseShares` (exact on decimal text; `sharesSnapToleranceInverse` 1e-9; `sharesBound` 10^12; faults `moneyPrecision`/`moneyTooLarge`/`moneyNotANumber`); shared grammar guards hoisted to `decimalColumn`, `parsePrice` now calls it (behaviour-neutral, existing price tests green).
-- `importer/investments.go`: rewritten tail. `investmentSubject` (`refuse`, `shares`, `money`, `readValues`), `splitSides`. Every share/amount/commission fault and NULL amount is now an offender in S.5 copy (`reasons.go` `reasonInvestment*`); `errUnreadableInvestmentValue` deleted. Placeholders stay plain errors: `errSharesWithoutSecurity` (non-zero shares, no resolved security; checked after the share parse) and `errUnreadableSplitRatio` (split side NULL, zero or unreadable) — message `investment transaction (source id N) <sentinel text>`.
-- Offender classes: shares/amount/commission precision reuse `classTransactionPrecision` (spec does not rule a class; comment in `offenders.go` widened), too large `classTooLarge`, not a number `classNotANumber`, NULL amount `classMissingValue`. S03 may re-rule.
-- Tests: `price_internal_test.go` `Test_parse_shares_snaps_residue_within_tolerance_and_refuses_beyond`; `investments_test.go` Import-level reasons table (10 rows), blob share count, undated-before-other-faults, residue snap, shares-without-security (no position / deleted security) + zero/NULL controls, split unreadable ratio (6 rows) + non-split ignores ratio; `run_investments_test.go` `Test_run_spend_and_cashflow_are_unchanged_by_investment_transactions` (helper `syncThenReport`; stdout+stderr of spend/cashflow text and `--json` byte-equal, window `--since/--until 2026-03`, "with" arm adds investment rows last).
-
-Mutations (backup + diff, restored byte-identical): `transactions.go:47` `t.Z_ENT = ?` -> `(t.Z_ENT = ? OR 1=1)` -> spend/cashflow test red at the byte-equal assertion (spend 80.00 -> 468.00; sync still exit 0). `price.go:51` snap tolerance `> 0` -> `>= 0` -> `.../residue_exactly_at_the_tolerance_snaps` red (expected 0 fault, actual 1).
-
-For V: do not redo mutations. Step 7 items remain: doc comments, `isDecimalText`/`securitiesQuery`/`quotesQuery` doc trims (STATE debt), `schema.md` regenerate, exact-count bumps, full verify, spec tick, STATE.md rewrite (drop the securities `Z_ENT` debt: B2 mutation already reddened `Test_import_leaves_out_a_security_row_of_another_entity`). STATE.md debt candidates: no test pins the share/amount `<v>` text for negative or exponent forms at Import level.
+- Sweep: `securitiesQuery`, `quotesQuery`, `isDecimalText` docs trimmed to budget (the quote-date REAL cast note moved into the SQL as a `--` comment); `schema.md` regenerated (adds `investment_transactions` and `investment_transactions_rows`). `Import`/`Rows`/`Counts` docs needed no change. No exact-count bumps were needed.
+- Verify: `go build` ok; `golangci-lint run ./...` 0 issues; full covered suite `go test rc=0`; `uncovered-diff.py --profile <cover> 3ce748a`: 0 uncovered added lines; `go test -race` importer and store/... ok.
+- `test-stats.py --base 3ce748a --changed`: cmd/quarry 666 (+2), internal/importer 203 (+26), v9fixture 9 (+1), duckstore 537 (+4); TOTAL 1415 (+33), tempdir 816 (+12), disk 739 (+9).
+- No mutations redone (B2/B3 ran them).

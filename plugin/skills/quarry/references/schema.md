@@ -118,6 +118,25 @@ each one's status.
 | `rates_fetch_error` | `VARCHAR` |
 | `securities_rows` | `BIGINT` |
 | `prices_rows` | `BIGINT` |
+| `investment_transactions_rows` | `BIGINT` |
+
+### investment_transactions
+
+| column | type |
+| --- | --- |
+| `id` | `VARCHAR` |
+| `source_id` | `BIGINT` |
+| `account_id` | `VARCHAR` |
+| `security_id` | `VARCHAR` |
+| `date` | `DATE` |
+| `action` | `VARCHAR` |
+| `shares` | `DECIMAL(18,6)` |
+| `amount` | `DECIMAL(18,2)` |
+| `commission` | `DECIMAL(18,2)` |
+| `currency` | `VARCHAR` |
+| `memo` | `VARCHAR` |
+| `split_new_shares` | `DECIMAL(18,6)` |
+| `split_old_shares` | `DECIMAL(18,6)` |
 
 ### payees
 

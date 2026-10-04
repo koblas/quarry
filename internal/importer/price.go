@@ -81,8 +81,7 @@ func decimalColumn(typ, text string) (*big.Rat, bool, moneyFault) {
 	return value, unsigned != text, moneyOK
 }
 
-// isDecimalText reports whether s is digits, an optional "." with digits, and an
-// optional exponent "e" or "E" with an optional sign and digits, as SQLite renders a number.
+// isDecimalText reports whether s is plain decimal text: digits, optional ".digits", optional exponent.
 func isDecimalText(s string) bool {
 	mantissa, exponent, hasExponent := strings.Cut(strings.ToLower(s), "e")
 	if hasExponent {
