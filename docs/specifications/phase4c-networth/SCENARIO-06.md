@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-06
-status: open
+status: done
 ---
 
 # SCENARIO-06: Daily balances combine cash and holdings
@@ -37,10 +37,10 @@ Spec: `specification.md` SCENARIO-06, N-5 (COMMENT verbatim), edge rows "Exclude
 - [x] Step 6: copy + pins — `internal/report/sql_conventions.go:4-44` new final paragraph (Deviation 1 text); `sql_conventions_test.go:19-23` add `v_balances_daily`, `:37-41` reworked so the action list still closes the investment paragraph; re-pin hand copies `internal/cli/sql_test.go:208-246`, `cmd/quarry/run_shared_documents_test.go:349-387` at existing wrap; `run_skill_schema_reference_test.go:173` Len 3→4, `:182` drop `v_balances_daily` (keep `v_net_worth`); `run_skill_references_test.go:21` pattern → `\bv_net_worth\b`, delete case `:101`; `duckstore/doc.go:8-12` name it; regenerate `plugin/skills/quarry/references/schema.md` with `go test ./cmd/quarry -run Test_skill_schema_reference_matches_the_committed_file -update`.
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `balancesDailyViewDDL`/`balancesDailyViewComment` within budget.
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `balancesDailyViewDDL`/`balancesDailyViewComment` within budget.
 
 ### Verify
-- [ ] Step 8: full verification + `.claude/scripts/spec-check.py phase4c-networth` → tick SCENARIO-06 with its acceptance test.
+- [x] Step 8: full verification + `.claude/scripts/spec-check.py phase4c-networth` → tick SCENARIO-06 with its acceptance test.
 
 ## Handoff
 
@@ -65,12 +65,10 @@ Spec: `specification.md` SCENARIO-06, N-5 (COMMENT verbatim), edge rows "Exclude
 
 ## Phase report
 
-Run B2 (steps 5-6) done; acceptance test green.
+Run V (steps 7-8) done; scenario complete.
 
-Files:
-- `internal/store/duckstore/schema.go:~335-355` final SELECT now reads `parts` through a subselect `b` adding `balance` (`cash + holdings_value` for investment accounts, else cash; DECIMAL(38,2)), then `ASOF LEFT JOIN fx_rates r` for `usd_cad`, `balance_cad`/`balance_usd` via `convertedToWide(..., 38)`. Placeholders gone; COMMENT was already in place.
-- `internal/store/duckstore/balances_daily_view_test.go` +6 tests (rate table of 6 rows, EUR NULLs, balance = cash + holdings, balance = cash outside investment, columns in order, note).
-- `internal/report/sql_conventions.go` new final paragraph (ruled text); pins: `sql_conventions_test.go` (`v_balances_daily` phrase, action-list test now checks paragraph 2's suffix, new test for last paragraph), `internal/cli/sql_test.go`, `cmd/quarry/run_shared_documents_test.go` hand copies; `run_skill_schema_reference_test.go` Len 4 and only `v_net_worth` unnamed; `run_skill_references_test.go` pattern `\bv_net_worth\b`, `v_balances_daily` case deleted; `duckstore/doc.go`; `plugin/skills/quarry/references/schema.md` regenerated with `-update`.
+Verified at 16b0782 (start 7cabe5a): `go build ./...` ok; `golangci-lint run ./...` 0 issues, rc 0; covered full suite rc 0, no FAIL/panic; `uncovered-diff.py --profile ... 7cabe5a` 0 uncovered added lines; `go test -race` on duckstore, report, cli rc 0.
 
-Green: step-5 narrow loop (duckstore `balances_daily|Test_query`, cmd `v_balances_daily`), cmd `schema_reference|references_name|documents_byte_for_byte`, `internal/report` and `internal/cli` sql tests; `go build ./...` and `golangci-lint run ./...` 0 issues.
-No mutation owned by B2 (plan's only check ran in B1). Full suite, coverage gate, spec tick, STATE.md rewrite: run V.
+test-stats --base 7cabe5a --changed: cmd/quarry 734 (+1), internal/cli 479 (+0), internal/report 387 (+1), internal/store/duckstore 636 (+18); TOTAL 2236 (+20), tempdir 713 (+1), disk 633 (+1).
+
+Spec ticked with acceptance test; `spec-check.py phase4c-networth` OK; STATE.md rewritten; plan `status: done`. Nothing for a later run in this scenario.
