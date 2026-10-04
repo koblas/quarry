@@ -1,6 +1,6 @@
 # Clean Architecture & Double-Loop Playbook
 
-`quarry` is **single Go binary**. One module at repo root, no frontend, no protos, no generated clients, no separate services. Anything in tree implying otherwise is bug — fix it, not work around. `plugin/` and `.claude-plugin/marketplace.json` are static files — the Claude Code plugin (skill, references, MCP config) that runs the installed `quarry` binary. They hold no program code and are not a second program.
+`quarry` is **single Go binary**. One module at repo root, no frontend, no protos, no generated clients, no separate services. Anything in tree implying otherwise is bug — fix it, not work around. `plugin/` and `.claude-plugin/marketplace.json` are static files (Claude Code plugin: skill, references, MCP config) for installed binary — no program code, not second program.
 
 ## Workflow rules
 

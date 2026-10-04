@@ -35,7 +35,8 @@ questions — skip the full procedure below:
    Missing *Planning* "Stored coverage claim" grid or "Injected adapters" wiring pin is MAJOR.
    Missing *Planning* out-of-domain row or "Siblings and mirrors" item is MAJOR. For static
    content (skill text, references, SQL, README), also ask: does each pinned behaviour claim
-   carry its `file:line` citation in the spec, and does a sibling file state a rule this one omits?
+   carry its `file:line` citation in the spec (`product-vision` → *The scoping pass owes the
+   literal copy*), and does a sibling file state a rule this one omits? Either gap is MAJOR.
 4. Does the diff touch only what the plan's steps name? Production file, behaviour or public
    symbol no step names is scope creep — name it, and whether a later scenario owns it. Plan
    with `Size: LIGHT` was written by developer itself: judge scope against spec's scenario.
