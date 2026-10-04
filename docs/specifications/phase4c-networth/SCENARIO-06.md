@@ -27,8 +27,8 @@ Spec: `specification.md` SCENARIO-06, N-5 (COMMENT verbatim), edge rows "Exclude
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_balances_daily_view_test.go` `Test_run_sql_combines_cash_and_valued_holdings_from_v_balances_daily` — `run sql --csv` over `replaceStoreWithRates` (`run_sql_fx_test.go:32`), template `run_holdings_view_test.go:14-58`. One CAD brokerage: a register txn plus a hand-built investment cash row (`InvestmentTransactionID` set — the store helper bypasses the importer); holdings priced CAD, priced USD (converted), unpriced, EUR. Assert every N-5 column for one date, incl. `holdings_unvalued` = 2. Keep to the Gherkin; edge arms live in duckstore tests.
-- [ ] Step 2: `internal/store/duckstore/schema.go:290` (after `holdingsViewDDL`) `balancesDailyViewDDL` + `balancesDailyViewComment` stub (columns only, no rows) appended to the Exec at `duckstore.go:454` **after** `holdingsViewDDL()`; `duckstore/query_test.go:31-35` `storeRelations` gains the view — red at the CSV assertion. Expected red outside the A/B1 loop until Step 6: `Test_skill_schema_reference_matches_the_committed_file` (from here), `…_carries_each_view_comment` (from Step 5).
+- [x] Step 1: `cmd/quarry/run_balances_daily_view_test.go` `Test_run_sql_combines_cash_and_valued_holdings_from_v_balances_daily` — `run sql --csv` over `replaceStoreWithRates` (`run_sql_fx_test.go:32`), template `run_holdings_view_test.go:14-58`. One CAD brokerage: a register txn plus a hand-built investment cash row (`InvestmentTransactionID` set — the store helper bypasses the importer); holdings priced CAD, priced USD (converted), unpriced, EUR. Assert every N-5 column for one date, incl. `holdings_unvalued` = 2. Keep to the Gherkin; edge arms live in duckstore tests.
+- [x] Step 2: `internal/store/duckstore/schema.go:290` (after `holdingsViewDDL`) `balancesDailyViewDDL` + `balancesDailyViewComment` stub (columns only, no rows) appended to the Exec at `duckstore.go:454` **after** `holdingsViewDDL()`; `duckstore/query_test.go:31-35` `storeRelations` gains the view — red at the CSV assertion. Expected red outside the A/B1 loop until Step 6: `Test_skill_schema_reference_matches_the_committed_file` (from here), `…_carries_each_view_comment` (from Step 5).
 
 ### Build
 - [ ] Step 3: `schema.go` `balancesDailyViewDDL` — grain + cash; new `internal/store/duckstore/balances_daily_view_test.go` (fixtures like `holdingRows`, `holdings_view_test.go:22-37`; today via `localToday()`, `accounts_test.go:19`, as `holdings_view_test.go:58-92`). Rows: first day = first txn when it precedes the first holding, and = first holding `from_date` when that precedes; last day today; no rows for an account with neither; no rows when its only txn is future-dated; closed, not-in-reports, linked-tracking each listed. Cash: a txn counts on its date and not the day before (bound); a day without txns carries prior cash; excluded-from-reports included; a future-dated txn absent from `cash` and `balance_cad` before its date. Non-investment account: `holdings_value` and `holdings_unvalued` NULL.
@@ -62,3 +62,20 @@ Spec: `specification.md` SCENARIO-06, N-5 (COMMENT verbatim), edge rows "Exclude
 - S09: at 3× scale a 200-date `IN` cost as much as the whole view; `v_net_worth` must be one pass over `v_balances_daily` (aggregate with `count(col) = count(*)` for the NULL-when-any-rate-missing rule), no per-row subqueries.
 - The COMMENT names `quarry networth` before that command exists; the skill drift test scans only code spans, so prose in schema.md does not trip it.
 - `cmd` store helpers bypass the importer: an investment cash row must be built by hand with `InvestmentTransactionID`.
+
+## Phase report
+
+Run A (steps 1-2) done; red.
+
+Files:
+- `cmd/quarry/run_balances_daily_view_test.go` — acceptance test. Fixture: one CAD brokerage `acct-cad`; register deposit +1000.00 and investment cash row `txn-inv-cad` -100.00 on 2026-03-02; holdings bought 03-02 (CAD priced 2.0 x 10 = 20.00, USD priced 1.0 x 20 USD = 25.00 CAD at 1.25, unpriced CAD, EUR priced); rates 03-05 1.25 and 03-12 1.30. Queries 2026-03-10: expects `cash 900.00, holdings_value 45.00, holdings_unvalued 2, balance 945.00, balance_cad 945.00, balance_usd 756.00, usd_cad 1.250000`.
+- `internal/store/duckstore/schema.go:292-315` — `balancesDailyViewComment` (N-5 text, final) and `balancesDailyViewDDL()` stub: typed NULL columns `WHERE false`, comment already attached. B1 replaces the SELECT body; B2/Step 5 keep the comment const as is.
+- `internal/store/duckstore/duckstore.go:454` — `balancesDailyViewDDL()` appended after `holdingsViewDDL()`.
+- `internal/store/duckstore/query_test.go:33` — `storeRelations` gains `v_balances_daily`.
+
+Red now (expected):
+- `Test_run_sql_combines_cash_and_valued_holdings_from_v_balances_daily` at its assertion: actual is the header only, no data row.
+- `Test_query_prints_every_column_of_each_table_and_view/v_balances_daily`: "Should NOT be empty" (view has no rows yet) — goes green with Step 3.
+- Outside the narrow loop until Step 6: `Test_skill_schema_reference_matches_the_committed_file` (not run here), later `…_carries_each_view_comment`.
+
+Do not redo: the stub already carries the column list and types (cash DECIMAL(18,2); holdings_value, balance, balance_cad, balance_usd DECIMAL(38,2); holdings_unvalued BIGINT; usd_cad DECIMAL(10,6)).

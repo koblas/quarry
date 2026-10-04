@@ -288,3 +288,23 @@ ASOF LEFT JOIN fx_rates r ON v.date >= r.date;
 COMMENT ON VIEW v_holdings IS '` + holdingsViewComment + `';
 `
 }
+
+// balancesDailyViewComment is the COMMENT ON VIEW text of v_balances_daily.
+const balancesDailyViewComment = "one row per account per day from its first transaction through today; " +
+	"cash is the sum of its transactions to that day, holdings_value its holdings' value in its own currency " +
+	"(NULL outside brokerage and retirement accounts), balance is cash plus holdings_value, " +
+	"as quarry accounts and quarry networth use; filter by date."
+
+// balancesDailyViewDDL creates v_balances_daily: one row per account per day, its cash and the value of its holdings.
+func balancesDailyViewDDL() string {
+	return `
+CREATE VIEW v_balances_daily AS
+SELECT CAST(NULL AS DATE) AS date, CAST(NULL AS VARCHAR) AS account_id, CAST(NULL AS VARCHAR) AS account,
+	CAST(NULL AS VARCHAR) AS type, CAST(NULL AS VARCHAR) AS currency, CAST(NULL AS DECIMAL(18,2)) AS cash,
+	CAST(NULL AS DECIMAL(38,2)) AS holdings_value, CAST(NULL AS BIGINT) AS holdings_unvalued,
+	CAST(NULL AS DECIMAL(38,2)) AS balance, CAST(NULL AS DECIMAL(38,2)) AS balance_cad,
+	CAST(NULL AS DECIMAL(38,2)) AS balance_usd, CAST(NULL AS DECIMAL(10,6)) AS usd_cad
+WHERE false;
+COMMENT ON VIEW v_balances_daily IS '` + strings.ReplaceAll(balancesDailyViewComment, "'", "''") + `';
+`
+}
