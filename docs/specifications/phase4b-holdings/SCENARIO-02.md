@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-02
-status: open
+status: done
 ---
 
 # SCENARIO-02: v_holdings values each holding on each day held
@@ -77,10 +77,10 @@ Spec: `specification.md` SCENARIO-02, H-2 (comment text R2 verbatim), H-3, H-5, 
   - **Fault rows:** add `Holdings` to `rowReads()` and its doc comment (`read_faults_test.go:20-48`). This covers the open, query, scan and close faults.
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Doc comments on `holdingsViewDDL`, `Holdings` and the `store.Holding*` types. Add `v_holdings` and `Holdings` to the view list in `duckstore/doc.go:6-14`. Bump any other exact relation or view list the full suite reports.
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Doc comments on `holdingsViewDDL`, `Holdings` and the `store.Holding*` types. Add `v_holdings` and `Holdings` to the view list in `duckstore/doc.go:6-14`. Bump any other exact relation or view list the full suite reports.
 
 ### Verify
-- [ ] Step 6: full verification + `spec-check.py phase4b-holdings` → tick SCENARIO-02 with its acceptance test; rewrite STATE.md
+- [x] Step 6: full verification + `spec-check.py phase4b-holdings` → tick SCENARIO-02 with its acceptance test; rewrite STATE.md
 
 ## Handoff
 
@@ -104,7 +104,7 @@ Spec: `specification.md` SCENARIO-02, H-2 (comment text R2 verbatim), H-3, H-5, 
 
 ## Phase report
 
-Run B1 (steps 2-4) done. Steps 1-4 ticked; steps 5-6 (Sweep, Verify) open for run V.
+Run V (steps 5-6) done; scenario complete, `status: done`, ticked in `specification.md`.
 
 - `internal/store/duckstore/schema.go` `holdingsViewDDL()` (+ consts `holdingsViewComment`, `lastHeldDay`), appended in `duckstore.go` `build`. `convert_sql.go`: `convertedTo` is now a 18-digit wrapper over `convertedToWide(target, amount, currency, rate, digits)`; the view uses 38.
 - `internal/store/store.go`: `HoldingsParams{AsOf}`, `Holdings{Holdings []Holding}`, `Holding` (cents `*big.Int`, `USDCAD money.Rate` zero when no rate). `duckstore/holdings.go`: `(*Store).Holdings`, LEFT JOINs accounts and securities so a holding is never dropped; order `a.name, a.source_id, v.account_id, v.security, s.source_id, v.security_id`.
@@ -112,4 +112,7 @@ Run B1 (steps 2-4) done. Steps 1-4 ticked; steps 5-6 (Sweep, Verify) open for ru
 - Acceptance test is green. Narrow loops green; `golangci-lint run ./...` 0 issues.
 - Two real overflows found by the largest-holding tests (red first, fixed): the view's `shares*price` multiplied DECIMAL(18,6) pair in 64 bits (now DECIMAL(19,6) casts), and `Holdings` reading `shares*1000000` (now via DECIMAL(38,6)).
 - Mutations (restored, diffed): cap -> `coalesce(to_date, current_date)` reddens `Test_holdings_view_stops_each_span_at_today/a_span_closed_after_today_ends_today` (got extra day); price `d.date >= p.date` -> `<=` reddens 5 rows of `Test_holdings_view_takes_the_latest_price_on_or_before_the_date`.
-- Not done, left for V: `duckstore/doc.go:6-14` view list (add `v_holdings`, `Holdings`), `typeof(date)` pin skipped on purpose (`Test_holdings_view_lists_its_columns_in_order` pins `date DATE`), doc-comment pass, full verification, spec tick, STATE.md, SCENARIO-02 `status: done`. STATE.md Open debts: sort differs from `quarry accounts` (lower(name) there).
+- `typeof(date)` pin skipped on purpose: `Test_holdings_view_lists_its_columns_in_order` pins `date DATE`.
+- Run V sweep: `duckstore/doc.go` names `v_holdings` and `Holdings`; `holdingsQuery` comment cut to one line; `golangci-lint run ./...` 0 issues.
+- Run V verify: full covered suite ok in every package; `uncovered-diff.py` 0 uncovered lines since 06f1957; `go test -race` on `internal/store` and `internal/store/duckstore` ok; `spec-check.py phase4b-holdings` OK. `test-stats.py --base 06f1957 --changed`: `cmd/quarry` 681 (+1), `internal/store/duckstore` 592 (+21), total 1273 (+22).
+- H-2 timing (throwaway test, deleted): 145 holdings x 3 spans from 2013-02-07, 500,251 prices, 3,600 rates. `SELECT * FROM v_holdings WHERE date = <recent>` warm 47-51 ms (145 rows); `count(*)` over the whole view 97 ms. EXPLAIN: the date FILTER sits directly above UNNEST (expansion materialises ~723k rows in 0.02 s) and below both ASOF joins, which see 145 rows.

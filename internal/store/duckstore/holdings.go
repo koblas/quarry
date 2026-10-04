@@ -9,8 +9,7 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// holdingsQuery reads v_holdings on $1 with its account and security names, shares and price in
-// millionths (the DECIMAL(38,6) casts keep the largest from overflowing 64 bits), values in cents and the rate in millionths, sorted on plain, not case-folded, names.
+// holdingsQuery reads v_holdings on $1 in the order store.Holdings documents, names not case-folded.
 const holdingsQuery = `
 SELECT v.account_id, v.security_id, a.name, a.source_id, a.closed, v.security, v.ticker, v.currency, s.source_id,
 	CAST(CAST(v.shares AS DECIMAL(38,6)) * 1000000 AS BIGINT), CAST(CAST(v.price AS DECIMAL(38,6)) * 1000000 AS BIGINT), v.price_date,
