@@ -172,11 +172,32 @@ func Test_holdings_orders_by_account_then_security_and_breaks_each_tie_in_turn(t
 			want:       []string{tierAccountA + "/sec-ghost-a", tierAccountA + "/sec-ghost-b"},
 		},
 		{
-			name:       "names compare as plain text, capitals before lower case",
-			accounts:   []store.Account{brokerage(tierAccountA, 1, "alpha"), brokerage(tierAccountB, 2, "Zulu")},
+			name:       "account names ignoring case, so a lower-case name sorts among capitals",
+			accounts:   []store.Account{brokerage(tierAccountA, 1, "Zulu"), brokerage(tierAccountB, 2, "alpha")},
 			securities: []store.Security{fund(secAcme, 1, "Acme")},
 			held:       []heldPair{{tierAccountA, secAcme}, {tierAccountB, secAcme}},
 			want:       []string{tierAccountB + "/" + secAcme, tierAccountA + "/" + secAcme},
+		},
+		{
+			name:       "account name as plain text when two names differ only in case",
+			accounts:   []store.Account{brokerage(tierAccountA, 1, "alpha"), brokerage(tierAccountB, 2, "Alpha")},
+			securities: []store.Security{fund(secAcme, 1, "Acme")},
+			held:       []heldPair{{tierAccountA, secAcme}, {tierAccountB, secAcme}},
+			want:       []string{tierAccountB + "/" + secAcme, tierAccountA + "/" + secAcme},
+		},
+		{
+			name:       "security names ignoring case, so a lower-case name sorts among capitals",
+			accounts:   []store.Account{brokerage(tierAccountA, 1, "Brokerage")},
+			securities: []store.Security{fund(secAcme, 1, "Zeta"), fund(secUSD, 2, "alpha")},
+			held:       []heldPair{{tierAccountA, secAcme}, {tierAccountA, secUSD}},
+			want:       []string{tierAccountA + "/" + secUSD, tierAccountA + "/" + secAcme},
+		},
+		{
+			name:       "security name as plain text when two names differ only in case",
+			accounts:   []store.Account{brokerage(tierAccountA, 1, "Brokerage")},
+			securities: []store.Security{fund(secAcme, 1, "alpha"), fund(secUSD, 2, "Alpha")},
+			held:       []heldPair{{tierAccountA, secAcme}, {tierAccountA, secUSD}},
+			want:       []string{tierAccountA + "/" + secUSD, tierAccountA + "/" + secAcme},
 		},
 	}
 

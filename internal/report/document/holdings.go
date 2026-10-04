@@ -130,9 +130,10 @@ func nonInvestmentWarnings(h report.Holdings) []string {
 			named = append(named, a)
 		}
 	}
-	// The same key as the holdings query's ORDER BY: plain name, then source id, then id.
+	// The same key as the holdings query's ORDER BY: name ignoring case, then name, source id, id.
 	slices.SortFunc(named, func(a, b store.Account) int {
-		return cmp.Or(strings.Compare(a.Name, b.Name), cmp.Compare(a.SourceID, b.SourceID), strings.Compare(a.ID, b.ID))
+		return cmp.Or(strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)), strings.Compare(a.Name, b.Name),
+			cmp.Compare(a.SourceID, b.SourceID), strings.Compare(a.ID, b.ID))
 	})
 	lines := make([]string, len(named))
 	for i, a := range named {

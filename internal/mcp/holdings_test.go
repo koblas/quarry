@@ -20,6 +20,8 @@ const (
 	holdingsLogPrefix = "quarry: mcp: holdings: "
 	holdingsConfigLog = "cannot read quarry's config file; run quarry holdings to see why"
 	asOfRefusedLine   = "refused the call's as_of; details went to the client only"
+	holdingsCutNote   = "holdings lists the first 500 holdings of 501; totals count every holding; " +
+		"pass fewer accounts, or query v_holdings where date = '2026-03-31' for the rest"
 )
 
 // decodeHoldings is result's one text block decoded as the holdings document.
@@ -51,13 +53,13 @@ func listed(doc document.Holdings) int { return len(doc.Holdings) }
 func Test_holdings_lists_the_first_500_and_totals_every_holding_with_a_cut_note(t *testing.T) {
 	h := newHarness(t, &fakeStore{held: cadHoldings(501)}, nil)
 
-	doc := decodeHoldings(t, h.holdings(t, map[string]any{"currency": "CAD"}))
+	doc := decodeHoldings(t, h.holdings(t, map[string]any{"currency": "CAD", "as_of": "2026-03-31"}))
 
 	require.Equal(t, 500, listed(doc))
 	assert.Equal(t, "sec-000", doc.Holdings[0].SecurityID)
 	assert.Equal(t, "sec-499", doc.Holdings[499].SecurityID)
 	assert.Equal(t, []document.HoldingsTotal{{Currency: "CAD", Value: "501.00"}}, doc.Totals)
-	assert.Equal(t, []string{"holdings lists the first 500 holdings of 501; query the v_holdings table for the rest"}, doc.Warnings)
+	assert.Equal(t, []string{holdingsCutNote}, doc.Warnings)
 }
 
 func Test_holdings_lists_exactly_500_with_no_cut_note(t *testing.T) {
@@ -76,12 +78,12 @@ func Test_holdings_puts_the_cut_note_after_the_config_warnings_and_the_holdings_
 	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
 	h := newHarness(t, &fakeStore{held: held}, nil, mcp.WithConfig(stub.load))
 
-	doc := decodeHoldings(t, h.holdings(t, map[string]any{}))
+	doc := decodeHoldings(t, h.holdings(t, map[string]any{"as_of": "2026-03-31"}))
 
 	require.Len(t, doc.Warnings, 3)
 	assert.Equal(t, configUnknownKeyWarning, doc.Warnings[0])
 	assert.Contains(t, doc.Warnings[1], "has no price")
-	assert.Equal(t, "holdings lists the first 500 holdings of 501; query the v_holdings table for the rest", doc.Warnings[2])
+	assert.Equal(t, holdingsCutNote, doc.Warnings[2])
 }
 
 func Test_holdings_reads_today_once_at_the_start_of_every_call(t *testing.T) {

@@ -32,10 +32,8 @@ func (s *Server) holdings(ctx context.Context, in holdingsInput) (any, error) {
 		return nil, accountRefusal(err)
 	}
 	doc := document.NewHoldings(held, append(configWarnings, document.HoldingsWarnings(held)...))
-	if total := len(doc.Holdings); total > maxRows {
-		doc.Holdings = doc.Holdings[:maxRows]
-		doc.Warnings = append(doc.Warnings, listCutWarning(toolHoldings, "holdings", "v_holdings", total))
-	}
+	doc.Holdings, doc.Warnings = capList(doc.Holdings, doc.Warnings, toolHoldings, "holdings",
+		"totals count every holding; pass fewer accounts, or query v_holdings where date = '"+doc.AsOf+"' for the rest")
 	return doc, nil
 }
 

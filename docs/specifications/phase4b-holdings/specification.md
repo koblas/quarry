@@ -181,7 +181,7 @@ Total                                                                           
   - **Priced on:** the price date, blank when there is no price.
   - **Currency:** `none` when NULL.
   - **Value:** `formatMoney`.
-- **Sort:** account name, account source_id, security name, security source_id.
+- **Sort:** account name ignoring case, then name, account source_id, security name ignoring case, then name, security source_id.
 - **Caption:** names the accounts the way `windowCaption` does.
 
 | Case | Price | Value | In column | In total? |
@@ -238,7 +238,7 @@ MCP tool `holdings`:
 - Description: `Securities held on one day with share count, latest price and its date, and value; cash in investment accounts is not included.`
 - Refusals use the sibling tools' error shape.
 - MCP rulings (2026-10-04, SCENARIO-13):
-  - The MCP result lists at most 500 holdings; totals cover all. A cut adds the existing `listCutWarning` note (noun `holdings`, full count) to `warnings[]`. Below 500 it is byte-identical to `--json`.
+  - The MCP result lists at most 500 holdings; totals cover all. A cut adds the shared `capList` note (noun `holdings`, full count) last in `warnings[]`: `holdings lists the first 500 holdings of 501; totals count every holding; pass fewer accounts, or query v_holdings where date = '<as_of>' for the rest`. Below 500 it is byte-identical to `--json`.
   - `quarry mcp --help` Tools line ends `…, search_transactions, holdings.`
   - Parameter descriptions: `as_of`: `Day to value holdings on: YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day. Defaults to today.`; `accounts`: `List only these accounts, each given by id or by name in any letter case. Omit it for every account.`
   - Refusals: `as_of "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`; `as_of 2027-01-01 is after today; holdings are valued up to today only, so pass an earlier as_of`; stderr `quarry: mcp: holdings: refused the call's as_of; details went to the client only`.

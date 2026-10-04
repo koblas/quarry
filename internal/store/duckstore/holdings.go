@@ -11,7 +11,7 @@ import (
 )
 
 // holdingsQueryFor reads v_holdings on $1, only in the named accounts when there are any (numbered from $2),
-// in the order store.Holdings documents, names not case-folded.
+// in the order store.Holdings documents.
 func holdingsQueryFor(accounts accountFilter) string {
 	filter := ""
 	if len(accounts) > 0 {
@@ -31,7 +31,7 @@ LEFT JOIN securities s ON s.id = v.security_id
 WHERE v.date = CAST($1 AS DATE)`
 
 const holdingsOrder = `
-ORDER BY a.name, a.source_id, v.account_id, v.security, s.source_id, v.security_id`
+ORDER BY lower(a.name), a.name, a.source_id, v.account_id, lower(v.security), v.security, s.source_id, v.security_id`
 
 // Holdings reads the holdings on params.AsOf in params.AccountIDs, the store's first rate date and the span of
 // those accounts' investment transactions, as store.Holdings documents; a day with none, or one after today,
