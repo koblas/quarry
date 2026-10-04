@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-03
-status: open
+status: done
 ---
 
 # SCENARIO-03: Investment income counts in cash flow (absorbs SCENARIO-04)
@@ -25,7 +25,7 @@ Premise: cash rows already flow through `v_cash_flow` by category kind (SCENARIO
 - [x] Step 3: copy, verbatim from `specification.md` → *Changes to existing surfaces*: `internal/cli/cashflow.go:55-59` (sentence between "here too." and "Uncategorized splits", paragraph rewrapped); `internal/cli/spend.go:36-38` (own paragraph after the one ending "Closed accounts are included."); `plugin/skills/quarry/SKILL.md:74` replaced.
 
 ### Sweep
-- [ ] Step 4 (run V): `go build ./... && golangci-lint run ./...` to `0 issues`; full verification; tick SCENARIO-03 and SCENARIO-04 (04 line: `delivered by SCENARIO-03`, its acceptance test last); `spec-check.py phase4c-networth`; STATE.md rewrite closing the 01a cash-flow re-cover and buy-row debts; `status: done`.
+- [x] Step 4 (run V): `go build ./... && golangci-lint run ./...` to `0 issues`; full verification; tick SCENARIO-03 and SCENARIO-04 (04 line: `delivered by SCENARIO-03`, its acceptance test last); `spec-check.py phase4c-networth`; STATE.md rewrite closing the 01a cash-flow re-cover and buy-row debts; `status: done`.
 
 ## Handoff
 
