@@ -152,6 +152,38 @@ func Test_holdings_total_leaves_out_values_with_no_conversion(t *testing.T) {
 	assert.Equal(t, []string{"CAD 350"}, totalValues(result))
 }
 
+func Test_holdings_total_leaves_out_a_security_quarry_does_not_convert(t *testing.T) {
+	rows := []store.Holding{
+		{Currency: new("CAD"), ValueCAD: big.NewInt(100)},
+		{Currency: nil, Value: big.NewInt(900)},
+		{Currency: new("EUR"), Value: big.NewInt(700)},
+	}
+
+	result := holdingsOf(t, rows, money.CAD)
+
+	assert.Equal(t, []string{"CAD 100"}, totalValues(result))
+}
+
+func Test_Convertible_is_true_only_for_a_security_in_cad_or_usd(t *testing.T) {
+	cases := []struct {
+		name     string
+		currency *string
+		want     bool
+	}{
+		{name: "CAD", currency: new("CAD"), want: true},
+		{name: "USD", currency: new("USD"), want: true},
+		{name: "EUR", currency: new("EUR"), want: false},
+		{name: "no currency", currency: nil, want: false},
+		{name: "lower case is not CAD", currency: new("cad"), want: false},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, report.Convertible(store.Holding{Currency: c.currency}))
+		})
+	}
+}
+
 func Test_holdings_total_sums_values_past_the_int64_range(t *testing.T) {
 	rows := []store.Holding{cadHolding(big.NewInt(math.MaxInt64)), cadHolding(big.NewInt(math.MaxInt64))}
 

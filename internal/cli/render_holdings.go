@@ -14,9 +14,10 @@ import (
 
 // The holdings table's cells for a row with nothing to show there.
 const (
-	holdingNoPriceCell    = "no price"
-	holdingNoCurrencyCell = "none"
-	holdingClosedSuffix   = " (closed)"
+	holdingNoPriceCell      = "no price"
+	holdingNoCurrencyCell   = "none"
+	holdingNotConvertedCell = "not converted"
+	holdingClosedSuffix     = " (closed)"
 )
 
 // renderHoldings renders h as the holdings table: caption, header, one row per holding in h's order, and
@@ -135,8 +136,15 @@ func holdingValue(h store.Holding) string {
 	return formatBigMoney(h.Value)
 }
 
-// holdingInCell is the value in the reporting currency, blank when the row has none.
+// holdingInCell is the value in the reporting currency: blank with no price, "not converted" for a
+// priced security quarry cannot convert, blank when the row has no converted value.
 func holdingInCell(l report.Holdings, h store.Holding) string {
+	if h.Price == nil {
+		return ""
+	}
+	if !report.Convertible(h) {
+		return holdingNotConvertedCell
+	}
 	if cents := l.Converted(h); cents != nil {
 		return formatBigMoney(cents)
 	}

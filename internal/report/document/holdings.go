@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/humanize"
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/store"
 )
 
 // bigCentsPerUnit is how many cents make one whole unit of currency.
@@ -105,13 +107,57 @@ func nullableMoney(cents *big.Int) *string {
 }
 
 // HoldingsWarnings is the unprefixed warning lines for h, in the order holdings prints them; never nil.
-// So far it carries the no-price line; the other lines join it in their own slots as they are built.
+// Slots: no price, no currency, other currency.
 func HoldingsWarnings(h report.Holdings) []string {
 	warnings := []string{}
 	if line, ok := noPriceWarning(h); ok {
 		warnings = append(warnings, line)
 	}
-	return warnings
+	warnings = append(warnings, noCurrencyWarnings(h)...)
+	return append(warnings, otherCurrencyWarnings(h)...)
+}
+
+// noCurrencyWarnings is one line per security with no currency, priced or not, in every mode.
+func noCurrencyWarnings(h report.Holdings) []string {
+	return perSecurity(h,
+		func(r store.Holding) bool { return r.Currency == nil },
+		func(name string, _ store.Holding) string {
+			return fmt.Sprintf("%q has no currency in Quicken, so quarry leaves its value out of the total; "+
+				"set its currency in Quicken, then run quarry sync", name)
+		})
+}
+
+// otherCurrencyWarnings is one line per priced security in a currency quarry does not convert; a native
+// listing totals it as it is, so it has none.
+func otherCurrencyWarnings(h report.Holdings) []string {
+	if h.Currency == money.Native {
+		return nil
+	}
+	return perSecurity(h,
+		func(r store.Holding) bool { return r.Price != nil && r.Currency != nil && !report.Convertible(r) },
+		func(name string, r store.Holding) string {
+			return fmt.Sprintf("%q is priced in %s, which quarry does not convert, so its value is left out of the total",
+				name, *r.Currency)
+		})
+}
+
+// perSecurity is line for the first row of each distinct security among the rows that qualify, in row order.
+// A security with no name is called by its id.
+func perSecurity(h report.Holdings, qualifies func(store.Holding) bool, line func(name string, r store.Holding) string) []string {
+	var lines []string
+	seen := map[string]bool{}
+	for _, r := range h.Rows {
+		if !qualifies(r) || seen[r.SecurityID] {
+			continue
+		}
+		seen[r.SecurityID] = true
+		name := r.SecurityID
+		if r.Security != nil {
+			name = *r.Security
+		}
+		lines = append(lines, line(name, r))
+	}
+	return lines
 }
 
 // noPriceWarning is the line that some of h's rows have no price on or before its as-of day, so they are

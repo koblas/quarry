@@ -2,6 +2,7 @@ package document_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -189,7 +190,7 @@ func Test_HoldingsWarnings_is_empty_not_nil(t *testing.T) {
 func unpricedHoldings(n int) []store.Holding {
 	rows := make([]store.Holding, n)
 	for i := range rows {
-		rows[i] = store.Holding{AccountID: "a-1", SecurityID: "s-1", Shares: 1_000_000}
+		rows[i] = store.Holding{AccountID: "a-1", SecurityID: "s-1", Shares: 1_000_000, Currency: new("CAD")}
 	}
 	return rows
 }
@@ -250,11 +251,10 @@ func Test_HoldingsWarnings_count_an_unpriced_holding_whatever_else_it_lacks_or_i
 		name string
 		row  store.Holding
 	}{
-		{name: "currency unknown", row: store.Holding{Shares: 1_000_000}},
 		{name: "currency CAD", row: store.Holding{Shares: 1_000_000, Currency: new("CAD")}},
 		{name: "currency EUR", row: store.Holding{Shares: 1_000_000, Currency: new("EUR")}},
-		{name: "account closed", row: store.Holding{Shares: 1_000_000, AccountClosed: true}},
-		{name: "negative shares", row: store.Holding{Shares: -500_000}},
+		{name: "account closed", row: store.Holding{Shares: 1_000_000, Currency: new("CAD"), AccountClosed: true}},
+		{name: "negative shares", row: store.Holding{Shares: -500_000, Currency: new("CAD")}},
 	}
 
 	for _, c := range cases {
@@ -268,6 +268,119 @@ func Test_HoldingsWarnings_count_an_unpriced_holding_whatever_else_it_lacks_or_i
 				assert.Contains(t, got[0], "1 holding has no price")
 			})
 		}
+	}
+}
+
+// heldSecurity is one holding of security id in account a-1; a nil price leaves it unpriced.
+func heldSecurity(id string, name, currency *string, price *int64) store.Holding {
+	return store.Holding{AccountID: "a-1", SecurityID: id, Security: name, Currency: currency, Price: price, Shares: 1_000_000}
+}
+
+func Test_HoldingsWarnings_say_which_securities_have_no_conversion(t *testing.T) {
+	const (
+		noCurrencyFormat = "%s has no currency in Quicken, so quarry leaves its value out of the total; " +
+			"set its currency in Quicken, then run quarry sync"
+		otherFormat = "%s is priced in %s, which quarry does not convert, so its value is left out of the total"
+		noPriceOne  = "1 holding has no price on or before 2026-03-12, so it has no value and is left out of the total; enter a price for it in Quicken, then run quarry sync"
+		mystery     = `"Mystery Fund"`
+		euro        = `"Euro Fund"`
+	)
+	priced := new(int64(1_000_000))
+	twoAccounts := []store.Holding{heldSecurity("s-1", new("Mystery Fund"), nil, priced), heldSecurity("s-1", new("Mystery Fund"), nil, priced)}
+	twoAccounts[1].AccountID = "a-2"
+	cases := []struct {
+		name     string
+		rows     []store.Holding
+		currency money.Currency
+		want     []string
+	}{
+		{
+			name: "no currency in CAD", currency: money.CAD,
+			rows: []store.Holding{heldSecurity("s-1", new("Mystery Fund"), nil, priced)},
+			want: []string{fmt.Sprintf(noCurrencyFormat, mystery)},
+		},
+		{
+			name: "no currency in USD", currency: money.USD,
+			rows: []store.Holding{heldSecurity("s-1", new("Mystery Fund"), nil, priced)},
+			want: []string{fmt.Sprintf(noCurrencyFormat, mystery)},
+		},
+		{
+			name: "no currency in native", currency: money.Native,
+			rows: []store.Holding{heldSecurity("s-1", new("Mystery Fund"), nil, priced)},
+			want: []string{fmt.Sprintf(noCurrencyFormat, mystery)},
+		},
+		{
+			name: "EUR in CAD", currency: money.CAD,
+			rows: []store.Holding{heldSecurity("s-2", new("Euro Fund"), new("EUR"), priced)},
+			want: []string{fmt.Sprintf(otherFormat, euro, "EUR")},
+		},
+		{
+			name: "EUR in USD", currency: money.USD,
+			rows: []store.Holding{heldSecurity("s-2", new("Euro Fund"), new("EUR"), priced)},
+			want: []string{fmt.Sprintf(otherFormat, euro, "EUR")},
+		},
+		{
+			name: "EUR in native is totalled as it is, so no line", currency: money.Native,
+			rows: []store.Holding{heldSecurity("s-2", new("Euro Fund"), new("EUR"), priced)},
+			want: []string{},
+		},
+		{
+			name: "CAD and USD securities have no line", currency: money.CAD,
+			rows: []store.Holding{heldSecurity("s-1", new("A"), new("CAD"), priced), heldSecurity("s-2", new("B"), new("USD"), priced)},
+			want: []string{},
+		},
+		{
+			name: "one security held in two accounts has one line", currency: money.CAD,
+			rows: twoAccounts,
+			want: []string{fmt.Sprintf(noCurrencyFormat, mystery)},
+		},
+		{
+			name: "several lines keep table order and name the currency as stored", currency: money.CAD,
+			rows: []store.Holding{
+				heldSecurity("s-1", new("Zeta"), nil, priced), heldSecurity("s-2", new("Alpha"), new("GBP"), priced),
+				heldSecurity("s-3", new("Mid"), nil, priced), heldSecurity("s-4", new("Beta"), new("EUR"), priced),
+			},
+			want: []string{
+				fmt.Sprintf(noCurrencyFormat, `"Zeta"`), fmt.Sprintf(noCurrencyFormat, `"Mid"`),
+				fmt.Sprintf(otherFormat, `"Alpha"`, "GBP"), fmt.Sprintf(otherFormat, `"Beta"`, "EUR"),
+			},
+		},
+		{
+			name: "no price, no currency and other currency come in that order", currency: money.CAD,
+			rows: []store.Holding{
+				heldSecurity("s-1", new("Mystery Fund"), nil, priced), heldSecurity("s-2", new("Euro Fund"), new("EUR"), priced),
+				heldSecurity("s-3", new("Bare"), new("CAD"), nil),
+			},
+			want: []string{noPriceOne, fmt.Sprintf(noCurrencyFormat, mystery), fmt.Sprintf(otherFormat, euro, "EUR")},
+		},
+		{
+			name: "an unpriced security with no currency has both lines", currency: money.CAD,
+			rows: []store.Holding{heldSecurity("s-1", new("Mystery Fund"), nil, nil)},
+			want: []string{noPriceOne, fmt.Sprintf(noCurrencyFormat, mystery)},
+		},
+		{
+			name: "an unpriced EUR security is not priced in EUR, so only the no-price line", currency: money.CAD,
+			rows: []store.Holding{heldSecurity("s-2", new("Euro Fund"), new("EUR"), nil)},
+			want: []string{noPriceOne},
+		},
+		{
+			name: "a security with no name is called by its id", currency: money.CAD,
+			rows: []store.Holding{heldSecurity("sec-9", nil, nil, priced)},
+			want: []string{fmt.Sprintf(noCurrencyFormat, `"sec-9"`)},
+		},
+		{
+			name: "a quote in the name is escaped", currency: money.CAD,
+			rows: []store.Holding{heldSecurity("s-1", new(`Fund "X"`), nil, priced)},
+			want: []string{fmt.Sprintf(noCurrencyFormat, `"Fund \"X\""`)},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := report.Holdings{Rows: c.rows, AsOf: time.Date(2026, 3, 12, 0, 0, 0, 0, time.UTC), Currency: c.currency}
+
+			assert.Equal(t, c.want, document.HoldingsWarnings(h))
+		})
 	}
 }
 

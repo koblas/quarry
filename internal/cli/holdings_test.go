@@ -402,6 +402,67 @@ func Test_holdings_listing_of_only_unpriced_holdings_has_no_total_row(t *testing
 	}
 }
 
+// unconvertibleHolding is brokerageHolding priced in currency, which the store leaves unconverted.
+func unconvertibleHolding(currency *string) store.Holding {
+	h := brokerageHolding()
+	h.Currency, h.ValueCAD, h.ValueUSD = currency, nil, nil
+	return h
+}
+
+func Test_holdings_in_column_says_not_converted_for_a_priced_security_it_cannot_convert(t *testing.T) {
+	cases := []struct {
+		name     string
+		args     []string
+		currency *string
+	}{
+		{name: "no currency in CAD", currency: nil},
+		{name: "no currency in USD", args: []string{"--currency", "USD"}, currency: nil},
+		{name: "EUR in CAD", currency: new("EUR")},
+		{name: "EUR in USD", args: []string{"--currency", "USD"}, currency: new("EUR")},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			fake := fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{unconvertibleHolding(c.currency)}}}
+
+			err := executeHoldings(t, fake, &stdout, &stderr, c.args...)
+
+			require.NoError(t, err)
+			assert.Regexp(t, `(?m)^Brokerage +Acme Corp \(ACME\) .* +not converted$`, stdout.String())
+			assert.NotContains(t, stdout.String(), "Total")
+		})
+	}
+}
+
+func Test_holdings_in_column_has_no_not_converted_where_the_row_is_unpriced_or_the_listing_native(t *testing.T) {
+	unpricedNone, unpricedEUR := bareHolding(), bareHolding()
+	unpricedNone.Currency, unpricedEUR.Currency = nil, new("EUR")
+	cases := []struct {
+		name string
+		args []string
+		row  store.Holding
+	}{
+		{name: "an unpriced security with no currency", row: unpricedNone},
+		{name: "an unpriced EUR security", row: unpricedEUR},
+		{name: "a priced security with no currency in native", args: []string{"--currency", "native"}, row: unconvertibleHolding(nil)},
+		{name: "a priced EUR security in native", args: []string{"--currency", "native"}, row: unconvertibleHolding(new("EUR"))},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			fake := fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{c.row}}}
+
+			err := executeHoldings(t, fake, &stdout, &stderr, c.args...)
+
+			require.NoError(t, err)
+			assert.Contains(t, stdout.String(), c.row.Account)
+			assert.NotContains(t, stdout.String(), "not converted")
+		})
+	}
+}
+
 func Test_holdings_json_lists_no_holdings_as_an_empty_array(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 

@@ -44,6 +44,12 @@ func (l Holdings) Converted(h store.Holding) *big.Int {
 	return nil
 }
 
+// Convertible reports whether h's security is priced in CAD or USD, the only currencies quarry converts;
+// a security with no currency, or any other, is never converted.
+func Convertible(h store.Holding) bool {
+	return h.Currency != nil && (*h.Currency == "CAD" || *h.Currency == "USD")
+}
+
 // Holdings lists the holdings on req.AsOf with the total of their values in req.Currency.
 // It refuses like Status, and reads the store once.
 func (s *Server) Holdings(ctx context.Context, req HoldingsRequest) (Holdings, error) {
