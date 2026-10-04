@@ -14,12 +14,18 @@
 | --- | --- | --- | --- | --- |
 | 1 | arch, correctness, test, refactor | 0/3/23/13 | skipped (no production Go) | BLOCKED |
 | 2 | correctness, test | 0/0/1/2 | skipped (no production Go) | PASS WITH FOLLOW-UPS |
+| final pass | product-vision | 0/3/0/1 | - | SHIP WITH CHANGES |
+| 3 | correctness, test | 0/2/0/2 (1 MAJOR rejected) | skipped (no production Go) | BLOCKED |
 
 ## Tokens
 
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
 | --- | --- | --- | --- |
+| final pass | SKILL.md §1 renders `null` for dates.last / rates.last | plugin/skills/quarry/SKILL.md:15,17 | SCENARIO-01 |
+| final pass | README claims quarry sends nothing anywhere | README.md:23 | SCENARIO-01 |
+| final pass | recipe currency not tied to reporting currency | plugin/skills/quarry/references/spending.md:45 | SCENARIO-03 |
+| gate R3 | README privacy line still false (rate fetch start_date) | README.md:23 | SCENARIO-01 |
 | gate R1 | recipe currency ELSE arm mislabels non-CAD values as converted USD | plugin/skills/quarry/references/sql/spending-trend.sql:16 | SCENARIO-04 |
 | gate R1 | trend guidance lacks partial-period caveat | plugin/skills/quarry/references/spending.md:48 | SCENARIO-03 |
 | gate R1 | P4 recipe pins driven by hand-kept maps, not disk | cmd/quarry/run_skill_recipes_test.go:487 | SCENARIO-04 |
