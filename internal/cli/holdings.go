@@ -8,12 +8,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const holdingsAsOfFlagHelp = "value holdings on `date` (YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day; default today)"
+const holdingsAccountFlagHelp = "list only the account with this `name` or id; repeat for more"
+
+const holdingsAsOfFlagHelp ="value holdings on `date` (YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day; default today)"
 
 // newHoldingsCommand builds holdings: the securities held in each account on one day, with their value.
 func newHoldingsCommand(newReport ReportFactory, loadConfig ConfigLoader, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var currency currencyFlag
 	var asOfFlag string
+	var accounts []string
 	cmd := &cobra.Command{
 		Use:   "holdings",
 		Short: "List the securities held in each account and their value",
@@ -71,6 +74,7 @@ accounts is not included, so it is not those accounts' balance.`,
 		},
 	}
 	cmd.Flags().StringVar(&asOfFlag, "as-of", "", holdingsAsOfFlagHelp)
+	cmd.Flags().StringArrayVar(&accounts, "account", nil, holdingsAccountFlagHelp)
 	currency.bind(cmd, holdingsCurrencyHelp)
 	return cmd
 }

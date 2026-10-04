@@ -16,6 +16,7 @@ import (
 type HoldingsRequest struct {
 	AsOf     time.Time
 	Currency money.Currency
+	Accounts []string
 }
 
 // HoldingsTotal is the sum of the values of the rows it covers, in Currency.
@@ -32,6 +33,7 @@ type Holdings struct {
 	AsOf      time.Time
 	Currency  money.Currency
 	FirstRate time.Time
+	Accounts  []store.Account
 }
 
 // Converted is h's value in the reporting currency in cents; nil in a native listing and when no

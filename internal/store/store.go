@@ -158,7 +158,8 @@ type Price struct {
 
 // HoldingsParams selects what Holdings reads: the holdings on AsOf, a calendar day held as UTC midnight.
 type HoldingsParams struct {
-	AsOf time.Time
+	AsOf       time.Time
+	AccountIDs []string
 }
 
 // Holdings is every holding on the day asked for, in account name, account source id, security name,

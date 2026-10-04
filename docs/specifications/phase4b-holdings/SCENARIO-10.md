@@ -17,8 +17,8 @@ Surveyed (grep, production only): `store.HoldingsParams` is built in one place, 
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_holdings_account_test.go` `Test_run_holdings_account_filter_lists_the_named_accounts_and_warns_for_chequing` — `holdingsRows()` (`run_holdings_test.go:51`) plus `chequingAccount("acct-chq", 4)`; `--account Brokerage --account Chequing`: stdout caption `Holdings on 2026-03-12 in Brokerage, Chequing, amounts in CAD; cash not included`, the Acme line and Total only, built with the file's OWN line helper sized to the filtered fixture (`holdingsLine`, `run_holdings_test.go:16-25`, is sized to the 3-account table and misaligns); stderr exactly the S.3 non-investment line with `quarry: warning: ` prefix; exit 0
-- [ ] Step 2: signature-only stubs so it compiles: `store.HoldingsParams.AccountIDs`, `report.HoldingsRequest.Accounts`, `report.Holdings.Accounts`, `--account` flag registered
+- [x] Step 1: `cmd/quarry/run_holdings_account_test.go` `Test_run_holdings_account_filter_lists_the_named_accounts_and_warns_for_chequing` — `holdingsRows()` (`run_holdings_test.go:51`) plus `chequingAccount("acct-chq", 4)`; `--account Brokerage --account Chequing`: stdout caption `Holdings on 2026-03-12 in Brokerage, Chequing, amounts in CAD; cash not included`, the Acme line and Total only, built with the file's OWN line helper sized to the filtered fixture (`holdingsLine`, `run_holdings_test.go:16-25`, is sized to the 3-account table and misaligns); stderr exactly the S.3 non-investment line with `quarry: warning: ` prefix; exit 0
+- [x] Step 2: signature-only stubs so it compiles: `store.HoldingsParams.AccountIDs`, `report.HoldingsRequest.Accounts`, `report.Holdings.Accounts`, `--account` flag registered
 
 ### Build
 - [ ] Step 3: filter reaches the reader — `store/store.go:159-162` `AccountIDs []string` (empty reads every account); `duckstore/holdings.go:13-24,34` const → `holdingsQueryFor(accountFilter)` adding `AND v.account_id IN (<marks(2)>)`, args `civilDay` then ids; `report/holdings.go:12-16,27-35,64-71` `HoldingsRequest.Accounts []string`, `Holdings.Accounts []store.Account`, `Server.Holdings` calls `namedAccounts(ctx, "holdings", req.Accounts)` first and passes ids in the one `store.Holdings` call; no names → no `store.Accounts` read, `AccountIDs` nil (the `internal/cli/holdings_test.go:~160` equality pin stays true). Tests: `duckstore/holdings_account_test.go` (new) `Test_holdings_reads_only_the_named_accounts` (one, two, none = all, an id naming no account = empty not error, closed account listed, ids in another order keep table order); `report/holdings_account_test.go` (new): names resolve in the order given (name, id, name ignoring case), same account by name and id is one entry, unknown and empty arg → `RefusalUnknownAccount` with no `Holdings` read (`holdingsReads`), ambiguous name → `RefusalAmbiguousAccount`, `store.Accounts` fault → `readRefusal`, no names → `accountsReads` zero and `AccountIDs` nil, one-read fake whose second `Holdings` call returns other rows
@@ -49,3 +49,17 @@ Surveyed (grep, production only): `store.HoldingsParams` is built in one place, 
 - A filtered table is narrower than the 3-account fixture: `holdingsLine` (`run_holdings_test.go:16-25`) misaligns it; `run_holdings_account_test.go` carries its own line helper
 - An exact-empty stderr assertion for a named investment account with no holdings goes stale when S09 lands: assert `NotContains`
 - Refusals are `RefusalError` (exit 1), not `UsageError` (exit 2)
+
+## Phase report
+
+Run A (steps 1-2) done. Acceptance red, nothing else touched.
+
+Files:
+- `cmd/quarry/run_holdings_account_test.go` (new): `holdingsAccountLine` (Brokerage-only widths 9/16/6/5/10/8/9/9) and the acceptance test; fixture is `holdingsRows()` plus `chequingAccount("acct-chq", 4)` through `replaceStoreWithRates` inline.
+- Signature-only stubs: `store.HoldingsParams.AccountIDs` (`internal/store/store.go:160`), `report.HoldingsRequest.Accounts []string` and `report.Holdings.Accounts []store.Account` (`internal/report/holdings.go:16,29`), `--account` registered in `internal/cli/holdings.go` (`StringArrayVar` into a local `accounts`, const `holdingsAccountFlagHelp` S.1 verbatim) but NOT passed into `HoldingsRequest` yet.
+
+Red (`go test ./cmd/quarry/ -run Test_run_holdings_account_filter`): stdout caption is `in all accounts` and the table lists all three accounts (expected `in Brokerage, Chequing` and Acme + Total only); stderr is empty (expected the non-investment line). Layout of the expected table matches the real one.
+
+Green still: `go test ./internal/cli/ ./internal/report/... ./internal/store/...` all ok with the stubs.
+
+Next run (B1): wire `accounts` into `HoldingsRequest.Accounts` at `cli/holdings.go` (the local `accounts` is currently unused beyond the flag bind). Nothing to undo.
