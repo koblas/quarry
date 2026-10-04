@@ -1,6 +1,6 @@
 # phase4b-holdings — current state
 
-Scenarios complete: SCENARIO-01 (folds 14), SCENARIO-02, SCENARIO-03. Last updated by SCENARIO-03.
+Scenarios complete: SCENARIO-01 (folds 14), SCENARIO-02, SCENARIO-03, SCENARIO-04. Last updated by SCENARIO-04.
 
 Inherited, still binding: `../phase4a-investments/STATE.md` — read its Binding decisions and Traps for the importer, the share gate (`CheckShares`, tolerance 0.000001), share formatters, `store.Action*`, DECIMAL(18,6) shares, `schema.md` regeneration and the `Z_ENT` / `CAST(... AS REAL)` fixture traps. Only what 4b changed or added is below.
 
@@ -15,7 +15,7 @@ Inherited, still binding: `../phase4a-investments/STATE.md` — read its Binding
 - Go value types: `Value`, `ValueCAD`, `ValueUSD` are `*big.Int` cents, nil when NULL; renderers, `document.Holdings` and totals sum and format `*big.Int`, never int64. `Shares`/`Price` int64 millionths. `Holdings.Holdings` is a nil slice when empty (`--json` emits `[]`). `USDCAD` is `money.Rate` zero when no rate (SCENARIO-02, SCENARIO-03)
 - Same-currency conversion needs no rate: CAD row `value_cad = value`, USD row `value_usd = value`, even before the first rate. S08's `no rate` cell and warning test that a conversion needed a rate, not `value_cad IS NULL` (NULL also covers no price, NULL currency, EUR) (SCENARIO-02)
 - Sort (S.2): plain, not case-folded, names — `a.name, a.source_id, v.account_id, v.security, s.source_id, v.security_id`. H-2 timing: warm `WHERE date = <recent>` ~50 ms; filter sits above the day expansion, below both ASOF joins (SCENARIO-02)
-- H-3, one owner: `report.Holdings.Totals` — a total exists for the reporting currency iff at least one row contributes a non-nil converted value (zero counts, negative counts), not when the sum is non-zero; none in native, none when empty. S04 adds native per-currency totals (CAD, USD, then alphabetical), S08 the unconverted ones after the converted; renderers and `document` only format it (SCENARIO-03)
+- H-3, one owner: `report.Holdings.Totals` — a total exists for a currency iff at least one row contributes a non-nil value (zero counts, negative counts), not when the sum is non-zero; none when empty. Converted modes: one total in the reporting currency. Native (`nativeTotals`): one per non-NULL stored security currency summing each row's own `Value`, CAD, USD, then alphabetical; NULL-currency or unpriced rows never contribute. S08 appends the unconverted totals after the converted; renderers (`holdingsNativeTotalRow`: Currency cell width-2, Value cell width-1) and `document` only format it (SCENARIO-03, SCENARIO-04)
 - `report.Today(now)` (`window.go`) is the as-of default — now's calendar day in now's own zone as UTC midnight; `DefaultWindow` uses it; S05's `--as-of` defaults through it into `HoldingsRequest.AsOf` (SCENARIO-03)
 - Money formatting: `document.BigMoney` owns the `*big.Int` cents split (ungrouped, for JSON); cli `formatBigMoney` groups its whole part via `humanize.ThousandsDigits`; `formatPrice` groups thousands like `formatShares` (`1,234.50`, min 2 decimals) — S.2 did not rule on price grouping, this pin is the decision (SCENARIO-03)
 - `holdingInCell` is the single In-cell owner; it already drops the In column and the `, amounts in` caption suffix for `money.Native`. S07/S08 add arms by branching on row facts (security currency, whether a rate was needed), never on `Converted == nil` (SCENARIO-03)
@@ -23,7 +23,6 @@ Inherited, still binding: `../phase4a-investments/STATE.md` — read its Binding
 - Holdings does not reuse the spend/cashflow/recurring composers: not-in-reports and linked-tracking accounts are listed with no left-out warning (SCENARIO-03)
 
 ## Left unbuilt
-- `--currency native` Total rows and native caption pin — SCENARIO-04
 - `--as-of` flag and refusals — SCENARIO-05/11; `--account`, its caption and non-empty `account_filter` — SCENARIO-10 (flags are unregistered until then, so usage and unknown-flag tables treat them as unknown)
 - `no price` warning and JSON row pin — SCENARIO-06/12; `not converted` — SCENARIO-07; `no rate` cell/warning and unconverted totals — SCENARIO-08; empty-result warnings — SCENARIO-09; MCP `holdings` — SCENARIO-13
 - `holding_shares` / `v_holdings` sentence in `report/sql_conventions.go`, action-vocabulary sentence, SKILL.md and hand copies — SCENARIO-15
@@ -35,6 +34,7 @@ Inherited, still binding: `../phase4a-investments/STATE.md` — read its Binding
 - LSP `findReferences` on `FormatVersion` / `refreshRates` misses `rates.go` call sites and every test; use grep (SCENARIO-01)
 - Worktree-isolation hook refuses `go test` / `uncovered-diff.py` whose path comes from a shell variable, and any compound command (`cd ... &&`, heredoc, `> file`): pass the coverage profile as a literal absolute path under the scratchpad, one plain command per call; write files with Edit/Write (SCENARIO-01, SCENARIO-02, SCENARIO-03)
 - `cmd/quarry/run_investments_test.go` is at 480 lines: new `cmd/quarry` holdings tests go in their own files (`run_holdings_test.go`, `run_holdings_view_test.go`, `run_holding_shares_test.go`) (SCENARIO-01, SCENARIO-03)
+- `run_holdings_test.go` shares `seedHoldingsStore`, `holdingsClock`, `holdingsNativeLine` (CAD + USD + closed-account fixture): later holdings command tests reuse them rather than re-seeding (SCENARIO-04)
 - `v_holdings` operands are cast to DECIMAL(19,6) before multiplying and `Holdings` reads shares/price through DECIMAL(38,6): do not simplify either cast (SCENARIO-02)
 - "Through today" arms use `localToday()` (DuckDB `current_date`): fixed dates in tests must not be after the real date; command tests use a past `spendEnvAt` clock (SCENARIO-02, SCENARIO-03)
 - `phase4ViewPattern` (`run_skill_references_test.go:21`) and the schema.md `Len` pin are shared: a new view's schema.md regen, the `Len` bump and pin retirement land together (SCENARIO-02)

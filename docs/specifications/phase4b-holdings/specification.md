@@ -403,7 +403,7 @@ Architect sizing pass 2026-10-04 (one pass over all 16; folds change no scenario
 - [x] SCENARIO-14: Sync fetches exchange rates back to the earliest investment transaction — delivered by SCENARIO-01 — `internal/store/duckstore/rates_test.go` `Test_replace_asks_for_rates_from_the_earliest_investment_transaction`
 - [x] SCENARIO-02: v_holdings values each holding on each day held — `cmd/quarry/run_holdings_view_test.go` `Test_run_sql_values_each_holding_on_a_date_from_v_holdings`
 - [x] SCENARIO-03: quarry holdings lists today's holdings in the reporting currency — `cmd/quarry/run_holdings_test.go` `Test_run_holdings_lists_todays_holdings_in_the_reporting_currency`
-- [ ] SCENARIO-04: Native currency lists each currency's own total
+- [x] SCENARIO-04: Native currency lists each currency's own total — `cmd/quarry/run_holdings_test.go` `Test_run_holdings_native_lists_each_currencys_own_total`
 - [ ] SCENARIO-05: Holdings on a past date
 - [ ] SCENARIO-11: quarry holdings refuses a date it cannot use
 - [ ] SCENARIO-06: A holding with no price is listed without value

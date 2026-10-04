@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-04
-status: open
+status: done
 ---
 
 # SCENARIO-04: Native currency lists each currency's own total
@@ -24,10 +24,10 @@ Spec: S.2 native rules, R1, S.5 `totals`; H-3. No new copy lines (no help, warni
 - [x] Step 3: `internal/cli/render_holdings.go:41-43` native arm — one `Total` row per `h.Totals` entry with Currency and Value cells filled (`holdingsNativeTotalRow`). Tests `render_holdings_internal_test.go` (two currencies, in order; no totals → no Total row); JSON `totals` one entry per currency in that order, read back in `internal/report/document/holdings_test.go`
 
 ### Sweep
-- [ ] Step 4: `go build ./... && golangci-lint run ./...` at `0 issues`; doc comments
+- [x] Step 4: `go build ./... && golangci-lint run ./...` at `0 issues`; doc comments
 
 ### Verify
-- [ ] Step 5: full verification, `spec-check.py`, tick SCENARIO-04, rewrite STATE.md
+- [x] Step 5: full verification, `spec-check.py`, tick SCENARIO-04, rewrite STATE.md
 
 ## Handoff
 
@@ -35,11 +35,11 @@ Spec: S.2 native rules, R1, S.5 `totals`; H-3. No new copy lines (no help, warni
 
 ## Phase report
 
-Run L done (steps 1-3); `V` (steps 4-5) left.
+Runs L and V done (steps 1-5). Verify: build ok, lint `0 issues`, full suite rc 0 (`go test -count=1 -coverpkg=./...`), `uncovered-diff.py` 0 uncovered added lines since 1b79304, `go test -race` on report, document, cli ok, `spec-check.py phase4b-holdings` OK. `test-stats.py --base 1b79304 --changed`: cmd/quarry 683 (+1), internal/cli 452 (+2), internal/report 357 (+4), TOTAL 1492 (+7); disk 480 (-1) in cmd/quarry because the S03 test's disk-touching seed moved into the shared `seedHoldingsStore` helper, not a test removed.
 
 - Red: `Test_run_holdings_native_lists_each_currencys_own_total` failed at its assertion (`cmd/quarry/run_holdings_test.go`): actual stdout ended after the Old RRSP row, the two `Total` rows were missing. Green after steps 2-3.
 - `cmd/quarry/run_holdings_test.go`: S03 fixture extracted to `seedHoldingsStore`, `holdingsClock`, `holdingsNativeLine` helpers; S03 acceptance test unchanged in behaviour.
 - `internal/report/holdings.go`: `total()` branches to `nativeTotals()` (per non-NULL stored currency, `nativeRank` CAD 0 / USD 1 / rest 2 then `strings.Compare`); nil `Currency` or nil `Value` never contributes. Converted modes unchanged. New imports `cmp`, `slices`, `strings`.
 - `internal/cli/render_holdings.go`: native arm appends `holdingsNativeTotalRow` per `h.Totals` entry (Currency cell = width-2, Value cell = width-1).
 - Tests: `internal/report/holdings_test.go` (+4: order, per-currency sum, NULL excluded, unpriced/zero), `internal/cli/render_holdings_internal_test.go` (+1), `internal/cli/holdings_test.go` (+1, native `--json` totals order and null `converted_value`). No change needed in `document` (it formats `Totals` in order); its existing tests cover that.
-- Not done: lint, doc.go/STATE updates, full suite, spec tick (V). STATE.md still says "none in native" for Totals (H-3 entry) and lists native Total rows as left unbuilt: V rewrites both.
+- Spec ticked, STATE.md rewritten (H-3 native totals; native Total rows removed from Left unbuilt).
