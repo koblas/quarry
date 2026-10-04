@@ -18,18 +18,20 @@ type HoldingsRequest struct {
 	Currency money.Currency
 }
 
-// HoldingsTotal is the sum of the converted values of the rows that have one, in Currency.
+// HoldingsTotal is the sum of the values of the rows it covers, in Currency.
 type HoldingsTotal struct {
 	Currency string
 	Value    *big.Int
 }
 
 // Holdings is the holdings on AsOf, in the store's order, with their totals.
+// FirstRate is the date of the store's first exchange rate, zero when it has none.
 type Holdings struct {
-	Rows     []store.Holding
-	Totals   []HoldingsTotal
-	AsOf     time.Time
-	Currency money.Currency
+	Rows      []store.Holding
+	Totals    []HoldingsTotal
+	AsOf      time.Time
+	Currency  money.Currency
+	FirstRate time.Time
 }
 
 // Converted is h's value in the reporting currency in cents; nil in a native listing and when no
@@ -50,6 +52,13 @@ func Convertible(h store.Holding) bool {
 	return h.Currency != nil && (*h.Currency == "CAD" || *h.Currency == "USD")
 }
 
+// NeedsRate reports whether h is priced in the other of CAD and USD than the reporting currency and has no
+// converted value, so only an exchange rate it lacks keeps it out of the converted total.
+func (l Holdings) NeedsRate(h store.Holding) bool {
+	return l.Currency != money.Native && h.Price != nil && Convertible(h) &&
+		*h.Currency != l.Currency.String() && l.Converted(h) == nil
+}
+
 // Holdings lists the holdings on req.AsOf with the total of their values in req.Currency.
 // It refuses like Status, and reads the store once.
 func (s *Server) Holdings(ctx context.Context, req HoldingsRequest) (Holdings, error) {
@@ -57,29 +66,38 @@ func (s *Server) Holdings(ctx context.Context, req HoldingsRequest) (Holdings, e
 	if err != nil {
 		return Holdings{}, s.readRefusal(ctx, "holdings", err)
 	}
-	listing := Holdings{Rows: read.Holdings, AsOf: req.AsOf, Currency: req.Currency}
+	listing := Holdings{Rows: read.Holdings, AsOf: req.AsOf, Currency: req.Currency, FirstRate: read.FirstRate}
 	listing.Totals = listing.total()
 	return listing, nil
 }
 
-// total is the sum of the rows' converted values, one entry in the reporting currency; none when no row has one.
-// A native listing totals each row's own value per stored currency instead.
+// total is the sum of the rows' converted values in the reporting currency, then the sum of the values of the
+// rows that need a rate, in the other currency; each only when it has a row. A native listing totals each
+// row's own value per stored currency instead.
 func (l Holdings) total() []HoldingsTotal {
 	if l.Currency == money.Native {
 		return l.nativeTotals()
 	}
-	sum := new(big.Int)
-	contributed := false
+	converted, unconverted := new(big.Int), new(big.Int)
+	var totals []HoldingsTotal
+	var anyConverted, anyUnconverted bool
 	for _, row := range l.Rows {
 		if value := l.Converted(row); value != nil {
-			sum.Add(sum, value)
-			contributed = true
+			converted.Add(converted, value)
+			anyConverted = true
+		}
+		if l.NeedsRate(row) {
+			unconverted.Add(unconverted, row.Value)
+			anyUnconverted = true
 		}
 	}
-	if !contributed {
-		return nil
+	if anyConverted {
+		totals = append(totals, HoldingsTotal{Currency: l.Currency.String(), Value: converted})
 	}
-	return []HoldingsTotal{{Currency: l.Currency.String(), Value: sum}}
+	if anyUnconverted {
+		totals = append(totals, HoldingsTotal{Currency: money.NativeOf(l.Currency).String(), Value: unconverted})
+	}
+	return totals
 }
 
 // nativeTotals is one total per stored currency among the rows with a value, CAD then USD then the

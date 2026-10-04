@@ -107,14 +107,43 @@ func nullableMoney(cents *big.Int) *string {
 }
 
 // HoldingsWarnings is the unprefixed warning lines for h, in the order holdings prints them; never nil.
-// Slots: no price, no currency, other currency.
+// Slots: no price, no rate, no currency, other currency.
 func HoldingsWarnings(h report.Holdings) []string {
 	warnings := []string{}
 	if line, ok := noPriceWarning(h); ok {
 		warnings = append(warnings, line)
 	}
+	warnings = append(warnings, noRateWarnings(h)...)
 	warnings = append(warnings, noCurrencyWarnings(h)...)
 	return append(warnings, otherCurrencyWarnings(h)...)
+}
+
+// holdingsNoRatesWarning is the line for a store with no exchange rates at all.
+const holdingsNoRatesWarning = "the store has no exchange rates, so values are listed in each security's own currency; " +
+	"run quarry sync to fetch them"
+
+// noRateWarnings is one line when some rows need a rate: that the store has no rates, or that the rows
+// are valued before its first one; none when no row needs one.
+func noRateWarnings(h report.Holdings) []string {
+	needing := 0
+	for _, r := range h.Rows {
+		if h.NeedsRate(r) {
+			needing++
+		}
+	}
+	if needing == 0 {
+		return nil
+	}
+	if h.FirstRate.IsZero() {
+		return []string{holdingsNoRatesWarning}
+	}
+	be := "are"
+	if needing == 1 {
+		be = "is"
+	}
+	return []string{fmt.Sprintf("%s valued on %s, before %s, the first exchange rate in the store, %s not converted to %s and %s totalled in %s",
+		humanize.Count(needing, "holding", "holdings"), h.AsOf.Format(DateLayout), h.FirstRate.Format(DateLayout),
+		be, h.Currency, be, money.NativeOf(h.Currency))}
 }
 
 // noCurrencyWarnings is one line per security with no currency, priced or not, in every mode.

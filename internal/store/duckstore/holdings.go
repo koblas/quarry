@@ -21,8 +21,8 @@ LEFT JOIN securities s ON s.id = v.security_id
 WHERE v.date = CAST($1 AS DATE)
 ORDER BY a.name, a.source_id, v.account_id, v.security, s.source_id, v.security_id`
 
-// Holdings reads every holding on params.AsOf, as store.Holdings documents; a day with none, or one
-// after today, is an empty result. A store it cannot open or read is a *store.OpenError.
+// Holdings reads every holding on params.AsOf and the store's first rate date, as store.Holdings
+// documents; a day with none, or one after today, is an empty result. A store it cannot open or read is a *store.OpenError.
 func (s *Store) Holdings(ctx context.Context, params store.HoldingsParams) (store.Holdings, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {
@@ -39,6 +39,9 @@ func (s *Store) Holdings(ctx context.Context, params store.HoldingsParams) (stor
 		holdings.Holdings = append(holdings.Holdings, holding)
 		return nil
 	})
+	if err == nil {
+		holdings.FirstRate, err = firstRate(ctx, db)
+	}
 	if err != nil {
 		return store.Holdings{}, openFault(s.Path(), err)
 	}

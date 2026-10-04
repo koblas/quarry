@@ -288,6 +288,8 @@ func Test_HoldingsWarnings_say_which_securities_have_no_conversion(t *testing.T)
 	priced := new(int64(1_000_000))
 	twoAccounts := []store.Holding{heldSecurity("s-1", new("Mystery Fund"), nil, priced), heldSecurity("s-1", new("Mystery Fund"), nil, priced)}
 	twoAccounts[1].AccountID = "a-2"
+	convertedUSD := heldSecurity("s-2", new("B"), new("USD"), priced)
+	convertedUSD.ValueCAD = big.NewInt(136)
 	cases := []struct {
 		name     string
 		rows     []store.Holding
@@ -326,7 +328,7 @@ func Test_HoldingsWarnings_say_which_securities_have_no_conversion(t *testing.T)
 		},
 		{
 			name: "CAD and USD securities have no line", currency: money.CAD,
-			rows: []store.Holding{heldSecurity("s-1", new("A"), new("CAD"), priced), heldSecurity("s-2", new("B"), new("USD"), priced)},
+			rows: []store.Holding{heldSecurity("s-1", new("A"), new("CAD"), priced), convertedUSD},
 			want: []string{},
 		},
 		{

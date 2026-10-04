@@ -209,6 +209,49 @@ func Test_holdings_reads_the_largest_holding_in_exact_cents(t *testing.T) {
 		[]*big.Int{short.Value, short.ValueUSD, short.ValueCAD})
 }
 
+func Test_holdings_gives_the_date_of_the_first_exchange_rate(t *testing.T) {
+	t.Parallel()
+	st := newStoreWithRates(t, holdingRows(buy(acctOne, secAcme, 1, marchDay(1), oneShare)),
+		ratesOn(12, 1_250_000, "FXUSDCAD"), ratesOn(10, 1_250_000, "FXUSDCAD"))
+
+	got, err := st.Holdings(t.Context(), store.HoldingsParams{AsOf: marchDay(2)})
+
+	require.NoError(t, err)
+	assert.Equal(t, marchDay(10), got.FirstRate)
+}
+
+func Test_holdings_gives_no_first_rate_date_for_a_store_without_rates(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, holdingRows(buy(acctOne, secAcme, 1, marchDay(1), oneShare)))
+
+	got, err := st.Holdings(t.Context(), store.HoldingsParams{AsOf: marchDay(2)})
+
+	require.NoError(t, err)
+	assert.True(t, got.FirstRate.IsZero())
+	assert.Len(t, got.Holdings, 1)
+}
+
+func Test_holdings_returns_the_first_rate_query_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	fault := ioFault(`query rows "SELECT min"`)
+	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, queryFault: fault}))
+
+	_, err := st.Holdings(t.Context(), store.HoldingsParams{AsOf: marchDay(2)})
+
+	assertOtherFault(t, err, "disk read failed")
+	assert.ErrorIs(t, err, fault)
+}
+
+func Test_holdings_returns_a_first_rate_scan_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, scanFault: errScanFailed}))
+
+	_, err := st.Holdings(t.Context(), store.HoldingsParams{AsOf: marchDay(2)})
+
+	assertOtherFault(t, err, errScanFailed.Error())
+	assert.ErrorIs(t, err, errScanFailed)
+}
+
 func Test_holdings_lists_accounts_quicken_leaves_out_of_its_reports(t *testing.T) {
 	t.Parallel()
 	hidden := brokerage("acct-hidden", 1, "Hidden")
