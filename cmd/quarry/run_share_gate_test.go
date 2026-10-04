@@ -31,7 +31,9 @@ func objectKeysInOrder(t *testing.T, raw json.RawMessage) []string {
 	for dec.More() {
 		key, err := dec.Token()
 		require.NoError(t, err)
-		keys = append(keys, key.(string))
+		name, ok := key.(string)
+		require.True(t, ok)
+		keys = append(keys, name)
 		var skip json.RawMessage
 		require.NoError(t, dec.Decode(&skip))
 	}
@@ -42,17 +44,17 @@ func objectKeysInOrder(t *testing.T, raw json.RawMessage) []string {
 // matching holding (Acme, 10 shares), a holding with transactions and no lots
 // in an open account (Bare Fund, 5 shares), and a closed RRSP holding whose
 // derived 120.5 shares differ from its 110.5 lot units.
-func shareGateBundle(t *testing.T, home string) (bundle v9fixture.Bundle, brokeragePK, rrspPK, barePK, ishares int64) {
+func shareGateBundle(t *testing.T, home string) (v9fixture.Bundle, int64, int64, int64, int64) {
 	t.Helper()
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	reconciled := int64(2)
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	brokeragePK = b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	rrspPK = b.Account(v9fixture.AccountRow{Name: "RRSP", Type: "RETIREMENTIRA", Currency: "CAD", Closed: true})
+	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	rrspPK := b.Account(v9fixture.AccountRow{Name: "RRSP", Type: "RETIREMENTIRA", Currency: "CAD", Closed: true})
 	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
-	barePK = b.Security(v9fixture.SecurityRow{Name: "Bare Fund", Currency: "CAD"})
-	ishares = b.Security(v9fixture.SecurityRow{Name: "iShares Core Equity ETF", Ticker: "XEQT", Currency: "CAD"})
+	barePK := b.Security(v9fixture.SecurityRow{Name: "Bare Fund", Currency: "CAD"})
+	ishares := b.Security(v9fixture.SecurityRow{Name: "iShares Core Equity ETF", Ticker: "XEQT", Currency: "CAD"})
 	acmePosition := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
 	barePosition := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: barePK})
 	isharesPosition := b.Position(v9fixture.PositionRow{Account: rrspPK, Security: ishares})
