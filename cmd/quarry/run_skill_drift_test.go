@@ -223,9 +223,7 @@ func (s *commandScan) unit(unit codeUnit, onLine *occurrence) *occurrence {
 			continue
 		}
 		for _, match := range flagInToken.FindAllStringSubmatch(token, -1) {
-			// A flag binds to the nearest quarry before it in the unit. A unit that opens with a flag
-			// binds its leading flags to the nearest quarry on the line, else to any command. Any other
-			// unit (claude, go, SQL) has none to bind to and skips them.
+			// A flag binds to the nearest quarry before it; a flag-first unit binds to the line's quarry, else any command.
 			switch {
 			case own != nil:
 				s.checkFlag(unit, match[1], own)
@@ -282,6 +280,23 @@ func (s *commandScan) report(unit codeUnit, message string) {
 	s.findings.mismatches = append(s.findings.mismatches, fmt.Sprintf("%s:%d: %s", s.source, unit.line, message))
 }
 
+// mcpToolNames is the name of every tool the MCP server lists.
+func mcpToolNames(t *testing.T) []string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
+	defer cancel()
+	peer := startMCP(ctx, t, func(*cli.Env) {})
+	listed, err := peer.session.ListTools(ctx, nil)
+	require.NoError(t, err)
+	require.NoError(t, peer.session.Close())
+	peer.waitForExit(ctx, t)
+	tools := make([]string, len(listed.Tools))
+	for i, tool := range listed.Tools {
+		tools[i] = tool.Name
+	}
+	return tools
+}
+
 func Test_every_quarry_name_the_skill_uses_exists(t *testing.T) {
 	t.Run("quarry commands and flags", func(t *testing.T) {
 		check := commandMismatches(helpTree(t), skillDriftSources(t))
@@ -291,19 +306,7 @@ func Test_every_quarry_name_the_skill_uses_exists(t *testing.T) {
 	})
 
 	t.Run("MCP tool names", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
-		defer cancel()
-		peer := startMCP(ctx, t, func(*cli.Env) {})
-		listed, err := peer.session.ListTools(ctx, nil)
-		require.NoError(t, err)
-		require.NoError(t, peer.session.Close())
-		peer.waitForExit(ctx, t)
-		tools := make([]string, len(listed.Tools))
-		for i, tool := range listed.Tools {
-			tools[i] = tool.Name
-		}
-
-		check := toolMismatches(t, skillDriftSources(t), tools, helpTree(t))
+		check := toolMismatches(t, skillDriftSources(t), mcpToolNames(t), helpTree(t))
 
 		assert.Contains(t, check.resolved, "sync_status")
 		assert.Empty(t, check.mismatches)

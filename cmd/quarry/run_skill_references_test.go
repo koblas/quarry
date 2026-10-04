@@ -4,7 +4,9 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -41,6 +43,15 @@ func findingTypesInHelp(t *testing.T) []string {
 	return types
 }
 
+// findingTypeBullets is each type as findings.md's types list opens its bullet, so a type named elsewhere does not count.
+func findingTypeBullets(types []string) []string {
+	bullets := make([]string, len(types))
+	for i, name := range types {
+		bullets[i] = "- `" + name + "`:"
+	}
+	return bullets
+}
+
 // collapsed is text with every run of whitespace turned into one space.
 func collapsed(text string) string { return strings.Join(strings.Fields(text), " ") }
 
@@ -65,7 +76,7 @@ func Test_reference_files_state_their_job(t *testing.T) {
 			"`per_year`", "`usual`", "`times`", "`not_judged`", "no SQL form",
 		}},
 		{"search.md", []string{"quarry search", "transfer", "excluded", "native", "--limit"}},
-		{"findings.md", append(findingTypesInHelp(t), []string{
+		{"findings.md", append(findingTypeBullets(findingTypesInHelp(t)), []string{
 			"in Quicken, then `quarry sync`", "findings.ignore", "quarry findings --csv", "only when the user asks",
 		}...)},
 	}
@@ -93,6 +104,46 @@ func Test_references_name_scan_flags_crafted_phase_4_and_quicken_text(t *testing
 			assert.Equal(t, []string{c.want}, phase4OrQuickenNames(c.text))
 		})
 	}
+}
+
+// toolNamedJSONFields are JSON fields the references name that share a tool's name.
+var toolNamedJSONFields = []string{"anomalies"}
+
+// mcpToolSpans is the tool names, JSON fields of the same name aside, that sources spell as a code span or fenced line.
+func mcpToolSpans(sources []driftSource, tools []string) []string {
+	var named []string
+	for _, source := range sources {
+		for _, unit := range codeUnits(source.text) {
+			if name := strings.TrimSpace(unit.text); slices.Contains(tools, name) && !slices.Contains(toolNamedJSONFields, name) {
+				named = append(named, fmt.Sprintf("%s:%d: %s", source.name, unit.line, name))
+			}
+		}
+	}
+	return named
+}
+
+func Test_references_name_scan_flags_crafted_tool_names(t *testing.T) {
+	tools := []string{"sync_status", "query", "anomalies"}
+	cases := []struct {
+		name, text string
+		want       []string
+	}{
+		{"a tool in a code span", "Call `sync_status` first.", []string{"crafted:1: sync_status"}},
+		{"a tool on a fenced line", "```\nquery\n```", []string{"crafted:2: query"}},
+		{"a JSON field named like a tool", "`anomalies` lists the charges.", nil},
+		{"a tool name in prose", "Run a query on sync_status.", nil},
+		{"a code span that only contains a tool name", "`quarry sync_status`", nil},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, mcpToolSpans([]driftSource{{name: "crafted", text: c.text}}, tools))
+		})
+	}
+}
+
+func Test_references_name_no_mcp_tool(t *testing.T) {
+	assert.Empty(t, mcpToolSpans(referenceSources(t), mcpToolNames(t)))
 }
 
 func Test_references_name_no_phase_4_view_or_quicken_table(t *testing.T) {

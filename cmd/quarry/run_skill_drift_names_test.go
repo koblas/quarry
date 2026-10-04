@@ -14,8 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// mcpNotTools are the names SKILL.md section 9 spells in code that are commands the MCP server
-// cannot run, not tools.
+// mcpNotTools are the commands SKILL.md section 9 spells in code that the MCP server cannot run.
 var mcpNotTools = []string{"sync"}
 
 var (
@@ -251,6 +250,18 @@ func Test_drift_check_flags_crafted_name_text(t *testing.T) {
 		{"live_backticked_path", func() driftCheck {
 			return linkMismatches([]driftSource{{name: skillPath, text: "Run `references/sql/spending-trend.sql`."}}, repoFileExists)
 		}, nil},
+		{"reference_file_live_link_is_relative_to_references", func() driftCheck {
+			return linkMismatches([]driftSource{{name: referencesDir + "/a.md", text: "[x](schema.md)"}}, repoFileExists)
+		}, nil},
+		{"reference_file_dead_link", func() driftCheck {
+			return linkMismatches([]driftSource{{name: referencesDir + "/a.md", text: "[x](bogus.md)"}}, repoFileExists)
+		}, []string{"plugin/skills/quarry/references/a.md:1: plugin/skills/quarry/references/bogus.md does not exist"}},
+		{"readme_live_link_is_relative_to_the_repo_root", func() driftCheck {
+			return linkMismatches([]driftSource{{name: "README.md Claude Code section", text: "[x](plugin/skills/quarry/SKILL.md)"}}, repoFileExists)
+		}, nil},
+		{"readme_dead_link", func() driftCheck {
+			return linkMismatches([]driftSource{{name: "README.md Claude Code section", text: "[x](bogus.md)"}}, repoFileExists)
+		}, []string{"README.md Claude Code section:1: bogus.md does not exist"}},
 		{"anchor_and_url", func() driftCheck {
 			return linkMismatches([]driftSource{{name: skillPath, text: "[a](#frag) [b](https://example.com/x)"}}, repoFileExists)
 		}, nil},
