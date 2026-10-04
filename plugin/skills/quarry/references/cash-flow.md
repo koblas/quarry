@@ -33,7 +33,7 @@ For "where did the income come from", use `references/sql/income-by-category.sql
 | Param | Value |
 | --- | --- |
 | `since`, `until` | Dates written `DATE 'YYYY-MM-DD'`; both ends are included. |
-| `currency` | `'CAD'` or `'USD'`. |
+| `currency` | `'CAD'` or `'USD'`. Use the `currency` that `quarry cashflow --json` reports, so the recipe matches the user's other totals; `'native'` lists each currency unconverted, never added together. |
 
 - The shipped values are the start of this year to today, in CAD. Change them to match the question and say in the answer what you asked for.
 - Each result row has `category`, `currency` and `income`. A split with no category shows as `(uncategorized)`.

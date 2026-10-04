@@ -42,7 +42,7 @@ For one category or one payee over years or months, use `references/sql/spending
 | `payee` | Exact payee name, ignoring case. NULL means any payee. |
 | `grain` | `'year'` or `'month'`. |
 | `since`, `until` | Dates written `DATE 'YYYY-MM-DD'`; both ends are included. |
-| `currency` | `'CAD'` or `'USD'`. |
+| `currency` | `'CAD'` or `'USD'`. Use the `currency` that `quarry spend --json` reports, so the trend matches the user's other totals; `'native'` lists each currency unconverted, never added together. |
 
 - The shipped values are `Food:Groceries`, no payee, by year, from 2022-01-01 to today, in CAD. Change them to match the question and say in the answer what you asked for.
 - Each result row has `period`, `currency` and `spent`. `period` is the first day of the year or month.

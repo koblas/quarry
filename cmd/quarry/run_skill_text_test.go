@@ -170,9 +170,9 @@ description: Answer questions about the user's own money from their Quicken Clas
 	skillSection1 = `Before the first number in a conversation, run ¤quarry status --json¤.
 
 - Exit 1 with ¤no store at … yet¤: tell the user "quarry has no data yet. Open your Quicken file, then run ¤quarry sync¤ in a terminal (or ask me to run it)." and stop.
-- Otherwise read ¤snapshot.taken_at¤ and ¤dates.last¤. Start the answer with "Data as of <taken_at date> (latest transaction <dates.last>)." If ¤snapshot.taken_at¤ is null, write "Data as of an unknown date (latest transaction <dates.last>)."
+- Otherwise read ¤snapshot.taken_at¤ and ¤dates.last¤. Start the answer with "Data as of <taken_at date> (latest transaction <dates.last>)." If ¤snapshot.taken_at¤ is null, write "Data as of an unknown date (latest transaction <dates.last>)." If ¤dates.last¤ is null, the store holds no transactions: write "(no transactions yet)" in place of "(latest transaction <dates.last>)".
 - If the snapshot is older than today, say so and offer to run ¤quarry sync¤; Quicken must be open with the file. Run ¤quarry sync¤ only when the user says yes. If it fails, repeat its error line, say the previous data is unchanged, and answer from that data with its date.
-- If ¤rates.fetch_error¤ is not null, add: "Currency conversions use Bank of Canada rates up to <rates.last>; the last sync could not fetch newer ones."
+- If ¤rates.fetch_error¤ is not null, add: "Currency conversions use Bank of Canada rates up to <rates.last>; the last sync could not fetch newer ones." If ¤rates.last¤ is also null, add instead: "quarry has no Bank of Canada rates yet, so amounts in the other currency are not converted and are listed in their own currency; the last sync could not fetch them."
 - If ¤findings.open¤ is more than 0 and the question is about data quality, mention ¤quarry findings¤.`
 
 	skillSection2 = `- Every amount, count, date and percentage in your answer comes from a quarry command's output or a ¤quarry sql¤ result in this conversation. Never estimate, extrapolate, or fill a gap from memory or general knowledge. If quarry cannot answer, say which part it cannot answer and why.

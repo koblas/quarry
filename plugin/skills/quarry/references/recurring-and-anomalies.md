@@ -18,7 +18,7 @@ Each entry of `series` has these fields.
 - `payee` and `cadence`: `weekly`, `monthly`, `quarterly` or `annual`.
 - `new`: true when the series' first charge falls in the period. Use it for "which subscriptions started this year"; answer from series with `new` true and name their `first_charge`.
 - `first_charge` and `last_charge`: the dates of the first and latest charge. `charge_count` is how many charges the series has.
-- `state`: `active` or `ended`. A series has ended when no charge has come for more than 14 days (weekly), 45 days (monthly), 120 days (quarterly) or 400 days (yearly).
+- `state`: `active` or `ended`. A series has ended when no charge has come for more than 14 days (weekly), 45 days (monthly), 120 days (quarterly) or 400 days (annual).
 - `amount` is the latest charge and `first_amount` the first. `per_year` is the latest amount times the charges in a year, for active series only; it is null for an ended series. `totals` has `per_year` for each currency.
 - `price_changes`: a step of more than 5% from one charge to the next. Each entry has `date` (the later charge), `from`, `to` and `change_pct`, in the series' own currency. An empty list means the price never changed by more than that.
 - `currency` is the reporting currency, except for a series quarry has no rate to convert, which stays in its own. `native_currency`, `native_amount` and `native_first_amount` are the series' own, and `price_changes` stay in them. A change in the exchange rate is never a price change.

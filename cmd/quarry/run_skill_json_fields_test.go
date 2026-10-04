@@ -39,7 +39,7 @@ var declaredFields = []fieldDeclaration{
 	{file: "spending.md", argv: []string{"spend", "--by", "month", "--json"}, names: []string{"partial"}},
 	{file: "spending.md", recipe: spendingTrendFile, names: []string{"period", "currency", "spent"}},
 	{file: "cash-flow.md", argv: []string{"cashflow", "--json"}, names: []string{
-		"periods", "income", "spent", "net", "savings_rate_pct", "totals", "partial", "warnings",
+		"periods", "income", "spent", "net", "savings_rate_pct", "totals", "partial", "currency", "warnings",
 	}},
 	{file: "cash-flow.md", recipe: incomeByCatFile, names: []string{"category", "currency", "income"}},
 	{file: "recurring-and-anomalies.md", argv: []string{"recurring", "--since", "2000", "--json"}, names: []string{

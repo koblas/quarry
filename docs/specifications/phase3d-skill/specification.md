@@ -193,9 +193,9 @@ Intro:
 `## 1. Check freshness first`
 > Before the first number in a conversation, run `quarry status --json`.
 > - Exit 1 with `no store at … yet`: tell the user "quarry has no data yet. Open your Quicken file, then run `quarry sync` in a terminal (or ask me to run it)." and stop.
-> - Otherwise read `snapshot.taken_at` and `dates.last`. Start the answer with "Data as of <taken_at date> (latest transaction <dates.last>)." If `snapshot.taken_at` is null, write "Data as of an unknown date (latest transaction <dates.last>)."
+> - Otherwise read `snapshot.taken_at` and `dates.last`. Start the answer with "Data as of <taken_at date> (latest transaction <dates.last>)." If `snapshot.taken_at` is null, write "Data as of an unknown date (latest transaction <dates.last>)." If `dates.last` is null, the store holds no transactions: write "(no transactions yet)" in place of "(latest transaction <dates.last>)".
 > - If the snapshot is older than today, say so and offer to run `quarry sync`; Quicken must be open with the file. Run `quarry sync` only when the user says yes. If it fails, repeat its error line, say the previous data is unchanged, and answer from that data with its date.
-> - If `rates.fetch_error` is not null, add: "Currency conversions use Bank of Canada rates up to <rates.last>; the last sync could not fetch newer ones."
+> - If `rates.fetch_error` is not null, add: "Currency conversions use Bank of Canada rates up to <rates.last>; the last sync could not fetch newer ones." If `rates.last` is also null, add instead: "quarry has no Bank of Canada rates yet, so amounts in the other currency are not converted and are listed in their own currency; the last sync could not fetch them."
 > - If `findings.open` is more than 0 and the question is about data quality, mention `quarry findings`.
 
 `## 2. Every number comes from quarry`
@@ -300,14 +300,14 @@ Each recipe:
   - `payee`: exact name, ignoring case. NULL means any payee.
   - `grain`: `'year'` or `'month'`.
   - `since`, `until`: DATEs; both ends are included.
-  - `currency`: `'CAD'` or `'USD'`.
+  - `currency`: `'CAD'` or `'USD'`. Use the `currency` that `quarry spend --json` reports, so the trend matches the user's other totals; `'native'` lists each currency unconverted, never added together.
 - **Shipped values:** grocery since 2022, i.e. `category` = `'Food:Groceries'`, `grain` = `'year'`, `since` = `2022-01-01`.
 - **Output:** `period DATE, currency VARCHAR, spent DECIMAL(18,2)`.
 - **NULL conversions:** splits whose converted amount is NULL appear on rows of their own, with `currency` set to their native currency and `spent` in that currency.
 - **Reads:** `v_spending` only.
 
 **`income-by-category.sql`**
-- **Params:** `since`, `until`, `currency`.
+- **Params:** `since`, `until`, `currency`: `'CAD'` or `'USD'`. Use the `currency` that `quarry cashflow --json` reports, so the recipe matches the user's other totals; `'native'` lists each currency unconverted, never added together.
 - **Output:** `category VARCHAR, currency VARCHAR, income DECIMAL(18,2)`. A NULL category shows as `(uncategorized)`.
 - **Reads:** `v_cash_flow` rows where `flow = 'income'`. NULL conversions go on native-currency rows.
 
@@ -344,7 +344,7 @@ claude plugin install quarry@quarry
 
 Ask Claude a question such as "How did our grocery spending change since 2022?" or "Which subscriptions started this year?", or type `/quarry:quarry` to load the skill yourself. Claude checks how fresh the data is with `quarry status`, answers from quarry's output, and runs `quarry sync` only when you ask.
 
-quarry itself sends nothing anywhere, but the output of the commands Claude runs becomes part of your conversation with Claude. Ask for totals rather than full transaction lists when that is all you need.
+quarry itself sends none of your data anywhere, but the output of the commands Claude runs becomes part of your conversation with Claude. Ask for totals rather than full transaction lists when that is all you need.
 
 To update the plugin: `claude plugin marketplace update quarry`. Update the quarry binary at the same time; if Claude reports that quarry is older than the skill, update quarry.
 ````
@@ -358,7 +358,7 @@ To update the plugin: `claude plugin marketplace update quarry`. Update the quar
 | `docs/initial-prd.md` L217 | "bundles the skill and the MCP server config" | "bundles the skill and the MCP server config (in `plugin.json`), in `plugin/`, listed by `.claude-plugin/marketplace.json` at the repo root." |
 | `docs/initial-prd.md` Risks/open questions | — | add: "Quicken's category tax line is not imported; tax totals are by user-named category until it is." (L117 is unchanged.) |
 | `docs/initial-prd.md` L129 | `v_balances_daily`, `v_net_worth`, `v_holdings` | Unchanged (Phase 4 design). The skill and `schema.md` must not mention them. |
-| `THIRD_PARTY_NOTICES` dweekly "Used in:" | `docs/prior-art/dweekly/` | `docs/prior-art/dweekly/; plugin/ (skill layout and the untrusted-data and reporting rules in SKILL.md)` |
+| `THIRD_PARTY_NOTICES` dweekly "Used in:" | `docs/prior-art/dweekly/` | `docs/prior-art/dweekly/ (schema reference, SQL recipes, skill layout, CSV exporter); plugin/ (skill layout and the untrusted-data and reporting rules in SKILL.md)` |
 | `quarry mcp --help`, `quarry sql --help`, `SQLConventions` | — | No change. |
 
 The feature adds no CLI command and no exit code.
