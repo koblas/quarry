@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,8 +37,8 @@ func Test_holding_shares_fails_on_a_decimal_column_that_is_not_a_number(t *testi
 		row  walkRow
 	}{
 		{name: "shares", row: walkRow{action: "buy", shares: text("n/a")}},
-		{name: "split new side", row: walkRow{action: splitAction, splitNew: text("n/a"), splitOld: text("12")}},
-		{name: "split old side", row: walkRow{action: splitAction, splitNew: text("1"), splitOld: text("n/a")}},
+		{name: "split new side", row: walkRow{action: store.ActionSplit, splitNew: text("n/a"), splitOld: text("12")}},
+		{name: "split old side", row: walkRow{action: store.ActionSplit, splitNew: text("1"), splitOld: text("n/a")}},
 	}
 
 	for _, c := range cases {

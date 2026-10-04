@@ -5,15 +5,14 @@ import (
 	"strings"
 )
 
-// priceUnscaledBound is the exclusive bound on a price's millionths: a DECIMAL(18,6) holds 18 unscaled digits.
-var priceUnscaledBound = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+// unscaledBound is the exclusive bound on a DECIMAL(18, n) column's unscaled units: 18 digits.
+var unscaledBound = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 
-// priceScale is the factor from a price to its millionths, the DECIMAL(18,6) unscaled value.
-var priceScale = big.NewRat(1_000_000, 1)
+// millionthsScale is the factor from a price or share count to its millionths, the DECIMAL(18,6) unscaled value.
+var millionthsScale = big.NewRat(1_000_000, 1)
 
-// fixedPoint is a DECIMAL(18, n) column read exactly by parseFixed: scale is the factor from a value to its
-// unscaled units, bound the exclusive magnitude in whole units, toleranceInverse 1 over the distance within
-// which a REAL is float residue of its nearest unit.
+// fixedPoint is a DECIMAL(18, n) column read by parseFixed: scale to unscaled units, bound in whole units,
+// and 1/toleranceInverse the distance within which a REAL is float residue of its nearest unit.
 type fixedPoint struct {
 	scale            *big.Rat
 	bound            int64
@@ -21,10 +20,9 @@ type fixedPoint struct {
 }
 
 // sharesFixed is the DECIMAL(18,6) share column: 10^12 shares, tolerance 1e-9.
-var sharesFixed = fixedPoint{scale: priceScale, bound: 1_000_000_000_000, toleranceInverse: 1_000_000_000}
+var sharesFixed = fixedPoint{scale: millionthsScale, bound: 1_000_000_000_000, toleranceInverse: 1_000_000_000}
 
-// commissionFixed is the DECIMAL(18,4) commission column: 10^14 units, tolerance 1e-8, so a value a
-// ten-thousandth apart from its neighbour is never mistaken for residue.
+// commissionFixed is the DECIMAL(18,4) commission column: 10^14 units, tolerance 1e-8.
 var commissionFixed = fixedPoint{scale: big.NewRat(10_000, 1), bound: 100_000_000_000_000, toleranceInverse: 100_000_000}
 
 // parsePrice returns the millionths of a price column from its typeof() and text, rounded half
@@ -34,8 +32,8 @@ func parsePrice(typ, text string) (int64, moneyFault) {
 	if fault != moneyOK {
 		return 0, fault
 	}
-	rounded := roundHalfEven(value.Mul(value, priceScale))
-	if rounded.Cmp(priceUnscaledBound) >= 0 {
+	rounded := roundHalfEven(value.Mul(value, millionthsScale))
+	if rounded.Cmp(unscaledBound) >= 0 {
 		return 0, moneyTooLarge
 	}
 	millionths := rounded.Int64()
@@ -71,7 +69,7 @@ func parseFixed(typ, text string, f fixedPoint) (int64, moneyFault) {
 	if distance.Abs(distance).Cmp(big.NewRat(1, f.toleranceInverse)) > 0 {
 		return 0, moneyPrecision
 	}
-	if units.Cmp(priceUnscaledBound) >= 0 {
+	if units.Cmp(unscaledBound) >= 0 {
 		return 0, moneyTooLarge
 	}
 	if negative {

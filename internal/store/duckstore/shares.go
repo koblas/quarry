@@ -18,9 +18,6 @@ var shareTolerance = big.NewRat(1, 1_000_000)
 // sharesPerMillionth is the factor from shares to the millionths ShareMismatch reports.
 var sharesPerMillionth = big.NewInt(1_000_000)
 
-// splitAction is the action whose split sides multiply a holding's running share count.
-const splitAction = "split"
-
 // errSplitRatio is the fault behind a split row whose new or old side is missing or not positive.
 var errSplitRatio = errors.New("ratio is not positive")
 
@@ -91,7 +88,7 @@ func holdingShares(ctx context.Context, db rowQuerier) (map[holdingKey]*big.Rat,
 		if counts[key] == nil {
 			counts[key] = new(big.Rat)
 		}
-		if action == splitAction {
+		if action == store.ActionSplit {
 			// a split scales the running count by new over old and adds nothing
 			ratio, err := splitRatio(splitNew, splitOld)
 			if err != nil {

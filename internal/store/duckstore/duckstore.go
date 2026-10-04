@@ -54,6 +54,9 @@ const moneyWidth, moneyScale = 18, 2
 // priceWidth and priceScale match schemaDDL's DECIMAL(18,6) price column.
 const priceWidth, priceScale = 18, 6
 
+// sharesWidth and sharesScale match schemaDDL's DECIMAL(18,6) shares and split columns.
+const sharesWidth, sharesScale = 18, 6
+
 // commissionWidth and commissionScale match schemaDDL's DECIMAL(18,4) commission column.
 const commissionWidth, commissionScale = 18, 4
 
@@ -656,11 +659,11 @@ func priceRows(prices []store.Price) ([][]any, error) {
 func investmentTransactionRows(txns []store.InvestmentTransaction) ([][]any, error) {
 	out := make([][]any, len(txns))
 	for i, t := range txns {
-		shares, err1 := decimalCell("shares", t.Shares, priceWidth, priceScale)
+		shares, err1 := decimalCell("shares", t.Shares, sharesWidth, sharesScale)
 		amount, err2 := decimalCell("amount", &t.Amount, moneyWidth, moneyScale)
 		commission, err3 := decimalCell("commission", t.Commission, commissionWidth, commissionScale)
-		splitNew, err4 := decimalCell("split_new_shares", t.SplitNewShares, priceWidth, priceScale)
-		splitOld, err5 := decimalCell("split_old_shares", t.SplitOldShares, priceWidth, priceScale)
+		splitNew, err4 := decimalCell("split_new_shares", t.SplitNewShares, sharesWidth, sharesScale)
+		splitOld, err5 := decimalCell("split_old_shares", t.SplitOldShares, sharesWidth, sharesScale)
 		if err := errors.Join(err1, err2, err3, err4, err5); err != nil {
 			return nil, fmt.Errorf("investment transaction %s: %w", t.ID, err)
 		}

@@ -136,6 +136,24 @@ func Test_run_sync_fails_when_holdings_share_counts_differ_from_quicken(t *testi
 		rrspPK, isharesPK), string(doc.Store.Shares.Mismatched[1]))
 }
 
+func Test_run_sync_fails_a_holding_with_a_lot_and_no_transactions_against_zero_shares(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	b := v9fixture.NewBuilder()
+	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
+	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
+	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "3"})
+	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+
+	assert.Equal(t, 1, exitCode)
+	assert.Contains(t, stdout.String(),
+		shareMismatchRow(len("Brokerage (CAD)"), len("Acme Corp (ACME)"), 1, 1, 2, "Brokerage (CAD)", "Acme Corp (ACME)", "0", "3", "-3")+"\n")
+}
+
 func Test_run_sync_joins_a_share_failure_to_a_balance_failure_in_one_line(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

@@ -12,9 +12,6 @@ import (
 // investmentIDFormat renders an investment transaction's quarry id from its ZTRANSACTION.Z_PK.
 const investmentIDFormat = "itxn-%d"
 
-// splitAction is the action whose ZNUMERATOR and ZDENOMINATOR become the split columns.
-const splitAction = "split"
-
 // ratioSideNone and ratioSideBlob are how a refusal shows a NULL and a blob split side.
 const (
 	ratioSideNone = "none"
@@ -23,19 +20,19 @@ const (
 
 // investmentActions maps ZTRANSACTION.ZTYPE to investment_transactions.action; any other code is unmappable.
 var investmentActions = map[int64]string{
-	2:  "add_shares",
-	3:  "buy",
-	6:  "margin_interest",
-	7:  "misc_expense",
-	8:  "capital_gain_long",
-	9:  "capital_gain_short",
-	10: "dividend",
-	11: "interest",
-	12: "misc_income",
-	15: "reinvest_dividend",
-	17: "remove_shares",
-	19: "sell",
-	23: splitAction,
+	2:  store.ActionAddShares,
+	3:  store.ActionBuy,
+	6:  store.ActionMarginInterest,
+	7:  store.ActionMiscExpense,
+	8:  store.ActionCapitalGainLong,
+	9:  store.ActionCapitalGainShort,
+	10: store.ActionDividend,
+	11: store.ActionInterest,
+	12: store.ActionMiscIncome,
+	15: store.ActionReinvestDividend,
+	17: store.ActionRemoveShares,
+	19: store.ActionSell,
+	23: store.ActionSplit,
 }
 
 // positionsQuery reads each non-deleted position of one entity that has an account and a security.
@@ -64,7 +61,7 @@ type positionRef struct {
 }
 
 // mapPositions reads the non-deleted positions of positionEnt that sit in an imported account,
-// by source Z_PK; with no entity in the snapshot it returns nil.
+// by source Z_PK; with no entity in the snapshot it returns an empty map.
 func mapPositions(
 	ctx context.Context, src Source, positionEnt int64, hasEntity bool, accounts map[int64]accountRef,
 ) (map[int64]positionRef, error) {
@@ -194,7 +191,7 @@ func buildInvestmentTransaction(
 		s.refuse(classMissingValue, reasonInvestmentSharesWithoutSecurity(s.day(), acct.Name))
 		return txn, false
 	}
-	if action == splitAction {
+	if action == store.ActionSplit {
 		newShares, oldShares, ok := splitSides(r)
 		if !ok {
 			s.refuse(classMissingValue, reasonSplitRatio(s.day(), acct.Name, sec.Name, ratioSideText(r.numerator), ratioSideText(r.denominator)))

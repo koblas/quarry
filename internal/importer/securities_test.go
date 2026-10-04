@@ -240,3 +240,25 @@ func Test_import_reports_a_security_with_no_name_once_when_a_transaction_holds_i
 
 	assert.Equal(t, fmt.Sprintf("a security (source id %d) has no name", pk), reason)
 }
+
+func Test_import_keeps_a_security_currency_other_than_CAD_or_USD(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Security(v9fixture.SecurityRow{Name: "Euro Fund", Ticker: "EUF", Currency: "EUR"})
+
+	fake, _ := importSecurities(t, b)
+
+	require.Len(t, fake.Rows.Securities, 1)
+	assert.Equal(t, new("EUR"), fake.Rows.Securities[0].Currency)
+}
+
+func Test_import_keeps_a_whitespace_only_security_name_as_recorded(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Security(v9fixture.SecurityRow{Name: "  ", Ticker: "BLNK", Currency: "CAD"})
+
+	fake, _ := importSecurities(t, b)
+
+	require.Len(t, fake.Rows.Securities, 1)
+	assert.Equal(t, "  ", fake.Rows.Securities[0].Name)
+}

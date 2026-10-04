@@ -156,10 +156,28 @@ type Price struct {
 	Price      int64
 }
 
+// The investment_transactions.action values.
+const (
+	ActionAddShares        = "add_shares"
+	ActionBuy              = "buy"
+	ActionMarginInterest   = "margin_interest"
+	ActionMiscExpense      = "misc_expense"
+	ActionCapitalGainLong  = "capital_gain_long"
+	ActionCapitalGainShort = "capital_gain_short"
+	ActionDividend         = "dividend"
+	ActionInterest         = "interest"
+	ActionMiscIncome       = "misc_income"
+	ActionReinvestDividend = "reinvest_dividend"
+	ActionRemoveShares     = "remove_shares"
+	ActionSell             = "sell"
+	ActionSplit            = "split"
+)
+
 // InvestmentTransaction is one row of the investment_transactions table. Shares,
 // SplitNewShares and SplitOldShares are millionths (DECIMAL(18,6)); Amount is
-// cents; Commission is ten-thousandths (DECIMAL(18,4)). SecurityID is nil for a cash-only action, Shares nil
-// when Quicken records none, and the split sides are set only for a split.
+// cents; Commission is ten-thousandths (DECIMAL(18,4)). SecurityID is nil for a
+// cash-only action, Shares nil when Quicken records none, and the split sides
+// are set only for a split.
 type InvestmentTransaction struct {
 	ID             string
 	SourceID       int64

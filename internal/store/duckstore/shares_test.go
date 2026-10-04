@@ -135,6 +135,19 @@ func Test_check_shares_matches_within_one_millionth(t *testing.T) {
 	}
 }
 
+func Test_check_shares_counts_rows_of_every_date_including_future_and_before_2001(t *testing.T) {
+	t.Parallel()
+	txns := []store.InvestmentTransaction{
+		buy(acctOne, secAcme, 1, time.Date(1999, 12, 31, 0, 0, 0, 0, time.UTC), 3*oneShare),
+		buy(acctOne, secAcme, 2, shareDay, 5*oneShare),
+		buy(acctOne, secAcme, 3, time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC), 7*oneShare),
+	}
+
+	result := checkShares(t, txns, []store.QuickenShare{quickenCount(acctOne, secAcme, 15*oneShare)})
+
+	assert.Equal(t, store.ShareCheck{Checked: 1}, result)
+}
+
 func Test_check_shares_counts_the_holdings_it_compares(t *testing.T) {
 	t.Parallel()
 	cashOnly := buy(acctOne, secAcme, 3, shareDay, 0)
