@@ -1,6 +1,6 @@
 package duckstore
 
-// SchemaDDL and HoldingWalkQuery are the statements CheckShares runs on its scratch database, so a test fake can fail one.
+// SchemaDDL and HoldingWalkQuery are the statements CheckShares runs on its scratch database, and HoldingWalkQuery also runs in Replace, so a test fake can fail one.
 const (
 	SchemaDDL        = schemaDDL
 	HoldingWalkQuery = holdingWalkQuery

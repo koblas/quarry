@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01
-status: open
+status: done
 ---
 
 # SCENARIO-01: Sync records each holding's share count over time
@@ -27,10 +27,10 @@ Size: OWNS A RUN — 4 batches, 1 feature package (`store/duckstore`; `cmd/quarr
 - [x] Step 7: `rates.go:26-27` `finishBuild`, `:50-63` `refreshRates` (take `rows`), `:128-146` `needSpan` — earliest of cash and investment dates; prices never. `rates_internal_test.go:38,48,69,78` call sites + rows: investment earlier (head), cash earlier (control), investment only, cash only, both empty, investment future-only → empty, future investment + past cash → cash date, equal dates, price earlier than both ignored. Step 2 goes green
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments: `doc.go:1-17` (holding_shares built by the walk), `holdingSpans`, `loadHoldingShares`, `needSpan`, `refreshRates`, `export_test.go:3` (walk query now also runs in Replace)
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments: `doc.go:1-17` (holding_shares built by the walk), `holdingSpans`, `loadHoldingShares`, `needSpan`, `refreshRates`, `export_test.go:3` (walk query now also runs in Replace)
 
 ### Verify
-- [ ] Step 9: full verification + `spec-check.py phase4b-holdings` → tick SCENARIO-01 and SCENARIO-14 (`delivered by SCENARIO-01 —` before its test); write `docs/specifications/phase4b-holdings/STATE.md`
+- [x] Step 9: full verification + `spec-check.py phase4b-holdings` → tick SCENARIO-01 and SCENARIO-14 (`delivered by SCENARIO-01 —` before its test); write `docs/specifications/phase4b-holdings/STATE.md`
 
 ## Handoff
 
@@ -54,9 +54,8 @@ Size: OWNS A RUN — 4 batches, 1 feature package (`store/duckstore`; `cmd/quarr
 
 ## Phase report
 
-Run B2 (step 7) done. Both acceptance tests green: `Test_run_sync_records_each_holdings_share_count_over_time` and `Test_replace_asks_for_rates_from_the_earliest_investment_transaction`. Narrow loop green; `golangci-lint run ./internal/store/duckstore/` 0 issues (full-repo lint left to V).
-- `duckstore/rates.go`: `refreshRates(ctx, rows store.Rows, carried)`; `needSpan(transactions, investments, now)` takes the earliest of both via `earliest` (zero when neither); doc comments on `refreshRates`/`needSpan` already updated.
-- `rates_internal_test.go`: existing call sites pass `nil` investments; new `Test_needSpan_starts_on_the_earliest_cash_or_investment_date` (6 rows: investment earlier, cash earlier, investment only, cash only, equal, future investment + past cash) and `Test_needSpan_is_empty_when_every_investment_transaction_is_dated_after_now`. `rates_test.go`: `Test_replace_does_not_ask_for_rates_from_a_price_dated_before_every_transaction` (price rule, via Replace; needSpan takes no prices).
-- Plan deviation (existing fixture retargeted): `rates_floor_test.go` `noTransactionRows()` now also nils `InvestmentTransactions` (minimalRows carries investment rows, which now legitimately start the span; it is used by "nothing was asked when there are no transactions" and "no transactions carries the previous floor").
-- Mutation (needSpan ignores investments, `_ = investments`): red = `Test_replace_asks_for_rates_from_the_earliest_investment_transaction` (expected 2026-03-01, actual 2026-03-15) plus needSpan rows `investment earlier than cash` and `investment only`. Restored via Edit (backup `cp` was sandbox-denied; file diff verified against intended source by reading the diff).
-- Not done: Sweep (Step 8: full-repo lint, doc.go / holdingSpans / loadHoldingShares / export_test.go:3 comments), Verify (Step 9), STATE.md, spec tick.
+Run V (steps 8-9) done; scenario complete, `status: done`.
+- Sweep: `golangci-lint run ./...` 0 issues. Doc comments: `internal/store/duckstore/doc.go` (holding_shares sentence), `export_test.go:3` (walk query also runs in Replace); `holdingSpans`, `loadHoldingShares`, `needSpan`, `refreshRates` already carried theirs.
+- Verify: full suite rc=0 (`go test -count=1 -coverpkg=./...`); first full run found 3 duckstore tests red because `minimalRows()` now carries an investment row that legitimately starts the rate span (`Test_replace_asks_for_no_dates_when_there_are_no_transactions`, `Test_replace_asks_for_nothing_when_every_transaction_is_dated_after_today`, floor case `only future-dated transactions leave a null floor null`). Fixture fix: `rates_floor_test.go` `futureRows()` nils `InvestmentTransactions`; `rates_test.go` no-transactions test uses `noTransactionRows()`. `uncovered-diff.py` 0 uncovered; `go test -race ./internal/store/duckstore/...` ok.
+- Counts (`test-stats.py --base 0c2d800 --changed`): cmd/quarry 680 (+1), internal/store/duckstore 570 (+9), TOTAL 1250 (+10).
+- `specification.md` ticks for SCENARIO-01 and SCENARIO-14; `STATE.md` written (first).

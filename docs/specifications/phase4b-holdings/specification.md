@@ -399,8 +399,8 @@ Architect sizing pass 2026-10-04 (one pass over all 16; folds change no scenario
 
 ## BDD Acceptance Progress
 
-- [ ] SCENARIO-01: Sync records each holding's share count over time
-- [ ] SCENARIO-14: Sync fetches exchange rates back to the earliest investment transaction
+- [x] SCENARIO-01: Sync records each holding's share count over time — `cmd/quarry/run_holding_shares_test.go` `Test_run_sync_records_each_holdings_share_count_over_time`
+- [x] SCENARIO-14: Sync fetches exchange rates back to the earliest investment transaction — delivered by SCENARIO-01 — `internal/store/duckstore/rates_test.go` `Test_replace_asks_for_rates_from_the_earliest_investment_transaction`
 - [ ] SCENARIO-02: v_holdings values each holding on each day held
 - [ ] SCENARIO-03: quarry holdings lists today's holdings in the reporting currency
 - [ ] SCENARIO-04: Native currency lists each currency's own total

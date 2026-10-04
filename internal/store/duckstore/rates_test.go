@@ -143,11 +143,9 @@ func Test_replace_asks_for_rates_up_to_the_local_date_when_it_differs_from_the_u
 func Test_replace_asks_for_no_dates_when_there_are_no_transactions(t *testing.T) {
 	t.Parallel()
 	src := &fakeRates{}
-	rows := minimalRows()
-	rows.Transactions, rows.Splits, rows.SplitTags, rows.Transfers = nil, nil, nil, nil
 	st := duckstore.New(t.TempDir(), duckstore.WithRates(src))
 
-	_, err := st.Replace(t.Context(), rows)
+	_, err := st.Replace(t.Context(), noTransactionRows())
 
 	require.NoError(t, err)
 	require.Len(t, src.requests, 1)
