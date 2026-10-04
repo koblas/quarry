@@ -212,6 +212,27 @@ func Test_renderHoldings_names_the_reporting_currency_in_the_caption_and_the_col
 		"Total                                                             37.00\n", got)
 }
 
+func Test_renderHoldings_a_native_listing_has_one_total_row_per_currency_in_the_order_given(t *testing.T) {
+	cad := heldRow()
+	usd := heldRow()
+	usd.Account, usd.Currency, usd.Value = "IRA", new("USD"), big.NewInt(-123_456)
+	totals := []report.HoldingsTotal{
+		{Currency: "CAD", Value: big.NewInt(5_000)},
+		{Currency: "USD", Value: big.NewInt(-123_456)},
+		{Currency: "EUR", Value: big.NewInt(0)},
+	}
+
+	got := renderHoldings(holdingsIn(money.Native, totals, cad, usd))
+
+	assert.Equal(t, "Holdings on 2026-03-12 in all accounts; cash not included\n\n"+
+		"Account    Security  Shares  Price  Priced on   Currency      Value\n"+
+		"Brokerage  Fund          10   5.00  2026-03-05  CAD           50.00\n"+
+		"IRA        Fund          10   5.00  2026-03-05  USD       -1,234.56\n"+
+		"Total                                           CAD           50.00\n"+
+		"Total                                           USD       -1,234.56\n"+
+		"Total                                           EUR            0.00\n", got)
+}
+
 func Test_renderHoldings_a_native_listing_has_no_in_column_and_no_amounts_in_caption(t *testing.T) {
 	got := renderHoldings(holdingsIn(money.Native, nil, heldRow()))
 

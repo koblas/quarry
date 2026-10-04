@@ -20,7 +20,7 @@ const (
 )
 
 // renderHoldings renders h as the holdings table: caption, header, one row per holding in h's order, and
-// a Total row holding only the converted total. The In column is absent in a native listing.
+// a Total row holding only the converted total. A native listing has no In column and one Total row per currency.
 func renderHoldings(h report.Holdings) string {
 	converted := h.Currency != money.Native
 	header := []string{"Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value"}
@@ -41,7 +41,20 @@ func renderHoldings(h report.Holdings) string {
 	if converted && len(h.Totals) > 0 {
 		rows = append(rows, holdingsTotalRow(len(header), formatBigMoney(h.Totals[0].Value)))
 	}
+	if !converted {
+		for _, total := range h.Totals {
+			rows = append(rows, holdingsNativeTotalRow(len(header), total))
+		}
+	}
 	return renderTable(holdingsCaption(h), aligns, rows)
+}
+
+// holdingsNativeTotalRow is the Total row of one currency in a native table width cells wide: the
+// label, the currency in the Currency column and the sum in the Value column, every other cell blank.
+func holdingsNativeTotalRow(width int, total report.HoldingsTotal) []string {
+	row := holdingsTotalRow(width, formatBigMoney(total.Value))
+	row[width-2] = total.Currency
+	return row
 }
 
 // holdingsCaption names the day, the accounts and, in CAD or USD, the currency of the amounts.

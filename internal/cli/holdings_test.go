@@ -219,6 +219,27 @@ func Test_holdings_json_reads_back_the_listing_the_total_and_the_config_warning(
 	assert.Equal(t, []string{unknownKeyAbsolute}, doc.Warnings)
 }
 
+func Test_holdings_native_json_has_one_total_per_stored_currency_cad_then_usd_then_others(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	own := func(code *string, cents int64) store.Holding {
+		return store.Holding{Currency: code, Value: big.NewInt(cents), ValueCAD: big.NewInt(1), ValueUSD: big.NewInt(1)}
+	}
+	fake := fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{
+		own(new("EUR"), 200), own(new("USD"), 300), own(nil, 900), own(new("CAD"), 500), own(new("CAD"), 50),
+	}}}
+
+	err := executeHoldings(t, fake, &stdout, &stderr, "--currency", "native", "--json")
+
+	require.NoError(t, err)
+	var doc holdingsDoc
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	assert.Equal(t, "native", doc.Currency)
+	assert.Equal(t, []holdingsTotalDoc{
+		{Currency: "CAD", Value: "5.50"}, {Currency: "USD", Value: "3.00"}, {Currency: "EUR", Value: "2.00"},
+	}, doc.Totals)
+	assert.Nil(t, doc.Holdings[0].ConvertedValue)
+}
+
 func Test_holdings_json_lists_no_holdings_as_an_empty_array(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 

@@ -35,6 +35,62 @@ func totalValues(result report.Holdings) []string {
 	return values
 }
 
+// ownHolding is a holding priced in currency code, worth cents in it; a nil code is a security with no currency.
+func ownHolding(code *string, cents *big.Int) store.Holding {
+	return store.Holding{Currency: code, Value: cents}
+}
+
+func Test_holdings_native_totals_each_stored_currency_cad_then_usd_then_alphabetically(t *testing.T) {
+	rows := []store.Holding{
+		ownHolding(new("GBP"), big.NewInt(1)),
+		ownHolding(new("EUR"), big.NewInt(2)),
+		ownHolding(new("USD"), big.NewInt(3)),
+		ownHolding(new("AUD"), big.NewInt(4)),
+		ownHolding(new("CAD"), big.NewInt(5)),
+	}
+
+	result := holdingsOf(t, rows, money.Native)
+
+	assert.Equal(t, []string{"CAD 5", "USD 3", "AUD 4", "EUR 2", "GBP 1"}, totalValues(result))
+}
+
+func Test_holdings_native_total_sums_the_values_of_one_currency(t *testing.T) {
+	rows := []store.Holding{
+		ownHolding(new("CAD"), big.NewInt(100)),
+		ownHolding(new("USD"), big.NewInt(7)),
+		ownHolding(new("CAD"), big.NewInt(-30)),
+	}
+
+	result := holdingsOf(t, rows, money.Native)
+
+	assert.Equal(t, []string{"CAD 70", "USD 7"}, totalValues(result))
+}
+
+func Test_holdings_native_total_leaves_out_a_security_with_no_currency(t *testing.T) {
+	rows := []store.Holding{ownHolding(new("CAD"), big.NewInt(100)), ownHolding(nil, big.NewInt(900))}
+
+	result := holdingsOf(t, rows, money.Native)
+
+	assert.Equal(t, []string{"CAD 100"}, totalValues(result))
+}
+
+func Test_holdings_native_total_leaves_out_an_unpriced_holding_but_counts_a_zero_value(t *testing.T) {
+	cases := []struct {
+		name string
+		rows []store.Holding
+		want []string
+	}{
+		{name: "an unpriced holding alone gives no total", rows: []store.Holding{ownHolding(new("CAD"), nil)}, want: []string{}},
+		{name: "a zero value alone gives a zero total", rows: []store.Holding{ownHolding(new("CAD"), big.NewInt(0)), ownHolding(new("CAD"), nil)}, want: []string{"CAD 0"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, totalValues(holdingsOf(t, c.rows, money.Native)))
+		})
+	}
+}
+
 func Test_holdings_reads_the_store_once_for_the_day_asked_and_returns_it_with_the_currency(t *testing.T) {
 	var got store.HoldingsParams
 	var reads int

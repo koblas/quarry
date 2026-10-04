@@ -1,8 +1,11 @@
 package report
 
 import (
+	"cmp"
 	"context"
 	"math/big"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/money"
@@ -54,7 +57,11 @@ func (s *Server) Holdings(ctx context.Context, req HoldingsRequest) (Holdings, e
 }
 
 // total is the sum of the rows' converted values, one entry in the reporting currency; none when no row has one.
+// A native listing totals each row's own value per stored currency instead.
 func (l Holdings) total() []HoldingsTotal {
+	if l.Currency == money.Native {
+		return l.nativeTotals()
+	}
 	sum := new(big.Int)
 	contributed := false
 	for _, row := range l.Rows {
@@ -67,4 +74,42 @@ func (l Holdings) total() []HoldingsTotal {
 		return nil
 	}
 	return []HoldingsTotal{{Currency: l.Currency.String(), Value: sum}}
+}
+
+// nativeTotals is one total per stored currency among the rows with a value, CAD then USD then the
+// rest alphabetically. A row with no currency is never totalled.
+func (l Holdings) nativeTotals() []HoldingsTotal {
+	sums := map[string]*big.Int{}
+	for _, row := range l.Rows {
+		if row.Currency == nil || row.Value == nil {
+			continue
+		}
+		if sums[*row.Currency] == nil {
+			sums[*row.Currency] = new(big.Int)
+		}
+		sums[*row.Currency].Add(sums[*row.Currency], row.Value)
+	}
+	totals := make([]HoldingsTotal, 0, len(sums))
+	for code, sum := range sums {
+		totals = append(totals, HoldingsTotal{Currency: code, Value: sum})
+	}
+	slices.SortFunc(totals, func(a, b HoldingsTotal) int {
+		return cmp.Or(nativeRank(a.Currency)-nativeRank(b.Currency), strings.Compare(a.Currency, b.Currency))
+	})
+	if len(totals) == 0 {
+		return nil
+	}
+	return totals
+}
+
+// nativeRank puts CAD first and USD second; every other currency ties and falls to alphabetical order.
+func nativeRank(code string) int {
+	switch code {
+	case "CAD":
+		return 0
+	case "USD":
+		return 1
+	default:
+		return 2
+	}
 }
