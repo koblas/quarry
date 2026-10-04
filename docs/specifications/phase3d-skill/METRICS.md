@@ -7,6 +7,7 @@
 | SCENARIO-02 | code-first (light) | L, V | 0/0/4/0 | no (MINORs → STATE.md) |
 | SCENARIO-04 (+05) | code-first | A, B1, B2, V | 0/2/1/1 | yes (shipped income test clock-dependent from 2027; shipped category/currency/income params unpinned; opening-line scanner controls) |
 | SCENARIO-06 | code-first (light) | L, V | 0/0/2/2 | no (MINORs → STATE.md); acceptance green on arrival, per-row mutation proof |
+| SCENARIO-03 | code-first | A, B1, B2, V | 0/1/4/1 | yes (duplicate/uncategorized type pins were bare substrings; MINOR folds: reference-file link base controls, no-MCP-tool pin, two comment budgets) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
