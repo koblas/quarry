@@ -90,7 +90,7 @@ func writeDiffRow(b *strings.Builder, sign, label, value string) {
 func renderStore(result store.Result, home string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", homepath.Abbreviate(home, result.Path))
-	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(result.Counts, result.NotImported))
+	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(result.Counts))
 	bc := result.Validation.Balances
 	fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesPhrase(balanceCounts{Checked: bc.Checked, NeverReconciled: len(bc.NeverReconciled), InvestmentAccounts: bc.InvestmentAccounts}))
 	fmt.Fprintf(&b, "%-10s%s\n", "Splits", splitsPhrase(result.Validation.Splits.Checked))
@@ -267,9 +267,8 @@ func splitsPhrase(checked int) string {
 	}
 }
 
-// rowsPhrase renders c as the cash clause, then the investment clause, then n's
-// investment-transaction clause when nonzero.
-func rowsPhrase(c store.Counts, n store.NotImported) string {
+// rowsPhrase renders c as the cash clause, then the investment clause.
+func rowsPhrase(c store.Counts) string {
 	phrase := strings.Join([]string{
 		humanize.Count(c.Transactions, "transaction", "transactions"),
 		humanize.Count(c.Splits, "split", "splits"),
@@ -283,9 +282,6 @@ func rowsPhrase(c store.Counts, n store.NotImported) string {
 		humanize.Count(c.Securities, "security", "securities"),
 		humanize.Count(c.Prices, "price", "prices"),
 	}, ", ")
-	if n.InvestmentTransactions > 0 {
-		phrase += "; " + humanize.Count(n.InvestmentTransactions, "investment transaction", "investment transactions") + " not imported"
-	}
 	return phrase
 }
 
@@ -509,7 +505,7 @@ func widestLen(ss []string) int {
 func renderStoreFailure(result store.Result, storeExisted bool, home string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-10s%s\n", "Store", storeFailureLine(result.Path, storeExisted, home))
-	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(result.Counts, result.NotImported))
+	fmt.Fprintf(&b, "%-10s%s\n", "Rows", rowsPhrase(result.Counts))
 
 	if mismatched := result.Validation.Balances.Mismatched; len(mismatched) > 0 {
 		fmt.Fprintf(&b, "%-10s%s\n", "Balances", balancesDifferPhrase(result.Validation.Balances))

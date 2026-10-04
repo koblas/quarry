@@ -175,7 +175,7 @@ func Test_run_counts_investment_transactions_without_importing_them(t *testing.T
 	storePath := storePathUnder(home)
 	require.Equal(t, syncBlock(t, home, bundle.Dir, 2,
 		[2]string{"Store", abbreviated(t, storePath, home)},
-		[2]string{"Rows", "2 transactions, 2 splits, 1 transfer, 0 payees, 0 categories, 0 tags; 2 investment transactions, 0 securities, 0 prices; 2 investment transactions not imported"},
+		[2]string{"Rows", "2 transactions, 2 splits, 1 transfer, 0 payees, 0 categories, 0 tags; 2 investment transactions, 0 securities, 0 prices"},
 		[2]string{"Balances", "no accounts to check; 1 never reconciled and 1 investment account not checked"},
 		[2]string{"Splits", "all 2 transactions equal the sum of their splits"},
 		[2]string{"Shares", "no holdings to check"},

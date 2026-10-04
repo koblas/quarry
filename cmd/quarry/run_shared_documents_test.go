@@ -165,6 +165,9 @@ const statusUnreadableConfigDocument = `{
   "splits": {
     "checked": 4
   },
+  "shares": {
+    "checked": 0
+  },
   "transfers": {
     "paired": 1,
     "cross_currency": 1,
@@ -181,9 +184,6 @@ const statusUnreadableConfigDocument = `{
     "first": "2026-01-02",
     "last": "2026-01-02",
     "fetch_error": null
-  },
-  "not_imported": {
-    "investment_transactions": 0
   },
   "warnings": [
     "cannot tell which findings you ignored: %[8]s: snapshots.keep must be a whole number of 1 or more, got 0; findings you ignored are counted as open"

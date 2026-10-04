@@ -89,6 +89,9 @@ func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
   "splits": {
     "checked": 4
   },
+  "shares": {
+    "checked": 0
+  },
   "transfers": {
     "paired": 1,
     "cross_currency": 1,
@@ -105,9 +108,6 @@ func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
     "first": "2026-01-02",
     "last": "2026-01-02",
     "fetch_error": null
-  },
-  "not_imported": {
-    "investment_transactions": 0
   },
   "warnings": []
 }

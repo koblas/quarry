@@ -53,6 +53,9 @@ const fullStatusJSON = `{
   "splits": {
     "checked": 18204
   },
+  "shares": {
+    "checked": 7
+  },
   "transfers": {
     "paired": 3112,
     "cross_currency": 41,
@@ -69,9 +72,6 @@ const fullStatusJSON = `{
     "first": "2003-01-04",
     "last": "2026-09-28",
     "fetch_error": null
-  },
-  "not_imported": {
-    "investment_transactions": 1605
   },
   "warnings": []
 }

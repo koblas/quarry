@@ -36,11 +36,6 @@ type Rows struct {
 	Prices                 int `json:"prices"`
 }
 
-// NotImported is the --json "not_imported" object.
-type NotImported struct {
-	InvestmentTransactions int `json:"investment_transactions"`
-}
-
 // NewFindingCounts converts c into its --json shape.
 func NewFindingCounts(c finding.Counts) FindingCounts {
 	return FindingCounts{Open: c.Open, Ignored: c.Ignored, Fixed: c.Fixed, New: c.New, NewlyFixed: c.NewlyFixed}

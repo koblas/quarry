@@ -154,7 +154,7 @@ func Test_renderJSON_ends_the_store_object_with_rates(t *testing.T) {
 	data, err := renderJSON(snapshot.Outcome{Store: &built}, nil)
 
 	require.NoError(t, err)
-	assert.Equal(t, []string{"path", "built", "rows", "balances", "splits", "shares", "transfers", "findings", "not_imported", "rates"}, storeKeys(t, data))
+	assert.Equal(t, []string{"path", "built", "rows", "balances", "splits", "shares", "transfers", "findings", "rates"}, storeKeys(t, data))
 }
 
 func Test_renderJSON_reports_the_shares_checked_with_an_empty_mismatched_array(t *testing.T) {

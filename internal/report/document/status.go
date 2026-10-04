@@ -10,16 +10,16 @@ import (
 
 // Status is status's --json document and the sync_status tool's structured result.
 type Status struct {
-	Store       StatusStore     `json:"store"`
-	Snapshot    StatusSnapshot  `json:"snapshot"`
-	Dates       StatusDates     `json:"dates"`
-	Balances    StatusBalances  `json:"balances"`
-	Splits      StatusSplits    `json:"splits"`
-	Transfers   StatusTransfers `json:"transfers"`
-	Findings    StatusFindings  `json:"findings"`
-	Rates       StatusRates     `json:"rates"`
-	NotImported NotImported     `json:"not_imported"`
-	Warnings    []string        `json:"warnings"`
+	Store     StatusStore     `json:"store"`
+	Snapshot  StatusSnapshot  `json:"snapshot"`
+	Dates     StatusDates     `json:"dates"`
+	Balances  StatusBalances  `json:"balances"`
+	Splits    StatusSplits    `json:"splits"`
+	Shares    StatusShares    `json:"shares"`
+	Transfers StatusTransfers `json:"transfers"`
+	Findings  StatusFindings  `json:"findings"`
+	Rates     StatusRates     `json:"rates"`
+	Warnings  []string        `json:"warnings"`
 }
 
 // StatusStore is the "store" object: where the store lives, how it was built, and its row counts.
@@ -55,6 +55,11 @@ type StatusBalances struct {
 
 // StatusSplits is the "splits" object: how many transactions sync checked against their splits.
 type StatusSplits struct {
+	Checked int `json:"checked"`
+}
+
+// StatusShares is the "shares" object: how many holdings sync checked against Quicken's share counts.
+type StatusShares struct {
 	Checked int `json:"checked"`
 }
 
@@ -130,6 +135,7 @@ func NewStatus(st store.Status, findings FindingsTally, warnings []string) Statu
 			InvestmentAccounts: run.InvestmentAccounts,
 		},
 		Splits: StatusSplits{Checked: run.Counts.Transactions},
+		Shares: StatusShares{Checked: run.SharesChecked},
 		Transfers: StatusTransfers{
 			Paired:        run.TransfersPaired,
 			CrossCurrency: run.TransfersCrossCurrency,
@@ -139,8 +145,7 @@ func NewStatus(st store.Status, findings FindingsTally, warnings []string) Statu
 		Rates: StatusRates{
 			First: nullDate(st.Rates.First), Last: nullDate(st.Rates.Last), FetchError: NullString(st.Rates.FetchError),
 		},
-		NotImported: NotImported{InvestmentTransactions: run.InvestmentTransactionsNotImported},
-		Warnings:    append([]string{}, warnings...),
+		Warnings: append([]string{}, warnings...),
 	}
 }
 

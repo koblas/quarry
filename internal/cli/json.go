@@ -29,16 +29,15 @@ type syncPrunedDocument struct {
 
 // storeDocument is the --json "store" object.
 type storeDocument struct {
-	Path        string                  `json:"path"`
-	Built       bool                    `json:"built"`
-	Rows        document.Rows           `json:"rows"`
-	Balances    balancesDocument        `json:"balances"`
-	Splits      splitsDocument          `json:"splits"`
-	Shares      sharesDocument          `json:"shares"`
-	Transfers   transfersDocument       `json:"transfers"`
-	Findings    *document.FindingCounts `json:"findings"`
-	NotImported document.NotImported    `json:"not_imported"`
-	Rates       *ratesDocument          `json:"rates"`
+	Path      string                  `json:"path"`
+	Built     bool                    `json:"built"`
+	Rows      document.Rows           `json:"rows"`
+	Balances  balancesDocument        `json:"balances"`
+	Splits    splitsDocument          `json:"splits"`
+	Shares    sharesDocument          `json:"shares"`
+	Transfers transfersDocument       `json:"transfers"`
+	Findings  *document.FindingCounts `json:"findings"`
+	Rates     *ratesDocument          `json:"rates"`
 }
 
 // ratesDocument is the --json "store.rates" object: the stored span (null when none), how many rates this
@@ -175,16 +174,15 @@ func newStoreDocument(result *store.Result) *storeDocument {
 		return nil
 	}
 	return &storeDocument{
-		Path:        result.Path,
-		Built:       result.Built,
-		Rows:        document.NewRows(result.Counts),
-		Balances:    newBalancesDocument(result.Validation.Balances),
-		Splits:      newSplitsDocument(result.Validation.Splits),
-		Shares:      newSharesDocument(result.Validation.Shares),
-		Transfers:   newTransfersDocument(result.Validation.Transfers),
-		Findings:    newFindingsDocument(result),
-		NotImported: document.NotImported{InvestmentTransactions: result.NotImported.InvestmentTransactions},
-		Rates:       newRatesDocument(result),
+		Path:      result.Path,
+		Built:     result.Built,
+		Rows:      document.NewRows(result.Counts),
+		Balances:  newBalancesDocument(result.Validation.Balances),
+		Splits:    newSplitsDocument(result.Validation.Splits),
+		Shares:    newSharesDocument(result.Validation.Shares),
+		Transfers: newTransfersDocument(result.Validation.Transfers),
+		Findings:  newFindingsDocument(result),
+		Rates:     newRatesDocument(result),
 	}
 }
 
