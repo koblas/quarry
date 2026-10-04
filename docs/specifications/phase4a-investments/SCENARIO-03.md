@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-03
-status: open
+status: done
 ---
 
 # SCENARIO-03: Sync refuses an investment record quarry cannot read
@@ -32,12 +32,6 @@ Rulings S03 made (spec S.5 left them open):
 
 ## Phase report
 
-Run L done (steps 1-4 ticked; SCENARIO-03 NOT yet ticked in specification.md, STATE.md not yet rewritten, status still open — run V does those).
+Run V done. Ruling update (spec S.5): a blob split side prints `blob`, never its bytes. Red first: `Test_import_shows_a_blob_split_side_as_blob` (REAL-style `UPDATE ... ZNUMERATOR = X'00FF41'`) failed at its assertion, actual `(\x00\xffA:12)`; `ratioSideText` (`internal/importer/investments.go`) now switches on `typ` null/blob; green.
 
-Red (before Build), `go test ./cmd/quarry/ -run Test_run_sync_refuses_an_investment_record`: 4 of 6 subtests failed at the stderr assertion — `a_split_ratio_1:0` and `..._NULL_denominator` got `quarry: cannot build the store in ~/Library/Application Support/quarry: has a split ratio quarry cannot read; run quarry sync --from <id>` (expected the S4 frame with the ruled reason); `non-zero_units_and_no_position` got the same shape with `has shares but no security`; `a_security_with_no_name` got `...: converting NULL to string is unsupported; ...`. Rows `an action code 14` and `1.23456789 shares` were green on arrival (SCENARIO-02). Now all 6 green.
-
-Files: `cmd/quarry/run_investments_test.go` (+`os` import, new test at end); `internal/importer/investments.go` (placeholders and `errors` import removed; `buildInvestmentTransaction` returns `(txn, bool)` — error return dropped as always nil; new `resolveSecurity`, `ratioSideText`, `ratioSideNone`); `reasons.go` (`reasonInvestmentSharesWithoutSecurity`, `reasonSplitRatio`, `reasonSecurityNoName`); `securities.go` (`mapSecurities` takes `off`, ZNAME scanned as `sql.NullString`; nameless stays in the map; `mapPrices` skips a nameless security's quotes — red first: with a nameless security and a not-a-number or too-large quote the reason was `a price of "" on ...` because `classNotANumber`/`classTooLarge` sort before `classMissingValue`); `importer.go:108`; `offenders.go:27` comment; tests `investments_test.go` (shares-without-security repointed; split ratio repointed, 8 cases, plus a no-security split case and a REAL-bound `1.5:0.0` case showing `(1.5:0)`), `securities_test.go` (+4 incl. the quote-ordering test, 2 rows).
-
-`go test ./internal/importer/` ok; `golangci-lint run ./internal/importer/... ./cmd/quarry/...` 0 issues. No full-suite, coverage, test-stats or spec tick yet (V). No mutations (plan: none).
-
-V must not redo: reasons are ruled/derived as in Handoff; do not re-add an error return to `buildInvestmentTransaction`. V does: full Verify block with `<start>` 28efd71, tick SCENARIO-03 `cmd/quarry/run_investments_test.go` `Test_run_sync_refuses_an_investment_record_quarry_cannot_read` (note rows 1-2 delivered by SCENARIO-02), `spec-check.py`, STATE.md rewrite (drop the two S03 Left-unbuilt entries, the ZNAME trap, the S02 offender-class debt; keep the `<v>` text debt as unowned), `status: done`.
+Verify: `go build ./...` ok; full suite `go test -count=1 -coverpkg=./... ./...` rc=0; `uncovered-diff.py --profile ... 28efd71`: 0 uncovered added lines; `go test -race` importer and cmd/quarry ok; `golangci-lint run ./...` 0 issues. `test-stats.py --base 28efd71 --changed`: cmd/quarry 667 (+1), internal/importer 212 (+7), TOTAL 879 (+8), tempdir 667 (+3), disk 608 (+3). Spec ticked (spec-check OK), STATE.md rewritten, status done.

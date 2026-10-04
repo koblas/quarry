@@ -15,8 +15,11 @@ const investmentIDFormat = "itxn-%d"
 // splitAction is the action whose ZNUMERATOR and ZDENOMINATOR become the split columns.
 const splitAction = "split"
 
-// ratioSideNone is how a refusal shows a NULL split side.
-const ratioSideNone = "none"
+// ratioSideNone and ratioSideBlob are how a refusal shows a NULL and a blob split side.
+const (
+	ratioSideNone = "none"
+	ratioSideBlob = "blob"
+)
 
 // investmentActions maps ZTRANSACTION.ZTYPE to investment_transactions.action; any other code is unmappable.
 var investmentActions = map[int64]string{
@@ -294,10 +297,14 @@ func splitSides(r investmentRow) (int64, int64, bool) {
 	return newShares, oldShares, ok
 }
 
-// ratioSideText is one side of a split ratio as a refusal shows it: its column text, "none" when NULL.
+// ratioSideText is one side of a split ratio as a refusal shows it: its column text, "none" when NULL
+// and "blob" when stored as bytes, which never reach the message.
 func ratioSideText(col numberColumn) string {
-	if col.typ == "null" {
+	switch col.typ {
+	case "null":
 		return ratioSideNone
+	case "blob":
+		return ratioSideBlob
 	}
 	return col.text.String
 }

@@ -306,7 +306,7 @@ Architect sizing pass 2026-10-03 (one pass over all 12; folds change no scenario
 
 - [x] SCENARIO-01: Sync imports securities and their prices — `cmd/quarry/run_investments_test.go` `Test_run_sync_imports_securities_and_their_prices`
 - [x] SCENARIO-02: Sync imports investment transactions with named actions — `cmd/quarry/run_investments_test.go` `Test_run_sync_imports_investment_transactions_with_named_actions`
-- [ ] SCENARIO-03: Sync refuses an investment record quarry cannot read
+- [x] SCENARIO-03: Sync refuses an investment record quarry cannot read — `cmd/quarry/run_investments_test.go` `Test_run_sync_refuses_an_investment_record_quarry_cannot_read`
 - [ ] SCENARIO-04: Sync reports holdings that match Quicken's share counts
 - [ ] SCENARIO-05: Share count applies a stock split in date order
 - [ ] SCENARIO-08: A file with no investment data
