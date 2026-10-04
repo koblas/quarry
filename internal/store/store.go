@@ -156,6 +156,35 @@ type Price struct {
 	Price      int64
 }
 
+// HoldingsParams selects what Holdings reads: the holdings on AsOf, a calendar day held as UTC midnight.
+type HoldingsParams struct {
+	AsOf time.Time
+}
+
+// Holdings is every holding on the day asked for, in account name, account source id, security name,
+// security source id order.
+type Holdings struct {
+	Holdings []Holding
+}
+
+// Holding is one row of v_holdings: what an account holds of a security on a day, with its value.
+// Shares and Price are millionths; Value, ValueCAD and ValueUSD are cents, which can pass 64 bits.
+// Price, PriceDate and Value are nil with no price on or before the day, and ValueCAD and ValueUSD
+// when no rate converts Value. USDCAD is the rate in force on the day, zero when there is none.
+type Holding struct {
+	AccountID, SecurityID      string
+	Account                    string
+	AccountSourceID            int64
+	AccountClosed              bool
+	Security, Ticker, Currency *string
+	SecuritySourceID           *int64
+	Shares                     int64
+	Price                      *int64
+	PriceDate                  *time.Time
+	Value, ValueCAD, ValueUSD  *big.Int
+	USDCAD                     money.Rate
+}
+
 // The investment_transactions.action values.
 const (
 	ActionAddShares        = "add_shares"

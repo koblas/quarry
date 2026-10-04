@@ -290,6 +290,26 @@ excludes accounts where accounts.in_reports is false or accounts.linked_tracking
 | `amount_usd` | `DECIMAL(18,2)` |
 | `usd_cad` | `DECIMAL(10,6)` |
 
+### v_holdings
+
+one row per holding per day it is held, through today, so filter by date; value is shares times price rounded to the cent, value_cad and value_usd convert it at the rate for date as quarry holdings does; cash in investment accounts is not included.
+
+| column | type |
+| --- | --- |
+| `date` | `DATE` |
+| `account_id` | `VARCHAR` |
+| `security_id` | `VARCHAR` |
+| `security` | `VARCHAR` |
+| `ticker` | `VARCHAR` |
+| `shares` | `DECIMAL(18,6)` |
+| `price` | `DECIMAL(18,6)` |
+| `price_date` | `DATE` |
+| `currency` | `VARCHAR` |
+| `value` | `DECIMAL(38,2)` |
+| `value_cad` | `DECIMAL(38,2)` |
+| `value_usd` | `DECIMAL(38,2)` |
+| `usd_cad` | `DECIMAL(10,6)` |
+
 ### v_spending
 
 expense splits of v_cash_flow with spent = -amount; same exclusions as v_cash_flow, so totals match quarry spend.

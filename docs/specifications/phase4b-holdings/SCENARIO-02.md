@@ -20,7 +20,7 @@ Spec: `specification.md` SCENARIO-02, H-2 (comment text R2 verbatim), H-3, H-5, 
 - [x] Step 1: `cmd/quarry/run_holdings_view_test.go` (new) `Test_run_sql_values_each_holding_on_a_date_from_v_holdings` — build the store with `replaceStoreWithRates` (`run_sql_fx_test.go:32`) and `usdRate` (`run_anomalies_fx_edges_test.go:47`). Fixture: one CAD and one USD holding (accounts, securities, investment transactions); prices on days before, on and after the queried date; two rates that differ on consecutive days; a shares×price product that is not whole cents. Then `run(... "sql", "SELECT … FROM v_holdings WHERE date = '…'")`, following `run_sql_fx_test.go`. Assert price, price_date, value, value_cad, value_usd and usd_cad for both rows. No stubs: red = non-zero exit at the exit-code assertion, because `v_holdings` does not exist yet.
 
 ### Build
-- [ ] Step 2: `internal/store/duckstore/schema.go:245-254` (new `holdingsViewDDL` after `spendingViewDDL`) + `duckstore.go:454` (append it to the build Exec) — the view's day expansion and `COMMENT ON VIEW v_holdings` (H-2 R2 text verbatim).
+- [x] Step 2: `internal/store/duckstore/schema.go:245-254` (new `holdingsViewDDL` after `spendingViewDDL`) + `duckstore.go:454` (append it to the build Exec) — the view's day expansion and `COMMENT ON VIEW v_holdings` (H-2 R2 text verbatim).
   - **Shape:** `generate_series(from_date, least(coalesce(to_date, current_date), current_date), INTERVAL 1 DAY)` cast to DATE. ASOF LEFT JOIN `prices` on `security_id` and `date >= p.date`. ASOF LEFT JOIN `fx_rates` on `date >= r.date`. LEFT JOIN `securities`, so a holding is never dropped. No window, DISTINCT or ORDER BY above the expansion, so a `date` filter pushes down.
   - **Tests** in `holdings_view_test.go` (new), one row per arm:
     - closed span: `from_date` and `to_date` both included;
@@ -40,7 +40,7 @@ Spec: `specification.md` SCENARIO-02, H-2 (comment text R2 verbatim), H-3, H-5, 
     - drop `v_holdings` from `:182`;
     - drop `holdings` from `phase4ViewPattern` at `run_skill_references_test.go:21`;
     - re-point the `:101` case at `v_balances_daily`, so each remaining alternative of the pattern keeps a row. This deviates on purpose from S.7's "remove its case".
-- [ ] Step 3: `schema.go` `holdingsViewDDL` value, `price` and FX columns + `convert_sql.go:31-46` `convertedTo`.
+- [x] Step 3: `schema.go` `holdingsViewDDL` value, `price` and FX columns + `convert_sql.go:31-46` `convertedTo`.
   - **Columns:** `value` = `CAST(shares*price AS DECIMAL(38,2))`. `value_cad` and `value_usd` are DECIMAL(38,2) via `convertedTo` over `securities.currency` and `r.usd_cad`. `usd_cad` = the rate in force on `date`, on every row whatever the currency, NULL before the first rate (as `v_cash_flow`).
   - **`convertedTo`:** its two branches hard-code a DECIMAL(18,2) result. Give it a result-type parameter, or make it a thin 18,2 wrapper over a sibling that takes the width, so one function still owns the half-away-from-zero rule. The four existing call sites (`schema.go:196-197,228-229`) keep DECIMAL(18,2), so their FX tests in `views_fx_test.go` stay green unchanged.
   - **Tests** in `holdings_value_test.go` (new), one row each, differing from a control in one variable:
@@ -66,7 +66,7 @@ Spec: `specification.md` SCENARIO-02, H-2 (comment text R2 verbatim), H-3, H-5, 
       - NULL currency in a CAD account: all converted cells NULL, no fallback to the account currency;
       - EUR: both converted cells NULL (out-of-domain row);
       - security currency ≠ account currency: the security's currency wins.
-- [ ] Step 4: `internal/store/store.go` (types after `Price`, `:152-158`) `store.HoldingsParams{AsOf}`, `store.Holdings`, `store.Holding` + `internal/store/duckstore/holdings.go` (new) `(*Store).Holdings(ctx, store.HoldingsParams)`.
+- [x] Step 4: `internal/store/store.go` (types after `Price`, `:152-158`) `store.HoldingsParams{AsOf}`, `store.Holdings`, `store.Holding` + `internal/store/duckstore/holdings.go` (new) `(*Store).Holdings(ctx, store.HoldingsParams)`.
   - **What it does:** reads `v_holdings WHERE date = $1`, joined to `accounts` for name, source_id and closed, and to `securities` for source_id. Sorted per S.2: account name, account source_id, security name, security source_id. Shape and error handling follow `accounts.go:21-58` (`openRead`, `QueryRows`, `openFault`, `nullInt64Ptr`).
   - **Tests** in `holdings_test.go` (new):
     - every column read, NULL arms included (no price, NULL currency, NULL ticker, closed account);
@@ -104,13 +104,12 @@ Spec: `specification.md` SCENARIO-02, H-2 (comment text R2 verbatim), H-3, H-5, 
 
 ## Phase report
 
-Run A (step 1) done. Step 1 ticked; steps 2-6 open.
+Run B1 (steps 2-4) done. Steps 1-4 ticked; steps 5-6 (Sweep, Verify) open for run V.
 
-- Added `cmd/quarry/run_holdings_view_test.go` (new, 63 lines): `Test_run_sql_values_each_holding_on_a_date_from_v_holdings`. No production code or stubs.
-- Red at the exit-code assertion (`run_holdings_view_test.go:51`): expected 0, actual 1, `quarry: query failed: Catalog Error: Table with name v_holdings does not exist!`.
-- Fixture: store built from `spendRows(accounts)` plus `Securities`, `InvestmentTransactions` (one buy each, 2026-03-02) and `Prices`, with `replaceStoreWithRates` and `usdRate`. Queried date 2026-03-12.
-  - CAD ACME 3.5 sh: prices day 9 / 11 / 13 (before, nearest before, after) -> uses 12.345678 dated 03-11; value 43.21.
-  - USD GLBX 2 sh: prices day 10 / 12 / 13 -> uses 20.123456 dated 03-12 (on the date); value 40.25.
-  - Rates 03-11 1.25, 03-12 1.30: value_usd of the CAD row 33.24 (1.25 would give 34.57); value_cad of the USD row 52.33 (half-cent product 52.325 rounds away; 1.25 would give 50.31).
-- Expected CSV derived by hand, unproven until Steps 2-3 turn it green. If a cell mismatches then, check the arithmetic before the view. `shares`/`price` render as DECIMAL(18,6) text, `usd_cad` as DECIMAL(10,6).
-- The Step 2 view alone leaves this test red on the value columns; Step 3 owns them.
+- `internal/store/duckstore/schema.go` `holdingsViewDDL()` (+ consts `holdingsViewComment`, `lastHeldDay`), appended in `duckstore.go` `build`. `convert_sql.go`: `convertedTo` is now a 18-digit wrapper over `convertedToWide(target, amount, currency, rate, digits)`; the view uses 38.
+- `internal/store/store.go`: `HoldingsParams{AsOf}`, `Holdings{Holdings []Holding}`, `Holding` (cents `*big.Int`, `USDCAD money.Rate` zero when no rate). `duckstore/holdings.go`: `(*Store).Holdings`, LEFT JOINs accounts and securities so a holding is never dropped; order `a.name, a.source_id, v.account_id, v.security, s.source_id, v.security_id`.
+- Tests: `holdings_view_test.go`, `holdings_value_test.go`, `holdings_test.go` (new); `read_faults_test.go` Holdings row; `query_test.go` `storeRelations`; `run_skill_schema_reference_test.go` Len 3 and `v_holdings` dropped; `run_skill_references_test.go` pattern without `holdings`, crafted case re-pointed at `v_balances_daily`; `schema.md` regenerated.
+- Acceptance test is green. Narrow loops green; `golangci-lint run ./...` 0 issues.
+- Two real overflows found by the largest-holding tests (red first, fixed): the view's `shares*price` multiplied DECIMAL(18,6) pair in 64 bits (now DECIMAL(19,6) casts), and `Holdings` reading `shares*1000000` (now via DECIMAL(38,6)).
+- Mutations (restored, diffed): cap -> `coalesce(to_date, current_date)` reddens `Test_holdings_view_stops_each_span_at_today/a_span_closed_after_today_ends_today` (got extra day); price `d.date >= p.date` -> `<=` reddens 5 rows of `Test_holdings_view_takes_the_latest_price_on_or_before_the_date`.
+- Not done, left for V: `duckstore/doc.go:6-14` view list (add `v_holdings`, `Holdings`), `typeof(date)` pin skipped on purpose (`Test_holdings_view_lists_its_columns_in_order` pins `date DATE`), doc-comment pass, full verification, spec tick, STATE.md, SCENARIO-02 `status: done`. STATE.md Open debts: sort differs from `quarry accounts` (lower(name) there).

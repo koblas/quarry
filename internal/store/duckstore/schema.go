@@ -252,3 +252,38 @@ FROM v_cash_flow
 WHERE flow = 'expense';
 COMMENT ON VIEW v_spending IS 'expense splits of v_cash_flow with spent = -amount; same exclusions as v_cash_flow, so totals match quarry spend.';
 `
+
+// holdingsViewComment is the COMMENT ON VIEW text of v_holdings.
+const holdingsViewComment = "one row per holding per day it is held, through today, so filter by date; " +
+	"value is shares times price rounded to the cent, value_cad and value_usd convert it at the rate for date as quarry holdings does; " +
+	"cash in investment accounts is not included."
+
+// lastHeldDay is the SQL for the last day of a holding_shares span: its to_date, or today while open, and never after today.
+const lastHeldDay = "least(coalesce(to_date, current_date), current_date)"
+
+// holdingsViewDDL creates v_holdings: one row per holding per day held, through today, valued at the latest
+// price on or before the day and converted at the latest rate on or before it.
+func holdingsViewDDL() string {
+	// The DECIMAL(19,6) operands make the product DECIMAL(38,12); two DECIMAL(18,6) operands overflow 64 bits at the largest holdings.
+	return `
+CREATE VIEW v_holdings AS
+WITH days AS (
+	SELECT account_id, security_id, shares,
+		CAST(unnest(generate_series(from_date, ` + lastHeldDay + `, INTERVAL 1 DAY)) AS DATE) AS date
+	FROM holding_shares
+), priced AS (
+	SELECT d.date, d.account_id, d.security_id, d.shares, p.price, p.date AS price_date,
+		CAST(CAST(d.shares AS DECIMAL(19,6)) * CAST(p.price AS DECIMAL(19,6)) AS DECIMAL(38,2)) AS value
+	FROM days d
+	ASOF LEFT JOIN prices p ON d.security_id = p.security_id AND d.date >= p.date
+)
+SELECT v.date, v.account_id, v.security_id, s.name AS security, s.ticker, v.shares, v.price, v.price_date, s.currency, v.value,
+	` + convertedToWide("CAD", "v.value", "s.currency", "r.usd_cad", 38) + ` AS value_cad,
+	` + convertedToWide("USD", "v.value", "s.currency", "r.usd_cad", 38) + ` AS value_usd,
+	r.usd_cad
+FROM priced v
+LEFT JOIN securities s ON s.id = v.security_id
+ASOF LEFT JOIN fx_rates r ON v.date >= r.date;
+COMMENT ON VIEW v_holdings IS '` + holdingsViewComment + `';
+`
+}
