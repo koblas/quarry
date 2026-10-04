@@ -20,7 +20,7 @@ import (
 const badCurrencyFlag = "--currency must be CAD, USD or native"
 
 // currencyCommands are the commands that take --currency.
-var currencyCommands = []string{"spend", "cashflow", "recurring", "anomalies", "accounts"}
+var currencyCommands = []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings"}
 
 // cadConfig is a ConfigLoader for a config file that leaves reporting.currency at its CAD default.
 func cadConfig(string) (config.Config, error) { return config.Config{Currency: money.CAD}, nil }

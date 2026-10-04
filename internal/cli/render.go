@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/platform/homepath"
@@ -491,11 +492,11 @@ func otherAccountLabel(leg store.OneSidedTransfer) string {
 	}
 }
 
-// widestLen returns the length of the longest of ss, 0 for an empty slice.
+// widestLen returns the rune count of the longest of ss, 0 for an empty slice.
 func widestLen(ss []string) int {
 	n := 0
 	for _, s := range ss {
-		n = max(n, len(s))
+		n = max(n, utf8.RuneCountInString(s))
 	}
 	return n
 }

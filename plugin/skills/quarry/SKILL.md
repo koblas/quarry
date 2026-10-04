@@ -1,6 +1,6 @@
 ---
 name: quarry
-description: Answer questions about the user's own money from their Quicken Classic for Mac data, using the quarry command-line tool and its local, read-only store. Use when the user asks how much they spent or earned, on what, where or when ("how much did we spend on groceries last year?", "how did our grocery spending change since 2022?"); about income, cash flow or savings rate by month or year; which subscriptions or recurring charges they pay, when one started or changed price ("which subscriptions started this year?"); about unusually large charges; to find a transaction by payee, memo, amount, date, account or category; for account balances; or what to clean up in their Quicken file (uncategorized items, duplicates, one-sided or unlinked transfers, payee name variants). Also use when the user mentions quarry or their Quicken data, or asks whether that data is up to date. Every number comes from quarry's output, never from estimation. Do not use for general financial advice, tax filing, trades or payments, for net worth, holdings, gains, dividend totals or ACB beyond saying quarry does not cover them yet, or for data that is not in Quicken; quarry cannot change the data, and fixes are made in Quicken.
+description: Answer questions about the user's own money from their Quicken Classic for Mac data, using the quarry command-line tool and its local, read-only store. Use when the user asks how much they spent or earned, on what, where or when ("how much did we spend on groceries last year?", "how did our grocery spending change since 2022?"); about income, cash flow or savings rate by month or year; which subscriptions or recurring charges they pay, when one started or changed price ("which subscriptions started this year?"); about unusually large charges; to find a transaction by payee, memo, amount, date, account or category; for account balances; what they hold in investment accounts and its value on a day; or what to clean up in their Quicken file (uncategorized items, duplicates, one-sided or unlinked transfers, payee name variants). Also use when the user mentions quarry or their Quicken data, or asks whether that data is up to date. Every number comes from quarry's output, never from estimation. Do not use for general financial advice, tax filing, trades or payments, for net worth, gains, dividend totals or ACB beyond saying quarry does not cover them yet, or for data that is not in Quicken; quarry cannot change the data, and fixes are made in Quicken.
 ---
 
 # Answer questions from Quicken data with quarry
@@ -44,6 +44,7 @@ Before the first number in a conversation, run `quarry status --json`.
 | Unusually large charges | `quarry anomalies --json` |
 | Find a transaction | `quarry search <text> --json` (with `--account`, `--category`, `--min`, `--max`, `--since`, `--until`) |
 | Account balances | `quarry accounts --json` |
+| Holdings and their value on a day | `quarry holdings --as-of <date> --json` |
 | What to clean up in Quicken | `quarry findings --json`; see `references/findings.md` |
 | Anything else | `quarry sql` (section 5) |
 
@@ -51,7 +52,7 @@ Dates are `YYYY`, `YYYY-MM` or `YYYY-MM-DD`, and both ends are included. Without
 
 ## 5. When to use quarry sql
 
-Use a named command when one answers the question; it carries the rules. Use `quarry sql` only for questions no command covers, and then query the views `v_spending` and `v_cash_flow` for spending and income; never rebuild those from `transactions` and `splits`. Recurring charges and anomalies have no SQL form; use their commands. Read `references/schema.md` before writing SQL.
+Use a named command when one answers the question; it carries the rules. Use `quarry sql` only for questions no command covers, and then query the views `v_spending` and `v_cash_flow` for spending and income; never rebuild those from `transactions` and `splits`. Recurring charges and anomalies have no SQL form; use their commands. Read `references/schema.md` before writing SQL. For holdings over time query `v_holdings`; never sum `investment_transactions.shares`.
 
 Pass the query on stdin with a quoted heredoc so the shell changes nothing:
 
@@ -69,8 +70,8 @@ quarry never writes to Quicken and never edits its own store by request. To fix 
 
 ## 7. Not covered yet
 
-- **Net worth:** "quarry does not compute net worth yet: it does not value investment holdings, so a total of the balances it has would leave them out." `quarry accounts` can list the other accounts' balances; don't add them up.
-- **Investments, holdings, dividends, realized gains, ACB:** "quarry imports investment transactions but does not compute holdings, dividends, gains or ACB yet."
+- **Net worth:** "quarry does not compute net worth yet: it values investment holdings but not the cash in investment accounts." `quarry accounts` lists the other balances and `quarry holdings` the holdings; don't add them up.
+- **Dividends, realized gains, ACB:** "quarry imports investment transactions and values holdings, but does not compute dividends, gains or ACB yet."
 - **Tax:** quarry has no tax-line data. Give totals for the categories the user names for the year, from `quarry spend --by category` and `references/sql/income-by-category.sql`. These are figures to review, not tax advice or a filing.
 
 ## 8. When a command fails
@@ -91,7 +92,7 @@ quarry never writes to Quicken and never edits its own store by request. To fix 
 
 ## 9. Without a shell: MCP tools
 
-If you cannot run shell commands but quarry's MCP tools are available, use them; they return the same numbers. `sync_status` for section 1, `spending`, `cash_flow`, `recurring_charges`, `anomalies`, `search_transactions`, `data_quality` for the commands in section 4, `describe_schema` and `query` for section 5. The MCP server cannot run `sync`.
+If you cannot run shell commands but quarry's MCP tools are available, use them; they return the same numbers. `sync_status` for section 1, `spending`, `cash_flow`, `recurring_charges`, `anomalies`, `search_transactions`, `holdings`, `data_quality` for the commands in section 4, `describe_schema` and `query` for section 5. The MCP server cannot run `sync`.
 
 ## 10. References
 

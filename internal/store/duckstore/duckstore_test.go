@@ -477,7 +477,7 @@ func Test_replace_stores_the_largest_investment_amounts_and_shares_the_columns_h
 	t.Parallel()
 	rows := minimalRows()
 	inv := &rows.InvestmentTransactions[0]
-	inv.Shares, inv.SplitNewShares, inv.SplitOldShares = new(int64(999_999_999_999_999_999)), new(int64(999_999_999_999_999_999)), new(int64(-999_999_999_999_999_999))
+	inv.Shares, inv.SplitNewShares, inv.SplitOldShares = new(int64(999_999_999_999_999_999)), new(int64(999_999_999_999_999_999)), new(int64(999_999_999_999_999_999))
 	inv.Amount, inv.Commission = 999_999_999_999_999_999, new(int64(-999_999_999_999_999_999))
 	st := duckstore.New(t.TempDir())
 
@@ -486,7 +486,7 @@ func Test_replace_stores_the_largest_investment_amounts_and_shares_the_columns_h
 	require.NoError(t, err)
 	assertScalar(t, openReadOnly(t, st.Path()), "SELECT concat_ws(' ', CAST(shares AS VARCHAR), CAST(amount AS VARCHAR), CAST(commission AS VARCHAR), "+
 		"CAST(split_new_shares AS VARCHAR), CAST(split_old_shares AS VARCHAR)) FROM investment_transactions WHERE id = 'inv-1'",
-		"999999999999.999999 9999999999999999.99 -99999999999999.9999 999999999999.999999 -999999999999.999999")
+		"999999999999.999999 9999999999999999.99 -99999999999999.9999 999999999999.999999 999999999999.999999")
 }
 
 func Test_replace_fails_when_an_investment_transaction_value_is_out_of_range(t *testing.T) {

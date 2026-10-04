@@ -6,7 +6,10 @@
 // file, and records the findings the build's detectors report (findings,
 // finding_items). A finished store carries one store_info row (FormatVersion,
 // quarry's version, build time), appended last, and the v_account_balances,
-// v_cash_flow and v_spending views. A build asks its RatesSource for the
+// v_cash_flow, v_spending and v_holdings views. holding_shares records each
+// holding's share count over time, built from the same walk of the investment
+// transactions that CheckShares runs; v_holdings values each holding per day
+// held, and Holdings reads it for one day. A build asks its RatesSource for the
 // exchange rates it needs and stores them in fx_rates; the views carry
 // converted columns (balance_cad, amount_usd, spent_cad, usd_cad and their
 // siblings) computed from that table. It also answers the read commands: every

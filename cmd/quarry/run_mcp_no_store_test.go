@@ -30,6 +30,7 @@ func Test_run_mcp_every_tool_refuses_before_the_first_sync(t *testing.T) {
 		{tool: "recurring_charges"},
 		{tool: "anomalies"},
 		{tool: "search_transactions"},
+		{tool: "holdings"},
 	}
 
 	for _, c := range calls {

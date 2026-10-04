@@ -76,11 +76,16 @@ var dateForms = []struct {
 // DefaultWindow is January 1 of now's year through now's day, both read in
 // now's own zone.
 func DefaultWindow(now time.Time) store.Window {
-	year, month, day := now.Date()
 	return store.Window{
-		Since: time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC),
-		Until: time.Date(year, month, day, 0, 0, 0, 0, time.UTC),
+		Since: time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, time.UTC),
+		Until: Today(now),
 	}
+}
+
+// Today is now's calendar day, read in now's own zone, as UTC midnight.
+func Today(now time.Time) time.Time {
+	year, month, day := now.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 }
 
 // ParseWindow resolves since and until into a window; a nil pointer is an argument not
@@ -135,12 +140,21 @@ func parseWindow(since, until *string, now time.Time, futureSince WindowErrorKin
 // parseDateBound is the first and last day of the year, month or day that
 // value names, or a WindowNotADate error for bound when it names none.
 func parseDateBound(bound, value string) (time.Time, time.Time, error) {
+	first, last, ok := datePeriod(value)
+	if !ok {
+		return time.Time{}, time.Time{}, WindowError{Kind: WindowNotADate, Bound: bound, Value: value}
+	}
+	return first, last, nil
+}
+
+// datePeriod is the first and last day of the year, month or day that value names; ok is false when it names none.
+func datePeriod(value string) (time.Time, time.Time, bool) {
 	for _, form := range dateForms {
 		if first, err := time.Parse(form.layout, value); err == nil {
-			return first, first.AddDate(form.years, form.months, form.days), nil
+			return first, first.AddDate(form.years, form.months, form.days), true
 		}
 	}
-	return time.Time{}, time.Time{}, WindowError{Kind: WindowNotADate, Bound: bound, Value: value}
+	return time.Time{}, time.Time{}, false
 }
 
 // ParseSearchWindow resolves since and until into a search window; a nil pointer is an open bound,

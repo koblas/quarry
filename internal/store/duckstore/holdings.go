@@ -1,0 +1,105 @@
+package duckstore
+
+import (
+	"context"
+	"database/sql"
+	"math/big"
+	"time"
+
+	"github.com/koblas/quarry/internal/platform/money"
+	"github.com/koblas/quarry/internal/store"
+)
+
+// holdingsQueryFor reads v_holdings on $1, only in the named accounts when there are any (numbered from $2),
+// in the order store.Holdings documents.
+func holdingsQueryFor(accounts accountFilter) string {
+	filter := ""
+	if len(accounts) > 0 {
+		filter = " AND v.account_id IN (" + accounts.marks(2) + ")"
+	}
+	return holdingsSelect + filter + holdingsOrder
+}
+
+const holdingsSelect = `
+SELECT v.account_id, v.security_id, a.name, a.source_id, a.closed, v.security, v.ticker, v.currency, s.source_id,
+	CAST(CAST(v.shares AS DECIMAL(38,6)) * 1000000 AS BIGINT), CAST(CAST(v.price AS DECIMAL(38,6)) * 1000000 AS BIGINT), v.price_date,
+	CAST(v.value * 100 AS HUGEINT), CAST(v.value_cad * 100 AS HUGEINT), CAST(v.value_usd * 100 AS HUGEINT),
+	CAST(v.usd_cad * 1000000 AS BIGINT)
+FROM v_holdings v
+LEFT JOIN accounts a ON a.id = v.account_id
+LEFT JOIN securities s ON s.id = v.security_id
+WHERE v.date = CAST($1 AS DATE)`
+
+const holdingsOrder = `
+ORDER BY lower(a.name), a.name, a.source_id, v.account_id, lower(v.security), v.security, s.source_id, v.security_id`
+
+// Holdings reads the holdings on params.AsOf in params.AccountIDs, the store's first rate date and the span of
+// those accounts' investment transactions, as store.Holdings documents; a day with none, or one after today,
+// is an empty result. A store it cannot open or read is a *store.OpenError.
+func (s *Store) Holdings(ctx context.Context, params store.HoldingsParams) (store.Holdings, error) {
+	db, err := s.openRead(ctx)
+	if err != nil {
+		return store.Holdings{}, err
+	}
+	defer func() { _ = db.Close() }()
+
+	var holdings store.Holdings
+	accounts := accountFilter(params.AccountIDs)
+	args := append([]any{civilDay(params.AsOf)}, accounts.args()...)
+	err = db.QueryRows(ctx, holdingsQueryFor(accounts), args, func(scan func(dest ...any) error) error {
+		holding, err := scanHolding(scan)
+		if err != nil {
+			return err
+		}
+		holdings.Holdings = append(holdings.Holdings, holding)
+		return nil
+	})
+	if err == nil {
+		holdings.FirstRate, err = firstRate(ctx, db)
+	}
+	if err == nil {
+		holdings.FirstTransaction, holdings.LastTransaction, err = holdingsSpan(ctx, db, accounts)
+	}
+	if err != nil {
+		return store.Holdings{}, openFault(s.Path(), err)
+	}
+	return holdings, nil
+}
+
+// holdingsSpan is the first and last date of the investment transactions of the named accounts, or of every
+// account when none is named, through db; both are zero when there are none.
+func holdingsSpan(ctx context.Context, db ReadDB, accounts accountFilter) (time.Time, time.Time, error) {
+	query := "SELECT min(date), max(date) FROM investment_transactions"
+	if len(accounts) > 0 {
+		query += " WHERE account_id IN (" + accounts.marks(1) + ")"
+	}
+	var earliest, latest sql.NullTime
+	err := db.QueryRows(ctx, query, accounts.args(), func(scan func(dest ...any) error) error {
+		return scan(&earliest, &latest)
+	})
+	return earliest.Time, latest.Time, err //nolint:wrapcheck // callers classify the driver's own error with openFault
+}
+
+// scanHolding reads one holdingsQueryFor row.
+func scanHolding(scan func(dest ...any) error) (store.Holding, error) {
+	var h store.Holding
+	var account, security, ticker, currency sql.NullString
+	var accountSource, securitySource, price, usdCAD sql.NullInt64
+	var closed sql.NullBool
+	var priceDate sql.NullTime
+	var value, valueCAD, valueUSD *big.Int
+	err := scan(&h.AccountID, &h.SecurityID, &account, &accountSource, &closed, &security, &ticker, &currency, &securitySource,
+		&h.Shares, &price, &priceDate, &value, &valueCAD, &valueUSD, &usdCAD)
+	if err != nil {
+		return store.Holding{}, err
+	}
+	h.Account, h.AccountSourceID, h.AccountClosed = account.String, accountSource.Int64, closed.Bool
+	h.Security, h.Ticker, h.Currency = nullStringPtr(security), nullStringPtr(ticker), nullStringPtr(currency)
+	h.SecuritySourceID, h.Price = nullInt64Ptr(securitySource), nullInt64Ptr(price)
+	if priceDate.Valid {
+		h.PriceDate = &priceDate.Time
+	}
+	h.Value, h.ValueCAD, h.ValueUSD = value, valueCAD, valueUSD
+	h.USDCAD = money.Rate(usdCAD.Int64)
+	return h, nil
+}

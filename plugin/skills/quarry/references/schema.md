@@ -30,8 +30,18 @@ DECIMAL(18,6) as Quicken recorded each transaction, negative when shares
 leave. A split row carries split_new_shares and split_old_shares instead, so
 a sum of shares is not a holding. prices holds each security's closing price
 per day as Quicken recorded it, rounded to 6 decimals, in the security's
-currency (securities.currency, NULL when Quicken records none); quarry does
-not convert prices yet.
+currency (securities.currency, NULL when Quicken records none).
+holding_shares holds each account's count of each security, one row per span
+of days it is unchanged and not zero (from_date through to_date, NULL while
+still held), splits applied; these are the counts quarry sync checks against
+Quicken. v_holdings has one row per holding per day held, through today:
+price is the latest on or before date and price_date its day (NULL when
+none), value is shares times price rounded to the cent, value_cad and
+value_usd convert it at the rate for date, as quarry holdings does; filter
+it by date. Neither includes cash in investment accounts. action is one of
+add_shares, buy, capital_gain_long, capital_gain_short, dividend, interest,
+margin_interest, misc_expense, misc_income, reinvest_dividend,
+remove_shares, sell, split.
 
 ## Findings
 
@@ -96,6 +106,16 @@ each one's status.
 | `date` | `DATE` |
 | `usd_cad` | `DECIMAL(10,6)` |
 | `series` | `VARCHAR` |
+
+### holding_shares
+
+| column | type |
+| --- | --- |
+| `account_id` | `VARCHAR` |
+| `security_id` | `VARCHAR` |
+| `from_date` | `DATE` |
+| `to_date` | `DATE` |
+| `shares` | `DECIMAL(18,6)` |
 
 ### import_runs
 
@@ -278,6 +298,26 @@ excludes accounts where accounts.in_reports is false or accounts.linked_tracking
 | `amount` | `DECIMAL(18,2)` |
 | `amount_cad` | `DECIMAL(18,2)` |
 | `amount_usd` | `DECIMAL(18,2)` |
+| `usd_cad` | `DECIMAL(10,6)` |
+
+### v_holdings
+
+one row per holding per day it is held, through today, so filter by date; value is shares times price rounded to the cent, value_cad and value_usd convert it at the rate for date as quarry holdings does; cash in investment accounts is not included.
+
+| column | type |
+| --- | --- |
+| `date` | `DATE` |
+| `account_id` | `VARCHAR` |
+| `security_id` | `VARCHAR` |
+| `security` | `VARCHAR` |
+| `ticker` | `VARCHAR` |
+| `shares` | `DECIMAL(18,6)` |
+| `price` | `DECIMAL(18,6)` |
+| `price_date` | `DATE` |
+| `currency` | `VARCHAR` |
+| `value` | `DECIMAL(38,2)` |
+| `value_cad` | `DECIMAL(38,2)` |
+| `value_usd` | `DECIMAL(38,2)` |
 | `usd_cad` | `DECIMAL(10,6)` |
 
 ### v_spending

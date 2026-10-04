@@ -45,7 +45,28 @@ func Test_notices_and_prd_carry_the_ruled_plugin_edits(t *testing.T) {
 		{
 			"prd notes the securities type and currency conventions",
 			"docs/initial-prd.md",
-			"(type from Phase 4b; currency as recorded, NULL when Quicken has none)",
+			"(type deferred: Quicken's type codes are unlabelled; currency as recorded, NULL when Quicken has none)",
+		},
+		{
+			"prd names v_holdings as built from holding_shares",
+			"docs/initial-prd.md",
+			"`v_holdings` (shares and value by day, from `holding_shares`; Phase 4b)",
+		},
+		{
+			"prd lists the holdings command beside accounts",
+			"docs/initial-prd.md",
+			"| `quarry accounts` | Accounts with current balances, closed ones on request | " +
+				"| `quarry holdings` | Securities held in each investment account on one day " +
+				"(`--as-of`, default today) with share count, latest price and its date, and value; " +
+				"`--account` to narrow, cash in investment accounts not included |",
+		},
+		{
+			"prd lists the holdings MCP tool beside search_transactions",
+			"docs/initial-prd.md",
+			"transfers and report-excluded transactions included and flagged | " +
+				"| `holdings` | Securities held on one day (as_of, default today) with share count, " +
+				"latest price and its date, and value, with accounts and currency parameters; " +
+				"cash in investment accounts not included |",
 		},
 		{
 			"prd names the investment transactions table and defers its cash side",

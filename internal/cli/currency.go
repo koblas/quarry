@@ -12,6 +12,7 @@ const currencyFlagName = "currency"
 const (
 	reportCurrencyHelp   = "show amounts in currency `code`: CAD, USD, or native for each account's own (default reporting.currency in the config file, else CAD)"
 	accountsCurrencyHelp = "add a column with each balance in currency `code`: CAD or USD; native adds none (default reporting.currency in the config file, else CAD)"
+	holdingsCurrencyHelp = "add a column with each value in currency `code`: CAD or USD; native adds none (default reporting.currency in the config file, else CAD)"
 )
 
 // reportCurrencyLong is the paragraph of a report's Long help that says which currency its amounts are in.

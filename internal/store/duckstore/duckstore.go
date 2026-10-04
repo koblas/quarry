@@ -22,7 +22,7 @@ import (
 const FileName = "quarry.duckdb"
 
 // FormatVersion is the store format this build of quarry writes and reads.
-const FormatVersion = 6
+const FormatVersion = 7
 
 // develVersion is the quarry_version recorded when no build version is known.
 const develVersion = "(devel)"
@@ -451,10 +451,13 @@ func removePartial(path string) {
 // build loads schema, views, rows, then findings merged with carried. It returns the state of each
 // finding it recorded. finishBuild completes the file; until it appends store_info the file is not a store.
 func build(ctx context.Context, db DB, rows store.Rows, carried history, builtAt time.Time) ([]finding.State, error) {
-	if _, err := db.Exec(ctx, schemaDDL+accountBalancesViewDDL()+cashFlowViewDDL()+spendingViewDDL); err != nil {
+	if _, err := db.Exec(ctx, schemaDDL+accountBalancesViewDDL()+cashFlowViewDDL()+spendingViewDDL+holdingsViewDDL()); err != nil {
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
 	if err := loadRows(ctx, db, rows, carried); err != nil {
+		return nil, err
+	}
+	if err := loadHoldingShares(ctx, db); err != nil {
 		return nil, err
 	}
 	states, err := loadFindings(ctx, db, carried.findings, rows.ReferencedCategoryIDs, builtAt)

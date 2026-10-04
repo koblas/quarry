@@ -18,7 +18,7 @@ const referencesDir = "plugin/skills/quarry/references"
 
 var (
 	findingTypeLine   = regexp.MustCompile(`^ {2}([a-z][a-z-]*) {2,}\S`)
-	phase4ViewPattern = regexp.MustCompile(`\bv_(?:balances_daily|net_worth|holdings)\b`)
+	phase4ViewPattern = regexp.MustCompile(`\bv_(?:balances_daily|net_worth)\b`)
 )
 
 const findingsHelpTypesHeading = "quarry looks for:"
@@ -98,7 +98,7 @@ func Test_reference_files_state_their_job(t *testing.T) {
 func Test_references_name_scan_flags_crafted_phase_4_and_quicken_text(t *testing.T) {
 	cases := []struct{ name, text, want string }{
 		{"a Phase 4 view", "Read `v_net_worth` for the total.", "v_net_worth"},
-		{"another Phase 4 view", "SELECT * FROM v_holdings", "v_holdings"},
+		{"another Phase 4 view", "SELECT * FROM v_balances_daily", "v_balances_daily"},
 		{"a Quicken table", "join ZTRANSACTION on it", "ZTRANSACTION"},
 	}
 

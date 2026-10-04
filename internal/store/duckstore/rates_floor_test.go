@@ -49,16 +49,18 @@ func newStoreWithFloors(t *testing.T, floors, rateDays []int, opts ...duckstore.
 	return newStoreFile(t, ddl.String(), opts...)
 }
 
-// futureRows is minimalRows with its one transaction dated 2099-01-01, after any date the clock can show.
+// futureRows is minimalRows with its one cash transaction dated 2099-01-01, after any date the clock can show, and no investment transactions.
 func futureRows() store.Rows {
 	rows := minimalRows()
 	rows.Transactions[0].Date = day(2099, 1, 1)
+	rows.InvestmentTransactions = nil
 	return rows
 }
 
+// noTransactionRows is minimalRows without any cash or investment transaction.
 func noTransactionRows() store.Rows {
 	rows := minimalRows()
-	rows.Transactions, rows.Splits, rows.SplitTags, rows.Transfers = nil, nil, nil, nil
+	rows.Transactions, rows.Splits, rows.SplitTags, rows.Transfers, rows.InvestmentTransactions = nil, nil, nil, nil, nil
 	return rows
 }
 

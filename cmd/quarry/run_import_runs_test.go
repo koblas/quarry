@@ -184,3 +184,22 @@ func importRunQuery(t *testing.T, home, query string) map[string]string {
 	defer func() { _ = db.Close() }()
 	return stringMap(t, db, query)
 }
+
+// storeTextRows runs query (one string-shaped column) against the store under home and returns each row in query order.
+func storeTextRows(t *testing.T, home, query string) []string {
+	t.Helper()
+	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	var got []string
+	err = db.QueryRows(t.Context(), query, nil, func(scan func(dest ...any) error) error {
+		var row string
+		if err := scan(&row); err != nil {
+			return err
+		}
+		got = append(got, row)
+		return nil
+	})
+	require.NoError(t, err)
+	return got
+}

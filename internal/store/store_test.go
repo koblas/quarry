@@ -30,6 +30,32 @@ func Test_IsInvestmentAccount(t *testing.T) {
 	}
 }
 
+func Test_actions_are_the_thirteen_investment_transaction_actions(t *testing.T) {
+	want := []string{
+		"add_shares", "buy", "capital_gain_long", "capital_gain_short", "dividend", "interest",
+		"margin_interest", "misc_expense", "misc_income", "reinvest_dividend", "remove_shares", "sell", "split",
+	}
+
+	got := store.Actions()
+
+	assert.Equal(t, want, got)
+	for _, action := range []string{
+		store.ActionAddShares, store.ActionBuy, store.ActionCapitalGainLong, store.ActionCapitalGainShort,
+		store.ActionDividend, store.ActionInterest, store.ActionMarginInterest, store.ActionMiscExpense,
+		store.ActionMiscIncome, store.ActionReinvestDividend, store.ActionRemoveShares, store.ActionSell,
+		store.ActionSplit,
+	} {
+		assert.Contains(t, got, action)
+	}
+}
+
+func Test_actions_returns_a_fresh_slice(t *testing.T) {
+	first := store.Actions()
+	first[0] = "changed"
+
+	assert.Equal(t, "add_shares", store.Actions()[0])
+}
+
 func Test_query_column_numeric(t *testing.T) {
 	cases := []struct {
 		name     string

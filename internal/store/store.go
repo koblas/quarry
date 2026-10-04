@@ -156,6 +156,42 @@ type Price struct {
 	Price      int64
 }
 
+// HoldingsParams selects what Holdings reads: the holdings on AsOf, a calendar day held as UTC midnight,
+// in the accounts with AccountIDs, or in every account when there are none.
+type HoldingsParams struct {
+	AsOf       time.Time
+	AccountIDs []string
+}
+
+// Holdings is every holding on the day asked for, in account name ignoring case, then name, account source
+// id, security name ignoring case, then name, security source id order. FirstRate is the date of the store's
+// first exchange rate, zero when it has none. FirstTransaction and LastTransaction are the earliest and latest
+// investment transaction dates in the accounts read, whatever the day asked for; both are zero when there are none.
+type Holdings struct {
+	Holdings         []Holding
+	FirstRate        time.Time
+	FirstTransaction time.Time
+	LastTransaction  time.Time
+}
+
+// Holding is one row of v_holdings: what an account holds of a security on a day, with its value.
+// Shares and Price are millionths; Value, ValueCAD and ValueUSD are cents, which can pass 64 bits.
+// Price, PriceDate and Value are nil with no price on or before the day, and ValueCAD and ValueUSD
+// when no rate converts Value. USDCAD is the rate in force on the day, zero when there is none.
+type Holding struct {
+	AccountID, SecurityID      string
+	Account                    string
+	AccountSourceID            int64
+	AccountClosed              bool
+	Security, Ticker, Currency *string
+	SecuritySourceID           *int64
+	Shares                     int64
+	Price                      *int64
+	PriceDate                  *time.Time
+	Value, ValueCAD, ValueUSD  *big.Int
+	USDCAD                     money.Rate
+}
+
 // The investment_transactions.action values.
 const (
 	ActionAddShares        = "add_shares"
@@ -172,6 +208,26 @@ const (
 	ActionSell             = "sell"
 	ActionSplit            = "split"
 )
+
+// Actions returns every investment_transactions.action value, alphabetically, as a fresh slice.
+// It is exported as the one vocabulary list; a new Action constant is added here too.
+func Actions() []string {
+	return []string{
+		ActionAddShares,
+		ActionBuy,
+		ActionCapitalGainLong,
+		ActionCapitalGainShort,
+		ActionDividend,
+		ActionInterest,
+		ActionMarginInterest,
+		ActionMiscExpense,
+		ActionMiscIncome,
+		ActionReinvestDividend,
+		ActionRemoveShares,
+		ActionSell,
+		ActionSplit,
+	}
+}
 
 // InvestmentTransaction is one row of the investment_transactions table. Shares,
 // SplitNewShares and SplitOldShares are millionths (DECIMAL(18,6)); Amount is

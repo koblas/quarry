@@ -219,6 +219,7 @@ func Test_run_sync_refuses_a_config_it_cannot_read(t *testing.T) {
 func readCommandArgs() map[string][]string {
 	return map[string][]string{
 		"accounts":  {"accounts"},
+		"holdings":  {"holdings"},
 		"anomalies": {"anomalies", "--since", "2026-01", "--until", "2026-09"},
 		"spend":     {"spend", "--since", "2026-01", "--until", "2026-09"},
 		"cashflow":  {"cashflow", "--since", "2026-01", "--until", "2026-09"},
@@ -232,8 +233,8 @@ func readCommandFixture(t *testing.T) (string, map[string]string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	replaceStore(t, home, cashFlowRows(
-		[]store.Account{chequingAccount("acct-chq", 1)},
+	rows := cashFlowRows(
+		[]store.Account{chequingAccount("acct-chq", 1), brokerageAccount("acct-cad", 2, "CAD")},
 		spendSplit{id: "s01", account: "acct-chq", category: "cat-salary", currency: "CAD", day: day(2026, 3, 1), cents: 50000},
 		spendSplit{id: "s02", account: "acct-chq", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -12000},
 		spendSplit{id: "s03", account: "acct-chq", category: "cat-groceries", payee: "payee-costco", currency: "CAD", day: day(2026, 7, 5), cents: -2000},
@@ -243,7 +244,11 @@ func readCommandFixture(t *testing.T) (string, map[string]string) {
 		spendSplit{id: "s07", account: "acct-chq", category: "cat-groceries", payee: "payee-bakery", currency: "CAD", day: day(2026, 4, 1), cents: -10000},
 		spendSplit{id: "s08", account: "acct-chq", category: "cat-groceries", payee: "payee-bakery", currency: "CAD", day: day(2026, 5, 1), cents: -10000},
 		spendSplit{id: "s09", account: "acct-chq", category: "cat-groceries", payee: "payee-bakery", currency: "CAD", day: day(2026, 6, 1), cents: -25000},
-	))
+	)
+	rows.Securities = []store.Security{{ID: "sec-acme", SourceID: 1, Name: "Acme Corp", Ticker: new("ACME"), Currency: new("CAD")}}
+	rows.InvestmentTransactions = []store.InvestmentTransaction{holdingsBuy("inv-acme", 1, "acct-cad", "sec-acme", "CAD", 1_000_000)}
+	rows.Prices = []store.Price{{SecurityID: "sec-acme", SourceID: 1, Date: holdingsDay(9), Price: 31_420_000}}
+	replaceStore(t, home, rows)
 	before := map[string]string{}
 	for name, args := range readCommandArgs() {
 		var stdout, stderr bytes.Buffer

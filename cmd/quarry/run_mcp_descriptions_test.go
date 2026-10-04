@@ -100,6 +100,20 @@ them for totals rather than adding up these rows. Amounts are in each
 account's own currency and are never converted. Returns at most limit
 transactions (default 500); matched counts every match.`
 
+const mcpHoldingsDescription = "Securities held on one day with share count, latest price and its date, and value; cash in investment accounts is not included."
+
+const mcpHoldingsInputSchema = `{
+	"type": "object",
+	"properties": {
+		"as_of": {"type": "string", "description": "Day to value holdings on: YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day. Defaults to today."},
+		"accounts": {"type": "array", "items": {"type": "string"}, "description": "List only these accounts, each given by id or by name in any letter case. ` +
+	`Omit it for every account."},
+		"currency": {"type": "string", "enum": ["CAD", "USD", "native"], "description": "Currency for amounts: CAD, USD, or native to list each account's own currency separately. ` +
+	`Defaults to reporting.currency in quarry's config file, else CAD."}
+	},
+	"additionalProperties": false
+}`
+
 const (
 	mcpRecurringInputSchema = `{
 		"type": "object",
@@ -232,6 +246,7 @@ func Test_run_mcp_describes_every_tool(t *testing.T) {
 			"recurring_charges":   {mcpRecurringDescription, mcpRecurringInputSchema},
 			"anomalies":           {mcpAnomaliesDescription, mcpAnomaliesInputSchema},
 			"search_transactions": {mcpSearchDescription, mcpSearchInputSchema},
+			"holdings":            {mcpHoldingsDescription, mcpHoldingsInputSchema},
 		}
 		require.Len(t, listed.Tools, len(wantTools))
 		for _, tool := range listed.Tools {
@@ -250,7 +265,7 @@ func Test_run_mcp_describes_every_tool(t *testing.T) {
 
 		assert.Equal(t, 0, code)
 		assert.Contains(t, stdout.String(), "SQL runs read-only, and every list a tool returns\nstops at 500 entries.")
-		assert.Contains(t, stdout.String(), "Tools: describe_schema, query, sync_status, data_quality, spending,\ncash_flow, recurring_charges, anomalies, search_transactions.")
+		assert.Contains(t, stdout.String(), "Tools: describe_schema, query, sync_status, data_quality, spending,\ncash_flow, recurring_charges, anomalies, search_transactions, holdings.")
 		assert.Empty(t, stderr.String())
 	})
 }

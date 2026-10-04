@@ -49,6 +49,7 @@ func Test_run_read_commands_refuse_when_there_is_no_store(t *testing.T) {
 	}{
 		{name: "status", args: []string{"status"}},
 		{name: "accounts", args: []string{"accounts"}},
+		{name: "holdings", args: []string{"holdings"}},
 		{name: "spend", args: []string{"spend"}},
 		{name: "cashflow", args: []string{"cashflow"}},
 		{name: "recurring", args: []string{"recurring"}},
@@ -98,6 +99,7 @@ func Test_run_read_commands_refuse_a_bad_reporting_currency(t *testing.T) {
 		{name: "recurring", config: `reporting.currency = "EUR"`, args: []string{"recurring"}, want: refusal(`"EUR"`)},
 		{name: "anomalies", config: `reporting.currency = "EUR"`, args: []string{"anomalies"}, want: refusal(`"EUR"`)},
 		{name: "accounts", config: `reporting.currency = "EUR"`, args: []string{"accounts"}, want: refusal(`"EUR"`)},
+		{name: "holdings", config: `reporting.currency = "EUR"`, args: []string{"holdings"}, want: refusal(`"EUR"`)},
 		{name: "an empty string", config: `reporting.currency = ""`, args: []string{"spend"}, want: refusal(`""`)},
 		{name: "a number", config: `reporting.currency = 12`, args: []string{"spend"}, want: refusal("12")},
 		{name: "a boolean", config: `reporting.currency = true`, args: []string{"spend"}, want: refusal("true")},
@@ -140,7 +142,9 @@ func Test_run_status_refuses_a_store_built_by_another_version(t *testing.T) {
 		stderr.String())
 }
 
-func Test_run_spend_refuses_a_store_built_by_an_older_quarry(t *testing.T) {
+// assertRefusesAnOlderStore runs command against a store built by format version 2 and asserts the rebuild refusal.
+func assertRefusesAnOlderStore(t *testing.T, command string) {
+	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	writeStoreFixture(t, home, phaseOneImportRunsDDL+
@@ -148,13 +152,21 @@ func Test_run_spend_refuses_a_store_built_by_an_older_quarry(t *testing.T) {
 		"INSERT INTO store_info VALUES (2, '0.2.0', TIMESTAMP '2026-09-27 14:30:05');")
 	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"spend"}, &stdout, &stderr)
+	exitCode := run(context.Background(), []string{command}, &stdout, &stderr)
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
 	assert.Equal(t, "quarry: the store at "+abbreviated(t, storePathUnder(home), home)+
 		" was built by another version of quarry; run quarry sync --from 20260927T143005Z to rebuild it\n",
 		stderr.String())
+}
+
+func Test_run_spend_refuses_a_store_built_by_an_older_quarry(t *testing.T) {
+	assertRefusesAnOlderStore(t, "spend")
+}
+
+func Test_run_holdings_refuses_a_store_built_by_an_older_quarry(t *testing.T) {
+	assertRefusesAnOlderStore(t, "holdings")
 }
 
 func Test_run_status_refuses_a_store_whose_store_info_has_no_row(t *testing.T) {
@@ -213,6 +225,7 @@ func Test_run_read_commands_report_an_interrupt_during_the_open(t *testing.T) {
 	}{
 		{name: "status", args: []string{"status"}, wantStderr: "quarry: status interrupted\n"},
 		{name: "accounts", args: []string{"accounts"}, wantStderr: "quarry: accounts interrupted\n"},
+		{name: "holdings", args: []string{"holdings"}, wantStderr: "quarry: holdings interrupted\n"},
 		{name: "spend", args: []string{"spend"}, wantStderr: "quarry: spend interrupted\n"},
 		{name: "cashflow", args: []string{"cashflow"}, wantStderr: "quarry: cashflow interrupted\n"},
 		{name: "recurring", args: []string{"recurring"}, wantStderr: "quarry: recurring interrupted\n"},
