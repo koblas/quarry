@@ -66,6 +66,9 @@ quarry looks for:
                       scheduled transaction or budget uses it before you
                       delete it
 
+duplicate and unlinked-transfer compare register entries only, not buys,
+sells, dividends or other investment transactions.
+
 To keep a finding off the list after checking it, add its id to
 findings.ignore in ~/Library/Application Support/quarry/config.toml:
 

@@ -10,21 +10,24 @@ import (
 	"github.com/koblas/quarry/internal/finding"
 )
 
-// duplicateQuery lists each pair of transactions in one account with the same non-zero amount at most ? days
-// apart, unless both are reconciled, the lower source id first so each pair appears once.
+// duplicateQuery lists each pair of register transactions (not investment cash rows) in one account with the same
+// non-zero amount at most ? days apart, unless both are reconciled, the lower source id first so each pair appears once.
 const duplicateQuery = `SELECT a.id, b.id
 FROM transactions a JOIN transactions b
   ON a.account_id = b.account_id AND a.amount = b.amount AND (a.source_id, a.id) < (b.source_id, b.id)
 WHERE a.amount <> 0 AND abs(a.date - b.date) <= ? AND NOT (a.status = 'reconciled' AND b.status = 'reconciled')
+  AND a.investment_transaction_id IS NULL AND b.investment_transaction_id IS NULL
 ORDER BY a.id, b.id`
 
-// unlinkedTransferQuery lists each pair of opposite non-zero transactions in two accounts of one currency at most ? days apart, neither with a transfer-leg split.
+// unlinkedTransferQuery lists each pair of opposite non-zero register transactions (not investment cash rows) in two
+// accounts of one currency at most ? days apart, neither with a transfer-leg split.
 const unlinkedTransferQuery = `SELECT a.id, b.id
 FROM transactions a
   JOIN accounts aa ON aa.id = a.account_id
   JOIN transactions b ON a.account_id <> b.account_id AND a.amount = -b.amount AND (a.source_id, a.id) < (b.source_id, b.id)
   JOIN accounts ba ON ba.id = b.account_id AND ba.currency = aa.currency
 WHERE a.amount <> 0 AND abs(a.date - b.date) <= ?
+  AND a.investment_transaction_id IS NULL AND b.investment_transaction_id IS NULL
   AND NOT EXISTS (
     SELECT 1 FROM splits s
     WHERE s.transaction_id IN (a.id, b.id)

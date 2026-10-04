@@ -24,6 +24,15 @@ func dupTxn(n int64, account string, date time.Time, amount int64, status string
 	}
 }
 
+// investmentCash is txn as an investment cash row, the way sync stores a brokerage dividend or sale.
+func investmentCash(txn store.Transaction) store.Transaction {
+	txn.InvestmentTransactionID = new(fmt.Sprintf("itxn-%d", txn.SourceID))
+	return txn
+}
+
+// identity is the register-row arm of a case that varies which side is an investment cash row.
+func identity(txn store.Transaction) store.Transaction { return txn }
+
 // duplicateIDs replaces the transactions of minimalRows with txns (and the extra closed account acct-2) and returns the
 // duplicate finding ids of the built store, comma-joined in id order.
 func duplicateIDs(t *testing.T, mutate func(*store.Rows), txns ...store.Transaction) string {
@@ -167,6 +176,30 @@ func Test_replace_flags_duplicates_in_every_kind_of_account_and_ignores_the_paye
 			got := duplicateIDs(t, c.mutate, c.txns...)
 
 			assert.Equal(t, "duplicate:txn-1+txn-2", got)
+		})
+	}
+}
+
+func Test_replace_does_not_flag_a_duplicate_when_either_transaction_is_an_investment_cash_row(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name         string
+		first, other func(store.Transaction) store.Transaction
+	}{
+		{"both investment cash rows", investmentCash, investmentCash},
+		{"the lower id a register row, the higher id an investment cash row", identity, investmentCash},
+		{"the lower id an investment cash row, the higher id a register row", investmentCash, identity},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := duplicateIDs(t, nil,
+				c.first(dupTxn(1, "acct-1", day(2026, 8, 3), duplicateAmount, uncleared)),
+				c.other(dupTxn(2, "acct-1", day(2026, 8, 3), duplicateAmount, uncleared)))
+
+			assert.Empty(t, got)
 		})
 	}
 }

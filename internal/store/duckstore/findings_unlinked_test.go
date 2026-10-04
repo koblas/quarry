@@ -181,6 +181,30 @@ func Test_replace_does_not_flag_an_unlinked_transfer_when_either_transaction_has
 	}
 }
 
+func Test_replace_does_not_flag_an_unlinked_transfer_when_either_transaction_is_an_investment_cash_row(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name         string
+		first, other func(store.Transaction) store.Transaction
+	}{
+		{"both investment cash rows", investmentCash, investmentCash},
+		{"the lower id a register row, the higher id an investment cash row", identity, investmentCash},
+		{"the lower id an investment cash row, the higher id a register row", investmentCash, identity},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := unlinkedIDs(t, nil,
+				c.first(dupTxn(1, "acct-1", day(2026, 8, 3), -unlinkedAmount, uncleared)),
+				c.other(dupTxn(2, "acct-2", day(2026, 8, 3), unlinkedAmount, uncleared)))
+
+			assert.Empty(t, got)
+		})
+	}
+}
+
 func Test_replace_records_one_unlinked_transfer_per_pair_of_three_matching_transactions(t *testing.T) {
 	t.Parallel()
 
