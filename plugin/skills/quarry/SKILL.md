@@ -85,6 +85,7 @@ quarry never writes to Quicken and never edits its own store by request. To fix 
 | `quarry` not found | shell exit 127 / `command not found` | "The quarry command isn't on this shell's PATH. Install quarry and check that `quarry status` works in a terminal; if you used `go install`, add `$(go env GOPATH)/bin` to your PATH." Stop. |
 | Unknown command or flag | exit 2, `unknown command`/`unknown flag` for a command this skill uses | "Your quarry binary is older than this skill. Update quarry, then ask again." Do not retry with other spellings. |
 | Other usage error | exit 2 | Fix the command line from the error and retry once. Do not show the user. |
+| acb refused: accounts not classified | exit 1, stderr `quarry: acb needs every brokerage and retirement account classified; …` | Classify them (`references/findings.md`, "Classifying accounts"), then run `quarry acb` again. |
 | Failure | exit 1, other stderr line | Quote the stderr line and stop that path. Do not retry variations or guess the number. |
 | Rows capped | stderr notice from `sql`/`search` | Say the list was cut at the cap; narrow the query, or aggregate. |
 | Empty result | exit 0, no rows | "quarry found no … for <period, filters>." |
@@ -95,7 +96,7 @@ quarry never writes to Quicken and never edits its own store by request. To fix 
 
 ## 9. Without a shell: MCP tools
 
-If you cannot run shell commands but quarry's MCP tools are available, use them; they return the same numbers. `sync_status` for section 1, `spending`, `cash_flow`, `recurring_charges`, `anomalies`, `search_transactions`, `holdings`, `net_worth`, `data_quality` for the commands in section 4, `describe_schema` and `query` for section 5. The MCP server cannot run `sync`.
+If you cannot run shell commands but quarry's MCP tools are available, use them; they return the same numbers. `sync_status` for section 1, `spending`, `cash_flow`, `recurring_charges`, `anomalies`, `search_transactions`, `holdings`, `net_worth`, `acb`, `data_quality` for the commands in section 4, `describe_schema` and `query` for section 5. The MCP server cannot run `sync`.
 
 ## 10. References
 

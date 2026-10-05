@@ -215,7 +215,7 @@ func Test_fix_pins_the_ruled_copy_for_every_type(t *testing.T) {
 			GroupClause: "no transaction uses them; check that no scheduled transaction or budget does, then delete them in Quicken",
 		}},
 		{finding.UnclassifiedAccount, finding.Fix{
-			Sentence: "Add this account's id to accounts.registered if it is an RRSP, RRIF, TFSA, RESP, FHSA or other registered plan, else to accounts.non-registered, in " +
+			Sentence: "Add this account's id to accounts.registered if it is an RRSP, RRIF, TFSA, RESP, FHSA, LIRA, a US 401(k) or IRA, or a similar registered plan, else to accounts.non-registered, in " +
 				"~/Library/Application Support/quarry/config.toml; quarry acb leaves registered accounts out",
 			Heading:     "Unclassified investment accounts",
 			GroupClause: "list each account's id (acct-…) in accounts.registered or accounts.non-registered in ~/Library/Application Support/quarry/config.toml; see quarry findings --help",

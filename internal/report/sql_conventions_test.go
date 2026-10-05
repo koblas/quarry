@@ -34,12 +34,13 @@ func Test_sql_conventions_explain_investment_data(t *testing.T) {
 	assert.NotContains(t, collapsed, "quarry does not convert prices yet")
 }
 
-func Test_sql_conventions_say_what_cost_basis_is_and_leave_acb_to_the_command(t *testing.T) {
+func Test_sql_conventions_say_what_cost_basis_is_and_send_acb_to_the_command(t *testing.T) {
 	collapsed := strings.Join(strings.Fields(report.SQLConventions), " ")
 
 	assert.Contains(t, collapsed, "a sum of shares is not a holding. "+
-		"cost_basis is the cost Quicken records for a buy, reinvested dividend or added shares (NULL when none). prices holds")
-	assert.NotContains(t, collapsed, "acb")
+		"cost_basis is the cost Quicken records for a buy, reinvested dividend or added shares (NULL when none). "+
+		"ACB and capital gains are in no table or view: quarry acb (MCP acb) computes them; never derive them in SQL. "+
+		"prices holds")
 }
 
 func Test_sql_conventions_close_the_investment_paragraph_with_the_action_values(t *testing.T) {

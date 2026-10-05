@@ -49,11 +49,13 @@ Call this before writing SQL for query.`
 const mcpDataQualityDescription = `List the data-quality findings quarry's last sync found: problems to fix
 in Quicken (duplicates, one-sided or unlinked transfers, uncategorized
 splits, payees in mixed categories, payee name variants, similar or
-unused categories). Each finding has an id, the suggested fix, and the
-transactions, payees or categories it is about. quarry never fixes them:
-the user fixes them in Quicken and runs quarry sync, and fixed findings
-drop off. To ignore a finding the user adds its id to findings.ignore in
-quarry's config file.`
+unused categories, shares added with no cost), and investment accounts
+not yet listed as registered or non-registered in quarry's config file,
+which acb needs. Each finding has an id, the suggested fix, and the
+transactions, accounts, payees or categories it is about. quarry never
+fixes them: the user fixes them in Quicken and runs quarry sync, or adds
+the account to quarry's config file, and they drop off. To ignore a
+finding the user adds its id to findings.ignore in quarry's config file.`
 
 const mcpSpendingDescription = `Total the user's spending for a period, grouped by category, payee, tag
 or month, with a total per currency. quarry's spending rules apply:
@@ -298,7 +300,7 @@ func Test_run_mcp_describes_every_tool(t *testing.T) {
 
 		assert.Equal(t, 0, code)
 		assert.Contains(t, stdout.String(), "SQL runs read-only, and every list a tool returns\nstops at 500 entries.")
-		assert.Contains(t, stdout.String(), "Tools: describe_schema, query, sync_status, data_quality, spending,\ncash_flow, recurring_charges, anomalies, search_transactions, holdings,\nnet_worth.")
+		assert.Contains(t, stdout.String(), "Tools: describe_schema, query, sync_status, data_quality, spending,\ncash_flow, recurring_charges, anomalies, search_transactions, holdings,\nnet_worth, acb.")
 		assert.Empty(t, stderr.String())
 	})
 }

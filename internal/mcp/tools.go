@@ -78,11 +78,13 @@ is old, ask the user to run quarry sync.`
 const dataQualityDescription = `List the data-quality findings quarry's last sync found: problems to fix
 in Quicken (duplicates, one-sided or unlinked transfers, uncategorized
 splits, payees in mixed categories, payee name variants, similar or
-unused categories). Each finding has an id, the suggested fix, and the
-transactions, payees or categories it is about. quarry never fixes them:
-the user fixes them in Quicken and runs quarry sync, and fixed findings
-drop off. To ignore a finding the user adds its id to findings.ignore in
-quarry's config file.`
+unused categories, shares added with no cost), and investment accounts
+not yet listed as registered or non-registered in quarry's config file,
+which acb needs. Each finding has an id, the suggested fix, and the
+transactions, accounts, payees or categories it is about. quarry never
+fixes them: the user fixes them in Quicken and runs quarry sync, or adds
+the account to quarry's config file, and they drop off. To ignore a
+finding the user adds its id to findings.ignore in quarry's config file.`
 
 const spendingDescription = `Total the user's spending for a period, grouped by category, payee, tag
 or month, with a total per currency. quarry's spending rules apply:
