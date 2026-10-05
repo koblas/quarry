@@ -17,14 +17,21 @@ const (
 	acbCommissionPerCent = 100
 )
 
-// acbTiers orders one day's pool transactions: acquisitions, splits, then dispositions; absent actions are skipped.
+// A day's pool transactions run acquisitions, then splits and adjustments, then dispositions.
+const (
+	acbAcquisition = iota
+	acbRestructure
+	acbDisposition
+)
+
+// acbTiers is each walked action's tier; absent actions are skipped.
 var acbTiers = map[string]int{
-	store.ActionBuy:              0,
-	store.ActionReinvestDividend: 0,
-	store.ActionAddShares:        0,
-	store.ActionSplit:            1,
-	store.ActionSell:             2,
-	store.ActionRemoveShares:     2,
+	store.ActionBuy:              acbAcquisition,
+	store.ActionReinvestDividend: acbAcquisition,
+	store.ActionAddShares:        acbAcquisition,
+	store.ActionSplit:            acbRestructure,
+	store.ActionSell:             acbDisposition,
+	store.ActionRemoveShares:     acbDisposition,
 }
 
 // acbPool is one security's units and adjusted cost base across the non-registered accounts.
@@ -53,18 +60,24 @@ func walkACB(history store.InvestmentHistory, req ACBRequest) ACB {
 	}
 
 	result := ACB{AsOf: req.Today}
+	days, issues := adjustmentDays(req, history.Securities)
 	names := accountNames(history.Accounts)
 	var sales []acbSale
+	var excesses []acbExcess
 	// A transaction naming a security absent from Securities is never walked; the importer cannot write one
 	// (investments.go resolveSecurity sets security_id only from a mapped security).
 	for _, security := range history.Securities {
 		txs := bySecurity[security.ID]
-		if len(txs) == 0 {
+		if len(txs) == 0 && len(days[security.ID]) == 0 {
 			continue
 		}
-		position, securitySales := walkSecurity(security, txs, history.Rates, names)
-		result.Securities = append(result.Securities, position)
-		sales = append(sales, securitySales...)
+		walk := walkSecurity(security, txs, days[security.ID], history.Rates, names)
+		if len(txs) > 0 {
+			result.Securities = append(result.Securities, walk.position)
+		}
+		sales = append(sales, walk.sales...)
+		excesses = append(excesses, walk.excesses...)
+		issues = append(issues, walk.issues...)
 	}
 	slices.SortFunc(result.Securities, func(a, b ACBSecurity) int {
 		return cmp.Or(
@@ -72,9 +85,64 @@ func walkACB(history store.InvestmentHistory, req ACBRequest) ACB {
 			cmp.Compare(a.Security.ID, b.Security.ID),
 		)
 	})
-	result.Years = acbYears(sales)
+	slices.SortFunc(issues, func(a, b ACBAdjustmentIssue) int { return cmp.Compare(a.Item, b.Item) })
+	result.Years = acbYears(sales, excesses)
+	result.AdjustmentIssues = issues
 
 	return result
+}
+
+// acbItem is one adjustment, dated date, and its number among the request's.
+type acbItem struct {
+	number                        int
+	date                          time.Time
+	returnOfCapital, reinvestment int64
+}
+
+// acbAdjustmentDay is one security's items dated one day, in request order.
+type acbAdjustmentDay struct {
+	date  time.Time
+	items []acbItem
+}
+
+// adjustmentDays groups the request's adjustments dated through Today by security, then by day, oldest
+// first. An item naming a security absent from securities is skipped and returned as an issue.
+func adjustmentDays(req ACBRequest, securities []store.Security) (map[string][]acbAdjustmentDay, []ACBAdjustmentIssue) {
+	known := make(map[string]bool, len(securities))
+	for _, security := range securities {
+		known[security.ID] = true
+	}
+
+	days := make(map[string][]acbAdjustmentDay)
+	var issues []ACBAdjustmentIssue
+	for i, a := range req.Adjustments {
+		item := acbItem{number: i + 1, date: a.Date, returnOfCapital: a.ReturnOfCapital, reinvestment: a.ReinvestedDistribution}
+		switch {
+		case a.Date.After(req.Today):
+		case !known[a.SecurityID]:
+			issues = append(issues, ACBAdjustmentIssue{Kind: ACBAdjustmentUnknownSecurity, Item: item.number, SecurityID: a.SecurityID, Date: a.Date})
+		default:
+			days[a.SecurityID] = addToDay(days[a.SecurityID], item)
+		}
+	}
+	for _, security := range days {
+		slices.SortFunc(security, func(a, b acbAdjustmentDay) int { return a.date.Compare(b.date) })
+	}
+
+	return days, issues
+}
+
+// addToDay puts item in the day of days it is dated, opening that day when there is none.
+func addToDay(days []acbAdjustmentDay, item acbItem) []acbAdjustmentDay {
+	for i := range days {
+		if days[i].date.Equal(item.date) {
+			days[i].items = append(days[i].items, item)
+
+			return days
+		}
+	}
+
+	return append(days, acbAdjustmentDay{date: item.date, items: []acbItem{item}})
 }
 
 // nonRegisteredAccounts is the ids of the accounts c lists non-registered; an unclassified account is in no pool.
@@ -99,9 +167,23 @@ func accountNames(accounts []store.Account) map[string]string {
 	return names
 }
 
-// walkSecurity applies txs, in date, tier then source id order, to one pool and returns its position and sales.
-// rates convert each foreign-currency amount at the rate on or before its date; names are the accounts' names by id.
-func walkSecurity(security store.Security, txs []store.InvestmentTransaction, rates []store.Rate, names map[string]string) (ACBSecurity, []acbSale) {
+// securityWalk is one security's pool as its transactions and adjustments are applied.
+type securityWalk struct {
+	security store.Security
+	rates    []store.Rate
+	names    map[string]string
+	pool     acbPool
+	position ACBSecurity
+	sales    []acbSale
+	excesses []acbExcess
+	issues   []ACBAdjustmentIssue
+	splitDay time.Time
+}
+
+// walkSecurity applies txs, in date, tier then source id order, to one pool, with each of days' adjustments
+// between its day's splits and dispositions. rates convert each foreign-currency amount at the rate on or
+// before its date; names are the accounts' names by id.
+func walkSecurity(security store.Security, txs []store.InvestmentTransaction, days []acbAdjustmentDay, rates []store.Rate, names map[string]string) *securityWalk {
 	slices.SortFunc(txs, func(a, b store.InvestmentTransaction) int {
 		return cmp.Or(
 			a.Date.Compare(b.Date),
@@ -110,53 +192,126 @@ func walkSecurity(security store.Security, txs []store.InvestmentTransaction, ra
 		)
 	})
 
-	pool := acbPool{shares: new(big.Rat)}
-	position := ACBSecurity{Security: security}
-	var sales []acbSale
-	var splitDay time.Time
-	for _, tx := range txs {
-		if movesNoUnits(tx) {
-			continue
-		}
-		rate := rateOn(rates, tx.Date)
-		event := ACBEvent{
-			ID: tx.ID, Date: tx.Date, AccountID: tx.AccountID, Account: names[tx.AccountID], Action: tx.Action,
-			Shares: units(tx.Shares), Amount: &tx.Amount, Currency: tx.Currency, CAD: toCAD(tx.Amount, tx.Currency, rate),
-		}
-		if currency, _ := money.ParseCurrency(tx.Currency); currency == money.USD {
-			event.Rate = rate
-		}
-		switch tx.Action {
-		case store.ActionBuy:
-			pool.add(event.Shares, -toCAD(tx.Amount, tx.Currency, rate))
-		case store.ActionReinvestDividend, store.ActionAddShares:
-			pool.add(event.Shares, toCAD(zeroIfNil(tx.CostBasis), tx.Currency, rate))
-		case store.ActionSplit:
-			// A split is recorded once per account that held the security; the first row of a day is the split.
-			if tx.Date.Equal(splitDay) {
-				continue
-			}
-			splitDay = tx.Date
-			pool.split(tx.SplitNewShares, tx.SplitOldShares)
-		case store.ActionSell:
-			// Quicken stores a sale's shares negative; the units sold are their magnitude.
-			event.Shares.Abs(event.Shares)
-			sale := pool.sell(tx, event.Shares, rate)
-			sale.row.AccountID, sale.row.Account = event.AccountID, event.Account
-			outlays := sale.row.Outlays
-			event.Gain, event.Outlays, event.Realized = sale.row.Gain, &outlays, true
-			sales = append(sales, sale)
-		case store.ActionRemoveShares:
-			// Stored negative like a sale's; the units leave with their share of the ACB and no gain.
-			event.Shares.Abs(event.Shares)
-			pool.take(event.Shares)
-		}
-		event.Held, event.ACB = new(big.Rat).Set(pool.shares), pool.acb
-		position.Events = append(position.Events, event)
+	w := &securityWalk{
+		security: security, rates: rates, names: names, pool: acbPool{shares: new(big.Rat)}, position: ACBSecurity{Security: security},
 	}
-	position.Shares, position.ACB = pool.shares, pool.acb
+	for _, tx := range txs {
+		for len(days) > 0 && (days[0].date.Before(tx.Date) || days[0].date.Equal(tx.Date) && acbTiers[tx.Action] == acbDisposition) {
+			w.adjust(days[0])
+			days = days[1:]
+		}
+		w.apply(tx)
+	}
+	for _, day := range days {
+		w.adjust(day)
+	}
+	w.position.Shares, w.position.ACB = w.pool.shares, w.pool.acb
 
-	return position, sales
+	return w
+}
+
+// apply puts tx through the pool and records its event, unless it moves nothing.
+func (w *securityWalk) apply(tx store.InvestmentTransaction) {
+	if movesNoUnits(tx) {
+		return
+	}
+	rate := rateOn(w.rates, tx.Date)
+	event := ACBEvent{
+		ID: tx.ID, Date: tx.Date, AccountID: tx.AccountID, Account: w.names[tx.AccountID], Action: tx.Action,
+		Shares: units(tx.Shares), Amount: &tx.Amount, Currency: tx.Currency, CAD: toCAD(tx.Amount, tx.Currency, rate),
+	}
+	if currency, _ := money.ParseCurrency(tx.Currency); currency == money.USD {
+		event.Rate = rate
+	}
+	switch tx.Action {
+	case store.ActionBuy:
+		w.pool.add(event.Shares, -toCAD(tx.Amount, tx.Currency, rate))
+	case store.ActionReinvestDividend, store.ActionAddShares:
+		w.pool.add(event.Shares, toCAD(zeroIfNil(tx.CostBasis), tx.Currency, rate))
+	case store.ActionSplit:
+		// A split is recorded once per account that held the security; the first row of a day is the split.
+		if tx.Date.Equal(w.splitDay) {
+			return
+		}
+		w.splitDay = tx.Date
+		w.pool.split(tx.SplitNewShares, tx.SplitOldShares)
+	case store.ActionSell:
+		// Quicken stores a sale's shares negative; the units sold are their magnitude.
+		event.Shares.Abs(event.Shares)
+		sale := w.pool.sell(tx, event.Shares, rate)
+		sale.row.AccountID, sale.row.Account = event.AccountID, event.Account
+		outlays := sale.row.Outlays
+		event.Gain, event.Outlays, event.Realized = sale.row.Gain, &outlays, true
+		w.sales = append(w.sales, sale)
+	case store.ActionRemoveShares:
+		// Stored negative like a sale's; the units leave with their share of the ACB and no gain.
+		event.Shares.Abs(event.Shares)
+		w.pool.take(event.Shares)
+	}
+	w.record(event)
+}
+
+// record keeps event with the pool as it left it.
+func (w *securityWalk) record(event ACBEvent) {
+	event.Held, event.ACB = new(big.Rat).Set(w.pool.shares), w.pool.acb
+	w.position.Events = append(w.position.Events, event)
+}
+
+// adjust applies one day's items, every reinvested distribution before every return of capital, each in
+// request order. An empty pool skips them all; on a held pool all apply, each later item repeating the first.
+func (w *securityWalk) adjust(day acbAdjustmentDay) {
+	if w.pool.shares.Sign() == 0 {
+		for _, item := range day.items {
+			w.issues = append(w.issues, w.issue(ACBAdjustmentNotHeld, item.number, day.date))
+		}
+
+		return
+	}
+	for _, item := range day.items[1:] {
+		repeat := w.issue(ACBAdjustmentRepeated, item.number, day.date)
+		repeat.First = day.items[0].number
+		w.issues = append(w.issues, repeat)
+	}
+	for _, item := range day.items {
+		if item.reinvestment > 0 {
+			w.reinvestDistribution(day.date, item.reinvestment)
+		}
+	}
+	for _, item := range day.items {
+		if item.returnOfCapital > 0 {
+			w.returnOfCapital(day.date, item.returnOfCapital)
+		}
+	}
+}
+
+// issue is an issue with the item numbered number, dated date, on this walk's security.
+func (w *securityWalk) issue(kind ACBAdjustmentKind, number int, date time.Time) ACBAdjustmentIssue {
+	return ACBAdjustmentIssue{Kind: kind, Item: number, SecurityID: w.security.ID, Security: w.security.Name, Date: date}
+}
+
+// adjustmentEvent is an event of an adjustment: no transaction, account or amount of its own, and no units moved.
+func adjustmentEvent(date time.Time, action string, cad int64) ACBEvent {
+	return ACBEvent{Date: date, Action: action, Shares: new(big.Rat), CAD: cad}
+}
+
+// reinvestDistribution raises the ACB by cents, the cost of a distribution reinvested.
+func (w *securityWalk) reinvestDistribution(date time.Time, cents int64) {
+	w.pool.acb += cents
+	w.record(adjustmentEvent(date, ACBActionReinvestedDistribution, -cents))
+}
+
+// returnOfCapital lowers the ACB by cents; what exceeds the ACB brings it to 0 and is a capital gain.
+func (w *securityWalk) returnOfCapital(date time.Time, cents int64) {
+	event := adjustmentEvent(date, ACBActionReturnOfCapital, cents)
+	if cents > w.pool.acb {
+		excess := cents - w.pool.acb
+		w.pool.acb = 0
+		event.Gain, event.Realized = excess, true
+		w.excesses = append(w.excesses, acbExcess{date: date, amount: excess})
+	} else {
+		w.pool.acb -= cents
+	}
+	w.record(event)
 }
 
 // movesNoUnits is whether tx adds or removes shares that move nothing: no units, or a negative count added.
@@ -251,24 +406,38 @@ func zeroIfNil(n *int64) int64 {
 	return *n
 }
 
-// acbYears groups sales by the calendar year of their date, oldest year first, each year's sales in date,
-// then source id order.
-func acbYears(sales []acbSale) []ACBYear {
+// acbExcess is a return of capital above the ACB: a capital gain of amount on date.
+type acbExcess struct {
+	date   time.Time
+	amount int64
+}
+
+// acbYears groups sales and excesses by the calendar year of their date, oldest year first, each year's
+// sales in date, then source id order. A year with only an excess has no sales.
+func acbYears(sales []acbSale, excesses []acbExcess) []ACBYear {
 	slices.SortFunc(sales, func(a, b acbSale) int {
 		return cmp.Or(a.row.Date.Compare(b.row.Date), cmp.Compare(a.sourceID, b.sourceID))
 	})
 
 	var years []ACBYear
-	for _, sale := range sales {
-		if len(years) == 0 || years[len(years)-1].Year != sale.row.Date.Year() {
-			years = append(years, ACBYear{Year: sale.row.Date.Year()})
+	yearOf := func(date time.Time) *ACBYear {
+		i, found := slices.BinarySearchFunc(years, date.Year(), func(y ACBYear, year int) int { return cmp.Compare(y.Year, year) })
+		if !found {
+			years = slices.Insert(years, i, ACBYear{Year: date.Year()})
 		}
-		year := &years[len(years)-1]
+
+		return &years[i]
+	}
+	for _, sale := range sales {
+		year := yearOf(sale.row.Date)
 		year.Sales = append(year.Sales, sale.row)
 		year.Proceeds += sale.row.Proceeds
 		year.Outlays += sale.row.Outlays
 		year.ACBRemoved += sale.row.ACBRemoved
 		year.Gain += sale.row.Gain
+	}
+	for _, excess := range excesses {
+		yearOf(excess.date).ReturnOfCapitalGain += excess.amount
 	}
 
 	return years

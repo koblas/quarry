@@ -68,6 +68,7 @@ type acbYearRow struct {
 	Year                                int
 	Sales                               []acbSaleRow
 	Proceeds, Outlays, ACBRemoved, Gain int64
+	ReturnOfCapitalGain                 int64
 }
 
 type acbPositionRow struct {
@@ -79,7 +80,10 @@ type acbPositionRow struct {
 func acbYearRows(result report.ACB) []acbYearRow {
 	rows := make([]acbYearRow, 0, len(result.Years))
 	for _, year := range result.Years {
-		row := acbYearRow{Year: year.Year, Proceeds: year.Proceeds, Outlays: year.Outlays, ACBRemoved: year.ACBRemoved, Gain: year.Gain}
+		row := acbYearRow{
+			Year: year.Year, Proceeds: year.Proceeds, Outlays: year.Outlays, ACBRemoved: year.ACBRemoved, Gain: year.Gain,
+			ReturnOfCapitalGain: year.ReturnOfCapitalGain,
+		}
 		for _, sale := range year.Sales {
 			row.Sales = append(row.Sales, acbSaleRow{
 				Date:       sale.Date.Format(time.DateOnly),

@@ -3,6 +3,7 @@ package cli
 import (
 	"time"
 
+	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/spf13/cobra"
@@ -54,7 +55,9 @@ accountant, not a tax filing.`,
 				return err
 			}
 
-			acb, err := srv.ACB(cmd.Context(), report.ACBRequest{Classification: classificationOf(cfg), Today: report.Today(now())})
+			acb, err := srv.ACB(cmd.Context(), report.ACBRequest{
+				Classification: classificationOf(cfg), Today: report.Today(now()), Adjustments: acbAdjustmentsOf(cfg),
+			})
 			if err != nil {
 				return &runtimeError{err: err}
 			}
@@ -70,4 +73,16 @@ accountant, not a tax filing.`,
 	}
 	currency.bind(cmd, acbCurrencyHelp)
 	return cmd
+}
+
+// acbAdjustmentsOf is the adjustments cfg lists, in file order.
+func acbAdjustmentsOf(cfg config.Config) []report.ACBAdjustment {
+	adjustments := make([]report.ACBAdjustment, 0, len(cfg.Adjustments))
+	for _, a := range cfg.Adjustments {
+		adjustments = append(adjustments, report.ACBAdjustment{
+			SecurityID: a.Security, Date: a.Date, ReturnOfCapital: a.ReturnOfCapital, ReinvestedDistribution: a.ReinvestedDistribution,
+		})
+	}
+
+	return adjustments
 }

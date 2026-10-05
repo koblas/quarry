@@ -21,6 +21,17 @@ func acbWalkOf(t *testing.T, txs ...store.InvestmentTransaction) report.ACB {
 // acbWalkWith is acbWalkOf over the given securities and exchange rates, which are in date order.
 func acbWalkWith(t *testing.T, securities []store.Security, rates []store.Rate, txs ...store.InvestmentTransaction) report.ACB {
 	t.Helper()
+	return acbWalkRequest(t, securities, rates, nil, txs...)
+}
+
+// acbWalkAdjusted is acbWalkOf with the adjustments, whose item numbers are their places in the list.
+func acbWalkAdjusted(t *testing.T, adjustments []report.ACBAdjustment, txs ...store.InvestmentTransaction) report.ACB {
+	t.Helper()
+	return acbWalkRequest(t, []store.Security{acbSecurity("sec-1", "XEQT", "CAD"), acbSecurity("sec-2", "VTI", "CAD")}, nil, adjustments, txs...)
+}
+
+func acbWalkRequest(t *testing.T, securities []store.Security, rates []store.Rate, adjustments []report.ACBAdjustment, txs ...store.InvestmentTransaction) report.ACB {
+	t.Helper()
 	unclassified := store.Account{ID: "acct-7", Name: "Cash margin", Type: store.AccountTypeBrokerage, Currency: "CAD"}
 	srv := report.NewServer(report.WithStore(fakeStore{history: store.InvestmentHistory{
 		Accounts:     append(acbAccounts(), unclassified),
@@ -29,7 +40,7 @@ func acbWalkWith(t *testing.T, securities []store.Security, rates []store.Rate, 
 		Rates:        rates,
 	}}))
 
-	got, err := srv.ACB(t.Context(), report.ACBRequest{Classification: acbClassification(), Today: acbToday})
+	got, err := srv.ACB(t.Context(), report.ACBRequest{Classification: acbClassification(), Today: acbToday, Adjustments: adjustments})
 
 	require.NoError(t, err)
 	return got

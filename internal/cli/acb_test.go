@@ -131,6 +131,35 @@ func Test_acb_pools_the_accounts_the_config_lists_as_non_registered(t *testing.T
 	assert.Equal(t, []string{}, doc.Warnings)
 }
 
+func Test_acb_applies_the_configs_adjustments(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	withReturnOfCapital := func(string) (config.Config, error) {
+		cfg, _ := nonRegisteredConfig("")
+		cfg.Adjustments = []config.Adjustment{
+			{Security: "sec-acme", Date: time.Date(2026, time.September, 15, 0, 0, 0, 0, time.UTC), ReturnOfCapital: 10_000},
+		}
+		return cfg, nil
+	}
+	env := holdingsEnv(withReturnOfCapital, fakeReportStore{history: acbHistory()}, &stdout, &stderr)
+
+	err := cli.Execute(t.Context(), []string{"acb", "--json"}, env)
+
+	require.NoError(t, err)
+	var doc struct {
+		Years []struct {
+			Gain string `json:"gain"`
+		} `json:"years"`
+		Securities []struct {
+			ACB string `json:"acb"`
+		} `json:"securities"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
+	require.Len(t, doc.Securities, 1)
+	assert.Equal(t, "540.00", doc.Securities[0].ACB)
+	require.Len(t, doc.Years, 1)
+	assert.Equal(t, "280.00", doc.Years[0].Gain)
+}
+
 func Test_acb_leaves_an_unlisted_account_out_of_the_pool(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := holdingsEnv(cadConfig, fakeReportStore{history: acbHistory()}, &stdout, &stderr)

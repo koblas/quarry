@@ -9,11 +9,28 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// ACBRequest is what ACB walks: the accounts Classification names non-registered, through Today.
+// ACBRequest is what ACB walks: the accounts Classification names non-registered, through Today, and the
+// Adjustments (T3 slip amounts) applied to the pools; an item's 1-based place in Adjustments is its number.
 type ACBRequest struct {
 	Classification Classification
 	Today          time.Time
+	Adjustments    []ACBAdjustment
 }
+
+// ACBAdjustment is one return of capital and/or reinvested distribution, in CAD cents, on a security on a date;
+// a kind it does not give is 0.
+type ACBAdjustment struct {
+	SecurityID             string
+	Date                   time.Time
+	ReturnOfCapital        int64
+	ReinvestedDistribution int64
+}
+
+// The actions of an adjustment's events, which no transaction carries.
+const (
+	ACBActionReturnOfCapital        = "return of capital"
+	ACBActionReinvestedDistribution = "reinvested distribution"
+)
 
 // ACB is the adjusted cost base of each security pooled across the non-registered accounts, and the capital
 // gains realized each tax year, in CAD cents.
@@ -21,13 +38,39 @@ type ACB struct {
 	AsOf       time.Time
 	Years      []ACBYear
 	Securities []ACBSecurity
+	// AdjustmentIssues are the adjustments skipped or repeated, by item number.
+	AdjustmentIssues []ACBAdjustmentIssue
 }
 
-// ACBYear is the sales dated in one calendar year and the sum of their CAD columns.
+// ACBAdjustmentKind is what the walk found wrong with an adjustment item.
+type ACBAdjustmentKind int
+
+// The kinds of ACBAdjustmentIssue: a skipped item names a security the store lacks or no pool holds; a repeated
+// item shares its security and day with an earlier applied one.
+const (
+	ACBAdjustmentUnknownSecurity ACBAdjustmentKind = iota
+	ACBAdjustmentNotHeld
+	ACBAdjustmentRepeated
+)
+
+// ACBAdjustmentIssue is an adjustment item (1-based) the walk skipped or applied beside the earlier item First,
+// which is 0 unless the kind is Repeated. Security is the security's name, empty when the store lacks it.
+type ACBAdjustmentIssue struct {
+	Kind       ACBAdjustmentKind
+	Item       int
+	First      int
+	SecurityID string
+	Security   string
+	Date       time.Time
+}
+
+// ACBYear is the sales dated in one calendar year and the sum of their CAD columns, and the returns of capital
+// above the ACB that year, a capital gain apart from the sales.
 type ACBYear struct {
 	Year                                int
 	Sales                               []ACBSale
 	Proceeds, Outlays, ACBRemoved, Gain int64
+	ReturnOfCapitalGain                 int64
 }
 
 // ACBSale is one disposition: the shares sold, its proceeds and outlays in CAD cents, the ACB it removed, and
@@ -64,7 +107,8 @@ func (s ACBSecurity) PerShare() *big.Rat {
 
 // ACBEvent is one transaction the walk applied: the units it moved and the pool it left. Amount and Currency
 // are the transaction's own; CAD is Amount at Rate, which is 0 unless the trade was in USD with a rate on file.
-// Outlays (CAD cents) and Gain are meaningful only when Realized, which only a sale sets.
+// Outlays (CAD cents) and Gain are meaningful only when Realized, which a sale and a return of capital above the
+// ACB set.
 type ACBEvent struct {
 	ID                 string
 	Date               time.Time
