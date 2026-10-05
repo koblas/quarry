@@ -576,7 +576,7 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 - [x] SCENARIO-12: Possible superficial losses are marked — `cmd/quarry/run_acb_superficial_test.go` `Test_run_acb_marks_a_loss_sale_rebought_in_a_registered_account_within_30_days`
 - [x] SCENARIO-13a: Shares added with no cost leave ACB incomplete — `cmd/quarry/run_acb_unknown_cost_test.go` `Test_run_acb_marks_an_incomplete_security_and_its_sales_after_shares_added_with_no_cost`
 - [x] SCENARIO-13b: Shares added with no cost are findings — `cmd/quarry/run_findings_shares_without_cost_test.go` `Test_run_findings_lists_shares_added_with_no_cost_as_status_sync_and_mcp_count_them`
-- [ ] SCENARIO-14: ACB data-quality warnings
+- [x] SCENARIO-14: ACB data-quality warnings — `cmd/quarry/run_acb_warnings_test.go` `Test_run_acb_warns_of_a_no_rate_trade_a_shared_ticker_and_a_december_sale`
 - [ ] SCENARIO-15: Sales of one tax year
 - [ ] SCENARIO-18: Nothing to show
 - [ ] SCENARIO-16: One security's history

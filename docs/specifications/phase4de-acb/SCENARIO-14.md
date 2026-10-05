@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-14
-status: open
+status: done
 ---
 
 # SCENARIO-14: ACB data-quality warnings
@@ -26,10 +26,10 @@ Survey: `toCAD` (`acb_walk.go:412-418`) drops `money.Convert`'s `ok`; that bool 
 - [x] Step 5: `document/acb_warnings.go` `decemberSaleWarnings` last in `ACBWarnings`, over `a.Years[].Sales` (excluded sales are absent, so never warned): one line per year ascending, `humanize.Count(n, "sale", "sales")`, `N sale(s) dated December 24–31, <year>: a sale settles a day or two after its trade date and counts for tax in the year it settles; check its date on your T5008` (en dash U+2013). Tests: `Test_ACBWarnings_dates_a_december_sale_warning_by_the_24th_to_the_31st` rows Dec 23 no, Dec 24 yes, Dec 31 yes, Jan 1 no, Nov 30 no, 2 sales one year plural, two years two lines ascending; `Test_ACBWarnings_orders_slots_1_and_3_to_9` hand-built report with every slot present asserting exact sequence (adjustment, 3, 4, 5, 6, 7, 8, 9); slot 2 (S15) goes between adjustment lines and 3 at `acb_warnings.go:19-20`. Control: `Test_ACBWarnings_is_empty_..._and_no_loss_is_marked` and `acbDocumentFixture` (`document/acb_test.go:20-60`, sales Mar 4 and Apr 5, no shared ticker) must stay empty.
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `NoRate`, `FirstRate`, `SharedTickers`; re-pin any literal fixture without a Currency that `go test` lists.
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `NoRate`, `FirstRate`, `SharedTickers`; re-pin any literal fixture without a Currency that `go test` lists.
 
 ### Verify
-- [ ] Step 7: full verification per `.claude/rules/agent-briefs.md`, `.claude/scripts/spec-check.py phase4de-acb`, tick SCENARIO-14 (`specification.md:578`) with its acceptance test, rewrite STATE.md (Left unbuilt: no-rate arm done; add the open items below), `status: done`.
+- [x] Step 7: full verification per `.claude/rules/agent-briefs.md`, `.claude/scripts/spec-check.py phase4de-acb`, tick SCENARIO-14 (`specification.md:578`) with its acceptance test, rewrite STATE.md (Left unbuilt: no-rate arm done; add the open items below), `status: done`.
 
 ## Defaults pending ruling (orchestrator: rule 1 BEFORE B1; the rest may ride)
 1. A non-USD trade `Convert` cannot value (EUR; empty currency): default incomplete + out of totals, NO warning line (copy 6 says "before the first exchange rate", false for it). Recommend a scoped product-vision copy ruling; if it rules USD-only, only `needsConversion` changes.
@@ -58,20 +58,4 @@ Survey: `toCAD` (`acb_walk.go:412-418`) drops `money.Convert`'s `ok`; that bool 
 
 ## Phase report
 
-Run B2 (steps 4-5) done on top of B1 (steps 2-3, to the orchestrator ruling). Acceptance test `Test_run_acb_warns_of_a_no_rate_trade_a_shared_ticker_and_a_december_sale` is GREEN (it was red only on warnings 7 and 9 after B1, and went green when the B2 code landed). Whole repo green (rc 0), `golangci-lint` 0 issues, `uncovered-diff.py` 0 added lines since 9febaae; test-stats report 585 (+3), report/document 217 (+8).
-
-B2:
-- `internal/report/acb_superficial.go`: `groupingTicker(store.Security) (string, bool)` is the ONE predicate (non-nil, non-empty, case-sensitive); `newSuperficialIndex` calls it.
-- `internal/report/acb.go`: `ACBSharedTicker{Ticker, Securities []store.Security}` and `(ACB).SharedTickers()` over `a.Securities` (groups of >= 2, first-member order, members in walk order).
-- `internal/report/document/acb_warnings.go`: `sameTickerWarnings` (after 6, before ROC) and `decemberSaleWarnings` (last; const `firstDecemberSaleDay = 24`, one line per year ascending over `a.Years[].Sales`). Slot order: adjustments, 3, 4, 5, 6, 7, 8, 9; S15's slot 2 goes between adjustments and 3.
-- Tests: new `internal/report/acb_tickers_test.go`; new `internal/report/document/acb_warnings_slots_test.go` (warning 7 n=2/n=3/order, warning 9 boundary table, singular, plural, per-year, `Test_ACBWarnings_orders_slots_1_and_3_to_9`).
-- Mutations (restored, diff clean): `firstDecemberSaleDay` 24 -> 25 reddens `.../december_24_is_inside`; `groupingTicker` lower-casing reddens `.../tickers_differing_only_by_case_are_not_shared` and the superficial `.../a_ticker_differing_in_case` (shared predicate proven).
-- V must: `spec-check.py phase4de-acb`, tick SCENARIO-14 (`specification.md` ~:578) with the acceptance test, rewrite STATE.md (no-rate arm and warnings 6/7/9 built; S16 blank `--security` cell stays open), `status: done`.
-
-B1:
-
-- `internal/report/acb.go`: `ACB.FirstRate`, `ACBSecurity.NoRate *ACBNoRate{Date, Currency}`, additive `ACBEvent.Unvalued` (CAD untouched).
-- `internal/report/acb_walk.go`: `unvalued(tx, rate)` = `needsConversion(tx)` (buy, sell, add_shares/reinvest with a cost) AND `money.Convert` fails (every non-CAD with no usable rate: USD pre-rate, EUR, empty code); `apply` sets `event.Unvalued` and the first `NoRate`; `walkSecurity` ORs it into `Incomplete`; `walkACB` appends a security's sales/excesses only when `NoRate == nil`, before `markSuperficialLosses`. `FirstRate` = `history.Rates[0].Date`.
-- `internal/report/document/acb.go`: event `CAD *string`, null with `Gain` when `Unvalued`. `acb_warnings.go`: `unconvertedTradeWarnings` (6a/6b/6c; NOT named noRateWarnings, `holdings.go:158` owns that name), slot after removals, before warning 8. Trade currency = account currency confirmed (`internal/importer/investments.go:228`).
-- Tests: new `internal/report/acb_no_rate_test.go` (10 tests, fixture `acbNoRateFixture` with a control arm); `acb_events_test.go` renamed `Test_acb_leaves_a_usd_event_with_no_rate_on_file_unvalued`; document `acb_warnings_test.go` (6a, 6b, 6c EUR/empty, order, slot), `acb_test.go` (null cad/gain); cmd `Test_run_acb_json_leaves_a_no_rate_security_out_of_the_years_and_warns`; `acbDoc` event `CAD` is now `*string` (`run_acb_surface_test.go`, `run_acb_adjustments_test.go:163`).
-- Mutation (plan check 1): `if walk.position.NoRate == nil` -> `if true` reddens `Test_acb_leaves_a_no_rate_securitys_sales_and_excess_out_of_the_years` (year rows carry the XEQT sale, ROC 50000) and the sold-out/re-buy test; restored, diff clean.- Not pinned: superficial marking of a no-rate sale (excluded sales are absent, so nothing observable); S16's `--security` blank cell stays open.
+Run V (steps 6-7) done. `go build ./...` ok, `golangci-lint run ./...` 0 issues, full covered suite rc 0, `uncovered-diff.py --profile ... ba45981`: 0 uncovered added lines in 0 runs, `go test -race ./internal/report/...` ok, `spec-check.py phase4de-acb` OK. test-stats --base ba45981 --changed: cmd/quarry 849 (+2), internal/report 585 (+13), internal/report/document 217 (+14), TOTAL 1651 (+29). SCENARIO-14 ticked in specification.md :579 with `Test_run_acb_warns_of_a_no_rate_trade_a_shared_ticker_and_a_december_sale`; STATE.md rewritten (no-rate arm, warnings 6/7/9, ticker predicate; traps for S15/S18; S16 blank CAD/Gain cell on an unvalued event stays open). No sweep fixes were needed (build and lint were clean on arrival). B1/B2 file lists and mutation results are in the commit messages of this scenario.
