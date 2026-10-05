@@ -238,6 +238,10 @@ func Test_config_always_read_commands_refuse_an_unreadable_config_as_a_runtime_e
 }
 
 func Test_config_always_read_commands_print_the_configs_warnings_once_even_with_the_currency_flag(t *testing.T) {
+	// ownWarnings is what each command adds after the config's, on the empty store.
+	ownWarnings := map[string]string{
+		"acb": "quarry: warning: no non-registered account has bought or sold a security; quarry acb has nothing to show\n",
+	}
 	for _, command := range configAlwaysReadCommands {
 		t.Run(command, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
@@ -245,7 +249,7 @@ func Test_config_always_read_commands_print_the_configs_warnings_once_even_with_
 			err := cli.Execute(t.Context(), []string{command, "--currency", "native"}, loaderEnv(&stdout, &stderr, warningConfig))
 
 			require.NoError(t, err)
-			assert.Equal(t, 1, strings.Count(stderr.String(), "quarry: warning: "+unknownKeyShown+"\n"))
+			assert.Equal(t, "quarry: warning: "+unknownKeyShown+"\n"+ownWarnings[command], stderr.String())
 		})
 	}
 }

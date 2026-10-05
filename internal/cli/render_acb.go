@@ -14,8 +14,8 @@ import (
 // acbPerShareDecimals is the decimals of an ACB per share in the position table.
 const acbPerShareDecimals = 4
 
-// renderACB renders a as two tables: the gains realized each tax year, one row per year with a sale, then
-// the ACB of each security still held on a.AsOf. Both are in CAD. A report cut to a year prints its sales alone.
+// renderACB renders a as the gains realized each tax year and the ACB held on a.AsOf, in CAD;
+// a report cut to a year prints that year's sales alone.
 func renderACB(a report.ACB) string {
 	if a.Year != 0 {
 		return renderACBSales(a)

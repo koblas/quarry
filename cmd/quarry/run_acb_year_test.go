@@ -66,6 +66,21 @@ func Test_run_acb_refuses_a_year_it_cannot_use_before_looking_for_a_store(t *tes
 	}
 }
 
+func Test_run_acb_year_is_bounded_by_the_injected_clocks_year(t *testing.T) {
+	clock := time.Date(2024, time.June, 1, 12, 0, 0, 0, time.UTC)
+	acbFixture(t, acbNonRegistered, acbAdjustmentsRows())
+	var thisOut, thisErr, nextOut, nextErr bytes.Buffer
+
+	thisExit := runWith(context.Background(), []string{"acb", "--year", "2024"}, spendEnvAt(&thisOut, &thisErr, clock))
+	nextExit := runWith(context.Background(), []string{"acb", "--year", "2025"}, spendEnvAt(&nextOut, &nextErr, clock))
+
+	require.Equal(t, 0, thisExit, thisErr.String())
+	assert.True(t, strings.HasPrefix(thisOut.String(), "Sales in 2024, in CAD\n"), thisOut.String())
+	assert.Equal(t, 2, nextExit)
+	assert.Equal(t, "quarry: --year 2025 is after this year; pass this year or an earlier one\n", nextErr.String())
+	assert.Empty(t, nextOut.String())
+}
+
 func Test_run_acb_warns_when_no_non_registered_account_has_traded(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

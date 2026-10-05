@@ -73,9 +73,8 @@ func decodeACBYear(t *testing.T, stdout string) acbJSONYear {
 	return doc
 }
 
-// acbStackedRows is 10 Acme shares bought for 1,000.00 and 10 added with no cost, 10 sold for 300.00 on 2025-03-01,
-// and 5 bought back in a registered account on 2025-03-15: a loss that is both a possible superficial loss and a
-// sale of shares with unknown cost.
+// acbStackedRows is one 2025 loss sale that is both a possible superficial loss (rebought in a registered account)
+// and a sale of shares with unknown cost (10 of 20 held were added free).
 func acbStackedRows() store.Rows {
 	rows := acbSuperficialRows()
 	rows.InvestmentTransactions = []store.InvestmentTransaction{
@@ -279,4 +278,54 @@ func Test_run_acb_leaves_a_pool_whose_trades_all_precede_the_rates_with_its_posi
 	assert.Empty(t, doc.Years)
 	assert.Len(t, doc.Securities, 1)
 	assert.Equal(t, []string{noRateWarningVTI}, doc.Warnings)
+}
+
+// acbNoPoolEventsRows is one non-registered brokerage that never traded.
+func acbNoPoolEventsRows() store.Rows {
+	return spendRows([]store.Account{
+		{ID: "acct-cad", SourceID: 1, Name: "CAD Brokerage", Type: store.AccountTypeBrokerage, Currency: "CAD", Active: true},
+	})
+}
+
+func Test_run_acb_year_with_no_pool_events_prints_a_zero_total_and_says_there_is_nothing_to_show(t *testing.T) {
+	acbFixture(t, acbNonRegistered, acbNoPoolEventsRows())
+	w := [7]int{5, 8, 6, 8, 7, 4, 12}
+
+	textOut, textErr := runACB(t, "--year", "2025")
+	docOut, docErr := runACB(t, "--year", "2025", "--json")
+
+	assert.Equal(t, "Sales in 2025, in CAD\n\n"+
+		acbSaleRowOf(w, [8]string{"Date", "Security", "Shares", "Proceeds", "Outlays", "ACB", "Gain or loss"})+
+		acbSaleRowOf(w, [8]string{"Total", "", "", "0.00", "0.00", "0.00", "0.00"}), textOut)
+	assert.Equal(t, stderrWarnings(acbNothingToShowWarning), textErr)
+	doc := decodeACBYear(t, docOut)
+	assert.Equal(t, new(2025), doc.Year)
+	assert.Empty(t, doc.Securities)
+	assert.Equal(t, []string{acbNothingToShowWarning}, doc.Warnings)
+	assert.Equal(t, textErr, docErr)
+}
+
+func Test_run_acb_json_with_no_pool_events_has_a_null_year_and_empty_arrays(t *testing.T) {
+	acbFixture(t, acbNonRegistered, acbNoPoolEventsRows())
+
+	docOut, _ := runACB(t, "--json")
+
+	var doc map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal([]byte(docOut), &doc), docOut)
+	assert.JSONEq(t, `null`, string(doc["year"]))
+	assert.JSONEq(t, `[]`, string(doc["years"]))
+	assert.JSONEq(t, `[]`, string(doc["securities"]))
+}
+
+func Test_run_acb_year_json_of_a_pool_that_never_sold_has_the_year_and_no_sales(t *testing.T) {
+	acbFixture(t, acbNonRegistered, acbAdjustmentsRows())
+	empty := "no sales in 2025 in non-registered accounts, nor in any other year"
+
+	docOut, docErr := runACB(t, "--year", "2025", "--json")
+
+	doc := decodeACBYear(t, docOut)
+	assert.Equal(t, new(2025), doc.Year)
+	assert.Empty(t, doc.Securities)
+	assert.Equal(t, []string{empty}, doc.Warnings)
+	assert.Equal(t, stderrWarnings(empty), docErr)
 }

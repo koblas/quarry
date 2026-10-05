@@ -50,9 +50,9 @@ func adjustmentWarnings(a report.ACB, configShown string) []string {
 }
 
 // nothingToShowWarnings is the line saying why a shows nothing: no non-registered account traded at all, or, under a
-// year, that year has no sale and no return of capital above the ACB; none otherwise. a must be the report before any
-// year cut, whose Year names the year asked for.
+// year, that year has no sale and no return of capital above the ACB; none otherwise.
 func nothingToShowWarnings(a report.ACB) []string {
+	// a is the report before any year cut: its Year names the year asked for.
 	switch {
 	case a.NoPoolEvents():
 		return []string{"no non-registered account has bought or sold a security; quarry acb has nothing to show"}
