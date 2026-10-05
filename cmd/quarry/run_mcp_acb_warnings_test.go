@@ -1,11 +1,13 @@
 package main
 
 import (
+	"os"
 	"testing"
 	"time"
 
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // acbToolTwinRows is acbToolRows plus Acme Twin, which shares Acme's ticker.
@@ -125,6 +127,10 @@ return-of-capital = 5000.00
 			name: "a year with only a return of capital gain, year given", store: seedACBToolStore, config: returnOfCapitalOnly,
 			cliArgs: []string{"acb", "--year", "2024"}, arguments: map[string]any{"year": 2024},
 		},
+		{
+			name: "a year with only a return of capital gain, security given", store: seedACBToolStore, config: returnOfCapitalOnly,
+			cliArgs: []string{"acb", "--security", "sec-acme"}, arguments: map[string]any{"security": []string{"sec-acme"}},
+		},
 	}
 
 	for _, c := range cases {
@@ -132,6 +138,38 @@ return-of-capital = 5000.00
 			got := runBothSurfaces(t, toolDocumentRun{store: c.store, config: c.config, cliArgs: c.cliArgs, tool: "acb", arguments: c.arguments})
 
 			assert.Equal(t, got.cliBody, got.toolBody)
+			assert.Equal(t, acbInToolWords(got.cliWarnings), got.toolWarnings)
+		})
+	}
+}
+
+func Test_run_mcp_acb_opens_each_adjustment_warning_with_the_absolute_config_path(t *testing.T) {
+	cases := []struct {
+		name       string
+		adjustment string
+		want       string
+	}{
+		{
+			name:       "a security the store does not have",
+			adjustment: "security = \"sec-99\"\ndate = 2024-06-30\n",
+			want:       `acb.adjustment item 1 names "sec-99", which is not a security in quarry's store; quarry skips it`,
+		},
+		{
+			name:       "a security no non-registered account holds on the date",
+			adjustment: "security = \"sec-acme\"\ndate = 2023-01-01\n",
+			want:       `acb.adjustment item 1 is for "Acme Corp", which no non-registered account holds on 2023-01-01; quarry skips it`,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := runBothSurfaces(t, toolDocumentRun{
+				store: seedACBToolStore, config: acbToolConfig + "\n[[acb.adjustment]]\n" + c.adjustment + "return-of-capital = 5.00\n",
+				cliArgs: []string{"acb"}, tool: "acb", arguments: map[string]any{},
+			})
+
+			require.NotEmpty(t, got.toolWarnings)
+			assert.Equal(t, configPath(os.Getenv("HOME"))+": "+c.want, got.toolWarnings[0])
 			assert.Equal(t, acbInToolWords(got.cliWarnings), got.toolWarnings)
 		})
 	}

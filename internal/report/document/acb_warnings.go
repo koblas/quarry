@@ -121,9 +121,8 @@ func superficialLossWarnings(a report.ACB) []string {
 		humanize.Count(marked, "possible superficial loss", "possible superficial losses"), strings.Join(years, ", "))}
 }
 
-// noCostWarnings is one line for each security of a that took in shares with no recorded cost, sold out or not.
-// The line's cause is which kinds of acquisition had none: added shares, reinvested dividends, or both. Its
-// last clause names the listing advice gives.
+// noCostWarnings is one line for each security of a that took in shares with no recorded cost, sold out or not,
+// naming added shares, reinvested dividends or both, and ending with the listing advice gives.
 func noCostWarnings(a report.ACB, advice ACBAdvice) []string {
 	var warnings []string
 	for _, security := range a.Securities {

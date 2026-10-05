@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const acbToolConfig = "[accounts]\nnon-registered = [\"acct-cad\", \"acct-usd\"]\nregistered = [\"acct-rrsp\"]\n"
@@ -16,6 +18,13 @@ const acbToolAdjustmentConfig = acbToolConfig + `
 security = "sec-acme"
 date = 2025-01-15
 return-of-capital = 100.00
+`
+
+const acbToolReinvestedConfig = acbToolConfig + `
+[[acb.adjustment]]
+security = "sec-acme"
+date = 2025-01-15
+reinvested-distribution = 100.00
 `
 
 // acbToolRows is acbRows plus two securities in acct-cad that took in shares with no cost: one added, one reinvested.
@@ -67,6 +76,7 @@ func Test_run_mcp_acb_returns_the_acb_json_document(t *testing.T) {
 			arguments: map[string]any{"year": 2025, "security": []string{"sec-gift"}},
 		},
 		{name: "one adjustment configured", config: acbToolAdjustmentConfig, cliArgs: []string{"acb"}, arguments: map[string]any{}},
+		{name: "one reinvested distribution configured", config: acbToolReinvestedConfig, cliArgs: []string{"acb"}, arguments: map[string]any{}},
 	}
 
 	for _, c := range cases {
@@ -79,4 +89,25 @@ func Test_run_mcp_acb_returns_the_acb_json_document(t *testing.T) {
 			assert.Equal(t, acbInToolWords(got.cliWarnings), got.toolWarnings)
 		})
 	}
+}
+
+func Test_run_mcp_acb_lists_a_reinvested_distribution_as_an_event_that_raises_the_acb(t *testing.T) {
+	got := runBothSurfaces(t, toolDocumentRun{
+		store: seedACBToolStore, config: acbToolReinvestedConfig, cliArgs: []string{"acb", "--security", "sec-acme"}, tool: "acb",
+		arguments: map[string]any{"security": []string{"sec-acme"}},
+	})
+
+	type event struct {
+		Action string `json:"action"`
+		CAD    string `json:"cad"`
+		ACB    string `json:"acb"`
+	}
+	var doc struct {
+		Securities []struct {
+			Events []event `json:"events"`
+		} `json:"securities"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(got.toolBody), &doc), got.toolBody)
+	require.Len(t, doc.Securities, 1)
+	assert.Contains(t, doc.Securities[0].Events, event{Action: "reinvested distribution", CAD: "-100.00", ACB: "1700.00"})
 }
