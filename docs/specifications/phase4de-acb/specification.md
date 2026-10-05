@@ -422,7 +422,12 @@ Feature: Registered-account classification and ACB
     When a command loads the config
     Then valid items load as decimal CAD amounts and a malformed item is refused with the ruled line
 
-  Scenario: SCENARIO-08 ACB and gains per tax year
+  Scenario: SCENARIO-08a ACB is pooled per security across non-registered accounts
+    Given non-registered CAD and USD buys and sells with commissions across two accounts
+    When the report computes ACB
+    Then each sale's proceeds, outlays, ACB removed and gain, each year's totals and each security's ACB follow the ruled CRA rules
+
+  Scenario: SCENARIO-08b ACB and gains per tax year
     Given non-registered CAD and USD buys and sells with commissions across two accounts
     When quarry acb runs
     Then it prints realized gains per tax year and today's ACB per security, pooled across the accounts
@@ -447,10 +452,15 @@ Feature: Registered-account classification and ACB
     When quarry acb runs
     Then the sale and its year are marked and the ruled warning prints, with the loss unadjusted
 
-  Scenario: SCENARIO-13 Shares added with no cost
+  Scenario: SCENARIO-13a Shares added with no cost leave ACB incomplete
     Given shares added to a non-registered account with no cost basis
     When quarry acb runs
-    Then the security is incomplete, its later sales say unknown cost, and quarry findings lists shares-without-cost
+    Then the security is incomplete and its later sales say unknown cost
+
+  Scenario: SCENARIO-13b Shares added with no cost are findings
+    Given shares added to a non-registered account with no cost basis
+    When quarry findings runs
+    Then it lists shares-without-cost:<itxn id> with the ruled copy, as status, sync and MCP counts do
 
   Scenario: SCENARIO-14 ACB data-quality warnings
     Given a USD trade before the first exchange rate, two securities sharing a ticker, and a sale dated December 28
@@ -497,28 +507,67 @@ Feature: Registered-account classification and ACB
 
 ## Sizing
 
-_Pending architect sizing pass._
+Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-10-05. Package counting as 4c: `internal/finding`, `store/duckstore` (adapter behind report's port) and a single `snapshot` option argument don't count as a second feature package. Twin cost (4c): unit p90 ≈ 2.9M IE; a new command ≈ 2.6M.
+
+| Scenario | Verdict — numbers |
+| --- | --- |
+| SCENARIO-01 | OWNS A RUN (sonnet), 3 batches, config + report: `[accounts]` lists + knownKeys; accounts Status words, JSON `registered`, Long paragraph; owns the schema.md "registered is not in the store" sentence (+ describe_schema if shared). |
+| SCENARIO-02 | OWNS A RUN (sonnet), 3 batches, config + new `internal/platform` mask helper (behaviour classes pinned in its package); owns every config-time masking site (refusals, "as item", "in both", unknown-key warning under `[accounts]`, go-toml syntax-error probe parse.go:104). |
+| SCENARIO-03 | FOLD into 05 (one warning composer at accounts, findings, data_quality); acceptance test rides in 05. |
+| SCENARIO-04 | OWNS A RUN (opus), 4 batches, finding + report: type + read-time detector + accounts on the `Findings` port result; JSON `first_found_at` null, CSV, `--csv` help (Part A form); text, Long row + after-table paragraph + TOML, `--type`, findings.md bullet + first line; fixture strategy / golden re-pins (every fixture without `[accounts]` raises the finding from here on). |
+| SCENARIO-05 | OWNS A RUN (opus), 4 batches, report + snapshot option + mcp; absorbs 03: status (accounts on the `Status` result + `CountFindings`), sync count via a snapshot option wired at cli/sync.go:102, MCP data_quality + sync_status, S03's warning. Builds the one read-time detector chokepoint 13b extends. |
+| SCENARIO-06 | OWNS A RUN (sonnet), 3 batches, importer + store. **Runs probes P1/P2 first** (results → Handoff → STATE). Column + field + duckstore read/write; importer reads ZCOSTBASIS (NULL when 0); FormatVersion 9 + re-pins; conventions sentence 1 (cost_basis) + hand copies + schema.md. |
+| SCENARIO-07 | OWNS A RUN (sonnet), 3 batches, config: `[[acb.adjustment]]` (new array-table parse; `platform/money` from raw token text) + knownKeys; 7 refusal lines with amount bounds. Adjustment warnings go to 11. |
+| SCENARIO-08a | OWNS A RUN (opus), 4 batches, report + duckstore; absorbs 09. Port read in an embedded interface (report.Store at its 10-method cap); walk (buy = −amount, pro-rata to the cent, exact remainder, commission arm per P1, tax year, same-day order per P2); BoC rate per event; reinvest/split arms; sold-out-and-rebought, closed account, fractional shares. Read covers every investment account incl. registered and file-wide holdings (12 needs them). Acceptance at `Server.ACB`. |
+| SCENARIO-08b | OWNS A RUN (opus), 4 batches, document + cli: full `--json`; text default; Short/Long/Example/all flags (`--currency` defined, refused in 17); root registration + all-commands tables; config warnings (warning 1). Docs: whole SKILL description line (4d fragment + 4e edits), SKILL §7 delete + Tax line, PRD CLI row + ACB bullet. Fixtures classify every investment account from here on. |
+| SCENARIO-09 | FOLD into 08a (acceptance at `Server.ACB`; Then unchanged). |
+| SCENARIO-10 | OWNS A RUN (sonnet), 3 batches, report: pool-internal pairing + `moved` row; unpaired remove + warning 5; add_shares with cost. If P2 finds 0 pairs → move arm dropped, Given unsatisfiable → back to the user; then LIGHT. |
+| SCENARIO-11 | OWNS A RUN (sonnet), 3 batches, report + cli wiring of cfg adjustments: ROC/RD events; ROC above ACB + warning 8; the 3 adjustment warnings. |
+| SCENARIO-12 | OWNS A RUN (opus), 3 batches, report: ±30-day bounds both sides; held at day +30; same ticker; "other than the shares sold"; registered accounts included; year suffix; warning 3. |
+| SCENARIO-13a | LIGHT, report: warning 4, `N sale(s) of shares with unknown cost` year suffix, `incomplete` suffix (3 ruled lines); NULL-cost reinvest arm. Becomes OWNS A RUN if warning 4's copy ruling adds a variant. |
+| SCENARIO-13b | OWNS A RUN (opus), 4 batches, finding + report: `shares-without-cost` detector (excludes 10's pairs) through 05's chokepoint (status/sync/MCP counts agree, R-1); 4 FindingItem/CSV keys; **final** `--csv` help (Part B, moves 04's pin); text, Long row + sentence, `--type`, findings.md bullet. |
+| SCENARIO-14 | OWNS A RUN (sonnet), 3 batches, report: warning 6 (both variants) + out of totals; warning 7; warning 9 (bounds Dec 23/24/31, Jan 1); relative order of warnings 3–9. |
+| SCENARIO-15 | OWNS A RUN (sonnet), 3 batches; absorbs 18: `--year` caption/columns/Total/suffixes, JSON year filter; both empty-warning forms; full 1–9 warning order. |
+| SCENARIO-16 | OWNS A RUN (sonnet), 2–3 batches: selector (name, ticker, id; repeated); history renderer; registered-only warning (owned here). |
+| SCENARIO-17 | OWNS A RUN (sonnet), 4 batches; absorbs 20: refusals R-6 (ignoring doesn't unblock), `--currency`, `--year` bad/future (clock seam), unknown `--security`; docs: findings.md "Classifying accounts", SKILL §6 + "Ignoring a finding" mirror (4d sentence + acb.adjustment allowance), SKILL trigger + 401(k)/IRA examples, SKILL §4 row. |
+| SCENARIO-18 | FOLD into 15. |
+| SCENARIO-19 | OWNS A RUN (sonnet), 3 batches, mcp (5–6 ruled lines > light-lane limit; 4c S17 precedent). Warnings from the full report before the cut. Owns SKILL §9 + `mcp --help` Tools line, conventions sentence 2 + hand copies + schema.md. |
+| SCENARIO-20 | FOLD into 17 (acceptance = the classify-first trigger drift pin); other doc lines go to their owners. |
+| SCENARIO-21 | No architect/developer: orchestrator reference check; a rule gap becomes a new scenario built before the gate. |
+
+**Copy ownership (Changes to existing surfaces):** Part A — findings Long paragraph + TOML → 04; `--csv` help → 04 (Part A), 13b writes the final Part B form; findings.md first line → 04; SKILL frontmatter fragment → 08b (one owner for the description line); SKILL §6 + findings.md mirror → 17; "Classifying accounts" → 17 (04's bullet reference dangles until 17, by design); schema.md registered sentence → 01. Part B — SKILL description/§7/PRD → 08b; SKILL §4, §6 acb.adjustment allowance, trigger + examples → 17; SKILL §9 + `mcp --help` → 19; `--type` + Long row for shares-without-cost → 13b; conventions sentence 1 → 06, sentence 2 → 19.
+
+**Mid-feature copy rulings expected:** before 13a (warning 4 says findings lists them, but a NULL-cost reinvest raises no finding); before 16 (registered-only warning has no slot in the order 1–9); before 08a only if P2 finds an inverted same-day buy/sell, or P1 is mixed/inconclusive.
+
+**Traps:** report.Store at its 10-method interfacebloat cap → new reads in an embedded interface or on existing Findings/Status results; `snapshot` cannot import `report` → read-time count injected as a snapshot option; golden blast radius (52 test files use investment fixtures; 12 cmd count pins) → 04 decides fixture strategy; 08a's read covers registered accounts too; acb fixtures classify every investment account from 08b on; adjustment amounts via `internal/platform/money` (config must not import report).
 
 ## BDD Acceptance Progress
 
 - [ ] SCENARIO-01: Accounts show their classification
 - [ ] SCENARIO-02: A malformed classification is refused
-- [ ] SCENARIO-03: An id that names no account is warned
 - [ ] SCENARIO-04: Unclassified investment accounts are findings
 - [ ] SCENARIO-05: Finding counts include unclassified accounts
+- [ ] SCENARIO-03: An id that names no account is warned
 - [ ] SCENARIO-06: Sync imports Quicken's cost basis
 - [ ] SCENARIO-07: ACB adjustments are read from config
-- [ ] SCENARIO-08: ACB and gains per tax year
+- [ ] SCENARIO-08a: ACB is pooled per security across non-registered accounts
 - [ ] SCENARIO-09: Reinvested dividends and splits
+- [ ] SCENARIO-08b: ACB and gains per tax year
 - [ ] SCENARIO-10: Shares moved between accounts
 - [ ] SCENARIO-11: Return of capital and reinvested distributions
 - [ ] SCENARIO-12: Possible superficial losses are marked
-- [ ] SCENARIO-13: Shares added with no cost
+- [ ] SCENARIO-13a: Shares added with no cost leave ACB incomplete
+- [ ] SCENARIO-13b: Shares added with no cost are findings
 - [ ] SCENARIO-14: ACB data-quality warnings
 - [ ] SCENARIO-15: Sales of one tax year
+- [ ] SCENARIO-18: Nothing to show
 - [ ] SCENARIO-16: One security's history
 - [ ] SCENARIO-17: ACB refuses what it cannot answer
-- [ ] SCENARIO-18: Nothing to show
-- [ ] SCENARIO-19: MCP acb
 - [ ] SCENARIO-20: Docs carry the new surface
+- [ ] SCENARIO-19: MCP acb
+
+## Reference check
+
+SCENARIO-21 is run by the orchestrator after SCENARIO-19 and before the gate, on a scratch HOME holding copies of the newest snapshot and the store, with the accounts classified. Results go in `REFERENCE-CHECK.md`.
+
 - [ ] SCENARIO-21: Reference check on the real Quicken file
