@@ -68,6 +68,7 @@ Scenarios complete: SCENARIO-01..07, 08a, 08b, 09, 10 (03 folded into 05, 09 int
 - Fixtures through `runWith` + `replaceStoreWithRates` for acb: the cli `fakeReportStore` only has a canned `history` (SCENARIO-08b)
 
 ## Open debts
+- S11 ruling (product-vision 2026-10-05) reshapes `years[]`: `return_of_capital_gain` after `gain`. Every `years[]` JSON pin (default, `--year`, S19 MCP) must re-assert the key order with `"0.00"`. Same-day tier pins (c41070b) must not assert ROC before RD — order is split, RD, ROC (S11 re-asserts).
 - Checkpoint 02 MINOR: `namedKeyMessage` var comment (`internal/config/parse.go:~150`) is 2 lines, budget 1; trim on next touch (the `setting` and `Load` docs were trimmed by SCENARIO-07)
 - Checkpoint 02 MINOR: in-both refusal quotes via `tomlstr.BasicString` but no row has a quote/newline id (`internal/config/accounts_test.go` `Test_load_refuses_an_id_listed_in_both_account_lists`) — add an `"a\"b"` row on next config touch
 - Checkpoint 02 NIT: `keyText` masks each dotted key part separately (`parse.go:~418-425`); a number split across parts keeps <=4 digits per part
