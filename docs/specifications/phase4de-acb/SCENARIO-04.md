@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-04
-status: open
+status: done
 ---
 
 # SCENARIO-04: Unclassified investment accounts are findings
@@ -26,10 +26,10 @@ Size: OWNS A RUN — 5 batches, 1 feature package (`report`; `finding`, duckstor
 - [x] Step 7: fixture re-pins per the Fixture rule (Handoff) — run `go test ./cmd/quarry/ ./internal/mcp/` and fix what fails; candidates: `cmd/quarry/run_config_test.go`, `run_investment_cash_test.go`, `run_shared_documents_test.go`, `run_mcp_descriptions_test.go` (:212 enum literal), `run_findings_usage_test.go`; JSON readers of `first_found_at` (`run_findings_json_test.go`, `run_findings_filters_test.go`, `run_shared_documents_test.go`, `run_investment_cash_test.go`) decode null into `string` as `""` silently — check any with an investment account (`--type must be …` derives from `Types()`); MCP enum derives from `Types()` — re-pin only
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (exhaustive switches on `finding.Type`); doc comments on `FindingList`, `FindingItem.AccountType`, `FindingsRequest`, `readTimeFindings`, `(*duckstore.Store).Findings`
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (exhaustive switches on `finding.Type`); doc comments on `FindingList`, `FindingItem.AccountType`, `FindingsRequest`, `readTimeFindings`, `(*duckstore.Store).Findings`
 
 ### Verify
-- [ ] Step 9: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-04 with its acceptance test; rewrite STATE.md
+- [x] Step 9: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-04 with its acceptance test; rewrite STATE.md
 
 ## Handoff
 
@@ -55,7 +55,10 @@ Size: OWNS A RUN — 5 batches, 1 feature package (`report`; `finding`, duckstor
 
 ## Phase report
 
-Run B2 (steps 6-7) done. Commit follows. Acceptance now GREEN; `golangci-lint` 0 issues; `go test ./cmd/quarry/ ./internal/...` narrow loop green.
+Run V (steps 8-9) done: `go build ./...` ok; `golangci-lint run ./...` 0 issues; covered full suite rc 0; `uncovered-diff.py d012715` 0 uncovered added lines, 2 declared unreachable (`internal/cli/render_findings.go:378 accountItem`, `internal/report/findings.go:226 accountOf`; reasons hold, same shape as `categoryOf`); `go test -race` on report, document, finding, cli, mcp, duckstore green; `spec-check.py phase4de-acb` OK. Ticked in specification.md; STATE.md rewritten.
+test-stats --base d012715 --changed: cmd/quarry 801 (+2), internal/cli 522 (+6), internal/finding 16 (+1), internal/report 446 (+10), internal/report/document 166 (+2), internal/store/duckstore 700 (+3); TOTAL 2651 (+24), tempdir 736 (+2), disk 647 (+2).
+
+Earlier: Run B2 (steps 6-7) done. Acceptance GREEN.
 
 Changed:
 - `internal/cli/render_findings.go` `liveFindingLines` case + `unclassifiedRows` + `accountItem` (empty-items branch marked `// unreachable`); `internal/cli/findings.go` Long (table realigned to 20-rune name column, wrapped at 51 cols, greedy re-wrap reproduces the old table at the old width), after-table paragraph + TOML example after the "duplicate and unlinked-transfer" note, `--type`/`--csv` help, `report.Classification` passed in `FindingsRequest`; `internal/mcp/data_quality.go` same wiring.
@@ -67,5 +70,5 @@ Mutations (both reverted, diff clean):
 - `internal/cli/findings.go` `Classification: report.Classification{Registered..}` -> `report.Classification{}`: `Test_run_findings_lists_an_unclassified_account_until_the_config_classifies_it` red ("unclassified-account" still listed after config classifies it).
 - `internal/mcp/data_quality.go` same -> `Test_run_mcp_data_quality_leaves_out_an_account_the_config_classifies` red (`Len` 1 vs 2 findings).
 
-For V: run the full Verify block with `<start>` = d012715; `report.Classification{Registered: cfg.Registered, NonRegistered: cfg.NonRegistered}` is now spelled at three sites (accounts.go, findings.go, data_quality.go) - S05 adds more; consider hoisting then.
+`report.Classification{Registered: cfg.Registered, NonRegistered: cfg.NonRegistered}` is now spelled at three sites (accounts.go, findings.go, data_quality.go) - S05 adds more; consider hoisting then.
 Open (unruled): findings.md "one row per transaction, split, payee or category" (line ~42) not updated to the `--csv` help form.
