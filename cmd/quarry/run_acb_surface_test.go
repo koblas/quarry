@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"slices"
 	"testing"
 	"time"
 
@@ -83,11 +82,8 @@ func Test_run_acb_prints_the_same_result_as_json(t *testing.T) {
 func Test_run_acb_leads_with_the_configs_warnings_in_both_forms(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	writeConfig(t, home, "snapshot.keep = 3\n[accounts]\nnon-registered = [\"acct-cad\"]\n")
-	rows := acbRows()
-	rows.Accounts = rows.Accounts[:1]
-	rows.InvestmentTransactions = slices.DeleteFunc(rows.InvestmentTransactions, func(tx store.InvestmentTransaction) bool { return tx.AccountID != "acct-cad" })
-	replaceStore(t, home, rows)
+	writeConfig(t, home, "snapshot.keep = 3\n[accounts]\nnon-registered = [\"acct-cad\"]\nregistered = [\"acct-usd\", \"acct-rrsp\"]\n")
+	replaceStore(t, home, acbRows())
 	var textOut, textErr, jsonOut, jsonErr bytes.Buffer
 
 	require.Equal(t, 0, runWith(context.Background(), []string{"acb"}, spendEnvAt(&textOut, &textErr, holdingsClock())), textErr.String())

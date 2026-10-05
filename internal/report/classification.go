@@ -49,8 +49,8 @@ func (c Classification) Unclassified(a store.Account) bool {
 	return store.IsInvestmentAccount(a.Type) && c.Of(a) == nil
 }
 
-// CountUnclassified is how many of accounts are investment accounts listed in neither list, closed ones included.
-func (c Classification) CountUnclassified(accounts []store.Account) int {
+// countUnclassified is how many of accounts are investment accounts listed in neither list, closed ones included.
+func (c Classification) countUnclassified(accounts []store.Account) int {
 	n := 0
 	for _, a := range accounts {
 		if c.Unclassified(a) {

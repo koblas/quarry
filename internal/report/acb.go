@@ -218,7 +218,7 @@ func (s *Server) ACB(ctx context.Context, req ACBRequest) (ACB, error) {
 	if err != nil {
 		return ACB{}, s.readRefusal(ctx, acbCommand, err)
 	}
-	if n := req.Classification.CountUnclassified(history.Accounts); n > 0 {
+	if n := req.Classification.countUnclassified(history.Accounts); n > 0 {
 		return ACB{}, unclassifiedAccountsRefusal(n)
 	}
 

@@ -80,7 +80,10 @@ func Test_run_acb_refuses_an_unclassified_account_and_a_currency_other_than_cad(
 		{"json mode", acbPooledConfig, one, []string{"acb", "--json"}, 1, acbRefusalOneUnclassified},
 		{"a security the pool holds", acbPooledConfig, one, []string{"acb", "--security", "ACME"}, 1, acbRefusalOneUnclassified},
 		{"a security held only by the unclassified account", acbPooledConfig, one, []string{"acb", "--security", "HELD"}, 1, acbRefusalOneUnclassified},
+		{"currency CAD", acbPooledConfig, one, []string{"acb", "--currency", "CAD"}, 1, acbRefusalOneUnclassified},
+		{"a year", acbPooledConfig, one, []string{"acb", "--year", "2024"}, 1, acbRefusalOneUnclassified},
 		{"currency USD", acbPooledConfig, one, []string{"acb", "--currency", "USD"}, 2, acbRefusalCADOnly},
+		{"currency USD in json mode", acbPooledConfig, one, []string{"acb", "--currency", "USD", "--json"}, 2, acbRefusalCADOnly},
 		{"currency native", acbPooledConfig, one, []string{"acb", "--currency", "native"}, 2, acbRefusalCADOnly},
 		{"currency in lower case", acbPooledConfig, one, []string{"acb", "--currency", "usd"}, 2, acbRefusalCADOnly},
 		{"currency before year", acbPooledConfig, one, []string{"acb", "--currency", "USD", "--year", "24"}, 2, acbRefusalCADOnly},
@@ -102,6 +105,43 @@ func Test_run_acb_refuses_an_unclassified_account_and_a_currency_other_than_cad(
 			assert.Empty(t, stdout.String())
 		})
 	}
+}
+
+func Test_run_acb_refuses_a_year_and_a_currency_before_reading_a_malformed_config(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		wantStderr string
+	}{
+		{"a bad year", []string{"acb", "--year", "24"}, acbRefusalBadYear24},
+		{"currency USD", []string{"acb", "--currency", "USD"}, acbRefusalCADOnly},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			malformedConfigFixture(t)
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), tc.args, spendEnv(&stdout, &stderr))
+
+			assert.Equal(t, 2, exitCode)
+			assert.Equal(t, tc.wantStderr, stderr.String())
+			assert.Empty(t, stdout.String())
+		})
+	}
+}
+
+func Test_run_acb_refuses_the_one_account_a_missing_config_leaves_unclassified(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStoreWithRates(t, home, acbUnclassifiedRows())
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"acb"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+	assert.Equal(t, 1, exitCode)
+	assert.Equal(t, acbRefusalOneUnclassified, stderr.String())
+	assert.Empty(t, stdout.String())
 }
 
 func Test_run_acb_counts_the_accounts_that_findings_lists_with_status_all(t *testing.T) {
