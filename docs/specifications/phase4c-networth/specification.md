@@ -287,6 +287,7 @@ Within one kind, warnings follow account name ignoring case. Lines 3–6 are als
 | cashflow Long, after "…left out here too." | `In brokerage and retirement accounts, dividends, interest and capital-gain distributions count as income; buying, selling and moving shares count as neither.` (N-3 (b): "reinvested dividends included" dropped) |
 | spend Long | Add: `Margin interest and other investment expenses Quicken puts in an expense category count as spending.` |
 | findings Long, after the list (`findings.go:39`) | `duplicate and unlinked-transfer compare register entries only, not buys, sells, dividends or other investment transactions.` |
+| `plugin/skills/quarry/references/findings.md`, after the `unlinked-transfer` bullet | Add the bullet: ``- `duplicate` and `unlinked-transfer` compare register entries only, not buys, sells, dividends or other investment transactions.`` (ruled in REVIEW-03 item 5) |
 | holdings Long, last paragraph | `The total is the value of the securities only, without the cash held in investment accounts; quarry accounts shows each account's balance, cash included.` |
 | `store.go:38,50-52` docs; `json_accounts.go:17` | Drop "cannot compute" and "not valued" |
 | SKILL.md description | Add `net worth today or over time;`; the exclusion becomes `…for gains or ACB beyond…` ("net worth" and "dividend totals" removed) |

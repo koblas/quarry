@@ -78,6 +78,7 @@ func Test_reference_files_state_their_job(t *testing.T) {
 		{"search.md", []string{"quarry search", "transfer", "excluded", "native", "--limit"}},
 		{"findings.md", append(findingTypeBullets(findingTypesInHelp(t)), []string{
 			"in Quicken, then `quarry sync`", "findings.ignore", "quarry findings --csv", "only when the user asks",
+			"compare register entries only, not buys, sells, dividends or other investment transactions",
 		}...)},
 	}
 

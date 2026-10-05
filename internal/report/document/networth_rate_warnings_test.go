@@ -98,7 +98,7 @@ func Test_net_worth_warnings_say_the_store_has_no_rates_when_it_holds_none(t *te
 	}
 }
 
-func Test_net_worth_warnings_advise_the_surface_s_own_way_to_list_balances_natively(t *testing.T) {
+func Test_net_worth_warnings_advise_the_surfaces_own_way_to_list_balances_natively(t *testing.T) {
 	jan := report.NetWorthDate{Date: rateDay(time.January, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}}
 	cases := []struct {
 		name string
