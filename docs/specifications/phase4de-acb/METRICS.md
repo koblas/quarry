@@ -13,6 +13,7 @@
 | SCENARIO-08b | code-first | A, B1, B2, V (+ product-vision ruling: years JSON key) | 0/2/1/1 | yes (break-even realized sale; fractional shares text cell; folds: fixture doc, STATE debt) |
 | SCENARIO-10 | code-first (light, Gherkin rewritten after P2a) | L, V | 0/3/1/0 | yes (zero-unit moves — orchestrator ruling, no event/no warning; tier cells; config×warning-5 order; fold: test doc) |
 | SCENARIO-11 | code-first | A, B1, B2, V (+ product-vision ruling: ROC-above-ACB year totals + RD-before-ROC; orchestrator rulings: 5 plan defaults) | 0/1/3/0 | yes (ROC-excess event JSON unpinned; folds: 3 comment trims) |
+| SCENARIO-12 | code-first | A, B1, V (+ orchestrator rulings: warning 3 years, per-row "other than shares sold", 6 edges) | 0/2/5/0 | yes (non-walked action counted as acquisition via iota-0 map miss — also in heldAt; remove_shares in heldAt unpinned; folds: vacuous test, redundant sort, 2 doc trims) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
