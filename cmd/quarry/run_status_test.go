@@ -143,6 +143,7 @@ store against Quicken's balances. Every other command reads that store;
 quarry never writes to the Quicken file.`)
 	assert.Contains(t, stdout.String(), ""+
 		"Available Commands:\n"+
+		"  acb         Show adjusted cost base and realized capital gains per tax year, in CAD\n"+
 		"  accounts    List accounts with their current balances\n"+
 		"  anomalies   List charges unusually large for their payee or category\n"+
 		"  cashflow    Show income, spending and savings rate by month or year\n"+

@@ -24,13 +24,13 @@ The acceptance test runs through `runWith` + `replaceStoreWithRates`, because th
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_acb_test.go` `Test_run_acb_prints_gains_per_tax_year_and_todays_acb_pooled_across_the_accounts`. Fixture:
+- [x] Step 1: `cmd/quarry/run_acb_test.go` `Test_run_acb_prints_gains_per_tax_year_and_todays_acb_pooled_across_the_accounts`. Fixture:
   - Accounts: a CAD brokerage and a USD brokerage, both in `accounts.non-registered`; a registered account with its own buy/sell (must be absent from the output).
   - One CAD security bought in both pool accounts and sold from one, with a commission.
   - A USD buy + sell with a commission, plus `usdRate` rows.
   - Sells use negative stored shares. Clock as `holdingsClock()`.
   - Assert both text tables verbatim, exit 0, empty stderr.
-- [ ] Step 2: `internal/cli/acb.go` `newAcbCommand` registered at `internal/cli/root.go:28-41` (+ doc list `:7-10`). Use/Short only and a RunE returning nothing, so the test fails at its stdout assertion.
+- [x] Step 2: `internal/cli/acb.go` `newAcbCommand` registered at `internal/cli/root.go:28-41` (+ doc list `:7-10`). Use/Short only and a RunE returning nothing, so the test fails at its stdout assertion.
 
 ### Build
 - [ ] Step 3: report types and walk (`internal/report/acb.go:11-67`, `acb_walk.go:41-176`). **Additive only**: no existing field retyped (08a pins ~30 sites).
@@ -109,3 +109,17 @@ The acceptance test runs through `runWith` + `replaceStoreWithRates`, because th
 - Deviations for the orchestrator to confirm before B2:
   - §7: the ruled Tax line replaces the old Tax bullet (face reading; no merged copy).
   - The Long :219 rewrap is layout only.
+
+## Phase report
+
+Run A done (steps 1-2). Acceptance test RED at its stdout assertion: expected the two tables, actual `""` (exit 0, store built, config read).
+
+Files:
+- `cmd/quarry/run_acb_test.go`: acceptance test, helpers `acbYearLine`, `acbPositionLine`, `acbTrade`, `acbRows` (fixture; sells stored negative). Config is `non-registered = [acct-cad, acct-usd]`, `registered = [acct-rrsp]`; rates 1.25 from 2024-01-02, 1.40 from 2026-01-02; clock `holdingsClock()` 2026-03-12.
+- `internal/cli/acb.go`: `newAcbCommand(_ ReportFactory, _ ConfigLoader, _ func() time.Time, _ *bool)`, Use/Short only, RunE returns nil. B2 (step 6) replaces the blank parameters and body.
+- `internal/cli/root.go:28-41` registered after holdings; doc list `:7-10` mentions acb.
+- `cmd/quarry/run_status_test.go:~145`: root-help `Available Commands` row for acb (the stub registration broke it; step 6's "root help" row is therefore already done).
+
+Expected output (derived by hand; B1 renders it): year rows 2025 (1 sale, 910.00, 10.00, 640.00, 260.00) and 2026 (1, 707.00, 7.00, 500.00, 200.00); positions Acme Corp ACME 90 960.00 10.6667 and Vanguard Total Stock VTI 6 750.00 125.0000. Tables: two-space column separator, text columns left, numbers right, blank line between caption and table, blank line between the tables, no trailing spaces. Maple (registered only) must be absent; its sale would add a second 2025 sale if it leaked.
+
+Do not redo: the fixture arithmetic (commission is ten-thousandths: 100_000 = 10.00; sell `amount` is net, proceeds = amount + commission).
