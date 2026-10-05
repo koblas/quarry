@@ -167,11 +167,10 @@ func (s ACBSecurity) PerShare() *big.Rat {
 	return new(big.Rat).Quo(big.NewRat(s.ACB, 100), s.Shares)
 }
 
-// ACBEvent is one transaction the walk applied: the units it moved and the pool it left. Amount and Currency
-// are the transaction's own; CAD is Amount at Rate, which is 0 unless the trade was in USD with a rate on file.
-// Outlays (CAD cents) and Gain are meaningful only when Realized, which a sale and a return of capital above the
-// ACB set. UnknownCost is set when the shares the event moved have no recorded cost. Unvalued is set when the
-// trade could not be converted to CAD, so CAD and Gain are unknown, not 0.
+// ACBEvent is one transaction the walk applied. CAD is Amount at Rate, 0 unless a USD trade with a rate on file;
+// Outlays and Gain mean something only when Realized (a sale, or a return of capital above the ACB).
+// UnknownCost marks shares moved with no recorded cost; Unvalued marks a trade quarry could not convert to CAD,
+// whose CAD and Gain are unknown, not 0.
 type ACBEvent struct {
 	ID                 string
 	Date               time.Time

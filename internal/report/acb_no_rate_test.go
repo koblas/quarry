@@ -130,6 +130,7 @@ func Test_acb_counts_only_a_trade_that_carries_a_value_as_one_it_cannot_convert(
 		want bool
 	}{
 		{name: "a buy", tx: acbTx(t, 1, "acct-3", "sec-1", date, store.ActionBuy, "USD", 10*acbMillion, -1_000), want: true},
+		{name: "a sale", tx: acbTx(t, 1, "acct-3", "sec-1", date, store.ActionSell, "USD", -5*acbMillion, 2_000), want: true},
 		{name: "added shares with a cost", tx: usd(acbCosted(acbNoCostAdd(t, 1, "sec-1", date, 10*acbMillion), cost)), want: true},
 		{name: "a reinvested dividend with a cost", tx: usd(acbCosted(acbReinvest(t, 1, date, 10*acbMillion), cost)), want: true},
 		{name: "added shares with no cost", tx: usd(acbNoCostAdd(t, 1, "sec-1", date, 10*acbMillion))},
@@ -163,6 +164,16 @@ func Test_acb_keeps_a_sold_out_security_out_of_the_years_after_it_is_bought_agai
 	assert.Zero(t, got.Securities[0].Shares.Sign())
 }
 
+// acbUnvaluedEvents is whether each of security's events could not be converted to CAD, in event order.
+func acbUnvaluedEvents(security report.ACBSecurity) []bool {
+	unvalued := make([]bool, 0, len(security.Events))
+	for _, event := range security.Events {
+		unvalued = append(unvalued, event.Unvalued)
+	}
+
+	return unvalued
+}
+
 func Test_acb_marks_an_event_unvalued_only_when_it_could_not_be_converted(t *testing.T) {
 	got := acbWalkWith(t, acbMixedSecurities(), []store.Rate{acbRate(t, "2024-01-02", 1_300_000)},
 		acbTx(t, 1, "acct-3", "sec-1", "2023-12-01", store.ActionBuy, "USD", 10*acbMillion, -1_000),
@@ -170,9 +181,68 @@ func Test_acb_marks_an_event_unvalued_only_when_it_could_not_be_converted(t *tes
 		acbTx(t, 3, "acct-1", "sec-1", "2024-02-02", store.ActionBuy, "CAD", 10*acbMillion, -1_000),
 	)
 
-	unvalued := make([]bool, 0, 3)
-	for _, event := range got.Securities[0].Events {
-		unvalued = append(unvalued, event.Unvalued)
+	assert.Equal(t, []bool{true, false, false}, acbUnvaluedEvents(got.Securities[0]))
+}
+
+func Test_acb_leaves_a_sale_out_of_the_years_only_when_it_could_not_be_converted(t *testing.T) {
+	cases := []struct {
+		name         string
+		saleDate     string
+		wantYears    int
+		wantUnvalued []bool
+		wantNoRate   bool
+	}{
+		{name: "a usd sale the day before the first rate is left out", saleDate: "2023-12-01", wantUnvalued: []bool{false, true}, wantNoRate: true},
+		{name: "a usd sale on the first rate date is counted", saleDate: "2024-01-02", wantYears: 1, wantUnvalued: []bool{false, false}},
 	}
-	assert.Equal(t, []bool{true, false, false}, unvalued)
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := acbWalkWith(t, acbMixedSecurities(), []store.Rate{acbRate(t, "2024-01-02", 1_300_000)},
+				acbTx(t, 1, "acct-1", "sec-1", "2023-11-01", store.ActionBuy, "CAD", 10*acbMillion, -1_000),
+				acbTx(t, 2, "acct-3", "sec-1", c.saleDate, store.ActionSell, "USD", -5*acbMillion, 2_000),
+			)
+
+			assert.Len(t, got.Years, c.wantYears)
+			assert.Equal(t, c.wantUnvalued, acbUnvaluedEvents(got.Securities[0]))
+			assert.Equal(t, c.wantNoRate, got.Securities[0].Incomplete)
+		})
+	}
+}
+
+func Test_acb_leaves_a_no_rate_securitys_return_of_capital_excess_out_of_the_years(t *testing.T) {
+	adjustment := report.ACBAdjustment{SecurityID: "sec-1", Date: dateOf(t, "2024-03-01"), ReturnOfCapital: 50_000}
+
+	got := acbWalkRequest(t, acbMixedSecurities(), []store.Rate{acbRate(t, "2024-01-02", 1_300_000)}, []report.ACBAdjustment{adjustment},
+		acbTx(t, 1, "acct-3", "sec-1", "2023-12-01", store.ActionBuy, "USD", 10*acbMillion, -1_000),
+	)
+
+	require.Len(t, got.Securities[0].Events, 2)
+	assert.True(t, got.Securities[0].Events[1].Realized)
+	assert.Empty(t, got.Years)
+}
+
+func Test_acb_marks_a_loss_superficial_only_when_its_security_has_a_rate_for_every_trade(t *testing.T) {
+	cases := []struct {
+		name      string
+		firstRate string
+		wantMarks []bool
+	}{
+		{name: "a no-rate loss sale rebought under its ticker is in no year, so marked nowhere", firstRate: "2024-01-02"},
+		{name: "the same loss sale with a rate is marked", firstRate: "2023-11-01", wantMarks: []bool{true}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			securities := []store.Security{acbSecurity("sec-1", "XEQT", "USD"), acbSecurity("sec-2", "XEQT", "CAD")}
+
+			got := acbWalkWith(t, securities, []store.Rate{acbRate(t, c.firstRate, 1_300_000)},
+				acbTx(t, 1, "acct-1", "sec-1", "2023-11-01", store.ActionBuy, "CAD", 10*acbMillion, -100_000),
+				acbTx(t, 2, "acct-3", "sec-1", "2023-12-01", store.ActionSell, "USD", -5*acbMillion, 20_000),
+				acbTx(t, 3, "acct-1", "sec-2", "2023-12-10", store.ActionBuy, "CAD", 10*acbMillion, -50_000),
+			)
+
+			assert.Equal(t, c.wantMarks, acbFlags(got))
+		})
+	}
 }

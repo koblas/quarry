@@ -19,6 +19,8 @@ const (
 		"so its ACB is incomplete and its gains are left out of the year totals"
 	sharedTickerWarningVTI = `"VTI" is 2 securities in Quicken (Vanguard Total Stock, Vanguard Total Stock CAD); ` +
 		"quarry keeps a separate ACB for each; if they are the same, merge them in Quicken"
+	returnOfCapitalWarningVTI = `"Vanguard Total Stock": return of capital on 2025-12-01 is 1,000.00 more than its ACB, so its ACB is 0.00 ` +
+		"and 1,000.00 is a capital gain in 2025"
 	decemberSaleWarning2025 = "1 sale dated December 24–31, 2025: a sale settles a day or two after its trade date and counts " +
 		"for tax in the year it settles; check its date on your T5008"
 )
@@ -28,9 +30,8 @@ func warningsPositionLine(security, ticker, shares, acb, perShare, suffix string
 	return strings.TrimRight(fmt.Sprintf("%-24s  %-6s  %6s  %6s  %13s  %s", security, ticker, shares, acb, perShare, suffix), " ") + "\n"
 }
 
-// noRateSharedTickerRows is a non-registered USD and CAD brokerage holding two securities that share ticker VTI.
-// The USD one is bought on 2023-12-01, before the first rate, and part-sold on December 29; the CAD one is bought
-// and part-sold on December 28.
+// noRateSharedTickerRows is a USD and a CAD brokerage, each holding one of two securities that share ticker VTI;
+// the USD one is bought before the first rate, and both are part-sold in December 2025.
 func noRateSharedTickerRows() store.Rows {
 	rows := spendRows([]store.Account{
 		{ID: "acct-usd", SourceID: 1, Name: "USD Brokerage", Type: store.AccountTypeBrokerage, Currency: "USD", Active: true},
@@ -104,5 +105,5 @@ func Test_run_acb_json_leaves_a_no_rate_security_out_of_the_years_and_warns(t *t
 	assert.Nil(t, noRate.Events[0].CAD)
 	assert.Nil(t, noRate.Events[0].Gain)
 	assert.Equal(t, new("1000.00"), noRate.Events[1].Gain)
-	assert.Contains(t, doc.Warnings, noRateWarningVTI)
+	assert.Equal(t, []string{noRateWarningVTI, sharedTickerWarningVTI, returnOfCapitalWarningVTI, decemberSaleWarning2025}, doc.Warnings)
 }
