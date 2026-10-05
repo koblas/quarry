@@ -142,22 +142,35 @@ func Test_run_mcp_acb_matches_the_cli_on_the_superficial_removal_december_and_sh
 		config    string
 		cliArgs   []string
 		arguments map[string]any
+		want      string
 	}{
-		{name: "a possible superficial loss", store: seed(acbSuperficialRows), config: acbSuperficialConfig, cliArgs: []string{"acb"}, arguments: map[string]any{}},
+		{
+			name: "a possible superficial loss", store: seed(acbSuperficialRows), config: acbSuperficialConfig,
+			cliArgs: []string{"acb"}, arguments: map[string]any{}, want: superficialLossWarning,
+		},
 		{
 			name: "a possible superficial loss, year given", store: seed(acbSuperficialRows), config: acbSuperficialConfig,
-			cliArgs: []string{"acb", "--year", "2025"}, arguments: map[string]any{"year": 2025},
+			cliArgs: []string{"acb", "--year", "2025"}, arguments: map[string]any{"year": 2025}, want: superficialLossWarning,
 		},
-		{name: "a removal with no sale", store: seed(acbSharesRows), config: fund, cliArgs: []string{"acb"}, arguments: map[string]any{}},
-		{name: "a December sale", store: seed(noRateSharedTickerRows), config: pair, cliArgs: []string{"acb"}, arguments: map[string]any{}},
-		{name: "a removal beyond the pool", store: seed(oversoldRemoval), config: fund, cliArgs: []string{"acb"}, arguments: map[string]any{}},
+		{
+			name: "a removal with no sale", store: seed(acbSharesRows), config: fund,
+			cliArgs: []string{"acb"}, arguments: map[string]any{}, want: acmeRemovalWarning,
+		},
+		{
+			name: "a December sale", store: seed(noRateSharedTickerRows), config: pair,
+			cliArgs: []string{"acb"}, arguments: map[string]any{}, want: decemberSaleWarning2025,
+		},
+		{
+			name: "a removal beyond the pool", store: seed(oversoldRemoval), config: fund,
+			cliArgs: []string{"acb"}, arguments: map[string]any{}, want: moneyFundRemovalOversoldWarning,
+		},
 		{
 			name: "a short, year given", store: seed(shortOpenRows), config: fund,
-			cliArgs: []string{"acb", "--year", "2017"}, arguments: map[string]any{"year": 2017},
+			cliArgs: []string{"acb", "--year", "2017"}, arguments: map[string]any{"year": 2017}, want: moneyFundShortWarning,
 		},
 		{
 			name: "a short, security given", store: seed(shortOpenRows), config: fund,
-			cliArgs: []string{"acb", "--security", "MNY"}, arguments: map[string]any{"security": []string{"MNY"}},
+			cliArgs: []string{"acb", "--security", "MNY"}, arguments: map[string]any{"security": []string{"MNY"}}, want: moneyFundShortWarning,
 		},
 	}
 
@@ -167,7 +180,7 @@ func Test_run_mcp_acb_matches_the_cli_on_the_superficial_removal_december_and_sh
 
 			assert.Equal(t, got.cliBody, got.toolBody)
 			assert.Equal(t, acbInToolWords(got.cliWarnings), got.toolWarnings)
-			assert.NotEmpty(t, got.toolWarnings)
+			assert.Contains(t, got.toolWarnings, c.want)
 		})
 	}
 }
