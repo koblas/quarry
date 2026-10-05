@@ -86,6 +86,16 @@ func Test_reference_files_state_their_job(t *testing.T) {
 			"`shares-without-cost`: shares moved or added into a non-registered account with no cost basis in Quicken. " +
 				"Open the Add Shares transaction and enter the cost (from the old broker's statement); quarry acb counts them at no cost until then.",
 			"A finding that quarry no longer finds after the sync is marked fixed, except shares-without-cost, which leaves the list without being marked fixed.",
+			"- quarry never writes that file. You write it only when the user asks, to record an account classification the user just gave you " +
+				"(see \"Classifying accounts\"), or to add `acb.adjustment` lines for amounts the user reads you from a T3 slip (see \"ACB adjustments\"); " +
+				"show the user the exact lines first, and write them only after the user says yes.",
+			"## Classifying accounts", "## ACB adjustments",
+			"(RRSP, RRIF, TFSA, RESP, FHSA, LIRA, a US 401(k) or IRA, or similar)",
+			"Never guess from the account's name or from Quicken calling it a retirement account.",
+			"Ignoring one does not stop quarry acb from needing it.",
+			"Then run `quarry findings --type unclassified-account --status all --json` to confirm none are left",
+			"Never write a second `[accounts]` line.",
+			"never compute or guess one",
 		}...)},
 	}
 

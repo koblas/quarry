@@ -46,10 +46,13 @@ Before the first number in a conversation, run `quarry status --json`.
 | Account balances | `quarry accounts --json` |
 | Net worth today, on a day, or by month | `quarry networth [--as-of <d> \| --since <d>] --json` |
 | Holdings and their value on a day | `quarry holdings --as-of <date> --json` |
+| ACB, capital gains for a tax year | `quarry acb [--year <y>] [--security <s>] --json`; see `references/findings.md` "Classifying accounts" first |
 | What to clean up in Quicken | `quarry findings --json`; see `references/findings.md` |
 | Anything else | `quarry sql` (section 5) |
 
 Dates are `YYYY`, `YYYY-MM` or `YYYY-MM-DD`, and both ends are included. Without `--since` and `--until`, `spend`, `cashflow`, `recurring` and `anomalies` cover this year to today.
+
+The first time ACB or gains are asked for, run `quarry findings --type unclassified-account --status all --json`; if it lists any account, classify them (`references/findings.md`, "Classifying accounts") before running `quarry acb`.
 
 ## 5. When to use quarry sql
 
@@ -67,7 +70,7 @@ Write user-supplied values only in a recipe's `params` row, and double any singl
 
 ## 6. quarry cannot change data
 
-quarry never writes to Quicken and never edits its own store by request. To fix a category, payee, duplicate or transfer, the user makes the change in Quicken, then runs `quarry sync`; findings it no longer finds leave the list. To stop listing a finding the user has checked, they add its id to `findings.ignore` in `~/Library/Application Support/quarry/config.toml`; quarry never writes that file, and you don't either unless the user asks. Run `quarry sync` or `quarry snapshots prune`, or write output to a file, only when the user asks.
+quarry never writes to Quicken and never edits its own store by request. To fix a category, payee, duplicate or transfer, the user makes the change in Quicken, then runs `quarry sync`; findings it no longer finds leave the list. To stop listing a finding the user has checked, they add its id to `findings.ignore` in `~/Library/Application Support/quarry/config.toml`. quarry never writes that file. You write it only when the user asks, to record an account classification the user just gave you (references/findings.md, "Classifying accounts"), or to add `acb.adjustment` lines for amounts the user reads you from a T3 slip (references/findings.md, "ACB adjustments"); show the user the exact lines first, and write them only after the user says yes. Run `quarry sync` or `quarry snapshots prune`, or write output to a file, only when the user asks.
 
 ## 7. Not covered yet
 
