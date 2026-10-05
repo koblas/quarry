@@ -494,4 +494,9 @@ Architect sizing pass, 2026-10-04. The S01 and S14 splits were approved by the u
 - [x] SCENARIO-14b: Net worth warns about USD balances it cannot convert — `cmd/quarry/run_networth_rates_test.go` `Test_run_networth_warns_when_a_usd_balance_has_no_exchange_rate_and_totals_it_apart`
 - [x] SCENARIO-16: Net worth before any data — `cmd/quarry/run_networth_before_data_test.go` `Test_run_networth_before_the_first_transaction_prints_the_caption_and_the_first_balance_warning`
 - [x] SCENARIO-17: MCP net_worth — `cmd/quarry/run_mcp_net_worth_test.go` `Test_run_mcp_net_worth_returns_the_networth_json_document`
-- [ ] SCENARIO-19: Reference check on the real Quicken file
+
+## Reference check
+
+SCENARIO-19 is run by the orchestrator after SCENARIO-17 and before the gate, on a scratch HOME holding copies of the snapshot and the store (as in 4a/4b). Results go in `REFERENCE-CHECK.md`.
+
+- [x] SCENARIO-19: Reference check on the real Quicken file — manual run recorded in `REFERENCE-CHECK.md` (2026-10-05, snapshot 20261004T184923Z): FI cash 5 exact + 1 explained by settlement timing, action kinds as N-2, networth = v_net_worth = accounts sums, timings ≤ 0.10 s, user confirmed all 9 accounts' cash

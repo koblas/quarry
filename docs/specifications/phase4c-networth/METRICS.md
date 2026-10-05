@@ -16,6 +16,7 @@
 | SCENARIO-14b | code-first | A, B1, B2, B3, V (+ product-vision copy ruling on USD form / history totals) | 0/1/4/1 | yes (history × --json; folds: USD-reporting history row, 3 doc trims, STATE dedupe) |
 | SCENARIO-16 | code-first | A, B1, B2, V (+ product-vision copy ruling: FirstBalance, new copy) | 0/0/4/1 | no (MINOR → STATE.md) |
 | SCENARIO-17 | code-first | A, B1, B2, V | 0/1/3/0 | yes (warnings-from-full-report-before-cut unpinned; folds: 2 doc trims) |
+| SCENARIO-19 | reference (orchestrator) | — | — | — (no rule gap; first manual compare used a stale snapshot, re-run on the latest matched) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
