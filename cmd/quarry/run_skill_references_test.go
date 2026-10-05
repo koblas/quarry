@@ -165,3 +165,29 @@ func Test_references_name_no_quicken_table(t *testing.T) {
 		})
 	}
 }
+
+const (
+	skillACBRow = "| Holdings and their value on a day | `quarry holdings --as-of <date> --json` |\n" +
+		"| ACB, capital gains for a tax year | `quarry acb [--year <y>] [--security <s>] --json`; see `references/findings.md` \"Classifying accounts\" first |\n"
+	skillACBTrigger = "The first time ACB or gains are asked for, run `quarry findings --type unclassified-account --status all --json`; " +
+		"if it lists any account, classify them (`references/findings.md`, \"Classifying accounts\") before running `quarry acb`."
+	classifyingAccountsHeading = "## Classifying accounts"
+)
+
+// markdownSection is the text under heading up to the next "## " heading, whitespace collapsed; empty when heading is absent.
+func markdownSection(text, heading string) string {
+	_, rest, _ := strings.Cut(text, "\n"+heading+"\n")
+	section, _, _ := strings.Cut(rest, "\n## ")
+	return collapseWhitespace(section)
+}
+
+func Test_skill_has_claude_classify_accounts_before_the_first_acb(t *testing.T) {
+	skill := splitSkill(t, repoFile(t, skillPath))
+	section4 := skill.bodies[skillHeadings[3]]
+	classifying := markdownSection(repoFile(t, referencesDir+"/findings.md"), classifyingAccountsHeading)
+
+	assert.Contains(t, section4, skillACBRow)
+	assert.True(t, strings.HasSuffix(section4, "\n\n"+skillACBTrigger), "the trigger must be the last paragraph of section 4")
+	assert.Contains(t, classifying, "(RRSP, RRIF, TFSA, RESP, FHSA, LIRA, a US 401(k) or IRA, or similar)")
+	assert.Contains(t, classifying, "`quarry findings --type unclassified-account --status all --json`")
+}
