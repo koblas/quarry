@@ -1,6 +1,6 @@
 # phase4c-networth — current state
 
-Scenarios complete: SCENARIO-01a (with 02 folded), SCENARIO-01b (with 05 folded), SCENARIO-03 (with 04 folded), SCENARIO-06, SCENARIO-07 (with 08 folded), SCENARIO-09 (with 18 folded). Last updated by SCENARIO-09.
+Scenarios complete: SCENARIO-01a (with 02 folded), SCENARIO-01b (with 05 folded), SCENARIO-03 (with 04 folded), SCENARIO-06, SCENARIO-07 (with 08 folded), SCENARIO-09 (with 18 folded), SCENARIO-10 (with 13 folded). Last updated by SCENARIO-10.
 
 ## Binding decisions
 - Investment cash row: id `txn-<Z_PK>`, `investment_transaction_id = itxn-<Z_PK>` (last column of `transactions`, NULL on register rows; `transactionRows` is positional against the DDL), splits `split-<entry Z_PK>` through the same `mapSplits` path as register entries — Z_PK is unique across ZTRANSACTION entities (SCENARIO-01a, N-1). Entries flowing through `mapSplits` carry transfer links into `pairTransfers` unchanged; pinned for numeric, investment-to-investment, cross-currency, name-form and amount-mismatch links (SCENARIO-01b).
@@ -18,13 +18,22 @@ Scenarios complete: SCENARIO-01a (with 02 folded), SCENARIO-01b (with 05 folded)
 - Conventions' last paragraph is the balances paragraph (`internal/report/sql_conventions.go`; mirrored in `internal/cli/sql_test.go`, `cmd/quarry/run_shared_documents_test.go`; `schema.md` is generated, `go test ./cmd/quarry/ -run Test_skill_schema_reference -update`); its last sentence is the `v_net_worth` one, not a new paragraph (SCENARIO-06/07/09).
 - `v_net_worth` (`duckstore/schema.go` `netWorthViewDDL`, last in the `duckstore.go:454` Exec; no FormatVersion bump): columns `date, type, currency, accounts, balance, balance_cad, balance_usd`, DECIMAL(38,2), one row per date x type x currency over `reportedAccount` accounts of `v_balances_daily`. Converted columns are a plain `sum` of per-account rounded values: rate presence is uniform within (currency, day), so NULL-when-any = NULL-when-all and a `count` guard would be an equivalent mutant. A date's total = sum of one converted column over its rows; NULL = missing rate. S10-S17's reader and MCP `net_worth` read these names (SCENARIO-09).
 - `quickenTableNames` (`run_skill_references_test.go`) replaced `phase4OrQuickenNames`; the Phase-4 view pin is gone, nothing but the drift tests' local `relations` list guards references naming a view the store lacks (SCENARIO-09/18).
+- `quarry networth` port: one method `report.Store.NetWorth(ctx, store.NetWorthParams{Dates})` (in `report.ValueReads` with `Holdings`, embedded in `Store` because `interfacebloat` caps at 10 methods): one open, `v_net_worth WHERE date IN (...)`, ordered date, type, currency. S12 passes month ends; S14a/14b/16 add their facts (unvalued holdings, first rate, first transaction) as fields of `store.NetWorth` read in that same open — one read per command (SCENARIO-10).
+- The day is `report.Today(now())` from the CLI's injected clock, never `current_date` in SQL (SCENARIO-10).
+- Snapshot = exactly one `NetWorth.Dates` / JSON `dates` entry, even with no balances; JSON `as_of`/`since`/`until` keys always present (S12 fills since/until, nulls as_of); `dates`/`balances`/`totals` never null; `balances` keeps zero rows, text omits them (SCENARIO-10).
+- Native mode is reachable through `reporting.currency = native`, so every networth mode renders it. Snapshot native done (S13 folded); history-native (`Month end  Currency  <types…>  Total`) is S12's (SCENARIO-10).
+- Converted total sums only non-nil converted values, one total in the reporting currency; native = one total per currency, CAD first, never added across (SCENARIO-10).
 
 ## Left unbuilt
 - Warnings 3-5 on `quarry accounts` (unpriced holding, no currency, other currency) and `HoldingsUnvalued` on `AccountBalance` — SCENARIO-14a. Until then an account with `holdings_unvalued > 0` shows its balance with those holdings left out, silently (SCENARIO-07).
-- `quarry networth`, MCP `net_worth`, the `Store`/report reader of `v_net_worth` — SCENARIO-10 onwards. SKILL §9 and `--help` Tools line — SCENARIO-17; PRD L169 — SCENARIO-10 (SCENARIO-09).
-- SKILL.md description edit (drop "dividend totals") and SKILL.md:73 ("Net worth: quarry does not compute net worth yet", still true) — SCENARIO-10 (SCENARIO-03).
+- networth `--as-of` and its `AsOfError` noun (`report/asof.go:27-32` hard-codes "holdings are valued") — SCENARIO-15; `--since`/`--until`, month-end history and history-native — SCENARIO-12. The help Example already names them (ruled copy; no test checks it) (SCENARIO-10).
+- Interim until 14b/16: nil converted cell is blank and silently left out of the total (`no rate` cell, `Total <CUR>` row, warning 6 — 14b); empty result prints caption plus header, no Total, no warning (S16). Networth `warnings` argument is nil until 14a/16 (SCENARIO-10).
+- SKILL §4 networth row — SCENARIO-15 (drift test needs `--as-of` and `--since` in help first). MCP `net_worth`, SKILL §9, `--help` Tools line — SCENARIO-17 (SCENARIO-09/10).
 
 ## Traps
+- `v_balances_daily` runs only through DuckDB's real today, so cmd networth fixtures need a past clock (`holdingsClock()`, 2026-03-12) (SCENARIO-10).
+- The drift test scans SKILL code spans: a §4 row naming `--as-of`/`--since` before both exist reddens `Test_every_quarry_name_the_skill_uses_exists` (SCENARIO-10).
+- `duckstore.NetWorth` does not guard empty `Dates` (`IN ()`); the report always passes one date, S12 passes month ends — guard if S12 can yield none (SCENARIO-10).
 - `mapSplits` must run after `mapInvestmentTransactions` (importer.go); otherwise investment entries silently take the skip path and every cash row fails the splits check.
 - Investment cash rows are appended to `transactions` before `pairTransfers` (it builds `accountOf` from it) — moving them later breaks pairing.
 - `addEntrylessSplits` runs after `mapSplits` and before `off.firstError()`: an entry refused into `off` also leaves its transaction split-less, harmless only because the refusal follows. Do not move the refusal (SCENARIO-01b).
@@ -43,7 +52,7 @@ Scenarios complete: SCENARIO-01a (with 02 folded), SCENARIO-01b (with 05 folded)
 
 ## Open debts
 - Conventions sentence "v_net_worth has net worth by day, account type and currency over the accounts Quicken's reports count, as quarry networth does; ..." reads awkwardly (the N-6 comment with a "has" prefix); final product-vision pass (SCENARIO-09).
-- Checkpoint 07 MINOR: setup-narrating comments — `cmd/quarry/run_status_test.go:63`, `cmd/quarry/run_accounts_investment_balance_test.go:16`; delete on next touch.
+- Checkpoint 07 MINOR: setup-narrating comment `cmd/quarry/run_accounts_investment_balance_test.go:16`; delete on next touch.
 - Checkpoint 07 MINOR: closed investment account with cash/holdings not pinned in `accounts --all --json` (`cmd/quarry/run_accounts_json_test.go`); no constructible failure today.
 - Conventions text (`internal/report/sql_conventions.go`, mirrors above): ruled sentence ends "...security and shares:" and the old "Their amount is..." follows with a capital T after the colon — final product-vision pass (SCENARIO-01a).
 - `plugin/skills/quarry/references/findings.md` says nothing about investment rows (duplicate / unlinked-transfer ignore them) — not in the spec's copy table; final product-vision pass (SCENARIO-01b).

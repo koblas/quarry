@@ -5,7 +5,7 @@ import (
 )
 
 // newRootCommand builds quarry's command tree: a persistent --json flag on
-// the root plus the sync, status, accounts, holdings, spend, cashflow,
+// the root plus the sync, status, accounts, holdings, networth, spend, cashflow,
 // recurring, anomalies, search, findings, sql, snapshots (with its prune
 // child) and mcp subcommands, wired against env's factories.
 func newRootCommand(env Env, jsonOut *bool) *cobra.Command {

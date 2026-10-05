@@ -60,7 +60,6 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 	assert.Equal(t, want, stdout.String())
 }
 
-// Cash-only investment rows keep the share gate out of the way.
 func Test_run_status_says_investment_accounts_cash_is_not_checked(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

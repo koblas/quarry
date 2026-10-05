@@ -113,12 +113,18 @@ func Test_NewNetWorth_keeps_a_zero_balance_row_and_writes_converted_balance_by_l
 		t.Run(c.name, func(t *testing.T) {
 			n := report.NetWorth{Dates: []report.NetWorthDate{{Date: netWorthTestDay, Rows: []store.NetWorthRow{row, other}}}, Currency: c.currency}
 
-			got := netWorthJSON(t, n, nil)
+			var got struct {
+				Dates []struct {
+					Balances []struct {
+						Converted any `json:"converted_balance"`
+					} `json:"balances"`
+				} `json:"dates"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(indented(t, document.NewNetWorth(n, nil))), &got))
 
-			balances := got["dates"].([]any)[0].(map[string]any)["balances"].([]any)
-			require.Len(t, balances, 2)
-			assert.Equal(t, c.want,
-				[]any{balances[0].(map[string]any)["converted_balance"], balances[1].(map[string]any)["converted_balance"]})
+			require.Len(t, got.Dates, 1)
+			require.Len(t, got.Dates[0].Balances, 2)
+			assert.Equal(t, c.want, []any{got.Dates[0].Balances[0].Converted, got.Dates[0].Balances[1].Converted})
 		})
 	}
 }

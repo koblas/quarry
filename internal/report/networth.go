@@ -93,7 +93,7 @@ func nativeNetWorthTotals(rows []store.NetWorthRow) []NetWorthTotal {
 		}
 		sums[row.Currency].Add(sums[row.Currency], row.Balance)
 	}
-	var totals []NetWorthTotal
+	totals := make([]NetWorthTotal, 0, len(sums))
 	for code, sum := range sums {
 		totals = append(totals, NetWorthTotal{Currency: code, Value: sum})
 	}

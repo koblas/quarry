@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-10
-status: open
+status: done
 ---
 
 # SCENARIO-10: Net worth today
@@ -43,10 +43,10 @@ Contract: `quarry networth` → stdout gets caption `Net worth on <today>, amoun
     - `docs/initial-prd.md:169` networth row.
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new exported symbols; add networth to the command lists in `internal/cli/root.go:8` and `internal/report/doc.go`. Trim on touch: STATE open-debt comment MINORs.
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new exported symbols; add networth to the command lists in `internal/cli/root.go:8` and `internal/report/doc.go`. Trim on touch: STATE open-debt comment MINORs.
 
 ### Verify
-- [ ] Step 9: full verification + `spec-check.py phase4c-networth` → tick SCENARIO-10, and SCENARIO-13 "delivered by SCENARIO-10" with its test; STATE.md rewrite.
+- [x] Step 9: full verification + `spec-check.py phase4c-networth` → tick SCENARIO-10, and SCENARIO-13 "delivered by SCENARIO-10" with its test; STATE.md rewrite.
 
 ## Handoff
 
@@ -72,17 +72,8 @@ Contract: `quarry networth` → stdout gets caption `Net worth on <today>, amoun
 
 ## Phase report
 
-Run B1 done (Steps 3-7), both acceptance tests green, Narrow loop green (duckstore, report, document, cli, cmd). Sweep/Verify (Steps 8-9) left for V; lint not run yet.
+Run V done. Lint 0 issues; covered full suite rc=0; `uncovered-diff.py` vs 63f2288: 0 uncovered; race green on cli, report, store, cmd; spec-check OK; SCENARIO-10 and 13 ticked; STATE.md rewritten.
 
-Files:
-- `internal/store/duckstore/networth.go`: `(*Store).NetWorth` (one open, `date IN (CAST($n AS DATE)...)`, HUGEINT cents). Tests `net_worth_read_test.go`; `NetWorth` row added to `rowReads` in `read_faults_test.go`. Empty `Dates` is not guarded (`IN ()`); the report always passes one date.
-- `internal/report/networth.go`: `NetWorth{Dates []NetWorthDate{Date, Rows, Totals []NetWorthTotal}, AsOf, Currency}`, `Converted`, `(*Server).NetWorth` (one read, snapshot = one Dates entry), `nativeNetWorthTotals` reuses `nativeRank`. `report/fakes_test.go` fakeStore gained `netWorth`/`gotNetWorth`/`netWorthReads`. Tests `report/networth_test.go`.
-- `internal/report/document/networth.go` (`NetWorth`, `NewNetWorth`; the plan said `document/` = this dir) + `networth_test.go`.
-- `internal/cli/render_networth.go`, `json_networth.go`, `networth.go` (Short/Long/Example verbatim; warnings nil, Steps 14a/16 add them), tests `render_networth_internal_test.go`.
-- cmd: `run_networth_surfaces_test.go` (help pin), `run_networth_json_test.go` (converted + native), all-commands rows added in `run_read_usage_test.go`, `run_read_refusals_test.go` (no store, config EUR, older store, interrupt), `run_spend_refusals_test.go` (HOME), `run_config_test.go` `readCommandArgs`, `run_usage_test.go` (needs value, hint), `run_status_test.go` root help, `internal/cli/currency_test.go`, `report_help_test.go`.
-- `seedNetWorthStore` gained a zero-net Savings account (omitted from text, kept in JSON) and manual investment txn/split SourceID 99 (spendRows numbers its own 1..n).
-- Docs: SKILL.md description (net worth added, exclusion `gains or ACB`), `:73` deleted, `skillFrontmatter`/`skillSection7` re-pinned; PRD L169.
+V changes: `report.Store` split so `interfacebloat` (max 10) passes: `report.ValueReads{Holdings, NetWorth}` embedded in `Store` (`internal/report/store.go`); `prealloc` in `nativeNetWorthTotals`; `forcetypeassert` in `document/networth_test.go` (typed decode); `networth` added to `cli/root.go` and `report/doc.go` lists; new `internal/cli/networth_test.go` (`Test_networth_returns_a_failed_report_open`, covers `networth.go:48`; mutation `return nil` -> red); deleted setup comment `cmd/quarry/run_status_test.go:63`. No stray `zz_timing_throwaway_test.go` existed.
 
-Mutations (both red, restored, diff clean): `sums[row.Currency]` -> `sums["CAD"]` in `nativeNetWorthTotals` -> `Test_networth_native_totals_each_currency_on_its_own` (expected CAD 125/USD 250, got CAD 375); `Sign() == 0` -> `== 7` in `renderNetWorth` -> `Test_render_networth_omits_a_zero_row_that_json_keeps` ("should not contain savings").
-
-For V: lint, doc comments, `internal/cli/root.go:8` and `internal/report/doc.go` command lists, STATE open-debt trims, full verify, spec tick, STATE rewrite.
+test-stats vs 63f2288: cmd/quarry 744 (+6), internal/cli 488 (+7), internal/report 398 (+10), internal/report/document 119 (+5), internal/store/duckstore 667 (+7); TOTAL 2416 (+35), tempdir 717 (+1), disk 636 (+0).
