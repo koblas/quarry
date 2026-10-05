@@ -28,7 +28,12 @@ func (s *Server) dataQuality(ctx context.Context, in dataQualityInput) (any, err
 		return nil, err
 	}
 	status, typ := finding.Status(in.Status), finding.Type(in.Type)
-	listing, err := srv.Findings(ctx, report.FindingsRequest{Ignore: cfg.Ignore, Status: status, Type: typ})
+	listing, err := srv.Findings(ctx, report.FindingsRequest{
+		Ignore:         cfg.Ignore,
+		Classification: report.Classification{Registered: cfg.Registered, NonRegistered: cfg.NonRegistered},
+		Status:         status,
+		Type:           typ,
+	})
 	if err != nil {
 		return nil, err //nolint:wrapcheck // a RefusalError is the tool's answer, sent verbatim
 	}

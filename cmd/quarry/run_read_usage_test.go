@@ -58,7 +58,7 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 		{
 			name: "findings with a bad type", args: []string{"findings", "--type", "duplicates"},
 			wantStderr: "quarry: --type must be duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, " +
-				"payee-variants, similar-categories or unused-category\n",
+				"payee-variants, similar-categories, unused-category or unclassified-account\n",
 		},
 	}
 

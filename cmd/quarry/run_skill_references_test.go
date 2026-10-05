@@ -79,6 +79,9 @@ func Test_reference_files_state_their_job(t *testing.T) {
 		{"findings.md", append(findingTypeBullets(findingTypesInHelp(t)), []string{
 			"in Quicken, then `quarry sync`", "findings.ignore", "quarry findings --csv", "only when the user asks",
 			"compare register entries only, not buys, sells, dividends or other investment transactions",
+			"which accounts quarry needs classified",
+			"`unclassified-account`: a brokerage or retirement account, open or closed, that the config file lists as neither registered nor non-registered. " +
+				"Fixed in quarry's config, not Quicken; see \"Classifying accounts\".",
 		}...)},
 	}
 

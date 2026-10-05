@@ -27,28 +27,43 @@ is about and what to change. After you fix them in Quicken, run quarry
 sync: findings it no longer finds are marked fixed.
 
 quarry looks for:
-  duplicate           two transactions in one account with the same amount,
-                      dated within 3 days of each other, unless both are
-                      reconciled
-  one-sided-transfer  a transfer with no matching transaction in the other
-                      account
-  unlinked-transfer   two transactions in different accounts of the same
-                      currency that look like one transfer (opposite
-                      amounts, within 3 days) but are not linked as one
-  uncategorized       splits with no category, one finding per payee;
-                      quarry cashflow counts them as income or spending
-  mixed-categories    a payee whose transactions go back and forth between
-                      categories
-  payee-variants      payees whose names differ only in case, punctuation,
-                      spacing, or store and reference numbers
-  similar-categories  categories whose names differ only in case,
-                      punctuation, spacing or a plural
-  unused-category     a category no transaction uses; check that no
-                      scheduled transaction or budget uses it before you
-                      delete it
+  duplicate             two transactions in one account with the same
+                        amount, dated within 3 days of each other, unless
+                        both are reconciled
+  one-sided-transfer    a transfer with no matching transaction in the
+                        other account
+  unlinked-transfer     two transactions in different accounts of the same
+                        currency that look like one transfer (opposite
+                        amounts, within 3 days) but are not linked as one
+  uncategorized         splits with no category, one finding per payee;
+                        quarry cashflow counts them as income or spending
+  mixed-categories      a payee whose transactions go back and forth
+                        between categories
+  payee-variants        payees whose names differ only in case,
+                        punctuation, spacing, or store and reference
+                        numbers
+  similar-categories    categories whose names differ only in case,
+                        punctuation, spacing or a plural
+  unused-category       a category no transaction uses; check that no
+                        scheduled transaction or budget uses it before you
+                        delete it
+  unclassified-account  a brokerage or retirement account listed in neither
+                        accounts.registered nor accounts.non-registered in
+                        the config file
 
 duplicate and unlinked-transfer compare register entries only, not buys,
 sells, dividends or other investment transactions.
+
+unclassified-account is fixed in the config file, not in Quicken: it leaves
+the list as soon as the account is listed there, without a sync, and is
+never marked fixed.
+
+  [accounts]
+  registered = [
+    "acct-12",  # Questrade TFSA
+    "acct-15",  # RBC RRSP
+  ]
+  non-registered = ["acct-3"]  # Questrade Margin
 
 To keep a finding off the list after checking it, add its id to
 findings.ignore in ~/Library/Application Support/quarry/config.toml:
@@ -88,7 +103,12 @@ prints one row per item, for a spreadsheet.`,
 				return err
 			}
 
-			req := report.FindingsRequest{Ignore: cfg.Ignore, Status: finding.Status(status), Type: finding.Type(typ)}
+			req := report.FindingsRequest{
+				Ignore:         cfg.Ignore,
+				Classification: report.Classification{Registered: cfg.Registered, NonRegistered: cfg.NonRegistered},
+				Status:         finding.Status(status),
+				Type:           finding.Type(typ),
+			}
 			view := findingsView{status: req.Status, typ: req.Type}
 			listing, err := srv.Findings(cmd.Context(), req)
 			if err != nil {
@@ -116,8 +136,8 @@ prints one row per item, for a spreadsheet.`,
 	cmd.Flags().StringVar(&status, "status", string(finding.StatusOpen),
 		"show only findings whose status is `status`: open, ignored, fixed or all")
 	cmd.Flags().StringVar(&typ, "type", "",
-		"show only findings of this `type`: duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, payee-variants, similar-categories or unused-category")
-	cmd.Flags().BoolVar(&csvOut, "csv", false, "print one row per transaction, split, payee or category as CSV")
+		"show only findings of this `type`: duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, payee-variants, similar-categories, unused-category or unclassified-account")
+	cmd.Flags().BoolVar(&csvOut, "csv", false, "print one row per transaction, split, payee, category or account as CSV")
 	return cmd
 }
 

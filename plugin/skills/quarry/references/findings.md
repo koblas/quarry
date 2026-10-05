@@ -1,6 +1,6 @@
 # Findings
 
-Use this to walk the user through what to clean up in their Quicken file. quarry only reports; it never changes Quicken or its own store on request. SKILL.md section 6 sets the rules for what you may and may not do.
+Use this to walk the user through what to clean up in their Quicken file, and which accounts quarry needs classified. quarry only reports; it never changes Quicken or its own store on request. SKILL.md section 6 sets the rules for what you may and may not do.
 
 ## How to run the walk-through
 
@@ -20,6 +20,7 @@ Use this to walk the user through what to clean up in their Quicken file. quarry
 - `payee-variants`: payees whose names differ only in case, punctuation, spacing, or store and reference numbers. Fix in Quicken: rename them to one payee and add a renaming rule, or ignore the group if they are different merchants.
 - `similar-categories`: categories whose names differ only in case, punctuation, spacing or a plural. Fix in Quicken: merge them into one, or ignore the group if they mean different things.
 - `unused-category`: a category no transaction uses. Check that no scheduled transaction or budget uses it before deleting it in Quicken, or ignore it to keep it.
+- `unclassified-account`: a brokerage or retirement account, open or closed, that the config file lists as neither registered nor non-registered. Fixed in quarry's config, not Quicken; see "Classifying accounts".
 
 ## After the user fixes something
 

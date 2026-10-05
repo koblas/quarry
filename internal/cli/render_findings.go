@@ -135,6 +135,8 @@ func liveFindingLines(typ finding.Type, findings []report.ListedFinding, view fi
 		return similarCategoryRows(findings, view)
 	case finding.UnusedCategory:
 		return unusedCategoryRows(findings, view)
+	case finding.UnclassifiedAccount:
+		return unclassifiedRows(findings, view)
 	}
 	return nil // unreachable: the exhaustive linter fails a switch missing a finding.Types() entry, and report.Findings groups only those
 }
@@ -344,6 +346,38 @@ func unusedCategoryRows(findings []report.ListedFinding, view findingsView) []st
 		rows[i] = "  " + padRight(f.ID, idWidth) + "  " + topCategory(f.Items) + subcategoriesClause(len(f.Items)-1) + ignoredMarker(f, view)
 	}
 	return rows
+}
+
+// unclassifiedRows renders one row per unclassified-account finding: its id and the account's name, each padded to the widest,
+// then "type, currency", ", closed" when the account is closed, then the ignored marker.
+func unclassifiedRows(findings []report.ListedFinding, view findingsView) []string {
+	ids := make([]string, len(findings))
+	names := make([]string, len(findings))
+	for i, f := range findings {
+		ids[i] = f.ID
+		names[i] = escapeCell(accountItem(f).Account)
+	}
+	idWidth, nameWidth := widestRunes(ids), widestRunes(names)
+
+	rows := make([]string, len(findings))
+	for i, f := range findings {
+		item := accountItem(f)
+		closed := ""
+		if item.Closed {
+			closed = ", closed"
+		}
+		rows[i] = "  " + padRight(f.ID, idWidth) + "  " + padRight(names[i], nameWidth) + "  " + item.AccountType + ", " + item.Currency + closed + ignoredMarker(f, view)
+	}
+	return rows
+}
+
+// accountItem is the one item of an unclassified-account finding, the zero item for a finding without one.
+func accountItem(f report.ListedFinding) store.FindingItem {
+	if len(f.Items) == 0 {
+		// unreachable: report.unclassifiedFindings gives each such finding exactly one item and none is ever stored or fixed
+		return store.FindingItem{}
+	}
+	return f.Items[0]
 }
 
 // topCategory is the path of the first of items, the unused category itself.
