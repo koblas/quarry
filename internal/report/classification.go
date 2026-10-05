@@ -7,7 +7,7 @@ import (
 )
 
 // Classification is the account ids the config lists as registered and as non-registered.
-// An id in both lists counts as registered.
+// An id in both lists is refused at config load, so Of reads it as registered only for a value built by hand.
 type Classification struct {
 	Registered, NonRegistered []string
 }

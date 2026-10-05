@@ -77,14 +77,6 @@ func Test_accounts_match_a_listed_id_exactly_and_case_sensitively(t *testing.T) 
 	}
 }
 
-func Test_accounts_classify_an_id_listed_in_both_lists_as_registered(t *testing.T) {
-	both := report.Classification{Registered: []string{registeredID}, NonRegistered: []string{registeredID}}
-
-	got := classifiedListing(t, store.Account{ID: registeredID, Type: store.AccountTypeBrokerage}, false, both)
-
-	assert.Equal(t, new(true), got.Classification.Of(got.Accounts[0].Account))
-}
-
 func Test_accounts_leave_an_investment_account_unclassified_only_when_no_list_names_it(t *testing.T) {
 	classification := report.Classification{Registered: []string{registeredID}, NonRegistered: []string{nonRegisteredID}}
 	cases := []struct {

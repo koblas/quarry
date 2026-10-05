@@ -69,7 +69,7 @@ type file struct {
 
 // parse validates the whole file: syntax first, then snapshots.keep, then
 // quicken.path, then findings.ignore, then reporting.currency, then accounts.registered,
-// then accounts.non-registered, then unknown keys.
+// then accounts.non-registered, then an id in both account lists, then unknown keys.
 func (f file) parse() (Config, error) {
 	tree, err := f.tree()
 	if err != nil {
@@ -102,6 +102,10 @@ func (f file) parse() (Config, error) {
 
 	nonRegistered, err := doc.idList(nonRegisteredSetting, "account ids", accountsExample)
 	if err != nil {
+		return Config{}, err
+	}
+
+	if err := doc.notInBoth(registered, nonRegistered); err != nil {
 		return Config{}, err
 	}
 
@@ -288,6 +292,18 @@ func (d document) idList(s setting, noun, example string) ([]string, error) {
 	}
 
 	return ids, nil
+}
+
+// notInBoth refuses the first id of registered, in file order, that nonRegistered also lists,
+// showing it masked.
+func (d document) notInBoth(registered, nonRegistered []string) error {
+	for _, id := range registered {
+		if slices.Contains(nonRegistered, id) {
+			return d.badValue("an account must be in only one of "+registeredSetting.String()+" and "+nonRegisteredSetting.String(), tomlstr.BasicString(accountmask.Mask(id))+" in both")
+		}
+	}
+
+	return nil
 }
 
 // currency is reporting.currency in any letter case: money.CAD when unset, else a string

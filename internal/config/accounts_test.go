@@ -204,3 +204,74 @@ func Test_load_refuses_a_bad_registered_list_before_a_bad_non_registered_one(t *
 
 	assert.Equal(t, shownPath+": "+registeredMust+"2"+fixLine, got)
 }
+
+const inBothMust = "an account must be in only one of accounts.registered and accounts.non-registered, got "
+
+func Test_load_refuses_an_id_listed_in_both_account_lists(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{name: "an acct id", content: "accounts.registered = [\"acct-3\"]\naccounts.non-registered = [\"acct-3\"]\n", want: `"acct-3" in both`},
+		{name: "a number is masked", content: "accounts.registered = [\"12345678\"]\naccounts.non-registered = [\"12345678\"]\n", want: `"****5678" in both`},
+		{name: "two shared ids name the first in registered order", content: "accounts.registered = [\"b\", \"a\"]\naccounts.non-registered = [\"a\", \"b\"]\n", want: `"b" in both`},
+		{name: "an empty id", content: "accounts.registered = [\"\"]\naccounts.non-registered = [\"\"]\n", want: `"" in both`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := refusal(t, c.content)
+
+			assert.Equal(t, shownPath+": "+inBothMust+c.want+fixLine, got)
+		})
+	}
+}
+
+func Test_load_refuses_an_id_listed_in_both_account_lists_in_either_list_order(t *testing.T) {
+	got := refusal(t, "accounts.non-registered = [\"acct-3\"]\naccounts.registered = [\"acct-3\"]\n")
+
+	assert.Equal(t, shownPath+": "+inBothMust+`"acct-3" in both`+fixLine, got)
+}
+
+func Test_load_loads_account_lists_that_share_no_id_exactly(t *testing.T) {
+	cases := []struct {
+		name          string
+		content       string
+		registered    []string
+		nonRegistered []string
+	}{
+		{name: "the same id twice in one list", content: "accounts.registered = [\"acct-3\", \"acct-3\"]\n", registered: []string{"acct-3", "acct-3"}},
+		{name: "ids that differ in letter case", content: "accounts.registered = [\"Acct-3\"]\naccounts.non-registered = [\"acct-3\"]\n", registered: []string{"Acct-3"}, nonRegistered: []string{"acct-3"}},
+		{name: "only the non-registered list set", content: "accounts.non-registered = [\"acct-3\"]\n", nonRegistered: []string{"acct-3"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, cfg, err := load(t, c.content)
+
+			require.NoError(t, err)
+			assert.Equal(t, c.registered, cfg.Registered)
+			assert.Equal(t, c.nonRegistered, cfg.NonRegistered)
+		})
+	}
+}
+
+func Test_load_refuses_a_bad_account_list_before_an_id_listed_in_both(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{name: "bad registered item", content: "accounts.registered = [\"a\", 1]\naccounts.non-registered = [\"a\"]\n", want: registeredOnly + "1 as item 2"},
+		{name: "bad non-registered item", content: "accounts.registered = [\"a\"]\naccounts.non-registered = [\"a\", 1]\n", want: nonRegisteredOnly + "1 as item 2"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := refusal(t, c.content)
+
+			assert.Equal(t, shownPath+": "+c.want+fixLine, got)
+		})
+	}
+}
