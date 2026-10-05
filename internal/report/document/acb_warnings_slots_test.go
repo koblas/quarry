@@ -120,7 +120,7 @@ func Test_ACBWarnings_gives_each_year_with_a_december_sale_its_own_line_oldest_f
 	assert.Contains(t, warnings[1], "1 sale dated December 24–31, 2025:")
 }
 
-func Test_ACBWarnings_orders_every_slot_1_to_9(t *testing.T) {
+func Test_ACBWarnings_orders_every_slot(t *testing.T) {
 	noRate := acbNoRateSecurity("sec-1", "Alpha", "USD", acbDay)
 	noRate.Security.Ticker = new("VTI")
 	noRate.Events = []report.ACBEvent{
@@ -136,18 +136,20 @@ func Test_ACBWarnings_orders_every_slot_1_to_9(t *testing.T) {
 		Years:            []report.ACBYear{marked},
 		AdjustmentIssues: []report.ACBAdjustmentIssue{{Kind: report.ACBAdjustmentUnknownSecurity, Item: 1, SecurityID: "sec-99", Date: acbDay}},
 		Securities:       []report.ACBSecurity{noRate, acbTickered("sec-2", "Beta", "VTI")},
+		RegisteredOnly:   []store.Security{{ID: "sec-3", Name: "Gamma"}},
 	}
 
 	warnings := document.ACBWarnings(a, acbConfigShown)
 
-	require.Len(t, warnings, 9)
+	require.Len(t, warnings, 10)
 	assert.Contains(t, warnings[0], "acb.adjustment item 1 names")
 	assert.Equal(t, "no sales in 2024 in non-registered accounts; the sales are in 2025", warnings[1])
-	assert.Contains(t, warnings[2], "1 possible superficial loss in 2025:")
-	assert.Contains(t, warnings[3], `"Alpha" has shares added with no cost,`)
-	assert.Contains(t, warnings[4], `"Alpha": 2 shares left`)
-	assert.Contains(t, warnings[5], `"Alpha" has a USD trade on`)
-	assert.Contains(t, warnings[6], `"VTI" is 2 securities in Quicken`)
-	assert.Contains(t, warnings[7], `"Alpha": return of capital on`)
-	assert.Contains(t, warnings[8], "1 sale dated December 24–31, 2025:")
+	assert.Equal(t, `"Gamma" is held only in registered accounts, so it has no ACB`, warnings[2])
+	assert.Contains(t, warnings[3], "1 possible superficial loss in 2025:")
+	assert.Contains(t, warnings[4], `"Alpha" has shares added with no cost,`)
+	assert.Contains(t, warnings[5], `"Alpha": 2 shares left`)
+	assert.Contains(t, warnings[6], `"Alpha" has a USD trade on`)
+	assert.Contains(t, warnings[7], `"VTI" is 2 securities in Quicken`)
+	assert.Contains(t, warnings[8], `"Alpha": return of capital on`)
+	assert.Contains(t, warnings[9], "1 sale dated December 24–31, 2025:")
 }

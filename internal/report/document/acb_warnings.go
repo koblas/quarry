@@ -18,6 +18,7 @@ import (
 func ACBWarnings(a report.ACB, configShown string) []string {
 	warnings := adjustmentWarnings(a, configShown)
 	warnings = append(warnings, nothingToShowWarnings(a)...)
+	warnings = append(warnings, registeredOnlyWarnings(a)...)
 	warnings = append(warnings, superficialLossWarnings(a)...)
 	warnings = append(warnings, noCostWarnings(a)...)
 	warnings = append(warnings, removalWarnings(a)...)
@@ -72,6 +73,17 @@ func nothingToShowWarnings(a report.ACB) []string {
 	}
 
 	return []string{line}
+}
+
+// registeredOnlyWarnings is one line for each security the request named that no non-registered account holds,
+// in the walk's order.
+func registeredOnlyWarnings(a report.ACB) []string {
+	warnings := make([]string, 0, len(a.RegisteredOnly))
+	for _, security := range a.RegisteredOnly {
+		warnings = append(warnings, fmt.Sprintf(`"%s" is held only in registered accounts, so it has no ACB`, security.Name))
+	}
+
+	return warnings
 }
 
 // superficialLossWarnings is one line for every sale of a marked a possible superficial loss, naming their years

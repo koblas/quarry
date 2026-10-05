@@ -75,7 +75,8 @@ type ACBSecurity struct {
 
 // ACBEvent is one event of a security's history. Amount and AmountCurrency are the transaction's own, USDCAD its
 // rate when it was in USD with one on file; CAD is the amount at that rate. Outlays and Gain are null off a sale;
-// CAD and Gain are null on an event whose amount quarry could not convert.
+// CAD and Gain are null on an event whose amount quarry could not convert. UnknownCost marks shares moved with no
+// recorded cost.
 type ACBEvent struct {
 	Date                    string  `json:"date"`
 	InvestmentTransactionID *string `json:"investment_transaction_id"`
@@ -91,6 +92,7 @@ type ACBEvent struct {
 	SharesHeld              string  `json:"shares_held"`
 	ACB                     string  `json:"acb"`
 	Gain                    *string `json:"gain"`
+	UnknownCost             bool    `json:"unknown_cost"`
 }
 
 // NewACB converts a into acb's document with warnings; every array is [] rather than null when empty. A report cut
@@ -182,12 +184,13 @@ func newACBEvent(e report.ACBEvent) ACBEvent {
 		Action: e.Action, Shares: Shares(report.Millionths(e.Shares)),
 		Amount: nullable(e.Amount, Money), Outlays: nullable(e.Outlays, Money),
 		SharesHeld: Shares(report.Millionths(e.Held)), ACB: Money(e.ACB),
+		UnknownCost: e.UnknownCost,
 	}
 	if e.Amount != nil {
 		out.AmountCurrency = NullString(e.Currency)
 	}
 	if e.Rate != 0 {
-		rate := formatRate(e.Rate)
+		rate := Rate(e.Rate)
 		out.USDCAD = &rate
 	}
 	if !e.Unvalued {
@@ -202,8 +205,8 @@ func newACBEvent(e report.ACBEvent) ACBEvent {
 	return out
 }
 
-// formatRate renders r, in millionths, with its trailing zeros trimmed to at least minRateDecimals decimals.
-func formatRate(r money.Rate) string {
+// Rate renders r, in millionths, with its trailing zeros trimmed to at least minRateDecimals decimals.
+func Rate(r money.Rate) string {
 	whole, fraction := int64(r)/1_000_000, int64(r)%1_000_000
 	decimals := strings.TrimRight(fmt.Sprintf("%06d", fraction), "0")
 	for len(decimals) < minRateDecimals {

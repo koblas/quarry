@@ -92,7 +92,7 @@ func Test_NewACB_writes_every_key_of_every_object_in_order(t *testing.T) {
 	}, topLevelKeys(t, security))
 	assert.Equal(t, []string{
 		"date", "investment_transaction_id", "account_id", "account", "action", "shares", "amount", "amount_currency",
-		"usd_cad", "cad", "outlays", "shares_held", "acb", "gain",
+		"usd_cad", "cad", "outlays", "shares_held", "acb", "gain", "unknown_cost",
 	}, topLevelKeys(t, firstOf(t, security, "events")))
 }
 
@@ -222,6 +222,21 @@ func Test_NewACB_writes_a_break_even_sale_gain_and_outlays_as_zero_and_a_buy_gai
 	assert.Equal(t, "0.00", events[1]["outlays"])
 }
 
+func Test_NewACB_writes_unknown_cost_true_on_an_event_that_moved_shares_with_no_cost_and_false_on_one_that_did_not(t *testing.T) {
+	a := report.ACB{AsOf: acbAsOf, Securities: []report.ACBSecurity{{
+		Security: store.Security{ID: "sec-41", Name: "XEQT"}, Shares: new(big.Rat),
+		Events: []report.ACBEvent{
+			{Date: acbAsOf, Action: "add_shares", Shares: big.NewRat(1, 1), Amount: new(int64(0)), Currency: "CAD", Held: big.NewRat(1, 1), UnknownCost: true},
+			{Date: acbAsOf, Action: "buy", Shares: big.NewRat(1, 1), Amount: new(int64(-500)), Currency: "CAD", CAD: -500, Held: big.NewRat(2, 1), ACB: 500},
+		},
+	}}}
+
+	got := document.NewACB(a, nil)
+
+	assert.True(t, got.Securities[0].Events[0].UnknownCost)
+	assert.False(t, got.Securities[0].Events[1].UnknownCost)
+}
+
 func Test_NewACB_writes_an_adjustment_event_with_no_transaction_account_or_amount(t *testing.T) {
 	a := report.ACB{AsOf: acbAsOf, Securities: []report.ACBSecurity{{
 		Security: store.Security{ID: "sec-41", Name: "XEQT"}, Shares: big.NewRat(10, 1), ACB: 500,
@@ -239,7 +254,7 @@ func Test_NewACB_writes_an_adjustment_event_with_no_transaction_account_or_amoun
 	assert.Equal(t, map[string]any{
 		"date": "2026-10-05", "investment_transaction_id": nil, "account_id": nil, "account": nil,
 		"action": "return of capital", "shares": "0.000000", "amount": nil, "amount_currency": nil, "usd_cad": nil,
-		"cad": "2.50", "outlays": nil, "shares_held": "10.000000", "acb": "5.00", "gain": nil,
+		"cad": "2.50", "outlays": nil, "shares_held": "10.000000", "acb": "5.00", "gain": nil, "unknown_cost": false,
 	}, events[0])
 }
 
@@ -260,7 +275,7 @@ func Test_NewACB_writes_a_return_of_capital_above_the_acb_event_with_the_excess_
 	assert.Equal(t, map[string]any{
 		"date": "2026-10-05", "investment_transaction_id": nil, "account_id": nil, "account": nil,
 		"action": "return of capital", "shares": "0.000000", "amount": nil, "amount_currency": nil, "usd_cad": nil,
-		"cad": "2300.00", "outlays": nil, "shares_held": "10.000000", "acb": "0.00", "gain": "1250.00",
+		"cad": "2300.00", "outlays": nil, "shares_held": "10.000000", "acb": "0.00", "gain": "1250.00", "unknown_cost": false,
 	}, events[0])
 }
 

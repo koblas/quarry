@@ -80,8 +80,8 @@ accountant, not a tax filing.`,
 				return &runtimeError{err: err}
 			}
 
-			// Warnings read the whole report: a year's cut would drop those of a security it did not sell.
-			cut := acb.InYear()
+			// Warnings read the whole report: a cut would drop those of a security it left out.
+			cut := acb.Cut()
 
 			return emitReport(cmd, *jsonOut, document.ACBWarnings(acb, homepath.Abbreviate(srv.Home(), cfg.Path)),
 				func() ([]byte, error) {

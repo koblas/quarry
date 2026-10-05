@@ -155,6 +155,124 @@ func Test_in_year_is_the_report_itself_when_it_names_no_year(t *testing.T) {
 	assert.Equal(t, a, a.InYear())
 }
 
+func cutSale(security string, year int, proceeds, gain int64) report.ACBSale {
+	return report.ACBSale{SecurityID: security, Date: day(year, time.June, 1), Proceeds: proceeds, Outlays: 1, ACBRemoved: proceeds - gain - 1, Gain: gain}
+}
+
+func Test_acb_cut_keeps_only_the_named_securities_sales_and_totals(t *testing.T) {
+	a := report.ACB{
+		Selected:    true,
+		SelectedIDs: []string{"sec-b"},
+		Years: []report.ACBYear{{
+			Year: 2024, Proceeds: 300, Outlays: 2, ACBRemoved: 247, Gain: 51,
+			Sales: []report.ACBSale{cutSale("sec-a", 2024, 100, 10), cutSale("sec-b", 2024, 200, 41)},
+		}},
+		Securities: []report.ACBSecurity{yearSecurity("sec-a"), yearSecurity("sec-b")},
+	}
+
+	got := a.Cut()
+
+	assert.Equal(t, []string{"sec-b"}, securityIDs(got))
+	assert.Equal(t, []report.ACBYear{{
+		Year: 2024, Proceeds: 200, Outlays: 1, ACBRemoved: 158, Gain: 41, Sales: []report.ACBSale{cutSale("sec-b", 2024, 200, 41)},
+	}}, got.Years)
+}
+
+func Test_acb_cut_without_a_selection_is_the_year_cut_alone(t *testing.T) {
+	a := report.ACB{
+		Year:       2025,
+		Years:      []report.ACBYear{{Year: 2024, Sales: []report.ACBSale{yearSale("sec-a", 2024)}}, {Year: 2025, Sales: []report.ACBSale{yearSale("sec-b", 2025)}}},
+		Securities: []report.ACBSecurity{yearSecurity("sec-a"), yearSecurity("sec-b")},
+	}
+
+	assert.Equal(t, a.InYear(), a.Cut())
+}
+
+func Test_acb_cut_without_a_selection_or_year_is_the_report_itself(t *testing.T) {
+	a := report.ACB{
+		Years:      []report.ACBYear{{Year: 2024, Sales: []report.ACBSale{yearSale("sec-a", 2024)}}},
+		Securities: []report.ACBSecurity{yearSecurity("sec-a"), yearSecurity("sec-b")},
+	}
+
+	assert.Equal(t, a, a.Cut())
+}
+
+func Test_acb_cut_drops_a_year_that_has_no_named_sale(t *testing.T) {
+	a := report.ACB{
+		Selected:    true,
+		SelectedIDs: []string{"sec-b"},
+		Years: []report.ACBYear{
+			{Year: 2023, Sales: []report.ACBSale{yearSale("sec-a", 2023)}, Proceeds: 100},
+			{Year: 2024, Sales: []report.ACBSale{yearSale("sec-b", 2024)}, Proceeds: 100},
+		},
+		Securities: []report.ACBSecurity{yearSecurity("sec-a"), yearSecurity("sec-b")},
+	}
+
+	got := a.Cut()
+
+	require.Len(t, got.Years, 1)
+	assert.Equal(t, 2024, got.Years[0].Year)
+}
+
+func Test_acb_cut_sums_the_return_of_capital_above_acb_of_the_named_securities_only(t *testing.T) {
+	a := report.ACB{
+		Selected:    true,
+		SelectedIDs: []string{"sec-roc"},
+		Years:       []report.ACBYear{{Year: 2024, ReturnOfCapitalGain: 80}},
+		Securities: []report.ACBSecurity{
+			yearSecurity("sec-roc", yearBuy(2023), yearExcess(2024)),
+			yearSecurity("sec-other", yearBuy(2023), yearExcess(2024)),
+		},
+	}
+
+	got := a.Cut()
+
+	assert.Equal(t, []report.ACBYear{{Year: 2024, ReturnOfCapitalGain: 40}}, got.Years)
+}
+
+func Test_acb_cut_leaves_out_the_return_of_capital_above_acb_of_a_named_security_quarry_could_not_value(t *testing.T) {
+	unvalued := yearSecurity("sec-usd", yearBuy(2023), yearExcess(2024))
+	unvalued.NoRate = &report.ACBNoRate{Date: day(2023, time.January, 5), Currency: "USD"}
+	a := report.ACB{Selected: true, SelectedIDs: []string{"sec-usd"}, Securities: []report.ACBSecurity{unvalued}}
+
+	got := a.Cut()
+
+	assert.Empty(t, got.Years)
+}
+
+func Test_acb_cut_applies_the_year_to_the_named_securities(t *testing.T) {
+	a := report.ACB{
+		Year:        2025,
+		Selected:    true,
+		SelectedIDs: []string{"sec-b"},
+		Years: []report.ACBYear{
+			{Year: 2025, Sales: []report.ACBSale{cutSale("sec-a", 2025, 100, 10), cutSale("sec-b", 2025, 200, 41)}, Proceeds: 300, Outlays: 2, ACBRemoved: 247, Gain: 51},
+		},
+		Securities: []report.ACBSecurity{yearSecurity("sec-a"), yearSecurity("sec-b")},
+	}
+
+	got := a.Cut()
+
+	assert.Equal(t, []string{"sec-b"}, securityIDs(got))
+	require.Len(t, got.Years, 1)
+	assert.Equal(t, int64(200), got.Years[0].Proceeds)
+}
+
+func Test_acb_cut_is_an_empty_year_when_the_named_securities_have_no_sale_in_it(t *testing.T) {
+	a := report.ACB{
+		Year:        2025,
+		Selected:    true,
+		SelectedIDs: []string{"sec-b"},
+		Years:       []report.ACBYear{{Year: 2025, Sales: []report.ACBSale{yearSale("sec-a", 2025)}, Proceeds: 100}},
+		Securities:  []report.ACBSecurity{yearSecurity("sec-a"), yearSecurity("sec-b")},
+	}
+
+	got := a.Cut()
+
+	assert.Equal(t, []report.ACBYear{{Year: 2025}}, got.Years)
+	assert.Empty(t, got.Securities)
+}
+
 func Test_acb_carries_the_requested_year_without_cutting_the_walk(t *testing.T) {
 	buy := acbTx(t, 1, "acct-1", "sec-1", "2023-03-01", store.ActionBuy, "CAD", 10*acbMillion, -100_000)
 	sell := acbTx(t, 2, "acct-1", "sec-1", "2024-03-01", store.ActionSell, "CAD", -4*acbMillion, 50_000)

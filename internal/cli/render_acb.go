@@ -15,10 +15,13 @@ import (
 const acbPerShareDecimals = 4
 
 // renderACB renders a as the gains realized each tax year and the ACB held on a.AsOf, in CAD;
-// a report cut to a year prints that year's sales alone.
+// a report cut to a year prints that year's sales alone, and one naming securities prints their histories.
 func renderACB(a report.ACB) string {
 	if a.Year != 0 {
 		return renderACBSales(a)
+	}
+	if a.Selected {
+		return renderACBHistory(a)
 	}
 
 	return renderACBYears(a) + "\n" + renderACBPositions(a)

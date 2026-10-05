@@ -7,6 +7,57 @@ import (
 	"time"
 )
 
+// Cut is a restricted to the securities it names (Selected, SelectedIDs) and then to the tax year a.Year names. A
+// selection keeps those securities and their sales, and re-sums each year's totals over them; a security with a
+// trade quarry could not value adds no return of capital above its ACB. It is the one cut: a report that names
+// neither is returned as it is.
+func (a ACB) Cut() ACB {
+	return a.selectedOnly().InYear()
+}
+
+// selectedOnly is a cut to the securities SelectedIDs names; a report with no selection is returned as it is.
+func (a ACB) selectedOnly() ACB {
+	if !a.Selected {
+		return a
+	}
+	named := make(map[string]bool, len(a.SelectedIDs))
+	for _, id := range a.SelectedIDs {
+		named[id] = true
+	}
+
+	cut := a
+	cut.Securities = nil
+	var excesses []acbExcess
+	for _, security := range a.Securities {
+		if !named[security.Security.ID] {
+			continue
+		}
+		cut.Securities = append(cut.Securities, security)
+		if security.NoRate == nil {
+			excesses = append(excesses, security.excesses()...)
+		}
+	}
+	var sales []ACBSale
+	for _, year := range a.Years {
+		sales = append(sales, slices.DeleteFunc(slices.Clone(year.Sales), func(sale ACBSale) bool { return !named[sale.SecurityID] })...)
+	}
+	cut.Years = yearsOf(sales, excesses)
+
+	return cut
+}
+
+// excesses are the returns of capital above the ACB among the security's events.
+func (s ACBSecurity) excesses() []acbExcess {
+	var excesses []acbExcess
+	for _, e := range s.Events {
+		if e.Action == ACBActionReturnOfCapital && e.Realized {
+			excesses = append(excesses, acbExcess{date: e.Date, amount: e.Gain})
+		}
+	}
+
+	return excesses
+}
+
 // InYear is a cut to the tax year a.Year names: Years holds that year alone, a zero ACBYear with no sales when
 // the report has none, and Securities those with a sale or a return of capital above the ACB counted in it,
 // events and order unchanged. A report with no Year is returned as it is.

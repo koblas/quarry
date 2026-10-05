@@ -473,7 +473,17 @@ func acbYears(sales []acbSale, excesses []acbExcess) []ACBYear {
 	slices.SortFunc(sales, func(a, b acbSale) int {
 		return cmp.Or(a.row.Date.Compare(b.row.Date), cmp.Compare(a.sourceID, b.sourceID))
 	})
+	rows := make([]ACBSale, len(sales))
+	for i, sale := range sales {
+		rows[i] = sale.row
+	}
 
+	return yearsOf(rows, excesses)
+}
+
+// yearsOf groups sales, already in date order, and excesses by the calendar year of their date, oldest year
+// first, and sums each year's CAD columns.
+func yearsOf(sales []ACBSale, excesses []acbExcess) []ACBYear {
 	var years []ACBYear
 	yearOf := func(date time.Time) *ACBYear {
 		i, found := slices.BinarySearchFunc(years, date.Year(), func(y ACBYear, year int) int { return cmp.Compare(y.Year, year) })
@@ -484,12 +494,12 @@ func acbYears(sales []acbSale, excesses []acbExcess) []ACBYear {
 		return &years[i]
 	}
 	for _, sale := range sales {
-		year := yearOf(sale.row.Date)
-		year.Sales = append(year.Sales, sale.row)
-		year.Proceeds += sale.row.Proceeds
-		year.Outlays += sale.row.Outlays
-		year.ACBRemoved += sale.row.ACBRemoved
-		year.Gain += sale.row.Gain
+		year := yearOf(sale.Date)
+		year.Sales = append(year.Sales, sale)
+		year.Proceeds += sale.Proceeds
+		year.Outlays += sale.Outlays
+		year.ACBRemoved += sale.ACBRemoved
+		year.Gain += sale.Gain
 	}
 	for _, excess := range excesses {
 		yearOf(excess.date).ReturnOfCapitalGain += excess.amount

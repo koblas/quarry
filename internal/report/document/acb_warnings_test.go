@@ -44,6 +44,23 @@ func acbPooled(a report.ACB) report.ACB {
 	return a
 }
 
+func Test_ACBWarnings_names_each_security_held_only_in_registered_accounts_in_the_reports_order(t *testing.T) {
+	a := report.ACB{RegisteredOnly: []store.Security{{ID: "sec-2", Name: "Maple Fund"}, {ID: "sec-9", Name: "Zeta Fund"}}}
+
+	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown)
+
+	assert.Equal(t, []string{
+		`"Maple Fund" is held only in registered accounts, so it has no ACB`,
+		`"Zeta Fund" is held only in registered accounts, so it has no ACB`,
+	}, warnings)
+}
+
+func Test_ACBWarnings_names_no_registered_only_security_when_the_request_named_none(t *testing.T) {
+	warnings := document.ACBWarnings(acbPooled(report.ACB{}), acbConfigShown)
+
+	assert.Empty(t, warnings)
+}
+
 func Test_ACBWarnings_names_one_possible_superficial_loss(t *testing.T) {
 	a := report.ACB{Years: []report.ACBYear{acbMarkedYear(2025, 3, 1)}}
 

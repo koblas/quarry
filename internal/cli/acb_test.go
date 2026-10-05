@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -106,6 +107,27 @@ func Test_acb_help_shows_the_year_flag(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Regexp(t, `(?m)--year year +list the sales in tax year \(YYYY\) one by one$`, stdout.String())
+}
+
+func Test_acb_help_shows_the_security_flag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := cli.Execute(t.Context(), []string{"acb", "--help"}, currencyEnv(&stdout, &stderr))
+
+	require.NoError(t, err)
+	assert.Regexp(t, `(?m)--security name +show the full history of the security with this name, ticker or id; repeat for more$`, stdout.String())
+}
+
+func Test_acb_security_takes_a_name_containing_a_comma_as_one_selector(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	history := acbHistory()
+	history.Securities[0].Name = "Acme, Inc"
+	env := holdingsEnv(nonRegisteredConfig, fakeReportStore{history: history}, &stdout, &stderr)
+
+	err := cli.Execute(t.Context(), []string{"acb", "--security", "Acme, Inc"}, env)
+
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(stdout.String(), "ACB history of \"Acme, Inc\" (ACME), in CAD\n"), stdout.String())
 }
 
 func Test_acb_pools_the_accounts_the_config_lists_as_non_registered(t *testing.T) {
