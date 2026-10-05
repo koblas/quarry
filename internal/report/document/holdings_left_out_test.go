@@ -29,10 +29,10 @@ func noCurrency(accountID, account, securityID, security string) store.UnvaluedH
 	}
 }
 
-// pricedIn is a priced holding in currency, on day 12.
+// pricedIn is a priced holding in currency, held in a CAD account, on day 12.
 func pricedIn(currency, accountID, account, securityID, security string) store.UnvaluedHolding {
 	return store.UnvaluedHolding{
-		Date: leftOutDay(12), AccountID: accountID, Account: account, SecurityID: securityID, Security: security,
+		Date: leftOutDay(12), AccountID: accountID, Account: account, AccountCurrency: "CAD", SecurityID: securityID, Security: security,
 		Currency: &currency, Priced: true,
 	}
 }
@@ -129,12 +129,20 @@ func Test_a_holding_is_warned_about_by_the_reason_it_has_no_value(t *testing.T) 
 			want: []string{brokerageNoPriceLine},
 		},
 		{
-			name: "a priced CAD holding that lacks only a rate is warned about for the missing rate",
-			held: pricedIn("CAD", "a-1", "Brokerage", "s-1", "Acme"), want: []string{brokerageCADNoRatesLine},
+			name: "a priced CAD holding in a USD account lacks only a rate",
+			held: inAccountCurrency(pricedIn("CAD", "a-1", "Brokerage", "s-1", "Acme"), "USD"), want: []string{brokerageCADNoRatesLine},
 		},
 		{
-			name: "a priced USD holding that lacks only a rate is warned about for the missing rate",
+			name: "a priced USD holding in a CAD account lacks only a rate",
 			held: pricedIn("USD", "a-1", "Brokerage", "s-1", "Acme"), want: []string{brokerageUSDNoRatesLine},
+		},
+		{
+			name: "a priced CAD holding in a EUR account is not a missing rate",
+			held: inAccountCurrency(pricedIn("CAD", "a-1", "Brokerage", "s-1", "Acme"), "EUR"), want: []string{},
+		},
+		{
+			name: "a priced USD holding in a USD account is not a missing rate",
+			held: inAccountCurrency(pricedIn("USD", "a-1", "Brokerage", "s-1", "Acme"), "USD"), want: []string{},
 		},
 	}
 
@@ -256,7 +264,7 @@ func Test_net_worth_warnings_count_the_securities_an_account_holds_without_a_rat
 }
 
 func Test_net_worth_warnings_name_the_account_currency_the_holding_leaves_out_of(t *testing.T) {
-	n := firstRateOn(15, snapshot(pricedIn("CAD", "a-1", "Brokerage", "s-1", "Acme")))
+	n := firstRateOn(15, snapshot(inAccountCurrency(pricedIn("CAD", "a-1", "Brokerage", "s-1", "Acme"), "USD")))
 
 	assert.Equal(t, []string{`"Brokerage" holds 1 CAD security valued on 2026-03-12, before 2026-03-15, ` +
 		`the first exchange rate in the store, so its USD balance leaves it out`}, document.NetWorthWarnings(n))
@@ -326,6 +334,11 @@ func Test_no_rate_warnings_come_before_the_rate_lines(t *testing.T) {
 		`"Brokerage" holds 1 USD security valued on 2026-03-12, before 2026-03-15, the first exchange rate in the store, so its CAD balance leaves it out`,
 		`USD balances on 2026-03-12, before 2026-03-15, the first exchange rate in the store, are not converted to CAD and are left out of the CAD total; pass --currency native to list them`,
 	}, document.NetWorthWarnings(n))
+}
+
+func inAccountCurrency(held store.UnvaluedHolding, currency string) store.UnvaluedHolding {
+	held.AccountCurrency = currency
+	return held
 }
 
 func withDay(held store.UnvaluedHolding, d int) store.UnvaluedHolding {

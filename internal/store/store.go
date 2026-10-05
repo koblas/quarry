@@ -217,6 +217,7 @@ type NetWorth struct {
 type UnvaluedHolding struct {
 	Date                 time.Time
 	AccountID, Account   string
+	AccountCurrency      string
 	SecurityID, Security string
 	Currency             *string
 	Priced               bool

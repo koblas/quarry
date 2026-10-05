@@ -92,10 +92,24 @@ func Test_net_worth_names_each_holding_its_balance_leaves_out(t *testing.T) {
 
 			got := unvaluedOn(t, st, marchDay(2))
 
-			c.want.Date, c.want.AccountID, c.want.Account = marchDay(2), acctOne, "Chequing"
+			c.want.Date, c.want.AccountID, c.want.Account, c.want.AccountCurrency = marchDay(2), acctOne, "Chequing", "CAD"
 			assert.Equal(t, []store.UnvaluedHolding{c.want}, got)
 		})
 	}
+}
+
+func Test_unvalued_holdings_carry_the_currency_of_their_account(t *testing.T) {
+	t.Parallel()
+	rows := balanceRows(buy(acctTwo, secAcme, 1, marchDay(1), oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)}
+	st := newStoreWith(t, rows)
+
+	got := unvaluedOn(t, st, marchDay(2))
+
+	assert.Equal(t, []store.UnvaluedHolding{{
+		Date: marchDay(2), AccountID: acctTwo, Account: "Brokerage USD", AccountCurrency: "USD",
+		SecurityID: secAcme, Security: "Acme Corp", Currency: new("CAD"), Priced: true,
+	}}, got)
 }
 
 func Test_unvalued_holdings_match_the_view_count_per_account_and_day(t *testing.T) {

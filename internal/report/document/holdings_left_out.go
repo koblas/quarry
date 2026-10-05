@@ -26,9 +26,8 @@ func AccountsWarnings(l report.AccountListing) []string {
 	return unvaluedWarnings(l.Unvalued, l.AsOf, false, l.FirstRate)
 }
 
-// unvaluedWarnings is the lines for rows, holdings left out of a balance: no price per account, then no
-// currency and other currency per account and security, then no rate per account. History counts the days
-// instead of naming one; firstRate is the store's earliest exchange rate, zero when it has none.
+// unvaluedWarnings is the lines for rows, holdings left out of a balance: no price, no currency, other
+// currency, then no rate. History counts the days instead of naming one; firstRate is zero when the store has none.
 func unvaluedWarnings(rows []store.UnvaluedHolding, asOf time.Time, history bool, firstRate time.Time) []string {
 	sorted := slices.SortedFunc(slices.Values(rows), compareLeftOut)
 	lines := noPriceLines(sorted, asOf, history)
@@ -49,18 +48,18 @@ func unvaluedWarnings(rows []store.UnvaluedHolding, asOf time.Time, history bool
 	return append(lines, noRateLines(sorted, asOf, history, firstRate)...)
 }
 
-// noRateLines is one line per account with a priced CAD or USD holding in sorted that only an exchange rate would
-// value. The read leaves out such a holding only when it is priced in the other of the two than its account's.
+// lacksOnlyARate reports whether r is priced in the other of CAD and USD than its CAD or USD account's, so only an
+// exchange rate would value it.
+func lacksOnlyARate(r store.UnvaluedHolding) bool {
+	return r.Priced && report.Convertible(store.Holding{Currency: r.Currency}) &&
+		(r.AccountCurrency == money.CAD.String() || r.AccountCurrency == money.USD.String()) && *r.Currency != r.AccountCurrency
+}
+
+// noRateLines is one line per account with a holding in sorted that lacksOnlyARate.
 func noRateLines(sorted []store.UnvaluedHolding, asOf time.Time, history bool, firstRate time.Time) []string {
 	lines := []string{}
-	for _, group := range byAccount(sorted, func(r store.UnvaluedHolding) bool {
-		return r.Priced && report.Convertible(store.Holding{Currency: r.Currency})
-	}) {
-		account, held := group[0].Account, *group[0].Currency
-		left := money.CAD
-		if held == money.CAD.String() {
-			left = money.USD
-		}
+	for _, group := range byAccount(sorted, lacksOnlyARate) {
+		account, held, left := group[0].Account, *group[0].Currency, group[0].AccountCurrency
 		switch {
 		case firstRate.IsZero():
 			lines = append(lines, fmt.Sprintf("%q holds a %s security and the store has no exchange rates, "+

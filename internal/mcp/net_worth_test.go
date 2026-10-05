@@ -269,6 +269,26 @@ func Test_net_worth_returns_the_report_as_networth_does_with_totals_and_the_rate
 	assert.Contains(t, doc.Warnings[0], "USD balances on 2026-03-31, before 2026-04-01")
 }
 
+func Test_net_worth_warns_that_a_priced_holding_lacks_only_an_exchange_rate(t *testing.T) {
+	asOf := civilDay(2026, time.March, 31)
+	h := newHarness(t, &fakeStore{netWorth: store.NetWorth{
+		Rows: []store.NetWorthRow{
+			{Date: asOf, Type: "brokerage", Currency: "CAD", Accounts: 1, Balance: big.NewInt(100_000), BalanceCAD: big.NewInt(100_000)},
+		},
+		Unvalued: []store.UnvaluedHolding{{
+			Date: asOf, AccountID: "acct-1", Account: "Brokerage", AccountCurrency: "CAD", SecurityID: "sec-1", Security: "Globex",
+			Currency: new("USD"), Priced: true,
+		}},
+		FirstRate:    civilDay(2026, time.April, 1),
+		FirstBalance: civilDay(2026, time.January, 5),
+	}}, nil, atNetWorthToday())
+
+	doc := decodeNetWorth(t, h.netWorth(t, map[string]any{"as_of": "2026-03", "currency": "CAD"}))
+
+	assert.Equal(t, []string{`"Brokerage" holds 1 USD security valued on 2026-03-31, before 2026-04-01, ` +
+		`the first exchange rate in the store, so its CAD balance leaves it out`}, doc.Warnings)
+}
+
 func Test_net_worth_refuses_an_unreadable_config_before_building_the_report(t *testing.T) {
 	stub := &configStub{err: errBadConfig}
 	h := newHarness(t, &fakeStore{}, errFactoryBroke, mcp.WithConfig(stub.load), atNetWorthToday())
