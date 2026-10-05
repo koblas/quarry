@@ -13,7 +13,7 @@ import (
 // windowNow's own day is 2026-09-29; its UTC day is already 2026-09-30.
 
 func Test_resolve_as_of_is_today_when_no_value_is_given(t *testing.T) {
-	got, err := report.ResolveAsOf(nil, windowNow)
+	got, err := report.ResolveAsOf(nil, report.HoldingsNoun, windowNow)
 
 	require.NoError(t, err)
 	assert.Equal(t, day(2026, time.September, 29), got)
@@ -22,7 +22,7 @@ func Test_resolve_as_of_is_today_when_no_value_is_given(t *testing.T) {
 func Test_resolve_as_of_reads_a_value_that_is_given(t *testing.T) {
 	given := "2025-06-15"
 
-	got, err := report.ResolveAsOf(&given, windowNow)
+	got, err := report.ResolveAsOf(&given, report.HoldingsNoun, windowNow)
 
 	require.NoError(t, err)
 	assert.Equal(t, day(2025, time.June, 15), got)
@@ -31,9 +31,9 @@ func Test_resolve_as_of_reads_a_value_that_is_given(t *testing.T) {
 func Test_resolve_as_of_refuses_a_given_empty_string_rather_than_defaulting_to_today(t *testing.T) {
 	given := ""
 
-	_, err := report.ResolveAsOf(&given, windowNow)
+	_, err := report.ResolveAsOf(&given, report.NetWorthNoun, windowNow)
 
-	assert.Equal(t, report.AsOfError{Kind: report.AsOfNotADate, Value: ""}, err)
+	assert.Equal(t, report.AsOfError{Kind: report.AsOfNotADate, Value: "", Noun: report.NetWorthNoun}, err)
 }
 
 func Test_parse_as_of_resolves_a_period_to_its_last_day(t *testing.T) {
@@ -51,7 +51,7 @@ func Test_parse_as_of_resolves_a_period_to_its_last_day(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := report.ParseAsOf(c.value, windowNow)
+			got, err := report.ParseAsOf(c.value, report.HoldingsNoun, windowNow)
 
 			require.NoError(t, err)
 			assert.Equal(t, c.want, got)
@@ -70,7 +70,7 @@ func Test_parse_as_of_resolves_the_current_year_and_month_to_today(t *testing.T)
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := report.ParseAsOf(c.value, windowNow)
+			got, err := report.ParseAsOf(c.value, report.HoldingsNoun, windowNow)
 
 			require.NoError(t, err)
 			assert.Equal(t, day(2026, time.September, 29), got)
@@ -95,7 +95,7 @@ func Test_parse_as_of_refuses_a_day_after_today_and_accepts_today(t *testing.T) 
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := report.ParseAsOf(c.value, windowNow)
+			got, err := report.ParseAsOf(c.value, report.HoldingsNoun, windowNow)
 
 			if !c.refused {
 				require.NoError(t, err)
@@ -111,6 +111,31 @@ func Test_parse_as_of_refuses_a_day_after_today_and_accepts_today(t *testing.T) 
 	}
 }
 
+func Test_parse_as_of_words_an_after_today_refusal_with_the_noun_it_was_given(t *testing.T) {
+	cases := []struct {
+		name string
+		noun string
+		want string
+	}{
+		{name: "holdings", noun: report.HoldingsNoun, want: "--as-of 2027 is after today; holdings are valued up to today only, so pass an earlier --as-of"},
+		{name: "net worth", noun: report.NetWorthNoun, want: "--as-of 2027 is after today; net worth is valued up to today only, so pass an earlier --as-of"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := report.ParseAsOf("2027", c.noun, windowNow)
+
+			assert.EqualError(t, err, c.want)
+		})
+	}
+}
+
+func Test_parse_as_of_words_a_not_a_date_refusal_without_the_noun(t *testing.T) {
+	_, err := report.ParseAsOf("2024-13", report.NetWorthNoun, windowNow)
+
+	assert.EqualError(t, err, `--as-of "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`)
+}
+
 func Test_parse_as_of_refuses_a_value_that_is_not_a_date_as_typed(t *testing.T) {
 	values := []string{
 		"2024-13", "2025-00", "", " 2025", "2025 ", "2025-1", "last spring", "2025-06-15T00:00:00Z", "2025-02-29",
@@ -118,7 +143,7 @@ func Test_parse_as_of_refuses_a_value_that_is_not_a_date_as_typed(t *testing.T) 
 
 	for _, value := range values {
 		t.Run(fmt.Sprintf("%q", value), func(t *testing.T) {
-			_, err := report.ParseAsOf(value, windowNow)
+			_, err := report.ParseAsOf(value, report.HoldingsNoun, windowNow)
 
 			var refusal report.AsOfError
 			require.ErrorAs(t, err, &refusal)

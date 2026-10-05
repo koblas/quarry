@@ -6,6 +6,14 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
+// ValueReads is the part of Store that values what accounts hold: holdings and net worth.
+type ValueReads interface {
+	// Holdings lists what each account holds of each security on params.AsOf, with its value.
+	Holdings(ctx context.Context, params store.HoldingsParams) (store.Holdings, error)
+	// NetWorth lists the balance of each account type and currency on each of params.Dates.
+	NetWorth(ctx context.Context, params store.NetWorthParams) (store.NetWorth, error)
+}
+
 // Store is the read side of quarry's store: each method opens the store
 // read-only, answers, and closes it again.
 type Store interface {
@@ -23,8 +31,7 @@ type Store interface {
 	// Search lists the newest params.Limit transactions matching params, with the full match count and the
 	// span of the store's transactions (of the named accounts' when params.AccountIDs is set).
 	Search(ctx context.Context, params store.SearchParams) (store.Search, error)
-	// Holdings lists what each account holds of each security on params.AsOf, with its value.
-	Holdings(ctx context.Context, params store.HoldingsParams) (store.Holdings, error)
+	ValueReads
 	// Findings lists every finding in the store with its items.
 	Findings(ctx context.Context) (store.FindingList, error)
 	// Schema describes what the store holds: its tables and views, accounts, categories and transaction dates.

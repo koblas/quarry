@@ -33,6 +33,9 @@ reports (quarry accounts marks them "not in reports") and accounts that use
 Quicken's linked account tracking (marked "linked tracking"). Closed
 accounts are included.
 
+Margin interest and other investment expenses Quicken puts in an expense
+category count as spending.
+
 The period runs from --since to --until, both included; a bare year or month
 covers all of it (--since 2024 --until 2024 is the whole of 2024). Without
 them it is this year up to today, so future-dated transactions are left out

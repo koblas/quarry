@@ -16,10 +16,7 @@ import (
 
 const referencesDir = "plugin/skills/quarry/references"
 
-var (
-	findingTypeLine   = regexp.MustCompile(`^ {2}([a-z][a-z-]*) {2,}\S`)
-	phase4ViewPattern = regexp.MustCompile(`\bv_(?:balances_daily|net_worth)\b`)
-)
+var findingTypeLine = regexp.MustCompile(`^ {2}([a-z][a-z-]*) {2,}\S`)
 
 const findingsHelpTypesHeading = "quarry looks for:"
 
@@ -52,9 +49,9 @@ func findingTypeBullets(types []string) []string {
 	return bullets
 }
 
-// phase4OrQuickenNames is the Phase 4 views and Quicken Z-table names that text mentions.
-func phase4OrQuickenNames(text string) []string {
-	return append(phase4ViewPattern.FindAllString(text, -1), zTableName.FindAllString(text, -1)...)
+// quickenTableNames is the Quicken Z-table names that text mentions.
+func quickenTableNames(text string) []string {
+	return zTableName.FindAllString(text, -1)
 }
 
 func Test_reference_files_state_their_job(t *testing.T) {
@@ -81,6 +78,7 @@ func Test_reference_files_state_their_job(t *testing.T) {
 		{"search.md", []string{"quarry search", "transfer", "excluded", "native", "--limit"}},
 		{"findings.md", append(findingTypeBullets(findingTypesInHelp(t)), []string{
 			"in Quicken, then `quarry sync`", "findings.ignore", "quarry findings --csv", "only when the user asks",
+			"compare register entries only, not buys, sells, dividends or other investment transactions",
 		}...)},
 	}
 
@@ -95,16 +93,14 @@ func Test_reference_files_state_their_job(t *testing.T) {
 	}
 }
 
-func Test_references_name_scan_flags_crafted_phase_4_and_quicken_text(t *testing.T) {
+func Test_references_name_scan_flags_crafted_quicken_text(t *testing.T) {
 	cases := []struct{ name, text, want string }{
-		{"a Phase 4 view", "Read `v_net_worth` for the total.", "v_net_worth"},
-		{"another Phase 4 view", "SELECT * FROM v_balances_daily", "v_balances_daily"},
 		{"a Quicken table", "join ZTRANSACTION on it", "ZTRANSACTION"},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, []string{c.want}, phase4OrQuickenNames(c.text))
+			assert.Equal(t, []string{c.want}, quickenTableNames(c.text))
 		})
 	}
 }
@@ -152,13 +148,13 @@ func Test_references_name_no_mcp_tool(t *testing.T) {
 	assert.Empty(t, mcpToolSpans(referenceSources(t), tools))
 }
 
-func Test_references_name_no_phase_4_view_or_quicken_table(t *testing.T) {
+func Test_references_name_no_quicken_table(t *testing.T) {
 	sources := skillDriftSources(t)
 	require.Greater(t, len(sources), 2)
 
 	for _, source := range sources {
 		t.Run(source.name, func(t *testing.T) {
-			assert.Empty(t, phase4OrQuickenNames(source.text))
+			assert.Empty(t, quickenTableNames(source.text))
 		})
 	}
 }

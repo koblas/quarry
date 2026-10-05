@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math/big"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ var asOf = time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
 func closedAccounts(n int) store.AccountList {
 	list := store.AccountList{AsOf: asOf}
 	for range n {
-		list.Accounts = append(list.Accounts, store.AccountBalance{ID: "acct", Name: "Old", Type: "chequing", Currency: "CAD", Closed: true, Active: true, Balance: new(int64(0))})
+		list.Accounts = append(list.Accounts, store.AccountBalance{ID: "acct", Name: "Old", Type: "chequing", Currency: "CAD", Closed: true, Active: true, Balance: big.NewInt(0), Cash: big.NewInt(0)})
 	}
 	return list
 }
@@ -45,7 +46,7 @@ func executeAccounts(t *testing.T, fake fakeReportStore, stdout, stderr io.Write
 
 func Test_accounts_all_closed_note(t *testing.T) {
 	const header = "Account  Type  Currency  Balance  Status\n"
-	open := store.AccountBalance{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true, Balance: new(int64(100))}
+	open := store.AccountBalance{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true, Balance: big.NewInt(100), Cash: big.NewInt(100)}
 	mixed := closedAccounts(2)
 	mixed.Accounts = append(mixed.Accounts, open)
 	cases := []struct {
@@ -173,4 +174,41 @@ func Test_status_and_accounts_take_no_arguments(t *testing.T) {
 			assert.Empty(t, stdout.String())
 		})
 	}
+}
+
+// leftOutAccounts is a listing whose brokerage holds one unpriced security.
+func leftOutAccounts() fakeReportStore {
+	return fakeReportStore{accounts: store.AccountList{
+		AsOf: asOf,
+		Accounts: []store.AccountBalance{
+			{
+				ID: "acct-1", Name: "Brokerage", Type: store.AccountTypeBrokerage, Currency: "CAD", Active: true,
+				Balance: big.NewInt(0), Cash: big.NewInt(0), HoldingsValue: big.NewInt(0), BalanceCAD: big.NewInt(0),
+			},
+		},
+		Unvalued: []store.UnvaluedHolding{
+			{Date: asOf, AccountID: "acct-1", Account: "Brokerage", SecurityID: "sec-1", Security: "Acme", Currency: new("CAD")},
+		},
+	}}
+}
+
+const leftOutAccountsWarning = `"Brokerage" holds 1 security with no price on or before 2026-09-29, ` +
+	`so its balance leaves it out; enter a price in Quicken, then run quarry sync`
+
+func Test_accounts_writes_the_holdings_warnings_to_stderr_after_the_listing(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeAccounts(t, leftOutAccounts(), &stdout, &stderr)
+
+	require.NoError(t, err)
+	assert.Equal(t, stderrOf([]string{leftOutAccountsWarning}), stderr.String())
+}
+
+func Test_accounts_writes_no_holdings_warning_when_stdout_fails(t *testing.T) {
+	var stderr bytes.Buffer
+
+	err := executeAccounts(t, leftOutAccounts(), failingWriter{err: errNoSpace}, &stderr)
+
+	require.ErrorIs(t, err, errNoSpace)
+	assert.Empty(t, stderr.String())
 }

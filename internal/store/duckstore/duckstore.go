@@ -22,7 +22,7 @@ import (
 const FileName = "quarry.duckdb"
 
 // FormatVersion is the store format this build of quarry writes and reads.
-const FormatVersion = 7
+const FormatVersion = 8
 
 // develVersion is the quarry_version recorded when no build version is known.
 const develVersion = "(devel)"
@@ -451,7 +451,7 @@ func removePartial(path string) {
 // build loads schema, views, rows, then findings merged with carried. It returns the state of each
 // finding it recorded. finishBuild completes the file; until it appends store_info the file is not a store.
 func build(ctx context.Context, db DB, rows store.Rows, carried history, builtAt time.Time) ([]finding.State, error) {
-	if _, err := db.Exec(ctx, schemaDDL+accountBalancesViewDDL()+cashFlowViewDDL()+spendingViewDDL+holdingsViewDDL()); err != nil {
+	if _, err := db.Exec(ctx, schemaDDL+cashFlowViewDDL()+spendingViewDDL+holdingsViewDDL()+balancesDailyViewDDL()+accountBalancesViewDDL()+netWorthViewDDL()); err != nil {
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
 	if err := loadRows(ctx, db, rows, carried); err != nil {
@@ -604,6 +604,7 @@ func transactionRows(transactions []store.Transaction) ([][]any, error) {
 		out[i] = []any{
 			t.ID, t.SourceID, t.AccountID, t.Date, nullableStr(t.PayeeID), nullableStr(t.Memo),
 			amount, t.Currency, t.Status, nullableStr(t.ChequeNumber), t.ExcludedFromReports, nullablePtrTime(t.PostedDate),
+			nullableStr(t.InvestmentTransactionID),
 		}
 	}
 	return out, nil

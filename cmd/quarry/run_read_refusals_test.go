@@ -50,6 +50,7 @@ func Test_run_read_commands_refuse_when_there_is_no_store(t *testing.T) {
 		{name: "status", args: []string{"status"}},
 		{name: "accounts", args: []string{"accounts"}},
 		{name: "holdings", args: []string{"holdings"}},
+		{name: "networth", args: []string{"networth"}},
 		{name: "spend", args: []string{"spend"}},
 		{name: "cashflow", args: []string{"cashflow"}},
 		{name: "recurring", args: []string{"recurring"}},
@@ -100,6 +101,7 @@ func Test_run_read_commands_refuse_a_bad_reporting_currency(t *testing.T) {
 		{name: "anomalies", config: `reporting.currency = "EUR"`, args: []string{"anomalies"}, want: refusal(`"EUR"`)},
 		{name: "accounts", config: `reporting.currency = "EUR"`, args: []string{"accounts"}, want: refusal(`"EUR"`)},
 		{name: "holdings", config: `reporting.currency = "EUR"`, args: []string{"holdings"}, want: refusal(`"EUR"`)},
+		{name: "networth", config: `reporting.currency = "EUR"`, args: []string{"networth"}, want: refusal(`"EUR"`)},
 		{name: "an empty string", config: `reporting.currency = ""`, args: []string{"spend"}, want: refusal(`""`)},
 		{name: "a number", config: `reporting.currency = 12`, args: []string{"spend"}, want: refusal("12")},
 		{name: "a boolean", config: `reporting.currency = true`, args: []string{"spend"}, want: refusal("true")},
@@ -169,6 +171,10 @@ func Test_run_holdings_refuses_a_store_built_by_an_older_quarry(t *testing.T) {
 	assertRefusesAnOlderStore(t, "holdings")
 }
 
+func Test_run_networth_refuses_a_store_built_by_an_older_quarry(t *testing.T) {
+	assertRefusesAnOlderStore(t, "networth")
+}
+
 func Test_run_status_refuses_a_store_whose_store_info_has_no_row(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -226,6 +232,7 @@ func Test_run_read_commands_report_an_interrupt_during_the_open(t *testing.T) {
 		{name: "status", args: []string{"status"}, wantStderr: "quarry: status interrupted\n"},
 		{name: "accounts", args: []string{"accounts"}, wantStderr: "quarry: accounts interrupted\n"},
 		{name: "holdings", args: []string{"holdings"}, wantStderr: "quarry: holdings interrupted\n"},
+		{name: "networth", args: []string{"networth"}, wantStderr: "quarry: networth interrupted\n"},
 		{name: "spend", args: []string{"spend"}, wantStderr: "quarry: spend interrupted\n"},
 		{name: "cashflow", args: []string{"cashflow"}, wantStderr: "quarry: cashflow interrupted\n"},
 		{name: "recurring", args: []string{"recurring"}, wantStderr: "quarry: recurring interrupted\n"},

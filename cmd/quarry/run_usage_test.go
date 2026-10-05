@@ -209,7 +209,7 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 }
 
 func Test_run_read_commands_need_a_value_for_the_currency_flag(t *testing.T) {
-	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings"} {
+	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth"} {
 		t.Run(command, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
 			var stdout, stderr bytes.Buffer
@@ -255,6 +255,7 @@ func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
 		{name: "status", args: []string{"status", "--bogus"}, wantStderr: "quarry: unknown flag: --bogus; Run 'quarry status --help' for usage.\n"},
 		{name: "accounts", args: []string{"accounts", "--bogus"}, wantStderr: "quarry: unknown flag: --bogus; Run 'quarry accounts --help' for usage.\n"},
 		{name: "holdings", args: []string{"holdings", "--bogus"}, wantStderr: "quarry: unknown flag: --bogus; Run 'quarry holdings --help' for usage.\n"},
+		{name: "networth", args: []string{"networth", "--bogus"}, wantStderr: "quarry: unknown flag: --bogus; Run 'quarry networth --help' for usage.\n"},
 		{name: "spend", args: []string{"spend", "--bogus"}, wantStderr: "quarry: unknown flag: --bogus; Run 'quarry spend --help' for usage.\n"},
 		{
 			name: "cashflow", args: []string{"cashflow", "--bogus"},

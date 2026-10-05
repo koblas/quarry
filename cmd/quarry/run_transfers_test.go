@@ -143,56 +143,6 @@ func Test_run_reports_no_transfers_for_a_file_with_no_transactions(t *testing.T)
 	), stdout.String())
 }
 
-func Test_run_keeps_investment_transactions_out_of_the_cash_transactions_table(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-
-	b := v9fixture.NewBuilder()
-	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-
-	buyTxn := b.InvestmentTransaction(v9fixture.TransactionRow{
-		Type: new(int64(3)), Account: brokeragePK, Amount: "-400.00", PostedDate: &day,
-	})
-	b.Entry(v9fixture.EntryRow{Parent: buyTxn, Amount: "-400.00"})
-	dividendTxn := b.InvestmentTransaction(v9fixture.TransactionRow{
-		Type: new(int64(10)), Account: brokeragePK, Amount: "12.00", PostedDate: &day,
-	})
-	b.Entry(v9fixture.EntryRow{Parent: dividendTxn, Amount: "12.00"})
-	contributionTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-1000.00", PostedDate: &day})
-	b.Entry(v9fixture.EntryRow{Parent: contributionTxn, Amount: "-1000.00", QuickenID: 5005, Transfer: "6006"})
-	depositTxn := b.Transaction(v9fixture.TransactionRow{Account: brokeragePK, Amount: "1000.00", PostedDate: &day})
-	b.Entry(v9fixture.EntryRow{Parent: depositTxn, Amount: "1000.00", QuickenID: 6006, Transfer: "5005"})
-
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
-
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
-
-	require.Equal(t, 0, exitCode)
-	require.Empty(t, stderr.String())
-	storePath := storePathUnder(home)
-	require.Equal(t, syncBlock(t, home, bundle.Dir, 2,
-		[2]string{"Store", abbreviated(t, storePath, home)},
-		[2]string{"Rows", "2 transactions, 2 splits, 1 transfer, 0 payees, 0 categories, 0 tags; 2 investment transactions, 0 securities, 0 prices"},
-		[2]string{"Balances", "no accounts to check; 1 never reconciled and 1 investment account not checked"},
-		[2]string{"Splits", "all 2 transactions equal the sum of their splits"},
-		[2]string{"Shares", "no holdings to check"},
-		[2]string{"Transfers", "1 paired"},
-		[2]string{"Findings", "none open"},
-		[2]string{"Rates", fakeRatesText},
-	), stdout.String())
-
-	db, err := duckdb.OpenReadOnly(t.Context(), storePath)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	assert.Equal(t, map[string]string{
-		fmt.Sprintf("txn-%d", contributionTxn): fmt.Sprintf("acct-%d", chequingPK),
-		fmt.Sprintf("txn-%d", depositTxn):      fmt.Sprintf("acct-%d", brokeragePK),
-	}, stringMap(t, db, "SELECT id, account_id FROM transactions"))
-}
-
 func Test_run_lists_one_sided_transfers_only_as_findings_on_a_successful_sync(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

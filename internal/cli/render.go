@@ -220,7 +220,7 @@ func balancesExtrasPhrase(c balanceCounts) string {
 		extras = append(extras, humanize.Count(c.NeverReconciled, "never reconciled", "never reconciled"))
 	}
 	if c.InvestmentAccounts > 0 {
-		extras = append(extras, humanize.Count(c.InvestmentAccounts, "investment account not checked", "investment accounts not checked"))
+		extras = append(extras, humanize.Count(c.InvestmentAccounts, "investment account's cash not checked", "investment accounts' cash not checked"))
 	}
 	if len(extras) == 0 {
 		return ""

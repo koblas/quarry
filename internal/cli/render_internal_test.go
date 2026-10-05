@@ -404,20 +404,37 @@ func Test_balancesPhrase(t *testing.T) {
 		{name: "one account matches", counts: balanceCounts{Checked: 1}, want: "1 account matches Quicken's last reconciled balance"},
 		{name: "many accounts match, thousands-grouped", counts: balanceCounts{Checked: 1000}, want: "1,000 accounts match Quicken's last reconciled balance"},
 		{name: "one never reconciled", counts: balanceCounts{NeverReconciled: 1}, want: "no accounts to check; 1 never reconciled"},
-		{name: "one investment account", counts: balanceCounts{InvestmentAccounts: 1}, want: "no accounts to check; 1 investment account not checked"},
+		{name: "one investment account", counts: balanceCounts{InvestmentAccounts: 1}, want: "no accounts to check; 1 investment account's cash not checked"},
 		{
 			name: "never reconciled and investment accounts joined", counts: balanceCounts{NeverReconciled: 3, InvestmentAccounts: 4},
-			want: "no accounts to check; 3 never reconciled and 4 investment accounts not checked",
+			want: "no accounts to check; 3 never reconciled and 4 investment accounts' cash not checked",
 		},
 		{
 			name: "checked, never reconciled and investment accounts", counts: balanceCounts{Checked: 35, NeverReconciled: 3, InvestmentAccounts: 4},
-			want: "35 accounts match Quicken's last reconciled balance; 3 never reconciled and 4 investment accounts not checked",
+			want: "35 accounts match Quicken's last reconciled balance; 3 never reconciled and 4 investment accounts' cash not checked",
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			assert.Equal(t, c.want, balancesPhrase(c.counts))
+		})
+	}
+}
+
+func Test_balancesDifferPhrase_counts_investment_accounts_after_the_differing_accounts(t *testing.T) {
+	cases := []struct {
+		name  string
+		check store.BalanceCheck
+		want  string
+	}{
+		{name: "one investment account", check: store.BalanceCheck{Checked: 2, InvestmentAccounts: 1}, want: "DIFFER for 0 of 2 accounts; 1 investment account's cash not checked"},
+		{name: "several investment accounts", check: store.BalanceCheck{Checked: 2, InvestmentAccounts: 3}, want: "DIFFER for 0 of 2 accounts; 3 investment accounts' cash not checked"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, balancesDifferPhrase(c.check))
 		})
 	}
 }

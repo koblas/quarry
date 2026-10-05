@@ -67,8 +67,8 @@ func Test_run_sql_views_carry_each_amount_converted_at_its_dates_rate(t *testing
 	assert.Empty(t, stderr.String())
 	assert.Equal(t, ""+
 		"source,id,native,in_cad,in_usd,cad_type,usd_type\n"+
-		"balance,acct-cad,-5.00,-5.00,-3.13,\"DECIMAL(18,2)\",\"DECIMAL(18,2)\"\n"+
-		"balance,acct-usd,-7.00,-11.20,-7.00,\"DECIMAL(18,2)\",\"DECIMAL(18,2)\"\n"+
+		"balance,acct-cad,-5.00,-5.00,-3.13,\"DECIMAL(38,2)\",\"DECIMAL(38,2)\"\n"+
+		"balance,acct-usd,-7.00,-11.20,-7.00,\"DECIMAL(38,2)\",\"DECIMAL(38,2)\"\n"+
 		"cash_flow,split-c0,-5.00,-5.00,,\"DECIMAL(18,2)\",\"DECIMAL(18,2)\"\n"+
 		"cash_flow,split-c1,-0.20,-0.20,-0.13,\"DECIMAL(18,2)\",\"DECIMAL(18,2)\"\n"+
 		"cash_flow,split-c2,0.20,0.20,0.13,\"DECIMAL(18,2)\",\"DECIMAL(18,2)\"\n"+

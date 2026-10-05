@@ -18,6 +18,8 @@ const (
 	WindowSinceAfterToday
 	// WindowChargeSinceAfterToday is WindowSinceAfterToday for Command, which lists charges up to today only.
 	WindowChargeSinceAfterToday
+	// WindowNetWorthSinceAfterToday is WindowSinceAfterToday for a net worth history, which is valued up to today only.
+	WindowNetWorthSinceAfterToday
 	// WindowSinceAfterUntil: Value, the since, is after Other, the until.
 	WindowSinceAfterUntil
 	// WindowUntilBeforeDefault: Value, the until, is before DefaultSince, the since taken when none was given.
@@ -46,6 +48,8 @@ func (e WindowError) Error() string {
 		return fmt.Sprintf("%s %s is after today; pass --until to include future-dated transactions", flag, e.Value)
 	case WindowChargeSinceAfterToday:
 		return fmt.Sprintf("%s %s is after today; %s lists charges up to today only, so pass an earlier %s", flag, e.Value, e.Command, flag)
+	case WindowNetWorthSinceAfterToday:
+		return fmt.Sprintf("%s %s is after today; net worth is valued up to today only, so pass an earlier %s", flag, e.Value, flag)
 	case WindowSinceAfterUntil:
 		return fmt.Sprintf("%s %s is after --%s %s", flag, e.Value, boundUntil, e.Other)
 	case WindowUntilBeforeDefault:
@@ -104,10 +108,56 @@ func ParseChargeWindow(command string, since, until *string, now time.Time) (sto
 
 // parseWindow is ParseWindow with the refusal for a future since given by futureSince and command.
 func parseWindow(since, until *string, now time.Time, futureSince WindowErrorKind, command string) (store.Window, error) {
-	window := DefaultWindow(now)
-	today := window.Until
-	defaultSince := window.Since
+	window, err := resolveBounds(since, until, now)
+	if err != nil {
+		return store.Window{}, err
+	}
+	today, defaultSince := Today(now), DefaultWindow(now).Since
 
+	switch {
+	case since != nil && until == nil && window.Since.After(today):
+		return store.Window{}, WindowError{Kind: futureSince, Bound: boundSince, Value: *since, Command: command}
+	case since != nil && until != nil && window.Since.After(window.Until):
+		return store.Window{}, WindowError{Kind: WindowSinceAfterUntil, Bound: boundSince, Value: *since, Other: *until}
+	case since == nil && until != nil && window.Until.Before(defaultSince):
+		return store.Window{}, WindowError{
+			Kind: WindowUntilBeforeDefault, Bound: boundUntil, Value: *until, DefaultSince: defaultSince.Format(time.DateOnly),
+		}
+	}
+	return window, nil
+}
+
+// ParseMonthEndWindow resolves since and until into the window a net worth history lists month ends of,
+// with the until clamped to today. It returns the WindowError ParseWindow does for a value that is not a
+// date, a since after the until and an until before the default since, and WindowNetWorthSinceAfterToday
+// for a since after today, with or without an until.
+func ParseMonthEndWindow(since, until *string, now time.Time) (store.Window, error) {
+	window, err := resolveBounds(since, until, now)
+	if err != nil {
+		return store.Window{}, err
+	}
+	today, defaultSince := Today(now), DefaultWindow(now).Since
+
+	switch {
+	case since != nil && until != nil && window.Since.After(window.Until):
+		return store.Window{}, WindowError{Kind: WindowSinceAfterUntil, Bound: boundSince, Value: *since, Other: *until}
+	case since == nil && until != nil && window.Until.Before(defaultSince):
+		return store.Window{}, WindowError{
+			Kind: WindowUntilBeforeDefault, Bound: boundUntil, Value: *until, DefaultSince: defaultSince.Format(time.DateOnly),
+		}
+	case since != nil && window.Since.After(today):
+		return store.Window{}, WindowError{Kind: WindowNetWorthSinceAfterToday, Bound: boundSince, Value: *since}
+	}
+	if window.Until.After(today) {
+		window.Until = today
+	}
+	return window, nil
+}
+
+// resolveBounds is DefaultWindow with each bound given replaced by the first day (since) or last day (until)
+// of the period it names; it returns a WindowError for a value that is not a date.
+func resolveBounds(since, until *string, now time.Time) (store.Window, error) {
+	window := DefaultWindow(now)
 	if since != nil {
 		first, _, err := parseDateBound(boundSince, *since)
 		if err != nil {
@@ -122,17 +172,6 @@ func parseWindow(since, until *string, now time.Time, futureSince WindowErrorKin
 			return store.Window{}, err
 		}
 		window.Until = last
-	}
-
-	switch {
-	case since != nil && until == nil && window.Since.After(today):
-		return store.Window{}, WindowError{Kind: futureSince, Bound: boundSince, Value: *since, Command: command}
-	case since != nil && until != nil && window.Since.After(window.Until):
-		return store.Window{}, WindowError{Kind: WindowSinceAfterUntil, Bound: boundSince, Value: *since, Other: *until}
-	case since == nil && until != nil && window.Until.Before(defaultSince):
-		return store.Window{}, WindowError{
-			Kind: WindowUntilBeforeDefault, Bound: boundUntil, Value: *until, DefaultSince: defaultSince.Format(time.DateOnly),
-		}
 	}
 	return window, nil
 }

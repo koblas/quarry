@@ -87,6 +87,45 @@ func Test_run_accounts_warns_of_the_missing_rate_and_shows_no_rate_in_both_forms
 	}
 }
 
+func Test_run_accounts_warns_of_the_missing_rate_for_an_investment_account_in_both_forms(t *testing.T) {
+	cases := []struct {
+		name     string
+		accounts []store.Account
+		rates    []store.Rate
+		args     []string
+		want     string
+	}{
+		{
+			name:     "a USD brokerage beside CAD chequing with no rates in CAD",
+			accounts: []store.Account{chequingAccount("acct-cad", 1), brokerageAccount("acct-brk", 2, "USD")},
+			want:     noRatesCADWarning,
+		},
+		{
+			name:     "a CAD brokerage beside USD chequing with no rates in USD",
+			accounts: []store.Account{usdChequingAccount("acct-usd", 1), brokerageAccount("acct-brk", 2, "CAD")},
+			args:     []string{"--currency", "USD"}, want: noRatesUSDWarning,
+		},
+		{
+			name:     "a USD brokerage beside CAD chequing with rates only after today",
+			accounts: []store.Account{chequingAccount("acct-cad", 1), brokerageAccount("acct-brk", 2, "USD")},
+			rates:    []store.Rate{futureRate}, want: futureCADWarning,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			seedAccounts(t, c.accounts, c.rates...)
+
+			got := runAccountsBothForms(t, c.args...)
+
+			assert.Equal(t, "quarry: warning: "+c.want+"\n", got.textErr)
+			assert.Contains(t, got.text, "no rate\n")
+			assert.Equal(t, []string{c.want}, warningsOf(t, got.json))
+			assert.Equal(t, "quarry: warning: "+c.want+"\n", got.jsonErr)
+		})
+	}
+}
+
 func Test_accounts_warn_of_no_rates_only_when_a_balance_needed_one(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -96,20 +135,6 @@ func Test_accounts_warn_of_no_rates_only_when_a_balance_needed_one(t *testing.T)
 	}{
 		{name: "an all-CAD store with no rates in CAD", accounts: []store.Account{chequingAccount("acct-cad", 1)}},
 		{name: "an all-USD store with no rates in USD", accounts: []store.Account{usdChequingAccount("acct-usd", 1)}, args: []string{"--currency", "USD"}},
-		{
-			name:     "a not valued USD account beside CAD ones with no rates in CAD",
-			accounts: []store.Account{chequingAccount("acct-cad", 1), brokerageAccount("acct-brk", 2, "USD")},
-		},
-		{
-			name:     "a not valued CAD account beside USD ones with no rates in USD",
-			accounts: []store.Account{usdChequingAccount("acct-usd", 1), brokerageAccount("acct-brk", 2, "CAD")},
-			args:     []string{"--currency", "USD"},
-		},
-		{
-			name:     "a not valued cross-currency account with rates only after today",
-			accounts: []store.Account{chequingAccount("acct-cad", 1), brokerageAccount("acct-brk", 2, "USD")},
-			rates:    []store.Rate{futureRate},
-		},
 		{name: "native with no rates", accounts: []store.Account{usdChequingAccount("acct-usd", 1)}, args: []string{"--currency", "native"}},
 		{
 			name:     "rates on or before today, in CAD",
@@ -172,18 +197,17 @@ func Test_run_accounts_all_converts_a_closed_account_like_any_other(t *testing.T
 	assert.Equal(t, "Account      Type      Currency  Balance  In CAD  Status\nUS Chequing  chequing  USD          0.00    0.00  closed\n", stdout.String())
 }
 
-func Test_run_accounts_all_pads_a_blank_cell_so_a_closed_Status_follows_it_in_the_column(t *testing.T) {
-	seedAccounts(t, []store.Account{chequingAccount("acct-cad", 1), closedAccount(brokerageAccount("acct-brk", 2, "USD"))}, pastRate)
+func Test_run_accounts_all_pads_a_no_rate_cell_so_a_closed_Status_follows_it_in_the_column(t *testing.T) {
+	seedAccounts(t, []store.Account{chequingAccount("acct-cad", 1), closedAccount(brokerageAccount("acct-brk", 2, "USD"))})
 	var stdout, stderr bytes.Buffer
 
 	exitCode := run(context.Background(), []string{"accounts", "--all"}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
 	assert.Equal(t, ""+
-		"Account    Type       Currency     Balance  In CAD  Status\n"+
-		"Brokerage  brokerage  USD       not valued          closed\n"+
-		"Chequing   chequing   CAD             0.00    0.00\n", stdout.String())
+		"Account    Type       Currency  Balance   In CAD  Status\n"+
+		"Brokerage  brokerage  USD          0.00  no rate  closed\n"+
+		"Chequing   chequing   CAD          0.00     0.00\n", stdout.String())
 }
 
 func Test_run_accounts_lists_the_config_warning_before_the_no_rates_warning_in_both_forms(t *testing.T) {

@@ -17,7 +17,7 @@ const holdingsTwin = "holdings"
 // holdings lists the holdings on the call's day in its accounts and currency, as holdings --json does,
 // but at most maxRows of them; totals count every holding and a cut adds a warning.
 func (s *Server) holdings(ctx context.Context, in holdingsInput) (any, error) {
-	asOf, err := report.ResolveAsOf(in.AsOf, s.now())
+	asOf, err := report.ResolveAsOf(in.AsOf, report.HoldingsNoun, s.now())
 	if err != nil {
 		return nil, asOfRefusal(err)
 	}
@@ -58,8 +58,8 @@ type asOfRefusedError string
 
 func (e asOfRefusedError) Error() string { return string(e) }
 
-// asOfRefusal is err, an as_of refusal, worded for the model: the argument is named as_of, and the stderr
-// line is the class line, which never carries the caller's value. Any other error comes back as is.
+// asOfRefusal is err, an as_of refusal, worded for the model; its stderr line is the class line, which never
+// carries the caller's value. Any other error comes back as is.
 func asOfRefusal(err error) error {
 	refusal, ok := errors.AsType[report.AsOfError](err)
 	if !ok {
@@ -73,7 +73,7 @@ func asOfRefusal(err error) error {
 func asOfWording(refusal report.AsOfError) string {
 	switch refusal.Kind {
 	case report.AsOfAfterToday:
-		return "as_of " + refusal.Value + " is after today; holdings are valued up to today only, so pass an earlier as_of"
+		return "as_of " + refusal.Value + " is after today; " + refusal.Noun + " valued up to today only, so pass an earlier as_of"
 	case report.AsOfNotADate:
 	}
 	return "as_of " + strconv.Quote(refusal.Value) + " is not a date; use YYYY, YYYY-MM or YYYY-MM-DD"

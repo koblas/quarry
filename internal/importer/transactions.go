@@ -22,6 +22,22 @@ func coreDataToDate(seconds float64) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 
+// transactionIDFormat renders a transactions row's quarry id from its ZTRANSACTION.Z_PK.
+const transactionIDFormat = "txn-%d"
+
+// reconcileStatus names a ZRECONCILESTATUS code (NULL is uncleared); false for a code quarry does not map.
+func reconcileStatus(code sql.NullInt64) (string, bool) {
+	switch {
+	case !code.Valid || code.Int64 == 0:
+		return "uncleared", true
+	case code.Int64 == 1:
+		return "cleared", true
+	case code.Int64 == 2:
+		return "reconciled", true
+	}
+	return "", false
+}
+
 // dateLayout is the refusal subject date format ("2024-03-02").
 const dateLayout = "2006-01-02"
 
@@ -127,20 +143,13 @@ func mapTransactions(
 		case moneyOK, moneyNotANumber: // moneyNotANumber returned above
 		}
 
-		var statusStr string
-		switch {
-		case !status.Valid || status.Int64 == 0:
-			statusStr = "uncleared"
-		case status.Int64 == 1:
-			statusStr = "cleared"
-		case status.Int64 == 2:
-			statusStr = "reconciled"
-		default:
+		statusStr, ok := reconcileStatus(status)
+		if !ok {
 			off.add(offender{class: classTransactionStatus, reason: reasonTransactionStatus(dateStr, acct.Name, status.Int64), dated: true, date: date, account: acct.Name, sourceID: pk})
 			return nil
 		}
 
-		id := fmt.Sprintf("txn-%d", pk)
+		id := fmt.Sprintf(transactionIDFormat, pk)
 		txn := store.Transaction{
 			ID: id, SourceID: pk, AccountID: acct.ID, Date: date,
 			Amount: cents, Currency: acct.Currency, Status: statusStr, ExcludedFromReports: excluded,

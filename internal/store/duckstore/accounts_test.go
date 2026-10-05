@@ -2,6 +2,7 @@ package duckstore_test
 
 import (
 	"errors"
+	"math/big"
 	"os"
 	"testing"
 	"time"
@@ -71,11 +72,11 @@ func Test_accounts_reads_each_accounts_balance(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []store.AccountBalance{
-		{Account: chequing, Balance: new(int64(123956))},
-		{Account: rrsp, Balance: nil},
-		{Account: savings, Balance: new(int64(0))},
-		{Account: usChequing, Balance: new(int64(800))},
-		{Account: visa, Balance: new(int64(-2500))},
+		{Account: chequing, Balance: big.NewInt(123956), Cash: big.NewInt(123956)},
+		{Account: rrsp, Balance: big.NewInt(100000), Cash: big.NewInt(100000), HoldingsValue: big.NewInt(0)},
+		{Account: savings, Balance: big.NewInt(0), Cash: big.NewInt(0)},
+		{Account: usChequing, Balance: big.NewInt(800), Cash: big.NewInt(800)},
+		{Account: visa, Balance: big.NewInt(-2500), Cash: big.NewInt(-2500)},
 	}, ownBalances(got.Accounts))
 }
 
@@ -92,9 +93,9 @@ func Test_accounts_reads_which_accounts_use_linked_account_tracking(t *testing.T
 
 	require.NoError(t, err)
 	assert.Equal(t, []store.AccountBalance{
-		{Account: both, Balance: new(int64(0))},
-		{Account: chequing, Balance: new(int64(0))},
-		{Account: linked, Balance: nil},
+		{Account: both, Balance: big.NewInt(0), Cash: big.NewInt(0)},
+		{Account: chequing, Balance: big.NewInt(0), Cash: big.NewInt(0)},
+		{Account: linked, Balance: big.NewInt(0), Cash: big.NewInt(0), HoldingsValue: big.NewInt(0)},
 	}, ownBalances(got.Accounts))
 }
 
@@ -116,8 +117,8 @@ func Test_accounts_counts_transactions_dated_today_but_not_tomorrow(t *testing.T
 	require.NoError(t, err)
 	require.Len(t, got.Accounts, 2)
 	// Past midnight, as_of is tomorrow and counts the tomorrow rows too.
-	want := map[time.Time][]*int64{today: {new(int64(100)), new(int64(0))}, tomorrow: {new(int64(1100)), new(int64(700))}}
-	balances := []*int64{got.Accounts[0].Balance, got.Accounts[1].Balance}
+	want := map[time.Time][]*big.Int{today: {big.NewInt(100), big.NewInt(0)}, tomorrow: {big.NewInt(1100), big.NewInt(700)}}
+	balances := []*big.Int{got.Accounts[0].Balance, got.Accounts[1].Balance}
 	assert.Equal(t, want[got.AsOf], balances)
 }
 

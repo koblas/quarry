@@ -32,6 +32,8 @@ func windowWording(refusal report.WindowError) string {
 		return bound + " " + refusal.Value + " is after today; pass until to include future-dated transactions"
 	case report.WindowChargeSinceAfterToday:
 		return bound + " " + refusal.Value + " is after today; " + refusal.Command + " lists charges up to today only, so pass an earlier since"
+	case report.WindowNetWorthSinceAfterToday:
+		return bound + " " + refusal.Value + " is after today; net worth is valued up to today only, so pass an earlier since"
 	case report.WindowSinceAfterUntil:
 		return bound + " " + refusal.Value + " is after until " + refusal.Other
 	case report.WindowUntilBeforeDefault:

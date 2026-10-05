@@ -23,7 +23,7 @@ func Test_run_status_reports_the_share_check(t *testing.T) {
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
 	assert.Contains(t, stdout.String(),
-		"Rows      1 transaction, 1 split, 0 transfers, 0 payees, 0 categories, 0 tags; 3 investment transactions, 2 securities, 3 prices\n")
+		"Rows      4 transactions, 4 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 3 investment transactions, 2 securities, 3 prices\n")
 	assert.Contains(t, stdout.String(), "Shares    2 holdings match Quicken's share counts\n")
 	assert.NotContains(t, stdout.String(), "not imported")
 

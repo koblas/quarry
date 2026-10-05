@@ -17,7 +17,7 @@ func Test_sql_conventions_never_mention_masking(t *testing.T) {
 }
 
 func Test_sql_conventions_name_the_views_and_currencies_a_query_writer_needs(t *testing.T) {
-	for _, phrase := range []string{"v_spending", "v_cash_flow", "v_account_balances", "fx_rates", "transfers.from_split_id"} {
+	for _, phrase := range []string{"v_spending", "v_cash_flow", "v_account_balances", "v_balances_daily", "v_net_worth", "fx_rates", "transfers.from_split_id"} {
 		assert.Contains(t, report.SQLConventions, phrase)
 	}
 }
@@ -26,7 +26,7 @@ func Test_sql_conventions_explain_investment_data(t *testing.T) {
 	collapsed := strings.Join(strings.Fields(report.SQLConventions), " ")
 
 	for _, phrase := range []string{
-		"investment_transactions", "not in transactions", "split_new_shares",
+		"investment_transactions", "also has a row in transactions", "split_new_shares",
 		"holding_shares", "v_holdings", "Neither includes cash in investment accounts",
 	} {
 		assert.Contains(t, collapsed, phrase)
@@ -34,8 +34,23 @@ func Test_sql_conventions_explain_investment_data(t *testing.T) {
 	assert.NotContains(t, collapsed, "quarry does not convert prices yet")
 }
 
-func Test_sql_conventions_list_the_action_values(t *testing.T) {
-	collapsed := strings.Join(strings.Fields(report.SQLConventions), " ")
+func Test_sql_conventions_close_the_investment_paragraph_with_the_action_values(t *testing.T) {
+	investment := strings.Join(strings.Fields(strings.Split(report.SQLConventions, "\n\n")[1]), " ")
 
-	assert.True(t, strings.HasSuffix(collapsed, "action is one of "+strings.Join(store.Actions(), ", ")+"."))
+	assert.True(t, strings.HasSuffix(investment, "action is one of "+strings.Join(store.Actions(), ", ")+"."))
+}
+
+func Test_sql_conventions_end_with_the_daily_balances_paragraph(t *testing.T) {
+	paragraphs := strings.Split(report.SQLConventions, "\n\n")
+
+	assert.True(t, strings.HasPrefix(paragraphs[len(paragraphs)-1], "v_balances_daily has one row per account per day"))
+}
+
+func Test_sql_conventions_close_the_balances_paragraph_with_the_net_worth_view(t *testing.T) {
+	paragraphs := strings.Split(report.SQLConventions, "\n\n")
+	balances := strings.Join(strings.Fields(paragraphs[len(paragraphs)-1]), " ")
+
+	assert.True(t, strings.HasSuffix(balances, "v_net_worth has one row per day, account type and currency, "+
+		"adding up the balances of the accounts Quicken's reports count, as quarry networth does; sum balance_cad or balance_usd "+
+		"over one date for the total; a NULL there means no exchange rate for that day."))
 }

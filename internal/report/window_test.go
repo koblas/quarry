@@ -388,3 +388,138 @@ func Test_parse_search_window_accepts_a_since_on_the_same_day_as_the_until(t *te
 	require.NoError(t, err)
 	assert.Equal(t, store.SearchWindow{Since: new(day(2026, time.March, 31)), Until: new(day(2026, time.March, 31))}, got)
 }
+
+func Test_parse_month_end_window_refuses_a_value_that_is_not_a_date(t *testing.T) {
+	cases := []struct {
+		name         string
+		since, until *string
+		want         string
+	}{
+		{name: "since", since: new("2024-13"), want: `--since "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`},
+		{name: "until", until: new("yesterday"), want: `--until "yesterday" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := report.ParseMonthEndWindow(c.since, c.until, windowNow)
+
+			var refusal report.WindowError
+			require.ErrorAs(t, err, &refusal)
+			assert.EqualError(t, err, c.want)
+		})
+	}
+}
+
+func Test_parse_month_end_window_refuses_a_since_after_the_until_as_given(t *testing.T) {
+	t.Run("a since a year after the until", func(t *testing.T) {
+		_, err := report.ParseMonthEndWindow(new("2025"), new("2024"), windowNow)
+
+		var refusal report.WindowError
+		require.ErrorAs(t, err, &refusal)
+		assert.EqualError(t, err, "--since 2025 is after --until 2024")
+	})
+
+	t.Run("a since on the same day as the until is accepted", func(t *testing.T) {
+		both := "2026-03-05"
+
+		got, err := report.ParseMonthEndWindow(&both, &both, windowNow)
+
+		require.NoError(t, err)
+		assert.Equal(t, store.Window{Since: day(2026, time.March, 5), Until: day(2026, time.March, 5)}, got)
+	})
+}
+
+func Test_parse_month_end_window_refuses_an_until_alone_before_the_default_since(t *testing.T) {
+	t.Run("the last day of last year", func(t *testing.T) {
+		_, err := report.ParseMonthEndWindow(nil, new("2025-12-31"), windowNow)
+
+		var refusal report.WindowError
+		require.ErrorAs(t, err, &refusal)
+		assert.EqualError(t, err, "--until 2025-12-31 is before the default --since 2026-01-01; pass --since too")
+	})
+
+	t.Run("the first day of this year is accepted", func(t *testing.T) {
+		got, err := report.ParseMonthEndWindow(nil, new("2026-01-01"), windowNow)
+
+		require.NoError(t, err)
+		assert.Equal(t, store.Window{Since: day(2026, time.January, 1), Until: day(2026, time.January, 1)}, got)
+	})
+}
+
+func Test_parse_month_end_window_without_flags_is_the_default_window(t *testing.T) {
+	got, err := report.ParseMonthEndWindow(nil, nil, windowNow)
+
+	require.NoError(t, err)
+	assert.Equal(t, report.DefaultWindow(windowNow), got)
+}
+
+func Test_parse_month_end_window_clamps_the_until_to_today(t *testing.T) {
+	cases := []struct {
+		name  string
+		until string
+		want  time.Time
+	}{
+		{name: "today is kept", until: "2026-09-29", want: day(2026, time.September, 29)},
+		{name: "yesterday is kept", until: "2026-09-28", want: day(2026, time.September, 28)},
+		{name: "tomorrow is today", until: "2026-09-30", want: day(2026, time.September, 29)},
+		{name: "a future year is today", until: "2027", want: day(2026, time.September, 29)},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := report.ParseMonthEndWindow(new("2026-01"), &c.until, windowNow)
+
+			require.NoError(t, err)
+			assert.Equal(t, store.Window{Since: day(2026, time.January, 1), Until: c.want}, got)
+		})
+	}
+}
+
+func Test_parse_month_end_window_refuses_a_since_after_today(t *testing.T) {
+	cases := []struct {
+		name  string
+		since string
+		until *string
+	}{
+		{name: "alone", since: "2027-01"},
+		{name: "with a later until", since: "2027-01", until: new("2028")},
+		{name: "tomorrow, which is already today in UTC", since: "2026-09-30"},
+		{name: "a year after this one", since: "2027"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := report.ParseMonthEndWindow(&c.since, c.until, windowNow)
+
+			assert.Equal(t, report.WindowError{Kind: report.WindowNetWorthSinceAfterToday, Bound: "since", Value: c.since}, err)
+			assert.EqualError(t, err, "--since "+c.since+" is after today; net worth is valued up to today only, so pass an earlier --since")
+		})
+	}
+}
+
+func Test_parse_month_end_window_accepts_a_since_that_is_today_or_in_the_month_containing_today(t *testing.T) {
+	cases := []struct {
+		name  string
+		since string
+		want  time.Time
+	}{
+		{name: "today", since: "2026-09-29", want: day(2026, time.September, 29)},
+		{name: "the month containing today", since: "2026-09", want: day(2026, time.September, 1)},
+		{name: "the year containing today", since: "2026", want: day(2026, time.January, 1)},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := report.ParseMonthEndWindow(&c.since, nil, windowNow)
+
+			require.NoError(t, err)
+			assert.Equal(t, store.Window{Since: c.want, Until: day(2026, time.September, 29)}, got)
+		})
+	}
+}
+
+func Test_parse_month_end_window_reports_a_since_after_the_until_before_a_since_after_today(t *testing.T) {
+	_, err := report.ParseMonthEndWindow(new("2027"), new("2024"), windowNow)
+
+	assert.Equal(t, report.WindowError{Kind: report.WindowSinceAfterUntil, Bound: "since", Value: "2027", Other: "2024"}, err)
+}

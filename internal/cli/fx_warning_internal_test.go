@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"math/big"
 	"testing"
 	"time"
 
@@ -14,8 +15,9 @@ import (
 func Test_accountsFXWarnings_says_why_a_row_shows_no_rate(t *testing.T) {
 	asOf := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
 	first := time.Date(2099, time.January, 2, 0, 0, 0, 0, time.UTC)
-	usd := store.AccountBalance{Currency: "USD", Balance: new(int64(800)), BalanceUSD: new(int64(800))}
-	cad := store.AccountBalance{Currency: "CAD", Balance: new(int64(800)), BalanceCAD: new(int64(800))}
+	usd := store.AccountBalance{Currency: "USD", Balance: big.NewInt(800), BalanceUSD: big.NewInt(800)}
+	cad := store.AccountBalance{Currency: "CAD", Balance: big.NewInt(800), BalanceCAD: big.NewInt(800)}
+	usdBrokerage := store.AccountBalance{Type: store.AccountTypeBrokerage, Currency: "USD", Cash: big.NewInt(800), HoldingsValue: big.NewInt(0), Balance: big.NewInt(800)}
 	cases := []struct {
 		name     string
 		currency money.Currency
@@ -23,6 +25,10 @@ func Test_accountsFXWarnings_says_why_a_row_shows_no_rate(t *testing.T) {
 		first    time.Time
 		want     string
 	}{
+		{
+			name: "no rates in CAD for a USD investment account", currency: money.CAD, account: usdBrokerage,
+			want: "the store has no exchange rates, so USD balances show no rate in the In CAD column; run quarry sync to fetch them",
+		},
 		{
 			name: "no rates in CAD", currency: money.CAD, account: usd,
 			want: "the store has no exchange rates, so USD balances show no rate in the In CAD column; run quarry sync to fetch them",
@@ -53,10 +59,8 @@ func Test_accountsFXWarnings_says_why_a_row_shows_no_rate(t *testing.T) {
 func Test_accountsFXWarnings_is_silent_unless_a_listed_row_shows_no_rate(t *testing.T) {
 	asOf := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
 	past := time.Date(2026, time.January, 2, 0, 0, 0, 0, time.UTC)
-	future := time.Date(2099, time.January, 2, 0, 0, 0, 0, time.UTC)
-	cad := store.AccountBalance{Currency: "CAD", Balance: new(int64(800)), BalanceCAD: new(int64(800))}
-	usdNoRate := store.AccountBalance{Currency: "USD", Balance: new(int64(800))}
-	notValued := store.AccountBalance{Currency: "USD"}
+	cad := store.AccountBalance{Currency: "CAD", Balance: big.NewInt(800), BalanceCAD: big.NewInt(800)}
+	usdNoRate := store.AccountBalance{Currency: "USD", Balance: big.NewInt(800)}
 	cases := []struct {
 		name     string
 		currency money.Currency
@@ -64,8 +68,6 @@ func Test_accountsFXWarnings_is_silent_unless_a_listed_row_shows_no_rate(t *test
 		accounts []store.AccountBalance
 	}{
 		{name: "an all-CAD store with no rates in CAD", currency: money.CAD, accounts: []store.AccountBalance{cad}},
-		{name: "a not valued cross-currency account with no rates", currency: money.CAD, accounts: []store.AccountBalance{notValued}},
-		{name: "a not valued cross-currency account with rates only after today", currency: money.CAD, first: future, accounts: []store.AccountBalance{notValued}},
 		{name: "no accounts with no rates", currency: money.CAD},
 		{name: "native with no rates", currency: money.Native, accounts: []store.AccountBalance{usdNoRate}},
 		{name: "a rate on or before today does not explain the missing cell", currency: money.CAD, first: past, accounts: []store.AccountBalance{usdNoRate}},

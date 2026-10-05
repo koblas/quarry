@@ -2,6 +2,8 @@ package report
 
 import (
 	"context"
+	"math/big"
+	"slices"
 	"strings"
 
 	"github.com/koblas/quarry/internal/platform/money"
@@ -19,9 +21,9 @@ type AccountListing struct {
 	Currency money.Currency
 }
 
-// ConvertedBalance is a's balance in cents in the listing's currency; nil in a native listing, for a
-// balance quarry cannot compute, and when no rate on or before AsOf converts it.
-func (l AccountListing) ConvertedBalance(a store.AccountBalance) *int64 {
+// ConvertedBalance is a's balance in cents, which can pass 64 bits, in the listing's currency; nil in a native listing and
+// when no rate on or before AsOf converts it.
+func (l AccountListing) ConvertedBalance(a store.AccountBalance) *big.Int {
 	if l.Currency == money.CAD {
 		return a.BalanceCAD
 	}
@@ -33,7 +35,7 @@ func (l AccountListing) ConvertedBalance(a store.AccountBalance) *int64 {
 
 // NeedsRate reports whether a's balance should convert but no rate converts it.
 func (l AccountListing) NeedsRate(a store.AccountBalance) bool {
-	return a.Balance != nil && l.Currency != money.Native && l.ConvertedBalance(a) == nil
+	return l.Currency != money.Native && l.ConvertedBalance(a) == nil
 }
 
 // AllHidden reports whether the listing is empty only because every account
@@ -55,13 +57,16 @@ func (s *Server) Accounts(ctx context.Context, includeClosed bool, currency mone
 	}
 
 	open := list.Accounts[:0:0]
+	listed := make(map[string]bool, len(list.Accounts))
 	for _, a := range list.Accounts {
 		if !a.Closed {
 			open = append(open, a)
+			listed[a.ID] = true
 		}
 	}
 	hidden := len(list.Accounts) - len(open)
 	list.Accounts = open
+	list.Unvalued = slices.DeleteFunc(slices.Clone(list.Unvalued), func(held store.UnvaluedHolding) bool { return !listed[held.AccountID] })
 	return AccountListing{AccountList: list, Hidden: hidden, Currency: currency}, nil
 }
 

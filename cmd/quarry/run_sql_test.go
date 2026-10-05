@@ -21,7 +21,7 @@ func Test_run_sql_prints_the_query_result_as_a_table(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	syncAccountsFixture(t, home)
-	const query = `SELECT source_id AS id, name, balance,
+	const query = `SELECT source_id AS id, name, holdings_value,
 		CASE WHEN source_id = 1 THEN 'line one' || chr(10) || 'tab' || chr(9) || 'cr' || chr(13) END AS note
 		FROM v_account_balances ORDER BY source_id`
 	var stdout, stderr bytes.Buffer
@@ -31,12 +31,12 @@ func Test_run_sql_prints_the_query_result_as_a_table(t *testing.T) {
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
 	assert.Equal(t, ""+
-		"id  name            balance  note\n"+
-		" 1  Chequing       12345.67  line one\\ntab\\tcr\\r\n"+
-		" 2  US Chequing     8310.00  NULL\n"+
-		" 3  Old Savings        0.00  NULL\n"+
-		" 4  RRSP               NULL  NULL\n"+ //nolint:dupword // two adjacent NULL cells are the expected row
-		" 5  Visa Infinite  -1204.17  NULL\n",
+		"id  name           holdings_value  note\n"+
+		" 1  Chequing                 NULL  line one\\ntab\\tcr\\r\n"+
+		" 2  US Chequing              NULL  NULL\n"+ //nolint:dupword // adjacent NULL cells are the expected row
+		" 3  Old Savings              NULL  NULL\n"+ //nolint:dupword // adjacent NULL cells are the expected row
+		" 4  RRSP                     0.00  NULL\n"+
+		" 5  Visa Infinite            NULL  NULL\n", //nolint:dupword // adjacent NULL cells are the expected row
 		stdout.String())
 }
 

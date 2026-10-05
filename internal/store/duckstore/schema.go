@@ -53,7 +53,8 @@ CREATE TABLE transactions (
 	status VARCHAR NOT NULL,
 	cheque_number VARCHAR,
 	excluded_from_reports BOOLEAN NOT NULL,
-	posted_date DATE
+	posted_date DATE,
+	investment_transaction_id VARCHAR
 );
 CREATE TABLE splits (
 	id VARCHAR PRIMARY KEY,
@@ -171,30 +172,35 @@ CREATE TABLE store_info (
 );
 `
 
-// accountBalancesViewDDL creates v_account_balances: each account with the sum of its
-// transactions dated today or earlier, NULL for an investment account.
-func accountBalancesViewDDL() string {
+// investmentTypesSQL is the SQL list of the accounts.type values that hold securities.
+func investmentTypesSQL() string {
 	quoted := make([]string, 0, len(store.InvestmentAccountTypes()))
 	for _, t := range store.InvestmentAccountTypes() {
 		quoted = append(quoted, "'"+strings.ReplaceAll(t, "'", "''")+"'")
 	}
-	// The date test sits in the join, not a WHERE, so an account whose only
-	// transactions are future-dated is still listed.
+	return strings.Join(quoted, ", ")
+}
+
+// accountBalancesViewDDL creates v_account_balances: each account with its cash, holdings value (NULL
+// outside investment accounts) and balance as v_balances_daily has them today.
+func accountBalancesViewDDL() string {
+	// The join to v_balances_daily is a LEFT JOIN, so an account with no row there (no transactions, or
+	// only future-dated ones) is still listed with 0.00.
 	return `
 CREATE VIEW v_account_balances AS
 WITH b AS (
 	SELECT a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed, a.active,
-		CASE WHEN a.type IN (` + strings.Join(quoted, ", ") + `) THEN NULL
-			ELSE CAST(COALESCE(sum(t.amount), 0) AS DECIMAL(18,2)) END AS balance
+		CAST(coalesce(d.cash, 0) AS DECIMAL(18,2)) AS cash,
+		CASE WHEN a.type IN (` + investmentTypesSQL() + `) THEN CAST(coalesce(d.holdings_value, 0) AS DECIMAL(38,2)) END AS holdings_value,
+		CAST(coalesce(d.balance, 0) AS DECIMAL(38,2)) AS balance
 	FROM accounts a
-	LEFT JOIN transactions t ON t.account_id = a.id AND t.date <= current_date
-	GROUP BY a.id, a.source_id, a.name, a.type, a.currency, a.institution, a.closed, a.active
+	LEFT JOIN v_balances_daily d ON d.account_id = a.id AND d.date = current_date
 ), r AS (
 	SELECT usd_cad FROM fx_rates WHERE date <= current_date ORDER BY date DESC LIMIT 1
 )
-SELECT b.id, b.source_id, b.name, b.type, b.currency, b.institution, b.closed, b.active, b.balance,
-	` + convertedTo("CAD", "b.balance", "b.currency", "r.usd_cad") + ` AS balance_cad,
-	` + convertedTo("USD", "b.balance", "b.currency", "r.usd_cad") + ` AS balance_usd
+SELECT b.id, b.source_id, b.name, b.type, b.currency, b.institution, b.closed, b.active, b.cash, b.holdings_value, b.balance,
+	` + convertedToWide("CAD", "b.balance", "b.currency", "r.usd_cad", 38) + ` AS balance_cad,
+	` + convertedToWide("USD", "b.balance", "b.currency", "r.usd_cad", 38) + ` AS balance_usd
 FROM b
 LEFT JOIN r ON true;
 `
@@ -285,5 +291,91 @@ FROM priced v
 LEFT JOIN securities s ON s.id = v.security_id
 ASOF LEFT JOIN fx_rates r ON v.date >= r.date;
 COMMENT ON VIEW v_holdings IS '` + holdingsViewComment + `';
+`
+}
+
+// balancesDailyViewComment is the COMMENT ON VIEW text of v_balances_daily.
+const balancesDailyViewComment = "one row per account per day from its first transaction or holding through today; " +
+	"cash is the sum of its transactions to that day, holdings_value its holdings' value in its own currency " +
+	"(NULL outside brokerage and retirement accounts), balance is cash plus holdings_value, " +
+	"as quarry accounts and quarry networth use; filter by date."
+
+// valuedInAccountCurrencySQL is the SQL for a v_holdings row h's value in the currency of its account a, NULL when
+// it has none: the holding is left out of balances. v_balances_daily and the unvalued-holdings reads share it.
+func valuedInAccountCurrencySQL() string {
+	return `CASE WHEN h.currency = a.currency THEN h.value
+		WHEN a.currency = 'CAD' THEN h.value_cad
+		WHEN a.currency = 'USD' THEN h.value_usd END`
+}
+
+// balancesDailyViewDDL creates v_balances_daily: one row per account per day, its cash, the value of its holdings
+// and the balance in CAD and USD at the day's rate.
+func balancesDailyViewDDL() string {
+	return `
+CREATE VIEW v_balances_daily AS
+WITH firsts AS (
+	SELECT account_id, min(d) AS first_day
+	FROM (SELECT account_id, date AS d FROM transactions UNION ALL SELECT account_id, from_date FROM holding_shares)
+	GROUP BY account_id
+), days AS (
+	SELECT account_id, CAST(unnest(generate_series(first_day, current_date, INTERVAL 1 DAY)) AS DATE) AS date
+	FROM firsts
+), flow AS (
+	SELECT account_id, date, sum(amount) AS amount FROM transactions GROUP BY account_id, date
+), cashed AS (
+	SELECT d.account_id, d.date,
+		CAST(sum(coalesce(f.amount, 0)) OVER (PARTITION BY d.account_id ORDER BY d.date) AS DECIMAL(18,2)) AS cash
+	FROM days d
+	LEFT JOIN flow f ON f.account_id = d.account_id AND f.date = d.date
+), valued AS (
+	SELECT h.account_id, h.date, ` + valuedInAccountCurrencySQL() + ` AS value
+	FROM v_holdings h
+	JOIN accounts a ON a.id = h.account_id
+), held AS (
+	SELECT account_id, date, sum(value) AS value, count(*) - count(value) AS unvalued
+	FROM valued
+	GROUP BY account_id, date
+), parts AS (
+	SELECT c.date, a.id AS account_id, a.name AS account, a.type, a.currency, c.cash,
+		a.type IN (` + investmentTypesSQL() + `) AS investment,
+		coalesce(h.value, 0) AS held_value, coalesce(h.unvalued, 0) AS held_unvalued
+	FROM cashed c
+	JOIN accounts a ON a.id = c.account_id
+	LEFT JOIN held h ON h.account_id = c.account_id AND h.date = c.date
+)
+SELECT b.date, b.account_id, b.account, b.type, b.currency, b.cash,
+	CASE WHEN b.investment THEN CAST(b.held_value AS DECIMAL(38,2)) END AS holdings_value,
+	CASE WHEN b.investment THEN b.held_unvalued END AS holdings_unvalued,
+	b.balance,
+	` + convertedToWide("CAD", "b.balance", "b.currency", "r.usd_cad", 38) + ` AS balance_cad,
+	` + convertedToWide("USD", "b.balance", "b.currency", "r.usd_cad", 38) + ` AS balance_usd,
+	r.usd_cad
+FROM (
+	SELECT *, CAST(cash + CASE WHEN investment THEN held_value ELSE 0 END AS DECIMAL(38,2)) AS balance
+	FROM parts
+) b
+ASOF LEFT JOIN fx_rates r ON b.date >= r.date;
+COMMENT ON VIEW v_balances_daily IS '` + strings.ReplaceAll(balancesDailyViewComment, "'", "''") + `';
+`
+}
+
+// netWorthViewComment is the COMMENT ON VIEW text of v_net_worth.
+const netWorthViewComment = "net worth by day, account type and currency over the accounts Quicken's reports count, as quarry networth does; " +
+	"sum balance_cad or balance_usd over one date for the total; a NULL there means no exchange rate for that day."
+
+// netWorthViewDDL creates v_net_worth: net worth by day, account type and currency over the accounts Quicken's reports count.
+func netWorthViewDDL() string {
+	// Rate presence depends only on (currency, day), so within a row every account has a rate or none does and a plain sum is NULL exactly when one is missing.
+	return `
+CREATE VIEW v_net_worth AS
+SELECT b.date, b.type, b.currency, count(*) AS accounts,
+	CAST(sum(b.balance) AS DECIMAL(38,2)) AS balance,
+	CAST(sum(b.balance_cad) AS DECIMAL(38,2)) AS balance_cad,
+	CAST(sum(b.balance_usd) AS DECIMAL(38,2)) AS balance_usd
+FROM v_balances_daily b
+JOIN accounts a ON a.id = b.account_id
+WHERE ` + reportedAccount + `
+GROUP BY b.date, b.type, b.currency;
+COMMENT ON VIEW v_net_worth IS '` + strings.ReplaceAll(netWorthViewComment, "'", "''") + `';
 `
 }

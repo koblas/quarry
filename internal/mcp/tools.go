@@ -25,6 +25,7 @@ const (
 	toolAnomalies   = "anomalies"
 	toolSearch      = "search_transactions"
 	toolHoldings    = "holdings"
+	toolNetWorth    = "net_worth"
 )
 
 // Row limits: the most any tool returns, data_quality's default, and the most items it lists per finding.
@@ -128,6 +129,16 @@ account's own currency and are never converted. Returns at most limit
 transactions (default 500); matched counts every match.`
 
 const holdingsDescription = "Securities held on one day with share count, latest price and its date, and value; cash in investment accounts is not included."
+
+const netWorthDescription = "Net worth on one day (as_of, default today) or at each month end from since to until, by account type and currency; " +
+	"brokerage and retirement accounts count their cash plus their holdings' value."
+
+// The descriptions of the parameters net_worth takes; its currency is currencyDescription.
+const (
+	netWorthAsOfDescription  = "Day to value net worth on: YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day. Defaults to today. Cannot be combined with since or until."
+	netWorthSinceDescription = "List net worth at each month end on or after this date: YYYY, YYYY-MM or YYYY-MM-DD. Defaults to January 1 of this year when until is given."
+	netWorthUntilDescription = "List net worth at each month end on or before this date: YYYY, YYYY-MM or YYYY-MM-DD. Defaults to today; a later date means today."
+)
 
 // The descriptions of the parameters holdings takes; its currency is currencyDescription.
 const (
@@ -237,6 +248,13 @@ type (
 		Accounts []string `json:"accounts"`
 		Currency string   `json:"currency"`
 	}
+	// netWorthInput is the net_worth tool's arguments; AsOf, Since and Until are nil when absent.
+	netWorthInput struct {
+		AsOf     *string `json:"as_of"`
+		Since    *string `json:"since"`
+		Until    *string `json:"until"`
+		Currency string  `json:"currency"`
+	}
 	// noInput is the arguments of a tool that takes none.
 	noInput struct{}
 )
@@ -295,6 +313,12 @@ func (s *Server) addTools(srv *sdk.Server) {
 		"accounts": accountsSchema(holdingsAccountsDescription),
 		"currency": currencySchema(),
 	})), handler(s.timeout, stoppedLine(toolHoldings), s.holdings))
+	sdk.AddTool(srv, tool(toolNetWorth, netWorthDescription, objectSchema(map[string]*jsonschema.Schema{
+		"as_of":    described(netWorthAsOfDescription, &jsonschema.Schema{Type: "string"}),
+		"since":    described(netWorthSinceDescription, &jsonschema.Schema{Type: "string"}),
+		"until":    described(netWorthUntilDescription, &jsonschema.Schema{Type: "string"}),
+		"currency": currencySchema(),
+	})), handler(s.timeout, stoppedLine(toolNetWorth), s.netWorth))
 }
 
 // tool describes one tool; its result is a JSON object.

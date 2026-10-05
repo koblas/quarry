@@ -3,24 +3,25 @@ package duckstore
 import (
 	"context"
 	"database/sql"
+	"math/big"
 	"time"
 
 	"github.com/koblas/quarry/internal/store"
 )
 
-// accountsQuery reads today, the earliest rate and every balance in cents, native, CAD and USD.
+// accountsQuery reads today, the earliest rate and every cash, holdings value and balance in cents, native, CAD and USD.
 const accountsQuery = `
 SELECT d.as_of, d.first_rate, v.id, v.source_id, v.name, v.type, v.currency, v.institution, v.closed, v.active,
-	NOT a.in_reports, a.linked_tracking, CAST(v.balance * 100 AS BIGINT),
-	CAST(v.balance_cad * 100 AS BIGINT), CAST(v.balance_usd * 100 AS BIGINT)
+	NOT a.in_reports, a.linked_tracking, CAST(v.cash * 100 AS HUGEINT), CAST(v.holdings_value * 100 AS HUGEINT),
+	CAST(v.balance * 100 AS HUGEINT), CAST(v.balance_cad * 100 AS HUGEINT), CAST(v.balance_usd * 100 AS HUGEINT)
 FROM (SELECT current_date AS as_of, ` + firstRateSubquery + ` AS first_rate) d
 LEFT JOIN v_account_balances v ON true
 LEFT JOIN accounts a ON a.id = v.id
 ORDER BY lower(v.name), v.name, v.source_id`
 
-// Accounts reads every account, closed ones included, with its balance native and in CAD and USD,
-// the store's today as AsOf and its earliest rate as FirstRate, sorted by name ignoring case,
-// then name, then source id. It refuses a store it cannot open or read with *store.OpenError.
+// Accounts reads every account, closed ones included, with balances native and in CAD and USD, the store's
+// today as AsOf, the holdings those balances leave out as Unvalued and the earliest rate as FirstRate,
+// sorted by name ignoring case, then name, then source id. A store it cannot open or read is a *store.OpenError.
 func (s *Store) Accounts(ctx context.Context) (store.AccountList, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {
@@ -33,9 +34,11 @@ func (s *Store) Accounts(ctx context.Context) (store.AccountList, error) {
 		var asOf time.Time
 		var firstRate sql.NullTime
 		var id, name, typ, currency, institution sql.NullString
-		var sourceID, balance, balanceCAD, balanceUSD sql.NullInt64
+		var sourceID sql.NullInt64
+		var cash, holdingsValue, balance, balanceCAD, balanceUSD *big.Int
 		var closed, active, notInReports, linkedTracking sql.NullBool
-		if err := scan(&asOf, &firstRate, &id, &sourceID, &name, &typ, &currency, &institution, &closed, &active, &notInReports, &linkedTracking, &balance, &balanceCAD, &balanceUSD); err != nil {
+		if err := scan(&asOf, &firstRate, &id, &sourceID, &name, &typ, &currency, &institution, &closed, &active,
+			&notInReports, &linkedTracking, &cash, &holdingsValue, &balance, &balanceCAD, &balanceUSD); err != nil {
 			return err
 		}
 		list.AsOf = asOf
@@ -47,10 +50,18 @@ func (s *Store) Accounts(ctx context.Context) (store.AccountList, error) {
 			ID: id.String, SourceID: sourceID.Int64, Name: name.String, Type: typ.String, Currency: currency.String,
 			Institution: nullStringPtr(institution), Closed: closed.Bool, Active: active.Bool, NotInReports: notInReports.Bool,
 			LinkedTracking: linkedTracking.Bool,
-			Balance:        nullInt64Ptr(balance), BalanceCAD: nullInt64Ptr(balanceCAD), BalanceUSD: nullInt64Ptr(balanceUSD),
+			Balance:        balance, Cash: cash, HoldingsValue: holdingsValue, BalanceCAD: balanceCAD, BalanceUSD: balanceUSD,
 		}
 		list.Accounts = append(list.Accounts, acct)
 		return nil
+	})
+	if err != nil {
+		return store.AccountList{}, openFault(s.Path(), err)
+	}
+	err = db.QueryRows(ctx, unvaluedHoldingsSQL("h.date = CAST($1 AS DATE)"), []any{civilDay(list.AsOf)}, func(scan func(dest ...any) error) error {
+		held, err := scanUnvaluedHolding(scan)
+		list.Unvalued = append(list.Unvalued, held)
+		return err
 	})
 	if err != nil {
 		return store.AccountList{}, openFault(s.Path(), err)

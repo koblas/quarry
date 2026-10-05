@@ -27,6 +27,8 @@ type accountRowJSON struct {
 	InReports      bool    `json:"in_reports"`
 	LinkedTracking bool    `json:"linked_tracking"`
 	Balance        *string `json:"balance"`
+	Cash           *string `json:"cash"`
+	HoldingsValue  *string `json:"holdings_value"`
 }
 
 type accountsJSON struct {
@@ -73,6 +75,8 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
       "in_reports": true,
       "linked_tracking": false,
       "balance": "12345.67",
+      "cash": "12345.67",
+      "holdings_value": null,
       "converted_balance": null
     },
     {
@@ -85,7 +89,9 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
       "active": true,
       "in_reports": true,
       "linked_tracking": false,
-      "balance": null,
+      "balance": "1000.00",
+      "cash": "1000.00",
+      "holdings_value": "0.00",
       "converted_balance": null
     },
     {
@@ -99,6 +105,8 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
       "in_reports": true,
       "linked_tracking": false,
       "balance": "0.00",
+      "cash": "0.00",
+      "holdings_value": null,
       "converted_balance": null
     }
   ],

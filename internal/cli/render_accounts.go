@@ -9,13 +9,10 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// notValuedBalance is the Balance cell of an account quarry imports but does not value.
-const notValuedBalance = "not valued"
-
 // accountsColumnGap separates the accounts table's columns.
 const accountsColumnGap = "  "
 
-// noRateCell is the reporting-currency cell of an imported balance no rate converts.
+// noRateCell is the reporting-currency cell of a balance no exchange rate converts.
 const noRateCell = "no rate"
 
 // renderAccounts renders l as the accounts table: a header row, then one row per account in l's order,
@@ -30,7 +27,7 @@ func renderAccounts(l report.AccountListing) string {
 	rows := make([][]string, 0, 1+len(l.Accounts))
 	rows = append(rows, header)
 	for _, a := range l.Accounts {
-		row := []string{escapeCell(a.Name), a.Type, a.Currency, accountBalance(a.Balance)}
+		row := []string{escapeCell(a.Name), a.Type, a.Currency, formatBigMoney(a.Balance)}
 		if converted {
 			row = append(row, convertedCell(l, a))
 		}
@@ -68,20 +65,12 @@ func renderAccounts(l report.AccountListing) string {
 // convertedCell is a's balance in l's currency, "no rate" when a rate should have converted it, else blank.
 func convertedCell(l report.AccountListing, a store.AccountBalance) string {
 	if cents := l.ConvertedBalance(a); cents != nil {
-		return formatMoney(*cents)
+		return formatBigMoney(cents)
 	}
 	if l.NeedsRate(a) {
 		return noRateCell
 	}
 	return ""
-}
-
-// accountBalance renders a balance in cents, or "not valued" when nil.
-func accountBalance(cents *int64) string {
-	if cents == nil {
-		return notValuedBalance
-	}
-	return formatMoney(*cents)
 }
 
 // accountStatus joins, with ", ", the state (closed or inactive), "not in reports" and

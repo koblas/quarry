@@ -178,18 +178,12 @@ func Test_import_keeps_a_numeric_link_with_no_imported_counterpart_as_one_sided(
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	missingLeg := transferLeg(b, chequingPK, "-1.00", 101, "999")
 	deletedLinkLeg := transferLeg(b, chequingPK, "-2.00", 102, "555")
-	investmentLinkLeg := transferLeg(b, chequingPK, "-3.00", 103, "666")
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	deletedTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-2.00", PostedDate: &day})
 	b.Entry(v9fixture.EntryRow{Parent: deletedTxn, Amount: "2.00", QuickenID: 555, Deleted: true})
 	b.Entry(v9fixture.EntryRow{Parent: deletedTxn, Amount: "-2.00", QuickenID: 556})
-	investmentTxn := b.InvestmentTransaction(v9fixture.TransactionRow{
-		Type: new(int64(3)), Account: brokeragePK, Amount: "3.00", PostedDate: &day,
-	})
-	b.Entry(v9fixture.EntryRow{Parent: investmentTxn, Amount: "3.00", QuickenID: 666})
 	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{}
 
@@ -202,12 +196,11 @@ func Test_import_keeps_a_numeric_link_with_no_imported_counterpart_as_one_sided(
 		}
 	}
 	assert.Equal(t, store.TransferCheck{OneSided: []store.OneSidedTransfer{
-		chequing(missingLeg, -100), chequing(deletedLinkLeg, -200), chequing(investmentLinkLeg, -300),
+		chequing(missingLeg, -100), chequing(deletedLinkLeg, -200),
 	}}, result.Validation.Transfers)
 	assert.Equal(t, []store.Transfer{
 		{ID: transferIDFor(missingLeg), FromSplitID: splitIDFor(missingLeg)},
 		{ID: transferIDFor(deletedLinkLeg), FromSplitID: splitIDFor(deletedLinkLeg)},
-		{ID: transferIDFor(investmentLinkLeg), FromSplitID: splitIDFor(investmentLinkLeg)},
 	}, fake.Rows.Transfers)
 }
 

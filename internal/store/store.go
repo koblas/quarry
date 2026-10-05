@@ -35,7 +35,7 @@ func (a Account) LeftOutOfReports() bool {
 	return a.NotInReports || a.LinkedTracking
 }
 
-// Investment account types, whose balance quarry cannot compute.
+// Investment account types: their balance is cash plus the value of their holdings.
 const (
 	AccountTypeBrokerage  = "brokerage"
 	AccountTypeRetirement = "retirement"
@@ -48,8 +48,7 @@ func InvestmentAccountTypes() []string {
 }
 
 // IsInvestmentAccount reports whether accountType is a brokerage or
-// retirement account: sync never checks its balance, and accounts shows it
-// as not valued.
+// retirement account: sync never checks its balance.
 func IsInvestmentAccount(accountType string) bool {
 	return slices.Contains(InvestmentAccountTypes(), accountType)
 }
@@ -101,6 +100,9 @@ type Transaction struct {
 	// PostedDate is the bank's posting day, set whenever Quicken holds one,
 	// even when it equals Date.
 	PostedDate *time.Time
+	// InvestmentTransactionID names the investment transaction whose cash this row
+	// records; nil for a register entry.
+	InvestmentTransactionID *string
 }
 
 // Split is one row of the splits table, a share of its Transaction's amount
@@ -190,6 +192,44 @@ type Holding struct {
 	PriceDate                  *time.Time
 	Value, ValueCAD, ValueUSD  *big.Int
 	USDCAD                     money.Rate
+}
+
+// NetWorthParams selects what NetWorth reads: the net worth on each of Dates, calendar days held as UTC midnight.
+type NetWorthParams struct {
+	Dates []time.Time
+}
+
+// NetWorth is the v_net_worth rows on the days asked for, in date, type, currency order, the holdings of
+// the counted accounts those rows leave out, and the dates of the store's earliest exchange rate and balance.
+type NetWorth struct {
+	Rows     []NetWorthRow
+	Unvalued []UnvaluedHolding
+
+	// FirstRate is the date of the store's earliest exchange rate; zero when it holds none.
+	FirstRate time.Time
+
+	// FirstBalance is the earliest day a counted account has a transaction or a holding; zero when none does.
+	FirstBalance time.Time
+}
+
+// UnvaluedHolding is a holding of an account on Date that has no value in the account's currency, so the
+// account's balance leaves it out: it has no price, no currency, a currency other than CAD and USD, or no exchange rate.
+type UnvaluedHolding struct {
+	Date                 time.Time
+	AccountID, Account   string
+	AccountCurrency      string
+	SecurityID, Security string
+	Currency             *string
+	Priced               bool
+}
+
+// NetWorthRow is one row of v_net_worth: the balance of the counted accounts of one type and currency on one
+// day, in cents, which can pass 64 bits. BalanceCAD and BalanceUSD are nil when no rate converts the balance.
+type NetWorthRow struct {
+	Date                            time.Time
+	Type, Currency                  string
+	Accounts                        int64
+	Balance, BalanceCAD, BalanceUSD *big.Int
 }
 
 // The investment_transactions.action values.
@@ -601,22 +641,30 @@ type FindingItem struct {
 	OtherAccountID *string
 }
 
-// AccountBalance is one account with its balance in cents; Balance is nil
-// when the store cannot compute it.
+// AccountBalance is one account with its balance in cents, which can pass 64 bits: Balance is Cash plus
+// HoldingsValue, 0 for an account with no transactions dated on or before AsOf. Balance and Cash are never nil.
 type AccountBalance struct {
 	Account
 
-	Balance *int64
+	Balance *big.Int
+
+	// Cash is the account's cash in cents; HoldingsValue is its valued holdings in cents,
+	// nil outside a brokerage or retirement account.
+	Cash          *big.Int
+	HoldingsValue *big.Int
 
 	// BalanceCAD and BalanceUSD are Balance in cents in that currency at the latest rate dated on or before AsOf;
-	// nil when Balance is nil or no rate converts it.
-	BalanceCAD, BalanceUSD *int64
+	// nil when no rate converts it.
+	BalanceCAD, BalanceUSD *big.Int
 }
 
 // AccountList is every account with its balance as of the store's today.
 type AccountList struct {
 	AsOf     time.Time
 	Accounts []AccountBalance
+
+	// Unvalued is the holdings of Accounts on AsOf that their balances leave out.
+	Unvalued []UnvaluedHolding
 
 	// FirstRate is the date of the store's earliest exchange rate; zero when it holds none.
 	FirstRate time.Time

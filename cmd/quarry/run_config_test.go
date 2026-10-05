@@ -220,6 +220,7 @@ func readCommandArgs() map[string][]string {
 	return map[string][]string{
 		"accounts":  {"accounts"},
 		"holdings":  {"holdings"},
+		"networth":  {"networth"},
 		"anomalies": {"anomalies", "--since", "2026-01", "--until", "2026-09"},
 		"spend":     {"spend", "--since", "2026-01", "--until", "2026-09"},
 		"cashflow":  {"cashflow", "--since", "2026-01", "--until", "2026-09"},

@@ -33,8 +33,9 @@ file, else CAD) at the Bank of Canada rate for the --as-of day, or the
 latest earlier one; --currency native leaves it out and totals each
 currency separately.
 
-The total is the value of the securities only. Cash held in investment
-accounts is not included, so it is not those accounts' balance.`,
+The total is the value of the securities only, without the cash held in
+investment accounts; quarry accounts shows each account's balance, cash
+included.`,
 		Example: `  quarry holdings
   quarry holdings --as-of 2025-12-31
   quarry holdings --account RRSP --currency native --json`,
@@ -44,7 +45,7 @@ accounts is not included, so it is not those accounts' balance.`,
 			if cmd.Flags().Changed("as-of") {
 				given = &asOfFlag
 			}
-			asOf, err := report.ResolveAsOf(given, now())
+			asOf, err := report.ResolveAsOf(given, report.HoldingsNoun, now())
 			if err != nil {
 				return UsageError{msg: err.Error()}
 			}

@@ -219,9 +219,9 @@ func Test_drift_check_flags_crafted_name_text(t *testing.T) {
 		}, nil},
 		{
 			"unknown_view", func() driftCheck {
-				return relationMismatches([]driftSource{{name: "a.md", text: "Read `v_net_worth`."}}, relations)
+				return relationMismatches([]driftSource{{name: "a.md", text: "Read `v_forecast`."}}, relations)
 			},
-			[]string{"a.md: unknown relation v_net_worth"},
+			[]string{"a.md: unknown relation v_forecast"},
 		},
 		{"from_list", func() driftCheck {
 			return relationMismatches([]driftSource{{name: "a.sql", text: "WITH params AS (SELECT 1 AS x)\nSELECT 1\nFROM v_bogus b, params p\nWHERE p.x = 1"}}, relations)

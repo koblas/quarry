@@ -87,10 +87,10 @@ var nativeCommands = []struct {
 		"\n" +
 		"17 charges checked\n"},
 	{name: "accounts", args: []string{"accounts"}, want: "" +
-		"Account      Type       Currency     Balance  Status\n" +
-		"Brokerage    brokerage  USD       not valued\n" +
-		"Chequing     chequing   CAD         2,840.00\n" +
-		"US Chequing  chequing   USD          -530.00\n"},
+		"Account      Type       Currency   Balance  Status\n" +
+		"Brokerage    brokerage  USD           0.00\n" +
+		"Chequing     chequing   CAD       2,840.00\n" +
+		"US Chequing  chequing   USD        -530.00\n"},
 }
 
 // runNative runs args with --currency native and fails t unless it exits 0 and prints nothing on stderr.

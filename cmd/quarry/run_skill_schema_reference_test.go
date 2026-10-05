@@ -170,17 +170,9 @@ func Test_skill_schema_reference_carries_each_view_comment(t *testing.T) {
 	comments := viewComments(t, home)
 	text := repoFile(t, schemaReferencePath)
 
-	require.Len(t, comments, 3)
+	require.Len(t, comments, 5)
 	for name, comment := range comments {
 		assert.Contains(t, text, "### "+name+"\n\n"+comment+"\n\n")
-	}
-}
-
-func Test_skill_schema_reference_does_not_name_a_view_the_store_lacks(t *testing.T) {
-	text := repoFile(t, schemaReferencePath)
-
-	for _, view := range []string{"v_balances_daily", "v_net_worth"} {
-		assert.NotContains(t, text, view)
 	}
 }
 

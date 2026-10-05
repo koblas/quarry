@@ -16,13 +16,8 @@ WHERE COALESCE(e.ZDELETIONCOUNT, 0) = 0
 ORDER BY e.ZPARENT, e.Z_PK
 `
 
-// mapSplits reads every non-deleted ZCASHFLOWTRANSACTIONENTRY row. An entry
-// with no imported parent transaction (NULL, dangling, deleted, Smart/Investment
-// or itself excluded) is skipped, its category recorded in refs. An entry under
-// an imported transaction whose amount is missing, stored as text or blob, has
-// more than 2 decimals beyond the snap tolerance or is too large, is added to
-// off and excluded. A category reference to a deleted or missing category, or
-// to a PK in uncategorized, stores NULL.
+// mapSplits reads every non-deleted entry into a split of txns (register and investment cash rows); an entry
+// under no such transaction is skipped and its category noted in refs, an unreadable amount goes to off.
 func mapSplits(
 	ctx context.Context, src Source, txns map[int64]txnRef, existingCategories, uncategorized map[int64]bool, refs *categoryRefs, off *offenders,
 ) ([]store.Split, []transferLink, map[int64]string, error) {
@@ -49,7 +44,7 @@ func mapSplits(
 		}
 		txn, ok := txns[parent.Int64]
 		if !ok {
-			refs.add(category) // parent is missing, deleted, Smart/Investment, or itself excluded
+			refs.add(category)
 			return nil
 		}
 		dateStr := txn.Date.Format(dateLayout)
@@ -91,6 +86,28 @@ func mapSplits(
 		return nil, nil, nil, fmt.Errorf("read splits: %w", err)
 	}
 	return rows, links, ids, nil
+}
+
+// entrylessSplitIDFormat is the id of an entry-less investment cash row's split, from its source Z_PK.
+const entrylessSplitIDFormat = "split-itxn-%d"
+
+// addEntrylessSplits appends one uncategorised split for each cash row that has none, with a zero link so
+// links[i] stays aligned with splits[i]. Its source id is the row's Z_PK negated, so it never equals an entry's.
+func addEntrylessSplits(cashRows []store.Transaction, splits []store.Split, links []transferLink) ([]store.Split, []transferLink) {
+	covered := make(map[string]bool, len(splits))
+	for _, s := range splits {
+		covered[s.TransactionID] = true
+	}
+	for _, cash := range cashRows {
+		if covered[cash.ID] {
+			continue
+		}
+		splits = append(splits, store.Split{
+			ID: fmt.Sprintf(entrylessSplitIDFormat, cash.SourceID), SourceID: -cash.SourceID, TransactionID: cash.ID, Amount: cash.Amount,
+		})
+		links = append(links, transferLink{})
+	}
+	return splits, links
 }
 
 const splitTagsQuery = `SELECT Z_15CASHFLOWTRANSACTIONENTRIES, Z_76USERTAGS FROM Z_15USERTAGS`

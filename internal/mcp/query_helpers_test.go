@@ -59,6 +59,9 @@ type fakeStore struct {
 	held      store.Holdings
 	heldAsked []store.HoldingsParams
 
+	netWorth      store.NetWorth
+	netWorthAsked []store.NetWorthParams
+
 	accounts store.AccountList
 }
 
@@ -71,6 +74,12 @@ func (f *fakeStore) Accounts(context.Context) (store.AccountList, error) {
 func (f *fakeStore) Holdings(_ context.Context, params store.HoldingsParams) (store.Holdings, error) {
 	f.heldAsked = append(f.heldAsked, params)
 	return f.held, f.err
+}
+
+// NetWorth answers with netWorth, or err when set, recording the params.
+func (f *fakeStore) NetWorth(_ context.Context, params store.NetWorthParams) (store.NetWorth, error) {
+	f.netWorthAsked = append(f.netWorthAsked, params)
+	return f.netWorth, f.err
 }
 
 // Search answers with found, or err when set, recording the params and keeping at most Limit rows as the real store does.
@@ -228,6 +237,14 @@ func (h *harness) searchTransactions(t *testing.T, arguments any) *sdk.CallToolR
 func (h *harness) holdings(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
 	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "holdings", Arguments: arguments})
+	require.NoError(t, err)
+	return result
+}
+
+// netWorth calls the net_worth tool with arguments.
+func (h *harness) netWorth(t *testing.T, arguments any) *sdk.CallToolResult {
+	t.Helper()
+	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "net_worth", Arguments: arguments})
 	require.NoError(t, err)
 	return result
 }

@@ -20,9 +20,9 @@ func Test_run_accounts_and_sql_help_carry_the_holdings_copy(t *testing.T) {
 
 	require.Equal(t, 0, accountsCode)
 	require.Equal(t, 0, sqlCode)
-	assert.Contains(t, accountsOut.String(), `Brokerage and retirement accounts show "not valued": quarry values their
-holdings (quarry holdings) but not yet the cash in them, so it cannot
-compute their balance.`)
+	assert.Contains(t, accountsOut.String(), `Brokerage and retirement accounts' balance is the cash in them plus the
+value of their holdings today, each at the latest price Quicken recorded
+(quarry holdings lists them).`)
 	assert.Contains(t, sqlOut.String(), `currency (securities.currency, NULL when Quicken records none).
 holding_shares holds each account's count of each security, one row per span
 of days it is unchanged and not zero (from_date through to_date, NULL while
@@ -36,4 +36,17 @@ it by date. Neither includes cash in investment accounts.`)
 add_shares, buy, capital_gain_long, capital_gain_short, dividend, interest,
 margin_interest, misc_expense, misc_income, reinvest_dividend,
 remove_shares, sell, split.`)
+}
+
+// Needs run(): the help text is assembled with the flags, not by calling a command directly.
+func Test_run_holdings_help_ends_by_pointing_at_accounts_for_the_balance_with_cash(t *testing.T) {
+	t.Setenv("HOME", "")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"holdings", "--help"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode)
+	assert.Contains(t, stdout.String(), `The total is the value of the securities only, without the cash held in
+investment accounts; quarry accounts shows each account's balance, cash
+included.`)
 }

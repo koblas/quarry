@@ -24,6 +24,7 @@ type fakeReportStore struct {
 	charges      store.Charges
 	findings     store.FindingList
 	holdings     store.Holdings
+	netWorth     store.NetWorth
 	result       store.QueryResult
 	gotQuery     *string
 	gotMaxRows   *int
@@ -97,4 +98,8 @@ func span(t *testing.T, first, last string) store.TransactionRange {
 	to, err := time.Parse(time.DateOnly, last)
 	require.NoError(t, err)
 	return store.TransactionRange{First: from, Last: to}
+}
+
+func (f fakeReportStore) NetWorth(context.Context, store.NetWorthParams) (store.NetWorth, error) {
+	return f.netWorth, f.err
 }

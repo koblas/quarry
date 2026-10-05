@@ -88,6 +88,11 @@ func (s *stallingStore) Holdings(ctx context.Context, _ store.HoldingsParams) (s
 	return store.Holdings{}, &store.OpenError{Fault: store.OpenFaultOther, Path: testStorePath, Err: errDriverInterrupt}
 }
 
+func (s *stallingStore) NetWorth(ctx context.Context, _ store.NetWorthParams) (store.NetWorth, error) {
+	s.wait(ctx)
+	return store.NetWorth{}, &store.OpenError{Fault: store.OpenFaultOther, Path: testStorePath, Err: errDriverInterrupt}
+}
+
 // serveStalling serves the tools over st with opts, returning the client session and the server's stderr.
 func serveStalling(t *testing.T, st *stallingStore, opts ...mcp.Option) (*sdk.ClientSession, *bytes.Buffer) {
 	t.Helper()
@@ -124,6 +129,7 @@ func Test_each_tool_answers_its_deadline_with_its_ruled_line(t *testing.T) {
 		{"anomalies", map[string]any{}, time.Second, "anomalies stopped after 1 second; try again"},
 		{"search_transactions", map[string]any{}, time.Second, "search_transactions stopped after 1 second; try again"},
 		{"holdings", map[string]any{}, time.Second, "holdings stopped after 1 second; try again"},
+		{"net_worth", map[string]any{}, time.Second, "net_worth stopped after 1 second; try again"},
 	}
 
 	for _, c := range cases {

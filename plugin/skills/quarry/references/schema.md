@@ -11,18 +11,22 @@ leaving the account. v_cash_flow and v_spending also carry each amount in
 CAD and in USD (amount_cad and amount_usd; spent_cad and spent_usd),
 converted per split at the Bank of Canada rate for its date and rounded to
 the cent, as quarry spend and quarry cashflow convert; they are NULL for a
-date before the first rate. v_account_balances has balance_cad and
-balance_usd at today's rate. fx_rates holds one rate per business day:
-usd_cad is the Canadian dollars in one US dollar. For spending and income,
-query v_spending and v_cash_flow: they already leave out transfers between
-your own accounts, Quicken's system categories, transactions excluded from
-reports and accounts Quicken leaves out of reports, so their totals match
-quarry spend and quarry cashflow. A transfer leg is any split named in
-transfers.from_split_id or transfers.to_split_id.
+date before the first rate. v_account_balances (v_balances_daily for
+today) has balance_cad and balance_usd at today's rate. fx_rates holds
+one rate per business day: usd_cad is the Canadian dollars in one US
+dollar. For spending and income, query v_spending and v_cash_flow: they
+already leave out transfers between your own accounts, Quicken's system
+categories, transactions excluded from reports and accounts Quicken
+leaves out of reports, so their totals match quarry spend and quarry
+cashflow. A transfer leg is any split named in transfers.from_split_id
+or transfers.to_split_id.
 
-Investment transactions are in investment_transactions, not in transactions,
-v_cash_flow or v_spending, so dividends, interest and trades are not counted
-as income or spending there. Their amount is DECIMAL(18,2) in the account's
+Each investment transaction that moves cash also has a row in transactions
+(investment_transaction_id names it; NULL for a register entry), one split per
+Quicken entry, so an account's cash is the sum of its transactions. In
+v_cash_flow dividends, interest and capital-gain distributions are income;
+buys, sells and share moves are neither. investment_transactions holds each
+one's action, security and shares; its amount is DECIMAL(18,2) in the account's
 own currency, negative when cash leaves the account; commission is
 DECIMAL(18,4) in the account's own currency as Quicken recorded it (some
 brokers charge fractions of a cent), NULL when there is none; shares is
@@ -42,6 +46,16 @@ it by date. Neither includes cash in investment accounts. action is one of
 add_shares, buy, capital_gain_long, capital_gain_short, dividend, interest,
 margin_interest, misc_expense, misc_income, reinvest_dividend,
 remove_shares, sell, split.
+
+v_balances_daily has one row per account per day from its first transaction
+or holding through today; cash is the sum of its transactions to that day,
+holdings_value its holdings' value in its own currency (NULL outside
+brokerage and retirement accounts), balance is cash plus holdings_value, as
+quarry accounts and quarry networth use; filter by date. v_net_worth has one
+row per day, account type and currency, adding up the balances of the
+accounts Quicken's reports count, as quarry networth does; sum balance_cad
+or balance_usd over one date for the total; a NULL there means no exchange
+rate for that day.
 
 ## Findings
 
@@ -249,6 +263,7 @@ each one's status.
 | `cheque_number` | `VARCHAR` |
 | `excluded_from_reports` | `BOOLEAN` |
 | `posted_date` | `DATE` |
+| `investment_transaction_id` | `VARCHAR` |
 
 ### transfers
 
@@ -274,9 +289,30 @@ each one's status.
 | `institution` | `VARCHAR` |
 | `closed` | `BOOLEAN` |
 | `active` | `BOOLEAN` |
-| `balance` | `DECIMAL(18,2)` |
-| `balance_cad` | `DECIMAL(18,2)` |
-| `balance_usd` | `DECIMAL(18,2)` |
+| `cash` | `DECIMAL(18,2)` |
+| `holdings_value` | `DECIMAL(38,2)` |
+| `balance` | `DECIMAL(38,2)` |
+| `balance_cad` | `DECIMAL(38,2)` |
+| `balance_usd` | `DECIMAL(38,2)` |
+
+### v_balances_daily
+
+one row per account per day from its first transaction or holding through today; cash is the sum of its transactions to that day, holdings_value its holdings' value in its own currency (NULL outside brokerage and retirement accounts), balance is cash plus holdings_value, as quarry accounts and quarry networth use; filter by date.
+
+| column | type |
+| --- | --- |
+| `date` | `DATE` |
+| `account_id` | `VARCHAR` |
+| `account` | `VARCHAR` |
+| `type` | `VARCHAR` |
+| `currency` | `VARCHAR` |
+| `cash` | `DECIMAL(18,2)` |
+| `holdings_value` | `DECIMAL(38,2)` |
+| `holdings_unvalued` | `BIGINT` |
+| `balance` | `DECIMAL(38,2)` |
+| `balance_cad` | `DECIMAL(38,2)` |
+| `balance_usd` | `DECIMAL(38,2)` |
+| `usd_cad` | `DECIMAL(10,6)` |
 
 ### v_cash_flow
 
@@ -319,6 +355,20 @@ one row per holding per day it is held, through today, so filter by date; value 
 | `value_cad` | `DECIMAL(38,2)` |
 | `value_usd` | `DECIMAL(38,2)` |
 | `usd_cad` | `DECIMAL(10,6)` |
+
+### v_net_worth
+
+net worth by day, account type and currency over the accounts Quicken's reports count, as quarry networth does; sum balance_cad or balance_usd over one date for the total; a NULL there means no exchange rate for that day.
+
+| column | type |
+| --- | --- |
+| `date` | `DATE` |
+| `type` | `VARCHAR` |
+| `currency` | `VARCHAR` |
+| `accounts` | `BIGINT` |
+| `balance` | `DECIMAL(38,2)` |
+| `balance_cad` | `DECIMAL(38,2)` |
+| `balance_usd` | `DECIMAL(38,2)` |
 
 ### v_spending
 

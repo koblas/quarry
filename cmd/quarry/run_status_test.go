@@ -50,7 +50,7 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 		"Source", abbreviated(t, bundle.Dir, home),
 		"Dates", "2026-01-05 to 2026-03-20",
 		"Rows", "4 transactions, 4 splits, 2 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices",
-		"Balances", "1 account matches Quicken's last reconciled balance; 1 never reconciled and 1 investment account not checked",
+		"Balances", "1 account matches Quicken's last reconciled balance; 1 never reconciled and 1 investment account's cash not checked",
 		"Splits", "all 4 transactions equal the sum of their splits",
 		"Shares", "no holdings to check",
 		"Transfers", "1 paired, 1 one-sided",
@@ -58,6 +58,27 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 		"Rates", "none, so amounts are not converted; run quarry sync to fetch them from the Bank of Canada",
 	)
 	assert.Equal(t, want, stdout.String())
+}
+
+func Test_run_status_says_investment_accounts_cash_is_not_checked(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	b := v9fixture.NewBuilder()
+	brokerage := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	ira := b.Account(v9fixture.AccountRow{Name: "IRA", Type: "RETIREMENTIRA", Currency: "CAD", Active: true})
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	dividend := new(int64(10))
+	for _, account := range []int64{brokerage, ira} {
+		pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: account, PostedDate: &day, Type: dividend, Amount: "12.00"})
+		b.Entry(v9fixture.EntryRow{Parent: pk, Amount: "12.00"})
+	}
+	syncBundle(t, b.WriteBundle(t, filepath.Join(home, "Documents")))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Contains(t, stdout.String(), fmt.Sprintf("%-10s%s\n", "Balances", "no accounts to check; 2 investment accounts' cash not checked"))
 }
 
 func Test_run_status_reports_the_latest_build_when_import_runs_holds_several(t *testing.T) {
@@ -129,6 +150,7 @@ quarry never writes to the Quicken file.`)
 		"  help        Help about any command\n"+
 		"  holdings    List the securities held in each account and their value\n"+
 		"  mcp         Serve quarry's store to Claude over MCP (stdio)\n"+
+		"  networth    Show net worth today or at each month end, by account type and currency\n"+
 		"  recurring   List charges that repeat every week, month, quarter or year\n"+
 		"  search      Find transactions by payee, memo, amount, date, account or category\n"+
 		"  snapshots   List the snapshots quarry has taken and which one the store was built from\n"+

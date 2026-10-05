@@ -85,6 +85,14 @@ func Test_run_mcp_logs_only_the_withheld_line_for_a_store_read_fault(t *testing.
 			damage: brokenStore("DROP VIEW v_holdings"), reason: "Table with name v_holdings does not exist!",
 		},
 		{
+			name: "net_worth, store cannot be opened", tool: "net_worth",
+			damage: directoryStore, reason: `Could not read from file "{store}": Is a directory`,
+		},
+		{
+			name: "net_worth, its view dropped", tool: "net_worth",
+			damage: brokenStore("DROP VIEW v_net_worth"), reason: "Table with name v_net_worth does not exist!",
+		},
+		{
 			name: "describe_schema, a table dropped", tool: "describe_schema",
 			damage: brokenStore("DROP TABLE categories CASCADE"), reason: "Table with name categories does not exist!",
 		},

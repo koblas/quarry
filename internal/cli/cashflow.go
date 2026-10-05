@@ -52,9 +52,11 @@ your own accounts, Quicken's system categories and transactions marked
 "exclude from reports" are left out, and refunds are netted. Accounts Quicken
 leaves out of reports ("not in reports" in quarry accounts) and accounts
 that use Quicken's linked account tracking ("linked tracking") are left out
-here too. Uncategorized splits count as income when they bring money in and
-as spending when they take money out. The Spent column equals quarry spend's
-total for the same period, accounts and currency.
+here too. In brokerage and retirement accounts, dividends, interest and
+capital-gain distributions count as income; buying, selling and moving
+shares count as neither. Uncategorized splits count as income when they
+bring money in and as spending when they take money out. The Spent column
+equals quarry spend's total for the same period, accounts and currency.
 
 Savings rate is net divided by income, and shows n/a when income is zero or
 less. A period that --since or --until cuts short is marked partial.`,

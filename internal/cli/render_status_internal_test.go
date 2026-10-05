@@ -98,7 +98,7 @@ func Test_renderStatus(t *testing.T) {
 			"Dates     2003-01-04 to 2026-09-26\n" +
 			"Rows      18,204 transactions, 21,977 splits, 3,141 transfers, 1,873 payees, 312 categories, 14 tags; " +
 			"1,605 investment transactions, 84 securities, 99,352 prices\n" +
-			"Balances  35 accounts match Quicken's last reconciled balance; 3 never reconciled and 4 investment accounts not checked\n" +
+			"Balances  35 accounts match Quicken's last reconciled balance; 3 never reconciled and 4 investment accounts' cash not checked\n" +
 			"Splits    all 18,204 transactions equal the sum of their splits\n" +
 			"Shares    7 holdings match Quicken's share counts\n" +
 			"Transfers 3,112 paired, 29 one-sided\n" +

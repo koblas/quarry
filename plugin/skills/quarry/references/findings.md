@@ -14,6 +14,7 @@ Use this to walk the user through what to clean up in their Quicken file. quarry
 - `duplicate`: two transactions in one account with the same amount, dated within 3 days of each other, unless both are reconciled. Fix in Quicken: delete the extra one, or ignore the pair if both are real.
 - `one-sided-transfer`: a transfer with no matching transaction in the other account. Fix in Quicken: re-enter it as a transfer between the two accounts, or ignore it if the other account is not in this file.
 - `unlinked-transfer`: two transactions in different accounts of the same currency that look like one transfer (opposite amounts, within 3 days) but are not linked as one. Fix in Quicken: make the pair one transfer between the two accounts, or ignore it if no money moved between the user's accounts.
+- `duplicate` and `unlinked-transfer` compare register entries only, not buys, sells, dividends or other investment transactions.
 - `uncategorized`: splits with no category, one finding per payee. `quarry cashflow` counts them as income or spending. Fix in Quicken: give that payee's splits a category.
 - `mixed-categories`: a payee whose transactions go back and forth between categories. Fix in Quicken: pick one category for that payee's transactions, or ignore it if the mix is intended.
 - `payee-variants`: payees whose names differ only in case, punctuation, spacing, or store and reference numbers. Fix in Quicken: rename them to one payee and add a renaming rule, or ignore the group if they are different merchants.
