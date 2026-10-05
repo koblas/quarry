@@ -13,6 +13,7 @@
 | SCENARIO-12 | code-first | A, B1, B2, V (+ product-vision copy ruling on history cells) | 0/2/2/0 | yes (same-day since/until control; native zero-balance cell; fold: monthEnd doc) |
 | SCENARIO-15 (+11) | code-first | A, B1, V | 0/1/1/0 | yes (as-of × native and refusal × --json cells; fold: seed doc) |
 | SCENARIO-14a | code-first | A, B1, B2, V | 0/2/3/1 | yes (investment-type guard on unvalued read; closed account × networth; folds: zero price, two doc trims) |
+| SCENARIO-14b | code-first | A, B1, B2, B3, V (+ product-vision copy ruling on USD form / history totals) | 0/1/4/1 | yes (history × --json; folds: USD-reporting history row, 3 doc trims, STATE dedupe) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
