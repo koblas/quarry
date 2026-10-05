@@ -1,6 +1,7 @@
 package duckstore_test
 
 import (
+	"math/big"
 	"os"
 	"os/exec"
 	"testing"
@@ -42,10 +43,10 @@ func accountRates(t *testing.T, rates ...store.Rate) store.AccountList {
 	return got
 }
 
-func cells(list store.AccountList) [][]*int64 {
-	out := make([][]*int64, len(list.Accounts))
+func cells(list store.AccountList) [][]*big.Int {
+	out := make([][]*big.Int, len(list.Accounts))
 	for i, a := range list.Accounts {
-		out[i] = []*int64{new(a.Balance), a.BalanceCAD, a.BalanceUSD}
+		out[i] = []*big.Int{a.Balance, a.BalanceCAD, a.BalanceUSD}
 	}
 	return out
 }
@@ -57,10 +58,10 @@ func Test_accounts_converts_at_the_latest_rate_dated_today_or_earlier_ignoring_a
 
 	got := accountRates(t, past, later)
 
-	assert.Equal(t, [][]*int64{
-		{new(int64(10000)), new(int64(10000)), new(int64(8000))},
-		{new(int64(0)), new(int64(0)), new(int64(0))},
-		{new(int64(800)), new(int64(1000)), new(int64(800))},
+	assert.Equal(t, [][]*big.Int{
+		{big.NewInt(10000), big.NewInt(10000), big.NewInt(8000)},
+		{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
+		{big.NewInt(800), big.NewInt(1000), big.NewInt(800)},
 	}, cells(got))
 }
 
@@ -69,10 +70,10 @@ func Test_accounts_gives_a_cad_account_its_own_cad_cell_and_no_other_cell_withou
 
 	got := accountRates(t)
 
-	assert.Equal(t, [][]*int64{
-		{new(int64(10000)), new(int64(10000)), nil},
-		{new(int64(0)), nil, new(int64(0))},
-		{new(int64(800)), nil, new(int64(800))},
+	assert.Equal(t, [][]*big.Int{
+		{big.NewInt(10000), big.NewInt(10000), nil},
+		{big.NewInt(0), nil, big.NewInt(0)},
+		{big.NewInt(800), nil, big.NewInt(800)},
 	}, cells(got))
 }
 
@@ -121,7 +122,7 @@ func Test_accounts_converts_a_cad_balance_to_usd_at_the_latest_rate(t *testing.T
 
 	got := accountRates(t, rate)
 
-	assert.Equal(t, new(int64(6250)), got.Accounts[0].BalanceUSD)
+	assert.Equal(t, big.NewInt(6250), got.Accounts[0].BalanceUSD)
 }
 
 func Test_accounts_use_the_local_date_in_every_zone(t *testing.T) {
@@ -154,5 +155,5 @@ func Test_accounts_zone_probe(t *testing.T) {
 		store.Rate{Date: tomorrow, USDCAD: 1_400_000, Series: store.SeriesCurrent})
 
 	assert.Equal(t, today, got.AsOf)
-	assert.Equal(t, new(int64(1040)), got.Accounts[2].BalanceCAD)
+	assert.Equal(t, big.NewInt(1040), got.Accounts[2].BalanceCAD)
 }

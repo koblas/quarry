@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/koblas/quarry/internal/platform/money"
@@ -14,8 +15,13 @@ import (
 func balanceRow(name, accountType, currency string, cents int64, closed, active bool) store.AccountBalance {
 	return store.AccountBalance{
 		Name: name, Type: accountType, Currency: currency, Closed: closed, Active: active,
-		Balance: cents,
+		Balance: big.NewInt(cents), Cash: big.NewInt(cents),
 	}
+}
+
+func cents(text string) *big.Int {
+	n, _ := new(big.Int).SetString(text, 10)
+	return n
 }
 
 func withNotInReports(a store.AccountBalance) store.AccountBalance {
@@ -64,13 +70,22 @@ func Test_renderAccounts(t *testing.T) {
 		{
 			name: "an investment account's Balance cell is cash plus holdings value, widening the column",
 			accounts: []store.AccountBalance{
-				{Name: "Brokerage", Type: "brokerage", Currency: "CAD", Active: true, Cash: 1000000, HoldingsValue: new(int64(20500000)), Balance: 21500000},
+				{Name: "Brokerage", Type: "brokerage", Currency: "CAD", Active: true, Cash: big.NewInt(1000000), HoldingsValue: big.NewInt(20500000), Balance: big.NewInt(21500000)},
 				balanceRow("Chequing", "chequing", "CAD", 1234567, false, true),
 			},
 			want: "" +
 				"Account    Type       Currency     Balance  Status\n" +
 				"Brokerage  brokerage  CAD       215,000.00\n" +
 				"Chequing   chequing   CAD        12,345.67\n",
+		},
+		{
+			name: "a balance past 64 bits renders in exact cents, grouped",
+			accounts: []store.AccountBalance{
+				{Name: "Brokerage", Type: "brokerage", Currency: "CAD", Active: true, Cash: big.NewInt(0), HoldingsValue: cents("99999999999999999800000000"), Balance: cents("99999999999999999800000000")},
+			},
+			want: "" +
+				"Account    Type       Currency                             Balance  Status\n" +
+				"Brokerage  brokerage  CAD       999,999,999,999,999,998,000,000.00\n",
 		},
 		{
 			name: "a non-ASCII name padded by rune count",
@@ -107,14 +122,14 @@ func listingIn(currency money.Currency, accounts ...store.AccountBalance) report
 	return report.AccountListing{Accounts: accounts, Currency: currency}
 }
 
-func withCells(a store.AccountBalance, cad, usd *int64) store.AccountBalance {
+func withCells(a store.AccountBalance, cad, usd *big.Int) store.AccountBalance {
 	a.BalanceCAD, a.BalanceUSD = cad, usd
 	return a
 }
 
 func Test_renderAccounts_adds_the_reporting_currency_column_after_Balance(t *testing.T) {
-	chequing := withCells(balanceRow("Chequing", "chequing", "CAD", 1234567, false, true), new(int64(1234567)), new(int64(987654)))
-	usChequing := withCells(balanceRow("US Chequing", "chequing", "USD", 831000, false, true), new(int64(1038750)), new(int64(831000)))
+	chequing := withCells(balanceRow("Chequing", "chequing", "CAD", 1234567, false, true), big.NewInt(1234567), big.NewInt(987654))
+	usChequing := withCells(balanceRow("US Chequing", "chequing", "USD", 831000, false, true), big.NewInt(1038750), big.NewInt(831000))
 	brokerage := balanceRow("Brokerage", "brokerage", "USD", 0, false, true)
 	cases := []struct {
 		name    string
@@ -142,7 +157,7 @@ func Test_renderAccounts_adds_the_reporting_currency_column_after_Balance(t *tes
 			name: "an imported balance no rate converts reads no rate, and its width sets the column",
 			listing: listingIn(money.CAD,
 				withCells(chequing, chequing.BalanceCAD, nil),
-				withCells(balanceRow("US Chequing", "chequing", "USD", 831000, false, true), nil, new(int64(831000)))),
+				withCells(balanceRow("US Chequing", "chequing", "USD", 831000, false, true), nil, big.NewInt(831000))),
 			want: "" +
 				"Account      Type      Currency    Balance     In CAD  Status\n" +
 				"Chequing     chequing  CAD       12,345.67  12,345.67\n" +
@@ -157,7 +172,7 @@ func Test_renderAccounts_adds_the_reporting_currency_column_after_Balance(t *tes
 		},
 		{
 			name:    "a closed account converts like any other",
-			listing: listingIn(money.CAD, withCells(balanceRow("Old US", "chequing", "USD", 100, true, true), new(int64(125)), new(int64(100)))),
+			listing: listingIn(money.CAD, withCells(balanceRow("Old US", "chequing", "USD", 100, true, true), big.NewInt(125), big.NewInt(100))),
 			want: "" +
 				"Account  Type      Currency  Balance  In CAD  Status\n" +
 				"Old US   chequing  USD          1.00    1.25  closed\n",
@@ -202,7 +217,7 @@ func Test_renderAccounts_adds_the_reporting_currency_column_after_Balance(t *tes
 
 func Test_renderAccounts_says_no_rate_for_every_cell_a_missing_rate_leaves_unconverted(t *testing.T) {
 	zeroBrokerage := balanceRow("Brokerage", "brokerage", "USD", 0, false, true)
-	missingRate := withCells(balanceRow("US Chequing", "chequing", "USD", 831000, false, true), nil, new(int64(831000)))
+	missingRate := withCells(balanceRow("US Chequing", "chequing", "USD", 831000, false, true), nil, big.NewInt(831000))
 
 	got := renderAccounts(listingIn(money.CAD, zeroBrokerage, missingRate))
 

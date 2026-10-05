@@ -4,6 +4,7 @@ package cli
 
 import (
 	"encoding/json"
+	"math/big"
 	"testing"
 	"time"
 
@@ -18,10 +19,13 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
 	list := store.AccountList{
 		AsOf: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC),
 		Accounts: []store.AccountBalance{
-			{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Institution: new("First Bank"), Active: true, LinkedTracking: true, Balance: 1234567, Cash: 1234567},
-			{ID: "acct-2", Name: "Visa", Type: "credit_card", Currency: "CAD", Closed: true, Active: true, NotInReports: true, Balance: -120417, Cash: -120417},
-			{ID: "acct-3", Name: "Old Savings", Type: "savings", Currency: "USD", Balance: 0},
-			{ID: "acct-4", Name: "RRSP", Type: "retirement", Currency: "CAD", Institution: new("First Bank"), Active: true, Balance: 250000, Cash: 100000, HoldingsValue: new(int64(150000))},
+			{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Institution: new("First Bank"), Active: true, LinkedTracking: true, Balance: big.NewInt(1234567), Cash: big.NewInt(1234567)},
+			{ID: "acct-2", Name: "Visa", Type: "credit_card", Currency: "CAD", Closed: true, Active: true, NotInReports: true, Balance: big.NewInt(-120417), Cash: big.NewInt(-120417)},
+			{ID: "acct-3", Name: "Old Savings", Type: "savings", Currency: "USD", Balance: big.NewInt(0), Cash: big.NewInt(0)},
+			{
+				ID: "acct-4", Name: "RRSP", Type: "retirement", Currency: "CAD", Institution: new("First Bank"), Active: true,
+				Balance: big.NewInt(250000), Cash: big.NewInt(100000), HoldingsValue: big.NewInt(150000),
+			},
 		},
 	}
 
@@ -120,7 +124,7 @@ func Test_renderAccountsJSON_carries_the_warnings(t *testing.T) {
 func Test_renderAccountsJSON_renders_an_empty_institution_as_null(t *testing.T) {
 	list := store.AccountList{
 		AsOf:     time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC),
-		Accounts: []store.AccountBalance{{ID: "acct-1", Institution: new("")}},
+		Accounts: []store.AccountBalance{{ID: "acct-1", Institution: new(""), Balance: big.NewInt(0), Cash: big.NewInt(0)}},
 	}
 
 	got, err := renderAccountsJSON(report.AccountListing{AccountList: list}, []string{})
@@ -161,9 +165,9 @@ func Test_allClosedNote(t *testing.T) {
 func jsonListing(currency money.Currency) report.AccountListing {
 	usd := store.AccountBalance{
 		ID: "acct-usd", Name: "US Chequing", Type: "chequing", Currency: "USD", Active: true,
-		Balance: 800, BalanceCAD: new(int64(1000)), BalanceUSD: new(int64(800)),
+		Balance: big.NewInt(800), Cash: big.NewInt(800), BalanceCAD: big.NewInt(1000), BalanceUSD: big.NewInt(800),
 	}
-	brokerage := store.AccountBalance{ID: "acct-brk", Name: "Brokerage", Type: "brokerage", Currency: "USD", Active: true}
+	brokerage := store.AccountBalance{ID: "acct-brk", Name: "Brokerage", Type: "brokerage", Currency: "USD", Active: true, Balance: big.NewInt(0), Cash: big.NewInt(0)}
 	return report.AccountListing{
 		AsOf: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC), Accounts: []store.AccountBalance{usd, brokerage},
 		Currency: currency,
@@ -237,9 +241,9 @@ func Test_renderAccountsJSON_reads_back_cash_on_every_account_and_holdings_value
 	list := report.AccountListing{
 		AsOf: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC),
 		Accounts: []store.AccountBalance{
-			{ID: "acct-chq", Type: "chequing", Currency: "CAD", Balance: 1500, Cash: 1500},
-			{ID: "acct-brk", Type: "brokerage", Currency: "CAD", Balance: 13000, Cash: 10000, HoldingsValue: new(int64(3000))},
-			{ID: "acct-empty", Type: "brokerage", Currency: "CAD"},
+			{ID: "acct-chq", Type: "chequing", Currency: "CAD", Balance: big.NewInt(1500), Cash: big.NewInt(1500)},
+			{ID: "acct-brk", Type: "brokerage", Currency: "CAD", Balance: big.NewInt(13000), Cash: big.NewInt(10000), HoldingsValue: big.NewInt(3000)},
+			{ID: "acct-empty", Type: "brokerage", Currency: "CAD", Balance: big.NewInt(0), Cash: big.NewInt(0)},
 		},
 	}
 

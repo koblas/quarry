@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/humanize"
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 )
@@ -16,18 +17,19 @@ import (
 // balance on a day listed, the holdings it cannot value, then the balances no exchange rate converts; never nil.
 func NetWorthWarnings(n report.NetWorth) []string {
 	lines := append([]string{}, emptyNetWorthWarnings(n)...)
-	lines = append(lines, unvaluedWarnings(n.Unvalued, n.AsOf, n.Window != nil)...)
+	lines = append(lines, unvaluedWarnings(n.Unvalued, n.AsOf, n.Window != nil, n.FirstRate)...)
 	return append(lines, rateWarnings(n)...)
 }
 
 // AccountsWarnings is the unprefixed warning lines for the holdings l leaves out of its balances; never nil.
 func AccountsWarnings(l report.AccountListing) []string {
-	return unvaluedWarnings(l.Unvalued, l.AsOf, false)
+	return unvaluedWarnings(l.Unvalued, l.AsOf, false, l.FirstRate)
 }
 
 // unvaluedWarnings is the lines for rows, holdings left out of a balance: no price per account, then no
-// currency and other currency per account and security. History counts the days instead of naming one.
-func unvaluedWarnings(rows []store.UnvaluedHolding, asOf time.Time, history bool) []string {
+// currency and other currency per account and security, then no rate per account. History counts the days
+// instead of naming one; firstRate is the store's earliest exchange rate, zero when it has none.
+func unvaluedWarnings(rows []store.UnvaluedHolding, asOf time.Time, history bool, firstRate time.Time) []string {
 	sorted := slices.SortedFunc(slices.Values(rows), compareLeftOut)
 	lines := noPriceLines(sorted, asOf, history)
 	lines = append(lines, perAccountSecurity(sorted,
@@ -36,7 +38,7 @@ func unvaluedWarnings(rows []store.UnvaluedHolding, asOf time.Time, history bool
 			return fmt.Sprintf("%q has no currency in Quicken, so quarry leaves its value out of %q's balance; "+
 				"set its currency in Quicken, then run quarry sync", securityName(r), r.Account)
 		})...)
-	return append(lines, perAccountSecurity(sorted,
+	lines = append(lines, perAccountSecurity(sorted,
 		func(r store.UnvaluedHolding) bool {
 			return r.Priced && r.Currency != nil && !report.Convertible(store.Holding{Currency: r.Currency})
 		},
@@ -44,7 +46,45 @@ func unvaluedWarnings(rows []store.UnvaluedHolding, asOf time.Time, history bool
 			return fmt.Sprintf("%q is priced in %s, which quarry does not convert, so its value is left out of %q's balance",
 				securityName(r), *r.Currency, r.Account)
 		})...)
+	return append(lines, noRateLines(sorted, asOf, history, firstRate)...)
 }
+
+// noRateLines is one line per account with a priced CAD or USD holding in sorted that only an exchange rate would
+// value. The read leaves out such a holding only when it is priced in the other of the two than its account's.
+func noRateLines(sorted []store.UnvaluedHolding, asOf time.Time, history bool, firstRate time.Time) []string {
+	lines := []string{}
+	for _, group := range byAccount(sorted, func(r store.UnvaluedHolding) bool {
+		return r.Priced && report.Convertible(store.Holding{Currency: r.Currency})
+	}) {
+		account, held := group[0].Account, *group[0].Currency
+		left := money.CAD
+		if held == money.CAD.String() {
+			left = money.USD
+		}
+		switch {
+		case firstRate.IsZero():
+			lines = append(lines, fmt.Sprintf("%q holds a %s security and the store has no exchange rates, "+
+				"so its %s balance leaves it out; run quarry sync to fetch rates", account, held, left))
+		case history:
+			lines = append(lines, fmt.Sprintf("%q holds a %s security on %s of the month ends listed, before %s, "+
+				"the first exchange rate in the store, so its %s balance leaves it out on those days",
+				account, held, humanize.Thousands(distinct(group, dayKey)), firstRate.Format(DateLayout), left))
+		default:
+			securities := distinct(group, func(r store.UnvaluedHolding) string { return r.SecurityID })
+			pronoun := "them"
+			if securities == 1 {
+				pronoun = "it"
+			}
+			lines = append(lines, fmt.Sprintf("%q holds %s valued on %s, before %s, the first exchange rate in the store, "+
+				"so its %s balance leaves %s out", account, humanize.Count(securities, held+" security", held+" securities"),
+				asOf.Format(DateLayout), firstRate.Format(DateLayout), left, pronoun))
+		}
+	}
+	return lines
+}
+
+// dayKey is the civil day of r's date.
+func dayKey(r store.UnvaluedHolding) string { return r.Date.Format(time.DateOnly) }
 
 // compareLeftOut orders rows by account name ignoring case, then name, then id, and the same for the security.
 func compareLeftOut(a, b store.UnvaluedHolding) int {
@@ -71,7 +111,7 @@ func noPriceLines(sorted []store.UnvaluedHolding, asOf time.Time, history bool) 
 		if history {
 			lines = append(lines, fmt.Sprintf("%q holds a security with no price on %s of the month ends listed, "+
 				"so its balance leaves it out on those days; enter prices in Quicken, then run quarry sync",
-				account, humanize.Thousands(distinct(group, func(r store.UnvaluedHolding) string { return r.Date.Format(time.DateOnly) }))))
+				account, humanize.Thousands(distinct(group, dayKey))))
 			continue
 		}
 		securities := distinct(group, func(r store.UnvaluedHolding) string { return r.SecurityID })

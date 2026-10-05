@@ -161,3 +161,19 @@ func Test_run_networth_warns_about_a_closed_accounts_unpriced_holding(t *testing
 		`so its balance leaves it out; enter a price in Quicken, then run quarry sync`+"\n"+
 		leftOutNoCurrencyLine+"\n"+leftOutOtherCurrencyLine+"\n", stderr)
 }
+
+func Test_run_networth_before_the_first_rate_prints_every_holding_warning_before_the_rate_line(t *testing.T) {
+	rows := leftOutHoldingsRows()
+	rows.InvestmentTransactions = append(rows.InvestmentTransactions, holdingsBuy("inv-vti-cad", 8, "acct-cad", "sec-vti", "CAD", 3_000_000))
+	seedLeftOutHoldingsRows(t, rows)
+
+	_, stderr := runNetWorthAtMarch12(t, "--as-of", "2026-03-09")
+
+	assert.Equal(t, `quarry: warning: "Brokerage" holds 1 security with no price on or before 2026-03-09, `+
+		`so its balance leaves it out; enter a price in Quicken, then run quarry sync`+"\n"+
+		leftOutNoCurrencyLine+"\n"+leftOutOtherCurrencyLine+"\n"+
+		`quarry: warning: "Brokerage" holds 1 USD security valued on 2026-03-09, before 2026-03-10, `+
+		`the first exchange rate in the store, so its CAD balance leaves it out`+"\n"+
+		`quarry: warning: USD balances on 2026-03-09, before 2026-03-10, the first exchange rate in the store, `+
+		`are not converted to CAD and are left out of the CAD total; pass --currency native to list them`+"\n", stderr)
+}

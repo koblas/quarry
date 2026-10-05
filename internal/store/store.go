@@ -213,7 +213,7 @@ type NetWorth struct {
 }
 
 // UnvaluedHolding is a holding of an account on Date that has no value in the account's currency, so the
-// account's balance leaves it out: it has no price, no currency, or a currency other than CAD and USD.
+// account's balance leaves it out: it has no price, no currency, a currency other than CAD and USD, or no exchange rate.
 type UnvaluedHolding struct {
 	Date                 time.Time
 	AccountID, Account   string
@@ -640,21 +640,21 @@ type FindingItem struct {
 	OtherAccountID *string
 }
 
-// AccountBalance is one account with its balance in cents: Cash plus HoldingsValue, 0 for an account
-// with no transactions dated on or before AsOf.
+// AccountBalance is one account with its balance in cents, which can pass 64 bits: Balance is Cash plus
+// HoldingsValue, 0 for an account with no transactions dated on or before AsOf. Balance and Cash are never nil.
 type AccountBalance struct {
 	Account
 
-	Balance int64
+	Balance *big.Int
 
 	// Cash is the account's cash in cents; HoldingsValue is its valued holdings in cents,
 	// nil outside a brokerage or retirement account.
-	Cash          int64
-	HoldingsValue *int64
+	Cash          *big.Int
+	HoldingsValue *big.Int
 
 	// BalanceCAD and BalanceUSD are Balance in cents in that currency at the latest rate dated on or before AsOf;
 	// nil when no rate converts it.
-	BalanceCAD, BalanceUSD *int64
+	BalanceCAD, BalanceUSD *big.Int
 }
 
 // AccountList is every account with its balance as of the store's today.

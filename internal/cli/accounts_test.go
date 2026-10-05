@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math/big"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ var asOf = time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
 func closedAccounts(n int) store.AccountList {
 	list := store.AccountList{AsOf: asOf}
 	for range n {
-		list.Accounts = append(list.Accounts, store.AccountBalance{ID: "acct", Name: "Old", Type: "chequing", Currency: "CAD", Closed: true, Active: true, Balance: 0})
+		list.Accounts = append(list.Accounts, store.AccountBalance{ID: "acct", Name: "Old", Type: "chequing", Currency: "CAD", Closed: true, Active: true, Balance: big.NewInt(0), Cash: big.NewInt(0)})
 	}
 	return list
 }
@@ -45,7 +46,7 @@ func executeAccounts(t *testing.T, fake fakeReportStore, stdout, stderr io.Write
 
 func Test_accounts_all_closed_note(t *testing.T) {
 	const header = "Account  Type  Currency  Balance  Status\n"
-	open := store.AccountBalance{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true, Balance: 100}
+	open := store.AccountBalance{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true, Balance: big.NewInt(100), Cash: big.NewInt(100)}
 	mixed := closedAccounts(2)
 	mixed.Accounts = append(mixed.Accounts, open)
 	cases := []struct {
@@ -180,7 +181,10 @@ func leftOutAccounts() fakeReportStore {
 	return fakeReportStore{accounts: store.AccountList{
 		AsOf: asOf,
 		Accounts: []store.AccountBalance{
-			{ID: "acct-1", Name: "Brokerage", Type: store.AccountTypeBrokerage, Currency: "CAD", Active: true, HoldingsValue: new(int64(0)), BalanceCAD: new(int64(0))},
+			{
+				ID: "acct-1", Name: "Brokerage", Type: store.AccountTypeBrokerage, Currency: "CAD", Active: true,
+				Balance: big.NewInt(0), Cash: big.NewInt(0), HoldingsValue: big.NewInt(0), BalanceCAD: big.NewInt(0),
+			},
 		},
 		Unvalued: []store.UnvaluedHolding{
 			{Date: asOf, AccountID: "acct-1", Account: "Brokerage", SecurityID: "sec-1", Security: "Acme", Currency: new("CAD")},

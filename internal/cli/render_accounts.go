@@ -27,7 +27,7 @@ func renderAccounts(l report.AccountListing) string {
 	rows := make([][]string, 0, 1+len(l.Accounts))
 	rows = append(rows, header)
 	for _, a := range l.Accounts {
-		row := []string{escapeCell(a.Name), a.Type, a.Currency, formatMoney(a.Balance)}
+		row := []string{escapeCell(a.Name), a.Type, a.Currency, formatBigMoney(a.Balance)}
 		if converted {
 			row = append(row, convertedCell(l, a))
 		}
@@ -65,7 +65,7 @@ func renderAccounts(l report.AccountListing) string {
 // convertedCell is a's balance in l's currency, "no rate" when a rate should have converted it, else blank.
 func convertedCell(l report.AccountListing, a store.AccountBalance) string {
 	if cents := l.ConvertedBalance(a); cents != nil {
-		return formatMoney(*cents)
+		return formatBigMoney(cents)
 	}
 	if l.NeedsRate(a) {
 		return noRateCell

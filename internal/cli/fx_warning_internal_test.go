@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"math/big"
 	"testing"
 	"time"
 
@@ -14,9 +15,9 @@ import (
 func Test_accountsFXWarnings_says_why_a_row_shows_no_rate(t *testing.T) {
 	asOf := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
 	first := time.Date(2099, time.January, 2, 0, 0, 0, 0, time.UTC)
-	usd := store.AccountBalance{Currency: "USD", Balance: 800, BalanceUSD: new(int64(800))}
-	cad := store.AccountBalance{Currency: "CAD", Balance: 800, BalanceCAD: new(int64(800))}
-	usdBrokerage := store.AccountBalance{Type: store.AccountTypeBrokerage, Currency: "USD", Cash: 800, HoldingsValue: new(int64(0)), Balance: 800}
+	usd := store.AccountBalance{Currency: "USD", Balance: big.NewInt(800), BalanceUSD: big.NewInt(800)}
+	cad := store.AccountBalance{Currency: "CAD", Balance: big.NewInt(800), BalanceCAD: big.NewInt(800)}
+	usdBrokerage := store.AccountBalance{Type: store.AccountTypeBrokerage, Currency: "USD", Cash: big.NewInt(800), HoldingsValue: big.NewInt(0), Balance: big.NewInt(800)}
 	cases := []struct {
 		name     string
 		currency money.Currency
@@ -58,8 +59,8 @@ func Test_accountsFXWarnings_says_why_a_row_shows_no_rate(t *testing.T) {
 func Test_accountsFXWarnings_is_silent_unless_a_listed_row_shows_no_rate(t *testing.T) {
 	asOf := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
 	past := time.Date(2026, time.January, 2, 0, 0, 0, 0, time.UTC)
-	cad := store.AccountBalance{Currency: "CAD", Balance: 800, BalanceCAD: new(int64(800))}
-	usdNoRate := store.AccountBalance{Currency: "USD", Balance: 800}
+	cad := store.AccountBalance{Currency: "CAD", Balance: big.NewInt(800), BalanceCAD: big.NewInt(800)}
+	usdNoRate := store.AccountBalance{Currency: "USD", Balance: big.NewInt(800)}
 	cases := []struct {
 		name     string
 		currency money.Currency

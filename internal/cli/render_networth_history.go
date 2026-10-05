@@ -93,10 +93,12 @@ func optionalMoney(cents *big.Int) string {
 }
 
 // netWorthHistoryCaption names the first and last month end listed, and in CAD or USD the currency of the
-// amounts. A history always lists at least one month end: the window's since never exceeds its until.
+// amounts. A history with no month end listed names no range.
 func netWorthHistoryCaption(n report.NetWorth) string {
-	first, last := n.Dates[0].Date, n.Dates[len(n.Dates)-1].Date
-	caption := "Net worth at each month end " + first.Format(time.DateOnly) + " to " + last.Format(time.DateOnly)
+	caption := "Net worth at each month end"
+	if len(n.Dates) > 0 {
+		caption += " " + n.Dates[0].Date.Format(time.DateOnly) + " to " + n.Dates[len(n.Dates)-1].Date.Format(time.DateOnly)
+	}
 	if n.Currency != money.Native {
 		caption += ", amounts in " + n.Currency.String()
 	}

@@ -1,6 +1,7 @@
 package report_test
 
 import (
+	"math/big"
 	"testing"
 	"time"
 
@@ -130,14 +131,14 @@ func Test_accounts_reads_the_store_once(t *testing.T) {
 }
 
 func Test_accounts_converted_balance_picks_the_cell_of_the_listings_currency(t *testing.T) {
-	a := store.AccountBalance{Balance: 800, BalanceCAD: new(int64(1000)), BalanceUSD: new(int64(790))}
+	a := store.AccountBalance{Balance: big.NewInt(800), BalanceCAD: big.NewInt(1000), BalanceUSD: big.NewInt(790)}
 	cases := []struct {
 		name     string
 		currency money.Currency
-		want     *int64
+		want     *big.Int
 	}{
-		{name: "CAD listing reads the CAD cell", currency: money.CAD, want: new(int64(1000))},
-		{name: "USD listing reads the USD cell", currency: money.USD, want: new(int64(790))},
+		{name: "CAD listing reads the CAD cell", currency: money.CAD, want: big.NewInt(1000)},
+		{name: "USD listing reads the USD cell", currency: money.USD, want: big.NewInt(790)},
 		{name: "native listing has none", currency: money.Native, want: nil},
 	}
 
@@ -151,9 +152,9 @@ func Test_accounts_converted_balance_picks_the_cell_of_the_listings_currency(t *
 }
 
 func Test_accounts_needs_a_rate_only_for_a_balance_with_no_cell_in_a_converted_listing(t *testing.T) {
-	imported := store.AccountBalance{Balance: 800}
-	investment := store.AccountBalance{Type: store.AccountTypeBrokerage, Currency: "USD", Cash: 800, HoldingsValue: new(int64(0)), Balance: 800}
-	converted := store.AccountBalance{Balance: 800, BalanceCAD: new(int64(1000))}
+	imported := store.AccountBalance{Balance: big.NewInt(800)}
+	investment := store.AccountBalance{Type: store.AccountTypeBrokerage, Currency: "USD", Cash: big.NewInt(800), HoldingsValue: big.NewInt(0), Balance: big.NewInt(800)}
+	converted := store.AccountBalance{Balance: big.NewInt(800), BalanceCAD: big.NewInt(1000)}
 	cases := []struct {
 		name     string
 		currency money.Currency

@@ -156,6 +156,13 @@ func Test_renderNetWorth_history_lists_a_column_per_type_with_a_blank_cell_where
 		"2026-02-28  2,000.00               2,000.00\n", got)
 }
 
+func Test_renderNetWorth_history_of_no_month_end_names_no_range(t *testing.T) {
+	got := renderNetWorth(netWorthHistoryOf(money.CAD))
+
+	assert.Equal(t, "Net worth at each month end, amounts in CAD\n\n"+
+		"Month end  Total\n", got)
+}
+
 func Test_renderNetWorth_history_sums_each_type_across_currencies_and_shows_a_zero_sum_as_0_00(t *testing.T) {
 	n := netWorthHistoryOf(money.CAD, monthEndOf(2026, time.January, 31, cadTotal(0),
 		cadRow("chequing", 50_000),

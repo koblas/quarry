@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"math/big"
+
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/report/document"
 )
@@ -41,7 +43,7 @@ func renderAccountsJSON(list report.AccountListing, warnings []string) ([]byte, 
 			Institution: jsonNullInstitution(a.Institution),
 			Closed:      a.Closed, Active: a.Active, InReports: !a.NotInReports,
 			LinkedTracking: a.LinkedTracking,
-			Balance:        document.Money(a.Balance), Cash: document.Money(a.Cash),
+			Balance:        document.BigMoney(a.Balance), Cash: document.BigMoney(a.Cash),
 			HoldingsValue:    jsonNullMoney(a.HoldingsValue),
 			ConvertedBalance: jsonNullMoney(list.ConvertedBalance(a)),
 		}
@@ -57,11 +59,11 @@ func jsonNullInstitution(name *string) *string {
 	return document.NullString(*name)
 }
 
-// jsonNullMoney is document.Money of cents, or nil when cents is nil.
-func jsonNullMoney(cents *int64) *string {
+// jsonNullMoney is document.BigMoney of cents, or nil when cents is nil.
+func jsonNullMoney(cents *big.Int) *string {
 	if cents == nil {
 		return nil
 	}
-	s := document.Money(*cents)
+	s := document.BigMoney(cents)
 	return &s
 }

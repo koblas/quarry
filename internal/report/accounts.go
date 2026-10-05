@@ -2,6 +2,7 @@ package report
 
 import (
 	"context"
+	"math/big"
 	"slices"
 	"strings"
 
@@ -20,9 +21,9 @@ type AccountListing struct {
 	Currency money.Currency
 }
 
-// ConvertedBalance is a's balance in cents in the listing's currency; nil in a native listing and
+// ConvertedBalance is a's balance in cents, which can pass 64 bits, in the listing's currency; nil in a native listing and
 // when no rate on or before AsOf converts it.
-func (l AccountListing) ConvertedBalance(a store.AccountBalance) *int64 {
+func (l AccountListing) ConvertedBalance(a store.AccountBalance) *big.Int {
 	if l.Currency == money.CAD {
 		return a.BalanceCAD
 	}

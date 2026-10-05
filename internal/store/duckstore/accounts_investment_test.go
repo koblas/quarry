@@ -1,6 +1,7 @@
 package duckstore_test
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/koblas/quarry/internal/store"
@@ -32,7 +33,7 @@ func Test_accounts_reads_an_investment_accounts_cash_and_valued_holdings(t *test
 	require.NoError(t, err)
 	a := balanceOf(t, got, acctOne)
 	require.NotNil(t, a.HoldingsValue)
-	assert.Equal(t, []int64{10_000, 3_000, 13_000}, []int64{a.Cash, *a.HoldingsValue, a.Balance})
+	assert.Equal(t, []*big.Int{big.NewInt(10_000), big.NewInt(3_000), big.NewInt(13_000)}, []*big.Int{a.Cash, a.HoldingsValue, a.Balance})
 }
 
 func Test_accounts_leaves_an_unpriced_holding_out_of_an_investment_balance(t *testing.T) {
@@ -46,7 +47,7 @@ func Test_accounts_leaves_an_unpriced_holding_out_of_an_investment_balance(t *te
 	require.NoError(t, err)
 	a := balanceOf(t, got, acctOne)
 	require.NotNil(t, a.HoldingsValue)
-	assert.Equal(t, []int64{0, 1_000, 1_000}, []int64{a.Cash, *a.HoldingsValue, a.Balance})
+	assert.Equal(t, []*big.Int{big.NewInt(0), big.NewInt(1_000), big.NewInt(1_000)}, []*big.Int{a.Cash, a.HoldingsValue, a.Balance})
 }
 
 func Test_accounts_converts_a_usd_holding_into_a_cad_investment_balance(t *testing.T) {
@@ -58,7 +59,7 @@ func Test_accounts_converts_a_usd_holding_into_a_cad_investment_balance(t *testi
 	got, err := st.Accounts(t.Context())
 
 	require.NoError(t, err)
-	assert.Equal(t, int64(1_250), balanceOf(t, got, acctOne).Balance)
+	assert.Equal(t, big.NewInt(1_250), balanceOf(t, got, acctOne).Balance)
 }
 
 func Test_accounts_gives_a_non_investment_account_no_holdings_value(t *testing.T) {
@@ -104,4 +105,21 @@ func Test_account_balances_lists_an_account_with_no_balance_row_as_zero(t *testi
 			assert.Equal(t, [][]string{c.want}, got)
 		})
 	}
+}
+
+func Test_accounts_reads_a_balance_past_64_bits_in_exact_cents(t *testing.T) {
+	t.Parallel()
+	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), maxDecimal18x6))
+	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), maxDecimal18x6)}
+	st := newStoreWithRates(t, rows, ratesOn(1, 1_250_000, "FXUSDCAD"))
+
+	got, err := st.Accounts(t.Context())
+
+	require.NoError(t, err)
+	a := balanceOf(t, got, acctOne)
+	assert.Equal(t, []*big.Int{
+		big.NewInt(0), cents("99999999999999999800000000"), cents("99999999999999999800000000"),
+		cents("99999999999999999800000000"), cents("79999999999999999840000000"),
+	},
+		[]*big.Int{a.Cash, a.HoldingsValue, a.Balance, a.BalanceCAD, a.BalanceUSD})
 }
