@@ -9,7 +9,8 @@ import (
 )
 
 // renderNetWorth renders n as a net worth table: a snapshot's rows with their Totals, or a history's month ends.
-// A converted table has one total in the reporting currency; a native one has a total per currency.
+// A converted table has a total in the reporting currency, then one per currency of the rows no rate converts;
+// a native one has a total per currency.
 func renderNetWorth(n report.NetWorth) string {
 	if n.Window != nil {
 		return renderNetWorthHistory(n)
@@ -35,7 +36,7 @@ func renderNetWorth(n report.NetWorth) string {
 		rows = append(rows, cells)
 	}
 	for _, total := range date.Totals {
-		rows = append(rows, netWorthTotalRow(len(header), converted, total))
+		rows = append(rows, netWorthTotalRow(len(header), n, total))
 	}
 	return renderTable(netWorthCaption(n), aligns, rows)
 }
@@ -49,21 +50,20 @@ func netWorthCaption(n report.NetWorth) string {
 	return caption
 }
 
-// netWorthInCell is the balance in the reporting currency, blank when no exchange rate converts it.
+// netWorthInCell is the balance in the reporting currency, "no rate" when no exchange rate converts it.
 func netWorthInCell(n report.NetWorth, row store.NetWorthRow) string {
-	value := n.Converted(row)
-	if value == nil {
-		return ""
+	if n.NeedsRate(row) {
+		return noRateCell
 	}
-	return formatBigMoney(value)
+	return optionalMoney(n.Converted(row))
 }
 
-// netWorthTotalRow is the Total row of a table width cells wide: a converted table's sum sits in its last
-// column, a native one's under Balance with its currency, every other cell blank.
-func netWorthTotalRow(width int, converted bool, total report.NetWorthTotal) []string {
+// netWorthTotalRow is the Total row of a table width cells wide: the reporting currency's sum sits in the
+// last column, any other currency's under Currency and Balance, every other cell blank.
+func netWorthTotalRow(width int, n report.NetWorth, total report.NetWorthTotal) []string {
 	row := make([]string, width)
 	row[0] = tableTotalLabel
-	if converted {
+	if n.Currency != money.Native && total.Currency == n.Currency.String() {
 		row[width-1] = formatBigMoney(total.Value)
 		return row
 	}

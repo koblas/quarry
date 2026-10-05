@@ -22,6 +22,12 @@ func netWorthHistoryLine(monthEnd, chequing, creditCard, total string) string {
 // chequing, each with a balance on 2026-01-31, 2026-02-28 and 2026-03-12; the USD rate is 1.36 from January 2.
 func seedNetWorthHistoryStore(t *testing.T) {
 	t.Helper()
+	seedNetWorthHistoryStoreWithRates(t, usdRate(day(2026, time.January, 2), 1_360_000))
+}
+
+// seedNetWorthHistoryStoreWithRates is seedNetWorthHistoryStore holding rates, none when none are given.
+func seedNetWorthHistoryStoreWithRates(t *testing.T, rates ...store.Rate) {
+	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	card := store.Account{ID: "acct-card", SourceID: 3, Name: "Card", Type: "credit_card", Currency: "CAD", Active: true}
@@ -36,7 +42,7 @@ func seedNetWorthHistoryStore(t *testing.T) {
 		spendSplit{id: "card-feb", account: "acct-card", currency: "CAD", day: day(2026, time.February, 15), cents: -10_000},
 		spendSplit{id: "card-mar", account: "acct-card", currency: "CAD", day: day(2026, time.March, 8), cents: -5_000},
 	)
-	replaceStoreWithRates(t, home, rows, usdRate(day(2026, time.January, 2), 1_360_000))
+	replaceStoreWithRates(t, home, rows, rates...)
 }
 
 func Test_run_networth_lists_each_month_end_with_a_column_per_type_ending_with_today(t *testing.T) {

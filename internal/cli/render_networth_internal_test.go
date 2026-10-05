@@ -60,18 +60,41 @@ func Test_renderNetWorth_native_table_has_no_In_column_and_a_total_per_currency(
 		"Total     USD         367.65\n", got)
 }
 
-func Test_renderNetWorth_leaves_the_In_cell_of_an_unconverted_row_blank(t *testing.T) {
-	n := netWorthIn(money.USD, []report.NetWorthTotal{{Currency: "USD", Value: big.NewInt(500)}},
+func Test_renderNetWorth_says_no_rate_in_the_In_cell_of_an_unconverted_row_and_totals_it_apart(t *testing.T) {
+	n := netWorthIn(money.USD, []report.NetWorthTotal{
+		{Currency: "USD", Value: big.NewInt(500)}, {Currency: "CAD", Value: big.NewInt(1_000)},
+	},
 		store.NetWorthRow{Type: "chequing", Currency: "CAD", Balance: big.NewInt(1_000)},
 		store.NetWorthRow{Type: "savings", Currency: "USD", Balance: big.NewInt(500), BalanceUSD: big.NewInt(500)})
 
 	got := renderNetWorth(n)
 
 	assert.Equal(t, "Net worth on 2026-03-12, amounts in USD\n\n"+
-		"Type      Currency  Balance  In USD\n"+
-		"chequing  CAD         10.00\n"+
-		"savings   USD          5.00    5.00\n"+
-		"Total                          5.00\n", got)
+		"Type      Currency  Balance   In USD\n"+
+		"chequing  CAD         10.00  no rate\n"+
+		"savings   USD          5.00     5.00\n"+
+		"Total                           5.00\n"+
+		"Total     CAD         10.00\n", got)
+}
+
+func Test_renderNetWorth_has_only_the_currency_total_when_no_row_converts(t *testing.T) {
+	n := netWorthIn(money.USD, []report.NetWorthTotal{{Currency: "CAD", Value: big.NewInt(1_000)}},
+		store.NetWorthRow{Type: "chequing", Currency: "CAD", Balance: big.NewInt(1_000)})
+
+	got := renderNetWorth(n)
+
+	assert.Equal(t, "Net worth on 2026-03-12, amounts in USD\n\n"+
+		"Type      Currency  Balance   In USD\n"+
+		"chequing  CAD         10.00  no rate\n"+
+		"Total     CAD         10.00\n", got)
+}
+
+func Test_renderNetWorth_leaves_the_In_cell_of_a_zero_balance_row_blank_not_no_rate(t *testing.T) {
+	n := netWorthIn(money.USD, nil, store.NetWorthRow{Type: "chequing", Currency: "CAD", Balance: big.NewInt(0)})
+
+	got := renderNetWorth(n)
+
+	assert.NotContains(t, got, "no rate")
 }
 
 func Test_renderNetWorth_prints_a_negative_balance_with_its_sign(t *testing.T) {
@@ -168,15 +191,46 @@ func Test_renderNetWorth_history_lists_a_month_end_with_no_rows_with_a_blank_tot
 		"2026-02-28      1.00   1.00\n", got)
 }
 
-func Test_renderNetWorth_history_leaves_a_cell_blank_when_no_rate_converts_its_rows(t *testing.T) {
-	n := netWorthHistoryOf(money.USD, monthEndOf(2026, time.January, 31, nil,
-		store.NetWorthRow{Type: "chequing", Currency: "CAD", Balance: big.NewInt(1_000)}))
+func Test_renderNetWorth_history_says_no_rate_in_a_cell_and_the_total_of_a_day_whose_rows_all_need_one(t *testing.T) {
+	n := netWorthHistoryOf(money.USD,
+		monthEndOf(2026, time.January, 31, cadTotal(1_000),
+			store.NetWorthRow{Type: "chequing", Currency: "CAD", Balance: big.NewInt(1_000)}),
+		monthEndOf(2026, time.February, 28, nil))
+
+	got := renderNetWorth(n)
+
+	assert.Equal(t, "Net worth at each month end 2026-01-31 to 2026-02-28, amounts in USD\n\n"+
+		"Month end   chequing    Total\n"+
+		"2026-01-31   no rate  no rate\n"+
+		"2026-02-28\n", got)
+}
+
+func Test_renderNetWorth_history_takes_the_total_in_the_reporting_currency_whatever_its_position(t *testing.T) {
+	n := netWorthHistoryOf(money.USD, monthEndOf(2026, time.January, 31, []report.NetWorthTotal{
+		{Currency: "CAD", Value: big.NewInt(1_000)}, {Currency: "USD", Value: big.NewInt(500)},
+	},
+		store.NetWorthRow{Type: "chequing", Currency: "CAD", Balance: big.NewInt(1_000)},
+		store.NetWorthRow{Type: "savings", Currency: "USD", Balance: big.NewInt(500), BalanceUSD: big.NewInt(500)}))
+
+	got := renderNetWorth(n)
+
+	assert.Equal(t, "Net worth at each month end 2026-01-31 to 2026-01-31, amounts in USD\n\n"+
+		"Month end   chequing  savings  Total\n"+
+		"2026-01-31   no rate     5.00   5.00\n", got)
+}
+
+func Test_renderNetWorth_history_shows_the_converting_sum_of_a_type_that_also_has_a_row_no_rate_converts(t *testing.T) {
+	n := netWorthHistoryOf(money.USD, monthEndOf(2026, time.January, 31, []report.NetWorthTotal{
+		{Currency: "USD", Value: big.NewInt(500)}, {Currency: "CAD", Value: big.NewInt(1_000)},
+	},
+		store.NetWorthRow{Type: "chequing", Currency: "CAD", Balance: big.NewInt(1_000)},
+		store.NetWorthRow{Type: "chequing", Currency: "USD", Balance: big.NewInt(500), BalanceUSD: big.NewInt(500)}))
 
 	got := renderNetWorth(n)
 
 	assert.Equal(t, "Net worth at each month end 2026-01-31 to 2026-01-31, amounts in USD\n\n"+
 		"Month end   chequing  Total\n"+
-		"2026-01-31\n", got)
+		"2026-01-31      5.00   5.00\n", got)
 }
 
 func Test_renderNetWorth_history_native_lists_a_line_per_currency_with_its_total_and_a_date_alone_when_no_row(t *testing.T) {

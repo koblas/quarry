@@ -12,7 +12,7 @@ import (
 // accountsColumnGap separates the accounts table's columns.
 const accountsColumnGap = "  "
 
-// noRateCell is the reporting-currency cell of an imported balance no rate converts.
+// noRateCell is the reporting-currency cell of a balance no exchange rate converts.
 const noRateCell = "no rate"
 
 // renderAccounts renders l as the accounts table: a header row, then one row per account in l's order,

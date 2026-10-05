@@ -9,7 +9,8 @@ import (
 )
 
 // renderNetWorthHistory renders n, a history, as one line per month end under one column per account type
-// and a Total; a native table adds a Currency column and a line per currency. A cell with no row is blank.
+// and a Total; a native table adds a Currency column and a line per currency. A cell with no row is blank, one
+// no exchange rate converts says "no rate".
 func renderNetWorthHistory(n report.NetWorth) string {
 	converted := n.Currency != money.Native
 	types := n.Types()
@@ -33,17 +34,37 @@ func renderNetWorthHistory(n report.NetWorth) string {
 	return renderTable(netWorthHistoryCaption(n), aligns, rows)
 }
 
-// convertedHistoryRow is date's line: each type's converted sum, then the day's total, blank when no row converts.
+// convertedHistoryRow is date's line: each type's converted sum, then the day's total in the reporting
+// currency. A cell no rate converts says "no rate", and so does the total of a day whose rows all need one.
 func convertedHistoryRow(n report.NetWorth, date report.NetWorthDate, types []string) []string {
 	row := []string{date.Date.Format(time.DateOnly)}
 	for _, accountType := range types {
-		row = append(row, optionalMoney(n.TypeConverted(date, accountType)))
+		row = append(row, convertedHistoryCell(n, date, accountType))
 	}
-	total := ""
+	return append(row, convertedHistoryTotal(n, date))
+}
+
+// convertedHistoryCell is accountType's converted sum on date, "no rate" when only unconverted rows hold it.
+func convertedHistoryCell(n report.NetWorth, date report.NetWorthDate, accountType string) string {
+	sum := n.TypeConverted(date, accountType)
+	if sum == nil && n.TypeNeedsRate(date, accountType) {
+		return noRateCell
+	}
+	return optionalMoney(sum)
+}
+
+// convertedHistoryTotal is date's total in the reporting currency; "no rate" when date has totals but none is
+// in that currency, blank when it has none.
+func convertedHistoryTotal(n report.NetWorth, date report.NetWorthDate) string {
+	for _, total := range date.Totals {
+		if total.Currency == n.Currency.String() {
+			return formatBigMoney(total.Value)
+		}
+	}
 	if len(date.Totals) > 0 {
-		total = formatBigMoney(date.Totals[0].Value)
+		return noRateCell
 	}
-	return append(row, total)
+	return ""
 }
 
 // nativeHistoryRows is date's line for each currency it has a row in, each with that currency's total; a day
