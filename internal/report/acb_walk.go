@@ -4,7 +4,10 @@ import (
 	"cmp"
 	"math/big"
 	"slices"
+	"strings"
+	"time"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 )
 
@@ -14,11 +17,13 @@ const (
 	acbCommissionPerCent = 100
 )
 
-// acbTiers orders one day's transactions in a pool: acquisitions, then dispositions. An action absent from
-// it does not touch the pool.
+// acbTiers orders one day's transactions in a pool: acquisitions, then splits, then dispositions. An action
+// absent from it does not touch the pool.
 var acbTiers = map[string]int{
-	store.ActionBuy:  0,
-	store.ActionSell: 2,
+	store.ActionBuy:              0,
+	store.ActionReinvestDividend: 0,
+	store.ActionSplit:            1,
+	store.ActionSell:             2,
 }
 
 // acbPool is one security's units and adjusted cost base across the non-registered accounts.
@@ -53,10 +58,16 @@ func walkACB(history store.InvestmentHistory, req ACBRequest) ACB {
 		if len(txs) == 0 {
 			continue
 		}
-		position, securitySales := walkSecurity(security, txs)
+		position, securitySales := walkSecurity(security, txs, history.Rates)
 		result.Securities = append(result.Securities, position)
 		sales = append(sales, securitySales...)
 	}
+	slices.SortFunc(result.Securities, func(a, b ACBSecurity) int {
+		return cmp.Or(
+			cmp.Compare(strings.ToLower(a.Security.Name), strings.ToLower(b.Security.Name)),
+			cmp.Compare(a.Security.ID, b.Security.ID),
+		)
+	})
 	result.Years = acbYears(sales)
 
 	return result
@@ -75,7 +86,8 @@ func nonRegisteredAccounts(accounts []store.Account, c Classification) map[strin
 }
 
 // walkSecurity applies txs, in date, tier then source id order, to one pool and returns its position and sales.
-func walkSecurity(security store.Security, txs []store.InvestmentTransaction) (ACBSecurity, []acbSale) {
+// rates convert each foreign-currency amount at the rate on or before its date.
+func walkSecurity(security store.Security, txs []store.InvestmentTransaction, rates []store.Rate) (ACBSecurity, []acbSale) {
 	slices.SortFunc(txs, func(a, b store.InvestmentTransaction) int {
 		return cmp.Or(
 			a.Date.Compare(b.Date),
@@ -87,14 +99,24 @@ func walkSecurity(security store.Security, txs []store.InvestmentTransaction) (A
 	pool := acbPool{shares: new(big.Rat)}
 	position := ACBSecurity{Security: security}
 	var sales []acbSale
+	var splitDay time.Time
 	for _, tx := range txs {
 		event := ACBEvent{ID: tx.ID, Date: tx.Date, Action: tx.Action, Shares: units(tx.Shares)}
+		rate := rateOn(rates, tx.Date)
 		switch tx.Action {
 		case store.ActionBuy:
-			pool.shares.Add(pool.shares, event.Shares)
-			pool.acb -= tx.Amount
+			pool.add(event.Shares, -toCAD(tx.Amount, tx.Currency, rate))
+		case store.ActionReinvestDividend:
+			pool.add(event.Shares, toCAD(zeroIfNil(tx.CostBasis), tx.Currency, rate))
+		case store.ActionSplit:
+			// A split is recorded once per account that held the security; the first row of a day is the split.
+			if tx.Date.Equal(splitDay) {
+				continue
+			}
+			splitDay = tx.Date
+			pool.split(tx.SplitNewShares, tx.SplitOldShares)
 		case store.ActionSell:
-			sale := pool.sell(tx, event.Shares)
+			sale := pool.sell(tx, event.Shares, rate)
 			event.Gain = sale.row.Gain
 			sales = append(sales, sale)
 		}
@@ -106,9 +128,24 @@ func walkSecurity(security store.Security, txs []store.InvestmentTransaction) (A
 	return position, sales
 }
 
-// sell removes sold units and their share of the ACB from the pool, and returns the sale. A sale of all the
-// units held, or more, removes the whole ACB and leaves the pool empty.
-func (p *acbPool) sell(tx store.InvestmentTransaction, sold *big.Rat) acbSale {
+// add puts bought units and their cost into the pool.
+func (p *acbPool) add(bought *big.Rat, cost int64) {
+	p.shares.Add(p.shares, bought)
+	p.acb += cost
+}
+
+// split multiplies the units held by newShares over oldShares and leaves the ACB alone.
+func (p *acbPool) split(newShares, oldShares *int64) {
+	if newShares == nil || oldShares == nil || *newShares <= 0 || *oldShares <= 0 {
+		// unreachable: the build refuses a split with a missing or non-positive side (duckstore.go splitRatio).
+		return
+	}
+	p.shares.Mul(p.shares, big.NewRat(*newShares, *oldShares))
+}
+
+// sell removes sold units and their share of the ACB, or all of it when they are all the units held or more,
+// and returns the sale in CAD.
+func (p *acbPool) sell(tx store.InvestmentTransaction, sold *big.Rat, rate money.Rate) acbSale {
 	removed := p.acb
 	if p.shares.Sign() > 0 && sold.Cmp(p.shares) < 0 {
 		removed = roundHalfAway(new(big.Rat).Mul(big.NewRat(p.acb, 1), new(big.Rat).Quo(sold, p.shares)))
@@ -123,7 +160,8 @@ func (p *acbPool) sell(tx store.InvestmentTransaction, sold *big.Rat) acbSale {
 	if tx.Commission != nil {
 		outlays = roundHalfAway(big.NewRat(*tx.Commission, acbCommissionPerCent))
 	}
-	proceeds := tx.Amount + outlays
+	proceeds := toCAD(tx.Amount+outlays, tx.Currency, rate)
+	outlays = toCAD(outlays, tx.Currency, rate)
 
 	return acbSale{
 		row: ACBSale{
@@ -132,6 +170,35 @@ func (p *acbPool) sell(tx store.InvestmentTransaction, sold *big.Rat) acbSale {
 		},
 		sourceID: tx.SourceID,
 	}
+}
+
+// rateOn is the USD/CAD rate of the latest day on or before day in rates, which are in date order; zero when none.
+func rateOn(rates []store.Rate, day time.Time) money.Rate {
+	i, found := slices.BinarySearchFunc(rates, day, func(r store.Rate, d time.Time) int { return r.Date.Compare(d) })
+	switch {
+	case found:
+		return rates[i].USDCAD
+	case i > 0:
+		return rates[i-1].USDCAD
+	default:
+		return 0
+	}
+}
+
+// toCAD is cents of currency in CAD at rate, or 0 when it cannot be converted: an unknown currency, or USD with no rate.
+func toCAD(cents int64, currency string, rate money.Rate) int64 {
+	from, _ := money.ParseCurrency(currency)
+	converted, _ := money.Convert(cents, from, money.CAD, rate)
+
+	return converted
+}
+
+func zeroIfNil(n *int64) int64 {
+	if n == nil {
+		return 0
+	}
+
+	return *n
 }
 
 // acbYears groups sales by the calendar year of their date, oldest year first, each year's sales in date,

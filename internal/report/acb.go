@@ -46,6 +46,15 @@ type ACBSecurity struct {
 	Events   []ACBEvent
 }
 
+// PerShare is the ACB per share in CAD dollars, or nil when no shares are held.
+func (s ACBSecurity) PerShare() *big.Rat {
+	if s.Shares.Sign() == 0 {
+		return nil
+	}
+
+	return new(big.Rat).Quo(big.NewRat(s.ACB, 100), s.Shares)
+}
+
 // ACBEvent is one transaction the walk applied: the units it moved and the pool it left.
 type ACBEvent struct {
 	ID     string
