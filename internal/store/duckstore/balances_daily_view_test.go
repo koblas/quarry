@@ -457,7 +457,7 @@ func Test_balances_daily_view_carries_its_note(t *testing.T) {
 
 	got := queryTexts(t, st, "SELECT comment FROM duckdb_views() WHERE view_name = 'v_balances_daily'")
 
-	assert.Equal(t, [][]string{{"one row per account per day from its first transaction through today; " +
+	assert.Equal(t, [][]string{{"one row per account per day from its first transaction or holding through today; " +
 		"cash is the sum of its transactions to that day, holdings_value its holdings' value in its own currency " +
 		"(NULL outside brokerage and retirement accounts), balance is cash plus holdings_value, " +
 		"as quarry accounts and quarry networth use; filter by date."}}, got)

@@ -50,7 +50,7 @@ func Test_sql_conventions_close_the_balances_paragraph_with_the_net_worth_view(t
 	paragraphs := strings.Split(report.SQLConventions, "\n\n")
 	balances := strings.Join(strings.Fields(paragraphs[len(paragraphs)-1]), " ")
 
-	assert.True(t, strings.HasSuffix(balances, "v_net_worth has net worth by day, account type and currency "+
-		"over the accounts Quicken's reports count, as quarry networth does; sum balance_cad or balance_usd "+
+	assert.True(t, strings.HasSuffix(balances, "v_net_worth has one row per day, account type and currency, "+
+		"adding up the balances of the accounts Quicken's reports count, as quarry networth does; sum balance_cad or balance_usd "+
 		"over one date for the total; a NULL there means no exchange rate for that day."))
 }

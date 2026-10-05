@@ -81,7 +81,7 @@ ends with today.`,
 				return &runtimeError{err: err}
 			}
 
-			warnings := document.NetWorthWarnings(netWorth)
+			warnings := document.NetWorthWarnings(netWorth, document.NativeFlag)
 			return emitReport(cmd, *jsonOut, warnings,
 				func() ([]byte, error) {
 					return renderNetWorthJSON(netWorth, withConfigWarnings(configWarnings, warnings))

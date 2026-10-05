@@ -47,7 +47,7 @@ func (s *Server) netWorth(ctx context.Context, in netWorthInput) (any, error) {
 	if err != nil {
 		return nil, accountRefusal(err)
 	}
-	doc := document.NewNetWorth(listing, slices.Concat(configWarnings, document.NetWorthWarnings(listing)))
+	doc := document.NewNetWorth(listing, slices.Concat(configWarnings, document.NetWorthWarnings(listing, document.NativeParameter)))
 	doc.Dates, doc.Warnings = capList(doc.Dates, doc.Warnings, toolNetWorth, "month ends",
 		"pass a later since, or query v_net_worth for the rest")
 	return doc, nil

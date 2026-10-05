@@ -14,11 +14,12 @@ import (
 )
 
 // NetWorthWarnings is the unprefixed warning lines for what n leaves out of its balances: that no account has a
-// balance on a day listed, the holdings it cannot value, then the balances no exchange rate converts; never nil.
-func NetWorthWarnings(n report.NetWorth) []string {
+// balance on a day listed, the holdings it cannot value, then the balances no exchange rate converts, whose line
+// ends with advice on listing them natively; never nil.
+func NetWorthWarnings(n report.NetWorth, advice NativeAdvice) []string {
 	lines := append([]string{}, emptyNetWorthWarnings(n)...)
 	lines = append(lines, unvaluedWarnings(n.Unvalued, n.AsOf, n.Window != nil, n.FirstRate)...)
-	return append(lines, rateWarnings(n)...)
+	return append(lines, rateWarnings(n, advice)...)
 }
 
 // AccountsWarnings is the unprefixed warning lines for the holdings l leaves out of its balances; never nil.

@@ -262,11 +262,25 @@ func Test_net_worth_returns_the_report_as_networth_does_with_totals_and_the_rate
 
 	result := h.netWorth(t, map[string]any{"as_of": "2026-03", "currency": "CAD"})
 
-	assert.JSONEq(t, jsonOf(t, document.NewNetWorth(listing, document.NetWorthWarnings(listing))), textOf(t, result))
+	assert.JSONEq(t, jsonOf(t, document.NewNetWorth(listing, document.NetWorthWarnings(listing, document.NativeParameter))), textOf(t, result))
 	doc := decodeNetWorth(t, result)
 	assert.Equal(t, []document.NetWorthTotal{{Currency: "CAD", Value: "1000.00"}, {Currency: "USD", Value: "50.00"}}, doc.Dates[0].Totals)
 	require.Len(t, doc.Warnings, 1)
-	assert.Contains(t, doc.Warnings[0], "USD balances on 2026-03-31, before 2026-04-01")
+	assert.Equal(t, "USD balances on 2026-03-31, before 2026-04-01, the first exchange rate in the store, are not converted to CAD "+
+		"and are left out of the CAD total; pass currency native to list them", doc.Warnings[0])
+}
+
+func Test_net_worth_names_the_currency_parameter_in_the_no_rates_warning(t *testing.T) {
+	asOf := civilDay(2026, time.March, 31)
+	h := newHarness(t, &fakeStore{netWorth: store.NetWorth{
+		Rows:         []store.NetWorthRow{{Date: asOf, Type: "checking", Currency: "USD", Accounts: 1, Balance: big.NewInt(5_000)}},
+		FirstBalance: civilDay(2026, time.January, 5),
+	}}, nil, atNetWorthToday())
+
+	doc := decodeNetWorth(t, h.netWorth(t, map[string]any{"as_of": "2026-03", "currency": "CAD"}))
+
+	assert.Equal(t, []string{"the store has no exchange rates, so USD balances are not converted to CAD and are left out of the CAD total; " +
+		"pass currency native to list them, or run quarry sync to fetch rates"}, doc.Warnings)
 }
 
 func Test_net_worth_warns_that_a_priced_holding_lacks_only_an_exchange_rate(t *testing.T) {
@@ -385,7 +399,7 @@ func Test_net_worth_counts_every_month_end_in_the_rate_warning_before_the_cut(t 
 	require.Len(t, doc.Dates, 500)
 	assert.Equal(t, []string{
 		"USD balances on 501 month ends before 2042-01-01, the first exchange rate in the store, are not converted to CAD " +
-			"and are left out of the CAD total; pass --currency native to list them",
+			"and are left out of the CAD total; pass currency native to list them",
 		netWorthCutNote,
 	}, doc.Warnings)
 }

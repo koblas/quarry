@@ -66,7 +66,7 @@
   - `cash` = sum of `transactions.amount` dated on or before `date`, all transactions including `excluded_from_reports` (`reportedTransaction` not used).
   - `holdings_value` is NULL outside brokerage and retirement accounts; otherwise the sum of that day's `v_holdings.value` in the account's currency: own currency as is; the other of CAD/USD converted at the date's rate and rounded; no price, NULL or other currency, or no rate → left out and counted in `holdings_unvalued`; 0.00 when nothing is held.
   - `balance` = cash + coalesce(holdings_value, 0). `balance_cad`/`balance_usd` via `convertedTo` at the ASOF rate for `date`, per account.
-  - `COMMENT ON VIEW`: `one row per account per day from its first transaction through today; cash is the sum of its transactions to that day, holdings_value its holdings' value in its own currency (NULL outside brokerage and retirement accounts), balance is cash plus holdings_value, as quarry accounts and quarry networth use; filter by date.`
+  - `COMMENT ON VIEW`: `one row per account per day from its first transaction or holding through today; cash is the sum of its transactions to that day, holdings_value its holdings' value in its own currency (NULL outside brokerage and retirement accounts), balance is cash plus holdings_value, as quarry accounts and quarry networth use; filter by date.`
   - `v_account_balances` = this view at `current_date` (LEFT JOIN, so an account with no rows is 0.00). It gains `cash` and `holdings_value`; its investment CASE (`schema.go:186-187`) is deleted.
 - **N-6 `v_net_worth`.**
   - Grain: day × type × currency over accounts where `in_reports AND NOT linked_tracking` (the `reportedAccount` constant, `schema.go:201`).
@@ -271,13 +271,18 @@ Within one kind, warnings follow account name ignoring case. Lines 3–6 are als
   - `as_of 2027-01-01 is after today; net worth is valued up to today only, so pass an earlier as_of`
   - `as_of cannot be combined with since or until; pass as_of for one day, or since and until for month ends`
   - stderr: `quarry: mcp: net_worth: refused the call's <param>; details went to the client only`
+- Parameter descriptions (ruled at the final pass, `internal/mcp/tools.go`):
+  - `as_of`: `Day to value net worth on: YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day. Defaults to today. Cannot be combined with since or until.`
+  - `since`: `List net worth at each month end on or after this date: YYYY, YYYY-MM or YYYY-MM-DD. Defaults to January 1 of this year when until is given.`
+  - `until`: `List net worth at each month end on or before this date: YYYY, YYYY-MM or YYYY-MM-DD. Defaults to today; a later date means today.`
+- Rate warnings are the CLI's, except that the advice reads `pass currency native to list them` (CLI: `pass --currency native to list them`) in the snapshot, history and no-rates forms; the no-rates tail `, or run quarry sync to fetch rates` is kept.
 - Cap: 500 `dates`, through `capList`: `net_worth lists the first 500 month ends of 501; pass a later since, or query v_net_worth for the rest`.
 
 ### Changes to existing surfaces
 
 | Where | New |
 | --- | --- |
-| `sql_conventions.go:19-21` ("Investment transactions are in investment_transactions, not in transactions…") | `Each investment transaction that moves cash also has a row in transactions (investment_transaction_id names it; NULL for a register entry), one split per Quicken entry, so an account's cash is the sum of its transactions. In v_cash_flow dividends, interest and capital-gain distributions are income; buys, sells and share moves are neither. investment_transactions holds each one's action, security and shares:` (rest unchanged). Append the `v_balances_daily` and `v_net_worth` sentences (N-5, N-6 comments). `v_account_balances` gets "(v_balances_daily for today)". |
+| `sql_conventions.go:19-21` ("Investment transactions are in investment_transactions, not in transactions…") | `Each investment transaction that moves cash also has a row in transactions (investment_transaction_id names it; NULL for a register entry), one split per Quicken entry, so an account's cash is the sum of its transactions. In v_cash_flow dividends, interest and capital-gain distributions are income; buys, sells and share moves are neither. investment_transactions holds each one's action, security and shares; its amount is DECIMAL(18,2)` (rest unchanged). Append the `v_balances_daily` sentence (N-5 comment) and, in the same paragraph, `v_net_worth has one row per day, account type and currency, adding up the balances of the accounts Quicken's reports count, as quarry networth does;` followed by the N-6 comment's tail. `v_account_balances` gets "(v_balances_daily for today)". |
 | Hand copies (`cli/sql_test.go:213`, `run_shared_documents_test.go:354`), `schema.md` | Re-pin and regenerate |
 | cashflow Long, after "…left out here too." | `In brokerage and retirement accounts, dividends, interest and capital-gain distributions count as income; buying, selling and moving shares count as neither.` (N-3 (b): "reinvested dividends included" dropped) |
 | spend Long | Add: `Margin interest and other investment expenses Quicken puts in an expense category count as spending.` |

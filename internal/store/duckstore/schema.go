@@ -295,7 +295,7 @@ COMMENT ON VIEW v_holdings IS '` + holdingsViewComment + `';
 }
 
 // balancesDailyViewComment is the COMMENT ON VIEW text of v_balances_daily.
-const balancesDailyViewComment = "one row per account per day from its first transaction through today; " +
+const balancesDailyViewComment = "one row per account per day from its first transaction or holding through today; " +
 	"cash is the sum of its transactions to that day, holdings_value its holdings' value in its own currency " +
 	"(NULL outside brokerage and retirement accounts), balance is cash plus holdings_value, " +
 	"as quarry accounts and quarry networth use; filter by date."

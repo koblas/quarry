@@ -47,6 +47,21 @@ func history(rows ...store.UnvaluedHolding) report.NetWorth {
 	}
 }
 
+func firstRateOn(d int, n report.NetWorth) report.NetWorth {
+	n.FirstRate = leftOutDay(d)
+	return n
+}
+
+func inAccountCurrency(held store.UnvaluedHolding, currency string) store.UnvaluedHolding {
+	held.AccountCurrency = currency
+	return held
+}
+
+func withDay(held store.UnvaluedHolding, d int) store.UnvaluedHolding {
+	held.Date = leftOutDay(d)
+	return held
+}
+
 const (
 	brokerageUSDNoRatesLine = `"Brokerage" holds a USD security and the store has no exchange rates, ` +
 		`so its CAD balance leaves it out; run quarry sync to fetch rates`
@@ -61,14 +76,14 @@ const (
 func Test_net_worth_warnings_name_the_account_that_holds_one_unpriced_security(t *testing.T) {
 	n := snapshot(unpriced("a-1", "Brokerage", "s-1", "Acme", 12))
 
-	assert.Equal(t, []string{brokerageNoPriceLine}, document.NetWorthWarnings(n))
+	assert.Equal(t, []string{brokerageNoPriceLine}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_net_worth_warnings_count_the_unpriced_securities_when_an_account_holds_several(t *testing.T) {
 	n := snapshot(unpriced("a-1", "Brokerage", "s-1", "Acme", 12), unpriced("a-1", "Brokerage", "s-2", "Bond", 12))
 
 	assert.Equal(t, []string{`"Brokerage" holds 2 securities with no price on or before 2026-03-12, ` +
-		`so its balance leaves them out; enter prices in Quicken, then run quarry sync`}, document.NetWorthWarnings(n))
+		`so its balance leaves them out; enter prices in Quicken, then run quarry sync`}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_net_worth_history_warnings_count_the_month_ends_an_account_held_an_unpriced_security(t *testing.T) {
@@ -82,14 +97,14 @@ func Test_net_worth_history_warnings_count_the_month_ends_an_account_held_an_unp
 			`so its balance leaves it out on those days; enter prices in Quicken, then run quarry sync`,
 		`"Savings" holds a security with no price on 1 of the month ends listed, ` +
 			`so its balance leaves it out on those days; enter prices in Quicken, then run quarry sync`,
-	}, document.NetWorthWarnings(n))
+	}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_net_worth_snapshot_warnings_name_the_as_of_day(t *testing.T) {
 	n := report.NetWorth{AsOf: leftOutDay(3), Unvalued: []store.UnvaluedHolding{unpriced("a-1", "Brokerage", "s-1", "Acme", 3)}}
 
 	assert.Equal(t, []string{`"Brokerage" holds 1 security with no price on or before 2026-03-03, ` +
-		`so its balance leaves it out; enter a price in Quicken, then run quarry sync`}, document.NetWorthWarnings(n))
+		`so its balance leaves it out; enter a price in Quicken, then run quarry sync`}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_accounts_warnings_name_the_listings_as_of_day(t *testing.T) {
@@ -137,7 +152,7 @@ func Test_a_holding_is_warned_about_by_the_reason_it_has_no_value(t *testing.T) 
 			held: pricedIn("USD", "a-1", "Brokerage", "s-1", "Acme"), want: []string{brokerageUSDNoRatesLine},
 		},
 		{
-			name: "a priced CAD holding in a EUR account is not a missing rate",
+			name: "a priced CAD holding in an account that is neither CAD nor USD is out of scope and silent",
 			held: inAccountCurrency(pricedIn("CAD", "a-1", "Brokerage", "s-1", "Acme"), "EUR"), want: []string{},
 		},
 		{
@@ -148,7 +163,7 @@ func Test_a_holding_is_warned_about_by_the_reason_it_has_no_value(t *testing.T) 
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, document.NetWorthWarnings(snapshot(c.held)))
+			assert.Equal(t, c.want, document.NetWorthWarnings(snapshot(c.held), document.NativeFlag))
 		})
 	}
 }
@@ -157,14 +172,14 @@ func Test_a_security_with_no_name_is_called_by_its_id(t *testing.T) {
 	n := snapshot(noCurrency("a-1", "Brokerage", "sec-7", ""))
 
 	assert.Equal(t, []string{`"sec-7" has no currency in Quicken, so quarry leaves its value out of "Brokerage"'s balance; ` +
-		`set its currency in Quicken, then run quarry sync`}, document.NetWorthWarnings(n))
+		`set its currency in Quicken, then run quarry sync`}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_a_name_with_a_quote_is_quoted_with_it_escaped(t *testing.T) {
 	n := snapshot(unpriced("a-1", `Bob's "RRSP"`, "s-1", "Acme", 12))
 
 	assert.Equal(t, []string{`"Bob's \"RRSP\"" holds 1 security with no price on or before 2026-03-12, ` +
-		`so its balance leaves it out; enter a price in Quicken, then run quarry sync`}, document.NetWorthWarnings(n))
+		`so its balance leaves it out; enter a price in Quicken, then run quarry sync`}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_a_security_without_a_currency_is_named_once_per_account_however_many_days_it_was_held(t *testing.T) {
@@ -172,7 +187,7 @@ func Test_a_security_without_a_currency_is_named_once_per_account_however_many_d
 		store.UnvaluedHolding{Date: leftOutDay(5), AccountID: "a-1", Account: "Brokerage", SecurityID: "s-1", Security: "Acme", Priced: true},
 		store.UnvaluedHolding{Date: leftOutDay(8), AccountID: "a-1", Account: "Brokerage", SecurityID: "s-1", Security: "Acme", Priced: true})
 
-	assert.Equal(t, []string{acmeNoCurrencyLine}, document.NetWorthWarnings(n))
+	assert.Equal(t, []string{acmeNoCurrencyLine}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_the_same_security_is_named_for_each_account_that_holds_it(t *testing.T) {
@@ -182,7 +197,7 @@ func Test_the_same_security_is_named_for_each_account_that_holds_it(t *testing.T
 		acmeNoCurrencyLine,
 		`"Acme" has no currency in Quicken, so quarry leaves its value out of "RRSP"'s balance; ` +
 			`set its currency in Quicken, then run quarry sync`,
-	}, document.NetWorthWarnings(n))
+	}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_warnings_run_by_kind_then_account_not_account_then_kind(t *testing.T) {
@@ -197,7 +212,7 @@ func Test_warnings_run_by_kind_then_account_not_account_then_kind(t *testing.T) 
 		`"Acme" has no currency in Quicken, so quarry leaves its value out of "Alpha"'s balance; ` +
 			`set its currency in Quicken, then run quarry sync`,
 		`"Euro Fund" is priced in EUR, which quarry does not convert, so its value is left out of "Alpha"'s balance`,
-	}, document.NetWorthWarnings(n))
+	}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_accounts_run_in_name_order_ignoring_case_then_name_then_id(t *testing.T) {
@@ -214,7 +229,7 @@ func Test_accounts_run_in_name_order_ignoring_case_then_name_then_id(t *testing.
 		`"Mid" holds 1 security with no price on or before 2026-03-12, so its balance leaves it out; enter a price in Quicken, then run quarry sync`,
 		`"Mid" holds 2 securities with no price on or before 2026-03-12, so its balance leaves them out; enter prices in Quicken, then run quarry sync`,
 		`"Zeta" holds 1 security with no price on or before 2026-03-12, so its balance leaves it out; enter a price in Quicken, then run quarry sync`,
-	}, document.NetWorthWarnings(n))
+	}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_securities_within_an_account_run_in_name_order_ignoring_case_then_name(t *testing.T) {
@@ -229,25 +244,20 @@ func Test_securities_within_an_account_run_in_name_order_ignoring_case_then_name
 		`"bond" has no currency in Quicken, so quarry leaves its value out of "Brokerage"'s balance; set its currency in Quicken, then run quarry sync`,
 		`"Fund" has no currency in Quicken, so quarry leaves its value out of "Brokerage"'s balance; set its currency in Quicken, then run quarry sync`,
 		`"fund" has no currency in Quicken, so quarry leaves its value out of "Brokerage"'s balance; set its currency in Quicken, then run quarry sync`,
-	}, document.NetWorthWarnings(n))
+	}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_warnings_are_an_empty_list_not_nil_when_no_holding_is_left_out(t *testing.T) {
-	assert.Equal(t, []string{}, document.NetWorthWarnings(snapshot()))
-	assert.Equal(t, []string{}, document.NetWorthWarnings(report.NetWorth{}))
+	assert.Equal(t, []string{}, document.NetWorthWarnings(snapshot(), document.NativeFlag))
+	assert.Equal(t, []string{}, document.NetWorthWarnings(report.NetWorth{}, document.NativeFlag))
 	assert.Equal(t, []string{}, document.AccountsWarnings(report.AccountListing{}))
-}
-
-func firstRateOn(d int, n report.NetWorth) report.NetWorth {
-	n.FirstRate = leftOutDay(d)
-	return n
 }
 
 func Test_net_worth_warnings_name_the_first_rate_for_one_holding_valued_before_it(t *testing.T) {
 	n := firstRateOn(15, snapshot(pricedIn("USD", "a-1", "Brokerage", "s-1", "Acme")))
 
 	assert.Equal(t, []string{`"Brokerage" holds 1 USD security valued on 2026-03-12, before 2026-03-15, ` +
-		`the first exchange rate in the store, so its CAD balance leaves it out`}, document.NetWorthWarnings(n))
+		`the first exchange rate in the store, so its CAD balance leaves it out`}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_net_worth_warnings_count_the_securities_an_account_holds_without_a_rate(t *testing.T) {
@@ -260,14 +270,14 @@ func Test_net_worth_warnings_count_the_securities_an_account_holds_without_a_rat
 			`the first exchange rate in the store, so its CAD balance leaves them out`,
 		`"Savings" holds 1 USD security valued on 2026-03-12, before 2026-03-15, ` +
 			`the first exchange rate in the store, so its CAD balance leaves it out`,
-	}, document.NetWorthWarnings(n))
+	}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_net_worth_warnings_name_the_account_currency_the_holding_leaves_out_of(t *testing.T) {
 	n := firstRateOn(15, snapshot(inAccountCurrency(pricedIn("CAD", "a-1", "Brokerage", "s-1", "Acme"), "USD")))
 
 	assert.Equal(t, []string{`"Brokerage" holds 1 CAD security valued on 2026-03-12, before 2026-03-15, ` +
-		`the first exchange rate in the store, so its USD balance leaves it out`}, document.NetWorthWarnings(n))
+		`the first exchange rate in the store, so its USD balance leaves it out`}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_net_worth_history_warnings_count_the_month_ends_a_holding_lacked_a_rate(t *testing.T) {
@@ -276,20 +286,20 @@ func Test_net_worth_history_warnings_count_the_month_ends_a_holding_lacked_a_rat
 		withDay(pricedIn("USD", "a-1", "Brokerage", "s-1", "Acme"), 8), withDay(pricedIn("USD", "a-1", "Brokerage", "s-1", "Acme"), 12)))
 
 	assert.Equal(t, []string{`"Brokerage" holds a USD security on 3 of the month ends listed, before 2026-03-15, ` +
-		`the first exchange rate in the store, so its CAD balance leaves it out on those days`}, document.NetWorthWarnings(n))
+		`the first exchange rate in the store, so its CAD balance leaves it out on those days`}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_net_worth_history_warnings_count_one_month_end_the_same_way(t *testing.T) {
 	n := firstRateOn(15, history(pricedIn("USD", "a-1", "Brokerage", "s-1", "Acme")))
 
 	assert.Equal(t, []string{`"Brokerage" holds a USD security on 1 of the month ends listed, before 2026-03-15, ` +
-		`the first exchange rate in the store, so its CAD balance leaves it out on those days`}, document.NetWorthWarnings(n))
+		`the first exchange rate in the store, so its CAD balance leaves it out on those days`}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_net_worth_warnings_say_the_store_has_no_rates_in_history_too(t *testing.T) {
 	n := history(pricedIn("USD", "a-1", "Brokerage", "s-1", "Acme"))
 
-	assert.Equal(t, []string{brokerageUSDNoRatesLine}, document.NetWorthWarnings(n))
+	assert.Equal(t, []string{brokerageUSDNoRatesLine}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_accounts_warnings_name_the_first_rate_for_a_holding_valued_today(t *testing.T) {
@@ -320,7 +330,7 @@ func Test_no_rate_warnings_come_after_the_other_kinds_one_per_account_by_name_ig
 		`"Euro Fund" is priced in EUR, which quarry does not convert, so its value is left out of "Beta"'s balance`,
 		`"Alpha" holds 1 USD security valued on 2026-03-12, before 2026-03-15, the first exchange rate in the store, so its CAD balance leaves it out`,
 		`"zeta" holds 1 USD security valued on 2026-03-12, before 2026-03-15, the first exchange rate in the store, so its CAD balance leaves it out`,
-	}, document.NetWorthWarnings(n))
+	}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_no_rate_warnings_come_before_the_rate_lines(t *testing.T) {
@@ -333,15 +343,5 @@ func Test_no_rate_warnings_come_before_the_rate_lines(t *testing.T) {
 	assert.Equal(t, []string{
 		`"Brokerage" holds 1 USD security valued on 2026-03-12, before 2026-03-15, the first exchange rate in the store, so its CAD balance leaves it out`,
 		`USD balances on 2026-03-12, before 2026-03-15, the first exchange rate in the store, are not converted to CAD and are left out of the CAD total; pass --currency native to list them`,
-	}, document.NetWorthWarnings(n))
-}
-
-func inAccountCurrency(held store.UnvaluedHolding, currency string) store.UnvaluedHolding {
-	held.AccountCurrency = currency
-	return held
-}
-
-func withDay(held store.UnvaluedHolding, d int) store.UnvaluedHolding {
-	held.Date = leftOutDay(d)
-	return held
+	}, document.NetWorthWarnings(n, document.NativeFlag))
 }

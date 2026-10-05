@@ -57,7 +57,7 @@ func Test_NetWorthWarnings_names_the_first_balance_when_no_account_has_one_yet(t
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, []string{c.want}, document.NetWorthWarnings(c.n))
+			assert.Equal(t, []string{c.want}, document.NetWorthWarnings(c.n, document.NativeFlag))
 		})
 	}
 }
@@ -81,7 +81,7 @@ func Test_NetWorthWarnings_says_the_reports_have_no_data_when_the_store_has_no_b
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, []string{c.want}, document.NetWorthWarnings(c.n))
+			assert.Equal(t, []string{c.want}, document.NetWorthWarnings(c.n, document.NativeFlag))
 		})
 	}
 }
@@ -92,7 +92,7 @@ func Test_NetWorthWarnings_gives_the_same_line_in_every_listing_currency(t *test
 			n := emptySnapshot(civil(2026, time.March, 2))
 			n.Currency = currency
 
-			assert.Equal(t, []string{"no account has a balance on 2026-03-01; the first balance is on 2026-03-02"}, document.NetWorthWarnings(n))
+			assert.Equal(t, []string{"no account has a balance on 2026-03-01; the first balance is on 2026-03-02"}, document.NetWorthWarnings(n, document.NativeFlag))
 		})
 	}
 }
@@ -101,14 +101,14 @@ func Test_NetWorthWarnings_says_nothing_for_a_date_whose_rows_all_sum_to_zero(t 
 	n := emptySnapshot(civil(2026, time.March, 2))
 	n.Dates[0].Rows = []store.NetWorthRow{zeroRow(civil(2026, time.March, 1))}
 
-	assert.Equal(t, []string{}, document.NetWorthWarnings(n))
+	assert.Equal(t, []string{}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_NetWorthWarnings_says_nothing_when_one_month_end_has_a_row(t *testing.T) {
 	n := emptyHistory(civil(2026, time.March, 2))
 	n.Dates[1].Rows = []store.NetWorthRow{zeroRow(civil(2026, time.February, 28))}
 
-	assert.Equal(t, []string{}, document.NetWorthWarnings(n))
+	assert.Equal(t, []string{}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_NetWorthWarnings_says_nothing_when_the_first_balance_is_not_after_the_last_day_listed(t *testing.T) {
@@ -124,7 +124,7 @@ func Test_NetWorthWarnings_says_nothing_when_the_first_balance_is_not_after_the_
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, []string{}, document.NetWorthWarnings(c.n))
+			assert.Equal(t, []string{}, document.NetWorthWarnings(c.n, document.NativeFlag))
 		})
 	}
 }
@@ -132,7 +132,7 @@ func Test_NetWorthWarnings_says_nothing_when_the_first_balance_is_not_after_the_
 func Test_NetWorthWarnings_says_nothing_when_no_day_is_listed(t *testing.T) {
 	n := report.NetWorth{AsOf: civil(2026, time.March, 1), Currency: money.CAD, FirstBalance: civil(2026, time.March, 2)}
 
-	assert.Equal(t, []string{}, document.NetWorthWarnings(n))
+	assert.Equal(t, []string{}, document.NetWorthWarnings(n, document.NativeFlag))
 }
 
 func Test_NetWorthWarnings_puts_the_empty_result_line_before_a_holding_line(t *testing.T) {
@@ -143,5 +143,5 @@ func Test_NetWorthWarnings_puts_the_empty_result_line_before_a_holding_line(t *t
 		"no account has a balance on 2026-03-01; the first balance is on 2026-03-02",
 		`"Brokerage" holds 1 security with no price on or before 2026-03-01, so its balance leaves it out; ` +
 			`enter a price in Quicken, then run quarry sync`,
-	}, document.NetWorthWarnings(n))
+	}, document.NetWorthWarnings(n, document.NativeFlag))
 }

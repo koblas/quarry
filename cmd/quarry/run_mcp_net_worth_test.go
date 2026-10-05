@@ -29,10 +29,6 @@ func Test_run_mcp_net_worth_returns_the_networth_json_document(t *testing.T) {
 	}{
 		{name: "today by default", seed: seedNetWorthStore, cliArgs: []string{"networth"}, arguments: map[string]any{}},
 		{
-			name: "one day with a USD balance before the first rate", seed: seedNetWorthStore,
-			cliArgs: []string{"networth", "--as-of", "2026-03-05"}, arguments: map[string]any{"as_of": "2026-03-05"},
-		},
-		{
 			name: "month ends from since to until", seed: seedNetWorthHistoryStore,
 			cliArgs:   []string{"networth", "--since", "2026-01", "--until", "2026-03"},
 			arguments: map[string]any{"since": "2026-01", "until": "2026-03"},
@@ -64,11 +60,6 @@ func Test_run_mcp_net_worth_returns_the_networth_json_document(t *testing.T) {
 			name: "no account in the reports has a balance", seed: seedUncountedOnlyStore,
 			cliArgs: []string{"networth", "--as-of", "2026-03-01"}, arguments: map[string]any{"as_of": "2026-03-01"},
 		},
-		{
-			name: "CAD balances in USD with no exchange rate", seed: seedNetWorthCADOnlyStore,
-			cliArgs:   []string{"networth", "--as-of", "2026-01-20", "--currency", "USD"},
-			arguments: map[string]any{"as_of": "2026-01-20", "currency": "USD"},
-		},
 	}
 
 	for _, c := range cases {
@@ -79,6 +70,43 @@ func Test_run_mcp_net_worth_returns_the_networth_json_document(t *testing.T) {
 
 			assert.Equal(t, got.cliBody, got.toolBody)
 			assert.Equal(t, got.cliWarnings, got.toolWarnings)
+		})
+	}
+}
+
+func Test_run_mcp_net_worth_words_the_rate_advice_for_a_tool_parameter_not_a_flag(t *testing.T) {
+	cases := []struct {
+		name      string
+		seed      func(*testing.T)
+		cliArgs   []string
+		arguments map[string]any
+		wantCLI   string
+		wantTool  string
+	}{
+		{
+			name: "one day with a USD balance before the first rate", seed: seedNetWorthStore,
+			cliArgs: []string{"networth", "--as-of", "2026-03-05"}, arguments: map[string]any{"as_of": "2026-03-05"},
+			wantCLI:  netWorthBeforeFirstRateLine,
+			wantTool: "USD balances on 2026-03-05, before 2026-03-10, the first exchange rate in the store, are not converted to CAD and are left out of the CAD total; pass currency native to list them",
+		},
+		{
+			name: "CAD balances in USD with no exchange rate", seed: seedNetWorthCADOnlyStore,
+			cliArgs:   []string{"networth", "--as-of", "2026-01-20", "--currency", "USD"},
+			arguments: map[string]any{"as_of": "2026-01-20", "currency": "USD"},
+			wantCLI:   "the store has no exchange rates, so CAD balances are not converted to USD and are left out of the USD total; pass --currency native to list them, or run quarry sync to fetch rates",
+			wantTool:  "the store has no exchange rates, so CAD balances are not converted to USD and are left out of the USD total; pass currency native to list them, or run quarry sync to fetch rates",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := runBothSurfaces(t, toolDocumentRun{
+				store: netWorthSeeder(c.seed), cliArgs: c.cliArgs, tool: "net_worth", arguments: c.arguments,
+			})
+
+			assert.Equal(t, got.cliBody, got.toolBody)
+			assert.Equal(t, []string{c.wantCLI}, got.cliWarnings)
+			assert.Equal(t, []string{c.wantTool}, got.toolWarnings)
 		})
 	}
 }
