@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-17
-status: open
+status: done
 ---
 
 # SCENARIO-17: ACB refuses what it cannot answer
@@ -29,10 +29,10 @@ Precedence (default; one pin per adjacent pair): positional arg → `--currency`
 - [x] Step 5: docs (after the copy ruling below) — `plugin/skills/quarry/SKILL.md:36-50` §4 acb row after the holdings row + trigger paragraph right after the table; `:70` §6 4d sentence verbatim + acb.adjustment sentence; `plugin/skills/quarry/references/findings.md:31-35` mirror bullet; new `## Classifying accounts` section after "Ignoring a finding", before "A spreadsheet" (content per spec Part A last bullet + 401(k)/IRA example). Pins: `cmd/quarry/run_skill_text_test.go:189` `skillSection4`, `:218` `skillSection6`; `cmd/quarry/run_skill_references_test.go:79-91` findings.md phrases (mirror sentence, question, never-a-second-`[accounts]`-header rule)
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comment on `(*Server).ACB` (names the unclassified refusal)
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comment on `(*Server).ACB` (names the unclassified refusal)
 
 ### Verify
-- [ ] Step 7: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-17 with its acceptance test; tick SCENARIO-20 `— delivered by SCENARIO-17 — ` + its acceptance test (test reference last on the line)
+- [x] Step 7: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-17 with its acceptance test; tick SCENARIO-20 `— delivered by SCENARIO-17 — ` + its acceptance test (test reference last on the line)
 
 ## Handoff
 
@@ -63,24 +63,10 @@ Precedence (default; one pin per adjacent pair): positional arg → `--currency`
 
 ## Phase report
 
-Run B1 (Steps 3-4), start a13a49f. Copy per RULING-S17.md, verbatim.
+Run V (Steps 6-7), start 7ed6363. No production or test code changed; `(*Server).ACB` doc comment (`internal/report/acb.go:213-215`) already names the refusal.
 
-Production: `internal/report/acb.go:221` R-6 guard after the read error (`Classification.CountUnclassified`, `classification.go`, counts closed too); `internal/report/refusal.go` `unclassifiedAccountsRefusal(n)` (`RefusalGeneric`, literal `~` path); `internal/cli/currency.go` `(*currencyFlag).argsCADOnly` (positional first, then any non-CAD value incl. `""` -> `acb is in CAD only, as the CRA requires; run it without --currency`, never echoed), wired as acb's `Args` in `internal/cli/acb.go`.
+Green: `go build ./...`; `golangci-lint run ./...` 0 issues rc=0; covered full suite rc=0; `uncovered-diff.py --profile ... 7ed6363` 0 uncovered added lines in 0 runs; `go test -race ./internal/report/... ./internal/cli/...` ok; `spec-check.py phase4de-acb` OK.
 
-Tests: `internal/report/acb_classification_test.go` (3 tests: refusal rows 1/closed/2, no-count control rows, R-6 before unknown security). `internal/cli/acb_test.go` interim test rewritten to `Test_acb_leaves_a_registered_account_out_of_the_pool` + `Test_acb_refuses_while_an_account_is_unclassified`; old EUR test dropped. `internal/cli/currency_test.go`: `currencyCommands` now includes acb; the three bad-value tables use new `genericCurrencyCommands`; new `Test_acb_currency_flag_accepts_cad_in_any_letter_case`, `Test_acb_currency_flag_refuses_any_other_value_without_echoing_it`; config-always tests pass `CAD`, not `native`. `report_help_test.go` per-row placeholder (acb = `currency`). `cmd/quarry/run_read_usage_test.go` own acb row (EUR), `run_usage_test.go` acb in the needs-a-value list.
+Counts (`test-stats.py --base 7ed6363 --changed`): cmd/quarry 882 (+3), internal/cli 570 (+2), internal/report 633 (+3), TOTAL 2085 (+8); tempdir 624 (+2), disk 552 (+2).
 
-Fixtures repaired by classifying (guard untouched): `run_config_test.go` `readCommandFixture` skips acb in `before` (config-less acb now refuses); report `acb_walk_test.go`/`acb_select_test.go` acct-7 re-typed chequing; cmd `run_acb_security_history_test.go` (2 tests) now use `acbRegisteredConfig`, `run_acb_year_cuts_test.go` all-before-rates lists `acct-cad` registered (no tx there, so no registered-only warning), `run_acb_surface_test.go` config-warning test trims the store to acct-cad.
-
-Green: report + cli narrow loops, acceptance `Test_run_acb_refuses_an_unclassified_account_and_a_currency_other_than_cad` and the cross-surface test. Full suite once: only `Test_skill_has_claude_classify_accounts_before_the_first_acb` red (B2). uncovered-diff 0; lint 0 issues.
-
-Mutations (restored, diffed): `acb.go:221` `n > 0` -> `n < 0` reddens all 3 rows of `Test_acb_refuses_while_an_investment_account_is_unclassified` and `Test_acb_refuses_an_unclassified_account_before_an_unknown_security`; `currency.go:65` `!= money.CAD` -> `== money.Native` reddens acceptance rows `currency USD`, `currency in lower case` (exit 2 expected, got 1 R-6) and cli `Test_acb_currency_flag_refuses_...` USD rows.
-
-Next run (B2) must not touch production Go; docs only (Step 5), then V. Left for V: Sweep doc comment on `(*Server).ACB` is done; STATE.md rewrite (acb `--currency` is no longer ignored; R-6 built; currencyCommands now holds acb).
-
-Run B2 (Step 5), start 0c36e61. Docs only, no production Go. Copy per RULING-S17.md sections 4-7, verbatim.
-
-Docs: `plugin/skills/quarry/SKILL.md` §4 acb row after holdings, trigger as the last paragraph of §4, §6 sentence (`acb.adjustment` a code span); `plugin/skills/quarry/references/findings.md` mirror bullet in "Ignoring a finding", new `## Classifying accounts` and `## ACB adjustments` before "A spreadsheet".
-
-Pins: `cmd/quarry/run_skill_text_test.go` `skillSection4` (row + trigger last), `skillSection6`; `cmd/quarry/run_skill_references_test.go` `Test_reference_files_state_their_job` findings.md phrases (mirror bullet, both headings, question, never-guess, ignoring-does-not-unblock, `--status all` confirm, never a second `[accounts]` line, never compute or guess an adjustment). `Test_skill_has_claude_classify_accounts_before_the_first_acb` green (it was red at its assertions before the docs).
-
-Green: `go build ./...`, `go test ./...` rc=0, lint 0 issues. Not run here (V's job): covered full suite, uncovered-diff, test-stats, spec-check, ticks of SCENARIO-17/20 in specification.md, STATE.md rewrite (acb `--currency` now refused for non-CAD, R-6 built, currencyCommands holds acb, classify-first docs built; S19 keeps conventions sentence 2, schema.md, SKILL §9, SKILL §8 R-6 row, finding.go:325 wording).
+Ticked SCENARIO-17 and SCENARIO-20 (`delivered by SCENARIO-17`) in specification.md; STATE.md rewritten (R-6 and acb `--currency` CAD-only built; Left unbuilt now only S19 items: MCP R-6 wording, `finding.go:325`, SKILL §8 R-6 row, SKILL §9, conventions sentence 2, `schema.md`).
