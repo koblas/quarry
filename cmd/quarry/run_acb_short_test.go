@@ -44,11 +44,12 @@ type shortDoc struct {
 		} `json:"sales"`
 	} `json:"years"`
 	Securities []struct {
-		Security   string `json:"security"`
-		Shares     string `json:"shares"`
-		ACB        string `json:"acb"`
-		Incomplete bool   `json:"incomplete"`
-		Events     []struct {
+		Security    string  `json:"security"`
+		Shares      string  `json:"shares"`
+		ACB         string  `json:"acb"`
+		ACBPerShare *string `json:"acb_per_share"`
+		Incomplete  bool    `json:"incomplete"`
+		Events      []struct {
 			Action     string `json:"action"`
 			SharesHeld string `json:"shares_held"`
 			ACB        string `json:"acb"`
@@ -83,4 +84,109 @@ func Test_run_acb_counts_shares_sold_beyond_the_pool_at_no_cost_and_lets_the_nex
 		[]string{doc.Securities[0].Security, doc.Securities[0].Shares, doc.Securities[0].ACB})
 	assert.False(t, doc.Securities[0].Incomplete)
 	assert.Equal(t, stderrWarnings(moneyFundOversoldWarning), stderr.String())
+}
+
+const moneyFundShortWarning = `"Money Fund": the sale on 2017-01-12 in "CAD Brokerage" sold 1,122.84 more shares than the ` +
+	"non-registered accounts held; quarry counts them at no cost, so the sale's gain is too high by what they cost, " +
+	"and the next 1,122.84 shares acquired only bring the holding back to 0; correct the shares in Quicken if they are wrong"
+
+// shortOpenRows is one non-registered brokerage whose Money Fund holding buys 100 for 100.00, then sells 1,222.84 for
+// 1,222.84, which leaves it short 1,122.84 with no buy to cover it.
+func shortOpenRows() store.Rows {
+	rows := oversoldRows()
+	rows.InvestmentTransactions = []store.InvestmentTransaction{
+		acbTrade("inv-buy", 1, "acct-cad", "sec-fund", store.ActionBuy, "CAD", day(2017, time.January, 3), 100_000_000, -10_000),
+		acbTrade("inv-sell", 2, "acct-cad", "sec-fund", store.ActionSell, "CAD", day(2017, time.January, 12), -1_222_840_000, 122_284),
+	}
+
+	return rows
+}
+
+func Test_run_acb_text_marks_the_oversold_sale_and_lists_no_short_position(t *testing.T) {
+	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", shortOpenRows())
+
+	stdout, stderr := runACB(t)
+
+	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
+		acbYearLine("Year", "Sales", "Proceeds", "Outlays", "ACB", "Gain or loss")+
+		unknownCostYearLine("2017", "1", "1,222.84", "0.00", "100.00", "1,122.84", "1 sale of shares with unknown cost")+
+		"\nACB on 2026-03-12, in CAD\n\n"+
+		"Security  Ticker  Shares  ACB  ACB per share\n", //nolint:dupword // the ACB column sits beside the ACB per share column
+		stdout)
+	assert.Equal(t, stderrWarnings(moneyFundShortWarning), stderr)
+}
+
+func Test_run_acb_json_writes_a_short_position_with_negative_shares_and_no_acb_per_share(t *testing.T) {
+	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", shortOpenRows())
+
+	stdout, stderr := runACB(t, "--json")
+
+	var doc shortDoc
+	require.NoError(t, json.Unmarshal([]byte(stdout), &doc), stdout)
+	require.Len(t, doc.Securities, 1)
+	position := doc.Securities[0]
+	assert.Equal(t, []string{"-1122.840000", "0.00"}, []string{position.Shares, position.ACB})
+	assert.Nil(t, position.ACBPerShare)
+	assert.True(t, position.Incomplete)
+	require.Len(t, position.Events, 2)
+	assert.Equal(t, []string{"sell", "-1122.840000", "0.00"},
+		[]string{position.Events[1].Action, position.Events[1].SharesHeld, position.Events[1].ACB})
+	assert.Equal(t, stderrWarnings(moneyFundShortWarning), stderr)
+}
+
+func Test_run_acb_year_marks_the_oversold_sale_unknown_cost(t *testing.T) {
+	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", shortOpenRows())
+	w := [7]int{10, 8, 8, 8, 7, 6, 12}
+
+	stdout, stderr := runACB(t, "--year", "2017")
+
+	assert.Equal(t, "Sales in 2017, in CAD\n\n"+
+		acbSaleRowOf(w, [8]string{"Date", "Security", "Shares", "Proceeds", "Outlays", "ACB", "Gain or loss"})+
+		acbSaleRowOf(w, [8]string{"2017-01-12", "MNY", "1,222.84", "1,222.84", "0.00", "100.00", "1,122.84", "unknown cost"})+
+		acbSaleRowOf(w, [8]string{"Total", "", "", "1,222.84", "0.00", "100.00", "1,122.84"}),
+		stdout)
+	assert.Equal(t, stderrWarnings(moneyFundShortWarning), stderr)
+}
+
+func Test_run_acb_security_prints_negative_shares_held_grouped(t *testing.T) {
+	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", shortOpenRows())
+	w := [10]int{10, 13, 6, 8, 12, 4, 8, 11, 6, 12}
+
+	stdout, stderr := runACB(t, "--security", "MNY")
+
+	assert.Equal(t, "ACB history of \"Money Fund\" (MNY), in CAD\n\n"+
+		acbHistoryRowOf(w, acbHistoryHeaderCells)+
+		acbHistoryRowOf(w, [11]string{"2017-01-03", "CAD Brokerage", "buy", "100", "-100.00 CAD", "", "-100.00", "100", "100.00", ""})+
+		acbHistoryRowOf(w, [11]string{"2017-01-12", "CAD Brokerage", "sell", "1,222.84", "1,222.84 CAD", "", "1,222.84", "-1,122.84", "0.00", "1,122.84", "unknown cost"}),
+		stdout)
+	assert.Equal(t, stderrWarnings(moneyFundShortWarning), stderr)
+}
+
+func Test_run_acb_names_a_removal_beyond_the_pool_after_its_removal_line(t *testing.T) {
+	rows := shortOpenRows()
+	rows.InvestmentTransactions[1] = acbTrade("inv-remove", 2, "acct-cad", "sec-fund", store.ActionRemoveShares, "CAD",
+		day(2017, time.January, 12), -110_000_000, 0)
+	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", rows)
+
+	_, stderr := runACB(t)
+
+	assert.Equal(t, stderrWarnings(
+		`"Money Fund": 110 shares left "CAD Brokerage" on 2017-01-12 without a sale; quarry took their share of the ACB out and reports no gain; `+
+			"if they went to a registered account or to someone else, that is a disposition at market value; check it with your accountant",
+		`"Money Fund": 10 more shares left "CAD Brokerage" on 2017-01-12 than the non-registered accounts held; `+
+			"the next 10 shares acquired only bring the holding back to 0; correct the shares in Quicken if they are wrong"),
+		stderr)
+}
+
+func Test_run_acb_skips_a_return_of_capital_while_the_pool_is_short_as_not_held(t *testing.T) {
+	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n\n"+
+		"[[acb.adjustment]]\nsecurity = \"sec-fund\"\ndate = 2017-02-01\nreturn-of-capital = 5.00\n", shortOpenRows())
+
+	stdout, stderr := runACB(t)
+
+	assert.Equal(t, stderrWarnings(
+		configShown+`: acb.adjustment item 1 is for "Money Fund", which no non-registered account holds on 2017-02-01; quarry skips it`,
+		moneyFundShortWarning), stderr)
+	assert.Contains(t, stdout, "1 sale of shares with unknown cost")
+	assert.NotContains(t, stdout, "return of capital")
 }

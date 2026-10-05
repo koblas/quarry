@@ -174,3 +174,17 @@ func Test_run_mcp_acb_opens_each_adjustment_warning_with_the_absolute_config_pat
 		})
 	}
 }
+
+func Test_run_mcp_acb_warns_of_a_sale_beyond_the_pool_in_the_cli_words(t *testing.T) {
+	got := runBothSurfaces(t, toolDocumentRun{
+		store: func(t *testing.T, home string) {
+			t.Helper()
+			replaceStore(t, home, shortOpenRows())
+		},
+		config: "[accounts]\nnon-registered = [\"acct-cad\"]\n", cliArgs: []string{"acb"}, tool: "acb", arguments: map[string]any{},
+	})
+
+	assert.Equal(t, []string{moneyFundShortWarning}, got.toolWarnings)
+	assert.Equal(t, got.cliWarnings, got.toolWarnings)
+	assert.Equal(t, got.cliBody, got.toolBody)
+}
