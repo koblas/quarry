@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/spf13/cobra"
 )
@@ -37,7 +38,7 @@ out. quarry does not add balances together here; quarry networth does.`,
 				return err
 			}
 
-			listing, err := srv.Accounts(cmd.Context(), all, reporting)
+			listing, err := srv.Accounts(cmd.Context(), all, reporting, report.Classification{})
 			if err != nil {
 				return &runtimeError{err: err}
 			}

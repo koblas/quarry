@@ -47,7 +47,7 @@ func (l AccountListing) AllHidden() bool {
 // Accounts lists the store's accounts in the store's order with their
 // balances in currency; closed accounts are left out, and counted in Hidden,
 // unless includeClosed is set. It refuses like Status.
-func (s *Server) Accounts(ctx context.Context, includeClosed bool, currency money.Currency) (AccountListing, error) {
+func (s *Server) Accounts(ctx context.Context, includeClosed bool, currency money.Currency, _ Classification) (AccountListing, error) {
 	list, err := s.store.Accounts(ctx)
 	if err != nil {
 		return AccountListing{}, s.readRefusal(ctx, "accounts", err)

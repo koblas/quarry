@@ -27,6 +27,10 @@ type Config struct {
 	QuickenPath string
 	// Ignore is findings.ignore as written: file order, duplicates and any text kept, nil when unset.
 	Ignore []string
+	// Registered is accounts.registered as written: file order, duplicates and any text kept, nil when unset.
+	Registered []string
+	// NonRegistered is accounts.non-registered as written, like Registered.
+	NonRegistered []string
 	// Currency is reporting.currency: money.CAD when the file is missing or leaves it unset.
 	Currency money.Currency
 	// Warnings holds one line per unknown key, in file order.

@@ -29,7 +29,7 @@ func Test_accounts_warns_only_about_listed_accounts_holdings(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			srv := report.NewServer(report.WithStore(fakeStore{accounts: list}))
 
-			got, err := srv.Accounts(t.Context(), c.includeClosed, money.Native)
+			got, err := srv.Accounts(t.Context(), c.includeClosed, money.Native, report.Classification{})
 
 			require.NoError(t, err)
 			assert.Equal(t, c.want, got.Unvalued)
@@ -45,7 +45,7 @@ func Test_accounts_filtering_unvalued_holdings_does_not_touch_the_store_s_rows(t
 		Accounts: []store.AccountBalance{{ID: "acct-1"}, {ID: "acct-2", Closed: true}}, Unvalued: held,
 	}}))
 
-	_, err := srv.Accounts(t.Context(), false, money.Native)
+	_, err := srv.Accounts(t.Context(), false, money.Native, report.Classification{})
 
 	require.NoError(t, err)
 	assert.Equal(t, []store.UnvaluedHolding{closedHeld, openHeld}, held)
