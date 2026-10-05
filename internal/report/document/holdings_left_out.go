@@ -12,9 +12,10 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// NetWorthWarnings is the unprefixed warning lines for the holdings n leaves out of its balances; never nil.
+// NetWorthWarnings is the unprefixed warning lines for what n leaves out of its balances: the holdings it
+// cannot value, then the balances no exchange rate converts; never nil.
 func NetWorthWarnings(n report.NetWorth) []string {
-	return unvaluedWarnings(n.Unvalued, n.AsOf, n.Window != nil)
+	return append(unvaluedWarnings(n.Unvalued, n.AsOf, n.Window != nil), rateWarnings(n)...)
 }
 
 // AccountsWarnings is the unprefixed warning lines for the holdings l leaves out of its balances; never nil.
