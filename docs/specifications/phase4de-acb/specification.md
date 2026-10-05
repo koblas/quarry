@@ -554,7 +554,7 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 - [x] SCENARIO-07: ACB adjustments are read from config — `internal/config/adjustment_test.go` `Test_load_reads_acb_adjustments_as_exact_cents`
 - [x] SCENARIO-08a: ACB is pooled per security across non-registered accounts — `internal/report/acb_test.go` `Test_acb_pools_each_security_across_non_registered_accounts`
 - [x] SCENARIO-09: Reinvested dividends and splits — delivered by SCENARIO-08a — `internal/report/acb_test.go` `Test_acb_adds_a_reinvested_dividends_cost_and_splits_shares_once`
-- [ ] SCENARIO-08b: ACB and gains per tax year
+- [x] SCENARIO-08b: ACB and gains per tax year — `cmd/quarry/run_acb_test.go` `Test_run_acb_prints_gains_per_tax_year_and_todays_acb_pooled_across_the_accounts`
 - [ ] SCENARIO-10: Shares added or removed without a trade
 - [ ] SCENARIO-11: Return of capital and reinvested distributions
 - [ ] SCENARIO-12: Possible superficial losses are marked

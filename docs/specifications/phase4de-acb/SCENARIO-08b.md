@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-08b
-status: open
+status: done
 ---
 
 # SCENARIO-08b: ACB and gains per tax year
@@ -76,10 +76,10 @@ The acceptance test runs through `runWith` + `replaceStoreWithRates`, because th
   - Re-pin `cmd/quarry/run_skill_text_test.go:165`, `:220-221`.
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new exported symbols; `doc.go`/root doc list mention acb.
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new exported symbols; `doc.go`/root doc list mention acb.
 
 ### Verify
-- [ ] Step 9: full verification + `spec-check.py phase4de-acb`. Tick SCENARIO-08b with its acceptance test; rewrite STATE.md.
+- [x] Step 9: full verification + `spec-check.py phase4de-acb`. Tick SCENARIO-08b with its acceptance test; rewrite STATE.md.
 
 ## Handoff
 
@@ -112,14 +112,9 @@ The acceptance test runs through `runWith` + `replaceStoreWithRates`, because th
 
 ## Phase report
 
-Run B2 done (steps 6-7). Acceptance `Test_run_acb_prints_gains_per_tax_year_and_todays_acb_pooled_across_the_accounts` is GREEN. Narrow loop green; `golangci-lint run ./...` 0 issues; full verification is run V.
+Run V done (steps 8-9). Scenario complete. No production or test code changed in V: `go build ./...` and `golangci-lint run ./...` already 0 issues; doc comments on new exported symbols (`report.Millionths`, `document.NewACB` and its types, `newAcbCommand`) and the root doc list already name acb.
 
-Files:
-- `internal/cli/acb.go`: ruled Use/Short/Long (:219 line rewrapped, words verbatim)/Example, `--currency` via `currencyFlag.bind(acbCurrencyHelp)` + `Args: currency.args`; RunE = `readConfig` always, `report.ACBRequest{classificationOf(cfg), report.Today(now())}`, `emitReport(nil warnings, renderACBJSON(withConfigWarnings(cfg.WarningsAbsolute, nil)), renderACB)`.
-- `internal/cli/acb_test.go` (help Long/Example/--currency pinned, config classification reaches the walk, unlisted account out of pool, store-read and report-open faults, bad `--currency`); `internal/cli/fakes_test.go` `history` + `InvestmentHistory`; `internal/cli/currency_test.go` the four accounts-config tests are now `{accounts, acb}` tables (`configAlwaysReadCommands`).
-- `cmd/quarry/run_acb_surface_test.go` (`--json` read-back of the acceptance fixture, config warning leading stderr and `warnings[0]`, zone-ahead-of-UTC today sale); all-commands rows in `run_read_refusals_test.go` (no store, EUR config, older store, interrupt), `run_read_usage_test.go`, `run_usage_test.go`, `run_config_test.go` (`readCommandArgs` acb row; acb skipped in the `--currency` ignores-malformed-config test, joined to accounts in the refuses-even-with-flag table), `run_spend_refusals_test.go` (HOME unset).
-- Docs: `plugin/skills/quarry/SKILL.md` description (1315 runes) + section 7 ACB bullet (ruled body, label kept; heading still "Not covered yet"); `cmd/quarry/run_skill_text_test.go` re-pinned; `docs/initial-prd.md:256`.
-
-Mutations (both red, restored byte-identical): `Today: report.Today(now())` -> `now()` reddened `Test_run_acb_counts_a_sale_dated_today_in_a_zone_ahead_of_utc`; readConfig skipped when `--currency` is given reddened the acb rows of `Test_config_always_read_commands_{read_the_config_once,refuse_an_unreadable_config,print_the_configs_warnings,name_the_configs_warnings_absolutely}...` and `Test_run_accounts_and_acb_refuse_a_malformed_config_even_when_given_a_currency/acb`.
-
-Run V: sweep (lint already 0), full verification block, tick SCENARIO-08b in specification.md with the acceptance test, spec-check, STATE.md rewrite, `status: done`. Open for product-vision: SKILL section 7 heading vs the acb bullet; Example lists unregistered `--year`/`--security` (verbatim from the spec until S15/S16).
+- Covered full suite rc=0; `uncovered-diff.py` vs 2ff80ee: 0 uncovered added lines; `-race` green on report, report/document, cli.
+- `test-stats.py --base 2ff80ee --changed`: cmd/quarry 832 (+5), internal/cli 536 (+14), internal/report 502 (+9), internal/report/document 177 (+8), TOTAL 2047 (+36).
+- SCENARIO-08b ticked in specification.md with its acceptance test; `spec-check.py phase4de-acb` OK; STATE.md rewritten.
+- Open for the final product-vision pass: SKILL section 7 heading vs the acb bullet; Example lists unregistered `--year`/`--security`.
