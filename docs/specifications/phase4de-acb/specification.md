@@ -135,8 +135,8 @@ Masking (PRD :265): any value from `accounts.*` or key under `accounts` not exac
 - Text row: id padded to widest, name padded+escaped (escapeCell), type, currency, `, closed` when closed, ignored marker:
 ```
 Unclassified investment accounts (2): list each account's id (acct-…) in accounts.registered or …
-  unclassified-account:acct-12  Questrade TFSA  brokerage, CAD
   unclassified-account:acct-31  Old RRSP        retirement, CAD, closed
+  unclassified-account:acct-12  Questrade TFSA  brokerage, CAD
 ```
 - JSON item: `account_id`, `account`, `currency` set; other item keys null; `first_found_at` null; `fixed_at` null.
 - CSV: account, currency filled; others empty; id in finding_id.
@@ -515,7 +515,7 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 | SCENARIO-02 | OWNS A RUN (sonnet), 3 batches, config + new `internal/platform` mask helper (behaviour classes pinned in its package); owns every config-time masking site (refusals, "as item", "in both", unknown-key warning under `[accounts]`, go-toml syntax-error probe parse.go:104). |
 | SCENARIO-03 | FOLD into 05 (one warning composer at accounts, findings, data_quality); acceptance test rides in 05. |
 | SCENARIO-04 | OWNS A RUN (opus), 4 batches, finding + report: type + read-time detector + accounts on the `Findings` port result; JSON `first_found_at` null, CSV, `--csv` help (Part A form); text, Long row + after-table paragraph + TOML, `--type`, findings.md bullet + first line; fixture strategy / golden re-pins (every fixture without `[accounts]` raises the finding from here on). |
-| SCENARIO-05 | OWNS A RUN (opus), 4 batches, report + snapshot option + mcp; absorbs 03: status (accounts on the `Status` result + `CountFindings`), sync count via a snapshot option wired at cli/sync.go:102, MCP data_quality + sync_status, S03's warning. Builds the one read-time detector chokepoint 13b extends. |
+| SCENARIO-05 | OWNS A RUN (opus), 4 batches, report + snapshot option + mcp; absorbs 03: status (accounts on the `Status` result + `CountFindings`), sync count via a snapshot option wired at cli/sync.go:102, MCP data_quality + sync_status, S03's warning. Builds the one read-time detector chokepoint 13b extends. Orchestrator 2026-10-05: S04 already wires MCP data_quality's listing (it calls `Server.Findings`); 05 adds the counts and the rest. |
 | SCENARIO-06 | OWNS A RUN (sonnet), 3 batches, importer + store. **Runs probes P1/P2 first** (results → Handoff → STATE). Column + field + duckstore read/write; importer reads ZCOSTBASIS (NULL when 0); FormatVersion 9 + re-pins; conventions sentence 1 (cost_basis) + hand copies + schema.md. |
 | SCENARIO-07 | OWNS A RUN (sonnet), 3 batches, config: `[[acb.adjustment]]` (new array-table parse; `platform/money` from raw token text) + knownKeys; 7 refusal lines with amount bounds. Adjustment warnings go to 11. |
 | SCENARIO-08a | OWNS A RUN (opus), 4 batches, report + duckstore; absorbs 09. Port read in an embedded interface (report.Store at its 10-method cap); walk (buy = −amount, pro-rata to the cent, exact remainder, commission arm per P1, tax year, same-day order per P2); BoC rate per event; reinvest/split arms; sold-out-and-rebought, closed account, fractional shares. Read covers every investment account incl. registered and file-wide holdings (12 needs them). Acceptance at `Server.ACB`. |
@@ -525,7 +525,7 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 | SCENARIO-11 | OWNS A RUN (sonnet), 3 batches, report + cli wiring of cfg adjustments: ROC/RD events; ROC above ACB + warning 8; the 3 adjustment warnings. |
 | SCENARIO-12 | OWNS A RUN (opus), 3 batches, report: ±30-day bounds both sides; held at day +30; same ticker; "other than the shares sold"; registered accounts included; year suffix; warning 3. |
 | SCENARIO-13a | LIGHT, report: warning 4, `N sale(s) of shares with unknown cost` year suffix, `incomplete` suffix (3 ruled lines); NULL-cost reinvest arm. Becomes OWNS A RUN if warning 4's copy ruling adds a variant. |
-| SCENARIO-13b | OWNS A RUN (opus), 4 batches, finding + report: `shares-without-cost` detector (excludes 10's pairs) through 05's chokepoint (status/sync/MCP counts agree, R-1); 4 FindingItem/CSV keys; **final** `--csv` help (Part B, moves 04's pin); text, Long row + sentence, `--type`, findings.md bullet. |
+| SCENARIO-13b | OWNS A RUN (opus), 4 batches, finding + report: `shares-without-cost` detector (excludes 10's pairs) through 05's chokepoint (status/sync/MCP counts agree, R-1); 4 FindingItem/CSV keys; **final** `--csv` help (Part B, moves 04's pin); text, Long row + sentence, `--type`, findings.md bullet. Also updates the `--csv` mirror sentence at `plugin/skills/quarry/references/findings.md:42` to the Part B `--csv` wording (orchestrator 2026-10-05). |
 | SCENARIO-14 | OWNS A RUN (sonnet), 3 batches, report: warning 6 (both variants) + out of totals; warning 7; warning 9 (bounds Dec 23/24/31, Jan 1); relative order of warnings 3–9. |
 | SCENARIO-15 | OWNS A RUN (sonnet), 3 batches; absorbs 18: `--year` caption/columns/Total/suffixes, JSON year filter; both empty-warning forms; full 1–9 warning order. |
 | SCENARIO-16 | OWNS A RUN (sonnet), 2–3 batches: selector (name, ticker, id; repeated); history renderer; registered-only warning (owned here). |

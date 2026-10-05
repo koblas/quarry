@@ -31,3 +31,4 @@ Scenarios complete: SCENARIO-01..02. Last updated by SCENARIO-02.
 - Checkpoint 02 MINOR: comment budgets — `setting` doc `internal/config/parse.go:26` (4 lines → 2), `namedKeyMessage` var comment `parse.go:144-146` (→ 1 line, what not how), `Load` doc `internal/config/config.go:42-47` (over budget, ragged wrap). Trim on next touch.
 - Checkpoint 02 MINOR: in-both refusal quotes via `tomlstr.BasicString` but no row has a quote/newline id (`internal/config/accounts_test.go` `Test_load_refuses_an_id_listed_in_both_account_lists`) — add an `"a\"b"` row on next config touch.
 - Checkpoint 02 NIT: `keyText` masks each dotted key part separately (`parse.go:~418-425`); a number split across parts keeps ≤4 digits per part.
+- Final product-vision pass: `quarry findings --help` type table realigned (descriptions at column 24) for the 20-char `unclassified-account` (SCENARIO-04; layout only, orchestrator-accepted).
