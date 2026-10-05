@@ -466,6 +466,16 @@ type Rate struct {
 	Series string
 }
 
+// InvestmentHistory is what an adjusted cost base is walked from: every account, closed and registered included,
+// every security, every investment transaction that names a security in date then source id order, and every
+// exchange rate in date order.
+type InvestmentHistory struct {
+	Accounts     []Account
+	Securities   []Security
+	Transactions []InvestmentTransaction
+	Rates        []Rate
+}
+
 // MaxRate is the largest rate fx_rates.usd_cad holds, in millionths: DECIMAL(10,6)'s 9999.999999.
 const MaxRate = money.Rate(9_999_999_999)
 

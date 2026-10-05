@@ -16,13 +16,13 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; duckstore adapter beh
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `internal/report/acb_test.go` both acceptance tests — `Server.ACB` against `fakeStore`, `Today` 2026-10-05, classification non-registered {acct-1, acct-2 (closed), acct-3 USD}, registered {acct-9}. Hand-computed (CAD cents, half away from zero):
+- [x] Step 1: `internal/report/acb_test.go` both acceptance tests — `Server.ACB` against `fakeStore`, `Today` 2026-10-05, classification non-registered {acct-1, acct-2 (closed), acct-3 USD}, registered {acct-9}. Hand-computed (CAD cents, half away from zero):
   - XEQT sec-1 CAD: 2023-03-01 acct-1 buy 100, amount -2509.99, commission 9.99 (99900) → pool 100 / 2509.99. 2023-06-15 acct-1 sell 30 (src 10), amount 800.00, commission 4.9450 (49450); acct-2 buy 100 (src 11), amount -2600.00 → buy first: 200 / 5109.99; sale ACB 766.50, proceeds 804.95, outlays 4.95, gain 33.50 → 170 / 4343.49. 2024-02-10 acct-1 sell 50, amount 1600.00 → ACB 1277.50, gain 322.50 → 120 / 3065.99. 2024-09-03 acct-2 sell 100, amount 3300.00, commission 9.99 → proceeds 3309.99, outlays 9.99, ACB 2554.99, gain 745.01 → 20 / 511.00.
   - VTI sec-2 USD in acct-3; rates 2023-12-29 1.320000, 2024-01-03 1.330000, 2024-04-02 1.355000. 2024-01-02 buy 10, amount -2001.37 → 1.32 (latest earlier) → 2641.81. 2024-04-02 sell 4, amount 900.00, commission 1.00 → proceeds 1220.86, outlays 1.36, ACB 1056.72, gain 162.78 → 6 / 1585.09.
   - acct-9 RRSP control: XEQT buy 2023-05-01 50 / -1250.00, sell 2024-03-01 50 / 1500.00 — in no sale, pool or event.
   - Years: 2023 → 1 sale, 804.95 / 4.95 / 766.50 / 33.50. 2024 → 3 sales, 6130.85 / 11.35 / 4889.21 / 1230.29. Securities: VTI 6 sh 1585.09; XEQT 20 sh 511.00.
   - Folded S09 (ZEB sec-5 CAD): 2024-01-10 acct-1 buy 10 / -300.00; acct-2 buy 10 / -310.00 → 20 / 610.00. 2024-03-28 acct-1 reinvest_dividend 0.5, amount 0, cost_basis 16.40 → 20.5 / 626.40. 2024-05-01 split 2:1 recorded in acct-1 AND acct-2 → 41 / 626.40. 2024-06-03 acct-2 sell 10.25, amount 200.00 → ACB 156.60, gain 43.40 → 30.75 / 469.80 (split twice 78.30; no split 313.20; reinvest dropped 156.31).
-- [ ] Step 2: `internal/report/store.go:9-15` `ValueReads.InvestmentHistory`; `internal/store/store.go:463-468` new `store.InvestmentHistory` beside `Rate`; new `internal/report/acb.go` `ACBRequest`/`ACB`/`ACBYear`/`ACBSale`/`ACBSecurity`/`ACBEvent` + `(*Server).ACB` signature-only stub; stub `(*duckstore.Store).InvestmentHistory`; `internal/report/fakes_test.go:10-40,99-120` fake field + method (with a reads counter). Let `go vet` list any other implementer (cli/mcp fakes embed `report.Store`). Red at the assertion.
+- [x] Step 2: `internal/report/store.go:9-15` `ValueReads.InvestmentHistory`; `internal/store/store.go:463-468` new `store.InvestmentHistory` beside `Rate`; new `internal/report/acb.go` `ACBRequest`/`ACB`/`ACBYear`/`ACBSale`/`ACBSecurity`/`ACBEvent` + `(*Server).ACB` signature-only stub; stub `(*duckstore.Store).InvestmentHistory`; `internal/report/fakes_test.go:10-40,99-120` fake field + method (with a reads counter). Let `go vet` list any other implementer (cli/mcp fakes embed `report.Store`). Red at the assertion.
 
 ### Build
 - [ ] Step 3: new `internal/store/duckstore/investments.go` `(*Store).InvestmentHistory` — one `openRead`, every account via `readAccounts` (`findings_read.go:101-112`), securities (id, name, ticker, currency), every investment transaction with a security (all accounts, registered included; cents/millionths via `CAST(... AS BIGINT)` like `history.go:60`; date then source_id), rates via `readRates` (`history.go:269-308`); faults through `openFault`. `investments_test.go` `Test_investment_history_reads_every_investment_transaction_with_its_cost`: real store (`newStoreWithRates` `views_fx_test.go:42`, `holdingRows` `holdings_view_test.go:22`): NULL vs set commission/cost_basis/shares, split sides, fractional shares, closed account, registered-type account, cash-only row excluded.
@@ -63,3 +63,20 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; duckstore adapter beh
 - With exact rational units, round(ACB × sold ÷ held) at sold == held already equals ACB. The exact-remainder guard is visible only on an oversell row.
 - `readRates` probes the fx_rates columns first, so it is two queries. Fault rows index queries with `passQueries`, and a single `rowReads` row faults only the first query.
 - cli/mcp fakes embed `report.Store` and compile without the method; only `report/fakes_test.go` needs it.
+
+## Phase report
+
+Run A (steps 1-2) done; both acceptance tests red at their assertions, nothing else changed.
+
+Files:
+- `internal/report/acb_test.go` (new): `Test_acb_pools_each_security_across_non_registered_accounts`, `Test_acb_adds_a_reinvested_dividends_cost_and_splits_shares_once`. Helpers `acbClassification`, `acbAccounts`, `acbSecurity`, `acbTx(t, src, account, security, date, action, currency, shares, amount)` (set `.Commission`/`.CostBasis`/split sides on the result), `acbRate`, projections `acbYearRows`/`acbPositionRows` (shares via `RatString()`). Reuse them in `acb_walk_test.go`.
+- `internal/report/acb.go` (new): `ACBRequest{Classification, Today}`, `ACB{Years, Securities}`, `ACBYear{Year, Sales, Proceeds, Outlays, ACBRemoved, Gain}` (Sales nested per year), `ACBSale{ID, Date, SecurityID, Shares, Proceeds, Outlays, ACBRemoved, Gain}`, `ACBSecurity{Security store.Security, Shares *big.Rat, ACB, Events}`, `ACBEvent{ID, Date, Action, Shares, Held, ACB, Gain}`; `(*Server).ACB` is a stub returning `ACB{}, nil` (ctx/req unused: lint will say so until step 5). `ACBEvent` field meaning and `ACBSecurity.PerShare()` are step 6's to settle.
+- `internal/report/store.go:9-19` `ValueReads.InvestmentHistory`; `internal/store/store.go` `store.InvestmentHistory{Accounts, Securities, Transactions, Rates}` before `MaxRate`.
+- `internal/store/duckstore/investments.go` (new): `(*Store).InvestmentHistory` stub returning zero value (step 3 builds it).
+- `internal/report/fakes_test.go`: `fakeStore.history` + `historyReads *int` + `InvestmentHistory` method.
+
+Red (both tests): `actual  : []report_test.acbYearRow(nil)` against the expected 2023/2024 (or 2024 ZEB) year rows, then `actual  : []report_test.acbPositionRow(nil)`. Hand-computed fixtures re-derived and agree with the plan (XEQT 20 / 51100, VTI 6 / 158509, ZEB 123/4 / 46980).
+
+Green: `go build ./...`, `go vet ./...`. Lint not run (stubs).
+
+Next run (B1, steps 3-4): replace the duckstore stub; do not touch the report types.

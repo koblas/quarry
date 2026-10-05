@@ -6,12 +6,16 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// ValueReads is the part of Store that values what accounts hold: holdings and net worth.
+// ValueReads is the part of Store that values what accounts hold and what it cost: holdings, net worth and
+// the investment history an adjusted cost base is walked from.
 type ValueReads interface {
 	// Holdings lists what each account holds of each security on params.AsOf, with its value.
 	Holdings(ctx context.Context, params store.HoldingsParams) (store.Holdings, error)
 	// NetWorth lists the balance of each account type and currency on each of params.Dates.
 	NetWorth(ctx context.Context, params store.NetWorthParams) (store.NetWorth, error)
+	// InvestmentHistory lists every account, security and investment transaction with a security, and every
+	// exchange rate.
+	InvestmentHistory(ctx context.Context) (store.InvestmentHistory, error)
 }
 
 // Store is the read side of quarry's store: each method opens the store
