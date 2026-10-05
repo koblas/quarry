@@ -3,6 +3,8 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
+	"strings"
 	"testing"
 	"time"
 
@@ -276,4 +278,24 @@ func Test_findings_csv_puts_an_unused_category_item_in_its_category_columns_with
 	assert.Equal(t, findingsCSVHeader+
 		"unused-category:cat-40,unused-category,open,,,,,Vacation,,,,,,,,cat-40,"+unusedFixCSV+"\n"+
 		"unused-category:cat-40,unused-category,open,,,,,Vacation:Hotel,,,,,,,,cat-41,"+unusedFixCSV+"\n", stdout.String())
+}
+
+func Test_findings_csv_puts_an_unclassified_account_in_its_account_and_currency_columns_with_everything_else_empty(t *testing.T) {
+	fake := fakeReportStore{findings: store.FindingList{Accounts: []store.Account{
+		{ID: "acct-12", Name: "Questrade TFSA", Type: store.AccountTypeBrokerage, Currency: "CAD"},
+		{ID: "acct-31", Name: "Old RRSP", Type: store.AccountTypeRetirement, Currency: "USD", Closed: true},
+	}}}
+	var stdout bytes.Buffer
+
+	err := executeFindings(t, fake, &stdout, &bytes.Buffer{}, "--csv")
+
+	require.NoError(t, err)
+	rows, err := csv.NewReader(strings.NewReader(stdout.String())).ReadAll()
+	require.NoError(t, err)
+	fix := finding.UnclassifiedAccount.Fix().Sentence
+	assert.Equal(t, [][]string{
+		strings.Split(strings.TrimSuffix(findingsCSVHeader, "\n"), ","),
+		{"unclassified-account:acct-31", "unclassified-account", "open", "", "Old RRSP", "USD", "", "", "", "", "", "", "", "", "", "", fix},
+		{"unclassified-account:acct-12", "unclassified-account", "open", "", "Questrade TFSA", "CAD", "", "", "", "", "", "", "", "", "", "", fix},
+	}, rows)
 }

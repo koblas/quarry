@@ -32,7 +32,7 @@ type Store interface {
 	// span of the store's transactions (of the named accounts' when params.AccountIDs is set).
 	Search(ctx context.Context, params store.SearchParams) (store.Search, error)
 	ValueReads
-	// Findings lists every finding in the store with its items.
+	// Findings lists every finding in the store with its items, and every account.
 	Findings(ctx context.Context) (store.FindingList, error)
 	// Schema describes what the store holds: its tables and views, accounts, categories and transaction dates.
 	Schema(ctx context.Context) (store.Schema, error)

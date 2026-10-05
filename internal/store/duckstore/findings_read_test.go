@@ -448,3 +448,45 @@ func Test_findings_gives_only_a_similar_categories_item_the_category_total(t *te
 
 	assert.Equal(t, []int{2, 0, 0}, []int{similar.Items[0].Splits, mixed.Items[0].Splits, uncategorized.Items[0].Splits})
 }
+
+func Test_findings_reads_every_account_with_its_closed_and_active_state_sorted_by_id(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	rows.Accounts = append(rows.Accounts,
+		store.Account{ID: "acct-3", SourceID: 3, Name: "Old RRSP", Type: "retirement", Currency: "CAD", Closed: true},
+		store.Account{ID: "acct-2", SourceID: 2, Name: "Questrade TFSA", Type: "brokerage", Currency: "USD", Active: true},
+	)
+	dir := t.TempDir()
+	_, err := duckstore.New(dir).Replace(t.Context(), rows)
+	require.NoError(t, err)
+
+	list, err := duckstore.New(dir).Findings(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.Account{
+		{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
+		{ID: "acct-2", Name: "Questrade TFSA", Type: "brokerage", Currency: "USD", Active: true},
+		{ID: "acct-3", Name: "Old RRSP", Type: "retirement", Currency: "CAD", Closed: true},
+	}, list.Accounts)
+}
+
+func Test_findings_returns_the_accounts_query_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	fault := ioFault(`query rows "SELECT id"`)
+	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, queryFault: fault}))
+
+	_, err := st.Findings(t.Context())
+
+	assertOtherFault(t, err, "disk read failed")
+	assert.ErrorIs(t, err, fault)
+}
+
+func Test_findings_returns_an_account_scan_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, scanFault: errScanFailed}))
+
+	_, err := st.Findings(t.Context())
+
+	assertOtherFault(t, err, errScanFailed.Error())
+	assert.ErrorIs(t, err, errScanFailed)
+}

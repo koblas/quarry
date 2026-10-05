@@ -12,7 +12,7 @@ import (
 // --type value.
 type Type string
 
-// The eight finding types.
+// The nine finding types.
 const (
 	Duplicate         Type = "duplicate"
 	OneSidedTransfer  Type = "one-sided-transfer"
@@ -26,11 +26,16 @@ const (
 	UnclassifiedAccount Type = "unclassified-account"
 )
 
+// ReadTime reports whether findings of t are computed from the config at read time: never stored, never new or fixed.
+func (t Type) ReadTime() bool {
+	return t == UnclassifiedAccount
+}
+
 // Types returns every finding type in display order, as a fresh slice.
 func Types() []Type {
 	return []Type{
 		Duplicate, OneSidedTransfer, UnlinkedTransfer, Uncategorized,
-		MixedCategories, PayeeVariants, SimilarCategories, UnusedCategory,
+		MixedCategories, PayeeVariants, SimilarCategories, UnusedCategory, UnclassifiedAccount,
 	}
 }
 
@@ -310,6 +315,12 @@ var fixes = map[Type]Fix{
 		Sentence:    "No transaction uses it; check that no scheduled transaction or budget does, then delete it in Quicken, or ignore it to keep it",
 		Heading:     "Unused categories",
 		GroupClause: "no transaction uses them; check that no scheduled transaction or budget does, then delete them in Quicken",
+	},
+	UnclassifiedAccount: {
+		Sentence: "Add this account's id to accounts.registered if it is an RRSP, RRIF, TFSA, RESP, FHSA or other registered plan, else to accounts.non-registered, in " +
+			"~/Library/Application Support/quarry/config.toml; quarry acb leaves registered accounts out",
+		Heading:     "Unclassified investment accounts",
+		GroupClause: "list each account's id (acct-…) in accounts.registered or accounts.non-registered in ~/Library/Application Support/quarry/config.toml; see quarry findings --help",
 	},
 }
 

@@ -600,10 +600,12 @@ type OneSidedTransfer struct {
 	OtherAccountID    *string
 }
 
-// FindingList is every finding the store holds, open and fixed alike; ignored
-// is not stored, so callers derive it from the config.
+// FindingList is every finding the store holds, open and fixed alike, with every account read in the same
+// open (ID, Name, Type, Currency, Closed, Active only), sorted by id; ignored is not stored, so callers derive it
+// from the config.
 type FindingList struct {
 	Findings []Finding
+	Accounts []Account
 }
 
 // Finding is one row of the findings table with its items. FixedAt is nil
@@ -632,6 +634,7 @@ type FindingItem struct {
 	Account        string
 	Currency       string
 	Closed, Active bool
+	AccountType    string // an unclassified-account item's account type; empty for every other type
 	Payee          string
 	Category       *string // an unlinked-transfer item's sole split's full path, nil if none or several; a mixed-categories, similar-categories or unused-category item's category path
 	Splits         int     // an unlinked-transfer item's split count; a similar-categories item's category's splits; 0 for an unused-category item

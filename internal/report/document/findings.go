@@ -16,12 +16,13 @@ type FindingsList struct {
 	Warnings []string       `json:"warnings"`
 }
 
-// FindingEntry is one entry of "findings"; FixedAt is null while the finding is open, and a fixed finding has no items.
+// FindingEntry is one entry of "findings"; FirstFoundAt is null for a read-time type, FixedAt while the finding is open,
+// and a fixed finding has no items.
 type FindingEntry struct {
 	ID           string        `json:"id"`
 	Type         string        `json:"type"`
 	Status       string        `json:"status"`
-	FirstFoundAt string        `json:"first_found_at"`
+	FirstFoundAt *string       `json:"first_found_at"`
 	FixedAt      *string       `json:"fixed_at"`
 	Fix          string        `json:"fix"`
 	Items        []FindingItem `json:"items"`
@@ -66,7 +67,8 @@ func NewFindingsList(listing report.FindingsListing, status finding.Status, typ 
 }
 
 // NewFindingEntry converts f into its --json entry: fixed_at is set only for a fixed finding, which has no items,
-// and splits only for the items of a similar-categories finding.
+// first_found_at is null for a read-time type, splits is set only for the items of a similar-categories finding,
+// and an unclassified-account item sets account_id, account and currency alone.
 func NewFindingEntry(f report.ListedFinding) FindingEntry {
 	items := make([]FindingItem, len(f.Items))
 	for i, item := range f.Items {
@@ -74,11 +76,17 @@ func NewFindingEntry(f report.ListedFinding) FindingEntry {
 		if f.Type == finding.SimilarCategories {
 			items[i].Splits = &item.Splits
 		}
+		if f.Type == finding.UnclassifiedAccount {
+			items[i].AccountID, items[i].Account, items[i].Currency = &item.AccountID, &item.Account, &item.Currency
+		}
 	}
 	doc := FindingEntry{
 		ID: f.ID, Type: string(f.Type), Status: string(f.Status),
-		FirstFoundAt: timestamp(f.FirstFoundAt),
-		Fix:          f.Type.Fix().Sentence, Items: items,
+		Fix: f.Type.Fix().Sentence, Items: items,
+	}
+	if !f.Type.ReadTime() {
+		firstFoundAt := timestamp(f.FirstFoundAt)
+		doc.FirstFoundAt = &firstFoundAt
 	}
 	if f.FixedAt != nil {
 		fixedAt := timestamp(*f.FixedAt)

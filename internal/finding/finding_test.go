@@ -7,11 +7,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_types_lists_the_eight_types_in_display_order(t *testing.T) {
+func Test_types_lists_the_nine_types_in_display_order(t *testing.T) {
 	assert.Equal(t, []finding.Type{
 		"duplicate", "one-sided-transfer", "unlinked-transfer", "uncategorized",
-		"mixed-categories", "payee-variants", "similar-categories", "unused-category",
+		"mixed-categories", "payee-variants", "similar-categories", "unused-category", "unclassified-account",
 	}, finding.Types())
+}
+
+func Test_read_time_is_true_only_for_the_unclassified_account_type(t *testing.T) {
+	for _, typ := range finding.Types() {
+		assert.Equal(t, typ == finding.UnclassifiedAccount, typ.ReadTime(), typ)
+	}
+	assert.False(t, finding.Type("future-kind").ReadTime())
 }
 
 func Test_types_returns_a_fresh_slice_each_call(t *testing.T) {
@@ -205,6 +212,12 @@ func Test_fix_pins_the_ruled_copy_for_every_type(t *testing.T) {
 			Sentence:    "No transaction uses it; check that no scheduled transaction or budget does, then delete it in Quicken, or ignore it to keep it",
 			Heading:     "Unused categories",
 			GroupClause: "no transaction uses them; check that no scheduled transaction or budget does, then delete them in Quicken",
+		}},
+		{finding.UnclassifiedAccount, finding.Fix{
+			Sentence: "Add this account's id to accounts.registered if it is an RRSP, RRIF, TFSA, RESP, FHSA or other registered plan, else to accounts.non-registered, in " +
+				"~/Library/Application Support/quarry/config.toml; quarry acb leaves registered accounts out",
+			Heading:     "Unclassified investment accounts",
+			GroupClause: "list each account's id (acct-…) in accounts.registered or accounts.non-registered in ~/Library/Application Support/quarry/config.toml; see quarry findings --help",
 		}},
 	}
 

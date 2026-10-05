@@ -58,7 +58,7 @@ func (s *Server) Findings(ctx context.Context, req FindingsRequest) (FindingsLis
 	}
 	want := cmp.Or(req.Status, finding.StatusOpen)
 
-	stored, states := knownFindings(list)
+	stored, states := knownFindings(readTimeFindings(list, req.Classification))
 	var typeStates []finding.State
 	for i, f := range stored {
 		if req.Type == "" || f.Type == req.Type {
@@ -137,7 +137,7 @@ func statusRank(s finding.Status) int {
 
 // findingOrder is the display order of typ's open and ignored findings: newest item date for transfers and
 // duplicates, size then payee for uncategorized and mixed, transactions for payee-variants, splits for
-// similar-categories, category path for unused-category.
+// similar-categories, category path for unused-category, account name for unclassified-account.
 func findingOrder(typ finding.Type) func(a, b store.Finding) int {
 	switch typ {
 	case finding.Duplicate, finding.UnlinkedTransfer, finding.OneSidedTransfer:
@@ -171,6 +171,10 @@ func findingOrder(typ finding.Type) func(a, b store.Finding) int {
 	case finding.UnusedCategory:
 		return func(a, b store.Finding) int {
 			return cmp.Or(cmp.Compare(strings.ToLower(categoryOf(a)), strings.ToLower(categoryOf(b))), cmp.Compare(a.ID, b.ID))
+		}
+	case finding.UnclassifiedAccount:
+		return func(a, b store.Finding) int {
+			return cmp.Or(cmp.Compare(strings.ToLower(accountOf(a)), strings.ToLower(accountOf(b))), cmp.Compare(a.ID, b.ID))
 		}
 	}
 	// unreachable: the exhaustive linter fails a switch missing a finding.Types() entry, and knownFindings drops rows of any other type.
@@ -213,6 +217,15 @@ func categoryOf(f store.Finding) string {
 		return ""
 	}
 	return *f.Items[0].Category
+}
+
+// accountOf is the name of f's first item's account; "" when f has none.
+func accountOf(f store.Finding) string {
+	if len(f.Items) == 0 {
+		// unreachable: only a fixed finding lacks items and listedOrder sends it to fixed_at; unclassifiedFindings gives each finding one item
+		return ""
+	}
+	return f.Items[0].Account
 }
 
 // payeeOf is the payee name of f's first item; every item of an uncategorized or mixed-categories finding shares it.
