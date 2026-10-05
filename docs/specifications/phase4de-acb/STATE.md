@@ -70,3 +70,4 @@ Scenarios complete: SCENARIO-01..07, 08a, 09 (03 folded into 05, 09 into 08a). L
 - Checkpoint 06 MINOR: first-fault order pinned only commission-before-cost (`internal/importer/investments_test.go` both-unreadable row); add amount+cost row on next importer touch.
 - Checkpoint 06 MINOR (owner S19): `Test_sql_conventions_say_what_cost_basis_is_and_leave_acb_to_the_command` (`internal/report/sql_conventions_test.go`) asserts NotContains "acb" — S19 must rewrite it when it adds sentence 2.
 - Checkpoint 06 NIT: `cmd/quarry/run_holdings_surfaces_test.go:26` pin shrank to `records none).` (full sentence pinned in report test).
+- Final product-vision pass: SKILL §7 ACB line keeps label **Realized gains, ACB:** with the ruled Tax-line body (orchestrator, S08b) — confirm; `acb` Long rewrapped.
