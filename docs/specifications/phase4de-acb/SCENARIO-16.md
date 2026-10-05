@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-16
-status: open
+status: done
 ---
 
 # SCENARIO-16: One security's history
@@ -42,10 +42,10 @@ Defaults, for the orchestrator:
 - [x] Step 6: document + cli — `document/acb_warnings.go:18-28` registered-only slot per P1 (`acb_warnings_slots_test.go` order row, `acb_warnings_test.go` copy pin, acbPooled helper per Trap); export `formatRate` (`document/acb.go:206-214`). `internal/cli/render_acb.go:19-25` branch on the selection flag → new `renderACBHistory` (caption P2, 10 columns + suffix P4, Amount `-1,234.56 USD`, Rate P5, CAD and Gain blank when `Unvalued` (S14 ruling), Gain blank unless `Realized`, `escapeCell` on name/account, blank line between blocks, P3); `cli/acb.go:79-86` wire `acb.Cut()`. Tests: `internal/cli/acb_test.go:102-109` flag-help pin `--security name +show the full history ...`; `render_acb_internal_test.go` cell arms (CAD vs USD rate, unvalued, adjustment P6, nil ticker, marks order); `run_acb_security_test.go` cmd matrix: `Test_run_acb_security_warns_a_security_held_only_in_registered_accounts` (`acbRows` `sec-maple`, `run_acb_test.go:36-62`; text + `--json`), refusal `quarry: no security named "XYZ"; run quarry acb to list the securities it covers` exit 1 (unmatched, `""`, one unmatched among matched), repeated `--security` two blocks walk order, `--json` `securities` = named and `years` cut (read back with `encoding/json`), `--year`+`--security`, shared-ticker pair, id selector. Folded 4b debt: new cmd fixture with a no-cost reinvest; run the warning's literal `quarry acb --security <id>` and assert the reinvest rows carry `unknown cost`; removal row inside span carries `unknown cost` in text
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (expect the `exhaustive` arm at `internal/mcp/result.go:75-89`: route `RefusalUnknownSecurity` to `refusal.Error()` for now); doc comments on `Cut`, `ACBRequest.Securities`, new fields, `renderACBHistory`
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (expect the `exhaustive` arm at `internal/mcp/result.go:75-89`: route `RefusalUnknownSecurity` to `refusal.Error()` for now); doc comments on `Cut`, `ACBRequest.Securities`, new fields, `renderACBHistory`
 
 ### Verify
-- [ ] Step 8: full verification + `.claude/scripts/spec-check.py phase4de-acb` → tick SCENARIO-16 with its acceptance test; STATE.md rewrite (Cut binding, removed S16 Left-unbuilt rows, P-rulings recorded)
+- [x] Step 8: full verification + `.claude/scripts/spec-check.py phase4de-acb` → tick SCENARIO-16 with its acceptance test; STATE.md rewrite (Cut binding, removed S16 Left-unbuilt rows, P-rulings recorded)
 
 ## Handoff
 
@@ -71,10 +71,4 @@ Defaults, for the orchestrator:
 
 ## Phase report
 
-Run B2 (steps 5-6) done; acceptance test and whole repo green (`go test` rc=0, `golangci-lint` 0 issues, `uncovered-diff.py` 0 vs 80911a0, +34 tests: cmd/quarry +12, cli +11, report +8, document +3).
-- `internal/report/acb_year.go` `(ACB).Cut()` = `selectedOnly()` then `InYear()`; selection keeps named `Securities`, re-sums `Years` via new `acb_walk.go` `yearsOf(sales []ACBSale, excesses)` (shared with `acbYears`), ROC excess from named events with `NoRate == nil` (`(ACBSecurity).excesses()`). `Cut` keeps `Selected`/`SelectedIDs`/`RegisteredOnly`.
-- `internal/report/document/acb.go`: `Rate` exported (was `formatRate`), event JSON `unknown_cost` last; `acb_warnings.go` `registeredOnlyWarnings` slot 2b (after nothing-to-show, before superficial). Re-pinned: key list and the two adjustment event maps in `document/acb_test.go`; order test now `Test_ACBWarnings_orders_every_slot` (10 lines).
-- `internal/cli/render_acb_history.go` (new) `renderACBHistory`; `render_acb.go` `renderACB` branches `Year != 0` first, then `Selected`; `cli/acb.go` renders `acb.Cut()`, warnings stay on the uncut `acb`. Adjustment = event with `Amount == nil`; Rate cell = `document.Rate` when `Rate != 0`; superficial mark by sale id from `Years` (cut report).
-- Tests: `acb_year_test.go` 8 `acb_cut` tests; `cli/acb_test.go` help pin + comma-name selector; `cli/render_acb_history_internal_test.go` (white-box cell arms); `cmd/quarry/run_acb_security_history_test.go` (matrix: walk order, id, shared ticker, registered-only text/JSON/mixed, JSON cut, `--year`+`--security` text/JSON, refusal table x4, the literal warning-4b `quarry acb --security sec-acme` run from the stderr text, asserting reinvest, sell and removal rows carry `unknown cost`).
-- Mutations: (1) `cli/acb.go` `document.ACBWarnings(acb, ..)` -> `(cut, ..)`: reddens `Test_run_acb_security_warns_a_security_held_only_in_registered_accounts` (stderr gains `no non-registered account has bought or sold a security; ...` because Cut drops unselected `Securities`; `RegisteredOnly` itself survives Cut, so the plan's premise "registered-only dropped" is wrong, the cause is slot 2) and `..._with_year_prints_a_zero_total_...`. (2) `selectedOnly` keeps unselected sales: reddens `Test_acb_cut_keeps_only_the_named_securities_sales_and_totals` (+3 sibling cut tests).
-- V must: full verify, spec-check, tick spec, STATE.md rewrite (Cut binding, `unknown_cost` JSON, slot 2b, removed S16 Left-unbuilt rows, `document.Rate` exported). Trap for STATE: `Cut` drops unselected `Securities`, so `ACBWarnings` on the cut fires slot 2 form 1.
+Run V (steps 7-8) done. `go test` rc=0; `golangci-lint` 0 issues; `go test -race ./internal/report/... ./internal/cli/` ok; `uncovered-diff.py ... d68efc0`: 0 uncovered, 1 declared unreachable (`internal/report/acb_select.go:74`, marker moved inside the `if` so it sits directly above the `continue` run); `test-stats.py --base d68efc0 --changed`: cmd/quarry 878 (+13), cli 568 (+11), report 627 (+18), report/document 227 (+3), TOTAL 2300 (+45). `spec-check.py phase4de-acb` OK; SCENARIO-16 ticked; STATE.md rewritten.

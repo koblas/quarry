@@ -12,7 +12,7 @@ import (
 
 // ACBRequest is what ACB walks: the accounts Classification names non-registered, through Today, and the
 // Adjustments (T3 slip amounts) applied to the pools; an item's 1-based place in Adjustments is its number.
-// Year is the tax year asked about, 0 for none; the walk keeps every year, ACB.InYear cuts to it.
+// Year is the tax year asked about, 0 for none; the walk keeps every year, ACB.Cut cuts to it.
 // Securities are the selectors (id, ticker or name) of the securities asked about, none for all.
 type ACBRequest struct {
 	Classification Classification

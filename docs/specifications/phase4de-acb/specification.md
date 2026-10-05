@@ -581,7 +581,7 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 - [x] SCENARIO-14: ACB data-quality warnings — `cmd/quarry/run_acb_warnings_test.go` `Test_run_acb_warns_of_a_no_rate_trade_a_shared_ticker_and_a_december_sale`
 - [x] SCENARIO-15: Sales of one tax year — `cmd/quarry/run_acb_year_test.go` `Test_run_acb_year_lists_that_years_sales_one_by_one_with_a_total`
 - [x] SCENARIO-18: Nothing to show — delivered by SCENARIO-15 — `cmd/quarry/run_acb_year_test.go` `Test_run_acb_warns_when_no_non_registered_account_has_traded`
-- [ ] SCENARIO-16: One security's history
+- [x] SCENARIO-16: One security's history — `cmd/quarry/run_acb_security_test.go` `Test_run_acb_security_prints_every_event_of_the_named_security_with_shares_held_acb_and_gain`
 - [ ] SCENARIO-17: ACB refuses what it cannot answer
 - [ ] SCENARIO-20: Docs carry the new surface
 - [ ] SCENARIO-19: MCP acb
