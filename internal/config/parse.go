@@ -69,7 +69,7 @@ type file struct {
 
 // parse validates the whole file: syntax first, then snapshots.keep, then
 // quicken.path, then findings.ignore, then reporting.currency, then accounts.registered,
-// then accounts.non-registered, then an id in both account lists, then unknown keys.
+// then accounts.non-registered, then an id in both account lists, then acb.adjustment, then unknown keys.
 func (f file) parse() (Config, error) {
 	tree, err := f.tree()
 	if err != nil {
@@ -109,7 +109,13 @@ func (f file) parse() (Config, error) {
 		return Config{}, err
 	}
 
+	adjustments, err := doc.adjustments()
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
+		Adjustments:      adjustments,
 		Path:             f.path,
 		Keep:             keep,
 		QuickenPath:      homepath.Expand(f.home, quickenPath),
@@ -389,6 +395,12 @@ var knownKeys = [][]string{
 	{registeredSetting.table},
 	registeredSetting.key(),
 	nonRegisteredSetting.key(),
+	{adjustmentSetting.table},
+	adjustmentSetting.key(),
+	append(adjustmentSetting.key(), securityKey),
+	append(adjustmentSetting.key(), dateKey),
+	append(adjustmentSetting.key(), returnOfCapitalKey),
+	append(adjustmentSetting.key(), reinvestedDistributionKey),
 }
 
 // unknownKeys is one warning per key the file has beyond the known ones, in

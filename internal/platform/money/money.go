@@ -1,6 +1,7 @@
 package money
 
 import (
+	"math"
 	"math/big"
 	"strings"
 )
@@ -97,4 +98,30 @@ func divRound(num, den *big.Int) (int64, bool) {
 		return 0, false
 	}
 	return q.Int64(), true
+}
+
+// maxCentsDecimals is the most decimal places ParseCents reads.
+const maxCentsDecimals = 2
+
+// ParseCents reads text, digits with an optional ".dd" of one or two decimals, as cents, exactly.
+// It reports false for a sign, an exponent, an underscore, a missing whole part, a third decimal
+// or a value past an int64 of cents; zero parses as 0 and is the caller's to refuse.
+func ParseCents(text string) (int64, bool) {
+	whole, decimals, hasPoint := strings.Cut(text, ".")
+	if whole == "" || (hasPoint && (decimals == "" || len(decimals) > maxCentsDecimals)) {
+		return 0, false
+	}
+	var cents int64
+	for _, digit := range whole + decimals + strings.Repeat("0", maxCentsDecimals-len(decimals)) {
+		if digit < '0' || digit > '9' {
+			return 0, false
+		}
+		next := int64(digit - '0')
+		if cents > (math.MaxInt64-next)/10 {
+			return 0, false
+		}
+		cents = cents*10 + next
+	}
+
+	return cents, true
 }

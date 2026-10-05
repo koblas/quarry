@@ -53,9 +53,9 @@ type Config struct {
 // Load reads the config file at path, resolving "~/" against home. A missing
 // or empty file yields the defaults. It refuses, with an error whose text is
 // the whole line for the user, a file that cannot be read, is not valid TOML,
-// or holds a bad value for a known key (snapshots.keep, quicken.path,
-// findings.ignore, reporting.currency, accounts.registered, accounts.non-registered) or an account
-// id listed in both account lists; unknown keys are Config.Warnings.
+// or holds a bad value for a known key (snapshots.keep, quicken.path, findings.ignore,
+// reporting.currency, the account lists, acb.adjustment) or an id in both account lists;
+// unknown keys are Config.Warnings.
 func Load(home, path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {

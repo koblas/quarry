@@ -4,10 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/koblas/quarry/internal/config"
 )
 
 func Test_load_reads_acb_adjustments_as_exact_cents(t *testing.T) {
