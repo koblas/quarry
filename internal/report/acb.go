@@ -45,8 +45,7 @@ type ACB struct {
 // ACBAdjustmentKind is what the walk found wrong with an adjustment item.
 type ACBAdjustmentKind int
 
-// The kinds of ACBAdjustmentIssue: a skipped item names a security the store lacks or no pool holds; a repeated
-// item shares its security and day with an earlier applied one.
+// The kinds of ACBAdjustmentIssue: skipped for an unknown or not-held security, or repeating an applied item.
 const (
 	ACBAdjustmentUnknownSecurity ACBAdjustmentKind = iota
 	ACBAdjustmentNotHeld

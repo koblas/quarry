@@ -31,6 +31,12 @@ type acbDoc struct {
 		Shares      string  `json:"shares"`
 		ACB         string  `json:"acb"`
 		ACBPerShare *string `json:"acb_per_share"`
+		Events      []struct {
+			Action  string  `json:"action"`
+			CAD     string  `json:"cad"`
+			Outlays *string `json:"outlays"`
+			Gain    *string `json:"gain"`
+		} `json:"events"`
 	} `json:"securities"`
 	Warnings []string `json:"warnings"`
 }

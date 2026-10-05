@@ -180,9 +180,8 @@ type securityWalk struct {
 	splitDay time.Time
 }
 
-// walkSecurity applies txs, in date, tier then source id order, to one pool, with each of days' adjustments
-// between its day's splits and dispositions. rates convert each foreign-currency amount at the rate on or
-// before its date; names are the accounts' names by id.
+// walkSecurity applies txs, in date, tier then source id order, to one pool, each of days' adjustments between
+// its day's splits and dispositions; rates convert foreign amounts, names are account names by id.
 func walkSecurity(security store.Security, txs []store.InvestmentTransaction, days []acbAdjustmentDay, rates []store.Rate, names map[string]string) *securityWalk {
 	slices.SortFunc(txs, func(a, b store.InvestmentTransaction) int {
 		return cmp.Or(

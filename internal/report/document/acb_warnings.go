@@ -10,8 +10,8 @@ import (
 )
 
 // ACBWarnings is a's warnings in the ruled order: the config's adjustment lines, which name the file as
-// configShown (~-abbreviated for stderr, absolute for --json), then one per removal of shares with no sale,
-// then one per return of capital above the ACB; the last two by security then date.
+// configShown, then one per removal of shares with no sale, then one per return of capital above the ACB;
+// the last two by security then date.
 func ACBWarnings(a report.ACB, configShown string) []string {
 	warnings := adjustmentWarnings(a, configShown)
 	warnings = append(warnings, removalWarnings(a)...)

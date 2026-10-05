@@ -224,6 +224,27 @@ func Test_NewACB_writes_an_adjustment_event_with_no_transaction_account_or_amoun
 	}, events[0])
 }
 
+func Test_NewACB_writes_a_return_of_capital_above_the_acb_event_with_the_excess_as_its_gain(t *testing.T) {
+	a := report.ACB{AsOf: acbAsOf, Securities: []report.ACBSecurity{{
+		Security: store.Security{ID: "sec-41", Name: "XEQT"}, Shares: big.NewRat(10, 1),
+		Events: []report.ACBEvent{{
+			Date: acbAsOf, Action: "return of capital", Shares: new(big.Rat), CAD: 230_000, Held: big.NewRat(10, 1),
+			Gain: 125_000, Realized: true,
+		}},
+	}}}
+
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(firstOf(t, acbJSON(t, a, nil), "securities"), &raw))
+	var events []map[string]any
+	require.NoError(t, json.Unmarshal(raw["events"], &events))
+
+	assert.Equal(t, map[string]any{
+		"date": "2026-10-05", "investment_transaction_id": nil, "account_id": nil, "account": nil,
+		"action": "return of capital", "shares": "0.000000", "amount": nil, "amount_currency": nil, "usd_cad": nil,
+		"cad": "2300.00", "outlays": nil, "shares_held": "10.000000", "acb": "0.00", "gain": "1250.00",
+	}, events[0])
+}
+
 func Test_NewACB_trims_a_usd_cad_rate_to_at_least_four_decimals(t *testing.T) {
 	cases := []struct {
 		name string
