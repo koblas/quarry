@@ -94,6 +94,46 @@ func Test_NewNetWorth_writes_since_and_until_as_null_and_as_of_as_a_date_in_a_sn
 	assert.Equal(t, "2026-10-04", got["as_of"])
 }
 
+func Test_NewNetWorth_writes_since_and_until_as_dates_and_as_of_as_null_in_a_history(t *testing.T) {
+	window := store.Window{Since: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Until: netWorthTestDay}
+	n := report.NetWorth{Window: &window, AsOf: netWorthTestDay, Currency: money.CAD}
+
+	got := netWorthJSON(t, n, nil)
+
+	assert.Contains(t, got, "as_of")
+	assert.Nil(t, got["as_of"])
+	assert.Equal(t, "2026-01-01", got["since"])
+	assert.Equal(t, "2026-10-04", got["until"])
+}
+
+func Test_NewNetWorth_keeps_a_month_end_with_no_rows_and_leaves_a_native_converted_balance_null_in_a_history(t *testing.T) {
+	window := store.Window{Since: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), Until: netWorthTestDay}
+	september := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+	n := report.NetWorth{
+		Dates: []report.NetWorthDate{
+			{Date: september},
+			{Date: netWorthTestDay, Rows: []store.NetWorthRow{{
+				Type: "chequing", Currency: "CAD", Balance: big.NewInt(100), BalanceCAD: big.NewInt(100),
+			}}},
+		},
+		Window:   &window,
+		Currency: money.Native,
+	}
+
+	got := netWorthJSON(t, n, nil)
+
+	assert.Equal(t, []any{
+		map[string]any{"date": "2026-09-30", "balances": []any{}, "totals": []any{}},
+		map[string]any{
+			"date": "2026-10-04",
+			"balances": []any{
+				map[string]any{"type": "chequing", "currency": "CAD", "balance": "1.00", "converted_balance": nil},
+			},
+			"totals": []any{},
+		},
+	}, got["dates"])
+}
+
 func Test_NewNetWorth_keeps_a_zero_balance_row_and_writes_converted_balance_by_listing_currency(t *testing.T) {
 	row := store.NetWorthRow{
 		Type: "savings", Currency: "CAD", Balance: big.NewInt(0), BalanceCAD: big.NewInt(0), BalanceUSD: big.NewInt(0),

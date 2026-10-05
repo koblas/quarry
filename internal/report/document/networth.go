@@ -39,8 +39,9 @@ type NetWorthTotal struct {
 	Value    string `json:"value"`
 }
 
-// NewNetWorth converts n, a snapshot, into networth's document with warnings;
-// dates, balances, totals and warnings are [] rather than null when n holds none.
+// NewNetWorth converts n into networth's document with warnings: as_of for a snapshot, since and until
+// (the resolved since, the clamped until) for a history. Dates, balances, totals and warnings are []
+// rather than null when n holds none.
 func NewNetWorth(n report.NetWorth, warnings []string) NetWorth {
 	dates := make([]NetWorthDate, len(n.Dates))
 	for i, d := range n.Dates {
@@ -56,10 +57,12 @@ func NewNetWorth(n report.NetWorth, warnings []string) NetWorth {
 		}
 		dates[i] = NetWorthDate{Date: d.Date.Format(DateLayout), Balances: balances, Totals: totals}
 	}
-	return NetWorth{
-		AsOf:     nullable(&n.AsOf, func(d time.Time) string { return d.Format(DateLayout) }),
-		Currency: n.Currency.String(),
-		Dates:    dates,
-		Warnings: append([]string{}, warnings...),
+	doc := NetWorth{Currency: n.Currency.String(), Dates: dates, Warnings: append([]string{}, warnings...)}
+	format := func(d time.Time) string { return d.Format(DateLayout) }
+	if n.Window == nil {
+		doc.AsOf = nullable(&n.AsOf, format)
+		return doc
 	}
+	doc.Since, doc.Until = nullable(&n.Window.Since, format), nullable(&n.Window.Until, format)
+	return doc
 }

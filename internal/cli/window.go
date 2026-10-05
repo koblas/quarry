@@ -38,13 +38,7 @@ func (w *reportFlags) bind(cmd *cobra.Command, help reportFlagHelp) {
 
 // window resolves the flags cmd was given against now, or refuses them as a UsageError.
 func (w *reportFlags) window(cmd *cobra.Command, now time.Time) (store.Window, error) {
-	var since, until *string
-	if cmd.Flags().Changed("since") {
-		since = &w.since
-	}
-	if cmd.Flags().Changed("until") {
-		until = &w.until
-	}
+	since, until := changedBounds(cmd, w.since, w.until)
 	parse := report.ParseWindow
 	if w.chargesCommand != "" {
 		parse = func(since, until *string, now time.Time) (store.Window, error) {
@@ -61,16 +55,22 @@ func (w *reportFlags) window(cmd *cobra.Command, now time.Time) (store.Window, e
 // searchWindow resolves the flags cmd was given into a search window, or refuses them as a UsageError.
 // An absent flag is an open bound.
 func (w *reportFlags) searchWindow(cmd *cobra.Command) (store.SearchWindow, error) {
-	var since, until *string
-	if cmd.Flags().Changed("since") {
-		since = &w.since
-	}
-	if cmd.Flags().Changed("until") {
-		until = &w.until
-	}
+	since, until := changedBounds(cmd, w.since, w.until)
 	window, err := report.ParseSearchWindow(since, until)
 	if err != nil {
 		return store.SearchWindow{}, UsageError{msg: err.Error()}
 	}
 	return window, nil
+}
+
+// changedBounds is the --since and --until values cmd was given, each nil when its flag was not set.
+func changedBounds(cmd *cobra.Command, since, until string) (*string, *string) {
+	var sincePtr, untilPtr *string
+	if cmd.Flags().Changed("since") {
+		sincePtr = &since
+	}
+	if cmd.Flags().Changed("until") {
+		untilPtr = &until
+	}
+	return sincePtr, untilPtr
 }

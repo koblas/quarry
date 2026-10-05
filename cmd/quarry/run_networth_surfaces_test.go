@@ -45,6 +45,10 @@ ends with today.
   quarry networth --as-of 2025-12-31
   quarry networth --since 2020 --currency native --json
 `)
+	assert.Contains(t, stdout.String(), "      --since date      list net worth at each month end on or after date "+
+		"(YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year when --until is given)\n")
+	assert.Contains(t, stdout.String(), "      --until date      list net worth at each month end on or before date "+
+		"(YYYY, YYYY-MM or YYYY-MM-DD; default today; a later date means today)\n")
 	assert.Contains(t, stdout.String(), "      --currency code   show amounts in currency code: CAD, USD, or native for each account's own "+
 		"(default reporting.currency in the config file, else CAD)\n")
 }

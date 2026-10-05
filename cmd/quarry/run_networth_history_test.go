@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -53,4 +54,147 @@ func Test_run_networth_lists_each_month_end_with_a_column_per_type_ending_with_t
 		netWorthHistoryLine("2026-02-28", "2,588.00", "-350.00", "2,238.00")+
 		netWorthHistoryLine("2026-03-12", "2,660.00", "-400.00", "2,260.00"),
 		stdout.String())
+}
+
+// netWorthHistoryNativeLine is one native history table line over the chequing and credit_card columns.
+func netWorthHistoryNativeLine(monthEnd, currency, chequing, creditCard, total string) string {
+	return fmt.Sprintf("%-10s  %-8s  %8s  %11s  %6s\n", monthEnd, currency, chequing, creditCard, total)
+}
+
+// HOME holds no store: exit 2 (not the missing-store 1) shows each check runs first.
+func Test_run_networth_rejects_a_period_it_cannot_list(t *testing.T) {
+	cases := []struct {
+		name       string
+		args       []string
+		wantStderr string
+	}{
+		{
+			name:       "a since that is not a date",
+			args:       []string{"networth", "--since", "2026-13"},
+			wantStderr: "quarry: --since \"2026-13\" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD\n",
+		},
+		{
+			name:       "an until that is not a date",
+			args:       []string{"networth", "--since", "2026", "--until", "yesterday"},
+			wantStderr: "quarry: --until \"yesterday\" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD\n",
+		},
+		{
+			name:       "a since after until",
+			args:       []string{"networth", "--since", "2026-03", "--until", "2026-02"},
+			wantStderr: "quarry: --since 2026-03 is after --until 2026-02\n",
+		},
+		{
+			name:       "an until alone before the default since",
+			args:       []string{"networth", "--until", "2025-12"},
+			wantStderr: "quarry: --until 2025-12 is before the default --since 2026-01-01; pass --since too\n",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), c.args, spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+			assert.Equal(t, 2, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, c.wantStderr, stderr.String())
+		})
+	}
+}
+
+func Test_run_networth_lists_from_january_first_when_only_until_is_given(t *testing.T) {
+	seedNetWorthHistoryStore(t)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"networth", "--until", "2026-02"},
+		spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Equal(t, "Net worth at each month end 2026-01-31 to 2026-02-28, amounts in CAD\n\n"+
+		netWorthHistoryLine("Month end", "chequing", "credit_card", "Total")+
+		netWorthHistoryLine("2026-01-31", "2,088.00", "-250.00", "1,838.00")+
+		netWorthHistoryLine("2026-02-28", "2,588.00", "-350.00", "2,238.00"),
+		stdout.String())
+}
+
+func Test_run_networth_lists_only_today_when_the_since_is_in_this_month(t *testing.T) {
+	seedNetWorthHistoryStore(t)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"networth", "--since", "2026-03-05"},
+		spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Equal(t, "Net worth at each month end 2026-03-12 to 2026-03-12, amounts in CAD\n\n"+
+		netWorthHistoryLine("Month end", "chequing", "credit_card", "Total")+
+		netWorthHistoryLine("2026-03-12", "2,660.00", "-400.00", "2,260.00"),
+		stdout.String())
+}
+
+func Test_run_networth_lists_one_line_per_currency_with_a_total_each_in_native_mode(t *testing.T) {
+	seedNetWorthHistoryStore(t)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(),
+		[]string{"networth", "--since", "2026-01", "--until", "2026-01", "--currency", "native"},
+		spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Equal(t, "Net worth at each month end 2026-01-31 to 2026-01-31\n\n"+
+		netWorthHistoryNativeLine("Month end", "Currency", "chequing", "credit_card", "Total")+
+		netWorthHistoryNativeLine("2026-01-31", "CAD", "1,000.00", "-250.00", "750.00")+
+		netWorthHistoryNativeLine("2026-01-31", "USD", "800.00", "", "800.00"),
+		stdout.String())
+}
+
+func Test_run_networth_json_history_names_the_period_and_every_month_end(t *testing.T) {
+	seedNetWorthHistoryStore(t)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"networth", "--json", "--since", "2026-01", "--until", "2027"},
+		spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	var got struct {
+		AsOf  *string `json:"as_of"`
+		Since string  `json:"since"`
+		Until string  `json:"until"`
+		Dates []struct {
+			Date string `json:"date"`
+		} `json:"dates"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+	assert.Nil(t, got.AsOf)
+	assert.Equal(t, "2026-01-01", got.Since)
+	assert.Equal(t, "2026-03-12", got.Until)
+	require.Len(t, got.Dates, 3)
+	assert.Equal(t, []string{"2026-01-31", "2026-02-28", "2026-03-12"},
+		[]string{got.Dates[0].Date, got.Dates[1].Date, got.Dates[2].Date})
+}
+
+func Test_run_networth_prints_only_a_caption_and_header_when_the_since_is_after_today(t *testing.T) {
+	seedNetWorthHistoryStore(t)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"networth", "--since", "2027-01"},
+		spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.Equal(t, "Net worth at each month end 2027-01-01 to 2026-03-12, amounts in CAD\n\nMonth end  Total\n", stdout.String())
+}
+
+func Test_run_networth_json_lists_no_dates_when_the_since_is_after_today(t *testing.T) {
+	seedNetWorthHistoryStore(t)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"networth", "--json", "--since", "2027-01"},
+		spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+	assert.Equal(t, []any{}, got["dates"])
 }

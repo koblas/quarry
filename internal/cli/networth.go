@@ -44,12 +44,22 @@ ends with today.`,
 				return err
 			}
 
+			request := report.NetWorthRequest{AsOf: report.Today(now()), Currency: reportCurrency}
+			if cmd.Flags().Changed("since") || cmd.Flags().Changed("until") {
+				sincePtr, untilPtr := changedBounds(cmd, since, until)
+				window, err := report.ParseMonthEndWindow(sincePtr, untilPtr, now())
+				if err != nil {
+					return UsageError{msg: err.Error()}
+				}
+				request.Window = &window
+			}
+
 			srv, err := openReport(cmd, newReport)
 			if err != nil {
 				return err
 			}
 
-			netWorth, err := srv.NetWorth(cmd.Context(), report.NetWorthRequest{AsOf: report.Today(now()), Currency: reportCurrency})
+			netWorth, err := srv.NetWorth(cmd.Context(), request)
 			if err != nil {
 				return &runtimeError{err: err}
 			}

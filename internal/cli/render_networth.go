@@ -8,10 +8,12 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// renderNetWorth renders n, a snapshot, as the net worth table: caption, header, one row per type and
-// currency whose balance is not zero, then one Total row per total. A converted table adds an In column and
-// one total in the reporting currency; a native one has no In column and a total per currency.
+// renderNetWorth renders n as a net worth table: a snapshot's rows with their Totals, or a history's month ends.
+// A converted table has one total in the reporting currency; a native one has a total per currency.
 func renderNetWorth(n report.NetWorth) string {
+	if n.Window != nil {
+		return renderNetWorthHistory(n)
+	}
 	converted := n.Currency != money.Native
 	header := []string{"Type", "Currency", "Balance"}
 	aligns := []tableAlign{alignLeft, alignLeft, alignRight}
