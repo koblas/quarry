@@ -52,7 +52,6 @@ func walkACB(history store.InvestmentHistory, req ACBRequest) ACB {
 	bySecurity := make(map[string][]store.InvestmentTransaction)
 	for _, tx := range history.Transactions {
 		_, walked := acbTiers[tx.Action]
-		// unreachable: the nil-security arm, since duckstore's InvestmentHistory reads only rows with a security_id (investments.go:20).
 		if tx.SecurityID == nil || !walked || !inPool[tx.AccountID] || tx.Date.After(req.Today) {
 			continue
 		}
@@ -186,8 +185,8 @@ type securityWalk struct {
 	excesses []acbExcess
 	issues   []ACBAdjustmentIssue
 	splitDay time.Time
-	// unknownCost is whether the pool holds shares added with no cost: opened by such an addition, closed
-	// when a disposition empties the pool.
+	// unknownCost is whether the pool holds shares added with no cost: opened by such an addition that leaves
+	// shares held, closed when a disposition leaves the pool at 0 or below.
 	unknownCost bool
 }
 
@@ -216,7 +215,7 @@ func walkSecurity(security store.Security, txs []store.InvestmentTransaction, da
 		w.adjust(day)
 	}
 	w.position.Shares, w.position.ACB = w.pool.shares, w.pool.acb
-	w.position.Incomplete = w.unknownCost || w.position.NoRate != nil
+	w.position.Incomplete = w.unknownCost || w.pool.shares.Sign() < 0 || w.position.NoRate != nil
 
 	return w
 }
@@ -234,9 +233,7 @@ func (w *securityWalk) apply(tx store.InvestmentTransaction) {
 	if currency, _ := money.ParseCurrency(tx.Currency); currency == money.USD {
 		event.Rate = rate
 	}
-	if noCostAcquisition(tx) {
-		w.unknownCost, event.UnknownCost = true, true
-	}
+	event.UnknownCost = noCostAcquisition(tx)
 	if unvalued(tx, rate) {
 		event.Unvalued = true
 		if w.position.NoRate == nil {
@@ -260,6 +257,8 @@ func (w *securityWalk) apply(tx store.InvestmentTransaction) {
 		event.Shares.Abs(event.Shares)
 		event.UnknownCost = w.unknownCost
 		sale := w.pool.sell(tx, event.Shares, rate)
+		event.Oversold = w.pool.short()
+		event.UnknownCost = event.UnknownCost || event.Oversold != nil
 		sale.row.AccountID, sale.row.Account, sale.row.UnknownCost = event.AccountID, event.Account, event.UnknownCost
 		outlays := sale.row.Outlays
 		event.Gain, event.Outlays, event.Realized = sale.row.Gain, &outlays, true
@@ -270,14 +269,19 @@ func (w *securityWalk) apply(tx store.InvestmentTransaction) {
 		event.Shares.Abs(event.Shares)
 		event.UnknownCost = w.unknownCost
 		w.pool.take(event.Shares)
+		event.Oversold = w.pool.short()
 		w.closeSpanWhenSoldOut()
+	}
+	// Shares with no cost that only cover a short leave nothing held without a cost.
+	if noCostAcquisition(tx) && w.pool.shares.Sign() > 0 {
+		w.unknownCost = true
 	}
 	w.record(event)
 }
 
-// closeSpanWhenSoldOut ends the no-cost span once a disposition has emptied the pool.
+// closeSpanWhenSoldOut ends the no-cost span once a disposition has left no shares held.
 func (w *securityWalk) closeSpanWhenSoldOut() {
-	if w.pool.shares.Sign() == 0 {
+	if w.pool.shares.Sign() <= 0 {
 		w.unknownCost = false
 	}
 }
@@ -289,9 +293,10 @@ func (w *securityWalk) record(event ACBEvent) {
 }
 
 // adjust applies one day's items, every reinvested distribution before every return of capital, each in
-// request order. An empty pool skips them all; on a held pool all apply, each later item repeating the first.
+// request order. A pool holding no shares, empty or short, skips them all; on a held pool all apply, each later
+// item repeating the first.
 func (w *securityWalk) adjust(day acbAdjustmentDay) {
-	if w.pool.shares.Sign() == 0 {
+	if w.pool.shares.Sign() <= 0 {
 		for _, item := range day.items {
 			w.issues = append(w.issues, w.issue(ACBAdjustmentNotHeld, item.number, day.date))
 		}
@@ -390,24 +395,39 @@ func noCostAcquisition(tx store.InvestmentTransaction) bool {
 	}
 }
 
-// add puts bought units and their cost into the pool.
+// add puts bought units and their cost, in CAD cents, into the pool. Against a short the units cover it first and
+// add no ACB; the units beyond it enter at cost × beyond ÷ bought, rounded half away from zero.
 func (p *acbPool) add(bought *big.Rat, cost int64) {
+	wasShort := p.shares.Sign() < 0
 	p.shares.Add(p.shares, bought)
-	p.acb += cost
+	switch {
+	case !wasShort:
+		p.acb += cost
+	case p.shares.Sign() > 0:
+		p.acb += roundHalfAway(new(big.Rat).Mul(big.NewRat(cost, 1), new(big.Rat).Quo(p.shares, bought)))
+	}
 }
 
-// take removes units (a magnitude) and their share of the ACB, or all of it when they are all the units held
-// or more, and returns the ACB removed.
+// short is how many units the pool is short, or nil when it is not.
+func (p *acbPool) short() *big.Rat {
+	if p.shares.Sign() >= 0 {
+		return nil
+	}
+
+	return new(big.Rat).Neg(p.shares)
+}
+
+// take removes units (a magnitude) and their share of the ACB, and returns the ACB removed. Units that are all
+// the units held or more remove all of it and leave the pool short by the excess.
 func (p *acbPool) take(units *big.Rat) int64 {
 	removed := p.acb
 	if units.Cmp(p.shares) < 0 {
 		removed = roundHalfAway(new(big.Rat).Mul(big.NewRat(p.acb, 1), new(big.Rat).Quo(units, p.shares)))
-		p.shares.Sub(p.shares, units)
 		p.acb -= removed
 	} else {
-		p.shares.SetInt64(0)
 		p.acb = 0
 	}
+	p.shares.Sub(p.shares, units)
 
 	return removed
 }

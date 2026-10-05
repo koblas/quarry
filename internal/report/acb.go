@@ -138,7 +138,7 @@ func (y ACBYear) countSales(marked func(ACBSale) bool) int {
 
 // ACBSale is one disposition: the shares sold, its proceeds and outlays in CAD cents, the ACB it removed, and
 // the gain, which is Proceeds - Outlays - ACBRemoved. PossibleSuperficialLoss marks a loss with the security
-// acquired within 30 days of it and still held; UnknownCost marks a sale from a pool holding shares with no cost.
+// acquired within 30 days of it and still held; UnknownCost marks a sale from a pool holding shares with no cost or of more shares than it held.
 type ACBSale struct {
 	ID                                  string
 	Date                                time.Time
@@ -155,7 +155,7 @@ type ACBSecurity struct {
 	Security store.Security
 	Shares   *big.Rat
 	ACB      int64
-	// Incomplete is true when the ACB rests on shares with no recorded cost or on a trade quarry cannot value.
+	// Incomplete is true when the ACB rests on shares with no recorded cost, a short, or a trade quarry cannot value.
 	Incomplete bool
 	// NoRate is the earliest trade quarry could not convert to CAD; nil when it valued them all. A security
 	// with one is left out of the year totals, every year.
@@ -170,9 +170,9 @@ type ACBNoRate struct {
 	Currency string
 }
 
-// PerShare is the ACB per share in CAD dollars, or nil when no shares are held.
+// PerShare is the ACB per share in CAD dollars, or nil when no shares are held: none, or a short.
 func (s ACBSecurity) PerShare() *big.Rat {
-	if s.Shares.Sign() == 0 {
+	if s.Shares.Sign() <= 0 {
 		return nil
 	}
 
@@ -182,7 +182,8 @@ func (s ACBSecurity) PerShare() *big.Rat {
 // ACBEvent is one transaction the walk applied. CAD is Amount at Rate, 0 unless a USD trade with a rate on file;
 // Outlays and Gain mean something only when Realized (a sale, or a return of capital above the ACB).
 // UnknownCost marks shares moved with no recorded cost; Unvalued marks a trade quarry could not convert to CAD,
-// whose CAD and Gain are unknown, not 0.
+// whose CAD and Gain are unknown, not 0. Oversold is the units the pool is short after a disposition that left
+// it below 0, nil otherwise.
 type ACBEvent struct {
 	ID                 string
 	Date               time.Time
@@ -200,6 +201,7 @@ type ACBEvent struct {
 	Realized           bool
 	UnknownCost        bool
 	Unvalued           bool
+	Oversold           *big.Rat
 }
 
 // Millionths is a count of shares in millionths, rounded half away from zero.

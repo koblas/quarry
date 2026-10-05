@@ -257,6 +257,87 @@ func Test_ACBWarnings_lists_adjustment_lines_then_superficial_losses_then_no_cos
 	assert.Contains(t, warnings[6], `"Beta": return of capital on`)
 }
 
+func acbOversoldSale(account string, date time.Time, short *big.Rat) report.ACBEvent {
+	return report.ACBEvent{Date: date, Account: account, Action: store.ActionSell, Shares: big.NewRat(3, 1), Held: new(big.Rat).Neg(short), Oversold: short}
+}
+
+func Test_ACBWarnings_names_an_oversold_sale(t *testing.T) {
+	cases := []struct {
+		name   string
+		advice document.ACBAdvice
+	}{
+		{name: "on the command line", advice: document.ACBAdviceCLI},
+		{name: "on the MCP server", advice: document.ACBAdviceTool},
+	}
+	a := report.ACB{Securities: []report.ACBSecurity{{
+		Security: store.Security{ID: "sec-1", Name: "Money Fund"},
+		Events:   []report.ACBEvent{acbOversoldSale("CAD Brokerage", time.Date(2017, time.January, 12, 0, 0, 0, 0, time.UTC), big.NewRat(112284, 100))},
+	}}}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			warnings := document.ACBWarnings(a, acbConfigShown, c.advice)
+
+			assert.Equal(t, []string{
+				`"Money Fund": the sale on 2017-01-12 in "CAD Brokerage" sold 1,122.84 more shares than the non-registered accounts held; ` +
+					"quarry counts them at no cost, so the sale's gain is too high by what they cost, " +
+					"and the next 1,122.84 shares acquired only bring the holding back to 0; correct the shares in Quicken if they are wrong",
+			}, warnings)
+		})
+	}
+}
+
+func Test_ACBWarnings_names_an_oversold_removal_after_its_removal_line(t *testing.T) {
+	removal := acbRemoval("Margin", acbDay, big.NewRat(12, 1))
+	removal.Oversold = big.NewRat(5, 1)
+	a := report.ACB{Securities: []report.ACBSecurity{{Security: store.Security{ID: "sec-1", Name: "Alpha"}, Events: []report.ACBEvent{removal}}}}
+
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
+
+	require.Len(t, warnings, 2)
+	assert.Contains(t, warnings[0], `"Alpha": 12 shares left "Margin" on 2025-03-03 without a sale;`)
+	assert.Equal(t, `"Alpha": 5 more shares left "Margin" on 2025-03-03 than the non-registered accounts held; `+
+		"the next 5 shares acquired only bring the holding back to 0; correct the shares in Quicken if they are wrong", warnings[1])
+}
+
+func Test_ACBWarnings_names_each_oversold_disposition_in_walk_order(t *testing.T) {
+	second := time.Date(2025, time.April, 4, 0, 0, 0, 0, time.UTC)
+	a := report.ACB{Securities: []report.ACBSecurity{
+		{
+			Security: store.Security{ID: "sec-1", Name: "Alpha"},
+			Events:   []report.ACBEvent{acbOversoldSale("Margin", acbDay, big.NewRat(2, 1)), acbOversoldSale("Old margin", second, big.NewRat(7, 1))},
+		},
+		{
+			Security: store.Security{ID: "sec-2", Name: "Beta"},
+			Events:   []report.ACBEvent{acbOversoldSale("Margin", acbDay, big.NewRat(1, 4)), acbOversoldSale("Margin", second, big.NewRat(9, 4))},
+		},
+	}}
+
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
+
+	require.Len(t, warnings, 4)
+	assert.Contains(t, warnings[0], `"Alpha": the sale on 2025-03-03 in "Margin" sold 2 more shares`)
+	assert.Contains(t, warnings[1], `"Alpha": the sale on 2025-04-04 in "Old margin" sold 7 more shares`)
+	assert.Contains(t, warnings[2], `"Beta": the sale on 2025-03-03 in "Margin" sold 0.25 more shares`)
+	assert.Contains(t, warnings[3], `"Beta": the sale on 2025-04-04 in "Margin" sold 2.25 more shares`)
+}
+
+func Test_ACBWarnings_lists_oversold_lines_after_the_december_sales(t *testing.T) {
+	a := report.ACB{
+		Years: []report.ACBYear{{Year: 2025, Sales: []report.ACBSale{{Date: time.Date(2025, time.December, 28, 0, 0, 0, 0, time.UTC)}}}},
+		Securities: []report.ACBSecurity{{
+			Security: store.Security{ID: "sec-1", Name: "Alpha"},
+			Events:   []report.ACBEvent{acbOversoldSale("Margin", acbDay, big.NewRat(2, 1))},
+		}},
+	}
+
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
+
+	require.Len(t, warnings, 2)
+	assert.Contains(t, warnings[0], "1 sale dated December 24–31, 2025")
+	assert.Contains(t, warnings[1], `"Alpha": the sale on 2025-03-03`)
+}
+
 func Test_ACBWarnings_names_a_security_with_only_added_shares_with_no_cost(t *testing.T) {
 	a := report.ACB{Securities: []report.ACBSecurity{acbNoCostSecurity("sec-1", "Acme Corp", acbNoCostEvent(store.ActionAddShares))}}
 

@@ -56,7 +56,7 @@ func Test_acb_removes_the_whole_acb_when_a_removal_exceeds_the_pool(t *testing.T
 		acbTx(t, 2, "acct-1", "sec-1", "2024-02-01", store.ActionRemoveShares, "CAD", -12*acbMillion, 0),
 	)
 
-	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "0", ACB: 0}}, acbPositionRows(got))
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "-2", ACB: 0}}, acbPositionRows(got))
 }
 
 func Test_acb_ignores_added_and_removed_shares_outside_the_pool(t *testing.T) {

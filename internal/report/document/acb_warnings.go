@@ -41,7 +41,9 @@ func ACBWarnings(a report.ACB, configShown string, advice ACBAdvice) []string {
 	warnings = append(warnings, sameTickerWarnings(a)...)
 	warnings = append(warnings, returnOfCapitalWarnings(a)...)
 
-	return append(warnings, decemberSaleWarnings(a)...)
+	warnings = append(warnings, decemberSaleWarnings(a)...)
+
+	return append(warnings, oversoldWarnings(a)...)
 }
 
 // adjustmentWarnings is one line for each issue of a's adjustment items, by item number.
@@ -258,6 +260,36 @@ func decemberSaleWarnings(a report.ACB) []string {
 		warnings = append(warnings, fmt.Sprintf(
 			"%s dated December 24–31, %d: a sale settles a day or two after its trade date and counts for tax in the year it settles; "+
 				"check its date on your T5008", humanize.Count(n, "sale", "sales"), year.Year))
+	}
+
+	return warnings
+}
+
+// oversoldWarnings is one line for each sale or removal of a's securities that left the pool short, in walk order.
+// Each names the units short after it, which the next acquisitions only cover.
+func oversoldWarnings(a report.ACB) []string {
+	var warnings []string
+	for _, security := range a.Securities {
+		for _, event := range security.Events {
+			if event.Oversold == nil {
+				continue
+			}
+			short := humanize.Shares(report.Millionths(event.Oversold))
+			date := event.Date.Format(DateLayout)
+			if event.Action == store.ActionSell {
+				warnings = append(warnings, fmt.Sprintf(
+					`"%s": the sale on %s in "%s" sold %s more shares than the non-registered accounts held; quarry counts them at no cost, `+
+						"so the sale's gain is too high by what they cost, and the next %s shares acquired only bring the holding back to 0; "+
+						"correct the shares in Quicken if they are wrong",
+					security.Security.Name, date, event.Account, short, short))
+
+				continue
+			}
+			warnings = append(warnings, fmt.Sprintf(
+				`"%s": %s more shares left "%s" on %s than the non-registered accounts held; `+
+					"the next %s shares acquired only bring the holding back to 0; correct the shares in Quicken if they are wrong",
+				security.Security.Name, short, event.Account, date, short))
+		}
 	}
 
 	return warnings

@@ -104,7 +104,7 @@ func Test_acb_marks_a_sale_made_while_shares_with_no_cost_are_held(t *testing.T)
 		{
 			name:      "a sale of more than the pool holds",
 			txs:       []store.InvestmentTransaction{acbBuy(t), add, acbSell(t, 3, "2024-03-01", 20*acbMillion)},
-			wantMarks: []bool{true}, wantIncomplete: false,
+			wantMarks: []bool{true}, wantIncomplete: true,
 		},
 		{
 			name:      "added shares of zero units",

@@ -97,19 +97,28 @@ func Test_acb_removes_the_whole_acb_when_a_sale_exceeds_the_pool(t *testing.T) {
 	assert.Equal(t, []acbSaleRow{
 		{Date: "2024-02-02", Security: "sec-1", Shares: "12", Proceeds: 50_000, ACBRemoved: 35_000, Gain: 15_000},
 	}, acbSaleRows(got))
-	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "0", ACB: 0}}, acbPositionRows(got))
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "-2", ACB: 0}}, acbPositionRows(got))
 }
 
 func Test_acb_restarts_from_zero_after_selling_out(t *testing.T) {
 	got := acbWalkOf(t,
 		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-		acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", -12*acbMillion, 12_000),
+		acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", -10*acbMillion, 12_000),
 		acbTx(t, 3, "acct-1", "sec-1", "2024-03-02", store.ActionBuy, "CAD", 10*acbMillion, -35_000),
 		acbTx(t, 4, "acct-1", "sec-1", "2024-04-02", store.ActionSell, "CAD", -5*acbMillion, 20_000),
 	)
 
 	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "5", ACB: 17_500}}, acbPositionRows(got))
 	assert.Equal(t, int64(17_500), acbSaleRows(got)[1].ACBRemoved)
+}
+
+func Test_acb_skips_a_transaction_with_no_security(t *testing.T) {
+	noSecurity := acbTx(t, 2, "acct-1", "sec-1", "2024-01-03", store.ActionBuy, "CAD", 5*acbMillion, -9_000)
+	noSecurity.SecurityID = nil
+
+	got := acbWalkOf(t, acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -1_000), noSecurity)
+
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "10", ACB: 1_000}}, acbPositionRows(got))
 }
 
 func Test_acb_pools_only_non_registered_accounts(t *testing.T) {
@@ -316,7 +325,7 @@ func Test_acb_gains_the_proceeds_less_outlays_of_a_sale_into_an_empty_pool(t *te
 	assert.Equal(t, []acbSaleRow{
 		{Date: "2024-02-02", Security: "sec-1", Shares: "5", Proceeds: 900, Outlays: 100, Gain: 800},
 	}, acbSaleRows(got))
-	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "0", ACB: 0}}, acbPositionRows(got))
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "-5", ACB: 0}}, acbPositionRows(got))
 }
 
 func Test_acb_orders_two_securities_sales_on_one_date_by_source_id(t *testing.T) {
