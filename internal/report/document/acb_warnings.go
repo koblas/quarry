@@ -17,6 +17,7 @@ import (
 // configShown, then the report's data-quality lines, one function per kind, appended below in that order.
 func ACBWarnings(a report.ACB, configShown string) []string {
 	warnings := adjustmentWarnings(a, configShown)
+	warnings = append(warnings, nothingToShowWarnings(a)...)
 	warnings = append(warnings, superficialLossWarnings(a)...)
 	warnings = append(warnings, noCostWarnings(a)...)
 	warnings = append(warnings, removalWarnings(a)...)
@@ -46,6 +47,31 @@ func adjustmentWarnings(a report.ACB, configShown string) []string {
 	}
 
 	return warnings
+}
+
+// nothingToShowWarnings is the line saying why a shows nothing: no non-registered account traded at all, or, under a
+// year, that year has no sale and no return of capital above the ACB; none otherwise. a must be the report before any
+// year cut, whose Year names the year asked for.
+func nothingToShowWarnings(a report.ACB) []string {
+	switch {
+	case a.NoPoolEvents():
+		return []string{"no non-registered account has bought or sold a security; quarry acb has nothing to show"}
+	case !a.YearIsEmpty():
+		return nil
+	}
+
+	line := fmt.Sprintf("no sales in %d in non-registered accounts", a.Year)
+	first, last, found := a.SaleYears()
+	switch {
+	case !found:
+		line += ", nor in any other year"
+	case first == last:
+		line += fmt.Sprintf("; the sales are in %d", first)
+	default:
+		line += fmt.Sprintf("; the sales are in %d–%d", first, last)
+	}
+
+	return []string{line}
 }
 
 // superficialLossWarnings is one line for every sale of a marked a possible superficial loss, naming their years

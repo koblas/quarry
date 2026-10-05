@@ -15,9 +15,63 @@ import (
 const acbPerShareDecimals = 4
 
 // renderACB renders a as two tables: the gains realized each tax year, one row per year with a sale, then
-// the ACB of each security still held on a.AsOf. Both are in CAD.
+// the ACB of each security still held on a.AsOf. Both are in CAD. A report cut to a year prints its sales alone.
 func renderACB(a report.ACB) string {
+	if a.Year != 0 {
+		return renderACBSales(a)
+	}
+
 	return renderACBYears(a) + "\n" + renderACBPositions(a)
+}
+
+// renderACBSales is the sales of the one year a holds, one row each, then a Total row that is always printed and,
+// when the year returned capital above the ACB, a row for that excess. A last, unheaded column carries a sale's marks.
+func renderACBSales(a report.ACB) string {
+	year := a.Years[0]
+	names := make(map[string]string, len(a.Securities))
+	for _, s := range a.Securities {
+		names[s.Security.ID] = acbSecurityLabel(s)
+	}
+
+	rows := [][]string{{"Date", "Security", "Shares", "Proceeds", "Outlays", "ACB", "Gain or loss", ""}}
+	for _, sale := range year.Sales {
+		rows = append(rows, []string{
+			sale.Date.Format(time.DateOnly), names[sale.SecurityID], humanize.Shares(report.Millionths(sale.Shares)),
+			formatMoney(sale.Proceeds), formatMoney(sale.Outlays), formatMoney(sale.ACBRemoved), formatMoney(sale.Gain),
+			strings.Join(acbSaleMarks(sale), ", "),
+		})
+	}
+	rows = append(rows, []string{
+		tableTotalLabel, "", "", formatMoney(year.Proceeds), formatMoney(year.Outlays), formatMoney(year.ACBRemoved), formatMoney(year.Gain), "",
+	})
+	if year.ReturnOfCapitalGain > 0 {
+		rows = append(rows, []string{"", "Return of capital above ACB", "", "", "", "", formatMoney(year.ReturnOfCapitalGain), ""})
+	}
+
+	return renderTable("Sales in "+strconv.Itoa(year.Year)+", in "+money.CAD.String(),
+		[]tableAlign{alignLeft, alignLeft, alignRight, alignRight, alignRight, alignRight, alignRight, alignLeft}, rows)
+}
+
+// acbSecurityLabel is the cell naming s: its ticker, else its name.
+func acbSecurityLabel(s report.ACBSecurity) string {
+	if s.Security.Ticker != nil && *s.Security.Ticker != "" {
+		return escapeCell(*s.Security.Ticker)
+	}
+
+	return escapeCell(s.Security.Name)
+}
+
+// acbSaleMarks are the notes after a sale's row, in the ruled order.
+func acbSaleMarks(sale report.ACBSale) []string {
+	var marks []string
+	if sale.PossibleSuperficialLoss {
+		marks = append(marks, "possible superficial loss")
+	}
+	if sale.UnknownCost {
+		marks = append(marks, "unknown cost")
+	}
+
+	return marks
 }
 
 // renderACBYears is the realized-gains table, one row per year with a sale or a return of capital above the

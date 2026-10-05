@@ -245,7 +245,7 @@ func Test_config_always_read_commands_print_the_configs_warnings_once_even_with_
 			err := cli.Execute(t.Context(), []string{command, "--currency", "native"}, loaderEnv(&stdout, &stderr, warningConfig))
 
 			require.NoError(t, err)
-			assert.Equal(t, "quarry: warning: "+unknownKeyShown+"\n", stderr.String())
+			assert.Equal(t, 1, strings.Count(stderr.String(), "quarry: warning: "+unknownKeyShown+"\n"))
 		})
 	}
 }

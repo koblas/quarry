@@ -216,6 +216,95 @@ func Test_renderACB_prints_only_the_headers_for_an_empty_acb(t *testing.T) {
 		"Security  Ticker  Shares  ACB  ACB per share\n", got) //nolint:dupword // the ACB column sits beside the ACB per share column
 }
 
+// acbSold is a sale of whole shares of the security sec on date, with the given cents.
+func acbSold(sec string, date time.Time, shares, proceeds, outlays, acbRemoved, gain int64) report.ACBSale {
+	return report.ACBSale{
+		Date: date, SecurityID: "sec-" + sec, Shares: big.NewRat(shares, 1),
+		Proceeds: proceeds, Outlays: outlays, ACBRemoved: acbRemoved, Gain: gain,
+	}
+}
+
+// acbCutTo is the report cut to year, whose sales are those given; its securities are held.
+func acbCutTo(year report.ACBYear, held ...report.ACBSecurity) report.ACB {
+	return report.ACB{AsOf: acbDay, Year: year.Year, Years: []report.ACBYear{year}, Securities: held}
+}
+
+func Test_renderACB_prints_a_years_sales_alone_one_row_each_then_a_total(t *testing.T) {
+	year := report.ACBYear{
+		Year: 2025, Proceeds: 1_210_000, Outlays: 2_500, ACBRemoved: 1_000_000, Gain: 207_500,
+		Sales: []report.ACBSale{
+			acbSold("xeqt", time.Date(2025, time.March, 4, 0, 0, 0, 0, time.UTC), 40, 910_000, 1_500, 700_000, 208_500),
+			acbSold("xeqt", time.Date(2025, time.June, 2, 0, 0, 0, 0, time.UTC), 10, 300_000, 1_000, 300_000, -1_000),
+		},
+	}
+
+	got := renderACB(acbCutTo(year, acbHeld("xeqt", new("XEQT"), 410, 1_041_233)))
+
+	assert.Equal(t, "Sales in 2025, in CAD\n\n"+
+		"Date        Security  Shares   Proceeds  Outlays        ACB  Gain or loss\n"+
+		"2025-03-04  XEQT          40   9,100.00    15.00   7,000.00      2,085.00\n"+
+		"2025-06-02  XEQT          10   3,000.00    10.00   3,000.00        -10.00\n"+
+		"Total                         12,100.00    25.00  10,000.00      2,075.00\n", got)
+}
+
+func Test_renderACB_names_a_sale_by_ticker_else_name_each_escaped(t *testing.T) {
+	year := report.ACBYear{Year: 2025, Sales: []report.ACBSale{
+		acbSold("a", acbDay, 1, 100, 0, 100, 0), acbSold("b", acbDay, 1, 100, 0, 100, 0), acbSold("c", acbDay, 1, 100, 0, 100, 0),
+	}}
+
+	got := renderACB(acbCutTo(year,
+		acbHeld("a", new("T\tA"), 1, 100), acbHeld("b", nil, 1, 100), acbHeld("c", new(""), 1, 100)))
+
+	assert.Contains(t, got, "2026-10-05  T\\tA ")
+	assert.Contains(t, got, "2026-10-05  b ")
+	assert.Contains(t, got, "2026-10-05  c ")
+}
+
+func Test_renderACB_escapes_the_name_of_a_sale_of_a_security_with_no_ticker(t *testing.T) {
+	odd := acbHeld("Odd\nFund", nil, 1, 100)
+	year := report.ACBYear{Year: 2025, Sales: []report.ACBSale{acbSold("Odd\nFund", acbDay, 1, 100, 0, 100, 0)}}
+
+	got := renderACB(acbCutTo(year, odd))
+
+	assert.Contains(t, got, `2026-10-05  Odd\nFund  `)
+}
+
+func Test_renderACB_marks_a_sale_with_each_note_alone_and_both_in_the_ruled_order(t *testing.T) {
+	plain := acbSold("xeqt", acbDay, 1, 100, 0, 100, 0)
+	superficial, unknown, both := plain, plain, plain
+	superficial.PossibleSuperficialLoss = true
+	unknown.UnknownCost = true
+	both.PossibleSuperficialLoss, both.UnknownCost = true, true
+	year := report.ACBYear{Year: 2025, Sales: []report.ACBSale{plain, superficial, unknown, both}, Proceeds: 400, ACBRemoved: 400}
+
+	got := renderACB(acbCutTo(year, acbHeld("xeqt", new("XEQT"), 1, 100)))
+
+	assert.Equal(t, "Sales in 2025, in CAD\n\n"+
+		"Date        Security  Shares  Proceeds  Outlays   ACB  Gain or loss\n"+
+		"2026-10-05  XEQT           1      1.00     0.00  1.00          0.00\n"+
+		"2026-10-05  XEQT           1      1.00     0.00  1.00          0.00  possible superficial loss\n"+
+		"2026-10-05  XEQT           1      1.00     0.00  1.00          0.00  unknown cost\n"+
+		"2026-10-05  XEQT           1      1.00     0.00  1.00          0.00  possible superficial loss, unknown cost\n"+
+		"Total                             4.00     0.00  4.00          0.00\n", got)
+}
+
+func Test_renderACB_prints_a_year_with_no_sale_as_headers_and_a_zero_total(t *testing.T) {
+	got := renderACB(acbCutTo(report.ACBYear{Year: 2025}))
+
+	assert.Equal(t, "Sales in 2025, in CAD\n\n"+
+		"Date   Security  Shares  Proceeds  Outlays   ACB  Gain or loss\n"+
+		"Total                        0.00     0.00  0.00          0.00\n", got)
+}
+
+func Test_renderACB_follows_the_total_with_a_row_for_the_return_of_capital_above_the_acb(t *testing.T) {
+	got := renderACB(acbCutTo(report.ACBYear{Year: 2025, ReturnOfCapitalGain: 125_000}))
+
+	assert.Equal(t, "Sales in 2025, in CAD\n\n"+
+		"Date   Security                     Shares  Proceeds  Outlays   ACB  Gain or loss\n"+
+		"Total                                           0.00     0.00  0.00          0.00\n"+
+		"       Return of capital above ACB                                       1,250.00\n", got)
+}
+
 func Test_formatPerShare_rounds_half_away_from_zero_and_groups_thousands(t *testing.T) {
 	cases := []struct {
 		name string

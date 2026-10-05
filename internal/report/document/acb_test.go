@@ -303,6 +303,35 @@ func Test_NewACB_writes_empty_arrays_not_null_for_an_empty_acb(t *testing.T) {
 	assert.JSONEq(t, "null", string(fields["year"]))
 }
 
+func Test_NewACB_names_the_year_it_is_cut_to_and_lists_it_with_no_sales_when_it_has_none(t *testing.T) {
+	cut := report.ACB{AsOf: acbAsOf, Year: 2025}.InYear()
+	var got document.ACB
+
+	require.NoError(t, json.Unmarshal(acbJSON(t, cut, nil), &got))
+
+	assert.Equal(t, new(2025), got.Year)
+	assert.Equal(t, []document.ACBYear{{
+		Year: 2025, Proceeds: "0.00", Outlays: "0.00", ACB: "0.00", Gain: "0.00", ReturnOfCapitalGain: "0.00", Sales: []document.ACBSale{},
+	}}, got.Years)
+	assert.Empty(t, got.Securities)
+}
+
+func Test_NewACB_writes_the_year_entry_of_a_cut_with_return_of_capital_gain_right_after_gain(t *testing.T) {
+	doc := acbJSON(t, report.ACB{AsOf: acbAsOf, Year: 2025}.InYear(), nil)
+
+	assert.Equal(t, []string{
+		"year", "sale_count", "proceeds", "outlays", "acb", "gain", "return_of_capital_gain", "possible_superficial_losses",
+		"unknown_cost_sales", "sales",
+	}, topLevelKeys(t, firstOf(t, doc, "years")))
+	assert.Contains(t, string(doc), `"gain":"0.00","return_of_capital_gain":"0.00","possible_superficial_losses":0`)
+}
+
+func Test_NewACB_writes_no_year_and_empty_arrays_for_a_report_with_nothing_in_it(t *testing.T) {
+	doc := acbJSON(t, report.ACB{AsOf: acbAsOf}, nil)
+
+	assert.Contains(t, string(doc), `"year":null,"years":[],"securities":[]`)
+}
+
 func Test_NewACB_rounds_the_shares_a_consolidation_leaves_to_millionths(t *testing.T) {
 	a := report.ACB{AsOf: acbAsOf, Securities: []report.ACBSecurity{{
 		Security: store.Security{ID: "sec-1", Name: "XEQT"}, Shares: big.NewRat(2, 3), ACB: 1_000,

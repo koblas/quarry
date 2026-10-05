@@ -76,11 +76,14 @@ accountant, not a tax filing.`,
 				return &runtimeError{err: err}
 			}
 
+			// Warnings read the whole report: a year's cut would drop those of a security it did not sell.
+			cut := acb.InYear()
+
 			return emitReport(cmd, *jsonOut, document.ACBWarnings(acb, homepath.Abbreviate(srv.Home(), cfg.Path)),
 				func() ([]byte, error) {
-					return renderACBJSON(acb, withConfigWarnings(cfg.WarningsAbsolute, document.ACBWarnings(acb, cfg.Path)))
+					return renderACBJSON(cut, withConfigWarnings(cfg.WarningsAbsolute, document.ACBWarnings(acb, cfg.Path)))
 				},
-				func() string { return renderACB(acb) })
+				func() string { return renderACB(cut) })
 		},
 	}
 	currency.bind(cmd, acbCurrencyHelp)

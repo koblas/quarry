@@ -16,7 +16,7 @@ const perShareDecimals = 4
 // minRateDecimals is the fewest decimals a usd_cad rate shows.
 const minRateDecimals = 4
 
-// ACB is acb's --json document. Year is null: a tax-year filter fills it.
+// ACB is acb's --json document. Year is the tax year it is cut to, null for the whole report.
 type ACB struct {
 	AsOf       string        `json:"as_of"`
 	Currency   string        `json:"currency"`
@@ -93,7 +93,8 @@ type ACBEvent struct {
 	Gain                    *string `json:"gain"`
 }
 
-// NewACB converts a into acb's document with warnings; every array is [] rather than null when empty.
+// NewACB converts a into acb's document with warnings; every array is [] rather than null when empty. A report cut
+// to a year (report.ACB.InYear) names it in "year".
 func NewACB(a report.ACB, warnings []string) ACB {
 	securities := make(map[string]store.Security, len(a.Securities))
 	for _, s := range a.Securities {
@@ -109,9 +110,15 @@ func NewACB(a report.ACB, warnings []string) ACB {
 		positions[i] = newACBSecurity(s)
 	}
 
+	var year *int
+	if a.Year != 0 {
+		year = &a.Year
+	}
+
 	return ACB{
 		AsOf:       a.AsOf.Format(DateLayout),
 		Currency:   money.CAD.String(),
+		Year:       year,
 		Years:      years,
 		Securities: positions,
 		Warnings:   append([]string{}, warnings...),
