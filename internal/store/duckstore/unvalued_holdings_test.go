@@ -74,6 +74,10 @@ func Test_net_worth_names_each_holding_its_balance_leaves_out(t *testing.T) {
 			want: store.UnvaluedHolding{SecurityID: secEUR, Security: "Euro Fund", Currency: new("EUR"), Priced: true},
 		},
 		{
+			name: "a holding priced at zero with no currency", rateDay: 1, prices: []store.Price{quote(secNoCurrency, 2, marchDay(1), 0)},
+			want: store.UnvaluedHolding{SecurityID: secNoCurrency, Security: "Plain Fund", Priced: true},
+		},
+		{
 			name: "a priced USD holding before the first rate", rateDay: 10, prices: []store.Price{quote(secUSD, 2, marchDay(1), tenUnits)},
 			want: store.UnvaluedHolding{SecurityID: secUSD, Security: "Globex Inc", Currency: new("USD"), Priced: true},
 		},
@@ -137,6 +141,30 @@ func Test_net_worth_leaves_a_not_in_reports_or_linked_tracking_accounts_unpriced
 	got := unvaluedOn(t, st, marchDay(2))
 
 	assert.Equal(t, []string{acctOne}, unvaluedIDs(got))
+}
+
+func Test_net_worth_and_accounts_leave_a_non_investment_accounts_unpriced_holding_out(t *testing.T) {
+	t.Parallel()
+	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), oneShare), buy(acctChequing, secAcme, 2, marchDay(1), oneShare))
+	st := newStoreWith(t, rows)
+
+	netWorth := unvaluedOn(t, st, marchDay(2))
+	accounts, err := st.Accounts(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{acctOne}, unvaluedIDs(netWorth))
+	assert.Equal(t, []string{acctOne}, unvaluedIDs(accounts.Unvalued))
+}
+
+func Test_net_worth_names_a_closed_accounts_unpriced_holding(t *testing.T) {
+	t.Parallel()
+	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), oneShare), buy(acctTwo, secAcme, 2, marchDay(1), oneShare))
+	rows.Accounts[0].Closed = true
+	st := newStoreWith(t, rows)
+
+	got := unvaluedOn(t, st, marchDay(2))
+
+	assert.Equal(t, []string{acctTwo, acctOne}, unvaluedIDs(got))
 }
 
 func Test_accounts_lists_every_accounts_unvalued_holding_as_of_today(t *testing.T) {

@@ -22,9 +22,8 @@ func AccountsWarnings(l report.AccountListing) []string {
 	return unvaluedWarnings(l.Unvalued, l.AsOf, false)
 }
 
-// unvaluedWarnings is the lines for rows, the holdings an account's balance leaves out: no price, one line per
-// account; no currency, then another currency, one line per account and security. Each kind runs in account
-// then security order. A listing of month ends (history) counts the days instead of naming one.
+// unvaluedWarnings is the lines for rows, holdings left out of a balance: no price per account, then no
+// currency and other currency per account and security. History counts the days instead of naming one.
 func unvaluedWarnings(rows []store.UnvaluedHolding, asOf time.Time, history bool) []string {
 	sorted := slices.SortedFunc(slices.Values(rows), compareLeftOut)
 	lines := noPriceLines(sorted, asOf, history)

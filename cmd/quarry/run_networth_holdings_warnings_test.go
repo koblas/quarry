@@ -148,3 +148,16 @@ func Test_run_networth_leaves_a_not_in_reports_accounts_unpriced_holding_out_of_
 
 	assert.Equal(t, leftOutNoPriceLine+"\n"+leftOutNoCurrencyLine+"\n"+leftOutOtherCurrencyLine+"\n", stderr)
 }
+
+func Test_run_networth_warns_about_a_closed_accounts_unpriced_holding(t *testing.T) {
+	rows := leftOutHoldingsRows()
+	rows.InvestmentTransactions = append(rows.InvestmentTransactions, holdingsBuy("inv-old-bare", 7, "acct-old", "sec-bare", "CAD", 1_000_000))
+	seedLeftOutHoldingsRows(t, rows)
+
+	_, stderr := runNetWorthAtMarch12(t)
+
+	assert.Equal(t, leftOutNoPriceLine+"\n"+
+		`quarry: warning: "Old RRSP" holds 1 security with no price on or before 2026-03-12, `+
+		`so its balance leaves it out; enter a price in Quicken, then run quarry sync`+"\n"+
+		leftOutNoCurrencyLine+"\n"+leftOutOtherCurrencyLine+"\n", stderr)
+}
