@@ -3,6 +3,7 @@ package report
 import (
 	"context"
 	"math/big"
+	"slices"
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/money"
@@ -42,6 +43,34 @@ type ACB struct {
 	Securities []ACBSecurity
 	// AdjustmentIssues are the adjustments skipped or repeated, by item number.
 	AdjustmentIssues []ACBAdjustmentIssue
+}
+
+// ACBSharedTicker is a ticker that two or more of the report's securities carry.
+type ACBSharedTicker struct {
+	Ticker     string
+	Securities []store.Security
+}
+
+// SharedTickers is each ticker of two or more of a's securities, by the walk's first member, members in the walk's
+// order. A ticker matches exactly, case included; a security with none or an empty one has no group.
+func (a ACB) SharedTickers() []ACBSharedTicker {
+	var groups []ACBSharedTicker
+	at := make(map[string]int)
+	for _, security := range a.Securities {
+		ticker, ok := groupingTicker(security.Security)
+		if !ok {
+			continue
+		}
+		i, seen := at[ticker]
+		if !seen {
+			i = len(groups)
+			at[ticker] = i
+			groups = append(groups, ACBSharedTicker{Ticker: ticker})
+		}
+		groups[i].Securities = append(groups[i].Securities, security.Security)
+	}
+
+	return slices.DeleteFunc(groups, func(g ACBSharedTicker) bool { return len(g.Securities) < 2 })
 }
 
 // ACBAdjustmentKind is what the walk found wrong with an adjustment item.

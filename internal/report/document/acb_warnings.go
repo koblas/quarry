@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/platform/money"
@@ -15,15 +16,18 @@ import (
 // ACBWarnings is a's warnings in the ruled order: the config's adjustment lines, which name the file as
 // configShown, then one line for the possible superficial losses, then one per security with shares acquired
 // with no cost, then one per removal of shares with no sale, then one per security with a trade quarry cannot
-// convert to CAD, then one per return of capital above the ACB; all but the first two by security then date.
+// convert to CAD, then one per ticker shared by securities, then one per return of capital above the ACB, then one
+// per year with a sale dated December 24 to 31; all but the first two by security then date.
 func ACBWarnings(a report.ACB, configShown string) []string {
 	warnings := adjustmentWarnings(a, configShown)
 	warnings = append(warnings, superficialLossWarnings(a)...)
 	warnings = append(warnings, noCostWarnings(a)...)
 	warnings = append(warnings, removalWarnings(a)...)
 	warnings = append(warnings, unconvertedTradeWarnings(a)...)
+	warnings = append(warnings, sameTickerWarnings(a)...)
+	warnings = append(warnings, returnOfCapitalWarnings(a)...)
 
-	return append(warnings, returnOfCapitalWarnings(a)...)
+	return append(warnings, decemberSaleWarnings(a)...)
 }
 
 // adjustmentWarnings is one line for each issue of a's adjustment items, by item number.
@@ -150,6 +154,23 @@ func unconvertedTradeWarnings(a report.ACB) []string {
 	return warnings
 }
 
+// sameTickerWarnings is one line for each ticker that two or more of a's securities carry.
+func sameTickerWarnings(a report.ACB) []string {
+	groups := a.SharedTickers()
+	warnings := make([]string, 0, len(groups))
+	for _, group := range groups {
+		names := make([]string, len(group.Securities))
+		for i, security := range group.Securities {
+			names[i] = security.Name
+		}
+		warnings = append(warnings, fmt.Sprintf(
+			`"%s" is %d securities in Quicken (%s); quarry keeps a separate ACB for each; if they are the same, merge them in Quicken`,
+			group.Ticker, len(names), strings.Join(names, ", ")))
+	}
+
+	return warnings
+}
+
 // returnOfCapitalWarnings is one warning for each return of capital of a's securities that exceeds the ACB.
 func returnOfCapitalWarnings(a report.ACB) []string {
 	var warnings []string
@@ -163,6 +184,30 @@ func returnOfCapitalWarnings(a report.ACB) []string {
 				`"%s": return of capital on %s is %s more than its ACB, so its ACB is 0.00 and %s is a capital gain in %d`,
 				security.Security.Name, event.Date.Format(DateLayout), excess, excess, event.Date.Year()))
 		}
+	}
+
+	return warnings
+}
+
+// firstDecemberSaleDay is the first day of December whose sales may settle in the next tax year.
+const firstDecemberSaleDay = 24
+
+// decemberSaleWarnings is one line for each year of a with a sale dated December 24 to 31, oldest year first.
+func decemberSaleWarnings(a report.ACB) []string {
+	var warnings []string
+	for _, year := range a.Years {
+		n := 0
+		for _, sale := range year.Sales {
+			if sale.Date.Month() == time.December && sale.Date.Day() >= firstDecemberSaleDay {
+				n++
+			}
+		}
+		if n == 0 {
+			continue
+		}
+		warnings = append(warnings, fmt.Sprintf(
+			"%s dated December 24–31, %d: a sale settles a day or two after its trade date and counts for tax in the year it settles; "+
+				"check its date on your T5008", humanize.Count(n, "sale", "sales"), year.Year))
 	}
 
 	return warnings

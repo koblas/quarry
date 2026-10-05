@@ -42,13 +42,23 @@ func newSuperficialIndex(history store.InvestmentHistory, today time.Time) super
 		index.byID[*tx.SecurityID] = append(index.byID[*tx.SecurityID], tx)
 	}
 	for _, security := range history.Securities {
-		if security.Ticker != nil && *security.Ticker != "" {
-			index.tickerOf[security.ID] = *security.Ticker
-			index.sameTicker[*security.Ticker] = append(index.sameTicker[*security.Ticker], security.ID)
+		if ticker, ok := groupingTicker(security); ok {
+			index.tickerOf[security.ID] = ticker
+			index.sameTicker[ticker] = append(index.sameTicker[ticker], security.ID)
 		}
 	}
 
 	return index
+}
+
+// groupingTicker is the ticker that makes security identical to every other with it: exact, case-sensitive and
+// not empty. Superficial-loss grouping and the shared-ticker warning both ask it.
+func groupingTicker(security store.Security) (string, bool) {
+	if security.Ticker == nil || *security.Ticker == "" {
+		return "", false
+	}
+
+	return *security.Ticker, true
 }
 
 // possible is whether the loss sale had an acquisition within the window and its security's group is still held
