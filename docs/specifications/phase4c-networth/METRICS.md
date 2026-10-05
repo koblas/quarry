@@ -21,6 +21,8 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
+| 1 | arch, correctness, test, refactor | 1/3/11/6 | 0 / 20 (of 113), 1135s | BLOCKED (kind-6 copy ruled mid-round by product-vision) |
+| 2 | correctness, test | 0/0/1/1 | 0 / 7, 661s | PASS WITH FOLLOW-UPS (EUR-account MAJOR ruled MINOR: importer refuses non-CAD/USD accounts) |
 
 ## Tokens
 
