@@ -43,6 +43,9 @@ func acbYearSuffixes(year report.ACBYear) []string {
 	if marked := year.PossibleSuperficialLosses(); marked > 0 {
 		suffixes = append(suffixes, humanize.Count(marked, "possible superficial loss", "possible superficial losses"))
 	}
+	if unknown := year.UnknownCostSales(); unknown > 0 {
+		suffixes = append(suffixes, humanize.Count(unknown, "sale of shares with unknown cost", "sales of shares with unknown cost"))
+	}
 	if year.ReturnOfCapitalGain > 0 {
 		suffixes = append(suffixes, formatMoney(year.ReturnOfCapitalGain)+" return of capital above ACB, a capital gain")
 	}
@@ -50,9 +53,10 @@ func acbYearSuffixes(year report.ACBYear) []string {
 	return suffixes
 }
 
-// renderACBPositions is the table of each security with shares held on a.AsOf, in the order a lists them.
+// renderACBPositions is the table of each security with shares held on a.AsOf, in the order a lists them; a
+// last, unheaded column says "incomplete" for a security whose ACB leaves out shares with no recorded cost.
 func renderACBPositions(a report.ACB) string {
-	rows := [][]string{{"Security", "Ticker", "Shares", "ACB", "ACB per share"}}
+	rows := [][]string{{"Security", "Ticker", "Shares", "ACB", "ACB per share", ""}}
 	for _, s := range a.Securities {
 		if s.Shares.Sign() <= 0 {
 			continue
@@ -61,14 +65,18 @@ func renderACBPositions(a report.ACB) string {
 		if s.Security.Ticker != nil {
 			ticker = escapeCell(*s.Security.Ticker)
 		}
+		note := ""
+		if s.Incomplete {
+			note = "incomplete"
+		}
 		rows = append(rows, []string{
 			escapeCell(s.Security.Name), ticker, humanize.Shares(report.Millionths(s.Shares)),
-			formatMoney(s.ACB), formatPerShare(s.PerShare()),
+			formatMoney(s.ACB), formatPerShare(s.PerShare()), note,
 		})
 	}
 
 	return renderTable("ACB on "+a.AsOf.Format(time.DateOnly)+", in "+money.CAD.String(),
-		[]tableAlign{alignLeft, alignLeft, alignRight, alignRight, alignRight}, rows)
+		[]tableAlign{alignLeft, alignLeft, alignRight, alignRight, alignRight, alignLeft}, rows)
 }
 
 // formatPerShare is r, dollars per share, thousands-grouped to acbPerShareDecimals decimals rounded half away

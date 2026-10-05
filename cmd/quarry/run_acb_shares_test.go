@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,13 +14,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// acmeNoCostWarnings is what the fixture prints: the no-cost add's line, then the removal's.
+var acmeNoCostWarnings = []string{acmeAddedNoCostWarning, acmeRemovalWarning}
+
 const acmeRemovalWarning = `"Acme Corp": 4 shares left "CAD Brokerage" on 2025-03-03 without a sale; ` +
 	"quarry took their share of the ACB out and reports no gain; if they went to a registered account or to someone else, " +
 	"that is a disposition at market value; check it with your accountant"
 
 // acbSharesPositionLine is one position table line, each cell as wide as this fixture's widest.
-func acbSharesPositionLine(security, ticker, shares, acb, perShare string) string {
-	return fmt.Sprintf("%-9s  %-6s  %6s  %8s  %13s\n", security, ticker, shares, acb, perShare)
+func acbSharesPositionLine(security, ticker, shares, acb, perShare, suffix string) string {
+	return strings.TrimRight(fmt.Sprintf("%-9s  %-6s  %6s  %8s  %13s  %s", security, ticker, shares, acb, perShare, suffix), " ") + "\n"
 }
 
 // acbSharesRows is one non-registered CAD brokerage whose Acme Corp holding gains 10 bought, 5 added with a
@@ -53,10 +57,10 @@ func Test_run_acb_takes_removed_shares_out_of_the_acb_and_adds_added_shares_at_t
 	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
 		"Year  Sales  Proceeds  Outlays  ACB  Gain or loss\n"+
 		"\nACB on 2026-03-12, in CAD\n\n"+
-		acbSharesPositionLine("Security", "Ticker", "Shares", "ACB", "ACB per share")+
-		acbSharesPositionLine("Acme Corp", "ACME", "16", "1,280.00", "80.0000"),
+		acbSharesPositionLine("Security", "Ticker", "Shares", "ACB", "ACB per share", "")+
+		acbSharesPositionLine("Acme Corp", "ACME", "16", "1,280.00", "80.0000", "incomplete"),
 		stdout.String())
-	assert.Equal(t, "quarry: warning: "+acmeRemovalWarning+"\n", stderr.String())
+	assert.Equal(t, stderrWarnings(acmeNoCostWarnings...), stderr.String())
 }
 
 func Test_run_acb_lists_a_removal_warning_in_json(t *testing.T) {
@@ -71,8 +75,8 @@ func Test_run_acb_lists_a_removal_warning_in_json(t *testing.T) {
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc acbDoc
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
-	assert.Equal(t, []string{acmeRemovalWarning}, doc.Warnings)
-	assert.Equal(t, "quarry: warning: "+acmeRemovalWarning+"\n", stderr.String())
+	assert.Equal(t, acmeNoCostWarnings, doc.Warnings)
+	assert.Equal(t, stderrWarnings(acmeNoCostWarnings...), stderr.String())
 }
 
 func Test_run_acb_leaves_a_zero_unit_removal_out_of_the_warnings(t *testing.T) {
@@ -86,8 +90,8 @@ func Test_run_acb_leaves_a_zero_unit_removal_out_of_the_warnings(t *testing.T) {
 
 	warnings, stderr := jsonWarnings(t, "acb", "--json")
 
-	assert.Equal(t, []string{acmeRemovalWarning}, warnings)
-	assert.Equal(t, "quarry: warning: "+acmeRemovalWarning+"\n", stderr)
+	assert.Equal(t, acmeNoCostWarnings, warnings)
+	assert.Equal(t, stderrWarnings(acmeNoCostWarnings...), stderr)
 }
 
 func Test_run_acb_lists_the_configs_warnings_before_a_removal_warning_in_both_forms(t *testing.T) {
@@ -100,8 +104,8 @@ func Test_run_acb_lists_the_configs_warnings_before_a_removal_warning_in_both_fo
 	require.Equal(t, 0, runWith(context.Background(), []string{"acb"}, spendEnvAt(&textOut, &textErr, holdingsClock())), textErr.String())
 	warnings, machineErr := jsonWarnings(t, "acb", "--json")
 
-	wantStderr := stderrWarnings(configShown+orderUnknownKey, acmeRemovalWarning)
-	assert.Equal(t, []string{configPath(home) + orderUnknownKey, acmeRemovalWarning}, warnings)
+	wantStderr := stderrWarnings(configShown+orderUnknownKey, acmeAddedNoCostWarning, acmeRemovalWarning)
+	assert.Equal(t, []string{configPath(home) + orderUnknownKey, acmeAddedNoCostWarning, acmeRemovalWarning}, warnings)
 	assert.Equal(t, wantStderr, textErr.String())
 	assert.Equal(t, wantStderr, machineErr)
 }

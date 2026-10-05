@@ -99,7 +99,7 @@ func acbAdjustmentLines(path string) []string {
 const acmeLargeReturnOfCapitalWarning = `"Acme Corp": return of capital on 2025-12-31 is 720.00 more than its ACB, ` +
 	"so its ACB is 0.00 and 720.00 is a capital gain in 2025"
 
-func Test_run_acb_lists_config_then_adjustment_then_removal_then_return_of_capital_warnings_in_both_forms(t *testing.T) {
+func Test_run_acb_lists_config_then_adjustment_then_no_cost_then_removal_then_return_of_capital_warnings_in_both_forms(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	writeConfig(t, home, acbAdjustmentWarningsConfig)
@@ -110,9 +110,9 @@ func Test_run_acb_lists_config_then_adjustment_then_removal_then_return_of_capit
 	warnings, machineErr := jsonWarnings(t, "acb", "--json")
 
 	wantStderr := stderrWarnings(append(append([]string{configShown + orderUnknownKey}, acbAdjustmentLines(configShown)...),
-		acmeRemovalWarning, acmeLargeReturnOfCapitalWarning)...)
+		acmeAddedNoCostWarning, acmeRemovalWarning, acmeLargeReturnOfCapitalWarning)...)
 	assert.Equal(t, append(append([]string{configPath(home) + orderUnknownKey}, acbAdjustmentLines(configPath(home))...),
-		acmeRemovalWarning, acmeLargeReturnOfCapitalWarning), warnings)
+		acmeAddedNoCostWarning, acmeRemovalWarning, acmeLargeReturnOfCapitalWarning), warnings)
 	assert.Equal(t, wantStderr, textErr.String())
 	assert.Equal(t, wantStderr, machineErr)
 }

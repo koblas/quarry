@@ -25,12 +25,17 @@ type acbDoc struct {
 		ACB                 string `json:"acb"`
 		Gain                string `json:"gain"`
 		ReturnOfCapitalGain string `json:"return_of_capital_gain"`
+		UnknownCostSales    int    `json:"unknown_cost_sales"`
+		Sales               []struct {
+			UnknownCost bool `json:"unknown_cost"`
+		} `json:"sales"`
 	} `json:"years"`
 	Securities []struct {
 		ID          string  `json:"security_id"`
 		Shares      string  `json:"shares"`
 		ACB         string  `json:"acb"`
 		ACBPerShare *string `json:"acb_per_share"`
+		Incomplete  bool    `json:"incomplete"`
 		Events      []struct {
 			Action  string  `json:"action"`
 			CAD     string  `json:"cad"`

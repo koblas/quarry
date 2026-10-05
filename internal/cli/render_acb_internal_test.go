@@ -97,6 +97,55 @@ func Test_renderACB_puts_the_possible_superficial_losses_before_the_return_of_ca
 		"2024      2  12,004.00     9.99  12,900.40       -906.39  1 possible superficial loss, 1,234.56 return of capital above ACB, a capital gain\n", got)
 }
 
+// acbUnknown marks the first n sales of year as sold from shares with no recorded cost.
+func acbUnknown(year report.ACBYear, n int) report.ACBYear {
+	for i := range n {
+		year.Sales[i].UnknownCost = true
+	}
+	return year
+}
+
+func Test_renderACB_suffixes_a_years_sales_of_shares_with_unknown_cost_by_count(t *testing.T) {
+	a := report.ACB{AsOf: acbDay, Years: []report.ACBYear{
+		acbUnknown(acbYearOf(2023, 3, 100, 0, 150, -50), 1),
+		acbUnknown(acbYearOf(2024, 3, 100, 0, 150, -50), 2),
+		acbUnknown(acbYearOf(2025, 3, 100, 0, 150, -50), 0),
+	}}
+
+	got := renderACBYears(a)
+
+	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
+		"Year  Sales  Proceeds  Outlays   ACB  Gain or loss\n"+
+		"2023      3      1.00     0.00  1.50         -0.50  1 sale of shares with unknown cost\n"+
+		"2024      3      1.00     0.00  1.50         -0.50  2 sales of shares with unknown cost\n"+
+		"2025      3      1.00     0.00  1.50         -0.50\n", got)
+}
+
+func Test_renderACB_orders_a_years_suffixes_superficial_loss_then_unknown_cost_then_return_of_capital(t *testing.T) {
+	year := acbUnknown(acbMarked(acbYearOf(2024, 2, 1_200_400, 999, 1_290_040, -90_639), 1), 2)
+	year.ReturnOfCapitalGain = 123_456
+
+	got := renderACBYears(report.ACB{AsOf: acbDay, Years: []report.ACBYear{year}})
+
+	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
+		"Year  Sales   Proceeds  Outlays        ACB  Gain or loss\n"+
+		"2024      2  12,004.00     9.99  12,900.40       -906.39  1 possible superficial loss, 2 sales of shares with unknown cost, "+
+		"1,234.56 return of capital above ACB, a capital gain\n", got)
+}
+
+func Test_renderACB_marks_an_incomplete_position_and_leaves_a_complete_one_unmarked(t *testing.T) {
+	incomplete := acbHeld("Added Fund", new("ADD"), 3, 600)
+	incomplete.Incomplete = true
+	a := report.ACB{AsOf: acbDay, Securities: []report.ACBSecurity{incomplete, acbHeld("Plain Fund", new("PLN"), 3, 600)}}
+
+	got := renderACBPositions(a)
+
+	assert.Equal(t, "ACB on 2026-10-05, in CAD\n\n"+
+		"Security    Ticker  Shares   ACB  ACB per share\n"+ //nolint:dupword // the ACB column sits beside the ACB per share column
+		"Added Fund  ADD          3  6.00         2.0000  incomplete\n"+
+		"Plain Fund  PLN          3  6.00         2.0000\n", got)
+}
+
 func Test_renderACB_lists_a_year_with_only_a_return_of_capital_gain(t *testing.T) {
 	year := report.ACBYear{Year: 2025, ReturnOfCapitalGain: 125_000}
 
