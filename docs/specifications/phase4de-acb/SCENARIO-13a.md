@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-13a
-status: open
+status: done
 ---
 
 # SCENARIO-13a: Shares added with no cost leave ACB incomplete
@@ -24,10 +24,10 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; `report/document`, cl
 - [x] Step 5: cmd pins — re-pin `cmd/quarry/run_acb_shares_test.go:43-60` (S10's ticked acceptance test), `:62`, `:78`, `:93`: warning 4a for `Acme Corp` before the removal line on stderr and in JSON `warnings[]`, position row `incomplete`. KEEP `inv-add-free` without cost: it is S10's only cmd-level "counts at 0.00" coverage. New tests in `run_acb_unknown_cost_test.go`: `--json` (`sales[].unknown_cost` true, `years[].unknown_cost_sales` 1, `securities[].incomplete` true, `warnings[]` 4a); slot-4 order (three no-cost securities: `beta`, `Alpha`, and a second `Alpha` with a lower id stored after it → `Alpha`(low id), `Alpha`, `beta`); edge row "no-cost add, sold out, re-bought with cost" (year suffix counts only pre-sell-out sales, no `incomplete`, warning 4a still prints). Cells n/a: `--year`/`--security` (unregistered until S15/S16), `--account` (acb has none); 4b/4c forms ride the same `ACBWarnings` call pinned in both forms by `:93`
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; docs: `ACBSale` two-flags sentence (`acb.go:87-89`), `ACBWarnings` slot list (`acb_warnings.go:14-16`), `renderACBPositions` doc; grep `internal/report/*acb*_test.go`, `cmd/quarry/run_acb*_test.go` for any other no-cost add/reinvest fixture with an exact `warnings[]`/position pin (found: `acb_arms_test.go:121`, `acb_walk_test.go:352,369`, `acb_test.go:169` assert projections only — confirm)
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; docs: `ACBSale` two-flags sentence (`acb.go:87-89`), `ACBWarnings` slot list (`acb_warnings.go:14-16`), `renderACBPositions` doc; grep `internal/report/*acb*_test.go`, `cmd/quarry/run_acb*_test.go` for any other no-cost add/reinvest fixture with an exact `warnings[]`/position pin (found: `acb_arms_test.go:121`, `acb_walk_test.go:352,369`, `acb_test.go:169` assert projections only — confirm)
 
 ### Verify
-- [ ] Step 7: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-13a with its acceptance test; STATE.md: drop the first Open debt's re-assert clause (done), keep its S16/S21 clauses
+- [x] Step 7: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-13a with its acceptance test; STATE.md: drop the first Open debt's re-assert clause (done), keep its S16/S21 clauses
 
 ## Handoff
 
@@ -54,13 +54,6 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; `report/document`, cl
 
 ## Phase report
 
-Runs B1 (steps 2-3) and B2 (steps 4-5) done, steps ticked. Acceptance test `Test_run_acb_marks_an_incomplete_security_and_its_sales_after_shares_added_with_no_cost` is GREEN. `go test ./cmd/quarry/ ./internal/cli/ ./internal/report/...` all ok; `golangci-lint run ./cmd/quarry/... ./internal/cli/...` 0 issues. V still owns the full covered suite, Sweep docs, spec tick, STATE.md.
+Run V done; all steps ticked, `status: done`, scenario ticked in specification.md, `spec-check.py phase4de-acb` OK. Full covered suite rc=0; `uncovered-diff.py --profile ... 3f8b5f1`: 0 uncovered added lines; `go test -race ./internal/report/...` ok; `golangci-lint run ./...` 0 issues. test-stats: cmd/quarry 845 (+4), internal/cli 544 (+3), internal/report 556 (+7), internal/report/document 202 (+8), TOTAL 2147 (+22).
 
-B1 production (unchanged): `internal/report/acb_walk.go` `securityWalk.unknownCost`, `noCostAcquisition`, `closeSpanWhenSoldOut`; `acb.go` `ACBEvent.UnknownCost`, `(ACBYear).UnknownCostSales()`; `document/acb.go` `unknown_cost_sales`; `document/acb_warnings.go` `noCostWarnings` (slot 4, iterates `a.Securities`, no composer sort: the walk's security sort orders it).
-
-B2 production: `internal/cli/render_acb.go` `acbYearSuffixes` adds `N sale(s) of shares with unknown cost` between superficial and ROC; `renderACBPositions` has a sixth unheaded left-aligned column ("" header) holding `incomplete`.
-B2 tests: `internal/cli/render_acb_internal_test.go` (count singular/plural, ruled three-suffix order, incomplete row beside a complete control; header and complete-row lines unchanged by trailing trim); re-pinned `cmd/quarry/run_acb_shares_test.go` (4 tests: `acmeNoCostWarnings` = 4a then removal on stderr and `warnings[]`, position row `incomplete`; `acbSharesPositionLine` gained a suffix arg and trims) and `run_acb_adjustments_test.go:102` (4a between adjustment and removal lines; renamed `..._then_no_cost_then_removal_...`); `run_acb_unknown_cost_test.go` new `--json` pin, slot-4 order pin, sold-out/re-bought edge row; `run_acb_surface_test.go` `acbDoc` gained `unknown_cost_sales`, `sales[].unknown_cost`, `securities[].incomplete`.
-
-Order pin deviates from plan: names `Beta`/`alpha`/`alpha` (lower id stored last) so case-insensitive order differs from byte order (the plan's `beta`/`Alpha` sort the same either way); the two `alpha` warning lines are identical, so the id tiebreak is pinned via `securities[].security_id` order `sec-a1, sec-a2, sec-b`. Both orders are the walk's, so no composer sort is needed.
-
-V owes: doc comments (`ACBSale` two-flags sentence `acb.go:87-89`, `ACBWarnings` slot list `acb_warnings.go:14-16`), the sweep grep for other no-cost fixtures with exact pins (cmd `run_acb*` now all green), full covered suite, `spec-check.py`, tick, STATE.md (drop first Open debt's re-assert clause; keep S16/S21). `acmeNoCostWarnings` is a package-level read-only test slice in `run_acb_shares_test.go`.
+V edits: doc comments only (`internal/report/acb.go` `ACBSale` two-flags sentence; `internal/report/document/acb_warnings.go` `ACBWarnings` "last two by security then date"); `ACBWarnings` slot-4 text and `renderACBPositions` doc were already right. Sweep grep of other no-cost add/reinvest fixtures: no failing exact pin (full suite green). STATE.md rewritten (first Open debt's re-assert clause dropped, S16/S21 clauses kept; S13a decisions and traps added).

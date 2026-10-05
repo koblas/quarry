@@ -14,7 +14,7 @@ import (
 // ACBWarnings is a's warnings in the ruled order: the config's adjustment lines, which name the file as
 // configShown, then one line for the possible superficial losses, then one per security with shares acquired
 // with no cost, then one per removal of shares with no sale, then one per return of capital above the ACB; the
-// last three by security then date.
+// last two by security then date.
 func ACBWarnings(a report.ACB, configShown string) []string {
 	warnings := adjustmentWarnings(a, configShown)
 	warnings = append(warnings, superficialLossWarnings(a)...)

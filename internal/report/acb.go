@@ -94,8 +94,8 @@ func (y ACBYear) countSales(marked func(ACBSale) bool) int {
 }
 
 // ACBSale is one disposition: the shares sold, its proceeds and outlays in CAD cents, the ACB it removed, and
-// the gain, which is Proceeds - Outlays - ACBRemoved. The two flags mark the sale for the reader; a loss is
-// marked possibly superficial when the walk finds the security acquired within 30 days of it and still held.
+// the gain, which is Proceeds - Outlays - ACBRemoved. PossibleSuperficialLoss marks a loss with the security
+// acquired within 30 days of it and still held; UnknownCost marks a sale from a pool holding shares with no cost.
 type ACBSale struct {
 	ID                                  string
 	Date                                time.Time
