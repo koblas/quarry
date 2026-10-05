@@ -257,7 +257,7 @@ Text `--security`: caption `ACB history of "<name>" (<ticker>), in CAD`; columns
 `--json` (one shape):
 ```json
 {"as_of":"2026-10-05","currency":"CAD","year":null|2024,
- "years":[{"year":2024,"sales":2,"proceeds":"…","outlays":"…","acb":"…","gain":"…",
+ "years":[{"year":2024,"sale_count":2,"proceeds":"…","outlays":"…","acb":"…","gain":"…",
    "possible_superficial_losses":1,"unknown_cost_sales":0,
    "sales":[{"date":"…","investment_transaction_id":"itxn-9","security_id":"sec-41","security":"…","ticker":"XEQT"|null,
      "account_id":"acct-3","account":"…","shares":"10","proceeds":"…","outlays":"…","acb":"…","gain":"…",
@@ -269,7 +269,7 @@ Text `--security`: caption `ACB history of "<name>" (<ticker>), in CAD`; columns
      "cad":"-1668.14","outlays":null|"9.99","shares_held":"…","acb":"…","gain":null|"…"}]}],
  "warnings":[]}
 ```
-- `years`: every year with a sale; with `--year` just that year (empty `sales` still listed). `securities`: every security with a pool event; `--security` the named; `--year` those sold that year; `events` always full history. `acb_per_share` null at 0 shares. Adjustment events: null `investment_transaction_id`/`account`. Arrays `[]` never null.
+- `years`: every year with a sale; with `--year` just that year (`sale_count` 0 and `sales` `[]` still listed); `years[]` key order: year, sale_count, proceeds, outlays, acb, gain, possible_superficial_losses, unknown_cost_sales, sales (product-vision ruling 2026-10-05, S08b). Text tables use the two-space column gap; ACB per share is thousands-grouped with 4 decimals in text, ungrouped in JSON. `securities`: every security with a pool event; `--security` the named; `--year` those sold that year; `events` always full history. `acb_per_share` null at 0 shares. Adjustment events: null `investment_transaction_id`/`account`. Arrays `[]` never null.
 
 Warnings (stderr `quarry: warning: `, exit 0, also `warnings[]` with absolute paths), order:
 1. Config warnings (incl. adjustment warnings).
