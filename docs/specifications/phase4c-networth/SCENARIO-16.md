@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-16
-status: open
+status: done
 ---
 
 # SCENARIO-16: Net worth before any data
@@ -32,10 +32,10 @@ Inventory (read, not Glob): `Server.NetWorth` is the only producer of `report.Ne
 - [x] Step 4 (B2, command matrix, `cmd/quarry/run_networth_before_data_test.go` plus one `internal/cli/networth_test.go` row): cmd rows reached through the real store: history `--since 2026-01 --until 2026-02` (all listed month ends empty: caption, header, one blank-Total line per month end, exit 0, stderr history line); `--json` snapshot and history (`dates` has the entries with `balances`/`totals` `[]`, `warnings[]` carries the line, `as_of`/`since`/`until` per existing rules); `--currency native` snapshot; store with no transactions at all (the "has no transactions" lines, snapshot and history); the seed's own `--as-of 2026-03-02` (rows exist) warns nothing (control one day later). `internal/cli/networth_test.go` (fake store, beside :60-100): config warning precedes the empty line in `warnings[]` and on stderr. n/a: `--account` (networth has none).
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments (`FirstTransaction`, `emptyNetWorthWarnings`); existing tests that hand-build an empty `store.NetWorth` through the CLI or `Server` now get the "no transactions" line: update their stderr expectations, not the code.
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments (`FirstTransaction`, `emptyNetWorthWarnings`); existing tests that hand-build an empty `store.NetWorth` through the CLI or `Server` now get the "no transactions" line: update their stderr expectations, not the code.
 
 ### Verify
-- [ ] Step 6: full verification per `.claude/rules/agent-briefs.md` + `spec-check.py phase4c-networth` -> tick SCENARIO-16 with its acceptance test; rewrite `STATE.md` (drop "Left unbuilt" empty-history item; composer order; the fourth query).
+- [x] Step 6: full verification per `.claude/rules/agent-briefs.md` + `spec-check.py phase4c-networth` -> tick SCENARIO-16 with its acceptance test; rewrite `STATE.md` (drop "Left unbuilt" empty-history item; composer order; the fourth query).
 
 ## Handoff
 
@@ -69,3 +69,4 @@ Run B2 done (step 4, code-first); tests-only, every row GREEN ON ARRIVAL (B1's p
 - `cmd/quarry/run_networth_before_data_test.go` (the acceptance test now uses `beforeSnapshotLine`/`beforeHistoryLine` consts): history, native snapshot and native history through the real store (table, exact stdout and stderr); `--json` snapshot and history (empty `balances`/`totals`, `warnings[]` = the line, stderr the same line); a store whose only transaction is in a not-in-reports account (`seedUncountedOnlyStore`) gives the no-data form, snapshot and history; control `--as-of 2026-03-02` has rows and no "no account has a balance" line (it still prints the USD rate warning, so the control asserts absence, not empty stderr).
 - `internal/cli/networth_test.go`: `Test_networth_prints_the_config_warning_before_the_empty_result_warning` and the `--json` twin (`warnings[]` = absolute config line, then empty line) through `loaderEnv`/`warningConfig` over an empty fake.
 - Next: V owes step 5 sweep (other cmd goldens that hand-build an empty net worth may now print the empty line), step 6 full suite, spec tick, STATE.md.
+Run V done (steps 5-6): sweep found nothing to fix (suite had no stale stderr expectations beyond B1/B2's edits); full covered suite rc=0, uncovered-diff 0 rows vs 97ef1e5, race green on report, document, duckstore, cli, cmd/quarry, lint 0 issues. test-stats vs 97ef1e5: cmd/quarry 776 (+5), internal/cli 506 (+2), internal/report 431 (+1), internal/report/document 153 (+8), internal/store/duckstore 693 (+9), TOTAL 2559 (+25). SCENARIO-16 ticked, STATE.md rewritten.
