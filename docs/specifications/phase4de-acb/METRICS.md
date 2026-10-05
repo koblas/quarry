@@ -18,6 +18,7 @@
 | SCENARIO-13b | code-first | A, B1, B2, V (+ product-vision rulings: finding copy gaps; findings Long opening + MCP status description) | 0/1/3/1 | yes (findings Long + MCP status said read-time types get marked fixed; folds: CountFindings empty-classification row, ignored-count cmd row, split assert, plan test names) |
 | SCENARIO-14 | code-first | A, B1, B2, V (+ product-vision ruling: warning 6 variants 6a/6b/6c, null cad/gain on unvalued event, exclusion permanent) | 0/1/4/2 | yes (sale arm of needsConversion unpinned; folds: ROC-excess arm isolated, no-rate superficial test, doc trims, full --json warnings pin) |
 | SCENARIO-15 (+18) | code-first | A, B1, B2, V (+ product-vision ruling: --year shape, warning 2 three forms, Total row; plan lost to orchestrator script truncation and re-written by the same architect via SendMessage) | 0/1/4/0 | yes (injected clock not pinned for --year bound; folds: 3 cmd JSON cells, exact stderr in currency_test, 3 doc trims) |
+| SCENARIO-16 | code-first | A, B1, B2, V (+ product-vision ruling: --security P1-P7/D1-D6, JSON unknown_cost, refusal line rewritten) | 0/5/2/0 | yes (nil-ticker guard, sort tiers, Today bound, false unreachable claim, registered-only x --year cell — all unpinned; folds: 2 doc trims) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
