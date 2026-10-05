@@ -15,6 +15,7 @@ import (
 // NetWorthRequest is what NetWorth reads: the net worth on AsOf, shown in Currency.
 type NetWorthRequest struct {
 	AsOf     time.Time
+	Window   *store.Window
 	Currency money.Currency
 }
 
@@ -35,6 +36,7 @@ type NetWorthDate struct {
 type NetWorth struct {
 	Dates    []NetWorthDate
 	AsOf     time.Time
+	Window   *store.Window
 	Currency money.Currency
 }
 

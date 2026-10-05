@@ -22,8 +22,8 @@ Contract: `quarry networth --since <d> [--until <d>]` / `--until <d>` → histor
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_networth_history_test.go` (new) `Test_run_networth_lists_each_month_end_with_a_column_per_type_ending_with_today` + `seedNetWorthHistoryStore` — `holdingsClock()` (2026-03-12, past DuckDB's today per trap), `--since 2026-01 --until 2027`; CAD chequing, CAD credit_card, USD chequing with balances on every listed date and the USD rate before 2026-01-31, so no interim blank cell; rows 2026-01-31, 2026-02-28, 2026-03-12, full stdout asserted
-- [ ] Step 2: `internal/cli/networth.go:11-63` — register `--since`/`--until` (help verbatim from Surface & Copy; not via `reportFlags.bind`, which adds `--account`); stub `report.ParseMonthEndWindow` in `internal/report/window.go` after `:103`; `Window *store.Window` on `NetWorthRequest` (`networth.go:15-19`) and `NetWorth` (`:34-39`), unused — test fails at its stdout assertion
+- [x] Step 1: `cmd/quarry/run_networth_history_test.go` (new) `Test_run_networth_lists_each_month_end_with_a_column_per_type_ending_with_today` + `seedNetWorthHistoryStore` — `holdingsClock()` (2026-03-12, past DuckDB's today per trap), `--since 2026-01 --until 2027`; CAD chequing, CAD credit_card, USD chequing with balances on every listed date and the USD rate before 2026-01-31, so no interim blank cell; rows 2026-01-31, 2026-02-28, 2026-03-12, full stdout asserted
+- [x] Step 2: `internal/cli/networth.go:11-63` — register `--since`/`--until` (help verbatim from Surface & Copy; not via `reportFlags.bind`, which adds `--account`); stub `report.ParseMonthEndWindow` in `internal/report/window.go` after `:103`; `Window *store.Window` on `NetWorthRequest` (`networth.go:15-19`) and `NetWorth` (`:34-39`), unused — test fails at its stdout assertion
 
 ### Build
 - [ ] Step 3: `internal/report/window.go:91-148` `ParseMonthEndWindow` — reuse `parseDateBound`, `WindowNotADate`/`WindowSinceAfterUntil`/`WindowUntilBeforeDefault`; must NOT pass through `parseWindow`'s future-since arm (`:128-129`); since defaults Jan 1 (`DefaultWindow`), until defaults today, until clamped to `Today(now)` after the since-after-until check (user's values). Tests in `window_test.go`: not-a-date per bound; since after until; until alone Dec 31 last year refused / Jan 1 accepted; until today (kept) / today+1 (clamped) / year 2027 (clamped); since after today alone and with a later until → window with since > until, no error
@@ -58,3 +58,13 @@ Contract: `quarry networth --since <d> [--until <d>]` / `--until <d>` → histor
 - `AddDate(0, 1, 0)` from Jan 31 lands on Mar 3 — derive a month end as first of next month minus one day.
 - `report.ParseWindow` refuses a lone future `--since` with spend's "pass --until" line; networth must not call it.
 - `reportFlags.bind` registers `--account`; networth has none, and `Test_each_reports_window_flags_describe_what_it_does_with_them` requires one — pin networth's help in `run_networth_surfaces_test.go` instead.
+
+## Phase report
+
+Run A done (steps 1-2). Acceptance test red at its stdout assertion, for the expected reason: the stubbed command prints the snapshot (`Net worth on 2026-03-12, amounts in CAD` + Type/Currency table) instead of the history.
+
+- `cmd/quarry/run_networth_history_test.go` (new): `Test_run_networth_lists_each_month_end_with_a_column_per_type_ending_with_today`, `seedNetWorthHistoryStore`, `netWorthHistoryLine` (`%-10s  %8s  %11s  %8s`, chequing/credit_card columns only; a later run adding other columns needs its own line helper). Expected totals checked against the snapshot: today's Total 2,260.00 matches the history's last row.
+- `internal/cli/networth.go`: `--since`/`--until` registered with Surface & Copy help verbatim, locals `since`/`until` unread until step 5.
+- `internal/report/window.go`: `ParseMonthEndWindow(since, until *string, now time.Time) (store.Window, error)` signature-only stub (zero value, unused params; step 3 fills it and clears any lint).
+- `internal/report/networth.go`: `Window *store.Window` on `NetWorthRequest` and `NetWorth`, unused.
+- Green now: all of `internal/cli`, `internal/report`; cmd networth/help/window tests except the acceptance test. Nothing to undo; B1 starts at step 3.

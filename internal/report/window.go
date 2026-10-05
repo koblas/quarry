@@ -137,6 +137,11 @@ func parseWindow(since, until *string, now time.Time, futureSince WindowErrorKin
 	return window, nil
 }
 
+// ParseMonthEndWindow resolves since and until into the window of month ends a net worth history lists.
+func ParseMonthEndWindow(since, until *string, now time.Time) (store.Window, error) {
+	return store.Window{}, nil
+}
+
 // parseDateBound is the first and last day of the year, month or day that
 // value names, or a WindowNotADate error for bound when it names none.
 func parseDateBound(bound, value string) (time.Time, time.Time, error) {

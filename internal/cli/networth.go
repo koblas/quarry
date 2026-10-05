@@ -10,6 +10,7 @@ import (
 // newNetWorthCommand builds networth: the balance of each account type and currency on one day.
 func newNetWorthCommand(newReport ReportFactory, loadConfig ConfigLoader, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var currency currencyFlag
+	var since, until string
 	cmd := &cobra.Command{
 		Use:   "networth",
 		Short: "Show net worth today or at each month end, by account type and currency",
@@ -58,6 +59,8 @@ ends with today.`,
 				func() string { return renderNetWorth(netWorth) })
 		},
 	}
+	cmd.Flags().StringVar(&since, "since", "", "list net worth at each month end on or after `date` (YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year when --until is given)")
+	cmd.Flags().StringVar(&until, "until", "", "list net worth at each month end on or before `date` (YYYY, YYYY-MM or YYYY-MM-DD; default today; a later date means today)")
 	currency.bind(cmd, reportCurrencyHelp)
 	return cmd
 }
