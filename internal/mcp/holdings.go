@@ -17,7 +17,7 @@ const holdingsTwin = "holdings"
 // holdings lists the holdings on the call's day in its accounts and currency, as holdings --json does,
 // but at most maxRows of them; totals count every holding and a cut adds a warning.
 func (s *Server) holdings(ctx context.Context, in holdingsInput) (any, error) {
-	asOf, err := report.ResolveAsOf(in.AsOf, s.now())
+	asOf, err := report.ResolveAsOf(in.AsOf, report.HoldingsNoun, s.now())
 	if err != nil {
 		return nil, asOfRefusal(err)
 	}

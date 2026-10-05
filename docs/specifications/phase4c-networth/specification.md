@@ -188,7 +188,7 @@ Month end    brokerage   chequing  credit_card       Total
   - A type gets a column when its native balance is non-zero on any listed date, in any currency.
   - A converted history cell with no rate is `no rate` (as `convertedCell`); blank always means "no row". Until SCENARIO-14b it renders blank (interim).
   - Every listed month end gets a line. Native: one line per currency with a row that date, CAD first; a date with no row in any currency gets one line with the date only. A native line's Total is that currency's sum.
-  - With no month ends listed (interim `--since` after today, until SCENARIO-15), the caption uses the resolved since and clamped until; otherwise the caption uses the first and last listed month ends while JSON `since`/`until` carry the resolved since and clamped until.
+  - The caption uses the first and last listed month ends while JSON `since`/`until` carry the resolved since and clamped until.
 
 **`--json`** (one shape for both modes):
 ```json

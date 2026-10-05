@@ -475,21 +475,51 @@ func Test_parse_month_end_window_clamps_the_until_to_today(t *testing.T) {
 	}
 }
 
-func Test_parse_month_end_window_accepts_a_since_after_today_with_or_without_an_until(t *testing.T) {
+func Test_parse_month_end_window_refuses_a_since_after_today(t *testing.T) {
 	cases := []struct {
 		name  string
+		since string
 		until *string
 	}{
-		{name: "alone", until: nil},
-		{name: "with a later until", until: new("2028")},
+		{name: "alone", since: "2027-01"},
+		{name: "with a later until", since: "2027-01", until: new("2028")},
+		{name: "tomorrow, which is already today in UTC", since: "2026-09-30"},
+		{name: "a year after this one", since: "2027"},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := report.ParseMonthEndWindow(new("2027-01"), c.until, windowNow)
+			_, err := report.ParseMonthEndWindow(&c.since, c.until, windowNow)
 
-			require.NoError(t, err)
-			assert.Equal(t, store.Window{Since: day(2027, time.January, 1), Until: day(2026, time.September, 29)}, got)
+			assert.Equal(t, report.WindowError{Kind: report.WindowNetWorthSinceAfterToday, Bound: "since", Value: c.since}, err)
+			assert.EqualError(t, err, "--since "+c.since+" is after today; net worth is valued up to today only, so pass an earlier --since")
 		})
 	}
+}
+
+func Test_parse_month_end_window_accepts_a_since_that_is_today_or_in_the_month_containing_today(t *testing.T) {
+	cases := []struct {
+		name  string
+		since string
+		want  time.Time
+	}{
+		{name: "today", since: "2026-09-29", want: day(2026, time.September, 29)},
+		{name: "the month containing today", since: "2026-09", want: day(2026, time.September, 1)},
+		{name: "the year containing today", since: "2026", want: day(2026, time.January, 1)},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := report.ParseMonthEndWindow(&c.since, nil, windowNow)
+
+			require.NoError(t, err)
+			assert.Equal(t, store.Window{Since: c.want, Until: day(2026, time.September, 29)}, got)
+		})
+	}
+}
+
+func Test_parse_month_end_window_reports_a_since_after_the_until_before_a_since_after_today(t *testing.T) {
+	_, err := report.ParseMonthEndWindow(new("2027"), new("2024"), windowNow)
+
+	assert.Equal(t, report.WindowError{Kind: report.WindowSinceAfterUntil, Bound: "since", Value: "2027", Other: "2024"}, err)
 }

@@ -212,23 +212,6 @@ func Test_renderNetWorth_history_native_shows_a_zero_balance_as_0_00_and_leaves_
 		"2026-01-31  USD         500.00           500.00\n", got)
 }
 
-func Test_renderNetWorth_history_has_a_caption_and_header_only_when_no_month_end_is_listed(t *testing.T) {
-	cases := []struct {
-		name     string
-		currency money.Currency
-		want     string
-	}{
-		{name: "converted", currency: money.CAD, want: "Net worth at each month end 2026-01-01 to 2026-03-12, amounts in CAD\n\nMonth end  Total\n"},
-		{name: "native", currency: money.Native, want: "Net worth at each month end 2026-01-01 to 2026-03-12\n\nMonth end  Currency  Total\n"},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, renderNetWorth(netWorthHistoryOf(c.currency)))
-		})
-	}
-}
-
 func Test_render_networth_omits_a_zero_row_that_json_keeps(t *testing.T) {
 	n := netWorthIn(money.CAD, []report.NetWorthTotal{{Currency: "CAD", Value: big.NewInt(100)}},
 		chequingCAD(big.NewInt(100), big.NewInt(100)),

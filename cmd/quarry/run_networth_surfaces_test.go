@@ -45,6 +45,8 @@ ends with today.
   quarry networth --as-of 2025-12-31
   quarry networth --since 2020 --currency native --json
 `)
+	assert.Contains(t, stdout.String(), "      --as-of date      value net worth on date "+
+		"(YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day; default today)\n")
 	assert.Contains(t, stdout.String(), "      --since date      list net worth at each month end on or after date "+
 		"(YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year when --until is given)\n")
 	assert.Contains(t, stdout.String(), "      --until date      list net worth at each month end on or before date "+

@@ -45,7 +45,7 @@ included.`,
 			if cmd.Flags().Changed("as-of") {
 				given = &asOfFlag
 			}
-			asOf, err := report.ResolveAsOf(given, now())
+			asOf, err := report.ResolveAsOf(given, report.HoldingsNoun, now())
 			if err != nil {
 				return UsageError{msg: err.Error()}
 			}

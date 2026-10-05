@@ -47,6 +47,11 @@ func windowRefusalCases() []windowRefusalCase {
 			want:    "since 2030-05 is after today; anomalies lists charges up to today only, so pass an earlier since",
 		},
 		{
+			name:    "net worth since after today",
+			refusal: report.WindowError{Kind: report.WindowNetWorthSinceAfterToday, Bound: "since", Value: "2027-01"},
+			want:    "since 2027-01 is after today; net worth is valued up to today only, so pass an earlier since",
+		},
+		{
 			name:    "since after until",
 			refusal: report.WindowError{Kind: report.WindowSinceAfterUntil, Bound: "since", Value: "2025", Other: "2024"},
 			want:    "since 2025 is after until 2024",

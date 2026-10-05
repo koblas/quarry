@@ -173,28 +173,3 @@ func Test_run_networth_json_history_names_the_period_and_every_month_end(t *test
 	assert.Equal(t, []string{"2026-01-31", "2026-02-28", "2026-03-12"},
 		[]string{got.Dates[0].Date, got.Dates[1].Date, got.Dates[2].Date})
 }
-
-func Test_run_networth_prints_only_a_caption_and_header_when_the_since_is_after_today(t *testing.T) {
-	seedNetWorthHistoryStore(t)
-	var stdout, stderr bytes.Buffer
-
-	exitCode := runWith(context.Background(), []string{"networth", "--since", "2027-01"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
-
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
-	assert.Equal(t, "Net worth at each month end 2027-01-01 to 2026-03-12, amounts in CAD\n\nMonth end  Total\n", stdout.String())
-}
-
-func Test_run_networth_json_lists_no_dates_when_the_since_is_after_today(t *testing.T) {
-	seedNetWorthHistoryStore(t)
-	var stdout, stderr bytes.Buffer
-
-	exitCode := runWith(context.Background(), []string{"networth", "--json", "--since", "2027-01"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
-
-	require.Equal(t, 0, exitCode, stderr.String())
-	var got map[string]any
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
-	assert.Equal(t, []any{}, got["dates"])
-}

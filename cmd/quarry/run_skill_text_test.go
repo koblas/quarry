@@ -196,6 +196,7 @@ description: Answer questions about the user's own money from their Quicken Clas
 | Unusually large charges | ¤quarry anomalies --json¤ |
 | Find a transaction | ¤quarry search <text> --json¤ (with ¤--account¤, ¤--category¤, ¤--min¤, ¤--max¤, ¤--since¤, ¤--until¤) |
 | Account balances | ¤quarry accounts --json¤ |
+| Net worth today, on a day, or by month | ¤quarry networth [--as-of <d> \| --since <d>] --json¤ |
 | Holdings and their value on a day | ¤quarry holdings --as-of <date> --json¤ |
 | What to clean up in Quicken | ¤quarry findings --json¤; see ¤references/findings.md¤ |
 | Anything else | ¤quarry sql¤ (section 5) |

@@ -7,10 +7,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// netWorthAsOfConflict is the refusal of --as-of beside --since or --until.
+const netWorthAsOfConflict = "--as-of cannot be combined with --since or --until; pass --as-of for one day, or --since and --until for month ends"
+
 // newNetWorthCommand builds networth: the balance of each account type and currency on one day.
 func newNetWorthCommand(newReport ReportFactory, loadConfig ConfigLoader, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var currency currencyFlag
-	var since, until string
+	var asOfFlag, since, until string
 	cmd := &cobra.Command{
 		Use:   "networth",
 		Short: "Show net worth today or at each month end, by account type and currency",
@@ -44,8 +47,21 @@ ends with today.`,
 				return err
 			}
 
-			request := report.NetWorthRequest{AsOf: report.Today(now()), Currency: reportCurrency}
-			if cmd.Flags().Changed("since") || cmd.Flags().Changed("until") {
+			historyGiven := cmd.Flags().Changed("since") || cmd.Flags().Changed("until")
+			var asOfGiven *string
+			if cmd.Flags().Changed("as-of") {
+				if historyGiven {
+					return UsageError{msg: netWorthAsOfConflict}
+				}
+				asOfGiven = &asOfFlag
+			}
+			asOf, err := report.ResolveAsOf(asOfGiven, report.NetWorthNoun, now())
+			if err != nil {
+				return UsageError{msg: err.Error()}
+			}
+
+			request := report.NetWorthRequest{AsOf: asOf, Currency: reportCurrency}
+			if historyGiven {
 				sincePtr, untilPtr := changedBounds(cmd, since, until)
 				window, err := report.ParseMonthEndWindow(sincePtr, untilPtr, now())
 				if err != nil {
@@ -69,6 +85,7 @@ ends with today.`,
 				func() string { return renderNetWorth(netWorth) })
 		},
 	}
+	cmd.Flags().StringVar(&asOfFlag, "as-of", "", "value net worth on `date` (YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day; default today)")
 	cmd.Flags().StringVar(&since, "since", "", "list net worth at each month end on or after `date` (YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year when --until is given)")
 	cmd.Flags().StringVar(&until, "until", "", "list net worth at each month end on or before `date` (YYYY, YYYY-MM or YYYY-MM-DD; default today; a later date means today)")
 	currency.bind(cmd, reportCurrencyHelp)
