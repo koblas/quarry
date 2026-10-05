@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-13b
-status: open
+status: done
 ---
 
 # SCENARIO-13b: Shares added with no cost are findings
@@ -50,10 +50,10 @@ Size: OWNS A RUN, 4 batches, 1 feature package (report). `finding`, the duckstor
   - `plugin/skills/quarry/references/findings.md:23`: add the bullet (spec :339). Change `:43` to "prints one row per transaction, split, payee, category, account or investment transaction". Re-pin `cmd/quarry/run_skill_references_test.go:81-85`.
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Update the doc comments on `FindingList`, `Status`, `Result`, `readTimeFindings`, `findingOrder` and `NewFindingEntry`. Bump the exact-count assertions the suite names.
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Update the doc comments on `FindingList`, `Status`, `Result`, `readTimeFindings`, `findingOrder` and `NewFindingEntry`. Bump the exact-count assertions the suite names.
 
 ### Verify
-- [ ] Step 8: run the full verification, then `spec-check.py phase4de-acb`. Tick SCENARIO-13b with its acceptance test, rewrite STATE.md (drop the S13b items from Left unbuilt and the `:43` open debt), and set `status: done`.
+- [x] Step 8: run the full verification, then `spec-check.py phase4de-acb`. Tick SCENARIO-13b with its acceptance test, rewrite STATE.md (drop the S13b items from Left unbuilt and the `:43` open debt), and set `status: done`.
 
 ## Handoff
 
@@ -80,11 +80,8 @@ Size: OWNS A RUN, 4 batches, 1 feature package (report). `finding`, the duckstor
 
 ## Phase report
 
-Run B2 (step 6) done; committed. Steps 1-6 ticked. Run V (steps 7-8) is next.
-- Text: `cli/render_findings.go` `sharesWithoutCostRows` (arm in `liveFindingLines`, closes the exhaustive lint) and `sharesCount` (`1 share` at exactly 1,000,000 millionths, else `humanize.Shares + " shares"`, at the call site). `accountItem` now serves both single-item types. Row columns: id, date, account, security padded to widest, shares, ignored marker.
-- Copy (`cli/findings.go`): Long type row, own paragraph after the TOML block (ruled wording), `--type` literal, final `--csv` help (`..., category, account or investment transaction as CSV`). The Long's "findings it no longer finds are marked fixed" sentence is untouched (the ruling lists only SKILL.md:70 and findings.md:27).
-- Docs: `plugin/skills/quarry/SKILL.md:70` ("leave the list"), `references/findings.md` bullet after `unclassified-account` (:24), :28 (except shares-without-cost), :44 `--csv` mirror (Part B wording).
-- Tests re-pinned: `internal/cli/findings_test.go` (Long, `--type`, `--csv`, bad-usage), `cmd/quarry/run_findings_usage_test.go`, `run_read_usage_test.go`, `run_mcp_descriptions_test.go` (enum), `run_skill_text_test.go:218` (SKILL section 6), `run_skill_references_test.go` (csv mirror, the new bullet, the :28 sentence). New `internal/cli/render_findings_shares_internal_test.go` (5 tests: widths, escaping, ignored marker under all/ignored views, `sharesCount` rows, heading plus row render).
-- Mutation: `sharesCount` `== oneShare` -> `<= oneShare`: `Test_sharesCount_says_share_only_for_exactly_one/half` red (`expected "0.5 shares", actual "1 share"`) and `/just_under_one`.
-- Green: acceptance test passes; full covered suite rc=0, 0 failures; `uncovered-diff.py` 0 lines since 8ad8ef4; `golangci-lint run ./...` 0 issues; `test-stats --base 8ad8ef4`: `internal/cli` 550 (+5), `cmd/quarry` 846 (+0), TOTAL 1396 (+5).
-- For V: STATE.md still lists S13b items (Left unbuilt: detector, FindingList input, warnings 4a/4c refusal) and the `:43` and S13b-ruling open debts; all now built. Step 7 doc-comment pass and exact-count bumps found nothing failing in the full run. The `findings.md` line numbers moved by one after the bullet (bullet :24, fixed sentence :28, `--csv` :44).
+Run V (steps 7-8) done; scenario complete, `status: done`. All steps ticked.
+- Step 7: doc comments for `FindingList`, `Status`, `Result`, `Investments`, `readTimeFindings`/`ReadTimeStates`, `findingOrder`, `NewFindingEntry`, duckstore `Findings`/`Status` were already current from B1/B2; exact-count assertions needed no bump (full suite green).
+- Verify at 07393ff: `go build ./...` ok; full covered suite rc=0, no failures; `uncovered-diff.py`: 0 uncovered added line(s) in 0 run(s) since 07393ff; `golangci-lint run ./...` 0 issues; `go test -race` on the touched packages rc=0; `test-stats --base 07393ff --changed`: TOTAL 3446 (+29) tests, tempdir 1286 (+2), disk 1100 (+1) (cmd/quarry +1, cli +6, importer +1, report +15, document +1, snapshot +1, duckstore +4).
+- `spec-check.py phase4de-acb` OK; SCENARIO-13b ticked with its acceptance test.
+- STATE.md rewritten: S13b items dropped from Left unbuilt, `findings.md:43` mirror and S13b copy-pin debts closed, traps added (importer vs duckstore investment order/filter, ZCOSTBASIS 0/NULL fixture), new open debt for the findings Long opening sentence.
