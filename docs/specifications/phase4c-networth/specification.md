@@ -36,7 +36,7 @@
   - `date` = `investment_transactions.date`; status from `ZRECONCILESTATUS`; `excluded_from_reports` from `ZEXCLUDEFROMREPORTS`; payee NULL; memo copied;
   - one split per Quicken entry, with the entry's category, amount and transfer target; splits go through the existing transfer pairing and splits-sum check;
   - add_shares, remove_shares, split (amount 0) get no row;
-  - reinvest_dividend: no row (N-3 outcome (b)).
+  - reinvest_dividend: no row when its amount is 0, as Quicken records it (N-3 outcome (b)); a row exists iff amount ≠ 0, whatever the action (orchestrator, gate round 1).
   - `FormatVersion` 7 → 8; an older store gets the existing format refusal; a re-sync rebuilds it.
 - **N-2 Cash-flow class = the entry category's kind** (the existing rule, `schema.go:225-227`); no action table. Expected per action (asserted on the real file in the reference scenario):
 
@@ -47,7 +47,7 @@
   | add_shares, remove_shares, split | 0 | no | — |
   | dividend, interest, capital_gain_long, capital_gain_short | + (income) | yes | income |
   | reinvest_dividend | 0 | no (N-3 (b)) | — (not income: Quicken records 0.00) |
-  | margin_interest | − (expense) | yes | spending (reaches `quarry spend`, recurring, anomalies) |
+  | margin_interest | − (expense) | yes | spending (reaches `quarry spend` and anomalies; not recurring, which needs a payee and investment rows have none — orchestrator, gate round 1) |
   | misc_expense | − | yes | by entry: expense → spending, system → neither |
   | misc_income | + | yes | by entry: income → income, system → neither |
   | commission | inside the buy/sell amount | — | never spending (part of the trade) |
@@ -218,7 +218,13 @@ Month end    brokerage   chequing  credit_card       Total
    - history: `"Brokerage" holds a security with no price on 3 of the month ends listed, so its balance leaves it out on those days; enter prices in Quicken, then run quarry sync`
 4. No currency: `"<security>" has no currency in Quicken, so quarry leaves its value out of "<account>"'s balance; set its currency in Quicken, then run quarry sync`
 5. Other currency: `"<security>" is priced in EUR, which quarry does not convert, so its value is left out of "<account>"'s balance`
-6. Rates (not in native mode):
+6. No rate for a holding (copy ruling, product-vision, gate round 1; every mode, native included — the holding is left out of the account's own-currency balance):
+   - snapshot, 1: `"Brokerage" holds 1 USD security valued on 2012-12-31, before 2013-01-02, the first exchange rate in the store, so its CAD balance leaves it out`
+   - snapshot, N: `"Brokerage" holds N USD securities valued on <d>, before <first>, the first exchange rate in the store, so its CAD balance leaves them out`
+   - history: `"Brokerage" holds a USD security on 12 of the month ends listed, before 2013-01-02, the first exchange rate in the store, so its CAD balance leaves it out on those days`
+   - no rates (snapshot and history): `"Brokerage" holds a USD security and the store has no exchange rates, so its CAD balance leaves it out; run quarry sync to fetch rates`
+   - `USD`/`CAD` are the holding's currency and `money.NativeOf` of it (the account's currency); history count = distinct dates (`humanize.Thousands`), as item 3. Variant chosen by `FirstRate.IsZero()`. One line per account, by account name ignoring case.
+7. Rates (not in native mode):
    - before the first rate: `USD balances on 2012-12-31, before 2013-01-02, the first exchange rate in the store, are not converted to CAD and are left out of the CAD total; pass --currency native to list them`
    - history: `USD balances on 12 month ends before 2013-01-02, the first exchange rate in the store, are not converted to CAD and are left out of the CAD total; pass --currency native to list them`
    - no rates: `the store has no exchange rates, so USD balances are not converted to CAD and are left out of the CAD total; pass --currency native to list them, or run quarry sync to fetch rates`
@@ -230,7 +236,7 @@ Month end    brokerage   chequing  credit_card       Total
    - The history count uses `humanize.Count(n, "month end", "month ends")` ("on 1 month end before …" accepted). A history run on a store with no rates uses the no-rates variant.
    - History cells: `no rate` only when the type has a row needing a rate and none of its rows convert; a mixed type shows the sum of rows that convert (no marker). A date whose rows all need a rate shows Total `no rate`; blank still means no rows.
 
-Within one kind, warnings follow account name ignoring case. Lines 3–5 are also emitted by `quarry accounts`, from the same composer, with as-of = today.
+Within one kind, warnings follow account name ignoring case. Lines 3–6 are also emitted by `quarry accounts`, from the same composer, with as-of = today, before the existing accounts FX warnings (orchestrator ruling, gate round 1: one composer, one order — holdings kinds before rate lines on both commands).
 
 **Refusals:**
 
