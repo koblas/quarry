@@ -21,10 +21,11 @@ Use this to walk the user through what to clean up in their Quicken file, and wh
 - `similar-categories`: categories whose names differ only in case, punctuation, spacing or a plural. Fix in Quicken: merge them into one, or ignore the group if they mean different things.
 - `unused-category`: a category no transaction uses. Check that no scheduled transaction or budget uses it before deleting it in Quicken, or ignore it to keep it.
 - `unclassified-account`: a brokerage or retirement account, open or closed, that the config file lists as neither registered nor non-registered. Fixed in quarry's config, not Quicken; see "Classifying accounts".
+- `shares-without-cost`: shares moved or added into a non-registered account with no cost basis in Quicken. Open the Add Shares transaction and enter the cost (from the old broker's statement); quarry acb counts them at no cost until then.
 
 ## After the user fixes something
 
-- Fix in Quicken, then `quarry sync`. A finding that quarry no longer finds after the sync is marked fixed. Run `quarry sync` only when the user asks.
+- Fix in Quicken, then `quarry sync`. A finding that quarry no longer finds after the sync is marked fixed, except shares-without-cost, which leaves the list without being marked fixed. Run `quarry sync` only when the user asks.
 - `quarry findings --status fixed --json` lists the findings marked fixed, and `--status ignored` those the user chose to keep off the list. `--status all` lists every status.
 
 ## Ignoring a finding
@@ -40,4 +41,4 @@ ignore = ["duplicate:txn-4410+txn-4412", "uncategorized:payee-88"]
 
 ## A spreadsheet
 
-- `quarry findings --csv` prints one row per transaction, split, payee, category or account. Write it to a file only when the user asks: `quarry findings --status all --csv > findings.csv`.
+- `quarry findings --csv` prints one row per transaction, split, payee, category, account or investment transaction. Write it to a file only when the user asks: `quarry findings --status all --csv > findings.csv`.

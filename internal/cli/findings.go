@@ -50,6 +50,8 @@ quarry looks for:
   unclassified-account  a brokerage or retirement account listed in neither
                         accounts.registered nor accounts.non-registered in
                         the config file
+  shares-without-cost   shares added to a non-registered account with no
+                        cost basis, which quarry acb needs
 
 duplicate and unlinked-transfer compare register entries only, not buys,
 sells, dividends or other investment transactions.
@@ -64,6 +66,9 @@ never marked fixed.
     "acct-15",  # RBC RRSP
   ]
   non-registered = ["acct-3"]  # Questrade Margin
+
+shares-without-cost leaves the list on the first sync after the shares' cost
+is entered in Quicken, and is never marked fixed.
 
 To keep a finding off the list after checking it, add its id to
 findings.ignore in ~/Library/Application Support/quarry/config.toml:
@@ -138,8 +143,9 @@ prints one row per item, for a spreadsheet.`,
 	cmd.Flags().StringVar(&status, "status", string(finding.StatusOpen),
 		"show only findings whose status is `status`: open, ignored, fixed or all")
 	cmd.Flags().StringVar(&typ, "type", "",
-		"show only findings of this `type`: duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, payee-variants, similar-categories, unused-category or unclassified-account")
-	cmd.Flags().BoolVar(&csvOut, "csv", false, "print one row per transaction, split, payee, category or account as CSV")
+		"show only findings of this `type`: duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, "+
+			"payee-variants, similar-categories, unused-category, unclassified-account or shares-without-cost")
+	cmd.Flags().BoolVar(&csvOut, "csv", false, "print one row per transaction, split, payee, category, account or investment transaction as CSV")
 	return cmd
 }
 

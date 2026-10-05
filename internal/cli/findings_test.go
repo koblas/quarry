@@ -69,6 +69,8 @@ quarry looks for:
   unclassified-account  a brokerage or retirement account listed in neither
                         accounts.registered nor accounts.non-registered in
                         the config file
+  shares-without-cost   shares added to a non-registered account with no
+                        cost basis, which quarry acb needs
 
 duplicate and unlinked-transfer compare register entries only, not buys,
 sells, dividends or other investment transactions.
@@ -83,6 +85,9 @@ never marked fixed.
     "acct-15",  # RBC RRSP
   ]
   non-registered = ["acct-3"]  # Questrade Margin
+
+shares-without-cost leaves the list on the first sync after the shares' cost
+is entered in Quicken, and is never marked fixed.
 
 To keep a finding off the list after checking it, add its id to
 findings.ignore in ~/Library/Application Support/quarry/config.toml:
@@ -138,9 +143,9 @@ func Test_findings_help_shows_each_flag(t *testing.T) {
 		{
 			flag: "--type", usage: "--type type",
 			help: "show only findings of this type: duplicate, one-sided-transfer, unlinked-transfer, " +
-				"uncategorized, mixed-categories, payee-variants, similar-categories, unused-category or unclassified-account",
+				"uncategorized, mixed-categories, payee-variants, similar-categories, unused-category, unclassified-account or shares-without-cost",
 		},
-		{flag: "--csv", usage: "--csv", help: "print one row per transaction, split, payee, category or account as CSV"},
+		{flag: "--csv", usage: "--csv", help: "print one row per transaction, split, payee, category, account or investment transaction as CSV"},
 	}
 
 	for _, c := range cases {
@@ -170,7 +175,7 @@ func Test_findings_rejects_bad_usage(t *testing.T) {
 		{
 			name: "a type that is not a finding type", args: []string{"--type", "duplicates"},
 			want: "--type must be duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, " +
-				"payee-variants, similar-categories, unused-category or unclassified-account",
+				"payee-variants, similar-categories, unused-category, unclassified-account or shares-without-cost",
 		},
 		{
 			name: "--csv with --json", args: []string{"--csv", "--json"},

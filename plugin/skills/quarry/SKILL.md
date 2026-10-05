@@ -67,7 +67,7 @@ Write user-supplied values only in a recipe's `params` row, and double any singl
 
 ## 6. quarry cannot change data
 
-quarry never writes to Quicken and never edits its own store by request. To fix a category, payee, duplicate or transfer, the user makes the change in Quicken, then runs `quarry sync`; findings it no longer finds are marked fixed. To stop listing a finding the user has checked, they add its id to `findings.ignore` in `~/Library/Application Support/quarry/config.toml`; quarry never writes that file, and you don't either unless the user asks. Run `quarry sync` or `quarry snapshots prune`, or write output to a file, only when the user asks.
+quarry never writes to Quicken and never edits its own store by request. To fix a category, payee, duplicate or transfer, the user makes the change in Quicken, then runs `quarry sync`; findings it no longer finds leave the list. To stop listing a finding the user has checked, they add its id to `findings.ignore` in `~/Library/Application Support/quarry/config.toml`; quarry never writes that file, and you don't either unless the user asks. Run `quarry sync` or `quarry snapshots prune`, or write output to a file, only when the user asks.
 
 ## 7. Not covered yet
 

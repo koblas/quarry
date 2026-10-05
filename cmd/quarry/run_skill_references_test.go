@@ -78,11 +78,14 @@ func Test_reference_files_state_their_job(t *testing.T) {
 		{"search.md", []string{"quarry search", "transfer", "excluded", "native", "--limit"}},
 		{"findings.md", append(findingTypeBullets(findingTypesInHelp(t)), []string{
 			"in Quicken, then `quarry sync`", "findings.ignore", "quarry findings --csv", "only when the user asks",
-			"prints one row per transaction, split, payee, category or account",
+			"prints one row per transaction, split, payee, category, account or investment transaction",
 			"compare register entries only, not buys, sells, dividends or other investment transactions",
 			"which accounts quarry needs classified",
 			"`unclassified-account`: a brokerage or retirement account, open or closed, that the config file lists as neither registered nor non-registered. " +
 				"Fixed in quarry's config, not Quicken; see \"Classifying accounts\".",
+			"`shares-without-cost`: shares moved or added into a non-registered account with no cost basis in Quicken. " +
+				"Open the Add Shares transaction and enter the cost (from the old broker's statement); quarry acb counts them at no cost until then.",
+			"A finding that quarry no longer finds after the sync is marked fixed, except shares-without-cost, which leaves the list without being marked fixed.",
 		}...)},
 	}
 

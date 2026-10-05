@@ -137,6 +137,8 @@ func liveFindingLines(typ finding.Type, findings []report.ListedFinding, view fi
 		return unusedCategoryRows(findings, view)
 	case finding.UnclassifiedAccount:
 		return unclassifiedRows(findings, view)
+	case finding.SharesWithoutCost:
+		return sharesWithoutCostRows(findings, view)
 	}
 	return nil // unreachable: the exhaustive linter fails a switch missing a finding.Types() entry, and report.Findings groups only those
 }
@@ -371,10 +373,42 @@ func unclassifiedRows(findings []report.ListedFinding, view findingsView) []stri
 	return rows
 }
 
-// accountItem is the one item of an unclassified-account finding, the zero item for a finding without one.
+// sharesWithoutCostRows renders one row per shares-without-cost finding: its id, the add's date, the account and the security,
+// each padded to the widest, then the share count, then the ignored marker.
+func sharesWithoutCostRows(findings []report.ListedFinding, view findingsView) []string {
+	ids := make([]string, len(findings))
+	accounts := make([]string, len(findings))
+	securities := make([]string, len(findings))
+	for i, f := range findings {
+		item := accountItem(f)
+		ids[i] = f.ID
+		accounts[i] = escapeCell(item.Account)
+		securities[i] = escapeCell(item.Security)
+	}
+	idWidth, accountWidth, securityWidth := widestRunes(ids), widestRunes(accounts), widestRunes(securities)
+
+	rows := make([]string, len(findings))
+	for i, f := range findings {
+		item := accountItem(f)
+		rows[i] = "  " + padRight(ids[i], idWidth) + "  " + item.Date.Format(time.DateOnly) + "  " + padRight(accounts[i], accountWidth) + "  " +
+			padRight(securities[i], securityWidth) + "  " + sharesCount(item.Shares) + ignoredMarker(f, view)
+	}
+	return rows
+}
+
+// sharesCount is millionths of a share as "1 share" when exactly one, else "N shares".
+func sharesCount(millionths int64) string {
+	const oneShare = 1_000_000
+	if millionths == oneShare {
+		return "1 share"
+	}
+	return humanize.Shares(millionths) + " shares"
+}
+
+// accountItem is the one item of an unclassified-account or shares-without-cost finding, the zero item for a finding without one.
 func accountItem(f report.ListedFinding) store.FindingItem {
 	if len(f.Items) == 0 {
-		// unreachable: report.unclassifiedFindings gives each such finding exactly one item and none is ever stored or fixed
+		// unreachable: report.unclassifiedFindings and sharesWithoutCostFindings give each such finding exactly one item; a fixed one never reaches here
 		return store.FindingItem{}
 	}
 	return f.Items[0]
