@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-02
-status: open
+status: done
 ---
 
 # SCENARIO-02: A malformed classification is refused
@@ -37,10 +37,10 @@ Digit counting (ruled reading chosen): across the WHOLE string, ASCII or Unicode
 - [x] Step 4 (B2): `parse.go:86-94`, `config.go:46-52`, `report/classification.go:9-10`, `report/classification_test.go:80-87` — new `(document).notInBoth(registered, nonRegistered)` called after both `idList` calls, refusing via `badValue("an account must be in only one of accounts.registered and accounts.non-registered", "<quoted masked id> in both")` (id = first registered id, file order, also in non-registered; quote with `tomlstr.BasicString` after `accountmask.Mask`). Delete `Test_accounts_classify_an_id_listed_in_both_lists_as_registered` (S01 pin; config now refuses it) and reword the `Classification` doc line (an id in both is refused at load). Tests in `accounts_test.go`: `Test_load_refuses_an_id_listed_in_both_account_lists` rows: plain `"acct-3"`, masked `"****5678"` for `12345678`, two shared ids names the first in registered order, `""` in both; controls that load clean: same id twice in one list, `Acct-3` vs `acct-3` (case-sensitive), one list unset; ordering: bad `registered` refused before in-both; `Test_load_refuses_an_id_listed_in_both_account_lists_in_either_list_order`.
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/platform/accountmask` reads as the contract; `config.Load` doc (`config.go:46-52`) names the in-both refusal.
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/platform/accountmask` reads as the contract; `config.Load` doc (`config.go:46-52`) names the in-both refusal.
 
 ### Verify
-- [ ] Step 6: full verification block (`.claude/rules/agent-briefs.md`) + `.claude/scripts/spec-check.py phase4de-acb`; tick SCENARIO-02 with its acceptance test; rewrite STATE.md (registered-wins decision replaced by the refusal; `Left unbuilt` loses mask helper, in-both and syntax probe).
+- [x] Step 6: full verification block (`.claude/rules/agent-briefs.md`) + `.claude/scripts/spec-check.py phase4de-acb`; tick SCENARIO-02 with its acceptance test; rewrite STATE.md (registered-wins decision replaced by the refusal; `Left unbuilt` loses mask helper, in-both and syntax probe).
 
 ## Handoff
 
@@ -60,11 +60,9 @@ Digit counting (ruled reading chosen): across the WHOLE string, ASCII or Unicode
 
 ## Phase report
 
-Runs A, B1 and B2 done. Steps 1-4 ticked. B2: `(document).notInBoth` in `internal/config/parse.go` (called after both `idList` calls; first registered id also in non-registered, `tomlstr.BasicString(accountmask.Mask(id))` + ` in both`), `config.Load` doc and `parse` doc name the refusal, `report.Classification` doc reworded, S01 pin `Test_accounts_classify_an_id_listed_in_both_lists_as_registered` deleted. Tests in `accounts_test.go`: `Test_load_refuses_an_id_listed_in_both_account_lists`, `..._in_either_list_order`, `Test_load_loads_account_lists_that_share_no_id_exactly`, `Test_load_refuses_a_bad_account_list_before_an_id_listed_in_both`. Mutation (restored, diffed identical): `slices.Contains(nonRegistered, id)` negated in `notInBoth` reddened the four refusal rows, the either-order test, `Test_load_reads_both_account_lists_...` and both no-share control rows. Lint `0 issues`; config, report, cli, cmd/quarry packages green. Narrow-loop trap: `-run 'Both'` is case sensitive and misses the lowercase `_both_` test names. Next: V (steps 5-6).
-Earlier runs: Steps 1-3 ticked. Acceptance test `Test_run_refuses_an_account_number_in_an_accounts_list_masked` is green.
-- New `internal/platform/accountmask/{doc.go,accountmask.go,accountmask_test.go}`: `Mask(s)`, whole-string digit count via `unicode.IsDigit`, exempt `^acct-[0-9]+$`.
-- `internal/config/parse.go`: `setting.masked` + `setting.show` (set on registered/non-registered); `idList` masks the got text and the item text (before ` as item n`); `lookup` masks the `accounts must be a table` got; `keyText` masks parts after `accounts` (quote decision on the original part, then Mask); `tree()` calls `maskNamedKey` (regexp `namedKeyMessage`, four shapes only).
-- Tests added: `accounts_test.go` (refusal masking table, short/exempt table, unknown-key warnings both lists), `ignore_test.go` `Test_load_leaves_a_findings_ignore_item_unmasked`, `config_test.go` (`Test_load_masks_the_name_a_syntax_error_echoes`, `Test_load_leaves_a_syntax_error_that_echoes_no_name_as_it_is` with `U+0031 '1'`, which whole-message masking would break), `problem_test.go` ProblemAbsolute row, `cmd/quarry/run_config_test.go` `Test_run_read_commands_refuse_a_masked_account_list`.
-- Mutations (restored, diffed identical): `keptDigits` 4 to 3 and 4 to 5 reddened `Test_Mask_keeps_the_last_four_digits` rows; `setting.show` gate `if s.masked` to `if true` reddened `Test_load_leaves_a_findings_ignore_item_unmasked` plus the findings.ignore not-a-list/date rows.
-- Lint `0 issues`, narrow loops green. Full suite and coverage gate are V's.
-- Next: B2 (step 4) `notInBoth` in parse.go, `Classification` doc + delete the S01 both-lists pin in `report/classification_test.go:80-87`. `config.Load` doc (`config.go:46-52`) names the in-both refusal in V's sweep or B2.
+Run V done; scenario complete, status done. Steps 5-6 ticked, SCENARIO-02 ticked in specification.md with its acceptance test, `spec-check.py phase4de-acb` OK, STATE.md rewritten.
+- Build and lint: `go build ./...` ok, `golangci-lint run ./...` 0 issues. `go doc ./internal/platform/accountmask` reads as the contract; `config.Load` doc names the in-both refusal.
+- Covered full suite (`-count=1 -coverpkg=./...`): rc=0. `uncovered-diff.py --profile ... baf4ed0`: 0 uncovered added lines in 0 runs. `go test -race` on accountmask, config, report: ok.
+- `test-stats.py --base baf4ed0 --changed`: cmd/quarry 799 (+2), internal/config 76 (+10), internal/platform/accountmask 4 (+4), internal/report 436 (-1), TOTAL 1315 (+15); tempdir +1, disk +1 (cmd/quarry).
+- No code changes in V. Mutations were done by B1/B2; V adds none.
+- Next: checkpoint over `<start>` = baf4ed0, then SCENARIO-04.
