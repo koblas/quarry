@@ -58,3 +58,5 @@ Precedence (default; one pin per adjacent pair): positional arg → `--currency`
 **Traps**:
 - `acbWalkRequest`/`acb_select_test` fixtures `require.NoError`: a later fixture adding an unlisted brokerage/retirement account now fails on R-6, not on the walk
 - `report_help_test` regex hard-codes the `code` placeholder; acb's ruled help uses `currency`
+
+**Orchestrator: product-vision copy ruling 2026-10-05 is in `RULING-S17.md` (same dir) — supersedes this plan and spec :159/:295/:299/:361/:363. Implement its copy verbatim.**

@@ -58,6 +58,7 @@ Scenarios complete: SCENARIO-01..07, 08a, 08b, 09, 10, 11, 12, 13a, 13b, 14, 15,
 - Hand-built `report.ACB` fixtures for `ACBWarnings` need the test helper `acbPooled` (document package): empty `Securities` fires slot 2 form 1 and pollutes the expected list. Do not retype the headers-only stdout with `acbYearLine` (filled-fixture widths) (SCENARIO-15)
 
 ## Open debts
+- S17 ruling (RULING-S17.md) supersedes spec :159, :295, :299, :361, :363. Follow-ups for S19: finding.go:325 fix sentence lacks LIRA/401(k)/IRA; SKILL §8 R-6 row.
 - `acb_walk.go:~55` still carries `// unreachable:` for its nil-security arm, a claim `report.Store` does not back (port allows nil): `registeredHoldings` has the same arm, now tested live; drop the marker and pin the walk arm with a nil-security tx in a pooled account on next walk touch (SCENARIO-16)
 - S14: superficial marking of a no-rate sale is unobservable (excluded sales absent), unpinned. Warning 6c and event-JSON null `cad`/`gain`: final product-vision pass re-checks (SCENARIO-14)
 - Final pass (SCENARIO-13b): `internal/mcp/tools.go:76-79` `dataQualityDescription` omits unclassified-account and shares-without-cost (pinned `cmd/quarry/run_mcp_descriptions_test.go` ~:50-56): ruling, then re-pin both
