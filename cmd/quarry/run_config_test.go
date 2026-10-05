@@ -202,6 +202,19 @@ func Test_run_sync_refuses_a_bad_config_value_with_the_ruled_copy(t *testing.T) 
 	}
 }
 
+func Test_run_refuses_an_account_number_in_an_accounts_list_masked(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, "[accounts]\nregistered = [12345678]\n")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: "+configShown+": accounts.registered must hold only account ids in quotes, got ****5678 as item 1"+configFix+"\n", stderr.String())
+	assert.Equal(t, 1, exitCode)
+}
+
 func Test_run_sync_refuses_a_config_it_cannot_read(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

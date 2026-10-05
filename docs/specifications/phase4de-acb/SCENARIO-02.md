@@ -25,7 +25,7 @@ Digit counting (ruled reading chosen): across the WHOLE string, ASCII or Unicode
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_config_test.go` `Test_run_refuses_an_account_number_in_an_accounts_list_masked` — `run` with `sync`, config `accounts.registered = [12345678]`; stdout empty, stderr `quarry: <configShown>: accounts.registered must hold only account ids in quotes, got ****5678 as item 1` + `configFix`, exit 1 (reuse `writeConfig`, `configShown`, `configFix`). Red: stderr shows `12345678`.
+- [x] Step 1: `cmd/quarry/run_config_test.go` `Test_run_refuses_an_account_number_in_an_accounts_list_masked` — `run` with `sync`, config `accounts.registered = [12345678]`; stdout empty, stderr `quarry: <configShown>: accounts.registered must hold only account ids in quotes, got ****5678 as item 1` + `configFix`, exit 1 (reuse `writeConfig`, `configShown`, `configFix`). Red: stderr shows `12345678`.
 
 ### Build
 - [ ] Step 2 (B1): new `internal/platform/accountmask/{doc.go,accountmask.go,accountmask_test.go}` `Mask(s string) string` — exported for S05's unmatched warning. Tests (own package): `Test_Mask_keeps_the_last_four_digits` rows 0/1/4 digits unchanged, 5 digits → `*2345`, 8 → `****5678`, 12 with separators (`1234 5678 9012` → `**** **** 9012`); exact `acct-12345678` and `acct-1` unchanged; each near-miss masked (`Acct-12345678`, `acct-12345678x`, ` acct-12345678`); ruled `RBC 2019 TFSA` unchanged and `RBC 2019 TFSA 5678` → `RBC **** TFSA 5678` (whole-string pin); non-ASCII digits and multibyte runes kept; `Mask(Mask(x)) == Mask(x)`; empty string.
@@ -57,3 +57,10 @@ Digit counting (ruled reading chosen): across the WHOLE string, ASCII or Unicode
 - `got` is raw token text: a quoted `accounts = "acct-12345678"` is not exactly the id (quotes), so it prints `"acct-****5678"`; harmless, pin not needed. A masked non-bare key part renders bare (`accounts.****5678`) because quoting is decided on the original part. Neither has a ruled copy; if product-vision objects, change here only.
 - Do not mask the whole `tree()` message or all of `got`: keep/path/currency refusals and `U+XXXX` text must stay as pinned.
 - Interim S01 tests (`"a"`, `12`, `7`) stay: they now prove short values pass the mask unchanged.
+
+## Phase report
+
+Run A (done). Step 1 ticked.
+- Added `cmd/quarry/run_config_test.go:205-215` `Test_run_refuses_an_account_number_in_an_accounts_list_masked` (config `[accounts]\nregistered = [12345678]\n`, `run sync`). No production code or stubs touched; it compiles as-is.
+- Red, at its stderr assertion (line 214): expected `...got ****5678 as item 1...`, actual `...got 12345678 as item 1...`. Stdout empty and exit 1 already hold.
+- Next run (B1, steps 2-3): `accountmask.Mask` plus the parse.go masking sites. Nothing to undo.
