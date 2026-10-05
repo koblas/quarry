@@ -25,8 +25,8 @@ Inputs read: STATE.md only (no SCENARIO-NN.md opened). Existence found by `go do
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_networth_holdings_warnings_test.go` `Test_run_networth_warns_about_each_holding_it_leaves_out_and_accounts_gives_the_same_lines` — one fixture (past clock `holdingsClock()`; mirror `seedHoldingsStoreWithUnpricedHolding` at `run_holdings_no_price_test.go:28-40`): a brokerage with an unpriced holding, a no-currency security and a EUR security; runs `networth` then `accounts`; asserts the three ruled lines verbatim on stderr (prefix `quarry: warning: `), exit 0, and `accounts` stderr holds the same three lines
-- [ ] Step 2: `internal/store/store.go:197-205,643-649` `UnvaluedHolding` + `NetWorth.Unvalued` + `AccountList.Unvalued` — signature-only; `report.NetWorth.Unvalued`; `document.NetWorthWarnings` / `document.AccountsWarnings` stubs returning nil so the test reddens at its assertion. Fixtures (`report/fakes_test.go:122`, `cli/fakes_test.go:38,102`) need no change: fields only
+- [x] Step 1: `cmd/quarry/run_networth_holdings_warnings_test.go` `Test_run_networth_warns_about_each_holding_it_leaves_out_and_accounts_gives_the_same_lines` — one fixture (past clock `holdingsClock()`; mirror `seedHoldingsStoreWithUnpricedHolding` at `run_holdings_no_price_test.go:28-40`): a brokerage with an unpriced holding, a no-currency security and a EUR security; runs `networth` then `accounts`; asserts the three ruled lines verbatim on stderr (prefix `quarry: warning: `), exit 0, and `accounts` stderr holds the same three lines
+- [x] Step 2: `internal/store/store.go:197-205,643-649` `UnvaluedHolding` + `NetWorth.Unvalued` + `AccountList.Unvalued` — signature-only; `report.NetWorth.Unvalued`; `document.NetWorthWarnings` / `document.AccountsWarnings` stubs returning nil so the test reddens at its assertion. Fixtures (`report/fakes_test.go:122`, `cli/fakes_test.go:38,102`) need no change: fields only
 
 ### Build
 - [ ] Step 3 (batch 1, adapter): `duckstore/schema.go:305-330` extract the `valued` CTE's CASE into `valuedInAccountCurrencySQL()` (behaviour-neutral); `duckstore/networth.go:26-55` second `QueryRows` in the same open: v_holdings x accounts on `date IN (...)`, `reportedAccount`, investment types, value in account currency NULL, ordered; `duckstore/accounts.go:24-55` the same at `current_date`, no counted filter. Tests: `duckstore/unvalued_holdings_test.go` — rows for each arm (unpriced, NULL currency, EUR priced, priced with no rate), `Test_unvalued_holdings_match_the_view_count_per_account_and_day` (per account x date equals `v_balances_daily.holdings_unvalued`, with a valued control), not-in-reports/linked-tracking absent from NetWorth but present in Accounts, past-64-bit unaffected; fault tests: `read_faults_test.go:22-60` rows need a query fault and a scan fault on the **second** query only (extend `spyReadDB` if it lacks fault-on-Nth) for NetWorth and Accounts; empty `Dates` still returns no rows without the query
@@ -55,3 +55,20 @@ Inputs read: STATE.md only (no SCENARIO-NN.md opened). Existence found by `go do
 - `store.Accounts` also serves `resolveAccounts` (every `--account` command): the second query adds cost there; step 8 times it.
 - v_holdings carries a NULL-price row until a price exists; "priced zero" counts as priced (`Price != nil`), as `holdings` does.
 - Warnings 3-5 never fire for a priced holding unvalued only because no rate exists; do not widen the classifier into 14b's lines.
+
+## Phase report
+
+Run A (steps 1-2) done; acceptance red.
+
+Files:
+- `cmd/quarry/run_networth_holdings_warnings_test.go` — acceptance test + `seedLeftOutHoldingsStore`, consts `leftOutNoPriceLine`, `leftOutNoCurrencyLine`, `leftOutOtherCurrencyLine` (reuse in B4 pins).
+- `internal/store/store.go` — `UnvaluedHolding{Date, AccountID, Account, SecurityID, Security string, Currency *string, Priced bool}`, `NetWorth.Unvalued`, `AccountList.Unvalued` (zero-value, nothing fills them yet).
+- `internal/report/networth.go` — `NetWorth.Unvalued []store.UnvaluedHolding`.
+- `internal/report/document/holdings_left_out.go` — `NetWorthWarnings` / `AccountsWarnings` stubs returning nil (doc says never nil: B3 makes it so).
+
+Red (quoted): networth `Not equal: expected: "quarry: warning: \"Brokerage\" holds 1 security with no price on or before 2026-03-12, ...three lines" actual: ""`; then `require.Len` on accounts stderr lines: `"[]" should have 3 item(s), but has 1`.
+
+Decisions B runs must keep:
+- Bare Fund in the fixture has NO price row at all (not "price after the clock"): `accounts` reads the store's real today, so a price dated 2026-03-13 would be valued there and drop its line. Networth line says `on or before 2026-03-12`; accounts line date is the real today, so the test matches it with `\d{4}-\d{2}-\d{2}`, not a literal.
+- Expected order in both commands: no price, no currency, other currency; accounts stderr has exactly these three lines (no other warning fires on this fixture).
+- `Priced bool` (not `Price *int64`) is the classifier input: unpriced = !Priced; no currency = Currency nil; other currency = Priced and Currency not CAD/USD. B1 may change field shape if the scan wants it; update stubs' users then.

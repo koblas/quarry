@@ -40,6 +40,9 @@ type NetWorth struct {
 	AsOf     time.Time
 	Window   *store.Window
 	Currency money.Currency
+
+	// Unvalued is the holdings of the counted accounts, on the days listed, that their balances leave out.
+	Unvalued []store.UnvaluedHolding
 }
 
 // Converted is row's balance in the reporting currency in cents; nil in a native listing and when no

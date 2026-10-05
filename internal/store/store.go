@@ -199,9 +199,21 @@ type NetWorthParams struct {
 	Dates []time.Time
 }
 
-// NetWorth is the v_net_worth rows on the days asked for, in date, type, currency order.
+// NetWorth is the v_net_worth rows on the days asked for, in date, type, currency order, and the holdings of
+// the counted accounts those rows leave out.
 type NetWorth struct {
-	Rows []NetWorthRow
+	Rows     []NetWorthRow
+	Unvalued []UnvaluedHolding
+}
+
+// UnvaluedHolding is a holding of an account on Date that has no value in the account's currency, so the
+// account's balance leaves it out: it has no price, no currency, or a currency other than CAD and USD.
+type UnvaluedHolding struct {
+	Date                 time.Time
+	AccountID, Account   string
+	SecurityID, Security string
+	Currency             *string
+	Priced               bool
 }
 
 // NetWorthRow is one row of v_net_worth: the balance of the counted accounts of one type and currency on one
@@ -643,6 +655,9 @@ type AccountBalance struct {
 type AccountList struct {
 	AsOf     time.Time
 	Accounts []AccountBalance
+
+	// Unvalued is the holdings of Accounts on AsOf that their balances leave out.
+	Unvalued []UnvaluedHolding
 
 	// FirstRate is the date of the store's earliest exchange rate; zero when it holds none.
 	FirstRate time.Time
