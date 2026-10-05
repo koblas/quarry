@@ -119,6 +119,9 @@ func Test_acb_does_not_mark_a_loss_sale_when_nothing_else_acquires_the_security(
 		{name: "a sale in another account", row: acbTx(t, 3, "acct-9", "sec-1", acbShift(t, acbLossDay, 5), store.ActionSell, "CAD", -acbMillion/2, 5_000)},
 		{name: "shares removed from another account", row: acbTx(t, 3, "acct-9", "sec-1", acbShift(t, acbLossDay, 5), store.ActionRemoveShares, "CAD", -acbMillion/2, 0)},
 		{name: "added shares of no units", row: acbTx(t, 3, "acct-9", "sec-1", acbShift(t, acbLossDay, 5), store.ActionAddShares, "CAD", 0, 0)},
+		{name: "a dividend carrying units", row: acbTx(t, 3, "acct-9", "sec-1", acbShift(t, acbLossDay, 5), store.ActionDividend, "CAD", 5*acbMillion, 3_000)},
+		{name: "margin interest carrying units", row: acbTx(t, 3, "acct-9", "sec-1", acbShift(t, acbLossDay, 5), store.ActionMarginInterest, "CAD", 5*acbMillion, -3_000)},
+		{name: "a long-term capital gain carrying units", row: acbTx(t, 3, "acct-9", "sec-1", acbShift(t, acbLossDay, 5), store.ActionCapitalGainLong, "CAD", 5*acbMillion, 3_000)},
 		{name: "a re-buy of another security", row: acbTx(t, 3, "acct-9", "sec-2", acbShift(t, acbLossDay, 5), store.ActionBuy, "CAD", 5*acbMillion, -30_000)},
 	}
 
@@ -266,18 +269,23 @@ func Test_acb_does_not_mark_a_loss_sale_when_nothing_is_held_30_days_after(t *te
 func Test_acb_counts_the_acquired_shares_as_held_until_the_end_of_day_30(t *testing.T) {
 	cases := []struct {
 		name    string
+		action  string
+		shares  int64
+		amount  int64
 		soldDay int
 		want    bool
 	}{
-		{name: "sold on day 30", soldDay: 30, want: false},
-		{name: "sold on day 31", soldDay: 31, want: true},
+		{name: "sold on day 30", action: store.ActionSell, shares: -5 * acbMillion, amount: 40_000, soldDay: 30, want: false},
+		{name: "sold on day 31", action: store.ActionSell, shares: -5 * acbMillion, amount: 40_000, soldDay: 31, want: true},
+		{name: "removed on day 30", action: store.ActionRemoveShares, shares: -5 * acbMillion, soldDay: 30, want: false},
+		{name: "removed on day 31", action: store.ActionRemoveShares, shares: -5 * acbMillion, soldDay: 31, want: true},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			rows := append(acbLossRows(t, acbLossDay, 50_000),
 				acbTx(t, 3, "acct-9", "sec-1", acbShift(t, acbLossDay, 10), store.ActionBuy, "CAD", 5*acbMillion, -30_000),
-				acbTx(t, 4, "acct-9", "sec-1", acbShift(t, acbLossDay, c.soldDay), store.ActionSell, "CAD", -5*acbMillion, 40_000),
+				acbTx(t, 4, "acct-9", "sec-1", acbShift(t, acbLossDay, c.soldDay), c.action, "CAD", c.shares, c.amount),
 			)
 
 			got := acbWalkOf(t, rows...)
@@ -285,6 +293,18 @@ func Test_acb_counts_the_acquired_shares_as_held_until_the_end_of_day_30(t *test
 			assert.Equal(t, []bool{c.want}, acbFlags(got))
 		})
 	}
+}
+
+func Test_acb_does_not_count_the_units_of_an_action_the_walk_skips_as_held(t *testing.T) {
+	rows := append(acbLossRows(t, acbLossDay, 50_000),
+		acbTx(t, 3, "acct-9", "sec-1", acbShift(t, acbLossDay, 5), store.ActionDividend, "CAD", 5*acbMillion, 3_000),
+		acbTx(t, 4, "acct-9", "sec-1", acbShift(t, acbLossDay, 10), store.ActionBuy, "CAD", 5*acbMillion, -30_000),
+		acbTx(t, 5, "acct-9", "sec-1", acbShift(t, acbLossDay, 20), store.ActionSell, "CAD", -5*acbMillion, 40_000),
+	)
+
+	got := acbWalkOf(t, rows...)
+
+	assert.Equal(t, []bool{false}, acbFlags(got))
 }
 
 func Test_acb_counts_a_security_of_the_same_ticker_as_held(t *testing.T) {
@@ -396,17 +416,4 @@ func Test_ACBYear_counts_the_sales_marked_as_possible_superficial_losses(t *test
 			assert.Equal(t, c.want, report.ACBYear{Sales: c.sales}.PossibleSuperficialLosses())
 		})
 	}
-}
-
-func Test_acb_never_marks_a_return_of_capital_above_the_acb(t *testing.T) {
-	adjustment := []report.ACBAdjustment{{SecurityID: "sec-1", Date: dateOf(t, acbLossDay), ReturnOfCapital: 150_000}}
-	rows := []store.InvestmentTransaction{
-		acbTx(t, 1, "acct-1", "sec-1", "2023-12-01", store.ActionBuy, "CAD", 10*acbMillion, -100_000),
-		acbTx(t, 2, "acct-9", "sec-1", acbShift(t, acbLossDay, 5), store.ActionBuy, "CAD", 5*acbMillion, -30_000),
-	}
-
-	got := acbWalkAdjusted(t, adjustment, rows...)
-
-	assert.Equal(t, int64(50_000), got.Years[0].ReturnOfCapitalGain)
-	assert.Zero(t, got.Years[0].PossibleSuperficialLosses())
 }

@@ -1,9 +1,7 @@
 package report
 
 import (
-	"cmp"
 	"math/big"
-	"slices"
 	"time"
 
 	"github.com/koblas/quarry/internal/store"
@@ -12,9 +10,8 @@ import (
 // superficialWindowDays is the days before and after a loss within which an acquisition may make it superficial.
 const superficialWindowDays = 30
 
-// markSuperficialLosses sets PossibleSuperficialLoss on each sale at a loss when the security (or one with the
-// same ticker) was acquired within 30 days either side of it in any account of history, registered included, and
-// is still held at the end of the 30th day after. A loss is marked, never adjusted; rows after today are ignored.
+// markSuperficialLosses marks each sale at a loss that the security, or one of its ticker, was acquired near and
+// is still held after, in any account. A loss is marked, never adjusted.
 func markSuperficialLosses(sales []acbSale, history store.InvestmentHistory, today time.Time) {
 	index := newSuperficialIndex(history, today)
 	for i := range sales {
@@ -43,11 +40,6 @@ func newSuperficialIndex(history store.InvestmentHistory, today time.Time) super
 			continue
 		}
 		index.byID[*tx.SecurityID] = append(index.byID[*tx.SecurityID], tx)
-	}
-	for _, txs := range index.byID {
-		slices.SortStableFunc(txs, func(a, b store.InvestmentTransaction) int {
-			return cmp.Or(a.Date.Compare(b.Date), cmp.Compare(a.SourceID, b.SourceID))
-		})
 	}
 	for _, security := range history.Securities {
 		if security.Ticker != nil && *security.Ticker != "" {
@@ -85,7 +77,7 @@ func (x superficialIndex) group(id string) []string {
 func (x superficialIndex) acquiredBetween(ids []string, from, to time.Time) bool {
 	for _, id := range ids {
 		for _, tx := range x.byID[id] {
-			if acbTiers[tx.Action] == acbAcquisition && units(tx.Shares).Sign() > 0 && !tx.Date.Before(from) && !tx.Date.After(to) {
+			if isAcquisition(tx.Action) && units(tx.Shares).Sign() > 0 && !tx.Date.Before(from) && !tx.Date.After(to) {
 				return true
 			}
 		}
@@ -94,13 +86,15 @@ func (x superficialIndex) acquiredBetween(ids []string, from, to time.Time) bool
 	return false
 }
 
-// heldAt is whether any holding of ids, an account's own units of one security, is above nothing at the end of
-// day. A holding counts its stored (signed) shares, each split row in its own account scaling that account's
-// count, and is rounded to millionths; a holding below nothing never cancels one above.
+// heldAt is whether any account's holding of ids, its walked actions' signed shares and own splits, is above
+// nothing at the end of day.
 func (x superficialIndex) heldAt(ids []string, day time.Time) bool {
 	for _, id := range ids {
 		counts := make(map[string]*big.Rat)
 		for _, tx := range x.byID[id] {
+			if _, walked := acbTiers[tx.Action]; !walked {
+				continue
+			}
 			if tx.Date.After(day) {
 				break
 			}
@@ -123,6 +117,13 @@ func (x superficialIndex) heldAt(ids []string, day time.Time) bool {
 	}
 
 	return false
+}
+
+// isAcquisition is whether action is one the walk puts in the acquisition tier; an action it skips is none.
+func isAcquisition(action string) bool {
+	tier, walked := acbTiers[action]
+
+	return walked && tier == acbAcquisition
 }
 
 // splitShares multiplies count by newShares over oldShares.

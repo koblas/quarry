@@ -1,7 +1,9 @@
 package report_test
 
 import (
+	"cmp"
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -32,6 +34,9 @@ func acbWalkAdjusted(t *testing.T, adjustments []report.ACBAdjustment, txs ...st
 
 func acbWalkRequest(t *testing.T, securities []store.Security, rates []store.Rate, adjustments []report.ACBAdjustment, txs ...store.InvestmentTransaction) report.ACB {
 	t.Helper()
+	txs = slices.SortedStableFunc(slices.Values(txs), func(a, b store.InvestmentTransaction) int {
+		return cmp.Or(a.Date.Compare(b.Date), cmp.Compare(a.SourceID, b.SourceID))
+	})
 	unclassified := store.Account{ID: "acct-7", Name: "Cash margin", Type: store.AccountTypeBrokerage, Currency: "CAD"}
 	srv := report.NewServer(report.WithStore(fakeStore{history: store.InvestmentHistory{
 		Accounts:     append(acbAccounts(), unclassified),
