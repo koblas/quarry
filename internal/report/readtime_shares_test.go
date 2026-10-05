@@ -145,7 +145,10 @@ func Test_findings_describes_shares_without_cost_by_one_item_with_the_accounts_c
 		Date: time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC), AccountID: "acct-1", Account: "Margin", Currency: "CAD",
 		InvestmentTransactionID: new("itxn-7"), SecurityID: new(xeqtID), Security: "XEQT", Shares: oneAndHalf,
 	}}, listed.Items)
-	assert.Equal(t, []any{finding.StatusOpen, true, false, false}, []any{listed.Status, listed.FirstFoundAt.IsZero(), listed.New, listed.NewlyFixed})
+	assert.Equal(t, finding.StatusOpen, listed.Status, "status")
+	assert.True(t, listed.FirstFoundAt.IsZero(), "first found at is unset")
+	assert.False(t, listed.New, "new")
+	assert.False(t, listed.NewlyFixed, "newly fixed")
 }
 
 func Test_findings_sorts_shares_without_cost_newest_date_first_then_id(t *testing.T) {
@@ -225,4 +228,13 @@ func Test_count_findings_counts_the_shares_without_cost_in_the_status_investment
 	got := report.CountFindings(st, []string{"shares-without-cost:itxn-2"}, nonRegistered())
 
 	assert.Equal(t, finding.Counts{Open: 1, Ignored: 1}, got)
+}
+
+func Test_count_findings_counts_no_shares_without_cost_when_the_classification_is_empty(t *testing.T) {
+	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, noCostAdd("itxn-1", "acct-1", 1))
+	st := store.Status{Accounts: list.Accounts, Investments: list.Investments}
+
+	got := report.CountFindings(st, []string{"unclassified-account:acct-1"}, report.Classification{})
+
+	assert.Equal(t, finding.Counts{Ignored: 1}, got)
 }

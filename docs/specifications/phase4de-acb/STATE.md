@@ -1,6 +1,6 @@
 # phase4de-acb — current state
 
-Scenarios complete: SCENARIO-01..07, 08a, 08b, 09, 10, 11, 12, 13a, 13b (03 folded into 05, 09 into 08a). Last updated by SCENARIO-13b.
+Scenarios complete: SCENARIO-01..07, 08a, 08b, 09, 10, 11, 12, 13a, 13b (03 folded into 05, 09 into 08a). Last updated by SCENARIO-13b (checkpoint fix).
 
 ## Binding decisions
 - `report.Classification{Registered, NonRegistered []string}` is passed INTO `(*report.Server).Accounts`, `FindingsRequest.Classification` and `CountFindings`; `report` owns the rule via `Classification.Of(store.Account) *bool` (true registered / false non-registered / nil neither) and `Classification.Unclassified(a)` (investment type, in neither list) (SCENARIO-01, 04, 05)
@@ -89,7 +89,7 @@ Scenarios complete: SCENARIO-01..07, 08a, 08b, 09, 10, 11, 12, 13a, 13b (03 fold
 - Slot-4 order comes from the walk's security sort, not a sort in `noCostWarnings`; S15's `--year` cut must build warnings from the UNCUT report or warning 4 vanishes for a security unsold that year (SCENARIO-13a)
 
 ## Open debts
-- Final product-vision pass (SCENARIO-13b): `findings` Long's opening paragraph (`internal/cli/findings.go:27`) still says "findings it no longer finds are marked fixed", untrue for read-time types (shares-without-cost, and unclassified-account before it); the ruling listed only SKILL.md:70 and findings.md:27, both fixed. Rule the Long wording and re-pin `internal/cli/findings_test.go` whole-Long.
+- Final product-vision pass (SCENARIO-13b): `internal/mcp/tools.go:76-79` `dataQualityDescription` lists finding kinds without unclassified-account and shares-without-cost (pinned at `cmd/quarry/run_mcp_descriptions_test.go` ~:50-56); its copy needs a ruling, then re-pin both.
 - S13a checkpoint MINORs: `internal/report/acb_unknown_cost_test.go:194-217` no remove_shares-outside-span control (an always-true UnknownCost on the remove arm survives) — S16 must add it before exposing the removal mark; `cmd/quarry/run_acb_unknown_cost_test.go:140-158` sold-out/re-bought edge row pinned in text only, `--json` cell (unknown_cost_sales 1, sales unknown_cost [true,false], incomplete false) unpinned; NIT `acb_unknown_cost_test.go:90` case name says sale first, tier puts add first.
 - S13a warning-4 ruling (pins re-asserted by S13a): warning 4b names `quarry acb --security <id>`: at S16 (or final pass) run it literally on a 4b fixture and confirm it lists the reinvest events, exit 0. S21: report count of reinvests with NULL cost_basis and non-zero amount; any → new scenario.
 - `years[]` pins: default (`document/acb_test.go:83`) and the RD-before-ROC tier pin are done (S11). STILL OWED: S15's `--year` pin and S19's MCP `years[]` pin must assert `return_of_capital_gain` right after `gain`, `"0.00"` when none.

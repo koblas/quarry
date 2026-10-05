@@ -66,3 +66,23 @@ Ignore a finding by adding its id to findings.ignore in %s; see quarry findings 
 	assert.Equal(t, 0, typeExit, stderr.String())
 	assert.Empty(t, stderr.String())
 }
+
+func Test_run_status_json_counts_an_ignored_shares_without_cost_as_ignored(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	b := v9fixture.NewBuilder()
+	marginPK := b.Account(v9fixture.AccountRow{Name: "Questrade Margin", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	xeqtPK := b.Security(v9fixture.SecurityRow{Name: "XEQT", Ticker: "XEQT", Currency: "CAD"})
+	positionPK := b.Position(v9fixture.PositionRow{Account: marginPK, Security: xeqtPK})
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	addPK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: marginPK, Position: positionPK, PostedDate: &day, Type: new(int64(2)), Amount: "0", Units: "5"})
+	b.Entry(v9fixture.EntryRow{Parent: addPK, Amount: "0"})
+	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "5"})
+	writeConfig(t, home, fmt.Sprintf("[accounts]\nnon-registered = [\"acct-%d\"]\n[findings]\nignore = [\"shares-without-cost:itxn-%d\"]\n", marginPK, addPK))
+	syncFindingsBundleIn(t, home, "Documents", b)
+
+	got := statusFindings(t)
+
+	require.NotNil(t, got.Findings.Ignored)
+	assert.Equal(t, []int{0, 1}, []int{got.Findings.Open, *got.Findings.Ignored})
+}

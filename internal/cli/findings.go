@@ -24,7 +24,8 @@ func newFindingsCommand(newReport ReportFactory, loadConfig ConfigLoader, jsonOu
 		Long: `List the problems sync found in the Quicken data, as a worklist to fix in
 Quicken; quarry never changes the data itself. Each finding names what it
 is about and what to change. After you fix them in Quicken, run quarry
-sync: findings it no longer finds are marked fixed.
+sync: findings it no longer finds leave the list, and are marked fixed
+unless noted below.
 
 quarry looks for:
   duplicate             two transactions in one account with the same

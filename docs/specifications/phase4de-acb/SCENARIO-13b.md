@@ -8,7 +8,7 @@ status: done
 Cadence: code-first (no bug fix, write-safety guard or atomic adapter touched)
 Acceptance test: `cmd/quarry/run_findings_shares_without_cost_test.go` `Test_run_findings_lists_shares_added_with_no_cost_as_status_sync_and_mcp_count_them`
 Narrow loop: `go test ./internal/report/... ./internal/store/... ./internal/importer/ ./internal/snapshot/ ./internal/cli/ ./internal/finding/ ./cmd/quarry/ -run '(?i)shares.?without|no.?cost|readtime|read_time|findings|status'`
-Mutation checks: `c.Of(a)` non-registered test in the detector → `Test_findings_lists_shares_without_cost_only_in_a_non_registered_account`; add_shares-only action test → `Test_findings_does_not_list_a_reinvest_with_no_cost`; `noCostAcquisition(tx)` replaced by `tx.CostBasis == nil` → `Test_findings_does_not_list_an_add_that_moves_no_units`
+Mutation checks: `c.Of(a)` non-registered test in the detector → `Test_findings_lists_shares_without_cost_only_in_a_non_registered_account`; add_shares-only action test → `Test_findings_does_not_list_a_reinvest_with_no_cost`; `noCostAcquisition(tx)` replaced by `tx.CostBasis == nil` → `Test_findings_does_not_list_an_add_of_zero_or_negative_units` and `Test_findings_does_not_list_an_add_with_no_unit_count`
 Runs: A (1-2) | B1 (3-5) | B2 (6) | V (7-8)
 Size: OWNS A RUN, 4 batches, 1 feature package (report). `finding`, the duckstore adapter, the one importer `Result` field and the snapshot call site are plumbing under the sizing note, as in S05.
 

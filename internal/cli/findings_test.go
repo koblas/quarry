@@ -43,7 +43,8 @@ func Test_findings_help_says_what_findings_lists_and_how_to_ignore_one(t *testin
 	const long = `List the problems sync found in the Quicken data, as a worklist to fix in
 Quicken; quarry never changes the data itself. Each finding names what it
 is about and what to change. After you fix them in Quicken, run quarry
-sync: findings it no longer finds are marked fixed.
+sync: findings it no longer finds leave the list, and are marked fixed
+unless noted below.
 
 quarry looks for:
   duplicate             two transactions in one account with the same

@@ -150,9 +150,10 @@ const (
 const (
 	querySQLDescription       = "One read-only SQL statement in DuckDB's dialect over quarry's tables and views; describe_schema lists them."
 	queryLimitDescription     = "Most rows to return, 1 to 500. Defaults to 500."
-	findingsStatusDescription = "Which findings to list: open (the default), ignored (the user listed the id in findings.ignore), fixed (no longer found since a later sync), or all."
-	findingsTypeDescription   = "List only findings of this type. Omit it to list every type."
-	findingsLimitDescription  = "Most findings to return, 1 to 500. Defaults to 50. counts always covers every finding, and each finding lists at most 25 items."
+	findingsStatusDescription = "Which findings to list: open (the default), ignored (the user listed the id in findings.ignore), fixed (no longer found since a later sync; " +
+		"never unclassified-account or shares-without-cost, which just leave the list), or all."
+	findingsTypeDescription  = "List only findings of this type. Omit it to list every type."
+	findingsLimitDescription = "Most findings to return, 1 to 500. Defaults to 50. counts always covers every finding, and each finding lists at most 25 items."
 )
 
 // The descriptions of the parameters spending shares with the other report tools.

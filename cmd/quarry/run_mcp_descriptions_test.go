@@ -206,7 +206,8 @@ const (
 		"type": "object",
 		"properties": {
 			"status": {"type": "string", "enum": ["open", "ignored", "fixed", "all"], "default": "open",
-				"description": "Which findings to list: open (the default), ignored (the user listed the id in findings.ignore), fixed (no longer found since a later sync), or all."},
+				"description": "Which findings to list: open (the default), ignored (the user listed the id in findings.ignore), fixed (no longer found since a later sync; ` +
+		`never unclassified-account or shares-without-cost, which just leave the list), or all."},
 			"type":   {"type": "string", "enum": [
 				"duplicate", "one-sided-transfer", "unlinked-transfer", "uncategorized",
 				"mixed-categories", "payee-variants", "similar-categories", "unused-category", "unclassified-account",
