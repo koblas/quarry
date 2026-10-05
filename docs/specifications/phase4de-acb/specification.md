@@ -204,6 +204,7 @@ User decisions (2026-10-05): F1 superficial loss = mark + warning in `acb`, NOT 
 - Orchestrator rulings 2026-10-05 (SCENARIO-11 plan defaults): (1) adjustment event `cad` follows the column's cash-flow sign: return of capital +amount (cash to you), reinvested distribution −amount (like a reinvest/buy); `internal/report/document/acb_test.go:189` fixture flips to `CAD: 250`. (2) adjustments dated after today are dropped with no warning, as transactions are. (3) three or more items on one security+date: each later item pairs with the first, warning printed at the later item's position. (4) a repeat whose items are both skipped (unknown/not held) gets no repeat warning; each keeps its own line. (5) warning 8 `<x>` is thousands-grouped, 2 decimals, like the year suffix.
 - Orchestrator rulings 2026-10-05 (SCENARIO-12 plan defaults): warning 3 is one line for the report, N = every marked sale, `<years>` distinct ascending ", "-joined; "other than the shares sold" is per-row (any qualifying acquisition row in the window counts, even one whose units were the ones sold — over-flagging a *possible* loss is the safe side; CRA min(acquired, sold, held)/sold denies the whole loss); window still open (day +30 after today): rows after today ignored, held measured at the earlier of day +30 and today; held = some (account, security) holding > 0 at that point, signed shares, each account's own split rows, millionths, a negative holding never cancels a positive one; a reinvested-distribution adjustment is not an acquisition; a same-day re-buy counts, a sell/remove never does; break-even (gain 0) not marked; same ticker = exact case-sensitive match on a non-empty ticker (binding for S14 warning 7); report keeps its own per-holding count mirroring duckstore.holdingSpans (no store change; S21 cross-checks it).
 - Unknown cost (product-vision ruling 2026-10-05, S13a): a no-cost acquisition is a non-registered add_shares or reinvest_dividend with shares > 0 and NULL cost_basis (units > 0 for reinvests too: orchestrator 2026-10-05). A security's pool is on unknown cost from its first no-cost acquisition until its pool shares next reach 0 (sell-out clears it; a later no-cost acquisition opens a new span). Every sale and remove_shares while on unknown cost is marked (same-day sale after the acquisition included): `sales[].unknown_cost`, `years[].unknown_cost_sales`, year suffix via humanize.Count `sale of shares with unknown cost`/`sales of shares with unknown cost`, `--year` row suffix `unknown cost`. Position `incomplete` (no-cost cause) = on unknown cost today. Unknown-cost sales stay in year totals. Marks stack with superficial-loss marks in the ruled suffix order (`possible superficial loss, unknown cost` on `--year` rows); JSON booleans independent.
+- Oversold disposition and short cover: see RULING-S22.md (product-vision ruling 2026-10-05, S22) — supersedes "an oversell resets the pool" and the unknown-cost span end ("reach 0 or below").
 - ROC above ACB: ACB → 0.00, excess is a capital gain on that date (ITA s.40(3)), warning 8, computed after all of that date's reinvested distributions for the security; the excess enters the year's `return_of_capital_gain` (S11 ruling).
 - Pool by security_id; same-ticker securities in the pool → warning 7; superficial-loss detection treats same-ticker as identical.
 - Worksheet, not a filing.
@@ -521,6 +522,16 @@ Feature: Registered-account classification and ACB
     Given copies of the user's snapshot and store in a scratch HOME with the accounts classified
     When quarry sync and quarry acb run
     Then the reference assertions hold and every ACB difference from Quicken's lots has a stated reason
+  Scenario: SCENARIO-22 A sale of more shares than the accounts held leaves a short the next buy covers
+    Given a non-registered account bought 100 shares of "Money Fund" for 100.00 CAD on 2017-01-03
+    And it sold 110 shares for 110.00 CAD on 2017-01-12
+    And it bought 15 shares for 15.00 CAD on 2017-01-30
+    When the user runs `quarry acb --json`
+    Then the 2017 sale has acb "100.00", gain "10.00" and unknown_cost true, and 2017 unknown_cost_sales is 1
+    And its sell event has shares_held "-10" and acb "0.00", and the 2017-01-30 buy event has shares_held "5" and acb "5.00"
+    And "Money Fund" is listed with shares "5", acb "5.00", incomplete false
+    And stderr carries warning 10a for the sale, and the exit code is 0
+
 ```
 
 ---
@@ -554,6 +565,7 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 | SCENARIO-19 | OWNS A RUN (sonnet), 3 batches, mcp (5–6 ruled lines > light-lane limit; 4c S17 precedent). Warnings from the full report before the cut. Owns SKILL §9 + `mcp --help` Tools line, conventions sentence 2 + hand copies + schema.md. |
 | SCENARIO-20 | FOLD into 17 (acceptance = the classify-first trigger drift pin); other doc lines go to their owners. |
 | SCENARIO-21 | No architect/developer: orchestrator reference check; a rule gap becomes a new scenario built before the gate. |
+| SCENARIO-22 | OWNS A RUN (sonnet), appended 2026-10-05 from the SCENARIO-21 reference check (rule gap: pooled oversell covered by a later buy); report walk + warning 10a/10b; rule in RULING-S22.md. Built before the gate; SCENARIO-21 re-runs after it. |
 
 **Copy ownership (Changes to existing surfaces):** Part A — findings Long paragraph + TOML → 04; `--csv` help → 04 (Part A), 13b writes the final Part B form; findings.md first line → 04; SKILL frontmatter fragment → 08b (one owner for the description line); SKILL §6 + findings.md mirror → 17; "Classifying accounts" → 17 (04's bullet reference dangles until 17, by design); schema.md registered sentence → 01. Part B — SKILL description/§7/PRD → 08b; SKILL §4, §6 acb.adjustment allowance, trigger + examples → 17; SKILL §9 + `mcp --help` → 19; `--type` + Long row for shares-without-cost → 13b; conventions sentence 1 → 06, sentence 2 → 19.
 
@@ -591,3 +603,4 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 SCENARIO-21 is run by the orchestrator after SCENARIO-19 and before the gate, on a scratch HOME holding copies of the newest snapshot and the store, with the accounts classified. Results go in `REFERENCE-CHECK.md`.
 
 - [ ] SCENARIO-21: Reference check on the real Quicken file
+- [ ] SCENARIO-22: A sale of more shares than the accounts held leaves a short the next buy covers
