@@ -9,6 +9,7 @@
 | SCENARIO-06 | code-first | A, B1, B2, V | 0/1/1/0 | yes (cash/balance before first transaction unpinned — coalesce arm; fold: comment trim) |
 | SCENARIO-07 (+08) | code-first | A, B1, B2, V | 0/1/3/0 | no (MAJOR was an unrecorded timing result B1 had measured — orchestrator recorded it in STATE; MINOR → STATE.md) |
 | SCENARIO-09 (+18) | code-first | A, B1, B2, V | 0/1/2/0 | yes (no investment account with holdings in v_net_worth — sum(cash) mutant survived; folds: both-flags case, plan file damaged by V restored) |
+| SCENARIO-10 (+13) | code-first | A, B1 (did 3-7), V | 0/0/5/1 | no (MINOR → STATE.md) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
