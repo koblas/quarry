@@ -17,7 +17,7 @@ Size: OWNS A RUN — 3 batches, `internal/report` (+ `document`) over `store` / 
 Surface already surveyed (no new port): `Store.NetWorth` is the one read; implementers are `duckstore.(*Store).NetWorth` (`networth.go:29`) and `report` `fakeStore` (`fakes_test.go:122`); a new field on `store.NetWorth` touches neither signature. `Server.NetWorth` copies read fields at `report/networth.go:72-88`. `cli/networth.go:70` already calls `document.NetWorthWarnings`; no RunE change (parsing stays before `openReport`).
 
 ### Acceptance (red)
-- [ ] Step 1: new `cmd/quarry/run_networth_rates_test.go` `Test_run_networth_warns_when_a_usd_balance_has_no_exchange_rate_and_totals_it_apart` — `seedNetWorthStore` (`run_networth_test.go:26`, first rate Mar 10), `networth --as-of 2026-03-05` at `holdingsClock()`: stdout rows show `no rate` in In, CAD In total, then a `Total  USD` row (Currency/Balance cells filled, In blank); stderr is the one before-first-rate line (`USD balances on 2026-03-05, before 2026-03-10, ...`); exit 0. No stubs needed (command-slice only). Must fail at the stdout assertion.
+- [x] Step 1: new `cmd/quarry/run_networth_rates_test.go` `Test_run_networth_warns_when_a_usd_balance_has_no_exchange_rate_and_totals_it_apart` — `seedNetWorthStore` (`run_networth_test.go:26`, first rate Mar 10), `networth --as-of 2026-03-05` at `holdingsClock()`: stdout rows show `no rate` in In, CAD In total, then a `Total  USD` row (Currency/Balance cells filled, In blank); stderr is the one before-first-rate line (`USD balances on 2026-03-05, before 2026-03-10, ...`); exit 0. No stubs needed (command-slice only). Must fail at the stdout assertion.
 
 ### Build
 - [ ] Step 2 (B1): `store/store.go:~650-665` `store.NetWorth` + `duckstore/networth.go:29-75` — add `FirstRate time.Time` read in the same `openRead` via `firstRate(ctx, db)` (`charges.go:75`, `Holdings` pattern `holdings.go:57-62`), after the unvalued query, `openFault` on error; zero when no rates; empty-`Dates` early return stays. Tests in `net_worth_read_test.go`: first rate read / zero without rates; fault: `read_faults_test.go:44` NetWorth row must reach the new call (inject failure on that query, same error shape as the other `rowReads`).
@@ -53,3 +53,12 @@ Surface already surveyed (no new port): `Store.NetWorth` is the one read; implem
 - `report/networth_test.go:104` and `render_networth_internal_test.go:63,171` pin the interim blank; they must change, not be deleted.
 - Copy for a ruling at the final product-vision pass: history N=1 reads "on 1 month end before" (singular noun, plural verb); the mixed-cell rule above.
 - Hand-built `report.NetWorth` values in renderer tests carry `Totals` directly; set `FirstRate`/rows consistently or `NeedsRate` and `Totals` disagree.
+
+## Phase report
+
+Run A (done). Added `cmd/quarry/run_networth_rates_test.go`: const `netWorthBeforeFirstRateLine`, helper `netWorthNoRateLine` (netWorthLine with trailing spaces trimmed, for a blank In cell), and the acceptance test. No production code or stubs.
+
+Red (both assertions, expected reasons; fixture numbers verified by the actual output): stderr expected the `USD balances on 2026-03-05, before 2026-03-10, ...` warning line, got `""`; stdout got blank In cells for brokerage/chequing USD, no `Total USD  1,720.00` row (CAD In total 774.50 already right).
+
+For B runs: reuse `netWorthBeforeFirstRateLine` and `netWorthNoRateLine` from this file for the other cmd cells (step 6 tests go in this same file). Seed is `seedNetWorthStore` (first rate Mar 10, USD rows 920.00 brokerage + 800.00 chequing on Mar 5).
+
