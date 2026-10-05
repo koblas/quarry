@@ -44,7 +44,7 @@ func Test_networth_refuses_an_as_of_it_cannot_use_before_opening_the_store(t *te
 
 			err := cli.Execute(t.Context(), append([]string{"networth"}, c.args...), refusedEnv(&stdout, &stderr))
 
-			assert.EqualError(t, err, c.want)
+			require.EqualError(t, err, c.want)
 			assert.Empty(t, stdout.String())
 		})
 	}

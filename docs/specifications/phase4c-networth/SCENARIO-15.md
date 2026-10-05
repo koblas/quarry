@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-15
-status: open
+status: done
 ---
 
 # SCENARIO-15: Net worth refuses impossible dates (absorbs SCENARIO-11, net worth on a past day)
@@ -26,10 +26,10 @@ Source read: STATE.md (binding), no prior SCENARIO files. Surface: `go doc`/Read
 - [x] Step 4: `internal/cli/networth.go:12-82` — `--as-of` flag with Surface & Copy help verbatim (placeholder `date`); RunE: conflict check first (any of `--as-of` Changed with `--since`/`--until` Changed → `UsageError`, ruled line), then `ResolveAsOf` (given-pointer like `holdings.go:44-48`; `--as-of ""` is given and not a date) into `request.AsOf` with nil `Window`; all before `openReport`. Delete the S12 interim: `render_networth_history.go:76-88` `netWorthHistoryCaption` window fallback (caption always from first/last listed month end), `render_networth_internal_test.go:215-230`, `run_networth_history_test.go:177-203` (both since-after-today tests, superseded by acceptance (a)). Add the `--as-of` help line to `run_networth_surfaces_test.go:48-52` (verbatim, wrapped as cobra prints it); `internal/cli/networth_test.go`: conflict/bad-value refused with `refusedEnv` (UsageError, store never opened). Spec `specification.md:191` interim bullet: drop the "(interim ...)" clause. SKILL row (same batch, tiny): `plugin/skills/quarry/SKILL.md:46-47` add `| Net worth today, on a day, or by month | \`quarry networth [--as-of <d> \| --since <d>] --json\` |` verbatim after the Account balances row; drift test `run_skill_drift_test.go:290` must see both flags (run it, and verify it reddens if `--as-of` is removed from the command, as the control).
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `AsOfError` noun, new kind, `ParseMonthEndWindow`; `golangci-lint`'s exhaustive linter lists any switch missing the new kind.
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `AsOfError` noun, new kind, `ParseMonthEndWindow`; `golangci-lint`'s exhaustive linter lists any switch missing the new kind.
 
 ### Verify
-- [ ] Step 6: full verification (`agent-briefs.md` → Verification) + `.claude/scripts/spec-check.py phase4c-networth`; tick SCENARIO-15 and SCENARIO-11 (line for 11: "delivered by SCENARIO-15" before its test ref, test ref last); rewrite STATE.md (drop the S15 Left-unbuilt items and the empty-caption open debt; trap 27's "since after today is accepted" is now false); `status: done`.
+- [x] Step 6: full verification (`agent-briefs.md` → Verification) + `.claude/scripts/spec-check.py phase4c-networth`; tick SCENARIO-15 and SCENARIO-11 (line for 11: "delivered by SCENARIO-15" before its test ref, test ref last); rewrite STATE.md (drop the S15 Left-unbuilt items and the empty-caption open debt; trap 27's "since after today is accepted" is now false); `status: done`.
 
 ## Handoff
 
@@ -51,11 +51,6 @@ Source read: STATE.md (binding), no prior SCENARIO files. Surface: `go doc`/Read
 
 ## Phase report
 
-Run B1 (done, steps 2-4). Both acceptance tests and `Test_run_networth_json_as_of_sets_the_day_and_leaves_since_and_until_null` are green; the hand-computed seed figures (3,133.00 / 920.00 / 1,125.00 / 1,088.00) were right, no seed change.
-- `internal/report/asof.go`: `AsOfError.Noun`, consts `HoldingsNoun` ("holdings are") / `NetWorthNoun` ("net worth is"); `ResolveAsOf(value, noun, now)`, `ParseAsOf(value, noun, now)`. Callers: `cli/holdings.go:48`, `mcp/holdings.go:20` pass `HoldingsNoun`; `mcp/holdings.go` `asOfWording` untouched.
-- `internal/report/window.go`: kind `WindowNetWorthSinceAfterToday`, raised in `ParseMonthEndWindow` after the since-after-until and until-before-default arms; `ParseMonthEndWindow` doc rewritten. `internal/mcp/window.go` has the case.
-- `internal/cli/networth.go`: `--as-of` flag (Surface & Copy help verbatim), const `netWorthAsOfConflict`; RunE order: currency, conflict, `ResolveAsOf`, window parse, `openReport`. `render_networth_history.go` caption now always from first/last listed date (indexes `Dates[0]`: a history is never empty from the CLI).
-- Deleted: caption empty-window test (`render_networth_internal_test.go`), both since-after-today tests (`run_networth_history_test.go`). Spec `specification.md` copy ruling bullet no longer says interim. SKILL.md row added after Account balances; `run_skill_text_test.go` pins the new row (not in plan, fixed because it reddened).
-- Tests added: `asof_test.go` (noun wording x2, not-a-date noun-free), `window_test.go` (refuses since after today x4 rows, accepts today/month/year, precedence vs since-after-until), `mcp/window_internal_test.go` row, `internal/cli/networth_test.go` `Test_networth_refuses_an_as_of_it_cannot_use_before_opening_the_store` (5 rows, `refusedEnv`), `run_networth_surfaces_test.go` `--as-of` help line.
-- Mutations (all restored, byte-identical): hoist `openReport` before the parse reddens all 5 rows of the cli refusal test but NOT the cmd acceptance table (cmd `openReport` succeeds on an empty HOME; the store read is what fails there); `since.After(Until)` for `since.After(today)` reddens `..._refuses_a_since_after_today/with_a_later_until`; hard-coded noun reddens `Test_run_holdings_refuses_a_date_it_cannot_use`; conflict disabled reddens 4 acceptance rows; `--as-of` renamed reddens `Test_every_quarry_name_the_skill_uses_exists` ("unknown flag --as-of for quarry networth").
-Next: V (steps 5-6): lint to 0 issues (check `netWorthHistoryOf` and other helpers for leftovers), full verification, tick SCENARIO-15 and folded SCENARIO-11, STATE.md rewrite.
+Run V (done, steps 5-6). Lint fixed one finding (`internal/cli/networth_test.go:47` `assert.EqualError` -> `require.EqualError`, testifylint); no unused helpers left behind by the interim deletions (unused linter clean). Covered full suite rc=0; `uncovered-diff.py` vs 9d92769: 0 uncovered added lines; `-race` green on report, mcp, cli, cmd/quarry; lint `0 issues`.
+`test-stats.py --base 9d92769 --changed`: cmd/quarry 753 (+1), internal/cli 496 (+0), internal/mcp 161 (+0), internal/report 422 (+4), TOTAL 1832 (+5).
+SCENARIO-15 and SCENARIO-11 ticked in `specification.md`; `spec-check.py phase4c-networth` OK; STATE.md rewritten; `status: done`.
