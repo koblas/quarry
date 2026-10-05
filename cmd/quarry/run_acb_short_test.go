@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,6 +88,19 @@ func Test_run_acb_counts_shares_sold_beyond_the_pool_at_no_cost_and_lets_the_nex
 	assert.Equal(t, stderrWarnings(moneyFundOversoldWarning), stderr.String())
 }
 
+func Test_run_acb_shows_a_buy_that_covers_a_short_at_the_pro_rata_cost_of_the_units_beyond_it(t *testing.T) {
+	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", oversoldRows())
+	w := [10]int{10, 13, 6, 6, 11, 4, 7, 11, 6, 12}
+
+	positions, _ := runACB(t)
+	history, stderr := runACB(t, "--security", "MNY")
+
+	assert.Contains(t, positions, fmt.Sprintf("%-10s  %-6s  %6s  %4s  %13s\n", "Money Fund", "MNY", "5", "5.00", "1.0000"))
+	assert.Contains(t, history, acbHistoryRowOf(w, [11]string{"2017-01-12", "CAD Brokerage", "sell", "110", "110.00 CAD", "", "110.00", "-10", "0.00", "10.00", "unknown cost"}))
+	assert.Contains(t, history, acbHistoryRowOf(w, [11]string{"2017-01-30", "CAD Brokerage", "buy", "15", "-15.00 CAD", "", "-15.00", "5", "5.00", ""}))
+	assert.Equal(t, stderrWarnings(moneyFundOversoldWarning), stderr)
+}
+
 const moneyFundShortWarning = `"Money Fund": the sale on 2017-01-12 in "CAD Brokerage" sold 1,122.84 more shares than the ` +
 	"non-registered accounts held; quarry counts them at no cost, so the sale's gain is too high by what they cost, " +
 	"and the next 1,122.84 shares acquired only bring the holding back to 0; correct the shares in Quicken if they are wrong"
@@ -146,6 +161,14 @@ func Test_run_acb_year_marks_the_oversold_sale_unknown_cost(t *testing.T) {
 		acbSaleRowOf(w, [8]string{"Total", "", "", "1,222.84", "0.00", "100.00", "1,122.84"}),
 		stdout)
 	assert.Equal(t, stderrWarnings(moneyFundShortWarning), stderr)
+}
+
+func Test_run_acb_year_without_a_sale_still_warns_of_an_oversold_sale_in_another_year(t *testing.T) {
+	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", shortOpenRows())
+
+	_, stderr := runACB(t, "--year", "2018")
+
+	assert.True(t, strings.HasSuffix(stderr, stderrWarnings(moneyFundShortWarning)), stderr)
 }
 
 func Test_run_acb_security_prints_negative_shares_held_grouped(t *testing.T) {

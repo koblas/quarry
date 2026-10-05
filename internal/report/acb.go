@@ -138,7 +138,7 @@ func (y ACBYear) countSales(marked func(ACBSale) bool) int {
 
 // ACBSale is one disposition: the shares sold, its proceeds and outlays in CAD cents, the ACB it removed, and
 // the gain, which is Proceeds - Outlays - ACBRemoved. PossibleSuperficialLoss marks a loss with the security
-// acquired within 30 days of it and still held; UnknownCost marks a sale from a pool holding shares with no cost or of more shares than it held.
+// acquired within 30 days of it and still held; UnknownCost, a sale of shares with no recorded cost.
 type ACBSale struct {
 	ID                                  string
 	Date                                time.Time
@@ -179,11 +179,9 @@ func (s ACBSecurity) PerShare() *big.Rat {
 	return new(big.Rat).Quo(big.NewRat(s.ACB, 100), s.Shares)
 }
 
-// ACBEvent is one transaction the walk applied. CAD is Amount at Rate, 0 unless a USD trade with a rate on file;
-// Outlays and Gain mean something only when Realized (a sale, or a return of capital above the ACB).
-// UnknownCost marks shares moved with no recorded cost; Unvalued marks a trade quarry could not convert to CAD,
-// whose CAD and Gain are unknown, not 0. Oversold is the units the pool is short after a disposition that left
-// it below 0, nil otherwise.
+// ACBEvent is one transaction the walk applied. CAD is Amount at Rate; Outlays and Gain mean something only
+// when Realized. UnknownCost marks shares moved with no recorded cost, Unvalued a trade with no CAD value
+// (CAD and Gain unknown, not 0), Oversold the short a disposition left the pool in, nil when it left none.
 type ACBEvent struct {
 	ID                 string
 	Date               time.Time

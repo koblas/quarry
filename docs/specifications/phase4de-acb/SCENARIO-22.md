@@ -60,3 +60,4 @@ Run V done: Steps 6-7 ticked, `status: done`, SCENARIO-22 ticked in `specificati
 - Spec edits verbatim from `RULING-S22.md`: triage "No pooled oversell." line, reference-check item (c), the unknown-cost bullet ("reach 0 or below; an oversold sale is marked too"), four edge rows after "Old store (format 8)".
 - Verify: full suite rc=0; `uncovered-diff.py --profile ... 74ca19a` 0 uncovered; `go test -race ./internal/report/...` ok; test-stats `cmd/quarry` 904 (+8), `internal/report` 643 (+10), `internal/report/document` 234 (+4), TOTAL 1781 (+22).
 - SCENARIO-21 reference check re-runs next (orchestrator).
+- Fix pass (checkpoint): pinned the covering buy in text (position row, `--security` sell and buy rows), slot 10 reading the uncut report both ways (`acb --year 2018` cmd row, document row with `NoRate` set), shortened the `ACBEvent`, `ACBSale` and `adjust` docs. Re-pinned fixtures in cmd, cli, mcp and document: none.

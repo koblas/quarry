@@ -322,6 +322,17 @@ func Test_ACBWarnings_names_each_oversold_disposition_in_walk_order(t *testing.T
 	assert.Contains(t, warnings[3], `"Beta": the sale on 2025-04-04 in "Margin" sold 2.25 more shares`)
 }
 
+func Test_ACBWarnings_names_an_oversold_sale_of_a_security_left_out_for_want_of_a_rate(t *testing.T) {
+	security := acbNoRateSecurity("sec-1", "Alpha", "EUR", acbDay)
+	security.Events = []report.ACBEvent{acbOversoldSale("Margin", acbDay, big.NewRat(2, 1))}
+
+	warnings := document.ACBWarnings(report.ACB{Securities: []report.ACBSecurity{security}}, acbConfigShown, document.ACBAdviceCLI)
+
+	require.Len(t, warnings, 2)
+	assert.Contains(t, warnings[0], `"Alpha" has a trade on 2025-03-03 in a currency quarry cannot convert`)
+	assert.Contains(t, warnings[1], `"Alpha": the sale on 2025-03-03 in "Margin" sold 2 more shares`)
+}
+
 func Test_ACBWarnings_lists_oversold_lines_after_the_december_sales(t *testing.T) {
 	a := report.ACB{
 		Years: []report.ACBYear{{Year: 2025, Sales: []report.ACBSale{{Date: time.Date(2025, time.December, 28, 0, 0, 0, 0, time.UTC)}}}},

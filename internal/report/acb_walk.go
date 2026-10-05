@@ -293,9 +293,8 @@ func (w *securityWalk) record(event ACBEvent) {
 	w.position.Events = append(w.position.Events, event)
 }
 
-// adjust applies one day's items, every reinvested distribution before every return of capital, each in
-// request order. A pool holding no shares, empty or short, skips them all; on a held pool all apply, each later
-// item repeating the first.
+// adjust applies one day's items, reinvested distributions before returns of capital; a pool with no shares
+// held, empty or short, skips them all.
 func (w *securityWalk) adjust(day acbAdjustmentDay) {
 	if w.pool.shares.Sign() <= 0 {
 		for _, item := range day.items {
