@@ -21,8 +21,8 @@ WHERE date IN (`
 const netWorthOrder = `)
 ORDER BY date, type, currency`
 
-// NetWorth reads the v_net_worth rows and the unvalued holdings of the counted accounts on params.Dates, as
-// store.NetWorth documents; a date with no rows contributes none. A store it cannot open or read is a *store.OpenError.
+// NetWorth reads the v_net_worth rows and the unvalued holdings of the counted accounts on params.Dates, and
+// the first exchange rate's date, as store.NetWorth documents; a date with no rows contributes none. A store it cannot open or read is a *store.OpenError.
 func (s *Store) NetWorth(ctx context.Context, params store.NetWorthParams) (store.NetWorth, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {
@@ -61,6 +61,9 @@ func (s *Store) NetWorth(ctx context.Context, params store.NetWorthParams) (stor
 			read.Unvalued = append(read.Unvalued, held)
 			return err
 		})
+	if err == nil {
+		read.FirstRate, err = firstRate(ctx, db)
+	}
 	if err != nil {
 		return store.NetWorth{}, openFault(s.Path(), err)
 	}

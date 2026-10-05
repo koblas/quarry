@@ -43,6 +43,30 @@ type NetWorth struct {
 
 	// Unvalued is the holdings of the counted accounts, on the days listed, that their balances leave out.
 	Unvalued []store.UnvaluedHolding
+
+	// FirstRate is the date of the store's earliest exchange rate; zero when it holds none.
+	FirstRate time.Time
+}
+
+// NeedsRate reports whether row has a balance and only an exchange rate it lacks keeps it out of the converted
+// total; never in a native listing.
+func (n NetWorth) NeedsRate(row store.NetWorthRow) bool {
+	return n.Currency != money.Native && n.Converted(row) == nil && row.Balance.Sign() != 0
+}
+
+// TypeNeedsRate reports whether date has a row of accountType that needs a rate and none of that type converts.
+func (n NetWorth) TypeNeedsRate(date NetWorthDate, accountType string) bool {
+	var needs bool
+	for _, row := range date.Rows {
+		if row.Type != accountType {
+			continue
+		}
+		if n.Converted(row) != nil {
+			return false
+		}
+		needs = needs || n.NeedsRate(row)
+	}
+	return needs
 }
 
 // Converted is row's balance in the reporting currency in cents; nil in a native listing and when no
@@ -69,7 +93,7 @@ func (s *Server) NetWorth(ctx context.Context, req NetWorthRequest) (NetWorth, e
 		return NetWorth{}, s.readRefusal(ctx, "networth", err)
 	}
 
-	listing := NetWorth{AsOf: req.AsOf, Window: req.Window, Currency: req.Currency}
+	listing := NetWorth{AsOf: req.AsOf, Window: req.Window, Currency: req.Currency, FirstRate: read.FirstRate}
 	listing.Dates = make([]NetWorthDate, len(days))
 	position := make(map[string]int, len(days))
 	for i, day := range days {
@@ -152,24 +176,29 @@ func (d NetWorthDate) TypeBalance(accountType, currency string) *big.Int {
 	return nil
 }
 
-// total is the sum of the rows' converted balances in the reporting currency, none when no row converts;
-// a native listing totals each stored currency's balances on its own instead.
+// total is the sum of the rows' converted balances in the reporting currency, none when no row converts,
+// then the balances of the rows that need a rate, one total per stored currency; a native listing totals each
+// stored currency's balances on its own instead.
 func (n NetWorth) total(rows []store.NetWorthRow) []NetWorthTotal {
 	if n.Currency == money.Native {
 		return nativeNetWorthTotals(rows)
 	}
 	sum := new(big.Int)
 	var found bool
+	var unconverted []store.NetWorthRow
 	for _, row := range rows {
 		if value := n.Converted(row); value != nil {
 			sum.Add(sum, value)
 			found = true
+		} else if n.NeedsRate(row) {
+			unconverted = append(unconverted, row)
 		}
 	}
-	if !found {
-		return nil
+	var totals []NetWorthTotal
+	if found {
+		totals = append(totals, NetWorthTotal{Currency: n.Currency.String(), Value: sum})
 	}
-	return []NetWorthTotal{{Currency: n.Currency.String(), Value: sum}}
+	return append(totals, nativeNetWorthTotals(unconverted)...)
 }
 
 // nativeNetWorthTotals is one total per stored currency among rows, CAD then USD then the rest alphabetically.

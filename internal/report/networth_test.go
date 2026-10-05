@@ -81,7 +81,16 @@ func Test_networth_total_is_the_sum_of_the_converted_balances_in_the_reporting_c
 		{name: "two rows add", rows: []store.NetWorthRow{cadRow(big.NewInt(100)), cadRow(big.NewInt(250))}, currency: money.CAD, want: []string{"CAD 350"}},
 		{name: "a negative row reduces it", rows: []store.NetWorthRow{cadRow(big.NewInt(100)), cadRow(big.NewInt(-250))}, currency: money.CAD, want: []string{"CAD -150"}},
 		{name: "a zero balance is a total of zero", rows: []store.NetWorthRow{cadRow(big.NewInt(0))}, currency: money.CAD, want: []string{"CAD 0"}},
-		{name: "a row with no conversion is left out", rows: []store.NetWorthRow{cadRow(big.NewInt(100)), cadRow(nil)}, currency: money.CAD, want: []string{"CAD 100"}},
+		{
+			name:     "a row with no conversion is left out of it and totals apart",
+			rows:     []store.NetWorthRow{cadRow(big.NewInt(100)), typedRow("chequing", "USD", 800, nil)},
+			currency: money.CAD, want: []string{"CAD 100", "USD 800"},
+		},
+		{
+			name:     "a row with no conversion and a zero balance adds no total",
+			rows:     []store.NetWorthRow{cadRow(big.NewInt(100)), typedRow("chequing", "USD", 0, nil)},
+			currency: money.CAD, want: []string{"CAD 100"},
+		},
 		{
 			name:     "the other currency reads its own column",
 			rows:     []store.NetWorthRow{{Date: netWorthDay, Currency: "CAD", BalanceCAD: big.NewInt(125), BalanceUSD: big.NewInt(100)}},
@@ -101,20 +110,25 @@ func Test_networth_total_is_the_sum_of_the_converted_balances_in_the_reporting_c
 	}
 }
 
-func Test_networth_has_no_total_when_no_row_converts(t *testing.T) {
+func Test_networth_has_no_reporting_currency_total_when_no_row_converts(t *testing.T) {
 	cases := []struct {
 		name     string
 		rows     []store.NetWorthRow
 		currency money.Currency
+		want     []string
 	}{
-		{name: "no rows", rows: nil, currency: money.CAD},
-		{name: "every row unconverted", rows: []store.NetWorthRow{cadRow(nil), cadRow(nil)}, currency: money.CAD},
-		{name: "only the other currency converts", rows: []store.NetWorthRow{cadRow(big.NewInt(100))}, currency: money.USD},
+		{name: "no rows", rows: nil, currency: money.CAD, want: []string{}},
+		{
+			name:     "every row unconverted",
+			rows:     []store.NetWorthRow{typedRow("brokerage", "USD", 920, nil), typedRow("chequing", "USD", 800, nil)},
+			currency: money.CAD, want: []string{"USD 1720"},
+		},
+		{name: "only the other currency converts", rows: []store.NetWorthRow{typedRow("chequing", "CAD", 100, nil)}, currency: money.USD, want: []string{"CAD 100"}},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Empty(t, netWorthOf(t, c.rows, c.currency).Dates[0].Totals)
+			assert.Equal(t, c.want, netWorthTotalValues(netWorthOf(t, c.rows, c.currency)))
 		})
 	}
 }
@@ -239,7 +253,7 @@ func Test_networth_history_refuses_when_the_read_fails(t *testing.T) {
 }
 
 func typedRow(accountType, currency string, balance int64, cad *big.Int) store.NetWorthRow {
-	return store.NetWorthRow{Type: accountType, Currency: currency, Balance: big.NewInt(balance), BalanceCAD: cad}
+	return store.NetWorthRow{Date: netWorthDay, Type: accountType, Currency: currency, Balance: big.NewInt(balance), BalanceCAD: cad}
 }
 
 func Test_networth_types_are_those_with_a_balance_on_some_day_alphabetically(t *testing.T) {
@@ -298,6 +312,75 @@ func Test_networth_type_balance_is_the_balance_of_that_type_and_currency(t *test
 	}}
 
 	assert.Equal(t, big.NewInt(250), date.TypeBalance("chequing", "USD"))
+}
+
+func Test_networth_warns_only_for_a_row_with_a_balance_no_rate_converts(t *testing.T) {
+	cases := []struct {
+		name    string
+		listing report.NetWorth
+		row     store.NetWorthRow
+		want    bool
+	}{
+		{name: "a USD row in a CAD listing", listing: report.NetWorth{Currency: money.CAD}, row: typedRow("chequing", "USD", 800, nil), want: true},
+		{name: "a CAD row in a USD listing", listing: report.NetWorth{Currency: money.USD}, row: typedRow("chequing", "CAD", 800, nil), want: true},
+		{name: "a row with a zero balance", listing: report.NetWorth{Currency: money.CAD}, row: typedRow("chequing", "USD", 0, nil), want: false},
+		{name: "a row a rate converts", listing: report.NetWorth{Currency: money.CAD}, row: typedRow("chequing", "USD", 800, big.NewInt(1000)), want: false},
+		{name: "a row in a native listing", listing: report.NetWorth{Currency: money.Native}, row: typedRow("chequing", "USD", 800, nil), want: false},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, c.listing.NeedsRate(c.row))
+		})
+	}
+}
+
+func Test_networth_type_needs_a_rate_when_a_row_of_it_does_and_none_converts(t *testing.T) {
+	cases := []struct {
+		name string
+		rows []store.NetWorthRow
+		want bool
+	}{
+		{name: "its only row needs a rate", rows: []store.NetWorthRow{typedRow("chequing", "USD", 800, nil)}, want: true},
+		{name: "a row converts beside one that needs a rate", rows: []store.NetWorthRow{typedRow("chequing", "CAD", 100, big.NewInt(100)), typedRow("chequing", "USD", 800, nil)}, want: false},
+		{name: "the type has no row", rows: []store.NetWorthRow{typedRow("savings", "USD", 800, nil)}, want: false},
+		{name: "its only row has a zero balance", rows: []store.NetWorthRow{typedRow("chequing", "USD", 0, nil)}, want: false},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			listing := report.NetWorth{Currency: money.CAD}
+
+			assert.Equal(t, c.want, listing.TypeNeedsRate(report.NetWorthDate{Rows: c.rows}, "chequing"))
+		})
+	}
+}
+
+func Test_networth_history_totals_carry_a_total_for_the_rows_no_rate_converts(t *testing.T) {
+	rows := []store.NetWorthRow{
+		typedRow("chequing", "CAD", 100, big.NewInt(100)), typedRow("brokerage", "USD", 800, nil), typedRow("brokerage", "USD", 900, nil),
+	}
+	rows[0].Date, rows[1].Date, rows[2].Date = day(2026, time.January, 31), day(2026, time.January, 31), day(2026, time.February, 28)
+	srv := report.NewServer(report.WithStore(fakeStore{netWorth: store.NetWorth{Rows: rows}}))
+
+	result, err := srv.NetWorth(t.Context(), report.NetWorthRequest{AsOf: netWorthDay, Window: &netWorthHistory, Currency: money.CAD})
+
+	require.NoError(t, err)
+	assert.Equal(t, [][]report.NetWorthTotal{
+		{{Currency: "CAD", Value: big.NewInt(100)}, {Currency: "USD", Value: big.NewInt(800)}},
+		{{Currency: "USD", Value: big.NewInt(900)}},
+		nil,
+	}, [][]report.NetWorthTotal{result.Dates[0].Totals, result.Dates[1].Totals, result.Dates[2].Totals})
+}
+
+func Test_networth_carries_the_date_of_the_first_exchange_rate_read(t *testing.T) {
+	first := day(2026, time.March, 10)
+	srv := report.NewServer(report.WithStore(fakeStore{netWorth: store.NetWorth{FirstRate: first}}))
+
+	result, err := srv.NetWorth(t.Context(), report.NetWorthRequest{AsOf: netWorthDay, Currency: money.CAD})
+
+	require.NoError(t, err)
+	assert.Equal(t, first, result.FirstRate)
 }
 
 func Test_networth_type_balance_is_nil_without_a_row_for_the_type_and_currency(t *testing.T) {

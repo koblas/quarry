@@ -221,7 +221,7 @@ func Test_net_worth_for_no_dates_runs_no_query(t *testing.T) {
 	_ = unvaluedOn(t, st, marchDay(1))
 
 	assert.Zero(t, idle)
-	assert.Equal(t, 2, spy.queries)
+	assert.Equal(t, 3, spy.queries)
 }
 
 func Test_net_worth_and_accounts_return_the_unvalued_holdings_query_fault_as_another_fault(t *testing.T) {

@@ -124,6 +124,49 @@ func Test_net_worth_reads_no_rows_for_no_dates(t *testing.T) {
 	assert.Empty(t, netWorthOn(t, st))
 }
 
+func Test_net_worth_gives_the_date_of_the_first_exchange_rate(t *testing.T) {
+	t.Parallel()
+	st := newStoreWithRates(t, cashRows(transaction("t1", acctOne, marchDay(1), 10_000)),
+		ratesOn(12, 1_250_000, "FXUSDCAD"), ratesOn(10, 1_250_000, "FXUSDCAD"))
+
+	got, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{marchDay(5)}})
+
+	require.NoError(t, err)
+	assert.Equal(t, marchDay(10), got.FirstRate)
+}
+
+func Test_net_worth_gives_no_first_rate_date_for_a_store_without_rates(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, cashRows(transaction("t1", acctOne, marchDay(1), 10_000)))
+
+	got, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{marchDay(5)}})
+
+	require.NoError(t, err)
+	assert.True(t, got.FirstRate.IsZero())
+	assert.Len(t, got.Rows, 1)
+}
+
+func Test_net_worth_returns_the_first_rate_query_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	fault := ioFault(`query rows "SELECT min"`)
+	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 2, queryFault: fault}))
+
+	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{marchDay(5)}})
+
+	assertOtherFault(t, err, "disk read failed")
+	assert.ErrorIs(t, err, fault)
+}
+
+func Test_net_worth_returns_a_first_rate_scan_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 2, scanFault: errScanFailed}))
+
+	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{marchDay(5)}})
+
+	assertOtherFault(t, err, errScanFailed.Error())
+	assert.ErrorIs(t, err, errScanFailed)
+}
+
 func Test_net_worth_for_no_dates_still_refuses_a_missing_store(t *testing.T) {
 	t.Parallel()
 
