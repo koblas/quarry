@@ -18,12 +18,13 @@ type acbDoc struct {
 	Currency string `json:"currency"`
 	Year     *int   `json:"year"`
 	Years    []struct {
-		Year      int    `json:"year"`
-		SaleCount int    `json:"sale_count"`
-		Proceeds  string `json:"proceeds"`
-		Outlays   string `json:"outlays"`
-		ACB       string `json:"acb"`
-		Gain      string `json:"gain"`
+		Year                int    `json:"year"`
+		SaleCount           int    `json:"sale_count"`
+		Proceeds            string `json:"proceeds"`
+		Outlays             string `json:"outlays"`
+		ACB                 string `json:"acb"`
+		Gain                string `json:"gain"`
+		ReturnOfCapitalGain string `json:"return_of_capital_gain"`
 	} `json:"years"`
 	Securities []struct {
 		ID          string  `json:"security_id"`

@@ -20,19 +20,31 @@ func renderACB(a report.ACB) string {
 	return renderACBYears(a) + "\n" + renderACBPositions(a)
 }
 
-// renderACBYears is the realized-gains table, one row per year with a sale and no total row.
+// renderACBYears is the realized-gains table, one row per year with a sale or a return of capital above the
+// ACB and no total row; a last, unheaded column carries the year's suffixes.
 func renderACBYears(a report.ACB) string {
 	rows := make([][]string, 0, 1+len(a.Years))
-	rows = append(rows, []string{"Year", "Sales", "Proceeds", "Outlays", "ACB", "Gain or loss"})
+	rows = append(rows, []string{"Year", "Sales", "Proceeds", "Outlays", "ACB", "Gain or loss", ""})
 	for _, year := range a.Years {
 		rows = append(rows, []string{
 			strconv.Itoa(year.Year), humanize.Thousands(len(year.Sales)), formatMoney(year.Proceeds),
 			formatMoney(year.Outlays), formatMoney(year.ACBRemoved), formatMoney(year.Gain),
+			strings.Join(acbYearSuffixes(year), ", "),
 		})
 	}
 
 	return renderTable("Realized capital gains by tax year, in "+money.CAD.String(),
-		[]tableAlign{alignLeft, alignRight, alignRight, alignRight, alignRight, alignRight}, rows)
+		[]tableAlign{alignLeft, alignRight, alignRight, alignRight, alignRight, alignRight, alignLeft}, rows)
+}
+
+// acbYearSuffixes are the notes after year's row, in the ruled order.
+func acbYearSuffixes(year report.ACBYear) []string {
+	var suffixes []string
+	if year.ReturnOfCapitalGain > 0 {
+		suffixes = append(suffixes, formatMoney(year.ReturnOfCapitalGain)+" return of capital above ACB, a capital gain")
+	}
+
+	return suffixes
 }
 
 // renderACBPositions is the table of each security with shares held on a.AsOf, in the order a lists them.

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/config"
+	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/spf13/cobra"
@@ -62,11 +63,9 @@ accountant, not a tax filing.`,
 				return &runtimeError{err: err}
 			}
 
-			warnings := document.ACBWarnings(acb)
-
-			return emitReport(cmd, *jsonOut, warnings,
+			return emitReport(cmd, *jsonOut, document.ACBWarnings(acb, homepath.Abbreviate(srv.Home(), cfg.Path)),
 				func() ([]byte, error) {
-					return renderACBJSON(acb, withConfigWarnings(cfg.WarningsAbsolute, warnings))
+					return renderACBJSON(acb, withConfigWarnings(cfg.WarningsAbsolute, document.ACBWarnings(acb, cfg.Path)))
 				},
 				func() string { return renderACB(acb) })
 		},

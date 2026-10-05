@@ -41,6 +41,20 @@ func Shares(millionths int64) string {
 	return s
 }
 
+// Money renders cents as a thousands-grouped amount of two decimals, with a leading "-" for a negative
+// value: 123456 is "1,234.56", -5 is "-0.05".
+func Money(cents int64) string {
+	negative := cents < 0
+	if negative {
+		cents = -cents
+	}
+	s := fmt.Sprintf("%s.%02d", Thousands(int(cents/100)), cents%100)
+	if negative {
+		return "-" + s
+	}
+	return s
+}
+
 // Count renders n thousands-grouped with singular at exactly 1 and plural
 // otherwise: "1 account", "0 accounts", "1,035 accounts".
 func Count(n int, singular, plural string) string {

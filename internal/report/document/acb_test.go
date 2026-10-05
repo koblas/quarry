@@ -80,7 +80,8 @@ func Test_NewACB_writes_every_key_of_every_object_in_order(t *testing.T) {
 
 	assert.Equal(t, []string{"as_of", "currency", "year", "years", "securities", "warnings"}, topLevelKeys(t, doc))
 	assert.Equal(t, []string{
-		"year", "sale_count", "proceeds", "outlays", "acb", "gain", "possible_superficial_losses", "unknown_cost_sales", "sales",
+		"year", "sale_count", "proceeds", "outlays", "acb", "gain", "return_of_capital_gain", "possible_superficial_losses",
+		"unknown_cost_sales", "sales",
 	}, topLevelKeys(t, year))
 	assert.Equal(t, []string{
 		"date", "investment_transaction_id", "security_id", "security", "ticker", "account_id", "account", "shares",
@@ -108,7 +109,7 @@ func Test_NewACB_reads_back_the_year_totals_and_each_sale_with_its_security_and_
 	year := got.Years[0]
 	assert.Equal(t, document.ACBYear{
 		Year: 2024, SaleCount: 2, Proceeds: "1050.00", Outlays: "9.99", ACB: "1200.00", Gain: "-159.99",
-		PossibleSuperficialLosses: 1, UnknownCostSales: 1, Sales: year.Sales,
+		ReturnOfCapitalGain: "0.00", PossibleSuperficialLosses: 1, UnknownCostSales: 1, Sales: year.Sales,
 	}, year)
 	assert.Equal(t, []document.ACBSale{
 		{
@@ -122,6 +123,26 @@ func Test_NewACB_reads_back_the_year_totals_and_each_sale_with_its_security_and_
 			Gain: "50.00", UnknownCost: true,
 		},
 	}, year.Sales)
+}
+
+func Test_NewACB_writes_a_sale_only_year_return_of_capital_gain_as_zero(t *testing.T) {
+	var got document.ACB
+
+	require.NoError(t, json.Unmarshal(acbJSON(t, acbDocumentFixture(), nil), &got))
+
+	assert.Equal(t, "0.00", got.Years[0].ReturnOfCapitalGain)
+}
+
+func Test_NewACB_writes_a_year_with_only_a_return_of_capital_gain(t *testing.T) {
+	a := report.ACB{AsOf: acbAsOf, Years: []report.ACBYear{{Year: 2025, ReturnOfCapitalGain: 125_000}}}
+	var got document.ACB
+
+	require.NoError(t, json.Unmarshal(acbJSON(t, a, nil), &got))
+
+	assert.Equal(t, []document.ACBYear{{
+		Year: 2025, SaleCount: 0, Proceeds: "0.00", Outlays: "0.00", ACB: "0.00", Gain: "0.00",
+		ReturnOfCapitalGain: "1250.00", Sales: []document.ACBSale{},
+	}}, got.Years)
 }
 
 func Test_NewACB_reads_back_a_held_security_with_its_per_share_and_a_sold_out_one_with_none(t *testing.T) {
@@ -186,7 +207,7 @@ func Test_NewACB_writes_an_adjustment_event_with_no_transaction_account_or_amoun
 	a := report.ACB{AsOf: acbAsOf, Securities: []report.ACBSecurity{{
 		Security: store.Security{ID: "sec-41", Name: "XEQT"}, Shares: big.NewRat(10, 1), ACB: 500,
 		Events: []report.ACBEvent{{
-			Date: acbAsOf, Action: "return of capital", Shares: new(big.Rat), CAD: -250, Held: big.NewRat(10, 1), ACB: 500,
+			Date: acbAsOf, Action: "return of capital", Shares: new(big.Rat), CAD: 250, Held: big.NewRat(10, 1), ACB: 500,
 		}},
 	}}}
 
@@ -199,7 +220,7 @@ func Test_NewACB_writes_an_adjustment_event_with_no_transaction_account_or_amoun
 	assert.Equal(t, map[string]any{
 		"date": "2026-10-05", "investment_transaction_id": nil, "account_id": nil, "account": nil,
 		"action": "return of capital", "shares": "0.000000", "amount": nil, "amount_currency": nil, "usd_cad": nil,
-		"cad": "-2.50", "outlays": nil, "shares_held": "10.000000", "acb": "5.00", "gain": nil,
+		"cad": "2.50", "outlays": nil, "shares_held": "10.000000", "acb": "5.00", "gain": nil,
 	}, events[0])
 }
 

@@ -27,6 +27,7 @@ type ACB struct {
 }
 
 // ACBYear is one tax year of "years": its totals in CAD, the flagged sales among them, and the sales.
+// Gain is the sales' alone; ReturnOfCapitalGain is the returns of capital above the ACB, "0.00" when none.
 type ACBYear struct {
 	Year                      int       `json:"year"`
 	SaleCount                 int       `json:"sale_count"`
@@ -34,6 +35,7 @@ type ACBYear struct {
 	Outlays                   string    `json:"outlays"`
 	ACB                       string    `json:"acb"`
 	Gain                      string    `json:"gain"`
+	ReturnOfCapitalGain       string    `json:"return_of_capital_gain"`
 	PossibleSuperficialLosses int       `json:"possible_superficial_losses"`
 	UnknownCostSales          int       `json:"unknown_cost_sales"`
 	Sales                     []ACBSale `json:"sales"`
@@ -120,7 +122,8 @@ func newACBYear(year report.ACBYear, securities map[string]store.Security) ACBYe
 	out := ACBYear{
 		Year: year.Year, SaleCount: len(year.Sales),
 		Proceeds: Money(year.Proceeds), Outlays: Money(year.Outlays), ACB: Money(year.ACBRemoved), Gain: Money(year.Gain),
-		Sales: make([]ACBSale, len(year.Sales)),
+		ReturnOfCapitalGain: Money(year.ReturnOfCapitalGain),
+		Sales:               make([]ACBSale, len(year.Sales)),
 	}
 	for i, sale := range year.Sales {
 		security := securities[sale.SecurityID]

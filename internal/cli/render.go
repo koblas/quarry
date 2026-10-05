@@ -301,15 +301,7 @@ func sharesPhrase(checked int) string {
 // formatMoney renders cents as a thousands-grouped, 2-decimal amount with a
 // leading "-" for a negative value.
 func formatMoney(cents int64) string {
-	negative := cents < 0
-	if negative {
-		cents = -cents
-	}
-	s := fmt.Sprintf("%s.%02d", humanize.Thousands(int(cents/100)), cents%100)
-	if negative {
-		return "-" + s
-	}
-	return s
+	return humanize.Money(cents)
 }
 
 // accountLabel renders "Name (CUR[, closed][, inactive])": inactive is

@@ -49,6 +49,29 @@ func Test_renderACB_prints_a_row_per_year_and_a_row_per_position_held(t *testing
 		"iShares Core Equity ETF  XEQT       410  10,412.33        25.3959\n", got)
 }
 
+func Test_renderACB_suffixes_a_years_return_of_capital_gain(t *testing.T) {
+	year := acbYearOf(2024, 2, 1_200_400, 999, 1_290_040, -90_639)
+	year.ReturnOfCapitalGain = 123_456
+	a := report.ACB{AsOf: acbDay, Years: []report.ACBYear{year, acbYearOf(2025, 1, 500, 0, 400, 100)}}
+
+	got := renderACBYears(a)
+
+	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
+		"Year  Sales   Proceeds  Outlays        ACB  Gain or loss\n"+
+		"2024      2  12,004.00     9.99  12,900.40       -906.39  1,234.56 return of capital above ACB, a capital gain\n"+
+		"2025      1       5.00     0.00       4.00          1.00\n", got)
+}
+
+func Test_renderACB_lists_a_year_with_only_a_return_of_capital_gain(t *testing.T) {
+	year := report.ACBYear{Year: 2025, ReturnOfCapitalGain: 125_000}
+
+	got := renderACBYears(report.ACB{AsOf: acbDay, Years: []report.ACBYear{year}})
+
+	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
+		"Year  Sales  Proceeds  Outlays   ACB  Gain or loss\n"+
+		"2025      0      0.00     0.00  0.00          0.00  1,250.00 return of capital above ACB, a capital gain\n", got)
+}
+
 func Test_renderACB_leaves_a_sold_out_security_out_of_the_positions(t *testing.T) {
 	a := report.ACB{
 		AsOf:       acbDay,

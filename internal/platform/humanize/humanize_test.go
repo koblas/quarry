@@ -76,6 +76,30 @@ func Test_Shares(t *testing.T) {
 	}
 }
 
+func Test_Money(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		cents int64
+		want  string
+	}{
+		{name: "zero keeps two decimals", cents: 0, want: "0.00"},
+		{name: "under one unit pads the cents", cents: 5, want: "0.05"},
+		{name: "a whole amount shows .00", cents: 100, want: "1.00"},
+		{name: "four digits of whole units get a comma", cents: 123456, want: "1,234.56"},
+		{name: "seven digits get two commas", cents: 123456789, want: "1,234,567.89"},
+		{name: "a negative gets a leading minus", cents: -123456, want: "-1,234.56"},
+		{name: "a negative under one unit keeps its minus", cents: -5, want: "-0.05"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, c.want, humanize.Money(c.cents))
+		})
+	}
+}
+
 func Test_Count(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
