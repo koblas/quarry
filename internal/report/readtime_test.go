@@ -169,3 +169,20 @@ func Test_findings_counts_only_unclassified_accounts_under_their_type_filter(t *
 	assert.Equal(t, finding.Counts{Open: 2}, got.Counts)
 	assert.Equal(t, map[finding.Type][]string{finding.UnclassifiedAccount: {"unclassified-account:acct-2", unclassifiedOne}}, listIDs(got))
 }
+
+func Test_read_time_states_holds_only_the_open_unclassified_accounts_and_never_marks_one_new(t *testing.T) {
+	stored := dated("duplicate:txn-1+txn-2", finding.Duplicate, march1, march1)
+	stored.New = true
+	list := store.FindingList{
+		Findings: []store.Finding{stored},
+		Accounts: []store.Account{
+			brokerage("acct-1", "TFSA"),
+			brokerage("acct-2", "Margin"),
+			{ID: "acct-3", Name: "Chequing", Type: "chequing"},
+		},
+	}
+
+	got := report.ReadTimeStates(list, report.Classification{Registered: []string{"acct-2"}})
+
+	assert.Equal(t, []finding.State{{ID: unclassifiedOne}}, got)
+}

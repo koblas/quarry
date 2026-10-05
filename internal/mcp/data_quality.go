@@ -55,7 +55,7 @@ func classificationOf(cfg config.Config) report.Classification {
 
 // capFindings keeps the first limit findings of listing and reports how many it held and whether any were cut.
 func capFindings(listing report.FindingsListing, limit int) (report.FindingsListing, int, bool) {
-	kept := report.FindingsListing{Counts: listing.Counts, Unmatched: listing.Unmatched, UnmatchedAccounts: listing.UnmatchedAccounts}
+	kept := report.FindingsListing{Counts: listing.Counts, Unmatched: listing.Unmatched}
 	total, left := 0, limit
 	for _, group := range listing.Groups {
 		total += len(group.Findings)
@@ -71,7 +71,7 @@ func capFindings(listing report.FindingsListing, limit int) (report.FindingsList
 // capItems keeps the first maxItems items of each finding in a copy of listing, with a warning per cut finding.
 func capItems(listing report.FindingsListing) (report.FindingsListing, []string) {
 	var warnings []string
-	capped := report.FindingsListing{Counts: listing.Counts, Unmatched: listing.Unmatched, UnmatchedAccounts: listing.UnmatchedAccounts}
+	capped := report.FindingsListing{Counts: listing.Counts, Unmatched: listing.Unmatched}
 	for _, group := range listing.Groups {
 		findings := slices.Clone(group.Findings)
 		for i, f := range findings {

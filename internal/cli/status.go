@@ -52,9 +52,8 @@ when the last sync could not fetch new ones, why.`,
 	}
 }
 
-// statusChoices returns findings.ignore, the account classification and the warnings to print, ~-abbreviated
-// and then with absolute paths for --json. Status never refuses over the config: when it cannot be read the
-// list and the classification are empty and each warnings list holds the one line saying why.
+// statusChoices returns findings.ignore, the account classification, and the warnings (~-abbreviated, then
+// absolute for --json). It never refuses: an unreadable config gives empty choices and one warning saying why.
 func statusChoices(loadConfig ConfigLoader) ([]string, report.Classification, []string, []string) {
 	cfg, err := loadConfig("status")
 	if err != nil {
