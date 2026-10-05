@@ -44,6 +44,7 @@ func Test_acb_gives_a_usd_event_its_amount_currency_rate_and_cad(t *testing.T) {
 	assert.Equal(t, "USD", event.Currency)
 	assert.Equal(t, int64(1_300_000), int64(event.Rate))
 	assert.Equal(t, int64(-13_000), event.CAD)
+	assert.False(t, event.Unvalued)
 }
 
 func Test_acb_gives_a_cad_event_no_rate_even_when_rates_are_stored(t *testing.T) {
@@ -59,7 +60,7 @@ func Test_acb_gives_a_cad_event_no_rate_even_when_rates_are_stored(t *testing.T)
 	assert.Equal(t, int64(-10_000), event.CAD)
 }
 
-func Test_acb_gives_a_usd_event_with_no_rate_on_file_a_zero_rate(t *testing.T) {
+func Test_acb_leaves_a_usd_event_with_no_rate_on_file_unvalued(t *testing.T) {
 	got := acbWalkWith(t, []store.Security{acbSecurity("sec-1", "XEQT", "USD")}, nil,
 		acbTx(t, 1, "acct-3", "sec-1", "2024-01-02", store.ActionBuy, "USD", 10*acbMillion, -10_000),
 	)
@@ -67,7 +68,7 @@ func Test_acb_gives_a_usd_event_with_no_rate_on_file_a_zero_rate(t *testing.T) {
 	event := got.Securities[0].Events[0]
 	assert.Equal(t, int64(-10_000), *event.Amount)
 	assert.Zero(t, event.Rate)
-	assert.Zero(t, event.CAD)
+	assert.True(t, event.Unvalued)
 }
 
 func Test_acb_marks_only_a_sale_realized_and_gives_it_outlays_in_cad(t *testing.T) {

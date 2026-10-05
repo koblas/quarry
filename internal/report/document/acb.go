@@ -74,7 +74,8 @@ type ACBSecurity struct {
 }
 
 // ACBEvent is one event of a security's history. Amount and AmountCurrency are the transaction's own, USDCAD its
-// rate when it was in USD with one on file; CAD is the amount at that rate. Outlays and Gain are null off a sale.
+// rate when it was in USD with one on file; CAD is the amount at that rate. Outlays and Gain are null off a sale;
+// CAD and Gain are null on an event whose amount quarry could not convert.
 type ACBEvent struct {
 	Date                    string  `json:"date"`
 	InvestmentTransactionID *string `json:"investment_transaction_id"`
@@ -85,7 +86,7 @@ type ACBEvent struct {
 	Amount                  *string `json:"amount"`
 	AmountCurrency          *string `json:"amount_currency"`
 	USDCAD                  *string `json:"usd_cad"`
-	CAD                     string  `json:"cad"`
+	CAD                     *string `json:"cad"`
 	Outlays                 *string `json:"outlays"`
 	SharesHeld              string  `json:"shares_held"`
 	ACB                     string  `json:"acb"`
@@ -172,7 +173,7 @@ func newACBEvent(e report.ACBEvent) ACBEvent {
 		Date: e.Date.Format(DateLayout), InvestmentTransactionID: NullString(e.ID),
 		AccountID: NullString(e.AccountID), Account: NullString(e.Account),
 		Action: e.Action, Shares: Shares(report.Millionths(e.Shares)),
-		Amount: nullable(e.Amount, Money), CAD: Money(e.CAD), Outlays: nullable(e.Outlays, Money),
+		Amount: nullable(e.Amount, Money), Outlays: nullable(e.Outlays, Money),
 		SharesHeld: Shares(report.Millionths(e.Held)), ACB: Money(e.ACB),
 	}
 	if e.Amount != nil {
@@ -182,7 +183,11 @@ func newACBEvent(e report.ACBEvent) ACBEvent {
 		rate := formatRate(e.Rate)
 		out.USDCAD = &rate
 	}
-	if e.Realized {
+	if !e.Unvalued {
+		cad := Money(e.CAD)
+		out.CAD = &cad
+	}
+	if e.Realized && !e.Unvalued {
 		gain := Money(e.Gain)
 		out.Gain = &gain
 	}

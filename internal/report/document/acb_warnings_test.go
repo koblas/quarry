@@ -313,3 +313,92 @@ func Test_ACBWarnings_stays_silent_for_a_security_whose_only_marked_event_is_a_d
 
 	assert.Empty(t, warnings)
 }
+
+func acbNoRateSecurity(id, name, currency string, date time.Time) report.ACBSecurity {
+	return report.ACBSecurity{
+		Security: store.Security{ID: id, Name: name}, Shares: big.NewRat(5, 1), Incomplete: true,
+		NoRate: &report.ACBNoRate{Date: date, Currency: currency},
+	}
+}
+
+func Test_ACBWarnings_names_a_usd_trade_before_the_first_rate_in_the_store(t *testing.T) {
+	a := report.ACB{
+		FirstRate:  time.Date(2024, time.January, 2, 0, 0, 0, 0, time.UTC),
+		Securities: []report.ACBSecurity{acbNoRateSecurity("sec-1", "Acme Corp", "USD", acbDay)},
+	}
+
+	warnings := document.ACBWarnings(a, acbConfigShown)
+
+	assert.Equal(t, []string{
+		`"Acme Corp" has a USD trade on 2025-03-03, before 2024-01-02, the first exchange rate in the store, ` +
+			"so its ACB is incomplete and its gains are left out of the year totals",
+	}, warnings)
+}
+
+func Test_ACBWarnings_names_a_usd_trade_when_the_store_has_no_rates(t *testing.T) {
+	a := report.ACB{Securities: []report.ACBSecurity{acbNoRateSecurity("sec-1", "Acme Corp", "USD", acbDay)}}
+
+	warnings := document.ACBWarnings(a, acbConfigShown)
+
+	assert.Equal(t, []string{
+		`"Acme Corp" has a USD trade on 2025-03-03, and the store has no exchange rates, ` +
+			"so its ACB is incomplete and its gains are left out of the year totals; run quarry sync to fetch rates",
+	}, warnings)
+}
+
+func Test_ACBWarnings_names_a_trade_in_a_currency_it_cannot_convert_by_its_code(t *testing.T) {
+	cases := []struct {
+		name     string
+		currency string
+		want     string
+	}{
+		{name: "a euro trade", currency: "EUR", want: `("EUR")`},
+		{name: "a trade with no currency code", currency: "", want: `("")`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			a := report.ACB{
+				FirstRate:  time.Date(2024, time.January, 2, 0, 0, 0, 0, time.UTC),
+				Securities: []report.ACBSecurity{acbNoRateSecurity("sec-1", "Acme Corp", c.currency, acbDay)},
+			}
+
+			warnings := document.ACBWarnings(a, acbConfigShown)
+
+			assert.Equal(t, []string{
+				`"Acme Corp" has a trade on 2025-03-03 in a currency quarry cannot convert to CAD ` + c.want + `, ` +
+					"so its ACB is incomplete and its gains are left out of the year totals",
+			}, warnings)
+		})
+	}
+}
+
+func Test_ACBWarnings_gives_each_no_rate_security_its_own_line_in_security_order(t *testing.T) {
+	a := report.ACB{Securities: []report.ACBSecurity{
+		acbNoRateSecurity("sec-1", "Alpha", "USD", acbDay),
+		acbNoCostSecurity("sec-2", "Beta"),
+		acbNoRateSecurity("sec-3", "Gamma", "USD", acbDay.AddDate(0, 0, 1)),
+	}}
+
+	warnings := document.ACBWarnings(a, acbConfigShown)
+
+	require.Len(t, warnings, 2)
+	assert.Contains(t, warnings[0], `"Alpha" has a USD trade on 2025-03-03,`)
+	assert.Contains(t, warnings[1], `"Gamma" has a USD trade on 2025-03-04,`)
+}
+
+func Test_ACBWarnings_lists_a_no_rate_line_after_the_removals_and_before_the_returns_of_capital(t *testing.T) {
+	noRate := acbNoRateSecurity("sec-1", "Alpha", "USD", acbDay)
+	noRate.Events = []report.ACBEvent{
+		{Date: acbDay, Action: report.ACBActionReturnOfCapital, Shares: new(big.Rat), Gain: 100, Realized: true},
+		acbRemoval("Margin", acbDay, big.NewRat(2, 1)),
+	}
+	a := report.ACB{Securities: []report.ACBSecurity{noRate}}
+
+	warnings := document.ACBWarnings(a, acbConfigShown)
+
+	require.Len(t, warnings, 3)
+	assert.Contains(t, warnings[0], `"Alpha": 2 shares left`)
+	assert.Contains(t, warnings[1], `"Alpha" has a USD trade on`)
+	assert.Contains(t, warnings[2], `"Alpha": return of capital on`)
+}

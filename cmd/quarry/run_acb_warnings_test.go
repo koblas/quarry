@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -71,4 +72,37 @@ func Test_run_acb_warns_of_a_no_rate_trade_a_shared_ticker_and_a_december_sale(t
 		"quarry: warning: "+sharedTickerWarningVTI+"\n"+
 		"quarry: warning: "+decemberSaleWarning2025+"\n",
 		stderr.String())
+}
+
+const noRateReturnOfCapitalConfig = `[accounts]
+non-registered = ["acct-usd", "acct-cad"]
+
+[[acb.adjustment]]
+security = "sec-vti"
+date = 2025-12-01
+return-of-capital = 1000.00
+`
+
+func Test_run_acb_json_leaves_a_no_rate_security_out_of_the_years_and_warns(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, noRateReturnOfCapitalConfig)
+	replaceStoreWithRates(t, home, noRateSharedTickerRows(), usdRate(day(2024, time.January, 2), 1_250_000))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"acb", "--json"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	var doc acbDoc
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
+	require.Len(t, doc.Years, 1)
+	assert.Equal(t, 1, doc.Years[0].SaleCount)
+	assert.Equal(t, "600.00", doc.Years[0].Proceeds)
+	assert.Equal(t, "0.00", doc.Years[0].ReturnOfCapitalGain)
+	noRate := doc.Securities[0]
+	assert.True(t, noRate.Incomplete)
+	assert.Nil(t, noRate.Events[0].CAD)
+	assert.Nil(t, noRate.Events[0].Gain)
+	assert.Equal(t, new("1000.00"), noRate.Events[1].Gain)
+	assert.Contains(t, doc.Warnings, noRateWarningVTI)
 }

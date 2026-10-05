@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/koblas/quarry/internal/platform/humanize"
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/platform/tomlstr"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
@@ -13,13 +14,14 @@ import (
 
 // ACBWarnings is a's warnings in the ruled order: the config's adjustment lines, which name the file as
 // configShown, then one line for the possible superficial losses, then one per security with shares acquired
-// with no cost, then one per removal of shares with no sale, then one per return of capital above the ACB; the
-// last two by security then date.
+// with no cost, then one per removal of shares with no sale, then one per security with a trade quarry cannot
+// convert to CAD, then one per return of capital above the ACB; all but the first two by security then date.
 func ACBWarnings(a report.ACB, configShown string) []string {
 	warnings := adjustmentWarnings(a, configShown)
 	warnings = append(warnings, superficialLossWarnings(a)...)
 	warnings = append(warnings, noCostWarnings(a)...)
 	warnings = append(warnings, removalWarnings(a)...)
+	warnings = append(warnings, unconvertedTradeWarnings(a)...)
 
 	return append(warnings, returnOfCapitalWarnings(a)...)
 }
@@ -115,6 +117,33 @@ func removalWarnings(a report.ACB) []string {
 					"if they went to a registered account or to someone else, that is a disposition at market value; "+
 					"check it with your accountant",
 				security.Security.Name, humanize.Shares(report.Millionths(event.Shares)), event.Account, event.Date.Format(DateLayout)))
+		}
+	}
+
+	return warnings
+}
+
+// unconvertedTradeWarnings is one line for each security of a with a trade quarry could not convert to CAD, naming the
+// earliest. A USD trade is told apart by whether the store has rates at all; any other currency by its code.
+func unconvertedTradeWarnings(a report.ACB) []string {
+	const left = "so its ACB is incomplete and its gains are left out of the year totals"
+	var warnings []string
+	for _, security := range a.Securities {
+		noRate := security.NoRate
+		if noRate == nil {
+			continue
+		}
+		name, date := security.Security.Name, noRate.Date.Format(DateLayout)
+		switch currency, _ := money.ParseCurrency(noRate.Currency); {
+		case currency != money.USD:
+			warnings = append(warnings, fmt.Sprintf(`"%s" has a trade on %s in a currency quarry cannot convert to CAD ("%s"), %s`,
+				name, date, noRate.Currency, left))
+		case a.FirstRate.IsZero():
+			warnings = append(warnings, fmt.Sprintf(`"%s" has a USD trade on %s, and the store has no exchange rates, %s; run quarry sync to fetch rates`,
+				name, date, left))
+		default:
+			warnings = append(warnings, fmt.Sprintf(`"%s" has a USD trade on %s, before %s, the first exchange rate in the store, %s`,
+				name, date, a.FirstRate.Format(DateLayout), left))
 		}
 	}
 

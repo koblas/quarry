@@ -60,6 +60,9 @@ func walkACB(history store.InvestmentHistory, req ACBRequest) ACB {
 	}
 
 	result := ACB{AsOf: req.Today}
+	if len(history.Rates) > 0 {
+		result.FirstRate = history.Rates[0].Date
+	}
 	days, issues := adjustmentDays(req, history.Securities)
 	names := accountNames(history.Accounts)
 	var sales []acbSale
@@ -75,8 +78,11 @@ func walkACB(history store.InvestmentHistory, req ACBRequest) ACB {
 		if len(txs) > 0 {
 			result.Securities = append(result.Securities, walk.position)
 		}
-		sales = append(sales, walk.sales...)
-		excesses = append(excesses, walk.excesses...)
+		// A security with a trade quarry cannot value has no trustworthy gain, in any year.
+		if walk.position.NoRate == nil {
+			sales = append(sales, walk.sales...)
+			excesses = append(excesses, walk.excesses...)
+		}
 		issues = append(issues, walk.issues...)
 	}
 	slices.SortFunc(result.Securities, func(a, b ACBSecurity) int {
@@ -208,7 +214,8 @@ func walkSecurity(security store.Security, txs []store.InvestmentTransaction, da
 	for _, day := range days {
 		w.adjust(day)
 	}
-	w.position.Shares, w.position.ACB, w.position.Incomplete = w.pool.shares, w.pool.acb, w.unknownCost
+	w.position.Shares, w.position.ACB = w.pool.shares, w.pool.acb
+	w.position.Incomplete = w.unknownCost || w.position.NoRate != nil
 
 	return w
 }
@@ -228,6 +235,12 @@ func (w *securityWalk) apply(tx store.InvestmentTransaction) {
 	}
 	if noCostAcquisition(tx) {
 		w.unknownCost, event.UnknownCost = true, true
+	}
+	if unvalued(tx, rate) {
+		event.Unvalued = true
+		if w.position.NoRate == nil {
+			w.position.NoRate = &ACBNoRate{Date: tx.Date, Currency: tx.Currency}
+		}
 	}
 	switch tx.Action {
 	case store.ActionBuy:
@@ -338,6 +351,28 @@ func movesNoUnits(tx store.InvestmentTransaction) bool {
 		return units(tx.Shares).Sign() <= 0
 	case store.ActionRemoveShares:
 		return units(tx.Shares).Sign() == 0
+	default:
+		return false
+	}
+}
+
+// unvalued is whether tx moves an amount into or out of the pool that quarry cannot convert to CAD: any
+// non-CAD currency without a usable rate. Only CAD is never converted.
+func unvalued(tx store.InvestmentTransaction, rate money.Rate) bool {
+	from, _ := money.ParseCurrency(tx.Currency)
+	_, converted := money.Convert(0, from, money.CAD, rate)
+
+	return needsConversion(tx) && !converted
+}
+
+// needsConversion is whether tx's amount reaches the pool or a gain: a buy, a sale, and added or reinvested
+// shares with a recorded cost. A split, a removal and added shares with no cost carry no value.
+func needsConversion(tx store.InvestmentTransaction) bool {
+	switch tx.Action {
+	case store.ActionBuy, store.ActionSell:
+		return true
+	case store.ActionAddShares, store.ActionReinvestDividend:
+		return tx.CostBasis != nil
 	default:
 		return false
 	}

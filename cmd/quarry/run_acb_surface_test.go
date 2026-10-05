@@ -38,7 +38,7 @@ type acbDoc struct {
 		Incomplete  bool    `json:"incomplete"`
 		Events      []struct {
 			Action  string  `json:"action"`
-			CAD     string  `json:"cad"`
+			CAD     *string `json:"cad"`
 			Outlays *string `json:"outlays"`
 			Gain    *string `json:"gain"`
 		} `json:"events"`

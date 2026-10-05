@@ -160,7 +160,7 @@ func Test_run_acb_writes_return_of_capital_gain_in_json(t *testing.T) {
 	require.Len(t, doc.Securities, 1)
 	excess := doc.Securities[0].Events[len(doc.Securities[0].Events)-1]
 	assert.Equal(t, "return of capital", excess.Action)
-	assert.Equal(t, "2300.00", excess.CAD)
+	assert.Equal(t, new("2300.00"), excess.CAD)
 	assert.Nil(t, excess.Outlays)
 	require.NotNil(t, excess.Gain)
 	assert.Equal(t, "1490.00", *excess.Gain)

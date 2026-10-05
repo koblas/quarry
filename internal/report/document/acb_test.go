@@ -170,14 +170,33 @@ func Test_NewACB_reads_back_a_usd_buy_with_its_rate_and_a_sale_with_its_outlays_
 		{
 			Date: "2023-01-03", InvestmentTransactionID: new("itxn-1"), AccountID: new("acct-3"), Account: new("Margin"),
 			Action: "buy", Shares: "410.000000", Amount: new("-1234.56"), AmountCurrency: new("USD"), USDCAD: new("1.351234"),
-			CAD: "-1668.14", SharesHeld: "410.000000", ACB: "10412.33",
+			CAD: new("-1668.14"), SharesHeld: "410.000000", ACB: "10412.33",
 		},
 		{
 			Date: "2024-03-04", InvestmentTransactionID: new("itxn-9"), AccountID: new("acct-3"), Account: new("Margin"),
 			Action: "sell", Shares: "10.000000", Amount: new("1000.00"), AmountCurrency: new("CAD"),
-			CAD: "1000.00", Outlays: new("9.99"), SharesHeld: "400.000000", ACB: "9212.33", Gain: new("-209.99"),
+			CAD: new("1000.00"), Outlays: new("9.99"), SharesHeld: "400.000000", ACB: "9212.33", Gain: new("-209.99"),
 		},
 	}, got.Securities[0].Events)
+}
+
+func Test_NewACB_writes_an_unvalued_event_with_a_null_cad_and_gain_and_keeps_its_position(t *testing.T) {
+	a := report.ACB{AsOf: acbAsOf, Securities: []report.ACBSecurity{{
+		Security: store.Security{ID: "sec-41", Name: "XEQT"}, Shares: big.NewRat(1, 1), Incomplete: true,
+		Events: []report.ACBEvent{{
+			Date: acbAsOf, Action: "sell", Shares: big.NewRat(1, 1), Amount: new(int64(500)), Currency: "USD",
+			Outlays: new(int64(0)), Held: big.NewRat(1, 1), ACB: 700, Gain: -700, Realized: true, Unvalued: true,
+		}},
+	}}}
+
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(firstOf(t, acbJSON(t, a, nil), "securities"), &raw))
+	var events []map[string]any
+	require.NoError(t, json.Unmarshal(raw["events"], &events))
+
+	assert.Nil(t, events[0]["cad"])
+	assert.Nil(t, events[0]["gain"])
+	assert.Equal(t, "7.00", events[0]["acb"])
 }
 
 func Test_NewACB_writes_a_break_even_sale_gain_and_outlays_as_zero_and_a_buy_gain_as_null(t *testing.T) {

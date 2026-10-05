@@ -35,7 +35,9 @@ const (
 // ACB is the adjusted cost base of each security pooled across the non-registered accounts, and the capital
 // gains realized each tax year, in CAD cents.
 type ACB struct {
-	AsOf       time.Time
+	AsOf time.Time
+	// FirstRate is the date of the first exchange rate in the store; zero when the store has none.
+	FirstRate  time.Time
 	Years      []ACBYear
 	Securities []ACBSecurity
 	// AdjustmentIssues are the adjustments skipped or repeated, by item number.
@@ -112,9 +114,19 @@ type ACBSecurity struct {
 	Security store.Security
 	Shares   *big.Rat
 	ACB      int64
-	// Incomplete is true when the ACB rests on shares with no recorded cost or on a trade with no rate.
+	// Incomplete is true when the ACB rests on shares with no recorded cost or on a trade quarry cannot value.
 	Incomplete bool
-	Events     []ACBEvent
+	// NoRate is the earliest trade quarry could not convert to CAD; nil when it valued them all. A security
+	// with one is left out of the year totals, every year.
+	NoRate *ACBNoRate
+	Events []ACBEvent
+}
+
+// ACBNoRate is a trade in a currency quarry could not convert to CAD: USD with no rate on or before its date,
+// or any other non-CAD currency, Currency being the trade's own code.
+type ACBNoRate struct {
+	Date     time.Time
+	Currency string
 }
 
 // PerShare is the ACB per share in CAD dollars, or nil when no shares are held.
@@ -129,7 +141,8 @@ func (s ACBSecurity) PerShare() *big.Rat {
 // ACBEvent is one transaction the walk applied: the units it moved and the pool it left. Amount and Currency
 // are the transaction's own; CAD is Amount at Rate, which is 0 unless the trade was in USD with a rate on file.
 // Outlays (CAD cents) and Gain are meaningful only when Realized, which a sale and a return of capital above the
-// ACB set. UnknownCost is set when the shares the event moved have no recorded cost.
+// ACB set. UnknownCost is set when the shares the event moved have no recorded cost. Unvalued is set when the
+// trade could not be converted to CAD, so CAD and Gain are unknown, not 0.
 type ACBEvent struct {
 	ID                 string
 	Date               time.Time
@@ -146,6 +159,7 @@ type ACBEvent struct {
 	Gain               int64
 	Realized           bool
 	UnknownCost        bool
+	Unvalued           bool
 }
 
 // Millionths is a count of shares in millionths, rounded half away from zero.
