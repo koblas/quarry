@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-19
-status: open
+status: done
 ---
 
 # SCENARIO-19: MCP acb
@@ -35,10 +35,10 @@ Tool `acb`, params `year` (integer 1..9999, `*int`), `security` (string array; a
 - [x] Step 7: copy and pins: `report/sql_conventions.go:31-33` sentence 2 right after sentence 1, re-wrapped; rewrite `sql_conventions_test.go:37-42` (drop `NotContains "acb"`); hand copies (`grep -rln 'cost_basis is the cost' cmd internal plugin`) `cli/sql_test.go:234` `Test_sql_help_describes_the_command_and_its_flags`, `run_shared_documents_test.go:397` `Test_run_prints_the_sql_status_and_findings_documents_byte_for_byte`, `run_holdings_surfaces_test.go:~25-40` `Test_run_accounts_and_sql_help_carry_the_holdings_copy`; regenerate `schema.md` (`go test ./cmd/quarry -run Test_skill_schema_reference_matches_the_committed_file -update`); `finding/finding.go:321-323` Sentence per ruling §7 + `finding_test.go:218` (first a flattened, positive-controlled search for other fix-sentence pins: goldens, CSV, `--json`); `mcp/tools.go:77-84` `dataQualityDescription` per §7 + `run_mcp_descriptions_test.go:~47-56` pin; `cli/mcp.go:40-41` + `cli/mcp_test.go:43-45` + `run_mcp_descriptions_test.go:286` Tools line; `plugin/skills/quarry/SKILL.md:98` §9 and the §8 row directly before `Failure` (`:80-90`) + `run_skill_text_test.go:226,240`
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/mcp ./internal/report/document` reads right; doc comments on new symbols
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/mcp ./internal/report/document` reads right; doc comments on new symbols
 
 ### Verify
-- [ ] Step 9: full verification per `agent-briefs.md`; `.claude/scripts/spec-check.py phase4de-acb`; tick SCENARIO-19 in `specification.md` with its acceptance test last on the line; rewrite STATE.md (drop the S19 Left-unbuilt items, the `years[]` pin and conventions-test debts, `finding.go:325` LIRA and `dataQualityDescription` debts)
+- [x] Step 9: full verification per `agent-briefs.md`; `.claude/scripts/spec-check.py phase4de-acb`; tick SCENARIO-19 in `specification.md` with its acceptance test last on the line; rewrite STATE.md (drop the S19 Left-unbuilt items, the `years[]` pin and conventions-test debts, `finding.go:325` LIRA and `dataQualityDescription` debts)
 
 ## Handoff
 **Binding decisions:**
@@ -50,10 +50,6 @@ Tool `acb`, params `year` (integer 1..9999, `*int`), `security` (string array; a
 **Traps:** A cut report fires slot 2 form 1 and drops warnings 4/6/7. `fakeStore`/`stallingStore` embed a nil `report.Store`: tests reaching `InvestmentHistory` panic without the stubs. `refusalLine` must map the kind to a class line or caller text reaches stderr. Re-wrapping the conventions paragraph shifts the hand-copy pins. Changing `ACBWarnings`' signature touches 39 test call sites: do it in run A.
 
 ## Phase report
-Run B3 (step 7) done: copy and pins, nothing left of it. `golangci-lint run ./...` 0 issues; `go test` green on `cmd/quarry`, `internal/cli`, `internal/mcp`, `internal/report/...`, `internal/finding` (full covered suite is V's).
-- Conventions sentence 2 right after sentence 1, tail re-wrapped at 79: `internal/report/sql_conventions.go:31-35`; hand copies `internal/cli/sql_test.go:234`, `cmd/quarry/run_shared_documents_test.go:397`; `plugin/skills/quarry/references/schema.md` regenerated with `-update` (not hand-edited). `run_holdings_surfaces_test.go:26` pin (`records none).` + next line) still matches unchanged: needs no edit. `sql_conventions_test.go` test renamed `Test_sql_conventions_say_what_cost_basis_is_and_send_acb_to_the_command`, `NotContains "acb"` dropped, asserts sentence 1 + 2 + `prices holds`.
-- `finding.go:322` Sentence + `finding_test.go:218` (RESP, FHSA, LIRA, a US 401(k) or IRA, or a similar registered plan). Flattened search (comment/`+`/quote prefixes stripped, whitespace collapsed, positive control found `finding.go` and `finding_test.go`) over repo minus .git/.devenv/worktrees: no other pin of the fix sentence (goldens, CSV, `--json` tests do not carry it; `findings.md`/`run_skill_references_test.go` hold the separate ask-the-user LIRA list, already ruled). Misses: text split across a Go string concatenation inside a line is joined only for `" + "`.
-- `internal/mcp/tools.go:77-84` `dataQualityDescription` + pin `run_mcp_descriptions_test.go` `mcpDataQualityDescription`, verbatim ruling §7.
-- `mcp --help` Tools line `net_worth, acb.`: `internal/cli/mcp.go:40`, `internal/cli/mcp_test.go:45`, `cmd/quarry/run_mcp_descriptions_test.go:~301`.
-- SKILL §8 row before `Failure` and §9 `acb` in `plugin/skills/quarry/SKILL.md`, pins `cmd/quarry/run_skill_text_test.go` (`skillSection8`, `skillSection9`).
-- Next (V): sweep, full verification, spec-check, tick SCENARIO-19, STATE.md rewrite (drop S19 Left-unbuilt items, `years[]` pin debt, conventions-test debt, `finding.go:325` LIRA and `dataQualityDescription` debts; the `Test_sql_conventions_...` name changed).
+Run V done: sweep and verify green, SCENARIO-19 ticked, STATE.md rewritten, `status: done`.
+- `go build ./...` ok, `golangci-lint run ./...` 0 issues, covered full suite rc=0, `uncovered-diff.py --profile ... 78155be`: 0 uncovered, 1 declared unreachable (`internal/mcp/accounts.go:95` `acbYearRefusal`), `-race` on `internal/mcp`, `internal/report/...`, `internal/cli/...` green, `spec-check.py phase4de-acb` OK.
+- Nothing left for a later run; SCENARIO-21 is the orchestrator's reference check.
