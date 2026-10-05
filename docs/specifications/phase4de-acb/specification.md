@@ -330,12 +330,18 @@ reinvested-distribution = 56.78  # T3 box 21 not paid in cash
 - No masking needed. Security ids appear in `acb --json` and `securities.id`.
 
 #### Finding `shares-without-cost`
-- After `unclassified-account` in Types(). Entity itxn id; id `shares-without-cost:itxn-123`. Read-time; non-registered accounts only; add_shares shares > 0, NULL cost_basis. Order date then id.
+- After `unclassified-account` in Types(). Entity itxn id; id `shares-without-cost:itxn-123`. Read-time; non-registered accounts only; add_shares shares > 0, NULL cost_basis. Order newest date first, then id (reuses `latestDate`, joins the duplicate/transfer arm — product-vision ruling 2026-10-05, S13b). An add dated after today is listed (findings have no clock).
 - Heading `Shares added with no cost`. GroupClause `enter what each one cost on its Add Shares transaction in Quicken, then run quarry sync; until then quarry acb counts those shares at no cost`.
 - Fix/JSON `fix`: `Open this Add Shares transaction in Quicken and enter the shares' cost basis, then run quarry sync; until then quarry acb counts them at no cost, so its gains on this security are too high`
 - Row: `  shares-without-cost:itxn-123  2016-03-01  Questrade Margin  XEQT  100 shares`
 - JSON item: date, account_id, account, currency set; new keys appended to every FindingItem (null elsewhere): `investment_transaction_id`, `security_id`, `security`, `shares`. CSV: same four columns appended to the header end.
-- `--type` literal gains it; Long row `shares-without-cost  shares added to a non-registered account with no cost basis, which quarry acb needs` + sentence: never marked fixed; leaves the list on the sync after the cost is entered.
+- `--type` literal gains it; Long row `shares-without-cost  shares added to a non-registered account with no cost basis, which quarry acb needs` + own paragraph right after the unclassified-account TOML block, before "To keep a finding off the list…", wrapped like its neighbours (product-vision ruling 2026-10-05, S13b):
+  ```
+  shares-without-cost leaves the list on the first sync after the shares' cost
+  is entered in Quicken, and is never marked fixed.
+  ```
+- Row shares: `humanize.Shares(n)` + ` share` when n is exactly 1 (1,000,000 millionths), ` shares` otherwise (`1 share`, `0.5 shares`); check at the call site, not in humanize. JSON item keys `investment_transaction_id`, `security_id`, `security`, `shares` after `splits`, null on other types; CSV the same four columns after `fix`, empty cells on other types and fixed/empty rows (S13b ruling).
+- Existing text made untrue (S13b ruling): `plugin/skills/quarry/SKILL.md:70` "findings it no longer finds are marked fixed." → "findings it no longer finds leave the list."; `plugin/skills/quarry/references/findings.md:27` → "A finding that quarry no longer finds after the sync is marked fixed, except shares-without-cost, which leaves the list without being marked fixed."
 - findings.md bullet: `` `shares-without-cost`: shares moved or added into a non-registered account with no cost basis in Quicken. Open the Add Shares transaction and enter the cost (from the old broker's statement); quarry acb counts them at no cost until then. ``
 
 #### Store
