@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"math/big"
 	"testing"
@@ -98,4 +99,28 @@ func Test_networth_writes_no_holdings_warning_when_stdout_fails(t *testing.T) {
 
 	require.ErrorIs(t, err, errNoSpace)
 	assert.Empty(t, stderr.String())
+}
+
+const emptyNetWorthWarning = "no account has a balance on 2026-03-12; no account in Quicken's reports has transactions or holdings"
+
+func Test_networth_prints_the_config_warning_before_the_empty_result_warning(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := cli.Execute(t.Context(), []string{"networth", "--as-of", "2026-03-12"}, loaderEnv(&stdout, &stderr, warningConfig))
+
+	require.NoError(t, err)
+	assert.Equal(t, stderrOf([]string{unknownKeyShown, emptyNetWorthWarning}), stderr.String())
+}
+
+func Test_networth_json_lists_the_config_warning_before_the_empty_result_warning(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := cli.Execute(t.Context(), []string{"networth", "--as-of", "2026-03-12", "--json"}, loaderEnv(&stdout, &stderr, warningConfig))
+
+	require.NoError(t, err)
+	var doc struct {
+		Warnings []string `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	assert.Equal(t, []string{unknownKeyAbsolute, emptyNetWorthWarning}, doc.Warnings)
 }
