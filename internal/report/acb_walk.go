@@ -50,7 +50,8 @@ func walkACB(history store.InvestmentHistory, req ACBRequest) ACB {
 		bySecurity[*tx.SecurityID] = append(bySecurity[*tx.SecurityID], tx)
 	}
 
-	var result ACB
+	result := ACB{AsOf: req.Today}
+	names := accountNames(history.Accounts)
 	var sales []acbSale
 	// A transaction naming a security absent from Securities is never walked; the importer cannot write one
 	// (investments.go resolveSecurity sets security_id only from a mapped security).
@@ -59,7 +60,7 @@ func walkACB(history store.InvestmentHistory, req ACBRequest) ACB {
 		if len(txs) == 0 {
 			continue
 		}
-		position, securitySales := walkSecurity(security, txs, history.Rates)
+		position, securitySales := walkSecurity(security, txs, history.Rates, names)
 		result.Securities = append(result.Securities, position)
 		sales = append(sales, securitySales...)
 	}
@@ -86,9 +87,19 @@ func nonRegisteredAccounts(accounts []store.Account, c Classification) map[strin
 	return ids
 }
 
+// accountNames is each account's name by id.
+func accountNames(accounts []store.Account) map[string]string {
+	names := make(map[string]string, len(accounts))
+	for _, a := range accounts {
+		names[a.ID] = a.Name
+	}
+
+	return names
+}
+
 // walkSecurity applies txs, in date, tier then source id order, to one pool and returns its position and sales.
-// rates convert each foreign-currency amount at the rate on or before its date.
-func walkSecurity(security store.Security, txs []store.InvestmentTransaction, rates []store.Rate) (ACBSecurity, []acbSale) {
+// rates convert each foreign-currency amount at the rate on or before its date; names are the accounts' names by id.
+func walkSecurity(security store.Security, txs []store.InvestmentTransaction, rates []store.Rate, names map[string]string) (ACBSecurity, []acbSale) {
 	slices.SortFunc(txs, func(a, b store.InvestmentTransaction) int {
 		return cmp.Or(
 			a.Date.Compare(b.Date),
@@ -102,8 +113,14 @@ func walkSecurity(security store.Security, txs []store.InvestmentTransaction, ra
 	var sales []acbSale
 	var splitDay time.Time
 	for _, tx := range txs {
-		event := ACBEvent{ID: tx.ID, Date: tx.Date, Action: tx.Action, Shares: units(tx.Shares)}
 		rate := rateOn(rates, tx.Date)
+		event := ACBEvent{
+			ID: tx.ID, Date: tx.Date, AccountID: tx.AccountID, Account: names[tx.AccountID], Action: tx.Action,
+			Shares: units(tx.Shares), Amount: &tx.Amount, Currency: tx.Currency, CAD: toCAD(tx.Amount, tx.Currency, rate),
+		}
+		if currency, _ := money.ParseCurrency(tx.Currency); currency == money.USD {
+			event.Rate = rate
+		}
 		switch tx.Action {
 		case store.ActionBuy:
 			pool.add(event.Shares, -toCAD(tx.Amount, tx.Currency, rate))
@@ -120,7 +137,9 @@ func walkSecurity(security store.Security, txs []store.InvestmentTransaction, ra
 			// Quicken stores a sale's shares negative; the units sold are their magnitude.
 			event.Shares.Abs(event.Shares)
 			sale := pool.sell(tx, event.Shares, rate)
-			event.Gain = sale.row.Gain
+			sale.row.AccountID, sale.row.Account = event.AccountID, event.Account
+			outlays := sale.row.Outlays
+			event.Gain, event.Outlays, event.Realized = sale.row.Gain, &outlays, true
 			sales = append(sales, sale)
 		}
 		event.Held, event.ACB = new(big.Rat).Set(pool.shares), pool.acb

@@ -33,20 +33,20 @@ The acceptance test runs through `runWith` + `replaceStoreWithRates`, because th
 - [x] Step 2: `internal/cli/acb.go` `newAcbCommand` registered at `internal/cli/root.go:28-41` (+ doc list `:7-10`). Use/Short only and a RunE returning nothing, so the test fails at its stdout assertion.
 
 ### Build
-- [ ] Step 3: report types and walk (`internal/report/acb.go:11-67`, `acb_walk.go:41-176`). **Additive only**: no existing field retyped (08a pins ~30 sites).
+- [x] Step 3: report types and walk (`internal/report/acb.go:11-67`, `acb_walk.go:41-176`). **Additive only**: no existing field retyped (08a pins ~30 sites).
   - New fields:
     - `ACB.AsOf` (= `req.Today`).
     - `AccountID` + account name on `ACBSale` and `ACBEvent`, from `history.Accounts` (same read).
     - On `ACBEvent`: `Amount` (native cents, nullable for S11 adjustments), `Currency`, `Rate` (`money.Rate`, 0 when not USD), `CAD` = `toCAD(amount)` at the event rate, `Outlays *int64` (sale only), and a realized marker so JSON `gain` is null off a sale.
     - Zero-valued `PossibleSuperficialLoss`/`UnknownCost` on `ACBSale` and `Incomplete` on `ACBSecurity` (S12/13a set them).
   - Tests extend `acb_walk_test.go` / `acb_arms_test.go`: account ids/names per event and sale; USD event amount/rate/cad vs CAD event rate 0; outlays and marker only on a sell.
-- [ ] Step 4: `internal/report/document/acb.go` `NewACB(report.ACB, warnings) ACB` — full `--json` shape (spec lines 257-272):
+- [x] Step 4: `internal/report/document/acb.go` `NewACB(report.ACB, warnings) ACB` — full `--json` shape (spec lines 257-272):
   - `currency` "CAD"; `year` null; `as_of` date.
   - Money via `Money`; shares via `Shares` after Rat→millionths round-half-away; `acb_per_share` via `Rat.FloatString(4)`, null at 0 shares.
   - Ticker/currency nullable; per-year counts derived from sale flags; arrays `[]` never nil; events = full history.
   - `usd_cad` rendered from `money.Rate` millionths, trailing zeros trimmed to at least 4 decimals, null unless USD. `amount_currency` is null only when `amount` is.
   - Tests in `document/acb_test.go`: a hand-built `report.ACB` with every flag set and a sold-out security (per-share null); an empty ACB (`[]` arrays); a consolidation leaving non-terminating shares; read-back through `encoding/json` asserting key order and values.
-- [ ] Step 5: `internal/cli/render_acb.go` `renderACB` + `json_acb.go` `renderACBJSON`:
+- [x] Step 5: `internal/cli/render_acb.go` `renderACB` + `json_acb.go` `renderACBJSON`:
   - Year table: caption `Realized capital gains by tax year, in CAD`, columns `Year Sales Proceeds Outlays ACB Gain or loss`, years with a sale only, no total row.
   - Blank line, then `ACB on <as_of>, in CAD` with `Security Ticker Shares ACB ACB per share`: shares > 0 only; name via `escapeCell`; `formatShares`; thousands-grouped money; per-share 4 decimals.
   - No suffix column (S12/13a/14).
@@ -112,14 +112,15 @@ The acceptance test runs through `runWith` + `replaceStoreWithRates`, because th
 
 ## Phase report
 
-Run A done (steps 1-2). Acceptance test RED at its stdout assertion: expected the two tables, actual `""` (exit 0, store built, config read).
+**NEEDS PRODUCT-VISION RULING BEFORE V:** spec :260 and :262 both give each `years[]` object a `sales` key (a count, then the array). One struct tag now: `document/acb.go` `ACBYear.SaleCount` is `json:"sale_count"`; `sales` is the array (spec :271 "empty `sales` still listed"). Rename = one tag + `acb_test.go` key-order row.
+
+Run B1 done (steps 3-5). Acceptance `Test_run_acb_prints_gains_per_tax_year_and_todays_acb_pooled_across_the_accounts` is still RED at its stdout assertion (actual `""`): expected, the RunE is step 6 (B2). Every other acb test in the narrow loop is green; `golangci-lint` on report/cli reports only `renderACBJSON` unused (B2 calls it).
 
 Files:
-- `cmd/quarry/run_acb_test.go`: acceptance test, helpers `acbYearLine`, `acbPositionLine`, `acbTrade`, `acbRows` (fixture; sells stored negative). Config is `non-registered = [acct-cad, acct-usd]`, `registered = [acct-rrsp]`; rates 1.25 from 2024-01-02, 1.40 from 2026-01-02; clock `holdingsClock()` 2026-03-12.
-- `internal/cli/acb.go`: `newAcbCommand(_ ReportFactory, _ ConfigLoader, _ func() time.Time, _ *bool)`, Use/Short only, RunE returns nil. B2 (step 6) replaces the blank parameters and body.
-- `internal/cli/root.go:28-41` registered after holdings; doc list `:7-10` mentions acb.
-- `cmd/quarry/run_status_test.go:~145`: root-help `Available Commands` row for acb (the stub registration broke it; step 6's "root help" row is therefore already done).
+- `internal/report/acb.go`: `ACB.AsOf`; `ACBSale.AccountID/Account/PossibleSuperficialLoss/UnknownCost`; `ACBSecurity.Incomplete`; `ACBEvent.AccountID/Account/Amount *int64/Currency/Rate/CAD/Outlays *int64/Realized`; exported `Millionths(*big.Rat) int64` (the ONE Rat->millionths rounding; document and cli both use it, B2 must not add another).
+- `internal/report/acb_walk.go`: `accountNames`, `walkSecurity(..., names)`; `Rate` set only for a USD trade (0 when CAD or no rate on file); `Outlays` is CAD cents on a sale, a pointer to 0 with no commission; `CAD` = amount at the event rate (a sale's is the net amount, not proceeds).
+- `internal/report/document/acb.go` `NewACB(report.ACB, warnings)`; `Year` is always null (S15 sets it); `usd_cad` null when `Rate == 0` (a USD trade with no rate prints null, not `0.0000`); sale `security`/`ticker` joined from `ACB.Securities`; `perShare` is `FloatString(4)`.
+- `internal/cli/render_acb.go` `renderACB` (years table + `"\n"` + positions table; both always print their header even when empty, S15/S18 own the empty text), `formatPerShare` (thousands-grouped whole part); `internal/cli/json_acb.go` `renderACBJSON(a, warnings)`.
+- Tests: `internal/report/acb_events_test.go`, `internal/report/document/acb_test.go`, `internal/cli/render_acb_internal_test.go` (three `//nolint:dupword`: the `ACB` and `ACB per share` header cells are adjacent).
 
-Expected output (derived by hand; B1 renders it): year rows 2025 (1 sale, 910.00, 10.00, 640.00, 260.00) and 2026 (1, 707.00, 7.00, 500.00, 200.00); positions Acme Corp ACME 90 960.00 10.6667 and Vanguard Total Stock VTI 6 750.00 125.0000. Tables: two-space column separator, text columns left, numbers right, blank line between caption and table, blank line between the tables, no trailing spaces. Maple (registered only) must be absent; its sale would add a second 2025 sale if it leaked.
-
-Do not redo: the fixture arithmetic (commission is ten-thousandths: 100_000 = 10.00; sell `amount` is net, proceeds = amount + commission).
+B2 (steps 6-7): `newAcbCommand` still has blank params and a nil RunE (`internal/cli/acb.go`); wire `renderACBJSON`/`renderACB` through `emitReport`. Do not redo the report fields or the document.
