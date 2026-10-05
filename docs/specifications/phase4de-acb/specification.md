@@ -152,6 +152,7 @@ Unclassified investment accounts (2): list each account's id (acct-…) in accou
 #### Changes to existing surfaces
 - findings Long after the type table: `unclassified-account is fixed in the config file, not in Quicken: it leaves the list as soon as the account is listed there, without a sync, and is never marked fixed.` + the TOML example.
 - `--csv` help: `print one row per transaction, split, payee, category or account as CSV`.
+- findings.md `--csv` mirror (`plugin/skills/quarry/references/findings.md:43`): `prints one row per transaction, split, payee, category or account` (orchestrator ruling 2026-10-05, mirror of the ruled help; 13b moves it to the Part B wording with `account or investment transaction`).
 - findings Short unchanged.
 - SKILL.md frontmatter: after "payee name variants)" add `, or which investment accounts are registered`.
 - SKILL.md §6: replace "quarry never writes that file, and you don't either unless the user asks." with `quarry never writes that file. You write it only when the user asks, or to record an account classification the user just gave you (references/findings.md, "Classifying accounts").` Mirror in findings.md "Ignoring a finding". Pins run_skill_references_test.go:23,79 move.
