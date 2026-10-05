@@ -200,13 +200,16 @@ type NetWorthParams struct {
 }
 
 // NetWorth is the v_net_worth rows on the days asked for, in date, type, currency order, the holdings of
-// the counted accounts those rows leave out, and the date of the store's earliest exchange rate.
+// the counted accounts those rows leave out, and the dates of the store's earliest exchange rate and balance.
 type NetWorth struct {
 	Rows     []NetWorthRow
 	Unvalued []UnvaluedHolding
 
 	// FirstRate is the date of the store's earliest exchange rate; zero when it holds none.
 	FirstRate time.Time
+
+	// FirstBalance is the earliest day a counted account has a transaction or a holding; zero when none does.
+	FirstBalance time.Time
 }
 
 // UnvaluedHolding is a holding of an account on Date that has no value in the account's currency, so the

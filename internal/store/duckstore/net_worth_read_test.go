@@ -189,3 +189,95 @@ func Test_net_worth_reads_a_balance_past_64_bits_in_exact_cents(t *testing.T) {
 	assert.Equal(t, []*big.Int{cents("99999999999999999800000000"), cents("99999999999999999800000000"), cents("79999999999999999840000000")},
 		[]*big.Int{got[0].Balance, got[0].BalanceCAD, got[0].BalanceUSD})
 }
+
+// firstBalanceOn reads st's first balance date.
+func firstBalanceOn(t *testing.T, st *duckstore.Store) time.Time {
+	t.Helper()
+	got, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{marchDay(10)}})
+	require.NoError(t, err)
+	return got.FirstBalance
+}
+
+func Test_net_worth_first_balance_is_the_earliest_transaction_of_any_counted_account(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, netWorthRows([]store.Account{account(acctTwo, 2, "Second", "chequing", "CAD")},
+		transaction("t1", acctOne, marchDay(5), 100), transaction("t2", acctTwo, marchDay(3), 100), transaction("t3", acctOne, marchDay(7), 100)))
+
+	assert.Equal(t, marchDay(3), firstBalanceOn(t, st))
+}
+
+func Test_net_worth_first_balance_is_zero_for_a_store_with_no_transactions_or_holdings(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, noTransactionRows())
+
+	assert.True(t, firstBalanceOn(t, st).IsZero())
+}
+
+func Test_net_worth_first_balance_ignores_accounts_left_out_of_reports(t *testing.T) {
+	t.Parallel()
+	left := account(acctTwo, 2, "Left out", "chequing", "CAD")
+	left.NotInReports = true
+	linked := account("acct-3", 3, "Linked", "chequing", "CAD")
+	linked.LinkedTracking = true
+	st := newStoreWith(t, netWorthRows([]store.Account{left, linked},
+		transaction("t1", acctTwo, marchDay(1), 100), transaction("t2", "acct-3", marchDay(2), 100), transaction("t3", acctOne, marchDay(6), 100)))
+
+	assert.Equal(t, marchDay(6), firstBalanceOn(t, st))
+}
+
+func Test_net_worth_first_balance_counts_an_account_in_reports_that_is_not_linked(t *testing.T) {
+	t.Parallel()
+	counted := account(acctTwo, 2, "Counted", "chequing", "CAD")
+	st := newStoreWith(t, netWorthRows([]store.Account{counted},
+		transaction("t1", acctTwo, marchDay(1), 100), transaction("t3", acctOne, marchDay(6), 100)))
+
+	assert.Equal(t, marchDay(1), firstBalanceOn(t, st))
+}
+
+func Test_net_worth_first_balance_is_a_holding_that_starts_before_the_first_transaction(t *testing.T) {
+	t.Parallel()
+	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(2), oneShare))
+	rows.Transactions = []store.Transaction{transaction("t1", acctChequing, marchDay(4), 100)}
+	st := newStoreWith(t, rows)
+
+	assert.Equal(t, marchDay(2), firstBalanceOn(t, st))
+}
+
+func Test_net_worth_first_balance_is_a_transaction_that_starts_before_the_first_holding(t *testing.T) {
+	t.Parallel()
+	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(4), oneShare))
+	rows.Transactions = []store.Transaction{transaction("t1", acctChequing, marchDay(2), 100)}
+	st := newStoreWith(t, rows)
+
+	assert.Equal(t, marchDay(2), firstBalanceOn(t, st))
+}
+
+func Test_net_worth_first_balance_ignores_a_holding_of_an_account_left_out_of_reports(t *testing.T) {
+	t.Parallel()
+	rows := holdingRows(buy(acctOne, secAcme, 1, marchDay(2), oneShare))
+	rows.Accounts[0].NotInReports = true
+	st := newStoreWith(t, rows)
+
+	assert.True(t, firstBalanceOn(t, st).IsZero())
+}
+
+func Test_net_worth_returns_the_first_balance_query_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	fault := ioFault(`query rows "SELECT min"`)
+	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 3, queryFault: fault}))
+
+	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{marchDay(5)}})
+
+	assertOtherFault(t, err, "disk read failed")
+	assert.ErrorIs(t, err, fault)
+}
+
+func Test_net_worth_returns_a_first_balance_scan_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 3, scanFault: errScanFailed}))
+
+	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{marchDay(5)}})
+
+	assertOtherFault(t, err, errScanFailed.Error())
+	assert.ErrorIs(t, err, errScanFailed)
+}

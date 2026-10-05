@@ -2,6 +2,7 @@ package duckstore
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"math/big"
 	"strings"
@@ -21,8 +22,16 @@ WHERE date IN (`
 const netWorthOrder = `)
 ORDER BY date, type, currency`
 
+// firstBalanceQuery is the earliest day a counted account has a transaction or a holding, the day
+// v_balances_daily starts it.
+const firstBalanceQuery = `
+SELECT min(f.d)
+FROM (SELECT account_id, date AS d FROM transactions UNION ALL SELECT account_id, from_date FROM holding_shares) f
+JOIN accounts a ON a.id = f.account_id
+WHERE ` + reportedAccount
+
 // NetWorth reads the v_net_worth rows and the unvalued holdings of the counted accounts on params.Dates, and
-// the first exchange rate's date, as store.NetWorth documents; a date with no rows contributes none. A store
+// the first exchange rate's and the first balance's dates, as store.NetWorth documents; a date with no rows contributes none. A store
 // it cannot open or read is a *store.OpenError.
 func (s *Store) NetWorth(ctx context.Context, params store.NetWorthParams) (store.NetWorth, error) {
 	db, err := s.openRead(ctx)
@@ -65,8 +74,20 @@ func (s *Store) NetWorth(ctx context.Context, params store.NetWorthParams) (stor
 	if err == nil {
 		read.FirstRate, err = firstRate(ctx, db)
 	}
+	if err == nil {
+		read.FirstBalance, err = firstBalance(ctx, db)
+	}
 	if err != nil {
 		return store.NetWorth{}, openFault(s.Path(), err)
 	}
 	return read, nil
+}
+
+// firstBalance is the date of the first balance of a counted account through db; zero when there is none.
+func firstBalance(ctx context.Context, db ReadDB) (time.Time, error) {
+	var first sql.NullTime
+	err := db.QueryRows(ctx, firstBalanceQuery, nil, func(scan func(dest ...any) error) error {
+		return scan(&first)
+	})
+	return first.Time, err //nolint:wrapcheck // the caller classifies the driver's own error with openFault
 }

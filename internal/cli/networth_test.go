@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"math/big"
 	"testing"
 	"time"
 
@@ -68,10 +69,12 @@ func executeNetWorth(t *testing.T, fake fakeReportStore, stdout, stderr io.Write
 	return cli.Execute(t.Context(), append([]string{"networth", "--as-of", "2026-03-12"}, args...), env)
 }
 
-// leftOutNetWorth is a net worth read whose brokerage holds one unpriced security on 2026-03-12.
+// leftOutNetWorth is a net worth read with one chequing row, whose brokerage holds one unpriced security on 2026-03-12.
 func leftOutNetWorth() fakeReportStore {
 	day := time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC)
-	return fakeReportStore{netWorth: store.NetWorth{Unvalued: []store.UnvaluedHolding{{
+	return fakeReportStore{netWorth: store.NetWorth{Rows: []store.NetWorthRow{{
+		Date: day, Type: "chequing", Currency: "CAD", Accounts: 1, Balance: big.NewInt(100), BalanceCAD: big.NewInt(100),
+	}}, Unvalued: []store.UnvaluedHolding{{
 		Date: day, AccountID: "acct-1", Account: "Brokerage", SecurityID: "sec-1", Security: "Acme", Currency: new("CAD"),
 	}}}}
 }

@@ -383,6 +383,18 @@ func Test_networth_carries_the_date_of_the_first_exchange_rate_read(t *testing.T
 	assert.Equal(t, first, result.FirstRate)
 }
 
+func Test_networth_carries_the_date_of_the_first_balance_read_in_a_snapshot_and_a_history(t *testing.T) {
+	first := day(2026, time.March, 2)
+	srv := report.NewServer(report.WithStore(fakeStore{netWorth: store.NetWorth{FirstBalance: first}}))
+
+	snapshot, snapshotErr := srv.NetWorth(t.Context(), report.NetWorthRequest{AsOf: netWorthDay, Currency: money.CAD})
+	history, historyErr := srv.NetWorth(t.Context(), report.NetWorthRequest{AsOf: netWorthDay, Window: &netWorthHistory, Currency: money.CAD})
+
+	require.NoError(t, snapshotErr)
+	require.NoError(t, historyErr)
+	assert.Equal(t, []time.Time{first, first}, []time.Time{snapshot.FirstBalance, history.FirstBalance})
+}
+
 func Test_networth_type_balance_is_nil_without_a_row_for_the_type_and_currency(t *testing.T) {
 	date := report.NetWorthDate{Rows: []store.NetWorthRow{typedRow("chequing", "CAD", 100, nil), typedRow("savings", "USD", 9, nil)}}
 

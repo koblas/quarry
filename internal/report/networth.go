@@ -46,6 +46,9 @@ type NetWorth struct {
 
 	// FirstRate is the date of the store's earliest exchange rate; zero when it holds none.
 	FirstRate time.Time
+
+	// FirstBalance is the earliest day a counted account has a transaction or a holding; zero when none does.
+	FirstBalance time.Time
 }
 
 // NeedsRate reports whether row has a balance and only an exchange rate it lacks keeps it out of the converted
@@ -93,7 +96,10 @@ func (s *Server) NetWorth(ctx context.Context, req NetWorthRequest) (NetWorth, e
 		return NetWorth{}, s.readRefusal(ctx, "networth", err)
 	}
 
-	listing := NetWorth{AsOf: req.AsOf, Window: req.Window, Currency: req.Currency, FirstRate: read.FirstRate}
+	listing := NetWorth{
+		AsOf: req.AsOf, Window: req.Window, Currency: req.Currency, FirstRate: read.FirstRate,
+		FirstBalance: read.FirstBalance,
+	}
 	listing.Dates = make([]NetWorthDate, len(days))
 	position := make(map[string]int, len(days))
 	for i, day := range days {

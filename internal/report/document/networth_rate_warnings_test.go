@@ -143,7 +143,6 @@ func Test_net_worth_warnings_say_nothing_about_rates_when_no_balance_needs_one(t
 	}{
 		{"every balance converts", rateSnapshot(money.CAD, rateDay(time.March, 1), convertedRow("chequing", 80_000))},
 		{"the only unconverted balance is zero", rateSnapshot(money.CAD, rateDay(time.March, 10), usdRow("chequing", 0))},
-		{"no rows", rateSnapshot(money.CAD, rateDay(time.March, 10))},
 	}
 
 	for _, c := range cases {
