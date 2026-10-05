@@ -108,11 +108,11 @@ func Test_acb_pools_each_security_across_non_registered_accounts(t *testing.T) {
 	commission999, commission495, commission100 := int64(99_900), int64(49_450), int64(10_000)
 	xeqtBuy := acbTx(t, 1, "acct-1", "sec-1", "2023-03-01", store.ActionBuy, "CAD", 100*acbMillion, -250_999)
 	xeqtBuy.Commission = &commission999
-	xeqtSell2023 := acbTx(t, 10, "acct-1", "sec-1", "2023-06-15", store.ActionSell, "CAD", 30*acbMillion, 80_000)
+	xeqtSell2023 := acbTx(t, 10, "acct-1", "sec-1", "2023-06-15", store.ActionSell, "CAD", -30*acbMillion, 80_000)
 	xeqtSell2023.Commission = &commission495
-	xeqtSell2024 := acbTx(t, 3, "acct-2", "sec-1", "2024-09-03", store.ActionSell, "CAD", 100*acbMillion, 330_000)
+	xeqtSell2024 := acbTx(t, 3, "acct-2", "sec-1", "2024-09-03", store.ActionSell, "CAD", -100*acbMillion, 330_000)
 	xeqtSell2024.Commission = &commission999
-	vtiSell := acbTx(t, 7, "acct-3", "sec-2", "2024-04-02", store.ActionSell, "USD", 4*acbMillion, 90_000)
+	vtiSell := acbTx(t, 7, "acct-3", "sec-2", "2024-04-02", store.ActionSell, "USD", -4*acbMillion, 90_000)
 	vtiSell.Commission = &commission100
 	srv := report.NewServer(report.WithStore(fakeStore{history: store.InvestmentHistory{
 		Accounts:   acbAccounts(),
@@ -123,8 +123,8 @@ func Test_acb_pools_each_security_across_non_registered_accounts(t *testing.T) {
 			acbTx(t, 11, "acct-2", "sec-1", "2023-06-15", store.ActionBuy, "CAD", 100*acbMillion, -260_000),
 			xeqtSell2023,
 			acbTx(t, 4, "acct-3", "sec-2", "2024-01-02", store.ActionBuy, "USD", 10*acbMillion, -200_137),
-			acbTx(t, 5, "acct-1", "sec-1", "2024-02-10", store.ActionSell, "CAD", 50*acbMillion, 160_000),
-			acbTx(t, 21, "acct-9", "sec-1", "2024-03-01", store.ActionSell, "CAD", 50*acbMillion, 150_000),
+			acbTx(t, 5, "acct-1", "sec-1", "2024-02-10", store.ActionSell, "CAD", -50*acbMillion, 160_000),
+			acbTx(t, 21, "acct-9", "sec-1", "2024-03-01", store.ActionSell, "CAD", -50*acbMillion, 150_000),
 			vtiSell,
 			xeqtSell2024,
 		},
@@ -178,7 +178,7 @@ func Test_acb_adds_a_reinvested_dividends_cost_and_splits_shares_once(t *testing
 			reinvest,
 			splitIn1,
 			splitIn2,
-			acbTx(t, 6, "acct-2", "sec-5", "2024-06-03", store.ActionSell, "CAD", 10*acbMillion+acbMillion/4, 20_000),
+			acbTx(t, 6, "acct-2", "sec-5", "2024-06-03", store.ActionSell, "CAD", -(10*acbMillion + acbMillion/4), 20_000),
 		},
 	}}))
 

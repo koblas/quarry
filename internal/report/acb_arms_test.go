@@ -47,7 +47,7 @@ func Test_acb_converts_usd_at_the_rate_on_or_before_the_date(t *testing.T) {
 
 func Test_acb_converts_a_usd_sales_proceeds_and_outlays_each_at_its_rate(t *testing.T) {
 	commission := int64(10_050)
-	sell := acbTx(t, 2, "acct-3", "sec-1", "2024-01-10", store.ActionSell, "USD", 10*acbMillion, 12_000)
+	sell := acbTx(t, 2, "acct-3", "sec-1", "2024-01-10", store.ActionSell, "USD", -10*acbMillion, 12_000)
 	sell.Commission = &commission
 
 	got := acbWalkWith(t, []store.Security{acbSecurity("sec-1", "XEQT", "USD")},
@@ -105,7 +105,7 @@ func Test_acb_splits_and_consolidates_shares_not_acb(t *testing.T) {
 
 func Test_acb_applies_a_days_buy_then_split_then_sale_in_that_order(t *testing.T) {
 	got := acbWalkOf(t,
-		acbTx(t, 1, "acct-1", "sec-1", "2024-02-01", store.ActionSell, "CAD", 10*acbMillion, 800),
+		acbTx(t, 1, "acct-1", "sec-1", "2024-02-01", store.ActionSell, "CAD", -10*acbMillion, 800),
 		acbSplitTx(t, 2, "acct-1", "2024-02-01", 2*acbMillion, acbMillion),
 		acbTx(t, 3, "acct-1", "sec-1", "2024-02-01", store.ActionBuy, "CAD", 10*acbMillion, -1_000),
 	)
@@ -189,7 +189,7 @@ func Test_acb_lists_each_securitys_events_and_position(t *testing.T) {
 		acbSplitTx(t, 3, "acct-1", "2024-02-01", 2*acbMillion, acbMillion),
 		acbSplitTx(t, 5, "acct-2", "2024-02-01", 2*acbMillion, acbMillion),
 		reinvest,
-		acbTx(t, 6, "acct-1", "sec-1", "2024-04-01", store.ActionSell, "CAD", 2*acbMillion, 2_000),
+		acbTx(t, 6, "acct-1", "sec-1", "2024-04-01", store.ActionSell, "CAD", -2*acbMillion, 2_000),
 	)
 
 	require.Len(t, got.Securities, 1)
@@ -212,9 +212,25 @@ func Test_acb_gives_the_acb_per_share_in_dollars_and_none_for_an_empty_pool(t *t
 	held := acbWalkOf(t, acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 4*acbMillion, -1_000))
 	soldOut := acbWalkOf(t,
 		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 4*acbMillion, -1_000),
-		acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", 4*acbMillion, 1_200),
+		acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", -4*acbMillion, 1_200),
 	)
 
 	assert.Equal(t, "5/2", held.Securities[0].PerShare().RatString())
 	assert.Nil(t, soldOut.Securities[0].PerShare())
+}
+
+func Test_acb_converts_a_usd_sales_proceeds_and_outlays_together_before_rounding(t *testing.T) {
+	commission := int64(10_100)
+	sell := acbTx(t, 2, "acct-3", "sec-1", "2024-01-10", store.ActionSell, "USD", -10*acbMillion, 1_001)
+	sell.Commission = &commission
+
+	got := acbWalkWith(t, []store.Security{acbSecurity("sec-1", "XEQT", "USD")},
+		[]store.Rate{acbRate(t, "2024-01-02", 1_500_000)},
+		acbTx(t, 1, "acct-3", "sec-1", "2024-01-02", store.ActionBuy, "USD", 10*acbMillion, -1_000),
+		sell,
+	)
+
+	assert.Equal(t, []acbSaleRow{
+		{Date: "2024-01-10", Security: "sec-1", Shares: "10", Proceeds: 1_653, Outlays: 152, ACBRemoved: 1_500, Gain: 1},
+	}, acbSaleRows(got))
 }

@@ -17,8 +17,7 @@ const (
 	acbCommissionPerCent = 100
 )
 
-// acbTiers orders one day's transactions in a pool: acquisitions, then splits, then dispositions. An action
-// absent from it does not touch the pool.
+// acbTiers orders one day's pool transactions: acquisitions, splits, then dispositions; absent actions are skipped.
 var acbTiers = map[string]int{
 	store.ActionBuy:              0,
 	store.ActionReinvestDividend: 0,
@@ -44,7 +43,7 @@ func walkACB(history store.InvestmentHistory, req ACBRequest) ACB {
 	bySecurity := make(map[string][]store.InvestmentTransaction)
 	for _, tx := range history.Transactions {
 		_, walked := acbTiers[tx.Action]
-		// unreachable: duckstore's InvestmentHistory reads only transactions whose security_id is set (investments.go).
+		// unreachable: the nil-security arm, since duckstore's InvestmentHistory reads only rows with a security_id (investments.go:20).
 		if tx.SecurityID == nil || !walked || !inPool[tx.AccountID] || tx.Date.After(req.Today) {
 			continue
 		}
@@ -53,6 +52,8 @@ func walkACB(history store.InvestmentHistory, req ACBRequest) ACB {
 
 	var result ACB
 	var sales []acbSale
+	// A transaction naming a security absent from Securities is never walked; the importer cannot write one
+	// (investments.go resolveSecurity sets security_id only from a mapped security).
 	for _, security := range history.Securities {
 		txs := bySecurity[security.ID]
 		if len(txs) == 0 {
@@ -116,6 +117,8 @@ func walkSecurity(security store.Security, txs []store.InvestmentTransaction, ra
 			splitDay = tx.Date
 			pool.split(tx.SplitNewShares, tx.SplitOldShares)
 		case store.ActionSell:
+			// Quicken stores a sale's shares negative; the units sold are their magnitude.
+			event.Shares.Abs(event.Shares)
 			sale := pool.sell(tx, event.Shares, rate)
 			event.Gain = sale.row.Gain
 			sales = append(sales, sale)
@@ -137,17 +140,17 @@ func (p *acbPool) add(bought *big.Rat, cost int64) {
 // split multiplies the units held by newShares over oldShares and leaves the ACB alone.
 func (p *acbPool) split(newShares, oldShares *int64) {
 	if newShares == nil || oldShares == nil || *newShares <= 0 || *oldShares <= 0 {
-		// unreachable: the build refuses a split with a missing or non-positive side (duckstore.go splitRatio).
+		// unreachable: the importer refuses such a split (investments.go splitSides) and duckstore/shares.go:223 splitRatio, called from shares.go:123, does too.
 		return
 	}
 	p.shares.Mul(p.shares, big.NewRat(*newShares, *oldShares))
 }
 
-// sell removes sold units and their share of the ACB, or all of it when they are all the units held or more,
-// and returns the sale in CAD.
+// sell removes sold units (a magnitude) and their share of the ACB, or all of it when they are all the units held
+// or more, and returns the sale in CAD.
 func (p *acbPool) sell(tx store.InvestmentTransaction, sold *big.Rat, rate money.Rate) acbSale {
 	removed := p.acb
-	if p.shares.Sign() > 0 && sold.Cmp(p.shares) < 0 {
+	if sold.Cmp(p.shares) < 0 {
 		removed = roundHalfAway(new(big.Rat).Mul(big.NewRat(p.acb, 1), new(big.Rat).Quo(sold, p.shares)))
 		p.shares.Sub(p.shares, sold)
 		p.acb -= removed

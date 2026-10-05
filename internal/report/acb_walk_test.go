@@ -61,7 +61,7 @@ func Test_acb_rounds_the_acb_removed_half_away_from_zero(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			got := acbWalkOf(t,
 				acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", c.boughtShares*acbMillion, -c.boughtCents),
-				acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", c.soldShares*acbMillion, 100),
+				acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", -c.soldShares*acbMillion, 100),
 			)
 
 			sales := acbSaleRows(got)
@@ -75,7 +75,7 @@ func Test_acb_rounds_the_acb_removed_half_away_from_zero(t *testing.T) {
 func Test_acb_removes_the_whole_acb_when_a_sale_exceeds_the_pool(t *testing.T) {
 	got := acbWalkOf(t,
 		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -35_000),
-		acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", 12*acbMillion, 50_000),
+		acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", -12*acbMillion, 50_000),
 	)
 
 	assert.Equal(t, []acbSaleRow{
@@ -87,9 +87,9 @@ func Test_acb_removes_the_whole_acb_when_a_sale_exceeds_the_pool(t *testing.T) {
 func Test_acb_restarts_from_zero_after_selling_out(t *testing.T) {
 	got := acbWalkOf(t,
 		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-		acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", 12*acbMillion, 12_000),
+		acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", -12*acbMillion, 12_000),
 		acbTx(t, 3, "acct-1", "sec-1", "2024-03-02", store.ActionBuy, "CAD", 10*acbMillion, -35_000),
-		acbTx(t, 4, "acct-1", "sec-1", "2024-04-02", store.ActionSell, "CAD", 5*acbMillion, 20_000),
+		acbTx(t, 4, "acct-1", "sec-1", "2024-04-02", store.ActionSell, "CAD", -5*acbMillion, 20_000),
 	)
 
 	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "5", ACB: 17_500}}, acbPositionRows(got))
@@ -112,7 +112,7 @@ func Test_acb_keeps_fractional_shares_exact(t *testing.T) {
 	got := acbWalkOf(t,
 		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", acbMillion/2, -3_000),
 		acbTx(t, 2, "acct-1", "sec-1", "2024-01-03", store.ActionBuy, "CAD", acbMillion/4, -1_500),
-		acbTx(t, 3, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", 333_333, 2_500),
+		acbTx(t, 3, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", -333_333, 2_500),
 	)
 
 	assert.Equal(t, int64(2_000), acbSaleRows(got)[0].ACBRemoved)
@@ -131,7 +131,7 @@ func Test_acb_orders_a_days_buys_before_its_sales(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			got := acbWalkOf(t,
-				acbTx(t, c.sellSrc, "acct-1", "sec-1", "2024-01-02", store.ActionSell, "CAD", 10*acbMillion, 1_500),
+				acbTx(t, c.sellSrc, "acct-1", "sec-1", "2024-01-02", store.ActionSell, "CAD", -10*acbMillion, 1_500),
 				acbTx(t, c.buySource, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -1_000),
 			)
 
@@ -153,8 +153,8 @@ func Test_acb_leaves_out_events_after_today(t *testing.T) {
 func Test_acb_counts_a_sale_in_the_calendar_year_of_its_date(t *testing.T) {
 	got := acbWalkOf(t,
 		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -1_000),
-		acbTx(t, 2, "acct-1", "sec-1", "2024-12-31", store.ActionSell, "CAD", 4*acbMillion, 800),
-		acbTx(t, 3, "acct-1", "sec-1", "2025-01-01", store.ActionSell, "CAD", 4*acbMillion, 900),
+		acbTx(t, 2, "acct-1", "sec-1", "2024-12-31", store.ActionSell, "CAD", -4*acbMillion, 800),
+		acbTx(t, 3, "acct-1", "sec-1", "2025-01-01", store.ActionSell, "CAD", -4*acbMillion, 900),
 	)
 
 	assert.Equal(t, []acbYearRow{
@@ -212,7 +212,7 @@ func Test_acb_returns_any_other_read_failure_unchanged(t *testing.T) {
 func Test_acb_counts_a_sale_without_a_commission_as_having_no_outlays(t *testing.T) {
 	got := acbWalkOf(t,
 		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -1_000),
-		acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", 10*acbMillion, 1_600),
+		acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", -10*acbMillion, 1_600),
 	)
 
 	assert.Equal(t, []acbSaleRow{
@@ -232,7 +232,7 @@ func Test_acb_adds_a_sales_commission_to_its_proceeds_and_rounds_it_half_away(t 
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			sell := acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", 10*acbMillion, 80_000)
+			sell := acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", -10*acbMillion, 80_000)
 			sell.Commission = &c.commission
 
 			got := acbWalkOf(t,
@@ -255,7 +255,7 @@ func Test_acb_leaves_the_pool_alone_for_actions_it_does_not_walk(t *testing.T) {
 		acbTx(t, 3, "acct-1", "sec-1", "2024-01-04", store.ActionCapitalGainLong, "CAD", 0, 60),
 		acbTx(t, 4, "acct-1", "sec-1", "2024-01-05", store.ActionMiscIncome, "CAD", 0, 70),
 		acbTx(t, 5, "acct-1", "sec-1", "2024-01-06", store.ActionAddShares, "CAD", 3*acbMillion, 0),
-		acbTx(t, 6, "acct-1", "sec-1", "2024-01-07", store.ActionRemoveShares, "CAD", 2*acbMillion, 0),
+		acbTx(t, 6, "acct-1", "sec-1", "2024-01-07", store.ActionRemoveShares, "CAD", -2*acbMillion, 0),
 	)
 
 	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "10", ACB: 1_000}}, acbPositionRows(got))
@@ -277,4 +277,89 @@ func Test_acb_reads_a_missing_share_count_as_none(t *testing.T) {
 
 	assert.Equal(t, []acbSaleRow{{Date: "2024-02-02", Security: "sec-1", Shares: "0", Proceeds: 300, Gain: 300}}, acbSaleRows(got))
 	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "10", ACB: 1_200}}, acbPositionRows(got))
+}
+
+func Test_acb_reads_a_sales_negative_stored_shares_as_the_units_sold(t *testing.T) {
+	got := acbWalkOf(t,
+		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -1_000),
+		acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", -4*acbMillion, 800),
+	)
+
+	assert.Equal(t, []acbSaleRow{
+		{Date: "2024-02-02", Security: "sec-1", Shares: "4", Proceeds: 800, ACBRemoved: 400, Gain: 400},
+	}, acbSaleRows(got))
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "6", ACB: 600}}, acbPositionRows(got))
+	assert.Equal(t, "4", got.Securities[0].Events[1].Shares.RatString())
+}
+
+func Test_acb_gains_the_proceeds_less_outlays_of_a_sale_into_an_empty_pool(t *testing.T) {
+	commission := int64(10_000)
+	sell := acbTx(t, 1, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", -5*acbMillion, 800)
+	sell.Commission = &commission
+
+	got := acbWalkOf(t, sell)
+
+	assert.Equal(t, []acbSaleRow{
+		{Date: "2024-02-02", Security: "sec-1", Shares: "5", Proceeds: 900, Outlays: 100, Gain: 800},
+	}, acbSaleRows(got))
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "0", ACB: 0}}, acbPositionRows(got))
+}
+
+func Test_acb_orders_two_securities_sales_on_one_date_by_source_id(t *testing.T) {
+	cases := []struct {
+		name              string
+		xeqtSell, vtiSell int64
+		wantSecurityOrder []string
+	}{
+		{name: "the alphabetically later security sells at the lower source id", xeqtSell: 1, vtiSell: 2, wantSecurityOrder: []string{"sec-1", "sec-2"}},
+		{name: "the alphabetically earlier security sells at the lower source id", xeqtSell: 2, vtiSell: 1, wantSecurityOrder: []string{"sec-2", "sec-1"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := acbWalkOf(t,
+				acbTx(t, 11, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -1_000),
+				acbTx(t, 12, "acct-1", "sec-2", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -1_000),
+				acbTx(t, c.xeqtSell, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", -4*acbMillion, 800),
+				acbTx(t, c.vtiSell, "acct-1", "sec-2", "2024-02-02", store.ActionSell, "CAD", -4*acbMillion, 800),
+			)
+
+			var order []string
+			for _, sale := range got.Years[0].Sales {
+				order = append(order, sale.SecurityID)
+			}
+			assert.Equal(t, c.wantSecurityOrder, order)
+		})
+	}
+}
+
+func Test_acb_adds_a_days_reinvestment_before_its_sale(t *testing.T) {
+	cost := int64(500)
+	reinvest := acbTx(t, 9, "acct-1", "sec-1", "2024-02-02", store.ActionReinvestDividend, "CAD", 5*acbMillion, 0)
+	reinvest.CostBasis = &cost
+
+	got := acbWalkOf(t,
+		acbTx(t, 5, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -1_000),
+		acbTx(t, 1, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", -12*acbMillion, 3_000),
+		reinvest,
+	)
+
+	assert.Equal(t, []acbSaleRow{
+		{Date: "2024-02-02", Security: "sec-1", Shares: "12", Proceeds: 3_000, ACBRemoved: 1_200, Gain: 1_800},
+	}, acbSaleRows(got))
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "3", ACB: 300}}, acbPositionRows(got))
+}
+
+func Test_acb_splits_a_days_reinvested_units(t *testing.T) {
+	cost := int64(500)
+	reinvest := acbTx(t, 9, "acct-1", "sec-1", "2024-02-02", store.ActionReinvestDividend, "CAD", 5*acbMillion, 0)
+	reinvest.CostBasis = &cost
+
+	got := acbWalkOf(t,
+		acbTx(t, 5, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -1_000),
+		acbSplitTx(t, 1, "acct-1", "2024-02-02", 2*acbMillion, acbMillion),
+		reinvest,
+	)
+
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "30", ACB: 1_500}}, acbPositionRows(got))
 }

@@ -6,9 +6,8 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// fakeStore answers each read with a canned result or fault; Query returns at most maxRows of rows,
-// and the got*/accountsReads/holdingsReads/historyReads/chargesReads pointers, when set, record what Query,
-// Spending, CashFlow, Charges, Search, Accounts, Holdings, NetWorth and InvestmentHistory were given or how often.
+// fakeStore answers each read with a canned result or fault; Query returns at most maxRows of rows, and the
+// got*/*Reads pointers, when set, record what each read was given or how often it was called.
 type fakeStore struct {
 	status     store.Status
 	accounts   store.AccountList
