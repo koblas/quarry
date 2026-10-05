@@ -347,15 +347,13 @@ func Test_run_read_commands_refuse_a_bad_acb_adjustment(t *testing.T) {
 
 func Test_run_read_commands_ignore_a_malformed_config_when_given_a_currency(t *testing.T) {
 	before := malformedConfigFixture(t)
+	args := readCommandArgs()
 
-	for name, args := range readCommandArgs() {
-		if name == "accounts" || name == "acb" {
-			continue
-		}
+	for _, name := range []string{"holdings", "networth", "anomalies", "spend", "cashflow", "recurring"} {
 		t.Run(name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), append(args, "--currency", "CAD"), spendEnv(&stdout, &stderr))
+			exitCode := runWith(context.Background(), append(args[name], "--currency", "CAD"), spendEnv(&stdout, &stderr))
 
 			assert.Equal(t, before[name], stdout.String())
 			assert.Empty(t, stderr.String())

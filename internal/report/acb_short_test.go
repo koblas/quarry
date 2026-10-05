@@ -259,3 +259,61 @@ func Test_acb_splits_a_short_pool(t *testing.T) {
 
 	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "-20", ACB: 0}}, acbPositionRows(got))
 }
+
+// acbSplitThenSell buys millionths of sec-1 for 3,000.00, splits newShares for oldShares, then sells units.
+func acbSplitThenSell(t *testing.T, bought, newShares, oldShares, units int64) []store.InvestmentTransaction {
+	t.Helper()
+	return []store.InvestmentTransaction{
+		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", bought, -300_000),
+		acbSplitTx(t, 2, "acct-1", "2024-03-01", newShares, oldShares),
+		acbSell(t, 3, "2024-04-01", units),
+	}
+}
+
+func Test_acb_counts_a_split_leftover_below_a_millionth_as_flat(t *testing.T) {
+	cases := []struct {
+		name         string
+		txs          []store.InvestmentTransaction
+		wantOversold string
+		wantHeld     string
+	}{
+		{
+			name:         "a 1 for 3 split of 100 sold at the shares millionth",
+			txs:          acbSplitThenSell(t, 100*acbMillion, acbMillion, 3*acbMillion, 33_333_333),
+			wantOversold: "", wantHeld: "0",
+		},
+		{
+			name:         "a 1 for 7 split of 1,000 sold at the shares rounded millionth",
+			txs:          acbSplitThenSell(t, 1_000*acbMillion, acbMillion, 7*acbMillion, 142_857_143),
+			wantOversold: "", wantHeld: "0",
+		},
+		{
+			name:         "a 1 for 3 split of 100 sold a millionth beyond the shares",
+			txs:          acbSplitThenSell(t, 100*acbMillion, acbMillion, 3*acbMillion, 33_333_334),
+			wantOversold: "1/1000000", wantHeld: "-1/1000000",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := acbWalkOf(t, c.txs...)
+
+			assert.Equal(t, c.wantOversold, acbLastOversold(t, got))
+			events := got.Securities[0].Events
+			assert.Equal(t, c.wantHeld, events[len(events)-1].Held.RatString())
+		})
+	}
+}
+
+func Test_acb_skips_a_return_of_capital_on_a_pool_a_split_left_flat_as_not_held(t *testing.T) {
+	txs := acbSplitThenSell(t, 100*acbMillion, acbMillion, 3*acbMillion, 33_333_333)
+
+	got := acbWalkAdjusted(t, []report.ACBAdjustment{acbAdjustment(t, "sec-1", "2024-06-01", 1_000, 0)}, txs...)
+
+	assert.Equal(t, []report.ACBAdjustmentIssue{
+		{Kind: report.ACBAdjustmentNotHeld, Item: 1, SecurityID: "sec-1", Security: "XEQT", Date: dateOf(t, "2024-06-01")},
+	}, got.AdjustmentIssues)
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "0", ACB: 0}}, acbPositionRows(got))
+	assert.Equal(t, int64(0), got.Years[0].ReturnOfCapitalGain)
+	assert.False(t, got.Securities[0].Incomplete)
+}

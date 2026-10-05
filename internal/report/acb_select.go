@@ -31,12 +31,7 @@ func (a ACB) withSelection(history store.InvestmentHistory, req ACBRequest) (ACB
 		}
 	}
 
-	ordered := slices.SortedFunc(maps.Values(picked), func(x, y store.Security) int {
-		return cmp.Or(
-			cmp.Compare(strings.ToLower(x.Name), strings.ToLower(y.Name)),
-			cmp.Compare(x.ID, y.ID),
-		)
-	})
+	ordered := slices.SortedFunc(maps.Values(picked), compareSecurities)
 	a.Selected = true
 	for _, s := range ordered {
 		a.SelectedIDs = append(a.SelectedIDs, s.ID)
@@ -46,6 +41,14 @@ func (a ACB) withSelection(history store.InvestmentHistory, req ACBRequest) (ACB
 	}
 
 	return a, nil
+}
+
+// compareSecurities orders securities by name, ignoring case, then id: the order acb lists them in.
+func compareSecurities(a, b store.Security) int {
+	return cmp.Or(
+		cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)),
+		cmp.Compare(a.ID, b.ID),
+	)
 }
 
 // matchSecurities is the securities selector names: the one with that id alone, else every one whose ticker or

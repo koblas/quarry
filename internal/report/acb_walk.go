@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"math/big"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/money"
@@ -67,8 +66,8 @@ func walkACB(history store.InvestmentHistory, req ACBRequest) ACB {
 	names := accountNames(history.Accounts)
 	var sales []acbSale
 	var excesses []acbExcess
-	// A transaction naming a security absent from Securities is never walked; the importer cannot write one
-	// (investments.go resolveSecurity sets security_id only from a mapped security).
+	// A transaction naming a security absent from Securities is never walked: the importer sets a security_id
+	// only from a security it mapped, so the store holds no such row.
 	for _, security := range history.Securities {
 		txs := bySecurity[security.ID]
 		if len(txs) == 0 && len(days[security.ID]) == 0 {
@@ -85,12 +84,7 @@ func walkACB(history store.InvestmentHistory, req ACBRequest) ACB {
 		}
 		issues = append(issues, walk.issues...)
 	}
-	slices.SortFunc(result.Securities, func(a, b ACBSecurity) int {
-		return cmp.Or(
-			cmp.Compare(strings.ToLower(a.Security.Name), strings.ToLower(b.Security.Name)),
-			cmp.Compare(a.Security.ID, b.Security.ID),
-		)
-	})
+	slices.SortFunc(result.Securities, func(a, b ACBSecurity) int { return compareSecurities(a.Security, b.Security) })
 	slices.SortFunc(issues, func(a, b ACBAdjustmentIssue) int { return cmp.Compare(a.Item, b.Item) })
 	markSuperficialLosses(sales, history, req.Today)
 	result.Years = acbYears(sales, excesses)
@@ -253,6 +247,9 @@ func (w *securityWalk) apply(tx store.InvestmentTransaction) {
 		}
 		w.splitDay = tx.Date
 		splitShares(w.pool.shares, tx.SplitNewShares, tx.SplitOldShares)
+		// Shares are kept in millionths, as the holding count keeps them: an uneven ratio's sub-millionth
+		// leftover would otherwise read as held or short.
+		w.pool.shares.SetFrac64(Millionths(w.pool.shares), acbUnitsPerShare)
 	case store.ActionSell:
 		// Quicken stores a sale's shares negative; the units sold are their magnitude.
 		event.Shares.Abs(event.Shares)
@@ -417,17 +414,17 @@ func (p *acbPool) short() *big.Rat {
 	return new(big.Rat).Neg(p.shares)
 }
 
-// take removes units (a magnitude) and their share of the ACB, and returns the ACB removed. Units that are all
-// the units held or more remove all of it and leave the pool short by the excess.
-func (p *acbPool) take(units *big.Rat) int64 {
+// take removes count units (a magnitude) and their share of the ACB, and returns the ACB removed. A count that is
+// all the units held or more removes all of it and leaves the pool short by the excess.
+func (p *acbPool) take(count *big.Rat) int64 {
 	removed := p.acb
-	if units.Cmp(p.shares) < 0 {
-		removed = roundHalfAway(new(big.Rat).Mul(big.NewRat(p.acb, 1), new(big.Rat).Quo(units, p.shares)))
+	if count.Cmp(p.shares) < 0 {
+		removed = roundHalfAway(new(big.Rat).Mul(big.NewRat(p.acb, 1), new(big.Rat).Quo(count, p.shares)))
 		p.acb -= removed
 	} else {
 		p.acb = 0
 	}
-	p.shares.Sub(p.shares, units)
+	p.shares.Sub(p.shares, count)
 
 	return removed
 }
@@ -473,6 +470,7 @@ func toCAD(cents int64, currency string, rate money.Rate) int64 {
 	return converted
 }
 
+// zeroIfNil is *n, or 0 when n is nil.
 func zeroIfNil(n *int64) int64 {
 	if n == nil {
 		return 0

@@ -54,16 +54,18 @@ func acbRefusal(err error) error {
 	if !ok {
 		return err
 	}
-	if refusal.Kind == report.RefusalUnclassifiedAccounts {
+	switch refusal.Kind {
+	case report.RefusalUnclassifiedAccounts:
 		// The text carries nothing from the call, so stderr repeats it.
 		return verbatim(namedRefusedError{text: unclassifiedAccountsText(refusal.Count), refusal: refusal})
-	}
-	if refusal.Kind == report.RefusalUnknownSecurity {
+	case report.RefusalUnknownSecurity:
 		return namedRefusedError{
 			text:    fmt.Sprintf("acb covers no security named %q; %s with no arguments lists every security it covers", refusal.Arg, toolACB),
 			refusal: refusal,
 		}
+	case report.RefusalGeneric, report.RefusalUnknownAccount, report.RefusalAmbiguousAccount, report.RefusalStore, report.RefusalUnknownCategory:
 	}
+
 	return err
 }
 

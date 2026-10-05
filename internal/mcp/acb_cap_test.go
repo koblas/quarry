@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/mcp"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -55,6 +56,8 @@ func Test_acb_caps_events_at_500_across_securities(t *testing.T) {
 
 			require.Len(t, doc.Securities, 2)
 			assert.Equal(t, c.wantCounts, []int{len(doc.Securities[0].Events), len(doc.Securities[1].Events)})
+			assert.NotNil(t, doc.Securities[0].Events)
+			assert.NotNil(t, doc.Securities[1].Events)
 			assert.Equal(t, c.wantWarnings, doc.Warnings)
 		})
 	}
@@ -66,7 +69,7 @@ func Test_acb_keeps_the_header_of_a_security_whose_events_the_cap_cut_all(t *tes
 	doc := decodeACB(t, h.acb(t, map[string]any{}))
 
 	assert.Equal(t, []string{"sec-acme", "sec-beta"}, securityIDs(doc))
-	assert.Empty(t, doc.Securities[1].Events)
+	assert.Equal(t, []document.ACBEvent{}, doc.Securities[1].Events)
 	assert.Equal(t, "Beta Fund", doc.Securities[1].Security)
 	assert.Equal(t, "1.000000", doc.Securities[1].Shares)
 }

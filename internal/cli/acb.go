@@ -13,6 +13,9 @@ import (
 // acbCurrencyHelp is --currency's help: the backticked word is the placeholder in usage text.
 const acbCurrencyHelp = "ACB is in CAD only; any other `currency` is refused"
 
+// acbCADOnlyRefusal is the usage error for a --currency other than CAD.
+const acbCADOnlyRefusal = "acb is in CAD only, as the CRA requires; run it without --currency"
+
 // acbYearHelp is --year's help: the backticked word is the placeholder in usage text.
 const acbYearHelp = "list the sales in tax `year` (YYYY) one by one"
 
@@ -52,11 +55,12 @@ accountant, not a tax filing.`,
 		Example: `  quarry acb
   quarry acb --year 2024
   quarry acb --security XEQT --json`,
-		Args: currency.argsCADOnly,
+		Args: currency.argsCADOnly(acbCADOnlyRefusal),
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			at := now()
 			var year int
 			if cmd.Flags().Changed("year") {
-				parsed, err := report.ParseACBYear(yearFlag, now())
+				parsed, err := report.ParseACBYear(yearFlag, at)
 				if err != nil {
 					return UsageError{msg: err.Error()}
 				}
@@ -74,7 +78,7 @@ accountant, not a tax filing.`,
 			}
 
 			acb, err := srv.ACB(cmd.Context(), report.ACBRequest{
-				Classification: classificationOf(cfg), Today: report.Today(now()), Year: year, Securities: securities, Adjustments: acbAdjustmentsOf(cfg),
+				Classification: classificationOf(cfg), Today: report.Today(at), Year: year, Securities: securities, Adjustments: acbAdjustmentsOf(cfg),
 			})
 			if err != nil {
 				return &runtimeError{err: err}

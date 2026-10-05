@@ -125,6 +125,7 @@ func (y ACBYear) UnknownCostSales() int {
 	return y.countSales(func(sale ACBSale) bool { return sale.UnknownCost })
 }
 
+// countSales is how many of the year's sales marked is true of.
 func (y ACBYear) countSales(marked func(ACBSale) bool) int {
 	n := 0
 	for _, sale := range y.Sales {

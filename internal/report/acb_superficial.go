@@ -28,6 +28,7 @@ type superficialIndex struct {
 	tickerOf   map[string]string
 }
 
+// newSuperficialIndex indexes the history's transactions dated through today, and its securities by ticker.
 func newSuperficialIndex(history store.InvestmentHistory, today time.Time) superficialIndex {
 	index := superficialIndex{
 		byID:       make(map[string][]store.InvestmentTransaction),
@@ -35,8 +36,11 @@ func newSuperficialIndex(history store.InvestmentHistory, today time.Time) super
 		tickerOf:   make(map[string]string),
 	}
 	for _, tx := range history.Transactions {
-		// unreachable: the nil-security arm, since duckstore's InvestmentHistory query selects only rows WHERE security_id IS NOT NULL (internal/store/duckstore/investments.go:20).
-		if tx.SecurityID == nil || tx.Date.After(today) {
+		if tx.SecurityID == nil {
+			// A row with no security is in no group; duckstore's InvestmentHistory selects none.
+			continue
+		}
+		if tx.Date.After(today) {
 			continue
 		}
 		index.byID[*tx.SecurityID] = append(index.byID[*tx.SecurityID], tx)
@@ -139,7 +143,7 @@ func isAcquisition(action string) bool {
 // splitShares multiplies count by newShares over oldShares.
 func splitShares(count *big.Rat, newShares, oldShares *int64) {
 	if newShares == nil || oldShares == nil || *newShares <= 0 || *oldShares <= 0 {
-		// unreachable: the importer refuses such a split (internal/importer/investments.go:245 splitSides), so no stored split has a nil or non-positive side.
+		// unreachable: the importer's splitSides refuses a split with a nil or non-positive side, so none is stored
 		return
 	}
 	count.Mul(count, big.NewRat(*newShares, *oldShares))

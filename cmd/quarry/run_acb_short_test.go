@@ -105,6 +105,13 @@ const moneyFundShortWarning = `"Money Fund": the sale on 2017-01-12 in "CAD Brok
 	"non-registered accounts held; quarry counts them at no cost, so the sale's gain is too high by what they cost, " +
 	"and the next 1,122.84 shares acquired only bring the holding back to 0; correct the shares in Quicken if they are wrong"
 
+const (
+	moneyFundRemovalWarning = `"Money Fund": 110 shares left "CAD Brokerage" on 2017-01-12 without a sale; quarry took their share of the ACB out and reports no gain; ` +
+		"if they went to a registered account or to someone else, that is a disposition at market value; check it with your accountant"
+	moneyFundRemovalOversoldWarning = `"Money Fund": 10 more shares left "CAD Brokerage" on 2017-01-12 than the non-registered accounts held; ` +
+		"the next 10 shares acquired only bring the holding back to 0; correct the shares in Quicken if they are wrong"
+)
+
 // shortOpenRows is one non-registered brokerage whose Money Fund holding buys 100 for 100.00, then sells 1,222.84 for
 // 1,222.84, which leaves it short 1,122.84 with no buy to cover it.
 func shortOpenRows() store.Rows {
@@ -193,12 +200,56 @@ func Test_run_acb_names_a_removal_beyond_the_pool_after_its_removal_line(t *test
 
 	_, stderr := runACB(t)
 
+	assert.Equal(t, stderrWarnings(moneyFundRemovalWarning, moneyFundRemovalOversoldWarning), stderr)
+}
+
+// splitSoldOutRows is Money Fund bought for 3,000.00, split 1 for splitOld, then sold for 1,000.00: bought and
+// sold are in millionths of shares.
+func splitSoldOutRows(bought, splitOld, sold int64) store.Rows {
+	rows := oversoldRows()
+	split := acbTrade("inv-split", 2, "acct-cad", "sec-fund", store.ActionSplit, "CAD", day(2017, time.February, 1), 0, 0)
+	split.Shares, split.SplitNewShares, split.SplitOldShares = nil, new(int64(1_000_000)), new(splitOld)
+	rows.InvestmentTransactions = []store.InvestmentTransaction{
+		acbTrade("inv-buy", 1, "acct-cad", "sec-fund", store.ActionBuy, "CAD", day(2017, time.January, 3), bought, -300_000),
+		split,
+		acbTrade("inv-sell", 3, "acct-cad", "sec-fund", store.ActionSell, "CAD", day(2017, time.March, 1), -sold, 100_000),
+	}
+
+	return rows
+}
+
+func Test_run_acb_text_lists_no_position_and_skips_a_return_of_capital_once_a_split_pool_is_sold_out(t *testing.T) {
+	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n\n"+
+		"[[acb.adjustment]]\nsecurity = \"sec-fund\"\ndate = 2017-06-01\nreturn-of-capital = 10.00\n",
+		splitSoldOutRows(100_000_000, 3_000_000, 33_333_333))
+
+	stdout, stderr := runACB(t)
+
+	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
+		"Year  Sales  Proceeds  Outlays       ACB  Gain or loss\n"+
+		"2017      1  1,000.00     0.00  3,000.00     -2,000.00\n"+
+		"\nACB on 2026-03-12, in CAD\n\n"+
+		"Security  Ticker  Shares  ACB  ACB per share\n", //nolint:dupword // the ACB column sits beside the ACB per share column
+		stdout)
 	assert.Equal(t, stderrWarnings(
-		`"Money Fund": 110 shares left "CAD Brokerage" on 2017-01-12 without a sale; quarry took their share of the ACB out and reports no gain; `+
-			"if they went to a registered account or to someone else, that is a disposition at market value; check it with your accountant",
-		`"Money Fund": 10 more shares left "CAD Brokerage" on 2017-01-12 than the non-registered accounts held; `+
-			"the next 10 shares acquired only bring the holding back to 0; correct the shares in Quicken if they are wrong"),
+		configShown+`: acb.adjustment item 1 is for "Money Fund", which no non-registered account holds on 2017-06-01; quarry skips it`),
 		stderr)
+}
+
+func Test_run_acb_json_counts_a_sale_of_every_share_of_a_split_pool_as_neither_oversold_nor_unknown_cost(t *testing.T) {
+	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", splitSoldOutRows(1_000_000_000, 7_000_000, 142_857_143))
+
+	stdout, stderr := runACB(t, "--json")
+
+	var doc shortDoc
+	require.NoError(t, json.Unmarshal([]byte(stdout), &doc), stdout)
+	require.Len(t, doc.Years, 1)
+	assert.Equal(t, 0, doc.Years[0].UnknownCostSales)
+	require.Len(t, doc.Years[0].Sales, 1)
+	assert.False(t, doc.Years[0].Sales[0].UnknownCost)
+	require.Len(t, doc.Securities, 1)
+	assert.False(t, doc.Securities[0].Incomplete)
+	assert.Empty(t, stderr)
 }
 
 func Test_run_acb_skips_a_return_of_capital_while_the_pool_is_short_as_not_held(t *testing.T) {
