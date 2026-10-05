@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-07
-status: open
+status: done
 ---
 
 # SCENARIO-07: ACB adjustments are read from config
@@ -35,10 +35,10 @@ Refusal = `quarry: <~path>: <line>; fix the file and run the command again`, exi
 - [x] Step 6: `parse.go:~393-407` `knownKeys` += `{acb}`, `{acb adjustment}`, four `{acb adjustment <key>}`; tests: no warning for a full valid file; `memo` inside an item warns `…: unknown key acb.adjustment.memo; quarry ignores it`; `acb.other` warns; letter-case variant `Date` warns. Command pins in `cmd/quarry/run_config_test.go`: new case in the `sync` ruled-copy table (`:145`) and a read-commands loop test (like `:300`) with a bad item, asserting exact stderr, empty stdout, exit 1
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `Adjustment`, `ParseCents`; trim `Load` doc (open debt: `config.go:42-47`) while touching it
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `Adjustment`, `ParseCents`; trim `Load` doc (open debt: `config.go:42-47`) while touching it
 
 ### Verify
-- [ ] Step 8: full verification + `.claude/scripts/spec-check.py phase4de-acb` → tick SCENARIO-07 with its acceptance test; rewrite STATE.md
+- [x] Step 8: full verification + `.claude/scripts/spec-check.py phase4de-acb` → tick SCENARIO-07 with its acceptance test; rewrite STATE.md
 
 ## Handoff
 
@@ -63,7 +63,7 @@ Refusal = `quarry: <~path>: <line>; fix the file and run the command again`, exi
 
 ## Phase report
 
-Runs A, B1 (steps 3-5) and B2 (step 6) done; acceptance `Test_load_reads_acb_adjustments_as_exact_cents` GREEN. Next: V (steps 7-8).
+All runs done (A, B1, B2, V); acceptance `Test_load_reads_acb_adjustments_as_exact_cents` GREEN, full suite rc=0, uncovered-diff 0, lint 0 issues. V trimmed the `Load` and `setting` docs; `Adjustment`/`ParseCents` docs already existed.
 - B2: `adjustment_test.go` `Test_load_warns_of_an_unknown_key_beside_acb_adjustments_in_both_warning_lists` (memo inside an item, `acb.other`, `Date`; both warning lists), green on arrival because B1 owned `knownKeys`. Mutation: adding those three keys to `knownKeys` reddened exactly those three subtests (restored).
 - B2: `cmd/quarry/run_config_test.go` pins: `sync` ruled-copy row "an adjustment without a date" and `Test_run_read_commands_refuse_a_bad_acb_adjustment` (item 2 amount 12.345, every `readCommandArgs`, exact stderr, empty stdout, exit 1). Green on arrival (production is B1's); copy matches `specification.md` lines 316-321.
 - V must do: `Load` doc budget debt (`config.go:42-47`), `setting` doc, `Adjustment`/`ParseCents` docs, full verification, spec tick, STATE.md, `status: done`.

@@ -551,7 +551,7 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 - [x] SCENARIO-05: Finding counts include unclassified accounts — `cmd/quarry/run_status_unclassified_test.go` `Test_run_status_counts_an_unclassified_account_until_the_config_classifies_it`
 - [x] SCENARIO-03: An id that names no account is warned — delivered by SCENARIO-05 — `cmd/quarry/run_accounts_unmatched_test.go` `Test_run_accounts_and_findings_warn_a_listed_id_that_names_no_account`
 - [x] SCENARIO-06: Sync imports Quicken's cost basis — `cmd/quarry/run_cost_basis_test.go` `Test_run_sync_keeps_quickens_cost_basis_and_stores_null_for_none`
-- [ ] SCENARIO-07: ACB adjustments are read from config
+- [x] SCENARIO-07: ACB adjustments are read from config — `internal/config/adjustment_test.go` `Test_load_reads_acb_adjustments_as_exact_cents`
 - [ ] SCENARIO-08a: ACB is pooled per security across non-registered accounts
 - [ ] SCENARIO-09: Reinvested dividends and splits
 - [ ] SCENARIO-08b: ACB and gains per tax year

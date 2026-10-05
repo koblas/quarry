@@ -1,6 +1,6 @@
 # phase4de-acb — current state
 
-Scenarios complete: SCENARIO-01..06 (03 folded into 05). Last updated by SCENARIO-06.
+Scenarios complete: SCENARIO-01..07 (03 folded into 05). Last updated by SCENARIO-07.
 
 ## Binding decisions
 - `report.Classification{Registered, NonRegistered []string}` is passed INTO `(*report.Server).Accounts`, `FindingsRequest.Classification` and `CountFindings`; `report` owns the rule via `Classification.Of(store.Account) *bool` (true registered / false non-registered / nil neither) and `Classification.Unclassified(a)` (investment type, in neither list) (SCENARIO-01, 04, 05)
@@ -20,12 +20,15 @@ Scenarios complete: SCENARIO-01..06 (03 folded into 05). Last updated by SCENARI
 - `FormatVersion = 9`; `investment_transactions.cost_basis DECIMAL(18,2)` sits directly after `commission` in the DDL and in `investmentTransactionRows` (`appendTable` is positional); store field `CostBasis *int64` cents. NULL when Quicken's ZCOSTBASIS is NULL or 0 (residue below the cent snap included); a negative is stored as recorded. Unreadable ZCOSTBASIS is a REFUSAL via the `reasonInvestment*` templates with `what = "a cost basis"`, read with the `amountColumn` kind; first fault wins: shares, amount, commission, cost basis. Shared helper `investmentSubject.optionalMoney` serves commission and cost basis (SCENARIO-06)
 - ACB rules ruled by probes (snapshot 20261004T184923Z), BINDING for 08a/10/13b: P1 a sell's commission is NET (proceeds = amount + commission); P2a pairing does NOT ship: every add_shares/remove_shares is unpaired, no `moved` row, shares-without-cost's "not a pool-internal move" clause is dead; P2b same-day order is acquisitions, then splits/adjustments, then dispositions, ties by source_id, with NO ZORDERID column (source_id order is inverted vs Quicken's own order on same-day buy+sell) (SCENARIO-06)
 - cost_basis conventions: sentence 1 (`cost_basis is the cost Quicken records for a buy, reinvested dividend or added shares (NULL when none).`) sits mid-paragraph right after `so a sum of shares is not a holding.`; S19 inserts sentence 2 (`ACB and capital gains are in no table or view: quarry acb (MCP acb) computes them; never derive them in SQL.`) immediately after it, never at the end (action-list suffix test) and never as a new paragraph (tests index paragraphs) (SCENARIO-06)
+- `config.Config.Adjustments []Adjustment{Security string, Date time.Time (UTC midnight), ReturnOfCapital, ReinvestedDistribution int64 cents, 0 = not given}`, file order, nil when none. One item MAY carry both amounts (line 3 says "needs ... or ...", no new copy): S11 must apply BOTH. `>0` and the 2-decimal bound live in config; `money.ParseCents(text) (int64, bool)` parses RAW token text (never float64) and returns 0 for `0`/`0.00` (SCENARIO-07)
+- Adjustment refusal order inside an item: needs security, needs date, needs an amount, then security type, date type, amount value (return-of-capital before reinvested-distribution); first bad item wins and refuses every command. The three `needs` lines carry no `got`, via `(file).badItem(reason)`, never `badValue`. `acb` non-table and `[[acb]]` use the existing `lookup` "must be a table" template (example `[[acb.adjustment]]`); line 1 is only for `acb.adjustment` itself. An impossible calendar date is a TOML syntax error (`cannot read ...: line n:`), not ruled line 6 (SCENARIO-07)
 
 ## Left unbuilt
 - `shares-without-cost` read-time detector and its inputs (all three sources above) — S13b
 - findings.md "Classifying accounts" section (bullet link dangles by design) — S17
 - A duckstore/report reader of `cost_basis` and 13b's `FindingList` input for shares-without-cost: 08a/13b build their own reads through SQL or a new port method (SCENARIO-06)
 - Conventions sentence 2 (the `acb` pointer) — S19 (SCENARIO-06)
+- The three adjustment warnings (unknown security, not held on date, duplicate items) and any consumer of `cfg.Adjustments` — S11 (needs the store; `config` stays store-free), S08b reads it (SCENARIO-07)
 
 ## Traps
 - Read-time states must never set `New`, or sync's `(N new)` counts every unclassified account on every sync (SCENARIO-05)
@@ -41,9 +44,11 @@ Scenarios complete: SCENARIO-01..06 (03 folded into 05). Last updated by SCENARI
 - `readValues` formerly returned early on a NULL commission; a new nullable column read must go through its own helper call, not below that early return (SCENARIO-06)
 - The conventions paragraph is hand-copied in THREE tests besides the const: `internal/cli/sql_test.go`, `cmd/quarry/run_shared_documents_test.go`, `cmd/quarry/run_holdings_surfaces_test.go:30`; a reflow must update all, and `schema.md` is regenerated with `-update`, never edited (SCENARIO-06)
 - `run_sync_pre4a_store_test.go:49` "8"/"9" are import-run ids, not format versions; a literal format-version pin is re-pinned on every bump (SCENARIO-06)
+- Read commands skip `config.Load` when `--currency` is given; `acb` (S08b) must load config regardless or adjustments silently vanish (SCENARIO-07)
+- `acb` is a known key, so a non-table `acb` is caught by `lookup`, not the unknown-key path; copy not separately ruled, mention at the final product-vision pass. Quoted literal `'sec-41'` is a valid security string (SCENARIO-07)
 
 ## Open debts
-- Checkpoint 02 MINOR: comment budgets — `setting` doc `internal/config/parse.go:26` (→ 2 lines), `namedKeyMessage` var comment `parse.go:144-146` (→ 1 line), `Load` doc `internal/config/config.go:42-47`. Trim on next touch
+- Checkpoint 02 MINOR: `namedKeyMessage` var comment (`internal/config/parse.go:~150`) is 2 lines, budget 1; trim on next touch (the `setting` and `Load` docs were trimmed by SCENARIO-07)
 - Checkpoint 02 MINOR: in-both refusal quotes via `tomlstr.BasicString` but no row has a quote/newline id (`internal/config/accounts_test.go` `Test_load_refuses_an_id_listed_in_both_account_lists`) — add an `"a\"b"` row on next config touch
 - Checkpoint 02 NIT: `keyText` masks each dotted key part separately (`parse.go:~418-425`); a number split across parts keeps <=4 digits per part
 - `plugin/skills/quarry/references/findings.md:43` `--csv` line mirrors the `--csv` help, pinned in `cmd/quarry/run_skill_references_test.go`; 13b moves both to the Part B wording (SCENARIO-04)

@@ -23,9 +23,8 @@ const (
 	gotTableList = "a list of tables"
 )
 
-// setting names a known key: its table, its name in that table, and the
-// line shown to a user who wrote the table as a plain value. A masked setting holds account
-// numbers, so a refusal shows its value through accountmask.Mask.
+// setting names a known key: its table, its name, and the line shown when the user wrote the
+// table as a plain value. A masked setting holds account numbers, so a refusal masks its value.
 type setting struct {
 	table, name, example string
 	masked               bool
