@@ -100,6 +100,35 @@ func Test_load_reports_a_missing_key_before_a_wrong_type_in_the_same_item(t *tes
 	require.EqualError(t, err, shownPath+": acb.adjustment item 1 needs date, such as date = 2024-12-31"+fixLine)
 }
 
+func Test_load_reports_the_first_bad_key_of_an_item_in_the_order_security_date_amount(t *testing.T) {
+	const (
+		item        = "[[acb.adjustment]]\n"
+		badSecurity = `: security must be a security id in quotes, such as "sec-41", got 41`
+		badDateMsg  = ": date must be a date such as 2024-12-31, got "
+	)
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{name: "security alone lacks date before it lacks an amount", content: item + "security = \"sec-41\"\n", want: needsDate},
+		{name: "control: security and date lack only an amount", content: item + "security = \"sec-41\"\ndate = 2024-12-31\n", want: needsAmount},
+		{name: "wrong security before wrong date", content: item + "security = 41\ndate = \"x\"\nreturn-of-capital = 12.34\n", want: adjItemOne + badSecurity},
+		{name: "control: right security and wrong date", content: item + "security = \"sec-41\"\ndate = \"x\"\nreturn-of-capital = 12.34\n", want: adjItemOne + badDateMsg + `"x"`},
+		{name: "wrong date before wrong amount", content: item + "security = \"sec-41\"\ndate = \"x\"\nreturn-of-capital = 0\n", want: adjItemOne + badDateMsg + `"x"`},
+		{name: "control: right date and wrong amount", content: item + "security = \"sec-41\"\ndate = 2024-12-31\nreturn-of-capital = 0\n", want: adjItemOne + ": return-of-capital" + adjAmountMust + "0"},
+		{name: "wrong security before wrong amount", content: item + "security = 41\ndate = 2024-12-31\nreturn-of-capital = 0\n", want: adjItemOne + badSecurity},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, _, err := load(t, c.content)
+
+			require.EqualError(t, err, shownPath+": "+c.want+fixLine)
+		})
+	}
+}
+
 func Test_load_refuses_a_security_that_is_not_a_non_empty_string(t *testing.T) {
 	cases := []struct {
 		name     string
