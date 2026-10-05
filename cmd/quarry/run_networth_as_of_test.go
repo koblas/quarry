@@ -24,15 +24,18 @@ func netWorthAsOfLine(typ, currency, balance, in string) string {
 	return fmt.Sprintf("%-9s  %-8s  %8s  %8s\n", typ, currency, balance, in)
 }
 
+// netWorthAsOfNativeLine is netWorthAsOfLine without the In column.
+func netWorthAsOfNativeLine(typ, currency, balance string) string {
+	return fmt.Sprintf("%-9s  %-8s  %8s\n", typ, currency, balance)
+}
+
 // netWorthAsOfRefusal is the refusal of a future as-of or since, as net worth words it.
 func netWorthAsOfRefusal(flag, value string) string {
 	return fmt.Sprintf("quarry: %s %s is after today; net worth is valued up to today only, so pass an earlier %s\n", flag, value, flag)
 }
 
-// seedNetWorthAsOfStore builds the store under a temp HOME with activity on both sides of 2025-12-31: a CAD
-// chequing (1,000.00 before, 100.00 on the day, 500.00 after), a closed CAD chequing (25.00), a USD chequing
-// (800.00 at a 1.36 rate from 2025-12-01, a 1.50 rate from 2026-01-20) and a CAD brokerage (1,000.00 deposited,
-// 100.00 spent on two shares priced 10.00 from 2025-12-10 and 20.00 from 2026-01-15).
+// seedNetWorthAsOfStore builds a store with CAD, USD, closed and brokerage activity on both sides of 2025-12-31,
+// and USD rates from 2025-12-01 (1.36) and 2026-01-20 (1.50).
 func seedNetWorthAsOfStore(t *testing.T) {
 	t.Helper()
 	home := t.TempDir()
@@ -100,6 +103,18 @@ func Test_run_networth_refuses_a_future_as_of_a_future_since_and_as_of_with_sinc
 		})
 	}
 
+	t.Run("a future as-of with --json prints nothing to stdout", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		var stdout, stderr bytes.Buffer
+
+		exitCode := runWith(context.Background(), []string{"networth", "--as-of", "2027", "--json"},
+			spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+		assert.Equal(t, 2, exitCode)
+		assert.Empty(t, stdout.String())
+		assert.Equal(t, netWorthAsOfRefusal("--as-of", "2027"), stderr.String())
+	})
+
 	controls := []struct {
 		name       string
 		args       []string
@@ -143,6 +158,25 @@ func Test_run_networth_values_every_counted_account_on_the_as_of_day(t *testing.
 				stdout.String())
 		})
 	}
+}
+
+func Test_run_networth_lists_each_currency_on_the_as_of_day_in_native_mode(t *testing.T) {
+	seedNetWorthAsOfStore(t)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"networth", "--as-of", "2025-12", "--currency", "native"},
+		spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.Equal(t, "Net worth on 2025-12-31\n\n"+
+		netWorthAsOfNativeLine("Type", "Currency", "Balance")+
+		netWorthAsOfNativeLine("brokerage", "CAD", "920.00")+
+		netWorthAsOfNativeLine("chequing", "CAD", "1,125.00")+
+		netWorthAsOfNativeLine("chequing", "USD", "800.00")+
+		netWorthAsOfNativeLine("Total", "CAD", "2,045.00")+
+		netWorthAsOfNativeLine("Total", "USD", "800.00"),
+		stdout.String())
 }
 
 func Test_run_networth_json_as_of_sets_the_day_and_leaves_since_and_until_null(t *testing.T) {
