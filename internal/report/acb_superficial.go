@@ -38,7 +38,7 @@ func newSuperficialIndex(history store.InvestmentHistory, today time.Time) super
 		tickerOf:   make(map[string]string),
 	}
 	for _, tx := range history.Transactions {
-		// unreachable: the nil-security arm, since duckstore's InvestmentHistory reads only rows with a security_id (investments.go:20).
+		// unreachable: the nil-security arm, since duckstore's InvestmentHistory query selects only rows WHERE security_id IS NOT NULL (internal/store/duckstore/investments.go:20).
 		if tx.SecurityID == nil || tx.Date.After(today) {
 			continue
 		}
@@ -128,7 +128,7 @@ func (x superficialIndex) heldAt(ids []string, day time.Time) bool {
 // splitShares multiplies count by newShares over oldShares.
 func splitShares(count *big.Rat, newShares, oldShares *int64) {
 	if newShares == nil || oldShares == nil || *newShares <= 0 || *oldShares <= 0 {
-		// unreachable: the importer refuses such a split (investments.go splitSides) and duckstore/shares.go:223 splitRatio, called from shares.go:123, does too.
+		// unreachable: the importer refuses such a split (internal/importer/investments.go:245 splitSides), so no stored split has a nil or non-positive side.
 		return
 	}
 	count.Mul(count, big.NewRat(*newShares, *oldShares))

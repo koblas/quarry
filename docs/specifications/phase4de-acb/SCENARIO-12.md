@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-12
-status: open
+status: done
 ---
 
 # SCENARIO-12: Possible superficial losses are marked
@@ -35,10 +35,10 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report; document/cli surfaces
 - [x] Step 4: ONE count site: new method `(ACBYear).PossibleSuperficialLosses() int` in `acb.go` (test in `acb_superficial_test.go`); repoint `document/acb.go:138-139` at it; `internal/cli/render_acb.go:41-48` `acbYearSuffixes` — count suffix FIRST via `humanize.Count` of that method, before the ROC suffix; `render_acb_internal_test.go` rows: 1 vs 2 (singular/plural), year with both suffixes in order, 0 → no suffix. `internal/report/document/acb_warnings.go:15-20` `ACBWarnings` — warning 3 (N and years summed from that method) after `adjustmentWarnings`, before `removalWarnings` (per the copy ruling); `acb_warnings_test.go` rows: one sale, two sales over two years, none → silent; extend the order test `:147-178` to adjustment, warning 3, removal, ROC. Edge × arm: RRSP re-buy row → text + JSON in Step 1; not-held, gain, break-even and bound rows → `Server.ACB` only, text/JSON n/a (both read the flag through the one count method); `--year`/`--security` n/a (unregistered until S15/S16)
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comment on the marking func; `ACBSale` doc `acb.go:75-76` names what marks it; `ACBWarnings` doc `acb_warnings.go:12-14` lists warning 3's slot. No golden re-pins expected: S08b/S10/S11 cmd fixtures and `acb_events_test.go:114-121` have no loss sale with an acquisition inside ±30 days — any re-pin is a finding to report, not to absorb
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comment on the marking func; `ACBSale` doc `acb.go:75-76` names what marks it; `ACBWarnings` doc `acb_warnings.go:12-14` lists warning 3's slot. No golden re-pins expected: S08b/S10/S11 cmd fixtures and `acb_events_test.go:114-121` have no loss sale with an acquisition inside ±30 days — any re-pin is a finding to report, not to absorb
 
 ### Verify
-- [ ] Step 6: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-12 with its acceptance test; STATE.md rewrite
+- [x] Step 6: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-12 with its acceptance test; STATE.md rewrite
 
 ## Handoff
 
@@ -61,18 +61,8 @@ Size: OWNS A RUN — 3 batches, 1 feature package (report; document/cli surfaces
 
 ## Phase report
 
-**Orchestrator rulings 2026-10-05 (SCENARIO-12 plan defaults): warning 3 is one line for the report, N = every marked sale, `<years>` distinct ascending ", "-joined; "other than the shares sold" is per-row (any qualifying acquisition row in the window counts, even one whose units were the ones sold — over-flagging a *possible* loss is the safe side; CRA min(acquired, sold, held)/sold denies the whole loss); window still open (day +30 after today): rows after today ignored, held measured at the earlier of day +30 and today; held = some (account, security) holding > 0 at that point, signed shares, each account's own split rows, millionths, a negative holding never cancels a positive one; a reinvested-distribution adjustment is not an acquisition; a same-day re-buy counts, a sell/remove never does; break-even (gain 0) not marked; same ticker = exact case-sensitive match on a non-empty ticker (binding for S14 warning 7); report keeps its own per-holding count mirroring duckstore.holdingSpans (no store change; S21 cross-checks it). Recorded in spec Part B CRA rules; all plan defaults stand.**
+**Run V (steps 5-6) — done.** Build, `golangci-lint run ./...` (0 issues, rc 0), full covered suite rc 0 (0 FAIL), `go test -race ./internal/report/...` ok, `uncovered-diff.py --profile ... ec8eedb`: 0 uncovered added lines, 1 declared unreachable (`internal/report/acb_superficial.go:132` splitShares). `test-stats.py --base ec8eedb --changed`: cmd/quarry 841 (+1), internal/cli 541 (+2), internal/report 549 (+20), internal/report/document 194 (+3), TOTAL 2125 (+26). `spec-check.py phase4de-acb` OK; SCENARIO-12 ticked with its acceptance test.
+- Changes in V: both `// unreachable:` reasons in `acb_superficial.go` had vague paths; now `internal/store/duckstore/investments.go:20` (the query's `WHERE security_id IS NOT NULL`, verified) and `internal/importer/investments.go:245` `splitSides` (refuses nil/zero/negative sides, verified). The nil-security marker sits on a compound line whose other half (`Date.After(today)`) is covered, so the gate does not list it. The marker on `acb_walk.go:55` still cites `investments.go:20` without the package path (not touched here).
+- No golden re-pins beyond B1's one rename. STATE.md rewritten.
 
-**Run A (acceptance, red) — done.** Added `cmd/quarry/run_acb_superficial_test.go` (fixture `acbSuperficialRows`, const `superficialLossWarning`, config `acbSuperficialConfig`); no production code, no stubs. Fixture: acct-cad (non-registered) buys 20 Acme 2025-01-10 for 2,000.00, sells 10 on 2025-03-01 for 600.00 (gain -400.00, ACB removed 1,000.00); acct-rrsp (registered) buys 5 on 2025-03-15; clock 2026-03-12 so the window is closed.
-- Red at assertions, expected reason (nothing marks yet), run `go test ./cmd/quarry/ -run Test_run_acb_marks_a_loss_sale`: text year row lacks suffix (`-400.00` ends the line, want `  1 possible superficial loss`); stderr `""` want `quarry: warning: 1 possible superficial loss in 2025: ...`; JSON `possible_superficial_losses` 0 want 1; sale `possible_superficial_loss` false want true; `warnings` `[]` want warning 3. Table widths, Gain `-400.00`, position table, JSON gain all already match (they pass).
-- One test, two runs (text, `--json`) per plan; both assert warning 3 on stderr and in `warnings[]`. `golangci-lint run ./cmd/quarry/`: 0 issues.
-- (Run A detail superseded by B1 below.)
-
-**Run B1 (steps 2-4) — done, green.** Acceptance `Test_run_acb_marks_a_loss_sale_rebought_in_a_registered_account_within_30_days` green (text, `--json`).
-- Production: new `internal/report/acb_superficial.go` (`markSuperficialLosses`, `superficialIndex` {byID, sameTicker, tickerOf}, `splitShares`); called in `walkACB` `acb_walk.go:89` before `acbYears`. `acbPool.split` removed, its guard hoisted into `splitShares` (shared by walk `acb_walk.go:236` and the held count). `(ACBYear).PossibleSuperficialLosses()` `acb.go`; `document/acb.go:125` uses it; `cli/render_acb.go:41-` suffix first; `document/acb_warnings.go` `superficialLossWarnings` between adjustment lines and removals.
-- Design notes: the index holds only rows dated <= Today, so "held at min(day+30, Today)" is just heldAt(day+30) (no clamp, no `today` field); per-security lists are sorted date, source_id inside the index, so fixtures need no order. Acquisition = `acbTiers[action]==acbAcquisition && units>0`.
-- Tests: `internal/report/acb_superficial_test.go` (new, 14 funcs incl. tables; helpers acbLossRows/acbKept/acbFlags/acbSplit); `internal/cli/render_acb_internal_test.go` +2; `document/acb_warnings_test.go` +3 and order test extended to 6 lines. One re-pin: `Test_ACBWarnings_is_empty_..._and_no_loss_is_marked` — the shared document fixture has a flagged loss, so it now unmarks it (renamed).
-- Mutations (all red as named, file restored, diff clean): `!tx.Date.After(to)`->`tx.Date.Before(to)` reddens `..._30_days_after`; `!tx.Date.Before(from)`->`tx.Date.After(from)` reddens `..._30_days_before`; dropping `&& x.heldAt(group, to)` reddens `..._nothing_is_held_30_days_after` (plus the same-day control, day-30, same-ticker, split and open-window rows).
-- Narrow loop green; `golangci-lint run ./internal/report/... ./internal/cli/...`: 0 issues. No golden re-pins elsewhere (cmd/quarry full package green).
-- V must not redo the above; V owns: build+lint whole repo, doc comments (`acbSale`/`ACBWarnings` already updated; check `superficialIndex` doc), full covered suite, uncovered-diff, spec tick, STATE.md. Watch: the `unreachable:` marker on the nil-security arm in `newSuperficialIndex` and in `splitShares`.
-
+Earlier runs (A: acceptance red; B1: steps 2-4 green, three mutations red as named) are in the commit log.
