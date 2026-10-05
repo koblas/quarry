@@ -82,6 +82,7 @@ Scenarios complete: SCENARIO-01..07, 08a, 08b, 09, 10, 11, 12 (03 folded into 05
 - The shared document fixture has a flagged loss; `Test_ACBWarnings_is_empty_..._and_no_loss_is_marked` unmarks it: a new fixture loss sale must say whether it is marked (SCENARIO-12)
 
 ## Open debts
+- S13a warning-4 ruling: re-assert exact-`warnings[]`/position pins on any fixture with a no-cost add or reinvest (e.g. `internal/report/acb_shares_test.go:23`; grep `acb*_test.go`, `cmd/quarry/run_acb*_test.go`). Warning 4b names `quarry acb --security <id>`: at S16 (or final pass) run it literally on a 4b fixture and confirm it lists the reinvest events, exit 0. S21: report count of reinvests with NULL cost_basis and non-zero amount; any → new scenario.
 - `years[]` pins: default (`document/acb_test.go:83`) and the RD-before-ROC tier pin are done (S11). STILL OWED: S15's `--year` pin and S19's MCP `years[]` pin must assert `return_of_capital_gain` right after `gain`, `"0.00"` when none.
 - Checkpoint 02 MINOR: `namedKeyMessage` var comment (`internal/config/parse.go:~150`) is 2 lines, budget 1; trim on next touch (the `setting` and `Load` docs were trimmed by SCENARIO-07)
 - Checkpoint 02 MINOR: in-both refusal quotes via `tomlstr.BasicString` but no row has a quote/newline id (`internal/config/accounts_test.go` `Test_load_refuses_an_id_listed_in_both_account_lists`) — add an `"a\"b"` row on next config touch
