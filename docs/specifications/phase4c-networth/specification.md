@@ -183,6 +183,12 @@ Month end    brokerage   chequing  credit_card       Total
 - One column per type non-zero on any listed date, alphabetical; each cell is the converted sum across currencies.
 - Native mode: one row per month end per currency: `Month end  Currency  <types…>  Total`.
 - Dates per N-9.
+- Copy ruling (product-vision, 2026-10-04, SCENARIO-12):
+  - A cell with no row for that type (converted) or type × currency (native) on that date is **blank**; a date with no rows has a blank Total, never `0.00`. A cell whose rows sum to zero shows `0.00` (history keeps zero cells; only snapshot text drops zero rows).
+  - A type gets a column when its native balance is non-zero on any listed date, in any currency.
+  - A converted history cell with no rate is `no rate` (as `convertedCell`); blank always means "no row". Until SCENARIO-14b it renders blank (interim).
+  - Every listed month end gets a line. Native: one line per currency with a row that date, CAD first; a date with no row in any currency gets one line with the date only. A native line's Total is that currency's sum.
+  - With no month ends listed (interim `--since` after today, until SCENARIO-15), the caption uses the resolved since and clamped until; otherwise the caption uses the first and last listed month ends while JSON `since`/`until` carry the resolved since and clamped until.
 
 **`--json`** (one shape for both modes):
 ```json
@@ -297,6 +303,8 @@ What dies: `notValuedBalance`, the accounts "not valued" paragraph, the investme
 | Excluded-from-reports transaction | In the balance, not in cash flow |
 | Future-dated transaction | Not in a balance before its date |
 | Old store (format 7) | Existing re-sync refusal, exit 1 |
+| Month end with no balance row (history) | Listed; cells blank (native: one line, date only); exit 0 |
+| History type × date summing to zero | `0.00` cell |
 
 ---
 

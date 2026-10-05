@@ -62,3 +62,5 @@ Scenarios complete: SCENARIO-01a (with 02 folded), SCENARIO-01b (with 05 folded)
 - Checkpoint 10 MINOR: `Test_renderNetWorth_leaves_the_In_cell_of_an_unconverted_row_blank_and_out_of_the_total` (`internal/cli/render_networth_internal_test.go:63`) overclaims — Total is injected; rename to `..._blank` (14b rewrites this arm anyway).
 - Checkpoint 10 MINOR: empty `params.Dates` builds `IN ()` (`internal/store/duckstore/networth.go:23-26`) — SCENARIO-12 plan owns a guard + test.
 - Checkpoint 10 NIT: native mode via `reporting.currency = native` has no networth cmd test.
+- History no-rate cell renders blank (S12 interim); SCENARIO-14b makes it `no rate`, left out of Total.
+- History caption with no month ends (resolved since > clamped until) is interim; no live input after SCENARIO-15's `--since`-after-today refusal.
