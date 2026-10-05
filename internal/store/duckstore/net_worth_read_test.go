@@ -1,6 +1,7 @@
 package duckstore_test
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 	"time"
@@ -113,6 +114,24 @@ func Test_net_worth_leaves_out_a_transaction_dated_after_the_day_asked(t *testin
 
 	require.Len(t, got, 1)
 	assert.Equal(t, big.NewInt(10_000), got[0].Balance)
+}
+
+func Test_net_worth_reads_no_rows_for_no_dates(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, cashRows(transaction("t1", acctOne, marchDay(1), 10_000)))
+
+	assert.Len(t, netWorthOn(t, st, marchDay(1)), 1)
+	assert.Empty(t, netWorthOn(t, st))
+}
+
+func Test_net_worth_for_no_dates_still_refuses_a_missing_store(t *testing.T) {
+	t.Parallel()
+
+	_, err := duckstore.New(t.TempDir()).NetWorth(t.Context(), store.NetWorthParams{})
+
+	openErr, ok := errors.AsType[*store.OpenError](err)
+	require.True(t, ok, "want *store.OpenError, got %v", err)
+	assert.Equal(t, store.OpenFaultMissing, openErr.Fault)
 }
 
 func Test_net_worth_reads_a_balance_past_64_bits_in_exact_cents(t *testing.T) {

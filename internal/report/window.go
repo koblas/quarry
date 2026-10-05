@@ -104,10 +104,53 @@ func ParseChargeWindow(command string, since, until *string, now time.Time) (sto
 
 // parseWindow is ParseWindow with the refusal for a future since given by futureSince and command.
 func parseWindow(since, until *string, now time.Time, futureSince WindowErrorKind, command string) (store.Window, error) {
-	window := DefaultWindow(now)
-	today := window.Until
-	defaultSince := window.Since
+	window, err := resolveBounds(since, until, now)
+	if err != nil {
+		return store.Window{}, err
+	}
+	today, defaultSince := Today(now), DefaultWindow(now).Since
 
+	switch {
+	case since != nil && until == nil && window.Since.After(today):
+		return store.Window{}, WindowError{Kind: futureSince, Bound: boundSince, Value: *since, Command: command}
+	case since != nil && until != nil && window.Since.After(window.Until):
+		return store.Window{}, WindowError{Kind: WindowSinceAfterUntil, Bound: boundSince, Value: *since, Other: *until}
+	case since == nil && until != nil && window.Until.Before(defaultSince):
+		return store.Window{}, WindowError{
+			Kind: WindowUntilBeforeDefault, Bound: boundUntil, Value: *until, DefaultSince: defaultSince.Format(time.DateOnly),
+		}
+	}
+	return window, nil
+}
+
+// ParseMonthEndWindow resolves since and until into the window a net worth history lists month ends of.
+// Unlike ParseWindow, a future since is no refusal and the until is clamped to today; it returns the same
+// WindowError for a value that is not a date, a since after the until and an until before the default since.
+func ParseMonthEndWindow(since, until *string, now time.Time) (store.Window, error) {
+	window, err := resolveBounds(since, until, now)
+	if err != nil {
+		return store.Window{}, err
+	}
+	today, defaultSince := Today(now), DefaultWindow(now).Since
+
+	switch {
+	case since != nil && until != nil && window.Since.After(window.Until):
+		return store.Window{}, WindowError{Kind: WindowSinceAfterUntil, Bound: boundSince, Value: *since, Other: *until}
+	case since == nil && until != nil && window.Until.Before(defaultSince):
+		return store.Window{}, WindowError{
+			Kind: WindowUntilBeforeDefault, Bound: boundUntil, Value: *until, DefaultSince: defaultSince.Format(time.DateOnly),
+		}
+	}
+	if window.Until.After(today) {
+		window.Until = today
+	}
+	return window, nil
+}
+
+// resolveBounds is DefaultWindow with each bound given replaced by the first day (since) or last day (until)
+// of the period it names; it returns a WindowError for a value that is not a date.
+func resolveBounds(since, until *string, now time.Time) (store.Window, error) {
+	window := DefaultWindow(now)
 	if since != nil {
 		first, _, err := parseDateBound(boundSince, *since)
 		if err != nil {
@@ -123,23 +166,7 @@ func parseWindow(since, until *string, now time.Time, futureSince WindowErrorKin
 		}
 		window.Until = last
 	}
-
-	switch {
-	case since != nil && until == nil && window.Since.After(today):
-		return store.Window{}, WindowError{Kind: futureSince, Bound: boundSince, Value: *since, Command: command}
-	case since != nil && until != nil && window.Since.After(window.Until):
-		return store.Window{}, WindowError{Kind: WindowSinceAfterUntil, Bound: boundSince, Value: *since, Other: *until}
-	case since == nil && until != nil && window.Until.Before(defaultSince):
-		return store.Window{}, WindowError{
-			Kind: WindowUntilBeforeDefault, Bound: boundUntil, Value: *until, DefaultSince: defaultSince.Format(time.DateOnly),
-		}
-	}
 	return window, nil
-}
-
-// ParseMonthEndWindow resolves since and until into the window of month ends a net worth history lists.
-func ParseMonthEndWindow(since, until *string, now time.Time) (store.Window, error) {
-	return store.Window{}, nil
 }
 
 // parseDateBound is the first and last day of the year, month or day that

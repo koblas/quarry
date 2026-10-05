@@ -10,14 +10,14 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// netWorthSelect reads v_net_worth on each of the dates numbered from $1, in the order store.NetWorth documents;
-// currency orders alphabetically because an account's currency is CAD or USD.
+// netWorthSelect reads v_net_worth on each of the dates numbered from $1, closed by netWorthOrder.
 const netWorthSelect = `
 SELECT date, type, currency, accounts,
 	CAST(balance * 100 AS HUGEINT), CAST(balance_cad * 100 AS HUGEINT), CAST(balance_usd * 100 AS HUGEINT)
 FROM v_net_worth
 WHERE date IN (`
 
+// netWorthOrder is store.NetWorth's order; currency sorts alphabetically because an account's is CAD or USD.
 const netWorthOrder = `)
 ORDER BY date, type, currency`
 
@@ -29,6 +29,10 @@ func (s *Store) NetWorth(ctx context.Context, params store.NetWorthParams) (stor
 		return store.NetWorth{}, err
 	}
 	defer func() { _ = db.Close() }()
+
+	if len(params.Dates) == 0 {
+		return store.NetWorth{}, nil
+	}
 
 	marks := make([]string, len(params.Dates))
 	args := make([]any, len(params.Dates))
