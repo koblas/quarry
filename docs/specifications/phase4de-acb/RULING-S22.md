@@ -39,3 +39,8 @@ One line per oversold disposition, walk order. `<x>` via `humanize.Shares`, `<da
 ## Reference-check explanations (S21)
 
 Acceptable only once verified: USD same-day multi-buy — recompute with Quicken's lot pick to 0.00 difference; no-cost add_shares — sale marked `unknown_cost` and the add listed by `quarry findings --type shares-without-cost`. Anything else that does not close is an unexplained difference → new scenario.
+
+## Orchestrator rulings (2026-10-05)
+
+- 10a/10b `<x>` is the short after the disposition (a pool at -10 that sells 5 shows 15).
+- A no-cost acquisition that only covers a short keeps its event `UnknownCost` true; it opens no span.
