@@ -16,6 +16,7 @@
 | SCENARIO-12 | code-first | A, B1, V (+ orchestrator rulings: warning 3 years, per-row "other than shares sold", 6 edges) | 0/2/5/0 | yes (non-walked action counted as acquisition via iota-0 map miss — also in heldAt; remove_shares in heldAt unpinned; folds: vacuous test, redundant sort, 2 doc trims) |
 | SCENARIO-13a | code-first (re-sized LIGHT → OWNS A RUN by warning-4 ruling) | A, B1, B2, V (+ product-vision ruling: warning 4 variants + unknown-cost span; orchestrator: reinvest units > 0, slot-4 order) | 0/0/2/1 | no (MINOR → STATE.md) |
 | SCENARIO-13b | code-first | A, B1, B2, V (+ product-vision rulings: finding copy gaps; findings Long opening + MCP status description) | 0/1/3/1 | yes (findings Long + MCP status said read-time types get marked fixed; folds: CountFindings empty-classification row, ignored-count cmd row, split assert, plan test names) |
+| SCENARIO-14 | code-first | A, B1, B2, V (+ product-vision ruling: warning 6 variants 6a/6b/6c, null cad/gain on unvalued event, exclusion permanent) | 0/1/4/2 | yes (sale arm of needsConversion unpinned; folds: ROC-excess arm isolated, no-rate superficial test, doc trims, full --json warnings pin) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
