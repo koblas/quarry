@@ -26,6 +26,7 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
+| 01 | arch, correctness, test, refactor (+ spec-check --run OK) | 0/2/9/≈18 | 0 / 20, 1517s | BLOCKED |
 
 ## Tokens
 
