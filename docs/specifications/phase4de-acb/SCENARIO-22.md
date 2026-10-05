@@ -15,7 +15,7 @@ Size: OWNS A RUN — 4 batches, 1 feature package (`internal/report` + its `docu
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_acb_short_test.go` (new) `Test_run_acb_counts_shares_sold_beyond_the_pool_at_no_cost_and_lets_the_next_buy_cover_the_short` — SCENARIO-22 Given/Then via `runWith` + `writeConfig` (local `accounts.non-registered`) + `replaceStore`, style of `run_acb_unknown_cost_test.go:83-102`; JSON shares through `document.Shares` (`"-10.000000"`, `"5.000000"`); stderr exact `quarry: warning: ` + 10a line from `RULING-S22.md`; no stubs needed (cmd-level)
+- [x] Step 1: `cmd/quarry/run_acb_short_test.go` (new) `Test_run_acb_counts_shares_sold_beyond_the_pool_at_no_cost_and_lets_the_next_buy_cover_the_short` — SCENARIO-22 Given/Then via `runWith` + `writeConfig` (local `accounts.non-registered`) + `replaceStore`, style of `run_acb_unknown_cost_test.go:83-102`; JSON shares through `document.Shares` (`"-10.000000"`, `"5.000000"`); stderr exact `quarry: warning: ` + 10a line from `RULING-S22.md`; no stubs needed (cmd-level)
 
 ### Build
 - [ ] Step 2: `internal/report/acb_walk.go:393-413` `(*acbPool).add`/`take`, `:258-274` sell/remove arms, `internal/report/acb.go:186-202` new `ACBEvent.Oversold *big.Rat` — `take` leaves shares negative (all ACB out); oversold sale `UnknownCost` true; acquisition covers the short first, units beyond at `roundHalfAway(costCAD × beyond ÷ bought)` (pro-rate only when shares < 0 before the add). Tests in `internal/report/acb_short_test.go` (new): `Test_acb_counts_the_units_sold_beyond_the_pool_at_no_cost_and_leaves_the_pool_short` (gain = proceeds − outlays − ACB removed, commission row; Held < 0; ACB 0), `Test_acb_marks_a_disposition_oversold_only_beyond_what_the_pool_holds` (bound: units = held → nil, shares 0; held + 1 millionth → 0.000001; remove_shares row; second disposition while short), `Test_acb_covers_a_short_before_adding_units_to_the_pool` (cover-only: units < short, units = short; ACB stays 0), `Test_acb_adds_the_cost_of_the_units_beyond_the_short_pro_rata_rounded_half_away` (half-away row; USD row where convert-then-prorate ≠ prorate-then-convert by a cent; reinvest and add_shares with cost; no-short buy control). Re-pin `acb_walk_test.go:91-101` (`"-2"`), `:309-320` (`"-5"`, sale unknown cost), `acb_shares_test.go:53-60` (`"-2"`); change `acb_walk_test.go:103-113` fixture to sell exactly 10 so it keeps pinning edge row "Sold out, re-bought later"
@@ -51,3 +51,12 @@ Size: OWNS A RUN — 4 batches, 1 feature package (`internal/report` + its `docu
 - `formatPerShare(nil)` panics; `renderACBPositions:118` filter is the only thing keeping a short off it — keep it
 
 **Orchestrator rulings 2026-10-05 (pre-dispatch):** (1) warning 10a/10b `<x>` = the short after the disposition (pool at -10 selling 5 shows 15) — keeps both clauses literally true; (2) a no-cost acquisition that only covers a short keeps its event `UnknownCost` true (opens no span, as ruled), so warning 4 and the shares-without-cost finding stay consistent. Both defaults stand.
+
+## Phase report
+
+Run A (Step 1) done; Steps 2-7 untouched.
+
+- New `cmd/quarry/run_acb_short_test.go`: `oversoldRows()` (Money Fund `sec-fund`, `acct-cad`, buy 100 / sell 110 / buy 15), local `shortDoc` JSON reader (did not touch `acbDoc`), const `moneyFundOversoldWarning` (10a verbatim, x = 10), and the acceptance test. No stubs needed.
+- Warnings print to stderr under `--json` too (`emit` in `internal/cli/output.go`), so the test asserts stderr exact and ignores `doc.Warnings`.
+- RED now (fails at assertions, not compile): `unknown_cost_sales` 0 (want 1); sale `unknown_cost` false; sell event `shares_held` "0.000000" (want "-10.000000"); buy event "15.000000"/"15.00" (want "5.000000"/"5.00"); security shares/acb "15.000000"/"15.00"; stderr empty (want 10a line). Sale acb "100.00" and gain "10.00" already pass today (reset path removes the whole pool).
+- Next (B1): Steps 2-3 in `internal/report`; step 5 may add cell tests reusing `oversoldRows`/`shortDoc`.
