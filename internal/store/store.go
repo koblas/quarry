@@ -284,6 +284,7 @@ type InvestmentTransaction struct {
 	Shares         *int64
 	Amount         int64
 	Commission     *int64
+	CostBasis      *int64
 	Currency       string
 	Memo           *string
 	SplitNewShares *int64

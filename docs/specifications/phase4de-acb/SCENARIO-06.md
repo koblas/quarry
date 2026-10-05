@@ -19,8 +19,8 @@ Surface surveyed (grep; LSP `findReferences` on `Commission` sees only its decla
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_cost_basis_test.go` (new) `Test_run_sync_keeps_quickens_cost_basis_and_stores_null_for_none` — mirror `run_commission_test.go:17-47`. Rows: buy with cost, reinvest (amount 0) with cost, add_shares with cost, add_shares without, sell with ZCOSTBASIS `0` (NULL), dividend (NULL). Assert `format_version` is the literal `"9"` first via `assert` (genuine red), then `cost_basis` per id via `stringMap`
-- [ ] Step 2: stubs so it compiles and runs. `v9fixture/builder.go:65-86` `TransactionRow.CostBasis` + INSERT column at `:514-524` + typeof/NULL asserts at `builder_test.go:166-191` (defaults NULL; no existing fixture changes, so STATE's no-shared-helper rule holds); `store/store.go:277-291` `CostBasis *int64` (cents) after `Commission`; `duckstore/schema.go:89-103` `cost_basis DECIMAL(18,2)` directly after `commission`; `duckstore.go:674-677` cell in the same slot (`appendTable` matches by POSITION). Red = values NULL and format `8`
+- [x] Step 1: `cmd/quarry/run_cost_basis_test.go` (new) `Test_run_sync_keeps_quickens_cost_basis_and_stores_null_for_none` — mirror `run_commission_test.go:17-47`. Rows: buy with cost, reinvest (amount 0) with cost, add_shares with cost, add_shares without, sell with ZCOSTBASIS `0` (NULL), dividend (NULL). Assert `format_version` is the literal `"9"` first via `assert` (genuine red), then `cost_basis` per id via `stringMap`
+- [x] Step 2: stubs so it compiles and runs. `v9fixture/builder.go:65-86` `TransactionRow.CostBasis` + INSERT column at `:514-524` + typeof/NULL asserts at `builder_test.go:166-191` (defaults NULL; no existing fixture changes, so STATE's no-shared-helper rule holds); `store/store.go:277-291` `CostBasis *int64` (cents) after `Commission`; `duckstore/schema.go:89-103` `cost_basis DECIMAL(18,2)` directly after `commission`; `duckstore.go:674-677` cell in the same slot (`appendTable` matches by POSITION). Red = values NULL and format `8`
 
 ### Build
 - [ ] Step 3 (B1, store): `duckstore.go:24-25` `FormatVersion = 9`; `:663-680` `decimalCell("cost_basis", t.CostBasis, moneyWidth, moneyScale)` joined into the error set. Tests `duckstore_test.go`: `minimalRows` `:59-70` (inv-1 set, inv-2 nil), round-trip `:129-153` set and NULL, largest value `:495-511` (`9999999999999999.99`, the in-bound control), out-of-range row in the table `:512-535` (`beyond18Digits`, error names `cost_basis`). Re-pin literal `8`→`9`: `run_holding_shares_test.go:56`, `run_investment_cash_test.go:90`, `run_shared_documents_test.go:134`. Constant-based pins (`open_test.go:180` older-format = 8, `status_test.go:36`, `run_store_info_test.go:73`) need nothing
@@ -59,3 +59,12 @@ Surface surveyed (grep; LSP `findReferences` on `Commission` sees only its decla
 - `readValues` returns early on a NULL commission (`investments.go:284-286`); a cost read appended below it never runs for the common no-commission buy.
 - `run_sync_pre4a_store_test.go:49` "8"/"9" are import-run ids, not format versions; leave alone.
 - Hand copies of the conventions wrap by hand; a reflow in the const that is not copied byte-for-byte fails `cli/sql_test.go` and `run_shared_documents_test.go`, and `schema.md` is regenerated, not edited.
+
+## Phase report
+
+Run A (steps 1-2) done; acceptance red at its assertions.
+- New `cmd/quarry/run_cost_basis_test.go` (`Test_run_sync_keeps_quickens_cost_basis_and_stores_null_for_none`): `assert` format_version `9` (got `8`) then `cost_basis` per id (got all `NULL`, want 1000.50 / 50.25 / 300.00 / NULL x3). Sync itself exits 0, stderr empty.
+- Fixture: `v9fixture/builder.go` `TransactionRow.CostBasis` (+ INSERT column ZCOSTBASIS); `builder_test.go` typeof real / integer and NULL asserts added to `Test_builder_seeds_positions_and_investment_transaction_fields`.
+- Stubs: `store.InvestmentTransaction.CostBasis *int64` (after Commission, no doc yet); `duckstore/schema.go` `cost_basis DECIMAL(18,2)` after `commission`; `duckstore.go` `investmentTransactionRows` slot is a literal `nil` right after `commission` (step 3 replaces it with `decimalCell("cost_basis", t.CostBasis, moneyWidth, moneyScale)` joined into the error set). FormatVersion still 8.
+- Do not redo: the column is already in the DDL and slot order; `v9fixture`, `store`, `duckstore`, `importer` test packages green with the stubs.
+- Next (B1, steps 3-4): FormatVersion 9 + decimalCell + the 3 literal `8`->`9` re-pins (`run_holding_shares_test.go:56`, `run_investment_cash_test.go:90`, `run_shared_documents_test.go:134`; those fail until step 3), then importer read.

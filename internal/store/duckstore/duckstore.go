@@ -672,7 +672,7 @@ func investmentTransactionRows(txns []store.InvestmentTransaction) ([][]any, err
 			return nil, fmt.Errorf("investment transaction %s: %w", t.ID, err)
 		}
 		out[i] = []any{
-			t.ID, t.SourceID, t.AccountID, nullableStr(t.SecurityID), t.Date, t.Action, shares, amount, commission,
+			t.ID, t.SourceID, t.AccountID, nullableStr(t.SecurityID), t.Date, t.Action, shares, amount, commission, nil,
 			t.Currency, nullableStr(t.Memo), splitNew, splitOld,
 		}
 	}

@@ -161,9 +161,9 @@ func Test_builder_seeds_positions_and_investment_transaction_fields(t *testing.T
 	bareDeletedPositionPK := b.Position(v9fixture.PositionRow{Deleted: true})
 	fullPK := b.InvestmentTransaction(v9fixture.TransactionRow{
 		Account: accountPK, Type: &buyType, Position: positionPK,
-		Units: "2.5", Numerator: "1", Denominator: "12", Commission: "1.50",
+		Units: "2.5", Numerator: "1", Denominator: "12", Commission: "1.50", CostBasis: "1000.50",
 	})
-	wholePK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Units: "10"})
+	wholePK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Units: "10", CostBasis: "1000"})
 	barePK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK})
 
 	bundle := b.WriteBundle(t, t.TempDir())
@@ -184,11 +184,13 @@ func Test_builder_seeds_positions_and_investment_transaction_fields(t *testing.T
 	assert.Equal(t, "real", queryString(t, db, "SELECT typeof(ZUNITS) FROM ZTRANSACTION WHERE Z_PK = ?", fullPK))
 	assert.Equal(t, "integer", queryString(t, db, "SELECT typeof(ZUNITS) FROM ZTRANSACTION WHERE Z_PK = ?", wholePK))
 	assert.Equal(t, "real", queryString(t, db, "SELECT typeof(ZCOMMISSION) FROM ZTRANSACTION WHERE Z_PK = ?", fullPK))
+	assert.Equal(t, "real", queryString(t, db, "SELECT typeof(ZCOSTBASIS) FROM ZTRANSACTION WHERE Z_PK = ?", fullPK))
+	assert.Equal(t, "integer", queryString(t, db, "SELECT typeof(ZCOSTBASIS) FROM ZTRANSACTION WHERE Z_PK = ?", wholePK))
 	assert.Equal(t, "integer", queryString(t, db, "SELECT typeof(ZNUMERATOR) FROM ZTRANSACTION WHERE Z_PK = ?", fullPK))
 	assert.Equal(t, "integer", queryString(t, db, "SELECT typeof(ZDENOMINATOR) FROM ZTRANSACTION WHERE Z_PK = ?", fullPK))
 	assert.Equal(t, int64(1), queryInt(t, db,
 		"SELECT count(*) FROM ZTRANSACTION WHERE Z_PK = ? AND ZTYPE IS NULL AND ZPOSITION IS NULL AND ZUNITS IS NULL"+
-			" AND ZNUMERATOR IS NULL AND ZDENOMINATOR IS NULL AND ZCOMMISSION IS NULL", barePK))
+			" AND ZNUMERATOR IS NULL AND ZDENOMINATOR IS NULL AND ZCOMMISSION IS NULL AND ZCOSTBASIS IS NULL", barePK))
 }
 
 func Test_builder_seeds_lots(t *testing.T) {

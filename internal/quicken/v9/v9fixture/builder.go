@@ -60,7 +60,7 @@ type AccountRow struct {
 // TransactionRow is one ZTRANSACTION row. Entity defaults to the Builder's
 // CashFlowTransaction entity number when zero. Account and Payee are zero
 // refs (0 writes NULL); Amount, Note, CheckNumber, Units, Numerator,
-// Denominator and Commission write NULL when "". The decimal strings are
+// Denominator, Commission and CostBasis write NULL when "". The decimal strings are
 // bound as text, so SQLite's affinity picks integer, real or text.
 type TransactionRow struct {
 	Entity      int64
@@ -83,6 +83,7 @@ type TransactionRow struct {
 	Numerator   string // ZNUMERATOR, a split's new shares
 	Denominator string // ZDENOMINATOR, a split's old shares
 	Commission  string // ZCOMMISSION
+	CostBasis   string // ZCOSTBASIS
 }
 
 // EntryRow is one ZCASHFLOWTRANSACTIONENTRY row (a split of a transaction).
@@ -515,12 +516,12 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 		exec(tb, ctx, db,
 			`INSERT INTO ZTRANSACTION
 				(Z_PK, Z_ENT, ZACCOUNT, ZAMOUNT, ZPOSTEDDATE, ZENTEREDDATE, ZRECONCILESTATUS, ZUSERPAYEE, ZNOTE, ZCHECKNUMBER, ZDELETIONCOUNT, ZEXCLUDEFROMREPORTS,
-				 ZTYPE, ZPOSITION, ZUNITS, ZNUMERATOR, ZDENOMINATOR, ZCOMMISSION)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				 ZTYPE, ZPOSITION, ZUNITS, ZNUMERATOR, ZDENOMINATOR, ZCOMMISSION, ZCOSTBASIS)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			x.pk, x.row.Entity, nullableRef(x.row.Account), nullableString(x.row.Amount), nullableTime(x.row.PostedDate), nullableTime(x.row.EnteredDate),
 			nullableInt(x.row.Status), nullableRef(x.row.Payee), nullableString(x.row.Note), nullableString(x.row.CheckNumber), deletionCount(x.row.Deleted), nullableInt(x.row.ExcludeFromReports),
 			nullableInt(x.row.Type), nullableRef(x.row.Position), nullableString(x.row.Units), nullableString(x.row.Numerator),
-			nullableString(x.row.Denominator), nullableString(x.row.Commission))
+			nullableString(x.row.Denominator), nullableString(x.row.Commission), nullableString(x.row.CostBasis))
 	}
 
 	for _, e := range b.entries {
