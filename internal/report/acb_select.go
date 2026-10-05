@@ -70,7 +70,6 @@ func registeredHoldings(history store.InvestmentHistory, req ACBRequest) map[str
 	held := make(map[string]bool)
 	for _, tx := range history.Transactions {
 		if tx.SecurityID == nil {
-			// unreachable: duckstore's InvestmentHistory query selects only rows WHERE security_id IS NOT NULL (internal/store/duckstore/investments.go:20).
 			continue
 		}
 		if inRegistered[tx.AccountID] && !tx.Date.After(req.Today) {

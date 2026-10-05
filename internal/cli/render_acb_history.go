@@ -11,9 +11,8 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// renderACBHistory is the full history of each security a names, in a.SelectedIDs' order: one captioned table
-// each, a blank line between. A security held only in registered accounts has no event, so its table is the
-// caption and header alone.
+// renderACBHistory is the full history of each security a names, in a.SelectedIDs' order, one captioned table each
+// with a blank line between; a security held only in registered accounts has the caption and header alone.
 func renderACBHistory(a report.ACB) string {
 	events := make(map[string][]report.ACBEvent, len(a.Securities))
 	named := make(map[string]store.Security, len(a.Securities)+len(a.RegisteredOnly))

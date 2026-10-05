@@ -154,6 +154,25 @@ func Test_run_acb_security_with_year_prints_a_zero_total_when_the_named_security
 		acbSaleRowOf(w, [8]string{"Total", "", "", "0.00", "0.00", "0.00", "0.00"}), stdout)
 }
 
+func Test_run_acb_security_with_year_for_a_security_held_only_in_registered_accounts(t *testing.T) {
+	acbPairFixture(t)
+	w := [7]int{5, 8, 6, 8, 7, 4, 12}
+	want := `"Maple Fund" is held only in registered accounts, so it has no ACB`
+
+	stdout, stderr := runACB(t, "--year", "2026", "--security", "MPL")
+	doc, docStderr := runACB(t, "--year", "2026", "--security", "MPL", "--json")
+
+	assert.Equal(t, "Sales in 2026, in CAD\n\n"+
+		acbSaleRowOf(w, [8]string{"Date", "Security", "Shares", "Proceeds", "Outlays", "ACB", "Gain or loss"})+
+		acbSaleRowOf(w, [8]string{"Total", "", "", "0.00", "0.00", "0.00", "0.00"}), stdout)
+	assert.Equal(t, stderrWarnings(want), stderr)
+	assert.Equal(t, stderr, docStderr)
+	got := decodeACBYear(t, doc)
+	assert.NotNil(t, got.Securities)
+	assert.Empty(t, got.Securities)
+	assert.Equal(t, []string{want}, got.Warnings)
+}
+
 func Test_run_acb_security_with_year_writes_that_year_re_summed_over_the_named_security_in_json(t *testing.T) {
 	acbPairFixture(t)
 

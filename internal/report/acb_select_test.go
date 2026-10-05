@@ -3,6 +3,7 @@ package report_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
@@ -15,14 +16,14 @@ func selectSecurity(id, name, ticker string) store.Security {
 	return store.Security{ID: id, Name: name, Ticker: &ticker, Currency: &currency}
 }
 
-// selectHistory is a store holding: sec-1 Acme Corp (ACME), sec-2 Beta Inc (BETA), sec-6 Acme Preferred (acme)
-// and sec-7 named "sec-2", each bought in a non-registered account; sec-3 Maple (MPL) bought only in the
-// registered acct-9; sec-5 bought in acct-9 after today; sec-9 bought only in the unclassified acct-7; sec-4
-// with no transaction; and sec-8 with an empty ticker, bought in a non-registered account.
+// selectHistory is securities bought in non-registered acct-1 (shared tickers and names, no or empty ticker), sec-3
+// and sec-13 only in registered acct-9, sec-5 there the day after today, sec-9 only in unclassified acct-7, sec-4 never.
 func selectHistory(t *testing.T) store.InvestmentHistory {
 	t.Helper()
 	empty := ""
+	cad := "CAD"
 	blank := store.Security{ID: "sec-8", Name: "Blank", Ticker: &empty}
+	tickerless := store.Security{ID: "sec-10", Name: "No Ticker", Currency: &cad}
 	return store.InvestmentHistory{
 		Accounts: append(acbAccounts(), store.Account{ID: "acct-7", Name: "Cash margin", Type: store.AccountTypeBrokerage, Currency: "CAD"}),
 		Securities: []store.Security{
@@ -35,16 +36,26 @@ func selectHistory(t *testing.T) store.InvestmentHistory {
 			selectSecurity("sec-7", "sec-2", "SEC7"),
 			blank,
 			selectSecurity("sec-9", "Cash only", "CSH"),
+			tickerless,
+			selectSecurity("sec-11", "beta Fund", "BFD"),
+			selectSecurity("sec-b", "Twin", "TWB"),
+			selectSecurity("sec-a", "Twin", "TWA"),
+			selectSecurity("sec-13", "Today Fund", "TDY"),
 		},
 		Transactions: []store.InvestmentTransaction{
 			acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
 			acbTx(t, 2, "acct-1", "sec-2", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
 			acbTx(t, 3, "acct-9", "sec-3", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-			acbTx(t, 4, "acct-9", "sec-5", "2026-12-01", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 4, "acct-9", "sec-5", "2026-10-06", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
 			acbTx(t, 5, "acct-1", "sec-6", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
 			acbTx(t, 6, "acct-1", "sec-7", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
 			acbTx(t, 7, "acct-1", "sec-8", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
 			acbTx(t, 8, "acct-7", "sec-9", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 9, "acct-1", "sec-10", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 10, "acct-1", "sec-11", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 11, "acct-1", "sec-b", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 12, "acct-1", "sec-a", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 13, "acct-9", "sec-13", acbToday.Format(time.DateOnly), store.ActionBuy, "CAD", 10*acbMillion, -10_000),
 		},
 	}
 }
@@ -76,6 +87,9 @@ func Test_acb_selects_the_securities_a_selector_names(t *testing.T) {
 		{name: "a ticker ignoring case", selectors: []string{"beta"}, want: []string{"sec-2"}},
 		{name: "a name ignoring case", selectors: []string{"beta inc"}, want: []string{"sec-2"}},
 		{name: "a ticker two securities share names both in the walk's order", selectors: []string{"ACME"}, want: []string{"sec-1", "sec-6"}},
+		{name: "a name ignoring case, though a security has no ticker", selectors: []string{"no ticker"}, want: []string{"sec-10"}},
+		{name: "a ticker, though a security has no ticker", selectors: []string{"bfd"}, want: []string{"sec-11"}},
+		{name: "a lowercase name sorts among the capitalised ones by its folded spelling", selectors: []string{"BFD", "BETA"}, want: []string{"sec-11", "sec-2"}},
 		{name: "several selectors list the securities in the walk's order, not the request's", selectors: []string{"BETA", "sec-1"}, want: []string{"sec-1", "sec-2"}},
 		{name: "a security named by two selectors is listed once", selectors: []string{"ACME", "sec-1"}, want: []string{"sec-1", "sec-6"}},
 	}
@@ -120,7 +134,7 @@ func Test_acb_refuses_a_selector_that_names_no_covered_security(t *testing.T) {
 		{name: "no id, ticker or name matches", selector: "XYZ"},
 		{name: "an empty selector, though a security has an empty ticker", selector: ""},
 		{name: "a security with no transaction", selector: "sec-4"},
-		{name: "a security bought in a registered account only after today", selector: "sec-5"},
+		{name: "a security bought in a registered account the day after today", selector: "sec-5"},
 		{name: "a security bought only in an unclassified account", selector: "sec-9"},
 	}
 
@@ -157,6 +171,38 @@ func Test_acb_lists_a_selected_security_held_only_in_registered_accounts(t *test
 	require.NoError(t, err)
 	assert.Equal(t, []string{"sec-3"}, got.SelectedIDs)
 	assert.Equal(t, []string{"sec-3"}, securityIDsOf(got.RegisteredOnly))
+}
+
+func Test_acb_counts_a_registered_account_transaction_dated_today_as_held(t *testing.T) {
+	got, err := selectACB(t, selectHistory(t), "TDY")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"sec-13"}, got.SelectedIDs)
+	assert.Equal(t, []string{"sec-13"}, securityIDsOf(got.RegisteredOnly))
+}
+
+func Test_acb_lists_securities_sharing_a_name_by_id_whatever_order_the_request_names_them(t *testing.T) {
+	for range 20 {
+		for _, selectors := range [][]string{{"TWB", "TWA"}, {"TWA", "TWB"}} {
+			got, err := selectACB(t, selectHistory(t), selectors...)
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{"sec-a", "sec-b"}, got.SelectedIDs)
+		}
+	}
+}
+
+func Test_acb_ignores_a_registered_account_transaction_with_no_security(t *testing.T) {
+	history := selectHistory(t)
+	noSecurity := acbTx(t, 14, "acct-9", "sec-3", "2024-03-01", store.ActionBuy, "CAD", acbMillion, -1_000)
+	noSecurity.SecurityID = nil
+	history.Transactions = append(history.Transactions, noSecurity)
+
+	got, err := selectACB(t, history, "MPL", "TDY")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"sec-3", "sec-13"}, got.SelectedIDs)
+	assert.Equal(t, []string{"sec-3", "sec-13"}, securityIDsOf(got.RegisteredOnly))
 }
 
 func Test_acb_does_not_list_a_selected_security_with_pool_events_as_registered_only(t *testing.T) {
