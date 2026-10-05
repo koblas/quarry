@@ -6,7 +6,7 @@ status: open
 # SCENARIO-16: Net worth before any data
 
 Cadence: code-first
-Acceptance test: `cmd/quarry/run_networth_before_data_test.go` `Test_run_networth_before_the_first_transaction_prints_the_caption_and_the_transactions_start_warning`
+Acceptance test: `cmd/quarry/run_networth_before_data_test.go` `Test_run_networth_before_the_first_transaction_prints_the_caption_and_the_first_balance_warning`
 Narrow loop: `go test ./internal/store/duckstore/ -run 'NetWorth|net_worth' && go test ./internal/report/... ./internal/cli/ -run 'NetWorth|Networth|networth' && go test ./cmd/quarry/ -run 'networth'`
 Mutation checks: empty = "no `Rows` on any listed date", not "all balances zero" (drop the zero-row guard) → `Test_NetWorthWarnings_says_nothing_for_a_date_whose_rows_all_sum_to_zero`; first-transaction scope (`reportedAccount`) → `Test_net_worth_first_transaction_ignores_accounts_left_out_of_reports`
 Runs: A (1) | B1 (2-3) | B2 (4) | V (5-6)
@@ -24,7 +24,7 @@ Inventory (read, not Glob): `Server.NetWorth` is the only producer of `report.Ne
 3. Scope of "the store's transactions": assumed counted accounts only (a not-in-reports account's earlier transaction must not make "start <d>" false).
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_networth_before_data_test.go` `Test_run_networth_before_the_first_transaction_prints_the_caption_and_the_transactions_start_warning` — `seedNetWorthStore` (`run_networth_test.go:26`, first transaction 2026-03-02), `holdingsClock()`, `--as-of 2026-03-01`: exit 0, stdout caption plus header only (no Total), stderr `quarry: warning: no account has a balance on 2026-03-01; the store's transactions start 2026-03-02`. Compiles unstubbed; red at the stderr assertion.
+- [x] Step 1: `cmd/quarry/run_networth_before_data_test.go` `Test_run_networth_before_the_first_transaction_prints_the_caption_and_the_first_balance_warning` — `seedNetWorthStore` (`run_networth_test.go:26`, first transaction 2026-03-02), `holdingsClock()`, `--as-of 2026-03-01`: exit 0, stdout caption plus header only (no Total), stderr `quarry: warning: no account has a balance on 2026-03-01; the first balance is on 2026-03-02`. Compiles unstubbed; red at the stderr assertion.
 
 ### Build
 - [ ] Step 2 (B1, store fact, one read): `store/store.go:~657-666` add `NetWorth.FirstTransaction time.Time` (zero when none; doc one line, beside `FirstRate`); `duckstore/networth.go:65-70` read it as the fourth query in the same open after `firstRate` (new unexported `firstTransaction(ctx, db)` modelled on `charges.go:74-81`, SQL `min(t.date)` over `transactions t JOIN accounts a` WHERE `reportedAccount`); `report/networth.go:36-49,96` `NetWorth.FirstTransaction`, copied from the read. Tests: `duckstore/net_worth_read_test.go` (beside :127-168) — gives the earliest date; zero for a store with no transactions; ignores not-in-reports and linked-tracking accounts (`Test_net_worth_first_transaction_ignores_accounts_left_out_of_reports`, their earlier transaction does not win; control: counted account's later one does); query fault and scan fault with `passQueries: 3` and a fault text that matches only the new query; bump `unvalued_holdings_test.go:214` `Test_net_worth_for_no_dates_runs_no_query` count 3 -> 4 and its `idle` stays 0 (empty dates still opens and queries nothing); `report/networth_test.go` — fake read's `FirstTransaction` reaches `report.NetWorth` for snapshot and history.
@@ -54,3 +54,10 @@ Inventory (read, not Glob): `Server.NetWorth` is the only producer of `report.Ne
 - Fakes and cmd fixtures with no transactions now print `...the store has no transactions` where they printed nothing; `Test_net_worth_for_no_dates_runs_no_query` and the `read_faults_test.go:44` NetWorth row follow the query count.
 - The first-rate fault test (`net_worth_read_test.go:149`, `passQueries: 2`) stays on query 3; its fault text `query rows "SELECT min"` also fits the new `min(...)` query, so the new fault tests need `passQueries: 3`.
 - `v_balances_daily` also starts an account at its first holding date, so the line's "transactions start" is the register start; a date before both is still empty and true.
+
+## Phase report
+
+Run A done. `cmd/quarry/run_networth_before_data_test.go` (new): `Test_run_networth_before_the_first_transaction_prints_the_caption_and_the_first_balance_warning`, `seedNetWorthStore` + `holdingsClock()` + `--as-of 2026-03-01`. Compiles unstubbed (no new symbol).
+RED at the stderr assertion (run_networth_before_data_test.go:21): expected `quarry: warning: no account has a balance on 2026-03-01; the first balance is on 2026-03-02\n`, actual `""`. Stdout assertion (`Net worth on 2026-03-01, amounts in CAD\n\nType  Currency  Balance  In CAD\n`) already passes (S10 renders the empty table) and exit 0 holds.
+Seed's earliest balance date is 2026-03-02 (transactions and the VTI buy/holding both that day), so the ruled `<f>` is that date; no earlier holding.
+Plan header/step 1 renamed per the copy ruling. B1 next: `FirstBalance` (not `FirstTransaction`) per Handoff ruling.
