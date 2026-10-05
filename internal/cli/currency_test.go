@@ -235,6 +235,20 @@ func Test_accounts_prints_the_configs_warnings_once_even_with_the_currency_flag(
 	assert.Equal(t, "quarry: warning: "+unknownKeyShown+"\n", stderr.String())
 }
 
+func Test_accounts_names_the_configs_warnings_absolutely_in_json_even_with_the_currency_flag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := cli.Execute(t.Context(), []string{"accounts", "--currency", "native", "--json"}, loaderEnv(&stdout, &stderr, warningConfig))
+
+	require.NoError(t, err)
+	var doc struct {
+		Warnings []string `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	require.NotEmpty(t, doc.Warnings)
+	assert.Equal(t, unknownKeyAbsolute, doc.Warnings[0])
+}
+
 func Test_read_commands_refuse_an_unreadable_config_as_a_runtime_error(t *testing.T) {
 	for _, command := range currencyCommands {
 		t.Run(command, func(t *testing.T) {

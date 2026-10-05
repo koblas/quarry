@@ -54,6 +54,29 @@ func Test_accounts_classify_each_account_by_the_list_that_names_its_id(t *testin
 	}
 }
 
+func Test_accounts_match_a_listed_id_exactly_and_case_sensitively(t *testing.T) {
+	account := store.Account{ID: registeredID, Name: "Growth", Type: store.AccountTypeBrokerage}
+	cases := []struct {
+		name       string
+		registered []string
+		want       *bool
+	}{
+		{name: "exact id", registered: []string{registeredID}, want: new(true)},
+		{name: "different letter case", registered: []string{"ACCT-1"}, want: nil},
+		{name: "leading whitespace", registered: []string{" acct-1"}, want: nil},
+		{name: "the account's name instead of its id", registered: []string{"Growth"}, want: nil},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := classifiedListing(t, account, false, report.Classification{Registered: c.registered})
+
+			assert.Equal(t, c.want, got.Classification.Of(got.Accounts[0].Account))
+			assert.Equal(t, c.want == nil, got.Classification.Unclassified(got.Accounts[0].Account))
+		})
+	}
+}
+
 func Test_accounts_classify_an_id_listed_in_both_lists_as_registered(t *testing.T) {
 	both := report.Classification{Registered: []string{registeredID}, NonRegistered: []string{registeredID}}
 
