@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01
-status: open
+status: done
 ---
 
 # SCENARIO-01: Accounts show their classification
@@ -29,10 +29,10 @@ Existence facts (LSP/grep): no `Registered`/`NonRegistered` anywhere; `Server.Ac
 - [x] Step 6: `report/sql_conventions.go` (end of the last paragraph, after "no exchange rate for that day.") — add verbatim: "Which accounts are registered is not in the store; it is accounts.registered and accounts.non-registered in quarry's config, and quarry accounts --json reports it as registered." Then regenerate `plugin/skills/quarry/references/schema.md` (`go test ./cmd/quarry -run Test_skill_schema_reference_matches_the_committed_file -update`) and update the hand copies `internal/cli/sql_test.go`, `cmd/quarry/run_shared_documents_test.go`, `internal/report/sql_conventions_test.go`; `describe_schema` and `quarry sql --help` share `report.SQLConventions`, so one pin per surface already exists — update them, add no new copy
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `Classification`, the tri-state method and the two `Config` fields; golden re-pins (below)
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `Classification`, the tri-state method and the two `Config` fields; golden re-pins (below)
 
 ### Verify
-- [ ] Step 8: full verification block + `.claude/scripts/spec-check.py phase4de-acb` → tick SCENARIO-01 with its acceptance test; write `STATE.md`
+- [x] Step 8: full verification block + `.claude/scripts/spec-check.py phase4de-acb` → tick SCENARIO-01 with its acceptance test; write `STATE.md`
 
 Golden re-pins (trap): every accounts `--json` fixture gains `"registered": null`; every fixture with a brokerage/retirement account and no `[accounts]` gains `unclassified` in Status. Search with `go test ./cmd/quarry ./internal/cli -run 'Account|Holdings|Currency|Golden'`; known files: `internal/cli/json_accounts_internal_test.go`, `json_accounts_wide_internal_test.go`, `render_accounts_internal_test.go`, `cmd/quarry/run_accounts_*_test.go`, `run_analysis_documents_golden_test.go`, `run_currency_native_test.go`, `run_config_test.go`. Re-pin only diffs that are exactly those two additions; any other diff is a bug.
 
@@ -61,13 +61,8 @@ Golden re-pins (trap): every accounts `--json` fixture gains `"registered": null
 
 ## Phase report
 
-Run B2 (steps 5-6) done. Acceptance `Test_accounts_show_their_classification` GREEN (both subtests). `go build ./...`, `golangci-lint run ./...` = 0 issues, `go test ./...` green (one self-inflicted golden slip fixed). Steps 7-8 (V) not started: no covered run, no `uncovered-diff.py`, no `test-stats.py`, no spec tick, no STATE.md, `status` still open.
+Run V (steps 7-8) done; scenario complete, `status: done`. `go build ./...` ok; `golangci-lint run ./...` 0 issues; covered full suite rc=0; `uncovered-diff.py` vs 76fa387: 0 uncovered added lines; `go test -race` on config/report/cli/cmd/quarry clean; `spec-check.py phase4de-acb` OK.
 
-- `internal/cli/currency.go`: `readConfig` (load + runtime-error wrap + `~` warnings, shared by `resolve`), new `currencyFlag.in(cmd, cfg)`. `resolve` still skips the loader with the flag (six other commands).
-- `internal/cli/accounts.go`: always `readConfig`, currency via `currency.in`, `report.Classification{Registered, NonRegistered}` from cfg, JSON warnings use `cfg.WarningsAbsolute`; Long paragraph verbatim after the networth paragraph.
-- `internal/cli/render_accounts.go`: `accountStatus(a, c)` appends `registered` then `unclassified` last. `json_accounts.go`: `Registered *bool` after `LinkedTracking`.
-- `internal/report/sql_conventions.go`: registered-not-in-store sentence appended; `schema.md` regenerated (`-update`); pins in `internal/cli/sql_test.go`, `cmd/quarry/run_shared_documents_test.go`, `internal/report/sql_conventions_test.go`.
-- Tests added: `internal/cli/accounts_classification_edges_test.go` (2: closed unlisted text with/without `--all`, JSON null registered), `render_accounts_internal_test.go` `Test_accountStatus_ends_with_registered_or_unclassified` (7 rows), `currency_test.go` (accounts reads loader with flag, loader error with flag = runtime error not usage, warnings printed once; `flagSkipsConfigCommands` now excludes accounts from the "loader unread with flag" pin), `cmd/quarry/run_config_test.go` `Test_run_accounts_refuses_a_malformed_config_even_when_given_a_currency` (accounts skipped in the ignore-malformed-with-flag loop). Accounts Long pin extended in `cmd/quarry/run_accounts_test.go`.
-- Goldens re-pinned, each diff exactly `unclassified` in Status or `"registered": null` after `linked_tracking`: `cmd/quarry/run_accounts_{fx,fx_edges,investment_balance,json}_test.go`, `run_accounts_test.go`, `run_currency_native_test.go`, `internal/cli/json_accounts_internal_test.go`, `render_accounts_internal_test.go`.
-- Not done by design: no Mask helper / in-both refusal (S02), no unclassified finding (S04).
-- V must: run the covered full suite + `uncovered-diff.py --profile`, `test-stats.py --base 76fa387 --changed`, tick the spec line, `spec-check.py phase4de-acb`, write STATE.md, set `status: done`, tick Steps 7-8.
+`test-stats.py --base 76fa387 --changed`: cmd/quarry 797 (+1), internal/cli 515 (+7), internal/config 66 (+9), internal/report 436 (+5), TOTAL 1814 (+22); tempdir/disk deltas +0.
+
+Spec ticked with `Test_accounts_show_their_classification`. STATE.md written. No production changes in V. Nothing for a later run to undo.

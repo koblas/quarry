@@ -543,7 +543,7 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 
 ## BDD Acceptance Progress
 
-- [ ] SCENARIO-01: Accounts show their classification
+- [x] SCENARIO-01: Accounts show their classification — `internal/cli/accounts_classification_test.go` `Test_accounts_show_their_classification`
 - [ ] SCENARIO-02: A malformed classification is refused
 - [ ] SCENARIO-04: Unclassified investment accounts are findings
 - [ ] SCENARIO-05: Finding counts include unclassified accounts
