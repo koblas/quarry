@@ -49,3 +49,6 @@ Scenarios complete: SCENARIO-01..06 (03 folded into 05). Last updated by SCENARI
 - `plugin/skills/quarry/references/findings.md:43` `--csv` line mirrors the `--csv` help, pinned in `cmd/quarry/run_skill_references_test.go`; 13b moves both to the Part B wording (SCENARIO-04)
 - Final product-vision pass: `quarry findings --help` type table realigned for 20-char `unclassified-account` (layout only, orchestrator-accepted) (SCENARIO-04)
 - Copy ruling (SCENARIO-05) changed the shared unreadable-config status warning; pins re-asserted at `document/status_test.go`, `run_status_findings_test.go`, `run_shared_documents_test.go`, `mcp/sync_status_test.go`. Final pass re-checks wording on `status` and `sync_status`
+- Checkpoint 06 MINOR: first-fault order pinned only commission-before-cost (`internal/importer/investments_test.go` both-unreadable row); add amount+cost row on next importer touch.
+- Checkpoint 06 MINOR (owner S19): `Test_sql_conventions_say_what_cost_basis_is_and_leave_acb_to_the_command` (`internal/report/sql_conventions_test.go`) asserts NotContains "acb" — S19 must rewrite it when it adds sentence 2.
+- Checkpoint 06 NIT: `cmd/quarry/run_holdings_surfaces_test.go:26` pin shrank to `records none).` (full sentence pinned in report test).
