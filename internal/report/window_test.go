@@ -411,11 +411,22 @@ func Test_parse_month_end_window_refuses_a_value_that_is_not_a_date(t *testing.T
 }
 
 func Test_parse_month_end_window_refuses_a_since_after_the_until_as_given(t *testing.T) {
-	_, err := report.ParseMonthEndWindow(new("2025"), new("2024"), windowNow)
+	t.Run("a since a year after the until", func(t *testing.T) {
+		_, err := report.ParseMonthEndWindow(new("2025"), new("2024"), windowNow)
 
-	var refusal report.WindowError
-	require.ErrorAs(t, err, &refusal)
-	assert.EqualError(t, err, "--since 2025 is after --until 2024")
+		var refusal report.WindowError
+		require.ErrorAs(t, err, &refusal)
+		assert.EqualError(t, err, "--since 2025 is after --until 2024")
+	})
+
+	t.Run("a since on the same day as the until is accepted", func(t *testing.T) {
+		both := "2026-03-05"
+
+		got, err := report.ParseMonthEndWindow(&both, &both, windowNow)
+
+		require.NoError(t, err)
+		assert.Equal(t, store.Window{Since: day(2026, time.March, 5), Until: day(2026, time.March, 5)}, got)
+	})
 }
 
 func Test_parse_month_end_window_refuses_an_until_alone_before_the_default_since(t *testing.T) {

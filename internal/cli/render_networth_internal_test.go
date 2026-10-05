@@ -197,6 +197,21 @@ func Test_renderNetWorth_history_native_lists_a_line_per_currency_with_its_total
 		"2026-02-28\n", got)
 }
 
+func Test_renderNetWorth_history_native_shows_a_zero_balance_as_0_00_and_leaves_a_missing_currency_blank(t *testing.T) {
+	n := netWorthHistoryOf(money.Native, monthEndOf(2026, time.January, 31, []report.NetWorthTotal{
+		{Currency: "CAD", Value: big.NewInt(100)}, {Currency: "USD", Value: big.NewInt(50_000)},
+	},
+		cadRow("chequing", 0), cadRow("savings", 100),
+		store.NetWorthRow{Type: "chequing", Currency: "USD", Balance: big.NewInt(50_000)}))
+
+	got := renderNetWorth(n)
+
+	assert.Equal(t, "Net worth at each month end 2026-01-31 to 2026-01-31\n\n"+
+		"Month end   Currency  chequing  savings   Total\n"+
+		"2026-01-31  CAD           0.00     1.00    1.00\n"+
+		"2026-01-31  USD         500.00           500.00\n", got)
+}
+
 func Test_renderNetWorth_history_has_a_caption_and_header_only_when_no_month_end_is_listed(t *testing.T) {
 	cases := []struct {
 		name     string

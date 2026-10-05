@@ -100,8 +100,7 @@ func monthEnds(window store.Window) []time.Time {
 	return ends
 }
 
-// monthEnd is the last day of day's month, found as the day before the next month's first, which lands
-// right where adding a month to the 31st does not.
+// monthEnd is the last day of day's month.
 func monthEnd(day time.Time) time.Time {
 	return time.Date(day.Year(), day.Month()+1, 0, 0, 0, 0, 0, time.UTC)
 }
