@@ -16,8 +16,8 @@ Size: OWNS A RUN — 5 batches, 1 feature package (report; `snapshot` option arg
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_status_unclassified_test.go` (new) `Test_run_status_counts_an_unclassified_account_until_the_config_classifies_it` — per-test v9fixture: one brokerage account + chequing control, `syncBundle`, no config → `quarry status` Findings row `1 open; run quarry findings to list them`; then `writeConfig` lists the id in `accounts.non-registered`, status again WITHOUT sync → `none open`. Must fail at the first assertion (`none open` today)
-- [ ] Step 2: `cmd/quarry/run_accounts_unmatched_test.go` (new) `Test_run_accounts_and_findings_warn_a_listed_id_that_names_no_account` — rows `accounts`, `findings`; config `registered = ["acct-99"]`, `non-registered = ["RBC 12345678"]`; stderr holds verbatim `quarry: warning: ~/Library/Application Support/quarry/config.toml: accounts.registered lists "acct-99", which is not an account in quarry's store; quarry skips it` and the `accounts.non-registered lists "RBC ****5678"` line; exit 0. Signature-only stubs not needed (no new symbol referenced)
+- [x] Step 1: `cmd/quarry/run_status_unclassified_test.go` (new) `Test_run_status_counts_an_unclassified_account_until_the_config_classifies_it` — per-test v9fixture: one brokerage account + chequing control, `syncBundle`, no config → `quarry status` Findings row `1 open; run quarry findings to list them`; then `writeConfig` lists the id in `accounts.non-registered`, status again WITHOUT sync → `none open`. Must fail at the first assertion (`none open` today)
+- [x] Step 2: `cmd/quarry/run_accounts_unmatched_test.go` (new) `Test_run_accounts_and_findings_warn_a_listed_id_that_names_no_account` — rows `accounts`, `findings`; config `registered = ["acct-99"]`, `non-registered = ["RBC 12345678"]`; stderr holds verbatim `quarry: warning: ~/Library/Application Support/quarry/config.toml: accounts.registered lists "acct-99", which is not an account in quarry's store; quarry skips it` and the `accounts.non-registered lists "RBC ****5678"` line; exit 0. Signature-only stubs not needed (no new symbol referenced)
 
 ### Build
 - [ ] Step 3: `internal/store/store.go:355-369` `Status.Accounts []Account` (+ doc); `internal/store/duckstore/status.go:45-100` reads accounts in the same open — extract the account scan at `findings_read.go:93-103` (`findingAccountsQuery` :39) into one helper both reads call; `internal/report/findings.go:91-96` `CountFindings(st, ignore, c Classification)` builds `store.FindingList{Findings: st.Findings, Accounts: st.Accounts}` and goes through `readTimeFindings` (readtime.go:12) before `knownFindings`. Tests: duckstore Status returns accounts (closed included, sorted by id) + fault test: account query fails → `*store.OpenError`; `internal/report/finding_counts_test.go:14` helper gains classification; rows: unclassified counted open, never `New`; listed registered / non-registered → not counted; non-investment unlisted → not counted; ignored unclassified id → `Ignored`; unknown stored type still dropped
@@ -54,3 +54,15 @@ Size: OWNS A RUN — 5 batches, 1 feature package (report; `snapshot` option arg
 - `Server.Accounts` without `--all` filters closed accounts (accounts.go:62-71): an unmatched check after it warns a real closed account
 - `accounts` reuses one `warnings` slice for stderr AND `renderAccountsJSON`; a `~` line appended there leaks into `--json`
 - Read-time states must never set `New`: sync's `(N new)` clause would then count every unclassified account on every sync
+
+## Phase report
+
+Run A (steps 1-2) done. Both acceptance tests written, red at their assertions, no production code touched.
+
+Files (new): `cmd/quarry/run_status_unclassified_test.go`, `cmd/quarry/run_accounts_unmatched_test.go`.
+
+Red now:
+- `Test_run_status_counts_an_unclassified_account_until_the_config_classifies_it` fails at `run_status_unclassified_test.go:28`: first status prints `Findings  none open`, wants `Findings  1 open; run quarry findings to list them`.
+- `Test_run_accounts_and_findings_warn_a_listed_id_that_names_no_account` (subtests `accounts`, `findings`) fails at `run_accounts_unmatched_test.go:31-32`: stderr is empty for both commands.
+
+Green: nothing else changed. Next run (B1, steps 3-5) must not rewrite these tests. The status test's second half (config classifies → `none open`) is not yet proven; it only runs once the first half is green.
