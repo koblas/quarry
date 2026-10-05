@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/spf13/cobra"
 )
@@ -45,7 +44,7 @@ findings lists those.`,
 				return err
 			}
 
-			listing, err := srv.Accounts(cmd.Context(), all, reporting, report.Classification{Registered: cfg.Registered, NonRegistered: cfg.NonRegistered})
+			listing, err := srv.Accounts(cmd.Context(), all, reporting, classificationOf(cfg))
 			if err != nil {
 				return &runtimeError{err: err}
 			}

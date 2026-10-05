@@ -356,7 +356,8 @@ type ImportRun struct {
 // build that wrote it, its import run and the dates its transactions cover.
 // A zero Run.Snapshot.TakenAt or empty Source means NULL was recorded; the
 // dates are zero when there are no transactions. Findings holds each recorded
-// finding's id, type and state without its items, read from the same build as the rest.
+// finding's id, type and state without its items, and Accounts every account, closed included,
+// sorted by id; both are read from the same build as the rest.
 type Status struct {
 	Path                string
 	FormatVersion       int
@@ -365,6 +366,7 @@ type Status struct {
 	Run                 ImportRun
 	FirstDate, LastDate time.Time
 	Findings            []Finding
+	Accounts            []Account
 	Rates               StatusRates
 }
 
@@ -404,6 +406,7 @@ type Counts struct {
 // FindingsFault is why a previous store that opened had findings that could not be read.
 // StoreUnreadable is true iff the previous store could not be opened at all.
 // RatesFault is why a previous store that opened had exchange rates that could not be read.
+// Accounts is the accounts the build wrote, nil when Built is false.
 type Result struct {
 	Path         string
 	Built        bool
@@ -411,6 +414,7 @@ type Result struct {
 	Validation   Validation
 	HistoryFault *OpenError
 	Findings     finding.Counts
+	Accounts     []Account
 
 	FindingStates   []finding.State
 	FindingsCarried bool

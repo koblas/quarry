@@ -34,7 +34,7 @@ LEFT JOIN (` + payeeTransactions + `) pc ON pc.payee_id = fi.payee_id AND f.type
 LEFT JOIN (` + categorySplits + `) cs ON cs.category_id = fi.category_id AND f.type = 'similar-categories'
 ORDER BY f.id, fi.rowid`
 
-// findingAccountsQuery reads every account the findings reads carry beside the findings.
+// findingAccountsQuery reads every account the findings and status reads carry beside the findings.
 const findingAccountsQuery = `SELECT id, name, type, currency, closed, active FROM accounts ORDER BY id`
 
 // Findings reads every finding, open and fixed, with its items, sorted by id; a fixed finding has no items. It
@@ -90,16 +90,23 @@ func (s *Store) Findings(ctx context.Context) (store.FindingList, error) {
 	if err != nil {
 		return store.FindingList{}, openFault(s.Path(), err)
 	}
-	err = db.QueryRows(ctx, findingAccountsQuery, nil, func(scan func(dest ...any) error) error {
-		var a store.Account
-		if err := scan(&a.ID, &a.Name, &a.Type, &a.Currency, &a.Closed, &a.Active); err != nil {
-			return err
-		}
-		list.Accounts = append(list.Accounts, a)
-		return nil
-	})
+	list.Accounts, err = readAccounts(ctx, db)
 	if err != nil {
 		return store.FindingList{}, openFault(s.Path(), err)
 	}
 	return list, nil
+}
+
+// readAccounts reads every account, closed included, sorted by id.
+func readAccounts(ctx context.Context, db ReadDB) ([]store.Account, error) {
+	var accounts []store.Account
+	err := db.QueryRows(ctx, findingAccountsQuery, nil, func(scan func(dest ...any) error) error {
+		var a store.Account
+		if err := scan(&a.ID, &a.Name, &a.Type, &a.Currency, &a.Closed, &a.Active); err != nil {
+			return err
+		}
+		accounts = append(accounts, a)
+		return nil
+	})
+	return accounts, err
 }

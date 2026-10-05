@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/snapshot"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -99,7 +102,9 @@ does not read Quicken at all.`,
 			}
 			printConfigWarnings(cmd, cfg.Warnings)
 
-			srv, err := newServer(cmd.Context(), snapshot.WithAutoPrune(cfg.Keep), snapshot.WithIgnore(cfg.Ignore))
+			classification := classificationOf(cfg)
+			srv, err := newServer(cmd.Context(), snapshot.WithAutoPrune(cfg.Keep), snapshot.WithIgnore(cfg.Ignore),
+				snapshot.WithReadTimeFindings(func(list store.FindingList) []finding.State { return report.ReadTimeStates(list, classification) }))
 			if err != nil {
 				return &runtimeError{err: err}
 			}

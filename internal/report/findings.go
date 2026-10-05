@@ -88,10 +88,10 @@ func (s *Server) Findings(ctx context.Context, req FindingsRequest) (FindingsLis
 	return FindingsListing{Groups: groups, Counts: counts, Unmatched: classified.Unmatched}, nil
 }
 
-// CountFindings tallies the findings st carries, those of a type this binary knows, by status: an
-// id in ignore is ignored unless fixed. It reads nothing, so it agrees with the rest of st.
-func CountFindings(st store.Status, ignore []string) finding.Counts {
-	_, states := knownFindings(store.FindingList{Findings: st.Findings})
+// CountFindings tallies the findings st carries plus those c computes from its accounts, those of a type
+// this binary knows, by status: an id in ignore is ignored unless fixed. It reads nothing, so it agrees with the rest of st.
+func CountFindings(st store.Status, ignore []string, c Classification) finding.Counts {
+	_, states := knownFindings(readTimeFindings(store.FindingList{Findings: st.Findings, Accounts: st.Accounts}, c))
 	return finding.Classify(states, ignore).Counts
 }
 

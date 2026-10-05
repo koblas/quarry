@@ -105,7 +105,7 @@ prints one row per item, for a spreadsheet.`,
 
 			req := report.FindingsRequest{
 				Ignore:         cfg.Ignore,
-				Classification: report.Classification{Registered: cfg.Registered, NonRegistered: cfg.NonRegistered},
+				Classification: classificationOf(cfg),
 				Status:         finding.Status(status),
 				Type:           finding.Type(typ),
 			}

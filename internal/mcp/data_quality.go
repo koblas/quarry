@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 
+	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/report"
@@ -30,7 +31,7 @@ func (s *Server) dataQuality(ctx context.Context, in dataQualityInput) (any, err
 	status, typ := finding.Status(in.Status), finding.Type(in.Type)
 	listing, err := srv.Findings(ctx, report.FindingsRequest{
 		Ignore:         cfg.Ignore,
-		Classification: report.Classification{Registered: cfg.Registered, NonRegistered: cfg.NonRegistered},
+		Classification: classificationOf(cfg),
 		Status:         status,
 		Type:           typ,
 	})
@@ -44,6 +45,11 @@ func (s *Server) dataQuality(ctx context.Context, in dataQualityInput) (any, err
 	}
 	kept, itemWarnings := capItems(kept)
 	return document.NewFindingsList(kept, status, typ, append(warnings, itemWarnings...)), nil
+}
+
+// classificationOf is the account classification cfg lists.
+func classificationOf(cfg config.Config) report.Classification {
+	return report.Classification{Registered: cfg.Registered, NonRegistered: cfg.NonRegistered}
 }
 
 // capFindings keeps the first limit findings of listing and reports how many it held and whether any were cut.

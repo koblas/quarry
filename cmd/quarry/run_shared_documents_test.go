@@ -55,8 +55,8 @@ func Test_run_prints_the_sql_status_and_findings_documents_byte_for_byte(t *test
 				args: []string{"status", "--json"},
 				stdout: fmt.Sprintf(statusUnreadableConfigDocument, storePathUnder(home), builtAt, snapshotID(snapshotPath),
 					snapshotPath, manifest.Snapshot.TakenAt, bundle.Dir, manifest.Snapshot.SHA256, configPath(home)),
-				stderr: "quarry: warning: cannot tell which findings you ignored: " + configShown +
-					": snapshots.keep must be a whole number of 1 or more, got 0; findings you ignored are counted as open\n",
+				stderr: "quarry: warning: cannot tell which findings you ignored or how you classified your accounts: " + configShown +
+					": snapshots.keep must be a whole number of 1 or more, got 0; findings you ignored are counted as open, and every investment account is counted as unclassified\n",
 			}
 		}},
 		{name: "findings --json lists a quoted unmatched ignore id escaped, with absolute path in the document", setup: func(t *testing.T, home string) sharedDocumentRun {
@@ -186,7 +186,7 @@ const statusUnreadableConfigDocument = `{
     "fetch_error": null
   },
   "warnings": [
-    "cannot tell which findings you ignored: %[8]s: snapshots.keep must be a whole number of 1 or more, got 0; findings you ignored are counted as open"
+    "cannot tell which findings you ignored or how you classified your accounts: %[8]s: snapshots.keep must be a whole number of 1 or more, got 0; findings you ignored are counted as open, and every investment account is counted as unclassified"
   ]
 }
 `

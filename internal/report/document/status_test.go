@@ -10,30 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const unreadableConfig = "/home/dave/config.toml: line 3: expected a value"
+func Test_CannotTellChoices_names_the_problem_and_says_what_status_counted_without_the_config(t *testing.T) {
+	got := document.CannotTellChoices("x")
 
-func Test_StatusIgnore_keeps_the_list_and_warns_nothing_when_the_config_was_read(t *testing.T) {
-	ignore := []string{"duplicate:txn-1+txn-2"}
-
-	list, warnings := document.StatusIgnore(ignore, "")
-
-	assert.Equal(t, ignore, list)
-	assert.Empty(t, warnings)
-}
-
-func Test_StatusIgnore_drops_the_list_and_warns_once_when_the_config_is_unreadable(t *testing.T) {
-	ignore := []string{"duplicate:txn-1+txn-2"}
-
-	list, warnings := document.StatusIgnore(ignore, unreadableConfig)
-
-	assert.Nil(t, list)
-	assert.Equal(t, []string{document.CannotTellIgnored(unreadableConfig)}, warnings)
-}
-
-func Test_CannotTellIgnored_names_the_problem_and_says_ignored_findings_count_as_open(t *testing.T) {
-	got := document.CannotTellIgnored("x")
-
-	assert.Equal(t, "cannot tell which findings you ignored: x; findings you ignored are counted as open", got)
+	assert.Equal(t, "cannot tell which findings you ignored or how you classified your accounts: x; "+
+		"findings you ignored are counted as open, and every investment account is counted as unclassified", got)
 }
 
 func Test_NewStatus_reports_ignored_only_when_the_ignore_list_was_read(t *testing.T) {

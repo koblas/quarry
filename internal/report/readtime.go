@@ -14,6 +14,14 @@ func readTimeFindings(list store.FindingList, c Classification) store.FindingLis
 	return list
 }
 
+// ReadTimeStates is the state of each finding c computes from list's accounts, none new. Findings
+// stored in list are left out, so a caller holding the stored states adds them without counting twice.
+func ReadTimeStates(list store.FindingList, c Classification) []finding.State {
+	list.Findings = nil
+	_, states := knownFindings(readTimeFindings(list, c))
+	return states
+}
+
 // unclassifiedFindings is one open finding per account c leaves unclassified, with no first-found time.
 func unclassifiedFindings(accounts []store.Account, c Classification) []store.Finding {
 	var found []store.Finding

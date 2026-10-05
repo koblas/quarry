@@ -11,8 +11,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/platform/sqlite"
 	"github.com/koblas/quarry/internal/platform/sqlschema"
+	"github.com/koblas/quarry/internal/store"
 )
 
 // snapshotNameLayout is the UTC, colon-free timestamp each snapshot pair is named with.
@@ -37,6 +39,7 @@ type Server struct {
 	remove      func(path string) error
 	autoKeep    int
 	ignore      []string
+	readTime    func(store.FindingList) []finding.State
 }
 
 // Option configures a Server built by NewServer.
@@ -109,6 +112,12 @@ func WithAutoPrune(keep int) Option {
 // leave out of the open and new counts of the store they build and count as ignored.
 func WithIgnore(ids []string) Option {
 	return func(s *Server) { s.ignore = ids }
+}
+
+// WithReadTimeFindings sets the function that computes, from the accounts a build wrote, the findings
+// no build records; SyncAndImport and ImportFrom count them with the stored ones, never as new.
+func WithReadTimeFindings(states func(store.FindingList) []finding.State) Option {
+	return func(s *Server) { s.readTime = states }
 }
 
 // NewServer builds a Server from opts.

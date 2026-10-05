@@ -3,6 +3,7 @@ package cli
 import (
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/platform/money"
+	"github.com/koblas/quarry/internal/report"
 	"github.com/spf13/cobra"
 )
 
@@ -86,6 +87,11 @@ func readConfig(cmd *cobra.Command, loadConfig ConfigLoader) (config.Config, err
 	}
 	printConfigWarnings(cmd, cfg.Warnings)
 	return cfg, nil
+}
+
+// classificationOf is the account classification cfg lists.
+func classificationOf(cfg config.Config) report.Classification {
+	return report.Classification{Registered: cfg.Registered, NonRegistered: cfg.NonRegistered}
 }
 
 // withConfigWarnings is the --json warnings of a read command: the config's, absolute, then the
