@@ -58,9 +58,8 @@ type asOfRefusedError string
 
 func (e asOfRefusedError) Error() string { return string(e) }
 
-// asOfRefusal is err, an as_of refusal, worded for the model: the argument is named as_of, the thing valued
-// is the refusal's noun, and the stderr line is the class line, which never carries the caller's value. Any
-// other error comes back as is.
+// asOfRefusal is err, an as_of refusal, worded for the model; its stderr line is the class line, which never
+// carries the caller's value. Any other error comes back as is.
 func asOfRefusal(err error) error {
 	refusal, ok := errors.AsType[report.AsOfError](err)
 	if !ok {

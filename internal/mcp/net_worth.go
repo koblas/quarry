@@ -13,9 +13,8 @@ const netWorthTwin = "networth"
 // asOfConflictLine is the isError text of as_of given beside since or until.
 const asOfConflictLine = "as_of cannot be combined with since or until; pass as_of for one day, or since and until for month ends"
 
-// netWorth is the net_worth tool: net worth on one day, or at each month end when since or until is given, as
-// networth --json does, but at most maxRows month ends; each date's totals count its own rows, so a cut drops
-// whole dates and a warning says so.
+// netWorth is the net_worth tool: networth --json's document for one day or, with since or until, at most
+// maxRows month ends; a cut drops whole dates and a warning says so.
 func (s *Server) netWorth(ctx context.Context, in netWorthInput) (any, error) {
 	now := s.now()
 	history := in.Since != nil || in.Until != nil

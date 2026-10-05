@@ -344,10 +344,30 @@ func Test_net_worth_lists_the_first_500_month_ends_and_warns_on_501(t *testing.T
 	require.Len(t, doc.Dates, 500)
 	assert.Equal(t, "2000-01-31", doc.Dates[0].Date)
 	assert.Equal(t, "2041-08-31", doc.Dates[499].Date)
-	require.Len(t, doc.Warnings, 3)
-	assert.Equal(t, configUnknownKeyWarning, doc.Warnings[0])
-	assert.Contains(t, doc.Warnings[1], "no account has a balance at any month end from 2000-01-31 to ")
-	assert.Equal(t, netWorthCutNote, doc.Warnings[2])
+	assert.Equal(t, []string{
+		configUnknownKeyWarning,
+		"no account has a balance at any month end from 2000-01-31 to 2041-09-30; no account in Quicken's reports has transactions or holdings",
+		netWorthCutNote,
+	}, doc.Warnings)
+}
+
+func Test_net_worth_counts_every_month_end_in_the_rate_warning_before_the_cut(t *testing.T) {
+	rows := make([]store.NetWorthRow, 0, 501)
+	for i := range 501 {
+		monthEnd := civilDay(2000+i/12, time.Month(i%12+2), 0)
+		rows = append(rows, store.NetWorthRow{Date: monthEnd, Type: "checking", Currency: "USD", Accounts: 1, Balance: big.NewInt(5_000)})
+	}
+	fake := &fakeStore{netWorth: store.NetWorth{Rows: rows, FirstRate: civilDay(2042, time.January, 1)}}
+	h := newHarness(t, fake, nil, inTheYear2100())
+
+	doc := decodeNetWorth(t, h.netWorth(t, map[string]any{"since": "2000-01", "until": "2041-09", "currency": "CAD"}))
+
+	require.Len(t, doc.Dates, 500)
+	assert.Equal(t, []string{
+		"USD balances on 501 month ends before 2042-01-01, the first exchange rate in the store, are not converted to CAD " +
+			"and are left out of the CAD total; pass --currency native to list them",
+		netWorthCutNote,
+	}, doc.Warnings)
 }
 
 func Test_net_worth_lists_exactly_500_month_ends_with_no_cut_note(t *testing.T) {
