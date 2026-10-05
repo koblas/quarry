@@ -606,5 +606,5 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 
 SCENARIO-21 is run by the orchestrator after SCENARIO-19 and before the gate, on a scratch HOME holding copies of the newest snapshot and the store, with the accounts classified. Results go in `REFERENCE-CHECK.md`.
 
-- [ ] SCENARIO-21: Reference check on the real Quicken file
+- [x] SCENARIO-21: Reference check on the real Quicken file — orchestrator run, results in `REFERENCE-CHECK.md`; rule gap found → SCENARIO-22
 - [x] SCENARIO-22: A sale of more shares than the accounts held leaves a short the next buy covers — `cmd/quarry/run_acb_short_test.go` `Test_run_acb_counts_shares_sold_beyond_the_pool_at_no_cost_and_lets_the_next_buy_cover_the_short`
