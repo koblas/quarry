@@ -58,6 +58,7 @@ Scenarios complete: SCENARIO-01..07, 08a, 08b, 09, 10, 11, 12, 13a, 13b, 14, 15 
 - Hand-built `report.ACB` fixtures for `ACBWarnings` need the test helper `acbPooled` (document package): empty `Securities` fires slot 2 form 1 and pollutes the expected list. Do not retype the headers-only stdout with `acbYearLine` (filled-fixture widths) (SCENARIO-15)
 
 ## Open debts
+- S16 ruling: event JSON gains `unknown_cost` last (S19 MCP pins too); unknown-`--security` refusal line replaced (S17 drops that row, uses the new line); S17 rules R-6 vs unknown-security order.
 - S14 ruling: `--security` text CAD cell and Gain blank on an unvalued event — S16. Superficial marking of a no-rate sale is unobservable (excluded sales absent), unpinned. Warning 6c and event-JSON null `cad`/`gain`: final product-vision pass re-checks (SCENARIO-14)
 - Final pass (SCENARIO-13b): `internal/mcp/tools.go:76-79` `dataQualityDescription` omits unclassified-account and shares-without-cost (pinned `cmd/quarry/run_mcp_descriptions_test.go` ~:50-56): ruling, then re-pin both
 - S13a checkpoint MINORs: `acb_unknown_cost_test.go:194-217` no remove_shares-outside-span control — S16 adds it before exposing the removal mark; `run_acb_unknown_cost_test.go:140-158` sold-out/re-bought row text-only, `--json` cell unpinned; NIT `:90` case name says sale first

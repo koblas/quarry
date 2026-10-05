@@ -66,3 +66,5 @@ Defaults, for the orchestrator:
 - Ticker matching here is case-INSENSITIVE (user input); grouping for warning 7/superficial stays exact case-sensitive (`groupingTicker`) — do not share the helper
 - `walkACB` skips a security with no pool rows (`acb_walk.go:74-80`): registered-only detection must read `history.Transactions` + `Classification.Of == true`, not `ACB.Securities`
 - A no-cost reinvest's Amount and CAD are 0: without the `unknown cost` suffix, warning 4b's "lists them" is unprovable
+
+**Orchestrator: product-vision ruling 2026-10-05 recorded in spec after "Text `--security`" — supersedes this plan: P4 JSON event key `unknown_cost` IS added (last, after gain; re-pin every event-byte pin in internal/report/document/acb_test.go); refusal line replaced: `quarry: acb covers no security named "XYZ"; quarry acb --json lists every security it covers` (exit 1); P3 widened: every named security gets a block in walk order, registered-only = caption+header, incl. mixed selections; slot 2b for the registered-only warning; P1, P2, P5-P7, D1-D6 confirmed.**
