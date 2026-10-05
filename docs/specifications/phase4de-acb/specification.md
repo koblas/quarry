@@ -152,6 +152,7 @@ Unclassified investment accounts (2): list each account's id (acct-…) in accou
 #### Changes to existing surfaces
 - findings Long after the type table: `unclassified-account is fixed in the config file, not in Quicken: it leaves the list as soon as the account is listed there, without a sync, and is never marked fixed.` + the TOML example.
 - `--csv` help: `print one row per transaction, split, payee, category or account as CSV`.
+- Unreadable-config warning on `quarry status` / MCP `sync_status` (replaces the phase2d/phase3a line; product-vision ruling 2026-10-05, SCENARIO-05): `cannot tell which findings you ignored or how you classified your accounts: <problem>; findings you ignored are counted as open, and every investment account is counted as unclassified` (`<problem>` `~` on stderr, absolute in `--json`/MCP; exit 0). Behaviour: with config unreadable, every investment account counts as an open `unclassified-account` (never under-report). Symbol `CannotTellIgnored` → `CannotTellChoices`.
 - findings.md `--csv` mirror (`plugin/skills/quarry/references/findings.md:43`): `prints one row per transaction, split, payee, category or account` (orchestrator ruling 2026-10-05, mirror of the ruled help; 13b moves it to the Part B wording with `account or investment transaction`).
 - findings Short unchanged.
 - SKILL.md frontmatter: after "payee name variants)" add `, or which investment accounts are registered`.
