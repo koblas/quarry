@@ -57,8 +57,9 @@ func Test_run_findings_status_all_csv_prints_a_row_per_duplicate_item_and_one_ro
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
 	const fix = `"Delete the extra one in Quicken, or ignore the pair if both are real"`
-	assert.Equal(t, "finding_id,type,status,date,account,currency,payee,category,amount,other_account,transactions,splits,transaction_id,split_id,payee_id,category_id,fix\n"+
-		ids.open+",duplicate,open,2026-08-03,Chequing,CAD,Hydro One,,-142.17,,,,"+ids.openFirst+",,,,"+fix+"\n"+
-		ids.open+",duplicate,open,2026-08-05,Chequing,CAD,Hydro One,,-142.17,,,,"+ids.openSecond+",,,,"+fix+"\n"+
-		ids.fixed+",duplicate,fixed,,,,,,,,,,,,,,"+fix+"\n", stdout.String())
+	assert.Equal(t, "finding_id,type,status,date,account,currency,payee,category,amount,other_account,transactions,splits,transaction_id,split_id,payee_id,category_id,fix,"+
+		"investment_transaction_id,security_id,security,shares\n"+
+		ids.open+",duplicate,open,2026-08-03,Chequing,CAD,Hydro One,,-142.17,,,,"+ids.openFirst+",,,,"+fix+",,,,\n"+
+		ids.open+",duplicate,open,2026-08-05,Chequing,CAD,Hydro One,,-142.17,,,,"+ids.openSecond+",,,,"+fix+",,,,\n"+
+		ids.fixed+",duplicate,fixed,,,,,,,,,,,,,,"+fix+",,,,\n", stdout.String())
 }

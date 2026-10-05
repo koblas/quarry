@@ -109,7 +109,8 @@ func Test_NewFindingEntry_encodes_an_unclassified_account_with_no_first_found_ti
 		"items": [{
 			"transaction_id": null, "split_id": null, "payee_id": null, "category_id": null, "date": null,
 			"account_id": "acct-12", "account": "Questrade TFSA", "currency": "CAD", "payee": null, "category": null,
-			"amount": null, "other_account": null, "other_account_id": null, "transactions": null, "splits": null
+			"amount": null, "other_account": null, "other_account_id": null, "transactions": null, "splits": null,
+			"investment_transaction_id": null, "security_id": null, "security": null, "shares": null
 		}]
 	}`, string(data))
 }

@@ -228,7 +228,11 @@ const findingsUnmatchedIgnoreDocument = `{
           "other_account": null,
           "other_account_id": null,
           "transactions": null,
-          "splits": null
+          "splits": null,
+          "investment_transaction_id": null,
+          "security_id": null,
+          "security": null,
+          "shares": null
         },
         {
           "transaction_id": "txn-2",
@@ -245,7 +249,11 @@ const findingsUnmatchedIgnoreDocument = `{
           "other_account": null,
           "other_account_id": null,
           "transactions": null,
-          "splits": null
+          "splits": null,
+          "investment_transaction_id": null,
+          "security_id": null,
+          "security": null,
+          "shares": null
         }
       ]
     },
@@ -272,7 +280,11 @@ const findingsUnmatchedIgnoreDocument = `{
           "other_account": null,
           "other_account_id": null,
           "transactions": null,
-          "splits": null
+          "splits": null,
+          "investment_transaction_id": null,
+          "security_id": null,
+          "security": null,
+          "shares": null
         }
       ]
     },
@@ -299,7 +311,11 @@ const findingsUnmatchedIgnoreDocument = `{
           "other_account": null,
           "other_account_id": null,
           "transactions": null,
-          "splits": null
+          "splits": null,
+          "investment_transaction_id": null,
+          "security_id": null,
+          "security": null,
+          "shares": null
         }
       ]
     },
@@ -326,7 +342,11 @@ const findingsUnmatchedIgnoreDocument = `{
           "other_account": null,
           "other_account_id": null,
           "transactions": null,
-          "splits": null
+          "splits": null,
+          "investment_transaction_id": null,
+          "security_id": null,
+          "security": null,
+          "shares": null
         }
       ]
     }

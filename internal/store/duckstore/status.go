@@ -38,7 +38,7 @@ ORDER BY f.id`
 // Status reads back what the store records about itself, from the highest-id
 // import run. It refuses a store it cannot open or read, whose format is not
 // this build's, or whose import_runs is empty, with *store.OpenError, and
-// reads the findings and every account on the same connection so all describe one build; a NULL
+// reads the findings, every account and the investment rows on the same connection so all describe one build; a NULL
 // snapshot_taken_at or source_path reads as the zero value. Rates takes its
 // first and last dates from fx_rates and its fetch error from that run, in the
 // same query as the rest.
@@ -93,6 +93,10 @@ func (s *Store) Status(ctx context.Context) (store.Status, error) {
 	}
 
 	st.Accounts, err = readAccounts(ctx, db)
+	if err != nil {
+		return store.Status{}, openFault(st.Path, err)
+	}
+	st.Investments, err = readInvestments(ctx, db)
 	if err != nil {
 		return store.Status{}, openFault(st.Path, err)
 	}

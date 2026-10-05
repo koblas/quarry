@@ -12,6 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const sharesWithoutCostClause = "enter what each one cost on its Add Shares transaction in Quicken, " +
+	"then run quarry sync; until then quarry acb counts those shares at no cost"
+
 func Test_run_findings_lists_shares_added_with_no_cost_as_status_sync_and_mcp_count_them(t *testing.T) {
 	const addShares = int64(2)
 	var syncLine, emptyCostID, zeroCostID string
@@ -49,13 +52,13 @@ func Test_run_findings_lists_shares_added_with_no_cost_as_status_sync_and_mcp_co
 	var listing dataQualityDocument
 	require.NoError(t, json.Unmarshal([]byte(textOf(result)), &listing))
 
-	assert.Equal(t, fmt.Sprintf(`Shares added with no cost (2): enter what each one cost on its Add Shares transaction in Quicken, then run quarry sync; until then quarry acb counts those shares at no cost
+	assert.Equal(t, fmt.Sprintf(`Shares added with no cost (2): %s
   shares-without-cost:%s  2026-02-01  Questrade Margin  XEQT  1 share
   shares-without-cost:%s  2016-03-01  Questrade Margin  XEQT  100 shares
 
 2 open findings
 Ignore a finding by adding its id to findings.ignore in %s; see quarry findings --help
-`, zeroCostID, emptyCostID, configShown), findingsOut.String())
+`, sharesWithoutCostClause, zeroCostID, emptyCostID, configShown), findingsOut.String())
 	assert.Equal(t, "Findings  2 open; run quarry findings to list them", syncLine)
 	assert.Contains(t, statusOut.String(), "\nFindings  2 open; run quarry findings to list them\n")
 	assert.Equal(t, 2, syncStatus.Findings.Open)

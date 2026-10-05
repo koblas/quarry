@@ -191,7 +191,7 @@ func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome
 
 	states := result.FindingStates
 	if s.readTime != nil {
-		states = slices.Concat(states, s.readTime(store.FindingList{Accounts: result.Accounts}))
+		states = slices.Concat(states, s.readTime(store.FindingList{Accounts: result.Accounts, Investments: result.Investments}))
 	}
 	result.Findings = finding.Classify(states, s.ignore).Counts
 	outcome := Outcome{Manifest: manifest, Store: &result}

@@ -38,7 +38,7 @@ ORDER BY f.id, fi.rowid`
 const findingAccountsQuery = `SELECT id, name, type, currency, closed, active FROM accounts ORDER BY id`
 
 // Findings reads every finding, open and fixed, with its items, sorted by id; a fixed finding has no items. It
-// reads every account in the same open, sorted by id. It refuses a store it cannot open or read with *store.OpenError.
+// reads every account and the investment rows in the same open. It refuses a store it cannot open or read with *store.OpenError.
 func (s *Store) Findings(ctx context.Context) (store.FindingList, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {
@@ -91,6 +91,10 @@ func (s *Store) Findings(ctx context.Context) (store.FindingList, error) {
 		return store.FindingList{}, openFault(s.Path(), err)
 	}
 	list.Accounts, err = readAccounts(ctx, db)
+	if err != nil {
+		return store.FindingList{}, openFault(s.Path(), err)
+	}
+	list.Investments, err = readInvestments(ctx, db)
 	if err != nil {
 		return store.FindingList{}, openFault(s.Path(), err)
 	}

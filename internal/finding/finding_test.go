@@ -7,16 +7,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_types_lists_the_nine_types_in_display_order(t *testing.T) {
+func Test_types_lists_the_ten_types_in_display_order(t *testing.T) {
 	assert.Equal(t, []finding.Type{
 		"duplicate", "one-sided-transfer", "unlinked-transfer", "uncategorized",
 		"mixed-categories", "payee-variants", "similar-categories", "unused-category", "unclassified-account",
+		"shares-without-cost",
 	}, finding.Types())
 }
 
-func Test_read_time_is_true_only_for_the_unclassified_account_type(t *testing.T) {
+func Test_read_time_is_true_only_for_the_unclassified_account_and_shares_without_cost_types(t *testing.T) {
 	for _, typ := range finding.Types() {
-		assert.Equal(t, typ == finding.UnclassifiedAccount, typ.ReadTime(), typ)
+		assert.Equal(t, typ == finding.UnclassifiedAccount || typ == finding.SharesWithoutCost, typ.ReadTime(), typ)
 	}
 	assert.False(t, finding.Type("future-kind").ReadTime())
 }
@@ -218,6 +219,12 @@ func Test_fix_pins_the_ruled_copy_for_every_type(t *testing.T) {
 				"~/Library/Application Support/quarry/config.toml; quarry acb leaves registered accounts out",
 			Heading:     "Unclassified investment accounts",
 			GroupClause: "list each account's id (acct-…) in accounts.registered or accounts.non-registered in ~/Library/Application Support/quarry/config.toml; see quarry findings --help",
+		}},
+		{finding.SharesWithoutCost, finding.Fix{
+			Sentence: "Open this Add Shares transaction in Quicken and enter the shares' cost basis, then run quarry sync; " +
+				"until then quarry acb counts them at no cost, so its gains on this security are too high",
+			Heading:     "Shares added with no cost",
+			GroupClause: "enter what each one cost on its Add Shares transaction in Quicken, then run quarry sync; until then quarry acb counts those shares at no cost",
 		}},
 	}
 

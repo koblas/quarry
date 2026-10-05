@@ -12,7 +12,7 @@ import (
 // --type value.
 type Type string
 
-// The nine finding types.
+// The ten finding types.
 const (
 	Duplicate         Type = "duplicate"
 	OneSidedTransfer  Type = "one-sided-transfer"
@@ -29,7 +29,7 @@ const (
 
 // ReadTime reports whether findings of t are computed from the config at read time: never stored, never new or fixed.
 func (t Type) ReadTime() bool {
-	return t == UnclassifiedAccount
+	return t == UnclassifiedAccount || t == SharesWithoutCost
 }
 
 // Types returns every finding type in display order, as a fresh slice.
@@ -37,6 +37,7 @@ func Types() []Type {
 	return []Type{
 		Duplicate, OneSidedTransfer, UnlinkedTransfer, Uncategorized,
 		MixedCategories, PayeeVariants, SimilarCategories, UnusedCategory, UnclassifiedAccount,
+		SharesWithoutCost,
 	}
 }
 
@@ -322,6 +323,12 @@ var fixes = map[Type]Fix{
 			"~/Library/Application Support/quarry/config.toml; quarry acb leaves registered accounts out",
 		Heading:     "Unclassified investment accounts",
 		GroupClause: "list each account's id (acct-…) in accounts.registered or accounts.non-registered in ~/Library/Application Support/quarry/config.toml; see quarry findings --help",
+	},
+	SharesWithoutCost: {
+		Sentence: "Open this Add Shares transaction in Quicken and enter the shares' cost basis, then run quarry sync; " +
+			"until then quarry acb counts them at no cost, so its gains on this security are too high",
+		Heading:     "Shares added with no cost",
+		GroupClause: "enter what each one cost on its Add Shares transaction in Quicken, then run quarry sync; until then quarry acb counts those shares at no cost",
 	},
 }
 

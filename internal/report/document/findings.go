@@ -30,7 +30,8 @@ type FindingEntry struct {
 }
 
 // FindingItem is one entry of a finding's "items": every key is always present and null where it does not
-// apply. Date, AccountID, Account, Currency and Amount are null for an item that is a payee or category, not a transaction or split.
+// apply. Date, AccountID, Account, Currency and Amount are null for an item that is a payee or category, not a transaction or split;
+// InvestmentTransactionID, SecurityID, Security and Shares are null except for a shares-without-cost item.
 type FindingItem struct {
 	TransactionID  *string `json:"transaction_id"`
 	SplitID        *string `json:"split_id"`
@@ -47,6 +48,11 @@ type FindingItem struct {
 	OtherAccountID *string `json:"other_account_id"`
 	Transactions   *int    `json:"transactions"`
 	Splits         *int    `json:"splits"`
+
+	InvestmentTransactionID *string `json:"investment_transaction_id"`
+	SecurityID              *string `json:"security_id"`
+	Security                *string `json:"security"`
+	Shares                  *string `json:"shares"`
 }
 
 // NewFindingsList builds the findings document for listing as filtered by status and typ (empty for no type
@@ -69,7 +75,8 @@ func NewFindingsList(listing report.FindingsListing, status finding.Status, typ 
 
 // NewFindingEntry converts f into its --json entry: fixed_at is set only for a fixed finding, which has no items,
 // first_found_at is null for a read-time type, splits is set only for the items of a similar-categories finding,
-// and an unclassified-account item sets account_id, account and currency alone.
+// an unclassified-account item sets account_id, account and currency alone, and a shares-without-cost item sets
+// date, those three and its four investment keys alone.
 func NewFindingEntry(f report.ListedFinding) FindingEntry {
 	items := make([]FindingItem, len(f.Items))
 	for i, item := range f.Items {
@@ -79,6 +86,9 @@ func NewFindingEntry(f report.ListedFinding) FindingEntry {
 		}
 		if f.Type == finding.UnclassifiedAccount {
 			items[i].AccountID, items[i].Account, items[i].Currency = &item.AccountID, &item.Account, &item.Currency
+		}
+		if f.Type == finding.SharesWithoutCost {
+			items[i] = sharesWithoutCostItem(item)
 		}
 	}
 	doc := FindingEntry{
@@ -94,6 +104,15 @@ func NewFindingEntry(f report.ListedFinding) FindingEntry {
 		doc.FixedAt = &fixedAt
 	}
 	return doc
+}
+
+// sharesWithoutCostItem is the --json item of a shares-without-cost finding's add_shares row.
+func sharesWithoutCostItem(item store.FindingItem) FindingItem {
+	date, shares := item.Date.Format(DateLayout), Shares(item.Shares)
+	return FindingItem{
+		Date: &date, AccountID: &item.AccountID, Account: &item.Account, Currency: &item.Currency,
+		InvestmentTransactionID: item.InvestmentTransactionID, SecurityID: item.SecurityID, Security: &item.Security, Shares: &shares,
+	}
 }
 
 // NewFindingItem converts item into its --json entry: date, account, currency and amount are null for

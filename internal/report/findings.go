@@ -96,7 +96,7 @@ func (s *Server) Findings(ctx context.Context, req FindingsRequest) (FindingsLis
 // CountFindings tallies the findings st carries plus those c computes from its accounts, those of a type
 // this binary knows, by status: an id in ignore is ignored unless fixed. It reads nothing, so it agrees with the rest of st.
 func CountFindings(st store.Status, ignore []string, c Classification) finding.Counts {
-	_, states := knownFindings(readTimeFindings(store.FindingList{Findings: st.Findings, Accounts: st.Accounts}, c))
+	_, states := knownFindings(readTimeFindings(store.FindingList{Findings: st.Findings, Accounts: st.Accounts, Investments: st.Investments}, c))
 	return finding.Classify(states, ignore).Counts
 }
 
@@ -140,12 +140,12 @@ func statusRank(s finding.Status) int {
 	return 0
 }
 
-// findingOrder is the display order of typ's open and ignored findings: newest item date for transfers and
-// duplicates, size then payee for uncategorized and mixed, transactions for payee-variants, splits for
+// findingOrder is the display order of typ's open and ignored findings: newest item date for transfers,
+// duplicates and shares-without-cost, size then payee for uncategorized and mixed, transactions for payee-variants, splits for
 // similar-categories, category path for unused-category, account name for unclassified-account.
 func findingOrder(typ finding.Type) func(a, b store.Finding) int {
 	switch typ {
-	case finding.Duplicate, finding.UnlinkedTransfer, finding.OneSidedTransfer:
+	case finding.Duplicate, finding.UnlinkedTransfer, finding.OneSidedTransfer, finding.SharesWithoutCost:
 		return func(a, b store.Finding) int {
 			return cmp.Or(latestDate(b).Compare(latestDate(a)), cmp.Compare(a.ID, b.ID))
 		}

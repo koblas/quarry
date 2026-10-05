@@ -45,6 +45,19 @@ func (s *Store) InvestmentHistory(ctx context.Context) (store.InvestmentHistory,
 	return history, nil
 }
 
+// readInvestments reads every security and every investment transaction that names one.
+func readInvestments(ctx context.Context, db ReadDB) (store.Investments, error) {
+	var inv store.Investments
+	var err error
+	if inv.Securities, err = readSecurities(ctx, db); err != nil {
+		return store.Investments{}, err
+	}
+	if inv.Transactions, err = readInvestmentTransactions(ctx, db); err != nil {
+		return store.Investments{}, err
+	}
+	return inv, nil
+}
+
 // readSecurities reads every security, sorted by id.
 func readSecurities(ctx context.Context, db ReadDB) ([]store.Security, error) {
 	var securities []store.Security

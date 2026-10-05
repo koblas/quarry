@@ -8,8 +8,11 @@ import (
 	"github.com/koblas/quarry/internal/report/document"
 )
 
-// findingItemCSVColumns is how many of findings --csv's columns describe an item.
+// findingItemCSVColumns is how many of findings --csv's columns, from date to category_id, describe a transaction, split, payee or category item.
 const findingItemCSVColumns = 13
+
+// findingInvestmentCSVColumns is how many columns after fix describe a shares-without-cost item.
+const findingInvestmentCSVColumns = 4
 
 // findingsCSVColumns are the header cells of findings --csv, in the order findingCSVRows fills them.
 var findingsCSVColumns = []string{
@@ -17,6 +20,7 @@ var findingsCSVColumns = []string{
 	"date", "account", "currency", "payee", "category", "amount", "other_account", "transactions", "splits",
 	"transaction_id", "split_id", "payee_id", "category_id",
 	"fix",
+	"investment_transaction_id", "security_id", "security", "shares",
 }
 
 // renderFindingsCSV renders listing as CSV: the header, then one row per item of each finding in
@@ -38,27 +42,36 @@ func renderFindingsCSV(listing report.FindingsListing) string {
 	return b.String()
 }
 
-// findingCSVRows is the rows of one finding: its id, type, status and fix around each item's cells.
+// findingCSVRows is the rows of one finding: its id, type, status and fix around each item's cells, then the item's investment cells.
 func findingCSVRows(entry document.FindingEntry) [][]csvCell {
 	lead := []csvCell{{Text: entry.ID}, {Text: entry.Type}, {Text: entry.Status}}
 	fix := csvCell{Text: entry.Fix}
 	if len(entry.Items) == 0 {
-		empty := make([]csvCell, findingItemCSVColumns)
-		for i := range empty {
-			empty[i] = csvCell{Null: true}
-		}
-		return [][]csvCell{findingRow(lead, empty, fix)}
+		return [][]csvCell{findingRow(lead, nullCells(findingItemCSVColumns), fix, nullCells(findingInvestmentCSVColumns))}
 	}
 	rows := make([][]csvCell, len(entry.Items))
 	for i, item := range entry.Items {
-		rows[i] = findingRow(lead, findingItemCSVCells(item), fix)
+		rows[i] = findingRow(lead, findingItemCSVCells(item), fix, findingInvestmentCSVCells(item))
 	}
 	return rows
 }
 
-// findingRow is lead, then middle, then last as one row.
-func findingRow(lead, middle []csvCell, last csvCell) []csvCell {
-	return append(append(append(make([]csvCell, 0, len(lead)+len(middle)+1), lead...), middle...), last)
+// findingRow is lead, middle, fix, then tail as one row.
+func findingRow(lead, middle []csvCell, fix csvCell, tail []csvCell) []csvCell {
+	row := make([]csvCell, 0, len(lead)+len(middle)+1+len(tail))
+	row = append(row, lead...)
+	row = append(row, middle...)
+	row = append(row, fix)
+	return append(row, tail...)
+}
+
+// nullCells is n NULL cells.
+func nullCells(n int) []csvCell {
+	cells := make([]csvCell, n)
+	for i := range cells {
+		cells[i] = csvCell{Null: true}
+	}
+	return cells
 }
 
 // findingItemCSVCells is item's cells in the header's order from date to category_id; fields the
@@ -72,6 +85,13 @@ func findingItemCSVCells(item document.FindingItem) []csvCell {
 		csvOptional(item.Amount),
 		csvOptional(item.OtherAccount), csvOptionalCount(item.Transactions), csvOptionalCount(item.Splits),
 		csvOptional(item.TransactionID), csvOptional(item.SplitID), csvOptional(item.PayeeID), csvOptional(item.CategoryID),
+	}
+}
+
+// findingInvestmentCSVCells is item's cells for the columns after fix; NULL unless item is a shares-without-cost item.
+func findingInvestmentCSVCells(item document.FindingItem) []csvCell {
+	return []csvCell{
+		csvOptional(item.InvestmentTransactionID), csvOptional(item.SecurityID), csvOptional(item.Security), csvOptional(item.Shares),
 	}
 }
 

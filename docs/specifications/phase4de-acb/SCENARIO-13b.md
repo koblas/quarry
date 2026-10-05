@@ -19,13 +19,13 @@ Size: OWNS A RUN, 4 batches, 1 feature package (report). `finding`, the duckstor
 - [x] Step 2: `internal/finding/finding.go:26` `SharesWithoutCost` const, signature-only (not yet in `Types()`), so the test compiles. Red at the findings text assertion.
 
 ### Build
-- [ ] Step 3: inputs in all three sources. `internal/store/store.go`: new `Investments{Securities []Security; Transactions []InvestmentTransaction}`, and an `Investments` field on `FindingList`, `Status` and `Result`, with doc comments updated.
+- [x] Step 3: inputs in all three sources. `internal/store/store.go`: new `Investments{Securities []Security; Transactions []InvestmentTransaction}`, and an `Investments` field on `FindingList`, `Status` and `Result`, with doc comments updated.
   - `duckstore/findings_read.go:92-98` (`Findings`) and `duckstore/status.go:95-98` (`Status`) gain one `readInvestments` helper. It reuses `readSecurities` and `readInvestmentTransactions` (`investments.go:49-85`) and adds no new SQL. Call it AFTER `readAccounts` so existing `passQueries` fault indices do not shift.
   - Importer: `importer/importer.go:176-181` sets `Investments{securities, investments}`.
   - Snapshot: `snapshot/import.go:194` passes `result.Investments` into the `FindingList`.
   - Report: `report/findings.go:99` (`CountFindings`) maps `st.Investments`.
   - Tests: one readback test each for `Findings` and `Status`. Fault tests (`findings_read_test.go:473-495` and `status_test.go:318-340` style): a query fault and a scan fault for the securities read and for the transactions read, on both methods (8 rows). One snapshot test that the read-time func receives `Result.Investments`.
-- [ ] Step 4: type and detector.
+- [x] Step 4: type and detector.
   - `finding/finding.go:26-38`: add to `Types()` after `UnclassifiedAccount`, set `ReadTime()` true, and add a `fixes` entry with Sentence, Heading and GroupClause verbatim from spec :334-335. Update `finding_test.go:13,19,216`.
   - `store.FindingItem` (`store/store.go:~640-660`) gains the investment transaction id, security id, security name and shares (millionths).
   - `report/readtime.go:12-15`: `readTimeFindings` concatenates a new `sharesWithoutCostFindings(list, c)`. It lists a row when action is `store.ActionAddShares`, `SecurityID != nil`, `noCostAcquisition(tx)` (`acb_walk.go:348`, never restated) holds, and the account's `c.Of` is non-nil false. The item carries date, account id and name, the ACCOUNT's currency (sibling precedent, `duckstore/findings_read.go:84`), and the four new fields.
@@ -39,7 +39,7 @@ Size: OWNS A RUN, 4 batches, 1 feature package (report). `finding`, the duckstor
     - the empty Classification (unreadable config), which lists none
     - ignored by id; never new or fixed; `ReadTimeStates` included; a `--type` count
     - order rows: date both orders, plus an id tie-break
-- [ ] Step 5: document and CSV.
+- [x] Step 5: document and CSV.
   - `report/document/findings.go:33-50`: `FindingItem` gains `investment_transaction_id`, `security_id`, `security` and `shares` (`document.Shares`) AFTER `splits`, null on every other type. A `NewFindingEntry` arm (`:68-83`) sets date, account_id, account and currency for this type. `NewFindingItem` returns early, so the arm must live in `NewFindingEntry`.
   - `cli/csv_findings.go:12-80`: the same four columns go AFTER `fix`, and `findingItemCSVColumns` covers them. The empty-item row (fixed finding) and every other type's row get four trailing NULLs.
   - Tests: an `encoding/csv` read-back where every record is header width, covering a fixed row, a non-shares row and a shares row. Re-pin the raw JSON and CSV goldens: `cmd/quarry/run_shared_documents_test.go:231-329`, `run_findings_json_test.go:~59`, `run_findings_csv_test.go:60-63`, `document/findings_test.go:112`, `cli/json_findings_internal_test.go:165-250`, `cli/findings_csv_test.go:~295`.
@@ -80,8 +80,11 @@ Size: OWNS A RUN, 4 batches, 1 feature package (report). `finding`, the duckstor
 
 ## Phase report
 
-Run A (steps 1-2) done; red, committed.
-- `cmd/quarry/run_findings_shares_without_cost_test.go` (new): acceptance test. Fixture: Margin (non-registered) with adds `""` cost 100 units 2016-03-01, `"0"` cost 1 unit 2026-02-01, one add with cost 300, and TFSA (registered) with a no-cost add of 7; Lots 106 and 7 so sync's holdings validation passes (without Lots sync refuses). Expects newest first, `1 share`/`100 shares`, ruled heading and GroupClause, `2 open` in sync line, status, `sync_status`, `data_quality`, and `findings --type shares-without-cost` exit 0 with empty stderr.
-- `internal/finding/finding.go:26` `SharesWithoutCost` const only (not in `Types()`, `ReadTime()` or `fixes`).
-- Red (planned reason): `findings` stdout is `No open findings\n` where the three-row group is expected (test line 52); the sync line reads `Findings  none open`; `--type shares-without-cost` is refused by the usage message (exit 2).
-- Next (B1): Step 3 inputs. `Test_run_findings_...` is the only test red; the rest of the suite is untouched. Ids in the fixture are `itxn-1`/`itxn-2`, so a fixture with fewer rows would shift them; the test reads them from the builder.
+Run B1 (steps 3-5) done, green on its own tests; committed. Run B2 (step 6) is next.
+- Step 3: `store.Investments{Securities, Transactions}` (`store.go`) on `FindingList`, `Status`, `Result`; `duckstore.readInvestments` (`investments.go`) called after `readAccounts` in `Findings` and `Status`; importer `Result.Investments` (`importer.go:177`); `snapshot/import.go:194`; `report.CountFindings`. Tests: `duckstore/read_investments_test.go` (readbacks, 8 fault rows), `snapshot/import_investments_test.go`, `importer/investments_result_test.go`.
+- Step 4: `finding.SharesWithoutCost` in `Types()` after `UnclassifiedAccount`, `ReadTime()` true, `fixes` entry verbatim from spec. `store.FindingItem` gained `InvestmentTransactionID *string`, `SecurityID *string`, `Security string`, `Shares int64` (millionths). `report/readtime.go` `sharesWithoutCostFindings`; `findingOrder` arm joined to the `latestDate` (newest first) case. Tests: `report/readtime_shares_test.go` (14).
+- Step 5: `document.FindingItem` four keys after `splits`, `sharesWithoutCostItem` called from `NewFindingEntry`; CSV four columns after `fix` (`findingInvestmentCSVColumns`, `nullCells`); goldens re-pinned; new `cli/findings_csv_shares_test.go` read-back, `document/findings_shares_test.go`.
+- Mutations (each reverted, red quoted by name): `readtime.go:61` drop `|| *registered` -> `Test_findings_lists_shares_without_cost_only_in_a_non_registered_account` (actual listed itxn-1 too); drop the `Action != ActionAddShares` clause -> `Test_findings_does_not_list_a_reinvest_with_no_cost` (itxn-1 listed); `!noCostAcquisition(tx)` -> `tx.CostBasis != nil` -> `Test_findings_does_not_list_an_add_that_moves_no_units`.
+- Lint: `golangci-lint run ./...` has ONE issue left, `internal/cli/render_findings.go:121` exhaustive missing `SharesWithoutCost`: B2's text arm closes it. The acceptance test is red at the group's row lines (the heading is already right, rows missing).
+- STILL RED, all B2 re-pins of the derived `--type` literal / MCP enum: `internal/cli/findings_test.go` `Test_findings_rejects_bad_usage`; `cmd/quarry` `Test_run_findings_rejects_usage_it_cannot_use`, `Test_run_read_commands_reject_bad_usage`, `Test_run_mcp_describes_every_tool`. The `--type` text is generated from `Types()`, so only the tests change. The new `--type` text reads `..., unused-category, unclassified-account or shares-without-cost`.
+- Not mine, unchanged: `cmd/quarry` full run takes ~110s; Step 7 re-count of exact-count assertions is V's.
