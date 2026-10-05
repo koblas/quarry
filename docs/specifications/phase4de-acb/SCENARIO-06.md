@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-06
-status: open
+status: done
 ---
 
 # SCENARIO-06: Sync imports Quicken's cost basis
@@ -30,10 +30,10 @@ Surface surveyed (grep; LSP `findReferences` on `Commission` sees only its decla
 - [x] Step 5: `report/sql_conventions.go:24-33` insert sentence 1 VERBATIM, mid-paragraph right after `so a sum of shares is not a holding.` and before `prices holds`: `cost_basis is the cost Quicken records for a buy, reinvested dividend or added shares (NULL when none).` Sentence 2 (`ACB and capital gains are in no table or view: quarry acb (MCP acb) computes them; never derive them in SQL.`) is S19's: it names a command that does not exist yet, so nothing here says `acb`. Hand-wrap to the const's width. Test: verbatim pin in `report/sql_conventions_test.go` (whitespace-collapsed, as `:27-37`); `Test_sql_conventions_close_the_investment_paragraph_with_the_action_values` must stay green. Re-copy the paragraph into `internal/cli/sql_test.go:222-242` and `cmd/quarry/run_shared_documents_test.go:366-385`; regenerate `plugin/skills/quarry/references/schema.md` with `go test ./cmd/quarry -run Test_skill_schema_reference_matches_the_committed_file -update` (adds the `cost_basis` row and the sentence; never hand-edit)
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `CostBasis` (cents, NULL when Quicken records none) and the `InvestmentTransaction` unit line `store.go:272-276`
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `CostBasis` (cents, NULL when Quicken records none) and the `InvestmentTransaction` unit line `store.go:272-276`
 
 ### Verify
-- [ ] Step 7: full verification block + `.claude/scripts/spec-check.py phase4de-acb`; tick SCENARIO-06 with its acceptance test; rewrite STATE.md (move the `cost_basis` line out of Left unbuilt; add the P1/P2 results and Binding decisions below)
+- [x] Step 7: full verification block + `.claude/scripts/spec-check.py phase4de-acb`; tick SCENARIO-06 with its acceptance test; rewrite STATE.md (move the `cost_basis` line out of Left unbuilt; add the P1/P2 results and Binding decisions below)
 
 ## Handoff
 
@@ -62,8 +62,7 @@ Surface surveyed (grep; LSP `findReferences` on `Commission` sees only its decla
 
 ## Phase report
 
-Run B2 (step 5) done; committed 5bd474b. Run B1 earlier (steps 3-4, a82c38f); acceptance green since B1.
-- `internal/report/sql_conventions.go` sentence 1 verbatim after `so a sum of shares is not a holding.`, wrapped by hand (four lines replace three; `records none).` now ends the prices sentence). Pin: `sql_conventions_test.go` `Test_sql_conventions_say_what_cost_basis_is_and_leave_acb_to_the_command` (collapsed; also asserts no `acb`). Mutation `NULL`->`zero` in the sentence reddens it.
-- Hand copies re-pasted byte-for-byte: `internal/cli/sql_test.go`, `cmd/quarry/run_shared_documents_test.go`, and a THIRD copy the plan missed: `cmd/quarry/run_holdings_surfaces_test.go:30` (its block began at the old wrap's last prices line; now starts `records none).`). `schema.md` regenerated with `-update`.
-- Narrow loop for report, cli, cmd/quarry (whole package), store, importer green; `golangci-lint run ./...` 0 issues. Full covered verify not run (run V).
-- Next (V, steps 6-7): sweep (doc comments on `CostBasis` / `InvestmentTransaction` already done in B1), full verify, spec-check, tick, STATE.md.
+Run V (steps 6-7) done. Scenario complete; status done; ticked in specification.md; `spec-check.py phase4de-acb` OK; STATE.md rewritten.
+- `go build ./...` ok; `golangci-lint run ./...` 0 issues, rc 0; covered full suite rc 0; `uncovered-diff.py --profile ... e7bff99`: 0 uncovered added lines; `go test -race` importer, store/..., report/... ok.
+- `test-stats.py --base e7bff99 --changed`: cmd/quarry 826 (+1), internal/cli 522 (+0), importer 265 (+2), v9fixture 10 (+0), report 460 (+1), duckstore 703 (+0); TOTAL 2786 (+4), tempdir 924 (+1), disk 827 (+1).
+- Nothing for later runs.
