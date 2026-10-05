@@ -89,6 +89,7 @@ Scenarios complete: SCENARIO-01..07, 08a, 08b, 09, 10, 11, 12, 13a, 13b (03 fold
 - Slot-4 order comes from the walk's security sort, not a sort in `noCostWarnings`; S15's `--year` cut must build warnings from the UNCUT report or warning 4 vanishes for a security unsold that year (SCENARIO-13a)
 
 ## Open debts
+- S14 ruling: `--security` text CAD cell (and Gain) blank on an unconverted event — S16. Re-run S08b/S11 event-serializing pins after `cad` becomes nullable.
 - Final product-vision pass (SCENARIO-13b): `internal/mcp/tools.go:76-79` `dataQualityDescription` lists finding kinds without unclassified-account and shares-without-cost (pinned at `cmd/quarry/run_mcp_descriptions_test.go` ~:50-56); its copy needs a ruling, then re-pin both.
 - S13a checkpoint MINORs: `internal/report/acb_unknown_cost_test.go:194-217` no remove_shares-outside-span control (an always-true UnknownCost on the remove arm survives) — S16 must add it before exposing the removal mark; `cmd/quarry/run_acb_unknown_cost_test.go:140-158` sold-out/re-bought edge row pinned in text only, `--json` cell (unknown_cost_sales 1, sales unknown_cost [true,false], incomplete false) unpinned; NIT `acb_unknown_cost_test.go:90` case name says sale first, tier puts add first.
 - S13a warning-4 ruling (pins re-asserted by S13a): warning 4b names `quarry acb --security <id>`: at S16 (or final pass) run it literally on a 4b fixture and confirm it lists the reinvest events, exit 0. S21: report count of reinvests with NULL cost_basis and non-zero amount; any → new scenario.
