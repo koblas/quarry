@@ -34,7 +34,8 @@ var acbTiers = map[string]int{
 	store.ActionRemoveShares:     acbDisposition,
 }
 
-// acbPool is one security's units and adjusted cost base across the non-registered accounts.
+// acbPool is one security's units and adjusted cost base across the non-registered accounts. Shares go negative
+// while a disposition has outrun the pool, a short; a pool with shares of 0 or below holds no ACB.
 type acbPool struct {
 	shares *big.Rat
 	acb    int64

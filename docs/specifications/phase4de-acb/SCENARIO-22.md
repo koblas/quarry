@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-22
-status: open
+status: done
 ---
 
 # SCENARIO-22: A sale of more shares than the accounts held leaves a short the next buy covers
@@ -24,10 +24,10 @@ Size: OWNS A RUN — 4 batches, 1 feature package (`internal/report` + its `docu
 - [x] Step 5: surface cells in `run_acb_short_test.go` — `Test_run_acb_text_marks_the_oversold_sale_and_lists_no_short_position` (year suffix `sale of shares with unknown cost`, no position row while short, stderr 10a), `Test_run_acb_json_writes_a_short_position_with_negative_shares_and_no_acb_per_share` (`"-1122.840000"`, `"0.00"`, null, incomplete true), `Test_run_acb_year_marks_the_oversold_sale_unknown_cost` (`--year 2017` row suffix `unknown cost`), `Test_run_acb_security_prints_negative_shares_held_grouped` (`-1,122.84`, suffix `unknown cost`); `cmd/quarry/run_mcp_acb_warnings_test.go` `Test_run_mcp_acb_warns_of_a_sale_beyond_the_pool_in_the_cli_words`. Re-pin any cmd/cli/mcp/document exact warning list whose fixture sells into an empty pool (now emits 10a) — say which in the phase report. n/a cells: 10b stderr and ROC-while-short at cmd level (shared composer and existing not-held line, pinned in `document` and Step 3)
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments: `take` (`acb_walk.go:399-400`, describes the short), `unknownCost` field `:189-190`, `closeSpanWhenSoldOut`, `adjust` `:291-292`, `ACBEvent.Oversold`, `PerShare`; spec edits verbatim from `RULING-S22.md` → *Changes to existing surfaces*: `specification.md:85`, `:206`, `:399` item (c), four edge rows appended to the table ending `:392`
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments: `take` (`acb_walk.go:399-400`, describes the short), `unknownCost` field `:189-190`, `closeSpanWhenSoldOut`, `adjust` `:291-292`, `ACBEvent.Oversold`, `PerShare`; spec edits verbatim from `RULING-S22.md` → *Changes to existing surfaces*: `specification.md:85`, `:206`, `:399` item (c), four edge rows appended to the table ending `:392`
 
 ### Verify
-- [ ] Step 7: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-22 with its acceptance test; rewrite STATE.md per Handoff (supersede, not append)
+- [x] Step 7: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-22 with its acceptance test; rewrite STATE.md per Handoff (supersede, not append)
 
 ## Handoff
 
@@ -54,10 +54,9 @@ Size: OWNS A RUN — 4 batches, 1 feature package (`internal/report` + its `docu
 
 ## Phase report
 
-Runs A (Step 1), B1 (Steps 2-4) and B2 (Step 5) done; Steps 6-7 (sweep, verify, tick, STATE rewrite, `status: done`) untouched. Acceptance test GREEN; narrow loop green; `golangci-lint run ./cmd/quarry/...` 0 issues. Full verification not run (V owns it).
+Run V done: Steps 6-7 ticked, `status: done`, SCENARIO-22 ticked in `specification.md`, STATE.md rewritten. Nothing left for later runs.
 
-- B1 production (unchanged by B2): `internal/report/acb_walk.go` (`add` cover-first and pro-rata, `short()`, `take` negative shares, oversold marking, span opens after the switch only when > 0, `closeSpanWhenSoldOut`/`adjust` at `<= 0`, nil-security `// unreachable:` dropped), `acb.go` (`ACBEvent.Oversold`, `PerShare` nil at `<= 0`, doc comments), `document/acb_warnings.go` (`oversoldWarnings`, slot 10 last). B1 tests: `acb_short_test.go` (9), re-pins in `acb_walk_test.go`, `acb_shares_test.go`, `acb_unknown_cost_test.go`, `document/acb_warnings_test.go` (4 new).
-- B2 (tests only, no production): `cmd/quarry/run_acb_short_test.go` adds `shortOpenRows` (buy 100, sell 1,222.84: short open at as-of), `moneyFundShortWarning`, `ACBPerShare` on `shortDoc`, and 6 tests: `Test_run_acb_text_marks_the_oversold_sale_and_lists_no_short_position`, `Test_run_acb_json_writes_a_short_position_with_negative_shares_and_no_acb_per_share`, `Test_run_acb_year_marks_the_oversold_sale_unknown_cost`, `Test_run_acb_security_prints_negative_shares_held_grouped`, plus two cells the plan called n/a but the dispatch named: `Test_run_acb_names_a_removal_beyond_the_pool_after_its_removal_line` (warning 5 then 10b on stderr) and `Test_run_acb_skips_a_return_of_capital_while_the_pool_is_short_as_not_held` (adjustment not-held line, then 10a, no ROC suffix). `cmd/quarry/run_mcp_acb_warnings_test.go` adds `Test_run_mcp_acb_warns_of_a_sale_beyond_the_pool_in_the_cli_words` (tool warnings = the one 10a line = CLI warnings; body = CLI body).
-- All 7 new cmd tests GREEN ON ARRIVAL: B1 production already satisfies them; they are surface cells, not new behaviour. Counts: `cmd/quarry` 904 (+7).
-- No existing cmd/cli/mcp/document warning list needed re-pinning (full `internal/cli`, `internal/mcp`, `cmd/quarry` green since B1; no fixture sells into an empty pool).
-- V must do: Step 6 sweep (doc comments `take`, `unknownCost` field, `closeSpanWhenSoldOut`, `adjust`; spec edits verbatim from `RULING-S22.md` -> *Changes to existing surfaces*: `specification.md:85`, `:206`, `:399` item (c), four edge rows after the table ending `:392`); Step 7 full verify, `spec-check.py phase4de-acb`, tick SCENARIO-22 in `specification.md` with `Test_run_acb_counts_shares_sold_beyond_the_pool_at_no_cost_and_lets_the_next_buy_cover_the_short`, STATE.md rewrite (supersede lines :23, :27, :28; close the `acb_walk.go:~55` open debt; add the slot-10 and short-pool decisions from the Handoff).
+- Sweep: doc comments already stated the short (`take`, `unknownCost`, `closeSpanWhenSoldOut`, `adjust`, `ACBEvent.Oversold`, `PerShare`); added the short to the `acbPool` type doc (`internal/report/acb_walk.go:37-38`). `go build ./...` ok, `golangci-lint run ./...` 0 issues.
+- Spec edits verbatim from `RULING-S22.md`: triage "No pooled oversell." line, reference-check item (c), the unknown-cost bullet ("reach 0 or below; an oversold sale is marked too"), four edge rows after "Old store (format 8)".
+- Verify: full suite rc=0; `uncovered-diff.py --profile ... 74ca19a` 0 uncovered; `go test -race ./internal/report/...` ok; test-stats `cmd/quarry` 904 (+8), `internal/report` 643 (+10), `internal/report/document` 234 (+4), TOTAL 1781 (+22).
+- SCENARIO-21 reference check re-runs next (orchestrator).
