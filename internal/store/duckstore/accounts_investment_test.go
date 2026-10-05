@@ -36,6 +36,21 @@ func Test_accounts_reads_an_investment_accounts_cash_and_valued_holdings(t *test
 	assert.Equal(t, []*big.Int{big.NewInt(10_000), big.NewInt(3_000), big.NewInt(13_000)}, []*big.Int{a.Cash, a.HoldingsValue, a.Balance})
 }
 
+func Test_accounts_reads_a_negative_investment_cash_balance(t *testing.T) {
+	t.Parallel()
+	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), 3*oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)}
+	rows.Transactions = []store.Transaction{transaction("t1", acctOne, marchDay(1), -10_000)}
+	st := newStoreWith(t, rows)
+
+	got, err := st.Accounts(t.Context())
+
+	require.NoError(t, err)
+	a := balanceOf(t, got, acctOne)
+	require.NotNil(t, a.HoldingsValue)
+	assert.Equal(t, []*big.Int{big.NewInt(-10_000), big.NewInt(3_000), big.NewInt(-7_000)}, []*big.Int{a.Cash, a.HoldingsValue, a.Balance})
+}
+
 func Test_accounts_leaves_an_unpriced_holding_out_of_an_investment_balance(t *testing.T) {
 	t.Parallel()
 	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), oneShare), buy(acctOne, secControl, 2, marchDay(1), oneShare))

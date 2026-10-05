@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -171,4 +172,36 @@ func Test_run_sync_pairs_an_investment_transfer_entry_and_gives_an_entry_less_in
 	assert.Equal(t, []string{"uncategorized"}, storeTextRows(t, home, "SELECT type FROM findings"))
 	assert.Equal(t, []string{syntheticID}, storeTextRows(t, home,
 		"SELECT split_id FROM finding_items WHERE finding_id IN (SELECT id FROM findings WHERE type = 'uncategorized')"))
+}
+
+func Test_run_sync_twice_reproduces_investment_cash_ids_and_keeps_an_ignored_uncategorized_finding_ignored(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	b := v9fixture.NewBuilder()
+	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	dividendCode, miscIncomeCode := int64(investmentCodeDividend), int64(investmentCodeMiscIncome)
+	dividendPK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: &dividendCode, Amount: "12.00", PostedDate: &day})
+	dividendEntry := b.Entry(v9fixture.EntryRow{Parent: dividendPK, Amount: "12.00"})
+	miscPK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: &miscIncomeCode, Amount: "5.00", PostedDate: &day})
+	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	syncBundle(t, bundle)
+	findingID := storeTextRows(t, home, "SELECT id FROM findings WHERE type = 'uncategorized'")
+	require.Len(t, findingID, 1, "one no-payee uncategorized finding covers both cash rows")
+	editStore(t, home, "UPDATE findings SET first_found_at = TIMESTAMP '2026-03-01 00:00:00'")
+	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [%q]\n", findingID[0]))
+
+	syncBundle(t, bundle)
+
+	wantTxns := []string{fmt.Sprintf("txn-%d", dividendPK), fmt.Sprintf("txn-%d", miscPK)}
+	wantSplits := []string{fmt.Sprintf("split-%d", dividendEntry), fmt.Sprintf("split-itxn-%d", miscPK)}
+	slices.Sort(wantTxns)
+	slices.Sort(wantSplits)
+	assert.Equal(t, wantTxns, storeTextRows(t, home, "SELECT id FROM transactions ORDER BY id"))
+	assert.Equal(t, wantSplits, storeTextRows(t, home, "SELECT id FROM splits ORDER BY id"))
+	assert.Equal(t, []string{findingID[0] + "|2026-03-01 00:00:00"},
+		storeTextRows(t, home, "SELECT id || '|' || CAST(first_found_at AS VARCHAR) FROM findings WHERE type = 'uncategorized'"))
+	var stdout, stderr bytes.Buffer
+	require.Equal(t, 0, run(context.Background(), []string{"findings"}, &stdout, &stderr), stderr.String())
+	assert.Equal(t, "No open findings; 1 ignored not shown (--status all)\n", stdout.String())
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/koblas/quarry/internal/store"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,6 +81,31 @@ func Test_run_mcp_net_worth_returns_the_networth_json_document(t *testing.T) {
 			assert.Equal(t, got.cliWarnings, got.toolWarnings)
 		})
 	}
+}
+
+func Test_run_mcp_net_worth_returns_the_left_out_holding_warnings_the_cli_prints(t *testing.T) {
+	seed := func(t *testing.T, home string) {
+		t.Helper()
+		rows := noRateHoldingRows()
+		rows.Securities = append(rows.Securities,
+			store.Security{ID: "sec-bare", SourceID: 5, Name: "Bare Fund", Ticker: new("BARE"), Currency: new("CAD")})
+		rows.InvestmentTransactions = append(rows.InvestmentTransactions,
+			holdingsBuy("inv-bare", 5, "acct-cad", "sec-bare", "CAD", 40_000_000))
+		replaceStoreWithRates(t, home, rows, usdRate(holdingsDay(10), 1_360_000))
+	}
+
+	got := runBothSurfaces(t, toolDocumentRun{
+		store: seed, cliArgs: []string{"networth", "--as-of", "2026-03-05"}, tool: "net_worth",
+		arguments: map[string]any{"as_of": "2026-03-05"},
+	})
+
+	assert.Equal(t, got.cliBody, got.toolBody)
+	assert.Equal(t, got.cliWarnings, got.toolWarnings)
+	assert.Equal(t, []string{
+		`"Brokerage" holds 2 securities with no price on or before 2026-03-05, so its balance leaves them out; enter prices in Quicken, then run quarry sync`,
+		`"IRA" holds 1 security with no price on or before 2026-03-05, so its balance leaves it out; enter a price in Quicken, then run quarry sync`,
+		`"Brokerage" holds 1 USD security valued on 2026-03-05, before 2026-03-10, the first exchange rate in the store, so its CAD balance leaves it out`,
+	}, got.toolWarnings)
 }
 
 func Test_run_mcp_net_worth_refuses_a_call_it_cannot_value_in_mcp_words(t *testing.T) {

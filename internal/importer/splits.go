@@ -44,7 +44,7 @@ func mapSplits(
 		}
 		txn, ok := txns[parent.Int64]
 		if !ok {
-			refs.add(category) // parent is missing, deleted, Smart, zero-amount investment, or itself excluded
+			refs.add(category)
 			return nil
 		}
 		dateStr := txn.Date.Format(dateLayout)
@@ -88,8 +88,7 @@ func mapSplits(
 	return rows, links, ids, nil
 }
 
-// entrylessSplitIDFormat renders the id of the split an entry-less investment cash row gets from its source Z_PK;
-// no entry id has the prefix.
+// entrylessSplitIDFormat is the id of an entry-less investment cash row's split, from its source Z_PK.
 const entrylessSplitIDFormat = "split-itxn-%d"
 
 // addEntrylessSplits appends one uncategorised split for each cash row that has none, with a zero link so

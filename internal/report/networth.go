@@ -44,11 +44,8 @@ type NetWorth struct {
 	// Unvalued is the holdings of the counted accounts, on the days listed, that their balances leave out.
 	Unvalued []store.UnvaluedHolding
 
-	// FirstRate is the date of the store's earliest exchange rate; zero when it holds none.
-	FirstRate time.Time
-
-	// FirstBalance is the earliest day a counted account has a transaction or a holding; zero when none does.
-	FirstBalance time.Time
+	// FirstRate and FirstBalance are store.NetWorth's.
+	FirstRate, FirstBalance time.Time
 }
 
 // NeedsRate reports whether row has a balance and only an exchange rate it lacks keeps it out of the converted

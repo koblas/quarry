@@ -22,17 +22,15 @@ WHERE date IN (`
 const netWorthOrder = `)
 ORDER BY date, type, currency`
 
-// firstBalanceQuery is the earliest day a counted account has a transaction or a holding, the day
-// v_balances_daily starts it.
+// firstBalanceQuery is the earliest day a counted account has a transaction or a holding, as v_balances_daily starts it.
 const firstBalanceQuery = `
 SELECT min(f.d)
 FROM (SELECT account_id, date AS d FROM transactions UNION ALL SELECT account_id, from_date FROM holding_shares) f
 JOIN accounts a ON a.id = f.account_id
 WHERE ` + reportedAccount
 
-// NetWorth reads the v_net_worth rows and the unvalued holdings of the counted accounts on params.Dates, and
-// the first exchange rate's and the first balance's dates, as store.NetWorth documents; a date with no rows contributes none. A store
-// it cannot open or read is a *store.OpenError.
+// NetWorth reads store.NetWorth for params.Dates; a date with no rows contributes none.
+// A store it cannot open or read is a *store.OpenError.
 func (s *Store) NetWorth(ctx context.Context, params store.NetWorthParams) (store.NetWorth, error) {
 	db, err := s.openRead(ctx)
 	if err != nil {

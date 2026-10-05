@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Rows are built by hand: the price needs no sync, and the cash row carries InvestmentTransactionID.
 func Test_run_accounts_shows_an_investment_balance_as_cash_plus_holdings_value(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -65,6 +64,58 @@ func Test_run_accounts_shows_an_investment_balance_as_cash_plus_holdings_value(t
 	assert.Equal(t, new("20.00"), brokerage.HoldingsValue)
 	assert.Equal(t, new("100.00"), chequing.Cash)
 	assert.Nil(t, chequing.HoldingsValue)
+}
+
+// boughtOnMarginRows is a CAD account holding 2 shares priced 10.00, paid for by a -100.00 cash row alone: no deposit.
+func boughtOnMarginRows(account store.Account) store.Rows {
+	when := day(2026, time.March, 2)
+	rows := spendRows([]store.Account{account})
+	rows.Securities = []store.Security{{ID: "sec-cad", SourceID: 1, Name: "Acme Corp", Ticker: new("ACME"), Currency: new("CAD")}}
+	rows.InvestmentTransactions = []store.InvestmentTransaction{{
+		ID: "inv-cad", SourceID: 1, AccountID: account.ID, SecurityID: new("sec-cad"), Date: when,
+		Action: store.ActionBuy, Shares: new(int64(2_000_000)), Amount: -10_000, Currency: "CAD",
+	}}
+	rows.Prices = []store.Price{{SecurityID: "sec-cad", SourceID: 1, Date: day(2026, time.March, 1), Price: 10_000_000}}
+	rows.Transactions = []store.Transaction{{
+		ID: "txn-inv-cad", SourceID: 3, AccountID: account.ID, Date: when, Amount: -10_000, Currency: "CAD",
+		Status: "uncleared", InvestmentTransactionID: new("inv-cad"),
+	}}
+	rows.Splits = []store.Split{{ID: "split-inv-cad", SourceID: 3, TransactionID: "txn-inv-cad", Amount: -10_000}}
+	return rows
+}
+
+func Test_run_accounts_shows_an_overdrawn_investment_balance_with_its_minus_sign(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStore(t, home, boughtOnMarginRows(brokerageAccount("acct-brokerage", 1, "CAD")))
+
+	got := runAccountsBothForms(t, "--currency", "native")
+
+	assert.Empty(t, got.textErr)
+	assert.Equal(t, ""+
+		"Account    Type       Currency  Balance  Status\n"+
+		"Brokerage  brokerage  CAD        -80.00\n",
+		got.text)
+	var doc accountsJSON
+	require.NoError(t, json.Unmarshal([]byte(got.json), &doc))
+	require.Len(t, doc.Accounts, 1)
+	brokerage := doc.Accounts[0]
+	assert.Equal(t, []*string{new("-80.00"), new("-100.00"), new("20.00")}, []*string{brokerage.Balance, brokerage.Cash, brokerage.HoldingsValue})
+}
+
+func Test_run_accounts_all_json_carries_a_closed_investment_accounts_cash_and_holdings_value(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	replaceStore(t, home, boughtOnMarginRows(closedAccount(brokerageAccount("acct-brokerage", 1, "CAD"))))
+
+	got := runAccountsBothForms(t, "--all", "--currency", "native")
+
+	var doc accountsJSON
+	require.NoError(t, json.Unmarshal([]byte(got.json), &doc))
+	require.Len(t, doc.Accounts, 1)
+	brokerage := doc.Accounts[0]
+	assert.True(t, brokerage.Closed)
+	assert.Equal(t, []*string{new("-80.00"), new("-100.00"), new("20.00")}, []*string{brokerage.Balance, brokerage.Cash, brokerage.HoldingsValue})
 }
 
 func Test_run_accounts_converts_an_investment_balance_as_cash_plus_holdings_value(t *testing.T) {

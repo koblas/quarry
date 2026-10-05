@@ -383,6 +383,18 @@ func Test_balances_daily_balance_adds_valued_holdings_to_cash(t *testing.T) {
 	assert.Equal(t, [][]string{{"100.00", "30.00", "130.00"}}, got)
 }
 
+func Test_balances_daily_balance_stays_negative_when_the_cash_overdraws_past_the_holdings(t *testing.T) {
+	t.Parallel()
+	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), 3*oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)}
+	rows.Transactions = []store.Transaction{transaction("t1", acctOne, marchDay(1), -10_000)}
+	st := newStoreWith(t, rows)
+
+	got := queryTexts(t, st, "SELECT cash, holdings_value, balance FROM v_balances_daily WHERE date = '2026-03-02'")
+
+	assert.Equal(t, [][]string{{"-100.00", "30.00", "-70.00"}}, got)
+}
+
 func Test_balances_daily_balance_is_cash_in_an_account_without_holdings_figures(t *testing.T) {
 	t.Parallel()
 	st := newStoreWith(t, cashRows(transaction("t1", acctOne, marchDay(1), 10_000)))
