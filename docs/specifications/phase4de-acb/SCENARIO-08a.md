@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-08a
-status: open
+status: done
 ---
 
 # SCENARIO-08a: ACB is pooled per security across non-registered accounts (absorbs SCENARIO-09)
@@ -31,10 +31,10 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; duckstore adapter beh
 - [x] Step 6: `acb_walk.go` FX, reinvest, split arms + output shape — USD amounts (−amount, proceeds, outlays each) via `money.Convert` at the rate on or latest before the date; reinvest adds `cost_basis` (NULL → units at 0.00, no other mark); split multiplies pool units by new/old once per (security, date) from pool-account rows, ACB unchanged, first ratio by source_id wins when two accounts differ; a nil or non-positive side is `// unreachable:` — the build refuses it (`duckstore.go:460` → `splitRatio` `shares.go:223-240`); `ACBSecurity.PerShare()` nil at 0 shares; securities by name ignoring case then id; sales date, tier, source_id across securities; events carry shares held, ACB and gain after each. Tests: `Test_acb_converts_usd_at_the_rate_on_or_before_the_date` (on-date, latest-earlier, later rate ignored), `Test_acb_splits_and_consolidates_shares_not_acb` (2:1, 1:2, split in a registered account only not applied, buy/split/sell same day), `Test_acb_reinvests_at_quickens_cost` (NULL cost row: units only), `Test_acb_walks_units_of_a_trade_it_cannot_convert` (USD before first rate, EUR account: shares asserted only), `Test_acb_lists_each_securitys_events_and_position` (event fields, per share, zero-share nil, order ties).
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new exported types, `ValueReads` doc names ACB's read, `report/doc.go` package list gains acb
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new exported types, `ValueReads` doc names ACB's read, `report/doc.go` package list gains acb
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-08a with its acceptance test; tick SCENARIO-09 with "delivered by SCENARIO-08a" and its folded test; rewrite STATE.md
+- [x] Step 8: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-08a with its acceptance test; tick SCENARIO-09 with "delivered by SCENARIO-08a" and its folded test; rewrite STATE.md
 
 ## Handoff
 
@@ -66,15 +66,4 @@ Size: OWNS A RUN — 4 batches, 1 feature package (report; duckstore adapter beh
 
 ## Phase report
 
-Run B3 (step 6) done: FX, reinvest, split arms, securities sort, `PerShare` built. Both acceptance tests GREEN (`go test ./internal/report/ -run Test_acb` ok). `test-stats` counts are V's. Narrow coverage: every function in acb.go/acb_walk.go 100% except the one `// unreachable:` branch in `(*acbPool).split`.
-
-Files:
-- `internal/report/acb_walk.go`: `acbTiers` gains reinvest 0 and split 1; `walkACB` passes `history.Rates` and sorts `result.Securities` (name lower-cased, then id); `walkSecurity` takes rates, converts through `rateOn` (latest rate dated on or before the tx date, 0 when none; rates are in date order) and `toCAD` (`money.Convert` to CAD; an unknown currency or USD with no rate contributes 0, units still walk); split applied once per date (`splitDay`: a same-day row after the first is skipped and makes NO event; first by source_id wins); `(*acbPool).add`, `.split` (new/old units, ACB untouched), `.sell(tx, sold, rate)` (native outlays rounded, native proceeds = amount + outlays, each converted on its own). Reinvest adds units plus `cost_basis` (nil -> 0).
-- `internal/report/acb.go:49-56`: `(ACBSecurity).PerShare()` = ACB cents / 100 / shares as a `*big.Rat` of dollars, nil at 0 shares (08b formats it).
-- `internal/report/acb_walk_test.go`: `acbWalkOf` now wraps new `acbWalkWith(t, securities, rates, txs...)`.
-- `internal/report/acb_arms_test.go` (new): `acbSplitTx`, tests per plan step 6 plus `Test_acb_converts_a_usd_sales_proceeds_and_outlays_each_at_its_rate`, `Test_acb_applies_a_days_buy_then_split_then_sale_in_that_order`, `Test_acb_orders_securities_by_name_ignoring_case_then_id`, `Test_acb_gives_the_acb_per_share_in_dollars_and_none_for_an_empty_pool`.
-
-Mutations (restored, diff clean): split-once guard disabled -> `splits_and_consolidates_shares_not_acb` (applies_once: 20 vs 40; first_ratio: 30 vs 60), `lists_each_securitys_events` and the folded acceptance test (ACBRemoved 15660 vs 7830); split tier 1 -> 3 (after sale) -> `applies_a_days_buy_then_split_then_sale` (ACBRemoved 500 vs 1000).
-
-Lint: B3 files clean. `golangci-lint run ./internal/report/...` still 3 issues, all run A's, left for V's Sweep: `fakes_test.go:10` lll, `acb_test.go:80` and `:100` prealloc.
-V still owes: Sweep (ValueReads doc names ACB's read, `report/doc.go` package list gains acb, exported-type doc comments), Verify, ticks, STATE.md, `status: done`.
+Run V done: sweep (3 run-A lint issues fixed: `fakes_test.go` doc wrapped, `acb_test.go` rows preallocated; `report/doc.go` names acb; `ValueReads` doc and exported-type docs already present), lint 0 issues, covered full suite rc=0, uncovered-diff 0 lines (1 declared unreachable: `acb_walk.go:141` split guard, judged sound: `duckstore/shares.go:223` `splitRatio` refuses a missing or non-positive side before the store holds the row), race ok on report and duckstore. test-stats vs 5317e2e: report 487 (+27), duckstore 707 (+4), total 1194 (+31). SCENARIO-08a and 09 ticked; STATE.md rewritten. Nothing left for this scenario.

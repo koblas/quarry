@@ -7,7 +7,8 @@ import (
 )
 
 // fakeStore answers each read with a canned result or fault; Query returns at most maxRows of rows,
-// and the got*/accountsReads/holdingsReads/historyReads/chargesReads pointers, when set, record what Query, Spending, CashFlow, Charges, Search, Accounts, Holdings, NetWorth and InvestmentHistory were given or how often.
+// and the got*/accountsReads/holdingsReads/historyReads/chargesReads pointers, when set, record what Query,
+// Spending, CashFlow, Charges, Search, Accounts, Holdings, NetWorth and InvestmentHistory were given or how often.
 type fakeStore struct {
 	status     store.Status
 	accounts   store.AccountList

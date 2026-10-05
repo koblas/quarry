@@ -1,6 +1,6 @@
 # phase4de-acb — current state
 
-Scenarios complete: SCENARIO-01..07 (03 folded into 05). Last updated by SCENARIO-07.
+Scenarios complete: SCENARIO-01..07, 08a, 09 (03 folded into 05, 09 into 08a). Last updated by SCENARIO-08a.
 
 ## Binding decisions
 - `report.Classification{Registered, NonRegistered []string}` is passed INTO `(*report.Server).Accounts`, `FindingsRequest.Classification` and `CountFindings`; `report` owns the rule via `Classification.Of(store.Account) *bool` (true registered / false non-registered / nil neither) and `Classification.Unclassified(a)` (investment type, in neither list) (SCENARIO-01, 04, 05)
@@ -22,11 +22,19 @@ Scenarios complete: SCENARIO-01..07 (03 folded into 05). Last updated by SCENARI
 - cost_basis conventions: sentence 1 (`cost_basis is the cost Quicken records for a buy, reinvested dividend or added shares (NULL when none).`) sits mid-paragraph right after `so a sum of shares is not a holding.`; S19 inserts sentence 2 (`ACB and capital gains are in no table or view: quarry acb (MCP acb) computes them; never derive them in SQL.`) immediately after it, never at the end (action-list suffix test) and never as a new paragraph (tests index paragraphs) (SCENARIO-06)
 - `config.Config.Adjustments []Adjustment{Security string, Date time.Time (UTC midnight), ReturnOfCapital, ReinvestedDistribution int64 cents, 0 = not given}`, file order, nil when none. One item MAY carry both amounts (line 3 says "needs ... or ...", no new copy): S11 must apply BOTH. `>0` and the 2-decimal bound live in config; `money.ParseCents(text) (int64, bool)` parses RAW token text (never float64) and returns 0 for `0`/`0.00` (SCENARIO-07)
 - Adjustment refusal order inside an item: needs security, needs date, needs an amount, then security type, date type, amount value (return-of-capital before reinvested-distribution); first bad item wins and refuses every command. The three `needs` lines carry no `got`, via `(file).badItem(reason)`, never `badValue`. `acb` non-table and `[[acb]]` use the existing `lookup` "must be a table" template (example `[[acb.adjustment]]`); line 1 is only for `acb.adjustment` itself. An impossible calendar date is a TOML syntax error (`cannot read ...: line n:`), not ruled line 6 (SCENARIO-07)
+- ONE read: `store.InvestmentHistory{Accounts, Securities, Transactions, Rates}` on `report.ValueReads` (not a new embed: `report.Store` is at interfacebloat's 10) via `(*duckstore.Store).InvestmentHistory` (`investments.go`, one `openRead`, faults through `openFault`). Covers EVERY account (closed, registered, unclassified) and every investment transaction with a security, date then source_id, incl. `CostBasis`/`Commission`; `Server.ACB` calls it once. S12 (file-wide acquisitions/holdings) and S17 (R-6 refusal) use this read, never a second call (SCENARIO-08a)
+- ACB types in `report/acb.go`: `ACBRequest{Classification, Today}`, `ACB{Years, Securities}`, `ACBYear{Year, Sales, Proceeds, Outlays, ACBRemoved, Gain}`, `ACBSale`, `ACBSecurity{Security, Shares, ACB, Events}` with `PerShare()`, `ACBEvent{ID, Date, Action, Shares, Held, ACB, Gain}`. Money is int64 CAD cents; shares are exact `*big.Rat` (`Held` = pool units after the event); `PerShare()` is a `*big.Rat` of dollars, nil at 0 shares. Formatting (4-decimal per share, thousands) belongs to 08b (SCENARIO-08a)
+- Walk (`acb_walk.go`): pool = `Classification.Of == false` accounts only (unclassified never pool; S17 refuses them before the walk); per security, one pool across accounts. Tiers map `acbTiers`: buy/reinvest 0, split 1, sell 2; actions absent from it (dividend, capital_gain_*, misc_income, add/remove_shares) are skipped. Events after `ACBRequest.Today` dropped. Buy adds -amount. Sell: outlays = commission rounded half away to cents, proceeds = amount + outlays (commission NET, P1), each converted to CAD on its own; gain = proceeds - outlays - ACB removed. ACB removed = round-half-away(ACB x sold / held); sold >= held removes the whole ACB and resets the pool to 0 / 0.00 (reachable until S10). Year = `Date.Year()`; year totals sum the per-sale CAD columns (SCENARIO-08a)
+- Splits apply once per date per security from pool-account rows only: a same-day split row after the first (by source_id) is skipped and makes NO event; ACB untouched, units x new/old. The nil/non-positive-side guard is `// unreachable:` (duckstore `splitRatio` refuses it) (SCENARIO-08a)
+- FX: `rateOn` = latest rate dated on or before the transaction date (rates in date order); `toCAD` = `money.Convert`. A currency with no rate (USD before the first rate, any non-CAD/USD currency) converts to 0 INTERIM: units still walk, CAD value not pinned, until S14 (SCENARIO-08a)
+- Reinvest adds units plus `cost_basis` converted; NULL cost adds units at 0.00 with no mark INTERIM until S13a (SCENARIO-08a)
+- Sort orders: sales date, tier, source_id across securities; securities name ignoring case then id; events date, tier, source_id (SCENARIO-08a)
 
 ## Left unbuilt
 - `shares-without-cost` read-time detector and its inputs (all three sources above) — S13b
 - findings.md "Classifying accounts" section (bullet link dangles by design) — S17
-- A duckstore/report reader of `cost_basis` and 13b's `FindingList` input for shares-without-cost: 08a/13b build their own reads through SQL or a new port method (SCENARIO-06)
+- 13b's `FindingList` input for shares-without-cost (08a built the cost_basis reader for the ACB walk only: `InvestmentHistory`) (SCENARIO-06, 08a)
+- add_shares / remove_shares arms in the walk (skipped, no tier) — S10; `incomplete` flag, warning 4, unknown-cost suffix — S13a; no-rate / other-currency arm and warning 6 — S14; `ACBRequest` adjustments field (report-owned type, never `config.Adjustment`) and ROC/RD events — S11; superficial-loss marks, R-6 refusal, `--year`/`--security`, CLI/document/JSON — S12, S17, S15/S16, 08b (SCENARIO-08a)
 - Conventions sentence 2 (the `acb` pointer) — S19 (SCENARIO-06)
 - The three adjustment warnings (unknown security, not held on date, duplicate items) and any consumer of `cfg.Adjustments` — S11 (needs the store; `config` stays store-free), S08b reads it (SCENARIO-07)
 
@@ -46,6 +54,9 @@ Scenarios complete: SCENARIO-01..07 (03 folded into 05). Last updated by SCENARI
 - `run_sync_pre4a_store_test.go:49` "8"/"9" are import-run ids, not format versions; a literal format-version pin is re-pinned on every bump (SCENARIO-06)
 - Read commands skip `config.Load` when `--currency` is given; `acb` (S08b) must load config regardless or adjustments silently vanish (SCENARIO-07)
 - `acb` is a known key, so a non-table `acb` is caught by `lookup`, not the unknown-key path; copy not separately ruled, mention at the final product-vision pass. Quoted literal `'sec-41'` is a valid security string (SCENARIO-07)
+- With exact rational units round(ACB x sold / held) at sold == held already equals ACB; the exact-remainder guard shows only on an oversell row (SCENARIO-08a)
+- `readRates` probes the fx_rates columns first (two queries): duckstore fault rows index queries with `passQueries`; a single `rowReads` row faults only the first query (SCENARIO-08a)
+- cli/mcp fakes embed `report.Store` and compile without `InvestmentHistory`; only `report/fakes_test.go` implements it (SCENARIO-08a)
 
 ## Open debts
 - Checkpoint 02 MINOR: `namedKeyMessage` var comment (`internal/config/parse.go:~150`) is 2 lines, budget 1; trim on next touch (the `setting` and `Load` docs were trimmed by SCENARIO-07)

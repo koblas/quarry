@@ -77,7 +77,7 @@ type acbPositionRow struct {
 }
 
 func acbYearRows(result report.ACB) []acbYearRow {
-	var rows []acbYearRow
+	rows := make([]acbYearRow, 0, len(result.Years))
 	for _, year := range result.Years {
 		row := acbYearRow{Year: year.Year, Proceeds: year.Proceeds, Outlays: year.Outlays, ACBRemoved: year.ACBRemoved, Gain: year.Gain}
 		for _, sale := range year.Sales {
@@ -97,7 +97,7 @@ func acbYearRows(result report.ACB) []acbYearRow {
 }
 
 func acbPositionRows(result report.ACB) []acbPositionRow {
-	var rows []acbPositionRow
+	rows := make([]acbPositionRow, 0, len(result.Securities))
 	for _, position := range result.Securities {
 		rows = append(rows, acbPositionRow{Name: position.Security.Name, Shares: position.Shares.RatString(), ACB: position.ACB})
 	}
