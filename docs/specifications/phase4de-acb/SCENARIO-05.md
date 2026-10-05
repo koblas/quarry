@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-05
-status: open
+status: done
 ---
 
 # SCENARIO-05: Finding counts include unclassified accounts (absorbs SCENARIO-03)
@@ -27,10 +27,10 @@ Size: OWNS A RUN — 5 batches, 1 feature package (report; `snapshot` option arg
 - [x] Step 7: fixture re-pins per the STATE fixture rule (subject is counts → re-pin; else local `accounts.non-registered` or `--type`; never `syncBundle`) — run the narrow loop over `./cmd/quarry/ ./internal/mcp/` and fix what fails; known candidates `cmd/quarry/run_status_test.go:57`, `run_validation_test.go:96`, `run_shared_documents_test.go:177,199`, plus sync/status goldens with brokerage/retirement fixtures (`run_success_test.go`, `run_import_test.go`, `run_json_test.go`, `run_investment_cash_test.go`)
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `CountFindings`, `Status`, `Result`, the new option, report func and composer; no Long/help copy changes (counts reuse existing lines)
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `CountFindings`, `Status`, `Result`, the new option, report func and composer; no Long/help copy changes (counts reuse existing lines)
 
 ### Verify
-- [ ] Step 9: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-05 with its acceptance test; tick SCENARIO-03 `— delivered by SCENARIO-05 —` then its acceptance test last on the line; rewrite STATE.md
+- [x] Step 9: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-05 with its acceptance test; tick SCENARIO-03 `— delivered by SCENARIO-05 —` then its acceptance test last on the line; rewrite STATE.md
 
 ## Handoff
 
@@ -57,14 +57,8 @@ Size: OWNS A RUN — 5 batches, 1 feature package (report; `snapshot` option arg
 
 ## Phase report
 
-Run B2 (steps 6-7) done and committed. `go test ./internal/... ./cmd/...` green (rc=0), `golangci-lint run ./...` 0 issues (lint already clean, incl. two B1 leftovers: `lll` on `run_shared_documents_test.go` status-unreadable const, `wrapcheck` on `duckstore/findings_read.go` `readAccounts`). Both acceptance tests green.
+Run V (steps 8-9) done. `go build ./...` ok; `golangci-lint run ./...` 0 issues; covered full suite `go test rc=0`; `uncovered-diff.py` vs e0c7ebb: 0 uncovered added lines; `go test -race` on report, document, snapshot, store, duckstore, cli, mcp, importer green. Doc comments present on CountFindings, ReadTimeStates, Status.Accounts, Result.Accounts, WithReadTimeFindings, UnmatchedAccounts/Unmatched, UnmatchedAccountWarnings, classificationOf, readAccounts.
 
-Production: `report/classification.go` `UnmatchedAccounts` + `(Classification).Unmatched`; `FindingsListing.UnmatchedAccounts` (from `list.Accounts`), `AccountListing.UnmatchedAccounts` (computed before the closed filter, `accountsOf` helper in `report/accounts.go`); `document.UnmatchedAccountWarnings` (`document/findings.go`); wired at `cli/findings.go` (stderr `~` after unmatched-ignore, JSON absolute), `cli/accounts.go` (stderr `~` before own warnings via `printConfigWarnings`; JSON absolute in `withConfigWarnings`' config slot), `mcp/data_quality.go` (also copied through `capFindings`/`capItems`, which rebuild `FindingsListing`).
+test-stats (base e0c7ebb): cmd/quarry 821 (+19), importer 263 (+1), mcp 185 (+4), report 458 (+12), report/document 169 (+3), snapshot 282 (+4), duckstore 703 (+3); TOTAL 2881 (+46) tests, 1264 (+24) tempdir, 1079 (+21) disk.
 
-Tests: `internal/report/unmatched_accounts_test.go` (7), `internal/report/document/unmatched_accounts_test.go` (5), `cmd/quarry/run_accounts_unmatched_json_test.go` (6: accounts/findings --json, closed account silent, MCP data_quality, status+sync silent, MCP sync_status silent; each silence row has `accounts --json` control).
-
-Step 7: `Test_run_checks_balances_and_split_sums_before_swapping_the_store_in` failed because its fixture holds an unclassified brokerage (`Findings 1 open` -> 2): expected consequence, not a defect; subject is validation so it gets a local `accounts.non-registered` config. Re-pinned counts 2 -> 3 in `run_status_test.go`, `run_status_json_test.go`, `run_shared_documents_test.go` (status unreadable-config golden).
-
-Mutation (plan line 2): `report/accounts.go` recompute `unmatched` after `list.Accounts = open` -> `Test_accounts_warns_nothing_for_a_listed_closed_account` red (`Should be empty, but was [acct-1]`); restored, diff clean.
-
-Left for V: full covered run + uncovered-diff, test-stats, spec tick (SCENARIO-05 + folded SCENARIO-03), spec-check, STATE.md rewrite, status: done, doc-comment check on new symbols.
+Spec: SCENARIO-05 and SCENARIO-03 (delivered by SCENARIO-05) ticked; `spec-check.py phase4de-acb` OK. STATE.md rewritten.

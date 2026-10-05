@@ -548,8 +548,8 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 - [x] SCENARIO-01: Accounts show their classification — `internal/cli/accounts_classification_test.go` `Test_accounts_show_their_classification`
 - [x] SCENARIO-02: A malformed classification is refused — `cmd/quarry/run_config_test.go` `Test_run_refuses_an_account_number_in_an_accounts_list_masked`
 - [x] SCENARIO-04: Unclassified investment accounts are findings — `cmd/quarry/run_findings_unclassified_test.go` `Test_run_findings_lists_an_unclassified_account_until_the_config_classifies_it`
-- [ ] SCENARIO-05: Finding counts include unclassified accounts
-- [ ] SCENARIO-03: An id that names no account is warned
+- [x] SCENARIO-05: Finding counts include unclassified accounts — `cmd/quarry/run_status_unclassified_test.go` `Test_run_status_counts_an_unclassified_account_until_the_config_classifies_it`
+- [x] SCENARIO-03: An id that names no account is warned — delivered by SCENARIO-05 — `cmd/quarry/run_accounts_unmatched_test.go` `Test_run_accounts_and_findings_warn_a_listed_id_that_names_no_account`
 - [ ] SCENARIO-06: Sync imports Quicken's cost basis
 - [ ] SCENARIO-07: ACB adjustments are read from config
 - [ ] SCENARIO-08a: ACB is pooled per security across non-registered accounts

@@ -1,47 +1,44 @@
 # phase4de-acb — current state
 
-Scenarios complete: SCENARIO-01, 02, 04. Last updated by SCENARIO-04.
+Scenarios complete: SCENARIO-01..05 (03 folded into 05). Last updated by SCENARIO-05.
 
 ## Binding decisions
-- `report.Classification{Registered, NonRegistered []string}` is passed INTO `(*report.Server).Accounts` and `FindingsRequest.Classification`; `report` owns the rule via `Classification.Of(store.Account) *bool` (true registered / false non-registered / nil neither) and `Classification.Unclassified(a)` (investment type, in neither list). Every site reuses these two (SCENARIO-01, 04)
-- An id in both `accounts.registered` and `accounts.non-registered` is REFUSED by `config.Load` (`(document).notInBoth`); `Classification.Of`'s registered-first order is only a tie-break for hand-built values (SCENARIO-02)
-- `Config.Registered` / `Config.NonRegistered` keep file order, duplicates and spelling as written (case-sensitive); S05's unknown-id warning reads them raw (SCENARIO-01, 02)
-- `accountmask.Mask(s)` (`internal/platform/accountmask`) is the one masking helper; S05's unmatched warning calls it on the raw id (`lists "<Mask(id)>"`). Digits counted across the WHOLE string, all but last four become `*`; exempt only exact `^acct-[0-9]+$` (SCENARIO-02)
-- Masking is per-setting (`setting.masked` only on the two account-list settings); `findings.ignore`, keep, path, currency echoes stay raw. Masked sites: `idList` got/item text, `lookup`, `keyText` after `accounts`, and `tree()` via `maskNamedKey` for four go-toml shapes only (SCENARIO-02)
-- Config parsing: one `document.idList(setting, noun, example)` shared by `findings.ignore` and the two account lists; `[accounts]` table and dotted forms both load (SCENARIO-01)
-- `accounts` always loads the config even with `--currency`; the other six `currencyFlag` commands skip the loader when the flag is given (SCENARIO-01)
+- `report.Classification{Registered, NonRegistered []string}` is passed INTO `(*report.Server).Accounts`, `FindingsRequest.Classification` and `CountFindings`; `report` owns the rule via `Classification.Of(store.Account) *bool` (true registered / false non-registered / nil neither) and `Classification.Unclassified(a)` (investment type, in neither list) (SCENARIO-01, 04, 05)
+- Read-time inputs have THREE sources: `store.FindingList.Accounts` (duckstore `Findings`), `store.Status.Accounts` (duckstore `Status`; both via one `readAccounts`), `store.Result.Accounts` (importer, accounts the build wrote). S13b adds its detector input to ALL THREE or status/sync silently disagree with findings (SCENARIO-04, 05)
+- One chokepoint, `report.readTimeFindings(store.FindingList, Classification)` (`readtime.go`), merged BEFORE `finding.Classify`. Callers: `Server.Findings`, `CountFindings(st, ignore, c)` (status, `sync_status`), and `report.ReadTimeStates(list, c)` (read-time states only, never New) wired into sync via `snapshot.WithReadTimeFindings(func(store.FindingList) []finding.State)` at `cli/sync.go` (snapshot cannot import report). 13b adds its detector inside `readTimeFindings` and its input as a new `FindingList` field, never a second option or parameter (SCENARIO-04, 05)
+- Read-time status is per TYPE (`finding.Type.ReadTime()`), never "FirstFoundAt is zero": never New/NewlyFixed/Fixed; JSON `first_found_at` is `*string`, null for read-time types. 13b's type sets the same predicate (SCENARIO-04)
+- Unreadable config at `status`/`sync_status` → empty Classification → every investment account counted open unclassified; warning is `document.CannotTellChoices` (renamed from `CannotTellIgnored`, copy ruled) (SCENARIO-05)
+- Unmatched account ids: `Classification.Unmatched(accounts)` over every store account (any type, closed included) BEFORE any filter or `--type`/closed cut; `FindingsListing.UnmatchedAccounts` / `AccountListing.UnmatchedAccounts`; composed by `document.UnmatchedAccountWarnings` (mask then `tomlstr.BasicString`; duplicates kept; registered first). stderr after unmatched-ignore lines, `~` path; JSON/MCP absolute. `capFindings`/`capItems` (mcp) rebuild `FindingsListing` and copy `UnmatchedAccounts`; a new listing field must be copied there too. `status` and `sync` stay silent (SCENARIO-05)
+- `accounts` stderr warning goes through `printConfigWarnings`; its JSON form joins `withConfigWarnings`' config slot, never the shared `warnings` slice (feeds `renderAccountsJSON`) (SCENARIO-05)
+- One unexported `classificationOf(cfg)` per delivery package (cli `currency.go`, mcp); no literal `report.Classification{Registered: cfg…}` elsewhere (SCENARIO-05)
+- An id in both account lists is REFUSED by `config.Load`; `Classification.Of` registered-first is only a tie-break for hand-built values. `Config.Registered`/`NonRegistered` keep file order, duplicates and spelling raw (case-sensitive) (SCENARIO-01, 02)
+- `accountmask.Mask(s)` (`internal/platform/accountmask`) is the one masking helper: digits counted across the WHOLE string, all but last four become `*`; exempt only exact `^acct-[0-9]+$`. Masking is per-setting (`setting.masked` only on the two account lists); `findings.ignore`, keep, path, currency echoes stay raw (SCENARIO-02)
+- Config parsing: one `document.idList(setting, noun, example)` shared by `findings.ignore` and the two account lists; `[accounts]` table and dotted forms both load. `accounts` always loads the config even with `--currency`; the other six `currencyFlag` commands skip it when the flag is given (SCENARIO-01)
 - Status words append last after `linked tracking`: `registered` then `unclassified`; JSON `registered` (`*bool`, null when neither) right after `linked_tracking` (SCENARIO-01)
-- Read-time chokepoint is `report.readTimeFindings(store.FindingList, Classification)` in `internal/report/readtime.go`, merged BEFORE `finding.Classify`; S05 calls it from `CountFindings` (build a `FindingList` from `store.Status` findings + accounts); 13b adds its detector inside it and its input as a new `FindingList` field, not a new parameter (SCENARIO-04)
-- Read-time status is per TYPE (`finding.Type.ReadTime()`), never "FirstFoundAt is zero": never New/NewlyFixed/Fixed; JSON `first_found_at` is `*string`, null for read-time types (`document.FindingEntry`). 13b's type sets the same predicate (SCENARIO-04)
-- Accounts ride on `store.FindingList.Accounts`, read in the same open as findings by `(*duckstore.Store).Findings` (report.Store is at its 10-method cap); `FindingItem.AccountType` is set for the unclassified-account item only and never serialized (SCENARIO-04)
-- Unclassified finding order: name case-insensitive, then id (`findingOrder`); ignore ids match unclassified ids (ignored, not Unmatched). `--csv` unchanged: row per finding, `account`+`currency` filled (SCENARIO-04)
-- Fixture rule: no default classifying config, no edit to `syncBundle` or any shared helper (fixtures are per-test v9fixture builders). A test whose subject is the findings list/counts re-pins (adds row/count); any other test narrows with `--type` or adds a local `accounts.non-registered` in its config write. Binds S05's status/sync count pins (SCENARIO-04)
-- Long type table realigned to a 20-rune name column (descriptions at col 24) for `unclassified-account`; layout only (SCENARIO-04)
-- MCP `data_quality` listing is wired to config classification here (it runs `Server.Findings`); S05 adds only its counts (SCENARIO-04)
-- The "registered is not in the store" sentence ends `report.SQLConventions`; `schema.md` regenerated by `go test ./cmd/quarry -run Test_skill_schema_reference_matches_the_committed_file -update`, never hand-edited (SCENARIO-01)
+- Unclassified finding order: name case-insensitive, then id (`findingOrder`); `FindingItem.AccountType` set for that item only, never serialized; ignore ids match unclassified ids. `--csv` unchanged. Long type table is a 20-rune name column; `schema.md` regenerated by `go test ./cmd/quarry -run Test_skill_schema_reference_matches_the_committed_file -update`, never hand-edited (SCENARIO-01, 04)
+- Fixture rule: no default classifying config, no edit to `syncBundle` or any shared helper (per-test v9fixture builders). Subject is counts/findings list → re-pin; otherwise a local `accounts.non-registered` or `--type`. S05 applied it (validation test got a local config; status counts 2→3 re-pinned) (SCENARIO-04, 05)
 
 ## Left unbuilt
-- `accounts.* lists "<v>", which is not an account in quarry's store` warning (must use `accountmask.Mask`) at accounts, findings, data_quality — S03, folded into S05
-- status/sync/MCP sync_status counts through `readTimeFindings` (`CountFindings`) — S05
+- `shares-without-cost` read-time detector and its inputs (all three sources above) — S13b
 - findings.md "Classifying accounts" section (bullet link dangles by design) — S17
 - `cost_basis` column, FormatVersion 9, cost_basis conventions sentence — S06
 
 ## Traps
-- Spec Part A example shows `Questrade TFSA` acct-12 before `Old RRSP` acct-31 (id order), contradicting the ruled name-then-id order. Code follows the RULE; never copy the example as a two-row literal (SCENARIO-04)
-- Until S05, `quarry findings` counts include unclassified findings while `status`/`sync` do not — expected (SCENARIO-04)
-- `NewFindingItem` returns early with no transaction/split (`document/findings.go:101`); the type arm must live in `NewFindingEntry` (SCENARIO-04)
+- Read-time states must never set `New`, or sync's `(N new)` counts every unclassified account on every sync (SCENARIO-05)
+- Sync-vs-status agreement test (`Test_run_status_sync_and_mcp_agree_on_an_unclassified_account_count`) is what proves importer `Result.Accounts` (`Type` especially) equal stored rows; do not drop it as redundant (SCENARIO-05)
+- `Server.Accounts` without `--all` filters closed accounts after the read: computing unmatched after that warns a real closed account (`Test_accounts_warns_nothing_for_a_listed_closed_account`) (SCENARIO-05)
+- Spec Part A example shows `Questrade TFSA` acct-12 before `Old RRSP` acct-31, contradicting the ruled name-then-id order; code follows the RULE (SCENARIO-04)
+- `NewFindingItem` returns early with no transaction/split; the type arm must live in `NewFindingEntry` (SCENARIO-04)
 - duckstore sync-time detectors must never emit `unclassified-account`; no detector-table entry (SCENARIO-04)
 - `first_found_at` goldens decode null into `string` as `""` silently; any JSON reader over an investment account needs a check (SCENARIO-04)
-- `report.Classification{Registered: cfg.Registered, NonRegistered: cfg.NonRegistered}` is spelled at three sites (`cli/accounts.go`, `cli/findings.go`, `mcp/data_quality.go`); S05 adds more — hoist then (SCENARIO-04)
-- Over-masking edges, not pinned as ruled copy: quoted `accounts = "acct-12345678"` prints `"acct-****5678"`; a masked non-bare key part renders bare. Change in `parse.go` only if product-vision objects (SCENARIO-02)
-- Do not mask whole `tree()` messages or all of `got`: keep/path/currency refusals and `U+XXXX` text stay as pinned (SCENARIO-02)
-- Narrow-loop `-run` is case sensitive; use `(?i)` or the exact test name, else the acceptance test appears not to run (SCENARIO-01, 02)
-- Fixtures without an `[accounts]` table show every brokerage/retirement account as `unclassified` and JSON `"registered": null`; a golden diff beyond those two additions is a bug (SCENARIO-01)
-- `Server.Accounts` filters closed accounts after the read; `Hidden` stays a count of closed accounts only; a non-investment account in neither list has empty Status and JSON `null`, not `false` (SCENARIO-01)
+- Over-masking edges, not pinned: quoted `accounts = "acct-12345678"` prints `"acct-****5678"`; a masked non-bare key part renders bare. Change in `parse.go` only if product-vision objects. Do not mask whole `tree()` messages or all of `got` (SCENARIO-02)
+- Narrow-loop `-run` is case sensitive; use `(?i)` or the exact test name (SCENARIO-01, 02)
+- Fixtures without an `[accounts]` table show every brokerage/retirement account as `unclassified` and JSON `"registered": null`; a golden diff beyond those is a bug. A non-investment account in neither list has empty Status and JSON `null`, not `false`; `Hidden` counts closed accounts only (SCENARIO-01)
 
 ## Open debts
 - Checkpoint 02 MINOR: comment budgets — `setting` doc `internal/config/parse.go:26` (→ 2 lines), `namedKeyMessage` var comment `parse.go:144-146` (→ 1 line), `Load` doc `internal/config/config.go:42-47`. Trim on next touch
 - Checkpoint 02 MINOR: in-both refusal quotes via `tomlstr.BasicString` but no row has a quote/newline id (`internal/config/accounts_test.go` `Test_load_refuses_an_id_listed_in_both_account_lists`) — add an `"a\"b"` row on next config touch
 - Checkpoint 02 NIT: `keyText` masks each dotted key part separately (`parse.go:~418-425`); a number split across parts keeps <=4 digits per part
-- `plugin/skills/quarry/references/findings.md:43` `--csv` line mirrors the `--csv` help (`...payee, category or account`, pinned in `cmd/quarry/run_skill_references_test.go`); 13b moves both to the Part B wording (SCENARIO-04)
-- Final product-vision pass: `quarry findings --help` type table realigned for the 20-char `unclassified-account` (SCENARIO-04; layout only, orchestrator-accepted)
+- `plugin/skills/quarry/references/findings.md:43` `--csv` line mirrors the `--csv` help, pinned in `cmd/quarry/run_skill_references_test.go`; 13b moves both to the Part B wording (SCENARIO-04)
+- Final product-vision pass: `quarry findings --help` type table realigned for 20-char `unclassified-account` (layout only, orchestrator-accepted) (SCENARIO-04)
+- Copy ruling (SCENARIO-05) changed the shared unreadable-config status warning; pins re-asserted at `document/status_test.go`, `run_status_findings_test.go`, `run_shared_documents_test.go`, `mcp/sync_status_test.go`. Final pass re-checks wording on `status` and `sync_status`
