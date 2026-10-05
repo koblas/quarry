@@ -40,6 +40,9 @@ func renderACBYears(a report.ACB) string {
 // acbYearSuffixes are the notes after year's row, in the ruled order.
 func acbYearSuffixes(year report.ACBYear) []string {
 	var suffixes []string
+	if marked := year.PossibleSuperficialLosses(); marked > 0 {
+		suffixes = append(suffixes, humanize.Count(marked, "possible superficial loss", "possible superficial losses"))
+	}
 	if year.ReturnOfCapitalGain > 0 {
 		suffixes = append(suffixes, formatMoney(year.ReturnOfCapitalGain)+" return of capital above ACB, a capital gain")
 	}

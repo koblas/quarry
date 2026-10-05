@@ -72,8 +72,21 @@ type ACBYear struct {
 	ReturnOfCapitalGain                 int64
 }
 
+// PossibleSuperficialLosses is how many of the year's sales are marked as a possible superficial loss.
+func (y ACBYear) PossibleSuperficialLosses() int {
+	marked := 0
+	for _, sale := range y.Sales {
+		if sale.PossibleSuperficialLoss {
+			marked++
+		}
+	}
+
+	return marked
+}
+
 // ACBSale is one disposition: the shares sold, its proceeds and outlays in CAD cents, the ACB it removed, and
-// the gain, which is Proceeds - Outlays - ACBRemoved. The two flags mark the sale for the reader.
+// the gain, which is Proceeds - Outlays - ACBRemoved. The two flags mark the sale for the reader; a loss is
+// marked possibly superficial when the walk finds the security acquired within 30 days of it and still held.
 type ACBSale struct {
 	ID                                  string
 	Date                                time.Time

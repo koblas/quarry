@@ -62,6 +62,41 @@ func Test_renderACB_suffixes_a_years_return_of_capital_gain(t *testing.T) {
 		"2025      1       5.00     0.00       4.00          1.00\n", got)
 }
 
+// acbMarked marks the first n sales of year as possible superficial losses.
+func acbMarked(year report.ACBYear, n int) report.ACBYear {
+	for i := range n {
+		year.Sales[i].PossibleSuperficialLoss = true
+	}
+	return year
+}
+
+func Test_renderACB_suffixes_a_years_possible_superficial_losses_by_count(t *testing.T) {
+	a := report.ACB{AsOf: acbDay, Years: []report.ACBYear{
+		acbMarked(acbYearOf(2023, 3, 100, 0, 150, -50), 1),
+		acbMarked(acbYearOf(2024, 3, 100, 0, 150, -50), 2),
+		acbMarked(acbYearOf(2025, 3, 100, 0, 150, -50), 0),
+	}}
+
+	got := renderACBYears(a)
+
+	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
+		"Year  Sales  Proceeds  Outlays   ACB  Gain or loss\n"+
+		"2023      3      1.00     0.00  1.50         -0.50  1 possible superficial loss\n"+
+		"2024      3      1.00     0.00  1.50         -0.50  2 possible superficial losses\n"+
+		"2025      3      1.00     0.00  1.50         -0.50\n", got)
+}
+
+func Test_renderACB_puts_the_possible_superficial_losses_before_the_return_of_capital_gain(t *testing.T) {
+	year := acbMarked(acbYearOf(2024, 2, 1_200_400, 999, 1_290_040, -90_639), 1)
+	year.ReturnOfCapitalGain = 123_456
+
+	got := renderACBYears(report.ACB{AsOf: acbDay, Years: []report.ACBYear{year}})
+
+	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
+		"Year  Sales   Proceeds  Outlays        ACB  Gain or loss\n"+
+		"2024      2  12,004.00     9.99  12,900.40       -906.39  1 possible superficial loss, 1,234.56 return of capital above ACB, a capital gain\n", got)
+}
+
 func Test_renderACB_lists_a_year_with_only_a_return_of_capital_gain(t *testing.T) {
 	year := report.ACBYear{Year: 2025, ReturnOfCapitalGain: 125_000}
 

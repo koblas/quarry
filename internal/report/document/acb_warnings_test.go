@@ -20,6 +20,47 @@ func acbRemoval(account string, date time.Time, units *big.Rat) report.ACBEvent 
 	return report.ACBEvent{Date: date, Account: account, Action: store.ActionRemoveShares, Shares: units, Held: new(big.Rat)}
 }
 
+// acbMarkedYear is year with sales sales, the first marked of them marked possible superficial losses.
+func acbMarkedYear(year, sales, marked int) report.ACBYear {
+	y := report.ACBYear{Year: year, Sales: make([]report.ACBSale, sales)}
+	for i := range marked {
+		y.Sales[i].PossibleSuperficialLoss = true
+	}
+	return y
+}
+
+func Test_ACBWarnings_names_one_possible_superficial_loss(t *testing.T) {
+	a := report.ACB{Years: []report.ACBYear{acbMarkedYear(2025, 3, 1)}}
+
+	warnings := document.ACBWarnings(a, acbConfigShown)
+
+	assert.Equal(t, []string{
+		"1 possible superficial loss in 2025: the same security was acquired within 30 days before or after the sale, " +
+			"in any account, and still held 30 days after; quarry does not deny or adjust these losses; review them with your accountant",
+	}, warnings)
+}
+
+func Test_ACBWarnings_counts_the_possible_superficial_losses_of_every_year_in_one_line_by_year(t *testing.T) {
+	a := report.ACB{Years: []report.ACBYear{
+		acbMarkedYear(2023, 2, 2),
+		acbMarkedYear(2024, 2, 0),
+		acbMarkedYear(2025, 3, 1),
+	}}
+
+	warnings := document.ACBWarnings(a, acbConfigShown)
+
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0], "3 possible superficial losses in 2023, 2025: the same security was acquired")
+}
+
+func Test_ACBWarnings_stays_silent_when_no_sale_is_marked(t *testing.T) {
+	a := report.ACB{Years: []report.ACBYear{acbMarkedYear(2025, 3, 0)}}
+
+	warnings := document.ACBWarnings(a, acbConfigShown)
+
+	assert.Empty(t, warnings)
+}
+
 func Test_ACBWarnings_names_each_removal_of_shares_with_no_sale(t *testing.T) {
 	a := report.ACB{Securities: []report.ACBSecurity{{
 		Security: store.Security{ID: "sec-41", Name: "iShares Core Equity ETF"},
@@ -61,8 +102,11 @@ func Test_ACBWarnings_lists_removals_by_security_then_event_order_with_grouped_f
 	assert.Contains(t, warnings[2], `"Beta": 1,000 shares left "Margin" on 2025-03-03 without a sale;`)
 }
 
-func Test_ACBWarnings_is_empty_when_no_shares_were_removed(t *testing.T) {
-	warnings := document.ACBWarnings(acbDocumentFixture(), acbConfigShown)
+func Test_ACBWarnings_is_empty_when_no_shares_were_removed_and_no_loss_is_marked(t *testing.T) {
+	a := acbDocumentFixture()
+	a.Years[0].Sales[0].PossibleSuperficialLoss = false
+
+	warnings := document.ACBWarnings(a, acbConfigShown)
 
 	assert.Empty(t, warnings)
 }
@@ -144,8 +188,9 @@ func Test_ACBWarnings_stays_silent_for_a_return_of_capital_within_the_acb(t *tes
 	assert.Empty(t, warnings)
 }
 
-func Test_ACBWarnings_lists_adjustment_lines_then_removals_then_returns_of_capital_above_the_acb(t *testing.T) {
+func Test_ACBWarnings_lists_adjustment_lines_then_possible_superficial_losses_then_removals_then_returns_of_capital_above_the_acb(t *testing.T) {
 	a := report.ACB{
+		Years: []report.ACBYear{acbMarkedYear(2025, 1, 1)},
 		AdjustmentIssues: []report.ACBAdjustmentIssue{
 			{Kind: report.ACBAdjustmentUnknownSecurity, Item: 1, SecurityID: "sec-99", Date: acbDay},
 			{Kind: report.ACBAdjustmentNotHeld, Item: 2, SecurityID: "sec-2", Security: "Beta", Date: acbDay},
@@ -169,10 +214,11 @@ func Test_ACBWarnings_lists_adjustment_lines_then_removals_then_returns_of_capit
 
 	warnings := document.ACBWarnings(a, acbConfigShown)
 
-	require.Len(t, warnings, 5)
+	require.Len(t, warnings, 6)
 	assert.Contains(t, warnings[0], "acb.adjustment item 1 names")
 	assert.Contains(t, warnings[1], "acb.adjustment item 2 is for")
-	assert.Contains(t, warnings[2], `"Alpha": 2 shares left`)
-	assert.Contains(t, warnings[3], `"Alpha": return of capital on`)
-	assert.Contains(t, warnings[4], `"Beta": return of capital on`)
+	assert.Contains(t, warnings[2], "1 possible superficial loss in 2025:")
+	assert.Contains(t, warnings[3], `"Alpha": 2 shares left`)
+	assert.Contains(t, warnings[4], `"Alpha": return of capital on`)
+	assert.Contains(t, warnings[5], `"Beta": return of capital on`)
 }

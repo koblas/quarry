@@ -2,6 +2,8 @@ package document
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/platform/tomlstr"
@@ -10,10 +12,11 @@ import (
 )
 
 // ACBWarnings is a's warnings in the ruled order: the config's adjustment lines, which name the file as
-// configShown, then one per removal of shares with no sale, then one per return of capital above the ACB;
-// the last two by security then date.
+// configShown, then one line for the possible superficial losses, then one per removal of shares with no sale,
+// then one per return of capital above the ACB; the last two by security then date.
 func ACBWarnings(a report.ACB, configShown string) []string {
 	warnings := adjustmentWarnings(a, configShown)
+	warnings = append(warnings, superficialLossWarnings(a)...)
 	warnings = append(warnings, removalWarnings(a)...)
 
 	return append(warnings, returnOfCapitalWarnings(a)...)
@@ -38,6 +41,26 @@ func adjustmentWarnings(a report.ACB, configShown string) []string {
 	}
 
 	return warnings
+}
+
+// superficialLossWarnings is one line for every sale of a marked a possible superficial loss, naming their years
+// oldest first; none when no sale is marked.
+func superficialLossWarnings(a report.ACB) []string {
+	var years []string
+	marked := 0
+	for _, year := range a.Years {
+		if n := year.PossibleSuperficialLosses(); n > 0 {
+			marked += n
+			years = append(years, strconv.Itoa(year.Year))
+		}
+	}
+	if marked == 0 {
+		return nil
+	}
+
+	return []string{fmt.Sprintf("%s in %s: the same security was acquired within 30 days before or after the sale, in any account, "+
+		"and still held 30 days after; quarry does not deny or adjust these losses; review them with your accountant",
+		humanize.Count(marked, "possible superficial loss", "possible superficial losses"), strings.Join(years, ", "))}
 }
 
 // removalWarnings is one warning for each remove_shares event of a's securities.

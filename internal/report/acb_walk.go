@@ -86,6 +86,7 @@ func walkACB(history store.InvestmentHistory, req ACBRequest) ACB {
 		)
 	})
 	slices.SortFunc(issues, func(a, b ACBAdjustmentIssue) int { return cmp.Compare(a.Item, b.Item) })
+	markSuperficialLosses(sales, history, req.Today)
 	result.Years = acbYears(sales, excesses)
 	result.AdjustmentIssues = issues
 
@@ -233,7 +234,7 @@ func (w *securityWalk) apply(tx store.InvestmentTransaction) {
 			return
 		}
 		w.splitDay = tx.Date
-		w.pool.split(tx.SplitNewShares, tx.SplitOldShares)
+		splitShares(w.pool.shares, tx.SplitNewShares, tx.SplitOldShares)
 	case store.ActionSell:
 		// Quicken stores a sale's shares negative; the units sold are their magnitude.
 		event.Shares.Abs(event.Shares)
@@ -329,15 +330,6 @@ func movesNoUnits(tx store.InvestmentTransaction) bool {
 func (p *acbPool) add(bought *big.Rat, cost int64) {
 	p.shares.Add(p.shares, bought)
 	p.acb += cost
-}
-
-// split multiplies the units held by newShares over oldShares and leaves the ACB alone.
-func (p *acbPool) split(newShares, oldShares *int64) {
-	if newShares == nil || oldShares == nil || *newShares <= 0 || *oldShares <= 0 {
-		// unreachable: the importer refuses such a split (investments.go splitSides) and duckstore/shares.go:223 splitRatio, called from shares.go:123, does too.
-		return
-	}
-	p.shares.Mul(p.shares, big.NewRat(*newShares, *oldShares))
 }
 
 // take removes units (a magnitude) and their share of the ACB, or all of it when they are all the units held
