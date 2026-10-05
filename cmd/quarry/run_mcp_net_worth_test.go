@@ -1,10 +1,15 @@
 package main
 
 import (
+	"context"
 	"testing"
 
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+const netWorthLogPrefix = "quarry: mcp: net_worth: "
 
 // netWorthSeeder is seed as the store hook of a toolDocumentRun; seed sets the HOME both surfaces read.
 func netWorthSeeder(seed func(*testing.T)) func(*testing.T, string) {
@@ -73,6 +78,49 @@ func Test_run_mcp_net_worth_returns_the_networth_json_document(t *testing.T) {
 
 			assert.Equal(t, got.cliBody, got.toolBody)
 			assert.Equal(t, got.cliWarnings, got.toolWarnings)
+		})
+	}
+}
+
+func Test_run_mcp_net_worth_refuses_a_call_it_cannot_value_in_mcp_words(t *testing.T) {
+	cases := []struct {
+		name      string
+		arguments map[string]any
+		want      string
+		wantLog   string
+	}{
+		{
+			name: "as_of after today", arguments: map[string]any{"as_of": "2027-01-01"},
+			want:    "as_of 2027-01-01 is after today; net worth is valued up to today only, so pass an earlier as_of",
+			wantLog: asOfRefusedLog,
+		},
+		{
+			name: "since after today", arguments: map[string]any{"since": "2027-01-01"},
+			want:    "since 2027-01-01 is after today; net worth is valued up to today only, so pass an earlier since",
+			wantLog: windowRefusedLog,
+		},
+		{
+			name: "as_of beside since", arguments: map[string]any{"as_of": "2026-03-12", "since": "2026-01"},
+			want:    "as_of cannot be combined with since or until; pass as_of for one day, or since and until for month ends",
+			wantLog: asOfRefusedLog,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			seedNetWorthStore(t)
+			ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
+			defer cancel()
+			peer := startClockedMCP(ctx, t)
+
+			result, err := peer.session.CallTool(ctx, &sdk.CallToolParams{Name: "net_worth", Arguments: c.arguments})
+			require.NoError(t, err)
+			require.NoError(t, peer.session.Close())
+			peer.waitForExit(ctx, t)
+
+			assert.True(t, result.IsError)
+			assert.Equal(t, c.want, textOf(result))
+			assert.Equal(t, netWorthLogPrefix+c.wantLog+"\n", peer.stderr.String())
 		})
 	}
 }
