@@ -296,3 +296,17 @@ func Test_NewACB_rounds_the_shares_a_consolidation_leaves_to_millionths(t *testi
 	assert.Equal(t, "0.333333", got.Securities[0].Events[0].SharesHeld)
 	assert.Equal(t, new("15.0000"), got.Securities[0].ACBPerShare)
 }
+
+func Test_NewACB_counts_every_unknown_cost_sale_of_a_year(t *testing.T) {
+	a := report.ACB{AsOf: acbAsOf, Years: []report.ACBYear{{Year: 2024, Sales: []report.ACBSale{
+		{Date: acbAsOf, Shares: big.NewRat(1, 1), UnknownCost: true},
+		{Date: acbAsOf, Shares: big.NewRat(1, 1)},
+		{Date: acbAsOf, Shares: big.NewRat(1, 1), UnknownCost: true},
+	}}}}
+	var got document.ACB
+
+	require.NoError(t, json.Unmarshal(acbJSON(t, a, nil), &got))
+
+	require.Len(t, got.Years, 1)
+	assert.Equal(t, 2, got.Years[0].UnknownCostSales)
+}

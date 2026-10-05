@@ -29,6 +29,15 @@ func acbMarkedYear(year, sales, marked int) report.ACBYear {
 	return y
 }
 
+// acbNoCostEvent is an acquisition of action whose shares have no recorded cost.
+func acbNoCostEvent(action string) report.ACBEvent {
+	return report.ACBEvent{Date: acbDay, Action: action, Shares: big.NewRat(5, 1), Held: big.NewRat(5, 1), UnknownCost: true}
+}
+
+func acbNoCostSecurity(id, name string, events ...report.ACBEvent) report.ACBSecurity {
+	return report.ACBSecurity{Security: store.Security{ID: id, Name: name}, Shares: big.NewRat(5, 1), Events: events}
+}
+
 func Test_ACBWarnings_names_one_possible_superficial_loss(t *testing.T) {
 	a := report.ACB{Years: []report.ACBYear{acbMarkedYear(2025, 3, 1)}}
 
@@ -102,7 +111,7 @@ func Test_ACBWarnings_lists_removals_by_security_then_event_order_with_grouped_f
 	assert.Contains(t, warnings[2], `"Beta": 1,000 shares left "Margin" on 2025-03-03 without a sale;`)
 }
 
-func Test_ACBWarnings_is_empty_when_no_shares_were_removed_and_no_loss_is_marked(t *testing.T) {
+func Test_ACBWarnings_is_empty_when_no_shares_were_removed_no_loss_is_marked_and_none_was_added_with_no_cost(t *testing.T) {
 	a := acbDocumentFixture()
 	a.Years[0].Sales[0].PossibleSuperficialLoss = false
 
@@ -188,7 +197,7 @@ func Test_ACBWarnings_stays_silent_for_a_return_of_capital_within_the_acb(t *tes
 	assert.Empty(t, warnings)
 }
 
-func Test_ACBWarnings_lists_adjustment_lines_then_possible_superficial_losses_then_removals_then_returns_of_capital_above_the_acb(t *testing.T) {
+func Test_ACBWarnings_lists_adjustment_lines_then_superficial_losses_then_no_cost_then_removals_then_returns_of_capital(t *testing.T) {
 	a := report.ACB{
 		Years: []report.ACBYear{acbMarkedYear(2025, 1, 1)},
 		AdjustmentIssues: []report.ACBAdjustmentIssue{
@@ -201,6 +210,7 @@ func Test_ACBWarnings_lists_adjustment_lines_then_possible_superficial_losses_th
 				Events: []report.ACBEvent{
 					{Date: acbDay, Action: report.ACBActionReturnOfCapital, Shares: new(big.Rat), Gain: 100, Realized: true},
 					acbRemoval("Margin", acbDay, big.NewRat(2, 1)),
+					acbNoCostEvent(store.ActionAddShares),
 				},
 			},
 			{
@@ -214,11 +224,92 @@ func Test_ACBWarnings_lists_adjustment_lines_then_possible_superficial_losses_th
 
 	warnings := document.ACBWarnings(a, acbConfigShown)
 
-	require.Len(t, warnings, 6)
+	require.Len(t, warnings, 7)
 	assert.Contains(t, warnings[0], "acb.adjustment item 1 names")
 	assert.Contains(t, warnings[1], "acb.adjustment item 2 is for")
 	assert.Contains(t, warnings[2], "1 possible superficial loss in 2025:")
-	assert.Contains(t, warnings[3], `"Alpha": 2 shares left`)
-	assert.Contains(t, warnings[4], `"Alpha": return of capital on`)
-	assert.Contains(t, warnings[5], `"Beta": return of capital on`)
+	assert.Contains(t, warnings[3], `"Alpha" has shares added with no cost,`)
+	assert.Contains(t, warnings[4], `"Alpha": 2 shares left`)
+	assert.Contains(t, warnings[5], `"Alpha": return of capital on`)
+	assert.Contains(t, warnings[6], `"Beta": return of capital on`)
+}
+
+func Test_ACBWarnings_names_a_security_with_only_added_shares_with_no_cost(t *testing.T) {
+	a := report.ACB{Securities: []report.ACBSecurity{acbNoCostSecurity("sec-1", "Acme Corp", acbNoCostEvent(store.ActionAddShares))}}
+
+	warnings := document.ACBWarnings(a, acbConfigShown)
+
+	assert.Equal(t, []string{
+		`"Acme Corp" has shares added with no cost, so its ACB is too low and its gains too high; ` +
+			"quarry findings --type shares-without-cost lists them",
+	}, warnings)
+}
+
+func Test_ACBWarnings_names_a_security_with_only_reinvested_dividends_with_no_cost(t *testing.T) {
+	a := report.ACB{Securities: []report.ACBSecurity{acbNoCostSecurity("sec-1", "Acme Corp", acbNoCostEvent(store.ActionReinvestDividend))}}
+
+	warnings := document.ACBWarnings(a, acbConfigShown)
+
+	assert.Equal(t, []string{
+		`"Acme Corp" has reinvested dividends with no cost, so its ACB is too low and its gains too high; ` +
+			"enter their cost in Quicken; quarry acb --security sec-1 lists them",
+	}, warnings)
+}
+
+func Test_ACBWarnings_names_shares_added_and_dividends_reinvested_with_no_cost_in_one_line(t *testing.T) {
+	a := report.ACB{Securities: []report.ACBSecurity{acbNoCostSecurity(
+		"sec-1", "Acme Corp", acbNoCostEvent(store.ActionReinvestDividend), acbNoCostEvent(store.ActionAddShares),
+	)}}
+
+	warnings := document.ACBWarnings(a, acbConfigShown)
+
+	assert.Equal(t, []string{
+		`"Acme Corp" has shares added and dividends reinvested with no cost, so its ACB is too low and its gains too high; ` +
+			"quarry findings --type shares-without-cost lists the added shares; enter the reinvested dividends' cost in Quicken",
+	}, warnings)
+}
+
+func Test_ACBWarnings_names_two_no_cost_adds_of_one_security_in_one_line(t *testing.T) {
+	a := report.ACB{Securities: []report.ACBSecurity{acbNoCostSecurity(
+		"sec-1", "Acme Corp", acbNoCostEvent(store.ActionAddShares), acbNoCostEvent(store.ActionAddShares),
+	)}}
+
+	warnings := document.ACBWarnings(a, acbConfigShown)
+
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0], `"Acme Corp" has shares added with no cost,`)
+}
+
+func Test_ACBWarnings_gives_each_security_with_a_no_cost_acquisition_its_own_line_in_security_order(t *testing.T) {
+	a := report.ACB{Securities: []report.ACBSecurity{
+		acbNoCostSecurity("sec-2", "Alpha", acbNoCostEvent(store.ActionReinvestDividend)),
+		acbNoCostSecurity("sec-9", "Costed", report.ACBEvent{Date: acbDay, Action: store.ActionAddShares, Shares: big.NewRat(5, 1)}),
+		acbNoCostSecurity("sec-1", "Beta", acbNoCostEvent(store.ActionAddShares)),
+	}}
+
+	warnings := document.ACBWarnings(a, acbConfigShown)
+
+	require.Len(t, warnings, 2)
+	assert.Contains(t, warnings[0], `"Alpha" has reinvested dividends with no cost,`)
+	assert.Contains(t, warnings[1], `"Beta" has shares added with no cost,`)
+}
+
+func Test_ACBWarnings_names_a_sold_out_security_that_took_in_shares_with_no_cost(t *testing.T) {
+	soldOut := acbNoCostSecurity("sec-1", "Acme Corp", acbNoCostEvent(store.ActionAddShares))
+	soldOut.Shares, soldOut.Incomplete = new(big.Rat), false
+
+	warnings := document.ACBWarnings(report.ACB{Securities: []report.ACBSecurity{soldOut}}, acbConfigShown)
+
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0], `"Acme Corp" has shares added with no cost,`)
+}
+
+func Test_ACBWarnings_stays_silent_for_a_security_whose_only_marked_event_is_a_disposition(t *testing.T) {
+	sale := report.ACBEvent{Date: acbDay, Action: store.ActionSell, Shares: big.NewRat(1, 1), UnknownCost: true}
+	security := acbNoCostSecurity("sec-1", "Acme Corp", sale)
+	security.Incomplete = true
+
+	warnings := document.ACBWarnings(report.ACB{Securities: []report.ACBSecurity{security}}, acbConfigShown)
+
+	assert.Empty(t, warnings)
 }

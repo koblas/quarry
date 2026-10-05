@@ -123,7 +123,8 @@ func newACBYear(year report.ACBYear, securities map[string]store.Security) ACBYe
 		Year: year.Year, SaleCount: len(year.Sales),
 		Proceeds: Money(year.Proceeds), Outlays: Money(year.Outlays), ACB: Money(year.ACBRemoved), Gain: Money(year.Gain),
 		ReturnOfCapitalGain: Money(year.ReturnOfCapitalGain), PossibleSuperficialLosses: year.PossibleSuperficialLosses(),
-		Sales: make([]ACBSale, len(year.Sales)),
+		UnknownCostSales: year.UnknownCostSales(),
+		Sales:            make([]ACBSale, len(year.Sales)),
 	}
 	for i, sale := range year.Sales {
 		security := securities[sale.SecurityID]
@@ -134,9 +135,6 @@ func newACBYear(year report.ACBYear, securities map[string]store.Security) ACBYe
 			Shares: Shares(report.Millionths(sale.Shares)), Proceeds: Money(sale.Proceeds), Outlays: Money(sale.Outlays),
 			ACB: Money(sale.ACBRemoved), Gain: Money(sale.Gain),
 			PossibleSuperficialLoss: sale.PossibleSuperficialLoss, UnknownCost: sale.UnknownCost,
-		}
-		if sale.UnknownCost {
-			out.UnknownCostSales++
 		}
 	}
 

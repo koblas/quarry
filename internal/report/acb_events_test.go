@@ -111,7 +111,7 @@ func Test_acb_gives_a_sale_without_a_commission_zero_outlays_not_none(t *testing
 	assert.Zero(t, *got.Securities[0].Events[1].Outlays)
 }
 
-func Test_acb_leaves_the_flags_the_later_rules_set_unset(t *testing.T) {
+func Test_acb_leaves_a_sale_of_costed_shares_unmarked_and_complete(t *testing.T) {
 	got := acbWalkOf(t,
 		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -1_000),
 		acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", -4*acbMillion, 1_600),

@@ -179,6 +179,9 @@ type securityWalk struct {
 	excesses []acbExcess
 	issues   []ACBAdjustmentIssue
 	splitDay time.Time
+	// unknownCost is whether the pool holds shares added with no cost: opened by such an addition, closed
+	// when a disposition empties the pool.
+	unknownCost bool
 }
 
 // walkSecurity applies txs, in date, tier then source id order, to one pool, each of days' adjustments between
@@ -205,7 +208,7 @@ func walkSecurity(security store.Security, txs []store.InvestmentTransaction, da
 	for _, day := range days {
 		w.adjust(day)
 	}
-	w.position.Shares, w.position.ACB = w.pool.shares, w.pool.acb
+	w.position.Shares, w.position.ACB, w.position.Incomplete = w.pool.shares, w.pool.acb, w.unknownCost
 
 	return w
 }
@@ -223,6 +226,9 @@ func (w *securityWalk) apply(tx store.InvestmentTransaction) {
 	if currency, _ := money.ParseCurrency(tx.Currency); currency == money.USD {
 		event.Rate = rate
 	}
+	if noCostAcquisition(tx) {
+		w.unknownCost, event.UnknownCost = true, true
+	}
 	switch tx.Action {
 	case store.ActionBuy:
 		w.pool.add(event.Shares, -toCAD(tx.Amount, tx.Currency, rate))
@@ -238,17 +244,28 @@ func (w *securityWalk) apply(tx store.InvestmentTransaction) {
 	case store.ActionSell:
 		// Quicken stores a sale's shares negative; the units sold are their magnitude.
 		event.Shares.Abs(event.Shares)
+		event.UnknownCost = w.unknownCost
 		sale := w.pool.sell(tx, event.Shares, rate)
-		sale.row.AccountID, sale.row.Account = event.AccountID, event.Account
+		sale.row.AccountID, sale.row.Account, sale.row.UnknownCost = event.AccountID, event.Account, event.UnknownCost
 		outlays := sale.row.Outlays
 		event.Gain, event.Outlays, event.Realized = sale.row.Gain, &outlays, true
 		w.sales = append(w.sales, sale)
+		w.closeSpanWhenSoldOut()
 	case store.ActionRemoveShares:
 		// Stored negative like a sale's; the units leave with their share of the ACB and no gain.
 		event.Shares.Abs(event.Shares)
+		event.UnknownCost = w.unknownCost
 		w.pool.take(event.Shares)
+		w.closeSpanWhenSoldOut()
 	}
 	w.record(event)
+}
+
+// closeSpanWhenSoldOut ends the no-cost span once a disposition has emptied the pool.
+func (w *securityWalk) closeSpanWhenSoldOut() {
+	if w.pool.shares.Sign() == 0 {
+		w.unknownCost = false
+	}
 }
 
 // record keeps event with the pool as it left it.
@@ -321,6 +338,17 @@ func movesNoUnits(tx store.InvestmentTransaction) bool {
 		return units(tx.Shares).Sign() <= 0
 	case store.ActionRemoveShares:
 		return units(tx.Shares).Sign() == 0
+	default:
+		return false
+	}
+}
+
+// noCostAcquisition is whether tx adds shares with no recorded cost: added shares or a reinvested dividend
+// of some units and a missing cost basis.
+func noCostAcquisition(tx store.InvestmentTransaction) bool {
+	switch tx.Action {
+	case store.ActionAddShares, store.ActionReinvestDividend:
+		return tx.CostBasis == nil && units(tx.Shares).Sign() > 0
 	default:
 		return false
 	}

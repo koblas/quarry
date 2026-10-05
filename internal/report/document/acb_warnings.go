@@ -12,11 +12,13 @@ import (
 )
 
 // ACBWarnings is a's warnings in the ruled order: the config's adjustment lines, which name the file as
-// configShown, then one line for the possible superficial losses, then one per removal of shares with no sale,
-// then one per return of capital above the ACB; the last two by security then date.
+// configShown, then one line for the possible superficial losses, then one per security with shares acquired
+// with no cost, then one per removal of shares with no sale, then one per return of capital above the ACB; the
+// last three by security then date.
 func ACBWarnings(a report.ACB, configShown string) []string {
 	warnings := adjustmentWarnings(a, configShown)
 	warnings = append(warnings, superficialLossWarnings(a)...)
+	warnings = append(warnings, noCostWarnings(a)...)
 	warnings = append(warnings, removalWarnings(a)...)
 
 	return append(warnings, returnOfCapitalWarnings(a)...)
@@ -61,6 +63,43 @@ func superficialLossWarnings(a report.ACB) []string {
 	return []string{fmt.Sprintf("%s in %s: the same security was acquired within 30 days before or after the sale, in any account, "+
 		"and still held 30 days after; quarry does not deny or adjust these losses; review them with your accountant",
 		humanize.Count(marked, "possible superficial loss", "possible superficial losses"), strings.Join(years, ", "))}
+}
+
+// noCostWarnings is one line for each security of a that took in shares with no recorded cost, sold out or not.
+// The line's cause is which kinds of acquisition had none: added shares, reinvested dividends, or both.
+func noCostWarnings(a report.ACB) []string {
+	var warnings []string
+	for _, security := range a.Securities {
+		var added, reinvested bool
+		for _, event := range security.Events {
+			if !event.UnknownCost {
+				continue
+			}
+			switch event.Action {
+			case store.ActionAddShares:
+				added = true
+			case store.ActionReinvestDividend:
+				reinvested = true
+			}
+		}
+		name := security.Security.Name
+		switch {
+		case added && reinvested:
+			warnings = append(warnings, fmt.Sprintf(
+				`"%s" has shares added and dividends reinvested with no cost, so its ACB is too low and its gains too high; `+
+					"quarry findings --type shares-without-cost lists the added shares; enter the reinvested dividends' cost in Quicken", name))
+		case reinvested:
+			warnings = append(warnings, fmt.Sprintf(
+				`"%s" has reinvested dividends with no cost, so its ACB is too low and its gains too high; `+
+					"enter their cost in Quicken; quarry acb --security %s lists them", name, security.Security.ID))
+		case added:
+			warnings = append(warnings, fmt.Sprintf(
+				`"%s" has shares added with no cost, so its ACB is too low and its gains too high; `+
+					"quarry findings --type shares-without-cost lists them", name))
+		}
+	}
+
+	return warnings
 }
 
 // removalWarnings is one warning for each remove_shares event of a's securities.

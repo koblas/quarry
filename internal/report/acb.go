@@ -74,14 +74,23 @@ type ACBYear struct {
 
 // PossibleSuperficialLosses is how many of the year's sales are marked as a possible superficial loss.
 func (y ACBYear) PossibleSuperficialLosses() int {
-	marked := 0
+	return y.countSales(func(sale ACBSale) bool { return sale.PossibleSuperficialLoss })
+}
+
+// UnknownCostSales is how many of the year's sales are marked as sales of shares with no recorded cost.
+func (y ACBYear) UnknownCostSales() int {
+	return y.countSales(func(sale ACBSale) bool { return sale.UnknownCost })
+}
+
+func (y ACBYear) countSales(marked func(ACBSale) bool) int {
+	n := 0
 	for _, sale := range y.Sales {
-		if sale.PossibleSuperficialLoss {
-			marked++
+		if marked(sale) {
+			n++
 		}
 	}
 
-	return marked
+	return n
 }
 
 // ACBSale is one disposition: the shares sold, its proceeds and outlays in CAD cents, the ACB it removed, and
@@ -120,7 +129,7 @@ func (s ACBSecurity) PerShare() *big.Rat {
 // ACBEvent is one transaction the walk applied: the units it moved and the pool it left. Amount and Currency
 // are the transaction's own; CAD is Amount at Rate, which is 0 unless the trade was in USD with a rate on file.
 // Outlays (CAD cents) and Gain are meaningful only when Realized, which a sale and a return of capital above the
-// ACB set.
+// ACB set. UnknownCost is set when the shares the event moved have no recorded cost.
 type ACBEvent struct {
 	ID                 string
 	Date               time.Time
@@ -136,6 +145,7 @@ type ACBEvent struct {
 	ACB                int64
 	Gain               int64
 	Realized           bool
+	UnknownCost        bool
 }
 
 // Millionths is a count of shares in millionths, rounded half away from zero.
