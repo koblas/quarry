@@ -77,6 +77,12 @@ Developer runs: 62; weighted per run median 282k, p90 693k, max 3,073k.
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
 | --- | --- | --- | --- |
+| gate R1 | priced CAD/USD holding lacking a rate into its account's currency left out silently | internal/report/document/holdings_left_out.go:30-45 | SCENARIO-14a (false premise that 14b's rate lines covered it) |
+| gate R1 | `Store.Accounts` BIGINT cast overflows past 64 bits of cents | internal/store/duckstore/accounts.go:14-15 | SCENARIO-07 |
+| gate R1 | negative investment cash unpinned | internal/store/duckstore/balances_daily_view_test.go | SCENARIO-06 |
+| gate R1 | anomalies / recurring / spend --by payee readers of investment rows unpinned; N-2 recurring claim false | cmd/quarry | SCENARIO-03 |
+| final pass | MCP rate warning named a CLI flag | internal/report/document/networth_rate_warnings.go:21-29 | SCENARIO-17 |
+| gate R3 | findings.md bullet unpinned | plugin/skills/quarry/references/findings.md:17 | fix pass 2 |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |
