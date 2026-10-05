@@ -2,6 +2,7 @@ package duckstore_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ type readOp struct {
 	call func(context.Context, *duckstore.Store) error
 }
 
-// rowReads are the reads that scan rows: Status, Accounts, Schema, Charges, Holdings, NetWorth, Findings and Search.
+// rowReads are the reads that scan rows: Status, Accounts, Schema, Charges, Holdings, NetWorth, Findings, InvestmentHistory and Search.
 func rowReads() []readOp {
 	return []readOp{
 		{name: "Status", call: func(ctx context.Context, st *duckstore.Store) error {
@@ -47,6 +48,10 @@ func rowReads() []readOp {
 		}},
 		{name: "Findings", call: func(ctx context.Context, st *duckstore.Store) error {
 			_, err := st.Findings(ctx)
+			return err
+		}},
+		{name: "InvestmentHistory", call: func(ctx context.Context, st *duckstore.Store) error {
+			_, err := st.InvestmentHistory(ctx)
 			return err
 		}},
 		{name: "Search", call: func(ctx context.Context, st *duckstore.Store) error {
@@ -135,5 +140,50 @@ func Test_reads_close_the_connection_on_success_and_on_a_query_fault(t *testing.
 				assert.Equal(t, 1, spy.closes)
 			})
 		}
+	}
+}
+
+// investmentHistoryQueries is how many queries InvestmentHistory runs after the open's format checks: accounts,
+// securities, transactions, the fx_rates column probe and the rates.
+const investmentHistoryQueries = 5
+
+func Test_investment_history_returns_each_querys_fault(t *testing.T) {
+	t.Parallel()
+	for passed := range investmentHistoryQueries {
+		t.Run(fmt.Sprintf("after %d queries", passed), func(t *testing.T) {
+			t.Parallel()
+			fault := ioFault(`query rows "SELECT"`)
+			st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault, passQueries: passed}))
+
+			_, err := st.InvestmentHistory(t.Context())
+
+			assertOtherFault(t, err, "disk read failed")
+			assert.ErrorIs(t, err, fault)
+		})
+	}
+}
+
+func Test_investment_history_returns_each_querys_scan_fault(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, prefix string
+		passed       int
+	}{
+		{name: "accounts", passed: 0},
+		{name: "securities", passed: 1},
+		{name: "transactions", passed: 2},
+		{name: "the rates column probe", passed: 3, prefix: "read fx_rates columns: "},
+		{name: "the rates", passed: 4, prefix: "read fx_rates: "},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(&spyReadDB{scanFault: errScanFailed, passQueries: c.passed}))
+
+			_, err := st.InvestmentHistory(t.Context())
+
+			assertOtherFault(t, err, c.prefix+errScanFailed.Error())
+			assert.ErrorIs(t, err, errScanFailed)
+		})
 	}
 }
