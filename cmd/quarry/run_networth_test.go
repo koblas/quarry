@@ -22,10 +22,7 @@ func netWorthNativeLine(typ, currency, balance string) string {
 	return fmt.Sprintf("%-11s  %-8s  %8s\n", typ, currency, balance)
 }
 
-// seedNetWorthStore builds the store under a temp HOME with CAD and USD chequing, a CAD credit card, a USD
-// brokerage with one priced holding, a closed CAD chequing account, a not-in-reports one and a savings account
-// that nets to zero, all dated March 2.
-// The USD rate is 1.36 from March 10.
+// seedNetWorthStore builds the net worth store (CAD and USD accounts, a USD brokerage, a USD rate from March 10) under a temp HOME.
 func seedNetWorthStore(t *testing.T) {
 	t.Helper()
 	home := t.TempDir()

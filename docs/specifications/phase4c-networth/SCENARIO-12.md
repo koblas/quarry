@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-12
-status: open
+status: done
 ---
 
 # SCENARIO-12: Net worth month by month
@@ -32,10 +32,10 @@ Contract: `quarry networth --since <d> [--until <d>]` / `--until <d>` → histor
 - [x] Step 6: `internal/cli/render_networth.go:11-48` history branch: caption `Net worth at each month end <first> to <last>, amounts in <CUR>` (native drops `, amounts in X`; first/last = listed month ends), `Month end` + type columns + `Total` (converted), `Month end  Currency  <types…>  Total` (native); per shape rulings 1-3. Doc comment trimmed to budget (debt `:11`). Tests in `render_networth_internal_test.go`: converted pivot, native pivot, zero-everywhere type has no column, date with no rows still listed, no-rate cell blank and out of Total (interim), empty list caption; rename `:63` test to `..._blank` (debt). Cmd: native history row in `run_networth_history_test.go`
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new/changed exported symbols; trim `seedNetWorthStore` doc (`cmd/quarry/run_networth_test.go:25-28`, debt)
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new/changed exported symbols; trim `seedNetWorthStore` doc (`cmd/quarry/run_networth_test.go:25-28`, debt)
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase4c-networth` → tick SCENARIO-12 with its acceptance test; STATE.md rewrite (clear the four debts closed here)
+- [x] Step 8: full verification + `spec-check.py phase4c-networth` → tick SCENARIO-12 with its acceptance test; STATE.md rewrite (clear the four debts closed here)
 
 ## Handoff
 
@@ -61,19 +61,9 @@ Contract: `quarry networth --since <d> [--until <d>]` / `--until <d>` → histor
 
 ## Phase report
 
-Run B2 done (steps 5-6). Acceptance test green; plan's narrow loop green (`internal/cli`, `internal/report/...`, `cmd/quarry`); lint 0 issues on `internal/cli`, `internal/report`, `cmd`. Not run: full suite, test-stats, spec-check, STATE rewrite, spec tick, `seedNetWorthStore` doc trim (`cmd/quarry/run_networth_test.go:25-28`) — run V (steps 7-8).
+Run V done (steps 7-8). Scenario complete; `status: done`, ticked in `specification.md`, `spec-check.py phase4c-networth` OK.
 
-- `internal/cli/networth.go`: history mode when `--since` or `--until` Changed; `ParseMonthEndWindow` runs before `openReport`, refusal is a `UsageError` (exit 2, before any store read). `changedBounds` (`window.go`) is now the one site turning flags into `*string` pairs; `reportFlags.window` and `searchWindow` use it.
-- `internal/cli/render_networth.go` dispatches to `renderNetWorthHistory` (new file `render_networth_history.go`): converted `Month end | types… | Total`, native `Month end | Currency | types… | Total`; blank = no row, `0.00` = rows summing to zero; native date with no row = date-only line; empty list captions with the resolved since and clamped until. Native line per currency iterates `date.Totals` (CAD first).
-- `internal/report/document/networth.go`: `Window` non-nil -> `as_of` null, `since`/`until` set; snapshot unchanged.
-- Tests: `document/networth_test.go` (+2), `render_networth_internal_test.go` (+7 incl. a converted/native empty table; old `..._and_out_of_the_total` renamed `..._blank`), `run_networth_history_test.go` (+7: refusal table x4, until-alone, since-this-month, native, JSON period, interim empty text and JSON), `run_networth_surfaces_test.go` (since/until help lines, verbatim). All new tests were green on arrival: the production code was written first (code-first) and the acceptance test went green with it.
-- Mutation: until clamp `After(today)` -> `After(today.AddDate(100,0,0))` reddens the acceptance test (caption to 2027-12-31, 24 month ends). Restored.
-
-Run B1 done (steps 3-4). Green on the plan's narrow loop for `internal/report/...`, `internal/cli`, `internal/store/duckstore`; the cmd acceptance test is still red (history not yet wired or rendered) — B2 starts at step 5.
-
-- `internal/report/window.go`: `ParseMonthEndWindow` built; `parseWindow` and it share new `resolveBounds` (parse + defaults), each keeps its own refusal switch. Until clamped to today after the since-after-until check.
-- `internal/report/networth.go`: `Server.NetWorth` takes `req.Window` (nil = snapshot, one date), calls the store once with `monthEnds(window)`, files rows by `Format(time.DateOnly)` key; every day gets an entry; rows whose day is not asked for are dropped (so fixtures must carry `Date`). Added for B2's renderer: `NetWorth.Types()` (non-zero native balance on any date, alphabetical), `NetWorth.TypeConverted(date, type)` (nil = no row or none converts), `NetWorthDate.TypeBalance(type, currency)` (nil = no row). Empty window (since > clamped until) still makes the one store call with no dates and yields `Dates` empty.
-- `internal/store/duckstore/networth.go`: empty-`Dates` guard after `openRead`; const docs trimmed to one line each (debt closed).
-- Tests: `window_test.go` (7 `parse_month_end_window` tests), `networth_internal_test.go` (new, `monthEnds` grid), `networth_test.go` (history x5, pivot helpers x7; fixtures `cadRow` and two inline row lists now carry `Date: netWorthDay`), `net_worth_read_test.go` (`Test_net_worth_reads_no_rows_for_no_dates`, `..._for_no_dates_still_refuses_a_missing_store`).
-- Mutations: duckstore guard `== 0` -> `< 0` reddens `Test_net_worth_reads_no_rows_for_no_dates` (DuckDB `Parser Error ... WHERE date IN ()`); clamp `After(today)` -> `After(today+100y)` reddens `Test_parse_month_end_window_clamps_the_until_to_today` (tomorrow, future year) and `..._accepts_a_since_after_today_..._with_a_later_until`. The acceptance-test arm of the clamp mutation cannot run until B2 wires it; run it then or accept the window tests as the proof.
-- Lint 0 issues on `internal/report/...` and `internal/store/...`; `internal/cli` still has unused `since`/`until` locals until step 5.
+- Sweep: `go build ./...` clean, `golangci-lint run ./...` 0 issues. `seedNetWorthStore` doc trimmed to one line (`cmd/quarry/run_networth_test.go:25`).
+- Verify: covered full suite rc=0; `uncovered-diff.py --profile ... df02ee8` 0 uncovered added lines; `go test -race` on `internal/report/...`, `internal/cli`, `internal/store/duckstore`, `cmd/quarry` ok.
+- `test-stats.py --base df02ee8 --changed`: cmd/quarry 752 (+8), internal/cli 495 (+7), internal/report 418 (+20), internal/report/document 121 (+2), internal/store/duckstore 669 (+2); TOTAL 2455 (+39), tempdir 720 (+3), disk 638 (+2).
+- STATE.md rewritten; debts closed here: empty-`Dates` guard, const docs, render doc, test rename, seed doc, native networth cmd test.

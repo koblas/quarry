@@ -476,7 +476,7 @@ Architect sizing pass, 2026-10-04. The S01 and S14 splits were approved by the u
 - [x] SCENARIO-09: Net-worth view covers reported accounts — `cmd/quarry/run_net_worth_view_test.go` `Test_run_sql_sums_net_worth_by_type_and_currency_over_the_accounts_quickens_reports_count`
 - [x] SCENARIO-18: Docs and pins follow the new surface — delivered by SCENARIO-09, `cmd/quarry/run_skill_schema_reference_test.go` `Test_skill_schema_reference_carries_each_view_comment`
 - [x] SCENARIO-10: Net worth today — `cmd/quarry/run_networth_test.go` `Test_run_networth_prints_todays_balances_by_type_and_currency_with_a_total_in_the_reporting_currency`
-- [ ] SCENARIO-12: Net worth month by month
+- [x] SCENARIO-12: Net worth month by month — `cmd/quarry/run_networth_history_test.go` `Test_run_networth_lists_each_month_end_with_a_column_per_type_ending_with_today`
 - [ ] SCENARIO-15: Net worth refuses impossible dates
 - [ ] SCENARIO-11: Net worth on a past day
 - [x] SCENARIO-13: Net worth in native currencies — delivered by SCENARIO-10, `cmd/quarry/run_networth_test.go` `Test_run_networth_lists_cad_and_usd_separately_with_one_total_each_in_native_mode`
