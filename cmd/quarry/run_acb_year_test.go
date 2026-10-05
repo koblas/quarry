@@ -39,6 +39,33 @@ func Test_run_acb_year_lists_that_years_sales_one_by_one_with_a_total(t *testing
 		stdout.String())
 }
 
+func Test_run_acb_refuses_a_year_it_cannot_use_before_looking_for_a_store(t *testing.T) {
+	tests := []struct {
+		name   string
+		year   string
+		stderr string
+	}{
+		{"not a year", "2024-03", `quarry: --year "2024-03" is not a year; use YYYY, such as 2024` + "\n"},
+		{"empty", "", `quarry: --year "" is not a year; use YYYY, such as 2024` + "\n"},
+		{"year zero", "0000", `quarry: --year "0000" is not a year; use YYYY, such as 2024` + "\n"},
+		{"after this year", "2027", "quarry: --year 2027 is after this year; pass this year or an earlier one\n"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), []string{"acb", "--year", tc.year},
+				spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+			assert.Equal(t, 2, exitCode)
+			assert.Equal(t, tc.stderr, stderr.String())
+			assert.Empty(t, stdout.String())
+		})
+	}
+}
+
 func Test_run_acb_warns_when_no_non_registered_account_has_traded(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

@@ -13,10 +13,14 @@ import (
 // acbCurrencyHelp is --currency's help: the backticked word is the placeholder in usage text.
 const acbCurrencyHelp = "ACB is in CAD only; any other `currency` is refused"
 
+// acbYearHelp is --year's help: the backticked word is the placeholder in usage text.
+const acbYearHelp = "list the sales in tax `year` (YYYY) one by one"
+
 // newAcbCommand builds acb: the adjusted cost base of each security and the capital gains realized each tax year.
 // It always reads the config, for the account classification, even when --currency is given.
 func newAcbCommand(newReport ReportFactory, loadConfig ConfigLoader, now func() time.Time, jsonOut *bool) *cobra.Command {
 	var currency currencyFlag
+	var yearFlag string
 	cmd := &cobra.Command{
 		Use:   "acb",
 		Short: "Show adjusted cost base and realized capital gains per tax year, in CAD",
@@ -46,6 +50,15 @@ accountant, not a tax filing.`,
   quarry acb --security XEQT --json`,
 		Args: currency.args,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			var year int
+			if cmd.Flags().Changed("year") {
+				parsed, err := report.ParseACBYear(yearFlag, now())
+				if err != nil {
+					return UsageError{msg: err.Error()}
+				}
+				year = parsed
+			}
+
 			cfg, err := readConfig(cmd, loadConfig)
 			if err != nil {
 				return err
@@ -57,7 +70,7 @@ accountant, not a tax filing.`,
 			}
 
 			acb, err := srv.ACB(cmd.Context(), report.ACBRequest{
-				Classification: classificationOf(cfg), Today: report.Today(now()), Adjustments: acbAdjustmentsOf(cfg),
+				Classification: classificationOf(cfg), Today: report.Today(now()), Year: year, Adjustments: acbAdjustmentsOf(cfg),
 			})
 			if err != nil {
 				return &runtimeError{err: err}
@@ -71,6 +84,7 @@ accountant, not a tax filing.`,
 		},
 	}
 	currency.bind(cmd, acbCurrencyHelp)
+	cmd.Flags().StringVar(&yearFlag, "year", "", acbYearHelp)
 	return cmd
 }
 

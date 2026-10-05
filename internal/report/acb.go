@@ -12,9 +12,11 @@ import (
 
 // ACBRequest is what ACB walks: the accounts Classification names non-registered, through Today, and the
 // Adjustments (T3 slip amounts) applied to the pools; an item's 1-based place in Adjustments is its number.
+// Year is the tax year asked about, 0 for none; the walk keeps every year, ACB.InYear cuts to it.
 type ACBRequest struct {
 	Classification Classification
 	Today          time.Time
+	Year           int
 	Adjustments    []ACBAdjustment
 }
 
@@ -37,6 +39,8 @@ const (
 // gains realized each tax year, in CAD cents.
 type ACB struct {
 	AsOf time.Time
+	// Year is the tax year asked about, 0 for none.
+	Year int
 	// FirstRate is the date of the first exchange rate in the store; zero when the store has none.
 	FirstRate  time.Time
 	Years      []ACBYear
@@ -206,5 +210,8 @@ func (s *Server) ACB(ctx context.Context, req ACBRequest) (ACB, error) {
 		return ACB{}, s.readRefusal(ctx, acbCommand, err)
 	}
 
-	return walkACB(history, req), nil
+	result := walkACB(history, req)
+	result.Year = req.Year
+
+	return result, nil
 }
