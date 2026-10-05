@@ -206,9 +206,12 @@ Month end    brokerage   chequing  credit_card       Total
 **Warnings** (stderr, prefix `quarry: warning: `, exit 0, also in `warnings[]`), in this order:
 1. Config warnings.
 2. Empty result:
-   - `no account has a balance on 2012-01-01; the store's transactions start 2013-02-07`
-   - history: `no account has a balance at any month end from <s> to <u>; the store's transactions start <d>`
-   - no data: `no account has a balance on <d>; the store has no transactions`
+   - Copy ruling (product-vision 2026-10-04, SCENARIO-16) replaces the earlier "transactions start" lines:
+   - snapshot: `no account has a balance on <d>; the first balance is on <f>`
+   - history: `no account has a balance at any month end from <s> to <u>; the first balance is on <f>`
+   - no data, snapshot: `no account has a balance on <d>; no account in Quicken's reports has transactions or holdings`
+   - no data, history: `no account has a balance at any month end from <s> to <u>; no account in Quicken's reports has transactions or holdings`
+   - `<s>`/`<u>` are the first and last listed month ends (as the caption); `<f>` (`FirstBalance`) is the earliest of `transactions.date` and `holding_shares.from_date` over counted accounts (`reportedAccount`); zero → the no-data form. The `<f>` form prints only when `<f>` is after `<u>` (snapshot: after `<d>`); otherwise no empty-result line. Empty = at least one listed date and no row on any listed date; zero-balance rows are rows. Same line in native, CAD and USD.
 3. Unpriced holding:
    - snapshot: `"Brokerage" holds 1 security with no price on or before 2026-10-04, so its balance leaves it out; enter a price in Quicken, then run quarry sync`
    - plural: `"Brokerage" holds N securities with no price on or before <d>, so its balance leaves them out; enter prices in Quicken, then run quarry sync`
@@ -413,9 +416,9 @@ Feature: Net worth
     Then it prints the ruled refusal and exits 2
 
   Scenario: SCENARIO-16 Net worth before any data
-    Given a store whose transactions start after the as-of date
+    Given a store whose first balance is after the as-of date
     When quarry networth runs
-    Then it prints the caption, no total, and the "transactions start" warning, and exits 0
+    Then it prints the caption, no total, and the "first balance" warning, and exits 0
 
   Scenario: SCENARIO-17 MCP net_worth
     Given the MCP server over a synced store
