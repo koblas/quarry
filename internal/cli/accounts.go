@@ -1,6 +1,9 @@
 package cli
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/koblas/quarry/internal/report/document"
+	"github.com/spf13/cobra"
+)
 
 // newAccountsCommand builds accounts: balances per account, closed ones only
 // with --all, as JSON when *jsonOut is set.
@@ -43,6 +46,7 @@ out. quarry does not add balances together here; quarry networth does.`,
 			if listing.AllHidden() {
 				warnings = append(warnings, allClosedNote(listing.Hidden))
 			}
+			warnings = append(warnings, document.AccountsWarnings(listing)...)
 			warnings = append(warnings, accountsFXWarnings(listing)...)
 
 			out, err := renderResult(*jsonOut,

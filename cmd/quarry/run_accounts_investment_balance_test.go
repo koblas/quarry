@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -128,4 +130,59 @@ func Test_run_accounts_converts_an_investment_balance_as_cash_plus_holdings_valu
 			}, doc.Accounts)
 		})
 	}
+}
+
+// unpricedHoldingRows is rows of accounts in which held has 2 shares of a security in currency that never had a price.
+func unpricedHoldingRows(accounts []store.Account, held store.Account, currency string) store.Rows {
+	rows := spendRows(accounts)
+	rows.Securities = []store.Security{{ID: "sec-acme", SourceID: 1, Name: "Acme Corp", Ticker: new("ACME"), Currency: &currency}}
+	rows.InvestmentTransactions = []store.InvestmentTransaction{{
+		ID: "inv-acme", SourceID: 1, AccountID: held.ID, SecurityID: new("sec-acme"), Date: day(2026, time.March, 2),
+		Action: store.ActionBuy, Shares: new(int64(2_000_000)), Amount: -10_000, Currency: currency,
+	}}
+	return rows
+}
+
+// accounts reads today from the store's own clock, so the as-of date is matched, not pinned.
+const unpricedHoldingPattern = `"%s" holds 1 security with no price on or before \d{4}-\d{2}-\d{2}, ` +
+	`so its balance leaves it out; enter a price in Quicken, then run quarry sync`
+
+func Test_run_accounts_lists_the_unpriced_holding_warning_after_the_config_warning_and_before_the_no_rates_warning(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	brokerage := store.Account{ID: "acct-brokerage", SourceID: 1, Name: "Brokerage", Type: store.AccountTypeBrokerage, Currency: "USD", Active: true}
+	replaceStore(t, home, unpricedHoldingRows([]store.Account{brokerage}, brokerage, "USD"))
+	writeConfig(t, home, "snapshot.keep = 3\n")
+	configWarning := configShown + ": unknown key snapshot.keep; quarry ignores it"
+	holdingPattern := fmt.Sprintf(unpricedHoldingPattern, "Brokerage")
+
+	got := runAccountsBothForms(t)
+
+	lines := strings.Split(strings.TrimSuffix(got.textErr, "\n"), "\n")
+	require.Len(t, lines, 3)
+	assert.Equal(t, "quarry: warning: "+configWarning, lines[0])
+	assert.Regexp(t, "^quarry: warning: "+holdingPattern+"$", lines[1])
+	assert.Equal(t, "quarry: warning: "+noRatesCADWarning, lines[2])
+	assert.Equal(t, got.textErr, got.jsonErr)
+	warnings := warningsOf(t, got.json)
+	require.Len(t, warnings, 3)
+	assert.Equal(t, configPath(home)+": unknown key snapshot.keep; quarry ignores it", warnings[0])
+	assert.Regexp(t, "^"+holdingPattern+"$", warnings[1])
+	assert.Equal(t, noRatesCADWarning, warnings[2])
+}
+
+func Test_run_accounts_warns_about_a_closed_accounts_unpriced_holding_only_with_all(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	oldRRSP := closedAccount(store.Account{ID: "acct-old", SourceID: 2, Name: "Old RRSP", Type: store.AccountTypeBrokerage, Currency: "CAD"})
+	replaceStore(t, home, unpricedHoldingRows([]store.Account{chequingAccount("acct-chequing", 1), oldRRSP}, oldRRSP, "CAD"))
+
+	listed := runAccountsBothForms(t)
+	withAll := runAccountsBothForms(t, "--all")
+
+	assert.Empty(t, listed.textErr)
+	assert.Equal(t, []string{}, warningsOf(t, listed.json))
+	assert.Regexp(t, "^quarry: warning: "+fmt.Sprintf(unpricedHoldingPattern, "Old RRSP")+"\n$", withAll.textErr)
+	require.Len(t, warningsOf(t, withAll.json), 1)
+	assert.Regexp(t, "^"+fmt.Sprintf(unpricedHoldingPattern, "Old RRSP")+"$", warningsOf(t, withAll.json)[0])
 }

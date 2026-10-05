@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/spf13/cobra"
 )
 
@@ -80,8 +81,11 @@ ends with today.`,
 				return &runtimeError{err: err}
 			}
 
-			return emitReport(cmd, *jsonOut, nil,
-				func() ([]byte, error) { return renderNetWorthJSON(netWorth, withConfigWarnings(configWarnings, nil)) },
+			warnings := document.NetWorthWarnings(netWorth)
+			return emitReport(cmd, *jsonOut, warnings,
+				func() ([]byte, error) {
+					return renderNetWorthJSON(netWorth, withConfigWarnings(configWarnings, warnings))
+				},
 				func() string { return renderNetWorth(netWorth) })
 		},
 	}

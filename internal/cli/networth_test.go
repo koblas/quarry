@@ -2,9 +2,14 @@ package cli_test
 
 import (
 	"bytes"
+	"context"
+	"io"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/cli"
+	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -48,4 +53,46 @@ func Test_networth_refuses_an_as_of_it_cannot_use_before_opening_the_store(t *te
 			assert.Empty(t, stdout.String())
 		})
 	}
+}
+
+func executeNetWorth(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
+	t.Helper()
+	env := cli.Env{
+		LoadConfig: cadConfig,
+		Stdout:     stdout, Stderr: stderr,
+		Now: func() time.Time { return spendNow },
+		NewReport: func(context.Context, string) (*report.Server, error) {
+			return report.NewServer(report.WithStore(fake)), nil
+		},
+	}
+	return cli.Execute(t.Context(), append([]string{"networth", "--as-of", "2026-03-12"}, args...), env)
+}
+
+// leftOutNetWorth is a net worth read whose brokerage holds one unpriced security on 2026-03-12.
+func leftOutNetWorth() fakeReportStore {
+	day := time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC)
+	return fakeReportStore{netWorth: store.NetWorth{Unvalued: []store.UnvaluedHolding{{
+		Date: day, AccountID: "acct-1", Account: "Brokerage", SecurityID: "sec-1", Security: "Acme", Currency: new("CAD"),
+	}}}}
+}
+
+const leftOutNetWorthWarning = `"Brokerage" holds 1 security with no price on or before 2026-03-12, ` +
+	`so its balance leaves it out; enter a price in Quicken, then run quarry sync`
+
+func Test_networth_writes_the_holdings_warnings_to_stderr_after_the_result(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeNetWorth(t, leftOutNetWorth(), &stdout, &stderr)
+
+	require.NoError(t, err)
+	assert.Equal(t, stderrOf([]string{leftOutNetWorthWarning}), stderr.String())
+}
+
+func Test_networth_writes_no_holdings_warning_when_stdout_fails(t *testing.T) {
+	var stderr bytes.Buffer
+
+	err := executeNetWorth(t, leftOutNetWorth(), failingWriter{err: errNoSpace}, &stderr)
+
+	require.ErrorIs(t, err, errNoSpace)
+	assert.Empty(t, stderr.String())
 }

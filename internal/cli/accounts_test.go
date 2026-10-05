@@ -174,3 +174,37 @@ func Test_status_and_accounts_take_no_arguments(t *testing.T) {
 		})
 	}
 }
+
+// leftOutAccounts is a listing whose brokerage holds one unpriced security.
+func leftOutAccounts() fakeReportStore {
+	return fakeReportStore{accounts: store.AccountList{
+		AsOf: asOf,
+		Accounts: []store.AccountBalance{
+			{ID: "acct-1", Name: "Brokerage", Type: store.AccountTypeBrokerage, Currency: "CAD", Active: true, HoldingsValue: new(int64(0)), BalanceCAD: new(int64(0))},
+		},
+		Unvalued: []store.UnvaluedHolding{
+			{Date: asOf, AccountID: "acct-1", Account: "Brokerage", SecurityID: "sec-1", Security: "Acme", Currency: new("CAD")},
+		},
+	}}
+}
+
+const leftOutAccountsWarning = `"Brokerage" holds 1 security with no price on or before 2026-09-29, ` +
+	`so its balance leaves it out; enter a price in Quicken, then run quarry sync`
+
+func Test_accounts_writes_the_holdings_warnings_to_stderr_after_the_listing(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeAccounts(t, leftOutAccounts(), &stdout, &stderr)
+
+	require.NoError(t, err)
+	assert.Equal(t, stderrOf([]string{leftOutAccountsWarning}), stderr.String())
+}
+
+func Test_accounts_writes_no_holdings_warning_when_stdout_fails(t *testing.T) {
+	var stderr bytes.Buffer
+
+	err := executeAccounts(t, leftOutAccounts(), failingWriter{err: errNoSpace}, &stderr)
+
+	require.ErrorIs(t, err, errNoSpace)
+	assert.Empty(t, stderr.String())
+}

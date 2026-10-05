@@ -24,6 +24,7 @@ type fakeReportStore struct {
 	charges      store.Charges
 	findings     store.FindingList
 	holdings     store.Holdings
+	netWorth     store.NetWorth
 	result       store.QueryResult
 	gotQuery     *string
 	gotMaxRows   *int
@@ -100,5 +101,5 @@ func span(t *testing.T, first, last string) store.TransactionRange {
 }
 
 func (f fakeReportStore) NetWorth(context.Context, store.NetWorthParams) (store.NetWorth, error) {
-	return store.NetWorth{}, f.err
+	return f.netWorth, f.err
 }
