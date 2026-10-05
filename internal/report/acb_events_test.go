@@ -90,6 +90,17 @@ func Test_acb_marks_only_a_sale_realized_and_gives_it_outlays_in_cad(t *testing.
 	assert.Equal(t, int64(16_200), sellEvent.CAD)
 }
 
+func Test_acb_marks_a_break_even_sale_realized_with_a_zero_gain(t *testing.T) {
+	got := acbWalkOf(t,
+		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -1_000),
+		acbTx(t, 2, "acct-1", "sec-1", "2024-02-02", store.ActionSell, "CAD", -10*acbMillion, 1_000),
+	)
+
+	sell := got.Securities[0].Events[1]
+	assert.True(t, sell.Realized)
+	assert.Zero(t, sell.Gain)
+}
+
 func Test_acb_gives_a_sale_without_a_commission_zero_outlays_not_none(t *testing.T) {
 	got := acbWalkOf(t,
 		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -1_000),

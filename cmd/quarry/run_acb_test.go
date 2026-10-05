@@ -31,13 +31,8 @@ func acbTrade(id string, sourceID int64, account, security, action, currency str
 	}
 }
 
-// acbRows is a CAD and a USD non-registered brokerage and a registered one:
-//
-//	Acme (CAD): 100 shares for 1,000.00 in the CAD account and 50 for 600.00 in the USD account in 2024,
-//	  then 60 sold in 2025 for 900.00 net of a 10.00 commission
-//	Vanguard (USD): 10 shares for 1,000.00 USD in 2024 at 1.25, 4 sold in 2026 for 500.00 USD net of a
-//	  5.00 USD commission at 1.40
-//	Maple (CAD), registered only: 20 bought in 2024, 10 sold in 2025
+// acbRows is a CAD and a USD non-registered brokerage and a registered one, trading Acme (CAD), Vanguard (USD)
+// and Maple (CAD, registered only) across 2024 to 2026.
 func acbRows() store.Rows {
 	rows := spendRows([]store.Account{
 		{ID: "acct-cad", SourceID: 1, Name: "CAD Brokerage", Type: store.AccountTypeBrokerage, Currency: "CAD", Active: true},

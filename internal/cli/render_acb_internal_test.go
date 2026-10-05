@@ -62,6 +62,23 @@ func Test_renderACB_leaves_a_sold_out_security_out_of_the_positions(t *testing.T
 		"Held Fund  HLD          3  6.00         2.0000\n", got)
 }
 
+func Test_renderACB_prints_a_fractional_share_count_to_six_decimals_and_a_whole_one_bare(t *testing.T) {
+	fractional := func(name string, shares *big.Rat) report.ACBSecurity {
+		return report.ACBSecurity{Security: store.Security{ID: "sec-" + name, Name: name}, Shares: shares, ACB: 600}
+	}
+	a := report.ACB{AsOf: acbDay, Securities: []report.ACBSecurity{
+		fractional("Third", big.NewRat(2, 3)), fractional("Half", big.NewRat(5, 2)), fractional("Whole", big.NewRat(4, 1)),
+	}}
+
+	got := renderACBPositions(a)
+
+	assert.Equal(t, "ACB on 2026-10-05, in CAD\n\n"+
+		"Security  Ticker    Shares   ACB  ACB per share\n"+ //nolint:dupword // the ACB column sits beside the ACB per share column
+		"Third             0.666667  6.00         9.0000\n"+
+		"Half                   2.5  6.00         2.4000\n"+
+		"Whole                    4  6.00         1.5000\n", got)
+}
+
 func Test_renderACB_leaves_the_ticker_cell_blank_for_a_security_without_one(t *testing.T) {
 	a := report.ACB{AsOf: acbDay, Securities: []report.ACBSecurity{acbHeld("Plain Fund", nil, 2, 1_000)}}
 

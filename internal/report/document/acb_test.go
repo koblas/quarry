@@ -159,6 +159,29 @@ func Test_NewACB_reads_back_a_usd_buy_with_its_rate_and_a_sale_with_its_outlays_
 	}, got.Securities[0].Events)
 }
 
+func Test_NewACB_writes_a_break_even_sale_gain_and_outlays_as_zero_and_a_buy_gain_as_null(t *testing.T) {
+	a := report.ACB{AsOf: acbAsOf, Securities: []report.ACBSecurity{{
+		Security: store.Security{ID: "sec-41", Name: "XEQT"}, Shares: new(big.Rat),
+		Events: []report.ACBEvent{
+			{Date: acbAsOf, Action: "buy", Shares: big.NewRat(1, 1), Amount: new(int64(-500)), Currency: "CAD", CAD: -500, Held: big.NewRat(1, 1), ACB: 500},
+			{
+				Date: acbAsOf, Action: "sell", Shares: big.NewRat(1, 1), Amount: new(int64(500)), Currency: "CAD", CAD: 500,
+				Outlays: new(int64(0)), Held: new(big.Rat), Realized: true,
+			},
+		},
+	}}}
+
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(firstOf(t, acbJSON(t, a, nil), "securities"), &raw))
+	var events []map[string]any
+	require.NoError(t, json.Unmarshal(raw["events"], &events))
+
+	assert.Nil(t, events[0]["gain"])
+	assert.Nil(t, events[0]["outlays"])
+	assert.Equal(t, "0.00", events[1]["gain"])
+	assert.Equal(t, "0.00", events[1]["outlays"])
+}
+
 func Test_NewACB_writes_an_adjustment_event_with_no_transaction_account_or_amount(t *testing.T) {
 	a := report.ACB{AsOf: acbAsOf, Securities: []report.ACBSecurity{{
 		Security: store.Security{ID: "sec-41", Name: "XEQT"}, Shares: big.NewRat(10, 1), ACB: 500,
