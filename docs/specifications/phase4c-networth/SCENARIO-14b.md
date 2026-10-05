@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-14b
-status: open
+status: done
 ---
 
 # SCENARIO-14b: Net worth warns about USD balances it cannot convert
@@ -27,10 +27,10 @@ Surface already surveyed (no new port): `Store.NetWorth` is the one read; implem
 - [x] Step 6 (B3): `cli/render_networth_history.go:34-60` `convertedHistoryRow` — cell `no rate` when `n.TypeConverted==nil && n.TypeNeedsRate`, blank when the type has no row; a type with a converting row and a no-rate row shows the converting sum; total cell is `Totals[0]` only when it is the reporting currency's (history Totals hold no other). Rewrite `render_networth_internal_test.go:171-181`; add mixed-cell case. cmd tests in the acceptance file, each its own cell: history before first rate (`--since 2026-01 --until 2026-03` on the history fixture with first rate moved after Jan 31: `no rate` cells, N month ends in stderr), no-rates store, `--currency USD` (CAD balances, symmetric line), `--currency native` (no warning, no `no rate`, unchanged), `--json` (`converted_balance` null, `totals` order, `warnings[]` holds the line), exit 0 each. `--account` n/a: networth has no such flag.
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `NeedsRate`, `TypeNeedsRate`, `rateWarnings`, `FirstRate` (budgets per `clean-architecture`); update `NetWorth` doc comments that say rows with no rate "left out" without the new rows.
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `NeedsRate`, `TypeNeedsRate`, `rateWarnings`, `FirstRate` (budgets per `clean-architecture`); update `NetWorth` doc comments that say rows with no rate "left out" without the new rows.
 
 ### Verify
-- [ ] Step 8: full verification block + `.claude/scripts/spec-check.py phase4c-networth` → tick SCENARIO-14b with its acceptance test, rewrite STATE.md (drop the "interim" lines for no-rate cell and rate warning; the history `no rate` open debt closes)
+- [x] Step 8: full verification block + `.claude/scripts/spec-check.py phase4c-networth` → tick SCENARIO-14b with its acceptance test, rewrite STATE.md (drop the "interim" lines for no-rate cell and rate warning; the history `no rate` open debt closes)
 
 ## Handoff
 
@@ -56,23 +56,7 @@ Surface already surveyed (no new port): `Store.NetWorth` is the one read; implem
 
 ## Phase report
 
-Run A (done). `cmd/quarry/run_networth_rates_test.go`: const `netWorthBeforeFirstRateLine`, helper `netWorthNoRateLine` (netWorthLine with trailing spaces trimmed, for a blank In cell), the acceptance test. Red at stderr (no warning line) and stdout (blank In cells, no `Total USD  1,720.00`).
-
-Run B1 (done, steps 2-3, tick them). Reuse `netWorthBeforeFirstRateLine` / `netWorthNoRateLine` in step-6 cmd tests; seed `seedNetWorthStore` (first rate Mar 10, USD 920.00 brokerage + 800.00 chequing on Mar 5).
-- `store.NetWorth.FirstRate` (`store/store.go`), read last in `duckstore/networth.go` `NetWorth` via `firstRate` (third query; `Test_net_worth_for_no_dates_runs_no_query` now counts 3). Tests `net_worth_read_test.go`: first rate / none / query fault / scan fault (`passQueries: 2`).
-- `report.NetWorth.FirstRate`, `NeedsRate(row)`, `TypeNeedsRate(date, type)` (`report/networth.go`). `total` now, per the orchestrator's ruling, in snapshot AND history: reporting-currency total of converting rows (absent when none), then `nativeNetWorthTotals` of the rows needing a rate (their own `row.Currency`, not `NativeOf(reporting)`). History `Totals` are no longer reporting-only, so the replaced mutation check `Test_networth_history_totals_leave_out_a_row_no_rate_converts` is `Test_networth_history_totals_carry_a_total_for_the_rows_no_rate_converts`.
-- `report/networth_test.go`: `typedRow` now carries `Date: netWorthDay`; old no-total test rewritten (`..._has_no_reporting_currency_total_when_no_row_converts`); new NeedsRate / TypeNeedsRate / FirstRate-copy tests. Did not extend the reads-once test: it pins params, the copy is its own test.
-- Mutations (restored, diff clean): drop `&& row.Balance.Sign() != 0` -> reds `..._warns_only_for_a_row_with_a_balance_no_rate_converts/a_row_with_a_zero_balance`, `_type_needs_a_rate.../its_only_row_has_a_zero_balance`, `..._sum_of_the_converted_balances.../a_row_with_no_conversion_and_a_zero_balance_adds_no_total`; drop the no-rate append in `total` -> reds the total, no-reporting-total and history-totals tests.
-- Green now: report, document, cli, duckstore narrow loop. Red: only the acceptance test (needs B2 warning, B3 cell/Total row).
-- B3 MUST: `convertedHistoryRow` reads `Totals[0]`; history `Totals` can now start with a non-reporting currency (all-no-rate date), so select by currency == reporting currency and print `no rate` when absent (step 6). No cmd test pins that today, so it is unguarded until B3.
-
-Run B2 (done, step 4, ticked). `document/networth_rate_warnings.go`: `rateWarnings(n)` (none when `datesNeedingRate` is 0; no-rates line when `FirstRate` zero; else snapshot `on <as-of>, before …` / history `on N month ends before …` via `humanize.Count`; `<OTHER>` = `money.NativeOf(n.Currency)`), appended last in `NetWorthWarnings` (`holdings_left_out.go:15-18`, doc updated). Tests `networth_rate_warnings_test.go`: CAD snapshot / USD symmetric / no-rates (3 variants) / history N=1 and N>1 / month end counted once for several types / all-convert month end uncounted / nothing-needs-a-rate (`[]` not nil, zero-balance row) / native / order after no-price line / `NewNetWorth` JSON null converted balance + `totals` order.
-- Plan said "native-mode skip in `rateWarnings`": there is no explicit skip there; native is already excluded by `NetWorth.NeedsRate` (`report/networth.go`, `n.Currency != money.Native`). Mutation (drop that clause, restored, diff clean) reds `Test_net_worth_native_listing_has_no_rate_warning` (both subtests).
-- Green: report, document, cli, duckstore narrow loop, lint 0 issues on `./internal/report/...`. Red: only the acceptance test, now stdout only (blank In cells, `Total` row without `USD` currency cell); stderr line already matches. B3 owns `no rate` cell, `Total USD` row, history cell and the `Totals[0]` fix.
-- B3 still MUST: `convertedHistoryRow` select the total whose currency is the reporting currency, `no rate` when absent. Reuse `rateDay`/`usdRow`-style helpers only within `document_test`; cmd tests reuse `netWorthBeforeFirstRateLine` / `netWorthNoRateLine`.
-
-Run B3 (done, steps 5-6, ticked). Acceptance `Test_run_networth_warns_when_a_usd_balance_has_no_exchange_rate_and_totals_it_apart` green. `cli/render_networth.go`: `netWorthInCell` says `no rate` when `n.NeedsRate(row)`; `netWorthTotalRow(width, n, total)` picks the last column by `total.Currency == n.Currency.String()` (converted only), else Currency/Balance. `cli/render_networth_history.go`: `convertedHistoryCell` (`no rate` iff sum nil and `TypeNeedsRate`), `convertedHistoryTotal` (reporting-currency total by currency, never `Totals[0]`; `no rate` when the date has totals but none in the reporting currency; blank when none). Reused the existing `noRateCell` (`render_accounts.go`), no rename.
-- Tests: `render_networth_internal_test.go` (no-rate cell + `Total CAD`, only-no-rate rows, zero row stays blank, history all-no-rate, total picked by currency with CAD first, mixed cell shows converting sum); `run_networth_rates_test.go` cmd cells: history before first rate (N=1, mixed cell), no-rates store history all-`no rate`, no-rates snapshot, `--currency USD` symmetric, native (no warning, no `no rate`), `--json` (null converted balance, totals order, `warnings[]`). `seedNetWorthHistoryStoreWithRates(t, rates...)` added in `run_networth_history_test.go`; `seedNetWorthHistoryStore` calls it with the Jan 2 rate.
-- Mutations (restored, diff clean): history total back to `Totals[0]` reds the unit all-no-rate test and the cmd all-no-rate history test; drop the history `no rate` cell reds those plus the by-currency test; drop the currency test in `netWorthTotalRow` reds 5 snapshot tests incl. acceptance.
-- Narrow loop green (report, document, cli, duckstore, cmd/quarry full), `golangci-lint run ./...` 0 issues. Still V: full covered suite + `uncovered-diff`, doc-comment sweep (`NetWorth` comments saying "left out"), spec tick, STATE.md.
-
+Run V (done, steps 7-8 ticked, `status: done`). Sweep: `NetWorth` doc comments already state the no-rate rows (`report/networth.go` `NeedsRate`, `total`, `store.NetWorth`); only edit was wrapping the `duckstore/networth.go` `NetWorth` doc line. The `networth` command Long (`cli/networth.go`) is spec copy and untouched.
+- `go build ./...` ok; `golangci-lint run ./...` 0 issues, rc 0; full covered suite rc 0; `uncovered-diff.py --profile ... 7487ab1`: 0 uncovered added lines; `go test -race` on report, document, cli, duckstore ok; `spec-check.py phase4c-networth` OK.
+- `test-stats.py --base 7487ab1 --changed`: cmd/quarry 770 (+7), internal/cli 504 (+4), internal/report 430 (+4), internal/report/document 145 (+10), internal/store/duckstore 684 (+4); TOTAL 2533 (+29), tempdir 727 (+1), disk 641 (+0).
+- Ticked SCENARIO-14b in `specification.md`; STATE.md rewritten (FirstRate third query, NeedsRate/TypeNeedsRate, Totals rule snapshot = history, `rateWarnings` last, history no-rate debt and `Totals[0]` trap closed).
