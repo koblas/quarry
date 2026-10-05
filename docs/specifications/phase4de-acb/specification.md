@@ -196,8 +196,8 @@ User decisions (2026-10-05): F1 superficial loss = mark + warning in `acb`, NOT 
 - Buy adds full cash cost (−amount, commission included). Sale removes ACB × sold ÷ held, rounded to the cent; selling the last unit removes the exact remainder. Gain = proceeds − outlays − ACB removed (Schedule 3 columns).
 - Commission (sells, per P1): net (expected) → proceeds = amount + commission, outlays = commission; gross → proceeds = amount, outlays = commission. Commission DECIMAL(18,4) → outlays rounded to the cent half away from zero.
 - Split/consolidation changes units once per security per date (even if several accounts record it); ACB unchanged. Reinvested dividend adds its `cost_basis`; NULL cost_basis → units at 0 cost, security `incomplete`, warning 4 (no finding).
-- add_shares shares > 0 not a pool-internal move: adds units + cost_basis when non-NULL; NULL → units at 0.00, security `incomplete` from that date, finding `shares-without-cost`. Pool-internal move (same security and date, equal and opposite shares, both accounts non-registered) changes nothing (`moved` row). Unpaired remove_shares: removes pro-rata ACB, no gain, warning 5. Pairing ships only if P2 finds ≥1 pair; else every add/remove is unpaired (same copy).
-- Ordering within a day: Quicken order (source_id) unless P2 shows a same-day buy and sell that order would invert → then "acquisitions before dispositions on the same day" (and say so).
+- add_shares shares > 0: adds units + cost_basis when non-NULL; NULL → units at 0.00, security `incomplete` from that date, finding `shares-without-cost`. Every remove_shares: removes pro-rata ACB, no gain, warning 5. (P2a found 0 pool-internal move pairs, so pairing does not ship — product-vision ruling 2026-10-05.)
+- Ordering within a day: acquisitions (buy, reinvest, add_shares), then splits and adjustments (split, return of capital, reinvested distribution), then dispositions (sell, remove_shares); ties in Quicken order (source_id). P2 found Quicken's order puts a same-day sale first (3 of 4 pairs), so this is the rule; the Long says so (product-vision ruling 2026-10-05). P1: sell amounts are net of commission (proceeds = amount + commission).
 - USD: each amount at the BoC rate for its date or latest earlier, rounded to the cent per event. Trade before first stored rate → security incomplete, left out of year totals (never valued at zero), warning 6.
 - Tax year = calendar year of the date Quicken records; Dec 24–31 sales warned (warning 9). Not computed: settlement dates, holidays.
 - Superficial loss (ITA s.54, CRA position incl. own RRSP/TFSA): flag a sale at a loss when, in ANY account in the file (registered included), the same security or one with the same ticker was acquired (buy, reinvested dividend, added shares; other than the shares sold) within 30 days before or after, and the file still holds some at end of day +30. Not claimed: spouse/affiliated outside the file, denied amount, ACB bump, permanent denial via registered. Gain stays as computed, marked.
@@ -215,8 +215,8 @@ cost per security, pooled across every account listed in
 accounts.non-registered in ~/Library/Application Support/quarry/config.toml.
 Registered accounts are left out. A buy adds what it cost, commission
 included; a sale removes its share of the ACB, and its gain is the
-proceeds less commission less that ACB. Reinvested dividends add their
-cost; splits change shares, not ACB. USD trades convert to CAD at the Bank
+proceeds less commission less that ACB. On a day with both, purchases
+count before sales. Reinvested dividends add their cost; splits change shares, not ACB. USD trades convert to CAD at the Bank
 of Canada rate for their date. Return of capital and reinvested
 distributions from T3 slips come from acb.adjustment in the config file.
 
@@ -252,7 +252,7 @@ Vanguard Total Stock Market    VTI      62.000    9,880.01       159.3550  incom
 
 Text `--year 2024`: caption `Sales in 2024, in CAD`; columns `Date  Security  Shares  Proceeds  Outlays  ACB  Gain or loss` (security = ticker else name, escapeCell); `Total` row; per-row suffixes `possible superficial loss` / `unknown cost`.
 
-Text `--security`: caption `ACB history of "<name>" (<ticker>), in CAD`; columns `Date  Account  Action  Shares  Amount  Rate  CAD  Shares held  ACB  Gain or loss`; Amount = native with code (`-1,234.56 USD`); Rate blank for CAD; actions = stored names + `return of capital`, `reinvested distribution`, `moved` (pool-internal pair, one row); one block per security, blank line between.
+Text `--security`: caption `ACB history of "<name>" (<ticker>), in CAD`; columns `Date  Account  Action  Shares  Amount  Rate  CAD  Shares held  ACB  Gain or loss`; Amount = native with code (`-1,234.56 USD`); Rate blank for CAD; actions = stored names + `return of capital`, `reinvested distribution`; one block per security, blank line between.
 
 `--json` (one shape):
 ```json
@@ -326,7 +326,7 @@ reinvested-distribution = 56.78  # T3 box 21 not paid in cash
 - No masking needed. Security ids appear in `acb --json` and `securities.id`.
 
 #### Finding `shares-without-cost`
-- After `unclassified-account` in Types(). Entity itxn id; id `shares-without-cost:itxn-123`. Read-time; non-registered accounts only; add_shares shares > 0, NULL cost_basis, not a pool-internal move. Order date then id.
+- After `unclassified-account` in Types(). Entity itxn id; id `shares-without-cost:itxn-123`. Read-time; non-registered accounts only; add_shares shares > 0, NULL cost_basis. Order date then id.
 - Heading `Shares added with no cost`. GroupClause `enter what each one cost on its Add Shares transaction in Quicken, then run quarry sync; until then quarry acb counts those shares at no cost`.
 - Fix/JSON `fix`: `Open this Add Shares transaction in Quicken and enter the shares' cost basis, then run quarry sync; until then quarry acb counts them at no cost, so its gains on this security are too high`
 - Row: `  shares-without-cost:itxn-123  2016-03-01  Questrade Margin  XEQT  100 shares`
@@ -335,6 +335,7 @@ reinvested-distribution = 56.78  # T3 box 21 not paid in cash
 - findings.md bullet: `` `shares-without-cost`: shares moved or added into a non-registered account with no cost basis in Quicken. Open the Add Shares transaction and enter the cost (from the old broker's statement); quarry acb counts them at no cost until then. ``
 
 #### Store
+- Sync refusal when ZCOSTBASIS can't be read (product-vision ruling 2026-10-05; existing reasonInvestment* templates, what = `a cost basis`, exit 1, store untouched): `an investment transaction on <date> in "<account>" has a cost basis of 1.234, which has more than 2 decimal places` / `… has a cost basis that is not a number` / `… has a cost basis of 10000000000000000, which is too large for quarry's amounts`. A value of 0 is stored NULL, not refused.
 - `investment_transactions.cost_basis DECIMAL(18,2)` NULL (ZCOSTBASIS, NULL when 0). FormatVersion 9.
 - Conventions sentence: `cost_basis is the cost Quicken records for a buy, reinvested dividend or added shares (NULL when none). ACB and capital gains are in no table or view: quarry acb (MCP acb) computes them; never derive them in SQL.` → sql_conventions.go, hand copies, schema.md.
 
@@ -362,8 +363,7 @@ What dies: SKILL §7 ACB "not yet" line; description exclusion. FindingItem/CSV 
 | Split recorded in 2 accounts | applied once |
 | Reinvest NULL cost_basis | units at 0 cost, incomplete, warning 4 (no finding) |
 | add_shares no cost | finding + incomplete + `unknown cost` on later sales |
-| Pool-internal move | `moved` row, ACB unchanged |
-| Remove to registered / unpaired | warning 5, pro-rata ACB out, no gain |
+| remove_shares (any) | warning 5, pro-rata ACB out, no gain |
 | Loss sale, re-buy in RRSP within 30 days, held | marked, warning 3 |
 | Loss sale, all sold, none held at +30 | not marked |
 | Gain sale with re-buy | not marked |
@@ -439,10 +439,10 @@ Feature: Registered-account classification and ACB
     When quarry acb runs
     Then the reinvest adds its cost and the split changes shares once, not ACB
 
-  Scenario: SCENARIO-10 Shares moved between accounts
-    Given shares moved between two non-registered accounts and shares removed with no matching add
+  Scenario: SCENARIO-10 Shares added or removed without a trade
+    Given shares removed with no sale and shares added with and without a cost basis
     When quarry acb runs
-    Then the move changes nothing and the unpaired removal takes out its share of ACB with the ruled warning
+    Then each removal takes out its share of ACB with the ruled warning and each addition adds its Quicken cost or counts at no cost
 
   Scenario: SCENARIO-11 Return of capital and reinvested distributions
     Given acb.adjustment items for return of capital and a reinvested distribution, one return of capital above the ACB
@@ -523,7 +523,7 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 | SCENARIO-08a | OWNS A RUN (opus), 4 batches, report + duckstore; absorbs 09. Port read in an embedded interface (report.Store at its 10-method cap); walk (buy = −amount, pro-rata to the cent, exact remainder, commission arm per P1, tax year, same-day order per P2); BoC rate per event; reinvest/split arms; sold-out-and-rebought, closed account, fractional shares. Read covers every investment account incl. registered and file-wide holdings (12 needs them). Acceptance at `Server.ACB`. |
 | SCENARIO-08b | OWNS A RUN (opus), 4 batches, document + cli: full `--json`; text default; Short/Long/Example/all flags (`--currency` defined, refused in 17); root registration + all-commands tables; config warnings (warning 1). Docs: whole SKILL description line (4d fragment + 4e edits), SKILL §7 delete + Tax line, PRD CLI row + ACB bullet. Fixtures classify every investment account from here on. |
 | SCENARIO-09 | FOLD into 08a (acceptance at `Server.ACB`; Then unchanged). |
-| SCENARIO-10 | OWNS A RUN (sonnet), 3 batches, report: pool-internal pairing + `moved` row; unpaired remove + warning 5; add_shares with cost. If P2 finds 0 pairs → move arm dropped, Given unsatisfiable → back to the user; then LIGHT. |
+| SCENARIO-10 | LIGHT (P2a = 0 pairs; Gherkin rewritten, user-approved 2026-10-05): remove_shares → pro-rata ACB out + warning 5; add_shares with cost adds it, without cost counts at 0.00 (incomplete/finding arms are 13a/13b). |
 | SCENARIO-11 | OWNS A RUN (sonnet), 3 batches, report + cli wiring of cfg adjustments: ROC/RD events; ROC above ACB + warning 8; the 3 adjustment warnings. |
 | SCENARIO-12 | OWNS A RUN (opus), 3 batches, report: ±30-day bounds both sides; held at day +30; same ticker; "other than the shares sold"; registered accounts included; year suffix; warning 3. |
 | SCENARIO-13a | LIGHT, report: warning 4, `N sale(s) of shares with unknown cost` year suffix, `incomplete` suffix (3 ruled lines); NULL-cost reinvest arm. Becomes OWNS A RUN if warning 4's copy ruling adds a variant. |
@@ -555,7 +555,7 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 - [ ] SCENARIO-08a: ACB is pooled per security across non-registered accounts
 - [ ] SCENARIO-09: Reinvested dividends and splits
 - [ ] SCENARIO-08b: ACB and gains per tax year
-- [ ] SCENARIO-10: Shares moved between accounts
+- [ ] SCENARIO-10: Shares added or removed without a trade
 - [ ] SCENARIO-11: Return of capital and reinvested distributions
 - [ ] SCENARIO-12: Possible superficial losses are marked
 - [ ] SCENARIO-13a: Shares added with no cost leave ACB incomplete
