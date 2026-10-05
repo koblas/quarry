@@ -63,6 +63,15 @@ type fakeStore struct {
 	netWorthAsked []store.NetWorthParams
 
 	accounts store.AccountList
+
+	history      store.InvestmentHistory
+	historyReads int
+}
+
+// InvestmentHistory answers with history, or err when set, counting the reads.
+func (f *fakeStore) InvestmentHistory(context.Context) (store.InvestmentHistory, error) {
+	f.historyReads++
+	return f.history, f.err
 }
 
 // Accounts answers with accounts, or err when set.
@@ -237,6 +246,14 @@ func (h *harness) searchTransactions(t *testing.T, arguments any) *sdk.CallToolR
 func (h *harness) holdings(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
 	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "holdings", Arguments: arguments})
+	require.NoError(t, err)
+	return result
+}
+
+// acb calls the acb tool with arguments.
+func (h *harness) acb(t *testing.T, arguments any) *sdk.CallToolResult {
+	t.Helper()
+	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "acb", Arguments: arguments})
 	require.NoError(t, err)
 	return result
 }

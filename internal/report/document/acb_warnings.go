@@ -30,12 +30,12 @@ var (
 // ACBWarnings is a's warnings in the ruled order: the config's adjustment lines, which name the file as
 // configShown, then the report's data-quality lines, one function per kind, appended below in that order.
 // The no-cost lines send the caller to the listings advice names.
-func ACBWarnings(a report.ACB, configShown string, _ ACBAdvice) []string {
+func ACBWarnings(a report.ACB, configShown string, advice ACBAdvice) []string {
 	warnings := adjustmentWarnings(a, configShown)
 	warnings = append(warnings, nothingToShowWarnings(a)...)
 	warnings = append(warnings, registeredOnlyWarnings(a)...)
 	warnings = append(warnings, superficialLossWarnings(a)...)
-	warnings = append(warnings, noCostWarnings(a)...)
+	warnings = append(warnings, noCostWarnings(a, advice)...)
 	warnings = append(warnings, removalWarnings(a)...)
 	warnings = append(warnings, unconvertedTradeWarnings(a)...)
 	warnings = append(warnings, sameTickerWarnings(a)...)
@@ -122,8 +122,9 @@ func superficialLossWarnings(a report.ACB) []string {
 }
 
 // noCostWarnings is one line for each security of a that took in shares with no recorded cost, sold out or not.
-// The line's cause is which kinds of acquisition had none: added shares, reinvested dividends, or both.
-func noCostWarnings(a report.ACB) []string {
+// The line's cause is which kinds of acquisition had none: added shares, reinvested dividends, or both. Its
+// last clause names the listing advice gives.
+func noCostWarnings(a report.ACB, advice ACBAdvice) []string {
 	var warnings []string
 	for _, security := range a.Securities {
 		var added, reinvested bool
@@ -143,15 +144,15 @@ func noCostWarnings(a report.ACB) []string {
 		case added && reinvested:
 			warnings = append(warnings, fmt.Sprintf(
 				`"%s" has shares added and dividends reinvested with no cost, so its ACB is too low and its gains too high; `+
-					"quarry findings --type shares-without-cost lists the added shares; enter the reinvested dividends' cost in Quicken", name))
+					"%s lists the added shares; enter the reinvested dividends' cost in Quicken", name, advice.SharesWithoutCost))
 		case reinvested:
 			warnings = append(warnings, fmt.Sprintf(
 				`"%s" has reinvested dividends with no cost, so its ACB is too low and its gains too high; `+
-					"enter their cost in Quicken; quarry acb --security %s lists them", name, security.Security.ID))
+					"enter their cost in Quicken; %s %s lists them", name, advice.Security, security.Security.ID))
 		case added:
 			warnings = append(warnings, fmt.Sprintf(
 				`"%s" has shares added with no cost, so its ACB is too low and its gains too high; `+
-					"quarry findings --type shares-without-cost lists them", name))
+					"%s lists them", name, advice.SharesWithoutCost))
 		}
 	}
 

@@ -1,14 +1,56 @@
 package mcp
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"slices"
 
-// acbStub is the acb tool's document until its handler reads the store.
-type acbStub struct {
-	AsOf     string   `json:"as_of"`
-	Warnings []string `json:"warnings"`
+	"github.com/koblas/quarry/internal/config"
+	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
+)
+
+// acbTwin is the quarry command whose output the acb tool matches.
+const acbTwin = "acb"
+
+// acb is the acb tool: acb --json's document for the call's year and securities. Its warnings read the whole
+// report, so a cut that leaves a security out does not drop what is said about it.
+func (s *Server) acb(ctx context.Context, in acbInput) (any, error) {
+	now := s.now()
+	var year int
+	if in.Year != nil {
+		parsed, err := report.ParseACBYear(fmt.Sprintf("%04d", *in.Year), now)
+		if err != nil {
+			return nil, err //nolint:wrapcheck // the year's refusal is the tool's answer
+		}
+		year = parsed
+	}
+	cfg, err := s.newConfig(commandName)
+	if err != nil {
+		return nil, withLog(err, configRefusalLog(acbTwin))
+	}
+	srv, err := s.newReport(ctx, commandName)
+	if err != nil {
+		return nil, err
+	}
+	acb, err := srv.ACB(ctx, report.ACBRequest{
+		Classification: classificationOf(cfg), Today: report.Today(now), Year: year, Securities: in.Security, Adjustments: acbAdjustmentsOf(cfg),
+	})
+	if err != nil {
+		return nil, err //nolint:wrapcheck // a RefusalError is the tool's answer, sent verbatim
+	}
+
+	return document.NewACB(acb.Cut(), slices.Concat(cfg.WarningsAbsolute, document.ACBWarnings(acb, cfg.Path, document.ACBAdviceTool))), nil
 }
 
-// acb is the acb tool.
-func (s *Server) acb(_ context.Context, _ acbInput) (any, error) {
-	return acbStub{Warnings: []string{}}, nil
+// acbAdjustmentsOf is the adjustments cfg lists, in file order.
+func acbAdjustmentsOf(cfg config.Config) []report.ACBAdjustment {
+	adjustments := make([]report.ACBAdjustment, 0, len(cfg.Adjustments))
+	for _, a := range cfg.Adjustments {
+		adjustments = append(adjustments, report.ACBAdjustment{
+			SecurityID: a.Security, Date: a.Date, ReturnOfCapital: a.ReturnOfCapital, ReinvestedDistribution: a.ReinvestedDistribution,
+		})
+	}
+
+	return adjustments
 }
