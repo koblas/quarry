@@ -21,9 +21,10 @@ const FindingsAll finding.Status = "all"
 // ignores, which status to list (open when empty; finding.StatusOpen, StatusIgnored, StatusFixed or
 // FindingsAll) and which type (every type when empty).
 type FindingsRequest struct {
-	Ignore []string
-	Status finding.Status
-	Type   finding.Type
+	Ignore         []string
+	Classification Classification
+	Status         finding.Status
+	Type           finding.Type
 }
 
 // ListedFinding is a finding with its status; FixedAt is non-nil exactly when Status is fixed.

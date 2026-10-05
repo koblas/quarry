@@ -15,8 +15,8 @@ Size: OWNS A RUN — 5 batches, 1 feature package (`report`; `finding`, duckstor
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_findings_unclassified_test.go` (new) `Test_run_findings_lists_an_unclassified_account_until_the_config_classifies_it` — v9fixture with one BROKERAGENORMAL account (plus a chequing control), `syncBundle`; `quarry findings` stdout holds the ruled heading + group clause line and the text row; then `writeConfig` lists the id in `accounts.registered`, run again WITHOUT sync → row and group gone. One unclassified account only (see Traps: example order)
-- [ ] Step 2: `internal/finding/finding.go:15-33` `UnclassifiedAccount` const appended last in `Types()` + empty `fixes` entry; `internal/report/findings.go:20-27` `FindingsRequest.Classification` field — stubs so it compiles; must fail at the stdout assertion
+- [x] Step 1: `cmd/quarry/run_findings_unclassified_test.go` (new) `Test_run_findings_lists_an_unclassified_account_until_the_config_classifies_it` — v9fixture with one BROKERAGENORMAL account (plus a chequing control), `syncBundle`; `quarry findings` stdout holds the ruled heading + group clause line and the text row; then `writeConfig` lists the id in `accounts.registered`, run again WITHOUT sync → row and group gone. One unclassified account only (see Traps: example order)
+- [x] Step 2: `internal/finding/finding.go:15-33` `UnclassifiedAccount` const appended last in `Types()` + empty `fixes` entry; `internal/report/findings.go:20-27` `FindingsRequest.Classification` field — stubs so it compiles; must fail at the stdout assertion
 
 ### Build
 - [ ] Step 3: `internal/store/store.go:603-607` `FindingList.Accounts []Account`; `store.go:625-642` `FindingItem.AccountType` (unclassified-account item only); `internal/store/duckstore/findings_read.go:37-91` `(*Store).Findings` reads accounts (id, name, type, currency, closed, active) in the SAME open as the findings query — tests in `findings_read_test.go`: accounts read with closed/active; fault test: second query fails (drop a column only it reads, e.g. `accounts.type`) → `*store.OpenError`; update `internal/report/store.go:35` doc
@@ -52,3 +52,20 @@ Size: OWNS A RUN — 5 batches, 1 feature package (`report`; `finding`, duckstor
 - Until S05, `quarry findings` counts include these findings while `status`/`sync` do not — expected, owned by S05
 - `NewFindingItem` returns early with no transaction/split (`document/findings.go:101`); the type arm must live in `NewFindingEntry`
 - duckstore sync-time detectors must never emit `unclassified-account`; add no detector-table entry there
+
+## Phase report
+
+Run A (steps 1-2) done. Commit follows this file.
+
+Changed:
+- `cmd/quarry/run_findings_unclassified_test.go` (new): `Test_run_findings_lists_an_unclassified_account_until_the_config_classifies_it` — brokerage "Questrade TFSA" + chequing control; run 1 asserts the full ruled stdout (heading, group clause, row, footer, hint); `writeConfig` lists the id; run 2 (no sync) asserts no `unclassified-account` and `No open findings`.
+- `internal/finding/finding.go:25-27` const `UnclassifiedAccount` — NOT yet in `Types()`, no `fixes` entry (step 4 does both; keeps every existing pin green meanwhile).
+- `internal/report/findings.go:20-26` `FindingsRequest.Classification` field (unused until step 4).
+
+Red (now): acceptance fails at its stdout assertion — expected the "Unclassified investment accounts (1): …" block, actual `"No open findings\n"`.
+
+Next run must know:
+- `golangci-lint` reports 1 `exhaustive` issue: `internal/report/findings.go:142` `findingOrder` switch lacks `UnclassifiedAccount` — closed by step 4's `findingOrder` arm.
+- Existing tests all green (`internal/finding`, `internal/report` pass).
+- Fixture account id for the brokerage is `acct-2` (chequing created first).
+- Second-run output is only `No open findings` (footer exact text not pinned: Contains).

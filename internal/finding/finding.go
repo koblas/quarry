@@ -22,6 +22,8 @@ const (
 	PayeeVariants     Type = "payee-variants"
 	SimilarCategories Type = "similar-categories"
 	UnusedCategory    Type = "unused-category"
+
+	UnclassifiedAccount Type = "unclassified-account"
 )
 
 // Types returns every finding type in display order, as a fresh slice.
