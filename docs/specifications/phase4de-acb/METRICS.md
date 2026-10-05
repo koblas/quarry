@@ -21,6 +21,7 @@
 | SCENARIO-16 | code-first | A, B1, B2, V (+ product-vision ruling: --security P1-P7/D1-D6, JSON unknown_cost, refusal line rewritten) | 0/5/2/0 | yes (nil-ticker guard, sort tiers, Today bound, false unreachable claim, registered-only x --year cell — all unpinned; folds: 2 doc trims) |
 | SCENARIO-17 (+20) | code-first | A, B1, B2 (docs), V (+ product-vision ruling RULING-S17.md: R-6 wording, CAD-only --currency line, classify-first + ACB adjustments docs) | 0/2/3/0 | yes (currency/year-before-config precedence unpinned; ruled findings.md bodies + TOML examples unpinned; folds: R-6 flag/no-config rows, countUnclassified unexported, surface fixture classified) |
 | SCENARIO-19 | code-first | A, B1, B2, B3, V (+ product-vision ruling RULING-S19.md: tool-worded refusals/warnings, integer year, finding Sentence, dataQualityDescription; plan re-scoped by same architect) | 0/3/1/0 | yes (adjustment-warning absolute path, ROC-only x security cell, ReinvestedDistribution mapping — all unpinned; fold: doc trim) |
+| SCENARIO-22 | code-first (appended from SCENARIO-21 reference check) | A, B1, B2, V (+ product-vision ruling RULING-S22.md: short pool, units-only cover, warning 10; orchestrator: <x> = short after, cover-only no-cost keeps UnknownCost) | 0/1/2/1 | yes (covering-buy row pinned only in --json; folds: slot-10 uncut pins, 3 doc trims, phase-report NIT) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
