@@ -480,7 +480,7 @@ Architect sizing pass, 2026-10-04. The S01 and S14 splits were approved by the u
 - [x] SCENARIO-15: Net worth refuses impossible dates — `cmd/quarry/run_networth_as_of_test.go` `Test_run_networth_refuses_a_future_as_of_a_future_since_and_as_of_with_since`
 - [x] SCENARIO-11: Net worth on a past day — delivered by SCENARIO-15, `cmd/quarry/run_networth_as_of_test.go` `Test_run_networth_values_every_counted_account_on_the_as_of_day`
 - [x] SCENARIO-13: Net worth in native currencies — delivered by SCENARIO-10, `cmd/quarry/run_networth_test.go` `Test_run_networth_lists_cad_and_usd_separately_with_one_total_each_in_native_mode`
-- [ ] SCENARIO-14a: Net worth warns about unpriced and unconvertible holdings
+- [x] SCENARIO-14a: Net worth warns about unpriced and unconvertible holdings — `cmd/quarry/run_networth_holdings_warnings_test.go` `Test_run_networth_warns_about_each_holding_it_leaves_out_and_accounts_gives_the_same_lines`
 - [ ] SCENARIO-14b: Net worth warns about USD balances it cannot convert
 - [ ] SCENARIO-16: Net worth before any data
 - [ ] SCENARIO-17: MCP net_worth

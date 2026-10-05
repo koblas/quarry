@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-14a
-status: open
+status: done
 ---
 
 # SCENARIO-14a: Net worth warns about unpriced and unconvertible holdings
@@ -35,10 +35,10 @@ Inputs read: STATE.md only (no SCENARIO-NN.md opened). Existence found by `go do
 - [x] Step 6 (batch 4, wiring): `cli/networth.go:262-269` `warnings := document.NetWorthWarnings(netWorth)` into `emitReport` and `withConfigWarnings(configWarnings, warnings)`; `cli/accounts.go:319-323` insert `document.AccountsWarnings(listing)` between `allClosedNote` and `accountsFXWarnings`. Tests, one pin per site and format: `cmd/quarry/run_networth_holdings_warnings_test.go` snapshot text, `--json` `warnings[]` (config warning first, holdings after), history text with the "N of the month ends" line, `--currency native` (EUR still warns), `--as-of` before the price (unpriced), counted-only `Test_run_networth_leaves_a_not_in_reports_accounts_unpriced_holding_out_of_its_warnings`; `cmd/quarry/run_accounts_investment_balance_test.go` pin for `accounts` text and `--json` `warnings[]` order beside an FX warning, `accounts --all` vs default for a closed account's holding; `internal/cli/networth_test.go`/`accounts_test.go` fake-store row proving the lines reach stderr only after a successful stdout write (`emit` order)
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments (budget: exported ~4 lines) on `UnvaluedHolding`, both composers; fix cmd goldens that now carry a warning (an existing fixture with an unpriced or NULL-currency holding was silent until now); update `store.go`/`json_accounts.go` docs that still say holdings left out silently, if any
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments (budget: exported ~4 lines) on `UnvaluedHolding`, both composers; fix cmd goldens that now carry a warning (an existing fixture with an unpriced or NULL-currency holding was silent until now); update `store.go`/`json_accounts.go` docs that still say holdings left out silently, if any
 
 ### Verify
-- [ ] Step 8: full verification per `.claude/rules/agent-briefs.md` + `spec-check.py phase4c-networth`; tick SCENARIO-14a with its acceptance test; time `quarry accounts` and `networth` on the synthetic store (Accounts now also scans v_holdings at today, and every `--account` resolve pays it; report ms next to S07's 70 ms); rewrite STATE.md (drop the three "Left unbuilt" 14a bullets)
+- [x] Step 8: full verification per `.claude/rules/agent-briefs.md` + `spec-check.py phase4c-networth`; tick SCENARIO-14a with its acceptance test; time `quarry accounts` and `networth` on the synthetic store (Accounts now also scans v_holdings at today, and every `--account` resolve pays it; report ms next to S07's 70 ms); rewrite STATE.md (drop the three "Left unbuilt" 14a bullets)
 
 ## Handoff
 
@@ -58,13 +58,6 @@ Inputs read: STATE.md only (no SCENARIO-NN.md opened). Existence found by `go do
 
 ## Phase report
 
-Run B2 (steps 5-6) done; acceptance green. `go build ./...` and `golangci-lint run ./...` report `0 issues`; `go test` green on `internal/report/...`, `internal/cli`, `cmd/quarry -run 'networth|accounts'`. Step 7 sweep needs only doc-budget/golden check (no existing cmd fixture warned: full `./cmd/quarry/ ./internal/...` run green after wiring). Full covered suite, `uncovered-diff.py`, `test-stats.py`, spec tick, `spec-check.py`, timing and STATE.md are V.
+Run V done. Sweep: `go build ./...` ok, `golangci-lint run ./...` `0 issues`; no stale "left out silently" docs, no cmd golden changed (nothing to fix). Verify: covered full suite rc=0, `uncovered-diff.py` vs b3cc603 0 uncovered lines, race green on duckstore/report/cli, `test-stats.py --base b3cc603 --changed` TOTAL 2501 (+39): cmd/quarry 762 (+8), internal/cli 500 (+4), internal/report 426 (+4), report/document 135 (+14), duckstore 678 (+9). SCENARIO-14a ticked in specification.md; `spec-check.py phase4c-networth` OK; STATE.md rewritten.
 
-Files:
-- `internal/report/document/holdings_left_out.go` — `NetWorthWarnings` (history iff `n.Window != nil`, as-of `n.AsOf`) and `AccountsWarnings` (as-of `l.AsOf`) over `unvaluedWarnings(rows, asOf, history)`: sorted copy (`compareLeftOut`), `noPriceLines` per account (`byAccount`, `distinct`), then `perAccountSecurity` for no-currency (`Currency == nil`) and other-currency (`Priced`, currency not CAD/USD via `report.Convertible`). 14b adds its rate lines after, 16 its empty line before, inside `NetWorthWarnings`.
-- `internal/cli/networth.go:~82` `warnings := document.NetWorthWarnings(netWorth)` into `emitReport` and `withConfigWarnings`; `internal/cli/accounts.go:~46` `document.AccountsWarnings(listing)` between the all-closed note and `accountsFXWarnings`.
-- Tests: `document/holdings_left_out_test.go` (13 top-level), `cli/networth_test.go` (+2, `executeNetWorth`, `leftOutNetWorth`), `cli/accounts_test.go` (+2), `cli/fakes_test.go` (`fakeReportStore.netWorth`), `cmd/quarry/run_networth_holdings_warnings_test.go` (+5; `leftOutHoldingsRows`, `seedLeftOutHoldingsRows`), `cmd/quarry/run_accounts_investment_balance_test.go` (+2).
-
-Mutation (counted filter, `duckstore/networth.go:58` `reportedAccount+" AND h.date IN (` -> `"a.id IS NOT NULL AND h.date IN (`): `Test_run_networth_leaves_a_not_in_reports_accounts_unpriced_holding_out_of_its_warnings` red (extra `"Hidden Brokerage" holds 1 security ...` line); restored byte-identical.
-
-Findings for V / orchestrator: history N=1 wording ("on 1 of the month ends listed") is as decision 5 flagged, pinned by `Test_net_worth_history_warnings_count_the_month_ends_an_account_held_an_unpriced_security`. The `accounts` `AllHidden` note and holdings lines never co-occur (a hidden account's rows are filtered), so their order is not pinnable; FX-after-holdings is pinned in cmd.
+Timing (throwaway test, deleted; 1x-shape synthetic, best of 5 warm): `Store.Accounts` 82 ms (view alone 55 ms; S07 read 70 ms on its fixture); unvalued query alone 36 ms. Same fixture shows an existing plan cliff in `v_net_worth` / `v_holdings` (45 s one date at 1x, 221 ms at 3x); recorded in STATE Traps for SCENARIO-19.
