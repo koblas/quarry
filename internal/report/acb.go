@@ -57,7 +57,16 @@ type ACBEvent struct {
 	Gain   int64
 }
 
-// ACB walks the investment history of the accounts req.Classification names non-registered.
+// acbCommand names the command in the interrupt and store refusals.
+const acbCommand = "acb"
+
+// ACB walks the investment history of the accounts req.Classification names non-registered, through req.Today.
+// It reads the store once, and refuses like Status.
 func (s *Server) ACB(ctx context.Context, req ACBRequest) (ACB, error) {
-	return ACB{}, nil
+	history, err := s.store.InvestmentHistory(ctx)
+	if err != nil {
+		return ACB{}, s.readRefusal(ctx, acbCommand, err)
+	}
+
+	return walkACB(history, req), nil
 }
