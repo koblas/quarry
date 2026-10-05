@@ -201,7 +201,7 @@ Month end    brokerage   chequing  credit_card       Total
 - `as_of` null in history mode; `since`/`until` null in snapshot mode.
 - `dates`, `balances`, `totals` are `[]`, never null. `balances` keeps zero rows (only text omits them).
 - `converted_balance` null in native mode and when there is no rate.
-- `totals` follows the text Total-row order.
+- `totals`: the reporting-currency total of rows that convert (absent if none), then one total per currency of rows with no rate; native: one per currency, CAD first. Snapshot text prints each as a Total row; history text prints only the reporting-currency one, in the Total column (copy ruling 2026-10-04, SCENARIO-14b).
 
 **Warnings** (stderr, prefix `quarry: warning: `, exit 0, also in `warnings[]`), in this order:
 1. Config warnings.
@@ -219,6 +219,13 @@ Month end    brokerage   chequing  credit_card       Total
    - before the first rate: `USD balances on 2012-12-31, before 2013-01-02, the first exchange rate in the store, are not converted to CAD and are left out of the CAD total; pass --currency native to list them`
    - history: `USD balances on 12 month ends before 2013-01-02, the first exchange rate in the store, are not converted to CAD and are left out of the CAD total; pass --currency native to list them`
    - no rates: `the store has no exchange rates, so USD balances are not converted to CAD and are left out of the CAD total; pass --currency native to list them, or run quarry sync to fetch rates`
+
+   - Copy ruling (product-vision 2026-10-04, SCENARIO-14b): reporting in USD uses the symmetric form through `money.NativeOf`:
+     - snapshot: `CAD balances on <d>, before <first>, the first exchange rate in the store, are not converted to USD and are left out of the USD total; pass --currency native to list them`
+     - history: `CAD balances on <N> month ends before <first>, the first exchange rate in the store, are not converted to USD and are left out of the USD total; pass --currency native to list them`
+     - no rates: `the store has no exchange rates, so CAD balances are not converted to USD and are left out of the USD total; pass --currency native to list them, or run quarry sync to fetch rates`
+   - The history count uses `humanize.Count(n, "month end", "month ends")` ("on 1 month end before …" accepted). A history run on a store with no rates uses the no-rates variant.
+   - History cells: `no rate` only when the type has a row needing a rate and none of its rows convert; a mixed type shows the sum of rows that convert (no marker). A date whose rows all need a rate shows Total `no rate`; blank still means no rows.
 
 Within one kind, warnings follow account name ignoring case. Lines 3–5 are also emitted by `quarry accounts`, from the same composer, with as-of = today.
 
