@@ -200,53 +200,72 @@ func Test_read_commands_read_the_config_once_and_only_without_the_currency_flag(
 	}
 }
 
-func Test_accounts_reads_the_config_once_even_with_the_currency_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	var asked []string
-	env := loaderEnv(&stdout, &stderr, func(name string) (config.Config, error) {
-		asked = append(asked, name)
+// configAlwaysReadCommands are the currencyCommands that read the config even when --currency is given.
+var configAlwaysReadCommands = []string{"accounts", "acb"}
 
-		return cadConfig(name)
-	})
+func Test_config_always_read_commands_read_the_config_once_even_with_the_currency_flag(t *testing.T) {
+	for _, command := range configAlwaysReadCommands {
+		t.Run(command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			var asked []string
+			env := loaderEnv(&stdout, &stderr, func(name string) (config.Config, error) {
+				asked = append(asked, name)
 
-	err := cli.Execute(t.Context(), []string{"accounts", "--currency", "native"}, env)
+				return cadConfig(name)
+			})
 
-	require.NoError(t, err)
-	assert.Equal(t, []string{"accounts"}, asked)
-}
+			err := cli.Execute(t.Context(), []string{command, "--currency", "native"}, env)
 
-func Test_accounts_refuses_an_unreadable_config_as_a_runtime_error_even_with_the_currency_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	env := loaderEnv(&stdout, &stderr, func(string) (config.Config, error) { return config.Config{}, errConfigRead })
-
-	err := cli.Execute(t.Context(), []string{"accounts", "--currency", "native"}, env)
-
-	require.ErrorIs(t, err, errConfigRead)
-	assert.NotErrorAs(t, err, new(cli.UsageError))
-	assert.Empty(t, stdout.String())
-}
-
-func Test_accounts_prints_the_configs_warnings_once_even_with_the_currency_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := cli.Execute(t.Context(), []string{"accounts", "--currency", "native"}, loaderEnv(&stdout, &stderr, warningConfig))
-
-	require.NoError(t, err)
-	assert.Equal(t, "quarry: warning: "+unknownKeyShown+"\n", stderr.String())
-}
-
-func Test_accounts_names_the_configs_warnings_absolutely_in_json_even_with_the_currency_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := cli.Execute(t.Context(), []string{"accounts", "--currency", "native", "--json"}, loaderEnv(&stdout, &stderr, warningConfig))
-
-	require.NoError(t, err)
-	var doc struct {
-		Warnings []string `json:"warnings"`
+			require.NoError(t, err)
+			assert.Equal(t, []string{command}, asked)
+		})
 	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
-	require.NotEmpty(t, doc.Warnings)
-	assert.Equal(t, unknownKeyAbsolute, doc.Warnings[0])
+}
+
+func Test_config_always_read_commands_refuse_an_unreadable_config_as_a_runtime_error_even_with_the_currency_flag(t *testing.T) {
+	for _, command := range configAlwaysReadCommands {
+		t.Run(command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			env := loaderEnv(&stdout, &stderr, func(string) (config.Config, error) { return config.Config{}, errConfigRead })
+
+			err := cli.Execute(t.Context(), []string{command, "--currency", "native"}, env)
+
+			require.ErrorIs(t, err, errConfigRead)
+			assert.NotErrorAs(t, err, new(cli.UsageError))
+			assert.Empty(t, stdout.String())
+		})
+	}
+}
+
+func Test_config_always_read_commands_print_the_configs_warnings_once_even_with_the_currency_flag(t *testing.T) {
+	for _, command := range configAlwaysReadCommands {
+		t.Run(command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := cli.Execute(t.Context(), []string{command, "--currency", "native"}, loaderEnv(&stdout, &stderr, warningConfig))
+
+			require.NoError(t, err)
+			assert.Equal(t, "quarry: warning: "+unknownKeyShown+"\n", stderr.String())
+		})
+	}
+}
+
+func Test_config_always_read_commands_name_the_configs_warnings_absolutely_in_json_even_with_the_currency_flag(t *testing.T) {
+	for _, command := range configAlwaysReadCommands {
+		t.Run(command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := cli.Execute(t.Context(), []string{command, "--currency", "native", "--json"}, loaderEnv(&stdout, &stderr, warningConfig))
+
+			require.NoError(t, err)
+			var doc struct {
+				Warnings []string `json:"warnings"`
+			}
+			require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+			require.NotEmpty(t, doc.Warnings)
+			assert.Equal(t, unknownKeyAbsolute, doc.Warnings[0])
+		})
+	}
 }
 
 func Test_read_commands_refuse_an_unreadable_config_as_a_runtime_error(t *testing.T) {

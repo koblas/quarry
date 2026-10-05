@@ -238,6 +238,7 @@ func readCommandArgs() map[string][]string {
 		"accounts":  {"accounts"},
 		"holdings":  {"holdings"},
 		"networth":  {"networth"},
+		"acb":       {"acb"},
 		"anomalies": {"anomalies", "--since", "2026-01", "--until", "2026-09"},
 		"spend":     {"spend", "--since", "2026-01", "--until", "2026-09"},
 		"cashflow":  {"cashflow", "--since", "2026-01", "--until", "2026-09"},
@@ -344,7 +345,7 @@ func Test_run_read_commands_ignore_a_malformed_config_when_given_a_currency(t *t
 	before := malformedConfigFixture(t)
 
 	for name, args := range readCommandArgs() {
-		if name == "accounts" {
+		if name == "accounts" || name == "acb" {
 			continue
 		}
 		t.Run(name, func(t *testing.T) {
@@ -359,15 +360,19 @@ func Test_run_read_commands_ignore_a_malformed_config_when_given_a_currency(t *t
 	}
 }
 
-func Test_run_accounts_refuses_a_malformed_config_even_when_given_a_currency(t *testing.T) {
-	malformedConfigFixture(t)
-	var stdout, stderr bytes.Buffer
+func Test_run_accounts_and_acb_refuse_a_malformed_config_even_when_given_a_currency(t *testing.T) {
+	for _, command := range []string{"accounts", "acb"} {
+		t.Run(command, func(t *testing.T) {
+			malformedConfigFixture(t)
+			var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"accounts", "--currency", "CAD"}, spendEnv(&stdout, &stderr))
+			exitCode := runWith(context.Background(), []string{command, "--currency", "CAD"}, spendEnv(&stdout, &stderr))
 
-	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout.String())
-	assert.Regexp(t, "^"+regexp.QuoteMeta("quarry: cannot read "+configShown+": line 1: ")+"[^\n]+"+regexp.QuoteMeta(configFix)+"\n$", stderr.String())
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Regexp(t, "^"+regexp.QuoteMeta("quarry: cannot read "+configShown+": line 1: ")+"[^\n]+"+regexp.QuoteMeta(configFix)+"\n$", stderr.String())
+		})
+	}
 }
 
 func Test_run_sql_ignores_a_malformed_config(t *testing.T) {

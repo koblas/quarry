@@ -52,7 +52,7 @@ The acceptance test runs through `runWith` + `replaceStoreWithRates`, because th
   - No suffix column (S12/13a/14).
   - `render_acb_internal_test.go`: sold-out security omitted from text; security without a ticker; name needing escape; negative gain year.
 
-- [ ] Step 6: `internal/cli/acb.go` full command:
+- [x] Step 6: `internal/cli/acb.go` full command:
   - Ruled Use/Short/Long/Example verbatim (spec 209-234). Rewrap only the overlong Long line (spec :219) to the ~76-column width; words verbatim.
   - `--currency` via `currencyFlag.bind` with the ruled help; `Args: currency.args`.
   - RunE: `readConfig` **always** (never `currency.resolve`); `ACBRequest{classificationOf(cfg), report.Today(now())}`; `openReport`; `runtimeError` on fault; `emitReport` with `withConfigWarnings(cfg.WarningsAbsolute, nil)`.
@@ -69,7 +69,7 @@ The acceptance test runs through `runWith` + `replaceStoreWithRates`, because th
     - `run_usage_test.go:252-260`: unknown flag.
     - `run_config_test.go:237-247`: `readCommandArgs`.
     - `run_spend_refusals_test.go:~85-97`: HOME unset.
-- [ ] Step 7: docs.
+- [x] Step 7: docs.
   - `plugin/skills/quarry/SKILL.md:3`: description. Add `, or which investment accounts are registered` after `payee name variants)`; add `; adjusted cost base and realized capital gains per tax year (CAD)` after `its value on a day`; drop `, for gains or ACB beyond saying quarry does not cover them yet` (result: 1315 runes, under the 1536 cap).
   - `SKILL.md:74-75` §7: delete the ACB bullet; the Tax bullet becomes the ruled `**Tax:** quarry acb is a worksheet: …`.
   - `docs/initial-prd.md:256`: superficial loss marked in `acb`, not a finding (F1). The PRD `acb` row already exists at `:173`, so no step.
@@ -112,15 +112,14 @@ The acceptance test runs through `runWith` + `replaceStoreWithRates`, because th
 
 ## Phase report
 
-**NEEDS PRODUCT-VISION RULING BEFORE V:** spec :260 and :262 both give each `years[]` object a `sales` key (a count, then the array). One struct tag now: `document/acb.go` `ACBYear.SaleCount` is `json:"sale_count"`; `sales` is the array (spec :271 "empty `sales` still listed"). Rename = one tag + `acb_test.go` key-order row.
-
-Run B1 done (steps 3-5). Acceptance `Test_run_acb_prints_gains_per_tax_year_and_todays_acb_pooled_across_the_accounts` is still RED at its stdout assertion (actual `""`): expected, the RunE is step 6 (B2). Every other acb test in the narrow loop is green; `golangci-lint` on report/cli reports only `renderACBJSON` unused (B2 calls it).
+Run B2 done (steps 6-7). Acceptance `Test_run_acb_prints_gains_per_tax_year_and_todays_acb_pooled_across_the_accounts` is GREEN. Narrow loop green; `golangci-lint run ./...` 0 issues; full verification is run V.
 
 Files:
-- `internal/report/acb.go`: `ACB.AsOf`; `ACBSale.AccountID/Account/PossibleSuperficialLoss/UnknownCost`; `ACBSecurity.Incomplete`; `ACBEvent.AccountID/Account/Amount *int64/Currency/Rate/CAD/Outlays *int64/Realized`; exported `Millionths(*big.Rat) int64` (the ONE Rat->millionths rounding; document and cli both use it, B2 must not add another).
-- `internal/report/acb_walk.go`: `accountNames`, `walkSecurity(..., names)`; `Rate` set only for a USD trade (0 when CAD or no rate on file); `Outlays` is CAD cents on a sale, a pointer to 0 with no commission; `CAD` = amount at the event rate (a sale's is the net amount, not proceeds).
-- `internal/report/document/acb.go` `NewACB(report.ACB, warnings)`; `Year` is always null (S15 sets it); `usd_cad` null when `Rate == 0` (a USD trade with no rate prints null, not `0.0000`); sale `security`/`ticker` joined from `ACB.Securities`; `perShare` is `FloatString(4)`.
-- `internal/cli/render_acb.go` `renderACB` (years table + `"\n"` + positions table; both always print their header even when empty, S15/S18 own the empty text), `formatPerShare` (thousands-grouped whole part); `internal/cli/json_acb.go` `renderACBJSON(a, warnings)`.
-- Tests: `internal/report/acb_events_test.go`, `internal/report/document/acb_test.go`, `internal/cli/render_acb_internal_test.go` (three `//nolint:dupword`: the `ACB` and `ACB per share` header cells are adjacent).
+- `internal/cli/acb.go`: ruled Use/Short/Long (:219 line rewrapped, words verbatim)/Example, `--currency` via `currencyFlag.bind(acbCurrencyHelp)` + `Args: currency.args`; RunE = `readConfig` always, `report.ACBRequest{classificationOf(cfg), report.Today(now())}`, `emitReport(nil warnings, renderACBJSON(withConfigWarnings(cfg.WarningsAbsolute, nil)), renderACB)`.
+- `internal/cli/acb_test.go` (help Long/Example/--currency pinned, config classification reaches the walk, unlisted account out of pool, store-read and report-open faults, bad `--currency`); `internal/cli/fakes_test.go` `history` + `InvestmentHistory`; `internal/cli/currency_test.go` the four accounts-config tests are now `{accounts, acb}` tables (`configAlwaysReadCommands`).
+- `cmd/quarry/run_acb_surface_test.go` (`--json` read-back of the acceptance fixture, config warning leading stderr and `warnings[0]`, zone-ahead-of-UTC today sale); all-commands rows in `run_read_refusals_test.go` (no store, EUR config, older store, interrupt), `run_read_usage_test.go`, `run_usage_test.go`, `run_config_test.go` (`readCommandArgs` acb row; acb skipped in the `--currency` ignores-malformed-config test, joined to accounts in the refuses-even-with-flag table), `run_spend_refusals_test.go` (HOME unset).
+- Docs: `plugin/skills/quarry/SKILL.md` description (1315 runes) + section 7 ACB bullet (ruled body, label kept; heading still "Not covered yet"); `cmd/quarry/run_skill_text_test.go` re-pinned; `docs/initial-prd.md:256`.
 
-B2 (steps 6-7): `newAcbCommand` still has blank params and a nil RunE (`internal/cli/acb.go`); wire `renderACBJSON`/`renderACB` through `emitReport`. Do not redo the report fields or the document.
+Mutations (both red, restored byte-identical): `Today: report.Today(now())` -> `now()` reddened `Test_run_acb_counts_a_sale_dated_today_in_a_zone_ahead_of_utc`; readConfig skipped when `--currency` is given reddened the acb rows of `Test_config_always_read_commands_{read_the_config_once,refuse_an_unreadable_config,print_the_configs_warnings,name_the_configs_warnings_absolutely}...` and `Test_run_accounts_and_acb_refuse_a_malformed_config_even_when_given_a_currency/acb`.
+
+Run V: sweep (lint already 0), full verification block, tick SCENARIO-08b in specification.md with the acceptance test, spec-check, STATE.md rewrite, `status: done`. Open for product-vision: SKILL section 7 heading vs the acb bullet; Example lists unregistered `--year`/`--security` (verbatim from the spec until S15/S16).

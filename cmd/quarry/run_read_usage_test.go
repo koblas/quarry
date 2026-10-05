@@ -43,6 +43,7 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 		{name: "accounts with an argument", args: []string{"accounts", "extra"}, wantStderr: "quarry: accounts takes no arguments\n"},
 		{name: "holdings with an argument", args: []string{"holdings", "extra"}, wantStderr: "quarry: holdings takes no arguments\n"},
 		{name: "networth with an argument", args: []string{"networth", "extra"}, wantStderr: "quarry: networth takes no arguments\n"},
+		{name: "acb with an argument", args: []string{"acb", "extra"}, wantStderr: "quarry: acb takes no arguments\n"},
 		{name: "spend with an argument", args: []string{"spend", "extra"}, wantStderr: "quarry: spend takes no arguments\n"},
 		{name: "cashflow with an argument", args: []string{"cashflow", "extra"}, wantStderr: "quarry: cashflow takes no arguments\n"},
 		{name: "recurring with an argument", args: []string{"recurring", "extra"}, wantStderr: "quarry: recurring takes no arguments\n"},
