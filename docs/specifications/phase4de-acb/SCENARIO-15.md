@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-15
-status: open
+status: done
 ---
 
 # SCENARIO-15: Sales of one tax year (folds SCENARIO-18, nothing to show)
@@ -30,10 +30,10 @@ Spec: SCENARIO-15 + SCENARIO-18; copy at :237 (flag help), :256-257 (text + S15 
 - [x] Step 6: `internal/cli/render_acb.go:19-38` `renderACB` branches on `ACB.Year` ONLY (never on emptiness) to a sales renderer: caption `Sales in <year>, in CAD`; columns `Date  Security  Shares  Proceeds  Outlays  ACB  Gain or loss` + unheaded suffix column (`possible superficial loss`, `unknown cost`, ", "-joined, that order; year suffix order `:41-53` untouched); security = ticker else name via `escapeCell`; Total row ALWAYS (Date `tableTotalLabel`, Security/Shares blank, four sums, Gain sales only, suffix blank; 0.00 when no sale); ROC row after it only when > 0. `acb.go:66-70`: warnings from the uncut report, text and JSON from `InYear()`. Tests: render internal — each suffix alone, both stacked, ticker / name / escape, empty year (Total 0.00, no ROC row), ROC-only year (Total 0.00 + ROC row), Total sums; headers-only pin `render_acb_internal_test.go:209-217` stays green unchanged; cmd `run_acb_year_test.go`, each text AND `--json`: stacked marks; empty year with sales elsewhere (span warning); ROC-only year (security listed, no warning 2); no-rate-only year (warnings 2 and 6 together); gap year; buy-only and all-pre-rate default (year header no rows, positions shown, no warning 2); `Test_run_acb_year_still_warns_of_a_security_it_did_not_sell_that_year` (warning 4 or 7 from an unsold security); `--year` stderr equals the default run's warnings plus slot 2
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `InYear`, `ParseACBYear`, the predicates, `ACB.Year`, `ACBRequest.Year`
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `InYear`, `ParseACBYear`, the predicates, `ACB.Year`, `ACBRequest.Year`
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-15 with its acceptance test, and SCENARIO-18 as `delivered by SCENARIO-15 —` its folded test (test reference last on the line); STATE.md: strike the `--year` open debt, the S15/S18 Left-unbuilt rows, and S14's "test years, not securities" trap (superseded below)
+- [x] Step 8: full verification + `spec-check.py phase4de-acb` → tick SCENARIO-15 with its acceptance test, and SCENARIO-18 as `delivered by SCENARIO-15 —` its folded test (test reference last on the line); STATE.md: strike the `--year` open debt, the S15/S18 Left-unbuilt rows, and S14's "test years, not securities" trap (superseded below)
 
 ## Handoff
 
@@ -57,11 +57,6 @@ Spec: SCENARIO-15 + SCENARIO-18; copy at :237 (flag help), :256-257 (text + S15 
 
 ## Phase report
 
-Run B2 (steps 5-6), green: full covered suite rc=0, lint `0 issues`, `uncovered-diff.py` 0 uncovered since 3bbd526. Both run-A acceptance tests green; the S15 table widths (Date 10, Security 8, Shares 6, Proceeds 8, Outlays 7, ACB 6, Gain 12) render as expected. test-stats: cmd/quarry 861 (+9), internal/cli 557 (+6), report/document 224 (+7).
-- `internal/report/document/acb.go`: `NewACB` sets `Year` from `ACB.Year` (nil at 0). `acb_warnings.go`: `nothingToShowWarnings` is slot 2 (between `adjustmentWarnings` and `superficialLossWarnings`); reads `NoPoolEvents`/`YearIsEmpty`/`SaleYears` on the UNCUT report.
-- `internal/cli/render_acb.go`: `renderACB` branches on `a.Year != 0` to `renderACBSales` (caption, Total always, ROC row when > 0; `acbSecurityLabel`, `acbSaleMarks`). `internal/cli/acb.go`: `cut := acb.InYear()` feeds JSON and text; both `ACBWarnings` calls keep the uncut `acb`.
-- Tests: `document/acb_warnings_empty_test.go` (new: slot 2 forms, silent rows, ROC-only), `acb_warnings_slots_test.go` (full 1-9 order now with slot 2 firing), `acb_test.go` (year-cut JSON, `years[]` key-order pin with `return_of_capital_gain` after `gain`, "0.00"), `cli/render_acb_internal_test.go` (sales table), `cmd/quarry/run_acb_year_cuts_test.go` (new: 10 cmd rows, text + `--json`).
-- Side effects: 10 hand-built document warning tests got `acbPooled(a)` (a pool security) because an event-less report now fires slot 2 form 1; `cli/currency_test.go` config-warnings-once test counts the config line (acb's own stderr now has form 1 over the fake store).
-- Mutations (both red): `acb.go` stderr `ACBWarnings(cut, ...)` -> `Test_run_acb_year_still_warns_of_a_security_it_did_not_sell_that_year` (and 4 more cmd rows, form 1 fires wrongly); JSON-side `ACBWarnings(cut, cfg.Path)` -> 3 cmd rows; `YearIsEmpty` without `ReturnOfCapitalGain == 0` -> `Test_ACBWarnings_is_silent_for_a_year_with_only_a_return_of_capital_gain`.
-- Not done (V): Sweep doc-comment pass, spec tick (SCENARIO-15 + folded SCENARIO-18), `spec-check.py`, STATE.md rewrite (strike the `--year` years[] pin debt, S15/S18 Left-unbuilt rows, S14 "test years" trap), `status: done`.
-- Trap found: the acceptance test alone passed with the cut missing (acbRows' first year is 2025, so uncut Years[0] looked right); the gap/before-first cmd rows are what prove the cut.
+Run V (steps 7-8), done: `go build` clean, lint `0 issues`, full covered suite rc=0, `uncovered-diff.py` 0 uncovered since e5af2b5, `-race` green on internal/report/... and internal/cli, `spec-check.py phase4de-acb` OK. The doc comments on `InYear`, `ParseACBYear`, the predicates, `ACB.Year` and `ACBRequest.Year` already existed from A/B1/B2; no code edited in V.
+- test-stats since e5af2b5: cmd/quarry 861 (+12), internal/cli 557 (+7), internal/report 609 (+21), report/document 224 (+7); total 2251 (+47).
+- Ticked S15 and S18 (delivered by SCENARIO-15) in `specification.md`; `status: done`; STATE.md rewritten (70 lines).
