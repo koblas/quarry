@@ -11,6 +11,7 @@
 | SCENARIO-09 (+18) | code-first | A, B1, B2, V | 0/1/2/0 | yes (no investment account with holdings in v_net_worth — sum(cash) mutant survived; folds: both-flags case, plan file damaged by V restored) |
 | SCENARIO-10 (+13) | code-first | A, B1 (did 3-7), V | 0/0/5/1 | no (MINOR → STATE.md) |
 | SCENARIO-12 | code-first | A, B1, B2, V (+ product-vision copy ruling on history cells) | 0/2/2/0 | yes (same-day since/until control; native zero-balance cell; fold: monthEnd doc) |
+| SCENARIO-15 (+11) | code-first | A, B1, V | 0/1/1/0 | yes (as-of × native and refusal × --json cells; fold: seed doc) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
