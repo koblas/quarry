@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/platform/money"
+	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -191,9 +193,12 @@ func Test_acb_applies_the_configs_adjustments(t *testing.T) {
 	assert.Equal(t, "280.00", doc.Years[0].Gain)
 }
 
-func Test_acb_leaves_an_unlisted_account_out_of_the_pool(t *testing.T) {
+func Test_acb_leaves_a_registered_account_out_of_the_pool(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	env := holdingsEnv(cadConfig, fakeReportStore{history: acbHistory()}, &stdout, &stderr)
+	registered := func(string) (config.Config, error) {
+		return config.Config{Currency: money.CAD, Registered: []string{"acct-1"}}, nil
+	}
+	env := holdingsEnv(registered, fakeReportStore{history: acbHistory()}, &stdout, &stderr)
 
 	err := cli.Execute(t.Context(), []string{"acb", "--json"}, env)
 
@@ -205,6 +210,19 @@ func Test_acb_leaves_an_unlisted_account_out_of_the_pool(t *testing.T) {
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
 	assert.Empty(t, doc.Years)
 	assert.Empty(t, doc.Securities)
+}
+
+func Test_acb_refuses_while_an_account_is_unclassified(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	env := holdingsEnv(cadConfig, fakeReportStore{history: acbHistory()}, &stdout, &stderr)
+
+	err := cli.Execute(t.Context(), []string{"acb", "--json"}, env)
+
+	refusal, ok := errors.AsType[report.RefusalError](err)
+	require.True(t, ok)
+	assert.Equal(t, report.RefusalGeneric, refusal.Kind)
+	assert.NotErrorAs(t, err, new(cli.UsageError))
+	assert.Empty(t, stdout.String())
 }
 
 func Test_acb_returns_a_failed_store_read(t *testing.T) {
@@ -224,16 +242,5 @@ func Test_acb_returns_a_failed_report_open(t *testing.T) {
 	err := cli.Execute(t.Context(), []string{"acb"}, refusedEnv(&stdout, &stderr))
 
 	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-}
-
-func Test_acb_refuses_a_currency_that_is_not_cad_usd_or_native(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := cli.Execute(t.Context(), []string{"acb", "--currency", "EUR"}, currencyEnv(&stdout, &stderr))
-
-	var usage cli.UsageError
-	require.ErrorAs(t, err, &usage)
-	assert.Equal(t, badCurrencyFlag, usage.Error())
 	assert.Empty(t, stdout.String())
 }

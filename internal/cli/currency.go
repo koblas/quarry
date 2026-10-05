@@ -53,6 +53,21 @@ func (f *currencyFlag) args(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// argsCADOnly refuses a positional argument, then a --currency that was given and is not CAD in any
+// letter case, as a UsageError. It never echoes the value.
+func (f *currencyFlag) argsCADOnly(cmd *cobra.Command, args []string) error {
+	if err := noArgs(cmd, args); err != nil {
+		return err
+	}
+	if !cmd.Flags().Changed(currencyFlagName) {
+		return nil
+	}
+	if currency, ok := money.ParseCurrency(f.code); !ok || currency != money.CAD {
+		return UsageError{msg: "acb is in CAD only, as the CRA requires; run it without --currency"}
+	}
+	return nil
+}
+
 // resolve is the --currency flag when given, else reporting.currency from the config (loader unread
 // with the flag); the second result is the config's absolute warnings, its ~ form printed to stderr.
 func (f *currencyFlag) resolve(cmd *cobra.Command, loadConfig ConfigLoader) (money.Currency, []string, error) {

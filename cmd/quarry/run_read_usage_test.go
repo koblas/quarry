@@ -39,6 +39,7 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 		{name: "sql with a negative limit", args: []string{"sql", "--limit", "-1", "SELECT 1"}, wantStderr: u7},
 		{name: "spend with an empty currency", args: []string{"spend", "--currency="}, wantStderr: badCurrencyFlag},
 		{name: "spend with a bad currency and a bad grouping", args: []string{"spend", "--currency", "EUR", "--by", "bogus"}, wantStderr: badCurrencyFlag},
+		{name: "acb with another currency", args: []string{"acb", "--currency", "EUR"}, wantStderr: "quarry: acb is in CAD only, as the CRA requires; run it without --currency\n"},
 		{name: "status with an argument", args: []string{"status", "extra"}, wantStderr: "quarry: status takes no arguments\n"},
 		{name: "accounts with an argument", args: []string{"accounts", "extra"}, wantStderr: "quarry: accounts takes no arguments\n"},
 		{name: "holdings with an argument", args: []string{"holdings", "extra"}, wantStderr: "quarry: holdings takes no arguments\n"},

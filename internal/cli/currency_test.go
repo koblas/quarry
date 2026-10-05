@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,8 +20,11 @@ import (
 
 const badCurrencyFlag = "--currency must be CAD, USD or native"
 
-// currencyCommands are the commands that take --currency.
-var currencyCommands = []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth"}
+// genericCurrencyCommands are the commands whose --currency takes CAD, USD or native.
+var genericCurrencyCommands = []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth"}
+
+// currencyCommands are the commands that take --currency; acb takes CAD only.
+var currencyCommands = append(slices.Clone(genericCurrencyCommands), "acb")
 
 // flagSkipsConfigCommands are the currencyCommands that read no config when --currency is given;
 // accounts always reads it, for the account classification.
@@ -50,7 +54,7 @@ func refusedEnv(stdout, stderr *bytes.Buffer) cli.Env {
 }
 
 func Test_currency_flag_is_checked_only_when_given(t *testing.T) {
-	for _, command := range currencyCommands {
+	for _, command := range genericCurrencyCommands {
 		t.Run(command, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
@@ -66,7 +70,7 @@ func Test_currency_flag_is_checked_only_when_given(t *testing.T) {
 }
 
 func Test_currency_flag_accepts_each_currency_in_any_letter_case(t *testing.T) {
-	for _, command := range currencyCommands {
+	for _, command := range genericCurrencyCommands {
 		for _, code := range []string{"usd", "CAD", "Native"} {
 			t.Run(command+" "+code, func(t *testing.T) {
 				var stdout, stderr bytes.Buffer
@@ -90,7 +94,7 @@ func Test_currency_flag_refuses_a_value_it_cannot_read_without_echoing_it(t *tes
 	}
 
 	for _, c := range cases {
-		for _, command := range currencyCommands {
+		for _, command := range genericCurrencyCommands {
 			t.Run(command+" "+c.name, func(t *testing.T) {
 				var stdout, stderr bytes.Buffer
 
@@ -101,6 +105,45 @@ func Test_currency_flag_refuses_a_value_it_cannot_read_without_echoing_it(t *tes
 				assert.EqualError(t, err, badCurrencyFlag)
 			})
 		}
+	}
+}
+
+func Test_acb_currency_flag_accepts_cad_in_any_letter_case(t *testing.T) {
+	for _, code := range []string{"cad", "CAD", "Cad"} {
+		t.Run(code, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := cli.Execute(t.Context(), []string{"acb", "--currency", code}, currencyEnv(&stdout, &stderr))
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func Test_acb_currency_flag_refuses_any_other_value_without_echoing_it(t *testing.T) {
+	const acbCADOnly = "acb is in CAD only, as the CRA requires; run it without --currency"
+	cases := []struct {
+		name string
+		code string
+	}{
+		{name: "USD", code: "USD"},
+		{name: "usd in lower case", code: "usd"},
+		{name: "native", code: "native"},
+		{name: "another currency", code: "EUR"},
+		{name: "an empty value", code: ""},
+		{name: "a leading space", code: " CAD"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := cli.Execute(t.Context(), []string{"acb", "--currency=" + c.code}, refusedEnv(&stdout, &stderr))
+
+			var usage cli.UsageError
+			require.ErrorAs(t, err, &usage)
+			assert.EqualError(t, err, acbCADOnly)
+		})
 	}
 }
 
@@ -214,7 +257,7 @@ func Test_config_always_read_commands_read_the_config_once_even_with_the_currenc
 				return cadConfig(name)
 			})
 
-			err := cli.Execute(t.Context(), []string{command, "--currency", "native"}, env)
+			err := cli.Execute(t.Context(), []string{command, "--currency", "CAD"}, env)
 
 			require.NoError(t, err)
 			assert.Equal(t, []string{command}, asked)
@@ -228,7 +271,7 @@ func Test_config_always_read_commands_refuse_an_unreadable_config_as_a_runtime_e
 			var stdout, stderr bytes.Buffer
 			env := loaderEnv(&stdout, &stderr, func(string) (config.Config, error) { return config.Config{}, errConfigRead })
 
-			err := cli.Execute(t.Context(), []string{command, "--currency", "native"}, env)
+			err := cli.Execute(t.Context(), []string{command, "--currency", "CAD"}, env)
 
 			require.ErrorIs(t, err, errConfigRead)
 			assert.NotErrorAs(t, err, new(cli.UsageError))
@@ -246,7 +289,7 @@ func Test_config_always_read_commands_print_the_configs_warnings_once_even_with_
 		t.Run(command, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
-			err := cli.Execute(t.Context(), []string{command, "--currency", "native"}, loaderEnv(&stdout, &stderr, warningConfig))
+			err := cli.Execute(t.Context(), []string{command, "--currency", "CAD"}, loaderEnv(&stdout, &stderr, warningConfig))
 
 			require.NoError(t, err)
 			assert.Equal(t, "quarry: warning: "+unknownKeyShown+"\n"+ownWarnings[command], stderr.String())
@@ -259,7 +302,7 @@ func Test_config_always_read_commands_name_the_configs_warnings_absolutely_in_js
 		t.Run(command, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
-			err := cli.Execute(t.Context(), []string{command, "--currency", "native", "--json"}, loaderEnv(&stdout, &stderr, warningConfig))
+			err := cli.Execute(t.Context(), []string{command, "--currency", "CAD", "--json"}, loaderEnv(&stdout, &stderr, warningConfig))
 
 			require.NoError(t, err)
 			var doc struct {

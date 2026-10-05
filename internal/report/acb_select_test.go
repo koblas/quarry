@@ -17,7 +17,7 @@ func selectSecurity(id, name, ticker string) store.Security {
 }
 
 // selectHistory is securities bought in non-registered acct-1 (shared tickers and names, no or empty ticker), sec-3
-// and sec-13 only in registered acct-9, sec-5 there the day after today, sec-9 only in unclassified acct-7, sec-4 never.
+// and sec-13 only in registered acct-9, sec-5 there the day after today, sec-9 only in acct-7, in neither list, sec-4 never.
 func selectHistory(t *testing.T) store.InvestmentHistory {
 	t.Helper()
 	empty := ""
@@ -25,7 +25,7 @@ func selectHistory(t *testing.T) store.InvestmentHistory {
 	blank := store.Security{ID: "sec-8", Name: "Blank", Ticker: &empty}
 	tickerless := store.Security{ID: "sec-10", Name: "No Ticker", Currency: &cad}
 	return store.InvestmentHistory{
-		Accounts: append(acbAccounts(), store.Account{ID: "acct-7", Name: "Cash margin", Type: store.AccountTypeBrokerage, Currency: "CAD"}),
+		Accounts: append(acbAccounts(), store.Account{ID: "acct-7", Name: "Cash margin", Type: "chequing", Currency: "CAD"}),
 		Securities: []store.Security{
 			selectSecurity("sec-1", "Acme Corp", "ACME"),
 			selectSecurity("sec-2", "Beta Inc", "BETA"),
@@ -135,7 +135,7 @@ func Test_acb_refuses_a_selector_that_names_no_covered_security(t *testing.T) {
 		{name: "an empty selector, though a security has an empty ticker", selector: ""},
 		{name: "a security with no transaction", selector: "sec-4"},
 		{name: "a security bought in a registered account the day after today", selector: "sec-5"},
-		{name: "a security bought only in an unclassified account", selector: "sec-9"},
+		{name: "a security bought only in an account in neither list", selector: "sec-9"},
 	}
 
 	for _, c := range cases {

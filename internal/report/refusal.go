@@ -108,6 +108,20 @@ func unknownSecurityRefusal(arg string) error {
 	}
 }
 
+// unclassifiedAccountsRefusal refuses acb while n investment accounts are in neither account list;
+// it names the config file by its literal ~ form, as the unclassified-account finding does.
+func unclassifiedAccountsRefusal(n int) error {
+	noun, verb, pronoun := "accounts", "are", "them"
+	if n == 1 {
+		noun, verb, pronoun = "account", "is", "it"
+	}
+
+	return RefusalError{msg: fmt.Sprintf(
+		"acb needs every brokerage and retirement account classified; %d %s %s in neither accounts.registered nor accounts.non-registered in "+
+			"~/Library/Application Support/quarry/config.toml; quarry findings --type unclassified-account --status all lists %s",
+		n, noun, verb, pronoun)}
+}
+
 // ambiguousAccountRefusal refuses an --account value naming the accounts with ids, which it lists sorted.
 func ambiguousAccountRefusal(arg string, ids []string) error {
 	sorted := slices.Sorted(slices.Values(ids))

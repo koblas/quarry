@@ -52,7 +52,7 @@ accountant, not a tax filing.`,
 		Example: `  quarry acb
   quarry acb --year 2024
   quarry acb --security XEQT --json`,
-		Args: currency.args,
+		Args: currency.argsCADOnly,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			var year int
 			if cmd.Flags().Changed("year") {

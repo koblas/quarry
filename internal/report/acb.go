@@ -211,11 +211,15 @@ func Millionths(shares *big.Rat) int64 {
 const acbCommand = "acb"
 
 // ACB walks the investment history of the accounts req.Classification names non-registered, through req.Today.
-// It reads the store once, and refuses like Status.
+// It reads the store once, and refuses like Status; it also refuses, as RefusalGeneric, while any
+// brokerage or retirement account, closed ones included, is in neither of req.Classification's lists.
 func (s *Server) ACB(ctx context.Context, req ACBRequest) (ACB, error) {
 	history, err := s.store.InvestmentHistory(ctx)
 	if err != nil {
 		return ACB{}, s.readRefusal(ctx, acbCommand, err)
+	}
+	if n := req.Classification.CountUnclassified(history.Accounts); n > 0 {
+		return ACB{}, unclassifiedAccountsRefusal(n)
 	}
 
 	result := walkACB(history, req)

@@ -68,7 +68,7 @@ func Test_run_acb_security_prints_a_block_for_each_security_sharing_the_ticker(t
 		acbTrade("inv-a", 1, "acct-cad", "sec-a", store.ActionBuy, "CAD", day(2024, time.February, 1), 10_000_000, -100_000),
 		acbTrade("inv-b", 2, "acct-cad", "sec-b", store.ActionBuy, "CAD", day(2024, time.February, 1), 10_000_000, -100_000),
 	}
-	acbFixture(t, acbNonRegistered, rows)
+	acbFixture(t, acbRegisteredConfig, rows)
 	w := [10]int{10, 13, 6, 6, 13, 4, 9, 11, 8, 12}
 	buy := [11]string{"2024-02-01", "CAD Brokerage", "buy", "10", "-1,000.00 CAD", "", "-1,000.00", "10", "1,000.00", ""}
 
@@ -227,7 +227,7 @@ func acbReinvestRows() store.Rows {
 }
 
 func Test_run_acb_security_lists_the_reinvested_dividends_the_no_cost_warning_names_and_marks_each_unknown_cost(t *testing.T) {
-	acbFixture(t, acbNonRegistered, acbReinvestRows())
+	acbFixture(t, acbRegisteredConfig, acbReinvestRows())
 	_, warned := runACB(t)
 	advice := regexp.MustCompile(`quarry (acb --security \S+) lists them`).FindStringSubmatch(warned)
 	require.Len(t, advice, 2, warned)

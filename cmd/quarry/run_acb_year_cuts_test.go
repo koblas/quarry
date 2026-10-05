@@ -263,7 +263,7 @@ func acbAllBeforeRatesRows() store.Rows {
 }
 
 func Test_run_acb_leaves_a_pool_whose_trades_all_precede_the_rates_with_its_position_and_no_empty_warning(t *testing.T) {
-	acbFixture(t, "[accounts]\nnon-registered = [\"acct-usd\"]\n", acbAllBeforeRatesRows(), usdRate(day(2024, time.January, 2), 1_250_000))
+	acbFixture(t, "[accounts]\nnon-registered = [\"acct-usd\"]\nregistered = [\"acct-cad\"]\n", acbAllBeforeRatesRows(), usdRate(day(2024, time.January, 2), 1_250_000))
 
 	textOut, textErr := runACB(t)
 	docOut, _ := runACB(t, "--json")

@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// acbWalkOf walks txs over acct-1, acct-2 (closed) and acct-3 non-registered, acct-9 registered and acct-7
-// in neither list, with securities sec-1 XEQT and sec-2 VTI.
+// acbWalkOf walks txs over acct-1, acct-2 (closed) and acct-3 non-registered, acct-9 registered and acct-7,
+// a chequing account, in neither list, with securities sec-1 XEQT and sec-2 VTI.
 func acbWalkOf(t *testing.T, txs ...store.InvestmentTransaction) report.ACB {
 	t.Helper()
 	return acbWalkWith(t, []store.Security{acbSecurity("sec-1", "XEQT", "CAD"), acbSecurity("sec-2", "VTI", "CAD")}, nil, txs...)
@@ -37,9 +37,9 @@ func acbWalkRequest(t *testing.T, securities []store.Security, rates []store.Rat
 	txs = slices.SortedStableFunc(slices.Values(txs), func(a, b store.InvestmentTransaction) int {
 		return cmp.Or(a.Date.Compare(b.Date), cmp.Compare(a.SourceID, b.SourceID))
 	})
-	unclassified := store.Account{ID: "acct-7", Name: "Cash margin", Type: store.AccountTypeBrokerage, Currency: "CAD"}
+	unlisted := store.Account{ID: "acct-7", Name: "Cash margin", Type: "chequing", Currency: "CAD"}
 	srv := report.NewServer(report.WithStore(fakeStore{history: store.InvestmentHistory{
-		Accounts:     append(acbAccounts(), unclassified),
+		Accounts:     append(acbAccounts(), unlisted),
 		Securities:   securities,
 		Transactions: txs,
 		Rates:        rates,

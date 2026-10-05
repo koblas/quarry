@@ -247,7 +247,7 @@ func readCommandArgs() map[string][]string {
 }
 
 // readCommandFixture builds a store every readCommandArgs invocation reads, with no config file;
-// it returns HOME and each invocation's output.
+// it returns HOME and each invocation's output, except acb's.
 func readCommandFixture(t *testing.T) (string, map[string]string) {
 	t.Helper()
 	home := t.TempDir()
@@ -270,6 +270,10 @@ func readCommandFixture(t *testing.T) (string, map[string]string) {
 	replaceStore(t, home, rows)
 	before := map[string]string{}
 	for name, args := range readCommandArgs() {
+		// With no config, acb refuses acct-cad as unclassified; no test reads its output from before.
+		if name == "acb" {
+			continue
+		}
 		var stdout, stderr bytes.Buffer
 		require.Equal(t, 0, runWith(context.Background(), args, spendEnv(&stdout, &stderr)), stderr.String())
 		before[name] = stdout.String()

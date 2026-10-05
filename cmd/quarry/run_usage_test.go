@@ -209,7 +209,7 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 }
 
 func Test_run_read_commands_need_a_value_for_the_currency_flag(t *testing.T) {
-	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth"} {
+	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth", "acb"} {
 		t.Run(command, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
 			var stdout, stderr bytes.Buffer

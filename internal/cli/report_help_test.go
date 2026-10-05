@@ -181,16 +181,18 @@ const (
 
 func Test_each_report_shows_the_currency_flag_without_a_cobra_default(t *testing.T) {
 	cases := []struct {
-		command string
-		help    string
+		command     string
+		placeholder string
+		help        string
 	}{
-		{command: "spend", help: reportCurrencyHelp},
-		{command: "cashflow", help: reportCurrencyHelp},
-		{command: "recurring", help: reportCurrencyHelp},
-		{command: "anomalies", help: reportCurrencyHelp},
-		{command: "accounts", help: accountsCurrencyHelp},
-		{command: "holdings", help: holdingsCurrencyHelp},
-		{command: "networth", help: reportCurrencyHelp},
+		{command: "spend", placeholder: "code", help: reportCurrencyHelp},
+		{command: "cashflow", placeholder: "code", help: reportCurrencyHelp},
+		{command: "recurring", placeholder: "code", help: reportCurrencyHelp},
+		{command: "anomalies", placeholder: "code", help: reportCurrencyHelp},
+		{command: "accounts", placeholder: "code", help: accountsCurrencyHelp},
+		{command: "holdings", placeholder: "code", help: holdingsCurrencyHelp},
+		{command: "networth", placeholder: "code", help: reportCurrencyHelp},
+		{command: "acb", placeholder: "currency", help: acbCurrencyHelp},
 	}
 
 	for _, c := range cases {
@@ -201,7 +203,7 @@ func Test_each_report_shows_the_currency_flag_without_a_cobra_default(t *testing
 			err := cli.Execute(t.Context(), []string{c.command, "--help"}, env)
 
 			require.NoError(t, err)
-			assert.Regexp(t, `(?m)--currency code +`+regexp.QuoteMeta(c.help)+`$`, stdout.String())
+			assert.Regexp(t, `(?m)--currency `+c.placeholder+` +`+regexp.QuoteMeta(c.help)+`$`, stdout.String())
 		})
 	}
 }
