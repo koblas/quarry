@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-17
-status: open
+status: done
 ---
 
 # SCENARIO-17: MCP net_worth
@@ -35,10 +35,10 @@ Rules this plan fixes (4b twin: `holdings.go:15-40`, `tools.go:293-297`):
 - [x] Step 6 (B2): cmd and cli tables, one edit each: `run_mcp_test.go:43-46` tool list; `run_mcp_no_store_test.go:33` row; `run_mcp_store_faults_test.go:80-86` rows `net_worth, store cannot be opened` and `net_worth, its view dropped` (`DROP VIEW v_net_worth`); `run_mcp_descriptions_test.go:98-110` `mcpNetWorthDescription`/`mcpNetWorthInputSchema` literals (verbatim, hand-written, not read from production) + map row :249 + help line :268; `internal/cli/mcp.go:38-39` Long Tools line and `internal/cli/mcp_test.go:43-44` (`... search_transactions, holdings,` then `net_worth.` on its own wrapped line; width of the line 2 is 71, adding the name overflows); `plugin/skills/quarry/SKILL.md:95` and `run_skill_text_test.go:237` §9 (`holdings`, `net_worth`, `data_quality`; the drift test `mcpToolNames` reads the live tool list so it needs no edit). Also `cmd/quarry/run_mcp_net_worth_test.go` refusal test through the real stack: after-today as_of, after-today since, conflict, each with its stderr line `quarry: mcp: net_worth: refused the call's as_of; details went to the client only` (conflict) / `... since or until ...` (windows)
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `netWorth`, `netWorthInput`, `toolNetWorth`
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `netWorth`, `netWorthInput`, `toolNetWorth`
 
 ### Verify
-- [ ] Step 8: full verification block per `.claude/rules/agent-briefs.md`, `spec-check.py phase4c-networth`, tick SCENARIO-17 with its acceptance test, rewrite STATE.md (drop the "Left unbuilt" MCP line and the checkpoint-16 JSON-arm debt, update the `windowWording` entry to "confirmed")
+- [x] Step 8: full verification block per `.claude/rules/agent-briefs.md`, `spec-check.py phase4c-networth`, tick SCENARIO-17 with its acceptance test, rewrite STATE.md (drop the "Left unbuilt" MCP line and the checkpoint-16 JSON-arm debt, update the `windowWording` entry to "confirmed")
 
 ## Handoff
 
@@ -59,15 +59,4 @@ Rules this plan fixes (4b twin: `holdings.go:15-40`, `tools.go:293-297`):
 
 ## Phase report
 
-Runs A, B1 and B2 (steps 1-6) done; steps 7-8 left for V. All previously red tool-list tests (`Test_run_mcp_describes_every_tool`, `Test_run_mcp_lists_quarrys_tools_over_json_rpc`) now green. `golangci-lint run ./internal/mcp/... ./internal/cli/... ./cmd/quarry/...` 0 issues; narrow loops green (`internal/mcp`, `internal/cli`, `cmd/quarry` run_mcp/skill/describes subsets).
-
-Files (B2):
-- `internal/mcp/timeout_test.go`: `stallingStore.NetWorth` after `Holdings`; deadline row `net_worth`.
-- `cmd/quarry/run_mcp_test.go` tool list; `run_mcp_no_store_test.go` row; `run_mcp_store_faults_test.go` rows `net_worth, store cannot be opened` / `its view dropped` (`DROP VIEW v_net_worth`); `run_mcp_descriptions_test.go` `mcpNetWorthDescription`/`mcpNetWorthInputSchema` literals, map row, help line (`holdings,\nnet_worth.`).
-- `internal/cli/mcp.go` Long Tools line and `internal/cli/mcp_test.go` (`holdings,` then `net_worth.` on its own line).
-- `plugin/skills/quarry/SKILL.md` section 9 and `cmd/quarry/run_skill_text_test.go` `skillSection9` (`holdings`, `net_worth`, `data_quality`).
-- `cmd/quarry/run_mcp_net_worth_test.go`: `Test_run_mcp_net_worth_refuses_a_call_it_cannot_value_in_mcp_words` (3 rows through the real stack; stderr lines via `asOfRefusedLog`/`windowRefusedLog`).
-
-No production code changed in B2. Param descriptions in `tools.go` (invented in A) are now pinned verbatim by the descriptions test.
-
-Next (V): Sweep (doc comments on `netWorth`, `netWorthInput`, `toolNetWorth` exist), full verification block, `spec-check.py`, tick SCENARIO-17 in specification.md, rewrite STATE.md, `status: done`. Trap: narrow-loop regex `Each_tool` is case-sensitive and matches nothing; the real test is `Test_each_tool_answers_its_deadline_with_its_ruled_line` (use `each_tool`).
+Run V done. Sweep: doc comments on `netWorth`, `netWorthInput`, `toolNetWorth` (const group comment) present; no edits. Verify: `go build ./...` ok; covered full suite rc=0; `uncovered-diff.py` vs 55cd8b3: 0 uncovered; `go test -race ./internal/mcp/... ./internal/cli/...` ok; `golangci-lint run ./...` 0 issues. `test-stats.py --base 55cd8b3 --changed`: cmd/quarry 778 (+2), internal/cli 506 (+0), internal/mcp 178 (+17), TOTAL 1462 (+19). SCENARIO-17 ticked in specification.md; STATE.md rewritten.

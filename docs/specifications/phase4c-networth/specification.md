@@ -493,5 +493,5 @@ Architect sizing pass, 2026-10-04. The S01 and S14 splits were approved by the u
 - [x] SCENARIO-14a: Net worth warns about unpriced and unconvertible holdings — `cmd/quarry/run_networth_holdings_warnings_test.go` `Test_run_networth_warns_about_each_holding_it_leaves_out_and_accounts_gives_the_same_lines`
 - [x] SCENARIO-14b: Net worth warns about USD balances it cannot convert — `cmd/quarry/run_networth_rates_test.go` `Test_run_networth_warns_when_a_usd_balance_has_no_exchange_rate_and_totals_it_apart`
 - [x] SCENARIO-16: Net worth before any data — `cmd/quarry/run_networth_before_data_test.go` `Test_run_networth_before_the_first_transaction_prints_the_caption_and_the_first_balance_warning`
-- [ ] SCENARIO-17: MCP net_worth
+- [x] SCENARIO-17: MCP net_worth — `cmd/quarry/run_mcp_net_worth_test.go` `Test_run_mcp_net_worth_returns_the_networth_json_document`
 - [ ] SCENARIO-19: Reference check on the real Quicken file
