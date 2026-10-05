@@ -1,6 +1,6 @@
 # phase4de-acb — current state
 
-Scenarios complete: SCENARIO-01..07, 08a, 08b, 09, 10 (03 folded into 05, 09 into 08a). Last updated by SCENARIO-10.
+Scenarios complete: SCENARIO-01..07, 08a, 08b, 09, 10 (03 folded into 05, 09 into 08a). Last updated by SCENARIO-10 checkpoint fix.
 
 ## Binding decisions
 - `report.Classification{Registered, NonRegistered []string}` is passed INTO `(*report.Server).Accounts`, `FindingsRequest.Classification` and `CountFindings`; `report` owns the rule via `Classification.Of(store.Account) *bool` (true registered / false non-registered / nil neither) and `Classification.Unclassified(a)` (investment type, in neither list) (SCENARIO-01, 04, 05)
@@ -28,6 +28,8 @@ Scenarios complete: SCENARIO-01..07, 08a, 08b, 09, 10 (03 folded into 05, 09 int
 - Splits apply once per date per security from pool-account rows only: a same-day split row after the first (by source_id) is skipped and makes NO event; ACB untouched, units x new/old. The nil/non-positive-side guard is `// unreachable:` (duckstore `splitRatio` refuses it) (SCENARIO-08a)
 - FX: `rateOn` = latest rate dated on or before the transaction date (rates in date order); `toCAD` = `money.Convert`. A currency with no rate (USD before the first rate, any non-CAD/USD currency) converts to 0 INTERIM: units still walk, CAD value not pinned, until S14 (SCENARIO-08a)
 - Reinvest AND add_shares share one arm: add units plus `cost_basis` converted; NULL cost adds units at 0.00 with no mark INTERIM until S13a (SCENARIO-08a, 10)
+- Zero-unit rule (spec Part B, ruled): `movesNoUnits(tx)` runs first in `walkSecurity`'s loop; an add_shares with units <= 0 (zero, nil or negative) and a remove_shares with 0 units are skipped: NO event (so no warning 5), no units, no cost. Reinvest is not covered (unruled). 13a/13b: a zero-unit add_shares is never "added with no cost" (SCENARIO-10)
+- Tier cells pinned: add_shares 0, split 1, remove_shares 2 each have a source_id-reversed test; sell/remove_shares tie by source_id, observable only through an oversell (ACB removed by the sale differs by order) (SCENARIO-10)
 - Sort orders: sales date, tier, source_id across securities; securities name ignoring case then id; events date, tier, source_id (SCENARIO-08a)
 - Stored shares are SIGNED (sell and remove_shares negative, buy/reinvest/add_shares positive; real file, snapshot 20261004T184923Z); the ACB walk uses absolute units for dispositions. The remove_shares arm takes `Abs` of the stored value; every sell/remove_shares fixture uses the stored (negative) sign (SCENARIO-08a, 10)
 - `acb` command (`internal/cli/acb.go`): `readConfig` ALWAYS (never `currency.resolve`, which skips `config.Load` with `--currency` and would drop adjustments; tests `configAlwaysReadCommands` = {accounts, acb}), `classificationOf(cfg)`, `report.Today(now())` (never `now()`: a zone ahead of UTC drops today's rows; S19's MCP caller too), `emitReport(nil, renderACBJSON(withConfigWarnings(cfg.WarningsAbsolute, nil)), renderACB)`. `--year`/`--security` are UNREGISTERED (unknown flag exits 2) until S15/S16; `--currency` is registered with its ruled help and `currency.args`, its value IGNORED (output always CAD) until S17; `acb` stays out of every `currencyCommands` table until S17 refuses USD/native (SCENARIO-08b)

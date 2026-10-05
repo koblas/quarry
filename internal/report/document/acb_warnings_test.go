@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// acbRemoval is a remove_shares event of units shares left account on date; the pool after it is irrelevant here.
 func acbRemoval(account string, date time.Time, units *big.Rat) report.ACBEvent {
 	return report.ACBEvent{Date: date, Account: account, Action: store.ActionRemoveShares, Shares: units, Held: new(big.Rat)}
 }

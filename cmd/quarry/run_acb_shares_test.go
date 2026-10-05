@@ -74,3 +74,34 @@ func Test_run_acb_lists_a_removal_warning_in_json(t *testing.T) {
 	assert.Equal(t, []string{acmeRemovalWarning}, doc.Warnings)
 	assert.Equal(t, "quarry: warning: "+acmeRemovalWarning+"\n", stderr.String())
 }
+
+func Test_run_acb_leaves_a_zero_unit_removal_out_of_the_warnings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
+	rows := acbSharesRows()
+	rows.InvestmentTransactions = append(rows.InvestmentTransactions,
+		acbTrade("inv-remove-zero", 5, "acct-cad", "sec-acme", store.ActionRemoveShares, "CAD", day(2025, time.March, 10), 0, 0))
+	replaceStore(t, home, rows)
+
+	warnings, stderr := jsonWarnings(t, "acb", "--json")
+
+	assert.Equal(t, []string{acmeRemovalWarning}, warnings)
+	assert.Equal(t, "quarry: warning: "+acmeRemovalWarning+"\n", stderr)
+}
+
+func Test_run_acb_lists_the_configs_warnings_before_a_removal_warning_in_both_forms(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, "colour = \"red\"\n[accounts]\nnon-registered = [\"acct-cad\"]\n")
+	replaceStore(t, home, acbSharesRows())
+	var textOut, textErr bytes.Buffer
+
+	require.Equal(t, 0, runWith(context.Background(), []string{"acb"}, spendEnvAt(&textOut, &textErr, holdingsClock())), textErr.String())
+	warnings, machineErr := jsonWarnings(t, "acb", "--json")
+
+	wantStderr := stderrWarnings(configShown+orderUnknownKey, acmeRemovalWarning)
+	assert.Equal(t, []string{configPath(home) + orderUnknownKey, acmeRemovalWarning}, warnings)
+	assert.Equal(t, wantStderr, textErr.String())
+	assert.Equal(t, wantStderr, machineErr)
+}

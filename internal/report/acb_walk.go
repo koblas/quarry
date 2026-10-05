@@ -115,6 +115,9 @@ func walkSecurity(security store.Security, txs []store.InvestmentTransaction, ra
 	var sales []acbSale
 	var splitDay time.Time
 	for _, tx := range txs {
+		if movesNoUnits(tx) {
+			continue
+		}
 		rate := rateOn(rates, tx.Date)
 		event := ACBEvent{
 			ID: tx.ID, Date: tx.Date, AccountID: tx.AccountID, Account: names[tx.AccountID], Action: tx.Action,
@@ -154,6 +157,18 @@ func walkSecurity(security store.Security, txs []store.InvestmentTransaction, ra
 	position.Shares, position.ACB = pool.shares, pool.acb
 
 	return position, sales
+}
+
+// movesNoUnits is whether tx adds or removes shares that move nothing: no units, or a negative count added.
+func movesNoUnits(tx store.InvestmentTransaction) bool {
+	switch tx.Action {
+	case store.ActionAddShares:
+		return units(tx.Shares).Sign() <= 0
+	case store.ActionRemoveShares:
+		return units(tx.Shares).Sign() == 0
+	default:
+		return false
+	}
 }
 
 // add puts bought units and their cost into the pool.
