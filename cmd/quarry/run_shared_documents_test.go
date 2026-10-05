@@ -126,6 +126,8 @@ const sqlLastStatementDocument = `{
 
 // statusUnreadableConfigDocument takes, in order: store path, built_at, snapshot id, snapshot path,
 // taken_at, source, sha256, config path.
+//
+//nolint:lll // ruled copy is pinned byte-equal, so its lines cannot wrap
 const statusUnreadableConfigDocument = `{
   "store": {
     "path": %[1]q,
@@ -174,7 +176,7 @@ const statusUnreadableConfigDocument = `{
     "one_sided": 1
   },
   "findings": {
-    "open": 2,
+    "open": 3,
     "ignored": null,
     "fixed": 0,
     "new": 2,

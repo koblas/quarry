@@ -2,6 +2,7 @@ package document
 
 import (
 	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/platform/accountmask"
 	"github.com/koblas/quarry/internal/platform/tomlstr"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
@@ -121,6 +122,22 @@ func UnmatchedIgnoreWarnings(configShown string, unmatched []string) []string {
 	for i, id := range unmatched {
 		lines[i] = configShown + ": findings.ignore lists " + tomlstr.BasicString(id) +
 			", which is not a finding in quarry's store; quarry skips it"
+	}
+	return lines
+}
+
+// UnmatchedAccountWarnings is one line per account id the config lists that names no account in quarry's store,
+// registered ids first, each naming the config file as configShown (~-abbreviated for stderr, absolute for --json); [] when none.
+func UnmatchedAccountWarnings(configShown string, unmatched report.UnmatchedAccounts) []string {
+	lines := []string{}
+	for _, list := range []struct {
+		setting string
+		ids     []string
+	}{{"registered", unmatched.Registered}, {"non-registered", unmatched.NonRegistered}} {
+		for _, id := range list.ids {
+			lines = append(lines, configShown+": accounts."+list.setting+" lists "+tomlstr.BasicString(accountmask.Mask(id))+
+				", which is not an account in quarry's store; quarry skips it")
+		}
 	}
 	return lines
 }

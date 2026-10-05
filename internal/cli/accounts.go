@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"slices"
+
+	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/spf13/cobra"
 )
@@ -49,6 +52,8 @@ findings lists those.`,
 				return &runtimeError{err: err}
 			}
 
+			printConfigWarnings(cmd, document.UnmatchedAccountWarnings(homepath.Abbreviate(srv.Home(), cfg.Path), listing.UnmatchedAccounts))
+
 			warnings := []string{}
 			if listing.AllHidden() {
 				warnings = append(warnings, allClosedNote(listing.Hidden))
@@ -58,7 +63,7 @@ findings lists those.`,
 
 			out, err := renderResult(*jsonOut,
 				func() ([]byte, error) {
-					return renderAccountsJSON(listing, withConfigWarnings(cfg.WarningsAbsolute, warnings))
+					return renderAccountsJSON(listing, withConfigWarnings(slices.Concat(cfg.WarningsAbsolute, document.UnmatchedAccountWarnings(cfg.Path, listing.UnmatchedAccounts)), warnings))
 				},
 				func() string { return renderAccounts(listing) })
 			if err != nil {

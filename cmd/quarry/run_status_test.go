@@ -54,7 +54,7 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 		"Splits", "all 4 transactions equal the sum of their splits",
 		"Shares", "no holdings to check",
 		"Transfers", "1 paired, 1 one-sided",
-		"Findings", "2 open; run quarry findings to list them",
+		"Findings", "3 open; run quarry findings to list them",
 		"Rates", "none, so amounts are not converted; run quarry sync to fetch them from the Bank of Canada",
 	)
 	assert.Equal(t, want, stdout.String())

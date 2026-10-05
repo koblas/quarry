@@ -42,11 +42,13 @@ type FindingsGroup struct {
 
 // FindingsListing is the selected findings grouped by type in display order, the tallies over every
 // finding of the requested type (every known type when none is), and the findings.ignore elements
-// that name no finding of any known type, in file order. A type with nothing listed has no group.
+// that name no finding of any known type, in file order, and the account ids the config lists that
+// name no account (whatever --type selects). A type with nothing listed has no group.
 type FindingsListing struct {
-	Groups    []FindingsGroup
-	Counts    finding.Counts
-	Unmatched []string
+	Groups            []FindingsGroup
+	Counts            finding.Counts
+	Unmatched         []string
+	UnmatchedAccounts UnmatchedAccounts
 }
 
 // Findings lists the findings req selects, grouped in finding.Types order and sorted within each
@@ -85,7 +87,10 @@ func (s *Server) Findings(ctx context.Context, req FindingsRequest) (FindingsLis
 		slices.SortStableFunc(selected[typ], listedOrder(typ))
 		groups = append(groups, FindingsGroup{Type: typ, Findings: selected[typ]})
 	}
-	return FindingsListing{Groups: groups, Counts: counts, Unmatched: classified.Unmatched}, nil
+	return FindingsListing{
+		Groups: groups, Counts: counts, Unmatched: classified.Unmatched,
+		UnmatchedAccounts: req.Classification.Unmatched(list.Accounts),
+	}, nil
 }
 
 // CountFindings tallies the findings st carries plus those c computes from its accounts, those of a type

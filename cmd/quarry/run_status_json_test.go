@@ -98,7 +98,7 @@ func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
     "one_sided": 1
   },
   "findings": {
-    "open": 2,
+    "open": 3,
     "ignored": 0,
     "fixed": 0,
     "new": 2,

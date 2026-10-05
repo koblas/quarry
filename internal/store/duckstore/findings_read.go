@@ -108,5 +108,5 @@ func readAccounts(ctx context.Context, db ReadDB) ([]store.Account, error) {
 		accounts = append(accounts, a)
 		return nil
 	})
-	return accounts, err
+	return accounts, err //nolint:wrapcheck // callers classify the driver's own error with openFault
 }

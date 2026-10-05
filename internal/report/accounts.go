@@ -22,6 +22,9 @@ type AccountListing struct {
 
 	// Classification is the config's registered and non-registered account ids the listing was asked with.
 	Classification Classification
+
+	// UnmatchedAccounts is the ids Classification lists that name no account in the store, closed ones included.
+	UnmatchedAccounts UnmatchedAccounts
 }
 
 // ConvertedBalance is a's balance in cents, which can pass 64 bits, in the listing's currency; nil in a native listing and
@@ -55,8 +58,9 @@ func (s *Server) Accounts(ctx context.Context, includeClosed bool, currency mone
 	if err != nil {
 		return AccountListing{}, s.readRefusal(ctx, "accounts", err)
 	}
+	unmatched := classification.Unmatched(accountsOf(list))
 	if includeClosed {
-		return AccountListing{AccountList: list, Currency: currency, Classification: classification}, nil
+		return AccountListing{AccountList: list, Currency: currency, Classification: classification, UnmatchedAccounts: unmatched}, nil
 	}
 
 	open := list.Accounts[:0:0]
@@ -70,7 +74,16 @@ func (s *Server) Accounts(ctx context.Context, includeClosed bool, currency mone
 	hidden := len(list.Accounts) - len(open)
 	list.Accounts = open
 	list.Unvalued = slices.DeleteFunc(slices.Clone(list.Unvalued), func(held store.UnvaluedHolding) bool { return !listed[held.AccountID] })
-	return AccountListing{AccountList: list, Hidden: hidden, Currency: currency, Classification: classification}, nil
+	return AccountListing{AccountList: list, Hidden: hidden, Currency: currency, Classification: classification, UnmatchedAccounts: unmatched}, nil
+}
+
+// accountsOf is the accounts of list, closed ones included.
+func accountsOf(list store.AccountList) []store.Account {
+	accounts := make([]store.Account, len(list.Accounts))
+	for i, a := range list.Accounts {
+		accounts[i] = a.Account
+	}
+	return accounts
 }
 
 // resolveAccounts is the accounts args name, in the order given and without repeats: each arg is an

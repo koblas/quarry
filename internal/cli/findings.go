@@ -114,9 +114,11 @@ prints one row per item, for a spreadsheet.`,
 			if err != nil {
 				return &runtimeError{err: err}
 			}
-			unmatched := document.UnmatchedIgnoreWarnings(homepath.Abbreviate(srv.Home(), cfg.Path), listing.Unmatched)
-			printConfigWarnings(cmd, unmatched)
-			jsonWarnings := append(slices.Clone(cfg.WarningsAbsolute), document.UnmatchedIgnoreWarnings(cfg.Path, listing.Unmatched)...)
+			shown := homepath.Abbreviate(srv.Home(), cfg.Path)
+			printConfigWarnings(cmd, document.UnmatchedIgnoreWarnings(shown, listing.Unmatched))
+			printConfigWarnings(cmd, document.UnmatchedAccountWarnings(shown, listing.UnmatchedAccounts))
+			jsonWarnings := slices.Concat(cfg.WarningsAbsolute, document.UnmatchedIgnoreWarnings(cfg.Path, listing.Unmatched),
+				document.UnmatchedAccountWarnings(cfg.Path, listing.UnmatchedAccounts))
 			render := func() string { return renderFindings(listing, view, len(req.Ignore) == 0) }
 			if csvOut {
 				render = func() string { return renderFindingsCSV(listing) }
