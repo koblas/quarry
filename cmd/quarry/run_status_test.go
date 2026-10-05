@@ -151,6 +151,7 @@ quarry never writes to the Quicken file.`)
 		"  help        Help about any command\n"+
 		"  holdings    List the securities held in each account and their value\n"+
 		"  mcp         Serve quarry's store to Claude over MCP (stdio)\n"+
+		"  networth    Show net worth today or at each month end, by account type and currency\n"+
 		"  recurring   List charges that repeat every week, month, quarter or year\n"+
 		"  search      Find transactions by payee, memo, amount, date, account or category\n"+
 		"  snapshots   List the snapshots quarry has taken and which one the store was built from\n"+

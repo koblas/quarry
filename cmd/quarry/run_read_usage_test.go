@@ -42,6 +42,7 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 		{name: "status with an argument", args: []string{"status", "extra"}, wantStderr: "quarry: status takes no arguments\n"},
 		{name: "accounts with an argument", args: []string{"accounts", "extra"}, wantStderr: "quarry: accounts takes no arguments\n"},
 		{name: "holdings with an argument", args: []string{"holdings", "extra"}, wantStderr: "quarry: holdings takes no arguments\n"},
+		{name: "networth with an argument", args: []string{"networth", "extra"}, wantStderr: "quarry: networth takes no arguments\n"},
 		{name: "spend with an argument", args: []string{"spend", "extra"}, wantStderr: "quarry: spend takes no arguments\n"},
 		{name: "cashflow with an argument", args: []string{"cashflow", "extra"}, wantStderr: "quarry: cashflow takes no arguments\n"},
 		{name: "recurring with an argument", args: []string{"recurring", "extra"}, wantStderr: "quarry: recurring takes no arguments\n"},
@@ -77,7 +78,7 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 }
 
 func Test_run_read_commands_refuse_a_bad_currency_flag(t *testing.T) {
-	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings"} {
+	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth"} {
 		t.Run(command, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
 			var stdout, stderr bytes.Buffer

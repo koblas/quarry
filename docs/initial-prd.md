@@ -166,7 +166,7 @@ Every command supports `--json` for machine consumers and a readable table by de
 | `quarry holdings` | Securities held in each investment account on one day (`--as-of`, default today) with share count, latest price and its date, and value; `--account` to narrow, cash in investment accounts not included |
 | `quarry spend` | Spending by category / payee / tag / month, with `--since`, `--until`, `--account` |
 | `quarry cashflow` | Income, expense, savings rate by period |
-| `quarry networth` | Net worth history, by account type and currency (Phase 4: needs investment holdings) |
+| `quarry networth` | Net worth on one day (`--as-of`, default today) or at each month end (`--since`/`--until`), by account type and currency |
 | `quarry recurring` | Detected recurring charges, start date, price changes |
 | `quarry anomalies` | Unusually large transactions (duplicates are `findings`) |
 | `quarry search` | Find transactions by payee, memo, amount, date, account or category; transfers and report-excluded transactions included and flagged |

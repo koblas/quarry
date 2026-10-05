@@ -3,6 +3,7 @@ package duckstore_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
 	"github.com/koblas/quarry/internal/store"
@@ -17,7 +18,7 @@ type readOp struct {
 	call func(context.Context, *duckstore.Store) error
 }
 
-// rowReads are the reads that scan rows: Status, Accounts, Schema, Charges, Holdings, Findings and Search.
+// rowReads are the reads that scan rows: Status, Accounts, Schema, Charges, Holdings, NetWorth, Findings and Search.
 func rowReads() []readOp {
 	return []readOp{
 		{name: "Status", call: func(ctx context.Context, st *duckstore.Store) error {
@@ -38,6 +39,10 @@ func rowReads() []readOp {
 		}},
 		{name: "Holdings", call: func(ctx context.Context, st *duckstore.Store) error {
 			_, err := st.Holdings(ctx, store.HoldingsParams{AsOf: day(2026, 9, 29)})
+			return err
+		}},
+		{name: "NetWorth", call: func(ctx context.Context, st *duckstore.Store) error {
+			_, err := st.NetWorth(ctx, store.NetWorthParams{Dates: []time.Time{day(2026, 9, 29)}})
 			return err
 		}},
 		{name: "Findings", call: func(ctx context.Context, st *duckstore.Store) error {

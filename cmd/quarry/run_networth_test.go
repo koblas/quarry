@@ -23,7 +23,8 @@ func netWorthNativeLine(typ, currency, balance string) string {
 }
 
 // seedNetWorthStore builds the store under a temp HOME with CAD and USD chequing, a CAD credit card, a USD
-// brokerage with one priced holding, a closed CAD chequing account and a not-in-reports one, all dated March 2.
+// brokerage with one priced holding, a closed CAD chequing account, a not-in-reports one and a savings account
+// that nets to zero, all dated March 2.
 // The USD rate is 1.36 from March 10.
 func seedNetWorthStore(t *testing.T) {
 	t.Helper()
@@ -35,10 +36,11 @@ func seedNetWorthStore(t *testing.T) {
 	closed.Name = "Old Chequing"
 	notInReports := chequingAccount("acct-out", 6)
 	notInReports.Name, notInReports.NotInReports = "Not In Reports", true
+	savings := store.Account{ID: "acct-savings", SourceID: 7, Name: "Savings", Type: "savings", Currency: "CAD", Active: true}
 	rows := spendRows(
 		[]store.Account{
 			chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2), card,
-			brokerageAccount("acct-brokerage", 4, "USD"), closed, notInReports,
+			brokerageAccount("acct-brokerage", 4, "USD"), closed, notInReports, savings,
 		},
 		spendSplit{id: "cad", account: "acct-cad", currency: "CAD", day: march(2), cents: 100_000},
 		spendSplit{id: "usd", account: "acct-usd", currency: "USD", day: march(2), cents: 80_000},
@@ -46,6 +48,8 @@ func seedNetWorthStore(t *testing.T) {
 		spendSplit{id: "deposit", account: "acct-brokerage", currency: "USD", day: march(2), cents: 100_000},
 		spendSplit{id: "closed", account: "acct-closed", currency: "CAD", day: march(2), cents: 2_500},
 		spendSplit{id: "out", account: "acct-out", currency: "CAD", day: march(2), cents: 500},
+		spendSplit{id: "saved", account: "acct-savings", currency: "CAD", day: march(2), cents: 5_000},
+		spendSplit{id: "spent", account: "acct-savings", currency: "CAD", day: march(2), cents: -5_000},
 	)
 	rows.Securities = []store.Security{{ID: "sec-vti", SourceID: 1, Name: "Vanguard Total Stock", Ticker: new("VTI"), Currency: new("USD")}}
 	rows.InvestmentTransactions = []store.InvestmentTransaction{{
@@ -54,10 +58,10 @@ func seedNetWorthStore(t *testing.T) {
 	}}
 	rows.Prices = []store.Price{{SecurityID: "sec-vti", SourceID: 1, Date: march(1), Price: 10_000_000}}
 	rows.Transactions = append(rows.Transactions, store.Transaction{
-		ID: "txn-inv-vti", SourceID: 7, AccountID: "acct-brokerage", Date: march(2), Amount: -10_000, Currency: "USD",
+		ID: "txn-inv-vti", SourceID: 99, AccountID: "acct-brokerage", Date: march(2), Amount: -10_000, Currency: "USD",
 		Status: "uncleared", InvestmentTransactionID: new("inv-vti"),
 	})
-	rows.Splits = append(rows.Splits, store.Split{ID: "split-inv-vti", SourceID: 7, TransactionID: "txn-inv-vti", Amount: -10_000})
+	rows.Splits = append(rows.Splits, store.Split{ID: "split-inv-vti", SourceID: 99, TransactionID: "txn-inv-vti", Amount: -10_000})
 	replaceStoreWithRates(t, home, rows, usdRate(march(10), 1_360_000))
 }
 
