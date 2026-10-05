@@ -182,6 +182,7 @@ each one's status.
 | `shares` | `DECIMAL(18,6)` |
 | `amount` | `DECIMAL(18,2)` |
 | `commission` | `DECIMAL(18,4)` |
+| `cost_basis` | `DECIMAL(18,2)` |
 | `currency` | `VARCHAR` |
 | `memo` | `VARCHAR` |
 | `split_new_shares` | `DECIMAL(18,6)` |

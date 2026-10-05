@@ -131,7 +131,7 @@ const sqlLastStatementDocument = `{
 const statusUnreadableConfigDocument = `{
   "store": {
     "path": %[1]q,
-    "format_version": 8,
+    "format_version": 9,
     "quarry_version": "(devel)",
     "built_at": %[2]q,
     "rows": {

@@ -22,7 +22,7 @@ import (
 const FileName = "quarry.duckdb"
 
 // FormatVersion is the store format this build of quarry writes and reads.
-const FormatVersion = 8
+const FormatVersion = 9
 
 // develVersion is the quarry_version recorded when no build version is known.
 const develVersion = "(devel)"
@@ -666,13 +666,14 @@ func investmentTransactionRows(txns []store.InvestmentTransaction) ([][]any, err
 		shares, err1 := decimalCell("shares", t.Shares, sharesWidth, sharesScale)
 		amount, err2 := decimalCell("amount", &t.Amount, moneyWidth, moneyScale)
 		commission, err3 := decimalCell("commission", t.Commission, commissionWidth, commissionScale)
-		splitNew, err4 := decimalCell("split_new_shares", t.SplitNewShares, sharesWidth, sharesScale)
-		splitOld, err5 := decimalCell("split_old_shares", t.SplitOldShares, sharesWidth, sharesScale)
-		if err := errors.Join(err1, err2, err3, err4, err5); err != nil {
+		costBasis, err4 := decimalCell("cost_basis", t.CostBasis, moneyWidth, moneyScale)
+		splitNew, err5 := decimalCell("split_new_shares", t.SplitNewShares, sharesWidth, sharesScale)
+		splitOld, err6 := decimalCell("split_old_shares", t.SplitOldShares, sharesWidth, sharesScale)
+		if err := errors.Join(err1, err2, err3, err4, err5, err6); err != nil {
 			return nil, fmt.Errorf("investment transaction %s: %w", t.ID, err)
 		}
 		out[i] = []any{
-			t.ID, t.SourceID, t.AccountID, nullableStr(t.SecurityID), t.Date, t.Action, shares, amount, commission, nil,
+			t.ID, t.SourceID, t.AccountID, nullableStr(t.SecurityID), t.Date, t.Action, shares, amount, commission, costBasis,
 			t.Currency, nullableStr(t.Memo), splitNew, splitOld,
 		}
 	}

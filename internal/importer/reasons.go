@@ -139,7 +139,7 @@ func reasonInvestmentNoAmount(date, account string) string {
 	return fmt.Sprintf("an investment transaction on %s in \"%s\" has no amount", date, account)
 }
 
-// In the reasonInvestment value refusals below, what names the column: "a commission", "an amount" or "a share count".
+// In the reasonInvestment value refusals below, what names the column: "a commission", "a cost basis", "an amount" or "a share count".
 
 func reasonInvestmentNotANumber(date, account, what string) string {
 	return fmt.Sprintf("an investment transaction on %s in \"%s\" has %s that is not a number", date, account, what)

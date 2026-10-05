@@ -47,7 +47,7 @@ ORDER BY Z_PK
 const investmentsQuery = `
 SELECT t.Z_PK, t.ZACCOUNT, CAST(t.ZPOSTEDDATE AS REAL), CAST(t.ZENTEREDDATE AS REAL), t.ZTYPE, t.ZPOSITION, t.ZNOTE,
        typeof(t.ZUNITS), CAST(t.ZUNITS AS TEXT), typeof(t.ZAMOUNT), CAST(t.ZAMOUNT AS TEXT),
-       typeof(t.ZCOMMISSION), CAST(t.ZCOMMISSION AS TEXT),
+       typeof(t.ZCOMMISSION), CAST(t.ZCOMMISSION AS TEXT), typeof(t.ZCOSTBASIS), CAST(t.ZCOSTBASIS AS TEXT),
        typeof(t.ZNUMERATOR), CAST(t.ZNUMERATOR AS TEXT), typeof(t.ZDENOMINATOR), CAST(t.ZDENOMINATOR AS TEXT),
        t.ZRECONCILESTATUS, COALESCE(t.ZEXCLUDEFROMREPORTS, 0) <> 0
 FROM ZTRANSACTION t
@@ -94,15 +94,15 @@ type numberColumn struct {
 
 // investmentRow is one scanned ZTRANSACTION row of the investment entity.
 type investmentRow struct {
-	pk                        int64
-	account, position         sql.NullInt64
-	posted, entered           sql.NullFloat64
-	code                      sql.NullInt64
-	note                      sql.NullString
-	units, amount, commission numberColumn
-	numerator, denominator    numberColumn
-	status                    sql.NullInt64
-	excluded                  bool
+	pk                                   int64
+	account, position                    sql.NullInt64
+	posted, entered                      sql.NullFloat64
+	code                                 sql.NullInt64
+	note                                 sql.NullString
+	units, amount, commission, costBasis numberColumn
+	numerator, denominator               numberColumn
+	status                               sql.NullInt64
+	excluded                             bool
 }
 
 // mapInvestmentTransactions reads the investment transactions of investmentEnt in an imported account, sending an
@@ -121,6 +121,7 @@ func mapInvestmentTransactions(
 		var r investmentRow
 		if err := scan(&r.pk, &r.account, &r.posted, &r.entered, &r.code, &r.position, &r.note,
 			&r.units.typ, &r.units.text, &r.amount.typ, &r.amount.text, &r.commission.typ, &r.commission.text,
+			&r.costBasis.typ, &r.costBasis.text,
 			&r.numerator.typ, &r.numerator.text, &r.denominator.typ, &r.denominator.text,
 			&r.status, &r.excluded); err != nil {
 			return err
@@ -262,8 +263,8 @@ func resolveSecurity(r investmentRow, positions map[int64]positionRef, securitie
 	return sec, ok
 }
 
-// readValues sets txn's shares, amount and commission, reporting false after adding an offender
-// for the first one quarry cannot read.
+// readValues sets txn's shares, amount, commission and cost basis, reporting false after adding an
+// offender for the first one quarry cannot read.
 func (s investmentSubject) readValues(txn *store.InvestmentTransaction) bool {
 	shares, ok := s.shares()
 	if !ok {
@@ -281,17 +282,25 @@ func (s investmentSubject) readValues(txn *store.InvestmentTransaction) bool {
 	}
 	txn.Amount = amount
 
-	if s.row.commission.typ == "null" {
-		return true
-	}
-	commission, ok := s.money(s.row.commission, "a commission", commissionColumn)
+	txn.Commission, ok = s.optionalMoney(s.row.commission, "a commission", commissionColumn)
 	if !ok {
 		return false
 	}
-	if commission != 0 {
-		txn.Commission = &commission
+	txn.CostBasis, ok = s.optionalMoney(s.row.costBasis, "a cost basis", amountColumn)
+	return ok
+}
+
+// optionalMoney returns the units of a money column that Quicken may leave NULL: nil for NULL or 0,
+// reporting false after adding an offender when it cannot be read.
+func (s investmentSubject) optionalMoney(col numberColumn, what string, kind moneyColumn) (*int64, bool) {
+	if col.typ == "null" {
+		return nil, true
 	}
-	return true
+	units, ok := s.money(col, what, kind)
+	if !ok || units == 0 {
+		return nil, ok
+	}
+	return &units, true
 }
 
 // shares returns the millionths of the units column; invalid when it is NULL.

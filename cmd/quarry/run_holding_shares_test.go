@@ -53,5 +53,5 @@ func Test_run_sync_records_each_holdings_share_count_over_time(t *testing.T) {
 		"2026-03-04 " + futureDay.AddDate(0, 0, -1).Format(time.DateOnly) + " 6.000000",
 		futureDay.Format(time.DateOnly) + " NULL 9.000000",
 	}, storeTextRows(t, home, holdingSpansQuery))
-	assert.Equal(t, []string{"8"}, storeTextRows(t, home, "SELECT CAST(format_version AS VARCHAR) FROM store_info"))
+	assert.Equal(t, []string{"9"}, storeTextRows(t, home, "SELECT CAST(format_version AS VARCHAR) FROM store_info"))
 }
