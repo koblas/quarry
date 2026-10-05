@@ -32,8 +32,8 @@ Defaults, for the orchestrator:
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_acb_security_test.go` (new) `Test_run_acb_security_prints_every_event_of_the_named_security_with_shares_held_acb_and_gain` — buys, a sell and a config `[[acb.adjustment]]` on one security plus a second security that must not print; `acb --security <ticker>`; full stdout block (caption, header, every row incl. the adjustment), stderr empty, exit 0
-- [ ] Step 2: `internal/cli/acb.go:21-92` `--security` via `StringArrayVar` + `acbSecurityHelp` const; `internal/report/acb.go:16-21` `ACBRequest.Securities`; stub so it compiles and fails at the stdout assertion
+- [x] Step 1: `cmd/quarry/run_acb_security_test.go` (new) `Test_run_acb_security_prints_every_event_of_the_named_security_with_shares_held_acb_and_gain` — buys, a sell and a config `[[acb.adjustment]]` on one security plus a second security that must not print; `acb --security <ticker>`; full stdout block (caption, header, every row incl. the adjustment), stderr empty, exit 0
+- [x] Step 2: `internal/cli/acb.go:21-92` `--security` via `StringArrayVar` + `acbSecurityHelp` const; `internal/report/acb.go:16-21` `ACBRequest.Securities`; stub so it compiles and fails at the stdout assertion
 
 ### Build
 - [ ] Step 3: `internal/report/acb.go:16-50,207-217` + new `acb_select.go` — resolve selectors in `(*Server).ACB` against `history.Securities` (the one read; registered-only securities never reach `ACB.Securities`, `acb_walk.go:72-80`); uncut `ACB` gains the selected ids, a "selection given" flag and `RegisteredOnly []store.Security`; `refusal.go:18-24` `RefusalUnknownSecurity` + `unknownSecurityRefusal` beside `:86-92`, `Arg` doc `:36`. Tests `internal/report/acb_select_test.go`: one row per D1 arm (id, ticker case-folded, name case-folded, shared ticker → both, `""`, id that is also another's name → id alone), D2 dedupe, D3 first-unmatched among matched, D4 adjustment-only/after-today security, registered-only row (control: same security also in pool → selected, not registered-only). Fault tests: n/a, selection is pure over the existing read (store fault already pinned by `Test_acb_returns_a_failed_store_read`)
@@ -68,3 +68,13 @@ Defaults, for the orchestrator:
 - A no-cost reinvest's Amount and CAD are 0: without the `unknown cost` suffix, warning 4b's "lists them" is unprovable
 
 **Orchestrator: product-vision ruling 2026-10-05 recorded in spec after "Text `--security`" — supersedes this plan: P4 JSON event key `unknown_cost` IS added (last, after gain; re-pin every event-byte pin in internal/report/document/acb_test.go); refusal line replaced: `quarry: acb covers no security named "XYZ"; quarry acb --json lists every security it covers` (exit 1); P3 widened: every named security gets a block in walk order, registered-only = caption+header, incl. mixed selections; slot 2b for the registered-only warning; P1, P2, P5-P7, D1-D6 confirmed.**
+
+## Phase report
+
+Run A (steps 1-2) done; commit follows `d68efc0`. Red, nothing else changed.
+- `cmd/quarry/run_acb_security_test.go` (new): acceptance test + `acbHistoryRows`, `acbHistoryLine` (widths fit THIS fixture: 10, 13, 17, 6, 13, 4, 9, 11, 8, 12; trailing spaces trimmed), `acbSecurityConfig` (ROC 150.00 on sec-acme 2024-06-30). B2's cmd tests add to this file; reuse `acbHistoryRows` (Acme + Beta, CAD only).
+- `internal/cli/acb.go:20-22,31,86,98-99` `acbSecurityHelp` const (spec wording verbatim), `--security` via `StringArrayVar`, passed as `ACBRequest.Securities`; `internal/report/acb.go:12-20` `ACBRequest.Securities []string`. The flag is accepted and IGNORED: nothing reads `Securities` yet (B1 wires it).
+- Red: `Test_run_acb_security_...` fails at the stdout `assert.Equal` — actual is the ordinary year + position tables (`Realized capital gains by tax year, in CAD ...`), expected `ACB history of "Acme Corp" (ACME), in CAD` block. Exit 0, stderr empty. Sanity from actual output: Acme sale ACB removed 580.00, gain 320.00, held 9, ACB 870.00, matching the expected rows.
+- Rulings applied to the expected text: caption `ACB history of "<name>" (<ticker>), in CAD` when the ticker is non-nil (no-ticker form drops ` (<ticker>)`); Amount `-1,000.00 CAD` (code on CAD rows too, Rate blank); adjustment row Account/Shares/Amount/Rate blank, Gain blank (ROC below ACB); sell event Shares positive (walk `Abs`).
+- Green now: `go build ./...`, `go test ./internal/report/... ./internal/cli/`, `golangci-lint` on cli/report/cmd = 0 issues. No help pin yet (step 6).
+- Orchestrator rulings (JSON `unknown_cost`, new refusal line, every named security gets a block, slot 2b) are NOT yet built; they land in B1/B2 (JSON `unknown_cost` re-pins every event-byte pin in `internal/report/document/acb_test.go`).
