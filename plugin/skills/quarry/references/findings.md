@@ -40,4 +40,4 @@ ignore = ["duplicate:txn-4410+txn-4412", "uncategorized:payee-88"]
 
 ## A spreadsheet
 
-- `quarry findings --csv` prints one row per transaction, split, payee or category. Write it to a file only when the user asks: `quarry findings --status all --csv > findings.csv`.
+- `quarry findings --csv` prints one row per transaction, split, payee, category or account. Write it to a file only when the user asks: `quarry findings --status all --csv > findings.csv`.

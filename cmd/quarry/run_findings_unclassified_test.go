@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -12,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The second run follows the config edit with no sync: classification is read from the config each time.
 func Test_run_findings_lists_an_unclassified_account_until_the_config_classifies_it(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -36,5 +36,41 @@ Ignore a finding by adding its id to findings.ignore in %s; see quarry findings 
 `, configShown, accountID, configShown), before.String())
 	assert.NotContains(t, after.String(), "unclassified-account")
 	assert.Contains(t, after.String(), "No open findings")
+	assert.Empty(t, stderr.String())
+}
+
+func Test_run_findings_json_reports_an_unclassified_account_without_found_or_fixed_times(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	b := v9fixture.NewBuilder()
+	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Questrade TFSA", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	syncBundle(t, b.WriteBundle(t, filepath.Join(home, "Documents")))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"findings", "--json", "--type", "unclassified-account"}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	var doc struct {
+		Findings []struct {
+			Status       string  `json:"status"`
+			FirstFoundAt *string `json:"first_found_at"`
+			FixedAt      *string `json:"fixed_at"`
+			Items        []struct {
+				AccountID string `json:"account_id"`
+				Account   string `json:"account"`
+				Currency  string `json:"currency"`
+			} `json:"items"`
+		} `json:"findings"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	require.Len(t, doc.Findings, 1)
+	entry := doc.Findings[0]
+	assert.Equal(t, "open", entry.Status)
+	assert.Nil(t, entry.FirstFoundAt)
+	assert.Nil(t, entry.FixedAt)
+	require.Len(t, entry.Items, 1)
+	assert.Equal(t, fmt.Sprintf("acct-%d", brokeragePK), entry.Items[0].AccountID)
+	assert.Equal(t, "Questrade TFSA", entry.Items[0].Account)
+	assert.Equal(t, "CAD", entry.Items[0].Currency)
 	assert.Empty(t, stderr.String())
 }
