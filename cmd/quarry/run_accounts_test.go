@@ -29,7 +29,7 @@ func Test_run_accounts_lists_open_accounts_with_their_balances(t *testing.T) {
 		"Account      Type        Currency    Balance  Status\n"+
 		"Chequing     chequing    CAD       12,345.67\n"+
 		"Old Savings  savings     CAD            0.00  inactive\n"+
-		"RRSP         retirement  CAD        1,000.00\n"+
+		"RRSP         retirement  CAD        1,000.00  unclassified\n"+
 		"US Chequing  chequing    USD        8,310.00\n",
 		stdout.String())
 }
@@ -48,7 +48,7 @@ func Test_run_accounts_all_lists_closed_accounts(t *testing.T) {
 		"Account        Type         Currency    Balance  Status\n"+
 		"Chequing       chequing     CAD       12,345.67\n"+
 		"Old Savings    savings      CAD            0.00  inactive\n"+
-		"RRSP           retirement   CAD        1,000.00\n"+
+		"RRSP           retirement   CAD        1,000.00  unclassified\n"+
 		"US Chequing    chequing     USD        8,310.00\n"+
 		"Visa Infinite  credit_card  CAD       -1,204.17  closed\n",
 		stdout.String())
@@ -100,7 +100,12 @@ value of their holdings today, each at the latest price Quicken recorded
 A column shows each balance in the reporting currency (--currency, else
 reporting.currency in the config file, else CAD) at today's Bank of
 Canada rate, or the latest earlier one; --currency native leaves it
-out. quarry does not add balances together here; quarry networth does.`)
+out. quarry does not add balances together here; quarry networth does.
+
+Status says registered for an account listed in accounts.registered in
+the config file, and unclassified for a brokerage or retirement account
+in neither accounts.registered nor accounts.non-registered; quarry
+findings lists those.`)
 	assert.Regexp(t, `(?m)^ +--all +include closed accounts$`, stdout.String())
 }
 

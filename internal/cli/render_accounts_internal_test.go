@@ -51,7 +51,7 @@ func Test_renderAccounts(t *testing.T) {
 			want: "" +
 				"Account        Type         Currency    Balance  Status\n" +
 				"Chequing       chequing     CAD       12,345.67\n" +
-				"RRSP           retirement   CAD            0.00\n" +
+				"RRSP           retirement   CAD            0.00  unclassified\n" +
 				"US Chequing    chequing     USD        8,310.00\n" +
 				"Visa Infinite  credit_card  CAD       -1,204.17  closed\n",
 		},
@@ -75,7 +75,7 @@ func Test_renderAccounts(t *testing.T) {
 			},
 			want: "" +
 				"Account    Type       Currency     Balance  Status\n" +
-				"Brokerage  brokerage  CAD       215,000.00\n" +
+				"Brokerage  brokerage  CAD       215,000.00  unclassified\n" +
 				"Chequing   chequing   CAD        12,345.67\n",
 		},
 		{
@@ -85,7 +85,7 @@ func Test_renderAccounts(t *testing.T) {
 			},
 			want: "" +
 				"Account    Type       Currency                             Balance  Status\n" +
-				"Brokerage  brokerage  CAD       999,999,999,999,999,998,000,000.00\n",
+				"Brokerage  brokerage  CAD       999,999,999,999,999,998,000,000.00  unclassified\n",
 		},
 		{
 			name: "a non-ASCII name padded by rune count",
@@ -106,8 +106,8 @@ func Test_renderAccounts(t *testing.T) {
 			},
 			want: "" +
 				"Account          Type        Currency  Balance  Status\n" +
-				"Netskope 401(k)  retirement  USD          0.00  closed, not in reports, linked tracking\n" +
-				"Brokerage        brokerage   USD          0.00  linked tracking\n",
+				"Netskope 401(k)  retirement  USD          0.00  closed, not in reports, linked tracking, unclassified\n" +
+				"Brokerage        brokerage   USD          0.00  linked tracking, unclassified\n",
 		},
 	}
 
@@ -143,7 +143,7 @@ func Test_renderAccounts_adds_the_reporting_currency_column_after_Balance(t *tes
 				"Account      Type       Currency    Balance     In CAD  Status\n" +
 				"Chequing     chequing   CAD       12,345.67  12,345.67\n" +
 				"US Chequing  chequing   USD        8,310.00  10,387.50\n" +
-				"Brokerage    brokerage  USD            0.00    no rate\n",
+				"Brokerage    brokerage  USD            0.00    no rate  unclassified\n",
 		},
 		{
 			name:    "USD: the header names the reporting currency",
@@ -183,7 +183,7 @@ func Test_renderAccounts_adds_the_reporting_currency_column_after_Balance(t *tes
 			want: "" +
 				"Account    Type       Currency    Balance     In CAD  Status\n" +
 				"Chequing   chequing   CAD       12,345.67  12,345.67\n" +
-				"Brokerage  brokerage  USD            0.00    no rate  closed\n",
+				"Brokerage  brokerage  USD            0.00    no rate  closed, unclassified\n",
 		},
 		{
 			name:    "CAD: a no rate cell is padded to the column so a not in reports Status starts two spaces after it",
@@ -191,7 +191,7 @@ func Test_renderAccounts_adds_the_reporting_currency_column_after_Balance(t *tes
 			want: "" +
 				"Account    Type       Currency    Balance     In CAD  Status\n" +
 				"Chequing   chequing   CAD       12,345.67  12,345.67\n" +
-				"Brokerage  brokerage  USD            0.00    no rate  not in reports\n",
+				"Brokerage  brokerage  USD            0.00    no rate  not in reports, unclassified\n",
 		},
 		{
 			name:    "USD: a no rate cell is padded to the narrower column so Status starts two spaces after it",
@@ -199,7 +199,7 @@ func Test_renderAccounts_adds_the_reporting_currency_column_after_Balance(t *tes
 			want: "" +
 				"Account    Type       Currency    Balance    In USD  Status\n" +
 				"Chequing   chequing   CAD       12,345.67  9,876.54\n" +
-				"Brokerage  brokerage  USD            0.00   no rate  not in reports\n",
+				"Brokerage  brokerage  USD            0.00   no rate  not in reports, unclassified\n",
 		},
 		{
 			name:    "no accounts keeps the column in the header",
@@ -223,7 +223,7 @@ func Test_renderAccounts_says_no_rate_for_every_cell_a_missing_rate_leaves_uncon
 
 	assert.Equal(t, ""+
 		"Account      Type       Currency   Balance   In CAD  Status\n"+
-		"Brokerage    brokerage  USD           0.00  no rate\n"+
+		"Brokerage    brokerage  USD           0.00  no rate  unclassified\n"+
 		"US Chequing  chequing   USD       8,310.00  no rate\n", got)
 }
 
@@ -249,7 +249,38 @@ func Test_accountStatus(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, accountStatus(c.account))
+			assert.Equal(t, c.want, accountStatus(c.account, report.Classification{}))
+		})
+	}
+}
+
+func Test_accountStatus_ends_with_registered_or_unclassified(t *testing.T) {
+	classification := report.Classification{Registered: []string{"acct-1"}, NonRegistered: []string{"acct-2"}}
+	cases := []struct {
+		name    string
+		account store.Account
+		want    string
+	}{
+		{name: "a listed registered account", account: store.Account{ID: "acct-1", Type: "brokerage", Active: true}, want: "registered"},
+		{name: "a listed registered non-investment account", account: store.Account{ID: "acct-1", Type: "chequing", Active: true}, want: "registered"},
+		{name: "a listed non-registered account gets nothing", account: store.Account{ID: "acct-2", Type: "brokerage", Active: true}, want: ""},
+		{name: "an unlisted investment account is unclassified", account: store.Account{ID: "acct-3", Type: "retirement", Active: true}, want: "unclassified"},
+		{name: "an unlisted non-investment account gets nothing", account: store.Account{ID: "acct-3", Type: "chequing", Active: true}, want: ""},
+		{
+			name:    "registered follows every other state",
+			account: store.Account{ID: "acct-1", Type: "brokerage", Closed: true, NotInReports: true, LinkedTracking: true},
+			want:    "closed, not in reports, linked tracking, registered",
+		},
+		{
+			name:    "unclassified follows every other state",
+			account: store.Account{ID: "acct-3", Type: "brokerage", NotInReports: true, LinkedTracking: true},
+			want:    "inactive, not in reports, linked tracking, unclassified",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, accountStatus(c.account, classification))
 		})
 	}
 }

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/spf13/cobra"
 )
@@ -59,12 +60,32 @@ func (f *currencyFlag) resolve(cmd *cobra.Command, loadConfig ConfigLoader) (mon
 		currency, _ := money.ParseCurrency(f.code)
 		return currency, nil, nil
 	}
+	cfg, err := readConfig(cmd, loadConfig)
+	if err != nil {
+		return money.Native, nil, err
+	}
+	return cfg.Currency, cfg.WarningsAbsolute, nil
+}
+
+// in is the --currency flag when given, else cfg's reporting currency.
+func (f *currencyFlag) in(cmd *cobra.Command, cfg config.Config) money.Currency {
+	if cmd.Flags().Changed(currencyFlagName) {
+		// The flag was validated in args.
+		currency, _ := money.ParseCurrency(f.code)
+		return currency
+	}
+	return cfg.Currency
+}
+
+// readConfig loads the config for cmd and prints its warnings (~ form) to stderr; a load failure is a
+// runtimeError.
+func readConfig(cmd *cobra.Command, loadConfig ConfigLoader) (config.Config, error) {
 	cfg, err := loadConfig(cmd.Name())
 	if err != nil {
-		return money.Native, nil, &runtimeError{err: err}
+		return config.Config{}, &runtimeError{err: err}
 	}
 	printConfigWarnings(cmd, cfg.Warnings)
-	return cfg.Currency, cfg.WarningsAbsolute, nil
+	return cfg, nil
 }
 
 // withConfigWarnings is the --json warnings of a read command: the config's, absolute, then the

@@ -51,7 +51,7 @@ func Test_run_accounts_shows_an_investment_balance_as_cash_plus_holdings_value(t
 	assert.Empty(t, stderr.String())
 	assert.Equal(t, ""+
 		"Account    Type       Currency  Balance  Status\n"+
-		"Brokerage  brokerage  CAD        920.00\n"+
+		"Brokerage  brokerage  CAD        920.00  unclassified\n"+
 		"Chequing   chequing   CAD        100.00\n",
 		stdout.String())
 	var doc accountsJSON
@@ -94,7 +94,7 @@ func Test_run_accounts_shows_an_overdrawn_investment_balance_with_its_minus_sign
 	assert.Empty(t, got.textErr)
 	assert.Equal(t, ""+
 		"Account    Type       Currency  Balance  Status\n"+
-		"Brokerage  brokerage  CAD        -80.00\n",
+		"Brokerage  brokerage  CAD        -80.00  unclassified\n",
 		got.text)
 	var doc accountsJSON
 	require.NoError(t, json.Unmarshal([]byte(got.json), &doc))
@@ -148,12 +148,12 @@ func Test_run_accounts_converts_an_investment_balance_as_cash_plus_holdings_valu
 		{
 			name: "CAD", currency: "CAD", converted: "1150.01",
 			text: "Account    Type       Currency  Balance    In CAD  Status\n" +
-				"Brokerage  brokerage  USD        920.01  1,150.01\n",
+				"Brokerage  brokerage  USD        920.01  1,150.01  unclassified\n",
 		},
 		{
 			name: "USD", currency: "USD", converted: "920.01",
 			text: "Account    Type       Currency  Balance  In USD  Status\n" +
-				"Brokerage  brokerage  USD        920.01  920.01\n",
+				"Brokerage  brokerage  USD        920.01  920.01  unclassified\n",
 		},
 	}
 	for _, c := range cases {

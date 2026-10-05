@@ -291,6 +291,9 @@ func Test_run_read_commands_ignore_a_malformed_config_when_given_a_currency(t *t
 	before := malformedConfigFixture(t)
 
 	for name, args := range readCommandArgs() {
+		if name == "accounts" {
+			continue
+		}
 		t.Run(name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
@@ -301,6 +304,17 @@ func Test_run_read_commands_ignore_a_malformed_config_when_given_a_currency(t *t
 			assert.Equal(t, 0, exitCode)
 		})
 	}
+}
+
+func Test_run_accounts_refuses_a_malformed_config_even_when_given_a_currency(t *testing.T) {
+	malformedConfigFixture(t)
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"accounts", "--currency", "CAD"}, spendEnv(&stdout, &stderr))
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Regexp(t, "^"+regexp.QuoteMeta("quarry: cannot read "+configShown+": line 1: ")+"[^\n]+"+regexp.QuoteMeta(configFix)+"\n$", stderr.String())
 }
 
 func Test_run_sql_ignores_a_malformed_config(t *testing.T) {

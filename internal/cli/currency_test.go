@@ -22,6 +22,10 @@ const badCurrencyFlag = "--currency must be CAD, USD or native"
 // currencyCommands are the commands that take --currency.
 var currencyCommands = []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth"}
 
+// flagSkipsConfigCommands are the currencyCommands that read no config when --currency is given;
+// accounts always reads it, for the account classification.
+var flagSkipsConfigCommands = []string{"spend", "cashflow", "recurring", "anomalies", "holdings", "networth"}
+
 // cadConfig is a ConfigLoader for a config file that leaves reporting.currency at its CAD default.
 func cadConfig(string) (config.Config, error) { return config.Config{Currency: money.CAD}, nil }
 
@@ -177,6 +181,8 @@ func Test_read_commands_read_the_config_once_and_only_without_the_currency_flag(
 			require.NoError(t, err)
 			assert.Equal(t, []string{command}, asked)
 		})
+	}
+	for _, command := range flagSkipsConfigCommands {
 		t.Run(command+" with the flag", func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			calls := 0
@@ -192,6 +198,41 @@ func Test_read_commands_read_the_config_once_and_only_without_the_currency_flag(
 			assert.Zero(t, calls)
 		})
 	}
+}
+
+func Test_accounts_reads_the_config_once_even_with_the_currency_flag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	var asked []string
+	env := loaderEnv(&stdout, &stderr, func(name string) (config.Config, error) {
+		asked = append(asked, name)
+
+		return cadConfig(name)
+	})
+
+	err := cli.Execute(t.Context(), []string{"accounts", "--currency", "native"}, env)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"accounts"}, asked)
+}
+
+func Test_accounts_refuses_an_unreadable_config_as_a_runtime_error_even_with_the_currency_flag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	env := loaderEnv(&stdout, &stderr, func(string) (config.Config, error) { return config.Config{}, errConfigRead })
+
+	err := cli.Execute(t.Context(), []string{"accounts", "--currency", "native"}, env)
+
+	require.ErrorIs(t, err, errConfigRead)
+	assert.NotErrorAs(t, err, new(cli.UsageError))
+	assert.Empty(t, stdout.String())
+}
+
+func Test_accounts_prints_the_configs_warnings_once_even_with_the_currency_flag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := cli.Execute(t.Context(), []string{"accounts", "--currency", "native"}, loaderEnv(&stdout, &stderr, warningConfig))
+
+	require.NoError(t, err)
+	assert.Equal(t, "quarry: warning: "+unknownKeyShown+"\n", stderr.String())
 }
 
 func Test_read_commands_refuse_an_unreadable_config_as_a_runtime_error(t *testing.T) {

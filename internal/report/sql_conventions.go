@@ -51,4 +51,6 @@ quarry accounts and quarry networth use; filter by date. v_net_worth has one
 row per day, account type and currency, adding up the balances of the
 accounts Quicken's reports count, as quarry networth does; sum balance_cad
 or balance_usd over one date for the total; a NULL there means no exchange
-rate for that day.`
+rate for that day. Which accounts are registered is not in the store; it is
+accounts.registered and accounts.non-registered in quarry's config, and
+quarry accounts --json reports it as registered.`

@@ -20,7 +20,7 @@ import (
 func classifiedAccounts() store.AccountList {
 	row := func(id, name, accountType string) store.AccountBalance {
 		return store.AccountBalance{
-			Account: store.Account{ID: id, Name: name, Type: accountType, Currency: "CAD", Active: true},
+			ID: id, Name: name, Type: accountType, Currency: "CAD", Active: true,
 			Balance: big.NewInt(0), Cash: big.NewInt(0),
 		}
 	}
@@ -35,6 +35,12 @@ func classifiedAccounts() store.AccountList {
 
 func executeClassified(t *testing.T, stdout *bytes.Buffer, args ...string) error {
 	t.Helper()
+
+	return executeClassifiedList(t, stdout, classifiedAccounts(), args...)
+}
+
+func executeClassifiedList(t *testing.T, stdout *bytes.Buffer, list store.AccountList, args ...string) error {
+	t.Helper()
 	env := cli.Env{
 		LoadConfig: func(string) (config.Config, error) {
 			return config.Config{
@@ -45,7 +51,7 @@ func executeClassified(t *testing.T, stdout *bytes.Buffer, args ...string) error
 		},
 		Stdout: stdout, Stderr: &bytes.Buffer{},
 		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fakeReportStore{accounts: classifiedAccounts()})), nil
+			return report.NewServer(report.WithStore(fakeReportStore{accounts: list})), nil
 		},
 	}
 	return cli.Execute(t.Context(), append([]string{"accounts", "--currency", "native"}, args...), env)

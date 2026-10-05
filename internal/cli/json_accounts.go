@@ -16,7 +16,7 @@ type accountsDocument struct {
 }
 
 // accountRowDocument is one entry of "accounts"; Institution and ConvertedBalance are null when
-// absent or unconverted (native listing or no rate), HoldingsValue for a non-investment account.
+// absent or unconverted (native listing or no rate), HoldingsValue for a non-investment account, Registered for an account in neither classification list.
 type accountRowDocument struct {
 	ID               string  `json:"id"`
 	Name             string  `json:"name"`
@@ -27,6 +27,7 @@ type accountRowDocument struct {
 	Active           bool    `json:"active"`
 	InReports        bool    `json:"in_reports"`
 	LinkedTracking   bool    `json:"linked_tracking"`
+	Registered       *bool   `json:"registered"`
 	Balance          string  `json:"balance"`
 	Cash             string  `json:"cash"`
 	HoldingsValue    *string `json:"holdings_value"`
@@ -43,6 +44,7 @@ func renderAccountsJSON(list report.AccountListing, warnings []string) ([]byte, 
 			Institution: jsonNullInstitution(a.Institution),
 			Closed:      a.Closed, Active: a.Active, InReports: !a.NotInReports,
 			LinkedTracking: a.LinkedTracking,
+			Registered:     list.Classification.Of(a.Account),
 			Balance:        document.BigMoney(a.Balance), Cash: document.BigMoney(a.Cash),
 			HoldingsValue:    jsonNullMoney(a.HoldingsValue),
 			ConvertedBalance: jsonNullMoney(list.ConvertedBalance(a)),
