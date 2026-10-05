@@ -89,7 +89,7 @@ func holdingCells(h store.Holding) []string {
 	return []string{
 		escapeCell(h.Account) + holdingClosed(h),
 		holdingSecurity(h),
-		formatShares(h.Shares),
+		humanize.Shares(h.Shares),
 		holdingPrice(h),
 		holdingPricedOn(h),
 		holdingCurrency(h),
@@ -161,9 +161,9 @@ func holdingInCell(l report.Holdings, h store.Holding) string {
 	return formatBigMoney(l.Converted(h))
 }
 
-// formatPrice renders millionths of a currency unit like formatShares, with at least two decimals.
+// formatPrice renders millionths of a currency unit like humanize.Shares, with at least two decimals.
 func formatPrice(millionths int64) string {
-	s := formatShares(millionths)
+	s := humanize.Shares(millionths)
 	_, decimals, found := strings.Cut(s, ".")
 	if !found {
 		return s + ".00"

@@ -47,7 +47,7 @@ func renderACBPositions(a report.ACB) string {
 			ticker = escapeCell(*s.Security.Ticker)
 		}
 		rows = append(rows, []string{
-			escapeCell(s.Security.Name), ticker, formatShares(report.Millionths(s.Shares)),
+			escapeCell(s.Security.Name), ticker, humanize.Shares(report.Millionths(s.Shares)),
 			formatMoney(s.ACB), formatPerShare(s.PerShare()),
 		})
 	}

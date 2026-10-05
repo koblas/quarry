@@ -254,8 +254,6 @@ func Test_acb_leaves_the_pool_alone_for_actions_it_does_not_walk(t *testing.T) {
 		acbTx(t, 2, "acct-1", "sec-1", "2024-01-03", store.ActionDividend, "CAD", 0, 50),
 		acbTx(t, 3, "acct-1", "sec-1", "2024-01-04", store.ActionCapitalGainLong, "CAD", 0, 60),
 		acbTx(t, 4, "acct-1", "sec-1", "2024-01-05", store.ActionMiscIncome, "CAD", 0, 70),
-		acbTx(t, 5, "acct-1", "sec-1", "2024-01-06", store.ActionAddShares, "CAD", 3*acbMillion, 0),
-		acbTx(t, 6, "acct-1", "sec-1", "2024-01-07", store.ActionRemoveShares, "CAD", -2*acbMillion, 0),
 	)
 
 	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "10", ACB: 1_000}}, acbPositionRows(got))

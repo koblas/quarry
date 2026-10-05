@@ -21,8 +21,10 @@ const (
 var acbTiers = map[string]int{
 	store.ActionBuy:              0,
 	store.ActionReinvestDividend: 0,
+	store.ActionAddShares:        0,
 	store.ActionSplit:            1,
 	store.ActionSell:             2,
+	store.ActionRemoveShares:     2,
 }
 
 // acbPool is one security's units and adjusted cost base across the non-registered accounts.
@@ -124,7 +126,7 @@ func walkSecurity(security store.Security, txs []store.InvestmentTransaction, ra
 		switch tx.Action {
 		case store.ActionBuy:
 			pool.add(event.Shares, -toCAD(tx.Amount, tx.Currency, rate))
-		case store.ActionReinvestDividend:
+		case store.ActionReinvestDividend, store.ActionAddShares:
 			pool.add(event.Shares, toCAD(zeroIfNil(tx.CostBasis), tx.Currency, rate))
 		case store.ActionSplit:
 			// A split is recorded once per account that held the security; the first row of a day is the split.
@@ -141,6 +143,10 @@ func walkSecurity(security store.Security, txs []store.InvestmentTransaction, ra
 			outlays := sale.row.Outlays
 			event.Gain, event.Outlays, event.Realized = sale.row.Gain, &outlays, true
 			sales = append(sales, sale)
+		case store.ActionRemoveShares:
+			// Stored negative like a sale's; the units leave with their share of the ACB and no gain.
+			event.Shares.Abs(event.Shares)
+			pool.take(event.Shares)
 		}
 		event.Held, event.ACB = new(big.Rat).Set(pool.shares), pool.acb
 		position.Events = append(position.Events, event)
@@ -165,18 +171,25 @@ func (p *acbPool) split(newShares, oldShares *int64) {
 	p.shares.Mul(p.shares, big.NewRat(*newShares, *oldShares))
 }
 
-// sell removes sold units (a magnitude) and their share of the ACB, or all of it when they are all the units held
-// or more, and returns the sale in CAD.
-func (p *acbPool) sell(tx store.InvestmentTransaction, sold *big.Rat, rate money.Rate) acbSale {
+// take removes units (a magnitude) and their share of the ACB, or all of it when they are all the units held
+// or more, and returns the ACB removed.
+func (p *acbPool) take(units *big.Rat) int64 {
 	removed := p.acb
-	if sold.Cmp(p.shares) < 0 {
-		removed = roundHalfAway(new(big.Rat).Mul(big.NewRat(p.acb, 1), new(big.Rat).Quo(sold, p.shares)))
-		p.shares.Sub(p.shares, sold)
+	if units.Cmp(p.shares) < 0 {
+		removed = roundHalfAway(new(big.Rat).Mul(big.NewRat(p.acb, 1), new(big.Rat).Quo(units, p.shares)))
+		p.shares.Sub(p.shares, units)
 		p.acb -= removed
 	} else {
 		p.shares.SetInt64(0)
 		p.acb = 0
 	}
+
+	return removed
+}
+
+// sell takes sold units (a magnitude) out of the pool and returns the sale in CAD.
+func (p *acbPool) sell(tx store.InvestmentTransaction, sold *big.Rat, rate money.Rate) acbSale {
+	removed := p.take(sold)
 
 	outlays := int64(0)
 	if tx.Commission != nil {

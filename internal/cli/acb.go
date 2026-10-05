@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
 	"github.com/spf13/cobra"
 )
 
@@ -58,9 +59,11 @@ accountant, not a tax filing.`,
 				return &runtimeError{err: err}
 			}
 
-			return emitReport(cmd, *jsonOut, nil,
+			warnings := document.ACBWarnings(acb)
+
+			return emitReport(cmd, *jsonOut, warnings,
 				func() ([]byte, error) {
-					return renderACBJSON(acb, withConfigWarnings(cfg.WarningsAbsolute, nil))
+					return renderACBJSON(acb, withConfigWarnings(cfg.WarningsAbsolute, warnings))
 				},
 				func() string { return renderACB(acb) })
 		},
