@@ -186,7 +186,7 @@ Month end    brokerage   chequing  credit_card       Total
 - Copy ruling (product-vision, 2026-10-04, SCENARIO-12):
   - A cell with no row for that type (converted) or type × currency (native) on that date is **blank**; a date with no rows has a blank Total, never `0.00`. A cell whose rows sum to zero shows `0.00` (history keeps zero cells; only snapshot text drops zero rows).
   - A type gets a column when its native balance is non-zero on any listed date, in any currency.
-  - A converted history cell with no rate is `no rate` (as `convertedCell`); blank always means "no row". Until SCENARIO-14b it renders blank (interim).
+  - A converted history cell with no rate is `no rate` (as `convertedCell`); blank always means "no row".
   - Every listed month end gets a line. Native: one line per currency with a row that date, CAD first; a date with no row in any currency gets one line with the date only. A native line's Total is that currency's sum.
   - The caption uses the first and last listed month ends while JSON `since`/`until` carry the resolved since and clamped until.
 
