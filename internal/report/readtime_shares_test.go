@@ -16,7 +16,10 @@ const (
 	oneAndHalf = int64(1_500_000)
 )
 
-var margin = report.Classification{NonRegistered: []string{"acct-1"}}
+// nonRegistered is a config listing acct-1 as non-registered.
+func nonRegistered() report.Classification {
+	return report.Classification{NonRegistered: []string{"acct-1"}}
+}
 
 // noCostAdd is an add_shares of oneAndHalf shares of sec-1 into account on 2026-03-day, with no cost basis.
 func noCostAdd(id, account string, day int) store.InvestmentTransaction {
@@ -62,16 +65,24 @@ func Test_findings_lists_shares_without_cost_only_in_a_non_registered_account(t 
 	assert.Equal(t, []string{"shares-without-cost:itxn-4", "shares-without-cost:itxn-3"}, sharesIDs(got))
 }
 
-func Test_findings_does_not_list_an_add_that_moves_no_units(t *testing.T) {
+func Test_findings_does_not_list_an_add_of_zero_or_negative_units(t *testing.T) {
 	zero, negative := noCostAdd("itxn-1", "acct-1", 1), noCostAdd("itxn-2", "acct-1", 2)
 	zero.Shares, negative.Shares = new(int64(0)), new(-oneAndHalf)
-	missing := noCostAdd("itxn-3", "acct-1", 3)
+	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, zero, negative, noCostAdd("itxn-3", "acct-1", 3))
+
+	got := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered()}, list)
+
+	assert.Equal(t, []string{"shares-without-cost:itxn-3"}, sharesIDs(got))
+}
+
+func Test_findings_does_not_list_an_add_with_no_unit_count(t *testing.T) {
+	missing := noCostAdd("itxn-1", "acct-1", 1)
 	missing.Shares = nil
-	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, zero, negative, missing, noCostAdd("itxn-4", "acct-1", 4))
+	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, missing, noCostAdd("itxn-2", "acct-1", 2))
 
-	got := sharesFindings(t, report.FindingsRequest{Classification: margin}, list)
+	got := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered()}, list)
 
-	assert.Equal(t, []string{"shares-without-cost:itxn-4"}, sharesIDs(got))
+	assert.Equal(t, []string{"shares-without-cost:itxn-2"}, sharesIDs(got))
 }
 
 func Test_findings_does_not_list_a_reinvest_with_no_cost(t *testing.T) {
@@ -79,7 +90,7 @@ func Test_findings_does_not_list_a_reinvest_with_no_cost(t *testing.T) {
 	reinvest.Action = store.ActionReinvestDividend
 	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, reinvest, noCostAdd("itxn-2", "acct-1", 2))
 
-	got := sharesFindings(t, report.FindingsRequest{Classification: margin}, list)
+	got := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered()}, list)
 
 	assert.Equal(t, []string{"shares-without-cost:itxn-2"}, sharesIDs(got))
 }
@@ -89,7 +100,7 @@ func Test_findings_does_not_list_an_add_that_has_a_cost(t *testing.T) {
 	costed.CostBasis = new(int64(30_000))
 	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, costed, noCostAdd("itxn-2", "acct-1", 2))
 
-	got := sharesFindings(t, report.FindingsRequest{Classification: margin}, list)
+	got := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered()}, list)
 
 	assert.Equal(t, []string{"shares-without-cost:itxn-2"}, sharesIDs(got))
 }
@@ -99,7 +110,7 @@ func Test_findings_does_not_list_an_add_that_names_no_security(t *testing.T) {
 	bare.SecurityID = nil
 	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, bare, noCostAdd("itxn-2", "acct-1", 2))
 
-	got := sharesFindings(t, report.FindingsRequest{Classification: margin}, list)
+	got := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered()}, list)
 
 	assert.Equal(t, []string{"shares-without-cost:itxn-2"}, sharesIDs(got))
 }
@@ -109,7 +120,7 @@ func Test_findings_lists_a_future_dated_add_with_no_cost(t *testing.T) {
 	future.Date = time.Date(2999, time.January, 1, 0, 0, 0, 0, time.UTC)
 	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, future)
 
-	got := sharesFindings(t, report.FindingsRequest{Classification: margin}, list)
+	got := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered()}, list)
 
 	assert.Equal(t, []string{"shares-without-cost:itxn-1"}, sharesIDs(got))
 }
@@ -117,7 +128,7 @@ func Test_findings_lists_a_future_dated_add_with_no_cost(t *testing.T) {
 func Test_findings_lists_no_shares_without_cost_when_the_classification_is_empty(t *testing.T) {
 	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, noCostAdd("itxn-1", "acct-1", 1))
 
-	listed := sharesFindings(t, report.FindingsRequest{Classification: margin}, list)
+	listed := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered()}, list)
 	unreadable := sharesFindings(t, report.FindingsRequest{}, list)
 
 	assert.Equal(t, []string{"shares-without-cost:itxn-1"}, sharesIDs(listed))
@@ -127,7 +138,7 @@ func Test_findings_lists_no_shares_without_cost_when_the_classification_is_empty
 func Test_findings_describes_shares_without_cost_by_one_item_with_the_accounts_currency_and_no_first_found_time(t *testing.T) {
 	list := sharesList([]store.Account{{ID: "acct-1", Name: "Margin", Type: store.AccountTypeBrokerage, Currency: "CAD"}}, noCostAdd("itxn-7", "acct-1", 2))
 
-	got := sharesFindings(t, report.FindingsRequest{Classification: margin}, list)
+	got := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered()}, list)
 
 	listed := got.Groups[0].Findings[0]
 	assert.Equal(t, []store.FindingItem{{
@@ -162,7 +173,7 @@ func Test_findings_sorts_shares_without_cost_newest_date_first_then_id(t *testin
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := sharesFindings(t, report.FindingsRequest{Classification: margin}, sharesList([]store.Account{brokerage("acct-1", "Margin")}, c.txns...))
+			got := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered()}, sharesList([]store.Account{brokerage("acct-1", "Margin")}, c.txns...))
 
 			assert.Equal(t, c.want, sharesIDs(got))
 		})
@@ -170,7 +181,7 @@ func Test_findings_sorts_shares_without_cost_newest_date_first_then_id(t *testin
 }
 
 func Test_findings_ignores_shares_without_cost_whose_id_is_in_the_ignore_list(t *testing.T) {
-	req := report.FindingsRequest{Classification: margin, Ignore: []string{"shares-without-cost:itxn-1"}, Status: report.FindingsAll}
+	req := report.FindingsRequest{Classification: nonRegistered(), Ignore: []string{"shares-without-cost:itxn-1"}, Status: report.FindingsAll}
 	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, noCostAdd("itxn-1", "acct-1", 1), noCostAdd("itxn-2", "acct-1", 2))
 
 	got := sharesFindings(t, req, list)
@@ -182,14 +193,14 @@ func Test_findings_ignores_shares_without_cost_whose_id_is_in_the_ignore_list(t 
 func Test_findings_never_lists_shares_without_cost_as_fixed(t *testing.T) {
 	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, noCostAdd("itxn-1", "acct-1", 1))
 
-	fixed := sharesFindings(t, report.FindingsRequest{Classification: margin, Status: finding.StatusFixed}, list)
+	fixed := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered(), Status: finding.StatusFixed}, list)
 
 	assert.Empty(t, fixed.Groups)
 	assert.Equal(t, finding.Counts{Open: 1}, fixed.Counts)
 }
 
 func Test_findings_counts_only_shares_without_cost_under_their_type_filter(t *testing.T) {
-	req := report.FindingsRequest{Classification: margin, Type: finding.SharesWithoutCost}
+	req := report.FindingsRequest{Classification: nonRegistered(), Type: finding.SharesWithoutCost}
 	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, noCostAdd("itxn-1", "acct-1", 1), noCostAdd("itxn-2", "acct-1", 2))
 	list.Findings = []store.Finding{dated("duplicate:txn-1+txn-2", finding.Duplicate, march1, march1)}
 
@@ -202,7 +213,7 @@ func Test_findings_counts_only_shares_without_cost_under_their_type_filter(t *te
 func Test_read_time_states_includes_each_shares_without_cost_and_never_marks_one_new(t *testing.T) {
 	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, noCostAdd("itxn-1", "acct-1", 1))
 
-	got := report.ReadTimeStates(list, margin)
+	got := report.ReadTimeStates(list, nonRegistered())
 
 	assert.Equal(t, []finding.State{{ID: "shares-without-cost:itxn-1"}}, got)
 }
@@ -211,7 +222,7 @@ func Test_count_findings_counts_the_shares_without_cost_in_the_status_investment
 	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, noCostAdd("itxn-1", "acct-1", 1), noCostAdd("itxn-2", "acct-1", 2))
 	st := store.Status{Accounts: list.Accounts, Investments: list.Investments}
 
-	got := report.CountFindings(st, []string{"shares-without-cost:itxn-2"}, margin)
+	got := report.CountFindings(st, []string{"shares-without-cost:itxn-2"}, nonRegistered())
 
 	assert.Equal(t, finding.Counts{Open: 1, Ignored: 1}, got)
 }

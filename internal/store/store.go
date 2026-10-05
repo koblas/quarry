@@ -373,8 +373,8 @@ type Status struct {
 	Rates               StatusRates
 }
 
-// Investments is the investment rows a finding computed at read time reads: every security by id, and every
-// investment transaction that names a security in date then source id order. It is zero when the file holds none.
+// Investments is the investment rows a finding computed at read time reads: every security and every investment
+// transaction; the store's read leaves out transactions naming no security, the importer's copy keeps them. Zero when the file holds none.
 type Investments struct {
 	Securities   []Security
 	Transactions []InvestmentTransaction
