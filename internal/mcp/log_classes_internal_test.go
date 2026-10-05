@@ -75,6 +75,11 @@ func accountRefusalFor(t *testing.T, arg string, names ...string) error {
 	return err
 }
 
+// unknownSecurityRefusal is acb's refusal of a security that names none, as report.ACB returns it.
+func unknownSecurityRefusal(arg string) error {
+	return report.RefusalError{Kind: report.RefusalUnknownSecurity, Arg: arg}
+}
+
 func Test_logLine_classifies_each_refusal(t *testing.T) {
 	cases := []struct {
 		name string
@@ -85,6 +90,9 @@ func Test_logLine_classifies_each_refusal(t *testing.T) {
 		{name: "an account that names several", err: accountRefusalFor(t, "Visa", "Visa", "Visa"), want: ambiguousAccountLog},
 		{name: "a category that names none", err: categoryRefusalFor(t, "Fod"), want: unknownCategoryLog},
 		{name: "the same, worded for the model", err: categoryRefusal(categoryRefusalFor(t, "Fod")), want: unknownCategoryLog},
+		{name: "a security that names none", err: unknownSecurityRefusal("XYZ"), want: unknownSecurityLog},
+		{name: "the same, worded for the model", err: acbRefusal(unknownSecurityRefusal("XYZ")), want: unknownSecurityLog},
+		{name: "a year after this one", err: acbYearRefusal(report.ACBYearError{Kind: report.ACBYearAfterThisYear, Value: "2027"}), want: yearRefusedLog},
 		{name: "blank search text", err: textRefusal(report.CheckSearchText(new(" "))), want: textRefusedLog},
 		{name: "a min that is not an amount", err: amountRefusal(amountRefusalFor(t, new("-12"), nil)), want: amountRefusedLog},
 		{name: "a min above the max", err: amountRefusal(amountRefusalFor(t, new("50"), new("20"))), want: amountRefusedLog},
@@ -132,6 +140,13 @@ func Test_logLine_classifies_each_refusal(t *testing.T) {
 	}
 }
 
+func Test_logLine_repeats_the_unclassified_accounts_text_the_client_gets(t *testing.T) {
+	err := acbRefusal(report.RefusalError{Kind: report.RefusalUnclassifiedAccounts, Count: 2})
+
+	assert.Equal(t, err.Error(), logLine(err))
+	assert.Contains(t, err.Error(), "2 accounts are in neither")
+}
+
 func Test_logLine_never_carries_the_callers_values(t *testing.T) {
 	const distinctive = "Zorblax"
 	cases := []struct {
@@ -143,6 +158,8 @@ func Test_logLine_never_carries_the_callers_values(t *testing.T) {
 		{name: "an account that names several", err: accountRefusalFor(t, distinctive, distinctive, distinctive)},
 		{name: "a category that names none, worded for the model", err: categoryRefusal(categoryRefusalFor(t, distinctive))},
 		{name: "a min that is not an amount", err: amountRefusal(amountRefusalFor(t, new(distinctive), nil))},
+		{name: "a security that names none, worded for the model", err: acbRefusal(unknownSecurityRefusal(distinctive))},
+		{name: "a year after this one", err: acbYearRefusal(report.ACBYearError{Kind: report.ACBYearAfterThisYear, Value: distinctive})},
 	}
 
 	for _, c := range cases {

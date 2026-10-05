@@ -21,7 +21,7 @@ func (s *Server) acb(ctx context.Context, in acbInput) (any, error) {
 	if in.Year != nil {
 		parsed, err := report.ParseACBYear(fmt.Sprintf("%04d", *in.Year), now)
 		if err != nil {
-			return nil, err //nolint:wrapcheck // the year's refusal is the tool's answer
+			return nil, acbYearRefusal(err)
 		}
 		year = parsed
 	}
@@ -37,10 +37,34 @@ func (s *Server) acb(ctx context.Context, in acbInput) (any, error) {
 		Classification: classificationOf(cfg), Today: report.Today(now), Year: year, Securities: in.Security, Adjustments: acbAdjustmentsOf(cfg),
 	})
 	if err != nil {
-		return nil, err //nolint:wrapcheck // a RefusalError is the tool's answer, sent verbatim
+		return nil, acbRefusal(err)
 	}
 
-	return document.NewACB(acb.Cut(), slices.Concat(cfg.WarningsAbsolute, document.ACBWarnings(acb, cfg.Path, document.ACBAdviceTool))), nil
+	doc := document.NewACB(acb.Cut(), slices.Concat(cfg.WarningsAbsolute, document.ACBWarnings(acb, cfg.Path, document.ACBAdviceTool)))
+	doc.Securities, doc.Warnings = capEvents(doc.Securities, doc.Warnings)
+
+	return doc, nil
+}
+
+// capEvents is securities with their events cut to the first maxRows in all, in document order, every security
+// kept with its header; a cut adds a last warning. A list within the cap and its warnings come back as given.
+func capEvents(securities []document.ACBSecurity, warnings []string) ([]document.ACBSecurity, []string) {
+	total := 0
+	for _, security := range securities {
+		total += len(security.Events)
+	}
+	if total <= maxRows {
+		return securities, warnings
+	}
+	left := maxRows
+	capped := slices.Clone(securities)
+	for i := range capped {
+		keep := min(left, len(capped[i].Events))
+		capped[i].Events = capped[i].Events[:keep]
+		left -= keep
+	}
+
+	return capped, append(warnings, capLine(toolACB, "events", total, "pass security to narrow"))
 }
 
 // acbAdjustmentsOf is the adjustments cfg lists, in file order.

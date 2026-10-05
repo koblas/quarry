@@ -22,6 +22,7 @@ const (
 	RefusalStore
 	RefusalUnknownCategory
 	RefusalUnknownSecurity
+	RefusalUnclassifiedAccounts
 )
 
 // RefusalError is a final, one-line refusal of a read: its message excludes
@@ -42,6 +43,8 @@ type RefusalError struct {
 	Fault store.OpenFault
 	// At is the store's path in its ~ form (RefusalStore).
 	At string
+	// Count is how many investment accounts are in neither account list (RefusalUnclassifiedAccounts).
+	Count int
 }
 
 // Error returns the refusal's message verbatim.
@@ -116,10 +119,13 @@ func unclassifiedAccountsRefusal(n int) error {
 		noun, verb, pronoun = "account", "is", "it"
 	}
 
-	return RefusalError{msg: fmt.Sprintf(
-		"acb needs every brokerage and retirement account classified; %d %s %s in neither accounts.registered nor accounts.non-registered in "+
-			"~/Library/Application Support/quarry/config.toml; quarry findings --type unclassified-account --status all lists %s",
-		n, noun, verb, pronoun)}
+	return RefusalError{
+		msg: fmt.Sprintf(
+			"acb needs every brokerage and retirement account classified; %d %s %s in neither accounts.registered nor accounts.non-registered in "+
+				"~/Library/Application Support/quarry/config.toml; quarry findings --type unclassified-account --status all lists %s",
+			n, noun, verb, pronoun),
+		Kind: RefusalUnclassifiedAccounts, Count: n,
+	}
 }
 
 // ambiguousAccountRefusal refuses an --account value naming the accounts with ids, which it lists sorted.

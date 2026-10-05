@@ -220,7 +220,7 @@ func Test_acb_refuses_while_an_account_is_unclassified(t *testing.T) {
 
 	refusal, ok := errors.AsType[report.RefusalError](err)
 	require.True(t, ok)
-	assert.Equal(t, report.RefusalGeneric, refusal.Kind)
+	assert.Equal(t, report.RefusalUnclassifiedAccounts, refusal.Kind)
 	assert.NotErrorAs(t, err, new(cli.UsageError))
 	assert.Empty(t, stdout.String())
 }

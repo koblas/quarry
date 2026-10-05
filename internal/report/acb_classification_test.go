@@ -38,10 +38,11 @@ func Test_acb_refuses_while_an_investment_account_is_unclassified(t *testing.T) 
 		name    string
 		extra   []store.Account
 		message string
+		count   int
 	}{
-		{name: "one open brokerage account", extra: []store.Account{openBrokerage}, message: acbUnclassifiedOne},
-		{name: "one closed retirement account counts", extra: []store.Account{closedRetirement}, message: acbUnclassifiedOne},
-		{name: "two accounts take the plural wording", extra: []store.Account{openBrokerage, closedRetirement}, message: acbUnclassifiedTwo},
+		{name: "one open brokerage account", extra: []store.Account{openBrokerage}, message: acbUnclassifiedOne, count: 1},
+		{name: "one closed retirement account counts", extra: []store.Account{closedRetirement}, message: acbUnclassifiedOne, count: 1},
+		{name: "two accounts take the plural wording", extra: []store.Account{openBrokerage, closedRetirement}, message: acbUnclassifiedTwo, count: 2},
 	}
 
 	for _, c := range cases {
@@ -51,7 +52,8 @@ func Test_acb_refuses_while_an_investment_account_is_unclassified(t *testing.T) 
 			refusal, ok := errors.AsType[report.RefusalError](err)
 			require.True(t, ok)
 			assert.Equal(t, c.message, refusal.Error())
-			assert.Equal(t, report.RefusalGeneric, refusal.Kind)
+			assert.Equal(t, report.RefusalUnclassifiedAccounts, refusal.Kind)
+			assert.Equal(t, c.count, refusal.Count)
 		})
 	}
 }
