@@ -148,6 +148,32 @@ func Test_run_networth_native_before_the_first_rate_has_no_warning_and_no_no_rat
 	assert.Contains(t, stdout.String(), netWorthNativeLine("Total", "USD", "1,720.00"))
 }
 
+func Test_run_networth_json_history_before_the_first_rate_totals_only_that_month_end_apart(t *testing.T) {
+	seedNetWorthHistoryStoreWithRates(t, usdRate(day(2026, time.February, 15), 1_360_000))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"networth", "--since", "2026-01", "--until", "2026-03", "--json"},
+		spendEnvAt(&stdout, &stderr, holdingsClock()))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	var got struct {
+		Dates []struct {
+			Balances []map[string]any `json:"balances"`
+			Totals   []map[string]any `json:"totals"`
+		} `json:"dates"`
+		Warnings []string `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+	require.Len(t, got.Dates, 3)
+	assert.Equal(t, []any{"1000.00", nil, "-250.00"}, convertedBalances(got.Dates[0].Balances))
+	assert.Equal(t, []map[string]any{
+		{"currency": "CAD", "value": "750.00"}, {"currency": "USD", "value": "800.00"},
+	}, got.Dates[0].Totals)
+	assert.Equal(t, []map[string]any{{"currency": "CAD", "value": "2238.00"}}, got.Dates[1].Totals)
+	assert.Equal(t, []string{"USD balances on 1 month end before 2026-02-15, the first exchange rate in the store, " +
+		"are not converted to CAD and are left out of the CAD total; pass --currency native to list them"}, got.Warnings)
+}
+
 func Test_run_networth_json_before_the_first_rate_nulls_the_converted_balance_and_carries_the_total_apart(t *testing.T) {
 	seedNetWorthStore(t)
 	var stdout, stderr bytes.Buffer

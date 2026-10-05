@@ -103,6 +103,13 @@ func Test_net_worth_history_warnings_count_the_month_ends_before_the_first_rate(
 	}{
 		{"one month end", rateHistory(money.CAD, first, jan, mar), "USD balances on 1 month end before 2026-03-10, " + rateTail},
 		{"several month ends", rateHistory(money.CAD, first, jan, feb, mar), "USD balances on 2 month ends before 2026-03-10, " + rateTail},
+		{
+			"CAD balances in a USD report",
+			rateHistory(money.USD, first,
+				report.NetWorthDate{Date: rateDay(time.January, 31), Rows: []store.NetWorthRow{cadRow("chequing", 80_000)}},
+				report.NetWorthDate{Date: rateDay(time.February, 28), Rows: []store.NetWorthRow{cadRow("chequing", 80_000)}}),
+			"CAD balances on 2 month ends before 2026-03-10, " + rateTailUSD,
+		},
 	}
 
 	for _, c := range cases {

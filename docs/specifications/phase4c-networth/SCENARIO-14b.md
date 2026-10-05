@@ -8,7 +8,7 @@ status: done
 Cadence: code-first (no mandatory test-first item: no write-safety guard, no atomic adapter, no bug fix)
 Acceptance test: `cmd/quarry/run_networth_rates_test.go` `Test_run_networth_warns_when_a_usd_balance_has_no_exchange_rate_and_totals_it_apart`
 Narrow loop: `go test ./internal/report/... ./internal/cli/ ./internal/store/duckstore/ -run 'NetWorth|net_worth|networth|NeedsRate' && go test ./cmd/quarry/ -run 'networth'`
-Mutation checks: `NeedsRate` zero-balance exclusion → `Test_networth_warns_only_for_a_row_with_a_balance_no_rate_converts`; native-mode skip in `rateWarnings` → `Test_net_worth_native_listing_has_no_rate_warning`; snapshot-only extra total in `(NetWorth).total` → `Test_networth_history_totals_leave_out_a_row_no_rate_converts`
+Mutation checks: `NeedsRate` zero-balance exclusion → `Test_networth_warns_only_for_a_row_with_a_balance_no_rate_converts`; native-mode exclusion in `NeedsRate` → `Test_networth_warns_only_for_a_row_with_a_balance_no_rate_converts` and `Test_net_worth_native_listing_has_no_rate_warning`; extra total for rows no rate converts in `(NetWorth).total` → `Test_networth_history_totals_carry_a_total_for_the_rows_no_rate_converts`
 Runs: A (1) | B1 (2-3) | B2 (4) | B3 (5-6) | V (7-8)
 Size: OWNS A RUN — 3 batches, `internal/report` (+ `document`) over `store` / `duckstore` / `cli` renderers; no new package, no wiring change
 

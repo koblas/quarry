@@ -8,9 +8,8 @@ import (
 	"github.com/koblas/quarry/internal/report"
 )
 
-// renderNetWorthHistory renders n, a history, as one line per month end under one column per account type
-// and a Total; a native table adds a Currency column and a line per currency. A cell with no row is blank, one
-// no exchange rate converts says "no rate".
+// renderNetWorthHistory renders n, a history, as a line per month end under a column per account type and a
+// Total; a native table adds a Currency column. A blank cell has no row, "no rate" has no exchange rate.
 func renderNetWorthHistory(n report.NetWorth) string {
 	converted := n.Currency != money.Native
 	types := n.Types()

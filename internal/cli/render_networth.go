@@ -9,8 +9,7 @@ import (
 )
 
 // renderNetWorth renders n as a net worth table: a snapshot's rows with their Totals, or a history's month ends.
-// A converted table has a total in the reporting currency, then one per currency of the rows no rate converts;
-// a native one has a total per currency.
+// Totals that no rate converts print apart from the reporting-currency one.
 func renderNetWorth(n report.NetWorth) string {
 	if n.Window != nil {
 		return renderNetWorthHistory(n)

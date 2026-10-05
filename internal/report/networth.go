@@ -176,9 +176,8 @@ func (d NetWorthDate) TypeBalance(accountType, currency string) *big.Int {
 	return nil
 }
 
-// total is the sum of the rows' converted balances in the reporting currency, none when no row converts,
-// then the balances of the rows that need a rate, one total per stored currency; a native listing totals each
-// stored currency's balances on its own instead.
+// total is the converted rows' sum in the reporting currency (none when no row converts), then one total per
+// currency of the rows that need a rate; a native listing totals each currency alone.
 func (n NetWorth) total(rows []store.NetWorthRow) []NetWorthTotal {
 	if n.Currency == money.Native {
 		return nativeNetWorthTotals(rows)
