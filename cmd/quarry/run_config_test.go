@@ -184,6 +184,10 @@ func Test_run_sync_refuses_a_bad_config_value_with_the_ruled_copy(t *testing.T) 
 			name: "reporting as a plain value", content: "reporting = \"CAD\"\n",
 			line: configShown + ": reporting must be a table, such as reporting.currency = \"CAD\", got \"CAD\"",
 		},
+		{
+			name: "an adjustment without a date", content: "[[acb.adjustment]]\nsecurity = \"sec-41\"\nreturn-of-capital = 12.34\n",
+			line: configShown + ": acb.adjustment item 1 needs date, such as date = 2024-12-31",
+		},
 	}
 
 	for _, c := range cases {
@@ -313,6 +317,25 @@ func Test_run_read_commands_refuse_a_masked_account_list(t *testing.T) {
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
 			assert.Equal(t, "quarry: "+configShown+": accounts.registered must hold only account ids in quotes, got ****5678 as item 1"+configFix+"\n", stderr.String())
+		})
+	}
+}
+
+func Test_run_read_commands_refuse_a_bad_acb_adjustment(t *testing.T) {
+	home, _ := readCommandFixture(t)
+	const item = "[[acb.adjustment]]\nsecurity = \"sec-41\"\ndate = 2024-12-31\nreturn-of-capital = "
+	const amountMust = ": acb.adjustment item 2: return-of-capital must be an amount in CAD above 0 with at most two decimals, such as 12.34, got "
+	writeConfig(t, home, item+"12.34\n\n"+item+"12.345\n")
+
+	for name, args := range readCommandArgs() {
+		t.Run(name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), args, spendEnv(&stdout, &stderr))
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, "quarry: "+configShown+amountMust+"12.345"+configFix+"\n", stderr.String())
 		})
 	}
 }

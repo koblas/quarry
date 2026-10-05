@@ -35,3 +35,25 @@ reinvested-distribution = 0.29
 	}, cfg.Adjustments)
 	assert.Empty(t, cfg.Warnings)
 }
+
+func Test_load_warns_of_an_unknown_key_beside_acb_adjustments_in_both_warning_lists(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		key     string
+	}{
+		{name: "a subkey inside an item", content: goodItem + "memo = \"year-end\"\n", key: "acb.adjustment.memo"},
+		{name: "a sibling of adjustment under acb", content: goodItem + "\n[acb]\nother = 1\n", key: "acb.other"},
+		{name: "a known subkey in another letter case", content: goodItem + "Date = 2024-12-30\n", key: "acb.adjustment.Date"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, cfg, err := load(t, c.content)
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{shownPath + ": unknown key " + c.key + "; quarry ignores it"}, cfg.Warnings)
+			assert.Equal(t, []string{cfg.Path + ": unknown key " + c.key + "; quarry ignores it"}, cfg.WarningsAbsolute)
+		})
+	}
+}
