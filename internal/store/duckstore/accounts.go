@@ -19,7 +19,8 @@ LEFT JOIN accounts a ON a.id = v.id
 ORDER BY lower(v.name), v.name, v.source_id`
 
 // Accounts reads every account, closed ones included, with its balance native and in CAD and USD,
-// the store's today as AsOf and its earliest rate as FirstRate, sorted by name ignoring case,
+// the store's today as AsOf, the holdings of those accounts their balances leave out as Unvalued and its
+// earliest rate as FirstRate, sorted by name ignoring case,
 // then name, then source id. It refuses a store it cannot open or read with *store.OpenError.
 func (s *Store) Accounts(ctx context.Context) (store.AccountList, error) {
 	db, err := s.openRead(ctx)
@@ -53,6 +54,14 @@ func (s *Store) Accounts(ctx context.Context) (store.AccountList, error) {
 		}
 		list.Accounts = append(list.Accounts, acct)
 		return nil
+	})
+	if err != nil {
+		return store.AccountList{}, openFault(s.Path(), err)
+	}
+	err = db.QueryRows(ctx, unvaluedHoldingsSQL("h.date = current_date"), nil, func(scan func(dest ...any) error) error {
+		held, err := scanUnvaluedHolding(scan)
+		list.Unvalued = append(list.Unvalued, held)
+		return err
 	})
 	if err != nil {
 		return store.AccountList{}, openFault(s.Path(), err)

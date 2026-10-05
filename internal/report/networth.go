@@ -81,6 +81,11 @@ func (s *Server) NetWorth(ctx context.Context, req NetWorthRequest) (NetWorth, e
 			listing.Dates[i].Rows = append(listing.Dates[i].Rows, row)
 		}
 	}
+	for _, held := range read.Unvalued {
+		if _, ok := position[held.Date.Format(time.DateOnly)]; ok {
+			listing.Unvalued = append(listing.Unvalued, held)
+		}
+	}
 	for i := range listing.Dates {
 		listing.Dates[i].Totals = listing.total(listing.Dates[i].Rows)
 	}

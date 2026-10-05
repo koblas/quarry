@@ -2,6 +2,7 @@ package report
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/koblas/quarry/internal/platform/money"
@@ -55,13 +56,16 @@ func (s *Server) Accounts(ctx context.Context, includeClosed bool, currency mone
 	}
 
 	open := list.Accounts[:0:0]
+	listed := make(map[string]bool, len(list.Accounts))
 	for _, a := range list.Accounts {
 		if !a.Closed {
 			open = append(open, a)
+			listed[a.ID] = true
 		}
 	}
 	hidden := len(list.Accounts) - len(open)
 	list.Accounts = open
+	list.Unvalued = slices.DeleteFunc(slices.Clone(list.Unvalued), func(held store.UnvaluedHolding) bool { return !listed[held.AccountID] })
 	return AccountListing{AccountList: list, Hidden: hidden, Currency: currency}, nil
 }
 

@@ -300,10 +300,17 @@ const balancesDailyViewComment = "one row per account per day from its first tra
 	"(NULL outside brokerage and retirement accounts), balance is cash plus holdings_value, " +
 	"as quarry accounts and quarry networth use; filter by date."
 
+// valuedInAccountCurrencySQL is the SQL for a v_holdings row h's value in the currency of its account a, NULL when
+// it has none: the holding is left out of balances. v_balances_daily and the unvalued-holdings reads share it.
+func valuedInAccountCurrencySQL() string {
+	return `CASE WHEN h.currency = a.currency THEN h.value
+		WHEN a.currency = 'CAD' THEN h.value_cad
+		WHEN a.currency = 'USD' THEN h.value_usd END`
+}
+
 // balancesDailyViewDDL creates v_balances_daily: one row per account per day, its cash, the value of its holdings
 // and the balance in CAD and USD at the day's rate.
 func balancesDailyViewDDL() string {
-	// A holding is valued when v_holdings gives its value in the account's currency; any other counts as unvalued.
 	return `
 CREATE VIEW v_balances_daily AS
 WITH firsts AS (
@@ -321,10 +328,7 @@ WITH firsts AS (
 	FROM days d
 	LEFT JOIN flow f ON f.account_id = d.account_id AND f.date = d.date
 ), valued AS (
-	SELECT h.account_id, h.date,
-		CASE WHEN h.currency = a.currency THEN h.value
-			WHEN a.currency = 'CAD' THEN h.value_cad
-			WHEN a.currency = 'USD' THEN h.value_usd END AS value
+	SELECT h.account_id, h.date, ` + valuedInAccountCurrencySQL() + ` AS value
 	FROM v_holdings h
 	JOIN accounts a ON a.id = h.account_id
 ), held AS (
