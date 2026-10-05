@@ -25,8 +25,8 @@ Refusal = `quarry: <~path>: <line>; fix the file and run the command again`, exi
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `internal/config/adjustment_test.go` (new) `Test_load_reads_acb_adjustments_as_exact_cents` — file with the spec's two `[[acb.adjustment]]` examples plus one item with both amounts; asserts `cfg.Adjustments` (security, date, cents) in file order, empty `Warnings`
-- [ ] Step 2: `config.go:15-39` `Config.Adjustments []Adjustment` + `Adjustment{Security string; Date time.Time; ReturnOfCapital, ReinvestedDistribution int64}` (cents, 0 = not given) — types only; fails at its assertion
+- [x] Step 1: `internal/config/adjustment_test.go` (new) `Test_load_reads_acb_adjustments_as_exact_cents` — file with the spec's two `[[acb.adjustment]]` examples plus one item with both amounts; asserts `cfg.Adjustments` (security, date, cents) in file order, empty `Warnings`
+- [x] Step 2: `config.go:15-39` `Config.Adjustments []Adjustment` + `Adjustment{Security string; Date time.Time; ReturnOfCapital, ReinvestedDistribution int64}` (cents, 0 = not given) — types only; fails at its assertion
 
 ### Build
 - [ ] Step 3: `platform/money/money.go` `ParseCents(text string) (int64, bool)` + `money_test.go` — unsigned decimal text only. Rows: `12`, `12.3`, `12.34`, `0`/`0.00` (parses to 0; caller owns >0), 3 decimals, `12.340`, sign, `.5`, `1_0`, `1e2`, hex, empty, int64 edge (`92233720368547758.07` ok, `.08` refused), exact `1.15`/`0.29`
@@ -60,3 +60,11 @@ Refusal = `quarry: <~path>: <line>; fix the file and run the command again`, exi
 - `badValue` always appends `, got <v>`; the `needs …` lines must not use it
 - `acb` set to a non-table is not covered by a ruled line: this plan refuses it with line 1 (`got` = its text) rather than ignoring it silently; `{acb}` being a known key means the unknown-key path will not catch it — copy not separately ruled, mention at the final product-vision pass
 - Quoted `'sec-41'` (literal string) is a string and accepted; an impossible calendar date may fail as TOML syntax (`cannot read …: line n`) not as ruled line 6 — pinned as whatever `Load` returns; confirm `toml.LocalDate` is what go-toml v2 yields into `map[string]any` before relying on it
+
+## Phase report
+
+Run A (steps 1-2) done.
+- `internal/config/config.go`: `Adjustment` type (above `Config`) and `Config.Adjustments []Adjustment` added, types only; `time` imported.
+- `internal/config/adjustment_test.go` (new): `Test_load_reads_acb_adjustments_as_exact_cents` (spec two examples + one item with both amounts, quoted-literal `'sec-7'` security).
+- Red now: `Load` returns NoError, `cfg.Adjustments` is `[]config.Adjustment(nil)` vs the 3 expected items (assertion at adjustment_test.go:32). Today `[[acb.adjustment]]` is accepted without error (no refusal path reached yet), so the red is the missing parse, not a compile error.
+- Not done: steps 3-8. Next run B1: `money.ParseCents`, then `adjustment.go` (`parse.go` call after `notInBoth`). Decision 3 replaced by orchestrator: `acb` non-table uses the `lookup` "must be a table, such as" template with example `[[acb.adjustment]]`.

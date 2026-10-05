@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/money"
@@ -16,6 +17,14 @@ const DefaultKeep = 12
 
 // utf8BOM is the byte order mark some editors put first in a UTF-8 file.
 var utf8BOM = []byte("\xef\xbb\xbf")
+
+// Adjustment is one [[acb.adjustment]] item: amounts in cents, 0 when the item does not give that key.
+type Adjustment struct {
+	Security               string
+	Date                   time.Time
+	ReturnOfCapital        int64
+	ReinvestedDistribution int64
+}
 
 // Config is quarry's settings after defaults are applied.
 type Config struct {
@@ -33,6 +42,8 @@ type Config struct {
 	NonRegistered []string
 	// Currency is reporting.currency: money.CAD when the file is missing or leaves it unset.
 	Currency money.Currency
+	// Adjustments is the [[acb.adjustment]] items in file order, nil when none.
+	Adjustments []Adjustment
 	// Warnings holds one line per unknown key, in file order.
 	Warnings []string
 	// WarningsAbsolute is Warnings with the config file named by its absolute path, for machine-readable output.
