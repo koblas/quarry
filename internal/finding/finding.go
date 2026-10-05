@@ -24,6 +24,7 @@ const (
 	UnusedCategory    Type = "unused-category"
 
 	UnclassifiedAccount Type = "unclassified-account"
+	SharesWithoutCost   Type = "shares-without-cost"
 )
 
 // ReadTime reports whether findings of t are computed from the config at read time: never stored, never new or fixed.

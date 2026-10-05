@@ -15,8 +15,8 @@ Size: OWNS A RUN, 4 batches, 1 feature package (report). `finding`, the duckstor
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_findings_shares_without_cost_test.go` (new) `Test_run_findings_lists_shares_added_with_no_cost_as_status_sync_and_mcp_count_them`. Pattern from `run_unclassified_agreement_test.go:14-38` (`newStatusPeer` and `syncFindingsBundleIn`). v9fixture brokerage listed in `accounts.non-registered` plus one registered brokerage. The security and add_shares rows are built as in `run_cost_basis_test.go`: one add with `CostBasis: ""` and one with `"0"` (both NULL, `importer/investments.go:293-304`), one add with a cost, and one no-cost add in the registered account. Assert: the `findings` text group (heading, GroupClause and two rows, ruled copy at spec :334-336) equals the sync line count, `status`, `sync_status` `Findings.Open` and `data_quality` counts. `findings --type shares-without-cost` exits 0.
-- [ ] Step 2: `internal/finding/finding.go:26` `SharesWithoutCost` const, signature-only (not yet in `Types()`), so the test compiles. Red at the findings text assertion.
+- [x] Step 1: `cmd/quarry/run_findings_shares_without_cost_test.go` (new) `Test_run_findings_lists_shares_added_with_no_cost_as_status_sync_and_mcp_count_them`. Pattern from `run_unclassified_agreement_test.go:14-38` (`newStatusPeer` and `syncFindingsBundleIn`). v9fixture brokerage listed in `accounts.non-registered` plus one registered brokerage. The security and add_shares rows are built as in `run_cost_basis_test.go`: one add with `CostBasis: ""` and one with `"0"` (both NULL, `importer/investments.go:293-304`), one add with a cost, and one no-cost add in the registered account. Assert: the `findings` text group (heading, GroupClause and two rows, ruled copy at spec :334-336) equals the sync line count, `status`, `sync_status` `Findings.Open` and `data_quality` counts. `findings --type shares-without-cost` exits 0.
+- [x] Step 2: `internal/finding/finding.go:26` `SharesWithoutCost` const, signature-only (not yet in `Types()`), so the test compiles. Red at the findings text assertion.
 
 ### Build
 - [ ] Step 3: inputs in all three sources. `internal/store/store.go`: new `Investments{Securities []Security; Transactions []InvestmentTransaction}`, and an `Investments` field on `FindingList`, `Status` and `Result`, with doc comments updated.
@@ -77,3 +77,11 @@ Size: OWNS A RUN, 4 batches, 1 feature package (report). `finding`, the duckstor
 - Fixtures with no `[accounts]` raise no shares-without-cost finding (the account is unclassified), so the blast radius is only fixtures that list a non-registered account AND hold a no-cost add.
 
 **Orchestrator: product-vision copy ruling 2026-10-05 recorded in spec `#### Finding shares-without-cost` — supersedes this plan where they differ: Long paragraph wording (not the proposed one); sort NEWEST first via `latestDate` (add to the Duplicate/UnlinkedTransfer/OneSidedTransfer arm in `internal/report/findings.go:148-151`, update `findingOrder` doc, pin descending in Step 4); `1 share` at exactly 1 else `shares`; future-dated add listed; JSON/CSV placement as planned; ALSO fix SKILL.md:70 and findings.md:27 per spec and re-pin their skill-text tests. Unclassified/registered add is not a finding (spec :333).**
+
+## Phase report
+
+Run A (steps 1-2) done; red, committed.
+- `cmd/quarry/run_findings_shares_without_cost_test.go` (new): acceptance test. Fixture: Margin (non-registered) with adds `""` cost 100 units 2016-03-01, `"0"` cost 1 unit 2026-02-01, one add with cost 300, and TFSA (registered) with a no-cost add of 7; Lots 106 and 7 so sync's holdings validation passes (without Lots sync refuses). Expects newest first, `1 share`/`100 shares`, ruled heading and GroupClause, `2 open` in sync line, status, `sync_status`, `data_quality`, and `findings --type shares-without-cost` exit 0 with empty stderr.
+- `internal/finding/finding.go:26` `SharesWithoutCost` const only (not in `Types()`, `ReadTime()` or `fixes`).
+- Red (planned reason): `findings` stdout is `No open findings\n` where the three-row group is expected (test line 52); the sync line reads `Findings  none open`; `--type shares-without-cost` is refused by the usage message (exit 2).
+- Next (B1): Step 3 inputs. `Test_run_findings_...` is the only test red; the rest of the suite is untouched. Ids in the fixture are `itxn-1`/`itxn-2`, so a fixture with fewer rows would shift them; the test reads them from the builder.
