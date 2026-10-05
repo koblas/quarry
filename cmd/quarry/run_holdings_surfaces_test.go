@@ -23,7 +23,7 @@ func Test_run_accounts_and_sql_help_carry_the_holdings_copy(t *testing.T) {
 	assert.Contains(t, accountsOut.String(), `Brokerage and retirement accounts' balance is the cash in them plus the
 value of their holdings today, each at the latest price Quicken recorded
 (quarry holdings lists them).`)
-	assert.Contains(t, sqlOut.String(), `currency (securities.currency, NULL when Quicken records none).
+	assert.Contains(t, sqlOut.String(), `records none).
 holding_shares holds each account's count of each security, one row per span
 of days it is unchanged and not zero (from_date through to_date, NULL while
 still held), splits applied; these are the counts quarry sync checks against

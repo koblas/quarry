@@ -374,9 +374,11 @@ DECIMAL(18,4) in the account's own currency as Quicken recorded it (some
 brokers charge fractions of a cent), NULL when there is none; shares is
 DECIMAL(18,6) as Quicken recorded each transaction, negative when shares
 leave. A split row carries split_new_shares and split_old_shares instead, so
-a sum of shares is not a holding. prices holds each security's closing price
-per day as Quicken recorded it, rounded to 6 decimals, in the security's
-currency (securities.currency, NULL when Quicken records none).
+a sum of shares is not a holding. cost_basis is the cost Quicken records for
+a buy, reinvested dividend or added shares (NULL when none). prices holds
+each security's closing price per day as Quicken recorded it, rounded to 6
+decimals, in the security's currency (securities.currency, NULL when Quicken
+records none).
 holding_shares holds each account's count of each security, one row per span
 of days it is unchanged and not zero (from_date through to_date, NULL while
 still held), splits applied; these are the counts quarry sync checks against
