@@ -300,6 +300,23 @@ func Test_run_read_commands_refuse_a_malformed_config(t *testing.T) {
 	}
 }
 
+func Test_run_read_commands_refuse_a_masked_account_list(t *testing.T) {
+	home, _ := readCommandFixture(t)
+	writeConfig(t, home, "[accounts]\nregistered = [12345678]\n")
+
+	for name, args := range readCommandArgs() {
+		t.Run(name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), args, spendEnv(&stdout, &stderr))
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, "quarry: "+configShown+": accounts.registered must hold only account ids in quotes, got ****5678 as item 1"+configFix+"\n", stderr.String())
+		})
+	}
+}
+
 func Test_run_read_commands_ignore_a_malformed_config_when_given_a_currency(t *testing.T) {
 	before := malformedConfigFixture(t)
 

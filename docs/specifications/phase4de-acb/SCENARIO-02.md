@@ -28,8 +28,8 @@ Digit counting (ruled reading chosen): across the WHOLE string, ASCII or Unicode
 - [x] Step 1: `cmd/quarry/run_config_test.go` `Test_run_refuses_an_account_number_in_an_accounts_list_masked` — `run` with `sync`, config `accounts.registered = [12345678]`; stdout empty, stderr `quarry: <configShown>: accounts.registered must hold only account ids in quotes, got ****5678 as item 1` + `configFix`, exit 1 (reuse `writeConfig`, `configShown`, `configFix`). Red: stderr shows `12345678`.
 
 ### Build
-- [ ] Step 2 (B1): new `internal/platform/accountmask/{doc.go,accountmask.go,accountmask_test.go}` `Mask(s string) string` — exported for S05's unmatched warning. Tests (own package): `Test_Mask_keeps_the_last_four_digits` rows 0/1/4 digits unchanged, 5 digits → `*2345`, 8 → `****5678`, 12 with separators (`1234 5678 9012` → `**** **** 9012`); exact `acct-12345678` and `acct-1` unchanged; each near-miss masked (`Acct-12345678`, `acct-12345678x`, ` acct-12345678`); ruled `RBC 2019 TFSA` unchanged and `RBC 2019 TFSA 5678` → `RBC **** TFSA 5678` (whole-string pin); non-ASCII digits and multibyte runes kept; `Mask(Mask(x)) == Mask(x)`; empty string.
-- [ ] Step 3 (B1): `parse.go:27-29,44-45,243-263,283-289,303-315,352-390,111-126` — config masking sites, one batch:
+- [x] Step 2 (B1): new `internal/platform/accountmask/{doc.go,accountmask.go,accountmask_test.go}` `Mask(s string) string` — exported for S05's unmatched warning. Tests (own package): `Test_Mask_keeps_the_last_four_digits` rows 0/1/4 digits unchanged, 5 digits → `*2345`, 8 → `****5678`, 12 with separators (`1234 5678 9012` → `**** **** 9012`); exact `acct-12345678` and `acct-1` unchanged; each near-miss masked (`Acct-12345678`, `acct-12345678x`, ` acct-12345678`); ruled `RBC 2019 TFSA` unchanged and `RBC 2019 TFSA 5678` → `RBC **** TFSA 5678` (whole-string pin); non-ASCII digits and multibyte runes kept; `Mask(Mask(x)) == Mask(x)`; empty string.
+- [x] Step 3 (B1): `parse.go:27-29,44-45,243-263,283-289,303-315,352-390,111-126` — config masking sites, one batch:
   - `setting` gains `masked bool`, set on `registeredSetting`/`nonRegisteredSetting`; `idList` (251, 257) and `lookup` (310) mask the got/item text when `s.masked`; mask the item text BEFORE appending ` as item n` (the `n` is a digit).
   - `unknownKeys` (363): for a key whose first part is `accounts`, mask each later part's rendered text (quote decision on the original part, as `keyPartText`); both `Warnings` and `WarningsAbsolute`.
   - `tree()` (123-125): mask the captured name in the four probed shapes only; any other message passes through untouched.
@@ -60,7 +60,10 @@ Digit counting (ruled reading chosen): across the WHOLE string, ASCII or Unicode
 
 ## Phase report
 
-Run A (done). Step 1 ticked.
-- Added `cmd/quarry/run_config_test.go:205-215` `Test_run_refuses_an_account_number_in_an_accounts_list_masked` (config `[accounts]\nregistered = [12345678]\n`, `run sync`). No production code or stubs touched; it compiles as-is.
-- Red, at its stderr assertion (line 214): expected `...got ****5678 as item 1...`, actual `...got 12345678 as item 1...`. Stdout empty and exit 1 already hold.
-- Next run (B1, steps 2-3): `accountmask.Mask` plus the parse.go masking sites. Nothing to undo.
+Runs A and B1 done. Steps 1-3 ticked. Acceptance test `Test_run_refuses_an_account_number_in_an_accounts_list_masked` is green.
+- New `internal/platform/accountmask/{doc.go,accountmask.go,accountmask_test.go}`: `Mask(s)`, whole-string digit count via `unicode.IsDigit`, exempt `^acct-[0-9]+$`.
+- `internal/config/parse.go`: `setting.masked` + `setting.show` (set on registered/non-registered); `idList` masks the got text and the item text (before ` as item n`); `lookup` masks the `accounts must be a table` got; `keyText` masks parts after `accounts` (quote decision on the original part, then Mask); `tree()` calls `maskNamedKey` (regexp `namedKeyMessage`, four shapes only).
+- Tests added: `accounts_test.go` (refusal masking table, short/exempt table, unknown-key warnings both lists), `ignore_test.go` `Test_load_leaves_a_findings_ignore_item_unmasked`, `config_test.go` (`Test_load_masks_the_name_a_syntax_error_echoes`, `Test_load_leaves_a_syntax_error_that_echoes_no_name_as_it_is` with `U+0031 '1'`, which whole-message masking would break), `problem_test.go` ProblemAbsolute row, `cmd/quarry/run_config_test.go` `Test_run_read_commands_refuse_a_masked_account_list`.
+- Mutations (restored, diffed identical): `keptDigits` 4 to 3 and 4 to 5 reddened `Test_Mask_keeps_the_last_four_digits` rows; `setting.show` gate `if s.masked` to `if true` reddened `Test_load_leaves_a_findings_ignore_item_unmasked` plus the findings.ignore not-a-list/date rows.
+- Lint `0 issues`, narrow loops green. Full suite and coverage gate are V's.
+- Next: B2 (step 4) `notInBoth` in parse.go, `Classification` doc + delete the S01 both-lists pin in `report/classification_test.go:80-87`. `config.Load` doc (`config.go:46-52`) names the in-both refusal in V's sweep or B2.

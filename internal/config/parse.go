@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/koblas/quarry/internal/platform/accountmask"
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/platform/tomlstr"
@@ -23,9 +24,20 @@ const (
 )
 
 // setting names a known key: its table, its name in that table, and the
-// line shown to a user who wrote the table as a plain value.
+// line shown to a user who wrote the table as a plain value. A masked setting holds account
+// numbers, so a refusal shows its value through accountmask.Mask.
 type setting struct {
 	table, name, example string
+	masked               bool
+}
+
+// show is text as a refusal of s prints it.
+func (s setting) show(text string) string {
+	if s.masked {
+		return accountmask.Mask(text)
+	}
+
+	return text
 }
 
 // ignoreExample is a findings.ignore list as a user writes it, right of the equal sign.
@@ -41,8 +53,8 @@ var (
 
 	reportingSetting = setting{table: "reporting", name: "currency", example: `reporting.currency = "CAD"`}
 
-	registeredSetting    = setting{table: "accounts", name: "registered", example: "accounts.registered = " + accountsExample}
-	nonRegisteredSetting = setting{table: "accounts", name: "non-registered", example: "accounts.registered = " + accountsExample}
+	registeredSetting    = setting{table: "accounts", name: "registered", example: "accounts.registered = " + accountsExample, masked: true}
+	nonRegisteredSetting = setting{table: "accounts", name: "non-registered", example: "accounts.registered = " + accountsExample, masked: true}
 )
 
 func (s setting) String() string { return strings.Join(s.key(), ".") }
@@ -122,7 +134,22 @@ func (f file) tree() (map[string]any, error) {
 	line, _ := decodeErr.Position()
 	message, _, _ := strings.Cut(strings.TrimPrefix(decodeErr.Error(), "toml: "), "\n")
 
-	return nil, f.cannotRead("line "+strconv.Itoa(line)+": "+message, err)
+	return nil, f.cannotRead("line "+strconv.Itoa(line)+": "+maskNamedKey(message), err)
+}
+
+// namedKeyMessage matches the go-toml messages that echo a key or table name, which under
+// [accounts] can be an account number; no other syntax message echoes a value.
+var namedKeyMessage = regexp.MustCompile(`^(key |table )(.+?)( is already defined| should be a table, not a value| already exists as an array of tables| already exists)$`)
+
+// maskNamedKey is message with the key or table name in it masked, or message unchanged when it
+// names none.
+func maskNamedKey(message string) string {
+	parts := namedKeyMessage.FindStringSubmatch(message)
+	if parts == nil {
+		return message
+	}
+
+	return parts[1] + accountmask.Mask(parts[2]) + parts[3]
 }
 
 // entry is one header or key of the file at its full key path, exactly as written:
@@ -248,13 +275,14 @@ func (d document) idList(s setting, noun, example string) ([]string, error) {
 	items, isList := value.([]any)
 	written, isWritten := d.written(s.key())
 	if !isList || !isWritten {
-		return nil, d.badValue(s.String()+" must be a list of "+noun+" in quotes, such as "+example, d.got(s.key()))
+		return nil, d.badValue(s.String()+" must be a list of "+noun+" in quotes, such as "+example, s.show(d.got(s.key())))
 	}
 	var ids []string
 	for i, item := range items {
 		id, isString := item.(string)
 		if !isString {
-			return nil, d.badValue(s.String()+" must hold only "+noun+" in quotes", itemText(arrayItems(written.value), items, i)+" as item "+strconv.Itoa(i+1))
+			// The item is masked before " as item n" is added: n is a digit too.
+			return nil, d.badValue(s.String()+" must hold only "+noun+" in quotes", s.show(itemText(arrayItems(written.value), items, i))+" as item "+strconv.Itoa(i+1))
 		}
 		ids = append(ids, id)
 	}
@@ -307,7 +335,7 @@ func (d document) lookup(s setting) (any, bool, error) {
 	}
 	table, isTable := entry.(map[string]any)
 	if !isTable {
-		return nil, false, d.badValue(s.table+" must be a table, such as "+s.example, d.got([]string{s.table}))
+		return nil, false, d.badValue(s.table+" must be a table, such as "+s.example, s.show(d.got([]string{s.table})))
 	}
 	value, present := table[s.name]
 
@@ -369,12 +397,15 @@ func (d document) unknownKeys(path string) []string {
 // bareKey matches a key part TOML allows unquoted.
 var bareKey = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
-// keyText writes key as TOML would: a part that is not bare is a basic string, so a dot,
-// quote, newline or empty name inside one part stays visible and on one line.
+// keyText writes key as TOML would, a part that is not bare as a basic string, so it stays on one
+// line; a name under accounts may be an account number and is masked.
 func keyText(key []string) string {
 	parts := make([]string, len(key))
 	for i, part := range key {
 		parts[i] = keyPartText(part)
+		if i > 0 && key[0] == registeredSetting.table {
+			parts[i] = accountmask.Mask(parts[i])
+		}
 	}
 
 	return strings.Join(parts, ".")

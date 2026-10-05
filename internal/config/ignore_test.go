@@ -123,6 +123,12 @@ func Test_load_refuses_findings_as_a_plain_value(t *testing.T) {
 	}
 }
 
+func Test_load_leaves_a_findings_ignore_item_unmasked(t *testing.T) {
+	got := refusal(t, "findings.ignore = [12345678]\n")
+
+	assert.Equal(t, shownPath+": findings.ignore must hold only finding ids in quotes, got 12345678 as item 1"+fixLine, got)
+}
+
 func Test_load_refuses_a_findings_ignore_item_that_is_not_a_string(t *testing.T) {
 	cases := []struct {
 		name    string

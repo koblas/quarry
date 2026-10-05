@@ -140,6 +140,34 @@ func Test_load_refuses_malformed_toml_naming_the_line(t *testing.T) {
 	}
 }
 
+func Test_load_masks_the_name_a_syntax_error_echoes(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{name: "duplicate key", content: "[accounts]\n12345678 = 1\n12345678 = 2\n", want: "line 3: key ****5678 is already defined"},
+		{name: "key that is a value then a table", content: "[accounts]\n12345678 = 1\n[accounts.12345678]\n", want: "line 3: key ****5678 should be a table, not a value"},
+		{name: "table written twice", content: "[accounts.12345678]\n[accounts.12345678]\n", want: "line 2: table ****5678 already exists"},
+		{name: "table that is an array of tables", content: "[[accounts.12345678]]\n[accounts.12345678]\n", want: "line 2: table ****5678 already exists as an array of tables"},
+		{name: "short name is unchanged", content: "a = 1\na = 2\n", want: "line 2: key a is already defined"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := refusal(t, c.content)
+
+			assert.Equal(t, "cannot read "+shownPath+": "+c.want+fixLine, got)
+		})
+	}
+}
+
+func Test_load_leaves_a_syntax_error_that_echoes_no_name_as_it_is(t *testing.T) {
+	got := refusal(t, "a = 1 1\n")
+
+	assert.Equal(t, "cannot read "+shownPath+": line 1: expected newline but got U+0031 '1'"+fixLine, got)
+}
+
 func Test_load_reads_a_key_from_a_table_or_a_dotted_key(t *testing.T) {
 	cases := []struct {
 		name    string

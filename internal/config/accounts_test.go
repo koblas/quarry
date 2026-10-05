@@ -131,6 +131,74 @@ func Test_load_refuses_accounts_as_a_plain_value(t *testing.T) {
 	assert.Equal(t, shownPath+": "+accountsMust+"5"+fixLine, got)
 }
 
+func Test_load_masks_an_account_number_in_a_refusal_of_an_account_list(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{name: "registered plain integer", content: "accounts.registered = 12345678\n", want: registeredMust + "****5678"},
+		{name: "registered quoted string", content: "accounts.registered = \"12345678\"\n", want: registeredMust + `"****5678"`},
+		{name: "non-registered plain integer", content: "accounts.non-registered = 12345678\n", want: nonRegisteredMust + "****5678"},
+		{name: "non-registered quoted string", content: "accounts.non-registered = \"12345678\"\n", want: nonRegisteredMust + `"****5678"`},
+		{name: "registered item that is a number", content: "accounts.registered = [12345678]\n", want: registeredOnly + "****5678 as item 1"},
+		{name: "non-registered item that is a number", content: "accounts.non-registered = [12345678]\n", want: nonRegisteredOnly + "****5678 as item 1"},
+		{name: "second item that is a longer number", content: "accounts.registered = [\"a\", 123456789012]\n", want: registeredOnly + "********9012 as item 2"},
+		{name: "accounts written as a number", content: "accounts = 12345678\n", want: accountsMust + "****5678"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := refusal(t, c.content)
+
+			assert.Equal(t, shownPath+": "+c.want+fixLine, got)
+		})
+	}
+}
+
+func Test_load_leaves_text_with_at_most_four_digits_in_an_account_refusal_as_written(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{name: "a name with a year", content: "accounts = \"RBC 2019 TFSA\"\n", want: accountsMust + `"RBC 2019 TFSA"`},
+		{name: "the item number is not counted", content: "accounts.registered = [\"a\", 1234]\n", want: registeredOnly + "1234 as item 2"},
+		{name: "an id of the form acct-digits", content: "accounts.registered = [\"a\", 12345678, \"acct-12345678\"]\n", want: registeredOnly + "****5678 as item 2"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := refusal(t, c.content)
+
+			assert.Equal(t, shownPath+": "+c.want+fixLine, got)
+		})
+	}
+}
+
+func Test_load_masks_an_account_number_named_by_an_unknown_key_in_both_warning_lists(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		key     string
+	}{
+		{name: "a number as the key", content: "[accounts]\n12345678 = 1\n", key: "accounts.****5678"},
+		{name: "an acct id as the key", content: "[accounts]\nacct-12345678 = 1\n", key: "accounts.acct-12345678"},
+		{name: "a quoted name holding a number", content: "[accounts]\n\"RBC 12345678\" = 1\n", key: `accounts."RBC ****5678"`},
+		{name: "a number outside accounts", content: "x12345678 = 1\n", key: "x12345678"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, cfg, err := load(t, c.content)
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{shownPath + ": unknown key " + c.key + "; quarry ignores it"}, cfg.Warnings)
+			assert.Equal(t, []string{cfg.Path + ": unknown key " + c.key + "; quarry ignores it"}, cfg.WarningsAbsolute)
+		})
+	}
+}
+
 func Test_load_refuses_a_bad_registered_list_before_a_bad_non_registered_one(t *testing.T) {
 	got := refusal(t, "accounts.non-registered = 1\naccounts.registered = 2\n")
 
