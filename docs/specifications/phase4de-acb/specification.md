@@ -557,7 +557,7 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 - [x] SCENARIO-09: Reinvested dividends and splits — delivered by SCENARIO-08a — `internal/report/acb_test.go` `Test_acb_adds_a_reinvested_dividends_cost_and_splits_shares_once`
 - [x] SCENARIO-08b: ACB and gains per tax year — `cmd/quarry/run_acb_test.go` `Test_run_acb_prints_gains_per_tax_year_and_todays_acb_pooled_across_the_accounts`
 - [x] SCENARIO-10: Shares added or removed without a trade — `cmd/quarry/run_acb_shares_test.go` `Test_run_acb_takes_removed_shares_out_of_the_acb_and_adds_added_shares_at_their_cost`
-- [ ] SCENARIO-11: Return of capital and reinvested distributions
+- [x] SCENARIO-11: Return of capital and reinvested distributions — `cmd/quarry/run_acb_adjustments_test.go` `Test_run_acb_lowers_and_raises_the_acb_by_the_adjustments_and_counts_return_of_capital_above_it_as_a_gain`
 - [ ] SCENARIO-12: Possible superficial losses are marked
 - [ ] SCENARIO-13a: Shares added with no cost leave ACB incomplete
 - [ ] SCENARIO-13b: Shares added with no cost are findings

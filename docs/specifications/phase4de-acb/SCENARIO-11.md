@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-11
-status: open
+status: done
 ---
 
 # SCENARIO-11: Return of capital and reinvested distributions
@@ -25,10 +25,10 @@ Size: OWNS A RUN — 5 batches, 1 feature package (`report`; `document`, `humani
 - [x] Step 6: `internal/cli/render_acb.go:23-36` `renderACBYears` trailing left-aligned suffix column, empty header, suffixes an ordered slice joined ", ": `<x> return of capital above ACB, a capital gain`; `internal/cli/acb.go:62-68` `ACBWarnings` twice — stderr `homepath.Abbreviate(srv.Home(), cfg.Path)`, JSON `cfg.Path` (precedent `accounts.go:55,66`). Tests: `render_acb_internal_test.go` `Test_renderACB_suffixes_a_years_return_of_capital_gain` + ROC-only year row (`0` sales, zeros); existing goldens `:30-110` pass unchanged (control); `cmd/quarry/run_acb_adjustments_test.go` `Test_run_acb_lists_config_then_adjustment_then_removal_then_return_of_capital_warnings_in_both_forms` (sibling of `run_acb_shares_test.go:93`; `~` path stderr, absolute JSON), `Test_run_acb_writes_return_of_capital_gain_in_json` (ROC-only year `sale_count` 0, `"0.00"` on a sale-only year). No new fallible call: no fault tests
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `ACBAdjustment`, the new `ACB`/`ACBYear` fields, `ACBWarnings`' new param, the humanize func
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `ACBAdjustment`, the new `ACB`/`ACBYear` fields, `ACBWarnings`' new param, the humanize func
 
 ### Verify
-- [ ] Step 8: full verification + `.claude/scripts/spec-check.py phase4de-acb` → tick SCENARIO-11 with its acceptance test; STATE.md: REWRITE Open debt :71, never close it — default `years[]` pin (`document/acb_test.go:83`) and RD-before-ROC pin done; S15 `--year` and S19 MCP `years[]` pins still owe `return_of_capital_gain` after `gain`, `"0.00"` when none
+- [x] Step 8: full verification + `.claude/scripts/spec-check.py phase4de-acb` → tick SCENARIO-11 with its acceptance test; STATE.md: REWRITE Open debt :71, never close it — default `years[]` pin (`document/acb_test.go:83`) and RD-before-ROC pin done; S15 `--year` and S19 MCP `years[]` pins still owe `return_of_capital_gain` after `gain`, `"0.00"` when none
 
 ## Handoff
 
@@ -59,10 +59,6 @@ Size: OWNS A RUN — 5 batches, 1 feature package (`report`; `document`, `humani
 
 ## Phase report
 
-Run B2 (steps 5-6) done. Narrow loop green including the acceptance test (`Test_run_acb_lowers_and_raises_the_acb_by_the_adjustments_and_counts_return_of_capital_above_it_as_a_gain`); `go test ./internal/...` all ok; `golangci-lint` 0 issues. No full covered suite yet (run V).
-- `internal/platform/humanize/humanize.go` `Money(cents)` (hoisted from `cli.formatMoney`, which now delegates), pinned by `Test_Money` (7 rows: zero, <1.00, whole, grouping x2, negative x2).
-- `internal/report/document/acb.go` `ACBYear.ReturnOfCapitalGain` (`return_of_capital_gain`, after `gain`), always `Money(...)`, so "0.00" when none. `document/acb_warnings.go`: `ACBWarnings(a, configShown)` = `adjustmentWarnings` (item order; unknown / not held / repeated lines, ids via `tomlstr.BasicString`) + `removalWarnings` (slot 5) + `returnOfCapitalWarnings` (warning 8: events `Realized` with action `return of capital`, `<x>` via `humanize.Money`, year = event date year).
-- `internal/cli/acb.go`: `ACBWarnings` called twice (stderr `homepath.Abbreviate(srv.Home(), cfg.Path)`, JSON `cfg.Path`). `internal/cli/render_acb.go`: year table has a seventh unheaded left-aligned column, `acbYearSuffixes(year)` an ordered slice joined ", " (S12/S13a insert theirs before the ROC one, `render_acb.go` `acbYearSuffixes`).
-- Tests: `document/acb_test.go` (key order re-pinned, fixture `CAD: 250` / `"2.50"` per ruling 1, two new year tests), `document/acb_warnings_test.go` (one test per ruled line, a TOML-escaped id, below-ACB silence, slot order), `cli/render_acb_internal_test.go` (suffix, ROC-only year; existing goldens unchanged), `cmd/quarry/run_acb_adjustments_test.go` (+3: both-forms warning order, repeat line, JSON years), `cmd/quarry/run_acb_surface_test.go` `acbDoc.Years` gained `ReturnOfCapitalGain`.
-- Day order split -> RD -> ROC was already pinned by B1's `Test_acb_orders_a_days_buy_split_distribution_return_of_capital_then_sale_whatever_their_source_ids` (action order list), no new test.
-- No mutation entries belong to B2 (all three on the plan line were B1's). V: sweep is already `0 issues`; remaining are full verify, `spec-check.py`, tick, STATE.md rewrite (keep Open debt :71 as step 8 says).
+Run V (steps 7-8) done. `go build ./...` ok, `golangci-lint run ./...` 0 issues, covered full suite rc=0, `uncovered-diff.py --profile ... bea4754` 0 uncovered added lines, `go test -race` on report/humanize/cli ok, `spec-check.py phase4de-acb` OK.
+- `test-stats.py --base bea4754 --changed`: cmd/quarry 840 (+4), internal/cli 539 (+3), internal/platform/humanize 5 (+1), internal/report 529 (+18), internal/report/document 190 (+9); TOTAL 2103 (+35).
+- SCENARIO-11 ticked in `specification.md` with its acceptance test; `STATE.md` rewritten (Open debt on `years[]` pins rewritten, not closed; traps added for `Realized` and `acbYearSuffixes`).
