@@ -31,12 +31,18 @@ type setting struct {
 // ignoreExample is a findings.ignore list as a user writes it, right of the equal sign.
 const ignoreExample = `["duplicate:txn-4410+txn-4412"]`
 
+// accountsExample is an accounts.registered list as a user writes it, right of the equal sign.
+const accountsExample = `["acct-12"]`
+
 var (
 	keepSetting   = setting{table: "snapshots", name: "keep", example: "snapshots.keep = 12"}
 	pathSetting   = setting{table: "quicken", name: "path", example: `quicken.path = "~/Documents/Home.quicken"`}
 	ignoreSetting = setting{table: "findings", name: "ignore", example: "findings.ignore = " + ignoreExample}
 
 	reportingSetting = setting{table: "reporting", name: "currency", example: `reporting.currency = "CAD"`}
+
+	registeredSetting    = setting{table: "accounts", name: "registered", example: "accounts.registered = " + accountsExample}
+	nonRegisteredSetting = setting{table: "accounts", name: "non-registered", example: "accounts.registered = " + accountsExample}
 )
 
 func (s setting) String() string { return strings.Join(s.key(), ".") }
@@ -50,7 +56,8 @@ type file struct {
 }
 
 // parse validates the whole file: syntax first, then snapshots.keep, then
-// quicken.path, then findings.ignore, then reporting.currency, then unknown keys.
+// quicken.path, then findings.ignore, then reporting.currency, then accounts.registered,
+// then accounts.non-registered, then unknown keys.
 func (f file) parse() (Config, error) {
 	tree, err := f.tree()
 	if err != nil {
@@ -66,12 +73,22 @@ func (f file) parse() (Config, error) {
 		return Config{}, err
 	}
 
-	ignore, err := doc.ignore()
+	ignore, err := doc.idList(ignoreSetting, "finding ids", ignoreExample)
 	if err != nil {
 		return Config{}, err
 	}
 
 	currency, err := doc.currency()
+	if err != nil {
+		return Config{}, err
+	}
+
+	registered, err := doc.idList(registeredSetting, "account ids", accountsExample)
+	if err != nil {
+		return Config{}, err
+	}
+
+	nonRegistered, err := doc.idList(nonRegisteredSetting, "account ids", accountsExample)
 	if err != nil {
 		return Config{}, err
 	}
@@ -82,6 +99,8 @@ func (f file) parse() (Config, error) {
 		QuickenPath:      homepath.Expand(f.home, quickenPath),
 		Ignore:           ignore,
 		Currency:         currency,
+		Registered:       registered,
+		NonRegistered:    nonRegistered,
 		Warnings:         doc.unknownKeys(f.shown),
 		WarningsAbsolute: doc.unknownKeys(f.path),
 	}, nil
@@ -218,23 +237,24 @@ func (d document) quickenPath() (string, error) {
 	return text, nil
 }
 
-// ignore is findings.ignore as written, file order and duplicates kept, nil when unset:
-// a list whose items are all strings. An item that is not one is refused by its place.
-func (d document) ignore() ([]string, error) {
-	value, present, err := d.lookup(ignoreSetting)
+// idList is the list s holds as written, file order and duplicates kept, nil when unset:
+// a list whose items are all strings, which noun names as in "must be a list of <noun> in
+// quotes, such as <example>". An item that is not a string is refused by its place.
+func (d document) idList(s setting, noun, example string) ([]string, error) {
+	value, present, err := d.lookup(s)
 	if err != nil || !present {
 		return nil, err
 	}
 	items, isList := value.([]any)
-	written, isWritten := d.written(ignoreSetting.key())
+	written, isWritten := d.written(s.key())
 	if !isList || !isWritten {
-		return nil, d.badValue(ignoreSetting.String()+" must be a list of finding ids in quotes, such as "+ignoreExample, d.got(ignoreSetting.key()))
+		return nil, d.badValue(s.String()+" must be a list of "+noun+" in quotes, such as "+example, d.got(s.key()))
 	}
 	var ids []string
 	for i, item := range items {
 		id, isString := item.(string)
 		if !isString {
-			return nil, d.badValue(ignoreSetting.String()+" must hold only finding ids in quotes", itemText(arrayItems(written.value), items, i)+" as item "+strconv.Itoa(i+1))
+			return nil, d.badValue(s.String()+" must hold only "+noun+" in quotes", itemText(arrayItems(written.value), items, i)+" as item "+strconv.Itoa(i+1))
 		}
 		ids = append(ids, id)
 	}
@@ -322,6 +342,9 @@ var knownKeys = [][]string{
 	ignoreSetting.key(),
 	{reportingSetting.table},
 	reportingSetting.key(),
+	{registeredSetting.table},
+	registeredSetting.key(),
+	nonRegisteredSetting.key(),
 }
 
 // unknownKeys is one warning per key the file has beyond the known ones, in

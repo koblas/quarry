@@ -19,6 +19,9 @@ type AccountListing struct {
 
 	// Currency is the reporting currency the listing was asked for.
 	Currency money.Currency
+
+	// Classification is the config's registered and non-registered account ids the listing was asked with.
+	Classification Classification
 }
 
 // ConvertedBalance is a's balance in cents, which can pass 64 bits, in the listing's currency; nil in a native listing and
@@ -46,14 +49,14 @@ func (l AccountListing) AllHidden() bool {
 
 // Accounts lists the store's accounts in the store's order with their
 // balances in currency; closed accounts are left out, and counted in Hidden,
-// unless includeClosed is set. It refuses like Status.
-func (s *Server) Accounts(ctx context.Context, includeClosed bool, currency money.Currency, _ Classification) (AccountListing, error) {
+// unless includeClosed is set, and carries classification for the caller to classify each account by. It refuses like Status.
+func (s *Server) Accounts(ctx context.Context, includeClosed bool, currency money.Currency, classification Classification) (AccountListing, error) {
 	list, err := s.store.Accounts(ctx)
 	if err != nil {
 		return AccountListing{}, s.readRefusal(ctx, "accounts", err)
 	}
 	if includeClosed {
-		return AccountListing{AccountList: list, Currency: currency}, nil
+		return AccountListing{AccountList: list, Currency: currency, Classification: classification}, nil
 	}
 
 	open := list.Accounts[:0:0]
@@ -67,7 +70,7 @@ func (s *Server) Accounts(ctx context.Context, includeClosed bool, currency mone
 	hidden := len(list.Accounts) - len(open)
 	list.Accounts = open
 	list.Unvalued = slices.DeleteFunc(slices.Clone(list.Unvalued), func(held store.UnvaluedHolding) bool { return !listed[held.AccountID] })
-	return AccountListing{AccountList: list, Hidden: hidden, Currency: currency}, nil
+	return AccountListing{AccountList: list, Hidden: hidden, Currency: currency, Classification: classification}, nil
 }
 
 // resolveAccounts is the accounts args name, in the order given and without repeats: each arg is an
