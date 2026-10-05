@@ -19,7 +19,7 @@ func acbTickered(id, name, ticker string) report.ACBSecurity {
 func Test_ACBWarnings_names_two_securities_that_share_a_ticker(t *testing.T) {
 	a := report.ACB{Securities: []report.ACBSecurity{acbTickered("sec-1", "Vanguard Total", "VTI"), acbTickered("sec-2", "Vanguard Total CAD", "VTI")}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{
 		`"VTI" is 2 securities in Quicken (Vanguard Total, Vanguard Total CAD); ` +
@@ -32,7 +32,7 @@ func Test_ACBWarnings_counts_three_securities_that_share_a_ticker_and_names_each
 		acbTickered("sec-1", "Alpha", "VTI"), acbTickered("sec-2", "Beta", "VTI"), acbTickered("sec-3", "Gamma", "VTI"),
 	}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	require.Len(t, warnings, 1)
 	assert.Contains(t, warnings[0], `"VTI" is 3 securities in Quicken (Alpha, Beta, Gamma);`)
@@ -44,7 +44,7 @@ func Test_ACBWarnings_gives_each_shared_ticker_its_own_line_in_first_member_orde
 		acbTickered("sec-3", "Gamma", "VTI"), acbTickered("sec-4", "Delta", "XEQT"),
 	}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	require.Len(t, warnings, 2)
 	assert.Contains(t, warnings[0], `"XEQT" is 2 securities in Quicken (Alpha, Delta);`)
@@ -81,7 +81,7 @@ func Test_ACBWarnings_dates_a_december_sale_warning_by_the_24th_to_the_31st(t *t
 		t.Run(c.name, func(t *testing.T) {
 			a := report.ACB{Years: []report.ACBYear{acbSalesOn(2025, c.sale)}}
 
-			warnings := document.ACBWarnings(acbPooled(a), acbConfigShown)
+			warnings := document.ACBWarnings(acbPooled(a), acbConfigShown, document.ACBAdviceCLI)
 
 			assert.Len(t, warnings, c.want)
 		})
@@ -91,7 +91,7 @@ func Test_ACBWarnings_dates_a_december_sale_warning_by_the_24th_to_the_31st(t *t
 func Test_ACBWarnings_words_a_december_sale_warning_in_the_singular(t *testing.T) {
 	a := report.ACB{Years: []report.ACBYear{acbSalesOn(2025, acbDec(2025, 28))}}
 
-	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown)
+	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{
 		"1 sale dated December 24–31, 2025: a sale settles a day or two after its trade date and counts for tax in the year it settles; " +
@@ -102,7 +102,7 @@ func Test_ACBWarnings_words_a_december_sale_warning_in_the_singular(t *testing.T
 func Test_ACBWarnings_counts_the_december_sales_of_one_year_in_one_plural_line(t *testing.T) {
 	a := report.ACB{Years: []report.ACBYear{acbSalesOn(2025, acbDec(2025, 24), acbDec(2025, 31), acbDec(2025, 10))}}
 
-	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown)
+	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown, document.ACBAdviceCLI)
 
 	require.Len(t, warnings, 1)
 	assert.Contains(t, warnings[0], "2 sales dated December 24–31, 2025:")
@@ -113,7 +113,7 @@ func Test_ACBWarnings_gives_each_year_with_a_december_sale_its_own_line_oldest_f
 		acbSalesOn(2023, acbDec(2023, 29)), acbSalesOn(2024, acbDec(2024, 2)), acbSalesOn(2025, acbDec(2025, 30)),
 	}}
 
-	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown)
+	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown, document.ACBAdviceCLI)
 
 	require.Len(t, warnings, 2)
 	assert.Contains(t, warnings[0], "1 sale dated December 24–31, 2023:")
@@ -139,7 +139,7 @@ func Test_ACBWarnings_orders_every_slot(t *testing.T) {
 		RegisteredOnly:   []store.Security{{ID: "sec-3", Name: "Gamma"}},
 	}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	require.Len(t, warnings, 10)
 	assert.Contains(t, warnings[0], "acb.adjustment item 1 names")

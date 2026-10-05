@@ -129,6 +129,20 @@ const mcpNetWorthInputSchema = `{
 	"additionalProperties": false
 }`
 
+const mcpACBDescription = "Adjusted cost base and realized capital gains per tax year, in CAD, the way the CRA defines them: average cost per security " +
+	"pooled across non-registered accounts; possible superficial losses marked, not adjusted. A worksheet, not a filing."
+
+const mcpACBInputSchema = `{
+	"type": "object",
+	"properties": {
+		"year": {"type": "integer", "minimum": 1, "maximum": 9999, "description": "Tax year to report, such as 2024, up to this year: years lists only that year (even with no sale), ` +
+	`and securities only those with a sale, or a return of capital above ACB, in it; each security's events stay its full history. Omit it for every year."},
+		"security": {"type": "array", "items": {"type": "string"}, "description": "Report only these securities, each given by id, ticker or name in any letter case; ` +
+	`years and securities count only them. A security held only in registered accounts has no ACB and is left out, with a warning. Omit it for every security."}
+	},
+	"additionalProperties": false
+}`
+
 const (
 	mcpRecurringInputSchema = `{
 		"type": "object",
@@ -265,6 +279,7 @@ func Test_run_mcp_describes_every_tool(t *testing.T) {
 			"search_transactions": {mcpSearchDescription, mcpSearchInputSchema},
 			"holdings":            {mcpHoldingsDescription, mcpHoldingsInputSchema},
 			"net_worth":           {mcpNetWorthDescription, mcpNetWorthInputSchema},
+			"acb":                 {mcpACBDescription, mcpACBInputSchema},
 		}
 		require.Len(t, listed.Tools, len(wantTools))
 		for _, tool := range listed.Tools {

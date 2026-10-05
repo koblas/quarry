@@ -83,9 +83,9 @@ accountant, not a tax filing.`,
 			// Warnings read the whole report: a cut would drop those of a security it left out.
 			cut := acb.Cut()
 
-			return emitReport(cmd, *jsonOut, document.ACBWarnings(acb, homepath.Abbreviate(srv.Home(), cfg.Path)),
+			return emitReport(cmd, *jsonOut, document.ACBWarnings(acb, homepath.Abbreviate(srv.Home(), cfg.Path), document.ACBAdviceCLI),
 				func() ([]byte, error) {
-					return renderACBJSON(cut, withConfigWarnings(cfg.WarningsAbsolute, document.ACBWarnings(acb, cfg.Path)))
+					return renderACBJSON(cut, withConfigWarnings(cfg.WarningsAbsolute, document.ACBWarnings(acb, cfg.Path, document.ACBAdviceCLI)))
 				},
 				func() string { return renderACB(cut) })
 		},

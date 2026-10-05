@@ -47,7 +47,7 @@ func Test_ACBWarnings_says_why_it_has_nothing_to_show(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, []string{c.want}, document.ACBWarnings(c.a, acbConfigShown))
+			assert.Equal(t, []string{c.want}, document.ACBWarnings(c.a, acbConfigShown, document.ACBAdviceCLI))
 		})
 	}
 }
@@ -57,7 +57,7 @@ func Test_ACBWarnings_leaves_out_of_the_span_a_year_with_only_a_return_of_capita
 	a.Years = append([]report.ACBYear{{Year: 2020, ReturnOfCapitalGain: 125_000}}, a.Years...)
 	a.Years = append(a.Years, report.ACBYear{Year: 2026, ReturnOfCapitalGain: 125_000})
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{"no sales in 2023 in non-registered accounts; the sales are in 2022–2024"}, warnings)
 }
@@ -65,7 +65,7 @@ func Test_ACBWarnings_leaves_out_of_the_span_a_year_with_only_a_return_of_capita
 func Test_ACBWarnings_is_silent_for_a_year_with_only_a_return_of_capital_gain(t *testing.T) {
 	a := acbPooled(report.ACB{Year: 2025, Years: []report.ACBYear{{Year: 2025, ReturnOfCapitalGain: 125_000}}})
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Empty(t, warnings)
 }
@@ -81,7 +81,7 @@ func Test_ACBWarnings_is_silent_when_there_is_something_to_show(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Empty(t, document.ACBWarnings(c.a, acbConfigShown))
+			assert.Empty(t, document.ACBWarnings(c.a, acbConfigShown, document.ACBAdviceCLI))
 		})
 	}
 }

@@ -26,6 +26,7 @@ const (
 	toolSearch      = "search_transactions"
 	toolHoldings    = "holdings"
 	toolNetWorth    = "net_worth"
+	toolACB         = "acb"
 )
 
 // Row limits: the most any tool returns, data_quality's default, and the most items it lists per finding.
@@ -138,6 +139,17 @@ const (
 	netWorthAsOfDescription  = "Day to value net worth on: YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day. Defaults to today. Cannot be combined with since or until."
 	netWorthSinceDescription = "List net worth at each month end on or after this date: YYYY, YYYY-MM or YYYY-MM-DD. Defaults to January 1 of this year when until is given."
 	netWorthUntilDescription = "List net worth at each month end on or before this date: YYYY, YYYY-MM or YYYY-MM-DD. Defaults to today; a later date means today."
+)
+
+const acbDescription = "Adjusted cost base and realized capital gains per tax year, in CAD, the way the CRA defines them: average cost per security " +
+	"pooled across non-registered accounts; possible superficial losses marked, not adjusted. A worksheet, not a filing."
+
+// The descriptions of the parameters acb takes; it has no currency, since the CRA wants CAD.
+const (
+	acbYearDescription = "Tax year to report, such as 2024, up to this year: years lists only that year (even with no sale), and securities only those " +
+		"with a sale, or a return of capital above ACB, in it; each security's events stay its full history. Omit it for every year."
+	acbSecurityDescription = "Report only these securities, each given by id, ticker or name in any letter case; years and securities count only them. " +
+		"A security held only in registered accounts has no ACB and is left out, with a warning. Omit it for every security."
 )
 
 // The descriptions of the parameters holdings takes; its currency is currencyDescription.
@@ -256,6 +268,11 @@ type (
 		Until    *string `json:"until"`
 		Currency string  `json:"currency"`
 	}
+	// acbInput is the acb tool's arguments; Year is nil when absent.
+	acbInput struct {
+		Year     *int     `json:"year"`
+		Security []string `json:"security"`
+	}
 	// noInput is the arguments of a tool that takes none.
 	noInput struct{}
 )
@@ -320,6 +337,10 @@ func (s *Server) addTools(srv *sdk.Server) {
 		"until":    described(netWorthUntilDescription, &jsonschema.Schema{Type: "string"}),
 		"currency": currencySchema(),
 	})), handler(s.timeout, stoppedLine(toolNetWorth), s.netWorth))
+	sdk.AddTool(srv, tool(toolACB, acbDescription, objectSchema(map[string]*jsonschema.Schema{
+		"year":     described(acbYearDescription, &jsonschema.Schema{Type: "integer", Minimum: new(1.0), Maximum: new(9999.0)}),
+		"security": described(acbSecurityDescription, &jsonschema.Schema{Type: "array", Items: &jsonschema.Schema{Type: "string"}}),
+	})), handler(s.timeout, stoppedLine(toolACB), s.acb))
 }
 
 // tool describes one tool; its result is a JSON object.

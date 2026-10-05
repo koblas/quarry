@@ -47,7 +47,7 @@ func acbPooled(a report.ACB) report.ACB {
 func Test_ACBWarnings_names_each_security_held_only_in_registered_accounts_in_the_reports_order(t *testing.T) {
 	a := report.ACB{RegisteredOnly: []store.Security{{ID: "sec-2", Name: "Maple Fund"}, {ID: "sec-9", Name: "Zeta Fund"}}}
 
-	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown)
+	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{
 		`"Maple Fund" is held only in registered accounts, so it has no ACB`,
@@ -56,7 +56,7 @@ func Test_ACBWarnings_names_each_security_held_only_in_registered_accounts_in_th
 }
 
 func Test_ACBWarnings_names_no_registered_only_security_when_the_request_named_none(t *testing.T) {
-	warnings := document.ACBWarnings(acbPooled(report.ACB{}), acbConfigShown)
+	warnings := document.ACBWarnings(acbPooled(report.ACB{}), acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Empty(t, warnings)
 }
@@ -64,7 +64,7 @@ func Test_ACBWarnings_names_no_registered_only_security_when_the_request_named_n
 func Test_ACBWarnings_names_one_possible_superficial_loss(t *testing.T) {
 	a := report.ACB{Years: []report.ACBYear{acbMarkedYear(2025, 3, 1)}}
 
-	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown)
+	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{
 		"1 possible superficial loss in 2025: the same security was acquired within 30 days before or after the sale, " +
@@ -79,7 +79,7 @@ func Test_ACBWarnings_counts_the_possible_superficial_losses_of_every_year_in_on
 		acbMarkedYear(2025, 3, 1),
 	}}
 
-	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown)
+	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown, document.ACBAdviceCLI)
 
 	require.Len(t, warnings, 1)
 	assert.Contains(t, warnings[0], "3 possible superficial losses in 2023, 2025: the same security was acquired")
@@ -88,7 +88,7 @@ func Test_ACBWarnings_counts_the_possible_superficial_losses_of_every_year_in_on
 func Test_ACBWarnings_stays_silent_when_no_sale_is_marked(t *testing.T) {
 	a := report.ACB{Years: []report.ACBYear{acbMarkedYear(2025, 3, 0)}}
 
-	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown)
+	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Empty(t, warnings)
 }
@@ -99,7 +99,7 @@ func Test_ACBWarnings_names_each_removal_of_shares_with_no_sale(t *testing.T) {
 		Events:   []report.ACBEvent{acbRemoval("Margin", time.Date(2025, time.March, 3, 0, 0, 0, 0, time.UTC), big.NewRat(4, 1))},
 	}}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{
 		`"iShares Core Equity ETF": 4 shares left "Margin" on 2025-03-03 without a sale; ` +
@@ -126,7 +126,7 @@ func Test_ACBWarnings_lists_removals_by_security_then_event_order_with_grouped_f
 		},
 	}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Len(t, warnings, 3)
 	assert.Contains(t, warnings[0], `"Alpha": 1,250.5 shares left "Margin" on 2025-03-03 without a sale;`)
@@ -138,7 +138,7 @@ func Test_ACBWarnings_is_empty_when_no_shares_were_removed_no_loss_is_marked_and
 	a := acbDocumentFixture()
 	a.Years[0].Sales[0].PossibleSuperficialLoss = false
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Empty(t, warnings)
 }
@@ -148,7 +148,7 @@ func Test_ACBWarnings_names_an_adjustment_for_a_security_not_in_the_store(t *tes
 		{Kind: report.ACBAdjustmentUnknownSecurity, Item: 2, SecurityID: "sec-99", Date: acbDay},
 	}}
 
-	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown)
+	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{
 		`~/Library/Application Support/quarry/config.toml: acb.adjustment item 2 names "sec-99", ` +
@@ -161,7 +161,7 @@ func Test_ACBWarnings_writes_an_unknown_security_id_as_a_toml_string(t *testing.
 		{Kind: report.ACBAdjustmentUnknownSecurity, Item: 1, SecurityID: `sec"9`, Date: acbDay},
 	}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Contains(t, warnings[0], `item 1 names "sec\"9", which`)
 }
@@ -171,7 +171,7 @@ func Test_ACBWarnings_names_an_adjustment_no_non_registered_account_holds(t *tes
 		{Kind: report.ACBAdjustmentNotHeld, Item: 3, SecurityID: "sec-41", Security: "iShares Core Equity ETF", Date: acbDay},
 	}}
 
-	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown)
+	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{
 		`~/Library/Application Support/quarry/config.toml: acb.adjustment item 3 is for "iShares Core Equity ETF", ` +
@@ -184,7 +184,7 @@ func Test_ACBWarnings_names_two_adjustments_for_one_security_on_one_day(t *testi
 		{Kind: report.ACBAdjustmentRepeated, Item: 4, First: 1, SecurityID: "sec-41", Security: "iShares Core Equity ETF", Date: acbDay},
 	}}
 
-	warnings := document.ACBWarnings(acbPooled(a), "/home/me/config.toml")
+	warnings := document.ACBWarnings(acbPooled(a), "/home/me/config.toml", document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{
 		`/home/me/config.toml: acb.adjustment items 1 and 4 are both for "sec-41" on 2025-03-03; quarry applies both`,
@@ -200,7 +200,7 @@ func Test_ACBWarnings_names_a_return_of_capital_above_the_acb(t *testing.T) {
 		}},
 	}}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{
 		`"Acme Corp": return of capital on 2025-12-31 is 1,250.00 more than its ACB, so its ACB is 0.00 and 1,250.00 is a capital gain in 2025`,
@@ -215,7 +215,7 @@ func Test_ACBWarnings_stays_silent_for_a_return_of_capital_within_the_acb(t *tes
 		}},
 	}}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Empty(t, warnings)
 }
@@ -245,7 +245,7 @@ func Test_ACBWarnings_lists_adjustment_lines_then_superficial_losses_then_no_cos
 		},
 	}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	require.Len(t, warnings, 7)
 	assert.Contains(t, warnings[0], "acb.adjustment item 1 names")
@@ -260,7 +260,7 @@ func Test_ACBWarnings_lists_adjustment_lines_then_superficial_losses_then_no_cos
 func Test_ACBWarnings_names_a_security_with_only_added_shares_with_no_cost(t *testing.T) {
 	a := report.ACB{Securities: []report.ACBSecurity{acbNoCostSecurity("sec-1", "Acme Corp", acbNoCostEvent(store.ActionAddShares))}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{
 		`"Acme Corp" has shares added with no cost, so its ACB is too low and its gains too high; ` +
@@ -271,7 +271,7 @@ func Test_ACBWarnings_names_a_security_with_only_added_shares_with_no_cost(t *te
 func Test_ACBWarnings_names_a_security_with_only_reinvested_dividends_with_no_cost(t *testing.T) {
 	a := report.ACB{Securities: []report.ACBSecurity{acbNoCostSecurity("sec-1", "Acme Corp", acbNoCostEvent(store.ActionReinvestDividend))}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{
 		`"Acme Corp" has reinvested dividends with no cost, so its ACB is too low and its gains too high; ` +
@@ -284,7 +284,7 @@ func Test_ACBWarnings_names_shares_added_and_dividends_reinvested_with_no_cost_i
 		"sec-1", "Acme Corp", acbNoCostEvent(store.ActionReinvestDividend), acbNoCostEvent(store.ActionAddShares),
 	)}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{
 		`"Acme Corp" has shares added and dividends reinvested with no cost, so its ACB is too low and its gains too high; ` +
@@ -297,7 +297,7 @@ func Test_ACBWarnings_names_two_no_cost_adds_of_one_security_in_one_line(t *test
 		"sec-1", "Acme Corp", acbNoCostEvent(store.ActionAddShares), acbNoCostEvent(store.ActionAddShares),
 	)}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	require.Len(t, warnings, 1)
 	assert.Contains(t, warnings[0], `"Acme Corp" has shares added with no cost,`)
@@ -310,7 +310,7 @@ func Test_ACBWarnings_gives_each_security_with_a_no_cost_acquisition_its_own_lin
 		acbNoCostSecurity("sec-1", "Beta", acbNoCostEvent(store.ActionAddShares)),
 	}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	require.Len(t, warnings, 2)
 	assert.Contains(t, warnings[0], `"Alpha" has reinvested dividends with no cost,`)
@@ -321,7 +321,7 @@ func Test_ACBWarnings_names_a_sold_out_security_that_took_in_shares_with_no_cost
 	soldOut := acbNoCostSecurity("sec-1", "Acme Corp", acbNoCostEvent(store.ActionAddShares))
 	soldOut.Shares, soldOut.Incomplete = new(big.Rat), false
 
-	warnings := document.ACBWarnings(report.ACB{Securities: []report.ACBSecurity{soldOut}}, acbConfigShown)
+	warnings := document.ACBWarnings(report.ACB{Securities: []report.ACBSecurity{soldOut}}, acbConfigShown, document.ACBAdviceCLI)
 
 	require.Len(t, warnings, 1)
 	assert.Contains(t, warnings[0], `"Acme Corp" has shares added with no cost,`)
@@ -332,7 +332,7 @@ func Test_ACBWarnings_stays_silent_for_a_security_whose_only_marked_event_is_a_d
 	security := acbNoCostSecurity("sec-1", "Acme Corp", sale)
 	security.Incomplete = true
 
-	warnings := document.ACBWarnings(report.ACB{Securities: []report.ACBSecurity{security}}, acbConfigShown)
+	warnings := document.ACBWarnings(report.ACB{Securities: []report.ACBSecurity{security}}, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Empty(t, warnings)
 }
@@ -350,7 +350,7 @@ func Test_ACBWarnings_names_a_usd_trade_before_the_first_rate_in_the_store(t *te
 		Securities: []report.ACBSecurity{acbNoRateSecurity("sec-1", "Acme Corp", "USD", acbDay)},
 	}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{
 		`"Acme Corp" has a USD trade on 2025-03-03, before 2024-01-02, the first exchange rate in the store, ` +
@@ -361,7 +361,7 @@ func Test_ACBWarnings_names_a_usd_trade_before_the_first_rate_in_the_store(t *te
 func Test_ACBWarnings_names_a_usd_trade_when_the_store_has_no_rates(t *testing.T) {
 	a := report.ACB{Securities: []report.ACBSecurity{acbNoRateSecurity("sec-1", "Acme Corp", "USD", acbDay)}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{
 		`"Acme Corp" has a USD trade on 2025-03-03, and the store has no exchange rates, ` +
@@ -386,7 +386,7 @@ func Test_ACBWarnings_names_a_trade_in_a_currency_it_cannot_convert_by_its_code(
 				Securities: []report.ACBSecurity{acbNoRateSecurity("sec-1", "Acme Corp", c.currency, acbDay)},
 			}
 
-			warnings := document.ACBWarnings(a, acbConfigShown)
+			warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 			assert.Equal(t, []string{
 				`"Acme Corp" has a trade on 2025-03-03 in a currency quarry cannot convert to CAD ` + c.want + `, ` +
@@ -403,7 +403,7 @@ func Test_ACBWarnings_gives_each_no_rate_security_its_own_line_in_security_order
 		acbNoRateSecurity("sec-3", "Gamma", "USD", acbDay.AddDate(0, 0, 1)),
 	}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	require.Len(t, warnings, 2)
 	assert.Contains(t, warnings[0], `"Alpha" has a USD trade on 2025-03-03,`)
@@ -418,7 +418,7 @@ func Test_ACBWarnings_lists_a_no_rate_line_after_the_removals_and_before_the_ret
 	}
 	a := report.ACB{Securities: []report.ACBSecurity{noRate}}
 
-	warnings := document.ACBWarnings(a, acbConfigShown)
+	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	require.Len(t, warnings, 3)
 	assert.Contains(t, warnings[0], `"Alpha": 2 shares left`)

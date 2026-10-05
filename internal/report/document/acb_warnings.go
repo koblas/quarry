@@ -13,9 +13,24 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
+// ACBAdvice is how a surface tells its caller to list what a no-cost warning is about: the call that lists the
+// shares added with no cost, and the one that lists one security's ACB history, which a security id follows.
+type ACBAdvice struct {
+	SharesWithoutCost string
+	Security          string
+}
+
+var (
+	// ACBAdviceCLI is the advice on the command line, where each listing is a command.
+	ACBAdviceCLI = ACBAdvice{SharesWithoutCost: "quarry findings --type shares-without-cost", Security: "quarry acb --security"}
+	// ACBAdviceTool is the advice on the MCP server, where each listing is a tool call.
+	ACBAdviceTool = ACBAdvice{SharesWithoutCost: "data_quality with type shares-without-cost", Security: "acb with security"}
+)
+
 // ACBWarnings is a's warnings in the ruled order: the config's adjustment lines, which name the file as
 // configShown, then the report's data-quality lines, one function per kind, appended below in that order.
-func ACBWarnings(a report.ACB, configShown string) []string {
+// The no-cost lines send the caller to the listings advice names.
+func ACBWarnings(a report.ACB, configShown string, _ ACBAdvice) []string {
 	warnings := adjustmentWarnings(a, configShown)
 	warnings = append(warnings, nothingToShowWarnings(a)...)
 	warnings = append(warnings, registeredOnlyWarnings(a)...)
