@@ -84,7 +84,7 @@ func refusalLine(refusal report.RefusalError) string {
 		if refusal.Fault == store.OpenFaultOther {
 			return withheldStoreLog(refusal.At)
 		}
-	case report.RefusalGeneric:
+	case report.RefusalUnknownSecurity, report.RefusalGeneric:
 	}
 	return refusal.Error()
 }

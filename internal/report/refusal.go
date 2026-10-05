@@ -21,6 +21,7 @@ const (
 	RefusalAmbiguousAccount
 	RefusalStore
 	RefusalUnknownCategory
+	RefusalUnknownSecurity
 )
 
 // RefusalError is a final, one-line refusal of a read: its message excludes
@@ -33,7 +34,7 @@ type RefusalError struct {
 
 	// Kind says which of the parts below are set.
 	Kind RefusalKind
-	// Arg is the caller's account or category text (RefusalUnknownAccount, RefusalAmbiguousAccount, RefusalUnknownCategory).
+	// Arg is the caller's account, category or security text (RefusalUnknownAccount, RefusalAmbiguousAccount, RefusalUnknownCategory, RefusalUnknownSecurity).
 	Arg string
 	// IDs are the ids of the accounts Arg names, sorted (RefusalAmbiguousAccount).
 	IDs []string
@@ -96,6 +97,14 @@ func unknownCategoryRefusal(arg string) error {
 	return RefusalError{
 		msg:  fmt.Sprintf("no category named %q; list them with quarry sql \"SELECT full_path FROM categories ORDER BY full_path\"", arg),
 		Kind: RefusalUnknownCategory, Arg: arg,
+	}
+}
+
+// unknownSecurityRefusal refuses a --security value that names no security acb covers.
+func unknownSecurityRefusal(arg string) error {
+	return RefusalError{
+		msg:  fmt.Sprintf("acb covers no security named %q; quarry acb --json lists every security it covers", arg),
+		Kind: RefusalUnknownSecurity, Arg: arg,
 	}
 }
 

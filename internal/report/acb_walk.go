@@ -48,7 +48,7 @@ type acbSale struct {
 
 // walkACB walks every security's pooled history in the non-registered accounts through req.Today.
 func walkACB(history store.InvestmentHistory, req ACBRequest) ACB {
-	inPool := nonRegisteredAccounts(history.Accounts, req.Classification)
+	inPool := accountsClassified(history.Accounts, req.Classification, false)
 	bySecurity := make(map[string][]store.InvestmentTransaction)
 	for _, tx := range history.Transactions {
 		_, walked := acbTiers[tx.Action]
@@ -152,11 +152,12 @@ func addToDay(days []acbAdjustmentDay, item acbItem) []acbAdjustmentDay {
 	return append(days, acbAdjustmentDay{date: item.date, items: []acbItem{item}})
 }
 
-// nonRegisteredAccounts is the ids of the accounts c lists non-registered; an unclassified account is in no pool.
-func nonRegisteredAccounts(accounts []store.Account, c Classification) map[string]bool {
+// accountsClassified is the ids of the accounts c lists registered, or non-registered when registered is false;
+// an unclassified account is in neither set.
+func accountsClassified(accounts []store.Account, c Classification, registered bool) map[string]bool {
 	ids := make(map[string]bool)
 	for _, a := range accounts {
-		if registered := c.Of(a); registered != nil && !*registered {
+		if of := c.Of(a); of != nil && *of == registered {
 			ids[a.ID] = true
 		}
 	}

@@ -216,6 +216,17 @@ func Test_acb_marks_a_removal_inside_the_span_and_ends_the_span_when_it_empties_
 	}
 }
 
+func Test_acb_leaves_a_removal_before_any_shares_were_added_with_no_cost_unmarked(t *testing.T) {
+	got := acbWalkOf(t,
+		acbBuy(t),
+		acbTx(t, 2, "acct-1", "sec-1", "2024-02-01", store.ActionRemoveShares, "CAD", -3*acbMillion, 0),
+		acbNoCostAdd(t, 3, "sec-1", "2024-03-01", 5*acbMillion),
+	)
+
+	require.Len(t, got.Securities, 1)
+	assert.Equal(t, []bool{false, false, true}, acbEventMarks(got.Securities[0]))
+}
+
 func Test_acb_keeps_the_span_to_the_security_that_was_added_with_no_cost(t *testing.T) {
 	got := acbWalkOf(t,
 		acbBuy(t),

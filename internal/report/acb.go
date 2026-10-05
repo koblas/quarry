@@ -47,6 +47,12 @@ type ACB struct {
 	FirstRate  time.Time
 	Years      []ACBYear
 	Securities []ACBSecurity
+	// Selected is whether the request named securities. SelectedIDs are the ids they matched, pooled or not, in
+	// the walk's order; RegisteredOnly are those with no pool event, held only in registered accounts. Securities
+	// is not cut to them.
+	Selected       bool
+	SelectedIDs    []string
+	RegisteredOnly []store.Security
 	// AdjustmentIssues are the adjustments skipped or repeated, by item number.
 	AdjustmentIssues []ACBAdjustmentIssue
 }
@@ -214,6 +220,13 @@ func (s *Server) ACB(ctx context.Context, req ACBRequest) (ACB, error) {
 
 	result := walkACB(history, req)
 	result.Year = req.Year
+	if len(req.Securities) > 0 {
+		selected, err := result.withSelection(history, req)
+		if err != nil {
+			return ACB{}, err
+		}
+		result = selected
+	}
 
 	return result, nil
 }
