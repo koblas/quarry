@@ -65,6 +65,7 @@ Scenarios complete: SCENARIO-01..07, 08a, 08b, 09, 10, 11, 12, 13a, 13b, 14, 15,
 - Hand-built `report.ACB` fixtures for `ACBWarnings` need the test helper `acbPooled` (document package): empty `Securities` fires slot 2 form 1 and pollutes the expected list. Do not retype the headers-only stdout with `acbYearLine` (filled-fixture widths) (SCENARIO-15)
 
 ## Open debts
+- REVIEW round 04 follow-ups: `acb_warnings_quoting_test.go:85-88` `if` in test body (put `acbPooled` in the two rows); `:92` 150-char assert line; warning 6c `("%s")` currency code left bare by ruling (`(%q)` would give same bytes for ISO codes); spec :261/:305 `"<name>"` placeholder now reads as Go-quoted.
 - REVIEW-03 (after fix pass 3 cap): four held-invariant guards have no discriminating pin though production is correct — settle's acquisition arm (acb_walk.go:300), `wasShort` (:241), `adjust` not-held (:322), `Incomplete` short (:160); inputs and expected values in REVIEW-03.md. Also: qualify the "Short pool" line "shares <= 0 => ACB 0" with HELD INVARIANT (3); `acbPool` doc (4 lines; says shares stay exact); `acbSplitThenSell` doc line; `run_config_test.go:386` hand-listed `{accounts, acb}`.
 - `RULING-S17.md` supersedes spec :159, :295, :299, :361, :363, `RULING-S19.md` spec :306; S17 docs (SKILL §4 acb row + trigger, §6, findings.md `## Classifying accounts` and `## ACB adjustments`) are built and pinned (SCENARIO-17)
 - PR known limitation (S14): superficial marking of a no-rate sale is unobservable (excluded sales absent), unpinned (SCENARIO-14)

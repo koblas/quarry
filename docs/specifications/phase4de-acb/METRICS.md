@@ -29,8 +29,59 @@
 | 01 | arch, correctness, test, refactor (+ spec-check --run OK) | 0/2/9/≈18 | 0 / 20, 1517s | BLOCKED |
 | 02 | correctness, test (re-gate after passes 1-2) | 0/2/2/1 | — | BLOCKED |
 | 03 | correctness, test (re-gate after pass 3; cap reached) | 0/4/3/3 | — | BLOCKED by contract; 4 MAJOR test-pin survivors + rest → STATE Open debts per cap |
+| final PV | product-vision step 10 | 0/2/0/1 | — | SHIP WITH CHANGES (%q names in acb warnings; SKILL §7) |
+| 04 | correctness, test (narrow, after final-PV fix) | 0/0/3/2 | — | PASS WITH FOLLOW-UPS → SHIP |
 
 ## Tokens
+
+Tokens for `phase4de-acb` across 7 project dir(s). Weighted = input-equivalent tokens (IE): cache read x0.1, cache write x1.25 (5m) / x2 (1h), output x5. Attribution: 158 tagged, 0 heuristic. Orchestrator row counts the main session between the feature's first and last run in each session, so it may include other work.
+
+| Agent | Runs | Model(s) | Input | Cache write | Cache read | Output | Weighted (IE) | Share |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| developer | 95 | claude-sonnet-5-5 | 5k | 11,303k | 304,029k | 96k | 45,018k | 71% |
+| architect | 20 | claude-opus-5-5, claude-sonnet-5-5 | 1k | 2,819k | 45,833k | 20k | 8,208k | 13% |
+| test-reviewer | 23 | claude-sonnet-5-5 | 1k | 2,210k | 34,682k | 27k | 6,367k | 10% |
+| product-vision | 14 | claude-opus-5-5 | 0k | 765k | 9,920k | 3k | 1,963k | 3% |
+| correctness-reviewer | 4 | claude-opus-5-5 | 0k | 463k | 12,517k | 2k | 1,840k | 3% |
+| arch-reviewer | 1 | claude-sonnet-5-5 | 0k | 65k | 403k | 0k | 121k | 0% |
+| refactor-advisor | 1 | claude-sonnet-5-5 | 0k | 68k | 139k | 0k | 99k | 0% |
+| **subagent total** | 158 | | 7k | 17,693k | 407,523k | 148k | 63,616k | 100% |
+| orchestrator (upper bound) | - | claude-opus-5-5 | 1k | 1,518k | 140,266k | 225k | 18,187k | - |
+
+| Run kind | Runs | Weighted (IE) | Share |
+| --- | --- | --- | --- |
+| scope | 13 | 1,071k | 2% |
+| plan | 20 | 8,208k | 13% |
+| build | 75 | 34,710k | 55% |
+| checkpoint | 19 | 3,797k | 6% |
+| checkpoint-fix | 16 | 6,038k | 9% |
+| review | 11 | 5,522k | 9% |
+| gate-fix | 4 | 4,270k | 7% |
+
+| Unit | Plan | Build | Checkpoint | Checkpoint fix | Gate fix | Weighted (IE) | Share |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| - | 1 | 0 | 0 | 0 | 4 | 9,999k | 16% |
+| SCENARIO-01 | 1 | 4 | 1 | 1 | 0 | 2,191k | 3% |
+| SCENARIO-02 | 1 | 4 | 1 | 0 | 0 | 1,493k | 2% |
+| SCENARIO-04 | 1 | 4 | 1 | 1 | 0 | 2,873k | 5% |
+| SCENARIO-05 | 2 | 4 | 1 | 1 | 0 | 3,465k | 5% |
+| SCENARIO-06 | 1 | 4 | 1 | 0 | 0 | 1,923k | 3% |
+| SCENARIO-07 | 1 | 4 | 1 | 1 | 0 | 1,862k | 3% |
+| SCENARIO-08a | 1 | 5 | 1 | 1 | 0 | 3,863k | 6% |
+| SCENARIO-08b | 1 | 4 | 1 | 1 | 0 | 3,355k | 5% |
+| SCENARIO-10 | 0 | 2 | 1 | 1 | 0 | 1,816k | 3% |
+| SCENARIO-11 | 1 | 4 | 1 | 1 | 0 | 2,547k | 4% |
+| SCENARIO-12 | 1 | 3 | 1 | 1 | 0 | 2,200k | 3% |
+| SCENARIO-13a | 1 | 4 | 1 | 0 | 0 | 1,939k | 3% |
+| SCENARIO-13b | 1 | 4 | 1 | 1 | 0 | 3,450k | 5% |
+| SCENARIO-14 | 1 | 4 | 1 | 1 | 0 | 3,111k | 5% |
+| SCENARIO-15 | 1 | 4 | 1 | 1 | 0 | 3,229k | 5% |
+| SCENARIO-16 | 1 | 4 | 1 | 1 | 0 | 3,543k | 6% |
+| SCENARIO-17 | 1 | 4 | 1 | 1 | 0 | 3,538k | 6% |
+| SCENARIO-19 | 1 | 5 | 1 | 1 | 0 | 4,675k | 7% |
+| SCENARIO-22 | 1 | 4 | 1 | 1 | 0 | 2,543k | 4% |
+
+Developer runs: 95; weighted per run median 331k, p90 915k, max 2,195k.
 
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
