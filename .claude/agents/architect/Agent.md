@@ -103,7 +103,8 @@ reading is not a reason to spend the run.
 
 **Sizing pass.** When invoked at scoping step 3 over whole scenario list, return only
 size verdict per scenario (with seams and absorbing scenarios) — no checklists, no
-`SCENARIO-XX.md` files.
+`SCENARIO-XX.md` files — plus, per scenario, each implied outcome with no literal line in
+draft `## Surface & Copy` (warning variant, refusal, flag-combination shape, MCP counterpart).
 
 ## Plan format
 

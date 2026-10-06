@@ -49,7 +49,9 @@ status: open
 # SCENARIO-XX: <title>
 ```
 
-Developer sets `status: done` when scenario complete, plus tick in `specification.md`. Every `- [ ]` under `## Implementation Plan` must be ticked by then — checkpoint question 2 checks it.
+Developer sets `status: done` when scenario complete, plus tick in `specification.md`. Every `- [ ]` under `## Implementation Plan` must be ticked by then. Checkpoint question 2 checks the `### Acceptance` and `### Build` ticks before `V`; `V` ticks Sweep and Verify.
+
+Orchestrator adds a ruling to a plan file with `Edit` (append below the last section), and commits the plan before dispatching a run on it. Never a script that opens the file for write before reading it: that truncates an uncommitted plan to the ruling alone.
 
 ## Developer runs
 
@@ -62,14 +64,15 @@ Architect writes run groups on plan's `Runs:` header line; orchestrator spawns *
 | `A` | Acceptance (red) | acceptance test failing at its assertion | `tdd`, `go-testing`, `clean-architecture` |
 | `B1`, `B2`, … | Build, **≤3 behaviour batches** per run | its batches green on `Narrow loop:` | `go-testing`, `clean-architecture`; `tdd` only under `test-first` |
 | `L` | writes plan (*Light lane*), then Acceptance (red) + Build | plan written, its batches green | `tdd`, `go-testing`, `clean-architecture` |
-| `V` | Sweep + Verify, spec tick, `spec-check.py`, `STATE.md` rewrite, `status: done` | full verification block green | none beyond briefs |
+| `V` | checkpoint's pin-only findings (if any), then Sweep + Verify, spec tick, `spec-check.py`, `STATE.md` rewrite, `status: done` | `verify.sh` green | `go-testing` when it adds pins |
 
 - Run gets: tag line with `unit:`, `Run: <group>` line, plan (with ticks so far), `STATE.md`, plan's `## Phase report`. **Never** previous run's transcript or report pasted into prompt — it is in the file.
 - Each run ends by **rewriting** `## Phase report` (last section of plan, ≤30 lines, replaces previous): files changed (`file:line`), what is red / green now (run `A` quotes failing assertion), anything next run must not redo or undo. Then returns.
 - Run past ~40 tool calls: finish current batch, write phase report, return `PARTIAL: <steps left>`; orchestrator spawns next run for remainder. Long run is the cost this section exists to stop.
 - Plan with ≤1 Build batch may merge `A` and `B1` into one run (`Runs: A+B1 (1-4) | V (5-6)`). Nothing else merges.
 - Mutation checks on plan's `Mutation checks:` line belong to `B` run that builds that guard; `V` adds none.
-- `<start>` (CLAUDE.md step 5) recorded before run `A`; checkpoint runs after `V`, over whole scenario's range.
+- `<start>` (CLAUDE.md step 5) recorded before run `A`; checkpoint runs after the last `B` (or `L`) run and **before `V`**, over whole scenario's range so far.
+- **Checkpoint findings route by what their fix touches.** Pin-only — fix adds or tightens tests, comments or docs, behaviour identical (unpinned cell, tier, arm, ruled string; comment-rule MINOR) — go into `V`'s brief as its first step, each with the mutation that must redden it (`proof.md`); no separate fix pass. Finding whose fix changes production code (constructible `Failure:` in behaviour) → one fresh `developer` fix pass, test-first, before `V`. Most checkpoint MAJORs are pin-only; a cold fix-pass spawn for test additions is the cost this rule removes.
 - Plan without `Runs:` line (older plan) → orchestrator derives groups by these rules before spawning.
 - Fix passes stay single runs — findings list is their plan.
 
@@ -80,7 +83,7 @@ Scenario the sizing pass rated **LIGHT** (architect → *Size verdict*) skips it
 - `L` — writes `SCENARIO-XX.md` itself (no plan exists yet; read spec's scenario and `STATE.md` instead), same shape as architect plan, **≤15 lines** under `## Implementation Plan`, header `Size: LIGHT — <n> steps, <package>` and `Runs: L | V`, no `## Handoff` beyond anything a later scenario must not contradict. Then executes Acceptance (red) and Build, ends with phase report. Plan names every `## Surface & Copy` line the scenario delivers (help Long, warning, refusal, status line) with the test asserting it; Long text asserted at wrap width.
 - `V` — as above.
 
-Checkpoint still runs after `V`. Plan touching mandatory test-first item, growing past 3 Build steps while being written, or delivering more than 3 ruled `## Surface & Copy` lines → `L` stops, returns `PARTIAL: needs architect`; orchestrator runs `architect` and continues normally.
+Checkpoint still runs, after `L` and before `V`. Plan touching mandatory test-first item, growing past 3 Build steps while being written, or delivering more than 3 ruled `## Surface & Copy` lines → `L` stops, returns `PARTIAL: needs architect`; orchestrator runs `architect` and continues normally.
 
 ## Planning: coverage the gate will demand
 
@@ -115,5 +118,7 @@ Commonest blocking findings share one shape: fallible call in new code with no f
 - **positive assertion** for each new branch — what DID happen, not only what did not — with control arm differing in one variable;
 - for every new numeric bound, **in-bound and just-outside-bound tests** (*Planning* applies to fix passes unchanged);
 - **mutation expected to redden each test**.
+
+**Two components disagreeing → invariant in the first brief.** Finding whose `Failure:` is two parts of the system deciding the same question differently — numeric unit or representation (exact vs rounded, cents vs millionths), boundary (`<` vs `<=`), or one path skipping a shared rule — gets its invariant stated in the **first** fix-pass brief, not after the second reopen: name the one decision function or unit every site must use, list the sites (`file:line`), one pin per site (*Planning* → *Cross-surface rule*), and a probe for each way state can reach the boundary without passing a site (a later transform, a different entry path). A per-site patch here is what reopens the same surface next round.
 
 Test reading `ctx.Err()` from value defaulting to nil, or bound test that cannot see bound's value, passes whether or not new branch works — each such gap found at gate costs whole extra fix pass and re-gate.
