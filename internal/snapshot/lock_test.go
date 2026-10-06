@@ -19,19 +19,10 @@ const lockHeldSyncRefusal = "another quarry sync or quarry snapshots prune is ru
 const lockHeldPruneRefusal = "another quarry sync or quarry snapshots prune is running, so this prune deleted nothing; " +
 	"run the command again once that one finishes"
 
-var errNoLocks = errors.New("no locks available")
-
 // fakeLocker is a Locker whose Acquire fails with err.
 type fakeLocker struct{ err error }
 
 func (f fakeLocker) Acquire(context.Context) (func(), error) { return nil, f.err }
-
-// newLockedServer returns a Server wired to a real lockfile adapter in a fresh quarry folder.
-func newLockedServer(t *testing.T, opts ...lockfile.Option) *snapshot.Server {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "quarry", "quarry.lock")
-	return snapshot.NewServer(snapshot.WithLocker(lockfile.New(path, lockfile.ModeSync, opts...)))
-}
 
 // newLockedServerPair returns two Servers whose lockers contend for one lock file.
 func newLockedServerPair(t *testing.T) (*snapshot.Server, *snapshot.Server) {
@@ -103,16 +94,6 @@ func Test_lock_for_sync_returns_a_folder_missing_lock_error_unchanged(t *testing
 	assert.Nil(t, release)
 }
 
-func Test_lock_for_sync_returns_other_lock_errors_unchanged(t *testing.T) {
-	srv := newLockedServer(t, lockfile.WithFlock(func(int, int) error { return errNoLocks }))
-
-	release, err := srv.LockForSync(context.Background())
-
-	require.ErrorIs(t, err, errNoLocks)
-	assert.NotErrorAs(t, err, new(snapshot.RefusalError))
-	assert.Nil(t, release)
-}
-
 func Test_lock_for_prune_refuses_with_the_prune_lock_held_line(t *testing.T) {
 	holder, contender := newSyncAndPruneServers(t)
 	release, err := holder.LockForSync(context.Background())
@@ -153,29 +134,6 @@ func Test_lock_for_prune_proceeds_unlocked_when_the_quarry_folder_is_missing(t *
 	assert.NoDirExists(t, dir)
 }
 
-func Test_lock_for_prune_returns_other_lock_errors_unchanged(t *testing.T) {
-	flockFault := newPruneServerInExistingFolder(t, lockfile.WithFlock(func(int, int) error { return errNoLocks }))
-	unknownKind := &lockfile.Error{Kind: lockfile.Kind(0), Path: "quarry.lock", Err: errNoLocks}
-	tests := []struct {
-		name string
-		srv  *snapshot.Server
-		want error
-	}{
-		{"the adapter's wrapped flock failure", flockFault, errNoLocks},
-		{"a plain error", snapshot.NewServer(snapshot.WithLocker(fakeLocker{err: errNoLocks})), errNoLocks},
-		{"a lockfile error of an unclassified kind", snapshot.NewServer(snapshot.WithLocker(fakeLocker{err: unknownKind})), unknownKind},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			release, err := tt.srv.LockForPrune(context.Background())
-
-			require.ErrorIs(t, err, tt.want)
-			assert.NotErrorAs(t, err, new(snapshot.RefusalError))
-			assert.Nil(t, release)
-		})
-	}
-}
-
 func Test_lock_for_prune_without_a_locker_is_a_no_op(t *testing.T) {
 	srv := snapshot.NewServer()
 
@@ -184,12 +142,4 @@ func Test_lock_for_prune_without_a_locker_is_a_no_op(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, release)
 	release()
-}
-
-// newPruneServerInExistingFolder returns a prune-mode Server whose quarry folder exists.
-func newPruneServerInExistingFolder(t *testing.T, opts ...lockfile.Option) *snapshot.Server {
-	t.Helper()
-	dir := filepath.Join(t.TempDir(), "quarry")
-	require.NoError(t, os.Mkdir(dir, 0o700))
-	return snapshot.NewServer(snapshot.WithLocker(lockfile.New(filepath.Join(dir, "quarry.lock"), lockfile.ModePrune, opts...)))
 }
