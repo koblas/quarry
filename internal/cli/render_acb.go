@@ -115,7 +115,7 @@ func acbYearSuffixes(year report.ACBYear) []string {
 func renderACBPositions(a report.ACB) string {
 	rows := [][]string{{"Security", "Ticker", "Shares", "ACB", "ACB per share", ""}}
 	for _, s := range a.Securities {
-		if s.Shares.Sign() <= 0 {
+		if !s.Holds() {
 			continue
 		}
 		ticker := ""

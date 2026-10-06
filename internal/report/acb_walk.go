@@ -33,11 +33,22 @@ var acbTiers = map[string]int{
 	store.ActionRemoveShares:     acbDisposition,
 }
 
-// acbPool is one security's units and adjusted cost base across the non-registered accounts. Shares go negative
-// while a disposition has outrun the pool, a short; a pool with shares of 0 or below holds no ACB.
+// acbPool is one security's units and adjusted cost base across the non-registered accounts. Shares stay an exact
+// count, negative while a disposition has outrun the pool, a short. Whether the pool is held, flat or short is
+// decided on held() alone, in millionths as the holding count decides it; a pool not held holds no ACB.
 type acbPool struct {
 	shares *big.Rat
 	acb    int64
+}
+
+// held is the pool's shares in millionths: above 0 held, 0 flat, below 0 short.
+func (p *acbPool) held() int64 {
+	return Millionths(p.shares)
+}
+
+// heldShares is the pool's shares rounded to the millionth, the count a reader sees.
+func (p *acbPool) heldShares() *big.Rat {
+	return big.NewRat(p.held(), acbUnitsPerShare)
 }
 
 // acbSale is a sale and the source id that breaks a tie with another security's sale the same day.
@@ -209,8 +220,8 @@ func walkSecurity(security store.Security, txs []store.InvestmentTransaction, da
 	for _, day := range days {
 		w.adjust(day)
 	}
-	w.position.Shares, w.position.ACB = w.pool.shares, w.pool.acb
-	w.position.Incomplete = w.unknownCost || w.pool.shares.Sign() < 0 || w.position.NoRate != nil
+	w.position.Shares, w.position.ACB = w.pool.heldShares(), w.pool.acb
+	w.position.Incomplete = w.unknownCost || w.pool.held() < 0 || w.position.NoRate != nil
 
 	return w
 }
@@ -247,9 +258,6 @@ func (w *securityWalk) apply(tx store.InvestmentTransaction) {
 		}
 		w.splitDay = tx.Date
 		splitShares(w.pool.shares, tx.SplitNewShares, tx.SplitOldShares)
-		// Shares are kept in millionths, as the holding count keeps them: an uneven ratio's sub-millionth
-		// leftover would otherwise read as held or short.
-		w.pool.shares.SetFrac64(Millionths(w.pool.shares), acbUnitsPerShare)
 	case store.ActionSell:
 		// Quicken stores a sale's shares negative; the units sold are their magnitude.
 		event.Shares.Abs(event.Shares)
@@ -271,7 +279,7 @@ func (w *securityWalk) apply(tx store.InvestmentTransaction) {
 		w.closeSpanWhenSoldOut()
 	}
 	// Shares with no cost that only cover a short leave nothing held without a cost.
-	if noCostAcquisition(tx) && w.pool.shares.Sign() > 0 {
+	if noCostAcquisition(tx) && w.pool.held() > 0 {
 		w.unknownCost = true
 	}
 	w.record(event)
@@ -279,21 +287,21 @@ func (w *securityWalk) apply(tx store.InvestmentTransaction) {
 
 // closeSpanWhenSoldOut ends the no-cost span once a disposition has left no shares held.
 func (w *securityWalk) closeSpanWhenSoldOut() {
-	if w.pool.shares.Sign() <= 0 {
+	if w.pool.held() <= 0 {
 		w.unknownCost = false
 	}
 }
 
 // record keeps event with the pool as it left it.
 func (w *securityWalk) record(event ACBEvent) {
-	event.Held, event.ACB = new(big.Rat).Set(w.pool.shares), w.pool.acb
+	event.Held, event.ACB = w.pool.heldShares(), w.pool.acb
 	w.position.Events = append(w.position.Events, event)
 }
 
 // adjust applies one day's items, reinvested distributions before returns of capital; a pool with no shares
 // held, empty or short, skips them all.
 func (w *securityWalk) adjust(day acbAdjustmentDay) {
-	if w.pool.shares.Sign() <= 0 {
+	if w.pool.held() <= 0 {
 		for _, item := range day.items {
 			w.issues = append(w.issues, w.issue(ACBAdjustmentNotHeld, item.number, day.date))
 		}
@@ -395,36 +403,38 @@ func noCostAcquisition(tx store.InvestmentTransaction) bool {
 // add puts bought units and their cost, in CAD cents, into the pool. Against a short the units cover it first and
 // add no ACB; the units beyond it enter at cost × beyond ÷ bought, rounded half away from zero.
 func (p *acbPool) add(bought *big.Rat, cost int64) {
-	wasShort := p.shares.Sign() < 0
+	wasShort := p.held() < 0
 	p.shares.Add(p.shares, bought)
 	switch {
 	case !wasShort:
 		p.acb += cost
-	case p.shares.Sign() > 0:
+	case p.held() > 0:
 		p.acb += roundHalfAway(new(big.Rat).Mul(big.NewRat(cost, 1), new(big.Rat).Quo(p.shares, bought)))
 	}
 }
 
 // short is how many units the pool is short, or nil when it is not.
 func (p *acbPool) short() *big.Rat {
-	if p.shares.Sign() >= 0 {
+	if p.held() >= 0 {
 		return nil
 	}
 
-	return new(big.Rat).Neg(p.shares)
+	return new(big.Rat).Neg(p.heldShares())
 }
 
-// take removes count units (a magnitude) and their share of the ACB, and returns the ACB removed. A count that is
-// all the units held or more removes all of it and leaves the pool short by the excess.
+// take removes count units (a magnitude) and their share of the ACB, and returns the ACB removed. A count that
+// leaves the pool flat or short removes all of it.
 func (p *acbPool) take(count *big.Rat) int64 {
-	removed := p.acb
-	if count.Cmp(p.shares) < 0 {
-		removed = roundHalfAway(new(big.Rat).Mul(big.NewRat(p.acb, 1), new(big.Rat).Quo(count, p.shares)))
-		p.acb -= removed
-	} else {
+	before := new(big.Rat).Set(p.shares)
+	p.shares.Sub(before, count)
+	if p.held() <= 0 {
+		removed := p.acb
 		p.acb = 0
+
+		return removed
 	}
-	p.shares.Sub(p.shares, count)
+	removed := roundHalfAway(new(big.Rat).Mul(big.NewRat(p.acb, 1), new(big.Rat).Quo(count, before)))
+	p.acb -= removed
 
 	return removed
 }

@@ -151,7 +151,8 @@ type ACBSale struct {
 	UnknownCost                         bool
 }
 
-// ACBSecurity is one security's position after its last event and the events that led there.
+// ACBSecurity is one security's position after its last event and the events that led there. Shares, like
+// every event's Held, is a whole number of millionths.
 type ACBSecurity struct {
 	Security store.Security
 	Shares   *big.Rat
@@ -171,9 +172,14 @@ type ACBNoRate struct {
 	Currency string
 }
 
+// Holds is whether shares are held: more than 0 in millionths, neither flat nor short.
+func (s ACBSecurity) Holds() bool {
+	return Millionths(s.Shares) > 0
+}
+
 // PerShare is the ACB per share in CAD dollars, or nil when no shares are held: none, or a short.
 func (s ACBSecurity) PerShare() *big.Rat {
-	if s.Shares.Sign() <= 0 {
+	if !s.Holds() {
 		return nil
 	}
 

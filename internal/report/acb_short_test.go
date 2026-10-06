@@ -1,6 +1,7 @@
 package report_test
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/koblas/quarry/internal/report"
@@ -316,4 +317,56 @@ func Test_acb_skips_a_return_of_capital_on_a_pool_a_split_left_flat_as_not_held(
 	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "0", ACB: 0}}, acbPositionRows(got))
 	assert.Equal(t, int64(0), got.Years[0].ReturnOfCapitalGain)
 	assert.False(t, got.Securities[0].Incomplete)
+}
+
+func Test_acb_holds_a_millionth_when_two_splits_cancel_and_a_sale_leaves_it(t *testing.T) {
+	got := acbWalkOf(t,
+		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 100*acbMillion, -300_000),
+		acbSplitTx(t, 2, "acct-1", "2024-03-01", acbMillion, 3*acbMillion),
+		acbSplitTx(t, 3, "acct-1", "2024-03-02", 3*acbMillion, acbMillion),
+		acbSell(t, 4, "2024-04-01", 99_999_999),
+	)
+
+	assert.Empty(t, acbLastOversold(t, got))
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "1/1000000", ACB: 0}}, acbPositionRows(got))
+	assert.False(t, got.Securities[0].Incomplete)
+}
+
+func Test_acb_closes_the_no_cost_span_when_a_sale_leaves_less_than_half_a_millionth(t *testing.T) {
+	got := acbWalkOf(t,
+		acbNoCostAdd(t, 1, "sec-1", "2024-01-02", 100*acbMillion),
+		acbSplitTx(t, 2, "acct-1", "2024-03-01", acbMillion, 3*acbMillion),
+		acbSell(t, 3, "2024-04-01", 33_333_333),
+	)
+
+	assert.False(t, got.Securities[0].Incomplete)
+}
+
+func Test_acb_position_holds_nothing_below_half_a_millionth_of_a_share(t *testing.T) {
+	position := report.ACBSecurity{Shares: big.NewRat(1, 3*acbMillion), ACB: 500}
+
+	assert.False(t, position.Holds())
+	assert.Nil(t, position.PerShare())
+}
+
+func Test_acb_adds_the_whole_cost_of_a_buy_after_a_sale_left_less_than_half_a_millionth_short(t *testing.T) {
+	const cost = 1_000_000_000
+	txs := acbSplitThenSell(t, 1_000*acbMillion, acbMillion, 7*acbMillion, 142_857_143)
+
+	got := acbWalkOf(t, append(txs, acbTx(t, 4, "acct-1", "sec-1", "2024-05-01", store.ActionBuy, "CAD", 10*acbMillion, -cost))...)
+
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "10", ACB: cost}}, acbPositionRows(got))
+}
+
+func Test_acb_removes_all_cost_when_a_sale_leaves_less_than_half_a_millionth(t *testing.T) {
+	const cost = 1_000_000_000
+	got := acbWalkOf(t,
+		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 100*acbMillion, -cost),
+		acbSplitTx(t, 2, "acct-1", "2024-03-01", acbMillion, 3*acbMillion),
+		acbSell(t, 3, "2024-04-01", 33_333_333),
+	)
+
+	assert.Equal(t, int64(cost), got.Years[0].Sales[0].ACBRemoved)
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "0", ACB: 0}}, acbPositionRows(got))
+	assert.Nil(t, got.Securities[0].PerShare())
 }
