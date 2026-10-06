@@ -518,7 +518,7 @@ Architect sizing pass (2026-10-06). Order: 01a → 01b → 06 → 10 → 12 → 
 - [x] SCENARIO-14: Missing exchange rates are warned about once — `cmd/quarry/run_summary_warnings_test.go` `Test_run_summary_warns_once_per_kind_when_the_store_has_no_exchange_rates`
 - [x] SCENARIO-16: Claude asks for last month's summary — `cmd/quarry/run_mcp_summary_test.go` `Test_run_mcp_monthly_summary_returns_the_summary_json_document`
 - [x] SCENARIO-17: Docs describe the monthly job — `cmd/quarry/run_skill_monthly_summary_test.go` `Test_monthly_summary_job_is_documented_where_a_reader_looks`
-- [ ] SCENARIO-21: A subscription that kept charging through a stray charge is not new
+- [x] SCENARIO-21: A subscription that kept charging through a stray charge is not new — `internal/report/summary_recurring_test.go` `Test_summary_does_not_list_a_subscription_that_kept_charging_through_a_stray_charge_as_new`
 - [ ] SCENARIO-18: Reference check on a real month
 
 SCENARIO-18 is run by the orchestrator after SCENARIO-17 and before the gate, on a scratch HOME holding copies of the newest snapshot; results go in `REFERENCE-CHECK.md`.

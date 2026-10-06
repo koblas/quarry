@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-21
-status: open
+status: done
 ---
 
 # SCENARIO-21: A subscription that kept charging through a stray charge is not new
@@ -26,10 +26,10 @@ Premise check: SCENARIO-19/20's acceptance tests are `Server.Summary` tests in `
   - End of step, once: narrow loop green, then `go test ./cmd/quarry/ -run 'run_summary|run_mcp_summary'`, `go test ./internal/cli/ -run summary`, `go test ./internal/mcp/ -run 'summary|Summary'` (lowercase on cmd/quarry: case-sensitive trap).
 
 ### Sweep
-- [ ] Step 3: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/report` unchanged (nothing exported).
+- [x] Step 3: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/report` unchanged (nothing exported).
 
 ### Verify
-- [ ] Step 4: `.claude/scripts/verify.sh <start> ./internal/report/...`; `spec-check.py phase4f-summary`; tick SCENARIO-21 in `specification.md` (`BDD Acceptance Progress`, test last on the line); rewrite STATE.md (decision at `:10` becomes "latest steady run with trailing off-schedule charges dropped, U17"; trap `:35` still true); `status: done`.
+- [x] Step 4: `.claude/scripts/verify.sh <start> ./internal/report/...`; `spec-check.py phase4f-summary`; tick SCENARIO-21 in `specification.md` (`BDD Acceptance Progress`, test last on the line); rewrite STATE.md (decision at `:10` becomes "latest steady run with trailing off-schedule charges dropped, U17"; trap `:35` still true); `status: done`.
 
 ## Handoff
 
@@ -50,7 +50,7 @@ Premise check: SCENARIO-19/20's acceptance tests are `Server.Summary` tests in `
 
 ## Phase report
 
-Run A+B1 (steps 1-2) done; Sweep/Verify (V) not run.
+Runs A+B1 (steps 1-2) and V (steps 3-4) done.
 
 - `internal/report/summary_recurring.go:27-41`: `resumes` now calls new `earlierRun(before, first)` (drops trailing charges until `latestRun` is ok, stops at charges more than `annualEndedAfterDays` before `first`); the gap in (3) stays measured from the earlier run's own last charge. `latestRun`/`recurring.go` untouched.
 - `internal/report/summary_recurring_test.go`: `afterMarch` clock plus the acceptance test (green).
@@ -58,4 +58,4 @@ Run A+B1 (steps 1-2) done; Sweep/Verify (V) not run.
 - Red before fix: acceptance + rows `one stray`, `two strays`, `stray, run starts 45 days...`, `annual earlier series, run starts 400 days after`; the five `listed` rows were green on arrival (controls).
 - Mutations (a)-(e) each reddened their named row; file restored byte-identical.
 - Narrow loops green: `internal/report`, `cmd/quarry` (`run_summary|run_mcp_summary`), `internal/cli` (`summary`), `internal/mcp` (`summary|Summary`).
-- V owns: lint sweep, `verify.sh`, spec tick, STATE.md rewrite, `status: done`, `go doc ./internal/report` unchanged.
+- V: `earlierRun` doc reworded (checkpoint NIT); lint `0 issues`; `verify.sh` rc=0, internal/report 709 (+2), 0 uncovered added lines; only unexported symbols changed so `go doc ./internal/report` is unchanged; spec ticked, STATE.md rewritten.

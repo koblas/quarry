@@ -29,8 +29,8 @@ func resumes(group, run []store.Charge) bool {
 	return ok && steadyCharges(earlier) && daysBetween(earlier[len(earlier)-1].Date, run[0].Date) <= rule.endedAfter
 }
 
-// earlierRun is the run ending before's last charge once trailing off-schedule charges are dropped, looking
-// back no further than the longest quiet period before first.
+// earlierRun is the run ending before once its trailing off-schedule charges are dropped; it does not look
+// back past the longest quiet period before first.
 func earlierRun(before []store.Charge, first time.Time) ([]store.Charge, cadenceRule, bool) {
 	for end := len(before); end > 0 && daysBetween(before[end-1].Date, first) <= annualEndedAfterDays; end-- {
 		if run, rule, ok := latestRun(before[:end]); ok {
