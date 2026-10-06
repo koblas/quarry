@@ -70,3 +70,5 @@ Runs B1 and B2 done (steps 1-8 ticked); Sweep/Verify (steps 9-10) left for V.
 - Green: `go test ./cmd/quarry/ -run 'skill|reference|readme|declared|use_case|monthly_summary_job|field|plugin|notices'` ok; acceptance test passes; `golangci-lint run ./cmd/quarry/...` 0 issues.
 - Mutation (README section appended after `## Credits`, restored, diffed identical): acceptance test red at `assert.Less(section, credits)` ("1909" is not less than "1588"); the section test red at its `require` ("a section must follow the monthly summary section"), since Credits is the last heading.
 - Do not redo: V runs `verify.sh e93da76 ./cmd/quarry/...`, spec tick with the acceptance test, STATE.md rewrite (drop the SCENARIO-17 Left-unbuilt line), `status: done`.
+
+Checkpoint ruling (orchestrator): finding 2 copy = sibling sentence verbatim, appended as the last sentence of the `## Reading the document` paragraph: "SKILL.md sections 2 and 3 set the rules for every number you quote." Docs-only one-sentence change folded into V, pin red first.
