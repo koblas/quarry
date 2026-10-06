@@ -3,7 +3,6 @@ package lockfile
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -36,6 +35,16 @@ const (
 	KindHeld Kind = iota + 1
 	// KindFolderMissing means the folder is absent and the mode forbids creating it.
 	KindFolderMissing
+	// KindNotRegular means the lock path exists but is not a regular file (directory, symlink, fifo).
+	KindNotRegular
+	// KindFolderCreate means ModeSync could not create the folder.
+	KindFolderCreate
+	// KindCreate means the lock file was absent and could not be created.
+	KindCreate
+	// KindOpen means the lock file exists (or could not be looked up) and could not be opened.
+	KindOpen
+	// KindLock means flock failed for a reason other than another holder.
+	KindLock
 )
 
 // Error is a classified lock failure Acquire returns.
@@ -52,6 +61,16 @@ func (e *Error) Error() string {
 		return "lock " + e.Path + " is held by another process"
 	case KindFolderMissing:
 		return "folder of lock " + e.Path + " does not exist"
+	case KindNotRegular:
+		return "lock " + e.Path + " is not a regular file"
+	case KindFolderCreate:
+		return "folder of lock " + e.Path + " cannot be created"
+	case KindCreate:
+		return "lock " + e.Path + " cannot be created"
+	case KindOpen:
+		return "lock " + e.Path + " cannot be opened"
+	case KindLock:
+		return "lock " + e.Path + " cannot be taken"
 	}
 	return "lock " + e.Path + " failed"
 }
@@ -84,16 +103,25 @@ func New(path string, mode Mode, opts ...Option) *Locker {
 }
 
 // Acquire takes the lock without waiting and returns its idempotent release func.
-// It returns a *Error of KindHeld while another open holds the lock, and of
-// KindFolderMissing in ModePrune when the folder is absent; any other failure
-// is wrapped with the path.
+// Every failure is a *Error: KindHeld while another open holds the lock,
+// KindFolderMissing in ModePrune when the folder is absent, KindNotRegular for a
+// path that is not a regular file, and KindFolderCreate, KindCreate, KindOpen or
+// KindLock for the OS step that failed.
 func (l *Locker) Acquire(_ context.Context) (func(), error) {
 	if err := l.ensureFolder(); err != nil {
 		return nil, err
 	}
+	existed, err := l.checkRegular()
+	if err != nil {
+		return nil, err
+	}
 	f, err := os.OpenFile(l.path, openFlags, filePerm)
 	if err != nil {
-		return nil, fmt.Errorf("open lock file %s: %w", l.path, err)
+		kind := KindCreate
+		if existed {
+			kind = KindOpen
+		}
+		return nil, &Error{Kind: kind, Path: l.path, Err: err}
 	}
 	if err := l.lock(f); err != nil {
 		_ = f.Close()
@@ -104,23 +132,36 @@ func (l *Locker) Acquire(_ context.Context) (func(), error) {
 	return func() { once.Do(func() { _ = f.Close() }) }, nil
 }
 
-// ensureFolder creates the lock file's folder in ModeSync; in ModePrune it only checks it exists.
+// ensureFolder creates the lock file's folder in ModeSync; in ModePrune it only checks it is not missing.
 func (l *Locker) ensureFolder() error {
 	dir := filepath.Dir(l.path)
 	if l.mode == ModeSync {
 		if err := os.MkdirAll(dir, folderPerm); err != nil {
-			return fmt.Errorf("create folder %s: %w", dir, err)
+			return &Error{Kind: KindFolderCreate, Path: l.path, Err: err}
 		}
 		return nil
 	}
-	_, err := os.Stat(dir)
-	if errors.Is(err, fs.ErrNotExist) {
+	// Any other Stat fault is left for checkRegular's Lstat to classify.
+	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
 		return &Error{Kind: KindFolderMissing, Path: l.path, Err: err}
 	}
-	if err != nil {
-		return fmt.Errorf("check folder %s: %w", dir, err)
-	}
 	return nil
+}
+
+// checkRegular reports whether the lock file exists and refuses a path that is not a
+// regular file. Lstat means a symlink is refused, never followed.
+func (l *Locker) checkRegular() (bool, error) {
+	info, err := os.Lstat(l.path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, &Error{Kind: KindOpen, Path: l.path, Err: err}
+	}
+	if !info.Mode().IsRegular() {
+		return true, &Error{Kind: KindNotRegular, Path: l.path}
+	}
+	return true, nil
 }
 
 // lock takes the exclusive non-blocking flock on f, classifying a would-block as KindHeld.
@@ -130,7 +171,7 @@ func (l *Locker) lock(f *os.File) error {
 		return &Error{Kind: KindHeld, Path: l.path, Err: flockErr}
 	}
 	if flockErr != nil {
-		return fmt.Errorf("lock %s: %w", l.path, flockErr)
+		return &Error{Kind: KindLock, Path: l.path, Err: flockErr}
 	}
 	return nil
 }

@@ -24,10 +24,14 @@ const (
 	refusalDeadline = 2 * time.Second
 )
 
-var (
-	errAcquireWaited = errors.New("acquire waited for the lock")
-	errNoLocks       = errors.New("no locks available")
-)
+var errAcquireWaited = errors.New("acquire waited for the lock")
+
+func skipAsRoot(t *testing.T) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file modes")
+	}
+}
 
 // TestMain doubles as the child process the kill test holds a lock in: with
 // holderPathEnv set it takes that lock, reports it, and blocks until killed.
@@ -188,49 +192,138 @@ func Test_acquire_in_prune_mode_takes_the_lock_when_the_folder_exists(t *testing
 	assert.Equal(t, lockfile.KindHeld, lockErr.Kind)
 }
 
-func Test_acquire_fails_unclassified_when_the_quarry_folder_cannot_be_created(t *testing.T) {
+// notRegularRows are lock paths that exist but are not a regular file; each arranges its shape at path.
+func notRegularRows() []struct {
+	name    string
+	arrange func(t *testing.T, path string)
+} {
+	return []struct {
+		name    string
+		arrange func(t *testing.T, path string)
+	}{
+		{name: "directory", arrange: func(t *testing.T, path string) {
+			t.Helper()
+			require.NoError(t, os.Mkdir(path, 0o700))
+		}},
+		{name: "symlink to a regular file", arrange: func(t *testing.T, path string) {
+			t.Helper()
+			target := filepath.Join(filepath.Dir(path), "elsewhere")
+			require.NoError(t, os.WriteFile(target, nil, 0o600))
+			require.NoError(t, os.Symlink(target, path))
+		}},
+		{name: "dangling symlink", arrange: func(t *testing.T, path string) {
+			t.Helper()
+			require.NoError(t, os.Symlink(filepath.Join(filepath.Dir(path), "gone"), path))
+		}},
+		{name: "fifo", arrange: func(t *testing.T, path string) {
+			t.Helper()
+			require.NoError(t, syscall.Mkfifo(path, 0o600))
+		}},
+	}
+}
+
+func Test_acquire_refuses_a_lock_file_that_is_not_a_regular_file(t *testing.T) {
+	modes := map[string]lockfile.Mode{"sync": lockfile.ModeSync, "prune": lockfile.ModePrune}
+	for _, row := range notRegularRows() {
+		for modeName, mode := range modes {
+			t.Run(row.name+" in "+modeName+" mode", func(t *testing.T) {
+				path := lockPath(t)
+				require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
+				row.arrange(t, path)
+
+				release, err := acquireNow(t, lockfile.New(path, mode))
+
+				var lockErr *lockfile.Error
+				require.ErrorAs(t, err, &lockErr)
+				assert.Equal(t, lockfile.KindNotRegular, lockErr.Kind)
+				assert.Equal(t, path, lockErr.Path)
+				assert.Nil(t, release)
+			})
+		}
+	}
+}
+
+func Test_acquire_classifies_a_folder_that_cannot_be_created(t *testing.T) {
 	notAFolder := filepath.Join(t.TempDir(), "Application Support")
 	require.NoError(t, os.WriteFile(notAFolder, nil, 0o600))
 	path := filepath.Join(notAFolder, "quarry", "quarry.lock")
 
 	release, err := lockfile.New(path, lockfile.ModeSync).Acquire(context.Background())
 
+	var lockErr *lockfile.Error
+	require.ErrorAs(t, err, &lockErr)
+	assert.Equal(t, lockfile.KindFolderCreate, lockErr.Kind)
+	assert.Equal(t, path, lockErr.Path)
 	require.ErrorIs(t, err, syscall.ENOTDIR)
-	require.ErrorContains(t, err, filepath.Join(notAFolder, "quarry"))
-	assert.NotErrorAs(t, err, new(*lockfile.Error))
 	assert.Nil(t, release)
 }
 
-func Test_acquire_fails_unclassified_when_the_lock_file_cannot_be_opened(t *testing.T) {
-	dir := t.TempDir()
-	target := filepath.Join(dir, "elsewhere")
-	require.NoError(t, os.WriteFile(target, nil, 0o600))
-	path := filepath.Join(dir, "quarry.lock")
-	require.NoError(t, os.Symlink(target, path))
+func Test_acquire_classifies_a_lock_file_that_exists_but_cannot_be_opened(t *testing.T) {
+	skipAsRoot(t)
+	path := lockPath(t)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
+	require.NoError(t, os.WriteFile(path, nil, 0o600))
+	require.NoError(t, os.Chmod(path, 0o000))
 
 	release, err := lockfile.New(path, lockfile.ModeSync).Acquire(context.Background())
 
-	require.ErrorIs(t, err, syscall.ELOOP)
-	require.ErrorContains(t, err, path)
-	assert.NotErrorAs(t, err, new(*lockfile.Error))
+	var lockErr *lockfile.Error
+	require.ErrorAs(t, err, &lockErr)
+	assert.Equal(t, lockfile.KindOpen, lockErr.Kind)
+	assert.Equal(t, path, lockErr.Path)
+	require.ErrorIs(t, err, syscall.EACCES)
 	assert.Nil(t, release)
 }
 
-func Test_acquire_returns_another_flock_error_unclassified_and_closes_the_file(t *testing.T) {
-	var lockedFD int
-	flock := func(fd, _ int) error {
-		lockedFD = fd
-		return errNoLocks
-	}
+func Test_acquire_classifies_a_lock_file_that_cannot_be_created_in_a_read_only_folder(t *testing.T) {
+	skipAsRoot(t)
 	path := lockPath(t)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
+	require.NoError(t, os.Chmod(filepath.Dir(path), 0o500))
+	t.Cleanup(func() { _ = os.Chmod(filepath.Dir(path), 0o700) })
 
-	release, err := lockfile.New(path, lockfile.ModeSync, lockfile.WithFlock(flock)).Acquire(context.Background())
+	release, err := lockfile.New(path, lockfile.ModeSync).Acquire(context.Background())
 
-	require.ErrorIs(t, err, errNoLocks)
-	require.ErrorContains(t, err, path)
-	assert.NotErrorAs(t, err, new(*lockfile.Error))
+	var lockErr *lockfile.Error
+	require.ErrorAs(t, err, &lockErr)
+	assert.Equal(t, lockfile.KindCreate, lockErr.Kind)
+	assert.Equal(t, path, lockErr.Path)
+	require.ErrorIs(t, err, syscall.EACCES)
 	assert.Nil(t, release)
-	assert.ErrorIs(t, syscall.Flock(lockedFD, syscall.LOCK_UN), syscall.EBADF)
+}
+
+func Test_acquire_takes_a_lock_file_that_is_read_only(t *testing.T) {
+	path := lockPath(t)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
+	require.NoError(t, os.WriteFile(path, nil, 0o400))
+
+	release, err := acquireNow(t, lockfile.New(path, lockfile.ModeSync))
+
+	require.NoError(t, err)
+	t.Cleanup(release)
+}
+
+func Test_acquire_classifies_another_flock_error_and_closes_the_file(t *testing.T) {
+	for _, cause := range []error{syscall.ENOTSUP, syscall.ENOLCK} {
+		t.Run(cause.Error(), func(t *testing.T) {
+			var lockedFD int
+			flock := func(fd, _ int) error {
+				lockedFD = fd
+				return cause
+			}
+			path := lockPath(t)
+
+			release, err := lockfile.New(path, lockfile.ModeSync, lockfile.WithFlock(flock)).Acquire(context.Background())
+
+			var lockErr *lockfile.Error
+			require.ErrorAs(t, err, &lockErr)
+			assert.Equal(t, lockfile.KindLock, lockErr.Kind)
+			assert.Equal(t, path, lockErr.Path)
+			require.ErrorIs(t, err, cause)
+			assert.Nil(t, release)
+			assert.ErrorIs(t, syscall.Flock(lockedFD, syscall.LOCK_UN), syscall.EBADF)
+		})
+	}
 }
 
 func Test_acquire_asks_for_an_exclusive_non_blocking_lock(t *testing.T) {
@@ -272,15 +365,18 @@ func Test_acquire_succeeds_after_the_holder_process_is_killed(t *testing.T) {
 	release()
 }
 
-func Test_acquire_in_prune_mode_fails_unclassified_when_the_folder_cannot_be_checked(t *testing.T) {
+func Test_acquire_in_prune_mode_classifies_a_folder_that_cannot_be_checked_as_an_open_failure(t *testing.T) {
 	notAFolder := filepath.Join(t.TempDir(), "Application Support")
 	require.NoError(t, os.WriteFile(notAFolder, nil, 0o600))
 	path := filepath.Join(notAFolder, "quarry", "quarry.lock")
 
 	release, err := lockfile.New(path, lockfile.ModePrune).Acquire(context.Background())
 
+	var lockErr *lockfile.Error
+	require.ErrorAs(t, err, &lockErr)
+	assert.Equal(t, lockfile.KindOpen, lockErr.Kind)
+	assert.Equal(t, path, lockErr.Path)
 	require.ErrorIs(t, err, syscall.ENOTDIR)
-	assert.NotErrorAs(t, err, new(*lockfile.Error))
 	assert.Nil(t, release)
 }
 
@@ -292,7 +388,12 @@ func Test_lock_error_names_the_path_for_each_kind(t *testing.T) {
 	}{
 		{name: "held", kind: lockfile.KindHeld, want: "lock /q/quarry.lock is held by another process"},
 		{name: "folder missing", kind: lockfile.KindFolderMissing, want: "folder of lock /q/quarry.lock does not exist"},
-		{name: "unclassified", kind: lockfile.Kind(0), want: "lock /q/quarry.lock failed"},
+		{name: "not regular", kind: lockfile.KindNotRegular, want: "lock /q/quarry.lock is not a regular file"},
+		{name: "folder create", kind: lockfile.KindFolderCreate, want: "folder of lock /q/quarry.lock cannot be created"},
+		{name: "create", kind: lockfile.KindCreate, want: "lock /q/quarry.lock cannot be created"},
+		{name: "open", kind: lockfile.KindOpen, want: "lock /q/quarry.lock cannot be opened"},
+		{name: "lock", kind: lockfile.KindLock, want: "lock /q/quarry.lock cannot be taken"},
+		{name: "unknown", kind: lockfile.Kind(0), want: "lock /q/quarry.lock failed"},
 	}
 
 	for _, c := range cells {
