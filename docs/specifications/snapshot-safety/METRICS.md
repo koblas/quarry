@@ -5,6 +5,7 @@
 | --- | --- | --- | --- | --- |
 | SCENARIO-01 (+02, 05, 08) | test-first | A, B1, V (+ orchestrator: kill -9 pin ruling) | 0/0/7/0 | folded into V (3 pins: GC-held child, folder-missing pass-through, hard-link alias; Mode(99); 3 comment trims) |
 | SCENARIO-03 (+04, 07, 09) | test-first | A, B1, B2, B3, V | 0/1/1/0 | folded into V (1 pin-only MAJOR: --json cells of 4 edge rows; 1 comment trim) |
+| SCENARIO-06 | test-first | A, B1, B2, B3, V (+ orchestrator: 3 rulings) | 0/0/2/2 | folded into V (prune fifo row; Acquire doc trim; O_NOFOLLOW equivalence note). B3 caught a production copy bug (L5 missing "so") a B2 test had copied from production |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
