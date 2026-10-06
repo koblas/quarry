@@ -40,12 +40,14 @@ func (s *Server) Summary(ctx context.Context, req SummaryRequest) (Summary, erro
 	if err != nil {
 		return Summary{}, s.readRefusal(ctx, summaryCommand, err)
 	}
+	netWorth := netWorthFrom(read.NetWorth, NetWorthRequest{AsOf: req.Month.End, Window: &history, Currency: req.Currency}, days)
 	return Summary{
 		Month:     req.Month,
 		Currency:  req.Currency,
 		Status:    read.Status,
 		Anomalies: anomaliesFrom(read.Charges, nil, nil, AnomaliesRequest{Window: req.Month.Window(), Currency: req.Currency}),
 		Recurring: recurringFrom(read.Charges, recurringScope{window: req.Month.Window(), today: req.Month.End, currency: req.Currency, keep: newInMonth(req.Month)}),
-		NetWorth:  netWorthFrom(read.NetWorth, NetWorthRequest{AsOf: req.Month.End, Window: &history, Currency: req.Currency}, days),
+		NetWorth:  netWorth,
+		Change:    netWorth.Change(),
 	}, nil
 }

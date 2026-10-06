@@ -50,8 +50,13 @@ func (s *Store) Charges(ctx context.Context, params store.ChargeParams) (store.C
 	}
 	defer func() { _ = db.Close() }()
 
+	return readCharges(ctx, db, s.Path(), params)
+}
+
+// readCharges is Charges over an open db of the store at path; every fault is a *store.OpenError.
+func readCharges(ctx context.Context, db ReadDB, path string, params store.ChargeParams) (store.Charges, error) {
 	var charges store.Charges
-	err = db.QueryRows(ctx, chargesQuery, []any{civilDay(params.Through)}, func(scan func(dest ...any) error) error {
+	err := db.QueryRows(ctx, chargesQuery, []any{civilDay(params.Through)}, func(scan func(dest ...any) error) error {
 		charge, err := scanCharge(scan)
 		if err != nil {
 			return err
@@ -66,7 +71,7 @@ func (s *Store) Charges(ctx context.Context, params store.ChargeParams) (store.C
 		charges.FirstRate, err = firstRate(ctx, db)
 	}
 	if err != nil {
-		return store.Charges{}, openFault(s.Path(), err)
+		return store.Charges{}, openFault(path, err)
 	}
 	return charges, nil
 }
