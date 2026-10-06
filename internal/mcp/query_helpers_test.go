@@ -62,6 +62,9 @@ type fakeStore struct {
 	netWorth      store.NetWorth
 	netWorthAsked []store.NetWorthParams
 
+	summary      store.Summary
+	summaryAsked []store.SummaryParams
+
 	accounts store.AccountList
 
 	history      store.InvestmentHistory
@@ -89,6 +92,12 @@ func (f *fakeStore) Holdings(_ context.Context, params store.HoldingsParams) (st
 func (f *fakeStore) NetWorth(_ context.Context, params store.NetWorthParams) (store.NetWorth, error) {
 	f.netWorthAsked = append(f.netWorthAsked, params)
 	return f.netWorth, f.err
+}
+
+// Summary answers with summary, or err when set, recording the params.
+func (f *fakeStore) Summary(_ context.Context, params store.SummaryParams) (store.Summary, error) {
+	f.summaryAsked = append(f.summaryAsked, params)
+	return f.summary, f.err
 }
 
 // Search answers with found, or err when set, recording the params and keeping at most Limit rows as the real store does.
@@ -262,6 +271,14 @@ func (h *harness) acb(t *testing.T, arguments any) *sdk.CallToolResult {
 func (h *harness) netWorth(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
 	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "net_worth", Arguments: arguments})
+	require.NoError(t, err)
+	return result
+}
+
+// monthlySummary calls the monthly_summary tool with arguments.
+func (h *harness) monthlySummary(t *testing.T, arguments any) *sdk.CallToolResult {
+	t.Helper()
+	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "monthly_summary", Arguments: arguments})
 	require.NoError(t, err)
 	return result
 }

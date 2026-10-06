@@ -211,16 +211,19 @@ func Test_anomalies_cuts_charges_to_the_cap_and_ends_the_warnings_with_the_line(
 }
 
 // unusualCharges is n payees, each with report.AnomalyPayeeMinHistory usual charges and then one the payee's
-// baseline makes unusual.
-func unusualCharges(n int) store.Charges {
+// baseline makes unusual, all in June 2026.
+func unusualCharges(n int) store.Charges { return unusualChargesIn(time.June, 0, n) }
+
+// unusualChargesIn is unusualCharges in month of 2026, for the payees named payeeNamed(first) on.
+func unusualChargesIn(month time.Month, first, n int) store.Charges {
 	var rows []store.Charge
 	add := func(i int, day int, amount int64) {
-		name := payeeNamed(i)
+		name := payeeNamed(first + i)
 		id := "payee-" + name
 		rows = append(rows, store.Charge{
 			TransactionID: "tx-" + name + strconv.Itoa(day),
 			SourceID:      int64(len(rows) + 1),
-			Date:          time.Date(2026, time.June, day, 0, 0, 0, 0, time.UTC),
+			Date:          time.Date(2026, month, day, 0, 0, 0, 0, time.UTC),
 			Account:       store.Account{ID: "acct", Name: "Chequing", Currency: "CAD"},
 			PayeeID:       &id,
 			Payee:         &name,

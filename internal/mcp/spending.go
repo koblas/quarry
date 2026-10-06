@@ -48,8 +48,7 @@ func (s *Server) spending(ctx context.Context, in spendingInput) (any, error) {
 // an unreadable config is refused with a stderr line naming twin.
 func (s *Server) resolveCurrency(name, twin string) (money.Currency, []string, error) {
 	if name != "" {
-		currency, _ := money.ParseCurrency(name) // the schema's enum admits only spellings it reads
-		return currency, nil, nil
+		return parseCurrency(name), nil, nil
 	}
 	cfg, err := s.newConfig(commandName)
 	if err != nil {
