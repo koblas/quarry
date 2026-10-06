@@ -170,7 +170,7 @@ Change        +654.33     +219.60    +5,312.50    +6,186.43
   "currency": "CAD",
   "snapshot": {"id": "20261001T130512Z", "taken_at": "2026-10-01T13:05:12Z", "covers_month": true},
   "dates": {"first": "2003-01-02", "last": "2026-09-30"},
-  "findings": {"open": 14, "ignored": 5, "fixed": 0, "new": 3, "newly_fixed": 2},
+  "findings": {"open": 14, "ignored": 5, "fixed": 2, "new": 3, "newly_fixed": 2},
   "anomalies": {"checked": 412, "not_judged": 37, "charges": [ /* document.Anomaly, unchanged */ ]},
   "recurring": {"series": [ /* document.RecurringSeries, unchanged */ ], "totals": [ /* document.RecurringTotal */ ]},
   "net_worth": {
@@ -507,7 +507,7 @@ Architect sizing pass (2026-10-06). Order: 01a → 01b → 06 → 10 → 12 → 
 - [x] SCENARIO-07: A quiet month — delivered by SCENARIO-06 — `cmd/quarry/run_summary_empty_test.go` `Test_run_summary_says_so_in_a_month_with_no_unusual_charge_and_no_new_recurring_charge`
 - [x] SCENARIO-10: Snapshot taken before the month ended is warned about — `cmd/quarry/run_summary_snapshot_test.go` `Test_run_summary_warns_when_the_snapshot_was_taken_before_the_month_ended`
 - [x] SCENARIO-11: Snapshot with no recorded time is warned about — delivered by SCENARIO-10 — `cmd/quarry/run_summary_snapshot_test.go` `Test_run_summary_warns_when_the_snapshot_records_no_time`
-- [ ] SCENARIO-12: Machine-readable summary
+- [x] SCENARIO-12: Machine-readable summary — `cmd/quarry/run_summary_json_test.go` `Test_run_summary_json_prints_the_ruled_document`
 - [ ] SCENARIO-14: Missing exchange rates are warned about once
 - [ ] SCENARIO-16: Claude asks for last month's summary
 - [ ] SCENARIO-17: Docs describe the monthly job

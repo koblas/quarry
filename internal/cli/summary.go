@@ -123,10 +123,8 @@ func summaryAgain(month report.Month, named bool) string {
 	return "run quarry summary again"
 }
 
-// summaryChoice is what the config file decides for a summary: its currency and the findings choices. ignoreKnown
-// is false when the file could not be read, so no ignored count can be said, and cannotTell then holds the
-// warning saying why: it is printed only once the summary has been read, so a refusal stands alone. The
-// Absolute fields are the same warnings with the config file named by its absolute path, for --json.
+// summaryChoice is what the config decides for a summary; cannotTell, printed after the report is read, says why
+// ignoreKnown is false. The Absolute fields name the config by its absolute path, for --json.
 type summaryChoice struct {
 	currency           money.Currency
 	ignore             []string

@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-12
-status: open
+status: done
 ---
 
 # SCENARIO-12: Machine-readable summary
@@ -27,10 +27,10 @@ Surface surveyed (grep; gopls rooted at ../phase4d-registered): `renderSummary` 
 - [x] Step 4 tables (checked, no code): all-commands tables `run_read_refusals_test.go:62,108,250`, `run_read_usage_test.go:84`, `run_usage_test.go:212` already carry `summary` and no `--json` variant exists in them (refusals precede any output): n/a. `run_skill_json_fields_test.go:33` `declaredFields` is an explicit list, not derived from the root, so summary needs no row until S17 writes its reference prose (S17 owns the row). No shared "every document has warnings" chokepoint exists (json_internal_test.go tests sync's document only): the arrays-never-null pin is Step 2's.
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on every new exported document type, `NewSummary`, `SummaryWarnings`, `renderSummaryJSON`; update `document/doc.go` if it lists builders.
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on every new exported document type, `NewSummary`, `SummaryWarnings`, `renderSummaryJSON`; update `document/doc.go` if it lists builders.
 
 ### Verify
-- [ ] Step 6: full verification per agent-briefs.md plus `.claude/scripts/spec-check.py phase4f-summary`; tick SCENARIO-12 with its acceptance test; rewrite STATE.md (drop the interim `--json` refusal and the currency-test debt; move `document.Summary`, `covers_month`, W3-in-`warnings[]` out of Left unbuilt).
+- [x] Step 6: full verification per agent-briefs.md plus `.claude/scripts/spec-check.py phase4f-summary`; tick SCENARIO-12 with its acceptance test; rewrite STATE.md (drop the interim `--json` refusal and the currency-test debt; move `document.Summary`, `covers_month`, W3-in-`warnings[]` out of Left unbuilt).
 
 ## Handoff
 
@@ -55,9 +55,10 @@ Surface surveyed (grep; gopls rooted at ../phase4d-registered): `renderSummary` 
 
 ## Phase report
 
-Run B1 (steps 2-4) done; Sweep/Verify (V) remain. Lint 0 issues, `go test ./internal/report/... ./internal/cli/ ./cmd/quarry/` green, acceptance test green.
+Runs B1 (steps 2-4) and V (steps 5-6) done; scenario complete.
 - Production: `internal/report/document/summary.go` (`Summary` + nested types, `NewSummary`, `coversMonth`, `summaryChanges`); `summary_warnings.go` `SummaryWarnings`; `networth.go` `netWorthDates` extracted; `anomalies.go` `anomalyEntries`, `recurring.go` `recurringSeriesEntries`/`recurringTotalEntries` extracted and shared. `internal/cli/json_summary.go` `renderSummaryJSON`; `summary.go` interim refusal deleted, `summaryChoice.warningsAbsolute`/`cannotTellAbsolute` + `configWarningsAbsolute()`, `emitReport` with `own = SummaryWarnings`.
 - Tests: `document/summary_test.go` (new); `cli/summary_json_test.go` (new, sibling of summary_test.go: json rows); `cli/currency_test.go:24` summary added to `genericCurrencyCommands`; five tests deleted from `cli/summary_test.go` (heading per currency confirmed pinned in render_summary_internal_test.go:44-46); `cmd/quarry/run_summary_json_cells_test.go` (new: first month, no transactions, native, EDT predates, W2 absolute, W1 absolute, anomalies and networth oracles).
 - Acceptance test fix: its fixture's `findings.fixed` is 1 (the newly fixed finding is also fixed), not 0; only that expectation changed.
 - Mutations (all red, restored byte-identical): covers_month predates/unknown swap -> `Test_NewSummary_says_whether_the_snapshot_covers_the_month...` rows predates+unknown; `Change==nil` nil slices -> `..._writes_empty_changes_when_the_first_month_end_holds_no_balance` and cmd `..._first_month_of_data`; `ignored` always set (status.go newStatusFindings) -> `..._ignored_null_only_when_the_ignore_list_was_unreadable` unreadable row, cli `..._leaves_ignored_null...`, cmd `..._names_the_config_by_its_absolute_path...`; W1abs/W2abs/own order swap -> cli `..._lists_the_configs_warning_in_its_absolute_form_before...` and `..._cannot_tell_warning_before...`; `warningsAbsolute: cfg.Warnings` -> cli `..._lists_the_configs_warning_in_its_absolute_form...` and cmd `..._names_a_config_warning_by_its_absolute_path...`; Summary field swap (Findings/Anomalies) -> key-order row and acceptance test.
-- Not done (V): full covered suite + uncovered-diff, test-stats, spec-check, tick SCENARIO-12 in specification.md, STATE.md rewrite, `status: done`, update `document/doc.go` if needed (it lists no builders; nothing to change).
+- Run V (done; `status: done`, ticked, spec-check OK): checkpoint pins — `document/summary_test.go` `keysAt` steps into array indices, rows `a change type` and `a change total`; cmd absolute-path test asserts `doc.Currency == "USD"`; `summaryChoice` doc trimmed to 2 lines; specification.md example `"fixed": 2`. Mutations (restored byte-identical): swap Type/Currency in `SummaryChangeType` -> `.../a_change_type` (expected type,currency,value; actual currency,type,value); swap Currency/Value in `SummaryChangeTotal` -> `.../a_change_total`; `NewSummary` Currency hardcoded "CAD" -> cmd absolute-path test (expected "USD", actual "CAD").
+- verify.sh from ad600a2: build, go test, uncovered-diff (0 lines), race, lint (0 issues) all rc=0; cmd/quarry 944 (+9), internal/cli 614 (+4), internal/report/document 265 (+22), total 1823 (+35). `document/doc.go` lists no builders; unchanged.

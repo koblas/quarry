@@ -1,6 +1,6 @@
 # phase4f-summary — current state
 
-Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds 05, 08, 09, 13, 15), SCENARIO-06 (folds 07), SCENARIO-10 (folds 11). Last updated by SCENARIO-10.
+Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds 05, 08, 09, 13, 15), SCENARIO-06 (folds 07), SCENARIO-10 (folds 11), SCENARIO-12. Last updated by SCENARIO-12.
 
 ## Binding decisions
 - One port call per `Server.Summary`: `SummaryReads.Summary` returns Status, Charges and NetWorth from one open (duckstore `readStatus`/`readCharges`/`readNetWorth` over one `ReadDB`). Snapshot, dates and findings render from `Summary.Status` — never a second `Status`/`NetWorth` call; sync renames the store mid-run, and the cli fake's nil `Status` panics on a second read (SCENARIO-01a, 01b)
@@ -19,12 +19,14 @@ Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds
 - Snapshot coverage is core: `Summary.Coverage` (`SnapshotCovers` zero value, `SnapshotPredatesMonthEnd`, `SnapshotTimeUnknown`) from `coverageOf(TakenAt, Month)`: zero is unknown, `!taken.Before(Month.closes())` covers. `closes()` is local midnight beginning the next month in `Month.Location()` (`Zone`, nil reads UTC; only `ParseMonth` sets it). `Month.Start/End` are UTC calendar days, never an instant: do not compare `taken_at` to them (SCENARIO-10)
 - W3 is `document.SnapshotWarning(summary, again)`, "" when covers; the time prints in `Month.Location()`, not `time.Local` (equal in production). `again` is the surface's phrase: the cli builds `run quarry summary again` or `run quarry summary --month YYYY-MM again` from `Flags().Changed` (`summaryAgain`; an explicit month equal to the default still gets the tail); S16 passes `call monthly_summary again`, tail for an explicit month decided there. W3b has no tail. Taken after the month end by any amount, or in the future, covers; any zero `TakenAt` is W3b, with or without transactions (SCENARIO-10)
 - W3 prints through `emit` after stdout, after W2 and only when the stdout write succeeded; W2 stays before stdout. Do not move W2 after it (SCENARIO-10)
-- Interim, never ships: `summary --json` → `UsageError` `summary --json is not available yet`; a nil Change cell prints `no rate` now (ruled U5) (SCENARIO-01b)
+- A nil Change cell prints `no rate` (ruled U5) (SCENARIO-01b)
+- `summary --json` is `document.NewSummary(report.Summary, FindingsTally, warnings)`, key order = struct field order (month, since, until, currency, snapshot, dates, findings, anomalies, recurring, net_worth, warnings); every array is `[]`, `changes` is `{"types":[],"totals":[]}` whenever `Change==nil`, `covers_month` maps covers true / predates false / unknown null, `currency` and `month` via `String()` (`native` for native). `netWorthDates`, `anomalyEntries`, `recurringSeriesEntries`/`recurringTotalEntries` are shared with the other documents (SCENARIO-12)
+- `warnings[]` = W1 absolute, W2 absolute, then `document.SummaryWarnings(summary, again)`: config paths use `config.ProblemAbsolute`/`cfg.WarningsAbsolute` from the one config load, stderr keeps the `~` form; W3 text (CLI tail included) is identical in both formats; stderr lines are the same with and without `--json`. `SummaryWarnings` is the one list S14 extends (slot order W3, then W4-W6). W1 and W2 are mutually exclusive in practice (SCENARIO-12)
 
 ## Left unbuilt
 - Suppression of the empty-window lines of `AnomaliesWarnings` (warnings.go:61-68, fires on `Checked==0`), `RecurringWarnings` (:53-59, fires on `Recurring.Empty()`) and `emptyNetWorthWarnings` — SCENARIO-14 wires W4-W6; `summary.go` calls none today, so SCENARIO-06's empty-stderr pins are green on arrival and must stay green when S14 lands (drop only each warning's last empty-window line, keep left-out/unconverted lines) (SCENARIO-06)
-- `--json` empty shapes (`{"types":[],"totals":[]}`, `dates` null/null) — SCENARIO-12 (SCENARIO-06)
-- `document.Summary`, `renderSummaryJSON` (replaces the interim `--json` refusal), `covers_month` (maps `Summary.Coverage`: covers true, predates false, unknown null) and W3 folded into `warnings[]` after W1/W2 via `SnapshotWarning` — SCENARIO-12; W4-W6 and the no-rate matrix — SCENARIO-14; `monthly_summary` MCP tool — SCENARIO-16; SKILL/README/reference/PRD Decisions + MCP row — SCENARIO-16/17
+- W4-W6 and dedupe inside `SummaryWarnings`, and the command-level no-rate matrix (converted `changes.totals[].value` null is pinned at document level only) — SCENARIO-14 (SCENARIO-12)
+- The `summary --json` row in `run_skill_json_fields_test.go:33` `declaredFields` — SCENARIO-17 (with the reference prose); `monthly_summary` MCP tool — SCENARIO-16; SKILL/README/reference/PRD Decisions + MCP row — SCENARIO-16/17 (SCENARIO-12)
 
 ## Traps
 - `Server.Anomalies`/`Server.Recurring` read Charges through *today*: calling them from Summary costs two full Charges reads and the wrong recurring clock (SCENARIO-01a)
@@ -42,5 +44,5 @@ Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds
 - cli `executeSummary` defaults a zero fake `TakenAt` to `spendNow` (`cmp.Or`), so fake-based cli tests never reach W3b; it is pinned only at command level. `summaryClock` is UTC: a test that pins `time.Local` and asserts the W3a time builds `now` in that zone (`summaryClockEDT`) (SCENARIO-10)
 
 ## Open debts
-- SCENARIO-12 adds `summary` to `genericCurrencyCommands` (currency_test.go:24) and the `--json` loops (:347), and deletes the summary-specific currency tests (`Test_summary_refuses_a_currency_that_is_not_cad_usd_or_native`, `Test_summary_shows_amounts_in_the_currency_it_was_given`, `Test_summary_refuses_a_positional_argument_before_the_currency_flag`, `Test_summary_reads_the_config_once_without_the_currency_flag`) they duplicate, and the interim `--json` refusal test `Test_summary_refuses_json_until_its_document_exists` (SCENARIO-01b)
-- No checkpoint MINOR/NIT left unfolded by SCENARIO-01b or SCENARIO-06 (the not-judged footer pin and the doc trim folded into run V)
+- NIT: `cmd/quarry/run_config_test.go:238` `readCommandArgs` lacks `summary`, so the masked-list and acb-adjustment config refusals are unpinned for summary (SCENARIO-12)
+- No other checkpoint MINOR/NIT left unfolded

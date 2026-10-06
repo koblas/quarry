@@ -3,6 +3,7 @@ package document_test
 import (
 	"encoding/json"
 	"math/big"
+	"strconv"
 	"testing"
 	"time"
 
@@ -35,11 +36,18 @@ func object(t *testing.T, doc map[string]any, path ...string) map[string]any {
 	return doc
 }
 
-// keysAt is the keys of the object at path in the NewSummary document, in document order.
+// keysAt is the keys of the object at path in the NewSummary document, in document order; a numeric path step
+// is an array index.
 func keysAt(t *testing.T, s report.Summary, path ...string) []string {
 	t.Helper()
 	raw := []byte(indented(t, document.NewSummary(s, document.FindingsTally{}, nil)))
 	for _, key := range path {
+		if index, err := strconv.Atoi(key); err == nil {
+			var elements []json.RawMessage
+			require.NoError(t, json.Unmarshal(raw, &elements))
+			raw = elements[index]
+			continue
+		}
 		var fields map[string]json.RawMessage
 		require.NoError(t, json.Unmarshal(raw, &fields))
 		raw = fields[key]
@@ -88,6 +96,8 @@ func Test_NewSummary_writes_every_object_with_its_keys_in_the_ruled_order(t *tes
 		{name: "recurring", path: []string{"recurring"}, want: []string{"series", "totals"}},
 		{name: "net worth", path: []string{"net_worth"}, want: []string{"dates", "changes"}},
 		{name: "changes", path: []string{"net_worth", "changes"}, want: []string{"types", "totals"}},
+		{name: "a change type", path: []string{"net_worth", "changes", "types", "0"}, want: []string{"type", "currency", "value"}},
+		{name: "a change total", path: []string{"net_worth", "changes", "totals", "0"}, want: []string{"currency", "value"}},
 	}
 
 	for _, c := range cases {

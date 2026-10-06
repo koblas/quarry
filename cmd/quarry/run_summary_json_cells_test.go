@@ -119,6 +119,7 @@ func Test_run_summary_json_names_the_config_by_its_absolute_path_while_stderr_sh
 
 	doc, _, stderr := runSummaryJSON(t, summaryClock, "--currency", "USD")
 
+	assert.Equal(t, "USD", doc.Currency)
 	assert.Nil(t, doc.Findings.Ignored)
 	require.NotEmpty(t, doc.Warnings)
 	assert.Equal(t, "cannot tell which findings you ignored or how you classified your accounts: "+configPath(home)+
