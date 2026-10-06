@@ -22,7 +22,7 @@ func acbToolTwinRows() store.Rows {
 
 func Test_run_mcp_acb_warns_of_securities_the_security_param_leaves_out(t *testing.T) {
 	const (
-		twins = `"ACME" is 2 securities in Quicken (Acme Corp, Acme Twin); quarry keeps a separate ACB for each; if they are the same, merge them in Quicken`
+		twins = `"ACME" is 2 securities in Quicken ("Acme Corp", "Acme Twin"); quarry keeps a separate ACB for each; if they are the same, merge them in Quicken`
 		drip  = `"Drip Fund" has reinvested dividends with no cost, so its ACB is too low and its gains too high; ` +
 			"enter their cost in Quicken; acb with security sec-drip lists them"
 		gift = `"Gift Fund" has shares added with no cost, so its ACB is too low and its gains too high; ` +

@@ -56,7 +56,7 @@ func adjustmentWarnings(a report.ACB, configShown string) []string {
 			warnings = append(warnings, fmt.Sprintf("%s names %s, which is not a security in quarry's store; quarry skips it",
 				prefix, tomlstr.BasicString(issue.SecurityID)))
 		case report.ACBAdjustmentNotHeld:
-			warnings = append(warnings, fmt.Sprintf(`%s is for "%s", which no non-registered account holds on %s; quarry skips it`,
+			warnings = append(warnings, fmt.Sprintf(`%s is for %q, which no non-registered account holds on %s; quarry skips it`,
 				prefix, issue.Security, issue.Date.Format(DateLayout)))
 		case report.ACBAdjustmentRepeated:
 			warnings = append(warnings, fmt.Sprintf("%s: acb.adjustment items %d and %d are both for %s on %s; quarry applies both",
@@ -97,7 +97,7 @@ func nothingToShowWarnings(a report.ACB) []string {
 func registeredOnlyWarnings(a report.ACB) []string {
 	warnings := make([]string, 0, len(a.RegisteredOnly))
 	for _, security := range a.RegisteredOnly {
-		warnings = append(warnings, fmt.Sprintf(`"%s" is held only in registered accounts, so it has no ACB`, security.Name))
+		warnings = append(warnings, fmt.Sprintf(`%q is held only in registered accounts, so it has no ACB`, security.Name))
 	}
 
 	return warnings
@@ -144,15 +144,15 @@ func noCostWarnings(a report.ACB, advice ACBAdvice) []string {
 		switch {
 		case added && reinvested:
 			warnings = append(warnings, fmt.Sprintf(
-				`"%s" has shares added and dividends reinvested with no cost, so its ACB is too low and its gains too high; `+
+				`%q has shares added and dividends reinvested with no cost, so its ACB is too low and its gains too high; `+
 					"%s lists the added shares; enter the reinvested dividends' cost in Quicken", name, advice.SharesWithoutCost))
 		case reinvested:
 			warnings = append(warnings, fmt.Sprintf(
-				`"%s" has reinvested dividends with no cost, so its ACB is too low and its gains too high; `+
+				`%q has reinvested dividends with no cost, so its ACB is too low and its gains too high; `+
 					"enter their cost in Quicken; %s %s lists them", name, advice.Security, security.Security.ID))
 		case added:
 			warnings = append(warnings, fmt.Sprintf(
-				`"%s" has shares added with no cost, so its ACB is too low and its gains too high; `+
+				`%q has shares added with no cost, so its ACB is too low and its gains too high; `+
 					"%s lists them", name, advice.SharesWithoutCost))
 		}
 	}
@@ -169,7 +169,7 @@ func removalWarnings(a report.ACB) []string {
 				continue
 			}
 			warnings = append(warnings, fmt.Sprintf(
-				`"%s": %s shares left "%s" on %s without a sale; quarry took their share of the ACB out and reports no gain; `+
+				`%q: %s shares left %q on %s without a sale; quarry took their share of the ACB out and reports no gain; `+
 					"if they went to a registered account or to someone else, that is a disposition at market value; "+
 					"check it with your accountant",
 				security.Security.Name, humanize.Shares(report.Millionths(event.Shares)), event.Account, event.Date.Format(DateLayout)))
@@ -192,13 +192,13 @@ func unconvertedTradeWarnings(a report.ACB) []string {
 		name, date := security.Security.Name, noRate.Date.Format(DateLayout)
 		switch currency, _ := money.ParseCurrency(noRate.Currency); {
 		case currency != money.USD:
-			warnings = append(warnings, fmt.Sprintf(`"%s" has a trade on %s in a currency quarry cannot convert to CAD ("%s"), %s`,
+			warnings = append(warnings, fmt.Sprintf(`%q has a trade on %s in a currency quarry cannot convert to CAD ("%s"), %s`,
 				name, date, noRate.Currency, left))
 		case a.FirstRate.IsZero():
-			warnings = append(warnings, fmt.Sprintf(`"%s" has a USD trade on %s, and the store has no exchange rates, %s; run quarry sync to fetch rates`,
+			warnings = append(warnings, fmt.Sprintf(`%q has a USD trade on %s, and the store has no exchange rates, %s; run quarry sync to fetch rates`,
 				name, date, left))
 		default:
-			warnings = append(warnings, fmt.Sprintf(`"%s" has a USD trade on %s, before %s, the first exchange rate in the store, %s`,
+			warnings = append(warnings, fmt.Sprintf(`%q has a USD trade on %s, before %s, the first exchange rate in the store, %s`,
 				name, date, a.FirstRate.Format(DateLayout), left))
 		}
 	}
@@ -213,10 +213,10 @@ func sameTickerWarnings(a report.ACB) []string {
 	for _, group := range groups {
 		names := make([]string, len(group.Securities))
 		for i, security := range group.Securities {
-			names[i] = security.Name
+			names[i] = strconv.Quote(security.Name)
 		}
 		warnings = append(warnings, fmt.Sprintf(
-			`"%s" is %d securities in Quicken (%s); quarry keeps a separate ACB for each; if they are the same, merge them in Quicken`,
+			`%q is %d securities in Quicken (%s); quarry keeps a separate ACB for each; if they are the same, merge them in Quicken`,
 			group.Ticker, len(names), strings.Join(names, ", ")))
 	}
 
@@ -233,7 +233,7 @@ func returnOfCapitalWarnings(a report.ACB) []string {
 			}
 			excess := humanize.Money(event.Gain)
 			warnings = append(warnings, fmt.Sprintf(
-				`"%s": return of capital on %s is %s more than its ACB, so its ACB is 0.00 and %s is a capital gain in %d`,
+				`%q: return of capital on %s is %s more than its ACB, so its ACB is 0.00 and %s is a capital gain in %d`,
 				security.Security.Name, event.Date.Format(DateLayout), excess, excess, event.Date.Year()))
 		}
 	}
@@ -278,7 +278,7 @@ func oversoldWarnings(a report.ACB) []string {
 			date := event.Date.Format(DateLayout)
 			if event.Action == store.ActionSell {
 				warnings = append(warnings, fmt.Sprintf(
-					`"%s": the sale on %s in "%s" sold %s more shares than the non-registered accounts held; quarry counts them at no cost, `+
+					`%q: the sale on %s in %q sold %s more shares than the non-registered accounts held; quarry counts them at no cost, `+
 						"so the sale's gain is too high by what they cost, and the next %s shares acquired only bring the holding back to 0; "+
 						"correct the shares in Quicken if they are wrong",
 					security.Security.Name, date, event.Account, short, short))
@@ -286,7 +286,7 @@ func oversoldWarnings(a report.ACB) []string {
 				continue
 			}
 			warnings = append(warnings, fmt.Sprintf(
-				`"%s": %s more shares left "%s" on %s than the non-registered accounts held; `+
+				`%q: %s more shares left %q on %s than the non-registered accounts held; `+
 					"the next %s shares acquired only bring the holding back to 0; correct the shares in Quicken if they are wrong",
 				security.Security.Name, short, event.Account, date, short))
 		}

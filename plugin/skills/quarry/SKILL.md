@@ -72,9 +72,9 @@ Write user-supplied values only in a recipe's `params` row, and double any singl
 
 quarry never writes to Quicken and never edits its own store by request. To fix a category, payee, duplicate or transfer, the user makes the change in Quicken, then runs `quarry sync`; findings it no longer finds leave the list. To stop listing a finding the user has checked, they add its id to `findings.ignore` in `~/Library/Application Support/quarry/config.toml`. quarry never writes that file. You write it only when the user asks, to record an account classification the user just gave you (references/findings.md, "Classifying accounts"), or to add `acb.adjustment` lines for amounts the user reads you from a T3 slip (references/findings.md, "ACB adjustments"); show the user the exact lines first, and write them only after the user says yes. Run `quarry sync` or `quarry snapshots prune`, or write output to a file, only when the user asks.
 
-## 7. Not covered yet
+## 7. Gains and tax
 
-- **Realized gains, ACB:** quarry acb is a worksheet: say so, relay superficial-loss and incomplete warnings, never call a loss deductible or denied.
+- **Realized gains, ACB:** quarry acb is a worksheet to review with an accountant, not a filing: say so, relay every line in its warnings with its numbers (section 2), and never call a loss deductible or denied.
 - **Tax:** quarry has no tax-line data. Give totals for the categories the user names for the year, from `quarry spend --by category` and `references/sql/income-by-category.sql`. These are figures to review, not tax advice or a filing.
 
 ## 8. When a command fails

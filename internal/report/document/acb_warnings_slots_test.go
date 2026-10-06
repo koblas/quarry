@@ -22,7 +22,7 @@ func Test_ACBWarnings_names_two_securities_that_share_a_ticker(t *testing.T) {
 	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Equal(t, []string{
-		`"VTI" is 2 securities in Quicken (Vanguard Total, Vanguard Total CAD); ` +
+		`"VTI" is 2 securities in Quicken ("Vanguard Total", "Vanguard Total CAD"); ` +
 			"quarry keeps a separate ACB for each; if they are the same, merge them in Quicken",
 	}, warnings)
 }
@@ -35,7 +35,7 @@ func Test_ACBWarnings_counts_three_securities_that_share_a_ticker_and_names_each
 	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	require.Len(t, warnings, 1)
-	assert.Contains(t, warnings[0], `"VTI" is 3 securities in Quicken (Alpha, Beta, Gamma);`)
+	assert.Contains(t, warnings[0], `"VTI" is 3 securities in Quicken ("Alpha", "Beta", "Gamma");`)
 }
 
 func Test_ACBWarnings_gives_each_shared_ticker_its_own_line_in_first_member_order(t *testing.T) {
@@ -47,8 +47,8 @@ func Test_ACBWarnings_gives_each_shared_ticker_its_own_line_in_first_member_orde
 	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	require.Len(t, warnings, 2)
-	assert.Contains(t, warnings[0], `"XEQT" is 2 securities in Quicken (Alpha, Delta);`)
-	assert.Contains(t, warnings[1], `"VTI" is 2 securities in Quicken (Beta, Gamma);`)
+	assert.Contains(t, warnings[0], `"XEQT" is 2 securities in Quicken ("Alpha", "Delta");`)
+	assert.Contains(t, warnings[1], `"VTI" is 2 securities in Quicken ("Beta", "Gamma");`)
 }
 
 // acbSalesOn is a year with one sale on each of the given dates.

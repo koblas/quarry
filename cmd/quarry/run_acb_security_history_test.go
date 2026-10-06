@@ -76,7 +76,7 @@ func Test_run_acb_security_prints_a_block_for_each_security_sharing_the_ticker(t
 
 	assert.Equal(t, "ACB history of \"Alpha Fund\" (DUP), in CAD\n\n"+acbHistoryRowOf(w, acbHistoryHeaderCells)+acbHistoryRowOf(w, buy)+
 		"\nACB history of \"Beta Fund\" (DUP), in CAD\n\n"+acbHistoryRowOf(w, acbHistoryHeaderCells)+acbHistoryRowOf(w, buy), stdout)
-	assert.Equal(t, stderrWarnings(`"DUP" is 2 securities in Quicken (Alpha Fund, Beta Fund); `+
+	assert.Equal(t, stderrWarnings(`"DUP" is 2 securities in Quicken ("Alpha Fund", "Beta Fund"); `+
 		"quarry keeps a separate ACB for each; if they are the same, merge them in Quicken"), stderr)
 }
 

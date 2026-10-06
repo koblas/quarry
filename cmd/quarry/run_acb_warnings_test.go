@@ -17,7 +17,7 @@ import (
 const (
 	noRateWarningVTI = `"Vanguard Total Stock" has a USD trade on 2023-12-01, before 2024-01-02, the first exchange rate in the store, ` +
 		"so its ACB is incomplete and its gains are left out of the year totals"
-	sharedTickerWarningVTI = `"VTI" is 2 securities in Quicken (Vanguard Total Stock, Vanguard Total Stock CAD); ` +
+	sharedTickerWarningVTI = `"VTI" is 2 securities in Quicken ("Vanguard Total Stock", "Vanguard Total Stock CAD"); ` +
 		"quarry keeps a separate ACB for each; if they are the same, merge them in Quicken"
 	returnOfCapitalWarningVTI = `"Vanguard Total Stock": return of capital on 2025-12-01 is 1,000.00 more than its ACB, so its ACB is 0.00 ` +
 		"and 1,000.00 is a capital gain in 2025"
