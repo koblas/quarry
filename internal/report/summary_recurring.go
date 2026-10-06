@@ -1,6 +1,10 @@
 package report
 
-import "github.com/koblas/quarry/internal/store"
+import (
+	"time"
+
+	"github.com/koblas/quarry/internal/store"
+)
 
 // newInMonth keeps the series whose listing charge falls in month and that do not resume an earlier series.
 func newInMonth(month Month) seriesFilter {
@@ -21,6 +25,17 @@ func listingCharge(run []store.Charge, rule cadenceRule) store.Charge {
 
 // resumes is whether run, the group's latest, starts again a steady series that had not ended before it.
 func resumes(group, run []store.Charge) bool {
-	earlier, rule, ok := latestRun(group[:len(group)-len(run)])
+	earlier, rule, ok := earlierRun(group[:len(group)-len(run)], run[0].Date)
 	return ok && steadyCharges(earlier) && daysBetween(earlier[len(earlier)-1].Date, run[0].Date) <= rule.endedAfter
+}
+
+// earlierRun is the run ending before's last charge once trailing off-schedule charges are dropped, looking
+// back no further than the longest quiet period before first.
+func earlierRun(before []store.Charge, first time.Time) ([]store.Charge, cadenceRule, bool) {
+	for end := len(before); end > 0 && daysBetween(before[end-1].Date, first) <= annualEndedAfterDays; end-- {
+		if run, rule, ok := latestRun(before[:end]); ok {
+			return run, rule, true
+		}
+	}
+	return nil, cadenceRule{}, false
 }

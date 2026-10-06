@@ -99,6 +99,56 @@ func Test_summary_resumption_arms(t *testing.T) {
 	}
 }
 
+func Test_summary_resumption_skips_off_schedule_charges(t *testing.T) {
+	const earlierEnd = "2026-01-10"
+	onDay := func(offset int) string { return dateOf(t, earlierEnd).AddDate(0, 0, offset).Format(time.DateOnly) }
+	cases := []struct {
+		name    string
+		earlier []store.Charge
+		strays  []int
+		start   int
+		listed  bool
+	}{
+		{name: "one stray", earlier: monthlyEndingOn(t, earlierEnd, 3), strays: []int{21}, start: 30},
+		{name: "two strays", earlier: monthlyEndingOn(t, earlierEnd, 3), strays: []int{10, 21}, start: 30},
+		{name: "stray, run starts 45 days after the earlier run's last charge", earlier: monthlyEndingOn(t, earlierEnd, 3), strays: []int{21}, start: 45},
+		{name: "stray, run starts 46 days after the earlier run's last charge", earlier: monthlyEndingOn(t, earlierEnd, 3), strays: []int{21}, start: 46, listed: true},
+		{
+			name: "earlier run not steady",
+			earlier: []store.Charge{
+				chargeOn(t, 0, onDay(-90), ofAmount(1000)),
+				chargeOn(t, 0, onDay(-60), ofAmount(1000)),
+				chargeOn(t, 0, onDay(-30), ofAmount(1000)),
+				chargeOn(t, 0, earlierEnd, ofAmount(1500)),
+			},
+			strays: []int{3},
+			start:  14,
+			listed: true,
+		},
+		{name: "earlier run too short", earlier: monthlyEndingOn(t, earlierEnd, 2), strays: []int{21}, start: 30, listed: true},
+		{name: "annual earlier series, run starts 400 days after", earlier: everyDaysEndingOn(t, earlierEnd, 365, 2), strays: []int{100}, start: 400},
+		{name: "annual earlier series, run starts 401 days after", earlier: everyDaysEndingOn(t, earlierEnd, 365, 2), strays: []int{100}, start: 401, listed: true},
+		{name: "earlier series over a year before the run", earlier: monthlyEndingOn(t, earlierEnd, 3), strays: []int{21}, start: 430, listed: true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			strays := make([]store.Charge, len(c.strays))
+			for i, offset := range c.strays {
+				strays[i] = chargeOn(t, 0, onDay(offset))
+			}
+			runEnd := dateOf(t, onDay(c.start+60))
+			month := runEnd.Format("2006-01")
+			now := time.Date(runEnd.Year(), runEnd.Month()+1, 2, 12, 0, 0, 0, time.UTC)
+			gym := slices.Concat(c.earlier, strays, monthlyEndingOn(t, runEnd.Format(time.DateOnly), 3))
+
+			summarized := summaryRecurring(t, month, now, gym)
+
+			assert.Equal(t, c.listed, !summarized.Empty())
+		})
+	}
+}
+
 func Test_recurring_still_lists_a_resumed_series(t *testing.T) {
 	gym := slices.Concat(monthlyEndingOn(t, "2026-07-27", 3), monthlyEndingOn(t, "2026-11-04", 3))
 
