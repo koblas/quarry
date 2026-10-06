@@ -64,6 +64,7 @@ Scenarios complete: SCENARIO-01..07, 08a, 08b, 09, 10, 11, 12, 13a, 13b, 14, 15,
 - Hand-built `report.ACB` fixtures for `ACBWarnings` need the test helper `acbPooled` (document package): empty `Securities` fires slot 2 form 1 and pollutes the expected list. Do not retype the headers-only stdout with `acbYearLine` (filled-fixture widths) (SCENARIO-15)
 
 ## Open debts
+- REVIEW-03 (after fix pass 3 cap): four held-invariant guards have no discriminating pin though production is correct — settle's acquisition arm (acb_walk.go:300), `wasShort` (:241), `adjust` not-held (:322), `Incomplete` short (:160); inputs and expected values in REVIEW-03.md. Also: qualify the "Short pool" line "shares <= 0 => ACB 0" with HELD INVARIANT (3); `acbPool` doc (4 lines; says shares stay exact); `acbSplitThenSell` doc line; `run_config_test.go:386` hand-listed `{accounts, acb}`.
 - `RULING-S17.md` supersedes spec :159, :295, :299, :361, :363, `RULING-S19.md` spec :306; S17 docs (SKILL §4 acb row + trigger, §6, findings.md `## Classifying accounts` and `## ACB adjustments`) are built and pinned (SCENARIO-17)
 - S14: superficial marking of a no-rate sale is unobservable (excluded sales absent), unpinned. Warning 6c and event-JSON null `cad`/`gain`: final product-vision pass re-checks (SCENARIO-14)
 - S13a checkpoint MINORs: `run_acb_unknown_cost_test.go:140-158` sold-out/re-bought row text-only, `--json` cell unpinned; NIT `:90` case name says sale first

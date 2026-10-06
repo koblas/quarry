@@ -28,6 +28,7 @@
 | --- | --- | --- | --- | --- |
 | 01 | arch, correctness, test, refactor (+ spec-check --run OK) | 0/2/9/≈18 | 0 / 20, 1517s | BLOCKED |
 | 02 | correctness, test (re-gate after passes 1-2) | 0/2/2/1 | — | BLOCKED |
+| 03 | correctness, test (re-gate after pass 3; cap reached) | 0/4/3/3 | — | BLOCKED by contract; 4 MAJOR test-pin survivors + rest → STATE Open debts per cap |
 
 ## Tokens
 
