@@ -75,15 +75,28 @@ func Test_summary_reads_charges_through_the_month_end_and_net_worth_at_both_mont
 }
 
 func Test_summary_reads_the_month_before_a_january_across_the_year_end(t *testing.T) {
-	var got store.SummaryParams
-	srv := report.NewServer(report.WithStore(fakeStore{gotSummary: &got}))
-	month, err := report.ParseMonth(new("2026-01"), summaryNow)
-	require.NoError(t, err)
+	cases := []struct {
+		name  string
+		month string
+		dates []time.Time
+	}{
+		{name: "a january in the current era", month: "2026-01", dates: []time.Time{day(2025, time.December, 31), day(2026, time.January, 31)}},
+		{name: "the earliest month", month: "0001-01", dates: []time.Time{day(0, time.December, 31), day(1, time.January, 31)}},
+	}
 
-	_, err = srv.Summary(t.Context(), report.SummaryRequest{Month: month, Currency: money.CAD})
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var got store.SummaryParams
+			srv := report.NewServer(report.WithStore(fakeStore{gotSummary: &got}))
+			month, err := report.ParseMonth(&c.month, summaryNow)
+			require.NoError(t, err)
 
-	require.NoError(t, err)
-	assert.Equal(t, []time.Time{day(2025, time.December, 31), day(2026, time.January, 31)}, got.Dates)
+			_, err = srv.Summary(t.Context(), report.SummaryRequest{Month: month, Currency: money.CAD})
+
+			require.NoError(t, err)
+			assert.Equal(t, c.dates, got.Dates)
+		})
+	}
 }
 
 func Test_summary_returns_the_month_and_currency_it_was_asked_for(t *testing.T) {
@@ -97,7 +110,18 @@ func Test_summary_returns_the_month_and_currency_it_was_asked_for(t *testing.T) 
 	assert.Equal(t, req.Month, got.Month)
 	assert.Equal(t, money.USD, got.Currency)
 	assert.Equal(t, money.USD, got.Anomalies.Currency)
+	assert.Equal(t, money.USD, got.Recurring.Currency)
 	assert.Equal(t, money.USD, got.NetWorth.Currency)
+}
+
+func Test_summary_lists_recurring_series_over_the_month_it_summarizes(t *testing.T) {
+	srv := report.NewServer(report.WithStore(fakeStore{}))
+	req := septemberRequest(t)
+
+	got, err := srv.Summary(t.Context(), req)
+
+	require.NoError(t, err)
+	assert.Equal(t, req.Month.Window(), got.Recurring.Window)
 }
 
 func Test_summary_anomalies_equal_the_anomalies_read_of_the_month(t *testing.T) {

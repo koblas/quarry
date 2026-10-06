@@ -66,11 +66,37 @@ func Test_summary_lists_a_subscription_with_an_early_price_change_as_new_in_its_
 }
 
 func Test_summary_does_not_list_a_late_bill_of_an_old_subscription_as_new(t *testing.T) {
-	gym := append(monthlyEndingOn(t, "2026-08-05", 24), chargeOn(t, 0, "2026-09-14"))
+	gym := slices.Concat(monthlyEndingOn(t, "2026-08-05", 24), chargesOn(t, []string{"2026-09-14", "2026-10-14", "2026-11-13"}))
+	november := store.Window{Since: dateOf(t, "2026-11-01"), Until: dateOf(t, "2026-11-30")}
 
-	september := summaryRecurring(t, "2026-09", summaryNow, gym)
+	september := summaryRecurring(t, "2026-09", afterNovember, gym)
+	summarized := summaryRecurring(t, "2026-11", afterNovember, gym)
+	recurring := recurringAt(t, afterNovember, november, gym)
 
 	assert.Empty(t, payeesOf(september))
+	assert.Empty(t, payeesOf(summarized))
+	assert.Equal(t, []string{"Gym"}, payeesOf(recurring))
+}
+
+func Test_summary_marks_a_series_new_only_when_it_was_first_charged_in_the_month(t *testing.T) {
+	cases := []struct {
+		name    string
+		charges []store.Charge
+		want    bool
+	}{
+		{name: "first charged two months before", charges: chargesOn(t, []string{"2026-07-03", "2026-08-02", "2026-09-01"})},
+		{name: "first charged late in the month before", charges: everyDaysEndingOn(t, "2026-09-10", 7, 4)},
+		{name: "first charged in the month", charges: everyDaysEndingOn(t, "2026-09-24", 7, 4), want: true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			september := summaryRecurring(t, "2026-09", summaryNow, c.charges)
+
+			require.Len(t, september.Series, 1)
+			assert.Equal(t, c.want, september.Series[0].New)
+		})
+	}
 }
 
 func Test_summary_lists_a_subscription_resumed_after_it_ended_as_new(t *testing.T) {

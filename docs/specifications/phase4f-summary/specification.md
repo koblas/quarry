@@ -491,12 +491,12 @@ Architect sizing pass (2026-10-06). Order: 01a → 01b → 06 → 10 → 12 → 
 **Traps:** one store handle (sync renames the store mid-run); two full Charges reads (share or time them); `quarry recurring` must not change; test clocks for later months (02 needs now ≥ 2026-11-01, 19 ≥ 2026-12-01); all-commands tables listed under 01b.
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01a: The report server summarizes a month
-- [ ] SCENARIO-02: A subscription is new in the month quarry first recognizes it
-- [ ] SCENARIO-19: A price change before quarry can list a subscription moves the month it is new
-- [ ] SCENARIO-03: A late bill does not make an old subscription new
-- [ ] SCENARIO-20: A subscription resumed after it ended is new again
-- [ ] SCENARIO-04: A past month's recurring charges do not change with later charges
+- [x] SCENARIO-01a: The report server summarizes a month — `internal/report/summary_test.go` `Test_summary_holds_the_months_anomalies_new_recurring_and_net_worth_change`
+- [x] SCENARIO-02: A subscription is new in the month quarry first recognizes it — delivered by SCENARIO-01a — `internal/report/summary_recurring_test.go` `Test_summary_lists_a_subscription_as_new_in_the_month_of_its_third_charge`
+- [x] SCENARIO-19: A price change before quarry can list a subscription moves the month it is new — delivered by SCENARIO-01a — `internal/report/summary_recurring_test.go` `Test_summary_lists_a_subscription_with_an_early_price_change_as_new_in_its_first_steady_month`
+- [x] SCENARIO-03: A late bill does not make an old subscription new — delivered by SCENARIO-01a — `internal/report/summary_recurring_test.go` `Test_summary_does_not_list_a_late_bill_of_an_old_subscription_as_new`
+- [x] SCENARIO-20: A subscription resumed after it ended is new again — delivered by SCENARIO-01a — `internal/report/summary_recurring_test.go` `Test_summary_lists_a_subscription_resumed_after_it_ended_as_new`
+- [x] SCENARIO-04: A past month's recurring charges do not change with later charges — delivered by SCENARIO-01a — `internal/report/summary_recurring_test.go` `Test_summary_recurring_ignores_charges_after_the_month`
 - [ ] SCENARIO-01b: Summary of last month
 - [ ] SCENARIO-05: Net worth change between month ends
 - [ ] SCENARIO-08: Findings line names the last sync

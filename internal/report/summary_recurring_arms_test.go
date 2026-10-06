@@ -45,7 +45,6 @@ func Test_summary_lists_a_series_new_in_the_month_of_its_listing_charge(t *testi
 }
 
 func Test_summary_resumption_arms(t *testing.T) {
-	// Each row's own run is Sep 5, Oct 5 and Nov 4; prior is what the group was charged before it.
 	cases := []struct {
 		name   string
 		prior  []store.Charge

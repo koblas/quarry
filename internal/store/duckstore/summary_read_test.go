@@ -56,8 +56,7 @@ func Test_summary_reads_net_worth_on_the_month_ends_around_the_first_day_of_year
 	assert.Empty(t, got.Charges.Rows)
 }
 
-// summaryQueries is how many queries Summary runs after the open's format checks: those of Status, then Charges,
-// then NetWorth.
+// summaryQueries is how many queries Summary runs after the open's format checks.
 const summaryQueries = 12
 
 func Test_summary_returns_each_querys_fault(t *testing.T) {

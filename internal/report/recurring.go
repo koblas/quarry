@@ -221,9 +221,8 @@ func (s *Server) Recurring(ctx context.Context, req RecurringRequest) (Recurring
 // group's tail) and the run's cadence rule.
 type seriesFilter func(group, run []store.Charge, rule cadenceRule) bool
 
-// recurringScope is what a recurring read judges charges by: the window to list, the day the series are
-// judged as of, the accounts they must be charged in (none: every account), the currency to list them in,
-// and the filter a series must also pass.
+// recurringScope is the window, as-of day, accounts (none: all), currency and extra filter a recurring read
+// judges series by.
 type recurringScope struct {
 	window     store.Window
 	today      time.Time

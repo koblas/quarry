@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01a
-status: open
+status: done
 ---
 
 # SCENARIO-01a: The report server summarizes a month
@@ -12,7 +12,7 @@ Acceptance test (SCENARIO-19, folded): `internal/report/summary_recurring_test.g
 Acceptance test (SCENARIO-03, folded): `internal/report/summary_recurring_test.go` `Test_summary_does_not_list_a_late_bill_of_an_old_subscription_as_new`
 Acceptance test (SCENARIO-20, folded): `internal/report/summary_recurring_test.go` `Test_summary_lists_a_subscription_resumed_after_it_ended_as_new`
 Acceptance test (SCENARIO-04, folded): `internal/report/summary_recurring_test.go` `Test_summary_recurring_ignores_charges_after_the_month`
-Narrow loop: `go test ./internal/report/ ./internal/store/duckstore/ -run 'Summary|Month|Recurring|Anomal|NetWorth|reads'`
+Narrow loop: `go test ./internal/report/ ./internal/store/duckstore/ -run 'summary|month|change|recurring_still|reads'`
 Mutation checks: resumption bound `<= endedAfter` → `<` in the summary's resumption test → the 45-day row of `Test_summary_resumption_arms` (month 2026-11) | port call in `(*Server).Summary` replaced by `s.store.Charges` → `Test_summary_reads_the_store_once`
 Runs: A (1-2) | B1 (3-4) | B2 (5) | B3 (6-7) | V (8-9)
 Size: OWNS A RUN — 5 batches, 1 feature package (report) + its store adapter (duckstore)
@@ -31,10 +31,10 @@ Size: OWNS A RUN — 5 batches, 1 feature package (report) + its store adapter (
 - [x] Step 7: duckstore one-handle read — extract `status.go:45-109`, `charges.go:46-72`, `networth.go:34-82` bodies into helpers over one `ReadDB`; `summary.go` `(*Store).Summary` opens once (`openRead` `duckstore.go:203-219`), runs all three, closes. Tests: `Summary` op added to `rowReads()` (`read_faults_test.go:22-62`; open/query/scan fault and `closes == 1` rows come free); `Test_summary_returns_each_querys_fault` with a `summaryQueries` constant (`:146-164` pattern, `spyReadDB.passQueries` `fakes_test.go:33-65`); contract `summary_read_test.go` `Test_summary_equals_the_separate_reads` (one built store: `Summary` == {`Status`, `Charges(Through)`, `NetWorth(Dates)`}, a charge after Through excluded); Dates row with `0000-12-31` (month 0001-01) — if DuckDB refuses the date, record "default, pending ruling" and stop
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on every new exported symbol; `internal/report/doc.go` command list adds summary; `go doc ./internal/report Summary` reads as the contract
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on every new exported symbol; `internal/report/doc.go` command list adds summary; `go doc ./internal/report Summary` reads as the contract
 
 ### Verify
-- [ ] Step 9: full verification + `spec-check.py phase4f-summary` → tick SCENARIO-01a, 02, 19, 03, 20, 04 (folds: "delivered by SCENARIO-01a" before the test reference), write `STATE.md`
+- [x] Step 9: full verification + `spec-check.py phase4f-summary` → tick SCENARIO-01a, 02, 19, 03, 20, 04 (folds: "delivered by SCENARIO-01a" before the test reference), write `STATE.md`
 
 ## Handoff
 
@@ -62,18 +62,12 @@ Size: OWNS A RUN — 5 batches, 1 feature package (report) + its store adapter (
 
 ## Phase report
 
-**Run B3 (steps 6-7) done; start commit 7c53e51.** Acceptance test `Test_summary_holds_the_months_anomalies_new_recurring_and_net_worth_change` is GREEN. Narrow loop green (`report`, `duckstore`); `go test ./internal/cli ./internal/mcp` ok; `golangci-lint run` on report+duckstore 0 issues; `uncovered-diff.py` on both packages 0 uncovered added lines (narrow profile, not the full-suite one -- V reruns it).
+**Run V done; start commit 909cd60.** Scenario complete, `status: done`, SCENARIO-01a + folds 02, 19, 03, 20, 04 ticked in `specification.md`, `STATE.md` written, `spec-check.py phase4f-summary` OK (also `--run`).
 
-Files:
-- `internal/report/networth_change.go` (new) -- `NetWorth.Change()` (nil when no dates or `Dates[0]` has no row); `convertedChange` (every `Types()` type, nil value when `typeNeedsAnyRate` on either day; one total, nil unless each day's `Totals` is exactly the reporting entry); `nativeChange` (currencies via `nativeCurrencies`, CAD/USD/alphabetical; type entry only when `TypeBalance` is non-nil on either day; missing day counts 0; one total per currency). `NetWorthChange` types untouched.
-- `internal/report/summary.go` -- `Summary.Change = netWorth.Change()`.
-- `internal/report/summary_change_test.go` (new) -- 15 tests: converted (missing type, one total, USD, start-only / end-only / mixed-rows no rate, total no rate by other-currency entry and by missing reporting entry, absent change), native (end-day-only currency +1,500 shape, type only where held, CAD/USD/EUR/GBP order, USD-only start, absent), `NetWorth{}.Change()` nil.
-- `internal/store/duckstore/{status,charges,networth}.go` -- bodies extracted to `readStatus` / `readCharges` / `readNetWorth(ctx, db, path, ...)` (each returns `*store.OpenError`); `Status`/`Charges`/`NetWorth` open, defer close, call them. `summary.go` `(*Store).Summary`: one `openRead`, the three helpers, one close.
-- `internal/store/duckstore/summary_read_test.go` (new) -- `Test_summary_equals_the_separate_reads` (charge after Through excluded; NotEmpty guards), `Test_summary_returns_each_querys_fault` (`summaryQueries = 12`, one row per query count), `Test_summary_runs_exactly_summaryQueries_queries` (pins the constant), year-one dates test. `read_faults_test.go` `rowReads()` gained `Summary` (open / query / scan faults and `closes == 1` free).
-- Code-first: all new tests green on arrival (code written first); no manufactured red. No mutation checks on B3 (plan's two belong to B2 / A).
+Pins added (all behaviour-neutral; each reddened under its named mutation):
+- `summary_recurring_test.go` late-bill test gained month 2026-11 (24-month history, Sep 14, Oct 14, Nov 13) plus the `Server.Recurring` control: dropping `!resumes` in `summary_recurring.go:8` reddens the November assertion (`Should be empty, but was [Gym]`).
+- `summary_read_test.go`: `got.Recurring.Currency == USD` (`currency: money.CAD` in `summary.go:49` reddens it); `Test_summary_lists_recurring_series_over_the_month_it_summarizes` pins `Recurring.Window` (window start one month early reddens it); year-end test is a table with a `0001-01` row.
+- `summary_recurring_test.go` `Test_summary_marks_a_series_new_only_when_it_was_first_charged_in_the_month` (3 rows): the same early-window mutation reddens the "late in the month before" row.
+- Docs trimmed (recurringScope, resumes, NetWorth.Change, summaryQueries, narrating test comment); plan Narrow loop regex now case-matched; `doc.go` lists summary.
 
-**Ruling 2 settled: DuckDB ACCEPTS `0000-12-31`** (`Summary` with Dates {0000-12-31, 0001-01-31} returns without error, no rows). So the lower bound stays 0001-01 (`--month 0001-01` valid, `0000-01` refused); no 0001-02 change, no new copy.
-
-Next: V (steps 8-9): full verification, doc comments, `internal/report/doc.go` command list adds summary, `go doc ./internal/report Summary`, spec ticks (01a, 02, 19, 03, 20, 04 with folds), `spec-check.py`, STATE.md, `status: done`.
-
-**Orchestrator ruling 2026-10-06 (checkpoint finding 4):** converted Change with an empty END day (no row on the month end; unreachable on a real store per U6, reachable through the port): the empty day counts 0.00 like any missing type (U10 / "missing day counts 0.00"), so the total is a number (0 − start total), never `no rate`; `no rate` only when a day that HAS rows lacks the reporting-currency entry or holds another. Native already behaves so. Fix pass before V, test-first.
+Verify: build, full suite, uncovered-diff (0), race (report, duckstore), lint (0 issues) all rc=0; `test-stats`: report 703 (+46), duckstore 715 (+4).

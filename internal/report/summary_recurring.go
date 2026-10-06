@@ -19,8 +19,7 @@ func listingCharge(run []store.Charge, rule cadenceRule) store.Charge {
 	return run[k]
 }
 
-// resumes is whether run, the group's latest, starts again an earlier steady series that had not ended: the
-// run before it is steady and its last charge is within that run's own quiet period of run's first.
+// resumes is whether run, the group's latest, starts again a steady series that had not ended before it.
 func resumes(group, run []store.Charge) bool {
 	earlier, rule, ok := latestRun(group[:len(group)-len(run)])
 	return ok && steadyCharges(earlier) && daysBetween(earlier[len(earlier)-1].Date, run[0].Date) <= rule.endedAfter

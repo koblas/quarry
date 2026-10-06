@@ -11,11 +11,8 @@ import (
 )
 
 // Change is how net worth moved between the listing's first and last dates; nil when the first date has no
-// row in any currency, so there is nothing to compare from.
-//
-// In a converted listing every type with a balance has one entry and one total is given; either is nil-valued
-// when a rate is missing on either day. In a native listing each currency has its own entries and total, and
-// a currency on one day only counts 0 on the other.
+// row in any currency. An entry or total is nil-valued when a rate is missing on either day; a type or
+// currency absent on one day counts 0 there.
 func (n NetWorth) Change() *NetWorthChange {
 	if len(n.Dates) == 0 || len(n.Dates[0].Rows) == 0 {
 		return nil
