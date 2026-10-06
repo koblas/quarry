@@ -11,6 +11,7 @@
 | SCENARIO-14 | code-first | A, B1, V (+ orchestrator: 3 defaults) | 0/1/0/1 | folded into V (1 pin-only MAJOR: JSON currency USD after retarget) |
 | SCENARIO-16 | code-first | A, B1, B2, V | 0/4/1/1 | folded into V (3 pin-only MAJORs: W1/W2 order, classification → findings, local-day clock; 1 scope-record: parseCurrency extraction; not-ended log row) |
 | SCENARIO-17 | code-first | A, B1, B2, V (+ orchestrator: 4 copy defaults, checkpoint sibling-sentence ruling) | 0/2/3/1 | folded into V (1 pin-only MAJOR: launchd recipe byte pin; 1 docs MAJOR: sections 2-3 pointer, pin red first; 3 MINOR test tightenings) |
+| SCENARIO-21 (added by the SCENARIO-18 reference check, U17) | test-first | A+B1, V (+ triage diagnosis on the scratch copy) | 0/0/0/2 | none (NIT doc reword folded into V) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
