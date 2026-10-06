@@ -8,9 +8,11 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -246,6 +248,22 @@ func readCommandArgs() map[string][]string {
 	}
 }
 
+// currencyIgnored are the read commands that load the config even when given --currency.
+var currencyIgnored = map[string]bool{"accounts": true, "acb": true}
+
+// currencyHonouringCommands are the readCommandArgs commands, in name order, that skip the config when
+// given --currency: every one except currencyIgnored.
+func currencyHonouringCommands() []string {
+	var names []string
+	for _, name := range slices.Sorted(maps.Keys(readCommandArgs())) {
+		if !currencyIgnored[name] {
+			names = append(names, name)
+		}
+	}
+
+	return names
+}
+
 // readCommandFixture builds a store every readCommandArgs invocation reads, with no config file;
 // it returns HOME and each invocation's output, except acb's.
 func readCommandFixture(t *testing.T) (string, map[string]string) {
@@ -348,8 +366,10 @@ func Test_run_read_commands_refuse_a_bad_acb_adjustment(t *testing.T) {
 func Test_run_read_commands_ignore_a_malformed_config_when_given_a_currency(t *testing.T) {
 	before := malformedConfigFixture(t)
 	args := readCommandArgs()
+	names := currencyHonouringCommands()
+	require.NotEmpty(t, names)
 
-	for _, name := range []string{"holdings", "networth", "anomalies", "spend", "cashflow", "recurring"} {
+	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 

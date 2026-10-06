@@ -35,7 +35,8 @@ var acbTiers = map[string]int{
 
 // acbPool is one security's units and adjusted cost base across the non-registered accounts. Shares stay an exact
 // count, negative while a disposition has outrun the pool, a short. Whether the pool is held, flat or short is
-// decided on held() alone, in millionths as the holding count decides it; a pool not held holds no ACB.
+// decided on held() alone, in millionths as the holding count decides it; a disposition that leaves the pool not
+// held leaves no ACB in it.
 type acbPool struct {
 	shares *big.Rat
 	acb    int64
@@ -44,6 +45,14 @@ type acbPool struct {
 // held is the pool's shares in millionths: above 0 held, 0 flat, below 0 short.
 func (p *acbPool) held() int64 {
 	return Millionths(p.shares)
+}
+
+// settle drops what is left of the exact shares once none are held, so the remainder cannot turn flat into held or
+// short when a later split rescales it.
+func (p *acbPool) settle() {
+	if p.held() == 0 {
+		p.shares.SetInt64(0)
+	}
 }
 
 // heldShares is the pool's shares rounded to the millionth, the count a reader sees.
@@ -192,7 +201,7 @@ type securityWalk struct {
 	issues   []ACBAdjustmentIssue
 	splitDay time.Time
 	// unknownCost is whether the pool holds shares added with no cost: opened by such an addition that leaves
-	// shares held, closed when a disposition leaves the pool at 0 or below.
+	// shares held, closed when any change leaves the pool at 0 or below.
 	unknownCost bool
 }
 
@@ -269,27 +278,26 @@ func (w *securityWalk) apply(tx store.InvestmentTransaction) {
 		outlays := sale.row.Outlays
 		event.Gain, event.Outlays, event.Realized = sale.row.Gain, &outlays, true
 		w.sales = append(w.sales, sale)
-		w.closeSpanWhenSoldOut()
 	case store.ActionRemoveShares:
 		// Stored negative like a sale's; the units leave with their share of the ACB and no gain.
 		event.Shares.Abs(event.Shares)
 		event.UnknownCost = w.unknownCost
 		w.pool.take(event.Shares)
 		event.Oversold = w.pool.short()
-		w.closeSpanWhenSoldOut()
+	}
+	// The span covers shares held, so any change that leaves none, a split's included, ends it.
+	if w.pool.held() <= 0 {
+		w.unknownCost = false
 	}
 	// Shares with no cost that only cover a short leave nothing held without a cost.
 	if noCostAcquisition(tx) && w.pool.held() > 0 {
 		w.unknownCost = true
 	}
-	w.record(event)
-}
-
-// closeSpanWhenSoldOut ends the no-cost span once a disposition has left no shares held.
-func (w *securityWalk) closeSpanWhenSoldOut() {
-	if w.pool.held() <= 0 {
-		w.unknownCost = false
+	// A split rescales shares it does not move, so its remainder stays exact.
+	if acbTiers[tx.Action] != acbRestructure {
+		w.pool.settle()
 	}
+	w.record(event)
 }
 
 // record keeps event with the pool as it left it.

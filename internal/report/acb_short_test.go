@@ -261,13 +261,28 @@ func Test_acb_splits_a_short_pool(t *testing.T) {
 	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "-20", ACB: 0}}, acbPositionRows(got))
 }
 
-// acbSplitThenSell buys millionths of sec-1 for 3,000.00, splits newShares for oldShares, then sells units.
-func acbSplitThenSell(t *testing.T, bought, newShares, oldShares, units int64) []store.InvestmentTransaction {
+// acbSplitSale is a buy of bought millionths of sec-1 for 3,000.00, a split of newShares for oldShares, and
+// a sale of sold millionths.
+type acbSplitSale struct {
+	bought, newShares, oldShares, sold int64
+}
+
+// acbHundredThirded is 100 shares split 1 for 3, then sold millionths.
+func acbHundredThirded(sold int64) acbSplitSale {
+	return acbSplitSale{bought: 100 * acbMillion, newShares: acbMillion, oldShares: 3 * acbMillion, sold: sold}
+}
+
+// acbThousandSeventh is 1,000 shares split 1 for 7, then sold millionths.
+func acbThousandSeventh(sold int64) acbSplitSale {
+	return acbSplitSale{bought: 1_000 * acbMillion, newShares: acbMillion, oldShares: 7 * acbMillion, sold: sold}
+}
+
+func acbSplitThenSell(t *testing.T, s acbSplitSale) []store.InvestmentTransaction {
 	t.Helper()
 	return []store.InvestmentTransaction{
-		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", bought, -300_000),
-		acbSplitTx(t, 2, "acct-1", "2024-03-01", newShares, oldShares),
-		acbSell(t, 3, "2024-04-01", units),
+		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", s.bought, -300_000),
+		acbSplitTx(t, 2, "acct-1", "2024-03-01", s.newShares, s.oldShares),
+		acbSell(t, 3, "2024-04-01", s.sold),
 	}
 }
 
@@ -280,17 +295,17 @@ func Test_acb_counts_a_split_leftover_below_a_millionth_as_flat(t *testing.T) {
 	}{
 		{
 			name:         "a 1 for 3 split of 100 sold at the shares millionth",
-			txs:          acbSplitThenSell(t, 100*acbMillion, acbMillion, 3*acbMillion, 33_333_333),
+			txs:          acbSplitThenSell(t, acbHundredThirded(33_333_333)),
 			wantOversold: "", wantHeld: "0",
 		},
 		{
 			name:         "a 1 for 7 split of 1,000 sold at the shares rounded millionth",
-			txs:          acbSplitThenSell(t, 1_000*acbMillion, acbMillion, 7*acbMillion, 142_857_143),
+			txs:          acbSplitThenSell(t, acbThousandSeventh(142_857_143)),
 			wantOversold: "", wantHeld: "0",
 		},
 		{
 			name:         "a 1 for 3 split of 100 sold a millionth beyond the shares",
-			txs:          acbSplitThenSell(t, 100*acbMillion, acbMillion, 3*acbMillion, 33_333_334),
+			txs:          acbSplitThenSell(t, acbHundredThirded(33_333_334)),
 			wantOversold: "1/1000000", wantHeld: "-1/1000000",
 		},
 	}
@@ -307,7 +322,7 @@ func Test_acb_counts_a_split_leftover_below_a_millionth_as_flat(t *testing.T) {
 }
 
 func Test_acb_skips_a_return_of_capital_on_a_pool_a_split_left_flat_as_not_held(t *testing.T) {
-	txs := acbSplitThenSell(t, 100*acbMillion, acbMillion, 3*acbMillion, 33_333_333)
+	txs := acbSplitThenSell(t, acbHundredThirded(33_333_333))
 
 	got := acbWalkAdjusted(t, []report.ACBAdjustment{acbAdjustment(t, "sec-1", "2024-06-01", 1_000, 0)}, txs...)
 
@@ -342,7 +357,7 @@ func Test_acb_closes_the_no_cost_span_when_a_sale_leaves_less_than_half_a_millio
 	assert.False(t, got.Securities[0].Incomplete)
 }
 
-func Test_acb_position_holds_nothing_below_half_a_millionth_of_a_share(t *testing.T) {
+func Test_ACBSecurity_holds_nothing_when_its_shares_round_to_no_millionth_whatever_the_walk_emits(t *testing.T) {
 	position := report.ACBSecurity{Shares: big.NewRat(1, 3*acbMillion), ACB: 500}
 
 	assert.False(t, position.Holds())
@@ -351,7 +366,7 @@ func Test_acb_position_holds_nothing_below_half_a_millionth_of_a_share(t *testin
 
 func Test_acb_adds_the_whole_cost_of_a_buy_after_a_sale_left_less_than_half_a_millionth_short(t *testing.T) {
 	const cost = 1_000_000_000
-	txs := acbSplitThenSell(t, 1_000*acbMillion, acbMillion, 7*acbMillion, 142_857_143)
+	txs := acbSplitThenSell(t, acbThousandSeventh(142_857_143))
 
 	got := acbWalkOf(t, append(txs, acbTx(t, 4, "acct-1", "sec-1", "2024-05-01", store.ActionBuy, "CAD", 10*acbMillion, -cost))...)
 
@@ -369,4 +384,74 @@ func Test_acb_removes_all_cost_when_a_sale_leaves_less_than_half_a_millionth(t *
 	assert.Equal(t, int64(cost), got.Years[0].Sales[0].ACBRemoved)
 	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "0", ACB: 0}}, acbPositionRows(got))
 	assert.Nil(t, got.Securities[0].PerShare())
+}
+
+func Test_acb_leaves_a_pool_flat_when_a_split_follows_a_sale_that_left_less_than_half_a_millionth(t *testing.T) {
+	txs := acbSplitThenSell(t, acbThousandSeventh(142_857_143))
+
+	got := acbWalkOf(t, append(txs, acbSplitTx(t, 4, "acct-1", "2024-05-01", 7*acbMillion, acbMillion))...)
+
+	events := got.Securities[0].Events
+	assert.Equal(t, "0", events[len(events)-1].Held.RatString())
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "0", ACB: 0}}, acbPositionRows(got))
+	assert.Equal(t, []bool{false}, acbSaleMarks(got))
+	assert.False(t, got.Securities[0].Incomplete)
+}
+
+func Test_acb_keeps_the_acb_of_a_pool_a_split_rounds_to_no_millionth(t *testing.T) {
+	got := acbWalkOf(t,
+		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 1, -100),
+		acbSplitTx(t, 2, "acct-1", "2024-03-01", acbMillion, 3*acbMillion),
+	)
+
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "0", ACB: 100}}, acbPositionRows(got))
+	assert.False(t, got.Securities[0].Holds())
+	assert.Nil(t, got.Securities[0].PerShare())
+}
+
+func Test_acb_holds_a_millionth_when_a_split_that_rounded_the_pool_to_none_is_undone(t *testing.T) {
+	got := acbWalkOf(t,
+		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 1, -100),
+		acbSplitTx(t, 2, "acct-1", "2024-03-01", acbMillion, 3*acbMillion),
+		acbSplitTx(t, 3, "acct-1", "2024-03-02", 3*acbMillion, acbMillion),
+	)
+
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "1/1000000", ACB: 100}}, acbPositionRows(got))
+}
+
+func Test_acb_adds_a_later_buy_to_the_acb_a_split_left_on_a_pool_of_no_millionth(t *testing.T) {
+	got := acbWalkOf(t,
+		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 1, -100),
+		acbSplitTx(t, 2, "acct-1", "2024-03-01", acbMillion, 3*acbMillion),
+		acbTx(t, 3, "acct-1", "sec-1", "2024-04-01", store.ActionBuy, "CAD", 10*acbMillion, -500),
+	)
+
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "10", ACB: 600}}, acbPositionRows(got))
+}
+
+func Test_acb_closes_the_no_cost_span_when_a_split_rounds_the_pool_to_no_millionth(t *testing.T) {
+	got := acbWalkOf(t,
+		acbNoCostAdd(t, 1, "sec-1", "2024-01-02", 1),
+		acbSplitTx(t, 2, "acct-1", "2024-03-01", acbMillion, 3*acbMillion),
+	)
+
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "0", ACB: 0}}, acbPositionRows(got))
+	assert.False(t, got.Securities[0].Incomplete)
+}
+
+func Test_acb_adds_no_cost_when_a_buy_covers_a_short_and_leaves_less_than_half_a_millionth(t *testing.T) {
+	txs := acbSplitThenSell(t, acbHundredThirded(33_333_334))
+
+	got := acbWalkOf(t, append(txs, acbTx(t, 4, "acct-1", "sec-1", "2024-05-01", store.ActionBuy, "CAD", 1, -300))...)
+
+	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "0", ACB: 0}}, acbPositionRows(got))
+}
+
+func Test_acb_opens_no_unknown_cost_span_when_added_shares_cover_a_short_and_leave_less_than_half_a_millionth(t *testing.T) {
+	txs := acbSplitThenSell(t, acbHundredThirded(33_333_334))
+
+	got := acbWalkOf(t, append(txs, acbNoCostAdd(t, 4, "sec-1", "2024-05-01", 1))...)
+
+	assert.False(t, got.Securities[0].Incomplete)
+	assert.True(t, got.Securities[0].Events[3].UnknownCost)
 }
