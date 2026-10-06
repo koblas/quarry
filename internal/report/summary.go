@@ -45,6 +45,7 @@ func (s *Server) Summary(ctx context.Context, req SummaryRequest) (Summary, erro
 		Currency:  req.Currency,
 		Status:    read.Status,
 		Anomalies: anomaliesFrom(read.Charges, nil, nil, AnomaliesRequest{Window: req.Month.Window(), Currency: req.Currency}),
+		Recurring: recurringFrom(read.Charges, recurringScope{window: req.Month.Window(), today: req.Month.End, currency: req.Currency, keep: newInMonth(req.Month)}),
 		NetWorth:  netWorthFrom(read.NetWorth, NetWorthRequest{AsOf: req.Month.End, Window: &history, Currency: req.Currency}, days),
 	}, nil
 }

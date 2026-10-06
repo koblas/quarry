@@ -206,28 +206,60 @@ func (s *Server) Recurring(ctx context.Context, req RecurringRequest) (Recurring
 	if err != nil {
 		return Recurring{}, s.readRefusal(ctx, recurringCommand, err)
 	}
-	result := Recurring{Window: req.Window, Accounts: accounts, Currency: req.Currency, Transactions: charges.Transactions}
+	result := recurringFrom(charges, recurringScope{
+		window:     req.Window,
+		today:      today,
+		accountIDs: accountIDs,
+		currency:   req.Currency,
+		keep:       func([]store.Charge, []store.Charge, cadenceRule) bool { return true },
+	})
+	result.Accounts = accounts
+	return result, nil
+}
+
+// seriesFilter is whether a detected series is listed, judged from its group's charges, its latest run (the
+// group's tail) and the run's cadence rule.
+type seriesFilter func(group, run []store.Charge, rule cadenceRule) bool
+
+// recurringScope is what a recurring read judges charges by: the window to list, the day the series are
+// judged as of, the accounts they must be charged in (none: every account), the currency to list them in,
+// and the filter a series must also pass.
+type recurringScope struct {
+	window     store.Window
+	today      time.Time
+	accountIDs []string
+	currency   money.Currency
+	keep       seriesFilter
+}
+
+// recurringFrom lists the steady series of charges that ran in scope.window as of scope.today, charged in
+// scope.accountIDs and kept by scope.keep; charges must reach at least to scope.today.
+func recurringFrom(charges store.Charges, scope recurringScope) Recurring {
+	result := Recurring{Window: scope.window, Currency: scope.currency, Transactions: charges.Transactions}
 	for _, group := range groupCharges(charges.Rows) {
 		run, rule, ok := latestRun(group.charges)
 		if !ok {
 			continue
 		}
-		series := seriesOf(group.key, run, rule, today, req.Currency)
-		if !series.steady() || !series.runsDuring(req.Window, today) || !series.chargedIn(accountIDs) {
+		series := seriesOf(group.key, run, rule, scope.today, scope.currency)
+		if !series.steady() || !series.runsDuring(scope.window, scope.today) || !series.chargedIn(scope.accountIDs) {
 			continue
 		}
-		series.New = !series.First.Before(req.Window.Since)
+		if !scope.keep(group.charges, run, rule) {
+			continue
+		}
+		series.New = !series.First.Before(scope.window.Since)
 		result.Series = append(result.Series, series)
 		if series.unconverted {
 			result.Unconverted.Transactions++
 		}
 	}
-	if req.Currency != money.Native {
+	if scope.currency != money.Native {
 		result.Unconverted.FirstRate = charges.FirstRate
 	}
 	slices.SortStableFunc(result.Series, compareSeries)
 	result.Totals = yearlyTotals(result.Series)
-	return result, nil
+	return result
 }
 
 // chargeIn is c's amount in target, in cents; ok is false when target is a currency c has no converted amount in.
