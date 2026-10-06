@@ -10,10 +10,9 @@ import (
 // snapshotTakenLayout is the format of the moment a snapshot was taken.
 const snapshotTakenLayout = "2006-01-02 15:04 MST"
 
-// SummaryWarnings is the summary's own warnings, never nil: the snapshot warning, then the unconverted-charge
-// note, the unconverted-series note and the net-worth rate note, each only when it applies and none twice.
-// The empty-window and left-out lines of the standalone reports are not part of it. Text stderr and --json
-// read this one list, so the two formats cannot disagree; again is as for SnapshotWarning, advice as for NetWorthWarnings.
+// SummaryWarnings is the summary's own warnings, never nil, each only when it applies and none twice: the
+// snapshot warning, the unconverted-charge note, the unconverted-series note, the net-worth rate note.
+// again is as for SnapshotWarning, advice as for NetWorthWarnings.
 func SummaryWarnings(s report.Summary, again string, advice NativeAdvice) []string {
 	var warnings []string
 	if warning := SnapshotWarning(s, again); warning != "" {

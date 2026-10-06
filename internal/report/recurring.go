@@ -211,11 +211,14 @@ func (s *Server) Recurring(ctx context.Context, req RecurringRequest) (Recurring
 		today:      today,
 		accountIDs: accountIDs,
 		currency:   req.Currency,
-		keep:       func([]store.Charge, []store.Charge, cadenceRule) bool { return true },
+		keep:       keepAll,
 	})
 	result.Accounts = accounts
 	return result, nil
 }
+
+// keepAll lists every detected series.
+func keepAll([]store.Charge, []store.Charge, cadenceRule) bool { return true }
 
 // seriesFilter is whether a detected series is listed, judged from its group's charges, its latest run (the
 // group's tail) and the run's cadence rule.

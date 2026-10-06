@@ -44,7 +44,7 @@ func Test_summary_equals_the_separate_reads(t *testing.T) {
 	assert.NotEmpty(t, got.Status.Accounts)
 }
 
-func Test_summary_reads_net_worth_on_the_month_ends_around_the_first_day_of_year_one(t *testing.T) {
+func Test_summary_does_not_fail_on_the_month_ends_around_the_first_day_of_year_one(t *testing.T) {
 	t.Parallel()
 	st := newStoreWith(t, summaryRows())
 	dates := []time.Time{day(0, time.December, 31), day(1, time.January, 31)}
@@ -75,7 +75,7 @@ func Test_summary_returns_each_querys_fault(t *testing.T) {
 	}
 }
 
-func Test_summary_runs_exactly_summaryQueries_queries(t *testing.T) {
+func Test_summary_runs_every_read_over_one_open(t *testing.T) {
 	t.Parallel()
 	spy := &spyReadDB{}
 	st := newBuiltStore(t, spyOpener(spy))

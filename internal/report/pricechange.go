@@ -47,7 +47,7 @@ func changeTenths(from, to int64) int64 {
 	return rounded
 }
 
-// steady is whether the series' price changes number at most a quarter of its steps.
+// steady is whether the series is steady, by steadyRun.
 func (s Series) steady() bool { return steadyRun(s.PriceChanges, s.ChargeCount) }
 
 // steadyRun is whether changes, the price changes of a run of charges, number at most a quarter of its steps.
@@ -55,7 +55,7 @@ func steadyRun(changes []PriceChange, charges int) bool {
 	return int64(len(changes)) <= int64(charges-1)/steadyChangeDivisor
 }
 
-// steadyCharges is whether run's price changes number at most a quarter of its steps.
+// steadyCharges is whether run is steady, by steadyRun.
 func steadyCharges(run []store.Charge) bool { return steadyRun(priceChangesOf(run), len(run)) }
 
 // abs is the magnitude of n.

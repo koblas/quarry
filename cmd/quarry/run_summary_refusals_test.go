@@ -109,51 +109,28 @@ func Test_run_summary_reads_the_config_before_looking_for_a_store(t *testing.T) 
 	assert.Regexp(t, "^"+regexp.QuoteMeta("quarry: cannot read "+configShown+": line 1: ")+"[^\n]+"+regexp.QuoteMeta(configFix)+"\n$", stderr.String())
 }
 
-func Test_run_summary_with_a_currency_prints_only_the_refusal_when_no_store_can_be_opened(t *testing.T) {
-	cases := []struct {
-		name       string
-		setup      func(t *testing.T) string
-		wantStderr func(t *testing.T, home string) string
-	}{
-		{
-			name: "HOME unset",
-			setup: func(t *testing.T) string {
-				t.Helper()
-				t.Setenv("HOME", "")
-				return ""
-			},
-			wantStderr: func(*testing.T, string) string {
-				return "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry summary again\n"
-			},
-		},
-		{
-			name: "a malformed config and no store",
-			setup: func(t *testing.T) string {
-				t.Helper()
-				home := t.TempDir()
-				t.Setenv("HOME", home)
-				writeConfig(t, home, "[snapshots\nkeep = 24\n")
-				return home
-			},
-			wantStderr: func(t *testing.T, home string) string {
-				t.Helper()
-				return "quarry: no store at " + abbreviated(t, storePathUnder(home), home) + " yet; run quarry sync to build it\n"
-			},
-		},
-	}
+func Test_run_summary_with_a_currency_refuses_when_the_home_directory_is_unknown(t *testing.T) {
+	t.Setenv("HOME", "")
+	var stdout, stderr bytes.Buffer
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			home := c.setup(t)
-			var stdout, stderr bytes.Buffer
+	exitCode := runWith(context.Background(), []string{"summary", "--currency", "USD"}, spendEnvAt(&stdout, &stderr, summaryClock))
 
-			exitCode := runWith(context.Background(), []string{"summary", "--currency", "USD"}, spendEnvAt(&stdout, &stderr, summaryClock))
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry summary again\n", stderr.String())
+}
 
-			assert.Equal(t, 1, exitCode)
-			assert.Empty(t, stdout.String())
-			assert.Equal(t, c.wantStderr(t, home), stderr.String())
-		})
-	}
+func Test_run_summary_with_a_currency_prints_only_the_missing_store_when_the_config_is_malformed(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, "[snapshots\nkeep = 24\n")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"summary", "--currency", "USD"}, spendEnvAt(&stdout, &stderr, summaryClock))
+
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: no store at "+abbreviated(t, storePathUnder(home), home)+" yet; run quarry sync to build it\n", stderr.String())
 }
 
 func Test_run_summary_refuses_a_store_built_by_an_older_quarry(t *testing.T) {

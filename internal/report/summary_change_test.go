@@ -153,6 +153,16 @@ func Test_change_total_is_no_rate_when_a_day_has_no_total_in_the_reporting_curre
 	assert.Equal(t, []string{"CAD " + noRate}, totalChanges(change))
 }
 
+func Test_change_total_counts_a_start_day_of_unrated_zero_balances_as_zero(t *testing.T) {
+	change := changeOf(t, money.CAD,
+		unrated(endOfAugust, "savings", 0),
+		cadHeld(endOfSeptember, "chequing", 150000))
+
+	require.NotNil(t, change)
+	assert.Equal(t, []string{"CAD chequing 150000"}, typeChanges(change))
+	assert.Equal(t, []string{"CAD 150000"}, totalChanges(change))
+}
+
 func Test_change_counts_an_empty_end_day_as_zero(t *testing.T) {
 	change := changeOf(t, money.CAD, cadHeld(endOfAugust, "chequing", 100000))
 

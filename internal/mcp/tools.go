@@ -155,6 +155,7 @@ const (
 		"A security held only in registered accounts has no ACB and is left out, with a warning. Omit it for every security."
 )
 
+// monthlySummaryDescription is the monthly_summary tool's description.
 const monthlySummaryDescription = "Summarize one month (default last month): data freshness, findings counts, unusually large charges, " +
 	"recurring charges new in the month, and net worth at the month end beside the month before, with the change. " +
 	"The same document quarry summary --json prints. Read-only; never syncs."

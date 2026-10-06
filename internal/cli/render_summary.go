@@ -60,12 +60,13 @@ func renderEmptySection(caption, line string) string {
 func renderNetWorthWithChange(n report.NetWorth) string {
 	first, last := n.Dates[0], n.Dates[len(n.Dates)-1]
 	change := n.Change()
-	if change == nil && len(last.Rows) == 0 {
+	noChange, lastEmpty := change == nil, len(last.Rows) == 0
+	if noChange && lastEmpty {
 		return renderEmptySection(netWorthHistoryCaption(n),
 			"No account has a balance on "+first.Date.Format(time.DateOnly)+" or "+last.Date.Format(time.DateOnly)+".")
 	}
 	aligns, rows := netWorthHistoryRows(n)
-	if change == nil {
+	if noChange {
 		return renderTable(netWorthHistoryCaption(n), aligns, rows) +
 			"\nNo change shown: no account has a balance on " + first.Date.Format(time.DateOnly) + ".\n"
 	}

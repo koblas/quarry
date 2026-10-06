@@ -24,8 +24,7 @@ type SummaryReads interface {
 	// Charges lists every charge dated through params.Through, with the span of the store's
 	// transactions (of the named reported accounts' when params.AccountIDs is set).
 	Charges(ctx context.Context, params store.ChargeParams) (store.Charges, error)
-	// Summary reads the store's status, every charge dated through params.Through and its net worth on
-	// params.Dates from one open of the store.
+	// Summary reads a monthly summary's data from one open of the store.
 	Summary(ctx context.Context, params store.SummaryParams) (store.Summary, error)
 }
 
