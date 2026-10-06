@@ -25,8 +25,9 @@ questions — skip the full procedure below:
 1. Does the acceptance test named on the scenario's `## BDD Acceptance Progress` line exist,
    sit at scenario's boundary (`cli.Run` command slice or `Server` method), and assert the
    scenario's `Then` — so it could not pass without the scenario's production code?
-2. Does every test the plan's `### Build` steps name exist, and is every `- [ ]` under
-   `## Implementation Plan` ticked?
+2. Does every test the plan's `### Build` steps name exist, and is every `- [ ]` under its
+   `### Acceptance` and `### Build` phases ticked? `### Sweep` and `### Verify` steps belong
+   to `V`, which runs after you — do not count them.
 3. Are `.claude/briefs/build.md` → *Planning* items present for this diff: one fault test per
    fallible call, every numeric bound just outside, every error-mapper fallback, one
    decode-fault test per decoded record kind, one pin per ruled string, edge row and rule arm the scenario owns (each cell of the cross-product rule; name any absent cell), and, for each destructive guard, a test where the same file is reached

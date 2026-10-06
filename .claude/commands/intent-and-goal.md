@@ -96,9 +96,8 @@ rather than one scenario per row — still one `When`.
 
 On approval, first run **one `architect` sizing pass** over the whole approved scenario list —
 a size verdict per scenario (OWNS A RUN / SPLIT with seam / FOLD into named neighbour / LIGHT), no
-checklists, plus each outcome a scenario implies that `## Surface & Copy` has no literal line
-for. Send that list to `product-vision` for one scoped copy ruling and fold the lines into
-`## Surface & Copy`. Apply the merges and splits to the scenario list, then create
+checklists, plus its unruled-outcome list (`architect` → *Sizing pass*). Send that list to
+`product-vision` for one scoped copy ruling and fold the lines into `## Surface & Copy`. Apply the merges and splits to the scenario list, then create
 `docs/specifications/<feature-slug>/` and write the specification inside it. A merge or split
 changes scenario boundaries, not behaviour; if one would change what a scenario asserts, put it
 back to the user.

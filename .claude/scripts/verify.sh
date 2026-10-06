@@ -1,8 +1,8 @@
 #!/bin/sh
 # The Verify block as one command: build, the full covered suite once, the
 # coverage gate, race on the touched packages, lint, and test counts.
-# One plain call, so harness guards that refuse $(...), $VAR and ; chains
-# accept it, and the coverage profile never outlives the call that made it.
+# One plain call: the coverage profile is made, read and named in the same
+# process, so no shell variable has to survive between tool calls.
 #
 # usage: .claude/scripts/verify.sh <start> [race-pkg ...]
 #   <start>    commit the scenario or fix pass started from

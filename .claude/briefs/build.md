@@ -49,7 +49,7 @@ status: open
 # SCENARIO-XX: <title>
 ```
 
-Developer sets `status: done` when scenario complete, plus tick in `specification.md`. Every `- [ ]` under `## Implementation Plan` must be ticked by then — checkpoint question 2 checks it.
+Developer sets `status: done` when scenario complete, plus tick in `specification.md`. Every `- [ ]` under `## Implementation Plan` must be ticked by then. Checkpoint question 2 checks the `### Acceptance` and `### Build` ticks before `V`; `V` ticks Sweep and Verify.
 
 Orchestrator adds a ruling to a plan file with `Edit` (append below the last section), and commits the plan before dispatching a run on it. Never a script that opens the file for write before reading it: that truncates an uncommitted plan to the ruling alone.
 

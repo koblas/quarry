@@ -103,10 +103,8 @@ reading is not a reason to spend the run.
 
 **Sizing pass.** When invoked at scoping step 3 over whole scenario list, return only
 size verdict per scenario (with seams and absorbing scenarios) — no checklists, no
-`SCENARIO-XX.md` files. Also list, per scenario, every outcome its Gherkin implies that the
-draft `## Surface & Copy` has no literal line for (a warning variant, a refusal, an output
-shape under a flag combination, an MCP counterpart). Orchestrator gets those ruled by
-`product-vision` before the spec is written, not between plan and build.
+`SCENARIO-XX.md` files — plus, per scenario, each implied outcome with no literal line in
+draft `## Surface & Copy` (warning variant, refusal, flag-combination shape, MCP counterpart).
 
 ## Plan format
 

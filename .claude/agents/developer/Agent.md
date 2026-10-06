@@ -232,10 +232,9 @@ Findings arrive ranked `[BLOCKER|MAJOR|MINOR|NIT] <file>:<line>` with `Failure:`
     pass adding guard, error return or fallback without test reaching it hands
     reviewer its next MAJOR, and loop repeats every pass. Before
     reporting:
-    - Run Verification block in `.claude/rules/agent-briefs.md` with `<start>` =
-      commit this fix pass started from: one covered full-suite run, then
-      `uncovered-diff.py --profile` on it. Zero uncovered added lines, or genuinely
-      unreachable branch marked `// unreachable: <reason>` in code.
+    - Run `.claude/scripts/verify.sh <start> <touched pkgs>` (`.claude/rules/agent-briefs.md`
+      → *Verification*), `<start>` = commit this fix pass started from. Zero uncovered
+      added lines, or genuinely unreachable branch marked `// unreachable: <reason>` in code.
     - Mutate each guard you added, one at a time, per
       `.claude/briefs/proof.md`, and record which test went red. Guard no mutation can
       redden is either dead (delete it) or untested (test it).
@@ -244,7 +243,7 @@ Findings arrive ranked `[BLOCKER|MAJOR|MINOR|NIT] <file>:<line>` with `Failure:`
    mode.
 
 Report back as: fixed (list, each with test that went red first or "behaviour-neutral"), sweep results (searched / hits / left-with-reason),
-consumer boundary verified (per finding), uncovered-diff result, mutations on added guards,
+consumer boundary verified (per finding), `verify.sh` `rc=` lines and its uncovered-diff output, mutations on added guards,
 skipped-with-reason (list), blocked (list).
 
 ## Notes
