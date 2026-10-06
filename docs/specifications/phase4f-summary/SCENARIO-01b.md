@@ -24,8 +24,8 @@ Contract: `quarry summary [--month YYYY-MM] [--currency CAD|USD|native]` → tex
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_summary_test.go` (new) `Test_run_summary_prints_last_months_summary` — `replaceStore` fixture (run_status_findings_test.go / run_networth_history_test.go precedents): snapshot taken 2026-10-01, one Sept anomaly, a monthly series whose 3rd charge is in Sept, balances Aug 31 + Sep 30, open/new/fixed findings; `spendEnvAt` 2026-10-06, zone pinned as run_status_test.go:49; `env.NewServer` fails the test if called (no Quicken path resolved, spec :316); whole stdout pinned verbatim, stderr empty, exit 0
-- [ ] Step 2: `internal/cli/summary.go` (new) `newSummaryCommand(newReport, loadConfig, now, jsonOut)` — Use/Short only, RunE returns nil; registered at `root.go:37` after anomalies; `internal/cli/fakes_test.go:17-37` `fakeReportStore` gains `summary store.Summary` + `gotSummary` and a `Summary` method (Status stays nil-embedded so any second read panics)
+- [x] Step 1: `cmd/quarry/run_summary_test.go` (new) `Test_run_summary_prints_last_months_summary` — `replaceStore` fixture (run_status_findings_test.go / run_networth_history_test.go precedents): snapshot taken 2026-10-01, one Sept anomaly, a monthly series whose 3rd charge is in Sept, balances Aug 31 + Sep 30, open/new/fixed findings; `spendEnvAt` 2026-10-06, zone pinned as run_status_test.go:49; `env.NewServer` fails the test if called (no Quicken path resolved, spec :316); whole stdout pinned verbatim, stderr empty, exit 0
+- [x] Step 2: `internal/cli/summary.go` (new) `newSummaryCommand(newReport, loadConfig, now, jsonOut)` — Use/Short only, RunE returns nil; registered at `root.go:37` after anomalies; `internal/cli/fakes_test.go:17-37` `fakeReportStore` gains `summary store.Summary` + `gotSummary` and a `Summary` method (Status stays nil-embedded so any second read panics)
 
 ### Build
 - [ ] Step 3: `summary.go` command — Short/Long/Example/flags verbatim from spec; `Args: currency.args`; `--month` via `report.ParseMonth` (`*string` only when Changed) → `UsageError{msg: err.Error()}`; `summaryChoices` (status.go:55-63 + currency.go:73-107 shape): config always loaded once; failure → W2 `document.CannotTellChoices(config.Problem(err))` when `--currency` given, else `runtimeError`; W1 via `printConfigWarnings`; currency = flag or `cfg.Currency`; ignore + `classificationOf(cfg)`; `openReport` → `srv.Summary` → `runtimeError`; one `now()` read feeds ParseMonth and the renderer; `--json` interim refusal. Tests `internal/cli/summary_test.go`: help Long pinned at its wrap, Example, both flag lines (`report_help_test.go:182-197` row for --currency); `Test_summary_warns_and_prints_when_the_config_is_unreadable_and_currency_is_given` (W2 line, stdout, no ignored clause, exit 0); config loaded once with the flag; unreadable config without flag → runtime error; `gotSummary` Month/Currency; Server.Summary error → not a UsageError; `failingWriter` → `cannot write the result to stdout`; `report_clock_test.go:27` `executeAtAdvancingClock` row `Test_summary_reads_the_clock_once`; `Test_summary_refuses_json_until_its_document_exists`
@@ -59,3 +59,20 @@ Contract: `quarry summary [--month YYYY-MM] [--currency CAD|USD|native]` → tex
 - The root help pin (run_status_test.go:145) goes red from run A until Step 6.
 
 **Orchestrator rulings 2026-10-06 (pre-dispatch):** (1) interim `summary --json is not available yet` (UsageError, exit 2) until SCENARIO-12 deletes the guard and its test — never ships; (2) nil Change cell renders `no rate` now (ruled copy, U5); S14 keeps the matrix, W4–W6, JSON null; (3) W2 prints before stdout (status.go:41 precedent); (4) `--currency` value refused in cobra Args before `--month` (currency_test.go:150 precedent) — the spec's "config/currency" step means the config file's currency.
+
+## Phase report
+
+Run A (steps 1-2) done; commit follows start ed61870.
+
+Files:
+- `cmd/quarry/run_summary_test.go` (new): `summaryRows(kioskFixed)`, `seedSummaryStore` (two `replaceStore` builds so the second build has 1 new, 1 newly fixed, Shell carried), `Test_run_summary_prints_last_months_summary`. Whole stdout pinned; anomalies/recurring/net-worth sections composed from the existing test oracles `anomaliesTable`, `recurringTable`, `netWorthHistoryLine`; `env.NewServer` errors the test if called; zone pinned with `pinLocalZone`; clock `summaryClock` 2026-10-06 12:00Z.
+- `internal/cli/summary.go` (new): `summaryCommand` const + `newSummaryCommand` stub (Use/Short, RunE returns nil; params unused until Step 3). Registered in `internal/cli/root.go` before `search`, after `anomalies`.
+- `internal/cli/fakes_test.go`: `fakeReportStore` gains `summary store.Summary`, `gotSummary *store.SummaryParams`, `Summary` method.
+
+Red (expected, assertion): `Test_run_summary_prints_last_months_summary` fails at run_summary_test.go:99 `assert.Equal` — expected the full text, actual `""` (stub prints nothing, exit 0).
+
+Fixture facts verified against the real commands on this store (scratch test, deleted): `status` Snapshot/Dates/`Findings 2 open`, `status --json` findings open 2 / new 1 / newly_fixed 1, `anomalies --since 2026-09 --until 2026-09` (2 charges checked), `recurring` Crave row, `networth --since 2026-08 --until 2026-09` rows. Expected Change row `+588.00 / -22.59 / +565.41` is hand-derived (not yet producible).
+
+Next runs must not redo: do not change the fixture amounts. Shell 10.00 / Kiosk 11.00 / Pharmacy 12.00 differ on purpose: equal amounts on nearby days raise `duplicate` findings (the first draft had 5 open). Snapshot age prints `4 days ago` (now - taken_at = 4d 22h). The default-month `NewServer` guard is a t.Error, not t.Fatal.
+Root help pin (run_status_test.go:145) is expected red until Step 6; `go test ./internal/cli/` is green now.
+Not run: golangci-lint (Sweep); the stub's unused parameters go away in Step 3.

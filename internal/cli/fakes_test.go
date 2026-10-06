@@ -26,6 +26,7 @@ type fakeReportStore struct {
 	holdings     store.Holdings
 	history      store.InvestmentHistory
 	netWorth     store.NetWorth
+	summary      store.Summary
 	result       store.QueryResult
 	gotQuery     *string
 	gotMaxRows   *int
@@ -33,6 +34,7 @@ type fakeReportStore struct {
 	gotCashFlow  *store.CashFlowParams
 	gotCharges   *store.ChargeParams
 	gotHoldings  *store.HoldingsParams
+	gotSummary   *store.SummaryParams
 	chargesReads *int
 	err          error
 }
@@ -107,4 +109,11 @@ func span(t *testing.T, first, last string) store.TransactionRange {
 
 func (f fakeReportStore) NetWorth(context.Context, store.NetWorthParams) (store.NetWorth, error) {
 	return f.netWorth, f.err
+}
+
+func (f fakeReportStore) Summary(_ context.Context, params store.SummaryParams) (store.Summary, error) {
+	if f.gotSummary != nil {
+		*f.gotSummary = params
+	}
+	return f.summary, f.err
 }
