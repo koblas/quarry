@@ -20,7 +20,7 @@ diff "$B" <file>                             # prove byte-identical; leave "$B" 
 
 Interrupted run can die holding gutted guard, and tree then looks merely "failing" not "deliberately broken". Copy make that recoverable.
 
-**Unique backup name, checked to be file.** Fixed path like `$TMPDIR/mutation-backup` shared by every agent in session: if earlier one left *directory* there, `cp <file> "$TMPDIR/mutation-backup"` silently copies INTO it, restore then fails with mutation still live. Only mandated `diff` reveals it.
+**Unique backup name, checked to be file.** Fixed path like `$TMPDIR/mutation-backup` shared by every agent in session: if earlier one left *directory* there, `cp <file> "$TMPDIR/mutation-backup"` silently copies INTO it, restore then fails with mutation still live. Only mandated `diff` reveals it. Name it as a literal you write out in every call (`$TMPDIR/mut-<run>-<file>.bak`), never `$$` or a `mktemp` result: those differ in the next Bash call, so the restore reads a different, stale or missing file and leaves the mutation live.
 
 **Never use `git stash` for this.** Pipeline work runs in git worktrees, and every worktree shares one stash stack with main checkout and any other session: bare `git stash pop` can apply someone else entry. Never reuse old `$TMPDIR` copy either — stale copy silently reverts file to older contents.
 

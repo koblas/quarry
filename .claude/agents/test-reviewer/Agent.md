@@ -40,18 +40,20 @@ questions — skip the full procedure below:
 4. Does the diff touch only what the plan's steps name? Production file, behaviour or public
    symbol no step names is scope creep — name it, and whether a later scenario owns it. Plan
    with `Size: LIGHT` was written by developer itself: judge scope against spec's scenario.
-5. Does `.claude/scripts/uncovered-diff.py` report zero open runs for the range? Use the
-   output the prompt carries (run `V`'s Verify); only when missing, run
-   `uncovered-diff.py <start>` yourself (full suite — never a narrowed PKG list). Each open
-   run is MAJOR — a `(no coverage block)` row too: no test links that file's package.
-   Judge each "declared unreachable" reason as in *Review procedure*. Exit 2 (stale profile,
-   or failing test) is not a pass — re-run without `--profile`.
+5. Does each `// unreachable:` marker the diff adds hold? Checkpoint runs before `V`, whose
+   `verify.sh` coverage gate must reach zero open runs before handing off — do not run the
+   suite here. Judge each marker's reason by reading, as in *Review procedure*; a branch you
+   can reach with a constructible input is MAJOR (it hides an untested change from the gate).
 6. Do comments the diff adds or changes, production and test, follow the comment rules in
    `.claude/rules/go-code.md` (doc budgets, no spec or finding ids such as `R7`, `BR-3`,
    `SCENARIO-04`, no history) and `go-testing` → *Test comments*? Each breach is MINOR, one
    line with `file:line`.
 
-Questions 1–5: any "no" is MAJOR (missing acceptance test is BLOCKER). Question 6 is MINOR
+Questions 1–5: any "no" is MAJOR (missing acceptance test is BLOCKER). For each finding,
+say whether its fix is **pin-only** (adds or tightens tests, comments, docs; behaviour
+identical) or **changes production code** — the orchestrator routes pin-only ones into `V`
+and the rest into a fix pass (`.claude/briefs/build.md` → *Developer runs*). For a pin-only
+finding name the mutation that must redden its pin. Question 6 is MINOR
 by the shared contract — raised here so drift is caught per scenario, not found across the
 whole feature at the final gate (CLAUDE.md step 5a says when it is fixed). Naming and structure rules still wait
 for the final gate — do not raise them here.
