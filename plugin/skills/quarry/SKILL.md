@@ -96,7 +96,7 @@ quarry never writes to Quicken and never edits its own store by request. To fix 
 
 ## 9. Without a shell: MCP tools
 
-If you cannot run shell commands but quarry's MCP tools are available, use them; they return the same numbers. `sync_status` for section 1, `spending`, `cash_flow`, `recurring_charges`, `anomalies`, `search_transactions`, `holdings`, `net_worth`, `acb`, `data_quality` for the commands in section 4, `describe_schema` and `query` for section 5. The MCP server cannot run `sync`.
+If you cannot run shell commands but quarry's MCP tools are available, use them; they return the same numbers. `sync_status` for section 1, `spending`, `cash_flow`, `recurring_charges`, `anomalies`, `search_transactions`, `holdings`, `net_worth`, `acb`, `monthly_summary`, `data_quality` for the commands in section 4, `describe_schema` and `query` for section 5. The MCP server cannot run `sync`.
 
 ## 10. References
 

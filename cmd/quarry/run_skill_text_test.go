@@ -238,7 +238,7 @@ Write user-supplied values only in a recipe's ¤params¤ row, and double any sin
 | ¤warnings[]¤ not empty | any JSON | Relay the warnings that bear on the answer. |
 | Sync refused (Quicken closed, reconciliation failed, schema differs) | exit 1 from ¤quarry sync¤ | Quote the line; "the previous data is unchanged"; answer from it with its date. |`
 
-	skillSection9 = `If you cannot run shell commands but quarry's MCP tools are available, use them; they return the same numbers. ¤sync_status¤ for section 1, ¤spending¤, ¤cash_flow¤, ¤recurring_charges¤, ¤anomalies¤, ¤search_transactions¤, ¤holdings¤, ¤net_worth¤, ¤acb¤, ¤data_quality¤ for the commands in section 4, ¤describe_schema¤ and ¤query¤ for section 5. The MCP server cannot run ¤sync¤.`
+	skillSection9 = `If you cannot run shell commands but quarry's MCP tools are available, use them; they return the same numbers. ¤sync_status¤ for section 1, ¤spending¤, ¤cash_flow¤, ¤recurring_charges¤, ¤anomalies¤, ¤search_transactions¤, ¤holdings¤, ¤net_worth¤, ¤acb¤, ¤monthly_summary¤, ¤data_quality¤ for the commands in section 4, ¤describe_schema¤ and ¤query¤ for section 5. The MCP server cannot run ¤sync¤.`
 
 	skillCredit = `Layout and some rules adapted from dweekly/quicken-mac-mcp (MIT); see THIRD_PARTY_NOTICES.`
 )

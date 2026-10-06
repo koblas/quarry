@@ -203,6 +203,7 @@ A thin wrapper over the core library, launched by the Claude desktop app as a lo
 | `acb` | Adjusted cost base and realized gains by security and tax year (CAD) |
 | `search_transactions` | Find transactions by payee, memo, amount, date, account or category; transfers and report-excluded transactions included and flagged |
 | `holdings` | Securities held on one day (as_of, default today) with share count, latest price and its date, and value, with accounts and currency parameters; cash in investment accounts not included |
+| `monthly_summary` | One month (month, default last month): freshness, findings counts, unusually large charges, recurring charges new in it, and net worth at its end beside the month before with the change; the document `quarry summary --json` prints |
 | `sync_status` | Freshness of the data, last validation result |
 
 - `query` is the escape hatch for questions no tool anticipates; the named tools exist so common questions don't depend on Claude re-deriving transfer rules in SQL.

@@ -145,6 +145,20 @@ const mcpACBInputSchema = `{
 	"additionalProperties": false
 }`
 
+const mcpMonthlySummaryDescription = "Summarize one month (default last month): data freshness, findings counts, unusually large charges, " +
+	"recurring charges new in the month, and net worth at the month end beside the month before, with the change. " +
+	"The same document quarry summary --json prints. Read-only; never syncs."
+
+const mcpMonthlySummaryInputSchema = `{
+	"type": "object",
+	"properties": {
+		"month": {"type": "string", "description": "Month to summarize: YYYY-MM, a month that has ended. Defaults to last month."},
+		"currency": {"type": "string", "enum": ["CAD", "USD", "native"], "description": "Currency for amounts: CAD, USD, or native to list each account's own currency separately. ` +
+	`Defaults to reporting.currency in quarry's config file, else CAD."}
+	},
+	"additionalProperties": false
+}`
+
 const (
 	mcpRecurringInputSchema = `{
 		"type": "object",
@@ -282,6 +296,7 @@ func Test_run_mcp_describes_every_tool(t *testing.T) {
 			"holdings":            {mcpHoldingsDescription, mcpHoldingsInputSchema},
 			"net_worth":           {mcpNetWorthDescription, mcpNetWorthInputSchema},
 			"acb":                 {mcpACBDescription, mcpACBInputSchema},
+			"monthly_summary":     {mcpMonthlySummaryDescription, mcpMonthlySummaryInputSchema},
 		}
 		require.Len(t, listed.Tools, len(wantTools))
 		for _, tool := range listed.Tools {
@@ -300,7 +315,8 @@ func Test_run_mcp_describes_every_tool(t *testing.T) {
 
 		assert.Equal(t, 0, code)
 		assert.Contains(t, stdout.String(), "SQL runs read-only, and every list a tool returns\nstops at 500 entries.")
-		assert.Contains(t, stdout.String(), "Tools: describe_schema, query, sync_status, data_quality, spending,\ncash_flow, recurring_charges, anomalies, search_transactions, holdings,\nnet_worth, acb.")
+		assert.Contains(t, stdout.String(), "Tools: describe_schema, query, sync_status, data_quality, spending,\n"+
+			"cash_flow, recurring_charges, anomalies, search_transactions, holdings,\nnet_worth, acb, monthly_summary.")
 		assert.Empty(t, stderr.String())
 	})
 }

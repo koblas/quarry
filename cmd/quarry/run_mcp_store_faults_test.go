@@ -93,6 +93,10 @@ func Test_run_mcp_logs_only_the_withheld_line_for_a_store_read_fault(t *testing.
 			damage: directoryStore, reason: `Could not read from file "{store}": Is a directory`,
 		},
 		{
+			name: "monthly_summary, store cannot be opened", tool: "monthly_summary",
+			damage: directoryStore, reason: `Could not read from file "{store}": Is a directory`,
+		},
+		{
 			name: "net_worth, its view dropped", tool: "net_worth",
 			damage: brokenStore("DROP VIEW v_net_worth"), reason: "Table with name v_net_worth does not exist!",
 		},
@@ -102,6 +106,10 @@ func Test_run_mcp_logs_only_the_withheld_line_for_a_store_read_fault(t *testing.
 		},
 		{
 			name: "sync_status, import history gone", tool: "sync_status",
+			damage: brokenStore("DELETE FROM import_runs"), reason: "the store has no import history",
+		},
+		{
+			name: "monthly_summary, import history gone", tool: "monthly_summary",
 			damage: brokenStore("DELETE FROM import_runs"), reason: "the store has no import history",
 		},
 		{
