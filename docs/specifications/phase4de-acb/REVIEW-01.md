@@ -40,3 +40,7 @@ none
 
 ### Verdict: BLOCKED
 Two MAJORs (acb_walk.go:255 split leftover; acb_cap_test.go:69 `events: []` pin).
+
+### Orchestrator ruling after fix pass 1 (2026-10-05) — supersedes the snap ruling above
+
+The per-split snap diverges from `duckstore.holdingSpans` and `superficialIndex.heldAt` on chained splits (1:3 then 3:1, sell 99.999999: walk flat, duckstore 0.000001 held). Invariant to build to: every held / flat / short decision in the walk (span open/close, not-held adjustment, oversold, `Oversold` amount, cover, `Incomplete`, `PerShare`, position filters) uses `Millionths(pool.shares)` — the stored-holding unit duckstore and heldAt use; the exact big.Rat stays for arithmetic. Remove the per-split snap. A disposition that leaves `Millionths(shares) <= 0` removes all ACB (so "shares <= 0 => ACB 0" holds in millionths). Pins: fixtures (a), (b) unchanged outcomes; control 33.333334 after 1:3 = -0.000001 short; chain row 1:3 then 3:1, sell 99.999999 = 0.000001 held (matches holdingSpans); a disposition leaving a positive sub-half-millionth exact remainder = flat with ACB 0.00.
