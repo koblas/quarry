@@ -23,8 +23,8 @@ Existing surfaces surveyed (grep, no LSP — markdown): SKILL §4 is pinned byte
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: new `cmd/quarry/run_skill_monthly_summary_test.go` `Test_monthly_summary_job_is_documented_where_a_reader_looks` — one test: `skillRunCell` (run_skill_use_cases_test.go:~188) finds the §4 row and its cell opens `quarry summary --json`; §10 links `references/monthly-summary.md` and the file exists; reference line 3 equals U15; README has `## Run a monthly summary` after the Claude Code section and before `## Credits`; PRD Decisions carries the ruled bullet (spec :305)
-- [ ] Step 2: no stubs (no Go symbols); run it, quote the failing assertion (missing §4 row)
+- [x] Step 1: new `cmd/quarry/run_skill_monthly_summary_test.go` `Test_monthly_summary_job_is_documented_where_a_reader_looks` — one test: `skillRunCell` (run_skill_use_cases_test.go:~188) finds the §4 row and its cell opens `quarry summary --json`; §10 links `references/monthly-summary.md` and the file exists; reference line 3 equals U15; README has `## Run a monthly summary` after the Claude Code section and before `## Credits`; PRD Decisions carries the ruled bullet (spec :305)
+- [x] Step 2: no stubs (no Go symbols); run it, quote the failing assertion (missing §4 row)
 
 ### Build
 - [ ] Step 3 (batch 1, reference + SKILL): new `plugin/skills/quarry/references/monthly-summary.md` (U15 line 3 + launchd recipe verbatim from spec :260-297, `&` as `&amp;` in XML; no code span equal to `monthly_summary`; never tells Claude to run sync unasked, SKILL §6); `SKILL.md:44` §4 row, `:110` §10 bullet (spec :310). Pins: `run_skill_text_test.go:196` `skillSection4` row, `:34-41` `skillReferenceLinks` (append), `run_skill_references_test.go:102` new case in `Test_reference_files_state_their_job` with U15's phrase list (spec :339) exactly. Fault/edge: none (static text); `Test_every_quarry_name_the_skill_uses_exists` is the check that `summary`, `sync` and `--month` resolve
@@ -59,3 +59,12 @@ Existing surfaces surveyed (grep, no LSP — markdown): SKILL §4 is pinned byte
 ## Orchestrator rulings (2026-10-06)
 
 Unruled copy 1-4: all defaults accepted as written above. 1: add `## Reading the document` to monthly-summary.md naming every summary --json top-level field in backticks; keep the declaredFields row. 2-4: defaults as listed.
+
+## Phase report
+
+Run A (steps 1-2) done. No production code, no Go stubs.
+
+- `cmd/quarry/run_skill_monthly_summary_test.go` (new): `Test_monthly_summary_job_is_documented_where_a_reader_looks` plus ruled-copy consts (`monthlySummary*`; question, §4 cell, §10 bullet, README heading, U15 line 3, PRD bullet). Reuses `skillRunCell`, `repoFile`, `readmeClaudeCodeHeading`, `readmeCreditsHeading`.
+- Red: fails at `run_skill_monthly_summary_test.go:33` `require.NoError(rowErr)`: "no section 4 row for the question". Assertions after it (reference file, README, PRD) are not yet reached, so each goes red in turn as B1/B2 land.
+- Pinned copy choices for B1/B2: reference line 1 `# Monthly summary job`, line 3 = U15; §10 bullet has no backticks (spec :310); PRD bullet is `- Monthly summary: ` + spec :305 text, straight quotes around "last month", no inner backticks, appended after the `Command names` bullet.
+- Step 5's `Test_readme_monthly_summary_section_is_verbatim_between_claude_code_and_credits` and its const go in the same file (B2).
