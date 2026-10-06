@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/koblas/quarry/internal/report"
@@ -66,6 +67,18 @@ func signedTenths(tenths int64) string {
 		tenths = -tenths
 	}
 	return fmt.Sprintf("%s%d.%d%%", sign, tenths/10, tenths%10)
+}
+
+// signedMoney renders cents as "+6,186.43" or "-219.60"; zero is "0.00", unsigned, and nil is "no rate".
+func signedMoney(cents *big.Int) string {
+	switch {
+	case cents == nil:
+		return noRateCell
+	case cents.Sign() > 0:
+		return "+" + formatBigMoney(cents)
+	default:
+		return formatBigMoney(cents)
+	}
 }
 
 // renderRecurring renders r as the recurring table: caption, header, one row per series and a Total

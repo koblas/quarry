@@ -14,6 +14,9 @@ import (
 // summaryRecurringTitle is the first words of the recurring section's caption.
 const summaryRecurringTitle = "Recurring charges new"
 
+// changeLabel is the first cell of the net worth Change line.
+const changeLabel = "Change"
+
 // renderSummary renders s as the summary text: heading, the Snapshot, Dates and Findings rows, then the
 // anomalies, recurring and net worth sections, one blank line between parts and one newline at the end.
 func renderSummary(s report.Summary, findings document.FindingsTally, now time.Time) string {
@@ -24,8 +27,50 @@ func renderSummary(s report.Summary, findings document.FindingsTally, now time.T
 	fmt.Fprintf(&b, "%-10s%s\n\n", "Findings", summaryFindingsPhrase(findings))
 	b.WriteString(renderAnomalies(s.Anomalies) + "\n")
 	b.WriteString(renderRecurringTitled(summaryRecurringTitle, s.Recurring) + "\n")
-	b.WriteString(renderNetWorthHistory(s.NetWorth))
+	b.WriteString(renderNetWorthWithChange(s.NetWorth))
 	return b.String()
+}
+
+// renderNetWorthWithChange is the month-end history table with the change between its first and last month
+// end appended; nothing is appended when the first month end has no balance.
+func renderNetWorthWithChange(n report.NetWorth) string {
+	aligns, rows := netWorthHistoryRows(n)
+	if change := n.Change(); change != nil {
+		rows = append(rows, changeRows(n, change)...)
+	}
+	return renderTable(netWorthHistoryCaption(n), aligns, rows)
+}
+
+// changeRows is the Change line of a converted history, or one per currency of a native one, in the history
+// table's columns; a native line leaves blank the type its currency does not hold.
+func changeRows(n report.NetWorth, change *report.NetWorthChange) [][]string {
+	types := n.Types()
+	if n.Currency != money.Native {
+		row := []string{changeLabel}
+		for _, entry := range change.Types {
+			row = append(row, signedMoney(entry.Value))
+		}
+		return [][]string{append(row, signedMoney(change.Totals[0].Value))}
+	}
+	rows := make([][]string, len(change.Totals))
+	for i, total := range change.Totals {
+		row := []string{changeLabel, total.Currency}
+		for _, accountType := range types {
+			row = append(row, nativeChangeCell(change, accountType, total.Currency))
+		}
+		rows[i] = append(row, signedMoney(total.Value))
+	}
+	return rows
+}
+
+// nativeChangeCell is accountType's change in currency, blank when neither month end holds that type in it.
+func nativeChangeCell(change *report.NetWorthChange, accountType, currency string) string {
+	for _, entry := range change.Types {
+		if entry.Type == accountType && entry.Currency == currency {
+			return signedMoney(entry.Value)
+		}
+	}
+	return ""
 }
 
 // summaryHeading is the month's name and first and last day, then the currency of the amounts unless native.

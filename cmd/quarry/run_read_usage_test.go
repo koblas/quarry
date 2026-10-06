@@ -49,6 +49,7 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 		{name: "cashflow with an argument", args: []string{"cashflow", "extra"}, wantStderr: "quarry: cashflow takes no arguments\n"},
 		{name: "recurring with an argument", args: []string{"recurring", "extra"}, wantStderr: "quarry: recurring takes no arguments\n"},
 		{name: "anomalies with an argument", args: []string{"anomalies", "extra"}, wantStderr: "quarry: anomalies takes no arguments\n"},
+		{name: "summary with an argument", args: []string{"summary", "extra"}, wantStderr: "quarry: summary takes no arguments\n"},
 		{name: "mcp with an argument", args: []string{"mcp", "extra"}, wantStderr: "quarry: mcp takes no arguments\n"},
 		{name: "mcp with --json", args: []string{"mcp", "--json"}, wantStderr: "quarry: mcp always speaks JSON on stdout; drop --json\n"},
 		{
@@ -80,7 +81,7 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 }
 
 func Test_run_read_commands_refuse_a_bad_currency_flag(t *testing.T) {
-	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth"} {
+	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth", "summary"} {
 		t.Run(command, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
 			var stdout, stderr bytes.Buffer

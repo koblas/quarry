@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -128,6 +129,53 @@ func Test_summary_reads_the_month_it_was_asked_for_in_the_currency_it_was_asked_
 		Dates:   []time.Time{time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC), time.Date(2026, 7, 31, 0, 0, 0, 0, time.UTC)},
 	}, got)
 	assert.Contains(t, stdout.String(), "Summary of July 2026 (2026-07-01 to 2026-07-31), amounts in USD\n")
+}
+
+func Test_summary_refuses_a_currency_that_is_not_cad_usd_or_native(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{name: "another currency", value: "EUR"},
+		{name: "an empty value", value: ""},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := executeSummary(t, fakeReportStore{}, cadConfig, &stdout, &stderr, "--currency="+c.value)
+
+			var usage cli.UsageError
+			require.ErrorAs(t, err, &usage)
+			require.EqualError(t, err, badCurrencyFlag)
+			assert.Empty(t, stdout.String())
+		})
+	}
+}
+
+func Test_summary_shows_amounts_in_the_currency_it_was_given(t *testing.T) {
+	cases := []struct {
+		name        string
+		value       string
+		wantHeading string
+	}{
+		{name: "CAD", value: "CAD", wantHeading: "Summary of August 2026 (2026-08-01 to 2026-08-31), amounts in CAD\n"},
+		{name: "USD", value: "USD", wantHeading: "Summary of August 2026 (2026-08-01 to 2026-08-31), amounts in USD\n"},
+		{name: "lower case", value: "usd", wantHeading: "Summary of August 2026 (2026-08-01 to 2026-08-31), amounts in USD\n"},
+		{name: "native names no currency", value: "native", wantHeading: "Summary of August 2026 (2026-08-01 to 2026-08-31)\n"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := executeSummary(t, fakeReportStore{}, cadConfig, &stdout, &stderr, "--currency", c.value)
+
+			require.NoError(t, err)
+			assert.True(t, strings.HasPrefix(stdout.String(), c.wantHeading), stdout.String())
+		})
+	}
 }
 
 func Test_summary_warns_and_prints_when_the_config_is_unreadable_and_currency_is_given(t *testing.T) {

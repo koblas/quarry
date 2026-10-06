@@ -75,14 +75,13 @@ func summaryRows(kioskFixed bool) store.Rows {
 }
 
 // seedSummaryStore builds the store under a temp HOME twice, so the second build fixes Kiosk's finding and
-// finds Pharmacy's while Shell's carries, and returns the HOME.
-func seedSummaryStore(t *testing.T) string {
+// finds Pharmacy's while Shell's carries.
+func seedSummaryStore(t *testing.T) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	replaceStore(t, home, summaryRows(false))
 	replaceStore(t, home, summaryRows(true))
-	return home
 }
 
 func Test_run_summary_prints_last_months_summary(t *testing.T) {

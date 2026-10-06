@@ -11,6 +11,12 @@ import (
 // renderNetWorthHistory renders n, a history, as a line per month end under a column per account type and a
 // Total; a native table adds a Currency column. A blank cell has no row, "no rate" has no exchange rate.
 func renderNetWorthHistory(n report.NetWorth) string {
+	aligns, rows := netWorthHistoryRows(n)
+	return renderTable(netWorthHistoryCaption(n), aligns, rows)
+}
+
+// netWorthHistoryRows is the history table's column alignments and its header and month end rows.
+func netWorthHistoryRows(n report.NetWorth) ([]tableAlign, [][]string) {
 	converted := n.Currency != money.Native
 	types := n.Types()
 	header, aligns := []string{"Month end"}, []tableAlign{alignLeft}
@@ -30,7 +36,7 @@ func renderNetWorthHistory(n report.NetWorth) string {
 		}
 		rows = append(rows, nativeHistoryRows(date, types)...)
 	}
-	return renderTable(netWorthHistoryCaption(n), aligns, rows)
+	return aligns, rows
 }
 
 // convertedHistoryRow is date's line: each type's converted sum, then the day's total in the reporting
