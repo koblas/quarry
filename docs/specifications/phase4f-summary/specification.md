@@ -527,6 +527,9 @@ Architect sizing pass (2026-10-06). Order: 01a → 01b → 06 → 10 → 12 → 
 - [x] SCENARIO-17: Docs describe the monthly job — `cmd/quarry/run_skill_monthly_summary_test.go` `Test_monthly_summary_job_is_documented_where_a_reader_looks`
 - [x] SCENARIO-21: A subscription that kept charging through a stray charge is not new — `internal/report/summary_recurring_test.go` `Test_summary_does_not_list_a_subscription_that_kept_charging_through_a_stray_charge_as_new`
 - [x] SCENARIO-22: A subscription never listed before is new when it first lists — `internal/report/summary_recurring_test.go` `Test_summary_lists_a_subscription_as_new_when_its_earlier_series_was_never_listable`
-- [ ] SCENARIO-18: Reference check on a real month
+
+## Reference check
 
 SCENARIO-18 is run by the orchestrator after SCENARIO-17 and before the gate, on a scratch HOME holding copies of the newest snapshot; results go in `REFERENCE-CHECK.md`.
+
+- [x] SCENARIO-18: Reference check on a real month — orchestrator run, results in `REFERENCE-CHECK.md` (2026-10-06, snapshot 20261004T184923Z); rule gaps found → SCENARIO-21, SCENARIO-22
