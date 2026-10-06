@@ -337,6 +337,7 @@ Read-only: `openReport` (output.go:10-17) only store access; acceptance test pin
 - **U13** SKILL §9 (SKILL.md:99): `` `sync_status` for section 1, `spending`, `cash_flow`, `recurring_charges`, `anomalies`, `search_transactions`, `holdings`, `net_worth`, `acb`, `monthly_summary`, `data_quality` for the commands in section 4, `describe_schema` and `query` for section 5. `` (rest unchanged).
 - **U14** PRD MCP table row, after `holdings`, before `sync_status`: `| \`monthly_summary\` | One month (month, default last month): freshness, findings counts, unusually large charges, recurring charges new in it, and net worth at its end beside the month before with the change; the document \`quarry summary --json\` prints |`
 - **U15** references/monthly-summary.md line 3: `Use this when the user wants last month's summary every month without asking: a launchd job that runs \`quarry sync\`, then \`quarry summary\`, on the 1st and writes both to a log only they can read. Show the user these steps; write or load the LaunchAgent only when they ask you to.` Test row (cmd/quarry/run_skill_references_test.go:60): `{"monthly-summary.md", []string{"quarry sync", "quarry summary", "launchd", "StartCalendarInterval", "umask 077", "launchctl bootstrap", "launchctl bootout", "command -v quarry", "only when they ask you to"}}`.
+- **U17** (orchestrator, from the SCENARIO-18 reference check, 2026-10-06) U2 condition (1) is the intent "an earlier steady series that had not ended", not the exact prefix: the earlier series is the latest `steady()` run `latestRun` finds over the group's charges before `R[0]` with any trailing off-schedule charges dropped (search back no further than that run's ended-after days before `R[0]`); (2) and (3) unchanged. Off-schedule charges between the runs do not end the earlier series. Real-file case: a monthly run whose last charge was 30 days before `R[0]` (ended-after 45), with one off-schedule charge between, was listed new. No copy change.
 - **U16** README `## Run a monthly summary` between `## Use quarry with Claude Code` and `## Credits`, path as a link `[plugin/skills/quarry/references/monthly-summary.md](plugin/skills/quarry/references/monthly-summary.md)`.
 - Recurring section rows keep recurring's own per-row `new` / `, new` suffix (series first charged in the month), as ruled at scoping.
 
@@ -374,6 +375,11 @@ Scenario: SCENARIO-20 A subscription resumed after it ended is new again
   Given a monthly subscription last charged January 2025 and charged again from July 2026
   When the user runs `quarry summary --month 2026-09`
   Then it is listed under recurring charges new in September
+
+Scenario: SCENARIO-21 A subscription that kept charging through a stray charge is not new
+  Given a monthly subscription charged October to December 2025, one off-schedule charge from the same payee 21 days after the December charge, and the subscription charged monthly again from 30 days after the December charge at a new price
+  When the user runs `quarry summary --month 2026-03`
+  Then it is not listed under recurring charges new in March
 
 Scenario: SCENARIO-04 A past month's recurring charges do not change with later charges
   Given a store holding charges after September 2026
@@ -486,6 +492,7 @@ Architect sizing pass (2026-10-06). Order: 01a → 01b → 06 → 10 → 12 → 
 | SCENARIO-15 | FOLD into 01b (row in run_read_refusals_test.go:45). |
 | SCENARIO-16 | OWNS A RUN (sonnet), 2–3 batches, mcp: tool, description, `month` (U11), isError lines, W3 tail, W6 `NativeParameter`, caps; SKILL §9 (U13), `mcp --help` Tools line (U12), PRD MCP row (U14). |
 | SCENARIO-17 | OWNS A RUN (sonnet), 2 batches, docs + tests: references/monthly-summary.md (U15 + recipe), SKILL §4 and §10, README (U16), PRD Decisions. |
+| SCENARIO-21 | OWNS A RUN (sonnet) — added by the SCENARIO-18 reference check (U17); one core function (`resumes`) plus its unit and acceptance tests. |
 | SCENARIO-18 | Orchestrator reference check (no architect/developer); also verifies the launchd claims ($HOME in `sh -c`, TCC on ~/Documents, bootstrap/kickstart on macOS 26) and times summary on the real store. |
 
 **Traps:** one store handle (sync renames the store mid-run); two full Charges reads (share or time them); `quarry recurring` must not change; test clocks for later months (02 needs now ≥ 2026-11-01, 19 ≥ 2026-12-01); all-commands tables listed under 01b.
@@ -511,6 +518,7 @@ Architect sizing pass (2026-10-06). Order: 01a → 01b → 06 → 10 → 12 → 
 - [x] SCENARIO-14: Missing exchange rates are warned about once — `cmd/quarry/run_summary_warnings_test.go` `Test_run_summary_warns_once_per_kind_when_the_store_has_no_exchange_rates`
 - [x] SCENARIO-16: Claude asks for last month's summary — `cmd/quarry/run_mcp_summary_test.go` `Test_run_mcp_monthly_summary_returns_the_summary_json_document`
 - [x] SCENARIO-17: Docs describe the monthly job — `cmd/quarry/run_skill_monthly_summary_test.go` `Test_monthly_summary_job_is_documented_where_a_reader_looks`
+- [ ] SCENARIO-21: A subscription that kept charging through a stray charge is not new
 - [ ] SCENARIO-18: Reference check on a real month
 
 SCENARIO-18 is run by the orchestrator after SCENARIO-17 and before the gate, on a scratch HOME holding copies of the newest snapshot; results go in `REFERENCE-CHECK.md`.
