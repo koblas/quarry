@@ -76,7 +76,8 @@ together.`,
 
 			at := now()
 			var given *string
-			if cmd.Flags().Changed(summaryMonthFlagName) {
+			named := cmd.Flags().Changed(summaryMonthFlagName)
+			if named {
 				given = &month
 			}
 			resolved, err := report.ParseMonth(given, at)
@@ -106,12 +107,25 @@ together.`,
 			if choices.cannotTell != "" {
 				printConfigWarnings(cmd, []string{choices.cannotTell})
 			}
-			return writeResult(cmd, []byte(renderSummary(summary, findings, at)))
+			var warnings []string
+			if warning := document.SnapshotWarning(summary, summaryAgain(resolved, named)); warning != "" {
+				warnings = append(warnings, warning)
+			}
+			return emit(cmd, []byte(renderSummary(summary, findings, at)), "quarry: warning: ", warnings)
 		},
 	}
 	cmd.Flags().StringVar(&month, summaryMonthFlagName, "", "summarize month `YYYY-MM` instead of last month; it must have ended")
 	currency.bind(cmd, reportCurrencyHelp)
 	return cmd
+}
+
+// summaryAgain is the phrase a warning ends with to repeat this summary: the command as typed, with --month
+// only when the month was named.
+func summaryAgain(month report.Month, named bool) string {
+	if named {
+		return "run quarry summary --month " + month.String() + " again"
+	}
+	return "run quarry summary again"
 }
 
 // summaryChoice is what the config file decides for a summary: its currency and the findings choices. ignoreKnown

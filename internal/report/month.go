@@ -8,8 +8,23 @@ import (
 )
 
 // Month is one calendar month a summary covers: Start is its first day and End its last, both UTC midnights.
+// Zone is the zone the month begins and ends in, set by ParseMonth; nil reads as UTC.
 type Month struct {
 	Start, End time.Time
+	Zone       *time.Location
+}
+
+// Location is the zone the month begins and ends in: Zone, or UTC when Zone is nil.
+func (m Month) Location() *time.Location {
+	if m.Zone == nil {
+		return time.UTC
+	}
+	return m.Zone
+}
+
+// closes is the instant the month ends: local midnight beginning the next month in its zone.
+func (m Month) closes() time.Time {
+	return time.Date(m.End.Year(), m.End.Month(), m.End.Day()+1, 0, 0, 0, 0, m.Location())
 }
 
 // Window is the month as the window of days it covers.
@@ -53,11 +68,12 @@ func (e MonthError) Error() string {
 const monthLayout = "2006-01"
 
 // ParseMonth resolves value, YYYY-MM, into the month it names; a nil value is the calendar month before
-// now's, read in now's own zone. It returns a MonthError for a value that is not a month and for a month
+// now's, read in now's own zone, which becomes the month's Zone. It returns a MonthError for a value that is not a month and for a month
 // that has not ended.
 func ParseMonth(value *string, now time.Time) (Month, error) {
 	today := Today(now)
 	last := monthOf(time.Date(today.Year(), today.Month()-1, 1, 0, 0, 0, 0, time.UTC))
+	last.Zone = now.Location()
 	if value == nil {
 		return last, nil
 	}
@@ -66,6 +82,7 @@ func ParseMonth(value *string, now time.Time) (Month, error) {
 		return Month{}, MonthError{Kind: MonthNotAMonth, Value: *value, Example: last.String()}
 	}
 	month := monthOf(start)
+	month.Zone = now.Location()
 	if !month.End.Before(today) {
 		return Month{}, MonthError{Kind: MonthNotEnded, Value: *value, Example: last.String()}
 	}

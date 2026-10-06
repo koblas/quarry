@@ -2,6 +2,7 @@ package report
 
 import (
 	"context"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
@@ -26,6 +27,33 @@ type Summary struct {
 	NetWorth  NetWorth
 	// Change is nil when the first month end has no balance in any currency.
 	Change *NetWorthChange
+	// Coverage says whether the store's snapshot was taken after the month ended.
+	Coverage SnapshotCoverage
+}
+
+// SnapshotCoverage is whether the snapshot a store was built from holds all of a month.
+type SnapshotCoverage int
+
+// The answers: Covers is the zero value, so a Summary built without a verdict raises no warning.
+const (
+	// SnapshotCovers: the snapshot was taken at or after the month's end.
+	SnapshotCovers SnapshotCoverage = iota
+	// SnapshotPredatesMonthEnd: the snapshot was taken before the month ended, so the rest of it is missing.
+	SnapshotPredatesMonthEnd
+	// SnapshotTimeUnknown: the snapshot's manifest records no time it was taken.
+	SnapshotTimeUnknown
+)
+
+// coverageOf judges a snapshot taken at taken against month; a zero taken is unknown.
+func coverageOf(taken time.Time, month Month) SnapshotCoverage {
+	switch {
+	case taken.IsZero():
+		return SnapshotTimeUnknown
+	case !taken.Before(month.closes()):
+		return SnapshotCovers
+	default:
+		return SnapshotPredatesMonthEnd
+	}
 }
 
 // summaryCommand names summary in its refusals; it equals the cli command word.
@@ -49,5 +77,6 @@ func (s *Server) Summary(ctx context.Context, req SummaryRequest) (Summary, erro
 		Recurring: recurringFrom(read.Charges, recurringScope{window: req.Month.Window(), today: req.Month.End, currency: req.Currency, keep: newInMonth(req.Month)}),
 		NetWorth:  netWorth,
 		Change:    netWorth.Change(),
+		Coverage:  coverageOf(read.Status.Run.Snapshot.TakenAt, req.Month),
 	}, nil
 }

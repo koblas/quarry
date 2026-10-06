@@ -103,6 +103,25 @@ func Test_a_month_that_has_not_ended_is_refused_with_the_default_month_as_the_ex
 	}
 }
 
+func Test_a_parsed_month_keeps_the_zone_of_the_clock(t *testing.T) {
+	cases := []struct {
+		name  string
+		value *string
+	}{
+		{name: "the default month", value: nil},
+		{name: "a named month", value: new("2026-08")},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			month, err := report.ParseMonth(c.value, time.Date(2026, 10, 6, 12, 0, 0, 0, edt))
+
+			require.NoError(t, err)
+			assert.Same(t, edt, month.Zone)
+		})
+	}
+}
+
 func Test_a_month_ends_at_local_midnight(t *testing.T) {
 	september := "2026-09"
 	lastSecond := time.Date(2026, 9, 30, 23, 59, 59, 0, edt)

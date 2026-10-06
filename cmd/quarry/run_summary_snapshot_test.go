@@ -16,6 +16,11 @@ func summaryClockEDT() time.Time {
 	return time.Date(2026, time.October, 6, 12, 0, 0, 0, time.FixedZone("EDT", -4*60*60))
 }
 
+// septemberTimeUnknownWarning is what a September summary says about a snapshot whose manifest records no time.
+const septemberTimeUnknownWarning = "quarry: warning: cannot tell whether the store holds all of September 2026: " +
+	"its snapshot's manifest does not record when it was taken; " +
+	"open your Quicken file and run quarry sync to take a new snapshot\n"
+
 func Test_run_summary_warns_when_the_snapshot_was_taken_before_the_month_ended(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -48,7 +53,5 @@ func Test_run_summary_warns_when_the_snapshot_records_no_time(t *testing.T) {
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "Snapshot  20261001T130512Z, time taken not recorded in its manifest\n")
-	assert.Equal(t, "quarry: warning: cannot tell whether the store holds all of September 2026: "+
-		"its snapshot's manifest does not record when it was taken; "+
-		"open your Quicken file and run quarry sync to take a new snapshot\n", stderr.String())
+	assert.Equal(t, septemberTimeUnknownWarning, stderr.String())
 }

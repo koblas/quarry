@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"io"
 	"strconv"
@@ -19,9 +20,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// executeSummary runs quarry summary against fake at spendNow, whose last month is August 2026.
+// executeSummary runs quarry summary against fake at spendNow, whose last month is August 2026. A fake that
+// records no snapshot time gets one at spendNow, after every month these tests ask for has ended.
 func executeSummary(t *testing.T, fake fakeReportStore, load cli.ConfigLoader, stdout, stderr io.Writer, args ...string) error {
 	t.Helper()
+	fake.summary.Status.Run.Snapshot.TakenAt = cmp.Or(fake.summary.Status.Run.Snapshot.TakenAt, spendNow)
 	env := cli.Env{
 		LoadConfig: load,
 		Stdout:     stdout, Stderr: stderr,
@@ -292,6 +295,89 @@ func Test_summary_refuses_a_failed_write_to_stdout(t *testing.T) {
 
 	require.ErrorIs(t, err, errNoSpace)
 	assert.ErrorContains(t, err, "cannot write the result to stdout")
+}
+
+// summaryTakenAt is a store whose snapshot was taken at taken.
+func summaryTakenAt(taken time.Time) fakeReportStore {
+	return fakeReportStore{summary: store.Summary{Status: store.Status{Run: store.ImportRun{Snapshot: store.SnapshotRef{TakenAt: taken}}}}}
+}
+
+func Test_summary_ends_its_snapshot_warning_with_the_command_that_repeats_the_summary_asked_for(t *testing.T) {
+	cases := []struct {
+		name  string
+		args  []string
+		taken time.Time
+		want  string
+	}{
+		{
+			name:  "the default month",
+			taken: time.Date(2026, time.August, 30, 12, 0, 0, 0, time.UTC),
+			want: "quarry: warning: the store was built from a snapshot taken 2026-08-30 12:00 UTC, before August 2026 ended, " +
+				"so transactions from the rest of the month are missing; open your Quicken file, run quarry sync, " +
+				"then run quarry summary again\n",
+		},
+		{
+			name:  "a month named on the command line",
+			args:  []string{"--month", "2026-07"},
+			taken: time.Date(2026, time.July, 30, 12, 0, 0, 0, time.UTC),
+			want: "quarry: warning: the store was built from a snapshot taken 2026-07-30 12:00 UTC, before July 2026 ended, " +
+				"so transactions from the rest of the month are missing; open your Quicken file, run quarry sync, " +
+				"then run quarry summary --month 2026-07 again\n",
+		},
+		{
+			name:  "the default month named anyway",
+			args:  []string{"--month", "2026-08"},
+			taken: time.Date(2026, time.August, 30, 12, 0, 0, 0, time.UTC),
+			want: "quarry: warning: the store was built from a snapshot taken 2026-08-30 12:00 UTC, before August 2026 ended, " +
+				"so transactions from the rest of the month are missing; open your Quicken file, run quarry sync, " +
+				"then run quarry summary --month 2026-08 again\n",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := executeSummary(t, summaryTakenAt(c.taken), cadConfig, &stdout, &stderr, c.args...)
+
+			require.NoError(t, err)
+			assert.Equal(t, c.want, stderr.String())
+		})
+	}
+}
+
+func Test_summary_says_nothing_about_a_snapshot_taken_when_the_month_ended(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeSummary(t, summaryTakenAt(time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)), cadConfig, &stdout, &stderr)
+
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String())
+	assert.Contains(t, stdout.String(), "Summary of August 2026")
+}
+
+func Test_summary_warns_about_the_snapshot_after_it_warns_about_the_config(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	unreadable := func(string) (config.Config, error) { return config.Config{}, errConfigRead }
+
+	err := executeSummary(t, summaryTakenAt(time.Date(2026, time.August, 30, 12, 0, 0, 0, time.UTC)), unreadable, &stdout, &stderr, "--currency", "USD")
+
+	require.NoError(t, err)
+	assert.Equal(t, "quarry: warning: cannot tell which findings you ignored or how you classified your accounts: "+
+		"cannot read config.toml: permission denied; findings you ignored are counted as open, "+
+		"and every investment account is counted as unclassified\n"+
+		"quarry: warning: the store was built from a snapshot taken 2026-08-30 12:00 UTC, before August 2026 ended, "+
+		"so transactions from the rest of the month are missing; open your Quicken file, run quarry sync, "+
+		"then run quarry summary again\n", stderr.String())
+}
+
+func Test_summary_does_not_warn_about_the_snapshot_when_the_summary_cannot_be_written(t *testing.T) {
+	var stderr bytes.Buffer
+
+	err := executeSummary(t, summaryTakenAt(time.Date(2026, time.August, 30, 12, 0, 0, 0, time.UTC)), cadConfig, failingWriter{err: errNoSpace}, &stderr)
+
+	require.ErrorIs(t, err, errNoSpace)
+	assert.Empty(t, stderr.String())
 }
 
 func Test_summary_reads_the_clock_once(t *testing.T) {

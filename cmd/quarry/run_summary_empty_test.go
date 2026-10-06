@@ -29,7 +29,7 @@ func Test_run_summary_shows_no_change_in_the_first_month_of_data(t *testing.T) {
 	exitCode := runWith(context.Background(), []string{"summary", "--month", "2026-09"}, spendEnvAt(&stdout, &stderr, summaryClock))
 
 	require.Equal(t, 0, exitCode)
-	assert.Empty(t, stderr.String())
+	assert.Equal(t, septemberTimeUnknownWarning, stderr.String())
 	assert.Equal(t, "Summary of September 2026 (2026-09-01 to 2026-09-30), amounts in CAD\n\n"+
 		"Snapshot  20260929T000000Z, time taken not recorded in its manifest\n"+
 		"Dates     2026-09-05 to 2026-09-10\n"+
@@ -65,7 +65,7 @@ func Test_run_summary_says_so_in_a_month_with_no_unusual_charge_and_no_new_recur
 	exitCode := runWith(context.Background(), []string{"summary"}, spendEnvAt(&stdout, &stderr, summaryClock))
 
 	require.Equal(t, 0, exitCode)
-	assert.Empty(t, stderr.String())
+	assert.Equal(t, septemberTimeUnknownWarning, stderr.String())
 	assert.Equal(t, "Summary of September 2026 (2026-09-01 to 2026-09-30), amounts in CAD\n\n"+
 		"Snapshot  20260929T000000Z, time taken not recorded in its manifest\n"+
 		"Dates     2026-01-02 to 2026-09-14\n"+
@@ -94,7 +94,7 @@ func Test_run_summary_counts_a_large_charge_with_too_little_history_as_not_judge
 	exitCode := runWith(context.Background(), []string{"summary", "--month", "2026-09"}, spendEnvAt(&stdout, &stderr, summaryClock))
 
 	require.Equal(t, 0, exitCode)
-	assert.Empty(t, stderr.String())
+	assert.Equal(t, septemberTimeUnknownWarning, stderr.String())
 	assert.Contains(t, stdout.String(), "\n\nNo unusually large charges.\n\n1 charge checked; 1 had too little history to judge\n\n")
 }
 
@@ -105,10 +105,13 @@ func Test_run_summary_prints_the_ruled_empty_lines_for_a_store_without_transacti
 		seed func(t *testing.T)
 		top  string
 		rest string
+		// stderr is what the run warns: only the store built by chargeRows records no snapshot time.
+		stderr string
 	}{
 		{
-			name: "store without transactions",
-			args: []string{"summary"},
+			name:   "store without transactions",
+			stderr: septemberTimeUnknownWarning,
+			args:   []string{"summary"},
 			seed: func(t *testing.T) {
 				t.Helper()
 				home := t.TempDir()
@@ -180,7 +183,7 @@ func Test_run_summary_prints_the_ruled_empty_lines_for_a_store_without_transacti
 			exitCode := runWith(context.Background(), c.args, spendEnvAt(&stdout, &stderr, summaryClock))
 
 			require.Equal(t, 0, exitCode)
-			assert.Empty(t, stderr.String())
+			assert.Equal(t, c.stderr, stderr.String())
 			assert.Equal(t, c.top+c.rest, stdout.String())
 		})
 	}
@@ -201,7 +204,7 @@ func Test_run_summary_shows_no_change_in_native_when_no_currency_has_a_balance_o
 	exitCode := runWith(context.Background(), []string{"summary", "--month", "2026-09", "--currency", "native"}, spendEnvAt(&stdout, &stderr, summaryClock))
 
 	require.Equal(t, 0, exitCode)
-	assert.Empty(t, stderr.String())
+	assert.Equal(t, septemberTimeUnknownWarning, stderr.String())
 	assert.Equal(t, "Summary of September 2026 (2026-09-01 to 2026-09-30)\n\n"+
 		"Snapshot  20260929T000000Z, time taken not recorded in its manifest\n"+
 		"Dates     2026-09-05 to 2026-09-06\n"+
