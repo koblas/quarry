@@ -46,10 +46,11 @@ guesses is the point of this phase.
    - **SHIP** — continue.
 5. **Name the checks only the user can run.** A claim that needs the user's own account or
    machine (a LaunchAgent loaded in their session, a macOS privacy prompt, a sign-in) cannot
-   be verified by any pipeline agent. List each in the spec's `## Surface & Copy` as
-   "user-verified, outside the pipeline", with what to run and what to report, and ask the
-   user at scenario approval whether it ships unverified or waits for them. Found at the
-   final pass, it becomes a late surprise.
+   be verified by any pipeline agent. List each, with what to run and what to report, and
+   carry the list into Phase 2: put it to the user with the scenarios at approval (ships
+   unverified, or waits for them) — no extra pause. It lands in the spec's
+   `## Surface & Copy` as "user-verified, outside the pipeline". Found at the final pass, it
+   becomes a late surprise.
 6. Summarize refined intent, ask: "Does this capture it correctly? I'll move on to proposing
    scenarios."
 
