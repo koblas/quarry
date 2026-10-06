@@ -25,3 +25,8 @@ func (s *Server) LockForSync(ctx context.Context) (func(), error) {
 	}
 	return release, err //nolint:wrapcheck // the Locker's other errors are returned as given; their copy is not this method's
 }
+
+// LockForPrune takes the writer lock once for a whole prune and returns the func that releases it.
+func (s *Server) LockForPrune(_ context.Context) (func(), error) {
+	return nil, nil //nolint:nilnil // signature-only stub
+}

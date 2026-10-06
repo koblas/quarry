@@ -27,8 +27,8 @@ Contract: `quarry snapshots prune` (no `--dry-run`) acquires after usage (2) →
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_prune_lock_test.go` (new) `Test_run_snapshots_prune_refuses_while_another_writer_holds_the_lock` — through `run()`, real factory: reuse `holdLockedStore` (`run_sync_lock_test.go:30-52`) for the lock, a real store via `buildStoreFrom` (`run_prune_test.go:79`), `writeSnapshots` (`run_snapshots_test.go:54`) with MORE snapshots than `--keep` and one orphan manifest. Cells text + `--json`; assert L1p, stdout empty, exit 1, every snapshot and the orphan still present. Control arm: same fixture after `release()` deletes (differs in one variable). Must fail at the assertion (exit 0 today)
-- [ ] Step 2: `internal/snapshot/lock.go:18` — signature-only stub `(*Server).LockForPrune(ctx) (func(), error)` so the tests compile
+- [x] Step 1: `cmd/quarry/run_prune_lock_test.go` (new) `Test_run_snapshots_prune_refuses_while_another_writer_holds_the_lock` — through `run()`, real factory: reuse `holdLockedStore` (`run_sync_lock_test.go:30-52`) for the lock, a real store via `buildStoreFrom` (`run_prune_test.go:79`), `writeSnapshots` (`run_snapshots_test.go:54`) with MORE snapshots than `--keep` and one orphan manifest. Cells text + `--json`; assert L1p, stdout empty, exit 1, every snapshot and the orphan still present. Control arm: same fixture after `release()` deletes (differs in one variable). Must fail at the assertion (exit 0 today)
+- [x] Step 2: `internal/snapshot/lock.go:18` — signature-only stub `(*Server).LockForPrune(ctx) (func(), error)` so the tests compile
 
 ### Build
 - [ ] Step 3 (B1): `internal/snapshot/lock.go:10-27`, `internal/snapshot/doc.go:9-11` — `LockForPrune` + L1p const beside `lockHeldSyncMsg` (share the held-check, do not copy it) + doc.go sentence (sync's store build and `Prune` each run under quarry's lock file). Maps `*lockfile.Error` `KindHeld` → `RefusalError{L1p}`; `KindFolderMissing` → no-op release, nil; anything else returned as given; nil locker → no-op. Tests in `lock_test.go` (extend `newLockedServer*` at :18-34 with a prune-mode pair): `Test_lock_for_prune_refuses_with_the_prune_lock_held_line` (holder is sync mode, contender prune mode, L1p text asserted verbatim, differs from L1s), `Test_lock_for_prune_proceeds_unlocked_when_the_quarry_folder_is_missing` (asserts folder still absent; release callable), `Test_lock_for_prune_returns_other_lock_errors_unchanged` (fake Locker returning an error shaped as the adapter's `*lockfile.Error` of a non-held kind, plus a plain error), nil-locker no-op, lock-after-release row. Mutation: `KindFolderMissing` → refusal
@@ -56,3 +56,13 @@ Contract: `quarry snapshots prune` (no `--dry-run`) acquires after usage (2) →
 - A prune test that holds a lock with a sentinel store refuses at the cannot-tell step if the lock arm is mutated away — use a real store (`buildStoreFrom`) so the unlocked arm actually deletes, else the "deletes nothing" claim has no control
 - `defer release()` inside the `if !dryRun` block is function-scoped (fine), but `release, err :=` shadows `err`
 - The Long text is wrapped in the source; pins assert the exact line breaks of `specification.md:88-96`
+
+## Phase report
+
+Run A done (steps 1-2), `<start>` d223b623. Acceptance red at its assertion; nothing else touched.
+
+- `cmd/quarry/run_prune_lock_test.go` (new): `prunableStore` fixture (`newPrunableStore`: five `fiveSnapshots()`, store built from the newest via `buildStoreFrom`, orphan `19990101T000000Z.json`) and `holdLock(t)` (ModeSync lock on `lockPathUnder(storeDirUnder(home))`, returns release, also `t.Cleanup`). B3 reuses both.
+- `Test_run_snapshots_prune_refuses_while_another_writer_holds_the_lock` (text + json cells): RED. text/json: `expected: 1 actual: 0` (exit), stdout `Deleted 2 snapshots (3.5 MB)...` not empty, stderr `""` != L1p, 20260927T143005Z/20260929T090011Z `.sqlite`/`.json` and the orphan gone.
+- `Test_run_snapshots_prune_proceeds_past_a_lock_left_by_an_earlier_run` written here as the control arm (lock acquired then released before run; deletes 2, sweeps orphan): GREEN on arrival, by design. B3's list item of that name is already done; do not re-add.
+- `internal/snapshot/lock.go`: signature-only stub `(*Server).LockForPrune(_ context.Context) (func(), error)` returning `nil, nil` (`//nolint:nilnil`, B1 removes it with the real body). `lockHeldPruneLine` const lives in the cmd test; B1 adds the L1p const in `internal/snapshot`.
+- `golangci-lint run ./cmd/quarry/... ./internal/snapshot/...`: 0 issues. Not yet run: V.
