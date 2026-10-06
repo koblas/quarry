@@ -37,7 +37,7 @@ type Server struct {
 	importer    Importer
 	storeProbe  StoreProbe
 	locker      Locker
-	remove     func(path string) error
+	remove      func(path string) error
 	autoKeep    int
 	ignore      []string
 	readTime    func(store.FindingList) []finding.State

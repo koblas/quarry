@@ -77,6 +77,7 @@ func Test_run_never_replaces_the_store_when_the_build_fails(t *testing.T) {
 				t.Helper()
 				skipAsRoot(t)
 				require.NoError(t, os.Mkdir(filepath.Join(storeDir, "snapshots"), 0o700))
+				require.NoError(t, os.WriteFile(filepath.Join(storeDir, "quarry.lock"), nil, 0o600))
 				require.NoError(t, os.Chmod(storeDir, 0o500))
 				t.Cleanup(func() { _ = os.Chmod(storeDir, 0o700) })
 				return &faultDB{}
@@ -162,7 +163,7 @@ func Test_run_never_replaces_the_store_when_the_build_fails(t *testing.T) {
 				stderr.String())
 			entries, err := os.ReadDir(storeDir)
 			require.NoError(t, err)
-			assert.Equal(t, []string{"quarry.duckdb", "snapshots"}, entryNames(entries))
+			assert.Equal(t, []string{"quarry.duckdb", "quarry.lock", "snapshots"}, entryNames(entries))
 			after, err := os.ReadFile(storePath)
 			require.NoError(t, err)
 			assert.Equal(t, sentinel, after)

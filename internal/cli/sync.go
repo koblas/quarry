@@ -108,6 +108,11 @@ does not read Quicken at all.`,
 			if err != nil {
 				return &runtimeError{err: err}
 			}
+			release, err := srv.LockForSync(cmd.Context())
+			if err != nil {
+				return &runtimeError{err: err}
+			}
+			defer release()
 			home := srv.Home()
 
 			var outcome snapshot.Outcome

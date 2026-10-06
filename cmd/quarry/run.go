@@ -17,6 +17,7 @@ import (
 	"github.com/koblas/quarry/internal/fx"
 	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/mcp"
+	"github.com/koblas/quarry/internal/platform/lockfile"
 	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/snapshot"
@@ -28,6 +29,7 @@ var (
 	_ snapshot.Importer   = (*importer.Server)(nil)
 	_ importer.Store      = (*duckstore.Store)(nil)
 	_ snapshot.StoreProbe = (*duckstore.Store)(nil)
+	_ snapshot.Locker     = (*lockfile.Locker)(nil)
 	_ report.Store        = (*duckstore.Store)(nil)
 
 	_ duckstore.RatesSource = (*fx.Server)(nil)
@@ -72,6 +74,7 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 			snapshot.WithHome(home),
 			snapshot.WithImporter(importer.NewServer(importer.WithStore(st))),
 			snapshot.WithStoreProbe(st),
+			snapshot.WithLocker(lockfile.New(lockPathUnder(storeDir), lockfile.ModeSync)),
 		}, opts...)...)
 		return srv, nil
 	}
@@ -154,6 +157,11 @@ func newMCPServe(info *debug.BuildInfo, opts ...mcp.Option) cli.MCPServeFunc {
 // storeDirUnder is the directory holding quarry's store and snapshots.
 func storeDirUnder(home string) string {
 	return filepath.Join(home, "Library", "Application Support", "quarry")
+}
+
+// lockPathUnder is the writer lock's file in the store directory storeDir.
+func lockPathUnder(storeDir string) string {
+	return filepath.Join(storeDir, "quarry.lock")
 }
 
 // snapshotsDirUnder is the directory holding the snapshots quarry has taken.
