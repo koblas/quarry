@@ -111,6 +111,12 @@ func (s *Server) NetWorth(ctx context.Context, req NetWorthRequest) (NetWorth, e
 		return NetWorth{}, s.readRefusal(ctx, "networth", err)
 	}
 
+	return netWorthFrom(read, req, days), nil
+}
+
+// netWorthFrom is the listing of read, a read on days, as req asks: each day's rows, and their totals in
+// req.Currency.
+func netWorthFrom(read store.NetWorth, req NetWorthRequest, days []time.Time) NetWorth {
 	listing := NetWorth{
 		AsOf: req.AsOf, Window: req.Window, Currency: req.Currency, FirstRate: read.FirstRate,
 		FirstBalance: read.FirstBalance,
@@ -134,7 +140,7 @@ func (s *Server) NetWorth(ctx context.Context, req NetWorthRequest) (NetWorth, e
 	for i := range listing.Dates {
 		listing.Dates[i].Totals = listing.total(listing.Dates[i].Rows)
 	}
-	return listing, nil
+	return listing
 }
 
 // monthEnds is the last day of each month from window.Since's through window.Until, then window.Until

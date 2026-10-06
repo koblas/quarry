@@ -28,5 +28,23 @@ type Summary struct {
 	Change *NetWorthChange
 }
 
-// Summary summarizes req.Month from one read of the store.
-func (s *Server) Summary(context.Context, SummaryRequest) (Summary, error) { return Summary{}, nil }
+// summaryCommand names summary in its refusals; it equals the cli command word.
+const summaryCommand = "summary"
+
+// Summary summarizes req.Month from one read of the store: every section is judged from that read, so a
+// store replaced mid-run cannot mix two builds. It refuses like Status.
+func (s *Server) Summary(ctx context.Context, req SummaryRequest) (Summary, error) {
+	history := store.Window{Since: req.Month.Start.AddDate(0, -1, 0), Until: req.Month.End}
+	days := monthEnds(history)
+	read, err := s.store.Summary(ctx, store.SummaryParams{Through: req.Month.End, Dates: days})
+	if err != nil {
+		return Summary{}, s.readRefusal(ctx, summaryCommand, err)
+	}
+	return Summary{
+		Month:     req.Month,
+		Currency:  req.Currency,
+		Status:    read.Status,
+		Anomalies: anomaliesFrom(read.Charges, nil, nil, AnomaliesRequest{Window: req.Month.Window(), Currency: req.Currency}),
+		NetWorth:  netWorthFrom(read.NetWorth, NetWorthRequest{AsOf: req.Month.End, Window: &history, Currency: req.Currency}, days),
+	}, nil
+}

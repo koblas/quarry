@@ -17,10 +17,10 @@ import (
 var summaryNow = time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 
 func Test_summary_holds_the_months_anomalies_new_recurring_and_net_worth_change(t *testing.T) {
-	hardware := []chargeOpt{paidTo("payee-hw", "Hardware")}
+	hardware := paidTo("payee-hw", "Hardware")
 	charges := slices.Concat(
-		earlierCharges(t, 3, 6000, hardware...),
-		[]store.Charge{chargeOn(t, 0, "2026-09-14", append(hardware, ofAmount(20000))...)},
+		earlierCharges(t, 3, 6000, hardware),
+		[]store.Charge{chargeOn(t, 0, "2026-09-14", hardware, ofAmount(20000))},
 		monthlyEndingOn(t, "2026-09-03", 3, paidTo("payee-tv", "Streaming"), ofAmount(2259)),
 	)
 	slices.SortStableFunc(charges, func(a, b store.Charge) int { return a.Date.Compare(b.Date) })

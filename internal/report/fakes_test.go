@@ -43,6 +43,8 @@ type fakeStore struct {
 	err           error
 	// chargesErr, when set, is what Charges fails with instead of err.
 	chargesErr error
+	// summary, when set, is what Summary returns instead of an answer assembled from the fields above.
+	summary *store.Summary
 }
 
 func (f fakeStore) Status(context.Context) (store.Status, error) { return f.status, f.err }
@@ -141,6 +143,9 @@ func (f fakeStore) Summary(_ context.Context, params store.SummaryParams) (store
 	}
 	if f.summaryReads != nil {
 		*f.summaryReads++
+	}
+	if f.summary != nil {
+		return *f.summary, f.err
 	}
 	charges := f.charges
 	charges.Rows = slices.DeleteFunc(slices.Clone(charges.Rows), func(c store.Charge) bool { return c.Date.After(params.Through) })
