@@ -71,8 +71,12 @@ func (n NetWorth) typeNeedsAnyRate(date NetWorthDate, accountType string) bool {
 	return slices.ContainsFunc(date.Rows, func(row store.NetWorthRow) bool { return row.Type == accountType && n.NeedsRate(row) })
 }
 
-// onlyReportingTotal is date's total in the reporting currency; false unless that is the day's only total.
+// onlyReportingTotal is date's total in the reporting currency, 0 for a day without rows; false unless that is
+// the day's only total.
 func (n NetWorth) onlyReportingTotal(date NetWorthDate) (*big.Int, bool) {
+	if len(date.Rows) == 0 {
+		return new(big.Int), true
+	}
 	if len(date.Totals) != 1 || date.Totals[0].Currency != n.Currency.String() {
 		return nil, false
 	}

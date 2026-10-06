@@ -153,6 +153,22 @@ func Test_change_total_is_no_rate_when_a_day_has_no_total_in_the_reporting_curre
 	assert.Equal(t, []string{"CAD " + noRate}, totalChanges(change))
 }
 
+func Test_change_counts_an_empty_end_day_as_zero(t *testing.T) {
+	change := changeOf(t, money.CAD, cadHeld(endOfAugust, "chequing", 100000))
+
+	require.NotNil(t, change)
+	assert.Equal(t, []string{"CAD chequing -100000"}, typeChanges(change))
+	assert.Equal(t, []string{"CAD -100000"}, totalChanges(change))
+}
+
+func Test_native_change_counts_an_empty_end_day_as_zero(t *testing.T) {
+	change := changeOf(t, money.Native, cadHeld(endOfAugust, "chequing", 100000))
+
+	require.NotNil(t, change)
+	assert.Equal(t, []string{"CAD chequing -100000"}, typeChanges(change))
+	assert.Equal(t, []string{"CAD -100000"}, totalChanges(change))
+}
+
 func Test_change_is_absent_when_the_start_day_has_no_balance(t *testing.T) {
 	change := changeOf(t, money.CAD, cadHeld(endOfSeptember, "chequing", 150000))
 
