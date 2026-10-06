@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-03
-status: open
+status: done
 ---
 
 # SCENARIO-03: Prune refuses while locked and deletes nothing (folds 04, 07, 09)
@@ -36,10 +36,10 @@ Contract: `quarry snapshots prune` (no `--dry-run`) acquires after usage (2) →
 - [x] Step 5 (B3): `cmd/quarry/run.go:109-124` `newSnapshotsFactory` — add `snapshot.WithLocker(lockfile.New(lockPathUnder(storeDir), lockfile.ModePrune))` (the factory is shared with `snapshots` and `--dry-run`: harmless only because neither calls `LockForPrune`; never lock in the factory). Tests in `run_prune_lock_test.go` through `run()`: the folded acceptances (04 dry-run while locked, exit 0, lists what it would delete — control: same listing as `run_prune_dryrun_test.go:17`; 07 table: `--keep 0` → usage line exit 2, malformed config `quicken.path = 12\n` → `configShown`/`configFix` C1 line exit 1, both while locked, stdout empty); `Test_run_snapshots_prune_refuses_with_nothing_beyond_the_cap_while_locked` (count ≤ N → L1p); `Test_run_snapshots_lists_while_a_writer_holds_the_lock` (`snapshots` exit 0); `Test_run_snapshots_prune_says_nothing_to_delete_with_no_quarry_folder_and_creates_nothing` (HOME empty: stdout `Nothing to delete: no snapshots in ~/Library/Application Support/quarry/snapshots`, exit 0, `os.ReadDir(home)` empty); `Test_run_snapshots_prune_proceeds_past_a_lock_left_by_an_earlier_run` (lock file exists, nobody holds it: deletes as normal). Add `Test_run_help_says_only_one_writer_runs_at_a_time` to `run_usage_test.go` pinning both `sync --help` and `snapshots prune --help` Long text at wrap width (sync paragraph follows the auto-prune paragraph; prune paragraph, replaced dry-run line); re-point `run_usage_test.go:44-70` only if it conflicts. Mutations: `ModeSync` in the factory; factory/`List` locking
 
 ### Sweep
-- [ ] Step 6 (V): fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `LockForPrune`; `Locker` doc (`ports.go:76`) already says prune — leave
+- [x] Step 6 (V): fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `LockForPrune`; `Locker` doc (`ports.go:76`) already says prune — leave
 
 ### Verify
-- [ ] Step 7 (V): `.claude/scripts/verify.sh <start> ./internal/snapshot/... ./internal/cli/... ./cmd/quarry/...` + `spec-check.py snapshot-safety`; tick SCENARIO-03 with its acceptance test and 04, 07, 09 with "delivered by SCENARIO-03" lines naming their tests; rewrite STATE.md
+- [x] Step 7 (V): `.claude/scripts/verify.sh <start> ./internal/snapshot/... ./internal/cli/... ./cmd/quarry/...` + `spec-check.py snapshot-safety`; tick SCENARIO-03 with its acceptance test and 04, 07, 09 with "delivered by SCENARIO-03" lines naming their tests; rewrite STATE.md
 
 ## Handoff
 
@@ -59,11 +59,10 @@ Contract: `quarry snapshots prune` (no `--dry-run`) acquires after usage (2) →
 
 ## Phase report
 
-Run B3 done (step 5); all Acceptance and Build steps ticked. `<start>` d223b623, B1 f3f9976f, B2 37349965. Narrow loop green (snapshots `lock`, cli `prune`, cmd/quarry `prune|help|lock`); `golangci-lint run ./cmd/...` 0 issues. Not run: V (full lint, verify.sh, spec tick, STATE.md, `status: done`).
 
-- `cmd/quarry/run.go:109-123` `newSnapshotsFactory`: adds `snapshot.WithLocker(lockfile.New(lockPathUnder(storeDir), lockfile.ModePrune))`; doc comment says only prune acquires it. Acceptance `Test_run_snapshots_prune_refuses_while_another_writer_holds_the_lock` (text and json) is green; it was red at exit 0 before this line.
-- `cmd/quarry/run_prune_lock_test.go`: added `..._prune_dry_run_runs_while_a_writer_holds_the_lock` (listing verbatim as `run_prune_dryrun_test.go:17`), `..._prune_refuses_usage_and_config_before_the_lock` (table: `--keep 0` exit 2, `quicken.path = 12` exit 1), `..._prune_refuses_with_nothing_beyond_the_cap_while_locked`, `Test_run_snapshots_lists_while_a_writer_holds_the_lock`, `..._prune_says_nothing_to_delete_with_no_quarry_folder_and_creates_nothing`. Control `..._proceeds_past_a_lock_left_by_an_earlier_run` left as B1/A had it.
-- `cmd/quarry/run_usage_test.go`: `Test_run_help_says_only_one_writer_runs_at_a_time` (table, sync and prune `--help` Long at wrap width). No existing pin conflicted, nothing re-pointed.
-- Green on arrival (pins on already-built B1/B2 code plus the one wiring line): everything above except the acceptance and the creates-nothing test, which a `ModeSync` wiring turns red.
-- Mutations (backups `$TMPDIR/mut-b3-{run,list,prune}.go.bak`, each restored, diff identical): factory `ModePrune`->`ModeSync` -> creates-nothing test red (`Should be empty, but was [d Library/]`); `List` takes `LockForPrune` -> `Test_run_snapshots_lists_while_a_writer_holds_the_lock` red (exit 1, expected 0); `PlanPrune` takes `LockForPrune` -> `Test_run_snapshots_prune_dry_run_runs_while_a_writer_holds_the_lock` red (exit 1, expected 0). `List` mutation does not redden the dry-run test (PlanPrune does not call `List`), so the plan's "same dry-run test" is reached by the PlanPrune mutation instead.
-- V must: full `golangci-lint`, `verify.sh`, tick 03 + folded 04/07/09 in `specification.md`, `spec-check.py snapshot-safety`, rewrite STATE.md, `status: done`.
+Run V done; scenario complete (`status: done`, all steps ticked). `verify.sh d223b623` rc=0, 0 issues, 0 uncovered added lines; tests +20 (cmd/quarry +8, cli +7, snapshot +5).
+
+- `cmd/quarry/run_prune_lock_test.go`: edge rows now cells over {text, `--json`} (shared `outputCells`, `runQuarry`, `jsonIDs`): dry-run while locked, count <= N while locked, `snapshots` while locked, no quarry folder (exact `--json` document, home stays empty).
+- `cmd/quarry/run.go:107-108` `newSnapshotsFactory` doc cut to 2 lines.
+- Mutations (backups `$TMPDIR/mut-v-*.bak`, restored, diff identical): `!dryRun || *jsonOut` -> dry-run json cell red (`dry_run` false, deleted instead of would_delete), text cell stays green; `KindFolderMissing` mapping dropped -> creates-nothing text and json cells red (exit 1); lock taken only when a plan has work -> nothing-beyond-the-cap text and json cells red (exit 0, stderr empty).
+- `specification.md` ticked 03 and folded 04, 07, 09; `spec-check.py snapshot-safety` OK. STATE.md rewritten.
