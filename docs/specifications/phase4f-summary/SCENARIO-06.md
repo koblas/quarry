@@ -18,8 +18,8 @@ No new port or adapter: nothing to survey. No fallible call and no numeric bound
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: new `cmd/quarry/run_summary_empty_test.go` `Test_run_summary_shows_no_change_in_the_first_month_of_data` — `spendRows` store whose only transactions are in September (template `run_summary_change_test.go:78-96`, clock `summaryClock`), `summary --month 2026-09`; full-document pin: heading, Snapshot/Dates/Findings, section bodies, history table (Aug 31 line date-only, Sep 30 line), then blank line and `No change shown: no account has a balance on 2026-08-31.`, no Change line; stderr empty; fails at the stdout assertion
-- [ ] Step 2: same file `Test_run_summary_says_so_in_a_month_with_no_unusual_charge_and_no_new_recurring_charge` — default month (September), store whose September holds only ordinary charges (non-zero `N charges checked`, none unusual, no series recognized), balances both month ends; pins `No unusually large charges.` + footer, `No new recurring charges.`, normal net worth with Change; stderr empty
+- [x] Step 1: new `cmd/quarry/run_summary_empty_test.go` `Test_run_summary_shows_no_change_in_the_first_month_of_data` — `spendRows` store whose only transactions are in September (template `run_summary_change_test.go:78-96`, clock `summaryClock`), `summary --month 2026-09`; full-document pin: heading, Snapshot/Dates/Findings, section bodies, history table (Aug 31 line date-only, Sep 30 line), then blank line and `No change shown: no account has a balance on 2026-08-31.`, no Change line; stderr empty; fails at the stdout assertion
+- [x] Step 2: same file `Test_run_summary_says_so_in_a_month_with_no_unusual_charge_and_no_new_recurring_charge` — default month (September), store whose September holds only ordinary charges (non-zero `N charges checked`, none unusual, no series recognized), balances both month ends; pins `No unusually large charges.` + footer, `No new recurring charges.`, normal net worth with Change; stderr empty
 
 ### Build
 - [ ] Step 3: `internal/cli/render_summary.go:22-32` `renderSummary` + new `summaryAnomaliesSection`, `summaryRecurringSection`, shared `renderEmptySection(caption, line)` (= `renderTable` with one left-aligned cell, `render_table.go:26-50`); `render_anomalies.go:44` hoist the `"Unusually large charges"` literal to a const both renderers use — quiet-month sections (SCENARIO-07)
@@ -60,3 +60,16 @@ No new port or adapter: nothing to survey. No fallible call and no numeric bound
 - `spendEnv`'s clock refuses `--month 2026-09`; use `summaryClock` (`run_summary_test.go:23`) and `pinLocalZone` where the Snapshot age prints
 
 **Orchestrator rulings 2026-10-06 (pre-dispatch):** all four defaults stand — (1) first-month table is the unchanged history table (Aug 31 date-only, as `quarry networth`), Gherkin "September 30 only" read as only Sep 30 has balances; (2) ruled empty variant wins over anomalies byte-identity for an empty month — the identity invariant holds for non-empty months; (3) native empty lines same sentences, no amounts clause; (4) U6 no branch.
+
+## Phase report
+
+Run A (steps 1-2) done; both acceptance tests red for the planned reason, no production code touched. Start commit 2a38496.
+
+Files: `cmd/quarry/run_summary_empty_test.go` (new): helper `chequingHistoryLine` (one-column history line `%-10s  %8s  %8s`, usable for later cells), `Test_run_summary_shows_no_change_in_the_first_month_of_data` (Employer +10,000.00 on Sep 5, Bakery -20.00 on Sep 10, `--month 2026-09`; chequing only, so Total column width 8), `Test_run_summary_says_so_in_a_month_with_no_unusual_charge_and_no_new_recurring_charge` (Bell Canada history plus Sep 14 -100.00; `1 charge checked`, Change -100.00).
+
+Red (both fail at the stdout `assert.Equal`; stderr empty, exit 0 pass): the diff is exactly the planned one. Actual prints the header rows where the empty lines belong:
+- `Date  Account  Payee  Category  Amount  Usual  Times  Compared with` where `No unusually large charges.` is expected (both tests)
+- `Payee  Currency  Every  Amount  Per year  First  Last  Status  Price changes` where `No new recurring charges.` is expected (both)
+- test 1 only: the trailing `\nNo change shown: no account has a balance on 2026-08-31.\n` is missing; the Aug 31 history line is already date-only.
+
+Notes for next runs: first-month store's single charge counts `1 charge checked` with no not-judged clause (a payee-less-history charge is judged against its category), so the footer pin there has no not-judged part; `Test_summaryAnomaliesSection_says_none_when_no_charge_is_listed` must pin that clause itself (Checked 412, NotJudged 37). The Aug 31 line of a first month prints `2026-08-31` with trailing cells trimmed. Do not edit the acceptance expectations: they are the ruled copy.
