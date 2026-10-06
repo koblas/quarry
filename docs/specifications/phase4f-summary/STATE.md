@@ -1,6 +1,6 @@
 # phase4f-summary — current state
 
-Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds 05, 08, 09, 13, 15), SCENARIO-06 (folds 07), SCENARIO-10 (folds 11), SCENARIO-12. Last updated by SCENARIO-12.
+Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds 05, 08, 09, 13, 15), SCENARIO-06 (folds 07), SCENARIO-10 (folds 11), SCENARIO-12, SCENARIO-14. Last updated by SCENARIO-14.
 
 ## Binding decisions
 - One port call per `Server.Summary`: `SummaryReads.Summary` returns Status, Charges and NetWorth from one open (duckstore `readStatus`/`readCharges`/`readNetWorth` over one `ReadDB`). Snapshot, dates and findings render from `Summary.Status` — never a second `Status`/`NetWorth` call; sync renames the store mid-run, and the cli fake's nil `Status` panics on a second read (SCENARIO-01a, 01b)
@@ -12,7 +12,7 @@ Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds
 - Refusals use command word `summary` (`summary interrupted`); `MonthError{Kind, Value, Example}`, `Error()` is the CLI line without `quarry: ` (SCENARIO-01a)
 - Findings counts are not in `Summary`: `report.CountFindings(Summary.Status, ignore, classification)` as status does (SCENARIO-01a, 01b)
 - Summary is a third config class: loads the config always (ignore list, classification) but refuses an unreadable one only without `--currency`; with it, W2 `document.CannotTellChoices(config.Problem(err))` is held in `summaryChoice.cannotTell` and printed only after the report is read (a refusal prints alone) and `IgnoreKnown=false`. S12's JSON `findings.ignored` null and S16 mirror it (SCENARIO-01b)
-- W1 (config warnings) print before stdout; S14's W4-W6 go after stdout through `emit` after W3, in the spec's order (SCENARIO-01b, 10)
+- W1 (config warnings) print before stdout; W3-W6 go after stdout through `emit`, in order W3, W4, W5, W6 (SCENARIO-01b, 10, 14)
 - Check order: Args (positional, then `--currency` value) → `--month` → config → store (SCENARIO-01b)
 - Empty section bodies are summary-only composers in `render_summary.go` (`summaryAnomaliesSection`, `summaryRecurringSection`, `renderEmptySection`); `renderAnomalies`, `renderRecurringTitled`, `renderNetWorthHistory` and every other command's output stay byte-identical. Empty test is `len(Listed)==0` / `Recurring.Empty()`, not `Checked==0`: all-too-young charges say `No unusually large charges.` above `N charges checked; M had too little history to judge`. An empty month's anomalies section differs from `quarry anomalies` (header row); the byte-identity pin stays on a non-empty month (SCENARIO-06)
 - No-change vs no-balance both key on `NetWorth.Change()==nil`; they differ only by whether the last month end has rows. `renderNetWorthWithChange` indexes `Dates[0]`/`Dates[len-1]` with no length guard: `Server.Summary` always holds both month ends (SCENARIO-06)
@@ -21,12 +21,11 @@ Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds
 - W3 prints through `emit` after stdout, after W2 and only when the stdout write succeeded; W2 stays before stdout. Do not move W2 after it (SCENARIO-10)
 - A nil Change cell prints `no rate` (ruled U5) (SCENARIO-01b)
 - `summary --json` is `document.NewSummary(report.Summary, FindingsTally, warnings)`, key order = struct field order (month, since, until, currency, snapshot, dates, findings, anomalies, recurring, net_worth, warnings); every array is `[]`, `changes` is `{"types":[],"totals":[]}` whenever `Change==nil`, `covers_month` maps covers true / predates false / unknown null, `currency` and `month` via `String()` (`native` for native). `netWorthDates`, `anomalyEntries`, `recurringSeriesEntries`/`recurringTotalEntries` are shared with the other documents (SCENARIO-12)
-- `warnings[]` = W1 absolute, W2 absolute, then `document.SummaryWarnings(summary, again)`: config paths use `config.ProblemAbsolute`/`cfg.WarningsAbsolute` from the one config load, stderr keeps the `~` form; W3 text (CLI tail included) is identical in both formats; stderr lines are the same with and without `--json`. `SummaryWarnings` is the one list S14 extends (slot order W3, then W4-W6). W1 and W2 are mutually exclusive in practice (SCENARIO-12)
+- `warnings[]` = W1 absolute, W2 absolute, then `document.SummaryWarnings(summary, again, advice NativeAdvice)`: config paths use `config.ProblemAbsolute`/`cfg.WarningsAbsolute` from the one config load, stderr keeps the `~` form; W3 text (CLI tail included) is identical in both formats; stderr lines are the same with and without `--json`. W1 and W2 are mutually exclusive in practice (SCENARIO-12)
+- `SummaryWarnings` is the one list: W3, W4 `unconvertedWarnings(Anomalies, chargesNoun)`, W5 same for Recurring with `seriesNoun`, W6 `rateWarnings(NetWorth, advice)`, then `withoutRepeats` (whole list, keeps first, never nil: only the no-rates line repeats; before-first-rate lines differ by noun and all print). W4-W6 are the sibling commands' lines verbatim, no path, no `again` tail; W6 prints once however many types need a rate; native prints none; `--currency USD` swaps currencies as the siblings do. The cli passes `document.NativeFlag`; S16 passes `document.NativeParameter` and `call monthly_summary again` (SCENARIO-14)
 
 ## Left unbuilt
-- Suppression of the empty-window lines of `AnomaliesWarnings` (warnings.go:61-68, fires on `Checked==0`), `RecurringWarnings` (:53-59, fires on `Recurring.Empty()`) and `emptyNetWorthWarnings` — SCENARIO-14 wires W4-W6; `summary.go` calls none today, so SCENARIO-06's empty-stderr pins are green on arrival and must stay green when S14 lands (drop only each warning's last empty-window line, keep left-out/unconverted lines) (SCENARIO-06)
-- W4-W6 and dedupe inside `SummaryWarnings`, and the command-level no-rate matrix (converted `changes.totals[].value` null is pinned at document level only) — SCENARIO-14 (SCENARIO-12)
-- The `summary --json` row in `run_skill_json_fields_test.go:33` `declaredFields` — SCENARIO-17 (with the reference prose); `monthly_summary` MCP tool — SCENARIO-16; SKILL/README/reference/PRD Decisions + MCP row — SCENARIO-16/17 (SCENARIO-12)
+- The `summary --json` row in `run_skill_json_fields_test.go:33` `declaredFields` — SCENARIO-17 (with the reference prose); `monthly_summary` MCP tool and its `NativeParameter` call site and caps — SCENARIO-16; SKILL/README/reference/PRD Decisions + MCP row — SCENARIO-16/17 (SCENARIO-12, 14)
 
 ## Traps
 - `Server.Anomalies`/`Server.Recurring` read Charges through *today*: calling them from Summary costs two full Charges reads and the wrong recurring clock (SCENARIO-01a)
@@ -42,6 +41,8 @@ Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds
 - Native fixture `summaryNativeRows` has no USD-end-day-only account at command level; that arm is pinned in the `changeRows` internal tests (SCENARIO-01b)
 - chargeRows-based cmd/quarry stores (`run_helpers_test.go:142`) record no `TakenAt`, so their summary runs print W3b: five pins in `run_summary_empty_test.go` assert `septemberTimeUnknownWarning`. Covered-snapshot variants use `withSnapshotTaken(rows, summaryTakenAt)` + `pinLocalZone`; `summaryRows`/`seedSummaryStore` stores have `summaryTakenAt` (Oct 1 09:05 EDT, covers September) (SCENARIO-10)
 - cli `executeSummary` defaults a zero fake `TakenAt` to `spendNow` (`cmp.Or`), so fake-based cli tests never reach W3b; it is pinned only at command level. `summaryClock` is UTC: a test that pins `time.Local` and asserts the W3a time builds `now` in that zone (`summaryClockEDT`) (SCENARIO-10)
+- Using `AnomaliesWarnings`/`RecurringWarnings`/`NetWorthWarnings` for W4-W6 leaks their empty-window lines and breaks the empty-stderr pins in `run_summary_empty_test.go`; call `unconvertedWarnings`/`rateWarnings` directly (SCENARIO-14)
+- A `--currency USD` summary of the no-rates CAD store prints the rate lines after W2: tests exercising the unreadable-config path with a bad config use `--currency CAD` (`run_summary_findings_test.go:72`, `run_summary_json_cells_test.go:120`) (SCENARIO-14)
 
 ## Open debts
 - NIT: `cmd/quarry/run_config_test.go:238` `readCommandArgs` lacks `summary`, so the masked-list and acb-adjustment config refusals are unpinned for summary (SCENARIO-12)

@@ -246,6 +246,7 @@ func Test_run_summary_json_in_usd_lists_the_lines_stderr_prints(t *testing.T) {
 
 	doc, _, stderr := runSummaryJSON(t, summaryClock, "--currency", "USD")
 
+	assert.Equal(t, "USD", doc.Currency)
 	require.Len(t, doc.Warnings, 3)
 	assert.Equal(t, warningLines(doc.Warnings), stderr)
 }

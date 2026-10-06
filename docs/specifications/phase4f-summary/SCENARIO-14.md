@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-14
-status: open
+status: done
 ---
 
 # SCENARIO-14: Missing exchange rates are warned about once
@@ -26,10 +26,10 @@ Expected values for the fixture (`summaryNativeRows`, default CAD, no rates; Hul
 - [x] Step 3 (batch 2, command cells): same new cmd file, one case per cell, each text and `--json` where it exists. (a) `--json` of the acceptance store: `warnings` equal the three stderr lines unprefixed, in order; `changes.types` chequing `null`, credit_card `"-22.59"`, `totals` `[{CAD, null}]`; stderr identical with and without `--json`. (b) before-first-rate with charges (`replaceStoreWithRates(summaryNativeRows(), usdRate(day(2026, time.October, 2), …))`): W4 and W5 each print (different nouns, no dedupe), W6 `2 month ends`; text and JSON. (b2) the ruled edge row "Month ends before first rate": new small store, a USD chequing balance on Aug 31 and Sep 30, no USD charge and no new USD series in September, first rate Oct 2: stderr exactly W3b then the W6 `2 month ends` line, anomalies and recurring sections normal, Change `no rate`; text and `--json` (`warnings`, null `changes` cells). (c) order with a config warning (`writeConfig(home, "colour = \"red\"\n")`, as run_summary_json_cells_test.go:133): stderr lines in order W1 (`~` form), W3b, rates lines (order within stderr; stdout is a separate buffer); JSON `warnings` = W1 absolute, W3b, rates lines. (d) order with W2 (unreadable config via `writeConfig` bad value + `--currency CAD`, as :114): W2, W3b, rates lines. (e) `--currency native` on the acceptance store: stderr is W3b only, no rate line, text and JSON. (e2) `--currency USD` on the acceptance store (CAD rows unconvertible, currencies swapped): stderr lines equal `--json` `warnings`; exact text is whatever the sibling builders print, asserted from `anomalies --currency USD` / `networth` output on the same store, not typed from memory. (f) controls already green, re-run: CAD-only `seedSummaryStore` prints no rate lines; the five empty-stderr pins in `run_summary_empty_test.go` (`septemberTimeUnknownWarning` alone) stay green. Fault: unreadable-config row (d) covers the `emitReport` path with write failure unchanged (S12 pin `internal/cli/summary_json_test.go`); no new fallible call.
 
 ### Sweep
-- [ ] Step 4: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comment on `SummaryWarnings` states the slot order W3, W4, W5, W6 and that the empty-window and left-out lines are not part of it.
+- [x] Step 4: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comment on `SummaryWarnings` states the slot order W3, W4, W5, W6 and that the empty-window and left-out lines are not part of it.
 
 ### Verify
-- [ ] Step 5: full verification per agent-briefs.md plus `.claude/scripts/spec-check.py phase4f-summary`; tick SCENARIO-14 with its acceptance test in specification.md; rewrite STATE.md (move W4-W6/dedupe and the suppression item out of Left unbuilt; keep the NativeParameter note for S16); `status: done`.
+- [x] Step 5: full verification per agent-briefs.md plus `.claude/scripts/spec-check.py phase4f-summary`; tick SCENARIO-14 with its acceptance test in specification.md; rewrite STATE.md (move W4-W6/dedupe and the suppression item out of Left unbuilt; keep the NativeParameter note for S16); `status: done`.
 
 ## Handoff
 
@@ -53,10 +53,6 @@ Expected values for the fixture (`summaryNativeRows`, default CAD, no rates; Hul
 
 ## Phase report
 
-Run B1 (steps 2-3, start commit 747f3c6). Acceptance test green; lint 0; whole cmd/quarry, internal/cli, internal/report/... green.
-- `internal/report/document/summary_warnings.go:17` `SummaryWarnings(s, again, advice NativeAdvice)`: W3, W4 `unconvertedWarnings(Anomalies, chargesNoun)`, W5 same for Recurring/`seriesNoun`, W6 `rateWarnings(NetWorth, advice)`, then `withoutRepeats` (whole list, keeps first, never nil). `internal/cli/summary.go:104` passes `document.NativeFlag`. The doc comment on `SummaryWarnings` already states the slot order and the suppression (step 4 only needs lint).
-- Document tests: new `internal/report/document/summary_rate_warnings_test.go` (9 tests incl. 4 suppression rows, advice rows, USD swap, native, order, month-end count); existing W3 table in `summary_test.go:411` takes the new parameter.
-- Command tests appended to `cmd/quarry/run_summary_warnings_test.go` (a, b, b2, c, d, e, e2, each text and --json). Real output matched the plan, except b2's JSON change cells read currency CAD (the reporting currency), not USD.
-- Two existing tests retargeted: `run_summary_findings_test.go:72` and `run_summary_json_cells_test.go:120` ran `--currency USD` on the CAD no-rates store, which now correctly prints the rate lines after W2; they now pass `--currency CAD` (same bad-config path, no rate lines).
-- Mutations run (each restored, diff clean): dedupe removed -> `Test_SummaryWarnings_says_the_store_has_no_rates_once_...` + acceptance; W4/W5 swapped and W6 moved before W5 -> order rows (document) + `Test_run_summary_warns_about_each_kind_dated_before_the_first_rate` (+ json); W4 -> `AnomaliesWarnings` -> `no_charge_checked_in_the_month` and `an_account_named_and_left_out` rows + empty-stderr pins in `run_summary_empty_test.go`; W5 -> `RecurringWarnings` -> `no_series_listed` row + empty pins; advice hard-coded `NativeFlag` -> the two `parameter` rows; W6 dropped -> acceptance; W6 -> `NetWorthWarnings` -> `no_balance_on_either_month_end` row + `Test_run_summary_prints_the_ruled_empty_lines_...`.
-- Next (V): step 4 sweep (lint already 0), step 5 full covered suite + uncovered-diff, spec tick + spec-check, STATE.md rewrite, `status: done`. STATE note: `NativeParameter` is S16's; the two retargeted tests belong in STATE Traps (USD on a no-rates CAD store prints rate lines).
+Run V (start commit ccad5af). Done.
+- Checkpoint pin: `cmd/quarry/run_summary_warnings_test.go:249` `assert.Equal(t, "USD", doc.Currency)` in `Test_run_summary_json_in_usd_lists_the_lines_stderr_prints`. Mutation `NewSummary` Currency emits "CAD" for USD (`internal/report/document/summary.go:76`) -> red (expected "USD", actual "CAD"); restored, diff clean.
+- verify.sh green (build, covered suite, uncovered-diff 0, race, lint 0 issues); spec-check --run OK; SCENARIO-14 ticked; STATE.md rewritten.
