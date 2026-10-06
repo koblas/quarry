@@ -42,6 +42,7 @@ Before the first number in a conversation, run `quarry status --json`.
 | Income by category | `references/sql/income-by-category.sql` |
 | Subscriptions and recurring charges; when they started; price changes | `quarry recurring --json` (`--since 2000` for all history; `new` marks series that started in the period) |
 | Unusually large charges | `quarry anomalies --json` |
+| What happened last month; a monthly summary | `quarry summary --json` (`--month YYYY-MM` for an earlier month) |
 | Find a transaction | `quarry search <text> --json` (with `--account`, `--category`, `--min`, `--max`, `--since`, `--until`) |
 | Account balances | `quarry accounts --json` |
 | Net worth today, on a day, or by month | `quarry networth [--as-of <d> \| --since <d>] --json` |
@@ -108,5 +109,6 @@ Each file below is loaded on demand; read the one the question needs.
 - [Recurring charges and anomalies](references/recurring-and-anomalies.md): how to read `quarry recurring --json` and `quarry anomalies --json`.
 - [Search](references/search.md): `quarry search` text and flags, the `transfer` and `excluded` flags, native-currency amounts and `--limit`.
 - [Findings](references/findings.md): walk the user through the worklist one type at a time, and the fix in Quicken.
+- [Monthly summary job](references/monthly-summary.md): a launchd job that runs quarry sync and quarry summary on the 1st of each month.
 
 Layout and some rules adapted from dweekly/quicken-mac-mcp (MIT); see THIRD_PARTY_NOTICES.

@@ -38,6 +38,7 @@ var skillReferenceLinks = []string{
 	"references/recurring-and-anomalies.md",
 	"references/search.md",
 	"references/findings.md",
+	"references/monthly-summary.md",
 }
 
 var skillLinkTarget = regexp.MustCompile(`\]\(([^)]+)\)`)
@@ -194,6 +195,7 @@ description: Answer questions about the user's own money from their Quicken Clas
 | Income by category | ¤references/sql/income-by-category.sql¤ |
 | Subscriptions and recurring charges; when they started; price changes | ¤quarry recurring --json¤ (¤--since 2000¤ for all history; ¤new¤ marks series that started in the period) |
 | Unusually large charges | ¤quarry anomalies --json¤ |
+| What happened last month; a monthly summary | ¤quarry summary --json¤ (¤--month YYYY-MM¤ for an earlier month) |
 | Find a transaction | ¤quarry search <text> --json¤ (with ¤--account¤, ¤--category¤, ¤--min¤, ¤--max¤, ¤--since¤, ¤--until¤) |
 | Account balances | ¤quarry accounts --json¤ |
 | Net worth today, on a day, or by month | ¤quarry networth [--as-of <d> \| --since <d>] --json¤ |
