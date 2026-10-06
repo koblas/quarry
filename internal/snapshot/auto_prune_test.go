@@ -216,7 +216,7 @@ func Test_sync_and_import_does_not_prune_without_a_keep(t *testing.T) {
 }
 
 // syncBesideOldSnapshots syncs bundle through fake beside three old snapshots and an orphan manifest with a keep of 1.
-func syncBesideOldSnapshots(t *testing.T, fake *fakeImporter, bundle func(testing.TB, string) v9fixture.Bundle) afterBuild {
+func syncBesideOldSnapshots(t *testing.T, fake snapshot.Importer, bundle func(testing.TB, string) v9fixture.Bundle) afterBuild {
 	t.Helper()
 	home := t.TempDir()
 	ids := oldIDs(3)
