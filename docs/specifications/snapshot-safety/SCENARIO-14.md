@@ -54,3 +54,8 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/snapshot`; plus `in
 - `requireNothingDeleted` (auto_prune_test.go:233) asserts `Pruned` nil — wrong here, `Pruned` is non-nil
 - Prune >N refuses before `selectPrune`, so prune cells cannot catch the ID-fallback mutation; only listing cells with a same-ID entry can
 - Expected reasons are literals (`permission denied`, `too many levels of symbolic links`, `not a directory`, `file name too long`), never `osreason.Reason` output; EACCES rows need `skipAsRoot` and a `t.Cleanup` chmod
+
+## Orchestrator rulings (2026-10-06)
+
+- Accepted: in the cannot-tell case auto-prune also skips sweepOrphans (BR-U4 "deletes nothing"; matches prune cannot-tell).
+- Accepted: per-entry stat in entriesAt (list.go:259) stays swallowed (scan/mark race only); stays in Left unbuilt.
