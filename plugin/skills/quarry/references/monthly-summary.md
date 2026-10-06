@@ -4,7 +4,7 @@ Use this when the user wants last month's summary every month without asking: a 
 
 ## Reading the document
 
-Run `quarry summary --json` and read `snapshot` (`covers_month` false or null: the store may lack the end of the month; say so), `findings`, `anomalies`, `recurring`, `net_worth` (with `changes`) and `warnings`; relay the warnings. `month`, `since`, `until` and `currency` say which month the numbers cover and in what currency, and `dates` gives the first and last transaction dates in the store.
+Run `quarry summary --json` and read `snapshot` (`covers_month` false or null: the store may lack the end of the month; say so), `findings`, `anomalies`, `recurring`, `net_worth` (with `changes`) and `warnings`; relay the warnings. `month`, `since`, `until` and `currency` say which month the numbers cover and in what currency, and `dates` gives the first and last transaction dates in the store. SKILL.md sections 2 and 3 set the rules for every number you quote.
 
 ## Run quarry summary every month
 

@@ -82,6 +82,7 @@ func Test_reference_files_state_their_job(t *testing.T) {
 		{"monthly-summary.md", []string{
 			"quarry sync", "quarry summary", "launchd", "StartCalendarInterval", "umask 077", "launchctl bootstrap",
 			"launchctl bootout", "command -v quarry", "only when they ask you to",
+			"SKILL.md sections 2 and 3 set the rules for every number you quote.",
 		}},
 		{"findings.md", append(findingTypeBullets(findingTypesInHelp(t)), []string{
 			"in Quicken, then `quarry sync`", "findings.ignore", "quarry findings --csv", "only when the user asks",

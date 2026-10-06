@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-17
-status: open
+status: done
 ---
 
 # SCENARIO-17: Docs describe the monthly job
@@ -35,10 +35,10 @@ Existing surfaces surveyed (grep, no LSP — markdown): SKILL §4 is pinned byte
 - [x] Step 8 (batch 2, sibling check): `grep -rn "recurring-and-anomalies.md" cmd internal plugin` for any other list that mirrors the reference files; add the new file to each, or say in the phase report that none exists
 
 ### Sweep
-- [ ] Step 9: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (long ruled-copy consts need `//nolint:lll // ruled copy is pinned word for word`, as run_plugin_readme_test.go:38)
+- [x] Step 9: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (long ruled-copy consts need `//nolint:lll // ruled copy is pinned word for word`, as run_plugin_readme_test.go:38)
 
 ### Verify
-- [ ] Step 10: full verification per `.claude/rules/agent-briefs.md` + `.claude/scripts/spec-check.py phase4f-summary` → tick SCENARIO-17 with its acceptance test, rewrite STATE.md (drop the SCENARIO-17 Left-unbuilt line), `status: done`
+- [x] Step 10: full verification per `.claude/rules/agent-briefs.md` + `.claude/scripts/spec-check.py phase4f-summary` → tick SCENARIO-17 with its acceptance test, rewrite STATE.md (drop the SCENARIO-17 Left-unbuilt line), `status: done`
 
 ## Handoff
 
@@ -62,13 +62,8 @@ Unruled copy 1-4: all defaults accepted as written above. 1: add `## Reading the
 
 ## Phase report
 
-Runs B1 and B2 done (steps 1-8 ticked); Sweep/Verify (steps 9-10) left for V.
+Run V done; scenario complete (`status: done`).
 
-- B1: `plugin/skills/quarry/references/monthly-summary.md`, SKILL §4 row and §10 bullet, pins in `run_skill_text_test.go`, `run_skill_references_test.go` (incl. `net_worth` in `toolNamedJSONFields`), `run_skill_json_fields_test.go`.
-- B2: `README.md` `## Run a monthly summary` between Claude Code and Credits; `docs/initial-prd.md` Decisions bullet after `Command names`; `run_skill_monthly_summary_test.go` `Test_readme_monthly_summary_section_is_verbatim_between_claude_code_and_credits` + `readmeMonthlySummarySection` + link-target check; `run_skill_use_cases_test.go` `what happened last month` use case (`summary --json`, asserts `Month == "2026-08"` under spendEnv's 2026-09-29 clock).
-- Step 8 sibling check: no Go list mirrors the reference files besides `skillReferenceLinks` (B1) and the derived drift tests. `docs/initial-prd.md:219` and `run_plugin_notices_test.go:24` pin a prose list of references that already omits `monthly-summary.md`, `net-worth.md` and `investments.md` is stale; left untouched (not in plan, pinned byte for byte by that test).
-- Green: `go test ./cmd/quarry/ -run 'skill|reference|readme|declared|use_case|monthly_summary_job|field|plugin|notices'` ok; acceptance test passes; `golangci-lint run ./cmd/quarry/...` 0 issues.
-- Mutation (README section appended after `## Credits`, restored, diffed identical): acceptance test red at `assert.Less(section, credits)` ("1909" is not less than "1588"); the section test red at its `require` ("a section must follow the monthly summary section"), since Credits is the last heading.
-- Do not redo: V runs `verify.sh e93da76 ./cmd/quarry/...`, spec tick with the acceptance test, STATE.md rewrite (drop the SCENARIO-17 Left-unbuilt line), `status: done`.
-
-Checkpoint ruling (orchestrator): finding 2 copy = sibling sentence verbatim, appended as the last sentence of the `## Reading the document` paragraph: "SKILL.md sections 2 and 3 set the rules for every number you quote." Docs-only one-sentence change folded into V, pin red first.
+- Checkpoint folds: `cmd/quarry/run_skill_monthly_summary_test.go` `Test_monthly_summary_reference_carries_the_launchd_recipe_to_the_end_of_the_file` pins the reference from `## Run quarry summary every month` to EOF (`monthlySummaryRecipe`); acceptance test drops the README ordering asserts (the README section test owns them), guards `len(lines) >= 3`, and asserts the PRD bullet on the line right after `- Command names:`.
+- Docs fold: `monthly-summary.md` `## Reading the document` ends with "SKILL.md sections 2 and 3 set the rules for every number you quote."; pinned in `Test_reference_files_state_their_job` (red before the sentence, green after).
+- Mutations (backup `$TMPDIR/mut-v-monthly-summary.md.bak`, restored, diffed identical): the `&amp;` in the plist's `2>&amp;1` turned into a bare `&` and the `launchctl kickstart` line dropped, each red at the recipe test's `assert.Equal`.

@@ -34,14 +34,24 @@ func Test_monthly_summary_job_is_documented_where_a_reader_looks(t *testing.T) {
 	assert.Equal(t, monthlySummaryCell, cell)
 	assert.Contains(t, skill, "\n"+monthlySummaryBullet+"\n")
 	lines := strings.Split(repoFile(t, monthlySummaryRef), "\n")
+	require.GreaterOrEqual(t, len(lines), 3)
 	assert.Equal(t, "# Monthly summary job", lines[0])
 	assert.Equal(t, monthlySummaryUse, lines[2])
-	claudeCode := strings.Index(readme, "\n"+readmeClaudeCodeHeading+"\n")
-	section := strings.Index(readme, "\n"+monthlySummaryHeading+"\n")
-	credits := strings.Index(readme, "\n"+readmeCreditsHeading+"\n")
-	assert.Less(t, claudeCode, section)
-	assert.Less(t, section, credits)
-	assert.Contains(t, prd, "\n"+monthlySummaryDecision+"\n")
+	assert.Contains(t, readme, "\n"+monthlySummaryHeading+"\n")
+	_, afterCommandNames, found := strings.Cut(prd, "\n- Command names:")
+	require.True(t, found, "the PRD Decisions list must carry the Command names bullet")
+	_, nextLines, _ := strings.Cut(afterCommandNames, "\n")
+	assert.Equal(t, monthlySummaryDecision, strings.SplitN(nextLines, "\n", 2)[0])
+}
+
+func Test_monthly_summary_reference_carries_the_launchd_recipe_to_the_end_of_the_file(t *testing.T) {
+	text := repoFile(t, monthlySummaryRef)
+	start := strings.Index(text, "\n## Run quarry summary every month\n")
+	require.GreaterOrEqual(t, start, 0, "the reference must carry the recipe heading")
+
+	recipe := text[start+1:]
+
+	assert.Equal(t, ticks(monthlySummaryRecipe)+"\n", recipe)
 }
 
 func Test_readme_monthly_summary_section_is_verbatim_between_claude_code_and_credits(t *testing.T) {
@@ -66,3 +76,45 @@ func Test_readme_monthly_summary_section_is_verbatim_between_claude_code_and_cre
 const readmeMonthlySummarySection = `## Run a monthly summary
 
 ¤quarry summary¤ prints last month's unusual charges, new recurring charges, net worth change and findings. To get it every month, follow [plugin/skills/quarry/references/monthly-summary.md](plugin/skills/quarry/references/monthly-summary.md).`
+
+// Ruled copy: the launchd recipe, from its heading to the end of the file, byte for byte.
+const monthlySummaryRecipe = `## Run quarry summary every month
+
+1. Find quarry's full path with ¤command -v quarry¤ (for example /Users/you/go/bin/quarry).
+   launchd does not use your shell's PATH.
+2. Save this as ~/Library/LaunchAgents/com.github.koblas.quarry.summary.plist, with both
+   /Users/you/go/bin/quarry replaced by that path:
+
+¤¤¤xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.github.koblas.quarry.summary</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>umask 077; mkdir -p "$HOME/Library/Logs/quarry"; { /Users/you/go/bin/quarry sync; /Users/you/go/bin/quarry summary; } >>"$HOME/Library/Logs/quarry/summary.log" 2>&amp;1</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Day</key><integer>1</integer>
+    <key>Hour</key><integer>9</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+</dict>
+</plist>
+¤¤¤
+
+3. Load it:      launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.github.koblas.quarry.summary.plist
+4. Try it now:   launchctl kickstart gui/$(id -u)/com.github.koblas.quarry.summary
+   then read ~/Library/Logs/quarry/summary.log.
+5. To stop it:   launchctl bootout gui/$(id -u)/com.github.koblas.quarry.summary
+
+quarry sync needs Quicken running with your file open. If Quicken was closed when the job ran,
+the log shows sync's error line, then a summary that warns its snapshot was taken before the
+month ended; open your Quicken file and run ¤quarry sync; quarry summary¤ in a terminal.
+If the Mac is asleep at 9:00 on the 1st, launchd runs the job when it wakes.
+The log holds your payees, amounts and net worth; umask 077 keeps it readable only by you.`

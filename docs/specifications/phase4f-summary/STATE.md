@@ -1,6 +1,6 @@
 # phase4f-summary — current state
 
-Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds 05, 08, 09, 13, 15), SCENARIO-06 (folds 07), SCENARIO-10 (folds 11), SCENARIO-12, SCENARIO-14, SCENARIO-16. Last updated by SCENARIO-16.
+Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds 05, 08, 09, 13, 15), SCENARIO-06 (folds 07), SCENARIO-10 (folds 11), SCENARIO-12, SCENARIO-14, SCENARIO-16, SCENARIO-17. Last updated by SCENARIO-17.
 
 ## Binding decisions
 - One port call per `Server.Summary`: `SummaryReads.Summary` returns Status, Charges and NetWorth from one open (duckstore `readStatus`/`readCharges`/`readNetWorth` over one `ReadDB`). Snapshot, dates and findings render from `Summary.Status` — never a second `Status`/`NetWorth` call; sync renames the store mid-run, and the cli fake's nil `Status` panics on a second read (SCENARIO-01a, 01b)
@@ -26,7 +26,7 @@ Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds
 - `monthly_summary` (`internal/mcp/summary.go`, registered last): `now := s.now()` once (local zone, no `.UTC()`) → `ParseMonth` → `summaryChoices` (config loaded ONCE, never `resolveCurrency`: readable config always feeds ignore, classification, W1 even with `currency`; unreadable refuses only without it, W2 + `IgnoreKnown=false` with it) → one `srv.Summary` → `document.NewSummary`, warnings `slices.Concat(W1/W2, SummaryWarnings)`, then `capList` charges (line first) then series at 500, advice `pass an earlier or later month`. `month` is a plain string schema (a `pattern` would pre-empt the ruled isError text); refusal text from `MonthError` parts, never `Error()`; stderr is the class line `refused the call's month; details went to the client only`. `instructions` unchanged. `resolveCurrency` (spending.go:51) now uses shared `parseCurrency`, behaviour-identical (SCENARIO-16)
 
 ## Left unbuilt
-- The `summary --json` row in `run_skill_json_fields_test.go:33` `declaredFields`, `references/monthly-summary.md`, SKILL §4/§10 rows, README section, PRD Decisions row — SCENARIO-17 (SCENARIO-12, 16)
+- Hand verification of `$HOME` in a LaunchAgent's `sh -c`, TCC on `~/Documents/*.quicken`, `bootstrap`/`kickstart` on macOS 26, and the real-month reference check — SCENARIO-18 (orchestrator, `REFERENCE-CHECK.md`); the reference asserts nothing beyond the ruled copy (SCENARIO-17)
 
 ## Traps
 - `Server.Anomalies`/`Server.Recurring` read Charges through *today*: calling them from Summary costs two full Charges reads and the wrong recurring clock (SCENARIO-01a)
@@ -46,8 +46,10 @@ Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds
 - A `--currency USD` summary of the no-rates CAD store prints the rate lines after W2: tests exercising the unreadable-config path with a bad config use `--currency CAD` (`run_summary_findings_test.go:72`, `run_summary_json_cells_test.go:120`) (SCENARIO-14)
 
 - `toolClock` (2026-09-29) makes the MCP default month August and `month: 2026-09` not ended: tool tests use `atSummaryToday()` (internal/mcp) or `startMCPAt` + `summaryClock` (cmd/quarry); a UTC-vs-local clock is pinned by `Test_monthly_summary_defaults_to_the_month_before_the_callers_local_month` (SCENARIO-16)
+- `monthly-summary.md` is pinned three ways: lines 1-3 and the recipe from `## Run quarry summary every month` to EOF byte for byte (`run_skill_monthly_summary_test.go`), plus the phrase row in `Test_reference_files_state_their_job`; any edit to the recipe or its trailing prose edits `monthlySummaryRecipe` too. `Test_references_name_no_mcp_tool` fails on a code span equal to `monthly_summary` (SCENARIO-17)
 - `fakeStore` and `stallingStore` embed a nil `report.Store`: a tool whose port method is not overridden panics every test touching it (SCENARIO-16)
 
 ## Open debts
+- Pre-existing, out of scope: the stale prose reference list at `docs/initial-prd.md:219` and `cmd/quarry/run_plugin_notices_test.go:24` omits `monthly-summary.md` and still says net-worth/investments arrive with Phase 4 (SCENARIO-17)
 - NIT: `cmd/quarry/run_config_test.go:238` `readCommandArgs` lacks `summary`, so the masked-list and acb-adjustment config refusals are unpinned for summary (SCENARIO-12)
 - No other checkpoint MINOR/NIT left unfolded
