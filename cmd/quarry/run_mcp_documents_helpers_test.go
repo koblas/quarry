@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"slices"
@@ -28,6 +29,7 @@ type toolDocumentRun struct {
 	cliArgs   []string
 	tool      string
 	arguments map[string]any
+	now       time.Time // both surfaces' clock; zero is toolClock
 }
 
 // toolDocuments are both surfaces' answers to one run: the compact document minus its warnings, and the warnings.
@@ -36,7 +38,7 @@ type toolDocuments struct {
 	cliWarnings, toolWarnings []string
 }
 
-// runBothSurfaces runs c's CLI command with --json and c's tool call over one store, the clock fixed at toolClock.
+// runBothSurfaces runs c's CLI command with --json and c's tool call over one store, the clock fixed at c.now.
 func runBothSurfaces(t *testing.T, c toolDocumentRun) toolDocuments {
 	t.Helper()
 	home := t.TempDir()
@@ -45,11 +47,12 @@ func runBothSurfaces(t *testing.T, c toolDocumentRun) toolDocuments {
 	if c.config != "" {
 		writeConfig(t, home, c.config)
 	}
+	now := cmp.Or(c.now, toolClock)
 	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
 	defer cancel()
 	var stdout, stderr bytes.Buffer
-	require.Equal(t, 0, runWith(ctx, slices.Concat(c.cliArgs, []string{"--json"}), spendEnvAt(&stdout, &stderr, toolClock)), stderr.String())
-	peer := startClockedMCP(ctx, t)
+	require.Equal(t, 0, runWith(ctx, slices.Concat(c.cliArgs, []string{"--json"}), spendEnvAt(&stdout, &stderr, now)), stderr.String())
+	peer := startMCPAt(ctx, t, now)
 	result, err := peer.session.CallTool(ctx, &sdk.CallToolParams{Name: c.tool, Arguments: c.arguments})
 	require.NoError(t, err)
 	require.NoError(t, peer.session.Close())
@@ -65,8 +68,14 @@ func runBothSurfaces(t *testing.T, c toolDocumentRun) toolDocuments {
 // startClockedMCP connects a client to quarry mcp over the HOME the test set, its clock fixed at toolClock.
 func startClockedMCP(ctx context.Context, t *testing.T) *mcpPeer {
 	t.Helper()
+	return startMCPAt(ctx, t, toolClock)
+}
+
+// startMCPAt is startClockedMCP with the clock fixed at now.
+func startMCPAt(ctx context.Context, t *testing.T, now time.Time) *mcpPeer {
+	t.Helper()
 	return startMCP(ctx, t, func(env *cli.Env) {
-		env.ServeMCP = newMCPServe(nil, mcp.WithClock(func() time.Time { return toolClock }))
+		env.ServeMCP = newMCPServe(nil, mcp.WithClock(func() time.Time { return now }))
 	})
 }
 
