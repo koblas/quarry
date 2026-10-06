@@ -105,7 +105,7 @@ func Test_run_sync_refuses_an_unusable_lock_file_with_a_fix(t *testing.T) {
 	}
 }
 
-func Test_run_sync_refuses_when_the_quarry_folder_cannot_be_created_with_a_fix(t *testing.T) {
+func Test_run_sync_refuses_with_a_fix_when_it_cannot_create_the_folder_for_its_lock(t *testing.T) {
 	for _, cell := range outputCells {
 		t.Run(cell.name, func(t *testing.T) {
 			skipAsRoot(t)
