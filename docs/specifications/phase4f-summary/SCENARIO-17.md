@@ -55,3 +55,7 @@ Existing surfaces surveyed (grep, no LSP — markdown): SKILL §4 is pinned byte
 - SKILL §4 and §10 are pinned byte for byte and link order is pinned: edit SKILL.md and the consts in one batch or the batch is red.
 - `unmentionedNames` requires each declared field in backticks in the reference prose; a `declaredFields` row without the prose section fails.
 - plist fence lines carry the absolute `/Users/you/go/bin/quarry`, a token that is not `quarry`, so the drift scan skips them; the `quarry sync; quarry summary` span is scanned and must resolve.
+
+## Orchestrator rulings (2026-10-06)
+
+Unruled copy 1-4: all defaults accepted as written above. 1: add `## Reading the document` to monthly-summary.md naming every summary --json top-level field in backticks; keep the declaredFields row. 2-4: defaults as listed.
