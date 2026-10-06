@@ -7,6 +7,7 @@
 | SCENARIO-01b (+05, 08, 09, 13, 15) | code-first | A, B1, B2, fix, V (+ orchestrator: interim --json refusal, nil Change `no rate`, W2 placement, currency-before-month, summary kept out of currency loops until S12) | 0/6/4/0 | yes (W2 printed before store open — production) + folded into V (5 pin-only MAJORs: openReport fault, home-unset row, W1, W2 shape, currency cells) |
 | SCENARIO-06 (+07) | code-first | A, B1, B2, V (+ orchestrator: 4 plan defaults) | 0/0/2/0 | folded into V (2 MINORs: end-to-end not-judged footer, doc trim) |
 | SCENARIO-10 (+11) | code-first | A, B1, V (+ orchestrator: 5 plan defaults) | 0/1/2/1 | folded into V (1 pin-only MAJOR: covered snapshot + no transactions/first month → empty stderr; zone pin, doc wraps) |
+| SCENARIO-12 | code-first | A, B1, V (+ orchestrator: 6 defaults; currency-test deletion) | 0/2/2/2 | folded into V (2 pin-only MAJORs: change-entry key order, --currency USD × --json currency; doc trim; spec example fixed≥newly_fixed) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
