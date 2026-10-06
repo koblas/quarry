@@ -6,7 +6,6 @@ import (
 	"context"
 	"io"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -134,53 +133,6 @@ func Test_summary_reads_the_month_it_was_asked_for_in_the_currency_it_was_asked_
 	assert.Contains(t, stdout.String(), "Summary of July 2026 (2026-07-01 to 2026-07-31), amounts in USD\n")
 }
 
-func Test_summary_refuses_a_currency_that_is_not_cad_usd_or_native(t *testing.T) {
-	cases := []struct {
-		name  string
-		value string
-	}{
-		{name: "another currency", value: "EUR"},
-		{name: "an empty value", value: ""},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			err := executeSummary(t, fakeReportStore{}, cadConfig, &stdout, &stderr, "--currency="+c.value)
-
-			var usage cli.UsageError
-			require.ErrorAs(t, err, &usage)
-			require.EqualError(t, err, badCurrencyFlag)
-			assert.Empty(t, stdout.String())
-		})
-	}
-}
-
-func Test_summary_shows_amounts_in_the_currency_it_was_given(t *testing.T) {
-	cases := []struct {
-		name        string
-		value       string
-		wantHeading string
-	}{
-		{name: "CAD", value: "CAD", wantHeading: "Summary of August 2026 (2026-08-01 to 2026-08-31), amounts in CAD\n"},
-		{name: "USD", value: "USD", wantHeading: "Summary of August 2026 (2026-08-01 to 2026-08-31), amounts in USD\n"},
-		{name: "lower case", value: "usd", wantHeading: "Summary of August 2026 (2026-08-01 to 2026-08-31), amounts in USD\n"},
-		{name: "native names no currency", value: "native", wantHeading: "Summary of August 2026 (2026-08-01 to 2026-08-31)\n"},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			err := executeSummary(t, fakeReportStore{}, cadConfig, &stdout, &stderr, "--currency", c.value)
-
-			require.NoError(t, err)
-			assert.True(t, strings.HasPrefix(stdout.String(), c.wantHeading), stdout.String())
-		})
-	}
-}
-
 func Test_summary_warns_and_prints_when_the_config_is_unreadable_and_currency_is_given(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	unreadable := func(string) (config.Config, error) { return config.Config{}, errConfigRead }
@@ -219,31 +171,6 @@ func Test_summary_reads_the_config_once_even_with_the_currency_flag(t *testing.T
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"summary"}, asked)
-}
-
-func Test_summary_reads_the_config_once_without_the_currency_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	var asked []string
-	load := func(name string) (config.Config, error) {
-		asked = append(asked, name)
-
-		return cadConfig(name)
-	}
-
-	err := executeSummary(t, fakeReportStore{}, load, &stdout, &stderr)
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{"summary"}, asked)
-}
-
-func Test_summary_refuses_a_positional_argument_before_the_currency_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := cli.Execute(t.Context(), []string{"summary", "extra", "--currency", "EUR"}, refusedEnv(&stdout, &stderr))
-
-	var usage cli.UsageError
-	require.ErrorAs(t, err, &usage)
-	assert.EqualError(t, err, "summary takes no arguments")
 }
 
 func Test_summary_prints_the_configs_warnings_on_stderr_with_or_without_the_currency_flag(t *testing.T) {
@@ -392,17 +319,6 @@ func Test_summary_reads_the_clock_once(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), "Snapshot  20260926T120000Z, taken ")
 	assert.Contains(t, stdout.String(), " (3 days ago)\n")
-}
-
-func Test_summary_refuses_json_until_its_document_exists(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeSummary(t, fakeReportStore{}, cadConfig, &stdout, &stderr, "--json")
-
-	var usage cli.UsageError
-	require.ErrorAs(t, err, &usage)
-	require.EqualError(t, err, "summary --json is not available yet")
-	assert.Empty(t, stdout.String())
 }
 
 // findingsFixture builds the findings of one store: open of them (the first openNew found by the latest

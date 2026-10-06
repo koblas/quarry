@@ -9,6 +9,16 @@ import (
 // snapshotTakenLayout is the format of the moment a snapshot was taken.
 const snapshotTakenLayout = "2006-01-02 15:04 MST"
 
+// SummaryWarnings is the summary's own warnings, never nil: the snapshot warning when it has one. Text stderr
+// and --json read this one list, so the two formats cannot disagree; again is as for SnapshotWarning.
+func SummaryWarnings(s report.Summary, again string) []string {
+	warnings := []string{}
+	if warning := SnapshotWarning(s, again); warning != "" {
+		warnings = append(warnings, warning)
+	}
+	return warnings
+}
+
 // SnapshotWarning says why s may be missing part of its month: "" when the snapshot covers the month, else
 // the warning for a snapshot taken before the month ended or whose time is unknown. again is the surface's
 // phrase for repeating the report, such as "run quarry summary again"; the first warning ends with it.

@@ -21,7 +21,7 @@ import (
 const badCurrencyFlag = "--currency must be CAD, USD or native"
 
 // genericCurrencyCommands are the commands whose --currency takes CAD, USD or native.
-var genericCurrencyCommands = []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth"}
+var genericCurrencyCommands = []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth", "summary"}
 
 // currencyCommands are the commands that take --currency; acb takes CAD only.
 var currencyCommands = append(slices.Clone(genericCurrencyCommands), "acb")

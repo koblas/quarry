@@ -43,6 +43,18 @@ type NetWorthTotal struct {
 // (the resolved since, the clamped until) for a history. Dates, balances, totals and warnings are []
 // rather than null when n holds none.
 func NewNetWorth(n report.NetWorth, warnings []string) NetWorth {
+	doc := NetWorth{Currency: n.Currency.String(), Dates: netWorthDates(n), Warnings: append([]string{}, warnings...)}
+	format := func(d time.Time) string { return d.Format(DateLayout) }
+	if n.Window == nil {
+		doc.AsOf = nullable(&n.AsOf, format)
+		return doc
+	}
+	doc.Since, doc.Until = nullable(&n.Window.Since, format), nullable(&n.Window.Until, format)
+	return doc
+}
+
+// netWorthDates is n's "dates": one entry per day asked for, its balances and totals [] rather than null.
+func netWorthDates(n report.NetWorth) []NetWorthDate {
 	dates := make([]NetWorthDate, len(n.Dates))
 	for i, d := range n.Dates {
 		balances := make([]NetWorthBalance, len(d.Rows))
@@ -57,12 +69,5 @@ func NewNetWorth(n report.NetWorth, warnings []string) NetWorth {
 		}
 		dates[i] = NetWorthDate{Date: d.Date.Format(DateLayout), Balances: balances, Totals: totals}
 	}
-	doc := NetWorth{Currency: n.Currency.String(), Dates: dates, Warnings: append([]string{}, warnings...)}
-	format := func(d time.Time) string { return d.Format(DateLayout) }
-	if n.Window == nil {
-		doc.AsOf = nullable(&n.AsOf, format)
-		return doc
-	}
-	doc.Since, doc.Until = nullable(&n.Window.Since, format), nullable(&n.Window.Until, format)
-	return doc
+	return dates
 }

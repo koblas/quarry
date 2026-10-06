@@ -131,7 +131,7 @@ func Test_run_summary_json_prints_the_ruled_document(t *testing.T) {
 	assert.Equal(t, "CAD", doc.Currency)
 	assert.Equal(t, summarySnapshotJSON{ID: "20261001T130512Z", TakenAt: new("2026-10-01T13:05:12Z"), CoversMonth: new(true)}, doc.Snapshot)
 	assert.Equal(t, summaryDatesJSON{First: new("2026-01-02"), Last: new("2026-09-15")}, doc.Dates)
-	assert.Equal(t, summaryFindingsJSON{Open: 2, Ignored: new(0), Fixed: 0, New: 1, NewlyFixed: 1}, doc.Findings)
+	assert.Equal(t, summaryFindingsJSON{Open: 2, Ignored: new(0), Fixed: 1, New: 1, NewlyFixed: 1}, doc.Findings)
 	assert.Equal(t, 2, doc.Anomalies.Checked)
 	assert.Equal(t, 0, doc.Anomalies.NotJudged)
 	require.Len(t, doc.Anomalies.Charges, 1)

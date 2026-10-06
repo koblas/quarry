@@ -54,10 +54,7 @@ const tenthsPerMultiple = 10.0
 // NewAnomalies converts a into anomalies' document with warnings; every array is []
 // rather than null when a holds none.
 func NewAnomalies(a report.Anomalies, warnings []string) Anomalies {
-	listed := make([]Anomaly, len(a.Listed))
-	for i, an := range a.Listed {
-		listed[i] = anomalyEntry(an)
-	}
+	listed := anomalyEntries(a)
 	return Anomalies{
 		Since:         a.Window.Since.Format(DateLayout),
 		Until:         a.Window.Until.Format(DateLayout),
@@ -68,6 +65,15 @@ func NewAnomalies(a report.Anomalies, warnings []string) Anomalies {
 		NotJudged:     a.NotJudged,
 		Warnings:      append([]string{}, warnings...),
 	}
+}
+
+// anomalyEntries is a's listed anomalies as document entries, [] when there are none.
+func anomalyEntries(a report.Anomalies) []Anomaly {
+	listed := make([]Anomaly, len(a.Listed))
+	for i, an := range a.Listed {
+		listed[i] = anomalyEntry(an)
+	}
+	return listed
 }
 
 // anomalyEntry is the document entry for an.

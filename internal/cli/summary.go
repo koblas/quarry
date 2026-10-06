@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"slices"
 	"time"
 
 	"github.com/koblas/quarry/internal/config"
@@ -15,9 +16,6 @@ const summaryCommand = "summary"
 
 // summaryMonthFlagName is the name of summary's --month flag.
 const summaryMonthFlagName = "month"
-
-// summaryJSONRefusal is what --json gets until summary has a document to print.
-const summaryJSONRefusal = "summary --json is not available yet"
 
 // newSummaryCommand builds summary: one month's unusually large charges, new recurring charges, net worth and findings.
 func newSummaryCommand(newReport ReportFactory, loadConfig ConfigLoader, now func() time.Time, jsonOut *bool) *cobra.Command {
@@ -70,10 +68,6 @@ together.`,
   quarry summary --json`,
 		Args: currency.args,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if *jsonOut {
-				return UsageError{msg: summaryJSONRefusal}
-			}
-
 			at := now()
 			var given *string
 			named := cmd.Flags().Changed(summaryMonthFlagName)
@@ -107,11 +101,12 @@ together.`,
 			if choices.cannotTell != "" {
 				printConfigWarnings(cmd, []string{choices.cannotTell})
 			}
-			var warnings []string
-			if warning := document.SnapshotWarning(summary, summaryAgain(resolved, named)); warning != "" {
-				warnings = append(warnings, warning)
-			}
-			return emit(cmd, []byte(renderSummary(summary, findings, at)), "quarry: warning: ", warnings)
+			own := document.SummaryWarnings(summary, summaryAgain(resolved, named))
+			return emitReport(cmd, *jsonOut, own,
+				func() ([]byte, error) {
+					return renderSummaryJSON(summary, findings, withConfigWarnings(choices.configWarningsAbsolute(), own))
+				},
+				func() string { return renderSummary(summary, findings, at) })
 		},
 	}
 	cmd.Flags().StringVar(&month, summaryMonthFlagName, "", "summarize month `YYYY-MM` instead of last month; it must have ended")
@@ -130,13 +125,26 @@ func summaryAgain(month report.Month, named bool) string {
 
 // summaryChoice is what the config file decides for a summary: its currency and the findings choices. ignoreKnown
 // is false when the file could not be read, so no ignored count can be said, and cannotTell then holds the
-// warning saying why: it is printed only once the summary has been read, so a refusal stands alone.
+// warning saying why: it is printed only once the summary has been read, so a refusal stands alone. The
+// Absolute fields are the same warnings with the config file named by its absolute path, for --json.
 type summaryChoice struct {
-	currency       money.Currency
-	ignore         []string
-	classification report.Classification
-	ignoreKnown    bool
-	cannotTell     string
+	currency           money.Currency
+	ignore             []string
+	classification     report.Classification
+	ignoreKnown        bool
+	cannotTell         string
+	cannotTellAbsolute string
+	warningsAbsolute   []string
+}
+
+// configWarningsAbsolute is the config's --json warnings: its own, then the cannot-tell one when the file
+// could not be read.
+func (c summaryChoice) configWarningsAbsolute() []string {
+	warnings := slices.Clone(c.warningsAbsolute)
+	if c.cannotTellAbsolute != "" {
+		warnings = append(warnings, c.cannotTellAbsolute)
+	}
+	return warnings
 }
 
 // summaryChoices loads the config once and prints its warnings. An unreadable config is a runtimeError, or
@@ -147,13 +155,18 @@ func summaryChoices(cmd *cobra.Command, loadConfig ConfigLoader, currency curren
 		if !cmd.Flags().Changed(currencyFlagName) {
 			return summaryChoice{}, &runtimeError{err: err}
 		}
-		return summaryChoice{currency: currency.in(cmd, config.Config{}), cannotTell: document.CannotTellChoices(config.Problem(err))}, nil
+		return summaryChoice{
+			currency:           currency.in(cmd, config.Config{}),
+			cannotTell:         document.CannotTellChoices(config.Problem(err)),
+			cannotTellAbsolute: document.CannotTellChoices(config.ProblemAbsolute(err)),
+		}, nil
 	}
 	printConfigWarnings(cmd, cfg.Warnings)
 	return summaryChoice{
-		currency:       currency.in(cmd, cfg),
-		ignore:         cfg.Ignore,
-		classification: classificationOf(cfg),
-		ignoreKnown:    true,
+		currency:         currency.in(cmd, cfg),
+		ignore:           cfg.Ignore,
+		classification:   classificationOf(cfg),
+		ignoreKnown:      true,
+		warningsAbsolute: cfg.WarningsAbsolute,
 	}, nil
 }
