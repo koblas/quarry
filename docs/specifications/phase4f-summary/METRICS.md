@@ -8,6 +8,7 @@
 | SCENARIO-06 (+07) | code-first | A, B1, B2, V (+ orchestrator: 4 plan defaults) | 0/0/2/0 | folded into V (2 MINORs: end-to-end not-judged footer, doc trim) |
 | SCENARIO-10 (+11) | code-first | A, B1, V (+ orchestrator: 5 plan defaults) | 0/1/2/1 | folded into V (1 pin-only MAJOR: covered snapshot + no transactions/first month → empty stderr; zone pin, doc wraps) |
 | SCENARIO-12 | code-first | A, B1, V (+ orchestrator: 6 defaults; currency-test deletion) | 0/2/2/2 | folded into V (2 pin-only MAJORs: change-entry key order, --currency USD × --json currency; doc trim; spec example fixed≥newly_fixed) |
+| SCENARIO-14 | code-first | A, B1, V (+ orchestrator: 3 defaults) | 0/1/0/1 | folded into V (1 pin-only MAJOR: JSON currency USD after retarget) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
