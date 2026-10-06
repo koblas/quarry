@@ -503,10 +503,10 @@ Architect sizing pass (2026-10-06). Order: 01a → 01b → 06 → 10 → 12 → 
 - [x] SCENARIO-09: --month that cannot be summarized is refused — delivered by SCENARIO-01b — `cmd/quarry/run_summary_refusals_test.go` `Test_run_summary_refuses_a_month_it_cannot_summarize`
 - [x] SCENARIO-13: Summary in another currency — delivered by SCENARIO-01b — `cmd/quarry/run_summary_change_test.go` `Test_run_summary_lists_cad_and_usd_separately_with_native`
 - [x] SCENARIO-15: Summary with no store refuses — delivered by SCENARIO-01b — `cmd/quarry/run_read_refusals_test.go` `Test_run_read_commands_refuse_when_there_is_no_store`
-- [x] SCENARIO-06: First month of data shows no change — `cmd/quarry/run_summary_empty_test.go` `Test_run_summary_shows_no_change_in_the_first_month_of_data`
+- [x] SCENARIO-06: First month of data shows no change — `cmd/quarry/run_summary_empty_test.go` `Test_run_summary_shows_no_change_in_the_first_month_of_data_and_warns_when_the_snapshot_time_is_unknown`
 - [x] SCENARIO-07: A quiet month — delivered by SCENARIO-06 — `cmd/quarry/run_summary_empty_test.go` `Test_run_summary_says_so_in_a_month_with_no_unusual_charge_and_no_new_recurring_charge`
-- [ ] SCENARIO-10: Snapshot taken before the month ended is warned about
-- [ ] SCENARIO-11: Snapshot with no recorded time is warned about
+- [x] SCENARIO-10: Snapshot taken before the month ended is warned about — `cmd/quarry/run_summary_snapshot_test.go` `Test_run_summary_warns_when_the_snapshot_was_taken_before_the_month_ended`
+- [x] SCENARIO-11: Snapshot with no recorded time is warned about — delivered by SCENARIO-10 — `cmd/quarry/run_summary_snapshot_test.go` `Test_run_summary_warns_when_the_snapshot_records_no_time`
 - [ ] SCENARIO-12: Machine-readable summary
 - [ ] SCENARIO-14: Missing exchange rates are warned about once
 - [ ] SCENARIO-16: Claude asks for last month's summary

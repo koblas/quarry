@@ -68,8 +68,8 @@ func (e MonthError) Error() string {
 const monthLayout = "2006-01"
 
 // ParseMonth resolves value, YYYY-MM, into the month it names; a nil value is the calendar month before
-// now's, read in now's own zone, which becomes the month's Zone. It returns a MonthError for a value that is not a month and for a month
-// that has not ended.
+// now's, read in now's own zone, which becomes the month's Zone. It returns a MonthError for a value that is
+// not a month and for a month that has not ended.
 func ParseMonth(value *string, now time.Time) (Month, error) {
 	today := Today(now)
 	last := monthOf(time.Date(today.Year(), today.Month()-1, 1, 0, 0, 0, 0, time.UTC))

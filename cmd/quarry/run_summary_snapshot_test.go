@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,6 +21,12 @@ func summaryClockEDT() time.Time {
 const septemberTimeUnknownWarning = "quarry: warning: cannot tell whether the store holds all of September 2026: " +
 	"its snapshot's manifest does not record when it was taken; " +
 	"open your Quicken file and run quarry sync to take a new snapshot\n"
+
+// withSnapshotTaken is rows with the snapshot's manifest time set; chargeRows leaves it unrecorded.
+func withSnapshotTaken(rows store.Rows, taken time.Time) store.Rows {
+	rows.ImportRuns[0].Snapshot.TakenAt = taken
+	return rows
+}
 
 func Test_run_summary_warns_when_the_snapshot_was_taken_before_the_month_ended(t *testing.T) {
 	home := t.TempDir()

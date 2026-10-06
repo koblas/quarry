@@ -27,7 +27,7 @@ type Summary struct {
 	NetWorth  NetWorth
 	// Change is nil when the first month end has no balance in any currency.
 	Change *NetWorthChange
-	// Coverage says whether the store's snapshot was taken after the month ended.
+	// Coverage says whether the store's snapshot was taken at or after the month ended.
 	Coverage SnapshotCoverage
 }
 

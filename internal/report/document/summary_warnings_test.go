@@ -8,6 +8,7 @@ import (
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var easternDaylight = time.FixedZone("EDT", -4*60*60)
@@ -72,7 +73,32 @@ func Test_SnapshotWarning_ends_with_the_phrase_the_surface_gives_for_running_the
 	}
 }
 
+// pinMachineZone sets the zone of the machine to UTC-4 named EDT, so a time read in it differs from UTC.
+func pinMachineZone(t *testing.T) {
+	t.Helper()
+	previous := time.Local                      //nolint:gosmopolitan // saved to restore
+	time.Local = easternDaylight                //nolint:gosmopolitan // restored by Cleanup
+	t.Cleanup(func() { time.Local = previous }) //nolint:gosmopolitan // restores the zone swapped above
+}
+
+func Test_SnapshotWarning_reads_a_month_parsed_from_a_UTC_clock_in_UTC_on_any_machine(t *testing.T) {
+	pinMachineZone(t)
+	month := "2026-09"
+	parsed, err := report.ParseMonth(&month, time.Date(2026, time.October, 6, 12, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	summary := report.Summary{
+		Month:    parsed,
+		Status:   store.Status{Run: store.ImportRun{Snapshot: store.SnapshotRef{TakenAt: time.Date(2026, time.September, 28, 18, 2, 0, 0, time.UTC)}}},
+		Coverage: report.SnapshotPredatesMonthEnd,
+	}
+
+	got := document.SnapshotWarning(summary, "run quarry summary again")
+
+	assert.Contains(t, got, "taken 2026-09-28 18:02 UTC,")
+}
+
 func Test_SnapshotWarning_reads_the_snapshot_time_in_the_zone_of_the_month(t *testing.T) {
+	pinMachineZone(t)
 	taken := time.Date(2026, time.September, 28, 18, 2, 0, 0, time.UTC)
 	cases := []struct {
 		name string

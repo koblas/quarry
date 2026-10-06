@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-10
-status: open
+status: done
 ---
 
 # SCENARIO-10: Snapshot taken before the month ended is warned about (folds SCENARIO-11)
@@ -27,10 +27,10 @@ Surface surveyed (grep, gopls rooted at ../phase4d-registered): `Summary` caller
 - [x] Step 4: `internal/cli/summary.go:72-110` — W2 stays before `writeResult` (STATE binding), so replace `writeResult` with `emit(cmd, []byte(renderSummary(...)), "quarry: warning: ", warnings)`: W3 lands on stderr after stdout and after W2, and only once the stdout write succeeded. `summaryAgain(month, given bool)` builds the tail from `cmd.Flags().Changed` (line 79 already computes it). Tests in `internal/cli/summary_test.go` via `executeSummary` with `fakeReportStore.summary.Status` TakenAt set: default month tail; `--month 2026-08` tail; covered snapshot → empty stderr; W2 then W3a order (unreadable config + `--currency`, line 182 pattern); stdout write failure → refusal, no W3 line (control: warning present when the write succeeds); `--json` stays the interim refusal (S12).
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Expected churn: fake-based tests that assert empty stderr or exact stderr at `summary_test.go:~182-260` now get W3b because the fake's zero `TakenAt` is unknown; give `executeSummary`'s default fake a `TakenAt` after the month end rather than loosening any pin. Doc comments on `SnapshotCoverage`, `Month.Zone`, `SnapshotWarning`.
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Expected churn: fake-based tests that assert empty stderr or exact stderr at `summary_test.go:~182-260` now get W3b because the fake's zero `TakenAt` is unknown; give `executeSummary`'s default fake a `TakenAt` after the month end rather than loosening any pin. Doc comments on `SnapshotCoverage`, `Month.Zone`, `SnapshotWarning`.
 
 ### Verify
-- [ ] Step 6: full verification per agent-briefs.md plus `.claude/scripts/spec-check.py phase4f-summary`; tick SCENARIO-10 with its acceptance test and SCENARIO-11 `delivered by SCENARIO-10` with its test (reference last on the line); rewrite STATE.md (move `covers_month`/W3a/W3b out of Left unbuilt).
+- [x] Step 6: full verification per agent-briefs.md plus `.claude/scripts/spec-check.py phase4f-summary`; tick SCENARIO-10 with its acceptance test and SCENARIO-11 `delivered by SCENARIO-10` with its test (reference last on the line); rewrite STATE.md (move `covers_month`/W3a/W3b out of Left unbuilt).
 
 ## Handoff
 
@@ -58,12 +58,8 @@ Surface surveyed (grep, gopls rooted at ../phase4d-registered): `Summary` caller
 
 ## Phase report
 
-Run B1 (Steps 2-4, code-first). Start commit `c6270ad`. Both acceptance tests green; `internal/report/...`, `internal/cli`, `cmd/quarry` all green; `golangci-lint run ./...` 0 issues.
+Run V (pin-only checkpoint findings, Steps 5-6). Done: `verify.sh fe7d11a` all rc=0, `spec-check.py --run` OK, S10 and S11 ticked.
 
-- `internal/report/month.go:10-28`: `Month.Zone` (set by `ParseMonth` from `now.Location()`), exported `(Month).Location()` (Zone or UTC; the document needs it), unexported `closes()`. `internal/report/summary.go:30-57`: `SnapshotCoverage` (`SnapshotCovers` = zero value, `SnapshotPredatesMonthEnd`, `SnapshotTimeUnknown`), `coverageOf`, `Summary.Coverage` set in `Server.Summary`.
-- `internal/report/document/summary_warnings.go`: `SnapshotWarning(s, again)`; own `snapshotTakenLayout` (cli's `takenLayout` is unexported in another package). An out-of-domain coverage value yields "" (pinned by a row, no `unreachable` marker).
-- `internal/cli/summary.go:77-125`: `named` from `Flags().Changed`; `emit(...)` replaces `writeResult`; `summaryAgain(month, named)` (tail uses `resolved.String()`, so `--month 2026-08` equal to the default still gets the `--month` tail).
-- Tests: `internal/report/summary_coverage_test.go` (3), `month_test.go` (+1), `document/summary_warnings_test.go` (6), `internal/cli/summary_test.go` (+4: tails table, covered, W2-then-W3a order, write failure).
-- Trap (plan said cmd/quarry stores always have `summaryTakenAt`; false): the `chargeRows`-based store (`run_helpers_test.go:142`) records no `TakenAt`, so five `run_summary_empty_test.go` pins now get W3b. Their `Empty(stderr)` became `septemberTimeUnknownWarning` (const in `run_summary_snapshot_test.go`, also used by the S11 acceptance test) plus a `stderr` column in the table; stdout unchanged, nothing loosened. cli `executeSummary` defaults a zero `TakenAt` to `spendNow` via `cmp.Or`, so no cli test reaches the unknown arm through it (acceptance S11 covers it).
-- Mutations (all restored, diffed byte-identical): (1) `!taken.Before(closes)` -> `taken.After(closes)` reddened the exact-midnight rows (UTC, EDT, Toronto October, year end, leap February, nil Zone); `closes().Add(-1ns)` reddened the three 1 ns-before rows. (2) closes zone -> UTC reddened EDT 1 ns and past-UTC-midnight, Toronto 1 ns, Toronto December, run-on-the-1st minute-before-midnight; zone -> fixed EST reddened Toronto October and March. (3) removing the zero arm reddened "no time recorded" (got 1, want 2) and `Test_run_summary_warns_when_the_snapshot_records_no_time`. (4) `named` inverted in `summaryAgain` reddened all three tail rows, the W2-then-W3a test and the S10 acceptance test.
-- Next (V): Verify block (covered full suite, uncovered-diff, test-stats), `spec-check.py`, tick S10 and S11 (reference last on the line), rewrite STATE.md (drop `covers_month`/W3a/W3b from Left unbuilt; add `Month.Location()`, the chargeRows W3b pins and cli `executeSummary` default `TakenAt`), `status: done`. Note cmd/quarry takes ~120 s.
+- `cmd/quarry/run_summary_empty_test.go`: `firstMonthSummary`, `firstMonthRows`, `noTransactionsSeptemberRest`; first-month test renamed `..._and_warns_when_the_snapshot_time_is_unknown` (S06's tick line updated to it) plus `..._without_a_warning_when_the_snapshot_covers_it`; table rows renamed `, snapshot time unknown` and new `, snapshot taken after the month ended` (empty stderr). `run_summary_snapshot_test.go`: `withSnapshotTaken`.
+- `internal/report/document/summary_warnings_test.go`: `pinMachineZone`; new `..._reads_a_month_parsed_from_a_UTC_clock_in_UTC_on_any_machine`; the zone test now runs under the pin. Docs: `ParseMonth` re-wrapped, `Summary.Coverage` "at or after". The `case report.SnapshotCovers` stays: `exhaustive` reports it missing.
+- Mutations (restored, diffed): unknown coverage when the store has no transactions reddened the new empty-table row; unknown when the first date is in the month reddened the covered first-month test; `.In(time.Local)` reddened the parsed-month test, the UTC row and the three tail rows; `Location()` nil arm to `time.Local` reddened the nil-zone row.
