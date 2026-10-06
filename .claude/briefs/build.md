@@ -121,4 +121,6 @@ Commonest blocking findings share one shape: fallible call in new code with no f
 
 **Two components disagreeing → invariant in the first brief.** Finding whose `Failure:` is two parts of the system deciding the same question differently — numeric unit or representation (exact vs rounded, cents vs millionths), boundary (`<` vs `<=`), or one path skipping a shared rule — gets its invariant stated in the **first** fix-pass brief, not after the second reopen: name the one decision function or unit every site must use, list the sites (`file:line`), one pin per site (*Planning* → *Cross-surface rule*), and a probe for each way state can reach the boundary without passing a site (a later transform, a different entry path). A per-site patch here is what reopens the same surface next round.
 
+**Membership-rule fix → name the boundaries it moves.** Fix that changes which items a rule admits (new, listed, hidden, counted, resumed) lists in its brief every boundary the change moves — what newly enters, what newly leaves — and one row for each, both sides. Pinning only the case that found the gap is how a second gap ships with the first fix.
+
 Test reading `ctx.Err()` from value defaulting to nil, or bound test that cannot see bound's value, passes whether or not new branch works — each such gap found at gate costs whole extra fix pass and re-gate.

@@ -124,13 +124,14 @@ So scoping pass does not stop at "shape is right". Write out, literally:
 - **every variant of each warning and refusal** — one ruled line per cause, not one line plus "…": which inputs pick which variant (cause only A, only B, both; rates exist vs none; sell vs remove), granularity (one per security / per item / per year) and order within its slot;
 - **MCP counterpart of every CLI string** the feature adds — rule once, at scoping, the rewording rule for refusals, warnings and fix lines that name a CLI command (`quarry findings --type X` → `data_quality with type X`), which lines stay verbatim, and each new tool param's type, bounds and description;
 - **behaviour claims cited** — every ruled sentence that states what quarry does or never does ("only", "never", "nothing", "always", what a null or empty value renders as) names the `file:line` that makes it true, beside the line in `## Surface & Copy`. No citation found → rule different copy. Byte pins prove a string is present, never that it is true;
+- **business rules ruled as intent** — a ruling on what a value is ("a day with nothing needing a rate counts 0") states the intent first; any data-shape wording ("when `Totals` lacks the reporting entry") follows as an illustration, never as the rule. Code built to the shape misses the inputs where shape and intent part, and the gate finds them;
 - **edge-case row table** for every output block, row kind, hint, suffix: each input class reaching it (no snapshot yet, Quicken closed, stale store, reconciliation failed, schema fingerprint changed, empty period, CAD vs USD, closed account, flag given vs not) with exact text it gets — or that it gets no row, and why. Hint only ruled once you said which rows it true for.
 
 These land in specification `## Surface & Copy` section; developer implements verbatim. Anything left unwritten gets invented at keyboard and comes back to you in final pass, at ~10x cost.
 
 At final pass, copy already ruled is settled — re-open only if implementation proved it wrong. Spend that pass on what only built surface can show: fix that cannot clear own finding, success line claiming more than happened, help string rendering differently than it reads in source.
 
-**Mid-feature copy ruling (third, scoped pass).** When scenario, fix pass or reviewer find failure mode spec has no copy for (new refusal, new exit code, new hint), you called on that one outcome only: rule its literal line(s) and exit code into `## Surface & Copy`, same way as scoping pass. Do not re-review rest of surface. Verdict SHIP / SHIP WITH CHANGES auto-continues; RETHINK or DON'T BUILD goes back to user.
+**Mid-feature copy ruling (third, scoped pass).** When scenario, fix pass or reviewer find failure mode spec has no copy for (new refusal, new exit code, new hint), you called on that one outcome only: rule its literal line(s) and exit code into `## Surface & Copy`, same way as scoping pass; a business-rule ruling states its intent, as above. Do not re-review rest of surface. Verdict SHIP / SHIP WITH CHANGES auto-continues; RETHINK or DON'T BUILD goes back to user.
 
 ## Verdict format
 
