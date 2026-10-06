@@ -103,10 +103,7 @@ func New(path string, mode Mode, opts ...Option) *Locker {
 }
 
 // Acquire takes the lock without waiting and returns its idempotent release func.
-// Every failure is a *Error: KindHeld while another open holds the lock,
-// KindFolderMissing in ModePrune when the folder is absent, KindNotRegular for a
-// path that is not a regular file, and KindFolderCreate, KindCreate, KindOpen or
-// KindLock for the OS step that failed.
+// Every failure is a *Error, classified by the Kind of the OS step that failed.
 func (l *Locker) Acquire(_ context.Context) (func(), error) {
 	if err := l.ensureFolder(); err != nil {
 		return nil, err

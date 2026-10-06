@@ -328,7 +328,7 @@ Order: 01 → 03 → 06 → 14 → 10 → 12a → 12b → 13 (lock first; 14 mak
 - [x] SCENARIO-04: Prune --dry-run runs while a sync is running — delivered by SCENARIO-03, `cmd/quarry/run_prune_lock_test.go` `Test_run_snapshots_prune_dry_run_runs_while_a_writer_holds_the_lock`
 - [x] SCENARIO-07: Usage and config errors come before the lock — delivered by SCENARIO-03, `cmd/quarry/run_prune_lock_test.go` `Test_run_snapshots_prune_refuses_usage_and_config_before_the_lock`
 - [x] SCENARIO-09: Help says only one writer runs at a time — delivered by SCENARIO-03, `cmd/quarry/run_usage_test.go` `Test_run_help_says_only_one_writer_runs_at_a_time`
-- [ ] SCENARIO-06: An unusable lock file refuses with a fix
+- [x] SCENARIO-06: An unusable lock file refuses with a fix — `cmd/quarry/run_sync_lock_file_test.go` `Test_run_sync_refuses_an_unusable_lock_file_with_a_fix`
 - [ ] SCENARIO-14: Prune refuses when the store's recorded snapshot cannot be read
 - [ ] SCENARIO-15: Listing warns and marks nothing when the recorded snapshot cannot be read
 - [ ] SCENARIO-16: Auto-prune inside sync deletes nothing when the recorded path cannot be read

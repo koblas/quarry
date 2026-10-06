@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-06
-status: open
+status: done
 ---
 
 # SCENARIO-06: An unusable lock file refuses with a fix
@@ -12,7 +12,7 @@ Mutation checks (each in the B run that builds the guard; one at a time):
 - `Lstat` → `Stat` in `Acquire` → symlink rows (`Test_acquire_refuses_a_lock_file_that_is_not_a_regular_file`, cmd L3 symlink cells): symlink-to-regular then fails ELOOP as `KindOpen`, dangling as `KindCreate`
 - drop the not-regular branch → directory and fifo rows red at their assertion (a lock "succeeds" on both); then also drop `O_NONBLOCK` → fifo row red by `acquireNow`'s deadline, not by go test timeout. `O_NONBLOCK` alone is race-only defence in depth (Lstat refuses the fifo first): no filesystem state reddens it alone — say so in the report
 - open failure classified by error instead of by whether `Lstat` found the file (cannot-open → cannot-create) → mode-0000 (L4b) and read-only-folder (L4a) cells
-- `LockForPrune` swallows any `*lockfile.Error`, not only `KindFolderMissing` → prune L3/L4/L5p cmd cells (five snapshots + orphan still present; the 0400 control arm shows prune deletes when the lock is usable)
+- `LockForPrune` swallows any `*lockfile.Error`, not only `KindFolderMissing` → pinned only by the `internal/snapshot` prune fallback rows (`lock()` turns every phrased kind into a `RefusalError` before `LockForPrune` sees it, so no cmd cell can redden it; the cmd 0400 control arm shows prune deletes when the lock is usable)
 - L5 sync/prune "changed nothing"/"deleted nothing" swapped → `Test_lock_for_sync_*`/`Test_lock_for_prune_*` cannot-lock rows and cmd L5s/L5p cells
 - `KindFolderCreate` arm dropped from the copy switch → L2 Server and cmd rows
 Runs: A (1) | B1 (2) | B2 (3) | B3 (4-5) | V (6-7)
@@ -32,10 +32,10 @@ Surface survey (what `Acquire` calls on the OS; none goes behind a port, `snapsh
 - [x] Step 5 (B3b): `cmd/quarry/run_prune_lock_file_test.go` (new) — prune matrix over `newPrunableStore` (`run_prune_lock_test.go:40-50`), `prune --keep 3`, text and `--json`: L3 directory + symlink, L4b 0000, L4a folder 0500 (no lock file), L5p via a locally built `snapshot.NewServer(…WithLocker(ModePrune+WithFlock))` in `env.NewSnapshots`; each asserts exit 1, empty stdout, verbatim line, five snapshots + orphan kept (`requireSnapshotsKept`); 0400 control: prune exits 0 and deletes. L2 for prune is n/a: prune never creates the folder (existing `..._with_no_quarry_folder_and_creates_nothing`)
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the new kinds and `Acquire` (kinds it returns, per the `go doc` budget), `LockForSync`/`LockForPrune` docs updated for the new refusals
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the new kinds and `Acquire` (kinds it returns, per the `go doc` budget), `LockForSync`/`LockForPrune` docs updated for the new refusals
 
 ### Verify
-- [ ] Step 7: `.claude/scripts/verify.sh <start> ./cmd/... ./internal/snapshot/... ./internal/platform/lockfile/...`; `spec-check.py snapshot-safety`; tick SCENARIO-06 with its acceptance test; rewrite `STATE.md` (close the Open debt "unclassified `lockfile` failures", move the Left unbuilt entry)
+- [x] Step 7: `.claude/scripts/verify.sh <start> ./cmd/... ./internal/snapshot/... ./internal/platform/lockfile/...`; `spec-check.py snapshot-safety`; tick SCENARIO-06 with its acceptance test; rewrite `STATE.md` (close the Open debt "unclassified `lockfile` failures", move the Left unbuilt entry)
 
 ## Handoff
 
@@ -65,11 +65,10 @@ Surface survey (what `Acquire` calls on the OS; none goes behind a port, `snapsh
 
 ## Phase report
 
-Runs A, B1, B2, B3 (steps 1-5) done. Sweep and Verify (V) left.
+All runs done (A, B1, B2, B3, V); scenario ticked, `status: done`. Nothing left for a later run.
 
-Run B3: `cmd/quarry/run_sync_lock_file_test.go` (acceptance test now builds its folder with `newSentinelStore`; new L2 `..._refuses_with_a_fix_when_it_cannot_create_the_folder_for_its_lock`, L5s `..._when_the_disk_cannot_take_a_lock_with_a_fix` via `NewServer` wrapper, fifo `..._refuses_a_fifo_lock_file_without_hanging` (10s goroutine deadline), 0400 control), `cmd/quarry/run_prune_lock_file_test.go` (new: L3/L3/L4b/L4a matrix reusing `unusableLockRows`, L5p via local `NewSnapshots` server, 0400 control that deletes). All text + `--json`.
-- Production fix (found by the L5s cell, red first): `internal/snapshot/lock_refusal.go` KindLock copy lacked `so` (`, this sync changed nothing` vs ruled `, so this sync changed nothing`); B2's Server test had copied the outcome from production. Fixed in code and in `lock_refusal_test.go` (`", so "+cmd.outcome`).
-- Ruling 2 row: unreachable through `run()` (config load refuses a quarry folder that is a file first: "cannot read ...config.toml: not a directory"), so pinned at Server level: `lock_refusal_test.go` `Test_lock_for_prune_refuses_as_unopenable_when_the_quarry_folder_is_a_file`.
-- Cmd tests that must match the narrow loop's lowercase `lock` need it in the name (the L2 test was renamed for that).
-- Mutations run (all restored, byte-identical): Lstat->Stat reddens symlink cells (sync, prune); not-regular branch dropped reddens directory + symlink + fifo cells; plus O_NONBLOCK dropped reddens fifo cells by the 10s deadline (O_NONBLOCK alone is unreachable by any filesystem state); open kind forced KindCreate reddens L4b cells, forced KindOpen reddens L4a cells; outcomes swapped reddens L5s/L5p cells; `KindFolderCreate` arm dropped reddens the L2 cells. `LockForPrune` swallowing any `*lockfile.Error` reddens NO cmd cell (lock() has already turned phrased kinds into RefusalError); it reddens the `internal/snapshot` prune fallback rows.
-- V must not redo: copy, mapping, matrices, mutations.
+Run V: folded the checkpoint findings. `lockfile.go` `Acquire` doc cut to 3 lines; `cmd/quarry/run_prune_lock_file_test.go` gained `Test_run_snapshots_prune_refuses_a_fifo_lock_file_without_hanging` (text + json, 10s goroutine deadline, L3 verbatim, snapshots + orphan kept). Mutation (not-regular branch dropped in `checkRegular`) reddened both cells: prune printed the L5p line (flock on the fifo failed) instead of L3; restored byte-identical.
+- verify.sh d1a0ce2d: build, test, race, lint all rc=0; 0 uncovered added lines; tests 1308 (+18): lockfile 19 (+3), snapshot 299 (+6), cmd/quarry 990 (+9).
+- The `LockForPrune` swallow mutation is pinned only by the `internal/snapshot` prune fallback rows: no cmd cell can redden it, because `lock()` has already turned every phrased kind into a `RefusalError`.
+- `O_NOFOLLOW` (like `O_NONBLOCK`) has no filesystem state that reddens it alone: equivalent apart from the accepted Lstat-to-OpenFile race, so a mutation sample of `openFlags` surviving is expected.
+- Production fix found in B3 by the L5s cell: `KindLock` copy lacked `so`; B2's Server test had copied the outcome from production.

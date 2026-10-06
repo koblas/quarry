@@ -8,6 +8,7 @@ import (
 	"os"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/platform/lockfile"
 	"github.com/koblas/quarry/internal/snapshot"
@@ -66,6 +67,36 @@ func Test_run_snapshots_prune_refuses_when_the_disk_cannot_take_a_lock_with_a_fi
 			assert.Equal(t, "quarry: cannot lock "+lockShown+": operation not supported, so this prune deleted nothing; "+
 				quarryDirS+" must be on a disk that supports file locks\n", stderr.String())
 			p.requireNothingDeleted(t)
+		})
+	}
+}
+
+// The prune runs on its own goroutine: a lock file that blocks the open must fail the test, not hang it.
+func Test_run_snapshots_prune_refuses_a_fifo_lock_file_without_hanging(t *testing.T) {
+	type result struct {
+		exitCode       int
+		stdout, stderr string
+	}
+	for _, cell := range outputCells {
+		t.Run(cell.name, func(t *testing.T) {
+			p := newPrunableStore(t)
+			require.NoError(t, syscall.Mkfifo(lockPathUnder(storeDirUnder(p.home)), 0o600))
+			done := make(chan result, 1)
+
+			go func() {
+				exitCode, stdout, stderr := runPrune(t, append([]string{"--keep", "3"}, cell.flag...)...)
+				done <- result{exitCode, stdout, stderr}
+			}()
+
+			select {
+			case got := <-done:
+				assert.Equal(t, 1, got.exitCode)
+				assert.Empty(t, got.stdout)
+				assert.Equal(t, "quarry: "+lockShown+" is not a regular file; remove it, then run the command again\n", got.stderr)
+				p.requireNothingDeleted(t)
+			case <-time.After(10 * time.Second):
+				t.Fatal("prune did not return: its lock file is a fifo")
+			}
 		})
 	}
 }
