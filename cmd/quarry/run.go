@@ -105,7 +105,8 @@ func newReportFactory(storeOpts ...duckstore.Option) cli.ReportFactory {
 }
 
 // newSnapshotsFactory returns cli.Execute's SnapshotsFactory: a Server over the snapshots
-// folder and the store's probe, with no reference schema and no importer.
+// folder and the store's probe, with no reference schema and no importer, and a prune-mode
+// writer lock that only snapshots prune acquires, so it never creates the quarry folder.
 func newSnapshotsFactory(storeOpts ...duckstore.Option) cli.SnapshotsFactory {
 	return func(_ context.Context, command string) (*snapshot.Server, error) {
 		home, err := resolveHome(command)
@@ -118,6 +119,7 @@ func newSnapshotsFactory(storeOpts ...duckstore.Option) cli.SnapshotsFactory {
 			snapshot.WithSnapshotDir(snapshotsDirUnder(home)),
 			snapshot.WithHome(home),
 			snapshot.WithStoreProbe(duckstore.New(storeDir, storeOpts...)),
+			snapshot.WithLocker(lockfile.New(lockPathUnder(storeDir), lockfile.ModePrune)),
 		), nil
 	}
 }
