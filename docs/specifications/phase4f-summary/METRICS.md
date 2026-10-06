@@ -17,12 +17,14 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
+| 01 | arch, correctness, test, refactor | 0/1/7/11 | 0 / 20 (1 timeout, killed by hand), 2053 s | BLOCKED |
 
 ## Tokens
 
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
 | --- | --- | --- | --- |
+| Final gate 01 (correctness) | Converted Change total `no rate` for a day of zero-balance unrated rows while type cells convert | internal/report/networth_change.go:71-79 | SCENARIO-01a (U5 wording keyed on Totals shape) |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |
