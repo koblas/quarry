@@ -1,6 +1,7 @@
 package report_test
 
 import (
+	"cmp"
 	"slices"
 	"testing"
 	"time"
@@ -108,6 +109,8 @@ func Test_summary_resumption_skips_off_schedule_charges(t *testing.T) {
 		strays  []int
 		start   int
 		listed  bool
+		// runCharges is the charges in the later run; 0 means 3.
+		runCharges int
 	}{
 		{name: "one stray", earlier: monthlyEndingOn(t, earlierEnd, 3), strays: []int{21}, start: 30},
 		{name: "two strays", earlier: monthlyEndingOn(t, earlierEnd, 3), strays: []int{10, 21}, start: 30},
@@ -129,6 +132,10 @@ func Test_summary_resumption_skips_off_schedule_charges(t *testing.T) {
 		{name: "annual earlier series, run starts 400 days after", earlier: everyDaysEndingOn(t, earlierEnd, 365, 2), strays: []int{100}, start: 400},
 		{name: "annual earlier series, run starts 401 days after", earlier: everyDaysEndingOn(t, earlierEnd, 365, 2), strays: []int{100}, start: 401, listed: true},
 		{name: "earlier series over a year before the run", earlier: monthlyEndingOn(t, earlierEnd, 3), strays: []int{21}, start: 430, listed: true},
+		{name: "no duplicate, run starts 40 days after", earlier: monthlyEndingOn(t, earlierEnd, 3), start: 40},
+		{name: "same-day duplicate on the earlier run's last day, run starts 40 days after", earlier: monthlyEndingOn(t, earlierEnd, 3), strays: []int{0}, start: 40, listed: true},
+		{name: "duplicate earlier in the earlier run, run starts 40 days after", earlier: monthlyEndingOn(t, earlierEnd, 3), strays: []int{-60}, start: 40},
+		{name: "duplicate is the run's first charge", earlier: monthlyEndingOn(t, earlierEnd, 3), strays: []int{0}, start: 30, runCharges: 2, listed: true},
 	}
 
 	for _, c := range cases {
@@ -137,10 +144,11 @@ func Test_summary_resumption_skips_off_schedule_charges(t *testing.T) {
 			for i, offset := range c.strays {
 				strays[i] = chargeOn(t, 0, onDay(offset))
 			}
-			runEnd := dateOf(t, onDay(c.start+60))
+			runCharges := cmp.Or(c.runCharges, 3)
+			runEnd := dateOf(t, onDay(c.start+30*(runCharges-1)))
 			month := runEnd.Format("2006-01")
 			now := time.Date(runEnd.Year(), runEnd.Month()+1, 2, 12, 0, 0, 0, time.UTC)
-			gym := slices.Concat(c.earlier, strays, monthlyEndingOn(t, runEnd.Format(time.DateOnly), 3))
+			gym := slices.Concat(c.earlier, strays, monthlyEndingOn(t, runEnd.Format(time.DateOnly), runCharges))
 
 			summarized := summaryRecurring(t, month, now, gym)
 

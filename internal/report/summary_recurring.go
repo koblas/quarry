@@ -1,6 +1,7 @@
 package report
 
 import (
+	"sort"
 	"time"
 
 	"github.com/koblas/quarry/internal/store"
@@ -23,10 +24,22 @@ func listingCharge(run []store.Charge, rule cadenceRule) store.Charge {
 	return run[k]
 }
 
-// resumes is whether run, the group's latest, starts again a steady series that had not ended before it.
+// resumes is whether run, the group's latest, starts again a steady series that had not ended before it
+// and that a recurring read could have listed as of its own last charge.
 func resumes(group, run []store.Charge) bool {
 	earlier, rule, ok := earlierRun(group[:len(group)-len(run)], run[0].Date)
-	return ok && steadyCharges(earlier) && daysBetween(earlier[len(earlier)-1].Date, run[0].Date) <= rule.endedAfter
+	if !ok || !steadyCharges(earlier) {
+		return false
+	}
+	last := earlier[len(earlier)-1].Date
+	return daysBetween(last, run[0].Date) <= rule.endedAfter && listableAt(group, last)
+}
+
+// listableAt is whether the group's charges dated on or before day end in a run a recurring read lists.
+func listableAt(group []store.Charge, day time.Time) bool {
+	end := sort.Search(len(group), func(i int) bool { return group[i].Date.After(day) })
+	_, _, ok := latestRun(group[:end])
+	return ok
 }
 
 // earlierRun is the run ending before once its trailing off-schedule charges are dropped; it does not look

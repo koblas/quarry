@@ -17,6 +17,7 @@ var (
 	afterOctober  = time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
 	afterNovember = time.Date(2026, 12, 2, 12, 0, 0, 0, time.UTC)
 	afterMarch    = time.Date(2026, 4, 2, 12, 0, 0, 0, time.UTC)
+	afterAugust   = time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
 )
 
 // summaryRecurring is the recurring section of month (YYYY-MM) summarized at now from a store holding the
@@ -120,6 +121,19 @@ func Test_summary_does_not_list_a_subscription_that_kept_charging_through_a_stra
 	recurring := recurringAt(t, afterMarch, march, gym)
 
 	assert.Empty(t, payeesOf(summarized))
+	assert.Equal(t, []string{"Gym"}, payeesOf(recurring))
+}
+
+func Test_summary_lists_a_subscription_as_new_when_its_earlier_series_was_never_listable(t *testing.T) {
+	gym := chargesOn(t, []string{"2024-08-15", "2025-08-15", "2025-08-15", "2026-08-15"})
+	august := store.Window{Since: dateOf(t, "2026-08-01"), Until: dateOf(t, "2026-08-31")}
+
+	summarized := summaryRecurring(t, "2026-08", afterAugust, gym)
+	year := summaryRecurring(t, "2025-08", afterAugust, gym)
+	recurring := recurringAt(t, afterAugust, august, gym)
+
+	assert.Equal(t, []string{"Gym"}, payeesOf(summarized))
+	assert.Empty(t, payeesOf(year))
 	assert.Equal(t, []string{"Gym"}, payeesOf(recurring))
 }
 
