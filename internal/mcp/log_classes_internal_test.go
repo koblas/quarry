@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
@@ -75,6 +76,14 @@ func accountRefusalFor(t *testing.T, arg string, names ...string) error {
 	return err
 }
 
+// monthRefusalFor is the refusal report.ParseMonth returns for value on 2026-10-06.
+func monthRefusalFor(t *testing.T, value string) error {
+	t.Helper()
+	_, err := report.ParseMonth(&value, time.Date(2026, time.October, 6, 12, 0, 0, 0, time.UTC))
+	require.Error(t, err)
+	return err
+}
+
 // unknownSecurityRefusal is acb's refusal of a security that names none, as report.ACB returns it.
 func unknownSecurityRefusal(arg string) error {
 	return report.RefusalError{Kind: report.RefusalUnknownSecurity, Arg: arg}
@@ -93,6 +102,8 @@ func Test_logLine_classifies_each_refusal(t *testing.T) {
 		{name: "a security that names none", err: unknownSecurityRefusal("XYZ"), want: unknownSecurityLog},
 		{name: "the same, worded for the model", err: acbRefusal(unknownSecurityRefusal("XYZ")), want: unknownSecurityLog},
 		{name: "a year after this one", err: acbYearRefusal(report.ACBYearError{Kind: report.ACBYearAfterThisYear, Value: "2027"}), want: yearRefusedLog},
+		{name: "a month that is not a month", err: monthRefusal(monthRefusalFor(t, "2026-9")), want: monthRefusedLog},
+		{name: "a month that has not ended", err: monthRefusal(monthRefusalFor(t, "2026-10")), want: monthRefusedLog},
 		{name: "blank search text", err: textRefusal(report.CheckSearchText(new(" "))), want: textRefusedLog},
 		{name: "a min that is not an amount", err: amountRefusal(amountRefusalFor(t, new("-12"), nil)), want: amountRefusedLog},
 		{name: "a min above the max", err: amountRefusal(amountRefusalFor(t, new("50"), new("20"))), want: amountRefusedLog},
@@ -160,6 +171,7 @@ func Test_logLine_never_carries_the_callers_values(t *testing.T) {
 		{name: "a min that is not an amount", err: amountRefusal(amountRefusalFor(t, new(distinctive), nil))},
 		{name: "a security that names none, worded for the model", err: acbRefusal(unknownSecurityRefusal(distinctive))},
 		{name: "a year after this one", err: acbYearRefusal(report.ACBYearError{Kind: report.ACBYearAfterThisYear, Value: distinctive})},
+		{name: "a month that is not a month", err: monthRefusal(monthRefusalFor(t, distinctive))},
 	}
 
 	for _, c := range cases {
@@ -170,6 +182,14 @@ func Test_logLine_never_carries_the_callers_values(t *testing.T) {
 			assert.NotContains(t, got, "id-")
 		})
 	}
+}
+
+func Test_logLine_never_carries_the_month_a_call_asked_for_that_has_not_ended(t *testing.T) {
+	const distinctiveMonth = "2031-07"
+
+	got := logLine(monthRefusal(monthRefusalFor(t, distinctiveMonth)))
+
+	assert.NotContains(t, got, distinctiveMonth)
 }
 
 func Test_logLine_never_carries_a_store_reason_in_the_engines_words(t *testing.T) {

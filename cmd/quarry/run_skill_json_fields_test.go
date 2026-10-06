@@ -50,6 +50,10 @@ var declaredFields = []fieldDeclaration{
 	{file: "recurring-and-anomalies.md", argv: []string{"anomalies", "--json"}, names: []string{
 		"anomalies", "amount", "usual", "times", "baseline", "earlier", "native_amount", "native_usual", "checked", "not_judged",
 	}},
+	{file: "monthly-summary.md", argv: []string{"summary", "--json"}, names: []string{
+		"month", "since", "until", "currency", "snapshot", "covers_month", "dates", "findings", "anomalies", "recurring",
+		"net_worth", "changes", "warnings",
+	}},
 	{file: "search.md", argv: []string{"search", "Savings Sweep", "--json"}, names: []string{
 		"transfer", "excluded", "matched", "limit", "truncated", "currency", "amount",
 	}},

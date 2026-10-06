@@ -49,7 +49,13 @@ func (s *Store) Status(ctx context.Context) (store.Status, error) {
 	}
 	defer func() { _ = db.Close() }()
 
-	st := store.Status{Path: s.Path()}
+	return readStatus(ctx, db, s.Path())
+}
+
+// readStatus is Status over an open db of the store at path; every fault is a *store.OpenError.
+func readStatus(ctx context.Context, db ReadDB, path string) (store.Status, error) {
+	var err error
+	st := store.Status{Path: path}
 	run := &st.Run
 	c := &run.Counts
 	var takenAt, first, last sql.NullTime

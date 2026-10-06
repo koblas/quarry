@@ -59,6 +59,7 @@ func Test_run_read_commands_refuse_when_there_is_no_store(t *testing.T) {
 		{name: "anomalies", args: []string{"anomalies"}},
 		{name: "anomalies with an account", args: []string{"anomalies", "--account", "Visa"}},
 		{name: "findings", args: []string{"findings"}},
+		{name: "summary", args: []string{"summary"}},
 		{name: "search", args: []string{"search"}},
 		{name: "search with an account", args: []string{"search", "--account", "Visa"}},
 		{name: "sql with a query", args: []string{"sql", "SELECT 1"}},
@@ -104,6 +105,7 @@ func Test_run_read_commands_refuse_a_bad_reporting_currency(t *testing.T) {
 		{name: "holdings", config: `reporting.currency = "EUR"`, args: []string{"holdings"}, want: refusal(`"EUR"`)},
 		{name: "networth", config: `reporting.currency = "EUR"`, args: []string{"networth"}, want: refusal(`"EUR"`)},
 		{name: "acb", config: `reporting.currency = "EUR"`, args: []string{"acb"}, want: refusal(`"EUR"`)},
+		{name: "summary", config: `reporting.currency = "EUR"`, args: []string{"summary"}, want: refusal(`"EUR"`)},
 		{name: "an empty string", config: `reporting.currency = ""`, args: []string{"spend"}, want: refusal(`""`)},
 		{name: "a number", config: `reporting.currency = 12`, args: []string{"spend"}, want: refusal("12")},
 		{name: "a boolean", config: `reporting.currency = true`, args: []string{"spend"}, want: refusal("true")},
@@ -245,6 +247,7 @@ func Test_run_read_commands_report_an_interrupt_during_the_open(t *testing.T) {
 		{name: "recurring", args: []string{"recurring"}, wantStderr: "quarry: recurring interrupted\n"},
 		{name: "anomalies", args: []string{"anomalies"}, wantStderr: "quarry: anomalies interrupted\n"},
 		{name: "findings", args: []string{"findings"}, wantStderr: "quarry: findings interrupted\n"},
+		{name: "summary", args: []string{"summary"}, wantStderr: "quarry: summary interrupted\n"},
 		{name: "search", args: []string{"search"}, wantStderr: "quarry: search interrupted\n"},
 		{name: "sql", args: []string{"sql", "SELECT 1"}, wantStderr: "quarry: query interrupted\n"},
 	}

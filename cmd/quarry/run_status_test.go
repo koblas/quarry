@@ -158,6 +158,7 @@ quarry never writes to the Quicken file.`)
 		"  spend       Show spending by category, payee, tag or month\n"+
 		"  sql         Run a read-only SQL query against quarry's store\n"+
 		"  status      Show which snapshot the store was built from and what it holds\n"+
+		"  summary     Summarize a month: unusual charges, new recurring charges, net worth and findings\n"+
 		"  sync        Snapshot the open Quicken file and rebuild quarry's store from it\n\n")
 }
 

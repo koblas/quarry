@@ -211,11 +211,14 @@ func Test_recurring_charges_cuts_series_to_the_cap_and_ends_the_warnings_with_th
 }
 
 // monthlyCharges is n payees, each charged amount on the 15th of July, August and September 2026.
-func monthlyCharges(n int, amount int64) store.Charges {
+func monthlyCharges(n int, amount int64) store.Charges { return monthlyChargesFrom(0, n, amount) }
+
+// monthlyChargesFrom is monthlyCharges for the payees named payeeNamed(first) on.
+func monthlyChargesFrom(first, n int, amount int64) store.Charges {
 	rows := make([]store.Charge, 0, n*3)
 	for _, month := range []time.Month{time.July, time.August, time.September} {
 		for i := range n {
-			name, id := payeeNamed(i), "payee-"+payeeNamed(i)
+			name, id := payeeNamed(first+i), "payee-"+payeeNamed(first+i)
 			rows = append(rows, store.Charge{
 				TransactionID: "tx-" + name + month.String(),
 				SourceID:      int64(len(rows) + 1),

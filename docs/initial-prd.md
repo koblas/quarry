@@ -169,6 +169,7 @@ Every command supports `--json` for machine consumers and a readable table by de
 | `quarry networth` | Net worth on one day (`--as-of`, default today) or at each month end (`--since`/`--until`), by account type and currency |
 | `quarry recurring` | Detected recurring charges, start date, price changes |
 | `quarry anomalies` | Unusually large transactions (duplicates are `findings`) |
+| `quarry summary` | One month (default last month): freshness, findings counts, unusually large charges, recurring charges new in it, net worth at its end and the change; read-only, for a monthly job after sync |
 | `quarry search` | Find transactions by payee, memo, amount, date, account or category; transfers and report-excluded transactions included and flagged |
 | `quarry acb` | Adjusted cost base per security and realized capital gains by tax year, in CAD |
 | `quarry findings` | The cleanup worklist to apply in Quicken; `--csv` to export; ignore a finding by listing its id under `findings.ignore` in the config file |
@@ -202,6 +203,7 @@ A thin wrapper over the core library, launched by the Claude desktop app as a lo
 | `acb` | Adjusted cost base and realized gains by security and tax year (CAD) |
 | `search_transactions` | Find transactions by payee, memo, amount, date, account or category; transfers and report-excluded transactions included and flagged |
 | `holdings` | Securities held on one day (as_of, default today) with share count, latest price and its date, and value, with accounts and currency parameters; cash in investment accounts not included |
+| `monthly_summary` | One month (month, default last month): freshness, findings counts, unusually large charges, recurring charges new in it, and net worth at its end beside the month before with the change; the document `quarry summary --json` prints |
 | `sync_status` | Freshness of the data, last validation result |
 
 - `query` is the escape hatch for questions no tool anticipates; the named tools exist so common questions don't depend on Claude re-deriving transfer rules in SQL.
@@ -214,7 +216,7 @@ A thin wrapper over the core library, launched by the Claude desktop app as a lo
 `quarry` ships a Claude skill as the primary way Claude uses the data, with the MCP server for clients that can't load skills; this follows dweekly's finding that the skill is the better default path.
 
 - **`SKILL.md`**: when to use it, checking freshness with `quarry status` first, the conventions (sign, transfers, CAD reporting, cross-currency transfers), and the rule that every number comes from `quarry` output or SQL, never estimation.
-- **`references/`**: `schema.md` for `quarry`'s own tables and views (generated from the store, so it can't drift; it lists tables, views and conventions only, never accounts or categories), plus `spending.md`, `cash-flow.md`, `recurring-and-anomalies.md`, `search.md` and `findings.md` (walking David through the findings worklist), with `.sql` recipes where no command answers the question; `net-worth.md` and `investments.md` arrive with Phase 4.
+- **`references/`**: `schema.md` for `quarry`'s own tables and views (generated from the store, so it can't drift; it lists tables, views and conventions only, never accounts or categories), plus `spending.md`, `cash-flow.md`, `recurring-and-anomalies.md`, `search.md`, `findings.md` (walking David through the findings worklist) and `monthly-summary.md` (the launchd job that runs sync and summary each month), with `.sql` recipes where no command answers the question; `net-worth.md` and `investments.md` arrive with Phase 4.
 - The skill calls `quarry … --json` and `quarry sql`; it contains no Quicken schema knowledge, so a Quicken change never breaks it.
 - Packaged as a Claude Code plugin that bundles the skill and the MCP server config (in `plugin.json`), in `plugin/`, listed by `.claude-plugin/marketplace.json` at the repo root, adapted from dweekly's plugin layout.
 
@@ -336,6 +338,7 @@ The main risk is Quicken's undocumented schema; reconciliation on every sync is 
 - Exit codes: `0` success (warnings included), `1` failure, `2` usage error, for every command.
 - Feedback: findings go back into Quicken as a cleanup worklist so later snapshots and exports are clean.
 - Command names: the worklist is `quarry findings`, snapshot housekeeping is `quarry snapshots` / `quarry snapshots prune`; no command is called `cleanup`, since it reads as either.
+- Monthly summary: quarry summary reads the store only; "last month" is the calendar month before today in local time; a recurring charge is new in the first month quarry recurring can list it, unless it starts again after an off-schedule charge before its earlier series had ended; recurring is judged as of the month's last day; the job is quarry sync; quarry summary from launchd; no stored state.
 - Snapshot retention: a count cap (`snapshots.keep`, default 12), applied after every successful sync and by `snapshots prune`; the store's own snapshot is always kept. No size or age caps in v1.
 - Redaction: only account numbers held in `quarry`'s config are masked (last four digits). Free text is passed through as Quicken holds it, since institutions and Quicken already mask card and account numbers there.
 - Dashboards: out of scope for v1.

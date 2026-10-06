@@ -10,6 +10,9 @@ import (
 	"github.com/koblas/quarry/internal/report/document"
 )
 
+// anomaliesTitle is the first words of the anomalies table's caption.
+const anomaliesTitle = "Unusually large charges"
+
 // anomaliesAligns is the alignment of the anomalies table's columns: Amount, Usual and Times right, the rest left.
 var anomaliesAligns = []tableAlign{
 	alignLeft, alignLeft, alignLeft, alignLeft, alignRight, alignRight, alignRight, alignLeft,
@@ -41,7 +44,7 @@ func renderAnomalies(a report.Anomalies) string {
 			fmt.Sprintf("%s, %s earlier", document.BaselineWord(an.Baseline), humanize.Thousands(an.Earlier)),
 		})
 	}
-	return renderTable(windowCaption("Unusually large charges", a.Window, a.Accounts, a.Currency), anomaliesAligns, rows) +
+	return renderTable(windowCaption(anomaliesTitle, a.Window, a.Accounts, a.Currency), anomaliesAligns, rows) +
 		"\n" + anomaliesFooter(a.Checked, a.NotJudged) + "\n"
 }
 

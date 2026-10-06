@@ -21,7 +21,7 @@ import (
 const badCurrencyFlag = "--currency must be CAD, USD or native"
 
 // genericCurrencyCommands are the commands whose --currency takes CAD, USD or native.
-var genericCurrencyCommands = []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth"}
+var genericCurrencyCommands = []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth", "summary"}
 
 // currencyCommands are the commands that take --currency; acb takes CAD only.
 var currencyCommands = append(slices.Clone(genericCurrencyCommands), "acb")
@@ -156,6 +156,7 @@ func Test_currency_flag_is_refused_before_the_command_checks_its_other_flags(t *
 		{command: "cashflow", other: []string{"--by", "bogus"}},
 		{command: "recurring", other: []string{"--since", "2024-13"}},
 		{command: "anomalies", other: []string{"--since", "2024-13"}},
+		{command: "summary", other: []string{"--month", "2026-9"}},
 	}
 
 	for _, c := range cases {
@@ -386,6 +387,7 @@ func Test_read_commands_refuse_their_own_bad_flags_before_reading_the_config(t *
 		{name: "cashflow --since", args: []string{"cashflow", "--since", "2024-13"}},
 		{name: "recurring --since", args: []string{"recurring", "--since", "2024-13"}},
 		{name: "anomalies --since", args: []string{"anomalies", "--since", "2024-13"}},
+		{name: "summary --month", args: []string{"summary", "--month", "2026-9"}},
 	}
 
 	for _, c := range cases {

@@ -93,6 +93,11 @@ func (s *stallingStore) NetWorth(ctx context.Context, _ store.NetWorthParams) (s
 	return store.NetWorth{}, &store.OpenError{Fault: store.OpenFaultOther, Path: testStorePath, Err: errDriverInterrupt}
 }
 
+func (s *stallingStore) Summary(ctx context.Context, _ store.SummaryParams) (store.Summary, error) {
+	s.wait(ctx)
+	return store.Summary{}, &store.OpenError{Fault: store.OpenFaultOther, Path: testStorePath, Err: errDriverInterrupt}
+}
+
 func (s *stallingStore) InvestmentHistory(ctx context.Context) (store.InvestmentHistory, error) {
 	s.wait(ctx)
 	return store.InvestmentHistory{}, &store.OpenError{Fault: store.OpenFaultOther, Path: testStorePath, Err: errDriverInterrupt}
@@ -136,6 +141,7 @@ func Test_each_tool_answers_its_deadline_with_its_ruled_line(t *testing.T) {
 		{"holdings", map[string]any{}, time.Second, "holdings stopped after 1 second; try again"},
 		{"net_worth", map[string]any{}, time.Second, "net_worth stopped after 1 second; try again"},
 		{"acb", map[string]any{}, time.Second, "acb stopped after 1 second; try again"},
+		{"monthly_summary", map[string]any{"month": "2026-09"}, time.Second, "monthly_summary stopped after 1 second; try again"},
 	}
 
 	for _, c := range cases {

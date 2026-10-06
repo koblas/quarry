@@ -948,6 +948,21 @@ type Charges struct {
 	FirstRate time.Time
 }
 
+// SummaryParams is what a summary read varies by: Through, the last civil day of its charges (held as UTC
+// midnight, as ChargeParams.Through), and Dates, the days its net worth is read on.
+type SummaryParams struct {
+	Through time.Time
+	Dates   []time.Time
+}
+
+// Summary is what one monthly summary reads from a single open of the store: its status, every charge dated
+// through SummaryParams.Through, and its net worth on SummaryParams.Dates.
+type Summary struct {
+	Status   Status
+	Charges  Charges
+	NetWorth NetWorth
+}
+
 // Relation kinds: a relation is a base table or a view.
 const (
 	RelationTable = "table"

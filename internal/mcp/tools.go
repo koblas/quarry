@@ -27,6 +27,7 @@ const (
 	toolHoldings    = "holdings"
 	toolNetWorth    = "net_worth"
 	toolACB         = "acb"
+	toolMonthly     = "monthly_summary"
 )
 
 // Row limits: the most any tool returns, data_quality's default, and the most items it lists per finding.
@@ -154,6 +155,14 @@ const (
 		"A security held only in registered accounts has no ACB and is left out, with a warning. Omit it for every security."
 )
 
+// monthlySummaryDescription is the monthly_summary tool's description.
+const monthlySummaryDescription = "Summarize one month (default last month): data freshness, findings counts, unusually large charges, " +
+	"recurring charges new in the month, and net worth at the month end beside the month before, with the change. " +
+	"The same document quarry summary --json prints. Read-only; never syncs."
+
+// monthlySummaryMonthDescription describes the month parameter of monthly_summary; its currency is currencyDescription.
+const monthlySummaryMonthDescription = "Month to summarize: YYYY-MM, a month that has ended. Defaults to last month."
+
 // The descriptions of the parameters holdings takes; its currency is currencyDescription.
 const (
 	holdingsAsOfDescription     = "Day to value holdings on: YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day. Defaults to today."
@@ -275,6 +284,11 @@ type (
 		Year     *int     `json:"year"`
 		Security []string `json:"security"`
 	}
+	// monthlySummaryInput is the monthly_summary tool's arguments; Month is nil when absent.
+	monthlySummaryInput struct {
+		Month    *string `json:"month"`
+		Currency string  `json:"currency"`
+	}
 	// noInput is the arguments of a tool that takes none.
 	noInput struct{}
 )
@@ -343,6 +357,10 @@ func (s *Server) addTools(srv *sdk.Server) {
 		"year":     described(acbYearDescription, &jsonschema.Schema{Type: "integer", Minimum: new(1.0), Maximum: new(9999.0)}),
 		"security": described(acbSecurityDescription, &jsonschema.Schema{Type: "array", Items: &jsonschema.Schema{Type: "string"}}),
 	})), handler(s.timeout, stoppedLine(toolACB), s.acb))
+	sdk.AddTool(srv, tool(toolMonthly, monthlySummaryDescription, objectSchema(map[string]*jsonschema.Schema{
+		"month":    described(monthlySummaryMonthDescription, &jsonschema.Schema{Type: "string"}),
+		"currency": currencySchema(),
+	})), handler(s.timeout, stoppedLine(toolMonthly), s.monthlySummary))
 }
 
 // tool describes one tool; its result is a JSON object.

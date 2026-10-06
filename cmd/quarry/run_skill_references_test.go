@@ -79,6 +79,11 @@ func Test_reference_files_state_their_job(t *testing.T) {
 			"more than 14 days (weekly), 45 days (monthly), 120 days (quarterly) or 400 days (annual)",
 		}},
 		{"search.md", []string{"quarry search", "transfer", "excluded", "native", "--limit"}},
+		{"monthly-summary.md", []string{
+			"quarry sync", "quarry summary", "launchd", "StartCalendarInterval", "umask 077", "launchctl bootstrap",
+			"launchctl bootout", "command -v quarry", "only when they ask you to",
+			"SKILL.md sections 2 and 3 set the rules for every number you quote.",
+		}},
 		{"findings.md", append(findingTypeBullets(findingTypesInHelp(t)), []string{
 			"in Quicken, then `quarry sync`", "findings.ignore", "quarry findings --csv", "only when the user asks",
 			"prints one row per transaction, split, payee, category, account or investment transaction",
@@ -126,7 +131,7 @@ func Test_references_name_scan_flags_crafted_quicken_text(t *testing.T) {
 }
 
 // toolNamedJSONFields are JSON fields the references name that share a tool's name.
-var toolNamedJSONFields = []string{"anomalies"}
+var toolNamedJSONFields = []string{"anomalies", "net_worth"}
 
 // mcpToolSpans is the tool names, JSON fields of the same name aside, that sources spell as a code span or fenced line.
 func mcpToolSpans(sources []driftSource, tools []string) []string {
@@ -142,7 +147,7 @@ func mcpToolSpans(sources []driftSource, tools []string) []string {
 }
 
 func Test_references_name_scan_flags_crafted_tool_names(t *testing.T) {
-	tools := []string{"sync_status", "query", "anomalies"}
+	tools := []string{"sync_status", "query", "anomalies", "net_worth"}
 	cases := []struct {
 		name, text string
 		want       []string
@@ -150,6 +155,7 @@ func Test_references_name_scan_flags_crafted_tool_names(t *testing.T) {
 		{"a tool in a code span", "Call `sync_status` first.", []string{"crafted:1: sync_status"}},
 		{"a tool on a fenced line", "```\nquery\n```", []string{"crafted:2: query"}},
 		{"a JSON field named like a tool", "`anomalies` lists the charges.", nil},
+		{"a second JSON field named like a tool", "`net_worth` holds the balances.", nil},
 		{"a tool name in prose", "Run a query on sync_status.", nil},
 		{"a code span that only contains a tool name", "`quarry sync_status`", nil},
 	}

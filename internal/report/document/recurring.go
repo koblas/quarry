@@ -85,23 +85,33 @@ const tenthsPerPercent = 10.0
 // NewRecurring converts r into recurring's document with warnings; every array
 // is [] rather than null when r holds none.
 func NewRecurring(r report.Recurring, warnings []string) Recurring {
-	series := make([]RecurringSeries, len(r.Series))
-	for i, s := range r.Series {
-		series[i] = recurringSeriesOf(s)
-	}
-	totals := make([]RecurringTotal, len(r.Totals))
-	for i, t := range r.Totals {
-		totals[i] = RecurringTotal{Currency: t.Currency, PerYear: Money(t.PerYear)}
-	}
 	return Recurring{
 		Since:         r.Window.Since.Format(DateLayout),
 		Until:         r.Window.Until.Format(DateLayout),
 		Currency:      r.Currency.String(),
 		AccountFilter: NewAccountFilters(r.Accounts),
-		Series:        series,
-		Totals:        totals,
+		Series:        recurringSeriesEntries(r),
+		Totals:        recurringTotalEntries(r),
 		Warnings:      append([]string{}, warnings...),
 	}
+}
+
+// recurringSeriesEntries is r's series as document entries, [] when there are none.
+func recurringSeriesEntries(r report.Recurring) []RecurringSeries {
+	series := make([]RecurringSeries, len(r.Series))
+	for i, s := range r.Series {
+		series[i] = recurringSeriesOf(s)
+	}
+	return series
+}
+
+// recurringTotalEntries is r's yearly totals as document entries, [] when there are none.
+func recurringTotalEntries(r report.Recurring) []RecurringTotal {
+	totals := make([]RecurringTotal, len(r.Totals))
+	for i, t := range r.Totals {
+		totals[i] = RecurringTotal{Currency: t.Currency, PerYear: Money(t.PerYear)}
+	}
+	return totals
 }
 
 // recurringSeriesOf is s as one entry of the document's "series".

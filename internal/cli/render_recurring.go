@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/koblas/quarry/internal/report"
@@ -68,9 +69,26 @@ func signedTenths(tenths int64) string {
 	return fmt.Sprintf("%s%d.%d%%", sign, tenths/10, tenths%10)
 }
 
+// signedMoney renders cents as "+6,186.43" or "-219.60"; zero is "0.00", unsigned, and nil is "no rate".
+func signedMoney(cents *big.Int) string {
+	switch {
+	case cents == nil:
+		return noRateCell
+	case cents.Sign() > 0:
+		return "+" + formatBigMoney(cents)
+	default:
+		return formatBigMoney(cents)
+	}
+}
+
 // renderRecurring renders r as the recurring table: caption, header, one row per series and a Total
 // row per currency whose only filled cell is Per year.
 func renderRecurring(r report.Recurring) string {
+	return renderRecurringTitled("Recurring charges", r)
+}
+
+// renderRecurringTitled is renderRecurring with title as the first words of the caption.
+func renderRecurringTitled(title string, r report.Recurring) string {
 	rows := make([][]string, 0, 1+len(r.Series)+len(r.Totals))
 	rows = append(rows, []string{"Payee", "Currency", "Every", "Amount", "Per year", "First", "Last", "Status", "Price changes"})
 	for _, s := range r.Series {
@@ -86,5 +104,5 @@ func renderRecurring(r report.Recurring) string {
 	for _, t := range r.Totals {
 		rows = append(rows, []string{tableTotalLabel, t.Currency, "", "", formatMoney(t.PerYear), "", "", "", ""})
 	}
-	return renderTable(windowCaption("Recurring charges", r.Window, r.Accounts, r.Currency), recurringAligns, rows)
+	return renderTable(windowCaption(title, r.Window, r.Accounts, r.Currency), recurringAligns, rows)
 }

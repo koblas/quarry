@@ -34,6 +34,7 @@ const (
 	unknownCategoryLog  = "refused the call's category: it names no category; details went to the client only"
 	unknownSecurityLog  = "refused the call's security; details went to the client only"
 	yearRefusedLog      = "refused the call's year; details went to the client only"
+	monthRefusedLog     = "refused the call's month; details went to the client only"
 )
 
 // withheldStoreLog is the stderr line of a store that failed for a reason only the client should read; at is its ~ path.

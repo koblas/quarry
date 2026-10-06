@@ -209,7 +209,7 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 }
 
 func Test_run_read_commands_need_a_value_for_the_currency_flag(t *testing.T) {
-	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth", "acb"} {
+	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth", "acb", "summary"} {
 		t.Run(command, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
 			var stdout, stderr bytes.Buffer
@@ -269,6 +269,10 @@ func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
 		{
 			name: "anomalies", args: []string{"anomalies", "--bogus"},
 			wantStderr: "quarry: unknown flag: --bogus; Run 'quarry anomalies --help' for usage.\n",
+		},
+		{
+			name: "summary", args: []string{"summary", "--bogus"},
+			wantStderr: "quarry: unknown flag: --bogus; Run 'quarry summary --help' for usage.\n",
 		},
 		{
 			name: "search", args: []string{"search", "--bogus"},

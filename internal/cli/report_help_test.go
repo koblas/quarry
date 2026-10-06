@@ -189,6 +189,7 @@ func Test_each_report_shows_the_currency_flag_without_a_cobra_default(t *testing
 		{command: "cashflow", placeholder: "code", help: reportCurrencyHelp},
 		{command: "recurring", placeholder: "code", help: reportCurrencyHelp},
 		{command: "anomalies", placeholder: "code", help: reportCurrencyHelp},
+		{command: "summary", placeholder: "code", help: reportCurrencyHelp},
 		{command: "accounts", placeholder: "code", help: accountsCurrencyHelp},
 		{command: "holdings", placeholder: "code", help: holdingsCurrencyHelp},
 		{command: "networth", placeholder: "code", help: reportCurrencyHelp},

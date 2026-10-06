@@ -38,6 +38,11 @@ func (s *Store) NetWorth(ctx context.Context, params store.NetWorthParams) (stor
 	}
 	defer func() { _ = db.Close() }()
 
+	return readNetWorth(ctx, db, s.Path(), params)
+}
+
+// readNetWorth is NetWorth over an open db of the store at path; every fault is a *store.OpenError.
+func readNetWorth(ctx context.Context, db ReadDB, path string, params store.NetWorthParams) (store.NetWorth, error) {
 	if len(params.Dates) == 0 {
 		return store.NetWorth{}, nil
 	}
@@ -49,7 +54,7 @@ func (s *Store) NetWorth(ctx context.Context, params store.NetWorthParams) (stor
 	}
 
 	var read store.NetWorth
-	err = db.QueryRows(ctx, netWorthSelect+strings.Join(marks, ", ")+netWorthOrder, args, func(scan func(dest ...any) error) error {
+	err := db.QueryRows(ctx, netWorthSelect+strings.Join(marks, ", ")+netWorthOrder, args, func(scan func(dest ...any) error) error {
 		var row store.NetWorthRow
 		var date time.Time
 		var balance, balanceCAD, balanceUSD *big.Int
@@ -61,7 +66,7 @@ func (s *Store) NetWorth(ctx context.Context, params store.NetWorthParams) (stor
 		return nil
 	})
 	if err != nil {
-		return store.NetWorth{}, openFault(s.Path(), err)
+		return store.NetWorth{}, openFault(path, err)
 	}
 	err = db.QueryRows(ctx, unvaluedHoldingsSQL(reportedAccount+" AND h.date IN ("+strings.Join(marks, ", ")+")"), args,
 		func(scan func(dest ...any) error) error {
@@ -76,7 +81,7 @@ func (s *Store) NetWorth(ctx context.Context, params store.NetWorthParams) (stor
 		read.FirstBalance, err = firstBalance(ctx, db)
 	}
 	if err != nil {
-		return store.NetWorth{}, openFault(s.Path(), err)
+		return store.NetWorth{}, openFault(path, err)
 	}
 	return read, nil
 }

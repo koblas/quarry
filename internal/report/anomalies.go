@@ -97,6 +97,12 @@ func (s *Server) Anomalies(ctx context.Context, req AnomaliesRequest) (Anomalies
 	if err != nil {
 		return Anomalies{}, s.readRefusal(ctx, anomaliesCommand, err)
 	}
+	return anomaliesFrom(charges, accounts, accountIDs, req), nil
+}
+
+// anomaliesFrom judges the charges req.Window holds in the accounts accountIDs names (every account when none),
+// against baselines of strictly earlier charges in charges, which must reach at least to the window's end.
+func anomaliesFrom(charges store.Charges, accounts []store.Account, accountIDs []string, req AnomaliesRequest) Anomalies {
 	result := Anomalies{Window: req.Window, Accounts: accounts, Currency: req.Currency, Transactions: charges.Transactions}
 	tallied := func(c store.Charge) bool {
 		return inWindow(req.Window, c.Date) && (len(accountIDs) == 0 || slices.Contains(accountIDs, c.Account.ID))
@@ -129,7 +135,7 @@ func (s *Server) Anomalies(ctx context.Context, req AnomaliesRequest) (Anomalies
 		result.Unconverted.FirstRate = charges.FirstRate
 	}
 	slices.SortFunc(result.Listed, compareAnomalies)
-	return result, nil
+	return result
 }
 
 // listedIn is a with Amount and Usual converted into target at the rate of the charge's own date. Both convert or
