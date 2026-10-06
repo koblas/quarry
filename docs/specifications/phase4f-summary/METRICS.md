@@ -19,8 +19,52 @@
 | --- | --- | --- | --- | --- |
 | 01 | arch, correctness, test, refactor | 0/1/7/11 | 0 / 20 (1 timeout, killed by hand), 2053 s | BLOCKED |
 | 02 | correctness, test (re-gate) | 0/0/0/0 | not re-sampled | PASS |
+| 03 | product-vision (final) | 0/1/1/0 | - | SHIP WITH CHANGES → PRD list fixed; launchd TCC line deferred by user (recipe optional) |
 
 ## Tokens
+
+Tokens for `phase4f-summary` across 7 project dir(s). Weighted = input-equivalent tokens (IE): cache read x0.1, cache write x1.25 (5m) / x2 (1h), output x5. Attribution: 140 tagged, 0 heuristic. Orchestrator row counts the main session between the feature's first and last run in each session, so it may include other work.
+
+| Agent | Runs | Model(s) | Input | Cache write | Cache read | Output | Weighted (IE) | Share |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| unknown | 70 | claude-opus-5-5, claude-sonnet-5-5 | 3k | 8,579k | 169,649k | 72k | 28,052k | 50% |
+| developer | 38 | claude-sonnet-5-5 | 2k | 4,852k | 116,416k | 49k | 17,955k | 32% |
+| test-reviewer | 12 | claude-sonnet-5-5 | 1k | 1,348k | 22,985k | 8k | 4,024k | 7% |
+| architect | 11 | claude-opus-5-5, claude-sonnet-5-5 | 0k | 1,502k | 19,431k | 10k | 3,872k | 7% |
+| product-vision | 3 | claude-opus-5-5 | 0k | 298k | 4,508k | 1k | 831k | 1% |
+| triage | 2 | claude-sonnet-5-5 | 0k | 277k | 3,176k | 2k | 672k | 1% |
+| correctness-reviewer | 2 | claude-opus-5-5 | 0k | 185k | 2,692k | 1k | 504k | 1% |
+| refactor-advisor | 1 | claude-sonnet-5-5 | 0k | 66k | 249k | 1k | 111k | 0% |
+| arch-reviewer | 1 | claude-sonnet-5-5 | 0k | 51k | 192k | 0k | 83k | 0% |
+| **subagent total** | 140 | | 6k | 17,159k | 339,298k | 144k | 56,104k | 100% |
+| orchestrator (upper bound) | - | claude-opus-5-5 | 1k | 963k | 136,032k | 272k | 16,890k | - |
+
+| Run kind | Runs | Weighted (IE) | Share |
+| --- | --- | --- | --- |
+| scope | 8 | 2,479k | 4% |
+| plan | 22 | 7,744k | 14% |
+| build | 68 | 34,456k | 61% |
+| checkpoint | 20 | 5,332k | 10% |
+| checkpoint-fix | 4 | 681k | 1% |
+| review | 14 | 4,639k | 8% |
+| gate-fix | 4 | 774k | 1% |
+
+| Unit | Plan | Build | Checkpoint | Checkpoint fix | Gate fix | Weighted (IE) | Share |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| - | 2 | 0 | 0 | 0 | 4 | 7,618k | 14% |
+| SCENARIO-01a | 2 | 10 | 2 | 2 | 0 | 8,029k | 14% |
+| SCENARIO-01b | 2 | 8 | 2 | 2 | 0 | 10,326k | 18% |
+| SCENARIO-06 | 2 | 8 | 2 | 0 | 0 | 3,658k | 7% |
+| SCENARIO-10 | 2 | 6 | 2 | 0 | 0 | 4,326k | 8% |
+| SCENARIO-12 | 2 | 6 | 2 | 0 | 0 | 5,228k | 9% |
+| SCENARIO-14 | 2 | 6 | 2 | 0 | 0 | 3,567k | 6% |
+| SCENARIO-16 | 2 | 8 | 2 | 0 | 0 | 6,186k | 11% |
+| SCENARIO-17 | 2 | 8 | 2 | 0 | 0 | 2,953k | 5% |
+| SCENARIO-18 | 0 | 0 | 0 | 0 | 0 | 1,002k | 2% |
+| SCENARIO-21 | 2 | 4 | 2 | 0 | 0 | 1,749k | 3% |
+| SCENARIO-22 | 2 | 4 | 2 | 0 | 0 | 1,463k | 3% |
+
+Developer runs: 38; weighted per run median 394k, p90 838k, max 1,241k.
 
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
