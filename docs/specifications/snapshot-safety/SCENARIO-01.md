@@ -54,3 +54,7 @@ User-visible contract (this scenario): `quarry sync [--json] [--quicken P | --fr
 - An unreferenced `*os.File` is closed by its GC cleanup, dropping the flock: a test holding the lock keeps it referenced (`t.Cleanup(lock.Release)`), and a leaked release cannot be pinned by two sequential runs alone — hence the recording-fake release test.
 - `O_CREATE` on an existing `quarry.lock` needs no folder write — that is why pre-creating it keeps `run_store_faults_test.go:80` on its original line.
 - A bundle or `--from` refusal on a first-ever sync now leaves the quarry folder and `quarry.lock` behind (no `snapshots/`); `run_bundle_refusals_test.go:36,60` check only `snapshots/` and stay green.
+
+## Orchestrator rulings (2026-10-06)
+
+- Kill -9 edge row gets a pin in B1: `internal/platform/lockfile` test that re-execs the test binary (`os.Args[0]`, `-test.run` helper-process pattern, env flag) to hold the lock in a child, SIGKILLs it, waits, then acquires successfully in the parent. Control: acquire while the child is alive refuses held.
