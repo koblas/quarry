@@ -135,6 +135,17 @@ func Test_lock_refuses_a_lock_file_it_cannot_open_naming_its_reason_and_the_fix(
 	}
 }
 
+func Test_lock_for_prune_refuses_as_unopenable_when_the_quarry_folder_is_a_file(t *testing.T) {
+	rig := newLockRigWithoutFolder(t)
+	require.NoError(t, os.MkdirAll(filepath.Dir(rig.dir), 0o700))
+	require.NoError(t, os.WriteFile(rig.dir, nil, 0o600))
+
+	release, err := rig.server(lockfile.ModePrune).LockForPrune(context.Background())
+
+	requireRefusal(t, release, err, "cannot open "+shownLock+": not a directory; "+
+		"make it readable by your user, or remove it, then run the command again")
+}
+
 func Test_lock_refuses_a_missing_lock_file_it_cannot_create_naming_its_reason_and_the_fix(t *testing.T) {
 	skipAsRoot(t)
 	for _, cmd := range lockCommands() {
@@ -207,7 +218,7 @@ func Test_lock_refuses_a_lock_that_cannot_be_taken_naming_its_reason_and_the_com
 
 				release, err := cmd.acquire(srv)
 
-				requireRefusal(t, release, err, "cannot lock "+shownLock+": "+fault.wantReason+", "+cmd.outcome+"; "+
+				requireRefusal(t, release, err, "cannot lock "+shownLock+": "+fault.wantReason+", so "+cmd.outcome+"; "+
 					shownDir+" must be on a disk that supports file locks")
 			})
 		}

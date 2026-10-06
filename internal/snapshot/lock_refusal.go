@@ -31,7 +31,7 @@ func lockRefusal(home string, err *lockfile.Error, words lockWords) (RefusalErro
 	case lockfile.KindOpen:
 		return RefusalError{msg: "cannot open " + lock + ": " + reason + "; make it readable by your user, or remove it, then run the command again"}, true
 	case lockfile.KindLock:
-		return RefusalError{msg: "cannot lock " + lock + ": " + reason + ", " + words.outcome + "; " + folder + " must be on a disk that supports file locks"}, true
+		return RefusalError{msg: "cannot lock " + lock + ": " + reason + ", so " + words.outcome + "; " + folder + " must be on a disk that supports file locks"}, true
 	case lockfile.KindHeld, lockfile.KindNotRegular, lockfile.KindFolderMissing:
 	}
 	return RefusalError{}, false
