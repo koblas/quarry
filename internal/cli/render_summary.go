@@ -55,9 +55,8 @@ func renderEmptySection(caption, line string) string {
 	return renderTable(caption, []tableAlign{alignLeft}, [][]string{{line}})
 }
 
-// renderNetWorthWithChange is the month-end history table with the change between its first and last month
-// end appended; no balance on either end replaces the table with a line saying so, none on the first adds
-// a line saying no change is shown. n holds both month ends.
+// renderNetWorthWithChange is the month-end history with the change between its two month ends appended; no
+// balance on either replaces the table with a line saying so, none on the first adds a no-change line.
 func renderNetWorthWithChange(n report.NetWorth) string {
 	first, last := n.Dates[0], n.Dates[len(n.Dates)-1]
 	change := n.Change()

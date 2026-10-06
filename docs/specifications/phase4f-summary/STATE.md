@@ -1,6 +1,6 @@
 # phase4f-summary — current state
 
-Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds 05, 08, 09, 13, 15). Last updated by SCENARIO-01b.
+Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds 05, 08, 09, 13, 15), SCENARIO-06 (folds 07). Last updated by SCENARIO-06.
 
 ## Binding decisions
 - One port call per `Server.Summary`: `SummaryReads.Summary` returns Status, Charges and NetWorth from one open (duckstore `readStatus`/`readCharges`/`readNetWorth` over one `ReadDB`). Snapshot, dates and findings render from `Summary.Status` — never a second `Status`/`NetWorth` call; sync renames the store mid-run, and the cli fake's nil `Status` panics on a second read (SCENARIO-01a, 01b)
@@ -14,10 +14,13 @@ Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds
 - Summary is a third config class: loads the config always (ignore list, classification) but refuses an unreadable one only without `--currency`; with it, W2 `document.CannotTellChoices(config.Problem(err))` is held in `summaryChoice.cannotTell` and printed only after the report is read (a refusal prints alone) and `IgnoreKnown=false`. S12's JSON `findings.ignored` null and S16 mirror it (SCENARIO-01b)
 - W1 (config warnings) print before stdout; S10/S14's W3-W6 go after stdout through `emitReport`, in the spec's order (SCENARIO-01b)
 - Check order: Args (positional, then `--currency` value) → `--month` → config → store (SCENARIO-01b)
+- Empty section bodies are summary-only composers in `render_summary.go` (`summaryAnomaliesSection`, `summaryRecurringSection`, `renderEmptySection`); `renderAnomalies`, `renderRecurringTitled`, `renderNetWorthHistory` and every other command's output stay byte-identical. Empty test is `len(Listed)==0` / `Recurring.Empty()`, not `Checked==0`: all-too-young charges say `No unusually large charges.` above `N charges checked; M had too little history to judge`. An empty month's anomalies section differs from `quarry anomalies` (header row); the byte-identity pin stays on a non-empty month (SCENARIO-06)
+- No-change vs no-balance both key on `NetWorth.Change()==nil`; they differ only by whether the last month end has rows. `renderNetWorthWithChange` indexes `Dates[0]`/`Dates[len-1]` with no length guard: `Server.Summary` always holds both month ends (SCENARIO-06)
 - Interim, never ships: `summary --json` → `UsageError` `summary --json is not available yet`; a nil Change cell prints `no rate` now (ruled U5) (SCENARIO-01b)
 
 ## Left unbuilt
-- Empty-section lines `No unusually large charges.`, `No new recurring charges.`, `No account has a balance on …`, `No change shown: …` — SCENARIO-06/07
+- Suppression of the empty-window lines of `AnomaliesWarnings` (warnings.go:61-68, fires on `Checked==0`), `RecurringWarnings` (:53-59, fires on `Recurring.Empty()`) and `emptyNetWorthWarnings` — SCENARIO-14 wires W4-W6; `summary.go` calls none today, so SCENARIO-06's empty-stderr pins are green on arrival and must stay green when S14 lands (drop only each warning's last empty-window line, keep left-out/unconverted lines) (SCENARIO-06)
+- `--json` empty shapes (`{"types":[],"totals":[]}`, `dates` null/null) — SCENARIO-12 (SCENARIO-06)
 - `covers_month`, W3a/W3b — SCENARIO-10/11; `document.Summary`, `renderSummaryJSON` (replaces the interim `--json` refusal) — SCENARIO-12; W4-W6 and the no-rate matrix — SCENARIO-14; `monthly_summary` MCP tool — SCENARIO-16; SKILL/README/reference/PRD Decisions + MCP row — SCENARIO-16/17
 
 ## Traps
@@ -29,8 +32,10 @@ Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds
 - `spendEnv`'s clock is 2026-09-29, so its default month is August and `--month 2026-09` is refused as not ended; summary tests use `summaryClock` (2026-10-06) (SCENARIO-01b)
 - Adding summary to `configAlwaysReadCommands` or `readCommandArgs` makes existing tests (currency_test.go configAlways loops, run_config_test.go empty-stderr) fail for a correct summary (SCENARIO-01b)
 - A CLI-level "no ignored clause on W2" assertion is vacuous (an unreadable config already leaves `Ignored` 0); `IgnoreKnown=false` is pinned in `Test_summaryFindingsPhrase_says_ignored_only_when_the_ignore_list_was_read` (SCENARIO-01b)
+- Narrow-loop `-run` is case-sensitive: command-level summary tests are `Test_run_summary_*`, so `-run 'Summary'` on `./cmd/quarry/` runs nothing; use lowercase `run_summary` (and `summary` on `internal/cli`) (SCENARIO-06)
+- `septemberSummary` (render_summary_internal_test.go) carries both month ends in `NetWorth.Dates`; a fixture without them panics `renderNetWorthWithChange` (SCENARIO-06)
 - Native fixture `summaryNativeRows` has no USD-end-day-only account at command level; that arm is pinned in the `changeRows` internal tests (SCENARIO-01b)
 
 ## Open debts
 - SCENARIO-12 adds `summary` to `genericCurrencyCommands` (currency_test.go:24) and the `--json` loops (:347), and deletes the summary-specific currency tests (`Test_summary_refuses_a_currency_that_is_not_cad_usd_or_native`, `Test_summary_shows_amounts_in_the_currency_it_was_given`, `Test_summary_refuses_a_positional_argument_before_the_currency_flag`, `Test_summary_reads_the_config_once_without_the_currency_flag`) they duplicate, and the interim `--json` refusal test `Test_summary_refuses_json_until_its_document_exists` (SCENARIO-01b)
-- No checkpoint MINOR/NIT left unfolded by SCENARIO-01b (all nine pins folded into run V)
+- No checkpoint MINOR/NIT left unfolded by SCENARIO-01b or SCENARIO-06 (the not-judged footer pin and the doc trim folded into run V)

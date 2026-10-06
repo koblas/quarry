@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-06
-status: open
+status: done
 ---
 
 # SCENARIO-06: First month of data shows no change (folds SCENARIO-07 A quiet month)
@@ -33,10 +33,10 @@ No new port or adapter: nothing to survey. No fallible call and no numeric bound
   - Tests (`render_summary_internal_test.go`, extend `:185-196` which already holds `augustEnd`/`septemberEnd` and `monthEndHolding`): `Test_renderNetWorthWithChange_says_no_account_has_a_balance_when_neither_month_end_has_one` (CAD, USD, native: same line, caption unchanged), `Test_renderNetWorthWithChange_says_no_change_is_shown_when_only_the_first_month_end_is_empty` (CAD and native, the latter with CAD and USD on the end day: U10 — fires only when the start day has no row in any currency; control: start day with a row in one currency only → Change rows, no line). Command-level cells (`run_summary_empty_test.go`): `Test_run_summary_prints_the_ruled_empty_lines_for_a_store_without_transactions_and_a_month_before_all_data` (table of: store with no transactions → `Dates     no transactions` and all four empty lines; `--month 2020-01` on the seeded store → heading plus empty lines, month named in `no account has a balance on 2019-12-31 or 2020-01-31.`; empty month between data via `--month 2026-03` on `seedSummaryStore` → `0 charges checked`, `No new recurring charges.`, normal Change; each asserts empty stderr and exit 0) and `Test_run_summary_shows_no_change_in_native_when_no_currency_has_a_balance_on_the_first_month_end` (`--currency native` on a CAD+USD store first balanced in September: no Change rows, one line)
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the new helpers (1-2 lines each)
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the new helpers (1-2 lines each)
 
 ### Verify
-- [ ] Step 6: full verification (`agent-briefs.md` → *Verification*) + `.claude/scripts/spec-check.py phase4f-summary` → tick SCENARIO-06 with its acceptance test and SCENARIO-07 ("delivered by SCENARIO-06") in `specification.md`; rewrite STATE.md
+- [x] Step 6: full verification (`agent-briefs.md` → *Verification*) + `.claude/scripts/spec-check.py phase4f-summary` → tick SCENARIO-06 with its acceptance test and SCENARIO-07 ("delivered by SCENARIO-06") in `specification.md`; rewrite STATE.md
 
 ## Handoff
 
@@ -63,12 +63,6 @@ No new port or adapter: nothing to survey. No fallible call and no numeric bound
 
 ## Phase report
 
-Run B2 (step 4) done. Start commit ec4bc62. Steps 3-4 ticked; steps 5-6 (Sweep, Verify) open for run V, though lint was already 0 issues and the covered full suite passed (rc 0) at the end of B2.
+Run V done. Checkpoint pins folded: `cmd/quarry/run_summary_empty_test.go` `Test_run_summary_counts_a_large_charge_with_too_little_history_as_not_judged_in_the_empty_section` (first-month store, one -150.00 charge: `No unusually large charges.` then `1 charge checked; 1 had too little history to judge`; mutation `anomaliesFooter(a.Checked, 0)` in `render_summary.go:41` reddened it, restored); `renderNetWorthWithChange` doc trimmed to 2 lines (`render_summary.go:58-59`).
 
-Files: `internal/cli/render_summary.go:58-72` `renderNetWorthWithChange` (neither month end has a row -> `renderEmptySection(netWorthHistoryCaption, "No account has a balance on <d0> or <d1>.")`; `Change()==nil` with an end-day row -> unchanged history table, blank line, `No change shown: no account has a balance on <d0>.`; else table plus Change rows as before; dates from `Dates[0]` / `Dates[len-1]`, no length guard, `septemberSummary` carries both). `internal/cli/render_summary_internal_test.go`: `Test_renderSummary_says_when_the_store_holds_no_transactions` now `assert.Equal` on the FULL empty document (fixture snapshot path set so the Snapshot line is real); the old NotContains-"Change" test is replaced by `Test_renderNetWorthWithChange_says_no_account_has_a_balance_when_neither_month_end_has_one` (CAD, USD, native), `..._says_no_change_is_shown_when_only_the_first_month_end_is_empty` (CAD; native with CAD+USD end day), `..._shows_the_change_when_the_first_month_end_has_a_row_in_one_currency_only` (U10 control), `..._shows_the_change_when_only_the_last_month_end_is_empty` (U6 control, `-1,000.00`). `cmd/quarry/run_summary_empty_test.go`: `Test_run_summary_prints_the_ruled_empty_lines_for_a_store_without_transactions_and_a_month_before_all_data` (3 rows: no transactions, `--month 2020-01`, `--month 2026-03`; each full-document Equal, empty stderr, exit 0) and `Test_run_summary_shows_no_change_in_native_when_no_currency_has_a_balance_on_the_first_month_end`.
-
-Green: S06 acceptance `Test_run_summary_shows_no_change_in_the_first_month_of_data` and S07 acceptance both pass; command-level cells were green on arrival because step 4's code existed before them (built code-first). `golangci-lint run ./...` 0 issues; covered full suite rc=0; `uncovered-diff.py` since ec4bc62: 0 uncovered. `test-stats.py --base ec4bc62 --changed`: cmd/quarry 931 (+2), internal/cli 606 (+3), TOTAL 1537 (+5).
-
-Mutation (plan line, no-balance branch): `render_summary.go:63` `change == nil && len(last.Rows) == 0` -> `change == nil` reddened `Test_renderNetWorthWithChange_says_no_change_is_shown_when_only_the_first_month_end_is_empty` (both subtests), `Test_run_summary_shows_no_change_in_the_first_month_of_data` and `Test_run_summary_shows_no_change_in_native_when_no_currency_has_a_balance_on_the_first_month_end` (table replaced by the no-balance line); `..._says_no_account_has_a_balance_when_neither...` stayed green, as predicted. Restored, diff identical.
-
-Notes for V: the plan's narrow loop `-run 'Summary'` on `./cmd/quarry/` runs nothing (case-sensitive; tests are `Test_run_summary_*`): use `-run 'run_summary'`. Tool hook refuses `COVER="$(mktemp ...)"` inside compound go commands: use a literal scratchpad path for the profile. Run V still owns: step 5 doc-comment check, step 6 spec-check, tick SCENARIO-06 plus SCENARIO-07 in specification.md, STATE.md rewrite (its `Left unbuilt` first bullet, the four empty-section lines, is now built; carry the Handoff's S14 note: empty-stderr pins are green on arrival until W4-W6 land).
+Verify (`verify.sh 2a38496 ./internal/cli/...`): build rc=0, go test rc=0, uncovered-diff rc=0 (0 uncovered), race rc=0, golangci-lint rc=0 (0 issues). Spec ticked (06 and 07), `spec-check.py phase4f-summary` OK, STATE.md rewritten, status done. Nothing left for later runs.

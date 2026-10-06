@@ -83,6 +83,21 @@ func Test_run_summary_says_so_in_a_month_with_no_unusual_charge_and_no_new_recur
 		stdout.String())
 }
 
+func Test_run_summary_counts_a_large_charge_with_too_little_history_as_not_judged_in_the_empty_section(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	chequing := chequingAccount("acct-cad", 1)
+	replaceStore(t, home, chargeRows([]store.Account{chequing},
+		summaryTxn(chequing.ID, "Appliance Store", "cat-groceries", day(2026, time.September, 12), -15000)))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runWith(context.Background(), []string{"summary", "--month", "2026-09"}, spendEnvAt(&stdout, &stderr, summaryClock))
+
+	require.Equal(t, 0, exitCode)
+	assert.Empty(t, stderr.String())
+	assert.Contains(t, stdout.String(), "\n\nNo unusually large charges.\n\n1 charge checked; 1 had too little history to judge\n\n")
+}
+
 func Test_run_summary_prints_the_ruled_empty_lines_for_a_store_without_transactions_and_a_month_before_all_data(t *testing.T) {
 	cases := []struct {
 		name string
