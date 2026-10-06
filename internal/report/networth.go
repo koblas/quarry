@@ -33,6 +33,24 @@ type NetWorthDate struct {
 	Totals []NetWorthTotal
 }
 
+// NetWorthChange is how net worth moved between a history's first and last dates.
+type NetWorthChange struct {
+	Types  []NetWorthChangeType
+	Totals []NetWorthChangeTotal
+}
+
+// NetWorthChangeType is the change of one account type in one currency; Value is nil when a rate is missing.
+type NetWorthChangeType struct {
+	Type, Currency string
+	Value          *big.Int
+}
+
+// NetWorthChangeTotal is the change of all of one currency's balances; Value is nil when a rate is missing.
+type NetWorthChangeTotal struct {
+	Currency string
+	Value    *big.Int
+}
+
 // NetWorth is the net worth on AsOf, or when Window is set at each month end in it, shown in Currency.
 // Every day asked for has a Dates entry, rows or not.
 type NetWorth struct {

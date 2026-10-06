@@ -2,6 +2,7 @@ package report_test
 
 import (
 	"context"
+	"slices"
 
 	"github.com/koblas/quarry/internal/store"
 )
@@ -29,9 +30,11 @@ type fakeStore struct {
 	gotSearch     *store.SearchParams
 	gotHoldings   *store.HoldingsParams
 	gotNetWorth   *store.NetWorthParams
+	gotSummary    *store.SummaryParams
 	accountsReads *int
 	holdingsReads *int
 	netWorthReads *int
+	summaryReads  *int
 	historyReads  *int
 	chargesReads  *int
 	schemaReads   *int
@@ -129,6 +132,19 @@ func (f fakeStore) NetWorth(_ context.Context, params store.NetWorthParams) (sto
 		*f.netWorthReads++
 	}
 	return f.netWorth, f.err
+}
+
+// Summary answers with the status, the charges dated through params.Through and the net worth the fake holds.
+func (f fakeStore) Summary(_ context.Context, params store.SummaryParams) (store.Summary, error) {
+	if f.gotSummary != nil {
+		*f.gotSummary = params
+	}
+	if f.summaryReads != nil {
+		*f.summaryReads++
+	}
+	charges := f.charges
+	charges.Rows = slices.DeleteFunc(slices.Clone(charges.Rows), func(c store.Charge) bool { return c.Date.After(params.Through) })
+	return store.Summary{Status: f.status, Charges: charges, NetWorth: f.netWorth}, f.err
 }
 
 func (f fakeStore) InvestmentHistory(context.Context) (store.InvestmentHistory, error) {

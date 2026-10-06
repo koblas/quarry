@@ -18,6 +18,17 @@ type ValueReads interface {
 	InvestmentHistory(ctx context.Context) (store.InvestmentHistory, error)
 }
 
+// SummaryReads is the part of Store a monthly summary reads: the charges anomalies and recurring are judged
+// from, and the one read that serves a whole summary.
+type SummaryReads interface {
+	// Charges lists every charge dated through params.Through, with the span of the store's
+	// transactions (of the named reported accounts' when params.AccountIDs is set).
+	Charges(ctx context.Context, params store.ChargeParams) (store.Charges, error)
+	// Summary reads the store's status, every charge dated through params.Through and its net worth on
+	// params.Dates from one open of the store.
+	Summary(ctx context.Context, params store.SummaryParams) (store.Summary, error)
+}
+
 // Store is the read side of quarry's store: each method opens the store
 // read-only, answers, and closes it again.
 type Store interface {
@@ -29,13 +40,11 @@ type Store interface {
 	Spending(ctx context.Context, params store.SpendingParams) (store.Spending, error)
 	// CashFlow reads income and spending in params.Window, per period and currency, filtered as params says.
 	CashFlow(ctx context.Context, params store.CashFlowParams) (store.CashFlow, error)
-	// Charges lists every charge dated through params.Through, with the span of the store's
-	// transactions (of the named reported accounts' when params.AccountIDs is set).
-	Charges(ctx context.Context, params store.ChargeParams) (store.Charges, error)
 	// Search lists the newest params.Limit transactions matching params, with the full match count and the
 	// span of the store's transactions (of the named accounts' when params.AccountIDs is set).
 	Search(ctx context.Context, params store.SearchParams) (store.Search, error)
 	ValueReads
+	SummaryReads
 	// Findings lists every finding in the store with its items, and every account.
 	Findings(ctx context.Context) (store.FindingList, error)
 	// Schema describes what the store holds: its tables and views, accounts, categories and transaction dates.
