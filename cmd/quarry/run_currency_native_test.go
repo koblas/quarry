@@ -88,7 +88,7 @@ var nativeCommands = []struct {
 		"17 charges checked\n"},
 	{name: "accounts", args: []string{"accounts"}, want: "" +
 		"Account      Type       Currency   Balance  Status\n" +
-		"Brokerage    brokerage  USD           0.00\n" +
+		"Brokerage    brokerage  USD           0.00  unclassified\n" +
 		"Chequing     chequing   CAD       2,840.00\n" +
 		"US Chequing  chequing   USD        -530.00\n"},
 }

@@ -1,0 +1,567 @@
+package report
+
+import (
+	"cmp"
+	"math/big"
+	"slices"
+	"time"
+
+	"github.com/koblas/quarry/internal/platform/money"
+	"github.com/koblas/quarry/internal/store"
+)
+
+// Shares are stored in millionths and commissions in hundredths of a cent.
+const (
+	acbUnitsPerShare     = 1_000_000
+	acbCommissionPerCent = 100
+)
+
+// A day's pool transactions run acquisitions, then splits and adjustments, then dispositions.
+const (
+	acbAcquisition = iota
+	acbRestructure
+	acbDisposition
+)
+
+// acbTiers is each walked action's tier; absent actions are skipped.
+var acbTiers = map[string]int{
+	store.ActionBuy:              acbAcquisition,
+	store.ActionReinvestDividend: acbAcquisition,
+	store.ActionAddShares:        acbAcquisition,
+	store.ActionSplit:            acbRestructure,
+	store.ActionSell:             acbDisposition,
+	store.ActionRemoveShares:     acbDisposition,
+}
+
+// acbPool is one security's units and adjusted cost base across the non-registered accounts. Shares stay an exact
+// count, negative while a disposition has outrun the pool, a short. Whether the pool is held, flat or short is
+// decided on held() alone, in millionths as the holding count decides it; a disposition that leaves the pool not
+// held leaves no ACB in it.
+type acbPool struct {
+	shares *big.Rat
+	acb    int64
+}
+
+// held is the pool's shares in millionths: above 0 held, 0 flat, below 0 short.
+func (p *acbPool) held() int64 {
+	return Millionths(p.shares)
+}
+
+// settle drops what is left of the exact shares once none are held, so the remainder cannot turn flat into held or
+// short when a later split rescales it.
+func (p *acbPool) settle() {
+	if p.held() == 0 {
+		p.shares.SetInt64(0)
+	}
+}
+
+// heldShares is the pool's shares rounded to the millionth, the count a reader sees.
+func (p *acbPool) heldShares() *big.Rat {
+	return big.NewRat(p.held(), acbUnitsPerShare)
+}
+
+// acbSale is a sale and the source id that breaks a tie with another security's sale the same day.
+type acbSale struct {
+	row      ACBSale
+	sourceID int64
+}
+
+// walkACB walks every security's pooled history in the non-registered accounts through req.Today.
+func walkACB(history store.InvestmentHistory, req ACBRequest) ACB {
+	inPool := accountsClassified(history.Accounts, req.Classification, false)
+	bySecurity := make(map[string][]store.InvestmentTransaction)
+	for _, tx := range history.Transactions {
+		_, walked := acbTiers[tx.Action]
+		if tx.SecurityID == nil || !walked || !inPool[tx.AccountID] || tx.Date.After(req.Today) {
+			continue
+		}
+		bySecurity[*tx.SecurityID] = append(bySecurity[*tx.SecurityID], tx)
+	}
+
+	result := ACB{AsOf: req.Today}
+	if len(history.Rates) > 0 {
+		result.FirstRate = history.Rates[0].Date
+	}
+	days, issues := adjustmentDays(req, history.Securities)
+	names := accountNames(history.Accounts)
+	var sales []acbSale
+	var excesses []acbExcess
+	// A transaction naming a security absent from Securities is never walked: the importer sets a security_id
+	// only from a security it mapped, so the store holds no such row.
+	for _, security := range history.Securities {
+		txs := bySecurity[security.ID]
+		if len(txs) == 0 && len(days[security.ID]) == 0 {
+			continue
+		}
+		walk := walkSecurity(security, txs, days[security.ID], history.Rates, names)
+		if len(txs) > 0 {
+			result.Securities = append(result.Securities, walk.position)
+		}
+		// A security with a trade quarry cannot value has no trustworthy gain, in any year.
+		if walk.position.NoRate == nil {
+			sales = append(sales, walk.sales...)
+			excesses = append(excesses, walk.excesses...)
+		}
+		issues = append(issues, walk.issues...)
+	}
+	slices.SortFunc(result.Securities, func(a, b ACBSecurity) int { return compareSecurities(a.Security, b.Security) })
+	slices.SortFunc(issues, func(a, b ACBAdjustmentIssue) int { return cmp.Compare(a.Item, b.Item) })
+	markSuperficialLosses(sales, history, req.Today)
+	result.Years = acbYears(sales, excesses)
+	result.AdjustmentIssues = issues
+
+	return result
+}
+
+// acbItem is one adjustment, dated date, and its number among the request's.
+type acbItem struct {
+	number                        int
+	date                          time.Time
+	returnOfCapital, reinvestment int64
+}
+
+// acbAdjustmentDay is one security's items dated one day, in request order.
+type acbAdjustmentDay struct {
+	date  time.Time
+	items []acbItem
+}
+
+// adjustmentDays groups the request's adjustments dated through Today by security, then by day, oldest
+// first. An item naming a security absent from securities is skipped and returned as an issue.
+func adjustmentDays(req ACBRequest, securities []store.Security) (map[string][]acbAdjustmentDay, []ACBAdjustmentIssue) {
+	known := make(map[string]bool, len(securities))
+	for _, security := range securities {
+		known[security.ID] = true
+	}
+
+	days := make(map[string][]acbAdjustmentDay)
+	var issues []ACBAdjustmentIssue
+	for i, a := range req.Adjustments {
+		item := acbItem{number: i + 1, date: a.Date, returnOfCapital: a.ReturnOfCapital, reinvestment: a.ReinvestedDistribution}
+		switch {
+		case a.Date.After(req.Today):
+		case !known[a.SecurityID]:
+			issues = append(issues, ACBAdjustmentIssue{Kind: ACBAdjustmentUnknownSecurity, Item: item.number, SecurityID: a.SecurityID, Date: a.Date})
+		default:
+			days[a.SecurityID] = addToDay(days[a.SecurityID], item)
+		}
+	}
+	for _, security := range days {
+		slices.SortFunc(security, func(a, b acbAdjustmentDay) int { return a.date.Compare(b.date) })
+	}
+
+	return days, issues
+}
+
+// addToDay puts item in the day of days it is dated, opening that day when there is none.
+func addToDay(days []acbAdjustmentDay, item acbItem) []acbAdjustmentDay {
+	for i := range days {
+		if days[i].date.Equal(item.date) {
+			days[i].items = append(days[i].items, item)
+
+			return days
+		}
+	}
+
+	return append(days, acbAdjustmentDay{date: item.date, items: []acbItem{item}})
+}
+
+// accountsClassified is the ids of the accounts c lists registered, or non-registered when registered is false;
+// an unclassified account is in neither set.
+func accountsClassified(accounts []store.Account, c Classification, registered bool) map[string]bool {
+	ids := make(map[string]bool)
+	for _, a := range accounts {
+		if of := c.Of(a); of != nil && *of == registered {
+			ids[a.ID] = true
+		}
+	}
+
+	return ids
+}
+
+// accountNames is each account's name by id.
+func accountNames(accounts []store.Account) map[string]string {
+	names := make(map[string]string, len(accounts))
+	for _, a := range accounts {
+		names[a.ID] = a.Name
+	}
+
+	return names
+}
+
+// securityWalk is one security's pool as its transactions and adjustments are applied.
+type securityWalk struct {
+	security store.Security
+	rates    []store.Rate
+	names    map[string]string
+	pool     acbPool
+	position ACBSecurity
+	sales    []acbSale
+	excesses []acbExcess
+	issues   []ACBAdjustmentIssue
+	splitDay time.Time
+	// unknownCost is whether the pool holds shares added with no cost: opened by such an addition that leaves
+	// shares held, closed when any change leaves the pool at 0 or below.
+	unknownCost bool
+}
+
+// walkSecurity applies txs, in date, tier then source id order, to one pool, each of days' adjustments between
+// its day's splits and dispositions; rates convert foreign amounts, names are account names by id.
+func walkSecurity(security store.Security, txs []store.InvestmentTransaction, days []acbAdjustmentDay, rates []store.Rate, names map[string]string) *securityWalk {
+	slices.SortFunc(txs, func(a, b store.InvestmentTransaction) int {
+		return cmp.Or(
+			a.Date.Compare(b.Date),
+			cmp.Compare(acbTiers[a.Action], acbTiers[b.Action]),
+			cmp.Compare(a.SourceID, b.SourceID),
+		)
+	})
+
+	w := &securityWalk{
+		security: security, rates: rates, names: names, pool: acbPool{shares: new(big.Rat)}, position: ACBSecurity{Security: security},
+	}
+	for _, tx := range txs {
+		for len(days) > 0 && (days[0].date.Before(tx.Date) || days[0].date.Equal(tx.Date) && acbTiers[tx.Action] == acbDisposition) {
+			w.adjust(days[0])
+			days = days[1:]
+		}
+		w.apply(tx)
+	}
+	for _, day := range days {
+		w.adjust(day)
+	}
+	w.position.Shares, w.position.ACB = w.pool.heldShares(), w.pool.acb
+	w.position.Incomplete = w.unknownCost || w.pool.held() < 0 || w.position.NoRate != nil
+
+	return w
+}
+
+// apply puts tx through the pool and records its event, unless it moves nothing.
+func (w *securityWalk) apply(tx store.InvestmentTransaction) {
+	if movesNoUnits(tx) {
+		return
+	}
+	rate := rateOn(w.rates, tx.Date)
+	event := ACBEvent{
+		ID: tx.ID, Date: tx.Date, AccountID: tx.AccountID, Account: w.names[tx.AccountID], Action: tx.Action,
+		Shares: units(tx.Shares), Amount: &tx.Amount, Currency: tx.Currency, CAD: toCAD(tx.Amount, tx.Currency, rate),
+	}
+	if currency, _ := money.ParseCurrency(tx.Currency); currency == money.USD {
+		event.Rate = rate
+	}
+	event.UnknownCost = noCostAcquisition(tx)
+	if unvalued(tx, rate) {
+		event.Unvalued = true
+		if w.position.NoRate == nil {
+			w.position.NoRate = &ACBNoRate{Date: tx.Date, Currency: tx.Currency}
+		}
+	}
+	switch tx.Action {
+	case store.ActionBuy:
+		w.pool.add(event.Shares, -toCAD(tx.Amount, tx.Currency, rate))
+	case store.ActionReinvestDividend, store.ActionAddShares:
+		w.pool.add(event.Shares, toCAD(zeroIfNil(tx.CostBasis), tx.Currency, rate))
+	case store.ActionSplit:
+		// A split is recorded once per account that held the security; the first row of a day is the split.
+		if tx.Date.Equal(w.splitDay) {
+			return
+		}
+		w.splitDay = tx.Date
+		splitShares(w.pool.shares, tx.SplitNewShares, tx.SplitOldShares)
+	case store.ActionSell:
+		// Quicken stores a sale's shares negative; the units sold are their magnitude.
+		event.Shares.Abs(event.Shares)
+		event.UnknownCost = w.unknownCost
+		sale := w.pool.sell(tx, event.Shares, rate)
+		event.Oversold = w.pool.short()
+		event.UnknownCost = event.UnknownCost || event.Oversold != nil
+		sale.row.AccountID, sale.row.Account, sale.row.UnknownCost = event.AccountID, event.Account, event.UnknownCost
+		outlays := sale.row.Outlays
+		event.Gain, event.Outlays, event.Realized = sale.row.Gain, &outlays, true
+		w.sales = append(w.sales, sale)
+	case store.ActionRemoveShares:
+		// Stored negative like a sale's; the units leave with their share of the ACB and no gain.
+		event.Shares.Abs(event.Shares)
+		event.UnknownCost = w.unknownCost
+		w.pool.take(event.Shares)
+		event.Oversold = w.pool.short()
+	}
+	// The span covers shares held, so any change that leaves none, a split's included, ends it.
+	if w.pool.held() <= 0 {
+		w.unknownCost = false
+	}
+	// Shares with no cost that only cover a short leave nothing held without a cost.
+	if noCostAcquisition(tx) && w.pool.held() > 0 {
+		w.unknownCost = true
+	}
+	// A split rescales shares it does not move, so its remainder stays exact.
+	if acbTiers[tx.Action] != acbRestructure {
+		w.pool.settle()
+	}
+	w.record(event)
+}
+
+// record keeps event with the pool as it left it.
+func (w *securityWalk) record(event ACBEvent) {
+	event.Held, event.ACB = w.pool.heldShares(), w.pool.acb
+	w.position.Events = append(w.position.Events, event)
+}
+
+// adjust applies one day's items, reinvested distributions before returns of capital; a pool with no shares
+// held, empty or short, skips them all.
+func (w *securityWalk) adjust(day acbAdjustmentDay) {
+	if w.pool.held() <= 0 {
+		for _, item := range day.items {
+			w.issues = append(w.issues, w.issue(ACBAdjustmentNotHeld, item.number, day.date))
+		}
+
+		return
+	}
+	for _, item := range day.items[1:] {
+		repeat := w.issue(ACBAdjustmentRepeated, item.number, day.date)
+		repeat.First = day.items[0].number
+		w.issues = append(w.issues, repeat)
+	}
+	for _, item := range day.items {
+		if item.reinvestment > 0 {
+			w.reinvestDistribution(day.date, item.reinvestment)
+		}
+	}
+	for _, item := range day.items {
+		if item.returnOfCapital > 0 {
+			w.returnOfCapital(day.date, item.returnOfCapital)
+		}
+	}
+}
+
+// issue is an issue with the item numbered number, dated date, on this walk's security.
+func (w *securityWalk) issue(kind ACBAdjustmentKind, number int, date time.Time) ACBAdjustmentIssue {
+	return ACBAdjustmentIssue{Kind: kind, Item: number, SecurityID: w.security.ID, Security: w.security.Name, Date: date}
+}
+
+// adjustmentEvent is an event of an adjustment: no transaction, account or amount of its own, and no units moved.
+func adjustmentEvent(date time.Time, action string, cad int64) ACBEvent {
+	return ACBEvent{Date: date, Action: action, Shares: new(big.Rat), CAD: cad}
+}
+
+// reinvestDistribution raises the ACB by cents, the cost of a distribution reinvested.
+func (w *securityWalk) reinvestDistribution(date time.Time, cents int64) {
+	w.pool.acb += cents
+	w.record(adjustmentEvent(date, ACBActionReinvestedDistribution, -cents))
+}
+
+// returnOfCapital lowers the ACB by cents; what exceeds the ACB brings it to 0 and is a capital gain.
+func (w *securityWalk) returnOfCapital(date time.Time, cents int64) {
+	event := adjustmentEvent(date, ACBActionReturnOfCapital, cents)
+	if cents > w.pool.acb {
+		excess := cents - w.pool.acb
+		w.pool.acb = 0
+		event.Gain, event.Realized = excess, true
+		w.excesses = append(w.excesses, acbExcess{date: date, amount: excess})
+	} else {
+		w.pool.acb -= cents
+	}
+	w.record(event)
+}
+
+// movesNoUnits is whether tx adds or removes shares that move nothing: no units, or a negative count added.
+func movesNoUnits(tx store.InvestmentTransaction) bool {
+	switch tx.Action {
+	case store.ActionAddShares:
+		return units(tx.Shares).Sign() <= 0
+	case store.ActionRemoveShares:
+		return units(tx.Shares).Sign() == 0
+	default:
+		return false
+	}
+}
+
+// unvalued is whether tx moves an amount into or out of the pool that quarry cannot convert to CAD: any
+// non-CAD currency without a usable rate. Only CAD is never converted.
+func unvalued(tx store.InvestmentTransaction, rate money.Rate) bool {
+	from, _ := money.ParseCurrency(tx.Currency)
+	_, converted := money.Convert(0, from, money.CAD, rate)
+
+	return needsConversion(tx) && !converted
+}
+
+// needsConversion is whether tx's amount reaches the pool or a gain: a buy, a sale, and added or reinvested
+// shares with a recorded cost. A split, a removal and added shares with no cost carry no value.
+func needsConversion(tx store.InvestmentTransaction) bool {
+	switch tx.Action {
+	case store.ActionBuy, store.ActionSell:
+		return true
+	case store.ActionAddShares, store.ActionReinvestDividend:
+		return tx.CostBasis != nil
+	default:
+		return false
+	}
+}
+
+// noCostAcquisition is whether tx adds shares with no recorded cost: added shares or a reinvested dividend
+// of some units and a missing cost basis.
+func noCostAcquisition(tx store.InvestmentTransaction) bool {
+	switch tx.Action {
+	case store.ActionAddShares, store.ActionReinvestDividend:
+		return tx.CostBasis == nil && units(tx.Shares).Sign() > 0
+	default:
+		return false
+	}
+}
+
+// add puts bought units and their cost, in CAD cents, into the pool. Against a short the units cover it first and
+// add no ACB; the units beyond it enter at cost × beyond ÷ bought, rounded half away from zero.
+func (p *acbPool) add(bought *big.Rat, cost int64) {
+	wasShort := p.held() < 0
+	p.shares.Add(p.shares, bought)
+	switch {
+	case !wasShort:
+		p.acb += cost
+	case p.held() > 0:
+		p.acb += roundHalfAway(new(big.Rat).Mul(big.NewRat(cost, 1), new(big.Rat).Quo(p.shares, bought)))
+	}
+}
+
+// short is how many units the pool is short, or nil when it is not.
+func (p *acbPool) short() *big.Rat {
+	if p.held() >= 0 {
+		return nil
+	}
+
+	return new(big.Rat).Neg(p.heldShares())
+}
+
+// take removes count units (a magnitude) and their share of the ACB, and returns the ACB removed. A count that
+// leaves the pool flat or short removes all of it.
+func (p *acbPool) take(count *big.Rat) int64 {
+	before := new(big.Rat).Set(p.shares)
+	p.shares.Sub(before, count)
+	if p.held() <= 0 {
+		removed := p.acb
+		p.acb = 0
+
+		return removed
+	}
+	removed := roundHalfAway(new(big.Rat).Mul(big.NewRat(p.acb, 1), new(big.Rat).Quo(count, before)))
+	p.acb -= removed
+
+	return removed
+}
+
+// sell takes sold units (a magnitude) out of the pool and returns the sale in CAD.
+func (p *acbPool) sell(tx store.InvestmentTransaction, sold *big.Rat, rate money.Rate) acbSale {
+	removed := p.take(sold)
+
+	outlays := int64(0)
+	if tx.Commission != nil {
+		outlays = roundHalfAway(big.NewRat(*tx.Commission, acbCommissionPerCent))
+	}
+	proceeds := toCAD(tx.Amount+outlays, tx.Currency, rate)
+	outlays = toCAD(outlays, tx.Currency, rate)
+
+	return acbSale{
+		row: ACBSale{
+			ID: tx.ID, Date: tx.Date, SecurityID: *tx.SecurityID, Shares: sold,
+			Proceeds: proceeds, Outlays: outlays, ACBRemoved: removed, Gain: proceeds - outlays - removed,
+		},
+		sourceID: tx.SourceID,
+	}
+}
+
+// rateOn is the USD/CAD rate of the latest day on or before day in rates, which are in date order; zero when none.
+func rateOn(rates []store.Rate, day time.Time) money.Rate {
+	i, found := slices.BinarySearchFunc(rates, day, func(r store.Rate, d time.Time) int { return r.Date.Compare(d) })
+	switch {
+	case found:
+		return rates[i].USDCAD
+	case i > 0:
+		return rates[i-1].USDCAD
+	default:
+		return 0
+	}
+}
+
+// toCAD is cents of currency in CAD at rate, or 0 when it cannot be converted: an unknown currency, or USD with no rate.
+func toCAD(cents int64, currency string, rate money.Rate) int64 {
+	from, _ := money.ParseCurrency(currency)
+	converted, _ := money.Convert(cents, from, money.CAD, rate)
+
+	return converted
+}
+
+// zeroIfNil is *n, or 0 when n is nil.
+func zeroIfNil(n *int64) int64 {
+	if n == nil {
+		return 0
+	}
+
+	return *n
+}
+
+// acbExcess is a return of capital above the ACB: a capital gain of amount on date.
+type acbExcess struct {
+	date   time.Time
+	amount int64
+}
+
+// acbYears groups sales and excesses by the calendar year of their date, oldest year first, each year's
+// sales in date, then source id order. A year with only an excess has no sales.
+func acbYears(sales []acbSale, excesses []acbExcess) []ACBYear {
+	slices.SortFunc(sales, func(a, b acbSale) int {
+		return cmp.Or(a.row.Date.Compare(b.row.Date), cmp.Compare(a.sourceID, b.sourceID))
+	})
+	rows := make([]ACBSale, len(sales))
+	for i, sale := range sales {
+		rows[i] = sale.row
+	}
+
+	return yearsOf(rows, excesses)
+}
+
+// yearsOf groups sales, already in date order, and excesses by the calendar year of their date, oldest year
+// first, and sums each year's CAD columns.
+func yearsOf(sales []ACBSale, excesses []acbExcess) []ACBYear {
+	var years []ACBYear
+	yearOf := func(date time.Time) *ACBYear {
+		i, found := slices.BinarySearchFunc(years, date.Year(), func(y ACBYear, year int) int { return cmp.Compare(y.Year, year) })
+		if !found {
+			years = slices.Insert(years, i, ACBYear{Year: date.Year()})
+		}
+
+		return &years[i]
+	}
+	for _, sale := range sales {
+		year := yearOf(sale.Date)
+		year.Sales = append(year.Sales, sale)
+		year.Proceeds += sale.Proceeds
+		year.Outlays += sale.Outlays
+		year.ACBRemoved += sale.ACBRemoved
+		year.Gain += sale.Gain
+	}
+	for _, excess := range excesses {
+		yearOf(excess.date).ReturnOfCapitalGain += excess.amount
+	}
+
+	return years
+}
+
+// units is shares, in millionths, as a number of shares; a missing count is none.
+func units(millionths *int64) *big.Rat {
+	if millionths == nil {
+		return new(big.Rat)
+	}
+
+	return big.NewRat(*millionths, acbUnitsPerShare)
+}
+
+// roundHalfAway is r rounded to the nearest whole number, halves away from zero.
+func roundHalfAway(r *big.Rat) int64 {
+	twice := new(big.Int).Abs(r.Num())
+	twice.Lsh(twice, 1)
+	twice.Add(twice, r.Denom())
+	rounded := twice.Quo(twice, new(big.Int).Lsh(r.Denom(), 1))
+	if r.Sign() < 0 {
+		rounded.Neg(rounded)
+	}
+
+	return rounded.Int64()
+}

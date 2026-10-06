@@ -29,7 +29,7 @@ func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *tes
 	closedPK := b.Account(v9fixture.AccountRow{Name: "Closed Card", Type: "CREDITCARD", Currency: "CAD", Closed: true})
 	walletPK := b.Account(v9fixture.AccountRow{Name: "Old Wallet", Type: "SAVINGS", Currency: "CAD"})
 	savingsPK := b.Account(v9fixture.AccountRow{Name: "Savings", Type: "SAVINGS", Currency: "CAD", Active: true})
-	b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	reconciled := int64(2)
@@ -62,6 +62,7 @@ func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *tes
 
 	_ = savingsPK
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	writeConfig(t, home, fmt.Sprintf("[accounts]\nnon-registered = [\"acct-%d\"]\n", brokeragePK))
 	var stdout, stderr bytes.Buffer
 
 	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)

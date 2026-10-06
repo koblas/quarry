@@ -37,9 +37,9 @@ when the last sync could not fetch new ones, why.`,
 				return &runtimeError{err: err}
 			}
 
-			ignore, warnings, warningsAbsolute := statusIgnore(loadConfig)
+			ignore, classification, warnings, warningsAbsolute := statusChoices(loadConfig)
 			printConfigWarnings(cmd, warnings)
-			findings := document.FindingsTally{Counts: report.CountFindings(st, ignore), IgnoreKnown: len(warnings) == 0}
+			findings := document.FindingsTally{Counts: report.CountFindings(st, ignore, classification), IgnoreKnown: len(warnings) == 0}
 
 			out, err := renderResult(*jsonOut,
 				func() ([]byte, error) { return renderStatusJSON(st, findings, warningsAbsolute) },
@@ -52,13 +52,12 @@ when the last sync could not fetch new ones, why.`,
 	}
 }
 
-// statusIgnore returns findings.ignore and the warnings to print, ~-abbreviated and then with absolute
-// paths for --json. Status never refuses over the config: when it cannot be read the list is nil and
-// each warnings list holds the one line saying why.
-func statusIgnore(loadConfig ConfigLoader) ([]string, []string, []string) {
+// statusChoices returns findings.ignore, the account classification, and the warnings (~-abbreviated, then
+// absolute for --json). It never refuses: an unreadable config gives empty choices and one warning saying why.
+func statusChoices(loadConfig ConfigLoader) ([]string, report.Classification, []string, []string) {
 	cfg, err := loadConfig("status")
 	if err != nil {
-		return nil, []string{document.CannotTellIgnored(config.Problem(err))}, []string{document.CannotTellIgnored(config.ProblemAbsolute(err))}
+		return nil, report.Classification{}, []string{document.CannotTellChoices(config.Problem(err))}, []string{document.CannotTellChoices(config.ProblemAbsolute(err))}
 	}
-	return cfg.Ignore, nil, nil
+	return cfg.Ignore, classificationOf(cfg), nil, nil
 }

@@ -21,9 +21,10 @@ const FindingsAll finding.Status = "all"
 // ignores, which status to list (open when empty; finding.StatusOpen, StatusIgnored, StatusFixed or
 // FindingsAll) and which type (every type when empty).
 type FindingsRequest struct {
-	Ignore []string
-	Status finding.Status
-	Type   finding.Type
+	Ignore         []string
+	Classification Classification
+	Status         finding.Status
+	Type           finding.Type
 }
 
 // ListedFinding is a finding with its status; FixedAt is non-nil exactly when Status is fixed.
@@ -41,11 +42,13 @@ type FindingsGroup struct {
 
 // FindingsListing is the selected findings grouped by type in display order, the tallies over every
 // finding of the requested type (every known type when none is), and the findings.ignore elements
-// that name no finding of any known type, in file order. A type with nothing listed has no group.
+// that name no finding of any known type, in file order, and the account ids the config lists that
+// name no account (whatever --type selects). A type with nothing listed has no group.
 type FindingsListing struct {
-	Groups    []FindingsGroup
-	Counts    finding.Counts
-	Unmatched []string
+	Groups            []FindingsGroup
+	Counts            finding.Counts
+	Unmatched         []string
+	UnmatchedAccounts UnmatchedAccounts
 }
 
 // Findings lists the findings req selects, grouped in finding.Types order and sorted within each
@@ -57,7 +60,7 @@ func (s *Server) Findings(ctx context.Context, req FindingsRequest) (FindingsLis
 	}
 	want := cmp.Or(req.Status, finding.StatusOpen)
 
-	stored, states := knownFindings(list)
+	stored, states := knownFindings(readTimeFindings(list, req.Classification))
 	var typeStates []finding.State
 	for i, f := range stored {
 		if req.Type == "" || f.Type == req.Type {
@@ -84,13 +87,16 @@ func (s *Server) Findings(ctx context.Context, req FindingsRequest) (FindingsLis
 		slices.SortStableFunc(selected[typ], listedOrder(typ))
 		groups = append(groups, FindingsGroup{Type: typ, Findings: selected[typ]})
 	}
-	return FindingsListing{Groups: groups, Counts: counts, Unmatched: classified.Unmatched}, nil
+	return FindingsListing{
+		Groups: groups, Counts: counts, Unmatched: classified.Unmatched,
+		UnmatchedAccounts: req.Classification.Unmatched(list.Accounts),
+	}, nil
 }
 
-// CountFindings tallies the findings st carries, those of a type this binary knows, by status: an
-// id in ignore is ignored unless fixed. It reads nothing, so it agrees with the rest of st.
-func CountFindings(st store.Status, ignore []string) finding.Counts {
-	_, states := knownFindings(store.FindingList{Findings: st.Findings})
+// CountFindings tallies the findings st carries plus those c computes from its accounts, those of a type
+// this binary knows, by status: an id in ignore is ignored unless fixed. It reads nothing, so it agrees with the rest of st.
+func CountFindings(st store.Status, ignore []string, c Classification) finding.Counts {
+	_, states := knownFindings(readTimeFindings(store.FindingList{Findings: st.Findings, Accounts: st.Accounts, Investments: st.Investments}, c))
 	return finding.Classify(states, ignore).Counts
 }
 
@@ -134,12 +140,12 @@ func statusRank(s finding.Status) int {
 	return 0
 }
 
-// findingOrder is the display order of typ's open and ignored findings: newest item date for transfers and
-// duplicates, size then payee for uncategorized and mixed, transactions for payee-variants, splits for
-// similar-categories, category path for unused-category.
+// findingOrder is the display order of typ's open and ignored findings: newest item date for transfers,
+// duplicates and shares-without-cost, size then payee for uncategorized and mixed, transactions for payee-variants, splits for
+// similar-categories, category path for unused-category, account name for unclassified-account.
 func findingOrder(typ finding.Type) func(a, b store.Finding) int {
 	switch typ {
-	case finding.Duplicate, finding.UnlinkedTransfer, finding.OneSidedTransfer:
+	case finding.Duplicate, finding.UnlinkedTransfer, finding.OneSidedTransfer, finding.SharesWithoutCost:
 		return func(a, b store.Finding) int {
 			return cmp.Or(latestDate(b).Compare(latestDate(a)), cmp.Compare(a.ID, b.ID))
 		}
@@ -170,6 +176,10 @@ func findingOrder(typ finding.Type) func(a, b store.Finding) int {
 	case finding.UnusedCategory:
 		return func(a, b store.Finding) int {
 			return cmp.Or(cmp.Compare(strings.ToLower(categoryOf(a)), strings.ToLower(categoryOf(b))), cmp.Compare(a.ID, b.ID))
+		}
+	case finding.UnclassifiedAccount:
+		return func(a, b store.Finding) int {
+			return cmp.Or(cmp.Compare(strings.ToLower(accountOf(a)), strings.ToLower(accountOf(b))), cmp.Compare(a.ID, b.ID))
 		}
 	}
 	// unreachable: the exhaustive linter fails a switch missing a finding.Types() entry, and knownFindings drops rows of any other type.
@@ -212,6 +222,15 @@ func categoryOf(f store.Finding) string {
 		return ""
 	}
 	return *f.Items[0].Category
+}
+
+// accountOf is the name of f's first item's account; "" when f has none.
+func accountOf(f store.Finding) string {
+	if len(f.Items) == 0 {
+		// unreachable: only a fixed finding lacks items and listedOrder sends it to fixed_at; unclassifiedFindings gives each finding one item
+		return ""
+	}
+	return f.Items[0].Account
 }
 
 // payeeOf is the payee name of f's first item; every item of an uncategorized or mixed-categories finding shares it.

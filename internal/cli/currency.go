@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/platform/money"
+	"github.com/koblas/quarry/internal/report"
 	"github.com/spf13/cobra"
 )
 
@@ -51,6 +53,23 @@ func (f *currencyFlag) args(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// argsCADOnly is the Args check of a command in CAD alone: it refuses a positional argument, then a --currency
+// that was given and is not CAD in any letter case, as a UsageError worded refusal. It never echoes the value.
+func (f *currencyFlag) argsCADOnly(refusal string) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if err := noArgs(cmd, args); err != nil {
+			return err
+		}
+		if !cmd.Flags().Changed(currencyFlagName) {
+			return nil
+		}
+		if currency, ok := money.ParseCurrency(f.code); !ok || currency != money.CAD {
+			return UsageError{msg: refusal}
+		}
+		return nil
+	}
+}
+
 // resolve is the --currency flag when given, else reporting.currency from the config (loader unread
 // with the flag); the second result is the config's absolute warnings, its ~ form printed to stderr.
 func (f *currencyFlag) resolve(cmd *cobra.Command, loadConfig ConfigLoader) (money.Currency, []string, error) {
@@ -59,12 +78,37 @@ func (f *currencyFlag) resolve(cmd *cobra.Command, loadConfig ConfigLoader) (mon
 		currency, _ := money.ParseCurrency(f.code)
 		return currency, nil, nil
 	}
+	cfg, err := readConfig(cmd, loadConfig)
+	if err != nil {
+		return money.Native, nil, err
+	}
+	return cfg.Currency, cfg.WarningsAbsolute, nil
+}
+
+// in is the --currency flag when given, else cfg's reporting currency.
+func (f *currencyFlag) in(cmd *cobra.Command, cfg config.Config) money.Currency {
+	if cmd.Flags().Changed(currencyFlagName) {
+		// The flag was validated in args.
+		currency, _ := money.ParseCurrency(f.code)
+		return currency
+	}
+	return cfg.Currency
+}
+
+// readConfig loads the config for cmd and prints its warnings (~ form) to stderr; a load failure is a
+// runtimeError.
+func readConfig(cmd *cobra.Command, loadConfig ConfigLoader) (config.Config, error) {
 	cfg, err := loadConfig(cmd.Name())
 	if err != nil {
-		return money.Native, nil, &runtimeError{err: err}
+		return config.Config{}, &runtimeError{err: err}
 	}
 	printConfigWarnings(cmd, cfg.Warnings)
-	return cfg.Currency, cfg.WarningsAbsolute, nil
+	return cfg, nil
+}
+
+// classificationOf is the account classification cfg lists.
+func classificationOf(cfg config.Config) report.Classification {
+	return report.Classification{Registered: cfg.Registered, NonRegistered: cfg.NonRegistered}
 }
 
 // withConfigWarnings is the --json warnings of a read command: the config's, absolute, then the

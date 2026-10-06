@@ -49,11 +49,13 @@ Call this before writing SQL for query.`
 const mcpDataQualityDescription = `List the data-quality findings quarry's last sync found: problems to fix
 in Quicken (duplicates, one-sided or unlinked transfers, uncategorized
 splits, payees in mixed categories, payee name variants, similar or
-unused categories). Each finding has an id, the suggested fix, and the
-transactions, payees or categories it is about. quarry never fixes them:
-the user fixes them in Quicken and runs quarry sync, and fixed findings
-drop off. To ignore a finding the user adds its id to findings.ignore in
-quarry's config file.`
+unused categories, shares added with no cost), and investment accounts
+not yet listed as registered or non-registered in quarry's config file,
+which acb needs. Each finding has an id, the suggested fix, and the
+transactions, accounts, payees or categories it is about. quarry never
+fixes them: the user fixes them in Quicken and runs quarry sync, or adds
+the account to quarry's config file, and they drop off. To ignore a
+finding the user adds its id to findings.ignore in quarry's config file.`
 
 const mcpSpendingDescription = `Total the user's spending for a period, grouped by category, payee, tag
 or month, with a total per currency. quarry's spending rules apply:
@@ -125,6 +127,20 @@ const mcpNetWorthInputSchema = `{
 		"until": {"type": "string", "description": "List net worth at each month end on or before this date: YYYY, YYYY-MM or YYYY-MM-DD. Defaults to today; a later date means today."},
 		"currency": {"type": "string", "enum": ["CAD", "USD", "native"], "description": "Currency for amounts: CAD, USD, or native to list each account's own currency separately. ` +
 	`Defaults to reporting.currency in quarry's config file, else CAD."}
+	},
+	"additionalProperties": false
+}`
+
+const mcpACBDescription = "Adjusted cost base and realized capital gains per tax year, in CAD, the way the CRA defines them: average cost per security " +
+	"pooled across non-registered accounts; possible superficial losses marked, not adjusted. A worksheet, not a filing."
+
+const mcpACBInputSchema = `{
+	"type": "object",
+	"properties": {
+		"year": {"type": "integer", "minimum": 1, "maximum": 9999, "description": "Tax year to report, such as 2024, up to this year: years lists only that year (even with no sale), ` +
+	`and securities only those with a sale, or a return of capital above ACB, in it; each security's events stay its full history. Omit it for every year."},
+		"security": {"type": "array", "items": {"type": "string"}, "description": "Report only these securities, each given by id, ticker or name in any letter case; ` +
+	`years and securities count only them. A security held only in registered accounts has no ACB and is left out, with a warning. Omit it for every security."}
 	},
 	"additionalProperties": false
 }`
@@ -206,10 +222,12 @@ const (
 		"type": "object",
 		"properties": {
 			"status": {"type": "string", "enum": ["open", "ignored", "fixed", "all"], "default": "open",
-				"description": "Which findings to list: open (the default), ignored (the user listed the id in findings.ignore), fixed (no longer found since a later sync), or all."},
+				"description": "Which findings to list: open (the default), ignored (the user listed the id in findings.ignore), fixed (no longer found since a later sync; ` +
+		`never unclassified-account or shares-without-cost, which just leave the list), or all."},
 			"type":   {"type": "string", "enum": [
 				"duplicate", "one-sided-transfer", "unlinked-transfer", "uncategorized",
-				"mixed-categories", "payee-variants", "similar-categories", "unused-category"], "description": "List only findings of this type. Omit it to list every type."},
+				"mixed-categories", "payee-variants", "similar-categories", "unused-category", "unclassified-account",
+				"shares-without-cost"], "description": "List only findings of this type. Omit it to list every type."},
 			"limit":  {"type": "integer", "minimum": 1, "maximum": 500, "default": 50,
 				"description": "Most findings to return, 1 to 500. Defaults to 50. counts always covers every finding, and each finding lists at most 25 items."}
 		},
@@ -263,6 +281,7 @@ func Test_run_mcp_describes_every_tool(t *testing.T) {
 			"search_transactions": {mcpSearchDescription, mcpSearchInputSchema},
 			"holdings":            {mcpHoldingsDescription, mcpHoldingsInputSchema},
 			"net_worth":           {mcpNetWorthDescription, mcpNetWorthInputSchema},
+			"acb":                 {mcpACBDescription, mcpACBInputSchema},
 		}
 		require.Len(t, listed.Tools, len(wantTools))
 		for _, tool := range listed.Tools {
@@ -281,7 +300,7 @@ func Test_run_mcp_describes_every_tool(t *testing.T) {
 
 		assert.Equal(t, 0, code)
 		assert.Contains(t, stdout.String(), "SQL runs read-only, and every list a tool returns\nstops at 500 entries.")
-		assert.Contains(t, stdout.String(), "Tools: describe_schema, query, sync_status, data_quality, spending,\ncash_flow, recurring_charges, anomalies, search_transactions, holdings,\nnet_worth.")
+		assert.Contains(t, stdout.String(), "Tools: describe_schema, query, sync_status, data_quality, spending,\ncash_flow, recurring_charges, anomalies, search_transactions, holdings,\nnet_worth, acb.")
 		assert.Empty(t, stderr.String())
 	})
 }

@@ -38,7 +38,7 @@ func Test_accounts_leaves_closed_accounts_out_unless_asked(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			srv := report.NewServer(report.WithStore(fakeStore{accounts: all}))
 
-			got, err := srv.Accounts(t.Context(), c.includeClosed, money.Native)
+			got, err := srv.Accounts(t.Context(), c.includeClosed, money.Native, report.Classification{})
 
 			require.NoError(t, err)
 			assert.Equal(t, c.want, got)
@@ -55,7 +55,7 @@ func Test_accounts_counts_the_closed_accounts_it_left_out(t *testing.T) {
 		accounts: store.AccountList{Accounts: []store.AccountBalance{closed("acct-1"), open, closed("acct-2"), closed("acct-3")}},
 	}))
 
-	got, err := srv.Accounts(t.Context(), false, money.Native)
+	got, err := srv.Accounts(t.Context(), false, money.Native, report.Classification{})
 
 	require.NoError(t, err)
 	assert.Equal(t, 3, got.Hidden)
@@ -80,7 +80,7 @@ func Test_accounts_reports_every_account_hidden_only_when_none_are_left(t *testi
 		t.Run(c.name, func(t *testing.T) {
 			srv := report.NewServer(report.WithStore(fakeStore{accounts: store.AccountList{Accounts: c.accounts}}))
 
-			got, err := srv.Accounts(t.Context(), c.includeClosed, money.Native)
+			got, err := srv.Accounts(t.Context(), c.includeClosed, money.Native, report.Classification{})
 
 			require.NoError(t, err)
 			assert.Equal(t, c.want, got.AllHidden())
@@ -91,7 +91,7 @@ func Test_accounts_reports_every_account_hidden_only_when_none_are_left(t *testi
 func Test_accounts_returns_the_store_fault(t *testing.T) {
 	srv := report.NewServer(report.WithStore(fakeStore{err: errDiskRead}))
 
-	_, err := srv.Accounts(t.Context(), true, money.Native)
+	_, err := srv.Accounts(t.Context(), true, money.Native, report.Classification{})
 
 	require.ErrorIs(t, err, errDiskRead)
 }
@@ -112,7 +112,7 @@ func Test_accounts_echoes_the_currency_it_was_asked_for(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			srv := report.NewServer(report.WithStore(fakeStore{accounts: store.AccountList{}}))
 
-			got, err := srv.Accounts(t.Context(), c.closed, c.currency)
+			got, err := srv.Accounts(t.Context(), c.closed, c.currency, report.Classification{})
 
 			require.NoError(t, err)
 			assert.Equal(t, c.currency, got.Currency)
@@ -124,7 +124,7 @@ func Test_accounts_reads_the_store_once(t *testing.T) {
 	var reads int
 	srv := report.NewServer(report.WithStore(fakeStore{accountsReads: &reads}))
 
-	_, err := srv.Accounts(t.Context(), false, money.CAD)
+	_, err := srv.Accounts(t.Context(), false, money.CAD, report.Classification{})
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, reads)

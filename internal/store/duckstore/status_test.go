@@ -293,3 +293,45 @@ func Test_status_returns_a_findings_scan_fault_as_another_fault(t *testing.T) {
 	assertOtherFault(t, err, errScanFailed.Error())
 	assert.ErrorIs(t, err, errScanFailed)
 }
+
+func Test_status_reads_every_account_closed_included_sorted_by_id(t *testing.T) {
+	t.Parallel()
+	rows := minimalRows()
+	rows.Accounts = append(rows.Accounts,
+		store.Account{ID: "acct-3", SourceID: 3, Name: "Old RRSP", Type: "retirement", Currency: "CAD", Closed: true},
+		store.Account{ID: "acct-2", SourceID: 2, Name: "Questrade TFSA", Type: "brokerage", Currency: "USD", Active: true},
+	)
+	dir := t.TempDir()
+	_, err := duckstore.New(dir).Replace(t.Context(), rows)
+	require.NoError(t, err)
+
+	got, err := duckstore.New(dir).Status(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.Account{
+		{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
+		{ID: "acct-2", Name: "Questrade TFSA", Type: "brokerage", Currency: "USD", Active: true},
+		{ID: "acct-3", Name: "Old RRSP", Type: "retirement", Currency: "CAD", Closed: true},
+	}, got.Accounts)
+}
+
+func Test_status_returns_an_accounts_query_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	fault := ioFault(`query rows "SELECT id"`)
+	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault, passQueries: 2}))
+
+	_, err := st.Status(t.Context())
+
+	assertOtherFault(t, err, "disk read failed")
+	assert.ErrorIs(t, err, fault)
+}
+
+func Test_status_returns_an_account_scan_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	st := newBuiltStore(t, spyOpener(&spyReadDB{scanFault: errScanFailed, passQueries: 2}))
+
+	_, err := st.Status(t.Context())
+
+	assertOtherFault(t, err, errScanFailed.Error())
+	assert.ErrorIs(t, err, errScanFailed)
+}

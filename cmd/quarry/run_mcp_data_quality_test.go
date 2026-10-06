@@ -59,6 +59,30 @@ func Test_run_mcp_data_quality_returns_the_first_50_open_findings_with_the_ruled
 	assert.Empty(t, peer.stderr.String())
 }
 
+func Test_run_mcp_data_quality_leaves_out_an_account_the_config_classifies(t *testing.T) {
+	var siblingID string
+	ctx, peer := newStatusPeer(t, func(t *testing.T, home string) {
+		t.Helper()
+		b := v9fixture.NewBuilder()
+		listedPK := b.Account(v9fixture.AccountRow{Name: "Questrade TFSA", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+		siblingPK := b.Account(v9fixture.AccountRow{Name: "Questrade Margin", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+		syncBundle(t, b.WriteBundle(t, filepath.Join(home, "Documents")))
+		siblingID = fmt.Sprintf("acct-%d", siblingPK)
+		writeConfig(t, home, fmt.Sprintf("[accounts]\nregistered = [\"acct-%d\"]\n", listedPK))
+	})
+
+	result := callDataQuality(ctx, t, peer, map[string]any{"type": "unclassified-account"})
+	require.NoError(t, peer.session.Close())
+	peer.waitForExit(ctx, t)
+
+	require.False(t, result.IsError, textOf(result))
+	var doc dataQualityDocument
+	require.NoError(t, json.Unmarshal([]byte(textOf(result)), &doc))
+	require.Len(t, doc.Findings, 1)
+	assert.Equal(t, "unclassified-account:"+siblingID, doc.Findings[0]["id"])
+	assert.Empty(t, peer.stderr.String())
+}
+
 func Test_run_mcp_data_quality_refuses_an_unreadable_config(t *testing.T) {
 	var home string
 	ctx, peer := newStatusPeer(t, func(t *testing.T, h string) {

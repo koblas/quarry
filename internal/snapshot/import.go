@@ -189,7 +189,11 @@ func (s *Server) importVerified(ctx context.Context, manifest Manifest) (Outcome
 		return Outcome{Manifest: manifest}, s.importFailureRefusal(ctx, manifest, err)
 	}
 
-	result.Findings = finding.Classify(result.FindingStates, s.ignore).Counts
+	states := result.FindingStates
+	if s.readTime != nil {
+		states = slices.Concat(states, s.readTime(store.FindingList{Accounts: result.Accounts, Investments: result.Investments}))
+	}
+	result.Findings = finding.Classify(states, s.ignore).Counts
 	outcome := Outcome{Manifest: manifest, Store: &result}
 	outcome.historyWarning, outcome.findingsWarning, outcome.ratesWarning = carryWarnings(result, homepath.Abbreviate(s.home, s.storeProbe.Path()))
 	outcome.fetchWarning = fetchWarning(result.Rates)

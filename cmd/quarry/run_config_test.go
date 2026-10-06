@@ -8,9 +8,11 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -184,6 +186,10 @@ func Test_run_sync_refuses_a_bad_config_value_with_the_ruled_copy(t *testing.T) 
 			name: "reporting as a plain value", content: "reporting = \"CAD\"\n",
 			line: configShown + ": reporting must be a table, such as reporting.currency = \"CAD\", got \"CAD\"",
 		},
+		{
+			name: "an adjustment without a date", content: "[[acb.adjustment]]\nsecurity = \"sec-41\"\nreturn-of-capital = 12.34\n",
+			line: configShown + ": acb.adjustment item 1 needs date, such as date = 2024-12-31",
+		},
 	}
 
 	for _, c := range cases {
@@ -200,6 +206,19 @@ func Test_run_sync_refuses_a_bad_config_value_with_the_ruled_copy(t *testing.T) 
 			assert.Equal(t, 1, exitCode)
 		})
 	}
+}
+
+func Test_run_refuses_an_account_number_in_an_accounts_list_masked(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, "[accounts]\nregistered = [12345678]\n")
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: "+configShown+": accounts.registered must hold only account ids in quotes, got ****5678 as item 1"+configFix+"\n", stderr.String())
+	assert.Equal(t, 1, exitCode)
 }
 
 func Test_run_sync_refuses_a_config_it_cannot_read(t *testing.T) {
@@ -221,6 +240,7 @@ func readCommandArgs() map[string][]string {
 		"accounts":  {"accounts"},
 		"holdings":  {"holdings"},
 		"networth":  {"networth"},
+		"acb":       {"acb"},
 		"anomalies": {"anomalies", "--since", "2026-01", "--until", "2026-09"},
 		"spend":     {"spend", "--since", "2026-01", "--until", "2026-09"},
 		"cashflow":  {"cashflow", "--since", "2026-01", "--until", "2026-09"},
@@ -228,8 +248,24 @@ func readCommandArgs() map[string][]string {
 	}
 }
 
+// currencyIgnored are the read commands that load the config even when given --currency.
+var currencyIgnored = map[string]bool{"accounts": true, "acb": true}
+
+// currencyHonouringCommands are the readCommandArgs commands, in name order, that skip the config when
+// given --currency: every one except currencyIgnored.
+func currencyHonouringCommands() []string {
+	var names []string
+	for _, name := range slices.Sorted(maps.Keys(readCommandArgs())) {
+		if !currencyIgnored[name] {
+			names = append(names, name)
+		}
+	}
+
+	return names
+}
+
 // readCommandFixture builds a store every readCommandArgs invocation reads, with no config file;
-// it returns HOME and each invocation's output.
+// it returns HOME and each invocation's output, except acb's.
 func readCommandFixture(t *testing.T) (string, map[string]string) {
 	t.Helper()
 	home := t.TempDir()
@@ -252,6 +288,10 @@ func readCommandFixture(t *testing.T) (string, map[string]string) {
 	replaceStore(t, home, rows)
 	before := map[string]string{}
 	for name, args := range readCommandArgs() {
+		// With no config, acb refuses acct-cad as unclassified; no test reads its output from before.
+		if name == "acb" {
+			continue
+		}
 		var stdout, stderr bytes.Buffer
 		require.Equal(t, 0, runWith(context.Background(), args, spendEnv(&stdout, &stderr)), stderr.String())
 		before[name] = stdout.String()
@@ -287,18 +327,72 @@ func Test_run_read_commands_refuse_a_malformed_config(t *testing.T) {
 	}
 }
 
-func Test_run_read_commands_ignore_a_malformed_config_when_given_a_currency(t *testing.T) {
-	before := malformedConfigFixture(t)
+func Test_run_read_commands_refuse_a_masked_account_list(t *testing.T) {
+	home, _ := readCommandFixture(t)
+	writeConfig(t, home, "[accounts]\nregistered = [12345678]\n")
 
 	for name, args := range readCommandArgs() {
 		t.Run(name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), append(args, "--currency", "CAD"), spendEnv(&stdout, &stderr))
+			exitCode := runWith(context.Background(), args, spendEnv(&stdout, &stderr))
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, "quarry: "+configShown+": accounts.registered must hold only account ids in quotes, got ****5678 as item 1"+configFix+"\n", stderr.String())
+		})
+	}
+}
+
+func Test_run_read_commands_refuse_a_bad_acb_adjustment(t *testing.T) {
+	home, _ := readCommandFixture(t)
+	const item = "[[acb.adjustment]]\nsecurity = \"sec-41\"\ndate = 2024-12-31\nreturn-of-capital = "
+	const amountMust = ": acb.adjustment item 2: return-of-capital must be an amount in CAD above 0 with at most two decimals, such as 12.34, got "
+	writeConfig(t, home, item+"12.34\n\n"+item+"12.345\n")
+
+	for name, args := range readCommandArgs() {
+		t.Run(name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), args, spendEnv(&stdout, &stderr))
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, "quarry: "+configShown+amountMust+"12.345"+configFix+"\n", stderr.String())
+		})
+	}
+}
+
+func Test_run_read_commands_ignore_a_malformed_config_when_given_a_currency(t *testing.T) {
+	before := malformedConfigFixture(t)
+	args := readCommandArgs()
+	names := currencyHonouringCommands()
+	require.NotEmpty(t, names)
+
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), append(args[name], "--currency", "CAD"), spendEnv(&stdout, &stderr))
 
 			assert.Equal(t, before[name], stdout.String())
 			assert.Empty(t, stderr.String())
 			assert.Equal(t, 0, exitCode)
+		})
+	}
+}
+
+func Test_run_accounts_and_acb_refuse_a_malformed_config_even_when_given_a_currency(t *testing.T) {
+	for _, command := range []string{"accounts", "acb"} {
+		t.Run(command, func(t *testing.T) {
+			malformedConfigFixture(t)
+			var stdout, stderr bytes.Buffer
+
+			exitCode := runWith(context.Background(), []string{command, "--currency", "CAD"}, spendEnv(&stdout, &stderr))
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Regexp(t, "^"+regexp.QuoteMeta("quarry: cannot read "+configShown+": line 1: ")+"[^\n]+"+regexp.QuoteMeta(configFix)+"\n$", stderr.String())
 		})
 	}
 }

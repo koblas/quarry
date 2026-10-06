@@ -162,7 +162,7 @@ func Test_renderFindingsJSON_gives_a_mixed_categories_item_its_payee_category_an
 		"transaction_id": nil, "split_id": nil, "payee_id": "payee-12", "category_id": "cat-3",
 		"date": nil, "account_id": nil, "account": nil, "currency": nil,
 		"payee": "Costco", "category": "Groceries", "amount": nil,
-		"other_account": nil, "other_account_id": nil, "transactions": float64(30), "splits": nil,
+		"other_account": nil, "other_account_id": nil, "transactions": float64(30), "splits": nil, "investment_transaction_id": nil, "security_id": nil, "security": nil, "shares": nil,
 	}, items[0])
 }
 
@@ -173,7 +173,7 @@ func Test_renderFindingsJSON_gives_a_payee_variants_item_its_payee_and_count_and
 		"transaction_id": nil, "split_id": nil, "payee_id": "payee-12", "category_id": nil,
 		"date": nil, "account_id": nil, "account": nil, "currency": nil,
 		"payee": "TIM HORTONS #1234", "category": nil, "amount": nil,
-		"other_account": nil, "other_account_id": nil, "transactions": float64(212), "splits": nil,
+		"other_account": nil, "other_account_id": nil, "transactions": float64(212), "splits": nil, "investment_transaction_id": nil, "security_id": nil, "security": nil, "shares": nil,
 	}, items[0])
 }
 
@@ -187,7 +187,7 @@ func Test_renderFindingsJSON_gives_a_one_sided_transfer_item_its_other_account_n
 		"transaction_id": "txn-9", "split_id": "split-9", "payee_id": nil, "category_id": nil,
 		"date": "2026-08-03", "account_id": "acct-3", "account": "Visa", "currency": "CAD",
 		"payee": "Payment", "category": nil, "amount": "1200.00",
-		"other_account": "Savings", "other_account_id": "acct-2", "transactions": nil, "splits": nil,
+		"other_account": "Savings", "other_account_id": "acct-2", "transactions": nil, "splits": nil, "investment_transaction_id": nil, "security_id": nil, "security": nil, "shares": nil,
 	}, items[0])
 }
 
@@ -201,7 +201,7 @@ func Test_renderFindingsJSON_keeps_the_date_account_and_amount_of_a_transaction_
 		"transaction_id": "txn-1", "split_id": nil, "payee_id": nil, "category_id": nil,
 		"date": "2026-08-03", "account_id": "acct-3", "account": "Chequing", "currency": "CAD",
 		"payee": "Hydro One", "category": nil, "amount": "-142.17",
-		"other_account": nil, "other_account_id": nil, "transactions": nil, "splits": nil,
+		"other_account": nil, "other_account_id": nil, "transactions": nil, "splits": nil, "investment_transaction_id": nil, "security_id": nil, "security": nil, "shares": nil,
 	}, items[0])
 }
 
@@ -214,7 +214,7 @@ func Test_renderFindingsJSON_keeps_the_date_account_and_amount_of_an_item_with_o
 		"transaction_id": nil, "split_id": "split-4", "payee_id": nil, "category_id": nil,
 		"date": "2026-08-03", "account_id": "acct-3", "account": "Chequing", "currency": "CAD",
 		"payee": nil, "category": nil, "amount": "-5.00",
-		"other_account": nil, "other_account_id": nil, "transactions": nil, "splits": nil,
+		"other_account": nil, "other_account_id": nil, "transactions": nil, "splits": nil, "investment_transaction_id": nil, "security_id": nil, "security": nil, "shares": nil,
 	}, items[0])
 }
 
@@ -227,7 +227,7 @@ func Test_renderFindingsJSON_gives_a_similar_categories_item_its_category_and_sp
 		"transaction_id": nil, "split_id": nil, "payee_id": nil, "category_id": "cat-3",
 		"date": nil, "account_id": nil, "account": nil, "currency": nil,
 		"payee": nil, "category": "Groceries", "amount": nil,
-		"other_account": nil, "other_account_id": nil, "transactions": nil, "splits": float64(812),
+		"other_account": nil, "other_account_id": nil, "transactions": nil, "splits": float64(812), "investment_transaction_id": nil, "security_id": nil, "security": nil, "shares": nil,
 	}, items[0])
 	assert.Equal(t, []any{float64(0), "cat-9"}, []any{items[1]["splits"], items[1]["category_id"]})
 }
@@ -247,6 +247,6 @@ func Test_renderFindingsJSON_gives_an_unused_category_item_its_category_and_null
 		"transaction_id": nil, "split_id": nil, "payee_id": nil, "category_id": "cat-40",
 		"date": nil, "account_id": nil, "account": nil, "currency": nil,
 		"payee": nil, "category": "Vacation", "amount": nil,
-		"other_account": nil, "other_account_id": nil, "transactions": nil, "splits": nil,
+		"other_account": nil, "other_account_id": nil, "transactions": nil, "splits": nil, "investment_transaction_id": nil, "security_id": nil, "security": nil, "shares": nil,
 	}, items[0])
 }

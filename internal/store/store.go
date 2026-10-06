@@ -270,10 +270,10 @@ func Actions() []string {
 }
 
 // InvestmentTransaction is one row of the investment_transactions table. Shares,
-// SplitNewShares and SplitOldShares are millionths (DECIMAL(18,6)); Amount is
-// cents; Commission is ten-thousandths (DECIMAL(18,4)). SecurityID is nil for a
-// cash-only action, Shares nil when Quicken records none, and the split sides
-// are set only for a split.
+// SplitNewShares and SplitOldShares are millionths (DECIMAL(18,6)); Amount and
+// CostBasis are cents; Commission is ten-thousandths (DECIMAL(18,4)). SecurityID
+// is nil for a cash-only action, Shares nil when Quicken records none, CostBasis
+// nil when Quicken records none, and the split sides are set only for a split.
 type InvestmentTransaction struct {
 	ID             string
 	SourceID       int64
@@ -284,6 +284,7 @@ type InvestmentTransaction struct {
 	Shares         *int64
 	Amount         int64
 	Commission     *int64
+	CostBasis      *int64
 	Currency       string
 	Memo           *string
 	SplitNewShares *int64
@@ -356,7 +357,9 @@ type ImportRun struct {
 // build that wrote it, its import run and the dates its transactions cover.
 // A zero Run.Snapshot.TakenAt or empty Source means NULL was recorded; the
 // dates are zero when there are no transactions. Findings holds each recorded
-// finding's id, type and state without its items, read from the same build as the rest.
+// finding's id, type and state without its items, Accounts every account, closed included,
+// sorted by id, and Investments the securities and transactions read-time findings are computed from;
+// all three are read from the same build as the rest.
 type Status struct {
 	Path                string
 	FormatVersion       int
@@ -365,7 +368,16 @@ type Status struct {
 	Run                 ImportRun
 	FirstDate, LastDate time.Time
 	Findings            []Finding
+	Accounts            []Account
+	Investments         Investments
 	Rates               StatusRates
+}
+
+// Investments is the investment rows a finding computed at read time reads: every security and every investment
+// transaction; the store's read leaves out transactions naming no security, the importer's copy keeps them. Zero when the file holds none.
+type Investments struct {
+	Securities   []Security
+	Transactions []InvestmentTransaction
 }
 
 // StatusRates is the exchange-rate coverage Status reports: the first and last
@@ -404,6 +416,7 @@ type Counts struct {
 // FindingsFault is why a previous store that opened had findings that could not be read.
 // StoreUnreadable is true iff the previous store could not be opened at all.
 // RatesFault is why a previous store that opened had exchange rates that could not be read.
+// Accounts and Investments are the accounts and investment rows the build wrote, zero when Built is false.
 type Result struct {
 	Path         string
 	Built        bool
@@ -411,6 +424,8 @@ type Result struct {
 	Validation   Validation
 	HistoryFault *OpenError
 	Findings     finding.Counts
+	Accounts     []Account
+	Investments  Investments
 
 	FindingStates   []finding.State
 	FindingsCarried bool
@@ -459,6 +474,16 @@ type Rate struct {
 	Date   time.Time
 	USDCAD money.Rate
 	Series string
+}
+
+// InvestmentHistory is what an adjusted cost base is walked from: every account, closed and registered included,
+// every security, every investment transaction that names a security in date then source id order, and every
+// exchange rate in date order.
+type InvestmentHistory struct {
+	Accounts     []Account
+	Securities   []Security
+	Transactions []InvestmentTransaction
+	Rates        []Rate
 }
 
 // MaxRate is the largest rate fx_rates.usd_cad holds, in millionths: DECIMAL(10,6)'s 9999.999999.
@@ -600,10 +625,13 @@ type OneSidedTransfer struct {
 	OtherAccountID    *string
 }
 
-// FindingList is every finding the store holds, open and fixed alike; ignored
-// is not stored, so callers derive it from the config.
+// FindingList is every finding the store holds, open and fixed alike, with every account read in the same
+// open (ID, Name, Type, Currency, Closed, Active only), sorted by id, and the Investments the read-time findings
+// need; ignored is not stored, so callers derive it from the config.
 type FindingList struct {
-	Findings []Finding
+	Findings    []Finding
+	Accounts    []Account
+	Investments Investments
 }
 
 // Finding is one row of the findings table with its items. FixedAt is nil
@@ -632,6 +660,7 @@ type FindingItem struct {
 	Account        string
 	Currency       string
 	Closed, Active bool
+	AccountType    string // an unclassified-account item's account type; empty for every other type
 	Payee          string
 	Category       *string // an unlinked-transfer item's sole split's full path, nil if none or several; a mixed-categories, similar-categories or unused-category item's category path
 	Splits         int     // an unlinked-transfer item's split count; a similar-categories item's category's splits; 0 for an unused-category item
@@ -639,6 +668,13 @@ type FindingItem struct {
 	Amount         int64
 	OtherAccount   *string
 	OtherAccountID *string
+
+	// InvestmentTransactionID, SecurityID, Security and Shares (millionths) describe a shares-without-cost item's
+	// add_shares row; nil, empty and 0 for every other type.
+	InvestmentTransactionID *string
+	SecurityID              *string
+	Security                string
+	Shares                  int64
 }
 
 // AccountBalance is one account with its balance in cents, which can pass 64 bits: Balance is Cash plus

@@ -54,12 +54,12 @@ func Test_run_accounts_shows_each_balance_in_the_reporting_currency(t *testing.T
 	accountsFXStore(t)
 	cadText := "" +
 		"Account      Type       Currency    Balance     In CAD  Status\n" +
-		"Brokerage    brokerage  USD            0.00       0.00\n" +
+		"Brokerage    brokerage  USD            0.00       0.00  unclassified\n" +
 		"Chequing     chequing   CAD       12,345.67  12,345.67\n" +
 		"US Chequing  chequing   USD        8,310.00  10,387.50\n"
 	usdText := "" +
 		"Account      Type       Currency    Balance    In USD  Status\n" +
-		"Brokerage    brokerage  USD            0.00      0.00\n" +
+		"Brokerage    brokerage  USD            0.00      0.00  unclassified\n" +
 		"Chequing     chequing   CAD       12,345.67  9,876.54\n" +
 		"US Chequing  chequing   USD        8,310.00  8,310.00\n"
 

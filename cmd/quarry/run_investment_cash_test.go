@@ -87,7 +87,7 @@ func Test_run_sync_gives_each_investment_transaction_that_moves_cash_a_row_in_tr
 		FROM splits s JOIN categories c ON c.id = s.category_id`))
 	assert.Equal(t, map[string]string{"cash": "-1008.50"},
 		stringMap(t, db, `SELECT 'cash', CAST(SUM(amount) AS VARCHAR) FROM transactions WHERE account_id = 'acct-`+strconv.FormatInt(brokeragePK, 10)+`'`))
-	assert.Equal(t, []string{"8"}, storeTextRows(t, home, "SELECT CAST(format_version AS VARCHAR) FROM store_info"))
+	assert.Equal(t, []string{"9"}, storeTextRows(t, home, "SELECT CAST(format_version AS VARCHAR) FROM store_info"))
 }
 
 func Test_run_sync_gives_a_reinvested_dividend_no_row_and_no_income(t *testing.T) {
@@ -189,7 +189,7 @@ func Test_run_sync_twice_reproduces_investment_cash_ids_and_keeps_an_ignored_unc
 	findingID := storeTextRows(t, home, "SELECT id FROM findings WHERE type = 'uncategorized'")
 	require.Len(t, findingID, 1, "one no-payee uncategorized finding covers both cash rows")
 	editStore(t, home, "UPDATE findings SET first_found_at = TIMESTAMP '2026-03-01 00:00:00'")
-	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [%q]\n", findingID[0]))
+	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [%q]\n[accounts]\nnon-registered = [\"acct-%d\"]\n", findingID[0], brokeragePK))
 
 	syncBundle(t, bundle)
 

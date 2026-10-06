@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 
+	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/platform/humanize"
 	"github.com/koblas/quarry/internal/report"
@@ -28,17 +29,28 @@ func (s *Server) dataQuality(ctx context.Context, in dataQualityInput) (any, err
 		return nil, err
 	}
 	status, typ := finding.Status(in.Status), finding.Type(in.Type)
-	listing, err := srv.Findings(ctx, report.FindingsRequest{Ignore: cfg.Ignore, Status: status, Type: typ})
+	listing, err := srv.Findings(ctx, report.FindingsRequest{
+		Ignore:         cfg.Ignore,
+		Classification: classificationOf(cfg),
+		Status:         status,
+		Type:           typ,
+	})
 	if err != nil {
 		return nil, err //nolint:wrapcheck // a RefusalError is the tool's answer, sent verbatim
 	}
-	warnings := append(slices.Clone(cfg.WarningsAbsolute), document.UnmatchedIgnoreWarnings(cfg.Path, listing.Unmatched)...)
+	warnings := slices.Concat(cfg.WarningsAbsolute, document.UnmatchedIgnoreWarnings(cfg.Path, listing.Unmatched),
+		document.UnmatchedAccountWarnings(cfg.Path, listing.UnmatchedAccounts))
 	kept, total, cut := capFindings(listing, in.Limit)
 	if cut {
 		warnings = append(warnings, findingsCapWarning(in.Limit, total, status, typ))
 	}
 	kept, itemWarnings := capItems(kept)
 	return document.NewFindingsList(kept, status, typ, append(warnings, itemWarnings...)), nil
+}
+
+// classificationOf is the account classification cfg lists.
+func classificationOf(cfg config.Config) report.Classification {
+	return report.Classification{Registered: cfg.Registered, NonRegistered: cfg.NonRegistered}
 }
 
 // capFindings keeps the first limit findings of listing and reports how many it held and whether any were cut.

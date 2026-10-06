@@ -34,6 +34,15 @@ func Test_sql_conventions_explain_investment_data(t *testing.T) {
 	assert.NotContains(t, collapsed, "quarry does not convert prices yet")
 }
 
+func Test_sql_conventions_say_what_cost_basis_is_and_send_acb_to_the_command(t *testing.T) {
+	collapsed := strings.Join(strings.Fields(report.SQLConventions), " ")
+
+	assert.Contains(t, collapsed, "a sum of shares is not a holding. "+
+		"cost_basis is the cost Quicken records for a buy, reinvested dividend or added shares (NULL when none). "+
+		"ACB and capital gains are in no table or view: quarry acb (MCP acb) computes them; never derive them in SQL. "+
+		"prices holds")
+}
+
 func Test_sql_conventions_close_the_investment_paragraph_with_the_action_values(t *testing.T) {
 	investment := strings.Join(strings.Fields(strings.Split(report.SQLConventions, "\n\n")[1]), " ")
 
@@ -46,11 +55,13 @@ func Test_sql_conventions_end_with_the_daily_balances_paragraph(t *testing.T) {
 	assert.True(t, strings.HasPrefix(paragraphs[len(paragraphs)-1], "v_balances_daily has one row per account per day"))
 }
 
-func Test_sql_conventions_close_the_balances_paragraph_with_the_net_worth_view(t *testing.T) {
+func Test_sql_conventions_close_the_balances_paragraph_with_the_net_worth_view_and_where_registered_lives(t *testing.T) {
 	paragraphs := strings.Split(report.SQLConventions, "\n\n")
 	balances := strings.Join(strings.Fields(paragraphs[len(paragraphs)-1]), " ")
 
 	assert.True(t, strings.HasSuffix(balances, "v_net_worth has one row per day, account type and currency, "+
 		"adding up the balances of the accounts Quicken's reports count, as quarry networth does; sum balance_cad or balance_usd "+
-		"over one date for the total; a NULL there means no exchange rate for that day."))
+		"over one date for the total; a NULL there means no exchange rate for that day. "+
+		"Which accounts are registered is not in the store; it is accounts.registered and accounts.non-registered in quarry's config, "+
+		"and quarry accounts --json reports it as registered."))
 }

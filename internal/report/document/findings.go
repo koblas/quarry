@@ -2,6 +2,7 @@ package document
 
 import (
 	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/platform/accountmask"
 	"github.com/koblas/quarry/internal/platform/tomlstr"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
@@ -16,19 +17,21 @@ type FindingsList struct {
 	Warnings []string       `json:"warnings"`
 }
 
-// FindingEntry is one entry of "findings"; FixedAt is null while the finding is open, and a fixed finding has no items.
+// FindingEntry is one entry of "findings"; FirstFoundAt is null for a read-time type, FixedAt while the finding is open,
+// and a fixed finding has no items.
 type FindingEntry struct {
 	ID           string        `json:"id"`
 	Type         string        `json:"type"`
 	Status       string        `json:"status"`
-	FirstFoundAt string        `json:"first_found_at"`
+	FirstFoundAt *string       `json:"first_found_at"`
 	FixedAt      *string       `json:"fixed_at"`
 	Fix          string        `json:"fix"`
 	Items        []FindingItem `json:"items"`
 }
 
 // FindingItem is one entry of a finding's "items": every key is always present and null where it does not
-// apply. Date, AccountID, Account, Currency and Amount are null for an item that is a payee or category, not a transaction or split.
+// apply. Date, AccountID, Account, Currency and Amount are null for an item that is a payee or category, not a transaction or split;
+// InvestmentTransactionID, SecurityID, Security and Shares are null except for a shares-without-cost item.
 type FindingItem struct {
 	TransactionID  *string `json:"transaction_id"`
 	SplitID        *string `json:"split_id"`
@@ -45,6 +48,11 @@ type FindingItem struct {
 	OtherAccountID *string `json:"other_account_id"`
 	Transactions   *int    `json:"transactions"`
 	Splits         *int    `json:"splits"`
+
+	InvestmentTransactionID *string `json:"investment_transaction_id"`
+	SecurityID              *string `json:"security_id"`
+	Security                *string `json:"security"`
+	Shares                  *string `json:"shares"`
 }
 
 // NewFindingsList builds the findings document for listing as filtered by status and typ (empty for no type
@@ -66,7 +74,9 @@ func NewFindingsList(listing report.FindingsListing, status finding.Status, typ 
 }
 
 // NewFindingEntry converts f into its --json entry: fixed_at is set only for a fixed finding, which has no items,
-// and splits only for the items of a similar-categories finding.
+// first_found_at is null for a read-time type, splits is set only for the items of a similar-categories finding,
+// an unclassified-account item sets account_id, account and currency alone, and a shares-without-cost item sets
+// date, those three and its four investment keys alone.
 func NewFindingEntry(f report.ListedFinding) FindingEntry {
 	items := make([]FindingItem, len(f.Items))
 	for i, item := range f.Items {
@@ -74,17 +84,35 @@ func NewFindingEntry(f report.ListedFinding) FindingEntry {
 		if f.Type == finding.SimilarCategories {
 			items[i].Splits = &item.Splits
 		}
+		if f.Type == finding.UnclassifiedAccount {
+			items[i].AccountID, items[i].Account, items[i].Currency = &item.AccountID, &item.Account, &item.Currency
+		}
+		if f.Type == finding.SharesWithoutCost {
+			items[i] = sharesWithoutCostItem(item)
+		}
 	}
 	doc := FindingEntry{
 		ID: f.ID, Type: string(f.Type), Status: string(f.Status),
-		FirstFoundAt: timestamp(f.FirstFoundAt),
-		Fix:          f.Type.Fix().Sentence, Items: items,
+		Fix: f.Type.Fix().Sentence, Items: items,
+	}
+	if !f.Type.ReadTime() {
+		firstFoundAt := timestamp(f.FirstFoundAt)
+		doc.FirstFoundAt = &firstFoundAt
 	}
 	if f.FixedAt != nil {
 		fixedAt := timestamp(*f.FixedAt)
 		doc.FixedAt = &fixedAt
 	}
 	return doc
+}
+
+// sharesWithoutCostItem is the --json item of a shares-without-cost finding's add_shares row.
+func sharesWithoutCostItem(item store.FindingItem) FindingItem {
+	date, shares := item.Date.Format(DateLayout), Shares(item.Shares)
+	return FindingItem{
+		Date: &date, AccountID: &item.AccountID, Account: &item.Account, Currency: &item.Currency,
+		InvestmentTransactionID: item.InvestmentTransactionID, SecurityID: item.SecurityID, Security: &item.Security, Shares: &shares,
+	}
 }
 
 // NewFindingItem converts item into its --json entry: date, account, currency and amount are null for
@@ -113,6 +141,22 @@ func UnmatchedIgnoreWarnings(configShown string, unmatched []string) []string {
 	for i, id := range unmatched {
 		lines[i] = configShown + ": findings.ignore lists " + tomlstr.BasicString(id) +
 			", which is not a finding in quarry's store; quarry skips it"
+	}
+	return lines
+}
+
+// UnmatchedAccountWarnings is one line per account id the config lists that names no account in quarry's store,
+// registered ids first, each naming the config file as configShown (~-abbreviated for stderr, absolute for --json); [] when none.
+func UnmatchedAccountWarnings(configShown string, unmatched report.UnmatchedAccounts) []string {
+	lines := []string{}
+	for _, list := range []struct {
+		setting string
+		ids     []string
+	}{{"registered", unmatched.Registered}, {"non-registered", unmatched.NonRegistered}} {
+		for _, id := range list.ids {
+			lines = append(lines, configShown+": accounts."+list.setting+" lists "+tomlstr.BasicString(accountmask.Mask(id))+
+				", which is not an account in quarry's store; quarry skips it")
+		}
 	}
 	return lines
 }

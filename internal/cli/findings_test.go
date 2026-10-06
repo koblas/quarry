@@ -43,31 +43,52 @@ func Test_findings_help_says_what_findings_lists_and_how_to_ignore_one(t *testin
 	const long = `List the problems sync found in the Quicken data, as a worklist to fix in
 Quicken; quarry never changes the data itself. Each finding names what it
 is about and what to change. After you fix them in Quicken, run quarry
-sync: findings it no longer finds are marked fixed.
+sync: findings it no longer finds leave the list, and are marked fixed
+unless noted below.
 
 quarry looks for:
-  duplicate           two transactions in one account with the same amount,
-                      dated within 3 days of each other, unless both are
-                      reconciled
-  one-sided-transfer  a transfer with no matching transaction in the other
-                      account
-  unlinked-transfer   two transactions in different accounts of the same
-                      currency that look like one transfer (opposite
-                      amounts, within 3 days) but are not linked as one
-  uncategorized       splits with no category, one finding per payee;
-                      quarry cashflow counts them as income or spending
-  mixed-categories    a payee whose transactions go back and forth between
-                      categories
-  payee-variants      payees whose names differ only in case, punctuation,
-                      spacing, or store and reference numbers
-  similar-categories  categories whose names differ only in case,
-                      punctuation, spacing or a plural
-  unused-category     a category no transaction uses; check that no
-                      scheduled transaction or budget uses it before you
-                      delete it
+  duplicate             two transactions in one account with the same
+                        amount, dated within 3 days of each other, unless
+                        both are reconciled
+  one-sided-transfer    a transfer with no matching transaction in the
+                        other account
+  unlinked-transfer     two transactions in different accounts of the same
+                        currency that look like one transfer (opposite
+                        amounts, within 3 days) but are not linked as one
+  uncategorized         splits with no category, one finding per payee;
+                        quarry cashflow counts them as income or spending
+  mixed-categories      a payee whose transactions go back and forth
+                        between categories
+  payee-variants        payees whose names differ only in case,
+                        punctuation, spacing, or store and reference
+                        numbers
+  similar-categories    categories whose names differ only in case,
+                        punctuation, spacing or a plural
+  unused-category       a category no transaction uses; check that no
+                        scheduled transaction or budget uses it before you
+                        delete it
+  unclassified-account  a brokerage or retirement account listed in neither
+                        accounts.registered nor accounts.non-registered in
+                        the config file
+  shares-without-cost   shares added to a non-registered account with no
+                        cost basis, which quarry acb needs
 
 duplicate and unlinked-transfer compare register entries only, not buys,
 sells, dividends or other investment transactions.
+
+unclassified-account is fixed in the config file, not in Quicken: it leaves
+the list as soon as the account is listed there, without a sync, and is
+never marked fixed.
+
+  [accounts]
+  registered = [
+    "acct-12",  # Questrade TFSA
+    "acct-15",  # RBC RRSP
+  ]
+  non-registered = ["acct-3"]  # Questrade Margin
+
+shares-without-cost leaves the list on the first sync after the shares' cost
+is entered in Quicken, and is never marked fixed.
 
 To keep a finding off the list after checking it, add its id to
 findings.ignore in ~/Library/Application Support/quarry/config.toml:
@@ -123,9 +144,9 @@ func Test_findings_help_shows_each_flag(t *testing.T) {
 		{
 			flag: "--type", usage: "--type type",
 			help: "show only findings of this type: duplicate, one-sided-transfer, unlinked-transfer, " +
-				"uncategorized, mixed-categories, payee-variants, similar-categories or unused-category",
+				"uncategorized, mixed-categories, payee-variants, similar-categories, unused-category, unclassified-account or shares-without-cost",
 		},
-		{flag: "--csv", usage: "--csv", help: "print one row per transaction, split, payee or category as CSV"},
+		{flag: "--csv", usage: "--csv", help: "print one row per transaction, split, payee, category, account or investment transaction as CSV"},
 	}
 
 	for _, c := range cases {
@@ -155,7 +176,7 @@ func Test_findings_rejects_bad_usage(t *testing.T) {
 		{
 			name: "a type that is not a finding type", args: []string{"--type", "duplicates"},
 			want: "--type must be duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, " +
-				"payee-variants, similar-categories or unused-category",
+				"payee-variants, similar-categories, unused-category, unclassified-account or shares-without-cost",
 		},
 		{
 			name: "--csv with --json", args: []string{"--csv", "--json"},
@@ -204,6 +225,7 @@ func Test_findings_accepts_every_status_and_type_value(t *testing.T) {
 		{"--type", "payee-variants"},
 		{"--type", "similar-categories"},
 		{"--type", "unused-category"},
+		{"--type", "unclassified-account"},
 	}
 
 	for _, args := range cases {

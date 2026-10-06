@@ -26,6 +26,7 @@ const (
 	toolSearch      = "search_transactions"
 	toolHoldings    = "holdings"
 	toolNetWorth    = "net_worth"
+	toolACB         = "acb"
 )
 
 // Row limits: the most any tool returns, data_quality's default, and the most items it lists per finding.
@@ -77,11 +78,13 @@ is old, ask the user to run quarry sync.`
 const dataQualityDescription = `List the data-quality findings quarry's last sync found: problems to fix
 in Quicken (duplicates, one-sided or unlinked transfers, uncategorized
 splits, payees in mixed categories, payee name variants, similar or
-unused categories). Each finding has an id, the suggested fix, and the
-transactions, payees or categories it is about. quarry never fixes them:
-the user fixes them in Quicken and runs quarry sync, and fixed findings
-drop off. To ignore a finding the user adds its id to findings.ignore in
-quarry's config file.`
+unused categories, shares added with no cost), and investment accounts
+not yet listed as registered or non-registered in quarry's config file,
+which acb needs. Each finding has an id, the suggested fix, and the
+transactions, accounts, payees or categories it is about. quarry never
+fixes them: the user fixes them in Quicken and runs quarry sync, or adds
+the account to quarry's config file, and they drop off. To ignore a
+finding the user adds its id to findings.ignore in quarry's config file.`
 
 const spendingDescription = `Total the user's spending for a period, grouped by category, payee, tag
 or month, with a total per currency. quarry's spending rules apply:
@@ -140,6 +143,17 @@ const (
 	netWorthUntilDescription = "List net worth at each month end on or before this date: YYYY, YYYY-MM or YYYY-MM-DD. Defaults to today; a later date means today."
 )
 
+const acbDescription = "Adjusted cost base and realized capital gains per tax year, in CAD, the way the CRA defines them: average cost per security " +
+	"pooled across non-registered accounts; possible superficial losses marked, not adjusted. A worksheet, not a filing."
+
+// The descriptions of the parameters acb takes; it has no currency, since the CRA wants CAD.
+const (
+	acbYearDescription = "Tax year to report, such as 2024, up to this year: years lists only that year (even with no sale), and securities only those " +
+		"with a sale, or a return of capital above ACB, in it; each security's events stay its full history. Omit it for every year."
+	acbSecurityDescription = "Report only these securities, each given by id, ticker or name in any letter case; years and securities count only them. " +
+		"A security held only in registered accounts has no ACB and is left out, with a warning. Omit it for every security."
+)
+
 // The descriptions of the parameters holdings takes; its currency is currencyDescription.
 const (
 	holdingsAsOfDescription     = "Day to value holdings on: YYYY, YYYY-MM or YYYY-MM-DD; a year or month means its last day. Defaults to today."
@@ -150,9 +164,10 @@ const (
 const (
 	querySQLDescription       = "One read-only SQL statement in DuckDB's dialect over quarry's tables and views; describe_schema lists them."
 	queryLimitDescription     = "Most rows to return, 1 to 500. Defaults to 500."
-	findingsStatusDescription = "Which findings to list: open (the default), ignored (the user listed the id in findings.ignore), fixed (no longer found since a later sync), or all."
-	findingsTypeDescription   = "List only findings of this type. Omit it to list every type."
-	findingsLimitDescription  = "Most findings to return, 1 to 500. Defaults to 50. counts always covers every finding, and each finding lists at most 25 items."
+	findingsStatusDescription = "Which findings to list: open (the default), ignored (the user listed the id in findings.ignore), fixed (no longer found since a later sync; " +
+		"never unclassified-account or shares-without-cost, which just leave the list), or all."
+	findingsTypeDescription  = "List only findings of this type. Omit it to list every type."
+	findingsLimitDescription = "Most findings to return, 1 to 500. Defaults to 50. counts always covers every finding, and each finding lists at most 25 items."
 )
 
 // The descriptions of the parameters spending shares with the other report tools.
@@ -255,6 +270,11 @@ type (
 		Until    *string `json:"until"`
 		Currency string  `json:"currency"`
 	}
+	// acbInput is the acb tool's arguments; Year is nil when absent.
+	acbInput struct {
+		Year     *int     `json:"year"`
+		Security []string `json:"security"`
+	}
 	// noInput is the arguments of a tool that takes none.
 	noInput struct{}
 )
@@ -319,6 +339,10 @@ func (s *Server) addTools(srv *sdk.Server) {
 		"until":    described(netWorthUntilDescription, &jsonschema.Schema{Type: "string"}),
 		"currency": currencySchema(),
 	})), handler(s.timeout, stoppedLine(toolNetWorth), s.netWorth))
+	sdk.AddTool(srv, tool(toolACB, acbDescription, objectSchema(map[string]*jsonschema.Schema{
+		"year":     described(acbYearDescription, &jsonschema.Schema{Type: "integer", Minimum: new(1.0), Maximum: new(9999.0)}),
+		"security": described(acbSecurityDescription, &jsonschema.Schema{Type: "array", Items: &jsonschema.Schema{Type: "string"}}),
+	})), handler(s.timeout, stoppedLine(toolACB), s.acb))
 }
 
 // tool describes one tool; its result is a JSON object.

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/koblas/quarry/internal/platform/accountmask"
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/platform/tomlstr"
@@ -22,14 +23,27 @@ const (
 	gotTableList = "a list of tables"
 )
 
-// setting names a known key: its table, its name in that table, and the
-// line shown to a user who wrote the table as a plain value.
+// setting names a known key: its table, its name, and the line shown when the user wrote the
+// table as a plain value. A masked setting holds account numbers, so a refusal masks its value.
 type setting struct {
 	table, name, example string
+	masked               bool
+}
+
+// show is text as a refusal of s prints it.
+func (s setting) show(text string) string {
+	if s.masked {
+		return accountmask.Mask(text)
+	}
+
+	return text
 }
 
 // ignoreExample is a findings.ignore list as a user writes it, right of the equal sign.
 const ignoreExample = `["duplicate:txn-4410+txn-4412"]`
+
+// accountsExample is an accounts.registered list as a user writes it, right of the equal sign.
+const accountsExample = `["acct-12"]`
 
 var (
 	keepSetting   = setting{table: "snapshots", name: "keep", example: "snapshots.keep = 12"}
@@ -37,6 +51,9 @@ var (
 	ignoreSetting = setting{table: "findings", name: "ignore", example: "findings.ignore = " + ignoreExample}
 
 	reportingSetting = setting{table: "reporting", name: "currency", example: `reporting.currency = "CAD"`}
+
+	registeredSetting    = setting{table: "accounts", name: "registered", example: "accounts.registered = " + accountsExample, masked: true}
+	nonRegisteredSetting = setting{table: "accounts", name: "non-registered", example: "accounts.registered = " + accountsExample, masked: true}
 )
 
 func (s setting) String() string { return strings.Join(s.key(), ".") }
@@ -50,7 +67,8 @@ type file struct {
 }
 
 // parse validates the whole file: syntax first, then snapshots.keep, then
-// quicken.path, then findings.ignore, then reporting.currency, then unknown keys.
+// quicken.path, then findings.ignore, then reporting.currency, then accounts.registered,
+// then accounts.non-registered, then an id in both account lists, then acb.adjustment, then unknown keys.
 func (f file) parse() (Config, error) {
 	tree, err := f.tree()
 	if err != nil {
@@ -66,7 +84,7 @@ func (f file) parse() (Config, error) {
 		return Config{}, err
 	}
 
-	ignore, err := doc.ignore()
+	ignore, err := doc.idList(ignoreSetting, "finding ids", ignoreExample)
 	if err != nil {
 		return Config{}, err
 	}
@@ -76,12 +94,34 @@ func (f file) parse() (Config, error) {
 		return Config{}, err
 	}
 
+	registered, err := doc.idList(registeredSetting, "account ids", accountsExample)
+	if err != nil {
+		return Config{}, err
+	}
+
+	nonRegistered, err := doc.idList(nonRegisteredSetting, "account ids", accountsExample)
+	if err != nil {
+		return Config{}, err
+	}
+
+	if err := doc.notInBoth(registered, nonRegistered); err != nil {
+		return Config{}, err
+	}
+
+	adjustments, err := doc.adjustments()
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
+		Adjustments:      adjustments,
 		Path:             f.path,
 		Keep:             keep,
 		QuickenPath:      homepath.Expand(f.home, quickenPath),
 		Ignore:           ignore,
 		Currency:         currency,
+		Registered:       registered,
+		NonRegistered:    nonRegistered,
 		Warnings:         doc.unknownKeys(f.shown),
 		WarningsAbsolute: doc.unknownKeys(f.path),
 	}, nil
@@ -103,7 +143,22 @@ func (f file) tree() (map[string]any, error) {
 	line, _ := decodeErr.Position()
 	message, _, _ := strings.Cut(strings.TrimPrefix(decodeErr.Error(), "toml: "), "\n")
 
-	return nil, f.cannotRead("line "+strconv.Itoa(line)+": "+message, err)
+	return nil, f.cannotRead("line "+strconv.Itoa(line)+": "+maskNamedKey(message), err)
+}
+
+// namedKeyMessage matches the go-toml messages that echo a key or table name, which under
+// [accounts] can be an account number; no other syntax message echoes a value.
+var namedKeyMessage = regexp.MustCompile(`^(key |table )(.+?)( is already defined| should be a table, not a value| already exists as an array of tables| already exists)$`)
+
+// maskNamedKey is message with the key or table name in it masked, or message unchanged when it
+// names none.
+func maskNamedKey(message string) string {
+	parts := namedKeyMessage.FindStringSubmatch(message)
+	if parts == nil {
+		return message
+	}
+
+	return parts[1] + accountmask.Mask(parts[2]) + parts[3]
 }
 
 // entry is one header or key of the file at its full key path, exactly as written:
@@ -218,28 +273,42 @@ func (d document) quickenPath() (string, error) {
 	return text, nil
 }
 
-// ignore is findings.ignore as written, file order and duplicates kept, nil when unset:
-// a list whose items are all strings. An item that is not one is refused by its place.
-func (d document) ignore() ([]string, error) {
-	value, present, err := d.lookup(ignoreSetting)
+// idList is the list s holds as written, file order and duplicates kept, nil when unset:
+// a list whose items are all strings, which noun names as in "must be a list of <noun> in
+// quotes, such as <example>". An item that is not a string is refused by its place.
+func (d document) idList(s setting, noun, example string) ([]string, error) {
+	value, present, err := d.lookup(s)
 	if err != nil || !present {
 		return nil, err
 	}
 	items, isList := value.([]any)
-	written, isWritten := d.written(ignoreSetting.key())
+	written, isWritten := d.written(s.key())
 	if !isList || !isWritten {
-		return nil, d.badValue(ignoreSetting.String()+" must be a list of finding ids in quotes, such as "+ignoreExample, d.got(ignoreSetting.key()))
+		return nil, d.badValue(s.String()+" must be a list of "+noun+" in quotes, such as "+example, s.show(d.got(s.key())))
 	}
 	var ids []string
 	for i, item := range items {
 		id, isString := item.(string)
 		if !isString {
-			return nil, d.badValue(ignoreSetting.String()+" must hold only finding ids in quotes", itemText(arrayItems(written.value), items, i)+" as item "+strconv.Itoa(i+1))
+			// The item is masked before " as item n" is added: n is a digit too.
+			return nil, d.badValue(s.String()+" must hold only "+noun+" in quotes", s.show(itemText(arrayItems(written.value), items, i))+" as item "+strconv.Itoa(i+1))
 		}
 		ids = append(ids, id)
 	}
 
 	return ids, nil
+}
+
+// notInBoth refuses the first id of registered, in file order, that nonRegistered also lists,
+// showing it masked.
+func (d document) notInBoth(registered, nonRegistered []string) error {
+	for _, id := range registered {
+		if slices.Contains(nonRegistered, id) {
+			return d.badValue("an account must be in only one of "+registeredSetting.String()+" and "+nonRegisteredSetting.String(), tomlstr.BasicString(accountmask.Mask(id))+" in both")
+		}
+	}
+
+	return nil
 }
 
 // currency is reporting.currency in any letter case: money.CAD when unset, else a string
@@ -287,7 +356,7 @@ func (d document) lookup(s setting) (any, bool, error) {
 	}
 	table, isTable := entry.(map[string]any)
 	if !isTable {
-		return nil, false, d.badValue(s.table+" must be a table, such as "+s.example, d.got([]string{s.table}))
+		return nil, false, d.badValue(s.table+" must be a table, such as "+s.example, s.show(d.got([]string{s.table})))
 	}
 	value, present := table[s.name]
 
@@ -322,6 +391,15 @@ var knownKeys = [][]string{
 	ignoreSetting.key(),
 	{reportingSetting.table},
 	reportingSetting.key(),
+	{registeredSetting.table},
+	registeredSetting.key(),
+	nonRegisteredSetting.key(),
+	{adjustmentSetting.table},
+	adjustmentSetting.key(),
+	append(adjustmentSetting.key(), securityKey),
+	append(adjustmentSetting.key(), dateKey),
+	append(adjustmentSetting.key(), returnOfCapitalKey),
+	append(adjustmentSetting.key(), reinvestedDistributionKey),
 }
 
 // unknownKeys is one warning per key the file has beyond the known ones, in
@@ -346,12 +424,15 @@ func (d document) unknownKeys(path string) []string {
 // bareKey matches a key part TOML allows unquoted.
 var bareKey = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
-// keyText writes key as TOML would: a part that is not bare is a basic string, so a dot,
-// quote, newline or empty name inside one part stays visible and on one line.
+// keyText writes key as TOML would, a part that is not bare as a basic string, so it stays on one
+// line; a name under accounts may be an account number and is masked.
 func keyText(key []string) string {
 	parts := make([]string, len(key))
 	for i, part := range key {
 		parts[i] = keyPartText(part)
+		if i > 0 && key[0] == registeredSetting.table {
+			parts[i] = accountmask.Mask(parts[i])
+		}
 	}
 
 	return strings.Join(parts, ".")

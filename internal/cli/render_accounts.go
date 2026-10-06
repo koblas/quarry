@@ -31,7 +31,7 @@ func renderAccounts(l report.AccountListing) string {
 		if converted {
 			row = append(row, convertedCell(l, a))
 		}
-		rows = append(rows, append(row, accountStatus(a.Account)))
+		rows = append(rows, append(row, accountStatus(a.Account, l.Classification)))
 	}
 
 	statusAt := len(header) - 1
@@ -73,9 +73,9 @@ func convertedCell(l report.AccountListing, a store.AccountBalance) string {
 	return ""
 }
 
-// accountStatus joins, with ", ", the state (closed or inactive), "not in reports" and
-// "linked tracking" that apply; "" when none does.
-func accountStatus(a store.Account) string {
+// accountStatus joins, with ", ", the state (closed or inactive), "not in reports",
+// "linked tracking", then "registered" or "unclassified" that apply; "" when none does.
+func accountStatus(a store.Account, c report.Classification) string {
 	var parts []string
 	switch {
 	case a.Closed:
@@ -88,6 +88,12 @@ func accountStatus(a store.Account) string {
 	}
 	if a.LinkedTracking {
 		parts = append(parts, "linked tracking")
+	}
+	if registered := c.Of(a); registered != nil && *registered {
+		parts = append(parts, "registered")
+	}
+	if c.Unclassified(a) {
+		parts = append(parts, "unclassified")
 	}
 	return strings.Join(parts, ", ")
 }

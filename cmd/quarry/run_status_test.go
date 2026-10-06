@@ -54,7 +54,7 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 		"Splits", "all 4 transactions equal the sum of their splits",
 		"Shares", "no holdings to check",
 		"Transfers", "1 paired, 1 one-sided",
-		"Findings", "2 open; run quarry findings to list them",
+		"Findings", "3 open; run quarry findings to list them",
 		"Rates", "none, so amounts are not converted; run quarry sync to fetch them from the Bank of Canada",
 	)
 	assert.Equal(t, want, stdout.String())
@@ -143,6 +143,7 @@ store against Quicken's balances. Every other command reads that store;
 quarry never writes to the Quicken file.`)
 	assert.Contains(t, stdout.String(), ""+
 		"Available Commands:\n"+
+		"  acb         Show adjusted cost base and realized capital gains per tax year, in CAD\n"+
 		"  accounts    List accounts with their current balances\n"+
 		"  anomalies   List charges unusually large for their payee or category\n"+
 		"  cashflow    Show income, spending and savings rate by month or year\n"+

@@ -3,6 +3,8 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,7 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const findingsCSVHeader = "finding_id,type,status,date,account,currency,payee,category,amount,other_account,transactions,splits,transaction_id,split_id,payee_id,category_id,fix\n"
+const findingsCSVHeader = "finding_id,type,status,date,account,currency,payee,category,amount,other_account,transactions,splits,transaction_id,split_id,payee_id,category_id,fix," +
+	"investment_transaction_id,security_id,security,shares\n"
 
 const (
 	duplicateFixCSV     = `"Delete the extra one in Quicken, or ignore the pair if both are real"`
@@ -50,9 +53,9 @@ func Test_findings_csv_prints_one_row_per_item_with_a_quoted_payee_and_the_leg_f
 
 	require.NoError(t, err)
 	assert.Equal(t, findingsCSVHeader+
-		`duplicate:txn-1+txn-2,duplicate,open,2026-08-03,Chequing,CAD,"Smith, ""Jo""",,-142.17,,,,txn-1,,,,`+duplicateFixCSV+"\n"+
-		`duplicate:txn-1+txn-2,duplicate,open,2026-08-05,Chequing,CAD,Hydro One,,-142.17,,,,txn-2,,,,`+duplicateFixCSV+"\n"+
-		`one-sided-transfer:xfer-9,one-sided-transfer,open,2026-08-01,Visa,USD,Payment,,-1200.50,Savings,,,txn-9,split-9,,,`+oneSidedFixCSV+"\n",
+		`duplicate:txn-1+txn-2,duplicate,open,2026-08-03,Chequing,CAD,"Smith, ""Jo""",,-142.17,,,,txn-1,,,,`+duplicateFixCSV+",,,,\n"+
+		`duplicate:txn-1+txn-2,duplicate,open,2026-08-05,Chequing,CAD,Hydro One,,-142.17,,,,txn-2,,,,`+duplicateFixCSV+",,,,\n"+
+		`one-sided-transfer:xfer-9,one-sided-transfer,open,2026-08-01,Visa,USD,Payment,,-1200.50,Savings,,,txn-9,split-9,,,`+oneSidedFixCSV+",,,,\n",
 		stdout.String())
 	assert.Empty(t, stderr.String())
 }
@@ -69,13 +72,13 @@ func Test_findings_csv_leaves_the_payee_of_a_no_payee_item_as_an_empty_field_not
 
 	require.NoError(t, err)
 	assert.Equal(t, findingsCSVHeader+
-		"uncategorized:no-payee,uncategorized,open,2026-08-02,Visa,CAD,,,-10.00,,,,txn-4,split-4,,,"+uncategorizedFixCSV+"\n", stdout.String())
+		"uncategorized:no-payee,uncategorized,open,2026-08-02,Visa,CAD,,,-10.00,,,,txn-4,split-4,,,"+uncategorizedFixCSV+",,,,\n", stdout.String())
 }
 
 func Test_findings_csv_applies_the_status_and_type_filters(t *testing.T) {
-	const uncategorizedRow = "uncategorized:payee-7,uncategorized,open,2026-09-01,Visa,CAD,Amazon,,-10.00,,,,txn-7,split-7,,," + uncategorizedFixCSV + "\n"
-	const fixedRow = "duplicate:txn-1+txn-2,duplicate,fixed,,,,,,,,,,,,,," + duplicateFixCSV + "\n"
-	const ignoredRow = "one-sided-transfer:xfer-3,one-sided-transfer,ignored,2026-08-02,Visa,USD,Payment,,-5.00,Savings,,,txn-3,split-3,,," + oneSidedFixCSV + "\n"
+	const uncategorizedRow = "uncategorized:payee-7,uncategorized,open,2026-09-01,Visa,CAD,Amazon,,-10.00,,,,txn-7,split-7,,," + uncategorizedFixCSV + ",,,,\n"
+	const fixedRow = "duplicate:txn-1+txn-2,duplicate,fixed,,,,,,,,,,,,,," + duplicateFixCSV + ",,,,\n"
+	const ignoredRow = "one-sided-transfer:xfer-3,one-sided-transfer,ignored,2026-08-02,Visa,USD,Payment,,-5.00,Savings,,,txn-3,split-3,,," + oneSidedFixCSV + ",,,,\n"
 	cases := []struct {
 		name string
 		args []string
@@ -119,7 +122,7 @@ func Test_findings_csv_puts_the_payee_and_category_ids_in_their_own_columns(t *t
 
 	require.NoError(t, err)
 	assert.Equal(t, findingsCSVHeader+
-		"uncategorized:payee-7,uncategorized,open,2026-08-02,Visa,CAD,Amazon,,-10.00,,,,txn-7,,payee-7,cat-3,"+uncategorizedFixCSV+"\n", stdout.String())
+		"uncategorized:payee-7,uncategorized,open,2026-08-02,Visa,CAD,Amazon,,-10.00,,,,txn-7,,payee-7,cat-3,"+uncategorizedFixCSV+",,,,\n", stdout.String())
 }
 
 func Test_findings_csv_prints_nothing_when_the_listing_fails(t *testing.T) {
@@ -192,8 +195,8 @@ func Test_findings_csv_puts_the_category_path_of_an_unlinked_transfer_item_in_it
 
 	require.NoError(t, err)
 	assert.Equal(t, findingsCSVHeader+
-		"unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-02,Chequing,CAD,Rent,Income:Other,-10.00,,,,txn-1,,,,"+unlinkedFixCSV+"\n"+
-		`unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-03,Chequing,CAD,Rent,"Bills, fixed",-10.00,,,,txn-2,,,,`+unlinkedFixCSV+"\n",
+		"unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-02,Chequing,CAD,Rent,Income:Other,-10.00,,,,txn-1,,,,"+unlinkedFixCSV+",,,,\n"+
+		`unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-03,Chequing,CAD,Rent,"Bills, fixed",-10.00,,,,txn-2,,,,`+unlinkedFixCSV+",,,,\n",
 		stdout.String())
 }
 
@@ -205,8 +208,8 @@ func Test_findings_csv_leaves_the_category_of_a_split_or_uncategorized_unlinked_
 
 	require.NoError(t, err)
 	assert.Equal(t, findingsCSVHeader+
-		"unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-02,Chequing,CAD,Rent,,-10.00,,,,txn-1,,,,"+unlinkedFixCSV+"\n"+
-		"unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-03,Chequing,CAD,Rent,,-10.00,,,,txn-2,,,,"+unlinkedFixCSV+"\n",
+		"unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-02,Chequing,CAD,Rent,,-10.00,,,,txn-1,,,,"+unlinkedFixCSV+",,,,\n"+
+		"unlinked-transfer:txn-1+txn-2,unlinked-transfer,open,2026-08-03,Chequing,CAD,Rent,,-10.00,,,,txn-2,,,,"+unlinkedFixCSV+",,,,\n",
 		stdout.String())
 }
 
@@ -221,7 +224,7 @@ func Test_findings_csv_puts_a_mixed_categories_item_in_its_payee_category_and_co
 
 	require.NoError(t, err)
 	assert.Equal(t, findingsCSVHeader+
-		"mixed-categories:payee-12,mixed-categories,open,,,,Costco,Groceries,,,30,,,,payee-12,cat-3,"+mixedFixCSV+"\n", stdout.String())
+		"mixed-categories:payee-12,mixed-categories,open,,,,Costco,Groceries,,,30,,,,payee-12,cat-3,"+mixedFixCSV+",,,,\n", stdout.String())
 }
 
 func Test_findings_csv_puts_a_payee_variants_item_in_its_payee_and_count_columns_with_the_transaction_cells_empty(t *testing.T) {
@@ -235,7 +238,7 @@ func Test_findings_csv_puts_a_payee_variants_item_in_its_payee_and_count_columns
 
 	require.NoError(t, err)
 	assert.Equal(t, findingsCSVHeader+
-		"payee-variants:tim-hortons,payee-variants,open,,,,TIM HORTONS #1234,,,,212,,,,payee-12,,"+variantsFixCSV+"\n", stdout.String())
+		"payee-variants:tim-hortons,payee-variants,open,,,,TIM HORTONS #1234,,,,212,,,,payee-12,,"+variantsFixCSV+",,,,\n", stdout.String())
 }
 
 const similarFixCSV = `"Merge these categories into one in Quicken, or ignore the group if they mean different things"`
@@ -254,8 +257,8 @@ func Test_findings_csv_puts_a_similar_categories_item_in_its_category_and_splits
 
 	require.NoError(t, err)
 	assert.Equal(t, findingsCSVHeader+
-		"similar-categories:grocery,similar-categories,open,,,,,Groceries,,,,812,,,,cat-3,"+similarFixCSV+"\n"+
-		"similar-categories:grocery,similar-categories,open,,,,,Grocery,,,,0,,,,cat-9,"+similarFixCSV+"\n", stdout.String())
+		"similar-categories:grocery,similar-categories,open,,,,,Groceries,,,,812,,,,cat-3,"+similarFixCSV+",,,,\n"+
+		"similar-categories:grocery,similar-categories,open,,,,,Grocery,,,,0,,,,cat-9,"+similarFixCSV+",,,,\n", stdout.String())
 }
 
 const unusedFixCSV = `"No transaction uses it; check that no scheduled transaction or budget does, then delete it in Quicken, or ignore it to keep it"`
@@ -274,6 +277,26 @@ func Test_findings_csv_puts_an_unused_category_item_in_its_category_columns_with
 
 	require.NoError(t, err)
 	assert.Equal(t, findingsCSVHeader+
-		"unused-category:cat-40,unused-category,open,,,,,Vacation,,,,,,,,cat-40,"+unusedFixCSV+"\n"+
-		"unused-category:cat-40,unused-category,open,,,,,Vacation:Hotel,,,,,,,,cat-41,"+unusedFixCSV+"\n", stdout.String())
+		"unused-category:cat-40,unused-category,open,,,,,Vacation,,,,,,,,cat-40,"+unusedFixCSV+",,,,\n"+
+		"unused-category:cat-40,unused-category,open,,,,,Vacation:Hotel,,,,,,,,cat-41,"+unusedFixCSV+",,,,\n", stdout.String())
+}
+
+func Test_findings_csv_puts_an_unclassified_account_in_its_account_and_currency_columns_with_everything_else_empty(t *testing.T) {
+	fake := fakeReportStore{findings: store.FindingList{Accounts: []store.Account{
+		{ID: "acct-12", Name: "Questrade TFSA", Type: store.AccountTypeBrokerage, Currency: "CAD"},
+		{ID: "acct-31", Name: "Old RRSP", Type: store.AccountTypeRetirement, Currency: "USD", Closed: true},
+	}}}
+	var stdout bytes.Buffer
+
+	err := executeFindings(t, fake, &stdout, &bytes.Buffer{}, "--csv")
+
+	require.NoError(t, err)
+	rows, err := csv.NewReader(strings.NewReader(stdout.String())).ReadAll()
+	require.NoError(t, err)
+	fix := finding.UnclassifiedAccount.Fix().Sentence
+	assert.Equal(t, [][]string{
+		strings.Split(strings.TrimSuffix(findingsCSVHeader, "\n"), ","),
+		{"unclassified-account:acct-31", "unclassified-account", "open", "", "Old RRSP", "USD", "", "", "", "", "", "", "", "", "", "", fix, "", "", "", ""},
+		{"unclassified-account:acct-12", "unclassified-account", "open", "", "Questrade TFSA", "CAD", "", "", "", "", "", "", "", "", "", "", fix, "", "", "", ""},
+	}, rows)
 }

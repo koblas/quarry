@@ -119,7 +119,7 @@ func Test_run_accounts_warns_of_the_missing_rate_for_an_investment_account_in_bo
 			got := runAccountsBothForms(t, c.args...)
 
 			assert.Equal(t, "quarry: warning: "+c.want+"\n", got.textErr)
-			assert.Contains(t, got.text, "no rate\n")
+			assert.Contains(t, got.text, "no rate  unclassified\n")
 			assert.Equal(t, []string{c.want}, warningsOf(t, got.json))
 			assert.Equal(t, "quarry: warning: "+c.want+"\n", got.jsonErr)
 		})
@@ -206,7 +206,7 @@ func Test_run_accounts_all_pads_a_no_rate_cell_so_a_closed_Status_follows_it_in_
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, ""+
 		"Account    Type       Currency  Balance   In CAD  Status\n"+
-		"Brokerage  brokerage  USD          0.00  no rate  closed\n"+
+		"Brokerage  brokerage  USD          0.00  no rate  closed, unclassified\n"+
 		"Chequing   chequing   CAD          0.00     0.00\n", stdout.String())
 }
 

@@ -354,6 +354,54 @@ func Test_import_stores_commission_as_ten_thousandths_and_null_for_none_or_zero(
 	}
 }
 
+func Test_import_stores_cost_basis_in_cents_and_null_for_none_or_zero(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name       string
+		commission string
+		costBasis  string
+		want       *int64
+	}{
+		{name: "NULL", costBasis: "", want: nil},
+		{name: "stored zero", costBasis: "0", want: nil},
+		{name: "residue snapping to 0.00", costBasis: "0.000000001", want: nil},
+		{name: "1000.50", costBasis: "1000.50", want: new(int64(100_050))},
+		{name: "stored as an integer", costBasis: "1000", want: new(int64(100_000))},
+		{name: "negative as recorded", costBasis: "-5.00", want: new(int64(-500))},
+		{name: "set with a NULL commission", commission: "", costBasis: "20.25", want: new(int64(2_025))},
+		{name: "set with a commission", commission: "1.50", costBasis: "20.25", want: new(int64(2_025))},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			accountPK := newBrokerage(b)
+			investmentWithEntry(b, v9fixture.TransactionRow{
+				Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Commission: c.commission, CostBasis: c.costBasis,
+			})
+
+			fake, _ := importInvestments(t, b)
+
+			require.Len(t, fake.Rows.InvestmentTransactions, 1)
+			assert.Equal(t, c.want, fake.Rows.InvestmentTransactions[0].CostBasis)
+		})
+	}
+}
+
+func Test_import_stores_a_commission_beside_a_cost_basis_of_none(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	accountPK := newBrokerage(b)
+	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Commission: "1.50"})
+
+	fake, _ := importInvestments(t, b)
+
+	require.Len(t, fake.Rows.InvestmentTransactions, 1)
+	assert.Equal(t, new(int64(15_000)), fake.Rows.InvestmentTransactions[0].Commission)
+	assert.Nil(t, fake.Rows.InvestmentTransactions[0].CostBasis)
+}
+
 func Test_import_sets_the_split_columns_only_on_a_split(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
@@ -412,6 +460,7 @@ func Test_import_refuses_an_investment_value_quarry_cannot_read(t *testing.T) {
 		units      string
 		amount     string
 		commission string
+		costBasis  string
 		want       string
 	}{
 		{name: "shares beyond 6 decimals", units: "1.23456789", amount: "1.00", want: prefix + "has 1.23456789 shares, which has more than 6 decimal places"},
@@ -424,6 +473,10 @@ func Test_import_refuses_an_investment_value_quarry_cannot_read(t *testing.T) {
 		{name: "commission beyond 4 decimals", amount: "1.00", commission: "1.23456", want: prefix + "has a commission of 1.23456, which has more than 4 decimal places"},
 		{name: "commission too large", amount: "1.00", commission: "10000000000000000", want: prefix + "has a commission of 10000000000000000, which is too large for quarry's amounts"},
 		{name: "commission not a number", amount: "1.00", commission: "n/a", want: prefix + "has a commission that is not a number"},
+		{name: "cost basis beyond 2 decimals", amount: "1.00", costBasis: "1.234", want: prefix + "has a cost basis of 1.234, which has more than 2 decimal places"},
+		{name: "cost basis too large", amount: "1.00", costBasis: "10000000000000000", want: prefix + "has a cost basis of 10000000000000000, which is too large for quarry's amounts"},
+		{name: "cost basis not a number", amount: "1.00", costBasis: "n/a", want: prefix + "has a cost basis that is not a number"},
+		{name: "commission and cost basis both unreadable", amount: "1.00", commission: "n/a", costBasis: "n/a", want: prefix + "has a commission that is not a number"},
 	}
 
 	for _, c := range cases {
@@ -432,7 +485,7 @@ func Test_import_refuses_an_investment_value_quarry_cannot_read(t *testing.T) {
 			b := v9fixture.NewBuilder()
 			accountPK := newBrokerage(b)
 			b.InvestmentTransaction(v9fixture.TransactionRow{
-				Account: accountPK, Type: buyCode, PostedDate: &investDay, Units: c.units, Amount: c.amount, Commission: c.commission,
+				Account: accountPK, Type: buyCode, PostedDate: &investDay, Units: c.units, Amount: c.amount, Commission: c.commission, CostBasis: c.costBasis,
 			})
 
 			reason, fake := importInvestmentsRefused(t, b)

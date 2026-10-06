@@ -56,11 +56,11 @@ func Test_run_findings_json_prints_the_ruled_document_for_one_open_duplicate(t *
         {"transaction_id": "txn-%[1]d", "split_id": null, "payee_id": null, "category_id": null,
          "date": "2026-08-03", "account_id": "acct-%[3]d", "account": "Chequing", "currency": "CAD",
          "payee": "Hydro One", "category": null, "amount": "-142.17",
-         "other_account": null, "other_account_id": null, "transactions": null, "splits": null},
+         "other_account": null, "other_account_id": null, "transactions": null, "splits": null, "investment_transaction_id": null, "security_id": null, "security": null, "shares": null},
         {"transaction_id": "txn-%[2]d", "split_id": null, "payee_id": null, "category_id": null,
          "date": "2026-08-05", "account_id": "acct-%[3]d", "account": "Chequing", "currency": "CAD",
          "payee": "Hydro One", "category": null, "amount": "-142.17",
-         "other_account": null, "other_account_id": null, "transactions": null, "splits": null}
+         "other_account": null, "other_account_id": null, "transactions": null, "splits": null, "investment_transaction_id": null, "security_id": null, "security": null, "shares": null}
       ]
     }
   ],
@@ -104,7 +104,7 @@ func Test_run_findings_json_items_of_a_one_sided_transfer_and_an_uncategorized_p
         {"transaction_id": "txn-%[2]d", "split_id": "split-%[1]d", "payee_id": null, "category_id": null,
          "date": "2024-02-01", "account_id": "acct-%[3]d", "account": "Visa", "currency": "USD",
          "payee": "Payment", "category": null, "amount": "-1200.50",
-         "other_account": "Savings", "other_account_id": null, "transactions": null, "splits": null}
+         "other_account": "Savings", "other_account_id": null, "transactions": null, "splits": null, "investment_transaction_id": null, "security_id": null, "security": null, "shares": null}
       ]
     },
     {
@@ -118,7 +118,7 @@ func Test_run_findings_json_items_of_a_one_sided_transfer_and_an_uncategorized_p
         {"transaction_id": "txn-%[5]d", "split_id": "split-%[6]d", "payee_id": null, "category_id": null,
          "date": "2026-03-01", "account_id": "acct-%[3]d", "account": "Visa", "currency": "USD",
          "payee": "Amazon", "category": null, "amount": "-10.00",
-         "other_account": null, "other_account_id": null, "transactions": null, "splits": null}
+         "other_account": null, "other_account_id": null, "transactions": null, "splits": null, "investment_transaction_id": null, "security_id": null, "security": null, "shares": null}
       ]
     }
   ],

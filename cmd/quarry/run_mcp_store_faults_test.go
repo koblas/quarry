@@ -89,6 +89,10 @@ func Test_run_mcp_logs_only_the_withheld_line_for_a_store_read_fault(t *testing.
 			damage: directoryStore, reason: `Could not read from file "{store}": Is a directory`,
 		},
 		{
+			name: "acb, store cannot be opened", tool: "acb",
+			damage: directoryStore, reason: `Could not read from file "{store}": Is a directory`,
+		},
+		{
 			name: "net_worth, its view dropped", tool: "net_worth",
 			damage: brokenStore("DROP VIEW v_net_worth"), reason: "Table with name v_net_worth does not exist!",
 		},

@@ -301,35 +301,7 @@ func sharesPhrase(checked int) string {
 // formatMoney renders cents as a thousands-grouped, 2-decimal amount with a
 // leading "-" for a negative value.
 func formatMoney(cents int64) string {
-	negative := cents < 0
-	if negative {
-		cents = -cents
-	}
-	s := fmt.Sprintf("%s.%02d", humanize.Thousands(int(cents/100)), cents%100)
-	if negative {
-		return "-" + s
-	}
-	return s
-}
-
-// formatShares renders millionths of a share thousands-grouped with trailing
-// fractional zeros trimmed, and a leading "-" for a negative count.
-func formatShares(millionths int64) string {
-	const perShare = 1_000_000
-	// Split before negating: the whole and fraction parts of math.MinInt64 fit, its magnitude does not.
-	whole, frac := millionths/perShare, millionths%perShare
-	negative := millionths < 0
-	if negative {
-		whole, frac = -whole, -frac
-	}
-	s := humanize.Thousands(int(whole))
-	if frac != 0 {
-		s += "." + strings.TrimRight(fmt.Sprintf("%06d", frac), "0")
-	}
-	if negative {
-		return "-" + s
-	}
-	return s
+	return humanize.Money(cents)
 }
 
 // accountLabel renders "Name (CUR[, closed][, inactive])": inactive is
@@ -365,9 +337,9 @@ func shareMismatchRows(mismatches []store.ShareMismatch) []string {
 	for i, m := range mismatches {
 		accounts[i] = accountLabel(m.Account, m.Currency, m.Closed, m.Active)
 		securities[i] = securityLabel(m.Security, m.Ticker)
-		quarry[i] = formatShares(m.Quarry)
-		quicken[i] = formatShares(m.Quicken)
-		diff[i] = formatShares(m.Difference)
+		quarry[i] = humanize.Shares(m.Quarry)
+		quicken[i] = humanize.Shares(m.Quicken)
+		diff[i] = humanize.Shares(m.Difference)
 	}
 	accountWidth, securityWidth := widestLen(accounts), widestLen(securities)
 	quarryWidth, quickenWidth, diffWidth := widestLen(quarry), widestLen(quicken), widestLen(diff)

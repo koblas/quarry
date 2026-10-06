@@ -90,3 +90,46 @@ func Test_NewFindingItem_formats_the_date_and_amount_of_a_transaction_item(t *te
 	assert.Equal(t, "-123.45", *got.Amount)
 	assert.Nil(t, got.Transactions)
 }
+
+func Test_NewFindingEntry_encodes_an_unclassified_account_with_no_first_found_time_and_only_its_account_keys(t *testing.T) {
+	listed := report.ListedFinding{
+		Status: finding.StatusOpen,
+		ID:     "unclassified-account:acct-12", Type: finding.UnclassifiedAccount,
+		Items: []store.FindingItem{{
+			AccountID: "acct-12", Account: "Questrade TFSA", AccountType: store.AccountTypeBrokerage, Currency: "CAD", Closed: true,
+		}},
+	}
+
+	data, err := json.Marshal(document.NewFindingEntry(listed))
+
+	require.NoError(t, err)
+	assert.JSONEq(t, `{
+		"id": "unclassified-account:acct-12", "type": "unclassified-account", "status": "open",
+		"first_found_at": null, "fixed_at": null, "fix": `+string(mustJSON(t, finding.UnclassifiedAccount.Fix().Sentence))+`,
+		"items": [{
+			"transaction_id": null, "split_id": null, "payee_id": null, "category_id": null, "date": null,
+			"account_id": "acct-12", "account": "Questrade TFSA", "currency": "CAD", "payee": null, "category": null,
+			"amount": null, "other_account": null, "other_account_id": null, "transactions": null, "splits": null,
+			"investment_transaction_id": null, "security_id": null, "security": null, "shares": null
+		}]
+	}`, string(data))
+}
+
+func Test_NewFindingEntry_gives_a_stored_finding_its_first_found_time(t *testing.T) {
+	stored := report.ListedFinding{
+		Status: finding.StatusOpen,
+		ID:     "uncategorized:x", Type: finding.Uncategorized, FirstFoundAt: time.Date(2026, 9, 1, 8, 30, 0, 0, time.UTC),
+	}
+
+	got := document.NewFindingEntry(stored)
+
+	require.NotNil(t, got.FirstFoundAt)
+	assert.Equal(t, "2026-09-01T08:30:00Z", *got.FirstFoundAt)
+}
+
+func mustJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	data, err := json.Marshal(v)
+	require.NoError(t, err)
+	return data
+}

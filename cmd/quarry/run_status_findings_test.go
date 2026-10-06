@@ -63,14 +63,14 @@ func Test_run_status_warns_on_a_bad_config_and_still_reports(t *testing.T) {
 	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, "quarry: warning: cannot tell which findings you ignored: "+configShown+
-		": snapshots.keep must be a whole number of 1 or more, got 0; findings you ignored are counted as open\n", stderr.String())
+	assert.Equal(t, "quarry: warning: cannot tell which findings you ignored or how you classified your accounts: "+configShown+
+		": snapshots.keep must be a whole number of 1 or more, got 0; findings you ignored are counted as open, and every investment account is counted as unclassified\n", stderr.String())
 	assert.Contains(t, stdout.String(), "\nFindings  4 open; run quarry findings to list them\n")
 }
 
 const (
-	statusIgnoreWarningLead = "cannot tell which findings you ignored: "
-	statusIgnoreWarningTail = "; findings you ignored are counted as open"
+	statusIgnoreWarningLead = "cannot tell which findings you ignored or how you classified your accounts: "
+	statusIgnoreWarningTail = "; findings you ignored are counted as open, and every investment account is counted as unclassified"
 )
 
 // statusConfigRefusal is a config that cannot be loaded and the problem the status warning names.

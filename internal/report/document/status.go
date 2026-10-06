@@ -94,19 +94,11 @@ type FindingsTally struct {
 	IgnoreKnown bool
 }
 
-// StatusIgnore applies status's ignore policy: with no problem it returns ignore and no warnings;
-// with a problem reading the config it returns a nil list and the one cannot-tell warning naming
-// problem. Status never refuses over the config.
-func StatusIgnore(ignore []string, problem string) ([]string, []string) {
-	if problem == "" {
-		return ignore, nil
-	}
-	return nil, []string{CannotTellIgnored(problem)}
-}
-
-// CannotTellIgnored is the warning for a config that cannot be read, naming problem.
-func CannotTellIgnored(problem string) string {
-	return "cannot tell which findings you ignored: " + problem + "; findings you ignored are counted as open"
+// CannotTellChoices is the warning for a config that cannot be read, naming problem; status counts
+// without it, so ignored findings are open and every investment account is unclassified.
+func CannotTellChoices(problem string) string {
+	return "cannot tell which findings you ignored or how you classified your accounts: " + problem +
+		"; findings you ignored are counted as open, and every investment account is counted as unclassified"
 }
 
 // NewStatus converts st into the status document. Paths stay absolute, times are UTC RFC 3339,

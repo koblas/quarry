@@ -47,6 +47,12 @@ func (f file) badValue(must, got string) *refusalError {
 	return f.refuse(func(path string) string { return path + ": " + must + ", got " + got }, nil)
 }
 
+// badItem is the refusal for a file that is missing something it must hold: the file's path and
+// reason, which has no value to show.
+func (f file) badItem(reason string) *refusalError {
+	return f.refuse(func(path string) string { return path + ": " + reason }, nil)
+}
+
 // ProblemAbsolute is Problem with the config file named by its absolute path, not ~-abbreviated;
 // machine-readable output carries this form. An error that is not a config refusal is returned as Problem does.
 func ProblemAbsolute(err error) string {

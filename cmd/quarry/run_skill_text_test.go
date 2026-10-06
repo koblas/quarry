@@ -25,7 +25,7 @@ var skillHeadings = []string{
 	"## 4. Pick the command",
 	"## 5. When to use quarry sql",
 	"## 6. quarry cannot change data",
-	"## 7. Not covered yet",
+	"## 7. Gains and tax",
 	"## 8. When a command fails",
 	"## 9. Without a shell: MCP tools",
 	"## 10. References",
@@ -162,7 +162,7 @@ func ticks(s string) string {
 const (
 	skillFrontmatter = `---
 name: quarry
-description: Answer questions about the user's own money from their Quicken Classic for Mac data, using the quarry command-line tool and its local, read-only store. Use when the user asks how much they spent or earned, on what, where or when ("how much did we spend on groceries last year?", "how did our grocery spending change since 2022?"); about income, cash flow or savings rate by month or year; which subscriptions or recurring charges they pay, when one started or changed price ("which subscriptions started this year?"); about unusually large charges; to find a transaction by payee, memo, amount, date, account or category; for account balances; net worth today or over time; what they hold in investment accounts and its value on a day; or what to clean up in their Quicken file (uncategorized items, duplicates, one-sided or unlinked transfers, payee name variants). Also use when the user mentions quarry or their Quicken data, or asks whether that data is up to date. Every number comes from quarry's output, never from estimation. Do not use for general financial advice, tax filing, trades or payments, for gains or ACB beyond saying quarry does not cover them yet, or for data that is not in Quicken; quarry cannot change the data, and fixes are made in Quicken.
+description: Answer questions about the user's own money from their Quicken Classic for Mac data, using the quarry command-line tool and its local, read-only store. Use when the user asks how much they spent or earned, on what, where or when ("how much did we spend on groceries last year?", "how did our grocery spending change since 2022?"); about income, cash flow or savings rate by month or year; which subscriptions or recurring charges they pay, when one started or changed price ("which subscriptions started this year?"); about unusually large charges; to find a transaction by payee, memo, amount, date, account or category; for account balances; net worth today or over time; what they hold in investment accounts and its value on a day; adjusted cost base and realized capital gains per tax year (CAD); or what to clean up in their Quicken file (uncategorized items, duplicates, one-sided or unlinked transfers, payee name variants), or which investment accounts are registered. Also use when the user mentions quarry or their Quicken data, or asks whether that data is up to date. Every number comes from quarry's output, never from estimation. Do not use for general financial advice, tax filing, trades or payments, or for data that is not in Quicken; quarry cannot change the data, and fixes are made in Quicken.
 ---`
 
 	skillIntro = `quarry keeps a read-only copy of the user's Quicken Classic for Mac data in a local store and answers questions from it. Run ¤quarry¤ in the shell and read its ¤--json¤ output. Every rule about what counts as spending, income or a transfer lives in quarry; use its commands and views instead of re-deriving those rules.`
@@ -198,10 +198,13 @@ description: Answer questions about the user's own money from their Quicken Clas
 | Account balances | ¤quarry accounts --json¤ |
 | Net worth today, on a day, or by month | ¤quarry networth [--as-of <d> \| --since <d>] --json¤ |
 | Holdings and their value on a day | ¤quarry holdings --as-of <date> --json¤ |
+| ACB, capital gains for a tax year | ¤quarry acb [--year <y>] [--security <s>] --json¤; see ¤references/findings.md¤ "Classifying accounts" first |
 | What to clean up in Quicken | ¤quarry findings --json¤; see ¤references/findings.md¤ |
 | Anything else | ¤quarry sql¤ (section 5) |
 
-Dates are ¤YYYY¤, ¤YYYY-MM¤ or ¤YYYY-MM-DD¤, and both ends are included. Without ¤--since¤ and ¤--until¤, ¤spend¤, ¤cashflow¤, ¤recurring¤ and ¤anomalies¤ cover this year to today.`
+Dates are ¤YYYY¤, ¤YYYY-MM¤ or ¤YYYY-MM-DD¤, and both ends are included. Without ¤--since¤ and ¤--until¤, ¤spend¤, ¤cashflow¤, ¤recurring¤ and ¤anomalies¤ cover this year to today.
+
+The first time ACB or gains are asked for, run ¤quarry findings --type unclassified-account --status all --json¤; if it lists any account, classify them (¤references/findings.md¤, "Classifying accounts") before running ¤quarry acb¤.`
 
 	skillSection5 = `Use a named command when one answers the question; it carries the rules. Use ¤quarry sql¤ only for questions no command covers, and then query the views ¤v_spending¤ and ¤v_cash_flow¤ for spending and income; never rebuild those from ¤transactions¤ and ¤splits¤. Recurring charges and anomalies have no SQL form; use their commands. Read ¤references/schema.md¤ before writing SQL. For holdings over time query ¤v_holdings¤; never sum ¤investment_transactions.shares¤.
 
@@ -215,9 +218,9 @@ SQL
 
 Write user-supplied values only in a recipe's ¤params¤ row, and double any single quote inside them (¤'Tim Horton''s'¤). Aggregate in SQL instead of listing rows; quarry prints at most 500 rows and says on stderr when there were more. Text for ¤quarry search¤ that starts with ¤-¤ goes after ¤--¤.`
 
-	skillSection6 = `quarry never writes to Quicken and never edits its own store by request. To fix a category, payee, duplicate or transfer, the user makes the change in Quicken, then runs ¤quarry sync¤; findings it no longer finds are marked fixed. To stop listing a finding the user has checked, they add its id to ¤findings.ignore¤ in ¤~/Library/Application Support/quarry/config.toml¤; quarry never writes that file, and you don't either unless the user asks. Run ¤quarry sync¤ or ¤quarry snapshots prune¤, or write output to a file, only when the user asks.`
+	skillSection6 = `quarry never writes to Quicken and never edits its own store by request. To fix a category, payee, duplicate or transfer, the user makes the change in Quicken, then runs ¤quarry sync¤; findings it no longer finds leave the list. To stop listing a finding the user has checked, they add its id to ¤findings.ignore¤ in ¤~/Library/Application Support/quarry/config.toml¤. quarry never writes that file. You write it only when the user asks, to record an account classification the user just gave you (references/findings.md, "Classifying accounts"), or to add ¤acb.adjustment¤ lines for amounts the user reads you from a T3 slip (references/findings.md, "ACB adjustments"); show the user the exact lines first, and write them only after the user says yes. Run ¤quarry sync¤ or ¤quarry snapshots prune¤, or write output to a file, only when the user asks.`
 
-	skillSection7 = `- **Realized gains, ACB:** "quarry counts dividends, interest and capital-gain distributions as income (query v_cash_flow by category for their totals), but does not compute gains or ACB yet."
+	skillSection7 = `- **Realized gains, ACB:** quarry acb is a worksheet to review with an accountant, not a filing: say so, relay every line in its warnings with its numbers (section 2), and never call a loss deductible or denied.
 - **Tax:** quarry has no tax-line data. Give totals for the categories the user names for the year, from ¤quarry spend --by category¤ and ¤references/sql/income-by-category.sql¤. These are figures to review, not tax advice or a filing.`
 
 	skillSection8 = `| Outcome | How Claude sees it | What Claude says or does |
@@ -226,6 +229,7 @@ Write user-supplied values only in a recipe's ¤params¤ row, and double any sin
 | ¤quarry¤ not found | shell exit 127 / ¤command not found¤ | "The quarry command isn't on this shell's PATH. Install quarry and check that ¤quarry status¤ works in a terminal; if you used ¤go install¤, add ¤$(go env GOPATH)/bin¤ to your PATH." Stop. |
 | Unknown command or flag | exit 2, ¤unknown command¤/¤unknown flag¤ for a command this skill uses | "Your quarry binary is older than this skill. Update quarry, then ask again." Do not retry with other spellings. |
 | Other usage error | exit 2 | Fix the command line from the error and retry once. Do not show the user. |
+| acb refused: accounts not classified | exit 1, stderr ¤quarry: acb needs every brokerage and retirement account classified; …¤ | Classify them (¤references/findings.md¤, "Classifying accounts"), then run ¤quarry acb¤ again. |
 | Failure | exit 1, other stderr line | Quote the stderr line and stop that path. Do not retry variations or guess the number. |
 | Rows capped | stderr notice from ¤sql¤/¤search¤ | Say the list was cut at the cap; narrow the query, or aggregate. |
 | Empty result | exit 0, no rows | "quarry found no … for <period, filters>." |
@@ -234,7 +238,7 @@ Write user-supplied values only in a recipe's ¤params¤ row, and double any sin
 | ¤warnings[]¤ not empty | any JSON | Relay the warnings that bear on the answer. |
 | Sync refused (Quicken closed, reconciliation failed, schema differs) | exit 1 from ¤quarry sync¤ | Quote the line; "the previous data is unchanged"; answer from it with its date. |`
 
-	skillSection9 = `If you cannot run shell commands but quarry's MCP tools are available, use them; they return the same numbers. ¤sync_status¤ for section 1, ¤spending¤, ¤cash_flow¤, ¤recurring_charges¤, ¤anomalies¤, ¤search_transactions¤, ¤holdings¤, ¤net_worth¤, ¤data_quality¤ for the commands in section 4, ¤describe_schema¤ and ¤query¤ for section 5. The MCP server cannot run ¤sync¤.`
+	skillSection9 = `If you cannot run shell commands but quarry's MCP tools are available, use them; they return the same numbers. ¤sync_status¤ for section 1, ¤spending¤, ¤cash_flow¤, ¤recurring_charges¤, ¤anomalies¤, ¤search_transactions¤, ¤holdings¤, ¤net_worth¤, ¤acb¤, ¤data_quality¤ for the commands in section 4, ¤describe_schema¤ and ¤query¤ for section 5. The MCP server cannot run ¤sync¤.`
 
 	skillCredit = `Layout and some rules adapted from dweekly/quicken-mac-mcp (MIT); see THIRD_PARTY_NOTICES.`
 )

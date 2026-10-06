@@ -32,6 +32,8 @@ const (
 	textRefusedLog      = "refused the call's text; details went to the client only"
 	amountRefusedLog    = "refused the call's min or max; details went to the client only"
 	unknownCategoryLog  = "refused the call's category: it names no category; details went to the client only"
+	unknownSecurityLog  = "refused the call's security; details went to the client only"
+	yearRefusedLog      = "refused the call's year; details went to the client only"
 )
 
 // withheldStoreLog is the stderr line of a store that failed for a reason only the client should read; at is its ~ path.
@@ -70,8 +72,8 @@ func logLine(err error) string {
 	return failedLog
 }
 
-// refusalLine is the stderr line of refusal: a class line where its text carries the caller's account or a
-// reason from the store's own engine, else its text, which is fixed copy.
+// refusalLine is the stderr line of refusal: a class line where its text carries the caller's account, security
+// or a reason from the store's own engine, else its text, which is fixed copy.
 func refusalLine(refusal report.RefusalError) string {
 	switch refusal.Kind {
 	case report.RefusalUnknownAccount:
@@ -84,7 +86,9 @@ func refusalLine(refusal report.RefusalError) string {
 		if refusal.Fault == store.OpenFaultOther {
 			return withheldStoreLog(refusal.At)
 		}
-	case report.RefusalGeneric:
+	case report.RefusalUnknownSecurity:
+		return unknownSecurityLog
+	case report.RefusalUnclassifiedAccounts, report.RefusalGeneric:
 	}
 	return refusal.Error()
 }

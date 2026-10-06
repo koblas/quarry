@@ -195,3 +195,60 @@ func Test_NativeOf_is_the_other_of_cad_and_usd(t *testing.T) {
 		})
 	}
 }
+
+func Test_money_ParseCents_is_exact_where_float_is_not(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+		want int64
+	}{
+		{name: "whole number", text: "12", want: 1200},
+		{name: "one decimal", text: "12.3", want: 1230},
+		{name: "two decimals", text: "12.34", want: 1234},
+		{name: "zero", text: "0", want: 0},
+		{name: "zero with decimals", text: "0.00", want: 0},
+		{name: "1.15 is 114 through a float", text: "1.15", want: 115},
+		{name: "0.29 is 28 through a float", text: "0.29", want: 29},
+		{name: "the largest amount an int64 of cents holds", text: "92233720368547758.07", want: math.MaxInt64},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, ok := money.ParseCents(c.text)
+
+			assert.True(t, ok)
+			assert.Equal(t, c.want, got)
+		})
+	}
+}
+
+func Test_money_ParseCents_reports_false_for_text_that_is_not_an_unsigned_amount_of_at_most_two_decimals(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+	}{
+		{name: "three decimals", text: "12.345"},
+		{name: "three decimals ending in zero", text: "12.340"},
+		{name: "minus sign", text: "-5"},
+		{name: "plus sign", text: "+5"},
+		{name: "no whole part", text: ".5"},
+		{name: "point with no decimals", text: "12."},
+		{name: "underscore", text: "1_0"},
+		{name: "exponent", text: "1e2"},
+		{name: "hex", text: "0x10"},
+		{name: "empty", text: ""},
+		{name: "quoted", text: `"12.34"`},
+		{name: "two points", text: "1.2.3"},
+		{name: "one cent past an int64", text: "92233720368547758.08"},
+		{name: "far past an int64", text: "99999999999999999999"},
+		{name: "non-ASCII digit", text: "١٢"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, ok := money.ParseCents(c.text)
+
+			assert.False(t, ok)
+		})
+	}
+}

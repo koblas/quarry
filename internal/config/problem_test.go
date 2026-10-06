@@ -33,6 +33,7 @@ func Test_ProblemAbsolute_names_the_file_by_its_absolute_path(t *testing.T) {
 	}{
 		{"a bad value", "[snapshots]\nkeep = 0\n", ": snapshots.keep must be a whole number of 1 or more, got 0"},
 		{"malformed TOML", "keep = \n", ": line 1: "},
+		{"an account number in a list", "accounts.registered = [12345678]\n", ": accounts.registered must hold only account ids in quotes, got ****5678 as item 1"},
 		{"a bad reporting currency", "reporting.currency = \"EUR\"\n", ": reporting.currency must be CAD, USD or native, got \"EUR\""},
 	}
 	for _, c := range cases {

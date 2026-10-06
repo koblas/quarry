@@ -46,6 +46,7 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
       "active": true,
       "in_reports": true,
       "linked_tracking": true,
+      "registered": null,
       "balance": "12345.67",
       "cash": "12345.67",
       "holdings_value": null,
@@ -61,6 +62,7 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
       "active": true,
       "in_reports": false,
       "linked_tracking": false,
+      "registered": null,
       "balance": "-1204.17",
       "cash": "-1204.17",
       "holdings_value": null,
@@ -76,6 +78,7 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
       "active": false,
       "in_reports": true,
       "linked_tracking": false,
+      "registered": null,
       "balance": "0.00",
       "cash": "0.00",
       "holdings_value": null,
@@ -91,6 +94,7 @@ func Test_renderAccountsJSON_renders_every_field_of_every_account(t *testing.T) 
       "active": true,
       "in_reports": true,
       "linked_tracking": false,
+      "registered": null,
       "balance": "2500.00",
       "cash": "1000.00",
       "holdings_value": "1500.00",
@@ -176,7 +180,7 @@ func jsonListing(currency money.Currency) report.AccountListing {
 
 func Test_renderAccountsJSON_puts_currency_after_as_of_and_cash_and_holdings_value_between_balance_and_converted_balance_in_every_mode(t *testing.T) {
 	topLevel := []string{"as_of", "currency", "accounts", "warnings"}
-	row := []string{"id", "name", "type", "currency", "institution", "closed", "active", "in_reports", "linked_tracking", "balance", "cash", "holdings_value", "converted_balance"}
+	row := []string{"id", "name", "type", "currency", "institution", "closed", "active", "in_reports", "linked_tracking", "registered", "balance", "cash", "holdings_value", "converted_balance"}
 	cases := []struct {
 		name     string
 		currency money.Currency

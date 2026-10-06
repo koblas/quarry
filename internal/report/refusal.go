@@ -21,6 +21,8 @@ const (
 	RefusalAmbiguousAccount
 	RefusalStore
 	RefusalUnknownCategory
+	RefusalUnknownSecurity
+	RefusalUnclassifiedAccounts
 )
 
 // RefusalError is a final, one-line refusal of a read: its message excludes
@@ -33,7 +35,7 @@ type RefusalError struct {
 
 	// Kind says which of the parts below are set.
 	Kind RefusalKind
-	// Arg is the caller's account or category text (RefusalUnknownAccount, RefusalAmbiguousAccount, RefusalUnknownCategory).
+	// Arg is the caller's account, category or security text (RefusalUnknownAccount, RefusalAmbiguousAccount, RefusalUnknownCategory, RefusalUnknownSecurity).
 	Arg string
 	// IDs are the ids of the accounts Arg names, sorted (RefusalAmbiguousAccount).
 	IDs []string
@@ -41,6 +43,8 @@ type RefusalError struct {
 	Fault store.OpenFault
 	// At is the store's path in its ~ form (RefusalStore).
 	At string
+	// Count is how many investment accounts are in neither account list (RefusalUnclassifiedAccounts).
+	Count int
 }
 
 // Error returns the refusal's message verbatim.
@@ -96,6 +100,31 @@ func unknownCategoryRefusal(arg string) error {
 	return RefusalError{
 		msg:  fmt.Sprintf("no category named %q; list them with quarry sql \"SELECT full_path FROM categories ORDER BY full_path\"", arg),
 		Kind: RefusalUnknownCategory, Arg: arg,
+	}
+}
+
+// unknownSecurityRefusal refuses a --security value that names no security acb covers.
+func unknownSecurityRefusal(arg string) error {
+	return RefusalError{
+		msg:  fmt.Sprintf("acb covers no security named %q; quarry acb --json lists every security it covers", arg),
+		Kind: RefusalUnknownSecurity, Arg: arg,
+	}
+}
+
+// unclassifiedAccountsRefusal refuses acb while n investment accounts are in neither account list;
+// it names the config file by its literal ~ form, as the unclassified-account finding does.
+func unclassifiedAccountsRefusal(n int) error {
+	noun, verb, pronoun := "accounts", "are", "them"
+	if n == 1 {
+		noun, verb, pronoun = "account", "is", "it"
+	}
+
+	return RefusalError{
+		msg: fmt.Sprintf(
+			"acb needs every brokerage and retirement account classified; %d %s %s in neither accounts.registered nor accounts.non-registered in "+
+				"~/Library/Application Support/quarry/config.toml; quarry findings --type unclassified-account --status all lists %s",
+			n, noun, verb, pronoun),
+		Kind: RefusalUnclassifiedAccounts, Count: n,
 	}
 }
 

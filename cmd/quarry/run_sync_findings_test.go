@@ -388,3 +388,72 @@ func Test_run_sync_says_nothing_about_an_ignored_id_that_is_not_a_finding(t *tes
 	require.NoError(t, json.Unmarshal([]byte(stdout), &parsed))
 	assert.Empty(t, parsed.Warnings)
 }
+
+const unclassifiedOpenLine = "Findings  1 open; run quarry findings to list them"
+
+func Test_run_sync_counts_an_unclassified_account_open_and_never_new(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	first, _ := unclassifiedAccountBundle()
+	second, _ := unclassifiedAccountBundle()
+
+	firstLine := syncFindingsBundleIn(t, home, "DocumentsA", first)
+	_, stdout, _ := syncNewBundle(t, home, "DocumentsB", second)
+
+	assert.Equal(t, unclassifiedOpenLine, firstLine)
+	assert.Equal(t, unclassifiedOpenLine, findingsLine(t, stdout))
+}
+
+func Test_run_sync_leaves_an_account_the_config_classifies_out_of_the_findings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	b, id := unclassifiedAccountBundle()
+	writeConfig(t, home, fmt.Sprintf("[accounts]\nregistered = [%q]\n", id))
+
+	line := syncFindingsBundleIn(t, home, "Documents", b)
+
+	assert.Equal(t, "Findings  none open", line)
+}
+
+func Test_run_sync_counts_an_ignored_unclassified_account_as_ignored(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	b, id := unclassifiedAccountBundle()
+	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [\"unclassified-account:%s\"]\n", id))
+
+	line := syncFindingsBundleIn(t, home, "Documents", b)
+
+	assert.Equal(t, "Findings  none open, 1 ignored", line)
+}
+
+func Test_run_sync_json_counts_an_unclassified_account_open_and_not_new(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	b, _ := unclassifiedAccountBundle()
+
+	exitCode, stdout, stderr := syncNewBundle(t, home, "Documents", b, "--json")
+
+	require.Equal(t, 0, exitCode, stderr)
+	var parsed struct {
+		Store struct {
+			Findings json.RawMessage `json:"findings"`
+		} `json:"store"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &parsed))
+	assert.JSONEq(t, `{"open":1,"ignored":0,"fixed":0,"new":0,"newly_fixed":0}`, string(parsed.Store.Findings))
+}
+
+func Test_run_sync_from_counts_an_unclassified_account_open(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	b, _ := unclassifiedAccountBundle()
+	syncFindingsBundleIn(t, home, "Documents", b)
+	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	id := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
+	var stdout, stderr bytes.Buffer
+
+	exitCode := run(context.Background(), []string{"sync", "--from", id}, &stdout, &stderr)
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Equal(t, unclassifiedOpenLine, findingsLine(t, stdout.String()))
+}

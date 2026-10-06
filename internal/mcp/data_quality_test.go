@@ -503,6 +503,7 @@ func Test_data_quality_orders_its_warnings(t *testing.T) {
 	stub := &configStub{cfg: config.Config{
 		Path:             dqConfig,
 		Ignore:           []string{"duplicate:gone"},
+		Registered:       []string{"acct-99"},
 		WarningsAbsolute: []string{"/home/dave/config.toml: unknown key x"},
 	}}
 	st := listOf(
@@ -517,6 +518,7 @@ func Test_data_quality_orders_its_warnings(t *testing.T) {
 	assert.Equal(t, []string{
 		"/home/dave/config.toml: unknown key x",
 		document.UnmatchedIgnoreWarnings(dqConfig, []string{"duplicate:gone"})[0],
+		document.UnmatchedAccountWarnings(dqConfig, report.UnmatchedAccounts{Registered: []string{"acct-99"}})[0],
 		"listed the first 2 of 3 open findings; pass type to narrow the list, or a larger limit (at most 500)",
 		"finding uncategorized:a lists the first 25 of 27 items; query finding_items WHERE finding_id = 'uncategorized:a' for the rest",
 		"finding uncategorized:b lists the first 25 of 26 items; query finding_items WHERE finding_id = 'uncategorized:b' for the rest",

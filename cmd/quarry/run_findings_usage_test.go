@@ -11,7 +11,7 @@ import (
 )
 
 func Test_run_findings_rejects_usage_it_cannot_use(t *testing.T) {
-	const types = "duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, payee-variants, similar-categories or unused-category"
+	const types = "duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, payee-variants, similar-categories, unused-category, unclassified-account or shares-without-cost"
 	cases := []struct {
 		name       string
 		args       []string

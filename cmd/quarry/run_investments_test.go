@@ -261,6 +261,10 @@ func Test_run_sync_refuses_an_investment_record_quarry_cannot_read(t *testing.T)
 			b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: new(int64(3)), Amount: "1.00", PostedDate: &day, Commission: "1.23456"})
 			return brokerage + " has a commission of 1.23456, which has more than 4 decimal places"
 		}},
+		{name: "a cost basis of 1.234", setup: func(b *v9fixture.Builder, brokeragePK int64) string {
+			b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: new(int64(3)), Amount: "1.00", PostedDate: &day, CostBasis: "1.234"})
+			return brokerage + " has a cost basis of 1.234, which has more than 2 decimal places"
+		}},
 		{name: "a split ratio 1:0", setup: func(b *v9fixture.Builder, brokeragePK int64) string {
 			acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
 			positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})

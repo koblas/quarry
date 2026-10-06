@@ -1,0 +1,55 @@
+---
+id: SCENARIO-19
+status: done
+---
+
+# SCENARIO-19: MCP acb
+
+Cadence: code-first (no bug fix, write-safety guard or atomic adapter touched)
+Acceptance test: `cmd/quarry/run_mcp_acb_test.go` `Test_run_mcp_acb_returns_the_acb_json_document`
+Narrow loop: `go test ./internal/mcp/ ./internal/report/... ./internal/cli/ ./internal/finding/ -run 'acb|cap|conventions|tool|mcp|sql_help|refusal|sentence|fix'` and `go test ./cmd/quarry/ -run 'mcp|skill|schema|holdings_copy|byte_for_byte'` (names are lowercase snake; `-run` is case-sensitive)
+Mutation checks: warnings built from the cut report instead of the uncut one in `(*Server).acb` → `Test_run_mcp_acb_warns_of_securities_the_security_param_leaves_out`; MCP passes the CLI advice value to `document.ACBWarnings` (tool warnings carry `quarry findings`/`quarry acb --security`) → `Test_run_mcp_acb_returns_the_acb_json_document` (4a and 4b fixture rows) and `Test_ACBWarnings_words_each_no_cost_line_for_the_advice_it_is_given`; `unclassifiedAccountsRefusal` leaves `Count` unset (or tool text ignores it) → `Test_acb_words_the_unclassified_refusal_for_a_tool_with_its_count` (N=1 `lists it`, N=2 `lists them`); adjustments not mapped from `cfg.Adjustments` → acceptance adjustment row; event cap `> maxRows` → `>= maxRows` → `Test_acb_caps_events_at_500_across_securities`; `s.now()` read twice → `Test_acb_reads_today_once_per_call`
+Runs: A (1-2) | B1 (3-4) | B2 (5-6) | B3 (7) | V (8-9)
+Size: OWNS A RUN — 5 batches (the limit, not over); `internal/mcp` is the one feature package, with logic seams in `internal/report` (`RefusalError` kind + count), `report/document` (`ACBWarnings` advice), `cli/acb.go` (passes the CLI value), `internal/finding` and plugin docs (copy). If the orchestrator counts `report` as a second feature package the seam is: a = report + document + cli + finding (steps 2 advice, 5 kind, 7 finding), b = mcp tool + docs.
+
+Copy: every line is ruled in `RULING-S19.md` (supersedes spec :306 and the earlier defaults); nothing left unruled. Implement verbatim. No new port, no store change; read + `grep`, no LSP. mcp keeps its own `acbAdjustmentsOf` (cli's is `internal/cli/acb.go:75`), as `classificationOf` (`data_quality.go:51`) does.
+
+## Contract
+Tool `acb`, params `year` (integer 1..9999, `*int`), `security` (string array; absent or `[]` = all); no `currency` (schema rejects it). Order: year -> config (`configRefusalLog("acb")`) -> `newReport` -> `Server.ACB` (R-6, then unknown security). Result = `Cut()` document; warnings from the UNCUT report: `slices.Concat(cfg.WarningsAbsolute, document.ACBWarnings(acb, cfg.Path, <tool advice>))`, cap line last. Year: `report.ParseACBYear(fmt.Sprintf("%04d", y), now)`, one `s.now()` per call; integer 24 accepted. stderr: refused year/security = `refused the call's <param>; details went to the client only`; R-6 = `verbatim()` of its client text.
+
+## Implementation Plan
+
+### Acceptance (red)
+- [x] Step 1: `cmd/quarry/run_mcp_acb_test.go` `Test_run_mcp_acb_returns_the_acb_json_document` — `runBothSurfaces` (`run_mcp_documents_helpers_test.go:25-63`) over `acbRows()` (`run_acb_test.go:38`) plus a no-cost add_shares security (4a) and a no-cost reinvest security (4b); `config` classifies acct-cad/usd non-registered, acct-rrsp registered; cases none, `year`, `security`, both, one `[[acb.adjustment]]`; tool body equal to CLI `acb --json`, tool warnings equal CLI warnings with exactly RULING-S19 §0's substitutions (a local `acbInToolWords` beside `inToolWords`, helpers `:84`)
+- [x] Step 2: stubs: `document.ACBWarnings(a, configShown, advice)` (`document/acb_warnings.go:16-30`) with an advice type shaped like `NativeAdvice` (`networth_rate_warnings.go:12-19`), CLI value passed at `internal/cli/acb.go:86,88`, test call sites updated (`acb_warnings_test.go` 27, `_slots_test.go` 8, `_empty_test.go` 4); `mcp/tools.go:27-29,317-322` `toolACB`, `acbInput`, registration + `mcp/acb.go` stub returning only `warnings`, so step 1 fails at `assert.Equal`. Registration reds every all-tools table, rows land here: `run_mcp_test.go:43-46`, `run_mcp_descriptions_test.go:217,267`, `run_mcp_no_store_test.go:34`, `run_mcp_store_faults_test.go:88-96` (directory store; dropped table), `internal/mcp/timeout_test.go:86-93,132` (`stallingStore.InvestmentHistory`), `query_helpers_test.go:42-60` (`fakeStore.InvestmentHistory`). Sweep `grep -rn '"net_worth"' internal/mcp cmd/quarry` (control: lists those rows) and check `log_classes_internal_test.go`, `log_internal_test.go`, `run_skill_drift_names_test.go`, `run_mcp_describe_test.go`, `run_mcp_wiring_test.go`, `run_mcp_cancel_test.go`
+
+### Build
+- [x] Step 3: `mcp/acb.go` handler, `tools.go:135-147,252-261` `acbInput{Year *int; Security []string}`, integer schema `{"type":"integer","minimum":1,"maximum":9999}`, both RULING-S19 §4 descriptions, `acbAdjustmentsOf`; tests `internal/mcp/acb_test.go` (fake history) + `run_mcp_acb_test.go`: `Test_run_mcp_acb_warns_of_securities_the_security_param_leaves_out` (unnamed security's 4/7 survive; registered-only slot 2b), `Test_run_mcp_acb_keeps_the_document_key_orders_the_cli_prints` (`years[]` `gain`, `return_of_capital_gain` `"0.00"`, `possible_superficial_losses`; event `unknown_cost` last), `Test_acb_reads_today_once_per_call`, `Test_acb_reads_the_store_once`, year+security together, config warnings first, `year` 24 accepted with warning 2, this year accepted; edge rows x `year`/`security` (closed account, USD no-rate, ROC-only year) each a case or "n/a: <reason>"
+- [x] Step 4: `document/acb_warnings.go:120-142` `noCostWarnings` takes the phrases from the advice (4a `data_quality with type shares-without-cost lists them`; 4b `acb with security <id> lists them`; 4c as ruled §5); mcp passes the tool value; `Test_ACBWarnings_words_each_no_cost_line_for_the_advice_it_is_given` (4a/4b/4c x CLI/tool); slot 2 form 1, 6b and config lines stay verbatim (pinned in the same test)
+
+### Build (B2)
+- [x] Step 5: `report/refusal.go:14-45,111-123` `RefusalUnclassifiedAccounts` + `Count int` set by `unclassifiedAccountsRefusal` (CLI text unchanged, pins `acb_classification_test.go:54`, `refusal_test.go:137` re-assert Kind); `mcp/result.go:24-35,75-90` arms: R-6 `verbatim`, `RefusalUnknownSecurity` -> class line; `mcp/accounts.go:20-46` beside `categoryRefusal`: `acbRefusal` words R-6 (`data_quality with type unclassified-account and status all lists it`/`them`) and unknown security (`acb with no arguments lists every security it covers`, `%q`); year: after-this-year only (`year 2027 is after this year; pass this year or an earlier one`), NotAYear arm `// unreachable:` per ruling §3; tests: R-6 N=1 and N=2, ignored finding does not unblock, unknown security (first in argv order, `""`), next year refused / this year ok / 24 ok, schema rows `"2024"` string, 0, 10000 (generic argument line), `currency` param refused, unreadable config -> `configRefusalLog("acb")` before the store, year refused before config and store; log rows in `log_classes_internal_test.go`/`log_internal_test.go`
+- [x] Step 6: `mcp/cap.go:9-16` extract the cap line from `capList`; `acb.go` `capEvents`; `Test_acb_caps_events_at_500_across_securities` (500 whole, 501 cut, two securities, later one `events: []`, headers kept, warning last, `security` narrows under the cap)
+
+### Build (B3)
+- [x] Step 7: copy and pins: `report/sql_conventions.go:31-33` sentence 2 right after sentence 1, re-wrapped; rewrite `sql_conventions_test.go:37-42` (drop `NotContains "acb"`); hand copies (`grep -rln 'cost_basis is the cost' cmd internal plugin`) `cli/sql_test.go:234` `Test_sql_help_describes_the_command_and_its_flags`, `run_shared_documents_test.go:397` `Test_run_prints_the_sql_status_and_findings_documents_byte_for_byte`, `run_holdings_surfaces_test.go:~25-40` `Test_run_accounts_and_sql_help_carry_the_holdings_copy`; regenerate `schema.md` (`go test ./cmd/quarry -run Test_skill_schema_reference_matches_the_committed_file -update`); `finding/finding.go:321-323` Sentence per ruling §7 + `finding_test.go:218` (first a flattened, positive-controlled search for other fix-sentence pins: goldens, CSV, `--json`); `mcp/tools.go:77-84` `dataQualityDescription` per §7 + `run_mcp_descriptions_test.go:~47-56` pin; `cli/mcp.go:40-41` + `cli/mcp_test.go:43-45` + `run_mcp_descriptions_test.go:286` Tools line; `plugin/skills/quarry/SKILL.md:98` §9 and the §8 row directly before `Failure` (`:80-90`) + `run_skill_text_test.go:226,240`
+
+### Sweep
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/mcp ./internal/report/document` reads right; doc comments on new symbols
+
+### Verify
+- [x] Step 9: full verification per `agent-briefs.md`; `.claude/scripts/spec-check.py phase4de-acb`; tick SCENARIO-19 in `specification.md` with its acceptance test last on the line; rewrite STATE.md (drop the S19 Left-unbuilt items, the `years[]` pin and conventions-test debts, `finding.go:325` LIRA and `dataQualityDescription` debts)
+
+## Handoff
+**Binding decisions:**
+- MCP `acb` renders `acb.Cut()` and builds warnings from the UNCUT `acb` through the one `document.ACBWarnings`, which takes an advice value: CLI and MCP differ only in the 4a/4b/4c command phrases (RULING-S19 §0, §5).
+- R-6 is a `RefusalUnclassifiedAccounts` kind with `Count`; the CLI text is unchanged and the MCP text is composed in `internal/mcp`.
+- `year` is an integer 1..9999 on MCP, parsed by `report.ParseACBYear` (one owner); `acbAdjustmentsOf` and `classificationOf` stay per delivery package, pinned by the adjustment parity case.
+- Cap is on total events (500), never on sales or securities.
+**Left unbuilt:** SCENARIO-21 reference check, orchestrator.
+**Traps:** A cut report fires slot 2 form 1 and drops warnings 4/6/7. `fakeStore`/`stallingStore` embed a nil `report.Store`: tests reaching `InvestmentHistory` panic without the stubs. `refusalLine` must map the kind to a class line or caller text reaches stderr. Re-wrapping the conventions paragraph shifts the hand-copy pins. Changing `ACBWarnings`' signature touches 39 test call sites: do it in run A.
+
+## Phase report
+Run V done: sweep and verify green, SCENARIO-19 ticked, STATE.md rewritten, `status: done`.
+- `go build ./...` ok, `golangci-lint run ./...` 0 issues, covered full suite rc=0, `uncovered-diff.py --profile ... 78155be`: 0 uncovered, 1 declared unreachable (`internal/mcp/accounts.go:95` `acbYearRefusal`), `-race` on `internal/mcp`, `internal/report/...`, `internal/cli/...` green, `spec-check.py phase4de-acb` OK.
+- Nothing left for a later run; SCENARIO-21 is the orchestrator's reference check.

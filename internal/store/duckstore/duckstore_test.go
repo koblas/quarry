@@ -59,7 +59,7 @@ func minimalRows() store.Rows {
 		InvestmentTransactions: []store.InvestmentTransaction{{
 			ID: "inv-1", SourceID: 21, AccountID: "acct-1", SecurityID: new("sec-1"),
 			Date: time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC), Action: "split", Shares: new(int64(1_500_000)),
-			Amount: 12_345, Commission: new(int64(84_998)), Currency: "CAD", Memo: new("note"),
+			Amount: 12_345, Commission: new(int64(84_998)), CostBasis: new(int64(100_050)), Currency: "CAD", Memo: new("note"),
 			SplitNewShares: new(int64(12_000_000)), SplitOldShares: new(int64(1_000_000)),
 		}, {
 			ID: "inv-2", SourceID: 22, AccountID: "acct-1",
@@ -134,8 +134,9 @@ func Test_replace_stores_an_investment_transaction_with_every_nullable_column_se
 	require.NoError(t, err)
 	db := openReadOnly(t, st.Path())
 	assertScalar(t, db, "SELECT concat_ws(' ', source_id, account_id, security_id, CAST(date AS VARCHAR), action, CAST(shares AS VARCHAR), "+
-		"CAST(amount AS VARCHAR), CAST(commission AS VARCHAR), currency, memo, CAST(split_new_shares AS VARCHAR), CAST(split_old_shares AS VARCHAR)) "+
-		"FROM investment_transactions WHERE id = 'inv-1'", "21 acct-1 sec-1 2026-03-16 split 1.500000 123.45 8.4998 CAD note 12.000000 1.000000")
+		"CAST(amount AS VARCHAR), CAST(commission AS VARCHAR), CAST(cost_basis AS VARCHAR), currency, memo, CAST(split_new_shares AS VARCHAR), "+
+		"CAST(split_old_shares AS VARCHAR)) FROM investment_transactions WHERE id = 'inv-1'",
+		"21 acct-1 sec-1 2026-03-16 split 1.500000 123.45 8.4998 1000.50 CAD note 12.000000 1.000000")
 }
 
 func Test_replace_stores_an_investment_transaction_with_every_nullable_column_null(t *testing.T) {
@@ -149,7 +150,7 @@ func Test_replace_stores_an_investment_transaction_with_every_nullable_column_nu
 	assertScalar(t, db, "SELECT concat_ws(' ', source_id, action, CAST(amount AS VARCHAR), currency) FROM investment_transactions WHERE id = 'inv-2'",
 		"22 dividend 5.00 CAD")
 	assertScalar(t, db, "SELECT CAST(count(*) AS VARCHAR) FROM investment_transactions WHERE id = 'inv-2' AND security_id IS NULL AND shares IS NULL "+
-		"AND commission IS NULL AND memo IS NULL AND split_new_shares IS NULL AND split_old_shares IS NULL", "1")
+		"AND commission IS NULL AND cost_basis IS NULL AND memo IS NULL AND split_new_shares IS NULL AND split_old_shares IS NULL", "1")
 }
 
 func Test_replace_stores_the_investment_transaction_id_of_a_cash_row_and_null_for_a_register_row(t *testing.T) {
@@ -495,15 +496,15 @@ func Test_replace_stores_the_largest_investment_amounts_and_shares_the_columns_h
 	rows := minimalRows()
 	inv := &rows.InvestmentTransactions[0]
 	inv.Shares, inv.SplitNewShares, inv.SplitOldShares = new(int64(999_999_999_999_999_999)), new(int64(999_999_999_999_999_999)), new(int64(999_999_999_999_999_999))
-	inv.Amount, inv.Commission = 999_999_999_999_999_999, new(int64(-999_999_999_999_999_999))
+	inv.Amount, inv.Commission, inv.CostBasis = 999_999_999_999_999_999, new(int64(-999_999_999_999_999_999)), new(int64(999_999_999_999_999_999))
 	st := duckstore.New(t.TempDir())
 
 	_, err := st.Replace(t.Context(), rows)
 
 	require.NoError(t, err)
 	assertScalar(t, openReadOnly(t, st.Path()), "SELECT concat_ws(' ', CAST(shares AS VARCHAR), CAST(amount AS VARCHAR), CAST(commission AS VARCHAR), "+
-		"CAST(split_new_shares AS VARCHAR), CAST(split_old_shares AS VARCHAR)) FROM investment_transactions WHERE id = 'inv-1'",
-		"999999999999.999999 9999999999999999.99 -99999999999999.9999 999999999999.999999 999999999999.999999")
+		"CAST(cost_basis AS VARCHAR), CAST(split_new_shares AS VARCHAR), CAST(split_old_shares AS VARCHAR)) FROM investment_transactions WHERE id = 'inv-1'",
+		"999999999999.999999 9999999999999999.99 -99999999999999.9999 9999999999999999.99 999999999999.999999 999999999999.999999")
 }
 
 func Test_replace_fails_when_an_investment_transaction_value_is_out_of_range(t *testing.T) {
@@ -517,6 +518,7 @@ func Test_replace_fails_when_an_investment_transaction_value_is_out_of_range(t *
 		{"shares", func(i *store.InvestmentTransaction) { i.Shares = new(int64(beyond18Digits)) }, "shares"},
 		{"amount", func(i *store.InvestmentTransaction) { i.Amount = beyondAmount }, "amount"},
 		{"commission", func(i *store.InvestmentTransaction) { i.Commission = new(int64(beyond18Digits)) }, "commission"},
+		{"cost basis", func(i *store.InvestmentTransaction) { i.CostBasis = new(int64(beyond18Digits)) }, "cost_basis"},
 		{"split new shares", func(i *store.InvestmentTransaction) { i.SplitNewShares = new(int64(-beyond18Digits)) }, "split_new_shares"},
 		{"split old shares", func(i *store.InvestmentTransaction) { i.SplitOldShares = new(int64(beyond18Digits)) }, "split_old_shares"},
 	}

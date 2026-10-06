@@ -55,8 +55,8 @@ func Test_run_prints_the_sql_status_and_findings_documents_byte_for_byte(t *test
 				args: []string{"status", "--json"},
 				stdout: fmt.Sprintf(statusUnreadableConfigDocument, storePathUnder(home), builtAt, snapshotID(snapshotPath),
 					snapshotPath, manifest.Snapshot.TakenAt, bundle.Dir, manifest.Snapshot.SHA256, configPath(home)),
-				stderr: "quarry: warning: cannot tell which findings you ignored: " + configShown +
-					": snapshots.keep must be a whole number of 1 or more, got 0; findings you ignored are counted as open\n",
+				stderr: "quarry: warning: cannot tell which findings you ignored or how you classified your accounts: " + configShown +
+					": snapshots.keep must be a whole number of 1 or more, got 0; findings you ignored are counted as open, and every investment account is counted as unclassified\n",
 			}
 		}},
 		{name: "findings --json lists a quoted unmatched ignore id escaped, with absolute path in the document", setup: func(t *testing.T, home string) sharedDocumentRun {
@@ -126,10 +126,12 @@ const sqlLastStatementDocument = `{
 
 // statusUnreadableConfigDocument takes, in order: store path, built_at, snapshot id, snapshot path,
 // taken_at, source, sha256, config path.
+//
+//nolint:lll // ruled copy is pinned byte-equal, so its lines cannot wrap
 const statusUnreadableConfigDocument = `{
   "store": {
     "path": %[1]q,
-    "format_version": 8,
+    "format_version": 9,
     "quarry_version": "(devel)",
     "built_at": %[2]q,
     "rows": {
@@ -174,7 +176,7 @@ const statusUnreadableConfigDocument = `{
     "one_sided": 1
   },
   "findings": {
-    "open": 2,
+    "open": 3,
     "ignored": null,
     "fixed": 0,
     "new": 2,
@@ -186,7 +188,7 @@ const statusUnreadableConfigDocument = `{
     "fetch_error": null
   },
   "warnings": [
-    "cannot tell which findings you ignored: %[8]s: snapshots.keep must be a whole number of 1 or more, got 0; findings you ignored are counted as open"
+    "cannot tell which findings you ignored or how you classified your accounts: %[8]s: snapshots.keep must be a whole number of 1 or more, got 0; findings you ignored are counted as open, and every investment account is counted as unclassified"
   ]
 }
 `
@@ -226,7 +228,11 @@ const findingsUnmatchedIgnoreDocument = `{
           "other_account": null,
           "other_account_id": null,
           "transactions": null,
-          "splits": null
+          "splits": null,
+          "investment_transaction_id": null,
+          "security_id": null,
+          "security": null,
+          "shares": null
         },
         {
           "transaction_id": "txn-2",
@@ -243,7 +249,11 @@ const findingsUnmatchedIgnoreDocument = `{
           "other_account": null,
           "other_account_id": null,
           "transactions": null,
-          "splits": null
+          "splits": null,
+          "investment_transaction_id": null,
+          "security_id": null,
+          "security": null,
+          "shares": null
         }
       ]
     },
@@ -270,7 +280,11 @@ const findingsUnmatchedIgnoreDocument = `{
           "other_account": null,
           "other_account_id": null,
           "transactions": null,
-          "splits": null
+          "splits": null,
+          "investment_transaction_id": null,
+          "security_id": null,
+          "security": null,
+          "shares": null
         }
       ]
     },
@@ -297,7 +311,11 @@ const findingsUnmatchedIgnoreDocument = `{
           "other_account": null,
           "other_account_id": null,
           "transactions": null,
-          "splits": null
+          "splits": null,
+          "investment_transaction_id": null,
+          "security_id": null,
+          "security": null,
+          "shares": null
         }
       ]
     },
@@ -324,7 +342,11 @@ const findingsUnmatchedIgnoreDocument = `{
           "other_account": null,
           "other_account_id": null,
           "transactions": null,
-          "splits": null
+          "splits": null,
+          "investment_transaction_id": null,
+          "security_id": null,
+          "security": null,
+          "shares": null
         }
       ]
     }
@@ -372,9 +394,12 @@ DECIMAL(18,4) in the account's own currency as Quicken recorded it (some
 brokers charge fractions of a cent), NULL when there is none; shares is
 DECIMAL(18,6) as Quicken recorded each transaction, negative when shares
 leave. A split row carries split_new_shares and split_old_shares instead, so
-a sum of shares is not a holding. prices holds each security's closing price
-per day as Quicken recorded it, rounded to 6 decimals, in the security's
-currency (securities.currency, NULL when Quicken records none).
+a sum of shares is not a holding. cost_basis is the cost Quicken records for
+a buy, reinvested dividend or added shares (NULL when none). ACB and capital
+gains are in no table or view: quarry acb (MCP acb) computes them; never derive
+them in SQL. prices holds each security's closing price per day as Quicken
+recorded it, rounded to 6 decimals, in the security's currency
+(securities.currency, NULL when Quicken records none).
 holding_shares holds each account's count of each security, one row per span
 of days it is unchanged and not zero (from_date through to_date, NULL while
 still held), splits applied; these are the counts quarry sync checks against
@@ -395,7 +420,9 @@ quarry accounts and quarry networth use; filter by date. v_net_worth has one
 row per day, account type and currency, adding up the balances of the
 accounts Quicken's reports count, as quarry networth does; sum balance_cad
 or balance_usd over one date for the total; a NULL there means no exchange
-rate for that day.
+rate for that day. Which accounts are registered is not in the store; it is
+accounts.registered and accounts.non-registered in quarry's config, and
+quarry accounts --json reports it as registered.
 
 findings holds what sync found to clean up in Quicken, and finding_items
 the transactions, splits, payees or categories each one is about;

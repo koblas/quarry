@@ -42,7 +42,7 @@ as Quicken holds them; quarry does not rewrite or mask them.
 
 Tools: describe_schema, query, sync_status, data_quality, spending,
 cash_flow, recurring_charges, anomalies, search_transactions, holdings,
-net_worth.
+net_worth, acb.
 `
 	var stdout bytes.Buffer
 

@@ -12,6 +12,10 @@ func capList[T any](list []T, warnings []string, tool, noun, advice string) ([]T
 	if len(list) <= maxRows {
 		return list, warnings
 	}
-	line := fmt.Sprintf("%s lists the first %s %s of %s; %s", tool, humanize.Thousands(maxRows), noun, humanize.Thousands(len(list)), advice)
-	return list[:maxRows], append(warnings, line)
+	return list[:maxRows], append(warnings, capLine(tool, noun, len(list), advice))
+}
+
+// capLine is the warning that tool listed the first maxRows of total noun, with advice for seeing the rest.
+func capLine(tool, noun string, total int, advice string) string {
+	return fmt.Sprintf("%s lists the first %s %s of %s; %s", tool, humanize.Thousands(maxRows), noun, humanize.Thousands(total), advice)
 }

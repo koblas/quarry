@@ -61,7 +61,7 @@ func Test_sync_status_returns_the_status_document_of_what_the_store_holds_as_com
 	st := statusFixture()
 	stub := &configStub{}
 	h := newHarness(t, &fakeStore{status: st}, nil, mcp.WithConfig(stub.load))
-	want, err := json.Marshal(document.NewStatus(st, document.FindingsTally{Counts: report.CountFindings(st, nil), IgnoreKnown: true}, nil))
+	want, err := json.Marshal(document.NewStatus(st, document.FindingsTally{Counts: report.CountFindings(st, nil, report.Classification{}), IgnoreKnown: true}, nil))
 	require.NoError(t, err)
 
 	result := h.syncStatus(t)
@@ -134,7 +134,7 @@ func Test_sync_status_says_it_cannot_tell_what_is_ignored_when_the_config_is_ref
 	doc := decodeStatus(t, result)
 	assert.Nil(t, doc.Findings.Ignored)
 	assert.Equal(t, 1, doc.Findings.Open)
-	assert.Equal(t, []string{document.CannotTellIgnored(config.ProblemAbsolute(refusal))}, doc.Warnings)
+	assert.Equal(t, []string{document.CannotTellChoices(config.ProblemAbsolute(refusal))}, doc.Warnings)
 	assert.Contains(t, doc.Warnings[0], path)
 }
 
@@ -147,7 +147,7 @@ func Test_sync_status_answers_a_loader_failure_that_is_not_a_config_refusal_with
 	require.False(t, result.IsError, textOf(t, result))
 	doc := decodeStatus(t, result)
 	assert.Nil(t, doc.Findings.Ignored)
-	assert.Equal(t, []string{document.CannotTellIgnored(errNoHome.Error())}, doc.Warnings)
+	assert.Equal(t, []string{document.CannotTellChoices(errNoHome.Error())}, doc.Warnings)
 }
 
 func Test_sync_status_leaves_warnings_empty_for_a_config_with_unknown_keys(t *testing.T) {
@@ -172,4 +172,50 @@ func Test_sync_status_loads_the_config_and_reads_the_store_on_every_call(t *test
 	assert.Equal(t, []string{"mcp", "mcp"}, stub.commands)
 	assert.Equal(t, 2, h.store.statusReads)
 	assert.Equal(t, []string{"mcp", "mcp"}, h.commands)
+}
+
+// statusWithBrokerage is statusFixture plus one brokerage account the config may classify.
+func statusWithBrokerage() store.Status {
+	st := statusFixture()
+	st.Accounts = []store.Account{{ID: "acct-1", Name: "TFSA", Type: store.AccountTypeBrokerage, Currency: "CAD"}}
+	return st
+}
+
+func Test_sync_status_counts_an_account_the_config_does_not_classify_as_open(t *testing.T) {
+	stub := &configStub{}
+	h := newHarness(t, &fakeStore{status: statusWithBrokerage()}, nil, mcp.WithConfig(stub.load))
+
+	result := h.syncStatus(t)
+
+	assert.Equal(t, 2, decodeStatus(t, result).Findings.Open)
+}
+
+func Test_sync_status_leaves_an_account_the_config_classifies_out_of_the_open_count(t *testing.T) {
+	stub := &configStub{cfg: config.Config{NonRegistered: []string{"acct-1"}}}
+	h := newHarness(t, &fakeStore{status: statusWithBrokerage()}, nil, mcp.WithConfig(stub.load))
+
+	result := h.syncStatus(t)
+
+	assert.Equal(t, 1, decodeStatus(t, result).Findings.Open)
+}
+
+func Test_sync_status_counts_an_ignored_unclassified_account_as_ignored(t *testing.T) {
+	stub := &configStub{cfg: config.Config{Ignore: []string{"unclassified-account:acct-1"}}}
+	h := newHarness(t, &fakeStore{status: statusWithBrokerage()}, nil, mcp.WithConfig(stub.load))
+
+	doc := decodeStatus(t, h.syncStatus(t))
+
+	require.NotNil(t, doc.Findings.Ignored)
+	assert.Equal(t, 1, *doc.Findings.Ignored)
+	assert.Equal(t, 1, doc.Findings.Open)
+}
+
+func Test_sync_status_counts_every_investment_account_open_when_the_config_is_refused(t *testing.T) {
+	stub := &configStub{err: errNoHome}
+	h := newHarness(t, &fakeStore{status: statusWithBrokerage()}, nil, mcp.WithConfig(stub.load))
+
+	doc := decodeStatus(t, h.syncStatus(t))
+
+	assert.Equal(t, 2, doc.Findings.Open)
+	assert.Equal(t, []string{document.CannotTellChoices(errNoHome.Error())}, doc.Warnings)
 }

@@ -253,7 +253,7 @@ Every report can be produced in CAD or USD; when reporting in CAD, `quarry` also
 - Buys add cost plus commissions; sells remove a pro-rata share of ACB and produce a realized gain or loss; reinvested dividends add to ACB; splits and consolidations change units, not ACB.
 - USD purchases and sales convert to CAD at the rate on each trade date, as the CRA requires, so ACB is correct even when the report is otherwise in USD.
 - Return of capital and reinvested (phantom) distributions reduce or increase ACB but come from T3 slips, not Quicken; `quarry` accepts them as a small manual adjustments file per security and year.
-- Possible superficial losses (a loss with the same security bought within 30 days before or after) are flagged as findings, not adjusted automatically. So are positions whose history starts without a purchase (a transfer-in or opening balance), since their ACB can't be derived from Quicken alone.
+- Possible superficial losses (a loss with the same security bought within 30 days before or after) are marked in `acb` with a warning, not a finding, and not adjusted automatically. Positions whose history starts without a purchase (a transfer-in or opening balance) are flagged as findings, since their ACB can't be derived from Quicken alone.
 - Output is a per-security ACB history and a realized-gains summary per tax year, as a worksheet to support tax filing and review with an accountant, not a filing.
 
 ## Security and privacy

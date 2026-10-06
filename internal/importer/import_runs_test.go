@@ -146,6 +146,21 @@ func Test_import_passes_the_finding_states_through_to_the_result(t *testing.T) {
 	assert.Equal(t, states, result.FindingStates)
 }
 
+func Test_import_returns_the_accounts_it_wrote_to_the_store(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "USD", Active: true})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	require.Len(t, fake.Rows.Accounts, 2)
+	assert.Equal(t, fake.Rows.Accounts, result.Accounts)
+}
+
 func Test_import_returns_whether_the_stores_findings_were_carried(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
