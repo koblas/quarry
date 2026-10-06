@@ -44,7 +44,14 @@ guesses is the point of this phase.
    - **DON'T BUILD** or **RETHINK** — stop, put it to the user before going further.
    - **SHIP WITH CHANGES** — fold changes into the intent before Phase 2.
    - **SHIP** — continue.
-5. Summarize refined intent, ask: "Does this capture it correctly? I'll move on to proposing
+5. **Name the checks only the user can run.** A claim that needs the user's own account or
+   machine (a LaunchAgent loaded in their session, a macOS privacy prompt, a sign-in) cannot
+   be verified by any pipeline agent. List each, with what to run and what to report, and
+   carry the list into Phase 2: put it to the user with the scenarios at approval (ships
+   unverified, or waits for them) — no extra pause. It lands in the spec's
+   `## Surface & Copy` as "user-verified, outside the pipeline". Found at the final pass, it
+   becomes a late surprise.
+6. Summarize refined intent, ask: "Does this capture it correctly? I'll move on to proposing
    scenarios."
 
 ## Phase 2: Scenario Generation

@@ -34,7 +34,10 @@ questions — skip the full procedure below:
    under another name (case, hard link, symlink, extension)? Unpinned ruled copy or edge row
    is MAJOR; a destructive guard decided by name is MAJOR.
    Missing *Planning* "Stored coverage claim" grid or "Injected adapters" wiring pin is MAJOR.
-   Missing *Planning* out-of-domain row or "Siblings and mirrors" item is MAJOR. For static
+   Missing *Planning* out-of-domain row or "Siblings and mirrors" item is MAJOR. A rule
+   `product-vision` rules as intent (→ *The scoping pass owes the literal copy*) is pinned at
+   the intent's boundary — all-zero, missing, empty — not only at the data shape the code
+   tests; a missing boundary row is MAJOR. For static
    content (skill text, references, SQL, README), also ask: does each pinned behaviour claim
    carry its `file:line` citation in the spec (`product-vision` → *The scoping pass owes the
    literal copy*), and does a sibling file state a rule this one omits? Either gap is MAJOR.

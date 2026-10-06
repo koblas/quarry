@@ -62,6 +62,10 @@ SCENARIO_RE = re.compile(r"SCENARIO-\d+[a-z]?")
 FIX_PASS_RE = re.compile(r"Review Findings|[Ff]ix mode|REVIEW-\d+\.md")
 REVIEWERS = ("test-reviewer", "correctness-reviewer", "arch-reviewer", "refactor-advisor",
              "api-reviewer", "pipeline-reviewer")
+# Agent a run kind implies, for transcripts whose .meta.json is missing; scope and review
+# kinds have several agents, so they stay unknown.
+AGENT_BY_KIND = {"plan": "architect", "build": "developer", "checkpoint-fix": "developer",
+                 "gate-fix": "developer", "checkpoint": "test-reviewer", "retro": "pipeline-reviewer"}
 
 
 @dataclass
@@ -177,6 +181,8 @@ def read_run(transcript: Path, slug: str) -> Run | None:
         run.kind = kind if kind in KINDS else "other"
         run.unit = tag.group("unit")
         run.tagged = True
+        if run.agent_type == "unknown":
+            run.agent_type = AGENT_BY_KIND.get(run.kind, "unknown")
     else:
         folder = SPEC_FOLDER_RE.search(prompt)
         if not folder or folder.group(1) != slug:
@@ -279,6 +285,19 @@ def print_developer_runs(runs: list[Run], w: Weights) -> None:
           f"p90 {k(p90)}, max {k(sizes[-1])}.")
 
 
+def unique_transcripts(project_dirs: list[Path]) -> list[Path]:
+    """One transcript per agent id: the same run can be stored under several project dirs
+    (main checkout and worktree); the copy with a .meta.json wins."""
+    best: dict[str, Path] = {}
+    for d in project_dirs:
+        for t in d.glob("*/subagents/agent-*.jsonl"):
+            seen = best.get(t.name)
+            if seen is None or (not seen.with_suffix(".meta.json").is_file()
+                                and t.with_suffix(".meta.json").is_file()):
+                best[t.name] = t
+    return list(best.values())
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("slug", metavar="feature-slug")
@@ -291,12 +310,7 @@ def main() -> int:
 
     prefix = encoded_project_prefix()
     project_dirs = [d for d in Path(args.projects_dir).glob(prefix + "*") if d.is_dir()]
-    runs = [
-        r
-        for d in project_dirs
-        for t in d.glob("*/subagents/agent-*.jsonl")
-        if (r := read_run(t, args.slug)) is not None
-    ]
+    runs = [r for t in unique_transcripts(project_dirs) if (r := read_run(t, args.slug)) is not None]
     if not runs:
         print(f"feature-metrics: no subagent runs mention `{args.slug}`", file=sys.stderr)
         return 1
