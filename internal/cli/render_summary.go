@@ -25,10 +25,34 @@ func renderSummary(s report.Summary, findings document.FindingsTally, now time.T
 	fmt.Fprintf(&b, "%-10s%s\n", "Snapshot", snapshotLine(s.Status.Run.Snapshot, now))
 	fmt.Fprintf(&b, "%-10s%s\n", "Dates", datesLine(s.Status.FirstDate, s.Status.LastDate))
 	fmt.Fprintf(&b, "%-10s%s\n\n", "Findings", summaryFindingsPhrase(findings))
-	b.WriteString(renderAnomalies(s.Anomalies) + "\n")
-	b.WriteString(renderRecurringTitled(summaryRecurringTitle, s.Recurring) + "\n")
+	b.WriteString(summaryAnomaliesSection(s.Anomalies) + "\n")
+	b.WriteString(summaryRecurringSection(s.Recurring) + "\n")
 	b.WriteString(renderNetWorthWithChange(s.NetWorth))
 	return b.String()
+}
+
+// summaryAnomaliesSection is renderAnomalies, except that a month listing no charge says so in place of the
+// table's header row; the footer still counts the charges checked.
+func summaryAnomaliesSection(a report.Anomalies) string {
+	if len(a.Listed) > 0 {
+		return renderAnomalies(a)
+	}
+	caption := windowCaption(anomaliesTitle, a.Window, a.Accounts, a.Currency)
+	return renderEmptySection(caption, "No unusually large charges.") + "\n" + anomaliesFooter(a.Checked, a.NotJudged) + "\n"
+}
+
+// summaryRecurringSection is renderRecurringTitled, except that a month with no new series says so in place of
+// the table's header row.
+func summaryRecurringSection(r report.Recurring) string {
+	if !r.Empty() {
+		return renderRecurringTitled(summaryRecurringTitle, r)
+	}
+	return renderEmptySection(windowCaption(summaryRecurringTitle, r.Window, r.Accounts, r.Currency), "No new recurring charges.")
+}
+
+// renderEmptySection is a caption, a blank line and the one line that stands where the section's table would.
+func renderEmptySection(caption, line string) string {
+	return renderTable(caption, []tableAlign{alignLeft}, [][]string{{line}})
 }
 
 // renderNetWorthWithChange is the month-end history table with the change between its first and last month
