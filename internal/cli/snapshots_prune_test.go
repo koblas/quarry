@@ -12,7 +12,11 @@ sync. prune keeps --keep snapshots, or snapshots.keep from
 ~/Library/Application Support/quarry/config.toml (12 unless set). The
 snapshot the store was built from is never deleted, even when it is older.
 
-With --dry-run, prune lists what it would delete and deletes nothing.
+Only one quarry sync or quarry snapshots prune runs at a time; while one
+is running, another stops at once and changes nothing.
+
+With --dry-run, prune lists what it would delete and deletes nothing; it
+runs even while a sync is running.
 `
 
 	got := snapshotsHelp(t, "snapshots", "prune", "--help")
