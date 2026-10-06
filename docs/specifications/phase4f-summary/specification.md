@@ -497,12 +497,12 @@ Architect sizing pass (2026-10-06). Order: 01a → 01b → 06 → 10 → 12 → 
 - [x] SCENARIO-03: A late bill does not make an old subscription new — delivered by SCENARIO-01a — `internal/report/summary_recurring_test.go` `Test_summary_does_not_list_a_late_bill_of_an_old_subscription_as_new`
 - [x] SCENARIO-20: A subscription resumed after it ended is new again — delivered by SCENARIO-01a — `internal/report/summary_recurring_test.go` `Test_summary_lists_a_subscription_resumed_after_it_ended_as_new`
 - [x] SCENARIO-04: A past month's recurring charges do not change with later charges — delivered by SCENARIO-01a — `internal/report/summary_recurring_test.go` `Test_summary_recurring_ignores_charges_after_the_month`
-- [ ] SCENARIO-01b: Summary of last month
-- [ ] SCENARIO-05: Net worth change between month ends
-- [ ] SCENARIO-08: Findings line names the last sync
-- [ ] SCENARIO-09: --month that cannot be summarized is refused
-- [ ] SCENARIO-13: Summary in another currency
-- [ ] SCENARIO-15: Summary with no store refuses
+- [x] SCENARIO-01b: Summary of last month — `cmd/quarry/run_summary_test.go` `Test_run_summary_prints_last_months_summary`
+- [x] SCENARIO-05: Net worth change between month ends — delivered by SCENARIO-01b — `cmd/quarry/run_summary_change_test.go` `Test_run_summary_counts_a_type_without_a_balance_on_the_first_month_end_as_zero_in_the_change`
+- [x] SCENARIO-08: Findings line names the last sync — delivered by SCENARIO-01b — `internal/cli/summary_test.go` `Test_summary_findings_row_names_the_last_sync`
+- [x] SCENARIO-09: --month that cannot be summarized is refused — delivered by SCENARIO-01b — `cmd/quarry/run_summary_refusals_test.go` `Test_run_summary_refuses_a_month_it_cannot_summarize`
+- [x] SCENARIO-13: Summary in another currency — delivered by SCENARIO-01b — `cmd/quarry/run_summary_change_test.go` `Test_run_summary_lists_cad_and_usd_separately_with_native`
+- [x] SCENARIO-15: Summary with no store refuses — delivered by SCENARIO-01b — `cmd/quarry/run_read_refusals_test.go` `Test_run_read_commands_refuse_when_there_is_no_store`
 - [ ] SCENARIO-06: First month of data shows no change
 - [ ] SCENARIO-07: A quiet month
 - [ ] SCENARIO-10: Snapshot taken before the month ended is warned about

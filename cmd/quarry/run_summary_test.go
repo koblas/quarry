@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,13 +37,8 @@ func summaryTxn(account, payee, category string, d time.Time, cents int64) charg
 	}
 }
 
-// summaryRows is the store of September 2026 the summary tests read, as the sync that finds the findings builds it.
-//
-// Chequing holds a 5,000.00 deposit on January 2, five Bell Canada charges (90.00 to 102.00, 480.05 in all) a
-// month and a half apart, a 412.00 Bell Canada charge on September 14 and a 1,000.00 deposit on September 15.
-// Card holds Crave's 22.59 on the 3rd of July, August and September. Shell (10.00), Kiosk (11.00) and
-// Pharmacy (12.00) are charges on August 10 and 11, of different amounts so none is a duplicate of another:
-// uncategorized except Kiosk's when kioskFixed, and Pharmacy's exists only when kioskFixed.
+// summaryRows is the store of September 2026 the summary tests read: Bell Canada's 412.00 charge is anomalous,
+// Crave is new and recurring, and Kiosk's finding is fixed (Pharmacy's found) when kioskFixed.
 func summaryRows(kioskFixed bool) store.Rows {
 	chequing, card := chequingAccount("acct-cad", 1), summaryCardAccount("acct-card", 2)
 	var txns []chargeTxn
@@ -75,13 +71,14 @@ func summaryRows(kioskFixed bool) store.Rows {
 }
 
 // seedSummaryStore builds the store under a temp HOME twice, so the second build fixes Kiosk's finding and
-// finds Pharmacy's while Shell's carries.
-func seedSummaryStore(t *testing.T) {
+// finds Pharmacy's while Shell's carries; it returns that HOME.
+func seedSummaryStore(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	replaceStore(t, home, summaryRows(false))
 	replaceStore(t, home, summaryRows(true))
+	return home
 }
 
 func Test_run_summary_prints_last_months_summary(t *testing.T) {
@@ -113,4 +110,15 @@ func Test_run_summary_prints_last_months_summary(t *testing.T) {
 		netWorthHistoryLine("2026-09-30", "5,074.95", "-67.77", "5,007.18")+
 		netWorthHistoryLine("Change", "+588.00", "-22.59", "+565.41"),
 		stdout.String())
+}
+
+func Test_run_summary_defaults_to_the_month_before_the_local_day_not_the_utc_day(t *testing.T) {
+	seedSummaryStore(t)
+	var stdout, stderr bytes.Buffer
+	lateOnSeptember30 := time.Date(2026, time.September, 30, 21, 0, 0, 0, time.FixedZone("UTC-4", -4*60*60))
+
+	exitCode := runWith(context.Background(), []string{"summary"}, spendEnvAt(&stdout, &stderr, lateOnSeptember30))
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.True(t, strings.HasPrefix(stdout.String(), "Summary of August 2026 (2026-08-01 to 2026-08-31), amounts in CAD\n"), stdout.String())
 }

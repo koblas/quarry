@@ -1,19 +1,19 @@
 ---
 id: SCENARIO-01b
-status: open
+status: done
 ---
 
 # SCENARIO-01b: Summary of last month
 
 Cadence: code-first (no bug fix, write-safety guard or atomic adapter touched)
 Acceptance test: `cmd/quarry/run_summary_test.go` `Test_run_summary_prints_last_months_summary`
-Acceptance test (SCENARIO-05, folded): `cmd/quarry/run_summary_test.go` `Test_run_summary_counts_a_type_without_a_balance_on_the_first_month_end_as_zero_in_the_change`
+Acceptance test (SCENARIO-05, folded): `cmd/quarry/run_summary_change_test.go` `Test_run_summary_counts_a_type_without_a_balance_on_the_first_month_end_as_zero_in_the_change`
 Acceptance test (SCENARIO-08, folded): `internal/cli/summary_test.go` `Test_summary_findings_row_names_the_last_sync`
 Acceptance test (SCENARIO-09, folded): `cmd/quarry/run_summary_refusals_test.go` `Test_run_summary_refuses_a_month_it_cannot_summarize`
-Acceptance test (SCENARIO-13, folded): `cmd/quarry/run_summary_test.go` `Test_run_summary_lists_cad_and_usd_separately_with_native`
+Acceptance test (SCENARIO-13, folded): `cmd/quarry/run_summary_change_test.go` `Test_run_summary_lists_cad_and_usd_separately_with_native`
 Acceptance test (SCENARIO-15, folded): `cmd/quarry/run_read_refusals_test.go` `Test_run_read_commands_refuse_when_there_is_no_store`
 Narrow loop: `go test ./internal/cli/ ./cmd/quarry/ -run 'ummary|read_commands|currency|usage_hint|run_help_prints|each_report|reads_the_config'`
-Mutation checks: `cmd.Flags().Changed(currencyFlagName)` arm of the config failure in `summaryChoices` (W2, not refusal) → `Test_summary_warns_and_prints_when_the_config_is_unreadable_and_currency_is_given` | `IgnoreKnown` guard on the ignored clause in `summaryFindingsPhrase` → `Test_summary_findings_row_names_the_last_sync` (row `Ignored>0, IgnoreKnown=false`)
+Mutation checks: `cmd.Flags().Changed(currencyFlagName)` arm of the config failure in `summaryChoices` (W2, not refusal) → `Test_summary_warns_and_prints_when_the_config_is_unreadable_and_currency_is_given` | `IgnoreKnown` guard on the ignored clause in `summaryFindingsPhrase` → `Test_summaryFindingsPhrase_says_ignored_only_when_the_ignore_list_was_read/ignore_list_unread`
 Runs: A (1-2) | B1 (3-4) | B2 (5-6) | V (7-8)
 Size: OWNS A RUN — 4 batches, 0 feature packages (internal/cli + cmd/quarry tests; `report.Server.Summary` exists from 01a)
 
@@ -34,10 +34,10 @@ Contract: `quarry summary [--month YYYY-MM] [--currency CAD|USD|native]` → tex
 - [x] Step 6: refusals + all-commands rows — `cmd/quarry/run_summary_refusals_test.go` (new) folded `Test_run_summary_refuses_a_month_it_cannot_summarize` (Outline rows + `2026-13`, `""`, `2026`, control `2026-09` accepted; stdout empty, exit 2); `Test_run_summary_checks_arguments_then_month_then_config_then_store` (`--currency EUR --month 2026-9` → currency line; `--month 2026-10` + malformed config + no store → month line; malformed config + no store → config line, exit 1; bad `reporting.currency` → existing line); `--month` with no value → cobra line; `Test_run_summary_refuses_a_store_built_by_an_older_quarry` (run_read_refusals_test.go:168-180). Rows: run_read_refusals_test.go:45-62 `summary` (S15), :87-110 `summary`, :236-247 `summary interrupted`; run_read_usage_test.go:16-51 `summary takes no arguments`, :83 list; run_usage_test.go:212 list, :248-275 unknown flag row; run_status_test.go:145-162 `  summary     Summarize a month: …` between status and sync; internal/cli/currency_test.go:24 `genericCurrencyCommands` (so :211 loop 1 and :318 apply), :150-160 row `--month 2026-9`, :378 row `summary --month 2026-9`. **Not** in currency_test.go:31 `flagSkipsConfigCommands`, :247 `configAlwaysReadCommands`, nor run_config_test.go:238 `readCommandArgs` (its :366 asserts empty stderr; summary prints W2)
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new symbols; `root.go:7-10` doc comment adds summary; `docs/initial-prd.md:171` CLI row after anomalies (spec *Changes to existing surfaces*, verbatim)
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on new symbols; `root.go:7-10` doc comment adds summary; `docs/initial-prd.md:171` CLI row after anomalies (spec *Changes to existing surfaces*, verbatim)
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py phase4f-summary` → tick SCENARIO-01b and 05, 08, 09, 13, 15 ("delivered by SCENARIO-01b" before the test reference); rewrite `STATE.md`
+- [x] Step 8: full verification + `spec-check.py phase4f-summary` → tick SCENARIO-01b and 05, 08, 09, 13, 15 ("delivered by SCENARIO-01b" before the test reference); rewrite `STATE.md`
 
 ## Handoff
 
@@ -62,18 +62,8 @@ Contract: `quarry summary [--month YYYY-MM] [--currency CAD|USD|native]` → tex
 
 ## Phase report
 
-Run B2 (steps 5-6) done; commit follows 097aec9. Next: checkpoint is after V; V does Sweep (step 7: doc comments, `root.go:7-10`, `docs/initial-prd.md:171`) and Verify (step 8).
+Run V done: checkpoint pins, Sweep, Verify, ticks, STATE.md; scenario complete.
 
-Files:
-- `internal/cli/render_networth_history.go`: `renderNetWorthHistory` split into `netWorthHistoryRows` (aligns + header/month-end rows) plus the unchanged caption; output unchanged.
-- `internal/cli/render_summary.go`: `renderNetWorthWithChange` (history rows + `changeRows`), `changeRows` (converted: one `Change` row; native: one per `Change.Totals` currency, Currency cell filled), `nativeChangeCell` (blank for an absent type), `changeLabel`; `Change == nil` appends nothing.
-- `internal/cli/render_recurring.go`: `signedMoney(*big.Int)` beside `signedTenths`.
-- Tests: `internal/cli/render_summary_internal_test.go` (signedMoney table, `changeRows` converted / one no-rate type / native end-day-only currency / native blank type, no Change line when first month end empty); `internal/cli/summary_test.go` (`Test_summary_refuses_a_currency_that_is_not_cad_usd_or_native`, `Test_summary_shows_amounts_in_the_currency_it_was_given`); `internal/cli/currency_test.go` (two `summary --month 2026-9` rows: currency refused before other flags, own bad flag before config read); `cmd/quarry/run_summary_change_test.go` (folded 13 `Test_run_summary_lists_cad_and_usd_separately_with_native`, folded 05 `Test_run_summary_counts_a_type_without_a_balance_on_the_first_month_end_as_zero_in_the_change`, `Test_run_summary_anomalies_section_equals_quarry_anomalies_of_the_month`); `cmd/quarry/run_summary_refusals_test.go` (folded 09 `Test_run_summary_refuses_a_month_it_cannot_summarize`, control `..._accepts_a_month_that_has_ended`, check-order table, config-before-store, older store); all-commands rows `summary` in `run_read_refusals_test.go` (no store = folded 15, bad reporting.currency, interrupt), `run_read_usage_test.go` (takes no arguments, bad currency list), `run_usage_test.go` (currency needs a value, unknown flag), `run_status_test.go` (root help line). Lint fixes in `run_summary_test.go` (`seedSummaryStore` no longer returns HOME).
+Files: `internal/cli/summary_test.go` (config read once without the flag, positional argument before the currency flag, W1 with and without `--currency`, store-open fault, thousands rows for ignored/new/fixed); `cmd/quarry/run_summary_findings_test.go` (W2 for each bad-config kind with `--currency`); `cmd/quarry/run_summary_test.go` (local day before UTC day; `seedSummaryStore` returns HOME; `summaryRows` doc trimmed); `cmd/quarry/run_spend_refusals_test.go` (`summary` in the home-unset table); `internal/cli/root.go` doc comment; `docs/initial-prd.md` CLI row.
 
-Green: `go test ./internal/cli/... ./cmd/quarry/...` full (both packages), `golangci-lint run ./internal/cli/... ./cmd/...` 0 issues. `Test_run_summary_prints_last_months_summary` green; root help pin green. No `Mutation checks:` entries belong to B2.
-
-Ruled: `summary` NOT added to `genericCurrencyCommands`/`currencyCommands` (currency_test.go:24; its `--json` loops would hit the interim refusal) nor to any all-commands `--json` row; summary's `--currency` behaviour is pinned by the two summary-specific tests above. No `--json` row exists in the cmd/quarry tables touched.
-
-Debt for V to put in STATE.md `## Open debts`: "SCENARIO-12 adds summary to genericCurrencyCommands (currency_test.go:24) and any `--json` all-commands rows, deleting the summary-specific currency test (`Test_summary_refuses_a_currency_that_is_not_cad_usd_or_native`, `Test_summary_shows_amounts_in_the_currency_it_was_given`) and the interim --json refusal test (`Test_summary_refuses_json_until_its_document_exists`)".
-
-Deviations: summary is deliberately in no `readCommandArgs`/`configAlwaysReadCommands` (plan); `Test_run_summary_reads_the_config_before_looking_for_a_store` pins the malformed-config line instead. Native fixture (`summaryNativeRows`) has no USD-end-day-only account at the command level; that arm is pinned in `changeRows` internal tests.
+Green: `verify.sh ed61870 ./internal/cli/...` all rc=0, 0 uncovered lines, 0 lint issues.

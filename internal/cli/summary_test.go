@@ -218,6 +218,63 @@ func Test_summary_reads_the_config_once_even_with_the_currency_flag(t *testing.T
 	assert.Equal(t, []string{"summary"}, asked)
 }
 
+func Test_summary_reads_the_config_once_without_the_currency_flag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	var asked []string
+	load := func(name string) (config.Config, error) {
+		asked = append(asked, name)
+
+		return cadConfig(name)
+	}
+
+	err := executeSummary(t, fakeReportStore{}, load, &stdout, &stderr)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"summary"}, asked)
+}
+
+func Test_summary_refuses_a_positional_argument_before_the_currency_flag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := cli.Execute(t.Context(), []string{"summary", "extra", "--currency", "EUR"}, refusedEnv(&stdout, &stderr))
+
+	var usage cli.UsageError
+	require.ErrorAs(t, err, &usage)
+	assert.EqualError(t, err, "summary takes no arguments")
+}
+
+func Test_summary_prints_the_configs_warnings_on_stderr_with_or_without_the_currency_flag(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "without the flag", args: nil},
+		{name: "with the flag", args: []string{"--currency", "CAD"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := executeSummary(t, fakeReportStore{}, warningConfig, &stdout, &stderr, c.args...)
+
+			require.NoError(t, err)
+			assert.Equal(t, "quarry: warning: "+unknownKeyShown+"\n", stderr.String())
+			assert.Contains(t, stdout.String(), "Summary of August 2026")
+		})
+	}
+}
+
+func Test_summary_returns_the_fault_of_opening_the_store_as_a_runtime_error(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := cli.Execute(t.Context(), []string{"summary"}, refusedEnv(&stdout, &stderr))
+
+	require.ErrorIs(t, err, errStoreRead)
+	assert.NotErrorAs(t, err, new(cli.UsageError))
+	assert.Empty(t, stdout.String())
+}
+
 func Test_summary_returns_the_report_fault_as_a_runtime_error(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -299,6 +356,13 @@ func Test_summary_findings_row_names_the_last_sync(t *testing.T) {
 		{name: "fixed in an earlier sync is not mentioned", open: 2, fixed: 3, want: "2 open; run quarry findings to list them"},
 		{name: "ignored", open: 3, ignored: 5, want: "3 open, 5 ignored; run quarry findings to list them"},
 		{name: "ignored, new and fixed", open: 4, openNew: 3, ignored: 5, fixed: 2, newlyFixed: 2, want: "4 open, 5 ignored; the last sync found 3 new and 2 fixed; run quarry findings to list them"},
+		{name: "ignored count grouped by thousands", open: 1, ignored: 1234, want: "1 open, 1,234 ignored; run quarry findings to list them"},
+		{
+			name: "new and fixed counts grouped by thousands", open: 1234, openNew: 1234, fixed: 1234, newlyFixed: 1234,
+			want: "1,234 open; the last sync found 1,234 new and 1,234 fixed; run quarry findings to list them",
+		},
+		{name: "new count grouped by thousands", open: 1234, openNew: 1234, want: "1,234 open; the last sync found 1,234 new; run quarry findings to list them"},
+		{name: "fixed count grouped by thousands", open: 1, fixed: 1234, newlyFixed: 1234, want: "1 open; the last sync found 1,234 fixed; run quarry findings to list them"},
 		{name: "none open, some ignored", ignored: 2, want: "none open, 2 ignored"},
 		{name: "none open, some fixed by the last sync", fixed: 3, newlyFixed: 2, want: "none open; the last sync found 2 fixed"},
 	}

@@ -169,6 +169,7 @@ Every command supports `--json` for machine consumers and a readable table by de
 | `quarry networth` | Net worth on one day (`--as-of`, default today) or at each month end (`--since`/`--until`), by account type and currency |
 | `quarry recurring` | Detected recurring charges, start date, price changes |
 | `quarry anomalies` | Unusually large transactions (duplicates are `findings`) |
+| `quarry summary` | One month (default last month): freshness, findings counts, unusually large charges, recurring charges new in it, net worth at its end and the change; read-only, for a monthly job after sync |
 | `quarry search` | Find transactions by payee, memo, amount, date, account or category; transfers and report-excluded transactions included and flagged |
 | `quarry acb` | Adjusted cost base per security and realized capital gains by tax year, in CAD |
 | `quarry findings` | The cleanup worklist to apply in Quicken; `--csv` to export; ignore a finding by listing its id under `findings.ignore` in the config file |
