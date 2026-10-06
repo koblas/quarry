@@ -83,15 +83,21 @@ func Test_renderSummary_says_when_the_snapshot_manifest_has_no_time(t *testing.T
 
 func Test_renderSummary_says_when_the_store_holds_no_transactions(t *testing.T) {
 	s := septemberSummary(money.CAD)
+	s.Status.Run.Snapshot = store.SnapshotRef{Path: "/snapshots/20260928T140200Z.sqlite"}
 
 	got := renderSummary(s, document.FindingsTally{IgnoreKnown: true}, time.Date(2026, time.October, 6, 12, 0, 0, 0, time.UTC))
 
-	assert.Contains(t, got, "\nDates     no transactions\nFindings  none open\n\n"+
+	assert.Equal(t, "Summary of September 2026 (2026-09-01 to 2026-09-30), amounts in CAD\n\n"+
+		"Snapshot  20260928T140200Z, time taken not recorded in its manifest\n"+
+		"Dates     no transactions\n"+
+		"Findings  none open\n\n"+
 		"Unusually large charges 2026-09-01 to 2026-09-30 in all accounts, amounts in CAD\n\n"+
 		"No unusually large charges.\n\n"+
 		"0 charges checked\n\n"+
 		"Recurring charges new 2026-09-01 to 2026-09-30 in all accounts, amounts in CAD\n\n"+
-		"No new recurring charges.\n\n")
+		"No new recurring charges.\n\n"+
+		"Net worth at each month end 2026-08-31 to 2026-09-30, amounts in CAD\n\n"+
+		"No account has a balance on 2026-08-31 or 2026-09-30.\n", got)
 }
 
 func Test_summaryAnomaliesSection_says_none_when_no_charge_is_listed(t *testing.T) {
@@ -274,15 +280,93 @@ func Test_changeRows_leaves_a_type_blank_in_a_currency_that_never_held_it_when_n
 	}, rows)
 }
 
-func Test_renderNetWorthWithChange_adds_no_line_when_the_first_month_end_has_no_balance(t *testing.T) {
-	n := report.NetWorth{Currency: money.CAD, Dates: []report.NetWorthDate{
-		monthEndHolding(augustEnd, nil),
-		monthEndHolding(septemberEnd, []store.NetWorthRow{monthEndRow("chequing", "CAD", 125_050)},
-			report.NetWorthTotal{Currency: "CAD", Value: big.NewInt(125_050)}),
+func Test_renderNetWorthWithChange_says_no_account_has_a_balance_when_neither_month_end_has_one(t *testing.T) {
+	cases := []struct {
+		name     string
+		currency money.Currency
+		caption  string
+	}{
+		{name: "CAD", currency: money.CAD, caption: "Net worth at each month end 2026-08-31 to 2026-09-30, amounts in CAD"},
+		{name: "USD", currency: money.USD, caption: "Net worth at each month end 2026-08-31 to 2026-09-30, amounts in USD"},
+		{name: "native adds no amounts clause", currency: money.Native, caption: "Net worth at each month end 2026-08-31 to 2026-09-30"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			n := report.NetWorth{Currency: c.currency, Dates: []report.NetWorthDate{monthEndHolding(augustEnd, nil), monthEndHolding(septemberEnd, nil)}}
+
+			assert.Equal(t, c.caption+"\n\nNo account has a balance on 2026-08-31 or 2026-09-30.\n", renderNetWorthWithChange(n))
+		})
+	}
+}
+
+func Test_renderNetWorthWithChange_says_no_change_is_shown_when_only_the_first_month_end_is_empty(t *testing.T) {
+	cases := []struct {
+		name string
+		n    report.NetWorth
+		want string
+	}{
+		{
+			name: "CAD",
+			n: report.NetWorth{Currency: money.CAD, Dates: []report.NetWorthDate{
+				monthEndHolding(augustEnd, nil),
+				monthEndHolding(septemberEnd, []store.NetWorthRow{monthEndRow("chequing", "CAD", 125_050)},
+					report.NetWorthTotal{Currency: "CAD", Value: big.NewInt(125_050)}),
+			}},
+			want: "Net worth at each month end 2026-08-31 to 2026-09-30, amounts in CAD\n\n" +
+				"Month end   chequing     Total\n" +
+				"2026-08-31\n" +
+				"2026-09-30  1,250.50  1,250.50\n" +
+				"\nNo change shown: no account has a balance on 2026-08-31.\n",
+		},
+		{
+			name: "native with CAD and USD on the end day",
+			n: report.NetWorth{Currency: money.Native, Dates: []report.NetWorthDate{
+				monthEndHolding(augustEnd, nil),
+				monthEndHolding(septemberEnd, []store.NetWorthRow{monthEndRow("chequing", "CAD", 125_050), monthEndRow("chequing", "USD", 200_000)},
+					report.NetWorthTotal{Currency: "CAD", Value: big.NewInt(125_050)}, report.NetWorthTotal{Currency: "USD", Value: big.NewInt(200_000)}),
+			}},
+			want: "Net worth at each month end 2026-08-31 to 2026-09-30\n\n" +
+				"Month end   Currency  chequing     Total\n" +
+				"2026-08-31\n" +
+				"2026-09-30  CAD       1,250.50  1,250.50\n" +
+				"2026-09-30  USD       2,000.00  2,000.00\n" +
+				"\nNo change shown: no account has a balance on 2026-08-31.\n",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, renderNetWorthWithChange(c.n))
+		})
+	}
+}
+
+func Test_renderNetWorthWithChange_shows_the_change_when_the_first_month_end_has_a_row_in_one_currency_only(t *testing.T) {
+	n := report.NetWorth{Currency: money.Native, Dates: []report.NetWorthDate{
+		monthEndHolding(augustEnd, []store.NetWorthRow{monthEndRow("chequing", "CAD", 100_000)},
+			report.NetWorthTotal{Currency: "CAD", Value: big.NewInt(100_000)}),
+		monthEndHolding(septemberEnd, []store.NetWorthRow{monthEndRow("chequing", "CAD", 125_050), monthEndRow("chequing", "USD", 200_000)},
+			report.NetWorthTotal{Currency: "CAD", Value: big.NewInt(125_050)}, report.NetWorthTotal{Currency: "USD", Value: big.NewInt(200_000)}),
 	}}
 
 	got := renderNetWorthWithChange(n)
 
-	assert.Contains(t, got, "2026-09-30")
-	assert.NotContains(t, got, "Change")
+	assert.Contains(t, got, "\nChange      USD       +2,000.00  +2,000.00\n")
+	assert.NotContains(t, got, "No change shown")
+	assert.NotContains(t, got, "No account has a balance")
+}
+
+func Test_renderNetWorthWithChange_shows_the_change_when_only_the_last_month_end_is_empty(t *testing.T) {
+	n := report.NetWorth{Currency: money.CAD, Dates: []report.NetWorthDate{
+		monthEndHolding(augustEnd, []store.NetWorthRow{monthEndRow("chequing", "CAD", 100_000)},
+			report.NetWorthTotal{Currency: "CAD", Value: big.NewInt(100_000)}),
+		monthEndHolding(septemberEnd, nil),
+	}}
+
+	got := renderNetWorthWithChange(n)
+
+	assert.Contains(t, got, "\nChange      -1,000.00  -1,000.00\n")
+	assert.NotContains(t, got, "No change shown")
+	assert.NotContains(t, got, "No account has a balance")
 }

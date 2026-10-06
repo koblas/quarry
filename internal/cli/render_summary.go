@@ -56,13 +56,21 @@ func renderEmptySection(caption, line string) string {
 }
 
 // renderNetWorthWithChange is the month-end history table with the change between its first and last month
-// end appended; nothing is appended when the first month end has no balance.
+// end appended; no balance on either end replaces the table with a line saying so, none on the first adds
+// a line saying no change is shown. n holds both month ends.
 func renderNetWorthWithChange(n report.NetWorth) string {
-	aligns, rows := netWorthHistoryRows(n)
-	if change := n.Change(); change != nil {
-		rows = append(rows, changeRows(n, change)...)
+	first, last := n.Dates[0], n.Dates[len(n.Dates)-1]
+	change := n.Change()
+	if change == nil && len(last.Rows) == 0 {
+		return renderEmptySection(netWorthHistoryCaption(n),
+			"No account has a balance on "+first.Date.Format(time.DateOnly)+" or "+last.Date.Format(time.DateOnly)+".")
 	}
-	return renderTable(netWorthHistoryCaption(n), aligns, rows)
+	aligns, rows := netWorthHistoryRows(n)
+	if change == nil {
+		return renderTable(netWorthHistoryCaption(n), aligns, rows) +
+			"\nNo change shown: no account has a balance on " + first.Date.Format(time.DateOnly) + ".\n"
+	}
+	return renderTable(netWorthHistoryCaption(n), aligns, append(rows, changeRows(n, change)...))
 }
 
 // changeRows is the Change line of a converted history, or one per currency of a native one, in the history
