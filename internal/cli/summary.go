@@ -103,6 +103,9 @@ together.`,
 				Counts:      report.CountFindings(summary.Status, choices.ignore, choices.classification),
 				IgnoreKnown: choices.ignoreKnown,
 			}
+			if choices.cannotTell != "" {
+				printConfigWarnings(cmd, []string{choices.cannotTell})
+			}
 			return writeResult(cmd, []byte(renderSummary(summary, findings, at)))
 		},
 	}
@@ -112,24 +115,25 @@ together.`,
 }
 
 // summaryChoice is what the config file decides for a summary: its currency and the findings choices. ignoreKnown
-// is false when the file could not be read, so no ignored count can be said.
+// is false when the file could not be read, so no ignored count can be said, and cannotTell then holds the
+// warning saying why: it is printed only once the summary has been read, so a refusal stands alone.
 type summaryChoice struct {
 	currency       money.Currency
 	ignore         []string
 	classification report.Classification
 	ignoreKnown    bool
+	cannotTell     string
 }
 
 // summaryChoices loads the config once and prints its warnings. An unreadable config is a runtimeError, or
-// with --currency one warning and findings counted without the choices.
+// with --currency findings counted without the choices and the warning left in cannotTell.
 func summaryChoices(cmd *cobra.Command, loadConfig ConfigLoader, currency currencyFlag) (summaryChoice, error) {
 	cfg, err := loadConfig(cmd.Name())
 	if err != nil {
 		if !cmd.Flags().Changed(currencyFlagName) {
 			return summaryChoice{}, &runtimeError{err: err}
 		}
-		printConfigWarnings(cmd, []string{document.CannotTellChoices(config.Problem(err))})
-		return summaryChoice{currency: currency.in(cmd, config.Config{})}, nil
+		return summaryChoice{currency: currency.in(cmd, config.Config{}), cannotTell: document.CannotTellChoices(config.Problem(err))}, nil
 	}
 	printConfigWarnings(cmd, cfg.Warnings)
 	return summaryChoice{
