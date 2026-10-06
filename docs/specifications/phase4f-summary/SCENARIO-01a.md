@@ -75,3 +75,5 @@ Files:
 **Ruling 2 settled: DuckDB ACCEPTS `0000-12-31`** (`Summary` with Dates {0000-12-31, 0001-01-31} returns without error, no rows). So the lower bound stays 0001-01 (`--month 0001-01` valid, `0000-01` refused); no 0001-02 change, no new copy.
 
 Next: V (steps 8-9): full verification, doc comments, `internal/report/doc.go` command list adds summary, `go doc ./internal/report Summary`, spec ticks (01a, 02, 19, 03, 20, 04 with folds), `spec-check.py`, STATE.md, `status: done`.
+
+**Orchestrator ruling 2026-10-06 (checkpoint finding 4):** converted Change with an empty END day (no row on the month end; unreachable on a real store per U6, reachable through the port): the empty day counts 0.00 like any missing type (U10 / "missing day counts 0.00"), so the total is a number (0 − start total), never `no rate`; `no rate` only when a day that HAS rows lacks the reporting-currency entry or holds another. Native already behaves so. Fix pass before V, test-first.
