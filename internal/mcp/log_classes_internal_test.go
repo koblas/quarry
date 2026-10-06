@@ -184,6 +184,14 @@ func Test_logLine_never_carries_the_callers_values(t *testing.T) {
 	}
 }
 
+func Test_logLine_never_carries_the_month_a_call_asked_for_that_has_not_ended(t *testing.T) {
+	const distinctiveMonth = "2031-07"
+
+	got := logLine(monthRefusal(monthRefusalFor(t, distinctiveMonth)))
+
+	assert.NotContains(t, got, distinctiveMonth)
+}
+
 func Test_logLine_never_carries_a_store_reason_in_the_engines_words(t *testing.T) {
 	const engineWords = "Zorblax catalog failure"
 	err := storeRefusalFor(t, &store.OpenError{Fault: store.OpenFaultOther, Path: refusalStore, Reason: engineWords})

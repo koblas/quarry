@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-16
-status: open
+status: done
 ---
 
 # SCENARIO-16: Claude asks for last month's summary
@@ -26,10 +26,10 @@ Sources: `internal/mcp` read in full for net_worth.go, anomalies.go, result.go, 
 - [x] Step 5 (batch 3, registry, copy, tables): `internal/mcp/log_classes_internal_test.go:60-100` rows for `monthRefusedLog` in the classification table and the never-logs-the-value table; `timeout_test.go:57-100,125-138` `stallingStore.Summary` (nil embedded `report.Store` would panic) + row `monthly_summary stopped after 1 second; try again`; `cmd/quarry/run_mcp_test.go:41-45` tool list; `run_mcp_descriptions_test.go:230-303` description + schema consts and map row, Tools-line pin (U12); `run_mcp_no_store_test.go:34` row; `run_mcp_store_faults_test.go:31-110` rows `directoryStore` and `DELETE FROM import_runs` → `the store has no import history` (deterministic: status read first; not a dropped view); `internal/cli/mcp.go:38-40` + `mcp_test.go:43-45` Tools line (U12, ends `net_worth, acb, monthly_summary.`); `plugin/skills/quarry/SKILL.md:99` + `run_skill_text_test.go:241` (U13); `docs/initial-prd.md` new row between :205 and :206 (U14)
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments (budget: exported ~4 lines); `go doc ./internal/mcp` unchanged surface
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments (budget: exported ~4 lines); `go doc ./internal/mcp` unchanged surface
 
 ### Verify
-- [ ] Step 7: full verification per `.claude/rules/agent-briefs.md`, `spec-check.py phase4f-summary`, tick SCENARIO-16 with its acceptance test, STATE.md rewrite
+- [x] Step 7: full verification per `.claude/rules/agent-briefs.md`, `spec-check.py phase4f-summary`, tick SCENARIO-16 with its acceptance test, STATE.md rewrite
 
 ## Handoff
 
@@ -56,14 +56,11 @@ Sources: `internal/mcp` read in full for net_worth.go, anomalies.go, result.go, 
 
 ## Phase report
 
-Runs A, B1 and B2 done (steps 1-5 ticked). B2 started from bba432cb. Remaining: V (steps 6-7).
+Run V done; scenario complete (steps 1-7 ticked, `status: done`, spec ticked, `spec-check.py --run` OK, STATE.md rewritten).
 
-**Files (B2)**
-- `internal/mcp/log_classes_internal_test.go`: `monthRefusalFor`; `monthRefusedLog` rows (not-a-month, not-ended) in the classification table and a not-a-month row in the never-carries-the-value table.
-- `internal/mcp/timeout_test.go`: `stallingStore.Summary`, `monthly_summary` deadline row (`month: 2026-09`).
-- `cmd/quarry/run_mcp_test.go` (tool list), `run_mcp_descriptions_test.go` (`mcpMonthlySummaryDescription`, `mcpMonthlySummaryInputSchema`, map row, Tools-line pin split over two literals for lll), `run_mcp_no_store_test.go`, `run_mcp_store_faults_test.go` (`directoryStore`, `DELETE FROM import_runs`).
-- `internal/cli/mcp.go:38-40` + `mcp_test.go:43-45`: U12 Tools line. `plugin/skills/quarry/SKILL.md:99` + `run_skill_text_test.go:241`: U13. `docs/initial-prd.md`: U14 row between `holdings` and `sync_status`.
+**Files (V)**
+- `internal/mcp/summary_test.go`: `Test_monthly_summary_lists_the_config_warning_before_the_snapshot_warning` (W1/W2 before W3), `Test_monthly_summary_leaves_an_account_the_config_classifies_out_of_the_open_count` (classification with and without `currency`), `Test_monthly_summary_defaults_to_the_month_before_the_callers_local_month`, `Test_monthly_summary_refuses_the_month_that_has_not_ended_in_the_callers_local_zone`.
+- `internal/mcp/log_classes_internal_test.go`: `Test_logLine_never_carries_the_month_a_call_asked_for_that_has_not_ended`.
+- No production change. Each pin reddened under its mutation (swap `slices.Concat` args; `report.Classification{}`; `s.now().UTC()`; monthRefusal logging `monthWording`).
 
-**Green now**: whole `cmd/quarry`, `internal/mcp`, `internal/cli` (incl. both tool-list tests); `golangci-lint run ./...` 0 issues; `go build ./...` ok. No production logic touched in B2 (`summary.go` untouched), so no mutations.
-
-**V must**: sweep (doc comments, `go doc ./internal/mcp` surface), covered full suite + `uncovered-diff.py` from a6ab29c1^ (scenario start), `test-stats.py --base`, `spec-check.py phase4f-summary`, tick SCENARIO-16 with `cmd/quarry/run_mcp_summary_test.go` `Test_run_mcp_monthly_summary_returns_the_summary_json_document`, rewrite STATE.md (drop `monthly_summary`/`NativeParameter`/caps from Left unbuilt; keep SKILL §4/§10, README, reference, PRD Decisions, `run_skill_json_fields_test.go:33` for SCENARIO-17), `status: done`.
+**Verify**: `verify.sh 1c8c370`: build, go test, uncovered-diff, race, lint all rc=0; 0 uncovered added lines, 1 declared unreachable (`summary.go:107`).

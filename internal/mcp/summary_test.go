@@ -329,3 +329,110 @@ func Test_monthly_summary_caps_anomalies_charges_and_recurring_series_at_500(t *
 		})
 	}
 }
+
+func Test_monthly_summary_lists_the_config_warning_before_the_snapshot_warning(t *testing.T) {
+	const snapshotBefore = "the store was built from a snapshot taken 2026-09-20 09:05 UTC, before September 2026 ended, " +
+		"so transactions from the rest of the month are missing; open your Quicken file, run quarry sync, " +
+		"then call monthly_summary again"
+	const snapshotUnknown = "cannot tell whether the store holds all of September 2026: its snapshot's manifest does not record " +
+		"when it was taken; open your Quicken file and run quarry sync to take a new snapshot"
+	cases := []struct {
+		name  string
+		stub  *configStub
+		taken time.Time
+		want  []string
+	}{
+		{
+			name:  "a config warning, then a snapshot taken before the month ended",
+			stub:  &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}},
+			taken: time.Date(2026, time.September, 20, 9, 5, 0, 0, time.UTC),
+			want:  []string{configUnknownKeyWarning, snapshotBefore},
+		},
+		{
+			name: "an unreadable config, then a snapshot with no recorded time",
+			stub: &configStub{err: errBadConfig},
+			want: []string{document.CannotTellChoices(config.ProblemAbsolute(errBadConfig)), snapshotUnknown},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			summary := coveredSummary()
+			summary.Status.Run.Snapshot.TakenAt = c.taken
+			h := newHarness(t, &fakeStore{summary: summary}, nil, mcp.WithConfig(c.stub.load), atSummaryToday())
+
+			doc := decodeSummary(t, h.monthlySummary(t, map[string]any{"currency": "USD"}))
+
+			assert.Equal(t, c.want, doc.Warnings)
+		})
+	}
+}
+
+func Test_monthly_summary_leaves_an_account_the_config_classifies_out_of_the_open_count(t *testing.T) {
+	cases := []struct {
+		name      string
+		cfg       config.Config
+		arguments map[string]any
+		want      int
+	}{
+		{name: "no classification", cfg: config.Config{}, arguments: map[string]any{}, want: 2},
+		{name: "no classification, with a currency", cfg: config.Config{}, arguments: map[string]any{"currency": "USD"}, want: 2},
+		{name: "registered", cfg: config.Config{Registered: []string{"acct-1"}}, arguments: map[string]any{}, want: 1},
+		{name: "non-registered", cfg: config.Config{NonRegistered: []string{"acct-1"}}, arguments: map[string]any{}, want: 1},
+		{name: "registered, with a currency", cfg: config.Config{Registered: []string{"acct-1"}}, arguments: map[string]any{"currency": "USD"}, want: 1},
+		{name: "non-registered, with a currency", cfg: config.Config{NonRegistered: []string{"acct-1"}}, arguments: map[string]any{"currency": "USD"}, want: 1},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			summary := coveredSummary()
+			summary.Status.Accounts = statusWithBrokerage().Accounts
+			stub := &configStub{cfg: c.cfg}
+			h := newHarness(t, &fakeStore{summary: summary}, nil, mcp.WithConfig(stub.load), atSummaryToday())
+
+			doc := decodeSummary(t, h.monthlySummary(t, c.arguments))
+
+			assert.Equal(t, c.want, doc.Findings.Open)
+		})
+	}
+}
+
+// summaryInstant is 2026-10-01 00:30 UTC, which is still 2026-09-30 in New York.
+func summaryInstant(zone *time.Location) func() time.Time {
+	return func() time.Time { return time.Date(2026, time.September, 30, 20, 30, 0, 0, summaryNewYork).In(zone) }
+}
+
+var summaryNewYork = time.FixedZone("EDT", -4*60*60)
+
+func Test_monthly_summary_defaults_to_the_month_before_the_callers_local_month(t *testing.T) {
+	cases := []struct {
+		name string
+		zone *time.Location
+		want string
+	}{
+		{name: "an instant that is still September in the local zone", zone: summaryNewYork, want: "2026-08"},
+		{name: "the same instant read in UTC", zone: time.UTC, want: "2026-09"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, mcp.WithConfig((&configStub{}).load), mcp.WithClock(summaryInstant(c.zone)))
+
+			doc := decodeSummary(t, h.monthlySummary(t, map[string]any{}))
+
+			assert.Equal(t, c.want, doc.Month)
+		})
+	}
+}
+
+func Test_monthly_summary_refuses_the_month_that_has_not_ended_in_the_callers_local_zone(t *testing.T) {
+	local := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, mcp.WithConfig((&configStub{}).load), mcp.WithClock(summaryInstant(summaryNewYork)))
+	utc := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, mcp.WithConfig((&configStub{}).load), mcp.WithClock(summaryInstant(time.UTC)))
+
+	refused := local.monthlySummary(t, map[string]any{"month": "2026-09"})
+	control := decodeSummary(t, utc.monthlySummary(t, map[string]any{"month": "2026-09"}))
+
+	assert.True(t, refused.IsError)
+	assert.Equal(t, "month 2026-09 has not ended; monthly_summary covers whole months, so pass 2026-08 or earlier", textOf(t, refused))
+	assert.Equal(t, "2026-09", control.Month)
+}

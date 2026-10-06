@@ -509,7 +509,7 @@ Architect sizing pass (2026-10-06). Order: 01a → 01b → 06 → 10 → 12 → 
 - [x] SCENARIO-11: Snapshot with no recorded time is warned about — delivered by SCENARIO-10 — `cmd/quarry/run_summary_snapshot_test.go` `Test_run_summary_warns_when_the_snapshot_records_no_time`
 - [x] SCENARIO-12: Machine-readable summary — `cmd/quarry/run_summary_json_test.go` `Test_run_summary_json_prints_the_ruled_document`
 - [x] SCENARIO-14: Missing exchange rates are warned about once — `cmd/quarry/run_summary_warnings_test.go` `Test_run_summary_warns_once_per_kind_when_the_store_has_no_exchange_rates`
-- [ ] SCENARIO-16: Claude asks for last month's summary
+- [x] SCENARIO-16: Claude asks for last month's summary — `cmd/quarry/run_mcp_summary_test.go` `Test_run_mcp_monthly_summary_returns_the_summary_json_document`
 - [ ] SCENARIO-17: Docs describe the monthly job
 - [ ] SCENARIO-18: Reference check on a real month
 
