@@ -36,7 +36,8 @@ type Server struct {
 	destination Destination
 	importer    Importer
 	storeProbe  StoreProbe
-	remove      func(path string) error
+	locker      Locker
+	remove     func(path string) error
 	autoKeep    int
 	ignore      []string
 	readTime    func(store.FindingList) []finding.State
@@ -94,6 +95,12 @@ func WithImporter(imp Importer) Option {
 // Importer writes; production callers pass that Importer's own store.
 func WithStoreProbe(probe StoreProbe) Option {
 	return func(s *Server) { s.storeProbe = probe }
+}
+
+// WithLocker sets the Locker LockForSync takes the writer lock with; unset,
+// LockForSync takes no lock.
+func WithLocker(locker Locker) Option {
+	return func(s *Server) { s.locker = locker }
 }
 
 // WithRemove sets the function that deletes a file in the snapshots
