@@ -320,10 +320,10 @@ Order: 01 → 03 → 06 → 14 → 10 → 12a → 12b → 13 (lock first; 14 mak
 **Traps:** a fifo opened read-only blocks without `O_NONBLOCK`; Lstat-then-open races without `O_NOFOLLOW`; "held to exit" means released when RunE returns, or in-process `run()` tests in one binary see a lock that stays held; cmd/quarry tests pinning the quarry folder's contents now see `quarry.lock`; run_store_faults_test.go:80 (folder 0500) now hits L4a first — pre-create `quarry.lock`.
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01: A sync refuses while another sync or prune is running
-- [ ] SCENARIO-02: A sync --from refuses while locked, before resolving the snapshot
-- [ ] SCENARIO-05: A lock left by a finished or killed run does not block
-- [ ] SCENARIO-08: Reads and the MCP server are never blocked
+- [x] SCENARIO-01: A sync refuses while another sync or prune is running — `cmd/quarry/run_sync_lock_test.go` `Test_run_sync_refuses_while_another_writer_holds_the_lock`
+- [x] SCENARIO-02: A sync --from refuses while locked, before resolving the snapshot — delivered by SCENARIO-01, `cmd/quarry/run_sync_lock_test.go` `Test_run_sync_from_refuses_on_the_lock_before_resolving_the_snapshot`
+- [x] SCENARIO-05: A lock left by a finished or killed run does not block — delivered by SCENARIO-01, `cmd/quarry/run_sync_lock_test.go` `Test_run_sync_proceeds_past_a_lock_left_by_an_earlier_run`
+- [x] SCENARIO-08: Reads and the MCP server are never blocked — delivered by SCENARIO-01, `cmd/quarry/run_sync_lock_test.go` `Test_run_status_reports_while_a_sync_holds_the_lock`
 - [ ] SCENARIO-03: Prune refuses while locked and deletes nothing
 - [ ] SCENARIO-04: Prune --dry-run runs while a sync is running
 - [ ] SCENARIO-07: Usage and config errors come before the lock

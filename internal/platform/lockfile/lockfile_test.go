@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"testing"
 	"time"
@@ -19,8 +20,7 @@ import (
 const (
 	holderPathEnv  = "QUARRY_LOCKFILE_TEST_HOLD"
 	holderReadyMsg = "locked"
-	// refusalDeadline bounds how long a refused Acquire may take: a blocking
-	// flock never answers, so the test fails here instead of at the go test timeout.
+	// refusalDeadline bounds a refused Acquire, so a blocking flock fails an assertion, not the go test timeout.
 	refusalDeadline = 2 * time.Second
 )
 
@@ -36,10 +36,13 @@ func TestMain(m *testing.M) {
 	if path == "" {
 		os.Exit(m.Run())
 	}
-	_, err := lockfile.New(path, lockfile.ModeSync).Acquire(context.Background())
+	release, err := lockfile.New(path, lockfile.ModeSync).Acquire(context.Background())
 	if err != nil {
 		os.Exit(3)
 	}
+	defer release()
+	// A collected release drops the flock; collecting now makes that fail the kill test.
+	runtime.GC()
 	_, _ = os.Stdout.WriteString(holderReadyMsg + "\n")
 	select {}
 }
@@ -141,6 +144,33 @@ func Test_acquire_in_prune_mode_never_creates_the_quarry_folder(t *testing.T) {
 	assert.Equal(t, path, lockErr.Path)
 	assert.Nil(t, release)
 	assert.NoDirExists(t, filepath.Dir(path))
+}
+
+func Test_acquire_with_an_unknown_mode_never_creates_the_quarry_folder(t *testing.T) {
+	path := lockPath(t)
+
+	release, err := lockfile.New(path, lockfile.Mode(99)).Acquire(context.Background())
+
+	var lockErr *lockfile.Error
+	require.ErrorAs(t, err, &lockErr)
+	assert.Equal(t, lockfile.KindFolderMissing, lockErr.Kind)
+	assert.Nil(t, release)
+	assert.NoDirExists(t, filepath.Dir(path))
+}
+
+func Test_acquire_refuses_through_a_hard_link_to_the_held_lock_file(t *testing.T) {
+	path := lockPath(t)
+	release, err := lockfile.New(path, lockfile.ModeSync).Acquire(context.Background())
+	require.NoError(t, err)
+	t.Cleanup(release)
+	link := filepath.Join(filepath.Dir(path), "other-name.lock")
+	require.NoError(t, os.Link(path, link))
+
+	_, err = acquireNow(t, lockfile.New(link, lockfile.ModeSync))
+
+	var lockErr *lockfile.Error
+	require.ErrorAs(t, err, &lockErr)
+	assert.Equal(t, lockfile.KindHeld, lockErr.Kind)
 }
 
 func Test_acquire_in_prune_mode_takes_the_lock_when_the_folder_exists(t *testing.T) {

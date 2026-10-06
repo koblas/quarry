@@ -15,9 +15,9 @@ import (
 const lockHeldSyncRefusal = "another quarry sync or quarry snapshots prune is running, so this sync changed nothing; " +
 	"run the command again once that one finishes"
 
-// newLockedServer returns a Server wired to a real lockfile adapter in a fresh quarry folder.
 var errNoLocks = errors.New("no locks available")
 
+// newLockedServer returns a Server wired to a real lockfile adapter in a fresh quarry folder.
 func newLockedServer(t *testing.T, opts ...lockfile.Option) *snapshot.Server {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "quarry", "quarry.lock")
@@ -68,6 +68,19 @@ func Test_lock_for_sync_without_a_locker_is_a_no_op(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, release)
 	release()
+}
+
+func Test_lock_for_sync_returns_a_folder_missing_lock_error_unchanged(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "quarry", "quarry.lock")
+	srv := snapshot.NewServer(snapshot.WithLocker(lockfile.New(path, lockfile.ModePrune)))
+
+	release, err := srv.LockForSync(context.Background())
+
+	lockErr, ok := errors.AsType[*lockfile.Error](err)
+	require.True(t, ok, "want the *lockfile.Error as given, got %v", err)
+	assert.Equal(t, lockfile.KindFolderMissing, lockErr.Kind)
+	assert.NotErrorAs(t, err, new(snapshot.RefusalError))
+	assert.Nil(t, release)
 }
 
 func Test_lock_for_sync_returns_other_lock_errors_unchanged(t *testing.T) {

@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01
-status: open
+status: done
 ---
 
 # SCENARIO-01: A sync refuses while another sync or prune is running
@@ -29,10 +29,10 @@ User-visible contract (this scenario): `quarry sync [--json] [--quicken P | --fr
 - [x] Step 5: `internal/cli/sync.go:110-113` acquire right after `newServer`, before the `Changed("from")` branch, `defer` release so it drops when RunE returns; `cmd/quarry/run.go:26-34` port guard, `:64-75` `snapshot.WithLocker(lockfile.New(<storeDir>/quarry.lock, sync mode))`. Re-point `run_import_test.go:187-189` and `run_store_faults_test.go:163-165` to `{"quarry.duckdb","quarry.lock","snapshots"}`; `run_store_faults_test.go:76-82` pre-create `quarry.lock` 0600 before the chmod 0500 (expected "cannot write to" line unchanged). Tests in `run_sync_lock_test.go`: `Test_run_sync_refuses_on_the_lock_before_looking_for_the_quicken_file` (lock held, no bundle under `$HOME` → L1s; cells: malformed config while held → C1 exit 1; extra arg while held → usage exit 2); `Test_run_sync_releases_the_lock_when_it_returns` (`runWith` with `NewServer` wrapping `newServerFactory(fixedRates())` and appending `snapshot.WithLocker(<recording fake>)`; release called exactly once after return — cells: successful sync, refusal after the lock is taken (no bundle)); `Test_run_sync_proceeds_past_a_lock_left_by_an_earlier_run` (two `run()` syncs in one process, both exit 0 — the control arm for Step 1's negative assertions; plus a `quarry.lock` left by an acquire+release); `Test_run_sync_creates_the_quarry_folder_0700_and_its_lock_file_0600` (first-ever sync); `Test_run_status_reports_while_a_sync_holds_the_lock` (store built by a sync, lock held; table over `status`, `sql`, `snapshots` — each stdout equals its unlocked run's, exit 0; the `snapshots` cell guards 03's prune-mode wiring in the shared `newSnapshotsFactory`; MCP n/a: same `newReportFactory` as `status`, no lock call reachable)
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `lockfile` package/`Acquire`/`Error`/`Kind`, `Locker`, `WithLocker`, `LockForSync` (state: taken once per command, held until release; auto-prune never re-takes it). Do NOT touch sync Long or `doc.go` (SCENARIO-03/09)
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `lockfile` package/`Acquire`/`Error`/`Kind`, `Locker`, `WithLocker`, `LockForSync` (state: taken once per command, held until release; auto-prune never re-takes it). Do NOT touch sync Long or `doc.go` (SCENARIO-03/09)
 
 ### Verify
-- [ ] Step 7: `.claude/scripts/verify.sh <start> ./internal/platform/lockfile/... ./internal/snapshot/... ./internal/cli/... ./cmd/quarry/...` + `spec-check.py snapshot-safety` → tick SCENARIO-01 with its acceptance test, and 02/05/08 each "delivered by SCENARIO-01" with its folded test
+- [x] Step 7: `.claude/scripts/verify.sh <start> ./internal/platform/lockfile/... ./internal/snapshot/... ./internal/cli/... ./cmd/quarry/...` + `spec-check.py snapshot-safety` → tick SCENARIO-01 with its acceptance test, and 02/05/08 each "delivered by SCENARIO-01" with its folded test
 
 ## Handoff
 
@@ -61,11 +61,9 @@ User-visible contract (this scenario): `quarry sync [--json] [--quicken P | --fr
 
 ## Phase report
 
-Run B1 (steps 3-5) done; Acceptance and Build ticked. Narrow loop green, `golangci-lint run` over the four touched trees `0 issues`. Sweep (6) and Verify (7) untouched: V still owes `go build ./...`, full lint, doc-comment pass (`go doc` check), `verify.sh`, `spec-check.py`, ticks, STATE.md.
+Run V done; scenario complete (`status: done`). Steps 6-7 ticked, SCENARIO-01/02/05/08 ticked in `specification.md`, `spec-check.py --run snapshot-safety` OK, `STATE.md` written, `verify.sh` all rc=0.
 
-Files: `internal/platform/lockfile/lockfile.go` (Acquire/ensureFolder/lock, `Error.Error`; stdlib `syscall.Flock` via injectable `WithFlock`; `openFlags` O_RDONLY|O_CREATE|O_NOFOLLOW|O_NONBLOCK 0600; release = `sync.Once` close, closure keeps the file referenced) and `lockfile_test.go` (11 tests + kill -9 child via `TestMain` re-exec); `internal/snapshot/lock.go` (`LockForSync`, held to L1s `RefusalError`, other errors returned unchanged under a `wrapcheck` nolint) and `lock_test.go`; `internal/cli/sync.go:111-115` (acquire after `newServer`, before `home`/`Changed("from")`, `defer release()`); `cmd/quarry/run.go` (`lockPathUnder`, `WithLocker(lockfile.New(.., ModeSync))` in `newServerFactory`, port guard); `cmd/quarry/run_sync_lock_test.go` (+5 tests, `recordingLocker`); `run_import_test.go:189` and `run_store_faults_test.go:166` re-pointed to `{"quarry.duckdb","quarry.lock","snapshots"}`, `:76-82` pre-creates `quarry.lock`.
+Checkpoint folds applied: `lockfile_test.go` kill-test child keeps its release (`defer release()` plus `runtime.GC()`); new `Test_acquire_with_an_unknown_mode_never_creates_the_quarry_folder` and `Test_acquire_refuses_through_a_hard_link_to_the_held_lock_file`; `refusalDeadline` comment 1 line; `lockfile.go:86-89` `Acquire` doc 4 lines; `lock_test.go` new `Test_lock_for_sync_returns_a_folder_missing_lock_error_unchanged`, `newLockedServer` comment moved above its func.
 
-Deviations: release is a bare `func()` (Run A deviation kept). `Acquire` uses `f.Fd()` not `SyscallConn().Control` (no unreachable error branches). Prune mode checks the folder with `os.Stat` before open. Green on arrival (control arms, stub already matched): `Test_acquire_after_release_succeeds`, `Test_lock_for_sync_without_a_locker_is_a_no_op`, `Test_run_sync_proceeds_past_a_lock_left_by_an_earlier_run`, `Test_run_status_reports_while_a_sync_holds_the_lock`. Not built, per plan: `LockForPrune`, extra `lockfile` kinds (06).
-
-Do not undo: mutation-verified (reds quoted in the B1 report). Mutations 4/5 also redden `Test_run_lists_mismatched_splits_in_the_failed_validation_stdout_block` only because the moved block's `release, err :=` shadows `err` in the else branch; that is a mutation artifact, not a lock pin.
+Do not undo: the child's `runtime.GC()` is what makes a dropped release fail the kill test. Mutations 4/5 of the B1 run also redden `Test_run_lists_mismatched_splits_in_the_failed_validation_stdout_block` only because the moved block's `release, err :=` shadows `err`; a mutation artifact, not a lock pin.
 
