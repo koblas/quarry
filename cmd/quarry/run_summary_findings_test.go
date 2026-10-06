@@ -69,11 +69,11 @@ func Test_run_summary_with_a_currency_warns_once_and_counts_every_finding_open_f
 			c.setup(t, home)
 			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), []string{"summary", "--currency", "USD"}, spendEnvAt(&stdout, &stderr, summaryClock))
+			exitCode := runWith(context.Background(), []string{"summary", "--currency", "CAD"}, spendEnvAt(&stdout, &stderr, summaryClock))
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Equal(t, "quarry: warning: "+statusIgnoreWarningLead+c.problem+statusIgnoreWarningTail+"\n", stderr.String())
-			assert.True(t, strings.HasPrefix(stdout.String(), "Summary of September 2026 (2026-09-01 to 2026-09-30), amounts in USD\n"), stdout.String())
+			assert.True(t, strings.HasPrefix(stdout.String(), "Summary of September 2026 (2026-09-01 to 2026-09-30), amounts in CAD\n"), stdout.String())
 			assert.Contains(t, stdout.String(), "\nFindings  2 open; the last sync found 1 new and 1 fixed; run quarry findings to list them\n")
 		})
 	}

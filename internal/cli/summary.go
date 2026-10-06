@@ -101,7 +101,7 @@ together.`,
 			if choices.cannotTell != "" {
 				printConfigWarnings(cmd, []string{choices.cannotTell})
 			}
-			own := document.SummaryWarnings(summary, summaryAgain(resolved, named))
+			own := document.SummaryWarnings(summary, summaryAgain(resolved, named), document.NativeFlag)
 			return emitReport(cmd, *jsonOut, own,
 				func() ([]byte, error) {
 					return renderSummaryJSON(summary, findings, withConfigWarnings(choices.configWarningsAbsolute(), own))

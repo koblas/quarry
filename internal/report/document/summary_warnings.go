@@ -2,6 +2,7 @@ package document
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/koblas/quarry/internal/report"
 )
@@ -9,14 +10,30 @@ import (
 // snapshotTakenLayout is the format of the moment a snapshot was taken.
 const snapshotTakenLayout = "2006-01-02 15:04 MST"
 
-// SummaryWarnings is the summary's own warnings, never nil: the snapshot warning when it has one. Text stderr
-// and --json read this one list, so the two formats cannot disagree; again is as for SnapshotWarning.
-func SummaryWarnings(s report.Summary, again string) []string {
-	warnings := []string{}
+// SummaryWarnings is the summary's own warnings, never nil: the snapshot warning, then the unconverted-charge
+// note, the unconverted-series note and the net-worth rate note, each only when it applies and none twice.
+// The empty-window and left-out lines of the standalone reports are not part of it. Text stderr and --json
+// read this one list, so the two formats cannot disagree; again is as for SnapshotWarning, advice as for NetWorthWarnings.
+func SummaryWarnings(s report.Summary, again string, advice NativeAdvice) []string {
+	var warnings []string
 	if warning := SnapshotWarning(s, again); warning != "" {
 		warnings = append(warnings, warning)
 	}
-	return warnings
+	warnings = append(warnings, unconvertedWarnings(s.Anomalies.Currency, s.Anomalies.Unconverted, chargesNoun)...)
+	warnings = append(warnings, unconvertedWarnings(s.Recurring.Currency, s.Recurring.Unconverted, seriesNoun)...)
+	warnings = append(warnings, rateWarnings(s.NetWorth, advice)...)
+	return withoutRepeats(warnings)
+}
+
+// withoutRepeats is warnings with each line kept at its first place only, never nil.
+func withoutRepeats(warnings []string) []string {
+	unique := make([]string, 0, len(warnings))
+	for _, warning := range warnings {
+		if !slices.Contains(unique, warning) {
+			unique = append(unique, warning)
+		}
+	}
+	return unique
 }
 
 // SnapshotWarning says why s may be missing part of its month: "" when the snapshot covers the month, else

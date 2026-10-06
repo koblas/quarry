@@ -408,7 +408,7 @@ func Test_SummaryWarnings_lists_the_snapshot_warning_for_a_snapshot_that_misses_
 		t.Run(c.name, func(t *testing.T) {
 			summary := summaryOf(civil(2026, time.September, 1), easternDaylight, taken, c.coverage)
 
-			assert.Equal(t, c.want, document.SummaryWarnings(summary, "run quarry summary again"))
+			assert.Equal(t, c.want, document.SummaryWarnings(summary, "run quarry summary again", document.NativeFlag))
 		})
 	}
 }
