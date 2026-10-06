@@ -100,7 +100,7 @@ func Test_summary_resumption_arms(t *testing.T) {
 	}
 }
 
-func Test_summary_resumption_skips_off_schedule_charges(t *testing.T) {
+func Test_summary_resumption_with_off_schedule_and_same_day_charges(t *testing.T) {
 	const earlierEnd = "2026-01-10"
 	onDay := func(offset int) string { return dateOf(t, earlierEnd).AddDate(0, 0, offset).Format(time.DateOnly) }
 	cases := []struct {

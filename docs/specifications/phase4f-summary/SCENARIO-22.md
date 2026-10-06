@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-22
-status: open
+status: done
 ---
 
 # SCENARIO-22: A subscription never listed before is new when it first lists
@@ -28,10 +28,10 @@ Premise check: `earlierRun`/`resumes` exist (`summary_recurring.go:26-41`); `res
   - End of step, once: narrow loop green, then `go test ./cmd/quarry/ -run 'run_summary|run_mcp_summary'`, `go test ./internal/cli/ -run summary`, `go test ./internal/mcp/ -run 'summary|Summary'`.
 
 ### Sweep
-- [ ] Step 3: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/report` unchanged (nothing exported).
+- [x] Step 3: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/report` unchanged (nothing exported).
 
 ### Verify
-- [ ] Step 4: `.claude/scripts/verify.sh <start> ./internal/report/...`; `spec-check.py phase4f-summary`; tick SCENARIO-22 in `specification.md:529` (test last on the line); rewrite STATE.md (decision at `:10` gains the U18 condition; add the same-day trap below); `status: done`.
+- [x] Step 4: `.claude/scripts/verify.sh <start> ./internal/report/...`; `spec-check.py phase4f-summary`; tick SCENARIO-22 in `specification.md:529` (test last on the line); rewrite STATE.md (decision at `:10` gains the U18 condition; add the same-day trap below); `status: done`.
 
 ## Handoff
 
@@ -47,10 +47,10 @@ Premise check: `earlierRun`/`resumes` exist (`summary_recurring.go:26-41`); `res
 
 ## Phase report
 
-Run A+B1 (steps 1-2) done; V (steps 3-4) remains.
+Run A+B1 (steps 1-2) and V (steps 3-4) done.
 
 - `internal/report/summary_recurring_test.go:16-21,126-138` `afterAugust` + acceptance test. Red at its first assertion (`expected: []string{"Gym"} actual: []string{}`); its `2025-08` empty and `recurringAt` Gym assertions were green on arrival.
-- `internal/report/summary_recurring_arms_test.go` `Test_summary_resumption_skips_off_schedule_charges`: new `runCharges` column (0 = 3), 4 new rows. Red before the fix: `same-day duplicate on the earlier run's last day, run starts 40 days after` and `duplicate is the run's first charge`; `no duplicate, run starts 40 days after` and `duplicate earlier in the earlier run, run starts 40 days after` green on arrival (controls). Test name kept.
+- `internal/report/summary_recurring_arms_test.go` `Test_summary_resumption_skips_off_schedule_charges`: new `runCharges` column (0 = 3), 4 new rows. Red before the fix: `same-day duplicate on the earlier run's last day, run starts 40 days after` and `duplicate is the run's first charge`; `no duplicate, run starts 40 days after` and `duplicate earlier in the earlier run, run starts 40 days after` green on arrival (controls). Renamed in V to `Test_summary_resumption_with_off_schedule_and_same_day_charges`.
 - `internal/report/summary_recurring.go:26-43` `resumes` gains `listableAt(group, last)` (sort.Search prefix through the earlier last charge's day, then `latestRun` ok).
 - Mutations (a)-(e) all redden the planned rows (see report). Narrow loops green: report, cmd/quarry `run_summary|run_mcp_summary`, cli `summary`, mcp `summary|Summary`.
-- Not done (V): lint sweep, `verify.sh`, spec tick, STATE.md, `status: done`.
+- V: test renamed `Test_summary_resumption_with_off_schedule_and_same_day_charges`; lint 0 issues; `verify.sh` all rc=0, internal/report 710 (+1); spec ticked, `spec-check` OK; STATE.md rewritten.
