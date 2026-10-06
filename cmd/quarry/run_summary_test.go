@@ -21,6 +21,8 @@ var summaryTakenAt = time.Date(2026, time.October, 1, 13, 5, 12, 0, time.UTC)
 // summaryClock is the instant the summary tests run at: October 6, so the default month is September.
 var summaryClock = time.Date(2026, time.October, 6, 12, 0, 0, 0, time.UTC)
 
+var errSummaryBuiltSyncServer = errors.New("summary must not build a sync server")
+
 // summaryCardAccount is an active CAD credit card named "Card".
 func summaryCardAccount(id string, sourceID int64) store.Account {
 	return store.Account{ID: id, SourceID: sourceID, Name: "Card", Type: "credit_card", Currency: "CAD", Active: true}
@@ -90,7 +92,7 @@ func Test_run_summary_prints_last_months_summary(t *testing.T) {
 	env := spendEnvAt(&stdout, &stderr, summaryClock)
 	env.NewServer = func(context.Context, ...snapshot.Option) (*snapshot.Server, error) {
 		t.Error("summary resolved a Quicken path")
-		return nil, errors.New("summary must not build a sync server")
+		return nil, errSummaryBuiltSyncServer
 	}
 
 	exitCode := runWith(context.Background(), []string{"summary"}, env)

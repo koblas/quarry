@@ -1,0 +1,72 @@
+package cli
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/koblas/quarry/internal/platform/humanize"
+	"github.com/koblas/quarry/internal/platform/money"
+	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/report/document"
+)
+
+// summaryRecurringTitle is the first words of the recurring section's caption.
+const summaryRecurringTitle = "Recurring charges new"
+
+// renderSummary renders s as the summary text: heading, the Snapshot, Dates and Findings rows, then the
+// anomalies, recurring and net worth sections, one blank line between parts and one newline at the end.
+func renderSummary(s report.Summary, findings document.FindingsTally, now time.Time) string {
+	var b strings.Builder
+	b.WriteString(summaryHeading(s) + "\n\n")
+	fmt.Fprintf(&b, "%-10s%s\n", "Snapshot", snapshotLine(s.Status.Run.Snapshot, now))
+	fmt.Fprintf(&b, "%-10s%s\n", "Dates", datesLine(s.Status.FirstDate, s.Status.LastDate))
+	fmt.Fprintf(&b, "%-10s%s\n\n", "Findings", summaryFindingsPhrase(findings))
+	b.WriteString(renderAnomalies(s.Anomalies) + "\n")
+	b.WriteString(renderRecurringTitled(summaryRecurringTitle, s.Recurring) + "\n")
+	b.WriteString(renderNetWorthHistory(s.NetWorth))
+	return b.String()
+}
+
+// summaryHeading is the month's name and first and last day, then the currency of the amounts unless native.
+func summaryHeading(s report.Summary) string {
+	heading := "Summary of " + s.Month.Name() +
+		" (" + s.Month.Start.Format(time.DateOnly) + " to " + s.Month.End.Format(time.DateOnly) + ")"
+	if s.Currency != money.Native {
+		heading += ", amounts in " + s.Currency.String()
+	}
+	return heading
+}
+
+// summaryFindingsPhrase is the Findings row text: the open count, the ignored one when findings.ignore was
+// read, what the last sync found new and fixed, and, while any finding is open, where to list them.
+func summaryFindingsPhrase(f document.FindingsTally) string {
+	c := f.Counts
+	phrase := "none open"
+	if c.Open > 0 {
+		phrase = humanize.Thousands(c.Open) + " open"
+	}
+	if f.IgnoreKnown && c.Ignored > 0 {
+		phrase += ", " + humanize.Thousands(c.Ignored) + " ignored"
+	}
+	phrase += lastSyncClause(c.New, c.NewlyFixed)
+	if c.Open > 0 {
+		phrase += "; run quarry findings to list them"
+	}
+	return phrase
+}
+
+// lastSyncClause is "; the last sync found <a> new and <b> fixed", with only the nonzero count when one is
+// zero and nothing when both are.
+func lastSyncClause(added, fixed int) string {
+	switch {
+	case added > 0 && fixed > 0:
+		return "; the last sync found " + humanize.Thousands(added) + " new and " + humanize.Thousands(fixed) + " fixed"
+	case added > 0:
+		return "; the last sync found " + humanize.Thousands(added) + " new"
+	case fixed > 0:
+		return "; the last sync found " + humanize.Thousands(fixed) + " fixed"
+	default:
+		return ""
+	}
+}

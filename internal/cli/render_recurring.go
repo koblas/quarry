@@ -71,6 +71,11 @@ func signedTenths(tenths int64) string {
 // renderRecurring renders r as the recurring table: caption, header, one row per series and a Total
 // row per currency whose only filled cell is Per year.
 func renderRecurring(r report.Recurring) string {
+	return renderRecurringTitled("Recurring charges", r)
+}
+
+// renderRecurringTitled is renderRecurring with title as the first words of the caption.
+func renderRecurringTitled(title string, r report.Recurring) string {
 	rows := make([][]string, 0, 1+len(r.Series)+len(r.Totals))
 	rows = append(rows, []string{"Payee", "Currency", "Every", "Amount", "Per year", "First", "Last", "Status", "Price changes"})
 	for _, s := range r.Series {
@@ -86,5 +91,5 @@ func renderRecurring(r report.Recurring) string {
 	for _, t := range r.Totals {
 		rows = append(rows, []string{tableTotalLabel, t.Currency, "", "", formatMoney(t.PerYear), "", "", "", ""})
 	}
-	return renderTable(windowCaption("Recurring charges", r.Window, r.Accounts, r.Currency), recurringAligns, rows)
+	return renderTable(windowCaption(title, r.Window, r.Accounts, r.Currency), recurringAligns, rows)
 }
