@@ -56,3 +56,9 @@ Surface survey (what `Acquire` calls on the OS; none goes behind a port, `snapsh
 - Mode rows (0000, 0500) need `skipAsRoot`; a 0500 folder needs a `t.Cleanup` chmod to 0700 or `t.TempDir` removal fails
 - `osreason.Reason(nil)` panics; flock errors are bare `syscall.Errno`, not `*fs.PathError`, so Reason returns `err.Error()` ("operation not supported", "no locks available")
 - Existing tests asserting "unclassified" (`lockfile_test.go:191-233,275`, `lock_test.go:106-114,156-178`) must be re-pointed, not deleted
+
+## Orchestrator rulings (2026-10-06)
+
+1. O_NONBLOCK double mutation accepted as planned; report that no filesystem state reddens O_NONBLOCK alone.
+2. Prune-mode quarry-folder stat faults (ENOTDIR, EACCES) surface as the ruled L4b line via Lstat — no new copy (near-impossible states: quarry folder replaced by a file or unsearchable). Pin one row. Recorded for the final product-vision pass to judge the L4b fix text there.
+3. No post-open fstat; Lstat-to-OpenFile race accepted (BR-L5 literal), stays in Left unbuilt.
