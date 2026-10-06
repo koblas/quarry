@@ -21,8 +21,9 @@ func Test_notices_and_prd_carry_the_ruled_plugin_edits(t *testing.T) {
 		{
 			"prd lists the shipped references and defers the Phase 4 ones",
 			"docs/initial-prd.md",
-			"`spending.md`, `cash-flow.md`, `recurring-and-anomalies.md`, `search.md` and `findings.md` " +
-				"(walking David through the findings worklist), with `.sql` recipes where no command answers " +
+			"`spending.md`, `cash-flow.md`, `recurring-and-anomalies.md`, `search.md`, `findings.md` " +
+				"(walking David through the findings worklist) and `monthly-summary.md` (the launchd job " +
+				"that runs sync and summary each month), with `.sql` recipes where no command answers " +
 				"the question; `net-worth.md` and `investments.md` arrive with Phase 4.",
 		},
 		{

@@ -52,7 +52,7 @@ Scenarios complete: SCENARIO-01a (folds 02, 19, 03, 20, 04), SCENARIO-01b (folds
 - `fakeStore` and `stallingStore` embed a nil `report.Store`: a tool whose port method is not overridden panics every test touching it (SCENARIO-16)
 
 ## Open debts
-- Pre-existing, out of scope: the stale prose reference list at `docs/initial-prd.md:219` and `cmd/quarry/run_plugin_notices_test.go:24` omits `monthly-summary.md` and still says net-worth/investments arrive with Phase 4 (SCENARIO-17)
+- Pre-existing, out of scope: `docs/initial-prd.md:219` and `cmd/quarry/run_plugin_notices_test.go:24` still say net-worth/investments arrive with Phase 4; the `monthly-summary.md` omission is fixed (SCENARIO-17)
 - NIT: `cmd/quarry/run_config_test.go:238` `readCommandArgs` lacks `summary`, so the masked-list and acb-adjustment config refusals are unpinned for summary (SCENARIO-12)
 - No other checkpoint MINOR/NIT left unfolded
 - Gate 01 MINOR: `internal/report/month.go:60` `MonthError.Error()` carries CLI vocabulary (`--month`, "summary") that mcp rewords via `monthWording`; split the CLI line from the error text
