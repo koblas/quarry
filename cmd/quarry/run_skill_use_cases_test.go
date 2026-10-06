@@ -103,6 +103,14 @@ func skillUseCases() []skillUseCase {
 			},
 		},
 		{
+			name: "what happened last month", question: "What happened last month; a monthly summary",
+			argv: []string{"summary", "--json"},
+			answer: func(t *testing.T, stdout []byte) {
+				t.Helper()
+				assert.Equal(t, "2026-08", decodeDoc[document.Summary](t, stdout).Month)
+			},
+		},
+		{
 			name: "duplicates and uncategorized items", question: "What to clean up in Quicken",
 			argv: []string{"findings", "--json"},
 			answer: func(t *testing.T, stdout []byte) {

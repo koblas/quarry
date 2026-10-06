@@ -338,6 +338,7 @@ The main risk is Quicken's undocumented schema; reconciliation on every sync is 
 - Exit codes: `0` success (warnings included), `1` failure, `2` usage error, for every command.
 - Feedback: findings go back into Quicken as a cleanup worklist so later snapshots and exports are clean.
 - Command names: the worklist is `quarry findings`, snapshot housekeeping is `quarry snapshots` / `quarry snapshots prune`; no command is called `cleanup`, since it reads as either.
+- Monthly summary: quarry summary reads the store only; "last month" is the calendar month before today in local time; a recurring charge is new in the first month quarry recurring can list it, unless it starts again after an off-schedule charge before its earlier series had ended; recurring is judged as of the month's last day; the job is quarry sync; quarry summary from launchd; no stored state.
 - Snapshot retention: a count cap (`snapshots.keep`, default 12), applied after every successful sync and by `snapshots prune`; the store's own snapshot is always kept. No size or age caps in v1.
 - Redaction: only account numbers held in `quarry`'s config are masked (last four digits). Free text is passed through as Quicken holds it, since institutions and Quicken already mask card and account numbers there.
 - Dashboards: out of scope for v1.

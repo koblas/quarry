@@ -43,3 +43,26 @@ func Test_monthly_summary_job_is_documented_where_a_reader_looks(t *testing.T) {
 	assert.Less(t, section, credits)
 	assert.Contains(t, prd, "\n"+monthlySummaryDecision+"\n")
 }
+
+func Test_readme_monthly_summary_section_is_verbatim_between_claude_code_and_credits(t *testing.T) {
+	readme := repoFile(t, "README.md")
+	start := strings.Index(readme, "\n"+monthlySummaryHeading+"\n")
+	require.GreaterOrEqual(t, start, 0, "README.md must carry the monthly summary section")
+	rest := readme[start+1:]
+	end := strings.Index(rest, "\n## ")
+	require.GreaterOrEqual(t, end, 0, "a section must follow the monthly summary section")
+
+	section := strings.TrimRight(rest[:end], "\n")
+
+	assert.Equal(t, ticks(readmeMonthlySummarySection), section)
+	assert.Equal(t, "\n"+readmeCreditsHeading, rest[end:end+len("\n"+readmeCreditsHeading)])
+	assert.Less(t, strings.Index(readme, readmeClaudeCodeHeading), start)
+	assert.True(t, repoFileExists(monthlySummaryRef), "the README link must resolve")
+}
+
+// Ruled copy: the README section, byte for byte.
+//
+//nolint:lll // ruled copy is pinned byte-equal, so its lines cannot wrap
+const readmeMonthlySummarySection = `## Run a monthly summary
+
+¤quarry summary¤ prints last month's unusual charges, new recurring charges, net worth change and findings. To get it every month, follow [plugin/skills/quarry/references/monthly-summary.md](plugin/skills/quarry/references/monthly-summary.md).`

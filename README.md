@@ -24,6 +24,10 @@ quarry's only network request is the exchange-rate fetch during `quarry sync`, w
 
 To update the plugin: `claude plugin marketplace update quarry`. Update the quarry binary at the same time; if Claude reports that quarry is older than the skill, update quarry.
 
+## Run a monthly summary
+
+`quarry summary` prints last month's unusual charges, new recurring charges, net worth change and findings. To get it every month, follow [plugin/skills/quarry/references/monthly-summary.md](plugin/skills/quarry/references/monthly-summary.md).
+
 ## Credits
 
 `quarry` builds on the schema knowledge and SQL of two MIT-licensed projects, [dweekly/quicken-mac-mcp](https://github.com/dweekly/quicken-mac-mcp) and [hardkoded/quicken-skills](https://github.com/hardkoded/quicken-skills). Frozen copies live in `docs/prior-art/`; license text is in `THIRD_PARTY_NOTICES`.
