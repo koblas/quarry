@@ -45,7 +45,7 @@ Scoping pass: **SHIP WITH CHANGES**, accepted — the changes are the rulings be
 **A. Lock**
 - **BR-L1 (one writer).** At most one quarry command that changes quarry's files runs at a time: `quarry sync` (fresh and `--from`, including its auto-prune) and `quarry snapshots prune` without `--dry-run`. Everything else never opens the lock — `status`, `accounts`, reports, `sql`, `findings`, `snapshots`, `prune --dry-run`, `mcp`. A running MCP server never blocks a sync.
 - **BR-L2 (no waiting).** A held lock refuses at once, exit 1. No wait, retry or timeout config.
-- **BR-L3 (before any write).** The lock is taken after usage checks and config loading and before anything reads Quicken or a snapshot or writes a file: before bundle resolution and `--from` resolution, so before `Destination.Prepare` (internal/snapshot/destination.go:45-51, mkdir + leftover sweep) and `Replace` (duckstore.go:330-333); for prune before `planPrune` (prune.go:69) and `sweepOrphans` (prune.go:137). This ordering makes "changed nothing"/"deleted nothing" true; cite these lines beside those strings. Refusal order: usage (2) → config (1) → lock (1) → everything else.
+- **BR-L3 (before any write).** The lock is taken after usage checks and config loading and before anything reads Quicken or a snapshot or writes a file: before bundle resolution and `--from` resolution, so before `Destination.Prepare` (internal/snapshot/destination.go:45-51, mkdir + leftover sweep) and `Replace` (duckstore.go:330-333); for prune before `planPrune` (prune.go:69) and `sweepOrphans` (prune.go:137). This ordering makes "changed nothing"/"deleted nothing" true; cite these lines beside those strings. Refusal order: usage (2) → config (1) → lock (1) → everything else. "Changed nothing" means the store and the snapshots: creating an empty quarry folder (0700) and `quarry.lock` (0600) on a first-ever sync does not count (BR-L5) — final product-vision pass, 2026-10-07.
 - **BR-L4 (mechanism).** OS advisory `flock(LOCK_EX|LOCK_NB)` (not fcntl — flock is per open file description, so an in-process acceptance test can hold it through a second open). Kernel releases it on exit, so kill -9 leaves no stale lock. Taken once per command, held to exit; auto-prune runs under sync's lock and never re-takes it.
 - **BR-L5 (the file).** `~/Library/Application Support/quarry/quarry.lock`, beside `quarry.duckdb`; created 0600, empty, never written, never deleted (leaving it is accepted). Opened for reading is enough, so a read-only lock file locks fine. Must be a regular file, checked with `Lstat` (symlink refused). sync creates the quarry folder 0700 if missing (as destination.go:46 / duckstore.go:331 do). **prune never creates the quarry folder**: folder missing → no lock, existing no-snapshots line.
 - **BR-L6 (closes debts).** phase2c STATE.md:79-80 close at SHIP. phase2c spec :9 superseded. phase0 BR-14 (phase0-snapshot/specification.md:34) and row :286 superseded: a second sync now refuses on the lock. Exclusive-create naming and the 1-hour age-gated sweep stay as defence in depth.
@@ -74,12 +74,14 @@ Paths `~`-abbreviated on stderr, absolute in `--json` and `warnings[]` (2a rule)
 |---|---|---|---|---|
 | L1s | lock held by another sync or prune | `sync`, `sync --from` | `quarry: another quarry sync or quarry snapshots prune is running, so this sync changed nothing; run the command again once that one finishes` | 1 |
 | L1p | lock held | `snapshots prune` | `quarry: another quarry sync or quarry snapshots prune is running, so this prune deleted nothing; run the command again once that one finishes` | 1 |
-| L2 | quarry folder missing and cannot be created | `sync` only | `quarry: cannot create ~/Library/Application Support/quarry: <OS reason per G1>; make ~/Library/Application Support writable by your user, then run the command again` | 1 |
+| L2 | quarry folder missing and cannot be created (not when the path exists as a non-folder — that is L6) | `sync` only | `quarry: cannot create ~/Library/Application Support/quarry: <OS reason per G1>; make ~/Library/Application Support writable by your user, then run the command again` | 1 |
 | L3 | `quarry.lock` exists and is not a regular file (directory, symlink, fifo, socket; Lstat) | both | `quarry: ~/Library/Application Support/quarry/quarry.lock is not a regular file; remove it, then run the command again` | 1 |
 | L4a | `quarry.lock` missing and cannot be created | both | `quarry: cannot create ~/Library/Application Support/quarry/quarry.lock: <OS reason per G1>; make ~/Library/Application Support/quarry writable by your user, then run the command again` | 1 |
-| L4b | `quarry.lock` exists and cannot be opened | both | `quarry: cannot open ~/Library/Application Support/quarry/quarry.lock: <OS reason per G1>; make it readable by your user, or remove it, then run the command again` | 1 |
+| L4b | `quarry.lock` exists (Lstat saw it) and the open then fails | both | `quarry: cannot open ~/Library/Application Support/quarry/quarry.lock: <OS reason per G1>; make it readable by your user, or remove it, then run the command again` | 1 |
 | L5s | flock fails other than would-block (ENOTSUP, ENOLCK) | `sync` | `quarry: cannot lock ~/Library/Application Support/quarry/quarry.lock: <OS reason per G1>, so this sync changed nothing; ~/Library/Application Support/quarry must be on a disk that supports file locks` | 1 |
 | L5p | same | `prune` | `quarry: cannot lock ~/Library/Application Support/quarry/quarry.lock: <OS reason per G1>, so this prune deleted nothing; ~/Library/Application Support/quarry must be on a disk that supports file locks` | 1 |
+| L6 | `~/Library/Application Support/quarry` exists and is not a folder (sync: MkdirAll fails and Lstat(dir) shows a non-folder; prune: Stat(dir) succeeds on a non-folder; Lstat of the lock returns ENOTDIR) | both | `quarry: ~/Library/Application Support/quarry is not a folder; rename or remove it, then run the command again` | 1 |
+| L7 | the quarry folder is a folder but `quarry.lock` cannot be looked up in it (Lstat fails other than not-exist and ENOTDIR: EACCES, ELOOP) | both | `quarry: cannot open ~/Library/Application Support/quarry: <OS reason per G1>; make it readable and writable by your user, then run the command again` | 1 |
 
 One shared lock-held line per command; it does not name the holder (no pid in the file).
 
@@ -108,6 +110,7 @@ runs even while a sync is running.
   - Manifest variants: same line with `.json` names.
   - `warnings[]`: same text without `quarry: warning: `, folder absolute.
   - Order: config warnings, no-snapshots note, D1 lines, store warning. Prune and auto-prune stay silent about strays.
+  - A non-regular manifest that wins while regular manifest variants exist gets no manifest D1 line (guard `slices.Contains(s.manifestNames, s.manifest)`, list.go) — nothing is deleted and the state is hand-made (final pass, 2026-10-07).
 
 ### Unreadable recorded path
 - **prune** (count > N, real or `--dry-run`): existing cannot-tell refusal (prune.go:183-186) with the phase2c :90 reason:
@@ -133,6 +136,8 @@ runs even while a sync is running.
 | `quarry.lock` mode 0400 | locks fine | 0 |
 | `quarry.lock` mode 0000 | L4b | 1 |
 | quarry folder read-only, no `quarry.lock` | L4a | 1 |
+| quarry folder path is a file | L6 (sync and prune) | 1 |
+| quarry folder mode 0600 (not searchable) | L7 `permission denied` (sync and prune) | 1 |
 | prune, quarry folder missing | `Nothing to delete: no snapshots in ~/Library/Application Support/quarry/snapshots`; creates nothing | 0 |
 | first-ever sync, folder missing | folder 0700, `quarry.lock` 0600, proceeds | 0 |
 | status/sql/reports/MCP while a sync runs | unaffected | as today |
@@ -341,3 +346,9 @@ Order: 01 → 03 → 06 → 14 → 10 → 12a → 12b → 13 (lock first; 14 mak
 - [x] SCENARIO-12a: sync --from <id> resolves an .SQLITE snapshot — `cmd/quarry/run_from_case_test.go` `Test_run_sync_from_an_id_rebuilds_the_store_from_an_upper_case_sqlite_snapshot`
 - [x] SCENARIO-12b: Status names a store built from an .SQLITE snapshot by its id — `cmd/quarry/run_status_case_test.go` `Test_run_status_names_a_store_built_from_an_upper_case_sqlite_snapshot_by_its_id`
 - [x] SCENARIO-13: Two letter cases of one id: one is listed, the user is warned — `cmd/quarry/run_snapshots_two_case_test.go` `Test_run_snapshots_lists_one_of_two_letter_cases_and_warns_naming_both`
+
+
+## Follow-ups ruled at the final pass (2026-10-07; not built here)
+
+- **cwd cannot be searched (required follow-up spec):** any DuckDB open from an unsearchable cwd aborts the process (SIGABRT, exit 134), breaking the 0/1/2 exit contract; intended behaviour: quarry refuses with exit 1 before opening DuckDB. Pre-existing.
+- **`sync --quicken <relative>`** (internal/snapshot/bundle.go:98-101, false `// unreachable:` on darwin): `quarry: cannot resolve <value as given> against the current folder: <OS reason per G1>; run quarry from a folder you can open`, exit 1, `causedRefusalError`, mirroring F7. Fold into the cwd follow-up.
