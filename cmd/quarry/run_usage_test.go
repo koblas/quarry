@@ -209,6 +209,21 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 			wantStderr: "quarry: mcp takes no arguments\n",
 		},
 		{
+			name:       "claude install with a positional argument",
+			args:       []string{"claude", "install", "extra"},
+			wantStderr: claudeInstallArgs,
+		},
+		{
+			name:       "claude uninstall with a positional argument",
+			args:       []string{"claude", "uninstall", "extra"},
+			wantStderr: claudeUninstallArgs,
+		},
+		{
+			name:       "claude with an unknown subcommand",
+			args:       []string{"claude", "bogus"},
+			wantStderr: "quarry: unknown command \"bogus\" for \"quarry claude\"; Run 'quarry claude --help' for usage.\n",
+		},
+		{
 			name:       "unknown command",
 			args:       []string{"frob"},
 			wantStderr: "quarry: unknown command \"frob\" for \"quarry\"; Run 'quarry --help' for usage.\n",
@@ -309,6 +324,14 @@ func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
 			wantStderr: "quarry: unknown flag: --bogus; Run 'quarry snapshots --help' for usage.\n",
 		},
 		{name: "mcp", args: []string{"mcp", "--bogus"}, wantStderr: "quarry: unknown flag: --bogus; Run 'quarry mcp --help' for usage.\n"},
+		{
+			name: "claude install", args: []string{"claude", "install", "--bogus"},
+			wantStderr: "quarry: unknown flag: --bogus; Run 'quarry claude install --help' for usage.\n",
+		},
+		{
+			name: "claude uninstall", args: []string{"claude", "uninstall", "--bogus"},
+			wantStderr: "quarry: unknown flag: --bogus; Run 'quarry claude uninstall --help' for usage.\n",
+		},
 		{name: "root", args: []string{"spending"}, wantStderr: "quarry: unknown command \"spending\" for \"quarry\"; Run 'quarry --help' for usage.\n"},
 	}
 
@@ -358,6 +381,26 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 			assert.Empty(t, stderr.String())
 		})
 	}
+
+	t.Run("claude install help", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+
+		exitCode := run(context.Background(), []string{"claude", "install", "--help"}, &stdout, &stderr)
+
+		assert.Equal(t, 0, exitCode)
+		assert.NotEmpty(t, stdout.String())
+		assert.Empty(t, stderr.String())
+	})
+
+	t.Run("claude uninstall help", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+
+		exitCode := run(context.Background(), []string{"claude", "uninstall", "--help"}, &stdout, &stderr)
+
+		assert.Equal(t, 0, exitCode)
+		assert.NotEmpty(t, stdout.String())
+		assert.Empty(t, stderr.String())
+	})
 
 	t.Run("unknown command is still a usage error, not the home-directory refusal", func(t *testing.T) {
 		exitCode, stdout, stderr := runCapture(context.Background(), []string{"frob"})
@@ -421,7 +464,12 @@ func runCaptureWithStdin(args []string, stdin string) (int, *bytes.Buffer, *byte
 	return runWith(context.Background(), args, env), &stdout, &stderr
 }
 
-const badCurrencyFlag = "quarry: --currency must be CAD, USD or native\n"
+const (
+	badCurrencyFlag   = "quarry: --currency must be CAD, USD or native\n"
+	claudeInstallArgs = "quarry: install takes no arguments; Run 'quarry claude install --help' for usage.\n"
+
+	claudeUninstallArgs = "quarry: uninstall takes no arguments; Run 'quarry claude uninstall --help' for usage.\n"
+)
 
 func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 	const (
@@ -460,6 +508,12 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 		{name: "summary with an argument", args: []string{"summary", "extra"}, wantStderr: "quarry: summary takes no arguments\n"},
 		{name: "mcp with an argument", args: []string{"mcp", "extra"}, wantStderr: "quarry: mcp takes no arguments\n"},
 		{name: "mcp with --json", args: []string{"mcp", "--json"}, wantStderr: "quarry: mcp always speaks JSON on stdout; drop --json\n"},
+		{name: "claude install with an argument", args: []string{"claude", "install", "extra"}, wantStderr: claudeInstallArgs},
+		{name: "claude install with --json", args: []string{"claude", "install", "--json"}, wantStderr: "quarry: claude install prints no JSON; drop --json\n"},
+		{name: "claude install with --json and an argument", args: []string{"claude", "install", "--json", "extra"}, wantStderr: claudeInstallArgs},
+		{name: "claude uninstall with an argument", args: []string{"claude", "uninstall", "extra"}, wantStderr: claudeUninstallArgs},
+		{name: "claude uninstall with --json", args: []string{"claude", "uninstall", "--json"}, wantStderr: "quarry: claude uninstall prints no JSON; drop --json\n"},
+		{name: "claude uninstall with --json and an argument", args: []string{"claude", "uninstall", "--json", "extra"}, wantStderr: claudeUninstallArgs},
 		{
 			name: "findings with an argument", args: []string{"findings", "duplicate:txn-1+txn-2"},
 			wantStderr: "quarry: findings takes no arguments; to ignore a finding add its id to findings.ignore in " +

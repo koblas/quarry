@@ -46,7 +46,7 @@ func skillDriftSources(t *testing.T) []driftSource {
 	t.Helper()
 	return append([]driftSource{
 		{name: skillPath, text: repoFile(t, skillPath)},
-		{name: "README.md Claude Code section", text: readmeClaudeCodeText(t)},
+		{name: "README.md Claude Code section", text: readmeSection(t, readmeClaudeCodeHeading)},
 	}, referenceSources(t)...)
 }
 

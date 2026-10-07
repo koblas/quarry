@@ -330,6 +330,7 @@ The main risk is Quicken's undocumented schema; reconciliation on every sync is 
 - History: everything, including closed accounts.
 - Input: `quarry sync` takes its own snapshot with SQLite's backup API while Quicken is open; no hand-made snapshot or import step.
 - Interfaces: CLI, MCP server and a Claude skill, the skill as Claude's primary path.
+- Plugin install: `quarry claude install` / `uninstall` install and remove the Claude Code plugin by running the `claude` command (user scope); quarry never edits Claude Code's files, and the download is Claude Code's, not quarry's.
 - Reuse: build on dweekly/quicken-mac-mcp (and hardkoded/quicken-skills), both MIT, with notices preserved.
 - Reporting currency: selectable, CAD, USD or native (each account's own currency, unconverted); default from config `reporting.currency`, else CAD. CLI and MCP accept the same values; MCP's are exact-case.
 - Search: defaults to all dates; --min/--max compare absolute native amounts; no --currency; search is a lookup, not a report.

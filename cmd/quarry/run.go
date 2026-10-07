@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
@@ -18,6 +19,7 @@ import (
 	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/mcp"
 	"github.com/koblas/quarry/internal/platform/lockfile"
+	"github.com/koblas/quarry/internal/platform/toolrun"
 	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/snapshot"
@@ -188,6 +190,7 @@ func resolveHome(command string) (string, error) {
 // streams, and the factories over the default store.
 func defaultEnv(stdout, stderr io.Writer) cli.Env {
 	info, _ := debug.ReadBuildInfo()
+	home, _ := os.UserHomeDir() // "" on error: claude's path then prints raw
 	return cli.Env{
 		Stdin:        os.Stdin,
 		Stdout:       stdout,
@@ -197,6 +200,9 @@ func defaultEnv(stdout, stderr io.Writer) cli.Env {
 		NewSnapshots: newSnapshotsFactory(),
 		LoadConfig:   newConfigLoader(),
 		ServeMCP:     newMCPServe(info),
+		RunTool:      toolrun.Run,
+		LookPath:     exec.LookPath,
+		Home:         home,
 		IsTerminal:   isTerminal,
 		Now:          time.Now,
 	}
