@@ -19,16 +19,12 @@ func Test_ResolveBundlePath_refuses_a_missing_path(t *testing.T) {
 
 	_, err := snapshot.ResolveBundlePath(home, path)
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
-	assert.Equal(t, "~/Documents/Missing.quicken does not exist; check the path passed to --quicken", re.Error())
+	assert.Equal(t, "~/Documents/Missing.quicken does not exist; check the path passed to --quicken", refusalText(t, err))
 }
 
 func Test_ResolveBundlePath_refuses_when_the_top_level_path_cannot_be_statted(t *testing.T) {
 	t.Parallel()
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores file permissions")
-	}
+	skipUnderRoot(t)
 	home := t.TempDir()
 	lockedDir := filepath.Join(home, "Locked")
 	require.NoError(t, os.MkdirAll(lockedDir, 0o700))
@@ -38,11 +34,9 @@ func Test_ResolveBundlePath_refuses_when_the_top_level_path_cannot_be_statted(t 
 
 	_, err := snapshot.ResolveBundlePath(home, path)
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
 	assert.Equal(t, "cannot read ~/Locked/Home.quicken: permission denied; "+
 		"allow your terminal to access the folder in System Settings > Privacy & Security, or check the file's permissions",
-		re.Error())
+		refusalText(t, err))
 }
 
 func Test_ResolveBundlePath_refuses_a_qdf_suffix(t *testing.T) {
@@ -64,9 +58,7 @@ func Test_ResolveBundlePath_refuses_a_qdf_suffix(t *testing.T) {
 
 			_, err := snapshot.ResolveBundlePath(home, path)
 
-			var re snapshot.RefusalError
-			require.ErrorAs(t, err, &re)
-			assert.Contains(t, re.Error(), "Quicken for Windows file")
+			assert.Contains(t, refusalText(t, err), "Quicken for Windows file")
 		})
 	}
 }
@@ -80,11 +72,9 @@ func Test_ResolveBundlePath_refuses_a_plain_file(t *testing.T) {
 
 	_, err := snapshot.ResolveBundlePath(home, path)
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
 	assert.Equal(t, "~/Documents/Home.quicken is not a Quicken for Mac file "+
 		"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path>",
-		re.Error())
+		refusalText(t, err))
 }
 
 func Test_ResolveBundlePath_refuses_a_bundle_without_data(t *testing.T) {
@@ -95,11 +85,9 @@ func Test_ResolveBundlePath_refuses_a_bundle_without_data(t *testing.T) {
 
 	_, err := snapshot.ResolveBundlePath(home, bundleDir)
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
 	assert.Equal(t, "~/Documents/Home.quicken is not a Quicken for Mac file "+
 		"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path>",
-		re.Error())
+		refusalText(t, err))
 }
 
 func Test_ResolveBundlePath_refuses_a_bundle_whose_data_is_a_directory(t *testing.T) {
@@ -110,34 +98,26 @@ func Test_ResolveBundlePath_refuses_a_bundle_whose_data_is_a_directory(t *testin
 
 	_, err := snapshot.ResolveBundlePath(home, bundleDir)
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
 	assert.Equal(t, "~/Documents/Home.quicken is not a Quicken for Mac file "+
 		"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path>",
-		re.Error())
+		refusalText(t, err))
 }
 
 func Test_ResolveBundlePath_refuses_unreadable_data(t *testing.T) {
 	t.Parallel()
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores file permissions")
-	}
+	skipUnderRoot(t)
 	home := t.TempDir()
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
 	require.NoError(t, os.Chmod(bundle.DataPath, 0o000))
 
 	_, err := snapshot.ResolveBundlePath(home, bundle.Dir)
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
-	assert.Contains(t, re.Error(), "permission denied")
+	assert.Contains(t, refusalText(t, err), "permission denied")
 }
 
 func Test_ResolveBundlePath_refuses_an_unreadable_bundle_directory(t *testing.T) {
 	t.Parallel()
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores file permissions")
-	}
+	skipUnderRoot(t)
 	home := t.TempDir()
 	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
 	require.NoError(t, os.MkdirAll(bundleDir, 0o700))
@@ -146,9 +126,7 @@ func Test_ResolveBundlePath_refuses_an_unreadable_bundle_directory(t *testing.T)
 
 	_, err := snapshot.ResolveBundlePath(home, bundleDir)
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
-	assert.Contains(t, re.Error(), "permission denied")
+	assert.Contains(t, refusalText(t, err), "permission denied")
 }
 
 func Test_ResolveBundlePath_refuses_a_wal_formatted_bundle_with_no_live_wal_file(t *testing.T) {
@@ -163,10 +141,8 @@ func Test_ResolveBundlePath_refuses_a_wal_formatted_bundle_with_no_live_wal_file
 
 	_, err = snapshot.ResolveBundlePath(home, bundleDir)
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
 	assert.Equal(t, "~/Documents/Home.quicken is not open in Quicken (its database has no write-ahead log); "+
-		"open it in Quicken, then run quarry sync again", re.Error())
+		"open it in Quicken, then run quarry sync again", refusalText(t, err))
 	after, err := os.ReadDir(bundleDir)
 	require.NoError(t, err)
 	assert.Equal(t, namesOf(before), namesOf(after))
@@ -348,29 +324,23 @@ func Test_ResolveBundle_refuses_a_bad_configured_path(t *testing.T) {
 
 			_, err := snapshot.ResolveBundle(home, snapshot.BundleChoice{Configured: c.path})
 
-			var re snapshot.RefusalError
-			require.ErrorAs(t, err, &re)
-			assert.Equal(t, c.want, re.Error())
+			assert.Equal(t, c.want, refusalText(t, err))
 		})
 	}
 }
 
 func Test_ResolveBundle_refuses_a_configured_bundle_whose_data_is_unreadable(t *testing.T) {
 	t.Parallel()
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores file permissions")
-	}
+	skipUnderRoot(t)
 	home := t.TempDir()
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Books"))
 	require.NoError(t, os.Chmod(bundle.DataPath, 0o000))
 
 	_, err := snapshot.ResolveBundle(home, snapshot.BundleChoice{Configured: "~/Books/Home.quicken"})
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
 	assert.Equal(t, "cannot read ~/Books/Home.quicken/data: permission denied; "+
 		"allow your terminal to access the folder in System Settings > Privacy & Security, or check the file's permissions",
-		re.Error())
+		refusalText(t, err))
 }
 
 func Test_ResolveBundle_keeps_the_flag_refusals_when_quicken_path_is_also_set(t *testing.T) {
@@ -408,9 +378,7 @@ func Test_ResolveBundle_keeps_the_flag_refusals_when_quicken_path_is_also_set(t 
 
 			_, err := snapshot.ResolveBundle(home, snapshot.BundleChoice{Flag: c.flag, Configured: "~/Books/Home.quicken"})
 
-			var re snapshot.RefusalError
-			require.ErrorAs(t, err, &re)
-			assert.Equal(t, c.want, re.Error())
+			assert.Equal(t, c.want, refusalText(t, err))
 		})
 	}
 }

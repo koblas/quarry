@@ -18,26 +18,6 @@ const (
 	idFourth = "20260926T080000Z"
 )
 
-// listed writes a snapshot per id into home's folder and lists them with probe as the store.
-func listed(t *testing.T, home string, probe snapshot.StoreProbe, ids ...string) snapshot.Listing {
-	t.Helper()
-	dir := snapshotsFolder(t, home)
-	for _, id := range ids {
-		writeSnapshot(t, dir, id, 1000)
-	}
-	listing, err := newListServer(home, probe).List(t.Context())
-	require.NoError(t, err)
-	return listing
-}
-
-func doomedIDs(entries []snapshot.Entry) []string {
-	ids := make([]string, len(entries))
-	for i, e := range entries {
-		ids[i] = e.ID
-	}
-	return ids
-}
-
 func Test_prune_keeps_exactly_the_newest_n(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -152,55 +132,6 @@ func Test_prune_accepts_a_keep_of_one(t *testing.T) {
 	_, err := newListServer(home, nil).Prune(t.Context(), 1)
 
 	require.NoError(t, err)
-}
-
-// fakeRemover records the base name of each file Prune removes, in order, and fails those
-// named in faults; every other file is really removed.
-type fakeRemover struct {
-	calls  []string
-	faults map[string]error
-	// cancel, when set, ends the context once cancelAfter has been removed (or has failed).
-	cancelAfter string
-	cancel      context.CancelFunc
-}
-
-func (r *fakeRemover) remove(path string) error {
-	name := filepath.Base(path)
-	r.calls = append(r.calls, name)
-	if r.cancel != nil && name == r.cancelAfter {
-		defer r.cancel()
-	}
-	if err, ok := r.faults[name]; ok {
-		return err
-	}
-	return os.Remove(path)
-}
-
-// failing is a fakeRemover that fails name with the *fs.PathError os.Remove returns for errno.
-func failing(name string, errno syscall.Errno) *fakeRemover {
-	return &fakeRemover{faults: map[string]error{name: &fs.PathError{Op: "remove", Path: name, Err: errno}}}
-}
-
-// newPruneServer builds a Server over home's snapshots folder whose removes go through rm, plus extra options.
-func newPruneServer(home string, probe snapshot.StoreProbe, rm *fakeRemover, extra ...snapshot.Option) *snapshot.Server {
-	opts := append([]snapshot.Option{
-		snapshot.WithSnapshotDir(filepath.Join(home, "snapshots")), snapshot.WithHome(home), snapshot.WithRemove(rm.remove),
-	}, extra...)
-	if probe != nil {
-		opts = append(opts, snapshot.WithStoreProbe(probe))
-	}
-	return snapshot.NewServer(opts...)
-}
-
-// prunable writes a snapshot with a manifest for each id under home's folder and returns the folder.
-func prunable(t *testing.T, home string, ids ...string) string {
-	t.Helper()
-	dir := snapshotsFolder(t, home)
-	for _, id := range ids {
-		writeSnapshot(t, dir, id, 1000)
-		writeManifest(t, dir, id, manifestTaken("2026-09-27T10:00:00Z"))
-	}
-	return dir
 }
 
 func Test_prune_deletes_the_snapshots_beyond_the_newest_n_with_their_manifests(t *testing.T) {
@@ -684,22 +615,6 @@ func Test_import_from_deletes_no_snapshot_that_is_the_file_it_built_the_store_fr
 	assert.FileExists(t, snapshotFile(dir, idLinkFuture))
 }
 
-// countingProbe is a fakeStoreProbe that counts BuiltFrom calls and runs onRead inside each.
-type countingProbe struct {
-	fakeStoreProbe
-
-	calls  int
-	onRead func()
-}
-
-func (p *countingProbe) BuiltFrom(ctx context.Context) (string, error) {
-	p.calls++
-	if p.onRead != nil {
-		p.onRead()
-	}
-	return p.fakeStoreProbe.BuiltFrom(ctx)
-}
-
 func Test_prune_reads_the_store_once_when_nothing_lies_beyond_the_newest_n(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -1179,27 +1094,6 @@ func Test_prune_finishes_without_sweeping_when_the_context_ends_after_the_last_d
 	assert.Equal(t, []string{idOldest}, doomedIDs(pruned.Deleted))
 	assert.Zero(t, pruned.NotDeleted)
 	assert.FileExists(t, filepath.Join(dir, idFourth+".json"))
-}
-
-// upperCased renames id's .sqlite in dir to .SQLITE and returns the new path.
-// A rename is needed because case-insensitive volumes keep the old name's case on a rewrite.
-func upperCased(t *testing.T, dir, id string) string {
-	t.Helper()
-	upper := filepath.Join(dir, id+".SQLITE")
-	require.NoError(t, os.Rename(filepath.Join(dir, id+".sqlite"), upper))
-	return upper
-}
-
-// dirNames lists the names os.ReadDir returns for dir.
-func dirNames(t *testing.T, dir string) []string {
-	t.Helper()
-	entries, err := os.ReadDir(dir)
-	require.NoError(t, err)
-	names := make([]string, len(entries))
-	for i, e := range entries {
-		names[i] = e.Name()
-	}
-	return names
 }
 
 func Test_prune_deletes_an_upper_case_sqlite_snapshot_then_its_manifest_and_keeps_every_newer_manifest(t *testing.T) {

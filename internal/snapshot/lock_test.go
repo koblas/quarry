@@ -153,13 +153,6 @@ const (
 
 var errNoLocks = errors.New("no locks available")
 
-func skipAsRoot(t *testing.T) {
-	t.Helper()
-	if os.Geteuid() == 0 {
-		t.Skip("root bypasses file modes")
-	}
-}
-
 // lockRig is a home directory whose quarry folder holds the lock file under test.
 type lockRig struct {
 	home     string
@@ -252,7 +245,7 @@ func Test_lock_refuses_a_lock_file_that_is_not_a_regular_file_naming_it(t *testi
 }
 
 func Test_lock_refuses_a_lock_file_it_cannot_open_naming_its_reason_and_the_fix(t *testing.T) {
-	skipAsRoot(t)
+	skipUnderRoot(t)
 	for _, cmd := range lockCommands() {
 		t.Run(cmd.name, func(t *testing.T) {
 			rig := newLockRig(t)
@@ -308,12 +301,11 @@ func Test_lock_for_prune_refuses_a_quarry_folder_below_a_file_as_not_a_folder(t 
 }
 
 func Test_lock_refuses_a_quarry_folder_it_cannot_search_naming_the_folder_and_its_reason(t *testing.T) {
-	skipAsRoot(t)
+	skipUnderRoot(t)
 	for _, cmd := range lockCommands() {
 		t.Run(cmd.name, func(t *testing.T) {
 			rig := newLockRig(t)
-			require.NoError(t, os.Chmod(rig.dir, 0o600))
-			t.Cleanup(func() { assert.NoError(t, os.Chmod(rig.dir, 0o700)) })
+			restrictMode(t, rig.dir, 0o600)
 
 			release, err := cmd.acquire(rig.server(cmd.mode))
 
@@ -335,12 +327,11 @@ func Test_lock_for_prune_refuses_a_symlink_loop_above_the_quarry_folder_naming_t
 }
 
 func Test_lock_refuses_a_missing_lock_file_it_cannot_create_naming_its_reason_and_the_fix(t *testing.T) {
-	skipAsRoot(t)
+	skipUnderRoot(t)
 	for _, cmd := range lockCommands() {
 		t.Run(cmd.name, func(t *testing.T) {
 			rig := newLockRig(t)
-			require.NoError(t, os.Chmod(rig.dir, 0o500))
-			t.Cleanup(func() { assert.NoError(t, os.Chmod(rig.dir, 0o700)) })
+			restrictMode(t, rig.dir, 0o500)
 
 			release, err := cmd.acquire(rig.server(cmd.mode))
 
@@ -360,7 +351,7 @@ func Test_lock_refuses_a_quarry_folder_it_cannot_create_naming_the_folder_to_mak
 			name: "a read-only Library",
 			arrange: func(t *testing.T, rig lockRig) {
 				t.Helper()
-				skipAsRoot(t)
+				skipUnderRoot(t)
 				library := filepath.Join(rig.home, "Library")
 				require.NoError(t, os.Mkdir(library, 0o500))
 				t.Cleanup(func() { assert.NoError(t, os.Chmod(library, 0o700)) })

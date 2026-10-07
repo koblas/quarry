@@ -14,6 +14,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// newDestination returns a directory Destination over a fresh folder, and that folder.
+func newDestination(tb testing.TB) (snapshot.Destination, string) {
+	tb.Helper()
+	dir := tb.TempDir()
+	return snapshot.NewDirDestination(dir), dir
+}
+
 func Test_dirDestination_prepare_creates_the_directory(t *testing.T) {
 	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "snapshots")
@@ -30,8 +37,7 @@ func Test_dirDestination_prepare_creates_the_directory(t *testing.T) {
 func Test_dirDestination_backup_fails_when_the_directory_is_not_writable(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	require.NoError(t, os.Chmod(dir, 0o500))
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	restrictMode(t, dir, 0o500)
 	dest := snapshot.NewDirDestination(dir)
 
 	_, _, err := dest.Backup(t.Context(), &fakeSource{}, "20260927T143005Z")
@@ -41,8 +47,7 @@ func Test_dirDestination_backup_fails_when_the_directory_is_not_writable(t *test
 
 func Test_dirDestination_backup_reserves_the_next_suffix_when_the_current_second_is_taken(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	dest := snapshot.NewDirDestination(dir)
+	dest, _ := newDestination(t)
 	partial, name, err := dest.Backup(t.Context(), &fakeSource{}, "20260927T143005Z")
 	require.NoError(t, err)
 	require.Equal(t, "20260927T143005Z", name)
@@ -57,8 +62,7 @@ func Test_dirDestination_backup_reserves_the_next_suffix_when_the_current_second
 
 func Test_dirDestination_backup_reserves_the_next_suffix_when_the_first_two_names_are_taken(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	dest := snapshot.NewDirDestination(dir)
+	dest, _ := newDestination(t)
 	firstPartial, _, err := dest.Backup(t.Context(), &fakeSource{}, "20260927T143005Z")
 	require.NoError(t, err)
 	_, err = dest.CommitSnapshot(t.Context(), firstPartial)
@@ -77,8 +81,7 @@ func Test_dirDestination_backup_reserves_the_next_suffix_when_the_first_two_name
 
 func Test_dirDestination_backup_reserves_the_next_suffix_when_only_the_manifest_final_is_taken(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	dest := snapshot.NewDirDestination(dir)
+	dest, _ := newDestination(t)
 	manifestPartial, err := dest.WriteManifest(t.Context(), "20260927T143005Z", []byte("{}"))
 	require.NoError(t, err)
 	_, err = dest.CommitManifest(t.Context(), manifestPartial)
@@ -104,14 +107,11 @@ func Test_dirDestination_backup_reserves_the_next_suffix_when_another_backup_is_
 
 func Test_dirDestination_backup_returns_immediately_when_the_partial_cannot_be_created_for_a_reason_other_than_a_collision(t *testing.T) {
 	t.Parallel()
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores file permissions")
-	}
+	skipUnderRoot(t)
 	dir := t.TempDir()
 	// The first candidate collides, forcing the loop to "_2" before the permission failure.
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".20260927T143005Z.sqlite.partial"), []byte("in flight"), 0o600))
-	require.NoError(t, os.Chmod(dir, 0o500))
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	restrictMode(t, dir, 0o500)
 	dest := snapshot.NewDirDestination(dir)
 
 	_, _, err := dest.Backup(t.Context(), &fakeSource{}, "20260927T143005Z")
@@ -125,8 +125,7 @@ func Test_dirDestination_backup_returns_immediately_when_the_partial_cannot_be_c
 func Test_dirDestination_write_manifest_fails_when_the_directory_is_not_writable(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	require.NoError(t, os.Chmod(dir, 0o500))
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	restrictMode(t, dir, 0o500)
 	dest := snapshot.NewDirDestination(dir)
 
 	_, err := dest.WriteManifest(t.Context(), "20260927T143005Z", []byte("{}"))
@@ -136,8 +135,7 @@ func Test_dirDestination_write_manifest_fails_when_the_directory_is_not_writable
 
 func Test_dirDestination_commit_snapshot_refuses_to_replace_an_existing_file(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	dest := snapshot.NewDirDestination(dir)
+	dest, dir := newDestination(t)
 	partial, _, err := dest.Backup(t.Context(), &fakeSource{}, "20260927T143005Z")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "20260927T143005Z.sqlite"), []byte("existing"), 0o600))
@@ -149,8 +147,7 @@ func Test_dirDestination_commit_snapshot_refuses_to_replace_an_existing_file(t *
 
 func Test_dirDestination_commit_manifest_refuses_to_replace_an_existing_file(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	dest := snapshot.NewDirDestination(dir)
+	dest, dir := newDestination(t)
 	partial, err := dest.WriteManifest(t.Context(), "20260927T143005Z", []byte("{}"))
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "20260927T143005Z.json"), []byte("existing"), 0o600))
@@ -162,8 +159,7 @@ func Test_dirDestination_commit_manifest_refuses_to_replace_an_existing_file(t *
 
 func Test_dirDestination_discard_removes_the_partial(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	dest := snapshot.NewDirDestination(dir)
+	dest, _ := newDestination(t)
 	partial, _, err := dest.Backup(t.Context(), &fakeSource{}, "20260927T143005Z")
 	require.NoError(t, err)
 
@@ -176,12 +172,10 @@ func Test_dirDestination_discard_removes_the_partial(t *testing.T) {
 
 func Test_dirDestination_discard_fails_when_the_partial_cannot_be_removed(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	dest := snapshot.NewDirDestination(dir)
+	dest, dir := newDestination(t)
 	partial, _, err := dest.Backup(t.Context(), &fakeSource{}, "20260927T143005Z")
 	require.NoError(t, err)
-	require.NoError(t, os.Chmod(dir, 0o500))
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	restrictMode(t, dir, 0o500)
 
 	err = dest.Discard(t.Context(), partial)
 
@@ -274,13 +268,10 @@ func Test_dirDestination_prepare_leaves_a_leftover_just_inside_the_age_gate_alon
 
 func Test_dirDestination_prepare_still_succeeds_when_a_leftover_cannot_be_removed(t *testing.T) {
 	t.Parallel()
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores file permissions")
-	}
+	skipUnderRoot(t)
 	dir := t.TempDir()
 	path := writeAged(t, dir, ".20260927T143005Z.sqlite.partial", 2*time.Hour)
-	require.NoError(t, os.Chmod(dir, 0o500))
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	restrictMode(t, dir, 0o500)
 	dest := snapshot.NewDirDestination(dir)
 
 	err := dest.Prepare(t.Context())
@@ -291,13 +282,10 @@ func Test_dirDestination_prepare_still_succeeds_when_a_leftover_cannot_be_remove
 
 func Test_dirDestination_prepare_still_succeeds_when_the_sweep_cannot_read_the_directory(t *testing.T) {
 	t.Parallel()
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores file permissions")
-	}
+	skipUnderRoot(t)
 	dir := t.TempDir()
 	writeAged(t, dir, ".20260927T143005Z.sqlite.partial", 2*time.Hour)
-	require.NoError(t, os.Chmod(dir, 0o000))
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	restrictMode(t, dir, 0o000)
 	dest := snapshot.NewDirDestination(dir)
 
 	err := dest.Prepare(t.Context())

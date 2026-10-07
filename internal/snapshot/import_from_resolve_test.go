@@ -157,7 +157,7 @@ func Test_import_from_an_id_resolves_an_upper_case_snapshot_and_manifest_by_thei
 	dir := filepath.Dir(taken.Snapshot.Path)
 	require.NoError(t, os.Rename(taken.Snapshot.Path, filepath.Join(dir, id+".SQLITE")))
 	require.NoError(t, os.Rename(taken.Snapshot.Manifest, filepath.Join(dir, id+".JSON")))
-	require.Equal(t, []string{id + ".JSON", id + ".SQLITE"}, dirNamesIn(t, dir))
+	require.Equal(t, []string{id + ".JSON", id + ".SQLITE"}, dirNames(t, dir))
 
 	outcome, err := srv.ImportFrom(t.Context(), id)
 
@@ -211,7 +211,7 @@ func Test_import_from_a_path_names_the_upper_case_manifest_it_cannot_read(t *tes
 	writeSnapshotPair(t, dir, "x", fromDDL)
 	manifest := filepath.Join(dir, "x.JSON")
 	require.NoError(t, os.Rename(filepath.Join(dir, "x.json"), manifest))
-	require.Equal(t, []string{"x.JSON", "x.sqlite"}, dirNamesIn(t, dir))
+	require.Equal(t, []string{"x.JSON", "x.sqlite"}, dirNames(t, dir))
 	require.NoError(t, os.Chmod(manifest, 0o000))
 	t.Cleanup(func() { _ = os.Chmod(manifest, 0o600) })
 
@@ -246,15 +246,4 @@ func renameTakenSnapshot(t *testing.T, srv *snapshot.Server, name string) string
 	require.NoError(t, os.Rename(taken.Snapshot.Path, filepath.Join(dir, name+".sqlite")))
 	require.NoError(t, os.Rename(taken.Snapshot.Manifest, filepath.Join(dir, name+".json")))
 	return dir
-}
-
-func dirNamesIn(t *testing.T, dir string) []string {
-	t.Helper()
-	entries, err := os.ReadDir(dir)
-	require.NoError(t, err)
-	names := make([]string, len(entries))
-	for i, e := range entries {
-		names[i] = e.Name()
-	}
-	return names
 }
