@@ -15,12 +15,15 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
+| 01 | arch, correctness, test, refactor | 0/2/~20/~8 | 1 / 20 (2 timeouts; 1 re-run killed, 1 survivor), 1496 s | BLOCKED |
 
 ## Tokens
 
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
 | --- | --- | --- | --- |
+| gate R1 (correctness) | `// unreachable:` false on darwin: relative --from from an unsearchable cwd prints unruled copy (now F7) | internal/snapshot/from.go:107-111 | SCENARIO-12a (moved the pre-existing branch, re-declared unreachable) |
+| gate R1 (test, mutation survivor) | Backup stat-check fallback unpinned under a listing fault; mutant could overwrite a snapshot | internal/snapshot/destination.go:94 | SCENARIO-13 (folderUses made the old stat-check pins unfalsifiable) |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |
