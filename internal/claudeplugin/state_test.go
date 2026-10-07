@@ -2,6 +2,7 @@ package claudeplugin_test
 
 import (
 	"errors"
+	"syscall"
 	"testing"
 
 	"github.com/koblas/quarry/internal/claudeplugin"
@@ -222,6 +223,24 @@ func Test_read_state_returns_the_runner_error_from_a_list_unchanged(t *testing.T
 
 			assert.Same(t, errBoom, err)
 			assert.Equal(t, c.calls, fake.calls)
+		})
+	}
+}
+
+func Test_exit_error_message_names_the_command_and_how_it_ended(t *testing.T) {
+	cases := []struct {
+		name string
+		err  *claudeplugin.ExitError
+		want string
+	}{
+		{"status 1", &claudeplugin.ExitError{Argv: "claude plugin list --json", Status: 1}, "claude plugin list --json exited with status 1"},
+		{"status 2", &claudeplugin.ExitError{Argv: "claude plugin install quarry@quarry", Status: 2}, "claude plugin install quarry@quarry exited with status 2"},
+		{"signal", &claudeplugin.ExitError{Argv: "claude plugin list --json", Signal: syscall.SIGKILL}, "claude plugin list --json was stopped by signal killed"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, c.err.Error())
 		})
 	}
 }
