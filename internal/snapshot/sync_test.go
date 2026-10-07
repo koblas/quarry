@@ -19,14 +19,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newServer(t *testing.T, snapshotsDir string) *snapshot.Server {
+func newServer(t *testing.T, snapshotsDir string, opts ...snapshot.Option) *snapshot.Server {
 	t.Helper()
 	ref, err := v9.Reference(t.Context())
 	require.NoError(t, err)
-	return snapshot.NewServer(
+	return snapshot.NewServer(append([]snapshot.Option{
 		snapshot.WithSnapshotDir(snapshotsDir),
 		snapshot.WithReference(v9.ReferenceLabel, ref),
-	)
+	}, opts...)...)
 }
 
 func Test_sync_writes_a_verified_private_snapshot_of_an_open_file(t *testing.T) {

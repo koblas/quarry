@@ -26,7 +26,12 @@ type folderSelection struct {
 	snapshots []selectedSnapshot
 	// orphans are the regular manifests whose snapshot is gone and that no sync is writing.
 	orphans []string
+	// used holds every ID that some entry of any type is named after, as snapshot or manifest.
+	used map[string]bool
 }
+
+// uses reports whether some entry of any type in the folder is named as id's snapshot or manifest, extension in any letter case.
+func (f folderSelection) uses(id string) bool { return f.used[id] }
 
 // idGroup is every directory entry that names one snapshot ID.
 type idGroup struct {
@@ -70,9 +75,10 @@ func selectFolder(dirEntries []fs.DirEntry) folderSelection {
 			}
 		}
 	}
-	var selection folderSelection
+	selection := folderSelection{used: make(map[string]bool, len(ids))}
 	for _, id := range ids {
 		g := groups[id]
+		selection.used[id] = true
 		if len(g.snapshots) == 0 {
 			continue
 		}

@@ -70,6 +70,9 @@ quarry sync --from <ID>.`,
 			if listing.NoSnapshots != "" {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: "+listing.NoSnapshots)
 			}
+			for _, duplicate := range listing.Duplicates {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: warning: "+duplicate)
+			}
 			if listing.StoreWarning != "" {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "quarry: warning: "+listing.StoreWarning)
 			}

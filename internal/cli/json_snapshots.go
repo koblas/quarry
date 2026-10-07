@@ -75,13 +75,14 @@ func newSnapshotDocument(e snapshot.Entry) snapshotDocument {
 	return doc
 }
 
-// snapshotsWarnings is the config warnings, then the no-snapshots note naming the folder by its
-// absolute path, then the store warning, without the prefixes stderr gives them; never nil.
+// snapshotsWarnings is the config warnings, then the no-snapshots note, then the duplicate-name warnings,
+// each naming the folder by its absolute path, then the store warning, without the prefixes stderr gives them; never nil.
 func snapshotsWarnings(config []string, l snapshot.Listing) []string {
 	warnings := append([]string{}, config...)
 	if l.NoSnapshots != "" {
 		warnings = append(warnings, l.NoSnapshotsAbsolute)
 	}
+	warnings = append(warnings, l.DuplicatesAbsolute...)
 	if l.StoreWarningAbsolute != "" {
 		warnings = append(warnings, l.StoreWarningAbsolute)
 	}

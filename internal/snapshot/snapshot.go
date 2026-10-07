@@ -167,7 +167,7 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 	}
 	destination := s.destination
 	if destination == nil {
-		destination = newDirDestination(s.snapshotDir)
+		destination = newDirDestination(s.snapshotDir, s.readDir)
 	}
 
 	dataPath := filepath.Join(bundlePath, "data")
