@@ -355,23 +355,37 @@ func Test_run_search_json_lists_closed_account_and_usd_transactions_in_their_own
 		[]string{doc.Transactions[1].TransactionID, doc.Transactions[1].Currency, doc.Transactions[1].Amount, doc.Transactions[1].Account})
 }
 
-func Test_run_search_refuses_a_since_that_is_not_a_date_before_opening_the_store(t *testing.T) {
-	newHome(t)
+func Test_run_search_json_echoes_its_filters_as_given_and_null_when_absent(t *testing.T) {
+	cases := []struct {
+		name         string
+		args         []string
+		wantMin      *string
+		wantMax      *string
+		wantCategory *string
+		wantText     *string
+		wantLimit    int
+	}{
+		{name: "none given", args: nil, wantLimit: 500},
+		{name: "min only is normalized to two decimals", args: []string{"--min", "12.5"}, wantMin: new("12.50"), wantLimit: 500},
+		{name: "max only", args: []string{"--max", "7"}, wantMax: new("7.00"), wantLimit: 500},
+		{name: "min and max", args: []string{"--min", "1", "--max", "9.99"}, wantMin: new("1.00"), wantMax: new("9.99"), wantLimit: 500},
+		{name: "category as typed, in its own letter case", args: []string{"--category", "food:GROCERIES"}, wantCategory: new("food:GROCERIES"), wantLimit: 500},
+		{name: "text as typed, not folded", args: []string{"COSTCO"}, wantText: new("COSTCO"), wantLimit: 500},
+		{name: "limit 0 stays 0, meaning every match", args: []string{"--limit", "0"}, wantLimit: 0},
+		{name: "a limit as given", args: []string{"--limit", "3"}, wantLimit: 3},
+	}
 
-	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--since", "2024-13"})
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			doc := searchedJSON(t, narrowCategoryStore(), c.args...)
 
-	assert.Equal(t, 2, exitCode)
-	assert.Empty(t, stdout.String())
-	assert.Equal(t, "quarry: --since \"2024-13\" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD\n", stderr.String())
-}
-
-func Test_run_search_refuses_a_since_after_the_until(t *testing.T) {
-	newHome(t)
-
-	exitCode, _, stderr := runSpendCapture(context.Background(), []string{"search", "--since", "2025", "--until", "2024"})
-
-	assert.Equal(t, 2, exitCode)
-	assert.Equal(t, "quarry: --since 2025 is after --until 2024\n", stderr.String())
+			assert.Equal(t, c.wantMin, doc.Min)
+			assert.Equal(t, c.wantMax, doc.Max)
+			assert.Equal(t, c.wantCategory, doc.Category)
+			assert.Equal(t, c.wantText, doc.Text)
+			assert.Equal(t, c.wantLimit, doc.Limit)
+		})
+	}
 }
 
 func Test_run_search_prints_the_transactions_table(t *testing.T) {
@@ -448,25 +462,6 @@ func gymSearchStore() store.Rows {
 	)
 }
 
-func Test_run_search_json_echoes_the_text_as_given_and_null_when_none_was_given(t *testing.T) {
-	cases := []struct {
-		name string
-		args []string
-		want *string
-	}{
-		{name: "text as typed, not folded", args: []string{"COSTCO"}, want: new("COSTCO")},
-		{name: "no text", args: nil, want: nil},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			doc := searchedJSON(t, textSearchStore(), c.args...)
-
-			assert.Equal(t, c.want, doc.Text)
-		})
-	}
-}
-
 func Test_run_search_shows_a_split_memo_only_match_in_the_memo_cell(t *testing.T) {
 	exitCode, stdout, stderr := runSearchOver(t, textSearchStore(), []string{"search", "tip"})
 
@@ -516,34 +511,6 @@ func Test_run_search_narrows_the_text_matches_by_account_and_since(t *testing.T)
 
 			assert.Equal(t, c.want, transactionIDs(doc))
 			assert.Equal(t, len(c.want), doc.Matched)
-		})
-	}
-}
-
-func Test_run_search_refuses_two_texts_and_blank_text_before_reading_anything(t *testing.T) {
-	const blank = "quarry: search text is blank; leave it out to search by date, account, category or amount alone\n"
-	const twoTexts = "quarry: search takes one text; quote it as one argument\n"
-	cases := []struct {
-		name string
-		args []string
-		want string
-	}{
-		{name: "two texts", args: []string{"search", "costco", "visa"}, want: twoTexts},
-		{name: "an empty text", args: []string{"search", ""}, want: blank},
-		{name: "a whitespace-only text", args: []string{"search", "  "}, want: blank},
-		{name: "a blank text beats a bad since", args: []string{"search", "", "--since", "nonsense"}, want: blank},
-		{name: "two texts with --json", args: []string{"search", "--json", "costco", "visa"}, want: twoTexts},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			newHome(t)
-
-			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
-
-			assert.Equal(t, 2, exitCode)
-			assert.Equal(t, c.want, stderr.String())
-			assert.Empty(t, stdout.String())
 		})
 	}
 }
@@ -614,94 +581,11 @@ func Test_run_search_min_and_max_compare_the_amount_without_its_sign(t *testing.
 	}
 }
 
-func Test_run_search_json_echoes_min_and_max_normalized_and_null_when_absent(t *testing.T) {
-	cases := []struct {
-		name             string
-		args             []string
-		wantMin, wantMax *string
-	}{
-		{name: "neither given", args: nil},
-		{name: "min only is normalized to two decimals", args: []string{"--min", "12.5"}, wantMin: new("12.50")},
-		{name: "max only", args: []string{"--max", "7"}, wantMax: new("7.00")},
-		{name: "both", args: []string{"--min", "1", "--max", "9.99"}, wantMin: new("1.00"), wantMax: new("9.99")},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			doc := searchedJSON(t, amountSearchStore(), c.args...)
-
-			assert.Equal(t, c.wantMin, doc.Min)
-			assert.Equal(t, c.wantMax, doc.Max)
-		})
-	}
-}
-
 func Test_run_search_text_names_the_amount_range_in_the_caption(t *testing.T) {
 	exitCode, stdout, stderr := runSearchOver(t, amountSearchStore(), []string{"search", "--min", "100", "--max", "1000"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "Transactions in all accounts, all dates, amount 100.00 to 1,000.00\n")
-}
-
-const useDigits = "use digits with up to 2 decimals and no sign, such as 25 or 19.99"
-
-func Test_run_search_refuses_a_bad_amount_with_the_ruled_line_before_opening_the_store(t *testing.T) {
-	cases := []struct {
-		name string
-		args []string
-		want string
-	}{
-		{name: "a signed min", args: []string{"--min", "-12"}, want: `quarry: --min "-12" is not an amount; ` + useDigits},
-		{name: "a grouped max", args: []string{"--max", "1,234.56"}, want: `quarry: --max "1,234.56" is not an amount; ` + useDigits},
-		{name: "an empty min is refused, not ignored", args: []string{"--min", ""}, want: `quarry: --min "" is not an amount; ` + useDigits},
-		{name: "an empty max", args: []string{"--max", ""}, want: `quarry: --max "" is not an amount; ` + useDigits},
-		{name: "seventeen integer digits", args: []string{"--min", "12345678901234567"}, want: `quarry: --min "12345678901234567" is not an amount; ` + useDigits},
-		{name: "a min above the max", args: []string{"--min", "50", "--max", "20"}, want: "quarry: --min 50 is more than --max 20"},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			assertSearchRefused(t, append([]string{"search"}, c.args...), c.want+"\n")
-		})
-	}
-}
-
-func Test_run_search_refuses_min_above_max_before_a_bad_since(t *testing.T) {
-	assertSearchRefused(t, []string{"search", "--min", "50", "--max", "20", "--since", "nonsense"}, "quarry: --min 50 is more than --max 20\n")
-}
-
-func Test_run_search_refuses_a_bad_min_before_a_bad_since_and_before_a_bad_max(t *testing.T) {
-	const badMin = "quarry: --min \"-12\" is not an amount; use digits with up to 2 decimals and no sign, such as 25 or 19.99\n"
-	const badMax = "quarry: --max \"abc\" is not an amount; use digits with up to 2 decimals and no sign, such as 25 or 19.99\n"
-	cases := []struct {
-		name string
-		args []string
-		want string
-	}{
-		{name: "a bad min beats a bad since", args: []string{"search", "--min", "-12", "--since", "nonsense"}, want: badMin},
-		{name: "a bad min beats a bad max", args: []string{"search", "--max", "abc", "--min", "-12"}, want: badMin},
-		{name: "a bad max beats a bad since", args: []string{"search", "--max", "abc", "--since", "nonsense"}, want: badMax},
-		{name: "a bad max beats a min above the max", args: []string{"search", "--min", "50", "--max", "abc"}, want: badMax},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			assertSearchRefused(t, c.args, c.want)
-		})
-	}
-}
-
-func Test_run_search_refuses_blank_text_before_a_bad_min(t *testing.T) {
-	assertSearchRefused(t, []string{"search", "", "--min", "-12"},
-		"quarry: search text is blank; leave it out to search by date, account, category or amount alone\n")
-}
-
-// assertSearchRefused runs args against an empty home and requires exit 2, nothing on stdout and want on stderr.
-func assertSearchRefused(t *testing.T, args []string, want string) {
-	t.Helper()
-	newHome(t)
-
-	assertSearchFailed(t, args, 2, want)
 }
 
 // categorySearchStore: one transaction per category, dated January 1..5 in the order listed,
@@ -821,25 +705,6 @@ func Test_run_search_category_narrows_with_account_text_and_amount(t *testing.T)
 
 			assert.Equal(t, c.want, transactionIDs(doc))
 			assert.Equal(t, len(c.want), doc.Matched)
-		})
-	}
-}
-
-func Test_run_search_json_echoes_the_category_as_given_and_null_when_absent(t *testing.T) {
-	cases := []struct {
-		name string
-		args []string
-		want *string
-	}{
-		{name: "not given", args: nil},
-		{name: "as typed, in its own letter case", args: []string{"--category", "food:GROCERIES"}, want: new("food:GROCERIES")},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			doc := searchedJSON(t, narrowCategoryStore(), c.args...)
-
-			assert.Equal(t, c.want, doc.Category)
 		})
 	}
 }
@@ -970,59 +835,6 @@ func Test_run_search_cuts_only_when_more_transactions_match_than_the_limit(t *te
 	}
 }
 
-func Test_run_search_json_echoes_the_limit_it_used(t *testing.T) {
-	cases := []struct {
-		name string
-		args []string
-		want int
-	}{
-		{name: "the default is 500", args: []string{"search", "--json"}, want: 500},
-		{name: "limit 0 stays 0, meaning every match", args: []string{"search", "--json", "--limit", "0"}, want: 0},
-		{name: "a limit as given", args: []string{"search", "--json", "--limit", "3"}, want: 3},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			exitCode, stdout, stderr := runSearchOver(t, fiveSearchStore(), c.args)
-
-			require.Equal(t, 0, exitCode, stderr.String())
-			assert.Equal(t, c.want, decodeSearchJSON(t, stdout.String()).Limit)
-		})
-	}
-}
-
-func Test_run_search_refuses_the_search_flags_and_text_in_the_ruled_order_before_reading_anything(t *testing.T) {
-	const (
-		twoTexts      = "quarry: search takes one text; quote it as one argument\n"
-		negativeLimit = "quarry: --limit must be 0 or more; 0 prints every transaction\n"
-		blank         = "quarry: search text is blank; leave it out to search by date, account, category or amount alone\n"
-	)
-	cases := []struct {
-		name string
-		args []string
-		want string
-	}{
-		{name: "a negative limit alone", args: []string{"search", "--limit", "-1"}, want: negativeLimit},
-		{name: "two texts beat a negative limit", args: []string{"search", "costco", "visa", "--limit", "-1"}, want: twoTexts},
-		{name: "a negative limit beats a blank text", args: []string{"search", "", "--limit", "-1"}, want: negativeLimit},
-		{name: "a blank text beats a bad since", args: []string{"search", "", "--since", "nonsense"}, want: blank},
-		{name: "a negative limit beats a bad since", args: []string{"search", "--limit", "-1", "--since", "nonsense"}, want: negativeLimit},
-		{name: "a negative limit with --json", args: []string{"search", "--json", "--limit", "-1"}, want: negativeLimit},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			newHome(t)
-
-			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
-
-			assert.Equal(t, 2, exitCode)
-			assert.Equal(t, c.want, stderr.String())
-			assert.Empty(t, stdout.String())
-		})
-	}
-}
-
 func Test_run_search_text_with_limit_counts_every_text_match_and_cuts_the_oldest(t *testing.T) {
 	exitCode, stdout, stderr := runSearchOver(t, gymSearchStore(), []string{"search", "gym", "--limit", "1", "--json"})
 
@@ -1097,6 +909,64 @@ func Test_run_search_text_with_no_match_prints_the_empty_listing_on_stdout_and_t
 		"0 matching transactions\n"
 	assert.Equal(t, want, stdout.String())
 	assert.Equal(t, "quarry: warning: no transactions match the search; the store's transactions run 2026-01-20 to 2026-04-02\n", stderr.String())
+}
+
+func Test_run_search_refuses_its_flags_and_text_in_the_ruled_order_before_opening_the_store(t *testing.T) {
+	const (
+		useDigits     = "use digits with up to 2 decimals and no sign, such as 25 or 19.99"
+		twoTexts      = "quarry: search takes one text; quote it as one argument\n"
+		negativeLimit = "quarry: --limit must be 0 or more; 0 prints every transaction\n"
+		blank         = "quarry: search text is blank; leave it out to search by date, account, category or amount alone\n"
+		badMin        = "quarry: --min \"-12\" is not an amount; use digits with up to 2 decimals and no sign, such as 25 or 19.99\n"
+		badMax        = "quarry: --max \"abc\" is not an amount; use digits with up to 2 decimals and no sign, such as 25 or 19.99\n"
+		minAboveMax   = "quarry: --min 50 is more than --max 20\n"
+	)
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "a signed min", args: []string{"search", "--min", "-12"}, want: badMin},
+		{name: "a grouped max", args: []string{"search", "--max", "1,234.56"}, want: `quarry: --max "1,234.56" is not an amount; ` + useDigits + "\n"},
+		{name: "an empty min is refused, not ignored", args: []string{"search", "--min", ""}, want: `quarry: --min "" is not an amount; ` + useDigits + "\n"},
+		{name: "an empty max", args: []string{"search", "--max", ""}, want: `quarry: --max "" is not an amount; ` + useDigits + "\n"},
+		{name: "seventeen integer digits", args: []string{"search", "--min", "12345678901234567"}, want: `quarry: --min "12345678901234567" is not an amount; ` + useDigits + "\n"},
+		{name: "a min above the max", args: []string{"search", "--min", "50", "--max", "20"}, want: minAboveMax},
+		{name: "a min above the max beats a bad since", args: []string{"search", "--min", "50", "--max", "20", "--since", "nonsense"}, want: minAboveMax},
+		{name: "a bad min beats a bad since", args: []string{"search", "--min", "-12", "--since", "nonsense"}, want: badMin},
+		{name: "a bad min beats a bad max", args: []string{"search", "--max", "abc", "--min", "-12"}, want: badMin},
+		{name: "a bad max beats a bad since", args: []string{"search", "--max", "abc", "--since", "nonsense"}, want: badMax},
+		{name: "a bad max beats a min above the max", args: []string{"search", "--min", "50", "--max", "abc"}, want: badMax},
+		{name: "blank text beats a bad min", args: []string{"search", "", "--min", "-12"}, want: blank},
+		{name: "a since that is not a date", args: []string{"search", "--since", "2024-13"}, want: "quarry: --since \"2024-13\" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD\n"},
+		{name: "a since after the until", args: []string{"search", "--since", "2025", "--until", "2024"}, want: "quarry: --since 2025 is after --until 2024\n"},
+		{name: "a negative limit alone", args: []string{"search", "--limit", "-1"}, want: negativeLimit},
+		{name: "two texts beat a negative limit", args: []string{"search", "costco", "visa", "--limit", "-1"}, want: twoTexts},
+		{name: "a negative limit beats a blank text", args: []string{"search", "", "--limit", "-1"}, want: negativeLimit},
+		{name: "a blank text beats a bad since", args: []string{"search", "", "--since", "nonsense"}, want: blank},
+		{name: "a negative limit beats a bad since", args: []string{"search", "--limit", "-1", "--since", "nonsense"}, want: negativeLimit},
+		{name: "a negative limit with --json", args: []string{"search", "--json", "--limit", "-1"}, want: negativeLimit},
+		{name: "two texts", args: []string{"search", "costco", "visa"}, want: twoTexts},
+		{name: "an empty text", args: []string{"search", ""}, want: blank},
+		{name: "a whitespace-only text", args: []string{"search", "  "}, want: blank},
+		{name: "two texts with --json", args: []string{"search", "--json", "costco", "visa"}, want: twoTexts},
+		{
+			name: "a text that is not valid UTF-8", args: []string{"search", "\xff"},
+			want: "quarry: search text \"\\xff\" is not valid UTF-8; set your terminal or script to UTF-8\n",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			newHome(t)
+
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
+
+			assert.Equal(t, 2, exitCode)
+			assert.Equal(t, c.want, stderr.String())
+			assert.Empty(t, stdout.String())
+		})
+	}
 }
 
 // refusalSearchStore holds two accounts named Visa, a chequing account and the categories Auto:Fuel and Food:Groceries.
@@ -1221,11 +1091,6 @@ func Test_run_search_reads_the_store_before_it_looks_up_the_category(t *testing.
 				"quarry: no store at "+abbreviated(t, storePathUnder(home), home)+" yet; run quarry sync to build it\n")
 		})
 	}
-}
-
-func Test_run_search_refuses_text_that_is_not_valid_UTF_8_before_the_store_opens(t *testing.T) {
-	assertSearchRefused(t, []string{"search", "\xff"},
-		"quarry: search text \"\\xff\" is not valid UTF-8; set your terminal or script to UTF-8\n")
 }
 
 func Test_run_search_text_with_a_nul_byte_matches_nothing_and_exits_0(t *testing.T) {

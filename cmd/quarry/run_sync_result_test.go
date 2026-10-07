@@ -355,25 +355,36 @@ func Test_run_prints_the_unbuilt_store_as_json_when_validation_fails(t *testing.
 		stderr.String())
 }
 
-// Once the build was reached, a stdout write failure still points at
-// --from --json under --json, the same as it does on the human path.
-func Test_run_points_at_from_json_when_stdout_fails_writing_a_failed_validation_as_json(t *testing.T) {
-	home := newHome(t)
+// Once the build was reached, even though it failed, a stdout write failure points at
+// --from --json, not at the snapshot's manifest, and does so under --json too.
+func Test_run_points_at_from_json_when_stdout_fails_on_a_failed_validation(t *testing.T) {
+	cases := []struct {
+		name  string
+		flags []string
+	}{
+		{name: "as text", flags: nil},
+		{name: "with --json", flags: []string{"--json"}},
+	}
 
-	b := v9fixture.NewBuilder()
-	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	reconcileAccount(b, acctPK, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), "100.00", "100.01")
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	writeErr := errNoSpace
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := newHome(t)
+			b := v9fixture.NewBuilder()
+			acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+			reconcileAccount(b, acctPK, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), "100.00", "100.01")
+			bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+			writeErr := errNoSpace
 
-	exitCode, stderr := runWithFailingStdout([]string{"sync", "--quicken", bundle.Dir, "--json"}, writeErr)
+			exitCode, stderr := runWithFailingStdout(append([]string{"sync", "--quicken", bundle.Dir}, c.flags...), writeErr)
 
-	assert.Equal(t, 1, exitCode)
-	snapshotPath := onlyFileWithSuffix(t, snapshotsDirUnder(home), ".sqlite")
-	assert.Equal(t,
-		"quarry: cannot write the result to stdout: "+writeErr.Error()+"; run quarry sync --from "+
-			snapshotID(snapshotPath)+" --json to see it again\n",
-		stderr)
+			assert.Equal(t, 1, exitCode)
+			snapshotPath := onlyFileWithSuffix(t, snapshotsDirUnder(home), ".sqlite")
+			assert.Equal(t,
+				"quarry: cannot write the result to stdout: "+writeErr.Error()+"; run quarry sync --from "+
+					snapshotID(snapshotPath)+" --json to see it again\n",
+				stderr)
+		})
+	}
 }
 
 // Two never-reconciled accounts with opposite closed/active flags, so a
@@ -516,14 +527,21 @@ func Test_run_reports_a_schema_mismatch_as_json(t *testing.T) {
 	assert.True(t, strings.HasPrefix(stderr.String(), "quarry: schema check failed:"))
 }
 
+// syncMissingSchemaSnapshot syncs a bundle whose schema differs from the reference, which keeps its snapshot and
+// refuses with exit 1, and returns the snapshot's id and that sync's stdout.
+func syncMissingSchemaSnapshot(t *testing.T, home string) (string, *bytes.Buffer) {
+	t.Helper()
+	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
+	exitCode, stdout, _ := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
+	require.Equal(t, 1, exitCode)
+	return snapshotID(onlyFileWithSuffix(t, snapshotsDirUnder(home), ".sqlite")), stdout
+}
+
 // --from re-checks the same snapshot file against the same embedded
 // reference MissingSchemaBundle already mismatches, independent of Quicken.
 func Test_run_reports_a_schema_mismatch_with_from(t *testing.T) {
 	home := newHome(t)
-	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
-	syncExit, syncStdout, _ := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
-	require.Equal(t, 1, syncExit)
-	id := snapshotID(onlyFileWithSuffix(t, snapshotsDirUnder(home), ".sqlite"))
+	id, syncStdout := syncMissingSchemaSnapshot(t, home)
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", id})
 
@@ -538,10 +556,7 @@ func Test_run_reports_a_schema_mismatch_with_from(t *testing.T) {
 
 func Test_run_reports_a_schema_mismatch_with_from_as_json(t *testing.T) {
 	home := newHome(t)
-	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
-	syncExit, _, _ := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
-	require.Equal(t, 1, syncExit)
-	id := snapshotID(onlyFileWithSuffix(t, snapshotsDirUnder(home), ".sqlite"))
+	id, _ := syncMissingSchemaSnapshot(t, home)
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", id, "--json"})
 
@@ -693,27 +708,6 @@ func Test_run_refuses_a_balance_mismatch_and_leaves_no_store(t *testing.T) {
 
 	_, err := os.Stat(storePath)
 	assert.ErrorIs(t, err, os.ErrNotExist)
-}
-
-// Once the build was reached, even though it failed, a stdout write
-// failure points at --from --json, not at the snapshot's manifest.
-func Test_run_points_at_from_json_when_stdout_fails_rendering_a_failed_validation(t *testing.T) {
-	home := newHome(t)
-
-	b := v9fixture.NewBuilder()
-	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	reconcileAccount(b, acctPK, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), "100.00", "100.01")
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	writeErr := errNoSpace
-
-	exitCode, stderr := runWithFailingStdout([]string{"sync", "--quicken", bundle.Dir}, writeErr)
-
-	assert.Equal(t, 1, exitCode)
-	snapshotPath := onlyFileWithSuffix(t, snapshotsDirUnder(home), ".sqlite")
-	assert.Equal(t,
-		"quarry: cannot write the result to stdout: "+writeErr.Error()+"; run quarry sync --from "+
-			snapshotID(snapshotPath)+" --json to see it again\n",
-		stderr)
 }
 
 // A failing sync leaves an existing store byte-identical; the failed-validation block

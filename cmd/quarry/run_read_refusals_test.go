@@ -265,30 +265,35 @@ func editStore(t *testing.T, home, stmt string) {
 	require.NoError(t, conn.Close())
 }
 
-func Test_run_accounts_refuses_a_store_that_cannot_be_read(t *testing.T) {
-	home := newHome(t)
-	syncAccountsFixture(t, home)
-	editStore(t, home, "DROP VIEW v_account_balances")
+func Test_run_read_commands_refuse_a_store_that_cannot_be_read(t *testing.T) {
+	cases := []struct {
+		name       string
+		command    string
+		damage     string
+		wantDetail string
+	}{
+		{
+			name: "accounts without its balances view", command: "accounts", damage: "DROP VIEW v_account_balances",
+			wantDetail: "Table with name v_account_balances does not exist!; run quarry sync to rebuild it",
+		},
+		{
+			name: "status without an import run", command: "status", damage: "DELETE FROM import_runs",
+			wantDetail: "the store has no import history; run quarry sync to rebuild it",
+		},
+	}
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts"})
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := newHome(t)
+			syncAccountsFixture(t, home)
+			editStore(t, home, c.damage)
 
-	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout.String())
-	assert.Equal(t, "quarry: cannot read the store at "+abbreviated(t, storePathUnder(home), home)+
-		": Table with name v_account_balances does not exist!; run quarry sync to rebuild it\n",
-		stderr.String())
-}
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{c.command})
 
-func Test_run_status_refuses_a_store_without_an_import_run(t *testing.T) {
-	home := newHome(t)
-	syncAccountsFixture(t, home)
-	editStore(t, home, "DELETE FROM import_runs")
-
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
-
-	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout.String())
-	assert.Equal(t, "quarry: cannot read the store at "+abbreviated(t, storePathUnder(home), home)+
-		": the store has no import history; run quarry sync to rebuild it\n",
-		stderr.String())
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, "quarry: cannot read the store at "+abbreviated(t, storePathUnder(home), home)+": "+c.wantDetail+"\n",
+				stderr.String())
+		})
+	}
 }

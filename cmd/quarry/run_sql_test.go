@@ -101,34 +101,29 @@ func Test_run_sql_refuses_to_write_another_file(t *testing.T) {
 	assert.NoFileExists(t, target)
 }
 
-func Test_run_sql_refuses_to_read_another_file(t *testing.T) {
-	source := filepath.Join(t.TempDir(), "in.csv")
-	require.NoError(t, os.WriteFile(source, []byte("n\n1\n"), 0o600))
+func Test_run_sql_refuses_what_reaches_outside_the_store(t *testing.T) {
+	cases := []struct {
+		name  string
+		query string // {dir} is a scratch directory holding in.csv; other.duckdb must never appear there
+	}{
+		{name: "reading another file", query: "SELECT n FROM read_csv('{dir}/in.csv')"},
+		{name: "attaching another database", query: "ATTACH '{dir}/other.duckdb' AS other"},
+		{name: "installing an extension", query: "INSTALL httpfs"},
+	}
 
-	exitCode, stdout, stderr := runSQLOnBuiltStore(t, "SELECT n FROM read_csv('"+source+"')")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "in.csv"), []byte("n\n1\n"), 0o600))
 
-	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout)
-	assert.Equal(t, sqlReadsOnlyItsStore, stderr)
-}
+			exitCode, stdout, stderr := runSQLOnBuiltStore(t, strings.ReplaceAll(c.query, "{dir}", dir))
 
-func Test_run_sql_refuses_to_attach_another_database(t *testing.T) {
-	target := filepath.Join(t.TempDir(), "other.duckdb")
-
-	exitCode, stdout, stderr := runSQLOnBuiltStore(t, "ATTACH '"+target+"' AS other")
-
-	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout)
-	assert.Equal(t, sqlReadsOnlyItsStore, stderr)
-	assert.NoFileExists(t, target)
-}
-
-func Test_run_sql_refuses_to_install_an_extension(t *testing.T) {
-	exitCode, stdout, stderr := runSQLOnBuiltStore(t, "INSTALL httpfs")
-
-	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout)
-	assert.Equal(t, sqlReadsOnlyItsStore, stderr)
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout)
+			assert.Equal(t, sqlReadsOnlyItsStore, stderr)
+			assert.NoFileExists(t, filepath.Join(dir, "other.duckdb"))
+		})
+	}
 }
 
 // threads=1 is a change DuckDB allows on an unlocked read-only connection; only the lock refuses it.

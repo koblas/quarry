@@ -234,38 +234,41 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 	}
 }
 
-func Test_run_read_commands_need_a_value_for_the_currency_flag(t *testing.T) {
+func Test_run_read_flag_usage_errors_point_at_the_commands_help(t *testing.T) {
+	type usageCase struct {
+		name       string
+		args       []string
+		wantStderr string
+	}
+	cases := make([]usageCase, 0, 11)
+	cases = append(cases,
+		usageCase{
+			name: "holdings --as-of without a value", args: []string{"holdings", "--as-of"},
+			wantStderr: "quarry: flag needs an argument: --as-of; Run 'quarry holdings --help' for usage.\n",
+		},
+		usageCase{
+			name: "holdings --all, which does not exist", args: []string{"holdings", "--all"},
+			wantStderr: "quarry: unknown flag: --all; Run 'quarry holdings --help' for usage.\n",
+		},
+	)
 	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth", "acb", "summary"} {
-		t.Run(command, func(t *testing.T) {
+		cases = append(cases, usageCase{
+			name: command + " --currency without a value", args: []string{command, "--currency"},
+			wantStderr: "quarry: flag needs an argument: --currency; Run 'quarry " + command + " --help' for usage.\n",
+		})
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
 			newHome(t)
 
-			exitCode, stdout, stderr := runCapture(context.Background(), []string{command, "--currency"})
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
-			assert.Equal(t, "quarry: flag needs an argument: --currency; Run 'quarry "+command+" --help' for usage.\n", stderr.String())
+			assert.Equal(t, c.wantStderr, stderr.String())
 		})
 	}
-}
-
-func Test_run_holdings_needs_a_value_for_the_as_of_flag(t *testing.T) {
-	newHome(t)
-
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"holdings", "--as-of"})
-
-	assert.Equal(t, 2, exitCode)
-	assert.Empty(t, stdout.String())
-	assert.Equal(t, "quarry: flag needs an argument: --as-of; Run 'quarry holdings --help' for usage.\n", stderr.String())
-}
-
-func Test_run_holdings_has_no_all_flag(t *testing.T) {
-	newHome(t)
-
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"holdings", "--all"})
-
-	assert.Equal(t, 2, exitCode)
-	assert.Empty(t, stdout.String())
-	assert.Equal(t, "quarry: unknown flag: --all; Run 'quarry holdings --help' for usage.\n", stderr.String())
 }
 
 func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
@@ -338,37 +341,23 @@ func Test_run_reports_exit_1_when_home_directory_cannot_be_resolved(t *testing.T
 func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 	t.Setenv("HOME", "")
 
-	t.Run("root help", func(t *testing.T) {
-		exitCode, stdout, stderr := runCapture(context.Background(), []string{"--help"})
+	for _, c := range []struct {
+		name string
+		args []string
+	}{
+		{name: "root help", args: []string{"--help"}},
+		{name: "sync help", args: []string{"sync", "--help"}},
+		{name: "snapshots help", args: []string{"snapshots", "--help"}},
+		{name: "mcp help", args: []string{"mcp", "--help"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
-		assert.Equal(t, 0, exitCode)
-		assert.NotEmpty(t, stdout.String())
-		assert.Empty(t, stderr.String())
-	})
-
-	t.Run("sync help", func(t *testing.T) {
-		exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--help"})
-
-		assert.Equal(t, 0, exitCode)
-		assert.NotEmpty(t, stdout.String())
-		assert.Empty(t, stderr.String())
-	})
-
-	t.Run("snapshots help", func(t *testing.T) {
-		exitCode, stdout, stderr := runCapture(context.Background(), []string{"snapshots", "--help"})
-
-		assert.Equal(t, 0, exitCode)
-		assert.NotEmpty(t, stdout.String())
-		assert.Empty(t, stderr.String())
-	})
-
-	t.Run("mcp help", func(t *testing.T) {
-		exitCode, stdout, stderr := runCapture(context.Background(), []string{"mcp", "--help"})
-
-		assert.Equal(t, 0, exitCode)
-		assert.NotEmpty(t, stdout.String())
-		assert.Empty(t, stderr.String())
-	})
+			assert.Equal(t, 0, exitCode)
+			assert.NotEmpty(t, stdout.String())
+			assert.Empty(t, stderr.String())
+		})
+	}
 
 	t.Run("unknown command is still a usage error, not the home-directory refusal", func(t *testing.T) {
 		exitCode, stdout, stderr := runCapture(context.Background(), []string{"frob"})
@@ -436,7 +425,6 @@ const badCurrencyFlag = "quarry: --currency must be CAD, USD or native\n"
 
 func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 	const (
-		u5 = "quarry: sql needs a query; pass it as one quoted argument, or - to read it from stdin\n"
 		u6 = "quarry: sql takes one query; quote it as one argument\n"
 		u7 = "quarry: --limit must be 0 or more; 0 prints every row\n"
 		u9 = "quarry: unknown flag: -- note; Run 'quarry sql --help' for usage.\n"
@@ -449,11 +437,11 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 		stdin      string
 		wantStderr string
 	}{
-		{name: "sql without a query", args: []string{"sql"}, wantStderr: u5},
-		{name: "sql with a blank query", args: []string{"sql", "   "}, wantStderr: u5},
-		{name: "sql - with empty stdin", args: []string{"sql", "-"}, wantStderr: u5},
-		{name: "sql with only a semicolon", args: []string{"sql", ";"}, wantStderr: u5},
-		{name: "sql with only a comment", args: []string{"sql", "--", "-- note"}, wantStderr: u5},
+		{name: "sql without a query", args: []string{"sql"}, wantStderr: sqlNeedsAQuery},
+		{name: "sql with a blank query", args: []string{"sql", "   "}, wantStderr: sqlNeedsAQuery},
+		{name: "sql - with empty stdin", args: []string{"sql", "-"}, wantStderr: sqlNeedsAQuery},
+		{name: "sql with only a semicolon", args: []string{"sql", ";"}, wantStderr: sqlNeedsAQuery},
+		{name: "sql with only a comment", args: []string{"sql", "--", "-- note"}, wantStderr: sqlNeedsAQuery},
 		{name: "sql with a query that starts with a dash", args: []string{"sql", "-- note"}, wantStderr: u9},
 		{name: "sql with two arguments", args: []string{"sql", "SELECT 1", "extra"}, wantStderr: u6},
 		{name: "sql with a negative limit", args: []string{"sql", "--limit", "-1", "SELECT 1"}, wantStderr: u7},
