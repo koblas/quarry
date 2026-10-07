@@ -182,14 +182,6 @@ func accountRates(t *testing.T, rates ...store.Rate) store.AccountList {
 	return got
 }
 
-func cells(list store.AccountList) [][]*big.Int {
-	out := make([][]*big.Int, len(list.Accounts))
-	for i, a := range list.Accounts {
-		out[i] = []*big.Int{a.Balance, a.BalanceCAD, a.BalanceUSD}
-	}
-	return out
-}
-
 func Test_accounts_converts_at_the_latest_rate_dated_today_or_earlier_ignoring_a_later_one(t *testing.T) {
 	t.Parallel()
 	past := store.Rate{Date: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), USDCAD: 1_250_000, Series: store.SeriesCurrent}

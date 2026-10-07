@@ -321,22 +321,6 @@ func Test_findings_counts_a_mixed_item_without_a_transaction_split_over_categori
 	assert.Equal(t, []int{3, 2}, []int{got.Items[0].Transactions, got.Items[1].Transactions})
 }
 
-// editDB runs statements against the store being built after its build and before its checkpoint.
-type editDB struct {
-	duckstore.DB
-
-	statements []string
-}
-
-func (e *editDB) CheckpointClose(ctx context.Context) error {
-	for _, statement := range e.statements {
-		if _, err := e.Exec(ctx, statement); err != nil {
-			return err
-		}
-	}
-	return e.DB.CheckpointClose(ctx)
-}
-
 // readEdited builds rows with statements applied to the built store and returns the finding with id from its Findings read.
 func readEdited(t *testing.T, rows store.Rows, id string, statements ...string) store.Finding {
 	t.Helper()

@@ -12,12 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	mixedPayee      = "payee-1"
-	mixedOtherPayee = "payee-2"
-	mixedThirdPayee = "payee-3"
-)
-
 // mixedFixture is one transaction with its splits, for a mixed-categories store.
 type mixedFixture struct {
 	txn    store.Transaction
@@ -55,37 +49,6 @@ func (f mixedFixture) splitInto(cats ...string) mixedFixture {
 func (f mixedFixture) inAccount(id string) mixedFixture {
 	f.txn.AccountID = id
 	return f
-}
-
-// mixedSeq is one payee's transactions, one per letter (the category), a day apart from 2026-01-01, source ids from first.
-func mixedSeq(payee, letters string, first int64) []mixedFixture {
-	out := make([]mixedFixture, 0, len(letters))
-	for i, l := range letters {
-		out = append(out, mixedTxn(first+int64(i), payee, string(l), day(2026, 1, 1+i)))
-	}
-	return out
-}
-
-// mixedRows is the rows of fixtures over the categories a-i (f to i share the path "Same") and the payees payee-1..3.
-func mixedRows(fixtures ...mixedFixture) store.Rows {
-	rows := minimalRows()
-	rows.Accounts = append(rows.Accounts,
-		store.Account{ID: "acct-2", SourceID: 2, Name: "Old Visa", Type: "credit", Currency: "CAD", Closed: true, NotInReports: true})
-	rows.Categories = nil
-	for letter, path := range map[string]string{"a": "Groceries", "b": "Household", "c": "Fuel", "d": "apple", "e": "Banana", "f": "Same", "g": "Same", "h": "Same", "i": "Same"} {
-		rows.Categories = append(rows.Categories, store.Category{
-			ID: "cat-" + letter, SourceID: int64(len(rows.Categories) + 1), Name: path, FullPath: path, Kind: "expense",
-		})
-	}
-	rows.Payees = []store.Payee{
-		{ID: mixedPayee, SourceID: 1, Name: "Costco"}, {ID: mixedOtherPayee, SourceID: 2, Name: "Shell"}, {ID: mixedThirdPayee, SourceID: 3, Name: "Bakery"},
-	}
-	rows.Transactions, rows.Splits, rows.SplitTags, rows.Transfers = nil, nil, nil, nil
-	for _, f := range fixtures {
-		rows.Transactions = append(rows.Transactions, f.txn)
-		rows.Splits = append(rows.Splits, f.splits...)
-	}
-	return rows
 }
 
 // mixedStore builds the store of fixtures and returns its read connection.
@@ -141,8 +104,6 @@ func Test_replace_flags_a_payee_only_when_a_category_is_revisited(t *testing.T) 
 		})
 	}
 }
-
-func mixedIDOf(payee string) string { return "mixed-categories:" + payee }
 
 func Test_replace_walks_a_payees_transactions_by_date_then_source_id(t *testing.T) {
 	t.Parallel()

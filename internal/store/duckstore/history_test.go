@@ -16,18 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// phase1ImportRunsDDL is Phase 1's import_runs: 19 columns, one run (id 4), no store_info beside it;
-// the extra column is investment_transactions_not_imported.
-const phase1ImportRunsDDL = `CREATE TABLE import_runs (
-	id BIGINT PRIMARY KEY, started_at TIMESTAMP NOT NULL, finished_at TIMESTAMP NOT NULL,
-	snapshot_path VARCHAR NOT NULL, snapshot_sha256 VARCHAR NOT NULL, schema_fingerprint VARCHAR NOT NULL,
-	accounts_rows BIGINT NOT NULL, categories_rows BIGINT NOT NULL, payees_rows BIGINT NOT NULL, tags_rows BIGINT NOT NULL,
-	transactions_rows BIGINT NOT NULL, splits_rows BIGINT NOT NULL, split_tags_rows BIGINT NOT NULL, transfers_rows BIGINT NOT NULL,
-	balances_checked BIGINT NOT NULL, balances_mismatched BIGINT NOT NULL, splits_mismatched BIGINT NOT NULL,
-	transfers_one_sided BIGINT NOT NULL, investment_transactions_not_imported BIGINT NOT NULL);
-INSERT INTO import_runs VALUES (4, '2026-06-01 10:00:00', '2026-06-01 10:00:02', '/snapshots/phase1.sqlite', 'abc', 'sha256:fp',
-	7, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13);`
-
 // importRunTexts is every import_runs row of st's store as text, ordered by id.
 func importRunTexts(t *testing.T, st *duckstore.Store) []string {
 	t.Helper()
@@ -44,24 +32,6 @@ func importRunTexts(t *testing.T, st *duckstore.Store) []string {
 		}))
 	require.NoError(t, db.Close())
 	return texts
-}
-
-// importRunIDs is the ids of st's import_runs rows in ascending order.
-func importRunIDs(t *testing.T, st *duckstore.Store) []int64 {
-	t.Helper()
-	db := openReadOnly(t, st.Path())
-	var ids []int64
-	require.NoError(t, db.QueryRows(t.Context(), "SELECT id FROM import_runs ORDER BY id", nil,
-		func(scan func(dest ...any) error) error {
-			var id int64
-			if err := scan(&id); err != nil {
-				return err
-			}
-			ids = append(ids, id)
-			return nil
-		}))
-	require.NoError(t, db.Close())
-	return ids
 }
 
 var errNoStoreToOpen = errors.New("no store to open")
@@ -158,16 +128,6 @@ func Test_replace_records_no_rates_columns_for_the_new_run(t *testing.T) {
 	db := openReadOnly(t, st.Path())
 	assertScalar(t, db, `SELECT CAST(count(*) AS VARCHAR) FROM import_runs WHERE id = 1
 		AND rates_checked_from IS NULL AND rates_last IS NULL AND rates_fetch_error IS NULL`, "1")
-}
-
-// execOnStore runs query against st's file through a writable connection closed before any read.
-func execOnStore(t *testing.T, st *duckstore.Store, query string) {
-	t.Helper()
-	conn, err := duckdb.OpenReadWrite(t.Context(), st.Path())
-	require.NoError(t, err)
-	_, err = conn.Exec(t.Context(), query)
-	require.NoError(t, err)
-	require.NoError(t, conn.Close())
 }
 
 func Test_replace_numbers_the_new_run_after_the_highest_carried_id(t *testing.T) {
@@ -380,18 +340,6 @@ func Test_replace_reads_the_history_in_four_queries_and_asks_for_the_rates_colum
 	assert.Equal(t, 5, spy.queries)
 }
 
-const (
-	reasonRepeatedID = "its import_runs table repeats an id"
-	reasonNoTable    = "it has no import_runs table"
-	reasonIncomplete = "its import_runs table is incomplete"
-	reasonIDTooLarge = "its import_runs table has an id too large to follow"
-
-	reasonFindingsRepeatedID = "its findings table repeats an id"
-	reasonFindingsIncomplete = "its findings table is incomplete"
-	previousOpenFindingID    = "uncategorized:payee-9"
-	previousOpenFindingType  = "uncategorized"
-)
-
 // importRunsColumns are the 18 columns every store format has, each with the cell of a valid run.
 var importRunsColumns = [][3]string{
 	{"id", "BIGINT", "1"},
@@ -477,13 +425,6 @@ func findingsReason(t *testing.T, st *duckstore.Store, replaced store.Replaced) 
 	t.Helper()
 	require.NotNil(t, replaced.FindingsFault)
 	return replaced.FindingsFault.UnreadableReason(st.Path())
-}
-
-// historyReason is the phrase a sync would print for replaced's history fault.
-func historyReason(t *testing.T, st *duckstore.Store, replaced store.Replaced) string {
-	t.Helper()
-	require.NotNil(t, replaced.HistoryFault)
-	return replaced.HistoryFault.UnreadableReason(st.Path())
 }
 
 func Test_replace_restarts_history_when_the_previous_store_cannot_be_read(t *testing.T) {

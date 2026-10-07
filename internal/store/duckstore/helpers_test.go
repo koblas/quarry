@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -741,4 +742,375 @@ func addImportRun(t *testing.T, st *duckstore.Store, id int, snapshotPath string
 	_, err = conn.Exec(t.Context(), clone, id, snapshotPath, accounts)
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
+}
+
+func cells(list store.AccountList) [][]*big.Int {
+	out := make([][]*big.Int, len(list.Accounts))
+	for i, a := range list.Accounts {
+		out[i] = []*big.Int{a.Balance, a.BalanceCAD, a.BalanceUSD}
+	}
+	return out
+}
+
+func namedCashFlowAccounts(ids ...string) store.CashFlowParams {
+	params := cashFlowParams()
+	params.AccountIDs = ids
+	return params
+}
+
+func cashFlowIn(currency money.Currency, by store.CashFlowPeriod) store.CashFlowParams {
+	params := cashFlowParams()
+	params.By = by
+	params.Currency = currency
+	return params
+}
+
+// earn adds an income split of cents in currency on date, on the account of that currency.
+func earn(rows *store.Rows, id, currency string, date time.Time, cents int64) {
+	account := acctInReports
+	if currency == "USD" {
+		account = acctUSD
+	}
+	addSplit(rows, splitSpec{id: id, account: account, currency: currency, date: date, category: new(catIncome), amount: cents})
+}
+
+const (
+	catFuel  = "cat-fuel"
+	payeeGym = "payee-gym"
+	nameGym  = "Gym"
+)
+
+// chargesThrough is the last day the charges tests read.
+var chargesThrough = day(2026, 9, 29)
+
+// splitPart is one split of a chargeSpec; negative cents is money out and a nil category is none.
+type splitPart struct {
+	category *string
+	cents    int64
+}
+
+// chargeSpec is one transaction of any number of splits; account defaults to acctInReports,
+// currency to CAD and date to 2026-03-15.
+type chargeSpec struct {
+	id       string
+	sourceID int64
+	account  string
+	currency string
+	payee    *string
+	date     time.Time
+	splits   []splitPart
+}
+
+// addCharge appends spec's transaction and its splits to rows.
+func addCharge(rows *store.Rows, spec chargeSpec) {
+	account, currency, date := spec.account, spec.currency, spec.date
+	if account == "" {
+		account = acctInReports
+	}
+	if currency == "" {
+		currency = "CAD"
+	}
+	if date.IsZero() {
+		date = day(2026, 3, 15)
+	}
+	var amount int64
+	for i, part := range spec.splits {
+		amount += part.cents
+		rows.Splits = append(rows.Splits, store.Split{
+			ID: spec.id + "-" + string(rune('a'+i)), SourceID: int64(len(rows.Splits) + 1), TransactionID: "txn-" + spec.id,
+			CategoryID: part.category, Amount: part.cents,
+		})
+	}
+	rows.Transactions = append(rows.Transactions, store.Transaction{
+		ID: "txn-" + spec.id, SourceID: spec.sourceID, AccountID: account, Date: date, PayeeID: spec.payee,
+		Amount: amount, Currency: currency, Status: "uncleared",
+	})
+}
+
+// chargeRowsFor is spendRows with the Gym payee and a fuel category.
+func chargeRowsFor() store.Rows {
+	rows := spendRows(expenseCategory(catFuel, "Fuel"))
+	rows.Payees = []store.Payee{{ID: payeeGym, SourceID: 1, Name: nameGym}}
+	return rows
+}
+
+// oneSplit is a charge of cents in catExpense.
+func oneSplit(id string, sourceID int64, cents int64) chargeSpec {
+	return chargeSpec{id: id, sourceID: sourceID, splits: []splitPart{{category: new(catExpense), cents: -cents}}}
+}
+
+func amountsOf(charges store.Charges) []int64 {
+	amounts := make([]int64, len(charges.Rows))
+	for i, c := range charges.Rows {
+		amounts[i] = c.Amount
+	}
+	return amounts
+}
+
+// snapshotFile is the snapshot path fixtures record in import_runs.
+const snapshotFile = "/Users/dave/Library/Application Support/quarry/snapshots/20260927T143005Z.sqlite"
+
+// importRunsDDL is an import run naming snapshotFile, as every quarry store has.
+const importRunsDDL = `CREATE TABLE import_runs (id BIGINT, snapshot_path VARCHAR);
+INSERT INTO import_runs VALUES (1, '` + snapshotFile + `');`
+
+// newStoreFile builds a DuckDB file at a Store's path from ddl, closed before any read.
+func newStoreFile(t *testing.T, ddl string, opts ...duckstore.Option) *duckstore.Store {
+	t.Helper()
+	dir := t.TempDir()
+	db, err := duckdb.Create(t.Context(), filepath.Join(dir, duckstore.FileName))
+	require.NoError(t, err)
+	_, err = db.Exec(t.Context(), ddl)
+	require.NoError(t, err)
+	require.NoError(t, db.CheckpointClose(t.Context()))
+	return duckstore.New(dir, opts...)
+}
+
+// driverIOError is the error chain duckdb.OpenReadOnly returns for a driver IO fault reading msg.
+func driverIOError(msg string) error {
+	return fmt.Errorf("open x read-only: %w", &duckdbdriver.Error{Type: duckdbdriver.ErrorTypeIO, Msg: msg})
+}
+
+const (
+	mixedPayee      = "payee-1"
+	mixedOtherPayee = "payee-2"
+	mixedThirdPayee = "payee-3"
+)
+
+// mixedSeq is one payee's transactions, one per letter (the category), a day apart from 2026-01-01, source ids from first.
+func mixedSeq(payee, letters string, first int64) []mixedFixture {
+	out := make([]mixedFixture, 0, len(letters))
+	for i, l := range letters {
+		out = append(out, mixedTxn(first+int64(i), payee, string(l), day(2026, 1, 1+i)))
+	}
+	return out
+}
+
+// mixedRows is the rows of fixtures over the categories a-i (f to i share the path "Same") and the payees payee-1..3.
+func mixedRows(fixtures ...mixedFixture) store.Rows {
+	rows := minimalRows()
+	rows.Accounts = append(rows.Accounts,
+		store.Account{ID: "acct-2", SourceID: 2, Name: "Old Visa", Type: "credit", Currency: "CAD", Closed: true, NotInReports: true})
+	rows.Categories = nil
+	for letter, path := range map[string]string{"a": "Groceries", "b": "Household", "c": "Fuel", "d": "apple", "e": "Banana", "f": "Same", "g": "Same", "h": "Same", "i": "Same"} {
+		rows.Categories = append(rows.Categories, store.Category{
+			ID: "cat-" + letter, SourceID: int64(len(rows.Categories) + 1), Name: path, FullPath: path, Kind: "expense",
+		})
+	}
+	rows.Payees = []store.Payee{
+		{ID: mixedPayee, SourceID: 1, Name: "Costco"}, {ID: mixedOtherPayee, SourceID: 2, Name: "Shell"}, {ID: mixedThirdPayee, SourceID: 3, Name: "Bakery"},
+	}
+	rows.Transactions, rows.Splits, rows.SplitTags, rows.Transfers = nil, nil, nil, nil
+	for _, f := range fixtures {
+		rows.Transactions = append(rows.Transactions, f.txn)
+		rows.Splits = append(rows.Splits, f.splits...)
+	}
+	return rows
+}
+
+func mixedIDOf(payee string) string { return "mixed-categories:" + payee }
+
+// variantPayee is a payee with how many transactions use it, in acct-1 unless account is set.
+type variantPayee struct {
+	name    string
+	txns    int
+	account string
+}
+
+// variantRows is rows whose payees are payee-1.. in argument order, each with its transactions.
+func variantRows(payees ...variantPayee) store.Rows {
+	rows := mixedRows()
+	source := int64(0)
+	for i, p := range payees {
+		id := fmt.Sprintf("payee-%d", i+1)
+		rows.Payees = append(rows.Payees, store.Payee{ID: id, SourceID: int64(i + 1), Name: p.name})
+		account := p.account
+		if account == "" {
+			account = "acct-1"
+		}
+		for range p.txns {
+			source++
+			rows.Transactions = append(rows.Transactions, store.Transaction{
+				ID: fmt.Sprintf("txn-%d", source), SourceID: source, AccountID: account, Date: day(2026, 1, int(source)),
+				PayeeID: new(id), Amount: -1000 * source, Currency: "CAD", Status: "uncleared",
+			})
+		}
+	}
+	rows.Payees = rows.Payees[3:]
+	return rows
+}
+
+// editDB runs statements against the store being built after its build and before its checkpoint.
+type editDB struct {
+	duckstore.DB
+
+	statements []string
+}
+
+func (e *editDB) CheckpointClose(ctx context.Context) error {
+	for _, statement := range e.statements {
+		if _, err := e.Exec(ctx, statement); err != nil {
+			return err
+		}
+	}
+	return e.DB.CheckpointClose(ctx)
+}
+
+// similarCat is a category with how many splits use it, in acct-1 unless account is set; an empty kind is expense.
+type similarCat struct {
+	path    string
+	kind    string
+	hidden  bool
+	splits  int
+	account string
+}
+
+// similarRows is rows whose categories are cat-1.. in argument order, each with its splits.
+func similarRows(cats ...similarCat) store.Rows {
+	rows := mixedRows()
+	rows.Categories = nil
+	source := int64(0)
+	for i, c := range cats {
+		id := fmt.Sprintf("cat-%d", i+1)
+		kind := c.kind
+		if kind == "" {
+			kind = "expense"
+		}
+		account := c.account
+		if account == "" {
+			account = "acct-1"
+		}
+		rows.Categories = append(rows.Categories, store.Category{ID: id, SourceID: int64(i + 1), Name: c.path, FullPath: c.path, Kind: kind, Hidden: c.hidden})
+		for range c.splits {
+			source++
+			txn := fmt.Sprintf("txn-%d", source)
+			rows.Transactions = append(rows.Transactions, store.Transaction{
+				ID: txn, SourceID: source, AccountID: account, Date: day(2026, 1, int(source)),
+				Amount: -1000 * source, Currency: "CAD", Status: "uncleared",
+			})
+			rows.Splits = append(rows.Splits, store.Split{
+				ID: fmt.Sprintf("split-%d", source), SourceID: source, TransactionID: txn, CategoryID: new(id), Amount: -1000 * source,
+			})
+		}
+	}
+	return rows
+}
+
+// withFindingCandidates adds, to minimalRows, uncategorized splits of one payee and of no payee,
+// and a from-split for the one-sided transfer xfer-3 (split-3, a transfer leg on txn-5).
+func withFindingCandidates() store.Rows {
+	rows := minimalRows()
+	txn := func(id string, sourceID int64, payee *string, amount int64) store.Transaction {
+		return store.Transaction{
+			ID: id, SourceID: sourceID, AccountID: "acct-1", Date: day(2026, 3, 16), PayeeID: payee,
+			Amount: amount, Currency: "CAD", Status: "uncleared",
+		}
+	}
+	rows.Transactions = append(rows.Transactions,
+		txn("txn-2", 2, nil, -500), txn("txn-3", 3, new("payee-1"), -700), txn("txn-4", 4, new("payee-1"), -900), txn("txn-5", 5, nil, -300))
+	rows.Splits = append(rows.Splits,
+		store.Split{ID: "split-5", SourceID: 5, TransactionID: "txn-2", Amount: -500},
+		store.Split{ID: "split-6", SourceID: 6, TransactionID: "txn-3", Amount: -700},
+		store.Split{ID: "split-7", SourceID: 7, TransactionID: "txn-4", Amount: -900},
+		store.Split{ID: "split-3", SourceID: 3, TransactionID: "txn-5", Amount: -300, TransferAccountID: new("acct-9")})
+	return rows
+}
+
+const (
+	duplicateAmount = -14217
+	reconciled      = "reconciled"
+	uncleared       = "uncleared"
+)
+
+// dupTxn is transaction txn-n in account, dated day, for amount; its source id is n so pair ids sort numerically.
+func dupTxn(n int64, account string, date time.Time, amount int64, status string) store.Transaction {
+	return store.Transaction{
+		ID: fmt.Sprintf("txn-%d", n), SourceID: n, AccountID: account, Date: date, Amount: amount, Currency: "CAD", Status: status,
+	}
+}
+
+const unlinkedAmount = 50000
+
+// unlinkedRows is minimalRows with the transactions replaced by txns, the closed CAD account acct-2 and the USD
+// account acct-3 added, and no splits or transfers until mutate adds them.
+func unlinkedRows(mutate func(*store.Rows), txns ...store.Transaction) store.Rows {
+	rows := minimalRows()
+	rows.Accounts = append(rows.Accounts,
+		store.Account{ID: "acct-2", SourceID: 2, Name: "Old Visa", Type: "credit", Currency: "CAD", Closed: true, NotInReports: true},
+		store.Account{ID: "acct-3", SourceID: 3, Name: "US Savings", Type: "savings", Currency: "USD"})
+	rows.Transactions = txns
+	rows.Splits, rows.SplitTags, rows.Transfers = nil, nil, nil
+	if mutate != nil {
+		mutate(&rows)
+	}
+	return rows
+}
+
+func inAccount(id string) func(*unusedCat) {
+	return func(c *unusedCat) { c.base.splits, c.base.account = 1, id }
+}
+
+// phase1ImportRunsDDL is Phase 1's import_runs: 19 columns, one run (id 4), no store_info beside it;
+// the extra column is investment_transactions_not_imported.
+const phase1ImportRunsDDL = `CREATE TABLE import_runs (
+	id BIGINT PRIMARY KEY, started_at TIMESTAMP NOT NULL, finished_at TIMESTAMP NOT NULL,
+	snapshot_path VARCHAR NOT NULL, snapshot_sha256 VARCHAR NOT NULL, schema_fingerprint VARCHAR NOT NULL,
+	accounts_rows BIGINT NOT NULL, categories_rows BIGINT NOT NULL, payees_rows BIGINT NOT NULL, tags_rows BIGINT NOT NULL,
+	transactions_rows BIGINT NOT NULL, splits_rows BIGINT NOT NULL, split_tags_rows BIGINT NOT NULL, transfers_rows BIGINT NOT NULL,
+	balances_checked BIGINT NOT NULL, balances_mismatched BIGINT NOT NULL, splits_mismatched BIGINT NOT NULL,
+	transfers_one_sided BIGINT NOT NULL, investment_transactions_not_imported BIGINT NOT NULL);
+INSERT INTO import_runs VALUES (4, '2026-06-01 10:00:00', '2026-06-01 10:00:02', '/snapshots/phase1.sqlite', 'abc', 'sha256:fp',
+	7, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13);`
+
+// importRunIDs is the ids of st's import_runs rows in ascending order.
+func importRunIDs(t *testing.T, st *duckstore.Store) []int64 {
+	t.Helper()
+	db := openReadOnly(t, st.Path())
+	var ids []int64
+	require.NoError(t, db.QueryRows(t.Context(), "SELECT id FROM import_runs ORDER BY id", nil,
+		func(scan func(dest ...any) error) error {
+			var id int64
+			if err := scan(&id); err != nil {
+				return err
+			}
+			ids = append(ids, id)
+			return nil
+		}))
+	require.NoError(t, db.Close())
+	return ids
+}
+
+// execOnStore runs query against st's file through a writable connection closed before any read.
+func execOnStore(t *testing.T, st *duckstore.Store, query string) {
+	t.Helper()
+	conn, err := duckdb.OpenReadWrite(t.Context(), st.Path())
+	require.NoError(t, err)
+	_, err = conn.Exec(t.Context(), query)
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+}
+
+const (
+	reasonRepeatedID = "its import_runs table repeats an id"
+	reasonNoTable    = "it has no import_runs table"
+	reasonIncomplete = "its import_runs table is incomplete"
+	reasonIDTooLarge = "its import_runs table has an id too large to follow"
+
+	reasonFindingsRepeatedID = "its findings table repeats an id"
+	reasonFindingsIncomplete = "its findings table is incomplete"
+	previousOpenFindingID    = "uncategorized:payee-9"
+	previousOpenFindingType  = "uncategorized"
+)
+
+// historyReason is the phrase a sync would print for replaced's history fault.
+func historyReason(t *testing.T, st *duckstore.Store, replaced store.Replaced) string {
+	t.Helper()
+	require.NotNil(t, replaced.HistoryFault)
+	return replaced.HistoryFault.UnreadableReason(st.Path())
+}
+
+// readOp is one store read, called with no arguments beyond the store.
+type readOp struct {
+	name string
+	call func(context.Context, *duckstore.Store) error
 }

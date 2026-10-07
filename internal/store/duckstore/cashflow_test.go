@@ -21,12 +21,6 @@ func emptyCashFlowParams() store.CashFlowParams {
 	return store.CashFlowParams{Window: emptyWindowParams().Window}
 }
 
-func namedCashFlowAccounts(ids ...string) store.CashFlowParams {
-	params := cashFlowParams()
-	params.AccountIDs = ids
-	return params
-}
-
 // incomeAndSpending is a fixture whose only splits are one income and one expense in March 2026.
 func incomeAndSpending(income, spent int64) store.Rows {
 	rows := spendRows()
@@ -434,22 +428,6 @@ func Test_cash_flow_closes_the_connection_on_success_and_on_a_query_fault(t *tes
 }
 
 // Rates are fridayAndMonday's: 2026-03-13 at 1.25 and 2026-03-16 at 1.30; march(10) is before the first.
-
-func cashFlowIn(currency money.Currency, by store.CashFlowPeriod) store.CashFlowParams {
-	params := cashFlowParams()
-	params.By = by
-	params.Currency = currency
-	return params
-}
-
-// earn adds an income split of cents in currency on date, on the account of that currency.
-func earn(rows *store.Rows, id, currency string, date time.Time, cents int64) {
-	account := acctInReports
-	if currency == "USD" {
-		account = acctUSD
-	}
-	addSplit(rows, splitSpec{id: id, account: account, currency: currency, date: date, category: new(catIncome), amount: cents})
-}
 
 func Test_cash_flow_read_in_native_lists_each_currency_on_rows_of_its_own_despite_rates(t *testing.T) {
 	t.Parallel()

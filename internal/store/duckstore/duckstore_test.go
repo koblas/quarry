@@ -860,13 +860,6 @@ var (
 	errEmpty    = errors.New("")
 )
 
-// snapshotFile is the snapshot path fixtures record in import_runs.
-const snapshotFile = "/Users/dave/Library/Application Support/quarry/snapshots/20260927T143005Z.sqlite"
-
-// importRunsDDL is an import run naming snapshotFile, as every quarry store has.
-const importRunsDDL = `CREATE TABLE import_runs (id BIGINT, snapshot_path VARCHAR);
-INSERT INTO import_runs VALUES (1, '` + snapshotFile + `');`
-
 // storeInfoDDL creates store_info holding one row per format version given.
 func storeInfoDDL(versions ...string) string {
 	var ddl strings.Builder
@@ -877,18 +870,6 @@ func storeInfoDDL(versions ...string) string {
 	return ddl.String()
 }
 
-// newStoreFile builds a DuckDB file at a Store's path from ddl, closed before any read.
-func newStoreFile(t *testing.T, ddl string, opts ...duckstore.Option) *duckstore.Store {
-	t.Helper()
-	dir := t.TempDir()
-	db, err := duckdb.Create(t.Context(), filepath.Join(dir, duckstore.FileName))
-	require.NoError(t, err)
-	_, err = db.Exec(t.Context(), ddl)
-	require.NoError(t, err)
-	require.NoError(t, db.CheckpointClose(t.Context()))
-	return duckstore.New(dir, opts...)
-}
-
 // openRefusal is the *store.OpenError a read of st refuses with.
 func openRefusal(t *testing.T, st *duckstore.Store) *store.OpenError {
 	t.Helper()
@@ -896,11 +877,6 @@ func openRefusal(t *testing.T, st *duckstore.Store) *store.OpenError {
 	openErr, ok := errors.AsType[*store.OpenError](err)
 	require.True(t, ok, "want *store.OpenError, got %v", err)
 	return openErr
-}
-
-// driverIOError is the error chain duckdb.OpenReadOnly returns for a driver IO fault reading msg.
-func driverIOError(msg string) error {
-	return fmt.Errorf("open x read-only: %w", &duckdbdriver.Error{Type: duckdbdriver.ErrorTypeIO, Msg: msg})
 }
 
 func Test_open_read_classifies_each_store_file_it_cannot_read(t *testing.T) {

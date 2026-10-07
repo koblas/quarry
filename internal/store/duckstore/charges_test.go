@@ -3,7 +3,6 @@ package duckstore_test
 import (
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
@@ -11,84 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	catFuel  = "cat-fuel"
-	payeeGym = "payee-gym"
-	nameGym  = "Gym"
-)
-
-// chargesThrough is the last day the charges tests read.
-var chargesThrough = day(2026, 9, 29)
-
-// splitPart is one split of a chargeSpec; negative cents is money out and a nil category is none.
-type splitPart struct {
-	category *string
-	cents    int64
-}
-
-// chargeSpec is one transaction of any number of splits; account defaults to acctInReports,
-// currency to CAD and date to 2026-03-15.
-type chargeSpec struct {
-	id       string
-	sourceID int64
-	account  string
-	currency string
-	payee    *string
-	date     time.Time
-	splits   []splitPart
-}
-
-// addCharge appends spec's transaction and its splits to rows.
-func addCharge(rows *store.Rows, spec chargeSpec) {
-	account, currency, date := spec.account, spec.currency, spec.date
-	if account == "" {
-		account = acctInReports
-	}
-	if currency == "" {
-		currency = "CAD"
-	}
-	if date.IsZero() {
-		date = day(2026, 3, 15)
-	}
-	var amount int64
-	for i, part := range spec.splits {
-		amount += part.cents
-		rows.Splits = append(rows.Splits, store.Split{
-			ID: spec.id + "-" + string(rune('a'+i)), SourceID: int64(len(rows.Splits) + 1), TransactionID: "txn-" + spec.id,
-			CategoryID: part.category, Amount: part.cents,
-		})
-	}
-	rows.Transactions = append(rows.Transactions, store.Transaction{
-		ID: "txn-" + spec.id, SourceID: spec.sourceID, AccountID: account, Date: date, PayeeID: spec.payee,
-		Amount: amount, Currency: currency, Status: "uncleared",
-	})
-}
-
-// chargeRowsFor is spendRows with the Gym payee and a fuel category.
-func chargeRowsFor() store.Rows {
-	rows := spendRows(expenseCategory(catFuel, "Fuel"))
-	rows.Payees = []store.Payee{{ID: payeeGym, SourceID: 1, Name: nameGym}}
-	return rows
-}
-
-// oneSplit is a charge of cents in catExpense.
-func oneSplit(id string, sourceID int64, cents int64) chargeSpec {
-	return chargeSpec{id: id, sourceID: sourceID, splits: []splitPart{{category: new(catExpense), cents: -cents}}}
-}
-
 func chargesOf(t *testing.T, rows store.Rows) store.Charges {
 	t.Helper()
 	got, err := newStoreWith(t, rows).Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
 	require.NoError(t, err)
 	return got
-}
-
-func amountsOf(charges store.Charges) []int64 {
-	amounts := make([]int64, len(charges.Rows))
-	for i, c := range charges.Rows {
-		amounts[i] = c.Amount
-	}
-	return amounts
 }
 
 func Test_charges_sums_a_split_transaction_into_one_charge(t *testing.T) {

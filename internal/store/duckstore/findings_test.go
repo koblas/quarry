@@ -6,7 +6,6 @@ import (
 	"os"
 	"slices"
 	"testing"
-	"time"
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
 	"github.com/koblas/quarry/internal/finding"
@@ -31,26 +30,6 @@ func Test_replace_creates_the_findings_tables(t *testing.T) {
 		"finding_id VARCHAR NO, transaction_id VARCHAR YES, split_id VARCHAR YES, payee_id VARCHAR YES, category_id VARCHAR YES")
 	assertScalar(t, db, `SELECT CAST(constraint_column_names AS VARCHAR) FROM duckdb_constraints()
 		WHERE table_name = 'findings' AND constraint_type = 'PRIMARY KEY'`, "[id]")
-}
-
-// withFindingCandidates adds, to minimalRows, uncategorized splits of one payee and of no payee,
-// and a from-split for the one-sided transfer xfer-3 (split-3, a transfer leg on txn-5).
-func withFindingCandidates() store.Rows {
-	rows := minimalRows()
-	txn := func(id string, sourceID int64, payee *string, amount int64) store.Transaction {
-		return store.Transaction{
-			ID: id, SourceID: sourceID, AccountID: "acct-1", Date: day(2026, 3, 16), PayeeID: payee,
-			Amount: amount, Currency: "CAD", Status: "uncleared",
-		}
-	}
-	rows.Transactions = append(rows.Transactions,
-		txn("txn-2", 2, nil, -500), txn("txn-3", 3, new("payee-1"), -700), txn("txn-4", 4, new("payee-1"), -900), txn("txn-5", 5, nil, -300))
-	rows.Splits = append(rows.Splits,
-		store.Split{ID: "split-5", SourceID: 5, TransactionID: "txn-2", Amount: -500},
-		store.Split{ID: "split-6", SourceID: 6, TransactionID: "txn-3", Amount: -700},
-		store.Split{ID: "split-7", SourceID: 7, TransactionID: "txn-4", Amount: -900},
-		store.Split{ID: "split-3", SourceID: 3, TransactionID: "txn-5", Amount: -300, TransferAccountID: new("acct-9")})
-	return rows
 }
 
 func Test_replace_records_each_finding_with_its_items(t *testing.T) {
@@ -308,19 +287,6 @@ func Test_replace_keeps_a_carried_finding_of_an_unknown_type_out_of_the_findings
 	assert.Contains(t, findingTimes(t, duckstore.New(dir)), "future-kind:x|future-kind|")
 }
 
-const (
-	duplicateAmount = -14217
-	reconciled      = "reconciled"
-	uncleared       = "uncleared"
-)
-
-// dupTxn is transaction txn-n in account, dated day, for amount; its source id is n so pair ids sort numerically.
-func dupTxn(n int64, account string, date time.Time, amount int64, status string) store.Transaction {
-	return store.Transaction{
-		ID: fmt.Sprintf("txn-%d", n), SourceID: n, AccountID: account, Date: date, Amount: amount, Currency: "CAD", Status: status,
-	}
-}
-
 // investmentCash is txn as an investment cash row, the way sync stores a brokerage dividend or sale.
 func investmentCash(txn store.Transaction) store.Transaction {
 	txn.InvestmentTransactionID = new(fmt.Sprintf("itxn-%d", txn.SourceID))
@@ -527,23 +493,6 @@ func Test_replace_records_the_two_transactions_of_a_duplicate_as_its_items(t *te
 		COALESCE(payee_id, 'NULL') || '|' || COALESCE(category_id, 'NULL'), '; ' ORDER BY transaction_id)
 		FROM finding_items WHERE finding_id = 'duplicate:txn-9+txn-10'`,
 		"txn-10|NULL|NULL|NULL; txn-9|NULL|NULL|NULL")
-}
-
-const unlinkedAmount = 50000
-
-// unlinkedRows is minimalRows with the transactions replaced by txns, the closed CAD account acct-2 and the USD
-// account acct-3 added, and no splits or transfers until mutate adds them.
-func unlinkedRows(mutate func(*store.Rows), txns ...store.Transaction) store.Rows {
-	rows := minimalRows()
-	rows.Accounts = append(rows.Accounts,
-		store.Account{ID: "acct-2", SourceID: 2, Name: "Old Visa", Type: "credit", Currency: "CAD", Closed: true, NotInReports: true},
-		store.Account{ID: "acct-3", SourceID: 3, Name: "US Savings", Type: "savings", Currency: "USD"})
-	rows.Transactions = txns
-	rows.Splits, rows.SplitTags, rows.Transfers = nil, nil, nil
-	if mutate != nil {
-		mutate(&rows)
-	}
-	return rows
 }
 
 // unlinkedIDs returns the unlinked-transfer finding ids of the store built from unlinkedRows, comma-joined in id order.

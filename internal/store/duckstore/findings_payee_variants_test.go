@@ -1,45 +1,13 @@
 package duckstore_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/koblas/quarry/internal/platform/duckdb"
-	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// variantPayee is a payee with how many transactions use it, in acct-1 unless account is set.
-type variantPayee struct {
-	name    string
-	txns    int
-	account string
-}
-
-// variantRows is rows whose payees are payee-1.. in argument order, each with its transactions.
-func variantRows(payees ...variantPayee) store.Rows {
-	rows := mixedRows()
-	source := int64(0)
-	for i, p := range payees {
-		id := fmt.Sprintf("payee-%d", i+1)
-		rows.Payees = append(rows.Payees, store.Payee{ID: id, SourceID: int64(i + 1), Name: p.name})
-		account := p.account
-		if account == "" {
-			account = "acct-1"
-		}
-		for range p.txns {
-			source++
-			rows.Transactions = append(rows.Transactions, store.Transaction{
-				ID: fmt.Sprintf("txn-%d", source), SourceID: source, AccountID: account, Date: day(2026, 1, int(source)),
-				PayeeID: new(id), Amount: -1000 * source, Currency: "CAD", Status: "uncleared",
-			})
-		}
-	}
-	rows.Payees = rows.Payees[3:]
-	return rows
-}
 
 // variantStore builds a store from variantRows and returns its read connection.
 func variantStore(t *testing.T, payees ...variantPayee) *duckdb.DB {
