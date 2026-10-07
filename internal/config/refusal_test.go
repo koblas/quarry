@@ -83,17 +83,6 @@ func Test_Load_leaves_both_warning_lists_nil_without_unknown_keys(t *testing.T) 
 	assert.Nil(t, cfg.WarningsAbsolute)
 }
 
-// loadPath writes content as the config file under a fresh home and returns the home and the file's path;
-// err is the error loading it gives.
-func loadPath(t *testing.T, content string) (string, string, error) {
-	t.Helper()
-	home, path := newHome(t)
-	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
-	_, err := config.Load(home, path)
-
-	return home, path, err
-}
-
 func Test_ProblemAbsolute_names_a_directory_in_place_of_the_file_by_its_absolute_path(t *testing.T) {
 	home, path := newHome(t)
 	require.NoError(t, os.Mkdir(path, 0o700))

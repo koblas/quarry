@@ -4,10 +4,15 @@
 // Test_open_read_only_does_not_wait_for_an_instance_an_earlier_open_left_running
 // is the canary on a driver upgrade: it goes red if the driver stops
 // consulting GetInstanceCache.
+//
+// White-box: checkNoWAL is unexported. A real CHECKPOINT always removes the
+// .wal file itself, so the only way to exercise "a .wal remains" is to
+// plant one beside an already-closed database and call the check directly.
 package duckdb
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -18,12 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// openBound is how long an open of an idle path may take before a test calls it blocked.
-const openBound = 5 * time.Second
-
-// lockHeldBound is how long a test waits to be sure an open is still blocked behind openMu.
-const lockHeldBound = 200 * time.Millisecond
 
 func Test_open_read_only_does_not_wait_for_an_instance_an_earlier_open_left_running(t *testing.T) {
 	t.Parallel()
@@ -138,57 +137,36 @@ func Test_the_driver_uses_its_shared_cache_outside_an_open(t *testing.T) {
 	assert.Equal(t, first.Ptr, second.Ptr)
 }
 
-// newStoreFile creates an empty DuckDB file and returns its path.
-func newStoreFile(t *testing.T) string {
-	t.Helper()
+func Test_no_wal_check_fails_when_a_wal_file_remains(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "data.duckdb")
-	db, err := Create(t.Context(), path)
-	require.NoError(t, err)
-	require.NoError(t, db.CheckpointClose(t.Context()))
-	return path
+	require.NoError(t, os.WriteFile(path+".wal", nil, 0o600))
+
+	err := checkNoWAL(path)
+
+	require.ErrorIs(t, err, ErrWALRemains)
 }
 
-// selectOne runs SELECT 1 on db and returns the value read.
-func selectOne(t *testing.T, db *DB) int {
-	t.Helper()
-	var one int
-	err := db.QueryRows(t.Context(), "SELECT 1", nil, func(scan func(dest ...any) error) error { return scan(&one) })
-	require.NoError(t, err)
-	return one
+func Test_no_wal_check_passes_when_no_wal_file_exists(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "data.duckdb")
+
+	err := checkNoWAL(path)
+
+	assert.NoError(t, err)
 }
 
-// opened is the outcome of an open started by startOpen.
-type opened struct {
-	db  *DB
-	err error
-}
+// An unreadable parent directory makes os.Stat fail with EACCES rather than
+// ErrNotExist — that error must pass through, not be swallowed as "no WAL".
+func Test_no_wal_check_fails_when_the_stat_itself_errors(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	path := filepath.Join(dir, "data.duckdb")
 
-// startOpen runs open in a goroutine and returns the channel its outcome arrives on.
-func startOpen(open func() (*DB, error)) <-chan opened {
-	result := make(chan opened, 1)
-	go func() {
-		db, err := open()
-		result <- opened{db: db, err: err}
-	}()
-	return result
-}
+	err := checkNoWAL(path)
 
-// awaitOpen waits up to bound for result, failing the test if the open has not returned or failed; the DB is closed on cleanup.
-func awaitOpen(t *testing.T, result <-chan opened, bound time.Duration) *DB {
-	t.Helper()
-	select {
-	case got := <-result:
-		require.NoError(t, got.err)
-		t.Cleanup(func() { _ = got.db.Close() })
-		return got.db
-	case <-time.After(bound):
-		require.FailNow(t, "open blocked", "open had not returned after %v", bound)
-		return nil
-	}
-}
-
-// openWithin runs open, failing the test if it has not returned within bound.
-func openWithin(t *testing.T, open func() (*DB, error), bound time.Duration) *DB {
-	t.Helper()
-	return awaitOpen(t, startOpen(open), bound)
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrWALRemains)
 }
