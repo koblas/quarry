@@ -51,27 +51,56 @@ func Test_dirDestination_backup_skips_an_id_the_folder_uses_in_another_letter_ca
 	}
 }
 
+var firstPartial = regexp.MustCompile(`^\.(\d{8}T\d{6}Z)\.sqlite\.partial$`)
+
+// readDirWithUpperCaseStrayForFirstPartial lists dir plus an upper-case snapshot named for the first partial found in it.
+func readDirWithUpperCaseStrayForFirstPartial(dir string) ([]fs.DirEntry, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if match := firstPartial.FindStringSubmatch(entry.Name()); match != nil {
+			entries = append(entries, listedEntry(match[1]+".SQLITE", 0))
+		}
+	}
+	return entries, nil
+}
+
 func Test_sync_skips_an_id_the_folder_uses_in_another_letter_case(t *testing.T) {
 	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
 	snapshotsDir := filepath.Join(t.TempDir(), "quarry", "snapshots")
-	firstPartial := regexp.MustCompile(`^\.(\d{8}T\d{6}Z)\.sqlite\.partial$`)
-	readDir := func(dir string) ([]fs.DirEntry, error) {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			return nil, err
-		}
-		for _, entry := range entries {
-			if match := firstPartial.FindStringSubmatch(entry.Name()); match != nil {
-				entries = append(entries, listedEntry(match[1]+".SQLITE", 0))
-			}
-		}
-		return entries, nil
-	}
-	srv := newServer(t, snapshotsDir, snapshot.WithReadDir(readDir))
+	srv := newServer(t, snapshotsDir, snapshot.WithReadDir(readDirWithUpperCaseStrayForFirstPartial))
 
 	manifest, err := srv.Sync(t.Context(), bundle.Dir)
 
 	require.NoError(t, err)
 	assert.Regexp(t, `^\d{8}T\d{6}Z_2\.sqlite$`, filepath.Base(manifest.Snapshot.Path))
+}
+
+func Test_dirDestination_backup_skips_an_id_a_final_on_disk_uses_when_the_folder_cannot_be_listed(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		file string
+	}{
+		{name: "snapshot only", file: letterCaseName + ".sqlite"},
+		{name: "manifest only", file: letterCaseName + ".json"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(dir, c.file), []byte("x"), 0o600))
+			unlistable := func(string) ([]fs.DirEntry, error) { return nil, fs.ErrPermission }
+			dest := snapshot.NewDirDestinationReading(dir, unlistable)
+
+			_, name, err := dest.Backup(t.Context(), &fakeSource{}, letterCaseName)
+
+			require.NoError(t, err)
+			assert.Equal(t, letterCaseName+"_2", name)
+		})
+	}
 }

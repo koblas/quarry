@@ -56,22 +56,34 @@ func Test_run_snapshots_prune_deletes_beyond_the_newest_n_when_the_recorded_snap
 }
 
 func Test_run_snapshots_prune_dry_run_lists_what_lies_beyond_the_newest_n_when_the_recorded_snapshot_stats_or_is_gone(t *testing.T) {
-	modes := []pruneMode{
-		{"text", []string{"--keep", "1", "--dry-run"}},
-		{"json", []string{"--keep", "1", "--dry-run", "--json"}},
-	}
 	for _, c := range readableRecordedClasses() {
-		for _, mode := range modes {
-			t.Run(c.name+" "+mode.name, func(t *testing.T) {
-				dir, _, exitCode, stdout, stderr := pruneRecordedCell(t, c, mode.args...)
+		t.Run(c.name, func(t *testing.T) {
+			pinLocalZone(t)
+			dir, _, exitCode, stdout, stderr := pruneRecordedCell(t, c, "--keep", "1", "--dry-run")
 
-				require.Equal(t, 0, exitCode, stderr)
-				assert.Empty(t, stderr)
-				assert.Contains(t, stdout, pruneOldest)
-				assert.Contains(t, stdout, pruneMorning)
-				requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
-			})
-		}
+			require.Equal(t, 0, exitCode, stderr)
+			assert.Empty(t, stderr)
+			assert.Equal(t, ""+
+				"Would delete 3 snapshots (1.6 MB), keeping the newest one and 20260929T090011Z, the store's snapshot:\n"+
+				"  20260930T141502Z  2026-09-30 10:15 EDT  0.2 MB\n"+
+				"  20260930T090000Z  2026-09-30 05:00 EDT  0.2 MB\n"+
+				"  20260927T143005Z  2026-09-27 10:30 EDT  1.2 MB\n", stdout)
+			requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+		})
+	}
+}
+
+func Test_run_snapshots_prune_dry_run_json_lists_what_lies_beyond_the_newest_n_when_the_recorded_snapshot_stats_or_is_gone(t *testing.T) {
+	for _, c := range readableRecordedClasses() {
+		t.Run(c.name, func(t *testing.T) {
+			dir, _, exitCode, stdout, stderr := pruneRecordedCell(t, c, "--keep", "1", "--dry-run", "--json")
+
+			require.Equal(t, 0, exitCode, stderr)
+			assert.Empty(t, stderr)
+			assert.Equal(t, []string{pruneNoon, pruneMorning, pruneOldest}, jsonIDs(t, stdout, "would_delete"))
+			assert.Empty(t, jsonIDs(t, stdout, "deleted"))
+			requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+		})
 	}
 }
 

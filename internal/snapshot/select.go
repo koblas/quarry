@@ -30,7 +30,7 @@ type folderSelection struct {
 	used map[string]bool
 }
 
-// uses reports whether some entry of any type in the folder is named as id's snapshot or manifest, extension in any letter case.
+// uses reports whether some entry of any type in the folder is named as id's snapshot or manifest.
 func (f folderSelection) uses(id string) bool { return f.used[id] }
 
 // idGroup is every directory entry that names one snapshot ID.
@@ -122,8 +122,8 @@ func (f folderSelection) snapshot(id string) (selectedSnapshot, bool) {
 	return f.snapshots[i], true
 }
 
-// selectManifest is the name of the manifest of stem in dirEntries: an entry of any type named stem plus a
-// .json extension in any letter case, the exact lowercase name first, else the byte-order first; "" when none.
+// selectManifest is the name of the manifest of stem in dirEntries: an entry of any type named stem plus .json,
+// the exact lowercase name first, else the byte-order first; "" when none.
 func selectManifest(dirEntries []fs.DirEntry, stem string) string {
 	var candidates []fs.DirEntry
 	for _, dirEntry := range dirEntries {

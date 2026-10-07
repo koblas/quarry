@@ -58,8 +58,7 @@ func (s *Server) Status(ctx context.Context) (store.Status, error) {
 	return st, nil
 }
 
-// SnapshotID returns the ID of the snapshot at path: its file name without
-// the .sqlite extension, in any letter case.
+// SnapshotID returns the ID of the snapshot at path: its file name without the .sqlite extension.
 func SnapshotID(path string) string {
 	name := filepath.Base(path)
 	ext := filepath.Ext(name)

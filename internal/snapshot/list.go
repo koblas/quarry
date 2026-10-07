@@ -20,9 +20,7 @@ import (
 // reasonOtherFormat is why a store of another format that names no snapshot cannot say which one built it.
 const reasonOtherFormat = "the store was built by another version of quarry"
 
-// Entry is one snapshot in a Listing: its ID, its .sqlite path and size on
-// disk, its manifest (nil when it has none or cannot read it) and whether the
-// store was built from it. Path and ManifestPath are names the directory listing returned.
+// Entry is one snapshot in a Listing; Path and ManifestPath are names the directory listing returned.
 type Entry struct {
 	ID    string
 	Path  string
@@ -60,11 +58,11 @@ type Listing struct {
 	Duplicates []string
 	// DuplicatesAbsolute is Duplicates naming the folder by its absolute path; machine-readable output carries this form.
 	DuplicatesAbsolute []string
-	// StoreUnreadable is why the store's snapshot cannot be told, a phrase naming any path it could not read; "" when it can, or there is no store.
+	// StoreUnreadable is why the store's snapshot cannot be told; "" when it can, or there is no store.
 	StoreUnreadable string
 	// StoreWarning is StoreUnreadable as the warning a listing prints; "" when StoreUnreadable is.
 	StoreWarning string
-	// StoreWarningAbsolute is StoreWarning naming any path by its absolute path; machine-readable output carries this form.
+	// StoreWarningAbsolute is StoreWarning with an unreadable recorded path shown absolute; machine-readable output carries this form.
 	StoreWarningAbsolute string
 	// orphans are the manifests whose snapshot file is gone and that no sync is writing.
 	orphans []string

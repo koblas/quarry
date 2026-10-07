@@ -212,8 +212,14 @@ func Test_run_snapshots_lists_while_a_writer_holds_the_lock(t *testing.T) {
 	}{
 		{name: "text", wantOK: func(t *testing.T, stdout string) {
 			t.Helper()
-			assert.Contains(t, stdout, pruneNewest)
-			assert.Contains(t, stdout, pruneOldest)
+			assert.Equal(t, ""+
+				"ID                  Taken                   Size  Source        Status\n"+
+				"20260930T141502Z_2  2026-09-30 14:30 EDT  3.2 MB  Home.quicken  store\n"+
+				"20260930T141502Z    2026-09-30 10:15 EDT  0.2 MB  Home.quicken\n"+
+				"20260930T090000Z    2026-09-30 05:00 EDT  0.2 MB  Home.quicken\n"+
+				"20260929T090011Z    2026-09-29 05:00 EDT  2.2 MB  Home.quicken\n"+
+				"20260927T143005Z    2026-09-27 10:30 EDT  1.2 MB  Home.quicken\n"+
+				"Total                                     7.1 MB\n", stdout)
 		}},
 		{name: "json", flag: []string{"--json"}, wantOK: func(t *testing.T, stdout string) {
 			t.Helper()
@@ -223,6 +229,7 @@ func Test_run_snapshots_lists_while_a_writer_holds_the_lock(t *testing.T) {
 
 	for _, c := range cells {
 		t.Run(c.name, func(t *testing.T) {
+			pinLocalZone(t)
 			p := newPrunableStore(t)
 			p.holdLock(t)
 

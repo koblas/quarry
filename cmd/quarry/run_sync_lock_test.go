@@ -154,21 +154,22 @@ func (r *recordingLocker) Acquire(context.Context) (func(), error) {
 
 func Test_run_sync_releases_the_lock_when_it_returns(t *testing.T) {
 	cells := []struct {
-		name       string
-		withBundle bool
-		wantCode   int
+		name     string
+		arrange  func(t *testing.T, home string)
+		wantCode int
 	}{
-		{name: "a successful sync", withBundle: true, wantCode: 0},
-		{name: "a refusal after the lock is taken", withBundle: false, wantCode: 1},
+		{name: "a successful sync", arrange: func(t *testing.T, home string) {
+			t.Helper()
+			writeStatusFixtureBundle(t, home)
+		}, wantCode: 0},
+		{name: "a refusal after the lock is taken", arrange: func(*testing.T, string) {}, wantCode: 1},
 	}
 
 	for _, c := range cells {
 		t.Run(c.name, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
-			if c.withBundle {
-				writeStatusFixtureBundle(t, home)
-			}
+			c.arrange(t, home)
 			locker := &recordingLocker{}
 			env := testEnv(io.Discard, io.Discard)
 			build := newServerFactory(fixedRates())

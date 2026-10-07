@@ -105,8 +105,8 @@ func (d *dirDestination) Backup(ctx context.Context, src Source, name string) (s
 	}
 }
 
-// folderUses reports whether an entry of the folder is named as id's snapshot or manifest in any letter case, which
-// the stat check misses on a case-sensitive volume. A listing fault reports false: the stat check alone then decides.
+// folderUses reports whether an entry of the folder is named as id's snapshot or manifest, which the stat check
+// misses on a case-sensitive volume. A listing fault reports false: the stat check alone then decides.
 func (d *dirDestination) folderUses(id string) bool {
 	entries, err := d.readDir(d.dir)
 	if err != nil {

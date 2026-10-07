@@ -153,8 +153,7 @@ func (e causedRefusalError) Unwrap() error { return e.cause }
 // sqliteExtension matches a snapshot file's extension, in any letter case, at the end of a name.
 var sqliteExtension = regexp.MustCompile(`\.(?i:sqlite)$`)
 
-// ID returns the id a snapshot goes by for its .sqlite path: the base name
-// with its extension, in any letter case, removed.
+// ID returns the id a snapshot goes by for its .sqlite path: its base name without the extension.
 func ID(path string) string {
 	return sqliteExtension.ReplaceAllString(filepath.Base(path), "")
 }

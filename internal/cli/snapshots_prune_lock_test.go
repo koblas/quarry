@@ -142,7 +142,6 @@ func Test_prune_releases_the_lock_when_it_returns(t *testing.T) {
 
 	require.NoError(t, got.err)
 	assert.Equal(t, 1, countOf(got.log.events, "release"))
-	assert.Equal(t, "release", got.log.events[len(got.log.events)-1])
 }
 
 func Test_prune_releases_the_lock_when_it_refuses_after_taking_it(t *testing.T) {

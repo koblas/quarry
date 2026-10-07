@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/koblas/quarry/internal/platform/homepath"
+	"github.com/koblas/quarry/internal/platform/osreason"
 	"github.com/koblas/quarry/internal/platform/sqlite"
 )
 
@@ -67,7 +68,7 @@ func (s *Server) ImportFrom(ctx context.Context, from string) (Outcome, error) {
 	return s.importVerified(ctx, manifest)
 }
 
-// isPathForm reports whether a --from value names a file: it has a "/" or ends in .sqlite, in any letter case.
+// isPathForm reports whether a --from value names a file: it has a "/" or ends in .sqlite.
 func isPathForm(value string) bool {
 	return strings.Contains(value, "/") || sqliteExtension.MatchString(value)
 }
@@ -101,13 +102,16 @@ func (s *Server) locateByID(id string) (string, string, error) {
 }
 
 // locateByPath resolves a path-form value, checks the file exists and is a snapshot candidate, then lists its
-// parent folder for the manifest in any letter case.
+// parent folder for the manifest.
 func (s *Server) locateByPath(value string) (string, string, error) {
 	home, snapshotDir := s.home, s.snapshotDir
 	snapshotPath, err := filepath.Abs(homepath.Expand(home, value))
 	if err != nil {
-		// unreachable: on darwin os.Getwd succeeds after the working directory is removed; Linux exercises it via Test_import_from_refuses_a_relative_path_when_the_working_directory_no_longer_exists
-		return "", "", fmt.Errorf("resolve snapshot path %s: %w", value, err)
+		return "", "", causedRefusalError{
+			msg: fmt.Sprintf("cannot resolve %s against the current folder: %s; pass --from an absolute or ~/ path instead",
+				value, osreason.Reason(err)),
+			cause: err,
+		}
 	}
 	if err := fromPathRefusal(home, snapshotDir, snapshotPath); err != nil {
 		return "", "", err
