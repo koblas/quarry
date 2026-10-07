@@ -4,14 +4,18 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -130,4 +134,42 @@ func readLineWithDeadline(t *testing.T, r *bufio.Reader, timeout time.Duration) 
 		t.Fatal("timed out waiting for child output")
 	}
 	return ""
+}
+
+func Test_exitCode_is_1_and_prints_nothing_for_an_error_already_reported(t *testing.T) {
+	var stderr bytes.Buffer
+
+	code := exitCode(cli.ReportedError{}, &stderr)
+
+	assert.Equal(t, 1, code)
+	assert.Empty(t, stderr.String())
+}
+
+var errBoom = errors.New("boom")
+
+func Test_exitCode_prints_an_error_that_was_not_reported_and_exits_1(t *testing.T) {
+	var stderr bytes.Buffer
+
+	code := exitCode(errBoom, &stderr)
+
+	assert.Equal(t, 1, code)
+	assert.Equal(t, "quarry: boom\n", stderr.String())
+}
+
+func Test_buildVersion_reads_the_main_module_version(t *testing.T) {
+	cases := []struct {
+		name string
+		info *debug.BuildInfo
+		want string
+	}{
+		{name: "no build info", info: nil, want: ""},
+		{name: "a build with no module version", info: &debug.BuildInfo{}, want: ""},
+		{name: "a tagged build", info: &debug.BuildInfo{Main: debug.Module{Version: "v1.2.3"}}, want: "v1.2.3"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, buildVersion(c.info))
+		})
+	}
 }

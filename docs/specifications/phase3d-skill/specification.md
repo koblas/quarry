@@ -83,7 +83,7 @@ Triage ran on 2026-10-03.
 - MCP tools (`internal/mcp/tools.go:18-26`): query, describe_schema, sync_status, data_quality, spending, cash_flow, recurring_charges, anomalies, search_transactions.
 - Conventions: `internal/report/sql_conventions.go:7-20`.
 - Describe-schema (`internal/report/describe_schema.go`) returns accounts and categories, which is why Rule P2 bounds `schema.md`.
-- Golden fixtures and helpers: `cmd/quarry/run_analysis_documents_golden_test.go` and the `cmd/quarry/run_*_test.go` helpers.
+- Golden fixtures and helpers: `cmd/quarry/run_analysis_documents_test.go` and the `cmd/quarry/run_*_test.go` helpers.
 - The only `go:embed` is at `internal/quicken/v9/reference.go:14`.
 
 **Caller table.** No Go symbol, flag, or format changes. The new artifacts read from:

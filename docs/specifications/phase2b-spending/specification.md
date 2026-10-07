@@ -561,9 +561,9 @@ Scenario: SCENARIO-29 — accounts marks linked-tracking accounts
 - [x] SCENARIO-03: sync dates each transaction by its register date — delivered by SCENARIO-01 — `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_dates_each_transaction_by_its_register_date`
 - [x] SCENARIO-04: sync stores splits on Quicken's Uncategorized category as uncategorized — delivered by SCENARIO-01 — `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_stores_uncategorized_splits_with_no_category`
 - [x] SCENARIO-05: spend refuses a store built by an older quarry — delivered by SCENARIO-09 — `cmd/quarry/run_read_refusals_test.go` `Test_run_spend_refuses_a_store_built_by_an_older_quarry`
-- [x] SCENARIO-06: v_cash_flow keeps only real income and spending — `cmd/quarry/run_sql_views_test.go` `Test_run_sql_cash_flow_keeps_only_real_income_and_spending`
+- [x] SCENARIO-06: v_cash_flow keeps only real income and spending — `cmd/quarry/run_sql_test.go` `Test_run_sql_cash_flow_keeps_only_real_income_and_spending`
 - [x] SCENARIO-07: spending leaves out accounts Quicken does not use in reports — delivered by SCENARIO-09 — `cmd/quarry/run_spend_test.go` `Test_run_spend_leaves_out_accounts_quicken_does_not_use_in_reports`
-- [x] SCENARIO-08: v_spending nets refunds against their category — delivered by SCENARIO-06 — `cmd/quarry/run_sql_views_test.go` `Test_run_sql_spending_nets_refunds_against_their_category`
+- [x] SCENARIO-08: v_spending nets refunds against their category — delivered by SCENARIO-06 — `cmd/quarry/run_sql_test.go` `Test_run_sql_spending_nets_refunds_against_their_category`
 - [x] SCENARIO-09: spend shows this year's spending by category in each currency — `cmd/quarry/run_spend_test.go` `Test_run_spend_shows_this_years_spending_by_category_in_each_currency`
 - [x] SCENARIO-10: spend groups by payee — `cmd/quarry/run_spend_by_test.go` `Test_run_spend_by_payee_groups_spending_by_payee_and_currency_biggest_first`
 - [x] SCENARIO-11: spend groups by tag and warns about multi-tagged splits — `cmd/quarry/run_spend_by_test.go` `Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_total_and_warns`
