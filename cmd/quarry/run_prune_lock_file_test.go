@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
@@ -39,6 +40,48 @@ func Test_run_snapshots_prune_refuses_an_unusable_lock_file_with_a_fix(t *testin
 				p.requireNothingDeleted(t)
 			})
 		}
+	}
+}
+
+func Test_run_snapshots_prune_lock_refuses_a_quarry_folder_that_is_a_file_naming_the_folder(t *testing.T) {
+	for _, cell := range outputCells {
+		t.Run(cell.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			quarryDir := storeDirUnder(home)
+			require.NoError(t, os.MkdirAll(filepath.Dir(quarryDir), 0o700))
+			require.NoError(t, os.WriteFile(quarryDir, []byte("not a folder"), 0o600))
+
+			exitCode, stdout, stderr := runWithoutConfigFile(t, home, append([]string{"snapshots", "prune", "--keep", "3"}, cell.flag...)...)
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout)
+			assert.Equal(t, "quarry: "+quarryDirS+" is not a folder; rename or remove it, then run the command again\n", stderr)
+			content, err := os.ReadFile(quarryDir)
+			require.NoError(t, err)
+			assert.Equal(t, "not a folder", string(content))
+		})
+	}
+}
+
+func Test_run_snapshots_prune_lock_refuses_a_quarry_folder_it_cannot_search_naming_the_folder_and_its_reason(t *testing.T) {
+	for _, cell := range outputCells {
+		t.Run(cell.name, func(t *testing.T) {
+			skipAsRoot(t)
+			p := newPrunableStore(t)
+			quarryDir := storeDirUnder(p.home)
+			require.NoError(t, os.Chmod(quarryDir, 0o600))
+			t.Cleanup(func() { assert.NoError(t, os.Chmod(quarryDir, 0o700)) })
+
+			exitCode, stdout, stderr := runWithoutConfigFile(t, p.home, append([]string{"snapshots", "prune", "--keep", "3"}, cell.flag...)...)
+
+			assert.Equal(t, 1, exitCode)
+			assert.Empty(t, stdout)
+			assert.Equal(t, "quarry: cannot open "+quarryDirS+": permission denied; "+
+				"make it readable and writable by your user, then run the command again\n", stderr)
+			require.NoError(t, os.Chmod(quarryDir, 0o700))
+			p.requireNothingDeleted(t)
+		})
 	}
 }
 

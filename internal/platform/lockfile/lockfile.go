@@ -37,14 +37,18 @@ const (
 	KindFolderMissing
 	// KindNotRegular means the lock path exists but is not a regular file (directory, symlink, fifo).
 	KindNotRegular
-	// KindFolderCreate means ModeSync could not create the folder.
+	// KindFolderCreate means ModeSync could not create a missing folder.
 	KindFolderCreate
 	// KindCreate means the lock file was absent and could not be created.
 	KindCreate
-	// KindOpen means the lock file exists (or could not be looked up) and could not be opened.
+	// KindOpen means the lock file exists and could not be opened.
 	KindOpen
 	// KindLock means flock failed for a reason other than another holder.
 	KindLock
+	// KindNotFolder means the lock file's folder path exists but is not a folder.
+	KindNotFolder
+	// KindFolderOpen means the folder exists but the lock file cannot be looked up in it.
+	KindFolderOpen
 )
 
 // Error is a classified lock failure Acquire returns.
@@ -69,6 +73,10 @@ func (e *Error) Error() string {
 		return "lock " + e.Path + " cannot be created"
 	case KindOpen:
 		return "lock " + e.Path + " cannot be opened"
+	case KindNotFolder:
+		return "folder of lock " + e.Path + " is not a folder"
+	case KindFolderOpen:
+		return "folder of lock " + e.Path + " cannot be opened"
 	case KindLock:
 		return "lock " + e.Path + " cannot be taken"
 	}
@@ -130,15 +138,21 @@ func (l *Locker) Acquire(_ context.Context) (func(), error) {
 }
 
 // ensureFolder creates the lock file's folder in ModeSync; in ModePrune it only checks it is not missing.
+// A folder path that exists as a non-folder is KindNotFolder: here in ModeSync, in checkRegular otherwise.
 func (l *Locker) ensureFolder() error {
 	dir := filepath.Dir(l.path)
 	if l.mode == ModeSync {
-		if err := os.MkdirAll(dir, folderPerm); err != nil {
-			return &Error{Kind: KindFolderCreate, Path: l.path, Err: err}
+		mkdirErr := os.MkdirAll(dir, folderPerm)
+		if mkdirErr == nil {
+			return nil
 		}
-		return nil
+		// MkdirAll's error cannot tell a non-folder from a folder it could not create.
+		if info, err := os.Lstat(dir); err == nil && !info.IsDir() {
+			return &Error{Kind: KindNotFolder, Path: l.path, Err: mkdirErr}
+		}
+		return &Error{Kind: KindFolderCreate, Path: l.path, Err: mkdirErr}
 	}
-	// Any other Stat fault is left for checkRegular's Lstat to classify.
+	// Any other Stat fault, and a folder that is a file, is left for checkRegular's Lstat to classify.
 	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
 		return &Error{Kind: KindFolderMissing, Path: l.path, Err: err}
 	}
@@ -152,8 +166,11 @@ func (l *Locker) checkRegular() (bool, error) {
 	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
 	}
+	if errors.Is(err, syscall.ENOTDIR) {
+		return false, &Error{Kind: KindNotFolder, Path: l.path, Err: err}
+	}
 	if err != nil {
-		return false, &Error{Kind: KindOpen, Path: l.path, Err: err}
+		return false, &Error{Kind: KindFolderOpen, Path: l.path, Err: err}
 	}
 	if !info.Mode().IsRegular() {
 		return true, &Error{Kind: KindNotRegular, Path: l.path}

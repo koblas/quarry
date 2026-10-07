@@ -135,15 +135,72 @@ func Test_lock_refuses_a_lock_file_it_cannot_open_naming_its_reason_and_the_fix(
 	}
 }
 
-func Test_lock_for_prune_refuses_as_unopenable_when_the_quarry_folder_is_a_file(t *testing.T) {
+func Test_lock_refuses_a_quarry_folder_that_is_not_a_folder_naming_it(t *testing.T) {
+	rows := []struct {
+		name    string
+		arrange func(t *testing.T, rig lockRig)
+	}{
+		{"a file", func(t *testing.T, rig lockRig) {
+			t.Helper()
+			require.NoError(t, os.WriteFile(rig.dir, nil, 0o600))
+		}},
+		{"a symlink to a file", func(t *testing.T, rig lockRig) {
+			t.Helper()
+			target := filepath.Join(rig.home, "elsewhere")
+			require.NoError(t, os.WriteFile(target, nil, 0o600))
+			require.NoError(t, os.Symlink(target, rig.dir))
+		}},
+	}
+	for _, row := range rows {
+		for _, cmd := range lockCommands() {
+			t.Run(row.name+" "+cmd.name, func(t *testing.T) {
+				rig := newLockRigWithoutFolder(t)
+				require.NoError(t, os.MkdirAll(filepath.Dir(rig.dir), 0o700))
+				row.arrange(t, rig)
+
+				release, err := cmd.acquire(rig.server(cmd.mode))
+
+				requireRefusal(t, release, err, shownDir+" is not a folder; rename or remove it, then run the command again")
+			})
+		}
+	}
+}
+
+func Test_lock_for_prune_refuses_a_quarry_folder_below_a_file_as_not_a_folder(t *testing.T) {
 	rig := newLockRigWithoutFolder(t)
-	require.NoError(t, os.MkdirAll(filepath.Dir(rig.dir), 0o700))
-	require.NoError(t, os.WriteFile(rig.dir, nil, 0o600))
+	require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Dir(rig.dir)), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Dir(rig.dir), nil, 0o600))
 
 	release, err := rig.server(lockfile.ModePrune).LockForPrune(context.Background())
 
-	requireRefusal(t, release, err, "cannot open "+shownLock+": not a directory; "+
-		"make it readable by your user, or remove it, then run the command again")
+	requireRefusal(t, release, err, shownDir+" is not a folder; rename or remove it, then run the command again")
+}
+
+func Test_lock_refuses_a_quarry_folder_it_cannot_search_naming_the_folder_and_its_reason(t *testing.T) {
+	skipAsRoot(t)
+	for _, cmd := range lockCommands() {
+		t.Run(cmd.name, func(t *testing.T) {
+			rig := newLockRig(t)
+			require.NoError(t, os.Chmod(rig.dir, 0o600))
+			t.Cleanup(func() { assert.NoError(t, os.Chmod(rig.dir, 0o700)) })
+
+			release, err := cmd.acquire(rig.server(cmd.mode))
+
+			requireRefusal(t, release, err, "cannot open "+shownDir+": permission denied; "+
+				"make it readable and writable by your user, then run the command again")
+		})
+	}
+}
+
+func Test_lock_for_prune_refuses_a_symlink_loop_above_the_quarry_folder_naming_the_folder_and_its_reason(t *testing.T) {
+	rig := newLockRigWithoutFolder(t)
+	library := filepath.Join(rig.home, "Library")
+	require.NoError(t, os.Symlink(library, library))
+
+	release, err := rig.server(lockfile.ModePrune).LockForPrune(context.Background())
+
+	requireRefusal(t, release, err, "cannot open "+shownDir+": too many levels of symbolic links; "+
+		"make it readable and writable by your user, then run the command again")
 }
 
 func Test_lock_refuses_a_missing_lock_file_it_cannot_create_naming_its_reason_and_the_fix(t *testing.T) {
@@ -248,6 +305,7 @@ func Test_lock_returns_an_error_it_cannot_phrase_unchanged(t *testing.T) {
 		{"a folder-create error with no cause", &lockfile.Error{Kind: lockfile.KindFolderCreate, Path: "quarry.lock"}},
 		{"a create error with no cause", &lockfile.Error{Kind: lockfile.KindCreate, Path: "quarry.lock"}},
 		{"an open error with no cause", &lockfile.Error{Kind: lockfile.KindOpen, Path: "quarry.lock"}},
+		{"a folder-open error with no cause", &lockfile.Error{Kind: lockfile.KindFolderOpen, Path: "quarry.lock"}},
 		{"a lock error with no cause", &lockfile.Error{Kind: lockfile.KindLock, Path: "quarry.lock"}},
 	}
 	for _, row := range unrefusable {

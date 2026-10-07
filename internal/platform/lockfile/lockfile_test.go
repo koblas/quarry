@@ -365,7 +365,43 @@ func Test_acquire_succeeds_after_the_holder_process_is_killed(t *testing.T) {
 	release()
 }
 
-func Test_acquire_in_prune_mode_classifies_a_folder_that_cannot_be_checked_as_an_open_failure(t *testing.T) {
+func Test_acquire_classifies_a_quarry_folder_that_exists_as_a_non_folder(t *testing.T) {
+	rows := []struct {
+		name    string
+		arrange func(t *testing.T, folder string)
+	}{
+		{"a regular file", func(t *testing.T, folder string) {
+			t.Helper()
+			require.NoError(t, os.WriteFile(folder, nil, 0o600))
+		}},
+		{"a symlink to a regular file", func(t *testing.T, folder string) {
+			t.Helper()
+			target := filepath.Join(filepath.Dir(folder), "elsewhere")
+			require.NoError(t, os.WriteFile(target, nil, 0o600))
+			require.NoError(t, os.Symlink(target, folder))
+		}},
+	}
+	modes := map[string]lockfile.Mode{"sync": lockfile.ModeSync, "prune": lockfile.ModePrune}
+	for _, row := range rows {
+		for modeName, mode := range modes {
+			t.Run(row.name+" in "+modeName+" mode", func(t *testing.T) {
+				path := lockPath(t)
+				require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Dir(path)), 0o700))
+				row.arrange(t, filepath.Dir(path))
+
+				release, err := acquireNow(t, lockfile.New(path, mode))
+
+				var lockErr *lockfile.Error
+				require.ErrorAs(t, err, &lockErr)
+				assert.Equal(t, lockfile.KindNotFolder, lockErr.Kind)
+				assert.Equal(t, path, lockErr.Path)
+				assert.Nil(t, release)
+			})
+		}
+	}
+}
+
+func Test_acquire_in_prune_mode_classifies_a_path_through_a_file_as_not_a_folder(t *testing.T) {
 	notAFolder := filepath.Join(t.TempDir(), "Application Support")
 	require.NoError(t, os.WriteFile(notAFolder, nil, 0o600))
 	path := filepath.Join(notAFolder, "quarry", "quarry.lock")
@@ -374,9 +410,46 @@ func Test_acquire_in_prune_mode_classifies_a_folder_that_cannot_be_checked_as_an
 
 	var lockErr *lockfile.Error
 	require.ErrorAs(t, err, &lockErr)
-	assert.Equal(t, lockfile.KindOpen, lockErr.Kind)
+	assert.Equal(t, lockfile.KindNotFolder, lockErr.Kind)
 	assert.Equal(t, path, lockErr.Path)
 	require.ErrorIs(t, err, syscall.ENOTDIR)
+	assert.Nil(t, release)
+}
+
+func Test_acquire_classifies_a_folder_that_cannot_be_searched_as_a_folder_it_cannot_open(t *testing.T) {
+	skipAsRoot(t)
+	modes := map[string]lockfile.Mode{"sync": lockfile.ModeSync, "prune": lockfile.ModePrune}
+	for modeName, mode := range modes {
+		t.Run(modeName, func(t *testing.T) {
+			path := lockPath(t)
+			require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
+			require.NoError(t, os.Chmod(filepath.Dir(path), 0o600))
+			t.Cleanup(func() { _ = os.Chmod(filepath.Dir(path), 0o700) })
+
+			release, err := acquireNow(t, lockfile.New(path, mode))
+
+			var lockErr *lockfile.Error
+			require.ErrorAs(t, err, &lockErr)
+			assert.Equal(t, lockfile.KindFolderOpen, lockErr.Kind)
+			assert.Equal(t, path, lockErr.Path)
+			require.ErrorIs(t, err, syscall.EACCES)
+			assert.Nil(t, release)
+		})
+	}
+}
+
+func Test_acquire_in_prune_mode_classifies_a_symlink_loop_above_the_folder_as_a_folder_it_cannot_open(t *testing.T) {
+	loop := filepath.Join(t.TempDir(), "loop")
+	require.NoError(t, os.Symlink(loop, loop))
+	path := filepath.Join(loop, "quarry", "quarry.lock")
+
+	release, err := lockfile.New(path, lockfile.ModePrune).Acquire(context.Background())
+
+	var lockErr *lockfile.Error
+	require.ErrorAs(t, err, &lockErr)
+	assert.Equal(t, lockfile.KindFolderOpen, lockErr.Kind)
+	assert.Equal(t, path, lockErr.Path)
+	require.ErrorIs(t, err, syscall.ELOOP)
 	assert.Nil(t, release)
 }
 
@@ -393,6 +466,8 @@ func Test_lock_error_names_the_path_for_each_kind(t *testing.T) {
 		{name: "create", kind: lockfile.KindCreate, want: "lock /q/quarry.lock cannot be created"},
 		{name: "open", kind: lockfile.KindOpen, want: "lock /q/quarry.lock cannot be opened"},
 		{name: "lock", kind: lockfile.KindLock, want: "lock /q/quarry.lock cannot be taken"},
+		{name: "not folder", kind: lockfile.KindNotFolder, want: "folder of lock /q/quarry.lock is not a folder"},
+		{name: "folder open", kind: lockfile.KindFolderOpen, want: "folder of lock /q/quarry.lock cannot be opened"},
 		{name: "unknown", kind: lockfile.Kind(0), want: "lock /q/quarry.lock failed"},
 	}
 
