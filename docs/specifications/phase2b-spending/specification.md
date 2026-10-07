@@ -565,23 +565,23 @@ Scenario: SCENARIO-29 — accounts marks linked-tracking accounts
 - [x] SCENARIO-07: spending leaves out accounts Quicken does not use in reports — delivered by SCENARIO-09 — `cmd/quarry/run_spend_test.go` `Test_run_spend_leaves_out_accounts_quicken_does_not_use_in_reports`
 - [x] SCENARIO-08: v_spending nets refunds against their category — delivered by SCENARIO-06 — `cmd/quarry/run_sql_views_test.go` `Test_run_sql_spending_nets_refunds_against_their_category`
 - [x] SCENARIO-09: spend shows this year's spending by category in each currency — `cmd/quarry/run_spend_test.go` `Test_run_spend_shows_this_years_spending_by_category_in_each_currency`
-- [x] SCENARIO-10: spend groups by payee — `cmd/quarry/run_spend_by_test.go` `Test_run_spend_by_payee_groups_spending_by_payee_and_currency_biggest_first`
-- [x] SCENARIO-11: spend groups by tag and warns about multi-tagged splits — `cmd/quarry/run_spend_by_test.go` `Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_total_and_warns`
-- [x] SCENARIO-12: spend groups by month and fills empty months — `cmd/quarry/run_spend_by_test.go` `Test_run_spend_by_month_fills_empty_months_and_marks_a_cut_short_month_partial`
-- [x] SCENARIO-13: spend counts the whole period it is given — `cmd/quarry/run_spend_window_test.go` `Test_run_spend_counts_the_whole_period_it_is_given`
-- [x] SCENARIO-14: spend counts only the accounts it is given — `cmd/quarry/run_spend_account_test.go` `Test_run_spend_counts_only_the_accounts_it_is_given`
-- [x] SCENARIO-15: spend says why a named account shows nothing — delivered by SCENARIO-14 — `cmd/quarry/run_spend_account_test.go` `Test_run_spend_warns_that_a_named_account_is_left_out_of_reports`
-- [x] SCENARIO-16: spend --json returns spending as a document — `cmd/quarry/run_spend_json_test.go` `Test_run_spend_json_returns_spending_as_a_document`
-- [x] SCENARIO-17: spend says when the period holds nothing — `cmd/quarry/run_spend_empty_test.go` `Test_run_spend_says_when_the_period_holds_nothing`
-- [x] SCENARIO-18: spend rejects a period it cannot use — delivered by SCENARIO-12 — `cmd/quarry/run_spend_refusals_test.go` `Test_run_spend_rejects_a_period_it_cannot_use`
-- [x] SCENARIO-19: spend refuses an account it cannot pick — delivered by SCENARIO-14 — `cmd/quarry/run_spend_account_test.go` `Test_run_spend_refuses_an_account_it_cannot_pick`
+- [x] SCENARIO-10: spend groups by payee — `cmd/quarry/run_spend_test.go` `Test_run_spend_by_payee_groups_spending_by_payee_and_currency_biggest_first`
+- [x] SCENARIO-11: spend groups by tag and warns about multi-tagged splits — `cmd/quarry/run_spend_test.go` `Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_total_and_warns`
+- [x] SCENARIO-12: spend groups by month and fills empty months — `cmd/quarry/run_spend_test.go` `Test_run_spend_by_month_fills_empty_months_and_marks_a_cut_short_month_partial`
+- [x] SCENARIO-13: spend counts the whole period it is given — `cmd/quarry/run_spend_test.go` `Test_run_spend_counts_the_whole_period_it_is_given`
+- [x] SCENARIO-14: spend counts only the accounts it is given — `cmd/quarry/run_spend_test.go` `Test_run_spend_counts_only_the_accounts_it_is_given`
+- [x] SCENARIO-15: spend says why a named account shows nothing — delivered by SCENARIO-14 — `cmd/quarry/run_spend_test.go` `Test_run_spend_warns_that_a_named_account_is_left_out_of_reports`
+- [x] SCENARIO-16: spend --json returns spending as a document — `cmd/quarry/run_spend_test.go` `Test_run_spend_json_returns_spending_as_a_document`
+- [x] SCENARIO-17: spend says when the period holds nothing — `cmd/quarry/run_spend_test.go` `Test_run_spend_says_when_the_period_holds_nothing`
+- [x] SCENARIO-18: spend rejects a period it cannot use — delivered by SCENARIO-12 — `cmd/quarry/run_spend_test.go` `Test_run_spend_rejects_a_period_it_cannot_use`
+- [x] SCENARIO-19: spend refuses an account it cannot pick — delivered by SCENARIO-14 — `cmd/quarry/run_spend_test.go` `Test_run_spend_refuses_an_account_it_cannot_pick`
 - [x] SCENARIO-20: cashflow shows income, spending and savings rate by month — `cmd/quarry/run_cashflow_test.go` `Test_run_cashflow_shows_income_spending_and_savings_rate_by_month`
 - [x] SCENARIO-21: cashflow groups by year — delivered by SCENARIO-20 — `cmd/quarry/run_cashflow_test.go` `Test_run_cashflow_by_year_shows_one_row_per_year_and_na_without_income`
-- [x] SCENARIO-22: cashflow --json returns cash flow as a document — `cmd/quarry/run_cashflow_json_test.go` `Test_run_cashflow_json_returns_cash_flow_as_a_document`
-- [x] SCENARIO-23: cashflow's spending equals spend's total — delivered by SCENARIO-20 — `cmd/quarry/run_cashflow_invariant_test.go` `Test_run_cashflow_total_spent_equals_spend_total_per_currency`
-- [x] SCENARIO-24: cashflow refuses and reports empty periods like spend — delivered by SCENARIO-20 — `cmd/quarry/run_cashflow_refusals_test.go` `Test_run_cashflow_refuses_and_reports_empty_periods_like_spend`
+- [x] SCENARIO-22: cashflow --json returns cash flow as a document — `cmd/quarry/run_cashflow_test.go` `Test_run_cashflow_json_returns_cash_flow_as_a_document`
+- [x] SCENARIO-23: cashflow's spending equals spend's total — delivered by SCENARIO-20 — `cmd/quarry/run_cashflow_test.go` `Test_run_cashflow_total_spent_equals_spend_total_per_currency`
+- [x] SCENARIO-24: cashflow refuses and reports empty periods like spend — delivered by SCENARIO-20 — `cmd/quarry/run_cashflow_test.go` `Test_run_cashflow_refuses_and_reports_empty_periods_like_spend`
 - [x] SCENARIO-25: accounts marks its all-closed note as a warning — delivered by SCENARIO-26 — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_says_how_to_list_them_when_every_account_is_closed`
 - [x] SCENARIO-26: accounts marks accounts Quicken leaves out of reports — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_all_marks_accounts_left_out_of_reports`
-- [x] SCENARIO-27: spending leaves out accounts that use Quicken's linked account tracking — `cmd/quarry/run_cashflow_linked_test.go` `Test_run_cashflow_leaves_out_accounts_that_use_linked_account_tracking`
-- [x] SCENARIO-28: naming a linked-tracking account warns that it is left out — delivered by SCENARIO-27 — `cmd/quarry/run_spend_account_test.go` `Test_run_spend_warns_that_a_named_linked_tracking_account_is_left_out`
+- [x] SCENARIO-27: spending leaves out accounts that use Quicken's linked account tracking — `cmd/quarry/run_cashflow_test.go` `Test_run_cashflow_leaves_out_accounts_that_use_linked_account_tracking`
+- [x] SCENARIO-28: naming a linked-tracking account warns that it is left out — delivered by SCENARIO-27 — `cmd/quarry/run_spend_test.go` `Test_run_spend_warns_that_a_named_linked_tracking_account_is_left_out`
 - [x] SCENARIO-29: accounts marks linked-tracking accounts — delivered by SCENARIO-27 — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_all_marks_accounts_that_use_linked_account_tracking`
