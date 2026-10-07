@@ -31,15 +31,13 @@ func assertRefusedBeforeSnapshotting(t *testing.T, home string, exitCode int, st
 }
 
 func Test_run_sync_snapshots_the_file_named_by_quicken_path(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Books"))
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "A.quicken"), 0o700))
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "B.quicken"), 0o700))
 	writeConfig(t, home, quickenPathConfig("~/Books/Home.quicken"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -47,12 +45,10 @@ func Test_run_sync_snapshots_the_file_named_by_quicken_path(t *testing.T) {
 }
 
 func Test_run_sync_refuses_a_quicken_path_that_does_not_exist(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, quickenPathConfig("~/Books/Missing.quicken"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
 
 	assertRefusedBeforeSnapshotting(t, home, exitCode, stdout.String(), stderr.String(),
 		"quarry: ~/Books/Missing.quicken does not exist; check quicken.path in "+configShown+
@@ -60,14 +56,12 @@ func Test_run_sync_refuses_a_quicken_path_that_does_not_exist(t *testing.T) {
 }
 
 func Test_run_sync_refuses_a_quicken_path_that_is_not_a_bundle(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "Books"), 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(home, "Books", "notes.txt"), []byte("x"), 0o600))
 	writeConfig(t, home, quickenPathConfig("~/Books/notes.txt"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
 
 	assertRefusedBeforeSnapshotting(t, home, exitCode, stdout.String(), stderr.String(),
 		"quarry: ~/Books/notes.txt is not a Quicken for Mac file "+
@@ -76,16 +70,14 @@ func Test_run_sync_refuses_a_quicken_path_that_is_not_a_bundle(t *testing.T) {
 }
 
 func Test_run_sync_prefers_the_quicken_flag_over_quicken_path(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Books"))
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents"), 0o700))
 	link := filepath.Join(home, "Documents", "A.quicken")
 	require.NoError(t, os.Symlink(bundle.Dir, link))
 	writeConfig(t, home, quickenPathConfig("~/Books/Missing.quicken"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", link}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", link})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -93,8 +85,7 @@ func Test_run_sync_prefers_the_quicken_flag_over_quicken_path(t *testing.T) {
 }
 
 func Test_run_sync_from_ignores_quicken_path(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Books"))
 	var syncStdout, syncStderr bytes.Buffer
 	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncStdout, &syncStderr), syncStderr.String())
@@ -103,9 +94,8 @@ func Test_run_sync_from_ignores_quicken_path(t *testing.T) {
 	storePath := filepath.Join(storeDirUnder(home), "quarry.duckdb")
 	require.NoError(t, os.Remove(storePath))
 	writeConfig(t, home, quickenPathConfig("~/Books/Missing.quicken"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--from", id}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--from", id})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

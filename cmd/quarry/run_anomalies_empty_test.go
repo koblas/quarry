@@ -14,14 +14,12 @@ import (
 )
 
 func Test_run_anomalies_says_when_no_charge_falls_in_the_window(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)},
 		groceryCharge("Bakery", day(2003, 1, 4), 1000),
 		groceryCharge("Bakery", day(2025, 12, 31), 500)))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"anomalies"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "0 charges checked"), stdout.String())
@@ -78,8 +76,7 @@ func Test_run_anomalies_prints_each_empty_window_warning_on_stderr_and_in_the_js
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			accounts := []store.Account{
 				chequingAccount("acct-cad", 1),
 				{ID: "acct-visa", SourceID: 2, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
@@ -108,8 +105,7 @@ func Test_run_anomalies_prints_each_empty_window_warning_on_stderr_and_in_the_js
 }
 
 func Test_run_anomalies_prints_no_warning_when_charges_were_checked_but_none_is_unusual(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)},
 		groceryCharge("Bakery", day(2026, 3, 1), 500)))
 	var textOut, textErr, jsonOut, jsonErr bytes.Buffer

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"testing"
@@ -33,8 +32,7 @@ type accountFXJSON struct {
 // USD brokerage account with no transactions. USD/CAD is 1.25 from 2026-01-02 and 1.60 from 2099, which never applies.
 func accountsFXStore(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, spendRows(
 		[]store.Account{
 			chequingAccount("acct-cad", 1),
@@ -89,9 +87,7 @@ func Test_run_accounts_shows_each_balance_in_the_reporting_currency(t *testing.T
 	}
 	for _, c := range cases {
 		t.Run(c.name+" text", func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			exitCode := run(context.Background(), append([]string{"accounts"}, c.args...), &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), append([]string{"accounts"}, c.args...))
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Empty(t, stderr.String())
@@ -100,9 +96,7 @@ func Test_run_accounts_shows_each_balance_in_the_reporting_currency(t *testing.T
 		})
 
 		t.Run(c.name+" json", func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			exitCode := run(context.Background(), append([]string{"accounts", "--json"}, c.args...), &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), append([]string{"accounts", "--json"}, c.args...))
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Empty(t, stderr.String())

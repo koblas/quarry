@@ -29,19 +29,16 @@ func holdingsRowsFromDayFive() store.Rows {
 // runHoldingsOn stores rows and runs holdings with args at holdingsClock.
 func runHoldingsOn(t *testing.T, rows store.Rows, args ...string) (int, string, string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, rows, usdRate(holdingsDay(10), 1_360_000))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), append([]string{"holdings"}, args...), spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), append([]string{"holdings"}, args...), holdingsClock())
 
 	return exitCode, stdout.String(), stderr.String()
 }
 
 func Test_run_holdings_before_the_first_investment_transaction_warns_where_they_start_and_prints_no_total(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	rows := holdingsRows()
 	rows.InvestmentTransactions[2].Date = holdingsDay(5)
 	replaceStoreWithRates(t, home, rows, usdRate(holdingsDay(10), 1_360_000))

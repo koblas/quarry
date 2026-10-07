@@ -16,8 +16,7 @@ import (
 )
 
 func Test_run_snapshots_prune_with_nothing_beyond_the_default_cap_deletes_nothing(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 
 	exitCode, stdout, stderr := runPrune(t)
@@ -29,8 +28,7 @@ func Test_run_snapshots_prune_with_nothing_beyond_the_default_cap_deletes_nothin
 }
 
 func Test_run_snapshots_prune_refuses_a_snapshots_keep_below_one(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, "snapshots.keep = 0\n")
 
@@ -43,8 +41,7 @@ func Test_run_snapshots_prune_refuses_a_snapshots_keep_below_one(t *testing.T) {
 }
 
 func Test_run_snapshots_prune_refuses_a_malformed_config_with_nothing_deleted(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, "[snapshots\nkeep = 24\n")
 
@@ -86,8 +83,7 @@ func Test_run_snapshots_prune_refuses_a_bad_config_value_with_nothing_deleted(t 
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			dir := writeSnapshots(t, home, fiveSnapshots()...)
 			writeConfig(t, home, c.content)
 
@@ -102,8 +98,7 @@ func Test_run_snapshots_prune_refuses_a_bad_config_value_with_nothing_deleted(t 
 }
 
 func Test_run_snapshots_prune_refuses_a_config_it_cannot_read(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	require.NoError(t, os.MkdirAll(filepath.Join(storeDirUnder(home), "config.toml"), 0o700))
 
@@ -116,8 +111,7 @@ func Test_run_snapshots_prune_refuses_a_config_it_cannot_read(t *testing.T) {
 }
 
 func Test_run_snapshots_prune_refuses_a_bad_config_even_when_keep_is_given(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, "snapshots.keep = 0\n")
 
@@ -130,8 +124,7 @@ func Test_run_snapshots_prune_refuses_a_bad_config_even_when_keep_is_given(t *te
 }
 
 func Test_run_snapshots_prune_keep_0_is_a_usage_error_beside_a_broken_config(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, "snapshots.keep = 0\n")
 
@@ -145,8 +138,7 @@ func Test_run_snapshots_prune_keep_0_is_a_usage_error_beside_a_broken_config(t *
 }
 
 func Test_run_snapshots_prune_never_looks_for_the_quicken_path_it_is_configured_with(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, "quicken.path = \"~/Books/Missing.quicken\"\n")
 
@@ -159,8 +151,7 @@ func Test_run_snapshots_prune_never_looks_for_the_quicken_path_it_is_configured_
 }
 
 func Test_run_snapshots_prune_prints_config_warnings_before_its_own_stderr(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, "snapshot.keep = 3\n")
 	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
@@ -177,8 +168,7 @@ func Test_run_snapshots_prune_prints_config_warnings_before_its_own_stderr(t *te
 
 func Test_run_snapshots_prune_prints_only_the_config_warning_on_stderr_after_a_successful_run(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, "snapshot.keep = 3\n")
 
@@ -194,8 +184,7 @@ func Test_run_snapshots_prune_prints_only_the_config_warning_on_stderr_after_a_s
 }
 
 func Test_run_snapshots_prune_prints_config_warnings_before_its_failed_delete_lines(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, "snapshot.keep = 3\n")
 

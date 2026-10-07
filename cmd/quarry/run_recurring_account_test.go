@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -25,14 +24,12 @@ func monthlyCharges(account, payee string, cents int64) []chargeTxn {
 }
 
 func Test_run_recurring_lists_only_the_series_charged_in_the_named_account(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	visa := store.Account{ID: "acct-visa", SourceID: 2, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true}
 	charges := append(monthlyCharges("acct-visa", "Netflix.com", 2099), monthlyCharges("acct-cad", "Gym", 4000)...)
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1), visa}, charges...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"recurring", "--since", "2000", "--account", "Visa"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring", "--since", "2000", "--account", "Visa"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -43,8 +40,7 @@ func Test_run_recurring_lists_only_the_series_charged_in_the_named_account(t *te
 }
 
 func Test_run_recurring_lists_an_ended_series_charged_in_a_closed_account(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	oldCard := store.Account{ID: "acct-old", SourceID: 2, Name: "Old Card", Type: "credit_card", Currency: "CAD", Closed: true}
 	var charges []chargeTxn
 	for month := time.July; len(charges) < 12; month++ {
@@ -53,9 +49,8 @@ func Test_run_recurring_lists_an_ended_series_charged_in_a_closed_account(t *tes
 		charges = append(charges, charge)
 	}
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1), oldCard}, charges...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"recurring", "--since", "2000", "--account", "Old Card"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring", "--since", "2000", "--account", "Old Card"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

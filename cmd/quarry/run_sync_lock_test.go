@@ -33,8 +33,7 @@ type lockedStore struct {
 // holdLockedStore points HOME at a fresh quarry folder holding a sentinel store, and holds its lock.
 func holdLockedStore(t *testing.T) lockedStore {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	quarryDir := storeDirUnder(home)
 	require.NoError(t, os.MkdirAll(quarryDir, 0o700))
 	storePath := filepath.Join(quarryDir, "quarry.duckdb")
@@ -72,9 +71,8 @@ func Test_run_sync_refuses_while_another_writer_holds_the_lock(t *testing.T) {
 			b := v9fixture.NewBuilder()
 			b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 			bundle := b.WriteBundle(t, filepath.Join(locked.home, "Documents"))
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), append([]string{"sync", "--quicken", bundle.Dir}, c.flag...), &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), append([]string{"sync", "--quicken", bundle.Dir}, c.flag...))
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
@@ -96,9 +94,8 @@ func Test_run_sync_from_refuses_on_the_lock_before_resolving_the_snapshot(t *tes
 	for _, c := range cells {
 		t.Run(c.name, func(t *testing.T) {
 			locked := holdLockedStore(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), append([]string{"sync", "--from", "20990101T000000Z"}, c.flag...), &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), append([]string{"sync", "--from", "20990101T000000Z"}, c.flag...))
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
@@ -131,9 +128,8 @@ func Test_run_sync_refuses_on_the_lock_before_looking_for_the_quicken_file(t *te
 		t.Run(c.name, func(t *testing.T) {
 			locked := holdLockedStore(t)
 			writeConfig(t, locked.home, c.config)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), c.args, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
 			assert.Equal(t, c.wantCode, exitCode)
 			assert.Empty(t, stdout.String())
@@ -167,8 +163,7 @@ func Test_run_sync_releases_the_lock_when_it_returns(t *testing.T) {
 
 	for _, c := range cells {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			c.arrange(t, home)
 			locker := &recordingLocker{}
 			env := testEnv(io.Discard, io.Discard)
@@ -207,13 +202,11 @@ func Test_run_sync_proceeds_past_a_lock_left_by_an_earlier_run(t *testing.T) {
 
 	for _, c := range cells {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			writeStatusFixtureBundle(t, home)
 			c.before(t, home)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
 
 			assert.Equal(t, 0, exitCode, stderr.String())
 			assert.NotEmpty(t, stdout.String())
@@ -222,12 +215,10 @@ func Test_run_sync_proceeds_past_a_lock_left_by_an_earlier_run(t *testing.T) {
 }
 
 func Test_run_sync_creates_the_quarry_folder_0700_and_its_lock_file_0600(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeStatusFixtureBundle(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	dirInfo, err := os.Stat(storeDirUnder(home))
@@ -251,17 +242,15 @@ func Test_run_status_reports_while_a_sync_holds_the_lock(t *testing.T) {
 
 	for _, c := range cells {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			syncBundle(t, writeStatusFixtureBundle(t, home))
 			var unlockedOut, unlockedErr bytes.Buffer
 			require.Equal(t, 0, run(context.Background(), c.args, &unlockedOut, &unlockedErr), unlockedErr.String())
 			release, err := lockfile.New(filepath.Join(storeDirUnder(home), "quarry.lock"), lockfile.ModeSync).Acquire(context.Background())
 			require.NoError(t, err)
 			t.Cleanup(release)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), c.args, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
 			assert.Equal(t, 0, exitCode, stderr.String())
 			assert.Empty(t, stderr.String())

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -36,8 +35,7 @@ func noRateHoldingRows() store.Rows {
 // seedNoRateHoldingStore stores noRateHoldingRows under a fresh HOME with rates.
 func seedNoRateHoldingStore(t *testing.T, rates ...store.Rate) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, noRateHoldingRows(), rates...)
 }
 
@@ -77,9 +75,8 @@ func Test_run_networth_in_a_store_with_no_rates_warns_of_the_holding_before_the_
 // accounts reads today from the store's own clock, so its as-of date is matched, not pinned.
 func Test_run_accounts_warns_of_a_usd_holding_in_a_cad_account_before_the_first_rate_before_the_rate_line(t *testing.T) {
 	seedNoRateHoldingStore(t, usdRate(day(2099, time.January, 1), 1_360_000))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"accounts"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, _, stderr := runSpendCaptureAt(context.Background(), []string{"accounts"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	lines := strings.Split(strings.TrimSuffix(stderr.String(), "\n"), "\n")
@@ -92,9 +89,8 @@ func Test_run_accounts_warns_of_a_usd_holding_in_a_cad_account_before_the_first_
 
 func Test_run_accounts_in_a_store_with_no_rates_warns_of_the_holding_before_the_rate_line(t *testing.T) {
 	seedNoRateHoldingStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"accounts"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, _, stderr := runSpendCaptureAt(context.Background(), []string{"accounts"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, noRateHoldingNoRates+"quarry: warning: the store has no exchange rates, so USD balances show no rate in the "+

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -12,12 +11,10 @@ import (
 )
 
 func Test_run_search_with_text_that_matches_nothing_prints_an_empty_result_and_the_no_match_warning(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, searchStore())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"search", "--json", "zzz"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--json", "zzz"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	doc := decodeSearchJSON(t, stdout.String())
@@ -60,12 +57,10 @@ func Test_run_search_with_no_match_says_where_the_searched_transactions_run(t *t
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStore(t, home, c.rows)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), append([]string{"search", "--json"}, c.args...), spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"search", "--json"}, c.args...))
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Equal(t, []string{c.want}, decodeSearchJSON(t, stdout.String()).Warnings)
@@ -75,12 +70,10 @@ func Test_run_search_with_no_match_says_where_the_searched_transactions_run(t *t
 }
 
 func Test_run_search_text_with_no_match_prints_the_empty_listing_on_stdout_and_the_warning_on_stderr(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, searchStore())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"search", "zzz"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "zzz"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	want := "Transactions matching \"zzz\" in all accounts, all dates\n\n" +

@@ -51,8 +51,7 @@ func (c recordedClass) jsonWarnings(recorded string) []string {
 func snapshotsRecordedCell(t *testing.T, c recordedClass, run func(*testing.T) (int, string, string)) (string, int, string, string) {
 	t.Helper()
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home, olderPair()...)
 	recorded := buildStoreFromClass(t, home, recordedID, c)
 	exitCode, stdout, stderr := run(t)
@@ -62,8 +61,7 @@ func snapshotsRecordedCell(t *testing.T, c recordedClass, run func(*testing.T) (
 func Test_run_snapshots_warns_and_marks_nothing_when_the_recorded_snapshot_cannot_be_read(t *testing.T) {
 	skipAsRoot(t)
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home, olderPair()...)
 	buildStoreFromUnreadable(t, home, recordedID)
 

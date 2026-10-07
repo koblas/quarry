@@ -19,8 +19,7 @@ import (
 )
 
 func Test_run_status_describes_the_store_sync_built(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	bundle := writeStatusFixtureBundle(t, home)
 
@@ -38,9 +37,8 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &manifest))
 	takenAt, err := time.Parse(time.RFC3339, manifest.Snapshot.TakenAt)
 	require.NoError(t, err)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -61,8 +59,7 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 }
 
 func Test_run_status_says_investment_accounts_cash_is_not_checked(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	brokerage := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	ira := b.Account(v9fixture.AccountRow{Name: "IRA", Type: "RETIREMENTIRA", Currency: "CAD", Active: true})
@@ -73,17 +70,15 @@ func Test_run_status_says_investment_accounts_cash_is_not_checked(t *testing.T) 
 		b.Entry(v9fixture.EntryRow{Parent: pk, Amount: "12.00"})
 	}
 	syncBundle(t, b.WriteBundle(t, filepath.Join(home, "Documents")))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), fmt.Sprintf("%-10s%s\n", "Balances", "no accounts to check; 2 investment accounts' cash not checked"))
 }
 
 func Test_run_status_reports_the_latest_build_when_import_runs_holds_several(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := writeStatusFixtureBundle(t, home)
 	syncBundle(t, bundle)
 	snapshotsDir := filepath.Join(storeDirUnder(home), "snapshots")
@@ -93,9 +88,8 @@ func Test_run_status_reports_the_latest_build_when_import_runs_holds_several(t *
 	require.Equal(t, 0, run(context.Background(), []string{"status"}, &before, &bytes.Buffer{}))
 	editStore(t, home, "INSERT INTO import_runs SELECT * REPLACE (2 AS id) FROM import_runs") //nolint:unqueryvet // a copy of the row is the point
 	editStore(t, home, "UPDATE import_runs SET snapshot_path = '"+laterPath+"' WHERE id = 2")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -104,9 +98,8 @@ func Test_run_status_reports_the_latest_build_when_import_runs_holds_several(t *
 
 func Test_run_status_refuses_when_home_is_unset(t *testing.T) {
 	t.Setenv("HOME", "")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -115,8 +108,7 @@ func Test_run_status_refuses_when_home_is_unset(t *testing.T) {
 }
 
 func Test_run_status_reports_a_failed_stdout_write(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
@@ -131,9 +123,8 @@ func Test_run_status_reports_a_failed_stdout_write(t *testing.T) {
 
 func Test_run_help_prints_quarrys_description(t *testing.T) {
 	t.Setenv("HOME", "")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"--help"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"--help"})
 
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())
@@ -164,9 +155,8 @@ quarry never writes to the Quicken file.`)
 
 func Test_run_status_help_describes_the_command_without_needing_home(t *testing.T) {
 	t.Setenv("HOME", "")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status", "--help"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status", "--help"})
 
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())

@@ -166,8 +166,7 @@ func fetchFailureCases() []fetchFailureCase {
 func Test_run_sync_warns_and_swaps_the_store_in_when_the_rate_fetch_fails(t *testing.T) {
 	for _, c := range fetchFailureCases() {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), c.days...)
 			for _, earlier := range c.earlier {
 				syncThrough(t, earlier, "--quicken", bundle.Dir)

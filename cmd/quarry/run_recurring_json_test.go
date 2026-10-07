@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"slices"
@@ -100,13 +99,11 @@ func inUSD(charges []chargeTxn) []chargeTxn {
 }
 
 func Test_run_recurring_json_returns_the_series_document(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	charges := monthlySeries("Netflix.com", 2026, time.February, slices.Concat(slices.Repeat([]int64{999}, 4), slices.Repeat([]int64{1199}, 4))...)
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, charges...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"recurring", "--since", "2000", "--json"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring", "--since", "2000", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -141,8 +138,7 @@ func Test_run_recurring_json_returns_the_series_document(t *testing.T) {
 }
 
 func Test_run_recurring_merges_payees_differing_in_store_numbers_and_splits_currencies(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	charges := slices.Concat(
 		monthlySeries("NETFLIX.COM 1234", 2026, time.April, 1500, 1500, 1500),
 		monthlySeries("Netflix.com", 2026, time.July, 1500, 1500, 1500),
@@ -150,9 +146,8 @@ func Test_run_recurring_merges_payees_differing_in_store_numbers_and_splits_curr
 	)
 	accounts := []store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)}
 	replaceStore(t, home, chargeRows(accounts, charges...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"recurring", "--since", "2000", "--json"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring", "--since", "2000", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	doc := decodeRecurringJSON(t, stdout.String())
@@ -172,16 +167,14 @@ func Test_run_recurring_merges_payees_differing_in_store_numbers_and_splits_curr
 }
 
 func Test_run_recurring_json_marks_new_only_for_a_series_first_charged_inside_the_window(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	charges := slices.Concat(
 		monthlySeries("Netflix.com", 2026, time.February, slices.Repeat([]int64{1199}, 8)...),
 		monthlySeries("Spotify", 2026, time.July, slices.Repeat([]int64{1099}, 3)...),
 	)
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, charges...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"recurring", "--since", "2026-05-01", "--json"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring", "--since", "2026-05-01", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	isNew := map[string]bool{}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -48,8 +47,7 @@ type acbJSONYear struct {
 // acbFixture stores rows under a fresh HOME with config, and rates when any are given.
 func acbFixture(t *testing.T, config string, rows store.Rows, rates ...store.Rate) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, config)
 	replaceStoreWithRates(t, home, rows, rates...)
 }
@@ -57,9 +55,8 @@ func acbFixture(t *testing.T, config string, rows store.Rows, rates ...store.Rat
 // runACB runs acb with args at the holdings clock; it must exit 0.
 func runACB(t *testing.T, args ...string) (string, string) {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), append([]string{"acb"}, args...), spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), append([]string{"acb"}, args...), holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	return stdout.String(), stderr.String()

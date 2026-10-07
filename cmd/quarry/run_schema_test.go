@@ -22,12 +22,10 @@ import (
 // The reference count line and rows never change with the schema outcome:
 // only the Schema line and its rows differ.
 func Test_run_reports_a_schema_mismatch(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 1, exitCode)
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
@@ -75,12 +73,10 @@ func Test_run_reports_a_schema_mismatch(t *testing.T) {
 }
 
 func Test_run_reports_extra_schema_only_as_a_warning(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.ExtraSchemaBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
@@ -131,12 +127,10 @@ func Test_run_reports_extra_schema_only_as_a_warning(t *testing.T) {
 }
 
 func Test_run_reports_a_schema_mismatch_as_json(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"})
 
 	require.Equal(t, 1, exitCode)
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
@@ -170,16 +164,14 @@ func Test_run_reports_a_schema_mismatch_as_json(t *testing.T) {
 // --from re-checks the same snapshot file against the same embedded
 // reference MissingSchemaBundle already mismatches, independent of Quicken.
 func Test_run_reports_a_schema_mismatch_with_from(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
 	var syncStdout, syncStderr bytes.Buffer
 	require.Equal(t, 1, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncStdout, &syncStderr))
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 	id := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--from", id}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", id})
 
 	require.Equal(t, 1, exitCode)
 	assert.Equal(t, syncStdout.String(), stdout.String())
@@ -191,16 +183,14 @@ func Test_run_reports_a_schema_mismatch_with_from(t *testing.T) {
 }
 
 func Test_run_reports_a_schema_mismatch_with_from_as_json(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
 	var syncStdout, syncStderr bytes.Buffer
 	require.Equal(t, 1, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncStdout, &syncStderr))
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 	id := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--from", id, "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", id, "--json"})
 
 	require.Equal(t, 1, exitCode)
 	var parsed map[string]json.RawMessage
@@ -223,8 +213,7 @@ func Test_run_reports_a_schema_mismatch_with_from_as_json(t *testing.T) {
 // On the mismatch path no build is reached, so a stdout write failure still
 // names the manifest already on disk, not --from --json.
 func Test_run_keeps_the_snapshot_message_when_writing_stdout_fails_on_a_schema_mismatch(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
 	writeErr := errNoSpace
 	var stderr bytes.Buffer

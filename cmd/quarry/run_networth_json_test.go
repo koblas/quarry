@@ -12,9 +12,8 @@ import (
 
 func Test_run_networth_json_keeps_a_zero_balance_row_and_counts_a_closed_account_but_not_one_left_out_of_reports(t *testing.T) {
 	seedNetWorthStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--json"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"networth", "--json"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

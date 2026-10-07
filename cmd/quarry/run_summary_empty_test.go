@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -44,12 +43,10 @@ func firstMonthRows() store.Rows {
 }
 
 func Test_run_summary_shows_no_change_in_the_first_month_of_data_and_warns_when_the_snapshot_time_is_unknown(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, firstMonthRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"summary", "--month", "2026-09"}, spendEnvAt(&stdout, &stderr, summaryClock))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary", "--month", "2026-09"}, summaryClock)
 
 	require.Equal(t, 0, exitCode)
 	assert.Equal(t, septemberTimeUnknownWarning, stderr.String())
@@ -57,13 +54,11 @@ func Test_run_summary_shows_no_change_in_the_first_month_of_data_and_warns_when_
 }
 
 func Test_run_summary_shows_no_change_in_the_first_month_of_data_without_a_warning_when_the_snapshot_covers_it(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	pinLocalZone(t)
 	replaceStore(t, home, withSnapshotTaken(firstMonthRows(), summaryTakenAt))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"summary", "--month", "2026-09"}, spendEnvAt(&stdout, &stderr, summaryClock))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary", "--month", "2026-09"}, summaryClock)
 
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())
@@ -71,8 +66,7 @@ func Test_run_summary_shows_no_change_in_the_first_month_of_data_without_a_warni
 }
 
 func Test_run_summary_says_so_in_a_month_with_no_unusual_charge_and_no_new_recurring_charge(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	chequing := chequingAccount("acct-cad", 1)
 	txns := make([]chargeTxn, 0, 7)
 	txns = append(txns, summaryTxn(chequing.ID, "Employer", "cat-fuel", day(2026, time.January, 2), 500_000))
@@ -83,9 +77,8 @@ func Test_run_summary_says_so_in_a_month_with_no_unusual_charge_and_no_new_recur
 	}
 	txns = append(txns, summaryTxn(chequing.ID, "Bell Canada", "cat-groceries", day(2026, time.September, 14), -10000))
 	replaceStore(t, home, chargeRows([]store.Account{chequing}, txns...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"summary"}, spendEnvAt(&stdout, &stderr, summaryClock))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary"}, summaryClock)
 
 	require.Equal(t, 0, exitCode)
 	assert.Equal(t, septemberTimeUnknownWarning, stderr.String())
@@ -107,14 +100,12 @@ func Test_run_summary_says_so_in_a_month_with_no_unusual_charge_and_no_new_recur
 }
 
 func Test_run_summary_counts_a_large_charge_with_too_little_history_as_not_judged_in_the_empty_section(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	chequing := chequingAccount("acct-cad", 1)
 	replaceStore(t, home, chargeRows([]store.Account{chequing},
 		summaryTxn(chequing.ID, "Appliance Store", "cat-groceries", day(2026, time.September, 12), -15000)))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"summary", "--month", "2026-09"}, spendEnvAt(&stdout, &stderr, summaryClock))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary", "--month", "2026-09"}, summaryClock)
 
 	require.Equal(t, 0, exitCode)
 	assert.Equal(t, septemberTimeUnknownWarning, stderr.String())
@@ -146,8 +137,7 @@ func Test_run_summary_prints_the_ruled_empty_lines_for_a_store_without_transacti
 			args:   []string{"summary"},
 			seed: func(t *testing.T) {
 				t.Helper()
-				home := t.TempDir()
-				t.Setenv("HOME", home)
+				home := newHome(t)
 				replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}))
 			},
 			top: "Summary of September 2026 (2026-09-01 to 2026-09-30), amounts in CAD\n\n" +
@@ -161,8 +151,7 @@ func Test_run_summary_prints_the_ruled_empty_lines_for_a_store_without_transacti
 			args: []string{"summary"},
 			seed: func(t *testing.T) {
 				t.Helper()
-				home := t.TempDir()
-				t.Setenv("HOME", home)
+				home := newHome(t)
 				pinLocalZone(t)
 				replaceStore(t, home, withSnapshotTaken(chargeRows([]store.Account{chequingAccount("acct-cad", 1)}), summaryTakenAt))
 			},
@@ -220,9 +209,8 @@ func Test_run_summary_prints_the_ruled_empty_lines_for_a_store_without_transacti
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			c.seed(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), c.args, spendEnvAt(&stdout, &stderr, summaryClock))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), c.args, summaryClock)
 
 			require.Equal(t, 0, exitCode)
 			assert.Equal(t, c.stderr, stderr.String())
@@ -232,8 +220,7 @@ func Test_run_summary_prints_the_ruled_empty_lines_for_a_store_without_transacti
 }
 
 func Test_run_summary_shows_no_change_in_native_when_no_currency_has_a_balance_on_the_first_month_end(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	chequing, usd := chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)
 	usdDeposit := chargeTxn{
 		id: "usd-deposit", account: usd.ID, payee: "Employer", currency: "USD", day: day(2026, time.September, 6),
@@ -241,9 +228,8 @@ func Test_run_summary_shows_no_change_in_native_when_no_currency_has_a_balance_o
 	}
 	replaceStore(t, home, chargeRows([]store.Account{chequing, usd},
 		summaryTxn(chequing.ID, "Employer", "cat-fuel", day(2026, time.September, 5), 100_000), usdDeposit))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"summary", "--month", "2026-09", "--currency", "native"}, spendEnvAt(&stdout, &stderr, summaryClock))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary", "--month", "2026-09", "--currency", "native"}, summaryClock)
 
 	require.Equal(t, 0, exitCode)
 	assert.Equal(t, septemberTimeUnknownWarning, stderr.String())

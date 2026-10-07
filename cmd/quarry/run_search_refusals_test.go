@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -67,8 +66,7 @@ func Test_run_search_refuses_bad_input_with_the_ruled_line_and_exit_code(t *test
 			args []string
 		}{{"as text", nil}, {"with --json", []string{"--json"}}} {
 			t.Run(c.name+" "+mode.name, func(t *testing.T) {
-				home := t.TempDir()
-				t.Setenv("HOME", home)
+				home := newHome(t)
 				replaceStore(t, home, refusalSearchStore())
 
 				assertSearchFailed(t, append(append([]string{"search"}, c.args...), mode.args...), c.exit, c.want)
@@ -107,9 +105,8 @@ func Test_run_search_refuses_in_the_ruled_order(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			builtStore(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), append([]string{"search", "--json"}, c.args...), spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"search", "--json"}, c.args...))
 
 			require.Equal(t, c.exit, exitCode, stderr.String())
 			assert.Equal(t, c.want, stderr.String())
@@ -129,8 +126,7 @@ func Test_run_search_reads_the_store_before_it_looks_up_the_category(t *testing.
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 
 			assertSearchFailed(t, append([]string{"search"}, c.args...), 1,
 				"quarry: no store at "+abbreviated(t, storePathUnder(home), home)+" yet; run quarry sync to build it\n")
@@ -145,9 +141,8 @@ func Test_run_search_refuses_text_that_is_not_valid_UTF_8_before_the_store_opens
 
 func Test_run_search_text_with_a_nul_byte_matches_nothing_and_exits_0(t *testing.T) {
 	builtStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"search", "a\x00b"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "a\x00b"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "0 matching transactions")
@@ -164,17 +159,15 @@ func Test_run_search_an_account_that_is_not_valid_UTF_8_is_an_unknown_account(t 
 // builtStore points HOME at a fresh directory holding refusalSearchStore.
 func builtStore(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, refusalSearchStore())
 }
 
 // assertSearchFailed runs args against the store under $HOME and requires wantExit, nothing on stdout and want on stderr.
 func assertSearchFailed(t *testing.T, args []string, wantExit int, want string) {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), args, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), args)
 
 	require.Equal(t, wantExit, exitCode, stderr.String())
 	assert.Equal(t, want, stderr.String())

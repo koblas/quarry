@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -61,13 +60,11 @@ func unknownCostRows() store.Rows {
 }
 
 func Test_run_acb_marks_an_incomplete_security_and_its_sales_after_shares_added_with_no_cost(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
 	replaceStore(t, home, unknownCostRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
@@ -81,13 +78,11 @@ func Test_run_acb_marks_an_incomplete_security_and_its_sales_after_shares_added_
 }
 
 func Test_run_acb_writes_the_unknown_cost_marks_in_json(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
 	replaceStore(t, home, unknownCostRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb", "--json"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb", "--json"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc acbDoc
@@ -121,13 +116,11 @@ func noCostOrderRows() store.Rows {
 }
 
 func Test_run_acb_warns_for_no_cost_securities_by_name_ignoring_case_then_id(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
 	replaceStore(t, home, noCostOrderRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb", "--json"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb", "--json"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc acbDoc
@@ -138,13 +131,11 @@ func Test_run_acb_warns_for_no_cost_securities_by_name_ignoring_case_then_id(t *
 }
 
 func Test_run_acb_counts_only_the_sales_before_a_no_cost_holding_sold_out_and_leaves_a_rebought_one_complete(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
 	replaceStore(t, home, soldOutAndRebought())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+

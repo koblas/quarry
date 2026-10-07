@@ -67,14 +67,12 @@ func snapshotFiles(t *testing.T, dir, suffix string) []string {
 }
 
 func Test_run_sync_deletes_the_snapshot_beyond_the_newest_12_and_prints_a_pruned_line(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	fixtures := oldSnapshots(keptSnapshots)
 	dir := writeSnapshots(t, home, fixtures...)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.NoFileExists(t, filepath.Join(dir, fixtures[0].id+".sqlite"))
@@ -86,15 +84,13 @@ func Test_run_sync_deletes_the_snapshot_beyond_the_newest_12_and_prints_a_pruned
 }
 
 func Test_run_sync_deletes_nothing_when_validation_fails(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, oldSnapshots(keptSnapshots)...)
 	orphan := filepath.Join(dir, "19990101T000000Z.json")
 	require.NoError(t, os.WriteFile(orphan, []byte("{}"), 0o600))
 	bundle := unreconciledBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 1, exitCode, stderr.String())
 	assert.Len(t, snapshotFiles(t, dir, ".sqlite"), keptSnapshots+1)
@@ -140,14 +136,12 @@ func copyOutsideFolder(t *testing.T, home, dir, id string) string {
 // runSyncFrom runs quarry sync --from id with extra args.
 func runSyncFrom(t *testing.T, id string, extra ...string) (int, string, string) {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
-	exitCode := run(context.Background(), append([]string{"sync", "--from", id}, extra...), &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), append([]string{"sync", "--from", id}, extra...))
 	return exitCode, stdout.String(), stderr.String()
 }
 
 func Test_run_sync_from_honours_snapshots_keep_from_config(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	older := oldSnapshots(3)
 	id, dir := syncThenWrite(t, home, older...)
 	writeConfig(t, home, snapshotsKeepConfig(2))
@@ -160,8 +154,7 @@ func Test_run_sync_from_honours_snapshots_keep_from_config(t *testing.T) {
 }
 
 func Test_run_sync_from_json_carries_a_null_pruned_key_on_a_schema_mismatch(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
 	var syncStdout, syncStderr bytes.Buffer
 	require.Equal(t, 1, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncStdout, &syncStderr))
@@ -178,8 +171,7 @@ func Test_run_sync_from_json_carries_a_null_pruned_key_on_a_schema_mismatch(t *t
 }
 
 func Test_run_sync_warns_when_an_old_snapshot_cannot_be_deleted_and_still_succeeds(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	fixtures := oldSnapshots(keptSnapshots)
 	dir := writeSnapshots(t, home, fixtures...)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
@@ -193,8 +185,7 @@ func Test_run_sync_warns_when_an_old_snapshot_cannot_be_deleted_and_still_succee
 }
 
 func Test_run_sync_prunes_the_snapshots_it_can_and_warns_about_the_one_it_cannot(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	fixtures := oldSnapshots(keptSnapshots + 2)
 	dir := writeSnapshots(t, home, fixtures...)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
@@ -210,8 +201,7 @@ func Test_run_sync_prunes_the_snapshots_it_can_and_warns_about_the_one_it_cannot
 }
 
 func Test_run_sync_from_an_older_snapshot_says_and_the_stores_own(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	newer := newerSnapshots(keptSnapshots)
 	older := oldSnapshots(1)
 	id, dir := syncThenWrite(t, home, append(newer, older...)...)
@@ -226,8 +216,7 @@ func Test_run_sync_from_an_older_snapshot_says_and_the_stores_own(t *testing.T) 
 }
 
 func Test_run_sync_from_says_the_newest_one_when_snapshots_keep_is_1(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	id, dir := syncThenWrite(t, home, oldSnapshots(2)...)
 	writeConfig(t, home, snapshotsKeepConfig(1))
 
@@ -240,8 +229,7 @@ func Test_run_sync_from_says_the_newest_one_when_snapshots_keep_is_1(t *testing.
 
 func Test_run_sync_from_warns_when_it_cannot_list_the_snapshots_folder(t *testing.T) {
 	skipAsRoot(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	id, dir := syncThenWrite(t, home)
 	kept := copyOutsideFolder(t, home, dir, id)
 	require.NoError(t, os.Chmod(dir, 0o300))

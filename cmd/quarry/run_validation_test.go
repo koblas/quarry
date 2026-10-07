@@ -21,8 +21,7 @@ import (
 // Chequing's stale and deleted-newer statements, and its non-reconciled
 // transaction, must all be ignored for its balance to match.
 func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -63,9 +62,8 @@ func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *tes
 	_ = savingsPK
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 	writeConfig(t, home, fmt.Sprintf("[accounts]\nnon-registered = [\"acct-%d\"]\n", brokeragePK))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	require.Empty(t, stderr.String())
@@ -121,8 +119,7 @@ func mismatchRow(labelWidth, quarryWidth, quickenWidth, diffWidth int, label, da
 // A mismatch on a first run (no previous store) keeps the snapshot and
 // leaves no store, with the full failed-validation block on stdout.
 func Test_run_refuses_a_balance_mismatch_and_leaves_no_store(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -136,9 +133,8 @@ func Test_run_refuses_a_balance_mismatch_and_leaves_no_store(t *testing.T) {
 	b.Entry(v9fixture.EntryRow{Parent: matchingTxnPK, Amount: "10.00"})
 	b.Reconcile(v9fixture.ReconcileRow{Account: matchingPK, EndDate: &day, EndingBalance: "10.00"})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	assert.Equal(t, 1, exitCode)
 
@@ -187,8 +183,7 @@ func Test_run_refuses_a_balance_mismatch_and_leaves_no_store(t *testing.T) {
 // Once the build was reached, even though it failed, a stdout write
 // failure points at --from --json, not at the snapshot's manifest.
 func Test_run_points_at_from_json_when_stdout_fails_rendering_a_failed_validation(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -215,8 +210,7 @@ func Test_run_points_at_from_json_when_stdout_fails_rendering_a_failed_validatio
 // A failing sync leaves an existing store byte-identical; the failed-validation block
 // lists every mismatched balance in account-name then source-id order.
 func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	storeDir := filepath.Join(home, "Library", "Application Support", "quarry")
 	require.NoError(t, os.MkdirAll(storeDir, 0o700))
@@ -246,9 +240,8 @@ func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *t
 	b.Reconcile(v9fixture.ReconcileRow{Account: savingsPK, EndDate: &savingsDay, EndingBalance: "60.00"})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	assert.Equal(t, 1, exitCode)
 
@@ -306,8 +299,7 @@ func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *t
 // A transaction whose splits don't sum to its amount lists in the
 // failed-validation block; no payee falls back to "(no payee)".
 func Test_run_lists_mismatched_splits_in_the_failed_validation_stdout_block(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
@@ -323,9 +315,8 @@ func Test_run_lists_mismatched_splits_in_the_failed_validation_stdout_block(t *t
 	b.Entry(v9fixture.EntryRow{Parent: mismatchedTxnPK, Amount: "-202.40"})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	assert.Equal(t, 1, exitCode)
 

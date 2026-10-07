@@ -92,13 +92,11 @@ func Test_run_acb_refuses_an_unclassified_account_and_a_currency_other_than_cad(
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			writeConfig(t, home, tc.config)
 			replaceStoreWithRates(t, home, acbUnclassifiedRows(tc.accounts...))
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), tc.args, spendEnvAt(&stdout, &stderr, holdingsClock()))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), tc.args, holdingsClock())
 
 			assert.Equal(t, tc.wantExit, exitCode)
 			assert.Equal(t, tc.wantStderr, stderr.String())
@@ -120,9 +118,8 @@ func Test_run_acb_refuses_a_year_and_a_currency_before_reading_a_malformed_confi
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			malformedConfigFixture(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), tc.args, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), tc.args)
 
 			assert.Equal(t, 2, exitCode)
 			assert.Equal(t, tc.wantStderr, stderr.String())
@@ -132,12 +129,10 @@ func Test_run_acb_refuses_a_year_and_a_currency_before_reading_a_malformed_confi
 }
 
 func Test_run_acb_refuses_the_one_account_a_missing_config_leaves_unclassified(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, acbUnclassifiedRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb"}, holdingsClock())
 
 	assert.Equal(t, 1, exitCode)
 	assert.Equal(t, acbRefusalOneUnclassified, stderr.String())
@@ -145,8 +140,7 @@ func Test_run_acb_refuses_the_one_account_a_missing_config_leaves_unclassified(t
 }
 
 func Test_run_acb_counts_the_accounts_that_findings_lists_with_status_all(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "findings.ignore = [\"unclassified-account:acct-ign\"]\n"+acbPooledConfig)
 	replaceStoreWithRates(t, home, acbUnclassifiedRows(
 		acbOpenBrokerage("acct-unc", 2), acbOpenBrokerage("acct-ign", 3), acbClosedRetirement("acct-old", 4)))

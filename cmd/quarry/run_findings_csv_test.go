@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -46,13 +45,11 @@ func syncCSVDuplicates(t *testing.T, home, dir string, withFixed bool) csvDuplic
 }
 
 func Test_run_findings_status_all_csv_prints_a_row_per_duplicate_item_and_one_row_for_the_fixed_finding(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	ids := syncCSVDuplicates(t, home, "DocumentsA", true)
 	syncCSVDuplicates(t, home, "DocumentsB", false)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--status", "all", "--csv"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--status", "all", "--csv"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

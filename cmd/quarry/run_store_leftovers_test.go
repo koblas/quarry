@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -18,8 +17,7 @@ import (
 // The store partial and its wal are backdated past the sweep's age gate; a
 // fresh one could belong to another build still in flight.
 func Test_run_removes_stale_store_leftovers_before_syncing(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
 	storeDir := filepath.Join(home, "Library", "Application Support", "quarry")
 	require.NoError(t, os.MkdirAll(storeDir, 0o700))
@@ -33,9 +31,8 @@ func Test_run_removes_stale_store_leftovers_before_syncing(t *testing.T) {
 	require.NoError(t, os.Chtimes(partialWAL, old, old))
 	staleWAL := filepath.Join(storeDir, "quarry.duckdb.wal")
 	require.NoError(t, os.WriteFile(staleWAL, []byte("wal"), 0o600))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())

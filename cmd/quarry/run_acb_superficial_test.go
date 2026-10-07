@@ -35,8 +35,7 @@ func acbSuperficialRows() store.Rows {
 }
 
 func Test_run_acb_marks_a_loss_sale_rebought_in_a_registered_account_within_30_days(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, acbSuperficialConfig)
 	replaceStore(t, home, acbSuperficialRows())
 	var stdout, stderr, jsonOut, jsonErr bytes.Buffer

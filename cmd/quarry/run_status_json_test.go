@@ -19,8 +19,7 @@ import (
 )
 
 func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := writeStatusFixtureBundle(t, home)
 	syncBundle(t, bundle)
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
@@ -34,9 +33,8 @@ func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
 		} `json:"snapshot"`
 	}
 	require.NoError(t, json.Unmarshal(raw, &manifest))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status", "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -118,8 +116,7 @@ func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
 }
 
 func Test_run_status_json_reports_the_latest_build_when_import_runs_holds_several(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := writeStatusFixtureBundle(t, home)
 	syncBundle(t, bundle)
 	snapshotsDir := filepath.Join(storeDirUnder(home), "snapshots")
@@ -129,9 +126,8 @@ func Test_run_status_json_reports_the_latest_build_when_import_runs_holds_severa
 	require.Equal(t, 0, run(context.Background(), []string{"status", "--json"}, &before, &bytes.Buffer{}))
 	editStore(t, home, "INSERT INTO import_runs SELECT * REPLACE (2 AS id) FROM import_runs") //nolint:unqueryvet // a copy of the row is the point
 	editStore(t, home, "UPDATE import_runs SET snapshot_path = '"+laterPath+"' WHERE id = 2")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status", "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -141,8 +137,7 @@ func Test_run_status_json_reports_the_latest_build_when_import_runs_holds_severa
 }
 
 func Test_status_json_carries_each_path_the_skill_reads(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncBundle(t, writeStatusFixtureBundle(t, home))
 	var stdout, stderr bytes.Buffer
 	require.Equal(t, 0, run(context.Background(), []string{"status", "--json"}, &stdout, &stderr), stderr.String())

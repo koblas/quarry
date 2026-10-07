@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -29,15 +28,13 @@ func withSnapshotTaken(rows store.Rows, taken time.Time) store.Rows {
 }
 
 func Test_run_summary_warns_when_the_snapshot_was_taken_before_the_month_ended(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	pinLocalZone(t)
 	rows := summaryRows(true)
 	rows.ImportRuns[0].Snapshot.TakenAt = time.Date(2026, time.September, 28, 14, 2, 0, 0, time.FixedZone("EDT", -4*60*60))
 	replaceStore(t, home, rows)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"summary"}, spendEnvAt(&stdout, &stderr, summaryClockEDT()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary"}, summaryClockEDT())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "Summary of September 2026 (2026-09-01 to 2026-09-30), amounts in CAD\n\n"+
@@ -48,15 +45,13 @@ func Test_run_summary_warns_when_the_snapshot_was_taken_before_the_month_ended(t
 }
 
 func Test_run_summary_warns_when_the_snapshot_records_no_time(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	pinLocalZone(t)
 	rows := summaryRows(true)
 	rows.ImportRuns[0].Snapshot.TakenAt = time.Time{}
 	replaceStore(t, home, rows)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"summary"}, spendEnvAt(&stdout, &stderr, summaryClockEDT()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary"}, summaryClockEDT())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "Snapshot  20261001T130512Z, time taken not recorded in its manifest\n")

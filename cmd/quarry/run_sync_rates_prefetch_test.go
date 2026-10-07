@@ -79,8 +79,7 @@ func hasRatesLine(stdout string) bool {
 func Test_run_sync_makes_no_rate_request_when_it_fails_before_the_swap(t *testing.T) {
 	for _, c := range failuresBeforeTheSwap() {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			bundle := c.write(t, filepath.Join(home, "Documents"))
 
 			got := syncCountingRateRequests(bundle)
@@ -93,8 +92,7 @@ func Test_run_sync_makes_no_rate_request_when_it_fails_before_the_swap(t *testin
 }
 
 func Test_run_sync_makes_one_rate_request_when_the_store_is_built(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), januaryDay(3))
 
 	got := syncCountingRateRequests(bundle)
@@ -107,8 +105,7 @@ func Test_run_sync_makes_one_rate_request_when_the_store_is_built(t *testing.T) 
 func Test_run_sync_json_makes_no_rate_request_when_it_fails_before_the_swap(t *testing.T) {
 	for _, c := range failuresBeforeTheSwap() {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			bundle := c.write(t, filepath.Join(home, "Documents"))
 
 			got := syncCountingRateRequests(bundle, "--json")
@@ -120,8 +117,7 @@ func Test_run_sync_json_makes_no_rate_request_when_it_fails_before_the_swap(t *t
 }
 
 func Test_run_sync_json_prints_nothing_when_the_bundle_is_not_open_in_quicken(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.ClosedWALBundle(t, filepath.Join(home, "Documents"))
 
 	got := syncCountingRateRequests(bundle, "--json")
@@ -130,8 +126,7 @@ func Test_run_sync_json_prints_nothing_when_the_bundle_is_not_open_in_quicken(t 
 }
 
 func Test_run_sync_json_reports_no_store_when_the_schema_changed(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
 
 	got := syncCountingRateRequests(bundle, "--json")
@@ -142,8 +137,7 @@ func Test_run_sync_json_reports_no_store_when_the_schema_changed(t *testing.T) {
 }
 
 func Test_run_sync_json_reports_no_rates_when_validation_fails(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := unreconciledBundle(t, filepath.Join(home, "Documents"))
 
 	got := syncCountingRateRequests(bundle, "--json")
@@ -156,8 +150,7 @@ func Test_run_sync_json_reports_no_rates_when_validation_fails(t *testing.T) {
 }
 
 func Test_run_sync_json_makes_one_rate_request_and_reports_rates_when_the_store_is_built(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), januaryDay(3))
 
 	got := syncCountingRateRequests(bundle, "--json")

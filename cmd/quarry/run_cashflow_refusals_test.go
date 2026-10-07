@@ -62,12 +62,10 @@ func Test_run_cashflow_refuses_and_reports_empty_periods_like_spend(t *testing.T
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStore(t, home, cashFlowRows(c.accounts, c.splits...))
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), c.args, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
 
 			assert.Equal(t, c.wantExit, exitCode)
 			assert.Equal(t, c.wantStdout, stdout.String())

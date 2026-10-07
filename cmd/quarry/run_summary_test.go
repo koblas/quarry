@@ -74,8 +74,7 @@ func summaryRows(kioskFixed bool) store.Rows {
 // finds Pharmacy's while Shell's carries; it returns that HOME.
 func seedSummaryStore(t *testing.T) string {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, summaryRows(false))
 	replaceStore(t, home, summaryRows(true))
 	return home

@@ -29,8 +29,7 @@ func holdingsNotConvertedLine(account, security, shares, price, pricedOn, curren
 // (no currency) at 10.00 and 20 shares of Euro Fund (EUR) at 12.50, both priced on day 9.
 func seedHoldingsStoreWithUnconvertible(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	rows := holdingsRows()
 	rows.Securities = append(rows.Securities,
 		store.Security{ID: "sec-null", SourceID: 4, Name: "Mystery Fund", Ticker: new("MYST")},
@@ -46,9 +45,8 @@ func seedHoldingsStoreWithUnconvertible(t *testing.T) {
 
 func Test_run_holdings_leaves_a_security_it_cannot_convert_out_of_the_total(t *testing.T) {
 	seedHoldingsStoreWithUnconvertible(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: "+holdingsNoCurrencyLine+"\nquarry: warning: "+holdingsOtherCurrencyLine+"\n", stderr.String())
@@ -65,9 +63,8 @@ func Test_run_holdings_leaves_a_security_it_cannot_convert_out_of_the_total(t *t
 
 func Test_run_holdings_json_lists_an_unconvertible_security_with_a_null_converted_value(t *testing.T) {
 	seedHoldingsStoreWithUnconvertible(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--json"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings", "--json"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc holdingsJSONDoc

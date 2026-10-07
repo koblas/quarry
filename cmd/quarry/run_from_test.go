@@ -16,8 +16,7 @@ import (
 
 // The bundle is moved out of Documents so any read of Quicken, or discovery, would fail.
 func Test_run_rebuilds_the_store_from_an_earlier_snapshot_without_quicken(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
 	var syncStdout, syncStderr bytes.Buffer
 	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncStdout, &syncStderr))
@@ -30,9 +29,8 @@ func Test_run_rebuilds_the_store_from_an_earlier_snapshot_without_quicken(t *tes
 	require.NoError(t, os.Rename(bundle.Dir, filepath.Join(home, "Elsewhere.quicken")))
 	storePath := filepath.Join(quarryDir, "quarry.duckdb")
 	require.NoError(t, os.Remove(storePath))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--from", id}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", id})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -46,8 +44,7 @@ func Test_run_rebuilds_the_store_from_an_earlier_snapshot_without_quicken(t *tes
 }
 
 func Test_run_from_a_path_creates_quarrys_directory_on_a_machine_without_one(t *testing.T) {
-	syncHome := t.TempDir()
-	t.Setenv("HOME", syncHome)
+	syncHome := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(syncHome, "Documents"))
 	var syncStdout, syncStderr bytes.Buffer
 	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncStdout, &syncStderr))
@@ -57,11 +54,9 @@ func Test_run_from_a_path_creates_quarrys_directory_on_a_machine_without_one(t *
 		src := onlyFileWithSuffix(t, snapshotsDir, suffix)
 		require.NoError(t, os.Rename(src, filepath.Join(elsewhere, filepath.Base(src))))
 	}
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	var stdout, stderr bytes.Buffer
+	home := newHome(t)
 
-	exitCode := run(context.Background(), []string{"sync", "--from", onlyFileWithSuffix(t, elsewhere, ".sqlite")}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--from", onlyFileWithSuffix(t, elsewhere, ".sqlite")})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.FileExists(t, filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb"))

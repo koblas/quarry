@@ -24,8 +24,7 @@ func pinFirstFoundAt(t *testing.T, home string) {
 }
 
 func Test_run_findings_json_prints_the_ruled_document_for_one_open_duplicate(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	hydroPK := b.Payee(v9fixture.PayeeRow{Name: "Hydro One"})
@@ -34,9 +33,8 @@ func Test_run_findings_json_prints_the_ruled_document_for_one_open_duplicate(t *
 	second := categorizedPayeeTxn(b, chequingPK, hydroPK, billsPK, time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC), "-142.17")
 	syncBundle(t, b.WriteBundle(t, filepath.Join(home, "Documents")))
 	pinFirstFoundAt(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -69,8 +67,7 @@ func Test_run_findings_json_prints_the_ruled_document_for_one_open_duplicate(t *
 }
 
 func Test_run_findings_json_items_of_a_one_sided_transfer_and_an_uncategorized_payee_carry_their_own_fields(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	visaPK := b.Account(v9fixture.AccountRow{Name: "Visa", Type: "CHECKING", Currency: "USD", Active: true})
 	paymentPK := b.Payee(v9fixture.PayeeRow{Name: "Payment"})
@@ -83,9 +80,8 @@ func Test_run_findings_json_items_of_a_one_sided_transfer_and_an_uncategorized_p
 	uncategorizedSplit := b.Entry(v9fixture.EntryRow{Parent: uncategorizedTxn, Amount: "-10.00"})
 	syncBundle(t, b.WriteBundle(t, filepath.Join(home, "Documents")))
 	pinFirstFoundAt(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.JSONEq(t, fmt.Sprintf(`{
@@ -127,13 +123,11 @@ func Test_run_findings_json_items_of_a_one_sided_transfer_and_an_uncategorized_p
 }
 
 func Test_run_findings_json_with_none_open_prints_empty_lists_not_null(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, spendRows([]store.Account{chequingAccount("acct-1", 1)},
 		spendSplit{id: "1", account: "acct-1", category: "cat-fuel", payee: "payee-costco", currency: "CAD", day: day(2026, 9, 1), cents: -4500}))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.JSONEq(t, `{
@@ -146,14 +140,12 @@ func Test_run_findings_json_with_none_open_prints_empty_lists_not_null(t *testin
 }
 
 func Test_run_findings_json_lists_a_config_warning_without_the_prefix_and_prints_it_to_stderr(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, spendRows([]store.Account{chequingAccount("acct-1", 1)},
 		spendSplit{id: "1", account: "acct-1", category: "cat-fuel", payee: "payee-costco", currency: "CAD", day: day(2026, 9, 1), cents: -4500}))
 	writeConfig(t, home, "snapshot.keep = 3\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {
@@ -176,8 +168,7 @@ func Test_run_findings_reports_a_failed_stdout_write(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStore(t, home, spendRows([]store.Account{chequingAccount("acct-1", 1)},
 				spendSplit{id: "1", account: "acct-1", category: "cat-fuel", payee: "payee-costco", currency: "CAD", day: day(2026, 9, 1), cents: -4500}))
 			var stderr bytes.Buffer

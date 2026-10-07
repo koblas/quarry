@@ -23,8 +23,7 @@ const (
 // seedUncountedOnlyStore builds a store whose only transaction is in an account left out of Quicken's reports.
 func seedUncountedOnlyStore(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	notInReports := chequingAccount("acct-out", 1)
 	notInReports.NotInReports = true
 	replaceStore(t, home, spendRows([]store.Account{notInReports},

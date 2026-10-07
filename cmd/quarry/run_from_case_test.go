@@ -17,8 +17,7 @@ import (
 
 // Case-insensitive volumes resolve the lower-case name too: only the recorded path tells them apart.
 func Test_run_sync_from_an_id_rebuilds_the_store_from_an_upper_case_sqlite_snapshot(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncBundle(t, writeNamedAccountBundle(t, filepath.Join(home, "Documents"), "Chequing"))
 	snapshotsDir := filepath.Join(storeDirUnder(home), "snapshots")
 	lower := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
@@ -27,9 +26,8 @@ func Test_run_sync_from_an_id_rebuilds_the_store_from_an_upper_case_sqlite_snaps
 	require.NoError(t, os.Rename(lower, upper))
 	require.Contains(t, dirNames(t, snapshotsDir), id+".SQLITE")
 	require.NoError(t, os.Remove(storePathUnder(home)))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--from", id}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--from", id})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, map[string]string{"1": upper}, importRunQuery(t, home, "SELECT CAST(id AS VARCHAR), snapshot_path FROM import_runs"))
@@ -121,8 +119,7 @@ func Test_run_sync_from_a_path_finds_its_snapshot_and_manifest_in_any_letter_cas
 	for _, c := range cases {
 		for _, format := range [][]string{nil, {"--json"}} {
 			t.Run(c.name+" "+strings.Join(format, " "), func(t *testing.T) {
-				home := t.TempDir()
-				t.Setenv("HOME", home)
+				home := newHome(t)
 				syncBundle(t, writeNamedAccountBundle(t, filepath.Join(home, "Documents"), "Chequing"))
 				dir := filepath.Join(storeDirUnder(home), "snapshots")
 				id := snapshotID(onlyFileWithSuffix(t, dir, ".sqlite"))

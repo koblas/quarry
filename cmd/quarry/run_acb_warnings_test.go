@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -52,13 +51,11 @@ func noRateSharedTickerRows() store.Rows {
 }
 
 func Test_run_acb_warns_of_a_no_rate_trade_a_shared_ticker_and_a_december_sale(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-usd\", \"acct-cad\"]\n")
 	replaceStoreWithRates(t, home, noRateSharedTickerRows(), usdRate(day(2024, time.January, 2), 1_250_000))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
@@ -85,13 +82,11 @@ return-of-capital = 1000.00
 `
 
 func Test_run_acb_json_leaves_a_no_rate_security_out_of_the_years_and_warns(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, noRateReturnOfCapitalConfig)
 	replaceStoreWithRates(t, home, noRateSharedTickerRows(), usdRate(day(2024, time.January, 2), 1_250_000))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb", "--json"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb", "--json"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc acbDoc

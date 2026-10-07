@@ -77,12 +77,10 @@ func Test_run_prints_the_sql_status_and_findings_documents_byte_for_byte(t *test
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			want := c.setup(t, home)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), want.args, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), want.args)
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Equal(t, want.stdout, stdout.String())

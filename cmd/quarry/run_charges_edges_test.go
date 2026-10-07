@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -17,16 +16,14 @@ import (
 func eveningOfTheLocalDay() time.Time { return time.Date(2026, 9, 29, 22, 0, 0, 0, utcMinus5) }
 
 func Test_run_recurring_leaves_out_a_charge_dated_after_the_local_day_even_when_until_reaches_past_it(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	charges := make([]chargeTxn, 0, 5)
 	for _, date := range []time.Time{day(2026, 6, 29), day(2026, 7, 29), day(2026, 8, 29), day(2026, 9, 29), day(2026, 9, 30)} {
 		charges = append(charges, groceryCharge("Netflix.com", date, 999))
 	}
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, charges...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"recurring", "--until", "2027"}, spendEnvAt(&stdout, &stderr, eveningOfTheLocalDay()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"recurring", "--until", "2027"}, eveningOfTheLocalDay())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -37,17 +34,15 @@ func Test_run_recurring_leaves_out_a_charge_dated_after_the_local_day_even_when_
 }
 
 func Test_run_anomalies_leaves_out_a_charge_dated_after_the_local_day_even_when_until_reaches_past_it(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	charges := make([]chargeTxn, 0, 4)
 	for i, cents := range []int64{9000, 9300, 9605} {
 		charges = append(charges, groceryCharge("Bell Canada", day(2026, time.March, 3+7*i), cents))
 	}
 	charges = append(charges, groceryCharge("Bell Canada", day(2026, 9, 30), 41200))
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, charges...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"anomalies", "--until", "2027"}, spendEnvAt(&stdout, &stderr, eveningOfTheLocalDay()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"anomalies", "--until", "2027"}, eveningOfTheLocalDay())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -55,8 +50,7 @@ func Test_run_anomalies_leaves_out_a_charge_dated_after_the_local_day_even_when_
 }
 
 func Test_run_anomalies_lists_a_charge_of_two_categories_as_split_against_its_payees_usual(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	charges := make([]chargeTxn, 0, 6)
 	for i, cents := range []int64{9000, 9300, 9605, 9900, 10200} {
 		charges = append(charges, groceryCharge("Bell Canada", day(2025, time.March, 3+7*i), cents))
@@ -65,9 +59,8 @@ func Test_run_anomalies_lists_a_charge_of_two_categories_as_split_against_its_pa
 	split.splits = []chargeSplit{{category: "cat-groceries", cents: -30000}, {category: "cat-fuel", cents: -11200}}
 	charges = append(charges, split)
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, charges...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"anomalies"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -77,13 +70,11 @@ func Test_run_anomalies_lists_a_charge_of_two_categories_as_split_against_its_pa
 }
 
 func Test_run_anomalies_counts_a_first_large_charge_without_a_payee_as_too_little_history_to_judge(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)},
 		groceryCharge("", day(2026, time.March, 2), 25000)))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"anomalies"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

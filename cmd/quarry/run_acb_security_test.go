@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -48,13 +47,11 @@ func acbHistoryLine(date, account, action, shares, amount, rate, cad, held, acb,
 }
 
 func Test_run_acb_security_prints_every_event_of_the_named_security_with_shares_held_acb_and_gain(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, acbSecurityConfig)
 	replaceStore(t, home, acbHistoryRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb", "--security", "ACME"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb", "--security", "ACME"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

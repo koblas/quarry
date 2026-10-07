@@ -16,9 +16,8 @@ import (
 // runRecurring runs quarry recurring from 2000 with args and returns stdout and stderr; it must exit 0.
 func runRecurring(t *testing.T, args ...string) (string, string) {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), append([]string{"recurring", "--since", "2000"}, args...), spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"recurring", "--since", "2000"}, args...))
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	return stdout.String(), stderr.String()
@@ -59,8 +58,7 @@ func Test_run_recurring_in_usd_lists_each_series_beside_its_native_currency(t *t
 }
 
 func Test_run_recurring_prefixes_a_price_change_with_the_native_code_when_the_row_is_converted(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	cadHydro := monthlySeries("Hydro", 2026, time.February, slices.Concat(slices.Repeat([]int64{999}, 4), slices.Repeat([]int64{1299}, 4))...)
 	replaceStoreWithRates(t, home,
 		chargeRows([]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)}, cadHydro...),
@@ -140,8 +138,7 @@ func Test_run_recurring_narrows_to_one_usd_account_and_converts_it_to_cad(t *tes
 }
 
 func Test_run_recurring_converts_an_ended_series_in_a_closed_account_at_the_rate_of_its_latest_charge(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	closed := usdChequingAccount("acct-old", 2)
 	closed.Name, closed.Active = "Old USD", false
 	old := inUSD(monthlySeries("Old Sub", 2026, time.February, slices.Repeat([]int64{800}, 5)...))
@@ -175,8 +172,7 @@ func Test_run_recurring_converts_an_ended_series_in_a_closed_account_at_the_rate
 }
 
 func Test_run_recurring_lists_a_series_charged_before_the_first_rate_in_its_own_currency_with_a_warning(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	usdGym := inUSD(monthlySeries("Gym", 2026, time.February, slices.Repeat([]int64{1200}, 8)...))
 	cadRent := monthlySeries("Rent", 2026, time.February, slices.Repeat([]int64{5000}, 8)...)
 	replaceStoreWithRates(t, home,
@@ -211,8 +207,7 @@ func Test_run_recurring_lists_a_series_charged_before_the_first_rate_in_its_own_
 }
 
 func Test_run_recurring_in_usd_lists_cad_series_charged_before_the_first_rate_in_cad_with_a_warning(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	usdGym := inUSD(monthlySeries("Gym", 2026, time.February, slices.Repeat([]int64{1200}, 8)...))
 	cadRent := monthlySeries("Rent", 2026, time.February, slices.Repeat([]int64{5000}, 8)...)
 	cadPhone := monthlySeries("Phone", 2026, time.February, slices.Repeat([]int64{3000}, 8)...)
@@ -253,8 +248,7 @@ func Test_run_recurring_in_usd_lists_cad_series_charged_before_the_first_rate_in
 
 func Test_run_recurring_on_a_store_without_rates_warns_only_when_a_usd_series_needs_converting(t *testing.T) {
 	const noRates = "the store has no exchange rates, so amounts are listed in each account's own currency; run quarry sync to fetch them"
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	usdGym := inUSD(monthlySeries("Gym", 2026, time.February, slices.Repeat([]int64{1200}, 8)...))
 	cadRent := monthlySeries("Rent", 2026, time.February, slices.Repeat([]int64{5000}, 8)...)
 	accounts := []store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)}
@@ -321,8 +315,7 @@ func Test_run_recurring_on_a_store_without_rates_warns_only_when_a_usd_series_ne
 }
 
 func Test_run_recurring_says_only_that_the_window_is_empty_on_an_unrated_usd_store_in_every_currency(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 		inUSD(monthlySeries("Gym", 2026, time.February, slices.Repeat([]int64{1200}, 8)...))...))
 	cases := []struct{ name, flag, wantCaption string }{

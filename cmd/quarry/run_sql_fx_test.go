@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -36,8 +35,7 @@ func replaceStoreWithRates(t *testing.T, home string, rows store.Rows, rates ...
 }
 
 func Test_run_sql_views_carry_each_amount_converted_at_its_dates_rate(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	day := func(month time.Month, d int) time.Time { return time.Date(2026, month, d, 0, 0, 0, 0, time.UTC) }
 	replaceStoreWithRates(t, home,
 		spendRows([]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
@@ -59,9 +57,8 @@ func Test_run_sql_views_carry_each_amount_converted_at_its_dates_rate(t *testing
 		UNION ALL
 		SELECT 'spending', split_id, spent, spent_cad, spent_usd, typeof(spent_cad), typeof(spent_usd) FROM v_spending
 	) ORDER BY source, id`
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sql", "--csv", query}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "--csv", query})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

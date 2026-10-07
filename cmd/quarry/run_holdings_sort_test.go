@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"testing"
@@ -14,8 +13,7 @@ import (
 // plain byte order would put IRA and Old RRSP before it.
 func seedLowerCaseAccountHoldingsStore(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	rows := holdingsRows()
 	rows.Accounts[0].Name = "brokerage"
 	replaceStoreWithRates(t, home, rows, usdRate(holdingsDay(10), 1_360_000))
@@ -23,9 +21,8 @@ func seedLowerCaseAccountHoldingsStore(t *testing.T) {
 
 func Test_run_holdings_sorts_accounts_ignoring_case_in_the_table(t *testing.T) {
 	seedLowerCaseAccountHoldingsStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Holdings on 2026-03-12 in all accounts, amounts in CAD; cash not included\n\n"+
@@ -39,9 +36,8 @@ func Test_run_holdings_sorts_accounts_ignoring_case_in_the_table(t *testing.T) {
 
 func Test_run_holdings_json_sorts_accounts_ignoring_case(t *testing.T) {
 	seedLowerCaseAccountHoldingsStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--json"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings", "--json"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {

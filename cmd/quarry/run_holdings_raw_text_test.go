@@ -11,8 +11,7 @@ import (
 )
 
 func Test_run_holdings_json_carries_account_and_security_names_as_stored(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	rows := holdingsRows()
 	rows.Accounts[0].Name = "Broker\nage"
 	rows.Securities[0].Name = "Acme\tCorp\r\n"

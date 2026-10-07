@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -50,17 +49,15 @@ func anomaliesTable(caption, footer string, rows ...[]string) string {
 }
 
 func Test_run_anomalies_lists_a_charge_over_twice_the_payees_usual(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	charges := make([]chargeTxn, 0, 6)
 	for i, cents := range []int64{9000, 9300, 9605, 9900, 10200} {
 		charges = append(charges, groceryCharge("Bell Canada", day(2025, time.March, 3+7*i), cents))
 	}
 	charges = append(charges, groceryCharge("Bell Canada", day(2026, time.March, 2), 41200))
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, charges...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"anomalies"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

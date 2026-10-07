@@ -77,8 +77,7 @@ func unusableLockRows() []unusableLockRow {
 // newSentinelStore points HOME at a quarry folder holding a sentinel store and no lock file.
 func newSentinelStore(t *testing.T) lockedStore {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	quarryDir := storeDirUnder(home)
 	require.NoError(t, os.MkdirAll(quarryDir, 0o700))
 	sentinel := []byte("previous store bytes, untouched while the lock file is unusable")
@@ -110,8 +109,7 @@ func Test_run_sync_refuses_with_a_fix_when_it_cannot_create_the_folder_for_its_l
 	for _, cell := range outputCells {
 		t.Run(cell.name, func(t *testing.T) {
 			skipAsRoot(t)
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			writeStatusFixtureBundle(t, home)
 			library := filepath.Join(home, "Library")
 			require.NoError(t, os.Mkdir(library, 0o500))
@@ -144,8 +142,7 @@ func runWithoutConfigFile(t *testing.T, home string, args ...string) (int, strin
 func Test_run_sync_lock_refuses_a_quarry_folder_that_is_a_file_naming_the_folder(t *testing.T) {
 	for _, cell := range outputCells {
 		t.Run(cell.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			writeStatusFixtureBundle(t, home)
 			quarryDir := storeDirUnder(home)
 			require.NoError(t, os.MkdirAll(filepath.Dir(quarryDir), 0o700))

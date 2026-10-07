@@ -159,8 +159,7 @@ func Test_run_snapshots_prune_run_twice_never_deletes_the_snapshot_the_recorded_
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			dir := writeSnapshots(t, home, fiveSnapshots()...)
 			buildStoreFrom(t, home, c.recorded(t, home, dir))
 
@@ -187,8 +186,7 @@ func storeBuiltFromASymlink(t *testing.T, home, ext string) (string, string, str
 }
 
 func Test_run_snapshots_json_marks_the_target_of_the_symlink_sync_built_the_store_from(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	id, _, _ := storeBuiltFromASymlink(t, home, ".sqlite")
 
 	exitCode, stdout, stderr := runSnapshotsJSON(t)
@@ -199,8 +197,7 @@ func Test_run_snapshots_json_marks_the_target_of_the_symlink_sync_built_the_stor
 }
 
 func Test_run_snapshots_json_marks_the_target_of_a_symlink_that_spells_its_extension_in_upper_case(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	skipOnCaseSensitiveVolume(t, home)
 	id, _, _ := storeBuiltFromASymlink(t, home, ".SQLITE")
 
@@ -212,8 +209,7 @@ func Test_run_snapshots_json_marks_the_target_of_a_symlink_that_spells_its_exten
 }
 
 func Test_run_snapshots_prune_run_twice_keeps_the_target_of_the_symlink_sync_built_the_store_from(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	id, newerID, dir := storeBuiltFromASymlink(t, home, ".sqlite")
 
 	firstExit, _, firstStderr := runPrune(t, "--keep", "1")
@@ -258,8 +254,7 @@ func Test_run_sync_from_keeps_the_snapshot_it_names_and_its_newer_hard_link_beyo
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			older := oldSnapshots(1)
 			id, dir := syncThenWrite(t, home, append(newerSnapshots(keptSnapshots), older...)...)
 			from := c.from(t, home, dir, id)
@@ -277,8 +272,7 @@ func Test_run_sync_from_keeps_the_snapshot_it_names_and_its_newer_hard_link_beyo
 }
 
 func Test_run_snapshots_prune_keeps_the_snapshot_sync_was_built_from_under_another_extension_once_that_file_is_gone(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	newer := newerSnapshots(1)
 	id, dir := syncThenWrite(t, home, newer...)
 	backup := filepath.Join(home, "backup")

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -152,12 +151,10 @@ func Test_run_search_json_echoes_the_category_as_given_and_null_when_absent(t *t
 }
 
 func Test_run_search_text_names_the_category_in_the_caption(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, narrowCategoryStore())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"search", "--category", "food:GROCERIES", "--min", "50"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--category", "food:GROCERIES", "--min", "50"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "Transactions in all accounts, all dates, category \"food:GROCERIES\", amount at least 50.00\n")
@@ -184,12 +181,10 @@ func Test_run_search_category_as_text(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStore(t, home, categorySearchStore())
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), append([]string{"search"}, c.args...), spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"search"}, c.args...))
 
 			require.Equal(t, c.wantExit, exitCode, stderr.String())
 			assert.Equal(t, c.wantStdout, stdout.String())

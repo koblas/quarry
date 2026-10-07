@@ -18,8 +18,7 @@ import (
 )
 
 func Test_run_sync_imports_securities_and_their_prices(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -37,9 +36,8 @@ func Test_run_sync_imports_securities_and_their_prices(t *testing.T) {
 	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: noCurrencyPK, QuoteDate: nil, ClosingPrice: "5"})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	require.Empty(t, stderr.String())
@@ -64,8 +62,7 @@ func Test_run_sync_imports_securities_and_their_prices(t *testing.T) {
 }
 
 func Test_run_sync_records_security_and_price_counts_in_import_runs(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -77,9 +74,8 @@ func Test_run_sync_records_security_and_price_counts_in_import_runs(t *testing.T
 	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &day2, ClosingPrice: "13"})
 	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: barePK, QuoteDate: &day1, ClosingPrice: "4"})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, _, _ := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
@@ -91,8 +87,7 @@ func Test_run_sync_records_security_and_price_counts_in_import_runs(t *testing.T
 }
 
 func Test_run_sync_imports_investment_transactions_with_named_actions(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -130,9 +125,8 @@ func Test_run_sync_imports_investment_transactions_with_named_actions(t *testing
 	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "0.541667"})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	require.Empty(t, stderr.String())
@@ -183,8 +177,7 @@ func Test_run_sync_imports_investment_transactions_with_named_actions(t *testing
 // withInvestments), then returns spend and cashflow output in text and JSON, and the investment_transactions row count.
 func syncThenReport(t *testing.T, withInvestments bool) (map[string]string, string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -289,8 +282,7 @@ func Test_run_sync_refuses_an_investment_record_quarry_cannot_read(t *testing.T)
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			quarryDir := filepath.Join(home, "Library", "Application Support", "quarry")
 			require.NoError(t, os.MkdirAll(quarryDir, 0o700))
 			storePath := filepath.Join(quarryDir, "quarry.duckdb")
@@ -300,9 +292,8 @@ func Test_run_sync_refuses_an_investment_record_quarry_cannot_read(t *testing.T)
 			brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 			reason := c.setup(b, brokeragePK)
 			bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
@@ -354,12 +345,10 @@ func holdingsBundle(t *testing.T, home string) v9fixture.Bundle {
 }
 
 func Test_run_sync_reports_holdings_that_match_quickens_share_counts(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := holdingsBundle(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	require.Empty(t, stderr.String())
@@ -408,16 +397,14 @@ func oneHoldingBundle(t *testing.T, home, lotUnits string) v9fixture.Bundle {
 
 // Cash checks pass here, so a kept store can only come from the share-count gate.
 func Test_run_sync_leaves_the_previous_store_byte_identical_when_share_counts_differ(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	storePath := storePathUnder(home)
 	require.NoError(t, os.MkdirAll(filepath.Dir(storePath), 0o700))
 	sentinel := []byte("previous store bytes, untouched by a failing sync")
 	require.NoError(t, os.WriteFile(storePath, sentinel, 0o600))
 	bundle := oneHoldingBundle(t, home, "9")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, _ := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Contains(t, stdout.String(), "NOT REBUILT")
@@ -427,16 +414,14 @@ func Test_run_sync_leaves_the_previous_store_byte_identical_when_share_counts_di
 }
 
 func Test_run_sync_replaces_the_store_when_the_lot_matches_the_derived_share_count(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	storePath := storePathUnder(home)
 	require.NoError(t, os.MkdirAll(filepath.Dir(storePath), 0o700))
 	sentinel := []byte("previous store bytes, replaced by a passing sync")
 	require.NoError(t, os.WriteFile(storePath, sentinel, 0o600))
 	bundle := oneHoldingBundle(t, home, "10")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	got, err := os.ReadFile(storePath)
@@ -445,8 +430,7 @@ func Test_run_sync_replaces_the_store_when_the_lot_matches_the_derived_share_cou
 }
 
 func Test_run_sync_applies_a_stock_split_in_date_order(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	buyDay := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	splitDay := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
 	sellDay := time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
@@ -464,9 +448,8 @@ func Test_run_sync_applies_a_stock_split_in_date_order(t *testing.T) {
 	invest(23, splitDay, v9fixture.TransactionRow{Units: "0", Amount: "0", Numerator: "1", Denominator: "12"})
 	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "0"})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	require.Empty(t, stderr.String())
@@ -474,14 +457,12 @@ func Test_run_sync_applies_a_stock_split_in_date_order(t *testing.T) {
 }
 
 func Test_run_sync_reports_a_file_with_no_investment_data(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	require.Empty(t, stderr.String())

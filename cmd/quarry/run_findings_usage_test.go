@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -33,9 +32,8 @@ func Test_run_findings_rejects_usage_it_cannot_use(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), c.args, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())

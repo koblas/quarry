@@ -13,8 +13,7 @@ import (
 
 // Shell is the control: it moves from Auto to Auto:Fuel once and stays there.
 func Test_run_sync_records_costco_as_mixed_categories_and_not_shell(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	costcoPK := b.Payee(v9fixture.PayeeRow{Name: "Costco"})

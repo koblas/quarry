@@ -24,8 +24,7 @@ func chdirToUnsearchableFolder(t *testing.T) {
 func Test_run_sync_from_a_relative_path_refuses_when_the_working_directory_cannot_be_resolved(t *testing.T) {
 	for _, format := range [][]string{nil, {"--json"}} {
 		t.Run(strings.Join(format, " "), func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			chdirToUnsearchableFolder(t)
 
 			exitCode, stdout, stderr := runSyncFrom(t, "x.sqlite", format...)

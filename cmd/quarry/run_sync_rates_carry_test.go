@@ -79,8 +79,7 @@ func storedRateDates(t *testing.T) string {
 }
 
 func Test_run_sync_from_an_older_snapshot_keeps_every_carried_rate(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundleA := writeChequingBundle(t, filepath.Join(home, "A"), januaryDay(3))
 	bundleB := writeChequingBundle(t, filepath.Join(home, "B"), januaryDay(3), januaryDay(10))
 	syncThrough(t, fakeValet{"FXUSDCAD": {"2017-01-03": "1.3435", "2017-01-04": "1.3315"}}, "--quicken", bundleA.Dir)
@@ -96,8 +95,7 @@ func Test_run_sync_from_an_older_snapshot_keeps_every_carried_rate(t *testing.T)
 }
 
 func Test_run_sync_asks_only_for_the_dates_after_the_last_stored_rate(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), januaryDay(3))
 	syncThrough(t, fakeValet{"FXUSDCAD": {"2017-01-03": "1.3435", "2017-01-04": "1.3315"}}, "--quicken", bundle.Dir)
 	source := &recordingValet{next: fakeValet{"FXUSDCAD": {

@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -13,8 +12,7 @@ import (
 )
 
 func Test_run_cashflow_warns_with_the_count_of_its_own_accounts_and_currency(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, cashFlowRows(
 		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 3, 10), cents: 100000},
@@ -33,9 +31,7 @@ func Test_run_cashflow_warns_with_the_count_of_its_own_accounts_and_currency(t *
 
 	for _, c := range cells {
 		t.Run(c.name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			exitCode := runWith(context.Background(), append([]string{"cashflow"}, c.args...), spendEnv(&stdout, &stderr))
+			exitCode, _, stderr := runSpendCapture(context.Background(), append([]string{"cashflow"}, c.args...))
 			doc, echoedStderr := runCashFlowJSON(t, c.args...)
 
 			require.Equal(t, 0, exitCode, stderr.String())
@@ -71,12 +67,10 @@ func Test_run_cashflow_without_rates_warns_only_when_a_conversion_is_needed(t *t
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStore(t, home, cashFlowRows(c.accounts, c.splits...))
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), []string{"cashflow", "--since", "2026-03", "--until", "2026-03"}, spendEnv(&stdout, &stderr))
+			exitCode, _, stderr := runSpendCapture(context.Background(), []string{"cashflow", "--since", "2026-03", "--until", "2026-03"})
 			doc, echoedStderr := runCashFlowJSON(t, "--since", "2026-03", "--until", "2026-03")
 
 			require.Equal(t, 0, exitCode, stderr.String())
@@ -109,13 +103,11 @@ func Test_run_cashflow_in_usd_without_rates_warns_only_when_a_conversion_is_need
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStore(t, home, cashFlowRows([]store.Account{c.account}, c.split))
 			args := []string{"--currency", "USD", "--since", "2026-03", "--until", "2026-03"}
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), append([]string{"cashflow"}, args...), spendEnv(&stdout, &stderr))
+			exitCode, _, stderr := runSpendCapture(context.Background(), append([]string{"cashflow"}, args...))
 			doc, echoedStderr := runCashFlowJSON(t, args...)
 
 			require.Equal(t, 0, exitCode, stderr.String())
@@ -127,8 +119,7 @@ func Test_run_cashflow_in_usd_without_rates_warns_only_when_a_conversion_is_need
 }
 
 func Test_run_cashflow_json_gives_a_period_in_the_other_currency_only_where_the_store_found_one(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, cashFlowRows(
 		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 		spendSplit{id: "s01", account: "acct-usd", category: "cat-salary", currency: "USD", day: day(2025, 12, 20), cents: 8000},
@@ -145,15 +136,13 @@ func Test_run_cashflow_json_gives_a_period_in_the_other_currency_only_where_the_
 }
 
 func Test_run_cashflow_of_an_unrated_empty_window_gives_only_the_empty_window_note(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, cashFlowRows(
 		[]store.Account{usdChequingAccount("acct-usd", 2)},
 		spendSplit{id: "s01", account: "acct-usd", category: "cat-salary", currency: "USD", day: day(2026, 3, 10), cents: 8000},
 	))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"cashflow", "--since", "2020-01-01", "--until", "2020-12-31"}, spendEnv(&stdout, &stderr))
+	exitCode, _, stderr := runSpendCapture(context.Background(), []string{"cashflow", "--since", "2020-01-01", "--until", "2020-12-31"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	const note = "no income or spending from 2020-01-01 to 2020-12-31; the store's transactions run 2026-03-10 to 2026-03-10"

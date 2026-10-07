@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -33,12 +32,10 @@ func syncUnusedCategories(t *testing.T, home string) (int64, int64, int64) {
 }
 
 func Test_run_findings_lists_unused_categories_with_their_subcategory_count(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	parkingPK, vacationPK, _ := syncUnusedCategories(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -52,12 +49,10 @@ Ignore a finding by adding its id to findings.ignore in %s; see quarry findings 
 }
 
 func Test_run_findings_json_gives_an_unused_category_item_its_category_and_null_everything_else(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	_, vacationPK, hotelPK := syncUnusedCategories(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--json", "--type", "unused-category"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--type", "unused-category"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {

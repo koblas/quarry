@@ -25,8 +25,7 @@ func netWorthNativeLine(typ, currency, balance string) string {
 // seedNetWorthStore builds the net worth store (CAD and USD accounts, a USD brokerage, a USD rate from March 10) under a temp HOME.
 func seedNetWorthStore(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	march := func(d int) time.Time { return day(2026, time.March, d) }
 	card := store.Account{ID: "acct-card", SourceID: 3, Name: "Card", Type: "credit_card", Currency: "CAD", Active: true}
 	closed := closedAccount(chequingAccount("acct-closed", 5))
@@ -64,9 +63,8 @@ func seedNetWorthStore(t *testing.T) {
 
 func Test_run_networth_prints_todays_balances_by_type_and_currency_with_a_total_in_the_reporting_currency(t *testing.T) {
 	seedNetWorthStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"networth"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

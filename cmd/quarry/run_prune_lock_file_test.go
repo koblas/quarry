@@ -46,8 +46,7 @@ func Test_run_snapshots_prune_refuses_an_unusable_lock_file_with_a_fix(t *testin
 func Test_run_snapshots_prune_lock_refuses_a_quarry_folder_that_is_a_file_naming_the_folder(t *testing.T) {
 	for _, cell := range outputCells {
 		t.Run(cell.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			quarryDir := storeDirUnder(home)
 			require.NoError(t, os.MkdirAll(filepath.Dir(quarryDir), 0o700))
 			require.NoError(t, os.WriteFile(quarryDir, []byte("not a folder"), 0o600))

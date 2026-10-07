@@ -17,8 +17,7 @@ import (
 )
 
 func Test_run_findings_leaves_investment_cash_rows_out_of_duplicate_and_unlinked_transfer(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})

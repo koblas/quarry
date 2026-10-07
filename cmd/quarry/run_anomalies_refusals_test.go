@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -52,12 +51,10 @@ func Test_run_anomalies_refuses_usage_and_store_problems(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStore(t, home, chargeRows(c.accounts))
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), c.args, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
 
 			assert.Equal(t, c.wantExit, exitCode)
 			assert.Empty(t, stdout.String())
@@ -67,11 +64,9 @@ func Test_run_anomalies_refuses_usage_and_store_problems(t *testing.T) {
 }
 
 func Test_run_anomalies_refuses_when_there_is_no_store(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	var stdout, stderr bytes.Buffer
+	home := newHome(t)
 
-	exitCode := runWith(context.Background(), []string{"anomalies"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -110,9 +105,8 @@ func Test_run_anomalies_rejects_a_period_it_cannot_use(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), c.args, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())

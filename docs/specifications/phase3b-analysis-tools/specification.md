@@ -736,15 +736,15 @@ Sizing pass (architect, opus) 2026-10-03 — 16 IDs → 7 runs. Order is binding
 - [x] SCENARIO-12: "today" is read on every call — delivered by SCENARIO-02 — `internal/mcp/spending_test.go` `Test_spending_reads_today_once_at_the_start_of_every_call`
 - [x] SCENARIO-03: spending refuses a bad window in MCP words — `cmd/quarry/run_mcp_spending_test.go` `Test_run_mcp_spending_refuses_a_bad_window_in_mcp_words`
 - [x] SCENARIO-04: an unknown or ambiguous account is refused without its name reaching stderr — `cmd/quarry/run_mcp_spending_test.go` `Test_run_mcp_spending_refuses_an_account_without_its_name_on_stderr`
-- [x] SCENARIO-05: a DuckDB read fault logs only the withheld store line — delivered by SCENARIO-04, covering query, describe_schema, sync_status, data_quality and spending (cash_flow, recurring_charges and anomalies rows are added by S09/S10) — `cmd/quarry/run_mcp_store_faults_test.go` `Test_run_mcp_logs_only_the_withheld_line_for_a_store_read_fault`
-- [x] SCENARIO-09: cash_flow returns the cashflow --json document — `cmd/quarry/run_mcp_cash_flow_test.go` `Test_run_mcp_cash_flow_returns_the_cashflow_json_document`
-- [x] SCENARIO-08: a list over 500 entries is cut with the cap warning — delivered by SCENARIO-09 — `cmd/quarry/run_mcp_spending_cap_test.go` `Test_run_mcp_spending_cuts_a_list_over_500_rows_with_the_cap_warning`
+- [x] SCENARIO-05: a DuckDB read fault logs only the withheld store line — delivered by SCENARIO-04, covering query, describe_schema, sync_status, data_quality and spending (cash_flow, recurring_charges and anomalies rows are added by S09/S10) — `cmd/quarry/run_mcp_test.go` `Test_run_mcp_logs_only_the_withheld_line_for_a_store_read_fault`
+- [x] SCENARIO-09: cash_flow returns the cashflow --json document — `cmd/quarry/run_mcp_spending_test.go` `Test_run_mcp_cash_flow_returns_the_cashflow_json_document`
+- [x] SCENARIO-08: a list over 500 entries is cut with the cap warning — delivered by SCENARIO-09 — `cmd/quarry/run_mcp_spending_test.go` `Test_run_mcp_spending_cuts_a_list_over_500_rows_with_the_cap_warning`
 - [x] SCENARIO-14: absent, null and empty arguments reach spending and cash_flow with the by default applied — delivered by SCENARIO-09 — `internal/mcp/server_test.go` `Test_a_by_tool_call_with_absent_null_or_empty_arguments_applies_the_by_default`
-- [x] SCENARIO-10: recurring_charges returns the recurring --json document — `cmd/quarry/run_mcp_recurring_charges_test.go` `Test_run_mcp_recurring_charges_returns_the_recurring_json_document`
-- [x] SCENARIO-10b: recurring_charges refuses a future since in its own words — delivered by SCENARIO-10 — `cmd/quarry/run_mcp_recurring_charges_test.go` `Test_run_mcp_recurring_charges_refuses_a_future_since_in_its_own_words`
-- [x] SCENARIO-11: anomalies returns the anomalies --json document — delivered by SCENARIO-10 — `cmd/quarry/run_mcp_anomalies_test.go` `Test_run_mcp_anomalies_returns_the_anomalies_json_document`
-- [x] SCENARIO-11b: anomalies refuses a future since in its own words — delivered by SCENARIO-10 — `cmd/quarry/run_mcp_anomalies_test.go` `Test_run_mcp_anomalies_refuses_a_future_since_in_its_own_words`
-- [x] SCENARIO-13: the server describes all eight tools — `cmd/quarry/run_mcp_descriptions_test.go` `Test_run_mcp_describes_every_tool`
+- [x] SCENARIO-10: recurring_charges returns the recurring --json document — `cmd/quarry/run_mcp_findings_test.go` `Test_run_mcp_recurring_charges_returns_the_recurring_json_document`
+- [x] SCENARIO-10b: recurring_charges refuses a future since in its own words — delivered by SCENARIO-10 — `cmd/quarry/run_mcp_findings_test.go` `Test_run_mcp_recurring_charges_refuses_a_future_since_in_its_own_words`
+- [x] SCENARIO-11: anomalies returns the anomalies --json document — delivered by SCENARIO-10 — `cmd/quarry/run_mcp_findings_test.go` `Test_run_mcp_anomalies_returns_the_anomalies_json_document`
+- [x] SCENARIO-11b: anomalies refuses a future since in its own words — delivered by SCENARIO-10 — `cmd/quarry/run_mcp_findings_test.go` `Test_run_mcp_anomalies_refuses_a_future_since_in_its_own_words`
+- [x] SCENARIO-13: the server describes all eight tools — `cmd/quarry/run_mcp_test.go` `Test_run_mcp_describes_every_tool`
 
 ---
 

@@ -47,13 +47,11 @@ func syncIgnoreFixture(t *testing.T, home string) ignoreFixtureIDs {
 }
 
 func Test_run_findings_leaves_an_ignored_id_off_the_list_and_counts_it_in_the_footer(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	ids := syncIgnoreFixture(t, home)
 	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [%q]\n", ids.duplicate))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -65,13 +63,11 @@ func Test_run_findings_leaves_an_ignored_id_off_the_list_and_counts_it_in_the_fo
 }
 
 func Test_run_findings_warns_about_an_ignored_id_that_is_not_a_finding(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncIgnoreFixture(t, home)
 	writeConfig(t, home, "[findings]\nignore = [\"uncategorized:payee-999\"]\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"findings"})
 
 	require.Equal(t, 0, exitCode)
 	assert.Equal(t, "quarry: warning: "+configShown+
@@ -80,13 +76,11 @@ func Test_run_findings_warns_about_an_ignored_id_that_is_not_a_finding(t *testin
 }
 
 func Test_run_findings_json_lists_an_unmatched_ignore_id_after_the_config_warning(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncIgnoreFixture(t, home)
 	writeConfig(t, home, "colour = \"red\"\n[findings]\nignore = [\"uncategorized:payee-999\"]\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	unknownKey := configShown + ": unknown key colour; quarry ignores it"
@@ -103,8 +97,7 @@ func Test_run_findings_json_lists_an_unmatched_ignore_id_after_the_config_warnin
 }
 
 func Test_run_findings_quotes_and_orders_every_unmatched_ignore_id_in_stderr_and_json_warnings(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	ids := syncIgnoreFixture(t, home)
 	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [\"\", \"a\\\"b\\\\c\\n\\u0001\", \"\", \"last:1\", %q]\n", ids.duplicate))
 	lists := func(quoted string) string {
@@ -115,9 +108,8 @@ func Test_run_findings_quotes_and_orders_every_unmatched_ignore_id_in_stderr_and
 	for i, line := range want {
 		wantJSON[i] = strings.Replace(line, configShown, configPath(home), 1)
 	}
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: "+strings.Join(want, "\nquarry: warning: ")+"\n", stderr.String())
@@ -129,34 +121,29 @@ func Test_run_findings_quotes_and_orders_every_unmatched_ignore_id_in_stderr_and
 }
 
 func Test_run_findings_shows_the_hint_when_findings_ignore_is_an_empty_list(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncIgnoreFixture(t, home)
 	writeConfig(t, home, "[findings]\nignore = []\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "2 open findings\nIgnore a finding by adding its id to findings.ignore in "+configShown)
 }
 
 func Test_run_findings_hides_the_hint_when_findings_ignore_lists_only_unmatched_ids(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncIgnoreFixture(t, home)
 	writeConfig(t, home, "[findings]\nignore = [\"uncategorized:payee-999\"]\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.True(t, strings.HasSuffix(stdout.String(), "\n2 open findings\n"), stdout.String())
 }
 
 func Test_run_findings_counts_an_ignored_finding_that_is_fixed_as_fixed(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	ids := syncIgnoreFixture(t, home)
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})

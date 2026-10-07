@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -14,8 +13,7 @@ import (
 )
 
 func Test_run_anomalies_account_judges_the_named_accounts_charge_against_history_from_every_account(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	visa := store.Account{ID: "acct-visa", SourceID: 2, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true}
 	charges := make([]chargeTxn, 0, 5)
 	for i, cents := range []int64{9000, 9300, 9605} {
@@ -25,9 +23,8 @@ func Test_run_anomalies_account_judges_the_named_accounts_charge_against_history
 	onVisa.account = "acct-visa"
 	charges = append(charges, onVisa, groceryCharge("Bell Canada", day(2026, time.April, 6), 50000))
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1), visa}, charges...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"anomalies", "--account", "Visa"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies", "--account", "Visa"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -48,13 +45,11 @@ func historyWithBigCharge(account string) []chargeTxn {
 }
 
 func Test_run_anomalies_lists_a_charge_in_a_closed_account(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	oldCard := store.Account{ID: "acct-old", SourceID: 2, Name: "Old Card", Type: "credit_card", Currency: "CAD", Closed: true}
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1), oldCard}, historyWithBigCharge("acct-old")...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"anomalies", "--account", "Old Card"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies", "--account", "Old Card"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -64,14 +59,12 @@ func Test_run_anomalies_lists_a_charge_in_a_closed_account(t *testing.T) {
 }
 
 func Test_run_anomalies_json_names_the_account_and_counts_only_its_charges(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	visa := store.Account{ID: "acct-visa", SourceID: 2, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true}
 	charges := append(historyWithBigCharge("acct-visa"), groceryCharge("Bell Canada", day(2026, time.April, 6), 500))
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1), visa}, charges...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"anomalies", "--json", "--account", "Visa"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies", "--json", "--account", "Visa"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	doc := decodeAnomaliesJSON(t, stdout.String())

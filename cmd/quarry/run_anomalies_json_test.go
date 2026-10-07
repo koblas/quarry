@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"strings"
@@ -57,8 +56,7 @@ func decodeAnomaliesJSON(t *testing.T, stdout string) anomaliesJSONDoc {
 }
 
 func Test_run_anomalies_json_returns_the_anomalies_document(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	charges := make([]chargeTxn, 0, 7)
 	for i, cents := range []int64{9000, 9300, 9605, 9900, 10200} {
 		charges = append(charges, groceryCharge("Bell Canada", day(2025, time.March, 3+7*i), cents))
@@ -69,9 +67,8 @@ func Test_run_anomalies_json_returns_the_anomalies_document(t *testing.T) {
 		splits: []chargeSplit{{cents: -15000}},
 	})
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, charges...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"anomalies", "--json"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

@@ -41,9 +41,8 @@ remove_shares, sell, split.`)
 // Needs run(): the help text is assembled with the flags, not by calling a command directly.
 func Test_run_holdings_help_ends_by_pointing_at_accounts_for_the_balance_with_cash(t *testing.T) {
 	t.Setenv("HOME", "")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"holdings", "--help"}, &stdout, &stderr)
+	exitCode, stdout, _ := runCapture(context.Background(), []string{"holdings", "--help"})
 
 	require.Equal(t, 0, exitCode)
 	assert.Contains(t, stdout.String(), `The total is the value of the securities only, without the cash held in

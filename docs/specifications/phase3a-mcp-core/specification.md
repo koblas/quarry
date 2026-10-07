@@ -679,21 +679,21 @@ Sizing pass (architect, opus) 2026-10-02 — 17 IDs → 8 runs. Full report and 
 ## BDD Acceptance Progress
 - [x] SCENARIO-01: CLI output is unchanged after the shared documents move out of cli — `cmd/quarry/run_shared_documents_test.go` `Test_run_prints_the_sql_status_and_findings_documents_byte_for_byte`
 - [x] SCENARIO-02: An MCP client connects and sees quarry's four tools — `cmd/quarry/run_mcp_test.go` `Test_run_mcp_lists_quarrys_tools_over_json_rpc`
-- [x] SCENARIO-15: quarry mcp ends with the ruled exit code — `cmd/quarry/run_mcp_exit_test.go` `Test_run_mcp_ends_with_the_ruled_exit_code`
-- [x] SCENARIO-16: quarry mcp run at a terminal says what it is — delivered by SCENARIO-15 — `cmd/quarry/run_mcp_terminal_test.go` `Test_run_mcp_at_a_terminal_prints_the_hint_and_keeps_serving`
+- [x] SCENARIO-15: quarry mcp ends with the ruled exit code — `cmd/quarry/run_mcp_test.go` `Test_run_mcp_ends_with_the_ruled_exit_code`
+- [x] SCENARIO-16: quarry mcp run at a terminal says what it is — delivered by SCENARIO-15 — `cmd/quarry/run_mcp_test.go` `Test_run_mcp_at_a_terminal_prints_the_hint_and_keeps_serving`
 - [x] SCENARIO-03: query returns rows as the sql --json document — `cmd/quarry/run_mcp_query_test.go` `Test_run_mcp_query_returns_the_sql_json_document`
 - [x] SCENARIO-04: query over its limit returns the first rows and says so — delivered by SCENARIO-03 — `cmd/quarry/run_mcp_query_test.go` `Test_run_mcp_query_over_its_limit_returns_the_first_rows_and_says_so`
 - [x] SCENARIO-05: query refuses what it cannot run — delivered by SCENARIO-03 — `cmd/quarry/run_mcp_query_test.go` `Test_run_mcp_query_refuses_what_it_cannot_run`
-- [x] SCENARIO-07: describe_schema describes the store — `cmd/quarry/run_mcp_describe_test.go` `Test_run_mcp_describe_schema_describes_the_store`
-- [x] SCENARIO-08: describe_schema bounds long account and category lists — delivered by SCENARIO-07 — `cmd/quarry/run_mcp_describe_test.go` `Test_run_mcp_describe_schema_lists_the_first_500_categories_and_says_so`
-- [x] SCENARIO-09: sync_status returns the status document — `cmd/quarry/run_mcp_status_test.go` `Test_run_mcp_sync_status_returns_the_status_json_document`
-- [x] SCENARIO-10: sync_status still answers when the config is unreadable — delivered by SCENARIO-09 — `cmd/quarry/run_mcp_status_test.go` `Test_run_mcp_sync_status_answers_when_the_config_is_unreadable`
-- [x] SCENARIO-14: A sync while the server runs is seen without restart — delivered by SCENARIO-09 — `cmd/quarry/run_mcp_status_test.go` `Test_run_mcp_sync_status_sees_a_sync_between_calls`
-- [x] SCENARIO-11: data_quality lists open findings within its bounds — `cmd/quarry/run_mcp_data_quality_test.go` `Test_run_mcp_data_quality_returns_the_first_50_open_findings_with_the_ruled_warnings`
-- [x] SCENARIO-12: data_quality refuses an unreadable config — delivered by SCENARIO-11 — `cmd/quarry/run_mcp_data_quality_test.go` `Test_run_mcp_data_quality_refuses_an_unreadable_config`
-- [x] SCENARIO-06: A slow call stops at its deadline — `cmd/quarry/run_mcp_timeout_test.go` `Test_run_mcp_query_stops_at_its_deadline`
-- [x] SCENARIO-13: Every tool refuses before the first sync — delivered by SCENARIO-06 — `cmd/quarry/run_mcp_no_store_test.go` `Test_run_mcp_every_tool_refuses_before_the_first_sync`
-- [x] SCENARIO-17: A cancelled call is interrupted quietly — delivered by SCENARIO-06 — `cmd/quarry/run_mcp_cancel_test.go` `Test_run_mcp_cancelled_query_is_interrupted_quietly`
+- [x] SCENARIO-07: describe_schema describes the store — `cmd/quarry/run_mcp_query_test.go` `Test_run_mcp_describe_schema_describes_the_store`
+- [x] SCENARIO-08: describe_schema bounds long account and category lists — delivered by SCENARIO-07 — `cmd/quarry/run_mcp_query_test.go` `Test_run_mcp_describe_schema_lists_the_first_500_categories_and_says_so`
+- [x] SCENARIO-09: sync_status returns the status document — `cmd/quarry/run_mcp_findings_test.go` `Test_run_mcp_sync_status_returns_the_status_json_document`
+- [x] SCENARIO-10: sync_status still answers when the config is unreadable — delivered by SCENARIO-09 — `cmd/quarry/run_mcp_findings_test.go` `Test_run_mcp_sync_status_answers_when_the_config_is_unreadable`
+- [x] SCENARIO-14: A sync while the server runs is seen without restart — delivered by SCENARIO-09 — `cmd/quarry/run_mcp_findings_test.go` `Test_run_mcp_sync_status_sees_a_sync_between_calls`
+- [x] SCENARIO-11: data_quality lists open findings within its bounds — `cmd/quarry/run_mcp_findings_test.go` `Test_run_mcp_data_quality_returns_the_first_50_open_findings_with_the_ruled_warnings`
+- [x] SCENARIO-12: data_quality refuses an unreadable config — delivered by SCENARIO-11 — `cmd/quarry/run_mcp_findings_test.go` `Test_run_mcp_data_quality_refuses_an_unreadable_config`
+- [x] SCENARIO-06: A slow call stops at its deadline — `cmd/quarry/run_mcp_test.go` `Test_run_mcp_query_stops_at_its_deadline`
+- [x] SCENARIO-13: Every tool refuses before the first sync — delivered by SCENARIO-06 — `cmd/quarry/run_mcp_test.go` `Test_run_mcp_every_tool_refuses_before_the_first_sync`
+- [x] SCENARIO-17: A cancelled call is interrupted quietly — delivered by SCENARIO-06 — `cmd/quarry/run_mcp_test.go` `Test_run_mcp_cancelled_query_is_interrupted_quietly`
 
 ---
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -17,8 +16,7 @@ import (
 // 1.40 from the 250.00 charge's date and, after both, 1.50.
 func anomaliesFXStore(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	charges := make([]chargeTxn, 0, 7)
 	for i, cents := range []int64{3800, 3900, 4000, 4100, 4200} {
 		charges = append(charges, groceryCharge("Hardware", day(2025, time.March, 3+7*i), cents))
@@ -39,9 +37,7 @@ func Test_run_anomalies_judges_in_native_currency_and_shows_converted_amounts(t 
 	anomaliesFXStore(t)
 
 	t.Run("text converts Amount and Usual at the charge's rate and keeps Times and the footer native", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := runWith(context.Background(), []string{"anomalies"}, spendEnv(&stdout, &stderr))
+		exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies"})
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Empty(t, stderr.String())
@@ -51,9 +47,7 @@ func Test_run_anomalies_judges_in_native_currency_and_shows_converted_amounts(t 
 	})
 
 	t.Run("json carries the native currency, amount and usual beside the converted ones", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := runWith(context.Background(), []string{"anomalies", "--json"}, spendEnv(&stdout, &stderr))
+		exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies", "--json"})
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Equal(t, anomaliesJSONDoc{

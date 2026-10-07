@@ -13,8 +13,7 @@ import (
 )
 
 func Test_run_cashflow_leaves_out_accounts_that_use_linked_account_tracking(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, cashFlowRows(
 		[]store.Account{
 			chequingAccount("acct-chq", 1),

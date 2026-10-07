@@ -28,8 +28,7 @@ func seedNetWorthHistoryStore(t *testing.T) {
 // seedNetWorthHistoryStoreWithRates is seedNetWorthHistoryStore holding rates, none when none are given.
 func seedNetWorthHistoryStoreWithRates(t *testing.T, rates ...store.Rate) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	card := store.Account{ID: "acct-card", SourceID: 3, Name: "Card", Type: "credit_card", Currency: "CAD", Active: true}
 	rows := spendRows(
 		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2), card},
@@ -99,9 +98,8 @@ func Test_run_networth_rejects_a_period_it_cannot_list(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), c.args, spendEnvAt(&stdout, &stderr, holdingsClock()))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), c.args, holdingsClock())
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())

@@ -22,8 +22,7 @@ func categorizedTxn(b *v9fixture.Builder, account, category int64, day time.Time
 }
 
 func Test_run_sync_records_two_same_amount_transactions_within_three_days_as_a_duplicate(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	foodPK := b.Category(v9fixture.TagRow{Name: "Food", Type: new(int64(1))})
@@ -41,8 +40,7 @@ func Test_run_sync_records_two_same_amount_transactions_within_three_days_as_a_d
 
 // The reconciled/uncleared pair is the control: one reconciled side is still flagged.
 func Test_run_sync_does_not_flag_two_reconciled_look_alikes_as_a_duplicate(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	foodPK := b.Category(v9fixture.TagRow{Name: "Food", Type: new(int64(1))})

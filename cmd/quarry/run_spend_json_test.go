@@ -14,8 +14,7 @@ import (
 )
 
 func Test_run_spend_json_returns_spending_as_a_document(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
 			chequingAccount("acct-cad", 1),

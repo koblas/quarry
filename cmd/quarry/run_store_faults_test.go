@@ -132,8 +132,7 @@ func Test_run_never_replaces_the_store_when_the_build_fails(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			storeDir := filepath.Join(home, "Library", "Application Support", "quarry")
 			require.NoError(t, os.MkdirAll(storeDir, 0o700))
 			storePath := filepath.Join(storeDir, "quarry.duckdb")

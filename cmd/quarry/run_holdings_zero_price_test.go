@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -11,8 +10,7 @@ import (
 )
 
 func Test_run_holdings_lists_a_holding_priced_at_zero_with_a_value_of_zero_and_no_warning(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	rows := holdingsRows()
 	rows.Securities = append(rows.Securities,
 		store.Security{ID: "sec-zero", SourceID: 4, Name: "Zero Fund", Ticker: new("ZERO"), Currency: new("CAD")})
@@ -20,9 +18,8 @@ func Test_run_holdings_lists_a_holding_priced_at_zero_with_a_value_of_zero_and_n
 		holdingsBuy("inv-zero", 4, "acct-cad", "sec-zero", "CAD", 40_000_000))
 	rows.Prices = append(rows.Prices, store.Price{SecurityID: "sec-zero", SourceID: 4, Date: holdingsDay(9), Price: 0})
 	replaceStoreWithRates(t, home, rows, usdRate(holdingsDay(10), 1_360_000))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

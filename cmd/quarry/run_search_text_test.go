@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -85,12 +84,10 @@ func Test_run_search_json_echoes_the_text_as_given_and_null_when_none_was_given(
 }
 
 func Test_run_search_shows_a_split_memo_only_match_in_the_memo_cell(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, textSearchStore())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"search", "tip"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "tip"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	want := "Transactions matching \"tip\" in all accounts, all dates\n\n" +
@@ -160,9 +157,8 @@ func Test_run_search_refuses_two_texts_and_blank_text_before_reading_anything(t 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), c.args, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
 
 			assert.Equal(t, 2, exitCode)
 			assert.Equal(t, c.want, stderr.String())

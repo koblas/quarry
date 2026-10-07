@@ -14,8 +14,7 @@ import (
 )
 
 func Test_run_spend_by_payee_groups_spending_by_payee_and_currency_biggest_first(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
 			chequingAccount("acct-cad", 1),
@@ -47,8 +46,7 @@ func Test_run_spend_by_payee_groups_spending_by_payee_and_currency_biggest_first
 }
 
 func Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_total_and_warns(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
 			chequingAccount("acct-cad", 1),
@@ -81,8 +79,7 @@ func Test_run_spend_by_tag_counts_a_two_tag_split_under_both_tags_once_in_the_to
 }
 
 func Test_run_spend_by_month_fills_empty_months_and_marks_a_cut_short_month_partial(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
 			chequingAccount("acct-cad", 1),

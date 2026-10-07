@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -27,12 +26,10 @@ type analysisRun struct {
 func Test_run_prints_spend_cashflow_recurring_and_anomalies_byte_for_byte(t *testing.T) {
 	for _, c := range analysisRuns() {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			c.store(t, home)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), c.args, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Equal(t, c.stdout, stdout.String())

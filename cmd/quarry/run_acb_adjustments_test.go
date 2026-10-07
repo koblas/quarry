@@ -48,13 +48,11 @@ func acbAdjustmentsRows() store.Rows {
 }
 
 func Test_run_acb_lowers_and_raises_the_acb_by_the_adjustments_and_counts_return_of_capital_above_it_as_a_gain(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, acbAdjustmentsConfig)
 	replaceStore(t, home, acbAdjustmentsRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
@@ -100,8 +98,7 @@ const acmeLargeReturnOfCapitalWarning = `"Acme Corp": return of capital on 2025-
 	"so its ACB is 0.00 and 720.00 is a capital gain in 2025"
 
 func Test_run_acb_lists_config_then_adjustment_then_no_cost_then_removal_then_return_of_capital_warnings_in_both_forms(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, acbAdjustmentWarningsConfig)
 	replaceStore(t, home, acbSharesRows())
 	var textOut, textErr bytes.Buffer
@@ -118,15 +115,13 @@ func Test_run_acb_lists_config_then_adjustment_then_no_cost_then_removal_then_re
 }
 
 func Test_run_acb_names_two_adjustments_for_one_security_on_one_day_with_the_first_item(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n\n"+
 		"[[acb.adjustment]]\nsecurity = \"sec-acme\"\ndate = 2024-06-30\nreinvested-distribution = 10.00\n\n"+
 		"[[acb.adjustment]]\nsecurity = \"sec-acme\"\ndate = 2024-06-30\nreturn-of-capital = 5.00\n")
 	replaceStore(t, home, acbAdjustmentsRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, _, stderr := runSpendCaptureAt(context.Background(), []string{"acb"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, stderrWarnings(configShown+`: acb.adjustment items 1 and 2 are both for "sec-acme" on 2024-06-30; quarry applies both`),
@@ -134,16 +129,14 @@ func Test_run_acb_names_two_adjustments_for_one_security_on_one_day_with_the_fir
 }
 
 func Test_run_acb_writes_return_of_capital_gain_in_json(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, acbAdjustmentsConfig)
 	rows := acbAdjustmentsRows()
 	rows.InvestmentTransactions = append(rows.InvestmentTransactions,
 		acbTrade("inv-sell", 2, "acct-cad", "sec-acme", store.ActionSell, "CAD", day(2024, time.September, 1), -2_000_000, 30_000))
 	replaceStore(t, home, rows)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb", "--json"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb", "--json"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc acbDoc

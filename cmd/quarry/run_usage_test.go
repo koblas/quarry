@@ -16,11 +16,9 @@ import (
 )
 
 func Test_run_sync_help_names_both_documents_folders(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	var stdout, stderr bytes.Buffer
+	newHome(t)
 
-	exitCode := run(context.Background(), []string{"sync", "--help"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--help"})
 
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())
@@ -35,8 +33,7 @@ func Test_run_sync_help_names_both_documents_folders(t *testing.T) {
 }
 
 func Test_run_prints_the_sync_help(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	newHome(t)
 	var rootStdout, rootStderr, syncStdout, syncStderr bytes.Buffer
 
 	rootExit := run(context.Background(), []string{"--help"}, &rootStdout, &rootStderr)
@@ -101,9 +98,8 @@ func Test_run_help_says_only_one_writer_runs_at_a_time(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), c.args, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
 			require.Equal(t, 0, exitCode)
 			assert.Empty(t, stderr.String())
@@ -130,12 +126,10 @@ func Test_run_refuses_from_with_quicken_or_without_a_value(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), c.args, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
@@ -157,12 +151,10 @@ func Test_run_refuses_an_empty_or_whitespace_quicken_flag_as_a_usage_error_even_
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), c.args, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
@@ -234,9 +226,8 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), c.args, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
 			require.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
@@ -250,9 +241,8 @@ func Test_run_read_commands_need_a_value_for_the_currency_flag(t *testing.T) {
 	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth", "acb", "summary"} {
 		t.Run(command, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), []string{command, "--currency"}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{command, "--currency"})
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
@@ -263,9 +253,8 @@ func Test_run_read_commands_need_a_value_for_the_currency_flag(t *testing.T) {
 
 func Test_run_holdings_needs_a_value_for_the_as_of_flag(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"holdings", "--as-of"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"holdings", "--as-of"})
 
 	assert.Equal(t, 2, exitCode)
 	assert.Empty(t, stdout.String())
@@ -274,9 +263,8 @@ func Test_run_holdings_needs_a_value_for_the_as_of_flag(t *testing.T) {
 
 func Test_run_holdings_has_no_all_flag(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"holdings", "--all"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"holdings", "--all"})
 
 	assert.Equal(t, 2, exitCode)
 	assert.Empty(t, stdout.String())
@@ -327,9 +315,8 @@ func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), c.args, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
@@ -342,9 +329,8 @@ func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
 // invocation with HOME unset.
 func Test_run_reports_exit_1_when_home_directory_cannot_be_resolved(t *testing.T) {
 	t.Setenv("HOME", "")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -356,9 +342,7 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 	t.Setenv("HOME", "")
 
 	t.Run("root help", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := run(context.Background(), []string{"--help"}, &stdout, &stderr)
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"--help"})
 
 		assert.Equal(t, 0, exitCode)
 		assert.NotEmpty(t, stdout.String())
@@ -366,9 +350,7 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 	})
 
 	t.Run("sync help", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := run(context.Background(), []string{"sync", "--help"}, &stdout, &stderr)
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--help"})
 
 		assert.Equal(t, 0, exitCode)
 		assert.NotEmpty(t, stdout.String())
@@ -376,9 +358,7 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 	})
 
 	t.Run("snapshots help", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := run(context.Background(), []string{"snapshots", "--help"}, &stdout, &stderr)
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"snapshots", "--help"})
 
 		assert.Equal(t, 0, exitCode)
 		assert.NotEmpty(t, stdout.String())
@@ -386,9 +366,7 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 	})
 
 	t.Run("mcp help", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := run(context.Background(), []string{"mcp", "--help"}, &stdout, &stderr)
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"mcp", "--help"})
 
 		assert.Equal(t, 0, exitCode)
 		assert.NotEmpty(t, stdout.String())
@@ -396,9 +374,7 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 	})
 
 	t.Run("unknown command is still a usage error, not the home-directory refusal", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := run(context.Background(), []string{"frob"}, &stdout, &stderr)
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"frob"})
 
 		assert.Equal(t, 2, exitCode)
 		assert.Empty(t, stdout.String())
@@ -435,13 +411,11 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 const sqlNeedsAQuery = "quarry: sql needs a query; pass it as one quoted argument, or - to read it from stdin\n"
 
 func Test_run_reports_exit_1_when_the_context_is_already_cancelled(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(ctx, []string{"sync", "--quicken", filepath.Join(home, "Any.quicken")}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(ctx, []string{"sync", "--quicken", filepath.Join(home, "Any.quicken")})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())

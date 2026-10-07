@@ -14,8 +14,7 @@ import (
 
 // Case-insensitive volumes resolve the lower-case name too: only the recorded path and the printed id tell them apart.
 func Test_run_status_names_a_store_built_from_an_upper_case_sqlite_snapshot_by_its_id(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncBundle(t, writeNamedAccountBundle(t, filepath.Join(home, "Documents"), "Chequing"))
 	snapshotsDir := filepath.Join(storeDirUnder(home), "snapshots")
 	id := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
@@ -27,18 +26,14 @@ func Test_run_status_names_a_store_built_from_an_upper_case_sqlite_snapshot_by_i
 	require.Equal(t, 0, run(context.Background(), []string{"sync", "--from", id}, &rebuildOut, &rebuildErr), rebuildErr.String())
 
 	t.Run("text", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Contains(t, stdout.String(), "\nSnapshot  "+id+", taken ")
 	})
 
 	t.Run("json", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := run(context.Background(), []string{"status", "--json"}, &stdout, &stderr)
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"status", "--json"})
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		var parsed struct {

@@ -32,8 +32,7 @@ func closedAccount(a store.Account) store.Account {
 // seedAccounts stores accounts under a fresh HOME with rates and no transactions.
 func seedAccounts(t *testing.T, accounts []store.Account, rates ...store.Rate) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, spendRows(accounts), rates...)
 }
 
@@ -188,9 +187,8 @@ func Test_run_accounts_header_only_keeps_the_column_and_prints_only_the_all_clos
 
 func Test_run_accounts_all_converts_a_closed_account_like_any_other(t *testing.T) {
 	seedAccounts(t, []store.Account{closedAccount(usdChequingAccount("acct-usd", 1))}, pastRate)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--all"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--all"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -199,9 +197,8 @@ func Test_run_accounts_all_converts_a_closed_account_like_any_other(t *testing.T
 
 func Test_run_accounts_all_pads_a_no_rate_cell_so_a_closed_Status_follows_it_in_the_column(t *testing.T) {
 	seedAccounts(t, []store.Account{chequingAccount("acct-cad", 1), closedAccount(brokerageAccount("acct-brk", 2, "USD"))})
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--all"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--all"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, ""+
@@ -211,8 +208,7 @@ func Test_run_accounts_all_pads_a_no_rate_cell_so_a_closed_Status_follows_it_in_
 }
 
 func Test_run_accounts_lists_the_config_warning_before_the_no_rates_warning_in_both_forms(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, spendRows([]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)}))
 	writeConfig(t, home, "snapshot.keep = 3\n")
 	configWarning := configShown + ": unknown key snapshot.keep; quarry ignores it"

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -27,8 +26,7 @@ func holdingsNoPriceTableLine(account, security, shares, price, pricedOn, curren
 // whose only price is dated the day after the test clock's day.
 func seedHoldingsStoreWithUnpricedHolding(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	rows := holdingsRows()
 	rows.Securities = append(rows.Securities,
 		store.Security{ID: "sec-bare", SourceID: 4, Name: "Bare Fund", Ticker: new("BARE"), Currency: new("CAD")})
@@ -41,9 +39,8 @@ func seedHoldingsStoreWithUnpricedHolding(t *testing.T) {
 
 func Test_run_holdings_lists_a_holding_with_no_price_without_value(t *testing.T) {
 	seedHoldingsStoreWithUnpricedHolding(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: "+holdingsNoPriceLine+"\n", stderr.String())
@@ -80,9 +77,8 @@ type holdingsJSONDoc struct {
 
 func Test_run_holdings_json_lists_the_unpriced_holding_with_nulls_and_a_warning(t *testing.T) {
 	seedHoldingsStoreWithUnpricedHolding(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--json"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings", "--json"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc holdingsJSONDoc

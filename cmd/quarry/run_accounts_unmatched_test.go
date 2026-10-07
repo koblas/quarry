@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"path/filepath"
 	"testing"
@@ -12,8 +11,7 @@ import (
 )
 
 func Test_run_accounts_and_findings_warn_a_listed_id_that_names_no_account(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	syncBundle(t, b.WriteBundle(t, filepath.Join(home, "Documents")))
@@ -23,9 +21,7 @@ func Test_run_accounts_and_findings_warn_a_listed_id_that_names_no_account(t *te
 
 	for _, command := range []string{"accounts", "findings"} {
 		t.Run(command, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			exitCode := run(context.Background(), []string{command}, &stdout, &stderr)
+			exitCode, _, stderr := runCapture(context.Background(), []string{command})
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Contains(t, stderr.String(), warningLead+`registered lists "acct-99"`+warningTail)

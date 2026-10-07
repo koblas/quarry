@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -12,8 +11,7 @@ import (
 )
 
 func Test_run_sql_values_each_holding_on_a_date_from_v_holdings(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	day := func(d int) time.Time { return time.Date(2026, time.March, d, 0, 0, 0, 0, time.UTC) }
 	buy := func(id string, sourceID int64, account, security, currency string, shares int64) store.InvestmentTransaction {
 		return store.InvestmentTransaction{
@@ -44,9 +42,8 @@ func Test_run_sql_values_each_holding_on_a_date_from_v_holdings(t *testing.T) {
 	replaceStoreWithRates(t, home, rows, usdRate(day(11), 1_250_000), usdRate(day(12), 1_300_000))
 	const query = `SELECT account_id, security_id, shares, price, price_date, value, value_cad, value_usd, usd_cad
 		FROM v_holdings WHERE date = '2026-03-12' ORDER BY account_id`
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sql", "--csv", query}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "--csv", query})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

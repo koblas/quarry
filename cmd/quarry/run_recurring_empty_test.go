@@ -15,14 +15,12 @@ import (
 )
 
 func Test_run_recurring_says_when_no_series_runs_in_the_period(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)},
 		groceryCharge("Bakery", day(2003, 1, 4), 1000),
 		groceryCharge("Bakery", day(2025, 12, 31), 500)))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"recurring"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, recurringTable("Recurring charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD"), stdout.String())
@@ -97,8 +95,7 @@ func Test_run_recurring_prints_each_empty_period_warning_on_stderr_and_in_the_js
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			accounts := []store.Account{
 				chequingAccount("acct-cad", 1),
 				{ID: "acct-visa", SourceID: 2, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
@@ -127,12 +124,10 @@ func Test_run_recurring_prints_each_empty_period_warning_on_stderr_and_in_the_js
 }
 
 func Test_run_recurring_lists_nothing_for_a_future_period_that_until_allows(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, bakeryHistory()...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"recurring", "--since", "2030", "--until", "2031"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring", "--since", "2030", "--until", "2031"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Recurring charges 2030-01-01 to 2031-12-31 in all accounts, amounts in CAD\n\n"+recurringHeaderOnly, stdout.String())

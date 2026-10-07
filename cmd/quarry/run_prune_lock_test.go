@@ -39,8 +39,7 @@ type prunableStore struct {
 // newPrunableStore points HOME at a fresh prunableStore.
 func newPrunableStore(t *testing.T) prunableStore {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 	orphan := filepath.Join(dir, "19990101T000000Z.json")
@@ -86,9 +85,8 @@ func Test_run_snapshots_prune_refuses_while_another_writer_holds_the_lock(t *tes
 		t.Run(c.name, func(t *testing.T) {
 			p := newPrunableStore(t)
 			p.holdLock(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), append([]string{"snapshots", "prune", "--keep", "3"}, c.flag...), &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), append([]string{"snapshots", "prune", "--keep", "3"}, c.flag...))
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
@@ -263,8 +261,7 @@ func Test_run_snapshots_prune_says_nothing_to_delete_with_no_quarry_folder_and_c
 
 	for _, c := range cells {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 
 			exitCode, stdout, stderr := runPrune(t, c.flag...)
 

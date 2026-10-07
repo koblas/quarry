@@ -18,8 +18,7 @@ import (
 )
 
 func Test_run_accounts_shows_an_investment_balance_as_cash_plus_holdings_value(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	day := func(d int) time.Time { return time.Date(2026, time.March, d, 0, 0, 0, 0, time.UTC) }
 	rows := spendRows(
 		[]store.Account{
@@ -85,8 +84,7 @@ func boughtOnMarginRows(account store.Account) store.Rows {
 }
 
 func Test_run_accounts_shows_an_overdrawn_investment_balance_with_its_minus_sign(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, boughtOnMarginRows(brokerageAccount("acct-brokerage", 1, "CAD")))
 
 	got := runAccountsBothForms(t, "--currency", "native")
@@ -104,8 +102,7 @@ func Test_run_accounts_shows_an_overdrawn_investment_balance_with_its_minus_sign
 }
 
 func Test_run_accounts_all_json_carries_a_closed_investment_accounts_cash_and_holdings_value(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, boughtOnMarginRows(closedAccount(brokerageAccount("acct-brokerage", 1, "CAD"))))
 
 	got := runAccountsBothForms(t, "--all", "--currency", "native")
@@ -119,8 +116,7 @@ func Test_run_accounts_all_json_carries_a_closed_investment_accounts_cash_and_ho
 }
 
 func Test_run_accounts_converts_an_investment_balance_as_cash_plus_holdings_value(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	when := day(2026, time.March, 2)
 	rows := spendRows(
 		[]store.Account{{ID: "acct-brokerage", SourceID: 1, Name: "Brokerage", Type: store.AccountTypeBrokerage, Currency: "USD", Active: true}},
@@ -158,9 +154,7 @@ func Test_run_accounts_converts_an_investment_balance_as_cash_plus_holdings_valu
 	}
 	for _, c := range cases {
 		t.Run(c.name+" text", func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			exitCode := run(context.Background(), []string{"accounts", "--currency", c.currency}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--currency", c.currency})
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Empty(t, stderr.String())
@@ -168,9 +162,7 @@ func Test_run_accounts_converts_an_investment_balance_as_cash_plus_holdings_valu
 		})
 
 		t.Run(c.name+" json", func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			exitCode := run(context.Background(), []string{"accounts", "--json", "--currency", c.currency}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--json", "--currency", c.currency})
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Empty(t, stderr.String())
@@ -199,8 +191,7 @@ const unpricedHoldingPattern = `"%s" holds 1 security with no price on or before
 	`so its balance leaves it out; enter a price in Quicken, then run quarry sync`
 
 func Test_run_accounts_lists_the_unpriced_holding_warning_after_the_config_warning_and_before_the_no_rates_warning(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	brokerage := store.Account{ID: "acct-brokerage", SourceID: 1, Name: "Brokerage", Type: store.AccountTypeBrokerage, Currency: "USD", Active: true}
 	replaceStore(t, home, unpricedHoldingRows([]store.Account{brokerage}, brokerage, "USD"))
 	writeConfig(t, home, "snapshot.keep = 3\n")
@@ -223,8 +214,7 @@ func Test_run_accounts_lists_the_unpriced_holding_warning_after_the_config_warni
 }
 
 func Test_run_accounts_warns_about_a_closed_accounts_unpriced_holding_only_with_all(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	oldRRSP := closedAccount(store.Account{ID: "acct-old", SourceID: 2, Name: "Old RRSP", Type: store.AccountTypeBrokerage, Currency: "CAD"})
 	replaceStore(t, home, unpricedHoldingRows([]store.Account{chequingAccount("acct-chequing", 1), oldRRSP}, oldRRSP, "CAD"))
 

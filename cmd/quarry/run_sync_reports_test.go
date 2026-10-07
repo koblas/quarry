@@ -17,8 +17,7 @@ import (
 // syncedStore syncs the bundle build describes under a fresh HOME and opens the store read-only.
 func syncedStore(t *testing.T, build func(b *v9fixture.Builder)) *duckdb.DB {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	build(b)
 	syncBundle(t, b.WriteBundle(t, filepath.Join(home, "Documents")))

@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -37,8 +36,7 @@ INSERT INTO findings VALUES
 func syncNewBundle(t *testing.T, home, dir string, b *v9fixture.Builder, extra ...string) (int, string, string) {
 	t.Helper()
 	bundle := b.WriteBundle(t, filepath.Join(home, dir))
-	var stdout, stderr bytes.Buffer
-	exitCode := run(context.Background(), append([]string{"sync", "--quicken", bundle.Dir}, extra...), &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), append([]string{"sync", "--quicken", bundle.Dir}, extra...))
 	return exitCode, stdout.String(), stderr.String()
 }
 
@@ -54,8 +52,7 @@ func syncWithFaultedFindings(t *testing.T, home string, stmt func(findingID stri
 }
 
 func Test_run_sync_from_warns_and_restarts_findings_history_when_the_previous_findings_table_repeats_an_id(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	id, _ := syncThenWrite(t, home)
 	editStore(t, home, findingsTableRepeating("uncategorized:payee-1"))
 
@@ -66,8 +63,7 @@ func Test_run_sync_from_warns_and_restarts_findings_history_when_the_previous_fi
 }
 
 func Test_run_sync_after_a_findings_fault_prints_the_findings_line_without_new_or_fixed_clauses(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	exitCode, stdout, stderr := syncWithFaultedFindings(t, home, findingsTableRepeating)
 
@@ -76,8 +72,7 @@ func Test_run_sync_after_a_findings_fault_prints_the_findings_line_without_new_o
 }
 
 func Test_run_sync_json_after_a_findings_fault_lists_the_findings_warning_and_counts_every_open_finding_as_new(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	exitCode, stdout, stderr := syncWithFaultedFindings(t, home, findingsTableRepeating, "--json")
 
@@ -93,8 +88,7 @@ func Test_run_sync_json_after_a_findings_fault_lists_the_findings_warning_and_co
 }
 
 func Test_run_sync_prints_the_import_history_line_then_the_findings_line_when_both_tables_are_faulty(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	exitCode, _, stderr := syncWithFaultedFindings(t, home, func(id string) string {
 		return findingsTableRepeating(id) + ";" + importRunsIDTooLarge
@@ -105,8 +99,7 @@ func Test_run_sync_prints_the_import_history_line_then_the_findings_line_when_bo
 }
 
 func Test_run_sync_json_lists_the_import_history_warning_then_the_findings_warning_when_both_tables_are_faulty(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	exitCode, stdout, stderr := syncWithFaultedFindings(t, home, func(id string) string {
 		return findingsTableRepeating(id) + ";" + importRunsIDTooLarge

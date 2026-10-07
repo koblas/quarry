@@ -23,8 +23,7 @@ func cashFlowLine(periodWidth int, period, currency, income, spent, net, rate, s
 }
 
 func Test_run_cashflow_shows_income_spending_and_savings_rate_by_month(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, cashFlowRows(
 		[]store.Account{chequingAccount("acct-cad", 1)},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 1, 31), cents: 910000},
@@ -35,9 +34,8 @@ func Test_run_cashflow_shows_income_spending_and_savings_rate_by_month(t *testin
 		spendSplit{id: "s06", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 9, 15), cents: 602000},
 		spendSplit{id: "s07", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 9, 20), cents: -511040},
 	))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"cashflow"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"cashflow"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -58,8 +56,7 @@ func Test_run_cashflow_shows_income_spending_and_savings_rate_by_month(t *testin
 }
 
 func Test_run_cashflow_by_year_shows_one_row_per_year_and_na_without_income(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, cashFlowRows(
 		[]store.Account{chequingAccount("acct-cad", 1)},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2020, 6, 1), cents: 1000000},

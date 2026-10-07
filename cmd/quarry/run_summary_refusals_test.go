@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"regexp"
@@ -35,9 +34,8 @@ func Test_run_summary_refuses_a_month_it_cannot_summarize(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), []string{"summary", "--month", c.month}, spendEnvAt(&stdout, &stderr, summaryClock))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary", "--month", c.month}, summaryClock)
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
@@ -47,11 +45,9 @@ func Test_run_summary_refuses_a_month_it_cannot_summarize(t *testing.T) {
 }
 
 func Test_run_summary_accepts_a_month_that_has_ended(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	var stdout, stderr bytes.Buffer
+	home := newHome(t)
 
-	exitCode := runWith(context.Background(), []string{"summary", "--month", "2026-09"}, spendEnvAt(&stdout, &stderr, summaryClock))
+	exitCode, _, stderr := runSpendCaptureAt(context.Background(), []string{"summary", "--month", "2026-09"}, summaryClock)
 
 	assert.Equal(t, 1, exitCode)
 	assert.Equal(t, "quarry: no store at "+abbreviated(t, storePathUnder(home), home)+" yet; run quarry sync to build it\n", stderr.String())
@@ -82,12 +78,10 @@ func Test_run_summary_checks_arguments_then_month_then_config_then_store(t *test
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			writeConfig(t, home, c.config)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), c.args, spendEnvAt(&stdout, &stderr, summaryClock))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), c.args, summaryClock)
 
 			assert.Equal(t, c.wantExit, exitCode)
 			assert.Empty(t, stdout.String())
@@ -97,12 +91,10 @@ func Test_run_summary_checks_arguments_then_month_then_config_then_store(t *test
 }
 
 func Test_run_summary_reads_the_config_before_looking_for_a_store(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[snapshots\nkeep = 24\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"summary"}, spendEnvAt(&stdout, &stderr, summaryClock))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary"}, summaryClock)
 
 	require.Equal(t, 1, exitCode, stderr.String())
 	assert.Empty(t, stdout.String())
@@ -111,9 +103,8 @@ func Test_run_summary_reads_the_config_before_looking_for_a_store(t *testing.T) 
 
 func Test_run_summary_with_a_currency_refuses_when_the_home_directory_is_unknown(t *testing.T) {
 	t.Setenv("HOME", "")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"summary", "--currency", "USD"}, spendEnvAt(&stdout, &stderr, summaryClock))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary", "--currency", "USD"}, summaryClock)
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -121,12 +112,10 @@ func Test_run_summary_with_a_currency_refuses_when_the_home_directory_is_unknown
 }
 
 func Test_run_summary_with_a_currency_prints_only_the_missing_store_when_the_config_is_malformed(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[snapshots\nkeep = 24\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"summary", "--currency", "USD"}, spendEnvAt(&stdout, &stderr, summaryClock))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary", "--currency", "USD"}, summaryClock)
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())

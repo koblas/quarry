@@ -68,8 +68,7 @@ Ignore a finding by adding its id to findings.ignore in %s; see quarry findings 
 }
 
 func Test_run_status_json_counts_an_ignored_shares_without_cost_as_ignored(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	marginPK := b.Account(v9fixture.AccountRow{Name: "Questrade Margin", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	xeqtPK := b.Security(v9fixture.SecurityRow{Name: "XEQT", Ticker: "XEQT", Currency: "CAD"})

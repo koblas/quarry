@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"os"
@@ -19,14 +18,12 @@ import (
 // The bundle itself is valid; its data file is present but not a SQLite
 // database at all, so this exercises srv.Sync's error path, not path resolution.
 func Test_run_refuses_an_encrypted_bundle(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
 	require.NoError(t, os.MkdirAll(bundleDir, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(bundleDir, "data"), []byte("not a database"), 0o600))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundleDir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundleDir})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -40,14 +37,12 @@ func Test_run_refuses_an_encrypted_bundle(t *testing.T) {
 // A WAL-formatted bundle with no live -wal file must be refused before Sync
 // opens it — that open alone would create -wal/-shm this test checks for.
 func Test_run_refuses_a_bundle_that_is_not_open_in_quicken(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.ClosedWALBundle(t, filepath.Join(home, "Documents"))
 	before, err := os.ReadDir(bundle.Dir)
 	require.NoError(t, err)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -77,16 +72,14 @@ func Test_run_refuses_a_snapshots_directory_that_is_not_writable(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")
 	}
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 	require.NoError(t, os.MkdirAll(snapshotsDir, 0o700))
 	t.Cleanup(func() { _ = os.Chmod(snapshotsDir, 0o700) })
 	require.NoError(t, os.Chmod(snapshotsDir, 0o500))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -155,12 +148,10 @@ func Test_run_refuses_a_bundle_whose_snapshot_content_is_rejected(t *testing.T) 
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			bundleDir := c.buildBundle(t, home)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), []string{"sync", "--quicken", bundleDir}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundleDir})
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())

@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -37,8 +36,7 @@ type cashFlowMark struct {
 
 func Test_run_cashflow_converts_each_period_to_cad_by_default(t *testing.T) {
 	// Two 0.10 USD splits at 1.25 make 0.26 rounded each, 0.25 summed first.
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, cashFlowRows(
 		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 1, 31), cents: 100000},
@@ -52,9 +50,7 @@ func Test_run_cashflow_converts_each_period_to_cad_by_default(t *testing.T) {
 	period := []string{"--since", "2026-01", "--until", "2026-02"}
 
 	t.Run("text", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := runWith(context.Background(), append([]string{"cashflow"}, period...), spendEnv(&stdout, &stderr))
+		exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"cashflow"}, period...))
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Empty(t, stderr.String())
@@ -68,9 +64,7 @@ Total    CAD       1,100.00  310.26   789.74         71.8%
 	})
 
 	t.Run("json", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := runWith(context.Background(), append([]string{"cashflow", "--json"}, period...), spendEnv(&stdout, &stderr))
+		exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"cashflow", "--json"}, period...))
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Empty(t, stderr.String())
@@ -91,8 +85,7 @@ Total    CAD       1,100.00  310.26   789.74         71.8%
 // runCashFlowJSON runs cashflow with args plus --json and decodes its document.
 func runCashFlowJSON(t *testing.T, args ...string) (cashFlowReport, string) {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
-	exitCode := runWith(context.Background(), append([]string{"cashflow", "--json"}, args...), spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"cashflow", "--json"}, args...))
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc cashFlowReport
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
@@ -178,16 +171,14 @@ func Test_run_cashflow_converts_the_edge_cases_in_each_reporting_currency(t *tes
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStoreWithRates(t, home, cashFlowRows(c.accounts, c.splits...), c.rate)
 
 			for _, currency := range c.currencies {
 				args := append([]string{"--currency", currency}, c.args...)
 				wantCaption := c.caption + map[string]string{"CAD": ", amounts in CAD", "USD": ", amounts in USD", "native": ""}[currency]
 
-				var stdout, stderr bytes.Buffer
-				exitCode := runWith(context.Background(), append([]string{"cashflow"}, args...), spendEnv(&stdout, &stderr))
+				exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"cashflow"}, args...))
 				require.Equal(t, 0, exitCode, stderr.String())
 				gotCaption, gotTotals := cashFlowTextView(stdout.String())
 				doc, echoedStderr := runCashFlowJSON(t, args...)
@@ -210,8 +201,7 @@ func Test_run_cashflow_of_an_empty_window_names_the_currency_and_lists_no_rows_b
 	suffixes := map[string]string{"CAD": ", amounts in CAD", "USD": ", amounts in USD", "native": ""}
 	for currency, suffix := range suffixes {
 		t.Run(currency, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStoreWithRates(t, home, cashFlowRows(
 				[]store.Account{usdChequingAccount("acct-usd", 2)},
 				spendSplit{id: "s1", account: "acct-usd", category: "cat-salary", currency: "USD", day: day(2026, 3, 11), cents: 8000},
@@ -219,9 +209,7 @@ func Test_run_cashflow_of_an_empty_window_names_the_currency_and_lists_no_rows_b
 			window := []string{"--currency", currency, "--since", "2020-01-01", "--until", "2020-12-31"}
 
 			t.Run("text", func(t *testing.T) {
-				var stdout, stderr bytes.Buffer
-
-				exitCode := runWith(context.Background(), append([]string{"cashflow"}, window...), spendEnv(&stdout, &stderr))
+				exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"cashflow"}, window...))
 
 				require.Equal(t, 0, exitCode, stderr.String())
 				assert.Equal(t, caption+suffix+"\n\n"+emptyHeader, stdout.String())
@@ -241,16 +229,14 @@ func Test_run_cashflow_of_an_empty_window_names_the_currency_and_lists_no_rows_b
 }
 
 func Test_run_cashflow_by_month_of_a_window_holding_only_unconverted_rows_still_lists_the_report_currency_zero_rows(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, cashFlowRows(
 		[]store.Account{usdChequingAccount("acct-usd", 2)},
 		spendSplit{id: "s1", account: "acct-usd", category: "cat-salary", currency: "USD", day: day(2025, 12, 20), cents: 8000},
 	), rateOnJan2)
 	window := []string{"--since", "2025-11", "--until", "2025-12"}
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), append([]string{"cashflow"}, window...), spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"cashflow"}, window...))
 	doc, _ := runCashFlowJSON(t, window...)
 
 	require.Equal(t, 0, exitCode, stderr.String())
@@ -266,8 +252,7 @@ Total    USD        80.00   0.00  80.00        100.0%
 }
 
 func Test_run_cashflow_json_reads_back_with_every_amount_in_the_reporting_currency(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, cashFlowRows(
 		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 		spendSplit{id: "s1", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 3, 10), cents: 123456},
@@ -295,8 +280,7 @@ const oneUSDBeforeFirstRateLine = "1 transaction dated before 2026-01-02, the fi
 	"is listed in USD, not converted to CAD"
 
 func Test_run_cashflow_lists_splits_before_the_first_rate_in_their_own_currency_and_warns(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, cashFlowRows(
 		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 		spendSplit{id: "s1", account: "acct-usd", category: "cat-salary", currency: "USD", day: day(2025, 12, 20), cents: 8000},
@@ -344,9 +328,8 @@ Total    USD        80.00  40.00   40.00         50.0%
 	for _, c := range cases {
 		t.Run(c.currency, func(t *testing.T) {
 			window := []string{"--currency", c.currency, "--since", "2025-12", "--until", "2026-02"}
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), append([]string{"cashflow"}, window...), spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"cashflow"}, window...))
 			doc, echoedStderr := runCashFlowJSON(t, window...)
 
 			require.Equal(t, 0, exitCode, stderr.String())

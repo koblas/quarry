@@ -22,8 +22,7 @@ func skipOnCaseSensitiveVolume(t *testing.T, dir string) {
 }
 
 func Test_run_sync_from_a_lowercased_id_names_no_snapshot_and_prunes_nothing(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	older := oldSnapshots(1)
 	id, dir := syncThenWrite(t, home, append(newerSnapshots(keptSnapshots), older...)...)
 	lowered := strings.ToLower(id)
@@ -38,8 +37,7 @@ func Test_run_sync_from_a_lowercased_id_names_no_snapshot_and_prunes_nothing(t *
 
 func Test_run_snapshots_marks_the_store_snapshot_recorded_in_lowercase(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	skipOnCaseSensitiveVolume(t, home)
 	dir := writeSnapshots(t, home, olderPair()...)
 	buildStoreFrom(t, home, filepath.Join(dir, strings.ToLower(olderPair()[1].id)+".sqlite"))
@@ -57,8 +55,7 @@ func Test_run_snapshots_marks_the_store_snapshot_recorded_in_lowercase(t *testin
 
 func Test_run_snapshots_prune_keeps_the_store_snapshot_recorded_in_lowercase(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	skipOnCaseSensitiveVolume(t, home)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, strings.ToLower(pruneOldest)+".sqlite"))

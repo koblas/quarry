@@ -26,8 +26,7 @@ type holdingsAccountDoc struct {
 // seedHoldingsAccounts stores holdingsRows with Chequing, an empty brokerage and two accounts named Visa added.
 func seedHoldingsAccounts(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	rows := holdingsRows()
 	rows.Accounts = append(rows.Accounts,
 		chequingAccount("acct-chq", 4),
@@ -39,9 +38,8 @@ func seedHoldingsAccounts(t *testing.T) {
 
 func runHoldingsAccounts(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), append([]string{"holdings"}, args...), spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), append([]string{"holdings"}, args...), holdingsClock())
 
 	return exitCode, stdout.String(), stderr.String()
 }
@@ -53,8 +51,7 @@ func holdingsAccountLine(account, security, shares, price, pricedOn, currency, v
 }
 
 func Test_run_holdings_account_filter_lists_the_named_accounts_and_warns_for_chequing(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	rows := holdingsRows()
 	rows.Accounts = append(rows.Accounts, chequingAccount("acct-chq", 4))
 	replaceStoreWithRates(t, home, rows, usdRate(holdingsDay(10), 1_360_000))

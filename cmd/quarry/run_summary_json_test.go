@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"strings"
@@ -115,9 +114,8 @@ func decodeSummaryJSON(t *testing.T, stdout string) summaryJSONDoc {
 func Test_run_summary_json_prints_the_ruled_document(t *testing.T) {
 	seedSummaryStore(t)
 	pinLocalZone(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"summary", "--json"}, spendEnvAt(&stdout, &stderr, summaryClock))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary", "--json"}, summaryClock)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

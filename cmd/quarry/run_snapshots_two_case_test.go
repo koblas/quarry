@@ -70,8 +70,7 @@ func runSnapshotsWithReadDir(t *testing.T, home string, readDir func(string) ([]
 
 func Test_run_snapshots_lists_one_of_two_letter_cases_and_warns_naming_both(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home,
 		snapshotFixture{id: oldestID, bytes: oldestBytes, taken: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), source: homeQuicken, verified: true})
 	readDir := readDirWithVariant(oldestID+".SQLITE", oldestID+".sqlite")
@@ -88,8 +87,7 @@ func Test_run_snapshots_lists_one_of_two_letter_cases_and_warns_naming_both(t *t
 }
 
 func Test_run_snapshots_json_warns_about_a_stray_letter_case_with_the_absolute_folder(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, snapshotFixture{id: oldestID, bytes: oldestBytes})
 	readDir := readDirWithVariant(oldestID+".SQLITE", oldestID+".sqlite")
 
@@ -114,8 +112,7 @@ func Test_run_snapshots_json_warns_about_a_stray_letter_case_with_the_absolute_f
 // twoStrayCases is one ID holding a stray letter case of its snapshot and of its manifest.
 func twoStrayCases(t *testing.T) (string, string, func(string) ([]fs.DirEntry, error)) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home,
 		snapshotFixture{id: oldestID, bytes: oldestBytes, taken: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), source: homeQuicken, verified: true})
 	readDir := readDirWithVariants(
@@ -156,8 +153,7 @@ func Test_run_snapshots_json_warns_about_each_stray_letter_case_of_one_id_snapsh
 }
 
 func Test_run_snapshots_json_puts_the_stray_letter_case_warning_between_the_config_and_store_warnings(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "snapshot.keep = 3\n")
 	dir := writeSnapshots(t, home, snapshotFixture{id: oldestID, bytes: oldestBytes})
 	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
@@ -251,8 +247,7 @@ func Test_run_snapshots_prune_is_silent_about_a_stray_letter_case(t *testing.T) 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			pinLocalZone(t)
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			dir := writeSnapshots(t, home, olderPair()...)
 			buildStoreFrom(t, home, filepath.Join(dir, recordedID+".sqlite"))
 			readDir := readDirWithVariant(oldestID+".SQLITE", oldestID+".sqlite")

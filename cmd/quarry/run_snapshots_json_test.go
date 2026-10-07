@@ -53,8 +53,7 @@ func jsonStoreSnapshot(t *testing.T, stdout string) string {
 }
 
 func Test_run_snapshots_json_prints_the_ruled_document_for_two_snapshots_and_a_store(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home,
 		snapshotFixture{id: olderID, bytes: middleBytes, taken: time.Date(2026, 9, 29, 9, 0, 11, 0, time.UTC), source: homeQuicken, sha256: "aaaa", verified: false},
 		snapshotFixture{id: newestID, bytes: newestBytes, taken: time.Date(2026, 9, 30, 14, 15, 2, 0, time.UTC), source: homeQuicken, sha256: "bbbb", verified: true},
@@ -103,8 +102,7 @@ func Test_run_snapshots_json_prints_the_ruled_document_for_two_snapshots_and_a_s
 }
 
 func Test_run_snapshots_json_nulls_every_manifest_field_but_keeps_the_keys_for_a_snapshot_with_none(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, snapshotFixture{id: oldestID, bytes: oldestBytes})
 
 	exitCode, stdout, stderr := runSnapshotsJSON(t)
@@ -135,8 +133,7 @@ func Test_run_snapshots_json_nulls_every_manifest_field_but_keeps_the_keys_for_a
 }
 
 func Test_run_snapshots_json_nulls_only_taken_at_when_the_manifest_holds_an_unparsable_one(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, snapshotFixture{id: oldestID, bytes: oldestBytes, taken: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), source: homeQuicken, sha256: "aaaa", verified: true})
 	unparsable := `{"snapshot":{"source":"` + homeQuicken + `","taken_at":"last tuesday","sha256":"aaaa"},"schema":{"verified":true}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, oldestID+".json"), []byte(unparsable), 0o600))
@@ -154,8 +151,7 @@ func Test_run_snapshots_json_nulls_only_taken_at_when_the_manifest_holds_an_unpa
 }
 
 func Test_run_snapshots_json_nulls_only_source_when_the_manifest_holds_an_empty_one(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, snapshotFixture{id: oldestID, bytes: oldestBytes, taken: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), source: "", sha256: "aaaa", verified: true})
 
 	exitCode, stdout, stderr := runSnapshotsJSON(t)
@@ -178,8 +174,7 @@ func writeManifestJSON(t *testing.T, dir, id, snapshotJSON string) {
 }
 
 func Test_run_snapshots_json_reports_the_size_on_disk_and_not_the_size_the_manifest_records(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, snapshotFixture{id: oldestID, bytes: oldestBytes})
 	writeManifestJSON(t, dir, oldestID, `{"source":"`+homeQuicken+`","taken_at":"2026-09-27T14:30:05Z","bytes":999,"sha256":"aaaa"}`)
 
@@ -192,8 +187,7 @@ func Test_run_snapshots_json_reports_the_size_on_disk_and_not_the_size_the_manif
 }
 
 func Test_run_snapshots_json_prints_taken_at_in_UTC_whatever_offset_the_manifest_records(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, snapshotFixture{id: oldestID, bytes: oldestBytes})
 	writeManifestJSON(t, dir, oldestID, `{"source":"`+homeQuicken+`","taken_at":"2026-09-27T10:30:05-04:00","bytes":1240000,"sha256":"aaaa"}`)
 
@@ -206,8 +200,7 @@ func Test_run_snapshots_json_prints_taken_at_in_UTC_whatever_offset_the_manifest
 }
 
 func Test_run_snapshots_json_passes_an_empty_recorded_sha256_through_as_an_empty_string(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, snapshotFixture{id: oldestID, bytes: oldestBytes})
 	writeManifestJSON(t, dir, oldestID, `{"source":"`+homeQuicken+`","taken_at":"2026-09-27T14:30:05Z","bytes":1240000,"sha256":""}`)
 
@@ -220,8 +213,7 @@ func Test_run_snapshots_json_passes_an_empty_recorded_sha256_through_as_an_empty
 }
 
 func Test_run_snapshots_json_prints_an_empty_list_and_the_no_snapshots_line_when_none_are_taken(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	exitCode, stdout, stderr := runSnapshotsJSON(t)
 
@@ -242,8 +234,7 @@ func Test_run_snapshots_json_prints_an_empty_list_and_the_no_snapshots_line_when
 }
 
 func Test_run_snapshots_json_lists_config_then_no_snapshots_then_store_warnings_and_prefixes_them_on_stderr(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "snapshot.keep = 3\n")
 	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
 	configWarning := configShown + ": unknown key snapshot.keep; quarry ignores it"
@@ -297,8 +288,7 @@ func Test_run_snapshots_json_gives_a_null_store_snapshot_when_the_store_cannot_n
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			dir := writeSnapshots(t, home, olderPair()[0])
 			c.setup(t, home, dir)
 
@@ -325,8 +315,7 @@ func Test_run_snapshots_json_names_the_recorded_path_and_marks_nothing_when_no_l
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			dir := writeSnapshots(t, home, olderPair()...)
 			recorded := c.recorded(home, dir)
 			buildStoreFrom(t, home, recorded)
@@ -346,8 +335,7 @@ func Test_run_snapshots_json_names_the_recorded_path_and_marks_nothing_when_no_l
 }
 
 func Test_run_snapshots_json_reports_keep_from_the_config(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[snapshots]\nkeep = 24\n")
 
 	exitCode, stdout, stderr := runSnapshotsJSON(t)

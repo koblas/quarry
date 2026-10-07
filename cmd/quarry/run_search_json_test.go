@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -59,12 +58,10 @@ func searchStore() store.Rows {
 }
 
 func Test_run_search_json_lists_every_transaction_newest_first_flagged_with_its_splits(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, searchStore())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"search", "--json"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -124,12 +121,10 @@ func Test_run_search_json_lists_every_transaction_newest_first_flagged_with_its_
 // searchedJSON runs quarry search --json with args against rows and returns the document, requiring exit 0.
 func searchedJSON(t *testing.T, rows store.Rows, args ...string) searchJSONDoc {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, rows)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), append([]string{"search", "--json"}, args...), spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"search", "--json"}, args...))
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	return decodeSearchJSON(t, stdout.String())
@@ -225,9 +220,8 @@ func Test_run_search_json_lists_closed_account_and_usd_transactions_in_their_own
 
 func Test_run_search_refuses_a_since_that_is_not_a_date_before_opening_the_store(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"search", "--since", "2024-13"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--since", "2024-13"})
 
 	assert.Equal(t, 2, exitCode)
 	assert.Empty(t, stdout.String())
@@ -236,21 +230,18 @@ func Test_run_search_refuses_a_since_that_is_not_a_date_before_opening_the_store
 
 func Test_run_search_refuses_a_since_after_the_until(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"search", "--since", "2025", "--until", "2024"}, spendEnv(&stdout, &stderr))
+	exitCode, _, stderr := runSpendCapture(context.Background(), []string{"search", "--since", "2025", "--until", "2024"})
 
 	assert.Equal(t, 2, exitCode)
 	assert.Equal(t, "quarry: --since 2025 is after --until 2024\n", stderr.String())
 }
 
 func Test_run_search_prints_the_transactions_table(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, searchStore())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"search"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

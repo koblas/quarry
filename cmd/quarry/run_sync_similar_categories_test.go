@@ -11,8 +11,7 @@ import (
 // "Auto" is the control: its key differs. The income "Grocery" shares the
 // expense key but is a different kind, so it joins no group.
 func Test_run_sync_records_similar_expense_categories_and_not_the_income_one(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	groceriesPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: new(int64(1))})
