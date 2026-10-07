@@ -189,10 +189,12 @@ Edge rows (additional):
 | `--from X`, folder unlistable | F1 | 1 |
 | `--from /d/X.SQLITE`, `/d` searchable not listable | F4 | 1 |
 | only a directory or symlink named `X.SQLITE` (or `X.sqlite`) in the folder | not listed, no D1, `X.json` not an orphan; `--from X` → F3 | 0 / 1 |
+| `latest.sqlite` + `latest.json` in the snapshots folder, `--from latest` | F3; path form `--from …/snapshots/latest.sqlite` succeeds | 1 / 0 |
 
 Changes to existing surfaces (additional):
 8. A directory named `<id>.sqlite` in the snapshots folder passed as `--from <id>` gave `… is not a snapshot file; …` (from.go:106,124-127); now F3. Re-point import_from_test.go:383-396 to the path form (keeps the not-a-snapshot-file pin) and add an ID-form F3 case.
 9. A symlink named `<id>.sqlite` in the snapshots folder was accepted by `--from <id>` (os.Stat follows it); now F3, since `snapshots` never listed it. The path form still follows the link and succeeds (from.go:80-83,95).
+10. (orchestrator, from the SCENARIO-12a checkpoint, 2026-10-06) A hand-placed non-ID name in the snapshots folder (`latest.sqlite` + `latest.json`) passed as `--from latest` used to resolve (join + os.Stat); it now gives F3 (`quarry: no snapshot latest in ~/Library/Application Support/quarry/snapshots; run quarry snapshots to list the ones kept`), because `snapshots` never lists it (BR-C6). The path form `--from ~/…/snapshots/latest.sqlite` still resolves.
 
 ---
 
