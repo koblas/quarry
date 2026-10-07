@@ -89,3 +89,10 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/snapshot`; cli/cmd 
   - `run_store_identity_test.go:247-256` hard-links `X.SQLITE.json`, which pins from.go:89.
 - Green, no edit, keep the skip: `run_case_variant_test.go:40-75` and `list_store_identity_test.go:84-92,131-139` pin identity through a differently-cased name via `markStoreSnapshot`, which S10 leaves alone. The same holds for `Test_prune_leaves_a_manifest_that_is_not_a_regular_file`, `Test_prune_sweeps_only_orphan_manifests` and `Test_list_ignores_everything_that_is_not_a_snapshot_file`.
 - Test names stay lowercase (`upper_case_sqlite`), or the narrow loop misses them.
+
+## Orchestrator rulings (2026-10-06)
+
+- Accepted: every entry type competes for the manifest winner (BR-C7 mid-scope ruling); orphan candidates regular manifests only; deleteSnapshot keeps its regular-file check.
+- Accepted: Unicode simple folding (agrees with (?i) and strings.EqualFold, 12b); pin X.ſqlite.
+- Accepted: .partial guard stays exact lowercase.
+- Accepted: the Triage Brief re-points are 12a's or unaffected (listed in Handoff Traps).
