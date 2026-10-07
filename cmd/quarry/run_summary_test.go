@@ -118,10 +118,9 @@ func Test_run_summary_prints_last_months_summary(t *testing.T) {
 
 func Test_run_summary_defaults_to_the_month_before_the_local_day_not_the_utc_day(t *testing.T) {
 	seedSummaryStore(t)
-	var stdout, stderr bytes.Buffer
 	lateOnSeptember30 := time.Date(2026, time.September, 30, 21, 0, 0, 0, time.FixedZone("UTC-4", -4*60*60))
 
-	exitCode := runWith(context.Background(), []string{"summary"}, spendEnvAt(&stdout, &stderr, lateOnSeptember30))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary"}, lateOnSeptember30)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.True(t, strings.HasPrefix(stdout.String(), "Summary of August 2026 (2026-08-01 to 2026-08-31), amounts in CAD\n"), stdout.String())
@@ -210,11 +209,12 @@ func Test_run_summary_counts_a_type_without_a_balance_on_the_first_month_end_as_
 func Test_run_summary_anomalies_section_equals_quarry_anomalies_of_the_month(t *testing.T) {
 	seedSummaryStore(t)
 	pinLocalZone(t)
-	var summary, anomalies, stderr bytes.Buffer
 
-	require.Equal(t, 0, runWith(context.Background(), []string{"summary"}, spendEnvAt(&summary, &stderr, summaryClock)), stderr.String())
-	require.Equal(t, 0, runWith(context.Background(), []string{"anomalies", "--since", "2026-09", "--until", "2026-09"},
-		spendEnvAt(&anomalies, &stderr, summaryClock)), stderr.String())
+	summaryCode, summary, summaryErr := runSpendCaptureAt(context.Background(), []string{"summary"}, summaryClock)
+	require.Equal(t, 0, summaryCode, summaryErr.String())
+	anomaliesCode, anomalies, anomaliesErr := runSpendCaptureAt(context.Background(),
+		[]string{"anomalies", "--since", "2026-09", "--until", "2026-09"}, summaryClock)
+	require.Equal(t, 0, anomaliesCode, anomaliesErr.String())
 
 	assert.Contains(t, summary.String(), "\n"+anomalies.String()+"\n")
 }
@@ -484,8 +484,8 @@ func syncSummaryFindingsFixture(t *testing.T, home string) (string, string) {
 // summaryOf is quarry summary for January 2026, a month that has ended whatever the clock says.
 func summaryOf(t *testing.T) string {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
-	require.Equal(t, 0, run(context.Background(), []string{"summary", "--month", "2026-01"}, &stdout, &stderr), stderr.String())
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"summary", "--month", "2026-01"})
+	require.Equal(t, 0, exitCode, stderr.String())
 	return stdout.String()
 }
 
@@ -496,8 +496,8 @@ func Test_run_summary_findings_count_a_classified_investment_account_and_an_igno
 	before := summaryOf(t)
 	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [%q]\n[accounts]\nnon-registered = [%q]\n", duplicate, brokerage))
 	after := summaryOf(t)
-	var status, stderr bytes.Buffer
-	require.Equal(t, 0, run(context.Background(), []string{"status"}, &status, &stderr), stderr.String())
+	statusCode, status, statusErr := runCapture(context.Background(), []string{"status"})
+	require.Equal(t, 0, statusCode, statusErr.String())
 
 	assert.Contains(t, before, "\nFindings  5 open")
 	assert.Contains(t, after, "\nFindings  3 open, 1 ignored")
@@ -648,10 +648,9 @@ func Test_run_summary_json_carries_the_charges_quarry_anomalies_lists_for_the_mo
 	seedSummaryStore(t)
 	pinLocalZone(t)
 	_, summaryOut, _ := runSummaryJSON(t, summaryClock)
-	var anomaliesOut, anomaliesErr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"anomalies", "--json", "--since", "2026-09", "--until", "2026-09"},
-		spendEnvAt(&anomaliesOut, &anomaliesErr, summaryClock))
+	exitCode, anomaliesOut, anomaliesErr := runSpendCaptureAt(context.Background(),
+		[]string{"anomalies", "--json", "--since", "2026-09", "--until", "2026-09"}, summaryClock)
 
 	require.Equal(t, 0, exitCode, anomaliesErr.String())
 	assert.NotEqual(t, "[]", compactField(t, summaryOut, "anomalies", "charges"))
@@ -662,10 +661,9 @@ func Test_run_summary_json_carries_the_dates_quarry_networth_lists_for_the_two_m
 	seedSummaryStore(t)
 	pinLocalZone(t)
 	_, summaryOut, _ := runSummaryJSON(t, summaryClock)
-	var netWorthOut, netWorthErr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--json", "--since", "2026-08", "--until", "2026-09"},
-		spendEnvAt(&netWorthOut, &netWorthErr, summaryClock))
+	exitCode, netWorthOut, netWorthErr := runSpendCaptureAt(context.Background(),
+		[]string{"networth", "--json", "--since", "2026-08", "--until", "2026-09"}, summaryClock)
 
 	require.Equal(t, 0, exitCode, netWorthErr.String())
 	assert.Equal(t, compactField(t, netWorthOut.String(), "dates"), compactField(t, summaryOut, "net_worth", "dates"))

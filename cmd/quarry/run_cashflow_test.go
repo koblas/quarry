@@ -73,10 +73,9 @@ func Test_run_cashflow_by_year_shows_one_row_per_year_and_na_without_income(t *t
 		spendSplit{id: "s08", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2025, 11, 1), cents: -600000},
 		spendSplit{id: "s09", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 1, 5), cents: 999900},
 	))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(),
-		[]string{"cashflow", "--by", "year", "--since", "2020", "--until", "2025"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(),
+		[]string{"cashflow", "--by", "year", "--since", "2020", "--until", "2025"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -450,6 +449,18 @@ func totalsColumn(out string, column int) map[string]string {
 	return totals
 }
 
+// mustRunSpendAndCashFlow runs spend, then cashflow, with args, requiring both to exit 0, and returns their
+// stdout and the stderr they shared.
+func mustRunSpendAndCashFlow(tb testing.TB, args ...string) (spendOut, cashFlowOut, stderr string) {
+	tb.Helper()
+	var spendBuf, cashFlowBuf, errBuf bytes.Buffer
+	spendExit := runWith(context.Background(), append([]string{"spend"}, args...), spendEnv(&spendBuf, &errBuf))
+	cashFlowExit := runWith(context.Background(), append([]string{"cashflow"}, args...), spendEnv(&cashFlowBuf, &errBuf))
+	require.Equal(tb, 0, spendExit, errBuf.String())
+	require.Equal(tb, 0, cashFlowExit, errBuf.String())
+	return spendBuf.String(), cashFlowBuf.String(), errBuf.String()
+}
+
 func Test_run_cashflow_total_spent_equals_spend_total_per_currency(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -495,15 +506,11 @@ func Test_run_cashflow_total_spent_equals_spend_total_per_currency(t *testing.T)
 			for _, a := range c.accounts {
 				period = append(period, "--account", a)
 			}
-			var spendOut, cashFlowOut, stderr bytes.Buffer
 
-			spendExit := runWith(context.Background(), append([]string{"spend"}, period...), spendEnv(&spendOut, &stderr))
-			cashFlowExit := runWith(context.Background(), append([]string{"cashflow"}, period...), spendEnv(&cashFlowOut, &stderr))
+			spendOut, cashFlowOut, _ := mustRunSpendAndCashFlow(t, period...)
 
-			require.Equal(t, 0, spendExit, stderr.String())
-			require.Equal(t, 0, cashFlowExit, stderr.String())
-			assert.Equal(t, c.wantSpent, totalsColumn(spendOut.String(), 2))
-			assert.Equal(t, c.wantSpent, totalsColumn(cashFlowOut.String(), 3))
+			assert.Equal(t, c.wantSpent, totalsColumn(spendOut, 2))
+			assert.Equal(t, c.wantSpent, totalsColumn(cashFlowOut, 3))
 		})
 	}
 }
@@ -544,15 +551,11 @@ func Test_run_cashflow_spent_equals_spend_total_in_every_reporting_currency(t *t
 			for _, a := range c.accounts {
 				args = append(args, "--account", a)
 			}
-			var spendOut, cashFlowOut, stderr bytes.Buffer
 
-			spendExit := runWith(context.Background(), append([]string{"spend"}, args...), spendEnv(&spendOut, &stderr))
-			cashFlowExit := runWith(context.Background(), append([]string{"cashflow"}, args...), spendEnv(&cashFlowOut, &stderr))
+			spendOut, cashFlowOut, _ := mustRunSpendAndCashFlow(t, args...)
 
-			require.Equal(t, 0, spendExit, stderr.String())
-			require.Equal(t, 0, cashFlowExit, stderr.String())
-			assert.Equal(t, c.wantSpent, totalsColumn(spendOut.String(), 2))
-			assert.Equal(t, c.wantSpent, totalsColumn(cashFlowOut.String(), 3))
+			assert.Equal(t, c.wantSpent, totalsColumn(spendOut, 2))
+			assert.Equal(t, c.wantSpent, totalsColumn(cashFlowOut, 3))
 		})
 	}
 }
@@ -624,18 +627,13 @@ func Test_run_cashflow_leaves_out_accounts_that_use_linked_account_tracking(t *t
 		spendSplit{id: "s03", account: "acct-401k", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 11), cents: -90000},
 		spendSplit{id: "s04", account: "acct-401k", currency: "CAD", day: day(2026, 3, 12), cents: 40000},
 	))
-	period := []string{"--since", "2026-01", "--until", "2026-09"}
-	var spendOut, cashFlowOut, stderr bytes.Buffer
 
-	spendExit := runWith(context.Background(), append([]string{"spend"}, period...), spendEnv(&spendOut, &stderr))
-	cashFlowExit := runWith(context.Background(), append([]string{"cashflow"}, period...), spendEnv(&cashFlowOut, &stderr))
+	spendOut, cashFlowOut, stderr := mustRunSpendAndCashFlow(t, "--since", "2026-01", "--until", "2026-09")
 
-	require.Equal(t, 0, spendExit, stderr.String())
-	require.Equal(t, 0, cashFlowExit, stderr.String())
-	assert.Equal(t, map[string]string{"CAD": "500.00"}, totalsColumn(cashFlowOut.String(), 2))
-	assert.Equal(t, map[string]string{"CAD": "120.00"}, totalsColumn(cashFlowOut.String(), 3))
-	assert.Equal(t, map[string]string{"CAD": "120.00"}, totalsColumn(spendOut.String(), 2))
-	assert.Empty(t, stderr.String())
+	assert.Equal(t, map[string]string{"CAD": "500.00"}, totalsColumn(cashFlowOut, 2))
+	assert.Equal(t, map[string]string{"CAD": "120.00"}, totalsColumn(cashFlowOut, 3))
+	assert.Equal(t, map[string]string{"CAD": "120.00"}, totalsColumn(spendOut, 2))
+	assert.Empty(t, stderr)
 }
 
 func Test_run_cashflow_refuses_and_reports_empty_periods_like_spend(t *testing.T) {
@@ -728,10 +726,8 @@ func Test_run_cashflow_rejects_a_period_it_cannot_use(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
-			var stdout, stderr bytes.Buffer
-			env := spendEnv(&stdout, &stderr)
 
-			exitCode := runWith(context.Background(), c.args, env)
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
@@ -857,11 +853,7 @@ func Test_run_cashflow_json_gives_a_period_in_the_other_currency_only_where_the_
 
 	doc, _ := runCashFlowJSON(t, "--since", "2025-12", "--until", "2026-02")
 
-	periods := make([]string, len(doc.Periods))
-	for i, p := range doc.Periods {
-		periods[i] = p.Period + " " + p.Currency
-	}
-	assert.Equal(t, []string{"2025-12 CAD", "2025-12 USD", "2026-01 CAD", "2026-02 CAD"}, periods)
+	assert.Equal(t, []string{"2025-12 CAD", "2025-12 USD", "2026-01 CAD", "2026-02 CAD"}, periodKeys(doc.Periods))
 }
 
 func Test_run_cashflow_of_an_unrated_empty_window_gives_only_the_empty_window_note(t *testing.T) {

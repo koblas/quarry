@@ -264,17 +264,16 @@ type accountsOutput struct{ text, textErr, json, jsonErr string }
 // runAccountsBothForms runs accounts with args in text and then --json form, returning both runs' output.
 func runAccountsBothForms(t *testing.T, args ...string) accountsOutput {
 	t.Helper()
-	var textOut, textErr, jsonOut, jsonErr bytes.Buffer
-	require.Equal(t, 0, run(context.Background(), append([]string{"accounts"}, args...), &textOut, &textErr), textErr.String())
-	require.Equal(t, 0, run(context.Background(), append([]string{"accounts", "--json"}, args...), &jsonOut, &jsonErr), jsonErr.String())
+	textCode, textOut, textErr := runCapture(context.Background(), append([]string{"accounts"}, args...))
+	require.Equal(t, 0, textCode, textErr.String())
+	jsonCode, jsonOut, jsonErr := runCapture(context.Background(), append([]string{"accounts", "--json"}, args...))
+	require.Equal(t, 0, jsonCode, jsonErr.String())
 	return accountsOutput{text: textOut.String(), textErr: textErr.String(), json: jsonOut.String(), jsonErr: jsonErr.String()}
 }
 
 func warningsOf(t *testing.T, doc string) []string {
 	t.Helper()
-	var parsed accountsFXDoc
-	require.NoError(t, json.Unmarshal([]byte(doc), &parsed), doc)
-	return parsed.Warnings
+	return decodeDoc[accountsFXDoc](t, []byte(doc)).Warnings
 }
 
 var (
@@ -532,8 +531,7 @@ func Test_run_accounts_shows_each_balance_in_the_reporting_currency(t *testing.T
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Empty(t, stderr.String())
-			var doc accountsFXDoc
-			require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
+			doc := decodeDoc[accountsFXDoc](t, stdout.Bytes())
 			assert.Equal(t, c.currency, doc.Currency)
 			assert.Equal(t, c.accounts, doc.Accounts)
 			assert.Equal(t, []string{}, doc.Warnings)
@@ -564,21 +562,17 @@ func Test_run_accounts_shows_an_investment_balance_as_cash_plus_holdings_value(t
 	})
 	rows.Splits = append(rows.Splits, store.Split{ID: "split-inv-cad", SourceID: 3, TransactionID: "txn-inv-cad", Amount: -10_000})
 	replaceStore(t, home, rows)
-	var stdout, stderr, jsonOut bytes.Buffer
 
-	textCode := run(context.Background(), []string{"accounts", "--currency", "native"}, &stdout, &stderr)
-	jsonCode := run(context.Background(), []string{"accounts", "--json", "--currency", "native"}, &jsonOut, &stderr)
+	got := runAccountsBothForms(t, "--currency", "native")
 
-	require.Equal(t, 0, textCode, stderr.String())
-	require.Equal(t, 0, jsonCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Empty(t, got.textErr)
+	assert.Empty(t, got.jsonErr)
 	assert.Equal(t, ""+
 		"Account    Type       Currency  Balance  Status\n"+
 		"Brokerage  brokerage  CAD        920.00  unclassified\n"+
 		"Chequing   chequing   CAD        100.00\n",
-		stdout.String())
-	var doc accountsJSON
-	require.NoError(t, json.Unmarshal(jsonOut.Bytes(), &doc))
+		got.text)
+	doc := decodeDoc[accountsJSON](t, []byte(got.json))
 	require.Len(t, doc.Accounts, 2)
 	brokerage, chequing := doc.Accounts[0], doc.Accounts[1]
 	assert.Equal(t, "Brokerage", brokerage.Name)
@@ -618,8 +612,7 @@ func Test_run_accounts_shows_an_overdrawn_investment_balance_with_its_minus_sign
 		"Account    Type       Currency  Balance  Status\n"+
 		"Brokerage  brokerage  CAD        -80.00  unclassified\n",
 		got.text)
-	var doc accountsJSON
-	require.NoError(t, json.Unmarshal([]byte(got.json), &doc))
+	doc := decodeDoc[accountsJSON](t, []byte(got.json))
 	require.Len(t, doc.Accounts, 1)
 	brokerage := doc.Accounts[0]
 	assert.Equal(t, []*string{new("-80.00"), new("-100.00"), new("20.00")}, []*string{brokerage.Balance, brokerage.Cash, brokerage.HoldingsValue})
@@ -631,8 +624,7 @@ func Test_run_accounts_all_json_carries_a_closed_investment_accounts_cash_and_ho
 
 	got := runAccountsBothForms(t, "--all", "--currency", "native")
 
-	var doc accountsJSON
-	require.NoError(t, json.Unmarshal([]byte(got.json), &doc))
+	doc := decodeDoc[accountsJSON](t, []byte(got.json))
 	require.Len(t, doc.Accounts, 1)
 	brokerage := doc.Accounts[0]
 	assert.True(t, brokerage.Closed)
@@ -690,8 +682,7 @@ func Test_run_accounts_converts_an_investment_balance_as_cash_plus_holdings_valu
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Empty(t, stderr.String())
-			var doc accountsFXDoc
-			require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
+			doc := decodeDoc[accountsFXDoc](t, stdout.Bytes())
 			assert.Equal(t, []accountFXJSON{
 				{Name: "Brokerage", Currency: "USD", Balance: new("920.01"), ConvertedBalance: new(c.converted)},
 			}, doc.Accounts)
@@ -786,10 +777,9 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
 	addTransaction(b, rrsp, "1000.00", past)
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 	syncBundle(t, bundle)
-	var stdout, stderr bytes.Buffer
 	before := time.Now()
 
-	exitCode := run(context.Background(), []string{"accounts", "--json", "--currency", "native"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--json", "--currency", "native"})
 
 	after := time.Now()
 	require.Equal(t, 0, exitCode, stderr.String())
@@ -862,8 +852,7 @@ func Test_run_accounts_json_reports_the_all_closed_note_in_both_streams(t *testi
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--json", "--currency", "native"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	var got accountsJSON
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+	got := decodeDoc[accountsJSON](t, stdout.Bytes())
 	assert.Empty(t, got.Accounts)
 	assert.Contains(t, stdout.String(), "  \"accounts\": [],\n")
 	assert.Equal(t, []string{"all 3 accounts are closed; pass --all to list them"}, got.Warnings)
@@ -877,8 +866,7 @@ func Test_run_accounts_json_carries_in_reports_per_account(t *testing.T) {
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--all", "--json", "--currency", "native"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	var got accountsJSON
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+	got := decodeDoc[accountsJSON](t, stdout.Bytes())
 	inReports := map[string]bool{}
 	for _, a := range got.Accounts {
 		inReports[a.Name] = a.InReports
@@ -894,8 +882,7 @@ func Test_run_accounts_json_carries_linked_tracking_per_account(t *testing.T) {
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--all", "--json", "--currency", "native"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	var got accountsJSON
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+	got := decodeDoc[accountsJSON](t, stdout.Bytes())
 	linked := map[string]bool{}
 	for _, a := range got.Accounts {
 		linked[a.Name] = a.LinkedTracking
@@ -932,8 +919,8 @@ func syncUnmatchedFixture(t *testing.T, home string) {
 // jsonWarnings runs args and returns the warnings array of its --json document and its stderr.
 func jsonWarnings(t *testing.T, args ...string) ([]string, string) {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
-	require.Equal(t, 0, run(context.Background(), args, &stdout, &stderr), stderr.String())
+	exitCode, stdout, stderr := runCapture(context.Background(), args)
+	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {
 		Warnings []string `json:"warnings"`
 	}
