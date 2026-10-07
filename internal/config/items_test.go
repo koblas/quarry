@@ -242,7 +242,10 @@ func Test_load_loads_account_lists_that_share_no_id_exactly(t *testing.T) {
 		nonRegistered []string
 	}{
 		{name: "the same id twice in one list", content: "accounts.registered = [\"acct-3\", \"acct-3\"]\n", registered: []string{"acct-3", "acct-3"}},
-		{name: "ids that differ in letter case", content: "accounts.registered = [\"Acct-3\"]\naccounts.non-registered = [\"acct-3\"]\n", registered: []string{"Acct-3"}, nonRegistered: []string{"acct-3"}},
+		{
+			name:    "ids that differ in letter case",
+			content: "accounts.registered = [\"Acct-3\"]\naccounts.non-registered = [\"acct-3\"]\n", registered: []string{"Acct-3"}, nonRegistered: []string{"acct-3"},
+		},
 		{name: "only the non-registered list set", content: "accounts.non-registered = [\"acct-3\"]\n", nonRegistered: []string{"acct-3"}},
 	}
 
@@ -312,27 +315,29 @@ func Test_load_leaves_findings_ignore_empty_when_unset_or_an_empty_list(t *testi
 	}
 }
 
-func Test_load_reads_findings_ignore_from_an_inline_table(t *testing.T) {
-	_, cfg, err := load(t, "findings = { ignore = [\"a\"] }\n")
+func Test_load_reads_findings_ignore_in_its_written_forms(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    []string
+	}{
+		{name: "from_an_inline_table", content: "findings = { ignore = [\"a\"] }\n", want: []string{"a"}},
+		{name: "spread_over_lines_with_comments_and_a_trailing_comma", content: "[findings]\nignore = [\n  \"a\", # first\n  # between\n  \"b\",\n]\n", want: []string{"a", "b"}},
+		{
+			name:    "items_holding_commas_brackets_quotes_and_hashes",
+			content: "findings.ignore = [\"a,b\", 'c]d', \"e\\\"f,\", \"#g\", \"\"\"h,\ni\"\"\", '''j,'k''', \"\"\"l\\\"\"\"m\"\"\", \"\"\"n\"\"\"\"]\n",
+			want:    []string{"a,b", "c]d", "e\"f,", "#g", "h,\ni", "j,'k", "l\"\"\"m", "n\""},
+		},
+	}
 
-	require.NoError(t, err)
-	assert.Equal(t, []string{"a"}, cfg.Ignore)
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, cfg, err := load(t, c.content)
 
-func Test_load_reads_findings_ignore_spread_over_lines_with_comments_and_a_trailing_comma(t *testing.T) {
-	_, cfg, err := load(t, "[findings]\nignore = [\n  \"a\", # first\n  # between\n  \"b\",\n]\n")
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{"a", "b"}, cfg.Ignore)
-}
-
-func Test_load_reads_findings_ignore_items_holding_commas_brackets_quotes_and_hashes(t *testing.T) {
-	content := "findings.ignore = [\"a,b\", 'c]d', \"e\\\"f,\", \"#g\", \"\"\"h,\ni\"\"\", '''j,'k''', \"\"\"l\\\"\"\"m\"\"\", \"\"\"n\"\"\"\"]\n"
-
-	_, cfg, err := load(t, content)
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{"a,b", "c]d", "e\"f,", "#g", "h,\ni", "j,'k", "l\"\"\"m", "n\""}, cfg.Ignore)
+			require.NoError(t, err)
+			assert.Equal(t, c.want, cfg.Ignore)
+		})
+	}
 }
 
 func Test_load_ignores_findings_ignore_spelled_with_another_letter_case(t *testing.T) {

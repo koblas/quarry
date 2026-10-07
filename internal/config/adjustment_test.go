@@ -132,22 +132,36 @@ func Test_load_refuses_an_item_that_lacks_a_key_it_needs(t *testing.T) {
 	}
 }
 
-func Test_load_numbers_a_bad_item_by_its_place_in_the_file(t *testing.T) {
-	_, _, err := load(t, goodItem+"\n[[acb.adjustment]]\nsecurity = \"sec-41\"\nreturn-of-capital = 12.34\n")
+func Test_load_reports_the_first_problem_in_file_order(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{
+			name:    "numbers_a_bad_item_by_its_place_in_the_file",
+			content: goodItem + "\n[[acb.adjustment]]\nsecurity = \"sec-41\"\nreturn-of-capital = 12.34\n",
+			want:    "acb.adjustment item 2 needs date, such as date = 2024-12-31",
+		},
+		{
+			name:    "refuses_the_first_bad_item_when_a_later_one_is_bad_too",
+			content: "[[acb.adjustment]]\ndate = 2024-12-31\nreturn-of-capital = 12.34\n\n[[acb.adjustment]]\nsecurity = \"sec-41\"\nreturn-of-capital = 12.34\n",
+			want:    `acb.adjustment item 1 needs security, such as security = "sec-41"`,
+		},
+		{
+			name:    "reports_a_missing_key_before_a_wrong_type_in_the_same_item",
+			content: "[[acb.adjustment]]\nsecurity = 41\nreturn-of-capital = 12.34\n",
+			want:    "acb.adjustment item 1 needs date, such as date = 2024-12-31",
+		},
+	}
 
-	require.EqualError(t, err, shownPath+": acb.adjustment item 2 needs date, such as date = 2024-12-31"+fixLine)
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, _, err := load(t, c.content)
 
-func Test_load_refuses_the_first_bad_item_when_a_later_one_is_bad_too(t *testing.T) {
-	_, _, err := load(t, "[[acb.adjustment]]\ndate = 2024-12-31\nreturn-of-capital = 12.34\n\n[[acb.adjustment]]\nsecurity = \"sec-41\"\nreturn-of-capital = 12.34\n")
-
-	require.EqualError(t, err, shownPath+": "+`acb.adjustment item 1 needs security, such as security = "sec-41"`+fixLine)
-}
-
-func Test_load_reports_a_missing_key_before_a_wrong_type_in_the_same_item(t *testing.T) {
-	_, _, err := load(t, "[[acb.adjustment]]\nsecurity = 41\nreturn-of-capital = 12.34\n")
-
-	require.EqualError(t, err, shownPath+": acb.adjustment item 1 needs date, such as date = 2024-12-31"+fixLine)
+			require.EqualError(t, err, shownPath+": "+c.want+fixLine)
+		})
+	}
 }
 
 func Test_load_reports_the_first_bad_key_of_an_item_in_the_order_security_date_amount(t *testing.T) {
@@ -166,7 +180,11 @@ func Test_load_reports_the_first_bad_key_of_an_item_in_the_order_security_date_a
 		{name: "wrong security before wrong date", content: item + "security = 41\ndate = \"x\"\nreturn-of-capital = 12.34\n", want: adjItemOne + badSecurity},
 		{name: "control: right security and wrong date", content: item + "security = \"sec-41\"\ndate = \"x\"\nreturn-of-capital = 12.34\n", want: adjItemOne + badDateMsg + `"x"`},
 		{name: "wrong date before wrong amount", content: item + "security = \"sec-41\"\ndate = \"x\"\nreturn-of-capital = 0\n", want: adjItemOne + badDateMsg + `"x"`},
-		{name: "control: right date and wrong amount", content: item + "security = \"sec-41\"\ndate = 2024-12-31\nreturn-of-capital = 0\n", want: adjItemOne + ": return-of-capital" + adjAmountMust + "0"},
+		{
+			name:    "control: right date and wrong amount",
+			content: item + "security = \"sec-41\"\ndate = 2024-12-31\nreturn-of-capital = 0\n",
+			want:    adjItemOne + ": return-of-capital" + adjAmountMust + "0",
+		},
 		{name: "wrong security before wrong amount", content: item + "security = 41\ndate = 2024-12-31\nreturn-of-capital = 0\n", want: adjItemOne + badSecurity},
 	}
 
@@ -257,28 +275,38 @@ func Test_load_accepts_an_amount_of_one_cent_and_a_whole_amount(t *testing.T) {
 	assert.Equal(t, int64(1200), cfg.Adjustments[0].ReinvestedDistribution)
 }
 
-func Test_load_names_reinvested_distribution_when_that_amount_is_bad(t *testing.T) {
-	_, _, err := load(t, "[[acb.adjustment]]\nsecurity = \"sec-41\"\ndate = 2024-12-31\nreinvested-distribution = 0\n")
+func Test_load_names_the_amount_key_and_shows_its_value_in_an_amount_refusal(t *testing.T) {
+	const item = "[[acb.adjustment]]\nsecurity = \"sec-41\"\ndate = 2024-12-31\n"
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{
+			name:    "names_reinvested_distribution_when_that_amount_is_bad",
+			content: item + "reinvested-distribution = 0\n",
+			want:    adjItemOne + ": reinvested-distribution" + adjAmountMust + "0",
+		},
+		{
+			name:    "reports_return_of_capital_before_reinvested_distribution_when_both_are_bad",
+			content: item + "reinvested-distribution = 0\nreturn-of-capital = -1\n",
+			want:    adjItemOne + ": return-of-capital" + adjAmountMust + "-1",
+		},
+		{name: "shows_an_amount_written_as_a_table_by_kind", content: item + "return-of-capital.x = 1\n", want: adjItemOne + ": return-of-capital" + adjAmountMust + "a table"},
+		{
+			name:    "shows_an_amount_without_its_trailing_comment",
+			content: item + "return-of-capital = 12.345   # T3 box 42\n",
+			want:    adjItemOne + ": return-of-capital" + adjAmountMust + "12.345",
+		},
+	}
 
-	require.EqualError(t, err, shownPath+": "+adjItemOne+": reinvested-distribution"+adjAmountMust+"0"+fixLine)
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, _, err := load(t, c.content)
 
-func Test_load_reports_return_of_capital_before_reinvested_distribution_when_both_are_bad(t *testing.T) {
-	_, _, err := load(t, "[[acb.adjustment]]\nsecurity = \"sec-41\"\ndate = 2024-12-31\nreinvested-distribution = 0\nreturn-of-capital = -1\n")
-
-	require.EqualError(t, err, shownPath+": "+adjItemOne+": return-of-capital"+adjAmountMust+"-1"+fixLine)
-}
-
-func Test_load_shows_an_amount_written_as_a_table_by_kind(t *testing.T) {
-	_, _, err := load(t, "[[acb.adjustment]]\nsecurity = \"sec-41\"\ndate = 2024-12-31\nreturn-of-capital.x = 1\n")
-
-	require.EqualError(t, err, shownPath+": "+adjItemOne+": return-of-capital"+adjAmountMust+"a table"+fixLine)
-}
-
-func Test_load_shows_an_amount_without_its_trailing_comment(t *testing.T) {
-	_, _, err := load(t, "[[acb.adjustment]]\nsecurity = \"sec-41\"\ndate = 2024-12-31\nreturn-of-capital = 12.345   # T3 box 42\n")
-
-	require.EqualError(t, err, shownPath+": "+adjItemOne+": return-of-capital"+adjAmountMust+"12.345"+fixLine)
+			require.EqualError(t, err, shownPath+": "+c.want+fixLine)
+		})
+	}
 }
 
 func Test_load_leaves_adjustments_nil_when_the_file_has_none(t *testing.T) {
