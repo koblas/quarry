@@ -45,13 +45,11 @@ func acbSharesRows() store.Rows {
 }
 
 func Test_run_acb_takes_removed_shares_out_of_the_acb_and_adds_added_shares_at_their_cost(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
 	replaceStore(t, home, acbSharesRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
@@ -64,13 +62,11 @@ func Test_run_acb_takes_removed_shares_out_of_the_acb_and_adds_added_shares_at_t
 }
 
 func Test_run_acb_lists_a_removal_warning_in_json(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
 	replaceStore(t, home, acbSharesRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb", "--json"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb", "--json"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc acbDoc
@@ -80,8 +76,7 @@ func Test_run_acb_lists_a_removal_warning_in_json(t *testing.T) {
 }
 
 func Test_run_acb_leaves_a_zero_unit_removal_out_of_the_warnings(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
 	rows := acbSharesRows()
 	rows.InvestmentTransactions = append(rows.InvestmentTransactions,
@@ -95,8 +90,7 @@ func Test_run_acb_leaves_a_zero_unit_removal_out_of_the_warnings(t *testing.T) {
 }
 
 func Test_run_acb_lists_the_configs_warnings_before_a_removal_warning_in_both_forms(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "colour = \"red\"\n[accounts]\nnon-registered = [\"acct-cad\"]\n")
 	replaceStore(t, home, acbSharesRows())
 	var textOut, textErr bytes.Buffer

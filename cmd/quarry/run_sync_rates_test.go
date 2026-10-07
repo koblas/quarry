@@ -54,8 +54,7 @@ func valetResponse(req *http.Request, status int, body string) *http.Response {
 }
 
 func Test_run_sync_back_fills_rates_from_the_earliest_transaction(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	earliest := time.Date(2005, 3, 1, 0, 0, 0, 0, time.UTC)
@@ -93,8 +92,7 @@ func Test_run_sync_back_fills_rates_from_the_earliest_transaction(t *testing.T) 
 // syncWithValet syncs a one-account bundle, with a transaction on each date in days, against valet and returns exit code, stdout and stderr.
 func syncWithValet(t *testing.T, valet fakeValet, days []time.Time, extraArgs ...string) (int, string, string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	for _, day := range days {

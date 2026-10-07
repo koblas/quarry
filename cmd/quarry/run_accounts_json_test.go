@@ -38,8 +38,7 @@ type accountsJSON struct {
 }
 
 func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	bank := b.Institution(v9fixture.InstitutionRow{Name: "First Bank"})
 	chequing := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Institution: bank, Active: true})
@@ -121,12 +120,10 @@ func Test_run_accounts_json_returns_accounts_as_a_document(t *testing.T) {
 }
 
 func Test_run_accounts_json_reports_the_all_closed_note_in_both_streams(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncClosedAccountsFixture(t, home, 3)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--json", "--currency", "native"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--json", "--currency", "native"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var got accountsJSON
@@ -138,12 +135,10 @@ func Test_run_accounts_json_reports_the_all_closed_note_in_both_streams(t *testi
 }
 
 func Test_run_accounts_json_carries_in_reports_per_account(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncNotInReportsFixture(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--all", "--json", "--currency", "native"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--all", "--json", "--currency", "native"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var got accountsJSON
@@ -157,12 +152,10 @@ func Test_run_accounts_json_carries_in_reports_per_account(t *testing.T) {
 }
 
 func Test_run_accounts_json_carries_linked_tracking_per_account(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncLinkedTrackingFixture(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--all", "--json", "--currency", "native"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--all", "--json", "--currency", "native"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var got accountsJSON

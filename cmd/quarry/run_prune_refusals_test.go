@@ -68,8 +68,7 @@ func cancellingRemove(cancel context.CancelFunc, trigger, refused string) func(s
 }
 
 func Test_run_snapshots_prune_without_keep_deletes_beyond_the_newest_12(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, thirteenSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, "20260913T090000Z.sqlite"))
 
@@ -96,8 +95,7 @@ func Test_run_snapshots_prune_names_itself_when_the_home_directory_cannot_be_res
 
 func Test_run_snapshots_prune_protects_nothing_when_there_is_no_store(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 
 	exitCode, stdout, stderr := runPrune(t, "--keep", "3")
@@ -112,8 +110,7 @@ func Test_run_snapshots_prune_protects_nothing_when_there_is_no_store(t *testing
 }
 
 func Test_run_snapshots_prune_says_nothing_to_delete_beside_an_unreadable_store(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
 	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
@@ -127,8 +124,7 @@ func Test_run_snapshots_prune_says_nothing_to_delete_beside_an_unreadable_store(
 }
 
 func Test_run_snapshots_prune_says_nothing_to_delete_within_the_newest_one(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()[0])
 
 	exitCode, stdout, stderr := runPrune(t, "--keep", "1")
@@ -140,8 +136,7 @@ func Test_run_snapshots_prune_says_nothing_to_delete_within_the_newest_one(t *te
 }
 
 func Test_run_snapshots_prune_names_the_stores_snapshot_when_it_is_the_only_one_beyond_the_newest_n(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, thirteenSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, "20260901T090000Z.sqlite"))
 
@@ -164,8 +159,7 @@ func Test_run_snapshots_prune_says_nothing_to_delete_with_no_snapshots_folder(t 
 }
 
 func Test_run_snapshots_prune_says_nothing_to_delete_when_the_only_candidate_is_already_gone(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	five := fiveSnapshots()
 	dir := writeSnapshots(t, home, five[0], five[4])
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
@@ -187,8 +181,7 @@ func Test_run_snapshots_prune_says_nothing_to_delete_when_the_only_candidate_is_
 
 func Test_run_snapshots_prune_prints_one_line_per_failure_and_nothing_on_stdout_when_none_succeeded(t *testing.T) {
 	skipAsRoot(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 	require.NoError(t, os.Chmod(dir, 0o500))
@@ -205,14 +198,12 @@ func Test_run_snapshots_prune_prints_one_line_per_failure_and_nothing_on_stdout_
 }
 
 func Test_run_snapshots_prune_says_it_was_interrupted_before_any_delete(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(ctx, []string{"snapshots", "prune", "--keep", "1"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(ctx, []string{"snapshots", "prune", "--keep", "1"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -252,8 +243,7 @@ func Test_run_snapshots_prune_prints_what_it_deleted_before_the_interrupt_line(t
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			pinLocalZone(t)
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			dir := writeSnapshots(t, home, fiveSnapshots()...)
 			buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 			ctx, cancel := context.WithCancel(context.Background())
@@ -273,8 +263,7 @@ func Test_run_snapshots_prune_prints_what_it_deleted_before_the_interrupt_line(t
 
 func Test_run_snapshots_prune_prints_the_failure_line_before_the_interrupt_line(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 	ctx, cancel := context.WithCancel(context.Background())
@@ -293,8 +282,7 @@ func Test_run_snapshots_prune_prints_the_failure_line_before_the_interrupt_line(
 }
 
 func Test_run_snapshots_prune_refuses_a_store_with_no_import_history(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 	editStore(t, home, "DELETE FROM import_runs")
@@ -308,8 +296,7 @@ func Test_run_snapshots_prune_refuses_a_store_with_no_import_history(t *testing.
 }
 
 func Test_run_snapshots_prune_refuses_a_store_of_another_format_naming_no_snapshot(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	writeStoreFixture(t, home, "CREATE TABLE import_runs (id BIGINT, snapshot_path VARCHAR);")
 
@@ -323,8 +310,7 @@ func Test_run_snapshots_prune_refuses_a_store_of_another_format_naming_no_snapsh
 
 func Test_run_snapshots_prune_refuses_a_snapshots_folder_it_cannot_read(t *testing.T) {
 	skipAsRoot(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	require.NoError(t, os.Chmod(dir, 0o000))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
@@ -337,8 +323,7 @@ func Test_run_snapshots_prune_refuses_a_snapshots_folder_it_cannot_read(t *testi
 }
 
 func Test_run_snapshots_prune_reports_a_failed_stdout_write(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home, thirteenSnapshots()...)
 	var stderr bytes.Buffer
 

@@ -13,12 +13,10 @@ import (
 )
 
 func Test_run_status_reports_the_share_check(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncBundle(t, holdingsBundle(t, home))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

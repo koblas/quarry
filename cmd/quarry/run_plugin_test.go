@@ -4,7 +4,6 @@ package main
 
 import (
 	"encoding/json"
-	"os"
 	"path"
 	"strings"
 	"testing"
@@ -65,17 +64,6 @@ func Test_plugin_manifests_agree_on_where_the_plugin_lives_and_how_it_starts_qua
 	assert.Equal(t, listed.Name, plugin.Name)
 	assert.Equal(t, "quarry", plugin.McpServers["quarry"].Command)
 	assert.Equal(t, []string{"mcp"}, plugin.McpServers["quarry"].Args)
-}
-
-// repoRoot is the repository root as seen from cmd/quarry, where go test runs.
-const repoRoot = "../../"
-
-// repoFile reads a file named relative to the repo root.
-func repoFile(t *testing.T, rel string) string {
-	t.Helper()
-	raw, err := os.ReadFile(repoRoot + rel)
-	require.NoError(t, err)
-	return string(raw)
 }
 
 func Test_notices_and_prd_carry_the_ruled_plugin_edits(t *testing.T) {

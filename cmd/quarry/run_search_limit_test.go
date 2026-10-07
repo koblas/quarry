@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -26,12 +25,10 @@ func Test_run_search_prints_the_newest_500_of_501_matches_unless_limit_0(t *test
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStore(t, home, searchRows([]store.Account{chequingAccount("acct-chq", 1)}, nil, manySearchTxns(501)...))
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), c.args, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			doc := decodeSearchJSON(t, stdout.String())
@@ -51,12 +48,10 @@ func fiveSearchStore() store.Rows {
 }
 
 func Test_run_search_text_with_limit_prints_the_newest_rows_with_the_full_match_count_and_the_cut_line(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, fiveSearchStore())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"search", "--limit", "2"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--limit", "2"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	want := "Transactions in all accounts, all dates\n\n" +
@@ -71,12 +66,10 @@ func Test_run_search_text_with_limit_prints_the_newest_rows_with_the_full_match_
 
 func Test_run_search_json_with_limit_carries_the_cut_line_in_warnings_and_on_stderr(t *testing.T) {
 	const cutLine = "showing the newest 2 of 5 matching transactions; pass --limit 0 to list every one"
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, fiveSearchStore())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"search", "--json", "--limit", "2"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--json", "--limit", "2"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	doc := decodeSearchJSON(t, stdout.String())
@@ -102,12 +95,10 @@ func Test_run_search_cuts_only_when_more_transactions_match_than_the_limit(t *te
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStore(t, home, fiveSearchStore())
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), []string{"search", "--json", "--limit", c.limit}, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--json", "--limit", c.limit})
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			doc := decodeSearchJSON(t, stdout.String())
@@ -132,12 +123,10 @@ func Test_run_search_json_echoes_the_limit_it_used(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStore(t, home, fiveSearchStore())
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), c.args, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Equal(t, c.want, decodeSearchJSON(t, stdout.String()).Limit)
@@ -167,9 +156,8 @@ func Test_run_search_refuses_the_search_flags_and_text_in_the_ruled_order_before
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), c.args, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
 
 			assert.Equal(t, 2, exitCode)
 			assert.Equal(t, c.want, stderr.String())
@@ -179,12 +167,10 @@ func Test_run_search_refuses_the_search_flags_and_text_in_the_ruled_order_before
 }
 
 func Test_run_search_text_with_limit_counts_every_text_match_and_cuts_the_oldest(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, gymSearchStore())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"search", "gym", "--limit", "1", "--json"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "gym", "--limit", "1", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	doc := decodeSearchJSON(t, stdout.String())

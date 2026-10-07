@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -13,9 +12,8 @@ import (
 // The expected blocks are hand copies at the help's wrap width, so a re-wrap fails here.
 func Test_run_networth_help_carries_its_copy_and_the_currency_flag(t *testing.T) {
 	t.Setenv("HOME", "")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"networth", "--help"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"networth", "--help"})
 
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())

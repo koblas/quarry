@@ -31,8 +31,7 @@ const (
 )
 
 func Test_run_sync_gives_each_investment_transaction_that_moves_cash_a_row_in_transactions(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
@@ -61,9 +60,8 @@ func Test_run_sync_gives_each_investment_transaction_that_moves_cash_a_row_in_tr
 	registerEntry := b.Entry(v9fixture.EntryRow{Parent: registerPK, Amount: "-20.00", CategoryTag: tradesPK})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
@@ -91,8 +89,7 @@ func Test_run_sync_gives_each_investment_transaction_that_moves_cash_a_row_in_tr
 }
 
 func Test_run_sync_gives_a_reinvested_dividend_no_row_and_no_income(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
@@ -114,9 +111,8 @@ func Test_run_sync_gives_a_reinvested_dividend_no_row_and_no_income(t *testing.T
 	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "0.5"})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
@@ -129,8 +125,7 @@ func Test_run_sync_gives_a_reinvested_dividend_no_row_and_no_income(t *testing.T
 }
 
 func Test_run_sync_pairs_an_investment_transfer_entry_and_gives_an_entry_less_investment_one_uncategorized_split(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	inReports := new(int64(1))
@@ -147,9 +142,8 @@ func Test_run_sync_pairs_an_investment_transfer_entry_and_gives_an_entry_less_in
 	miscPK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: &miscIncomeCode, Amount: "5.00", PostedDate: &later})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
@@ -175,8 +169,7 @@ func Test_run_sync_pairs_an_investment_transfer_entry_and_gives_an_entry_less_in
 }
 
 func Test_run_sync_twice_reproduces_investment_cash_ids_and_keeps_an_ignored_uncategorized_finding_ignored(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)

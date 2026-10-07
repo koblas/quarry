@@ -42,8 +42,7 @@ func holdingsBuy(id string, sourceID int64, account, security, currency string, 
 // account, each holding one priced security.
 func seedHoldingsStore(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, holdingsRows(), usdRate(holdingsDay(10), 1_360_000))
 }
 
@@ -75,9 +74,8 @@ func holdingsRows() store.Rows {
 
 func Test_run_holdings_lists_todays_holdings_in_the_reporting_currency(t *testing.T) {
 	seedHoldingsStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

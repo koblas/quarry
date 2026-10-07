@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -33,9 +32,8 @@ func syncFindingsBundle(t *testing.T, home string, b *v9fixture.Builder) (*duckd
 func syncFindingsBundleIn(t *testing.T, home, dir string, b *v9fixture.Builder) string {
 	t.Helper()
 	bundle := b.WriteBundle(t, filepath.Join(home, dir))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	return findingsLine(t, stdout.String())
@@ -68,8 +66,7 @@ func uncategorizedPayeeBundle(categorized bool, amount string) (*v9fixture.Build
 }
 
 func Test_run_sync_records_findings_and_prints_the_findings_line(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -100,8 +97,7 @@ func Test_run_sync_records_findings_and_prints_the_findings_line(t *testing.T) {
 }
 
 func Test_run_sync_records_a_one_sided_transfer_with_its_from_split_as_the_item(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -134,8 +130,7 @@ type cashFlowTotals struct {
 
 // Distinct magnitudes (1, 20, 300, 4000) make each total name the splits it sums.
 func Test_run_sync_uncategorized_findings_hold_what_cashflow_counts(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -175,8 +170,7 @@ func Test_run_sync_uncategorized_findings_hold_what_cashflow_counts(t *testing.T
 		UNION ALL
 		SELECT 'spent', CAST(-sum(s.amount) FILTER (WHERE s.amount < 0) AS VARCHAR)
 		FROM finding_items i JOIN splits s ON s.id = i.split_id JOIN findings f ON f.id = i.finding_id WHERE f.type = 'uncategorized'`)
-	var stdout, stderr bytes.Buffer
-	exitCode := run(context.Background(), []string{"cashflow", "--json", "--by", "year", "--since", "2026", "--until", "2099"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"cashflow", "--json", "--by", "year", "--since", "2026", "--until", "2099"})
 	require.Equal(t, 0, exitCode, stderr.String())
 	var flow cashFlowTotals
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &flow))
@@ -187,8 +181,7 @@ func Test_run_sync_uncategorized_findings_hold_what_cashflow_counts(t *testing.T
 }
 
 func Test_run_sync_marks_a_finding_no_longer_found_fixed_at_the_build_time(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	first, amazonPK := uncategorizedPayeeBundle(false, "-10.00")
 	second, _ := uncategorizedPayeeBundle(true, "-10.00")
 	syncFindingsBundleIn(t, home, "DocumentsA", first)
@@ -203,8 +196,7 @@ func Test_run_sync_marks_a_finding_no_longer_found_fixed_at_the_build_time(t *te
 }
 
 func Test_run_sync_reopens_a_fixed_finding_with_its_first_found_at_and_not_new(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	first, amazonPK := uncategorizedPayeeBundle(false, "-10.00")
 	fixed, _ := uncategorizedPayeeBundle(true, "-10.00")
 	reopened, _ := uncategorizedPayeeBundle(false, "-12.00")
@@ -221,8 +213,7 @@ func Test_run_sync_reopens_a_fixed_finding_with_its_first_found_at_and_not_new(t
 }
 
 func Test_run_sync_prints_a_finding_first_seen_since_the_last_sync_as_new(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	first, _ := twoPayeeBundle(false, true)
 	second, _ := twoPayeeBundle(false, false)
 	syncFindingsBundleIn(t, home, "DocumentsA", first)
@@ -233,15 +224,13 @@ func Test_run_sync_prints_a_finding_first_seen_since_the_last_sync_as_new(t *tes
 }
 
 func Test_run_sync_json_counts_a_finding_fixed_since_the_last_sync(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	first, _ := uncategorizedPayeeBundle(false, "-10.00")
 	second, _ := uncategorizedPayeeBundle(true, "-10.00")
 	syncFindingsBundleIn(t, home, "DocumentsA", first)
 	bundle := second.WriteBundle(t, filepath.Join(home, "DocumentsB"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var parsed struct {
@@ -286,8 +275,7 @@ func twoPayeeBundleKeys(xCategorized, yCategorized bool) (*v9fixture.Builder, in
 }
 
 func Test_run_sync_from_an_older_snapshot_reopens_and_fixes_findings(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	first, xPK := twoPayeeBundle(false, true)
 	second, _ := twoPayeeBundle(true, false)
 	syncFindingsBundleIn(t, home, "DocumentsA", first)
@@ -296,9 +284,8 @@ func Test_run_sync_from_an_older_snapshot_reopens_and_fixes_findings(t *testing.
 	xID := fmt.Sprintf("uncategorized:payee-%d", xPK)
 	firstFoundAt := importRunQuery(t, home, "SELECT id, CAST(first_found_at AS VARCHAR) FROM findings")[xID]
 	syncFindingsBundleIn(t, home, "DocumentsB", second)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--from", firstID}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", firstID})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Findings  1 open, 1 fixed since the last sync; run quarry findings to list them", findingsLine(t, stdout.String()))
@@ -317,8 +304,7 @@ func syncIgnoringTheNewFinding(t *testing.T, home string, extra ...string) (int,
 }
 
 func Test_run_sync_counts_an_ignored_finding_as_ignored_not_open_or_new(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	exitCode, stdout, stderr := syncIgnoringTheNewFinding(t, home)
 
@@ -327,8 +313,7 @@ func Test_run_sync_counts_an_ignored_finding_as_ignored_not_open_or_new(t *testi
 }
 
 func Test_run_sync_json_counts_an_ignored_finding_as_ignored_not_open_or_new(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	exitCode, stdout, stderr := syncIgnoringTheNewFinding(t, home, "--json")
 
@@ -343,8 +328,7 @@ func Test_run_sync_json_counts_an_ignored_finding_as_ignored_not_open_or_new(t *
 }
 
 func Test_run_sync_counts_a_new_open_finding_beside_an_ignored_one(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	first, xPK, _ := twoPayeeBundleKeys(false, true)
 	second, _, _ := twoPayeeBundleKeys(false, false)
 	syncFindingsBundleIn(t, home, "DocumentsA", first)
@@ -357,24 +341,21 @@ func Test_run_sync_counts_a_new_open_finding_beside_an_ignored_one(t *testing.T)
 }
 
 func Test_run_sync_from_counts_an_ignored_finding_as_ignored_not_open(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	first, xPK, _ := twoPayeeBundleKeys(false, true)
 	syncFindingsBundleIn(t, home, "DocumentsA", first)
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 	firstID := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
 	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [\"uncategorized:payee-%d\"]\n", xPK))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--from", firstID}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", firstID})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Findings  none open, 1 ignored", findingsLine(t, stdout.String()))
 }
 
 func Test_run_sync_says_nothing_about_an_ignored_id_that_is_not_a_finding(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	first, _, _ := twoPayeeBundleKeys(false, true)
 	writeConfig(t, home, "[findings]\nignore = [\"uncategorized:payee-999\"]\n")
 
@@ -392,8 +373,7 @@ func Test_run_sync_says_nothing_about_an_ignored_id_that_is_not_a_finding(t *tes
 const unclassifiedOpenLine = "Findings  1 open; run quarry findings to list them"
 
 func Test_run_sync_counts_an_unclassified_account_open_and_never_new(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	first, _ := unclassifiedAccountBundle()
 	second, _ := unclassifiedAccountBundle()
 
@@ -405,8 +385,7 @@ func Test_run_sync_counts_an_unclassified_account_open_and_never_new(t *testing.
 }
 
 func Test_run_sync_leaves_an_account_the_config_classifies_out_of_the_findings(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b, id := unclassifiedAccountBundle()
 	writeConfig(t, home, fmt.Sprintf("[accounts]\nregistered = [%q]\n", id))
 
@@ -416,8 +395,7 @@ func Test_run_sync_leaves_an_account_the_config_classifies_out_of_the_findings(t
 }
 
 func Test_run_sync_counts_an_ignored_unclassified_account_as_ignored(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b, id := unclassifiedAccountBundle()
 	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [\"unclassified-account:%s\"]\n", id))
 
@@ -427,8 +405,7 @@ func Test_run_sync_counts_an_ignored_unclassified_account_as_ignored(t *testing.
 }
 
 func Test_run_sync_json_counts_an_unclassified_account_open_and_not_new(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b, _ := unclassifiedAccountBundle()
 
 	exitCode, stdout, stderr := syncNewBundle(t, home, "Documents", b, "--json")
@@ -444,15 +421,13 @@ func Test_run_sync_json_counts_an_unclassified_account_open_and_not_new(t *testi
 }
 
 func Test_run_sync_from_counts_an_unclassified_account_open(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b, _ := unclassifiedAccountBundle()
 	syncFindingsBundleIn(t, home, "Documents", b)
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 	id := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--from", id}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", id})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, unclassifiedOpenLine, findingsLine(t, stdout.String()))

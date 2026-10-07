@@ -106,12 +106,10 @@ func Test_run_holdings_native_before_the_first_rate_has_no_no_rate_cell_and_no_w
 }
 
 func Test_run_holdings_in_a_store_with_no_rates_says_so_and_shows_no_rate_for_the_usd_row(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, holdingsRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: "+holdingsNoRatesWarningLine+"\n", stderr.String())
@@ -126,8 +124,7 @@ func Test_run_holdings_in_a_store_with_no_rates_says_so_and_shows_no_rate_for_th
 }
 
 func Test_run_holdings_on_a_day_inside_a_rate_gap_converts_at_the_earlier_rate_and_is_silent(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, holdingsRows(), usdRate(holdingsDay(10), 1_360_000), usdRate(holdingsDay(12), 1_400_000))
 	var stdout, stderr bytes.Buffer
 
@@ -146,8 +143,7 @@ func Test_run_holdings_on_a_day_inside_a_rate_gap_converts_at_the_earlier_rate_a
 }
 
 func Test_run_holdings_of_cad_holdings_only_before_the_first_rate_in_cad_needs_no_rate(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	rows := holdingsRows()
 	rows.InvestmentTransactions, rows.Prices = rows.InvestmentTransactions[:1], rows.Prices[:1]
 	replaceStoreWithRates(t, home, rows, usdRate(holdingsDay(10), 1_360_000))

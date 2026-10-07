@@ -51,16 +51,6 @@ func seedACBToolStore(t *testing.T, home string) {
 		usdRate(day(2024, time.January, 2), 1_250_000), usdRate(day(2026, time.January, 2), 1_400_000))
 }
 
-// acbInToolWords is the CLI warnings with each command a no-cost line names replaced by the tool call that does the same.
-func acbInToolWords(cliWarnings []string) []string {
-	mapped := make([]string, len(cliWarnings))
-	for i, line := range cliWarnings {
-		line = strings.ReplaceAll(line, "quarry findings --type shares-without-cost", "data_quality with type shares-without-cost")
-		mapped[i] = strings.ReplaceAll(line, "quarry acb --security ", "acb with security ")
-	}
-	return mapped
-}
-
 func Test_run_mcp_acb_returns_the_acb_json_document(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -123,8 +113,7 @@ type acbRefusals struct{ cli, tool, toolStderr string }
 // acbRefusedPair runs the CLI acb with cliArgs and the acb tool with arguments over one store and config, each refused.
 func acbRefusedPair(t *testing.T, accounts []store.Account, cliArgs []string, arguments map[string]any) acbRefusals {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, acbPooledConfig)
 	replaceStoreWithRates(t, home, acbUnclassifiedRows(accounts...))
 	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
@@ -426,8 +415,7 @@ func Test_run_mcp_holdings_refuses_an_as_of_it_cannot_use_in_mcp_words(t *testin
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			seedHoldingsToolStore(t, home)
 			ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
 			defer cancel()

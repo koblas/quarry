@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/csv"
 	"strings"
@@ -14,15 +13,13 @@ import (
 )
 
 func Test_run_sql_csv_prints_null_as_an_empty_field_and_an_empty_string_as_a_quoted_pair(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
 	const query = `SELECT source_id, holdings_value,
 		CASE WHEN source_id = 1 THEN '' WHEN source_id = 2 THEN 'US, "x"' END AS note
 		FROM v_account_balances ORDER BY source_id`
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sql", "--csv", query}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "--csv", query})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -37,12 +34,10 @@ func Test_run_sql_csv_prints_null_as_an_empty_field_and_an_empty_string_as_a_quo
 }
 
 func Test_run_sql_csv_writes_a_row_of_one_null_column_as_a_quoted_pair_a_csv_reader_keeps(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sql", "--csv", "SELECT holdings_value FROM v_account_balances WHERE source_id = 1"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "--csv", "SELECT holdings_value FROM v_account_balances WHERE source_id = 1"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "holdings_value\n\"\"\n", stdout.String())
@@ -53,9 +48,8 @@ func Test_run_sql_csv_writes_a_row_of_one_null_column_as_a_quoted_pair_a_csv_rea
 
 func Test_run_sql_csv_with_json_exits_2_naming_the_two_flags(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sql", "--csv", "--json", "SELECT 1"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "--csv", "--json", "SELECT 1"})
 
 	assert.Equal(t, 2, exitCode)
 	assert.Empty(t, stdout.String())

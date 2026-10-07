@@ -14,8 +14,7 @@ import (
 )
 
 func Test_run_findings_lists_an_unclassified_account_until_the_config_classifies_it(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Questrade TFSA", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
@@ -40,14 +39,12 @@ Ignore a finding by adding its id to findings.ignore in %s; see quarry findings 
 }
 
 func Test_run_findings_json_reports_an_unclassified_account_without_found_or_fixed_times(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Questrade TFSA", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	syncBundle(t, b.WriteBundle(t, filepath.Join(home, "Documents")))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--json", "--type", "unclassified-account"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--type", "unclassified-account"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {

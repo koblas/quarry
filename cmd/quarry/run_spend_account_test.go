@@ -14,8 +14,7 @@ import (
 )
 
 func Test_run_spend_counts_only_the_accounts_it_is_given(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
 			chequingAccount("acct-chq", 1),
@@ -43,17 +42,15 @@ func Test_run_spend_counts_only_the_accounts_it_is_given(t *testing.T) {
 }
 
 func Test_run_spend_warns_that_a_named_account_is_left_out_of_reports(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
 			{ID: "acct-old", SourceID: 1, Name: "Old Card", Type: "credit_card", Currency: "CAD", Active: true, NotInReports: true},
 		},
 		spendSplit{id: "s01", account: "acct-old", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -900},
 	))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"spend", "--account", "Old Card"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"spend", "--account", "Old Card"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: account \"Old Card\" is not used in reports in Quicken, so spend leaves it out; "+
@@ -63,17 +60,15 @@ func Test_run_spend_warns_that_a_named_account_is_left_out_of_reports(t *testing
 }
 
 func Test_run_spend_warns_that_a_named_linked_tracking_account_is_left_out(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
 			{ID: "acct-401k", SourceID: 1, Name: "Netskope 401(k)", Type: "retirement", Currency: "USD", Active: true, NotInReports: true, LinkedTracking: true},
 		},
 		spendSplit{id: "s01", account: "acct-401k", category: "cat-groceries", currency: "USD", day: day(2026, 3, 10), cents: -900},
 	))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"spend", "--account", "Netskope 401(k)"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"spend", "--account", "Netskope 401(k)"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: account \"Netskope 401(k)\" uses linked account tracking in Quicken, "+
@@ -83,8 +78,7 @@ func Test_run_spend_warns_that_a_named_linked_tracking_account_is_left_out(t *te
 }
 
 func Test_run_spend_ranges_a_linked_and_a_reported_named_account_over_the_reported_one(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
 			{ID: "acct-401k", SourceID: 1, Name: "Netskope 401(k)", Type: "retirement", Currency: "USD", Active: true, LinkedTracking: true},
@@ -130,16 +124,14 @@ func Test_run_spend_refuses_an_account_it_cannot_pick(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStore(t, home, spendRows([]store.Account{
 				chequingAccount("acct-chq", 1),
 				{ID: "acct-977", SourceID: 2, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
 				{ID: "acct-812", SourceID: 3, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
 			}))
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), []string{"spend", "--account", c.arg}, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"spend", "--account", c.arg})
 
 			assert.Equal(t, 1, exitCode)
 			assert.Equal(t, c.want, stderr.String())

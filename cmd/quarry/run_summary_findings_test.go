@@ -47,8 +47,7 @@ func summaryOf(t *testing.T) string {
 }
 
 func Test_run_summary_findings_count_a_classified_investment_account_and_an_ignored_id(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	duplicate, brokerage := syncSummaryFindingsFixture(t, home)
 
 	before := summaryOf(t)
@@ -67,9 +66,8 @@ func Test_run_summary_with_a_currency_warns_once_and_counts_every_finding_open_f
 		t.Run(c.name, func(t *testing.T) {
 			home := seedSummaryStore(t)
 			c.setup(t, home)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), []string{"summary", "--currency", "CAD"}, spendEnvAt(&stdout, &stderr, summaryClock))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary", "--currency", "CAD"}, summaryClock)
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Equal(t, "quarry: warning: "+statusIgnoreWarningLead+c.problem+statusIgnoreWarningTail+"\n", stderr.String())

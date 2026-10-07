@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"strconv"
@@ -127,10 +126,8 @@ func Test_run_sql_json_caps_the_rows_and_says_so(t *testing.T) {
 // runSQLArgsOnBuiltStore syncs the accounts fixture under a fresh HOME, then runs sql with args against it.
 func runSQLArgsOnBuiltStore(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
-	var stdout, stderr bytes.Buffer
-	exitCode := run(context.Background(), append([]string{"sql"}, args...), &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), append([]string{"sql"}, args...))
 	return exitCode, stdout.String(), stderr.String()
 }

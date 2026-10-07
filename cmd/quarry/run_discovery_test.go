@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -80,12 +79,10 @@ func Test_run_refuses_a_bad_quicken_path(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			c.setup(t, home)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), []string{"sync", "--quicken", c.quicken}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", c.quicken})
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
@@ -96,13 +93,11 @@ func Test_run_refuses_a_bad_quicken_path(t *testing.T) {
 	}
 
 	t.Run("--quicken names one of two bundles, so discovery never runs", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
+		home := newHome(t)
 		bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
 		require.NoError(t, os.MkdirAll(filepath.Join(quickenDocumentsDir(home), "Other.quicken"), 0o700))
-		var stdout, stderr bytes.Buffer
 
-		exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 		require.Equal(t, 0, exitCode)
 		assert.Empty(t, stderr.String())
@@ -110,12 +105,10 @@ func Test_run_refuses_a_bad_quicken_path(t *testing.T) {
 	})
 
 	t.Run("a valid bundle given as ~/…", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
+		home := newHome(t)
 		v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
-		var stdout, stderr bytes.Buffer
 
-		exitCode := run(context.Background(), []string{"sync", "--quicken", "~/Documents/Home.quicken"}, &stdout, &stderr)
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", "~/Documents/Home.quicken"})
 
 		require.Equal(t, 0, exitCode)
 		assert.Empty(t, stderr.String())
@@ -164,12 +157,10 @@ func Test_run_discovers_the_bundle_from_documents_without_quicken(t *testing.T) 
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			bundleDir := c.setup(t, home)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
 
 			require.Equal(t, 0, exitCode)
 			assert.Empty(t, stderr.String())
@@ -268,12 +259,10 @@ func Test_run_pools_bundles_across_both_documents_folders(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			c.setup(t, home)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
@@ -286,15 +275,13 @@ func Test_run_pools_bundles_across_both_documents_folders(t *testing.T) {
 
 func Test_run_counts_a_bundle_reached_two_ways_once(t *testing.T) {
 	t.Run("~/Documents/Linked.quicken symlinks to the only bundle in the Quicken folder", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
+		home := newHome(t)
 		bundle := v9fixture.OpenBundle(t, quickenDocumentsDir(home))
 		require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents"), 0o700))
 		link := filepath.Join(home, "Documents", "Linked.quicken")
 		require.NoError(t, os.Symlink(bundle.Dir, link))
-		var stdout, stderr bytes.Buffer
 
-		exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
 
 		require.Equal(t, 0, exitCode)
 		assert.Empty(t, stderr.String())
@@ -302,14 +289,12 @@ func Test_run_counts_a_bundle_reached_two_ways_once(t *testing.T) {
 	})
 
 	t.Run("the Quicken folder is symlinked to ~/Documents", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
+		home := newHome(t)
 		bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
 		require.NoError(t, os.MkdirAll(filepath.Dir(quickenDocumentsDir(home)), 0o700))
 		require.NoError(t, os.Symlink(filepath.Join(home, "Documents"), quickenDocumentsDir(home)))
-		var stdout, stderr bytes.Buffer
 
-		exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
 
 		require.Equal(t, 0, exitCode)
 		assert.Empty(t, stderr.String())
@@ -374,12 +359,10 @@ func Test_run_refuses_when_a_discovery_location_is_unreadable(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			c.setup(t, home)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
@@ -391,12 +374,10 @@ func Test_run_refuses_when_a_discovery_location_is_unreadable(t *testing.T) {
 }
 
 func Test_run_sync_names_quicken_path_when_the_only_discovered_bundle_is_not_a_bundle(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "Empty.quicken"), 0o700))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())

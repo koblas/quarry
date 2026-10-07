@@ -22,8 +22,7 @@ func (r *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error
 
 // Swaps http.DefaultTransport, which the shipped wiring's Valet client uses: no t.Parallel.
 func Test_the_shipped_sync_fetches_exchange_rates_from_the_valet_series(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	transport := &recordingTransport{}
 	saved := http.DefaultTransport
 	http.DefaultTransport = transport

@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
@@ -64,8 +63,7 @@ func Test_run_mcp_anomalies_returns_the_anomalies_json_document(t *testing.T) {
 }
 
 func Test_run_mcp_anomalies_refuses_a_future_since_in_its_own_words(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	populatedAnalysisStore(t, home)
 	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
 	defer cancel()
@@ -138,8 +136,7 @@ func Test_run_mcp_recurring_charges_returns_the_recurring_json_document(t *testi
 }
 
 func Test_run_mcp_recurring_charges_refuses_a_future_since_in_its_own_words(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	populatedAnalysisStore(t, home)
 	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
 	defer cancel()
@@ -177,15 +174,6 @@ const (
 	defaultFindingLimit = 50
 	itemsPerFindingCap  = 25
 )
-
-// dataQualityDocument is the findings list document, with findings left as decoded maps for comparison.
-type dataQualityDocument struct {
-	Status   string           `json:"status"`
-	Type     *string          `json:"type"`
-	Counts   map[string]any   `json:"counts"`
-	Findings []map[string]any `json:"findings"`
-	Warnings []string         `json:"warnings"`
-}
 
 func Test_run_mcp_data_quality_returns_the_first_50_open_findings_with_the_ruled_warnings(t *testing.T) {
 	ctx, peer := newStatusPeer(t, syncManyUncategorizedPayees)
@@ -305,33 +293,11 @@ func cutFindings(findings []map[string]any, limit, itemCap int) []map[string]any
 // findingsJSON is quarry findings --json's document over the HOME the test set.
 func findingsJSON(ctx context.Context, t *testing.T) dataQualityDocument {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
-	exitCode := run(ctx, []string{"findings", "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(ctx, []string{"findings", "--json"})
 	require.Equal(t, 0, exitCode, strings.TrimSpace(stderr.String()))
 	var doc dataQualityDocument
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
 	return doc
-}
-
-func callDataQuality(ctx context.Context, t *testing.T, peer *mcpPeer, arguments map[string]any) *sdk.CallToolResult {
-	t.Helper()
-	result, err := peer.session.CallTool(ctx, &sdk.CallToolParams{Name: "data_quality", Arguments: arguments})
-	require.NoError(t, err)
-	return result
-}
-
-// syncStatusDocument is the part of sync_status's result these tests read.
-type syncStatusDocument struct {
-	statusFindingsJSON
-
-	Store struct {
-		Rows struct {
-			Accounts int `json:"accounts"`
-		} `json:"rows"`
-	} `json:"store"`
-	Snapshot struct {
-		ID string `json:"id"`
-	} `json:"snapshot"`
 }
 
 func Test_run_mcp_sync_status_returns_the_status_json_document(t *testing.T) {
@@ -376,8 +342,7 @@ func Test_run_mcp_sync_status_answers_when_the_config_is_unreadable(t *testing.T
 
 func Test_run_mcp_sync_status_sees_a_sync_between_calls(t *testing.T) {
 	t.Run("a re-sync shows the new store", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
+		home := newHome(t)
 		snapshots := filepath.Join(storeDirUnder(home), "snapshots")
 		exitCode, _, stderr := syncNewBundle(t, home, "DocumentsA", accountsBuilder("Chequing"))
 		require.Equal(t, 0, exitCode, stderr)
@@ -401,8 +366,7 @@ func Test_run_mcp_sync_status_sees_a_sync_between_calls(t *testing.T) {
 	})
 
 	t.Run("the config is read on every call", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
+		home := newHome(t)
 		duplicate := syncStatusFindingsFixture(t, home)
 		ctx, peer := startStatusPeer(t)
 		before := readSyncStatus(ctx, t, peer)
@@ -419,8 +383,7 @@ func Test_run_mcp_sync_status_sees_a_sync_between_calls(t *testing.T) {
 }
 
 func Test_run_mcp_sync_status_refuses_a_store_without_an_import_run(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
 	editStore(t, home, "DELETE FROM import_runs")
 	var cliStdout, cliStderr bytes.Buffer
@@ -449,45 +412,10 @@ func accountsBuilder(names ...string) *v9fixture.Builder {
 	return b
 }
 
-// newStatusPeer sets a fresh HOME, lets seed build the store under it, and connects a client to quarry mcp.
-func newStatusPeer(t *testing.T, seed func(t *testing.T, home string)) (context.Context, *mcpPeer) {
-	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	seed(t, home)
-	return startStatusPeer(t)
-}
-
-// startStatusPeer connects a client to quarry mcp over the HOME the test already set.
-func startStatusPeer(t *testing.T) (context.Context, *mcpPeer) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
-	t.Cleanup(cancel)
-	return ctx, startMCP(ctx, t, func(*cli.Env) {})
-}
-
 // statusJSON is quarry status --json's stdout over the HOME the test set.
 func statusJSON(ctx context.Context, t *testing.T) string {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
-	exitCode := run(ctx, []string{"status", "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(ctx, []string{"status", "--json"})
 	require.Equal(t, 0, exitCode, strings.TrimSpace(stderr.String()))
 	return stdout.String()
-}
-
-func callSyncStatus(ctx context.Context, t *testing.T, peer *mcpPeer) *sdk.CallToolResult {
-	t.Helper()
-	result, err := peer.session.CallTool(ctx, &sdk.CallToolParams{Name: "sync_status", Arguments: map[string]any{}})
-	require.NoError(t, err)
-	return result
-}
-
-// readSyncStatus calls sync_status and decodes the document it returns.
-func readSyncStatus(ctx context.Context, t *testing.T, peer *mcpPeer) syncStatusDocument {
-	t.Helper()
-	result := callSyncStatus(ctx, t, peer)
-	require.False(t, result.IsError, textOf(result))
-	var doc syncStatusDocument
-	require.NoError(t, json.Unmarshal([]byte(textOf(result)), &doc))
-	return doc
 }

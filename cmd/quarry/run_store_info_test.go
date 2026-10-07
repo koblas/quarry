@@ -19,8 +19,7 @@ import (
 )
 
 func Test_run_stamps_the_store_with_its_format_and_the_build(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})

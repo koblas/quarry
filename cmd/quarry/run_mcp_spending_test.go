@@ -105,8 +105,7 @@ func Test_run_mcp_spending_reads_the_config_only_when_currency_is_absent(t *test
 	}
 
 	t.Run("currency absent, config unparseable", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
+		home := newHome(t)
 		populatedAnalysisStore(t, home)
 		writeConfig(t, home, unparseableConfig)
 		ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
@@ -162,8 +161,7 @@ func Test_run_mcp_spending_refuses_a_bad_window_in_mcp_words(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			populatedAnalysisStore(t, home)
 			ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
 			defer cancel()
@@ -186,8 +184,7 @@ func Test_run_mcp_spending_refuses_an_account_without_its_name_on_stderr(t *test
 }
 
 func Test_run_mcp_spending_words_its_warnings_with_the_tool_name(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	populatedAnalysisStore(t, home)
 	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
 	defer cancel()
@@ -480,8 +477,7 @@ func Test_run_mcp_monthly_summary_refuses_a_month_in_mcp_words(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			seedSummaryStoreAt(t, home)
 			ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
 			defer cancel()

@@ -55,8 +55,7 @@ const netWorthNoRatesNote = "quarry: warning: the store has no exchange rates, s
 // 2026-01-20, and no exchange rates.
 func seedNetWorthCADOnlyStore(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	card := store.Account{ID: "acct-card", SourceID: 3, Name: "Card", Type: "credit_card", Currency: "CAD", Active: true}
 	replaceStore(t, home, spendRows([]store.Account{chequingAccount("acct-cad", 1), card},
 		spendSplit{id: "cad", account: "acct-cad", currency: "CAD", day: day(2026, time.January, 15), cents: 100_000},

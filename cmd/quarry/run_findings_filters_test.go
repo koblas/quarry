@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -90,13 +89,11 @@ func quotedList(items []string) string {
 }
 
 func Test_run_findings_status_all_type_duplicate_marks_ignored_shows_fixed_as_a_date_line_and_counts_duplicates_only(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	inZone(t, time.FixedZone("UTC-5", -5*60*60))
 	ids := syncFiltersStore(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--status", "all", "--type", "duplicate"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--status", "all", "--type", "duplicate"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -114,13 +111,11 @@ func Test_run_findings_status_all_type_duplicate_marks_ignored_shows_fixed_as_a_
 }
 
 func Test_run_findings_status_fixed_lists_only_the_fixed_finding_as_a_date_line(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	inZone(t, time.UTC)
 	ids := syncFiltersStore(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--status", "fixed"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--status", "fixed"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -128,12 +123,10 @@ func Test_run_findings_status_fixed_lists_only_the_fixed_finding_as_a_date_line(
 }
 
 func Test_run_findings_status_ignored_lists_only_the_ignored_finding_without_a_marker_or_hint(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	ids := syncFiltersStore(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--status", "ignored"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--status", "ignored"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -147,14 +140,12 @@ func Test_run_findings_status_ignored_lists_only_the_ignored_finding_without_a_m
 }
 
 func Test_run_findings_type_duplicate_warns_about_an_unmatched_id_but_not_one_the_type_filters_out(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	sync := syncFiltersBundle(t, home, "DocumentsA", true)
 	const unmatched = "duplicate:txn-9998+txn-9999"
 	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [%s]\n", quotedList([]string{sync.uncategorized, unmatched})))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--type", "duplicate"}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"findings", "--type", "duplicate"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: "+configShown+": findings.ignore lists \""+unmatched+
@@ -162,13 +153,11 @@ func Test_run_findings_type_duplicate_warns_about_an_unmatched_id_but_not_one_th
 }
 
 func Test_run_findings_json_status_all_type_duplicate_prints_each_finding_with_its_status_and_fixed_at(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	ids := syncFiltersStore(t, home)
 	pinFirstFoundAt(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--json", "--status", "all", "--type", "duplicate"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--status", "all", "--type", "duplicate"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {

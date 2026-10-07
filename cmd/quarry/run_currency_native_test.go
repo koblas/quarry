@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"slices"
@@ -96,8 +95,7 @@ var nativeCommands = []struct {
 // runNative runs args with --currency native and fails t unless it exits 0 and prints nothing on stderr.
 func runNative(t *testing.T, args ...string) string {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
-	exitCode := runWith(context.Background(), append(slices.Clone(args), "--currency", "native"), spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), append(slices.Clone(args), "--currency", "native"))
 	require.Equal(t, 0, exitCode, stderr.String())
 	require.Empty(t, stderr.String())
 	return stdout.String()
@@ -115,8 +113,7 @@ func Test_run_currency_native_reproduces_the_pre_fx_output(t *testing.T) {
 			name = "a store without rates"
 		}
 		t.Run(name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			if withRates {
 				replaceStoreWithRates(t, home, nativeStoreRows(), rates...)
 			} else {

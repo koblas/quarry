@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -30,8 +29,7 @@ type unconvertedDoc struct {
 }
 
 func Test_run_spend_lists_a_split_before_the_first_rate_in_its_own_currency_and_warns(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, spendRows(
 		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -12345},
@@ -41,9 +39,7 @@ func Test_run_spend_lists_a_split_before_the_first_rate_in_its_own_currency_and_
 	), rateOnJan2)
 
 	t.Run("text", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := runWith(context.Background(), []string{"spend"}, spendEnv(&stdout, &stderr))
+		exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"spend"})
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Equal(t, "quarry: warning: "+beforeFirstRateLine+"\n", stderr.String())
@@ -74,16 +70,14 @@ func Test_run_spend_lists_a_split_before_the_first_rate_in_its_own_currency_and_
 func Test_run_spend_without_rates_lists_each_currency_natively_and_warns_only_when_a_conversion_is_needed(t *testing.T) {
 	const row = "%-14s  %-8s  %6s\n"
 	t.Run("CAD and USD data warns that there are no rates", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
+		home := newHome(t)
 		replaceStore(t, home, spendRows(
 			[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 			spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -12345},
 			spendSplit{id: "s02", account: "acct-usd", category: "cat-groceries", currency: "USD", day: day(2026, 4, 1), cents: -1000},
 		))
-		var stdout, stderr bytes.Buffer
 
-		exitCode := runWith(context.Background(), []string{"spend"}, spendEnv(&stdout, &stderr))
+		exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"spend"})
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Equal(t, "quarry: warning: "+noRatesLine+"\n", stderr.String())
@@ -99,15 +93,13 @@ func Test_run_spend_without_rates_lists_each_currency_natively_and_warns_only_wh
 	})
 
 	t.Run("all-CAD data in CAD needs no conversion and stays quiet", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
+		home := newHome(t)
 		replaceStore(t, home, spendRows(
 			[]store.Account{chequingAccount("acct-cad", 1)},
 			spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -12345},
 		))
-		var stdout, stderr bytes.Buffer
 
-		exitCode := runWith(context.Background(), []string{"spend"}, spendEnv(&stdout, &stderr))
+		exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"spend"})
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Empty(t, stderr.String())
@@ -124,8 +116,7 @@ func Test_run_spend_without_rates_lists_each_currency_natively_and_warns_only_wh
 // runSpendUnconverted runs spend --json and returns its document and stderr.
 func runSpendUnconverted(t *testing.T, args ...string) (unconvertedDoc, string) {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
-	exitCode := runWith(context.Background(), append([]string{"spend", "--json"}, args...), spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"spend", "--json"}, args...))
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc unconvertedDoc
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
@@ -168,13 +159,11 @@ func Test_run_spend_in_usd_without_rates_warns_only_when_a_conversion_is_needed(
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStore(t, home, spendRows([]store.Account{c.account}, c.split))
 			args := []string{"--currency", "USD"}
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), append([]string{"spend"}, args...), spendEnv(&stdout, &stderr))
+			exitCode, _, stderr := runSpendCapture(context.Background(), append([]string{"spend"}, args...))
 			doc, echoedStderr := runSpendUnconverted(t, args...)
 
 			require.Equal(t, 0, exitCode, stderr.String())
@@ -186,8 +175,7 @@ func Test_run_spend_in_usd_without_rates_warns_only_when_a_conversion_is_needed(
 }
 
 func Test_run_spend_warns_once_per_report_with_the_count_of_its_own_accounts_and_currency(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, spendRows(
 		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -12345},
@@ -209,9 +197,7 @@ func Test_run_spend_warns_once_per_report_with_the_count_of_its_own_accounts_and
 
 	for _, c := range cells {
 		t.Run(c.name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			exitCode := runWith(context.Background(), append([]string{"spend"}, c.args...), spendEnv(&stdout, &stderr))
+			exitCode, _, stderr := runSpendCapture(context.Background(), append([]string{"spend"}, c.args...))
 			doc, echoedStderr := runSpendUnconverted(t, c.args...)
 
 			require.Equal(t, 0, exitCode, stderr.String())
@@ -223,8 +209,7 @@ func Test_run_spend_warns_once_per_report_with_the_count_of_its_own_accounts_and
 }
 
 func Test_run_spend_by_month_lists_the_other_currency_only_in_the_month_that_holds_it(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, spendRows(
 		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 		spendSplit{id: "s01", account: "acct-usd", category: "cat-fuel", currency: "USD", day: day(2026, 1, 1), cents: -1000},
@@ -235,9 +220,7 @@ func Test_run_spend_by_month_lists_the_other_currency_only_in_the_month_that_hol
 	wantRows := []string{"2026-01 CAD", "2026-01 USD", "2026-02 CAD", "2026-03 CAD"}
 
 	t.Run("text", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := runWith(context.Background(), append([]string{"spend"}, args...), spendEnv(&stdout, &stderr))
+		exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"spend"}, args...))
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Equal(t, "Spending 2026-01-01 to 2026-03-31 in all accounts, amounts in CAD\n\n"+
@@ -251,9 +234,7 @@ func Test_run_spend_by_month_lists_the_other_currency_only_in_the_month_that_hol
 	})
 
 	t.Run("json", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := runWith(context.Background(), append([]string{"spend", "--json"}, args...), spendEnv(&stdout, &stderr))
+		exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"spend", "--json"}, args...))
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		var doc struct {
@@ -271,9 +252,7 @@ func Test_run_spend_by_month_lists_the_other_currency_only_in_the_month_that_hol
 	})
 
 	t.Run("native fills every currency in every month", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := runWith(context.Background(), append([]string{"spend", "--currency", "native"}, args...), spendEnv(&stdout, &stderr))
+		exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"spend", "--currency", "native"}, args...))
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Equal(t, 6, strings.Count(stdout.String(), "\n2026-0"), stdout.String())
@@ -281,15 +260,13 @@ func Test_run_spend_by_month_lists_the_other_currency_only_in_the_month_that_hol
 }
 
 func Test_run_spend_of_an_unrated_empty_window_gives_only_the_empty_window_note(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, spendRows(
 		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 		spendSplit{id: "s01", account: "acct-usd", category: "cat-fuel", currency: "USD", day: day(2026, 3, 10), cents: -1000},
 	))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"spend", "--since", "2020-01-01", "--until", "2020-12-31"}, spendEnv(&stdout, &stderr))
+	exitCode, _, stderr := runSpendCapture(context.Background(), []string{"spend", "--since", "2020-01-01", "--until", "2020-12-31"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	const note = "no spending from 2020-01-01 to 2020-12-31; the store's transactions run 2026-03-10 to 2026-03-10"
@@ -300,16 +277,14 @@ func Test_run_spend_of_an_unrated_empty_window_gives_only_the_empty_window_note(
 }
 
 func Test_run_spend_by_month_of_an_empty_window_lists_no_rows_beside_the_empty_window_note(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, spendRows(
 		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 		spendSplit{id: "s01", account: "acct-usd", category: "cat-fuel", currency: "USD", day: day(2026, 3, 10), cents: -1000},
 	), rateOnJan2)
 	args := []string{"--by", "month", "--since", "2020-01", "--until", "2020-03"}
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), append([]string{"spend"}, args...), spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"spend"}, args...))
 	doc, _ := runSpendUnconverted(t, args...)
 
 	require.Equal(t, 0, exitCode, stderr.String())
@@ -321,16 +296,14 @@ func Test_run_spend_by_month_of_an_empty_window_lists_no_rows_beside_the_empty_w
 }
 
 func Test_run_spend_by_month_of_a_window_holding_only_unconverted_rows_still_lists_the_report_currency_zero_rows(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, spendRows(
 		[]store.Account{usdChequingAccount("acct-usd", 2)},
 		spendSplit{id: "s01", account: "acct-usd", category: "cat-fuel", currency: "USD", day: day(2025, 12, 20), cents: -1000},
 	), rateOnJan2)
 	args := []string{"--by", "month", "--since", "2025-11", "--until", "2025-12"}
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), append([]string{"spend"}, args...), spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"spend"}, args...))
 	doc, _ := runSpendUnconverted(t, args...)
 
 	require.Equal(t, 0, exitCode, stderr.String())

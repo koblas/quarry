@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -12,8 +11,7 @@ import (
 )
 
 func Test_run_sql_sums_net_worth_by_type_and_currency_over_the_accounts_quickens_reports_count(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	day := func(d int) time.Time { return time.Date(2026, time.March, d, 0, 0, 0, 0, time.UTC) }
 	closed := chequingAccount("acct-closed", 2)
 	closed.Name, closed.Closed, closed.Active = "Old Chequing", true, false
@@ -32,9 +30,8 @@ func Test_run_sql_sums_net_worth_by_type_and_currency_over_the_accounts_quickens
 	replaceStoreWithRates(t, home, rows, usdRate(day(5), 1_250_000))
 	const query = `SELECT date, type, currency, accounts, balance, balance_cad, balance_usd
 		FROM v_net_worth WHERE date = '2026-03-10' ORDER BY currency`
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sql", "--csv", query}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "--csv", query})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

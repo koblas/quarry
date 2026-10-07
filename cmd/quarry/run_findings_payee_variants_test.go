@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -37,12 +36,10 @@ func syncTimHortons(t *testing.T, home string) (int64, int64) {
 }
 
 func Test_run_findings_lists_payee_variants_with_a_row_per_payee(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncTimHortons(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--type", "payee-variants"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--type", "payee-variants"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -57,12 +54,10 @@ Ignore a finding by adding its id to findings.ignore in %s; see quarry findings 
 }
 
 func Test_run_findings_json_gives_a_payee_variants_item_its_payee_and_count_and_null_transaction_fields(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	numberedPK, plainPK := syncTimHortons(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--json", "--type", "payee-variants"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--type", "payee-variants"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {

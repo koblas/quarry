@@ -43,8 +43,7 @@ func Test_run_cashflow_total_spent_equals_spend_total_per_currency(t *testing.T)
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			rows := cashFlowRows(
 				[]store.Account{
 					chequingAccount("acct-cad", 1),
@@ -102,8 +101,7 @@ func Test_run_cashflow_spent_equals_spend_total_in_every_reporting_currency(t *t
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStoreWithRates(t, home, cashFlowRows(
 				[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 				spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -10000},

@@ -18,8 +18,7 @@ func snapshotsKeepConfig(keep int) string {
 
 func Test_run_snapshots_prune_uses_snapshots_keep_when_keep_is_not_given(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 	writeConfig(t, home, snapshotsKeepConfig(3))
@@ -70,8 +69,7 @@ func Test_run_snapshots_prune_keep_flag_overrides_snapshots_keep(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			pinLocalZone(t)
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			dir := writeSnapshots(t, home, fiveSnapshots()...)
 			writeConfig(t, home, snapshotsKeepConfig(c.configKeep))
 
@@ -86,8 +84,7 @@ func Test_run_snapshots_prune_keep_flag_overrides_snapshots_keep(t *testing.T) {
 }
 
 func Test_run_snapshots_prune_says_nothing_to_delete_when_snapshots_keep_equals_the_snapshot_count(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, snapshotsKeepConfig(5))
 
@@ -101,8 +98,7 @@ func Test_run_snapshots_prune_says_nothing_to_delete_when_snapshots_keep_equals_
 
 func Test_run_snapshots_prune_deletes_exactly_the_oldest_when_snapshots_keep_is_one_below_the_count(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, snapshotsKeepConfig(4))
 
@@ -119,8 +115,7 @@ func Test_run_snapshots_prune_deletes_exactly_the_oldest_when_snapshots_keep_is_
 
 func Test_run_snapshots_prune_accepts_snapshots_keep_of_one(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, snapshotsKeepConfig(1))
 

@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -40,8 +39,7 @@ func stringMap(t *testing.T, db *duckdb.DB, query string) map[string]string {
 
 // No ZTRANSFER legs, so Rows counts 0 transfers and Transfers says none.
 func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -70,9 +68,8 @@ func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 	b.LinkUserTag(split3PK, businessPK)
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	require.Empty(t, stderr.String())
@@ -161,8 +158,7 @@ func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 }
 
 func Test_run_refuses_an_unmappable_value_and_keeps_the_snapshot(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	quarryDir := filepath.Join(home, "Library", "Application Support", "quarry")
 	require.NoError(t, os.MkdirAll(quarryDir, 0o700))
 	storePath := filepath.Join(quarryDir, "quarry.duckdb")
@@ -171,9 +167,8 @@ func Test_run_refuses_an_unmappable_value_and_keeps_the_snapshot(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Euro Savings", Type: "SAVINGS", Currency: "EUR", Active: true})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())

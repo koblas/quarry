@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -74,12 +73,10 @@ func viewRows() store.Rows {
 }
 
 func Test_run_sql_cash_flow_keeps_only_real_income_and_spending(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, viewRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sql", "SELECT split_id, flow, amount FROM v_cash_flow ORDER BY split_id"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "SELECT split_id, flow, amount FROM v_cash_flow ORDER BY split_id"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -96,12 +93,10 @@ func Test_run_sql_cash_flow_keeps_only_real_income_and_spending(t *testing.T) {
 }
 
 func Test_run_sql_spending_nets_refunds_against_their_category(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, viewRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sql", "SELECT category, sum(spent) AS spent FROM v_spending GROUP BY category ORDER BY category"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "SELECT category, sum(spent) AS spent FROM v_spending GROUP BY category ORDER BY category"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

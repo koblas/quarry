@@ -68,11 +68,9 @@ func Test_run_read_commands_refuse_when_there_is_no_store(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
-			var stdout, stderr bytes.Buffer
+			home := newHome(t)
 
-			exitCode := run(context.Background(), c.args, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
@@ -119,12 +117,10 @@ func Test_run_read_commands_refuse_a_bad_reporting_currency(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			writeConfig(t, home, c.config+"\n")
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), c.args, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
@@ -134,12 +130,10 @@ func Test_run_read_commands_refuse_a_bad_reporting_currency(t *testing.T) {
 }
 
 func Test_run_status_refuses_a_store_built_by_another_version(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeStoreFixture(t, home, phaseOneImportRunsDDL)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -151,14 +145,12 @@ func Test_run_status_refuses_a_store_built_by_another_version(t *testing.T) {
 // assertRefusesAnOlderStore runs command against a store built by format version 2 and asserts the rebuild refusal.
 func assertRefusesAnOlderStore(t *testing.T, command string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeStoreFixture(t, home, phaseOneImportRunsDDL+
 		"CREATE TABLE store_info (format_version INTEGER, quarry_version VARCHAR, built_at TIMESTAMP);"+
 		"INSERT INTO store_info VALUES (2, '0.2.0', TIMESTAMP '2026-09-27 14:30:05');")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{command}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{command})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -184,13 +176,11 @@ func Test_run_acb_refuses_a_store_built_by_an_older_quarry(t *testing.T) {
 }
 
 func Test_run_status_refuses_a_store_whose_store_info_has_no_row(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeStoreFixture(t, home, phaseOneImportRunsDDL+
 		"CREATE TABLE store_info (format_version INTEGER, quarry_version VARCHAR, built_at TIMESTAMP);")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -200,13 +190,11 @@ func Test_run_status_refuses_a_store_whose_store_info_has_no_row(t *testing.T) {
 }
 
 func Test_run_accounts_refuses_a_store_that_is_not_a_duckdb_file(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
 	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("not a database\n"), 0o600))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -216,8 +204,7 @@ func Test_run_accounts_refuses_a_store_that_is_not_a_duckdb_file(t *testing.T) {
 }
 
 func Test_run_status_refuses_a_store_removed_while_it_opens(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
 	var stdout, stderr bytes.Buffer
 	env := testEnv(&stdout, &stderr)
@@ -254,14 +241,12 @@ func Test_run_read_commands_report_an_interrupt_during_the_open(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			syncAccountsFixture(t, home)
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(ctx, c.args, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(ctx, c.args)
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
@@ -281,13 +266,11 @@ func editStore(t *testing.T, home, stmt string) {
 }
 
 func Test_run_accounts_refuses_a_store_that_cannot_be_read(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
 	editStore(t, home, "DROP VIEW v_account_balances")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -297,13 +280,11 @@ func Test_run_accounts_refuses_a_store_that_cannot_be_read(t *testing.T) {
 }
 
 func Test_run_status_refuses_a_store_without_an_import_run(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
 	editStore(t, home, "DELETE FROM import_runs")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -37,9 +36,8 @@ func Test_run_anomalies_lists_a_margin_interest_charge_against_its_categorys_ear
 		return time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC)
 	}, amounts...)
 	syncedHome(t, b)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"anomalies"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -53,9 +51,8 @@ func Test_run_anomalies_counts_a_margin_interest_charge_of_100_or_more_with_no_h
 		return time.Date(2026, time.March, 1+i, 0, 0, 0, 0, time.UTC)
 	}, "-20.00", "-30.00", "-150.00")
 	syncedHome(t, b)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"anomalies"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -84,9 +81,8 @@ func marginInterestAndNetflixFixture() *v9fixture.Builder {
 
 func Test_run_recurring_finds_no_series_in_investment_rows_that_have_no_payee(t *testing.T) {
 	syncedHome(t, marginInterestAndNetflixFixture())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"recurring"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -98,9 +94,8 @@ func Test_run_recurring_finds_no_series_in_investment_rows_that_have_no_payee(t 
 
 func Test_run_spend_by_payee_puts_margin_interest_in_the_no_payee_bucket(t *testing.T) {
 	syncedHome(t, marginInterestAndNetflixFixture())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"spend", "--by", "payee"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"spend", "--by", "payee"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

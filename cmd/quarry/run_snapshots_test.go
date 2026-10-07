@@ -99,8 +99,7 @@ func olderPair() []snapshotFixture {
 
 func Test_run_snapshots_lists_newest_first_marks_the_stores_snapshot_and_totals_the_size(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home,
 		snapshotFixture{id: "20260927T143005Z", bytes: oldestBytes, taken: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), source: homeQuicken, verified: true},
 		snapshotFixture{id: "20260930T141502Z", bytes: middleBytes, taken: time.Date(2026, 9, 30, 14, 15, 2, 0, time.UTC), source: homeQuicken, verified: true},
@@ -122,8 +121,7 @@ func Test_run_snapshots_lists_newest_first_marks_the_stores_snapshot_and_totals_
 
 func Test_run_snapshots_warns_about_an_unknown_config_key_and_still_lists(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home, olderPair()...)
 	writeConfig(t, home, "snapshot.keep = 3\n")
 
@@ -140,8 +138,7 @@ func Test_run_snapshots_warns_about_an_unknown_config_key_and_still_lists(t *tes
 
 func Test_run_snapshots_marks_a_schema_mismatch_and_a_missing_manifest(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home,
 		snapshotFixture{id: "20260927T143005Z", bytes: oldestBytes},
 		snapshotFixture{id: "20260929T090011Z", bytes: middleBytes, taken: time.Date(2026, 9, 29, 9, 0, 11, 0, time.UTC), source: homeQuicken},
@@ -159,8 +156,7 @@ func Test_run_snapshots_marks_a_schema_mismatch_and_a_missing_manifest(t *testin
 }
 
 func Test_run_snapshots_with_none_taken_yet_says_how_to_take_one(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	exitCode, stdout, stderr := runSnapshots(t)
 
@@ -172,8 +168,7 @@ func Test_run_snapshots_with_none_taken_yet_says_how_to_take_one(t *testing.T) {
 
 func Test_run_snapshots_warns_when_the_store_cannot_be_read(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home, olderPair()...)
 	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
 

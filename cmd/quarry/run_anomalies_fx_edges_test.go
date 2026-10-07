@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -21,9 +20,8 @@ const (
 // runAnomaliesOK runs quarry anomalies with args and returns stdout and stderr; it must exit 0.
 func runAnomaliesOK(t *testing.T, args ...string) (string, string) {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), append([]string{"anomalies"}, args...), spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"anomalies"}, args...))
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	return stdout.String(), stderr.String()
@@ -51,8 +49,7 @@ func usdRate(date time.Time, rate int64) store.Rate {
 // anomaliesStore stores charges on accounts under a fresh HOME, with rates when any are given.
 func anomaliesStore(t *testing.T, accounts []store.Account, charges []chargeTxn, rates ...store.Rate) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	if len(rates) == 0 {
 		replaceStore(t, home, chargeRows(accounts, charges...))
 		return

@@ -44,12 +44,10 @@ func summaryNativeRows() store.Rows {
 }
 
 func Test_run_summary_lists_cad_and_usd_separately_with_native(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, summaryNativeRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"summary", "--currency", "native"}, spendEnvAt(&stdout, &stderr, summaryClock))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary", "--currency", "native"}, summaryClock)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Summary of September 2026 (2026-09-01 to 2026-09-30)\n\n"+
@@ -76,16 +74,14 @@ func Test_run_summary_lists_cad_and_usd_separately_with_native(t *testing.T) {
 }
 
 func Test_run_summary_counts_a_type_without_a_balance_on_the_first_month_end_as_zero_in_the_change(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	card := store.Account{ID: "acct-card", SourceID: 2, Name: "Card", Type: "credit_card", Currency: "CAD", Active: true}
 	replaceStore(t, home, spendRows([]store.Account{chequingAccount("acct-cad", 1), card},
 		spendSplit{id: "cad-aug", account: "acct-cad", currency: "CAD", day: day(2026, time.August, 15), cents: 100_000},
 		spendSplit{id: "card-sep", account: "acct-card", currency: "CAD", day: day(2026, time.September, 10), cents: -5_000},
 	))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"summary"}, spendEnvAt(&stdout, &stderr, summaryClock))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary"}, summaryClock)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "\nNet worth at each month end 2026-08-31 to 2026-09-30, amounts in CAD\n\n"+

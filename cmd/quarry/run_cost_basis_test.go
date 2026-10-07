@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -15,8 +14,7 @@ import (
 )
 
 func Test_run_sync_keeps_quickens_cost_basis_and_stores_null_for_none(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	b := v9fixture.NewBuilder()
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
@@ -36,9 +34,8 @@ func Test_run_sync_keeps_quickens_cost_basis_and_stores_null_for_none(t *testing
 	dividendPK := invest(10, v9fixture.TransactionRow{Amount: "12"})
 	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "16"})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	require.Empty(t, stderr.String())

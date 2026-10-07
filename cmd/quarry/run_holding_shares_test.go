@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"path/filepath"
 	"testing"
@@ -16,8 +15,7 @@ const holdingSpansQuery = `SELECT concat_ws(' ', CAST(from_date AS VARCHAR), COA
 FROM holding_shares ORDER BY from_date`
 
 func Test_run_sync_records_each_holdings_share_count_over_time(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	buyDay := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	twoBuysDay := buyDay.AddDate(0, 0, 1)
 	splitDay := buyDay.AddDate(0, 0, 2)
@@ -40,9 +38,8 @@ func Test_run_sync_records_each_holdings_share_count_over_time(t *testing.T) {
 	invest(3, futureDay, v9fixture.TransactionRow{Units: "3", Amount: "-30.00"})
 	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "9"})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "Shares    1 holding matches Quicken's share count\n")

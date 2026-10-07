@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -16,8 +15,7 @@ import (
 
 func Test_run_snapshots_prune_dry_run_lists_what_it_would_delete_and_deletes_nothing(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 
@@ -33,8 +31,7 @@ func Test_run_snapshots_prune_dry_run_lists_what_it_would_delete_and_deletes_not
 }
 
 func Test_run_snapshots_prune_dry_run_refuses_when_the_store_cannot_be_read(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
 	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
@@ -49,8 +46,7 @@ func Test_run_snapshots_prune_dry_run_refuses_when_the_store_cannot_be_read(t *t
 
 func Test_run_snapshots_prune_dry_run_uses_snapshots_keep(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 	writeConfig(t, home, snapshotsKeepConfig(3))
@@ -67,8 +63,7 @@ func Test_run_snapshots_prune_dry_run_uses_snapshots_keep(t *testing.T) {
 }
 
 func Test_run_snapshots_prune_dry_run_refuses_a_bad_config(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, "snapshots.keep = 0\n")
 
@@ -81,8 +76,7 @@ func Test_run_snapshots_prune_dry_run_refuses_a_bad_config(t *testing.T) {
 }
 
 func Test_run_snapshots_prune_dry_run_says_nothing_to_delete_within_the_cap(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 
 	exitCode, stdout, stderr := runPrune(t, "--dry-run")
@@ -94,8 +88,7 @@ func Test_run_snapshots_prune_dry_run_says_nothing_to_delete_within_the_cap(t *t
 }
 
 func Test_run_snapshots_prune_dry_run_says_nothing_to_delete_with_no_snapshots_folder(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	newHome(t)
 
 	exitCode, stdout, stderr := runPrune(t, "--dry-run")
 
@@ -105,8 +98,7 @@ func Test_run_snapshots_prune_dry_run_says_nothing_to_delete_with_no_snapshots_f
 }
 
 func Test_run_snapshots_prune_dry_run_says_nothing_to_delete_beside_an_unreadable_store(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home, fiveSnapshots()...)
 	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
 	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
@@ -121,8 +113,7 @@ func Test_run_snapshots_prune_dry_run_says_nothing_to_delete_beside_an_unreadabl
 func Test_run_snapshots_prune_dry_run_names_the_stores_snapshot_when_it_lies_beyond_the_newest_n(t *testing.T) {
 	pinLocalZone(t)
 	const storeSnapshot = "20260801T120000Z"
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home,
 		pruneFixture(storeSnapshot, keptBytes, time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)),
 		pruneFixture(pruneOldest, oldestBytes, time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC)),
@@ -144,8 +135,7 @@ func Test_run_snapshots_prune_dry_run_names_the_stores_snapshot_when_it_lies_bey
 
 func Test_run_snapshots_prune_dry_run_reports_a_folder_it_cannot_read(t *testing.T) {
 	skipAsRoot(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	require.NoError(t, os.Chmod(dir, 0o000))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
@@ -164,14 +154,12 @@ func Test_run_snapshots_prune_dry_run_reports_a_folder_it_cannot_read(t *testing
 }
 
 func Test_run_snapshots_prune_dry_run_is_interrupted_before_the_store_read(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(ctx, []string{"snapshots", "prune", "--keep", "1", "--dry-run"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(ctx, []string{"snapshots", "prune", "--keep", "1", "--dry-run"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -191,8 +179,7 @@ func Test_run_snapshots_prune_dry_run_counts_the_cap_exactly(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			pinLocalZone(t)
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			dir := writeSnapshots(t, home, fiveSnapshots()...)
 			buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 

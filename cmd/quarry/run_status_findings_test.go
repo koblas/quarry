@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -40,13 +39,11 @@ func syncStatusFindingsFixture(t *testing.T, home string) string {
 }
 
 func Test_run_status_shows_the_findings_line_with_open_and_ignored_counts(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	duplicate := syncStatusFindingsFixture(t, home)
 	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [%q]\n", duplicate))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -54,13 +51,11 @@ func Test_run_status_shows_the_findings_line_with_open_and_ignored_counts(t *tes
 }
 
 func Test_run_status_warns_on_a_bad_config_and_still_reports(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	duplicate := syncStatusFindingsFixture(t, home)
 	writeConfig(t, home, fmt.Sprintf("[snapshots]\nkeep = 0\n[findings]\nignore = [%q]\n", duplicate))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: cannot tell which findings you ignored or how you classified your accounts: "+configShown+
@@ -115,13 +110,11 @@ func statusConfigRefusals() []statusConfigRefusal {
 func Test_run_status_warns_once_and_counts_every_finding_open_for_each_kind_of_bad_config(t *testing.T) {
 	for _, c := range statusConfigRefusals() {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			syncStatusFindingsFixture(t, home)
 			c.setup(t, home)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Equal(t, "quarry: warning: "+statusIgnoreWarningLead+c.problem+statusIgnoreWarningTail+"\n", stderr.String())
@@ -145,13 +138,11 @@ type statusFindingsJSON struct {
 func Test_run_status_json_carries_the_config_warning_unprefixed_and_a_null_ignored_count_for_each_kind_of_bad_config(t *testing.T) {
 	for _, c := range statusConfigRefusals() {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			syncStatusFindingsFixture(t, home)
 			c.setup(t, home)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), []string{"status", "--json"}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{"status", "--json"})
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			var got statusFindingsJSON
@@ -165,13 +156,11 @@ func Test_run_status_json_carries_the_config_warning_unprefixed_and_a_null_ignor
 }
 
 func Test_run_status_json_reports_the_findings_counts_with_the_ignore_list(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	duplicate := syncStatusFindingsFixture(t, home)
 	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [%q]\n", duplicate))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status", "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -186,13 +175,11 @@ func Test_run_status_json_reports_the_findings_counts_with_the_ignore_list(t *te
 }
 
 func Test_run_status_stays_silent_on_unknown_keys_and_unmatched_ignore_ids(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncStatusFindingsFixture(t, home)
 	writeConfig(t, home, "[snapshot]\nkeep = 3\n[findings]\nignore = [\"uncategorized:payee-999\"]\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status", "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -203,12 +190,10 @@ func Test_run_status_stays_silent_on_unknown_keys_and_unmatched_ignore_ids(t *te
 }
 
 func Test_run_status_reports_every_finding_open_without_a_warning_when_there_is_no_config_file(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncStatusFindingsFixture(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -216,12 +201,10 @@ func Test_run_status_reports_every_finding_open_without_a_warning_when_there_is_
 }
 
 func Test_run_status_refuses_a_missing_store_without_reading_the_config(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[snapshots]\nkeep = 0\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -229,15 +212,13 @@ func Test_run_status_refuses_a_missing_store_without_reading_the_config(t *testi
 }
 
 func Test_run_status_refuses_a_store_whose_findings_cannot_be_read_without_the_config_warning(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncStatusFindingsFixture(t, home)
 	editStore(t, home, "DROP TABLE finding_items")
 	editStore(t, home, "DROP TABLE findings")
 	writeConfig(t, home, "[snapshots]\nkeep = 0\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())

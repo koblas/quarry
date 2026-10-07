@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -100,12 +99,10 @@ func Test_run_search_json_echoes_min_and_max_normalized_and_null_when_absent(t *
 }
 
 func Test_run_search_text_names_the_amount_range_in_the_caption(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, amountSearchStore())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"search", "--min", "100", "--max", "1000"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--min", "100", "--max", "1000"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "Transactions in all accounts, all dates, amount 100.00 to 1,000.00\n")

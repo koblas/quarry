@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -26,9 +25,8 @@ const (
 func syncInvestmentFixture(t *testing.T, home string, b *v9fixture.Builder) {
 	t.Helper()
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 }
@@ -36,8 +34,7 @@ func syncInvestmentFixture(t *testing.T, home string, b *v9fixture.Builder) {
 // syncedHome syncs b under a fresh HOME and returns that HOME.
 func syncedHome(t *testing.T, b *v9fixture.Builder) string {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncInvestmentFixture(t, home, b)
 	return home
 }
@@ -104,9 +101,8 @@ func cashFlowByCategory(t *testing.T, home string) map[string]string {
 
 func Test_run_cashflow_counts_investment_dividends_interest_and_capital_gains_as_income_and_buys_and_sells_as_neither(t *testing.T) {
 	home := syncedHome(t, incomeAndTradesFixture())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"cashflow", "--since", "2026-03", "--until", "2026-03"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"cashflow", "--since", "2026-03", "--until", "2026-03"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Cash flow 2026-03-01 to 2026-03-31 in all accounts, amounts in CAD\n\n"+
@@ -128,9 +124,7 @@ func Test_run_cashflow_for_the_brokerage_account_reports_its_investment_income(t
 	args := []string{"--account", "Brokerage", "--since", "2026-03", "--until", "2026-03"}
 
 	t.Run("text", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := run(context.Background(), append([]string{"cashflow"}, args...), &stdout, &stderr)
+		exitCode, stdout, stderr := runCapture(context.Background(), append([]string{"cashflow"}, args...))
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Equal(t, "Cash flow 2026-03-01 to 2026-03-31 in Brokerage, amounts in CAD\n\n"+
@@ -152,9 +146,8 @@ func Test_run_cashflow_for_the_brokerage_account_reports_its_investment_income(t
 
 func Test_run_spend_counts_investment_margin_interest_as_spending(t *testing.T) {
 	syncedHome(t, marginInterestFixture())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"spend", "--since", "2026-03", "--until", "2026-03"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"spend", "--since", "2026-03", "--until", "2026-03"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	const row = "%-15s  %-8s  %5s\n"
@@ -171,9 +164,7 @@ func Test_run_spend_for_the_brokerage_account_reports_its_margin_interest(t *tes
 	args := []string{"--account", "Brokerage", "--since", "2026-03", "--until", "2026-03"}
 
 	t.Run("text", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := run(context.Background(), append([]string{"spend"}, args...), &stdout, &stderr)
+		exitCode, stdout, stderr := runCapture(context.Background(), append([]string{"spend"}, args...))
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		const row = "%-15s  %-8s  %5s\n"
@@ -205,9 +196,8 @@ func Test_run_cashflow_counts_investment_income_and_margin_interest_in_a_retirem
 	investmentCash(b, day, investmentCodeDividend, dividendsPK, inAccount(retirementPK, "6.00"))
 	investmentCash(b, day, investmentCodeMarginInterest, marginPK, inAccount(retirementPK, "-2.00"))
 	syncedHome(t, b)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"cashflow", "--account", "Retirement", "--since", "2026-03", "--until", "2026-03"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"cashflow", "--account", "Retirement", "--since", "2026-03", "--until", "2026-03"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Cash flow 2026-03-01 to 2026-03-31 in Retirement, amounts in CAD\n\n"+
@@ -229,9 +219,8 @@ func Test_run_cashflow_classifies_miscellaneous_investment_cash_by_its_category_
 	investmentCash(b, day, investmentCodeMiscExpense, feesPK, inAccount(brokeragePK, "-5.00"))
 	investmentCash(b, day, investmentCodeMiscExpense, adjustmentsPK, inAccount(brokeragePK, "-3.00"))
 	home := syncedHome(t, b)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"cashflow", "--since", "2026-03", "--until", "2026-03"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"cashflow", "--since", "2026-03", "--until", "2026-03"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Cash flow 2026-03-01 to 2026-03-31 in all accounts, amounts in CAD\n\n"+
@@ -254,9 +243,8 @@ func Test_run_cashflow_counts_an_uncategorized_investment_transaction_by_its_sig
 	investmentCash(b, day, investmentCodeMiscIncome, 0, inAccount(brokeragePK, "2.50"))
 	investmentCash(b, day, investmentCodeMiscExpense, 0, inAccount(brokeragePK, "-5.00"))
 	syncedHome(t, b)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"cashflow", "--since", "2026-03", "--until", "2026-03"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"cashflow", "--since", "2026-03", "--until", "2026-03"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Cash flow 2026-03-01 to 2026-03-31 in all accounts, amounts in CAD\n\n"+

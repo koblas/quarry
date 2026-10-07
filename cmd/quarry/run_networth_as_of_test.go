@@ -38,8 +38,7 @@ func netWorthAsOfRefusal(flag, value string) string {
 // and USD rates from 2025-12-01 (1.36) and 2026-01-20 (1.50).
 func seedNetWorthAsOfStore(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	closed := closedAccount(chequingAccount("acct-closed", 3))
 	closed.Name = "Old Chequing"
 	rows := spendRows(

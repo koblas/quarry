@@ -13,8 +13,7 @@ import (
 
 // "Tim Hortons Cafe" is the control: its key (tim-hortons-cafe) differs.
 func Test_run_sync_records_tim_hortons_variants_and_not_unrelated_payees(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	numberedPK := b.Payee(v9fixture.PayeeRow{Name: "TIM HORTONS #1234"})

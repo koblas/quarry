@@ -21,8 +21,7 @@ const noSnapshotsLine = "quarry: no snapshots in " + snapshotsShown + " yet; run
 const cannotTellPrefix = "quarry: warning: cannot tell which snapshot the store was built from: "
 
 func Test_run_snapshots_refuses_a_malformed_config_with_nothing_on_stdout(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home, olderPair()...)
 	writeConfig(t, home, "[snapshots\nkeep = 24\n")
 
@@ -59,8 +58,7 @@ func Test_run_snapshots_refuses_a_bad_config_value_with_nothing_on_stdout(t *tes
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			writeSnapshots(t, home, olderPair()...)
 			writeConfig(t, home, c.content)
 
@@ -74,8 +72,7 @@ func Test_run_snapshots_refuses_a_bad_config_value_with_nothing_on_stdout(t *tes
 }
 
 func Test_run_snapshots_refuses_a_config_it_cannot_read(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home, olderPair()...)
 	require.NoError(t, os.MkdirAll(filepath.Join(storeDirUnder(home), "config.toml"), 0o700))
 
@@ -88,8 +85,7 @@ func Test_run_snapshots_refuses_a_config_it_cannot_read(t *testing.T) {
 
 func Test_run_snapshots_never_looks_for_the_quicken_path_it_is_configured_with(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home, olderPair()[0])
 	writeConfig(t, home, "quicken.path = \"~/Books/Missing.quicken\"\n")
 
@@ -114,8 +110,7 @@ func Test_run_snapshots_names_itself_when_the_home_directory_cannot_be_resolved(
 }
 
 func Test_run_snapshots_reports_a_failed_stdout_write_and_prints_no_note(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	newHome(t)
 	var stderr bytes.Buffer
 
 	exitCode := run(context.Background(), []string{"snapshots"}, failingWriter{err: errNoSpace}, &stderr)
@@ -126,8 +121,7 @@ func Test_run_snapshots_reports_a_failed_stdout_write_and_prints_no_note(t *test
 
 func Test_run_snapshots_refuses_a_snapshots_folder_it_cannot_read(t *testing.T) {
 	skipAsRoot(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, olderPair()...)
 	require.NoError(t, os.Chmod(dir, 0o000))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
@@ -141,8 +135,7 @@ func Test_run_snapshots_refuses_a_snapshots_folder_it_cannot_read(t *testing.T) 
 
 func Test_run_snapshots_refuses_a_snapshot_it_cannot_stat(t *testing.T) {
 	skipAsRoot(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, olderPair()...)
 	require.NoError(t, os.Chmod(dir, 0o400))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
@@ -155,14 +148,12 @@ func Test_run_snapshots_refuses_a_snapshot_it_cannot_stat(t *testing.T) {
 }
 
 func Test_run_snapshots_says_it_was_interrupted(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home, olderPair()...)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(ctx, []string{"snapshots"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(ctx, []string{"snapshots"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -170,8 +161,7 @@ func Test_run_snapshots_says_it_was_interrupted(t *testing.T) {
 }
 
 func Test_run_snapshots_prints_the_no_snapshots_note_before_the_store_warning(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
 	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
 
@@ -184,8 +174,7 @@ func Test_run_snapshots_prints_the_no_snapshots_note_before_the_store_warning(t 
 
 func Test_run_snapshots_warns_when_the_store_has_no_import_history(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, olderPair()[0])
 	buildStoreFrom(t, home, filepath.Join(dir, "20260927T143005Z.sqlite"))
 	editStore(t, home, "DELETE FROM import_runs")
@@ -202,8 +191,7 @@ func Test_run_snapshots_warns_when_the_store_has_no_import_history(t *testing.T)
 
 func Test_run_snapshots_warns_when_a_store_of_another_format_names_no_snapshot(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home, olderPair()[0])
 	writeStoreFixture(t, home, "CREATE TABLE import_runs (id BIGINT, snapshot_path VARCHAR);")
 
@@ -219,8 +207,7 @@ func Test_run_snapshots_warns_when_a_store_of_another_format_names_no_snapshot(t
 
 func Test_run_snapshots_shows_unknown_for_a_taken_at_or_source_the_manifest_does_not_hold(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home,
 		snapshotFixture{id: "20260927T143005Z", bytes: oldestBytes, taken: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), source: homeQuicken},
 		snapshotFixture{id: "20260929T090011Z", bytes: middleBytes, taken: time.Date(2026, 9, 29, 9, 0, 11, 0, time.UTC), source: "", verified: true},

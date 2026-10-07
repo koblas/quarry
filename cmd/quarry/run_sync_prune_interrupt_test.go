@@ -28,8 +28,7 @@ type interruptedRun struct {
 // newest of them is refused, the next cancels the run once deleted, the oldest is never attempted.
 func interruptedSync(t *testing.T, args ...string) interruptedRun {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	fixtures := oldSnapshots(keptSnapshots + 2)
 	dir := writeSnapshots(t, home, fixtures...)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
@@ -71,8 +70,7 @@ func Test_run_sync_json_prints_the_document_when_interrupted_while_deleting_old_
 }
 
 func Test_run_sync_succeeds_when_interrupted_with_no_snapshot_left_to_delete(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	fixtures := oldSnapshots(keptSnapshots)
 	dir := writeSnapshots(t, home, fixtures...)
 	orphan := filepath.Join(dir, "19990101T000000Z.json")

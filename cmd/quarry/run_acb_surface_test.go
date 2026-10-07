@@ -47,14 +47,12 @@ type acbDoc struct {
 }
 
 func Test_run_acb_prints_the_same_result_as_json(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\", \"acct-usd\"]\nregistered = [\"acct-rrsp\"]\n")
 	replaceStoreWithRates(t, home, acbRows(),
 		usdRate(day(2024, time.January, 2), 1_250_000), usdRate(day(2026, time.January, 2), 1_400_000))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb", "--json"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb", "--json"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -80,8 +78,7 @@ func Test_run_acb_prints_the_same_result_as_json(t *testing.T) {
 }
 
 func Test_run_acb_leads_with_the_configs_warnings_in_both_forms(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "snapshot.keep = 3\n[accounts]\nnon-registered = [\"acct-cad\"]\nregistered = [\"acct-usd\", \"acct-rrsp\"]\n")
 	replaceStore(t, home, acbRows())
 	var textOut, textErr, jsonOut, jsonErr bytes.Buffer
@@ -97,8 +94,7 @@ func Test_run_acb_leads_with_the_configs_warnings_in_both_forms(t *testing.T) {
 }
 
 func Test_run_acb_counts_a_sale_dated_today_in_a_zone_ahead_of_utc(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
 	rows := spendRows([]store.Account{{ID: "acct-cad", SourceID: 1, Name: "CAD Brokerage", Type: store.AccountTypeBrokerage, Currency: "CAD", Active: true}})
 	rows.Securities = []store.Security{{ID: "sec-vanguard", SourceID: 1, Name: "Vanguard Total Stock", Ticker: new("VTI"), Currency: new("CAD")}}

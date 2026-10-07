@@ -45,8 +45,7 @@ const warningPrefix = "quarry: warning: "
 func Test_run_sync_json_carries_the_fetch_reason_in_warnings_and_rates(t *testing.T) {
 	for _, c := range fetchFailureCases() {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), c.days...)
 			for _, earlier := range c.earlier {
 				syncThrough(t, earlier, "--quicken", bundle.Dir)
@@ -67,8 +66,7 @@ func Test_run_sync_json_carries_the_fetch_reason_in_warnings_and_rates(t *testin
 // that cannot be reached, returning that second sync's exit code, stdout and stderr.
 func fetchAfterUnreadableRates(t *testing.T, ddl string, args ...string) (int, string, string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), januaryDay(3))
 	syncThrough(t, januaryBank(), "--quicken", bundle.Dir)
 	editStore(t, home, ddl)
@@ -113,8 +111,7 @@ func Test_run_sync_json_lists_only_the_fetch_warning_when_a_v4_store_is_synced_w
 // then syncs again through a bank that cannot be reached.
 func fetchAfterUnreadableStore(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), januaryDay(3))
 	syncThrough(t, januaryBank(), "--quicken", bundle.Dir)
 	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a database"), 0o600))
@@ -140,8 +137,7 @@ func Test_run_sync_json_lists_the_combined_carry_line_then_the_fetch_warning(t *
 // cannot be deleted, returning the refused snapshot's ID, then exit code, stdout and stderr.
 func fetchWithRefusedPrune(t *testing.T, args ...string) (string, int, string, string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), januaryDay(3))
 	fixtures := oldSnapshots(keptSnapshots)
 	writeSnapshots(t, home, fixtures...)
@@ -185,8 +181,7 @@ func firstAnswers503ThenNotAList() http.RoundTripper {
 // transaction asks for a span before them and a span after them, both failing differently.
 func syncWhereTwoSpansFail(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	first := writeChequingBundle(t, filepath.Join(home, "Documents"), januaryDay(3))
 	syncThrough(t, januaryBank(), "--quicken", first.Dir)
 	second := writeChequingBundle(t, filepath.Join(home, "Earlier"), januaryDay(3).AddDate(0, 0, -4), januaryDay(3))
@@ -213,8 +208,7 @@ func Test_run_sync_json_lists_one_fetch_warning_with_the_first_reason_when_two_s
 // syncFromAfterFailedFetch syncs a bundle, then rebuilds the store from its snapshot through a bank that times out.
 func syncFromAfterFailedFetch(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), januaryDay(3))
 	syncThrough(t, januaryBank(), "--quicken", bundle.Dir)
 	id := snapshotID(onlyFileWithSuffix(t, snapshotsDirUnder(home), ".sqlite"))
@@ -243,8 +237,7 @@ func Test_run_sync_from_json_lists_the_fetch_warning_and_reason(t *testing.T) {
 // then syncs it again with the bank whole, returning the second sync's stdout.
 func syncTwiceAroundALegacyOutage(t *testing.T) string {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), time.Date(2016, time.December, 30, 0, 0, 0, 0, time.UTC))
 	current := januaryBank()
 	syncThrough(t, legacyDown(current), "--quicken", bundle.Dir)

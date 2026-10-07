@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"slices"
 	"testing"
@@ -17,8 +16,7 @@ import (
 // with rates 1.30, 1.40 from June and, after the last charge, 1.50.
 func recurringFXStore(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	usdNetflix := inUSD(monthlySeries("Netflix.com", 2026, time.February, slices.Repeat([]int64{1000}, 8)...))
 	cadGym := monthlySeries("Gym", 2026, time.February, slices.Repeat([]int64{2000}, 8)...)
 	usdGym := inUSD(monthlySeries("Gym", 2026, time.February, slices.Concat(slices.Repeat([]int64{1200}, 4), slices.Repeat([]int64{1500}, 4))...))
@@ -35,9 +33,7 @@ func Test_run_recurring_detects_in_native_currency_and_converts_at_the_latest_ch
 	recurringFXStore(t)
 
 	t.Run("text lists converted amounts and finds no price change in a steady USD price", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := runWith(context.Background(), []string{"recurring", "--since", "2000"}, spendEnv(&stdout, &stderr))
+		exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring", "--since", "2000"})
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Empty(t, stderr.String())
@@ -50,9 +46,7 @@ func Test_run_recurring_detects_in_native_currency_and_converts_at_the_latest_ch
 	})
 
 	t.Run("json carries the native currency and amounts beside the converted ones", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := runWith(context.Background(), []string{"recurring", "--since", "2000", "--json"}, spendEnv(&stdout, &stderr))
+		exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring", "--since", "2000", "--json"})
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Equal(t, recurringJSONDoc{

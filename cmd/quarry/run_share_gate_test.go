@@ -76,16 +76,14 @@ func shareGateBundle(t *testing.T, home string) (v9fixture.Bundle, int64, int64,
 }
 
 func Test_run_sync_fails_when_holdings_share_counts_differ_from_quicken(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	storePath := storePathUnder(home)
 	require.NoError(t, os.MkdirAll(filepath.Dir(storePath), 0o700))
 	sentinel := []byte("previous store bytes, untouched by a failing sync")
 	require.NoError(t, os.WriteFile(storePath, sentinel, 0o600))
 	bundle, brokeragePK, rrspPK, barePK, isharesPK := shareGateBundle(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	assert.Equal(t, 1, exitCode)
 	snapshotPath := onlyFileWithSuffix(t, filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"), ".sqlite")
@@ -137,17 +135,15 @@ func Test_run_sync_fails_when_holdings_share_counts_differ_from_quicken(t *testi
 }
 
 func Test_run_sync_fails_a_holding_with_a_lot_and_no_transactions_against_zero_shares(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
 	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
 	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "3"})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, _ := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Contains(t, stdout.String(),
@@ -155,8 +151,7 @@ func Test_run_sync_fails_a_holding_with_a_lot_and_no_transactions_against_zero_s
 }
 
 func Test_run_sync_joins_a_share_failure_to_a_balance_failure_in_one_line(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	reconciled := int64(2)
 	b := v9fixture.NewBuilder()
@@ -173,9 +168,8 @@ func Test_run_sync_joins_a_share_failure_to_a_balance_failure_in_one_line(t *tes
 	b.Entry(v9fixture.EntryRow{Parent: buyPK, Amount: "-1000.00"})
 	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "9"})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	assert.Equal(t, 1, exitCode)
 	snapshotPath := onlyFileWithSuffix(t, filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"), ".sqlite")

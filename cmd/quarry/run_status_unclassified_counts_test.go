@@ -40,8 +40,7 @@ func statusFindings(t *testing.T) statusFindingsJSON {
 }
 
 func Test_run_status_json_counts_an_unclassified_account_open_and_never_new_until_the_config_lists_it(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	id := syncUnclassifiedFixture(t, home)
 
 	before := statusFindings(t)
@@ -53,8 +52,7 @@ func Test_run_status_json_counts_an_unclassified_account_open_and_never_new_unti
 }
 
 func Test_run_status_json_counts_an_ignored_unclassified_account_as_ignored(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	id := syncUnclassifiedFixture(t, home)
 	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [\"unclassified-account:%s\"]\n", id))
 
@@ -65,13 +63,11 @@ func Test_run_status_json_counts_an_ignored_unclassified_account_as_ignored(t *t
 }
 
 func Test_run_status_counts_every_investment_account_open_when_the_config_is_unreadable(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	id := syncUnclassifiedFixture(t, home)
 	writeConfig(t, home, fmt.Sprintf("[snapshots]\nkeep = 0\n[accounts]\nnon-registered = [%q]\n", id))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"status"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "\nFindings  1 open; run quarry findings to list them\n")
@@ -80,8 +76,7 @@ func Test_run_status_counts_every_investment_account_open_when_the_config_is_unr
 }
 
 func Test_run_status_json_counts_every_investment_account_open_when_the_config_is_unreadable(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	id := syncUnclassifiedFixture(t, home)
 	writeConfig(t, home, fmt.Sprintf("[snapshots]\nkeep = 0\n[accounts]\nnon-registered = [%q]\n", id))
 

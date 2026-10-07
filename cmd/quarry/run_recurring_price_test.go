@@ -13,8 +13,7 @@ import (
 )
 
 func Test_run_recurring_lists_price_changes_both_ways_from_first_to_latest(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	cents := slices.Concat(slices.Repeat([]int64{999}, 8), slices.Repeat([]int64{1199}, 8), slices.Repeat([]int64{1099}, 8))
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)},
 		monthlySeries("Netflix.com", 2024, time.October, cents...)...))
@@ -38,13 +37,11 @@ func Test_run_recurring_lists_price_changes_both_ways_from_first_to_latest(t *te
 }
 
 func Test_run_recurring_leaves_out_a_bill_whose_amount_changes_most_months(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)},
 		monthlySeries("Hydro", 2026, time.February, 1000, 1200, 1000, 1200, 1000, 1200, 1000, 1200)...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"recurring", "--since", "2000"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring", "--since", "2000"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: no recurring charges from 2000-01-01 to 2026-09-29; "+

@@ -12,8 +12,7 @@ import (
 // "Brokerage Fees" is used only by an investment entry and "Charity" only by a
 // budget line, neither of which the importer stores as a split.
 func Test_run_sync_records_unused_categories_but_not_one_an_investment_or_budget_uses(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 	parkingPK := b.Category(v9fixture.TagRow{Name: "Parking", Type: new(int64(1))})

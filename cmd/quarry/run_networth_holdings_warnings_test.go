@@ -31,8 +31,7 @@ func seedLeftOutHoldingsStore(t *testing.T) string {
 // seedLeftOutHoldingsRows stores rows under a fresh HOME, which it returns.
 func seedLeftOutHoldingsRows(t *testing.T, rows store.Rows) string {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, rows, usdRate(holdingsDay(10), 1_360_000))
 	return home
 }
@@ -40,9 +39,8 @@ func seedLeftOutHoldingsRows(t *testing.T, rows store.Rows) string {
 // runNetWorthAtMarch12 runs networth with args at holdingsClock and returns its stdout and stderr.
 func runNetWorthAtMarch12(t *testing.T, args ...string) (string, string) {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), append([]string{"networth"}, args...), spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), append([]string{"networth"}, args...), holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	return stdout.String(), stderr.String()

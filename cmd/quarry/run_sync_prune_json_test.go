@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -63,14 +62,12 @@ func topLevelKeys(t *testing.T, raw string) []string {
 }
 
 func Test_run_sync_json_lists_what_it_pruned_after_store(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	fixtures := oldSnapshots(keptSnapshots)
 	dir := writeSnapshots(t, home, fixtures...)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, []string{"snapshot", "schema", "store", "pruned", "warnings"}, topLevelKeys(t, stdout.String()))
@@ -85,12 +82,10 @@ func Test_run_sync_json_lists_what_it_pruned_after_store(t *testing.T) {
 }
 
 func Test_run_sync_json_carries_empty_pruned_lists_when_nothing_was_deleted(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var parsed map[string]json.RawMessage
@@ -100,13 +95,11 @@ func Test_run_sync_json_carries_empty_pruned_lists_when_nothing_was_deleted(t *t
 }
 
 func Test_run_sync_json_carries_a_null_pruned_key_when_validation_fails(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, oldSnapshots(keptSnapshots)...)
 	bundle := unreconciledBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"}, &stdout, &stderr)
+	exitCode, stdout, _ := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"})
 
 	require.Equal(t, 1, exitCode)
 	var parsed map[string]json.RawMessage
@@ -118,8 +111,7 @@ func Test_run_sync_json_carries_a_null_pruned_key_when_validation_fails(t *testi
 }
 
 func Test_run_sync_json_lists_a_failed_delete_in_pruned_and_in_warnings(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	fixtures := oldSnapshots(keptSnapshots)
 	dir := writeSnapshots(t, home, fixtures...)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
@@ -141,8 +133,7 @@ func Test_run_sync_json_lists_a_failed_delete_in_pruned_and_in_warnings(t *testi
 
 func Test_run_sync_from_json_names_the_unlistable_folder_by_its_absolute_path_in_warnings(t *testing.T) {
 	skipAsRoot(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	id, dir := syncThenWrite(t, home)
 	kept := copyOutsideFolder(t, home, dir, id)
 	require.NoError(t, os.Chmod(dir, 0o300))
@@ -161,8 +152,7 @@ func Test_run_sync_from_json_names_the_unlistable_folder_by_its_absolute_path_in
 }
 
 func Test_run_sync_json_lists_the_prune_warnings_after_config_and_history_warnings(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeStatusFixtureBundle(t, home)
 	corruptPreviousStore(t, home)
 	writeConfig(t, home, "snapshot.keep = 3\n")

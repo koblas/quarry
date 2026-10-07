@@ -23,8 +23,7 @@ func holdingsAsOfLine(account, security, shares, price, pricedOn, currency, valu
 // prices are 10.00 on 2025-06-02, 12.00 on 2025-12-30 and 15.00 on 2026-01-05.
 func seedSplitHoldingsStore(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	day := func(year int, month time.Month, d int) time.Time {
 		return time.Date(year, month, d, 0, 0, 0, 0, time.UTC)
 	}

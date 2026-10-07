@@ -74,8 +74,7 @@ func requireSnapshotsKept(t *testing.T, dir string, ids ...string) {
 
 func Test_run_snapshots_prune_deletes_all_but_the_newest_n(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 
@@ -94,8 +93,7 @@ func Test_run_snapshots_prune_deletes_all_but_the_newest_n(t *testing.T) {
 func Test_run_snapshots_prune_keeps_the_stores_snapshot_when_it_is_older_than_the_newest_n(t *testing.T) {
 	pinLocalZone(t)
 	const storeSnapshot = "20260801T120000Z"
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home,
 		pruneFixture(storeSnapshot, keptBytes, time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)),
 		pruneFixture(pruneOldest, oldestBytes, time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC)),
@@ -117,8 +115,7 @@ func Test_run_snapshots_prune_keeps_the_stores_snapshot_when_it_is_older_than_th
 }
 
 func Test_run_snapshots_prune_refuses_when_the_store_cannot_be_read(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
 	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
@@ -134,8 +131,7 @@ func Test_run_snapshots_prune_refuses_when_the_store_cannot_be_read(t *testing.T
 }
 
 func Test_run_snapshots_prune_refuses_keep_0_as_a_usage_error(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 
@@ -161,8 +157,7 @@ func refusingRemove(refused string) func(string) error {
 // Needs runWith: the one file that cannot be deleted is a Server option, not a folder mode.
 func Test_run_snapshots_prune_reports_each_snapshot_it_could_not_delete_and_exits_1(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	five := fiveSnapshots()
 	dir := writeSnapshots(t, home, five[0], five[1], five[4])
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))

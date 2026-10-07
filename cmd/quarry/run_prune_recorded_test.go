@@ -96,8 +96,7 @@ func (c recordedClass) cannotReadPhrase(shown string) string {
 // pruneMiddle recorded as c has it; it returns the snapshots folder, the recorded path and the run's result.
 func pruneRecordedCell(t *testing.T, c recordedClass, args ...string) (string, string, int, string, string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	recorded := buildStoreFromClass(t, home, pruneMiddle, c)
 	exitCode, stdout, stderr := runPrune(t, args...)
@@ -117,8 +116,7 @@ func buildStoreFromUnreadable(t *testing.T, home, id string) {
 
 func Test_run_snapshots_prune_refuses_when_the_recorded_snapshot_cannot_be_read(t *testing.T) {
 	skipAsRoot(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFromUnreadable(t, home, pruneMiddle)
 

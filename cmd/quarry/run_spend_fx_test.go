@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -38,8 +37,7 @@ var rateOnJan2 = store.Rate{Date: day(2026, 1, 2), USDCAD: money.Rate(1_250_000)
 // runSpendJSON runs spend with args plus --json and decodes its document.
 func runSpendJSON(t *testing.T, args ...string) (spendReport, string) {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
-	exitCode := runWith(context.Background(), append([]string{"spend", "--json"}, args...), spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"spend", "--json"}, args...))
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc spendReport
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
@@ -48,8 +46,7 @@ func runSpendJSON(t *testing.T, args ...string) (spendReport, string) {
 
 func Test_run_spend_converts_every_split_to_cad_by_default(t *testing.T) {
 	// Two 0.10 USD splits at 1.25 make 0.26 rounded each, 0.25 summed first.
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, spendRows(
 		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -12345},
@@ -60,9 +57,7 @@ func Test_run_spend_converts_every_split_to_cad_by_default(t *testing.T) {
 	), rateOnJan2)
 
 	t.Run("text", func(t *testing.T) {
-		var stdout, stderr bytes.Buffer
-
-		exitCode := runWith(context.Background(), []string{"spend"}, spendEnv(&stdout, &stderr))
+		exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"spend"})
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Empty(t, stderr.String())
@@ -147,8 +142,7 @@ func Test_run_spend_takes_its_currency_from_the_config_unless_the_flag_names_one
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStoreWithRates(t, home, spendRows(
 				[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 				spendSplit{id: "s01", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -10000},
@@ -159,9 +153,7 @@ func Test_run_spend_takes_its_currency_from_the_config_unless_the_flag_names_one
 			}
 
 			t.Run("text", func(t *testing.T) {
-				var stdout, stderr bytes.Buffer
-
-				exitCode := runWith(context.Background(), append([]string{"spend"}, c.flag...), spendEnv(&stdout, &stderr))
+				exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"spend"}, c.flag...))
 
 				require.Equal(t, 0, exitCode, stderr.String())
 				assert.Empty(t, stderr.String())
@@ -248,16 +240,14 @@ func Test_run_spend_converts_the_edge_cases_in_each_reporting_currency(t *testin
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStoreWithRates(t, home, spendRows(c.accounts, c.splits...), c.rate)
 
 			for _, currency := range c.currencies {
 				args := append([]string{"--currency", currency}, c.args...)
 				wantCaption := c.caption + map[string]string{"CAD": ", amounts in CAD", "USD": ", amounts in USD", "native": ""}[currency]
 
-				var stdout, stderr bytes.Buffer
-				exitCode := runWith(context.Background(), append([]string{"spend"}, args...), spendEnv(&stdout, &stderr))
+				exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"spend"}, args...))
 				require.Equal(t, 0, exitCode, stderr.String())
 				gotCaption, gotTotals := spendTextView(stdout.String())
 				doc, jsonStderr := runSpendJSON(t, args...)
@@ -279,8 +269,7 @@ func Test_run_spend_of_an_empty_window_names_the_currency_and_lists_no_rows_besi
 	suffixes := map[string]string{"CAD": ", amounts in CAD", "USD": ", amounts in USD", "native": ""}
 	for currency, suffix := range suffixes {
 		t.Run(currency, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStoreWithRates(t, home, spendRows(
 				[]store.Account{usdChequingAccount("acct-usd", 2)},
 				spendSplit{id: "s1", account: "acct-usd", category: "cat-groceries", currency: "USD", day: day(2026, 3, 11), cents: -8000},
@@ -288,9 +277,7 @@ func Test_run_spend_of_an_empty_window_names_the_currency_and_lists_no_rows_besi
 			window := []string{"--currency", currency, "--since", "2020-01-01", "--until", "2020-12-31"}
 
 			t.Run("text", func(t *testing.T) {
-				var stdout, stderr bytes.Buffer
-
-				exitCode := runWith(context.Background(), append([]string{"spend"}, window...), spendEnv(&stdout, &stderr))
+				exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"spend"}, window...))
 
 				require.Equal(t, 0, exitCode, stderr.String())
 				assert.Equal(t, caption+suffix+"\n\nCategory  Currency  Spent\n", stdout.String())
@@ -310,8 +297,7 @@ func Test_run_spend_of_an_empty_window_names_the_currency_and_lists_no_rows_besi
 }
 
 func Test_run_spend_json_reads_back_with_every_amount_in_the_reporting_currency(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, spendRows(
 		[]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)},
 		spendSplit{id: "s1", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 3, 10), cents: -12345},

@@ -107,9 +107,8 @@ func Test_run_report_commands_refuse_when_home_is_unset(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.command, func(t *testing.T) {
 			t.Setenv("HOME", "")
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), []string{c.command}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{c.command})
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())

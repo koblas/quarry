@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -13,8 +12,7 @@ import (
 )
 
 func Test_run_cashflow_json_returns_cash_flow_as_a_document(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, cashFlowRows(
 		[]store.Account{chequingAccount("acct-cad", 1)},
 		spendSplit{id: "s01", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 1, 31), cents: 910000},
@@ -22,9 +20,8 @@ func Test_run_cashflow_json_returns_cash_flow_as_a_document(t *testing.T) {
 		spendSplit{id: "s03", account: "acct-cad", category: "cat-fuel", currency: "CAD", day: day(2026, 1, 20), cents: -320000},
 		spendSplit{id: "s04", account: "acct-cad", category: "cat-groceries", currency: "CAD", day: day(2026, 2, 15), cents: -10000},
 	))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"cashflow", "--json", "--since", "2026-01", "--until", "2026-02"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"cashflow", "--json", "--since", "2026-01", "--until", "2026-02"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

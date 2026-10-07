@@ -16,12 +16,10 @@ import (
 )
 
 func Test_run_accounts_lists_open_accounts_with_their_balances(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--currency", "native"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--currency", "native"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -35,12 +33,10 @@ func Test_run_accounts_lists_open_accounts_with_their_balances(t *testing.T) {
 }
 
 func Test_run_accounts_all_lists_closed_accounts(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--all", "--currency", "native"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--all", "--currency", "native"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -56,9 +52,8 @@ func Test_run_accounts_all_lists_closed_accounts(t *testing.T) {
 
 func Test_run_accounts_refuses_when_home_is_unset(t *testing.T) {
 	t.Setenv("HOME", "")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -67,8 +62,7 @@ func Test_run_accounts_refuses_when_home_is_unset(t *testing.T) {
 }
 
 func Test_run_accounts_reports_a_failed_stdout_write(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
@@ -83,9 +77,8 @@ func Test_run_accounts_reports_a_failed_stdout_write(t *testing.T) {
 
 func Test_run_accounts_help_describes_the_command_without_needing_home(t *testing.T) {
 	t.Setenv("HOME", "")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--help"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--help"})
 
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())
@@ -151,12 +144,10 @@ func syncClosedAccountsFixture(t *testing.T, home string, n int) {
 }
 
 func Test_run_accounts_says_how_to_list_them_when_every_account_is_closed(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncClosedAccountsFixture(t, home, 3)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--currency", "native"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--currency", "native"})
 
 	require.Equal(t, 0, exitCode)
 	assert.Equal(t, "Account  Type  Currency  Balance  Status\n", stdout.String())
@@ -164,12 +155,10 @@ func Test_run_accounts_says_how_to_list_them_when_every_account_is_closed(t *tes
 }
 
 func Test_run_accounts_all_lists_closed_accounts_without_a_note(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncClosedAccountsFixture(t, home, 3)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--all", "--currency", "native"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--all", "--currency", "native"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -197,12 +186,10 @@ func syncNotInReportsFixture(t *testing.T, home string) {
 }
 
 func Test_run_accounts_all_marks_accounts_left_out_of_reports(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncNotInReportsFixture(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--all", "--currency", "native"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--all", "--currency", "native"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -229,12 +216,10 @@ func syncLinkedTrackingFixture(t *testing.T, home string) {
 }
 
 func Test_run_accounts_all_marks_accounts_that_use_linked_account_tracking(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncLinkedTrackingFixture(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"accounts", "--all", "--currency", "native"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"accounts", "--all", "--currency", "native"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

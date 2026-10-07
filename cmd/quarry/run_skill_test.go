@@ -96,60 +96,6 @@ func Test_skill_text_carries_the_ruled_frontmatter_and_rules(t *testing.T) {
 	assert.Equal(t, ticks(skillCredit), lastNonEmptyLine(raw))
 }
 
-// skillText is SKILL.md cut at the places the ruled copy is pinned: the
-// frontmatter, the intro under the title, and each numbered section's body.
-type skillText struct {
-	frontmatter string
-	title       string
-	intro       string
-	headings    []string
-	bodies      map[string]string
-}
-
-func splitSkill(t *testing.T, raw string) skillText {
-	t.Helper()
-	rest, ok := strings.CutPrefix(raw, "---\n")
-	require.True(t, ok, "SKILL.md must open with frontmatter")
-	fm, body, ok := strings.Cut(rest, "\n---\n")
-	require.True(t, ok, "SKILL.md frontmatter must be closed")
-
-	skill := skillText{frontmatter: "---\n" + fm + "\n---", bodies: map[string]string{}}
-	var current *[]string
-	var title, intro []string
-	sections := map[string]*[]string{}
-	for line := range strings.SplitSeq(body, "\n") {
-		switch {
-		case strings.HasPrefix(line, "## "):
-			skill.headings = append(skill.headings, line)
-			lines := []string{}
-			sections[line] = &lines
-			current = &lines
-		case strings.HasPrefix(line, "# ") && current == nil:
-			title = append(title, line)
-		case current == nil:
-			intro = append(intro, line)
-		default:
-			*current = append(*current, line)
-		}
-	}
-	require.Len(t, title, 1, "SKILL.md must have exactly one title line")
-	skill.title = title[0]
-	skill.intro = strings.Trim(strings.Join(intro, "\n"), "\n")
-	for heading, lines := range sections {
-		skill.bodies[heading] = strings.Trim(strings.Join(*lines, "\n"), "\n")
-	}
-	return skill
-}
-
-func (s skillText) description() string {
-	for line := range strings.SplitSeq(s.frontmatter, "\n") {
-		if value, ok := strings.CutPrefix(line, "description: "); ok {
-			return value
-		}
-	}
-	return ""
-}
-
 // referenceLinkTargets returns the target of every markdown link in section,
 // failing when a line carries two.
 func referenceLinkTargets(t *testing.T, section string) []string {
@@ -662,8 +608,7 @@ func findingsParagraph(t *testing.T) string {
 }
 
 func Test_skill_schema_reference_matches_the_committed_file(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	populatedAnalysisStore(t, home)
 	got := generateSchemaReference(t, home)
 	if *updateSchemaReference {
@@ -678,8 +623,7 @@ func Test_skill_schema_reference_matches_the_committed_file(t *testing.T) {
 }
 
 func Test_skill_schema_reference_names_no_account_category_or_payee(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	populatedAnalysisStore(t, home)
 	names := userNames(t, home)
 
@@ -694,12 +638,10 @@ func Test_skill_schema_reference_names_no_account_category_or_payee(t *testing.T
 }
 
 func Test_skill_schema_reference_is_the_same_for_an_empty_store(t *testing.T) {
-	populated := t.TempDir()
-	t.Setenv("HOME", populated)
+	populated := newHome(t)
 	populatedAnalysisStore(t, populated)
 	fromPopulated := generateSchemaReference(t, populated)
-	empty := t.TempDir()
-	t.Setenv("HOME", empty)
+	empty := newHome(t)
 	replaceStore(t, empty, store.Rows{})
 
 	fromEmpty := generateSchemaReference(t, empty)
@@ -720,8 +662,7 @@ func Test_skill_schema_reference_carries_the_findings_paragraph_from_sql_help(t 
 }
 
 func Test_skill_schema_reference_carries_each_view_comment(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	populatedAnalysisStore(t, home)
 	comments := viewComments(t, home)
 	text := repoFile(t, schemaReferencePath)
@@ -1142,9 +1083,7 @@ func Test_each_use_case_question_is_answered_by_the_command_the_skill_names(t *t
 
 	for _, c := range skillUseCases() {
 		t.Run(c.name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			exitCode := runWith(context.Background(), c.argv, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.argv)
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			c.answer(t, stdout.Bytes())

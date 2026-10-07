@@ -52,8 +52,7 @@ func jsonWarnings(t *testing.T, args ...string) ([]string, string) {
 }
 
 func Test_run_accounts_json_names_the_config_by_absolute_path_in_a_no_account_warning(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncUnmatchedFixture(t, home)
 
 	warnings, stderr := jsonWarnings(t, "accounts", "--json")
@@ -63,8 +62,7 @@ func Test_run_accounts_json_names_the_config_by_absolute_path_in_a_no_account_wa
 }
 
 func Test_run_findings_json_names_the_config_by_absolute_path_in_a_no_account_warning(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncUnmatchedFixture(t, home)
 
 	warnings, stderr := jsonWarnings(t, "findings", "--json")
@@ -74,8 +72,7 @@ func Test_run_findings_json_names_the_config_by_absolute_path_in_a_no_account_wa
 }
 
 func Test_run_accounts_warns_nothing_about_a_listed_closed_account_without_all(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	closed := b.Account(v9fixture.AccountRow{Name: "Old RRSP", Type: "RETIREMENTIRA", Currency: "CAD", Closed: true})
@@ -107,8 +104,7 @@ func Test_run_mcp_data_quality_names_the_config_by_absolute_path_in_a_no_account
 }
 
 func Test_run_status_and_sync_stay_silent_about_a_listed_id_that_names_no_account(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncUnmatchedFixture(t, home)
 	control, _ := jsonWarnings(t, "accounts", "--json")
 	require.Equal(t, unmatchedWarningsAt(configPath(home)), control)

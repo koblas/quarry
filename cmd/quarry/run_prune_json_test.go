@@ -69,8 +69,7 @@ func pruneDocument(t *testing.T, stdout string) map[string]json.RawMessage {
 }
 
 func Test_run_snapshots_prune_json_prints_the_ruled_document_for_a_real_run(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 
@@ -95,8 +94,7 @@ func Test_run_snapshots_prune_json_prints_the_ruled_document_for_a_real_run(t *t
 }
 
 func Test_run_snapshots_prune_json_fills_would_delete_and_leaves_deleted_and_failed_empty_for_a_dry_run(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 
@@ -121,8 +119,7 @@ func Test_run_snapshots_prune_json_fills_would_delete_and_leaves_deleted_and_fai
 }
 
 func Test_run_snapshots_prune_json_prints_empty_lists_and_the_store_snapshot_when_nothing_is_beyond_the_cap(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNoon+".sqlite"))
 
@@ -143,8 +140,7 @@ func Test_run_snapshots_prune_json_prints_empty_lists_and_the_store_snapshot_whe
 }
 
 func Test_run_snapshots_prune_json_gives_a_null_store_snapshot_without_a_warning_when_the_unreadable_store_blocks_nothing(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
 	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
@@ -167,8 +163,7 @@ func Test_run_snapshots_prune_json_gives_a_null_store_snapshot_without_a_warning
 }
 
 func Test_run_snapshots_prune_json_gives_a_null_store_snapshot_when_there_is_no_store(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home, fiveSnapshots()...)
 
 	exitCode, stdout, stderr := runPrune(t, "--keep", "3", "--json")
@@ -179,8 +174,7 @@ func Test_run_snapshots_prune_json_gives_a_null_store_snapshot_when_there_is_no_
 
 func Test_run_snapshots_prune_json_prints_the_stores_snapshot_and_does_not_delete_it_when_it_lies_beyond_the_newest_n(t *testing.T) {
 	const storeSnapshot = "20260801T120000Z"
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	fixtures := append([]snapshotFixture{pruneFixture(storeSnapshot, keptBytes, time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC))}, fiveSnapshots()...)
 	dir := writeSnapshots(t, home, fixtures...)
 	buildStoreFrom(t, home, filepath.Join(dir, storeSnapshot+".sqlite"))
@@ -199,8 +193,7 @@ func Test_run_snapshots_prune_json_prints_the_stores_snapshot_and_does_not_delet
 
 // Needs runPruneRemoving: the files that cannot be deleted are a Server option, not a folder mode.
 func Test_run_snapshots_prune_json_lists_the_failed_deletes_newest_first_beside_the_deleted_ones_and_exits_1(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 	remove := refusingRemoveEach(pruneOldest+".sqlite", pruneMorning+".sqlite")
@@ -232,8 +225,7 @@ func Test_run_snapshots_prune_json_lists_the_failed_deletes_newest_first_beside_
 }
 
 func Test_run_snapshots_prune_json_prints_what_was_deleted_when_the_run_is_interrupted_and_exits_1(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 	ctx, cancel := context.WithCancel(context.Background())
@@ -260,8 +252,7 @@ func Test_run_snapshots_prune_json_prints_what_was_deleted_when_the_run_is_inter
 }
 
 func Test_run_snapshots_prune_json_prints_the_failure_lines_then_the_interrupt_line_and_the_document_when_a_delete_fails_before_the_interrupt(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	buildStoreFrom(t, home, filepath.Join(dir, pruneNewest+".sqlite"))
 	ctx, cancel := context.WithCancel(context.Background())
@@ -293,8 +284,7 @@ func Test_run_snapshots_prune_json_prints_the_failure_lines_then_the_interrupt_l
 func Test_run_snapshots_prune_json_prints_no_document_when_interrupted_before_any_delete(t *testing.T) {
 	for _, dryRun := range []bool{false, true} {
 		t.Run("dry-run="+strconv.FormatBool(dryRun), func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			dir := writeSnapshots(t, home, fiveSnapshots()...)
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
@@ -327,8 +317,7 @@ func Test_run_snapshots_prune_json_still_prints_the_document_with_empty_lists_an
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			if c.makeFolder {
 				writeSnapshots(t, home)
 			}
@@ -405,8 +394,7 @@ func Test_run_snapshots_prune_json_gives_the_store_snapshot_path_as_the_store_re
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			dir := writeSnapshots(t, home, fiveSnapshots()...)
 			recorded := c.recorded(t, dir)
 			buildStoreFrom(t, home, recorded)
@@ -490,8 +478,7 @@ func Test_run_snapshots_prune_json_prints_no_document_when_the_run_refuses(t *te
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			dir := writeSnapshots(t, home, fiveSnapshots()...)
 			c.setup(t, home)
 			if c.locked {
@@ -515,8 +502,7 @@ func Test_run_snapshots_prune_json_prints_no_document_when_the_run_refuses(t *te
 }
 
 func Test_run_snapshots_prune_json_carries_a_config_warning_in_warnings_and_prefixed_on_stderr(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, "snapshot.keep = 3\n")
 	warning := configShown + ": unknown key snapshot.keep; quarry ignores it"
@@ -530,8 +516,7 @@ func Test_run_snapshots_prune_json_carries_a_config_warning_in_warnings_and_pref
 }
 
 func Test_run_snapshots_prune_json_reports_the_keep_from_the_config_when_keep_is_not_given(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, snapshotsKeepConfig(3))
 

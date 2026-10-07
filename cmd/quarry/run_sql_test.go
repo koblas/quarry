@@ -18,15 +18,13 @@ import (
 )
 
 func Test_run_sql_prints_the_query_result_as_a_table(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
 	const query = `SELECT source_id AS id, name, holdings_value,
 		CASE WHEN source_id = 1 THEN 'line one' || chr(10) || 'tab' || chr(9) || 'cr' || chr(13) END AS note
 		FROM v_account_balances ORDER BY source_id`
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sql", query}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", query})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -41,24 +39,20 @@ func Test_run_sql_prints_the_query_result_as_a_table(t *testing.T) {
 }
 
 func Test_run_sql_prints_only_the_header_for_zero_rows(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sql", "SELECT name, balance FROM v_account_balances WHERE false"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "SELECT name, balance FROM v_account_balances WHERE false"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "name  balance\n", stdout.String())
 }
 
 func Test_run_sql_prints_at_most_limit_rows(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sql", "--limit", "2", "SELECT source_id FROM accounts ORDER BY source_id"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "--limit", "2", "SELECT source_id FROM accounts ORDER BY source_id"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "source_id\n        1\n        2\n", stdout.String())
@@ -66,8 +60,7 @@ func Test_run_sql_prints_at_most_limit_rows(t *testing.T) {
 }
 
 func Test_run_sql_reads_the_query_from_stdin(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
 	var stdout, stderr bytes.Buffer
 	env := testEnv(&stdout, &stderr)
@@ -89,14 +82,12 @@ func Test_run_sql_reports_a_bad_query(t *testing.T) {
 }
 
 func Test_run_sql_refuses_to_change_the_store(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
 	storePath := filepath.Join(storeDirUnder(home), "quarry.duckdb")
 	before := fileSum(t, storePath)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sql", "CREATE TABLE notes (body VARCHAR)"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "CREATE TABLE notes (body VARCHAR)"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -171,8 +162,7 @@ func Test_run_sql_refuses_to_change_a_setting(t *testing.T) {
 // Not parallel: it signals the whole test process. It proves the SIGINT wiring;
 // the sleep does not prove the query had started (duckstore's tests cover that).
 func Test_run_sql_reports_a_query_interrupted_by_sigint(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
 	ctx, stop := signalContext(context.Background())
 	defer stop()
@@ -193,9 +183,8 @@ func Test_run_sql_reports_a_query_interrupted_by_sigint(t *testing.T) {
 
 func Test_run_sql_refuses_when_home_is_unset(t *testing.T) {
 	t.Setenv("HOME", "")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sql", "SELECT 1"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "SELECT 1"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -211,11 +200,9 @@ const (
 // runSQLOnBuiltStore syncs the accounts fixture under a fresh HOME, then runs sql query against it.
 func runSQLOnBuiltStore(t *testing.T, query string) (int, string, string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
-	var stdout, stderr bytes.Buffer
-	exitCode := run(context.Background(), []string{"sql", query}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", query})
 	return exitCode, stdout.String(), stderr.String()
 }
 

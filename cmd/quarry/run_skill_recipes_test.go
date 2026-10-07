@@ -212,8 +212,7 @@ func rowsOfYear(rows [][]any, year string) [][]any {
 }
 
 func Test_spending_trend_recipe_agrees_with_quarry_spend(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	skillEvalStore(t, home)
 
 	t.Run("no_filter_year", func(t *testing.T) {
@@ -268,8 +267,7 @@ func Test_spending_trend_recipe_agrees_with_quarry_spend(t *testing.T) {
 }
 
 func Test_income_by_category_recipe_agrees_with_quarry_cashflow(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	skillEvalStore(t, home)
 
 	recipe := runRecipe(t, incomeByCatFile, recipeParams{since: "2026-01-01", until: "2026-12-31", currency: "CAD"})
@@ -318,8 +316,7 @@ func Test_recipe_params_line_is_found_once_and_keeps_its_names(t *testing.T) {
 // recipeScenario sets HOME to a fresh skillEvalStore.
 func recipeScenario(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	skillEvalStore(t, home)
 }
 
@@ -374,8 +371,7 @@ func Test_spending_trend_payee_matches_the_exact_name_ignoring_case(t *testing.T
 // spendByMonth is the 2026 rows of spend --by month that spent anything, as cents keyed "YYYY-MM|currency".
 func spendByMonth(t *testing.T) map[string]int64 {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
-	exitCode := runWith(context.Background(), []string{"spend", "--json", "--by", "month", "--since", "2026", "--until", "2026"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"spend", "--json", "--by", "month", "--since", "2026", "--until", "2026"})
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {
 		Rows []struct {
@@ -439,8 +435,7 @@ func Test_spending_trend_lists_cad_before_the_first_rate_natively_in_usd_mode(t 
 
 func Test_spending_trend_leaves_out_the_transfer(t *testing.T) {
 	recipeScenario(t)
-	var stdout, stderr bytes.Buffer
-	exitCode := runWith(context.Background(), []string{"search", "Savings Sweep", "--json"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "Savings Sweep", "--json"})
 	require.Equal(t, 0, exitCode, stderr.String())
 	found := decodeSearchJSON(t, stdout.String()).Transactions
 	require.Len(t, found, 2)
@@ -608,8 +603,7 @@ func openingProblems(sql string) []string {
 // storeRelations is the names of the tables and views of the store under a fresh HOME.
 func storeRelations(t *testing.T) []string {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	skillEvalStore(t, home)
 	schema, err := duckstore.New(storeDirUnder(home)).Schema(t.Context())
 	require.NoError(t, err)

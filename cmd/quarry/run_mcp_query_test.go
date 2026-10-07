@@ -191,8 +191,7 @@ func Test_run_mcp_query_logs_no_stored_value_and_no_sql_when_a_cast_of_a_stored_
 // newQueryPeer syncs the accounts fixture under a fresh HOME and connects a client to quarry mcp.
 func newQueryPeer(t *testing.T) (context.Context, *mcpPeer) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
 	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
 	t.Cleanup(cancel)
@@ -212,18 +211,6 @@ func callQuery(ctx context.Context, t *testing.T, peer *mcpPeer, arguments map[s
 	result, err := peer.session.CallTool(ctx, &sdk.CallToolParams{Name: "query", Arguments: arguments})
 	require.NoError(t, err)
 	return result
-}
-
-// textOf is the text of result's content, which must be a single TextContent.
-func textOf(result *sdk.CallToolResult) string {
-	if len(result.Content) != 1 {
-		return fmt.Sprintf("<%d content blocks>", len(result.Content))
-	}
-	text, ok := result.Content[0].(*sdk.TextContent)
-	if !ok {
-		return "<not text>"
-	}
-	return text.Text
 }
 
 // compactJSON is the document in indented with its insignificant whitespace removed.
@@ -391,8 +378,7 @@ func manyCategoriesRows(count int) store.Rows {
 // newDescribePeer builds a store of rows under a fresh HOME and connects a client to quarry mcp.
 func newDescribePeer(t *testing.T, rows store.Rows) (context.Context, *mcpPeer) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, rows)
 	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
 	t.Cleanup(cancel)

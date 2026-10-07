@@ -48,8 +48,7 @@ func Test_run_spend_counts_the_whole_period_it_is_given(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStore(t, home, spendRows(
 				[]store.Account{chequingAccount("acct-cad", 1)},
 				spendSplit{id: "s01", account: "acct-cad", category: "cat-fuel", currency: "CAD", day: day(2024, 1, 1), cents: -1000},

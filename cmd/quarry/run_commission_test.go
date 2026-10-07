@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -15,8 +14,7 @@ import (
 )
 
 func Test_run_sync_keeps_a_commission_with_fractions_of_a_cent(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	b := v9fixture.NewBuilder()
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
@@ -32,9 +30,8 @@ func Test_run_sync_keeps_a_commission_with_fractions_of_a_cent(t *testing.T) {
 	sellPK := invest(19, v9fixture.TransactionRow{Units: "-4", Amount: "400.25", Commission: "8.4998"})
 	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "6"})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	require.Empty(t, stderr.String())

@@ -20,8 +20,7 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 		u7 = "quarry: --limit must be 0 or more; 0 prints every row\n"
 		u9 = "quarry: unknown flag: -- note; Run 'quarry sql --help' for usage.\n"
 	)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncAccountsFixture(t, home)
 	cases := []struct {
 		name       string
@@ -84,9 +83,8 @@ func Test_run_read_commands_refuse_a_bad_currency_flag(t *testing.T) {
 	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth", "summary"} {
 		t.Run(command, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), []string{command, "--currency", "EUR"}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{command, "--currency", "EUR"})
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
@@ -109,9 +107,8 @@ func Test_run_sql_refuses_a_multi_line_query_that_starts_with_a_dash_as_an_unkno
 
 func Test_run_findings_rejects_a_bad_status_before_looking_for_a_store(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--status", "closed"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--status", "closed"})
 
 	assert.Equal(t, 2, exitCode)
 	assert.Empty(t, stdout.String())
@@ -119,12 +116,10 @@ func Test_run_findings_rejects_a_bad_status_before_looking_for_a_store(t *testin
 }
 
 func Test_run_spend_refuses_a_bad_currency_flag_before_reading_a_bad_config(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "reporting.currency = \"EUR\"\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"spend", "--currency", "EUR"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"spend", "--currency", "EUR"})
 
 	assert.Equal(t, 2, exitCode)
 	assert.Empty(t, stdout.String())

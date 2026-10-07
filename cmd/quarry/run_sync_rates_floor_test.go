@@ -45,8 +45,7 @@ func dayOf(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 
 // again against a bank that publishes nothing more, with extraArgs; it returns the second sync's stdout and requests.
 func syncTailAnsweredEmpty(t *testing.T, extraArgs ...string) (string, []string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), januaryDay(3))
 	syncThrough(t, fakeValet{"FXUSDCAD": {"2017-01-03": "1.3435", "2017-01-04": "1.3315"}}, "--quicken", bundle.Dir)
 	source := &recordingValet{next: emptyValet()}
@@ -60,8 +59,7 @@ func syncTailAnsweredEmpty(t *testing.T, extraArgs ...string) (string, []string)
 // 2099-12-31, with extraArgs; it returns stdout and the requests the bank saw.
 func syncWithCoveringRate(t *testing.T, extraArgs ...string) (string, []string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	rates := []store.Rate{{Date: dayOf(2017, time.January, 2), USDCAD: money.Rate(1_340_000), Series: "IEXE0101"}}
 	for d := dayOf(2017, time.January, 3); !d.After(dayOf(2099, time.December, 31)); d = d.AddDate(0, 0, 1) {
 		rates = append(rates, store.Rate{Date: d, USDCAD: money.Rate(1_250_000), Series: "FXUSDCAD"})
@@ -79,8 +77,7 @@ func syncWithCoveringRate(t *testing.T, extraArgs ...string) (string, []string) 
 // whose earliest transaction is 2017-01-10 against an empty bank, with extraArgs. It returns the second sync's stdout and requests.
 func syncLaterBundleOverEarlierRates(t *testing.T, extraArgs ...string) (string, []string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	early := writeChequingBundle(t, filepath.Join(home, "Early"), januaryDay(3))
 	later := writeChequingBundle(t, filepath.Join(home, "Later"), januaryDay(10))
 	syncThrough(t, fakeValet{"FXUSDCAD": {"2017-01-03": "1.3435", "2017-01-04": "1.3315"}}, "--quicken", early.Dir)
@@ -95,8 +92,7 @@ func syncLaterBundleOverEarlierRates(t *testing.T, extraArgs ...string) (string,
 // with extraArgs; it returns stdout and the requests the bank saw.
 func syncFutureDatedBundle(t *testing.T, extraArgs ...string) (string, []string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, spendRows([]store.Account{chequingAccount("acct-cad", 1)}),
 		store.Rate{Date: januaryDay(3), USDCAD: money.Rate(1_343_500), Series: "FXUSDCAD"},
 		store.Rate{Date: januaryDay(4), USDCAD: money.Rate(1_331_500), Series: "FXUSDCAD"},
@@ -113,8 +109,7 @@ func syncFutureDatedBundle(t *testing.T, extraArgs ...string) (string, []string)
 // with extraArgs; it returns stdout and the requests the bank saw.
 func syncNoTransactionsWithRates(t *testing.T, extraArgs ...string) (string, []string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, spendRows([]store.Account{chequingAccount("acct-cad", 1)}),
 		store.Rate{Date: januaryDay(3), USDCAD: money.Rate(1_343_500), Series: "FXUSDCAD"},
 		store.Rate{Date: januaryDay(4), USDCAD: money.Rate(1_331_500), Series: "FXUSDCAD"},
@@ -131,8 +126,7 @@ func syncNoTransactionsWithRates(t *testing.T, extraArgs ...string) (string, []s
 // then that bundle again with extraArgs. It returns the middle sync's requests, then the last sync's stdout and requests.
 func syncAfterAnOlderDateWasAnsweredEmpty(t *testing.T, extraArgs ...string) ([]string, string, []string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	later := writeChequingBundle(t, filepath.Join(home, "Later"), januaryDay(10))
 	earlier := writeChequingBundle(t, filepath.Join(home, "Earlier"), januaryDay(3), januaryDay(10))
 	syncThrough(t, fakeValet{"FXUSDCAD": {"2017-01-10": "1.3300", "2017-01-11": "1.3350"}}, "--quicken", later.Dir)

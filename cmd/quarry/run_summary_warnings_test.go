@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -17,12 +16,10 @@ const netWorthNoRatesLine = "the store has no exchange rates, so USD balances ar
 	"pass --currency native to list them, or run quarry sync to fetch rates"
 
 func Test_run_summary_warns_once_per_kind_when_the_store_has_no_exchange_rates(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, summaryNativeRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"summary"}, spendEnvAt(&stdout, &stderr, summaryClock))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"summary"}, summaryClock)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), anomaliesTable("Unusually large charges 2026-09-01 to 2026-09-30 in all accounts, amounts in CAD", "4 charges checked",
@@ -57,9 +54,8 @@ func septemberTimeUnknownText() string {
 // runSummaryText runs quarry summary with args at summaryClock and returns its stdout and stderr.
 func runSummaryText(t *testing.T, args ...string) (string, string) {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), append([]string{"summary"}, args...), spendEnvAt(&stdout, &stderr, summaryClock))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), append([]string{"summary"}, args...), summaryClock)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	return stdout.String(), stderr.String()
@@ -68,8 +64,7 @@ func runSummaryText(t *testing.T, args ...string) (string, string) {
 // seedNativeSummaryStore stores summaryNativeRows, which holds no exchange rates, under a fresh HOME.
 func seedNativeSummaryStore(t *testing.T) string {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, summaryNativeRows())
 	return home
 }
@@ -77,8 +72,7 @@ func seedNativeSummaryStore(t *testing.T) string {
 // seedRatedNativeSummaryStore stores summaryNativeRows with a USD rate first dated October 2, after both month ends.
 func seedRatedNativeSummaryStore(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, summaryNativeRows(), usdRate(day(2026, time.October, 2), 1_350_000))
 }
 
@@ -136,8 +130,7 @@ func Test_run_summary_json_lists_each_kind_dated_before_the_first_rate_and_leave
 }
 
 func Test_run_summary_warns_only_about_the_month_ends_when_no_charge_or_series_needs_a_rate(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, usdBalanceOnlyRows(), usdRate(day(2026, time.October, 2), 1_350_000))
 
 	stdout, stderr := runSummaryText(t)
@@ -149,8 +142,7 @@ func Test_run_summary_warns_only_about_the_month_ends_when_no_charge_or_series_n
 }
 
 func Test_run_summary_json_lists_only_the_month_end_warning_when_no_charge_or_series_needs_a_rate(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStoreWithRates(t, home, usdBalanceOnlyRows(), usdRate(day(2026, time.October, 2), 1_350_000))
 
 	doc, _, _ := runSummaryJSON(t, summaryClock)
@@ -221,9 +213,8 @@ func Test_run_summary_json_native_lists_no_rate_warning(t *testing.T) {
 // siblingStderr is the stderr of quarry args at summaryClock.
 func siblingStderr(t *testing.T, args ...string) string {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), args, spendEnvAt(&stdout, &stderr, summaryClock))
+	exitCode, _, stderr := runSpendCaptureAt(context.Background(), args, summaryClock)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	return stderr.String()

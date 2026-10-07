@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -19,8 +18,7 @@ import (
 )
 
 func Test_run_records_an_import_runs_row_for_the_build(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -38,9 +36,8 @@ func Test_run_records_an_import_runs_row_for_the_build(t *testing.T) {
 	b.Entry(v9fixture.EntryRow{Parent: buyTxn, Amount: "-40.00"})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, _, _ := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
@@ -73,8 +70,7 @@ func Test_run_records_an_import_runs_row_for_the_build(t *testing.T) {
 }
 
 func Test_run_sync_from_keeps_the_earlier_build_in_import_runs(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	snapshotsDir := filepath.Join(storeDirUnder(home), "snapshots")
 	syncBundle(t, writeNamedAccountBundle(t, filepath.Join(home, "DocumentsA"), "Chequing"))
 	earlierManifest := onlyFileWithSuffix(t, snapshotsDir, ".json")
@@ -84,9 +80,8 @@ func Test_run_sync_from_keeps_the_earlier_build_in_import_runs(t *testing.T) {
 	laterManifest := manifestOtherThan(t, snapshotsDir, earlierManifest)
 	require.NoError(t, os.Rename(earlierStore, storePathUnder(home)))
 	rowsBefore := importRunRowsAsText(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--from", strings.TrimSuffix(filepath.Base(laterManifest), ".json")}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--from", strings.TrimSuffix(filepath.Base(laterManifest), ".json")})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	rowsAfter := importRunRowsAsText(t, home)
@@ -97,14 +92,12 @@ func Test_run_sync_from_keeps_the_earlier_build_in_import_runs(t *testing.T) {
 }
 
 func Test_run_sync_from_warns_and_restarts_history_when_the_previous_store_is_not_a_duckdb_database(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncBundle(t, writeNamedAccountBundle(t, filepath.Join(home, "Documents"), "Chequing"))
 	manifest := onlyFileWithSuffix(t, filepath.Join(storeDirUnder(home), "snapshots"), ".json")
 	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a database"), 0o600))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--from", strings.TrimSuffix(filepath.Base(manifest), ".json")}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--from", strings.TrimSuffix(filepath.Base(manifest), ".json")})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: cannot carry import history, findings or exchange rates forward from the previous store (the file is not a DuckDB database); "+
@@ -113,8 +106,7 @@ func Test_run_sync_from_warns_and_restarts_history_when_the_previous_store_is_no
 }
 
 func Test_run_sync_from_warns_and_restarts_history_when_the_previous_run_has_the_largest_id(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncBundle(t, writeNamedAccountBundle(t, filepath.Join(home, "Documents"), "Chequing"))
 	id := snapshotID(onlyFileWithSuffix(t, filepath.Join(storeDirUnder(home), "snapshots"), ".sqlite"))
 	editStore(t, home, "UPDATE import_runs SET id = 9223372036854775807")

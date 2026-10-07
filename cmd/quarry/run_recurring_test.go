@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -59,16 +58,14 @@ func groceryCharge(payee string, day time.Time, cents int64) chargeTxn {
 }
 
 func Test_run_recurring_lists_a_monthly_subscription_with_its_yearly_cost(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	var charges []chargeTxn
 	for month := time.October; len(charges) < 12; month++ {
 		charges = append(charges, groceryCharge("Netflix.com", day(2025, month, 12), 2099))
 	}
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, charges...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"recurring"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -97,16 +94,14 @@ func Test_run_recurring_detects_weekly_quarterly_and_yearly_series(t *testing.T)
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			var charges []chargeTxn
 			for i := c.count - 1; i >= 0; i-- {
 				charges = append(charges, groceryCharge("Gym", lastCharge.AddDate(0, 0, -c.gapDays*i), c.cents))
 			}
 			replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, charges...))
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), []string{"recurring", "--since", "2000"}, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring", "--since", "2000"})
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Empty(t, stderr.String())
@@ -119,8 +114,7 @@ func Test_run_recurring_detects_weekly_quarterly_and_yearly_series(t *testing.T)
 }
 
 func Test_run_recurring_counts_a_split_charge_once_and_leaves_a_refund_out(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	charges := []chargeTxn{
 		groceryCharge("Gym", day(2026, time.April, 10), 2099),
 		groceryCharge("Gym", day(2026, time.May, 10), 2099),
@@ -137,9 +131,8 @@ func Test_run_recurring_counts_a_split_charge_once_and_leaves_a_refund_out(t *te
 		},
 	}
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, charges...))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"recurring", "--since", "2000"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring", "--since", "2000"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

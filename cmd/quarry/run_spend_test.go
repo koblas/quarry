@@ -15,8 +15,7 @@ import (
 )
 
 func Test_run_spend_shows_this_years_spending_by_category_in_each_currency(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
 			chequingAccount("acct-cad", 1),
@@ -50,8 +49,7 @@ func Test_run_spend_shows_this_years_spending_by_category_in_each_currency(t *te
 }
 
 func Test_run_spend_leaves_out_accounts_quicken_does_not_use_in_reports(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, spendRows(
 		[]store.Account{
 			chequingAccount("acct-in", 1),

@@ -21,14 +21,12 @@ func acbSaleLine(date, security, shares, proceeds, outlays, acb, gain string) st
 const acbNothingToShowWarning = "no non-registered account has bought or sold a security; quarry acb has nothing to show"
 
 func Test_run_acb_year_lists_that_years_sales_one_by_one_with_a_total(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\", \"acct-usd\"]\nregistered = [\"acct-rrsp\"]\n")
 	replaceStoreWithRates(t, home, acbRows(),
 		usdRate(day(2024, time.January, 2), 1_250_000), usdRate(day(2026, time.January, 2), 1_400_000))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb", "--year", "2025"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb", "--year", "2025"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -82,16 +80,14 @@ func Test_run_acb_year_is_bounded_by_the_injected_clocks_year(t *testing.T) {
 }
 
 func Test_run_acb_warns_when_no_non_registered_account_has_traded(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
 	rows := spendRows([]store.Account{
 		{ID: "acct-cad", SourceID: 1, Name: "CAD Brokerage", Type: store.AccountTypeBrokerage, Currency: "CAD", Active: true},
 	})
 	replaceStoreWithRates(t, home, rows)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+

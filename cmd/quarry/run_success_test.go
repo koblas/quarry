@@ -29,12 +29,10 @@ type failingWriter struct{ err error }
 func (w failingWriter) Write([]byte) (int, error) { return 0, w.err }
 
 func Test_run_writes_a_verified_snapshot_and_reports_success(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())
@@ -72,8 +70,7 @@ func Test_run_writes_a_verified_snapshot_and_reports_success(t *testing.T) {
 // The leftovers are backdated past the sweep's age gate: a fresh leftover
 // could belong to another sync still in flight.
 func Test_run_removes_leftover_partials_silently_before_syncing(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
 	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 	require.NoError(t, os.MkdirAll(snapshotsDir, 0o700))
@@ -84,9 +81,8 @@ func Test_run_removes_leftover_partials_silently_before_syncing(t *testing.T) {
 	old := time.Now().Add(-2 * time.Hour)
 	require.NoError(t, os.Chtimes(leftover, old, old))
 	require.NoError(t, os.Chtimes(leftoverWAL, old, old))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())
@@ -101,8 +97,7 @@ func Test_run_removes_leftover_partials_silently_before_syncing(t *testing.T) {
 // Once the build was reached, a stdout write failure points at --from
 // --json instead of the manifest: the store result no longer lives there alone.
 func Test_run_points_to_from_when_writing_stdout_fails_after_the_build(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
 	writeErr := errNoSpace
 	var stderr bytes.Buffer
@@ -120,12 +115,10 @@ func Test_run_points_to_from_when_writing_stdout_fails_after_the_build(t *testin
 }
 
 func Test_run_prints_the_manifest_as_json_with_the_json_flag(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"})
 
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())

@@ -34,8 +34,7 @@ func dirNames(t *testing.T, dir string) []string {
 }
 
 func Test_run_snapshots_json_lists_an_upper_case_sqlite_snapshot_with_its_on_disk_paths(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home,
 		snapshotFixture{id: oldestID, bytes: oldestBytes, taken: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), source: homeQuicken, sha256: "aaaa", verified: true},
 		snapshotFixture{id: newestID, bytes: newestBytes, taken: time.Date(2026, 9, 30, 14, 15, 2, 0, time.UTC), source: homeQuicken, sha256: "bbbb", verified: true},
@@ -89,8 +88,7 @@ func Test_run_snapshots_json_lists_an_upper_case_sqlite_snapshot_with_its_on_dis
 }
 
 func Test_run_snapshots_json_gives_an_upper_case_manifest_its_on_disk_path(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home,
 		snapshotFixture{id: newestID, bytes: newestBytes, taken: time.Date(2026, 9, 30, 14, 15, 2, 0, time.UTC), source: homeQuicken, verified: true},
 	)
@@ -105,8 +103,7 @@ func Test_run_snapshots_json_gives_an_upper_case_manifest_its_on_disk_path(t *te
 
 func Test_run_snapshots_lists_an_upper_case_sqlite_snapshot_like_a_lowercase_one(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home,
 		snapshotFixture{id: oldestID, bytes: oldestBytes, taken: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), source: homeQuicken, verified: true},
 		snapshotFixture{id: newestID, bytes: newestBytes, taken: time.Date(2026, 9, 30, 14, 15, 2, 0, time.UTC), source: homeQuicken, verified: true},
@@ -158,8 +155,7 @@ func Test_run_snapshots_prune_deletes_an_upper_case_sqlite_snapshot_and_its_mani
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			pinLocalZone(t)
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			dir := writeSnapshots(t, home,
 				pruneFixture(pruneOldest, oldestBytes, time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC)),
 				pruneFixture(pruneMiddle, keptBytes, time.Date(2026, 9, 29, 9, 0, 11, 0, time.UTC)),

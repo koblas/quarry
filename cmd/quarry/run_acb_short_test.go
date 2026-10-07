@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -60,13 +59,11 @@ type shortDoc struct {
 }
 
 func Test_run_acb_counts_shares_sold_beyond_the_pool_at_no_cost_and_lets_the_next_buy_cover_the_short(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
 	replaceStore(t, home, oversoldRows())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"acb", "--json"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb", "--json"}, holdingsClock())
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc shortDoc

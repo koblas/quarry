@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -38,12 +37,10 @@ func syncSimilarCategories(t *testing.T, home string) (int64, int64) {
 }
 
 func Test_run_findings_lists_similar_categories_with_a_row_per_category(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncSimilarCategories(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--type", "similar-categories"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--type", "similar-categories"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -61,12 +58,10 @@ Ignore a finding by adding its id to findings.ignore in %s; see quarry findings 
 }
 
 func Test_run_findings_json_gives_a_similar_categories_item_its_category_and_splits_and_null_transaction_fields(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	groceriesPK, groceryPK := syncSimilarCategories(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--json", "--type", "similar-categories"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--type", "similar-categories"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {

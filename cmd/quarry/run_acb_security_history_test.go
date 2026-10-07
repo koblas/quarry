@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"regexp"
@@ -202,9 +201,8 @@ func Test_run_acb_security_refuses_a_name_that_matches_no_security(t *testing.T)
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			acbPairFixture(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), append([]string{"acb"}, c.args...), spendEnvAt(&stdout, &stderr, holdingsClock()))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), append([]string{"acb"}, c.args...), holdingsClock())
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())

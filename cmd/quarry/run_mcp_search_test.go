@@ -73,8 +73,7 @@ func Test_run_mcp_search_transactions_cuts_to_its_limit_with_the_mcp_cut_line(t 
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			replaceStore(t, home, searchRows([]store.Account{chequingAccount("acct-chq", 1)}, nil, manySearchTxns(501)...))
 			ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
 			defer cancel()
@@ -119,8 +118,7 @@ const (
 // everything the server wrote to stderr.
 func callSearchRefused(t *testing.T, arguments map[string]any) (*sdk.CallToolResult, string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceSearchStore(t, home)
 	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
 	defer cancel()
@@ -265,8 +263,7 @@ func Test_run_mcp_search_transactions_over_stdio_answers_invalid_utf8_text_with_
 		callPrefix  = `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_transactions","arguments":{"text":"`
 		callSuffix  = `"}}}` + "\n"
 	)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceSearchStore(t, home)
 	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
 	defer cancel()

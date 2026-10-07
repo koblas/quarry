@@ -15,9 +15,8 @@ import (
 // runSummaryJSON runs quarry summary --json with args at now and returns its decoded document, stdout and stderr.
 func runSummaryJSON(t *testing.T, now time.Time, args ...string) (summaryJSONDoc, string, string) {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), append([]string{"summary", "--json"}, args...), spendEnvAt(&stdout, &stderr, now))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), append([]string{"summary", "--json"}, args...), now)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	return decodeSummaryJSON(t, stdout.String()), stdout.String(), stderr.String()
@@ -42,8 +41,7 @@ func compactField(t *testing.T, stdout string, path ...string) string {
 func warningLine(warning string) string { return "quarry: warning: " + warning + "\n" }
 
 func Test_run_summary_json_writes_empty_arrays_and_nulls_for_the_first_month_of_data(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, firstMonthRows())
 
 	doc, _, stderr := runSummaryJSON(t, summaryClock, "--month", "2026-09")
@@ -65,8 +63,7 @@ func Test_run_summary_json_writes_empty_arrays_and_nulls_for_the_first_month_of_
 }
 
 func Test_run_summary_json_writes_null_dates_for_a_store_without_transactions(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}))
 
 	doc, _, _ := runSummaryJSON(t, summaryClock)
@@ -76,8 +73,7 @@ func Test_run_summary_json_writes_null_dates_for_a_store_without_transactions(t 
 }
 
 func Test_run_summary_json_lists_each_currency_of_a_native_summary_separately(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, summaryNativeRows())
 
 	doc, _, _ := runSummaryJSON(t, summaryClock, "--currency", "native")
@@ -97,8 +93,7 @@ func Test_run_summary_json_lists_each_currency_of_a_native_summary_separately(t 
 }
 
 func Test_run_summary_json_says_a_snapshot_taken_before_the_month_ended_does_not_cover_it(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	pinLocalZone(t)
 	rows := summaryRows(true)
 	rows.ImportRuns[0].Snapshot.TakenAt = time.Date(2026, time.September, 28, 14, 2, 0, 0, time.FixedZone("EDT", -4*60*60))
@@ -112,8 +107,7 @@ func Test_run_summary_json_says_a_snapshot_taken_before_the_month_ended_does_not
 }
 
 func Test_run_summary_json_names_the_config_by_its_absolute_path_while_stderr_shows_it_with_a_tilde(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, summaryRows(true))
 	writeConfig(t, home, "[reporting]\ncurrency = \"EUR\"\n")
 
@@ -131,8 +125,7 @@ func Test_run_summary_json_names_the_config_by_its_absolute_path_while_stderr_sh
 }
 
 func Test_run_summary_json_names_a_config_warning_by_its_absolute_path_while_stderr_shows_it_with_a_tilde(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, summaryRows(true))
 	writeConfig(t, home, "colour = \"red\"\n")
 

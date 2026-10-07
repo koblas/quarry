@@ -33,8 +33,7 @@ VALUES (7, '2026-06-01 10:00:00', '2026-06-01 10:00:02', '/snapshots/version-fiv
 	3, 2, 1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13);`
 
 func Test_run_sync_twice_over_a_version_5_store_carries_import_history_forward(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeStoreFixture(t, home, versionFiveStoreDDL)
 	bundle := writeNamedAccountBundle(t, filepath.Join(home, "Documents"), "Chequing")
 	var firstOut, firstErr, secondOut, secondErr bytes.Buffer

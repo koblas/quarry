@@ -31,8 +31,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 			name: "a path that does not exist",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
-				home := t.TempDir()
-				t.Setenv("HOME", home)
+				home := newHome(t)
 				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 				return home, filepath.Join(snapshotsDir, "20260927T143005Z.sqlite")
 			},
@@ -45,8 +44,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 			name: "a directory",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
-				home := t.TempDir()
-				t.Setenv("HOME", home)
+				home := newHome(t)
 				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 				dir := filepath.Join(snapshotsDir, "20260927T143005Z.sqlite")
 				require.NoError(t, os.MkdirAll(dir, 0o700))
@@ -63,8 +61,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 			name: "a .quicken bundle",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
-				home := t.TempDir()
-				t.Setenv("HOME", home)
+				home := newHome(t)
 				bundle := v9fixture.OpenBundle(t, t.TempDir())
 				return home, bundle.Dir
 			},
@@ -78,8 +75,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 			name: "a file with no manifest",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
-				home := t.TempDir()
-				t.Setenv("HOME", home)
+				home := newHome(t)
 				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 				require.NoError(t, os.MkdirAll(snapshotsDir, 0o700))
 				require.NoError(t, os.WriteFile(filepath.Join(snapshotsDir, "20260927T143005Z.sqlite"), []byte("x"), 0o600))
@@ -100,8 +96,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 				if os.Geteuid() == 0 {
 					t.Skip("root ignores file permissions")
 				}
-				home := t.TempDir()
-				t.Setenv("HOME", home)
+				home := newHome(t)
 				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
 				require.NoError(t, os.MkdirAll(snapshotsDir, 0o700))
 				path := filepath.Join(snapshotsDir, "20260927T143005Z.sqlite")
@@ -123,8 +118,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 			name: "a snapshot whose hash changed",
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
-				home := t.TempDir()
-				t.Setenv("HOME", home)
+				home := newHome(t)
 				bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
 				var stdout, stderr bytes.Buffer
 				require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr))
@@ -155,9 +149,8 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			home, from := c.setup(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), []string{"sync", "--from", from}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", from})
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
@@ -169,11 +162,9 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 }
 
 func Test_run_sync_from_an_unknown_id_points_at_quarry_snapshots(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	var stdout, stderr bytes.Buffer
+	newHome(t)
 
-	exitCode := run(context.Background(), []string{"sync", "--from", "20260601T090000Z"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", "20260601T090000Z"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -299,8 +290,7 @@ func Test_run_sync_from_refuses_what_it_cannot_resolve(t *testing.T) {
 	for _, c := range cases {
 		for _, format := range [][]string{nil, {"--json"}} {
 			t.Run(c.name+" "+strings.Join(format, " "), func(t *testing.T) {
-				home := t.TempDir()
-				t.Setenv("HOME", home)
+				home := newHome(t)
 				from := c.arrange(t, home)
 
 				exitCode, stdout, stderr := runSyncFrom(t, from, format...)

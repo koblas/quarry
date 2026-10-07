@@ -40,8 +40,7 @@ func storeIdentity(t *testing.T, stdout string) ([]string, string) {
 
 func Test_run_snapshots_prune_dry_run_lists_neither_the_recorded_snapshot_nor_its_hard_link(t *testing.T) {
 	pinLocalZone(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	hardLink(t, snapshotFile(dir, pruneOldest), snapshotFile(dir, linkID))
 	buildStoreFrom(t, home, filepath.Join(dir, pruneOldest+".sqlite"))
@@ -60,8 +59,7 @@ func Test_run_snapshots_prune_dry_run_lists_neither_the_recorded_snapshot_nor_it
 }
 
 func Test_run_snapshots_json_marks_only_the_recorded_snapshot_when_another_is_a_hard_link_to_it(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	hardLink(t, snapshotFile(dir, pruneOldest), snapshotFile(dir, linkID))
 	buildStoreFrom(t, home, filepath.Join(dir, pruneOldest+".sqlite"))
@@ -75,8 +73,7 @@ func Test_run_snapshots_json_marks_only_the_recorded_snapshot_when_another_is_a_
 }
 
 func Test_run_snapshots_prune_json_lists_neither_the_recorded_snapshot_nor_its_hard_link(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	hardLink(t, snapshotFile(dir, pruneOldest), snapshotFile(dir, linkID))
 	buildStoreFrom(t, home, filepath.Join(dir, pruneOldest+".sqlite"))
@@ -100,8 +97,7 @@ func Test_run_snapshots_prune_json_lists_neither_the_recorded_snapshot_nor_its_h
 }
 
 func Test_run_snapshots_prune_says_nothing_to_delete_when_only_a_hard_link_of_the_stores_snapshot_lies_beyond_the_newest_n(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	dir := writeSnapshots(t, home, pruneFixture(pruneNewest, newestBytes, time.Date(2026, 9, 30, 18, 30, 0, 0, time.UTC)))
 	hardLink(t, snapshotFile(dir, pruneNewest), snapshotFile(dir, linkID))
 	buildStoreFrom(t, home, snapshotFile(dir, pruneNewest))

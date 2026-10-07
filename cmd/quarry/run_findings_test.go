@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -17,8 +16,7 @@ import (
 )
 
 func Test_run_findings_lists_open_findings_by_type_with_their_fix(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	visaPK := b.Account(v9fixture.AccountRow{Name: "Visa", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -38,9 +36,8 @@ func Test_run_findings_lists_open_findings_by_type_with_their_fix(t *testing.T) 
 		b.Entry(v9fixture.EntryRow{Parent: txn, Amount: amount})
 	}
 	syncBundle(t, b.WriteBundle(t, filepath.Join(home, "Documents")))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -61,13 +58,11 @@ Ignore a finding by adding its id to findings.ignore in %s; see quarry findings 
 }
 
 func Test_run_findings_says_no_open_findings_when_the_store_has_none(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, spendRows([]store.Account{chequingAccount("acct-1", 1)},
 		spendSplit{id: "1", account: "acct-1", category: "cat-fuel", payee: "payee-costco", currency: "CAD", day: day(2026, 9, 1), cents: -4500}))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -75,14 +70,12 @@ func Test_run_findings_says_no_open_findings_when_the_store_has_none(t *testing.
 }
 
 func Test_run_findings_refuses_a_store_built_before_findings_existed(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeStoreFixture(t, home, phaseOneImportRunsDDL+
 		"CREATE TABLE store_info (format_version INTEGER, quarry_version VARCHAR, built_at TIMESTAMP);"+
 		"INSERT INTO store_info VALUES (3, '0.3.0', TIMESTAMP '2026-09-27 14:30:05');")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())

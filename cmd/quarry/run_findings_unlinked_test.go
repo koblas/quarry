@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -48,12 +47,10 @@ func syncUnlinkedPairs(t *testing.T, home string) unlinkedPairs {
 }
 
 func Test_run_findings_lists_an_unlinked_transfer_pair_with_its_category_cells(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	p := syncUnlinkedPairs(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--type", "unlinked-transfer"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--type", "unlinked-transfer"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -71,12 +68,10 @@ Ignore a finding by adding its id to findings.ignore in %[5]s; see quarry findin
 }
 
 func Test_run_findings_json_gives_an_unlinked_transfer_item_its_category_path_or_null(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	p := syncUnlinkedPairs(t, home)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings", "--json", "--type", "unlinked-transfer"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--type", "unlinked-transfer"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {

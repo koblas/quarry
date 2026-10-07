@@ -24,8 +24,7 @@ var errNoSpace = errors.New("no space left on device")
 // One assert.JSONEq against a full literal catches a wrong type, a missing
 // key, or a leaked display-only field (source_id, closed, active) at once.
 func Test_run_reports_the_store_result_alongside_the_manifest_as_json(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -52,9 +51,8 @@ func Test_run_reports_the_store_result_alongside_the_manifest_as_json(t *testing
 	b.Reconcile(v9fixture.ReconcileRow{Account: walletPK, EndDate: &day, EndingBalance: "250.00"})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"})
 
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())
@@ -106,8 +104,7 @@ func Test_run_reports_the_store_result_alongside_the_manifest_as_json(t *testing
 // Once the build was reached, a failed validation still writes the --json document
 // with "built": false, instead of returning before anything is written.
 func Test_run_prints_the_unbuilt_store_as_json_when_validation_fails(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Closed: true})
@@ -127,9 +124,8 @@ func Test_run_prints_the_unbuilt_store_as_json_when_validation_fails(t *testing.
 	b.Entry(v9fixture.EntryRow{Parent: mismatchedTxn, Amount: "-202.40"})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"})
 
 	assert.Equal(t, 1, exitCode)
 
@@ -188,8 +184,7 @@ func Test_run_prints_the_unbuilt_store_as_json_when_validation_fails(t *testing.
 // Once the build was reached, a stdout write failure still points at
 // --from --json under --json, the same as it does on the human path.
 func Test_run_points_at_from_json_when_stdout_fails_writing_a_failed_validation_as_json(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -216,17 +211,15 @@ func Test_run_points_at_from_json_when_stdout_fails_writing_a_failed_validation_
 // Two never-reconciled accounts with opposite closed/active flags, so a
 // hardcoded closed:false or active:true in the renderer cannot pass.
 func Test_run_lists_never_reconciled_accounts_in_json_and_succeeds(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	closedPK := b.Account(v9fixture.AccountRow{Name: "Zulu Card", Type: "CREDITCARD", Currency: "CAD", Closed: true})
 	inactivePK := b.Account(v9fixture.AccountRow{Name: "Alpha Wallet", Type: "SAVINGS", Currency: "CAD"})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"})
 
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())
