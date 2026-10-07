@@ -556,10 +556,10 @@ Scenario: SCENARIO-29 — accounts marks linked-tracking accounts
 | SCENARIO-29 | FOLD into SCENARIO-27 — a status part and one JSON field over the Accounts read 27 already widens; the new Long text says "linked tracking" and that is only true once 29's Status lands |
 
 ## BDD Acceptance Progress
-- [x] SCENARIO-01: sync records which transactions Quicken leaves out of reports — `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_records_which_transactions_are_excluded_from_reports`
-- [x] SCENARIO-02: sync records which accounts Quicken uses in reports — delivered by SCENARIO-01 — `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_records_which_accounts_are_used_in_reports`
-- [x] SCENARIO-03: sync dates each transaction by its register date — delivered by SCENARIO-01 — `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_dates_each_transaction_by_its_register_date`
-- [x] SCENARIO-04: sync stores splits on Quicken's Uncategorized category as uncategorized — delivered by SCENARIO-01 — `cmd/quarry/run_sync_reports_test.go` `Test_run_sync_stores_uncategorized_splits_with_no_category`
+- [x] SCENARIO-01: sync records which transactions Quicken leaves out of reports — `cmd/quarry/run_sync_test.go` `Test_run_sync_records_which_transactions_are_excluded_from_reports`
+- [x] SCENARIO-02: sync records which accounts Quicken uses in reports — delivered by SCENARIO-01 — `cmd/quarry/run_sync_test.go` `Test_run_sync_records_which_accounts_are_used_in_reports`
+- [x] SCENARIO-03: sync dates each transaction by its register date — delivered by SCENARIO-01 — `cmd/quarry/run_sync_test.go` `Test_run_sync_dates_each_transaction_by_its_register_date`
+- [x] SCENARIO-04: sync stores splits on Quicken's Uncategorized category as uncategorized — delivered by SCENARIO-01 — `cmd/quarry/run_sync_test.go` `Test_run_sync_stores_uncategorized_splits_with_no_category`
 - [x] SCENARIO-05: spend refuses a store built by an older quarry — delivered by SCENARIO-09 — `cmd/quarry/run_read_refusals_test.go` `Test_run_spend_refuses_a_store_built_by_an_older_quarry`
 - [x] SCENARIO-06: v_cash_flow keeps only real income and spending — `cmd/quarry/run_sql_views_test.go` `Test_run_sql_cash_flow_keeps_only_real_income_and_spending`
 - [x] SCENARIO-07: spending leaves out accounts Quicken does not use in reports — delivered by SCENARIO-09 — `cmd/quarry/run_spend_test.go` `Test_run_spend_leaves_out_accounts_quicken_does_not_use_in_reports`

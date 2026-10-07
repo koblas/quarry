@@ -322,7 +322,7 @@ Architect sizing pass 2026-10-03 (one pass over all 12; folds change no scenario
 - [x] SCENARIO-06: Sync fails when holdings' share counts differ from Quicken — `cmd/quarry/run_share_gate_test.go` `Test_run_sync_fails_when_holdings_share_counts_differ_from_quicken`
 - [x] SCENARIO-07: A share failure joins a balance failure in one line — delivered by SCENARIO-06 — `cmd/quarry/run_share_gate_test.go` `Test_run_sync_joins_a_share_failure_to_a_balance_failure_in_one_line`
 - [x] SCENARIO-09: Status reports the share check without "not imported" — `cmd/quarry/run_status_shares_test.go` `Test_run_status_reports_the_share_check`
-- [x] SCENARIO-10: Sync over a pre-4a store carries import history forward — delivered by SCENARIO-09 — `cmd/quarry/run_sync_pre4a_store_test.go` `Test_run_sync_twice_over_a_version_5_store_carries_import_history_forward`
+- [x] SCENARIO-10: Sync over a pre-4a store carries import history forward — delivered by SCENARIO-09 — `cmd/quarry/run_sync_test.go` `Test_run_sync_twice_over_a_version_5_store_carries_import_history_forward`
 - [x] SCENARIO-11: Existing surfaces stop saying investments are not imported — `cmd/quarry/run_accounts_not_valued_test.go` `Test_run_accounts_shows_not_valued_for_brokerage_and_retirement_accounts`
 
 - [x] SCENARIO-13: Sync keeps a commission with fractions of a cent — `cmd/quarry/run_commission_test.go` `Test_run_sync_keeps_a_commission_with_fractions_of_a_cent`

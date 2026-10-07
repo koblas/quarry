@@ -411,24 +411,24 @@ Ruled (sizing pass 2026-10-01):
 - [x] SCENARIO-02: recurring detects weekly, quarterly and yearly series — delivered by SCENARIO-01: `cmd/quarry/run_recurring_test.go` `Test_run_recurring_detects_weekly_quarterly_and_yearly_series`
 - [x] SCENARIO-03: a charge off schedule starts the series again — delivered by SCENARIO-01: `internal/report/recurring_test.go` `Test_recurring_starts_the_series_again_after_a_charge_off_schedule`
 - [x] SCENARIO-04: a split transaction counts once and a refund does not break the series — delivered by SCENARIO-01: `cmd/quarry/run_recurring_test.go` `Test_run_recurring_counts_a_split_charge_once_and_leaves_a_refund_out`
-- [x] SCENARIO-05: a series ends after its cadence's quiet period — `cmd/quarry/run_recurring_state_test.go` `Test_run_recurring_marks_a_series_ended_one_day_past_its_cadences_quiet_period`
-- [x] SCENARIO-06: a series first charged in the window is marked new — delivered by SCENARIO-05: `cmd/quarry/run_recurring_state_test.go` `Test_run_recurring_marks_a_series_first_charged_in_the_window_as_new`
-- [x] SCENARIO-07: price changes are listed both ways with first to latest — `cmd/quarry/run_recurring_price_test.go` `Test_run_recurring_lists_price_changes_both_ways_from_first_to_latest`
-- [x] SCENARIO-08: recurring --json returns the series document — delivered by SCENARIO-07: `cmd/quarry/run_recurring_json_test.go` `Test_run_recurring_json_returns_the_series_document`
-- [x] SCENARIO-09: a bill whose amount changes most months is not listed — delivered by SCENARIO-07: `cmd/quarry/run_recurring_price_test.go` `Test_run_recurring_leaves_out_a_bill_whose_amount_changes_most_months`
-- [x] SCENARIO-10: payees differing in store numbers are one series, currencies are two — delivered by SCENARIO-07: `cmd/quarry/run_recurring_json_test.go` `Test_run_recurring_merges_payees_differing_in_store_numbers_and_splits_currencies`
-- [x] SCENARIO-11: recurring --account lists only series charged in that account — `cmd/quarry/run_recurring_account_test.go` `Test_run_recurring_lists_only_the_series_charged_in_the_named_account`
-- [x] SCENARIO-12: no series in the window says so — delivered by SCENARIO-11: `cmd/quarry/run_recurring_empty_test.go` `Test_run_recurring_says_when_no_series_runs_in_the_period`
-- [x] SCENARIO-13: recurring refuses usage and store problems — delivered by SCENARIO-11: `cmd/quarry/run_recurring_refusals_test.go` `Test_run_recurring_refuses_usage_and_account_problems`
+- [x] SCENARIO-05: a series ends after its cadence's quiet period — `cmd/quarry/run_recurring_test.go` `Test_run_recurring_marks_a_series_ended_one_day_past_its_cadences_quiet_period`
+- [x] SCENARIO-06: a series first charged in the window is marked new — delivered by SCENARIO-05: `cmd/quarry/run_recurring_test.go` `Test_run_recurring_marks_a_series_first_charged_in_the_window_as_new`
+- [x] SCENARIO-07: price changes are listed both ways with first to latest — `cmd/quarry/run_recurring_test.go` `Test_run_recurring_lists_price_changes_both_ways_from_first_to_latest`
+- [x] SCENARIO-08: recurring --json returns the series document — delivered by SCENARIO-07: `cmd/quarry/run_recurring_test.go` `Test_run_recurring_json_returns_the_series_document`
+- [x] SCENARIO-09: a bill whose amount changes most months is not listed — delivered by SCENARIO-07: `cmd/quarry/run_recurring_test.go` `Test_run_recurring_leaves_out_a_bill_whose_amount_changes_most_months`
+- [x] SCENARIO-10: payees differing in store numbers are one series, currencies are two — delivered by SCENARIO-07: `cmd/quarry/run_recurring_test.go` `Test_run_recurring_merges_payees_differing_in_store_numbers_and_splits_currencies`
+- [x] SCENARIO-11: recurring --account lists only series charged in that account — `cmd/quarry/run_recurring_test.go` `Test_run_recurring_lists_only_the_series_charged_in_the_named_account`
+- [x] SCENARIO-12: no series in the window says so — delivered by SCENARIO-11: `cmd/quarry/run_recurring_test.go` `Test_run_recurring_says_when_no_series_runs_in_the_period`
+- [x] SCENARIO-13: recurring refuses usage and store problems — delivered by SCENARIO-11: `cmd/quarry/run_recurring_test.go` `Test_run_recurring_refuses_usage_and_account_problems`
 - [x] SCENARIO-14: a charge over twice the payee's usual is listed — `cmd/quarry/run_anomalies_test.go` `Test_run_anomalies_lists_a_charge_over_twice_the_payees_usual`
 - [x] SCENARIO-15: anomaly thresholds hold at their boundaries — delivered by SCENARIO-14: `internal/report/anomalies_test.go` `Test_anomalies_thresholds_hold_at_their_boundaries`
 - [x] SCENARIO-16: each report's window flags describe what that report does with them — delivered by SCENARIO-14: `internal/cli/report_test.go` `Test_each_reports_window_flags_describe_what_it_does_with_them`
-- [x] SCENARIO-17: a payee with little history is judged against its category — `cmd/quarry/run_anomalies_category_test.go` `Test_run_anomalies_judges_a_first_time_payee_against_its_category`
-- [x] SCENARIO-18: a charge with no usable history is counted as not judged — delivered by SCENARIO-17: `cmd/quarry/run_anomalies_category_test.go` `Test_run_anomalies_counts_an_uncategorized_first_time_charge_as_not_judged`
-- [x] SCENARIO-19: anomalies --json returns the anomalies document — `cmd/quarry/run_anomalies_json_test.go` `Test_run_anomalies_json_returns_the_anomalies_document`
-- [x] SCENARIO-20: history outside the window and other accounts still counts — `cmd/quarry/run_anomalies_account_test.go` `Test_run_anomalies_account_judges_the_named_accounts_charge_against_history_from_every_account`
-- [x] SCENARIO-21: no charges in the window says so — delivered by SCENARIO-20: `cmd/quarry/run_anomalies_empty_test.go` `Test_run_anomalies_says_when_no_charge_falls_in_the_window`
-- [x] SCENARIO-22: anomalies refuses usage and store problems — delivered by SCENARIO-20: `cmd/quarry/run_anomalies_refusals_test.go` `Test_run_anomalies_refuses_usage_and_store_problems`
+- [x] SCENARIO-17: a payee with little history is judged against its category — `cmd/quarry/run_anomalies_test.go` `Test_run_anomalies_judges_a_first_time_payee_against_its_category`
+- [x] SCENARIO-18: a charge with no usable history is counted as not judged — delivered by SCENARIO-17: `cmd/quarry/run_anomalies_test.go` `Test_run_anomalies_counts_an_uncategorized_first_time_charge_as_not_judged`
+- [x] SCENARIO-19: anomalies --json returns the anomalies document — `cmd/quarry/run_anomalies_test.go` `Test_run_anomalies_json_returns_the_anomalies_document`
+- [x] SCENARIO-20: history outside the window and other accounts still counts — `cmd/quarry/run_anomalies_test.go` `Test_run_anomalies_account_judges_the_named_accounts_charge_against_history_from_every_account`
+- [x] SCENARIO-21: no charges in the window says so — delivered by SCENARIO-20: `cmd/quarry/run_anomalies_test.go` `Test_run_anomalies_says_when_no_charge_falls_in_the_window`
+- [x] SCENARIO-22: anomalies refuses usage and store problems — delivered by SCENARIO-20: `cmd/quarry/run_anomalies_test.go` `Test_run_anomalies_refuses_usage_and_store_problems`
 
 ## Reference check
 Last step before the gate round (step 7). Outcome recorded in `REFERENCE-CHECK.md` beside this file.

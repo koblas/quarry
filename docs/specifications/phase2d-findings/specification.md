@@ -578,34 +578,34 @@ Ruled: the finding core (type list and order, id grammar, P2d-3 status function,
 | 29 (29) | Moved to `## Reference check` — manual review on the real file, no Go acceptance test, no architect or developer run |
 
 ## BDD Acceptance Progress
-- [x] SCENARIO-01: sync records findings and prints a Findings line — `cmd/quarry/run_sync_findings_test.go` `Test_run_sync_records_findings_and_prints_the_findings_line`
-- [x] SCENARIO-02: a transfer with no matching leg is a one-sided-transfer finding — delivered by SCENARIO-01 — `cmd/quarry/run_sync_findings_test.go` `Test_run_sync_records_a_one_sided_transfer_with_its_from_split_as_the_item`
-- [x] SCENARIO-03: uncategorized findings count what cashflow counts — delivered by SCENARIO-01 — `cmd/quarry/run_sync_findings_test.go` `Test_run_sync_uncategorized_findings_hold_what_cashflow_counts`
+- [x] SCENARIO-01: sync records findings and prints a Findings line — `cmd/quarry/run_sync_test.go` `Test_run_sync_records_findings_and_prints_the_findings_line`
+- [x] SCENARIO-02: a transfer with no matching leg is a one-sided-transfer finding — delivered by SCENARIO-01 — `cmd/quarry/run_sync_test.go` `Test_run_sync_records_a_one_sided_transfer_with_its_from_split_as_the_item`
+- [x] SCENARIO-03: uncategorized findings count what cashflow counts — delivered by SCENARIO-01 — `cmd/quarry/run_sync_test.go` `Test_run_sync_uncategorized_findings_hold_what_cashflow_counts`
 - [x] SCENARIO-04: a successful sync lists one-sided transfers only as findings — `cmd/quarry/run_transfers_test.go` `Test_run_lists_one_sided_transfers_only_as_findings_on_a_successful_sync`
 - [x] SCENARIO-05: a validation failure says to fix them in Quicken — delivered by SCENARIO-04 — `cmd/quarry/run_validation_test.go` `Test_run_lists_mismatched_splits_in_the_failed_validation_stdout_block`
-- [x] SCENARIO-06: a finding no longer found is marked fixed on the next sync — `cmd/quarry/run_sync_findings_test.go` `Test_run_sync_marks_a_finding_no_longer_found_fixed_at_the_build_time`
-- [x] SCENARIO-07: a fixed finding that comes back reopens and is not new — delivered by SCENARIO-06 — `cmd/quarry/run_sync_findings_test.go` `Test_run_sync_reopens_a_fixed_finding_with_its_first_found_at_and_not_new`
-- [x] SCENARIO-08: findings history that cannot be carried forward restarts with a warning — `cmd/quarry/run_findings_carry_test.go` `Test_run_sync_from_warns_and_restarts_findings_history_when_the_previous_findings_table_repeats_an_id`
-- [x] SCENARIO-09: two same-amount transactions within 3 days are a possible duplicate — `cmd/quarry/run_sync_duplicates_test.go` `Test_run_sync_records_two_same_amount_transactions_within_three_days_as_a_duplicate`
-- [x] SCENARIO-10: two reconciled look-alikes are not a duplicate — delivered by SCENARIO-09 — `cmd/quarry/run_sync_duplicates_test.go` `Test_run_sync_does_not_flag_two_reconciled_look_alikes_as_a_duplicate`
+- [x] SCENARIO-06: a finding no longer found is marked fixed on the next sync — `cmd/quarry/run_sync_test.go` `Test_run_sync_marks_a_finding_no_longer_found_fixed_at_the_build_time`
+- [x] SCENARIO-07: a fixed finding that comes back reopens and is not new — delivered by SCENARIO-06 — `cmd/quarry/run_sync_test.go` `Test_run_sync_reopens_a_fixed_finding_with_its_first_found_at_and_not_new`
+- [x] SCENARIO-08: findings history that cannot be carried forward restarts with a warning — `cmd/quarry/run_findings_test.go` `Test_run_sync_from_warns_and_restarts_findings_history_when_the_previous_findings_table_repeats_an_id`
+- [x] SCENARIO-09: two same-amount transactions within 3 days are a possible duplicate — `cmd/quarry/run_sync_test.go` `Test_run_sync_records_two_same_amount_transactions_within_three_days_as_a_duplicate`
+- [x] SCENARIO-10: two reconciled look-alikes are not a duplicate — delivered by SCENARIO-09 — `cmd/quarry/run_sync_test.go` `Test_run_sync_does_not_flag_two_reconciled_look_alikes_as_a_duplicate`
 - [x] SCENARIO-11: findings lists open findings by type with their fix — `cmd/quarry/run_findings_test.go` `Test_run_findings_lists_open_findings_by_type_with_their_fix`
 - [x] SCENARIO-12: findings with none open says so — delivered by SCENARIO-11 — `cmd/quarry/run_findings_test.go` `Test_run_findings_says_no_open_findings_when_the_store_has_none`
 - [x] SCENARIO-13: findings refuses a store built before findings existed — delivered by SCENARIO-11 — `cmd/quarry/run_findings_test.go` `Test_run_findings_refuses_a_store_built_before_findings_existed`
-- [x] SCENARIO-14: findings --json returns the worklist as a document — `cmd/quarry/run_findings_json_test.go` `Test_run_findings_json_prints_the_ruled_document_for_one_open_duplicate`
-- [x] SCENARIO-15: a malformed findings.ignore is refused before Quicken is touched — `cmd/quarry/run_findings_ignore_config_test.go` `Test_run_sync_refuses_a_findings_ignore_that_is_not_a_list_before_taking_a_snapshot`
-- [x] SCENARIO-16: an id listed in findings.ignore is ignored — `cmd/quarry/run_findings_ignore_test.go` `Test_run_findings_leaves_an_ignored_id_off_the_list_and_counts_it_in_the_footer`
-- [x] SCENARIO-17: an ignored id that is not a finding warns — delivered by SCENARIO-16 — `cmd/quarry/run_findings_ignore_test.go` `Test_run_findings_warns_about_an_ignored_id_that_is_not_a_finding`
-- [x] SCENARIO-18: findings filters by status and type — `cmd/quarry/run_findings_filters_test.go` `Test_run_findings_status_all_type_duplicate_marks_ignored_shows_fixed_as_a_date_line_and_counts_duplicates_only`
+- [x] SCENARIO-14: findings --json returns the worklist as a document — `cmd/quarry/run_findings_test.go` `Test_run_findings_json_prints_the_ruled_document_for_one_open_duplicate`
+- [x] SCENARIO-15: a malformed findings.ignore is refused before Quicken is touched — `cmd/quarry/run_findings_test.go` `Test_run_sync_refuses_a_findings_ignore_that_is_not_a_list_before_taking_a_snapshot`
+- [x] SCENARIO-16: an id listed in findings.ignore is ignored — `cmd/quarry/run_findings_test.go` `Test_run_findings_leaves_an_ignored_id_off_the_list_and_counts_it_in_the_footer`
+- [x] SCENARIO-17: an ignored id that is not a finding warns — delivered by SCENARIO-16 — `cmd/quarry/run_findings_test.go` `Test_run_findings_warns_about_an_ignored_id_that_is_not_a_finding`
+- [x] SCENARIO-18: findings filters by status and type — `cmd/quarry/run_findings_test.go` `Test_run_findings_status_all_type_duplicate_marks_ignored_shows_fixed_as_a_date_line_and_counts_duplicates_only`
 - [x] SCENARIO-19: status shows the open findings count — `cmd/quarry/run_status_findings_test.go` `Test_run_status_shows_the_findings_line_with_open_and_ignored_counts`
 - [x] SCENARIO-20: status warns on a bad config and still reports — delivered by SCENARIO-19 — `cmd/quarry/run_status_findings_test.go` `Test_run_status_warns_on_a_bad_config_and_still_reports`
 - [x] SCENARIO-21: sql --csv prints every row with a header — `internal/cli/sql_test.go` `Test_sql_csv_prints_every_row_with_a_header`
-- [x] SCENARIO-22: findings --csv prints one row per item — `cmd/quarry/run_findings_csv_test.go` `Test_run_findings_status_all_csv_prints_a_row_per_duplicate_item_and_one_row_for_the_fixed_finding`
-- [x] SCENARIO-23: findings rejects usage it cannot use — delivered by SCENARIO-22 — `cmd/quarry/run_findings_usage_test.go` `Test_run_findings_rejects_usage_it_cannot_use`
-- [x] SCENARIO-24: opposite amounts in two accounts not linked as a transfer are an unlinked transfer — `cmd/quarry/run_sync_unlinked_test.go` `Test_run_sync_records_opposite_amounts_in_two_cad_accounts_as_an_unlinked_transfer_and_not_the_cad_usd_pair`
-- [x] SCENARIO-25: a payee whose category goes back and forth is in mixed categories — `cmd/quarry/run_sync_mixed_test.go` `Test_run_sync_records_costco_as_mixed_categories_and_not_shell`
-- [x] SCENARIO-26: payees that differ only in case, punctuation or numbers are variants — `cmd/quarry/run_sync_payee_variants_test.go` `Test_run_sync_records_tim_hortons_variants_and_not_unrelated_payees`
-- [x] SCENARIO-27: categories that differ only in case, punctuation or a plural are similar — `cmd/quarry/run_sync_similar_categories_test.go` `Test_run_sync_records_similar_expense_categories_and_not_the_income_one`
-- [x] SCENARIO-28: an unused category is reported only when nothing imported or counted uses it — `cmd/quarry/run_sync_unused_category_test.go` `Test_run_sync_records_unused_categories_but_not_one_an_investment_or_budget_uses`
+- [x] SCENARIO-22: findings --csv prints one row per item — `cmd/quarry/run_findings_test.go` `Test_run_findings_status_all_csv_prints_a_row_per_duplicate_item_and_one_row_for_the_fixed_finding`
+- [x] SCENARIO-23: findings rejects usage it cannot use — delivered by SCENARIO-22 — `cmd/quarry/run_findings_test.go` `Test_run_findings_rejects_usage_it_cannot_use`
+- [x] SCENARIO-24: opposite amounts in two accounts not linked as a transfer are an unlinked transfer — `cmd/quarry/run_sync_test.go` `Test_run_sync_records_opposite_amounts_in_two_cad_accounts_as_an_unlinked_transfer_and_not_the_cad_usd_pair`
+- [x] SCENARIO-25: a payee whose category goes back and forth is in mixed categories — `cmd/quarry/run_sync_test.go` `Test_run_sync_records_costco_as_mixed_categories_and_not_shell`
+- [x] SCENARIO-26: payees that differ only in case, punctuation or numbers are variants — `cmd/quarry/run_sync_test.go` `Test_run_sync_records_tim_hortons_variants_and_not_unrelated_payees`
+- [x] SCENARIO-27: categories that differ only in case, punctuation or a plural are similar — `cmd/quarry/run_sync_test.go` `Test_run_sync_records_similar_expense_categories_and_not_the_income_one`
+- [x] SCENARIO-28: an unused category is reported only when nothing imported or counted uses it — `cmd/quarry/run_sync_test.go` `Test_run_sync_records_unused_categories_but_not_one_an_investment_or_budget_uses`
 
 ## Reference check
 Last step before the gate round (step 7), per the reference-check rule; not a BDD scenario because it has no Go acceptance test. Outcome recorded in `REFERENCE-CHECK.md` beside this file.
