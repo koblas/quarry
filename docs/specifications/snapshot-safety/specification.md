@@ -83,6 +83,8 @@ Paths `~`-abbreviated on stderr, absolute in `--json` and `warnings[]` (2a rule)
 | L6 | `~/Library/Application Support/quarry` exists and is not a folder (sync: MkdirAll fails and Lstat(dir) shows a non-folder; prune: Stat(dir) succeeds on a non-folder; Lstat of the lock returns ENOTDIR) | both | `quarry: ~/Library/Application Support/quarry is not a folder; rename or remove it, then run the command again` | 1 |
 | L7 | the quarry folder is a folder but `quarry.lock` cannot be looked up in it (Lstat fails other than not-exist and ENOTDIR: EACCES, ELOOP) | both | `quarry: cannot open ~/Library/Application Support/quarry: <OS reason per G1>; make it readable and writable by your user, then run the command again` | 1 |
 
+L6 and L7 are built and pinned at the lock seam; today's binary refuses these inputs earlier at config load (BR-L3 order) — see Follow-ups.
+
 One shared lock-held line per command; it does not name the holder (no pid in the file).
 
 ### Help Long changes
@@ -136,8 +138,8 @@ runs even while a sync is running.
 | `quarry.lock` mode 0400 | locks fine | 0 |
 | `quarry.lock` mode 0000 | L4b | 1 |
 | quarry folder read-only, no `quarry.lock` | L4a | 1 |
-| quarry folder path is a file | L6 (sync and prune) | 1 |
-| quarry folder mode 0600 (not searchable) | L7 `permission denied` (sync and prune) | 1 |
+| quarry folder path is a file | refused by config load first: `quarry: cannot read ~/Library/Application Support/quarry/config.toml: not a directory; fix the file and run the command again` (L6 is reachable only once config load stops refusing first — follow-up) | 1 |
+| quarry folder mode 0600 (not searchable) | refused by config load first: `quarry: cannot read ~/Library/Application Support/quarry/config.toml: permission denied; fix the file and run the command again` (L7 likewise — follow-up) | 1 |
 | prune, quarry folder missing | `Nothing to delete: no snapshots in ~/Library/Application Support/quarry/snapshots`; creates nothing | 0 |
 | first-ever sync, folder missing | folder 0700, `quarry.lock` 0600, proceeds | 0 |
 | status/sql/reports/MCP while a sync runs | unaffected | as today |
