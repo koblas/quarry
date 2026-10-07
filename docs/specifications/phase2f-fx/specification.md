@@ -94,7 +94,7 @@ None of 2f exists yet. There is no `--currency`, no `fx_rates`, no config key an
 | sync sync.go | `--quicken/--from` | snapshot.Server | n/a |
 
 - Only spend, cashflow, recurring and anomalies share reportFlags.
-- Help Long for spend, cashflow and recurring says "CAD and USD are listed separately, never added together". A `--currency` default makes that false. It is pinned byte-exact in internal/cli/report_help_test.go.
+- Help Long for spend, cashflow and recurring says "CAD and USD are listed separately, never added together". A `--currency` default makes that false. It is pinned byte-exact in internal/cli/report_test.go.
 - Money is int64 cents. `formatMoney` (render.go:250) is used for text and `jsonMoney` (json.go:297, 2-decimal string) for JSON. No money-rounding helper exists.
 
 ## Store
@@ -118,7 +118,7 @@ None of 2f exists yet. There is no `--currency`, no `fx_rates`, no config key an
 - cmd/quarry/run_read_refusals_test.go:46-60 and :~174
 - run_usage_test.go:~200-225
 - run_read_usage_test.go:30-60
-- internal/cli/report_help_test.go
+- internal/cli/report_test.go
 - json_*_internal_test.go key-set pins
 - run_cashflow_invariant_test.go:76 (spend Total = cashflow Spent per currency)
 
@@ -654,7 +654,7 @@ Ruled (sizing pass 2026-10-01, architect):
 - [x] SCENARIO-02: Later sync fetches only the missing dates — delivered by SCENARIO-04 — `cmd/quarry/run_sync_rates_carry_test.go` `Test_run_sync_asks_only_for_the_dates_after_the_last_stored_rate`
 - [x] SCENARIO-03: Failed rate fetch warns and the sync still succeeds — `cmd/quarry/run_sync_rates_fetch_test.go` `Test_run_sync_warns_and_swaps_the_store_in_when_the_rate_fetch_fails`
 - [x] SCENARIO-05: A sync that fails before the swap never fetches rates — delivered by SCENARIO-03 — `cmd/quarry/run_sync_rates_prefetch_test.go` `Test_run_sync_makes_no_rate_request_when_it_fails_before_the_swap`
-- [x] SCENARIO-06: Status shows rate coverage — `internal/cli/status_rates_test.go` `Test_status_prints_the_rates_line_for_each_coverage_state`
+- [x] SCENARIO-06: Status shows rate coverage — `internal/cli/status_test.go` `Test_status_prints_the_rates_line_for_each_coverage_state`
 - [x] SCENARIO-16: A bad reporting.currency value refuses the read commands — `cmd/quarry/run_read_refusals_test.go` `Test_run_read_commands_refuse_a_bad_reporting_currency`
 - [x] SCENARIO-15: A bad --currency value is a usage error — delivered by SCENARIO-16 — `cmd/quarry/run_read_usage_test.go` `Test_run_read_commands_refuse_a_bad_currency_flag`
 - [x] SCENARIO-08: Spend converts to the reporting currency by default — `cmd/quarry/run_spend_fx_test.go` `Test_run_spend_converts_every_split_to_cad_by_default`
