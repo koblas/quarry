@@ -1,16 +1,13 @@
 package mcp_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/mcp"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,36 +19,12 @@ const (
 	missingStoreLine  = "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it"
 )
 
-// steppingClock answers each read with the next of its times, then the last one again, and counts the reads.
-type steppingClock struct {
-	times []time.Time
-	reads int
-}
-
-func (c *steppingClock) now() time.Time {
-	at := c.times[min(c.reads, len(c.times)-1)]
-	c.reads++
-	return at
-}
-
-// decodeSpending is result's one text block decoded as the spending document.
-func decodeSpending(t *testing.T, result *sdk.CallToolResult) document.Spending {
-	t.Helper()
-	require.False(t, result.IsError, textOf(t, result))
-	var doc document.Spending
-	require.NoError(t, json.Unmarshal([]byte(textOf(t, result)), &doc))
-	return doc
-}
-
 func Test_spending_reads_today_once_at_the_start_of_every_call(t *testing.T) {
-	clock := &steppingClock{times: []time.Time{
-		time.Date(2026, time.September, 29, 23, 59, 0, 0, time.UTC),
-		time.Date(2026, time.September, 30, 0, 1, 0, 0, time.UTC),
-	}}
+	clock := newMidnightClock()
 	h := newHarness(t, &fakeStore{}, nil, mcp.WithClock(clock.now))
 
-	first := decodeSpending(t, h.spending(t, map[string]any{}))
-	second := decodeSpending(t, h.spending(t, map[string]any{}))
+	first := decodeDoc[document.Spending](t, h.spending(t, map[string]any{}))
+	second := decodeDoc[document.Spending](t, h.spending(t, map[string]any{}))
 
 	assert.Equal(t, "2026-09-29", first.Until)
 	assert.Equal(t, "2026-09-30", second.Until)
@@ -87,7 +60,7 @@ func Test_spending_does_not_read_the_config_when_the_call_names_a_currency(t *te
 	stub := &configStub{err: errBadConfig}
 	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load))
 
-	doc := decodeSpending(t, h.spending(t, map[string]any{"currency": "USD"}))
+	doc := decodeDoc[document.Spending](t, h.spending(t, map[string]any{"currency": "USD"}))
 
 	assert.Equal(t, "USD", doc.Currency)
 	assert.Empty(t, stub.commands)
@@ -97,7 +70,7 @@ func Test_spending_reads_the_config_as_the_mcp_command_when_the_call_names_no_cu
 	stub := &configStub{}
 	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load))
 
-	decodeSpending(t, h.spending(t, map[string]any{}))
+	decodeDoc[document.Spending](t, h.spending(t, map[string]any{}))
 
 	assert.Equal(t, []string{"mcp"}, stub.commands)
 }
@@ -169,7 +142,7 @@ func Test_spending_cuts_rows_to_the_cap_keeps_every_total_and_ends_the_warnings_
 	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
 	h := newHarness(t, &fakeStore{spent: store.Spending{Rows: rows, Totals: totals, Unconverted: store.Unconverted{Transactions: 1}}}, nil, mcp.WithConfig(stub.load))
 
-	doc := decodeSpending(t, h.spending(t, map[string]any{"by": "payee"}))
+	doc := decodeDoc[document.Spending](t, h.spending(t, map[string]any{"by": "payee"}))
 
 	assert.Len(t, doc.Rows, 500)
 	assert.Len(t, doc.Totals, 2)

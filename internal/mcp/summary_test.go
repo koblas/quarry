@@ -1,7 +1,6 @@
 package mcp_test
 
 import (
-	"encoding/json"
 	"math/big"
 	"testing"
 	"time"
@@ -11,7 +10,6 @@ import (
 	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -31,15 +29,6 @@ func atSummaryToday() mcp.Option {
 	return mcp.WithClock(func() time.Time { return summaryToday })
 }
 
-// decodeSummary is result's one text block decoded as the summary document.
-func decodeSummary(t *testing.T, result *sdk.CallToolResult) document.Summary {
-	t.Helper()
-	require.False(t, result.IsError, textOf(t, result))
-	var doc document.Summary
-	require.NoError(t, json.Unmarshal([]byte(textOf(t, result)), &doc))
-	return doc
-}
-
 // coveredSummary is a store read whose snapshot was taken after September 2026 ended: it adds no warning.
 func coveredSummary() store.Summary {
 	st := statusFixture()
@@ -52,10 +41,10 @@ func Test_monthly_summary_reads_today_once_at_the_start_of_every_call(t *testing
 		time.Date(2026, time.October, 31, 23, 59, 0, 0, time.UTC),
 		time.Date(2026, time.November, 1, 0, 1, 0, 0, time.UTC),
 	}}
-	h := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, mcp.WithConfig((&configStub{}).load), mcp.WithClock(clock.now))
+	h := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, withDefaultConfig(), mcp.WithClock(clock.now))
 
-	first := decodeSummary(t, h.monthlySummary(t, map[string]any{}))
-	second := decodeSummary(t, h.monthlySummary(t, map[string]any{}))
+	first := decodeDoc[document.Summary](t, h.monthlySummary(t, map[string]any{}))
+	second := decodeDoc[document.Summary](t, h.monthlySummary(t, map[string]any{}))
 
 	assert.Equal(t, "2026-09", first.Month)
 	assert.Equal(t, "2026-10", second.Month)
@@ -63,9 +52,9 @@ func Test_monthly_summary_reads_today_once_at_the_start_of_every_call(t *testing
 }
 
 func Test_monthly_summary_defaults_to_last_month(t *testing.T) {
-	h := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, mcp.WithConfig((&configStub{}).load), atSummaryToday())
+	h := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, withDefaultConfig(), atSummaryToday())
 
-	doc := decodeSummary(t, h.monthlySummary(t, map[string]any{}))
+	doc := decodeDoc[document.Summary](t, h.monthlySummary(t, map[string]any{}))
 
 	assert.Equal(t, "2026-09", doc.Month)
 	assert.Equal(t, "2026-09-01", doc.Since)
@@ -84,9 +73,9 @@ func Test_monthly_summary_summarizes_the_month_it_is_given(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			h := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, mcp.WithConfig((&configStub{}).load), atSummaryToday())
+			h := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, withDefaultConfig(), atSummaryToday())
 
-			doc := decodeSummary(t, h.monthlySummary(t, map[string]any{"month": c.month}))
+			doc := decodeDoc[document.Summary](t, h.monthlySummary(t, map[string]any{"month": c.month}))
 
 			assert.Equal(t, c.month, doc.Month)
 			assert.Equal(t, c.until, doc.Until)
@@ -127,9 +116,9 @@ func Test_monthly_summary_refuses_a_month_it_cannot_summarize_before_the_config_
 
 func Test_monthly_summary_reads_the_store_once_for_the_month_and_the_one_before(t *testing.T) {
 	fake := &fakeStore{summary: coveredSummary()}
-	h := newHarness(t, fake, nil, mcp.WithConfig((&configStub{}).load), atSummaryToday())
+	h := newHarness(t, fake, nil, withDefaultConfig(), atSummaryToday())
 
-	decodeSummary(t, h.monthlySummary(t, map[string]any{}))
+	decodeDoc[document.Summary](t, h.monthlySummary(t, map[string]any{}))
 
 	assert.Equal(t, []store.SummaryParams{{
 		Through: civilDay(2026, time.September, 30),
@@ -154,7 +143,7 @@ func Test_monthly_summary_loads_the_config_once_per_call(t *testing.T) {
 			stub := &configStub{}
 			h := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, mcp.WithConfig(stub.load), atSummaryToday())
 
-			decodeSummary(t, h.monthlySummary(t, c.arguments))
+			decodeDoc[document.Summary](t, h.monthlySummary(t, c.arguments))
 
 			assert.Equal(t, []string{"mcp"}, stub.commands)
 		})
@@ -165,7 +154,7 @@ func Test_monthly_summary_counts_an_ignored_finding_when_currency_is_given(t *te
 	stub := &configStub{cfg: config.Config{Ignore: []string{duplicateID, fixedID}}}
 	h := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, mcp.WithConfig(stub.load), atSummaryToday())
 
-	doc := decodeSummary(t, h.monthlySummary(t, map[string]any{"currency": "USD"}))
+	doc := decodeDoc[document.Summary](t, h.monthlySummary(t, map[string]any{"currency": "USD"}))
 
 	require.NotNil(t, doc.Findings.Ignored)
 	assert.Equal(t, 1, *doc.Findings.Ignored)
@@ -177,7 +166,7 @@ func Test_monthly_summary_takes_the_currency_from_the_config_when_the_call_names
 	stub := &configStub{cfg: config.Config{Currency: money.USD}}
 	h := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, mcp.WithConfig(stub.load), atSummaryToday())
 
-	doc := decodeSummary(t, h.monthlySummary(t, map[string]any{}))
+	doc := decodeDoc[document.Summary](t, h.monthlySummary(t, map[string]any{}))
 
 	assert.Equal(t, "USD", doc.Currency)
 }
@@ -186,7 +175,7 @@ func Test_monthly_summary_keeps_config_warnings_when_currency_is_given(t *testin
 	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
 	h := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, mcp.WithConfig(stub.load), atSummaryToday())
 
-	doc := decodeSummary(t, h.monthlySummary(t, map[string]any{"currency": "CAD"}))
+	doc := decodeDoc[document.Summary](t, h.monthlySummary(t, map[string]any{"currency": "CAD"}))
 
 	assert.Equal(t, []string{configUnknownKeyWarning}, doc.Warnings)
 }
@@ -207,7 +196,7 @@ func Test_monthly_summary_warns_it_cannot_tell_what_is_ignored_when_the_config_i
 	stub := &configStub{err: errBadConfig}
 	h := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, mcp.WithConfig(stub.load), atSummaryToday())
 
-	doc := decodeSummary(t, h.monthlySummary(t, map[string]any{"currency": "USD"}))
+	doc := decodeDoc[document.Summary](t, h.monthlySummary(t, map[string]any{"currency": "USD"}))
 
 	assert.Nil(t, doc.Findings.Ignored)
 	assert.Equal(t, 1, doc.Findings.Open)
@@ -216,7 +205,7 @@ func Test_monthly_summary_warns_it_cannot_tell_what_is_ignored_when_the_config_i
 }
 
 func Test_monthly_summary_answers_a_report_factory_failure_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{}, errFactoryBroke, mcp.WithConfig((&configStub{}).load), atSummaryToday())
+	h := newHarness(t, &fakeStore{}, errFactoryBroke, withDefaultConfig(), atSummaryToday())
 
 	result := h.monthlySummary(t, map[string]any{})
 
@@ -226,7 +215,7 @@ func Test_monthly_summary_answers_a_report_factory_failure_with_the_generic_log_
 }
 
 func Test_monthly_summary_answers_a_plain_store_fault_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{err: errDiskOnFire}, nil, mcp.WithConfig((&configStub{}).load), atSummaryToday())
+	h := newHarness(t, &fakeStore{err: errDiskOnFire}, nil, withDefaultConfig(), atSummaryToday())
 
 	result := h.monthlySummary(t, map[string]any{})
 
@@ -237,7 +226,7 @@ func Test_monthly_summary_answers_a_plain_store_fault_with_the_generic_log_line(
 
 func Test_monthly_summary_sends_a_store_refusal_verbatim_to_the_client_and_stderr(t *testing.T) {
 	h := newHarness(t, &fakeStore{err: &store.OpenError{Fault: store.OpenFaultMissing, Path: testStorePath}}, nil,
-		mcp.WithConfig((&configStub{}).load), atSummaryToday())
+		withDefaultConfig(), atSummaryToday())
 
 	result := h.monthlySummary(t, map[string]any{})
 
@@ -259,9 +248,9 @@ func Test_monthly_summary_words_a_snapshot_taken_before_the_month_ended_with_the
 		t.Run(c.name, func(t *testing.T) {
 			summary := coveredSummary()
 			summary.Status.Run.Snapshot.TakenAt = time.Date(2026, time.September, 20, 9, 5, 0, 0, time.UTC)
-			h := newHarness(t, &fakeStore{summary: summary}, nil, mcp.WithConfig((&configStub{}).load), atSummaryToday())
+			h := newHarness(t, &fakeStore{summary: summary}, nil, withDefaultConfig(), atSummaryToday())
 
-			doc := decodeSummary(t, h.monthlySummary(t, c.arguments))
+			doc := decodeDoc[document.Summary](t, h.monthlySummary(t, c.arguments))
 
 			assert.Equal(t, []string{"the store was built from a snapshot taken 2026-09-20 09:05 UTC, before September 2026 ended, " +
 				"so transactions from the rest of the month are missing; open your Quicken file, run quarry sync, " +
@@ -271,9 +260,9 @@ func Test_monthly_summary_words_a_snapshot_taken_before_the_month_ended_with_the
 }
 
 func Test_monthly_summary_gives_a_snapshot_with_no_time_no_call_again_tail(t *testing.T) {
-	h := newHarness(t, &fakeStore{summary: store.Summary{Status: statusFixture()}}, nil, mcp.WithConfig((&configStub{}).load), atSummaryToday())
+	h := newHarness(t, &fakeStore{summary: store.Summary{Status: statusFixture()}}, nil, withDefaultConfig(), atSummaryToday())
 
-	doc := decodeSummary(t, h.monthlySummary(t, map[string]any{}))
+	doc := decodeDoc[document.Summary](t, h.monthlySummary(t, map[string]any{}))
 
 	assert.Equal(t, []string{"cannot tell whether the store holds all of September 2026: its snapshot's manifest does not record " +
 		"when it was taken; open your Quicken file and run quarry sync to take a new snapshot"}, doc.Warnings)
@@ -285,9 +274,9 @@ func Test_monthly_summary_words_the_rate_advice_for_a_tool_parameter(t *testing.
 		Rows:         []store.NetWorthRow{{Date: civilDay(2026, time.September, 30), Type: "checking", Currency: "USD", Accounts: 1, Balance: big.NewInt(5_000)}},
 		FirstBalance: civilDay(2026, time.January, 5),
 	}
-	h := newHarness(t, &fakeStore{summary: summary}, nil, mcp.WithConfig((&configStub{}).load), atSummaryToday())
+	h := newHarness(t, &fakeStore{summary: summary}, nil, withDefaultConfig(), atSummaryToday())
 
-	doc := decodeSummary(t, h.monthlySummary(t, map[string]any{"currency": "CAD"}))
+	doc := decodeDoc[document.Summary](t, h.monthlySummary(t, map[string]any{"currency": "CAD"}))
 
 	assert.Equal(t, []string{"the store has no exchange rates, so USD balances are not converted to CAD and are left out of the CAD total; " +
 		"pass currency native to list them, or run quarry sync to fetch rates"}, doc.Warnings)
@@ -321,7 +310,7 @@ func Test_monthly_summary_caps_anomalies_charges_and_recurring_series_at_500(t *
 			stub := &configStub{cfg: config.Config{Currency: money.CAD}}
 			h := newHarness(t, &fakeStore{summary: summary}, nil, mcp.WithConfig(stub.load), atSummaryToday())
 
-			doc := decodeSummary(t, h.monthlySummary(t, map[string]any{}))
+			doc := decodeDoc[document.Summary](t, h.monthlySummary(t, map[string]any{}))
 
 			assert.Len(t, doc.Anomalies.Charges, min(c.anomalies, 500))
 			assert.Len(t, doc.Recurring.Series, min(c.series, 500))
@@ -361,7 +350,7 @@ func Test_monthly_summary_lists_the_config_warning_before_the_snapshot_warning(t
 			summary.Status.Run.Snapshot.TakenAt = c.taken
 			h := newHarness(t, &fakeStore{summary: summary}, nil, mcp.WithConfig(c.stub.load), atSummaryToday())
 
-			doc := decodeSummary(t, h.monthlySummary(t, map[string]any{"currency": "USD"}))
+			doc := decodeDoc[document.Summary](t, h.monthlySummary(t, map[string]any{"currency": "USD"}))
 
 			assert.Equal(t, c.want, doc.Warnings)
 		})
@@ -390,7 +379,7 @@ func Test_monthly_summary_leaves_an_account_the_config_classifies_out_of_the_ope
 			stub := &configStub{cfg: c.cfg}
 			h := newHarness(t, &fakeStore{summary: summary}, nil, mcp.WithConfig(stub.load), atSummaryToday())
 
-			doc := decodeSummary(t, h.monthlySummary(t, c.arguments))
+			doc := decodeDoc[document.Summary](t, h.monthlySummary(t, c.arguments))
 
 			assert.Equal(t, c.want, doc.Findings.Open)
 		})
@@ -416,9 +405,9 @@ func Test_monthly_summary_defaults_to_the_month_before_the_callers_local_month(t
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			h := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, mcp.WithConfig((&configStub{}).load), mcp.WithClock(summaryInstant(c.zone)))
+			h := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, withDefaultConfig(), mcp.WithClock(summaryInstant(c.zone)))
 
-			doc := decodeSummary(t, h.monthlySummary(t, map[string]any{}))
+			doc := decodeDoc[document.Summary](t, h.monthlySummary(t, map[string]any{}))
 
 			assert.Equal(t, c.want, doc.Month)
 		})
@@ -426,11 +415,11 @@ func Test_monthly_summary_defaults_to_the_month_before_the_callers_local_month(t
 }
 
 func Test_monthly_summary_refuses_the_month_that_has_not_ended_in_the_callers_local_zone(t *testing.T) {
-	local := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, mcp.WithConfig((&configStub{}).load), mcp.WithClock(summaryInstant(summaryNewYork)))
-	utc := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, mcp.WithConfig((&configStub{}).load), mcp.WithClock(summaryInstant(time.UTC)))
+	local := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, withDefaultConfig(), mcp.WithClock(summaryInstant(summaryNewYork)))
+	utc := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, withDefaultConfig(), mcp.WithClock(summaryInstant(time.UTC)))
 
 	refused := local.monthlySummary(t, map[string]any{"month": "2026-09"})
-	control := decodeSummary(t, utc.monthlySummary(t, map[string]any{"month": "2026-09"}))
+	control := decodeDoc[document.Summary](t, utc.monthlySummary(t, map[string]any{"month": "2026-09"}))
 
 	assert.True(t, refused.IsError)
 	assert.Equal(t, "month 2026-09 has not ended; monthly_summary covers whole months, so pass 2026-08 or earlier", textOf(t, refused))

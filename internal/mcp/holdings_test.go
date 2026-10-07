@@ -11,7 +11,6 @@ import (
 	"github.com/koblas/quarry/internal/mcp"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,15 +22,6 @@ const (
 	holdingsCutNote   = "holdings lists the first 500 holdings of 501; totals count every holding; " +
 		"pass fewer accounts, or query v_holdings where date = '2026-03-31' for the rest"
 )
-
-// decodeHoldings is result's one text block decoded as the holdings document.
-func decodeHoldings(t *testing.T, result *sdk.CallToolResult) document.Holdings {
-	t.Helper()
-	require.False(t, result.IsError, textOf(t, result))
-	var doc document.Holdings
-	require.NoError(t, json.Unmarshal([]byte(textOf(t, result)), &doc))
-	return doc
-}
 
 // cadHoldings is n priced CAD holdings, each worth 1.00, security ids sec-000 upward.
 func cadHoldings(n int) store.Holdings {
@@ -53,7 +43,7 @@ func listed(doc document.Holdings) int { return len(doc.Holdings) }
 func Test_holdings_lists_the_first_500_and_totals_every_holding_with_a_cut_note(t *testing.T) {
 	h := newHarness(t, &fakeStore{held: cadHoldings(501)}, nil)
 
-	doc := decodeHoldings(t, h.holdings(t, map[string]any{"currency": "CAD", "as_of": "2026-03-31"}))
+	doc := decodeDoc[document.Holdings](t, h.holdings(t, map[string]any{"currency": "CAD", "as_of": "2026-03-31"}))
 
 	require.Equal(t, 500, listed(doc))
 	assert.Equal(t, "sec-000", doc.Holdings[0].SecurityID)
@@ -78,7 +68,7 @@ func Test_holdings_cut_note_names_the_accounts_the_call_named_in_the_order_given
 			fake := &fakeStore{held: cadHoldings(501), accounts: namedAccountList()}
 			h := newHarness(t, fake, nil)
 
-			doc := decodeHoldings(t, h.holdings(t, map[string]any{"currency": "CAD", "as_of": "2026-03-31", "accounts": c.accounts}))
+			doc := decodeDoc[document.Holdings](t, h.holdings(t, map[string]any{"currency": "CAD", "as_of": "2026-03-31", "accounts": c.accounts}))
 
 			want := "holdings lists the first 500 holdings of 501; totals count every holding; pass fewer accounts, " +
 				"or query v_holdings where date = '2026-03-31'" + c.want + " for the rest"
@@ -100,7 +90,7 @@ func namedAccountList() store.AccountList {
 func Test_holdings_lists_exactly_500_with_no_cut_note(t *testing.T) {
 	h := newHarness(t, &fakeStore{held: cadHoldings(500)}, nil)
 
-	doc := decodeHoldings(t, h.holdings(t, map[string]any{"currency": "CAD"}))
+	doc := decodeDoc[document.Holdings](t, h.holdings(t, map[string]any{"currency": "CAD"}))
 
 	assert.Equal(t, 500, listed(doc))
 	assert.Equal(t, []document.HoldingsTotal{{Currency: "CAD", Value: "500.00"}}, doc.Totals)
@@ -113,7 +103,7 @@ func Test_holdings_puts_the_cut_note_after_the_config_warnings_and_the_holdings_
 	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
 	h := newHarness(t, &fakeStore{held: held}, nil, mcp.WithConfig(stub.load))
 
-	doc := decodeHoldings(t, h.holdings(t, map[string]any{"as_of": "2026-03-31"}))
+	doc := decodeDoc[document.Holdings](t, h.holdings(t, map[string]any{"as_of": "2026-03-31"}))
 
 	require.Len(t, doc.Warnings, 3)
 	assert.Equal(t, configUnknownKeyWarning, doc.Warnings[0])
@@ -122,14 +112,11 @@ func Test_holdings_puts_the_cut_note_after_the_config_warnings_and_the_holdings_
 }
 
 func Test_holdings_reads_today_once_at_the_start_of_every_call(t *testing.T) {
-	clock := &steppingClock{times: []time.Time{
-		time.Date(2026, time.September, 29, 23, 59, 0, 0, time.UTC),
-		time.Date(2026, time.September, 30, 0, 1, 0, 0, time.UTC),
-	}}
+	clock := newMidnightClock()
 	h := newHarness(t, &fakeStore{}, nil, mcp.WithClock(clock.now))
 
-	first := decodeHoldings(t, h.holdings(t, map[string]any{}))
-	second := decodeHoldings(t, h.holdings(t, map[string]any{}))
+	first := decodeDoc[document.Holdings](t, h.holdings(t, map[string]any{}))
+	second := decodeDoc[document.Holdings](t, h.holdings(t, map[string]any{}))
 
 	assert.Equal(t, "2026-09-29", first.AsOf)
 	assert.Equal(t, "2026-09-30", second.AsOf)
@@ -141,8 +128,8 @@ func Test_holdings_asks_the_store_for_the_day_as_of_names_and_for_today_when_it_
 	fake := &fakeStore{}
 	h := newHarness(t, fake, nil, mcp.WithClock(clock))
 
-	decodeHoldings(t, h.holdings(t, map[string]any{"as_of": "2026-03"}))
-	decodeHoldings(t, h.holdings(t, map[string]any{}))
+	decodeDoc[document.Holdings](t, h.holdings(t, map[string]any{"as_of": "2026-03"}))
+	decodeDoc[document.Holdings](t, h.holdings(t, map[string]any{}))
 
 	require.Len(t, fake.heldAsked, 2)
 	assert.Equal(t, time.Date(2026, time.March, 31, 0, 0, 0, 0, time.UTC), fake.heldAsked[0].AsOf)
@@ -159,7 +146,7 @@ func Test_holdings_with_absent_null_or_empty_arguments_values_today(t *testing.T
 			clock := func() time.Time { return time.Date(2026, time.September, 29, 12, 0, 0, 0, time.UTC) }
 			h := newHarness(t, &fakeStore{}, nil, mcp.WithClock(clock))
 
-			doc := decodeHoldings(t, h.holdings(t, args))
+			doc := decodeDoc[document.Holdings](t, h.holdings(t, args))
 
 			assert.Equal(t, "2026-09-29", doc.AsOf)
 		})
@@ -209,7 +196,7 @@ func Test_holdings_does_not_read_the_config_when_the_call_names_a_currency(t *te
 	stub := &configStub{err: errBadConfig}
 	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load))
 
-	doc := decodeHoldings(t, h.holdings(t, map[string]any{"currency": "USD"}))
+	doc := decodeDoc[document.Holdings](t, h.holdings(t, map[string]any{"currency": "USD"}))
 
 	assert.Equal(t, "USD", doc.Currency)
 	assert.Empty(t, stub.commands)
@@ -219,7 +206,7 @@ func Test_holdings_reads_the_config_as_the_mcp_command_when_the_call_names_no_cu
 	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
 	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load))
 
-	doc := decodeHoldings(t, h.holdings(t, map[string]any{}))
+	doc := decodeDoc[document.Holdings](t, h.holdings(t, map[string]any{}))
 
 	assert.Equal(t, []string{"mcp"}, stub.commands)
 	require.NotEmpty(t, doc.Warnings)

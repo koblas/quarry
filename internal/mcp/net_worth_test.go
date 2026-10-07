@@ -12,7 +12,6 @@ import (
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,11 +23,6 @@ const (
 	netWorthCutNote   = "net_worth lists the first 500 month ends of 501; pass a later since, or query v_net_worth for the rest"
 )
 
-// atNetWorthToday is the clock option that makes today 2026-09-29.
-func atNetWorthToday() mcp.Option {
-	return mcp.WithClock(func() time.Time { return time.Date(2026, time.September, 29, 12, 0, 0, 0, time.UTC) })
-}
-
 // inTheYear2100 is the clock option that puts every month end the cap tests list before today.
 func inTheYear2100() mcp.Option {
 	return mcp.WithClock(func() time.Time { return time.Date(2100, time.January, 15, 0, 0, 0, 0, time.UTC) })
@@ -37,15 +31,6 @@ func inTheYear2100() mcp.Option {
 // civilDay is the day as the UTC midnight the store is asked for.
 func civilDay(year int, month time.Month, day int) time.Time {
 	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-}
-
-// decodeNetWorth is result's one text block decoded as the networth document.
-func decodeNetWorth(t *testing.T, result *sdk.CallToolResult) document.NetWorth {
-	t.Helper()
-	require.False(t, result.IsError, textOf(t, result))
-	var doc document.NetWorth
-	require.NoError(t, json.Unmarshal([]byte(textOf(t, result)), &doc))
-	return doc
 }
 
 // listedDates is the dates doc lists, as text.
@@ -72,7 +57,7 @@ func Test_net_worth_refuses_as_of_with_since_or_until(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			stub := &configStub{}
 			fake := &fakeStore{}
-			h := newHarness(t, fake, nil, mcp.WithConfig(stub.load), atNetWorthToday())
+			h := newHarness(t, fake, nil, mcp.WithConfig(stub.load), atSeptember29())
 
 			result := h.netWorth(t, c.arguments)
 
@@ -101,7 +86,7 @@ func Test_net_worth_refuses_an_as_of_it_cannot_use_with_the_class_line_before_th
 		t.Run(c.name, func(t *testing.T) {
 			stub := &configStub{}
 			fake := &fakeStore{}
-			h := newHarness(t, fake, nil, mcp.WithConfig(stub.load), atNetWorthToday())
+			h := newHarness(t, fake, nil, mcp.WithConfig(stub.load), atSeptember29())
 
 			result := h.netWorth(t, map[string]any{"as_of": c.asOf})
 
@@ -132,7 +117,7 @@ func Test_net_worth_refuses_a_window_it_cannot_list_with_the_class_line_before_t
 		t.Run(c.name, func(t *testing.T) {
 			stub := &configStub{}
 			fake := &fakeStore{}
-			h := newHarness(t, fake, nil, mcp.WithConfig(stub.load), atNetWorthToday())
+			h := newHarness(t, fake, nil, mcp.WithConfig(stub.load), atSeptember29())
 
 			result := h.netWorth(t, c.arguments)
 
@@ -147,9 +132,9 @@ func Test_net_worth_refuses_a_window_it_cannot_list_with_the_class_line_before_t
 }
 
 func Test_net_worth_clamps_an_until_in_the_future_to_today(t *testing.T) {
-	h := newHarness(t, &fakeStore{}, nil, atNetWorthToday())
+	h := newHarness(t, &fakeStore{}, nil, atSeptember29())
 
-	doc := decodeNetWorth(t, h.netWorth(t, map[string]any{"until": "2099"}))
+	doc := decodeDoc[document.NetWorth](t, h.netWorth(t, map[string]any{"until": "2099"}))
 
 	assert.Equal(t, []string{
 		"2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30", "2026-05-31", "2026-06-30", "2026-07-31", "2026-08-31", "2026-09-29",
@@ -165,9 +150,9 @@ func Test_net_worth_with_absent_null_or_empty_arguments_values_today(t *testing.
 		"empty":   map[string]any{},
 	} {
 		t.Run(name, func(t *testing.T) {
-			h := newHarness(t, &fakeStore{}, nil, atNetWorthToday())
+			h := newHarness(t, &fakeStore{}, nil, atSeptember29())
 
-			doc := decodeNetWorth(t, h.netWorth(t, args))
+			doc := decodeDoc[document.NetWorth](t, h.netWorth(t, args))
 
 			require.NotNil(t, doc.AsOf)
 			assert.Equal(t, "2026-09-29", *doc.AsOf)
@@ -199,9 +184,9 @@ func Test_net_worth_asks_the_store_once_for_the_days_the_call_lists(t *testing.T
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			fake := &fakeStore{}
-			h := newHarness(t, fake, nil, atNetWorthToday())
+			h := newHarness(t, fake, nil, atSeptember29())
 
-			decodeNetWorth(t, h.netWorth(t, c.arguments))
+			decodeDoc[document.NetWorth](t, h.netWorth(t, c.arguments))
 
 			assert.Equal(t, []store.NetWorthParams{{Dates: c.want}}, fake.netWorthAsked)
 		})
@@ -209,14 +194,11 @@ func Test_net_worth_asks_the_store_once_for_the_days_the_call_lists(t *testing.T
 }
 
 func Test_net_worth_reads_today_once_at_the_start_of_every_call(t *testing.T) {
-	clock := &steppingClock{times: []time.Time{
-		time.Date(2026, time.September, 29, 23, 59, 0, 0, time.UTC),
-		time.Date(2026, time.September, 30, 0, 1, 0, 0, time.UTC),
-	}}
+	clock := newMidnightClock()
 	h := newHarness(t, &fakeStore{}, nil, mcp.WithClock(clock.now))
 
-	first := decodeNetWorth(t, h.netWorth(t, map[string]any{"since": "2026-09"}))
-	second := decodeNetWorth(t, h.netWorth(t, map[string]any{"since": "2026-09"}))
+	first := decodeDoc[document.NetWorth](t, h.netWorth(t, map[string]any{"since": "2026-09"}))
+	second := decodeDoc[document.NetWorth](t, h.netWorth(t, map[string]any{"since": "2026-09"}))
 
 	assert.Equal(t, []string{"2026-09-29"}, listedDates(first))
 	assert.Equal(t, []string{"2026-09-30"}, listedDates(second))
@@ -225,9 +207,9 @@ func Test_net_worth_reads_today_once_at_the_start_of_every_call(t *testing.T) {
 
 func Test_net_worth_does_not_read_the_config_when_the_call_names_a_currency(t *testing.T) {
 	stub := &configStub{err: errBadConfig}
-	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load), atNetWorthToday())
+	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load), atSeptember29())
 
-	doc := decodeNetWorth(t, h.netWorth(t, map[string]any{"currency": "USD"}))
+	doc := decodeDoc[document.NetWorth](t, h.netWorth(t, map[string]any{"currency": "USD"}))
 
 	assert.Equal(t, "USD", doc.Currency)
 	assert.Empty(t, stub.commands)
@@ -235,9 +217,9 @@ func Test_net_worth_does_not_read_the_config_when_the_call_names_a_currency(t *t
 
 func Test_net_worth_reads_the_config_as_the_mcp_command_and_lists_its_warnings_first(t *testing.T) {
 	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
-	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load), atNetWorthToday())
+	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load), atSeptember29())
 
-	doc := decodeNetWorth(t, h.netWorth(t, map[string]any{}))
+	doc := decodeDoc[document.NetWorth](t, h.netWorth(t, map[string]any{}))
 
 	assert.Equal(t, []string{"mcp"}, stub.commands)
 	require.Len(t, doc.Warnings, 2)
@@ -255,7 +237,7 @@ func Test_net_worth_returns_the_report_as_networth_does_with_totals_and_the_rate
 		FirstRate:    civilDay(2026, time.April, 1),
 		FirstBalance: civilDay(2026, time.January, 5),
 	}}
-	h := newHarness(t, fake, nil, atNetWorthToday())
+	h := newHarness(t, fake, nil, atSeptember29())
 	listing, err := report.NewServer(report.WithStore(fake), report.WithHome(testHome)).
 		NetWorth(t.Context(), report.NetWorthRequest{AsOf: asOf, Currency: money.CAD})
 	require.NoError(t, err)
@@ -263,7 +245,7 @@ func Test_net_worth_returns_the_report_as_networth_does_with_totals_and_the_rate
 	result := h.netWorth(t, map[string]any{"as_of": "2026-03", "currency": "CAD"})
 
 	assert.JSONEq(t, jsonOf(t, document.NewNetWorth(listing, document.NetWorthWarnings(listing, document.NativeParameter))), textOf(t, result))
-	doc := decodeNetWorth(t, result)
+	doc := decodeDoc[document.NetWorth](t, result)
 	assert.Equal(t, []document.NetWorthTotal{{Currency: "CAD", Value: "1000.00"}, {Currency: "USD", Value: "50.00"}}, doc.Dates[0].Totals)
 	require.Len(t, doc.Warnings, 1)
 	assert.Equal(t, "USD balances on 2026-03-31, before 2026-04-01, the first exchange rate in the store, are not converted to CAD "+
@@ -275,9 +257,9 @@ func Test_net_worth_names_the_currency_parameter_in_the_no_rates_warning(t *test
 	h := newHarness(t, &fakeStore{netWorth: store.NetWorth{
 		Rows:         []store.NetWorthRow{{Date: asOf, Type: "checking", Currency: "USD", Accounts: 1, Balance: big.NewInt(5_000)}},
 		FirstBalance: civilDay(2026, time.January, 5),
-	}}, nil, atNetWorthToday())
+	}}, nil, atSeptember29())
 
-	doc := decodeNetWorth(t, h.netWorth(t, map[string]any{"as_of": "2026-03", "currency": "CAD"}))
+	doc := decodeDoc[document.NetWorth](t, h.netWorth(t, map[string]any{"as_of": "2026-03", "currency": "CAD"}))
 
 	assert.Equal(t, []string{"the store has no exchange rates, so USD balances are not converted to CAD and are left out of the CAD total; " +
 		"pass currency native to list them, or run quarry sync to fetch rates"}, doc.Warnings)
@@ -295,9 +277,9 @@ func Test_net_worth_warns_that_a_priced_holding_lacks_only_an_exchange_rate(t *t
 		}},
 		FirstRate:    civilDay(2026, time.April, 1),
 		FirstBalance: civilDay(2026, time.January, 5),
-	}}, nil, atNetWorthToday())
+	}}, nil, atSeptember29())
 
-	doc := decodeNetWorth(t, h.netWorth(t, map[string]any{"as_of": "2026-03", "currency": "CAD"}))
+	doc := decodeDoc[document.NetWorth](t, h.netWorth(t, map[string]any{"as_of": "2026-03", "currency": "CAD"}))
 
 	assert.Equal(t, []string{`"Brokerage" holds 1 USD security valued on 2026-03-31, before 2026-04-01, ` +
 		`the first exchange rate in the store, so its CAD balance leaves it out`}, doc.Warnings)
@@ -305,7 +287,7 @@ func Test_net_worth_warns_that_a_priced_holding_lacks_only_an_exchange_rate(t *t
 
 func Test_net_worth_refuses_an_unreadable_config_before_building_the_report(t *testing.T) {
 	stub := &configStub{err: errBadConfig}
-	h := newHarness(t, &fakeStore{}, errFactoryBroke, mcp.WithConfig(stub.load), atNetWorthToday())
+	h := newHarness(t, &fakeStore{}, errFactoryBroke, mcp.WithConfig(stub.load), atSeptember29())
 
 	result := h.netWorth(t, map[string]any{})
 
@@ -316,7 +298,7 @@ func Test_net_worth_refuses_an_unreadable_config_before_building_the_report(t *t
 }
 
 func Test_net_worth_answers_a_report_factory_failure_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{}, errFactoryBroke, atNetWorthToday())
+	h := newHarness(t, &fakeStore{}, errFactoryBroke, atSeptember29())
 
 	result := h.netWorth(t, map[string]any{})
 
@@ -326,7 +308,7 @@ func Test_net_worth_answers_a_report_factory_failure_with_the_generic_log_line(t
 }
 
 func Test_net_worth_sends_a_store_refusal_verbatim_to_the_client_and_stderr(t *testing.T) {
-	h := newHarness(t, &fakeStore{err: &store.OpenError{Fault: store.OpenFaultMissing, Path: testStorePath}}, nil, atNetWorthToday())
+	h := newHarness(t, &fakeStore{err: &store.OpenError{Fault: store.OpenFaultMissing, Path: testStorePath}}, nil, atSeptember29())
 
 	result := h.netWorth(t, map[string]any{})
 
@@ -336,7 +318,7 @@ func Test_net_worth_sends_a_store_refusal_verbatim_to_the_client_and_stderr(t *t
 }
 
 func Test_net_worth_answers_a_plain_store_fault_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{err: errDiskOnFire}, nil, atNetWorthToday())
+	h := newHarness(t, &fakeStore{err: errDiskOnFire}, nil, atSeptember29())
 
 	result := h.netWorth(t, map[string]any{})
 
@@ -356,7 +338,7 @@ func Test_net_worth_refuses_arguments_the_schema_rejects_without_reading_the_con
 		t.Run(name, func(t *testing.T) {
 			stub := &configStub{}
 			fake := &fakeStore{}
-			h := newHarness(t, fake, nil, mcp.WithConfig(stub.load), atNetWorthToday())
+			h := newHarness(t, fake, nil, mcp.WithConfig(stub.load), atSeptember29())
 
 			result := h.netWorth(t, arguments)
 
@@ -373,7 +355,7 @@ func Test_net_worth_lists_the_first_500_month_ends_and_warns_on_501(t *testing.T
 	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
 	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load), inTheYear2100())
 
-	doc := decodeNetWorth(t, h.netWorth(t, map[string]any{"since": "2000-01", "until": "2041-09"}))
+	doc := decodeDoc[document.NetWorth](t, h.netWorth(t, map[string]any{"since": "2000-01", "until": "2041-09"}))
 
 	require.Len(t, doc.Dates, 500)
 	assert.Equal(t, "2000-01-31", doc.Dates[0].Date)
@@ -394,7 +376,7 @@ func Test_net_worth_counts_every_month_end_in_the_rate_warning_before_the_cut(t 
 	fake := &fakeStore{netWorth: store.NetWorth{Rows: rows, FirstRate: civilDay(2042, time.January, 1)}}
 	h := newHarness(t, fake, nil, inTheYear2100())
 
-	doc := decodeNetWorth(t, h.netWorth(t, map[string]any{"since": "2000-01", "until": "2041-09", "currency": "CAD"}))
+	doc := decodeDoc[document.NetWorth](t, h.netWorth(t, map[string]any{"since": "2000-01", "until": "2041-09", "currency": "CAD"}))
 
 	require.Len(t, doc.Dates, 500)
 	assert.Equal(t, []string{
@@ -408,7 +390,7 @@ func Test_net_worth_lists_exactly_500_month_ends_with_no_cut_note(t *testing.T) 
 	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
 	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load), inTheYear2100())
 
-	doc := decodeNetWorth(t, h.netWorth(t, map[string]any{"since": "2000-01", "until": "2041-08"}))
+	doc := decodeDoc[document.NetWorth](t, h.netWorth(t, map[string]any{"since": "2000-01", "until": "2041-08"}))
 
 	require.Len(t, doc.Dates, 500)
 	assert.Equal(t, "2041-08-31", doc.Dates[499].Date)
