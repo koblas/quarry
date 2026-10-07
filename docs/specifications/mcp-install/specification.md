@@ -358,7 +358,7 @@ Sizing pass (architect, 2026-10-07): no mandatory test-first code (quarry writes
 | SCENARIO-18, 27, 27b, 28 | FOLD → SCENARIO-17 |
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01: Fresh install runs both steps (folds 02, 03, 09, 09b, 15, 16, 19, 21, 22)
+- [x] SCENARIO-01: Fresh install runs both steps (folds 02 `Test_claude_install_skips_both_steps_when_both_are_present`, 03 `Test_claude_install_installs_only_the_plugin_when_the_marketplace_is_present`, 09 `Test_claude_install_refuses_a_plugin_list_that_is_not_json`, 09b `Test_claude_install_replays_a_failed_marketplace_list`, 15 `Test_claude_install_refuses_json`, 16 `Test_claude_install_refuses_arguments`, 19 `Test_claude_install_refuses_a_foreign_quarry_marketplace`, 21 `Test_claude_install_hints_when_the_user_copy_is_turned_off`, 22 `Test_claude_install_refuses_a_plugin_list_entry_without_an_id`) — `internal/cli/claude_install_test.go` `Test_claude_install_runs_both_steps_when_nothing_is_installed`
 - [ ] SCENARIO-04: Install warns when quarry is not on PATH (folds 05, 25)
 - [ ] SCENARIO-06: First install step fails (folds 07, 08, 14, 23, 24)
 - [ ] SCENARIO-10: Uninstall runs both steps (folds 11, 13, 05b, 15b, 20)

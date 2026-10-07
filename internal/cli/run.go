@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/koblas/quarry/internal/claudeplugin"
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/snapshot"
@@ -51,6 +52,7 @@ type Env struct {
 	NewSnapshots   SnapshotsFactory
 	LoadConfig     ConfigLoader
 	ServeMCP       MCPServeFunc
+	RunTool        claudeplugin.Runner
 	IsTerminal     TerminalProbe
 	Now            func() time.Time
 }

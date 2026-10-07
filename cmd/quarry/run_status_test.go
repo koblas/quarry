@@ -147,6 +147,7 @@ quarry never writes to the Quicken file.`)
 		"  accounts    List accounts with their current balances\n"+
 		"  anomalies   List charges unusually large for their payee or category\n"+
 		"  cashflow    Show income, spending and savings rate by month or year\n"+
+		"  claude      Install quarry's plugin in Claude Code, or remove it\n"+
 		"  findings    List what to clean up in Quicken\n"+
 		"  help        Help about any command\n"+
 		"  holdings    List the securities held in each account and their value\n"+
