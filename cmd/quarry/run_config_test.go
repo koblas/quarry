@@ -44,6 +44,28 @@ const (
 		"all three start again with this sync"
 )
 
+// badConfigValue is a config file one value of which a command refuses, and the refusal's line before the fix hint.
+type badConfigValue struct{ name, content, line string }
+
+// quickenAndReportingBadValues are the refused quicken.path and reporting.currency values every config-reading
+// command refuses the same way.
+func quickenAndReportingBadValues() []badConfigValue {
+	return []badConfigValue{
+		{
+			name: "quicken.path not a string", content: "quicken.path = 12\n",
+			line: configShown + ": quicken.path must be a path in quotes, got 12",
+		},
+		{
+			name: "quicken.path relative", content: "quicken.path = \"Home.quicken\"\n",
+			line: configShown + ": quicken.path must be a full path or start with ~/, got \"Home.quicken\"",
+		},
+		{
+			name: "reporting.currency another currency", content: "reporting.currency = \"EUR\"\n",
+			line: configShown + ": reporting.currency must be CAD, USD or native, got \"EUR\"",
+		},
+	}
+}
+
 // corruptPreviousStore syncs once, then replaces the store with bytes DuckDB cannot open.
 func corruptPreviousStore(t *testing.T, home string) {
 	t.Helper()

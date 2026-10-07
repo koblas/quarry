@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -384,4 +385,92 @@ func Test_run_sync_names_quicken_path_when_the_only_discovered_bundle_is_not_a_b
 	assert.Equal(t, "quarry: ~/Documents/Empty.quicken is not a Quicken for Mac file "+
 		"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path> "+
 		"or set quicken.path in ~/Library/Application Support/quarry/config.toml\n", stderr.String())
+}
+
+// quickenPathConfig is a config file whose only setting is quicken.path.
+func quickenPathConfig(path string) string {
+	return "[quicken]\npath = \"" + path + "\"\n"
+}
+
+// assertRefusedBeforeSnapshotting checks the one-line refusal contract: exit 1,
+// empty stdout, exactly wantStderr, and no snapshots folder under home.
+func assertRefusedBeforeSnapshotting(t *testing.T, home string, exitCode int, stdout, stderr, wantStderr string) {
+	t.Helper()
+	assert.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout)
+	assert.Equal(t, wantStderr, stderr)
+	_, statErr := os.Stat(filepath.Join(storeDirUnder(home), "snapshots"))
+	assert.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
+func Test_run_sync_snapshots_the_file_named_by_quicken_path(t *testing.T) {
+	home := newHome(t)
+	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Books"))
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "A.quicken"), 0o700))
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents", "B.quicken"), 0o700))
+	writeConfig(t, home, quickenPathConfig("~/Books/Home.quicken"))
+
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.Contains(t, stdout.String(), "Source    "+abbreviated(t, bundle.Dir, home)+"\n")
+}
+
+func Test_run_sync_refuses_a_quicken_path_that_does_not_exist(t *testing.T) {
+	home := newHome(t)
+	writeConfig(t, home, quickenPathConfig("~/Books/Missing.quicken"))
+
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
+
+	assertRefusedBeforeSnapshotting(t, home, exitCode, stdout.String(), stderr.String(),
+		"quarry: ~/Books/Missing.quicken does not exist; check quicken.path in "+configShown+
+			", or pass the file with --quicken <path>\n")
+}
+
+func Test_run_sync_refuses_a_quicken_path_that_is_not_a_bundle(t *testing.T) {
+	home := newHome(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "Books"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(home, "Books", "notes.txt"), []byte("x"), 0o600))
+	writeConfig(t, home, quickenPathConfig("~/Books/notes.txt"))
+
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
+
+	assertRefusedBeforeSnapshotting(t, home, exitCode, stdout.String(), stderr.String(),
+		"quarry: ~/Books/notes.txt is not a Quicken for Mac file "+
+			"(expected a .quicken bundle containing a data file); "+
+			"set quicken.path in "+configShown+" to the .quicken bundle\n")
+}
+
+func Test_run_sync_prefers_the_quicken_flag_over_quicken_path(t *testing.T) {
+	home := newHome(t)
+	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Books"))
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "Documents"), 0o700))
+	link := filepath.Join(home, "Documents", "A.quicken")
+	require.NoError(t, os.Symlink(bundle.Dir, link))
+	writeConfig(t, home, quickenPathConfig("~/Books/Missing.quicken"))
+
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", link})
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.Contains(t, stdout.String(), "Source    "+abbreviated(t, link, home)+"\n")
+}
+
+func Test_run_sync_from_ignores_quicken_path(t *testing.T) {
+	home := newHome(t)
+	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Books"))
+	var syncStdout, syncStderr bytes.Buffer
+	require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncStdout, &syncStderr), syncStderr.String())
+	snapshotsDir := filepath.Join(storeDirUnder(home), "snapshots")
+	id := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
+	storePath := filepath.Join(storeDirUnder(home), "quarry.duckdb")
+	require.NoError(t, os.Remove(storePath))
+	writeConfig(t, home, quickenPathConfig("~/Books/Missing.quicken"))
+
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--from", id})
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.FileExists(t, storePath)
 }
