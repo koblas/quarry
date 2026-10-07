@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/stretchr/testify/assert"
@@ -291,36 +290,6 @@ func Test_open_read_only_reads_the_file_now_at_the_path_while_an_earlier_open_is
 	assert.Equal(t, int32(2), onlyValue(t, current))
 }
 
-// writeStoreHolding creates a DuckDB file at path whose table t holds the one value v.
-func writeStoreHolding(t *testing.T, path string, v int32) string {
-	t.Helper()
-	db, err := duckdb.Create(t.Context(), path)
-	require.NoError(t, err)
-	_, err = db.Exec(t.Context(), "CREATE TABLE t (v INTEGER)")
-	require.NoError(t, err)
-	require.NoError(t, db.AppendRows(t.Context(), "t", [][]any{{v}}))
-	require.NoError(t, db.CheckpointClose(t.Context()))
-	return path
-}
-
-// onlyValue is the one value of db's table t.
-func onlyValue(t *testing.T, db *duckdb.DB) int32 {
-	t.Helper()
-	var v int32
-	err := db.QueryRows(t.Context(), "SELECT v FROM t", nil, func(scan func(dest ...any) error) error { return scan(&v) })
-	require.NoError(t, err)
-	return v
-}
-
-func newOpenDatabase(t *testing.T) (*duckdb.DB, string) {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "data.duckdb")
-	db, err := duckdb.Create(t.Context(), path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db, path
-}
-
 func Test_exec_fails_on_a_syntax_error(t *testing.T) {
 	t.Parallel()
 	db, _ := newOpenDatabase(t)
@@ -491,17 +460,6 @@ func Test_query_rows_reports_a_deadline_that_passes_mid_iteration(t *testing.T) 
 	assert.Equal(t, 1, calls)
 }
 
-// scriptedContext is a context that never fires Done, so the driver's own interrupt
-// cannot be what stops a read; its Err is whatever err returns.
-type scriptedContext struct {
-	err func() error
-}
-
-func (scriptedContext) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (scriptedContext) Done() <-chan struct{}       { return nil }
-func (scriptedContext) Value(any) any               { return nil }
-func (c scriptedContext) Err() error                { return c.err() }
-
 // The Appender itself refuses a table that does not exist.
 func Test_append_rows_fails_when_the_table_does_not_exist(t *testing.T) {
 	t.Parallel()
@@ -523,17 +481,6 @@ func Test_checkpoint_close_fails_when_the_context_is_already_cancelled(t *testin
 	err := db.CheckpointClose(ctx)
 
 	require.ErrorIs(t, err, context.Canceled)
-}
-
-func newTestTable(t *testing.T, ddl string) *duckdb.DB {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "data.duckdb")
-	db, err := duckdb.Create(t.Context(), path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	_, err = db.Exec(t.Context(), ddl)
-	require.NoError(t, err)
-	return db
 }
 
 func Test_append_rows_reports_a_duplicate_primary_key(t *testing.T) {
@@ -571,23 +518,6 @@ func Test_append_rows_reports_a_wrong_column_count(t *testing.T) {
 	})
 
 	require.Error(t, err)
-}
-
-// cancelAfterNErrCalls reports Err() as nil for its first n calls, then as
-// context.Canceled — lands AppendRows' per-row check on a chosen row deterministically.
-type cancelAfterNErrCalls struct {
-	context.Context //nolint:containedctx // wraps a Context to override Err alone
-
-	n     int
-	calls int
-}
-
-func (c *cancelAfterNErrCalls) Err() error {
-	c.calls++
-	if c.calls > c.n {
-		return context.Canceled
-	}
-	return nil
 }
 
 // Three rows exist; Err() cancels after the first, so a row count of

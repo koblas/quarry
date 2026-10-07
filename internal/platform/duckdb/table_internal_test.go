@@ -6,7 +6,6 @@
 package duckdb
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -98,12 +97,6 @@ func Test_cell_value_refuses_a_value_it_cannot_print(t *testing.T) {
 		})
 	}
 }
-
-var (
-	errOtherDriverFault   = errors.New("database/sql/driver: API error: invalid input")
-	errIndexPastTheResult = errors.New("database/sql/driver: API error: unsupported data type: VARIANT: index: 1")
-	errIndexTooLarge      = errors.New("unsupported data type: VARIANT: index: 99999999999999999999")
-)
 
 func Test_driver_refusal_returns_an_error_it_cannot_place_unchanged(t *testing.T) {
 	columns := []Column{{Name: "label", Type: "VARCHAR"}}

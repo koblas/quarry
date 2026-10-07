@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
 	"github.com/koblas/quarry/internal/platform/duckdb"
@@ -268,17 +267,4 @@ func Test_query_table_prints_a_timestamptz_offset_in_whole_minutes(t *testing.T)
 			assert.Equal(t, []string{c.want, c.want}, []string{table.Rows[0][0].Text, table.Rows[0][1].Text})
 		})
 	}
-}
-
-// useZone makes zone the process-local zone and db's TimeZone for the test.
-func useZone(t *testing.T, db *duckdb.DB, zone string) {
-	t.Helper()
-	loc, err := time.LoadLocation(zone)
-	require.NoError(t, err)
-	_, err = db.Exec(t.Context(), "SET GLOBAL TimeZone = '"+zone+"'")
-	require.NoError(t, err)
-	//nolint:gosmopolitan // the test swaps the process-local zone; Cleanup restores it
-	previous := time.Local
-	time.Local = loc                            //nolint:gosmopolitan // restored by Cleanup
-	t.Cleanup(func() { time.Local = previous }) //nolint:gosmopolitan // restores the zone swapped above
 }

@@ -2,7 +2,6 @@ package duckdb_test
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -17,8 +16,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-var errNotDuckDB = errors.New("boom")
 
 func Test_IsDiskFull_and_IsPermission_classify_error_shapes(t *testing.T) {
 	t.Parallel()
@@ -183,23 +180,6 @@ func Test_query_error_predicates_reject_an_error_from_elsewhere(t *testing.T) {
 	assert.False(t, duckdb.IsAccessDisabled(errNotDuckDB))
 	assert.False(t, duckdb.IsEmptyQuery(errNotDuckDB))
 }
-
-// skipAsRoot skips t under root, whom file modes do not stop.
-func skipAsRoot(t *testing.T) {
-	t.Helper()
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores file modes")
-	}
-}
-
-// DuckDB's own wording, capitals included: the predicates and the prefix strip match it exactly.
-var (
-	errOpenFaultTexts = errors.New("Could not set lock on file; not a valid DuckDB database file") //nolint:staticcheck // DuckDB's capitalised text
-	errTwoLines       = errors.New("Parser Error: first\nsecond")                                  //nolint:staticcheck // DuckDB's capitalised type prefix
-)
-
-// lockHolderEnv names the database file Test_hold_a_database_open_for_writing holds when run as a child process.
-const lockHolderEnv = "QUARRY_DUCKDB_LOCK_HOLDER"
 
 func Test_open_read_only_on_a_non_duckdb_file_classifies_as_not_a_database(t *testing.T) {
 	t.Parallel()
