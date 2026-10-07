@@ -44,3 +44,12 @@ func Test_NewStatus_lists_warnings_as_an_empty_array_when_there_are_none(t *test
 
 	assert.Equal(t, []string{}, got.Warnings)
 }
+
+func Test_NewStatus_names_an_upper_case_sqlite_snapshot_by_its_id_and_keeps_its_path(t *testing.T) {
+	st := store.Status{Run: store.ImportRun{Snapshot: store.SnapshotRef{Path: "/snaps/20260927T143005Z.SQLITE"}}}
+
+	got := document.NewStatus(st, document.FindingsTally{}, nil)
+
+	assert.Equal(t, "20260927T143005Z", got.Snapshot.ID)
+	assert.Equal(t, "/snaps/20260927T143005Z.SQLITE", got.Snapshot.Path)
+}
