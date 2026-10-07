@@ -143,8 +143,8 @@ func (s *Server) sweepOrphans(ctx context.Context, orphans []string) {
 	}
 }
 
-// deleteSnapshot removes entry's .sqlite, then its manifest, and records the outcome in pruned.
-// A .sqlite already gone is neither deleted nor failed; any other fault leaves the manifest.
+// deleteSnapshot removes entry's snapshot, then its manifest unless the snapshot would not go or another entry of
+// the ID may still need it, and records the outcome in pruned; a snapshot already gone counts as neither.
 func (s *Server) deleteSnapshot(entry Entry, pruned *Pruned) {
 	err := s.remove(entry.Path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -156,9 +156,11 @@ func (s *Server) deleteSnapshot(entry Entry, pruned *Pruned) {
 		pruned.Deleted = append(pruned.Deleted, entry)
 	}
 	// os.Remove would delete an empty directory or a symlink named like the manifest.
-	manifest := s.manifestPath(entry.ID)
-	if info, statErr := os.Lstat(manifest); statErr == nil && info.Mode().IsRegular() {
-		_ = s.remove(manifest)
+	if entry.ManifestPath == "" || entry.manifestShared {
+		return
+	}
+	if info, statErr := os.Lstat(entry.ManifestPath); statErr == nil && info.Mode().IsRegular() {
+		_ = s.remove(entry.ManifestPath)
 	}
 }
 

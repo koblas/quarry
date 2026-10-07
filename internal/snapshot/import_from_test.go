@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -151,6 +153,8 @@ func Test_import_from_a_path_outside_the_snapshots_directory_never_creates_it(t 
 	assert.NoDirExists(t, filepath.Join(home, "snapshots"))
 }
 
+const unresolvableFolderRefusal = "cannot resolve x.sqlite against the current folder: %s; run quarry from a folder you can open"
+
 func Test_import_from_refuses_a_relative_path_when_the_working_directory_no_longer_exists(t *testing.T) {
 	deletedDir := filepath.Join(t.TempDir(), "deleted")
 	require.NoError(t, os.Mkdir(deletedDir, 0o700))
@@ -164,8 +168,59 @@ func Test_import_from_refuses_a_relative_path_when_the_working_directory_no_long
 
 	_, err := srv.ImportFrom(t.Context(), "x.sqlite")
 
-	require.Error(t, err)
+	require.ErrorIs(t, err, fs.ErrNotExist)
+	require.EqualError(t, err, fmt.Sprintf(unresolvableFolderRefusal, "no such file or directory"))
 	assert.Empty(t, fake.calls)
+}
+
+func Test_import_from_refuses_a_relative_path_when_the_working_directory_cannot_be_searched(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory modes")
+	}
+	locked := t.TempDir()
+	t.Chdir(locked)
+	require.NoError(t, os.Chmod(locked, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+	fake := &fakeImporter{}
+	srv := newImportServer(t, t.TempDir(), fake)
+
+	_, err := srv.ImportFrom(t.Context(), "x.sqlite")
+
+	require.ErrorIs(t, err, fs.ErrPermission)
+	require.EqualError(t, err, fmt.Sprintf(unresolvableFolderRefusal, "permission denied"))
+	assert.Empty(t, fake.calls)
+}
+
+func Test_import_from_an_absolute_or_home_path_succeeds_when_the_working_directory_cannot_be_searched(t *testing.T) {
+	cases := []struct {
+		name string
+		from func(home, snapshotPath string) string
+	}{
+		{name: "an absolute path", from: func(_, snapshotPath string) string { return snapshotPath }},
+		{name: "a ~/ path", from: homepath.Abbreviate},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if os.Geteuid() == 0 {
+				t.Skip("root ignores directory modes")
+			}
+			home := t.TempDir()
+			fake := &fakeImporter{}
+			srv := newImportServer(t, home, fake)
+			taken := takeSnapshot(t, srv)
+			locked := t.TempDir()
+			t.Chdir(locked)
+			require.NoError(t, os.Chmod(locked, 0o000))
+			t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+
+			_, err := srv.ImportFrom(t.Context(), c.from(home, taken.Snapshot.Path))
+
+			require.NoError(t, err)
+			require.Len(t, fake.calls, 1)
+			assert.Equal(t, taken.Snapshot.Path, fake.calls[0].Path)
+		})
+	}
 }
 
 func Test_import_from_returns_the_manifest_a_plain_sync_returned(t *testing.T) {
@@ -348,7 +403,7 @@ func Test_import_from_refuses_a_path_form_value_that_does_not_exist(t *testing.T
 
 // os.Stat needs no read permission on its target, only execute on its
 // ancestor directories, so only a chmod'd directory reaches this branch.
-func Test_import_from_names_the_snapshot_when_its_directory_cannot_be_read(t *testing.T) {
+func Test_import_from_a_path_names_the_snapshot_when_its_directory_cannot_be_searched(t *testing.T) {
 	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file permissions")
@@ -361,7 +416,7 @@ func Test_import_from_names_the_snapshot_when_its_directory_cannot_be_read(t *te
 	require.NoError(t, os.Chmod(snapshotsDir, 0o000))
 	t.Cleanup(func() { _ = os.Chmod(snapshotsDir, 0o700) })
 
-	_, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
+	_, err := srv.ImportFrom(t.Context(), taken.Snapshot.Path)
 
 	require.EqualError(t, err, "cannot read "+homepath.Abbreviate(home, taken.Snapshot.Path)+
 		": permission denied; check the file's permissions")
@@ -380,7 +435,7 @@ func Test_import_from_refuses_an_id_form_value_with_no_matching_snapshot(t *test
 	assert.Empty(t, fake.calls)
 }
 
-func Test_import_from_refuses_a_directory_that_is_not_a_quicken_bundle(t *testing.T) {
+func Test_import_from_refuses_a_path_form_directory_that_is_not_a_quicken_bundle(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
@@ -388,7 +443,7 @@ func Test_import_from_refuses_a_directory_that_is_not_a_quicken_bundle(t *testin
 	snapshotPath := filepath.Join(home, "snapshots", "20260927T143005Z.sqlite")
 	require.NoError(t, os.MkdirAll(snapshotPath, 0o700))
 
-	_, err := srv.ImportFrom(t.Context(), "20260927T143005Z")
+	_, err := srv.ImportFrom(t.Context(), snapshotPath)
 
 	require.EqualError(t, err, "~/snapshots/20260927T143005Z.sqlite is not a snapshot file; "+
 		"pass a .sqlite snapshot from ~/snapshots with --from <snapshot>")

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"strings"
 	"time"
 
 	"github.com/koblas/quarry/internal/report/document"
@@ -65,8 +64,7 @@ func newSnapshotDocument(e snapshot.Entry) snapshotDocument {
 	if e.Manifest == nil {
 		return doc
 	}
-	manifestPath := strings.TrimSuffix(e.Path, ".sqlite") + ".json"
-	doc.Manifest = &manifestPath
+	doc.Manifest = &e.ManifestPath
 	doc.Source = document.NullString(e.Manifest.Snapshot.Source)
 	doc.SHA256 = &e.Manifest.Snapshot.SHA256
 	doc.SchemaVerified = &e.Manifest.Schema.Verified
@@ -77,15 +75,16 @@ func newSnapshotDocument(e snapshot.Entry) snapshotDocument {
 	return doc
 }
 
-// snapshotsWarnings is the config warnings, then the no-snapshots note naming the folder by its
-// absolute path, then the store warning, without the prefixes stderr gives them; never nil.
+// snapshotsWarnings is the config warnings, then the no-snapshots note, then the duplicate-name warnings,
+// each naming the folder by its absolute path, then the store warning, without the prefixes stderr gives them; never nil.
 func snapshotsWarnings(config []string, l snapshot.Listing) []string {
 	warnings := append([]string{}, config...)
 	if l.NoSnapshots != "" {
 		warnings = append(warnings, l.NoSnapshotsAbsolute)
 	}
-	if l.StoreWarning != "" {
-		warnings = append(warnings, l.StoreWarning)
+	warnings = append(warnings, l.DuplicatesAbsolute...)
+	if l.StoreWarningAbsolute != "" {
+		warnings = append(warnings, l.StoreWarningAbsolute)
 	}
 	return warnings
 }

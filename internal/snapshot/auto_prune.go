@@ -8,8 +8,8 @@ import (
 	"github.com/koblas/quarry/internal/platform/osreason"
 )
 
-// autoPrune deletes the snapshots beyond the newest s.autoKeep, sparing every one that is outcome's own file, and
-// records the result in outcome.Pruned; an ended ctx before a delete stops it with interruptedWhilePruning.
+// autoPrune deletes the snapshots beyond the newest s.autoKeep, sparing outcome's own file, and records the result in
+// outcome.Pruned; it deletes nothing when that file cannot be statted. An ended ctx stops it with interruptedWhilePruning.
 func (s *Server) autoPrune(ctx context.Context, outcome *Outcome) error {
 	if s.autoKeep < 1 {
 		return nil
@@ -23,8 +23,10 @@ func (s *Server) autoPrune(ctx context.Context, outcome *Outcome) error {
 		outcome.pruneWarningAbsolute = cannotListWarning(s.snapshotDir, reason)
 		return nil
 	}
-	markStoreSnapshot(listing.Entries, outcome.Manifest.Snapshot.Path)
 	pruned.Snapshots = len(listing.Entries)
+	if err := markStoreSnapshot(listing.Entries, outcome.Manifest.Snapshot.Path); err != nil {
+		return nil //nolint:nilerr // an unreadable recorded snapshot means delete nothing, and the sync still succeeded
+	}
 	var doomed []Entry
 	doomed, pruned.StoreKept = selectPrune(listing.Entries, s.autoKeep)
 	for i, entry := range doomed {

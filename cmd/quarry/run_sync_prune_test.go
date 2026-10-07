@@ -127,6 +127,16 @@ func syncThenWrite(t *testing.T, home string, fixtures ...snapshotFixture) (stri
 	return id, dir
 }
 
+// copyOutsideFolder links id's snapshot and manifest from dir into ~/kept, beyond the folder a test is about to
+// make unlistable, and returns the snapshot's path.
+func copyOutsideFolder(t *testing.T, home, dir, id string) string {
+	t.Helper()
+	kept := filepath.Join(home, "kept")
+	require.NoError(t, os.MkdirAll(kept, 0o700))
+	hardLink(t, filepath.Join(dir, id+".json"), filepath.Join(kept, id+".json"))
+	return hardLink(t, filepath.Join(dir, id+".sqlite"), filepath.Join(kept, id+".sqlite"))
+}
+
 // runSyncFrom runs quarry sync --from id with extra args.
 func runSyncFrom(t *testing.T, id string, extra ...string) (int, string, string) {
 	t.Helper()
@@ -233,10 +243,11 @@ func Test_run_sync_from_warns_when_it_cannot_list_the_snapshots_folder(t *testin
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	id, dir := syncThenWrite(t, home)
+	kept := copyOutsideFolder(t, home, dir, id)
 	require.NoError(t, os.Chmod(dir, 0o300))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
 
-	exitCode, stdout, stderr := runSyncFrom(t, id)
+	exitCode, stdout, stderr := runSyncFrom(t, kept)
 
 	require.Equal(t, 0, exitCode, stderr)
 	assert.Equal(t, "quarry: warning: cannot list "+snapshotsShown+" to delete old snapshots: permission denied; "+

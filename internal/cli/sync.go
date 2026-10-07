@@ -68,6 +68,9 @@ newest 12 (snapshots.keep in ~/Library/Application Support/quarry/config.toml),
 never the one the store was built from; a failed sync deletes nothing. Run
 quarry snapshots to list them.
 
+Only one quarry sync or quarry snapshots prune runs at a time; while one
+is running, another stops at once and changes nothing.
+
 Quicken must be running with the file open: it encrypts the database when
 the file is closed. quarry only reads the Quicken file; it never writes to it.
 
@@ -108,6 +111,11 @@ does not read Quicken at all.`,
 			if err != nil {
 				return &runtimeError{err: err}
 			}
+			release, err := srv.LockForSync(cmd.Context())
+			if err != nil {
+				return &runtimeError{err: err}
+			}
+			defer release()
 			home := srv.Home()
 
 			var outcome snapshot.Outcome

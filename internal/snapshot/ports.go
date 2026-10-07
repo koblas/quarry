@@ -72,3 +72,10 @@ type StoreProbe interface {
 	// and OtherFormat included).
 	BuiltFrom(ctx context.Context) (snapshotPath string, err error)
 }
+
+// Locker is the single-writer lock port: sync's store build and prune's deletes each run while holding it.
+type Locker interface {
+	// Acquire takes the lock without waiting and returns the func that
+	// releases it, or an error when the lock is held or cannot be taken.
+	Acquire(ctx context.Context) (release func(), err error)
+}

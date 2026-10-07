@@ -40,6 +40,15 @@ func Test_status_refuses_with_the_store_refusal_copy(t *testing.T) {
 				"run quarry sync --from 20260927T143005Z to rebuild it",
 		},
 		{
+			name: "another format, naming an upper-case snapshot by its id",
+			openErr: &store.OpenError{
+				Fault: store.OpenFaultOtherFormat, Path: storePath,
+				SnapshotPath: "/Users/dave/Library/Application Support/quarry/snapshots/20260927T143005Z.SQLITE",
+			},
+			want: "the store at ~/Library/Application Support/quarry/quarry.duckdb was built by another version of quarry; " +
+				"run quarry sync --from 20260927T143005Z to rebuild it",
+		},
+		{
 			name:    "another format with no readable snapshot",
 			openErr: &store.OpenError{Fault: store.OpenFaultOtherFormat, Path: storePath},
 			want: "the store at ~/Library/Application Support/quarry/quarry.duckdb was built by another version of quarry; " +

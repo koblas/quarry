@@ -32,7 +32,11 @@ sync. prune keeps --keep snapshots, or snapshots.keep from
 ~/Library/Application Support/quarry/config.toml (12 unless set). The
 snapshot the store was built from is never deleted, even when it is older.
 
-With --dry-run, prune lists what it would delete and deletes nothing.`,
+Only one quarry sync or quarry snapshots prune runs at a time; while one
+is running, another stops at once and changes nothing.
+
+With --dry-run, prune lists what it would delete and deletes nothing; it
+runs even while a sync is running.`,
 		Example: "  quarry snapshots prune --dry-run\n  quarry snapshots prune --keep 3",
 		Args: func(cmd *cobra.Command, args []string) error {
 			hint := "Run '" + cmd.CommandPath() + " --help' for usage."
@@ -60,9 +64,14 @@ With --dry-run, prune lists what it would delete and deletes nothing.`,
 			if err != nil {
 				return &runtimeError{err: err}
 			}
-			prune := srv.Prune
-			if dryRun {
-				prune = srv.PlanPrune
+			prune := srv.PlanPrune
+			if !dryRun {
+				release, lockErr := srv.LockForPrune(cmd.Context())
+				if lockErr != nil {
+					return &runtimeError{err: lockErr}
+				}
+				defer release()
+				prune = srv.Prune
 			}
 			pruned, pruneErr := prune(cmd.Context(), limit)
 			// Prune returns a zero Pruned with every refusal that leaves nothing to report.

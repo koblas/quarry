@@ -20,26 +20,27 @@ const leftoverMaxAge = time.Hour
 // leftoverPartialPattern matches a quarry partial name and its -journal/-wal/-shm companions.
 var leftoverPartialPattern = regexp.MustCompile(`^\.\d{8}T\d{6}Z(_\d+)?\.(sqlite|json)\.partial(-journal|-wal|-shm)?$`)
 
-// snapshotFilePattern matches a snapshot's file name; its groups are the ID's timestamp and _N digits.
-var snapshotFilePattern = regexp.MustCompile(`^(\d{8}T\d{6}Z)(?:_(\d+))?\.sqlite$`)
+// snapshotFilePattern matches a snapshot's file name, extension in any letter case; its groups are the ID's timestamp and _N digits.
+var snapshotFilePattern = regexp.MustCompile(`^(\d{8}T\d{6}Z)(?:_(\d+))?\.(?i:sqlite)$`)
 
-// manifestFilePattern matches a manifest's file name; its group is the snapshot ID.
-var manifestFilePattern = regexp.MustCompile(`^(\d{8}T\d{6}Z(?:_\d+)?)\.json$`)
+// manifestFilePattern matches a manifest's file name, extension in any letter case; its group is the snapshot ID.
+var manifestFilePattern = regexp.MustCompile(`^(\d{8}T\d{6}Z(?:_\d+)?)\.(?i:json)$`)
 
 // dirDestination is the production Destination adapter: a directory on disk
 // holding committed snapshots and manifests plus their exclusively-created
 // partials, named "<name>.sqlite"/"<name>.json" and
 // ".<name>.sqlite.partial"/".<name>.json.partial".
 type dirDestination struct {
-	dir string
+	dir     string
+	readDir func(dir string) ([]fs.DirEntry, error)
 }
 
 var _ Destination = (*dirDestination)(nil)
 
 // newDirDestination returns the production Destination adapter, writing
-// into dir.
-func newDirDestination(dir string) Destination {
-	return &dirDestination{dir: dir}
+// into dir and listing it through readDir.
+func newDirDestination(dir string, readDir func(dir string) ([]fs.DirEntry, error)) Destination {
+	return &dirDestination{dir: dir, readDir: readDir}
 }
 
 func (d *dirDestination) Prepare(_ context.Context) error {
@@ -90,7 +91,7 @@ func (d *dirDestination) Backup(ctx context.Context, src Source, name string) (s
 		_ = f.Close()
 
 		snapshotFinal, manifestFinal := d.FinalPaths(candidate)
-		if fileExists(snapshotFinal) || fileExists(manifestFinal) {
+		if fileExists(snapshotFinal) || fileExists(manifestFinal) || d.folderUses(candidate) {
 			_ = os.Remove(partial)
 			candidate = fmt.Sprintf("%s_%d", name, suffix+1)
 			continue
@@ -102,6 +103,16 @@ func (d *dirDestination) Backup(ctx context.Context, src Source, name string) (s
 		}
 		return partial, candidate, nil
 	}
+}
+
+// folderUses reports whether an entry of the folder is named as id's snapshot or manifest, which the stat check
+// misses on a case-sensitive volume. A listing fault reports false: the stat check alone then decides.
+func (d *dirDestination) folderUses(id string) bool {
+	entries, err := d.readDir(d.dir)
+	if err != nil {
+		return false
+	}
+	return selectFolder(entries).uses(id)
 }
 
 // fileExists reports whether path can be stat'ed.

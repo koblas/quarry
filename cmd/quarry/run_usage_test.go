@@ -74,6 +74,44 @@ func Test_run_prints_the_sync_help(t *testing.T) {
 		"an ID such as 20260927T143005Z, or the path to its .sqlite file")
 }
 
+func Test_run_help_says_only_one_writer_runs_at_a_time(t *testing.T) {
+	const oneWriter = "Only one quarry sync or quarry snapshots prune runs at a time; while one\n" +
+		"is running, another stops at once and changes nothing."
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "sync follows the auto-prune paragraph",
+			args: []string{"sync", "--help"},
+			want: "never the one the store was built from; a failed sync deletes nothing. Run\n" +
+				"quarry snapshots to list them.\n\n" + oneWriter,
+		},
+		{
+			name: "prune follows its first paragraph and replaces the dry-run line",
+			args: []string{"snapshots", "prune", "--help"},
+			want: "snapshot the store was built from is never deleted, even when it is older.\n\n" +
+				oneWriter + "\n\n" +
+				"With --dry-run, prune lists what it would delete and deletes nothing; it\n" +
+				"runs even while a sync is running.",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			var stdout, stderr bytes.Buffer
+
+			exitCode := run(context.Background(), c.args, &stdout, &stderr)
+
+			require.Equal(t, 0, exitCode)
+			assert.Empty(t, stderr.String())
+			assert.Contains(t, stdout.String(), c.want)
+		})
+	}
+}
+
 func Test_run_refuses_from_with_quicken_or_without_a_value(t *testing.T) {
 	const u3 = "quarry: --from and --quicken cannot be used together; --from rebuilds from a snapshot without reading Quicken\n"
 	const u4 = "quarry: flag needs an argument: --from; Run 'quarry sync --help' for usage.\n"

@@ -186,7 +186,7 @@ func Test_run_refuses_an_unmappable_value_and_keeps_the_snapshot(t *testing.T) {
 		stderr.String())
 	entries, err := os.ReadDir(quarryDir)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"quarry.duckdb", "snapshots"}, entryNames(entries))
+	assert.Equal(t, []string{"quarry.duckdb", "quarry.lock", "snapshots"}, entryNames(entries))
 	after, err := os.ReadFile(storePath)
 	require.NoError(t, err)
 	assert.Equal(t, sentinel, after)

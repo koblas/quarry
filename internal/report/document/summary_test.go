@@ -134,6 +134,15 @@ func Test_NewSummary_writes_the_snapshot_id_and_the_time_it_was_taken(t *testing
 	assert.Equal(t, map[string]any{"id": "20261001T130512Z", "taken_at": "2026-10-01T13:05:12Z", "covers_month": true}, got["snapshot"])
 }
 
+func Test_NewSummary_names_an_upper_case_sqlite_snapshot_by_its_id(t *testing.T) {
+	s := septemberSummary()
+	s.Status.Run.Snapshot.Path = "/snaps/20261001T130512Z.SQLITE"
+
+	got := summaryDocument(t, s, document.FindingsTally{}, nil)
+
+	assert.Equal(t, "20261001T130512Z", object(t, got, "snapshot")["id"])
+}
+
 func Test_NewSummary_says_whether_the_snapshot_covers_the_month_and_leaves_it_null_when_the_time_is_unknown(t *testing.T) {
 	cases := []struct {
 		name        string

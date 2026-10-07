@@ -154,6 +154,15 @@ func Test_renderStatus(t *testing.T) {
 		assert.Contains(t, renderStatus(st, findingsFixture(), home, now), "Transfers none\n")
 	})
 
+	t.Run("upper-case snapshot file", func(t *testing.T) {
+		st := statusFixture()
+		st.Run.Snapshot.Path = "/Users/dave/Library/Application Support/quarry/snapshots/20260927T143005Z.SQLITE"
+
+		got := renderStatus(st, findingsFixture(), home, now)
+
+		assert.Contains(t, got, "Snapshot  20260927T143005Z, taken 2026-09-27 10:30 EDT (2 days ago)\n")
+	})
+
 	t.Run("snapshot time not recorded", func(t *testing.T) {
 		st := statusFixture()
 		st.Run.Snapshot.TakenAt = time.Time{}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"syscall"
 	"testing"
 
@@ -21,6 +22,12 @@ func Test_reason_finds_a_path_error_inside_a_wrapped_error(t *testing.T) {
 	err := fmt.Errorf("read config: %w", &fs.PathError{Op: "read", Path: "/x", Err: syscall.EISDIR})
 
 	assert.Equal(t, "is a directory", osreason.Reason(err))
+}
+
+func Test_reason_is_the_cause_of_a_syscall_error_without_the_syscall_name(t *testing.T) {
+	err := fmt.Errorf("resolve: %w", &os.SyscallError{Syscall: "getwd", Err: syscall.ENOENT})
+
+	assert.Equal(t, "no such file or directory", osreason.Reason(err))
 }
 
 var (

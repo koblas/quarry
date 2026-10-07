@@ -20,18 +20,20 @@ import (
 // reasonOtherFormat is why a store of another format that names no snapshot cannot say which one built it.
 const reasonOtherFormat = "the store was built by another version of quarry"
 
-// Entry is one snapshot in a Listing: its ID, its .sqlite path and size on
-// disk, its manifest (nil when it has none or cannot read it) and whether the
-// store was built from it.
+// Entry is one snapshot in a Listing; Path and ManifestPath are names the directory listing returned.
 type Entry struct {
-	ID       string
-	Path     string
-	Bytes    int64
-	Manifest *Manifest
+	ID    string
+	Path  string
+	Bytes int64
+	// ManifestPath is the manifest file chosen for this snapshot, readable or not; "" when it has none.
+	ManifestPath string
+	Manifest     *Manifest
 	// TakenAt is the manifest's taken_at in UTC; zero when there is no manifest or it does not parse.
 	TakenAt time.Time
 	// Store marks the one entry output names as the store's snapshot.
 	Store bool
+	// manifestShared is true when another entry of the ID is named as its snapshot; prune then keeps the manifest.
+	manifestShared bool
 	// storeFile is true for every entry that is the file the store recorded, whatever its name; none is ever deleted.
 	storeFile bool
 }
@@ -42,8 +44,8 @@ type Listing struct {
 	Dir string
 	// Entries are the snapshots, newest first.
 	Entries []Entry
-	// StorePath is the snapshot path the store recorded, unresolved; "" when
-	// there is no store or it cannot be read.
+	// StorePath is the snapshot path the store recorded, unresolved, even when that path cannot be
+	// statted; "" when there is no store or the store itself cannot be read.
 	StorePath string
 	// TotalBytes sums every entry's size on disk.
 	TotalBytes int64
@@ -51,17 +53,24 @@ type Listing struct {
 	NoSnapshots string
 	// NoSnapshotsAbsolute is NoSnapshots naming the folder by its absolute path; machine-readable output carries this form.
 	NoSnapshotsAbsolute string
-	// StoreUnreadable is why the store's snapshot cannot be told, a bare phrase; "" when it can, or there is no store.
+	// Duplicates are the warnings that the folder holds several letter cases of one file name, newest ID
+	// first; nil when none does.
+	Duplicates []string
+	// DuplicatesAbsolute is Duplicates naming the folder by its absolute path; machine-readable output carries this form.
+	DuplicatesAbsolute []string
+	// StoreUnreadable is why the store's snapshot cannot be told; "" when it can, or there is no store.
 	StoreUnreadable string
 	// StoreWarning is StoreUnreadable as the warning a listing prints; "" when StoreUnreadable is.
 	StoreWarning string
+	// StoreWarningAbsolute is StoreWarning with an unreadable recorded path shown absolute; machine-readable output carries this form.
+	StoreWarningAbsolute string
 	// orphans are the manifests whose snapshot file is gone and that no sync is writing.
 	orphans []string
 }
 
 // List reads the snapshots folder, newest first, and marks the snapshot the store was
 // built from. A missing folder lists nothing, an unreadable one or an ended ctx is a
-// refusal; a store that cannot say marks nothing and sets StoreUnreadable.
+// refusal; a store that cannot say, or whose recorded path cannot be statted, marks nothing and sets StoreUnreadable.
 func (s *Server) List(ctx context.Context) (Listing, error) {
 	listing, err := s.listFolder()
 	if err != nil {
@@ -81,13 +90,17 @@ func (s *Server) listFolder() (Listing, error) {
 	}
 	listing := Listing{Dir: s.snapshotDir, Entries: make([]Entry, len(files)), orphans: orphans}
 	for i, f := range files {
-		entry := Entry{ID: f.id, Path: filepath.Join(s.snapshotDir, f.id+".sqlite"), Bytes: f.bytes}
-		if manifest, err := readManifest(s.manifestPath(f.id)); err == nil {
-			entry.Manifest = &manifest
-			entry.TakenAt = recordedTakenAt(manifest.Snapshot.TakenAt)
+		entry := newEntry(s.snapshotDir, f)
+		if entry.ManifestPath != "" {
+			if manifest, err := readManifest(entry.ManifestPath); err == nil {
+				entry.Manifest = &manifest
+				entry.TakenAt = recordedTakenAt(manifest.Snapshot.TakenAt)
+			}
 		}
 		listing.Entries[i] = entry
 		listing.TotalBytes += f.bytes
+		listing.Duplicates = append(listing.Duplicates, f.duplicates(homepath.Abbreviate(s.home, s.snapshotDir))...)
+		listing.DuplicatesAbsolute = append(listing.DuplicatesAbsolute, f.duplicates(s.snapshotDir)...)
 	}
 	if len(files) == 0 {
 		listing.NoSnapshots = noSnapshotsNote(homepath.Abbreviate(s.home, s.snapshotDir))
@@ -101,66 +114,100 @@ func noSnapshotsNote(folder string) string {
 	return "no snapshots in " + folder + " yet; run quarry sync to take one"
 }
 
-// manifestPath is where the manifest of the snapshot with id lives.
-func (s *Server) manifestPath(id string) string { return filepath.Join(s.snapshotDir, id+".json") }
+// duplicateWarning is the warning that folder holds several letter cases of one file name, names in all,
+// of which quarry uses only winner.
+func duplicateWarning(folder string, names []string, winner string) string {
+	sorted := slices.Sorted(slices.Values(names))
+	var held, rename string
+	if len(sorted) == 2 {
+		other := sorted[0]
+		if other == winner {
+			other = sorted[1]
+		}
+		held, rename = "both "+winner+" and "+other, "the other"
+	} else {
+		held, rename = strings.Join(sorted[:len(sorted)-1], ", ")+" and "+sorted[len(sorted)-1], "the others"
+	}
+	return folder + " holds " + held + "; quarry lists, prunes and uses only " + winner + "; rename or remove " + rename
+}
 
-// markStore reads which snapshot the store was built from into listing and marks that entry.
+// duplicates are the warnings, snapshot first, for the names of this ID that differ from the one in use only
+// by letter case; a variant that is not a regular file is not counted.
+func (s selectedSnapshot) duplicates(folder string) []string {
+	var warnings []string
+	if len(s.names) > 1 {
+		warnings = append(warnings, duplicateWarning(folder, s.names, s.entry.Name()))
+	}
+	if len(s.manifestNames) > 1 && slices.Contains(s.manifestNames, s.manifest) {
+		warnings = append(warnings, duplicateWarning(folder, s.manifestNames, s.manifest))
+	}
+	return warnings
+}
+
+// markStore reads which snapshot the store was built from into listing and marks that entry. A recorded
+// path that cannot be statted marks nothing and is reported as StoreUnreadable.
 func (s *Server) markStore(ctx context.Context, listing *Listing) error {
 	recorded, reason, err := s.storeSnapshot(ctx)
 	if err != nil {
 		return err
 	}
+	listing.StorePath = recorded
+	absolute := reason
+	if statErr := markStoreSnapshot(listing.Entries, recorded); statErr != nil {
+		reason = "cannot read " + homepath.Abbreviate(s.home, recorded) + ": " + osreason.Reason(statErr)
+		absolute = "cannot read " + recorded + ": " + osreason.Reason(statErr)
+	}
 	if reason != "" {
 		listing.StoreUnreadable = reason
-		listing.StoreWarning = "cannot tell which snapshot the store was built from: " + reason
+		listing.StoreWarning = cannotTellWarning + reason
+		listing.StoreWarningAbsolute = cannotTellWarning + absolute
 	}
-	listing.StorePath = recorded
-	markStoreSnapshot(listing.Entries, recorded)
 	return nil
 }
 
-// snapshotFile is one snapshot's file as listed: its ID, the two parts the
-// order reads from that ID, and its size on disk.
+// cannotTellWarning opens the warning that the store's snapshot cannot be told.
+const cannotTellWarning = "cannot tell which snapshot the store was built from: "
+
+// snapshotFile is one selected snapshot and its size on disk.
 type snapshotFile struct {
-	id, stamp, suffix string
-	bytes             int64
+	selectedSnapshot
+
+	bytes int64
 }
 
-// scanFolder reads the snapshots folder once: the regular snapshot files, newest first, and
-// the orphan manifests' paths. An unreadable folder or unstattable snapshot is a refusal.
+// newEntry is f's Entry in dir, with no manifest read.
+func newEntry(dir string, f snapshotFile) Entry {
+	entry := Entry{ID: f.id, Path: filepath.Join(dir, f.entry.Name()), Bytes: f.bytes, manifestShared: f.manifestShared}
+	if f.manifest != "" {
+		entry.ManifestPath = filepath.Join(dir, f.manifest)
+	}
+	return entry
+}
+
+// scanFolder reads the snapshots folder once: the regular snapshot files chosen by selectFolder, newest
+// first, and the orphan manifests' paths. An unreadable folder or unstattable snapshot is a refusal.
 func (s *Server) scanFolder() ([]snapshotFile, []string, error) {
-	dirEntries, err := os.ReadDir(s.snapshotDir)
+	dirEntries, err := s.readDir(s.snapshotDir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil, nil
 	}
 	if err != nil {
-		return nil, nil, s.folderUnreadableRefusal(err)
+		return nil, nil, folderUnreadableRefusal(s.home, s.snapshotDir, err)
 	}
-	names := make(map[string]bool, len(dirEntries))
-	for _, dirEntry := range dirEntries {
-		names[dirEntry.Name()] = true
-	}
-	var files []snapshotFile
-	var orphans []string
-	for _, dirEntry := range dirEntries {
-		if match := manifestFilePattern.FindStringSubmatch(dirEntry.Name()); match != nil {
-			// A manifest beside a partial snapshot is a sync in flight: it commits the manifest first.
-			if dirEntry.Type().IsRegular() && !names[match[1]+".sqlite"] && !names["."+match[1]+".sqlite.partial"] {
-				orphans = append(orphans, filepath.Join(s.snapshotDir, dirEntry.Name()))
-			}
-			continue
-		}
-		match := snapshotFilePattern.FindStringSubmatch(dirEntry.Name())
-		if match == nil || !dirEntry.Type().IsRegular() {
-			continue
-		}
-		info, err := dirEntry.Info()
+	selection := selectFolder(dirEntries)
+	files := make([]snapshotFile, len(selection.snapshots))
+	for i, chosen := range selection.snapshots {
+		info, err := chosen.entry.Info()
 		if err != nil {
-			return nil, nil, s.folderUnreadableRefusal(err)
+			return nil, nil, folderUnreadableRefusal(s.home, s.snapshotDir, err)
 		}
-		files = append(files, snapshotFile{id: ID(dirEntry.Name()), stamp: match[1], suffix: match[2], bytes: info.Size()})
+		files[i] = snapshotFile{selectedSnapshot: chosen, bytes: info.Size()}
 	}
 	slices.SortFunc(files, newestFirst)
+	orphans := make([]string, len(selection.orphans))
+	for i, name := range selection.orphans {
+		orphans[i] = filepath.Join(s.snapshotDir, name)
+	}
 	return files, orphans, nil
 }
 
@@ -176,10 +223,10 @@ func newestFirst(a, b snapshotFile) int {
 	)
 }
 
-// folderUnreadableRefusal reports that the snapshots folder, or a snapshot in it, cannot be read.
-func (s *Server) folderUnreadableRefusal(err error) error {
+// folderUnreadableRefusal reports that folder, or an entry in it, cannot be read.
+func folderUnreadableRefusal(home, folder string, err error) error {
 	return causedRefusalError{
-		msg:   "cannot read " + homepath.Abbreviate(s.home, s.snapshotDir) + ": " + osreason.Reason(err),
+		msg:   "cannot read " + homepath.Abbreviate(home, folder) + ": " + osreason.Reason(err),
 		cause: err,
 	}
 }
@@ -211,16 +258,21 @@ func (s *Server) storeSnapshot(ctx context.Context) (string, string, error) {
 	return "", openErr.UnreadableReason(homepath.Abbreviate(s.home, openErr.Path)), nil
 }
 
-// markStoreSnapshot records which entries are the store's recorded snapshot: storeFile on every entry that
-// is that file, and Store on the one of them output names, or on the entry carrying its ID when none is.
-func markStoreSnapshot(entries []Entry, recorded string) {
-	sameFile := entriesAt(entries, recorded)
+// markStoreSnapshot marks the entries that are the store's recorded snapshot (storeFile) and the one output names (Store);
+// it marks nothing and returns the stat error when recorded fails to stat for any reason but not existing.
+func markStoreSnapshot(entries []Entry, recorded string) error {
+	want, err := os.Stat(recorded)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err //nolint:wrapcheck // callers read the *fs.PathError reason through osreason.Reason
+	}
+	sameFile := entriesAt(entries, want)
 	for _, i := range sameFile {
 		entries[i].storeFile = true
 	}
 	if i := storeEntryIndex(entries, sameFile, recorded); i >= 0 {
 		entries[i].Store = true
 	}
+	return nil
 }
 
 // storeEntryIndex is the index of the entry output names as the store's snapshot, or -1. sameFile are the
@@ -249,11 +301,9 @@ func snapshotName(path string) string {
 	return strings.TrimSuffix(name, filepath.Ext(name))
 }
 
-// entriesAt returns the indexes of the entries that are the file at path, symlinks followed and
-// letter case as the volume reads it; none when no file is there.
-func entriesAt(entries []Entry, path string) []int {
-	// os.SameFile is false for a path that did not stat, so neither Stat error needs a branch.
-	want, _ := os.Stat(path)
+// entriesAt returns the indexes of the entries that are the file want describes, symlinks followed and
+// letter case as the volume reads it; none when want is nil.
+func entriesAt(entries []Entry, want fs.FileInfo) []int {
 	var same []int
 	for i, entry := range entries {
 		if info, _ := os.Stat(entry.Path); os.SameFile(want, info) {

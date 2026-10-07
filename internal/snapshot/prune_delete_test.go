@@ -40,11 +40,11 @@ func failing(name string, errno syscall.Errno) *fakeRemover {
 	return &fakeRemover{faults: map[string]error{name: &fs.PathError{Op: "remove", Path: name, Err: errno}}}
 }
 
-// newPruneServer builds a Server over home's snapshots folder whose removes go through rm.
-func newPruneServer(home string, probe snapshot.StoreProbe, rm *fakeRemover) *snapshot.Server {
-	opts := []snapshot.Option{
+// newPruneServer builds a Server over home's snapshots folder whose removes go through rm, plus extra options.
+func newPruneServer(home string, probe snapshot.StoreProbe, rm *fakeRemover, extra ...snapshot.Option) *snapshot.Server {
+	opts := append([]snapshot.Option{
 		snapshot.WithSnapshotDir(filepath.Join(home, "snapshots")), snapshot.WithHome(home), snapshot.WithRemove(rm.remove),
-	}
+	}, extra...)
 	if probe != nil {
 		opts = append(opts, snapshot.WithStoreProbe(probe))
 	}

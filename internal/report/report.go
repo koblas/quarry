@@ -8,7 +8,7 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// snapshotExt is the file extension a snapshot's ID is stripped of.
+// snapshotExt is the file extension a snapshot's ID is stripped of, matched in any letter case.
 const snapshotExt = ".sqlite"
 
 // Server answers read commands against one Store.
@@ -58,8 +58,12 @@ func (s *Server) Status(ctx context.Context) (store.Status, error) {
 	return st, nil
 }
 
-// SnapshotID returns the ID of the snapshot at path: its file name without
-// the .sqlite extension.
+// SnapshotID returns the ID of the snapshot at path: its file name without the .sqlite extension.
 func SnapshotID(path string) string {
-	return strings.TrimSuffix(filepath.Base(path), snapshotExt)
+	name := filepath.Base(path)
+	ext := filepath.Ext(name)
+	if strings.EqualFold(ext, snapshotExt) {
+		return strings.TrimSuffix(name, ext)
+	}
+	return name
 }

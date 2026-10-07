@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -36,7 +37,9 @@ type Server struct {
 	destination Destination
 	importer    Importer
 	storeProbe  StoreProbe
+	locker      Locker
 	remove      func(path string) error
+	readDir     func(dir string) ([]fs.DirEntry, error)
 	autoKeep    int
 	ignore      []string
 	readTime    func(store.FindingList) []finding.State
@@ -96,10 +99,22 @@ func WithStoreProbe(probe StoreProbe) Option {
 	return func(s *Server) { s.storeProbe = probe }
 }
 
+// WithLocker sets the Locker LockForSync takes the writer lock with; unset,
+// LockForSync takes no lock.
+func WithLocker(locker Locker) Option {
+	return func(s *Server) { s.locker = locker }
+}
+
 // WithRemove sets the function that deletes a file in the snapshots
 // directory; it defaults to os.Remove. Tests use it to inject a failing delete.
 func WithRemove(remove func(path string) error) Option {
 	return func(s *Server) { s.remove = remove }
+}
+
+// WithReadDir sets the function that lists a snapshots folder, os.ReadDir by default. Tests use it
+// to list two letter cases of one name, which a case-insensitive volume cannot hold.
+func WithReadDir(readDir func(dir string) ([]fs.DirEntry, error)) Option {
+	return func(s *Server) { s.readDir = readDir }
 }
 
 // WithAutoPrune makes SyncAndImport and ImportFrom delete the snapshots beyond the newest
@@ -122,7 +137,7 @@ func WithReadTimeFindings(states func(store.FindingList) []finding.State) Option
 
 // NewServer builds a Server from opts.
 func NewServer(opts ...Option) *Server {
-	s := &Server{busyTimeout: DefaultBusyTimeout, remove: os.Remove}
+	s := &Server{busyTimeout: DefaultBusyTimeout, remove: os.Remove, readDir: os.ReadDir}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -152,7 +167,7 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 	}
 	destination := s.destination
 	if destination == nil {
-		destination = newDirDestination(s.snapshotDir)
+		destination = newDirDestination(s.snapshotDir, s.readDir)
 	}
 
 	dataPath := filepath.Join(bundlePath, "data")

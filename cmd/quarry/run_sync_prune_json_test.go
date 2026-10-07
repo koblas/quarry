@@ -144,10 +144,11 @@ func Test_run_sync_from_json_names_the_unlistable_folder_by_its_absolute_path_in
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	id, dir := syncThenWrite(t, home)
+	kept := copyOutsideFolder(t, home, dir, id)
 	require.NoError(t, os.Chmod(dir, 0o300))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
 
-	exitCode, stdout, stderr := runSyncFrom(t, id, "--json")
+	exitCode, stdout, stderr := runSyncFrom(t, kept, "--json")
 
 	require.Equal(t, 0, exitCode, stderr)
 	var parsed map[string]json.RawMessage
