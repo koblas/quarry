@@ -33,7 +33,7 @@ const (
 	pluginAbsentLine       = "The quarry plugin is not installed for all your projects.\n"
 	marketplaceRemovedLine = "Removed the quarry marketplace from Claude Code.\n"
 	marketplaceAbsentLine  = "The quarry marketplace is not in Claude Code.\n"
-	marketplaceKeptLine    = "Kept the quarry marketplace: the quarry plugin is still installed for a single project.\n"
+	marketplaceKeptLine    = "Kept the quarry marketplace: the quarry plugin is still installed elsewhere and needs it.\n"
 	uninstallRestartLine   = "Restart Claude Code to unload it.\n"
 
 	uninstallForeignRefusal = `Claude Code has a marketplace named "quarry" that is not koblas/quarry on GitHub, ` +
@@ -119,9 +119,14 @@ func uninstallRemainingHints(home string, res claudeplugin.UninstallResult) []st
 	return hints
 }
 
-// remainingCopyHint returns the hint for one copy: the scope claude reported verbatim, and the
-// project path as claudePath prints it when claude named one.
+// remainingCopyHint returns the hint for one copy. A project or local copy gets the removal command
+// with the scope claude reported and, when claude named one, the project path as claudePath prints
+// it; any other scope is one claude plugin uninstall cannot remove from.
 func remainingCopyHint(home string, c claudeplugin.Copy) string {
+	if c.Scope != "project" && c.Scope != "local" {
+		return fmt.Sprintf("the quarry plugin is still installed at scope %q, which claude plugin uninstall cannot remove from; "+
+			"it stays until whoever manages that scope removes it", c.Scope)
+	}
 	remove := "to remove it, run claude plugin uninstall --scope " + c.Scope + " quarry@quarry"
 	if c.ProjectPath == "" {
 		return "the quarry plugin is still installed for a project Claude Code did not name; " + remove + " in that project's directory"

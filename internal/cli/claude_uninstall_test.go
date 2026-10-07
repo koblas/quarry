@@ -18,7 +18,7 @@ const (
 	pluginAbsentLine       = "The quarry plugin is not installed for all your projects.\n"
 	marketplaceRemovedLine = "Removed the quarry marketplace from Claude Code.\n"
 	marketplaceAbsentLine  = "The quarry marketplace is not in Claude Code.\n"
-	marketplaceKeptLine    = "Kept the quarry marketplace: the quarry plugin is still installed for a single project.\n"
+	marketplaceKeptLine    = "Kept the quarry marketplace: the quarry plugin is still installed elsewhere and needs it.\n"
 	uninstallRestartLine   = "Restart Claude Code to unload it.\n"
 )
 
@@ -65,6 +65,10 @@ func Test_claude_uninstall_hints_each_remaining_copy(t *testing.T) {
 	unnamedHint := func(scope string) string {
 		return "quarry: claude uninstall: the quarry plugin is still installed for a project Claude Code did not name; " +
 			"to remove it, run claude plugin uninstall --scope " + scope + " quarry@quarry in that project's directory\n"
+	}
+	otherScopeHint := func(scope string) string {
+		return "quarry: claude uninstall: the quarry plugin is still installed at scope " + scope +
+			", which claude plugin uninstall cannot remove from; it stays until whoever manages that scope removes it\n"
 	}
 	cases := []struct {
 		name       string
@@ -165,6 +169,33 @@ func Test_claude_uninstall_hints_each_remaining_copy(t *testing.T) {
 			wantArgv:   []string{marketplaceListArgv, pluginListArgv},
 			wantStdout: pluginAbsentLine + marketplaceKeptLine,
 			wantStderr: namedHint(`"~/my \"dir\""`, "project"),
+		},
+		{
+			name:       "a managed copy gets the scope hint, not the project one",
+			tool:       (&toolCalls{}).lists(ourMarketplace, `[{"id":"quarry@quarry","scope":"managed"}]`),
+			home:       "/home/ada",
+			wantArgv:   []string{marketplaceListArgv, pluginListArgv},
+			wantStdout: pluginAbsentLine + marketplaceKeptLine,
+			wantStderr: otherScopeHint(`"managed"`),
+		},
+		{
+			name:       "a scope hint ignores the projectPath claude reported",
+			tool:       (&toolCalls{}).lists(ourMarketplace, `[{"id":"quarry@quarry","scope":"enterprise","projectPath":"/home/ada/x"}]`),
+			home:       "/home/ada",
+			wantArgv:   []string{marketplaceListArgv, pluginListArgv},
+			wantStdout: pluginAbsentLine + marketplaceKeptLine,
+			wantStderr: otherScopeHint(`"enterprise"`),
+		},
+		{
+			name: "a managed copy among project and local copies is named in list order",
+			tool: (&toolCalls{}).lists(ourMarketplace, `[`+
+				`{"id":"quarry@quarry","scope":"project","projectPath":"/home/ada/a"},`+
+				`{"id":"quarry@quarry","scope":"managed"},`+
+				`{"id":"quarry@quarry","scope":"local"}]`),
+			home:       "/home/ada",
+			wantArgv:   []string{marketplaceListArgv, pluginListArgv},
+			wantStdout: pluginAbsentLine + marketplaceKeptLine,
+			wantStderr: namedHint(`"~/a"`, "project") + otherScopeHint(`"managed"`) + unnamedHint("local"),
 		},
 	}
 

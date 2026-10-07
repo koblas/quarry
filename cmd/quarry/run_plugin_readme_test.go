@@ -78,7 +78,7 @@ To update the plugin: ¤claude plugin marketplace update quarry¤. Update the qu
 
 	readmeInstallSection = `## Install or remove the plugin
 
-¤quarry claude install¤ runs two commands for you, skipping any that is already done, so running it again is safe:
+¤quarry claude install¤ runs two commands for you, skipping each one that is already done, so running it again is safe:
 
 ¤¤¤
 claude plugin marketplace add --scope user koblas/quarry
@@ -92,7 +92,7 @@ claude plugin uninstall --scope user quarry@quarry
 claude plugin marketplace remove --scope user quarry
 ¤¤¤
 
-If you installed the plugin in a project, that copy stays, and ¤quarry claude uninstall¤ names it so you can remove it yourself.
+If you installed the plugin in a project, that copy and the quarry marketplace stay, and ¤quarry claude uninstall¤ names each copy so you can remove it yourself.
 
 To add only the MCP server, without the skill, run:
 

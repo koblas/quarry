@@ -111,7 +111,7 @@ store and snapshots are not touched.
 | install, plugin | `Installed the quarry plugin (skill and MCP server) for all your projects.` | `The quarry plugin is already installed for all your projects.` |
 | uninstall, plugin | `Uninstalled the quarry plugin from Claude Code.` | `The quarry plugin is not installed for all your projects.` |
 | uninstall, marketplace | `Removed the quarry marketplace from Claude Code.` | `The quarry marketplace is not in Claude Code.` |
-| uninstall, marketplace kept (BR-6) | `Kept the quarry marketplace: the quarry plugin is still installed for a single project.` | — |
+| uninstall, marketplace kept (BR-6) | `Kept the quarry marketplace: the quarry plugin is still installed elsewhere and needs it.` | — |
 
 Trailing line (BR-7): install `Restart Claude Code to load it.`; uninstall `Restart Claude Code to unload it.`; none when no step ran.
 
@@ -124,6 +124,7 @@ Composition examples (R8): plugin absent + marketplace ours → `not installed` 
 - **R6 remaining copies** (uninstall; one line per `quarry@quarry` entry with scope ≠ `user`, in list order; `<scope>` verbatim from entry):
   - with `projectPath`: `quarry: claude uninstall: the quarry plugin is still installed for project %q; to remove it, run claude plugin uninstall --scope <scope> quarry@quarry in that directory`
   - without: `quarry: claude uninstall: the quarry plugin is still installed for a project Claude Code did not name; to remove it, run claude plugin uninstall --scope <scope> quarry@quarry in that project's directory`
+  - scope other than `project` or `local` (e.g. `managed`; ignores `projectPath`; `%q` wraps the scope verbatim): `quarry: claude uninstall: the quarry plugin is still installed at scope %q, which claude plugin uninstall cannot remove from; it stays until whoever manages that scope removes it`
 - **R7 path form** for `%q` here and in the cannot-run line: `$HOME` set and path == `$HOME` → `~`; path starts with `$HOME/` → `~/...`; otherwise (incl. `$HOME` unset/empty) raw as `claude` printed. `%q` wraps the abbreviated text: `"~/repos/foo"`.
 - **R3**: only project/local entries on install → install user copy normally, no hint.
 
