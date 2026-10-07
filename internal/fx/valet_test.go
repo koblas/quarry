@@ -2,13 +2,11 @@ package fx_test
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/fx"
 	"github.com/koblas/quarry/internal/platform/money"
@@ -16,37 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
-
-func reply(req *http.Request, status int, body io.ReadCloser) *http.Response {
-	return &http.Response{StatusCode: status, Status: http.StatusText(status), Body: body, Request: req}
-}
-
-func answering(status int, body string) roundTripFunc {
-	return func(req *http.Request) (*http.Response, error) {
-		return reply(req, status, io.NopCloser(strings.NewReader(body))), nil
-	}
-}
-
-func newValet(t *testing.T, rt http.RoundTripper) *fx.Valet {
-	t.Helper()
-	return fx.NewValet(&http.Client{Transport: rt})
-}
-
-func day(year int, month time.Month, d int) time.Time {
-	return time.Date(year, month, d, 0, 0, 0, 0, time.UTC)
-}
-
-func span(first, last time.Time) store.DateSpan { return store.DateSpan{First: first, Last: last} }
-
-func observationBody(series, value string) string {
-	return `{"observations":[{"d":"2017-01-03","` + series + `":{"v":"` + value + `"}}]}`
-}
-
-var january2017 = span(day(2017, 1, 3), day(2017, 1, 6))
 
 func Test_valet_asks_for_the_series_over_the_span_with_a_plain_get(t *testing.T) {
 	var got *http.Request
@@ -184,21 +151,6 @@ func Test_valet_refuses_an_answer_one_byte_over_the_cap(t *testing.T) {
 	assert.Empty(t, got)
 }
 
-// blanks is a reader of size spaces that counts what was taken from it.
-type blanks struct{ size, taken int }
-
-func (b *blanks) Read(p []byte) (int, error) {
-	n := min(len(p), b.size-b.taken)
-	for i := range p[:n] {
-		p[i] = ' '
-	}
-	b.taken += n
-	if n == 0 {
-		return 0, io.EOF
-	}
-	return n, nil
-}
-
 func Test_valet_stops_reading_an_answer_at_the_cap(t *testing.T) {
 	endless := &blanks{size: 2 * answerCap}
 	body := io.NopCloser(io.MultiReader(strings.NewReader(`{"observations":[]}`), endless))
@@ -227,16 +179,6 @@ func Test_valet_fails_on_a_status_other_than_200(t *testing.T) {
 
 	require.ErrorContains(t, err, "Service Unavailable")
 }
-
-var (
-	errDial  = errors.New("dial tcp: connection refused")
-	errReset = errors.New("connection reset")
-)
-
-type failingBody struct{ err error }
-
-func (b failingBody) Read([]byte) (int, error) { return 0, b.err }
-func (failingBody) Close() error               { return nil }
 
 func Test_valet_fails_when_the_body_cannot_be_read(t *testing.T) {
 	valet := newValet(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
