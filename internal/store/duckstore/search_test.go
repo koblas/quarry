@@ -418,25 +418,19 @@ func Test_search_gives_no_rows_and_the_zero_range_for_a_store_without_transactio
 	assert.Equal(t, store.Search{}, got)
 }
 
-func Test_search_returns_the_span_query_fault_as_another_fault(t *testing.T) {
+func Test_search_returns_a_span_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT min"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, queryFault: fault}))
+	for _, c := range otherFaults("SELECT min", 1) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.Search(t.Context(), store.SearchParams{})
+			_, err := st.Search(t.Context(), store.SearchParams{})
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_search_returns_a_span_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, scanFault: errScanFailed}))
-
-	_, err := st.Search(t.Context(), store.SearchParams{})
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
 
 // signedTxn is a one-split transaction of exactly cents, positive for a deposit and negative for a charge.

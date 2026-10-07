@@ -687,36 +687,31 @@ func ratesReason(t *testing.T, st *duckstore.Store, replaced store.Replaced) str
 	return replaced.RatesFault.UnreadableReason(st.Path())
 }
 
-func Test_replace_names_a_repeated_rate_date_as_the_rates_fault(t *testing.T) {
-	t.Parallel()
-	st := storeWithRatesRows(t, nil, "('2026-03-13', 1.25, 'IEXE0101')", "('2026-03-13', 1.26, 'FXUSDCAD')")
-
-	replaced, err := st.Replace(t.Context(), minimalRows())
-
-	require.NoError(t, err)
-	assert.Equal(t, reasonRatesRepeatDate, ratesReason(t, st, replaced))
-}
-
-func Test_replace_names_an_impossible_rate_as_the_rates_fault(t *testing.T) {
+func Test_replace_names_a_corrupt_fx_rates_table_as_the_rates_fault(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
-		row  string
+		rows []string
+		want string
 	}{
-		{name: "a zero rate", row: "('2026-03-13', 0, 'FXUSDCAD')"},
-		{name: "a negative rate", row: "('2026-03-13', -1.25, 'FXUSDCAD')"},
-		{name: "a rate one millionth past the column maximum", row: "('2026-03-13', 10000.000000, 'FXUSDCAD')"},
+		{name: "a repeated date", rows: []string{"('2026-03-13', 1.25, 'IEXE0101')", "('2026-03-13', 1.26, 'FXUSDCAD')"}, want: reasonRatesRepeatDate},
+		{name: "a zero rate", rows: []string{"('2026-03-13', 0, 'FXUSDCAD')"}, want: reasonRatesImpossible},
+		{name: "a negative rate", rows: []string{"('2026-03-13', -1.25, 'FXUSDCAD')"}, want: reasonRatesImpossible},
+		{name: "a rate one millionth past the column maximum", rows: []string{"('2026-03-13', 10000.000000, 'FXUSDCAD')"}, want: reasonRatesImpossible},
+		{name: "a series name the publisher never used", rows: []string{"('2026-03-13', 1.25, 'ECB')"}, want: reasonRatesUnknown},
+		{name: "a known series name in the wrong case", rows: []string{"('2026-03-13', 1.25, 'fxusdcad')"}, want: reasonRatesUnknown},
+		{name: "an empty series name", rows: []string{"('2026-03-13', 1.25, '')"}, want: reasonRatesUnknown},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			st := storeWithRatesRows(t, nil, c.row)
+			st := storeWithRatesRows(t, nil, c.rows...)
 
 			replaced, err := st.Replace(t.Context(), minimalRows())
 
 			require.NoError(t, err)
-			assert.Equal(t, reasonRatesImpossible, ratesReason(t, st, replaced))
+			assert.Equal(t, c.want, ratesReason(t, st, replaced))
 		})
 	}
 }
@@ -730,30 +725,6 @@ func Test_replace_carries_a_rate_of_one_millionth_and_one_at_the_column_maximum(
 	require.NoError(t, err)
 	assert.Nil(t, replaced.RatesFault)
 	assertScalar(t, openReadOnly(t, replaced.Path), fxRatesText, "2026-03-13 0.000001 FXUSDCAD, 2026-03-14 9999.999999 IEXE0101")
-}
-
-func Test_replace_names_an_unknown_series_as_the_rates_fault(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		name string
-		row  string
-	}{
-		{name: "a name the publisher never used", row: "('2026-03-13', 1.25, 'ECB')"},
-		{name: "a known name in the wrong case", row: "('2026-03-13', 1.25, 'fxusdcad')"},
-		{name: "an empty name", row: "('2026-03-13', 1.25, '')"},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
-			st := storeWithRatesRows(t, nil, c.row)
-
-			replaced, err := st.Replace(t.Context(), minimalRows())
-
-			require.NoError(t, err)
-			assert.Equal(t, reasonRatesUnknown, ratesReason(t, st, replaced))
-		})
-	}
 }
 
 func Test_replace_names_an_fx_rates_table_it_cannot_read_a_cell_of_as_incomplete(t *testing.T) {

@@ -134,30 +134,16 @@ const schemaQueries = 4
 func Test_schema_returns_the_fault_of_each_query_as_another_fault(t *testing.T) {
 	t.Parallel()
 	for passed := range schemaQueries {
-		t.Run(fmt.Sprintf("after %d queries", passed), func(t *testing.T) {
-			t.Parallel()
-			fault := ioFault(`query rows "SELECT"`)
-			st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault, passQueries: passed}))
+		for _, c := range otherFaults("SELECT", passed) {
+			t.Run(fmt.Sprintf("%s_after_%d_queries", c.name, passed), func(t *testing.T) {
+				t.Parallel()
+				st := newBuiltStore(t, spyOpener(c.spy))
 
-			_, err := st.Schema(t.Context())
+				_, err := st.Schema(t.Context())
 
-			assertOtherFault(t, err, "disk read failed")
-			assert.ErrorIs(t, err, fault)
-		})
-	}
-}
-
-func Test_schema_returns_the_scan_fault_of_each_query_as_another_fault(t *testing.T) {
-	t.Parallel()
-	for passed := range schemaQueries {
-		t.Run(fmt.Sprintf("after %d queries", passed), func(t *testing.T) {
-			t.Parallel()
-			st := newBuiltStore(t, spyOpener(&spyReadDB{scanFault: errScanFailed, passQueries: passed}))
-
-			_, err := st.Schema(t.Context())
-
-			assertOtherFault(t, err, errScanFailed.Error())
-			assert.ErrorIs(t, err, errScanFailed)
-		})
+				assertOtherFault(t, err, c.reason)
+				assert.ErrorIs(t, err, c.fault)
+			})
+		}
 	}
 }

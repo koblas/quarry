@@ -251,25 +251,19 @@ func Test_status_carries_each_finding_with_its_state_from_the_latest_build(t *te
 	}, states)
 }
 
-func Test_status_returns_a_findings_query_fault_as_another_fault(t *testing.T) {
+func Test_status_returns_a_findings_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault, passQueries: 1}))
+	for _, c := range otherFaults("SELECT", 1) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.Status(t.Context())
+			_, err := st.Status(t.Context())
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_status_returns_a_findings_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{scanFault: errScanFailed, passQueries: 1}))
-
-	_, err := st.Status(t.Context())
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
 
 func Test_status_reads_every_account_closed_included_sorted_by_id(t *testing.T) {
@@ -293,23 +287,17 @@ func Test_status_reads_every_account_closed_included_sorted_by_id(t *testing.T) 
 	}, got.Accounts)
 }
 
-func Test_status_returns_an_accounts_query_fault_as_another_fault(t *testing.T) {
+func Test_status_returns_an_accounts_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT id"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault, passQueries: 2}))
+	for _, c := range otherFaults("SELECT id", 2) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.Status(t.Context())
+			_, err := st.Status(t.Context())
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_status_returns_an_account_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{scanFault: errScanFailed, passQueries: 2}))
-
-	_, err := st.Status(t.Context())
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }

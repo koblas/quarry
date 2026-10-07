@@ -184,25 +184,19 @@ func Test_spending_returns_the_open_fault(t *testing.T) {
 	require.ErrorIs(t, err, fault)
 }
 
-func Test_spending_returns_the_query_fault_as_another_fault(t *testing.T) {
+func Test_spending_returns_a_read_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault}))
+	for _, c := range otherFaults("SELECT", 0) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.Spending(t.Context(), spendingParams())
+			_, err := st.Spending(t.Context(), spendingParams())
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_spending_returns_a_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{scanFault: errScanFailed}))
-
-	_, err := st.Spending(t.Context(), spendingParams())
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
 
 func Test_spending_closes_the_connection_on_success_and_on_a_query_fault(t *testing.T) {
@@ -968,25 +962,19 @@ func Test_spending_gives_a_zero_range_when_every_named_account_uses_linked_accou
 	assert.Zero(t, got.Transactions)
 }
 
-func Test_spending_returns_the_transaction_range_query_fault_as_another_fault(t *testing.T) {
+func Test_spending_returns_a_transaction_range_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT min"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, queryFault: fault}))
+	for _, c := range otherFaults("SELECT min", 1) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.Spending(t.Context(), emptyWindowParams())
+			_, err := st.Spending(t.Context(), emptyWindowParams())
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_spending_returns_a_transaction_range_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, scanFault: errScanFailed}))
-
-	_, err := st.Spending(t.Context(), emptyWindowParams())
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
 
 func tagParams() store.SpendingParams {
@@ -1253,25 +1241,19 @@ func Test_spending_by_category_reports_no_multi_tag_splits(t *testing.T) {
 	assert.Zero(t, got.MultiTagSplits)
 }
 
-func Test_spending_by_tag_returns_the_multi_tag_count_query_fault_as_another_fault(t *testing.T) {
+func Test_spending_by_tag_returns_a_multi_tag_count_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT count"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, queryFault: fault}))
+	for _, c := range otherFaults("SELECT count", 1) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.Spending(t.Context(), tagParams())
+			_, err := st.Spending(t.Context(), tagParams())
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_spending_by_tag_returns_a_multi_tag_count_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, scanFault: errScanFailed}))
-
-	_, err := st.Spending(t.Context(), tagParams())
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
 
 func Test_spending_by_tag_closes_the_connection_after_a_multi_tag_count_fault(t *testing.T) {
