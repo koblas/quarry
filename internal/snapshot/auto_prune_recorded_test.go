@@ -47,3 +47,19 @@ func Test_sync_and_import_prunes_nothing_when_the_recorded_snapshot_cannot_be_re
 	assert.Empty(t, got.outcome.Warnings())
 	assert.Empty(t, got.outcome.WarningsAbsolute())
 }
+
+func Test_sync_and_import_prunes_beyond_the_newest_and_sweeps_orphans_when_the_recorded_snapshot_is_gone(t *testing.T) {
+	t.Parallel()
+	fake := &reshapingImporter{reshape: os.Remove}
+
+	got := syncBesideOldSnapshots(t, fake, v9fixture.OpenBundle)
+
+	require.NoError(t, got.err)
+	require.NotNil(t, got.outcome.Pruned)
+	assert.Equal(t, []string{got.ids[1], got.ids[0]}, doomedIDs(got.outcome.Pruned.Deleted))
+	assertSnapshotPairs(t, got.dir, false, got.ids[0], got.ids[1])
+	assertSnapshotPairs(t, got.dir, true, got.ids[2])
+	assert.NoFileExists(t, filepath.Join(got.dir, oldIDs(4)[3]+".json"))
+	assert.Empty(t, got.outcome.Warnings())
+	assert.Empty(t, got.outcome.WarningsAbsolute())
+}

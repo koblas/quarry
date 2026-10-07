@@ -84,8 +84,8 @@ func snapshotsWarnings(config []string, l snapshot.Listing) []string {
 	if l.NoSnapshots != "" {
 		warnings = append(warnings, l.NoSnapshotsAbsolute)
 	}
-	if l.StoreWarning != "" {
-		warnings = append(warnings, l.StoreWarning)
+	if l.StoreWarningAbsolute != "" {
+		warnings = append(warnings, l.StoreWarningAbsolute)
 	}
 	return warnings
 }

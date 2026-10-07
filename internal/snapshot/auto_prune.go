@@ -23,8 +23,10 @@ func (s *Server) autoPrune(ctx context.Context, outcome *Outcome) error {
 		outcome.pruneWarningAbsolute = cannotListWarning(s.snapshotDir, reason)
 		return nil
 	}
-	markStoreSnapshot(listing.Entries, outcome.Manifest.Snapshot.Path)
 	pruned.Snapshots = len(listing.Entries)
+	if err := markStoreSnapshot(listing.Entries, outcome.Manifest.Snapshot.Path); err != nil {
+		return nil
+	}
 	var doomed []Entry
 	doomed, pruned.StoreKept = selectPrune(listing.Entries, s.autoKeep)
 	for i, entry := range doomed {

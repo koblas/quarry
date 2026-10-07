@@ -55,6 +55,8 @@ type Listing struct {
 	StoreUnreadable string
 	// StoreWarning is StoreUnreadable as the warning a listing prints; "" when StoreUnreadable is.
 	StoreWarning string
+	// StoreWarningAbsolute is StoreWarning naming any path by its absolute path; machine-readable output carries this form.
+	StoreWarningAbsolute string
 	// orphans are the manifests whose snapshot file is gone and that no sync is writing.
 	orphans []string
 }
@@ -104,20 +106,29 @@ func noSnapshotsNote(folder string) string {
 // manifestPath is where the manifest of the snapshot with id lives.
 func (s *Server) manifestPath(id string) string { return filepath.Join(s.snapshotDir, id+".json") }
 
-// markStore reads which snapshot the store was built from into listing and marks that entry.
+// markStore reads which snapshot the store was built from into listing and marks that entry. A recorded
+// path that cannot be statted marks nothing and is reported as StoreUnreadable.
 func (s *Server) markStore(ctx context.Context, listing *Listing) error {
 	recorded, reason, err := s.storeSnapshot(ctx)
 	if err != nil {
 		return err
 	}
+	listing.StorePath = recorded
+	absolute := reason
+	if statErr := markStoreSnapshot(listing.Entries, recorded); statErr != nil {
+		reason = "cannot read " + homepath.Abbreviate(s.home, recorded) + ": " + osreason.Reason(statErr)
+		absolute = "cannot read " + recorded + ": " + osreason.Reason(statErr)
+	}
 	if reason != "" {
 		listing.StoreUnreadable = reason
-		listing.StoreWarning = "cannot tell which snapshot the store was built from: " + reason
+		listing.StoreWarning = cannotTellWarning + reason
+		listing.StoreWarningAbsolute = cannotTellWarning + absolute
 	}
-	listing.StorePath = recorded
-	markStoreSnapshot(listing.Entries, recorded)
 	return nil
 }
+
+// cannotTellWarning opens the warning that the store's snapshot cannot be told.
+const cannotTellWarning = "cannot tell which snapshot the store was built from: "
 
 // snapshotFile is one snapshot's file as listed: its ID, the two parts the
 // order reads from that ID, and its size on disk.
@@ -213,14 +224,20 @@ func (s *Server) storeSnapshot(ctx context.Context) (string, string, error) {
 
 // markStoreSnapshot records which entries are the store's recorded snapshot: storeFile on every entry that
 // is that file, and Store on the one of them output names, or on the entry carrying its ID when none is.
-func markStoreSnapshot(entries []Entry, recorded string) {
-	sameFile := entriesAt(entries, recorded)
+// It marks nothing and returns the stat error when recorded fails to stat for any reason but not existing.
+func markStoreSnapshot(entries []Entry, recorded string) error {
+	want, err := os.Stat(recorded)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	sameFile := entriesAt(entries, want)
 	for _, i := range sameFile {
 		entries[i].storeFile = true
 	}
 	if i := storeEntryIndex(entries, sameFile, recorded); i >= 0 {
 		entries[i].Store = true
 	}
+	return nil
 }
 
 // storeEntryIndex is the index of the entry output names as the store's snapshot, or -1. sameFile are the
@@ -249,11 +266,9 @@ func snapshotName(path string) string {
 	return strings.TrimSuffix(name, filepath.Ext(name))
 }
 
-// entriesAt returns the indexes of the entries that are the file at path, symlinks followed and
-// letter case as the volume reads it; none when no file is there.
-func entriesAt(entries []Entry, path string) []int {
-	// os.SameFile is false for a path that did not stat, so neither Stat error needs a branch.
-	want, _ := os.Stat(path)
+// entriesAt returns the indexes of the entries that are the file want describes, symlinks followed and
+// letter case as the volume reads it; none when want is nil.
+func entriesAt(entries []Entry, want fs.FileInfo) []int {
 	var same []int
 	for i, entry := range entries {
 		if info, _ := os.Stat(entry.Path); os.SameFile(want, info) {
