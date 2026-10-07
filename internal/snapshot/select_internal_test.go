@@ -201,3 +201,89 @@ func Test_select_folder_finds_orphan_manifests(t *testing.T) {
 		})
 	}
 }
+
+// entryName is the on-disk name of s's entry, "" for the zero selection.
+func entryName(s selectedSnapshot) string {
+	if s.entry == nil {
+		return ""
+	}
+	return s.entry.Name()
+}
+
+func Test_folder_selection_snapshot_lookup_skips_non_regular_entries(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		entries   []fs.DirEntry
+		id        string
+		wantName  string
+		wantFound bool
+	}{
+		{
+			name: "a regular winner is found by its ID", entries: entries(selID+".SQLITE", selOther+".sqlite"),
+			id: selID, wantName: selID + ".SQLITE", wantFound: true,
+		},
+		{
+			name:    "a directory named as the ID is not found",
+			entries: withType(entries(selID+".sqlite"), selID+".sqlite", fs.ModeDir), id: selID,
+		},
+		{
+			name:    "a symlink named as the ID is not found",
+			entries: withType(entries(selID+".sqlite"), selID+".sqlite", fs.ModeSymlink), id: selID,
+		},
+		{
+			name:    "a non-regular sibling does not take the ID from a regular variant",
+			entries: withType(entries(selID+".sqlite", selID+".SQLITE"), selID+".sqlite", fs.ModeSymlink),
+			id:      selID, wantName: selID + ".SQLITE", wantFound: true,
+		},
+		{name: "an ID absent from the folder is not found", entries: entries(selOther + ".sqlite"), id: selID},
+		{name: "the ID is not folded", entries: entries(selID + ".sqlite"), id: "20260927t143005z"},
+		{name: "an empty folder holds nothing", entries: entries(), id: selID},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, found := selectFolder(c.entries).snapshot(c.id)
+
+			assert.Equal(t, c.wantFound, found)
+			assert.Equal(t, c.wantName, entryName(got))
+		})
+	}
+}
+
+func Test_select_manifest_picks_the_manifest_of_a_stem(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		entries []fs.DirEntry
+		stem    string
+		want    string
+	}{
+		{name: "the lower-case manifest", entries: entries("X.json", "X.sqlite"), stem: "X", want: "X.json"},
+		{name: "an upper-case extension alone", entries: entries("X.JSON"), stem: "X", want: "X.JSON"},
+		{name: "lower case beats upper case", entries: entries("X.JSON", "X.json"), stem: "X", want: "X.json"},
+		{name: "without lower case the byte-order first wins", entries: entries("X.Json", "X.JSON"), stem: "X", want: "X.JSON"},
+		{
+			name:    "a directory competes",
+			entries: withType(entries("X.JSON"), "X.JSON", fs.ModeDir), stem: "X", want: "X.JSON",
+		},
+		{
+			name:    "a symlink competes and an exact lower-case symlink wins",
+			entries: withType(entries("X.JSON", "X.json"), "X.json", fs.ModeSymlink), stem: "X", want: "X.json",
+		},
+		{name: "a stem need not be an ID", entries: entries("latest.JSON"), stem: "latest", want: "latest.JSON"},
+		{name: "the stem is exact, not folded", entries: entries("x.json"), stem: "X"},
+		{name: "a snapshot extension before .json is not the stem", entries: entries("X.SQLITE.json"), stem: "X"},
+		{name: "a trailing extension after .json is not a manifest", entries: entries("X.json.bak"), stem: "X"},
+		{name: "a longer stem sharing the prefix is not a match", entries: entries("X2.json"), stem: "X"},
+		{name: "no entries", entries: entries(), stem: "X"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, c.want, selectManifest(c.entries, c.stem))
+		})
+	}
+}

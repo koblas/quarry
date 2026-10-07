@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -141,17 +142,25 @@ func Test_outcome_adds_no_prune_warning_for_a_store_that_was_not_built(t *testin
 	assert.Empty(t, unbuilt.Warnings())
 }
 
-// importFromUnlistableFolder rebuilds the store from a snapshot whose folder can be opened but not listed.
+// importFromUnlistableFolder rebuilds the store from a snapshot kept outside the snapshots folder,
+// which can be opened but not listed.
 func importFromUnlistableFolder(t *testing.T, home string) (snapshot.Outcome, string) {
 	t.Helper()
 	skipUnderRoot(t)
 	srv := newImportServer(t, home, builtStore(), snapshot.WithAutoPrune(2))
 	taken := takeSnapshot(t, srv)
 	dir := filepath.Join(home, "snapshots")
+	kept := filepath.Join(home, "kept", filepath.Base(taken.Snapshot.Path))
+	require.NoError(t, os.MkdirAll(filepath.Dir(kept), 0o700))
+	for _, pair := range [][2]string{{taken.Snapshot.Path, kept}, {taken.Snapshot.Manifest, strings.TrimSuffix(kept, ".sqlite") + ".json"}} {
+		raw, err := os.ReadFile(pair[0])
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(pair[1], raw, 0o600))
+	}
 	require.NoError(t, os.Chmod(dir, 0o300))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
 
-	outcome, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
+	outcome, err := srv.ImportFrom(t.Context(), kept)
 
 	require.NoError(t, err)
 	return outcome, dir

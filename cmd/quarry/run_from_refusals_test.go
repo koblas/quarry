@@ -181,6 +181,122 @@ func Test_run_sync_from_an_unknown_id_points_at_quarry_snapshots(t *testing.T) {
 		"run quarry snapshots to list the ones kept\n", stderr.String())
 }
 
+const (
+	refusedID      = "20260927T143005Z"
+	noSuchIDSuffix = "; run quarry snapshots to list the ones kept"
+)
+
+func Test_run_sync_from_refuses_what_it_cannot_resolve(t *testing.T) {
+	cases := []struct {
+		name string
+		// arrange builds the folders under home and returns the --from value.
+		arrange func(t *testing.T, home string) string
+		want    string
+	}{
+		{
+			name: "a snapshots folder with no permissions (ID form)",
+			arrange: func(t *testing.T, home string) string {
+				t.Helper()
+				return lockedSnapshotsFolder(t, home, 0o000)
+			},
+			want: "quarry: cannot read ~/Library/Application Support/quarry/snapshots: permission denied",
+		},
+		{
+			name: "a snapshots folder that is searchable but not readable (ID form)",
+			arrange: func(t *testing.T, home string) string {
+				t.Helper()
+				return lockedSnapshotsFolder(t, home, 0o300)
+			},
+			want: "quarry: cannot read ~/Library/Application Support/quarry/snapshots: permission denied",
+		},
+		{
+			name: "no snapshots folder (ID form)",
+			arrange: func(t *testing.T, _ string) string {
+				t.Helper()
+				return refusedID
+			},
+			want: "quarry: no snapshot " + refusedID + " in ~/Library/Application Support/quarry/snapshots" + noSuchIDSuffix,
+		},
+		{
+			name: "a directory named as the snapshot (ID form)",
+			arrange: func(t *testing.T, home string) string {
+				t.Helper()
+				require.NoError(t, os.MkdirAll(filepath.Join(storeDirUnder(home), "snapshots", refusedID+".sqlite"), 0o700))
+				return refusedID
+			},
+			want: "quarry: no snapshot " + refusedID + " in ~/Library/Application Support/quarry/snapshots" + noSuchIDSuffix,
+		},
+		{
+			name: "a symlink named as the snapshot (ID form)",
+			arrange: func(t *testing.T, home string) string {
+				t.Helper()
+				dir := filepath.Join(storeDirUnder(home), "snapshots")
+				require.NoError(t, os.MkdirAll(dir, 0o700))
+				target := filepath.Join(home, "elsewhere.sqlite")
+				require.NoError(t, os.WriteFile(target, []byte("x"), 0o600))
+				symlink(t, target, filepath.Join(dir, refusedID+".sqlite"))
+				return refusedID
+			},
+			want: "quarry: no snapshot " + refusedID + " in ~/Library/Application Support/quarry/snapshots" + noSuchIDSuffix,
+		},
+		{
+			name: "the ID in another letter case (ID form)",
+			arrange: func(t *testing.T, home string) string {
+				t.Helper()
+				dir := filepath.Join(storeDirUnder(home), "snapshots")
+				require.NoError(t, os.MkdirAll(dir, 0o700))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, refusedID+".sqlite"), []byte("x"), 0o600))
+				return strings.ToLower(refusedID)
+			},
+			want: "quarry: no snapshot " + strings.ToLower(refusedID) + " in ~/Library/Application Support/quarry/snapshots" + noSuchIDSuffix,
+		},
+		{
+			name: "a snapshot whose parent folder cannot be listed (path form)",
+			arrange: func(t *testing.T, home string) string {
+				t.Helper()
+				skipAsRoot(t)
+				dir := filepath.Join(home, "Backups")
+				require.NoError(t, os.MkdirAll(dir, 0o700))
+				from := filepath.Join(dir, "x.sqlite")
+				require.NoError(t, os.WriteFile(from, []byte("x"), 0o600))
+				require.NoError(t, os.Chmod(dir, 0o300))
+				t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+				return from
+			},
+			want: "quarry: cannot read ~/Backups: permission denied",
+		},
+	}
+
+	for _, c := range cases {
+		for _, format := range [][]string{nil, {"--json"}} {
+			t.Run(c.name+" "+strings.Join(format, " "), func(t *testing.T) {
+				home := t.TempDir()
+				t.Setenv("HOME", home)
+				from := c.arrange(t, home)
+
+				exitCode, stdout, stderr := runSyncFrom(t, from, format...)
+
+				assert.Equal(t, 1, exitCode)
+				assert.Empty(t, stdout)
+				assert.Equal(t, c.want+"\n", stderr)
+				assert.NoFileExists(t, storePathUnder(home))
+			})
+		}
+	}
+}
+
+// lockedSnapshotsFolder creates the snapshots folder under home with a snapshot in it, sets its mode, and returns the ID.
+func lockedSnapshotsFolder(t *testing.T, home string, mode os.FileMode) string {
+	t.Helper()
+	skipAsRoot(t)
+	dir := filepath.Join(storeDirUnder(home), "snapshots")
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, refusedID+".sqlite"), []byte("x"), 0o600))
+	require.NoError(t, os.Chmod(dir, mode))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	return refusedID
+}
+
 // writeManifestForTest writes the .json manifest next to snapshotPath, recording content's real SHA-256.
 func writeManifestForTest(t *testing.T, snapshotPath string, content []byte) {
 	t.Helper()

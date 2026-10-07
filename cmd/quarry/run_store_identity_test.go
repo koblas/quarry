@@ -251,7 +251,6 @@ func Test_run_sync_from_keeps_the_snapshot_it_names_and_its_newer_hard_link_beyo
 			from: func(t *testing.T, home, dir, id string) string {
 				t.Helper()
 				skipOnCaseSensitiveVolume(t, home)
-				hardLink(t, filepath.Join(dir, id+".json"), filepath.Join(dir, id+".SQLITE.json"))
 				return filepath.Join(dir, id+".SQLITE")
 			},
 		},

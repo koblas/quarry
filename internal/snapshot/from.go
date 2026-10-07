@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,21 +17,17 @@ import (
 
 // ImportFrom rebuilds the store from an earlier snapshot, named by ID or by
 // .sqlite path, without touching Quicken or writing a new snapshot; a Server
-// with WithAutoPrune then deletes old ones as SyncAndImport does.
+// with WithAutoPrune then deletes old ones as SyncAndImport does. An ID
+// resolves to the file quarry snapshots lists for it.
 // It refuses when from does not resolve to a usable snapshot, and returns a
 // MismatchError when the current reference finds a missing table or column.
 func (s *Server) ImportFrom(ctx context.Context, from string) (Outcome, error) {
 	if s.reference == nil {
 		return Outcome{}, errNoReference
 	}
-	snapshotPath, manifestPath, isPath, err := resolveFrom(s.home, s.snapshotDir, from)
+	snapshotPath, manifestPath, err := locateFrom(s.home, s.snapshotDir, from)
 	if err != nil {
-		// unreachable: on darwin os.Getwd succeeds after the working directory is removed; Linux exercises it via Test_import_from_refuses_a_relative_path_when_the_working_directory_no_longer_exists
-		return Outcome{}, err
-	}
-
-	if refusal := fromPathRefusal(s.home, s.snapshotDir, snapshotPath, isPath); refusal != nil {
-		return Outcome{}, FailureOutcome(ctx, refusal)
+		return Outcome{}, FailureOutcome(ctx, err)
 	}
 
 	recorded, err := readManifest(manifestPath)
@@ -72,33 +69,64 @@ func (s *Server) ImportFrom(ctx context.Context, from string) (Outcome, error) {
 	return s.importVerified(ctx, manifest)
 }
 
-// resolveFrom maps a --from value to its snapshot and manifest paths: a
-// value with "/" or ending ".sqlite" is a path (isPath true), else an ID in snapshotDir.
-func resolveFrom(home, snapshotDir, value string) (string, string, bool, error) {
-	snapshotPath := filepath.Join(snapshotDir, value+".sqlite")
-	isPath := false
-	if strings.Contains(value, "/") || strings.HasSuffix(value, ".sqlite") {
-		isPath = true
-		var err error
-		snapshotPath, err = filepath.Abs(homepath.Expand(home, value))
-		if err != nil {
-			// unreachable: on darwin os.Getwd succeeds after the working directory is removed; Linux exercises it via Test_import_from_refuses_a_relative_path_when_the_working_directory_no_longer_exists
-			return "", "", false, fmt.Errorf("resolve snapshot path %s: %w", value, err)
-		}
+// isPathForm reports whether a --from value names a file: it has a "/" or ends in .sqlite, in any letter case.
+func isPathForm(value string) bool {
+	return strings.Contains(value, "/") || sqliteExtension.MatchString(value)
+}
+
+// locateFrom maps a --from value to the snapshot file and manifest it names, or the refusal for one it
+// cannot name. The manifest path is the on-disk name when one exists, else the lowercase name that reads as absent.
+func locateFrom(home, snapshotDir, value string) (string, string, error) {
+	if isPathForm(value) {
+		return locateByPath(home, snapshotDir, value)
 	}
-	return snapshotPath, strings.TrimSuffix(snapshotPath, ".sqlite") + ".json", isPath, nil
+	return locateByID(home, snapshotDir, value)
+}
+
+// locateByID lists snapshotDir once and takes the file and manifest selectFolder chose for id, so --from and
+// quarry snapshots agree on which file is id. An unlistable folder is a refusal, never a lowercase guess.
+func locateByID(home, snapshotDir, id string) (string, string, error) {
+	dirEntries, err := os.ReadDir(snapshotDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", "", idNotFoundRefusal(home, snapshotDir, id)
+	}
+	if err != nil {
+		return "", "", folderUnreadableRefusal(home, snapshotDir, err)
+	}
+	chosen, ok := selectFolder(dirEntries).snapshot(id)
+	if !ok {
+		return "", "", idNotFoundRefusal(home, snapshotDir, id)
+	}
+	manifest := cmp.Or(chosen.manifest, id+".json")
+	return filepath.Join(snapshotDir, chosen.entry.Name()), filepath.Join(snapshotDir, manifest), nil
+}
+
+// locateByPath resolves a path-form value, checks the file exists and is a snapshot candidate, then lists its
+// parent folder for the manifest in any letter case.
+func locateByPath(home, snapshotDir, value string) (string, string, error) {
+	snapshotPath, err := filepath.Abs(homepath.Expand(home, value))
+	if err != nil {
+		// unreachable: on darwin os.Getwd succeeds after the working directory is removed; Linux exercises it via Test_import_from_refuses_a_relative_path_when_the_working_directory_no_longer_exists
+		return "", "", fmt.Errorf("resolve snapshot path %s: %w", value, err)
+	}
+	if err := fromPathRefusal(home, snapshotDir, snapshotPath); err != nil {
+		return "", "", err
+	}
+	folder, stem := filepath.Dir(snapshotPath), ID(snapshotPath)
+	dirEntries, err := os.ReadDir(folder)
+	if err != nil {
+		return "", "", folderUnreadableRefusal(home, folder, err)
+	}
+	return snapshotPath, filepath.Join(folder, cmp.Or(selectManifest(dirEntries, stem), stem+".json")), nil
 }
 
 // fromPathRefusal reports whether snapshotPath names a usable file at all,
 // before any manifest or content read is attempted.
-func fromPathRefusal(home, snapshotDir, snapshotPath string, isPath bool) error {
+func fromPathRefusal(home, snapshotDir, snapshotPath string) error {
 	info, err := os.Stat(snapshotPath)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		if isPath {
-			return pathNotFoundRefusal(home, snapshotPath)
-		}
-		return idNotFoundRefusal(home, snapshotDir, ID(snapshotPath))
+		return pathNotFoundRefusal(home, snapshotPath)
 	case err != nil:
 		return fromUnreadableRefusal(home, snapshotPath, err)
 	case info.IsDir() && strings.EqualFold(filepath.Ext(snapshotPath), ".quicken"):

@@ -3,6 +3,7 @@ package snapshot
 import (
 	"cmp"
 	"io/fs"
+	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -93,6 +94,31 @@ func selectFolder(dirEntries []fs.DirEntry) folderSelection {
 		}
 	}
 	return selection
+}
+
+// snapshot is the selected snapshot whose ID is exactly id, if the folder has one.
+func (f folderSelection) snapshot(id string) (selectedSnapshot, bool) {
+	i := slices.IndexFunc(f.snapshots, func(c selectedSnapshot) bool { return c.id == id })
+	if i < 0 {
+		return selectedSnapshot{}, false
+	}
+	return f.snapshots[i], true
+}
+
+// selectManifest is the name of the manifest of stem in dirEntries: an entry of any type named stem plus a
+// .json extension in any letter case, the exact lowercase name first, else the byte-order first; "" when none.
+func selectManifest(dirEntries []fs.DirEntry, stem string) string {
+	var candidates []fs.DirEntry
+	for _, dirEntry := range dirEntries {
+		name := dirEntry.Name()
+		if ext := filepath.Ext(name); strings.EqualFold(ext, ".json") && strings.TrimSuffix(name, ext) == stem {
+			candidates = append(candidates, dirEntry)
+		}
+	}
+	if len(candidates) == 0 {
+		return ""
+	}
+	return preferred(candidates, stem+".json").Name()
 }
 
 // preferred is the entry named exactly want when there is one, else the one whose name sorts first by bytes.

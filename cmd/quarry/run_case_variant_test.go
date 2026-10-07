@@ -3,7 +3,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,19 +21,19 @@ func skipOnCaseSensitiveVolume(t *testing.T, dir string) {
 	}
 }
 
-func Test_run_sync_from_a_lowercased_id_keeps_the_stores_own_snapshot_beyond_the_newest_12(t *testing.T) {
+func Test_run_sync_from_a_lowercased_id_names_no_snapshot_and_prunes_nothing(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	skipOnCaseSensitiveVolume(t, home)
 	older := oldSnapshots(1)
 	id, dir := syncThenWrite(t, home, append(newerSnapshots(keptSnapshots), older...)...)
+	lowered := strings.ToLower(id)
 
-	exitCode, stdout, stderr := runSyncFrom(t, strings.ToLower(id))
+	exitCode, stdout, stderr := runSyncFrom(t, lowered)
 
-	require.Equal(t, 0, exitCode, stderr)
-	assert.Regexp(t, fmt.Sprintf(`Pruned {4}1 snapshot beyond the newest %d and the store's own \(%s\)\n$`, keptSnapshots, megabytes(oldestBytes)), stdout)
-	assert.NoFileExists(t, filepath.Join(dir, older[0].id+".sqlite"))
-	requireSnapshotsKept(t, dir, id)
+	require.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout)
+	assert.Equal(t, "quarry: no snapshot "+lowered+" in "+snapshotsShown+"; run quarry snapshots to list the ones kept\n", stderr)
+	assert.FileExists(t, filepath.Join(dir, older[0].id+".sqlite"))
 }
 
 func Test_run_snapshots_marks_the_store_snapshot_recorded_in_lowercase(t *testing.T) {

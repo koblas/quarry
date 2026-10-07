@@ -157,14 +157,14 @@ func (s *Server) scanFolder() ([]snapshotFile, []string, error) {
 		return nil, nil, nil
 	}
 	if err != nil {
-		return nil, nil, s.folderUnreadableRefusal(err)
+		return nil, nil, folderUnreadableRefusal(s.home, s.snapshotDir, err)
 	}
 	selection := selectFolder(dirEntries)
 	files := make([]snapshotFile, len(selection.snapshots))
 	for i, chosen := range selection.snapshots {
 		info, err := chosen.entry.Info()
 		if err != nil {
-			return nil, nil, s.folderUnreadableRefusal(err)
+			return nil, nil, folderUnreadableRefusal(s.home, s.snapshotDir, err)
 		}
 		files[i] = snapshotFile{selectedSnapshot: chosen, bytes: info.Size()}
 	}
@@ -188,10 +188,10 @@ func newestFirst(a, b snapshotFile) int {
 	)
 }
 
-// folderUnreadableRefusal reports that the snapshots folder, or a snapshot in it, cannot be read.
-func (s *Server) folderUnreadableRefusal(err error) error {
+// folderUnreadableRefusal reports that folder, or an entry in it, cannot be read.
+func folderUnreadableRefusal(home, folder string, err error) error {
 	return causedRefusalError{
-		msg:   "cannot read " + homepath.Abbreviate(s.home, s.snapshotDir) + ": " + osreason.Reason(err),
+		msg:   "cannot read " + homepath.Abbreviate(home, folder) + ": " + osreason.Reason(err),
 		cause: err,
 	}
 }
