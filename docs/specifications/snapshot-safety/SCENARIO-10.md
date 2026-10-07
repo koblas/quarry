@@ -115,3 +115,7 @@ Green on arrival: `Test_list_lists_no_directory_or_symlink_named_as_an_upper_cas
 Mutations (all restored, byte-identical): see report; all six plan mutations went red, whole-manifest-`(?i)` first SURVIVED, fixed by two orphan rows.
 
 Next (V): sweep lint, doc comments (`selectFolder` etc. already carry docs; check budget), `verify.sh 2bd1adfb ./internal/snapshot/... ./internal/cli/... ./cmd/quarry/...`, spec tick, STATE.md rewrite.
+
+## Orchestrator ruling — checkpoint finding 3 (2026-10-06)
+
+- **BR-C8 (shared manifest kept).** When an ID has any stray (another regular case variant) or any non-regular entry named `<id>.sqlite` in any case beside the winner, quarry cannot tell which file the manifest describes: prune and auto-prune delete the winning snapshot only and leave the manifest. Next run the stray (if regular) becomes the winner with its manifest; a non-regular sibling keeps blocking orphaning (BR-C4). No copy change: `deleted[]`/Pruned rows name the snapshot only, as today. Invariant text becomes: "prune never deletes a manifest that any remaining entry of that ID could still need". Production change → test-first fix pass before V; pinned at selector level (flag per selected snapshot) and through deleteSnapshot/Server with a fake listing (case-sensitive volumes cannot be built on macOS).
