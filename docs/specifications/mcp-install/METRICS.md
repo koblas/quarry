@@ -16,6 +16,7 @@
 | 1 | arch, correctness, test, refactor | 0/2/10/5 | 0 / 20 (7 killed, 13 timed out), 2249s | BLOCKED |
 | 2 | correctness, test (re-gate d8a9a171..964f5ddd) | 0/1/3/2 | n/a (re-gate; developer mutations in REVIEW-02) | BLOCKED |
 | 3 | test (re-gate 37fa483c..9dabaaf1) | 0/0/0/0 | 4 / 4 killed by reviewer on export | PASS |
+| 4 | test (re-gate c7713737..4478fa91, after final-pass fix) | 0/1/1/2 | n/a | PASS WITH FOLLOW-UPS (MAJOR pin-only, deferred under fix-pass cap) |
 
 ## Tokens
 <output of `.claude/scripts/feature-metrics.py --strict mcp-install`, pasted once at SHIP>
@@ -28,6 +29,7 @@
 | gate R2 | signal/cancel pins cannot tell combined from stdout | internal/platform/toolrun/toolrun_test.go:241,268 | gate-fix 1 |
 | final pass | Kept line says "a single project" while hints name several/any scope | internal/cli/render_claude.go:36 | SCENARIO-12 (copy ruled at scoping, flagged at 12's checkpoint) |
 | final pass | R6 hint advises `--scope <scope>` for scopes `claude plugin uninstall` rejects | internal/cli/render_claude.go:124-130 | SCENARIO-12 |
+| gate R4 | other-scope hint rows pin only named scopes; allow-list mutant survives; %q unpinned | internal/cli/claude_uninstall_test.go:173-199 | gate-fix 3 (deferred under cap) |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |
