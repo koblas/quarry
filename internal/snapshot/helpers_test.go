@@ -531,13 +531,7 @@ func writeSnapshotPair(t *testing.T, dir, id string, ddl ...string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(dir, 0o700))
 	path := filepath.Join(dir, id+".sqlite")
-	conn, err := sql.Open("sqlite3", path)
-	require.NoError(t, err)
-	for _, stmt := range ddl {
-		_, err := conn.ExecContext(t.Context(), stmt)
-		require.NoError(t, err)
-	}
-	require.NoError(t, conn.Close())
+	sqliteFileWith(t, path, ddl...)
 	writeManifestFor(t, path)
 }
 
@@ -635,4 +629,16 @@ func syncSnapshotCopy(tb testing.TB, snapshotPath string) error {
 	)
 	_, err := srv.Sync(tb.Context(), filepath.Join(home, "Documents", "Home.quicken"))
 	return err
+}
+
+// sqliteFileWith creates the SQLite file at path by running each of statements, in order, on one connection.
+func sqliteFileWith(tb testing.TB, path string, statements ...string) {
+	tb.Helper()
+	conn, err := sql.Open("sqlite3", path)
+	require.NoError(tb, err)
+	for _, stmt := range statements {
+		_, err := conn.ExecContext(tb.Context(), stmt)
+		require.NoError(tb, err)
+	}
+	require.NoError(tb, conn.Close())
 }

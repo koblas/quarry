@@ -402,20 +402,33 @@ func Test_import_from_refuses_a_quicken_bundle_passed_as_from(t *testing.T) {
 	assert.Empty(t, fake.calls)
 }
 
-func Test_import_from_reports_no_manifest_as_not_a_quarry_snapshot(t *testing.T) {
+func Test_import_from_an_id_reports_no_manifest_as_not_a_quarry_snapshot(t *testing.T) {
 	t.Parallel()
-	home := t.TempDir()
-	fake := &fakeImporter{}
-	srv := newImportServer(t, home, fake)
-	snapshotPath := filepath.Join(home, "snapshots", "20260927T143005Z.sqlite")
-	require.NoError(t, os.MkdirAll(filepath.Dir(snapshotPath), 0o700))
-	require.NoError(t, os.WriteFile(snapshotPath, []byte("x"), 0o600))
+	cases := []struct {
+		name     string
+		snapshot string
+	}{
+		{name: "a lower-case snapshot", snapshot: fromID + ".sqlite"},
+		{name: "a snapshot with no manifest in any case", snapshot: fromID + ".SQLITE"},
+	}
 
-	_, err := srv.ImportFrom(t.Context(), "20260927T143005Z")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			fake := &fakeImporter{}
+			srv := newImportServer(t, home, fake)
+			dir := filepath.Join(home, "snapshots")
+			require.NoError(t, os.MkdirAll(dir, 0o700))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, c.snapshot), []byte("x"), 0o600))
 
-	require.EqualError(t, err, "~/snapshots/20260927T143005Z.sqlite is not a quarry snapshot "+
-		"(no .json manifest next to it); pass a snapshot taken by quarry sync with --from <snapshot>")
-	assert.Empty(t, fake.calls)
+			_, err := srv.ImportFrom(t.Context(), fromID)
+
+			require.EqualError(t, err, "~/snapshots/"+c.snapshot+" is not a quarry snapshot "+
+				"(no .json manifest next to it); pass a snapshot taken by quarry sync with --from <snapshot>")
+			assert.Empty(t, fake.calls)
+		})
+	}
 }
 
 func Test_import_from_refuses_without_importing_when_the_manifest_is_not_json(t *testing.T) {
@@ -452,39 +465,34 @@ func Test_import_from_refuses_without_importing_when_the_manifest_has_a_wrong_ty
 	assert.Empty(t, fake.calls)
 }
 
-// Only the manifest is chmod'd, not the snapshot: proves the refusal names
-// whichever file's own read actually failed.
-func Test_import_from_names_the_manifest_when_it_cannot_be_read(t *testing.T) {
+// Only the one file is chmod'd, not its twin: proves the refusal names whichever file's own read actually failed.
+func Test_import_from_names_the_file_it_cannot_read(t *testing.T) {
 	t.Parallel()
 	skipUnderRoot(t)
-	home := t.TempDir()
-	fake := &fakeImporter{}
-	srv := newImportServer(t, home, fake)
-	taken := takeSnapshot(t, srv)
-	restrictMode(t, taken.Snapshot.Manifest, 0o000)
+	cases := []struct {
+		name string
+		file func(snapshot.Manifest) string
+	}{
+		{name: "the manifest", file: func(m snapshot.Manifest) string { return m.Snapshot.Manifest }},
+		{name: "the snapshot", file: func(m snapshot.Manifest) string { return m.Snapshot.Path }},
+	}
 
-	_, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			fake := &fakeImporter{}
+			srv := newImportServer(t, home, fake)
+			taken := takeSnapshot(t, srv)
+			restrictMode(t, c.file(taken), 0o000)
 
-	require.EqualError(t, err, "cannot read "+homepath.Abbreviate(home, taken.Snapshot.Manifest)+
-		": permission denied; check the file's permissions")
-	assert.Empty(t, fake.calls)
-}
+			_, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
 
-// Only the snapshot is chmod'd, not the manifest: the mirror of the case above.
-func Test_import_from_names_the_snapshot_when_it_cannot_be_read(t *testing.T) {
-	t.Parallel()
-	skipUnderRoot(t)
-	home := t.TempDir()
-	fake := &fakeImporter{}
-	srv := newImportServer(t, home, fake)
-	taken := takeSnapshot(t, srv)
-	restrictMode(t, taken.Snapshot.Path, 0o000)
-
-	_, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
-
-	require.EqualError(t, err, "cannot read "+homepath.Abbreviate(home, taken.Snapshot.Path)+
-		": permission denied; check the file's permissions")
-	assert.Empty(t, fake.calls)
+			require.EqualError(t, err, "cannot read "+homepath.Abbreviate(home, c.file(taken))+
+				": permission denied; check the file's permissions")
+			assert.Empty(t, fake.calls)
+		})
+	}
 }
 
 func Test_import_from_refuses_without_importing_when_the_snapshot_is_not_sqlite(t *testing.T) {
@@ -772,22 +780,6 @@ func Test_import_from_an_id_resolves_an_upper_case_snapshot_and_manifest_by_thei
 	assert.Equal(t, filepath.Join(dir, id+".JSON"), outcome.Manifest.Snapshot.Manifest)
 	require.Len(t, fake.calls, 1)
 	assert.Equal(t, filepath.Join(dir, id+".SQLITE"), fake.calls[0].Path)
-}
-
-func Test_import_from_an_id_reports_no_manifest_when_the_snapshot_has_none_in_any_case(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	fake := &fakeImporter{}
-	srv := newImportServer(t, home, fake)
-	dir := filepath.Join(home, "snapshots")
-	require.NoError(t, os.MkdirAll(dir, 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, fromID+".SQLITE"), []byte("x"), 0o600))
-
-	_, err := srv.ImportFrom(t.Context(), fromID)
-
-	require.EqualError(t, err, "~/snapshots/"+fromID+".SQLITE is not a quarry snapshot "+
-		"(no .json manifest next to it); pass a snapshot taken by quarry sync with --from <snapshot>")
-	assert.Empty(t, fake.calls)
 }
 
 func Test_import_from_a_path_refuses_a_parent_folder_it_cannot_list(t *testing.T) {

@@ -240,23 +240,62 @@ func Test_sync_refuses_when_the_source_reports_a_classified_error(t *testing.T) 
 	}
 }
 
-// A write failure that is neither a permission error nor disk-full/over-quota
-// gets its own text, distinct from the disk-full wording.
-func Test_sync_refuses_when_writing_the_manifest_fails_with_an_unclassified_cause(t *testing.T) {
+const (
+	diskFullRefusal = "cannot write snapshot to ~/snapshots: no space left on device; free disk space, then run quarry sync again"
+	// A write failure that is neither a permission error nor disk-full/over-quota
+	// gets its own text, distinct from the disk-full wording.
+	writeFailedRefusal = "cannot write snapshot to ~/snapshots: input/output error; run quarry sync again"
+)
+
+// A Discard failure is best-effort: it never replaces the write refusal already classified for the
+// write failure that triggered it, and failDiscard only overrides the returned error, so each call
+// still removes its own real file.
+func Test_sync_refuses_when_writing_to_the_snapshots_folder_fails(t *testing.T) {
 	t.Parallel()
-	home := t.TempDir()
-	snapshotsDir := filepath.Join(home, "snapshots")
-	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	srv := newDestinationServer(t, home, snapshotsDir, &partialFaultDestination{
-		real:              snapshot.NewDirDestination(snapshotsDir),
-		failWriteManifest: &fs.PathError{Op: "open", Path: "manifest.json.partial", Err: syscall.EIO},
-	})
+	enospc := &fs.PathError{Op: "open", Path: "manifest.json.partial", Err: syscall.ENOSPC}
+	commitManifest := &os.LinkError{Op: "link", Old: "manifest.json.partial", New: "manifest.json", Err: syscall.ENOSPC}
+	commitSnapshot := &os.LinkError{Op: "link", Old: "snapshot.sqlite.partial", New: "snapshot.sqlite", Err: syscall.ENOSPC}
+	cases := []struct {
+		name                                              string
+		failWriteManifest, failCommitManifest, failCommit error
+		failDiscard                                       error
+		want                                              string
+	}{
+		{
+			name:              "writing the manifest fails with an unclassified cause",
+			failWriteManifest: &fs.PathError{Op: "open", Path: "manifest.json.partial", Err: syscall.EIO},
+			want:              writeFailedRefusal,
+		},
+		{name: "writing the manifest fails", failWriteManifest: enospc, want: diskFullRefusal},
+		{name: "committing the manifest fails", failCommitManifest: commitManifest, want: diskFullRefusal},
+		// The manifest final is already committed when CommitSnapshot fails; the
+		// empty directory afterward proves Discard removed that final too.
+		{name: "committing the snapshot fails", failCommit: commitSnapshot, want: diskFullRefusal},
+		{name: "write manifest fails and so does discard", failWriteManifest: enospc, failDiscard: errBoom, want: diskFullRefusal},
+		{name: "commit manifest fails and so does discard", failCommitManifest: enospc, failDiscard: errBoom, want: diskFullRefusal},
+		{name: "commit snapshot fails and so does discard", failCommit: enospc, failDiscard: errBoom, want: diskFullRefusal},
+	}
 
-	_, err := srv.Sync(t.Context(), bundle.Dir)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			snapshotsDir := filepath.Join(home, "snapshots")
+			bundle := v9fixture.OpenBundle(t, t.TempDir())
+			srv := newDestinationServer(t, home, snapshotsDir, &partialFaultDestination{
+				real:               snapshot.NewDirDestination(snapshotsDir),
+				failWriteManifest:  c.failWriteManifest,
+				failCommitManifest: c.failCommitManifest,
+				failCommit:         c.failCommit,
+				failDiscard:        c.failDiscard,
+			})
 
-	assert.Equal(t,
-		"cannot write snapshot to ~/snapshots: input/output error; run quarry sync again", refusalText(t, err))
-	assertSnapshotsDirEmpty(t, snapshotsDir)
+			_, err := srv.Sync(t.Context(), bundle.Dir)
+
+			assert.Equal(t, c.want, refusalText(t, err))
+			assertSnapshotsDirEmpty(t, snapshotsDir)
+		})
+	}
 }
 
 // mkdirAllCause reproduces os.MkdirAll's own failure against an existing
@@ -345,59 +384,6 @@ func (f *partialFaultDestination) Discard(ctx context.Context, partial string) e
 	return err
 }
 
-func Test_sync_refuses_when_writing_the_manifest_fails(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	snapshotsDir := filepath.Join(home, "snapshots")
-	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	srv := newDestinationServer(t, home, snapshotsDir, &partialFaultDestination{
-		real:              snapshot.NewDirDestination(snapshotsDir),
-		failWriteManifest: &fs.PathError{Op: "open", Path: "manifest.json.partial", Err: syscall.ENOSPC},
-	})
-
-	_, err := srv.Sync(t.Context(), bundle.Dir)
-
-	assert.Equal(t,
-		"cannot write snapshot to ~/snapshots: no space left on device; free disk space, then run quarry sync again", refusalText(t, err))
-	assertSnapshotsDirEmpty(t, snapshotsDir)
-}
-
-func Test_sync_refuses_when_committing_the_manifest_fails(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	snapshotsDir := filepath.Join(home, "snapshots")
-	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	srv := newDestinationServer(t, home, snapshotsDir, &partialFaultDestination{
-		real:               snapshot.NewDirDestination(snapshotsDir),
-		failCommitManifest: &os.LinkError{Op: "link", Old: "manifest.json.partial", New: "manifest.json", Err: syscall.ENOSPC},
-	})
-
-	_, err := srv.Sync(t.Context(), bundle.Dir)
-
-	assert.Equal(t,
-		"cannot write snapshot to ~/snapshots: no space left on device; free disk space, then run quarry sync again", refusalText(t, err))
-	assertSnapshotsDirEmpty(t, snapshotsDir)
-}
-
-// The manifest final is already committed when CommitSnapshot fails; the
-// empty directory afterward proves Discard removed that final too.
-func Test_sync_refuses_when_committing_the_snapshot_fails(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	snapshotsDir := filepath.Join(home, "snapshots")
-	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	srv := newDestinationServer(t, home, snapshotsDir, &partialFaultDestination{
-		real:       snapshot.NewDirDestination(snapshotsDir),
-		failCommit: &os.LinkError{Op: "link", Old: "snapshot.sqlite.partial", New: "snapshot.sqlite", Err: syscall.ENOSPC},
-	})
-
-	_, err := srv.Sync(t.Context(), bundle.Dir)
-
-	assert.Equal(t,
-		"cannot write snapshot to ~/snapshots: no space left on device; free disk space, then run quarry sync again", refusalText(t, err))
-	assertSnapshotsDirEmpty(t, snapshotsDir)
-}
-
 func Test_sync_still_returns_the_classified_refusal_when_discard_fails(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
@@ -421,47 +407,6 @@ func Test_sync_still_returns_the_classified_refusal_when_discard_fails(t *testin
 	assert.Equal(t, dest.backedUpPartial, dest.discardedPartial)
 }
 
-// A Discard failure is best-effort: it never replaces the write refusal
-// already classified for the write failure that triggered it.
-func Test_sync_still_returns_the_write_refusal_when_discard_fails_after_a_write_failure(t *testing.T) {
-	t.Parallel()
-	writeErr := &fs.PathError{Op: "open", Path: "manifest.json.partial", Err: syscall.ENOSPC}
-
-	cases := []struct {
-		name               string
-		failWriteManifest  error
-		failCommitManifest error
-		failCommit         error
-	}{
-		{name: "write manifest fails", failWriteManifest: writeErr},
-		{name: "commit manifest fails", failCommitManifest: writeErr},
-		{name: "commit snapshot fails", failCommit: writeErr},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
-			home := t.TempDir()
-			snapshotsDir := filepath.Join(home, "snapshots")
-			bundle := v9fixture.OpenBundle(t, t.TempDir())
-			srv := newDestinationServer(t, home, snapshotsDir, &partialFaultDestination{
-				real:               snapshot.NewDirDestination(snapshotsDir),
-				failWriteManifest:  c.failWriteManifest,
-				failCommitManifest: c.failCommitManifest,
-				failCommit:         c.failCommit,
-				failDiscard:        errBoom,
-			})
-
-			_, err := srv.Sync(t.Context(), bundle.Dir)
-
-			assert.Equal(t,
-				"cannot write snapshot to ~/snapshots: no space left on device; free disk space, then run quarry sync again", refusalText(t, err))
-			// failDiscard only overrides the returned error; each call still removes its own real file.
-			assertSnapshotsDirEmpty(t, snapshotsDir)
-		})
-	}
-}
-
 // garbageFileOpenCause opens path — garbage bytes buildManifest's own open
 // will fail against — through a connection independent of the code under
 // test, so a test can pin the exact cause Sync's wrap carries rather than
@@ -483,6 +428,7 @@ func Test_sync_refuses_a_snapshot_copy_that_cannot_be_opened(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte("not a database"), 0o600))
 	cause := garbageFileOpenCause(t, path)
 	require.Error(t, cause)
+
 	err := syncSnapshotCopy(t, path)
 
 	assert.Equal(t,
@@ -494,19 +440,14 @@ func Test_sync_refuses_a_snapshot_copy_that_cannot_be_opened(t *testing.T) {
 func Test_sync_refuses_a_snapshot_whose_schema_cannot_be_read(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "snap.sqlite")
-	conn, err := sql.Open("sqlite3", path)
-	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), "CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZNAME TEXT)")
-	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), "INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')")
-	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), "PRAGMA writable_schema = ON")
-	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), "INSERT INTO sqlite_master (type, name, tbl_name, rootpage, sql) VALUES "+
-		"('table', 'ZFOO', 'ZFOO', 0, 'CREATE VIRTUAL TABLE ZFOO USING nonexistent_module')")
-	require.NoError(t, err)
-	require.NoError(t, conn.Close())
-	err = syncSnapshotCopy(t, path)
+	sqliteFileWith(t, path,
+		"CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZNAME TEXT)",
+		"INSERT INTO ZACCOUNT (ZNAME) VALUES ('Checking')",
+		"PRAGMA writable_schema = ON",
+		"INSERT INTO sqlite_master (type, name, tbl_name, rootpage, sql) VALUES "+
+			"('table', 'ZFOO', 'ZFOO', 0, 'CREATE VIRTUAL TABLE ZFOO USING nonexistent_module')")
+
+	err := syncSnapshotCopy(t, path)
 
 	text := refusalText(t, err)
 	assert.True(t, strings.HasPrefix(text, "cannot read the snapshot of ~/Documents/Home.quicken: "))
@@ -531,6 +472,7 @@ func Test_sync_refuses_a_snapshot_that_fails_integrity_check(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "snap.sqlite")
 	v9fixture.CorruptDataFile(t, path)
+
 	err := syncSnapshotCopy(t, path)
 
 	assert.Equal(t,
@@ -538,30 +480,34 @@ func Test_sync_refuses_a_snapshot_that_fails_integrity_check(t *testing.T) {
 			"); nothing was kept; quit and reopen the file in Quicken, then run quarry sync again", refusalText(t, err))
 }
 
-func Test_sync_refuses_a_snapshot_with_no_accounts_table(t *testing.T) {
+func Test_sync_refuses_a_snapshot_with_no_accounts(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "no-accounts.sqlite")
-	conn, err := sql.Open("sqlite3", path)
-	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), "CREATE TABLE OTHER (id INTEGER PRIMARY KEY)")
-	require.NoError(t, err)
-	require.NoError(t, conn.Close())
-	err = syncSnapshotCopy(t, path)
+	cases := []struct {
+		name string
+		ddl  string
+		want string
+	}{
+		{
+			name: "no accounts table",
+			ddl:  "CREATE TABLE OTHER (id INTEGER PRIMARY KEY)",
+			want: "~/Documents/Home.quicken is not a Quicken Classic for Mac database (no ZACCOUNT table); pass the right file with --quicken <path>",
+		},
+		{
+			name: "no account rows",
+			ddl:  "CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZNAME TEXT)",
+			want: "~/Documents/Home.quicken has no accounts; nothing was kept; check you have the right file open, or pass it with --quicken <path>",
+		},
+	}
 
-	assert.Equal(t,
-		"~/Documents/Home.quicken is not a Quicken Classic for Mac database (no ZACCOUNT table); pass the right file with --quicken <path>", refusalText(t, err))
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			path := filepath.Join(t.TempDir(), "snapshot.sqlite")
+			sqliteFileWith(t, path, c.ddl)
 
-func Test_sync_refuses_a_snapshot_with_no_account_rows(t *testing.T) {
-	t.Parallel()
-	path := filepath.Join(t.TempDir(), "empty-accounts.sqlite")
-	conn, err := sql.Open("sqlite3", path)
-	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), "CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZNAME TEXT)")
-	require.NoError(t, err)
-	require.NoError(t, conn.Close())
-	err = syncSnapshotCopy(t, path)
+			err := syncSnapshotCopy(t, path)
 
-	assert.Equal(t,
-		"~/Documents/Home.quicken has no accounts; nothing was kept; check you have the right file open, or pass it with --quicken <path>", refusalText(t, err))
+			assert.Equal(t, c.want, refusalText(t, err))
+		})
+	}
 }

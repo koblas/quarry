@@ -60,23 +60,27 @@ func Test_stdout_write_refusal_points_to_from_only_once_the_build_was_reached(t 
 	}
 }
 
-func Test_outcome_warnings_omit_one_sided_transfers_for_a_built_store(t *testing.T) {
+func Test_outcome_warnings_are_the_manifests_own(t *testing.T) {
 	t.Parallel()
 	built := &store.Result{Built: true, Validation: store.Validation{Transfers: store.TransferCheck{OneSided: make([]store.OneSidedTransfer, 2)}}}
-	outcome := snapshot.Outcome{Manifest: snapshot.Manifest{Warnings: []string{"schema warning"}}, Store: built}
+	cases := []struct {
+		name  string
+		store *store.Result
+	}{
+		{name: "one-sided transfers of a built store are omitted", store: built},
+		{name: "no import ran", store: nil},
+	}
 
-	got := outcome.Warnings()
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			outcome := snapshot.Outcome{Manifest: snapshot.Manifest{Warnings: []string{"schema warning"}}, Store: c.store}
 
-	assert.Equal(t, []string{"schema warning"}, got)
-}
+			got := outcome.Warnings()
 
-func Test_outcome_warnings_are_the_manifests_when_no_import_ran(t *testing.T) {
-	t.Parallel()
-	outcome := snapshot.Outcome{Manifest: snapshot.Manifest{Warnings: []string{"schema warning"}}}
-
-	got := outcome.Warnings()
-
-	assert.Equal(t, []string{"schema warning"}, got)
+			assert.Equal(t, []string{"schema warning"}, got)
+		})
+	}
 }
 
 func Test_id_strips_one_sqlite_extension_in_any_letter_case(t *testing.T) {
@@ -718,14 +722,27 @@ func Test_sync_and_import_names_the_findings_fault_reason_in_the_warning(t *test
 
 func Test_sync_and_import_warns_of_a_findings_fault_alone_without_the_import_history_line(t *testing.T) {
 	t.Parallel()
-	home := t.TempDir()
-	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: filepath.Join(home, "quarry", "quarry.duckdb"), Reason: "its findings table is incomplete"}
-	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, FindingsFault: fault}})
+	cases := []struct {
+		name       string
+		unreadable bool
+	}{
+		{name: "a store not flagged unreadable", unreadable: false},
+		{name: "a store flagged unreadable", unreadable: true},
+	}
 
-	outcome, err := srv.SyncAndImport(t.Context(), v9fixture.OpenBundle(t, t.TempDir()).Dir)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			fault := &store.OpenError{Fault: store.OpenFaultOther, Path: filepath.Join(home, "quarry", "quarry.duckdb"), Reason: "its findings table is incomplete"}
+			srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, StoreUnreadable: c.unreadable, FindingsFault: fault}})
 
-	require.NoError(t, err)
-	assert.Equal(t, []string{findingsRestartLine("its findings table is incomplete")}, outcome.Warnings())
+			outcome, err := srv.SyncAndImport(t.Context(), v9fixture.OpenBundle(t, t.TempDir()).Dir)
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{findingsRestartLine("its findings table is incomplete")}, outcome.Warnings())
+		})
+	}
 }
 
 func Test_sync_and_import_prints_the_history_line_then_the_findings_line_when_both_tables_are_faulty(t *testing.T) {
@@ -743,18 +760,6 @@ func Test_sync_and_import_prints_the_history_line_then_the_findings_line_when_bo
 		historyRestartLine("its import_runs table is incomplete"),
 		findingsRestartLine("its findings table repeats an id"),
 	}, outcome.Warnings())
-}
-
-func Test_sync_and_import_warns_of_a_findings_fault_alone_when_the_store_is_flagged_unreadable(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: filepath.Join(home, "quarry", "quarry.duckdb"), Reason: "its findings table is incomplete"}
-	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, StoreUnreadable: true, FindingsFault: fault}})
-
-	outcome, err := srv.SyncAndImport(t.Context(), v9fixture.OpenBundle(t, t.TempDir()).Dir)
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{findingsRestartLine("its findings table is incomplete")}, outcome.Warnings())
 }
 
 func Test_sync_and_import_names_the_rates_fault_reason_in_the_warning(t *testing.T) {
@@ -846,55 +851,49 @@ func Test_sync_and_import_warns_of_nothing_when_the_history_was_carried(t *testi
 	assert.Empty(t, outcome.Warnings())
 }
 
-func Test_import_from_puts_the_history_warning_after_the_manifest_warning(t *testing.T) {
+func Test_import_from_puts_each_carry_warning_after_the_manifest_warning(t *testing.T) {
 	t.Parallel()
-	home := t.TempDir()
-	ref := v9Reference(t)
-	delete(ref, "ZALERT")
-	fault := &store.OpenError{Fault: store.OpenFaultNotDuckDB, Path: filepath.Join(home, "quarry", "quarry.duckdb")}
-	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, HistoryFault: fault, StoreUnreadable: true}},
-		snapshot.WithReference(v9.ReferenceLabel, ref))
-	taken := takeSnapshot(t, srv)
-	require.Len(t, taken.Warnings, 1)
+	cases := []struct {
+		name   string
+		result store.Result
+		want   string
+	}{
+		{
+			name:   "the history warning",
+			result: store.Result{Built: true, StoreUnreadable: true, HistoryFault: &store.OpenError{Fault: store.OpenFaultNotDuckDB}},
+			want:   combinedCarryLine("the file is not a DuckDB database"),
+		},
+		{
+			name: "the findings warning",
+			result: store.Result{Built: true, FindingsFault: &store.OpenError{
+				Fault: store.OpenFaultOther, Reason: "its findings table repeats an id",
+			}},
+			want: findingsRestartLine("its findings table repeats an id"),
+		},
+		{
+			name: "the rates warning",
+			result: store.Result{Built: true, RatesFault: &store.OpenError{
+				Fault: store.OpenFaultOther, Reason: "its fx_rates table names an unknown series",
+			}},
+			want: ratesRestartLine("its fx_rates table names an unknown series"),
+		},
+	}
 
-	outcome, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			ref := v9Reference(t)
+			delete(ref, "ZALERT")
+			srv := newImportServer(t, t.TempDir(), &fakeImporter{result: c.result}, snapshot.WithReference(v9.ReferenceLabel, ref))
+			taken := takeSnapshot(t, srv)
+			require.Len(t, taken.Warnings, 1)
 
-	require.NoError(t, err)
-	assert.Equal(t, []string{taken.Warnings[0], combinedCarryLine("the file is not a DuckDB database")}, outcome.Warnings())
-}
+			outcome, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
 
-func Test_import_from_puts_the_findings_warning_after_the_manifest_warning(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	ref := v9Reference(t)
-	delete(ref, "ZALERT")
-	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: filepath.Join(home, "quarry", "quarry.duckdb"), Reason: "its findings table repeats an id"}
-	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, FindingsFault: fault}},
-		snapshot.WithReference(v9.ReferenceLabel, ref))
-	taken := takeSnapshot(t, srv)
-	require.Len(t, taken.Warnings, 1)
-
-	outcome, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{taken.Warnings[0], findingsRestartLine("its findings table repeats an id")}, outcome.Warnings())
-}
-
-func Test_import_from_puts_the_rates_warning_after_the_manifest_warning(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	ref := v9Reference(t)
-	delete(ref, "ZALERT")
-	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: filepath.Join(home, "quarry", "quarry.duckdb"), Reason: "its fx_rates table names an unknown series"}
-	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, RatesFault: fault}},
-		snapshot.WithReference(v9.ReferenceLabel, ref))
-	taken := takeSnapshot(t, srv)
-	require.Len(t, taken.Warnings, 1)
-
-	outcome, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{taken.Warnings[0], ratesRestartLine("its fx_rates table names an unknown series")}, outcome.Warnings())
+			require.NoError(t, err)
+			assert.Equal(t, []string{taken.Warnings[0], c.want}, outcome.Warnings())
+		})
+	}
 }
 
 // threeStates is two new findings and one carried, as a store build reports them with no ignore list.
@@ -920,14 +919,27 @@ func Test_sync_and_import_counts_an_ignored_open_finding_as_ignored_not_open_or_
 	assert.Equal(t, finding.Counts{Open: 2, Ignored: 1, New: 1}, outcome.Store.Findings)
 }
 
-func Test_sync_and_import_counts_every_finding_as_open_without_an_ignore_list(t *testing.T) {
+func Test_sync_and_import_counts_every_finding_as_open_without_an_ignore_list_or_a_read_time_function(t *testing.T) {
 	t.Parallel()
-	srv := newImportServer(t, t.TempDir(), &fakeImporter{result: threeStates()})
+	cases := []struct {
+		name   string
+		result store.Result
+	}{
+		{name: "without an ignore list", result: threeStates()},
+		{name: "without a read-time function whatever accounts the build wrote", result: threeStatesWithAccount()},
+	}
 
-	outcome, err := srv.SyncAndImport(t.Context(), v9fixture.OpenBundle(t, t.TempDir()).Dir)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			srv := newImportServer(t, t.TempDir(), &fakeImporter{result: c.result})
 
-	require.NoError(t, err)
-	assert.Equal(t, finding.Counts{Open: 3, New: 2}, outcome.Store.Findings)
+			outcome, err := srv.SyncAndImport(t.Context(), v9fixture.OpenBundle(t, t.TempDir()).Dir)
+
+			require.NoError(t, err)
+			assert.Equal(t, finding.Counts{Open: 3, New: 2}, outcome.Store.Findings)
+		})
+	}
 }
 
 const unclassifiedID = "unclassified-account:acct-1"
@@ -956,16 +968,6 @@ func Test_sync_and_import_counts_a_read_time_finding_open_and_never_new(t *testi
 
 	require.NoError(t, err)
 	assert.Equal(t, finding.Counts{Open: 4, New: 2}, outcome.Store.Findings)
-}
-
-func Test_sync_and_import_counts_the_same_without_a_read_time_function_whatever_accounts_the_build_wrote(t *testing.T) {
-	t.Parallel()
-	srv := newImportServer(t, t.TempDir(), &fakeImporter{result: threeStatesWithAccount()})
-
-	outcome, err := srv.SyncAndImport(t.Context(), v9fixture.OpenBundle(t, t.TempDir()).Dir)
-
-	require.NoError(t, err)
-	assert.Equal(t, finding.Counts{Open: 3, New: 2}, outcome.Store.Findings)
 }
 
 func Test_sync_and_import_counts_an_ignored_read_time_finding_as_ignored(t *testing.T) {
@@ -1062,6 +1064,11 @@ func Test_sync_and_import_names_the_failed_rate_fetch_in_a_warning(t *testing.T)
 			store.RatesSummary{First: firstRate, Last: lastRate, Added: 2, FetchError: fetchReason, Partial: true},
 			partialFetchLine(fetchReason),
 		},
+		{
+			"the fetch reason it was given",
+			store.RatesSummary{FetchError: "cannot reach www.bankofcanada.ca"},
+			nothingStoredLine("cannot reach www.bankofcanada.ca"),
+		},
 	}
 
 	for _, c := range cases {
@@ -1078,36 +1085,27 @@ func Test_sync_and_import_names_the_failed_rate_fetch_in_a_warning(t *testing.T)
 	}
 }
 
-func Test_sync_and_import_names_the_fetch_reason_it_was_given(t *testing.T) {
+func Test_outcome_adds_no_fetch_warning_unless_a_built_store_failed_its_rate_fetch(t *testing.T) {
 	t.Parallel()
-	rates := store.RatesSummary{FetchError: "cannot reach www.bankofcanada.ca"}
-	srv := newImportServer(t, t.TempDir(), &fakeImporter{result: store.Result{Built: true, Rates: rates}})
+	cases := []struct {
+		name   string
+		result store.Result
+	}{
+		{name: "the rate fetch succeeded", result: store.Result{Built: true, Rates: store.RatesSummary{First: firstRate, Last: lastRate, Added: 2}}},
+		{name: "the store was not built", result: store.Result{Rates: fetchFailed()}},
+	}
 
-	outcome, err := syncBundle(t, srv)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			srv := newImportServer(t, t.TempDir(), &fakeImporter{result: c.result})
 
-	require.NoError(t, err)
-	assert.Equal(t, []string{nothingStoredLine("cannot reach www.bankofcanada.ca")}, outcome.Warnings())
-}
+			outcome, err := syncBundle(t, srv)
 
-func Test_sync_and_import_adds_no_fetch_warning_when_the_rate_fetch_succeeded(t *testing.T) {
-	t.Parallel()
-	rates := store.RatesSummary{First: firstRate, Last: lastRate, Added: 2}
-	srv := newImportServer(t, t.TempDir(), &fakeImporter{result: store.Result{Built: true, Rates: rates}})
-
-	outcome, err := syncBundle(t, srv)
-
-	require.NoError(t, err)
-	assert.Empty(t, outcome.Warnings())
-}
-
-func Test_outcome_adds_no_fetch_warning_for_a_store_that_was_not_built(t *testing.T) {
-	t.Parallel()
-	srv := newImportServer(t, t.TempDir(), &fakeImporter{result: store.Result{Rates: fetchFailed()}})
-
-	outcome, err := syncBundle(t, srv)
-
-	require.NoError(t, err)
-	assert.Empty(t, outcome.Warnings())
+			require.NoError(t, err)
+			assert.Empty(t, outcome.Warnings())
+		})
+	}
 }
 
 func Test_outcome_lists_the_fetch_warning_before_the_prune_warning(t *testing.T) {
@@ -1126,43 +1124,47 @@ func Test_outcome_lists_the_fetch_warning_before_the_prune_warning(t *testing.T)
 	assert.Equal(t, want, outcome.WarningsAbsolute())
 }
 
-func Test_outcome_lists_the_fetch_warning_after_the_rates_carry_warning(t *testing.T) {
+func Test_outcome_lists_the_fetch_warning_after_the_carry_warning(t *testing.T) {
 	t.Parallel()
-	home := t.TempDir()
-	storePath := filepath.Join(home, "quarry", "quarry.duckdb")
-	result := store.Result{
-		Built:      true,
-		RatesFault: &store.OpenError{Fault: store.OpenFaultOther, Path: storePath, Reason: "its fx_rates table repeats a date"},
-		Rates:      fetchFailed(),
+	cases := []struct {
+		name   string
+		result store.Result
+		carry  string
+	}{
+		{
+			name: "the rates carry warning",
+			result: store.Result{
+				Built:      true,
+				RatesFault: &store.OpenError{Fault: store.OpenFaultOther, Reason: "its fx_rates table repeats a date"},
+				Rates:      fetchFailed(),
+			},
+			carry: ratesRestartLine("its fx_rates table repeats a date"),
+		},
+		{
+			name: "the combined carry warning",
+			result: store.Result{
+				Built:           true,
+				StoreUnreadable: true,
+				HistoryFault:    &store.OpenError{Fault: store.OpenFaultNotDuckDB},
+				Rates:           fetchFailed(),
+			},
+			carry: combinedCarryLine("the file is not a DuckDB database"),
+		},
 	}
-	srv := newImportServer(t, home, &fakeImporter{result: result})
 
-	outcome, err := syncBundle(t, srv)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			srv := newImportServer(t, t.TempDir(), &fakeImporter{result: c.result})
 
-	require.NoError(t, err)
-	want := []string{ratesRestartLine("its fx_rates table repeats a date"), nothingStoredLine(fetchReason)}
-	assert.Equal(t, want, outcome.Warnings())
-	assert.Equal(t, want, outcome.WarningsAbsolute())
-}
+			outcome, err := syncBundle(t, srv)
 
-func Test_outcome_lists_the_fetch_warning_after_the_combined_carry_warning(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	storePath := filepath.Join(home, "quarry", "quarry.duckdb")
-	result := store.Result{
-		Built:           true,
-		StoreUnreadable: true,
-		HistoryFault:    &store.OpenError{Fault: store.OpenFaultNotDuckDB, Path: storePath},
-		Rates:           fetchFailed(),
+			require.NoError(t, err)
+			want := []string{c.carry, nothingStoredLine(fetchReason)}
+			assert.Equal(t, want, outcome.Warnings())
+			assert.Equal(t, want, outcome.WarningsAbsolute())
+		})
 	}
-	srv := newImportServer(t, home, &fakeImporter{result: result})
-
-	outcome, err := syncBundle(t, srv)
-
-	require.NoError(t, err)
-	want := []string{combinedCarryLine("the file is not a DuckDB database"), nothingStoredLine(fetchReason)}
-	assert.Equal(t, want, outcome.Warnings())
-	assert.Equal(t, want, outcome.WarningsAbsolute())
 }
 
 func Test_outcome_lists_every_warning_in_the_ruled_order(t *testing.T) {
