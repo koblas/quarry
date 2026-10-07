@@ -3,7 +3,6 @@ package sqlite_test
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,19 +15,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func newTestDatabase(t *testing.T) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "data")
-	conn, err := sql.Open("sqlite3", path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	_, err = conn.ExecContext(t.Context(), "CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
-	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), "INSERT INTO t (v) VALUES ('a')")
-	require.NoError(t, err)
-	return path
-}
 
 func Test_open_read_only_refuses_writes(t *testing.T) {
 	t.Parallel()
@@ -128,49 +114,6 @@ func Test_integrity_check_fails_on_a_corrupted_database(t *testing.T) {
 	require.ErrorAs(t, err, &integrityErr)
 	assert.Equal(t, rowLines[len(rowLines)-1], integrityErr.Result)
 	assert.NotContains(t, integrityErr.Result, "*** in database")
-}
-
-// rawIntegrityCheckRow reads PRAGMA integrity_check's first row through a
-// connection independent of the code under test.
-func rawIntegrityCheckRow(t *testing.T, path string) string {
-	t.Helper()
-	conn, err := sql.Open("sqlite3", path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	var row string
-	require.NoError(t, conn.QueryRowContext(t.Context(), "PRAGMA integrity_check").Scan(&row))
-	return row
-}
-
-// newMultiPageTestDatabase writes enough rows to spill past the first
-// (4096-byte) page, so a later page can be corrupted without breaking the
-// schema page's own readability.
-func newMultiPageTestDatabase(t *testing.T) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "data")
-	conn, err := sql.Open("sqlite3", path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	_, err = conn.ExecContext(t.Context(), "CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
-	require.NoError(t, err)
-	for range 500 {
-		_, err = conn.ExecContext(t.Context(), "INSERT INTO t (v) VALUES (?)", strings.Repeat("x", 100))
-		require.NoError(t, err)
-	}
-	return path
-}
-
-// corruptLastPage flips bytes in the file's final page, which by
-// construction holds only row data, not the schema page.
-func corruptLastPage(t *testing.T, path string) {
-	t.Helper()
-	raw, err := os.ReadFile(path)
-	require.NoError(t, err)
-	require.Greater(t, len(raw), 8192)
-	for i := len(raw) - 200; i < len(raw)-100; i++ {
-		raw[i] ^= 0xFF
-	}
-	require.NoError(t, os.WriteFile(path, raw, 0o600)) //nolint:gosec // path is under the test's own temp dir
 }
 
 func Test_schema_fails_when_the_connection_is_closed(t *testing.T) {
@@ -319,23 +262,6 @@ func Test_backup_sets_journal_mode_delete_on_the_destination(t *testing.T) {
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
-// newWALTestDatabase creates a database already switched into WAL mode, so
-// its header bytes 18-19 read 2 (see Test_backup_sets_journal_mode_delete_on_the_destination).
-func newWALTestDatabase(t *testing.T) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "data")
-	conn, err := sql.Open("sqlite3", path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	_, err = conn.ExecContext(t.Context(), "PRAGMA journal_mode=WAL")
-	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), "CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
-	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), "INSERT INTO t (v) VALUES ('a')")
-	require.NoError(t, err)
-	return path
-}
-
 func Test_backup_fails_when_the_destination_directory_is_missing(t *testing.T) {
 	t.Parallel()
 	srcPath := newTestDatabase(t)
@@ -348,8 +274,6 @@ func Test_backup_fails_when_the_destination_directory_is_missing(t *testing.T) {
 
 	require.Error(t, err)
 }
-
-var errNotSQLite3 = errors.New("boom")
 
 func Test_IsNotADB_and_IsBusy_classify_sqlite3_error_codes(t *testing.T) {
 	t.Parallel()
@@ -376,23 +300,6 @@ func Test_IsNotADB_and_IsBusy_classify_sqlite3_error_codes(t *testing.T) {
 			assert.Equal(t, c.wantBusy, sqlite.IsBusy(c.err))
 		})
 	}
-}
-
-// lockDatabaseExclusively opens a second connection to path and holds an
-// uncommitted BEGIN EXCLUSIVE for the rest of the test.
-func lockDatabaseExclusively(t *testing.T, path string) {
-	t.Helper()
-	locker, err := sql.Open("sqlite3", path)
-	require.NoError(t, err)
-	locker.SetMaxOpenConns(1)
-	t.Cleanup(func() { _ = locker.Close() })
-	conn, err := locker.Conn(t.Context())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	_, err = conn.ExecContext(t.Context(), "BEGIN EXCLUSIVE")
-	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), "INSERT INTO t (v) VALUES ('locked')")
-	require.NoError(t, err)
 }
 
 // busy_timeout=0 disables SQLite's own retry, so any wait is runBackup's.
@@ -522,19 +429,6 @@ func Test_open_read_only_busy_succeeds_once_the_writer_releases_the_lock_before_
 	t.Cleanup(func() { _ = db.Close() })
 }
 
-func newMultiRowTestDatabase(t *testing.T) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "data")
-	conn, err := sql.Open("sqlite3", path)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	_, err = conn.ExecContext(t.Context(), "CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
-	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), "INSERT INTO t (id, v) VALUES (1, 'a'), (2, 'b'), (3, 'c')")
-	require.NoError(t, err)
-	return path
-}
-
 func Test_query_rows_scans_every_row_in_order(t *testing.T) {
 	t.Parallel()
 	path := newMultiRowTestDatabase(t)
@@ -607,8 +501,6 @@ func Test_query_rows_fails_on_a_scan_type_error(t *testing.T) {
 
 	require.Error(t, err)
 }
-
-var errQueryRowsCallback = errors.New("boom")
 
 // Two rows exist; the callback errors on the first, so a call count of 1
 // (not just the error) proves the loop stopped instead of continuing.
@@ -696,14 +588,3 @@ func Test_query_rows_reports_a_deadline_that_passes_mid_iteration(t *testing.T) 
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Equal(t, 1, calls)
 }
-
-// scriptedContext is a context that never fires Done, so the driver's own interrupt
-// cannot be what stops a read; its Err is whatever err returns.
-type scriptedContext struct {
-	err func() error
-}
-
-func (scriptedContext) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (scriptedContext) Done() <-chan struct{}       { return nil }
-func (scriptedContext) Value(any) any               { return nil }
-func (c scriptedContext) Err() error                { return c.err() }
