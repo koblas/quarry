@@ -14,6 +14,7 @@
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
 | 1 | arch, correctness, test, refactor | 0/2/10/5 | 0 / 20 (7 killed, 13 timed out), 2249s | BLOCKED |
+| 2 | correctness, test (re-gate d8a9a171..964f5ddd) | 0/1/3/2 | n/a (re-gate; developer mutations in REVIEW-02) | BLOCKED |
 
 ## Tokens
 <output of `.claude/scripts/feature-metrics.py --strict mcp-install`, pasted once at SHIP>
@@ -23,6 +24,7 @@
 | --- | --- | --- | --- |
 | gate R1 | lists decoded from combined stdout+stderr buffer; stderr noise breaks idempotency check | internal/claudeplugin/state.go:396 | SCENARIO-01 (seam ruled at scoping; SCENARIO-04 built adapter) |
 | gate R1 | toolrun.Run output unpinned on exit/signal/cancel returns | internal/platform/toolrun/toolrun_test.go:106 | SCENARIO-04 |
+| gate R2 | signal/cancel pins cannot tell combined from stdout | internal/platform/toolrun/toolrun_test.go:241,268 | gate-fix 1 |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |
