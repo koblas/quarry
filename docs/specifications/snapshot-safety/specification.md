@@ -329,9 +329,9 @@ Order: 01 → 03 → 06 → 14 → 10 → 12a → 12b → 13 (lock first; 14 mak
 - [x] SCENARIO-07: Usage and config errors come before the lock — delivered by SCENARIO-03, `cmd/quarry/run_prune_lock_test.go` `Test_run_snapshots_prune_refuses_usage_and_config_before_the_lock`
 - [x] SCENARIO-09: Help says only one writer runs at a time — delivered by SCENARIO-03, `cmd/quarry/run_usage_test.go` `Test_run_help_says_only_one_writer_runs_at_a_time`
 - [x] SCENARIO-06: An unusable lock file refuses with a fix — `cmd/quarry/run_sync_lock_file_test.go` `Test_run_sync_refuses_an_unusable_lock_file_with_a_fix`
-- [ ] SCENARIO-14: Prune refuses when the store's recorded snapshot cannot be read
-- [ ] SCENARIO-15: Listing warns and marks nothing when the recorded snapshot cannot be read
-- [ ] SCENARIO-16: Auto-prune inside sync deletes nothing when the recorded path cannot be read
+- [x] SCENARIO-14: Prune refuses when the store's recorded snapshot cannot be read — `cmd/quarry/run_prune_recorded_test.go` `Test_run_snapshots_prune_refuses_when_the_recorded_snapshot_cannot_be_read`
+- [x] SCENARIO-15: Listing warns and marks nothing when the recorded snapshot cannot be read — delivered by SCENARIO-14, `cmd/quarry/run_snapshots_recorded_test.go` `Test_run_snapshots_warns_and_marks_nothing_when_the_recorded_snapshot_cannot_be_read`
+- [x] SCENARIO-16: Auto-prune inside sync deletes nothing when the recorded path cannot be read — delivered by SCENARIO-14, `internal/snapshot/auto_prune_recorded_test.go` `Test_sync_and_import_prunes_nothing_when_the_recorded_snapshot_cannot_be_read`
 - [ ] SCENARIO-10: An upper-case .SQLITE snapshot is listed with its on-disk paths
 - [ ] SCENARIO-11: Prune deletes an .SQLITE snapshot and its manifest, never sweeping it as an orphan
 - [ ] SCENARIO-12a: sync --from <id> resolves an .SQLITE snapshot

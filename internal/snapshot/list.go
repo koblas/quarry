@@ -42,8 +42,8 @@ type Listing struct {
 	Dir string
 	// Entries are the snapshots, newest first.
 	Entries []Entry
-	// StorePath is the snapshot path the store recorded, unresolved; "" when
-	// there is no store or it cannot be read.
+	// StorePath is the snapshot path the store recorded, unresolved, even when that path cannot be
+	// statted; "" when there is no store or the store itself cannot be read.
 	StorePath string
 	// TotalBytes sums every entry's size on disk.
 	TotalBytes int64
@@ -51,7 +51,7 @@ type Listing struct {
 	NoSnapshots string
 	// NoSnapshotsAbsolute is NoSnapshots naming the folder by its absolute path; machine-readable output carries this form.
 	NoSnapshotsAbsolute string
-	// StoreUnreadable is why the store's snapshot cannot be told, a bare phrase; "" when it can, or there is no store.
+	// StoreUnreadable is why the store's snapshot cannot be told, a phrase naming any path it could not read; "" when it can, or there is no store.
 	StoreUnreadable string
 	// StoreWarning is StoreUnreadable as the warning a listing prints; "" when StoreUnreadable is.
 	StoreWarning string
@@ -63,7 +63,7 @@ type Listing struct {
 
 // List reads the snapshots folder, newest first, and marks the snapshot the store was
 // built from. A missing folder lists nothing, an unreadable one or an ended ctx is a
-// refusal; a store that cannot say marks nothing and sets StoreUnreadable.
+// refusal; a store that cannot say, or whose recorded path cannot be statted, marks nothing and sets StoreUnreadable.
 func (s *Server) List(ctx context.Context) (Listing, error) {
 	listing, err := s.listFolder()
 	if err != nil {
@@ -222,13 +222,12 @@ func (s *Server) storeSnapshot(ctx context.Context) (string, string, error) {
 	return "", openErr.UnreadableReason(homepath.Abbreviate(s.home, openErr.Path)), nil
 }
 
-// markStoreSnapshot records which entries are the store's recorded snapshot: storeFile on every entry that
-// is that file, and Store on the one of them output names, or on the entry carrying its ID when none is.
-// It marks nothing and returns the stat error when recorded fails to stat for any reason but not existing.
+// markStoreSnapshot marks the entries that are the store's recorded snapshot (storeFile) and the one output names (Store);
+// it marks nothing and returns the stat error when recorded fails to stat for any reason but not existing.
 func markStoreSnapshot(entries []Entry, recorded string) error {
 	want, err := os.Stat(recorded)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
+		return err //nolint:wrapcheck // callers read the *fs.PathError reason through osreason.Reason
 	}
 	sameFile := entriesAt(entries, want)
 	for _, i := range sameFile {

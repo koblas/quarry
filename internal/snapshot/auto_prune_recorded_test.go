@@ -39,6 +39,7 @@ func Test_sync_and_import_prunes_nothing_when_the_recorded_snapshot_cannot_be_re
 	require.NoError(t, got.err)
 	require.NotNil(t, got.outcome.Pruned)
 	assert.Equal(t, 1, got.outcome.Pruned.Keep)
+	assert.Equal(t, 3, got.outcome.Pruned.Snapshots)
 	assert.Empty(t, got.outcome.Pruned.Deleted)
 	assert.Empty(t, got.outcome.Pruned.Failed)
 	assert.Empty(t, got.rm.calls)
@@ -56,6 +57,7 @@ func Test_sync_and_import_prunes_beyond_the_newest_and_sweeps_orphans_when_the_r
 
 	require.NoError(t, got.err)
 	require.NotNil(t, got.outcome.Pruned)
+	assert.Equal(t, 1, got.outcome.Pruned.Snapshots)
 	assert.Equal(t, []string{got.ids[1], got.ids[0]}, doomedIDs(got.outcome.Pruned.Deleted))
 	assertSnapshotPairs(t, got.dir, false, got.ids[0], got.ids[1])
 	assertSnapshotPairs(t, got.dir, true, got.ids[2])

@@ -48,14 +48,14 @@ func (c recordedClass) jsonWarnings(recorded string) []string {
 
 // snapshotsRecordedCell runs the snapshots command through run beside olderPair and a store built from
 // recordedID recorded as c has it; it returns the recorded path and the run's result.
-func snapshotsRecordedCell(t *testing.T, c recordedClass, run func(*testing.T) (int, string, string)) (recorded string, exitCode int, stdout, stderr string) {
+func snapshotsRecordedCell(t *testing.T, c recordedClass, run func(*testing.T) (int, string, string)) (string, int, string, string) {
 	t.Helper()
 	pinLocalZone(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	writeSnapshots(t, home, olderPair()...)
-	recorded = buildStoreFromClass(t, home, recordedID, c)
-	exitCode, stdout, stderr = run(t)
+	recorded := buildStoreFromClass(t, home, recordedID, c)
+	exitCode, stdout, stderr := run(t)
 	return recorded, exitCode, stdout, stderr
 }
 
@@ -102,12 +102,15 @@ func Test_run_snapshots_json_recorded_snapshot_cells(t *testing.T) {
 			require.Equal(t, 0, exitCode, stderr)
 			assert.Equal(t, c.stderrWarning(), stderr)
 			var doc struct {
-				StoreSnapshot struct{ ID, Path string } `json:"store_snapshot"`
-				Snapshots     []struct {
-					ID    string
-					Store bool
-				}
-				Warnings []string
+				StoreSnapshot struct {
+					ID   string `json:"id"`
+					Path string `json:"path"`
+				} `json:"store_snapshot"`
+				Snapshots []struct {
+					ID    string `json:"id"`
+					Store bool   `json:"store"`
+				} `json:"snapshots"`
+				Warnings []string `json:"warnings"`
 			}
 			require.NoError(t, json.Unmarshal([]byte(stdout), &doc))
 			assert.Equal(t, recordedID, doc.StoreSnapshot.ID)

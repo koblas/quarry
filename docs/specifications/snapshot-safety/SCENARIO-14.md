@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-14
-status: open
+status: done
 ---
 
 # SCENARIO-14: Prune refuses when the store's recorded snapshot cannot be read
@@ -31,10 +31,10 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/snapshot`; plus `in
 - [x] Step 6: `internal/cli/json_snapshots.go:80-91` `snapshotsWarnings` — appends `StoreWarningAbsolute`; stderr (`snapshots.go:73-75`) keeps `StoreWarning`. Cmd cells, recorded path always under HOME: `run_snapshots_recorded_test.go` `Test_run_snapshots_recorded_snapshot_cells` text + `--json` × {nil, ENOENT, EACCES, ELOOP, ENOTDIR} (json: `store_snapshot` = recorded `{id,path}`, every `store:false` on unreadable rows, `warnings[]` absolute line); `run_prune_recorded_test.go` `Test_run_snapshots_prune_recorded_snapshot_cells` — prune and `--dry-run` >N text + `--json` × same classes (unreadable: refusal, stdout empty, exit 1, nothing deleted; nil/ENOENT: deletes or would-delete), prune ≤N text + `--json` × unreadable classes (`Nothing to delete: …` line, stderr empty, `store_snapshot` recorded, `warnings[]` empty — arms of `run_prune_refusals_test.go:114`). R3 control `run_snapshots_json_test.go:253` stays byte-identical
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments truer and no longer: `List` (list.go:62-64), `Listing.StorePath`/`StoreUnreadable`/`StoreWarningAbsolute`, `markStore`, `markStoreSnapshot`, `entriesAt`, `autoPrune`
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments truer and no longer: `List` (list.go:62-64), `Listing.StorePath`/`StoreUnreadable`/`StoreWarningAbsolute`, `markStore`, `markStoreSnapshot`, `entriesAt`, `autoPrune`
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py snapshot-safety` → tick SCENARIO-14 with its acceptance test, SCENARIO-15 and -16 as "delivered by SCENARIO-14" with theirs
+- [x] Step 8: full verification + `spec-check.py snapshot-safety` → tick SCENARIO-14 with its acceptance test, SCENARIO-15 and -16 as "delivered by SCENARIO-14" with theirs
 
 ## Handoff
 
@@ -63,7 +63,9 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/snapshot`; plus `in
 
 ## Phase report
 
-Run B1 (steps 4-6) done; all three acceptance tests green, narrow loop green (`internal/snapshot`, `internal/cli`, `cmd/quarry` -run 'recorded|prune|list_marks|snapshots_json'). Sweep and Verify (V) not run.
+Run V done: scenario complete, status done. Checkpoint folds applied (`Pruned.Snapshots` pins in both `auto_prune_recorded_test.go` tests; `markStoreSnapshot` doc shortened), doc comments for `List`, `Listing.StorePath`/`StoreUnreadable`, `autoPrune` made truer, lint at 0 issues (two `//nolint` with reasons: `nilerr` auto_prune.go, `wrapcheck` list.go), SCENARIO-14/15/16 ticked, STATE.md rewritten.
+
+Run B1 (steps 4-6) done; all three acceptance tests green, narrow loop green (`internal/snapshot`, `internal/cli`, `cmd/quarry` -run 'recorded|prune|list_marks|snapshots_json').
 
 Production:
 - `internal/snapshot/list.go`: `markStoreSnapshot` stats `recorded` once and returns every error but not-exist; `entriesAt` takes the `fs.FileInfo`; `markStore` sets `StorePath`, `StoreUnreadable`, `StoreWarning`, new `StoreWarningAbsolute` (R3 arm: equal to `StoreWarning`); new const `cannotTellWarning`.
