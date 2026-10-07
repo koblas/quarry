@@ -17,8 +17,8 @@ Size: OWNS A RUN — 5 batches, 1 feature package (`internal/snapshot`; `interna
 ReadDir survey (`grep -n 'os.ReadDir' internal/snapshot/*.go`, non-test): `list.go:155` `scanFolder` (List, PlanPrune, Prune, autoPrune) → seam · `from.go:87` `locateByID` → seam · `from.go:114` `locateByPath` (any `--from` parent) → seam · new listing in `dirDestination.Backup` → seam · `destination.go:57` `sweepLeftovers` → stays `os.ReadDir` · `discover.go:81` (Quicken Documents) → stays. Also `chosen.entry.Info()` (`list.go:165`): fakes must return a real `FileInfo` with nonzero size. No `cmd/quarry` wiring line: production takes the `NewServer` default.
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_snapshots_two_case_test.go` `Test_run_snapshots_lists_one_of_two_letter_cases_and_warns_naming_both` — `runWith` with `env.NewSnapshots` (precedent `run_prune_test.go:171-178`) building a Server `WithReadDir(<real os.ReadDir + fake regular <id>.SQLITE wrapping the real entry>)`; stdout one row for `<id>`, stderr the two-name D1 line verbatim (`specification.md:106`), exit 0
-- [ ] Step 2: `internal/snapshot/snapshot.go:28-44,106-110` `Server.readDir` + `WithReadDir(readDir func(dir string) ([]fs.DirEntry, error)) Option` — stub sets the field only; red at the D1 assertion
+- [x] Step 1: `cmd/quarry/run_snapshots_two_case_test.go` `Test_run_snapshots_lists_one_of_two_letter_cases_and_warns_naming_both` — `runWith` with `env.NewSnapshots` (precedent `run_prune_test.go:171-178`) building a Server `WithReadDir(<real os.ReadDir + fake regular <id>.SQLITE wrapping the real entry>)`; stdout one row for `<id>`, stderr the two-name D1 line verbatim (`specification.md:106`), exit 0
+- [x] Step 2: `internal/snapshot/snapshot.go:28-44,106-110` `Server.readDir` + `WithReadDir(readDir func(dir string) ([]fs.DirEntry, error)) Option` — stub sets the field only; red at the D1 assertion
 
 ### Build
 - [ ] Step 3: `snapshot.go:131-137` default `readDir: os.ReadDir` beside `remove`; `list.go:154-160` `scanFolder` via `s.readDir`. Tests (seam-injected strays, assert `rm.calls` / `would_delete[]` never file existence — macOS `os.Remove("X.SQLITE")` hits `X.sqlite`): `Test_list_never_lists_or_counts_a_stray_letter_case_variant` (entries, `TotalBytes`); `Test_prune_never_deletes_a_stray_letter_case_variant` (winner beyond keep: `rm.calls` = winner only, manifest kept per `manifestShared`); `Test_plan_prune_never_would_delete_a_stray_letter_case_variant`; `Test_sync_and_import_never_deletes_a_stray_letter_case_variant` (auto-prune, `WithAutoPrune`, no prune warning); fault: seam returns `*fs.PathError{EACCES}` → `List` gives `folderUnreadableRefusal` copy; rewrite `prune_upper_case_test.go:169-207` `Test_prune_keeps_the_manifest_while_another_entry_is_named_as_the_snapshot` — all three rows (regular, directory, symlink) injected through the seam with their modes, skip removed; `newPruneServer` (`prune_delete_test.go:44-53`) takes extra opts
@@ -58,3 +58,15 @@ ReadDir survey (`grep -n 'os.ReadDir' internal/snapshot/*.go`, non-test): `list.
 2. An ID with both snapshot and manifest variants: two D1 lines, the snapshot line first.
 3. A non-regular manifest that wins: no D1 cell; stays in Left unbuilt (final product-vision pass may rule).
 4. BR-C5 fail-open on a listing fault (falls back to the fileExists stat, no refusal, no new copy) accepted: worst case is a stray that is never deleted, never data loss.
+
+## Phase report
+
+Run A (steps 1-2) done; B1 (3-5) next.
+
+Files:
+- `cmd/quarry/run_snapshots_two_case_test.go`: acceptance test plus shared helpers `renamedEntry`, `readDirWithVariant(variant, like)` (os.ReadDir + one extra regular entry wrapping the real `like` entry), `runSnapshotsWithReadDir(t, home, readDir, args...)` (Server with `WithReadDir`, no store probe, no remove override). B2's json/order/prune cells reuse them; a prune cell needs its own `WithRemove` fake and store probe, so extend the helper with opts rather than copy it.
+- `internal/snapshot/snapshot.go`: `Server.readDir` field and `WithReadDir` option; stub only, `NewServer` sets no default yet and nothing reads the field (Step 3 adds `readDir: os.ReadDir` beside `remove` and moves `scanFolder` onto it).
+
+Red now: `go test ./cmd/quarry/ -run letter_case` fails at the stderr assertion, expected the two-name D1 line, actual empty; stdout (one row, total 1.2 MB) already passes.
+
+Not done: no default for `readDir` (a Server built by `NewServer` with no `WithReadDir` has a nil func until Step 3 sets the default).

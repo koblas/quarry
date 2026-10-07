@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -38,6 +39,7 @@ type Server struct {
 	storeProbe  StoreProbe
 	locker      Locker
 	remove      func(path string) error
+	readDir     func(dir string) ([]fs.DirEntry, error)
 	autoKeep    int
 	ignore      []string
 	readTime    func(store.FindingList) []finding.State
@@ -107,6 +109,12 @@ func WithLocker(locker Locker) Option {
 // directory; it defaults to os.Remove. Tests use it to inject a failing delete.
 func WithRemove(remove func(path string) error) Option {
 	return func(s *Server) { s.remove = remove }
+}
+
+// WithReadDir sets the function that lists a snapshots folder, os.ReadDir by default. Tests use it
+// to list two letter cases of one name, which a case-insensitive volume cannot hold.
+func WithReadDir(readDir func(dir string) ([]fs.DirEntry, error)) Option {
+	return func(s *Server) { s.readDir = readDir }
 }
 
 // WithAutoPrune makes SyncAndImport and ImportFrom delete the snapshots beyond the newest
