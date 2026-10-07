@@ -207,16 +207,35 @@ func Test_renderFindings_shows_the_ignore_hint_when_asked_and_a_finding_is_open(
 	assert.Contains(t, got, "\n1 open finding\n"+ignoreHint)
 }
 
-func Test_renderFindings_leaves_out_the_ignore_hint_when_not_asked(t *testing.T) {
-	got := renderFindings(openUncategorizedListing(), openView, false)
+func Test_renderFindings_leaves_out_the_ignore_hint(t *testing.T) {
+	cases := []struct {
+		name    string
+		listing report.FindingsListing
+		view    findingsView
+		asked   bool
+	}{
+		{name: "when_not_asked", listing: openUncategorizedListing(), view: openView, asked: false},
+		{name: "when_no_finding_is_open", listing: report.FindingsListing{}, view: openView, asked: true},
+		{
+			name: "when_only_an_ignored_finding_is_listed",
+			listing: report.FindingsListing{
+				Groups: []report.FindingsGroup{{Type: finding.MixedCategories, Findings: []report.ListedFinding{
+					withStatus(openFinding(store.Finding{ID: "mixed-categories:payee-3", Type: finding.MixedCategories}), finding.StatusIgnored),
+				}}},
+				Counts: finding.Counts{Open: 2, Ignored: 1},
+			},
+			view:  ignoredView,
+			asked: true,
+		},
+	}
 
-	assert.NotContains(t, got, ignoreHint)
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := renderFindings(c.listing, c.view, c.asked)
 
-func Test_renderFindings_leaves_out_the_ignore_hint_when_no_finding_is_open(t *testing.T) {
-	got := renderFindings(report.FindingsListing{}, openView, true)
-
-	assert.NotContains(t, got, ignoreHint)
+			assert.NotContains(t, got, ignoreHint)
+		})
+	}
 }
 
 func Test_uncategorizedSpan_takes_the_earliest_and_latest_date_whatever_the_item_order(t *testing.T) {
@@ -863,19 +882,6 @@ func Test_renderFindings_lists_a_fixed_group_with_its_count_and_no_fix_under_the
 	got := renderFindings(listing, fixedView, true)
 
 	assert.Equal(t, "Possible duplicates (1)\n  duplicate:txn-1+txn-2  fixed 2026-10-02\n\n1 fixed finding\n", got)
-}
-
-func Test_renderFindings_leaves_out_the_hint_when_only_an_ignored_finding_is_listed(t *testing.T) {
-	ignored := report.FindingsListing{
-		Groups: []report.FindingsGroup{{Type: finding.MixedCategories, Findings: []report.ListedFinding{
-			withStatus(openFinding(store.Finding{ID: "mixed-categories:payee-3", Type: finding.MixedCategories}), finding.StatusIgnored),
-		}}},
-		Counts: finding.Counts{Open: 2, Ignored: 1},
-	}
-
-	got := renderFindings(ignored, ignoredView, true)
-
-	assert.NotContains(t, got, ignoreHint)
 }
 
 func Test_renderFindings_prints_the_hint_when_an_open_finding_is_listed_beside_an_ignored_one(t *testing.T) {

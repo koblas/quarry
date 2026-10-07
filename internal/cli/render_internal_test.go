@@ -30,20 +30,25 @@ func Test_formatMB(t *testing.T) {
 	}
 }
 
-func Test_renderSuccess_reports_one_account_in_the_singular(t *testing.T) {
-	m := snapshot.Manifest{Snapshot: snapshot.Info{Accounts: 1}}
+func Test_renderSuccess_reports_the_account_count(t *testing.T) {
+	cases := []struct {
+		name     string
+		accounts int
+		want     string
+	}{
+		{name: "one_account_in_the_singular", accounts: 1, want: "1 account\n"},
+		{name: "many_accounts_in_the_plural_with_thousands_grouped", accounts: 1000, want: "1,000 accounts\n"},
+	}
 
-	got := renderSuccess(m, "/Users/dave")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := snapshot.Manifest{Snapshot: snapshot.Info{Accounts: c.accounts}}
 
-	assert.Contains(t, got, "1 account\n")
-}
+			got := renderSuccess(m, "/Users/dave")
 
-func Test_renderSuccess_reports_many_accounts_in_the_plural_with_thousands_grouped(t *testing.T) {
-	m := snapshot.Manifest{Snapshot: snapshot.Info{Accounts: 1000}}
-
-	got := renderSuccess(m, "/Users/dave")
-
-	assert.Contains(t, got, "1,000 accounts\n")
+			assert.Contains(t, got, c.want)
+		})
+	}
 }
 
 func Test_schemaLine(t *testing.T) {
