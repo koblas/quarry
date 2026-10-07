@@ -117,3 +117,51 @@ func Test_import_keeps_a_system_subcategory_named_uncategorized(t *testing.T) {
 	require.NotNil(t, fake.Rows.Splits[0].CategoryID)
 	assert.Equal(t, "cat-"+itoa(catPK), *fake.Rows.Splits[0].CategoryID)
 }
+
+// A category's full_path drops a deleted parent and stops there,
+// rather than refusing or including the deleted ancestor's name.
+func Test_import_category_full_path_ignores_a_deleted_parent(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	deletedParentPK := b.Category(v9fixture.TagRow{Name: "OldParent", Type: new(int64(1)), Deleted: true})
+	b.Category(v9fixture.TagRow{Name: "Child", Type: new(int64(1)), ParentCategory: deletedParentPK})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	require.Len(t, fake.Rows.Categories, 1)
+	assert.Equal(t, "Child", fake.Rows.Categories[0].FullPath)
+	assert.Nil(t, fake.Rows.Categories[0].ParentID)
+}
+
+// A category referencing a nameless parent must still build a full_path,
+// falling back to "(source id N)" for that ancestor.
+func Test_import_full_path_falls_back_to_source_id_for_a_nameless_parent(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	parentPK := b.Category(v9fixture.TagRow{Type: new(int64(1))})
+	b.Category(v9fixture.TagRow{Name: "Groceries", Type: new(int64(1)), ParentCategory: parentPK})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	assert.Equal(t, `category (source id `+itoa(parentPK)+`) has no name`, importReason(t, err))
+}
+
+// A cyclic ZPARENTCATEGORY chain must not loop: the walk is bounded by the
+// number of categories read.
+func Test_import_bounds_a_cyclic_category_parent_chain(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	b.Category(v9fixture.TagRow{Name: "A", Type: new(int64(1)), ParentCategory: 2})
+	b.Category(v9fixture.TagRow{Name: "B", Type: new(int64(1)), ParentCategory: 1})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.Len(t, fake.Rows.Categories, 2)
+}

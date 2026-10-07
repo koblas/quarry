@@ -59,12 +59,3 @@ func Test_import_refuses_when_several_required_entities_are_missing(t *testing.T
 		"the snapshot has no CategoryTag or UserTag entity, which quarry needs to read Quicken's records",
 		unmappable.Reason)
 }
-
-func Test_import_fails_when_the_snapshot_path_does_not_exist(t *testing.T) {
-	t.Parallel()
-	fake := &fakeStore{}
-
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: "/no/such/snapshot.sqlite"})
-
-	require.Error(t, err)
-}

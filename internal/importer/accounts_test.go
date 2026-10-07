@@ -10,13 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func importReason(t *testing.T, err error) string {
-	t.Helper()
-	var unmappable *importer.UnmappableError
-	require.ErrorAs(t, err, &unmappable, "expected *importer.UnmappableError, got %v", err)
-	return unmappable.Reason
-}
-
 func Test_import_refuses_an_account_with_an_unsupported_currency(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()

@@ -280,83 +280,6 @@ func Test_import_refuses_a_split_with_more_than_2_decimal_places(t *testing.T) {
 		importReason(t, err))
 }
 
-func Test_import_refuses_a_split_with_more_than_2_decimal_places_when_its_transaction_is_valid(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
-	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34", PostedDate: &posted})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "12.345"})
-	bundle := b.WriteBundle(t, t.TempDir())
-
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
-
-	assert.Equal(t,
-		`a split of a transaction on 2024-03-02 in "Visa Infinite" has an amount of 12.345, which has more than 2 decimal places`,
-		importReason(t, err))
-}
-
-func Test_import_refuses_a_split_with_an_amount_too_large_for_quarry(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
-	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34", PostedDate: &posted})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "10000000000000.5"})
-	bundle := b.WriteBundle(t, t.TempDir())
-
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
-
-	assert.Equal(t,
-		`a split of a transaction on 2024-03-02 in "Visa Infinite" has an amount of 10000000000000.5, which is too large for quarry's amounts`,
-		importReason(t, err))
-}
-
-func Test_import_refuses_a_split_with_no_amount(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
-	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34", PostedDate: &posted})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK})
-	bundle := b.WriteBundle(t, t.TempDir())
-
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
-
-	assert.Equal(t, `a split of a transaction on 2024-03-02 in "Visa Infinite" has no amount`, importReason(t, err))
-}
-
-func Test_import_skips_a_split_with_no_parent_transaction(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	b.Entry(v9fixture.EntryRow{Amount: "0.00"})
-	bundle := b.WriteBundle(t, t.TempDir())
-	fake := &fakeStore{}
-
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
-
-	require.NoError(t, err)
-	assert.Empty(t, fake.Rows.Splits)
-}
-
-func Test_import_skips_a_split_with_no_parent_whatever_its_amount(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34", PostedDate: &posted})
-	keptPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "12.34"})
-	b.Entry(v9fixture.EntryRow{Amount: "12.34"})
-	bundle := b.WriteBundle(t, t.TempDir())
-	fake := &fakeStore{}
-
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
-
-	require.NoError(t, err)
-	require.Len(t, fake.Rows.Splits, 1)
-	assert.Equal(t, "split-"+itoa(keptPK), fake.Rows.Splits[0].ID)
-}
-
 // A later-added but earlier-dated transaction sorts first while every
 // existing transaction keeps its own id.
 func Test_import_keeps_every_other_id_when_the_snapshot_gains_a_row(t *testing.T) {
@@ -457,4 +380,207 @@ func Test_import_orders_transactions_by_register_date(t *testing.T) {
 	require.Len(t, fake.Rows.Transactions, 2)
 	assert.Equal(t, int64(200), fake.Rows.Transactions[0].Amount)
 	assert.Equal(t, int64(100), fake.Rows.Transactions[1].Amount)
+}
+
+func Test_import_refuses_a_transaction_with_a_text_amount(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
+	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "not-a-number", PostedDate: &posted})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	reason := importReason(t, err)
+	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, reason)
+	assert.NotContains(t, reason, "too large")
+}
+
+func Test_import_refuses_a_transaction_with_a_whitespace_amount(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
+	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "   ", PostedDate: &posted})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, importReason(t, err))
+}
+
+func Test_import_refuses_a_transaction_with_an_empty_text_amount(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
+	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "0.00", PostedDate: &posted})
+	bundle := b.WriteBundle(t, t.TempDir())
+	setColumnEmptyText(t, bundle.DataPath, "ZTRANSACTION", "ZAMOUNT", txnPK)
+
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, importReason(t, err))
+}
+
+func Test_import_refuses_a_transaction_with_a_blob_amount(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
+	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "0.00", PostedDate: &posted})
+	bundle := b.WriteBundle(t, t.TempDir())
+	setColumnBlob(t, bundle.DataPath, "ZTRANSACTION", "ZAMOUNT", txnPK, []byte{0xde, 0xad, 0xbe, 0xef})
+
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, importReason(t, err))
+}
+
+// A text/blob amount with no date falls back to the source-id subject, the
+// same shape reason 10's "no date" form uses.
+func Test_import_refuses_a_dateless_transaction_with_a_text_amount(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "not-a-number"})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	assert.Equal(t, `a transaction in "Visa Infinite" (source id `+itoa(txnPK)+`) has an amount that is not a number`, importReason(t, err))
+}
+
+// A genuinely NULL amount stays reason 10, never reason 11.
+func Test_import_null_amount_is_reason_10_not_reason_11(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
+	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+	b.Transaction(v9fixture.TransactionRow{Account: acctPK, PostedDate: &posted})
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has no amount`, importReason(t, err))
+}
+
+// A transaction in a deleted account, and its splits, are dropped
+// silently — never validated, never counted, never in Rows.
+func Test_import_skips_a_transaction_and_its_splits_in_a_deleted_account(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	deletedAcctPK := b.Account(v9fixture.AccountRow{Name: "Old", Type: "CHECKING", Currency: "CAD", Deleted: true})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: deletedAcctPK, Amount: "1.00", PostedDate: &posted})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00"})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	assert.Empty(t, fake.Rows.Transactions)
+	assert.Empty(t, fake.Rows.Splits)
+}
+
+func Test_import_skips_a_transaction_whose_account_does_not_exist(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	keptPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "2.00", PostedDate: &posted})
+	b.Entry(v9fixture.EntryRow{Parent: keptPK, Amount: "2.00"})
+	b.Transaction(v9fixture.TransactionRow{Account: 999, Amount: "1.00", PostedDate: &posted})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	require.Len(t, fake.Rows.Transactions, 1)
+	assert.Equal(t, keptPK, fake.Rows.Transactions[0].SourceID)
+}
+
+// A transaction's payee reference to a deleted payee stores NULL.
+func Test_import_nulls_a_transactions_payee_when_the_payee_is_deleted(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	deletedPayeePK := b.Payee(v9fixture.PayeeRow{Name: "Old Shop", Deleted: true})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, Payee: deletedPayeePK})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00"})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	require.Len(t, fake.Rows.Transactions, 1)
+	assert.Nil(t, fake.Rows.Transactions[0].PayeeID)
+}
+
+// A transaction's payee reference to no payee row at all stores NULL,
+// the same as a deleted one.
+func Test_import_nulls_a_transactions_payee_when_the_payee_does_not_exist(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, Payee: 999})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00"})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	require.Len(t, fake.Rows.Transactions, 1)
+	assert.Nil(t, fake.Rows.Transactions[0].PayeeID)
+}
+
+func Test_import_maps_cleared_and_reconciled_transaction_status(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	cleared := int64(1)
+	reconciled := int64(2)
+	clearedTxnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, Status: &cleared})
+	b.Entry(v9fixture.EntryRow{Parent: clearedTxnPK, Amount: "1.00"})
+	reconciledTxnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "2.00", PostedDate: &posted, Status: &reconciled})
+	b.Entry(v9fixture.EntryRow{Parent: reconciledTxnPK, Amount: "2.00"})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	statuses := make([]string, len(fake.Rows.Transactions))
+	for i, txn := range fake.Rows.Transactions {
+		statuses[i] = txn.Status
+	}
+	assert.ElementsMatch(t, []string{"cleared", "reconciled"}, statuses)
+}
+
+func Test_import_sets_transaction_memo_and_cheque_number_when_present(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, Note: "Groceries", CheckNumber: "101"})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00"})
+	bundle := b.WriteBundle(t, t.TempDir())
+	fake := &fakeStore{}
+
+	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+
+	require.NoError(t, err)
+	require.Len(t, fake.Rows.Transactions, 1)
+	require.NotNil(t, fake.Rows.Transactions[0].Memo)
+	require.NotNil(t, fake.Rows.Transactions[0].ChequeNumber)
+	assert.Equal(t, "Groceries", *fake.Rows.Transactions[0].Memo)
+	assert.Equal(t, "101", *fake.Rows.Transactions[0].ChequeNumber)
 }

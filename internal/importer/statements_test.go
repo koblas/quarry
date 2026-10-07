@@ -11,15 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func chequingWithOneReconciledTxn(b *v9fixture.Builder, cents string) int64 {
-	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	reconciled := int64(2)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: cents, PostedDate: &posted, Status: &reconciled})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: cents})
-	return acctPK
-}
-
 // The correct (later) record is inserted first, so a "last row scanned
 // wins" bug would pick the wrong (earlier) one instead.
 func Test_import_uses_the_newest_statement_by_date(t *testing.T) {

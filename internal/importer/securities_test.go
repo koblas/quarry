@@ -12,18 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func importSecurities(t *testing.T, b *v9fixture.Builder) (*fakeStore, store.Result) {
-	t.Helper()
-	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	bundle := b.WriteBundle(t, t.TempDir())
-	fake := &fakeStore{}
-
-	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
-
-	require.NoError(t, err)
-	return fake, result
-}
-
 func Test_import_maps_a_security_as_quicken_recorded_it(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()

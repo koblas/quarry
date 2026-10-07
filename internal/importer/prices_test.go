@@ -11,11 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var (
-	priceDay1 = time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	priceDay2 = time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC)
-)
-
 // priceLine is one price as "<security id> <date> <millionths>".
 func priceLine(securityPK int64, day time.Time, millionths int64) string {
 	return fmt.Sprintf("sec-%d %s %d", securityPK, day.Format(time.DateOnly), millionths)
@@ -27,10 +22,6 @@ func priceLines(fake *fakeStore) []string {
 		out[i] = fmt.Sprintf("%s %s %d", p.SecurityID, p.Date.Format(time.DateOnly), p.Price)
 	}
 	return out
-}
-
-func newAcme(b *v9fixture.Builder) int64 {
-	return b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
 }
 
 func Test_import_keeps_the_highest_source_id_quote_of_a_day_even_when_its_price_is_lower(t *testing.T) {

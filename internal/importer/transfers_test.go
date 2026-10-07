@@ -12,28 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// transferLeg adds a one-entry transaction in account whose entry carries
-// quickenID and the ZTRANSFER text link, returning the entry's Z_PK.
-func transferLeg(b *v9fixture.Builder, account int64, amount string, quickenID int64, link string) int64 {
-	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	txn := b.Transaction(v9fixture.TransactionRow{Account: account, Amount: amount, PostedDate: &day})
-	return b.Entry(v9fixture.EntryRow{Parent: txn, Amount: amount, QuickenID: quickenID, Transfer: link})
-}
-
-func splitIDFor(pk int64) string { return fmt.Sprintf("split-%d", pk) }
-
 func transferIDFor(pk int64) string { return fmt.Sprintf("xfer-%d", pk) }
-
-func accountIDFor(pk int64) string { return fmt.Sprintf("acct-%d", pk) }
-
-func splitByID(fake *fakeStore, id string) store.Split {
-	for _, s := range fake.Rows.Splits {
-		if s.ID == id {
-			return s
-		}
-	}
-	return store.Split{}
-}
 
 func transactionAccount(fake *fakeStore, txnID string) string {
 	for _, txn := range fake.Rows.Transactions {
