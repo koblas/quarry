@@ -4,14 +4,18 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,28 +30,29 @@ func waitDone(t *testing.T, ctx context.Context) {
 	}
 }
 
-func Test_signalContext_closes_ctx_done_on_sigint(t *testing.T) {
-	ctx, stop := signalContext(context.Background())
-	defer stop()
-
-	require.NoError(t, syscall.Kill(os.Getpid(), syscall.SIGINT))
-
-	waitDone(t, ctx)
-}
-
-func Test_signalContext_closes_ctx_done_on_sigterm(t *testing.T) {
-	ctx, stop := signalContext(context.Background())
-	defer stop()
-
-	require.NoError(t, syscall.Kill(os.Getpid(), syscall.SIGTERM))
-
-	waitDone(t, ctx)
-}
-
 // signalSubprocessEnv, when set to "1" in the child's environment, tells
 // Test_signalContext_kills_the_process_on_a_second_sigterm to run as the
 // subprocess body instead of the parent's assertions.
 const signalSubprocessEnv = "QUARRY_SIGNALCONTEXT_SUBPROCESS"
+
+func Test_signalContext_closes_ctx_done_on_sigint_and_sigterm(t *testing.T) {
+	for _, sig := range []struct {
+		name   string
+		signal syscall.Signal
+	}{
+		{name: "sigint", signal: syscall.SIGINT},
+		{name: "sigterm", signal: syscall.SIGTERM},
+	} {
+		t.Run(sig.name, func(t *testing.T) {
+			ctx, stop := signalContext(context.Background())
+			defer stop()
+
+			require.NoError(t, syscall.Kill(os.Getpid(), sig.signal))
+
+			waitDone(t, ctx)
+		})
+	}
+}
 
 // Runs itself as a child process. SIGTERM, not SIGINT: a re-exec'd child may
 // inherit SIGINT as ignored.
@@ -130,4 +135,46 @@ func readLineWithDeadline(t *testing.T, r *bufio.Reader, timeout time.Duration) 
 		t.Fatal("timed out waiting for child output")
 	}
 	return ""
+}
+
+var errBoom = errors.New("boom")
+
+func Test_exitCode_is_1_and_prints_only_an_error_not_already_reported(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantStderr string
+	}{
+		{name: "an error already reported prints nothing", err: cli.ReportedError{}, wantStderr: ""},
+		{name: "an error that was not reported is printed", err: errBoom, wantStderr: "quarry: boom\n"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stderr bytes.Buffer
+
+			code := exitCode(c.err, &stderr)
+
+			assert.Equal(t, 1, code)
+			assert.Equal(t, c.wantStderr, stderr.String())
+		})
+	}
+}
+
+func Test_buildVersion_reads_the_main_module_version(t *testing.T) {
+	cases := []struct {
+		name string
+		info *debug.BuildInfo
+		want string
+	}{
+		{name: "no build info", info: nil, want: ""},
+		{name: "a build with no module version", info: &debug.BuildInfo{}, want: ""},
+		{name: "a tagged build", info: &debug.BuildInfo{Main: debug.Module{Version: "v1.2.3"}}, want: "v1.2.3"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, buildVersion(c.info))
+		})
+	}
 }

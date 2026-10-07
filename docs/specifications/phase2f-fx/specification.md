@@ -648,7 +648,7 @@ Ruled (sizing pass 2026-10-01, architect):
 | 20 | Reference check (below) — no production code; any gap becomes a new scenario before the gate |
 
 ## BDD Acceptance Progress
-- [x] SCENARIO-07: Store views carry exact converted amounts — `cmd/quarry/run_sql_fx_test.go` `Test_run_sql_views_carry_each_amount_converted_at_its_dates_rate`
+- [x] SCENARIO-07: Store views carry exact converted amounts — `cmd/quarry/run_sql_test.go` `Test_run_sql_views_carry_each_amount_converted_at_its_dates_rate`
 - [x] SCENARIO-01: First sync back-fills exchange rates from the earliest transaction — `cmd/quarry/run_sync_rates_test.go` `Test_run_sync_back_fills_rates_from_the_earliest_transaction`
 - [x] SCENARIO-04: Rates survive the rebuild, including sync --from an older snapshot — `cmd/quarry/run_sync_rates_carry_test.go` `Test_run_sync_from_an_older_snapshot_keeps_every_carried_rate`
 - [x] SCENARIO-02: Later sync fetches only the missing dates — delivered by SCENARIO-04 — `cmd/quarry/run_sync_rates_carry_test.go` `Test_run_sync_asks_only_for_the_dates_after_the_last_stored_rate`
@@ -656,7 +656,7 @@ Ruled (sizing pass 2026-10-01, architect):
 - [x] SCENARIO-05: A sync that fails before the swap never fetches rates — delivered by SCENARIO-03 — `cmd/quarry/run_sync_rates_prefetch_test.go` `Test_run_sync_makes_no_rate_request_when_it_fails_before_the_swap`
 - [x] SCENARIO-06: Status shows rate coverage — `internal/cli/status_test.go` `Test_status_prints_the_rates_line_for_each_coverage_state`
 - [x] SCENARIO-16: A bad reporting.currency value refuses the read commands — `cmd/quarry/run_read_refusals_test.go` `Test_run_read_commands_refuse_a_bad_reporting_currency`
-- [x] SCENARIO-15: A bad --currency value is a usage error — delivered by SCENARIO-16 — `cmd/quarry/run_read_usage_test.go` `Test_run_read_commands_refuse_a_bad_currency_flag`
+- [x] SCENARIO-15: A bad --currency value is a usage error — delivered by SCENARIO-16 — `cmd/quarry/run_usage_test.go` `Test_run_read_commands_refuse_a_bad_currency_flag`
 - [x] SCENARIO-08: Spend converts to the reporting currency by default — `cmd/quarry/run_spend_test.go` `Test_run_spend_converts_every_split_to_cad_by_default`
 - [x] SCENARIO-14: reporting.currency in config sets the default, the flag wins — delivered by SCENARIO-08 — `cmd/quarry/run_spend_test.go` `Test_run_spend_takes_its_currency_from_the_config_unless_the_flag_names_one`
 - [x] SCENARIO-10: Cashflow converts each period — `cmd/quarry/run_cashflow_test.go` `Test_run_cashflow_converts_each_period_to_cad_by_default`

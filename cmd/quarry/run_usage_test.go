@@ -5,7 +5,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -97,7 +96,7 @@ func Test_run_help_says_only_one_writer_runs_at_a_time(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			newHome(t)
 
 			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
@@ -134,8 +133,7 @@ func Test_run_refuses_from_with_quicken_or_without_a_value(t *testing.T) {
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
 			assert.Equal(t, c.wantStderr, stderr.String())
-			_, statErr := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"))
-			assert.ErrorIs(t, statErr, os.ErrNotExist)
+			assertNoSnapshotsDir(t, home)
 		})
 	}
 }
@@ -159,8 +157,7 @@ func Test_run_refuses_an_empty_or_whitespace_quicken_flag_as_a_usage_error_even_
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
 			assert.Equal(t, "quarry: flag needs an argument: --quicken; Run 'quarry sync --help' for usage.\n", stderr.String())
-			_, statErr := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"))
-			assert.ErrorIs(t, statErr, os.ErrNotExist)
+			assertNoSnapshotsDir(t, home)
 		})
 	}
 }
@@ -225,7 +222,7 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			newHome(t)
 
 			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
@@ -237,38 +234,41 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 	}
 }
 
-func Test_run_read_commands_need_a_value_for_the_currency_flag(t *testing.T) {
+func Test_run_read_flag_usage_errors_point_at_the_commands_help(t *testing.T) {
+	type usageCase struct {
+		name       string
+		args       []string
+		wantStderr string
+	}
+	cases := make([]usageCase, 0, 11)
+	cases = append(cases,
+		usageCase{
+			name: "holdings --as-of without a value", args: []string{"holdings", "--as-of"},
+			wantStderr: "quarry: flag needs an argument: --as-of; Run 'quarry holdings --help' for usage.\n",
+		},
+		usageCase{
+			name: "holdings --all, which does not exist", args: []string{"holdings", "--all"},
+			wantStderr: "quarry: unknown flag: --all; Run 'quarry holdings --help' for usage.\n",
+		},
+	)
 	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth", "acb", "summary"} {
-		t.Run(command, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+		cases = append(cases, usageCase{
+			name: command + " --currency without a value", args: []string{command, "--currency"},
+			wantStderr: "quarry: flag needs an argument: --currency; Run 'quarry " + command + " --help' for usage.\n",
+		})
+	}
 
-			exitCode, stdout, stderr := runCapture(context.Background(), []string{command, "--currency"})
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			newHome(t)
+
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
-			assert.Equal(t, "quarry: flag needs an argument: --currency; Run 'quarry "+command+" --help' for usage.\n", stderr.String())
+			assert.Equal(t, c.wantStderr, stderr.String())
 		})
 	}
-}
-
-func Test_run_holdings_needs_a_value_for_the_as_of_flag(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"holdings", "--as-of"})
-
-	assert.Equal(t, 2, exitCode)
-	assert.Empty(t, stdout.String())
-	assert.Equal(t, "quarry: flag needs an argument: --as-of; Run 'quarry holdings --help' for usage.\n", stderr.String())
-}
-
-func Test_run_holdings_has_no_all_flag(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"holdings", "--all"})
-
-	assert.Equal(t, 2, exitCode)
-	assert.Empty(t, stdout.String())
-	assert.Equal(t, "quarry: unknown flag: --all; Run 'quarry holdings --help' for usage.\n", stderr.String())
 }
 
 func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
@@ -314,7 +314,7 @@ func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			newHome(t)
 
 			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
@@ -341,37 +341,23 @@ func Test_run_reports_exit_1_when_home_directory_cannot_be_resolved(t *testing.T
 func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 	t.Setenv("HOME", "")
 
-	t.Run("root help", func(t *testing.T) {
-		exitCode, stdout, stderr := runCapture(context.Background(), []string{"--help"})
+	for _, c := range []struct {
+		name string
+		args []string
+	}{
+		{name: "root help", args: []string{"--help"}},
+		{name: "sync help", args: []string{"sync", "--help"}},
+		{name: "snapshots help", args: []string{"snapshots", "--help"}},
+		{name: "mcp help", args: []string{"mcp", "--help"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
-		assert.Equal(t, 0, exitCode)
-		assert.NotEmpty(t, stdout.String())
-		assert.Empty(t, stderr.String())
-	})
-
-	t.Run("sync help", func(t *testing.T) {
-		exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--help"})
-
-		assert.Equal(t, 0, exitCode)
-		assert.NotEmpty(t, stdout.String())
-		assert.Empty(t, stderr.String())
-	})
-
-	t.Run("snapshots help", func(t *testing.T) {
-		exitCode, stdout, stderr := runCapture(context.Background(), []string{"snapshots", "--help"})
-
-		assert.Equal(t, 0, exitCode)
-		assert.NotEmpty(t, stdout.String())
-		assert.Empty(t, stderr.String())
-	})
-
-	t.Run("mcp help", func(t *testing.T) {
-		exitCode, stdout, stderr := runCapture(context.Background(), []string{"mcp", "--help"})
-
-		assert.Equal(t, 0, exitCode)
-		assert.NotEmpty(t, stdout.String())
-		assert.Empty(t, stderr.String())
-	})
+			assert.Equal(t, 0, exitCode)
+			assert.NotEmpty(t, stdout.String())
+			assert.Empty(t, stderr.String())
+		})
+	}
 
 	t.Run("unknown command is still a usage error, not the home-directory refusal", func(t *testing.T) {
 		exitCode, stdout, stderr := runCapture(context.Background(), []string{"frob"})
@@ -395,11 +381,7 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 	}
 	for _, c := range usageErrors {
 		t.Run(c.name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-			env := testEnv(&stdout, &stderr)
-			env.Stdin = strings.NewReader(c.stdin)
-
-			exitCode := runWith(context.Background(), c.args, env)
+			exitCode, stdout, stderr := runCaptureWithStdin(c.args, c.stdin)
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
@@ -429,4 +411,120 @@ func Test_runProcess_returns_the_usage_exit_code_for_an_unknown_command(t *testi
 
 	assert.Equal(t, 2, exitCode)
 	assert.Equal(t, "quarry: unknown command \"frob\" for \"quarry\"; Run 'quarry --help' for usage.\n", stderr.String())
+}
+
+// runCaptureWithStdin is runCapture with stdin as the command's standard input.
+func runCaptureWithStdin(args []string, stdin string) (int, *bytes.Buffer, *bytes.Buffer) {
+	var stdout, stderr bytes.Buffer
+	env := testEnv(&stdout, &stderr)
+	env.Stdin = strings.NewReader(stdin)
+	return runWith(context.Background(), args, env), &stdout, &stderr
+}
+
+const badCurrencyFlag = "quarry: --currency must be CAD, USD or native\n"
+
+func Test_run_read_commands_reject_bad_usage(t *testing.T) {
+	const (
+		u6 = "quarry: sql takes one query; quote it as one argument\n"
+		u7 = "quarry: --limit must be 0 or more; 0 prints every row\n"
+		u9 = "quarry: unknown flag: -- note; Run 'quarry sql --help' for usage.\n"
+	)
+	home := newHome(t)
+	syncAccountsFixture(t, home)
+	cases := []struct {
+		name       string
+		args       []string
+		stdin      string
+		wantStderr string
+	}{
+		{name: "sql without a query", args: []string{"sql"}, wantStderr: sqlNeedsAQuery},
+		{name: "sql with a blank query", args: []string{"sql", "   "}, wantStderr: sqlNeedsAQuery},
+		{name: "sql - with empty stdin", args: []string{"sql", "-"}, wantStderr: sqlNeedsAQuery},
+		{name: "sql with only a semicolon", args: []string{"sql", ";"}, wantStderr: sqlNeedsAQuery},
+		{name: "sql with only a comment", args: []string{"sql", "--", "-- note"}, wantStderr: sqlNeedsAQuery},
+		{name: "sql with a query that starts with a dash", args: []string{"sql", "-- note"}, wantStderr: u9},
+		{name: "sql with two arguments", args: []string{"sql", "SELECT 1", "extra"}, wantStderr: u6},
+		{name: "sql with a negative limit", args: []string{"sql", "--limit", "-1", "SELECT 1"}, wantStderr: u7},
+		{name: "spend with an empty currency", args: []string{"spend", "--currency="}, wantStderr: badCurrencyFlag},
+		{name: "spend with a bad currency and a bad grouping", args: []string{"spend", "--currency", "EUR", "--by", "bogus"}, wantStderr: badCurrencyFlag},
+		{name: "acb with another currency", args: []string{"acb", "--currency", "EUR"}, wantStderr: "quarry: acb is in CAD only, as the CRA requires; run it without --currency\n"},
+		{name: "status with an argument", args: []string{"status", "extra"}, wantStderr: "quarry: status takes no arguments\n"},
+		{name: "accounts with an argument", args: []string{"accounts", "extra"}, wantStderr: "quarry: accounts takes no arguments\n"},
+		{name: "holdings with an argument", args: []string{"holdings", "extra"}, wantStderr: "quarry: holdings takes no arguments\n"},
+		{name: "networth with an argument", args: []string{"networth", "extra"}, wantStderr: "quarry: networth takes no arguments\n"},
+		{name: "acb with an argument", args: []string{"acb", "extra"}, wantStderr: "quarry: acb takes no arguments\n"},
+		{name: "spend with an argument", args: []string{"spend", "extra"}, wantStderr: "quarry: spend takes no arguments\n"},
+		{name: "cashflow with an argument", args: []string{"cashflow", "extra"}, wantStderr: "quarry: cashflow takes no arguments\n"},
+		{name: "recurring with an argument", args: []string{"recurring", "extra"}, wantStderr: "quarry: recurring takes no arguments\n"},
+		{name: "anomalies with an argument", args: []string{"anomalies", "extra"}, wantStderr: "quarry: anomalies takes no arguments\n"},
+		{name: "summary with an argument", args: []string{"summary", "extra"}, wantStderr: "quarry: summary takes no arguments\n"},
+		{name: "mcp with an argument", args: []string{"mcp", "extra"}, wantStderr: "quarry: mcp takes no arguments\n"},
+		{name: "mcp with --json", args: []string{"mcp", "--json"}, wantStderr: "quarry: mcp always speaks JSON on stdout; drop --json\n"},
+		{
+			name: "findings with an argument", args: []string{"findings", "duplicate:txn-1+txn-2"},
+			wantStderr: "quarry: findings takes no arguments; to ignore a finding add its id to findings.ignore in " +
+				"~/Library/Application Support/quarry/config.toml; Run 'quarry findings --help' for usage.\n",
+		},
+		{name: "findings with a bad status", args: []string{"findings", "--status", "closed"}, wantStderr: "quarry: --status must be open, ignored, fixed or all\n"},
+		{
+			name: "findings with a bad type", args: []string{"findings", "--type", "duplicates"},
+			wantStderr: "quarry: --type must be duplicate, one-sided-transfer, unlinked-transfer, uncategorized, mixed-categories, " +
+				"payee-variants, similar-categories, unused-category, unclassified-account or shares-without-cost\n",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			exitCode, stdout, stderr := runCaptureWithStdin(c.args, c.stdin)
+
+			assert.Equal(t, 2, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, c.wantStderr, stderr.String())
+		})
+	}
+}
+
+func Test_run_read_commands_refuse_a_bad_currency_flag(t *testing.T) {
+	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth", "summary"} {
+		t.Run(command, func(t *testing.T) {
+			newHome(t)
+
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{command, "--currency", "EUR"})
+
+			assert.Equal(t, 2, exitCode)
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, badCurrencyFlag, stderr.String())
+		})
+	}
+}
+
+func Test_run_sql_refuses_a_multi_line_query_that_starts_with_a_dash_as_an_unknown_flag(t *testing.T) {
+	newHome(t)
+
+	exitCode, stdout, stderr := runCaptureWithStdin([]string{"sql", "-- monthly totals\nSELECT 1"}, "")
+
+	assert.Equal(t, 2, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.True(t, strings.HasSuffix(stderr.String(), "; Run 'quarry sql --help' for usage.\n"), stderr.String())
+}
+
+func Test_run_findings_rejects_a_bad_status_before_looking_for_a_store(t *testing.T) {
+	newHome(t)
+
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--status", "closed"})
+
+	assert.Equal(t, 2, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, "quarry: --status must be open, ignored, fixed or all\n", stderr.String())
+}
+
+func Test_run_spend_refuses_a_bad_currency_flag_before_reading_a_bad_config(t *testing.T) {
+	home := newHome(t)
+	writeConfig(t, home, "reporting.currency = \"EUR\"\n")
+
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"spend", "--currency", "EUR"})
+
+	assert.Equal(t, 2, exitCode)
+	assert.Empty(t, stdout.String())
+	assert.Equal(t, badCurrencyFlag, stderr.String())
 }
