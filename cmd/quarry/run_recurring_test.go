@@ -552,78 +552,75 @@ func Test_run_recurring_converts_an_ended_series_in_a_closed_account_at_the_rate
 }
 
 func Test_run_recurring_lists_a_series_charged_before_the_first_rate_in_its_own_currency_with_a_warning(t *testing.T) {
-	home := newHome(t)
-	usdGym := inUSD(monthlySeries("Gym", 2026, time.February, slices.Repeat([]int64{1200}, 8)...))
-	cadRent := monthlySeries("Rent", 2026, time.February, slices.Repeat([]int64{5000}, 8)...)
-	replaceStoreWithRates(t, home,
-		chargeRows([]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)}, slices.Concat(usdGym, cadRent)...),
-		store.Rate{Date: day(2026, time.April, 1), USDCAD: money.Rate(1_300_000), Series: "FXUSDCAD"},
-		store.Rate{Date: day(2026, time.June, 1), USDCAD: money.Rate(1_400_000), Series: "FXUSDCAD"})
-	const warning = "1 series with a charge dated before 2026-04-01, the first exchange rate in the store, " +
-		"is listed in USD, not converted to CAD"
-
-	t.Run("text shows the USD row plain, a USD Total and the series line", func(t *testing.T) {
-		stdout, stderr := runRecurring(t)
-
-		assert.Equal(t, warningLines([]string{warning}), stderr)
-		assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts, amounts in CAD",
-			monthlyRow("Rent", "CAD", "50.00", "600.00", ""),
-			monthlyRow("Gym", "USD", "12.00", "144.00", ""),
-			[]string{"Total", "CAD", "", "", "600.00", "", "", "", ""},
-			[]string{"Total", "USD", "", "", "144.00", "", "", "", ""}),
-			stdout)
-	})
-
-	t.Run("json lists the row's currency apart from the document's and echoes the warning", func(t *testing.T) {
-		stdout, stderr := runRecurring(t, "--json")
-
-		assert.Equal(t, warningLines([]string{warning}), stderr)
-		doc := decodeRecurringJSON(t, stdout)
-		assert.Equal(t, "CAD", doc.Currency)
-		assert.Equal(t, []string{warning}, doc.Warnings)
-		require.Len(t, doc.Series, 2)
-		assert.Equal(t, []string{"USD", "12.00", "USD"}, []string{doc.Series[1].Currency, doc.Series[1].Amount, doc.Series[1].NativeCurrency})
-	})
-}
-
-func Test_run_recurring_in_usd_lists_cad_series_charged_before_the_first_rate_in_cad_with_a_warning(t *testing.T) {
-	home := newHome(t)
 	usdGym := inUSD(monthlySeries("Gym", 2026, time.February, slices.Repeat([]int64{1200}, 8)...))
 	cadRent := monthlySeries("Rent", 2026, time.February, slices.Repeat([]int64{5000}, 8)...)
 	cadPhone := monthlySeries("Phone", 2026, time.February, slices.Repeat([]int64{3000}, 8)...)
-	replaceStoreWithRates(t, home,
-		chargeRows([]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)}, slices.Concat(usdGym, cadRent, cadPhone)...),
-		store.Rate{Date: day(2026, time.April, 1), USDCAD: money.Rate(1_300_000), Series: "FXUSDCAD"},
-		store.Rate{Date: day(2026, time.June, 1), USDCAD: money.Rate(1_400_000), Series: "FXUSDCAD"})
-	const warning = "2 series with a charge dated before 2026-04-01, the first exchange rate in the store, " +
-		"are listed in CAD, not converted to USD"
+	cases := []struct {
+		name      string
+		charges   []chargeTxn
+		args      []string
+		reporting string
+		warning   string
+		rows      [][]string
+		amounts   [][]string
+	}{
+		{
+			name: "a usd series in cad", charges: slices.Concat(usdGym, cadRent), reporting: "CAD",
+			warning: "1 series with a charge dated before 2026-04-01, the first exchange rate in the store, is listed in USD, not converted to CAD",
+			rows: [][]string{
+				monthlyRow("Rent", "CAD", "50.00", "600.00", ""),
+				monthlyRow("Gym", "USD", "12.00", "144.00", ""),
+				{"Total", "CAD", "", "", "600.00", "", "", "", ""},
+				{"Total", "USD", "", "", "144.00", "", "", "", ""},
+			},
+			amounts: [][]string{
+				{"Rent", "CAD", "50.00", "50.00", "CAD", "50.00", "50.00"},
+				{"Gym", "USD", "12.00", "12.00", "USD", "12.00", "12.00"},
+			},
+		},
+		{
+			name: "cad series in usd", charges: slices.Concat(usdGym, cadRent, cadPhone), args: []string{"--currency", "USD"}, reporting: "USD",
+			warning: "2 series with a charge dated before 2026-04-01, the first exchange rate in the store, are listed in CAD, not converted to USD",
+			rows: [][]string{
+				monthlyRow("Rent", "CAD", "50.00", "600.00", ""),
+				monthlyRow("Phone", "CAD", "30.00", "360.00", ""),
+				monthlyRow("Gym", "USD", "12.00", "144.00", ""),
+				{"Total", "CAD", "", "", "960.00", "", "", "", ""},
+				{"Total", "USD", "", "", "144.00", "", "", "", ""},
+			},
+			amounts: [][]string{
+				{"Rent", "CAD", "50.00", "50.00", "CAD", "50.00", "50.00"},
+				{"Phone", "CAD", "30.00", "30.00", "CAD", "30.00", "30.00"},
+				{"Gym", "USD", "12.00", "12.00", "USD", "12.00", "12.00"},
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := newHome(t)
+			replaceStoreWithRates(t, home,
+				chargeRows([]store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)}, c.charges...),
+				store.Rate{Date: day(2026, time.April, 1), USDCAD: money.Rate(1_300_000), Series: "FXUSDCAD"},
+				store.Rate{Date: day(2026, time.June, 1), USDCAD: money.Rate(1_400_000), Series: "FXUSDCAD"})
 
-	t.Run("text lists the CAD rows plain ahead of the USD one", func(t *testing.T) {
-		stdout, stderr := runRecurring(t, "--currency", "USD")
+			t.Run("text lists the rows plain in their own currency, a Total per currency and the series line", func(t *testing.T) {
+				stdout, stderr := runRecurring(t, c.args...)
 
-		assert.Equal(t, warningLines([]string{warning}), stderr)
-		assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts, amounts in USD",
-			monthlyRow("Rent", "CAD", "50.00", "600.00", ""),
-			monthlyRow("Phone", "CAD", "30.00", "360.00", ""),
-			monthlyRow("Gym", "USD", "12.00", "144.00", ""),
-			[]string{"Total", "CAD", "", "", "960.00", "", "", "", ""},
-			[]string{"Total", "USD", "", "", "144.00", "", "", "", ""}),
-			stdout)
-	})
+				assert.Equal(t, warningLines([]string{c.warning}), stderr)
+				assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts, amounts in "+c.reporting, c.rows...), stdout)
+			})
 
-	t.Run("json echoes the warning and names USD as the reporting currency", func(t *testing.T) {
-		stdout, stderr := runRecurring(t, "--currency", "USD", "--json")
+			t.Run("json echoes the warning and keeps each row's currency apart from the document's", func(t *testing.T) {
+				stdout, stderr := runRecurring(t, append(slices.Clone(c.args), "--json")...)
 
-		assert.Equal(t, warningLines([]string{warning}), stderr)
-		doc := decodeRecurringJSON(t, stdout)
-		assert.Equal(t, "USD", doc.Currency)
-		assert.Equal(t, []string{warning}, doc.Warnings)
-		assert.Equal(t, [][]string{
-			{"Rent", "CAD", "50.00", "50.00", "CAD", "50.00", "50.00"},
-			{"Phone", "CAD", "30.00", "30.00", "CAD", "30.00", "30.00"},
-			{"Gym", "USD", "12.00", "12.00", "USD", "12.00", "12.00"},
-		}, amountsOf(doc.Series))
-	})
+				assert.Equal(t, warningLines([]string{c.warning}), stderr)
+				doc := decodeRecurringJSON(t, stdout)
+				assert.Equal(t, c.reporting, doc.Currency)
+				assert.Equal(t, []string{c.warning}, doc.Warnings)
+				assert.Equal(t, c.amounts, amountsOf(doc.Series))
+			})
+		})
+	}
 }
 
 func Test_run_recurring_on_a_store_without_rates_warns_only_when_a_usd_series_needs_converting(t *testing.T) {
@@ -995,32 +992,7 @@ func Test_run_recurring_refuses_when_there_is_no_store(t *testing.T) {
 
 // HOME holds no store: exit 2 (not the missing-store 1) shows each check runs first.
 func Test_run_recurring_rejects_a_period_it_cannot_use(t *testing.T) {
-	cases := []struct {
-		name       string
-		args       []string
-		wantStderr string
-	}{
-		{
-			name:       "a since after until",
-			args:       []string{"recurring", "--since", "2025", "--until", "2024"},
-			wantStderr: "quarry: --since 2025 is after --until 2024\n",
-		},
-		{
-			name:       "an until before the default since",
-			args:       []string{"recurring", "--until", "2024"},
-			wantStderr: "quarry: --until 2024 is before the default --since 2026-01-01; pass --since too\n",
-		},
-		{
-			name:       "a since after today",
-			args:       []string{"recurring", "--since", "2099"},
-			wantStderr: "quarry: --since 2099 is after today; recurring lists charges up to today only, so pass an earlier --since\n",
-		},
-		{
-			name:       "a since after today, with --json",
-			args:       []string{"recurring", "--json", "--since", "2099"},
-			wantStderr: "quarry: --since 2099 is after today; recurring lists charges up to today only, so pass an earlier --since\n",
-		},
-	}
+	cases := periodRefusals("recurring")
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

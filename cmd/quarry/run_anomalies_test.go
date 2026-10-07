@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -408,52 +409,50 @@ func Test_run_anomalies_in_usd_lists_a_usd_charge_as_it_was_charged_and_says_not
 	})
 }
 
-func Test_run_anomalies_lists_a_usd_charge_before_the_first_rate_in_usd_with_a_warning(t *testing.T) {
-	anomaliesStore(t, []store.Account{usdChequingAccount("acct-usd", 1)}, inUSD(append(hardwareHistory(), bigHardware())),
-		usdRate(day(2026, time.April, 1), 1_300_000))
+func Test_run_anomalies_lists_a_charge_before_the_first_rate_in_its_own_currency_with_a_warning(t *testing.T) {
+	cases := []struct {
+		name        string
+		account     store.Account
+		charges     []chargeTxn
+		args        []string
+		reporting   string
+		warning     string
+		accountCell string
+		native      string
+	}{
+		{
+			name: "a usd charge in cad", account: usdChequingAccount("acct-usd", 1), charges: inUSD(append(hardwareHistory(), bigHardware())),
+			reporting: "CAD", warning: beforeAprilUSDInCAD, accountCell: "US Chequing (USD)", native: "USD",
+		},
+		{
+			name: "a cad charge in usd", account: chequingAccount("acct-cad", 1), charges: append(hardwareHistory(), bigHardware()),
+			args: []string{"--currency", "USD"}, reporting: "USD", warning: beforeAprilCADInUSD, accountCell: "Chequing (CAD)", native: "CAD",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			anomaliesStore(t, []store.Account{c.account}, c.charges, usdRate(day(2026, time.April, 1), 1_300_000))
 
-	t.Run("text prefixes both cells with USD", func(t *testing.T) {
-		stdout, stderr := runAnomaliesOK(t)
+			t.Run("text prefixes both cells with the charge's currency", func(t *testing.T) {
+				stdout, stderr := runAnomaliesOK(t, c.args...)
 
-		assert.Equal(t, warningLines([]string{beforeAprilUSDInCAD}), stderr)
-		assert.Equal(t, anomaliesCADTable("1 charge checked",
-			hardwareRow("US Chequing (USD)", "USD 250.00", "USD 40.00")), stdout)
-	})
+				assert.Equal(t, warningLines([]string{c.warning}), stderr)
+				assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in "+c.reporting, "1 charge checked",
+					hardwareRow(c.accountCell, c.native+" 250.00", c.native+" 40.00")), stdout)
+			})
 
-	t.Run("json echoes the warning", func(t *testing.T) {
-		stdout, stderr := runAnomaliesOK(t, "--json")
+			t.Run("json echoes the warning", func(t *testing.T) {
+				stdout, stderr := runAnomaliesOK(t, append(slices.Clone(c.args), "--json")...)
 
-		assert.Equal(t, warningLines([]string{beforeAprilUSDInCAD}), stderr)
-		doc := decodeAnomaliesJSON(t, stdout)
-		assert.Equal(t, []string{beforeAprilUSDInCAD}, doc.Warnings)
-		assert.Equal(t, "CAD", doc.Currency)
-		require.Len(t, doc.Anomalies, 1)
-		assert.Equal(t, []string{"USD", "250.00", "40.00", "USD", "250.00", "40.00"}, jsonCells(doc.Anomalies[0]))
-	})
-}
-
-func Test_run_anomalies_in_usd_lists_a_cad_charge_before_the_first_rate_in_cad_with_a_warning(t *testing.T) {
-	anomaliesStore(t, []store.Account{chequingAccount("acct-cad", 1)}, append(hardwareHistory(), bigHardware()),
-		usdRate(day(2026, time.April, 1), 1_300_000))
-
-	t.Run("text prefixes both cells with CAD", func(t *testing.T) {
-		stdout, stderr := runAnomaliesOK(t, "--currency", "USD")
-
-		assert.Equal(t, warningLines([]string{beforeAprilCADInUSD}), stderr)
-		assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in USD", "1 charge checked",
-			hardwareRow("Chequing (CAD)", "CAD 250.00", "CAD 40.00")), stdout)
-	})
-
-	t.Run("json echoes the warning", func(t *testing.T) {
-		stdout, stderr := runAnomaliesOK(t, "--currency", "USD", "--json")
-
-		assert.Equal(t, warningLines([]string{beforeAprilCADInUSD}), stderr)
-		doc := decodeAnomaliesJSON(t, stdout)
-		assert.Equal(t, []string{beforeAprilCADInUSD}, doc.Warnings)
-		assert.Equal(t, "USD", doc.Currency)
-		require.Len(t, doc.Anomalies, 1)
-		assert.Equal(t, []string{"CAD", "250.00", "40.00", "CAD", "250.00", "40.00"}, jsonCells(doc.Anomalies[0]))
-	})
+				assert.Equal(t, warningLines([]string{c.warning}), stderr)
+				doc := decodeAnomaliesJSON(t, stdout)
+				assert.Equal(t, []string{c.warning}, doc.Warnings)
+				assert.Equal(t, c.reporting, doc.Currency)
+				require.Len(t, doc.Anomalies, 1)
+				assert.Equal(t, []string{c.native, "250.00", "40.00", c.native, "250.00", "40.00"}, jsonCells(doc.Anomalies[0]))
+			})
+		})
+	}
 }
 
 func Test_run_anomalies_counts_each_unconverted_listed_charge_and_says_are(t *testing.T) {
@@ -833,34 +832,43 @@ func Test_run_anomalies_refuses_when_there_is_no_store(t *testing.T) {
 	assert.Equal(t, noStoreLine(t, home), stderr.String())
 }
 
-// HOME holds no store: exit 2 (not the missing-store 1) shows each check runs first.
-func Test_run_anomalies_rejects_a_period_it_cannot_use(t *testing.T) {
-	cases := []struct {
-		name       string
-		args       []string
-		wantStderr string
-	}{
+// periodRefusal is a --since and --until a spend view refuses with exit 2, and the line it prints.
+type periodRefusal struct {
+	name       string
+	args       []string
+	wantStderr string
+}
+
+// periodRefusals are the periods command refuses before it looks for a store.
+func periodRefusals(command string) []periodRefusal {
+	todayLine := "quarry: --since 2099 is after today; " + command + " lists charges up to today only, so pass an earlier --since\n"
+	return []periodRefusal{
 		{
 			name:       "a since after until",
-			args:       []string{"anomalies", "--since", "2025", "--until", "2024"},
+			args:       []string{command, "--since", "2025", "--until", "2024"},
 			wantStderr: "quarry: --since 2025 is after --until 2024\n",
 		},
 		{
 			name:       "an until before the default since",
-			args:       []string{"anomalies", "--until", "2024"},
+			args:       []string{command, "--until", "2024"},
 			wantStderr: "quarry: --until 2024 is before the default --since 2026-01-01; pass --since too\n",
 		},
 		{
 			name:       "a since after today",
-			args:       []string{"anomalies", "--since", "2099"},
-			wantStderr: "quarry: --since 2099 is after today; anomalies lists charges up to today only, so pass an earlier --since\n",
+			args:       []string{command, "--since", "2099"},
+			wantStderr: todayLine,
 		},
 		{
 			name:       "a since after today, with --json",
-			args:       []string{"anomalies", "--json", "--since", "2099"},
-			wantStderr: "quarry: --since 2099 is after today; anomalies lists charges up to today only, so pass an earlier --since\n",
+			args:       []string{command, "--json", "--since", "2099"},
+			wantStderr: todayLine,
 		},
 	}
+}
+
+// HOME holds no store: exit 2 (not the missing-store 1) shows each check runs first.
+func Test_run_anomalies_rejects_a_period_it_cannot_use(t *testing.T) {
+	cases := periodRefusals("anomalies")
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

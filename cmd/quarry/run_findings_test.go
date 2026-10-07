@@ -84,6 +84,22 @@ func Test_run_findings_says_no_open_findings_when_the_store_has_none(t *testing.
 	assert.Equal(t, "No open findings\n", stdout.String())
 }
 
+func Test_run_findings_json_with_none_open_prints_empty_lists_not_null(t *testing.T) {
+	home := newHome(t)
+	seedStoreWithoutFindings(t, home)
+
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json"})
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.JSONEq(t, `{
+  "status": "open",
+  "type": null,
+  "counts": {"open": 0, "ignored": 0, "fixed": 0, "new": 0, "newly_fixed": 0},
+  "findings": [],
+  "warnings": []
+}`, stdout.String())
+}
+
 func Test_run_findings_refuses_a_store_built_before_findings_existed(t *testing.T) {
 	home := newHome(t)
 	writeStoreFixture(t, home, phaseOneImportRunsDDL+
@@ -242,22 +258,6 @@ func Test_run_findings_json_items_of_a_one_sided_transfer_and_an_uncategorized_p
   ],
   "warnings": []
 }`, transferLeg, transferTxn, visaPK, amazonPK, uncategorizedTxn, uncategorizedSplit), stdout.String())
-}
-
-func Test_run_findings_json_with_none_open_prints_empty_lists_not_null(t *testing.T) {
-	home := newHome(t)
-	seedStoreWithoutFindings(t, home)
-
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json"})
-
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.JSONEq(t, `{
-  "status": "open",
-  "type": null,
-  "counts": {"open": 0, "ignored": 0, "fixed": 0, "new": 0, "newly_fixed": 0},
-  "findings": [],
-  "warnings": []
-}`, stdout.String())
 }
 
 func Test_run_findings_json_lists_a_config_warning_without_the_prefix_and_prints_it_to_stderr(t *testing.T) {
@@ -793,15 +793,16 @@ func syncCostco(t *testing.T, home string) int64 {
 	return costcoPK
 }
 
-func Test_run_findings_lists_a_mixed_categories_payee_with_its_category_rows(t *testing.T) {
+func Test_run_findings_reports_a_mixed_categories_payee(t *testing.T) {
 	home := newHome(t)
 	costcoPK := syncCostco(t, home)
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--type", "mixed-categories"})
+	t.Run("lists_the_payee_with_its_category_rows", func(t *testing.T) {
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--type", "mixed-categories"})
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
-	assert.Equal(t, fmt.Sprintf(`Payees in mixed categories (1): pick one category per payee in Quicken, or ignore a payee whose mix is intended
+		require.Equal(t, 0, exitCode, stderr.String())
+		assert.Empty(t, stderr.String())
+		assert.Equal(t, fmt.Sprintf(`Payees in mixed categories (1): pick one category per payee in Quicken, or ignore a payee whose mix is intended
   mixed-categories:payee-%d  Costco  3 categories, 6 transactions
     Groceries  3 transactions
     Household  2 transactions
@@ -810,36 +811,34 @@ func Test_run_findings_lists_a_mixed_categories_payee_with_its_category_rows(t *
 1 open finding
 Ignore a finding by adding its id to findings.ignore in %s; see quarry findings --help
 `, costcoPK, configShown), stdout.String())
-}
+	})
 
-func Test_run_findings_json_gives_a_mixed_categories_item_its_payee_category_and_count(t *testing.T) {
-	home := newHome(t)
-	costcoPK := syncCostco(t, home)
+	t.Run("json_gives_the_item_its_payee_category_and_count", func(t *testing.T) {
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--type", "mixed-categories"})
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--type", "mixed-categories"})
-
-	require.Equal(t, 0, exitCode, stderr.String())
-	var doc struct {
-		Findings []struct {
-			Items []struct {
-				Payee         string  `json:"payee"`
-				Category      string  `json:"category"`
-				Transactions  int     `json:"transactions"`
-				PayeeID       string  `json:"payee_id"`
-				TransactionID *string `json:"transaction_id"`
-				Date          *string `json:"date"`
-				Amount        *string `json:"amount"`
-			} `json:"items"`
-		} `json:"findings"`
-	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
-	require.Len(t, doc.Findings, 1)
-	items := doc.Findings[0].Items
-	require.Len(t, items, 3)
-	assert.Equal(t, []string{"Groceries", "Household", "Auto:Fuel"}, []string{items[0].Category, items[1].Category, items[2].Category})
-	assert.Equal(t, []int{3, 2, 1}, []int{items[0].Transactions, items[1].Transactions, items[2].Transactions})
-	assert.Equal(t, []string{"Costco", fmt.Sprintf("payee-%d", costcoPK)}, []string{items[0].Payee, items[0].PayeeID})
-	assert.Equal(t, []*string{nil, nil, nil}, []*string{items[0].TransactionID, items[0].Date, items[0].Amount})
+		require.Equal(t, 0, exitCode, stderr.String())
+		var doc struct {
+			Findings []struct {
+				Items []struct {
+					Payee         string  `json:"payee"`
+					Category      string  `json:"category"`
+					Transactions  int     `json:"transactions"`
+					PayeeID       string  `json:"payee_id"`
+					TransactionID *string `json:"transaction_id"`
+					Date          *string `json:"date"`
+					Amount        *string `json:"amount"`
+				} `json:"items"`
+			} `json:"findings"`
+		}
+		require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+		require.Len(t, doc.Findings, 1)
+		items := doc.Findings[0].Items
+		require.Len(t, items, 3)
+		assert.Equal(t, []string{"Groceries", "Household", "Auto:Fuel"}, []string{items[0].Category, items[1].Category, items[2].Category})
+		assert.Equal(t, []int{3, 2, 1}, []int{items[0].Transactions, items[1].Transactions, items[2].Transactions})
+		assert.Equal(t, []string{"Costco", fmt.Sprintf("payee-%d", costcoPK)}, []string{items[0].Payee, items[0].PayeeID})
+		assert.Equal(t, []*string{nil, nil, nil}, []*string{items[0].TransactionID, items[0].Date, items[0].Amount})
+	})
 }
 
 // syncTimHortons syncs a Quicken file in which "TIM HORTONS #1234" has two transactions and "Tim Hortons" one,
@@ -862,15 +861,16 @@ func syncTimHortons(t *testing.T, home string) (int64, int64) {
 	return numberedPK, plainPK
 }
 
-func Test_run_findings_lists_payee_variants_with_a_row_per_payee(t *testing.T) {
+func Test_run_findings_reports_payee_variants(t *testing.T) {
 	home := newHome(t)
-	syncTimHortons(t, home)
+	numberedPK, plainPK := syncTimHortons(t, home)
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--type", "payee-variants"})
+	t.Run("lists_a_row_per_payee", func(t *testing.T) {
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--type", "payee-variants"})
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
-	assert.Equal(t, fmt.Sprintf(`Payee variants (1 group): rename each group to one payee in Quicken and add a renaming rule
+		require.Equal(t, 0, exitCode, stderr.String())
+		assert.Empty(t, stderr.String())
+		assert.Equal(t, fmt.Sprintf(`Payee variants (1 group): rename each group to one payee in Quicken and add a renaming rule
   payee-variants:tim-hortons  2 payees, 3 transactions
     TIM HORTONS #1234  2 transactions
     Tim Hortons         1 transaction
@@ -878,38 +878,36 @@ func Test_run_findings_lists_payee_variants_with_a_row_per_payee(t *testing.T) {
 1 open finding
 Ignore a finding by adding its id to findings.ignore in %s; see quarry findings --help
 `, configShown), stdout.String())
-}
+	})
 
-func Test_run_findings_json_gives_a_payee_variants_item_its_payee_and_count_and_null_transaction_fields(t *testing.T) {
-	home := newHome(t)
-	numberedPK, plainPK := syncTimHortons(t, home)
+	t.Run("json_gives_the_item_its_payee_and_count_and_null_transaction_fields", func(t *testing.T) {
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--type", "payee-variants"})
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--type", "payee-variants"})
-
-	require.Equal(t, 0, exitCode, stderr.String())
-	var doc struct {
-		Findings []struct {
-			ID    string `json:"id"`
-			Items []struct {
-				Payee         string  `json:"payee"`
-				PayeeID       string  `json:"payee_id"`
-				Transactions  int     `json:"transactions"`
-				Category      *string `json:"category"`
-				TransactionID *string `json:"transaction_id"`
-				Date          *string `json:"date"`
-				Amount        *string `json:"amount"`
-			} `json:"items"`
-		} `json:"findings"`
-	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
-	require.Len(t, doc.Findings, 1)
-	assert.Equal(t, "payee-variants:tim-hortons", doc.Findings[0].ID)
-	items := doc.Findings[0].Items
-	require.Len(t, items, 2)
-	assert.Equal(t, []string{"TIM HORTONS #1234", fmt.Sprintf("payee-%d", numberedPK), "Tim Hortons", fmt.Sprintf("payee-%d", plainPK)},
-		[]string{items[0].Payee, items[0].PayeeID, items[1].Payee, items[1].PayeeID})
-	assert.Equal(t, []int{2, 1}, []int{items[0].Transactions, items[1].Transactions})
-	assert.Equal(t, []*string{nil, nil, nil, nil}, []*string{items[0].Category, items[0].TransactionID, items[0].Date, items[0].Amount})
+		require.Equal(t, 0, exitCode, stderr.String())
+		var doc struct {
+			Findings []struct {
+				ID    string `json:"id"`
+				Items []struct {
+					Payee         string  `json:"payee"`
+					PayeeID       string  `json:"payee_id"`
+					Transactions  int     `json:"transactions"`
+					Category      *string `json:"category"`
+					TransactionID *string `json:"transaction_id"`
+					Date          *string `json:"date"`
+					Amount        *string `json:"amount"`
+				} `json:"items"`
+			} `json:"findings"`
+		}
+		require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+		require.Len(t, doc.Findings, 1)
+		assert.Equal(t, "payee-variants:tim-hortons", doc.Findings[0].ID)
+		items := doc.Findings[0].Items
+		require.Len(t, items, 2)
+		assert.Equal(t, []string{"TIM HORTONS #1234", fmt.Sprintf("payee-%d", numberedPK), "Tim Hortons", fmt.Sprintf("payee-%d", plainPK)},
+			[]string{items[0].Payee, items[0].PayeeID, items[1].Payee, items[1].PayeeID})
+		assert.Equal(t, []int{2, 1}, []int{items[0].Transactions, items[1].Transactions})
+		assert.Equal(t, []*string{nil, nil, nil, nil}, []*string{items[0].Category, items[0].TransactionID, items[0].Date, items[0].Amount})
+	})
 }
 
 // syncSimilarCategories syncs a Quicken file in which expense "Groceries" has two splits and "Grocery" one, and the
@@ -933,15 +931,16 @@ func syncSimilarCategories(t *testing.T, home string) (int64, int64) {
 	return groceriesPK, groceryPK
 }
 
-func Test_run_findings_lists_similar_categories_with_a_row_per_category(t *testing.T) {
+func Test_run_findings_reports_similar_categories(t *testing.T) {
 	home := newHome(t)
-	syncSimilarCategories(t, home)
+	groceriesPK, groceryPK := syncSimilarCategories(t, home)
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--type", "similar-categories"})
+	t.Run("lists_a_row_per_category", func(t *testing.T) {
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--type", "similar-categories"})
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
-	assert.Equal(t, fmt.Sprintf(`Similar categories (2 groups): merge each group into one category in Quicken
+		require.Equal(t, 0, exitCode, stderr.String())
+		assert.Empty(t, stderr.String())
+		assert.Equal(t, fmt.Sprintf(`Similar categories (2 groups): merge each group into one category in Quicken
   similar-categories:grocery      2 categories
     Groceries  2 splits
     Grocery     1 split
@@ -952,40 +951,38 @@ func Test_run_findings_lists_similar_categories_with_a_row_per_category(t *testi
 2 open findings
 Ignore a finding by adding its id to findings.ignore in %s; see quarry findings --help
 `, configShown), stdout.String())
-}
+	})
 
-func Test_run_findings_json_gives_a_similar_categories_item_its_category_and_splits_and_null_transaction_fields(t *testing.T) {
-	home := newHome(t)
-	groceriesPK, groceryPK := syncSimilarCategories(t, home)
+	t.Run("json_gives_the_item_its_category_and_splits_and_null_transaction_fields", func(t *testing.T) {
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--type", "similar-categories"})
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--type", "similar-categories"})
-
-	require.Equal(t, 0, exitCode, stderr.String())
-	var doc struct {
-		Findings []struct {
-			ID    string `json:"id"`
-			Items []struct {
-				Category      string  `json:"category"`
-				CategoryID    string  `json:"category_id"`
-				Splits        int     `json:"splits"`
-				Transactions  *int    `json:"transactions"`
-				Payee         *string `json:"payee"`
-				TransactionID *string `json:"transaction_id"`
-				Date          *string `json:"date"`
-				Amount        *string `json:"amount"`
-			} `json:"items"`
-		} `json:"findings"`
-	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
-	require.Len(t, doc.Findings, 2)
-	assert.Equal(t, []string{"similar-categories:grocery", "similar-categories:income:gift"}, []string{doc.Findings[0].ID, doc.Findings[1].ID})
-	items := doc.Findings[0].Items
-	require.Len(t, items, 2)
-	assert.Equal(t, []string{"Groceries", fmt.Sprintf("cat-%d", groceriesPK), "Grocery", fmt.Sprintf("cat-%d", groceryPK)},
-		[]string{items[0].Category, items[0].CategoryID, items[1].Category, items[1].CategoryID})
-	assert.Equal(t, []int{2, 1, 0}, []int{items[0].Splits, items[1].Splits, doc.Findings[1].Items[0].Splits})
-	assert.Equal(t, []any{(*int)(nil), (*string)(nil), (*string)(nil), (*string)(nil), (*string)(nil)},
-		[]any{items[0].Transactions, items[0].Payee, items[0].TransactionID, items[0].Date, items[0].Amount})
+		require.Equal(t, 0, exitCode, stderr.String())
+		var doc struct {
+			Findings []struct {
+				ID    string `json:"id"`
+				Items []struct {
+					Category      string  `json:"category"`
+					CategoryID    string  `json:"category_id"`
+					Splits        int     `json:"splits"`
+					Transactions  *int    `json:"transactions"`
+					Payee         *string `json:"payee"`
+					TransactionID *string `json:"transaction_id"`
+					Date          *string `json:"date"`
+					Amount        *string `json:"amount"`
+				} `json:"items"`
+			} `json:"findings"`
+		}
+		require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+		require.Len(t, doc.Findings, 2)
+		assert.Equal(t, []string{"similar-categories:grocery", "similar-categories:income:gift"}, []string{doc.Findings[0].ID, doc.Findings[1].ID})
+		items := doc.Findings[0].Items
+		require.Len(t, items, 2)
+		assert.Equal(t, []string{"Groceries", fmt.Sprintf("cat-%d", groceriesPK), "Grocery", fmt.Sprintf("cat-%d", groceryPK)},
+			[]string{items[0].Category, items[0].CategoryID, items[1].Category, items[1].CategoryID})
+		assert.Equal(t, []int{2, 1, 0}, []int{items[0].Splits, items[1].Splits, doc.Findings[1].Items[0].Splits})
+		assert.Equal(t, []any{(*int)(nil), (*string)(nil), (*string)(nil), (*string)(nil), (*string)(nil)},
+			[]any{items[0].Transactions, items[0].Payee, items[0].TransactionID, items[0].Date, items[0].Amount})
+	})
 }
 
 // unlinkedPairs is the txn primary keys of two unlinked pairs: -500.00 in Chequing categorized Bills with +500.00 in
@@ -1019,15 +1016,16 @@ func syncUnlinkedPairs(t *testing.T, home string) unlinkedPairs {
 	return p
 }
 
-func Test_run_findings_lists_an_unlinked_transfer_pair_with_its_category_cells(t *testing.T) {
+func Test_run_findings_reports_unlinked_transfer_pairs(t *testing.T) {
 	home := newHome(t)
 	p := syncUnlinkedPairs(t, home)
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--type", "unlinked-transfer"})
+	t.Run("lists_a_pair_with_its_category_cells", func(t *testing.T) {
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--type", "unlinked-transfer"})
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
-	assert.Equal(t, fmt.Sprintf(`Unlinked transfers (2): make each pair one transfer between the two accounts in Quicken, or ignore it if no money moved between your accounts
+		require.Equal(t, 0, exitCode, stderr.String())
+		assert.Empty(t, stderr.String())
+		assert.Equal(t, fmt.Sprintf(`Unlinked transfers (2): make each pair one transfer between the two accounts in Quicken, or ignore it if no money moved between your accounts
   unlinked-transfer:txn-%[3]d+txn-%[4]d
     2026-07-10  Chequing (CAD)  (no payee)  -75.00  (uncategorized)
     2026-07-11  Visa (CAD)      (no payee)   75.00  (uncategorized)
@@ -1038,38 +1036,36 @@ func Test_run_findings_lists_an_unlinked_transfer_pair_with_its_category_cells(t
 2 open findings
 Ignore a finding by adding its id to findings.ignore in %[5]s; see quarry findings --help
 `, p.outBig, p.inBig, p.outSmall, p.inSmall, configShown), stdout.String())
-}
+	})
 
-func Test_run_findings_json_gives_an_unlinked_transfer_item_its_category_path_or_null(t *testing.T) {
-	home := newHome(t)
-	p := syncUnlinkedPairs(t, home)
+	t.Run("json_gives_the_item_its_category_path_or_null", func(t *testing.T) {
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--type", "unlinked-transfer"})
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--type", "unlinked-transfer"})
-
-	require.Equal(t, 0, exitCode, stderr.String())
-	var doc struct {
-		Findings []struct {
-			ID    string `json:"id"`
-			Items []struct {
-				TransactionID string  `json:"transaction_id"`
-				Category      *string `json:"category"`
-				CategoryID    *string `json:"category_id"`
-			} `json:"items"`
-		} `json:"findings"`
-	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
-	require.Len(t, doc.Findings, 2)
-	got := map[string]*string{}
-	for _, f := range doc.Findings {
-		for _, item := range f.Items {
-			got[item.TransactionID] = item.Category
-			assert.Nil(t, item.CategoryID)
+		require.Equal(t, 0, exitCode, stderr.String())
+		var doc struct {
+			Findings []struct {
+				ID    string `json:"id"`
+				Items []struct {
+					TransactionID string  `json:"transaction_id"`
+					Category      *string `json:"category"`
+					CategoryID    *string `json:"category_id"`
+				} `json:"items"`
+			} `json:"findings"`
 		}
-	}
-	assert.Equal(t, map[string]*string{
-		fmt.Sprintf("txn-%d", p.outBig): new("Bills"), fmt.Sprintf("txn-%d", p.inBig): nil,
-		fmt.Sprintf("txn-%d", p.outSmall): nil, fmt.Sprintf("txn-%d", p.inSmall): nil,
-	}, got)
+		require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+		require.Len(t, doc.Findings, 2)
+		got := map[string]*string{}
+		for _, f := range doc.Findings {
+			for _, item := range f.Items {
+				got[item.TransactionID] = item.Category
+				assert.Nil(t, item.CategoryID)
+			}
+		}
+		assert.Equal(t, map[string]*string{
+			fmt.Sprintf("txn-%d", p.outBig): new("Bills"), fmt.Sprintf("txn-%d", p.inBig): nil,
+			fmt.Sprintf("txn-%d", p.outSmall): nil, fmt.Sprintf("txn-%d", p.inSmall): nil,
+		}, got)
+	})
 }
 
 // syncUnusedCategories syncs a Quicken file with a used "Food" and the unused expense "Parking" and
@@ -1090,54 +1086,53 @@ func syncUnusedCategories(t *testing.T, home string) (int64, int64, int64) {
 	return parkingPK, vacationPK, hotelPK
 }
 
-func Test_run_findings_lists_unused_categories_with_their_subcategory_count(t *testing.T) {
+func Test_run_findings_reports_unused_categories(t *testing.T) {
 	home := newHome(t)
-	parkingPK, vacationPK, _ := syncUnusedCategories(t, home)
+	parkingPK, vacationPK, hotelPK := syncUnusedCategories(t, home)
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings"})
+	t.Run("lists_them_with_their_subcategory_count", func(t *testing.T) {
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings"})
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
-	assert.Equal(t, fmt.Sprintf(`Unused categories (2): no transaction uses them; check that no scheduled transaction or budget does, then delete them in Quicken
+		require.Equal(t, 0, exitCode, stderr.String())
+		assert.Empty(t, stderr.String())
+		assert.Equal(t, fmt.Sprintf(`Unused categories (2): no transaction uses them; check that no scheduled transaction or budget does, then delete them in Quicken
   unused-category:cat-%d  Parking
   unused-category:cat-%d  Vacation (and 2 subcategories)
 
 2 open findings
 Ignore a finding by adding its id to findings.ignore in %s; see quarry findings --help
 `, parkingPK, vacationPK, configShown), stdout.String())
-}
+	})
 
-func Test_run_findings_json_gives_an_unused_category_item_its_category_and_null_everything_else(t *testing.T) {
-	home := newHome(t)
-	_, vacationPK, hotelPK := syncUnusedCategories(t, home)
+	t.Run("json_gives_the_item_its_category_and_null_everything_else", func(t *testing.T) {
+		exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--type", "unused-category"})
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json", "--type", "unused-category"})
-
-	require.Equal(t, 0, exitCode, stderr.String())
-	var doc struct {
-		Findings []struct {
-			ID    string `json:"id"`
-			Items []struct {
-				Category      string  `json:"category"`
-				CategoryID    string  `json:"category_id"`
-				Splits        *int    `json:"splits"`
-				Transactions  *int    `json:"transactions"`
-				Payee         *string `json:"payee"`
-				TransactionID *string `json:"transaction_id"`
-				Date          *string `json:"date"`
-				Amount        *string `json:"amount"`
-			} `json:"items"`
-		} `json:"findings"`
-	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
-	require.Len(t, doc.Findings, 2)
-	vacation := doc.Findings[1]
-	assert.Equal(t, fmt.Sprintf("unused-category:cat-%d", vacationPK), vacation.ID)
-	require.Len(t, vacation.Items, 3)
-	assert.Equal(t, []string{"Vacation", fmt.Sprintf("cat-%d", vacationPK), "Vacation:Hotel", fmt.Sprintf("cat-%d", hotelPK)},
-		[]string{vacation.Items[0].Category, vacation.Items[0].CategoryID, vacation.Items[2].Category, vacation.Items[2].CategoryID})
-	assert.Equal(t, []any{(*int)(nil), (*int)(nil), (*string)(nil), (*string)(nil), (*string)(nil), (*string)(nil)},
-		[]any{vacation.Items[0].Splits, vacation.Items[0].Transactions, vacation.Items[0].Payee, vacation.Items[0].TransactionID, vacation.Items[0].Date, vacation.Items[0].Amount})
+		require.Equal(t, 0, exitCode, stderr.String())
+		var doc struct {
+			Findings []struct {
+				ID    string `json:"id"`
+				Items []struct {
+					Category      string  `json:"category"`
+					CategoryID    string  `json:"category_id"`
+					Splits        *int    `json:"splits"`
+					Transactions  *int    `json:"transactions"`
+					Payee         *string `json:"payee"`
+					TransactionID *string `json:"transaction_id"`
+					Date          *string `json:"date"`
+					Amount        *string `json:"amount"`
+				} `json:"items"`
+			} `json:"findings"`
+		}
+		require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+		require.Len(t, doc.Findings, 2)
+		vacation := doc.Findings[1]
+		assert.Equal(t, fmt.Sprintf("unused-category:cat-%d", vacationPK), vacation.ID)
+		require.Len(t, vacation.Items, 3)
+		assert.Equal(t, []string{"Vacation", fmt.Sprintf("cat-%d", vacationPK), "Vacation:Hotel", fmt.Sprintf("cat-%d", hotelPK)},
+			[]string{vacation.Items[0].Category, vacation.Items[0].CategoryID, vacation.Items[2].Category, vacation.Items[2].CategoryID})
+		assert.Equal(t, []any{(*int)(nil), (*int)(nil), (*string)(nil), (*string)(nil), (*string)(nil), (*string)(nil)},
+			[]any{vacation.Items[0].Splits, vacation.Items[0].Transactions, vacation.Items[0].Payee, vacation.Items[0].TransactionID, vacation.Items[0].Date, vacation.Items[0].Amount})
+	})
 }
 
 func Test_run_findings_lists_an_unclassified_account_until_the_config_classifies_it(t *testing.T) {
