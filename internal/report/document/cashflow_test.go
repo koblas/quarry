@@ -1,7 +1,6 @@
 package document_test
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/koblas/quarry/internal/platform/money"
@@ -150,7 +149,7 @@ func Test_NewCashFlow_reads_back_with_every_period_total_and_warning_it_was_give
 		Warnings []string `json:"warnings"`
 	}
 
-	require.NoError(t, json.Unmarshal([]byte(indented(t, document.NewCashFlow(c, []string{"first"}))), &back))
+	mustReadBack(t, document.NewCashFlow(c, []string{"first"}), &back)
 
 	assert.Equal(t, "year", back.By)
 	assert.Equal(t, "USD", back.Currency)

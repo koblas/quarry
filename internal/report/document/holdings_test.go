@@ -95,7 +95,7 @@ func Test_NewHoldings_writes_null_not_empty_for_a_row_with_nothing_to_show(t *te
 	var got struct {
 		Holdings []map[string]any `json:"holdings"`
 	}
-	require.NoError(t, json.Unmarshal([]byte(indented(t, document.NewHoldings(h, nil))), &got))
+	mustReadBack(t, document.NewHoldings(h, nil), &got)
 
 	require.Len(t, got.Holdings, 1)
 	assert.Equal(t, map[string]any{
@@ -126,7 +126,7 @@ func Test_NewHoldings_reads_converted_value_from_the_reporting_currency(t *testi
 			}
 			h := report.Holdings{Rows: []store.Holding{row}, Currency: c.currency}
 
-			require.NoError(t, json.Unmarshal([]byte(indented(t, document.NewHoldings(h, nil))), &got))
+			mustReadBack(t, document.NewHoldings(h, nil), &got)
 
 			assert.Equal(t, c.wantCurrency, got.Currency)
 			assert.Equal(t, "37704.00", got.Holdings[0]["value"])
@@ -148,7 +148,7 @@ func Test_NewHoldings_writes_a_zero_price_and_a_zero_value_as_amounts_not_null(t
 		Totals   []map[string]any `json:"totals"`
 	}
 
-	require.NoError(t, json.Unmarshal([]byte(indented(t, document.NewHoldings(h, nil))), &got))
+	mustReadBack(t, document.NewHoldings(h, nil), &got)
 
 	require.Len(t, got.Holdings, 1)
 	assert.Equal(t, "0.000000", got.Holdings[0]["price"])
@@ -504,7 +504,7 @@ func Test_holdings_json_account_filter_lists_the_named_accounts(t *testing.T) {
 				AccountFilter json.RawMessage `json:"account_filter"`
 			}
 
-			require.NoError(t, json.Unmarshal([]byte(indented(t, document.NewHoldings(report.Holdings{Accounts: c.accounts, Currency: money.CAD}, nil))), &got))
+			mustReadBack(t, document.NewHoldings(report.Holdings{Accounts: c.accounts, Currency: money.CAD}, nil), &got)
 
 			assert.JSONEq(t, c.want, string(got.AccountFilter))
 		})
@@ -514,8 +514,6 @@ func Test_holdings_json_account_filter_lists_the_named_accounts(t *testing.T) {
 var emptyAsOf = time.Date(2026, 3, 12, 0, 0, 0, 0, time.UTC)
 
 const namedNothingLine = "no holdings on 2026-03-12 in the named accounts; they have no investment transactions"
-
-func march(day int) time.Time { return time.Date(2026, 3, day, 0, 0, 0, 0, time.UTC) }
 
 func Test_HoldingsWarnings_word_an_empty_result_by_what_the_store_holds(t *testing.T) {
 	named := []store.Account{namedAccount("a-1", "Brokerage", store.AccountTypeBrokerage)}

@@ -75,11 +75,11 @@ func Test_SnapshotWarning_ends_with_the_phrase_the_surface_gives_for_running_the
 }
 
 // pinMachineZone sets the zone of the machine to UTC-4 named EDT, so a time read in it differs from UTC.
-func pinMachineZone(t *testing.T) {
-	t.Helper()
-	previous := time.Local                      //nolint:gosmopolitan // saved to restore
-	time.Local = easternDaylight                //nolint:gosmopolitan // restored by Cleanup
-	t.Cleanup(func() { time.Local = previous }) //nolint:gosmopolitan // restores the zone swapped above
+func pinMachineZone(tb testing.TB) {
+	tb.Helper()
+	previous := time.Local                       //nolint:gosmopolitan // saved to restore
+	time.Local = easternDaylight                 //nolint:gosmopolitan // restored by Cleanup
+	tb.Cleanup(func() { time.Local = previous }) //nolint:gosmopolitan // restores the zone swapped above
 }
 
 func Test_SnapshotWarning_reads_a_month_parsed_from_a_UTC_clock_in_UTC_on_any_machine(t *testing.T) {
@@ -163,8 +163,8 @@ func calmSummary() report.Summary {
 	s := summaryOf(civil(2026, time.September, 1), time.UTC, time.Time{}, report.SnapshotCovers)
 	s.Anomalies = report.Anomalies{Currency: money.CAD, Checked: 3}
 	s.Recurring = report.Recurring{Currency: money.CAD, Series: []report.Series{{}}}
-	s.NetWorth = rateHistory(money.CAD, rateDay(time.March, 1),
-		report.NetWorthDate{Date: rateDay(time.August, 31), Rows: []store.NetWorthRow{convertedRow("chequing", 80_000)}})
+	s.NetWorth = rateHistory(money.CAD, day(time.March, 1),
+		report.NetWorthDate{Date: day(time.August, 31), Rows: []store.NetWorthRow{convertedRow("chequing", 80_000)}})
 	return s
 }
 
@@ -190,7 +190,7 @@ func Test_SummaryWarnings_says_the_store_has_no_rates_once_however_many_sections
 }
 
 func Test_SummaryWarnings_counts_the_charges_and_series_dated_before_the_first_rate(t *testing.T) {
-	first := rateDay(time.October, 2)
+	first := day(time.October, 2)
 	cases := []struct {
 		name            string
 		charges, series int
@@ -218,13 +218,13 @@ func Test_SummaryWarnings_counts_the_charges_and_series_dated_before_the_first_r
 }
 
 func Test_SummaryWarnings_lists_the_snapshot_then_charge_then_series_then_rate_warning(t *testing.T) {
-	first := rateDay(time.October, 2)
+	first := day(time.October, 2)
 	s := summaryOf(civil(2026, time.September, 1), time.UTC, time.Time{}, report.SnapshotTimeUnknown)
 	s.Anomalies = report.Anomalies{Currency: money.CAD, Checked: 3, Unconverted: store.Unconverted{Transactions: 2, FirstRate: first}}
 	s.Recurring = report.Recurring{Currency: money.CAD, Series: []report.Series{{}}, Unconverted: store.Unconverted{Transactions: 3, FirstRate: first}}
 	s.NetWorth = rateHistory(money.CAD, first,
-		report.NetWorthDate{Date: rateDay(time.August, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}},
-		report.NetWorthDate{Date: rateDay(time.September, 30), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}})
+		report.NetWorthDate{Date: day(time.August, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}},
+		report.NetWorthDate{Date: day(time.September, 30), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}})
 
 	got := document.SummaryWarnings(s, againPhrase, document.NativeFlag)
 
@@ -244,11 +244,11 @@ func Test_SummaryWarnings_counts_the_month_ends_before_the_first_rate(t *testing
 		want         string
 	}{
 		{
-			name: "first rate between the two month ends", first: rateDay(time.September, 15), septemberEnd: convertedRow("chequing", 80_000),
+			name: "first rate between the two month ends", first: day(time.September, 15), septemberEnd: convertedRow("chequing", 80_000),
 			want: "USD balances on 1 month end before 2026-09-15, " + rateTail,
 		},
 		{
-			name: "first rate after both month ends", first: rateDay(time.October, 2), septemberEnd: usdRow("chequing", 80_000),
+			name: "first rate after both month ends", first: day(time.October, 2), septemberEnd: usdRow("chequing", 80_000),
 			want: "USD balances on 2 month ends before 2026-10-02, " + rateTail,
 		},
 	}
@@ -257,8 +257,8 @@ func Test_SummaryWarnings_counts_the_month_ends_before_the_first_rate(t *testing
 		t.Run(c.name, func(t *testing.T) {
 			s := calmSummary()
 			s.NetWorth = rateHistory(money.CAD, c.first,
-				report.NetWorthDate{Date: rateDay(time.August, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}},
-				report.NetWorthDate{Date: rateDay(time.September, 30), Rows: []store.NetWorthRow{c.septemberEnd}})
+				report.NetWorthDate{Date: day(time.August, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}},
+				report.NetWorthDate{Date: day(time.September, 30), Rows: []store.NetWorthRow{c.septemberEnd}})
 
 			assert.Equal(t, []string{c.want}, document.SummaryWarnings(s, againPhrase, document.NativeFlag))
 		})
@@ -272,8 +272,8 @@ func Test_SummaryWarnings_advises_the_surfaces_own_way_to_list_balances_natively
 		advice document.NativeAdvice
 		want   string
 	}{
-		{name: "flag, before the first rate", first: rateDay(time.October, 2), advice: document.NativeFlag, want: "USD balances on 2 month ends before 2026-10-02, " + rateTail},
-		{name: "parameter, before the first rate", first: rateDay(time.October, 2), advice: document.NativeParameter, want: "USD balances on 2 month ends before 2026-10-02, " + rateTailParameter},
+		{name: "flag, before the first rate", first: day(time.October, 2), advice: document.NativeFlag, want: "USD balances on 2 month ends before 2026-10-02, " + rateTail},
+		{name: "parameter, before the first rate", first: day(time.October, 2), advice: document.NativeParameter, want: "USD balances on 2 month ends before 2026-10-02, " + rateTailParameter},
 		{name: "flag, no rates", advice: document.NativeFlag, want: noRatesLine},
 		{name: "parameter, no rates", advice: document.NativeParameter, want: noRatesLineParameter},
 	}
@@ -282,8 +282,8 @@ func Test_SummaryWarnings_advises_the_surfaces_own_way_to_list_balances_natively
 		t.Run(c.name, func(t *testing.T) {
 			s := calmSummary()
 			s.NetWorth = rateHistory(money.CAD, c.first,
-				report.NetWorthDate{Date: rateDay(time.August, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}},
-				report.NetWorthDate{Date: rateDay(time.September, 30), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}})
+				report.NetWorthDate{Date: day(time.August, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}},
+				report.NetWorthDate{Date: day(time.September, 30), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}})
 
 			assert.Equal(t, []string{c.want}, document.SummaryWarnings(s, againPhrase, c.advice))
 		})
@@ -291,12 +291,12 @@ func Test_SummaryWarnings_advises_the_surfaces_own_way_to_list_balances_natively
 }
 
 func Test_SummaryWarnings_swaps_the_currencies_in_a_usd_summary(t *testing.T) {
-	first := rateDay(time.October, 2)
+	first := day(time.October, 2)
 	s := calmSummary()
 	s.Anomalies = report.Anomalies{Currency: money.USD, Checked: 3, Unconverted: store.Unconverted{Transactions: 1, FirstRate: first}}
 	s.Recurring = report.Recurring{Currency: money.USD, Series: []report.Series{{}}, Unconverted: store.Unconverted{Transactions: 1, FirstRate: first}}
 	s.NetWorth = rateHistory(money.USD, first,
-		report.NetWorthDate{Date: rateDay(time.August, 31), Rows: []store.NetWorthRow{cadRow("chequing", 80_000)}})
+		report.NetWorthDate{Date: day(time.August, 31), Rows: []store.NetWorthRow{cadRow("chequing", 80_000)}})
 
 	got := document.SummaryWarnings(s, againPhrase, document.NativeFlag)
 
@@ -312,7 +312,7 @@ func Test_SummaryWarnings_has_no_rate_line_in_a_native_summary(t *testing.T) {
 	s.Anomalies.Currency = money.Native
 	s.Recurring.Currency = money.Native
 	s.NetWorth = rateHistory(money.Native, time.Time{},
-		report.NetWorthDate{Date: rateDay(time.August, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}})
+		report.NetWorthDate{Date: day(time.August, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}})
 
 	got := document.SummaryWarnings(s, againPhrase, document.NativeFlag)
 
@@ -328,8 +328,8 @@ func Test_SummaryWarnings_says_nothing_about_rates_when_none_is_needed(t *testin
 		{name: "every section converts", summary: calmSummary()},
 		{name: "a first rate with no charge or series before it", summary: func() report.Summary {
 			s := calmSummary()
-			s.Anomalies.Unconverted = store.Unconverted{FirstRate: rateDay(time.October, 2)}
-			s.Recurring.Unconverted = store.Unconverted{FirstRate: rateDay(time.October, 2)}
+			s.Anomalies.Unconverted = store.Unconverted{FirstRate: day(time.October, 2)}
+			s.Recurring.Unconverted = store.Unconverted{FirstRate: day(time.October, 2)}
 			return s
 		}()},
 	}
@@ -353,7 +353,7 @@ func Test_SummaryWarnings_leaves_out_the_empty_window_and_left_out_lines_of_the_
 		{name: "no charge checked in the month", shape: func(s *report.Summary) { s.Anomalies.Checked = 0 }},
 		{name: "no series listed", shape: func(s *report.Summary) { s.Recurring.Series = nil }},
 		{name: "no balance on either month end", shape: func(s *report.Summary) {
-			s.NetWorth.Dates = []report.NetWorthDate{{Date: rateDay(time.August, 31)}, {Date: rateDay(time.September, 30)}}
+			s.NetWorth.Dates = []report.NetWorthDate{{Date: day(time.August, 31)}, {Date: day(time.September, 30)}}
 		}},
 		{name: "an account named and left out of reports", shape: func(s *report.Summary) {
 			s.Anomalies.Accounts = leftOut

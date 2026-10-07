@@ -127,13 +127,6 @@ func Test_NewFindingEntry_gives_a_stored_finding_its_first_found_time(t *testing
 	assert.Equal(t, "2026-09-01T08:30:00Z", *got.FirstFoundAt)
 }
 
-func mustJSON(t *testing.T, v any) []byte {
-	t.Helper()
-	data, err := json.Marshal(v)
-	require.NoError(t, err)
-	return data
-}
-
 func Test_NewFindingEntry_encodes_shares_without_cost_with_its_date_account_and_investment_keys(t *testing.T) {
 	listed := report.ListedFinding{
 		Status: finding.StatusOpen,

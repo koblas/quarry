@@ -27,10 +27,6 @@ const (
 		"pass currency native to list them, or run quarry sync to fetch rates"
 )
 
-func rateDay(month time.Month, day int) time.Time {
-	return time.Date(2026, month, day, 0, 0, 0, 0, time.UTC)
-}
-
 // usdRow is a USD balance of cents with no CAD value, in an account of accountType.
 func usdRow(accountType string, cents int64) store.NetWorthRow {
 	return store.NetWorthRow{Type: accountType, Currency: "USD", Balance: big.NewInt(cents), BalanceUSD: big.NewInt(cents)}
@@ -47,7 +43,7 @@ func convertedRow(accountType string, cents int64) store.NetWorthRow {
 }
 
 func rateSnapshot(currency money.Currency, first time.Time, rows ...store.NetWorthRow) report.NetWorth {
-	asOf := rateDay(time.March, 5)
+	asOf := day(time.March, 5)
 	return report.NetWorth{
 		Dates: []report.NetWorthDate{{Date: asOf, Rows: rows}}, AsOf: asOf, Currency: currency, FirstRate: first,
 	}
@@ -59,7 +55,7 @@ func rateHistory(currency money.Currency, first time.Time, dates ...report.NetWo
 }
 
 func Test_net_worth_warnings_say_which_day_is_before_the_first_rate(t *testing.T) {
-	n := rateSnapshot(money.CAD, rateDay(time.March, 10), usdRow("chequing", 80_000))
+	n := rateSnapshot(money.CAD, day(time.March, 10), usdRow("chequing", 80_000))
 
 	got := document.NetWorthWarnings(n, document.NativeFlag)
 
@@ -67,7 +63,7 @@ func Test_net_worth_warnings_say_which_day_is_before_the_first_rate(t *testing.T
 }
 
 func Test_net_worth_warnings_swap_the_currencies_in_a_usd_report(t *testing.T) {
-	n := rateSnapshot(money.USD, rateDay(time.March, 10), cadRow("chequing", 80_000))
+	n := rateSnapshot(money.USD, day(time.March, 10), cadRow("chequing", 80_000))
 
 	got := document.NetWorthWarnings(n, document.NativeFlag)
 
@@ -85,8 +81,8 @@ func Test_net_worth_warnings_say_the_store_has_no_rates_when_it_holds_none(t *te
 		{
 			"history in CAD",
 			rateHistory(money.CAD, time.Time{},
-				report.NetWorthDate{Date: rateDay(time.January, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}},
-				report.NetWorthDate{Date: rateDay(time.February, 28), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}}),
+				report.NetWorthDate{Date: day(time.January, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}},
+				report.NetWorthDate{Date: day(time.February, 28), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}}),
 			noRatesLine,
 		},
 	}
@@ -99,14 +95,14 @@ func Test_net_worth_warnings_say_the_store_has_no_rates_when_it_holds_none(t *te
 }
 
 func Test_net_worth_warnings_advise_the_surfaces_own_way_to_list_balances_natively(t *testing.T) {
-	jan := report.NetWorthDate{Date: rateDay(time.January, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}}
+	jan := report.NetWorthDate{Date: day(time.January, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}}
 	cases := []struct {
 		name string
 		n    report.NetWorth
 		want string
 	}{
-		{"snapshot", rateSnapshot(money.CAD, rateDay(time.March, 10), usdRow("chequing", 80_000)), "USD balances on 2026-03-05, before 2026-03-10, " + rateTailParameter},
-		{"history", rateHistory(money.CAD, rateDay(time.March, 10), jan), "USD balances on 1 month end before 2026-03-10, " + rateTailParameter},
+		{"snapshot", rateSnapshot(money.CAD, day(time.March, 10), usdRow("chequing", 80_000)), "USD balances on 2026-03-05, before 2026-03-10, " + rateTailParameter},
+		{"history", rateHistory(money.CAD, day(time.March, 10), jan), "USD balances on 1 month end before 2026-03-10, " + rateTailParameter},
 		{"no rates in the store", rateSnapshot(money.CAD, time.Time{}, usdRow("chequing", 80_000)), noRatesLineParameter},
 	}
 
@@ -118,10 +114,10 @@ func Test_net_worth_warnings_advise_the_surfaces_own_way_to_list_balances_native
 }
 
 func Test_net_worth_history_warnings_count_the_month_ends_before_the_first_rate(t *testing.T) {
-	jan := report.NetWorthDate{Date: rateDay(time.January, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}}
-	feb := report.NetWorthDate{Date: rateDay(time.February, 28), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}}
-	mar := report.NetWorthDate{Date: rateDay(time.March, 31), Rows: []store.NetWorthRow{convertedRow("chequing", 80_000)}}
-	first := rateDay(time.March, 10)
+	jan := report.NetWorthDate{Date: day(time.January, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}}
+	feb := report.NetWorthDate{Date: day(time.February, 28), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}}
+	mar := report.NetWorthDate{Date: day(time.March, 31), Rows: []store.NetWorthRow{convertedRow("chequing", 80_000)}}
+	first := day(time.March, 10)
 
 	cases := []struct {
 		name string
@@ -133,8 +129,8 @@ func Test_net_worth_history_warnings_count_the_month_ends_before_the_first_rate(
 		{
 			"CAD balances in a USD report",
 			rateHistory(money.USD, first,
-				report.NetWorthDate{Date: rateDay(time.January, 31), Rows: []store.NetWorthRow{cadRow("chequing", 80_000)}},
-				report.NetWorthDate{Date: rateDay(time.February, 28), Rows: []store.NetWorthRow{cadRow("chequing", 80_000)}}),
+				report.NetWorthDate{Date: day(time.January, 31), Rows: []store.NetWorthRow{cadRow("chequing", 80_000)}},
+				report.NetWorthDate{Date: day(time.February, 28), Rows: []store.NetWorthRow{cadRow("chequing", 80_000)}}),
 			"CAD balances on 2 month ends before 2026-03-10, " + rateTailUSD,
 		},
 	}
@@ -147,18 +143,18 @@ func Test_net_worth_history_warnings_count_the_month_ends_before_the_first_rate(
 }
 
 func Test_net_worth_history_warnings_count_a_month_end_once_however_many_types_need_a_rate(t *testing.T) {
-	jan := report.NetWorthDate{Date: rateDay(time.January, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000), usdRow("savings", 5_000)}}
+	jan := report.NetWorthDate{Date: day(time.January, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000), usdRow("savings", 5_000)}}
 
-	got := document.NetWorthWarnings(rateHistory(money.CAD, rateDay(time.March, 10), jan), document.NativeFlag)
+	got := document.NetWorthWarnings(rateHistory(money.CAD, day(time.March, 10), jan), document.NativeFlag)
 
 	assert.Equal(t, []string{"USD balances on 1 month end before 2026-03-10, " + rateTail}, got)
 }
 
 func Test_net_worth_warnings_leave_out_a_month_end_whose_rows_all_convert(t *testing.T) {
-	jan := report.NetWorthDate{Date: rateDay(time.January, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}}
-	feb := report.NetWorthDate{Date: rateDay(time.February, 28), Rows: []store.NetWorthRow{convertedRow("chequing", 80_000)}}
+	jan := report.NetWorthDate{Date: day(time.January, 31), Rows: []store.NetWorthRow{usdRow("chequing", 80_000)}}
+	feb := report.NetWorthDate{Date: day(time.February, 28), Rows: []store.NetWorthRow{convertedRow("chequing", 80_000)}}
 
-	got := document.NetWorthWarnings(rateHistory(money.CAD, rateDay(time.February, 1), jan, feb), document.NativeFlag)
+	got := document.NetWorthWarnings(rateHistory(money.CAD, day(time.February, 1), jan, feb), document.NativeFlag)
 
 	assert.Equal(t, []string{"USD balances on 1 month end before 2026-02-01, " + rateTail}, got)
 }
@@ -168,8 +164,8 @@ func Test_net_worth_warnings_say_nothing_about_rates_when_no_balance_needs_one(t
 		name string
 		n    report.NetWorth
 	}{
-		{"every balance converts", rateSnapshot(money.CAD, rateDay(time.March, 1), convertedRow("chequing", 80_000))},
-		{"the only unconverted balance is zero", rateSnapshot(money.CAD, rateDay(time.March, 10), usdRow("chequing", 0))},
+		{"every balance converts", rateSnapshot(money.CAD, day(time.March, 1), convertedRow("chequing", 80_000))},
+		{"the only unconverted balance is zero", rateSnapshot(money.CAD, day(time.March, 10), usdRow("chequing", 0))},
 	}
 
 	for _, c := range cases {
@@ -187,7 +183,7 @@ func Test_net_worth_native_listing_has_no_rate_warning(t *testing.T) {
 		name  string
 		first time.Time
 	}{
-		{"before the first rate", rateDay(time.March, 10)},
+		{"before the first rate", day(time.March, 10)},
 		{"no rates in the store", time.Time{}},
 	}
 
@@ -202,9 +198,9 @@ func Test_net_worth_native_listing_has_no_rate_warning(t *testing.T) {
 }
 
 func Test_net_worth_warnings_put_the_rate_line_after_the_no_price_line(t *testing.T) {
-	n := rateSnapshot(money.CAD, rateDay(time.March, 10), usdRow("chequing", 80_000))
+	n := rateSnapshot(money.CAD, day(time.March, 10), usdRow("chequing", 80_000))
 	n.Unvalued = []store.UnvaluedHolding{unpriced("a-1", "Brokerage", "s-1", "Acme", 5)}
-	n.AsOf = leftOutDay(5)
+	n.AsOf = march(5)
 
 	got := document.NetWorthWarnings(n, document.NativeFlag)
 
@@ -215,7 +211,7 @@ func Test_net_worth_warnings_put_the_rate_line_after_the_no_price_line(t *testin
 }
 
 func Test_NewNetWorth_writes_a_null_converted_balance_and_a_total_for_the_rows_no_rate_converts(t *testing.T) {
-	n := rateSnapshot(money.CAD, rateDay(time.March, 10), usdRow("chequing", 80_000), cadRow("savings", 20_000))
+	n := rateSnapshot(money.CAD, day(time.March, 10), usdRow("chequing", 80_000), cadRow("savings", 20_000))
 	n.Dates[0].Totals = []report.NetWorthTotal{
 		{Currency: "CAD", Value: big.NewInt(20_000)},
 		{Currency: "USD", Value: big.NewInt(80_000)},

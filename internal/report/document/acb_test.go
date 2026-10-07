@@ -55,21 +55,21 @@ func acbDocumentFixture() report.ACB {
 }
 
 // acbJSON is a's document as the command writes it.
-func acbJSON(t *testing.T, a report.ACB, warnings []string) []byte {
-	t.Helper()
+func acbJSON(tb testing.TB, a report.ACB, warnings []string) []byte {
+	tb.Helper()
 	out, err := json.Marshal(document.NewACB(a, warnings))
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return out
 }
 
 // firstOf is the first element of the array under key in the JSON object doc.
-func firstOf(t *testing.T, doc []byte, key string) json.RawMessage {
-	t.Helper()
+func firstOf(tb testing.TB, doc []byte, key string) json.RawMessage {
+	tb.Helper()
 	var fields map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(doc, &fields))
+	require.NoError(tb, json.Unmarshal(doc, &fields))
 	var elements []json.RawMessage
-	require.NoError(t, json.Unmarshal(fields[key], &elements))
-	require.NotEmpty(t, elements)
+	require.NoError(tb, json.Unmarshal(fields[key], &elements))
+	require.NotEmpty(tb, elements)
 	return elements[0]
 }
 
@@ -94,6 +94,16 @@ func Test_NewACB_writes_every_key_of_every_object_in_order(t *testing.T) {
 		"date", "investment_transaction_id", "account_id", "account", "action", "shares", "amount", "amount_currency",
 		"usd_cad", "cad", "outlays", "shares_held", "acb", "gain", "unknown_cost",
 	}, topLevelKeys(t, firstOf(t, security, "events")))
+}
+
+// firstSecurityEvents is the "events" of the first security in doc, each read back as a generic object.
+func firstSecurityEvents(tb testing.TB, doc []byte) []map[string]any {
+	tb.Helper()
+	var raw map[string]json.RawMessage
+	require.NoError(tb, json.Unmarshal(firstOf(tb, doc, "securities"), &raw))
+	var events []map[string]any
+	require.NoError(tb, json.Unmarshal(raw["events"], &events))
+	return events
 }
 
 func Test_NewACB_reads_back_the_year_totals_and_each_sale_with_its_security_and_account(t *testing.T) {
@@ -189,10 +199,7 @@ func Test_NewACB_writes_an_unvalued_event_with_a_null_cad_and_gain_and_keeps_its
 		}},
 	}}}
 
-	var raw map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(firstOf(t, acbJSON(t, a, nil), "securities"), &raw))
-	var events []map[string]any
-	require.NoError(t, json.Unmarshal(raw["events"], &events))
+	events := firstSecurityEvents(t, acbJSON(t, a, nil))
 
 	assert.Nil(t, events[0]["cad"])
 	assert.Nil(t, events[0]["gain"])
@@ -211,10 +218,7 @@ func Test_NewACB_writes_a_break_even_sale_gain_and_outlays_as_zero_and_a_buy_gai
 		},
 	}}}
 
-	var raw map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(firstOf(t, acbJSON(t, a, nil), "securities"), &raw))
-	var events []map[string]any
-	require.NoError(t, json.Unmarshal(raw["events"], &events))
+	events := firstSecurityEvents(t, acbJSON(t, a, nil))
 
 	assert.Nil(t, events[0]["gain"])
 	assert.Nil(t, events[0]["outlays"])
@@ -246,10 +250,7 @@ func Test_NewACB_writes_an_adjustment_event_with_no_transaction_account_or_amoun
 	}}}
 
 	doc := acbJSON(t, a, nil)
-	var raw map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(firstOf(t, doc, "securities"), &raw))
-	var events []map[string]any
-	require.NoError(t, json.Unmarshal(raw["events"], &events))
+	events := firstSecurityEvents(t, doc)
 
 	assert.Equal(t, map[string]any{
 		"date": "2026-10-05", "investment_transaction_id": nil, "account_id": nil, "account": nil,
@@ -267,10 +268,7 @@ func Test_NewACB_writes_a_return_of_capital_above_the_acb_event_with_the_excess_
 		}},
 	}}}
 
-	var raw map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(firstOf(t, acbJSON(t, a, nil), "securities"), &raw))
-	var events []map[string]any
-	require.NoError(t, json.Unmarshal(raw["events"], &events))
+	events := firstSecurityEvents(t, acbJSON(t, a, nil))
 
 	assert.Equal(t, map[string]any{
 		"date": "2026-10-05", "investment_transaction_id": nil, "account_id": nil, "account": nil,

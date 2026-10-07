@@ -3,7 +3,6 @@ package document_test
 import (
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
@@ -12,12 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func leftOutDay(d int) time.Time { return time.Date(2026, time.March, d, 0, 0, 0, 0, time.UTC) }
-
 // unpriced is a holding of account with no price, in CAD, on day d of March 2026.
 func unpriced(accountID, account, securityID, security string, d int) store.UnvaluedHolding {
 	return store.UnvaluedHolding{
-		Date: leftOutDay(d), AccountID: accountID, Account: account, SecurityID: securityID, Security: security,
+		Date: march(d), AccountID: accountID, Account: account, SecurityID: securityID, Security: security,
 		Currency: new("CAD"),
 	}
 }
@@ -25,30 +22,30 @@ func unpriced(accountID, account, securityID, security string, d int) store.Unva
 // noCurrency is a priced holding with no currency, on day 12.
 func noCurrency(accountID, account, securityID, security string) store.UnvaluedHolding {
 	return store.UnvaluedHolding{
-		Date: leftOutDay(12), AccountID: accountID, Account: account, SecurityID: securityID, Security: security, Priced: true,
+		Date: march(12), AccountID: accountID, Account: account, SecurityID: securityID, Security: security, Priced: true,
 	}
 }
 
 // pricedIn is a priced holding in currency, held in a CAD account, on day 12.
 func pricedIn(currency, accountID, account, securityID, security string) store.UnvaluedHolding {
 	return store.UnvaluedHolding{
-		Date: leftOutDay(12), AccountID: accountID, Account: account, AccountCurrency: "CAD", SecurityID: securityID, Security: security,
+		Date: march(12), AccountID: accountID, Account: account, AccountCurrency: "CAD", SecurityID: securityID, Security: security,
 		Currency: &currency, Priced: true,
 	}
 }
 
 func snapshot(rows ...store.UnvaluedHolding) report.NetWorth {
-	return report.NetWorth{AsOf: leftOutDay(12), Unvalued: rows}
+	return report.NetWorth{AsOf: march(12), Unvalued: rows}
 }
 
 func history(rows ...store.UnvaluedHolding) report.NetWorth {
 	return report.NetWorth{
-		AsOf: leftOutDay(12), Window: &store.Window{Since: leftOutDay(1), Until: leftOutDay(12)}, Unvalued: rows,
+		AsOf: march(12), Window: &store.Window{Since: march(1), Until: march(12)}, Unvalued: rows,
 	}
 }
 
 func firstRateOn(d int, n report.NetWorth) report.NetWorth {
-	n.FirstRate = leftOutDay(d)
+	n.FirstRate = march(d)
 	return n
 }
 
@@ -58,7 +55,7 @@ func inAccountCurrency(held store.UnvaluedHolding, currency string) store.Unvalu
 }
 
 func withDay(held store.UnvaluedHolding, d int) store.UnvaluedHolding {
-	held.Date = leftOutDay(d)
+	held.Date = march(d)
 	return held
 }
 
@@ -101,7 +98,7 @@ func Test_net_worth_history_warnings_count_the_month_ends_an_account_held_an_unp
 }
 
 func Test_net_worth_snapshot_warnings_name_the_as_of_day(t *testing.T) {
-	n := report.NetWorth{AsOf: leftOutDay(3), Unvalued: []store.UnvaluedHolding{unpriced("a-1", "Brokerage", "s-1", "Acme", 3)}}
+	n := report.NetWorth{AsOf: march(3), Unvalued: []store.UnvaluedHolding{unpriced("a-1", "Brokerage", "s-1", "Acme", 3)}}
 
 	assert.Equal(t, []string{`"Brokerage" holds 1 security with no price on or before 2026-03-03, ` +
 		`so its balance leaves it out; enter a price in Quicken, then run quarry sync`}, document.NetWorthWarnings(n, document.NativeFlag))
@@ -109,7 +106,7 @@ func Test_net_worth_snapshot_warnings_name_the_as_of_day(t *testing.T) {
 
 func Test_accounts_warnings_name_the_listings_as_of_day(t *testing.T) {
 	l := report.AccountListing{
-		AsOf:     leftOutDay(12),
+		AsOf:     march(12),
 		Unvalued: []store.UnvaluedHolding{unpriced("a-1", "Brokerage", "s-1", "Acme", 12)},
 	}
 
@@ -125,7 +122,7 @@ func Test_a_holding_is_warned_about_by_the_reason_it_has_no_value(t *testing.T) 
 		{name: "no price in a currency quarry converts is only unpriced", held: unpriced("a-1", "Brokerage", "s-1", "Acme", 12), want: []string{brokerageNoPriceLine}},
 		{
 			name: "no price and no currency is both unpriced and without a currency",
-			held: store.UnvaluedHolding{Date: leftOutDay(12), AccountID: "a-1", Account: "Brokerage", SecurityID: "s-1", Security: "Acme"},
+			held: store.UnvaluedHolding{Date: march(12), AccountID: "a-1", Account: "Brokerage", SecurityID: "s-1", Security: "Acme"},
 			want: []string{brokerageNoPriceLine, acmeNoCurrencyLine},
 		},
 		{
@@ -139,7 +136,7 @@ func Test_a_holding_is_warned_about_by_the_reason_it_has_no_value(t *testing.T) 
 		{
 			name: "no price in another currency is only unpriced",
 			held: store.UnvaluedHolding{
-				Date: leftOutDay(12), AccountID: "a-1", Account: "Brokerage", SecurityID: "s-1", Security: "Acme", Currency: new("EUR"),
+				Date: march(12), AccountID: "a-1", Account: "Brokerage", SecurityID: "s-1", Security: "Acme", Currency: new("EUR"),
 			},
 			want: []string{brokerageNoPriceLine},
 		},
@@ -184,8 +181,8 @@ func Test_a_name_with_a_quote_is_quoted_with_it_escaped(t *testing.T) {
 
 func Test_a_security_without_a_currency_is_named_once_per_account_however_many_days_it_was_held(t *testing.T) {
 	n := history(
-		store.UnvaluedHolding{Date: leftOutDay(5), AccountID: "a-1", Account: "Brokerage", SecurityID: "s-1", Security: "Acme", Priced: true},
-		store.UnvaluedHolding{Date: leftOutDay(8), AccountID: "a-1", Account: "Brokerage", SecurityID: "s-1", Security: "Acme", Priced: true})
+		store.UnvaluedHolding{Date: march(5), AccountID: "a-1", Account: "Brokerage", SecurityID: "s-1", Security: "Acme", Priced: true},
+		store.UnvaluedHolding{Date: march(8), AccountID: "a-1", Account: "Brokerage", SecurityID: "s-1", Security: "Acme", Priced: true})
 
 	assert.Equal(t, []string{acmeNoCurrencyLine}, document.NetWorthWarnings(n, document.NativeFlag))
 }
@@ -304,7 +301,7 @@ func Test_net_worth_warnings_say_the_store_has_no_rates_in_history_too(t *testin
 
 func Test_accounts_warnings_name_the_first_rate_for_a_holding_valued_today(t *testing.T) {
 	l := report.AccountListing{
-		AsOf: leftOutDay(12), FirstRate: leftOutDay(15),
+		AsOf: march(12), FirstRate: march(15),
 		Unvalued: []store.UnvaluedHolding{pricedIn("USD", "a-1", "Brokerage", "s-1", "Acme")},
 	}
 
@@ -313,7 +310,7 @@ func Test_accounts_warnings_name_the_first_rate_for_a_holding_valued_today(t *te
 }
 
 func Test_accounts_warnings_say_the_store_has_no_rates(t *testing.T) {
-	l := report.AccountListing{AsOf: leftOutDay(12), Unvalued: []store.UnvaluedHolding{pricedIn("USD", "a-1", "Brokerage", "s-1", "Acme")}}
+	l := report.AccountListing{AsOf: march(12), Unvalued: []store.UnvaluedHolding{pricedIn("USD", "a-1", "Brokerage", "s-1", "Acme")}}
 
 	assert.Equal(t, []string{brokerageUSDNoRatesLine}, document.AccountsWarnings(l))
 }
@@ -336,8 +333,8 @@ func Test_no_rate_warnings_come_after_the_other_kinds_one_per_account_by_name_ig
 func Test_no_rate_warnings_come_before_the_rate_lines(t *testing.T) {
 	n := firstRateOn(15, snapshot(pricedIn("USD", "a-1", "Brokerage", "s-1", "Acme")))
 	n.Currency = money.CAD
-	n.Dates = []report.NetWorthDate{{Date: leftOutDay(12), Rows: []store.NetWorthRow{{
-		Date: leftOutDay(12), Type: "chequing", Currency: "USD", Accounts: 1, Balance: big.NewInt(100),
+	n.Dates = []report.NetWorthDate{{Date: march(12), Rows: []store.NetWorthRow{{
+		Date: march(12), Type: "chequing", Currency: "USD", Accounts: 1, Balance: big.NewInt(100),
 	}}}}
 
 	assert.Equal(t, []string{
