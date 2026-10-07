@@ -39,56 +39,26 @@ func Test_list_orders_by_id_even_when_taken_at_disagrees(t *testing.T) {
 	assert.Equal(t, time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), listing.Entries[0].TakenAt)
 }
 
-func Test_list_orders_a_numeric_suffix_by_value_with_the_bare_id_oldest(t *testing.T) {
+func Test_list_orders_ids_with_a_numeric_suffix(t *testing.T) {
 	t.Parallel()
-	home := t.TempDir()
-	dir := snapshotsFolder(t, home)
-	for _, id := range []string{idNewest, idNewest + "_2", idNewest + "_10", idMiddle} {
-		writeSnapshot(t, dir, id, 1000)
-	}
-
-	listing, err := newListServer(home, nil).List(t.Context())
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{idNewest + "_10", idNewest + "_2", idNewest, idMiddle}, entryIDs(listing))
-}
-
-func Test_list_orders_a_suffix_too_long_for_an_integer_by_value(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	dir := snapshotsFolder(t, home)
 	const huge = "_123456789012345678901234567890"
-	for _, id := range []string{idNewest + "_9", idNewest + huge} {
-		writeSnapshot(t, dir, id, 1000)
-	}
-
-	listing, err := newListServer(home, nil).List(t.Context())
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{idNewest + huge, idNewest + "_9"}, entryIDs(listing))
-}
-
-func Test_list_orders_a_suffix_with_leading_zeros_by_its_value(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	dir := snapshotsFolder(t, home)
-	for _, id := range []string{idNewest + "_010", idNewest + "_11"} {
-		writeSnapshot(t, dir, id, 1000)
-	}
-
-	listing, err := newListServer(home, nil).List(t.Context())
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{idNewest + "_11", idNewest + "_010"}, entryIDs(listing))
-}
-
-func Test_list_orders_suffixes_of_equal_value_by_their_text_from_the_highest(t *testing.T) {
-	t.Parallel()
 	cases := []struct {
 		name string
 		ids  []string
 		want []string
 	}{
+		{
+			name: "by value with the bare id oldest", ids: []string{idNewest, idNewest + "_2", idNewest + "_10", idMiddle},
+			want: []string{idNewest + "_10", idNewest + "_2", idNewest, idMiddle},
+		},
+		{
+			name: "a suffix too long for an integer by value", ids: []string{idNewest + "_9", idNewest + huge},
+			want: []string{idNewest + huge, idNewest + "_9"},
+		},
+		{
+			name: "a suffix with leading zeros by its value", ids: []string{idNewest + "_010", idNewest + "_11"},
+			want: []string{idNewest + "_11", idNewest + "_010"},
+		},
 		{name: "one leading zero", ids: []string{idNewest + "_02", idNewest + "_2"}, want: []string{idNewest + "_2", idNewest + "_02"}},
 		{
 			name: "all-zero suffixes fall before the bare id", ids: []string{idNewest, idNewest + "_0", idNewest + "_000", idNewest + "_00"},
@@ -332,21 +302,6 @@ func threeSnapshots(t *testing.T, home string) string {
 	return dir
 }
 
-func Test_list_marks_the_snapshot_the_store_was_built_from(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	dir := threeSnapshots(t, home)
-	recorded := filepath.Join(dir, idMiddle+".sqlite")
-
-	listing, err := newListServer(home, &fakeStoreProbe{builtFrom: recorded}).List(t.Context())
-
-	require.NoError(t, err)
-	assert.Equal(t, []bool{false, true, false}, storeFlags(listing))
-	assert.Equal(t, recorded, listing.StorePath)
-	assert.Empty(t, listing.StoreWarning)
-	assert.Empty(t, listing.StoreUnreadable)
-}
-
 func Test_list_marks_nothing_and_says_nothing_without_a_store_probe(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
@@ -371,88 +326,6 @@ func Test_list_marks_nothing_and_says_nothing_when_there_is_no_store(t *testing.
 	require.NoError(t, err)
 	assert.Equal(t, []bool{false, false, false}, storeFlags(listing))
 	assert.Empty(t, listing.StorePath)
-	assert.Empty(t, listing.StoreWarning)
-}
-
-func Test_list_marks_the_stores_snapshot_recorded_through_a_symlink(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	dir := threeSnapshots(t, home)
-	alias := filepath.Join(home, "alias")
-	require.NoError(t, os.Symlink(dir, alias))
-	recorded := filepath.Join(alias, idMiddle+".sqlite")
-
-	listing, err := newListServer(home, &fakeStoreProbe{builtFrom: recorded}).List(t.Context())
-
-	require.NoError(t, err)
-	assert.Equal(t, []bool{false, true, false}, storeFlags(listing))
-	assert.Equal(t, recorded, listing.StorePath)
-}
-
-func Test_list_marks_nothing_for_a_store_built_from_a_snapshot_outside_the_folder(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	threeSnapshots(t, home)
-	outside := writeSnapshot(t, home, idOutside, 1000)
-
-	listing, err := newListServer(home, &fakeStoreProbe{builtFrom: outside}).List(t.Context())
-
-	require.NoError(t, err)
-	assert.Equal(t, []bool{false, false, false}, storeFlags(listing))
-	assert.Equal(t, outside, listing.StorePath)
-	assert.Empty(t, listing.StoreWarning)
-}
-
-func Test_list_marks_the_same_id_snapshot_when_the_store_was_built_from_a_copy_outside_the_folder(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	threeSnapshots(t, home)
-	outside := writeSnapshot(t, home, idMiddle, 1000)
-
-	listing, err := newListServer(home, &fakeStoreProbe{builtFrom: outside}).List(t.Context())
-
-	require.NoError(t, err)
-	assert.Equal(t, []bool{false, true, false}, storeFlags(listing))
-	assert.Equal(t, outside, listing.StorePath)
-}
-
-func Test_list_marks_the_same_id_snapshot_when_the_recorded_path_no_longer_resolves(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	threeSnapshots(t, home)
-	moved := filepath.Join(home, "moved-away", idMiddle+".sqlite")
-
-	listing, err := newListServer(home, &fakeStoreProbe{builtFrom: moved}).List(t.Context())
-
-	require.NoError(t, err)
-	assert.Equal(t, []bool{false, true, false}, storeFlags(listing))
-	assert.Equal(t, moved, listing.StorePath)
-}
-
-func Test_list_prefers_the_path_match_over_the_id_match(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	dir := threeSnapshots(t, home)
-	alias := filepath.Join(home, idMiddle+".sqlite")
-	require.NoError(t, os.Symlink(filepath.Join(dir, idNewest+".sqlite"), alias))
-
-	listing, err := newListServer(home, &fakeStoreProbe{builtFrom: alias}).List(t.Context())
-
-	require.NoError(t, err)
-	assert.Equal(t, []bool{true, false, false}, storeFlags(listing))
-}
-
-func Test_list_marks_nothing_but_keeps_the_recorded_path_when_the_snapshot_was_deleted_by_hand(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	dir := threeSnapshots(t, home)
-	gone := filepath.Join(dir, "20260801T120000Z.sqlite")
-
-	listing, err := newListServer(home, &fakeStoreProbe{builtFrom: gone}).List(t.Context())
-
-	require.NoError(t, err)
-	assert.Equal(t, []bool{false, false, false}, storeFlags(listing))
-	assert.Equal(t, gone, listing.StorePath)
 	assert.Empty(t, listing.StoreWarning)
 }
 
@@ -608,6 +481,11 @@ func Test_duplicate_warning_names_every_variant(t *testing.T) {
 			want: "holds " + idOldest + ".SQLITE, " + idOldest + ".SQLite, " + idOldest + ".Sqlite and " + idOldest + ".sqlite" +
 				usesOnly + idOldest + ".sqlite; rename or remove the others",
 		},
+		{
+			name:     "a manifest variant names the manifest pair",
+			variants: []variant{regularVariant(idOldest+".JSON", idOldest+".json")},
+			want:     "holds both " + idOldest + ".json and " + idOldest + ".JSON" + usesOnly + idOldest + ".json" + renameOther,
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -619,16 +497,6 @@ func Test_duplicate_warning_names_every_variant(t *testing.T) {
 			assert.Equal(t, []string{dir + " " + c.want}, listing.DuplicatesAbsolute)
 		})
 	}
-}
-
-func Test_duplicate_warning_names_the_manifest_variants(t *testing.T) {
-	t.Parallel()
-
-	listing, dir := duplicatesOf(t, []string{idOldest}, regularVariant(idOldest+".JSON", idOldest+".json"))
-
-	want := " holds both " + idOldest + ".json and " + idOldest + ".JSON" + usesOnly + idOldest + ".json" + renameOther
-	assert.Equal(t, []string{"~/snapshots" + want}, listing.Duplicates)
-	assert.Equal(t, []string{dir + want}, listing.DuplicatesAbsolute)
 }
 
 func Test_duplicate_warning_gives_a_snapshot_with_both_kinds_of_variant_its_snapshot_line_first(t *testing.T) {
@@ -975,6 +843,38 @@ func Test_list_marks_exactly_the_snapshot_the_recorded_path_resolves_to(t *testi
 			},
 			want: []string{},
 		},
+		{
+			name: "a snapshot in the folder reached through a symlink to the folder",
+			recorded: func(t *testing.T, home, dir string) string {
+				t.Helper()
+				alias := symlink(t, dir, filepath.Join(home, "alias"))
+				return snapshotFile(alias, idMiddle)
+			},
+			want: []string{idMiddle},
+		},
+		{
+			name: "a copy outside the folder under no snapshot's id marks nothing",
+			recorded: func(t *testing.T, home, _ string) string {
+				t.Helper()
+				return writeSnapshot(t, home, idOutside, 1000)
+			},
+			want: []string{},
+		},
+		{
+			name: "a symlink named as one snapshot to another snapshot's file marks the file it resolves to",
+			recorded: func(t *testing.T, home, dir string) string {
+				t.Helper()
+				return symlink(t, snapshotFile(dir, idNewest), snapshotFile(home, idMiddle))
+			},
+			want: []string{idNewest},
+		},
+		{
+			name: "a path in the folder that is gone, under no snapshot's id, marks nothing",
+			recorded: func(_ *testing.T, _, dir string) string {
+				return snapshotFile(dir, idOutside)
+			},
+			want: []string{},
+		},
 	}
 
 	for _, c := range cases {
@@ -988,6 +888,9 @@ func Test_list_marks_exactly_the_snapshot_the_recorded_path_resolves_to(t *testi
 
 			require.NoError(t, err)
 			assert.Equal(t, c.want, markedIDs(listing))
+			assert.Equal(t, recorded, listing.StorePath)
+			assert.Empty(t, listing.StoreWarning)
+			assert.Empty(t, listing.StoreUnreadable)
 		})
 	}
 }

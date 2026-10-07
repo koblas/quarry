@@ -72,16 +72,6 @@ func Test_lock_for_sync_after_release_locks_again(t *testing.T) {
 	assert.ErrorAs(t, err, new(snapshot.RefusalError))
 }
 
-func Test_lock_for_sync_without_a_locker_is_a_no_op(t *testing.T) {
-	srv := snapshot.NewServer()
-
-	release, err := srv.LockForSync(context.Background())
-
-	require.NoError(t, err)
-	require.NotNil(t, release)
-	release()
-}
-
 func Test_lock_for_sync_returns_a_folder_missing_lock_error_unchanged(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "quarry", "quarry.lock")
 	srv := snapshot.NewServer(snapshot.WithLocker(lockfile.New(path, lockfile.ModePrune)))
@@ -133,16 +123,6 @@ func Test_lock_for_prune_proceeds_unlocked_when_the_quarry_folder_is_missing(t *
 	require.NotNil(t, release)
 	release()
 	assert.NoDirExists(t, dir)
-}
-
-func Test_lock_for_prune_without_a_locker_is_a_no_op(t *testing.T) {
-	srv := snapshot.NewServer()
-
-	release, err := srv.LockForPrune(context.Background())
-
-	require.NoError(t, err)
-	require.NotNil(t, release)
-	release()
 }
 
 const (
@@ -442,5 +422,19 @@ func Test_lock_returns_an_error_it_cannot_phrase_unchanged(t *testing.T) {
 				assert.Nil(t, release)
 			})
 		}
+	}
+}
+
+func Test_lock_without_a_locker_is_a_no_op(t *testing.T) {
+	for _, cmd := range lockCommands() {
+		t.Run(cmd.name, func(t *testing.T) {
+			srv := snapshot.NewServer()
+
+			release, err := cmd.acquire(srv)
+
+			require.NoError(t, err)
+			require.NotNil(t, release)
+			release()
+		})
 	}
 }

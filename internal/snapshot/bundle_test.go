@@ -63,44 +63,38 @@ func Test_ResolveBundlePath_refuses_a_qdf_suffix(t *testing.T) {
 	}
 }
 
-func Test_ResolveBundlePath_refuses_a_plain_file(t *testing.T) {
+func Test_ResolveBundlePath_refuses_a_path_that_is_not_a_bundle_with_a_data_file(t *testing.T) {
 	t.Parallel()
-	home := t.TempDir()
-	path := filepath.Join(home, "Documents", "Home.quicken")
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
-	require.NoError(t, os.WriteFile(path, []byte("x"), 0o600))
+	cases := []struct {
+		name  string
+		dirs  []string
+		files []string
+	}{
+		{name: "a plain file", files: []string{"Home.quicken"}},
+		{name: "a bundle without data", dirs: []string{"Home.quicken"}},
+		{name: "a bundle whose data is a directory", dirs: []string{"Home.quicken/data"}},
+	}
 
-	_, err := snapshot.ResolveBundlePath(home, path)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			documents := filepath.Join(home, "Documents")
+			require.NoError(t, os.MkdirAll(documents, 0o700))
+			for _, dir := range c.dirs {
+				require.NoError(t, os.MkdirAll(filepath.Join(documents, dir), 0o700))
+			}
+			for _, file := range c.files {
+				require.NoError(t, os.WriteFile(filepath.Join(documents, file), []byte("x"), 0o600))
+			}
 
-	assert.Equal(t, "~/Documents/Home.quicken is not a Quicken for Mac file "+
-		"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path>",
-		refusalText(t, err))
-}
+			_, err := snapshot.ResolveBundlePath(home, filepath.Join(documents, "Home.quicken"))
 
-func Test_ResolveBundlePath_refuses_a_bundle_without_data(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
-	require.NoError(t, os.MkdirAll(bundleDir, 0o700))
-
-	_, err := snapshot.ResolveBundlePath(home, bundleDir)
-
-	assert.Equal(t, "~/Documents/Home.quicken is not a Quicken for Mac file "+
-		"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path>",
-		refusalText(t, err))
-}
-
-func Test_ResolveBundlePath_refuses_a_bundle_whose_data_is_a_directory(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	bundleDir := filepath.Join(home, "Documents", "Home.quicken")
-	require.NoError(t, os.MkdirAll(filepath.Join(bundleDir, "data"), 0o700))
-
-	_, err := snapshot.ResolveBundlePath(home, bundleDir)
-
-	assert.Equal(t, "~/Documents/Home.quicken is not a Quicken for Mac file "+
-		"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path>",
-		refusalText(t, err))
+			assert.Equal(t, "~/Documents/Home.quicken is not a Quicken for Mac file "+
+				"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path>",
+				refusalText(t, err))
+		})
+	}
 }
 
 func Test_ResolveBundlePath_refuses_unreadable_data(t *testing.T) {

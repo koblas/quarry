@@ -188,6 +188,14 @@ func listed(tb testing.TB, home string, probe snapshot.StoreProbe, ids ...string
 	return listing
 }
 
+// keptID is the ID of the snapshot kept for the store, "" when none was.
+func keptID(kept *snapshot.Entry) string {
+	if kept == nil {
+		return ""
+	}
+	return kept.ID
+}
+
 func doomedIDs(entries []snapshot.Entry) []string {
 	ids := make([]string, len(entries))
 	for i, e := range entries {

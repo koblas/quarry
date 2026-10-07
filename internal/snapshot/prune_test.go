@@ -44,42 +44,44 @@ func Test_prune_keeps_exactly_the_newest_n(t *testing.T) {
 	}
 }
 
-func Test_prune_never_deletes_the_stores_snapshot_when_it_is_older_than_the_newest_n(t *testing.T) {
+func Test_prune_protects_the_stores_snapshot_only_when_it_lies_beyond_the_newest_n(t *testing.T) {
 	t.Parallel()
-	home := t.TempDir()
-	stored := filepath.Join(home, "snapshots", idOldest+".sqlite")
-	listing := listed(t, home, &fakeStoreProbe{builtFrom: stored}, idNewest, idMiddle, idOldest, idFourth)
+	cases := []struct {
+		name     string
+		ids      []string
+		recorded func(home string) string
+		keep     int
+		want     []string
+		wantKept string
+	}{
+		{
+			name: "older than the newest two", ids: []string{idNewest, idMiddle, idOldest, idFourth}, keep: 2,
+			recorded: func(home string) string { return snapshotFile(filepath.Join(home, "snapshots"), idOldest) },
+			want:     []string{idFourth}, wantKept: idOldest,
+		},
+		{
+			name: "within the newest two", ids: []string{idNewest, idMiddle, idOldest, idFourth}, keep: 2,
+			recorded: func(home string) string { return snapshotFile(filepath.Join(home, "snapshots"), idMiddle) },
+			want:     []string{idOldest, idFourth},
+		},
+		{
+			name: "recorded under a path that no longer resolves", ids: []string{idNewest, idMiddle, idOldest}, keep: 1,
+			recorded: func(home string) string { return snapshotFile(filepath.Join(home, "moved-away"), idOldest) },
+			want:     []string{idMiddle}, wantKept: idOldest,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			listing := listed(t, home, &fakeStoreProbe{builtFrom: c.recorded(home)}, c.ids...)
 
-	doomed, kept := snapshot.SelectPrune(listing.Entries, 2)
+			doomed, kept := snapshot.SelectPrune(listing.Entries, c.keep)
 
-	assert.Equal(t, []string{idFourth}, doomedIDs(doomed))
-	require.NotNil(t, kept)
-	assert.Equal(t, idOldest, kept.ID)
-}
-
-func Test_prune_reports_no_kept_store_snapshot_when_the_store_is_within_the_newest_n(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	stored := filepath.Join(home, "snapshots", idMiddle+".sqlite")
-	listing := listed(t, home, &fakeStoreProbe{builtFrom: stored}, idNewest, idMiddle, idOldest, idFourth)
-
-	doomed, kept := snapshot.SelectPrune(listing.Entries, 2)
-
-	assert.Equal(t, []string{idOldest, idFourth}, doomedIDs(doomed))
-	assert.Nil(t, kept)
-}
-
-func Test_prune_never_deletes_the_stores_snapshot_recorded_under_a_path_that_no_longer_resolves(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	moved := filepath.Join(home, "moved-away", idOldest+".sqlite")
-	listing := listed(t, home, &fakeStoreProbe{builtFrom: moved}, idNewest, idMiddle, idOldest)
-
-	doomed, kept := snapshot.SelectPrune(listing.Entries, 1)
-
-	assert.Equal(t, []string{idMiddle}, doomedIDs(doomed))
-	require.NotNil(t, kept)
-	assert.Equal(t, idOldest, kept.ID)
+			assert.Equal(t, c.want, doomedIDs(doomed))
+			assert.Equal(t, c.wantKept, keptID(kept))
+		})
+	}
 }
 
 func Test_prune_protects_nothing_without_a_store_or_for_a_store_built_outside_the_folder(t *testing.T) {
@@ -615,7 +617,7 @@ func Test_import_from_deletes_no_snapshot_that_is_the_file_it_built_the_store_fr
 	assert.FileExists(t, snapshotFile(dir, idLinkFuture))
 }
 
-func Test_prune_reads_the_store_once_when_nothing_lies_beyond_the_newest_n(t *testing.T) {
+func Test_prune_reads_the_store_once(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
@@ -623,6 +625,7 @@ func Test_prune_reads_the_store_once_when_nothing_lies_beyond_the_newest_n(t *te
 	}{
 		{"as many snapshots as the newest two", []string{idNewest, idMiddle}},
 		{"no snapshots folder", nil},
+		{"a snapshot beyond the newest two", []string{idNewest, idMiddle, idOldest}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -708,18 +711,6 @@ func Test_prune_is_interrupted_when_the_context_ended_during_the_store_read_with
 	require.EqualError(t, err, "snapshots prune interrupted")
 	require.ErrorIs(t, err, context.Canceled)
 	assert.Equal(t, snapshot.Pruned{}, pruned)
-}
-
-func Test_prune_asks_the_store_when_a_snapshot_lies_beyond_the_newest_n(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	prunable(t, home, idNewest, idMiddle, idOldest)
-	probe := &countingProbe{}
-
-	_, err := newPruneServer(home, probe, &fakeRemover{}).Prune(t.Context(), 2)
-
-	require.NoError(t, err)
-	assert.Equal(t, 1, probe.calls)
 }
 
 func Test_prune_reports_the_folder_and_its_snapshot_count_when_nothing_lies_beyond_the_newest_n(t *testing.T) {
