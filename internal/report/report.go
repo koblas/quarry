@@ -8,7 +8,7 @@ import (
 	"github.com/koblas/quarry/internal/store"
 )
 
-// snapshotExt is the file extension a snapshot's ID is stripped of.
+// snapshotExt is the file extension a snapshot's ID is stripped of, matched in any letter case.
 const snapshotExt = ".sqlite"
 
 // Server answers read commands against one Store.

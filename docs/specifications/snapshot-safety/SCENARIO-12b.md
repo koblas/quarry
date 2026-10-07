@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-12b
-status: in-progress
+status: done
 ---
 
 # SCENARIO-12b: Status names a store built from an .SQLITE snapshot by its id

@@ -1,6 +1,6 @@
 # snapshot-safety — current state
 
-Scenarios complete: SCENARIO-01 (folded 02, 05, 08), SCENARIO-03 (folded 04, 07, 09), SCENARIO-06, SCENARIO-10 (folded 11), SCENARIO-12a, SCENARIO-14 (folded 15, 16). Last updated by SCENARIO-12a.
+Scenarios complete: SCENARIO-01 (folded 02, 05, 08), SCENARIO-03 (folded 04, 07, 09), SCENARIO-06, SCENARIO-10 (folded 11), SCENARIO-12a, SCENARIO-12b, SCENARIO-14 (folded 15, 16). Last updated by SCENARIO-12b.
 
 ## Binding decisions
 - Sync lock taken in `internal/cli/sync.go` RunE via `(*snapshot.Server).LockForSync`, `defer release()`; prune lock in `snapshots_prune.go` RunE via `LockForPrune`, only `if !dryRun`, after usage (2) → config (1) → `newSnapshots`, before `Prune`. Neither is taken inside `SyncAndImport`/`ImportFrom`/`Prune`/`PlanPrune`/`autoPrune`/`List`: auto-prune runs under sync's lock and a second in-process acquire would refuse itself (SCENARIO-01, 03)
@@ -22,11 +22,11 @@ Scenarios complete: SCENARIO-01 (folded 02, 05, 08), SCENARIO-03 (folded 04, 07,
 - Prune never deletes a manifest any remaining entry of the ID could still need: `selectedSnapshot.manifestShared` (`named > 1`, any type) rides `Entry.manifestShared` and `deleteSnapshot` returns before the manifest; prune and auto-prune share `deleteSnapshot`; a non-regular sibling keeps blocking orphaning (SCENARIO-10, BR-C8)
 
 - `--from` resolution (`from.go`): `isPathForm` (a `/` or `.sqlite` in any case) splits `locateByID` from `locateByPath`. ID form lists the folder once, takes file and manifest from `selectFolder(...).snapshot(id)`, no `os.Stat`, no lowercase fallback; unlistable = F1, missing folder or no regular winner (directory, symlink, lowercased ID, hand-placed non-ID name like `latest`) = the F2/F3 `no snapshot <id> in …` line. Path form `Stat`s first (not-exist / bundle / not-a-file refusals precede any listing), then lists `filepath.Dir`; any error = F4; manifest from `selectManifest` (select.go: every entry type competes, ext folds, lowercase first then byte order), else the `<stem>.json` path so the no-manifest line fires. `ImportFrom` wraps every locate error in `FailureOutcome` (SCENARIO-12a)
+- `report.SnapshotID` (report.go:61-70) strips one trailing `.sqlite` in any case (`strings.EqualFold` on `filepath.Ext`, no ID pattern); the one rule behind the R2 hint, status text line, `status --json` `snapshot.id` (path kept as on disk) and `summary --json`/MCP `monthly_summary` id. Cmd helper `snapshotID` (run_helpers_test.go) is lowercase-fixture only by design (SCENARIO-12b)
 - `folderUnreadableRefusal(home, folder, err)` is a free function in list.go (callers list.go x2, from.go x2); F1 and F4 differ only by the folder argument; SCENARIO-13's D1/`WithReadDir` builds on it (SCENARIO-12a)
 
 ## Left unbuilt
-- `report.SnapshotID` any-case, status line, `summary --json` id — 12b
-- `folderSelection.strays` is computed with no consumer; D1 text, the `WithReadDir` Server seam, BR-C5 (`destination.go:93`) and whether D1 counts non-regular manifest variants — 13
+- `folderSelection.strays` is computed with no consumer; D1 text, the `WithReadDir` Server seam, BR-C5 (`destination.go:93`) and whether D1 counts non-regular manifest variants — 13 (the only scenario left)
 - Entry-side `os.Stat` in `entriesAt` (list.go) stays swallowed: `scanFolder` already refuses an unstattable snapshot, only a scan-to-mark race reaches it — unowned by design (SCENARIO-14)
 - Auto-prune EACCES/ENOTDIR on the recorded path: unreachable without the folder failing to list first (`cannotListWarning`) — unowned by design (SCENARIO-14)
 - Post-open `fstat` on the lock file: a swap between `Lstat` and `OpenFile` is accepted as one local-user race — unowned by design (SCENARIO-06)
@@ -52,6 +52,7 @@ Scenarios complete: SCENARIO-01 (folded 02, 05, 08), SCENARIO-03 (folded 04, 07,
 - Test names carrying the case rows stay lowercase (`upper_case_sqlite`) or the lowercase-matched narrow loop misses them (SCENARIO-10)
 
 ## Open debts
+- Mutations verified, SCENARIO-12b: `SnapshotID` `ext == snapshotExt` (case-sensitive) → `Test_SnapshotID` upper/mixed-case and one-extension rows, R2 upper-case row in `Test_status_refuses_with_the_store_refusal_copy`, `Test_NewStatus_`/`Test_NewSummary_names_an_upper_case…`, `Test_renderStatus/upper-case_snapshot_file`, acceptance text and json
 - Mutations verified, SCENARIO-12a: ID-form lowercase fallback on unlistable folder → F1 `0300`/`000` rows; ID-form `os.Stat` or join+Stat for a non-pattern name → hand-placed `latest` F3 slice and cmd rows, directory/symlink/lowercased-ID F3 rows, acceptance (recorded path); path-form manifest `TrimSuffix(path, ".sqlite")` → `X.SQLITE` absolute/relative rows; non-regular entry accepted → directory/symlink F3 rows and `Test_folder_selection_snapshot_lookup_skips_non_regular_entries`; F5 line rebuilt lowercase → slice and cmd `x.JSON` rows
 - Mutations verified, SCENARIO-10: orphan check exact `id+".sqlite"` → `Test_select_folder_finds_orphan_manifests`; entry path rebuilt → acceptance (`path`) and S11 acceptance (`rm.calls`); winner byte-order → picks table; non-regular blocker dropped → orphan table and directory-sweep test; whole-pattern `(?i)` → lowercase `t`/`z` rows; `deleteSnapshot` manifest rebuilt `id+".json"` → `Test_prune_removes_the_manifest_by_its_on_disk_name`; `manifestShared` mutations → selector table, `newEntry` and `deleteSnapshot` tests; `ManifestPath` set only on a readable manifest → `Test_prune_removes_an_upper_case_manifest_it_cannot_read_with_its_snapshot` and `Test_list_keeps_the_on_disk_path_of_an_upper_case_manifest_it_cannot_read`; `--json` manifest rebuilt as `id+".json"` → `Test_run_snapshots_json_gives_an_upper_case_manifest_its_on_disk_path`
 - `Acquire` ignores its `ctx` (non-blocking, nothing to cancel) — unowned; dies unless a blocking mode is added
