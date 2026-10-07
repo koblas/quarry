@@ -153,7 +153,7 @@ func Test_import_from_a_path_outside_the_snapshots_directory_never_creates_it(t 
 	assert.NoDirExists(t, filepath.Join(home, "snapshots"))
 }
 
-const unresolvableFolderRefusal = "cannot resolve x.sqlite against the current folder: %s; pass --from an absolute or ~/ path instead"
+const unresolvableFolderRefusal = "cannot resolve x.sqlite against the current folder: %s; run quarry from a folder you can open"
 
 func Test_import_from_refuses_a_relative_path_when_the_working_directory_no_longer_exists(t *testing.T) {
 	deletedDir := filepath.Join(t.TempDir(), "deleted")

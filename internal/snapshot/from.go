@@ -108,7 +108,7 @@ func (s *Server) locateByPath(value string) (string, string, error) {
 	snapshotPath, err := filepath.Abs(homepath.Expand(home, value))
 	if err != nil {
 		return "", "", causedRefusalError{
-			msg: fmt.Sprintf("cannot resolve %s against the current folder: %s; pass --from an absolute or ~/ path instead",
+			msg: fmt.Sprintf("cannot resolve %s against the current folder: %s; run quarry from a folder you can open",
 				value, osreason.Reason(err)),
 			cause: err,
 		}

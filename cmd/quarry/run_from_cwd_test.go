@@ -33,7 +33,7 @@ func Test_run_sync_from_a_relative_path_refuses_when_the_working_directory_canno
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout)
 			assert.Equal(t, "quarry: cannot resolve x.sqlite against the current folder: permission denied; "+
-				"pass --from an absolute or ~/ path instead\n", stderr)
+				"run quarry from a folder you can open\n", stderr)
 			assert.NoFileExists(t, storePathUnder(home))
 		})
 	}
