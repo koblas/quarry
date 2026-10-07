@@ -28,7 +28,32 @@ const (
 	installClaudeNotFoundRefusal = "cannot find the claude command on your PATH; install Claude Code, then run quarry claude install again"
 
 	installAddedLead = "added the quarry marketplace, but "
+
+	pluginUninstalledLine  = "Uninstalled the quarry plugin from Claude Code.\n"
+	pluginAbsentLine       = "The quarry plugin is not installed for all your projects.\n"
+	marketplaceRemovedLine = "Removed the quarry marketplace from Claude Code.\n"
+	marketplaceAbsentLine  = "The quarry marketplace is not in Claude Code.\n"
+	uninstallRestartLine   = "Restart Claude Code to unload it.\n"
+
+	uninstallForeignRefusal = `Claude Code has a marketplace named "quarry" that is not koblas/quarry on GitHub, ` +
+		"so quarry leaves it and its plugin alone; to remove them, run claude plugin uninstall quarry@quarry, " +
+		"then claude plugin marketplace remove quarry"
+	uninstallClaudeNotFoundRefusal = "cannot find the claude command on your PATH; add it to your PATH, then run quarry claude uninstall again"
+
+	uninstallRemovedLead = "uninstalled the quarry plugin, but "
 )
+
+// claudeRefusals is the copy of the two refusals whose wording depends on the verb.
+type claudeRefusals struct {
+	foreign  string // a marketplace named quarry that is not quarry's
+	notFound string // no claude command on PATH
+}
+
+// claudeRefusalCopy holds each verb's refusal copy, keyed by verb.
+var claudeRefusalCopy = map[string]claudeRefusals{
+	installCommand:   {foreign: installForeignRefusal, notFound: installClaudeNotFoundRefusal},
+	uninstallCommand: {foreign: uninstallForeignRefusal, notFound: uninstallClaudeNotFoundRefusal},
+}
 
 // renderInstalled returns the stdout of a successful install: one line per step, then the
 // restart line when a step ran.
@@ -60,6 +85,40 @@ func renderInstallDone(res claudeplugin.Result) string {
 func installDoneLead(res claudeplugin.Result) string {
 	if res.MarketplaceAdded {
 		return installAddedLead
+	}
+	return ""
+}
+
+// renderUninstalled returns the stdout of a successful uninstall: one line per step, then the
+// restart line when a step ran.
+func renderUninstalled(res claudeplugin.UninstallResult) string {
+	plugin, marketplace := pluginAbsentLine, marketplaceAbsentLine
+	if res.PluginUninstalled {
+		plugin = pluginUninstalledLine
+	}
+	if res.MarketplaceRemoved {
+		marketplace = marketplaceRemovedLine
+	}
+	out := plugin + marketplace
+	if res.Ran() {
+		out += uninstallRestartLine
+	}
+	return out
+}
+
+// renderUninstallDone returns the line for the step a failed uninstall had already run: only the
+// plugin uninstall can have, since the marketplace remove is the last step.
+func renderUninstallDone(res claudeplugin.UninstallResult) string {
+	if res.PluginUninstalled {
+		return pluginUninstalledLine
+	}
+	return ""
+}
+
+// uninstallDoneLead returns the lead of a failure line that follows the plugin uninstall this run, else "".
+func uninstallDoneLead(res claudeplugin.UninstallResult) string {
+	if res.PluginUninstalled {
+		return uninstallRemovedLead
 	}
 	return ""
 }
@@ -106,11 +165,11 @@ func reportClaudeFailure(cmd *cobra.Command, verb, home, lead, done string, err 
 		return ReportedError{}
 	}
 	if errors.Is(err, claudeplugin.ErrForeignMarketplace) {
-		writeClaudeLine(cmd, verb, installForeignRefusal)
+		writeClaudeLine(cmd, verb, claudeRefusalCopy[verb].foreign)
 		return ReportedError{}
 	}
 	if errors.Is(err, claudeplugin.ErrClaudeNotFound) {
-		writeClaudeLine(cmd, verb, installClaudeNotFoundRefusal)
+		writeClaudeLine(cmd, verb, claudeRefusalCopy[verb].notFound)
 		return ReportedError{}
 	}
 	if start, ok := errors.AsType[*toolrun.StartError](err); ok {

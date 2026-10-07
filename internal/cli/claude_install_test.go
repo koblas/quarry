@@ -25,6 +25,9 @@ const (
 	addMarketplaceArgv  = "plugin marketplace add --scope user koblas/quarry"
 	installPluginArgv   = "plugin install --scope user quarry@quarry"
 
+	uninstallPluginArgv   = "plugin uninstall --scope user quarry@quarry"
+	removeMarketplaceArgv = "plugin marketplace remove --scope user quarry"
+
 	ourMarketplace     = `[{"name":"quarry","source":"github","repo":"koblas/quarry"}]`
 	foreignMarketplace = `[{"name":"quarry","source":"github","repo":"someone/quarry"}]`
 	userPluginOn       = `[{"id":"quarry@quarry","scope":"user","enabled":true}]`

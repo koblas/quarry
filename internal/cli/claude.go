@@ -8,8 +8,8 @@ import (
 // claudeCommand is the claude group's name, for its children's messages.
 const claudeCommand = "claude"
 
-// newClaudeCommand builds the claude group: install quarry's plugin in Claude Code, or remove it.
-// It runs nothing itself; its children run runTool.
+// newClaudeCommand builds the claude group with its install and uninstall children. It runs
+// nothing itself; the children run runTool.
 func newClaudeCommand(runTool claudeplugin.Runner, lookPath claudeplugin.LookPath, home string, jsonOut *bool) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   claudeCommand,
@@ -18,5 +18,6 @@ func newClaudeCommand(runTool claudeplugin.Runner, lookPath claudeplugin.LookPat
 running the claude command, so claude must be on your PATH.`,
 	}
 	cmd.AddCommand(newClaudeInstallCommand(runTool, lookPath, home, jsonOut))
+	cmd.AddCommand(newClaudeUninstallCommand(runTool, lookPath, home, jsonOut))
 	return cmd
 }

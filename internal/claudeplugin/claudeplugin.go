@@ -16,9 +16,12 @@ type LookPath func(file string) (string, error)
 const (
 	addMarketplaceArgs = "plugin marketplace add --scope user " + marketplaceRepo
 	installPluginArgs  = "plugin install --scope user " + pluginID
+
+	uninstallPluginArgs   = "plugin uninstall --scope user " + pluginID
+	removeMarketplaceArgs = "plugin marketplace remove --scope user " + marketplaceName
 )
 
-// Server installs quarry's Claude Code plugin through a Runner.
+// Server installs and uninstalls quarry's Claude Code plugin through a Runner.
 type Server struct {
 	runner   Runner
 	lookPath LookPath
@@ -27,13 +30,13 @@ type Server struct {
 // Option configures a Server.
 type Option func(*Server)
 
-// WithRunner sets how claude children run. A Server needs one before Install.
+// WithRunner sets how claude children run. A Server needs one before Install or Uninstall.
 func WithRunner(r Runner) Option {
 	return func(s *Server) { s.runner = r }
 }
 
-// WithLookPath sets how Install finds the claude and quarry commands. Without
-// it, Install runs "claude" as named and does not look for quarry.
+// WithLookPath sets how Install and Uninstall find the claude command, and Install the
+// quarry command. Without it, both run "claude" as named and Install does not look for quarry.
 func WithLookPath(l LookPath) Option {
 	return func(s *Server) { s.lookPath = l }
 }
@@ -89,6 +92,47 @@ func (s *Server) Install(ctx context.Context) (Result, error) {
 	}
 	res.UserCopyOff = st.userCopyOff
 	res.QuarryNotOnPath = s.quarryNotOnPath()
+	return res, nil
+}
+
+// UninstallResult reports what an Uninstall did.
+type UninstallResult struct {
+	PluginUninstalled  bool // the plugin uninstall step ran
+	MarketplaceRemoved bool // the marketplace remove step ran
+}
+
+// Ran reports whether any claude step changed something.
+func (r UninstallResult) Ran() bool {
+	return r.PluginUninstalled || r.MarketplaceRemoved
+}
+
+// Uninstall removes quarry's plugin from user scope, then quarry's marketplace, skipping
+// each step the lists show absent, and returns the steps completed even on failure.
+// Errors: ErrClaudeNotFound, ErrForeignMarketplace, *ListUnreadableError, *ExitError,
+// *InterruptedError, or the Runner's own.
+func (s *Server) Uninstall(ctx context.Context) (UninstallResult, error) {
+	claude, err := s.findClaude()
+	if err != nil {
+		return UninstallResult{}, err
+	}
+	st, err := s.readState(ctx, claude)
+	if err != nil {
+		return UninstallResult{}, err
+	}
+
+	var res UninstallResult
+	if st.userCopy {
+		if _, err := s.run(ctx, claude, uninstallPluginArgs); err != nil {
+			return res, err
+		}
+		res.PluginUninstalled = true
+	}
+	if st.marketplaceOurs {
+		if _, err := s.run(ctx, claude, removeMarketplaceArgs); err != nil {
+			return res, err
+		}
+		res.MarketplaceRemoved = true
+	}
 	return res, nil
 }
 
