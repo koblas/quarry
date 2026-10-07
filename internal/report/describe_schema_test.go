@@ -77,30 +77,6 @@ func Test_describe_schema_lists_tables_before_views_then_by_name(t *testing.T) {
 	assert.Equal(t, []string{"b_table", "z_table", "a_view", "c_view"}, relationNames(got))
 }
 
-func Test_describe_schema_orders_accounts_by_name_ignoring_case_first(t *testing.T) {
-	schema := store.Schema{Accounts: []store.Account{{ID: "1", Name: "Zeta"}, {ID: "2", Name: "alpha"}}}
-
-	got := describe(t, schema, listCap)
-
-	assert.Equal(t, []string{"alpha/2", "Zeta/1"}, accountKeys(got))
-}
-
-func Test_describe_schema_orders_accounts_whose_names_differ_only_in_case_by_the_name_bytes(t *testing.T) {
-	schema := store.Schema{Accounts: []store.Account{{ID: "1", Name: "chequing"}, {ID: "2", Name: "Chequing"}}}
-
-	got := describe(t, schema, listCap)
-
-	assert.Equal(t, []string{"Chequing/2", "chequing/1"}, accountKeys(got))
-}
-
-func Test_describe_schema_orders_accounts_with_one_name_by_id(t *testing.T) {
-	schema := store.Schema{Accounts: []store.Account{{ID: "b", Name: "Chequing"}, {ID: "a", Name: "Chequing"}}}
-
-	got := describe(t, schema, listCap)
-
-	assert.Equal(t, []string{"Chequing/a", "Chequing/b"}, accountKeys(got))
-}
-
 func Test_describe_schema_orders_categories_by_full_path_with_a_grandchild_after_its_parent(t *testing.T) {
 	schema := store.Schema{Categories: []store.Category{
 		{FullPath: "Food:Groceries:Organic"}, {FullPath: "Misc"}, {FullPath: "Food:Groceries"}, {FullPath: "Auto"},
@@ -179,7 +155,7 @@ func Test_describe_schema_refuses_a_missing_store_with_the_store_refusal(t *test
 
 	_, err := srv.DescribeSchema(t.Context(), listCap)
 
-	assert.EqualError(t, err, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it")
+	assert.EqualError(t, err, missingStoreRefusal)
 }
 
 func Test_describe_schema_reports_an_interrupt_before_any_store_refusal(t *testing.T) {
@@ -199,4 +175,33 @@ func Test_describe_schema_returns_another_store_error_unchanged(t *testing.T) {
 	_, err := srv.DescribeSchema(t.Context(), listCap)
 
 	assert.Equal(t, errDiskRead, err)
+}
+
+func Test_describe_schema_orders_accounts_by_name_then_id(t *testing.T) {
+	cases := []struct {
+		name     string
+		accounts []store.Account
+		want     []string
+	}{
+		{
+			name: "by name ignoring case first", want: []string{"alpha/2", "Zeta/1"},
+			accounts: []store.Account{{ID: "1", Name: "Zeta"}, {ID: "2", Name: "alpha"}},
+		},
+		{
+			name: "whose names differ only in case by the name bytes", want: []string{"Chequing/2", "chequing/1"},
+			accounts: []store.Account{{ID: "1", Name: "chequing"}, {ID: "2", Name: "Chequing"}},
+		},
+		{
+			name: "with one name by id", want: []string{"Chequing/a", "Chequing/b"},
+			accounts: []store.Account{{ID: "b", Name: "Chequing"}, {ID: "a", Name: "Chequing"}},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := describe(t, store.Schema{Accounts: c.accounts}, listCap)
+
+			assert.Equal(t, c.want, accountKeys(got))
+		})
+	}
 }
