@@ -9,13 +9,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// renamedExtension renames id's file from extension from to extension to and returns the new path.
+// renamedExtension renames id's file from extension from to extension to.
 // A rename is needed because case-insensitive volumes keep the old name's case on a rewrite.
-func renamedExtension(t *testing.T, dir, id, from, to string) string {
+func renamedExtension(t *testing.T, dir, id, from, to string) {
 	t.Helper()
-	renamed := filepath.Join(dir, id+"."+to)
-	require.NoError(t, os.Rename(filepath.Join(dir, id+"."+from), renamed))
-	return renamed
+	require.NoError(t, os.Rename(filepath.Join(dir, id+"."+from), filepath.Join(dir, id+"."+to)))
 }
 
 func Test_list_gives_an_upper_case_sqlite_snapshot_its_on_disk_path_and_manifest(t *testing.T) {
@@ -26,12 +24,18 @@ func Test_list_gives_an_upper_case_sqlite_snapshot_its_on_disk_path_and_manifest
 		wantSnapshot             string
 		wantManifest             string
 	}{
-		{name: "upper-case snapshot, lower-case manifest", snapshotExt: "SQLITE", manifestExt: "json",
-			wantSnapshot: "20260927T143005Z.SQLITE", wantManifest: "20260927T143005Z.json"},
-		{name: "lower-case snapshot, upper-case manifest", snapshotExt: "sqlite", manifestExt: "JSON",
-			wantSnapshot: "20260927T143005Z.sqlite", wantManifest: "20260927T143005Z.JSON"},
-		{name: "upper-case snapshot and manifest", snapshotExt: "SQLITE", manifestExt: "JSON",
-			wantSnapshot: "20260927T143005Z.SQLITE", wantManifest: "20260927T143005Z.JSON"},
+		{
+			name: "upper-case snapshot, lower-case manifest", snapshotExt: "SQLITE", manifestExt: "json",
+			wantSnapshot: "20260927T143005Z.SQLITE", wantManifest: "20260927T143005Z.json",
+		},
+		{
+			name: "lower-case snapshot, upper-case manifest", snapshotExt: "sqlite", manifestExt: "JSON",
+			wantSnapshot: "20260927T143005Z.sqlite", wantManifest: "20260927T143005Z.JSON",
+		},
+		{
+			name: "upper-case snapshot and manifest", snapshotExt: "SQLITE", manifestExt: "JSON",
+			wantSnapshot: "20260927T143005Z.SQLITE", wantManifest: "20260927T143005Z.JSON",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

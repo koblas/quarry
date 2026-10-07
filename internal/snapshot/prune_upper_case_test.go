@@ -1,6 +1,8 @@
 package snapshot_test
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -63,10 +65,14 @@ func Test_prune_removes_the_manifest_by_its_on_disk_name(t *testing.T) {
 		snapshotExt string
 		want        []string
 	}{
-		{name: "lower-case snapshot, upper-case manifest", snapshotExt: "sqlite",
-			want: []string{"20260927T143005Z.sqlite", "20260927T143005Z.JSON"}},
-		{name: "upper-case snapshot and manifest", snapshotExt: "SQLITE",
-			want: []string{"20260927T143005Z.SQLITE", "20260927T143005Z.JSON"}},
+		{
+			name: "lower-case snapshot, upper-case manifest", snapshotExt: "sqlite",
+			want: []string{"20260927T143005Z.sqlite", "20260927T143005Z.JSON"},
+		},
+		{
+			name: "upper-case snapshot and manifest", snapshotExt: "SQLITE",
+			want: []string{"20260927T143005Z.SQLITE", "20260927T143005Z.JSON"},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -129,4 +135,41 @@ func Test_plan_prune_would_delete_an_upper_case_sqlite_snapshot_by_its_on_disk_p
 	require.Len(t, pruned.WouldDelete, 1)
 	assert.Equal(t, oldestPath, pruned.WouldDelete[0].Path)
 	assert.Empty(t, rm.calls)
+}
+
+func Test_prune_keeps_the_manifest_while_another_entry_is_named_as_the_snapshot(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		create func(path string) error
+	}{
+		{name: "a regular upper-case variant", create: func(path string) error {
+			f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+			if err == nil {
+				err = f.Close()
+			}
+			return err
+		}},
+		{name: "a directory", create: func(path string) error { return os.Mkdir(path, 0o700) }},
+		{name: "a symlink", create: func(path string) error { return os.Symlink("elsewhere", path) }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			dir := prunable(t, home, idNewest, idMiddle, idOldest)
+			if err := c.create(filepath.Join(dir, idOldest+".SQLITE")); errors.Is(err, fs.ErrExist) {
+				t.Skip("the volume folds letter case, so a second name for the snapshot cannot exist")
+			} else {
+				require.NoError(t, err)
+			}
+			rm := &fakeRemover{}
+
+			_, err := newPruneServer(home, nil, rm).Prune(t.Context(), 2)
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{idOldest + ".sqlite"}, rm.calls)
+			assert.FileExists(t, filepath.Join(dir, idOldest+".json"))
+		})
+	}
 }

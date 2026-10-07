@@ -13,7 +13,7 @@ Mutation checks: orphan check back to exact `id+".sqlite"` in `selectFolder` →
 Runs: A (1-2) | B1 (3-5) | V (6-7)
 Size: OWNS A RUN — 3 batches, 1 feature package (`internal/snapshot`; cli/cmd cells only)
 
-**Invariant.** Prune and auto-prune never delete a manifest whose snapshot exists under any letter case or entry type, and every path they remove or report is a name `os.ReadDir` returned, never rebuilt from the ID. The sweep has to work by name. How this plan treats each way two names can reach one file:
+**Invariant.** Prune and auto-prune never delete a manifest that any remaining entry of that ID could still need (a snapshot under any letter case or entry type), and every path they remove or report is a name `os.ReadDir` returned, never rebuilt from the ID. The sweep has to work by name. How this plan treats each way two names can reach one file:
 - Letter case is folded, for the winner and for blocking orphans. An entry of any type named `<id>.sqlite` in any case blocks orphaning but never wins.
 - `.partial` stays exact lowercase, as quarry writes it and as `leftoverPartialPattern` (destination.go:21) matches it.
 - A hard link under another ID is unchanged (`storeFile` SameFile in `markStoreSnapshot`). Another extension (`X.db`) leaves `X.json` an orphan, unchanged and accepted.
@@ -113,6 +113,13 @@ Deviations: list tests are in `list_upper_case_test.go`, not `list_test.go` (fil
 Green on arrival: `Test_list_lists_no_directory_or_symlink_named_as_an_upper_case_snapshot` (the pattern fold alone already skips non-regular entries; it pins the type guard, which the select tests also redden).
 
 Mutations (all restored, byte-identical): see report; all six plan mutations went red, whole-manifest-`(?i)` first SURVIVED, fixed by two orphan rows.
+
+Checkpoint fix pass (BR-C8, shared manifest kept; start bc250fe3):
+- `select.go`: `idGroup.named` (entries of any type named as a snapshot) replaces `anySnapshot`; `selectedSnapshot.manifestShared = named > 1`. `list.go`: `snapshotFile` embeds `selectedSnapshot` (no per-field copy), new `newEntry(dir, f)` builds the `Entry` and carries `Entry.manifestShared`; `prune.go` `deleteSnapshot` returns before the manifest when `entry.manifestShared`. Prune and auto-prune share `deleteSnapshot`, so both keep the manifest.
+- Tests: `select_shared_internal_test.go` (selector flag table, 10 rows; `newEntry` carries the flag), `prune_shared_internal_test.go` (`deleteSnapshot`: shared keeps `X.json`, control removes both), `prune_upper_case_test.go` `Test_prune_keeps_the_manifest_while_another_entry_is_named_as_the_snapshot` (on disk: regular, directory, symlink sibling; SKIPS on a case-folding volume such as macOS, runs on Linux).
+- Order deviation: production written before the tests; the reds below come from restoring the pre-fix behaviour by mutation.
+- Reds: `deleteSnapshot` ignores the flag -> `Test_delete_snapshot_keeps_a_manifest...` `a_shared_manifest_stays`; selector never sets it -> 5 rows of the selector table; `len(g.snapshots) > 1` instead of `named > 1` -> the directory and symlink rows; `newEntry` drops the flag -> `Test_new_entry_carries_the_shared_manifest_flag_to_the_listing`. All restored.
+- Trap: the on-disk prune test cannot run on macOS; the selector, `newEntry` and `deleteSnapshot` tests are the pins there.
 
 Next (V): sweep lint, doc comments (`selectFolder` etc. already carry docs; check budget), `verify.sh 2bd1adfb ./internal/snapshot/... ./internal/cli/... ./cmd/quarry/...`, spec tick, STATE.md rewrite.
 

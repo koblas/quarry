@@ -12,6 +12,8 @@ type selectedSnapshot struct {
 	entry             fs.DirEntry
 	id, stamp, suffix string
 	manifest          string
+	// manifestShared is true when another entry of any type is named as this ID's snapshot, so the manifest may describe it.
+	manifestShared bool
 }
 
 // folderSelection is selectFolder's decision over a snapshots folder's entries. Every name in it is a name
@@ -29,8 +31,9 @@ type folderSelection struct {
 type idGroup struct {
 	stamp, suffix string
 	snapshots     []fs.DirEntry
-	anySnapshot   bool
-	manifests     []fs.DirEntry
+	// named counts the entries of any type named as a snapshot.
+	named     int
+	manifests []fs.DirEntry
 }
 
 // selectFolder decides which entry is the snapshot and which the manifest of each ID, folding the extension's
@@ -54,7 +57,8 @@ func selectFolder(dirEntries []fs.DirEntry) folderSelection {
 			g.manifests = append(g.manifests, dirEntry)
 		} else if match := snapshotFilePattern.FindStringSubmatch(name); match != nil {
 			g := group(ID(name))
-			g.stamp, g.suffix, g.anySnapshot = match[1], match[2], true
+			g.stamp, g.suffix = match[1], match[2]
+			g.named++
 			if dirEntry.Type().IsRegular() {
 				g.snapshots = append(g.snapshots, dirEntry)
 			}
@@ -72,7 +76,7 @@ func selectFolder(dirEntries []fs.DirEntry) folderSelection {
 				selection.strays = append(selection.strays, dirEntry.Name())
 			}
 		}
-		chosen := selectedSnapshot{entry: winner, id: id, stamp: g.stamp, suffix: g.suffix}
+		chosen := selectedSnapshot{entry: winner, id: id, stamp: g.stamp, suffix: g.suffix, manifestShared: g.named > 1}
 		if len(g.manifests) > 0 {
 			chosen.manifest = preferred(g.manifests, id+".json").Name()
 		}
@@ -84,7 +88,7 @@ func selectFolder(dirEntries []fs.DirEntry) folderSelection {
 			continue
 		}
 		// A manifest beside a partial snapshot is a sync in flight: it commits the manifest first.
-		if !groups[match[1]].anySnapshot && !names["."+match[1]+".sqlite.partial"] {
+		if groups[match[1]].named == 0 && !names["."+match[1]+".sqlite.partial"] {
 			selection.orphans = append(selection.orphans, dirEntry.Name())
 		}
 	}

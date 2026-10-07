@@ -34,6 +34,8 @@ type Entry struct {
 	TakenAt time.Time
 	// Store marks the one entry output names as the store's snapshot.
 	Store bool
+	// manifestShared is true when another entry of the ID is named as its snapshot; prune then keeps the manifest.
+	manifestShared bool
 	// storeFile is true for every entry that is the file the store recorded, whatever its name; none is ever deleted.
 	storeFile bool
 }
@@ -85,9 +87,8 @@ func (s *Server) listFolder() (Listing, error) {
 	}
 	listing := Listing{Dir: s.snapshotDir, Entries: make([]Entry, len(files)), orphans: orphans}
 	for i, f := range files {
-		entry := Entry{ID: f.id, Path: filepath.Join(s.snapshotDir, f.name), Bytes: f.bytes}
-		if f.manifest != "" {
-			entry.ManifestPath = filepath.Join(s.snapshotDir, f.manifest)
+		entry := newEntry(s.snapshotDir, f)
+		if entry.ManifestPath != "" {
 			if manifest, err := readManifest(entry.ManifestPath); err == nil {
 				entry.Manifest = &manifest
 				entry.TakenAt = recordedTakenAt(manifest.Snapshot.TakenAt)
@@ -132,12 +133,20 @@ func (s *Server) markStore(ctx context.Context, listing *Listing) error {
 // cannotTellWarning opens the warning that the store's snapshot cannot be told.
 const cannotTellWarning = "cannot tell which snapshot the store was built from: "
 
-// snapshotFile is one snapshot's file as listed: its ID, the two parts the order reads from that ID, its
-// on-disk name and its chosen manifest's name ("" when none), and its size on disk.
+// snapshotFile is one selected snapshot and its size on disk.
 type snapshotFile struct {
-	id, stamp, suffix string
-	name, manifest    string
-	bytes             int64
+	selectedSnapshot
+
+	bytes int64
+}
+
+// newEntry is f's Entry in dir, with no manifest read.
+func newEntry(dir string, f snapshotFile) Entry {
+	entry := Entry{ID: f.id, Path: filepath.Join(dir, f.entry.Name()), Bytes: f.bytes, manifestShared: f.manifestShared}
+	if f.manifest != "" {
+		entry.ManifestPath = filepath.Join(dir, f.manifest)
+	}
+	return entry
 }
 
 // scanFolder reads the snapshots folder once: the regular snapshot files chosen by selectFolder, newest
@@ -157,10 +166,7 @@ func (s *Server) scanFolder() ([]snapshotFile, []string, error) {
 		if err != nil {
 			return nil, nil, s.folderUnreadableRefusal(err)
 		}
-		files[i] = snapshotFile{
-			id: chosen.id, stamp: chosen.stamp, suffix: chosen.suffix,
-			name: chosen.entry.Name(), manifest: chosen.manifest, bytes: info.Size(),
-		}
+		files[i] = snapshotFile{selectedSnapshot: chosen, bytes: info.Size()}
 	}
 	slices.SortFunc(files, newestFirst)
 	orphans := make([]string, len(selection.orphans))
