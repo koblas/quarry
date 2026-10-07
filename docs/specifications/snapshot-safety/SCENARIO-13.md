@@ -51,3 +51,10 @@ ReadDir survey (`grep -n 'os.ReadDir' internal/snapshot/*.go`, non-test): `list.
 - On macOS a fake `X.SQLITE` path removes or reads the real `X.sqlite`: assert `rm.calls`, `would_delete[]`, `Entry` fields, never `FileExists`
 - `fakeDirEntry` (`select_internal_test.go:17-25`) is internal-package only; `snapshot_test` and `cmd/quarry` need their own wrapper
 - Test names stay lowercase (`letter_case`, `stray`) or the narrow loop misses them
+
+## Orchestrator rulings (2026-10-06)
+
+1. D1 two names: `both <winner> and <other>` (winner first, as the ruled example at specification.md:106); three or more: byte order (:107).
+2. An ID with both snapshot and manifest variants: two D1 lines, the snapshot line first.
+3. A non-regular manifest that wins: no D1 cell; stays in Left unbuilt (final product-vision pass may rule).
+4. BR-C5 fail-open on a listing fault (falls back to the fileExists stat, no refusal, no new copy) accepted: worst case is a stray that is never deleted, never data loss.
