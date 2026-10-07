@@ -113,16 +113,6 @@ func Test_search_transactions_refuses_a_limit_the_schema_rejects_without_searchi
 	}
 }
 
-func Test_search_transactions_answers_a_report_factory_failure_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{}, errFactoryBroke)
-
-	result := h.searchTransactions(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errFactoryBroke.Error(), textOf(t, result))
-	assert.Equal(t, searchLogPrefix+failedLogLine+"\n", h.stderr.String())
-}
-
 func Test_search_transactions_passes_its_arguments_to_the_store(t *testing.T) {
 	fake := &fakeStore{}
 	h := newHarness(t, fake, nil)

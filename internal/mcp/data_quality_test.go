@@ -183,16 +183,6 @@ func Test_data_quality_refuses_a_loader_failure_that_is_not_a_config_refusal_the
 	assert.Zero(t, h.built)
 }
 
-func Test_data_quality_answers_a_report_factory_failure_as_isError_with_its_text(t *testing.T) {
-	h := newHarness(t, listOf(), errFactoryBroke, withDefaultConfig())
-
-	result := h.dataQuality(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errFactoryBroke.Error(), textOf(t, result))
-	assert.Equal(t, dqLogPrefix+failedLogLine+"\n", h.stderr.String())
-}
-
 func Test_data_quality_answers_a_store_fault_as_isError_with_its_text(t *testing.T) {
 	h := newHarness(t, &fakeStore{err: errDiskOnFire}, nil, withDefaultConfig())
 

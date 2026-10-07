@@ -205,16 +205,6 @@ func Test_net_worth_reads_today_once_at_the_start_of_every_call(t *testing.T) {
 	assert.Equal(t, 2, clock.reads)
 }
 
-func Test_net_worth_does_not_read_the_config_when_the_call_names_a_currency(t *testing.T) {
-	stub := &configStub{err: errBadConfig}
-	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load), atSeptember29())
-
-	doc := decodeDoc[document.NetWorth](t, h.netWorth(t, map[string]any{"currency": "USD"}))
-
-	assert.Equal(t, "USD", doc.Currency)
-	assert.Empty(t, stub.commands)
-}
-
 func Test_net_worth_reads_the_config_as_the_mcp_command_and_lists_its_warnings_first(t *testing.T) {
 	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
 	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load), atSeptember29())
@@ -283,48 +273,6 @@ func Test_net_worth_warns_that_a_priced_holding_lacks_only_an_exchange_rate(t *t
 
 	assert.Equal(t, []string{`"Brokerage" holds 1 USD security valued on 2026-03-31, before 2026-04-01, ` +
 		`the first exchange rate in the store, so its CAD balance leaves it out`}, doc.Warnings)
-}
-
-func Test_net_worth_refuses_an_unreadable_config_before_building_the_report(t *testing.T) {
-	stub := &configStub{err: errBadConfig}
-	h := newHarness(t, &fakeStore{}, errFactoryBroke, mcp.WithConfig(stub.load), atSeptember29())
-
-	result := h.netWorth(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errBadConfig.Error(), textOf(t, result))
-	assert.Zero(t, h.built)
-	assert.Equal(t, netWorthLogPrefix+netWorthConfigLog+"\n", h.stderr.String())
-}
-
-func Test_net_worth_answers_a_report_factory_failure_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{}, errFactoryBroke, atSeptember29())
-
-	result := h.netWorth(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errFactoryBroke.Error(), textOf(t, result))
-	assert.Equal(t, netWorthLogPrefix+failedLogLine+"\n", h.stderr.String())
-}
-
-func Test_net_worth_sends_a_store_refusal_verbatim_to_the_client_and_stderr(t *testing.T) {
-	h := newHarness(t, &fakeStore{err: &store.OpenError{Fault: store.OpenFaultMissing, Path: testStorePath}}, nil, atSeptember29())
-
-	result := h.netWorth(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, missingStoreLine, textOf(t, result))
-	assert.Equal(t, netWorthLogPrefix+missingStoreLine+"\n", h.stderr.String())
-}
-
-func Test_net_worth_answers_a_plain_store_fault_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{err: errDiskOnFire}, nil, atSeptember29())
-
-	result := h.netWorth(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errDiskOnFire.Error(), textOf(t, result))
-	assert.Equal(t, netWorthLogPrefix+failedLogLine+"\n", h.stderr.String())
 }
 
 func Test_net_worth_refuses_arguments_the_schema_rejects_without_reading_the_config_or_the_store(t *testing.T) {

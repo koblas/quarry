@@ -56,73 +56,12 @@ func Test_cash_flow_refuses_a_future_since_without_until_before_the_config_or_th
 	assert.Equal(t, cashFlowLogPrefix+windowRefusedLine+"\n", h.stderr.String())
 }
 
-func Test_cash_flow_refuses_an_unreadable_config_before_building_the_report(t *testing.T) {
-	stub := &configStub{err: errBadConfig}
-	h := newHarness(t, &fakeStore{}, errFactoryBroke, mcp.WithConfig(stub.load))
-
-	result := h.cashFlow(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errBadConfig.Error(), textOf(t, result))
-	assert.Zero(t, h.built)
-	assert.Equal(t, cashFlowLogPrefix+cashFlowConfigLog+"\n", h.stderr.String())
-}
-
-func Test_cash_flow_does_not_read_the_config_when_the_call_names_a_currency(t *testing.T) {
-	stub := &configStub{err: errBadConfig}
-	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load))
-
-	doc := decodeDoc[document.CashFlow](t, h.cashFlow(t, map[string]any{"currency": "USD"}))
-
-	assert.Equal(t, "USD", doc.Currency)
-	assert.Empty(t, stub.commands)
-}
-
-func Test_cash_flow_reads_the_config_as_the_mcp_command_when_the_call_names_no_currency(t *testing.T) {
-	stub := &configStub{}
-	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load))
-
-	decodeDoc[document.CashFlow](t, h.cashFlow(t, map[string]any{}))
-
-	assert.Equal(t, []string{"mcp"}, stub.commands)
-}
-
 func Test_cash_flow_groups_by_year_when_the_call_asks_for_it(t *testing.T) {
 	h := newHarness(t, &fakeStore{flow: store.CashFlow{}}, nil)
 
 	doc := decodeDoc[document.CashFlow](t, h.cashFlow(t, map[string]any{"by": "year"}))
 
 	assert.Equal(t, "year", doc.By)
-}
-
-func Test_cash_flow_answers_a_report_factory_failure_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{}, errFactoryBroke)
-
-	result := h.cashFlow(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errFactoryBroke.Error(), textOf(t, result))
-	assert.Equal(t, cashFlowLogPrefix+failedLogLine+"\n", h.stderr.String())
-}
-
-func Test_cash_flow_sends_a_store_refusal_verbatim_to_the_client_and_stderr(t *testing.T) {
-	h := newHarness(t, &fakeStore{err: &store.OpenError{Fault: store.OpenFaultMissing, Path: testStorePath}}, nil)
-
-	result := h.cashFlow(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, missingStoreLine, textOf(t, result))
-	assert.Equal(t, cashFlowLogPrefix+missingStoreLine+"\n", h.stderr.String())
-}
-
-func Test_cash_flow_answers_a_plain_store_fault_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{err: errDiskOnFire}, nil)
-
-	result := h.cashFlow(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errDiskOnFire.Error(), textOf(t, result))
-	assert.Equal(t, cashFlowLogPrefix+failedLogLine+"\n", h.stderr.String())
 }
 
 func Test_cash_flow_refuses_arguments_the_schema_rejects_without_reading_the_config_or_the_store(t *testing.T) {

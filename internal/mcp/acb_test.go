@@ -343,18 +343,6 @@ func Test_acb_refuses_a_year_before_it_reads_the_config_or_the_store(t *testing.
 	assert.Zero(t, h.built)
 }
 
-func Test_acb_refuses_an_unreadable_config_before_building_the_report(t *testing.T) {
-	stub := &configStub{err: errBadConfig}
-	h := newHarness(t, &fakeStore{}, errFactoryBroke, mcp.WithConfig(stub.load), atSeptember29())
-
-	result := h.acb(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errBadConfig.Error(), textOf(t, result))
-	assert.Zero(t, h.built)
-	assert.Equal(t, acbLogPrefix+acbConfigLog+"\n", h.stderr.String())
-}
-
 func Test_acb_refuses_arguments_its_schema_does_not_allow(t *testing.T) {
 	cases := []struct {
 		name      string

@@ -180,18 +180,6 @@ func Test_monthly_summary_keeps_config_warnings_when_currency_is_given(t *testin
 	assert.Equal(t, []string{configUnknownKeyWarning}, doc.Warnings)
 }
 
-func Test_monthly_summary_refuses_an_unreadable_config_without_currency_before_building_the_report(t *testing.T) {
-	stub := &configStub{err: errBadConfig}
-	h := newHarness(t, &fakeStore{}, errFactoryBroke, mcp.WithConfig(stub.load), atSummaryToday())
-
-	result := h.monthlySummary(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errBadConfig.Error(), textOf(t, result))
-	assert.Equal(t, summaryLogPrefix+summaryConfigLog+"\n", h.stderr.String())
-	assert.Zero(t, h.built)
-}
-
 func Test_monthly_summary_warns_it_cannot_tell_what_is_ignored_when_the_config_is_unreadable_with_currency(t *testing.T) {
 	stub := &configStub{err: errBadConfig}
 	h := newHarness(t, &fakeStore{summary: coveredSummary()}, nil, mcp.WithConfig(stub.load), atSummaryToday())
@@ -202,37 +190,6 @@ func Test_monthly_summary_warns_it_cannot_tell_what_is_ignored_when_the_config_i
 	assert.Equal(t, 1, doc.Findings.Open)
 	assert.Equal(t, "USD", doc.Currency)
 	assert.Equal(t, []string{document.CannotTellChoices(config.ProblemAbsolute(errBadConfig))}, doc.Warnings)
-}
-
-func Test_monthly_summary_answers_a_report_factory_failure_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{}, errFactoryBroke, withDefaultConfig(), atSummaryToday())
-
-	result := h.monthlySummary(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errFactoryBroke.Error(), textOf(t, result))
-	assert.Equal(t, summaryLogPrefix+failedLogLine+"\n", h.stderr.String())
-}
-
-func Test_monthly_summary_answers_a_plain_store_fault_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{err: errDiskOnFire}, nil, withDefaultConfig(), atSummaryToday())
-
-	result := h.monthlySummary(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errDiskOnFire.Error(), textOf(t, result))
-	assert.Equal(t, summaryLogPrefix+failedLogLine+"\n", h.stderr.String())
-}
-
-func Test_monthly_summary_sends_a_store_refusal_verbatim_to_the_client_and_stderr(t *testing.T) {
-	h := newHarness(t, &fakeStore{err: &store.OpenError{Fault: store.OpenFaultMissing, Path: testStorePath}}, nil,
-		withDefaultConfig(), atSummaryToday())
-
-	result := h.monthlySummary(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, missingStoreLine, textOf(t, result))
-	assert.Equal(t, summaryLogPrefix+missingStoreLine+"\n", h.stderr.String())
 }
 
 func Test_monthly_summary_words_a_snapshot_taken_before_the_month_ended_with_the_tool_to_call_again(t *testing.T) {

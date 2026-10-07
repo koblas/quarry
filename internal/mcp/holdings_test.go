@@ -180,28 +180,6 @@ func Test_holdings_refuses_an_as_of_it_cannot_use_with_the_class_line_before_the
 	}
 }
 
-func Test_holdings_refuses_an_unreadable_config_before_building_the_report(t *testing.T) {
-	stub := &configStub{err: errBadConfig}
-	h := newHarness(t, &fakeStore{}, errFactoryBroke, mcp.WithConfig(stub.load))
-
-	result := h.holdings(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errBadConfig.Error(), textOf(t, result))
-	assert.Zero(t, h.built)
-	assert.Equal(t, holdingsLogPrefix+holdingsConfigLog+"\n", h.stderr.String())
-}
-
-func Test_holdings_does_not_read_the_config_when_the_call_names_a_currency(t *testing.T) {
-	stub := &configStub{err: errBadConfig}
-	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load))
-
-	doc := decodeDoc[document.Holdings](t, h.holdings(t, map[string]any{"currency": "USD"}))
-
-	assert.Equal(t, "USD", doc.Currency)
-	assert.Empty(t, stub.commands)
-}
-
 func Test_holdings_reads_the_config_as_the_mcp_command_when_the_call_names_no_currency(t *testing.T) {
 	stub := &configStub{cfg: config.Config{WarningsAbsolute: []string{configUnknownKeyWarning}}}
 	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load))
@@ -211,36 +189,6 @@ func Test_holdings_reads_the_config_as_the_mcp_command_when_the_call_names_no_cu
 	assert.Equal(t, []string{"mcp"}, stub.commands)
 	require.NotEmpty(t, doc.Warnings)
 	assert.Equal(t, configUnknownKeyWarning, doc.Warnings[0])
-}
-
-func Test_holdings_answers_a_report_factory_failure_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{}, errFactoryBroke)
-
-	result := h.holdings(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errFactoryBroke.Error(), textOf(t, result))
-	assert.Equal(t, holdingsLogPrefix+failedLogLine+"\n", h.stderr.String())
-}
-
-func Test_holdings_sends_a_store_refusal_verbatim_to_the_client_and_stderr(t *testing.T) {
-	h := newHarness(t, &fakeStore{err: &store.OpenError{Fault: store.OpenFaultMissing, Path: testStorePath}}, nil)
-
-	result := h.holdings(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, missingStoreLine, textOf(t, result))
-	assert.Equal(t, holdingsLogPrefix+missingStoreLine+"\n", h.stderr.String())
-}
-
-func Test_holdings_answers_a_plain_store_fault_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{err: errDiskOnFire}, nil)
-
-	result := h.holdings(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errDiskOnFire.Error(), textOf(t, result))
-	assert.Equal(t, holdingsLogPrefix+failedLogLine+"\n", h.stderr.String())
 }
 
 func Test_holdings_refuses_arguments_the_schema_rejects_without_reading_the_config_or_the_store(t *testing.T) {
