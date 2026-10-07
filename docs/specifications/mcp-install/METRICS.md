@@ -26,6 +26,8 @@
 | gate R1 | lists decoded from combined stdout+stderr buffer; stderr noise breaks idempotency check | internal/claudeplugin/state.go:396 | SCENARIO-01 (seam ruled at scoping; SCENARIO-04 built adapter) |
 | gate R1 | toolrun.Run output unpinned on exit/signal/cancel returns | internal/platform/toolrun/toolrun_test.go:106 | SCENARIO-04 |
 | gate R2 | signal/cancel pins cannot tell combined from stdout | internal/platform/toolrun/toolrun_test.go:241,268 | gate-fix 1 |
+| final pass | Kept line says "a single project" while hints name several/any scope | internal/cli/render_claude.go:36 | SCENARIO-12 (copy ruled at scoping, flagged at 12's checkpoint) |
+| final pass | R6 hint advises `--scope <scope>` for scopes `claude plugin uninstall` rejects | internal/cli/render_claude.go:124-130 | SCENARIO-12 |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |
