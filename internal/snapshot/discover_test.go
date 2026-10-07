@@ -39,11 +39,9 @@ func Test_DiscoverBundle_refuses_when_no_bundle_is_found(t *testing.T) {
 
 			_, err := snapshot.DiscoverBundle(home)
 
-			var re snapshot.RefusalError
-			require.ErrorAs(t, err, &re)
 			assert.Equal(t, "no .quicken file found in ~/Documents or "+
 				"~/Library/Application Support/Quicken/Documents; pass one with --quicken <path> "+
-				"or set quicken.path in ~/Library/Application Support/quarry/config.toml", re.Error())
+				"or set quicken.path in ~/Library/Application Support/quarry/config.toml", refusalText(t, err))
 		})
 	}
 }
@@ -139,11 +137,9 @@ func Test_DiscoverBundle_refuses_when_a_candidate_cannot_be_statted_for_a_reason
 
 			_, err := snapshot.DiscoverBundle(home)
 
-			var re snapshot.RefusalError
-			require.ErrorAs(t, err, &re)
 			assert.Equal(t, fmt.Sprintf("cannot read %s: ", homepath.Abbreviate(home, loop))+errno.Error()+
 				"; allow your terminal to access the folder in System Settings > Privacy & Security, "+
-				"or check the file's permissions", re.Error())
+				"or check the file's permissions", refusalText(t, err))
 		})
 	}
 }
@@ -181,9 +177,7 @@ func Test_DiscoverBundle_refuses_when_multiple_bundles_exist(t *testing.T) {
 
 			_, err := snapshot.DiscoverBundle(home)
 
-			var re snapshot.RefusalError
-			require.ErrorAs(t, err, &re)
-			assert.Equal(t, c.wantStderr, re.Error())
+			assert.Equal(t, c.wantStderr, refusalText(t, err))
 		})
 	}
 }
@@ -198,9 +192,7 @@ func Test_DiscoverBundle_groups_the_bundle_count_by_thousands(t *testing.T) {
 
 	_, err := snapshot.DiscoverBundle(home)
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
-	assert.Equal(t, "found 1,000 .quicken files", strings.SplitN(re.Error(), " (", 2)[0])
+	assert.Equal(t, "found 1,000 .quicken files", strings.SplitN(refusalText(t, err), " (", 2)[0])
 }
 
 func Test_DiscoverBundle_refuses_when_the_only_match_has_no_data_file(t *testing.T) {
@@ -210,19 +202,15 @@ func Test_DiscoverBundle_refuses_when_the_only_match_has_no_data_file(t *testing
 
 	_, err := snapshot.DiscoverBundle(home)
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
 	assert.Equal(t, "~/Documents/Home.quicken is not a Quicken for Mac file "+
 		"(expected a .quicken bundle containing a data file); pass the .quicken bundle with --quicken <path> "+
 		"or set quicken.path in ~/Library/Application Support/quarry/config.toml",
-		re.Error())
+		refusalText(t, err))
 }
 
 func Test_DiscoverBundle_refuses_when_documents_is_unreadable(t *testing.T) {
 	t.Parallel()
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores file permissions")
-	}
+	skipUnderRoot(t)
 	home := t.TempDir()
 	documents := filepath.Join(home, "Documents")
 	require.NoError(t, os.MkdirAll(documents, 0o700))
@@ -231,9 +219,7 @@ func Test_DiscoverBundle_refuses_when_documents_is_unreadable(t *testing.T) {
 
 	_, err := snapshot.DiscoverBundle(home)
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
-	assert.Contains(t, re.Error(), "permission denied")
+	assert.Contains(t, refusalText(t, err), "permission denied")
 }
 
 // Only the Quicken location treats ENOTDIR as missing, even though a valid bundle sits there.
@@ -245,9 +231,7 @@ func Test_DiscoverBundle_refuses_documents_as_unreadable_when_it_is_a_regular_fi
 
 	_, err := snapshot.DiscoverBundle(home)
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
 	assert.Equal(t, "cannot read ~/Documents: "+syscall.ENOTDIR.Error()+"; allow your terminal to access "+
 		"the Documents folder in System Settings > Privacy & Security > Files and Folders, "+
-		"or pass --quicken <path>", re.Error())
+		"or pass --quicken <path>", refusalText(t, err))
 }
