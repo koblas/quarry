@@ -51,7 +51,7 @@ Architect step 0 (before SCENARIO-01's plan), record only, do not rule: in a thr
 
 ### Commands and help (render verbatim)
 
-**`quarry claude`** — group, not runnable.
+**`quarry claude`** — group; runnable only to print help / refuse unknown names.
 - Short: `Install quarry's plugin in Claude Code, or remove it`
 - Long:
 ```
@@ -363,4 +363,4 @@ Sizing pass (architect, 2026-10-07): no mandatory test-first code (quarry writes
 - [x] SCENARIO-06: First install step fails (first-step row green on arrival `Test_claude_install_reports_a_failed_first_step`; folds 07 (acceptance test below), 08 `Test_claude_install_finishes_on_a_rerun_after_a_partial_install`, 14 `Test_claude_install_reports_an_interrupt_while_a_step_runs`, 23 `Test_claude_install_drops_see_above_when_the_failed_step_printed_nothing`, 24 `Test_claude_install_reports_a_step_stopped_by_a_signal`) — `internal/cli/claude_install_test.go` `Test_claude_install_reports_a_partial_install_when_the_plugin_step_fails`
 - [x] SCENARIO-10: Uninstall runs both steps (folds 11 `Test_claude_uninstall_skips_both_steps_when_nothing_is_installed`, 13 `Test_claude_uninstall_reports_a_partial_uninstall_when_the_marketplace_step_fails`, 05b `Test_claude_uninstall_refuses_when_claude_is_not_on_the_path`, 15b `Test_claude_uninstall_refuses_json`, 20 `Test_claude_uninstall_refuses_a_foreign_quarry_marketplace`) — `internal/cli/claude_uninstall_test.go` `Test_claude_uninstall_runs_both_steps_when_both_are_present`
 - [x] SCENARIO-12: Uninstall keeps the marketplace for a project copy (folds 26 `Test_claude_uninstall_shows_a_project_path_outside_home_unabbreviated`) — `internal/cli/claude_uninstall_test.go` `Test_claude_uninstall_keeps_the_marketplace_for_a_project_copy`
-- [ ] SCENARIO-17: mcp help points at quarry claude install (folds 18, 27, 27b, 28)
+- [x] SCENARIO-17: mcp help points at quarry claude install (folds 18 `Test_readme_section_for_installing_and_removing_the_plugin_is_verbatim`, 27 `Test_claude_refuses_an_unknown_subcommand`, 27b `Test_claude_prints_its_group_help_on_stdout`, 28 `Test_run_help_prints_quarrys_description` (green on arrival)) — `internal/cli/mcp_test.go` `Test_mcp_help_prints_the_ruled_long_text`

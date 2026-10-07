@@ -230,6 +230,11 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 			wantStderr: claudeUninstallArgs,
 		},
 		{
+			name:       "claude with an unknown subcommand",
+			args:       []string{"claude", "bogus"},
+			wantStderr: "quarry: unknown command \"bogus\" for \"quarry claude\"; Run 'quarry claude --help' for usage.\n",
+		},
+		{
 			name:       "unknown command",
 			args:       []string{"frob"},
 			wantStderr: "quarry: unknown command \"frob\" for \"quarry\"; Run 'quarry --help' for usage.\n",

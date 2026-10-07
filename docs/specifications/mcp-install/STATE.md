@@ -1,6 +1,6 @@
 # mcp-install — current state
 
-Scenarios complete: SCENARIO-01 (folds 02, 03, 09, 09b, 15, 16, 19, 21, 22), SCENARIO-04 (folds 05, 25), SCENARIO-06 (folds 07, 08, 14, 23, 24), SCENARIO-10 (folds 11, 13, 05b, 15b, 20), SCENARIO-12 (fold 26). Last updated by SCENARIO-12. Only SCENARIO-17 remains.
+Scenarios complete: SCENARIO-01..17 (all; 17 folds 18, 27, 27b, 28). Last updated by SCENARIO-17. Feature complete; next step is the final gate.
 
 ## Binding decisions
 - claudeplugin returns values and typed errors (`*ExitError`, `*InterruptedError`, `*ListUnreadableError`, `ErrForeignMarketplace`, `ErrClaudeNotFound`, the Runner's own); all copy lives in `internal/cli/render_claude.go`. The exit/signal line is composed from fields (`Argv`, `Status`, `Signal.String()`, `len(Output)`) by `claudeStepFailureLine(verb, lead, exit)`, never from `Error()`; the unreadable line still uses `Error()`. Install and uninstall render the same errors under their own verb prefix (SCENARIO-01, 04, 06, 10)
@@ -18,9 +18,11 @@ Scenarios complete: SCENARIO-01 (folds 02, 03, 09, 09b, 15, 16, 19, 21, 22), SCE
 - The Runner's `name` is the path `LookPath("claude")` resolved; `ExitError.Argv` stays `claude …`; the wiring test (`cmd/quarry/run_claude_wiring_test.go`) proves production sets it (SCENARIO-04)
 - `Env.Home` rendered through `claudePath(home, p)` (raw when home is ""); hint paths abbreviate first, then `%q` (SCENARIO-04, 12)
 - cli fakes record every ctx; `runClaudeAt` owns a marker on the command ctx and asserts it on each recorded ctx (SCENARIO-06)
+- The `claude` group is runnable on purpose: `RunE` prints help and `Args: cobra.NoArgs` refuses an unknown name (cobra checks `Runnable()` before `Args`, so without `RunE` `quarry claude bogus` exits 0). Its help gains a `quarry claude [flags]` usage line, accepted and pinned (`claudeGroupHelp`); the spec says "not runnable" and was amended. Do not "fix" it (SCENARIO-17)
+- Drift test `run_claude_drift_test.go` ties the install/uninstall Long command lines to the README install section, the Claude Code section's scope-less forms, `plugin.json`/`marketplace.json` names and `go.mod` (`koblas/quarry` is `go.mod` minus `github.com/`, since marketplace `owner.name` is a display name). README Claude Code block keeps the scope-less pair; the install section carries the `--scope user` lines verbatim (SCENARIO-17)
 
 ## Left unbuilt
-- SCENARIO-17 (folds 18, 27, 27b, 28) must do: (1) `mcp` Long names `quarry claude install` + `internal/cli/mcp_test.go:28,55` pins; (2) README: install block, network sentence, new `## Install or remove the plugin` section, README const pin `cmd/quarry/run_plugin_readme_test.go:41-62` (command lines equal the Long's); (3) drift test tying `install` Long's `koblas/quarry` / `quarry@quarry` to `.claude-plugin/marketplace.json`, `plugin/.claude-plugin/plugin.json`, README; PRD Decisions line; (4) `claude` group unknown-subcommand `Args` + RunE refusal (spec Surface & Copy; `noArgs` `errors.go:15` lacks the `; Run '...' for usage.` suffix), group Long pin, bare group prints help (27b); (5) `claude` Short rewrite + root-help row (28)
+- Nothing planned remains. Out of scope per spec, no owner: `--json` for install/uninstall, `--desktop`, `--scope`, project-scope removal; adding the new README section to `skillDriftSources` (`run_skill_drift_test.go:42-48`; `claude mcp add ... -- quarry mcp` may confuse its scanner) (SCENARIO-17)
 
 ## Traps
 - `toolrun.SignalError.Error()` is `stopped by signal: killed` (colon) — render `Signal.String()`, never `Error()` (SCENARIO-06)
@@ -32,13 +34,11 @@ Scenarios complete: SCENARIO-01 (folds 02, 03, 09, 09b, 15, 16, 19, 21, 22), SCE
 - `cmd/quarry` `testEnv` has a RunTool fake that errors and a LookPath fake returning `*exec.Error{ErrNotFound}`, so no cmd/quarry test starts a child; only the wiring test runs a real file, no `t.Parallel` (SCENARIO-04)
 - cli test fakes: `toolCalls` (`script`, `cancelBefore`, `cancel`, `lists`, `reply`), helpers `runClaude`, `runClaudeAt` (home, marker), `findsAt`, `cannotStart`; `errNoStart` is a bare string error. claudeplugin fakes: `fakeClaude`, `fakePath`. Interrupt tables: `cancel` alone = step succeeded then ctx ended; `cancel`+`ctxErr` = ended during (SCENARIO-04, 06, 10)
 - `UninstallResult.Remaining` must be nil, not empty, when no copy exists: `assert.Equal(…UninstallResult{…})` rows break otherwise; do not add a non-user entry to the `reports_each_outcome` table (stderr asserted empty) (SCENARIO-12)
-- Until SCENARIO-17, `quarry claude bogus` prints group help and exits 0; do not pin it (SCENARIO-10)
-- Group help padding: cobra pads names to 11, so `uninstall` gets three spaces before its Short, `install` five. The root-help claude row is unchanged by SCENARIO-10/12; a diff there is a bug until SCENARIO-17 rewrites the `claude` Short (SCENARIO-10)
 - Uninstall Long's "names each one" is now true; ruled copy, do not reword (SCENARIO-10, 12)
-- Pins SCENARIO-17 must re-assert: root-help claude row `cmd/quarry/run_status_test.go:145-162`; `claude install` and `claude uninstall` rows in `run_usage_test.go` and `run_read_usage_test.go`; `Test_claude_uninstall_help_prints_the_ruled_text` and `Test_claude_uninstall_reports_each_outcome` (byte-identical)
-- Green on arrival: SCENARIO-28's root-help row (17 only names `Test_run_help_prints_quarrys_description`)
 
 ## Open debts
+- Final product-vision pass (NITs from the SCENARIO-17 checkpoint, left as ruled): README says "skipping any that is already done" (grammar "any that is"); Claude Code section shows scope-less lines while the install section shows `--scope user`; the README uninstall text does not mention the marketplace keep-rule when a project copy remains (SCENARIO-17)
+- Group help padding: cobra pads names to 11 (`uninstall` three spaces before its Short, `install` five); child-column width changes break the group-help `Contains` pins; `Test_claude_*_help_prints_the_ruled_text` and `Test_claude_uninstall_reports_each_outcome` must stay byte-identical (SCENARIO-10, 17)
 - Final product-vision pass: the Kept line says "a single project" even for a `managed`/`local` scope copy or several remaining copies (SCENARIO-12) — ruled copy, not re-ruled here
 - `claudeRefusalCopy[verb]` returns empty strings for an unknown verb (only install/uninstall call it) — NIT, unowned, dies unless re-opened (SCENARIO-10)
 - `toolrun.run` nil `cmd.ProcessState` (wait4 ECHILD) returns the raw err via the `// unreachable:`-marked final return; no test provokes it — unowned, dies unless re-opened
