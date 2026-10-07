@@ -56,8 +56,8 @@ func manifestTaken(takenAt string) snapshot.Manifest {
 }
 
 // newListServer builds a Server over home's snapshots folder; probe is the store, nil for none.
-func newListServer(home string, probe snapshot.StoreProbe) *snapshot.Server {
-	opts := []snapshot.Option{snapshot.WithSnapshotDir(filepath.Join(home, "snapshots")), snapshot.WithHome(home)}
+func newListServer(home string, probe snapshot.StoreProbe, extra ...snapshot.Option) *snapshot.Server {
+	opts := append([]snapshot.Option{snapshot.WithSnapshotDir(filepath.Join(home, "snapshots")), snapshot.WithHome(home)}, extra...)
 	if probe != nil {
 		opts = append(opts, snapshot.WithStoreProbe(probe))
 	}

@@ -137,7 +137,7 @@ func WithReadTimeFindings(states func(store.FindingList) []finding.State) Option
 
 // NewServer builds a Server from opts.
 func NewServer(opts ...Option) *Server {
-	s := &Server{busyTimeout: DefaultBusyTimeout, remove: os.Remove}
+	s := &Server{busyTimeout: DefaultBusyTimeout, remove: os.Remove, readDir: os.ReadDir}
 	for _, opt := range opts {
 		opt(s)
 	}

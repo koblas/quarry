@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -49,6 +50,19 @@ func chosen(sel folderSelection) []selected {
 	out := make([]selected, len(sel.snapshots))
 	for i, s := range sel.snapshots {
 		out[i] = selected{snapshot: s.entry.Name(), manifest: s.manifest}
+	}
+	return out
+}
+
+// strayNames are the regular snapshot names that lost to another name of their ID, in directory order.
+func strayNames(sel folderSelection) []string {
+	var out []string
+	for _, s := range sel.snapshots {
+		for _, name := range s.names {
+			if name != s.entry.Name() {
+				out = append(out, name)
+			}
+		}
 	}
 	return out
 }
@@ -147,7 +161,52 @@ func Test_select_folder_picks_one_snapshot_and_one_manifest_per_id(t *testing.T)
 			got := selectFolder(c.entries)
 
 			assert.Equal(t, c.want, chosen(got))
-			assert.Equal(t, c.strays, got.strays)
+			assert.Equal(t, c.strays, strayNames(got))
+		})
+	}
+}
+
+func Test_select_folder_records_every_regular_name_of_an_id(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name          string
+		entries       []fs.DirEntry
+		wantSnapshots []string
+		wantManifests []string
+	}{
+		{
+			name: "every regular snapshot name in directory order, winner included", entries: entries(selID+".SQLITE", selID+".sqlite"),
+			wantSnapshots: []string{selID + ".SQLITE", selID + ".sqlite"},
+		},
+		{
+			name: "every regular manifest name in directory order", entries: entries(selID+".sqlite", selID+".JSON", selID+".json"),
+			wantSnapshots: []string{selID + ".sqlite"}, wantManifests: []string{selID + ".JSON", selID + ".json"},
+		},
+		{
+			name:          "a directory named as a snapshot is no regular name",
+			entries:       withType(entries(selID+".SQLITE", selID+".sqlite"), selID+".SQLITE", fs.ModeDir),
+			wantSnapshots: []string{selID + ".sqlite"},
+		},
+		{
+			name:          "a symlink named as a manifest is no regular name",
+			entries:       withType(entries(selID+".sqlite", selID+".JSON", selID+".json"), selID+".json", fs.ModeSymlink),
+			wantSnapshots: []string{selID + ".sqlite"}, wantManifests: []string{selID + ".JSON"},
+		},
+		{
+			name:          "another ID's names are not counted",
+			entries:       entries(selID+".sqlite", selOther+".SQLITE", selOther+".sqlite"),
+			wantSnapshots: []string{selID + ".sqlite"},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, found := selectFolder(c.entries).snapshot(selID)
+
+			require.True(t, found)
+			assert.Equal(t, c.wantSnapshots, got.names)
+			assert.Equal(t, c.wantManifests, got.manifestNames)
 		})
 	}
 }

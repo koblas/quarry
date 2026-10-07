@@ -1,13 +1,13 @@
 package snapshot_test
 
 import (
-	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"syscall"
 	"testing"
 
+	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -169,32 +169,22 @@ func Test_plan_prune_would_delete_an_upper_case_sqlite_snapshot_by_its_on_disk_p
 func Test_prune_keeps_the_manifest_while_another_entry_is_named_as_the_snapshot(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name   string
-		create func(path string) error
+		name string
+		mode fs.FileMode
 	}{
-		{name: "a regular upper-case variant", create: func(path string) error {
-			f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-			if err == nil {
-				err = f.Close()
-			}
-			return err
-		}},
-		{name: "a directory", create: func(path string) error { return os.Mkdir(path, 0o700) }},
-		{name: "a symlink", create: func(path string) error { return os.Symlink("elsewhere", path) }},
+		{name: "a regular upper-case variant"},
+		{name: "a directory", mode: fs.ModeDir},
+		{name: "a symlink", mode: fs.ModeSymlink},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			home := t.TempDir()
 			dir := prunable(t, home, idNewest, idMiddle, idOldest)
-			if err := c.create(filepath.Join(dir, idOldest+".SQLITE")); errors.Is(err, fs.ErrExist) {
-				t.Skip("the volume folds letter case, so a second name for the snapshot cannot exist")
-			} else {
-				require.NoError(t, err)
-			}
 			rm := &fakeRemover{}
+			other := variant{name: idOldest + ".SQLITE", like: idOldest + ".sqlite", mode: c.mode}
 
-			_, err := newPruneServer(home, nil, rm).Prune(t.Context(), 2)
+			_, err := newPruneServer(home, nil, rm, snapshot.WithReadDir(readDirWith(t, other))).Prune(t.Context(), 2)
 
 			require.NoError(t, err)
 			assert.Equal(t, []string{idOldest + ".sqlite"}, rm.calls)

@@ -3,8 +3,10 @@
 package snapshot
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -69,7 +71,7 @@ func Test_locateFrom_maps_each_path_shape_to_its_snapshot_and_manifest(t *testin
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 
-			snapshotPath, manifestPath, err := locateFrom(home, snapshotDir, c.value)
+			snapshotPath, manifestPath, err := NewServer(WithHome(home), WithSnapshotDir(snapshotDir)).locateFrom(c.value)
 
 			require.NoError(t, err)
 			assert.Equal(t, c.wantSnapshot, snapshotPath)
@@ -85,9 +87,71 @@ func Test_locateFrom_resolves_a_relative_name_against_the_working_directory(t *t
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 
-	snapshotPath, manifestPath, err := locateFrom(t.TempDir(), t.TempDir(), "x.SQLITE")
+	snapshotPath, manifestPath, err := NewServer(WithHome(t.TempDir()), WithSnapshotDir(t.TempDir())).locateFrom("x.SQLITE")
 
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(cwd, "x.SQLITE"), snapshotPath)
 	assert.Equal(t, filepath.Join(cwd, "x.json"), manifestPath)
+}
+
+// listing is a read-dir seam that returns names as regular files whatever folder it is asked for.
+func listing(names ...string) func(string) ([]fs.DirEntry, error) {
+	return func(string) ([]fs.DirEntry, error) { return entries(names...), nil }
+}
+
+func Test_locate_by_id_takes_the_winner_through_the_read_dir_seam(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	snapshotDir := filepath.Join(home, "snapshots")
+	srv := NewServer(WithHome(home), WithSnapshotDir(snapshotDir),
+		WithReadDir(listing(selID+".Sqlite", selID+".SQLITE", selID+".JSON")))
+
+	snapshotPath, manifestPath, err := srv.locateFrom(selID)
+
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(snapshotDir, selID+".SQLITE"), snapshotPath)
+	assert.Equal(t, filepath.Join(snapshotDir, selID+".JSON"), manifestPath)
+}
+
+func Test_locate_by_path_finds_the_manifest_through_the_read_dir_seam(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	path := filepath.Join(home, "X.sqlite")
+	require.NoError(t, os.WriteFile(path, []byte("x"), 0o600))
+	srv := NewServer(WithHome(home), WithSnapshotDir(filepath.Join(home, "snapshots")), WithReadDir(listing("X.JSON")))
+
+	snapshotPath, manifestPath, err := srv.locateFrom(path)
+
+	require.NoError(t, err)
+	assert.Equal(t, path, snapshotPath)
+	assert.Equal(t, filepath.Join(home, "X.JSON"), manifestPath)
+}
+
+func Test_locate_refuses_with_the_unreadable_folder_copy_when_the_read_dir_seam_fails(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	backups := filepath.Join(home, "Backups")
+	require.NoError(t, os.Mkdir(backups, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(backups, "x.sqlite"), []byte("x"), 0o600))
+	denied := func(string) ([]fs.DirEntry, error) {
+		return nil, &fs.PathError{Op: "open", Path: "dir", Err: syscall.EACCES}
+	}
+	cases := []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{name: "an ID names the snapshots folder", value: selID, want: "cannot read ~/snapshots: permission denied"},
+		{name: "a path names its parent folder", value: filepath.Join(backups, "x.sqlite"), want: "cannot read ~/Backups: permission denied"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			srv := NewServer(WithHome(home), WithSnapshotDir(filepath.Join(home, "snapshots")), WithReadDir(denied))
+
+			_, _, err := srv.locateFrom(c.value)
+
+			require.EqualError(t, err, c.want)
+		})
+	}
 }

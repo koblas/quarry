@@ -15,6 +15,8 @@ type selectedSnapshot struct {
 	manifest          string
 	// manifestShared is true when another entry of any type is named as this ID's snapshot, so the manifest may describe it.
 	manifestShared bool
+	// names are the regular snapshot files named as this ID, winner included; manifestNames the regular manifests.
+	names, manifestNames []string
 }
 
 // folderSelection is selectFolder's decision over a snapshots folder's entries. Every name in it is a name
@@ -22,8 +24,6 @@ type selectedSnapshot struct {
 type folderSelection struct {
 	// snapshots holds one regular snapshot file per ID.
 	snapshots []selectedSnapshot
-	// strays are the regular snapshot files that lost to another file of the same ID.
-	strays []string
 	// orphans are the regular manifests whose snapshot is gone and that no sync is writing.
 	orphans []string
 }
@@ -35,6 +35,8 @@ type idGroup struct {
 	// named counts the entries of any type named as a snapshot.
 	named     int
 	manifests []fs.DirEntry
+	// manifestNames are the names of the regular files among manifests.
+	manifestNames []string
 }
 
 // selectFolder decides which entry is the snapshot and which the manifest of each ID, folding the extension's
@@ -56,6 +58,9 @@ func selectFolder(dirEntries []fs.DirEntry) folderSelection {
 		if match := manifestFilePattern.FindStringSubmatch(name); match != nil {
 			g := group(match[1])
 			g.manifests = append(g.manifests, dirEntry)
+			if dirEntry.Type().IsRegular() {
+				g.manifestNames = append(g.manifestNames, name)
+			}
 		} else if match := snapshotFilePattern.FindStringSubmatch(name); match != nil {
 			g := group(ID(name))
 			g.stamp, g.suffix = match[1], match[2]
@@ -71,13 +76,10 @@ func selectFolder(dirEntries []fs.DirEntry) folderSelection {
 		if len(g.snapshots) == 0 {
 			continue
 		}
-		winner := preferred(g.snapshots, id+".sqlite")
-		for _, dirEntry := range g.snapshots {
-			if dirEntry != winner {
-				selection.strays = append(selection.strays, dirEntry.Name())
-			}
+		chosen := selectedSnapshot{
+			entry: preferred(g.snapshots, id+".sqlite"), id: id, stamp: g.stamp, suffix: g.suffix,
+			manifestShared: g.named > 1, names: entryNames(g.snapshots), manifestNames: g.manifestNames,
 		}
-		chosen := selectedSnapshot{entry: winner, id: id, stamp: g.stamp, suffix: g.suffix, manifestShared: g.named > 1}
 		if len(g.manifests) > 0 {
 			chosen.manifest = preferred(g.manifests, id+".json").Name()
 		}
@@ -94,6 +96,15 @@ func selectFolder(dirEntries []fs.DirEntry) folderSelection {
 		}
 	}
 	return selection
+}
+
+// entryNames are the names of dirEntries, in order.
+func entryNames(dirEntries []fs.DirEntry) []string {
+	names := make([]string, len(dirEntries))
+	for i, dirEntry := range dirEntries {
+		names[i] = dirEntry.Name()
+	}
+	return names
 }
 
 // snapshot is the selected snapshot whose ID is exactly id, if the folder has one.

@@ -55,6 +55,11 @@ type Listing struct {
 	NoSnapshots string
 	// NoSnapshotsAbsolute is NoSnapshots naming the folder by its absolute path; machine-readable output carries this form.
 	NoSnapshotsAbsolute string
+	// Duplicates are the warnings that the folder holds several letter cases of one file name, newest ID
+	// first; nil when none does.
+	Duplicates []string
+	// DuplicatesAbsolute is Duplicates naming the folder by its absolute path; machine-readable output carries this form.
+	DuplicatesAbsolute []string
 	// StoreUnreadable is why the store's snapshot cannot be told, a phrase naming any path it could not read; "" when it can, or there is no store.
 	StoreUnreadable string
 	// StoreWarning is StoreUnreadable as the warning a listing prints; "" when StoreUnreadable is.
@@ -96,6 +101,8 @@ func (s *Server) listFolder() (Listing, error) {
 		}
 		listing.Entries[i] = entry
 		listing.TotalBytes += f.bytes
+		listing.Duplicates = append(listing.Duplicates, f.duplicates(homepath.Abbreviate(s.home, s.snapshotDir))...)
+		listing.DuplicatesAbsolute = append(listing.DuplicatesAbsolute, f.duplicates(s.snapshotDir)...)
 	}
 	if len(files) == 0 {
 		listing.NoSnapshots = noSnapshotsNote(homepath.Abbreviate(s.home, s.snapshotDir))
@@ -107,6 +114,36 @@ func (s *Server) listFolder() (Listing, error) {
 // noSnapshotsNote is the note that no snapshot exists yet in a snapshots folder shown as folder.
 func noSnapshotsNote(folder string) string {
 	return "no snapshots in " + folder + " yet; run quarry sync to take one"
+}
+
+// duplicateWarning is the warning that folder holds several letter cases of one file name, names in all,
+// of which quarry uses only winner.
+func duplicateWarning(folder string, names []string, winner string) string {
+	sorted := slices.Sorted(slices.Values(names))
+	var held, rename string
+	if len(sorted) == 2 {
+		other := sorted[0]
+		if other == winner {
+			other = sorted[1]
+		}
+		held, rename = "both "+winner+" and "+other, "the other"
+	} else {
+		held, rename = strings.Join(sorted[:len(sorted)-1], ", ")+" and "+sorted[len(sorted)-1], "the others"
+	}
+	return folder + " holds " + held + "; quarry lists, prunes and uses only " + winner + "; rename or remove " + rename
+}
+
+// duplicates are the warnings, snapshot first, for the names of this ID that differ from the one in use only
+// by letter case; a variant that is not a regular file is not counted.
+func (s selectedSnapshot) duplicates(folder string) []string {
+	var warnings []string
+	if len(s.names) > 1 {
+		warnings = append(warnings, duplicateWarning(folder, s.names, s.entry.Name()))
+	}
+	if len(s.manifestNames) > 1 && slices.Contains(s.manifestNames, s.manifest) {
+		warnings = append(warnings, duplicateWarning(folder, s.manifestNames, s.manifest))
+	}
+	return warnings
 }
 
 // markStore reads which snapshot the store was built from into listing and marks that entry. A recorded
@@ -152,7 +189,7 @@ func newEntry(dir string, f snapshotFile) Entry {
 // scanFolder reads the snapshots folder once: the regular snapshot files chosen by selectFolder, newest
 // first, and the orphan manifests' paths. An unreadable folder or unstattable snapshot is a refusal.
 func (s *Server) scanFolder() ([]snapshotFile, []string, error) {
-	dirEntries, err := os.ReadDir(s.snapshotDir)
+	dirEntries, err := s.readDir(s.snapshotDir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil, nil
 	}

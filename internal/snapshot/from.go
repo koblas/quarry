@@ -23,7 +23,7 @@ func (s *Server) ImportFrom(ctx context.Context, from string) (Outcome, error) {
 	if s.reference == nil {
 		return Outcome{}, errNoReference
 	}
-	snapshotPath, manifestPath, err := locateFrom(s.home, s.snapshotDir, from)
+	snapshotPath, manifestPath, err := s.locateFrom(from)
 	if err != nil {
 		return Outcome{}, FailureOutcome(ctx, err)
 	}
@@ -74,17 +74,18 @@ func isPathForm(value string) bool {
 
 // locateFrom maps a --from value to the snapshot file and manifest it names, or the refusal for one it
 // cannot name. The manifest path is the on-disk name when one exists, else the lowercase name that reads as absent.
-func locateFrom(home, snapshotDir, value string) (string, string, error) {
+func (s *Server) locateFrom(value string) (string, string, error) {
 	if isPathForm(value) {
-		return locateByPath(home, snapshotDir, value)
+		return s.locateByPath(value)
 	}
-	return locateByID(home, snapshotDir, value)
+	return s.locateByID(value)
 }
 
 // locateByID lists snapshotDir once and takes the file and manifest selectFolder chose for id, so --from and
 // quarry snapshots agree on which file is id. An unlistable folder is a refusal, never a lowercase guess.
-func locateByID(home, snapshotDir, id string) (string, string, error) {
-	dirEntries, err := os.ReadDir(snapshotDir)
+func (s *Server) locateByID(id string) (string, string, error) {
+	home, snapshotDir := s.home, s.snapshotDir
+	dirEntries, err := s.readDir(snapshotDir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return "", "", idNotFoundRefusal(home, snapshotDir, id)
 	}
@@ -101,7 +102,8 @@ func locateByID(home, snapshotDir, id string) (string, string, error) {
 
 // locateByPath resolves a path-form value, checks the file exists and is a snapshot candidate, then lists its
 // parent folder for the manifest in any letter case.
-func locateByPath(home, snapshotDir, value string) (string, string, error) {
+func (s *Server) locateByPath(value string) (string, string, error) {
+	home, snapshotDir := s.home, s.snapshotDir
 	snapshotPath, err := filepath.Abs(homepath.Expand(home, value))
 	if err != nil {
 		// unreachable: on darwin os.Getwd succeeds after the working directory is removed; Linux exercises it via Test_import_from_refuses_a_relative_path_when_the_working_directory_no_longer_exists
@@ -111,7 +113,7 @@ func locateByPath(home, snapshotDir, value string) (string, string, error) {
 		return "", "", err
 	}
 	folder, stem := filepath.Dir(snapshotPath), ID(snapshotPath)
-	dirEntries, err := os.ReadDir(folder)
+	dirEntries, err := s.readDir(folder)
 	if err != nil {
 		return "", "", folderUnreadableRefusal(home, folder, err)
 	}
