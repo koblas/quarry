@@ -33,21 +33,27 @@ type lockedStore struct {
 	sentinel  []byte
 }
 
+// sentinelStoreOf points HOME at a fresh quarry folder holding a store of the sentinel text and no lock file.
+func sentinelStoreOf(tb testing.TB, sentinel string) lockedStore {
+	tb.Helper()
+	home := newHome(tb)
+	quarryDir := storeDirUnder(home)
+	require.NoError(tb, os.MkdirAll(quarryDir, 0o700))
+	storePath := filepath.Join(quarryDir, "quarry.duckdb")
+	require.NoError(tb, os.WriteFile(storePath, []byte(sentinel), 0o600))
+	return lockedStore{home: home, quarryDir: quarryDir, storePath: storePath, sentinel: []byte(sentinel)}
+}
+
 // holdLockedStore points HOME at a fresh quarry folder holding a sentinel store, and holds its lock.
 func holdLockedStore(t *testing.T) lockedStore {
 	t.Helper()
-	home := newHome(t)
-	quarryDir := storeDirUnder(home)
-	require.NoError(t, os.MkdirAll(quarryDir, 0o700))
-	storePath := filepath.Join(quarryDir, "quarry.duckdb")
-	sentinel := []byte("previous store bytes, untouched while another writer holds the lock")
-	require.NoError(t, os.WriteFile(storePath, sentinel, 0o600))
+	locked := sentinelStoreOf(t, "previous store bytes, untouched while another writer holds the lock")
 
-	release, err := lockfile.New(filepath.Join(quarryDir, "quarry.lock"), lockfile.ModeSync).Acquire(context.Background())
+	release, err := lockfile.New(filepath.Join(locked.quarryDir, "quarry.lock"), lockfile.ModeSync).Acquire(context.Background())
 	require.NoError(t, err)
 	t.Cleanup(release)
 
-	return lockedStore{home: home, quarryDir: quarryDir, storePath: storePath, sentinel: sentinel}
+	return locked
 }
 
 // requireUntouched fails t unless no snapshot was taken and the store holds its sentinel bytes.
@@ -60,15 +66,7 @@ func (l lockedStore) requireUntouched(t *testing.T) {
 }
 
 func Test_run_sync_refuses_while_another_writer_holds_the_lock(t *testing.T) {
-	cells := []struct {
-		name string
-		flag []string
-	}{
-		{name: "text", flag: nil},
-		{name: "json", flag: []string{"--json"}},
-	}
-
-	for _, c := range cells {
+	for _, c := range outputCells {
 		t.Run(c.name, func(t *testing.T) {
 			locked := holdLockedStore(t)
 			b := v9fixture.NewBuilder()
@@ -86,15 +84,7 @@ func Test_run_sync_refuses_while_another_writer_holds_the_lock(t *testing.T) {
 }
 
 func Test_run_sync_from_refuses_on_the_lock_before_resolving_the_snapshot(t *testing.T) {
-	cells := []struct {
-		name string
-		flag []string
-	}{
-		{name: "text", flag: nil},
-		{name: "json", flag: []string{"--json"}},
-	}
-
-	for _, c := range cells {
+	for _, c := range outputCells {
 		t.Run(c.name, func(t *testing.T) {
 			locked := holdLockedStore(t)
 
@@ -322,13 +312,7 @@ func unusableLockRows() []unusableLockRow {
 // newSentinelStore points HOME at a quarry folder holding a sentinel store and no lock file.
 func newSentinelStore(t *testing.T) lockedStore {
 	t.Helper()
-	home := newHome(t)
-	quarryDir := storeDirUnder(home)
-	require.NoError(t, os.MkdirAll(quarryDir, 0o700))
-	sentinel := []byte("previous store bytes, untouched while the lock file is unusable")
-	storePath := filepath.Join(quarryDir, "quarry.duckdb")
-	require.NoError(t, os.WriteFile(storePath, sentinel, 0o600))
-	return lockedStore{home: home, quarryDir: quarryDir, storePath: storePath, sentinel: sentinel}
+	return sentinelStoreOf(t, "previous store bytes, untouched while the lock file is unusable")
 }
 
 func Test_run_sync_refuses_an_unusable_lock_file_with_a_fix(t *testing.T) {

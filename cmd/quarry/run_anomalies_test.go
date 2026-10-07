@@ -24,47 +24,59 @@ var anomaliesRightAligned = map[int]bool{4: true, 5: true, 6: true}
 // anomaliesTable is the anomalies table under caption followed by a blank line and footer: every cell
 // but the last padded to its column's widest cell, two-space gaps, numbers right-aligned, trailing spaces trimmed.
 func anomaliesTable(caption, footer string, rows ...[]string) string {
-	rows = append([][]string{anomaliesHeader}, rows...)
-	widths := make([]int, len(anomaliesHeader)-1)
-	for _, row := range rows {
-		for i := range widths {
-			widths[i] = max(widths[i], len(row[i]))
-		}
+	return caption + "\n\n" + paddedTable(anomaliesHeader, anomaliesRightAligned, rows) + "\n" + footer + "\n"
+}
+
+// anomaliesCADTable is anomaliesTable for the default period over all accounts, amounts in CAD.
+func anomaliesCADTable(footer string, rows ...[]string) string {
+	return anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", footer, rows...)
+}
+
+// weeklyCharges is one grocery charge of payee a week from 2025-03-03 on, one per amount in cents.
+func weeklyCharges(payee string, cents ...int64) []chargeTxn {
+	charges := make([]chargeTxn, len(cents))
+	for i, c := range cents {
+		charges[i] = groceryCharge(payee, day(2025, time.March, 3+7*i), c)
 	}
-	var b strings.Builder
-	b.WriteString(caption + "\n\n")
-	for _, row := range rows {
-		cells := make([]string, len(row))
-		for i, cell := range row {
-			switch {
-			case i == len(widths):
-				cells[i] = cell
-			case anomaliesRightAligned[i]:
-				cells[i] = fmt.Sprintf("%*s", widths[i], cell)
-			default:
-				cells[i] = fmt.Sprintf("%-*s", widths[i], cell)
-			}
-		}
-		b.WriteString(strings.TrimRight(strings.Join(cells, "  "), " ") + "\n")
+	return charges
+}
+
+// emptyWindowAccounts are the accounts of the empty-window tests: one in reports, one without transactions,
+// one left out of reports and one on linked tracking.
+func emptyWindowAccounts() []store.Account {
+	return []store.Account{
+		chequingAccount("acct-cad", 1),
+		{ID: "acct-visa", SourceID: 2, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
+		{ID: "acct-old", SourceID: 3, Name: "Old Card", Type: "credit_card", Currency: "CAD", Active: true, NotInReports: true},
+		{ID: "acct-401k", SourceID: 4, Name: "Linked", Type: "chequing", Currency: "CAD", Active: true, LinkedTracking: true},
 	}
-	b.WriteString("\n" + footer + "\n")
-	return b.String()
+}
+
+// spendRun is what one command line exited with and printed.
+type spendRun struct {
+	exitCode       int
+	stdout, stderr string
+}
+
+// runSpendTextAndJSON runs command with args over the spend clock, once as text and once with --json after the command;
+// it returns the text run, then the JSON one.
+func runSpendTextAndJSON(command string, args ...string) (spendRun, spendRun) {
+	var textOut, textErr, jsonOut, jsonErr bytes.Buffer
+	textExit := runWith(context.Background(), append([]string{command}, args...), spendEnv(&textOut, &textErr))
+	jsonExit := runWith(context.Background(), append([]string{command, "--json"}, args...), spendEnv(&jsonOut, &jsonErr))
+	return spendRun{textExit, textOut.String(), textErr.String()}, spendRun{jsonExit, jsonOut.String(), jsonErr.String()}
 }
 
 func Test_run_anomalies_lists_a_charge_over_twice_the_payees_usual(t *testing.T) {
 	home := newHome(t)
-	charges := make([]chargeTxn, 0, 6)
-	for i, cents := range []int64{9000, 9300, 9605, 9900, 10200} {
-		charges = append(charges, groceryCharge("Bell Canada", day(2025, time.March, 3+7*i), cents))
-	}
-	charges = append(charges, groceryCharge("Bell Canada", day(2026, time.March, 2), 41200))
+	charges := append(weeklyCharges("Bell Canada", 9000, 9300, 9605, 9900, 10200), groceryCharge("Bell Canada", day(2026, time.March, 2), 41200))
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, charges...))
 
 	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "1 charge checked",
+	assert.Equal(t, anomaliesCADTable("1 charge checked",
 		[]string{"2026-03-02", "Chequing (CAD)", "Bell Canada", "Food:Groceries", "412.00", "96.05", "4.3x", "payee, 5 earlier"}),
 		stdout.String())
 }
@@ -72,13 +84,9 @@ func Test_run_anomalies_lists_a_charge_over_twice_the_payees_usual(t *testing.T)
 func Test_run_anomalies_account_judges_the_named_accounts_charge_against_history_from_every_account(t *testing.T) {
 	home := newHome(t)
 	visa := store.Account{ID: "acct-visa", SourceID: 2, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true}
-	charges := make([]chargeTxn, 0, 5)
-	for i, cents := range []int64{9000, 9300, 9605} {
-		charges = append(charges, groceryCharge("Bell Canada", day(2025, time.March, 3+7*i), cents))
-	}
 	onVisa := groceryCharge("Bell Canada", day(2026, time.March, 2), 41200)
 	onVisa.account = "acct-visa"
-	charges = append(charges, onVisa, groceryCharge("Bell Canada", day(2026, time.April, 6), 50000))
+	charges := append(weeklyCharges("Bell Canada", 9000, 9300, 9605), onVisa, groceryCharge("Bell Canada", day(2026, time.April, 6), 50000))
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1), visa}, charges...))
 
 	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies", "--account", "Visa"})
@@ -92,10 +100,7 @@ func Test_run_anomalies_account_judges_the_named_accounts_charge_against_history
 
 // historyWithBigCharge is three 2025 charges of Bell Canada on Chequing, then a 412.00 charge in 2026 on account.
 func historyWithBigCharge(account string) []chargeTxn {
-	charges := make([]chargeTxn, 0, 4)
-	for i, cents := range []int64{9000, 9300, 9605} {
-		charges = append(charges, groceryCharge("Bell Canada", day(2025, time.March, 3+7*i), cents))
-	}
+	charges := weeklyCharges("Bell Canada", 9000, 9300, 9605)
 	big := groceryCharge("Bell Canada", day(2026, time.March, 2), 41200)
 	big.account = account
 	return append(charges, big)
@@ -144,7 +149,7 @@ func Test_run_anomalies_judges_a_first_time_payee_against_its_category(t *testin
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "1 charge checked",
+	assert.Equal(t, anomaliesCADTable("1 charge checked",
 		[]string{"2026-08-14", "Chequing (CAD)", "Home Depot", "Food:Groceries", "1,842.10", "210.40", "8.8x", "category, 10 earlier"}),
 		stdout.String())
 }
@@ -162,8 +167,7 @@ func Test_run_anomalies_counts_an_uncategorized_first_time_charge_as_not_judged(
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
-	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD",
-		"2 charges checked; 1 had too little history to judge"), stdout.String())
+	assert.Equal(t, anomaliesCADTable("2 charges checked; 1 had too little history to judge"), stdout.String())
 }
 
 func Test_run_anomalies_says_when_no_charge_falls_in_the_window(t *testing.T) {
@@ -175,7 +179,7 @@ func Test_run_anomalies_says_when_no_charge_falls_in_the_window(t *testing.T) {
 	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"anomalies"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "0 charges checked"), stdout.String())
+	assert.Equal(t, anomaliesCADTable("0 charges checked"), stdout.String())
 	assert.Equal(t, "quarry: warning: no unusually large charges from 2026-01-01 to 2026-09-29; "+
 		"the store's transactions run 2003-01-04 to 2025-12-31\n", stderr.String())
 }
@@ -230,28 +234,20 @@ func Test_run_anomalies_prints_each_empty_window_warning_on_stderr_and_in_the_js
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			home := newHome(t)
-			accounts := []store.Account{
-				chequingAccount("acct-cad", 1),
-				{ID: "acct-visa", SourceID: 2, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
-				{ID: "acct-old", SourceID: 3, Name: "Old Card", Type: "credit_card", Currency: "CAD", Active: true, NotInReports: true},
-				{ID: "acct-401k", SourceID: 4, Name: "Linked", Type: "chequing", Currency: "CAD", Active: true, LinkedTracking: true},
-			}
-			replaceStore(t, home, chargeRows(accounts, c.charges...))
-			var textOut, textErr, jsonOut, jsonErr bytes.Buffer
+			replaceStore(t, home, chargeRows(emptyWindowAccounts(), c.charges...))
 
-			textExit := runWith(context.Background(), append([]string{"anomalies"}, c.args...), spendEnv(&textOut, &textErr))
-			jsonExit := runWith(context.Background(), append([]string{"anomalies", "--json"}, c.args...), spendEnv(&jsonOut, &jsonErr))
+			text, jsonRun := runSpendTextAndJSON("anomalies", c.args...)
 
-			require.Equal(t, 0, textExit, textErr.String())
-			require.Equal(t, 0, jsonExit, jsonErr.String())
+			require.Equal(t, 0, text.exitCode, text.stderr)
+			require.Equal(t, 0, jsonRun.exitCode, jsonRun.stderr)
 			wantStderr := warningLines(c.wantWarns)
-			assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in "+c.wantCaption+", amounts in CAD", "0 charges checked"), textOut.String())
-			assert.Equal(t, wantStderr, textErr.String())
-			assert.Equal(t, wantStderr, jsonErr.String())
+			assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in "+c.wantCaption+", amounts in CAD", "0 charges checked"), text.stdout)
+			assert.Equal(t, wantStderr, text.stderr)
+			assert.Equal(t, wantStderr, jsonRun.stderr)
 			var doc struct {
 				Warnings []string `json:"warnings"`
 			}
-			require.NoError(t, json.Unmarshal(jsonOut.Bytes(), &doc), jsonOut.String())
+			require.NoError(t, json.Unmarshal([]byte(jsonRun.stdout), &doc), jsonRun.stdout)
 			assert.Equal(t, c.wantWarns, doc.Warnings)
 		})
 	}
@@ -261,21 +257,19 @@ func Test_run_anomalies_prints_no_warning_when_charges_were_checked_but_none_is_
 	home := newHome(t)
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)},
 		groceryCharge("Bakery", day(2026, 3, 1), 500)))
-	var textOut, textErr, jsonOut, jsonErr bytes.Buffer
 
-	textExit := runWith(context.Background(), []string{"anomalies"}, spendEnv(&textOut, &textErr))
-	jsonExit := runWith(context.Background(), []string{"anomalies", "--json"}, spendEnv(&jsonOut, &jsonErr))
+	text, jsonRun := runSpendTextAndJSON("anomalies")
 
-	require.Equal(t, 0, textExit, textErr.String())
-	require.Equal(t, 0, jsonExit, jsonErr.String())
-	assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "1 charge checked"), textOut.String())
-	assert.Empty(t, textErr.String())
-	assert.Empty(t, jsonErr.String())
+	require.Equal(t, 0, text.exitCode, text.stderr)
+	require.Equal(t, 0, jsonRun.exitCode, jsonRun.stderr)
+	assert.Equal(t, anomaliesCADTable("1 charge checked"), text.stdout)
+	assert.Empty(t, text.stderr)
+	assert.Empty(t, jsonRun.stderr)
 	var doc struct {
 		Warnings []string `json:"warnings"`
 		Checked  int      `json:"checked"`
 	}
-	require.NoError(t, json.Unmarshal(jsonOut.Bytes(), &doc), jsonOut.String())
+	require.NoError(t, json.Unmarshal([]byte(jsonRun.stdout), &doc), jsonRun.stdout)
 	assert.Equal(t, []string{}, doc.Warnings)
 	assert.Equal(t, 1, doc.Checked)
 }
@@ -286,14 +280,7 @@ func Test_run_anomalies_prints_no_warning_when_charges_were_checked_but_none_is_
 func anomaliesFXStore(t *testing.T) {
 	t.Helper()
 	home := newHome(t)
-	charges := make([]chargeTxn, 0, 7)
-	for i, cents := range []int64{3800, 3900, 4000, 4100, 4200} {
-		charges = append(charges, groceryCharge("Hardware", day(2025, time.March, 3+7*i), cents))
-	}
-	charges = append(charges,
-		groceryCharge("Hardware", day(2026, time.March, 2), 25000),
-		groceryCharge("Hardware", day(2026, time.May, 4), 9000),
-	)
+	charges := append(hardwareHistory(), bigHardware(), groceryCharge("Hardware", day(2026, time.May, 4), 9000))
 	replaceStoreWithRates(t, home,
 		chargeRows([]store.Account{usdChequingAccount("acct-usd", 1)}, inUSD(charges)...),
 		store.Rate{Date: day(2025, time.January, 2), USDCAD: money.Rate(1_300_000), Series: "FXUSDCAD"},
@@ -310,7 +297,7 @@ func Test_run_anomalies_judges_in_native_currency_and_shows_converted_amounts(t 
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Empty(t, stderr.String())
-		assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "2 charges checked",
+		assert.Equal(t, anomaliesCADTable("2 charges checked",
 			[]string{"2026-03-02", "US Chequing (USD)", "Hardware", "Food:Groceries", "350.00", "56.00", "6.3x", "payee, 5 earlier"}),
 			stdout.String())
 	})
@@ -370,11 +357,7 @@ func jsonCells(a anomalyJSON) []string {
 
 // hardwareHistory is five Hardware charges of 38.00 to 42.00 (median 40.00), weekly from 2025-03-03.
 func hardwareHistory() []chargeTxn {
-	history := make([]chargeTxn, 0, 5)
-	for i, cents := range []int64{3800, 3900, 4000, 4100, 4200} {
-		history = append(history, groceryCharge("Hardware", day(2025, time.March, 3+7*i), cents))
-	}
-	return history
+	return weeklyCharges("Hardware", 3800, 3900, 4000, 4100, 4200)
 }
 
 // usdRate is a FXUSDCAD rate of rate millionths from date.
@@ -433,7 +416,7 @@ func Test_run_anomalies_lists_a_usd_charge_before_the_first_rate_in_usd_with_a_w
 		stdout, stderr := runAnomaliesOK(t)
 
 		assert.Equal(t, warningLines([]string{beforeAprilUSDInCAD}), stderr)
-		assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "1 charge checked",
+		assert.Equal(t, anomaliesCADTable("1 charge checked",
 			hardwareRow("US Chequing (USD)", "USD 250.00", "USD 40.00")), stdout)
 	})
 
@@ -475,11 +458,7 @@ func Test_run_anomalies_in_usd_lists_a_cad_charge_before_the_first_rate_in_cad_w
 
 func Test_run_anomalies_counts_each_unconverted_listed_charge_and_says_are(t *testing.T) {
 	const want = "2 charges dated before 2026-04-01, the first exchange rate in the store, are listed in USD, not converted to CAD"
-	other := make([]chargeTxn, 0, 6)
-	for i, cents := range []int64{3800, 3900, 4000, 4100, 4200} {
-		other = append(other, groceryCharge("Lumber", day(2025, time.March, 3+7*i), cents))
-	}
-	other = append(other, groceryCharge("Lumber", day(2026, time.March, 9), 25000))
+	other := append(weeklyCharges("Lumber", 3800, 3900, 4000, 4100, 4200), groceryCharge("Lumber", day(2026, time.March, 9), 25000))
 	anomaliesStore(t, []store.Account{usdChequingAccount("acct-usd", 1)}, inUSD(append(append(hardwareHistory(), bigHardware()), other...)),
 		usdRate(day(2026, time.April, 1), 1_300_000))
 
@@ -487,7 +466,7 @@ func Test_run_anomalies_counts_each_unconverted_listed_charge_and_says_are(t *te
 		stdout, stderr := runAnomaliesOK(t)
 
 		assert.Equal(t, warningLines([]string{want}), stderr)
-		assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "2 charges checked",
+		assert.Equal(t, anomaliesCADTable("2 charges checked",
 			[]string{"2026-03-09", "US Chequing (USD)", "Lumber", "Food:Groceries", "USD 250.00", "USD 40.00", "6.3x", "payee, 5 earlier"},
 			hardwareRow("US Chequing (USD)", "USD 250.00", "USD 40.00")), stdout)
 	})
@@ -512,7 +491,7 @@ func Test_run_anomalies_on_a_store_without_rates_warns_only_when_a_usd_charge_ne
 		stdout, stderr := runAnomaliesOK(t)
 
 		assert.Equal(t, warningLines([]string{noRatesLine}), stderr)
-		assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "1 charge checked",
+		assert.Equal(t, anomaliesCADTable("1 charge checked",
 			hardwareRow("US Chequing (USD)", "USD 250.00", "USD 40.00")), stdout)
 	})
 
@@ -535,7 +514,7 @@ func Test_run_anomalies_on_a_store_without_rates_warns_only_when_a_usd_charge_ne
 		stdout, stderr := runAnomaliesOK(t)
 
 		assert.Empty(t, stderr)
-		assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "1 charge checked",
+		assert.Equal(t, anomaliesCADTable("1 charge checked",
 			hardwareRow("Chequing (CAD)", "250.00", "40.00")), stdout)
 	})
 
@@ -590,7 +569,7 @@ func Test_run_anomalies_converts_a_category_baseline_anomaly_with_no_payee(t *te
 		stdout, stderr := runAnomaliesOK(t)
 
 		assert.Empty(t, stderr)
-		assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "1 charge checked", want), stdout)
+		assert.Equal(t, anomaliesCADTable("1 charge checked", want), stdout)
 	})
 
 	t.Run("json lists one entry without a payee", func(t *testing.T) {
@@ -666,7 +645,7 @@ func Test_run_anomalies_converts_a_charge_in_a_closed_usd_account(t *testing.T) 
 		stdout, stderr := runAnomaliesOK(t)
 
 		assert.Empty(t, stderr)
-		assert.Equal(t, anomaliesTable("Unusually large charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD", "1 charge checked",
+		assert.Equal(t, anomaliesCADTable("1 charge checked",
 			hardwareRow("Old USD (USD, closed)", "350.00", "56.00")), stdout)
 	})
 
@@ -752,11 +731,7 @@ func decodeAnomaliesJSON(t *testing.T, stdout string) anomaliesJSONDoc {
 
 func Test_run_anomalies_json_returns_the_anomalies_document(t *testing.T) {
 	home := newHome(t)
-	charges := make([]chargeTxn, 0, 7)
-	for i, cents := range []int64{9000, 9300, 9605, 9900, 10200} {
-		charges = append(charges, groceryCharge("Bell Canada", day(2025, time.March, 3+7*i), cents))
-	}
-	charges = append(charges, groceryCharge("Bell Canada", day(2026, time.March, 2), 41200))
+	charges := append(weeklyCharges("Bell Canada", 9000, 9300, 9605, 9900, 10200), groceryCharge("Bell Canada", day(2026, time.March, 2), 41200))
 	charges = append(charges, chargeTxn{
 		id: "tool-shed", account: "acct-cad", payee: "Tool Shed", currency: "CAD", day: day(2026, time.June, 9),
 		splits: []chargeSplit{{cents: -15000}},

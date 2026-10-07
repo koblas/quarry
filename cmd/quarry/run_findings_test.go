@@ -18,6 +18,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// addUncategorizedPayeeSplits adds two uncategorized charges by payee in account, on 2026-03-01 and 2026-03-02:
+// one uncategorized finding for the payee.
+func addUncategorizedPayeeSplits(b *v9fixture.Builder, account, payee int64) {
+	for i, amount := range []string{"-10.00", "-20.00"} {
+		posted := time.Date(2026, 3, 1+i, 0, 0, 0, 0, time.UTC)
+		txn := b.Transaction(v9fixture.TransactionRow{Account: account, Amount: amount, PostedDate: &posted, Payee: payee})
+		b.Entry(v9fixture.EntryRow{Parent: txn, Amount: amount})
+	}
+}
+
+// seedStoreWithoutFindings builds quarry's store under home from one categorized fuel charge: no finding is open.
+func seedStoreWithoutFindings(t *testing.T, home string) {
+	t.Helper()
+	replaceStore(t, home, spendRows([]store.Account{chequingAccount("acct-1", 1)},
+		spendSplit{id: "1", account: "acct-1", category: "cat-fuel", payee: "payee-costco", currency: "CAD", day: day(2026, 9, 1), cents: -4500}))
+}
+
 func Test_run_findings_lists_open_findings_by_type_with_their_fix(t *testing.T) {
 	home := newHome(t)
 	b := v9fixture.NewBuilder()
@@ -33,11 +50,7 @@ func Test_run_findings_lists_open_findings_by_type_with_their_fix(t *testing.T) 
 	transferDay := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
 	transferTxn := b.Transaction(v9fixture.TransactionRow{Account: visaPK, Amount: "1200.00", PostedDate: &transferDay, Payee: paymentPK})
 	transferLeg := b.Entry(v9fixture.EntryRow{Parent: transferTxn, Amount: "1200.00", QuickenID: 3001, Transfer: "Savings"})
-	for i, amount := range []string{"-10.00", "-20.00"} {
-		uncategorizedDay := time.Date(2026, 3, 1+i, 0, 0, 0, 0, time.UTC)
-		txn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: amount, PostedDate: &uncategorizedDay, Payee: amazonPK})
-		b.Entry(v9fixture.EntryRow{Parent: txn, Amount: amount})
-	}
+	addUncategorizedPayeeSplits(b, chequingPK, amazonPK)
 	syncBundle(t, b.WriteBundle(t, filepath.Join(home, "Documents")))
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings"})
@@ -62,8 +75,7 @@ Ignore a finding by adding its id to findings.ignore in %s; see quarry findings 
 
 func Test_run_findings_says_no_open_findings_when_the_store_has_none(t *testing.T) {
 	home := newHome(t)
-	replaceStore(t, home, spendRows([]store.Account{chequingAccount("acct-1", 1)},
-		spendSplit{id: "1", account: "acct-1", category: "cat-fuel", payee: "payee-costco", currency: "CAD", day: day(2026, 9, 1), cents: -4500}))
+	seedStoreWithoutFindings(t, home)
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings"})
 
@@ -234,8 +246,7 @@ func Test_run_findings_json_items_of_a_one_sided_transfer_and_an_uncategorized_p
 
 func Test_run_findings_json_with_none_open_prints_empty_lists_not_null(t *testing.T) {
 	home := newHome(t)
-	replaceStore(t, home, spendRows([]store.Account{chequingAccount("acct-1", 1)},
-		spendSplit{id: "1", account: "acct-1", category: "cat-fuel", payee: "payee-costco", currency: "CAD", day: day(2026, 9, 1), cents: -4500}))
+	seedStoreWithoutFindings(t, home)
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json"})
 
@@ -251,8 +262,7 @@ func Test_run_findings_json_with_none_open_prints_empty_lists_not_null(t *testin
 
 func Test_run_findings_json_lists_a_config_warning_without_the_prefix_and_prints_it_to_stderr(t *testing.T) {
 	home := newHome(t)
-	replaceStore(t, home, spendRows([]store.Account{chequingAccount("acct-1", 1)},
-		spendSplit{id: "1", account: "acct-1", category: "cat-fuel", payee: "payee-costco", currency: "CAD", day: day(2026, 9, 1), cents: -4500}))
+	seedStoreWithoutFindings(t, home)
 	writeConfig(t, home, "snapshot.keep = 3\n")
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--json"})
@@ -279,8 +289,7 @@ func Test_run_findings_reports_a_failed_stdout_write(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			home := newHome(t)
-			replaceStore(t, home, spendRows([]store.Account{chequingAccount("acct-1", 1)},
-				spendSplit{id: "1", account: "acct-1", category: "cat-fuel", payee: "payee-costco", currency: "CAD", day: day(2026, 9, 1), cents: -4500}))
+			seedStoreWithoutFindings(t, home)
 			var stderr bytes.Buffer
 
 			exitCode := run(context.Background(), c.args, failingWriter{err: errNoSpace}, &stderr)
@@ -315,11 +324,7 @@ func syncFiltersBundle(t *testing.T, home, dir string, withFixed bool) filtersFi
 	openSecond := categorizedPayeeTxn(b, chequingPK, hydroNetworksPK, billsPK, day(time.August, 5), "-142.17")
 	ignoredFirst := categorizedPayeeTxn(b, chequingPK, rogersPK, billsPK, day(time.August, 20), "-55.00")
 	ignoredSecond := categorizedPayeeTxn(b, chequingPK, rogersWirelessPK, billsPK, day(time.August, 21), "-55.00")
-	for i, amount := range []string{"-10.00", "-20.00"} {
-		posted := day(time.March, 1+i)
-		txn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: amount, PostedDate: &posted, Payee: amazonPK})
-		b.Entry(v9fixture.EntryRow{Parent: txn, Amount: amount})
-	}
+	addUncategorizedPayeeSplits(b, chequingPK, amazonPK)
 	ids := filtersFixtureIDs{
 		open:          fmt.Sprintf("duplicate:txn-%d+txn-%d", openFirst, openSecond),
 		ignored:       fmt.Sprintf("duplicate:txn-%d+txn-%d", ignoredFirst, ignoredSecond),
@@ -532,11 +537,7 @@ func syncIgnoreFixture(t *testing.T, home string) ignoreFixtureIDs {
 	billsPK := b.Category(v9fixture.TagRow{Name: "Bills", Type: new(int64(1))})
 	first := categorizedPayeeTxn(b, chequingPK, hydroPK, billsPK, time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC), "-142.17")
 	second := categorizedPayeeTxn(b, chequingPK, hydroNetworksPK, billsPK, time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC), "-142.17")
-	for i, amount := range []string{"-10.00", "-20.00"} {
-		day := time.Date(2026, 3, 1+i, 0, 0, 0, 0, time.UTC)
-		txn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: amount, PostedDate: &day, Payee: amazonPK})
-		b.Entry(v9fixture.EntryRow{Parent: txn, Amount: amount})
-	}
+	addUncategorizedPayeeSplits(b, chequingPK, amazonPK)
 	syncBundle(t, b.WriteBundle(t, filepath.Join(home, "Documents")))
 	return ignoreFixtureIDs{
 		duplicate:     fmt.Sprintf("duplicate:txn-%d+txn-%d", first, second),
@@ -650,11 +651,7 @@ func Test_run_findings_counts_an_ignored_finding_that_is_fixed_as_fixed(t *testi
 	amazonPK := b.Payee(v9fixture.PayeeRow{Name: "Amazon"})
 	billsPK := b.Category(v9fixture.TagRow{Name: "Bills", Type: new(int64(1))})
 	categorizedPayeeTxn(b, chequingPK, hydroPK, billsPK, time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC), "-142.17")
-	for i, amount := range []string{"-10.00", "-20.00"} {
-		day := time.Date(2026, 3, 1+i, 0, 0, 0, 0, time.UTC)
-		txn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: amount, PostedDate: &day, Payee: amazonPK})
-		b.Entry(v9fixture.EntryRow{Parent: txn, Amount: amount})
-	}
+	addUncategorizedPayeeSplits(b, chequingPK, amazonPK)
 	exitCode, _, syncErr := syncNewBundle(t, home, "DocumentsB", b)
 	require.Equal(t, 0, exitCode, syncErr)
 	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [%q]\n", ids.duplicate))
@@ -749,14 +746,8 @@ func Test_run_sync_json_after_a_findings_fault_lists_the_findings_warning_and_co
 	exitCode, stdout, stderr := syncWithFaultedFindings(t, home, findingsTableRepeating, "--json")
 
 	require.Equal(t, 0, exitCode, stderr)
-	var parsed struct {
-		Store struct {
-			Findings json.RawMessage `json:"findings"`
-		} `json:"store"`
-	}
-	require.NoError(t, json.Unmarshal([]byte(stdout), &parsed))
 	assert.Equal(t, []string{findingsRepeatWarning}, decodeSyncDoc(t, stdout).Warnings)
-	assert.JSONEq(t, `{"open":1,"ignored":0,"fixed":0,"new":1,"newly_fixed":0}`, string(parsed.Store.Findings))
+	assert.JSONEq(t, `{"open":1,"ignored":0,"fixed":0,"new":1,"newly_fixed":0}`, syncFindingsCounts(t, stdout))
 }
 
 func Test_run_sync_prints_the_import_history_line_then_the_findings_line_when_both_tables_are_faulty(t *testing.T) {

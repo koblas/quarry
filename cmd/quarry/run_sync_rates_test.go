@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/fx"
 	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
@@ -61,32 +62,41 @@ func valetResponse(req *http.Request, status int, body string) *http.Response {
 	}
 }
 
+// valetServerFactory is the sync Server factory fetching rates through bank.
+func valetServerFactory(bank http.RoundTripper) cli.ServerFactory {
+	return newServerFactory(duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(&http.Client{Transport: bank}))))
+}
+
+// serverRemovingThrough is base with its Server deleting snapshots through remove.
+func serverRemovingThrough(base cli.ServerFactory, remove func(string) error) cli.ServerFactory {
+	return func(ctx context.Context, opts ...snapshot.Option) (*snapshot.Server, error) {
+		return base(ctx, append(opts, snapshot.WithRemove(remove))...)
+	}
+}
+
+// sqlCSV is quarry sql's CSV of query over the store under the test's HOME; the sql must succeed.
+func sqlCSV(tb testing.TB, query string) string {
+	tb.Helper()
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "--csv", query})
+	require.Equal(tb, 0, exitCode, stderr.String())
+	return stdout.String()
+}
+
 func Test_run_sync_back_fills_rates_from_the_earliest_transaction(t *testing.T) {
 	home := newHome(t)
-	b := v9fixture.NewBuilder()
-	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	earliest := time.Date(2005, 3, 1, 0, 0, 0, 0, time.UTC)
-	latest := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	for _, day := range []*time.Time{&earliest, &latest} {
-		txn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-5.00", PostedDate: day})
-		b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "-5.00"})
-	}
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), day(2005, time.March, 1), day(2026, time.March, 1))
 	valet := fakeValet{
 		"IEXE0101": {"2005-03-01": "1.2345", "2005-03-02": "1.2400", "2017-01-02": "1.3427"},
 		"FXUSDCAD": {"2017-01-03": "1.3435", "2017-01-04": "1.3315"},
 	}
 	var stdout, stderr bytes.Buffer
 	env := testEnv(&stdout, &stderr)
-	env.NewServer = newServerFactory(duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(&http.Client{Transport: valet}))))
+	env.NewServer = valetServerFactory(valet)
 
 	exitCode := runWith(context.Background(), []string{"sync", "--quicken", bundle.Dir}, env)
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, strings.Split(stdout.String(), "\n"), "Rates     USD/CAD 2005-03-01 to 2017-01-04 (5 new)")
-	var sqlOut, sqlErr bytes.Buffer
-	sqlCode := run(context.Background(), []string{"sql", "--csv", "SELECT date, usd_cad, series FROM fx_rates ORDER BY date"}, &sqlOut, &sqlErr)
-	require.Equal(t, 0, sqlCode, sqlErr.String())
 	assert.Equal(t, ""+
 		"date,usd_cad,series\n"+
 		"2005-03-01,1.234500,IEXE0101\n"+
@@ -94,23 +104,17 @@ func Test_run_sync_back_fills_rates_from_the_earliest_transaction(t *testing.T) 
 		"2017-01-02,1.342700,IEXE0101\n"+
 		"2017-01-03,1.343500,FXUSDCAD\n"+
 		"2017-01-04,1.331500,FXUSDCAD\n",
-		sqlOut.String())
+		sqlCSV(t, "SELECT date, usd_cad, series FROM fx_rates ORDER BY date"))
 }
 
 // syncWithValet syncs a one-account bundle, with a transaction on each date in days, against valet and returns exit code, stdout and stderr.
 func syncWithValet(t *testing.T, valet fakeValet, days []time.Time, extraArgs ...string) (int, string, string) {
 	t.Helper()
 	home := newHome(t)
-	b := v9fixture.NewBuilder()
-	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	for _, day := range days {
-		txn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-5.00", PostedDate: &day})
-		b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "-5.00"})
-	}
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), days...)
 	var stdout, stderr bytes.Buffer
 	env := testEnv(&stdout, &stderr)
-	env.NewServer = newServerFactory(duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(&http.Client{Transport: valet}))))
+	env.NewServer = valetServerFactory(valet)
 
 	exitCode := runWith(context.Background(), append([]string{"sync", "--quicken", bundle.Dir}, extraArgs...), env)
 
@@ -118,34 +122,20 @@ func syncWithValet(t *testing.T, valet fakeValet, days []time.Time, extraArgs ..
 }
 
 func Test_run_sync_json_reports_the_rates_it_fetched(t *testing.T) {
-	valet := fakeValet{"FXUSDCAD": {"2017-01-03": "1.3435", "2017-01-04": "1.3315"}}
-
-	exitCode, stdout, stderr := syncWithValet(t, valet, []time.Time{time.Date(2017, 1, 3, 0, 0, 0, 0, time.UTC)}, "--json")
+	exitCode, stdout, stderr := syncWithValet(t, januaryBank(), []time.Time{januaryDay(3)}, "--json")
 
 	require.Equal(t, 0, exitCode, stderr)
-	var doc struct {
-		Store struct {
-			Rates struct {
-				First      *string `json:"first"`
-				Last       *string `json:"last"`
-				Added      int     `json:"added"`
-				FetchError *string `json:"fetch_error"`
-			} `json:"rates"`
-		} `json:"store"`
-	}
-	require.NoError(t, json.Unmarshal([]byte(stdout), &doc))
-	require.NotNil(t, doc.Store.Rates.First)
-	require.NotNil(t, doc.Store.Rates.Last)
-	assert.Equal(t, "2017-01-03", *doc.Store.Rates.First)
-	assert.Equal(t, "2017-01-04", *doc.Store.Rates.Last)
-	assert.Equal(t, 2, doc.Store.Rates.Added)
-	assert.Nil(t, doc.Store.Rates.FetchError)
+	rates := decodeSyncRates(t, stdout)
+	require.NotNil(t, rates.First)
+	require.NotNil(t, rates.Last)
+	assert.Equal(t, "2017-01-03", *rates.First)
+	assert.Equal(t, "2017-01-04", *rates.Last)
+	assert.Equal(t, 2, rates.Added)
+	assert.Nil(t, rates.FetchError)
 }
 
 func Test_run_sync_says_the_bank_has_no_rates_when_it_answers_empty_for_the_transaction_dates(t *testing.T) {
-	valet := fakeValet{"FXUSDCAD": {}, "IEXE0101": {}}
-
-	exitCode, stdout, stderr := syncWithValet(t, valet, []time.Time{time.Date(2017, 1, 3, 0, 0, 0, 0, time.UTC)})
+	exitCode, stdout, stderr := syncWithValet(t, emptyValet(), []time.Time{januaryDay(3)})
 
 	require.Equal(t, 0, exitCode, stderr)
 	assert.Empty(t, stderr)
@@ -200,10 +190,7 @@ func syncCapturingRemoving(t *testing.T, bank http.RoundTripper, remove func(str
 	t.Helper()
 	var stdout, stderr bytes.Buffer
 	env := testEnv(&stdout, &stderr)
-	base := newServerFactory(duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(&http.Client{Transport: bank}))))
-	env.NewServer = func(ctx context.Context, opts ...snapshot.Option) (*snapshot.Server, error) {
-		return base(ctx, append(opts, snapshot.WithRemove(remove))...)
-	}
+	env.NewServer = serverRemovingThrough(valetServerFactory(bank), remove)
 
 	exitCode := runWith(context.Background(), append([]string{"sync"}, args...), env)
 
@@ -213,10 +200,7 @@ func syncCapturingRemoving(t *testing.T, bank http.RoundTripper, remove func(str
 // lastFetchError is quarry sql's CSV of the newest import run's rates_fetch_error.
 func lastFetchError(t *testing.T) string {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
-	require.Equal(t, 0, run(context.Background(),
-		[]string{"sql", "--csv", "SELECT rates_fetch_error FROM import_runs ORDER BY id DESC LIMIT 1"}, &stdout, &stderr), stderr.String())
-	return stdout.String()
+	return sqlCSV(t, "SELECT rates_fetch_error FROM import_runs ORDER BY id DESC LIMIT 1")
 }
 
 const (
@@ -513,7 +497,7 @@ func syncFromAfterFailedFetch(t *testing.T, args ...string) (int, string, string
 	home := newHome(t)
 	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), januaryDay(3))
 	syncThrough(t, januaryBank(), "--quicken", bundle.Dir)
-	id := snapshotID(onlyFileWithSuffix(t, snapshotsDirUnder(home), ".sqlite"))
+	id := soleSnapshotIDUnder(t, home)
 	return syncCapturing(t, failing(context.DeadlineExceeded), append([]string{"--from", id}, args...)...)
 }
 
@@ -578,16 +562,13 @@ func decodeSyncRates(t *testing.T, stdout string) ratesDoc {
 // emptyValet is a Bank of Canada that publishes nothing.
 func emptyValet() fakeValet { return fakeValet{"FXUSDCAD": {}, "IEXE0101": {}} }
 
-// dayOf is the civil day y-m-d at UTC midnight.
-func dayOf(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
-
 // syncTailAnsweredEmpty syncs a 2017-01-03 transaction against a bank that publishes 01-03 and 01-04, then syncs
 // again against a bank that publishes nothing more, with extraArgs; it returns the second sync's stdout and requests.
 func syncTailAnsweredEmpty(t *testing.T, extraArgs ...string) (string, []string) {
 	t.Helper()
 	home := newHome(t)
 	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), januaryDay(3))
-	syncThrough(t, fakeValet{"FXUSDCAD": {"2017-01-03": "1.3435", "2017-01-04": "1.3315"}}, "--quicken", bundle.Dir)
+	syncThrough(t, januaryBank(), "--quicken", bundle.Dir)
 	source := &recordingValet{next: emptyValet()}
 
 	stdout := syncThrough(t, source, append([]string{"--quicken", bundle.Dir}, extraArgs...)...)
@@ -600,8 +581,8 @@ func syncTailAnsweredEmpty(t *testing.T, extraArgs ...string) (string, []string)
 func syncWithCoveringRate(t *testing.T, extraArgs ...string) (string, []string) {
 	t.Helper()
 	home := newHome(t)
-	rates := []store.Rate{{Date: dayOf(2017, time.January, 2), USDCAD: money.Rate(1_340_000), Series: "IEXE0101"}}
-	for d := dayOf(2017, time.January, 3); !d.After(dayOf(2099, time.December, 31)); d = d.AddDate(0, 0, 1) {
+	rates := []store.Rate{{Date: day(2017, time.January, 2), USDCAD: money.Rate(1_340_000), Series: "IEXE0101"}}
+	for d := day(2017, time.January, 3); !d.After(day(2099, time.December, 31)); d = d.AddDate(0, 0, 1) {
 		rates = append(rates, store.Rate{Date: d, USDCAD: money.Rate(1_250_000), Series: "FXUSDCAD"})
 	}
 	replaceStoreWithRates(t, home, spendRows([]store.Account{chequingAccount("acct-cad", 1)}), rates...)
@@ -620,7 +601,7 @@ func syncLaterBundleOverEarlierRates(t *testing.T, extraArgs ...string) (string,
 	home := newHome(t)
 	early := writeChequingBundle(t, filepath.Join(home, "Early"), januaryDay(3))
 	later := writeChequingBundle(t, filepath.Join(home, "Later"), januaryDay(10))
-	syncThrough(t, fakeValet{"FXUSDCAD": {"2017-01-03": "1.3435", "2017-01-04": "1.3315"}}, "--quicken", early.Dir)
+	syncThrough(t, januaryBank(), "--quicken", early.Dir)
 	source := &recordingValet{next: emptyValet()}
 
 	stdout := syncThrough(t, source, append([]string{"--quicken", later.Dir}, extraArgs...)...)
@@ -637,7 +618,7 @@ func syncFutureDatedBundle(t *testing.T, extraArgs ...string) (string, []string)
 		store.Rate{Date: januaryDay(3), USDCAD: money.Rate(1_343_500), Series: "FXUSDCAD"},
 		store.Rate{Date: januaryDay(4), USDCAD: money.Rate(1_331_500), Series: "FXUSDCAD"},
 	)
-	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), dayOf(2099, time.January, 1))
+	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), day(2099, time.January, 1))
 	source := &recordingValet{next: emptyValet()}
 
 	stdout := syncThrough(t, source, append([]string{"--quicken", bundle.Dir}, extraArgs...)...)
@@ -797,7 +778,7 @@ func syncThrough(t *testing.T, valet http.RoundTripper, args ...string) string {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
 	env := testEnv(&stdout, &stderr)
-	env.NewServer = newServerFactory(duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(&http.Client{Transport: valet}))))
+	env.NewServer = valetServerFactory(valet)
 
 	exitCode := runWith(context.Background(), append([]string{"sync"}, args...), env)
 
@@ -808,19 +789,17 @@ func syncThrough(t *testing.T, valet http.RoundTripper, args ...string) string {
 // storedRateDates is quarry sql's CSV of the dates held in fx_rates.
 func storedRateDates(t *testing.T) string {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
-	require.Equal(t, 0, run(context.Background(), []string{"sql", "--csv", "SELECT date FROM fx_rates ORDER BY date"}, &stdout, &stderr), stderr.String())
-	return stdout.String()
+	return sqlCSV(t, "SELECT date FROM fx_rates ORDER BY date")
 }
 
 func Test_run_sync_from_an_older_snapshot_keeps_every_carried_rate(t *testing.T) {
 	home := newHome(t)
 	bundleA := writeChequingBundle(t, filepath.Join(home, "A"), januaryDay(3))
 	bundleB := writeChequingBundle(t, filepath.Join(home, "B"), januaryDay(3), januaryDay(10))
-	syncThrough(t, fakeValet{"FXUSDCAD": {"2017-01-03": "1.3435", "2017-01-04": "1.3315"}}, "--quicken", bundleA.Dir)
-	idA := snapshotID(onlyFileWithSuffix(t, snapshotsDirUnder(home), ".sqlite"))
+	syncThrough(t, januaryBank(), "--quicken", bundleA.Dir)
+	idA := soleSnapshotIDUnder(t, home)
 	syncThrough(t, fakeValet{"FXUSDCAD": {"2017-01-05": "1.3300", "2017-01-06": "1.3350"}}, "--quicken", bundleB.Dir)
-	source := &recordingValet{next: fakeValet{"FXUSDCAD": {}, "IEXE0101": {}}}
+	source := &recordingValet{next: emptyValet()}
 
 	stdout := syncThrough(t, source, "--from", idA)
 
@@ -832,7 +811,7 @@ func Test_run_sync_from_an_older_snapshot_keeps_every_carried_rate(t *testing.T)
 func Test_run_sync_asks_only_for_the_dates_after_the_last_stored_rate(t *testing.T) {
 	home := newHome(t)
 	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), januaryDay(3))
-	syncThrough(t, fakeValet{"FXUSDCAD": {"2017-01-03": "1.3435", "2017-01-04": "1.3315"}}, "--quicken", bundle.Dir)
+	syncThrough(t, januaryBank(), "--quicken", bundle.Dir)
 	source := &recordingValet{next: fakeValet{"FXUSDCAD": {
 		"2017-01-03": "1.3435", "2017-01-04": "1.3315", "2017-01-05": "1.3300", "2017-01-06": "1.3350",
 	}}}
@@ -945,7 +924,7 @@ func Test_run_sync_json_makes_no_rate_request_when_it_fails_before_the_swap(t *t
 
 func Test_run_sync_json_prints_nothing_when_the_bundle_is_not_open_in_quicken(t *testing.T) {
 	home := newHome(t)
-	bundle := v9fixture.ClosedWALBundle(t, filepath.Join(home, "Documents"))
+	bundle := closedWALBundle(t, filepath.Join(home, "Documents"))
 
 	got := syncCountingRateRequests(bundle, "--json")
 
@@ -954,7 +933,7 @@ func Test_run_sync_json_prints_nothing_when_the_bundle_is_not_open_in_quicken(t 
 
 func Test_run_sync_json_reports_no_store_when_the_schema_changed(t *testing.T) {
 	home := newHome(t)
-	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
+	bundle := missingSchemaBundle(t, filepath.Join(home, "Documents"))
 
 	got := syncCountingRateRequests(bundle, "--json")
 

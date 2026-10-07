@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
-	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -105,10 +104,7 @@ func Test_run_sync_deletes_nothing_when_validation_fails(t *testing.T) {
 func runSyncRemoving(ctx context.Context, remove func(string) error, args ...string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
 	env := testEnv(&stdout, &stderr)
-	base := env.NewServer
-	env.NewServer = func(ctx context.Context, opts ...snapshot.Option) (*snapshot.Server, error) {
-		return base(ctx, append(opts, snapshot.WithRemove(remove))...)
-	}
+	env.NewServer = serverRemovingThrough(env.NewServer, remove)
 
 	exitCode := runWith(ctx, append([]string{"sync"}, args...), env)
 	return exitCode, stdout.String(), stderr.String()
@@ -119,10 +115,24 @@ func runSyncRemoving(ctx context.Context, remove func(string) error, args ...str
 func syncThenWrite(t *testing.T, home string, fixtures ...snapshotFixture) (string, string) {
 	t.Helper()
 	syncBundle(t, v9fixture.OpenBundle(t, filepath.Join(home, "Documents")))
-	dir := filepath.Join(storeDirUnder(home), "snapshots")
-	id := snapshotID(onlyFileWithSuffix(t, dir, ".sqlite"))
+	id := soleSnapshotIDUnder(t, home)
 	writeSnapshots(t, home, fixtures...)
-	return id, dir
+	return id, snapshotsDirUnder(home)
+}
+
+// soleSnapshotIDUnder is the ID of the one snapshot in home's snapshots folder; the test fails if there is not exactly one.
+func soleSnapshotIDUnder(t *testing.T, home string) string {
+	t.Helper()
+	return snapshotID(onlyFileWithSuffix(t, snapshotsDirUnder(home), ".sqlite"))
+}
+
+// prunedMember is the raw "pruned" member of sync's --json stdout and whether the key is there at all.
+func prunedMember(tb testing.TB, stdout string) (json.RawMessage, bool) {
+	tb.Helper()
+	var parsed map[string]json.RawMessage
+	require.NoError(tb, json.Unmarshal([]byte(stdout), &parsed))
+	raw, present := parsed["pruned"]
+	return raw, present
 }
 
 // copyOutsideFolder links id's snapshot and manifest from dir into ~/kept, beyond the folder a test is about to
@@ -158,16 +168,14 @@ func Test_run_sync_from_honours_snapshots_keep_from_config(t *testing.T) {
 func Test_run_sync_from_json_carries_a_null_pruned_key_on_a_schema_mismatch(t *testing.T) {
 	home := newHome(t)
 	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
-	var syncStdout, syncStderr bytes.Buffer
-	require.Equal(t, 1, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncStdout, &syncStderr))
-	id := snapshotID(onlyFileWithSuffix(t, filepath.Join(storeDirUnder(home), "snapshots"), ".sqlite"))
+	syncCode, _, syncStderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
+	require.Equal(t, 1, syncCode, syncStderr.String())
+	id := soleSnapshotIDUnder(t, home)
 
 	exitCode, stdout, _ := runSyncFrom(t, id, "--json")
 
 	require.Equal(t, 1, exitCode)
-	var parsed map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal([]byte(stdout), &parsed))
-	prunedValue, present := parsed["pruned"]
+	prunedValue, present := prunedMember(t, stdout)
 	require.True(t, present, "the pruned key must be present even when nothing was pruned")
 	assert.JSONEq(t, "null", string(prunedValue))
 }
@@ -318,9 +326,8 @@ func Test_run_sync_json_carries_empty_pruned_lists_when_nothing_was_deleted(t *t
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	var parsed map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &parsed))
-	assert.JSONEq(t, `{"keep": 12, "deleted": [], "failed": []}`, string(parsed["pruned"]))
+	pruned, _ := prunedMember(t, stdout.String())
+	assert.JSONEq(t, `{"keep": 12, "deleted": [], "failed": []}`, string(pruned))
 	assert.Empty(t, stderr.String())
 }
 
@@ -332,9 +339,7 @@ func Test_run_sync_json_carries_a_null_pruned_key_when_validation_fails(t *testi
 	exitCode, stdout, _ := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"})
 
 	require.Equal(t, 1, exitCode)
-	var parsed map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &parsed))
-	prunedValue, present := parsed["pruned"]
+	prunedValue, present := prunedMember(t, stdout.String())
 	require.True(t, present, "the pruned key must be present even when validation failed")
 	assert.JSONEq(t, "null", string(prunedValue))
 	assert.Len(t, snapshotFiles(t, dir, ".sqlite"), keptSnapshots+1)
@@ -372,9 +377,8 @@ func Test_run_sync_from_json_names_the_unlistable_folder_by_its_absolute_path_in
 	exitCode, stdout, stderr := runSyncFrom(t, kept, "--json")
 
 	require.Equal(t, 0, exitCode, stderr)
-	var parsed map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal([]byte(stdout), &parsed))
-	assert.JSONEq(t, `{"keep": 12, "deleted": [], "failed": []}`, string(parsed["pruned"]))
+	pruned, _ := prunedMember(t, stdout)
+	assert.JSONEq(t, `{"keep": 12, "deleted": [], "failed": []}`, string(pruned))
 	assert.Equal(t, []string{"cannot list " + dir + " to delete old snapshots: permission denied; run quarry snapshots prune to try again"},
 		decodeSyncDoc(t, stdout).Warnings)
 	assert.Equal(t, "quarry: warning: cannot list "+snapshotsShown+" to delete old snapshots: permission denied; "+

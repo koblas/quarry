@@ -27,22 +27,27 @@ var recurringRightAligned = map[int]bool{3: true, 4: true}
 // recurringTable is the recurring table under caption: every cell but the last padded to its
 // column's widest cell, two-space gaps, money columns right-aligned, trailing spaces trimmed.
 func recurringTable(caption string, rows ...[]string) string {
-	rows = append([][]string{recurringHeader}, rows...)
-	widths := make([]int, len(recurringHeader)-1)
+	return caption + "\n\n" + paddedTable(recurringHeader, recurringRightAligned, rows)
+}
+
+// paddedTable is header and rows, one line each: every cell but the last padded to its column's widest cell,
+// two-space gaps, the columns in rightAligned padded on the left, trailing spaces trimmed.
+func paddedTable(header []string, rightAligned map[int]bool, rows [][]string) string {
+	rows = append([][]string{header}, rows...)
+	widths := make([]int, len(header)-1)
 	for _, row := range rows {
 		for i := range widths {
 			widths[i] = max(widths[i], len(row[i]))
 		}
 	}
 	var b strings.Builder
-	b.WriteString(caption + "\n\n")
 	for _, row := range rows {
 		cells := make([]string, len(row))
 		for i, cell := range row {
 			switch {
 			case i == len(widths):
 				cells[i] = cell
-			case recurringRightAligned[i]:
+			case rightAligned[i]:
 				cells[i] = fmt.Sprintf("%*s", widths[i], cell)
 			default:
 				cells[i] = fmt.Sprintf("%-*s", widths[i], cell)
@@ -63,11 +68,7 @@ func groceryCharge(payee string, day time.Time, cents int64) chargeTxn {
 
 func Test_run_recurring_lists_a_monthly_subscription_with_its_yearly_cost(t *testing.T) {
 	home := newHome(t)
-	var charges []chargeTxn
-	for month := time.October; len(charges) < 12; month++ {
-		charges = append(charges, groceryCharge("Netflix.com", day(2025, month, 12), 2099))
-	}
-	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, charges...))
+	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, monthlyCharges("acct-cad", "Netflix.com", 2099)...))
 
 	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring"})
 
@@ -99,10 +100,7 @@ func Test_run_recurring_detects_weekly_quarterly_and_yearly_series(t *testing.T)
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			home := newHome(t)
-			var charges []chargeTxn
-			for i := c.count - 1; i >= 0; i-- {
-				charges = append(charges, groceryCharge("Gym", lastCharge.AddDate(0, 0, -c.gapDays*i), c.cents))
-			}
+			charges := spacedCharges("Gym", lastCharge, c.gapDays, c.count, c.cents)
 			replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, charges...))
 
 			exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"recurring", "--since", "2000"})
@@ -144,6 +142,15 @@ func Test_run_recurring_counts_a_split_charge_once_and_leaves_a_refund_out(t *te
 		[]string{"Gym", "CAD", "month", "20.99", "251.88", "2026-04-10", "2026-09-10", "active, new", ""},
 		[]string{"Total", "CAD", "", "", "251.88", "", "", "", ""}),
 		stdout.String())
+}
+
+// spacedCharges is count grocery charges of payee of cents, gapDays apart, the last on last.
+func spacedCharges(payee string, last time.Time, gapDays, count int, cents int64) []chargeTxn {
+	var charges []chargeTxn
+	for i := count - 1; i >= 0; i-- {
+		charges = append(charges, groceryCharge(payee, last.AddDate(0, 0, -gapDays*i), cents))
+	}
+	return charges
 }
 
 // monthlyCharges is twelve monthly charges of cents by payee on account, the last on 2026-09-12.
@@ -275,28 +282,20 @@ func Test_run_recurring_prints_each_empty_period_warning_on_stderr_and_in_the_js
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			home := newHome(t)
-			accounts := []store.Account{
-				chequingAccount("acct-cad", 1),
-				{ID: "acct-visa", SourceID: 2, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
-				{ID: "acct-old", SourceID: 3, Name: "Old Card", Type: "credit_card", Currency: "CAD", Active: true, NotInReports: true},
-				{ID: "acct-401k", SourceID: 4, Name: "Linked", Type: "chequing", Currency: "CAD", Active: true, LinkedTracking: true},
-			}
-			replaceStore(t, home, chargeRows(accounts, c.charges...))
-			var textOut, textErr, jsonOut, jsonErr bytes.Buffer
+			replaceStore(t, home, chargeRows(emptyWindowAccounts(), c.charges...))
 
-			textExit := runWith(context.Background(), append([]string{"recurring"}, c.args...), spendEnv(&textOut, &textErr))
-			jsonExit := runWith(context.Background(), append([]string{"recurring", "--json"}, c.args...), spendEnv(&jsonOut, &jsonErr))
+			text, jsonRun := runSpendTextAndJSON("recurring", c.args...)
 
-			require.Equal(t, 0, textExit, textErr.String())
-			require.Equal(t, 0, jsonExit, jsonErr.String())
+			require.Equal(t, 0, text.exitCode, text.stderr)
+			require.Equal(t, 0, jsonRun.exitCode, jsonRun.stderr)
 			wantStderr := warningLines(c.wantWarns)
-			assert.Equal(t, "Recurring charges 2026-01-01 to 2026-09-29 in "+c.wantCaption+", amounts in CAD\n\n"+recurringHeaderOnly, textOut.String())
-			assert.Equal(t, wantStderr, textErr.String())
-			assert.Equal(t, wantStderr, jsonErr.String())
+			assert.Equal(t, "Recurring charges 2026-01-01 to 2026-09-29 in "+c.wantCaption+", amounts in CAD\n\n"+recurringHeaderOnly, text.stdout)
+			assert.Equal(t, wantStderr, text.stderr)
+			assert.Equal(t, wantStderr, jsonRun.stderr)
 			var doc struct {
 				Warnings []string `json:"warnings"`
 			}
-			require.NoError(t, json.Unmarshal(jsonOut.Bytes(), &doc), jsonOut.String())
+			require.NoError(t, json.Unmarshal([]byte(jsonRun.stdout), &doc), jsonRun.stdout)
 			assert.Equal(t, c.wantWarns, doc.Warnings)
 		})
 	}
@@ -708,17 +707,14 @@ func Test_run_recurring_says_only_that_the_window_is_empty_on_an_unrated_usd_sto
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			const emptyLine = "no recurring charges from 2030-01-01 to 2031-12-31; the store's transactions run 2026-02-12 to 2026-09-12"
-			args := []string{"--since", "2030", "--until", "2031", "--currency", c.flag}
-			var textOut, textErr, jsonOut, jsonErr bytes.Buffer
 
-			textExit := runWith(context.Background(), append([]string{"recurring"}, args...), spendEnv(&textOut, &textErr))
-			jsonExit := runWith(context.Background(), append([]string{"recurring", "--json"}, args...), spendEnv(&jsonOut, &jsonErr))
+			text, jsonRun := runSpendTextAndJSON("recurring", "--since", "2030", "--until", "2031", "--currency", c.flag)
 
-			require.Equal(t, 0, textExit, textErr.String())
-			require.Equal(t, 0, jsonExit, jsonErr.String())
-			assert.Equal(t, "Recurring charges 2030-01-01 to 2031-12-31 in all accounts"+c.wantCaption+"\n\n"+recurringHeaderOnly, textOut.String())
-			assert.Equal(t, warningLines([]string{emptyLine}), textErr.String())
-			doc := decodeRecurringJSON(t, jsonOut.String())
+			require.Equal(t, 0, text.exitCode, text.stderr)
+			require.Equal(t, 0, jsonRun.exitCode, jsonRun.stderr)
+			assert.Equal(t, "Recurring charges 2030-01-01 to 2031-12-31 in all accounts"+c.wantCaption+"\n\n"+recurringHeaderOnly, text.stdout)
+			assert.Equal(t, warningLines([]string{emptyLine}), text.stderr)
+			doc := decodeRecurringJSON(t, jsonRun.stdout)
 			assert.Equal(t, c.flag, doc.Currency)
 			assert.Equal(t, []recurringTotalJSON{}, doc.Totals)
 			assert.Equal(t, []recurringSeriesJSON{}, doc.Series)
@@ -903,18 +899,16 @@ func Test_run_recurring_lists_price_changes_both_ways_from_first_to_latest(t *te
 	cents := slices.Concat(slices.Repeat([]int64{999}, 8), slices.Repeat([]int64{1199}, 8), slices.Repeat([]int64{1099}, 8))
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)},
 		monthlySeries("Netflix.com", 2024, time.October, cents...)...))
-	var textOut, textErr, jsonOut, jsonErr bytes.Buffer
 
-	textCode := runWith(context.Background(), []string{"recurring", "--since", "2000"}, spendEnv(&textOut, &textErr))
-	jsonCode := runWith(context.Background(), []string{"recurring", "--since", "2000", "--json"}, spendEnv(&jsonOut, &jsonErr))
+	text, jsonRun := runSpendTextAndJSON("recurring", "--since", "2000")
 
-	require.Equal(t, 0, textCode, textErr.String())
-	require.Equal(t, 0, jsonCode, jsonErr.String())
+	require.Equal(t, 0, text.exitCode, text.stderr)
+	require.Equal(t, 0, jsonRun.exitCode, jsonRun.stderr)
 	assert.Equal(t, recurringTable("Recurring charges 2000-01-01 to 2026-09-29 in all accounts, amounts in CAD",
 		[]string{"Netflix.com", "CAD", "month", "10.99", "131.88", "2024-10-12", "2026-09-12", "active, new", "2: 9.99 -> 10.99 (+10.0%)"},
 		[]string{"Total", "CAD", "", "", "131.88", "", "", "", ""}),
-		textOut.String())
-	doc := decodeRecurringJSON(t, jsonOut.String())
+		text.stdout)
+	doc := decodeRecurringJSON(t, jsonRun.stdout)
 	require.Len(t, doc.Series, 1)
 	assert.Equal(t, []recurringPriceChangeJSON{
 		{Date: "2025-06-12", Currency: "CAD", From: "9.99", To: "11.99", ChangePct: 20.0},
@@ -1056,10 +1050,7 @@ func quietSeriesOutput(t *testing.T, c quietCase) (string, string, string) {
 	t.Helper()
 	home := newHome(t)
 	lastCharge := day(2026, time.September, 29).AddDate(0, 0, -c.quietDays)
-	var charges []chargeTxn
-	for i := c.count - 1; i >= 0; i-- {
-		charges = append(charges, groceryCharge("Gym", lastCharge.AddDate(0, 0, -c.gapDays*i), 1000))
-	}
+	charges := spacedCharges("Gym", lastCharge, c.gapDays, c.count, 1000)
 	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-cad", 1)}, charges...))
 	var out, stderr bytes.Buffer
 

@@ -26,21 +26,38 @@ import (
 func syncFindingsBundle(t *testing.T, home string, b *v9fixture.Builder) (*duckdb.DB, string) {
 	t.Helper()
 	stdout := syncFindingsBundleIn(t, home, "Documents", b)
-	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db, stdout
+	return openStoreReadOnly(t, home), stdout
+}
+
+// openStoreReadOnly opens the store under home read-only until the test ends.
+func openStoreReadOnly(tb testing.TB, home string) *duckdb.DB {
+	tb.Helper()
+	db, err := duckdb.OpenReadOnly(tb.Context(), storePathUnder(home))
+	require.NoError(tb, err)
+	tb.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+// syncFindingsCounts is the store.findings member of sync's --json stdout.
+func syncFindingsCounts(tb testing.TB, stdout string) string {
+	tb.Helper()
+	var parsed struct {
+		Store struct {
+			Findings json.RawMessage `json:"findings"`
+		} `json:"store"`
+	}
+	require.NoError(tb, json.Unmarshal([]byte(stdout), &parsed))
+	return string(parsed.Store.Findings)
 }
 
 // syncFindingsBundleIn syncs b written under home/dir and returns sync's Findings line, leaving no store connection open.
 func syncFindingsBundleIn(t *testing.T, home, dir string, b *v9fixture.Builder) string {
 	t.Helper()
-	bundle := b.WriteBundle(t, filepath.Join(home, dir))
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
+	exitCode, stdout, stderr := syncNewBundle(t, home, dir, b)
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	return findingsLine(t, stdout.String())
+	require.Equal(t, 0, exitCode, stderr)
+	return findingsLine(t, stdout)
 }
 
 // findingsLine is the Findings line of sync's stdout.
@@ -237,13 +254,7 @@ func Test_run_sync_json_counts_a_finding_fixed_since_the_last_sync(t *testing.T)
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
-	var parsed struct {
-		Store struct {
-			Findings json.RawMessage `json:"findings"`
-		} `json:"store"`
-	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &parsed))
-	assert.JSONEq(t, `{"open":0,"ignored":0,"fixed":1,"new":0,"newly_fixed":1}`, string(parsed.Store.Findings))
+	assert.JSONEq(t, `{"open":0,"ignored":0,"fixed":1,"new":0,"newly_fixed":1}`, syncFindingsCounts(t, stdout.String()))
 }
 
 // twoPayeeBundle mints both payees in every call, so each finding id is the same in every sync.
@@ -283,8 +294,7 @@ func Test_run_sync_from_an_older_snapshot_reopens_and_fixes_findings(t *testing.
 	first, xPK := twoPayeeBundle(false, true)
 	second, _ := twoPayeeBundle(true, false)
 	syncFindingsBundleIn(t, home, "DocumentsA", first)
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	firstID := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
+	firstID := soleSnapshotIDUnder(t, home)
 	xID := fmt.Sprintf("uncategorized:payee-%d", xPK)
 	firstFoundAt := importRunQuery(t, home, "SELECT id, CAST(first_found_at AS VARCHAR) FROM findings")[xID]
 	syncFindingsBundleIn(t, home, "DocumentsB", second)
@@ -322,13 +332,7 @@ func Test_run_sync_json_counts_an_ignored_finding_as_ignored_not_open_or_new(t *
 	exitCode, stdout, stderr := syncIgnoringTheNewFinding(t, home, "--json")
 
 	require.Equal(t, 0, exitCode, stderr)
-	var parsed struct {
-		Store struct {
-			Findings json.RawMessage `json:"findings"`
-		} `json:"store"`
-	}
-	require.NoError(t, json.Unmarshal([]byte(stdout), &parsed))
-	assert.JSONEq(t, `{"open":1,"ignored":1,"fixed":0,"new":0,"newly_fixed":0}`, string(parsed.Store.Findings))
+	assert.JSONEq(t, `{"open":1,"ignored":1,"fixed":0,"new":0,"newly_fixed":0}`, syncFindingsCounts(t, stdout))
 }
 
 func Test_run_sync_counts_a_new_open_finding_beside_an_ignored_one(t *testing.T) {
@@ -348,8 +352,7 @@ func Test_run_sync_from_counts_an_ignored_finding_as_ignored_not_open(t *testing
 	home := newHome(t)
 	first, xPK, _ := twoPayeeBundleKeys(false, true)
 	syncFindingsBundleIn(t, home, "DocumentsA", first)
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	firstID := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
+	firstID := soleSnapshotIDUnder(t, home)
 	writeConfig(t, home, fmt.Sprintf("[findings]\nignore = [\"uncategorized:payee-%d\"]\n", xPK))
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", firstID})
@@ -415,21 +418,14 @@ func Test_run_sync_json_counts_an_unclassified_account_open_and_not_new(t *testi
 	exitCode, stdout, stderr := syncNewBundle(t, home, "Documents", b, "--json")
 
 	require.Equal(t, 0, exitCode, stderr)
-	var parsed struct {
-		Store struct {
-			Findings json.RawMessage `json:"findings"`
-		} `json:"store"`
-	}
-	require.NoError(t, json.Unmarshal([]byte(stdout), &parsed))
-	assert.JSONEq(t, `{"open":1,"ignored":0,"fixed":0,"new":0,"newly_fixed":0}`, string(parsed.Store.Findings))
+	assert.JSONEq(t, `{"open":1,"ignored":0,"fixed":0,"new":0,"newly_fixed":0}`, syncFindingsCounts(t, stdout))
 }
 
 func Test_run_sync_from_counts_an_unclassified_account_open(t *testing.T) {
 	home := newHome(t)
 	b, _ := unclassifiedAccountBundle()
 	syncFindingsBundleIn(t, home, "Documents", b)
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	id := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
+	id := soleSnapshotIDUnder(t, home)
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", id})
 
@@ -643,10 +639,7 @@ func syncedStore(t *testing.T, build func(b *v9fixture.Builder)) *duckdb.DB {
 	b := v9fixture.NewBuilder()
 	build(b)
 	syncBundle(t, b.WriteBundle(t, filepath.Join(home, "Documents")))
-	db, err := duckdb.OpenReadOnly(t.Context(), filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb"))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db
+	return openStoreReadOnly(t, home)
 }
 
 func Test_run_sync_records_which_transactions_are_excluded_from_reports(t *testing.T) {
