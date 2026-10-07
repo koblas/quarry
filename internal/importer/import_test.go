@@ -19,9 +19,8 @@ import (
 
 func Test_import_fails_when_the_snapshot_path_does_not_exist(t *testing.T) {
 	t.Parallel()
-	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: "/no/such/snapshot.sqlite"})
+	_, err := importInto(t, &fakeStore{}, "/no/such/snapshot.sqlite")
 
 	require.Error(t, err)
 }
@@ -47,11 +46,9 @@ func Test_import_builds_every_table_from_a_v9_snapshot(t *testing.T) {
 	entry2PK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "5.34"})
 	b.LinkUserTag(entry1PK, tagPK)
 
-	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{Path: "/store/quarry.duckdb"}
-	srv := importer.NewServer(importer.WithStore(fake))
 
-	result, err := srv.Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	result, err := importBuilt(t, fake, b)
 
 	require.NoError(t, err)
 	assert.Equal(t, fake.Path, result.Path)
@@ -98,19 +95,17 @@ func Test_import_builds_every_table_from_a_v9_snapshot(t *testing.T) {
 func Test_import_twice_from_the_same_snapshot_keeps_every_id(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	acctPK := newChequing(b)
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00"})
-	bundle := b.WriteBundle(t, t.TempDir())
+	txnPK := transactionWithEntry(b, v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
+	dataPath := b.WriteBundle(t, t.TempDir()).DataPath
+	fake1, fake2 := &fakeStore{}, &fakeStore{}
 
-	fake1 := &fakeStore{}
-	_, err := importer.NewServer(importer.WithStore(fake1)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
-	require.NoError(t, err)
+	_, err1 := importInto(t, fake1, dataPath)
+	_, err2 := importInto(t, fake2, dataPath)
 
-	fake2 := &fakeStore{}
-	_, err = importer.NewServer(importer.WithStore(fake2)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
-	require.NoError(t, err)
+	require.NoError(t, err1)
+	require.NoError(t, err2)
 
 	wantAcctID := fmt.Sprintf("acct-%d", acctPK)
 	wantTxnID := fmt.Sprintf("txn-%d", txnPK)
@@ -135,12 +130,9 @@ func Test_import_keeps_each_categorys_parent_path_kind_and_hidden(t *testing.T) 
 	childPK := b.Category(v9fixture.TagRow{
 		Name: "Groceries", Type: new(int64(1)), ParentCategory: parentPK, Hidden: true,
 	})
-	bundle := b.WriteBundle(t, t.TempDir())
-	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	fake, _ := importOK(t, b)
 
-	require.NoError(t, err)
 	parentID := fmt.Sprintf("cat-%d", parentPK)
 	assert.ElementsMatch(t, []store.Category{
 		{ID: fmt.Sprintf("cat-%d", incomePK), SourceID: incomePK, Name: "Salary", FullPath: "Salary", Kind: "income"},
@@ -163,10 +155,9 @@ func Test_import_hands_the_store_one_import_run_describing_the_build(t *testing.
 	savingsPK := b.Account(v9fixture.AccountRow{Name: "US Savings", Type: "SAVINGS", Currency: "USD", Active: true})
 	transferLeg(b, chequingPK, "-20.00", 201, "202")
 	transferLeg(b, savingsPK, "15.00", 202, "201")
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	brokeragePK := newBrokerage(b)
 	investmentWithEntry(b, v9fixture.TransactionRow{Type: new(int64(3)), Account: brokeragePK, Amount: "-40.00", PostedDate: &day})
-	bundle := b.WriteBundle(t, t.TempDir())
-	snap := store.SnapshotRef{Path: bundle.DataPath, SHA256: "9f86d081", SchemaFingerprint: "sha256:abc"}
+	snap := store.SnapshotRef{Path: snapshotPath(t, b), SHA256: "9f86d081", SchemaFingerprint: "sha256:abc"}
 	fake := &fakeStore{}
 	before := time.Now().UTC()
 
@@ -197,8 +188,9 @@ func Test_import_counts_securities_and_prices_in_the_import_run(t *testing.T) {
 	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay1, ClosingPrice: "12.5"})
 	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay2, ClosingPrice: "13"})
 	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: barePK, QuoteDate: &priceDay1, ClosingPrice: "4"})
+	newChequing(b)
 
-	fake, _ := importSecurities(t, b)
+	fake, _ := importOK(t, b)
 
 	require.Len(t, fake.Rows.ImportRuns, 1)
 	assert.Equal(t, store.Counts{Accounts: 1, Securities: 2, Prices: 3}, fake.Rows.ImportRuns[0].Counts)
@@ -207,12 +199,11 @@ func Test_import_counts_securities_and_prices_in_the_import_run(t *testing.T) {
 func Test_import_reports_the_history_fault_the_store_returns(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	bundle := b.WriteBundle(t, t.TempDir())
+	newChequing(b)
 	fault := &store.OpenError{Fault: store.OpenFaultNotDuckDB, Path: "/store/quarry.duckdb"}
 	fake := &fakeStore{historyFault: fault}
 
-	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	result, err := importBuilt(t, fake, b)
 
 	require.NoError(t, err)
 	assert.True(t, result.Built)
@@ -222,12 +213,10 @@ func Test_import_reports_the_history_fault_the_store_returns(t *testing.T) {
 func Test_import_reports_no_history_fault_when_the_store_returns_none(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	bundle := b.WriteBundle(t, t.TempDir())
+	newChequing(b)
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	_, result := importOK(t, b)
 
-	require.NoError(t, err)
 	assert.True(t, result.Built)
 	assert.Nil(t, result.HistoryFault)
 }
@@ -235,12 +224,11 @@ func Test_import_reports_no_history_fault_when_the_store_returns_none(t *testing
 func Test_import_passes_the_carry_faults_through_to_the_result(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	bundle := b.WriteBundle(t, t.TempDir())
+	newChequing(b)
 	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: "/store/quarry.duckdb", Reason: "its findings table repeats an id"}
 	fake := &fakeStore{findingsFault: fault, unreadable: true}
 
-	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	result, err := importBuilt(t, fake, b)
 
 	require.NoError(t, err)
 	assert.Same(t, fault, result.FindingsFault)
@@ -250,12 +238,11 @@ func Test_import_passes_the_carry_faults_through_to_the_result(t *testing.T) {
 func Test_import_passes_the_rates_fault_through_to_the_result(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	bundle := b.WriteBundle(t, t.TempDir())
+	newChequing(b)
 	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: "/store/quarry.duckdb", Reason: "its fx_rates table repeats a date"}
 	fake := &fakeStore{ratesFault: fault}
 
-	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	result, err := importBuilt(t, fake, b)
 
 	require.NoError(t, err)
 	assert.Same(t, fault, result.RatesFault)
@@ -264,11 +251,10 @@ func Test_import_passes_the_rates_fault_through_to_the_result(t *testing.T) {
 func Test_import_returns_the_stores_findings_counts(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	bundle := b.WriteBundle(t, t.TempDir())
+	newChequing(b)
 	counts := finding.Counts{Open: 4, New: 3}
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{findings: counts})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	result, err := importBuilt(t, &fakeStore{findings: counts}, b)
 
 	require.NoError(t, err)
 	assert.Equal(t, counts, result.Findings)
@@ -277,11 +263,10 @@ func Test_import_returns_the_stores_findings_counts(t *testing.T) {
 func Test_import_passes_the_finding_states_through_to_the_result(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	bundle := b.WriteBundle(t, t.TempDir())
+	newChequing(b)
 	states := []finding.State{{ID: "uncategorized:payee-1", New: true}, {ID: "duplicate:txn-1:txn-2", Fixed: true, NewlyFixed: true}}
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{states: states})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	result, err := importBuilt(t, &fakeStore{states: states}, b)
 
 	require.NoError(t, err)
 	assert.Equal(t, states, result.FindingStates)
@@ -290,14 +275,11 @@ func Test_import_passes_the_finding_states_through_to_the_result(t *testing.T) {
 func Test_import_returns_the_accounts_it_wrote_to_the_store(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	newChequing(b)
 	b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "USD", Active: true})
-	bundle := b.WriteBundle(t, t.TempDir())
-	fake := &fakeStore{}
 
-	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	fake, result := importOK(t, b)
 
-	require.NoError(t, err)
 	require.Len(t, fake.Rows.Accounts, 2)
 	assert.Equal(t, fake.Rows.Accounts, result.Accounts)
 }
@@ -305,10 +287,9 @@ func Test_import_returns_the_accounts_it_wrote_to_the_store(t *testing.T) {
 func Test_import_returns_whether_the_stores_findings_were_carried(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	bundle := b.WriteBundle(t, t.TempDir())
+	newChequing(b)
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{carried: true})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	result, err := importBuilt(t, &fakeStore{carried: true}, b)
 
 	require.NoError(t, err)
 	assert.True(t, result.FindingsCarried)
@@ -317,13 +298,12 @@ func Test_import_returns_whether_the_stores_findings_were_carried(t *testing.T) 
 func Test_import_passes_the_rates_summary_through_to_the_result(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	bundle := b.WriteBundle(t, t.TempDir())
+	newChequing(b)
 	rates := store.RatesSummary{
 		First: time.Date(2005, 3, 1, 0, 0, 0, 0, time.UTC), Last: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), Added: 7, FetchError: "unreachable",
 	}
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{rates: rates})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	result, err := importBuilt(t, &fakeStore{rates: rates}, b)
 
 	require.NoError(t, err)
 	assert.Equal(t, rates, result.Rates)
@@ -337,7 +317,7 @@ func Test_import_returns_the_securities_and_investment_transactions_it_wrote(t *
 	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: acmePK})
 	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Position: positionPK, Units: "0"})
 
-	fake, result := importInvestments(t, b)
+	fake, result := importOK(t, b)
 
 	require.Len(t, fake.Rows.Securities, 1)
 	require.Len(t, fake.Rows.InvestmentTransactions, 1)
@@ -355,10 +335,9 @@ func oneShareMismatch() store.ShareCheck {
 
 func Test_import_does_not_replace_the_store_when_share_counts_differ(t *testing.T) {
 	t.Parallel()
-	bundle := v9fixture.NewBuilder().WriteBundle(t, t.TempDir())
 	fake := &fakeStore{shareCheck: oneShareMismatch()}
 
-	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	result, err := importBuilt(t, fake, v9fixture.NewBuilder())
 
 	require.ErrorIs(t, err, store.ErrValidationFailed)
 	assert.Zero(t, fake.replaceCalls)
@@ -370,10 +349,9 @@ func Test_import_does_not_replace_the_store_when_share_counts_differ(t *testing.
 
 func Test_import_replaces_the_store_and_records_the_holdings_checked_when_share_counts_match(t *testing.T) {
 	t.Parallel()
-	bundle := v9fixture.NewBuilder().WriteBundle(t, t.TempDir())
 	fake := &fakeStore{shareCheck: store.ShareCheck{Checked: 3}}
 
-	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	result, err := importBuilt(t, fake, v9fixture.NewBuilder())
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, fake.replaceCalls)
@@ -388,10 +366,9 @@ func Test_import_reports_share_counts_alongside_a_balance_failure(t *testing.T) 
 	acctPK := chequingWithOneReconciledTxn(b, "100.00")
 	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &feb, EndingBalance: "100.01"})
-	bundle := b.WriteBundle(t, t.TempDir())
 	fake := &fakeStore{shareCheck: store.ShareCheck{Checked: 4}}
 
-	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	result, err := importBuilt(t, fake, b)
 
 	require.ErrorIs(t, err, store.ErrValidationFailed)
 	assert.Len(t, result.Validation.Balances.Mismatched, 1)
@@ -400,10 +377,9 @@ func Test_import_reports_share_counts_alongside_a_balance_failure(t *testing.T) 
 
 func Test_import_returns_the_share_check_error_without_replacing_the_store(t *testing.T) {
 	t.Parallel()
-	bundle := v9fixture.NewBuilder().WriteBundle(t, t.TempDir())
 	fake := &fakeStore{shareErr: errShareCheckFault}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	_, err := importBuilt(t, fake, v9fixture.NewBuilder())
 
 	require.ErrorIs(t, err, errShareCheckFault)
 	require.NotErrorIs(t, err, store.ErrValidationFailed)
@@ -428,90 +404,6 @@ func (f *faultingSource) QueryRows(ctx context.Context, query string, args []any
 
 func (f *faultingSource) Close() error { return f.real.Close() }
 
-// errSourceBoom and errStoreDiskFull are the faults the fakes below inject.
-var (
-	errSourceBoom    = errors.New("boom")
-	errStoreDiskFull = errors.New("disk full")
-)
-
-func openerFailingOn(match string, err error) importer.SourceOpener {
-	return func(ctx context.Context, path string) (importer.Source, error) {
-		src, openErr := sqlite.OpenReadOnly(ctx, path)
-		if openErr != nil {
-			return nil, openErr
-		}
-		return &faultingSource{real: src, match: match, err: err}, nil
-	}
-}
-
-// Import must propagate a failure from every source query it issues, not
-// swallow it — one row per table the importer reads from.
-func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	catPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: new(int64(1))})
-	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true, LoanInterestCategory: catPK})
-	b.BudgetLineItem(v9fixture.BudgetLineItemRow{Category: catPK})
-	b.LoanSplitEntry(v9fixture.LoanSplitEntryRow{Category: catPK})
-	b.QuickfillRuleSplitEntry(v9fixture.QuickfillRuleSplitEntryRow{Category: catPK})
-	b.ProductService(v9fixture.ProductServiceRow{Category: catPK})
-	b.CustomerCreditLineItem(v9fixture.CustomerCreditLineItemRow{Category: catPK})
-	b.Payee(v9fixture.PayeeRow{Name: "Coffee Shop"})
-	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
-	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
-	entryPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00", CategoryTag: catPK})
-	b.LinkUserTag(entryPK, tagPK)
-	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &posted, EndingBalance: "1.00"})
-	securityPK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
-	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: securityPK, QuoteDate: &posted, ClosingPrice: "12.5"})
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: securityPK})
-	investmentWithEntry(b, v9fixture.TransactionRow{Account: brokeragePK, Type: new(int64(3)), Amount: "1.00", PostedDate: &posted, Position: positionPK, Units: "1"})
-	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "1"})
-	bundle := b.WriteBundle(t, t.TempDir())
-
-	errBoom := errSourceBoom
-	cases := []struct {
-		name  string
-		match string
-		want  string
-	}{
-		{"Z_PRIMARYKEY", "Z_PRIMARYKEY", "resolve entities"},
-		{"ZACCOUNT", "ZTYPENAME", "read accounts"},
-		{"ZRECONCILERECORD", "ZRECONCILERECORD", "read reconcile records"},
-		{"ZTAG categories", "ZPARENTCATEGORY", "read categories"},
-		{"ZTAG tags", "COALESCE(ZNAME, '')\nFROM ZTAG", "read tags"},
-		{"ZUSERPAYEE", "ZUSERPAYEE", "read payees"},
-		{"ZTRANSACTION", "ZPOSTEDDATE", "read transactions"},
-		{"ZCASHFLOWTRANSACTIONENTRY", "FROM ZCASHFLOWTRANSACTIONENTRY", "read splits"},
-		{"Z_15USERTAGS", "Z_15USERTAGS", "read split tags"},
-		{"ZBUDGETLINEITEM", "FROM ZBUDGETLINEITEM", "read budget line items"},
-		{"ZLOANSPLITENTRY", "FROM ZLOANSPLITENTRY", "read loan split entries"},
-		{"ZACCOUNT loan interest", "ZLOANINTERESTCATEGORY", "read loan interest categories"},
-		{"ZQUICKFILLRULESPLITENTRY", "FROM ZQUICKFILLRULESPLITENTRY", "read quickfill rule split entries"},
-		{"ZPRODUCTSERVICE", "FROM ZPRODUCTSERVICE", "read product and service categories"},
-		{"ZCUSTOMERCREDITLINEITEM", "FROM ZCUSTOMERCREDITLINEITEM", "read customer credit line item categories"},
-		{"ZSECURITY", "ZTICKER", "read securities"},
-		{"ZSECURITYQUOTE", "ZCLOSINGPRICE", "read prices"},
-		{"ZPOSITION", "FROM ZPOSITION", "read positions"},
-		{"ZLOT", "FROM ZLOT", "read lots"},
-		{"ZTRANSACTION investments", "ZUNITS", "read investment transactions"},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
-			srv := importer.NewServer(importer.WithStore(&fakeStore{}), importer.WithSourceOpener(openerFailingOn(c.match, errBoom)))
-
-			_, err := srv.Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
-
-			require.ErrorIs(t, err, errBoom)
-			require.ErrorContains(t, err, c.want)
-		})
-	}
-}
-
 // scanFaultingSource lets a matched query's real rows through but fails
 // every scan() call on them.
 type scanFaultingSource struct {
@@ -531,20 +423,36 @@ func (f *scanFaultingSource) QueryRows(ctx context.Context, query string, args [
 
 func (f *scanFaultingSource) Close() error { return f.real.Close() }
 
-func openerScanFailingOn(match string, err error) importer.SourceOpener {
+// errSourceBoom and errStoreDiskFull are the faults the fakes inject.
+var (
+	errSourceBoom    = errors.New("boom")
+	errStoreDiskFull = errors.New("disk full")
+)
+
+// openerWrapping opens the snapshot read-only and hands Import the source wrap returns around it.
+func openerWrapping(wrap func(importer.Source) importer.Source) importer.SourceOpener {
 	return func(ctx context.Context, path string) (importer.Source, error) {
 		src, openErr := sqlite.OpenReadOnly(ctx, path)
 		if openErr != nil {
 			return nil, openErr
 		}
-		return &scanFaultingSource{real: src, match: match, err: err}, nil
+		return wrap(src), nil
 	}
 }
 
-// Import must propagate a Scan failure on a row it already fetched, not
-// just a failure to run the query itself — one row per table.
-func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
-	t.Parallel()
+func openerFailingOn(match string, err error) importer.SourceOpener {
+	return openerWrapping(func(src importer.Source) importer.Source { return &faultingSource{real: src, match: match, err: err} })
+}
+
+func openerScanFailingOn(match string, err error) importer.SourceOpener {
+	return openerWrapping(func(src importer.Source) importer.Source {
+		return &scanFaultingSource{real: src, match: match, err: err}
+	})
+}
+
+// everySourceTableSnapshot writes a snapshot with a row in every table Import reads and returns its data path.
+func everySourceTableSnapshot(tb testing.TB) string {
+	tb.Helper()
 	b := v9fixture.NewBuilder()
 	catPK := b.Category(v9fixture.TagRow{Name: "Groceries", Type: new(int64(1))})
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true, LoanInterestCategory: catPK})
@@ -560,20 +468,25 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 	entryPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00", CategoryTag: catPK})
 	b.LinkUserTag(entryPK, tagPK)
 	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &posted, EndingBalance: "1.00"})
-	securityPK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
+	securityPK := newAcme(b)
 	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: securityPK, QuoteDate: &posted, ClosingPrice: "12.5"})
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	brokeragePK := newBrokerage(b)
 	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: securityPK})
-	investmentWithEntry(b, v9fixture.TransactionRow{Account: brokeragePK, Type: new(int64(3)), Amount: "1.00", PostedDate: &posted, Position: positionPK, Units: "1"})
+	investmentWithEntry(b, v9fixture.TransactionRow{Account: brokeragePK, Type: buyCode, Amount: "1.00", PostedDate: &posted, Position: positionPK, Units: "1"})
 	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "1"})
-	bundle := b.WriteBundle(t, t.TempDir())
+	return b.WriteBundle(tb, tb.TempDir()).DataPath
+}
 
-	errBoom := errSourceBoom
-	cases := []struct {
-		name  string
-		match string
-		want  string
-	}{
+// sourceQuery is one query Import issues: a fragment of its text and the context its error is wrapped in.
+type sourceQuery struct {
+	name  string
+	match string
+	want  string
+}
+
+// everySourceQuery lists one query per table Import reads.
+func everySourceQuery() []sourceQuery {
+	return []sourceQuery{
 		{"Z_PRIMARYKEY", "Z_PRIMARYKEY", "resolve entities"},
 		{"ZACCOUNT", "ZTYPENAME", "read accounts"},
 		{"ZRECONCILERECORD", "ZRECONCILERECORD", "read reconcile records"},
@@ -595,15 +508,41 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 		{"ZLOT", "FROM ZLOT", "read lots"},
 		{"ZTRANSACTION investments", "ZUNITS", "read investment transactions"},
 	}
+}
 
-	for _, c := range cases {
+// Import must propagate a failure from every source query it issues, not
+// swallow it — one row per table the importer reads from.
+func Test_import_propagates_a_fault_from_every_source_query(t *testing.T) {
+	t.Parallel()
+	dataPath := everySourceTableSnapshot(t)
+
+	for _, c := range everySourceQuery() {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			srv := importer.NewServer(importer.WithStore(&fakeStore{}), importer.WithSourceOpener(openerScanFailingOn(c.match, errBoom)))
+			srv := importer.NewServer(importer.WithStore(&fakeStore{}), importer.WithSourceOpener(openerFailingOn(c.match, errSourceBoom)))
 
-			_, err := srv.Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+			_, err := srv.Import(t.Context(), store.SnapshotRef{Path: dataPath})
 
-			require.ErrorIs(t, err, errBoom)
+			require.ErrorIs(t, err, errSourceBoom)
+			require.ErrorContains(t, err, c.want)
+		})
+	}
+}
+
+// Import must propagate a Scan failure on a row it already fetched, not
+// just a failure to run the query itself — one row per table.
+func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
+	t.Parallel()
+	dataPath := everySourceTableSnapshot(t)
+
+	for _, c := range everySourceQuery() {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			srv := importer.NewServer(importer.WithStore(&fakeStore{}), importer.WithSourceOpener(openerScanFailingOn(c.match, errSourceBoom)))
+
+			_, err := srv.Import(t.Context(), store.SnapshotRef{Path: dataPath})
+
+			require.ErrorIs(t, err, errSourceBoom)
 			require.ErrorContains(t, err, c.want)
 		})
 	}
@@ -612,15 +551,13 @@ func Test_import_propagates_a_scan_fault_from_every_source_query(t *testing.T) {
 func Test_import_propagates_a_store_replace_error(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	bundle := b.WriteBundle(t, t.TempDir())
+	newChequing(b)
 	fake := &fakeStore{}
-	errBoom := errStoreDiskFull
-	fake.failNext(errBoom)
+	fake.failNext(errStoreDiskFull)
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	_, err := importBuilt(t, fake, b)
 
-	require.ErrorIs(t, err, errBoom)
+	require.ErrorIs(t, err, errStoreDiskFull)
 }
 
 func Test_UnmappableError_matches_ErrUnmappable_and_keeps_its_reason(t *testing.T) {

@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -29,7 +28,7 @@ func Test_import_names_each_of_the_thirteen_mapped_action_codes(t *testing.T) {
 		investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: &code, Amount: "1.00", PostedDate: &investDay, Numerator: "1", Denominator: "1"})
 	}
 
-	fake, result := importInvestments(t, b)
+	fake, result := importOK(t, b)
 
 	assert.Equal(t, []string{
 		"add_shares", "buy", "margin_interest", "misc_expense", "capital_gain_long", "capital_gain_short",
@@ -47,7 +46,7 @@ func Test_import_refuses_an_unmapped_action_code(t *testing.T) {
 			accountPK := newBrokerage(b)
 			b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: &code, Amount: "1.00", PostedDate: &investDay})
 
-			reason, fake := importInvestmentsRefused(t, b)
+			reason, fake := importRefused(t, b)
 
 			assert.Equal(t, fmt.Sprintf(`an investment transaction on 2026-03-01 in "Brokerage" has action code %d, which quarry does not map yet`, code), reason)
 			assert.Zero(t, fake.replaceCalls)
@@ -61,7 +60,7 @@ func Test_import_refuses_an_investment_transaction_with_no_action_code(t *testin
 	accountPK := newBrokerage(b)
 	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Amount: "1.00", PostedDate: &investDay})
 
-	reason, _ := importInvestmentsRefused(t, b)
+	reason, _ := importRefused(t, b)
 
 	assert.Equal(t, `an investment transaction on 2026-03-01 in "Brokerage" has no action code`, reason)
 }
@@ -72,7 +71,7 @@ func Test_import_refuses_an_investment_transaction_with_neither_a_posted_nor_an_
 	accountPK := newBrokerage(b)
 	pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00"})
 
-	reason, _ := importInvestmentsRefused(t, b)
+	reason, _ := importRefused(t, b)
 
 	assert.Equal(t, fmt.Sprintf(`an investment transaction in "Brokerage" (source id %d) has no date`, pk), reason)
 }
@@ -96,7 +95,7 @@ func Test_import_ignores_an_unreadable_action_code_in_a_deleted_account(t *testi
 			livePK := investmentWithEntry(b, v9fixture.TransactionRow{Account: liveAccountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
 			b.InvestmentTransaction(v9fixture.TransactionRow{Account: deletedAccountPK, Type: c.code, Amount: "1.00", PostedDate: &investDay})
 
-			fake, _ := importInvestments(t, b)
+			fake, _ := importOK(t, b)
 
 			require.Len(t, fake.Rows.InvestmentTransactions, 1)
 			assert.Equal(t, livePK, fake.Rows.InvestmentTransactions[0].SourceID)
@@ -123,7 +122,7 @@ func Test_import_dates_an_investment_transaction_by_its_posted_day_else_its_ente
 			accountPK := newBrokerage(b)
 			investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: c.posted, EnteredDate: c.entered})
 
-			fake, _ := importInvestments(t, b)
+			fake, _ := importOK(t, b)
 
 			require.Len(t, fake.Rows.InvestmentTransactions, 1)
 			assert.Equal(t, c.want, fake.Rows.InvestmentTransactions[0].Date)
@@ -138,7 +137,7 @@ func Test_import_leaves_a_deleted_investment_transaction_out(t *testing.T) {
 	keptPK := investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
 	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "2.00", PostedDate: &investDay, Deleted: true})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	require.Len(t, fake.Rows.InvestmentTransactions, 1)
 	assert.Equal(t, keptPK, fake.Rows.InvestmentTransactions[0].SourceID)
@@ -151,7 +150,7 @@ func Test_import_leaves_out_an_investment_row_of_another_entity(t *testing.T) {
 	keptPK := investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
 	b.InvestmentTransaction(v9fixture.TransactionRow{Entity: 999, Account: accountPK, Type: buyCode, Amount: "2.00", PostedDate: &investDay})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	require.Len(t, fake.Rows.InvestmentTransactions, 1)
 	assert.Equal(t, keptPK, fake.Rows.InvestmentTransactions[0].SourceID)
@@ -165,7 +164,7 @@ func Test_import_resolves_the_security_of_an_investment_transaction_through_its_
 	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: acmePK})
 	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Position: positionPK, Units: "0"})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	require.Len(t, fake.Rows.InvestmentTransactions, 1)
 	assert.Equal(t, new(fmt.Sprintf("sec-%d", acmePK)), fake.Rows.InvestmentTransactions[0].SecurityID)
@@ -208,7 +207,7 @@ func Test_import_gives_a_zero_share_row_no_security_when_its_position_cannot_be_
 			positionPK := c.setup(b, accountPK, acmePK)
 			investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Position: positionPK, Units: "0"})
 
-			fake, _ := importInvestments(t, b)
+			fake, _ := importOK(t, b)
 
 			require.Len(t, fake.Rows.InvestmentTransactions, 1)
 			assert.Nil(t, fake.Rows.InvestmentTransactions[0].SecurityID)
@@ -223,13 +222,11 @@ func Test_import_skips_an_investment_transaction_with_no_account(t *testing.T) {
 	accountPK := newBrokerage(b)
 	livePK := investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
 	b.InvestmentTransaction(v9fixture.TransactionRow{Type: buyCode, Amount: "2.00", PostedDate: &investDay})
-	bundle := b.WriteBundle(t, t.TempDir())
-	execOn(t, bundle.DataPath, "INSERT INTO ZACCOUNT (Z_PK, ZNAME, ZTYPENAME, ZCURRENCY, ZACTIVE) VALUES (0, 'Zero', 'BROKERAGENORMAL', 'CAD', 1)")
-	fake := &fakeStore{}
+	dataPath := snapshotPath(t, b)
+	execOn(t, dataPath, "INSERT INTO ZACCOUNT (Z_PK, ZNAME, ZTYPENAME, ZCURRENCY, ZACTIVE) VALUES (0, 'Zero', 'BROKERAGENORMAL', 'CAD', 1)")
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	fake, _ := importOKFrom(t, dataPath)
 
-	require.NoError(t, err)
 	require.Len(t, fake.Rows.InvestmentTransactions, 1)
 	assert.Equal(t, livePK, fake.Rows.InvestmentTransactions[0].SourceID)
 }
@@ -242,13 +239,11 @@ func Test_import_gives_a_row_with_no_position_no_security_though_a_position_has_
 	acmePK := newAcme(b)
 	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: acmePK})
 	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Units: "0"})
-	bundle := b.WriteBundle(t, t.TempDir())
-	execOn(t, bundle.DataPath, "UPDATE ZPOSITION SET Z_PK = 0 WHERE Z_PK = ?", positionPK)
-	fake := &fakeStore{}
+	dataPath := snapshotPath(t, b)
+	execOn(t, dataPath, "UPDATE ZPOSITION SET Z_PK = 0 WHERE Z_PK = ?", positionPK)
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	fake, _ := importOKFrom(t, dataPath)
 
-	require.NoError(t, err)
 	require.Len(t, fake.Rows.InvestmentTransactions, 1)
 	assert.Nil(t, fake.Rows.InvestmentTransactions[0].SecurityID)
 }
@@ -261,7 +256,7 @@ func Test_import_leaves_out_a_position_row_of_another_entity(t *testing.T) {
 	otherPositionPK := b.Position(v9fixture.PositionRow{Entity: 999, Account: accountPK, Security: acmePK})
 	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Position: otherPositionPK, Units: "0"})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	require.Len(t, fake.Rows.InvestmentTransactions, 1)
 	assert.Nil(t, fake.Rows.InvestmentTransactions[0].SecurityID)
@@ -273,7 +268,7 @@ func Test_import_imports_investment_transactions_without_a_security_when_the_sna
 	accountPK := newBrokerage(b)
 	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: dividendCode, Amount: "12.00", PostedDate: &investDay})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	require.Len(t, fake.Rows.InvestmentTransactions, 1)
 	assert.Nil(t, fake.Rows.InvestmentTransactions[0].SecurityID)
@@ -283,10 +278,9 @@ func Test_import_imports_no_investment_transactions_when_the_snapshot_has_no_inv
 	t.Parallel()
 	b := v9fixture.NewBuilder().WithoutEntity("InvestmentTransaction")
 	accountPK := newBrokerage(b)
-	cashPK := b.Transaction(v9fixture.TransactionRow{Account: accountPK, Amount: "5.00", PostedDate: &investDay})
-	b.Entry(v9fixture.EntryRow{Parent: cashPK, Amount: "5.00"})
+	transactionWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Amount: "5.00", PostedDate: &investDay})
 
-	fake, result := importInvestments(t, b)
+	fake, result := importOK(t, b)
 
 	assert.Empty(t, fake.Rows.InvestmentTransactions)
 	assert.Zero(t, result.Counts.InvestmentTransactions)
@@ -313,7 +307,7 @@ func Test_import_stores_commission_as_ten_thousandths_and_null_for_none_or_zero(
 			accountPK := newBrokerage(b)
 			investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Commission: c.commission})
 
-			fake, _ := importInvestments(t, b)
+			fake, _ := importOK(t, b)
 
 			require.Len(t, fake.Rows.InvestmentTransactions, 1)
 			assert.Equal(t, c.want, fake.Rows.InvestmentTransactions[0].Commission)
@@ -348,7 +342,7 @@ func Test_import_stores_cost_basis_in_cents_and_null_for_none_or_zero(t *testing
 				Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Commission: c.commission, CostBasis: c.costBasis,
 			})
 
-			fake, _ := importInvestments(t, b)
+			fake, _ := importOK(t, b)
 
 			require.Len(t, fake.Rows.InvestmentTransactions, 1)
 			assert.Equal(t, c.want, fake.Rows.InvestmentTransactions[0].CostBasis)
@@ -362,7 +356,7 @@ func Test_import_stores_a_commission_beside_a_cost_basis_of_none(t *testing.T) {
 	accountPK := newBrokerage(b)
 	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Commission: "1.50"})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	require.Len(t, fake.Rows.InvestmentTransactions, 1)
 	assert.Equal(t, new(int64(15_000)), fake.Rows.InvestmentTransactions[0].Commission)
@@ -376,7 +370,7 @@ func Test_import_sets_the_split_columns_only_on_a_split(t *testing.T) {
 	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Numerator: "1", Denominator: "12"})
 	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: new(int64(23)), Amount: "0", PostedDate: &investDay, Numerator: "1", Denominator: "12"})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	require.Len(t, fake.Rows.InvestmentTransactions, 2)
 	buy, split := fake.Rows.InvestmentTransactions[0], fake.Rows.InvestmentTransactions[1]
@@ -396,7 +390,7 @@ func Test_import_reads_shares_and_amount_in_quickens_sign_with_the_accounts_curr
 		Account: usdPK, Type: new(int64(19)), Amount: "400.25", PostedDate: &investDay, Position: positionPK, Units: "-4.5",
 	})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Equal(t, []store.InvestmentTransaction{{
 		ID: fmt.Sprintf("itxn-%d", pk), SourceID: pk, AccountID: fmt.Sprintf("acct-%d", usdPK),
@@ -412,7 +406,7 @@ func Test_import_stores_an_investment_transactions_note_as_its_memo_and_an_empty
 	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay, Note: "quarterly"})
 	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "2.00", PostedDate: &investDay})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	require.Len(t, fake.Rows.InvestmentTransactions, 2)
 	assert.Equal(t, new("quarterly"), fake.Rows.InvestmentTransactions[0].Memo)
@@ -455,7 +449,7 @@ func Test_import_refuses_an_investment_value_quarry_cannot_read(t *testing.T) {
 				Account: accountPK, Type: buyCode, PostedDate: &investDay, Units: c.units, Amount: c.amount, Commission: c.commission, CostBasis: c.costBasis,
 			})
 
-			reason, fake := importInvestmentsRefused(t, b)
+			reason, fake := importRefused(t, b)
 
 			assert.Equal(t, c.want, reason)
 			assert.Zero(t, fake.replaceCalls)
@@ -468,12 +462,12 @@ func Test_import_refuses_a_blob_share_count(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	accountPK := newBrokerage(b)
 	pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Units: "1"})
-	bundle := b.WriteBundle(t, t.TempDir())
-	setColumnBlob(t, bundle.DataPath, "ZTRANSACTION", "ZUNITS", pk, []byte{0x01, 0x02})
+	dataPath := snapshotPath(t, b)
+	setColumnBlob(t, dataPath, "ZTRANSACTION", "ZUNITS", pk, []byte{0x01, 0x02})
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	reason, _ := importRefusedFrom(t, dataPath)
 
-	assert.Equal(t, `an investment transaction on 2026-03-01 in "Brokerage" has a share count that is not a number`, importReason(t, err))
+	assert.Equal(t, `an investment transaction on 2026-03-01 in "Brokerage" has a share count that is not a number`, reason)
 }
 
 func Test_import_refuses_an_undated_investment_transaction_before_any_other_fault(t *testing.T) {
@@ -482,7 +476,7 @@ func Test_import_refuses_an_undated_investment_transaction_before_any_other_faul
 	accountPK := newBrokerage(b)
 	pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Units: "n/a", Amount: "n/a"})
 
-	reason, _ := importInvestmentsRefused(t, b)
+	reason, _ := importRefused(t, b)
 
 	assert.Equal(t, fmt.Sprintf(`an investment transaction in "Brokerage" (source id %d) has no date`, pk), reason)
 }
@@ -497,7 +491,7 @@ func Test_import_snaps_float_residue_in_shares_to_the_nearest_millionth(t *testi
 		Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Position: positionPK, Units: "0.30000000000000004",
 	})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	require.Len(t, fake.Rows.InvestmentTransactions, 1)
 	assert.Equal(t, new(int64(300_000)), fake.Rows.InvestmentTransactions[0].Shares)
@@ -527,7 +521,7 @@ func Test_import_fails_on_shares_without_a_security(t *testing.T) {
 				Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Position: c.setup(b, accountPK), Units: c.units,
 			})
 
-			reason, fake := importInvestmentsRefused(t, b)
+			reason, fake := importRefused(t, b)
 
 			assert.Equal(t, `an investment transaction on 2026-03-01 in "Brokerage" has shares but no security`, reason)
 			assert.Zero(t, fake.replaceCalls)
@@ -553,7 +547,7 @@ func Test_import_gives_a_row_with_zero_or_NULL_shares_and_no_position_no_securit
 			accountPK := newBrokerage(b)
 			investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Units: c.units})
 
-			fake, _ := importInvestments(t, b)
+			fake, _ := importOK(t, b)
 
 			require.Len(t, fake.Rows.InvestmentTransactions, 1)
 			assert.Nil(t, fake.Rows.InvestmentTransactions[0].SecurityID)
@@ -595,7 +589,7 @@ func Test_import_fails_on_a_split_with_an_unreadable_ratio(t *testing.T) {
 				Numerator: c.numerator, Denominator: c.denominator,
 			})
 
-			reason, fake := importInvestmentsRefused(t, b)
+			reason, fake := importRefused(t, b)
 
 			assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" of "Acme Corp" has a ratio quarry cannot read `+c.want, reason)
 			assert.Zero(t, fake.replaceCalls)
@@ -611,12 +605,12 @@ func Test_import_shows_a_REAL_stored_zero_split_side_as_a_plain_zero(t *testing.
 	pk := b.InvestmentTransaction(v9fixture.TransactionRow{
 		Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Position: positionPK, Numerator: "1", Denominator: "1",
 	})
-	bundle := b.WriteBundle(t, t.TempDir())
-	execOn(t, bundle.DataPath, "UPDATE ZTRANSACTION SET ZNUMERATOR = 1.5, ZDENOMINATOR = 0.0 WHERE Z_PK = ?", pk)
+	dataPath := snapshotPath(t, b)
+	execOn(t, dataPath, "UPDATE ZTRANSACTION SET ZNUMERATOR = 1.5, ZDENOMINATOR = 0.0 WHERE Z_PK = ?", pk)
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	reason, _ := importRefusedFrom(t, dataPath)
 
-	assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" of "Acme Corp" has a ratio quarry cannot read (1.5:0)`, importReason(t, err))
+	assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" of "Acme Corp" has a ratio quarry cannot read (1.5:0)`, reason)
 }
 
 func Test_import_shows_a_blob_split_side_as_blob(t *testing.T) {
@@ -627,12 +621,12 @@ func Test_import_shows_a_blob_split_side_as_blob(t *testing.T) {
 	pk := b.InvestmentTransaction(v9fixture.TransactionRow{
 		Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Position: positionPK, Numerator: "1", Denominator: "12",
 	})
-	bundle := b.WriteBundle(t, t.TempDir())
-	execOn(t, bundle.DataPath, "UPDATE ZTRANSACTION SET ZNUMERATOR = X'00FF41' WHERE Z_PK = ?", pk)
+	dataPath := snapshotPath(t, b)
+	execOn(t, dataPath, "UPDATE ZTRANSACTION SET ZNUMERATOR = X'00FF41' WHERE Z_PK = ?", pk)
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	reason, _ := importRefusedFrom(t, dataPath)
 
-	assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" of "Acme Corp" has a ratio quarry cannot read (blob:12)`, importReason(t, err))
+	assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" of "Acme Corp" has a ratio quarry cannot read (blob:12)`, reason)
 }
 
 func Test_import_shows_a_blob_split_denominator_as_blob(t *testing.T) {
@@ -643,12 +637,12 @@ func Test_import_shows_a_blob_split_denominator_as_blob(t *testing.T) {
 	pk := b.InvestmentTransaction(v9fixture.TransactionRow{
 		Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Position: positionPK, Numerator: "1", Denominator: "12",
 	})
-	bundle := b.WriteBundle(t, t.TempDir())
-	execOn(t, bundle.DataPath, "UPDATE ZTRANSACTION SET ZDENOMINATOR = X'00FF41' WHERE Z_PK = ?", pk)
+	dataPath := snapshotPath(t, b)
+	execOn(t, dataPath, "UPDATE ZTRANSACTION SET ZDENOMINATOR = X'00FF41' WHERE Z_PK = ?", pk)
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	reason, _ := importRefusedFrom(t, dataPath)
 
-	assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" of "Acme Corp" has a ratio quarry cannot read (1:blob)`, importReason(t, err))
+	assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" of "Acme Corp" has a ratio quarry cannot read (1:blob)`, reason)
 }
 
 func Test_import_names_no_security_in_the_refusal_of_a_split_whose_security_is_not_imported(t *testing.T) {
@@ -661,7 +655,7 @@ func Test_import_names_no_security_in_the_refusal_of_a_split_whose_security_is_n
 		Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Position: positionPK, Numerator: "1", Denominator: "0",
 	})
 
-	reason, _ := importInvestmentsRefused(t, b)
+	reason, _ := importRefused(t, b)
 
 	assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" has a ratio quarry cannot read (1:0)`, reason)
 }
@@ -674,7 +668,7 @@ func Test_import_names_no_security_in_the_refusal_of_a_split_with_no_security(t 
 		Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Numerator: "1", Denominator: "0",
 	})
 
-	reason, _ := importInvestmentsRefused(t, b)
+	reason, _ := importRefused(t, b)
 
 	assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" has a ratio quarry cannot read (1:0)`, reason)
 }
@@ -685,7 +679,7 @@ func Test_import_ignores_the_ratio_of_a_row_that_is_not_a_split(t *testing.T) {
 	accountPK := newBrokerage(b)
 	investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Numerator: "0", Denominator: "n/a"})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Len(t, fake.Rows.InvestmentTransactions, 1)
 }
@@ -712,7 +706,7 @@ func Test_import_gives_an_investment_transaction_with_an_amount_a_cash_row_carry
 		Note: "quarterly", Status: new(int64(1)), ExcludeFromReports: new(int64(1)),
 	})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Equal(t, store.Transaction{
 		ID: fmt.Sprintf("txn-%d", pk), SourceID: pk, AccountID: fmt.Sprintf("acct-%d", accountPK),
@@ -741,7 +735,7 @@ func Test_import_dates_an_investment_cash_row_by_the_investments_posted_day_else
 				Account: newBrokerage(b), Type: dividendCode, Amount: "12.00", PostedDate: c.posted, EnteredDate: &investLater,
 			})
 
-			fake, _ := importInvestments(t, b)
+			fake, _ := importOK(t, b)
 
 			cash := cashRowOf(t, fake, pk)
 			assert.Equal(t, c.wantDate, cash.Date)
@@ -771,7 +765,7 @@ func Test_import_reads_an_investment_cash_rows_status_from_the_reconcile_status(
 				Account: newBrokerage(b), Type: dividendCode, Amount: "12.00", PostedDate: &investDay, Status: c.status,
 			})
 
-			fake, _ := importInvestments(t, b)
+			fake, _ := importOK(t, b)
 
 			assert.Equal(t, c.want, cashRowOf(t, fake, pk).Status)
 		})
@@ -785,7 +779,7 @@ func Test_import_refuses_an_investment_transaction_with_an_amount_and_an_unmappe
 		Account: newBrokerage(b), Type: dividendCode, Amount: "12.00", PostedDate: &investDay, Status: new(int64(3)),
 	})
 
-	reason, fake := importInvestmentsRefused(t, b)
+	reason, fake := importRefused(t, b)
 
 	assert.Equal(t, `a transaction on 2026-03-01 in "Brokerage" has reconcile status 3, which quarry does not map yet`, reason)
 	assert.Zero(t, fake.replaceCalls)
@@ -798,7 +792,7 @@ func Test_import_ignores_the_reconcile_status_of_an_investment_transaction_with_
 		Account: newBrokerage(b), Type: dividendCode, Amount: "0", PostedDate: &investDay, Status: new(int64(3)),
 	})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Len(t, fake.Rows.InvestmentTransactions, 1)
 }
@@ -823,7 +817,7 @@ func Test_import_flags_an_investment_cash_row_excluded_from_reports_only_when_th
 				Account: newBrokerage(b), Type: dividendCode, Amount: "12.00", PostedDate: &investDay, ExcludeFromReports: c.exclude,
 			})
 
-			fake, _ := importInvestments(t, b)
+			fake, _ := importOK(t, b)
 
 			assert.Equal(t, c.want, cashRowOf(t, fake, pk).ExcludedFromReports)
 		})
@@ -837,7 +831,7 @@ func Test_import_gives_an_investment_cash_row_the_investments_note_as_memo_and_n
 	notedPK := investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: dividendCode, Amount: "12.00", PostedDate: &investDay, Note: "quarterly"})
 	barePK := investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: dividendCode, Amount: "13.00", PostedDate: &investDay})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Equal(t, new("quarterly"), cashRowOf(t, fake, notedPK).Memo)
 	assert.Nil(t, cashRowOf(t, fake, barePK).Memo)
@@ -866,7 +860,7 @@ func Test_import_gives_no_cash_row_to_an_investment_transaction_with_amount_zero
 				Account: accountPK, Type: &c.code, Amount: "0", PostedDate: &investDay, Units: "0", Numerator: "1", Denominator: "1",
 			})
 
-			fake, _ := importInvestments(t, b)
+			fake, _ := importOK(t, b)
 
 			assert.Len(t, fake.Rows.InvestmentTransactions, 2)
 			assert.Equal(t, []string{fmt.Sprintf("txn-%d", controlPK)}, transactionIDs(fake))
@@ -882,7 +876,7 @@ func Test_import_gives_an_investment_transactions_entry_a_split_with_its_categor
 	pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: dividendCode, Amount: "12.00", PostedDate: &investDay})
 	entryPK := b.Entry(v9fixture.EntryRow{Parent: pk, Amount: "12.00", CategoryTag: incomePK, Note: "ACME Q1"})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Equal(t, []store.Split{{
 		ID: fmt.Sprintf("split-%d", entryPK), SourceID: entryPK, TransactionID: fmt.Sprintf("txn-%d", pk),
@@ -895,7 +889,7 @@ func Test_import_gives_an_entry_less_investment_transaction_one_uncategorized_sp
 	b := v9fixture.NewBuilder()
 	pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: newBrokerage(b), Type: dividendCode, Amount: "12.00", PostedDate: &investDay})
 
-	fake, result := importInvestments(t, b)
+	fake, result := importOK(t, b)
 
 	assert.Equal(t, []store.Split{{
 		ID: fmt.Sprintf("split-itxn-%d", pk), SourceID: -pk, TransactionID: fmt.Sprintf("txn-%d", pk), Amount: 1200,
@@ -906,13 +900,13 @@ func Test_import_gives_an_entry_less_investment_transaction_one_uncategorized_sp
 func Test_import_gives_an_entry_less_investment_transaction_a_split_that_collides_with_no_entry_split(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	chequingPK := newChequing(b)
 	investmentPK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: newBrokerage(b), Type: dividendCode, Amount: "12.00", PostedDate: &investDay})
 	registerPK := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-5.00", PostedDate: &investDay})
 	entryPK := b.Entry(v9fixture.EntryRow{Parent: registerPK, Amount: "-5.00"})
 	require.Equal(t, investmentPK, entryPK)
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	ids := make(map[string]bool)
 	sourceIDs := make(map[int64]bool)
@@ -929,15 +923,12 @@ func Test_import_still_fails_validation_for_a_register_transaction_with_no_entry
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	pk := b.Transaction(v9fixture.TransactionRow{
-		Account: b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true}),
+		Account: newChequing(b),
 		Amount:  "12.00", PostedDate: &investDay,
 	})
-	bundle := b.WriteBundle(t, t.TempDir())
-	fake := &fakeStore{}
 
-	result, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	result, fake := importFailingValidation(t, b)
 
-	require.ErrorIs(t, err, store.ErrValidationFailed)
 	require.Len(t, result.Validation.Splits.Mismatched, 1)
 	mismatch := result.Validation.Splits.Mismatched[0]
 	assert.Equal(t, fmt.Sprintf("txn-%d", pk), mismatch.ID)
@@ -951,7 +942,7 @@ func Test_import_gives_an_entry_less_investment_transaction_with_amount_zero_no_
 	b := v9fixture.NewBuilder()
 	b.InvestmentTransaction(v9fixture.TransactionRow{Account: newBrokerage(b), Type: dividendCode, Amount: "0", PostedDate: &investDay})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Empty(t, fake.Rows.Transactions)
 	assert.Empty(t, fake.Rows.Splits)
@@ -963,7 +954,7 @@ func Test_import_gives_an_investment_cash_row_the_currency_of_its_account(t *tes
 	usdPK := b.Account(v9fixture.AccountRow{Name: "US Brokerage", Type: "BROKERAGENORMAL", Currency: "USD", Active: true})
 	pk := investmentWithEntry(b, v9fixture.TransactionRow{Account: usdPK, Type: dividendCode, Amount: "12.00", PostedDate: &investDay})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Equal(t, "USD", cashRowOf(t, fake, pk).Currency)
 }
@@ -1012,7 +1003,7 @@ func Test_import_pairs_an_investment_transfer_entry_with_its_counterpart_leg(t *
 			investmentLeg := investmentTransferLeg(b, brokeragePK, "50.00", 101, "102")
 			counterLeg := c.counterLeg(b, counterpartPK, "-50.00", 102, "101")
 
-			fake, result := importInvestments(t, b)
+			fake, result := importOK(t, b)
 
 			assert.Equal(t, c.wantTransfer, result.Validation.Transfers)
 			assert.Empty(t, result.Validation.Splits.Mismatched)
@@ -1025,10 +1016,10 @@ func Test_import_pairs_an_investment_transfer_entry_with_its_counterpart_leg(t *
 func Test_import_keeps_an_investment_transfer_entry_named_for_an_account_as_a_one_sided_transfer(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	chequingPK := newChequing(b)
 	leg := investmentTransferLeg(b, newBrokerage(b), "50.00", 101, "Chequing")
 
-	_, result := importInvestments(t, b)
+	_, result := importOK(t, b)
 
 	require.Len(t, result.Validation.Transfers.OneSided, 1)
 	oneSided := result.Validation.Transfers.OneSided[0]
@@ -1042,11 +1033,9 @@ func Test_import_reports_an_investment_transfer_entry_that_differs_from_its_tran
 	accountPK := newBrokerage(b)
 	pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: dividendCode, Amount: "12.00", PostedDate: &investDay})
 	b.Entry(v9fixture.EntryRow{Parent: pk, Amount: "10.00", QuickenID: 101, Transfer: "Chequing"})
-	bundle := b.WriteBundle(t, t.TempDir())
 
-	result, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	result, _ := importFailingValidation(t, b)
 
-	require.ErrorIs(t, err, store.ErrValidationFailed)
 	require.Len(t, result.Validation.Splits.Mismatched, 1)
 	assert.Equal(t, fmt.Sprintf("txn-%d", pk), result.Validation.Splits.Mismatched[0].ID)
 	assert.Equal(t, int64(1000), result.Validation.Splits.Mismatched[0].SplitsTotal)
@@ -1059,7 +1048,7 @@ func Test_import_splits_an_investment_transaction_across_its_two_entries_with_no
 	first := b.Entry(v9fixture.EntryRow{Parent: pk, Amount: "7.00"})
 	second := b.Entry(v9fixture.EntryRow{Parent: pk, Amount: "5.00"})
 
-	fake, result := importInvestments(t, b)
+	fake, result := importOK(t, b)
 
 	assert.Equal(t, []string{splitIDFor(first), splitIDFor(second)}, []string{fake.Rows.Splits[0].ID, fake.Rows.Splits[1].ID})
 	assert.Len(t, fake.Rows.Splits, 2)

@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -16,8 +15,9 @@ func Test_import_maps_a_security_as_quicken_recorded_it(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
+	newChequing(b)
 
-	fake, _ := importSecurities(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Equal(t, []store.Security{{
 		ID: fmt.Sprintf("sec-%d", acmePK), SourceID: acmePK, Name: "Acme Corp", Ticker: new("ACME"), Currency: new("CAD"),
@@ -38,15 +38,13 @@ func Test_import_stores_a_missing_ticker_as_null(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			b := v9fixture.NewBuilder()
-			b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+			newChequing(b)
 			pk := b.Security(v9fixture.SecurityRow{Name: "Bare Fund", Ticker: "ACME", Currency: "USD"})
-			bundle := b.WriteBundle(t, t.TempDir())
-			execOn(t, bundle.DataPath, c.update, pk)
-			fake := &fakeStore{}
+			dataPath := snapshotPath(t, b)
+			execOn(t, dataPath, c.update, pk)
 
-			_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+			fake, _ := importOKFrom(t, dataPath)
 
-			require.NoError(t, err)
 			require.Len(t, fake.Rows.Securities, 1)
 			assert.Nil(t, fake.Rows.Securities[0].Ticker)
 		})
@@ -67,15 +65,13 @@ func Test_import_stores_a_missing_currency_as_null(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			b := v9fixture.NewBuilder()
-			b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+			newChequing(b)
 			pk := b.Security(v9fixture.SecurityRow{Name: "Plain Co", Ticker: "PLN", Currency: "USD"})
-			bundle := b.WriteBundle(t, t.TempDir())
-			execOn(t, bundle.DataPath, c.update, pk)
-			fake := &fakeStore{}
+			dataPath := snapshotPath(t, b)
+			execOn(t, dataPath, c.update, pk)
 
-			_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+			fake, _ := importOKFrom(t, dataPath)
 
-			require.NoError(t, err)
 			require.Len(t, fake.Rows.Securities, 1)
 			assert.Nil(t, fake.Rows.Securities[0].Currency)
 		})
@@ -87,8 +83,9 @@ func Test_import_leaves_a_deleted_security_out(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	keptPK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
 	b.Security(v9fixture.SecurityRow{Name: "Gone Inc", Ticker: "GONE", Currency: "CAD", Deleted: true})
+	newChequing(b)
 
-	fake, result := importSecurities(t, b)
+	fake, result := importOK(t, b)
 
 	require.Len(t, fake.Rows.Securities, 1)
 	assert.Equal(t, keptPK, fake.Rows.Securities[0].SourceID)
@@ -100,8 +97,9 @@ func Test_import_leaves_out_a_security_row_of_another_entity(t *testing.T) {
 	b := v9fixture.NewBuilder()
 	keptPK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
 	b.Security(v9fixture.SecurityRow{Entity: 999, Name: "Other Kind", Ticker: "OTH", Currency: "CAD"})
+	newChequing(b)
 
-	fake, _ := importSecurities(t, b)
+	fake, _ := importOK(t, b)
 
 	require.Len(t, fake.Rows.Securities, 1)
 	assert.Equal(t, keptPK, fake.Rows.Securities[0].SourceID)
@@ -113,8 +111,9 @@ func Test_import_resolves_the_security_entities_by_name_from_z_primarykey(t *tes
 	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
 	day := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
 	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &day, ClosingPrice: "12.5"})
+	newChequing(b)
 
-	fake, _ := importSecurities(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Len(t, fake.Rows.Securities, 1)
 	assert.Len(t, fake.Rows.Prices, 1)
@@ -126,8 +125,9 @@ func Test_import_imports_no_securities_and_no_prices_when_the_snapshot_has_no_se
 	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
 	day := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
 	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &day, ClosingPrice: "12.5"})
+	newChequing(b)
 
-	fake, result := importSecurities(t, b)
+	fake, result := importOK(t, b)
 
 	assert.Empty(t, fake.Rows.Securities)
 	assert.Empty(t, fake.Rows.Prices)
@@ -149,16 +149,15 @@ func Test_import_refuses_a_security_with_no_name(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			b := v9fixture.NewBuilder()
-			b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+			newChequing(b)
 			b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
 			pk := b.Security(v9fixture.SecurityRow{Name: "Placeholder", Ticker: "NONAME", Currency: "CAD"})
-			bundle := b.WriteBundle(t, t.TempDir())
-			execOn(t, bundle.DataPath, "UPDATE ZSECURITY SET ZNAME = "+c.value+" WHERE Z_PK = ?", pk)
-			fake := &fakeStore{}
+			dataPath := snapshotPath(t, b)
+			execOn(t, dataPath, "UPDATE ZSECURITY SET ZNAME = "+c.value+" WHERE Z_PK = ?", pk)
 
-			_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+			reason, fake := importRefusedFrom(t, dataPath)
 
-			assert.Equal(t, fmt.Sprintf("a security (source id %d) has no name", pk), importReason(t, err))
+			assert.Equal(t, fmt.Sprintf("a security (source id %d) has no name", pk), reason)
 			assert.Zero(t, fake.replaceCalls)
 		})
 	}
@@ -167,21 +166,22 @@ func Test_import_refuses_a_security_with_no_name(t *testing.T) {
 func Test_import_counts_a_second_security_with_no_name_as_one_more(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	newChequing(b)
 	firstPK := b.Security(v9fixture.SecurityRow{Ticker: "NONAME1", Currency: "CAD"})
 	b.Security(v9fixture.SecurityRow{Ticker: "NONAME2", Currency: "CAD"})
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: b.WriteBundle(t, t.TempDir()).DataPath})
+	reason, _ := importRefused(t, b)
 
-	assert.Equal(t, fmt.Sprintf("a security (source id %d) has no name (and 1 more)", firstPK), importReason(t, err))
+	assert.Equal(t, fmt.Sprintf("a security (source id %d) has no name (and 1 more)", firstPK), reason)
 }
 
 func Test_import_ignores_a_deleted_security_with_no_name(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	b.Security(v9fixture.SecurityRow{Ticker: "GONE", Currency: "CAD", Deleted: true})
+	newChequing(b)
 
-	fake, result := importSecurities(t, b)
+	fake, result := importOK(t, b)
 
 	assert.Empty(t, fake.Rows.Securities)
 	assert.Zero(t, result.Counts.Securities)
@@ -201,15 +201,14 @@ func Test_import_reports_a_security_with_no_name_ahead_of_its_unreadable_quotes(
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			b := v9fixture.NewBuilder()
-			b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+			newChequing(b)
 			pk := b.Security(v9fixture.SecurityRow{Ticker: "NONAME", Currency: "CAD"})
 			day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 			b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: pk, QuoteDate: &day, ClosingPrice: c.price})
-			bundle := b.WriteBundle(t, t.TempDir())
 
-			_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+			reason, _ := importRefused(t, b)
 
-			assert.Equal(t, fmt.Sprintf("a security (source id %d) has no name", pk), importReason(t, err))
+			assert.Equal(t, fmt.Sprintf("a security (source id %d) has no name", pk), reason)
 		})
 	}
 }
@@ -224,7 +223,7 @@ func Test_import_reports_a_security_with_no_name_once_when_a_transaction_holds_i
 		Account: accountPK, Type: buyCode, PostedDate: &investDay, Amount: "1.00", Position: positionPK, Units: "2",
 	})
 
-	reason, _ := importInvestmentsRefused(t, b)
+	reason, _ := importRefused(t, b)
 
 	assert.Equal(t, fmt.Sprintf("a security (source id %d) has no name", pk), reason)
 }
@@ -233,8 +232,9 @@ func Test_import_keeps_a_security_currency_other_than_CAD_or_USD(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	b.Security(v9fixture.SecurityRow{Name: "Euro Fund", Ticker: "EUF", Currency: "EUR"})
+	newChequing(b)
 
-	fake, _ := importSecurities(t, b)
+	fake, _ := importOK(t, b)
 
 	require.Len(t, fake.Rows.Securities, 1)
 	assert.Equal(t, new("EUR"), fake.Rows.Securities[0].Currency)
@@ -244,8 +244,9 @@ func Test_import_keeps_a_whitespace_only_security_name_as_recorded(t *testing.T)
 	t.Parallel()
 	b := v9fixture.NewBuilder()
 	b.Security(v9fixture.SecurityRow{Name: "  ", Ticker: "BLNK", Currency: "CAD"})
+	newChequing(b)
 
-	fake, _ := importSecurities(t, b)
+	fake, _ := importOK(t, b)
 
 	require.Len(t, fake.Rows.Securities, 1)
 	assert.Equal(t, "  ", fake.Rows.Securities[0].Name)

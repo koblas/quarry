@@ -4,11 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
-	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const reasonNoLots = "the snapshot has investment transactions but no Quicken lots to check their share counts against"
@@ -44,7 +41,7 @@ func Test_import_sums_each_holdings_lot_units_into_one_share_count(t *testing.T)
 	b.Lot(v9fixture.LotRow{Position: betaPosition, LatestUnits: "10"})
 	b.Lot(v9fixture.LotRow{Position: acmePosition, LatestUnits: "2.25"})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Equal(t, []string{
 		holding(accountPK, acmePK, "3750000"),
@@ -64,7 +61,7 @@ func Test_import_sums_the_lots_of_two_positions_in_one_holding(t *testing.T) {
 	b.Lot(v9fixture.LotRow{Position: first, LatestUnits: "4"})
 	b.Lot(v9fixture.LotRow{Position: second, LatestUnits: "5"})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Equal(t, []string{holding(accountPK, acmePK, "9000000")}, quickenShares(fake))
 }
@@ -77,7 +74,7 @@ func Test_import_lists_a_holding_whose_lots_total_zero(t *testing.T) {
 	position := b.Position(v9fixture.PositionRow{Account: accountPK, Security: acmePK})
 	b.Lot(v9fixture.LotRow{Position: position, LatestUnits: "0"})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Equal(t, []string{holding(accountPK, acmePK, "0")}, quickenShares(fake))
 }
@@ -89,7 +86,7 @@ func Test_import_lists_no_holding_for_a_position_without_lots(t *testing.T) {
 	acmePK := newAcme(b)
 	b.Position(v9fixture.PositionRow{Account: accountPK, Security: acmePK})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Empty(t, fake.Rows.QuickenShares)
 }
@@ -104,7 +101,7 @@ func Test_import_adds_lot_units_beyond_the_range_of_a_64_bit_count(t *testing.T)
 		b.Lot(v9fixture.LotRow{Position: position, LatestUnits: "999999999999"})
 	}
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Equal(t, []string{holding(accountPK, acmePK, "9999999999990000000")}, quickenShares(fake))
 }
@@ -117,7 +114,7 @@ func Test_import_snaps_a_lots_float_residue_to_its_millionth(t *testing.T) {
 	position := b.Position(v9fixture.PositionRow{Account: accountPK, Security: acmePK})
 	b.Lot(v9fixture.LotRow{Position: position, LatestUnits: "1.0000000001"})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Equal(t, []string{holding(accountPK, acmePK, "1000000")}, quickenShares(fake))
 }
@@ -131,7 +128,7 @@ func Test_import_leaves_out_a_lot_of_another_entity(t *testing.T) {
 	b.Lot(v9fixture.LotRow{Position: position, LatestUnits: "1"})
 	b.Lot(v9fixture.LotRow{Entity: 999, Position: position, LatestUnits: "5"})
 
-	fake, _ := importInvestments(t, b)
+	fake, _ := importOK(t, b)
 
 	assert.Equal(t, []string{holding(accountPK, acmePK, "1000000")}, quickenShares(fake))
 }
@@ -178,7 +175,7 @@ func Test_import_leaves_out_a_lot_that_does_not_count(t *testing.T) {
 			acmePK := newAcme(b)
 			c.setup(b, accountPK, acmePK)
 
-			fake, _ := importInvestments(t, b)
+			fake, _ := importOK(t, b)
 
 			assert.Empty(t, fake.Rows.QuickenShares)
 		})
@@ -193,13 +190,11 @@ func Test_import_leaves_out_a_lot_with_no_position_though_a_position_has_pk_zero
 	acmePK := newAcme(b)
 	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: acmePK})
 	b.Lot(v9fixture.LotRow{LatestUnits: "3"})
-	bundle := b.WriteBundle(t, t.TempDir())
-	execOn(t, bundle.DataPath, "UPDATE ZPOSITION SET Z_PK = 0 WHERE Z_PK = ?", positionPK)
-	fake := &fakeStore{}
+	dataPath := snapshotPath(t, b)
+	execOn(t, dataPath, "UPDATE ZPOSITION SET Z_PK = 0 WHERE Z_PK = ?", positionPK)
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	fake, _ := importOKFrom(t, dataPath)
 
-	require.NoError(t, err)
 	assert.Empty(t, fake.Rows.QuickenShares)
 }
 
@@ -226,7 +221,7 @@ func Test_import_refuses_a_counting_lot_with_an_unreadable_share_count(t *testin
 			position := b.Position(v9fixture.PositionRow{Account: accountPK, Security: acmePK})
 			b.Lot(v9fixture.LotRow{Position: position, LatestUnits: c.units})
 
-			reason, fake := importInvestmentsRefused(t, b)
+			reason, fake := importRefused(t, b)
 
 			assert.Equal(t, c.want, reason)
 			assert.Zero(t, fake.replaceCalls)
@@ -241,12 +236,12 @@ func Test_import_refuses_a_counting_lot_whose_share_count_is_a_blob(t *testing.T
 	acmePK := newAcme(b)
 	position := b.Position(v9fixture.PositionRow{Account: accountPK, Security: acmePK})
 	b.Lot(v9fixture.LotRow{Position: position, LatestUnits: "1"})
-	bundle := b.WriteBundle(t, t.TempDir())
-	execOn(t, bundle.DataPath, "UPDATE ZLOT SET ZLATESTUNITS = X'00'")
+	dataPath := snapshotPath(t, b)
+	execOn(t, dataPath, "UPDATE ZLOT SET ZLATESTUNITS = X'00'")
 
-	_, err := importer.NewServer(importer.WithStore(&fakeStore{})).Import(t.Context(), store.SnapshotRef{Path: bundle.DataPath})
+	reason, _ := importRefusedFrom(t, dataPath)
 
-	assert.Equal(t, `a lot of "Acme Corp" in "Brokerage" has a share count that is not a number`, importReason(t, err))
+	assert.Equal(t, `a lot of "Acme Corp" in "Brokerage" has a share count that is not a number`, reason)
 }
 
 func Test_import_refuses_an_unreadable_lot_count_without_a_second_refusal_for_a_nameless_security(t *testing.T) {
@@ -257,7 +252,7 @@ func Test_import_refuses_an_unreadable_lot_count_without_a_second_refusal_for_a_
 	position := b.Position(v9fixture.PositionRow{Account: accountPK, Security: namelessPK})
 	b.Lot(v9fixture.LotRow{Position: position})
 
-	reason, _ := importInvestmentsRefused(t, b)
+	reason, _ := importRefused(t, b)
 
 	assert.Equal(t, fmt.Sprintf("a security (source id %d) has no name", namelessPK), reason)
 }
@@ -268,7 +263,7 @@ func Test_import_refuses_investment_transactions_when_the_snapshot_has_no_lot_en
 	accountPK := newBrokerage(b)
 	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: dividendCode, Amount: "12.00", PostedDate: &investDay})
 
-	reason, fake := importInvestmentsRefused(t, b)
+	reason, fake := importRefused(t, b)
 
 	assert.Equal(t, reasonNoLots, reason)
 	assert.Zero(t, fake.replaceCalls)
@@ -301,8 +296,8 @@ func Test_import_reports_the_missing_lot_entity_ahead_of_an_unreadable_investmen
 			withLot := v9fixture.NewBuilder()
 			oneGoodAndOneBadInvestmentRow(withLot, c.units, c.amount)
 
-			noLotReason, _ := importInvestmentsRefused(t, withoutLot)
-			controlReason, _ := importInvestmentsRefused(t, withLot)
+			noLotReason, _ := importRefused(t, withoutLot)
+			controlReason, _ := importRefused(t, withLot)
 
 			assert.Equal(t, reasonNoLots, noLotReason)
 			assert.Equal(t, c.wantRow, controlReason)
@@ -316,7 +311,7 @@ func Test_import_reports_the_unreadable_row_when_no_lot_entity_and_no_investment
 	accountPK := newBrokerage(b)
 	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Units: "1", PostedDate: &investDay})
 
-	reason, _ := importInvestmentsRefused(t, b)
+	reason, _ := importRefused(t, b)
 
 	assert.Equal(t, `an investment transaction on 2026-03-01 in "Brokerage" has no amount`, reason)
 }
@@ -341,7 +336,7 @@ func Test_import_accepts_a_snapshot_with_no_lot_entity_and_no_imported_investmen
 			newBrokerage(b)
 			c.setup(b)
 
-			fake, _ := importInvestments(t, b)
+			fake, _ := importOK(t, b)
 
 			assert.Empty(t, fake.Rows.QuickenShares)
 		})

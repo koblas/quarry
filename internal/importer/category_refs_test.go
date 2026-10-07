@@ -4,22 +4,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
-	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const missingPK = 9999
 
 func importReferencedCategories(t *testing.T, b *v9fixture.Builder) []string {
 	t.Helper()
-	fake := &fakeStore{}
 
-	_, err := importer.NewServer(importer.WithStore(fake)).Import(t.Context(), store.SnapshotRef{Path: b.WriteBundle(t, t.TempDir()).DataPath})
+	fake, _ := importOK(t, b)
 
-	require.NoError(t, err)
 	return fake.Rows.ReferencedCategoryIDs
 }
 
@@ -31,12 +26,12 @@ func Test_import_records_the_categories_every_non_imported_reference_uses(t *tes
 		seed func(b *v9fixture.Builder, category int64)
 	}{
 		{"an entry under a zero-amount investment transaction", func(b *v9fixture.Builder, category int64) {
-			acct := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+			acct := newBrokerage(b)
 			txn := b.InvestmentTransaction(v9fixture.TransactionRow{Type: new(int64(3)), Account: acct, Amount: "0", PostedDate: &day})
 			b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "0", CategoryTag: category})
 		}},
 		{"an entry under a smart transaction", func(b *v9fixture.Builder, category int64) {
-			acct := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+			acct := newChequing(b)
 			txn := b.Transaction(v9fixture.TransactionRow{Entity: v9fixture.EntSmartCashFlowTransaction, Account: acct, Amount: "-4.00", PostedDate: &day})
 			b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "-4.00", CategoryTag: category})
 		}},
@@ -47,7 +42,7 @@ func Test_import_records_the_categories_every_non_imported_reference_uses(t *tes
 			b.Entry(v9fixture.EntryRow{Parent: missingPK, Amount: "-4.00", CategoryTag: category})
 		}},
 		{"an entry under a deleted transaction", func(b *v9fixture.Builder, category int64) {
-			acct := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+			acct := newChequing(b)
 			txn := b.Transaction(v9fixture.TransactionRow{Account: acct, Amount: "-4.00", PostedDate: &day, Deleted: true})
 			b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "-4.00", CategoryTag: category})
 		}},
@@ -98,7 +93,7 @@ func Test_import_records_no_category_for_a_reference_that_is_gone(t *testing.T) 
 		seed func(b *v9fixture.Builder, category int64)
 	}{
 		{"a deleted entry under a zero-amount investment transaction", func(b *v9fixture.Builder, category int64) {
-			acct := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+			acct := newBrokerage(b)
 			txn := b.InvestmentTransaction(v9fixture.TransactionRow{Type: new(int64(3)), Account: acct, Amount: "0", PostedDate: &day})
 			b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "0", CategoryTag: category, Deleted: true})
 		}},
@@ -151,7 +146,7 @@ func Test_import_records_no_category_for_a_split_the_store_keeps(t *testing.T) {
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	b := v9fixture.NewBuilder()
 	category := b.Category(v9fixture.TagRow{Name: "Spend", Type: new(int64(1))})
-	acct := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
+	acct := newChequing(b)
 	txn := b.Transaction(v9fixture.TransactionRow{Account: acct, Amount: "-4.00", PostedDate: &day})
 	b.Entry(v9fixture.EntryRow{Parent: txn, Amount: "-4.00", CategoryTag: category})
 
