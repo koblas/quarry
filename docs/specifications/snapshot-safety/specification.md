@@ -332,8 +332,8 @@ Order: 01 → 03 → 06 → 14 → 10 → 12a → 12b → 13 (lock first; 14 mak
 - [x] SCENARIO-14: Prune refuses when the store's recorded snapshot cannot be read — `cmd/quarry/run_prune_recorded_test.go` `Test_run_snapshots_prune_refuses_when_the_recorded_snapshot_cannot_be_read`
 - [x] SCENARIO-15: Listing warns and marks nothing when the recorded snapshot cannot be read — delivered by SCENARIO-14, `cmd/quarry/run_snapshots_recorded_test.go` `Test_run_snapshots_warns_and_marks_nothing_when_the_recorded_snapshot_cannot_be_read`
 - [x] SCENARIO-16: Auto-prune inside sync deletes nothing when the recorded path cannot be read — delivered by SCENARIO-14, `internal/snapshot/auto_prune_recorded_test.go` `Test_sync_and_import_prunes_nothing_when_the_recorded_snapshot_cannot_be_read`
-- [ ] SCENARIO-10: An upper-case .SQLITE snapshot is listed with its on-disk paths
-- [ ] SCENARIO-11: Prune deletes an .SQLITE snapshot and its manifest, never sweeping it as an orphan
+- [x] SCENARIO-10: An upper-case .SQLITE snapshot is listed with its on-disk paths — `cmd/quarry/run_snapshots_upper_case_test.go` `Test_run_snapshots_json_lists_an_upper_case_sqlite_snapshot_with_its_on_disk_paths`
+- [x] SCENARIO-11: Prune deletes an .SQLITE snapshot and its manifest, never sweeping it as an orphan — delivered by SCENARIO-10, `internal/snapshot/prune_upper_case_test.go` `Test_prune_deletes_an_upper_case_sqlite_snapshot_then_its_manifest_and_keeps_every_newer_manifest`
 - [ ] SCENARIO-12a: sync --from <id> resolves an .SQLITE snapshot
 - [ ] SCENARIO-12b: Status names a store built from an .SQLITE snapshot by its id
 - [ ] SCENARIO-13: Two letter cases of one id: one is listed, the user is warned

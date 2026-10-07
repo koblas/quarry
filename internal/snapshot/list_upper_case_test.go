@@ -64,6 +64,40 @@ func Test_list_gives_an_upper_case_sqlite_snapshot_its_on_disk_path_and_manifest
 	}
 }
 
+func Test_list_keeps_the_on_disk_path_of_an_upper_case_manifest_it_cannot_read(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		write func(t *testing.T, path string)
+	}{
+		{name: "it is not JSON", write: func(t *testing.T, path string) {
+			t.Helper()
+			require.NoError(t, os.WriteFile(path, []byte("not json"), 0o600))
+		}},
+		{name: "it is a directory", write: func(t *testing.T, path string) {
+			t.Helper()
+			require.NoError(t, os.Mkdir(path, 0o700))
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			dir := snapshotsFolder(t, home)
+			writeSnapshot(t, dir, idOldest, 1500)
+			c.write(t, filepath.Join(dir, idOldest+".JSON"))
+			require.ElementsMatch(t, []string{"20260927T143005Z.sqlite", "20260927T143005Z.JSON"}, dirNames(t, dir))
+
+			listing, err := newListServer(home, nil).List(t.Context())
+
+			require.NoError(t, err)
+			require.Len(t, listing.Entries, 1)
+			assert.Equal(t, filepath.Join(dir, "20260927T143005Z.JSON"), listing.Entries[0].ManifestPath)
+			assert.Nil(t, listing.Entries[0].Manifest)
+		})
+	}
+}
+
 func Test_list_lists_no_directory_or_symlink_named_as_an_upper_case_snapshot(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

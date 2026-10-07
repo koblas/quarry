@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-10
-status: open
+status: done
 ---
 
 # SCENARIO-10: An upper-case .SQLITE snapshot is listed with its on-disk paths
@@ -64,10 +64,10 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/snapshot`; cli/cmd 
   - n/a: sync `--json` `pruned.deleted[]` uses `newPrunedEntryDocuments` (json.go:220); `failed[].path` is `Entry.Path` (json_prune.go:43), pinned by the Server fault row.
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Doc comments on `ID` ("its extension, in any letter case", Surface change 3), `Entry`/`ManifestPath` (on-disk), the two patterns, and `selectFolder`.
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. Doc comments on `ID` ("its extension, in any letter case", Surface change 3), `Entry`/`ManifestPath` (on-disk), the two patterns, and `selectFolder`.
 
 ### Verify
-- [ ] Step 7: full verification + `spec-check.py snapshot-safety`. Tick SCENARIO-10 with its acceptance test, and SCENARIO-11 "delivered by SCENARIO-10" with its folded test. Rewrite STATE.md.
+- [x] Step 7: full verification + `spec-check.py snapshot-safety`. Tick SCENARIO-10 with its acceptance test, and SCENARIO-11 "delivered by SCENARIO-10" with its folded test. Rewrite STATE.md.
 
 ## Handoff
 
@@ -99,29 +99,16 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/snapshot`; cli/cmd 
 
 ## Phase report
 
-Run B1 (Steps 3-5) done; both acceptance tests green. Commit 98fc956c plus one follow-up (orphan lower-case t/z rows, `partials`→`names` rename). Run A: start 2bd1adfb, acceptance 2aa5a7f5.
+Run V done; SCENARIO-10 and folded 11 ticked, `spec-check.py --run snapshot-safety` OK, STATE.md rewritten, `status: done`. Starts: scenario 2bd1adfb, acceptance 2aa5a7f5.
 
-Production:
-- `internal/snapshot/select.go` (new): `selectFolder`, `folderSelection{snapshots, strays, orphans}`, `selectedSnapshot{entry, id, stamp, suffix, manifest}`, `preferred`/`rankName`. Names only; `strays` has no consumer (13's).
-- `destination.go:23-27` patterns fold the extension via `(?i:...)`; `import.go` `ID` uses `sqliteExtension` regexp.
-- `list.go`: `Entry.ManifestPath`; `snapshotFile` gains `name`, `manifest`; `scanFolder` runs over `selectFolder`; `listFolder` reads `ManifestPath`; `manifestPath()` deleted.
-- `prune.go` `deleteSnapshot` removes `entry.ManifestPath` (Lstat-regular kept, skipped when empty). `internal/cli/json_snapshots.go` `manifest` = `e.ManifestPath`.
+Checkpoint pin folds (tests only, plus one doc trim in `prune.go` `deleteSnapshot`):
+- `prune_upper_case_test.go`: `Test_prune_removes_an_upper_case_manifest_it_cannot_read_with_its_snapshot`, `Test_prune_sweeps_an_upper_case_orphan_manifest_by_its_on_disk_name`.
+- `list_upper_case_test.go`: `Test_list_keeps_the_on_disk_path_of_an_upper_case_manifest_it_cannot_read` (not-JSON and directory rows).
+- `cmd/quarry/run_snapshots_upper_case_test.go`: `Test_run_snapshots_json_gives_an_upper_case_manifest_its_on_disk_path`.
+- Reds: `ManifestPath` assigned only when the manifest reads -> the prune row (`actual: [..SQLITE]`) and both list rows (`actual: ""`); `--json` manifest rebuilt as `id+".json"` -> the cmd row only. Both restored byte-identical.
+- Doc budgets: `snapshotFile`, `newEntry`, `scanFolder` (2), `Entry` (3) were already within budget; only `deleteSnapshot` was over and is now 2 lines.
 
-Tests (new): `select_internal_test.go` (white-box, fake DirEntry; picks 17 rows, orphans 16), `import_test.go` ID table, `list_upper_case_test.go` (+ helper `renamedExtension`), `prune_upper_case_test.go` (4 tests), `auto_prune_test.go` 1 test, cmd text cell and prune text/json table in the Step 1 file.
-
-Deviations: list tests are in `list_upper_case_test.go`, not `list_test.go` (file size). Step 5's unit tests were written after its production edit, not before; seen red only through the plan's `deleteSnapshot` mutation.
-Green on arrival: `Test_list_lists_no_directory_or_symlink_named_as_an_upper_case_snapshot` (the pattern fold alone already skips non-regular entries; it pins the type guard, which the select tests also redden).
-
-Mutations (all restored, byte-identical): see report; all six plan mutations went red, whole-manifest-`(?i)` first SURVIVED, fixed by two orphan rows.
-
-Checkpoint fix pass (BR-C8, shared manifest kept; start bc250fe3):
-- `select.go`: `idGroup.named` (entries of any type named as a snapshot) replaces `anySnapshot`; `selectedSnapshot.manifestShared = named > 1`. `list.go`: `snapshotFile` embeds `selectedSnapshot` (no per-field copy), new `newEntry(dir, f)` builds the `Entry` and carries `Entry.manifestShared`; `prune.go` `deleteSnapshot` returns before the manifest when `entry.manifestShared`. Prune and auto-prune share `deleteSnapshot`, so both keep the manifest.
-- Tests: `select_shared_internal_test.go` (selector flag table, 10 rows; `newEntry` carries the flag), `prune_shared_internal_test.go` (`deleteSnapshot`: shared keeps `X.json`, control removes both), `prune_upper_case_test.go` `Test_prune_keeps_the_manifest_while_another_entry_is_named_as_the_snapshot` (on disk: regular, directory, symlink sibling; SKIPS on a case-folding volume such as macOS, runs on Linux).
-- Order deviation: production written before the tests; the reds below come from restoring the pre-fix behaviour by mutation.
-- Reds: `deleteSnapshot` ignores the flag -> `Test_delete_snapshot_keeps_a_manifest...` `a_shared_manifest_stays`; selector never sets it -> 5 rows of the selector table; `len(g.snapshots) > 1` instead of `named > 1` -> the directory and symlink rows; `newEntry` drops the flag -> `Test_new_entry_carries_the_shared_manifest_flag_to_the_listing`. All restored.
-- Trap: the on-disk prune test cannot run on macOS; the selector, `newEntry` and `deleteSnapshot` tests are the pins there.
-
-Next (V): sweep lint, doc comments (`selectFolder` etc. already carry docs; check budget), `verify.sh 2bd1adfb ./internal/snapshot/... ./internal/cli/... ./cmd/quarry/...`, spec tick, STATE.md rewrite.
+Nothing for a later run to redo.
 
 ## Orchestrator ruling — checkpoint finding 3 (2026-10-06)
 

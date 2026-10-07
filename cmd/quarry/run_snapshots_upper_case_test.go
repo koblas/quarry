@@ -88,6 +88,21 @@ func Test_run_snapshots_json_lists_an_upper_case_sqlite_snapshot_with_its_on_dis
 		"}\n", stdout)
 }
 
+func Test_run_snapshots_json_gives_an_upper_case_manifest_its_on_disk_path(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := writeSnapshots(t, home,
+		snapshotFixture{id: newestID, bytes: newestBytes, taken: time.Date(2026, 9, 30, 14, 15, 2, 0, time.UTC), source: homeQuicken, verified: true},
+	)
+	require.NoError(t, os.Rename(filepath.Join(dir, newestID+".json"), filepath.Join(dir, newestID+".JSON")))
+	require.Equal(t, []string{"20260930T141502Z.JSON", "20260930T141502Z.sqlite"}, dirNames(t, dir))
+
+	exitCode, stdout, stderr := runSnapshotsJSON(t)
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Contains(t, stdout, "\"manifest\": \""+dir+"/20260930T141502Z.JSON\",")
+}
+
 func Test_run_snapshots_lists_an_upper_case_sqlite_snapshot_like_a_lowercase_one(t *testing.T) {
 	pinLocalZone(t)
 	home := t.TempDir()

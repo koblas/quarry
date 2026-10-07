@@ -143,9 +143,8 @@ func (s *Server) sweepOrphans(ctx context.Context, orphans []string) {
 	}
 }
 
-// deleteSnapshot removes entry's snapshot file, then its manifest, by the names the listing returned, and
-// records the outcome in pruned. A snapshot already gone is neither deleted nor failed; any other fault leaves the manifest,
-// as does another entry of the ID that the manifest may still describe.
+// deleteSnapshot removes entry's snapshot, then its manifest unless the snapshot would not go or another entry of
+// the ID may still need it, and records the outcome in pruned; a snapshot already gone counts as neither.
 func (s *Server) deleteSnapshot(entry Entry, pruned *Pruned) {
 	err := s.remove(entry.Path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {

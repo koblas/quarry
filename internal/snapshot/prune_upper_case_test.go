@@ -91,6 +91,35 @@ func Test_prune_removes_the_manifest_by_its_on_disk_name(t *testing.T) {
 	}
 }
 
+func Test_prune_removes_an_upper_case_manifest_it_cannot_read_with_its_snapshot(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	dir := prunable(t, home, idNewest, idMiddle)
+	writeSnapshot(t, dir, idOldest, 1000)
+	renamedExtension(t, dir, idOldest, "sqlite", "SQLITE")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, idOldest+".JSON"), []byte("not json"), 0o600))
+	rm := &fakeRemover{}
+
+	_, err := newPruneServer(home, nil, rm).Prune(t.Context(), 2)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"20260927T143005Z.SQLITE", "20260927T143005Z.JSON"}, rm.calls)
+}
+
+func Test_prune_sweeps_an_upper_case_orphan_manifest_by_its_on_disk_name(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	dir := prunable(t, home, idNewest, idMiddle)
+	writeManifest(t, dir, idOldest, manifestTaken("2026-09-27T10:00:00Z"))
+	renamedExtension(t, dir, idOldest, "json", "JSON")
+	rm := &fakeRemover{}
+
+	_, err := newPruneServer(home, nil, rm).Prune(t.Context(), 2)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"20260927T143005Z.JSON"}, rm.calls)
+}
+
 func Test_prune_never_sweeps_the_manifest_of_a_directory_named_as_an_upper_case_snapshot(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
