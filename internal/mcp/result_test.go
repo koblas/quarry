@@ -191,7 +191,7 @@ func Test_a_tool_reads_the_config_as_the_mcp_command_when_the_call_names_no_curr
 			stub := &configStub{}
 			h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load), atSeptember29())
 
-			require.False(t, callTool(t, h.session, tool, map[string]any{}).IsError)
+			decodeDoc[map[string]any](t, callTool(t, h.session, tool, map[string]any{}))
 
 			assert.Equal(t, []string{"mcp"}, stub.commands)
 		})
