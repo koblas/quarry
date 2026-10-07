@@ -496,9 +496,9 @@ Scenario: SCENARIO-21 — a read command reports a failed stdout write
 ---
 
 ## BDD Acceptance Progress
-- [x] SCENARIO-01: sync stamps the store's format and records what status needs — `cmd/quarry/run_store_info_test.go` `Test_run_stamps_the_store_with_its_format_and_the_build`
+- [x] SCENARIO-01: sync stamps the store's format and records what status needs — `cmd/quarry/run_store_test.go` `Test_run_stamps_the_store_with_its_format_and_the_build`
 - [x] SCENARIO-02: status describes the store and the checks sync ran — `cmd/quarry/run_status_test.go` `Test_run_status_describes_the_store_sync_built`
-- [x] SCENARIO-03: status --json returns the store description as a document — `cmd/quarry/run_status_json_test.go` `Test_run_status_json_describes_the_store_sync_built`
+- [x] SCENARIO-03: status --json returns the store description as a document — `cmd/quarry/run_status_test.go` `Test_run_status_json_describes_the_store_sync_built`
 - [x] SCENARIO-04: accounts lists open accounts with native-currency balances — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_lists_open_accounts_with_their_balances`
 - [x] SCENARIO-05: accounts --all includes closed accounts — delivered by SCENARIO-04 — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_all_lists_closed_accounts`
 - [x] SCENARIO-06: accounts says how to see accounts when every one is closed — delivered by SCENARIO-07 — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_says_how_to_list_them_when_every_account_is_closed`

@@ -617,31 +617,31 @@ Sizing notes (binding on per-scenario architects):
 - [x] SCENARIO-04: Read commands ignore a broken config file — delivered by SCENARIO-01 `cmd/quarry/run_config_test.go` `Test_run_read_commands_ignore_a_malformed_config`
 - [x] SCENARIO-09: A relative quicken.path is refused — delivered by SCENARIO-01 `cmd/quarry/run_config_test.go` `Test_run_sync_refuses_a_relative_quicken_path`
 - [x] SCENARIO-10: A quicken.path that is not a string is refused — delivered by SCENARIO-01 `cmd/quarry/run_config_test.go` `Test_run_sync_refuses_a_quicken_path_that_is_not_a_string`
-- [x] SCENARIO-05: sync snapshots the file named by quicken.path — `cmd/quarry/run_quicken_path_test.go` `Test_run_sync_snapshots_the_file_named_by_quicken_path`
-- [x] SCENARIO-06: --quicken overrides quicken.path — delivered by SCENARIO-05 `cmd/quarry/run_quicken_path_test.go` `Test_run_sync_prefers_the_quicken_flag_over_quicken_path`
-- [x] SCENARIO-07: A configured path that does not exist is refused naming the config key — delivered by SCENARIO-05 `cmd/quarry/run_quicken_path_test.go` `Test_run_sync_refuses_a_quicken_path_that_does_not_exist`
-- [x] SCENARIO-08: A configured path that is not a .quicken bundle is refused naming the config key — delivered by SCENARIO-05 `cmd/quarry/run_quicken_path_test.go` `Test_run_sync_refuses_a_quicken_path_that_is_not_a_bundle`
-- [x] SCENARIO-11: sync --from ignores quicken.path — delivered by SCENARIO-05 `cmd/quarry/run_quicken_path_test.go` `Test_run_sync_from_ignores_quicken_path`
+- [x] SCENARIO-05: sync snapshots the file named by quicken.path — `cmd/quarry/run_discovery_test.go` `Test_run_sync_snapshots_the_file_named_by_quicken_path`
+- [x] SCENARIO-06: --quicken overrides quicken.path — delivered by SCENARIO-05 `cmd/quarry/run_discovery_test.go` `Test_run_sync_prefers_the_quicken_flag_over_quicken_path`
+- [x] SCENARIO-07: A configured path that does not exist is refused naming the config key — delivered by SCENARIO-05 `cmd/quarry/run_discovery_test.go` `Test_run_sync_refuses_a_quicken_path_that_does_not_exist`
+- [x] SCENARIO-08: A configured path that is not a .quicken bundle is refused naming the config key — delivered by SCENARIO-05 `cmd/quarry/run_discovery_test.go` `Test_run_sync_refuses_a_quicken_path_that_is_not_a_bundle`
+- [x] SCENARIO-11: sync --from ignores quicken.path — delivered by SCENARIO-05 `cmd/quarry/run_discovery_test.go` `Test_run_sync_from_ignores_quicken_path`
 - [x] SCENARIO-12: Finding several .quicken files points at quicken.path — delivered by SCENARIO-05 `cmd/quarry/run_discovery_test.go` `Test_run_pools_bundles_across_both_documents_folders`
-- [x] SCENARIO-13: sync keeps earlier builds in import_runs — `cmd/quarry/run_import_runs_test.go` `Test_run_sync_from_keeps_the_earlier_build_in_import_runs`
+- [x] SCENARIO-13: sync keeps earlier builds in import_runs — `cmd/quarry/run_import_test.go` `Test_run_sync_from_keeps_the_earlier_build_in_import_runs`
 - [x] SCENARIO-14: status reports the latest build when import_runs holds several — delivered by SCENARIO-13 `cmd/quarry/run_status_test.go` `Test_run_status_reports_the_latest_build_when_import_runs_holds_several`
-- [x] SCENARIO-15: sync warns and restarts history when the previous store's history cannot be read — `cmd/quarry/run_import_runs_test.go` `Test_run_sync_from_warns_and_restarts_history_when_the_previous_store_is_not_a_duckdb_database`
+- [x] SCENARIO-15: sync warns and restarts history when the previous store's history cannot be read — `cmd/quarry/run_import_test.go` `Test_run_sync_from_warns_and_restarts_history_when_the_previous_store_is_not_a_duckdb_database`
 - [x] SCENARIO-16: snapshots lists newest first, marks the store's snapshot, and totals the size — `cmd/quarry/run_snapshots_test.go` `Test_run_snapshots_lists_newest_first_marks_the_stores_snapshot_and_totals_the_size`
 - [x] SCENARIO-03: An unknown config key warns and the command proceeds — delivered by SCENARIO-16 — `cmd/quarry/run_snapshots_test.go` `Test_run_snapshots_warns_about_an_unknown_config_key_and_still_lists`
 - [x] SCENARIO-17: snapshots marks a schema-mismatch snapshot and one with no manifest — delivered by SCENARIO-16 — `cmd/quarry/run_snapshots_test.go` `Test_run_snapshots_marks_a_schema_mismatch_and_a_missing_manifest`
 - [x] SCENARIO-19: snapshots with none taken yet says how to take one — delivered by SCENARIO-16 — `cmd/quarry/run_snapshots_test.go` `Test_run_snapshots_with_none_taken_yet_says_how_to_take_one`
 - [x] SCENARIO-20: snapshots warns when the store cannot be read — delivered by SCENARIO-16 — `cmd/quarry/run_snapshots_test.go` `Test_run_snapshots_warns_when_the_store_cannot_be_read`
-- [x] SCENARIO-34: --from with an unknown ID points at quarry snapshots — delivered by SCENARIO-16 — `cmd/quarry/run_from_refusals_test.go` `Test_run_sync_from_an_unknown_id_points_at_quarry_snapshots`
-- [x] SCENARIO-18: snapshots --json lists every snapshot with its store flag — `cmd/quarry/run_snapshots_json_test.go` `Test_run_snapshots_json_prints_the_ruled_document_for_two_snapshots_and_a_store`
+- [x] SCENARIO-34: --from with an unknown ID points at quarry snapshots — delivered by SCENARIO-16 — `cmd/quarry/run_from_test.go` `Test_run_sync_from_an_unknown_id_points_at_quarry_snapshots`
+- [x] SCENARIO-18: snapshots --json lists every snapshot with its store flag — `cmd/quarry/run_snapshots_test.go` `Test_run_snapshots_json_prints_the_ruled_document_for_two_snapshots_and_a_store`
 - [x] SCENARIO-21: prune deletes all but the newest N snapshots — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_deletes_all_but_the_newest_n`
 - [x] SCENARIO-23: prune keeps the store's snapshot when it is older than the newest N — delivered by SCENARIO-21 — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_keeps_the_stores_snapshot_when_it_is_older_than_the_newest_n`
 - [x] SCENARIO-25: prune refuses when the store cannot be read — delivered by SCENARIO-21 — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_refuses_when_the_store_cannot_be_read`
 - [x] SCENARIO-26: prune --keep 0 is a usage error — delivered by SCENARIO-21 — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_refuses_keep_0_as_a_usage_error`
 - [x] SCENARIO-27: prune reports each snapshot it could not delete and exits 1 — delivered by SCENARIO-21 — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_reports_each_snapshot_it_could_not_delete_and_exits_1`
-- [x] SCENARIO-24: prune with nothing beyond the cap deletes nothing — `cmd/quarry/run_prune_config_test.go` `Test_run_snapshots_prune_with_nothing_beyond_the_default_cap_deletes_nothing`
-- [x] SCENARIO-02: A snapshots.keep below 1 is refused — delivered by SCENARIO-24 — `cmd/quarry/run_prune_config_test.go` `Test_run_snapshots_prune_refuses_a_snapshots_keep_below_one`
-- [x] SCENARIO-22: prune --dry-run lists what it would delete and deletes nothing — delivered by SCENARIO-24 — `cmd/quarry/run_prune_dryrun_test.go` `Test_run_snapshots_prune_dry_run_lists_what_it_would_delete_and_deletes_nothing`
-- [x] SCENARIO-28: prune --json reports deleted, would_delete and failed in one shape — `cmd/quarry/run_prune_json_test.go` `Test_run_snapshots_prune_json_prints_the_ruled_document_for_a_real_run`
+- [x] SCENARIO-24: prune with nothing beyond the cap deletes nothing — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_with_nothing_beyond_the_default_cap_deletes_nothing`
+- [x] SCENARIO-02: A snapshots.keep below 1 is refused — delivered by SCENARIO-24 — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_refuses_a_snapshots_keep_below_one`
+- [x] SCENARIO-22: prune --dry-run lists what it would delete and deletes nothing — delivered by SCENARIO-24 — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_dry_run_lists_what_it_would_delete_and_deletes_nothing`
+- [x] SCENARIO-28: prune --json reports deleted, would_delete and failed in one shape — `cmd/quarry/run_prune_test.go` `Test_run_snapshots_prune_json_prints_the_ruled_document_for_a_real_run`
 - [x] SCENARIO-29: sync deletes snapshots beyond the newest 12 and prints a Pruned line — `cmd/quarry/run_sync_prune_test.go` `Test_run_sync_deletes_the_snapshot_beyond_the_newest_12_and_prints_a_pruned_line`
 - [x] SCENARIO-30: sync honours snapshots.keep from config — delivered by SCENARIO-29 — `cmd/quarry/run_sync_prune_test.go` `Test_run_sync_from_honours_snapshots_keep_from_config`
 - [x] SCENARIO-31: sync --json always carries the pruned key — delivered by SCENARIO-29 — `cmd/quarry/run_sync_prune_test.go` `Test_run_sync_from_json_carries_a_null_pruned_key_on_a_schema_mismatch`
