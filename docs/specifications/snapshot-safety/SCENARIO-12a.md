@@ -19,7 +19,7 @@ Surveyed surface (nothing new to port): `resolveFrom` has one caller, `ImportFro
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_from_case_test.go` (new) `Test_run_sync_from_an_id_rebuilds_the_store_from_an_upper_case_sqlite_snapshot` — `run` slice (model: run_from_test.go:18-46): sync, remove the store, `os.Rename` `<id>.sqlite` → `<id>.SQLITE`, assert the ReadDir name first (macOS folds case), `sync --from <id>` exit 0, `import_runs.snapshot_path` (via `importRunQuery`, run_import_runs_test.go:127) and `status --json` `snapshot.path` equal the on-disk `.SQLITE` path. No stubs; red at the path assertion (macOS) / exit code (Linux).
+- [x] Step 1: `cmd/quarry/run_from_case_test.go` (new) `Test_run_sync_from_an_id_rebuilds_the_store_from_an_upper_case_sqlite_snapshot` — `run` slice (model: run_from_test.go:18-46): sync, remove the store, `os.Rename` `<id>.sqlite` → `<id>.SQLITE`, assert the ReadDir name first (macOS folds case), `sync --from <id>` exit 0, `import_runs.snapshot_path` (via `importRunQuery`, run_import_runs_test.go:127) and `status --json` `snapshot.path` equal the on-disk `.SQLITE` path. No stubs; red at the path assertion (macOS) / exit code (Linux).
 
 ### Build
 - [ ] Step 2 (batch 1, ID form, F1/F2/F3, changes 8-9): `list.go:191-197` `folderUnreadableRefusal` → free func over a folder argument (callers :160, :167; fix mention at `auto_prune.go:49`); `select.go:98` add `(folderSelection) snapshot(id)` beside `preferred`; `from.go:22-39,77-90,94-110` ID form calls `os.ReadDir(snapshotDir)` once → not-exist = F2, other error = F1, no `selectFolder` winner for the value = F3 (the value verbatim in the line, `idNotFoundRefusal` :118); manifest = the winner's selected manifest, a lowercase `<id>.json` path when none (reaches today's no-manifest line); NO `os.Stat` and no lowercase fallback on this form. Tests: `import_from_test.go:360-370` re-point (path form keeps `cannot read <snapshot>: permission denied; check the file's permissions` on a 000 parent) + ID-form F1 rows (000, 0300, snapshotDir is a file → `not a directory`); `:383-396` re-point to the path form (keeps `is not a snapshot file`) + ID-form F3 cases (directory, symlink, lowercased ID, folder missing = F2); new ID-form success naming `.SQLITE`; `select_internal_test.go` `Test_folder_selection_snapshot_lookup_skips_non_regular_entries` (regular winner, a non-regular sibling of the ID, absent ID).
@@ -48,3 +48,13 @@ Surveyed surface (nothing new to port): `resolveFrom` has one caller, `ImportFro
 - Path-form `Stat` must stay before the parent listing, or a missing path reports F4 instead of "does not exist" (`run_from_refusals_test.go:29-39`).
 - Lowercased ID is F3 now, so `run_case_variant_test.go:25-38` is a rewrite, not a rename; its keep-beyond-the-newest-12 assertions go away.
 - A hard link named `X.SQLITE.json` no longer pins anything; the `.SQLITE` extension strip is what the re-pointed identity row proves.
+
+## Phase report
+
+Run A (Acceptance): `cmd/quarry/run_from_case_test.go` (new, 41 lines) holds `Test_run_sync_from_an_id_rebuilds_the_store_from_an_upper_case_sqlite_snapshot`. No production code, no stubs.
+
+Red (macOS), at the recorded-path assertion, `run_from_case_test.go:35`: expected `.../snapshots/20261007T011444Z.SQLITE`, actual `.../20261007T011444Z.sqlite` (case folding stats the lowercase name); the `status --json` `snapshot.path` assertion (:44) fails the same way. Exit code is 0 today on macOS.
+
+Deviations: none. `dirNames` is reused from `run_snapshots_upper_case_test.go:25`, `writeNamedAccountBundle` from `run_import_runs_test.go`. The test asserts `snapshot.path` only; `snapshot.id` under `.SQLITE` is 12b's.
+
+Next run (B1, steps 2-4): the new file is where `Test_run_sync_from_a_path_finds_its_snapshot_and_manifest_in_any_letter_case` goes (step 4). Do not redo step 1.
