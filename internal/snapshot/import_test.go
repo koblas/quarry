@@ -67,3 +67,28 @@ func Test_outcome_warnings_are_the_manifests_when_no_import_ran(t *testing.T) {
 
 	assert.Equal(t, []string{"schema warning"}, got)
 }
+
+func Test_id_strips_one_sqlite_extension_in_any_letter_case(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "lower case", path: "/snaps/20260927T143005Z.sqlite", want: "20260927T143005Z"},
+		{name: "upper case", path: "/snaps/20260927T143005Z.SQLITE", want: "20260927T143005Z"},
+		{name: "mixed case", path: "/snaps/20260927T143005Z.Sqlite", want: "20260927T143005Z"},
+		{name: "the long s folds", path: "/snaps/20260927T143005Z.ſqlite", want: "20260927T143005Z"},
+		{name: "another extension is kept", path: "/snaps/latest.db", want: "latest.db"},
+		{name: "only the last extension goes", path: "/snaps/X.sqlite.SQLITE", want: "X.sqlite"},
+		{name: "a manifest name is kept", path: "/snaps/X.json", want: "X.json"},
+		{name: "no extension", path: "/snaps/X", want: "X"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, c.want, snapshot.ID(c.path))
+		})
+	}
+}

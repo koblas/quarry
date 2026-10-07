@@ -346,6 +346,32 @@ func Test_sync_and_import_sweeps_orphan_manifests_once_the_store_is_built(t *tes
 	assertSnapshotPairs(t, dir, true, ids[0])
 }
 
+func Test_sync_and_import_deletes_an_upper_case_sqlite_snapshot_then_its_manifest(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	dir := prunable(t, home, oldIDs(3)...)
+	for _, id := range oldIDs(3) {
+		upperCased(t, dir, id)
+	}
+	rm := &fakeRemover{}
+	srv := newImportServer(t, home, builtStore(), snapshot.WithAutoPrune(2), snapshot.WithRemove(rm.remove))
+	require.Equal(t, []string{
+		"20000101T000000Z.SQLITE", "20000101T000000Z.json",
+		"20000201T000000Z.SQLITE", "20000201T000000Z.json",
+		"20000301T000000Z.SQLITE", "20000301T000000Z.json",
+	}, dirNames(t, dir))
+
+	_, err := syncBundle(t, srv)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"20000201T000000Z.SQLITE", "20000201T000000Z.json",
+		"20000101T000000Z.SQLITE", "20000101T000000Z.json",
+	}, rm.calls)
+	assert.Contains(t, dirNames(t, dir), "20000301T000000Z.SQLITE")
+	assert.Contains(t, dirNames(t, dir), "20000301T000000Z.json")
+}
+
 // afterBuild is what syncAfterBuild leaves: the sync's result, the removals it made, and the old snapshots' IDs and folder.
 type afterBuild struct {
 	outcome snapshot.Outcome

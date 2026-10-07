@@ -3,6 +3,7 @@ package snapshot_test
 import (
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -53,4 +54,79 @@ func Test_prune_deletes_an_upper_case_sqlite_snapshot_then_its_manifest_and_keep
 		"20260929T090011Z.json", "20260929T090011Z.sqlite",
 		"20260930T141502Z.SQLITE", "20260930T141502Z.json",
 	}, dirNames(t, dir))
+}
+
+func Test_prune_removes_the_manifest_by_its_on_disk_name(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name        string
+		snapshotExt string
+		want        []string
+	}{
+		{name: "lower-case snapshot, upper-case manifest", snapshotExt: "sqlite",
+			want: []string{"20260927T143005Z.sqlite", "20260927T143005Z.JSON"}},
+		{name: "upper-case snapshot and manifest", snapshotExt: "SQLITE",
+			want: []string{"20260927T143005Z.SQLITE", "20260927T143005Z.JSON"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			dir := prunable(t, home, idNewest, idMiddle, idOldest)
+			renamedExtension(t, dir, idOldest, "sqlite", c.snapshotExt)
+			renamedExtension(t, dir, idOldest, "json", "JSON")
+			rm := &fakeRemover{}
+
+			_, err := newPruneServer(home, nil, rm).Prune(t.Context(), 2)
+
+			require.NoError(t, err)
+			assert.Equal(t, c.want, rm.calls)
+		})
+	}
+}
+
+func Test_prune_never_sweeps_the_manifest_of_a_directory_named_as_an_upper_case_snapshot(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	dir := prunable(t, home, idNewest, idMiddle)
+	writeManifest(t, dir, idOldest, manifestTaken("2026-09-27T10:00:00Z"))
+	require.NoError(t, os.Mkdir(filepath.Join(dir, idOldest+".SQLITE"), 0o700))
+	rm := &fakeRemover{}
+
+	_, err := newPruneServer(home, nil, rm).Prune(t.Context(), 2)
+
+	require.NoError(t, err)
+	assert.Empty(t, rm.calls)
+	assert.FileExists(t, filepath.Join(dir, idOldest+".json"))
+}
+
+func Test_prune_reports_an_upper_case_sqlite_snapshot_it_could_not_delete(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	dir := prunable(t, home, idNewest, idMiddle, idOldest)
+	oldestPath := upperCased(t, dir, idOldest)
+
+	pruned, err := newPruneServer(home, nil, failing("20260927T143005Z.SQLITE", syscall.EACCES)).Prune(t.Context(), 2)
+
+	require.NoError(t, err)
+	require.Len(t, pruned.Failed, 1)
+	assert.Equal(t, oldestPath, pruned.Failed[0].Entry.Path)
+	assert.Equal(t, "permission denied", pruned.Failed[0].Reason)
+	assert.Empty(t, pruned.Deleted)
+	assert.FileExists(t, filepath.Join(dir, idOldest+".json"))
+}
+
+func Test_plan_prune_would_delete_an_upper_case_sqlite_snapshot_by_its_on_disk_path(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	dir := prunable(t, home, idNewest, idMiddle, idOldest)
+	oldestPath := upperCased(t, dir, idOldest)
+	rm := &fakeRemover{}
+
+	pruned, err := newPruneServer(home, nil, rm).PlanPrune(t.Context(), 2)
+
+	require.NoError(t, err)
+	require.Len(t, pruned.WouldDelete, 1)
+	assert.Equal(t, oldestPath, pruned.WouldDelete[0].Path)
+	assert.Empty(t, rm.calls)
 }

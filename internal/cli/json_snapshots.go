@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"strings"
 	"time"
 
 	"github.com/koblas/quarry/internal/report/document"
@@ -65,8 +64,7 @@ func newSnapshotDocument(e snapshot.Entry) snapshotDocument {
 	if e.Manifest == nil {
 		return doc
 	}
-	manifestPath := strings.TrimSuffix(e.Path, ".sqlite") + ".json"
-	doc.Manifest = &manifestPath
+	doc.Manifest = &e.ManifestPath
 	doc.Source = document.NullString(e.Manifest.Snapshot.Source)
 	doc.SHA256 = &e.Manifest.Snapshot.SHA256
 	doc.SchemaVerified = &e.Manifest.Schema.Verified

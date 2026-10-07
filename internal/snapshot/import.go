@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -149,10 +150,13 @@ func (e causedRefusalError) Error() string { return e.msg }
 // Unwrap returns the error the refusal wraps.
 func (e causedRefusalError) Unwrap() error { return e.cause }
 
+// sqliteExtension matches a snapshot file's extension, in any letter case, at the end of a name.
+var sqliteExtension = regexp.MustCompile(`\.(?i:sqlite)$`)
+
 // ID returns the id a snapshot goes by for its .sqlite path: the base name
-// with the extension removed.
+// with its extension, in any letter case, removed.
 func ID(path string) string {
-	return strings.TrimSuffix(filepath.Base(path), ".sqlite")
+	return sqliteExtension.ReplaceAllString(filepath.Base(path), "")
 }
 
 // SyncAndImport takes a snapshot of bundlePath, then imports it through the configured Importer,
