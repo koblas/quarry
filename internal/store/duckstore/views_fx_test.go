@@ -18,9 +18,6 @@ const (
 	mondayRate     = 1_300_000
 )
 
-// march is a date in March 2026: the 13th is a Friday, the 14th and 15th the weekend after it.
-func march(day int) time.Time { return time.Date(2026, 3, day, 0, 0, 0, 0, time.UTC) }
-
 // fxRows is reportRows with a USD account that Quicken's reports count.
 func fxRows() store.Rows {
 	rows := reportRows()
@@ -37,19 +34,6 @@ func expense(rows *store.Rows, id, currency string, date time.Time, cents int64)
 		account = acctUSD
 	}
 	addSplit(rows, splitSpec{id: id, account: account, currency: currency, date: date, category: new(catExpense), amount: cents})
-}
-
-func newStoreWithRates(t *testing.T, rows store.Rows, rates ...store.Rate) *duckstore.Store {
-	t.Helper()
-	dir := t.TempDir()
-	src := &fakeRates{refresh: store.RatesRefresh{Rates: rates}}
-	_, err := duckstore.New(dir, duckstore.WithRates(src)).Replace(t.Context(), rows)
-	require.NoError(t, err)
-	return duckstore.New(dir)
-}
-
-func fridayAndMonday() []store.Rate {
-	return []store.Rate{ratesOn(13, fridayRate, "FXUSDCAD"), ratesOn(16, mondayRate, "FXUSDCAD")}
 }
 
 const convertedAmounts = "SELECT amount_cad, amount_usd FROM v_cash_flow WHERE split_id = 'x'"

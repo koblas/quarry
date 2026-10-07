@@ -1,7 +1,6 @@
 package duckstore_test
 
 import (
-	"errors"
 	"math/big"
 	"os"
 	"testing"
@@ -12,23 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// errScanFailed has the shape of database/sql's Scan conversion error.
-var errScanFailed = errors.New(`sql: Scan error on column index 1, name "id": converting NULL to string is unsupported`)
-
-// localToday is today's local calendar date at UTC midnight, the shape a DATE column reads back as.
-func localToday() time.Time {
-	now := time.Now()
-	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-}
-
-func account(id string, sourceID int64, name, accountType, currency string) store.Account {
-	return store.Account{ID: id, SourceID: sourceID, Name: name, Type: accountType, Currency: currency, Active: true}
-}
-
-func transaction(id, accountID string, date time.Time, cents int64) store.Transaction {
-	return store.Transaction{ID: id, SourceID: 1, AccountID: accountID, Date: date, Amount: cents, Currency: "CAD", Status: "uncleared"}
-}
 
 // replaceWith builds a store in a fresh directory from accounts and transactions only.
 func replaceWith(t *testing.T, accounts []store.Account, txns []store.Transaction) *duckstore.Store {

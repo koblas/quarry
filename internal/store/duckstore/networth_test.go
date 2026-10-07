@@ -16,39 +16,32 @@ import (
 // netWorthOn reads st's net worth rows on dates.
 func netWorthOn(t *testing.T, st *duckstore.Store, dates ...time.Time) []store.NetWorthRow {
 	t.Helper()
-	got, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: dates})
-	require.NoError(t, err)
-	return got.Rows
-}
-
-func cents(text string) *big.Int {
-	n, _ := new(big.Int).SetString(text, 10)
-	return n
+	return netWorthRead(t, st, dates...).Rows
 }
 
 func Test_net_worth_reads_every_column_of_a_converted_row(t *testing.T) {
 	t.Parallel()
 	st := newStoreWithRates(t, netWorthRows(
 		[]store.Account{account(acctTwo, 2, "Second", "chequing", "CAD")},
-		transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctTwo, marchDay(1), 5_000)),
+		transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctTwo, march(1), 5_000)),
 		ratesOn(1, 1_250_000, "FXUSDCAD"))
 
-	got := netWorthOn(t, st, marchDay(2))
+	got := netWorthOn(t, st, march(2))
 
 	assert.Equal(t, []store.NetWorthRow{{
-		Date: marchDay(2), Type: "chequing", Currency: "CAD", Accounts: 2,
+		Date: march(2), Type: "chequing", Currency: "CAD", Accounts: 2,
 		Balance: big.NewInt(15_000), BalanceCAD: big.NewInt(15_000), BalanceUSD: big.NewInt(12_000),
 	}}, got)
 }
 
 func Test_net_worth_leaves_nil_a_balance_the_store_holds_as_null(t *testing.T) {
 	t.Parallel()
-	st := newStoreWithRates(t, cashRows(transaction("t1", acctOne, marchDay(1), 10_000)), ratesOn(10, 1_250_000, "FXUSDCAD"))
+	st := newStoreWithRates(t, cashRows(transaction("t1", acctOne, march(1), 10_000)), ratesOn(10, 1_250_000, "FXUSDCAD"))
 
-	got := netWorthOn(t, st, marchDay(5))
+	got := netWorthOn(t, st, march(5))
 
 	assert.Equal(t, []store.NetWorthRow{{
-		Date: marchDay(5), Type: "chequing", Currency: "CAD", Accounts: 1,
+		Date: march(5), Type: "chequing", Currency: "CAD", Accounts: 1,
 		Balance: big.NewInt(10_000), BalanceCAD: big.NewInt(10_000), BalanceUSD: nil,
 	}}, got)
 }
@@ -71,12 +64,12 @@ func Test_net_worth_orders_rows_by_type_then_currency_whatever_order_the_account
 			rows := noTransactionRows()
 			rows.Accounts = c.accounts
 			rows.Transactions = []store.Transaction{
-				transaction("t1", acctOne, marchDay(1), 100), transaction("t2", acctTwo, marchDay(1), 100),
-				transaction("t3", "acct-3", marchDay(1), 100),
+				transaction("t1", acctOne, march(1), 100), transaction("t2", acctTwo, march(1), 100),
+				transaction("t3", "acct-3", march(1), 100),
 			}
 			st := newStoreWith(t, rows)
 
-			got := netWorthOn(t, st, marchDay(1))
+			got := netWorthOn(t, st, march(1))
 
 			require.Len(t, got, 3)
 			assert.Equal(t, [][2]string{{"credit_card", "CAD"}, {"savings", "CAD"}, {"savings", "USD"}},
@@ -87,21 +80,21 @@ func Test_net_worth_orders_rows_by_type_then_currency_whatever_order_the_account
 
 func Test_net_worth_reads_two_dates_in_one_call_in_date_order(t *testing.T) {
 	t.Parallel()
-	st := newStoreWith(t, cashRows(transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctOne, marchDay(3), 500)))
+	st := newStoreWith(t, cashRows(transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctOne, march(3), 500)))
 
-	got := netWorthOn(t, st, marchDay(3), marchDay(1))
+	got := netWorthOn(t, st, march(3), march(1))
 
 	require.Len(t, got, 2)
-	assert.Equal(t, []time.Time{marchDay(1), marchDay(3)}, []time.Time{got[0].Date, got[1].Date})
+	assert.Equal(t, []time.Time{march(1), march(3)}, []time.Time{got[0].Date, got[1].Date})
 	assert.Equal(t, []*big.Int{big.NewInt(10_000), big.NewInt(10_500)}, []*big.Int{got[0].Balance, got[1].Balance})
 }
 
 func Test_net_worth_has_no_rows_for_a_date_before_the_first_transaction(t *testing.T) {
 	t.Parallel()
-	st := newStoreWith(t, cashRows(transaction("t1", acctOne, marchDay(5), 10_000)))
+	st := newStoreWith(t, cashRows(transaction("t1", acctOne, march(5), 10_000)))
 
-	before := netWorthOn(t, st, marchDay(4))
-	onFirst := netWorthOn(t, st, marchDay(5))
+	before := netWorthOn(t, st, march(4))
+	onFirst := netWorthOn(t, st, march(5))
 
 	assert.Empty(t, before)
 	assert.Len(t, onFirst, 1)
@@ -109,9 +102,9 @@ func Test_net_worth_has_no_rows_for_a_date_before_the_first_transaction(t *testi
 
 func Test_net_worth_leaves_out_a_transaction_dated_after_the_day_asked(t *testing.T) {
 	t.Parallel()
-	st := newStoreWith(t, cashRows(transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctOne, marchDay(3), 500)))
+	st := newStoreWith(t, cashRows(transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctOne, march(3), 500)))
 
-	got := netWorthOn(t, st, marchDay(2))
+	got := netWorthOn(t, st, march(2))
 
 	require.Len(t, got, 1)
 	assert.Equal(t, big.NewInt(10_000), got[0].Balance)
@@ -119,30 +112,28 @@ func Test_net_worth_leaves_out_a_transaction_dated_after_the_day_asked(t *testin
 
 func Test_net_worth_reads_no_rows_for_no_dates(t *testing.T) {
 	t.Parallel()
-	st := newStoreWith(t, cashRows(transaction("t1", acctOne, marchDay(1), 10_000)))
+	st := newStoreWith(t, cashRows(transaction("t1", acctOne, march(1), 10_000)))
 
-	assert.Len(t, netWorthOn(t, st, marchDay(1)), 1)
+	assert.Len(t, netWorthOn(t, st, march(1)), 1)
 	assert.Empty(t, netWorthOn(t, st))
 }
 
 func Test_net_worth_gives_the_date_of_the_first_exchange_rate(t *testing.T) {
 	t.Parallel()
-	st := newStoreWithRates(t, cashRows(transaction("t1", acctOne, marchDay(1), 10_000)),
+	st := newStoreWithRates(t, cashRows(transaction("t1", acctOne, march(1), 10_000)),
 		ratesOn(12, 1_250_000, "FXUSDCAD"), ratesOn(10, 1_250_000, "FXUSDCAD"))
 
-	got, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{marchDay(5)}})
+	got := netWorthRead(t, st, march(5))
 
-	require.NoError(t, err)
-	assert.Equal(t, marchDay(10), got.FirstRate)
+	assert.Equal(t, march(10), got.FirstRate)
 }
 
 func Test_net_worth_gives_no_first_rate_date_for_a_store_without_rates(t *testing.T) {
 	t.Parallel()
-	st := newStoreWith(t, cashRows(transaction("t1", acctOne, marchDay(1), 10_000)))
+	st := newStoreWith(t, cashRows(transaction("t1", acctOne, march(1), 10_000)))
 
-	got, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{marchDay(5)}})
+	got := netWorthRead(t, st, march(5))
 
-	require.NoError(t, err)
 	assert.True(t, got.FirstRate.IsZero())
 	assert.Len(t, got.Rows, 1)
 }
@@ -152,7 +143,7 @@ func Test_net_worth_returns_the_first_rate_query_fault_as_another_fault(t *testi
 	fault := ioFault(`query rows "SELECT min"`)
 	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 2, queryFault: fault}))
 
-	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{marchDay(5)}})
+	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{march(5)}})
 
 	assertOtherFault(t, err, "disk read failed")
 	assert.ErrorIs(t, err, fault)
@@ -162,7 +153,7 @@ func Test_net_worth_returns_a_first_rate_scan_fault_as_another_fault(t *testing.
 	t.Parallel()
 	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 2, scanFault: errScanFailed}))
 
-	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{marchDay(5)}})
+	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{march(5)}})
 
 	assertOtherFault(t, err, errScanFailed.Error())
 	assert.ErrorIs(t, err, errScanFailed)
@@ -180,11 +171,11 @@ func Test_net_worth_for_no_dates_still_refuses_a_missing_store(t *testing.T) {
 
 func Test_net_worth_reads_a_balance_past_64_bits_in_exact_cents(t *testing.T) {
 	t.Parallel()
-	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), maxDecimal18x6))
-	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), maxDecimal18x6)}
+	rows := balanceRows(buy(acctOne, secAcme, 1, march(1), maxDecimal18x6))
+	rows.Prices = []store.Price{quote(secAcme, 1, march(1), maxDecimal18x6)}
 	st := newStoreWithRates(t, rows, ratesOn(1, 1_250_000, "FXUSDCAD"))
 
-	got := netWorthOn(t, st, marchDay(2))
+	got := netWorthOn(t, st, march(2))
 
 	require.Len(t, got, 1)
 	assert.Equal(t, []*big.Int{cents("99999999999999999800000000"), cents("99999999999999999800000000"), cents("79999999999999999840000000")},
@@ -194,17 +185,15 @@ func Test_net_worth_reads_a_balance_past_64_bits_in_exact_cents(t *testing.T) {
 // firstBalanceOn reads st's first balance date.
 func firstBalanceOn(t *testing.T, st *duckstore.Store) time.Time {
 	t.Helper()
-	got, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{marchDay(10)}})
-	require.NoError(t, err)
-	return got.FirstBalance
+	return netWorthRead(t, st, march(10)).FirstBalance
 }
 
 func Test_net_worth_first_balance_is_the_earliest_transaction_of_any_counted_account(t *testing.T) {
 	t.Parallel()
 	st := newStoreWith(t, netWorthRows([]store.Account{account(acctTwo, 2, "Second", "chequing", "CAD")},
-		transaction("t1", acctOne, marchDay(5), 100), transaction("t2", acctTwo, marchDay(3), 100), transaction("t3", acctOne, marchDay(7), 100)))
+		transaction("t1", acctOne, march(5), 100), transaction("t2", acctTwo, march(3), 100), transaction("t3", acctOne, march(7), 100)))
 
-	assert.Equal(t, marchDay(3), firstBalanceOn(t, st))
+	assert.Equal(t, march(3), firstBalanceOn(t, st))
 }
 
 func Test_net_worth_first_balance_is_zero_for_a_store_with_no_transactions_or_holdings(t *testing.T) {
@@ -221,41 +210,41 @@ func Test_net_worth_first_balance_ignores_accounts_left_out_of_reports(t *testin
 	linked := account("acct-3", 3, "Linked", "chequing", "CAD")
 	linked.LinkedTracking = true
 	st := newStoreWith(t, netWorthRows([]store.Account{left, linked},
-		transaction("t1", acctTwo, marchDay(1), 100), transaction("t2", "acct-3", marchDay(2), 100), transaction("t3", acctOne, marchDay(6), 100)))
+		transaction("t1", acctTwo, march(1), 100), transaction("t2", "acct-3", march(2), 100), transaction("t3", acctOne, march(6), 100)))
 
-	assert.Equal(t, marchDay(6), firstBalanceOn(t, st))
+	assert.Equal(t, march(6), firstBalanceOn(t, st))
 }
 
 func Test_net_worth_first_balance_counts_an_account_in_reports_that_is_not_linked(t *testing.T) {
 	t.Parallel()
 	counted := account(acctTwo, 2, "Counted", "chequing", "CAD")
 	st := newStoreWith(t, netWorthRows([]store.Account{counted},
-		transaction("t1", acctTwo, marchDay(1), 100), transaction("t3", acctOne, marchDay(6), 100)))
+		transaction("t1", acctTwo, march(1), 100), transaction("t3", acctOne, march(6), 100)))
 
-	assert.Equal(t, marchDay(1), firstBalanceOn(t, st))
+	assert.Equal(t, march(1), firstBalanceOn(t, st))
 }
 
 func Test_net_worth_first_balance_is_a_holding_that_starts_before_the_first_transaction(t *testing.T) {
 	t.Parallel()
-	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(2), oneShare))
-	rows.Transactions = []store.Transaction{transaction("t1", acctChequing, marchDay(4), 100)}
+	rows := balanceRows(buy(acctOne, secAcme, 1, march(2), oneShare))
+	rows.Transactions = []store.Transaction{transaction("t1", acctChequing, march(4), 100)}
 	st := newStoreWith(t, rows)
 
-	assert.Equal(t, marchDay(2), firstBalanceOn(t, st))
+	assert.Equal(t, march(2), firstBalanceOn(t, st))
 }
 
 func Test_net_worth_first_balance_is_a_transaction_that_starts_before_the_first_holding(t *testing.T) {
 	t.Parallel()
-	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(4), oneShare))
-	rows.Transactions = []store.Transaction{transaction("t1", acctChequing, marchDay(2), 100)}
+	rows := balanceRows(buy(acctOne, secAcme, 1, march(4), oneShare))
+	rows.Transactions = []store.Transaction{transaction("t1", acctChequing, march(2), 100)}
 	st := newStoreWith(t, rows)
 
-	assert.Equal(t, marchDay(2), firstBalanceOn(t, st))
+	assert.Equal(t, march(2), firstBalanceOn(t, st))
 }
 
 func Test_net_worth_first_balance_ignores_a_holding_of_an_account_left_out_of_reports(t *testing.T) {
 	t.Parallel()
-	rows := holdingRows(buy(acctOne, secAcme, 1, marchDay(2), oneShare))
+	rows := holdingRows(buy(acctOne, secAcme, 1, march(2), oneShare))
 	rows.Accounts[0].NotInReports = true
 	st := newStoreWith(t, rows)
 
@@ -267,7 +256,7 @@ func Test_net_worth_returns_the_first_balance_query_fault_as_another_fault(t *te
 	fault := ioFault(`query rows "SELECT min"`)
 	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 3, queryFault: fault}))
 
-	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{marchDay(5)}})
+	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{march(5)}})
 
 	assertOtherFault(t, err, "disk read failed")
 	assert.ErrorIs(t, err, fault)
@@ -277,7 +266,7 @@ func Test_net_worth_returns_a_first_balance_scan_fault_as_another_fault(t *testi
 	t.Parallel()
 	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 3, scanFault: errScanFailed}))
 
-	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{marchDay(5)}})
+	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{march(5)}})
 
 	assertOtherFault(t, err, errScanFailed.Error())
 	assert.ErrorIs(t, err, errScanFailed)
@@ -304,7 +293,7 @@ func Test_net_worth_sums_accounts_of_one_type_and_currency_into_one_row(t *testi
 	t.Parallel()
 	st := newStoreWith(t, netWorthRows(
 		[]store.Account{account(acctTwo, 2, "Second", "chequing", "CAD")},
-		transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctTwo, marchDay(1), 5_000)))
+		transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctTwo, march(1), 5_000)))
 
 	got := queryTexts(t, st, netWorthQuery(1))
 
@@ -315,7 +304,7 @@ func Test_net_worth_keeps_a_type_in_another_currency_in_its_own_row(t *testing.T
 	t.Parallel()
 	st := newStoreWith(t, netWorthRows(
 		[]store.Account{account(acctTwo, 2, "US", "chequing", "USD")},
-		transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctTwo, marchDay(1), 5_000)))
+		transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctTwo, march(1), 5_000)))
 
 	got := queryTexts(t, st, netWorthQuery(1))
 
@@ -326,7 +315,7 @@ func Test_net_worth_keeps_a_currency_in_another_type_in_its_own_row(t *testing.T
 	t.Parallel()
 	st := newStoreWith(t, netWorthRows(
 		[]store.Account{account(acctTwo, 2, "Savings", "savings", "CAD")},
-		transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctTwo, marchDay(1), 5_000)))
+		transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctTwo, march(1), 5_000)))
 
 	got := queryTexts(t, st, netWorthQuery(1))
 
@@ -335,7 +324,7 @@ func Test_net_worth_keeps_a_currency_in_another_type_in_its_own_row(t *testing.T
 
 func Test_net_worth_counts_a_closed_account_on_the_days_after_it_closed(t *testing.T) {
 	t.Parallel()
-	rows := netWorthRows(nil, transaction("t1", acctOne, marchDay(1), 10_000))
+	rows := netWorthRows(nil, transaction("t1", acctOne, march(1), 10_000))
 	rows.Accounts[0].Closed = true
 	st := newStoreWith(t, rows)
 
@@ -361,7 +350,7 @@ func Test_net_worth_leaves_out_accounts_not_in_reports_and_linked_tracking(t *te
 			left := account(acctTwo, 2, "Left Out", "chequing", "CAD")
 			c.flag(&left)
 			st := newStoreWith(t, netWorthRows([]store.Account{left},
-				transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctTwo, marchDay(1), 5_000)))
+				transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctTwo, march(1), 5_000)))
 
 			got := queryTexts(t, st, netWorthQuery(1))
 
@@ -372,10 +361,10 @@ func Test_net_worth_leaves_out_accounts_not_in_reports_and_linked_tracking(t *te
 
 func Test_net_worth_balance_of_an_investment_account_adds_its_valued_holdings_to_cash(t *testing.T) {
 	t.Parallel()
-	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), 3*oneShare))
-	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)}
+	rows := balanceRows(buy(acctOne, secAcme, 1, march(1), 3*oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, march(1), tenUnits)}
 	rows.Transactions = []store.Transaction{
-		transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctChequing, marchDay(1), 5_000),
+		transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctChequing, march(1), 5_000),
 	}
 	st := newStoreWith(t, rows)
 
@@ -386,10 +375,10 @@ func Test_net_worth_balance_of_an_investment_account_adds_its_valued_holdings_to
 
 func Test_net_worth_converts_an_investment_accounts_cash_plus_valued_holdings(t *testing.T) {
 	t.Parallel()
-	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), 3*oneShare))
-	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)}
+	rows := balanceRows(buy(acctOne, secAcme, 1, march(1), 3*oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, march(1), tenUnits)}
 	rows.Transactions = []store.Transaction{
-		transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctChequing, marchDay(1), 5_000),
+		transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctChequing, march(1), 5_000),
 	}
 	st := newStoreWithRates(t, rows, ratesOn(1, 1_250_000, "FXUSDCAD"))
 
@@ -400,7 +389,7 @@ func Test_net_worth_converts_an_investment_accounts_cash_plus_valued_holdings(t 
 
 func Test_net_worth_has_no_row_for_a_date_where_every_account_is_left_out(t *testing.T) {
 	t.Parallel()
-	rows := netWorthRows(nil, transaction("t1", acctOne, marchDay(1), 10_000))
+	rows := netWorthRows(nil, transaction("t1", acctOne, march(1), 10_000))
 	rows.Accounts[0].NotInReports = true
 	st := newStoreWith(t, rows)
 
@@ -413,7 +402,7 @@ func Test_net_worth_adds_an_account_on_the_day_of_its_first_transaction_not_befo
 	t.Parallel()
 	st := newStoreWith(t, netWorthRows(
 		[]store.Account{account(acctTwo, 2, "Later", "chequing", "CAD")},
-		transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctTwo, marchDay(5), 5_000)))
+		transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctTwo, march(5), 5_000)))
 
 	got := queryTexts(t, st, "SELECT CAST(date AS VARCHAR), accounts, balance FROM v_net_worth WHERE date IN ('2026-03-04', '2026-03-05') ORDER BY date")
 
@@ -424,7 +413,7 @@ func Test_net_worth_keeps_the_sign_of_a_negative_balance(t *testing.T) {
 	t.Parallel()
 	st := newStoreWith(t, netWorthRows(
 		[]store.Account{account(acctTwo, 2, "Card", "credit", "CAD")},
-		transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctTwo, marchDay(1), -30_000)))
+		transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctTwo, march(1), -30_000)))
 
 	got := queryTexts(t, st, netWorthQuery(1))
 
@@ -435,7 +424,7 @@ func Test_net_worth_converts_the_sum_of_each_accounts_rounded_conversion(t *test
 	t.Parallel()
 	st := newStoreWithRates(t, netWorthRows(
 		[]store.Account{account(acctTwo, 2, "Second", "chequing", "CAD")},
-		transaction("t1", acctOne, marchDay(1), 2), transaction("t2", acctTwo, marchDay(1), 2)),
+		transaction("t1", acctOne, march(1), 2), transaction("t2", acctTwo, march(1), 2)),
 		ratesOn(1, 1_250_000, "FXUSDCAD"))
 
 	got := queryTexts(t, st, netWorthConvertedQuery(1))
@@ -459,7 +448,7 @@ func Test_net_worth_has_no_conversion_to_the_other_currency_before_the_first_rat
 			t.Parallel()
 			rows := cashRows()
 			rows.Accounts = []store.Account{account(acctOne, 1, "Only", "chequing", c.currency)}
-			rows.Transactions = []store.Transaction{transaction("t1", acctOne, marchDay(1), 10_000)}
+			rows.Transactions = []store.Transaction{transaction("t1", acctOne, march(1), 10_000)}
 			st := newStoreWithRates(t, rows, ratesOn(10, 1_250_000, "FXUSDCAD"))
 
 			got := queryTexts(t, st, netWorthConvertedQuery(5))
@@ -473,7 +462,7 @@ func Test_net_worth_has_no_converted_balance_for_a_currency_other_than_cad_and_u
 	t.Parallel()
 	rows := cashRows()
 	rows.Accounts = []store.Account{account(acctOne, 1, "Euro", "chequing", "EUR")}
-	rows.Transactions = []store.Transaction{transaction("t1", acctOne, marchDay(1), 10_000)}
+	rows.Transactions = []store.Transaction{transaction("t1", acctOne, march(1), 10_000)}
 	st := newStoreWithRates(t, rows, ratesOn(1, 1_250_000, "FXUSDCAD"))
 
 	got := queryTexts(t, st, "SELECT currency, balance, balance_cad, balance_usd FROM v_net_worth WHERE date = '2026-03-05'")
@@ -485,7 +474,7 @@ func Test_net_worth_converts_a_day_in_a_rate_gap_at_the_prior_rate(t *testing.T)
 	t.Parallel()
 	st := newStoreWithRates(t, netWorthRows(
 		[]store.Account{account(acctTwo, 2, "US", "chequing", "USD")},
-		transaction("t1", acctTwo, marchDay(1), 10_000)),
+		transaction("t1", acctTwo, march(1), 10_000)),
 		ratesOn(10, 1_250_000, "FXUSDCAD"), ratesOn(16, 1_300_000, "FXUSDCAD"))
 
 	got := queryTexts(t, st, netWorthConvertedQuery(15))
@@ -497,7 +486,7 @@ func Test_net_worth_converted_columns_sum_over_one_date_to_the_total(t *testing.
 	t.Parallel()
 	st := newStoreWithRates(t, netWorthRows(
 		[]store.Account{account(acctTwo, 2, "US", "chequing", "USD")},
-		transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctTwo, marchDay(1), 10_000)),
+		transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctTwo, march(1), 10_000)),
 		ratesOn(1, 1_250_000, "FXUSDCAD"))
 
 	got := queryTexts(t, st, "SELECT sum(balance_cad), sum(balance_usd) FROM v_net_worth WHERE date = '2026-03-05'")

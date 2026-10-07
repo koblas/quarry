@@ -2,7 +2,6 @@ package duckstore_test
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"math"
@@ -19,67 +18,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// minimalRows fills every table (transfers: one paired, one one-sided) so a
-// round trip covers each table and each nullable column set and NULL.
-func minimalRows() store.Rows {
-	return store.Rows{
-		Accounts: []store.Account{{
-			ID: "acct-1", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD",
-			Institution: new("Big Bank"), Closed: false, Active: true,
-		}},
-		Categories: []store.Category{{
-			ID: "cat-1", SourceID: 1, Name: "Groceries", FullPath: "Groceries", Kind: "expense", Hidden: false,
-		}},
-		Payees: []store.Payee{{ID: "payee-1", SourceID: 1, Name: "Coffee Shop"}},
-		Tags:   []store.Tag{{ID: "tag-1", SourceID: 1, Name: "Reimbursable"}},
-		Transactions: []store.Transaction{{
-			ID: "txn-1", SourceID: 1, AccountID: "acct-1",
-			Date: time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC), PayeeID: new("payee-1"), Memo: new("Beans"),
-			Amount: 1234, Currency: "CAD", Status: "uncleared", ChequeNumber: new("101"),
-		}},
-		Splits: []store.Split{{
-			ID: "split-1", SourceID: 1, TransactionID: "txn-1", CategoryID: new("cat-1"),
-			Amount: 1234, Memo: new("split memo"),
-		}, {
-			ID: "split-4", SourceID: 4, TransactionID: "txn-1", CategoryID: new("cat-1"), Amount: 1234,
-		}},
-		SplitTags: []store.SplitTag{{SplitID: "split-1", TagID: "tag-1"}},
-		Transfers: []store.Transfer{
-			{ID: "xfer-1", FromSplitID: "split-1", ToSplitID: new("split-2"), CrossCurrency: true},
-			{ID: "xfer-3", FromSplitID: "split-3", OtherAccount: new("Savings")},
-		},
-		Securities: []store.Security{
-			{ID: "sec-1", SourceID: 1, Name: "Acme Corp", Ticker: new("ACME"), Currency: new("CAD")},
-			{ID: "sec-2", SourceID: 2, Name: "Plain Fund"},
-		},
-		Prices: []store.Price{{
-			SecurityID: "sec-1", SourceID: 7, Date: time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC), Price: 12_345_678,
-		}},
-		InvestmentTransactions: []store.InvestmentTransaction{{
-			ID: "inv-1", SourceID: 21, AccountID: "acct-1", SecurityID: new("sec-1"),
-			Date: time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC), Action: "split", Shares: new(int64(1_500_000)),
-			Amount: 12_345, Commission: new(int64(84_998)), CostBasis: new(int64(100_050)), Currency: "CAD", Memo: new("note"),
-			SplitNewShares: new(int64(12_000_000)), SplitOldShares: new(int64(1_000_000)),
-		}, {
-			ID: "inv-2", SourceID: 22, AccountID: "acct-1",
-			Date: time.Date(2026, 3, 17, 0, 0, 0, 0, time.UTC), Action: "dividend", Amount: 500, Currency: "CAD",
-		}},
-		ImportRuns: []store.ImportRun{{
-			ID: 1, StartedAt: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), FinishedAt: time.Date(2026, 9, 27, 14, 30, 7, 0, time.UTC),
-			Snapshot: store.SnapshotRef{
-				Path: "/snapshots/20260927T143005Z.sqlite", SHA256: "9f86", SchemaFingerprint: "sha256:abc",
-				TakenAt: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), Source: "/Users/alex/Documents/Home.quicken",
-			},
-			Counts: store.Counts{
-				Accounts: 1, Categories: 2, Payees: 3, Tags: 4, Transactions: 5, Splits: 6, SplitTags: 7, Transfers: 8,
-				Securities: 18, Prices: 19, InvestmentTransactions: 20,
-			},
-			BalancesChecked: 9, BalancesMismatched: 10, SplitsMismatched: 11, TransfersOneSided: 12,
-			BalancesNeverReconciled: 14, InvestmentAccounts: 15, TransfersPaired: 16, TransfersCrossCurrency: 17, SharesChecked: 21,
-		}},
-	}
-}
 
 // Reads back via a fresh read-only connection: the only proof of the
 // bytes on disk, not just the in-memory build.
@@ -627,95 +565,6 @@ func Test_replace_fails_when_the_context_is_already_cancelled(t *testing.T) {
 	assert.Empty(t, entries)
 }
 
-// faultDB wraps the real partial-file connection and injects at most one
-// fault; with no fault configured it passes every call through.
-type faultDB struct {
-	duckstore.DB
-
-	path             string
-	checkpointFault  error
-	afterCheckpoint  func()
-	walOnClose       bool
-	appendFaultTable string
-	appendFault      error
-	queryFaultOn     string // the build query that fails with queryFault, or whose first row's scan fails with scanFault
-	queryFault       error
-	scanFault        error
-	execFaultOn      string // the statement Exec fails with execFault
-	execFault        error
-	appended         []string // every table AppendRows was asked to load, in order
-	checkpoints      int      // CheckpointClose calls
-	closes           int      // Close calls
-}
-
-// QueryRows fails with queryFault for the query queryFaultOn, hands its row callback a scan that
-// fails with scanFault, else queries for real.
-func (f *faultDB) QueryRows(ctx context.Context, query string, args []any, row func(scan func(dest ...any) error) error) error {
-	if f.queryFault != nil && query == f.queryFaultOn {
-		return f.queryFault
-	}
-	if f.scanFault != nil && query == f.queryFaultOn {
-		return row(func(...any) error { return f.scanFault })
-	}
-	return f.DB.QueryRows(ctx, query, args, row)
-}
-
-// Exec fails with execFault for the statement execFaultOn, else runs it for real.
-func (f *faultDB) Exec(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	if f.execFault != nil && query == f.execFaultOn {
-		return nil, f.execFault
-	}
-	return f.DB.Exec(ctx, query, args...)
-}
-
-// AppendRows fails with appendFault for appendFaultTable, else appends for real.
-func (f *faultDB) AppendRows(ctx context.Context, table string, rows [][]any) error {
-	f.appended = append(f.appended, table)
-	if f.appendFault != nil && table == f.appendFaultTable {
-		return fmt.Errorf("append %s: %w", table, f.appendFault)
-	}
-	return f.DB.AppendRows(ctx, table, rows)
-}
-
-// CheckpointClose returns checkpointFault wrapped as duckdb.CheckpointClose
-// wraps a driver error, or runs the real one and then afterCheckpoint.
-func (f *faultDB) CheckpointClose(ctx context.Context) error {
-	f.checkpoints++
-	if f.checkpointFault != nil {
-		return fmt.Errorf("checkpoint %s: %w", f.path, f.checkpointFault)
-	}
-	err := f.DB.CheckpointClose(ctx)
-	if f.afterCheckpoint != nil {
-		f.afterCheckpoint()
-	}
-	return err
-}
-
-// Close closes the real connection, then leaves a .wal beside the partial
-// when walOnClose is set, as a crash mid-checkpoint would.
-func (f *faultDB) Close() error {
-	f.closes++
-	err := f.DB.Close()
-	if f.walOnClose {
-		_ = os.WriteFile(f.path+".wal", []byte("wal"), 0o600)
-	}
-	return err
-}
-
-// newFaultStore returns a Store over dir that builds its partial file
-// through f over a real DuckDB connection, configured further by opts.
-func newFaultStore(dir string, f *faultDB, opts ...duckstore.Option) *duckstore.Store {
-	create := duckstore.WithCreate(func(ctx context.Context, path string) (duckstore.DB, error) {
-		db, err := duckdb.Create(ctx, path)
-		if err != nil {
-			return nil, err
-		}
-		f.DB, f.path = db, path
-		return f, nil
-	})
-	return duckstore.New(dir, append([]duckstore.Option{create}, opts...)...)
-}
-
 func Test_replace_removes_the_partial_and_wal_when_the_checkpoint_fails(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -1001,22 +850,4 @@ func Test_replace_removes_the_partial_its_failed_create_left_behind(t *testing.T
 	entries, err := os.ReadDir(dir)
 	require.NoError(t, err)
 	assert.Empty(t, direntNames(entries))
-}
-
-func direntNames(entries []os.DirEntry) []string {
-	names := make([]string, len(entries))
-	for i, e := range entries {
-		names[i] = e.Name()
-	}
-	return names
-}
-
-func assertScalar(t *testing.T, db *duckdb.DB, query, want string) {
-	t.Helper()
-	var got string
-	err := db.QueryRows(t.Context(), query, nil, func(scan func(dest ...any) error) error {
-		return scan(&got)
-	})
-	require.NoError(t, err)
-	assert.Equal(t, want, got)
 }

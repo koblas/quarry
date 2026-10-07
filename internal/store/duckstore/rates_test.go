@@ -8,7 +8,6 @@ import (
 	"time"
 
 	duckdbdriver "github.com/duckdb/duckdb-go/v2"
-	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
@@ -17,26 +16,6 @@ import (
 
 const fxRatesText = `SELECT coalesce(string_agg(CAST(date AS VARCHAR) || ' ' || CAST(usd_cad AS VARCHAR) || ' ' || series, ', ' ORDER BY date), '')
 FROM fx_rates`
-
-// fakeRates is a RatesSource that records each request and plays back one refresh.
-type fakeRates struct {
-	requests []store.RatesRequest
-	refresh  store.RatesRefresh
-	err      error
-	during   func(ctx context.Context) // runs inside Refresh, before it returns
-}
-
-func (f *fakeRates) Refresh(ctx context.Context, req store.RatesRequest) (store.RatesRefresh, error) {
-	f.requests = append(f.requests, req)
-	if f.during != nil {
-		f.during(ctx)
-	}
-	return f.refresh, f.err
-}
-
-func ratesOn(day int, usdCAD money.Rate, series string) store.Rate {
-	return store.Rate{Date: time.Date(2026, 3, day, 0, 0, 0, 0, time.UTC), USDCAD: usdCAD, Series: series}
-}
 
 func Test_replace_stores_each_fetched_rate_with_its_series(t *testing.T) {
 	t.Parallel()

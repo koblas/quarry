@@ -242,15 +242,6 @@ func Test_status_fails_on_a_missing_store_without_creating_it(t *testing.T) {
 	assert.Empty(t, entries)
 }
 
-// assertOtherFault requires err to be the *store.OpenError of an unclassified fault, its Reason the one line reason.
-func assertOtherFault(t *testing.T, err error, reason string) {
-	t.Helper()
-	openErr, ok := errors.AsType[*store.OpenError](err)
-	require.True(t, ok, "want *store.OpenError, got %v", err)
-	assert.Equal(t, store.OpenFaultOther, openErr.Fault)
-	assert.Equal(t, reason, openErr.Reason)
-}
-
 func Test_status_carries_each_finding_with_its_state_from_the_latest_build(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

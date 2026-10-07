@@ -57,13 +57,6 @@ func futureRows() store.Rows {
 	return rows
 }
 
-// noTransactionRows is minimalRows without any cash or investment transaction.
-func noTransactionRows() store.Rows {
-	rows := minimalRows()
-	rows.Transactions, rows.Splits, rows.SplitTags, rows.Transfers, rows.InvestmentTransactions = nil, nil, nil, nil, nil
-	return rows
-}
-
 // latestFloorText is the newest import run's rates_checked_from, NULL spelled out.
 const latestFloorText = `SELECT coalesce(CAST(rates_checked_from AS VARCHAR), 'NULL') FROM import_runs ORDER BY id DESC LIMIT 1`
 

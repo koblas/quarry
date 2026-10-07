@@ -10,34 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	acctChequing   = "acct-chq"
-	acctRetirement = "acct-ret"
-	acctEUR        = "acct-eur"
-	secControl     = "sec-control"
-)
-
-// balanceRows is holdingRows with brokerage accounts acct-1 (CAD) and acct-2 (USD), a CAD chequing account, a CAD
-// retirement account and a EUR brokerage account; Control Corp (CAD) joins its securities.
-func balanceRows(txns ...store.InvestmentTransaction) store.Rows {
-	rows := holdingRows(txns...)
-	rows.Accounts[0].Type = store.AccountTypeBrokerage
-	rows.Accounts = append(rows.Accounts,
-		store.Account{ID: acctChequing, SourceID: 3, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
-		store.Account{ID: acctRetirement, SourceID: 4, Name: "RRSP", Type: store.AccountTypeRetirement, Currency: "CAD", Active: true},
-		store.Account{ID: acctEUR, SourceID: 5, Name: "Euro Brokerage", Type: store.AccountTypeBrokerage, Currency: "EUR", Active: true})
-	rows.Securities = append(rows.Securities,
-		store.Security{ID: secControl, SourceID: 5, Name: "Control Corp", Ticker: new("CTRL"), Currency: new("CAD")})
-	return rows
-}
-
-// cashRows is a store whose only account is a CAD chequing account with txns.
-func cashRows(txns ...store.Transaction) store.Rows {
-	rows := noTransactionRows()
-	rows.Transactions = txns
-	return rows
-}
-
 // dayQuery is the first day, last day and row count of v_balances_daily for account.
 func dayQuery(account string) string {
 	return fmt.Sprintf("SELECT CAST(min(date) AS VARCHAR), CAST(max(date) AS VARCHAR), count(*) = count(DISTINCT date) FROM v_balances_daily WHERE account_id = '%s'", account)
@@ -45,7 +17,7 @@ func dayQuery(account string) string {
 
 func Test_balances_daily_runs_from_the_first_transaction_through_today(t *testing.T) {
 	t.Parallel()
-	st := newStoreWith(t, cashRows(transaction("t1", acctOne, marchDay(3), 100)))
+	st := newStoreWith(t, cashRows(transaction("t1", acctOne, march(3), 100)))
 
 	got := queryTexts(t, st, dayQuery(acctOne))
 
@@ -67,8 +39,8 @@ func Test_balances_daily_starts_on_the_earlier_of_the_first_transaction_and_the_
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(c.holdingDay), oneShare))
-			rows.Transactions = []store.Transaction{transaction("t1", acctOne, marchDay(c.txnDay), 100)}
+			rows := balanceRows(buy(acctOne, secAcme, 1, march(c.holdingDay), oneShare))
+			rows.Transactions = []store.Transaction{transaction("t1", acctOne, march(c.txnDay), 100)}
 			st := newStoreWith(t, rows)
 
 			got := queryTexts(t, st, dayQuery(acctOne))
@@ -80,7 +52,7 @@ func Test_balances_daily_starts_on_the_earlier_of_the_first_transaction_and_the_
 
 func Test_balances_daily_starts_on_the_first_holding_when_the_account_has_no_transaction(t *testing.T) {
 	t.Parallel()
-	st := newStoreWith(t, balanceRows(buy(acctOne, secAcme, 1, marchDay(4), oneShare)))
+	st := newStoreWith(t, balanceRows(buy(acctOne, secAcme, 1, march(4), oneShare)))
 
 	got := queryTexts(t, st, dayQuery(acctOne))
 
@@ -89,7 +61,7 @@ func Test_balances_daily_starts_on_the_first_holding_when_the_account_has_no_tra
 
 func Test_balances_daily_has_no_rows_for_an_account_with_no_transaction_and_no_holding(t *testing.T) {
 	t.Parallel()
-	st := newStoreWith(t, balanceRows(buy(acctOne, secAcme, 1, marchDay(4), oneShare)))
+	st := newStoreWith(t, balanceRows(buy(acctOne, secAcme, 1, march(4), oneShare)))
 
 	got := queryTexts(t, st, "SELECT count(*) FROM v_balances_daily WHERE account_id = '"+acctTwo+"'")
 
@@ -108,8 +80,8 @@ func Test_balances_daily_has_no_rows_for_an_account_whose_only_transaction_is_fu
 func Test_balances_daily_lists_closed_left_out_and_linked_tracking_accounts(t *testing.T) {
 	t.Parallel()
 	rows := cashRows(
-		transaction("t1", acctOne, marchDay(1), 100), transaction("t2", acctTwo, marchDay(1), 100),
-		transaction("t3", acctChequing, marchDay(1), 100))
+		transaction("t1", acctOne, march(1), 100), transaction("t2", acctTwo, march(1), 100),
+		transaction("t3", acctChequing, march(1), 100))
 	rows.Accounts = append(rows.Accounts,
 		store.Account{ID: acctTwo, SourceID: 2, Name: "Not In Reports", Type: "chequing", Currency: "CAD", Active: true, NotInReports: true},
 		store.Account{ID: acctChequing, SourceID: 3, Name: "Linked", Type: "chequing", Currency: "CAD", Active: true, LinkedTracking: true})
@@ -124,8 +96,8 @@ func Test_balances_daily_lists_closed_left_out_and_linked_tracking_accounts(t *t
 func Test_balances_daily_cash_is_the_running_sum_of_transactions_on_or_before_each_day(t *testing.T) {
 	t.Parallel()
 	st := newStoreWith(t, cashRows(
-		transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctOne, marchDay(3), 5_000),
-		transaction("t3", acctOne, marchDay(3), -250)))
+		transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctOne, march(3), 5_000),
+		transaction("t3", acctOne, march(3), -250)))
 
 	got := queryTexts(t, st, "SELECT CAST(date AS VARCHAR), cash FROM v_balances_daily WHERE date <= '2026-03-04' ORDER BY date")
 
@@ -136,9 +108,9 @@ func Test_balances_daily_cash_is_the_running_sum_of_transactions_on_or_before_ea
 
 func Test_balances_daily_cash_includes_a_transaction_excluded_from_reports(t *testing.T) {
 	t.Parallel()
-	excluded := transaction("t2", acctOne, marchDay(1), 5_000)
+	excluded := transaction("t2", acctOne, march(1), 5_000)
 	excluded.ExcludedFromReports = true
-	st := newStoreWith(t, cashRows(transaction("t1", acctOne, marchDay(1), 10_000), excluded))
+	st := newStoreWith(t, cashRows(transaction("t1", acctOne, march(1), 10_000), excluded))
 
 	got := queryTexts(t, st, "SELECT cash FROM v_balances_daily WHERE date = '2026-03-01'")
 
@@ -149,7 +121,7 @@ func Test_balances_daily_cash_leaves_out_a_transaction_dated_after_today(t *test
 	t.Parallel()
 	today := localToday()
 	st := newStoreWith(t, cashRows(
-		transaction("t1", acctOne, marchDay(1), 10_000), transaction("t2", acctOne, today.AddDate(0, 0, 2), 50_000),
+		transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctOne, today.AddDate(0, 0, 2), 50_000),
 		transaction("t3", acctOne, today, 700)))
 
 	got := queryTexts(t, st, "SELECT cash FROM v_balances_daily WHERE date = current_date")
@@ -159,7 +131,7 @@ func Test_balances_daily_cash_leaves_out_a_transaction_dated_after_today(t *test
 
 func Test_balances_daily_has_no_holdings_figures_outside_brokerage_and_retirement_accounts(t *testing.T) {
 	t.Parallel()
-	st := newStoreWith(t, cashRows(transaction("t1", acctOne, marchDay(1), 10_000)))
+	st := newStoreWith(t, cashRows(transaction("t1", acctOne, march(1), 10_000)))
 
 	got := queryTexts(t, st, "SELECT holdings_value, holdings_unvalued FROM v_balances_daily WHERE date = '2026-03-01'")
 
@@ -181,28 +153,28 @@ func Test_balances_daily_counts_each_holding_it_cannot_value(t *testing.T) {
 	}{
 		{
 			name: "a holding with no price", account: acctOne,
-			txns:   []store.InvestmentTransaction{buy(acctOne, secControl, 1, marchDay(1), oneShare), buy(acctOne, secAcme, 2, marchDay(1), oneShare)},
-			prices: []store.Price{quote(secControl, 1, marchDay(1), tenUnits)},
+			txns:   []store.InvestmentTransaction{buy(acctOne, secControl, 1, march(1), oneShare), buy(acctOne, secAcme, 2, march(1), oneShare)},
+			prices: []store.Price{quote(secControl, 1, march(1), tenUnits)},
 		},
 		{
 			name: "a holding with no currency", account: acctOne,
-			txns:   []store.InvestmentTransaction{buy(acctOne, secControl, 1, marchDay(1), oneShare), buy(acctOne, secNoCurrency, 2, marchDay(1), oneShare)},
-			prices: []store.Price{quote(secControl, 1, marchDay(1), tenUnits), quote(secNoCurrency, 2, marchDay(1), tenUnits)},
+			txns:   []store.InvestmentTransaction{buy(acctOne, secControl, 1, march(1), oneShare), buy(acctOne, secNoCurrency, 2, march(1), oneShare)},
+			prices: []store.Price{quote(secControl, 1, march(1), tenUnits), quote(secNoCurrency, 2, march(1), tenUnits)},
 		},
 		{
 			name: "a EUR holding in a CAD account", account: acctOne,
-			txns:   []store.InvestmentTransaction{buy(acctOne, secControl, 1, marchDay(1), oneShare), buy(acctOne, secEUR, 2, marchDay(1), oneShare)},
-			prices: []store.Price{quote(secControl, 1, marchDay(1), tenUnits), quote(secEUR, 2, marchDay(1), tenUnits)},
+			txns:   []store.InvestmentTransaction{buy(acctOne, secControl, 1, march(1), oneShare), buy(acctOne, secEUR, 2, march(1), oneShare)},
+			prices: []store.Price{quote(secControl, 1, march(1), tenUnits), quote(secEUR, 2, march(1), tenUnits)},
 		},
 		{
 			name: "a USD holding in a CAD account before the first rate", account: acctOne,
-			txns:   []store.InvestmentTransaction{buy(acctOne, secControl, 1, marchDay(1), oneShare), buy(acctOne, secUSD, 2, marchDay(1), oneShare)},
-			prices: []store.Price{quote(secControl, 1, marchDay(1), tenUnits), quote(secUSD, 2, marchDay(1), tenUnits)},
+			txns:   []store.InvestmentTransaction{buy(acctOne, secControl, 1, march(1), oneShare), buy(acctOne, secUSD, 2, march(1), oneShare)},
+			prices: []store.Price{quote(secControl, 1, march(1), tenUnits), quote(secUSD, 2, march(1), tenUnits)},
 		},
 		{
 			name: "a CAD holding in a USD account before the first rate", account: acctTwo,
-			txns:   []store.InvestmentTransaction{buy(acctTwo, secUSD, 1, marchDay(1), oneShare), buy(acctTwo, secControl, 2, marchDay(1), oneShare)},
-			prices: []store.Price{quote(secUSD, 1, marchDay(1), tenUnits), quote(secControl, 2, marchDay(1), tenUnits)},
+			txns:   []store.InvestmentTransaction{buy(acctTwo, secUSD, 1, march(1), oneShare), buy(acctTwo, secControl, 2, march(1), oneShare)},
+			prices: []store.Price{quote(secUSD, 1, march(1), tenUnits), quote(secControl, 2, march(1), tenUnits)},
 		},
 	}
 
@@ -234,59 +206,59 @@ func Test_balances_daily_values_holdings_in_the_accounts_currency(t *testing.T) 
 	}{
 		{
 			name: "an own-currency holding as is", account: acctOne, onMarch: 2,
-			txns:      []store.InvestmentTransaction{buy(acctOne, secAcme, 1, marchDay(1), 3*oneShare)},
-			prices:    []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)},
+			txns:      []store.InvestmentTransaction{buy(acctOne, secAcme, 1, march(1), 3*oneShare)},
+			prices:    []store.Price{quote(secAcme, 1, march(1), tenUnits)},
 			wantValue: "30.00", wantUnvalued: "0",
 		},
 		{
 			name: "a USD holding in a CAD account converted at the rate and rounded", account: acctOne, onMarch: 2,
-			txns:      []store.InvestmentTransaction{buy(acctOne, secUSD, 1, marchDay(1), oneShare)},
-			prices:    []store.Price{quote(secUSD, 1, marchDay(1), oneAndATenth)},
+			txns:      []store.InvestmentTransaction{buy(acctOne, secUSD, 1, march(1), oneShare)},
+			prices:    []store.Price{quote(secUSD, 1, march(1), oneAndATenth)},
 			wantValue: "12.51", wantUnvalued: "0",
 		},
 		{
 			name: "a CAD holding in a USD account converted at the rate and rounded", account: acctTwo, onMarch: 2,
-			txns:      []store.InvestmentTransaction{buy(acctTwo, secAcme, 1, marchDay(1), oneShare)},
-			prices:    []store.Price{quote(secAcme, 1, marchDay(1), oneAndATenth)},
+			txns:      []store.InvestmentTransaction{buy(acctTwo, secAcme, 1, march(1), oneShare)},
+			prices:    []store.Price{quote(secAcme, 1, march(1), oneAndATenth)},
 			wantValue: "8.01", wantUnvalued: "0",
 		},
 		{
 			name: "a retirement account valued like a brokerage account", account: acctRetirement, onMarch: 2,
-			txns:      []store.InvestmentTransaction{buy(acctRetirement, secAcme, 1, marchDay(1), 2*oneShare)},
-			prices:    []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)},
+			txns:      []store.InvestmentTransaction{buy(acctRetirement, secAcme, 1, march(1), 2*oneShare)},
+			prices:    []store.Price{quote(secAcme, 1, march(1), tenUnits)},
 			wantValue: "20.00", wantUnvalued: "0",
 		},
 		{
 			name: "a EUR holding in a EUR account as is", account: acctEUR, onMarch: 2,
-			txns:      []store.InvestmentTransaction{buy(acctEUR, secEUR, 1, marchDay(1), oneShare)},
-			prices:    []store.Price{quote(secEUR, 1, marchDay(1), tenUnits)},
+			txns:      []store.InvestmentTransaction{buy(acctEUR, secEUR, 1, march(1), oneShare)},
+			prices:    []store.Price{quote(secEUR, 1, march(1), tenUnits)},
 			wantValue: "10.00", wantUnvalued: "0",
 		},
 		{
 			name: "a CAD holding in a EUR account left out", account: acctEUR, onMarch: 2,
-			txns:      []store.InvestmentTransaction{buy(acctEUR, secAcme, 1, marchDay(1), oneShare)},
-			prices:    []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)},
+			txns:      []store.InvestmentTransaction{buy(acctEUR, secAcme, 1, march(1), oneShare)},
+			prices:    []store.Price{quote(secAcme, 1, march(1), tenUnits)},
 			wantValue: "0.00", wantUnvalued: "1",
 		},
 		{
 			name: "nothing held on a day between spans", account: acctOne, onMarch: 5,
 			txns: []store.InvestmentTransaction{
-				buy(acctOne, secAcme, 1, marchDay(1), oneShare), buy(acctOne, secAcme, 2, marchDay(3), -oneShare),
-				buy(acctOne, secControl, 3, marchDay(7), oneShare),
+				buy(acctOne, secAcme, 1, march(1), oneShare), buy(acctOne, secAcme, 2, march(3), -oneShare),
+				buy(acctOne, secControl, 3, march(7), oneShare),
 			},
-			prices:    []store.Price{quote(secAcme, 1, marchDay(1), tenUnits), quote(secControl, 2, marchDay(7), tenUnits)},
+			prices:    []store.Price{quote(secAcme, 1, march(1), tenUnits), quote(secControl, 2, march(7), tenUnits)},
 			wantValue: "0.00", wantUnvalued: "0",
 		},
 		{
 			name: "every holding unvalued", account: acctOne, onMarch: 2,
-			txns:      []store.InvestmentTransaction{buy(acctOne, secAcme, 1, marchDay(1), oneShare)},
+			txns:      []store.InvestmentTransaction{buy(acctOne, secAcme, 1, march(1), oneShare)},
 			prices:    nil,
 			wantValue: "0.00", wantUnvalued: "1",
 		},
 		{
 			name: "the largest holding without overflow", account: acctOne, onMarch: 2,
-			txns:      []store.InvestmentTransaction{buy(acctOne, secAcme, 1, marchDay(1), maxDecimal18x6)},
-			prices:    []store.Price{quote(secAcme, 1, marchDay(1), maxDecimal18x6)},
+			txns:      []store.InvestmentTransaction{buy(acctOne, secAcme, 1, march(1), maxDecimal18x6)},
+			prices:    []store.Price{quote(secAcme, 1, march(1), maxDecimal18x6)},
 			wantValue: maxHoldingValue, wantUnvalued: "0",
 		},
 	}
@@ -349,7 +321,7 @@ func Test_balances_daily_converts_balance_at_the_rate_for_the_day(t *testing.T) 
 			t.Parallel()
 			rows := balanceRows()
 			rows.Transactions = []store.Transaction{
-				transaction("t1", acctOne, marchDay(1), 10_001), transaction("t2", acctTwo, marchDay(1), 10_001),
+				transaction("t1", acctOne, march(1), 10_001), transaction("t2", acctTwo, march(1), 10_001),
 			}
 			st := newStoreWithRates(t, rows, ratesOn(10, 1_250_000, "FXUSDCAD"), ratesOn(16, 1_300_000, "FXUSDCAD"))
 
@@ -363,7 +335,7 @@ func Test_balances_daily_converts_balance_at_the_rate_for_the_day(t *testing.T) 
 func Test_balances_daily_has_no_converted_balance_for_an_account_in_another_currency(t *testing.T) {
 	t.Parallel()
 	rows := balanceRows()
-	rows.Transactions = []store.Transaction{transaction("t1", acctEUR, marchDay(1), 10_000)}
+	rows.Transactions = []store.Transaction{transaction("t1", acctEUR, march(1), 10_000)}
 	st := newStoreWithRates(t, rows, ratesOn(1, 1_250_000, "FXUSDCAD"))
 
 	got := queryTexts(t, st, convertedQuery(acctEUR, 5))
@@ -373,9 +345,9 @@ func Test_balances_daily_has_no_converted_balance_for_an_account_in_another_curr
 
 func Test_balances_daily_balance_adds_valued_holdings_to_cash(t *testing.T) {
 	t.Parallel()
-	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), 3*oneShare))
-	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)}
-	rows.Transactions = []store.Transaction{transaction("t1", acctOne, marchDay(1), 10_000)}
+	rows := balanceRows(buy(acctOne, secAcme, 1, march(1), 3*oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, march(1), tenUnits)}
+	rows.Transactions = []store.Transaction{transaction("t1", acctOne, march(1), 10_000)}
 	st := newStoreWith(t, rows)
 
 	got := queryTexts(t, st, "SELECT cash, holdings_value, balance FROM v_balances_daily WHERE date = '2026-03-02'")
@@ -385,9 +357,9 @@ func Test_balances_daily_balance_adds_valued_holdings_to_cash(t *testing.T) {
 
 func Test_balances_daily_balance_stays_negative_when_the_cash_overdraws_past_the_holdings(t *testing.T) {
 	t.Parallel()
-	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), 3*oneShare))
-	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)}
-	rows.Transactions = []store.Transaction{transaction("t1", acctOne, marchDay(1), -10_000)}
+	rows := balanceRows(buy(acctOne, secAcme, 1, march(1), 3*oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, march(1), tenUnits)}
+	rows.Transactions = []store.Transaction{transaction("t1", acctOne, march(1), -10_000)}
 	st := newStoreWith(t, rows)
 
 	got := queryTexts(t, st, "SELECT cash, holdings_value, balance FROM v_balances_daily WHERE date = '2026-03-02'")
@@ -397,7 +369,7 @@ func Test_balances_daily_balance_stays_negative_when_the_cash_overdraws_past_the
 
 func Test_balances_daily_balance_is_cash_in_an_account_without_holdings_figures(t *testing.T) {
 	t.Parallel()
-	st := newStoreWith(t, cashRows(transaction("t1", acctOne, marchDay(1), 10_000)))
+	st := newStoreWith(t, cashRows(transaction("t1", acctOne, march(1), 10_000)))
 
 	got := queryTexts(t, st, "SELECT cash, balance FROM v_balances_daily WHERE date = '2026-03-01'")
 
@@ -406,8 +378,8 @@ func Test_balances_daily_balance_is_cash_in_an_account_without_holdings_figures(
 
 func Test_balances_daily_balance_is_holdings_value_in_an_account_with_no_transaction(t *testing.T) {
 	t.Parallel()
-	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), 3*oneShare))
-	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)}
+	rows := balanceRows(buy(acctOne, secAcme, 1, march(1), 3*oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, march(1), tenUnits)}
 	st := newStoreWith(t, rows)
 
 	got := queryTexts(t, st, "SELECT cash, holdings_value, balance, balance_cad FROM v_balances_daily WHERE account_id = '"+acctOne+"' AND date = '2026-03-02'")
@@ -417,8 +389,8 @@ func Test_balances_daily_balance_is_holdings_value_in_an_account_with_no_transac
 
 func Test_balances_daily_cash_is_zero_on_the_days_before_the_first_transaction(t *testing.T) {
 	t.Parallel()
-	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(2), oneShare))
-	rows.Transactions = []store.Transaction{transaction("t1", acctOne, marchDay(5), 10_000)}
+	rows := balanceRows(buy(acctOne, secAcme, 1, march(2), oneShare))
+	rows.Transactions = []store.Transaction{transaction("t1", acctOne, march(5), 10_000)}
 	st := newStoreWith(t, rows)
 
 	got := queryTexts(t, st, "SELECT CAST(date AS VARCHAR), cash, balance FROM v_balances_daily WHERE account_id = '"+acctOne+"' AND date BETWEEN '2026-03-02' AND '2026-03-05' ORDER BY date")

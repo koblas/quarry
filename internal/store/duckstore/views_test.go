@@ -2,108 +2,11 @@ package duckstore_test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/store"
-	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-const (
-	acctInReports  = "acct-in"
-	acctNotReports = "acct-out"
-	acctLinked     = "acct-linked"
-	acctUSD        = "acct-usd"
-	catExpense     = "cat-expense"
-	catIncome      = "cat-income"
-	catSystem      = "cat-system"
-	keepSplit      = "keep"
-)
-
-// reportRows is a store whose only view-visible split is `keep`, an expense.
-// Its unmatched transfer leg has a NULL to_split_id, as real stores do.
-func reportRows() store.Rows {
-	rows := store.Rows{
-		Accounts: []store.Account{
-			{ID: acctInReports, SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD", Active: true},
-			{ID: acctNotReports, SourceID: 2, Name: "Old Card", Type: "credit_card", Currency: "CAD", Active: true, NotInReports: true},
-			{ID: acctLinked, SourceID: 6, Name: "Netskope 401(k)", Type: "retirement", Currency: "USD", Active: true, LinkedTracking: true},
-		},
-		Categories: []store.Category{
-			{ID: catExpense, SourceID: 1, Name: "Groceries", FullPath: "Groceries", Kind: "expense"},
-			{ID: catIncome, SourceID: 2, Name: "Salary", FullPath: "Salary", Kind: "income"},
-			{ID: catSystem, SourceID: 3, Name: "Adjustment", FullPath: "Adjustment", Kind: "system"},
-		},
-		Transfers: []store.Transfer{{ID: "xfer-orphan", FromSplitID: "orphan-leg"}},
-	}
-	addSplit(&rows, splitSpec{id: keepSplit, category: new(catExpense), amount: -1000})
-	return rows
-}
-
-// splitSpec is one split and the transaction carrying it; account defaults to
-// acctInReports, currency to CAD and date to 2026-03-15; tags are tag ids.
-type splitSpec struct {
-	id       string
-	account  string
-	currency string
-	category *string
-	amount   int64
-	excluded bool
-	payee    *string
-	date     time.Time
-	tags     []string
-}
-
-func addSplit(rows *store.Rows, spec splitSpec) {
-	account := spec.account
-	if account == "" {
-		account = acctInReports
-	}
-	currency := spec.currency
-	if currency == "" {
-		currency = "CAD"
-	}
-	date := spec.date
-	if date.IsZero() {
-		date = time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	}
-	rows.Transactions = append(rows.Transactions, store.Transaction{
-		ID: "txn-" + spec.id, SourceID: int64(len(rows.Transactions) + 1), AccountID: account,
-		Date: date, PayeeID: spec.payee,
-		Amount: spec.amount, Currency: currency, Status: "uncleared", ExcludedFromReports: spec.excluded,
-	})
-	rows.Splits = append(rows.Splits, store.Split{
-		ID: spec.id, SourceID: int64(len(rows.Splits) + 1), TransactionID: "txn-" + spec.id,
-		CategoryID: spec.category, Amount: spec.amount,
-	})
-	for _, tag := range spec.tags {
-		rows.SplitTags = append(rows.SplitTags, store.SplitTag{SplitID: spec.id, TagID: tag})
-	}
-}
-
-func newStoreWith(t *testing.T, rows store.Rows) *duckstore.Store {
-	t.Helper()
-	dir := t.TempDir()
-	_, err := duckstore.New(dir).Replace(t.Context(), rows)
-	require.NoError(t, err)
-	return duckstore.New(dir)
-}
-
-// queryTexts runs query and returns every cell as DuckDB's text for it.
-func queryTexts(t *testing.T, st *duckstore.Store, query string) [][]string {
-	t.Helper()
-	got, err := st.Query(t.Context(), query, 0)
-	require.NoError(t, err)
-	texts := make([][]string, len(got.Rows))
-	for i, row := range got.Rows {
-		texts[i] = make([]string, len(row))
-		for j, cell := range row {
-			texts[i][j] = cell.Text
-		}
-	}
-	return texts
-}
 
 func Test_cash_flow_leaves_out_what_quicken_reports_leave_out(t *testing.T) {
 	t.Parallel()

@@ -17,7 +17,7 @@ const (
 
 // historyTxn is a buy of shares millionths of security in account on March date, with no amount and every optional column unset.
 func historyTxn(source int64, account, security string, date int, shares int64) store.InvestmentTransaction {
-	txn := buy(account, security, source, marchDay(date), shares)
+	txn := buy(account, security, source, march(date), shares)
 	txn.Amount = 0
 	return txn
 }

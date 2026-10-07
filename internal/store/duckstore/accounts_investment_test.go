@@ -23,9 +23,9 @@ func balanceOf(t *testing.T, list store.AccountList, id string) store.AccountBal
 
 func Test_accounts_reads_an_investment_accounts_cash_and_valued_holdings(t *testing.T) {
 	t.Parallel()
-	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), 3*oneShare))
-	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)}
-	rows.Transactions = []store.Transaction{transaction("t1", acctOne, marchDay(1), 10_000)}
+	rows := balanceRows(buy(acctOne, secAcme, 1, march(1), 3*oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, march(1), tenUnits)}
+	rows.Transactions = []store.Transaction{transaction("t1", acctOne, march(1), 10_000)}
 	st := newStoreWith(t, rows)
 
 	got, err := st.Accounts(t.Context())
@@ -38,9 +38,9 @@ func Test_accounts_reads_an_investment_accounts_cash_and_valued_holdings(t *test
 
 func Test_accounts_reads_a_negative_investment_cash_balance(t *testing.T) {
 	t.Parallel()
-	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), 3*oneShare))
-	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)}
-	rows.Transactions = []store.Transaction{transaction("t1", acctOne, marchDay(1), -10_000)}
+	rows := balanceRows(buy(acctOne, secAcme, 1, march(1), 3*oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, march(1), tenUnits)}
+	rows.Transactions = []store.Transaction{transaction("t1", acctOne, march(1), -10_000)}
 	st := newStoreWith(t, rows)
 
 	got, err := st.Accounts(t.Context())
@@ -53,8 +53,8 @@ func Test_accounts_reads_a_negative_investment_cash_balance(t *testing.T) {
 
 func Test_accounts_leaves_an_unpriced_holding_out_of_an_investment_balance(t *testing.T) {
 	t.Parallel()
-	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), oneShare), buy(acctOne, secControl, 2, marchDay(1), oneShare))
-	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)}
+	rows := balanceRows(buy(acctOne, secAcme, 1, march(1), oneShare), buy(acctOne, secControl, 2, march(1), oneShare))
+	rows.Prices = []store.Price{quote(secAcme, 1, march(1), tenUnits)}
 	st := newStoreWith(t, rows)
 
 	got, err := st.Accounts(t.Context())
@@ -67,8 +67,8 @@ func Test_accounts_leaves_an_unpriced_holding_out_of_an_investment_balance(t *te
 
 func Test_accounts_converts_a_usd_holding_into_a_cad_investment_balance(t *testing.T) {
 	t.Parallel()
-	rows := balanceRows(buy(acctOne, secUSD, 1, marchDay(1), oneShare))
-	rows.Prices = []store.Price{quote(secUSD, 1, marchDay(1), tenUnits)}
+	rows := balanceRows(buy(acctOne, secUSD, 1, march(1), oneShare))
+	rows.Prices = []store.Price{quote(secUSD, 1, march(1), tenUnits)}
 	st := newStoreWithRates(t, rows, ratesOn(1, 1_250_000, "FXUSDCAD"))
 
 	got, err := st.Accounts(t.Context())
@@ -124,8 +124,8 @@ func Test_account_balances_lists_an_account_with_no_balance_row_as_zero(t *testi
 
 func Test_accounts_reads_a_balance_past_64_bits_in_exact_cents(t *testing.T) {
 	t.Parallel()
-	rows := balanceRows(buy(acctOne, secAcme, 1, marchDay(1), maxDecimal18x6))
-	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), maxDecimal18x6)}
+	rows := balanceRows(buy(acctOne, secAcme, 1, march(1), maxDecimal18x6))
+	rows.Prices = []store.Price{quote(secAcme, 1, march(1), maxDecimal18x6)}
 	st := newStoreWithRates(t, rows, ratesOn(1, 1_250_000, "FXUSDCAD"))
 
 	got, err := st.Accounts(t.Context())
