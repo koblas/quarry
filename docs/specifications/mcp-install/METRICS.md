@@ -15,6 +15,7 @@
 | --- | --- | --- | --- | --- |
 | 1 | arch, correctness, test, refactor | 0/2/10/5 | 0 / 20 (7 killed, 13 timed out), 2249s | BLOCKED |
 | 2 | correctness, test (re-gate d8a9a171..964f5ddd) | 0/1/3/2 | n/a (re-gate; developer mutations in REVIEW-02) | BLOCKED |
+| 3 | test (re-gate 37fa483c..9dabaaf1) | 0/0/0/0 | 4 / 4 killed by reviewer on export | PASS |
 
 ## Tokens
 <output of `.claude/scripts/feature-metrics.py --strict mcp-install`, pasted once at SHIP>
