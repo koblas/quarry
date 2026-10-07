@@ -16,9 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// summaryNow is the clock the summary tests read: 2026-10-06 noon UTC, after September 2026 ended.
-var summaryNow = time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
-
 func Test_summary_holds_the_months_anomalies_new_recurring_and_net_worth_change(t *testing.T) {
 	hardware := paidTo("payee-hw", "Hardware")
 	charges := slices.Concat(
@@ -28,14 +25,9 @@ func Test_summary_holds_the_months_anomalies_new_recurring_and_net_worth_change(
 	)
 	slices.SortStableFunc(charges, func(a, b store.Charge) int { return a.Date.Compare(b.Date) })
 	august, september := day(2026, time.August, 31), day(2026, time.September, 30)
-	chequing := func(date time.Time, cents int64) store.NetWorthRow {
-		row := typedRow("chequing", "CAD", cents, big.NewInt(cents))
-		row.Date = date
-		return row
-	}
 	srv := report.NewServer(report.WithStore(fakeStore{
 		charges:  store.Charges{Rows: charges},
-		netWorth: store.NetWorth{Rows: []store.NetWorthRow{chequing(august, 100000), chequing(september, 150000)}},
+		netWorth: store.NetWorth{Rows: []store.NetWorthRow{cadHeld(august, "chequing", 100000), cadHeld(september, "chequing", 150000)}},
 	}))
 	month, err := report.ParseMonth(new("2026-09"), summaryNow)
 	require.NoError(t, err)
@@ -367,12 +359,6 @@ func septemberHardwareCharges(t *testing.T) []store.Charge {
 	return append(earlierCharges(t, 3, 6000, payee), chargeOn(t, 0, "2026-09-14", payee, ofAmount(20000)))
 }
 
-func chequingOn(date time.Time, cents int64) store.NetWorthRow {
-	row := typedRow("chequing", "CAD", cents, big.NewInt(cents))
-	row.Date = date
-	return row
-}
-
 func septemberRequest(t *testing.T) report.SummaryRequest {
 	t.Helper()
 	month, err := report.ParseMonth(new("2026-09"), summaryNow)
@@ -384,14 +370,14 @@ func Test_summary_reads_the_store_once(t *testing.T) {
 	read := store.Summary{
 		Status:   store.Status{QuarryVersion: "from the summary read"},
 		Charges:  store.Charges{Rows: septemberHardwareCharges(t)},
-		NetWorth: store.NetWorth{Rows: []store.NetWorthRow{chequingOn(day(2026, time.September, 30), 150000)}},
+		NetWorth: store.NetWorth{Rows: []store.NetWorthRow{cadHeld(day(2026, time.September, 30), "chequing", 150000)}},
 	}
 	var summaryReads, chargesReads, netWorthReads int
 	srv := report.NewServer(report.WithStore(fakeStore{
 		summary:       &read,
 		status:        store.Status{QuarryVersion: "from a second read"},
 		charges:       store.Charges{},
-		netWorth:      store.NetWorth{Rows: []store.NetWorthRow{chequingOn(day(2026, time.September, 30), 1)}},
+		netWorth:      store.NetWorth{Rows: []store.NetWorthRow{cadHeld(day(2026, time.September, 30), "chequing", 1)}},
 		summaryReads:  &summaryReads,
 		chargesReads:  &chargesReads,
 		netWorthReads: &netWorthReads,
@@ -487,8 +473,8 @@ func Test_summary_anomalies_equal_the_anomalies_read_of_the_month(t *testing.T) 
 
 func Test_summary_net_worth_equals_the_month_end_read(t *testing.T) {
 	rows := []store.NetWorthRow{
-		chequingOn(day(2026, time.August, 31), 100000),
-		chequingOn(day(2026, time.September, 30), 150000),
+		cadHeld(day(2026, time.August, 31), "chequing", 100000),
+		cadHeld(day(2026, time.September, 30), "chequing", 150000),
 		typedRow("brokerage", "USD", 9000, nil),
 	}
 	rows[2].Date = day(2026, time.September, 30)
@@ -513,7 +499,7 @@ func Test_summary_refuses_a_store_that_cannot_be_opened(t *testing.T) {
 
 	refusal, ok := errors.AsType[report.RefusalError](err)
 	require.True(t, ok)
-	assert.Equal(t, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it", refusal.Error())
+	assert.Equal(t, missingStoreRefusal, refusal.Error())
 }
 
 func Test_summary_passes_on_a_read_fault_that_is_not_a_refusal(t *testing.T) {

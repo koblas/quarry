@@ -89,20 +89,6 @@ func Test_spend_returns_the_store_fault(t *testing.T) {
 	assert.Equal(t, errDiskRead, err)
 }
 
-var (
-	chequing = store.Account{ID: "acct-100", Name: "Chequing"}
-	savings  = store.Account{ID: "acct-200", Name: "Savings"}
-	oldCard  = store.Account{ID: "acct-300", Name: "Old Card", Closed: true, NotInReports: true}
-)
-
-func accountsOf(accounts ...store.Account) store.AccountList {
-	list := store.AccountList{}
-	for _, a := range accounts {
-		list.Accounts = append(list.Accounts, store.AccountBalance{Account: a})
-	}
-	return list
-}
-
 func spendAccounts(t *testing.T, list store.AccountList, names ...string) (report.Spending, store.SpendingParams, error) {
 	t.Helper()
 	var got store.SpendingParams
@@ -260,7 +246,7 @@ func Test_spend_refuses_when_the_accounts_read_fails_to_open_the_store(t *testin
 
 	_, err := srv.Spend(t.Context(), report.SpendRequest{Accounts: []string{"Chequing"}})
 
-	assert.EqualError(t, err, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it")
+	assert.EqualError(t, err, missingStoreRefusal)
 }
 
 func Test_spend_reports_an_interrupt_during_the_accounts_read(t *testing.T) {

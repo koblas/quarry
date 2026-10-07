@@ -25,12 +25,7 @@ var (
 // merged charges of groups, oldest first and numbered in that order.
 func summaryRecurring(t *testing.T, month string, now time.Time, groups ...[]store.Charge) report.Recurring {
 	t.Helper()
-	merged := slices.Concat(groups...)
-	slices.SortStableFunc(merged, func(a, b store.Charge) int { return a.Date.Compare(b.Date) })
-	for i := range merged {
-		merged[i].SourceID = int64(i + 1)
-	}
-	srv := report.NewServer(report.WithStore(fakeStore{charges: store.Charges{Rows: merged}}))
+	srv := report.NewServer(report.WithStore(fakeStore{charges: store.Charges{Rows: mergedByDate(groups...)}}))
 	parsed, err := report.ParseMonth(&month, now)
 	require.NoError(t, err)
 
