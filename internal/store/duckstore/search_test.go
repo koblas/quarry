@@ -487,3 +487,596 @@ func Test_search_returns_a_span_scan_fault_as_another_fault(t *testing.T) {
 	assertOtherFault(t, err, errScanFailed.Error())
 	assert.ErrorIs(t, err, errScanFailed)
 }
+
+// signedTxn is a one-split transaction of exactly cents, positive for a deposit and negative for a charge.
+func signedTxn(id string, sourceID, cents int64) searchSpec {
+	return searchSpec{id: id, sourceID: sourceID, parts: []searchPart{{category: new(catExpense), sourceID: 1, cents: cents}}}
+}
+
+// amountRows holds one transaction per amount of the table below, ids "txn-<name>".
+func amountRows() store.Rows {
+	rows := searchRowsFor()
+	for i, t := range []struct {
+		name  string
+		cents int64
+	}{
+		{"c150", -15000},
+		{"d120", 12000},
+		{"c9999", -9999},
+		{"c20", -2000},
+		{"c2001", -2001},
+		{"d20", 2000},
+		{"d50", 5000},
+		{"d5001", 5001},
+		{"d4217", 4217},
+		{"c4217", -4217},
+		{"zero", 0},
+	} {
+		addSearch(&rows, signedTxn(t.name, int64(i+1), t.cents))
+	}
+	return rows
+}
+
+func Test_search_amount_bounds_compare_the_absolute_amount(t *testing.T) {
+	t.Parallel()
+	rows := amountRows()
+	cases := []struct {
+		name     string
+		min, max *int64
+		want     []string
+	}{
+		{name: "min finds a negative amount and a deposit by size", min: new(int64(12000)), want: []string{"txn-c150", "txn-d120"}},
+		{name: "min is inclusive at the value", min: new(int64(15000)), want: []string{"txn-c150"}},
+		{name: "min one cent above a value leaves it out", min: new(int64(15001))},
+		{name: "min one cent below a value keeps it", min: new(int64(11999)), want: []string{"txn-c150", "txn-d120"}},
+		{name: "min of one cent lists every amount but the zero one", min: new(int64(1)), want: []string{
+			"txn-c150", "txn-d120", "txn-c9999", "txn-c20", "txn-c2001", "txn-d20", "txn-d50", "txn-d5001", "txn-d4217", "txn-c4217",
+		}},
+		{name: "min of zero lists the zero amount too", min: new(int64(0)), want: []string{
+			"txn-c150", "txn-d120", "txn-c9999", "txn-c20", "txn-c2001", "txn-d20", "txn-d50", "txn-d5001", "txn-d4217", "txn-c4217", "txn-zero",
+		}},
+		{name: "max is inclusive at the value and ignores the sign", max: new(int64(2000)), want: []string{"txn-c20", "txn-d20", "txn-zero"}},
+		{name: "max one cent below a value leaves it out", max: new(int64(1999)), want: []string{"txn-zero"}},
+		{name: "max one cent above a value keeps it", max: new(int64(2001)), want: []string{"txn-c20", "txn-c2001", "txn-d20", "txn-zero"}},
+		{name: "max of zero lists only the zero amount", max: new(int64(0)), want: []string{"txn-zero"}},
+		{name: "min and max together keep both ends", min: new(int64(2000)), max: new(int64(5000)), want: []string{
+			"txn-c20", "txn-c2001", "txn-d20", "txn-d50", "txn-d4217", "txn-c4217",
+		}},
+		{name: "equal min and max find exactly that amount", min: new(int64(4217)), max: new(int64(4217)), want: []string{"txn-d4217", "txn-c4217"}},
+		{name: "equal min and max on a value with one holder", min: new(int64(5000)), max: new(int64(5000)), want: []string{"txn-d50"}},
+		{name: "equal min and max on a value nobody holds", min: new(int64(4218)), max: new(int64(4218))},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := searchOf(t, rows, store.SearchParams{Min: c.min, Max: c.max})
+
+			assert.ElementsMatch(t, c.want, searchedIDs(got))
+			assert.Equal(t, len(c.want), got.Matched)
+		})
+	}
+}
+
+func Test_search_amount_compares_the_transaction_not_its_splits(t *testing.T) {
+	t.Parallel()
+	rows := searchRowsFor()
+	addSearch(&rows, searchSpec{id: "two", sourceID: 1, parts: []searchPart{
+		{category: new(catExpense), sourceID: 1, cents: -3000}, {category: new(catSearchFuel), sourceID: 2, cents: -4000},
+	}})
+	cases := []struct {
+		name     string
+		min, max *int64
+		want     []string
+	}{
+		{name: "min at the transaction total finds it once", min: new(int64(7000)), want: []string{"txn-two"}},
+		{name: "min above the total finds nothing", min: new(int64(7001))},
+		{name: "max below the total finds nothing though each split is below it", max: new(int64(6999))},
+		{name: "max at the total finds it once", max: new(int64(7000)), want: []string{"txn-two"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := searchOf(t, rows, store.SearchParams{Min: c.min, Max: c.max})
+
+			assert.ElementsMatch(t, c.want, searchedIDs(got))
+			assert.Equal(t, len(c.want), got.Matched)
+		})
+	}
+}
+
+func Test_search_amount_combines_with_text_window_and_two_accounts(t *testing.T) {
+	t.Parallel()
+	rows := searchRowsFor()
+	for _, g := range []struct {
+		id      string
+		payee   string
+		account string
+		day     int
+		cents   int64
+	}{
+		{id: "g1", payee: "Gym", account: acctInReports, day: 10, cents: 6000},
+		{id: "g2", payee: "Gym", account: acctSecond, day: 11, cents: 7000},
+		{id: "g3", payee: "Gym", account: acctNotReports, day: 12, cents: 8000},
+		{id: "g4", payee: "Bakery", account: acctInReports, day: 13, cents: 9000},
+		{id: "g5", payee: "Gym", account: acctInReports, day: 5, cents: 6000},
+		{id: "g6", payee: "Gym", account: acctInReports, day: 14, cents: 1000},
+	} {
+		spec := textTxn(&rows, g.id, int64(g.day), g.payee, "", "")
+		spec.parts[0].cents = -g.cents
+		spec.account, spec.date = g.account, day(2026, time.March, g.day)
+		addSearch(&rows, spec)
+	}
+	since := day(2026, time.March, 8)
+
+	got := searchOf(t, rows, store.SearchParams{
+		Text: "gym", Window: store.SearchWindow{Since: &since}, AccountIDs: []string{acctInReports, acctSecond}, Min: new(int64(5000)),
+	})
+
+	assert.Equal(t, []string{"txn-g2", "txn-g1"}, searchedIDs(got))
+	assert.Equal(t, 2, got.Matched)
+}
+
+func Test_search_amount_with_limit_counts_every_amount_match(t *testing.T) {
+	t.Parallel()
+	rows := searchRowsFor()
+	for i, cents := range []int64{-9000, 8000, -7000, 100} {
+		spec := signedTxn(string(rune('a'+i)), int64(i+1), cents)
+		spec.date = day(2026, time.March, 10+i)
+		addSearch(&rows, spec)
+	}
+
+	got := searchOf(t, rows, store.SearchParams{Min: new(int64(7000)), Limit: 2})
+
+	require.Equal(t, []string{"txn-c", "txn-b"}, searchedIDs(got))
+	assert.Equal(t, 3, got.Matched)
+}
+
+func Test_search_amount_compares_the_largest_amount_the_column_holds(t *testing.T) {
+	t.Parallel()
+	const top = int64(999999999999999999)
+	rows := searchRowsFor()
+	addSearch(&rows, signedTxn("deposit", 1, top))
+	addSearch(&rows, signedTxn("charge", 2, -top))
+	both := []listedAmount{{"txn-deposit", top}, {"txn-charge", -top}}
+	cases := []struct {
+		name     string
+		min, max *int64
+		want     []listedAmount
+	}{
+		{name: "min at the largest amount finds both signs", min: new(top), want: both},
+		{name: "min one cent above it finds nothing", min: new(top + 1)},
+		{name: "max at the largest amount finds both signs", max: new(top), want: both},
+		{name: "max one cent below it finds nothing", max: new(top - 1)},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := searchOf(t, rows, store.SearchParams{Min: c.min, Max: c.max})
+
+			assert.ElementsMatch(t, c.want, listedAmounts(got))
+		})
+	}
+}
+
+// listedAmount is a listed transaction's id with the amount the store returned for it.
+type listedAmount struct {
+	id     string
+	amount int64
+}
+
+func listedAmounts(found store.Search) []listedAmount {
+	listed := make([]listedAmount, len(found.Rows))
+	for i, row := range found.Rows {
+		listed[i] = listedAmount{row.TransactionID, row.Amount}
+	}
+	return listed
+}
+
+const (
+	catFood      = "cat-food"
+	catGroceries = "cat-groceries"
+	catOrganic   = "cat-organic"
+	catFoo       = "cat-foo"
+	catArchive   = "cat-archive"
+	catTravel    = "cat-travel"
+)
+
+// categoryRows holds a transaction named after each of Food, Food:Groceries, Food:Groceries:Organic, Foo and the
+// hidden Archive, ids "txn-<name>"; the category Travel has none.
+func categoryRows() store.Rows {
+	rows := searchRowsFor()
+	hidden := expenseCategory(catArchive, "Archive")
+	hidden.Hidden = true
+	rows.Categories = append(rows.Categories,
+		expenseCategory(catFood, "Food"), expenseCategory(catGroceries, "Food:Groceries"), expenseCategory(catOrganic, "Food:Groceries:Organic"),
+		expenseCategory(catFoo, "Foo"), hidden, expenseCategory(catTravel, "Travel"))
+	for i, t := range []struct{ name, category string }{
+		{"food", catFood}, {"groceries", catGroceries}, {"organic", catOrganic}, {"foo", catFoo}, {"archive", catArchive},
+	} {
+		addSearch(&rows, categorized(t.name, int64(i+1), t.category))
+	}
+	return rows
+}
+
+// categorized is a one-split transaction in category id.
+func categorized(name string, sourceID int64, id string) searchSpec {
+	return searchSpec{id: name, sourceID: sourceID, parts: []searchPart{{category: new(id), sourceID: 1, cents: -100}}}
+}
+
+func Test_search_category_matches_the_category_and_everything_under_it(t *testing.T) {
+	t.Parallel()
+	rows := categoryRows()
+	cases := []struct {
+		name     string
+		category string
+		want     []string
+	}{
+		{name: "the category and every category under it", category: "Food", want: []string{"txn-food", "txn-groceries", "txn-organic"}},
+		{name: "a lower-case argument", category: "food", want: []string{"txn-food", "txn-groceries", "txn-organic"}},
+		{name: "an upper-case argument reaches the children", category: "FOOD", want: []string{"txn-food", "txn-groceries", "txn-organic"}},
+		{name: "a child and its own child", category: "FOOD:GROCERIES", want: []string{"txn-groceries", "txn-organic"}},
+		{name: "a grandchild alone", category: "food:groceries:organic", want: []string{"txn-organic"}},
+		{name: "a sibling prefix is not the category", category: "Foo", want: []string{"txn-foo"}},
+		{name: "half of a child's name is no category", category: "Food:Groc"},
+		{name: "a hidden category counts", category: "Archive", want: []string{"txn-archive"}},
+		{name: "a known category with no transactions", category: "Travel"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := searchOf(t, rows, store.SearchParams{Category: &c.category})
+
+			assert.ElementsMatch(t, c.want, searchedIDs(got))
+			assert.Equal(t, len(c.want), got.Matched)
+		})
+	}
+}
+
+func Test_search_category_counts_a_transaction_once_when_several_splits_match(t *testing.T) {
+	t.Parallel()
+	rows := categoryRows()
+	addSearch(&rows, searchSpec{id: "both", sourceID: 9, parts: []searchPart{
+		{category: new(catFood), sourceID: 1, cents: -100}, {category: new(catGroceries), sourceID: 2, cents: -200},
+	}})
+	category := "Food"
+
+	got := searchOf(t, rows, store.SearchParams{Category: &category, Limit: 1})
+
+	assert.Equal(t, []string{"txn-both"}, searchedIDs(got))
+	assert.Equal(t, 4, got.Matched)
+	assert.Len(t, got.Rows[0].Splits, 2)
+}
+
+func Test_search_category_keeps_both_filters_with_named_accounts_and_text(t *testing.T) {
+	t.Parallel()
+	rows := categoryRows()
+	for _, g := range []struct {
+		id, payee, account, category string
+		day                          int
+	}{
+		{"hit", "Gym", acctInReports, catGroceries, 20},
+		{"other-account", "Gym", acctSecond, catGroceries, 21},
+		{"other-text", "Bakery", acctInReports, catGroceries, 22},
+		{"other-category", "Gym", acctInReports, catFoo, 23},
+		{"other-named", "Gym", acctNotReports, catGroceries, 24},
+	} {
+		spec := categorized(g.id, 100+int64(g.day), g.category)
+		payeeID := "cat-payee-" + g.id
+		rows.Payees = append(rows.Payees, store.Payee{ID: payeeID, SourceID: int64(g.day), Name: g.payee})
+		spec.payee, spec.account, spec.date = &payeeID, g.account, day(2026, time.April, g.day)
+		addSearch(&rows, spec)
+	}
+	category := "Food"
+
+	got := searchOf(t, rows, store.SearchParams{Category: &category, Text: "gym", AccountIDs: []string{acctInReports, acctNotReports}})
+
+	assert.Equal(t, []string{"txn-other-named", "txn-hit"}, searchedIDs(got))
+	assert.False(t, got.UnknownCategory)
+	assert.Equal(t, store.TransactionRange{First: day(2026, time.March, 15), Last: day(2026, time.April, 24)}, got.Transactions)
+}
+
+func Test_search_category_flags_unknown_only_when_no_path_equals_it(t *testing.T) {
+	t.Parallel()
+	rows := categoryRows()
+	cases := []struct {
+		name     string
+		category *string
+		want     bool
+	}{
+		{name: "no category given", category: nil},
+		{name: "a category with transactions", category: new("Food")},
+		{name: "a category in other letter case", category: new("food:GROCERIES")},
+		{name: "a known category with no transactions", category: new("Travel")},
+		{name: "a misspelling", category: new("Fod"), want: true},
+		{name: "the empty path", category: new(""), want: true},
+		{name: "a path ending in the separator", category: new("Food:"), want: true},
+		{name: "a wildcard character", category: new("%"), want: true},
+		{name: "half of a name", category: new("Food:Groc"), want: true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := searchOf(t, rows, store.SearchParams{Category: c.category})
+
+			assert.Equal(t, c.want, got.UnknownCategory)
+		})
+	}
+}
+
+func Test_search_category_flags_unknown_with_named_accounts_whether_or_not_they_have_transactions(t *testing.T) {
+	t.Parallel()
+	rows := categoryRows()
+	cases := []struct {
+		name     string
+		category string
+		accounts []string
+		want     bool
+	}{
+		{name: "a misspelling with an account that has transactions", category: "Fod", accounts: []string{acctInReports}, want: true},
+		{name: "a misspelling with an account that has none", category: "Fod", accounts: []string{acctSecond}, want: true},
+		{name: "a misspelling with both", category: "Fod", accounts: []string{acctInReports, acctSecond}, want: true},
+		{name: "a known category no split uses with both", category: "Travel", accounts: []string{acctInReports, acctSecond}},
+		{name: "a known category with an account that has none", category: "Food", accounts: []string{acctSecond}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := searchOf(t, rows, store.SearchParams{Category: &c.category, AccountIDs: c.accounts})
+
+			assert.Equal(t, c.want, got.UnknownCategory)
+			assert.Empty(t, got.Rows)
+		})
+	}
+}
+
+func Test_search_category_known_with_no_transactions_in_the_store_is_not_unknown(t *testing.T) {
+	t.Parallel()
+	rows := searchRowsFor()
+	rows.Categories = append(rows.Categories, expenseCategory(catTravel, "Travel"))
+	category := "travel"
+
+	got := searchOf(t, rows, store.SearchParams{Category: &category})
+
+	assert.Equal(t, store.Search{}, got)
+}
+
+func Test_search_category_runs_two_statements(t *testing.T) {
+	t.Parallel()
+	category := "Food"
+	spy := &spyReadDB{passQueries: 2, queryFault: errQueryFailed}
+	st := newBuiltStore(t, spyOpener(spy))
+
+	_, err := st.Search(t.Context(), store.SearchParams{Category: &category})
+
+	require.NoError(t, err)
+}
+
+// textTxn is a one-split transaction of the given payee name, memo and split memo; "" means none.
+func textTxn(rows *store.Rows, id string, sourceID int64, payee, memo, splitMemo string) searchSpec {
+	spec := spend(id, sourceID, 100)
+	if payee != "" {
+		payeeID := "text-payee-" + id
+		rows.Payees = append(rows.Payees, store.Payee{ID: payeeID, SourceID: 10 + sourceID, Name: payee})
+		spec.payee = &payeeID
+	}
+	if memo != "" {
+		spec.memo = &memo
+	}
+	if splitMemo != "" {
+		spec.parts[0].memo = &splitMemo
+	}
+	return spec
+}
+
+func Test_search_text_matches_payee_memo_and_split_memo_each_alone(t *testing.T) {
+	t.Parallel()
+	rows := searchRowsFor()
+	addSearch(&rows, textTxn(&rows, "payee", 1, "Fitness Gym", "", ""))
+	addSearch(&rows, textTxn(&rows, "memo", 2, "", "monthly pass", ""))
+	addSearch(&rows, textTxn(&rows, "split", 3, "", "", "locker fee"))
+	addSearch(&rows, textTxn(&rows, "bare", 4, "", "", ""))
+	cases := []struct {
+		name string
+		text string
+		want []string
+	}{
+		{name: "payee name", text: "gym", want: []string{"txn-payee"}},
+		{name: "transaction memo", text: "pass", want: []string{"txn-memo"}},
+		{name: "split memo", text: "locker", want: []string{"txn-split"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := searchOf(t, rows, store.SearchParams{Text: c.text})
+
+			assert.Equal(t, c.want, searchedIDs(got))
+			assert.Equal(t, 1, got.Matched)
+		})
+	}
+}
+
+func Test_search_text_ignores_letter_case_both_ways(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name                         string
+		payee, memo, splitMemo, text string
+	}{
+		{name: "upper payee, lower text", payee: "CAFÉ", text: "café"},
+		{name: "lower payee, upper text", payee: "café", text: "CAFÉ"},
+		{name: "upper memo, lower text", memo: "CAFÉ", text: "café"},
+		{name: "lower memo, upper text", memo: "café", text: "CAFÉ"},
+		{name: "upper split memo, lower text", splitMemo: "CAFÉ", text: "café"},
+		{name: "lower split memo, upper text", splitMemo: "café", text: "CAFÉ"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			rows := searchRowsFor()
+			addSearch(&rows, textTxn(&rows, "cafe", 1, c.payee, c.memo, c.splitMemo))
+
+			got := searchOf(t, rows, store.SearchParams{Text: c.text})
+
+			assert.Equal(t, []string{"txn-cafe"}, searchedIDs(got))
+		})
+	}
+}
+
+func Test_search_text_treats_percent_underscore_and_backslash_literally(t *testing.T) {
+	t.Parallel()
+	rows := searchRowsFor()
+	addSearch(&rows, textTxn(&rows, "fifty", 1, "50 off", "", ""))
+	addSearch(&rows, textTxn(&rows, "pct", 2, "100% pure", "", ""))
+	addSearch(&rows, textTxn(&rows, "under", 3, "a_b", "", ""))
+	addSearch(&rows, textTxn(&rows, "other", 4, "axb", "", ""))
+	addSearch(&rows, textTxn(&rows, "slash", 5, "", `back\slash`, ""))
+	cases := []struct {
+		name string
+		text string
+		want []string
+	}{
+		{name: "percent is not a wildcard", text: "5%", want: nil},
+		{name: "percent matches only a percent sign", text: "%", want: []string{"txn-pct"}},
+		{name: "underscore is not a one-character wildcard", text: "a_b", want: []string{"txn-under"}},
+		{name: "backslash is a character", text: `\`, want: []string{"txn-slash"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := searchOf(t, rows, store.SearchParams{Text: c.text})
+
+			assert.ElementsMatch(t, c.want, searchedIDs(got))
+		})
+	}
+}
+
+func Test_search_text_does_not_match_account_or_category_names(t *testing.T) {
+	t.Parallel()
+	rows := searchRowsFor()
+	spec := textTxn(&rows, "named", 1, "Fitness Gym", "", "")
+	spec.account = acctSecond
+	addSearch(&rows, spec)
+	cases := []struct {
+		name string
+		text string
+		want []string
+	}{
+		{name: "account name", text: "Savings"},
+		{name: "category name", text: "Groceries"},
+		{name: "payee name control", text: "Fitness", want: []string{"txn-named"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := searchOf(t, rows, store.SearchParams{Text: c.text})
+
+			assert.ElementsMatch(t, c.want, searchedIDs(got))
+		})
+	}
+}
+
+func Test_search_text_lists_a_transaction_once_and_counts_it_once_when_several_splits_match(t *testing.T) {
+	t.Parallel()
+	rows := searchRowsFor()
+	spec := textTxn(&rows, "many", 1, "", "tip jar", "tip one")
+	spec.parts = append(spec.parts,
+		searchPart{category: new(catExpense), memo: new("tip two"), sourceID: 2, cents: -100},
+		searchPart{category: new(catExpense), memo: new("tip three"), sourceID: 3, cents: -100})
+	addSearch(&rows, spec)
+	addSearch(&rows, textTxn(&rows, "one", 2, "", "", "tip"))
+
+	got := searchOf(t, rows, store.SearchParams{Text: "tip"})
+
+	require.Equal(t, []string{"txn-one", "txn-many"}, searchedIDs(got))
+	assert.Equal(t, 2, got.Matched)
+	assert.Len(t, got.Rows[1].Splits, 3)
+}
+
+func Test_search_text_is_not_trimmed(t *testing.T) {
+	t.Parallel()
+	rows := searchRowsFor()
+	addSearch(&rows, textTxn(&rows, "gym", 1, "Gym", "", ""))
+	cases := []struct {
+		name string
+		text string
+		want []string
+	}{
+		{name: "leading space", text: " gym"},
+		{name: "trailing space", text: "gym "},
+		{name: "no space", text: "gym", want: []string{"txn-gym"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := searchOf(t, rows, store.SearchParams{Text: c.text})
+
+			assert.ElementsMatch(t, c.want, searchedIDs(got))
+		})
+	}
+}
+
+func Test_search_text_combines_with_window_and_two_accounts(t *testing.T) {
+	t.Parallel()
+	rows := searchRowsFor()
+	for _, g := range []struct {
+		id      string
+		payee   string
+		account string
+		day     int
+	}{
+		{id: "g1", payee: "Gym", account: acctInReports, day: 10},
+		{id: "g2", payee: "Gym", account: acctSecond, day: 11},
+		{id: "g3", payee: "Gym", account: acctNotReports, day: 12},
+		{id: "g4", payee: "Bakery", account: acctInReports, day: 13},
+		{id: "g5", payee: "Gym", account: acctInReports, day: 5},
+	} {
+		spec := textTxn(&rows, g.id, int64(g.day), g.payee, "", "")
+		spec.account, spec.date = g.account, day(2026, time.March, g.day)
+		addSearch(&rows, spec)
+	}
+	since := day(2026, time.March, 8)
+
+	got := searchOf(t, rows, store.SearchParams{
+		Text: "gym", Window: store.SearchWindow{Since: &since}, AccountIDs: []string{acctInReports, acctSecond},
+	})
+
+	assert.Equal(t, []string{"txn-g2", "txn-g1"}, searchedIDs(got))
+	assert.Equal(t, 2, got.Matched)
+}
+
+func Test_search_text_with_limit_counts_every_text_match(t *testing.T) {
+	t.Parallel()
+	rows := searchRowsFor()
+	for i, g := range []struct{ id, payee string }{
+		{"gym-old", "Gym"}, {"bakery", "Bakery"}, {"gym-mid", "Gym"}, {"gym-new", "Gym"}, {"bakery-new", "Bakery"},
+	} {
+		spec := textTxn(&rows, g.id, int64(i+1), g.payee, "", "")
+		spec.date = day(2026, time.March, 10+i)
+		addSearch(&rows, spec)
+	}
+
+	got := searchOf(t, rows, store.SearchParams{Text: "gym", Limit: 2})
+
+	require.Equal(t, []string{"txn-gym-new", "txn-gym-mid"}, searchedIDs(got))
+	assert.Equal(t, 3, got.Matched)
+}
