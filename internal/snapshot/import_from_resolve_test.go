@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -119,6 +120,33 @@ func Test_import_from_an_id_does_not_fold_the_id_itself(t *testing.T) {
 	assert.Empty(t, fake.calls)
 }
 
+func Test_import_from_an_id_finds_no_snapshot_for_a_hand_placed_name_that_is_not_an_id(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	renameTakenSnapshot(t, srv, "latest")
+
+	_, err := srv.ImportFrom(t.Context(), "latest")
+
+	require.EqualError(t, err, noSnapshotLine("latest"))
+	assert.Empty(t, fake.calls)
+}
+
+func Test_import_from_a_path_resolves_a_hand_placed_name_that_is_not_an_id(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	fake := &fakeImporter{}
+	srv := newImportServer(t, home, fake)
+	dir := renameTakenSnapshot(t, srv, "latest")
+
+	outcome, err := srv.ImportFrom(t.Context(), filepath.Join(dir, "latest.sqlite"))
+
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(dir, "latest.sqlite"), outcome.Manifest.Snapshot.Path)
+	require.Len(t, fake.calls, 1)
+}
+
 func Test_import_from_an_id_resolves_an_upper_case_snapshot_and_manifest_by_their_on_disk_names(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
@@ -208,6 +236,16 @@ func Test_import_from_a_path_reports_no_manifest_when_none_exists_in_any_case(t 
 	require.EqualError(t, err, "~/Backups/x.sqlite is not a quarry snapshot "+
 		"(no .json manifest next to it); pass a snapshot taken by quarry sync with --from <snapshot>")
 	assert.Empty(t, fake.calls)
+}
+
+// renameTakenSnapshot takes a snapshot, renames it and its manifest to name, and returns the snapshots folder.
+func renameTakenSnapshot(t *testing.T, srv *snapshot.Server, name string) string {
+	t.Helper()
+	taken := takeSnapshot(t, srv)
+	dir := filepath.Dir(taken.Snapshot.Path)
+	require.NoError(t, os.Rename(taken.Snapshot.Path, filepath.Join(dir, name+".sqlite")))
+	require.NoError(t, os.Rename(taken.Snapshot.Manifest, filepath.Join(dir, name+".json")))
+	return dir
 }
 
 func dirNamesIn(t *testing.T, dir string) []string {

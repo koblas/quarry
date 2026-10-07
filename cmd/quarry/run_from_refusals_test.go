@@ -251,6 +251,35 @@ func Test_run_sync_from_refuses_what_it_cannot_resolve(t *testing.T) {
 			want: "quarry: no snapshot " + strings.ToLower(refusedID) + " in ~/Library/Application Support/quarry/snapshots" + noSuchIDSuffix,
 		},
 		{
+			name: "a hand-placed name that is not an ID (ID form)",
+			arrange: func(t *testing.T, home string) string {
+				t.Helper()
+				dir := filepath.Join(storeDirUnder(home), "snapshots")
+				require.NoError(t, os.MkdirAll(dir, 0o700))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "latest.sqlite"), []byte("x"), 0o600))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "latest.json"), []byte("{}"), 0o600))
+				return "latest"
+			},
+			want: "quarry: no snapshot latest in ~/Library/Application Support/quarry/snapshots" + noSuchIDSuffix,
+		},
+		{
+			name: "an upper-case manifest that cannot be read (path form)",
+			arrange: func(t *testing.T, home string) string {
+				t.Helper()
+				skipAsRoot(t)
+				dir := filepath.Join(home, "Backups")
+				require.NoError(t, os.MkdirAll(dir, 0o700))
+				from := filepath.Join(dir, "x.sqlite")
+				manifest := filepath.Join(dir, "x.JSON")
+				require.NoError(t, os.WriteFile(from, []byte("x"), 0o600))
+				require.NoError(t, os.WriteFile(manifest, []byte("{}"), 0o000))
+				t.Cleanup(func() { _ = os.Chmod(manifest, 0o600) })
+				require.Equal(t, []string{"x.JSON", "x.sqlite"}, dirNames(t, dir))
+				return from
+			},
+			want: "quarry: cannot read ~/Backups/x.JSON: permission denied; check the file's permissions",
+		},
+		{
 			name: "a snapshot whose parent folder cannot be listed (path form)",
 			arrange: func(t *testing.T, home string) string {
 				t.Helper()

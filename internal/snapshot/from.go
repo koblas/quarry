@@ -15,12 +15,10 @@ import (
 	"github.com/koblas/quarry/internal/platform/sqlite"
 )
 
-// ImportFrom rebuilds the store from an earlier snapshot, named by ID or by
-// .sqlite path, without touching Quicken or writing a new snapshot; a Server
-// with WithAutoPrune then deletes old ones as SyncAndImport does. An ID
-// resolves to the file quarry snapshots lists for it.
-// It refuses when from does not resolve to a usable snapshot, and returns a
-// MismatchError when the current reference finds a missing table or column.
+// ImportFrom rebuilds the store from an earlier snapshot, named by ID or by .sqlite path, without touching
+// Quicken or writing a new snapshot; a Server with WithAutoPrune then deletes old ones as SyncAndImport does.
+// An ID resolves to the file quarry snapshots lists for it. It refuses when from does not resolve to a usable
+// snapshot, and returns a MismatchError when the current reference finds a missing table or column.
 func (s *Server) ImportFrom(ctx context.Context, from string) (Outcome, error) {
 	if s.reference == nil {
 		return Outcome{}, errNoReference

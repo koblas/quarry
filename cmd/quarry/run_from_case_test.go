@@ -15,8 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The snapshot is renamed after the sync and its on-disk name asserted: a case-insensitive volume
-// resolves the lower-case name too, so only the recorded path tells the two apart.
+// Case-insensitive volumes resolve the lower-case name too: only the recorded path tells them apart.
 func Test_run_sync_from_an_id_rebuilds_the_store_from_an_upper_case_sqlite_snapshot(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -45,8 +44,7 @@ func Test_run_sync_from_an_id_rebuilds_the_store_from_an_upper_case_sqlite_snaps
 	assert.Equal(t, upper, parsed.Snapshot.Path)
 }
 
-// Case-insensitive volumes resolve a differently-cased name too, so every row renames first and asserts the
-// on-disk names; the recorded path is what tells the spellings apart.
+// Rows assert the on-disk names first: case-insensitive volumes resolve any spelling.
 func Test_run_sync_from_a_path_finds_its_snapshot_and_manifest_in_any_letter_case(t *testing.T) {
 	cases := []struct {
 		name string
@@ -94,6 +92,17 @@ func Test_run_sync_from_a_path_finds_its_snapshot_and_manifest_in_any_letter_cas
 				return upper, upper
 			},
 			wantNames: func(id string) []string { return []string{id + ".JSON", id + ".SQLITE"} },
+		},
+		{
+			name: "a hand-placed name that is not an ID, which only the ID form refuses",
+			arrange: func(t *testing.T, _, dir, id string) (string, string) {
+				t.Helper()
+				hand := filepath.Join(dir, "latest.sqlite")
+				require.NoError(t, os.Rename(filepath.Join(dir, id+".sqlite"), hand))
+				require.NoError(t, os.Rename(filepath.Join(dir, id+".json"), filepath.Join(dir, "latest.json")))
+				return hand, hand
+			},
+			wantNames: func(string) []string { return []string{"latest.json", "latest.sqlite"} },
 		},
 		{
 			name: "a symlink named as the snapshot, which only the ID form refuses",

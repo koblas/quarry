@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-12a
-status: open
+status: done
 ---
 
 # SCENARIO-12a: sync --from <id> resolves an .SQLITE snapshot
@@ -27,10 +27,10 @@ Surveyed surface (nothing new to port): `resolveFrom` has one caller, `ImportFro
 - [x] Step 4 (batch 3, command cells + re-points): `cmd/quarry/run_from_refusals_test.go` (after :182) `Test_run_sync_from_refuses_what_it_cannot_resolve` — rows F1 (0300, 000), F3 (directory, symlink, lowercased ID), F4 (parent `~/Backups` 0300), F2 (folder missing), each as text and `--json` (stdout empty, exact stderr, exit 1, no store file); `cmd/quarry/run_from_case_test.go` `Test_run_sync_from_a_path_finds_its_snapshot_and_manifest_in_any_letter_case` — `X.SQLITE` absolute and relative (`t.Chdir`), `X.sqlite` + `X.JSON`, `X.SQLITE` + `X.JSON`, a symlink named `<id>.sqlite` reached by path form still succeeds (change 9), text and `--json`; `run_case_variant_test.go:25-38` → replace by the F3 lowercased-ID pin (strict ID; drop the skip); `run_store_identity_test.go:247-256` drop the `X.SQLITE.json` hard link (:253), manifest is now `X.json`.
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `ImportFrom` (:17-21: ID resolves the way `snapshots` lists it) and the new helpers, short and id-free.
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `ImportFrom` (:17-21: ID resolves the way `snapshots` lists it) and the new helpers, short and id-free.
 
 ### Verify
-- [ ] Step 6: `.claude/scripts/verify.sh <start> ./internal/snapshot/... ./cmd/quarry/...`, `.claude/scripts/spec-check.py snapshot-safety`; tick SCENARIO-12a in `specification.md` with its acceptance test; rewrite STATE.md; `status: done`.
+- [x] Step 6: `.claude/scripts/verify.sh <start> ./internal/snapshot/... ./cmd/quarry/...`, `.claude/scripts/spec-check.py snapshot-safety`; tick SCENARIO-12a in `specification.md` with its acceptance test; rewrite STATE.md; `status: done`.
 
 ## Handoff
 
@@ -58,4 +58,6 @@ Run B1 (steps 2-4, code-first, committed): Narrow loop `go test ./internal/snaps
 - Tests: `import_from_resolve_test.go` (new: ID-form F1/F2/F3 rows, `.SQLITE`/`.JSON` on-disk success, path-form F4/F5/no-manifest), `from_internal_test.go` (rewritten: `isPathForm`, `locateFrom` path shapes), `select_internal_test.go` (`snapshot` lookup, `selectManifest` tables), `import_from_test.go` (two re-points), `run_from_refusals_test.go` `Test_run_sync_from_refuses_what_it_cannot_resolve`, `run_from_case_test.go` path-form case test, `run_case_variant_test.go` (lowercased-ID F3 pin replaces the old test), `run_store_identity_test.go` (dropped `X.SQLITE.json` hard link).
 - Deviations from the plan: (1) three tests the plan did not list used `--from <id>` on a 0300 folder to reach auto-prune's listing and became F1: `auto_prune_faults_test.go` `importFromUnlistableFolder`, `run_sync_prune_test.go` `Test_run_sync_from_warns_when_it_cannot_list_the_snapshots_folder`, `run_sync_prune_json_test.go` `Test_run_sync_from_json_names_the_unlistable_folder_...`; each now hard-links the snapshot and manifest into `~/kept` and passes the path (a path whose parent is the 0300 folder is F4). (2) Path-form `--from X.SQLITE` rows share one case test with text and `--json` as subtests. (3) F2 (folder missing) is pinned at both slice and cmd levels; the old unknown-ID test stays.
 - Mutations (all red, files restored byte-identical): see report.
-- V: run `verify.sh 3e2b1a2c ./internal/snapshot/... ./cmd/quarry/...`, spec-check, tick, STATE.md. Left for STATE.md: `folderUnreadableRefusal` is now a free function in list.go (callers list.go x2, from.go x2).
+- Run V (done): checkpoint pins added — `--from latest` F3 (slice `Test_import_from_an_id_finds_no_snapshot_for_a_hand_placed_name_that_is_not_an_id` + control `Test_import_from_a_path_resolves_a_hand_placed_name_that_is_not_an_id`; cmd refusal row text/`--json`; path-form success row in the case test); F5 cmd row (mode-0 `x.JSON`, text/`--json`); `ImportFrom` doc cut to 4 lines; two test comments shortened.
+- Mutations (all red, from.go restored byte-identical): ID form falls back to join+Stat for a non-pattern name → slice F3 test (`An error is expected but got nil`) and cmd rows `a hand-placed name ... (ID form)` text and `--json` (actual: `has changed since quarry took it`); F5 line rebuilt as `<stem>.json` → slice `Test_import_from_a_path_names_the_upper_case_manifest_it_cannot_read` and cmd row `an upper-case manifest that cannot be read` (actual `x.json`, expected `x.JSON`).
+- verify.sh 3e2b1a2c: all rc=0, uncovered 0 (1 declared unreachable, pre-existing), 0 issues; cmd/quarry 1006 (+3), internal/snapshot 343 (+17).
