@@ -542,9 +542,22 @@ func Test_append_rows_stops_when_the_context_is_cancelled(t *testing.T) {
 
 func Test_decimal_refuses_an_unscaled_magnitude_of_10_to_the_width(t *testing.T) {
 	t.Parallel()
-	_, err := duckdb.Decimal(1_000_000_000_000_000_000, 18, 2)
+	cases := []struct {
+		name     string
+		unscaled int64
+	}{
+		{name: "positive", unscaled: 1_000_000_000_000_000_000},
+		{name: "negative", unscaled: -1_000_000_000_000_000_000},
+	}
 
-	require.Error(t, err)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := duckdb.Decimal(c.unscaled, 18, 2)
+
+			require.Error(t, err)
+		})
+	}
 }
 
 func Test_decimal_accepts_an_unscaled_magnitude_one_below_10_to_the_width(t *testing.T) {
@@ -553,11 +566,4 @@ func Test_decimal_accepts_an_unscaled_magnitude_one_below_10_to_the_width(t *tes
 
 	require.NoError(t, err)
 	assert.NotNil(t, value)
-}
-
-func Test_decimal_refuses_a_negative_unscaled_magnitude_of_10_to_the_width(t *testing.T) {
-	t.Parallel()
-	_, err := duckdb.Decimal(-1_000_000_000_000_000_000, 18, 2)
-
-	require.Error(t, err)
 }
