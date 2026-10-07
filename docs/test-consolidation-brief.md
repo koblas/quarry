@@ -34,6 +34,30 @@ ls <pkgdir>/*_test.go | wc -l ; cat <pkgdir>/*_test.go | wc -l
 
 Repeat with `-after` at the end. Also run `.claude/scripts/test-stats.py --base <start> <pkg>` and `.claude/scripts/spec-check.py --run <every slug whose spec cites this package>`; spec-check problems must not exceed the baseline in `docs/test-consolidation-spec-baseline.log` for that package.
 
+**Leaf-name diff is the real "no case dropped" gate.** `test-stats --run`'s pass column counts table parents too, so it can rise while a case vanishes; its tempdir/disk columns drop falsely when `t.TempDir()` moves into a helper (say so in the commit, don't chase it). Record leaf names before editing and diff after:
+
+```bash
+go test -count=1 -json <pkg> > $TMPDIR/<pkgname>-<phase>.json
+python3 -c '
+import json,sys; n=set()
+for l in open(sys.argv[1]):
+    e=json.loads(l)
+    if e.get("Action")=="pass" and e.get("Test"): n.add(e["Test"])
+print("\n".join(sorted(x for x in n if not any(m.startswith(x+"/") for m in n))))' $TMPDIR/<pkgname>-<phase>.json > $TMPDIR/<pkgname>-<phase>-leaves.txt
+```
+
+Every leaf missing after must map to a named new case (list the mapping for collapsed groups in your report), or be a named duplicate. Also diff string literals and `assert.`/`require.` lines old→new for each collapsed group.
+
+## Style lessons from the pilot (internal/importer, commits caa71c2b..95a64bec — read its `helpers_test.go` and `statements_test.go` as the model)
+
+- Work in three commits: (1) pure file moves/merges, identical leaf set; (2) hoist helpers, no rename/removal; (3) table collapses + duplicate removal.
+- Helper params are `tb testing.TB` (the `thelper` linter requires the name).
+- A helper may own `require.NoError` / error-class checks only if its name says so (`mustImport`, `importRefused`); never an assertion on result data. Every test keeps at least one visible assertion in its Then — no test whose only Then is a helper call.
+- Tables vary **data** (inputs + exact expected values). Don't build tables of setup closures; keep separate tests when only the setup differs.
+- Don't rename existing subtests just to normalise style — that changes leaf identity.
+- Fixture builders that seeded rows implicitly behind a test's back: make the seeding explicit in Given.
+- Prose file references in specs (not Progress lines) may go stale; leave them.
+
 ## Commit
 
 One commit (or a few, each green) per package/group: `test(<pkg>): consolidate test files and share helpers`. Body: files before→after, test lines before→after, top-level tests before→after, leaf PASS before→after, coverage % before→after, any removed duplicate named. End with the attribution trailer you were given.
