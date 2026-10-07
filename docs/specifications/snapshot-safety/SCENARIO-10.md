@@ -32,7 +32,7 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/snapshot`; cli/cmd 
   - No stubs needed. Both tests are red at their assertions today: `.SQLITE` is not listed, and `A.json`/`C.json` are swept.
 
 ### Build
-- [ ] Step 3: `internal/snapshot/destination.go:23-27` `snapshotFilePattern`/`manifestFilePattern` fold the extension only. New `internal/snapshot/select.go` `selectFolder(dirEntries []fs.DirEntry) folderSelection` returns, per ID, the winning snapshot entry and manifest name, plus `strays` and `orphans`. `internal/snapshot/import.go:152-156` `ID` strips one `.sqlite` in any case. Test-first:
+- [x] Step 3: `internal/snapshot/destination.go:23-27` `snapshotFilePattern`/`manifestFilePattern` fold the extension only. New `internal/snapshot/select.go` `selectFolder(dirEntries []fs.DirEntry) folderSelection` returns, per ID, the winning snapshot entry and manifest name, plus `strays` and `orphans`. `internal/snapshot/import.go:152-156` `ID` strips one `.sqlite` in any case. Test-first:
   - `select_internal_test.go` `Test_select_folder_picks_one_snapshot_and_one_manifest_per_id` (table, fake `fs.DirEntry`). Rows:
     - lone `X.SQLITE`; `X.SQLITE`+`X.sqlite` → `X.sqlite` wins, the other is a stray; `X.SQLITE`+`X.Sqlite` → `X.SQLITE`; three variants
     - a directory or symlink `X.SQLITE` beside regular `X.Sqlite` → `X.Sqlite`, no stray; non-regular only → no snapshot
@@ -43,7 +43,7 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/snapshot`; cli/cmd 
     - beside `X.SQLITE`, beside a directory or symlink `X.SQLITE`, or beside `.X.sqlite.partial` → not an orphan
     - a non-regular `X.json` alone → not an orphan
   - `import_test.go` `Test_id_strips_one_sqlite_extension_in_any_letter_case`. Rows: `.sqlite`/`.SQLITE`/`.Sqlite`; `latest.db` unchanged; `X.sqlite.SQLITE` → `X.sqlite`; `X.json` unchanged; no extension.
-- [ ] Step 4: Wire the selection into the listing:
+- [x] Step 4: Wire the selection into the listing:
   - `internal/snapshot/list.go:23-37` `Entry` gains exported `ManifestPath`: on-disk, set whenever a manifest was selected, readable or not.
   - `list.go:79-98` `listFolder` takes `Path` and `ManifestPath` from the selection and calls `readManifest(ManifestPath)`.
   - `list.go:139-176` `scanFolder` runs over `selectFolder`, calls `Info()` on the winner, keeps its refusal, and joins the orphan paths.
@@ -53,7 +53,7 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/snapshot`; cli/cmd 
     - `Test_list_lists_no_directory_or_symlink_named_as_an_upper_case_snapshot`.
     - cmd text cell `Test_run_snapshots_lists_an_upper_case_sqlite_snapshot_like_a_lowercase_one` (Step 1 file): the row is byte-identical to a lowercase one.
   - The acceptance test goes green here.
-- [ ] Step 5: `internal/snapshot/prune.go:146-163` `deleteSnapshot` removes `entry.ManifestPath`: Lstat-regular kept, skipped when empty. Delete `manifestPath` (list.go:106-107); it has no callers left.
+- [x] Step 5: `internal/snapshot/prune.go:146-163` `deleteSnapshot` removes `entry.ManifestPath`: Lstat-regular kept, skipped when empty. Delete `manifestPath` (list.go:106-107); it has no callers left.
   - `prune_upper_case_test.go`:
     - `Test_prune_removes_the_manifest_by_its_on_disk_name`: rows `X.sqlite`+`X.JSON` and `X.SQLITE`+`X.JSON`, exact `rm.calls`.
     - `Test_prune_never_sweeps_the_manifest_of_a_directory_named_as_an_upper_case_snapshot` (on disk; control: `Test_prune_sweeps_only_orphan_manifests`).
@@ -99,14 +99,19 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/snapshot`; cli/cmd 
 
 ## Phase report
 
-Run A (Acceptance) done; start 2bd1adfb. No production code, no stubs (both tests compile against existing API).
+Run B1 (Steps 3-5) done; both acceptance tests green. Commit 98fc956c plus one follow-up (orphan lower-case t/z rows, `partials`→`names` rename). Run A: start 2bd1adfb, acceptance 2aa5a7f5.
 
-Files:
-- `cmd/quarry/run_snapshots_upper_case_test.go` (new): acceptance `Test_run_snapshots_json_lists_an_upper_case_sqlite_snapshot_with_its_on_disk_paths`, plus helpers `renamedToUpperCase(t, dir, id) string` and `dirNames(t, dir) []string` for B1's cmd cells.
-- `internal/snapshot/prune_upper_case_test.go` (new): folded acceptance `Test_prune_deletes_an_upper_case_sqlite_snapshot_then_its_manifest_and_keeps_every_newer_manifest`, plus helpers `upperCased(t, dir, id) string` and `dirNames(t, dir) []string` for B1's snapshot cells.
+Production:
+- `internal/snapshot/select.go` (new): `selectFolder`, `folderSelection{snapshots, strays, orphans}`, `selectedSnapshot{entry, id, stamp, suffix, manifest}`, `preferred`/`rankName`. Names only; `strays` has no consumer (13's).
+- `destination.go:23-27` patterns fold the extension via `(?i:...)`; `import.go` `ID` uses `sqliteExtension` regexp.
+- `list.go`: `Entry.ManifestPath`; `snapshotFile` gains `name`, `manifest`; `scanFolder` runs over `selectFolder`; `listFolder` reads `ManifestPath`; `manifestPath()` deleted.
+- `prune.go` `deleteSnapshot` removes `entry.ManifestPath` (Lstat-regular kept, skipped when empty). `internal/cli/json_snapshots.go` `manifest` = `e.ManifestPath`.
 
-Red (both at their assertions):
-- cmd: stdout differs: `store_snapshot.id` is `20260927T143005Z.SQLITE` (extension kept in the ID), the `.SQLITE` entry is missing from `snapshots[]`, `total_bytes` 3240000 not 4480000.
-- snapshot: `rm.calls` is `[20260927T143005Z.json 20260930T141502Z.json]`, wanted `[...Z.SQLITE ...Z.json]`: today's sweep removes the newer `A.json` and the oldest `C.json`; `Deleted` is empty.
+Tests (new): `select_internal_test.go` (white-box, fake DirEntry; picks 17 rows, orphans 16), `import_test.go` ID table, `list_upper_case_test.go` (+ helper `renamedExtension`), `prune_upper_case_test.go` (4 tests), `auto_prune_test.go` 1 test, cmd text cell and prune text/json table in the Step 1 file.
 
-Next run must not redo: ReadDir-name pins are in both fixtures (asserted before the When). Expected literals are on-disk names. Plan deviation: none.
+Deviations: list tests are in `list_upper_case_test.go`, not `list_test.go` (file size). Step 5's unit tests were written after its production edit, not before; seen red only through the plan's `deleteSnapshot` mutation.
+Green on arrival: `Test_list_lists_no_directory_or_symlink_named_as_an_upper_case_snapshot` (the pattern fold alone already skips non-regular entries; it pins the type guard, which the select tests also redden).
+
+Mutations (all restored, byte-identical): see report; all six plan mutations went red, whole-manifest-`(?i)` first SURVIVED, fixed by two orphan rows.
+
+Next (V): sweep lint, doc comments (`selectFolder` etc. already carry docs; check budget), `verify.sh 2bd1adfb ./internal/snapshot/... ./internal/cli/... ./cmd/quarry/...`, spec tick, STATE.md rewrite.

@@ -38,7 +38,7 @@ type idGroup struct {
 func selectFolder(dirEntries []fs.DirEntry) folderSelection {
 	groups := map[string]*idGroup{}
 	var ids []string
-	partials := map[string]bool{}
+	names := map[string]bool{}
 	group := func(id string) *idGroup {
 		if groups[id] == nil {
 			groups[id] = &idGroup{}
@@ -48,7 +48,7 @@ func selectFolder(dirEntries []fs.DirEntry) folderSelection {
 	}
 	for _, dirEntry := range dirEntries {
 		name := dirEntry.Name()
-		partials[name] = true
+		names[name] = true
 		if match := manifestFilePattern.FindStringSubmatch(name); match != nil {
 			g := group(match[1])
 			g.manifests = append(g.manifests, dirEntry)
@@ -84,7 +84,7 @@ func selectFolder(dirEntries []fs.DirEntry) folderSelection {
 			continue
 		}
 		// A manifest beside a partial snapshot is a sync in flight: it commits the manifest first.
-		if !groups[match[1]].anySnapshot && !partials["."+match[1]+".sqlite.partial"] {
+		if !groups[match[1]].anySnapshot && !names["."+match[1]+".sqlite.partial"] {
 			selection.orphans = append(selection.orphans, dirEntry.Name())
 		}
 	}

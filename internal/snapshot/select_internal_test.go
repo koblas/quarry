@@ -138,6 +138,8 @@ func Test_select_folder_finds_orphan_manifests(t *testing.T) {
 		{name: "beside an upper-case partial", entries: entries(selID+".json", "."+selID+".SQLITE.PARTIAL"),
 			want: []string{selID + ".json"}},
 		{name: "beside another ID's snapshot", entries: entries(selID+".json", selOther+".sqlite"), want: []string{selID + ".json"}},
+		{name: "a lower-case t in the ID is no orphan", entries: entries("20260927t143005Z.json")},
+		{name: "a lower-case z in the ID is no orphan", entries: entries("20260927T143005z.json")},
 		{name: "a non-regular manifest alone", entries: withType(entries(selID+".json"), selID+".json", fs.ModeDir)},
 		{name: "a symlinked manifest alone", entries: withType(entries(selID+".json"), selID+".json", fs.ModeSymlink)},
 		{name: "only the regular variant of a mixed pair", entries: withType(entries(selID+".JSON", selID+".json"), selID+".json", fs.ModeDir),
