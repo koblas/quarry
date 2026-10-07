@@ -490,21 +490,21 @@ Architect sizing pass, 2026-10-04. The S01 and S14 splits were approved by the u
 - [x] SCENARIO-01b: Investment cash rows pair transfers and keep entry-less transactions — `cmd/quarry/run_investment_cash_test.go` `Test_run_sync_pairs_an_investment_transfer_entry_and_gives_an_entry_less_investment_one_uncategorized_split`
 - [x] SCENARIO-02: Reinvested dividend moves no cash — delivered by SCENARIO-01a — `cmd/quarry/run_investment_cash_test.go` `Test_run_sync_gives_a_reinvested_dividend_no_row_and_no_income`
 - [x] SCENARIO-05: Findings ignore investment cash rows — delivered by SCENARIO-01b — `cmd/quarry/run_findings_investment_cash_test.go` `Test_run_findings_leaves_investment_cash_rows_out_of_duplicate_and_unlinked_transfer`
-- [x] SCENARIO-03: Investment income counts in cash flow — `cmd/quarry/run_investment_cashflow_test.go` `Test_run_cashflow_counts_investment_dividends_interest_and_capital_gains_as_income_and_buys_and_sells_as_neither`
-- [x] SCENARIO-04: Margin interest counts as spending — delivered by SCENARIO-03 — `cmd/quarry/run_investment_cashflow_test.go` `Test_run_spend_counts_investment_margin_interest_as_spending`
+- [x] SCENARIO-03: Investment income counts in cash flow — `cmd/quarry/run_investment_cash_test.go` `Test_run_cashflow_counts_investment_dividends_interest_and_capital_gains_as_income_and_buys_and_sells_as_neither`
+- [x] SCENARIO-04: Margin interest counts as spending — delivered by SCENARIO-03 — `cmd/quarry/run_investment_cash_test.go` `Test_run_spend_counts_investment_margin_interest_as_spending`
 - [x] SCENARIO-06: Daily balances combine cash and holdings — `cmd/quarry/run_balances_daily_view_test.go` `Test_run_sql_combines_cash_and_valued_holdings_from_v_balances_daily`
 - [x] SCENARIO-07: Accounts shows investment balances — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_shows_an_investment_balance_as_cash_plus_holdings_value`
 - [x] SCENARIO-08: Balances line says what is not checked — delivered by SCENARIO-07, `cmd/quarry/run_status_test.go` `Test_run_status_says_investment_accounts_cash_is_not_checked`
-- [x] SCENARIO-09: Net-worth view covers reported accounts — `cmd/quarry/run_net_worth_view_test.go` `Test_run_sql_sums_net_worth_by_type_and_currency_over_the_accounts_quickens_reports_count`
+- [x] SCENARIO-09: Net-worth view covers reported accounts — `cmd/quarry/run_networth_test.go` `Test_run_sql_sums_net_worth_by_type_and_currency_over_the_accounts_quickens_reports_count`
 - [x] SCENARIO-18: Docs and pins follow the new surface — delivered by SCENARIO-09, `cmd/quarry/run_skill_test.go` `Test_skill_schema_reference_carries_each_view_comment`
 - [x] SCENARIO-10: Net worth today — `cmd/quarry/run_networth_test.go` `Test_run_networth_prints_todays_balances_by_type_and_currency_with_a_total_in_the_reporting_currency`
-- [x] SCENARIO-12: Net worth month by month — `cmd/quarry/run_networth_history_test.go` `Test_run_networth_lists_each_month_end_with_a_column_per_type_ending_with_today`
-- [x] SCENARIO-15: Net worth refuses impossible dates — `cmd/quarry/run_networth_as_of_test.go` `Test_run_networth_refuses_a_future_as_of_a_future_since_and_as_of_with_since`
-- [x] SCENARIO-11: Net worth on a past day — delivered by SCENARIO-15, `cmd/quarry/run_networth_as_of_test.go` `Test_run_networth_values_every_counted_account_on_the_as_of_day`
+- [x] SCENARIO-12: Net worth month by month — `cmd/quarry/run_networth_test.go` `Test_run_networth_lists_each_month_end_with_a_column_per_type_ending_with_today`
+- [x] SCENARIO-15: Net worth refuses impossible dates — `cmd/quarry/run_networth_test.go` `Test_run_networth_refuses_a_future_as_of_a_future_since_and_as_of_with_since`
+- [x] SCENARIO-11: Net worth on a past day — delivered by SCENARIO-15, `cmd/quarry/run_networth_test.go` `Test_run_networth_values_every_counted_account_on_the_as_of_day`
 - [x] SCENARIO-13: Net worth in native currencies — delivered by SCENARIO-10, `cmd/quarry/run_networth_test.go` `Test_run_networth_lists_cad_and_usd_separately_with_one_total_each_in_native_mode`
-- [x] SCENARIO-14a: Net worth warns about unpriced and unconvertible holdings — `cmd/quarry/run_networth_holdings_warnings_test.go` `Test_run_networth_warns_about_each_holding_it_leaves_out_and_accounts_gives_the_same_lines`
-- [x] SCENARIO-14b: Net worth warns about USD balances it cannot convert — `cmd/quarry/run_networth_rates_test.go` `Test_run_networth_warns_when_a_usd_balance_has_no_exchange_rate_and_totals_it_apart`
-- [x] SCENARIO-16: Net worth before any data — `cmd/quarry/run_networth_before_data_test.go` `Test_run_networth_before_the_first_transaction_prints_the_caption_and_the_first_balance_warning`
+- [x] SCENARIO-14a: Net worth warns about unpriced and unconvertible holdings — `cmd/quarry/run_networth_test.go` `Test_run_networth_warns_about_each_holding_it_leaves_out_and_accounts_gives_the_same_lines`
+- [x] SCENARIO-14b: Net worth warns about USD balances it cannot convert — `cmd/quarry/run_networth_test.go` `Test_run_networth_warns_when_a_usd_balance_has_no_exchange_rate_and_totals_it_apart`
+- [x] SCENARIO-16: Net worth before any data — `cmd/quarry/run_networth_test.go` `Test_run_networth_before_the_first_transaction_prints_the_caption_and_the_first_balance_warning`
 - [x] SCENARIO-17: MCP net_worth — `cmd/quarry/run_mcp_investments_test.go` `Test_run_mcp_net_worth_returns_the_networth_json_document`
 
 ## Reference check
