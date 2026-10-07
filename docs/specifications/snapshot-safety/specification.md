@@ -172,6 +172,7 @@ runs even while a sync is running.
 | F4 | path form, snapshot's parent folder cannot be listed (searchable, not readable, e.g. 0300) | `quarry: cannot read <parent folder, ~-abbreviated>: <OS reason per G1>`, e.g. `quarry: cannot read ~/Backups: permission denied` — same helper as F1 | 1 |
 | F5 | path form, parent listed, the manifest found cannot be read | unchanged: `quarry: cannot read <on-disk manifest path>: <reason>; check the file's permissions` (from.go:186-191) | 1 |
 | F6 | snapshots folder 0300, `--from <id>` | F1 (`permission denied`); accepted change (quarry creates that folder 0700, destination.go:46) | 1 |
+| F7 | path form with a relative value (e.g. `x.sqlite`, `snaps/x.sqlite`) and the current folder cannot be resolved (`filepath.Abs` → `os.Getwd` fails: darwin cwd without search permission; Linux also cwd removed) | `quarry: cannot resolve x.sqlite against the current folder: <OS reason per G1>; pass --from an absolute or ~/ path instead`, e.g. `quarry: cannot resolve x.sqlite against the current folder: permission denied; pass --from an absolute or ~/ path instead` — value shown as given; `causedRefusalError`; `osreason.Reason` also unwraps `*os.SyscallError` so Linux renders `no such file or directory`, not `getwd: …` (gate ruling, 2026-10-06) | 1 |
 
 - **Non-regular `<id>.SQLITE`** (symlink, directory, fifo) in the snapshots folder: never competes for the BR-C2 winner; **no D1** (D1 counts regular entries only); never listed, counted, pruned or deleted (today's skip, list.go:153-155). It **does block the orphan sweep**: BR-C4's "no snapshot file of that ID" means no entry of any type named `<id>.sqlite` in any case (today's `names` map holds every entry type, list.go:139-148). `--from <id>` whose only entry is non-regular → F3.
 - **`report.SnapshotID`** (report.go:61-64) strips one trailing extension equal to `.sqlite` in any letter case (`strings.EqualFold` on `filepath.Ext`); no ID pattern match. `20260927T143005Z.SQLITE` → `20260927T143005Z`; `latest.Sqlite` → `latest`; other names → base name unchanged. Doc: "its file name without the .sqlite extension, in any letter case". Status line, byte-identical to a lowercase-recorded store's (render_status.go:24,82-88,110-112):
@@ -190,6 +191,7 @@ Edge rows (additional):
 | `--from /d/X.SQLITE`, `/d` searchable not listable | F4 | 1 |
 | only a directory or symlink named `X.SQLITE` (or `X.sqlite`) in the folder | not listed, no D1, `X.json` not an orphan; `--from X` → F3 | 0 / 1 |
 | `latest.sqlite` + `latest.json` in the snapshots folder, `--from latest` | F3; path form `--from …/snapshots/latest.sqlite` succeeds | 1 / 0 |
+| `--from x.sqlite` run from a folder with no search permission (or, on Linux, removed) | F7; `--from /abs/x.sqlite` or `--from ~/x.sqlite` from the same folder succeeds | 1 / 0 |
 
 Changes to existing surfaces (additional):
 8. A directory named `<id>.sqlite` in the snapshots folder passed as `--from <id>` gave `… is not a snapshot file; …` (from.go:106,124-127); now F3. Re-point import_from_test.go:383-396 to the path form (keeps the not-a-snapshot-file pin) and add an ID-form F3 case.
