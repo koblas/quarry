@@ -284,3 +284,15 @@ func Test_accountStatus_ends_with_registered_or_unclassified(t *testing.T) {
 		})
 	}
 }
+
+func Test_renderAccounts_escapes_an_account_name_and_pads_after_it(t *testing.T) {
+	got := renderAccounts(report.AccountListing{Accounts: []store.AccountBalance{
+		balanceRow("\tAccount Not Synced", "chequing", "CAD", 100, false, true),
+		balanceRow("Chequing", "chequing", "CAD", 100, false, true),
+	}})
+
+	assert.Equal(t, ""+
+		"Account               Type      Currency  Balance  Status\n"+
+		"\\tAccount Not Synced  chequing  CAD          1.00\n"+
+		"Chequing              chequing  CAD          1.00\n", got)
+}

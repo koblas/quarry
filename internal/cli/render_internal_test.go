@@ -839,3 +839,111 @@ func Test_renderStoreFailure(t *testing.T) {
 		assert.Contains(t, got, "Splits    DIFFER for 1,000 of 1,204 transactions\n")
 	})
 }
+
+func Test_accountLabel_escapes_control_characters_in_the_name(t *testing.T) {
+	assert.Equal(t, `\tAccount (CAD)`, accountLabel("\tAccount", "CAD", false, true))
+	assert.Equal(t, "Account (CAD)", accountLabel("Account", "CAD", false, true))
+}
+
+func Test_payeeLabel_escapes_control_characters_in_the_payee(t *testing.T) {
+	assert.Equal(t, `Tim\nHortons`, payeeLabel("Tim\nHortons"))
+	assert.Equal(t, "Tim Hortons", payeeLabel("Tim Hortons"))
+}
+
+func Test_otherAccountLabel_escapes_control_characters_in_the_name(t *testing.T) {
+	cases := []struct {
+		name string
+		leg  store.OneSidedTransfer
+		want string
+	}{
+		{"not in this file", store.OneSidedTransfer{OtherAccount: new("\tAccount Not Synced")}, `\tAccount Not Synced (not in this file)`},
+		{"in this file", store.OneSidedTransfer{OtherAccount: new("Sav\ringS"), OtherAccountID: new("acct-2")}, `Sav\ringS`},
+		{"a clean name is unchanged", store.OneSidedTransfer{OtherAccount: new("Old Visa")}, "Old Visa (not in this file)"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, otherAccountLabel(c.leg))
+		})
+	}
+}
+
+func Test_renderStoreFailure_escapes_the_names_of_a_one_sided_leg_and_a_mismatch(t *testing.T) {
+	result := store.Result{
+		Validation: store.Validation{
+			Balances: store.BalanceCheck{Checked: 1, Mismatched: []store.BalanceMismatch{
+				{Name: "Cheq\tuing", Currency: "CAD", Active: true, StatementDate: time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)},
+			}},
+			Transfers: store.TransferCheck{OneSided: []store.OneSidedTransfer{
+				{
+					Date: time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC), Account: "Chequing", Currency: "CAD", Active: true,
+					Payee: "Rent", Amount: -50000, OtherAccount: new("\tAccount Not Synced"),
+				},
+			}},
+		},
+	}
+
+	got := renderStoreFailure(result, true, "/Users/dave")
+
+	assert.Contains(t, got, "  ! Cheq\\tuing (CAD)  2026-08-31  quarry 0.00  Quicken 0.00  difference 0.00\n")
+	assert.Contains(t, got, "  ? 2026-08-02  Chequing (CAD)  Rent  -500.00  other account: \\tAccount Not Synced (not in this file)\n")
+}
+
+func Test_oneSidedRows_measure_widths_after_escaping(t *testing.T) {
+	date := time.Date(2019, 6, 14, 0, 0, 0, 0, time.UTC)
+
+	rows := oneSidedRows([]store.OneSidedTransfer{
+		{Date: date, Account: "A\tB", Currency: "CAD", Active: true, Payee: "x", Amount: 100},
+		{Date: date, Account: "Visa", Currency: "CAD", Active: true, Payee: "y", Amount: 100},
+	})
+
+	assert.Equal(t, []string{
+		`  ? 2019-06-14  A\tB (CAD)  x  1.00  other account: unknown`,
+		`  ? 2019-06-14  Visa (CAD)  y  1.00  other account: unknown`,
+	}, rows)
+}
+
+func Test_widestLen_counts_runes_not_bytes(t *testing.T) {
+	cases := []struct {
+		name string
+		ss   []string
+		want int
+	}{
+		{name: "empty slice", ss: nil, want: 0},
+		{name: "ASCII control", ss: []string{"ab", "abcd", "abc"}, want: 4},
+		{name: "two-byte rune counts once", ss: []string{"Épargne", "abc"}, want: 7},
+		{name: "CJK counts once per glyph", ss: []string{"ニホン", "ab"}, want: 3},
+		{name: "four-byte emoji counts once", ss: []string{"📈📉", "abc"}, want: 3},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, widestLen(c.ss))
+		})
+	}
+}
+
+func Test_shareMismatchRows_pad_non_ASCII_names_by_runes(t *testing.T) {
+	rows := shareMismatchRows([]store.ShareMismatch{
+		{Account: "Épargne", Currency: "CAD", Active: true, Security: "Fund", Quarry: 1_000_000, Quicken: 0, Difference: 1_000_000},
+		{Account: "RRSP", Currency: "USD", Active: true, Security: "ニホン", Quarry: 2_000_000, Quicken: 0, Difference: 2_000_000},
+	})
+
+	assert.Equal(t, []string{
+		"  ! Épargne (CAD)  Fund  quarry 1  Quicken 0  difference 1",
+		"  ! RRSP (USD)     ニホン   quarry 2  Quicken 0  difference 2",
+	}, rows)
+}
+
+func Test_balanceMismatchRows_pad_non_ASCII_labels_by_runes(t *testing.T) {
+	day := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
+
+	rows := balanceMismatchRows([]store.BalanceMismatch{
+		{Name: "Épargne courante", Currency: "CAD", Active: true, StatementDate: day, Quarry: 831000, Quicken: 830000, Difference: 1000},
+		{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: day, Quarry: 831000, Quicken: 830000, Difference: 1000},
+	})
+
+	assert.Equal(t, []string{
+		"  ! Épargne courante (CAD)  2026-08-31  quarry 8,310.00  Quicken 8,300.00  difference 10.00",
+		"  ! Chequing (CAD)          2026-08-31  quarry 8,310.00  Quicken 8,300.00  difference 10.00",
+	}, rows)
+}

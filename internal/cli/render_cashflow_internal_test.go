@@ -109,3 +109,13 @@ func Test_renderCashFlow_captions_a_converted_report_with_its_currency(t *testin
 		})
 	}
 }
+
+func Test_renderCashFlow_escapes_an_account_name_in_the_caption(t *testing.T) {
+	got := renderCashFlow(report.CashFlow{
+		Window:   spendingWindow(),
+		Accounts: []store.Account{{Name: "A\tB"}, {Name: "C"}},
+		Totals:   []store.CashFlowTotal{{Currency: "CAD"}},
+	})
+
+	assert.Contains(t, got, "Cash flow 2026-01-01 to 2026-03-09 in A\\tB, C\n")
+}
