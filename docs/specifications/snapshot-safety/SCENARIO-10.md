@@ -23,10 +23,10 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/snapshot`; cli/cmd 
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `cmd/quarry/run_snapshots_upper_case_test.go` (new) `Test_run_snapshots_json_lists_an_upper_case_sqlite_snapshot_with_its_on_disk_paths`
+- [x] Step 1: `cmd/quarry/run_snapshots_upper_case_test.go` (new) `Test_run_snapshots_json_lists_an_upper_case_sqlite_snapshot_with_its_on_disk_paths`
   - Setup: a newer lowercase pair, and the oldest snapshot renamed to `<id>.SQLITE` with `<id>.json`. `buildStoreFrom` the `.SQLITE` path. Assert the ReadDir names first.
   - Asserts the full document: `id` has no extension; `path` ends `.SQLITE`; `manifest` ends `.json`; `store: true`; `total_bytes` counts both; `store_snapshot` = `{id, …/<id>.SQLITE}`. Expected paths are literals.
-- [ ] Step 2: `internal/snapshot/prune_upper_case_test.go` (new) `Test_prune_deletes_an_upper_case_sqlite_snapshot_then_its_manifest_and_keeps_every_newer_manifest`
+- [x] Step 2: `internal/snapshot/prune_upper_case_test.go` (new) `Test_prune_deletes_an_upper_case_sqlite_snapshot_then_its_manifest_and_keeps_every_newer_manifest`
   - Setup: `A.SQLITE`+`A.json` (newest), `B.sqlite`+`B.json`, `C.SQLITE`+`C.json` (oldest); keep 2; `fakeRemover`.
   - Asserts `rm.calls == [C.SQLITE, C.json]`, `Deleted[0].Path` on-disk, and `A.json` still in the ReadDir names.
   - No stubs needed. Both tests are red at their assertions today: `.SQLITE` is not listed, and `A.json`/`C.json` are swept.
@@ -96,3 +96,17 @@ Size: OWNS A RUN — 3 batches, 1 feature package (`internal/snapshot`; cli/cmd 
 - Accepted: Unicode simple folding (agrees with (?i) and strings.EqualFold, 12b); pin X.ſqlite.
 - Accepted: .partial guard stays exact lowercase.
 - Accepted: the Triage Brief re-points are 12a's or unaffected (listed in Handoff Traps).
+
+## Phase report
+
+Run A (Acceptance) done; start 2bd1adfb. No production code, no stubs (both tests compile against existing API).
+
+Files:
+- `cmd/quarry/run_snapshots_upper_case_test.go` (new): acceptance `Test_run_snapshots_json_lists_an_upper_case_sqlite_snapshot_with_its_on_disk_paths`, plus helpers `renamedToUpperCase(t, dir, id) string` and `dirNames(t, dir) []string` for B1's cmd cells.
+- `internal/snapshot/prune_upper_case_test.go` (new): folded acceptance `Test_prune_deletes_an_upper_case_sqlite_snapshot_then_its_manifest_and_keeps_every_newer_manifest`, plus helpers `upperCased(t, dir, id) string` and `dirNames(t, dir) []string` for B1's snapshot cells.
+
+Red (both at their assertions):
+- cmd: stdout differs: `store_snapshot.id` is `20260927T143005Z.SQLITE` (extension kept in the ID), the `.SQLITE` entry is missing from `snapshots[]`, `total_bytes` 3240000 not 4480000.
+- snapshot: `rm.calls` is `[20260927T143005Z.json 20260930T141502Z.json]`, wanted `[...Z.SQLITE ...Z.json]`: today's sweep removes the newer `A.json` and the oldest `C.json`; `Deleted` is empty.
+
+Next run must not redo: ReadDir-name pins are in both fixtures (asserted before the When). Expected literals are on-disk names. Plan deviation: none.
