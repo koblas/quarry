@@ -502,7 +502,7 @@ Scenario: SCENARIO-21 — a read command reports a failed stdout write
 - [x] SCENARIO-04: accounts lists open accounts with native-currency balances — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_lists_open_accounts_with_their_balances`
 - [x] SCENARIO-05: accounts --all includes closed accounts — delivered by SCENARIO-04 — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_all_lists_closed_accounts`
 - [x] SCENARIO-06: accounts says how to see accounts when every one is closed — delivered by SCENARIO-07 — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_says_how_to_list_them_when_every_account_is_closed`
-- [x] SCENARIO-07: accounts --json returns accounts as a document — `cmd/quarry/run_accounts_json_test.go` `Test_run_accounts_json_returns_accounts_as_a_document`
+- [x] SCENARIO-07: accounts --json returns accounts as a document — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_json_returns_accounts_as_a_document`
 - [x] SCENARIO-08: sql prints a query result as a table — `cmd/quarry/run_sql_test.go` `Test_run_sql_prints_the_query_result_as_a_table`
 - [x] SCENARIO-09: sql --json returns typed values — `cmd/quarry/run_sql_json_test.go` `Test_run_sql_json_returns_typed_values`
 - [x] SCENARIO-10: sql caps the rows it prints — delivered by SCENARIO-09 — `cmd/quarry/run_sql_json_test.go` `Test_run_sql_json_caps_the_rows_and_says_so`
