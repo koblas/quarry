@@ -799,18 +799,6 @@ func Test_anomalies_read_the_charges_once_whatever_the_reporting_currency(t *tes
 	assert.Equal(t, 1, reads)
 }
 
-// since is the window from date through recurringNow's day.
-func since(t *testing.T, date string) store.Window {
-	t.Helper()
-	return store.Window{Since: dateOf(t, date), Until: thisYear.Until}
-}
-
-// earlierCharges is count charges of amount cents, 30 days apart from 2025-06-01.
-func earlierCharges(t *testing.T, count int, amount int64, opts ...chargeOpt) []store.Charge {
-	t.Helper()
-	return chargesOn(t, everyDays(t, "2025-06-01", 30, count), append([]chargeOpt{ofAmount(amount)}, opts...)...)
-}
-
 // anomaliesIn is the Anomalies read over charges, in window, at recurringNow.
 func anomaliesIn(t *testing.T, window store.Window, charges []store.Charge) report.Anomalies {
 	t.Helper()
@@ -820,14 +808,6 @@ func anomaliesIn(t *testing.T, window store.Window, charges []store.Charge) repo
 
 	require.NoError(t, err)
 	return got
-}
-
-func amountsOf(anomalies []report.Anomaly) []int64 {
-	amounts := make([]int64, 0, len(anomalies))
-	for _, a := range anomalies {
-		amounts = append(amounts, a.Amount)
-	}
-	return amounts
 }
 
 func Test_anomalies_need_three_earlier_charges_for_a_payee_baseline(t *testing.T) {

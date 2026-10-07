@@ -14,11 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	refusalHome = "/Users/dave"
-	storePath   = "/Users/dave/Library/Application Support/quarry/quarry.duckdb"
-)
-
 func Test_status_refuses_with_the_store_refusal_copy(t *testing.T) {
 	cases := []struct {
 		name    string

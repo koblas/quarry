@@ -1,9 +1,7 @@
 package report_test
 
 import (
-	"cmp"
 	"context"
-	"slices"
 	"testing"
 	"time"
 
@@ -12,52 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// acbWalkOf walks txs over acct-1, acct-2 (closed) and acct-3 non-registered, acct-9 registered and acct-7,
-// a chequing account, in neither list, with securities sec-1 XEQT and sec-2 VTI.
-func acbWalkOf(t *testing.T, txs ...store.InvestmentTransaction) report.ACB {
-	t.Helper()
-	return acbWalkWith(t, []store.Security{acbSecurity("sec-1", "XEQT", "CAD"), acbSecurity("sec-2", "VTI", "CAD")}, nil, txs...)
-}
-
-// acbWalkWith is acbWalkOf over the given securities and exchange rates, which are in date order.
-func acbWalkWith(t *testing.T, securities []store.Security, rates []store.Rate, txs ...store.InvestmentTransaction) report.ACB {
-	t.Helper()
-	return acbWalkRequest(t, securities, rates, nil, txs...)
-}
-
-// acbWalkAdjusted is acbWalkOf with the adjustments, whose item numbers are their places in the list.
-func acbWalkAdjusted(t *testing.T, adjustments []report.ACBAdjustment, txs ...store.InvestmentTransaction) report.ACB {
-	t.Helper()
-	return acbWalkRequest(t, []store.Security{acbSecurity("sec-1", "XEQT", "CAD"), acbSecurity("sec-2", "VTI", "CAD")}, nil, adjustments, txs...)
-}
-
-func acbWalkRequest(t *testing.T, securities []store.Security, rates []store.Rate, adjustments []report.ACBAdjustment, txs ...store.InvestmentTransaction) report.ACB {
-	t.Helper()
-	txs = slices.SortedStableFunc(slices.Values(txs), func(a, b store.InvestmentTransaction) int {
-		return cmp.Or(a.Date.Compare(b.Date), cmp.Compare(a.SourceID, b.SourceID))
-	})
-	unlisted := store.Account{ID: "acct-7", Name: "Cash margin", Type: "chequing", Currency: "CAD"}
-	srv := report.NewServer(report.WithStore(fakeStore{history: store.InvestmentHistory{
-		Accounts:     append(acbAccounts(), unlisted),
-		Securities:   securities,
-		Transactions: txs,
-		Rates:        rates,
-	}}))
-
-	got, err := srv.ACB(t.Context(), report.ACBRequest{Classification: acbClassification(), Today: acbToday, Adjustments: adjustments})
-
-	require.NoError(t, err)
-	return got
-}
-
-func acbSaleRows(result report.ACB) []acbSaleRow {
-	var rows []acbSaleRow
-	for _, year := range acbYearRows(result) {
-		rows = append(rows, year.Sales...)
-	}
-	return rows
-}
 
 func Test_acb_rounds_the_acb_removed_half_away_from_zero(t *testing.T) {
 	cases := []struct {

@@ -6,109 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-const acbMillion = 1_000_000
-
-var acbToday = time.Date(2026, time.October, 5, 0, 0, 0, 0, time.UTC)
-
-// acbClassification lists acct-1, acct-2 and acct-3 non-registered and acct-9 registered.
-func acbClassification() report.Classification {
-	return report.Classification{
-		Registered:    []string{"acct-9"},
-		NonRegistered: []string{"acct-1", "acct-2", "acct-3"},
-	}
-}
-
-func acbAccounts() []store.Account {
-	return []store.Account{
-		{ID: "acct-1", Name: "Margin", Type: store.AccountTypeBrokerage, Currency: "CAD"},
-		{ID: "acct-2", Name: "Old margin", Type: store.AccountTypeBrokerage, Currency: "CAD", Closed: true},
-		{ID: "acct-3", Name: "US margin", Type: store.AccountTypeBrokerage, Currency: "USD"},
-		{ID: "acct-9", Name: "RRSP", Type: store.AccountTypeRetirement, Currency: "CAD"},
-	}
-}
-
-func acbSecurity(id, name, currency string) store.Security {
-	return store.Security{ID: id, Name: name, Ticker: &name, Currency: &currency}
-}
-
-// acbTx is one investment transaction with shares in millionths and amount in cents, no commission.
-func acbTx(t *testing.T, sourceID int64, account, security, date, action, currency string, shares, amount int64) store.InvestmentTransaction {
-	t.Helper()
-	return store.InvestmentTransaction{
-		ID:         "itxn-" + date + "-" + account + "-" + security + "-" + action,
-		SourceID:   sourceID,
-		AccountID:  account,
-		SecurityID: &security,
-		Date:       dateOf(t, date),
-		Action:     action,
-		Shares:     &shares,
-		Amount:     amount,
-		Currency:   currency,
-	}
-}
-
-func acbRate(t *testing.T, date string, usdcad money.Rate) store.Rate {
-	t.Helper()
-	return store.Rate{Date: dateOf(t, date), USDCAD: usdcad, Series: store.SeriesCurrent}
-}
-
-type acbSaleRow struct {
-	Date                                string
-	Security                            string
-	Shares                              string
-	Proceeds, Outlays, ACBRemoved, Gain int64
-}
-
-type acbYearRow struct {
-	Year                                int
-	Sales                               []acbSaleRow
-	Proceeds, Outlays, ACBRemoved, Gain int64
-	ReturnOfCapitalGain                 int64
-}
-
-type acbPositionRow struct {
-	Name   string
-	Shares string
-	ACB    int64
-}
-
-func acbYearRows(result report.ACB) []acbYearRow {
-	rows := make([]acbYearRow, 0, len(result.Years))
-	for _, year := range result.Years {
-		row := acbYearRow{
-			Year: year.Year, Proceeds: year.Proceeds, Outlays: year.Outlays, ACBRemoved: year.ACBRemoved, Gain: year.Gain,
-			ReturnOfCapitalGain: year.ReturnOfCapitalGain,
-		}
-		for _, sale := range year.Sales {
-			row.Sales = append(row.Sales, acbSaleRow{
-				Date:       sale.Date.Format(time.DateOnly),
-				Security:   sale.SecurityID,
-				Shares:     sale.Shares.RatString(),
-				Proceeds:   sale.Proceeds,
-				Outlays:    sale.Outlays,
-				ACBRemoved: sale.ACBRemoved,
-				Gain:       sale.Gain,
-			})
-		}
-		rows = append(rows, row)
-	}
-	return rows
-}
-
-func acbPositionRows(result report.ACB) []acbPositionRow {
-	rows := make([]acbPositionRow, 0, len(result.Securities))
-	for _, position := range result.Securities {
-		rows = append(rows, acbPositionRow{Name: position.Security.Name, Shares: position.Shares.RatString(), ACB: position.ACB})
-	}
-	return rows
-}
 
 func Test_acb_pools_each_security_across_non_registered_accounts(t *testing.T) {
 	commission999, commission495, commission100 := int64(99_900), int64(49_450), int64(10_000)
@@ -558,14 +460,6 @@ func Test_acb_lists_adjustment_issues_by_item_number(t *testing.T) {
 		items = append(items, issue.Item)
 	}
 	assert.Equal(t, []int{1, 2, 4}, items)
-}
-
-// acbSplitTx is a sec-1 split of newShares for oldShares, both in millionths.
-func acbSplitTx(t *testing.T, sourceID int64, account, date string, newShares, oldShares int64) store.InvestmentTransaction {
-	t.Helper()
-	split := acbTx(t, sourceID, account, "sec-1", date, store.ActionSplit, "CAD", 0, 0)
-	split.Shares, split.SplitNewShares, split.SplitOldShares = nil, &newShares, &oldShares
-	return split
 }
 
 func Test_acb_converts_usd_at_the_rate_on_or_before_the_date(t *testing.T) {

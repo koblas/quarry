@@ -1,11 +1,16 @@
 package report_test
 
 import (
+	"cmp"
 	"context"
+	"errors"
+	"math/big"
 	"slices"
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/finding"
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/require"
@@ -364,3 +369,307 @@ func day(year int, month time.Month, dayOfMonth int) time.Time {
 
 // edt is a zone whose midnight falls on the previous day in UTC.
 var edt = time.FixedZone("EDT", -4*60*60)
+
+// Investment fixtures shared by the ACB tests.
+
+const acbMillion = 1_000_000
+
+var acbToday = time.Date(2026, time.October, 5, 0, 0, 0, 0, time.UTC)
+
+// acbClassification lists acct-1, acct-2 and acct-3 non-registered and acct-9 registered.
+func acbClassification() report.Classification {
+	return report.Classification{
+		Registered:    []string{"acct-9"},
+		NonRegistered: []string{"acct-1", "acct-2", "acct-3"},
+	}
+}
+
+func acbAccounts() []store.Account {
+	return []store.Account{
+		{ID: "acct-1", Name: "Margin", Type: store.AccountTypeBrokerage, Currency: "CAD"},
+		{ID: "acct-2", Name: "Old margin", Type: store.AccountTypeBrokerage, Currency: "CAD", Closed: true},
+		{ID: "acct-3", Name: "US margin", Type: store.AccountTypeBrokerage, Currency: "USD"},
+		{ID: "acct-9", Name: "RRSP", Type: store.AccountTypeRetirement, Currency: "CAD"},
+	}
+}
+
+func acbSecurity(id, name, currency string) store.Security {
+	return store.Security{ID: id, Name: name, Ticker: &name, Currency: &currency}
+}
+
+// acbTx is one investment transaction with shares in millionths and amount in cents, no commission.
+func acbTx(t *testing.T, sourceID int64, account, security, date, action, currency string, shares, amount int64) store.InvestmentTransaction {
+	t.Helper()
+	return store.InvestmentTransaction{
+		ID:         "itxn-" + date + "-" + account + "-" + security + "-" + action,
+		SourceID:   sourceID,
+		AccountID:  account,
+		SecurityID: &security,
+		Date:       dateOf(t, date),
+		Action:     action,
+		Shares:     &shares,
+		Amount:     amount,
+		Currency:   currency,
+	}
+}
+
+func acbRate(t *testing.T, date string, usdcad money.Rate) store.Rate {
+	t.Helper()
+	return store.Rate{Date: dateOf(t, date), USDCAD: usdcad, Series: store.SeriesCurrent}
+}
+
+type acbSaleRow struct {
+	Date                                string
+	Security                            string
+	Shares                              string
+	Proceeds, Outlays, ACBRemoved, Gain int64
+}
+
+type acbYearRow struct {
+	Year                                int
+	Sales                               []acbSaleRow
+	Proceeds, Outlays, ACBRemoved, Gain int64
+	ReturnOfCapitalGain                 int64
+}
+
+type acbPositionRow struct {
+	Name   string
+	Shares string
+	ACB    int64
+}
+
+func acbYearRows(result report.ACB) []acbYearRow {
+	rows := make([]acbYearRow, 0, len(result.Years))
+	for _, year := range result.Years {
+		row := acbYearRow{
+			Year: year.Year, Proceeds: year.Proceeds, Outlays: year.Outlays, ACBRemoved: year.ACBRemoved, Gain: year.Gain,
+			ReturnOfCapitalGain: year.ReturnOfCapitalGain,
+		}
+		for _, sale := range year.Sales {
+			row.Sales = append(row.Sales, acbSaleRow{
+				Date:       sale.Date.Format(time.DateOnly),
+				Security:   sale.SecurityID,
+				Shares:     sale.Shares.RatString(),
+				Proceeds:   sale.Proceeds,
+				Outlays:    sale.Outlays,
+				ACBRemoved: sale.ACBRemoved,
+				Gain:       sale.Gain,
+			})
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+func acbPositionRows(result report.ACB) []acbPositionRow {
+	rows := make([]acbPositionRow, 0, len(result.Securities))
+	for _, position := range result.Securities {
+		rows = append(rows, acbPositionRow{Name: position.Security.Name, Shares: position.Shares.RatString(), ACB: position.ACB})
+	}
+	return rows
+}
+
+// acbSplitTx is a sec-1 split of newShares for oldShares, both in millionths.
+func acbSplitTx(t *testing.T, sourceID int64, account, date string, newShares, oldShares int64) store.InvestmentTransaction {
+	t.Helper()
+	split := acbTx(t, sourceID, account, "sec-1", date, store.ActionSplit, "CAD", 0, 0)
+	split.Shares, split.SplitNewShares, split.SplitOldShares = nil, &newShares, &oldShares
+	return split
+}
+
+// acbWalkOf walks txs over acct-1, acct-2 (closed) and acct-3 non-registered, acct-9 registered and acct-7,
+// a chequing account, in neither list, with securities sec-1 XEQT and sec-2 VTI.
+func acbWalkOf(t *testing.T, txs ...store.InvestmentTransaction) report.ACB {
+	t.Helper()
+	return acbWalkWith(t, []store.Security{acbSecurity("sec-1", "XEQT", "CAD"), acbSecurity("sec-2", "VTI", "CAD")}, nil, txs...)
+}
+
+// acbWalkWith is acbWalkOf over the given securities and exchange rates, which are in date order.
+func acbWalkWith(t *testing.T, securities []store.Security, rates []store.Rate, txs ...store.InvestmentTransaction) report.ACB {
+	t.Helper()
+	return acbWalkRequest(t, securities, rates, nil, txs...)
+}
+
+// acbWalkAdjusted is acbWalkOf with the adjustments, whose item numbers are their places in the list.
+func acbWalkAdjusted(t *testing.T, adjustments []report.ACBAdjustment, txs ...store.InvestmentTransaction) report.ACB {
+	t.Helper()
+	return acbWalkRequest(t, []store.Security{acbSecurity("sec-1", "XEQT", "CAD"), acbSecurity("sec-2", "VTI", "CAD")}, nil, adjustments, txs...)
+}
+
+func acbWalkRequest(t *testing.T, securities []store.Security, rates []store.Rate, adjustments []report.ACBAdjustment, txs ...store.InvestmentTransaction) report.ACB {
+	t.Helper()
+	txs = slices.SortedStableFunc(slices.Values(txs), func(a, b store.InvestmentTransaction) int {
+		return cmp.Or(a.Date.Compare(b.Date), cmp.Compare(a.SourceID, b.SourceID))
+	})
+	unlisted := store.Account{ID: "acct-7", Name: "Cash margin", Type: "chequing", Currency: "CAD"}
+	srv := report.NewServer(report.WithStore(fakeStore{history: store.InvestmentHistory{
+		Accounts:     append(acbAccounts(), unlisted),
+		Securities:   securities,
+		Transactions: txs,
+		Rates:        rates,
+	}}))
+
+	got, err := srv.ACB(t.Context(), report.ACBRequest{Classification: acbClassification(), Today: acbToday, Adjustments: adjustments})
+
+	require.NoError(t, err)
+	return got
+}
+
+func acbSaleRows(result report.ACB) []acbSaleRow {
+	var rows []acbSaleRow
+	for _, year := range acbYearRows(result) {
+		rows = append(rows, year.Sales...)
+	}
+	return rows
+}
+
+// acbFlags is each sale's possible-superficial-loss mark, in the order the years list the sales.
+func acbFlags(result report.ACB) []bool {
+	var flags []bool
+	for _, year := range result.Years {
+		for _, sale := range year.Sales {
+			flags = append(flags, sale.PossibleSuperficialLoss)
+		}
+	}
+	return flags
+}
+
+// selectHistory is securities bought in non-registered acct-1 (shared tickers and names, no or empty ticker), sec-3
+// and sec-13 only in registered acct-9, sec-5 there the day after today, sec-9 only in acct-7, in neither list, sec-4 never.
+func selectHistory(t *testing.T) store.InvestmentHistory {
+	t.Helper()
+	empty := ""
+	cad := "CAD"
+	blank := store.Security{ID: "sec-8", Name: "Blank", Ticker: &empty}
+	tickerless := store.Security{ID: "sec-10", Name: "No Ticker", Currency: &cad}
+	return store.InvestmentHistory{
+		Accounts: append(acbAccounts(), store.Account{ID: "acct-7", Name: "Cash margin", Type: "chequing", Currency: "CAD"}),
+		Securities: []store.Security{
+			selectSecurity("sec-1", "Acme Corp", "ACME"),
+			selectSecurity("sec-2", "Beta Inc", "BETA"),
+			selectSecurity("sec-3", "Maple", "MPL"),
+			selectSecurity("sec-4", "Adjusted", "ADJ"),
+			selectSecurity("sec-5", "Future", "FUT"),
+			selectSecurity("sec-6", "Acme Preferred", "acme"),
+			selectSecurity("sec-7", "sec-2", "SEC7"),
+			blank,
+			selectSecurity("sec-9", "Cash only", "CSH"),
+			tickerless,
+			selectSecurity("sec-11", "beta Fund", "BFD"),
+			selectSecurity("sec-b", "Twin", "TWB"),
+			selectSecurity("sec-a", "Twin", "TWA"),
+			selectSecurity("sec-13", "Today Fund", "TDY"),
+		},
+		Transactions: []store.InvestmentTransaction{
+			acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 2, "acct-1", "sec-2", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 3, "acct-9", "sec-3", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 4, "acct-9", "sec-5", "2026-10-06", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 5, "acct-1", "sec-6", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 6, "acct-1", "sec-7", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 7, "acct-1", "sec-8", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 8, "acct-7", "sec-9", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 9, "acct-1", "sec-10", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 10, "acct-1", "sec-11", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 11, "acct-1", "sec-b", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 12, "acct-1", "sec-a", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+			acbTx(t, 13, "acct-9", "sec-13", acbToday.Format(time.DateOnly), store.ActionBuy, "CAD", 10*acbMillion, -10_000),
+		},
+	}
+}
+
+func selectACB(t *testing.T, history store.InvestmentHistory, selectors ...string) (report.ACB, error) {
+	t.Helper()
+	srv := report.NewServer(report.WithStore(fakeStore{history: history}))
+
+	return srv.ACB(t.Context(), report.ACBRequest{Classification: acbClassification(), Today: acbToday, Securities: selectors})
+}
+
+func securityIDs(a report.ACB) []string {
+	ids := make([]string, 0, len(a.Securities))
+	for _, s := range a.Securities {
+		ids = append(ids, s.Security.ID)
+	}
+
+	return ids
+}
+
+// Finding, anomaly and account fixtures shared across files.
+
+// since is the window from date through recurringNow's day.
+func since(t *testing.T, date string) store.Window {
+	t.Helper()
+	return store.Window{Since: dateOf(t, date), Until: thisYear.Until}
+}
+
+// earlierCharges is count charges of amount cents, 30 days apart from 2025-06-01.
+func earlierCharges(t *testing.T, count int, amount int64, opts ...chargeOpt) []store.Charge {
+	t.Helper()
+	return chargesOn(t, everyDays(t, "2025-06-01", 30, count), append([]chargeOpt{ofAmount(amount)}, opts...)...)
+}
+
+func amountsOf(anomalies []report.Anomaly) []int64 {
+	amounts := make([]int64, 0, len(anomalies))
+	for _, a := range anomalies {
+		amounts = append(amounts, a.Amount)
+	}
+	return amounts
+}
+
+// dated is an open finding of typ with one item per date.
+func dated(id string, typ finding.Type, dates ...time.Time) store.Finding {
+	f := store.Finding{ID: id, Type: typ}
+	for _, d := range dates {
+		f.Items = append(f.Items, store.FindingItem{Date: d})
+	}
+	return f
+}
+
+func idsOf(g report.FindingsGroup) []string {
+	ids := make([]string, len(g.Findings))
+	for i, f := range g.Findings {
+		ids[i] = f.ID
+	}
+	return ids
+}
+
+func listIDs(listing report.FindingsListing) map[finding.Type][]string {
+	ids := map[finding.Type][]string{}
+	for _, g := range listing.Groups {
+		ids[g.Type] = idsOf(g)
+	}
+	return ids
+}
+
+var (
+	march1  = time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	march2  = time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+	march3  = time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
+	fixedAt = time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC)
+)
+
+func typedRow(accountType, currency string, balance int64, cad *big.Int) store.NetWorthRow {
+	return store.NetWorthRow{Date: netWorthDay, Type: accountType, Currency: currency, Balance: big.NewInt(balance), BalanceCAD: cad}
+}
+
+const unclassifiedOne = "unclassified-account:acct-1"
+
+// accountsFindings lists the findings of req over accounts and stored findings.
+func accountsFindings(t *testing.T, req report.FindingsRequest, accounts []store.Account, stored ...store.Finding) report.FindingsListing {
+	t.Helper()
+	srv := report.NewServer(report.WithStore(fakeStore{findings: store.FindingList{Findings: stored, Accounts: accounts}}))
+	got, err := srv.Findings(t.Context(), req)
+	require.NoError(t, err)
+	return got
+}
+
+func brokerage(id, name string) store.Account {
+	return store.Account{ID: id, Name: name, Type: store.AccountTypeBrokerage, Currency: "CAD"}
+}
+
+const (
+	refusalHome = "/Users/dave"
+	storePath   = "/Users/dave/Library/Application Support/quarry/quarry.duckdb"
+)
+
+var errDiskRead = errors.New("read store status: disk read failed")

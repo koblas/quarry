@@ -252,10 +252,6 @@ func Test_networth_history_refuses_when_the_read_fails(t *testing.T) {
 	assert.Equal(t, errDiskRead, err)
 }
 
-func typedRow(accountType, currency string, balance int64, cad *big.Int) store.NetWorthRow {
-	return store.NetWorthRow{Date: netWorthDay, Type: accountType, Currency: currency, Balance: big.NewInt(balance), BalanceCAD: cad}
-}
-
 func Test_networth_types_are_those_with_a_balance_on_some_day_alphabetically(t *testing.T) {
 	listing := report.NetWorth{Dates: []report.NetWorthDate{
 		{Rows: []store.NetWorthRow{typedRow("savings", "CAD", 5, nil), typedRow("brokerage", "CAD", 0, nil), typedRow("chequing", "CAD", 0, nil)}},

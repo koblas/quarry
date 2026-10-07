@@ -1,7 +1,6 @@
 package report_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/koblas/quarry/internal/report"
@@ -9,8 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-var errDiskRead = errors.New("read store status: disk read failed")
 
 func Test_status_returns_what_the_store_reads(t *testing.T) {
 	want := store.Status{Path: "/home/dave/quarry.duckdb", FormatVersion: 2, QuarryVersion: "v1.2.3"}

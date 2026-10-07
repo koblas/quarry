@@ -11,21 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const unclassifiedOne = "unclassified-account:acct-1"
-
-// accountsFindings lists the findings of req over accounts and stored findings.
-func accountsFindings(t *testing.T, req report.FindingsRequest, accounts []store.Account, stored ...store.Finding) report.FindingsListing {
-	t.Helper()
-	srv := report.NewServer(report.WithStore(fakeStore{findings: store.FindingList{Findings: stored, Accounts: accounts}}))
-	got, err := srv.Findings(t.Context(), req)
-	require.NoError(t, err)
-	return got
-}
-
-func brokerage(id, name string) store.Account {
-	return store.Account{ID: id, Name: name, Type: store.AccountTypeBrokerage, Currency: "CAD"}
-}
-
 func Test_findings_lists_an_investment_account_that_neither_list_names(t *testing.T) {
 	cases := []struct {
 		name    string

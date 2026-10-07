@@ -12,22 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	march1  = time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	march2  = time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
-	march3  = time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
-	fixedAt = time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC)
-)
-
-// dated is an open finding of typ with one item per date.
-func dated(id string, typ finding.Type, dates ...time.Time) store.Finding {
-	f := store.Finding{ID: id, Type: typ}
-	for _, d := range dates {
-		f.Items = append(f.Items, store.FindingItem{Date: d})
-	}
-	return f
-}
-
 // paid is an open uncategorized finding of payee with the given number of items.
 func paid(id, payee string, items int) store.Finding {
 	f := store.Finding{ID: id, Type: finding.Uncategorized}
@@ -75,14 +59,6 @@ func findingsOf(t *testing.T, fs ...store.Finding) report.FindingsListing {
 	got, err := srv.Findings(t.Context(), report.FindingsRequest{})
 	require.NoError(t, err)
 	return got
-}
-
-func idsOf(g report.FindingsGroup) []string {
-	ids := make([]string, len(g.Findings))
-	for i, f := range g.Findings {
-		ids[i] = f.ID
-	}
-	return ids
 }
 
 func Test_findings_groups_open_findings_by_type_in_display_order_and_omits_empty_groups(t *testing.T) {
@@ -325,14 +301,6 @@ func mixedFindings() []store.Finding {
 		gone(fixedPayee, finding.Uncategorized, fixedAt),
 		paid(openPayee, "Amazon", 1),
 	}
-}
-
-func listIDs(listing report.FindingsListing) map[finding.Type][]string {
-	ids := map[finding.Type][]string{}
-	for _, g := range listing.Groups {
-		ids[g.Type] = idsOf(g)
-	}
-	return ids
 }
 
 func findingsWith(t *testing.T, req report.FindingsRequest, fs ...store.Finding) report.FindingsListing {

@@ -3,7 +3,6 @@ package report_test
 import (
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
@@ -14,57 +13,6 @@ import (
 func selectSecurity(id, name, ticker string) store.Security {
 	currency := "CAD"
 	return store.Security{ID: id, Name: name, Ticker: &ticker, Currency: &currency}
-}
-
-// selectHistory is securities bought in non-registered acct-1 (shared tickers and names, no or empty ticker), sec-3
-// and sec-13 only in registered acct-9, sec-5 there the day after today, sec-9 only in acct-7, in neither list, sec-4 never.
-func selectHistory(t *testing.T) store.InvestmentHistory {
-	t.Helper()
-	empty := ""
-	cad := "CAD"
-	blank := store.Security{ID: "sec-8", Name: "Blank", Ticker: &empty}
-	tickerless := store.Security{ID: "sec-10", Name: "No Ticker", Currency: &cad}
-	return store.InvestmentHistory{
-		Accounts: append(acbAccounts(), store.Account{ID: "acct-7", Name: "Cash margin", Type: "chequing", Currency: "CAD"}),
-		Securities: []store.Security{
-			selectSecurity("sec-1", "Acme Corp", "ACME"),
-			selectSecurity("sec-2", "Beta Inc", "BETA"),
-			selectSecurity("sec-3", "Maple", "MPL"),
-			selectSecurity("sec-4", "Adjusted", "ADJ"),
-			selectSecurity("sec-5", "Future", "FUT"),
-			selectSecurity("sec-6", "Acme Preferred", "acme"),
-			selectSecurity("sec-7", "sec-2", "SEC7"),
-			blank,
-			selectSecurity("sec-9", "Cash only", "CSH"),
-			tickerless,
-			selectSecurity("sec-11", "beta Fund", "BFD"),
-			selectSecurity("sec-b", "Twin", "TWB"),
-			selectSecurity("sec-a", "Twin", "TWA"),
-			selectSecurity("sec-13", "Today Fund", "TDY"),
-		},
-		Transactions: []store.InvestmentTransaction{
-			acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-			acbTx(t, 2, "acct-1", "sec-2", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-			acbTx(t, 3, "acct-9", "sec-3", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-			acbTx(t, 4, "acct-9", "sec-5", "2026-10-06", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-			acbTx(t, 5, "acct-1", "sec-6", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-			acbTx(t, 6, "acct-1", "sec-7", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-			acbTx(t, 7, "acct-1", "sec-8", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-			acbTx(t, 8, "acct-7", "sec-9", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-			acbTx(t, 9, "acct-1", "sec-10", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-			acbTx(t, 10, "acct-1", "sec-11", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-			acbTx(t, 11, "acct-1", "sec-b", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-			acbTx(t, 12, "acct-1", "sec-a", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-			acbTx(t, 13, "acct-9", "sec-13", acbToday.Format(time.DateOnly), store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-		},
-	}
-}
-
-func selectACB(t *testing.T, history store.InvestmentHistory, selectors ...string) (report.ACB, error) {
-	t.Helper()
-	srv := report.NewServer(report.WithStore(fakeStore{history: history}))
-
-	return srv.ACB(t.Context(), report.ACBRequest{Classification: acbClassification(), Today: acbToday, Securities: selectors})
 }
 
 func securityIDsOf(securities []store.Security) []string {

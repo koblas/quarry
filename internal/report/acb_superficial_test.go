@@ -33,17 +33,6 @@ func acbKept(t *testing.T) store.InvestmentTransaction {
 	return acbTx(t, 90, "acct-9", "sec-1", "2023-01-01", store.ActionBuy, "CAD", acbMillion, -10_000)
 }
 
-// acbFlags is each sale's possible-superficial-loss mark, in the order the years list the sales.
-func acbFlags(result report.ACB) []bool {
-	var flags []bool
-	for _, year := range result.Years {
-		for _, sale := range year.Sales {
-			flags = append(flags, sale.PossibleSuperficialLoss)
-		}
-	}
-	return flags
-}
-
 func acbSecurityTicker(id string, ticker *string) store.Security {
 	return store.Security{ID: id, Name: "Security " + id, Ticker: ticker}
 }
