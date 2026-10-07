@@ -127,18 +127,14 @@ func syncThenWrite(t *testing.T, home string, fixtures ...snapshotFixture) (stri
 	return id, dir
 }
 
-// copyOutsideFolder copies id's snapshot and manifest from dir to ~/kept, beyond the folder a test is about to
+// copyOutsideFolder links id's snapshot and manifest from dir into ~/kept, beyond the folder a test is about to
 // make unlistable, and returns the snapshot's path.
 func copyOutsideFolder(t *testing.T, home, dir, id string) string {
 	t.Helper()
 	kept := filepath.Join(home, "kept")
 	require.NoError(t, os.MkdirAll(kept, 0o700))
-	for _, ext := range []string{".sqlite", ".json"} {
-		raw, err := os.ReadFile(filepath.Join(dir, id+ext))
-		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(filepath.Join(kept, id+ext), raw, 0o600))
-	}
-	return filepath.Join(kept, id+".sqlite")
+	hardLink(t, filepath.Join(dir, id+".json"), filepath.Join(kept, id+".json"))
+	return hardLink(t, filepath.Join(dir, id+".sqlite"), filepath.Join(kept, id+".sqlite"))
 }
 
 // runSyncFrom runs quarry sync --from id with extra args.

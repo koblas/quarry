@@ -153,9 +153,7 @@ func importFromUnlistableFolder(t *testing.T, home string) (snapshot.Outcome, st
 	kept := filepath.Join(home, "kept", filepath.Base(taken.Snapshot.Path))
 	require.NoError(t, os.MkdirAll(filepath.Dir(kept), 0o700))
 	for _, pair := range [][2]string{{taken.Snapshot.Path, kept}, {taken.Snapshot.Manifest, strings.TrimSuffix(kept, ".sqlite") + ".json"}} {
-		raw, err := os.ReadFile(pair[0])
-		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(pair[1], raw, 0o600))
+		require.NoError(t, os.Link(pair[0], pair[1]))
 	}
 	require.NoError(t, os.Chmod(dir, 0o300))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
