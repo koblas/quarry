@@ -240,14 +240,6 @@ func storeKeys(t *testing.T, data []byte) []string {
 	return keys
 }
 
-// spendWindow is January 1 through September 29, 2026, the window the JSON document tests report over.
-func spendWindow() store.Window {
-	return store.Window{
-		Since: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
-		Until: time.Date(2026, time.September, 29, 0, 0, 0, 0, time.UTC),
-	}
-}
-
 // topLevelKeys is the keys of the JSON object in doc, in document order.
 func topLevelKeys(t *testing.T, doc []byte) []string {
 	t.Helper()

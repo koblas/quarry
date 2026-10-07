@@ -32,7 +32,7 @@ func Test_renderFindingsJSON_encodes_a_finding_item_without_a_payee_as_null(t *t
 		Type: finding.Uncategorized,
 		Findings: []report.ListedFinding{openFinding(store.Finding{
 			ID: "uncategorized:no-payee", Type: finding.Uncategorized,
-			Items: []store.FindingItem{{Payee: "", Date: findingDay(2012, 1, 1)}},
+			Items: []store.FindingItem{{Payee: "", Date: utcDay(2012, 1, 1)}},
 		})},
 	}}}
 
@@ -80,7 +80,7 @@ func Test_renderFindingsJSON_entries_follow_each_findings_status_and_fixed_at(t 
 	fixedAt := time.Date(2026, 10, 2, 3, 0, 0, 0, time.UTC)
 	ignored := withStatus(openFinding(store.Finding{
 		ID: "duplicate:txn-1+txn-2", Type: finding.Duplicate,
-		Items: []store.FindingItem{{Date: findingDay(2026, 8, 3)}},
+		Items: []store.FindingItem{{Date: utcDay(2026, 8, 3)}},
 	}), finding.StatusIgnored)
 	listing := report.FindingsListing{Groups: []report.FindingsGroup{{
 		Type:     finding.Duplicate,
@@ -137,15 +137,15 @@ func Test_renderFindingsJSON_gives_an_unlinked_transfer_item_its_category_path_a
 	txn := "txn-1"
 
 	items := unlinkedItemsJSON(t,
-		store.FindingItem{TransactionID: &txn, Date: findingDay(2026, 7, 2), Category: new("Income:Other"), Splits: 1})
+		store.FindingItem{TransactionID: &txn, Date: utcDay(2026, 7, 2), Category: new("Income:Other"), Splits: 1})
 
 	assert.Equal(t, []any{"Income:Other", nil}, []any{items[0]["category"], items[0]["category_id"]})
 }
 
 func Test_renderFindingsJSON_gives_an_unlinked_transfer_item_with_several_splits_or_none_a_null_category(t *testing.T) {
 	items := unlinkedItemsJSON(t,
-		store.FindingItem{Date: findingDay(2026, 7, 2), Splits: 2},
-		store.FindingItem{Date: findingDay(2026, 7, 3), Splits: 0})
+		store.FindingItem{Date: utcDay(2026, 7, 2), Splits: 2},
+		store.FindingItem{Date: utcDay(2026, 7, 3), Splits: 0})
 
 	assert.Contains(t, items[0], "category")
 	assert.Nil(t, items[0]["category"])
@@ -179,7 +179,7 @@ func Test_renderFindingsJSON_gives_a_payee_variants_item_its_payee_and_count_and
 
 func Test_renderFindingsJSON_gives_a_one_sided_transfer_item_its_other_account_name_and_id(t *testing.T) {
 	items := itemsJSON(t, finding.OneSidedTransfer, store.FindingItem{
-		TransactionID: new("txn-9"), SplitID: new("split-9"), Date: findingDay(2026, 8, 3), AccountID: "acct-3", Account: "Visa",
+		TransactionID: new("txn-9"), SplitID: new("split-9"), Date: utcDay(2026, 8, 3), AccountID: "acct-3", Account: "Visa",
 		Currency: "CAD", Payee: "Payment", Amount: 120000, OtherAccount: new("Savings"), OtherAccountID: new("acct-2"),
 	})
 
@@ -193,7 +193,7 @@ func Test_renderFindingsJSON_gives_a_one_sided_transfer_item_its_other_account_n
 
 func Test_renderFindingsJSON_keeps_the_date_account_and_amount_of_a_transaction_item_and_a_null_transactions(t *testing.T) {
 	items := itemsJSON(t, finding.Duplicate, store.FindingItem{
-		TransactionID: new("txn-1"), Date: findingDay(2026, 8, 3), AccountID: "acct-3", Account: "Chequing", Currency: "CAD",
+		TransactionID: new("txn-1"), Date: utcDay(2026, 8, 3), AccountID: "acct-3", Account: "Chequing", Currency: "CAD",
 		Payee: "Hydro One", Amount: -14217,
 	})
 
@@ -207,7 +207,7 @@ func Test_renderFindingsJSON_keeps_the_date_account_and_amount_of_a_transaction_
 
 func Test_renderFindingsJSON_keeps_the_date_account_and_amount_of_an_item_with_only_a_split(t *testing.T) {
 	items := itemsJSON(t, finding.Uncategorized, store.FindingItem{
-		SplitID: new("split-4"), Date: findingDay(2026, 8, 3), AccountID: "acct-3", Account: "Chequing", Currency: "CAD", Amount: -500,
+		SplitID: new("split-4"), Date: utcDay(2026, 8, 3), AccountID: "acct-3", Account: "Chequing", Currency: "CAD", Amount: -500,
 	})
 
 	assert.Equal(t, map[string]any{
@@ -234,7 +234,7 @@ func Test_renderFindingsJSON_gives_a_similar_categories_item_its_category_and_sp
 
 func Test_renderFindingsJSON_leaves_splits_null_for_an_unlinked_transfer_item_that_carries_a_split_count(t *testing.T) {
 	items := unlinkedItemsJSON(t,
-		store.FindingItem{TransactionID: new("txn-1"), Date: findingDay(2026, 7, 2), Category: new("Income:Other"), Splits: 1})
+		store.FindingItem{TransactionID: new("txn-1"), Date: utcDay(2026, 7, 2), Category: new("Income:Other"), Splits: 1})
 
 	assert.Contains(t, items[0], "splits")
 	assert.Nil(t, items[0]["splits"])

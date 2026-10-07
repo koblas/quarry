@@ -16,24 +16,9 @@ const anomaliesCaption = "Unusually large charges 2026-01-01 to 2026-03-09 in al
 
 const anomaliesHeaderLine = "Date  Account  Payee  Category  Amount  Usual  Times  Compared with\n"
 
-// anomalyOf is a payee-baseline anomaly of the given payee, category and splits: 412.00 against a
-// usual 96.05, 4.3 times, from 38 earlier charges, on 2026-03-02 in Chequing (CAD).
-func anomalyOf(payee *string, category *store.ChargeCategory, splits int) report.Anomaly {
-	return report.Anomaly{
-		Date:    time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC),
-		Account: store.Account{ID: "acct-1", Name: "Chequing", Currency: "CAD", Active: true},
-		Payee:   payee, Currency: "CAD", Amount: 41200, Category: category, ExpenseSplits: splits,
-		Baseline: report.BaselinePayee, Usual: 9605, Earlier: 38, TimesTenths: 43,
-	}
-}
-
-func listed(anomalies ...report.Anomaly) report.Anomalies {
-	return report.Anomalies{Window: spendingWindow(), Listed: anomalies, Checked: len(anomalies)}
-}
-
 func Test_renderAnomalies_pads_each_column_and_trims_the_trailing_spaces_of_a_row(t *testing.T) {
 	longer := anomalyOf(new("Bell Canada"), &store.ChargeCategory{Path: "Utilities:Phone"}, 1)
-	longer.Date = time.Date(2026, time.March, 5, 0, 0, 0, 0, time.UTC)
+	longer.Date = utcDay(2026, time.March, 5)
 	longer.Amount, longer.Usual, longer.TimesTenths, longer.Earlier = 184210, 21040, 88, 212
 	shorter := anomalyOf(new("Rogers"), &store.ChargeCategory{Path: "Home"}, 1)
 

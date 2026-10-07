@@ -25,3 +25,8 @@ func Test_windowCaption_names_the_reporting_currency_only_for_cad_and_usd(t *tes
 		})
 	}
 }
+
+func Test_escapeCell_writes_newline_tab_and_carriage_return_as_backslash_forms(t *testing.T) {
+	assert.Equal(t, `a\nb\tc\rd`, escapeCell("a\nb\tc\rd"))
+	assert.Equal(t, "plain 'name' \\ é", escapeCell("plain 'name' \\ é"))
+}

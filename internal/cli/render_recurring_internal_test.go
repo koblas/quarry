@@ -12,21 +12,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func recurringDay(month time.Month, day int) time.Time {
-	return time.Date(2026, month, day, 0, 0, 0, 0, time.UTC)
-}
-
 func Test_renderRecurring_pads_each_column_and_trims_the_trailing_spaces_of_a_row(t *testing.T) {
 	r := report.Recurring{
 		Window: spendingWindow(),
 		Series: []report.Series{
 			{
 				Payee: "Rogers", Currency: "CAD", NativeCurrency: "CAD", Cadence: report.CadenceMonthly, Amount: 9500, PerYear: new(int64(114000)),
-				First: recurringDay(time.May, 3), Last: recurringDay(time.September, 3), State: report.SeriesActive,
+				First: utcDay(2026, time.May, 3), Last: utcDay(2026, time.September, 3), State: report.SeriesActive,
 			},
 			{
 				Payee: "Disney Plus", Currency: "CAD", NativeCurrency: "CAD", Cadence: report.CadenceMonthly, Amount: 1199,
-				First: recurringDay(time.February, 7), Last: recurringDay(time.April, 7), State: report.SeriesEnded,
+				First: utcDay(2026, time.February, 7), Last: utcDay(2026, time.April, 7), State: report.SeriesEnded,
 			},
 		},
 		Totals: []report.RecurringTotal{{Currency: "CAD", PerYear: 114000}},
@@ -49,7 +45,7 @@ func Test_renderRecurring_measures_the_payee_column_after_escaping_the_name(t *t
 		Window: spendingWindow(),
 		Series: []report.Series{{
 			Payee: "Foo\nBar", Currency: "CAD", NativeCurrency: "CAD", Cadence: report.CadenceWeekly, Amount: 500, PerYear: new(int64(26000)),
-			First: recurringDay(time.January, 5), Last: recurringDay(time.February, 5), State: report.SeriesActive,
+			First: utcDay(2026, time.January, 5), Last: utcDay(2026, time.February, 5), State: report.SeriesActive,
 		}},
 	}
 
@@ -69,11 +65,11 @@ func Test_renderRecurring_measures_the_payee_column_in_characters_not_bytes(t *t
 		Series: []report.Series{
 			{
 				Payee: "Société", Currency: "CAD", NativeCurrency: "CAD", Cadence: report.CadenceWeekly, Amount: 500, PerYear: new(int64(26000)),
-				First: recurringDay(time.January, 5), Last: recurringDay(time.February, 5), State: report.SeriesActive,
+				First: utcDay(2026, time.January, 5), Last: utcDay(2026, time.February, 5), State: report.SeriesActive,
 			},
 			{
 				Payee: "Rogers", Currency: "CAD", NativeCurrency: "CAD", Cadence: report.CadenceWeekly, Amount: 500, PerYear: new(int64(26000)),
-				First: recurringDay(time.January, 5), Last: recurringDay(time.February, 5), State: report.SeriesActive,
+				First: utcDay(2026, time.January, 5), Last: utcDay(2026, time.February, 5), State: report.SeriesActive,
 			},
 		},
 	}
@@ -106,7 +102,7 @@ func Test_renderRecurring_names_each_cadence_in_the_Every_cell(t *testing.T) {
 				Window: spendingWindow(),
 				Series: []report.Series{{
 					Payee: "A", Currency: "CAD", NativeCurrency: "CAD", Cadence: c.cadence, Amount: 100, PerYear: new(int64(5200)),
-					First: recurringDay(time.January, 5), Last: recurringDay(time.February, 5), State: report.SeriesActive,
+					First: utcDay(2026, time.January, 5), Last: utcDay(2026, time.February, 5), State: report.SeriesActive,
 				}},
 			}
 
@@ -133,7 +129,7 @@ func Test_renderRecurring_adds_new_to_the_status_of_a_new_series(t *testing.T) {
 				Window: spendingWindow(),
 				Series: []report.Series{{
 					Payee: "A", Currency: "CAD", NativeCurrency: "CAD", Cadence: report.CadenceMonthly, Amount: 100,
-					First: recurringDay(time.January, 5), Last: recurringDay(time.February, 5), State: c.state, New: true,
+					First: utcDay(2026, time.January, 5), Last: utcDay(2026, time.February, 5), State: c.state, New: true,
 				}},
 			}
 
@@ -173,8 +169,8 @@ func Test_renderRecurring_prints_the_ruled_sample_row_with_its_price_change(t *t
 		Window: spendingWindow(),
 		Series: []report.Series{{
 			Payee: "Rogers", Currency: "CAD", NativeCurrency: "CAD", Cadence: report.CadenceMonthly, Amount: 9500, FirstAmount: 8500, NativeAmount: 9500, NativeFirstAmount: 8500, PerYear: new(int64(114000)),
-			First: recurringDay(time.May, 3), Last: recurringDay(time.September, 3), State: report.SeriesActive,
-			PriceChanges: []report.PriceChange{{Date: recurringDay(time.July, 3), From: 8500, To: 9500, Tenths: 118}},
+			First: utcDay(2026, time.May, 3), Last: utcDay(2026, time.September, 3), State: report.SeriesActive,
+			PriceChanges: []report.PriceChange{{Date: utcDay(2026, time.July, 3), From: 8500, To: 9500, Tenths: 118}},
 			ChangeTenths: 118,
 		}},
 	}
@@ -206,7 +202,7 @@ func Test_renderRecurring_writes_the_first_to_latest_change_in_the_price_changes
 				Window: spendingWindow(),
 				Series: []report.Series{{
 					Payee: "A", Currency: "CAD", NativeCurrency: "CAD", Cadence: report.CadenceMonthly, Amount: c.last, FirstAmount: c.first, NativeAmount: c.last, NativeFirstAmount: c.first,
-					First: recurringDay(time.January, 5), Last: recurringDay(time.February, 5), State: report.SeriesEnded,
+					First: utcDay(2026, time.January, 5), Last: utcDay(2026, time.February, 5), State: report.SeriesEnded,
 					PriceChanges: make([]report.PriceChange, c.changes), ChangeTenths: c.changeTenths,
 				}},
 			}
@@ -223,7 +219,7 @@ func Test_renderRecurring_leaves_the_price_changes_cell_empty_without_a_change(t
 		Window: spendingWindow(),
 		Series: []report.Series{{
 			Payee: "A", Currency: "CAD", NativeCurrency: "CAD", Cadence: report.CadenceMonthly, Amount: 1000, FirstAmount: 1040,
-			First: recurringDay(time.January, 5), Last: recurringDay(time.February, 5), State: report.SeriesEnded,
+			First: utcDay(2026, time.January, 5), Last: utcDay(2026, time.February, 5), State: report.SeriesEnded,
 			ChangeTenths: -38,
 		}},
 	}
@@ -251,14 +247,14 @@ func Test_renderRecurring_shows_the_native_currency_after_a_converted_rows_curre
 			{
 				Payee: "Gym", Currency: "CAD", NativeCurrency: "USD", Cadence: report.CadenceMonthly,
 				Amount: 2100, FirstAmount: 1560, NativeAmount: 1500, NativeFirstAmount: 1200, PerYear: new(int64(25200)),
-				First: recurringDay(time.February, 12), Last: recurringDay(time.September, 12), State: report.SeriesActive, New: true,
-				PriceChanges: []report.PriceChange{{Date: recurringDay(time.June, 12), From: 1200, To: 1500, Tenths: 250}}, ChangeTenths: 250,
+				First: utcDay(2026, time.February, 12), Last: utcDay(2026, time.September, 12), State: report.SeriesActive, New: true,
+				PriceChanges: []report.PriceChange{{Date: utcDay(2026, time.June, 12), From: 1200, To: 1500, Tenths: 250}}, ChangeTenths: 250,
 			},
 			{
 				Payee: "Rent", Currency: "CAD", NativeCurrency: "CAD", Cadence: report.CadenceMonthly,
 				Amount: 5000, FirstAmount: 4000, NativeAmount: 5000, NativeFirstAmount: 4000, PerYear: new(int64(60000)),
-				First: recurringDay(time.February, 12), Last: recurringDay(time.September, 12), State: report.SeriesActive,
-				PriceChanges: []report.PriceChange{{Date: recurringDay(time.June, 12), From: 4000, To: 5000, Tenths: 250}}, ChangeTenths: 250,
+				First: utcDay(2026, time.February, 12), Last: utcDay(2026, time.September, 12), State: report.SeriesActive,
+				PriceChanges: []report.PriceChange{{Date: utcDay(2026, time.June, 12), From: 4000, To: 5000, Tenths: 250}}, ChangeTenths: 250,
 			},
 		},
 		Totals: []report.RecurringTotal{{Currency: "CAD", PerYear: 85200}},
@@ -282,8 +278,8 @@ func Test_renderRecurring_reads_the_price_change_in_the_native_amounts_not_the_c
 		Series: []report.Series{{
 			Payee: "Hydro", Currency: "USD", NativeCurrency: "CAD", Cadence: report.CadenceMonthly,
 			Amount: 900, FirstAmount: 900, NativeAmount: 1299, NativeFirstAmount: 999, PerYear: new(int64(10800)),
-			First: recurringDay(time.February, 12), Last: recurringDay(time.September, 12), State: report.SeriesActive,
-			PriceChanges: []report.PriceChange{{Date: recurringDay(time.June, 12), From: 999, To: 1299, Tenths: 300}}, ChangeTenths: 300,
+			First: utcDay(2026, time.February, 12), Last: utcDay(2026, time.September, 12), State: report.SeriesActive,
+			PriceChanges: []report.PriceChange{{Date: utcDay(2026, time.June, 12), From: 999, To: 1299, Tenths: 300}}, ChangeTenths: 300,
 		}},
 	}
 
@@ -299,7 +295,7 @@ func Test_renderRecurring_lists_an_ended_converted_series_without_per_year_or_to
 		Series: []report.Series{{
 			Payee: "Old", Currency: "CAD", NativeCurrency: "USD", Cadence: report.CadenceMonthly, Amount: 1400, FirstAmount: 1400,
 			NativeAmount: 1000, NativeFirstAmount: 1000,
-			First: recurringDay(time.January, 5), Last: recurringDay(time.February, 5), State: report.SeriesEnded, New: true,
+			First: utcDay(2026, time.January, 5), Last: utcDay(2026, time.February, 5), State: report.SeriesEnded, New: true,
 		}},
 	}
 

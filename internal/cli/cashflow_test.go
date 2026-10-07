@@ -2,14 +2,14 @@ package cli_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"testing"
 	"time"
 
 	"github.com/koblas/quarry/internal/cli"
-	"github.com/koblas/quarry/internal/report"
+	"github.com/koblas/quarry/internal/config"
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,25 +17,9 @@ import (
 
 const cashFlowEmpty = "no income or spending from 2026-01-01 to 2026-09-29"
 
-func leftOutCashFlowWarning(name string) string {
-	return "account \"" + name + "\" is not used in reports in Quicken, so cashflow leaves it out; " +
-		"to include it, turn on reports for it in Quicken's account settings, then run quarry sync"
-}
-
-func linkedCashFlowWarning(name string) string {
-	return "account \"" + name + "\" uses linked account tracking in Quicken, so cashflow leaves it out, as Quicken's reports do"
-}
-
 func executeCashFlow(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
 	t.Helper()
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     stdout, Stderr: stderr,
-		Now: func() time.Time { return spendNow },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fake)), nil
-		},
-	}
+	env := reportEnv(fake, stdout, stderr, atSpendNow)
 	return cli.Execute(t.Context(), append([]string{"cashflow"}, args...), env)
 }
 
@@ -102,12 +86,7 @@ func Test_cashflow_refuses_a_by_that_names_no_period_before_reading_the_store(t 
 
 func Test_cashflow_refuses_a_by_before_it_looks_at_the_window_or_opens_the_report(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     &stdout, Stderr: &stderr,
-		Now:       time.Now,
-		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
-	}
+	env := failingReportEnv(errStoreRead, &stdout, &stderr, atWallClock)
 
 	err := cli.Execute(t.Context(), []string{"cashflow", "--by", "week", "--since", "2024-13"}, env)
 
@@ -118,12 +97,7 @@ func Test_cashflow_refuses_a_by_before_it_looks_at_the_window_or_opens_the_repor
 
 func Test_cashflow_refuses_a_window_before_opening_the_report(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     &stdout, Stderr: &stderr,
-		Now:       time.Now,
-		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
-	}
+	env := failingReportEnv(errStoreRead, &stdout, &stderr, atWallClock)
 
 	err := cli.Execute(t.Context(), []string{"cashflow", "--since", "2024-13"}, env)
 
@@ -164,31 +138,6 @@ func Test_cashflow_refuses_a_period_it_cannot_use_before_reading_the_store(t *te
 			assert.Empty(t, stderr.String())
 		})
 	}
-}
-
-func Test_cashflow_returns_the_report_fault(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeCashFlow(t, fakeReportStore{err: errStoreRead}, &stdout, &stderr)
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-	assert.Empty(t, stderr.String())
-}
-
-func Test_cashflow_returns_the_report_factory_fault(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     &stdout, Stderr: &stderr,
-		Now:       time.Now,
-		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
-	}
-
-	err := cli.Execute(t.Context(), []string{"cashflow"}, env)
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
 }
 
 func Test_cashflow_returns_a_failed_stdout_write(t *testing.T) {
@@ -241,8 +190,8 @@ func Test_cashflow_warns_once_per_named_account_left_out_of_reports_saying_cashf
 		"--account", "Old Card", "--account", chequingID, "--account", oldBankID, "--account", "old card")
 
 	require.NoError(t, err)
-	assert.Equal(t, "quarry: warning: "+leftOutCashFlowWarning("Old Card")+"\n"+
-		"quarry: warning: "+leftOutCashFlowWarning("Old Bank")+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+leftOutWarning("cashflow", "Old Card")+"\n"+
+		"quarry: warning: "+leftOutWarning("cashflow", "Old Bank")+"\n", stderr.String())
 }
 
 func Test_cashflow_puts_the_empty_window_note_after_the_left_out_of_reports_warnings(t *testing.T) {
@@ -253,7 +202,7 @@ func Test_cashflow_puts_the_empty_window_note_after_the_left_out_of_reports_warn
 	err := executeCashFlow(t, fake, &stdout, &stderr, "--account", "Old Card", "--account", chequingID)
 
 	require.NoError(t, err)
-	assert.Equal(t, "quarry: warning: "+leftOutCashFlowWarning("Old Card")+"\n"+
+	assert.Equal(t, "quarry: warning: "+leftOutWarning("cashflow", "Old Card")+"\n"+
 		"quarry: warning: "+cashFlowEmpty+" in the named accounts; their transactions run 2019-03-02 to 2024-11-30\n", stderr.String())
 }
 
@@ -263,8 +212,8 @@ func Test_cashflow_says_nothing_of_an_empty_window_when_every_named_account_is_l
 	err := executeCashFlow(t, namedAccounts(), &stdout, &stderr, "--account", "Old Card", "--account", oldBankID)
 
 	require.NoError(t, err)
-	assert.Equal(t, "quarry: warning: "+leftOutCashFlowWarning("Old Card")+"\n"+
-		"quarry: warning: "+leftOutCashFlowWarning("Old Bank")+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+leftOutWarning("cashflow", "Old Card")+"\n"+
+		"quarry: warning: "+leftOutWarning("cashflow", "Old Bank")+"\n", stderr.String())
 }
 
 func Test_cashflow_warns_that_linked_tracking_leaves_out_a_named_account_before_an_account_not_in_reports(t *testing.T) {
@@ -274,9 +223,9 @@ func Test_cashflow_warns_that_linked_tracking_leaves_out_a_named_account_before_
 		"--account", linkedID, "--account", "Old Card", "--account", bothID)
 
 	require.NoError(t, err)
-	assert.Equal(t, "quarry: warning: "+linkedCashFlowWarning("Netskope 401(k)")+"\n"+
-		"quarry: warning: "+leftOutCashFlowWarning("Old Card")+"\n"+
-		"quarry: warning: "+linkedCashFlowWarning("Old 401(k)")+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+linkedTrackingWarning("cashflow", "Netskope 401(k)")+"\n"+
+		"quarry: warning: "+leftOutWarning("cashflow", "Old Card")+"\n"+
+		"quarry: warning: "+linkedTrackingWarning("cashflow", "Old 401(k)")+"\n", stderr.String())
 }
 
 func Test_cashflow_json_lists_a_linked_tracking_warning_before_a_left_out_of_reports_one_unprefixed(t *testing.T) {
@@ -290,7 +239,7 @@ func Test_cashflow_json_lists_a_linked_tracking_warning_before_a_left_out_of_rep
 		Warnings []string `json:"warnings"`
 	}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
-	assert.Equal(t, []string{linkedCashFlowWarning("Netskope 401(k)"), leftOutCashFlowWarning("Old Card")}, doc.Warnings)
+	assert.Equal(t, []string{linkedTrackingWarning("cashflow", "Netskope 401(k)"), leftOutWarning("cashflow", "Old Card")}, doc.Warnings)
 }
 
 func Test_cashflow_says_nothing_of_an_empty_window_when_every_named_account_is_left_out_and_one_is_linked(t *testing.T) {
@@ -299,8 +248,8 @@ func Test_cashflow_says_nothing_of_an_empty_window_when_every_named_account_is_l
 	err := executeCashFlow(t, namedAccounts(), &stdout, &stderr, "--account", linkedID, "--account", "Old Card")
 
 	require.NoError(t, err)
-	assert.Equal(t, "quarry: warning: "+linkedCashFlowWarning("Netskope 401(k)")+"\n"+
-		"quarry: warning: "+leftOutCashFlowWarning("Old Card")+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+linkedTrackingWarning("cashflow", "Netskope 401(k)")+"\n"+
+		"quarry: warning: "+leftOutWarning("cashflow", "Old Card")+"\n", stderr.String())
 }
 
 func Test_cashflow_puts_the_empty_window_note_after_the_linked_tracking_warning_when_a_reported_account_is_named(t *testing.T) {
@@ -311,7 +260,7 @@ func Test_cashflow_puts_the_empty_window_note_after_the_linked_tracking_warning_
 	err := executeCashFlow(t, fake, &stdout, &stderr, "--account", linkedID, "--account", chequingID)
 
 	require.NoError(t, err)
-	assert.Equal(t, "quarry: warning: "+linkedCashFlowWarning("Netskope 401(k)")+"\n"+
+	assert.Equal(t, "quarry: warning: "+linkedTrackingWarning("cashflow", "Netskope 401(k)")+"\n"+
 		"quarry: warning: "+cashFlowEmpty+" in the named accounts; their transactions run 2019-03-02 to 2024-11-30\n", stderr.String())
 }
 
@@ -365,4 +314,31 @@ func Test_cashflow_says_nothing_of_an_empty_window_when_a_currency_nets_to_zero(
 
 	require.NoError(t, err)
 	assert.Empty(t, stderr.String())
+}
+
+func Test_cashflow_reads_in_the_currency_the_resolver_picks(t *testing.T) {
+	cases := []struct {
+		name   string
+		config money.Currency
+		args   []string
+		want   money.Currency
+	}{
+		{name: "the config's currency without the flag", config: money.USD, want: money.USD},
+		{name: "the flag", config: money.CAD, args: []string{"--currency", "usd"}, want: money.USD},
+		{name: "the flag beats the config", config: money.USD, args: []string{"--currency", "CAD"}, want: money.CAD},
+		{name: "native by flag", config: money.CAD, args: []string{"--currency", "native"}, want: money.Native},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var got store.CashFlowParams
+			var stdout, stderr bytes.Buffer
+			env := reportEnv(fakeReportStore{gotCashFlow: &got}, &stdout, &stderr, atSpendNow, withConfig(config.Config{Currency: c.config}))
+
+			err := cli.Execute(t.Context(), append([]string{"cashflow"}, c.args...), env)
+
+			require.NoError(t, err)
+			assert.Equal(t, c.want, got.Currency)
+		})
+	}
 }

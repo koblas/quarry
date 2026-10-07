@@ -6,7 +6,6 @@ package cli
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/snapshot"
@@ -31,20 +30,25 @@ func Test_formatMB(t *testing.T) {
 	}
 }
 
-func Test_renderSuccess_reports_one_account_in_the_singular(t *testing.T) {
-	m := snapshot.Manifest{Snapshot: snapshot.Info{Accounts: 1}}
+func Test_renderSuccess_reports_the_account_count(t *testing.T) {
+	cases := []struct {
+		name     string
+		accounts int
+		want     string
+	}{
+		{name: "one_account_in_the_singular", accounts: 1, want: "1 account\n"},
+		{name: "many_accounts_in_the_plural_with_thousands_grouped", accounts: 1000, want: "1,000 accounts\n"},
+	}
 
-	got := renderSuccess(m, "/Users/dave")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := snapshot.Manifest{Snapshot: snapshot.Info{Accounts: c.accounts}}
 
-	assert.Contains(t, got, "1 account\n")
-}
+			got := renderSuccess(m, "/Users/dave")
 
-func Test_renderSuccess_reports_many_accounts_in_the_plural_with_thousands_grouped(t *testing.T) {
-	m := snapshot.Manifest{Snapshot: snapshot.Info{Accounts: 1000}}
-
-	got := renderSuccess(m, "/Users/dave")
-
-	assert.Contains(t, got, "1,000 accounts\n")
+			assert.Contains(t, got, c.want)
+		})
+	}
 }
 
 func Test_schemaLine(t *testing.T) {
@@ -232,7 +236,7 @@ func Test_renderStore_prints_the_transfers_count_line_without_one_sided_rows(t *
 	result := store.Result{
 		Path: "/Users/dave/Library/Application Support/quarry/quarry.duckdb",
 		Validation: store.Validation{Transfers: store.TransferCheck{Paired: 2, OneSided: []store.OneSidedTransfer{
-			{Date: time.Date(2019, 6, 14, 0, 0, 0, 0, time.UTC), Account: "Chequing", Currency: "CAD", Active: true, Amount: -50000},
+			{Date: utcDay(2019, 6, 14), Account: "Chequing", Currency: "CAD", Active: true, Amount: -50000},
 		}}},
 		Findings: finding.Counts{Open: 2},
 	}
@@ -291,7 +295,7 @@ func Test_renderStore_renders_the_store_rows_balances_splits_shares_and_transfer
 func Test_renderStore_ends_with_the_rates_line(t *testing.T) {
 	result := store.Result{
 		Counts: store.Counts{Transactions: 1},
-		Rates:  store.RatesSummary{First: time.Date(2005, 3, 1, 0, 0, 0, 0, time.UTC), Last: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), Added: 12},
+		Rates:  store.RatesSummary{First: utcDay(2005, 3, 1), Last: utcDay(2026, 3, 1), Added: 12},
 	}
 
 	got := renderStore(result, "/Users/dave")
@@ -300,7 +304,7 @@ func Test_renderStore_ends_with_the_rates_line(t *testing.T) {
 }
 
 func Test_ratesPhrase(t *testing.T) {
-	first, last := time.Date(2005, 3, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	first, last := utcDay(2005, 3, 1), utcDay(2026, 3, 1)
 	cases := []struct {
 		name         string
 		rates        store.RatesSummary
@@ -560,7 +564,7 @@ func Test_accountLabel(t *testing.T) {
 }
 
 func Test_balanceMismatchRows(t *testing.T) {
-	day := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
+	day := utcDay(2026, 8, 31)
 
 	t.Run("single row needs no padding", func(t *testing.T) {
 		rows := balanceMismatchRows([]store.BalanceMismatch{
@@ -574,7 +578,7 @@ func Test_balanceMismatchRows(t *testing.T) {
 			{Name: "US Chequing", Currency: "USD", Active: true, StatementDate: day, Quarry: 831000, Quicken: 830000, Difference: 1000},
 			{
 				Name: "Visa Infinite", Currency: "CAD", Closed: true,
-				StatementDate: time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC), Quarry: -120417, Quicken: -118417, Difference: -2000,
+				StatementDate: utcDay(2026, 7, 15), Quarry: -120417, Quicken: -118417, Difference: -2000,
 			},
 		})
 		assert.Equal(t, []string{
@@ -585,7 +589,7 @@ func Test_balanceMismatchRows(t *testing.T) {
 }
 
 func Test_splitMismatchRows(t *testing.T) {
-	date := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+	date := utcDay(2024, 3, 2)
 
 	t.Run("single row needs no padding", func(t *testing.T) {
 		rows := splitMismatchRows([]store.SplitMismatch{
@@ -624,7 +628,7 @@ func Test_splitMismatchRows(t *testing.T) {
 }
 
 func Test_oneSidedRows(t *testing.T) {
-	date := time.Date(2019, 6, 14, 0, 0, 0, 0, time.UTC)
+	date := utcDay(2019, 6, 14)
 
 	t.Run("numeric link renders other account unknown", func(t *testing.T) {
 		rows := oneSidedRows([]store.OneSidedTransfer{
@@ -675,13 +679,13 @@ func Test_renderStoreFailure(t *testing.T) {
 			Path: "/Users/dave/Library/Application Support/quarry/quarry.duckdb",
 			Validation: store.Validation{
 				Balances: store.BalanceCheck{Checked: 2, Mismatched: []store.BalanceMismatch{
-					{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC), Quarry: 100, Quicken: 200, Difference: -100},
+					{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: utcDay(2026, 8, 31), Quarry: 100, Quicken: 200, Difference: -100},
 				}},
 				Splits: store.SplitCheck{Checked: 5},
 				Shares: store.ShareCheck{Checked: 7},
 				Transfers: store.TransferCheck{Paired: 1, OneSided: []store.OneSidedTransfer{
 					{
-						Date: time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC), Account: "Chequing", Currency: "CAD", Active: true,
+						Date: utcDay(2026, 8, 2), Account: "Chequing", Currency: "CAD", Active: true,
 						Payee: "Rent", Amount: -50000, OtherAccount: new("Old Visa"),
 					},
 				}},
@@ -759,7 +763,7 @@ func Test_renderStoreFailure(t *testing.T) {
 		result := store.Result{
 			Validation: store.Validation{
 				Balances: store.BalanceCheck{Checked: 2, Mismatched: []store.BalanceMismatch{
-					{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC), Quarry: 100, Quicken: 200, Difference: -100},
+					{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: utcDay(2026, 8, 31), Quarry: 100, Quicken: 200, Difference: -100},
 				}},
 				Splits: store.SplitCheck{Checked: 5},
 				Shares: store.ShareCheck{Checked: 3, Mismatched: []store.ShareMismatch{
@@ -838,4 +842,112 @@ func Test_renderStoreFailure(t *testing.T) {
 		assert.Contains(t, got, "Balances  DIFFER for 1,000 of 1,035 accounts\n")
 		assert.Contains(t, got, "Splits    DIFFER for 1,000 of 1,204 transactions\n")
 	})
+}
+
+func Test_accountLabel_escapes_control_characters_in_the_name(t *testing.T) {
+	assert.Equal(t, `\tAccount (CAD)`, accountLabel("\tAccount", "CAD", false, true))
+	assert.Equal(t, "Account (CAD)", accountLabel("Account", "CAD", false, true))
+}
+
+func Test_payeeLabel_escapes_control_characters_in_the_payee(t *testing.T) {
+	assert.Equal(t, `Tim\nHortons`, payeeLabel("Tim\nHortons"))
+	assert.Equal(t, "Tim Hortons", payeeLabel("Tim Hortons"))
+}
+
+func Test_otherAccountLabel_escapes_control_characters_in_the_name(t *testing.T) {
+	cases := []struct {
+		name string
+		leg  store.OneSidedTransfer
+		want string
+	}{
+		{"not in this file", store.OneSidedTransfer{OtherAccount: new("\tAccount Not Synced")}, `\tAccount Not Synced (not in this file)`},
+		{"in this file", store.OneSidedTransfer{OtherAccount: new("Sav\ringS"), OtherAccountID: new("acct-2")}, `Sav\ringS`},
+		{"a clean name is unchanged", store.OneSidedTransfer{OtherAccount: new("Old Visa")}, "Old Visa (not in this file)"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, otherAccountLabel(c.leg))
+		})
+	}
+}
+
+func Test_renderStoreFailure_escapes_the_names_of_a_one_sided_leg_and_a_mismatch(t *testing.T) {
+	result := store.Result{
+		Validation: store.Validation{
+			Balances: store.BalanceCheck{Checked: 1, Mismatched: []store.BalanceMismatch{
+				{Name: "Cheq\tuing", Currency: "CAD", Active: true, StatementDate: utcDay(2026, 8, 31)},
+			}},
+			Transfers: store.TransferCheck{OneSided: []store.OneSidedTransfer{
+				{
+					Date: utcDay(2026, 8, 2), Account: "Chequing", Currency: "CAD", Active: true,
+					Payee: "Rent", Amount: -50000, OtherAccount: new("\tAccount Not Synced"),
+				},
+			}},
+		},
+	}
+
+	got := renderStoreFailure(result, true, "/Users/dave")
+
+	assert.Contains(t, got, "  ! Cheq\\tuing (CAD)  2026-08-31  quarry 0.00  Quicken 0.00  difference 0.00\n")
+	assert.Contains(t, got, "  ? 2026-08-02  Chequing (CAD)  Rent  -500.00  other account: \\tAccount Not Synced (not in this file)\n")
+}
+
+func Test_oneSidedRows_measure_widths_after_escaping(t *testing.T) {
+	date := utcDay(2019, 6, 14)
+
+	rows := oneSidedRows([]store.OneSidedTransfer{
+		{Date: date, Account: "A\tB", Currency: "CAD", Active: true, Payee: "x", Amount: 100},
+		{Date: date, Account: "Visa", Currency: "CAD", Active: true, Payee: "y", Amount: 100},
+	})
+
+	assert.Equal(t, []string{
+		`  ? 2019-06-14  A\tB (CAD)  x  1.00  other account: unknown`,
+		`  ? 2019-06-14  Visa (CAD)  y  1.00  other account: unknown`,
+	}, rows)
+}
+
+func Test_widestLen_counts_runes_not_bytes(t *testing.T) {
+	cases := []struct {
+		name string
+		ss   []string
+		want int
+	}{
+		{name: "empty slice", ss: nil, want: 0},
+		{name: "ASCII control", ss: []string{"ab", "abcd", "abc"}, want: 4},
+		{name: "two-byte rune counts once", ss: []string{"Épargne", "abc"}, want: 7},
+		{name: "CJK counts once per glyph", ss: []string{"ニホン", "ab"}, want: 3},
+		{name: "four-byte emoji counts once", ss: []string{"📈📉", "abc"}, want: 3},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, widestLen(c.ss))
+		})
+	}
+}
+
+func Test_shareMismatchRows_pad_non_ASCII_names_by_runes(t *testing.T) {
+	rows := shareMismatchRows([]store.ShareMismatch{
+		{Account: "Épargne", Currency: "CAD", Active: true, Security: "Fund", Quarry: 1_000_000, Quicken: 0, Difference: 1_000_000},
+		{Account: "RRSP", Currency: "USD", Active: true, Security: "ニホン", Quarry: 2_000_000, Quicken: 0, Difference: 2_000_000},
+	})
+
+	assert.Equal(t, []string{
+		"  ! Épargne (CAD)  Fund  quarry 1  Quicken 0  difference 1",
+		"  ! RRSP (USD)     ニホン   quarry 2  Quicken 0  difference 2",
+	}, rows)
+}
+
+func Test_balanceMismatchRows_pad_non_ASCII_labels_by_runes(t *testing.T) {
+	day := utcDay(2026, 8, 31)
+
+	rows := balanceMismatchRows([]store.BalanceMismatch{
+		{Name: "Épargne courante", Currency: "CAD", Active: true, StatementDate: day, Quarry: 831000, Quicken: 830000, Difference: 1000},
+		{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: day, Quarry: 831000, Quicken: 830000, Difference: 1000},
+	})
+
+	assert.Equal(t, []string{
+		"  ! Épargne courante (CAD)  2026-08-31  quarry 8,310.00  Quicken 8,300.00  difference 10.00",
+		"  ! Chequing (CAD)          2026-08-31  quarry 8,310.00  Quicken 8,300.00  difference 10.00",
+	}, rows)
 }

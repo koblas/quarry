@@ -422,7 +422,7 @@ Ruled (sizing pass 2026-10-01):
 - [x] SCENARIO-13: recurring refuses usage and store problems — delivered by SCENARIO-11: `cmd/quarry/run_recurring_refusals_test.go` `Test_run_recurring_refuses_usage_and_account_problems`
 - [x] SCENARIO-14: a charge over twice the payee's usual is listed — `cmd/quarry/run_anomalies_test.go` `Test_run_anomalies_lists_a_charge_over_twice_the_payees_usual`
 - [x] SCENARIO-15: anomaly thresholds hold at their boundaries — delivered by SCENARIO-14: `internal/report/anomalies_test.go` `Test_anomalies_thresholds_hold_at_their_boundaries`
-- [x] SCENARIO-16: each report's window flags describe what that report does with them — delivered by SCENARIO-14: `internal/cli/report_help_test.go` `Test_each_reports_window_flags_describe_what_it_does_with_them`
+- [x] SCENARIO-16: each report's window flags describe what that report does with them — delivered by SCENARIO-14: `internal/cli/report_test.go` `Test_each_reports_window_flags_describe_what_it_does_with_them`
 - [x] SCENARIO-17: a payee with little history is judged against its category — `cmd/quarry/run_anomalies_category_test.go` `Test_run_anomalies_judges_a_first_time_payee_against_its_category`
 - [x] SCENARIO-18: a charge with no usable history is counted as not judged — delivered by SCENARIO-17: `cmd/quarry/run_anomalies_category_test.go` `Test_run_anomalies_counts_an_uncategorized_first_time_charge_as_not_judged`
 - [x] SCENARIO-19: anomalies --json returns the anomalies document — `cmd/quarry/run_anomalies_json_test.go` `Test_run_anomalies_json_returns_the_anomalies_document`

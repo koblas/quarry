@@ -2,12 +2,10 @@ package cli_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -15,7 +13,6 @@ import (
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/platform/money"
-	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,14 +24,7 @@ const holdingsCurrencyHelp = "add a column with each value in currency code: CAD
 
 // holdingsEnv is an Env whose config comes from load and whose report store is fake.
 func holdingsEnv(load func(string) (config.Config, error), fake fakeReportStore, stdout, stderr io.Writer) cli.Env {
-	return cli.Env{
-		LoadConfig: load,
-		Stdout:     stdout, Stderr: stderr,
-		Now: func() time.Time { return spendNow },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fake)), nil
-		},
-	}
+	return reportEnv(fake, stdout, stderr, atSpendNow, withLoader(load))
 }
 
 func executeHoldings(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
@@ -104,29 +94,6 @@ included.
 	assert.Contains(t, stdout.String(), long)
 }
 
-func Test_holdings_help_shows_examples(t *testing.T) {
-	const examples = `Examples:
-  quarry holdings
-  quarry holdings --as-of 2025-12-31
-  quarry holdings --account RRSP --currency native --json
-`
-	var stdout, stderr bytes.Buffer
-
-	err := executeHoldings(t, fakeReportStore{}, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), examples)
-}
-
-func Test_holdings_help_shows_the_currency_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeHoldings(t, fakeReportStore{}, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Regexp(t, `(?m)--currency code +`+regexp.QuoteMeta(holdingsCurrencyHelp)+`$`, stdout.String())
-}
-
 func Test_holdings_is_listed_in_the_root_help_with_its_short_description(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := cli.Env{Stdout: &stdout, Stderr: &stderr}
@@ -145,15 +112,6 @@ func Test_holdings_reads_the_day_of_the_clock_as_its_as_of_day(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, store.HoldingsParams{AsOf: time.Date(2026, time.September, 29, 0, 0, 0, 0, time.UTC)}, got)
-}
-
-func Test_holdings_help_shows_the_as_of_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeHoldings(t, fakeReportStore{}, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Regexp(t, `(?m)--as-of date +`+regexp.QuoteMeta(holdingsAsOfHelp)+`$`, stdout.String())
 }
 
 func Test_holdings_as_of_reads_the_last_day_of_the_period_it_names(t *testing.T) {
@@ -485,24 +443,6 @@ func Test_holdings_json_lists_no_holdings_as_an_empty_array(t *testing.T) {
 	assert.Contains(t, stdout.String(), `"totals": []`)
 }
 
-func Test_holdings_returns_a_failed_store_read(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeHoldings(t, fakeReportStore{err: errStoreRead}, &stdout, &stderr)
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-}
-
-func Test_holdings_returns_a_failed_report_open(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := cli.Execute(t.Context(), []string{"holdings"}, refusedEnv(&stdout, &stderr))
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-}
-
 func Test_holdings_returns_a_failed_stdout_write(t *testing.T) {
 	var stderr bytes.Buffer
 
@@ -510,4 +450,176 @@ func Test_holdings_returns_a_failed_stdout_write(t *testing.T) {
 
 	require.ErrorIs(t, err, errNoSpace)
 	assert.EqualError(t, err, "cannot write the result to stdout: "+errNoSpace.Error())
+}
+
+const (
+	holdingsAccountHelp = "list only the account with this name or id; repeat for more"
+	zetaID              = "acct-zeta"
+	alphaID             = "acct-alpha"
+	retiredID           = "acct-retired"
+)
+
+// investmentAccounts has Zeta (brokerage), Alpha (retirement) and Retired (a closed brokerage).
+func investmentAccounts() fakeReportStore {
+	return accountsStore(
+		store.Account{ID: zetaID, Name: "Zeta", Type: store.AccountTypeBrokerage},
+		store.Account{ID: alphaID, Name: "Alpha", Type: store.AccountTypeRetirement},
+		store.Account{ID: retiredID, Name: "Retired", Type: store.AccountTypeBrokerage, Closed: true},
+	)
+}
+
+func Test_holdings_reads_the_accounts_named_by_id_and_by_name(t *testing.T) {
+	var got store.HoldingsParams
+	fake := investmentAccounts()
+	fake.gotHoldings = &got
+	var stdout, stderr bytes.Buffer
+
+	err := executeHoldings(t, fake, &stdout, &stderr, "--account", "alpha", "--account", zetaID)
+
+	require.NoError(t, err)
+	assert.Equal(t, store.HoldingsParams{
+		AsOf:       time.Date(2026, time.September, 29, 0, 0, 0, 0, time.UTC),
+		AccountIDs: []string{alphaID, zetaID},
+	}, got)
+}
+
+func Test_holdings_captions_the_named_accounts_in_the_order_given(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeHoldings(t, investmentAccounts(), &stdout, &stderr, "--account", "Zeta", "--account", "alpha")
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), "Holdings on 2026-09-29 in Zeta, Alpha, amounts in CAD; cash not included\n")
+}
+
+func Test_holdings_captions_a_native_listing_with_the_named_accounts_and_no_currency(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeHoldings(t, investmentAccounts(), &stdout, &stderr, "--account", "Zeta", "--currency", "native")
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), "Holdings on 2026-09-29 in Zeta; cash not included\n")
+}
+
+func Test_holdings_captions_an_account_named_twice_once(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeHoldings(t, investmentAccounts(), &stdout, &stderr, "--account", "Zeta", "--account", zetaID)
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), "Holdings on 2026-09-29 in Zeta, amounts in CAD; cash not included\n")
+}
+
+func Test_holdings_lists_a_named_closed_account_with_its_closed_mark_in_its_row_not_its_caption(t *testing.T) {
+	fake := investmentAccounts()
+	row := brokerageHolding()
+	row.AccountID, row.Account, row.AccountClosed = retiredID, "Retired", true
+	fake.holdings = store.Holdings{Holdings: []store.Holding{row}}
+	var stdout, stderr bytes.Buffer
+
+	err := executeHoldings(t, fake, &stdout, &stderr, "--account", "Retired")
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), "Holdings on 2026-09-29 in Retired, amounts in CAD; cash not included\n")
+	assert.Contains(t, stdout.String(), "Retired (closed)")
+}
+
+// usdHolding is brokerageHolding priced in USD, 37,704.00 USD, whose CAD value needs an exchange rate the store lacks.
+func usdHolding() store.Holding {
+	h := brokerageHolding()
+	h.Currency, h.ValueCAD, h.ValueUSD = new("USD"), nil, big.NewInt(3_770_400)
+	return h
+}
+
+// cadHolding is brokerageHolding whose USD value needs an exchange rate the store lacks.
+func cadHolding() store.Holding {
+	h := brokerageHolding()
+	h.ValueUSD = nil
+	return h
+}
+
+func Test_holdings_in_column_says_no_rate_for_a_priced_cad_or_usd_row_the_other_currency_cannot_convert(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		row  store.Holding
+	}{
+		{name: "USD in CAD", row: usdHolding()},
+		{name: "CAD in USD", args: []string{"--currency", "USD"}, row: cadHolding()},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			fake := fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{c.row}}}
+
+			err := executeHoldings(t, fake, &stdout, &stderr, c.args...)
+
+			require.NoError(t, err)
+			assert.Regexp(t, `(?m)^Brokerage +Acme Corp \(ACME\) .* +no rate$`, stdout.String())
+		})
+	}
+}
+
+func Test_holdings_in_column_has_no_no_rate_where_the_row_converts_or_is_not_a_rate_matter(t *testing.T) {
+	unpriced := usdHolding()
+	unpriced.Price, unpriced.PriceDate, unpriced.Value = nil, nil, nil
+	cases := []struct {
+		name string
+		args []string
+		row  store.Holding
+	}{
+		{name: "a CAD row in CAD", row: brokerageHolding()},
+		{name: "a USD row in USD", args: []string{"--currency", "USD"}, row: func() store.Holding {
+			h := usdHolding()
+			h.ValueUSD = h.Value
+			return h
+		}()},
+		{name: "a CAD row in USD that converts", args: []string{"--currency", "USD"}, row: brokerageHolding()},
+		{name: "an unpriced USD row", row: unpriced},
+		{name: "a USD row in native", args: []string{"--currency", "native"}, row: usdHolding()},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			fake := fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{c.row}}}
+
+			err := executeHoldings(t, fake, &stdout, &stderr, c.args...)
+
+			require.NoError(t, err)
+			assert.NotContains(t, stdout.String(), "no rate")
+		})
+	}
+}
+
+func Test_holdings_total_rows_list_the_unconverted_total_below_the_converted_one(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	fake := fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{brokerageHolding(), usdHolding()}}}
+
+	err := executeHoldings(t, fake, &stdout, &stderr)
+
+	require.NoError(t, err)
+	assert.Regexp(t, `(?m)^Total +50\.00\nTotal +USD +37,704\.00\n$`, stdout.String())
+}
+
+func Test_holdings_total_rows_list_the_unconverted_total_when_nothing_converts(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	fake := fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{usdHolding()}}}
+
+	err := executeHoldings(t, fake, &stdout, &stderr)
+
+	require.NoError(t, err)
+	assert.Regexp(t, `(?m)^Total +USD +37,704\.00\n$`, stdout.String())
+	assert.NotRegexp(t, `(?m)^Total +37,704\.00$`, stdout.String())
+}
+
+func Test_holdings_in_usd_total_rows_list_the_cad_total_below_the_usd_one(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	fake := fakeReportStore{holdings: store.Holdings{Holdings: []store.Holding{brokerageHolding(), cadHolding()}}}
+
+	err := executeHoldings(t, fake, &stdout, &stderr, "--currency", "USD")
+
+	require.NoError(t, err)
+	assert.Regexp(t, `(?m)^Total +27\.00\nTotal +CAD +37,704\.00\n$`, stdout.String())
 }
