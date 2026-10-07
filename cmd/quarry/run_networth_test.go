@@ -838,11 +838,23 @@ func seedNoRateHoldingStore(t *testing.T, rates ...store.Rate) {
 }
 
 func Test_run_networth_before_the_first_rate_warns_that_a_usd_holding_in_a_cad_account_is_left_out(t *testing.T) {
-	seedNoRateHoldingStore(t, usdRate(holdingsDay(10), 1_360_000))
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "in the reporting currency", args: []string{"--as-of", "2026-02-28"}},
+		{name: "in native currency", args: []string{"--currency", "native", "--as-of", "2026-02-28"}},
+	}
 
-	_, stderr := mustRunNetWorth(t, "--as-of", "2026-02-28")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			seedNoRateHoldingStore(t, usdRate(holdingsDay(10), 1_360_000))
 
-	assert.Equal(t, fmt.Sprintf(noRateHoldingBeforeFirstRate, "2026-02-28", "2026-03-10"), stderr)
+			_, stderr := mustRunNetWorth(t, c.args...)
+
+			assert.Equal(t, fmt.Sprintf(noRateHoldingBeforeFirstRate, "2026-02-28", "2026-03-10"), stderr)
+		})
+	}
 }
 
 func Test_run_networth_history_counts_the_month_ends_a_usd_holding_in_a_cad_account_lacked_a_rate(t *testing.T) {
@@ -852,14 +864,6 @@ func Test_run_networth_history_counts_the_month_ends_a_usd_holding_in_a_cad_acco
 
 	assert.Equal(t, `quarry: warning: "Brokerage" holds a USD security on 2 of the month ends listed, before 2026-03-10, `+
 		`the first exchange rate in the store, so its CAD balance leaves it out on those days`+"\n", stderr)
-}
-
-func Test_run_networth_native_still_warns_that_a_usd_holding_in_a_cad_account_has_no_rate(t *testing.T) {
-	seedNoRateHoldingStore(t, usdRate(holdingsDay(10), 1_360_000))
-
-	_, stderr := mustRunNetWorth(t, "--currency", "native", "--as-of", "2026-02-28")
-
-	assert.Equal(t, fmt.Sprintf(noRateHoldingBeforeFirstRate, "2026-02-28", "2026-03-10"), stderr)
 }
 
 func Test_run_networth_in_a_store_with_no_rates_warns_of_the_holding_before_the_rate_line(t *testing.T) {

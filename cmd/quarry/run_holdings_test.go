@@ -452,46 +452,52 @@ func runHoldingsOn(t *testing.T, rows store.Rows, args ...string) (int, string, 
 }
 
 func Test_run_holdings_before_the_first_investment_transaction_warns_where_they_start_and_prints_no_total(t *testing.T) {
-	home := newHome(t)
-	rows := holdingsRows()
-	rows.InvestmentTransactions[2].Date = holdingsDay(5)
-	replaceStoreWithRates(t, home, rows, usdRate(holdingsDay(10), 1_360_000))
+	exitCode, stdout, stderr := runHoldingsOn(t, holdingsRowsFromDayFive(), "--as-of", "2026-03-01")
 
-	stdout, stderr := mustRunHoldings(t, "--as-of", "2026-03-01")
-
+	require.Equal(t, 0, exitCode, stderr)
 	assert.Equal(t, "Holdings on 2026-03-01 in all accounts, amounts in CAD; cash not included\n\n"+
 		"Account  Security  Shares  Price  Priced on  Currency  Value  In CAD\n", stdout)
 	assert.Equal(t, "quarry: warning: no holdings on 2026-03-01; the store's investment transactions run 2026-03-02 to 2026-03-05\n",
 		stderr)
 }
 
-func Test_run_holdings_of_a_store_with_no_investment_transactions_warns_there_are_none(t *testing.T) {
-	rows := holdingsRows()
-	rows.InvestmentTransactions = nil
+func Test_run_holdings_with_nothing_held_on_the_day_prints_an_empty_table_and_one_warning(t *testing.T) {
+	noTrades := holdingsRows()
+	noTrades.InvestmentTransactions = nil
+	cases := []struct {
+		name       string
+		rows       store.Rows
+		args       []string
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			name: "a store with no investment transactions", rows: noTrades, args: []string{"--as-of", "2026-03-01"},
+			wantStdout: emptyCaption + emptyHeader, wantStderr: noDataWarning,
+		},
+		{
+			name: "a named account", rows: holdingsRowsFromDayFive(), args: []string{"--account", "Brokerage", "--as-of", "2026-03-01"},
+			wantStdout: "Holdings on 2026-03-01 in Brokerage, amounts in CAD; cash not included\n\n" + emptyHeader,
+			wantStderr: "quarry: warning: no holdings on 2026-03-01 in the named accounts; " +
+				"their investment transactions run 2026-03-02 to 2026-03-02\n",
+		},
+		{
+			name: "native currency", rows: holdingsRowsFromDayFive(), args: []string{"--as-of", "2026-03-01", "--currency", "native"},
+			wantStdout: "Holdings on 2026-03-01 in all accounts; cash not included\n\n" +
+				"Account  Security  Shares  Price  Priced on  Currency  Value\n",
+			wantStderr: spanWarning,
+		},
+	}
 
-	exitCode, stdout, stderr := runHoldingsOn(t, rows, "--as-of", "2026-03-01")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			exitCode, stdout, stderr := runHoldingsOn(t, c.rows, c.args...)
 
-	require.Equal(t, 0, exitCode, stderr)
-	assert.Equal(t, emptyCaption+emptyHeader, stdout)
-	assert.Equal(t, noDataWarning, stderr)
-}
-
-func Test_run_holdings_of_a_named_account_warns_where_only_its_own_transactions_run(t *testing.T) {
-	exitCode, stdout, stderr := runHoldingsOn(t, holdingsRowsFromDayFive(), "--account", "Brokerage", "--as-of", "2026-03-01")
-
-	require.Equal(t, 0, exitCode, stderr)
-	assert.Equal(t, "Holdings on 2026-03-01 in Brokerage, amounts in CAD; cash not included\n\n"+emptyHeader, stdout)
-	assert.Equal(t, "quarry: warning: no holdings on 2026-03-01 in the named accounts; "+
-		"their investment transactions run 2026-03-02 to 2026-03-02\n", stderr)
-}
-
-func Test_run_holdings_native_before_the_first_investment_transaction_has_no_in_column_and_the_same_warning(t *testing.T) {
-	exitCode, stdout, stderr := runHoldingsOn(t, holdingsRowsFromDayFive(), "--as-of", "2026-03-01", "--currency", "native")
-
-	require.Equal(t, 0, exitCode, stderr)
-	assert.Equal(t, "Holdings on 2026-03-01 in all accounts; cash not included\n\n"+
-		"Account  Security  Shares  Price  Priced on  Currency  Value\n", stdout)
-	assert.Equal(t, spanWarning, stderr)
+			require.Equal(t, 0, exitCode, stderr)
+			assert.Equal(t, c.wantStdout, stdout)
+			assert.Equal(t, c.wantStderr, stderr)
+		})
+	}
 }
 
 func Test_run_holdings_json_before_the_first_investment_transaction_has_empty_lists_and_the_warning_stderr_prints(t *testing.T) {

@@ -651,28 +651,39 @@ func Test_run_acb_security_writes_only_the_named_securities_and_their_years_in_j
 }
 
 func Test_run_acb_security_with_year_prints_the_years_sales_of_the_named_security_only(t *testing.T) {
-	acbPairFixture(t)
-	w := [7]int{10, 8, 6, 8, 7, 6, 12}
+	sold := [7]int{10, 8, 6, 8, 7, 6, 12}
+	none := [7]int{5, 8, 6, 8, 7, 4, 12}
+	header := [8]string{"Date", "Security", "Shares", "Proceeds", "Outlays", "ACB", "Gain or loss"}
+	cases := []struct {
+		name     string
+		security string
+		want     string
+	}{
+		{
+			name: "a security sold that year", security: "VTI",
+			want: "Sales in 2026, in CAD\n\n" +
+				acbSaleRowOf(sold, header) +
+				acbSaleRowOf(sold, [8]string{"2026-02-02", "VTI", "4", "707.00", "7.00", "500.00", "200.00"}) +
+				acbSaleRowOf(sold, [8]string{"Total", "", "", "707.00", "7.00", "500.00", "200.00"}),
+		},
+		{
+			name: "a security that sold nothing that year", security: "ACME",
+			want: "Sales in 2026, in CAD\n\n" +
+				acbSaleRowOf(none, header) +
+				acbSaleRowOf(none, [8]string{"Total", "", "", "0.00", "0.00", "0.00", "0.00"}),
+		},
+	}
 
-	stdout, stderr := mustRunACB(t, "--year", "2026", "--security", "VTI")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			acbPairFixture(t)
 
-	assert.Empty(t, stderr)
-	assert.Equal(t, "Sales in 2026, in CAD\n\n"+
-		acbSaleRowOf(w, [8]string{"Date", "Security", "Shares", "Proceeds", "Outlays", "ACB", "Gain or loss"})+
-		acbSaleRowOf(w, [8]string{"2026-02-02", "VTI", "4", "707.00", "7.00", "500.00", "200.00"})+
-		acbSaleRowOf(w, [8]string{"Total", "", "", "707.00", "7.00", "500.00", "200.00"}), stdout)
-}
+			stdout, stderr := mustRunACB(t, "--year", "2026", "--security", c.security)
 
-func Test_run_acb_security_with_year_prints_a_zero_total_when_the_named_security_sold_nothing_that_year(t *testing.T) {
-	acbPairFixture(t)
-	w := [7]int{5, 8, 6, 8, 7, 4, 12}
-
-	stdout, stderr := mustRunACB(t, "--year", "2026", "--security", "ACME")
-
-	assert.Empty(t, stderr)
-	assert.Equal(t, "Sales in 2026, in CAD\n\n"+
-		acbSaleRowOf(w, [8]string{"Date", "Security", "Shares", "Proceeds", "Outlays", "ACB", "Gain or loss"})+
-		acbSaleRowOf(w, [8]string{"Total", "", "", "0.00", "0.00", "0.00", "0.00"}), stdout)
+			assert.Empty(t, stderr)
+			assert.Equal(t, c.want, stdout)
+		})
+	}
 }
 
 func Test_run_acb_security_with_year_for_a_security_held_only_in_registered_accounts(t *testing.T) {
