@@ -57,12 +57,6 @@ func Test_ACBWarnings_names_each_security_held_only_in_registered_accounts_in_th
 	}, warnings)
 }
 
-func Test_ACBWarnings_names_no_registered_only_security_when_the_request_named_none(t *testing.T) {
-	warnings := document.ACBWarnings(acbPooled(report.ACB{}), acbConfigShown, document.ACBAdviceCLI)
-
-	assert.Empty(t, warnings)
-}
-
 func Test_ACBWarnings_names_one_possible_superficial_loss(t *testing.T) {
 	a := report.ACB{Years: []report.ACBYear{acbMarkedYear(2025, 3, 1)}}
 
@@ -85,14 +79,6 @@ func Test_ACBWarnings_counts_the_possible_superficial_losses_of_every_year_in_on
 
 	require.Len(t, warnings, 1)
 	assert.Contains(t, warnings[0], "3 possible superficial losses in 2023, 2025: the same security was acquired")
-}
-
-func Test_ACBWarnings_stays_silent_when_no_sale_is_marked(t *testing.T) {
-	a := report.ACB{Years: []report.ACBYear{acbMarkedYear(2025, 3, 0)}}
-
-	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown, document.ACBAdviceCLI)
-
-	assert.Empty(t, warnings)
 }
 
 func Test_ACBWarnings_names_each_removal_of_shares_with_no_sale(t *testing.T) {
@@ -145,19 +131,6 @@ func Test_ACBWarnings_is_empty_when_no_shares_were_removed_no_loss_is_marked_and
 	assert.Empty(t, warnings)
 }
 
-func Test_ACBWarnings_names_an_adjustment_for_a_security_not_in_the_store(t *testing.T) {
-	a := report.ACB{AdjustmentIssues: []report.ACBAdjustmentIssue{
-		{Kind: report.ACBAdjustmentUnknownSecurity, Item: 2, SecurityID: "sec-99", Date: acbDay},
-	}}
-
-	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown, document.ACBAdviceCLI)
-
-	assert.Equal(t, []string{
-		`~/Library/Application Support/quarry/config.toml: acb.adjustment item 2 names "sec-99", ` +
-			"which is not a security in quarry's store; quarry skips it",
-	}, warnings)
-}
-
 func Test_ACBWarnings_writes_an_unknown_security_id_as_a_toml_string(t *testing.T) {
 	a := report.ACB{AdjustmentIssues: []report.ACBAdjustmentIssue{
 		{Kind: report.ACBAdjustmentUnknownSecurity, Item: 1, SecurityID: `sec"9`, Date: acbDay},
@@ -166,31 +139,6 @@ func Test_ACBWarnings_writes_an_unknown_security_id_as_a_toml_string(t *testing.
 	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
 
 	assert.Contains(t, warnings[0], `item 1 names "sec\"9", which`)
-}
-
-func Test_ACBWarnings_names_an_adjustment_no_non_registered_account_holds(t *testing.T) {
-	a := report.ACB{AdjustmentIssues: []report.ACBAdjustmentIssue{
-		{Kind: report.ACBAdjustmentNotHeld, Item: 3, SecurityID: "sec-41", Security: "iShares Core Equity ETF", Date: acbDay},
-	}}
-
-	warnings := document.ACBWarnings(acbPooled(a), acbConfigShown, document.ACBAdviceCLI)
-
-	assert.Equal(t, []string{
-		`~/Library/Application Support/quarry/config.toml: acb.adjustment item 3 is for "iShares Core Equity ETF", ` +
-			"which no non-registered account holds on 2025-03-03; quarry skips it",
-	}, warnings)
-}
-
-func Test_ACBWarnings_names_two_adjustments_for_one_security_on_one_day(t *testing.T) {
-	a := report.ACB{AdjustmentIssues: []report.ACBAdjustmentIssue{
-		{Kind: report.ACBAdjustmentRepeated, Item: 4, First: 1, SecurityID: "sec-41", Security: "iShares Core Equity ETF", Date: acbDay},
-	}}
-
-	warnings := document.ACBWarnings(acbPooled(a), "/home/me/config.toml", document.ACBAdviceCLI)
-
-	assert.Equal(t, []string{
-		`/home/me/config.toml: acb.adjustment items 1 and 4 are both for "sec-41" on 2025-03-03; quarry applies both`,
-	}, warnings)
 }
 
 func Test_ACBWarnings_names_a_return_of_capital_above_the_acb(t *testing.T) {
@@ -207,19 +155,6 @@ func Test_ACBWarnings_names_a_return_of_capital_above_the_acb(t *testing.T) {
 	assert.Equal(t, []string{
 		`"Acme Corp": return of capital on 2025-12-31 is 1,250.00 more than its ACB, so its ACB is 0.00 and 1,250.00 is a capital gain in 2025`,
 	}, warnings)
-}
-
-func Test_ACBWarnings_stays_silent_for_a_return_of_capital_within_the_acb(t *testing.T) {
-	a := report.ACB{Securities: []report.ACBSecurity{{
-		Security: store.Security{ID: "sec-1", Name: "Acme Corp"},
-		Events: []report.ACBEvent{{
-			Date: acbDay, Action: report.ACBActionReturnOfCapital, Shares: new(big.Rat), CAD: 15_000,
-		}},
-	}}}
-
-	warnings := document.ACBWarnings(a, acbConfigShown, document.ACBAdviceCLI)
-
-	assert.Empty(t, warnings)
 }
 
 func Test_ACBWarnings_lists_adjustment_lines_then_superficial_losses_then_no_cost_then_removals_then_returns_of_capital(t *testing.T) {
@@ -898,4 +833,75 @@ func Test_ACBWarnings_orders_every_slot(t *testing.T) {
 	assert.Contains(t, warnings[7], `"VTI" is 2 securities in Quicken`)
 	assert.Contains(t, warnings[8], `"Alpha": return of capital on`)
 	assert.Contains(t, warnings[9], "1 sale dated December 24–31, 2025:")
+}
+
+func Test_ACBWarnings_stays_silent_when_there_is_nothing_to_warn_about(t *testing.T) {
+	cases := []struct {
+		name string
+		a    report.ACB
+	}{
+		{name: "names_no_registered_only_security_when_the_request_named_none", a: acbPooled(report.ACB{})},
+		{name: "stays_silent_when_no_sale_is_marked", a: acbPooled(report.ACB{Years: []report.ACBYear{acbMarkedYear(2025, 3, 0)}})},
+		{
+			name: "stays_silent_for_a_return_of_capital_within_the_acb",
+			a: report.ACB{Securities: []report.ACBSecurity{{
+				Security: store.Security{ID: "sec-1", Name: "Acme Corp"},
+				Events: []report.ACBEvent{{
+					Date: acbDay, Action: report.ACBActionReturnOfCapital, Shares: new(big.Rat), CAD: 15_000,
+				}},
+			}}},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			warnings := document.ACBWarnings(c.a, acbConfigShown, document.ACBAdviceCLI)
+
+			assert.Empty(t, warnings)
+		})
+	}
+}
+
+func Test_ACBWarnings_names_each_adjustment_the_config_gets_wrong(t *testing.T) {
+	cases := []struct {
+		name  string
+		a     report.ACB
+		shown string
+		want  string
+	}{
+		{
+			name: "names_an_adjustment_for_a_security_not_in_the_store",
+			a: acbPooled(report.ACB{AdjustmentIssues: []report.ACBAdjustmentIssue{
+				{Kind: report.ACBAdjustmentUnknownSecurity, Item: 2, SecurityID: "sec-99", Date: acbDay},
+			}}),
+			shown: acbConfigShown,
+			want: `~/Library/Application Support/quarry/config.toml: acb.adjustment item 2 names "sec-99", ` +
+				"which is not a security in quarry's store; quarry skips it",
+		},
+		{
+			name: "names_an_adjustment_no_non_registered_account_holds",
+			a: acbPooled(report.ACB{AdjustmentIssues: []report.ACBAdjustmentIssue{
+				{Kind: report.ACBAdjustmentNotHeld, Item: 3, SecurityID: "sec-41", Security: "iShares Core Equity ETF", Date: acbDay},
+			}}),
+			shown: acbConfigShown,
+			want: `~/Library/Application Support/quarry/config.toml: acb.adjustment item 3 is for "iShares Core Equity ETF", ` +
+				"which no non-registered account holds on 2025-03-03; quarry skips it",
+		},
+		{
+			name: "names_two_adjustments_for_one_security_on_one_day",
+			a: acbPooled(report.ACB{AdjustmentIssues: []report.ACBAdjustmentIssue{
+				{Kind: report.ACBAdjustmentRepeated, Item: 4, First: 1, SecurityID: "sec-41", Security: "iShares Core Equity ETF", Date: acbDay},
+			}}),
+			shown: "/home/me/config.toml",
+			want:  `/home/me/config.toml: acb.adjustment items 1 and 4 are both for "sec-41" on 2025-03-03; quarry applies both`,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			warnings := document.ACBWarnings(c.a, c.shown, document.ACBAdviceCLI)
+
+			assert.Equal(t, []string{c.want}, warnings)
+		})
+	}
 }

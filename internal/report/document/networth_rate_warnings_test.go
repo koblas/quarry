@@ -54,22 +54,6 @@ func rateHistory(currency money.Currency, first time.Time, dates ...report.NetWo
 	return report.NetWorth{Dates: dates, AsOf: window.Until, Window: &window, Currency: currency, FirstRate: first}
 }
 
-func Test_net_worth_warnings_say_which_day_is_before_the_first_rate(t *testing.T) {
-	n := rateSnapshot(money.CAD, day(time.March, 10), usdRow("chequing", 80_000))
-
-	got := document.NetWorthWarnings(n, document.NativeFlag)
-
-	assert.Equal(t, []string{"USD balances on 2026-03-05, before 2026-03-10, " + rateTail}, got)
-}
-
-func Test_net_worth_warnings_swap_the_currencies_in_a_usd_report(t *testing.T) {
-	n := rateSnapshot(money.USD, day(time.March, 10), cadRow("chequing", 80_000))
-
-	got := document.NetWorthWarnings(n, document.NativeFlag)
-
-	assert.Equal(t, []string{"CAD balances on 2026-03-05, before 2026-03-10, " + rateTailUSD}, got)
-}
-
 func Test_net_worth_warnings_say_the_store_has_no_rates_when_it_holds_none(t *testing.T) {
 	cases := []struct {
 		name string
@@ -230,4 +214,31 @@ func Test_NewNetWorth_writes_a_null_converted_balance_and_a_total_for_the_rows_n
 			map[string]any{"currency": "USD", "value": "800.00"},
 		},
 	}}, got["dates"])
+}
+
+func Test_net_worth_warnings_say_which_day_is_before_the_first_rate(t *testing.T) {
+	cases := []struct {
+		name string
+		n    report.NetWorth
+		want string
+	}{
+		{
+			name: "say_which_day_is_before_the_first_rate",
+			n:    rateSnapshot(money.CAD, day(time.March, 10), usdRow("chequing", 80_000)),
+			want: "USD balances on 2026-03-05, before 2026-03-10, " + rateTail,
+		},
+		{
+			name: "swap_the_currencies_in_a_usd_report",
+			n:    rateSnapshot(money.USD, day(time.March, 10), cadRow("chequing", 80_000)),
+			want: "CAD balances on 2026-03-05, before 2026-03-10, " + rateTailUSD,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := document.NetWorthWarnings(c.n, document.NativeFlag)
+
+			assert.Equal(t, []string{c.want}, got)
+		})
+	}
 }

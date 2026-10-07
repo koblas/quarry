@@ -183,10 +183,6 @@ func Test_NewHoldings_writes_a_value_past_int64_in_full(t *testing.T) {
 	assert.Equal(t, "184467440737095516.16", got.Totals[0].Value)
 }
 
-func Test_HoldingsWarnings_is_empty_not_nil(t *testing.T) {
-	assert.Equal(t, []string{}, document.HoldingsWarnings(report.Holdings{Rows: []store.Holding{holdingsTestRow()}, Currency: money.CAD}))
-}
-
 func unpricedHoldings(n int) []store.Holding {
 	rows := make([]store.Holding, n)
 	for i := range rows {
@@ -598,40 +594,6 @@ func unconvertedRow(id, account, code string) store.Holding {
 	return row
 }
 
-func Test_HoldingsWarnings_say_one_holding_is_not_converted_before_the_first_rate(t *testing.T) {
-	h := report.Holdings{Rows: []store.Holding{unconvertedRow("s-1", "a-1", "USD")}, Currency: money.CAD, AsOf: beforeFirstRate, FirstRate: firstRateDay}
-
-	got := document.HoldingsWarnings(h)
-
-	assert.Equal(t, []string{"1 holding " + noRateLinePrefix + "is not converted to CAD and is totalled in USD"}, got)
-}
-
-func Test_HoldingsWarnings_count_each_row_that_needs_a_rate_not_each_security(t *testing.T) {
-	rows := []store.Holding{unconvertedRow("s-1", "a-1", "USD"), unconvertedRow("s-1", "a-2", "USD")}
-	h := report.Holdings{Rows: rows, Currency: money.CAD, AsOf: beforeFirstRate, FirstRate: firstRateDay}
-
-	got := document.HoldingsWarnings(h)
-
-	assert.Equal(t, []string{"2 holdings " + noRateLinePrefix + "are not converted to CAD and are totalled in USD"}, got)
-}
-
-func Test_HoldingsWarnings_swap_the_currencies_in_a_usd_report(t *testing.T) {
-	h := report.Holdings{Rows: []store.Holding{unconvertedRow("s-1", "a-1", "CAD")}, Currency: money.USD, AsOf: beforeFirstRate, FirstRate: firstRateDay}
-
-	got := document.HoldingsWarnings(h)
-
-	assert.Equal(t, []string{"1 holding " + noRateLinePrefix + "is not converted to USD and is totalled in CAD"}, got)
-}
-
-func Test_HoldingsWarnings_say_the_store_has_no_rates_when_it_holds_none(t *testing.T) {
-	rows := []store.Holding{unconvertedRow("s-1", "a-1", "USD"), unconvertedRow("s-2", "a-1", "USD")}
-	h := report.Holdings{Rows: rows, Currency: money.CAD, AsOf: beforeFirstRate}
-
-	got := document.HoldingsWarnings(h)
-
-	assert.Equal(t, []string{"the store has no exchange rates, so values are listed in each security's own currency; run quarry sync to fetch them"}, got)
-}
-
 func Test_HoldingsWarnings_are_silent_when_no_row_needs_a_rate(t *testing.T) {
 	converted := unconvertedRow("s-2", "a-1", "USD")
 	converted.ValueCAD = big.NewInt(136)
@@ -674,4 +636,51 @@ func Test_HoldingsWarnings_put_the_rate_line_after_no_price_and_before_no_curren
 	got := document.HoldingsWarnings(h)
 
 	assert.Equal(t, []string{noPrice, "1 holding " + noRateLinePrefix + "is not converted to CAD and is totalled in USD", noCurrency, other}, got)
+}
+
+func Test_HoldingsWarnings_say_which_holdings_are_not_converted(t *testing.T) {
+	cases := []struct {
+		name string
+		h    report.Holdings
+		want string
+	}{
+		{
+			name: "say_one_holding_is_not_converted_before_the_first_rate",
+			h: report.Holdings{
+				Rows: []store.Holding{unconvertedRow("s-1", "a-1", "USD")}, Currency: money.CAD, AsOf: beforeFirstRate, FirstRate: firstRateDay,
+			},
+			want: "1 holding " + noRateLinePrefix + "is not converted to CAD and is totalled in USD",
+		},
+		{
+			name: "count_each_row_that_needs_a_rate_not_each_security",
+			h: report.Holdings{
+				Rows:     []store.Holding{unconvertedRow("s-1", "a-1", "USD"), unconvertedRow("s-1", "a-2", "USD")},
+				Currency: money.CAD, AsOf: beforeFirstRate, FirstRate: firstRateDay,
+			},
+			want: "2 holdings " + noRateLinePrefix + "are not converted to CAD and are totalled in USD",
+		},
+		{
+			name: "swap_the_currencies_in_a_usd_report",
+			h: report.Holdings{
+				Rows: []store.Holding{unconvertedRow("s-1", "a-1", "CAD")}, Currency: money.USD, AsOf: beforeFirstRate, FirstRate: firstRateDay,
+			},
+			want: "1 holding " + noRateLinePrefix + "is not converted to USD and is totalled in CAD",
+		},
+		{
+			name: "say_the_store_has_no_rates_when_it_holds_none",
+			h: report.Holdings{
+				Rows:     []store.Holding{unconvertedRow("s-1", "a-1", "USD"), unconvertedRow("s-2", "a-1", "USD")},
+				Currency: money.CAD, AsOf: beforeFirstRate,
+			},
+			want: "the store has no exchange rates, so values are listed in each security's own currency; run quarry sync to fetch them",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := document.HoldingsWarnings(c.h)
+
+			assert.Equal(t, []string{c.want}, got)
+		})
+	}
 }
