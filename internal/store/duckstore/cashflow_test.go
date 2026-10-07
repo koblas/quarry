@@ -362,46 +362,34 @@ func Test_cash_flow_returns_the_open_fault(t *testing.T) {
 	require.ErrorIs(t, err, fault)
 }
 
-func Test_cash_flow_returns_the_query_fault_as_another_fault(t *testing.T) {
+func Test_cash_flow_returns_a_read_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault}))
+	for _, c := range otherFaults("SELECT", 0) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.CashFlow(t.Context(), cashFlowParams())
+			_, err := st.CashFlow(t.Context(), cashFlowParams())
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
 
-func Test_cash_flow_returns_a_scan_fault_as_another_fault(t *testing.T) {
+func Test_cash_flow_returns_a_transaction_range_read_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{scanFault: errScanFailed}))
+	for _, c := range otherFaults("SELECT min", 1) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.CashFlow(t.Context(), cashFlowParams())
+			_, err := st.CashFlow(t.Context(), emptyCashFlowParams())
 
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
-}
-
-func Test_cash_flow_returns_the_transaction_range_query_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	fault := ioFault(`query rows "SELECT min"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, queryFault: fault}))
-
-	_, err := st.CashFlow(t.Context(), emptyCashFlowParams())
-
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_cash_flow_returns_a_transaction_range_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, scanFault: errScanFailed}))
-
-	_, err := st.CashFlow(t.Context(), emptyCashFlowParams())
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
 
 func Test_cash_flow_closes_the_connection_on_success_and_on_a_query_fault(t *testing.T) {
@@ -615,28 +603,30 @@ func Test_cash_flow_read_takes_the_savings_rate_from_the_converted_sums_not_the_
 	assert.Equal(t, new(67.1), got.Totals[0].SavingsRatePct)
 }
 
-func Test_cash_flow_read_converts_a_weekend_split_at_the_fridays_rate(t *testing.T) {
+func Test_cash_flow_read_converts_a_split_dated_between_or_after_rates_at_the_latest_earlier_rate(t *testing.T) {
 	t.Parallel()
-	rows := fxSpendRows()
-	earn(&rows, "pay", "USD", march(14), 1000)
-	st := newStoreWithRates(t, rows, fridayAndMonday()...)
+	cases := []struct {
+		name string
+		date time.Time
+		want int64
+	}{
+		{name: "a_weekend_split_at_the_fridays_rate", date: march(14), want: 1250},
+		{name: "a_split_after_the_last_rate", date: march(20), want: 1300},
+	}
 
-	got, err := st.CashFlow(t.Context(), cashFlowIn(money.CAD, store.CashFlowByMonth))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			rows := fxSpendRows()
+			earn(&rows, "pay", "USD", c.date, 1000)
+			st := newStoreWithRates(t, rows, fridayAndMonday()...)
 
-	require.NoError(t, err)
-	assert.Equal(t, int64(1250), got.Totals[0].Income)
-}
+			got, err := st.CashFlow(t.Context(), cashFlowIn(money.CAD, store.CashFlowByMonth))
 
-func Test_cash_flow_read_converts_a_split_after_the_last_rate_at_the_latest_earlier_rate(t *testing.T) {
-	t.Parallel()
-	rows := fxSpendRows()
-	earn(&rows, "pay", "USD", march(20), 1000)
-	st := newStoreWithRates(t, rows, fridayAndMonday()...)
-
-	got, err := st.CashFlow(t.Context(), cashFlowIn(money.CAD, store.CashFlowByMonth))
-
-	require.NoError(t, err)
-	assert.Equal(t, int64(1300), got.Totals[0].Income)
+			require.NoError(t, err)
+			assert.Equal(t, c.want, got.Totals[0].Income)
+		})
+	}
 }
 
 func Test_cash_flow_read_converts_a_closed_accounts_split(t *testing.T) {

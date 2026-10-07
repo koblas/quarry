@@ -220,25 +220,19 @@ func Test_charges_gives_no_rows_and_a_zero_span_for_a_store_without_transactions
 	assert.Zero(t, got.Transactions)
 }
 
-func Test_charges_returns_the_transaction_range_query_fault_as_another_fault(t *testing.T) {
+func Test_charges_returns_a_transaction_range_read_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT min"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, queryFault: fault}))
+	for _, c := range otherFaults("SELECT min", 1) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
+			_, err := st.Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_charges_returns_a_transaction_range_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, scanFault: errScanFailed}))
-
-	_, err := st.Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
 
 // namedChargesOf reads chargesOf's charges with the span scoped to ids.
@@ -481,23 +475,17 @@ func Test_charges_gives_no_first_rate_date_for_a_store_without_rates(t *testing.
 	assert.True(t, got.FirstRate.IsZero())
 }
 
-func Test_charges_returns_the_first_rate_query_fault_as_another_fault(t *testing.T) {
+func Test_charges_returns_a_first_rate_read_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT min(date) FROM fx_rates"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 2, queryFault: fault}))
+	for _, c := range otherFaults("SELECT min(date) FROM fx_rates", 2) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
+			_, err := st.Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_charges_returns_a_first_rate_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 2, scanFault: errScanFailed}))
-
-	_, err := st.Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }

@@ -74,15 +74,37 @@ func Test_query_returns_at_most_max_rows(t *testing.T) {
 	assert.Len(t, got.Rows, 2)
 }
 
-func Test_query_reports_the_first_line_of_a_bad_query(t *testing.T) {
+func Test_query_reports_a_rejected_query_as_a_query_error(t *testing.T) {
 	t.Parallel()
-	st := newBuiltStore(t)
+	cases := []struct {
+		name   string
+		sql    string
+		reason string
+	}{
+		{
+			name:   "the_first_line_of_a_bad_query",
+			sql:    "SELECT missing_column FROM accounts",
+			reason: `Binder Error: Referenced column "missing_column" not found in FROM clause!`,
+		},
+		{
+			name:   "a_file_of_unknown_type_named_as_a_table",
+			sql:    "SELECT 1 FROM '/etc/hosts'",
+			reason: "Catalog Error: Table with name /etc/hosts does not exist!",
+		},
+	}
 
-	_, err := st.Query(t.Context(), "SELECT missing_column FROM accounts", 0)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t)
 
-	var queryErr *store.QueryError
-	require.ErrorAs(t, err, &queryErr)
-	assert.Equal(t, `Binder Error: Referenced column "missing_column" not found in FROM clause!`, queryErr.Reason)
+			_, err := st.Query(t.Context(), c.sql, 0)
+
+			var queryErr *store.QueryError
+			require.ErrorAs(t, err, &queryErr)
+			assert.Equal(t, c.reason, queryErr.Reason)
+		})
+	}
 }
 
 func Test_query_reports_a_locked_setting_as_a_query_error(t *testing.T) {
@@ -95,17 +117,6 @@ func Test_query_reports_a_locked_setting_as_a_query_error(t *testing.T) {
 	require.ErrorAs(t, err, &queryErr)
 	assert.Equal(t, `Invalid Input Error: Cannot change configuration option "enable_external_access" - the configuration has been locked`,
 		queryErr.Reason)
-}
-
-func Test_query_reports_a_file_of_unknown_type_named_as_a_table_as_a_query_error(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t)
-
-	_, err := st.Query(t.Context(), "SELECT 1 FROM '/etc/hosts'", 0)
-
-	var queryErr *store.QueryError
-	require.ErrorAs(t, err, &queryErr)
-	assert.Equal(t, "Catalog Error: Table with name /etc/hosts does not exist!", queryErr.Reason)
 }
 
 func Test_query_refuses_what_a_read_may_not_do(t *testing.T) {

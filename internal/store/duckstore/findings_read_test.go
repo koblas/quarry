@@ -454,23 +454,17 @@ func Test_findings_reads_every_account_with_its_closed_and_active_state_sorted_b
 	}, list.Accounts)
 }
 
-func Test_findings_returns_the_accounts_query_fault_as_another_fault(t *testing.T) {
+func Test_findings_returns_an_accounts_read_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT id"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, queryFault: fault}))
+	for _, c := range otherFaults("SELECT id", 1) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.Findings(t.Context())
+			_, err := st.Findings(t.Context())
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_findings_returns_an_account_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, scanFault: errScanFailed}))
-
-	_, err := st.Findings(t.Context())
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }

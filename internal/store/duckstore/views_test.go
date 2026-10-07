@@ -309,37 +309,30 @@ func Test_spending_holds_exactly_the_cash_flow_expense_rows(t *testing.T) {
 
 const convertedAmounts = "SELECT amount_cad, amount_usd FROM v_cash_flow WHERE split_id = 'x'"
 
-func Test_cash_flow_converts_a_weekend_split_at_the_fridays_rate(t *testing.T) {
+func Test_cash_flow_view_converts_a_split_at_the_latest_rate_on_or_before_its_date(t *testing.T) {
 	t.Parallel()
-	rows := fxRows()
-	expense(&rows, "x", "USD", march(14), 1000)
-	st := newStoreWithRates(t, rows, fridayAndMonday()...)
+	cases := []struct {
+		name string
+		date time.Time
+		want string
+	}{
+		{name: "a_weekend_split_at_the_fridays_rate", date: march(14), want: "12.50"},
+		{name: "a_split_on_a_rate_date_at_that_dates_rate", date: march(16), want: "13.00"},
+		{name: "a_split_after_the_last_rate_at_the_last_rate", date: march(20), want: "13.00"},
+	}
 
-	got := queryTexts(t, st, convertedAmounts)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			rows := fxRows()
+			expense(&rows, "x", "USD", c.date, 1000)
+			st := newStoreWithRates(t, rows, fridayAndMonday()...)
 
-	assert.Equal(t, [][]string{{"12.50", "10.00"}}, got)
-}
+			got := queryTexts(t, st, convertedAmounts)
 
-func Test_cash_flow_converts_a_split_on_a_rate_date_at_that_dates_rate(t *testing.T) {
-	t.Parallel()
-	rows := fxRows()
-	expense(&rows, "x", "USD", march(16), 1000)
-	st := newStoreWithRates(t, rows, fridayAndMonday()...)
-
-	got := queryTexts(t, st, convertedAmounts)
-
-	assert.Equal(t, [][]string{{"13.00", "10.00"}}, got)
-}
-
-func Test_cash_flow_converts_a_split_after_the_last_rate_at_the_last_rate(t *testing.T) {
-	t.Parallel()
-	rows := fxRows()
-	expense(&rows, "x", "USD", march(20), 1000)
-	st := newStoreWithRates(t, rows, fridayAndMonday()...)
-
-	got := queryTexts(t, st, convertedAmounts)
-
-	assert.Equal(t, [][]string{{"13.00", "10.00"}}, got)
+			assert.Equal(t, [][]string{{c.want, "10.00"}}, got)
+		})
+	}
 }
 
 func Test_cash_flow_rounds_half_a_cent_away_from_zero_and_below_half_down(t *testing.T) {
