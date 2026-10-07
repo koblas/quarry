@@ -24,57 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// takeSnapshot commits a snapshot of a fresh fixture bundle into srv's snapshots directory.
-func takeSnapshot(t *testing.T, srv *snapshot.Server) snapshot.Manifest {
-	t.Helper()
-	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	manifest, err := srv.Sync(t.Context(), bundle.Dir)
-	require.NoError(t, err)
-	return manifest
-}
-
-// editManifest rewrites the manifest at path after applying edit to its decoded form.
-func editManifest(t *testing.T, path string, edit func(*snapshot.Manifest)) {
-	t.Helper()
-	raw, err := os.ReadFile(path)
-	require.NoError(t, err)
-	var m snapshot.Manifest
-	require.NoError(t, json.Unmarshal(raw, &m))
-	edit(&m)
-	data, err := m.Encode()
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(path, data, 0o600))
-}
-
-// writeSnapshotPair creates a SQLite file <id>.sqlite in dir by running ddl,
-// plus an <id>.json manifest recording the file's real SHA-256.
-func writeSnapshotPair(t *testing.T, dir, id string, ddl ...string) {
-	t.Helper()
-	require.NoError(t, os.MkdirAll(dir, 0o700))
-	path := filepath.Join(dir, id+".sqlite")
-	conn, err := sql.Open("sqlite3", path)
-	require.NoError(t, err)
-	for _, stmt := range ddl {
-		_, err := conn.ExecContext(t.Context(), stmt)
-		require.NoError(t, err)
-	}
-	require.NoError(t, conn.Close())
-	writeManifestFor(t, path)
-}
-
-// writeManifestFor writes the .json manifest next to snapshotPath, recording its real SHA-256.
-func writeManifestFor(t *testing.T, snapshotPath string) {
-	t.Helper()
-	raw, err := os.ReadFile(snapshotPath)
-	require.NoError(t, err)
-	sum := sha256.Sum256(raw)
-	data, err := snapshot.Manifest{Snapshot: snapshot.Info{
-		Source: "/Users/x/Documents/Home.quicken", SHA256: hex.EncodeToString(sum[:]),
-	}}.Encode()
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(strings.TrimSuffix(snapshotPath, ".sqlite")+".json", data, 0o600))
-}
-
 func Test_import_from_passes_the_same_snapshot_ref_as_a_plain_sync(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
@@ -138,14 +87,13 @@ func Test_import_from_a_path_outside_the_snapshots_directory_never_creates_it(t 
 	t.Parallel()
 	elsewhere := t.TempDir()
 	fake := &fakeImporter{}
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
+	ref := v9Reference(t)
 	taken := takeSnapshot(t, snapshot.NewServer(
 		snapshot.WithSnapshotDir(elsewhere), snapshot.WithReference(v9.ReferenceLabel, ref)))
 	home := t.TempDir()
 	srv := newImportServer(t, home, fake)
 
-	_, err = srv.ImportFrom(t.Context(), taken.Snapshot.Path)
+	_, err := srv.ImportFrom(t.Context(), taken.Snapshot.Path)
 
 	require.NoError(t, err)
 	require.Len(t, fake.calls, 1)
@@ -174,13 +122,10 @@ func Test_import_from_refuses_a_relative_path_when_the_working_directory_no_long
 }
 
 func Test_import_from_refuses_a_relative_path_when_the_working_directory_cannot_be_searched(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores directory modes")
-	}
+	skipUnderRoot(t)
 	locked := t.TempDir()
 	t.Chdir(locked)
-	require.NoError(t, os.Chmod(locked, 0o000))
-	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+	restrictMode(t, locked, 0o000)
 	fake := &fakeImporter{}
 	srv := newImportServer(t, t.TempDir(), fake)
 
@@ -202,17 +147,14 @@ func Test_import_from_an_absolute_or_home_path_succeeds_when_the_working_directo
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if os.Geteuid() == 0 {
-				t.Skip("root ignores directory modes")
-			}
+			skipUnderRoot(t)
 			home := t.TempDir()
 			fake := &fakeImporter{}
 			srv := newImportServer(t, home, fake)
 			taken := takeSnapshot(t, srv)
 			locked := t.TempDir()
 			t.Chdir(locked)
-			require.NoError(t, os.Chmod(locked, 0o000))
-			t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+			restrictMode(t, locked, 0o000)
 
 			_, err := srv.ImportFrom(t.Context(), c.from(home, taken.Snapshot.Path))
 
@@ -363,8 +305,7 @@ func Test_import_from_skips_the_import_when_the_current_reference_no_longer_matc
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	taken := takeSnapshot(t, newImportServer(t, home, fake))
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
+	ref := v9Reference(t)
 	ref["ZQUARRYNEWTABLE"] = []string{"Z_PK"}
 	srv := snapshot.NewServer(
 		snapshot.WithSnapshotDir(filepath.Join(home, "snapshots")),
@@ -405,16 +346,13 @@ func Test_import_from_refuses_a_path_form_value_that_does_not_exist(t *testing.T
 // ancestor directories, so only a chmod'd directory reaches this branch.
 func Test_import_from_a_path_names_the_snapshot_when_its_directory_cannot_be_searched(t *testing.T) {
 	t.Parallel()
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores file permissions")
-	}
+	skipUnderRoot(t)
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
 	taken := takeSnapshot(t, srv)
 	snapshotsDir := filepath.Dir(taken.Snapshot.Path)
-	require.NoError(t, os.Chmod(snapshotsDir, 0o000))
-	t.Cleanup(func() { _ = os.Chmod(snapshotsDir, 0o700) })
+	restrictMode(t, snapshotsDir, 0o000)
 
 	_, err := srv.ImportFrom(t.Context(), taken.Snapshot.Path)
 
@@ -518,15 +456,12 @@ func Test_import_from_refuses_without_importing_when_the_manifest_has_a_wrong_ty
 // whichever file's own read actually failed.
 func Test_import_from_names_the_manifest_when_it_cannot_be_read(t *testing.T) {
 	t.Parallel()
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores file permissions")
-	}
+	skipUnderRoot(t)
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
 	taken := takeSnapshot(t, srv)
-	require.NoError(t, os.Chmod(taken.Snapshot.Manifest, 0o000))
-	t.Cleanup(func() { _ = os.Chmod(taken.Snapshot.Manifest, 0o600) })
+	restrictMode(t, taken.Snapshot.Manifest, 0o000)
 
 	_, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
 
@@ -538,15 +473,12 @@ func Test_import_from_names_the_manifest_when_it_cannot_be_read(t *testing.T) {
 // Only the snapshot is chmod'd, not the manifest: the mirror of the case above.
 func Test_import_from_names_the_snapshot_when_it_cannot_be_read(t *testing.T) {
 	t.Parallel()
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores file permissions")
-	}
+	skipUnderRoot(t)
 	home := t.TempDir()
 	fake := &fakeImporter{}
 	srv := newImportServer(t, home, fake)
 	taken := takeSnapshot(t, srv)
-	require.NoError(t, os.Chmod(taken.Snapshot.Path, 0o000))
-	t.Cleanup(func() { _ = os.Chmod(taken.Snapshot.Path, 0o600) })
+	restrictMode(t, taken.Snapshot.Path, 0o000)
 
 	_, err := srv.ImportFrom(t.Context(), snapshotIDFromPath(taken.Snapshot.Path))
 
@@ -866,8 +798,7 @@ func Test_import_from_a_path_refuses_a_parent_folder_it_cannot_list(t *testing.T
 	srv := newImportServer(t, home, fake)
 	dir := filepath.Join(home, "Backups")
 	writeSnapshotPair(t, dir, "x", fromDDL)
-	require.NoError(t, os.Chmod(dir, 0o300))
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	restrictMode(t, dir, 0o300)
 
 	_, err := srv.ImportFrom(t.Context(), filepath.Join(dir, "x.sqlite"))
 
@@ -886,8 +817,7 @@ func Test_import_from_a_path_names_the_upper_case_manifest_it_cannot_read(t *tes
 	manifest := filepath.Join(dir, "x.JSON")
 	require.NoError(t, os.Rename(filepath.Join(dir, "x.json"), manifest))
 	require.Equal(t, []string{"x.JSON", "x.sqlite"}, dirNames(t, dir))
-	require.NoError(t, os.Chmod(manifest, 0o000))
-	t.Cleanup(func() { _ = os.Chmod(manifest, 0o600) })
+	restrictMode(t, manifest, 0o000)
 
 	_, err := srv.ImportFrom(t.Context(), filepath.Join(dir, "x.sqlite"))
 

@@ -2,7 +2,12 @@ package snapshot_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -10,7 +15,11 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/koblas/quarry/internal/platform/sqlschema"
+	v9 "github.com/koblas/quarry/internal/quicken/v9"
+	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/snapshot"
+	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -227,9 +236,7 @@ func (r *fakeRemover) remove(path string) error {
 }
 
 // failing is a fakeRemover that fails name with the *fs.PathError os.Remove returns for errno.
-func failing(name string, errno syscall.Errno) *fakeRemover {
-	return &fakeRemover{faults: map[string]error{name: &fs.PathError{Op: "remove", Path: name, Err: errno}}}
-}
+func failing(name string, errno syscall.Errno) *fakeRemover { return failingRemover(errno, name) }
 
 // newPruneServer is newListServer whose removes go through rm.
 func newPruneServer(home string, probe snapshot.StoreProbe, rm *fakeRemover, extra ...snapshot.Option) *snapshot.Server {
@@ -277,6 +284,11 @@ func dirNames(tb testing.TB, dir string) []string {
 	tb.Helper()
 	entries, err := os.ReadDir(dir)
 	require.NoError(tb, err)
+	return namesOf(entries)
+}
+
+// namesOf is the name of each of entries, in order.
+func namesOf(entries []os.DirEntry) []string {
 	names := make([]string, len(entries))
 	for i, e := range entries {
 		names[i] = e.Name()
@@ -348,4 +360,279 @@ func restrictMode(tb testing.TB, path string, mode fs.FileMode) {
 	tb.Helper()
 	require.NoError(tb, os.Chmod(path, mode))
 	tb.Cleanup(func() { assert.NoError(tb, os.Chmod(path, 0o700)) })
+}
+
+func newServer(t *testing.T, snapshotsDir string, opts ...snapshot.Option) *snapshot.Server {
+	t.Helper()
+	ref := v9Reference(t)
+	return snapshot.NewServer(append([]snapshot.Option{
+		snapshot.WithSnapshotDir(snapshotsDir),
+		snapshot.WithReference(v9.ReferenceLabel, ref),
+	}, opts...)...)
+}
+
+// fakeImporter is a hand-written Importer fake: it records every snapshot
+// ref it was called with and returns the configured result, or err when
+// set, after calling cancel when interrupt is set.
+type fakeImporter struct {
+	calls     []store.SnapshotRef
+	result    store.Result
+	err       error
+	interrupt bool
+	cancel    context.CancelFunc
+}
+
+func (f *fakeImporter) Import(_ context.Context, snap store.SnapshotRef) (store.Result, error) {
+	f.calls = append(f.calls, snap)
+	if f.interrupt {
+		f.cancel()
+	}
+	return f.result, f.err
+}
+
+// fakeStoreProbe is a hand-written StoreProbe fake reporting a fixed path and existence,
+// and answering BuiltFrom with builtFrom, or builtFromErr when set.
+type fakeStoreProbe struct {
+	path         string
+	exists       bool
+	builtFrom    string
+	builtFromErr error
+}
+
+func (f *fakeStoreProbe) Path() string { return f.path }
+func (f *fakeStoreProbe) Exists() bool { return f.exists }
+
+func (f *fakeStoreProbe) BuiltFrom(context.Context) (string, error) {
+	return f.builtFrom, f.builtFromErr
+}
+
+// newImportServer builds a Server whose snapshots and store live under home; opts override those.
+func newImportServer(t *testing.T, home string, imp snapshot.Importer, opts ...snapshot.Option) *snapshot.Server {
+	t.Helper()
+	ref := v9Reference(t)
+	return snapshot.NewServer(append([]snapshot.Option{
+		snapshot.WithSnapshotDir(filepath.Join(home, "snapshots")),
+		snapshot.WithReference(v9.ReferenceLabel, ref),
+		snapshot.WithHome(home),
+		snapshot.WithImporter(imp),
+		snapshot.WithStoreProbe(&fakeStoreProbe{path: filepath.Join(home, "quarry", "quarry.duckdb")}),
+	}, opts...)...)
+}
+
+func snapshotIDFromPath(path string) string {
+	return strings.TrimSuffix(filepath.Base(path), ".sqlite")
+}
+
+func historyRestartLine(reason string) string {
+	return "cannot carry import history forward from the previous store (" + reason + "); import_runs starts again with this sync"
+}
+
+func findingsRestartLine(reason string) string {
+	return "cannot carry findings forward from the previous store (" + reason + "); findings history starts again with this sync"
+}
+
+func combinedCarryLine(reason string) string {
+	return "cannot carry import history, findings or exchange rates forward from the previous store (" + reason + "); all three start again with this sync"
+}
+
+func ratesRestartLine(reason string) string {
+	return "cannot carry exchange rates forward from the previous store (" + reason + "); fetching them all again"
+}
+
+// fakeSource is a hand-written Source fake: each call returns the
+// configured error, or succeeds when it is nil.
+type fakeSource struct {
+	openErr, probeErr, backupErr error
+}
+
+func (f *fakeSource) Open(context.Context, string) error   { return f.openErr }
+func (f *fakeSource) Probe(context.Context) error          { return f.probeErr }
+func (f *fakeSource) Backup(context.Context, string) error { return f.backupErr }
+func (f *fakeSource) Close() error                         { return nil }
+
+var errBoom = errors.New("boom")
+
+// fixedPathDestination hands Backup's caller a pre-built file instead of
+// really backing anything up, so a test controls exactly what buildManifest
+// reads.
+type fixedPathDestination struct {
+	snapshotPath string
+}
+
+func (f *fixedPathDestination) Prepare(context.Context) error { return nil }
+func (f *fixedPathDestination) Backup(_ context.Context, _ snapshot.Source, name string) (string, string, error) {
+	return f.snapshotPath, name, nil
+}
+
+func (f *fixedPathDestination) WriteManifest(context.Context, string, []byte) (string, error) {
+	return "", nil
+}
+
+func (f *fixedPathDestination) CommitSnapshot(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (f *fixedPathDestination) CommitManifest(context.Context, string) (string, error) {
+	return "", nil
+}
+func (f *fixedPathDestination) FinalPaths(string) (string, string)    { return "", "" }
+func (f *fixedPathDestination) Discard(context.Context, string) error { return nil }
+
+// assertSnapshotsDirEmpty fails if dir holds anything at all: unlike
+// assertNoPartialsLeftBehind, it also catches a committed final Discard
+// should have removed.
+func assertSnapshotsDirEmpty(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
+// assertNoPartialsLeftBehind fails if dir holds any of Destination's
+// exclusively-created ".partial" files: every Destination method that
+// creates one removes it again on its own failure.
+func assertNoPartialsLeftBehind(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return
+	}
+	require.NoError(t, err)
+	for _, entry := range entries {
+		assert.False(t, strings.HasSuffix(entry.Name(), ".partial"), "leftover partial: %s", entry.Name())
+	}
+}
+
+// takeSnapshot commits a snapshot of a fresh fixture bundle into srv's snapshots directory.
+func takeSnapshot(t *testing.T, srv *snapshot.Server) snapshot.Manifest {
+	t.Helper()
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	manifest, err := srv.Sync(t.Context(), bundle.Dir)
+	require.NoError(t, err)
+	return manifest
+}
+
+// editManifest rewrites the manifest at path after applying edit to its decoded form.
+func editManifest(t *testing.T, path string, edit func(*snapshot.Manifest)) {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var m snapshot.Manifest
+	require.NoError(t, json.Unmarshal(raw, &m))
+	edit(&m)
+	data, err := m.Encode()
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, data, 0o600))
+}
+
+// writeSnapshotPair creates a SQLite file <id>.sqlite in dir by running ddl,
+// plus an <id>.json manifest recording the file's real SHA-256.
+func writeSnapshotPair(t *testing.T, dir, id string, ddl ...string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+	path := filepath.Join(dir, id+".sqlite")
+	conn, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	for _, stmt := range ddl {
+		_, err := conn.ExecContext(t.Context(), stmt)
+		require.NoError(t, err)
+	}
+	require.NoError(t, conn.Close())
+	writeManifestFor(t, path)
+}
+
+// writeManifestFor writes the .json manifest next to snapshotPath, recording its real SHA-256.
+func writeManifestFor(t *testing.T, snapshotPath string) {
+	t.Helper()
+	raw, err := os.ReadFile(snapshotPath)
+	require.NoError(t, err)
+	sum := sha256.Sum256(raw)
+	data, err := snapshot.Manifest{Snapshot: snapshot.Info{
+		Source: "/Users/x/Documents/Home.quicken", SHA256: hex.EncodeToString(sum[:]),
+	}}.Encode()
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(strings.TrimSuffix(snapshotPath, ".sqlite")+".json", data, 0o600))
+}
+
+// oldIDs returns n snapshot IDs from the year 2000, oldest first: older than any ID SyncAndImport mints.
+func oldIDs(n int) []string {
+	ids := make([]string, n)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("2000%02d01T000000Z", i+1)
+	}
+	return ids
+}
+
+// futureIDs returns two snapshot IDs newer than any ID SyncAndImport mints, oldest first.
+func futureIDs() []string { return []string{"20990101T000000Z", "20990201T000000Z"} }
+
+// builtStore is the Importer result of a store that was built.
+func builtStore() *fakeImporter { return &fakeImporter{result: store.Result{Built: true}} }
+
+// syncBundle runs SyncAndImport over a fresh fixture bundle.
+func syncBundle(t *testing.T, srv *snapshot.Server) (snapshot.Outcome, error) {
+	t.Helper()
+	return srv.SyncAndImport(t.Context(), v9fixture.OpenBundle(t, t.TempDir()).Dir)
+}
+
+// assertSnapshotPairs asserts each id's .sqlite and .json in dir exist (want) or are gone (!want).
+func assertSnapshotPairs(t *testing.T, dir string, want bool, ids ...string) {
+	t.Helper()
+	for _, id := range ids {
+		for _, ext := range []string{".sqlite", ".json"} {
+			if want {
+				assert.FileExists(t, filepath.Join(dir, id+ext))
+			} else {
+				assert.NoFileExists(t, filepath.Join(dir, id+ext))
+			}
+		}
+	}
+}
+
+// deleteFailureLine is the warning for a snapshot that could not be deleted, for reason.
+func deleteFailureLine(id, reason string) string {
+	return "cannot delete snapshot " + id + ": " + reason + "; run quarry snapshots prune to try again"
+}
+
+// failingRemover returns a fakeRemover that fails each named file with errno as os.Remove reports it.
+func failingRemover(errno syscall.Errno, names ...string) *fakeRemover {
+	rm := &fakeRemover{faults: map[string]error{}}
+	for _, name := range names {
+		rm.faults[name] = &fs.PathError{Op: "remove", Path: name, Err: errno}
+	}
+	return rm
+}
+
+// v9Reference is the Quicken v9 schema reference, which a test may edit before handing it to the Server.
+func v9Reference(tb testing.TB) sqlschema.Schema {
+	tb.Helper()
+	ref, err := v9.Reference(tb.Context())
+	require.NoError(tb, err)
+	return ref
+}
+
+// newDestinationServer builds a Server that syncs through dest, with the v9 schema reference.
+func newDestinationServer(tb testing.TB, home, snapshotsDir string, dest snapshot.Destination) *snapshot.Server {
+	tb.Helper()
+	return snapshot.NewServer(
+		snapshot.WithSnapshotDir(snapshotsDir),
+		snapshot.WithReference(v9.ReferenceLabel, v9Reference(tb)),
+		snapshot.WithDestination(dest),
+		snapshot.WithHome(home),
+	)
+}
+
+// syncSnapshotCopy syncs ~/Documents/Home.quicken under a fresh home through a source whose backup is the
+// file at snapshotPath, and returns Sync's error.
+func syncSnapshotCopy(tb testing.TB, snapshotPath string) error {
+	tb.Helper()
+	home := tb.TempDir()
+	srv := snapshot.NewServer(
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{}),
+		snapshot.WithDestination(&fixedPathDestination{snapshotPath: snapshotPath}),
+		snapshot.WithHome(home),
+	)
+	_, err := srv.Sync(tb.Context(), filepath.Join(home, "Documents", "Home.quicken"))
+	return err
 }

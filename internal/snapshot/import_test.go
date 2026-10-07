@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -105,25 +104,6 @@ func Test_id_strips_one_sqlite_extension_in_any_letter_case(t *testing.T) {
 	}
 }
 
-// fakeImporter is a hand-written Importer fake: it records every snapshot
-// ref it was called with and returns the configured result, or err when
-// set, after calling cancel when interrupt is set.
-type fakeImporter struct {
-	calls     []store.SnapshotRef
-	result    store.Result
-	err       error
-	interrupt bool
-	cancel    context.CancelFunc
-}
-
-func (f *fakeImporter) Import(_ context.Context, snap store.SnapshotRef) (store.Result, error) {
-	f.calls = append(f.calls, snap)
-	if f.interrupt {
-		f.cancel()
-	}
-	return f.result, f.err
-}
-
 // taggedBuildError mirrors a store build error classified as sentinel:
 // Unwrap reaches cause alone, Is also matches sentinel.
 type taggedBuildError struct {
@@ -141,40 +121,6 @@ type unmappableError struct{ reason string }
 
 func (e unmappableError) Error() string        { return e.reason }
 func (e unmappableError) Is(target error) bool { return target == store.ErrUnmappable }
-
-// fakeStoreProbe is a hand-written StoreProbe fake reporting a fixed path and existence,
-// and answering BuiltFrom with builtFrom, or builtFromErr when set.
-type fakeStoreProbe struct {
-	path         string
-	exists       bool
-	builtFrom    string
-	builtFromErr error
-}
-
-func (f *fakeStoreProbe) Path() string { return f.path }
-func (f *fakeStoreProbe) Exists() bool { return f.exists }
-
-func (f *fakeStoreProbe) BuiltFrom(context.Context) (string, error) {
-	return f.builtFrom, f.builtFromErr
-}
-
-// newImportServer builds a Server whose snapshots and store live under home; opts override those.
-func newImportServer(t *testing.T, home string, imp snapshot.Importer, opts ...snapshot.Option) *snapshot.Server {
-	t.Helper()
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
-	return snapshot.NewServer(append([]snapshot.Option{
-		snapshot.WithSnapshotDir(filepath.Join(home, "snapshots")),
-		snapshot.WithReference(v9.ReferenceLabel, ref),
-		snapshot.WithHome(home),
-		snapshot.WithImporter(imp),
-		snapshot.WithStoreProbe(&fakeStoreProbe{path: filepath.Join(home, "quarry", "quarry.duckdb")}),
-	}, opts...)...)
-}
-
-func snapshotIDFromPath(path string) string {
-	return strings.TrimSuffix(filepath.Base(path), ".sqlite")
-}
 
 func Test_sync_and_import_imports_the_committed_snapshot(t *testing.T) {
 	t.Parallel()
@@ -383,8 +329,7 @@ func Test_sync_and_import_does_not_import_when_the_snapshot_fails(t *testing.T) 
 	t.Parallel()
 	home := t.TempDir()
 	fake := &fakeImporter{}
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
+	ref := v9Reference(t)
 	srv := snapshot.NewServer(
 		snapshot.WithSnapshotDir(filepath.Join(home, "snapshots")),
 		snapshot.WithReference(v9.ReferenceLabel, ref),
@@ -685,22 +630,6 @@ func Test_sync_and_import_refuses_without_an_importer(t *testing.T) {
 
 var errDriverText = errors.New("driver text")
 
-func historyRestartLine(reason string) string {
-	return "cannot carry import history forward from the previous store (" + reason + "); import_runs starts again with this sync"
-}
-
-func findingsRestartLine(reason string) string {
-	return "cannot carry findings forward from the previous store (" + reason + "); findings history starts again with this sync"
-}
-
-func combinedCarryLine(reason string) string {
-	return "cannot carry import history, findings or exchange rates forward from the previous store (" + reason + "); all three start again with this sync"
-}
-
-func ratesRestartLine(reason string) string {
-	return "cannot carry exchange rates forward from the previous store (" + reason + "); fetching them all again"
-}
-
 func Test_sync_and_import_names_the_combined_reason_when_the_previous_store_cannot_be_read(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
@@ -920,8 +849,7 @@ func Test_sync_and_import_warns_of_nothing_when_the_history_was_carried(t *testi
 func Test_import_from_puts_the_history_warning_after_the_manifest_warning(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
+	ref := v9Reference(t)
 	delete(ref, "ZALERT")
 	fault := &store.OpenError{Fault: store.OpenFaultNotDuckDB, Path: filepath.Join(home, "quarry", "quarry.duckdb")}
 	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, HistoryFault: fault, StoreUnreadable: true}},
@@ -938,8 +866,7 @@ func Test_import_from_puts_the_history_warning_after_the_manifest_warning(t *tes
 func Test_import_from_puts_the_findings_warning_after_the_manifest_warning(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
+	ref := v9Reference(t)
 	delete(ref, "ZALERT")
 	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: filepath.Join(home, "quarry", "quarry.duckdb"), Reason: "its findings table repeats an id"}
 	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, FindingsFault: fault}},
@@ -956,8 +883,7 @@ func Test_import_from_puts_the_findings_warning_after_the_manifest_warning(t *te
 func Test_import_from_puts_the_rates_warning_after_the_manifest_warning(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
+	ref := v9Reference(t)
 	delete(ref, "ZALERT")
 	fault := &store.OpenError{Fault: store.OpenFaultOther, Path: filepath.Join(home, "quarry", "quarry.duckdb"), Reason: "its fx_rates table names an unknown series"}
 	srv := newImportServer(t, home, &fakeImporter{result: store.Result{Built: true, RatesFault: fault}},

@@ -2,8 +2,6 @@ package snapshot_test
 
 import (
 	"context"
-	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,41 +16,6 @@ import (
 )
 
 const interruptedPruneLine = "sync interrupted while deleting old snapshots; the store was rebuilt; run quarry snapshots prune to finish"
-
-// oldIDs returns n snapshot IDs from the year 2000, oldest first: older than any ID SyncAndImport mints.
-func oldIDs(n int) []string {
-	ids := make([]string, n)
-	for i := range ids {
-		ids[i] = fmt.Sprintf("2000%02d01T000000Z", i+1)
-	}
-	return ids
-}
-
-// futureIDs returns two snapshot IDs newer than any ID SyncAndImport mints, oldest first.
-func futureIDs() []string { return []string{"20990101T000000Z", "20990201T000000Z"} }
-
-// builtStore is the Importer result of a store that was built.
-func builtStore() *fakeImporter { return &fakeImporter{result: store.Result{Built: true}} }
-
-// syncBundle runs SyncAndImport over a fresh fixture bundle.
-func syncBundle(t *testing.T, srv *snapshot.Server) (snapshot.Outcome, error) {
-	t.Helper()
-	return srv.SyncAndImport(t.Context(), v9fixture.OpenBundle(t, t.TempDir()).Dir)
-}
-
-// assertSnapshotPairs asserts each id's .sqlite and .json in dir exist (want) or are gone (!want).
-func assertSnapshotPairs(t *testing.T, dir string, want bool, ids ...string) {
-	t.Helper()
-	for _, id := range ids {
-		for _, ext := range []string{".sqlite", ".json"} {
-			if want {
-				assert.FileExists(t, filepath.Join(dir, id+ext))
-			} else {
-				assert.NoFileExists(t, filepath.Join(dir, id+ext))
-			}
-		}
-	}
-}
 
 // presenceImporter records, during Import, whether each of paths still exists.
 type presenceImporter struct {
@@ -487,20 +450,6 @@ func Test_sync_and_import_completes_normally_when_the_signal_lands_on_the_last_s
 	assert.FileExists(t, filepath.Join(dir, ids[1]+".json"))
 }
 
-// deleteFailureLine is the warning for a snapshot that could not be deleted, for reason.
-func deleteFailureLine(id, reason string) string {
-	return "cannot delete snapshot " + id + ": " + reason + "; run quarry snapshots prune to try again"
-}
-
-// failingRemover returns a fakeRemover that fails each named file with errno as os.Remove reports it.
-func failingRemover(errno syscall.Errno, names ...string) *fakeRemover {
-	rm := &fakeRemover{faults: map[string]error{}}
-	for _, name := range names {
-		rm.faults[name] = &fs.PathError{Op: "remove", Path: name, Err: errno}
-	}
-	return rm
-}
-
 func Test_sync_and_import_warns_about_each_snapshot_it_could_not_delete_and_succeeds(t *testing.T) {
 	t.Parallel()
 	ids := oldIDs(3)
@@ -628,8 +577,7 @@ func importFromUnlistableFolder(t *testing.T, home string) (snapshot.Outcome, st
 	for _, pair := range [][2]string{{taken.Snapshot.Path, kept}, {taken.Snapshot.Manifest, strings.TrimSuffix(kept, ".sqlite") + ".json"}} {
 		require.NoError(t, os.Link(pair[0], pair[1]))
 	}
-	require.NoError(t, os.Chmod(dir, 0o300))
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	restrictMode(t, dir, 0o300)
 
 	outcome, err := srv.ImportFrom(t.Context(), kept)
 

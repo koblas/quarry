@@ -22,16 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newServer(t *testing.T, snapshotsDir string, opts ...snapshot.Option) *snapshot.Server {
-	t.Helper()
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
-	return snapshot.NewServer(append([]snapshot.Option{
-		snapshot.WithSnapshotDir(snapshotsDir),
-		snapshot.WithReference(v9.ReferenceLabel, ref),
-	}, opts...)...)
-}
-
 func Test_sync_writes_a_verified_private_snapshot_of_an_open_file(t *testing.T) {
 	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
@@ -64,8 +54,7 @@ func Test_sync_writes_a_verified_private_snapshot_of_an_open_file(t *testing.T) 
 func Test_sync_reports_verified_false_when_the_reference_names_a_table_the_bundle_lacks(t *testing.T) {
 	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
+	ref := v9Reference(t)
 	ref["ZFAKETABLE"] = []string{"ZFAKECOLUMN"}
 	srv := snapshot.NewServer(
 		snapshot.WithSnapshotDir(filepath.Join(t.TempDir(), "snapshots")),
@@ -87,8 +76,7 @@ func Test_sync_reports_verified_false_when_the_reference_names_a_table_the_bundl
 func Test_sync_reports_a_missing_column_when_the_reference_names_one_the_bundle_lacks(t *testing.T) {
 	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
+	ref := v9Reference(t)
 	ref["ZACCOUNT"] = append(ref["ZACCOUNT"], "ZFAKECOLUMN")
 	srv := snapshot.NewServer(
 		snapshot.WithSnapshotDir(filepath.Join(t.TempDir(), "snapshots")),
@@ -109,8 +97,7 @@ func Test_sync_reports_a_missing_column_when_the_reference_names_one_the_bundle_
 func Test_sync_stays_verified_and_lists_unexpected_tables_when_the_bundle_has_extra_tables_only(t *testing.T) {
 	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
+	ref := v9Reference(t)
 	delete(ref, "ZALERT")
 	srv := snapshot.NewServer(
 		snapshot.WithSnapshotDir(filepath.Join(t.TempDir(), "snapshots")),
@@ -158,8 +145,7 @@ func Test_sync_warns_with_correct_singular_plural_agreement_for_extras(t *testin
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			bundle := v9fixture.OpenBundle(t, t.TempDir())
-			ref, err := v9.Reference(t.Context())
-			require.NoError(t, err)
+			ref := v9Reference(t)
 			for _, table := range c.dropTables {
 				delete(ref, table)
 			}
@@ -184,8 +170,7 @@ func Test_sync_warns_with_correct_singular_plural_agreement_for_extras(t *testin
 func Test_sync_does_not_populate_warnings_when_extras_are_accompanied_by_missing_entries(t *testing.T) {
 	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
+	ref := v9Reference(t)
 	delete(ref, "ZALERT")
 	ref["ZFAKETABLE"] = []string{"ZFAKECOLUMN"}
 	srv := snapshot.NewServer(
@@ -258,8 +243,7 @@ func Test_sync_leaves_the_live_bundle_unchanged(t *testing.T) {
 	require.NoError(t, err)
 	statBefore, err := os.Stat(bundle.DataPath)
 	require.NoError(t, err)
-	entriesBefore, err := os.ReadDir(bundle.Dir)
-	require.NoError(t, err)
+	namesBefore := dirNames(t, bundle.Dir)
 
 	manifest, err := srv.Sync(t.Context(), bundle.Dir)
 	require.NoError(t, err)
@@ -270,12 +254,11 @@ func Test_sync_leaves_the_live_bundle_unchanged(t *testing.T) {
 	require.NoError(t, err)
 	statAfter, err := os.Stat(bundle.DataPath)
 	require.NoError(t, err)
-	entriesAfter, err := os.ReadDir(bundle.Dir)
-	require.NoError(t, err)
+	namesAfter := dirNames(t, bundle.Dir)
 
 	assert.Equal(t, before, after)
 	assert.True(t, statBefore.ModTime().Equal(statAfter.ModTime()))
-	assert.Equal(t, namesOf(entriesBefore), namesOf(entriesAfter))
+	assert.Equal(t, namesBefore, namesAfter)
 }
 
 func Test_sync_appends_a_suffix_when_the_current_second_already_has_a_snapshot(t *testing.T) {
@@ -344,14 +327,6 @@ func onlyFileWithSuffix(t *testing.T, dir, suffix string) string {
 	return filepath.Join(dir, found[0])
 }
 
-func namesOf(entries []os.DirEntry) []string {
-	names := make([]string, len(entries))
-	for i, e := range entries {
-		names[i] = e.Name()
-	}
-	return names
-}
-
 // A cancelled ctx overrides whatever refusal each pre-commit failure site
 // would otherwise classify to, across every failure kind.
 func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_at_a_precommit_failure(t *testing.T) {
@@ -389,9 +364,7 @@ func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_at_a_pr
 
 			_, err := srv.Sync(ctx, filepath.Join(home, "Documents", "Home.quicken"))
 
-			var re snapshot.RefusalError
-			require.ErrorAs(t, err, &re)
-			assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", re.Error())
+			assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", refusalText(t, err))
 		})
 	}
 }
@@ -410,9 +383,7 @@ func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_during_
 
 	_, err := srv.Sync(ctx, t.TempDir())
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
-	assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", re.Error())
+	assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", refusalText(t, err))
 }
 
 // cancelAndFailWriteManifestDestination cancels ctx and fails WriteManifest
@@ -456,24 +427,15 @@ func Test_sync_reports_interrupted_when_the_context_ends_exactly_when_writing_th
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
-	srv := snapshot.NewServer(
-		snapshot.WithSnapshotDir(snapshotsDir),
-		snapshot.WithReference(v9.ReferenceLabel, ref),
-		snapshot.WithDestination(&cancelAndFailWriteManifestDestination{
-			real:   snapshot.NewDirDestination(snapshotsDir),
-			cancel: cancel,
-		}),
-		snapshot.WithHome(home),
-	)
+	srv := newDestinationServer(t, home, snapshotsDir, &cancelAndFailWriteManifestDestination{
+		real:   snapshot.NewDirDestination(snapshotsDir),
+		cancel: cancel,
+	})
 
-	_, err = srv.Sync(ctx, bundle.Dir)
+	_, err := srv.Sync(ctx, bundle.Dir)
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
-	assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", re.Error())
+	assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", refusalText(t, err))
 }
 
 // cancelAfterWriteManifestDestination wraps the real adapter and cancels ctx
@@ -521,24 +483,15 @@ func Test_sync_discards_everything_and_reports_interrupted_when_the_context_ends
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
-	srv := snapshot.NewServer(
-		snapshot.WithSnapshotDir(snapshotsDir),
-		snapshot.WithReference(v9.ReferenceLabel, ref),
-		snapshot.WithDestination(&cancelAfterWriteManifestDestination{
-			real:   snapshot.NewDirDestination(snapshotsDir),
-			cancel: cancel,
-		}),
-		snapshot.WithHome(home),
-	)
+	srv := newDestinationServer(t, home, snapshotsDir, &cancelAfterWriteManifestDestination{
+		real:   snapshot.NewDirDestination(snapshotsDir),
+		cancel: cancel,
+	})
 
-	_, err = srv.Sync(ctx, bundle.Dir)
+	_, err := srv.Sync(ctx, bundle.Dir)
 
-	var re snapshot.RefusalError
-	require.ErrorAs(t, err, &re)
-	assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", re.Error())
+	assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", refusalText(t, err))
 	assertSnapshotsDirEmpty(t, snapshotsDir)
 }
 
@@ -585,18 +538,11 @@ func Test_sync_completes_normally_when_the_context_ends_during_the_commit_sequen
 	home := t.TempDir()
 	snapshotsDir := filepath.Join(home, "snapshots")
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
-	srv := snapshot.NewServer(
-		snapshot.WithSnapshotDir(snapshotsDir),
-		snapshot.WithReference(v9.ReferenceLabel, ref),
-		snapshot.WithDestination(&cancelDuringCommitManifestDestination{
-			real:   snapshot.NewDirDestination(snapshotsDir),
-			cancel: cancel,
-		}),
-		snapshot.WithHome(home),
-	)
+	srv := newDestinationServer(t, home, snapshotsDir, &cancelDuringCommitManifestDestination{
+		real:   snapshot.NewDirDestination(snapshotsDir),
+		cancel: cancel,
+	})
 
 	manifest, err := srv.Sync(ctx, bundle.Dir)
 
